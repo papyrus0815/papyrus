@@ -443,6 +443,10 @@ export class EventController {
    * @param hasNoDescription "true" 시 description이 null/빈 사건만
    * @param hasNoCountries "true" 시 countryRelations 비어있는 사건만
    * @param hasNoKeywords "true" 시 keywords 비어있는 사건만
+   * @param includeSubEvents "true" 시 최상위만 보는 기본 스코프를 풀고 **하위 사건도
+   *   각자 한 행으로** 내려보낸다(중첩 childEvents는 싣지 않는다 — 중복이 되므로).
+   *   "이 국가의 사건 전부"를 세는 쪽(국가 대시보드)이 쓴다. 목록·트리 뷰는 계층을
+   *   스스로 그리므로 기본값(루트만)을 그대로 쓴다.
    * @returns 사건 목록
    * @tag events
    */
@@ -460,6 +464,7 @@ export class EventController {
     @Query('hasNoDescription') hasNoDescription?: string,
     @Query('hasNoCountries') hasNoCountries?: string,
     @Query('hasNoKeywords') hasNoKeywords?: string,
+    @Query('includeSubEvents') includeSubEvents?: string,
     @Request() req?: any,
   ): Promise<EventResponseDto[]> {
     const userId = req.user?.id || req.user?.sub // AuthGuard가 이미 인증 체크함
@@ -485,6 +490,13 @@ export class EventController {
     const hCountryIdList = splitIds(historicalCountryIds)
 
     const isFlagOn = (raw?: string): boolean => raw === 'true' || raw === '1'
+
+    /*
+     * 하위 사건까지 평평하게. 기본은 루트만인데, 그 스코프는 '목록/트리가 계층을
+     * 스스로 그린다'는 전제에서 나온 것이라 **집계하는 쪽에서는 틀린 모수**가 된다
+     * (국가 대시보드에서 미국 43건 중 자식 6건이 통째로 빠져 37건으로 보였다).
+     */
+    const includeAll = isFlagOn(includeSubEvents)
 
     // 시간 범위 — decade/century 동시 적용 가능 (양쪽 만족하는 교집합).
     const dateRange: { gte?: Date; lt?: Date } = {}
@@ -554,10 +566,11 @@ export class EventController {
     }
 
     // 최상위 사건만 페이징 (본인이 등록한 것만, 삭제되지 않은 것만)
+    // — includeSubEvents=true면 루트 조건을 풀어 하위 사건도 한 행씩 선다.
     const events = await this.prisma.event.findMany({
       where: {
         // 루트 판정 — 정의·INV-2 의존 근거는 domain/event-hierarchy.ts(단일출처) 참고.
-        ...ROOT_EVENT_WHERE,
+        ...(includeAll ? {} : ROOT_EVENT_WHERE),
         createdById: userId,
         deletedAt: null,
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
@@ -589,81 +602,90 @@ export class EventController {
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
         parentEvent: true,
-        childEvents: {
-          // 상세(loadEventDetail)와 동일 — 소프트 삭제된 자식 제외.
-          where: { deletedAt: null },
-          omit: LIST_OMITTED_BODY_FIELDS,
-          include: {
-            // 자식 행에도 추가 상위 개수 — 루트와 동일 필터(유령 제외). 손자 레벨은
-            // 경량 include 정책(계층 3 캡)이라 싣지 않는다(undefined=미로드).
-            _count: {
-              select: {
-                extraParentLinks: { where: { parentEvent: { deletedAt: null } } },
-              },
-            },
-            category: true,
-            historicalCountry: { select: { id: true, name: true } },
-            // 목록은 섹션 *제목*만 소비한다(드로어의 '본문 구성' 칩) —
-            // content 제외 근거는 아래 루트 include 주석 참고.
-            eventSections: {
-              select: { id: true, title: true, order: true, sectionType: true },
-              orderBy: { order: 'asc' },
-            },
-            eventImages: true,
-            /**
-             * 자식의 관련국 — 없으면 toResponseDto가 relatedCountries를 undefined로
-             * 내려보내, 클라의 국가·대륙 필터가 하위 사건을 **절대 매칭하지 못한다**
-             * (2026-07-28 검토 TF-7). 배치 4에서 자식에도 필터를 적용하게 되면서
-             * 이 누락이 곧 '조건 밖'으로 잘리는 결과가 되므로 함께 채운다.
-             * 페이로드는 카드가 쓰는 필드만 select해 억제.
-             */
-            countryRelations: {
-              include: {
-                country: {
-                  select: { id: true, name: true, flagEmoji: true },
-                },
-                historicalCountry: { select: { id: true, name: true } },
-              },
-              orderBy: { createdAt: 'asc' },
-            },
-            // 손자(2단 하위) — 트리/목록의 3계층 표시용. 경량 include로 페이로드 팽창을 억제.
-            // 여기서 nested를 멈춰 depth 3(root→자식→손자)에서 캡한다.
-            // toResponseDto가 childEvents를 재귀 매핑하므로 배선 불필요(손자의 childEvents는
-            // include 안 해 undefined → 응답에서 자연히 종단).
-            childEvents: {
-              where: { deletedAt: null },
-              omit: LIST_OMITTED_BODY_FIELDS,
-              include: {
-                category: true,
-                historicalCountry: { select: { id: true, name: true } },
-                /**
-                 * 손자에도 관련국을 실어야 한다 — 자식에만 넣은 수정(TF-7)이 한 계층 앞에서
-                 * 멈춰 있었다. 없으면 toResponseDto가 relatedCountries를 undefined로 내려,
-                 * 손자 행은 국기가 안 뜨고 국가·대륙 필터에서 **항상 탈락**한다
-                 * (필터가 자식에도 적용되므로 곧 '조건 밖'으로 잘리는 결과가 된다).
-                 */
-                countryRelations: {
-                  include: {
-                    country: {
-                      select: { id: true, name: true, flagEmoji: true },
+        /*
+         * 하위 사건 중첩 — 루트만 보는 기본 모드에서만 싣는다.
+         * includeSubEvents=true면 자식이 이미 각자 한 행으로 서 있어, 여기서 또
+         * 중첩하면 같은 사건이 한 응답에 두 번 실린다(세는 쪽이 곧바로 이중계산한다).
+         */
+        ...(includeAll
+          ? {}
+          : {
+              childEvents: {
+                // 상세(loadEventDetail)와 동일 — 소프트 삭제된 자식 제외.
+                where: { deletedAt: null },
+                omit: LIST_OMITTED_BODY_FIELDS,
+                include: {
+                  // 자식 행에도 추가 상위 개수 — 루트와 동일 필터(유령 제외). 손자 레벨은
+                  // 경량 include 정책(계층 3 캡)이라 싣지 않는다(undefined=미로드).
+                  _count: {
+                    select: {
+                      extraParentLinks: { where: { parentEvent: { deletedAt: null } } },
                     },
-                    historicalCountry: { select: { id: true, name: true } },
                   },
-                  orderBy: { createdAt: 'asc' },
+                  category: true,
+                  historicalCountry: { select: { id: true, name: true } },
+                  // 목록은 섹션 *제목*만 소비한다(드로어의 '본문 구성' 칩) —
+                  // content 제외 근거는 아래 루트 include 주석 참고.
+                  eventSections: {
+                    select: { id: true, title: true, order: true, sectionType: true },
+                    orderBy: { order: 'asc' },
+                  },
+                  eventImages: true,
+                  /**
+                   * 자식의 관련국 — 없으면 toResponseDto가 relatedCountries를 undefined로
+                   * 내려보내, 클라의 국가·대륙 필터가 하위 사건을 **절대 매칭하지 못한다**
+                   * (2026-07-28 검토 TF-7). 배치 4에서 자식에도 필터를 적용하게 되면서
+                   * 이 누락이 곧 '조건 밖'으로 잘리는 결과가 되므로 함께 채운다.
+                   * 페이로드는 카드가 쓰는 필드만 select해 억제.
+                   */
+                  countryRelations: {
+                    include: {
+                      country: {
+                        select: { id: true, name: true, flagEmoji: true },
+                      },
+                      historicalCountry: { select: { id: true, name: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                  },
+                  // 손자(2단 하위) — 트리/목록의 3계층 표시용. 경량 include로 페이로드 팽창을 억제.
+                  // 여기서 nested를 멈춰 depth 3(root→자식→손자)에서 캡한다.
+                  // toResponseDto가 childEvents를 재귀 매핑하므로 배선 불필요(손자의 childEvents는
+                  // include 안 해 undefined → 응답에서 자연히 종단).
+                  childEvents: {
+                    where: { deletedAt: null },
+                    omit: LIST_OMITTED_BODY_FIELDS,
+                    include: {
+                      category: true,
+                      historicalCountry: { select: { id: true, name: true } },
+                      /**
+                       * 손자에도 관련국을 실어야 한다 — 자식에만 넣은 수정(TF-7)이 한 계층 앞에서
+                       * 멈춰 있었다. 없으면 toResponseDto가 relatedCountries를 undefined로 내려,
+                       * 손자 행은 국기가 안 뜨고 국가·대륙 필터에서 **항상 탈락**한다
+                       * (필터가 자식에도 적용되므로 곧 '조건 밖'으로 잘리는 결과가 된다).
+                       */
+                      countryRelations: {
+                        include: {
+                          country: {
+                            select: { id: true, name: true, flagEmoji: true },
+                          },
+                          historicalCountry: { select: { id: true, name: true } },
+                        },
+                        orderBy: { createdAt: 'asc' },
+                      },
+                    },
+                    orderBy: { startDate: 'asc' },
+                  },
                 },
+                orderBy: { startDate: 'asc' }, // 하위 사건 시간순 정렬
               },
-              orderBy: { startDate: 'asc' },
-            },
-          },
-          orderBy: { startDate: 'asc' }, // 하위 사건 시간순 정렬
-        },
+            }),
         countryRelations: {
           include: {
             country: true,
             historicalCountry: true,
           },
-          // role 미설정 데이터에서도 lane 배치가 안정적이도록 createdAt 오름차순 — items[0] 결정성 보장
-          orderBy: { createdAt: 'asc' },
+          // 표시 순서는 sortOrder가 정본. createdAt은 동률 tiebreak(구 데이터 안전망).
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
         /**
          * 목록에서 섹션은 *제목*만 쓰인다 — 카탈로그 드로어의 '본문 구성' 칩
@@ -696,6 +718,7 @@ export class EventController {
    * 필터)와 일치시켜 "전체"의 의미가 목록 페이징 대상과 같도록 한다.
    *
    * ⚠️ 라우트는 반드시 @Get(':id')보다 먼저 선언 — 아니면 'count'가 :id로 매칭된다.
+   * @param includeSubEvents "true" 시 하위 사건도 세는 모수에 넣는다(목록과 같은 스위치).
    * @returns { total } 총 개수
    * @tag events
    */
@@ -711,6 +734,7 @@ export class EventController {
     @Query('hasNoDescription') hasNoDescription?: string,
     @Query('hasNoCountries') hasNoCountries?: string,
     @Query('hasNoKeywords') hasNoKeywords?: string,
+    @Query('includeSubEvents') includeSubEvents?: string,
     @Request() req?: any,
   ): Promise<{ total: number }> {
     const userId = req.user?.id || req.user?.sub
@@ -732,6 +756,8 @@ export class EventController {
     const countryIdList = splitIds(countryIds)
     const hCountryIdList = splitIds(historicalCountryIds)
     const isFlagOn = (raw?: string): boolean => raw === 'true' || raw === '1'
+    /* 목록과 같은 스위치 — 총량과 목록의 모수가 어긋나면 "전체 N건"이 거짓말이 된다 */
+    const includeAll = isFlagOn(includeSubEvents)
 
     const dateRange: { gte?: Date; lt?: Date } = {}
     if (decade) {
@@ -788,7 +814,7 @@ export class EventController {
     const total = await this.prisma.event.count({
       where: {
         // 루트 판정 — getAllEvents와 동일 계약(domain/event-hierarchy.ts 단일출처)
-        ...ROOT_EVENT_WHERE,
+        ...(includeAll ? {} : ROOT_EVENT_WHERE),
         createdById: userId,
         deletedAt: null,
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),

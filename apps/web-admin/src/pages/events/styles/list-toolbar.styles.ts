@@ -449,6 +449,12 @@ export const ViewSwitcherRow = styled.div`
   padding: 0 4px;
   flex-wrap: wrap;
 
+  /* 표시 제어 묶음이 이 행에 합류하는 대역 — 16px 간격이면 묶음 하나가 넘쳐 줄이 하나 는다.
+     간격을 좁혀 같은 줄에 태운다(라벨 sr-only와 한 쌍). */
+  @media (max-width: 1100px) {
+    gap: 10px;
+  }
+
   @media (max-width: 900px) {
     gap: 8px;
   }

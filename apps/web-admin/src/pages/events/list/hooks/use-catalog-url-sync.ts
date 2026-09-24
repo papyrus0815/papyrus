@@ -22,10 +22,6 @@ import type { useSearchParams } from 'react-router-dom'
 import type { CenturyFilter } from '@/entities/event/model'
 import { FILTER_ALL, type ViewMode } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
-import {
-  serializeTimelineWindow,
-  type TimelineWindow,
-} from '@/widgets/event-timeline/model/timeline-model'
 
 import {
   DEFAULT_PAGE_SIZE,
@@ -71,12 +67,6 @@ interface CatalogUrlSyncArgs {
   viewExplicit: boolean
   /** 페이지 크기 — 표시 선호. 새로고침·공유 시 보존 */
   pageSize: number
-  /**
-   * 타임라인 전용 축(검토 GAP-4) — 시간 창(`tlw`)과 숨긴 카테고리(`hide`).
-   * 위젯 지역 state였을 땐 URL에 실리지 않아 공유 링크가 화면을 재현하지 못했다.
-   */
-  timelineWindow: TimelineWindow | null
-  hiddenTimelineCategories: ReadonlySet<string>
 
   // 세터 (URL → state)
   setKeywordInput: (value: string) => void
@@ -94,8 +84,6 @@ interface CatalogUrlSyncArgs {
   setViewMode: (value: ViewMode) => void
   setViewExplicit: (value: boolean) => void
   setPageSize: (value: number) => void
-  setTimelineWindow: (next: TimelineWindow | null) => void
-  setHiddenTimelineCategories: (hidden: ReadonlySet<string>) => void
 }
 
 export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
@@ -118,8 +106,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     viewMode,
     viewExplicit,
     pageSize,
-    timelineWindow,
-    hiddenTimelineCategories,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
@@ -135,8 +121,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setViewMode,
     setViewExplicit,
     setPageSize,
-    setTimelineWindow,
-    setHiddenTimelineCategories,
   } = args
 
   /**
@@ -199,21 +183,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     if (next.viewMode !== viewMode) setViewMode(next.viewMode)
     if (next.viewExplicit !== viewExplicit) setViewExplicit(next.viewExplicit)
 
-    // 창은 값 객체 — 직렬화 문자열로 비교해야 같은 창이 매번 새 객체로 갈아끼워지지 않는다
-    if (
-      serializeTimelineWindow(next.timelineWindow) !==
-      serializeTimelineWindow(timelineWindow)
-    ) {
-      setTimelineWindow(next.timelineWindow)
-    }
-
-    const hiddenChanged =
-      next.hiddenTimelineCategories.size !== hiddenTimelineCategories.size ||
-      Array.from(next.hiddenTimelineCategories).some(
-        (name) => !hiddenTimelineCategories.has(name),
-      )
-    if (hiddenChanged)
-      setHiddenTimelineCategories(next.hiddenTimelineCategories)
     // 의도적: 마운트 시·뒤로가기 시 한 번씩 끌어오면 충분. 양방향 동기화는 아래 effect에서.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
@@ -258,21 +227,15 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setOrDel('flat', showFlatView ? '1' : null)
     /**
      * view는 **사용자가 직접 고른 경우에만** 기록한다(검토 URL-12).
-     * 디폴트 viewMode는 디바이스에 따라 다른데(모바일 LIST, 데스크톱 TIMELINE) 예전엔
-     * 그 추론값까지 항상 URL에 실어, 모바일에서 만든 링크가 데스크톱에서 목록을 강제하고
-     * 데스크톱 링크가 모바일의 'LIST 폴백'(타임라인은 터치로 거의 조작 불가)을 무력화했다.
+     * 뷰가 하나로 합쳐진 지금은 추론 디폴트도 LIST 하나뿐이지만, 규약은 유지한다 —
+     * 뷰가 다시 늘어나도 추론값이 URL에 새어 나가지 않는다.
      */
     setOrDel('view', viewExplicit ? viewMode : null)
-    // 타임라인 축 — 기본값(전체 창 / 숨김 없음)이면 키를 싣지 않는다.
-    // v3의 `lane` 파라미터는 폐지 — 구 URL에 남아 있으면 여기서 함께 정리한다.
+    /* 폐지된 타임라인 뷰가 남긴 파라미터 — 구 URL에 실려 오면 첫 write에서 정리한다
+       (`lane`은 v3, `tlw`·`hide`는 v4~v6). */
     next.delete('lane')
-    setOrDel('tlw', serializeTimelineWindow(timelineWindow))
-    setOrDel(
-      'hide',
-      hiddenTimelineCategories.size > 0
-        ? Array.from(hiddenTimelineCategories).join(',')
-        : null,
-    )
+    next.delete('tlw')
+    next.delete('hide')
     const nextStr = next.toString()
     if (nextStr !== searchParams.toString()) {
       lastSelfWriteRef.current = nextStr
@@ -301,7 +264,5 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     viewMode,
     viewExplicit,
     pageSize,
-    timelineWindow,
-    hiddenTimelineCategories,
   ])
 }

@@ -36,6 +36,8 @@ import { useNavigate } from 'react-router-dom'
 
 /** 드로어 하위 사건 목록의 기본 노출 개수 — 나머지는 '더 보기'로 편다. */
 const CHILD_PREVIEW_COUNT = 5
+/** 본문 구성(목차) 미리보기 상한 — 실측 사건당 섹션 수 1~14개. */
+const SECTION_PREVIEW_COUNT = 6
 
 import { getCategoryName } from '@/features/event-list/lib'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
@@ -227,16 +229,18 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
         </Detail.HeroFigure>
       )
     }
-    // placeholder — 이미지 추가는 상세의 이미지 CRUD가 담당한다(대표 지정 포함).
+    /* placeholder — 이미지 추가는 상세의 이미지 CRUD가 담당한다(대표 지정 포함).
+       실측 대표 이미지 보유율 19/293(6.5%)이라 이쪽이 **기본 경로**다. 200px 상자를
+       예약하지 않고 한 줄 띠로 둔다($empty) — 동선은 남기고 지면은 내용에 돌려준다. */
     return (
-      <Detail.HeroFigure>
+      <Detail.HeroFigure $empty>
         <Detail.HeroPlaceholder
           type="button"
-          aria-label="이미지 추가 — 상세로 이동"
+          aria-label="대표 이미지 추가 — 상세로 이동"
           onClick={() => navigate(pathKeys.events.detail(selectedNode.id))}
         >
-          <FiImage size={28} aria-hidden="true" />
-          <span>대표 이미지 없음 — 클릭하여 추가</span>
+          <FiImage size={ICON_SIZE.base} aria-hidden="true" />
+          <span>대표 이미지 추가</span>
         </Detail.HeroPlaceholder>
       </Detail.HeroFigure>
     )
@@ -249,7 +253,11 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
     const relatedHistorical = selectedEvent.relatedHistoricalCountries ?? []
     const sections = selectedEvent.eventSections ?? []
     const sectionTitles = selectedEvent.sectionTitles ?? []
-    const hasSections = sections.length > 0 || sectionTitles.length > 0
+    /* 두 소스(구조화 섹션 / 제목 배열)를 여기서 한 줄로 합친다 — 렌더 분기가 둘로 갈려
+       있으면 미리보기 상한·'외 N개' 계산을 양쪽에 중복해서 넣어야 한다. */
+    const sectionLabels: string[] =
+      sections.length > 0 ? sections.map((section) => section.title) : sectionTitles
+    const hasSections = sectionLabels.length > 0
 
     return (
       <Detail.InfoBlock>
@@ -319,30 +327,15 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             </>
           )}
 
-          {selectedNode.children && selectedNode.children.length > 0 && (
-            <>
-              <Detail.InfoLabel>
-                <FiLayers size={ICON_SIZE.base} aria-hidden="true" />
-                <span>하위 사건</span>
-              </Detail.InfoLabel>
-              <Detail.InfoValue>
-                {/* 숫자가 정적 div였다 — 누르면 아무 일도 없는데 그 아래 실제 목록은
-                    리치텍스트 두 덩이를 지나야 나왔다(검토 DISC-7).
-                    이제 여기서 바로 계층 전체를 연다. */}
-                {onShowSummary ? (
-                  <ParentEventLink
-                    type="button"
-                    onClick={() => onShowSummary(selectedNode.id)}
-                    aria-label={`하위 사건 ${selectedNode.children.length}개 — 계층 전체 보기`}
-                  >
-                    {selectedNode.children.length}개
-                  </ParentEventLink>
-                ) : (
-                  `${selectedNode.children.length}개`
-                )}
-              </Detail.InfoValue>
-            </>
-          )}
+          {/*
+            (제거) '하위 사건 N개' 정보 행.
+
+            이 행과 아래 '하위 사건 (N개)' 구역은 **조건이 같아서**(children.length > 0)
+            늘 함께 떴다 — 같은 수치를 한 화면에서 두 번, 300px 떨어뜨려 말하고 있었다.
+            구역 쪽이 제목·날짜·요약까지 담으므로 정보량이 압도적이고, 이 행이 유일하게
+            더 하던 일(계층 모달 열기)은 구역 하단의 '전체 계층 구조 보기'로 옮겼다
+            (예전엔 자식이 5개를 넘을 때만 있던 버튼이라 그 조건도 함께 풀었다).
+          */}
 
           {(relatedCountries.length > 0 || relatedHistorical.length > 0) && (
             <>
@@ -371,17 +364,22 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 <FiBookOpen size={ICON_SIZE.base} aria-hidden="true" />
                 <span>본문 구성</span>
               </Detail.InfoLabel>
-              <Detail.ChipRow>
-                {sections.length > 0
-                  ? sections.map((section) => (
-                      <Detail.SectionChip key={section.id}>
-                        {section.title}
-                      </Detail.SectionChip>
-                    ))
-                  : sectionTitles.map((title, idx) => (
-                      <Detail.SectionChip key={idx}>{title}</Detail.SectionChip>
-                    ))}
-              </Detail.ChipRow>
+              {/* 목차 — 상한을 넘으면 나머지는 숫자로만 알린다. 실측 사건당 최대 14개라
+                  전부 펴면 이 한 행이 패널의 다른 모든 정보를 합친 것보다 길어진다. */}
+              <Detail.SectionList>
+                {sectionLabels
+                  .slice(0, SECTION_PREVIEW_COUNT)
+                  .map((label, index) => (
+                    <Detail.SectionItem key={`${index}-${label}`}>
+                      <span>{label}</span>
+                    </Detail.SectionItem>
+                  ))}
+                {sectionLabels.length > SECTION_PREVIEW_COUNT && (
+                  <Detail.SectionMore>
+                    외 {sectionLabels.length - SECTION_PREVIEW_COUNT}개 단락
+                  </Detail.SectionMore>
+                )}
+              </Detail.SectionList>
             </>
           )}
         </Detail.InfoGrid>
@@ -473,7 +471,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             </OutOfScopeBanner>
           )}
           {/* sticky 헤더 — 제목·summary·액션 */}
-          <Detail.DetailPanelHeader>
+          <Detail.DetailPanelHeader $expanded={descExpanded}>
             <Detail.DetailTitleRow>
               <Detail.DetailTitle>{selectedNode.title}</Detail.DetailTitle>
               {onClose && (
@@ -505,58 +503,65 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             )}
 
             <Detail.ActionButtonRow>
-              {/* 이전/다음 사건 — 키보드 ↑↓와 동등. 끝/처음에서는 disabled */}
-              <Detail.ActionButton
-                $variant="ghost"
-                title={
-                  isOutOfScope
-                    ? '이 사건이 목록 조건 밖이라 이동할 수 없습니다'
-                    : '이전 사건 (↑)'
-                }
-                aria-label="이전 사건"
-                disabled={!onPrev}
-                onClick={() => onPrev?.()}
-              >
-                <FiChevronLeft size={ICON_SIZE.base} aria-hidden="true" />
-              </Detail.ActionButton>
-              <Detail.ActionButton
-                $variant="ghost"
-                title={
-                  isOutOfScope
-                    ? '이 사건이 목록 조건 밖이라 이동할 수 없습니다'
-                    : '다음 사건 (↓)'
-                }
-                aria-label="다음 사건"
-                disabled={!onNext}
-                onClick={() => onNext?.()}
-              >
-                <FiChevronRight size={ICON_SIZE.base} aria-hidden="true" />
-              </Detail.ActionButton>
-              <Detail.ActionButton
-                $variant="ghost"
-                title="공유"
-                aria-label="공유 — 링크 복사 또는 공유 시트"
-                onClick={handleShare}
-              >
-                <FiShare2 size={ICON_SIZE.base} aria-hidden="true" />
-              </Detail.ActionButton>
-              <Detail.ActionButton
-                $variant="ghost"
-                title="수정"
-                aria-label="이 사건 수정"
-                /* 수정 표면은 상세 인라인 편집 하나 — 별도 편집 페이지는 흡수됐다. */
-                onClick={() => navigate(pathKeys.events.detail(selectedNode.id))}
-              >
-                <FiEdit2 size={ICON_SIZE.base} aria-hidden="true" />
-              </Detail.ActionButton>
-              <Detail.ActionButton
-                $variant="ghost-danger"
-                title="삭제"
-                aria-label="이 사건 삭제"
-                onClick={() => setConfirmDeleteOpen(true)}
-              >
-                <FiTrash2 size={ICON_SIZE.base} aria-hidden="true" />
-              </Detail.ActionButton>
+              {/* 이전/다음 사건 — 키보드 ↑↓와 동등. 끝/처음에서는 disabled.
+                  '목록 안에서 이동'이라는 한 가지 일이라 한 묶음으로 둔다. */}
+              <Detail.ActionGroup>
+                <Detail.ActionButton
+                  $variant="ghost"
+                  title={
+                    isOutOfScope
+                      ? '이 사건이 목록 조건 밖이라 이동할 수 없습니다'
+                      : '이전 사건 (↑)'
+                  }
+                  aria-label="이전 사건"
+                  disabled={!onPrev}
+                  onClick={() => onPrev?.()}
+                >
+                  <FiChevronLeft size={ICON_SIZE.base} aria-hidden="true" />
+                </Detail.ActionButton>
+                <Detail.ActionButton
+                  $variant="ghost"
+                  title={
+                    isOutOfScope
+                      ? '이 사건이 목록 조건 밖이라 이동할 수 없습니다'
+                      : '다음 사건 (↓)'
+                  }
+                  aria-label="다음 사건"
+                  disabled={!onNext}
+                  onClick={() => onNext?.()}
+                >
+                  <FiChevronRight size={ICON_SIZE.base} aria-hidden="true" />
+                </Detail.ActionButton>
+              </Detail.ActionGroup>
+              {/* 이 사건에 대한 조작 — 삭제는 되돌릴 수 없어 구분선 뒤로 뗀다. */}
+              <Detail.ActionGroup>
+                <Detail.ActionButton
+                  $variant="ghost"
+                  title="공유"
+                  aria-label="공유 — 링크 복사 또는 공유 시트"
+                  onClick={handleShare}
+                >
+                  <FiShare2 size={ICON_SIZE.base} aria-hidden="true" />
+                </Detail.ActionButton>
+                <Detail.ActionButton
+                  $variant="ghost"
+                  title="수정"
+                  aria-label="이 사건 수정"
+                  /* 수정 표면은 상세 인라인 편집 하나 — 별도 편집 페이지는 흡수됐다. */
+                  onClick={() => navigate(pathKeys.events.detail(selectedNode.id))}
+                >
+                  <FiEdit2 size={ICON_SIZE.base} aria-hidden="true" />
+                </Detail.ActionButton>
+                <Detail.ActionDivider aria-hidden="true" />
+                <Detail.ActionButton
+                  $variant="ghost-danger"
+                  title="삭제"
+                  aria-label="이 사건 삭제"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                >
+                  <FiTrash2 size={ICON_SIZE.base} aria-hidden="true" />
+                </Detail.ActionButton>
+              </Detail.ActionGroup>
               <Detail.ActionButton
                 $variant="primary"
                 data-cta="primary"
@@ -619,28 +624,32 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                   </Detail.DetailChildItem>
                 ))}
               </Detail.DetailChildrenList>
-              {selectedNode.children.length > CHILD_PREVIEW_COUNT && (
+              {(selectedNode.children.length > CHILD_PREVIEW_COUNT ||
+                Boolean(onShowSummary)) && (
                 <Detail.DetailChildrenMoreRow>
-                  <Detail.DetailChildrenMoreButton
-                    type="button"
-                    onClick={() => setChildrenExpanded((open) => !open)}
-                    aria-expanded={childrenExpanded}
-                  >
-                    {childrenExpanded
-                      ? '접기'
-                      : `나머지 ${selectedNode.children.length - CHILD_PREVIEW_COUNT}개 더 보기`}
-                  </Detail.DetailChildrenMoreButton>
-                  <Modal.ViewAllHierarchyButton
-                    type="button"
-                    onClick={() => {
-                      if (onShowSummary) {
-                        onShowSummary(selectedNode.id)
-                      }
-                    }}
-                  >
-                    <FiGitBranch size={ICON_SIZE.base} aria-hidden="true" />
-                    전체 계층 구조 보기
-                  </Modal.ViewAllHierarchyButton>
+                  {selectedNode.children.length > CHILD_PREVIEW_COUNT && (
+                    <Detail.DetailChildrenMoreButton
+                      type="button"
+                      onClick={() => setChildrenExpanded((open) => !open)}
+                      aria-expanded={childrenExpanded}
+                    >
+                      {childrenExpanded
+                        ? '접기'
+                        : `나머지 ${selectedNode.children.length - CHILD_PREVIEW_COUNT}개 더 보기`}
+                    </Detail.DetailChildrenMoreButton>
+                  )}
+                  {/* 손자까지 보는 유일한 진입점 — 자식이 5개 이하라고 사라지면 안 된다.
+                      예전에는 정보 행의 'N개' 링크가 그 자리를 대신하고 있었는데, 그 행이
+                      중복이라 없어졌으므로 여기가 정본이다. */}
+                  {onShowSummary && (
+                    <Modal.ViewAllHierarchyButton
+                      type="button"
+                      onClick={() => onShowSummary(selectedNode.id)}
+                    >
+                      <FiGitBranch size={ICON_SIZE.base} aria-hidden="true" />
+                      전체 계층 구조 보기
+                    </Modal.ViewAllHierarchyButton>
+                  )}
                 </Detail.DetailChildrenMoreRow>
               )}
             </Detail.DetailSection>

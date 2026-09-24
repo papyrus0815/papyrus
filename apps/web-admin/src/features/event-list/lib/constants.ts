@@ -42,7 +42,13 @@ export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]
  *  - GALLERY   : heroImage 기반 카드 (비주얼 발견)
  */
 export const VIEW_MODES = {
-  TIMELINE: 'timeline',
+  /**
+   * 유일한 기본 뷰. 예전에는 `TIMELINE`(연속 가로 시간축)이 함께 있었지만, 둘 다
+   * '시간순으로 묶인 행 목록'이라 사실상 같은 화면이었다 — 타임라인 쪽이 제목·설명·
+   * 분류를 잃고 막대를 얻었을 뿐이다. 두 뷰를 합쳐 목록의 조판을 정본으로 삼고,
+   * 타임라인이 유일하게 더 갖고 있던 인코딩(시간 비례 막대)은 기간 열이 흡수했다
+   * (`widgets/event-list-compact/lib/year-span.ts`).
+   */
   LIST: 'list',
   MAP: 'map',
   GRID: 'grid',
@@ -66,9 +72,10 @@ export type SummaryViewMode =
   (typeof SUMMARY_VIEW_MODES)[keyof typeof SUMMARY_VIEW_MODES]
 
 /*
- * (제거) 타임라인 레인(lane) 축 — v4 재설계에서 레인 자체가 사라져 폐지.
- * 시간 창(`tlw`)의 정의·직렬화는 widgets/event-timeline/model/timeline-model에 있다.
- * docs/event-timeline-redesign.md 참고.
+ * (제거) 타임라인 뷰 전용 URL 축 — 레인(`lane`, v4에서 폐지)에 이어 시간 창(`tlw`)과
+ * 카테고리 숨김(`hide`)도 사라졌다. 타임라인 뷰 자체가 목록에 흡수됐기 때문이다.
+ * 셋 다 use-catalog-url-sync가 첫 write에서 구 URL에서 걷어낸다.
+ * docs/event-timeline-merged-into-list.md 참고.
  */
 
 /**

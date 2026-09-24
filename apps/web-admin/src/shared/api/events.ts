@@ -57,6 +57,15 @@ export interface GetAllEventsParams {
   hasNoDescription?: boolean
   hasNoCountries?: boolean
   hasNoKeywords?: boolean
+  /**
+   * true면 최상위(루트) 사건만 보는 기본 스코프를 풀고 **하위 사건도 각자 한 행으로**
+   * 받는다. 이 모드의 응답에는 중첩 childEvents가 실리지 않는다 — 자식이 이미 행으로
+   * 서 있어 중첩까지 세면 이중계산이다.
+   *
+   * 계층을 스스로 그리는 목록·트리 뷰는 기본값(루트만)을 쓰고, "이 국가의 사건이 몇
+   * 건인가"처럼 **집계**하는 쪽이 이걸 켠다.
+   */
+  includeSubEvents?: boolean
 }
 
 export async function getAllEvents(
@@ -85,6 +94,7 @@ export async function getAllEvents(
     set('categoryId', params?.categoryId)
     set('decade', params?.decade)
     set('century', params?.century)
+    if (params?.includeSubEvents) url.searchParams.set('includeSubEvents', 'true')
     if (params?.hasNoDescription) url.searchParams.set('hasNoDescription', 'true')
     if (params?.hasNoCountries) url.searchParams.set('hasNoCountries', 'true')
     if (params?.hasNoKeywords) url.searchParams.set('hasNoKeywords', 'true')
@@ -124,6 +134,7 @@ export async function getEventsCount(
     | 'hasNoDescription'
     | 'hasNoCountries'
     | 'hasNoKeywords'
+    | 'includeSubEvents'
   >,
 ): Promise<number> {
   try {
@@ -147,6 +158,7 @@ export async function getEventsCount(
     set('decade', params?.decade)
     set('century', params?.century)
     set('createdSinceDays', params?.createdSinceDays)
+    if (params?.includeSubEvents) url.searchParams.set('includeSubEvents', 'true')
     if (params?.hasNoDescription) url.searchParams.set('hasNoDescription', 'true')
     if (params?.hasNoCountries) url.searchParams.set('hasNoCountries', 'true')
     if (params?.hasNoKeywords) url.searchParams.set('hasNoKeywords', 'true')
@@ -161,6 +173,36 @@ export async function getEventsCount(
   } catch (error) {
     throw new Error(`사건 개수 조회 실패: ${error}`)
   }
+}
+
+/** 서버가 한 번에 내주는 상한. 더 크게 불러도 잘린다(event.controller: Math.min(limit, 100)). */
+const EVENTS_PAGE_SIZE = 100
+
+/** 안전장치 — 이 이상은 한 지면이 쓸 모수가 아니다(10,000건) */
+const EVENTS_MAX_PAGES = 100
+
+/**
+ * 필터에 걸리는 사건을 **전부** 받는다 — 서버 상한(100)을 넘겨 요청해도 잘리므로
+ * offset을 밀어가며 소진한다.
+ *
+ * `limit: 5000`처럼 큰 수를 한 번 던지는 코드가 여럿 있었는데, 서버가 조용히 100으로
+ * 깎아 그 지면들은 "전부"라고 믿으면서 첫 100건만 보고 있었다.
+ */
+export async function getAllEventsExhaustive(
+  params?: Omit<GetAllEventsParams, 'offset' | 'limit'>,
+): Promise<EventResponseDto[]> {
+  const collected: EventResponseDto[] = []
+  for (let page = 0; page < EVENTS_MAX_PAGES; page += 1) {
+    const chunk = await getAllEvents({
+      ...params,
+      offset: page * EVENTS_PAGE_SIZE,
+      limit: EVENTS_PAGE_SIZE,
+    })
+    collected.push(...chunk)
+    /* 마지막 페이지는 상한보다 적게 온다 — 빈 페이지를 한 번 더 부르지 않는다 */
+    if (chunk.length < EVENTS_PAGE_SIZE) break
+  }
+  return collected
 }
 
 /**

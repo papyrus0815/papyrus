@@ -143,8 +143,17 @@ export const DetailPanelSkeleton = styled.div`
 `
 
 /* HeroFigure(200px)와 height 일치 — skeleton→실제 전환 시 CLS 0 */
+/**
+ * 상세 패널 히어로 자리.
+ *
+ * 200px이었다 — 실제 히어로(`HeroFigure`)와 높이를 맞춰 CLS를 없애려는 값이었는데,
+ * 대표 이미지를 가진 사건은 실측 19/293(6.5%)뿐이다. 즉 이 스켈레톤은 **93.5%의 경우에
+ * 없을 이미지 자리를 200px 잡았다가 40px로 무너뜨리고** 있었다. 다수 쪽(빈 히어로 띠)에
+ * 맞춘다 — 이미지가 있는 6.5%에서만 아래로 밀리고, 그쪽은 이미지가 도착하는 순간이라
+ * 사용자가 원인을 본다.
+ */
 export const SkeletonDetailHeroImage = styled.div`
-  height: 200px;
+  height: 40px;
   margin: 12px 16px 0;
   ${skeletonBarStrong}
   ${shimmerAnimation}

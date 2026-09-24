@@ -12,7 +12,6 @@ import {
   DEFAULT_PAGE_SIZE,
   parseCatalogSearchParams,
   parseCenturyParam,
-  parseHiddenCategoriesParam,
   parseSortParam,
 } from './parse-catalog-search-params'
 
@@ -70,20 +69,6 @@ describe('parseSortParam', () => {
   })
 })
 
-describe('parseHiddenCategoriesParam', () => {
-  it('콤마 목록을 집합으로 만들고 빈 토큰을 버린다', () => {
-    expect(Array.from(parseHiddenCategoriesParam('전쟁, 정치,,'))).toEqual([
-      '전쟁',
-      '정치',
-    ])
-  })
-
-  it('`hide=`만 있으면 빈 집합이다(빈 이름 숨김으로 둔갑 금지)', () => {
-    expect(parseHiddenCategoriesParam('').size).toBe(0)
-    expect(parseHiddenCategoriesParam(null).size).toBe(0)
-  })
-})
-
 describe('parseCatalogSearchParams', () => {
   it('파라미터가 없으면 전부 기본값이다', () => {
     const state = parse('')
@@ -99,13 +84,11 @@ describe('parseCatalogSearchParams', () => {
     expect(state.sortDirection).toBe('desc')
     expect(state.showFlatView).toBe(false)
     expect(state.viewExplicit).toBe(false)
-    expect(state.timelineWindow).toBeNull()
-    expect(state.hiddenTimelineCategories.size).toBe(0)
   })
 
   it('정상 딥링크를 그대로 복원한다', () => {
     const state = parse(
-      'q=%EC%A0%84%EC%9F%81&cat=cat-1&country=c-1&continent=asia&century=17&size=50&sort=duration&dir=asc&flat=1&view=list&tlw=c19&hide=%EC%A0%84%EC%9F%81&bookmarks=1&event=ev-1',
+      'q=%EC%A0%84%EC%9F%81&cat=cat-1&country=c-1&continent=asia&century=17&size=50&sort=duration&dir=asc&flat=1&view=list&bookmarks=1&event=ev-1',
     )
     expect(state.keyword).toBe('전쟁')
     expect(state.selectedCategory).toBe('cat-1')
@@ -118,8 +101,6 @@ describe('parseCatalogSearchParams', () => {
     expect(state.showFlatView).toBe(true)
     expect(state.viewMode).toBe(VIEW_MODES.LIST)
     expect(state.viewExplicit).toBe(true)
-    expect(state.timelineWindow).toEqual({ level: 'century', century: 19 })
-    expect(Array.from(state.hiddenTimelineCategories)).toEqual(['전쟁'])
     expect(state.bookmarksOnly).toBe(true)
     expect(state.selectedEventId).toBe('ev-1')
   })
@@ -139,31 +120,19 @@ describe('parseCatalogSearchParams', () => {
     expect(state.selectedEventId).toBeNull()
   })
 
-  it('무효한 size·dir·tlw·view는 기본값으로 낙하한다', () => {
-    const state = parse('size=7&dir=sideways&tlw=galaxy&view=hologram')
+  it('무효한 size·dir·view는 기본값으로 낙하한다', () => {
+    const state = parse('size=7&dir=sideways&view=hologram')
     expect(state.pageSize).toBe(DEFAULT_PAGE_SIZE)
     expect(state.sortDirection).toBe('desc')
-    expect(state.timelineWindow).toBeNull()
     expect(state.viewExplicit).toBe(false)
   })
 
-  it('tlw — 세기 10등분에 어긋난 구간 시작·0세기·크기 상한 밖은 전체로 낙하한다', () => {
-    // 19세기 구간은 1801·1811·…·1891 — 1870은 유효 시작이 아니다.
-    expect(parse('tlw=d1870').timelineWindow).toBeNull()
-    expect(parse('tlw=c0').timelineWindow).toBeNull()
-    // 크기 상한(|c| ≤ 21) — 수용하면 첫 write 정리 규약이 안 걸린다(검토 R5).
-    expect(parse('tlw=c999').timelineWindow).toBeNull()
-    expect(parse('tlw=d2101').timelineWindow).toBeNull()
-    // BC 세기는 정상 수용.
-    expect(parse('tlw=c-1').timelineWindow).toEqual({
-      level: 'century',
-      century: -1,
-    })
-    expect(parse('tlw=d1871').timelineWindow).toEqual({
-      level: 'span10',
-      startYear: 1871,
-    })
-    expect(parse('tlw=u').timelineWindow).toEqual({ level: 'unknown' })
+  it('폐지된 타임라인 뷰의 링크는 죽지 않고 목록으로 받는다', () => {
+    // `view=timeline`은 **명시로 치지 않는다** — 명시로 받으면 상태→URL이 `view=list`를
+    // 되써서, 사라진 뷰의 이름이 새 URL로 되살아난다.
+    const state = parse('view=timeline&tlw=y1901..2000&hide=%EC%A0%84%EC%9F%81')
+    expect(state.viewMode).toBe(VIEW_MODES.LIST)
+    expect(state.viewExplicit).toBe(false)
   })
 
   it('bookmarks는 정확히 "1"일 때만 켜진다', () => {

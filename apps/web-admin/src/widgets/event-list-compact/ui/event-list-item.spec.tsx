@@ -104,9 +104,10 @@ describe('EventListItem', () => {
     expect(screen.queryByText('3', { ignore: '[aria-hidden="true"]' })).toBeNull()
   })
 
-  it('당일 사건은 시각적으로 점이지만 스크린리더에는 1일로 남는다', () => {
-    // 실측 252행 중 133행(53%)이 '1일'이다. 텍스트로 두면 반복 노이즈지만
-    // '종료 확정'과 '종료 미상'은 다른 사실이라 지울 수도 없다.
+  it('당일 사건은 시각적으로 점이고 스크린리더에는 **날짜**가 남는다', () => {
+    // 실측 252행 중 133행(53%)이 '1일'이라 텍스트로 두면 열의 절반이 같은 두 글자였다.
+    // 기간 열이 막대 트랙이 된 뒤로 그 자리는 점이 차지하고, 낭독·툴팁에는 '1일'보다
+    // 훨씬 쓸모 있는 값(그 날짜)이 실린다 — 정보를 줄이지 않고 바꾼 것이다.
     renderWithTheme(
       <EventListItem
         {...baseProps}
@@ -118,7 +119,7 @@ describe('EventListItem', () => {
         }
       />,
     )
-    expect(screen.getByText('1일')).toBeInTheDocument()
+    expect(screen.getByText('2025년 6월 13일')).toBeInTheDocument()
   })
 
   it('종료 미상은 기간 토큰을 만들지 않는다', () => {
@@ -139,19 +140,71 @@ describe('EventListItem', () => {
   })
 
   /**
-   * 요약 열(배치 D) — 넓은 카드에서 죽은 폭을 잉크로 되돌리는 흡수체.
+   * 종료 열 — 이 목록은 오래 **시작만** 보여 주고 있었다(사용자 지적 2026-09-21).
+   * 연도는 그룹 머리글이 대므로 같은 해면 월·일만 적는다. jsdom은 컨테이너 쿼리를
+   * 평가하지 않으므로 '언제 보이는지'가 아니라 **무엇이 실리는지**만 고정한다.
+   */
+  describe('종료 열', () => {
+    const endText = () =>
+      document.querySelector('[data-row-end]')?.textContent ?? null
+    const withPeriod = (start: string, end?: string) =>
+      ({ ...baseNode, period: { start, end } }) as never
+
+    it('종료가 시작과 다르면 날짜를 싣는다 — 같은 해면 월·일만', () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          groupYear={2025}
+          node={withPeriod('2025-06-13', '2025-06-24')}
+        />,
+      )
+      expect(endText()).toBe('6.24')
+    })
+
+    it('그룹과 다른 해로 끝나면 연도까지 적는다', () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          groupYear={1989}
+          node={withPeriod('1989-11-17', '1999-03-12')}
+        />,
+      )
+      expect(endText()).toBe('1999.3.12')
+    })
+
+    it("시작과 같은 날이면 날짜를 되풀이하지 않고 '당일'로 적는다", () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          groupYear={2025}
+          node={withPeriod('2025-06-13', '2025-06-13')}
+        />,
+      )
+      expect(endText()).toBe('당일')
+    })
+
+    it('종료가 없으면 빈칸이다 — 그 빈칸이 곧 종료 미상이다', () => {
+      renderWithTheme(
+        <EventListItem {...baseProps} groupYear={2025} node={withPeriod('2025-06-13')} />,
+      )
+      expect(endText()).toBe('')
+    })
+  })
+
+  /**
+   * 제목 뒤 한 줄 — 설명을 걷어낸 뒤 **검색 근거만** 남는 자리다.
    *
    * jsdom은 컨테이너 쿼리를 평가하지 않으므로 **언제 보이는지**는 여기서 볼 수 없다
    * (그건 시각 확인의 몫이다). 대신 CSS와 무관한 계약 — 어떤 텍스트가 실리는지 — 만 고정한다.
    */
-  describe('요약 열', () => {
+  describe('제목 뒤 한 줄', () => {
     const withSummary = (summary: string, start = '2025-06-13') =>
       ({ ...baseNode, summary, period: { start, end: '2025-06-24' } }) as never
 
     const summaryText = () =>
       document.querySelector('[data-row-summary]')?.textContent ?? null
 
-    it('설명 선두 날짜가 행의 시작 연도와 같으면 잘라낸다 — date 트랙이 이미 말했다', () => {
+    it('검색 중이 아니면 설명을 싣지 않는다 — 목록은 색인이다', () => {
       renderWithTheme(
         <EventListItem
           {...baseProps}
@@ -160,35 +213,11 @@ describe('EventListItem', () => {
           )}
         />,
       )
-      expect(summaryText()).toBe(
-        '이스라엘이 이란 핵시설을 선제 타격하며 교전이 시작됐다.',
-      )
-    })
-
-    it('설명이 다른 해로 시작하면 자르지 않는다 — 중복이 아니라 배경 정보다', () => {
-      const background =
-        '1979년 이란 혁명 이후 누적된 적대가 배경이었고 양국은 오래 대리 충돌했다.'
-      renderWithTheme(
-        <EventListItem {...baseProps} node={withSummary(background)} />,
-      )
-      expect(summaryText()).toBe(background)
-    })
-
-    it('잘라낸 뒤 남는 게 너무 짧으면 자르기를 포기한다', () => {
-      const terse = '2025년 6월 13일, 개전했으며 곧 휴전 협상이 시작됐다.'
-      renderWithTheme(
-        <EventListItem {...baseProps} node={withSummary(terse)} />,
-      )
-      expect(summaryText()).toBe(terse)
-    })
-
-    it('설명이 없거나 너무 짧으면 열지 않는다 — 빈 셀을 만들지 않는다', () => {
-      renderWithTheme(<EventListItem {...baseProps} node={withSummary('짧다.')} />)
       expect(document.querySelector('[data-row-summary]')).toBeNull()
     })
 
-    it('검색 중이면 앞머리가 아니라 매칭 근거를 싣는다', () => {
-      // 검색 결과의 76%가 제목에 검색어가 없는 행 — 근거를 앞머리로 덮으면
+    it('검색 중이면 매칭 근거를 싣는다 — 왜 이 행이 결과에 있는가', () => {
+      // 검색 결과의 76%가 제목에 검색어가 없는 행 — 근거가 없으면
       // '왜 걸렸는지 알 수 없는 목록'으로 되돌아간다(CR-3).
       renderWithTheme(
         <EventListItem
@@ -201,6 +230,17 @@ describe('EventListItem', () => {
       )
       expect(summaryText()).toContain('설명')
       expect(summaryText()).toContain('핵시설')
+    })
+
+    it('검색어가 제목에 이미 보이면 근거를 만들지 않는다', () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          searchQuery={String(baseNode.title).slice(0, 3)}
+          node={withSummary('배경 서술이 길게 이어지는 설명 문장이다. 아주 길다.')}
+        />,
+      )
+      expect(document.querySelector('[data-row-summary]')).toBeNull()
     })
   })
 
@@ -216,5 +256,50 @@ describe('EventListItem', () => {
     const hint = screen.getByRole('button', { name: /조건 밖의 하위 사건 5개/ })
     hint.click()
     expect(onShowSummary).toHaveBeenCalledWith('evt-1')
+  })
+
+  /**
+   * 레일 가지선 — **구슬은 언제나 선 위에 얹힌다**가 이 레일의 단일 문법이다.
+   *
+   * jsdom은 레이아웃도 pseudo-element도 계산하지 않으므로 선의 좌표는 여기서 볼 수 없다
+   * (그건 브라우저 실측의 몫이다). 대신 **가지선 요소가 언제 존재하는가**만 고정한다 —
+   * 직전 구현은 depth 1 자식과 depth 0 부모 양쪽에서 이 요소를 그리지 않아, 하위 묶음
+   * 115행이 세로선을 하나도 갖지 못한 채 가로 스텁만 늘어놓고 있었다.
+   */
+  describe('레일 가지선', () => {
+    const branchOf = (container: HTMLElement) =>
+      container.querySelector('[role="listitem"] > span[aria-hidden="true"]')
+
+    it('자식 없는 최상위 행은 가지선을 그리지 않는다 — 그 구슬은 줄기 위에 있다', () => {
+      const { container } = renderWithTheme(<EventListItem {...baseProps} />)
+      expect(branchOf(container)).toBeNull()
+    })
+
+    it('접힌 부모도 그리지 않는다 — 내려갈 자식 행이 화면에 없다', () => {
+      const { container } = renderWithTheme(
+        <EventListItem {...baseProps} hasChildren childCount={3} />,
+      )
+      expect(branchOf(container)).toBeNull()
+    })
+
+    it('펼친 최상위 부모는 자식 가지선으로 꺾어 내려가는 엘보를 그린다', () => {
+      const { container } = renderWithTheme(
+        <EventListItem {...baseProps} hasChildren isExpanded childCount={3} />,
+      )
+      expect(branchOf(container)).not.toBeNull()
+    })
+
+    it('하위 행은 자기 가지선을 그린다', () => {
+      const { container } = renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          depth={1}
+          ariaLevel={2}
+          positionInSet={2}
+          setSize={5}
+        />,
+      )
+      expect(branchOf(container)).not.toBeNull()
+    })
   })
 })

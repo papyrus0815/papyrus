@@ -147,6 +147,23 @@ interface EventCompactListProps {
    * 완전히 동일했다). 작동하지 않는 정렬 옵션을 두느니 그때만 그룹을 끈다(검토 CR-4/IA-12).
    */
   grouped?: boolean
+  /**
+   * 현재 정렬 축·방향 — **열 머리글이 그것을 표시한다**.
+   *
+   * 정렬 컨트롤은 도구줄에 있고 결과는 표에 나타나는데, 둘을 잇는 표시가 화면에 없었다.
+   * 어떤 열이 순서를 만들고 있는지 표가 스스로 말하게 한다(시기순 → 날짜 · 등록순 → 등록 ·
+   * 기간순 → 기간). '하위 많은 순'은 대응 열이 없어 표지를 만들지 않는다.
+   */
+  sortBy?: SortOption
+  sortDirection?: 'asc' | 'desc'
+  /**
+   * 건수 스트립('180건 · 전쟁/군사 49') — **표의 머리글이 싣는다**.
+   *
+   * 페이지가 노드째 내려준다. 도구줄에 있던 자리에서는 컨트롤 13개 사이에 낀 토큰이었고,
+   * 정작 그 숫자가 설명하는 대상은 바로 아래 표다. 표가 없는 뷰에서는 도구줄이 계속 싣는다
+   * (catalog-main-content의 MetaArea).
+   */
+  headerStats?: React.ReactNode
 }
 
 export const EventCompactList: React.FC<EventCompactListProps> = ({
@@ -171,6 +188,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   searchQuery,
   density = 'cozy',
   recentEventIds = [],
+  sortBy,
+  sortDirection = 'desc',
+  headerStats,
   collapsedYears,
   collapsedCenturies,
   onToggleYearCollapse,
@@ -198,7 +218,19 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 격자 트랙은 CSS가 좁히고, CSS로 못 하는 것(국기 개수)은 이 값이 정한다.
    */
   const isMidWidth = useMediaQuery('(min-width: 641px) and (max-width: 899px)')
-  const flagMax = isNarrow ? 1 : isMidWidth ? 2 : 3
+  /**
+   * 넓은 대역 — 열 사다리 step 2·3(ledger 1752 / atlas 2052)에 해당한다. 설명을 걷어내며
+   * 남은 폭이 키워드·관련국 열로 넘어갔는데, 트랙만 넓히면 칩 개수가 상수(2·3)라 **넓어진
+   * 만큼 빈 칸**이 된다. CSS가 못 하는 개수 판정을 여기서 한 번만 한다(행마다 matchMedia를
+   * 다는 것을 막는 것이 이 블록의 원래 이유다).
+   * ⚠️ 뷰포트 기준이고 트랙은 컨테이너 기준이라 좌측 목록이 접히면 한 계단 어긋날 수 있다.
+   * 넘치는 칩은 어차피 말줄임·'+N'으로 흡수되므로 과다 쪽으로 틀려도 깨지지 않는다.
+   */
+  const isWide = useMediaQuery('(min-width: 2200px)')
+  const isUltraWide = useMediaQuery('(min-width: 2500px)')
+  const flagMax = isNarrow ? 1 : isMidWidth ? 2 : isUltraWide ? 5 : isWide ? 4 : 3
+  /** 키워드 칩 개수 — 트랙이 넓어진 만큼 더 싣는다(넘치면 '+N'). */
+  const keywordMax = isNarrow ? 1 : isMidWidth ? 2 : isUltraWide ? 6 : isWide ? 4 : 2
 
   /**
    * 0건의 **단일 범인**(검토 IA-12) — 해제하면 결과가 생기는 축이 정확히 하나일 때만.
@@ -343,6 +375,18 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
      * 평면 보기(depth 0 고정)는 계층 표현 자체가 없는 모드라 대상이 아니다.
      */
     const levelPosition = grouped ? levelPositionById.get(node.id) : undefined
+    /**
+     * 부모에게 아직 뒤따르는 형제가 있는가 — 레일 가지선이 손자 구간에서 끊기지 않게
+     * 손자 행이 부모 몫의 세로선을 대신 잇는다(EventListItem.ancestorContinues).
+     * 레일 들여쓰기는 두 단에서 멈추므로(--rail-depth-x가 step×2로 clamp) 조상 사슬을
+     * 끝까지 거슬러 오를 필요 없이 **직계 부모 한 칸**이면 충분하다.
+     */
+    const ancestorContinues = (() => {
+      if (depth < 2 || !parentNodeId) return false
+      const parentPosition = levelPositionById.get(parentNodeId)
+      if (!parentPosition) return false
+      return parentPosition.position < parentPosition.size
+    })()
     const anchorParent = (() => {
       if (depth === 0 || !parentNodeId) return null
       const parentTitle = nodeTitleById.get(parentNodeId)
@@ -377,12 +421,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         groupHeaderless={groupHeaderless}
         isNarrow={isNarrow}
         flagMax={flagMax}
+        keywordMax={keywordMax}
         // 계층 깊이를 접근성 트리에 전달 — 예전엔 하위 사건이 최상위와 똑같이 읽혔다.
         ariaLevel={depth + 1}
         // 그룹 목록은 레벨별 형제 시퀀스를 쓴다(위 memo). 평면 목록은 전부 depth 0이라
         // 인자로 받은 통합 인덱스가 그대로 정답이다.
         positionInSet={levelPosition?.position ?? positionInSet}
         setSize={levelPosition?.size ?? setSize}
+        ancestorContinues={ancestorContinues}
         // 목록 전체가 탭 정지점 하나만 갖도록(로빙 tabindex)
         isRovingTarget={node.id === rovingRowId}
         // 안정 참조 전달 — 행마다 새 화살표를 만들지 않아 EventListItem의
@@ -402,7 +448,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         /* ⚠️ data-density가 없으면 조밀 모드 사용자에게 로딩 45px → 데이터 32px 세로 점프가
            난다(밀도 변수는 스크롤 컨테이너가 한 번만 선언한다). */
         <List.CompactList data-density={density}>
-          <ListColumnHeader />
+          <ListColumnHeader
+            sortBy={sortBy}
+            sortDirection={sortDirection}
+            headerStats={headerStats}
+          />
           {[...Array(SKELETON_ROW_COUNT)].map((_, index) => {
             // 실제 행과 **같은 트랙 선언**으로 렌더 → 로딩→데이터 전환 시 가로·세로 점프 없음.
             // 동일 폭 반복 회피 — index 기반 폭으로 자연스러운 다양성.
@@ -603,7 +653,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           </List.GroupHeading>
           {/* 열 헤더 — sticky 3겹 사다리의 첫 단. 스켈레톤 경로와 **같은 컴포넌트**라
               로딩 → 데이터 전환에서 26px 세로 점프가 없다. */}
-          <ListColumnHeader />
+          <ListColumnHeader
+            sortBy={sortBy}
+            sortDirection={sortDirection}
+            headerStats={headerStats}
+          />
           {!grouped && (
             /* 그룹 없는 평면 목록 — 배열 순서(= 선택한 정렬)를 그대로 보여준다.
                groupYear를 null로 넘겨 각 행이 자기 연도를 그대로 표시하게 한다. */
@@ -1207,26 +1261,115 @@ const SKELETON_ROW_COUNT = 18
  * `aria-hidden` — 행은 listitem이고 여기 라벨은 시각 보조다. 스크린리더에는 각 셀의
  * 텍스트와 title 속성이 이미 의미를 싣고 있어, 헤더를 읽히면 행마다 중복 낭독이 된다.
  */
-const ListColumnHeader: React.FC = () => (
+/** 정렬 축 → 열 매핑. 대응 열이 없는 축('하위 많은 순')은 undefined. */
+const SORT_COLUMN: Partial<Record<SortOption, 'date' | 'dur' | 'reg'>> = {
+  recent: 'date',
+  duration: 'dur',
+  created: 'reg',
+}
+
+const ListColumnHeader: React.FC<{
+  sortBy?: SortOption
+  sortDirection?: 'asc' | 'desc'
+  headerStats?: React.ReactNode
+}> = ({ sortBy, sortDirection = 'desc', headerStats }) => {
+  const sortedCol = sortBy ? SORT_COLUMN[sortBy] : undefined
+  /* 방향 글리프는 **한 곳에서만** 만든다 — 열마다 따로 쓰면 오름/내림이 엇갈린다. */
+  const caret = (col: 'date' | 'dur' | 'reg') =>
+    sortedCol === col ? (
+      <List.ColumnSortCaret aria-hidden="true">
+        {sortDirection === 'asc' ? '▲' : '▼'}
+      </List.ColumnSortCaret>
+    ) : null
+
+  return (
   <List.ColumnHeader aria-hidden="true">
-    <List.ColumnHeaderCell $col="date">날짜</List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="cat">분류</List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="title">사건</List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="sum" $showFrom={LIST_STEPS.summary}>
-      설명
+    {/* 정렬은 **셀을 따라간다** — 라벨과 값이 같은 트랙의 반대쪽 끝에 서면 머리글이
+        열을 가리키는 게 아니라 오독을 만든다(실측: 날짜 값은 우측 정렬인데 라벨은
+        좌측이라 66px 트랙의 양 끝에 따로 서 있었다. 분류도 같은 상태였다). */}
+    <List.ColumnHeaderCell
+      $col="date"
+      $align="right"
+      $sorted={sortedCol === 'date'}
+    >
+      시작
+      {caret('date')}
     </List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="kw" $showFrom={LIST_STEPS.ledger}>
+    {/* 종료 — 시작과 한 쌍이라 바로 옆에 세운다. 값이 없는 행이 많지만(65%) 그 빈칸이
+        '종료 미상'이라는 사실이고, 머리글이 없으면 그 사실을 읽을 이름 자체가 없다. */}
+    <List.ColumnHeaderCell
+      $col="end"
+      $align="right"
+      $showFrom={LIST_STEPS.summary}
+    >
+      종료
+    </List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="cat" $align="right">
+      분류
+    </List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="title" $textIndent>
+      사건
+      {headerStats && <HeaderStatsSlot>{headerStats}</HeaderStatsSlot>}
+    </List.ColumnHeaderCell>
+    {/* (제거) '설명' 열 머리글 — 설명이 별도 열이 아니라 '사건' 셀 안에서 제목 뒤를
+        잇는 글이 됐다. 없는 열에 머리글만 남으면 그 라벨이 가리키는 트랙이 없다. */}
+    <List.ColumnHeaderCell $col="kw" $showFrom={LIST_STEPS.summary}>
       키워드
     </List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="dur" $align="right">
+    {/* 기간 열은 우측 정렬 숫자가 아니라 **연 단위 트랙**이다 — 라벨을 오른쪽 끝에
+        붙이면 연말(12월 31일) 위에 얹혀 축이 거기서 끝나는 것처럼 읽힌다. */}
+    <List.ColumnHeaderCell
+      $col="dur"
+      $align="center"
+      $axis
+      $sorted={sortedCol === 'dur'}
+      title="이 행이 속한 해의 1월 1일 ~ 12월 31일 · 눈금과 세로 격자는 4·7·10월"
+    >
+      {/* 축의 양 끝 — 이 열이 '한 해'라는 사실을 화면에 적는 유일한 잉크.
+          좁은 대역에서는 스스로 꺼진다(AxisEndLabel의 컨테이너 쿼리). */}
+      <List.AxisEndLabel $side="start" aria-hidden="true">
+        1월
+      </List.AxisEndLabel>
       기간
+      {caret('dur')}
+      <List.AxisEndLabel $side="end" aria-hidden="true">
+        12월
+      </List.AxisEndLabel>
+      <List.DurationAxis aria-hidden="true" />
     </List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="flags">관련국</List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="reg" $align="right" $showFrom={LIST_STEPS.atlas}>
+    {/* 관련국 칩 묶음은 트랙 우단에 붙는다(Flags의 justify-content) — 라벨도 함께 간다. */}
+    <List.ColumnHeaderCell $col="flags" $align="right">
+      관련국
+    </List.ColumnHeaderCell>
+    <List.ColumnHeaderCell
+      $col="reg"
+      $align="right"
+      $showFrom={LIST_STEPS.atlas}
+      $sorted={sortedCol === 'reg'}
+    >
       등록
+      {caret('reg')}
     </List.ColumnHeaderCell>
-  </List.ColumnHeader>
-)
+    </List.ColumnHeader>
+  )
+}
+
+/**
+ * 머리글 안 건수 슬롯 — 라벨('사건')보다 **한 단 뒤**에 선다.
+ *
+ * 스트립 자신의 12px을 11px로 낮춘다(자식 선택자). 머리글 줄의 다른 잉크가 전부 11px이라
+ * 한 토큰만 크면 그게 라벨처럼 읽히고, 정작 열 이름이 뒤로 밀린다.
+ */
+const HeaderStatsSlot = styled.span`
+  margin-left: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+
+  > * {
+    font-size: 11px;
+  }
+`
 
 const skeletonBarBg = css`
   background: linear-gradient(
@@ -1314,23 +1457,34 @@ const SkeletonCategory = styled.span`
   opacity: 0.7;
 `
 
-const SkeletonTitleBar = styled.span`
+/* 제목 + 설명을 한 트랙 안에 나란히 — 실제 행이 그렇게 조판되므로(설명은 열이 아니라
+   제목 뒤를 잇는 글) 스켈레톤도 같은 구조여야 데이터 도착 시 폭이 튀지 않는다. */
+const SkeletonTitleGroup = styled.span`
   grid-column: title;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   /* 실제 제목은 디스클로저 폭만큼 안쪽에서 시작한다 */
   margin-left: var(--row-disc-btn);
+`
+
+const SkeletonTitleBar = styled.span`
+  flex: 0 0 auto;
   height: 14px;
   border-radius: 4px;
   ${skeletonBarBg}
   ${shimmerAnimation}
 `
 
-/* 요약 열이 켜지는 대역에서만 — 실제 행과 같은 게이트를 읽는다. */
+/* 설명이 켜지는 대역에서만 — 실제 행과 같은 게이트를 읽는다. */
 const SkeletonSnippet = styled.span`
   display: none;
 
   @container eventcard (min-width: ${LIST_STEPS.summary}px) {
     display: block;
-    grid-column: sum;
+    flex: 1 1 0;
+    min-width: 0;
     height: 11px;
     border-radius: 4px;
     opacity: 0.6;

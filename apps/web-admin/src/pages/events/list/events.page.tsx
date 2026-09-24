@@ -58,11 +58,6 @@ import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useRecentEvents } from '@/shared/hooks/use-recent-events.hook'
 import type { ListDensity } from '@/pages/events/styles/theme'
 import { EventCompactList } from '@/widgets/event-list-compact/ui/event-compact-list'
-import {
-  EventTimeline,
-  type TimelineWindow,
-} from '@/widgets/event-timeline/ui/event-timeline'
-import { describeWindow as describeTimelineWindow } from '@/widgets/event-timeline/model/timeline-model'
 import { EventDetailPanel } from '@/widgets/event-list/ui/event-detail-panel'
 
 /**
@@ -113,7 +108,11 @@ import { CatalogDetailDrawer } from './components/catalog-detail-drawer'
 import { CatalogEntityFilterModals } from './components/catalog-entity-filter-modals'
 import { CatalogMainContent } from './components/catalog-main-content'
 import { CatalogOverlayModals } from './components/catalog-overlay-modals'
-import { CatalogToolbar } from './components/catalog-toolbar'
+import { CatalogHeaderStats } from './components/catalog-header-stats'
+import {
+  CatalogToolbar,
+  CatalogViewUtilities,
+} from './components/catalog-toolbar'
 import { useCatalogEventIndex } from './hooks/use-catalog-event-index'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 import type { EventParentPreset } from '@/widgets/event-form/ui/event-register-modal'
@@ -133,16 +132,9 @@ import {
 } from './lib/prune-deleted-event'
 
 /** 집중(넓게) 보기 선택 영속 키 — 세션 간 유지. 모듈 스코프(렌더마다 재생성 회피). */
-const WIDE_MODE_KEY = 'papyrus.events.wideMode'
 /** 목록 밀도 선택 영속 키 — 세션 간 유지. */
 const LIST_DENSITY_KEY = 'papyrus.events.listDensity'
 const LIST_DENSITIES: ListDensity[] = ['compact', 'cozy', 'roomy']
-/**
- * 타임라인 '카테고리 숨김'의 빈 값 — 모듈 스코프 고정 참조.
- * 매번 `new Set()`을 만들면 초기화·재설정이 위젯 memo를 통째로 무효화한다.
- */
-const EMPTY_HIDDEN_CATEGORIES: ReadonlySet<string> = new Set<string>()
-
 /**
  * (제거됨) EventsCatalogPageProps — `countryId`·`embed`.
  *
@@ -206,7 +198,7 @@ export const EventsCatalogPage: React.FC = () => {
   // 아이콘인데(45px 중 28px이 액션 버튼), 사용자가 '더 많이 보기'로 쓸 수 있는 레버가
   // '넓게'(세로 79px 회수) 하나뿐이었다.
   //
-  // ⚠️ wideMode와 달리 뷰포트로 **자동 추정하지 않는다**. 밀도는 과업 의존적이라
+  // ⚠️ 뷰포트로 **자동 추정하지 않는다**. 밀도는 과업 의존적이라
   // (찾을 땐 조밀, 읽을 땐 편안) 사용자 선택이 우선이고, 자동 추정은 "왜 어제와 다르지"를 만든다.
   const [listDensity, setListDensity] = useState<ListDensity>(() => {
     if (typeof window === 'undefined') return 'cozy'
@@ -252,35 +244,6 @@ export const EventsCatalogPage: React.FC = () => {
           ?.scrollIntoView({ block: 'start', behavior: 'instant' })
       })
     }
-  }, [])
-
-  // ===== 집중(넓게) 보기 =====
-  // 페이지 헤더·뷰 힌트·타임라인 미니맵을 접어 콘텐츠 본문에 세로 공간(~250px)을 양보.
-  // 토글 1회로 켜고 끄며 선택은 localStorage에 영속(다음 방문에도 유지).
-  const [wideMode, setWideMode] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    try {
-      const saved = window.localStorage.getItem(WIDE_MODE_KEY)
-      if (saved === '1') return true
-      if (saved === '0') return false
-      // 미설정(최초 방문) — 짧은 뷰포트(노트북류, < 860px)면 자동으로 집중 모드로
-      // 시작해 첫 진입 가독성을 확보. 큰 모니터(≥ 860px)는 미니맵을 유지.
-      // 사용자가 토글하면 '1'/'0'이 저장돼 이후엔 그 선택이 항상 우선.
-      return window.innerHeight < 860
-    } catch {
-      return false
-    }
-  })
-  const toggleWideMode = useCallback(() => {
-    setWideMode((prev) => {
-      const next = !prev
-      try {
-        window.localStorage.setItem(WIDE_MODE_KEY, next ? '1' : '0')
-      } catch {
-        /* storage 비활성 — 세션 내 토글만 동작 */
-      }
-      return next
-    })
   }, [])
 
   // ===== 북마크 / 최근 본 =====
@@ -498,43 +461,6 @@ export const EventsCatalogPage: React.FC = () => {
     startViewTransition(() => setViewMode(next))
   }, [])
 
-  /**
-   * ===== 타임라인 전용 축 — **페이지가 소유한다**(검토 GAP-4) =====
-   *
-   * 카테고리 숨김(`hide`)과 시간 창(`tlw`)은 위젯 지역 state로 두면 URL에도
-   * 활성 칩에도 '전체 초기화'에도 없는 두 번째 상태 체계가 된다 — 카테고리 3개를
-   * 숨겨 둔 채 하루 뒤에 돌아온 사용자에게는 그냥 "사건이 없는 화면"이고, 공유한
-   * 링크는 상대에게 다른 화면을 보여준다. 상태를 여기로 올려 다른 축과 같은 규약을
-   * 받게 한다. (v3의 레인 축 `lane`은 v4 재설계에서 레인 자체가 사라져 폐지 —
-   * docs/event-timeline-redesign.md)
-   *
-   * ⚠️ 숨김 키는 **카테고리 이름**이다(타임라인이 `point.category` 문자열로 거른다).
-   * id로 바꿔 페이지 카테고리 필터와 합치는 중기안은 다중 선택(보류 IA-10)에 종속되므로
-   * 여기서는 하지 않는다.
-   */
-  const [timelineWindow, setTimelineWindow] = useState<TimelineWindow | null>(
-    initialUrlState.timelineWindow,
-  )
-  const [hiddenTimelineCategories, setHiddenTimelineCategories] = useState<
-    ReadonlySet<string>
-  >(() =>
-    // 빈 집합은 모듈 스코프 고정 참조를 재사용한다(위젯 memo 무효화 방지).
-    initialUrlState.hiddenTimelineCategories.size > 0
-      ? initialUrlState.hiddenTimelineCategories
-      : EMPTY_HIDDEN_CATEGORIES,
-  )
-  const toggleHiddenTimelineCategory = useCallback((categoryKey: string) => {
-    setHiddenTimelineCategories((prev) => {
-      const next = new Set(prev)
-      if (next.has(categoryKey)) next.delete(categoryKey)
-      else next.add(categoryKey)
-      return next
-    })
-  }, [])
-  const showAllTimelineCategories = useCallback(
-    () => setHiddenTimelineCategories(EMPTY_HIDDEN_CATEGORIES),
-    [],
-  )
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
     initialUrlState.selectedEventId,
   )
@@ -672,8 +598,6 @@ export const EventsCatalogPage: React.FC = () => {
     viewMode,
     viewExplicit,
     pageSize,
-    timelineWindow,
-    hiddenTimelineCategories,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
@@ -689,8 +613,6 @@ export const EventsCatalogPage: React.FC = () => {
     setViewMode,
     setViewExplicit,
     setPageSize,
-    setTimelineWindow,
-    setHiddenTimelineCategories,
   })
 
   /**
@@ -1318,38 +1240,6 @@ export const EventsCatalogPage: React.FC = () => {
   )
 
   /**
-   * 타임라인 전용 축의 활성 칩(검토 GAP-4).
-   *
-   * **타임라인을 보고 있을 때만** 노출한다 — 이 두 축은 다른 뷰의 결과를 바꾸지 않으므로,
-   * 목록 화면에 '숨김 · 전쟁' 칩을 띄우면 걸리지도 않은 효과를 주장하게 된다.
-   * 반면 '전체 초기화'는 뷰와 무관하게 이 축들도 되돌린다(handleResetAll 참고).
-   */
-  const timelineFilterChips = useMemo<FilterChip[]>(() => {
-    if (viewMode !== VIEW_MODES.TIMELINE) return []
-    const chips: FilterChip[] = []
-    if (timelineWindow !== null) {
-      chips.push({
-        key: 'tlw',
-        label: `타임라인 창 · ${describeTimelineWindow(timelineWindow)}`,
-        onClear: () => setTimelineWindow(null),
-      })
-    }
-    for (const categoryKey of hiddenTimelineCategories) {
-      chips.push({
-        key: `hide:${categoryKey}`,
-        label: `숨김 · ${categoryKey}`,
-        onClear: () => toggleHiddenTimelineCategory(categoryKey),
-      })
-    }
-    return chips
-  }, [
-    viewMode,
-    timelineWindow,
-    hiddenTimelineCategories,
-    toggleHiddenTimelineCategory,
-  ])
-
-  /**
    * 칩 바에 **실제로 렌더되는** 필터 집합(검토 IA-17).
    *
    * 예전엔 'N개 적용 중'을 `filterSummaryChips.length + 북마크`로 셌는데, 툴바는
@@ -1378,9 +1268,8 @@ export const EventsCatalogPage: React.FC = () => {
     () => [
       ...(anchorScopeChip ? [anchorScopeChip] : []),
       ...filterSummaryChips.filter((chip) => chip.key !== 'keyword'),
-      ...timelineFilterChips,
     ],
-    [anchorScopeChip, filterSummaryChips, timelineFilterChips],
+    [anchorScopeChip, filterSummaryChips],
   )
 
   /**
@@ -1470,26 +1359,16 @@ export const EventsCatalogPage: React.FC = () => {
       bookmarksOnly,
       anchorsOnly,
       anchorId,
-      timelineWindow,
-      hiddenTimelineCategories,
       collapsedYears,
       collapsedCenturies,
       expandedEventIds,
     }
-    /**
-     * 해제되는 '좁히는 조건' 수 — 칩과 같은 모수(검색어 칩 포함).
-     * 타임라인 축 2종(창 `tlw`·카테고리 숨김 `hide`)은 칩이 TIMELINE 뷰 전용인
-     * 것과 달리 **뷰와 무관하게** 카운트한다(검토 R40 — 의도된 비대칭). 다른
-     * 뷰에서도 URL에 남아 있고 아래에서 실제로 해제되므로, 뷰로 게이트하면
-     * 토스트 건수와 되돌리기 스냅샷이 어긋난다.
-     */
+    /** 해제되는 '좁히는 조건' 수 — 칩과 같은 모수(검색어 칩 포함). */
     const releasedFilters =
       filterSummaryChips.length +
       (bookmarksOnly ? 1 : 0) +
       (anchorsOnly ? 1 : 0) +
-      (anchorId !== null ? 1 : 0) +
-      (timelineWindow !== null ? 1 : 0) +
-      hiddenTimelineCategories.size
+      (anchorId !== null ? 1 : 0)
     /**
      * 실제로 감춰진 행이 있었는가 — 밴드 접힘(④)이거나 계층 접힘(③).
      * ⚠️ `expandedEventIds.size === 0`으로 판정하면 안 된다. 자식이 있는 사건이 하나도
@@ -1504,8 +1383,6 @@ export const EventsCatalogPage: React.FC = () => {
     setBookmarksOnly(false)
     setAnchorsOnly(false)
     setAnchorId(null)
-    setTimelineWindow(null)
-    setHiddenTimelineCategories(EMPTY_HIDDEN_CATEGORIES)
     // 접힘도 함께 푼다 — 이 버튼이 '보이게 해 준다'고 약속하기 때문이다(URL-6).
     setCollapsedYears(new Set())
     setCollapsedCenturies(new Set())
@@ -1528,8 +1405,6 @@ export const EventsCatalogPage: React.FC = () => {
           setBookmarksOnly(snapshot.bookmarksOnly)
           setAnchorsOnly(snapshot.anchorsOnly)
           setAnchorId(snapshot.anchorId)
-          setTimelineWindow(snapshot.timelineWindow)
-          setHiddenTimelineCategories(snapshot.hiddenTimelineCategories)
           setCollapsedYears(snapshot.collapsedYears)
           setCollapsedCenturies(snapshot.collapsedCenturies)
           setExpandedEventIds(snapshot.expandedEventIds)
@@ -1548,8 +1423,6 @@ export const EventsCatalogPage: React.FC = () => {
     bookmarksOnly,
     anchorsOnly,
     anchorId,
-    timelineWindow,
-    hiddenTimelineCategories,
     collapsedYears,
     collapsedCenturies,
     expandedEventIds,
@@ -1817,6 +1690,7 @@ export const EventsCatalogPage: React.FC = () => {
       )
       break
     case VIEW_MODES.LIST:
+    default:
       activeSlot = (
         <EventCompactList
           density={listDensity}
@@ -1850,6 +1724,21 @@ export const EventsCatalogPage: React.FC = () => {
           bookmarks={bookmarks}
           searchQuery={debouncedKeyword}
           recentEventIds={recentEvents}
+          // 열 머리글이 '지금 어느 열이 순서를 만드는가'를 표시한다 — 도구줄의
+          // 정렬 컨트롤과 표를 잇는 유일한 시각 고리다.
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          // 건수 스트립은 표의 머리글이 싣는다 — 도구줄 MetaArea는 LIST에서 렌더되지 않는다.
+          // 모수 규약은 도구줄과 동일(검토 IA-13): statsEvents = 총계와 같은 모수.
+          headerStats={
+            <CatalogHeaderStats
+              events={statsEvents}
+              dbCategories={dbCategories}
+              visibleCount={filtersOrSearchActive ? matchedCount : undefined}
+              serverTotal={serverTotal}
+              authoritativeTotal={serverTotal ?? rootLoadedCount}
+            />
+          }
           collapsedYears={collapsedYears}
           collapsedCenturies={collapsedCenturies}
           onToggleYearCollapse={toggleYearCollapse}
@@ -1869,29 +1758,6 @@ export const EventsCatalogPage: React.FC = () => {
         />
       )
       break
-    case VIEW_MODES.TIMELINE:
-    default:
-      activeSlot = (
-        <EventTimeline
-          flattenedHierarchy={matchedOnlyHierarchy}
-          events={events}
-          selectedEventId={selectedEventId}
-          dbCategories={dbCategories}
-          onSelectEvent={setSelectedEventId}
-          hasMore={hasMore}
-          isFetchingMore={isFetchingNextPage}
-          onLoadMore={fetchMoreEvents}
-          loadMoreFailed={loadMoreFailed}
-          isLoading={firstPageLoading}
-          wideMode={wideMode}
-          // 타임라인 전용 상태(창·숨김)는 페이지 소유 — URL·칩·초기화에 참여(검토 GAP-4)
-          window={timelineWindow}
-          onWindowChange={setTimelineWindow}
-          hiddenCategories={hiddenTimelineCategories}
-          onToggleHiddenCategory={toggleHiddenTimelineCategory}
-          onShowAllCategories={showAllTimelineCategories}
-        />
-      )
   }
 
   const handleAfterDelete = useCallback(
@@ -2099,6 +1965,21 @@ export const EventsCatalogPage: React.FC = () => {
      */
     filterSummaryChips: barFilterChips,
     handleResetAll,
+    /* ≤900px 전용 자리 — 넓은 폭에서는 CatalogMainContent의 보기 행이 같은 노드를 그린다.
+       둘 중 하나는 항상 display:none이라 화면에도 접근성 트리에도 한 벌만 존재한다. */
+    viewUtilities: (
+      <CatalogViewUtilities
+        showFlatView={showFlatView}
+        childrenCollapsed={childrenCollapsed}
+        hasCollapsibleChildren={hasCollapsibleChildren}
+        onCollapseAllChildren={collapseAllChildren}
+        onExpandAllChildren={expandAllChildren}
+        onExportJson={handleExportJson}
+        onOpenShortcutHelp={openShortcutHelp}
+        pageSize={pageSize}
+        onPageSizeChange={handlePageSizeChange}
+      />
+    ),
   }
 
   // ===== 표시 옵션 묶음 (CatalogMainContent의 ViewSwitcherRow가 소비) =====
@@ -2195,12 +2076,23 @@ export const EventsCatalogPage: React.FC = () => {
           sortDirection={sortDirection}
           onSortChange={handleSortChange}
           onSortDirectionToggle={handleSortDirectionToggle}
-          pageSize={pageSize}
-          onPageSizeChange={handlePageSizeChange}
-          wideMode={wideMode}
-          onToggleWideMode={toggleWideMode}
           listDensity={listDensity}
           onChangeListDensity={changeListDensity}
+          /* 표시 제어는 필터 바가 아니라 보기 행에 산다 — 결과를 좁히지 않는 컨트롤이고,
+             필터 바에 있을 때는 액션 트랙을 4px 넘겨 '새 사건 등록'을 다음 줄로 밀었다. */
+          viewUtilities={
+            <CatalogViewUtilities
+              showFlatView={showFlatView}
+              childrenCollapsed={childrenCollapsed}
+              hasCollapsibleChildren={hasCollapsibleChildren}
+              onCollapseAllChildren={collapseAllChildren}
+              onExpandAllChildren={expandAllChildren}
+              onExportJson={handleExportJson}
+              onOpenShortcutHelp={openShortcutHelp}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+            />
+          }
           activeSlot={activeSlot}
         />
         <PageStyles.DrawerAnnouncer role="status" aria-live="polite">

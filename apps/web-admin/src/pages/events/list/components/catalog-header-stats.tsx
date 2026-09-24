@@ -31,6 +31,11 @@ interface Props {
   visibleCount?: number
   /** 서버 권위 총개수(최상위 기준) — 미필터 상태의 "N건" */
   serverTotal?: number
+  /**
+   * 필터 중일 때 함께 보여 줄 **모수** — '조건 일치 N건'만으로는 N이 큰지 작은지 모른다.
+   * 앞 숫자와 모수가 다르므로(조건 일치 vs 등록 전체) 반드시 라벨을 붙여 구별한다.
+   */
+  authoritativeTotal?: number
 }
 
 export const CatalogHeaderStats: React.FC<Props> = ({
@@ -38,6 +43,7 @@ export const CatalogHeaderStats: React.FC<Props> = ({
   dbCategories,
   visibleCount,
   serverTotal,
+  authoritativeTotal,
 }) => {
   const { topCategory } = useMemo(() => {
     const catCount = new Map<string, number>()
@@ -84,6 +90,11 @@ export const CatalogHeaderStats: React.FC<Props> = ({
         {isFiltered && <TotalPrefix>조건 일치</TotalPrefix>}
         <strong>{total.toLocaleString()}</strong>건
       </Total>
+      {isFiltered && authoritativeTotal !== undefined && (
+        <TotalHint title="등록된 최상위 사건 수(필터 적용 전). 앞의 숫자는 현재 조건을 만족하는 사건 수이므로 모수가 다릅니다.">
+          / 등록 전체 {authoritativeTotal.toLocaleString()}건(최상위)
+        </TotalHint>
+      )}
       {topCategory && (
         <>
           <Sep aria-hidden="true">·</Sep>
@@ -140,6 +151,12 @@ const Dot = styled.span`
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
+`
+
+const TotalHint = styled.span`
+  font-weight: 500;
+  color: ${metaText};
+  opacity: 0.9;
 `
 
 const Sep = styled.span`

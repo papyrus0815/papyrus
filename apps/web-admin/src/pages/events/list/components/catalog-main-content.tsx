@@ -21,14 +21,11 @@ import {
   FiArrowDown,
   FiBarChart2,
   FiChevronDown,
-  FiClock,
   FiGitBranch,
   FiGrid,
   FiImage,
   FiList,
   FiMapPin,
-  FiMaximize2,
-  FiMinimize2,
   FiMoreHorizontal,
   FiFlag,
 } from 'react-icons/fi'
@@ -81,15 +78,15 @@ interface Props {
   onSortChange: (sortBy: SortOption) => void
   onSortDirectionToggle: () => void
 
-  pageSize: number
-  onPageSizeChange: (size: number) => void
+  /* (제거) pageSize · onPageSizeChange — '한 번에 불러올 개수'가 보기 행의 셀렉트에서
+     ⋯ 메뉴(CatalogViewUtilities)로 내려가면서 이 컴포넌트는 값을 쓰지 않는다.
+     쓰지 않는 prop을 남겨 두면 다음 사람이 이 지면을 개수 설정의 소유자로 읽는다. */
 
   /**
-   * 집중(넓게) 보기 — 타임라인의 시대 내비게이터를 슬림으로 전환해 연표 리스트에
-   * 세로 공간을 양보한다. 상태는 페이지가 소유(localStorage 영속).
+   * 표시 제어 클러스터(하위 접기·JSON·?) — 페이지가 렌더해 내려준다.
+   * 노드로 받는 이유는 핸들러 일곱 개를 이 컴포넌트로 끌어오지 않기 위해서다.
    */
-  wideMode: boolean
-  onToggleWideMode: () => void
+  viewUtilities?: React.ReactNode
   /** 목록 밀도 — LIST 뷰에서만 노출되는 컨트롤 */
   listDensity: ListDensity
   onChangeListDensity: (next: ListDensity) => void
@@ -109,9 +106,8 @@ interface ModeDef {
  * 활성 뷰 아래에 캡션으로 노출해, 사용자가 목적에 맞는 뷰를 고르도록 돕는다.
  */
 const VIEW_HINTS: Record<ViewMode, string> = {
-  [VIEW_MODES.TIMELINE]:
-    '시대별 분포·동시대성 — 막대 길이=기간, 우측 목록으로 사건명 확인',
-  [VIEW_MODES.LIST]: '전체 사건을 시간순으로 훑기 — 세기·연도별 그룹',
+  [VIEW_MODES.LIST]:
+    '전체 사건을 시간순으로 훑기 — 세기·연도별 그룹, 기간 열은 그 해 안의 위치·길이',
   [VIEW_MODES.ERA]:
     '빅토리아 시대·건륭제 시대처럼 군주의 재위로 묶어 보기 — 사건이 걸린 나라의 재위만',
   [VIEW_MODES.MAP]: '지리적 위치 — 좌표 데이터가 아직 없어 준비 중입니다',
@@ -122,27 +118,31 @@ const VIEW_HINTS: Record<ViewMode, string> = {
 }
 
 /**
- * 자주 쓰는 2개 — 세그먼트 컨트롤로 노출.
+ * 자주 쓰는 3개 — 세그먼트 컨트롤로 노출.
+ *
+ * 타임라인이 목록에 합쳐지면서 여기가 한 칸만 남았었다 — 누를 수도 끌 수도 없는
+ * 세그먼트 하나는 컨트롤이 아니라 라벨이다. 성격이 실제로 다른 렌즈 둘(시대=재위로
+ * 묶기, 트리=상하위 관계)을 '더보기'에서 끌어올려 세 칸을 되돌린다. 나머지 넷은
+ * 같은 사건을 다르게 그리는 변주라 드롭다운에 남는다.
  *
  * 지도는 여기서 **빠졌다**(2026-07-28 검토 M8): 좌표 파이프라인이 스키마·DTO·등록
  * 폼 어디에도 없어 데이터와 무관하게 100% 빈 화면인데, primary 3개 중 하나를
  * 차지하고 있었다. 좌표를 실제로 싣게 되면 다시 올릴 것.
  */
 const PRIMARY_MODES: ModeDef[] = [
-  { value: VIEW_MODES.TIMELINE, label: '타임라인', icon: <FiClock size={13} /> },
   { value: VIEW_MODES.LIST, label: '목록', icon: <FiList size={13} /> },
+  { value: VIEW_MODES.ERA, label: '시대', icon: <FiFlag size={13} /> },
+  { value: VIEW_MODES.TREE, label: '트리', icon: <FiGitBranch size={13} /> },
 ]
 
-/** 보조 5개 — "더보기 ▾" 드롭다운에 묶음 */
+/** 보조 4개 — "더보기 ▾" 드롭다운에 묶음 */
 const SECONDARY_MODES: ModeDef[] = [
-  { value: VIEW_MODES.ERA, label: '시대', icon: <FiFlag size={13} /> },
   { value: VIEW_MODES.GRID, label: '격자', icon: <FiGrid size={13} /> },
   {
     value: VIEW_MODES.DASHBOARD,
     label: '통계',
     icon: <FiBarChart2 size={13} />,
   },
-  { value: VIEW_MODES.TREE, label: '트리', icon: <FiGitBranch size={13} /> },
   { value: VIEW_MODES.GALLERY, label: '갤러리', icon: <FiImage size={13} /> },
   { value: VIEW_MODES.MAP, label: '지도', icon: <FiMapPin size={13} /> },
 ]
@@ -161,10 +161,7 @@ export const CatalogMainContent: React.FC<Props> = ({
   sortDirection,
   onSortChange,
   onSortDirectionToggle,
-  pageSize,
-  onPageSizeChange,
-  wideMode,
-  onToggleWideMode,
+  viewUtilities,
   listDensity,
   onChangeListDensity,
   activeSlot,
@@ -342,16 +339,9 @@ export const CatalogMainContent: React.FC<Props> = ({
           >
             <FiArrowDown size={14} aria-hidden="true" />
           </Filter.SortButton>
-          <List.SortSelect
-            value={pageSize}
-            aria-label="한 번에 불러올 사건 수"
-            title="한 번에 불러올 사건 수 (스크롤 시 추가 로드)"
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          >
-            <option value={20}>20개씩</option>
-            <option value={50}>50개씩</option>
-            <option value={100}>100개씩</option>
-          </List.SortSelect>
+          {/* (이동) '한 번에 불러올 개수' 셀렉트 — 우측 ⋯ 메뉴로 내려갔다.
+              한 세션에 한 번 만질까 말까 한 설정이 정렬·방향과 같은 무게로 상시 서 있었다.
+              근거는 CatalogViewUtilities의 ⋯ 메뉴 주석. */}
         </ToolbarStyles.DisplayOptions>
 
         {/* 목록 밀도 — LIST 뷰 전용. 다른 뷰에는 '행'이라는 단위가 없다.
@@ -406,44 +396,30 @@ export const CatalogMainContent: React.FC<Props> = ({
           </DensityGroup>
         )}
 
-        {/* 집중(넓게) 보기 토글 — **타임라인 전용**.
-            예전엔 모든 뷰에 있었지만 실제로 접는 것은 타임라인의 시대 내비게이터
-            (슬림 전환)뿐이다(v3 미니맵을 지칭하던 카피는 검토 R24로 정정). 목록·
-            격자 등에서는 no-op이 된다 — 실행된 적 없는 계약을 남기지 않는다. */}
-        {viewMode === VIEW_MODES.TIMELINE && (
-        <ToolbarStyles.ToolbarBtn
-          type="button"
-          $active={wideMode}
-          onClick={onToggleWideMode}
-          aria-pressed={wideMode}
-          title={
-            wideMode
-              ? '기본 보기 — 시대 내비게이터를 원래 높이로'
-              : '넓게 보기 — 시대 내비게이터를 슬림으로 접어 연표를 최대화'
-          }
-        >
-          {wideMode ? (
-            <FiMinimize2 size={13} aria-hidden="true" />
-          ) : (
-            <FiMaximize2 size={13} aria-hidden="true" />
-          )}
-          <span>{wideMode ? '기본' : '넓게'}</span>
-        </ToolbarStyles.ToolbarBtn>
+        {/*
+          * 건수 스트립 — **LIST 뷰에서는 표의 열 머리글이 싣는다**(events.page가 같은
+          * 노드를 EventCompactList에 내려준다). 숫자가 설명하는 대상이 바로 아래 표인데
+          * 도구줄에 있으면 컨트롤 13개 사이에 낀 또 하나의 토큰으로 읽힌다.
+          * 표가 없는 뷰(격자·통계·지도…)에는 머리글이 없으므로 여기 그대로 둔다.
+          */}
+        {viewMode !== VIEW_MODES.LIST && (
+          <MetaArea aria-live="polite">
+            <CatalogHeaderStats
+              events={events}
+              dbCategories={dbCategories}
+              visibleCount={isFiltered ? matchedCount : undefined}
+              serverTotal={serverTotal}
+              /* 모수 고지는 이제 스트립 자신이 싣는다 — 표 머리글로 옮겨 간 LIST 뷰와
+                 도구줄에 남은 다른 뷰가 **같은 컴포넌트**를 쓰게 하기 위해서다. */
+              authoritativeTotal={authoritativeTotal}
+            />
+          </MetaArea>
         )}
 
-        <MetaArea aria-live="polite">
-          <CatalogHeaderStats
-            events={events}
-            dbCategories={dbCategories}
-            visibleCount={isFiltered ? matchedCount : undefined}
-            serverTotal={serverTotal}
-          />
-          {isFiltered && (
-            <FilteredHint title="등록된 최상위 사건 수(필터 적용 전). 앞의 숫자는 현재 조건을 만족하는 사건 수이므로 모수가 다릅니다.">
-              / 등록 전체 {authoritativeTotal.toLocaleString()}건(최상위)
-            </FilteredHint>
-          )}
-        </MetaArea>
+        {/* 표시 제어(하위 접기·JSON·?) — 필터 바에서 내려온 자리.
+            결과 집합을 좁히지 않는 컨트롤이라 필터가 아니라 **보기**에 속하고,
+            이 행 우측 474px이 비어 있어 높이를 새로 쓰지 않는다. */}
+        {viewUtilities && <UtilityArea>{viewUtilities}</UtilityArea>}
       </ToolbarStyles.ViewSwitcherRow>
 
 
@@ -638,6 +614,48 @@ const ViewHint = styled.div`
   color: ${metaText};
 `
 
+/** 우측 끝 앵커 — 통계까지가 좌측 클러스터, 표시 제어는 반대쪽 끝에 선다. */
+const UtilityArea = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+
+  /*
+   * ≤900px에서는 **필터 바가** 이 묶음을 소유한다(CatalogToolbar의 NarrowUtilities).
+   * 그 대역의 보기 행은 이미 꽉 차 있어 묶음 하나가 줄을 하나 더 만들었고(실측 768px에서
+   * 헤더 총높이 322 → 370px), 반대로 필터 바는 이미 wrap이라 아이콘 3개를 공짜로 흡수한다.
+   * 한쪽은 display:none이라 접근성 트리에도 한 벌만 남는다.
+   */
+  @media (max-width: 900px) {
+    display: none;
+  }
+
+  /*
+   * 좁은 폭 — auto 마진을 풀어 좌측 클러스터에 이어 붙이고, 라벨을 sr-only로 떨어뜨린다.
+   *
+   * ⚠️ 라벨을 남기면 이 묶음이 212px이라 보기 행을 **한 줄 더** 만든다. 실측: 768px에서
+   * 헤더 총높이가 322 → 370px로 되레 나빠졌다(필터 바에서 아낀 40px을 여기서 48px
+   * 도로 뱉음). 아이콘만 남기면 110px로 줄어 같은 줄에 탄다. 라벨 축소는 **이 묶음에만**
+   * 건다 — 필터 바의 북마크·최상위는 640px까지 라벨을 유지하는 기존 규약 그대로다.
+   */
+  @media (max-width: 1100px) {
+    margin-left: 0;
+
+    & > button > span:not([class]) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  }
+`
+
 const MetaArea = styled.div`
   /* (제거됨) margin-left: auto — 전폭 2560에서 결과 카운트가 조작 컨트롤에서 1,590px,
      3440에서 2,470px 떨어져, 필터를 바꿀 때마다 시선이 화면을 가로질러야 했다.
@@ -651,8 +669,6 @@ const MetaArea = styled.div`
   font-variant-numeric: tabular-nums;
 `
 
-const FilteredHint = styled.span`
-  color: ${metaText};
-  font-weight: 500;
-  letter-spacing: -0.005em;
-`
+/* (제거) FilteredHint — '/ 등록 전체 N건(최상위)' 고지는 CatalogHeaderStats 안으로
+   들어갔다. 스트립이 LIST에서는 표 머리글, 그 밖에서는 도구줄에 사는데 고지만 이쪽에
+   남으면 같은 문장이 뷰에 따라 나왔다 말았다 한다. */

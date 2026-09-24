@@ -17,14 +17,10 @@ export function resolveDefaultViewMode(viewParam: string | null): ViewMode {
   if (isExplicitViewMode(viewParam)) {
     return viewParam as ViewMode
   }
-  // matchMedia 존재 확인까지 하는 이유: jsdom(테스트 환경)에는 구현이 없어서
-  // 파서를 순수 함수로 테스트할 때 여기서 TypeError로 죽는다. 없으면 데스크톱 기본값.
-  if (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(max-width: 640px)').matches
-  ) {
-    return VIEW_MODES.LIST
-  }
-  return VIEW_MODES.TIMELINE
+  /* 폐지된 타임라인 뷰의 배포된 링크 — 죽이지 않고 후신인 목록으로 받는다.
+     (`isExplicitViewMode`는 여전히 false라 상태→URL이 `view=list`를 되쓰지 않는다.) */
+  if (viewParam === 'timeline') return VIEW_MODES.LIST
+  /* 뷰가 하나뿐이라 디바이스 추론이 남을 자리가 없다 — 예전에는 데스크톱 기본이
+     타임라인, 모바일 폴백이 목록이었다. */
+  return VIEW_MODES.LIST
 }

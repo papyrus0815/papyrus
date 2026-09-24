@@ -32,10 +32,6 @@ import {
   type SortOption,
   type ViewMode,
 } from '@/features/event-list/lib'
-import {
-  parseTimelineWindow,
-  type TimelineWindow,
-} from '@/widgets/event-timeline/model/timeline-model'
 
 import { isExplicitViewMode, resolveDefaultViewMode } from './resolve-default-view-mode'
 
@@ -88,14 +84,6 @@ export interface CatalogUrlState {
    * 반대로 모바일 폴백('타임라인은 터치로 거의 조작 불가')도 무력화된다.
    */
   viewExplicit: boolean
-  /**
-   * `tlw` — 타임라인 시간 창(`c19`·`c-1`·`d1871`·`u`). 없거나 무효면 전체(null).
-   * v3의 레인 축(`lane`)은 v4 재설계에서 폐지 — 구 URL의 `lane`은 무시되고
-   * 첫 상태→URL write에서 정리된다.
-   */
-  timelineWindow: TimelineWindow | null
-  /** `hide` — 타임라인에서 숨긴 카테고리 **이름** 집합 */
-  hiddenTimelineCategories: Set<string>
 }
 
 /** 빈 문자열·공백만 있는 값은 '없음'과 같다 — `?cat=`이 '이름 없는 카테고리' 필터가 되면 결과가 0건이 된다 */
@@ -147,18 +135,6 @@ export const parsePageSizeParam = (raw: string | null): number => {
 }
 
 /**
- * `hide` — 콤마로 구분한 카테고리 **이름** 목록.
- * 빈 토큰은 버려 `hide=`만 남은 URL이 '이름 없는 카테고리 숨김' 필터로 둔갑하지 않게 한다.
- */
-export const parseHiddenCategoriesParam = (raw: string | null): Set<string> =>
-  new Set(
-    (raw ?? '')
-      .split(',')
-      .map((token) => token.trim())
-      .filter((token) => token.length > 0),
-  )
-
-/**
  * 검색 파라미터 전체를 한 번에 해석한다.
  *
  * 검증에 실패한 값은 **조용히 기본값으로 낙하**시킨다. 그 다음 상태→URL 동기화가
@@ -190,9 +166,5 @@ export function parseCatalogSearchParams(
     showFlatView: searchParams.get('flat') === '1',
     viewMode: resolveDefaultViewMode(viewParam),
     viewExplicit: isExplicitViewMode(viewParam),
-    timelineWindow: parseTimelineWindow(searchParams.get('tlw')),
-    hiddenTimelineCategories: parseHiddenCategoriesParam(
-      searchParams.get('hide'),
-    ),
   }
 }

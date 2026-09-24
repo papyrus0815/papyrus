@@ -45,8 +45,6 @@ const makeArgs = (
   viewMode: VIEW_MODES.LIST,
   viewExplicit: false,
   pageSize: DEFAULT_PAGE_SIZE,
-  timelineWindow: null,
-  hiddenTimelineCategories: new Set<string>(),
   setKeywordInput: noopSetter,
   setSelectedEventId: noopSetter,
   setBookmarksOnly: noopSetter,
@@ -62,8 +60,6 @@ const makeArgs = (
   setViewMode: noopSetter,
   setViewExplicit: noopSetter,
   setPageSize: noopSetter,
-  setTimelineWindow: noopSetter,
-  setHiddenTimelineCategories: noopSetter,
   ...overrides,
 })
 
@@ -164,30 +160,40 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
       viewMode: seed.viewMode,
       viewExplicit: seed.viewExplicit,
       pageSize: seed.pageSize,
-      timelineWindow: seed.timelineWindow,
-      hiddenTimelineCategories: seed.hiddenTimelineCategories,
     }
   }
 
   it('완전한 딥링크는 첫 커밋에서 URL을 한 번도 쓰지 않는다', () => {
     const search =
       'q=foo&event=e1&bookmarks=1&cat=c1&country=k1&continent=eu&century=17' +
-      '&size=50&sort=duration&dir=asc&flat=1&view=grid&tlw=d1871&hide=%EC%A0%84%EC%9F%81'
+      '&size=50&sort=duration&dir=asc&flat=1&view=grid'
     const setSearchParams = renderSync(search, seedFromUrl(search))
     expect(setSearchParams).not.toHaveBeenCalled()
+  })
+
+  it('폐지된 타임라인 파라미터(tlw·hide)는 첫 write 한 번으로 정리된다', () => {
+    // 타임라인 뷰가 목록에 합쳐지면서 두 축 모두 사라졌다. 배포된 딥링크는 열리되
+    // (view=timeline → 목록), 죽은 파라미터를 URL에 계속 끌고 다니지는 않는다.
+    const search = 'tlw=y1871..1880&hide=%EC%A0%84%EC%9F%81&view=timeline&cat=c1'
+    const setSearchParams = renderSync(search, seedFromUrl(search))
+    expect(setSearchParams).toHaveBeenCalledTimes(1)
+    const written = lastWritten(setSearchParams)
+    expect(written.has('tlw')).toBe(false)
+    expect(written.has('hide')).toBe(false)
+    // 사라진 뷰 이름을 되쓰지 않는다 — view=timeline은 '명시'가 아니다.
+    expect(written.has('view')).toBe(false)
+    expect(written.get('cat')).toBe('c1')
   })
 
   it('무효값은 첫 write 한 번으로 URL에서 사라지고 정상 축은 그대로 남는다', () => {
     // century=0(존재하지 않는 세기) · sort=bogus(화이트리스트 밖) — 파서가 기본값으로
     // 낙하시키고 setOrDel이 기본값 키를 지우므로, 별도 정리 코드 없이 한 번에 정리된다.
-    const search = 'century=0&sort=bogus&tlw=c999&cat=c1&view=list'
+    const search = 'century=0&sort=bogus&cat=c1&view=list'
     const setSearchParams = renderSync(search, seedFromUrl(search))
     expect(setSearchParams).toHaveBeenCalledTimes(1)
     const written = lastWritten(setSearchParams)
     expect(written.has('century')).toBe(false)
     expect(written.has('sort')).toBe(false)
-    // 상한 밖 tlw도 같은 규약으로 첫 write에서 정리된다(검토 R5).
-    expect(written.has('tlw')).toBe(false)
     expect(written.get('cat')).toBe('c1')
     // 명시된 view는 사용자 선택이므로 남는다(URL-12).
     expect(written.get('view')).toBe('list')

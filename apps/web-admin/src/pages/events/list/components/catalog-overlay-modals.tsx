@@ -129,40 +129,6 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                   </li>
                 </PageStyles.ShortcutList>
 
-                <PageStyles.ShortcutSectionTitle>
-                  타임라인 보기
-                </PageStyles.ShortcutSectionTitle>
-                <PageStyles.ShortcutList>
-                  <li>
-                    <kbd>Tab</kbd>
-                    <span>다음 막대 포커스</span>
-                  </li>
-                  <li>
-                    <kbd>Enter</kbd> / <kbd>Space</kbd>
-                    <span>포커스된 막대 선택</span>
-                  </li>
-                  <li>
-                    <kbd aria-label="왼쪽 화살표">←</kbd> /{' '}
-                    <kbd aria-label="오른쪽 화살표">→</kbd>
-                    <span>같은 카테고리 안 시간순 이동</span>
-                  </li>
-                  <li>
-                    <kbd>Home</kbd> / <kbd>End</kbd>
-                    <span>같은 카테고리 첫/마지막 사건</span>
-                  </li>
-                  <li>
-                    <kbd>Ctrl</kbd>+<kbd aria-label="마우스 휠">휠</kbd>
-                    <span>확대/축소 (포인터 위치 중심)</span>
-                  </li>
-                  <li>
-                    <kbd>Space</kbd>+드래그
-                    <span>가로 패닝 (또는 마우스 미들 버튼)</span>
-                  </li>
-                  <li>
-                    <kbd>Enter</kbd> on +N
-                    <span>밀집 사건 묶음 자동 확대 + 첫 사건 포커스</span>
-                  </li>
-                </PageStyles.ShortcutList>
               </PageStyles.ShortcutBox>
             </PageStyles.ShortcutOverlay>
           )}

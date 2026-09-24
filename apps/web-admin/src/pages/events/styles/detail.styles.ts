@@ -83,9 +83,15 @@ export const DetailPanelContent = styled.div`
     width: 100%;
   }
 
-  /* 히어로는 지면 전체를 쓴다 — 상한을 받으면 좌우에 흰 띠가 생긴다 */
+  /* 히어로는 지면 전체를 쓴다 — 상한을 받으면 좌우에 흰 띠가 생긴다.
+   *
+   * ⚠️ width: auto 가 **필수**다(styled 리터럴 안이라 백틱을 쓸 수 없다).
+   * 바로 위 규칙의 width: 100% 가 figure에도 걸리면 '부모 폭 100% + 자기 좌우 마진 32px'이
+   * 돼 패널 밖으로 16px 삐져나간다 — 실측 패널 1182~1580인데 figure 1198~1596으로,
+   * 히어로 이미지 오른쪽이 카드 경계에서 잘렸다. auto면 flex stretch가 마진을 뺀 폭을 준다. */
   > figure {
     max-width: none;
+    width: auto;
   }
 `
 
@@ -175,12 +181,19 @@ export const DetailPanelEmptyDescription = styled.p`
  * 헤더 — sticky top. 본문 길어져도 제목/액션 항상 보임.
  * 배경색은 panel surface와 동일 (불투명) — 스크롤 시 본문이 비치지 않게.
  */
-export const DetailPanelHeader = styled.div`
+export const DetailPanelHeader = styled.div<{ $expanded?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 16px 20px;
-  position: sticky;
+  /*
+   * sticky는 **접힌 요약일 때만**. 요약을 펼치면 이 헤더가 실측 500px(패널 819px의 61%)이
+   * 되는데, 그대로 붙어 있으면 스크롤을 아무리 내려도 본문에 남는 자리가 300px뿐이다 —
+   * 화면 대부분을 차지한 채 따라다니는 '고정 머리글'이 된다. 펼친 요약은 크롬이 아니라
+   * 사용자가 방금 요청한 **본문**이므로 함께 흘러가는 게 맞다. 선택이 바뀌면 접힘으로
+   * 되돌아가므로(위젯의 useEffect) sticky도 자동으로 복귀한다.
+   */
+  position: ${({ $expanded }) => ($expanded ? 'static' : 'sticky')};
   top: 0;
   z-index: 2;
   ${({ theme }) =>
@@ -261,13 +274,22 @@ export const DetailSection = styled.section`
   &:first-of-type { padding-top: 20px; }
 `
 
+/**
+ * 구역 머리글(하위 사건 · 배경 · 여파).
+ *
+ * brand blue(#2563eb)였다. 이 패널에서 파랑이 맡고 있던 일이 이미 다섯 가지였다 —
+ * '더 보기' 토글 · '상세 보기' CTA · '상위 사건' 링크 · 관련국 칩 글자 · 그리고 이 머리글.
+ * 그중 넷은 누를 수 있고 머리글만 누를 수 없는데 옷이 같아서, 읽는 쪽에서는 '하위 사건 (4개)'이
+ * 링크로 보였다. 파랑은 **누를 수 있는 것**에만 남기고 머리글은 중립색 + 굵기로 선다.
+ *
+ * text-transform: uppercase도 걷어낸다 — 이 지면의 머리글은 전부 한글이라 no-op이었다.
+ */
 export const DetailSectionTitle = styled.h3`
   margin: 0;
   font-size: 12px;
   font-weight: 700;
-  color: #2563eb;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  letter-spacing: 0.04em;
 `
 
 export const DetailStatsGrid = styled.div`
@@ -404,6 +426,15 @@ export const DetailChildrenMoreButton = styled.button`
   }
 `
 
+/**
+ * 하위 사건 카드.
+ *
+ * 요약·날짜 글자가 라이트·다크 모두 `#64748b` 11px이었다 — 다크 카드 배경(#1b1b1b 상당)
+ * 위에서 **3.62:1**로 WCAG AA(4.5:1) 미달이고, 라이트도 4.60:1로 경계선이었다.
+ * 이 목록의 요약은 '어느 하위 사건인지'를 가르는 유일한 문장이라 가장 안 읽히면 안 되는
+ * 자리다. 이 지면이 이미 쓰는 메타 토큰 짝(라이트 #6b7280 / 다크 #94a3b8)으로 옮긴다
+ * — 각각 4.68:1 / 6.72:1.
+ */
 export const DetailChildItem = styled.button`
   border-radius: 10px;
   padding: 10px 12px;
@@ -419,7 +450,7 @@ export const DetailChildItem = styled.button`
           background: rgba(255, 255, 255, 0.03);
           border: 1px solid rgba(37, 99, 235, 0.12);
           strong { font-size: 12px; font-weight: 600; color: #e2e8f0; }
-          span { font-size: 11px; line-height: 1.4; color: #64748b; }
+          span { font-size: 11px; line-height: 1.4; color: #94a3b8; }
           &:hover {
             border-color: ${BRAND.primaryBorder};
             background: ${BRAND.primarySoftDark};
@@ -429,7 +460,7 @@ export const DetailChildItem = styled.button`
           background: #fafbff;
           border: 1px solid rgba(37, 99, 235, 0.12);
           strong { font-size: 12px; font-weight: 600; color: #0f172a; }
-          span { font-size: 11px; line-height: 1.4; color: #64748b; }
+          span { font-size: 11px; line-height: 1.4; color: #6b7280; }
           &:hover {
             border-color: ${BRAND.primaryBorder};
             background: #f0f4ff;
@@ -534,7 +565,8 @@ export const ViewAllHierarchyButton = styled.button`
 
 /* Timeline View styled 6종(TimelineContainer·EventCard·EventDate·EventTitle·
    EventSummary·Importance)은 v3 이전부터 사용처 0의 죽은 코드 — 삭제(검토 R42).
-   v4 타임라인의 스타일은 widgets/event-timeline이 소유한다. */
+   타임라인 뷰는 이후 목록에 흡수돼 위젯째 사라졌다(docs/event-timeline-merged-into-list.md) —
+   시간 비례 막대는 목록 기간 열이 그린다(widgets/event-list-compact/lib/year-span.ts). */
 
 // Tree View
 export const TreeContainer = styled.div`
@@ -691,15 +723,26 @@ export const SummaryIconButton = styled.button`
 // EventDetailPanel 위젯 전용 스타일 — 이전엔 위젯 안 inline. detail.styles로 hoist.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/* Hero image — 패널 폭 fit. 16px 좌우 여백만. CLS 방지를 위해 height는 skeleton과 일치. */
-export const HeroFigure = styled.figure`
+/**
+ * Hero image — 패널 폭 fit. 16px 좌우 여백만. CLS 방지를 위해 height는 skeleton과 일치.
+ *
+ * `$empty`(대표 이미지 없음)일 때는 **높이를 예약하지 않는다**. 실측 293건 중 대표 이미지를
+ * 가진 사건은 **19건(6.5%)** — 나머지 274건에서는 헤더 바로 아래 200px짜리 점선 빈 상자가
+ * 지면의 첫 화면을 차지하고, 분류·기간·관련국 같은 실제 내용은 그만큼 접힌 아래로 밀렸다.
+ * 추가 동선은 남기되(발견성) 높이는 한 줄짜리 띠로 줄인다.
+ */
+export const HeroFigure = styled.figure<{ $empty?: boolean }>`
   margin: 12px 16px 0;
   position: relative;
   border-radius: 10px;
   overflow: hidden;
-  height: 200px;
-  background-color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
+  height: ${({ $empty }) => ($empty ? '40px' : '200px')};
+  background-color: ${({ theme, $empty }) =>
+    $empty
+      ? 'transparent'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : '#f1f5f9'};
 `
 
 export const HeroImg = styled.img`
@@ -715,7 +758,8 @@ export const HeroPlaceholder = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
+  /* 세로 스택 → 가로 한 줄. 40px 띠 안에서 아이콘과 문구가 나란히 선다. */
+  flex-direction: row;
   gap: 6px;
   background: transparent;
   border: 1px dashed
@@ -757,12 +801,33 @@ export const HeroPlaceholder = styled.button`
 export const ActionButtonRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  /*
+   * 묶음 사이 간격(10) > 묶음 안 간격(2). 예전에는 여섯 버튼이 전부 같은 6px 간격이라
+   * '이전/다음'(목록 이동) · '공유/수정/삭제'(이 사건에 대한 조작) · '상세 보기'(이동)가
+   * 한 줄에 균질하게 늘어서 있었다 — 되돌릴 수 없는 삭제가 수정 바로 옆에, 같은 무게로.
+   */
+  gap: 10px;
   margin-top: 4px;
 
   & > [data-cta='primary'] {
     margin-left: auto;
   }
+`
+
+/** 액션 묶음 — 한 가지 일을 하는 버튼들만 담는다. */
+export const ActionGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 2px;
+`
+
+/** 묶음 경계 — 간격만으로는 약한 자리(파괴적 동작 앞)에 세우는 얇은 세로선. */
+export const ActionDivider = styled.span`
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.10)'};
 `
 
 type ActionVariant = 'ghost' | 'ghost-danger' | 'primary'
@@ -864,6 +929,15 @@ export const InfoGrid = styled.div`
   gap: 8px 14px;
   font-size: 13px;
   line-height: 1.6;
+  /*
+   * 라벨은 값의 **첫 줄 옆**에 선다.
+   *
+   * stretch(기본)로 두면 라벨 박스가 값 높이만큼 늘어나고 그 안에서 세로 중앙정렬이라,
+   * 값이 길수록 라벨이 아래로 흘러내렸다 — 실측 '위치'는 평균 58자(최장 237자)라 3~4줄,
+   * '본문 구성'은 사건당 최대 14개라 라벨이 블록 한가운데 떠 있었다. 무엇의 라벨인지
+   * 알려면 눈이 다시 위로 올라가야 한다.
+   */
+  align-items: start;
 `
 
 export const InfoLabel = styled.div`
@@ -901,13 +975,18 @@ export const CountryChip = styled.span`
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: 6px;
-  font-weight: 600;
+  font-weight: 500;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : BRAND.primaryHover)};
-  border: 1px solid ${BRAND.primaryBorder};
+  /*
+   * 테두리 없음 — 이 칩은 **누를 수 없다**. 채움 + 1px 외곽선 + 600 굵기는 이 패널에서
+   * 유일하게 실제 버튼인 '상세 보기'와 같은 옷이라, 5개가 두 줄로 깔리면 정보가 아니라
+   * 버튼 밭으로 읽혔다(필터 칩 가족을 그대로 빌려 온 자리 — 거긴 누르는 칩이다).
+   * 면 tint만 남겨 '분류가 있는 값'이라는 사실만 싣는다.
+   */
 `
 
 /* 역사적 국가 — amber 톤. 페이지 안에서 오직 이 chip만 amber라 색 분리 의도 보존. */
@@ -916,34 +995,58 @@ export const HistoricalCountryChip = styled.span`
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: 6px;
-  font-weight: 600;
+  font-weight: 500;
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(245, 158, 11, 0.18)'
-      : 'rgba(245, 158, 11, 0.08)'};
+      : 'rgba(245, 158, 11, 0.10)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#92400e')};
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  /* 테두리 없음 — CountryChip과 같은 이유. 현대/역사 구분은 hue가 계속 맡는다. */
 `
 
-/* SectionChip — neutral, 본문 구성 표시 */
-export const SectionChip = styled.span`
-  display: inline-block;
+/**
+ * 본문 구성 = **목차**다. 칩이 아니라 목록으로 그린다.
+ *
+ * 이전엔 `SectionChip`(회색 알약)을 ChipRow에 흘렸다. 칩은 짧은 꼬리표를 담는 그릇인데
+ * 여기 들어가는 값은 실측 평균 **22자**(최장 45자)짜리 제목 문장이라("개전 — 라이징 라이언
+ * 작전 (2025-06-13)"), 알약 하나가 값 열을 거의 다 차지하고 여러 개가 세로로 쌓여
+ * 길이가 제각각인 회색 덩어리 더미가 됐다(사건당 최대 14개). 번호를 매긴 한 줄짜리 목록은
+ * 같은 폭에서 더 많이, 더 읽히게 담고 '이 글이 어떤 순서로 쓰였는가'를 그대로 말한다.
+ */
+export const SectionList = styled.ol`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  counter-reset: section-index;
+`
+
+export const SectionItem = styled.li`
+  counter-increment: section-index;
+  display: grid;
+  grid-template-columns: 1.4em 1fr;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  &::before {
+    content: counter(section-index) '.';
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+`
+
+/** 미리보기 상한을 넘은 나머지 — 숫자만 조용히 남긴다. */
+export const SectionMore = styled.li`
+  grid-column: 1 / -1;
+  padding-left: calc(1.4em + 6px);
   font-size: 12px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-weight: 500;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.06);
-          color: ${theme.colors.text.secondary};
-        `
-      : css`
-          background: #f1f5f9;
-          color: #475569;
-        `}
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /**

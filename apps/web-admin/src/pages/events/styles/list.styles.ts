@@ -8,11 +8,16 @@ import type { HistoricalEventCategory } from '../create/events.types'
 import {
   BRAND,
   CATEGORY_BADGE_COLORS,
+  COLUMN_HEAD_BAND,
+  GROUP_BAND,
+  GROUP_BAND_HOVER,
   LIST_DENSITY,
   MOTION,
   LIST_STEPS,
   ROW_TYPE,
   SURFACE,
+  RAIL_AXIS,
+  RAIL_CONNECTOR,
   rowHairline,
   SHADOW,
   metaText,
@@ -39,6 +44,23 @@ const densityVars = (density: ListDensity) => {
     --col-date: ${box.colDate}px;
     --col-chip: ${box.colChip}px;
     --col-dur: ${box.colDur}px;
+    /*
+     * 기간 트랙의 **램프** — summary 대역에서 카드가 넓어지는 만큼 축이 해상도를 받는다.
+     *
+     * 이 대역의 신축 트랙은 제목 하나라 기간 1px = 제목 1px이다. 그런데 그 교환비는
+     * 카드 폭에 따라 값이 다르다(theme.ts colDurSummaryMax의 실측표): 카드 1275에서는
+     * 32px을 더 주면 제목 17행이 더 잘리고, 카드 1432에서는 3행, 1744에서는 0행이다.
+     * 그래서 계단(단계별 상수)이 아니라 직선으로 준다 — 두 점(카드 1275 = 하한,
+     * 카드 1400 = 상한)을 지나는 식이 22cqw − 176px이고, clamp가 양 끝을 잡는다.
+     * ledger 이상은 자기 토큰(--col-dur-wide / -ultra)이 이 값을 덮는다.
+     */
+    @container eventcard (min-width: ${LIST_STEPS.summary}px) {
+      --col-dur: clamp(
+        ${box.colDur}px,
+        22cqw - 176px,
+        ${box.colDurSummaryMax}px
+      );
+    }
     --col-flags: ${box.colFlags}px;
     --col-act: ${box.colAct}px;
     /* 7트랙(요약 열) 이상 대역에서만 소비된다 — 6트랙에서 제목은 여전히 1fr이다.
@@ -54,6 +76,7 @@ const densityVars = (density: ListDensity) => {
     /* 광폭 단계(LIST_STEPS.ledger / .atlas)에서만 소비 */
     --col-date-wide: ${box.colDateWide}px;
     --col-dur-wide: ${box.colDurWide}px;
+    --col-dur-ultra: ${box.colDurUltra}px;
     --col-flags-wide: ${box.colFlagsWide}px;
     --col-flags-ultra: ${box.colFlagsUltra}px;
     --col-kw: ${box.colKw}px;
@@ -65,9 +88,14 @@ const densityVars = (density: ListDensity) => {
     --year-h: ${box.yearH}px;
     --year-mt: ${box.yearMt}px;
     --year-mb: ${box.yearMb}px;
+    /* 그룹 머리글 라벨 — 행 제목(--row-title)보다 한 단씩 위. 이 단조가 깨지면
+       연 헤더가 다시 '행처럼' 읽힌다(도입 전 실측: 연 라벨 14px/700 = 행 제목 14px/700). */
+    --year-label: ${box.yearLabel}px;
+    --century-label: ${box.centuryLabel}px;
     --century-gap: ${box.centuryGap}px;
     /* ⚠️ 아래 두 개는 **기존 변수** — 이름·소비처 불변, 값만 밀도에 묶는다.
-       YearDivider가 top: var(--century-header-h)로 세기 헤더에 붙어 있다. */
+       (세기 헤더가 sticky이던 시절 YearDivider의 top이 이 값을 읽었다. 지금은 세기 밴드의
+       min-height 전용이다.) */
     /* 열 헤더 높이 — sticky 3겹 사다리(열 → 세기 → 연도)의 첫 단.
        ⚠️ 세기 헤더 top과 연도 헤더 top(calc) **두 곳 모두**에 배선해야 한다.
        한 곳만 넣으면 띠가 겹치거나 사이에 슬릿이 생긴다. */
@@ -118,21 +146,50 @@ export const CompactList = styled.div.attrs(
      안내문과 빈칸이었다. 모바일에서만 안전 영역과 함께 되살린다. */
   /* 좌 36 / 우 12의 24px 비대칭은 근거가 없다. 전폭에서는 행 잉크가 우측 보더에 12px까지
      붙어 '오른쪽이 잘렸다'로 읽힌다(짧은 행에서는 여백이 보완해 주던 문제다). */
-  padding: 4px 20px 32px var(--rail-gutter);
+  /*
+   * ⚠️ 상단 패딩 **0**. sticky 자식의 top:0은 스크롤 컨테이너의 **패딩 상자** 기준이라,
+   * padding-top이 있으면 그 두께만큼이 '아무도 덮지 않는 슬릿'이 되고 스크롤되는 행이
+   * 그 틈으로 지나간다(다크에서 특히 또렷하다 — 카드 표면이 rgba(255,255,255,0.02)라
+   * 지나가는 글자가 그대로 비친다). 4px이었고, 실측에서 행 글자 윗머리가 열 헤더 위로
+   * 보였다. 숨 쉴 틈은 열 헤더 자신의 패딩이 만든다.
+   */
+  /* 우측 패딩은 변수로 — 띠(열 머리글·세기·연도·행)가 **카드 안쪽 모서리까지** 번지려면
+     자기 음수 마진으로 이 값을 정확히 상쇄해야 한다(bleedToEdges). 리터럴로 두면 한쪽만
+     고쳤을 때 띠가 컨테이너 보더 앞에서 멈춰 흰 띠가 남는다 — 사용자 지적 그대로다. */
+  --list-pad-r: 20px;
+  padding: 0 var(--list-pad-r) 32px var(--rail-gutter);
   position: relative;
 
   /* 레일 3좌표는 한 세트로 움직인다 — 거터(패딩) · 축선 x · 인셋(=거터-축선).
    * 인셋은 밀도 토큰이 공급하고(--rail-inset), 나머지 둘은 밴드가 정한다.
    * 셋을 따로 고치면 디바이더 도트가 축선에서 어긋난다(모바일에서 실제로 겪었던 회귀). */
-  --rail-gutter: 36px;
+  /* 36px이었다. 레일이 '축 + 눈금' 2층에서 '축(세기·연) + 사건 + 하위 + 손자' 4층이 되며
+     오른쪽 예산이 모자랐다(축선 17 + 6×3 = 35가 옛 거터 36에 닿았다). 늘린 4px은
+     2,526px 행에서 0.16%다. ⚠️ --rail-inset(밀도 토큰)도 함께 40−17=23으로 옮겼다. */
+  --rail-gutter: 48px;
   --rail-x: 17px;
+  /**
+   * 계층 한 단이 레일에서 오른쪽으로 밀리는 거리.
+   *
+   * 축 위 눈금이 depth와 무관하게 전부 같은 x에 서 있었다(사용자 지적: "타임라인선이
+   * 그냥 일자로 내려온다"). 이제 레일이 **트리**다 — 축선에 세기·연 앵커가 서고,
+   * 그 해의 사건이 한 단, 하위 사건이 또 한 단 안으로 들어간다.
+   *   축선 17 ─┬─ 사건 23 ─┬─ 하위 29 ─── 손자 35
+   * 제목 들여쓰기(20px)를 그대로 쓸 수는 없다 — 거터 예산이 31px뿐이다.
+   *
+   * ⚠️ 6px이었다. 그 폭에서는 축선과 계층 줄기가 **6px 떨어진 두 세로선**이라, 트리가
+   * 아니라 '색이 다른 이중 괘선'으로 읽혔다(실측 확인). 선 사이를 벌리는 것 말고는
+   * 고칠 방법이 없어 거터를 40 → 48px로 늘리고 한 단을 10px로 잡았다.
+   */
+  --rail-depth-step: 10px;
   /* 마지막 사건 아래로 레일이 계속 이어져 목록이 끝나지 않는 것처럼 보이던 문제.
    * 축을 하단 패딩만큼 잘라 종단을 만든다. */
   --rail-tail: 104px;
 
   /* 행·그룹 헤더·스켈레톤이 공유하는 기하 변수 — 밀도 토큰이 단일 출처.
-   * --rail-inset(디바이더·커넥터를 레일 도트에 정렬)과 --century-header-h(연도 sticky
-   * 헤더의 top 오프셋)도 여기에 편입됐다 — 이름과 소비처는 그대로다.
+   * --rail-inset(디바이더·커넥터를 레일 도트에 정렬)과 --century-header-h(세기 밴드의
+   * min-height. 세기 헤더가 sticky에서 빠진 뒤로는 연도 sticky top 계산에서 빠졌다)도
+   * 여기에 편입됐다 — 이름과 소비처는 그대로다.
    * ⚠️ 이 주석 안에서 백틱을 쓰지 말 것 — styled 템플릿 리터럴이 끊겨 TS1005가 난다. */
   ${densityVars('cozy')}
   &[data-density='compact'] {
@@ -148,27 +205,18 @@ export const CompactList = styled.div.attrs(
    * 그 위의 눈금(도트)보다 흐린 역전 상태였다 — 이제 축이 유일한 선이므로 자기 몫의
    * 대비를 가져야 한다. */
   background-image: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? `linear-gradient(
-          to right,
-          transparent var(--rail-x),
-          rgba(147, 197, 253, 0.32) var(--rail-x),
-          rgba(147, 197, 253, 0.32) calc(var(--rail-x) + 1px),
-          transparent calc(var(--rail-x) + 1px)
-        )`
-      : `linear-gradient(
-          to right,
-          transparent var(--rail-x),
-          rgba(37, 99, 235, 0.34) var(--rail-x),
-          rgba(37, 99, 235, 0.34) calc(var(--rail-x) + 1px),
-          transparent calc(var(--rail-x) + 1px)
-        )`};
+    railAxisOverlay(theme.mode === 'dark')};
   background-attachment: local;
   background-repeat: no-repeat;
   /* 종단 — 하단 패딩 구간에는 축을 그리지 않는다. local 첨부라 높이는 콘텐츠 전체 길이다. */
   /* 잉크는 1px인데 100% 폭 그라디언트 셰이더가 도는 건 순 낭비다(전폭에서 3,300px).
      no-repeat이 이미 걸려 있어 시각 결과는 픽셀 동일하다. */
-  background-size: calc(var(--rail-x) + 2px) calc(100% - var(--rail-tail));
+  background-size: calc(var(--rail-x) + 2px)
+    calc(100% - var(--rail-tail) - var(--col-header-h, 26px));
+  /* 축은 **표가 시작하는 곳**에서 시작한다 — 안 그러면 컨테이너 상단 패딩 구간에
+     축 토막이 남아 열 헤더('날짜') 위에 정체불명의 눈금처럼 떠 있다(스크롤 최상단에서만
+     보이던 잔상). local 첨부라 스크롤하면 어차피 화면 밖이므로 부작용이 없다. */
+  background-position: 0 var(--col-header-h, 26px);
 
   /* 스크롤바 — 중립 크롬. 브랜드 파랑 20%는 라이트 표면 대비 1.33:1로 사실상 안 보였고,
      브랜드 hue를 중립 크롬에 쓰는 것 자체가 BRAND 규약(primary CTA·활성 상태 전용) 위반이다.
@@ -234,6 +282,13 @@ export const CompactList = styled.div.attrs(
   @media (max-width: 1024px) {
     --rail-gutter: 24px;
     --rail-x: 11px;
+    /* 좁은 대역의 한 단.
+     *
+     * ⚠️ 4px이었다. 눈금이 축 위로 올라온 뒤로 이 값은 **하위 눈금이 축선에서 비켜나는
+     * 거리**가 됐는데, 4px에서는 속 빈 눈금의 지면색 링(반지름 5px)이 축선을 덮어
+     * 행마다 축이 끊기고 점이 ⊖처럼 보였다(실측 1024px). 링 반지름 + 1px 이상 필요하다.
+     * 거터 24 − 축선 11 = 13px 예산 안에서 7px이 최대치다(하위 18 · 손자 25). */
+    --rail-depth-step: 7px;
     && {
       --rail-inset: 13px;
     }
@@ -246,6 +301,14 @@ export const CompactList = styled.div.attrs(
     --col-flags: 60px;
     --col-act: 56px;
     --row-col-gap: 8px;
+    /*
+     * ⚠️ 열 헤더가 사라지는 대역이다(ColumnHeader는 여기서 display:none). 그런데
+     * --col-header-h는 밀도 토큰 값(26px) 그대로라, 세기 헤더가 top:26px에 붙어
+     * **26px짜리 빈 띠**가 남았다 — 그 띠로 행이 통째로 지나가 헤더 위에 유령 행이
+     * 떠다녔다(실측 860px 다크에서 한 줄이 그대로 읽혔다). 헤더가 없으면 높이도 0이다.
+     * 레일 배경(background-position·size)도 같은 변수를 읽으므로 함께 맞는다.
+     */
+    --col-header-h: 0px;
   }
 
   /* 모바일 — 좁은 폭에서 거터를 더 줄이고 축선을 12px로 동기화. */
@@ -261,9 +324,29 @@ export const CompactList = styled.div.attrs(
     }
     --rail-gutter: 24px;
     --rail-x: 11px;
+    /*
+     * 모바일에서는 한 단을 **0**으로 눕힌다 — 하위 구슬이 줄기(축선) 위로 돌아온다.
+     *
+     * 이 대역은 RailBranch(가지선)를 display:none으로 끄고 계층을 행 들여쓰기에 맡기는
+     * 곳이다. 그런데 레일 문법이 '구슬은 언제나 선 위에 얹힌다'로 바뀌었으므로, 선을
+     * 끈 채 한 단(7px)만 남기면 하위 구슬이 아무 선에도 얹히지 않고 축선 옆에 뜬다.
+     * 한 단을 0으로 두면 구슬은 줄기 위에 앉고 크기(5 → 4px)만으로 하위임을 말한다.
+     * ⚠️ event-list-item.tsx의 RailBranch ≤640 규칙과 한 쌍이다 — 한쪽만 바꾸지 말 것.
+     */
+    --rail-depth-step: 0px;
+    /*
+     * 그룹 라벨은 모바일에서 한 단 내린다. 데스크톱 값(세기 23px)을 390px 화면에 그대로
+     * 들고 가면 '20세기 (1901–2000) 81건 · 하위 31'이 **세 줄로 접혀** 세기 밴드가 110px
+     * 짜리 블록이 된다(실측) — 화면의 7분의 1을 머리글 하나가 먹는다.
+     * 줄어들어도 행 제목(11~13px)보다는 확실히 크므로 위계는 유지된다.
+     */
+    --century-label: 18px;
+    --year-label: 15px;
     /* 배경 그라디언트는 --rail-x를 읽으므로 여기서 재선언할 필요가 없다
        (이전에는 11/12px 리터럴을 두 번째로 적어 두 좌표가 따로 놀았다). */
-    padding: 4px 10px max(96px, env(safe-area-inset-bottom)) var(--rail-gutter);
+    --list-pad-r: 10px;
+    padding: 0 var(--list-pad-r) max(96px, env(safe-area-inset-bottom))
+      var(--rail-gutter);
   }
 
   /* ≤400px — 메타 줄이 1px 차이로 넘쳐 3줄로 무너지던 구간(실측 320px).
@@ -304,12 +387,55 @@ export const CompactList = styled.div.attrs(
  *    step 0에는 `[sum]`이 없어 `[sumend]`가 제목 직후라 그 선언이 자동으로 no-op이 된다.
  *    ⚠️ `span`을 라인 이름으로 쓰지 말 것 — `grid-column: span N` 키워드와 충돌한다.
  */
+/**
+ * 레일 축선을 **면 위에 다시 그리는** 그라디언트.
+ *
+ * 불투명한 밴드가 전폭으로 번지면 스크롤러 배경에 그려진 축선을 그 높이만큼 덮는다 —
+ * 안 그리면 밴드마다 축이 40~50px씩 끊겨 점선처럼 보인다. 좌표는 --rail-x 하나가 소유하므로
+ * 거터를 바꿔도 따라온다.
+ */
+export const railAxisOverlay = (isDark: boolean) => {
+  const ink = isDark ? RAIL_AXIS.dark : RAIL_AXIS.light
+  return `linear-gradient(
+      to right,
+      transparent var(--rail-x),
+      ${ink} var(--rail-x),
+      ${ink} calc(var(--rail-x) + 1px),
+      transparent calc(var(--rail-x) + 1px)
+    )`
+}
+
+/**
+ * 카드 안쪽 모서리까지 번지는 **면(面) 규약**.
+ *
+ * 목록의 모든 가로 면(열 머리글 · 세기/연도 밴드 · 행 배경과 괘선)은 컨테이너의 안쪽
+ * 가장자리에서 시작해 반대쪽 가장자리에서 끝난다. 예전에는 저마다 다른 만큼만 번져
+ * 왼쪽 17px · 오른쪽 9px의 흰 띠가 남았고, 카드가 12px 라운드 보더를 두르고 있어
+ * **모서리 네 곳이 빈 흰 노치**로 보였다(사용자 지적: "border 처리된 부분 모서리를
+ * 차지하지도 않는다"). 실측 좌단이 카드 147 · 띠 165 · 행 184로 셋, 우단도 셋이었다.
+ *
+ * 규약: 면은 음수 마진으로 컨테이너 패딩을 **정확히** 상쇄하고, 잉크는 같은 양을
+ * 패딩으로 되돌려 받는다 — 면은 전폭, 글자 위치는 종전과 픽셀 동일.
+ *
+ * ⚠️ 면이 전폭이 되면 스크롤러 배경에 그려진 레일 축선을 **덮는다**. 불투명한 면
+ *    (밴드)은 자기 배경에 축선을 다시 그려야 한다(YearDivider ::after · CenturyDivider
+ *    background). 행은 기본이 투명이라 덮지 않는다.
+ */
+export const bleedToEdges = css`
+  margin-left: calc(-1 * var(--rail-gutter));
+  margin-right: calc(-1 * var(--list-pad-r, 20px));
+`
+
 export const rowGridTemplate = css`
   display: grid;
   column-gap: var(--row-col-gap);
   /* 베이스라인 정렬 — center는 칩 라인박스(15.75px)와 제목(18.2px)이 어긋나
      전 행에서 1.51px 드리프트를 만든다. 상자형 셀만 center로 예외 처리한다. */
   align-items: baseline;
+  /* 베이스라인 덩어리는 격자 기본값으로는 **위**에 붙는다. 행의 min-height가 내용보다
+     클 때(설명 없는 행) 남는 높이가 전부 아래로 몰려 글이 위로 치우쳐 보이므로,
+     덩어리째 세로 가운데에 놓는다. 내용이 높이를 넘기면 이 선언은 아무 일도 안 한다. */
+  align-content: center;
 
   /* ── step 0 (카드 < summary) — 6트랙. 신축은 제목. */
   grid-template-columns:
@@ -320,34 +446,68 @@ export const rowGridTemplate = css`
     [flags] var(--col-flags)
     [act] var(--col-act);
 
-  /* ── step 1 summary — 7트랙. 신축이 제목 → 설명으로. 임계·트랙 폭 모두 현행 그대로.
-       제목 자연 폭 p50이 177px이라 6트랙에서 카드를 넓히면 트랙만 커지고 잉크는 안 커졌다
-       — 흡수체를 하나 더 세워야 캡을 풀 수 있고, 그 자리에 설명(목록 응답에 이미 실려
-       오면서 0픽셀도 안 그려지던 필드)을 놓는다. */
+  /* ── step 1 summary — **종료 열과 키워드 열이 켜진다**(9트랙).
+   *
+   * 종료: 날짜 열 바로 뒤에 같은 폭(--col-date)으로 선다. 폭을 맞추는 이유는 둘이 **한 쌍**
+   * 이기 때문이다 — 같은 폭·같은 우측정렬이면 두 열이 한 범위의 양 끝으로 읽힌다.
+   * 실측 299행: 실제 종료일 131(44%) · 당일 152(51%) · 빈칸 16(5%). 빈칸이 곧 '종료 미상'
+   * 이라는 사실이다(이 목록은 예전부터 종료 미상과 당일 종료를 구별해 왔다 —
+   * formatDuration 주석).
+   */
+  /* (키워드)
+   *
+   * 이 단계는 원래 '설명이 켜지는 폭'이었다. 설명을 걷어낸 뒤 그 자리에 남은 것은
+   * 제목 뒤의 빈 폭뿐이라(1,062px 카드에서 실측 약 300px), 같은 폭을 **짧은 칩 열**이
+   * 가져간다. 키워드는 ledger(1752)에서 내려왔다 — 거기 있던 이유가 '설명이 이미 이
+   * 대역의 폭을 쓰고 있어서'였기 때문이다.
+   *
+   * 신축은 제목 1.5 : 키워드 1. 제목이 더 받는 이유는 그게 유일한 자연어 열이라서다.
+   */
   @container eventcard (min-width: ${LIST_STEPS.summary}px) {
+    /* ⚠️ 이 대역에서는 키워드가 **고정 폭**이다. fr을 주면 남는 폭이 제목과 나뉘는데,
+       카드 1,180px(대역 하단)에서는 그 나눔 뒤 제목에 251px밖에 안 남는다(한글 21자).
+       광폭에서나 나눌 값이지 여기서는 전부 제목 몫이다.
+       ⚠️ 한때 여기서 150px로 더 줄였다가 되돌렸다 — 칩 2개가 각 50px로 눌려
+       '이란-이스라…' · '참…'처럼 **무엇을 가리키는지 알 수 없는 조각**만 남았다.
+       열을 좁히는 것이 아니라 칩 개수를 줄이는 것이 맞는 처방인데, 개수는 컨테이너가
+       아니라 뷰포트로 재고 있어(keywordMax) 이 대역에서 2로 고정이다. */
     grid-template-columns:
       [date] var(--col-date)
+      [end] var(--col-date)
       [cat] var(--col-chip)
-      [title] minmax(0, var(--col-title))
-      [sum] minmax(0, 1fr)
-      [sumend dur] var(--col-dur)
+      [title] minmax(0, 1fr)
+      [sumend kw] var(--col-kw)
+      [dur] var(--col-dur)
       [flags] var(--col-flags)
       [act] var(--col-act);
   }
 
   /* ── step 2 ledger — 8트랙. 키워드 열이 켜지고, 기간(다년 사건이 앞자리부터 잘리던 폭)과
-       관련국이 넓어진다. */
+       관련국이 넓어진다.
+   *
+   * ⚠️ 여기서부터 **신축 트랙이 셋**이다(제목 1.5 : 키워드 1 : 관련국 1).
+   *
+   * 예전엔 제목만 1fr이었고, 남는 폭은 전부 제목 뒤 설명이 먹었다. 설명을 걷어낸 뒤
+   * 그 계약을 그대로 두면 2,526px 행에서 제목 트랙이 1,642px이 되고 제목 잉크는 중앙값
+   * 220px이라 **행마다 1,400px이 빈다**. 폭에 상한을 걸어 지면 오른쪽을 비우는 처방은
+   * 이전 라운드에서 880 → 1120 → 1880으로 세 번 시도하고 폐기했다(사용자 판정).
+   *
+   * 그래서 남는 폭을 **글자를 더 싣는 두 열**에 나눠 준다: 키워드는 칩 개수가 폭에 따라
+   * 2 → 4 → 6으로 늘고(keywordMax), 관련국은 국기 대신 **이름**이 들어간다. 제목이 여전히
+   * 가장 큰 몫(1.5)을 받는 이유는 그게 유일한 자연어 열이고 최장 잉크가 613px이기 때문이다 —
+   * 이 배분에서는 어떤 제목도 잘리지 않는다.
+   */
   @container eventcard (min-width: ${LIST_STEPS.ledger}px) {
     --col-dur: var(--col-dur-wide);
     --col-flags: var(--col-flags-wide);
     grid-template-columns:
       [date] var(--col-date)
+      [end] var(--col-date)
       [cat] var(--col-chip)
-      [title] minmax(0, var(--col-title))
-      [sum] minmax(0, 1fr)
-      [sumend kw] var(--col-kw)
+      [title] minmax(0, 1.5fr)
+      [sumend kw] minmax(var(--col-kw), 1fr)
       [dur] var(--col-dur)
-      [flags] var(--col-flags)
+      [flags] minmax(var(--col-flags), 1fr)
       [act] var(--col-act);
   }
 
@@ -355,16 +515,19 @@ export const rowGridTemplate = css`
        문제), 날짜(BC·YYYY.M.D 극단값)와 관련국이 한 번 더 넓어진다. */
   @container eventcard (min-width: ${LIST_STEPS.atlas}px) {
     --col-date: var(--col-date-wide);
-    --col-dur: var(--col-dur-wide);
+    /* 기간 트랙은 여기서 한 번 더 넓어진다 — 이 단계에서만 켜지는 '등록' 열과 달리
+       기간은 처음부터 있던 열이라, 폭이 늘면 새 정보가 아니라 **해상도**가 는다
+       (한 달 ≈ 19px = 분기 격자 한 칸이 58px). */
+    --col-dur: var(--col-dur-ultra);
     --col-flags: var(--col-flags-ultra);
     grid-template-columns:
       [date] var(--col-date)
+      [end] var(--col-date)
       [cat] var(--col-chip)
-      [title] minmax(0, var(--col-title))
-      [sum] minmax(0, 1fr)
-      [sumend kw] var(--col-kw)
+      [title] minmax(0, 1.5fr)
+      [sumend kw] minmax(var(--col-kw), 1fr)
       [dur] var(--col-dur)
-      [flags] var(--col-flags)
+      [flags] minmax(var(--col-flags), 1fr)
       [reg] var(--col-reg)
       [act] var(--col-act);
   }
@@ -411,16 +574,51 @@ export const ColumnHeader = styled.div`
   box-sizing: border-box;
   min-height: var(--col-header-h, 26px);
   /* 행과 같은 좌우 인셋 — 라벨 x가 셀 x와 어긋나면 헤더가 오히려 오독을 만든다.
-     좌측은 레일까지 당기고(margin) 그만큼 안쪽으로 되민다(padding). */
-  margin: 0 calc(-1 * var(--row-pad-r)) 2px calc(-1 * var(--rail-inset));
-  padding: 0 var(--row-pad-r) 0 calc(var(--rail-inset) + var(--row-pad-l));
+     좌측은 레일까지 당기고(margin) 그만큼 안쪽으로 되민다(padding).
+
+     ⚠️ 우측 패딩은 **두 몫**이다. 음수 마진(-row-pad-r)이 띠를 목록 패딩 위로 흘려보낸
+     만큼(1) 되밀고, 행의 바깥 상자(Stop)가 자기 격자를 안쪽으로 들인 만큼(2) 한 번 더
+     들여야 헤더 격자와 행 격자의 **폭이 같아진다**.
+     (2)가 빠져 있어 헤더 콘텐츠 상자가 행보다 12px 넓었고, 유일한 신축 트랙인 제목이
+     그 12px을 먹어(883.6 vs 871.6) 제목 오른쪽의 모든 열이 통째로 12px 밀려 있었다 —
+     '기간'·'관련국'·'등록' 세 라벨이 자기 열 위가 아니라 옆 칸 경계 위에 서 있었다는
+     뜻이다(실측: 관련국 라벨 우단 1488 vs 칩 트랙 우단 1476). */
+  ${bleedToEdges}
+  margin-bottom: 2px;
+  /* 잉크는 컨테이너 패딩 + 행 자신의 안쪽 패딩만큼 되돌려 받는다 — 라벨 x가 행 셀과
+     픽셀 단위로 같아야 머리글이 '그 열'을 가리킨다(어긋났던 12px 회귀 이력 참고). */
+  padding: 0 calc(var(--list-pad-r, 20px) + var(--row-pad-r)) 0
+    calc(var(--rail-gutter) + var(--row-pad-l));
+  /* 10.5px/700이었다. 10.5px에서 700은 한글 글자 속이 메워져 '작고 진한 얼룩'으로 읽힌다 —
+     크기를 반 픽셀 올리고 굵기를 한 단 낮춰, 대비는 아래 color로 올린다(같은 잉크량으로
+     글자 모양이 살아난다). 반픽셀은 위계를 0비트 실어 나르므로 스케일에서 뺀다. */
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  color: ${metaText};
-  /* ⚠️ 반투명 금지 — 아래 행이 비친다(세기 헤더가 같은 이유로 솔리드로 고쳐져 있다) */
+  /* 600 → 700. 띠가 지면색이고(회색 판 폐기 규약) 높이도 24px이라, 이 줄이 '표의 머리'
+     라고 말하는 것은 글자 자체뿐이다. 그 글자가 흐린 600이면 머리글이 있다는 사실이
+     안 읽힌다(사용자 지적: "헤더가 너무 없어보인다"). 면을 되살리는 대신 잉크를 올린다. */
+  font-weight: 700;
+  /*
+   * 표 머리글은 **양의 트래킹**을 쓴다. 11px에 -0.005em(음수)이 걸려 있어 글자가 서로
+   * 붙었고, 6열짜리 표의 유일한 범례가 화면에서 가장 흐린 텍스트였다. 크기를 조금 줄이는
+   * 대신 자간을 벌리고 굵기를 올려 '데이터가 아니라 라벨'로 읽히게 한다 — 같은 수법을
+   * 폐기된 타임라인 축 헤더가 쓰고 있었고 거기서는 제대로 동작했다.
+   */
+  letter-spacing: 0.08em;
+  /*
+   * ⚠️ text.tertiary였다 — 라이트 **2.54:1**로 AA(4.5:1) 미달이다. 이 지면이 이미
+   * META_TEXT를 만들어 쓰는 이유가 정확히 그것인데(그 토큰 주석 참고), 정작 표의 유일한
+   * 범례인 열 머리글만 그 판단 밖에 남아 화면에서 가장 흐린 텍스트였다. 같은 토큰으로
+   * 옮긴다 — 라이트 4.83:1 / 다크 7.48:1.
+   *
+   * ⚠️ 다시 한 단 올렸다(metaText → text.secondary). 위 font-weight 주석과 같은 이유다 —
+   * 이 띠에는 면도 테두리도 없으므로 존재감을 글자가 혼자 진다.
+   */
+  color: ${({ theme }) => theme.colors.text.secondary};
+  /* ⚠️ 반투명 금지 — 아래 행이 비친다(세기 헤더가 같은 이유로 솔리드로 고쳐져 있다).
+     지면색(흰색)이었는데, 그러면 이 띠가 '표의 머리'가 아니라 **또 하나의 행**으로 보인다.
+     밴드 계열의 가장 옅은 단을 줘서 스크롤 중 머리글 블록이 한 덩어리로 읽히게 한다. */
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
+    theme.mode === 'dark' ? COLUMN_HEAD_BAND.dark : COLUMN_HEAD_BAND.light};
   border-bottom: 1px solid ${rowHairline};
 
   /* 밀도 컨트롤이 숨는 임계와 정합 — 좁은 폭에서는 행이 2줄/압축 규약이라 열이 없다 */
@@ -439,15 +637,53 @@ export const ColumnHeader = styled.div`
  */
 export const ColumnHeaderCell = styled.span<{
   $col: string
-  $align?: 'right'
+  $align?: 'right' | 'center'
   /** 이 라벨이 켜지는 컨테이너 폭(LIST_STEPS 값). 생략 = step 0부터 항상 존재하는 열 */
   $showFrom?: number
+  /**
+   * 제목 열 전용 — 셀 안쪽 서브격자의 디스클로저 트랙만큼 라벨을 들여쓴다.
+   *
+   * 제목 셀은 `[ind][disc][text]` 3트랙이라 **실제 제목 잉크**는 셀 좌단이 아니라
+   * `--row-disc-btn`만큼 안쪽에서 시작한다. 라벨을 셀 좌단에 두면 머리글만 혼자
+   * 24px 왼쪽으로 튀어나와, 6열짜리 표에서 유일하게 어긋난 열이 된다(실측 25px).
+   */
+  $textIndent?: boolean
+  /** 현재 정렬을 만드는 열 — 라벨 한 단 진하게 + 방향 글리프(ColumnSortCaret) */
+  $sorted?: boolean
+  /** 라벨 아래 축(DurationAxis)을 다는 칸 — 셀 밖으로 나가는 잉크가 있어 잘라내지 않는다 */
+  $axis?: boolean
 }>`
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  ${({ $axis }) =>
+    $axis &&
+    css`
+      /* 축이 머리글 띠의 **아래 선**에 서야 '열의 바닥에 그은 자'로 읽힌다 —
+         그러려면 셀이 가운데 정렬된 글자 높이가 아니라 띠 높이를 다 차지해야 한다.
+         세로 가운데 정렬은 그래서 flex가 대신 맡는다. */
+      position: relative;
+      overflow: visible;
+      align-self: stretch;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `}
   text-align: ${({ $align }) => $align ?? 'left'};
+  /* 정렬 중인 열만 본문 색으로 올라온다 — 나머지 라벨과 **한 단** 차이. 두 단 이상
+     벌리면 머리글 줄 안에서 그 열만 제목처럼 읽힌다. */
+  ${({ $sorted, theme }) =>
+    $sorted &&
+    css`
+      color: ${theme.colors.text.secondary};
+      font-weight: 700;
+    `}
+  ${({ $textIndent }) =>
+    $textIndent &&
+    css`
+      padding-left: var(--row-disc-btn);
+    `}
 
   ${({ $col, $showFrom }) =>
     $showFrom === undefined
@@ -462,6 +698,99 @@ export const ColumnHeaderCell = styled.span<{
             grid-column: ${$col};
           }
         `}
+`
+
+/**
+ * 정렬 방향 글리프 — 열 머리글 라벨 뒤에 붙는 작은 삼각형.
+ *
+ * 아이콘 컴포넌트가 아니라 글자인 이유: 이 줄의 다른 모든 잉크가 11px 텍스트라
+ * SVG를 얹으면 베이스라인이 혼자 어긋난다(라벨은 baseline 정렬 격자 안에 있다).
+ */
+/**
+ * 「기간」 열 머리글의 **연 축** — 한 번만 그린다.
+ *
+ * 행의 기간 트랙은 그 행이 속한 연 그룹의 1월 1일~12월 31일이 좌우 끝이다. 그런데 트랙
+ * 안에는 좌표계가 없어서, 실측 298행 중 164행(55%)이 6px 점 하나로 그려지는 동안 그 점이
+ * 트랙의 **어디**에 찍혔는지 읽을 방법이 없었다(≤12px까지 넓히면 194행 = 65%).
+ *
+ * 예전엔 같은 눈금을 **행마다** 그렸고, 293행 × 5선 = 1,465개의 세로 획이 정작 값(점·막대)
+ * 보다 먼저 읽혀 폐기됐다(SpanBar 위쪽 주석). 축은 한 번, 데이터는 행마다 — 그래서 여기다.
+ *
+ * ⚠️ 라벨과 같은 잉크를 쓰지 않는다. 눈금이 '기간'이라는 글자만큼 진하면 머리글 줄에서
+ * 축이 라벨을 이긴다. 바탕 트랙선(행)보다는 한 단 진하고 라벨보다는 흐린 자리에 둔다.
+ * ⚠️ `background-position`의 백분율은 **상자 기준**이라 0%·100%가 트랙 양 끝에 정확히
+ * 선다(연 경계). 25/50/75%는 4·7·10월 1일과 최대 0.25px 어긋난다 — 눈금 폭이 1px이라
+ * 무시할 수 있다.
+ */
+export const DurationAxis = styled.span`
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  pointer-events: none;
+
+  ${({ theme }) => {
+    /* 머리글 띠(라이트 #ffffff · 다크 #141414) 위에서 WCAG 1.4.11(3:1)을 넘기는 최소치
+       근처 — 라이트 0.46 = #959595 = 3.08:1 · 다크 0.34 = #646464 = 3.17:1.
+       축은 값이 아니라 눈금이지만, 이 열에서 **위치를 읽게 하는 유일한 기준선**이라
+       배경 장식(행의 바탕 트랙선 0.07)이 아니라 그래픽 객체 쪽 기준을 쓴다. */
+    const ink =
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.34)' : 'rgba(20,19,34,0.46)'
+    const tick = `linear-gradient(${ink}, ${ink})`
+    /* 연 경계(0·100%)는 4px, 분기 눈금(25·50·75%)은 3px — 축의 끝과 안이 갈린다. */
+    return css`
+      background-image: ${tick}, ${tick}, ${tick}, ${tick}, ${tick};
+      background-repeat: no-repeat;
+      background-size: 1px 4px, 1px 3px, 1px 3px, 1px 3px, 1px 4px;
+      background-position: 0 100%, 25% 100%, 50% 100%, 75% 100%, 100% 100%;
+    `
+  }}
+`
+
+/**
+ * 기간 축의 **양 끝 라벨** — `1월` · `12월`.
+ *
+ * 축이 무엇인지는 그동안 머리글 셀의 `title` 속성(마우스를 1초 올려야 뜨는 말풍선)
+ * 에만 적혀 있었다. 즉 화면에는 눈금 다섯 개만 있고 **그 눈금이 한 해를 가른다는
+ * 사실은 0픽셀**이었다 — 자에 숫자가 없으면 그건 자가 아니라 무늬다.
+ *
+ * 두 글자씩 두 개만 둔다. 4·7·10월까지 적으면 30px 머리글에 라벨이 다섯 개가 되어
+ * 머리글 줄에서 축이 라벨('기간')을 이긴다. 가운데 눈금의 뜻은 양 끝이 정해지면
+ * 자동으로 읽힌다(등간격 = 분기).
+ *
+ * ⚠️ 절대 배치다 — 셀은 `justify-content: center`라 라벨을 흐름에 두면 '기간'이
+ * 가운데에서 밀려난다.
+ */
+export const AxisEndLabel = styled.span<{ $side: 'start' | 'end' }>`
+  display: none;
+
+  /* 기간 트랙이 104px 이상인 대역부터 — 그 아래(48~96px)에서는 두 라벨과 '기간'이
+     서로 겹친다. */
+  @container eventcard (min-width: ${LIST_STEPS.summary}px) {
+    display: block;
+    position: absolute;
+    ${({ $side }) => ($side === 'start' ? 'left: 1px;' : 'right: 1px;')}
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0;
+    color: ${metaText};
+    opacity: 0.75;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+`
+
+export const ColumnSortCaret = styled.span`
+  margin-left: 3px;
+  font-size: 7px;
+  line-height: 1;
+  vertical-align: 1px;
+  letter-spacing: 0;
+  opacity: 0.75;
 `
 
 export type ListItemImportance = 'critical' | 'major' | 'normal'
@@ -540,8 +869,10 @@ export const GapMarker = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 4px calc(-1 * var(--rail-inset));
-  padding-left: var(--rail-inset);
+  ${bleedToEdges}
+  margin-bottom: 4px;
+  padding-left: var(--rail-gutter);
+  padding-right: var(--list-pad-r, 20px);
   font-size: var(--row-meta, 12px);
   font-weight: 500;
   letter-spacing: 0;
@@ -631,37 +962,65 @@ export const YearDivider = styled.button`
   gap: 10px;
   /* 세로 예산의 31%가 연도 헤더였다(88개 × 63px = 5,500px, 스크롤 총량 17,903px 중).
      밀도 토큰이 소유하게 해 조밀 모드에서 실제로 줄어들게 한다. */
-  margin: var(--year-mt) -12px var(--year-mb) calc(-1 * var(--rail-inset));
-  padding: 6px 12px 6px var(--rail-inset);
+  ${bleedToEdges}
+  margin-top: var(--year-mt);
+  margin-bottom: var(--year-mb);
+  padding: 6px calc(var(--list-pad-r, 20px) + 12px) 6px var(--rail-gutter);
   min-height: var(--year-h);
   border: none;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.08)'
-        : 'rgba(15, 23, 42, 0.08)'};
+  /*
+   * 선 3단 사다리 — 행 괘선 0.08 < 연 경계 0.13 < 세기 리더 룰 0.20.
+   *
+   * ⚠️ 연 경계를 행 괘선 **이하**로 내리면 안 된다. 예전엔 둘 다 0.08로 같아서 그룹
+   * 경계와 행 경계가 구별되지 않았고, 한때 0.055까지 내렸더니 이번엔 그룹 경계가 행
+   * 경계보다 약해져 위계가 거꾸로 섰다. 세기는 굵기가 아니라 **장치**(라벨에서 우측
+   * 끝까지 달리는 리더 룰)로 한 단계 더 올라간다 — 행도 연도도 갖지 않는 모양이다.
+   */
+  /*
+   * (제거) border-top 1px.
+   *
+   * 그룹 경계를 '선'으로 말하는 동안은 행 경계와 같은 문법을 쓰는 셈이라, 굵기를 아무리
+   * 조절해도 '조금 더 진한 행 구분선'을 넘지 못했다. 구분은 이제 ::after가 까는
+   * **면(밴드)** 이 맡는다 — 행이 가질 수 없는 신호이고 세로 예산도 0px 더 쓰지 않는다.
+   */
+  border: none;
   border-radius: 0;
   cursor: pointer;
   text-align: left;
   background: transparent;
   position: sticky;
-  /* 사다리의 세 번째 단 — 열 헤더 + 세기 헤더 높이만큼 내려온다 */
-  top: calc(var(--col-header-h, 26px) + var(--century-header-h, 44px));
+  /* 사다리의 **두 번째이자 마지막** 단 — 열 머리글 바로 아래 붙는다.
+     (세기 헤더가 sticky에서 빠지며 + --century-header-h 항이 사라졌다. 근거는 CenturyDivider) */
+  top: var(--col-header-h, 26px);
   z-index: 5;
   transition: background 0.15s ease-out;
   align-self: stretch;
 
-  /* 레일 위 솔리드 indigo 도트 — 시각 anchor. 이전 outline은 약했음. */
+  /* 레일 위 솔리드 indigo 도트 — 시각 anchor. 이전 outline은 약했음.
+     ⚠️ 좌표는 --rail-x(카드 안쪽 가장자리 기준)다. 밴드가 전폭으로 번지기 전에는 밴드의
+     좌단이 곧 축선이라 left:0이었다 — 그때 값을 남겨 두면 도트가 보더에 붙는다. */
   &::before {
     content: '';
     position: absolute;
-    left: 0;
+    left: var(--rail-x);
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 10px;
-    height: 10px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: ${BRAND.primary};
+    /*
+     * 축 위의 **앵커** — 지면에서 파랑이 남는 두 자리 중 하나(다른 하나는 세기).
+     *
+     * 규약이 바뀌었다: 반복하는 것(행 눈금 301개)은 중립, **구조를 만드는 것만 파랑**.
+     * 그래서 이 도트는 행 눈금보다 진해야 한다 — 2.63:1이었고 새 축선(3.03:1)보다도
+     * 흐려서, 축 위에 앵커가 얹힌 게 아니라 축이 앵커를 덮고 지나가는 것처럼 보였다.
+     * 라이트 5.17:1 · 다크 7.11:1(행 눈금 5.03 / 4.99보다 위, 세기보다 아래).
+     *
+     * ⚠️ 다크에서 **세기보다 밝았다**(연 7.11 vs 세기 #2563eb 3.71) — 눈금 3단이 다크에서만
+     * 뒤집혀 있었다. 세기 도트를 다크 전용 밝은 파랑으로 올려 같이 고쳤다(CenturyDivider).
+     */
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(147, 197, 253, 0.80)' : BRAND.primary};
     box-shadow: 0 0 0 2.5px
       ${({ theme }) => (theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised)};
     z-index: 1;
@@ -681,12 +1040,33 @@ export const YearDivider = styled.button`
   &::after {
     content: '';
     position: absolute;
-    left: var(--rail-inset);
-    top: 0;
+    /*
+     * ⚠️ 자기 margin-top까지 위로 덮는다. 세기 헤더와 연 헤더가 둘 다 stuck인 구간에서
+     * 그 사이 --year-mt(16px)만큼이 **아무도 덮지 않는 슬릿**이었고, 스크롤되는 행의
+     * 윗머리가 그 틈으로 비쳤다. 행 레일 눈금이 되살아난 뒤로는 지나가는 점까지 보여
+     * 연 앵커 바로 아래 유령 눈금이 하나 더 있는 것처럼 읽혔다.
+     *
+     * stuck이 아닐 때 이 구간은 **빈 여백**이다(앞 행의 hairline은 그보다 위에 있다) —
+     * 지면색으로 칠해도 시각 결과가 같다.
+     */
+    top: calc(-1 * var(--year-mt));
     right: 0;
     bottom: 0;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
+    /*
+     * ⚠️ 좌측은 축선 **너머**까지 덮는다(이 버튼의 좌단이 곧 축선이므로 -6px).
+     * 예전엔 left 가 --rail-inset 이라 축선 오른쪽에서 시작했는데, 행 레일 눈금이
+     * 되살아나자 **본문은 가려지는데 눈금만 뚫고 나오는** 상태가 됐다 — stuck 헤더
+     * 아래로 유령 점이 떠다녔다(실측: 행 51~97px이 41~91px 띠에 가려지는데 y=74의
+     * 점은 축선 위라 무방비).
+     *
+     * 덮은 만큼 축선을 **다시 그린다** — 안 그리면 헤더마다 축이 50px씩 끊긴다.
+     * 축선 x는 이 띠 안에서 6px(= -left)이고, 그 위에 ::before 앵커가 얹힌다.
+     */
+    left: 0;
+    background:
+      ${({ theme }) => railAxisOverlay(theme.mode === 'dark')},
+      ${({ theme }) =>
+        theme.mode === 'dark' ? GROUP_BAND.dark.year : GROUP_BAND.light.year};
     z-index: -1;
   }
 
@@ -707,11 +1087,23 @@ export const YearDivider = styled.button`
     display: inline-flex;
     align-items: baseline;
     gap: 6px;
-    font-size: 14px;
+    /*
+     * 한때 14px/700 primary로 **행 제목과 픽셀 단위로 같았고**, 그걸 17px/800으로 키워
+     * 갈랐다. 크기로 이긴 대가가 '오버'였다 — 머리글이 목록보다 커졌다.
+     *
+     * 지금은 **다른 종류의 글자**로 가른다: 행보다 작고(13 vs 14), 흐리고(tertiary),
+     * 자간이 벌어진(+0.04em) 라벨. 행 제목은 절대 그런 옷을 입지 않으므로 크기를 키우지
+     * 않고도 동률이 깨진다. 크기는 밀도 토큰이 소유한다(--year-label).
+     */
+    font-size: var(--year-label, 13px);
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: 0.04em;
     font-variant-numeric: tabular-nums;
-    color: ${({ theme }) => theme.colors.text.primary};
+    /* metaText였다. '행보다 작고 흐린 라벨'이라는 처방은 맞았지만 흐리기를 너무 멀리
+       밀어서, 연 머리글이 자기가 여는 **섹션의 이름**이 아니라 각주처럼 보였다.
+       크기는 여전히 행 제목보다 작고 자간도 벌어져 있으므로, 색만 한 단 올려도
+       '행과 같은 옷'으로 되돌아가지 않는다. */
+    color: ${({ theme }) => theme.colors.text.secondary};
 
     svg {
       color: ${metaText};
@@ -722,11 +1114,16 @@ export const YearDivider = styled.button`
     }
   }
 
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.04)'
-        : 'rgba(15, 23, 42, 0.03)'};
+  /* ⚠️ hover는 ::after 밴드 **위에** 얹혀야 보인다 — 요소 자신의 background는 음수 z의
+     ::after에 덮인다(이 요소가 z-index로 스태킹 컨텍스트를 만든다). 그래서 hover도
+     ::after의 색을 바꾼다. */
+  &:hover::after {
+    background:
+      ${({ theme }) => railAxisOverlay(theme.mode === 'dark')},
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? GROUP_BAND_HOVER.dark.year
+          : GROUP_BAND_HOVER.light.year};
   }
 
   &:focus-visible {
@@ -809,11 +1206,21 @@ export const CenturyDivider = styled.button`
   /* 세기 사이 간격은 'CenturySection + CenturySection'이 담당한다 — 여기서 margin-top을
    * 주면 섹션 간격과 이중으로 더해진다. (예전엔 &:first-child로 상쇄했는데, 접근성용
    * GroupHeading이 섹션의 첫 자식이 되면서 그 규칙이 더 이상 매칭되지 않았다.) */
-  margin: 0 -12px var(--year-mb) calc(-1 * var(--rail-inset));
-  padding: 8px 16px 8px var(--rail-inset);
+  /*
+   * ⚠️ 하단 마진 **0**. --year-mb(6px)였는데, 그 6px은 세기 밴드와 연 밴드 사이에서
+   * **아무도 칠하지 않는 띠**였다 — 두 헤더가 동시에 stuck인 구간(세기 섹션 내내)에서
+   * 그 틈으로 스크롤되는 행이 지나간다. 연 헤더의 ::after는 자기 margin-top(--year-mt)
+   * 까지만 위로 덮으므로 이 6px은 사각지대다.
+   * 0으로 두면 연 밴드가 세기 밴드에 바로 잇닿아 2단 머리글 블록이 되고, 슬릿이 원천적으로
+   * 생기지 않는다(연 헤더 위 숨 틈은 ::after가 칠하는 --year-mt 구간이 그대로 맡는다).
+   */
+  ${bleedToEdges}
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 8px calc(var(--list-pad-r, 20px) + 16px) 8px var(--rail-gutter);
   /* --century-header-h를 '선언된 상수'가 아니라 '실제 높이'로 만든다.
-   * YearDivider가 top: var(--century-header-h)로 이 값에 붙으므로, 상수(44px)와 실측
-   * 높이(41px)가 어긋나면 두 sticky 띠 사이에 3px 슬릿이 생긴다. */
+   * (세기 헤더가 sticky이던 시절엔 연 헤더의 top이 이 값에 붙어 있어 상수와 실측 높이가
+   *  어긋나면 두 띠 사이에 슬릿이 생겼다. 지금은 밴드 높이를 밀도 토큰에 묶는 역할이다.) */
   box-sizing: border-box;
   min-height: var(--century-header-h, 44px);
   /* hairline 2줄 제거 — 세기·연도 헤더가 **같은 굵기** hairline을 쓰던 탓에 목록
@@ -823,40 +1230,95 @@ export const CenturyDivider = styled.button`
   border-radius: 0;
   cursor: pointer;
   text-align: left;
-  position: sticky;
-  /* 열 헤더 아래에 붙는다 — sticky 3겹 사다리의 두 번째 단 */
-  top: var(--col-header-h, 26px);
-  z-index: 6;
+  /*
+   * ⚠️ sticky가 **아니다**(top: --col-header-h · z-index 6이었다).
+   *
+   * 고정된 세기 띠가 나르는 정보는 0이다 — 바로 아래 고정된 연도 띠가 '1914년'이라고
+   * 말하는 순간 세기는 이미 결정된다. 대가는 컸다: 열 머리글 26 + 세기 44 + 연도 34 =
+   * **104px**(1000px 뷰포트의 10%)이 스크롤 내내 고정 크롬으로 묶였고, 명도가 다른 띠
+   * 세 개가 쌓여 머리글 블록이 한 덩어리로 읽히지 않았다(사용자 지적: "스크롤 내릴 때
+   * 세기·연도 부분이 어색하다").
+   *
+   * 세기 띠는 흐름 안의 **장(章) 표지**로 남는다 — 그 자리에 도달할 때 한 번 크게 말하고
+   * 지나간다. 고정 크롬은 104 → 60px.
+   *
+   * ⚠️ 되살리려면 YearDivider의 top(= --col-header-h)도 같이 되돌릴 것. 두 값은
+   *    한 쌍이다 — 한쪽만 바꾸면 띠가 겹치거나 사이에 슬릿이 생긴다.
+   */
+  position: relative;
+  z-index: 1;
   /* ⚠️ 반투명 금지. 연 헤더는 같은 이유로 이미 솔리드로 고쳐져 있었는데(alpha 0.94에서도
      아래 행이 5~6% 비친다) 세기 헤더만 0.78/0.82로 남아 있었다. 세기 헤더는 섹션 전체
      구간에서 상시 stuck이라 비침이 가장 오래 노출되는 표면이고, blur까지 겹쳐 라벨 뒤에
      회색 얼룩을 만들었다. 실측 표면색으로 완전히 덮는다. */
+  /* 세기 밴드 — 연 밴드보다 한 단 진하다. 두 머리글이 같은 표면색이면 남는 차이가
+     라벨 크기와 도트뿐이라, 스크롤 중에 '시대가 바뀌었나 해가 바뀌었나'를 매번
+     견줘 읽어야 했다. 면의 농도가 그 질문에 먼저 답한다. */
+  /* ⚠️ 축선을 **면 위에 다시 그린다** — 전폭 번짐으로 이 밴드가 축을 덮기 때문이다. */
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: ${SURFACE.dark.raised};
+          background:
+            ${railAxisOverlay(true)},
+            ${GROUP_BAND.dark.century};
           color: ${theme.colors.text.primary};
         `
       : css`
-          background: #ffffff;
+          background:
+            ${railAxisOverlay(false)},
+            ${GROUP_BAND.light.century};
           color: ${theme.colors.text.primary};
         `}
   transition: background 0.15s ease-out;
 
-  /* 레일(divider padding-box left=rail) 솔리드 큰 도트 — 시대 분기 */
+  /*
+   * 리더 룰 — 라벨 클러스터에서 지면 우측 끝까지. 세기 밴드는 1,400px 폭에 라벨 하나만
+   * 얹혀 있어 나머지가 통째로 빈 띠였고, 정작 **경계선은 연도 헤더에만** 있었다
+   * (연도가 세기보다 강한 구분으로 보이던 위계 역전). 룰을 여기에 세워 세기가 표 전체를
+   * 가로지르는 구분임을 말하고, 연도 쪽 hairline은 한 단계 낮춘다.
+   *
+   * flex 막내라 남는 폭을 전부 먹는다 — JSX 변경 0.
+   */
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    min-width: 24px;
+    /* 밴드를 걷어낸 뒤 이 룰이 세기 경계의 **유일한** 장치다. 그만큼 한 단 낮춰도
+       충분히 보이고(행 괘선 0.08 대비 여전히 두 배), 면이 없어진 자리에서 선까지
+       진하면 이번엔 선이 혼자 도드라진다. */
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.14)'
+        : 'rgba(15, 23, 42, 0.13)'};
+  }
+
+  /* 레일 축선 위 솔리드 큰 도트 — 시대 분기. 좌표는 --rail-x(카드 안쪽 가장자리 기준). */
   &::before {
     content: '';
     position: absolute;
-    left: 0;
+    left: var(--rail-x);
     top: 50%;
     transform: translate(-50%, -50%);
-    /* 세기 16 : 연도 10 = 1.6× — 두 단계가 '조금 다른 같은 것'으로 보이던 문제. */
-    width: 16px;
-    height: 16px;
+    /* 행 5 : 연 7 : 세기 10 — 축 위 눈금 3단. */
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: ${BRAND.primary};
+    /* ⚠️ 다크에서도 #2563eb(3.71:1)를 쓰고 있었다 — 같은 축의 연 앵커가 7.11:1이라
+       3단 중 맨 위가 가운데보다 어두웠다. 다크는 밝은 파랑 원색(10.63:1)으로. */
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? '#93c5fd' : BRAND.primary};
+    /*
+     * 지면색 링 하나만 남긴다(축선 위에 얹히므로 필요하다).
+     *
+     * ⚠️ 한때 15px + 브랜드 외곽링의 **이중 링**이었다. '크기만 다르면 큰 점인지 작은
+     * 점인지 매번 견줘야 한다'는 근거였는데, 그건 머리글이 회색 밴드에 얹혀 있어 라벨
+     * 자체가 약할 때의 보상이었다. 라벨이 제 옷(크기·색·자간)을 입은 지금 도트는
+     * 눈금이면 충분하고, 이중 링은 목록에서 가장 무거운 장식이 된다.
+     */
     box-shadow: 0 0 0 3px
-      ${({ theme }) => (theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised)};
+      ${({ theme }) =>
+        theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
     z-index: 1;
     pointer-events: none;
   }
@@ -869,8 +1331,8 @@ export const CenturyDivider = styled.button`
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.05)'
-        : 'rgba(15, 23, 42, 0.03)'};
+        ? `${railAxisOverlay(true)}, ${GROUP_BAND_HOVER.dark.century}`
+        : `${railAxisOverlay(false)}, ${GROUP_BAND_HOVER.light.century}`};
   }
 
   &:focus-visible {
@@ -887,10 +1349,11 @@ export const CenturyDividerLabel = styled.span`
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  /* 세기 20 : 연도 14 = 1.43×. 16px일 때는 1.14×라 스크롤 중 '시대가 바뀐 것인지
-     해가 바뀐 것인지'를 라벨을 읽어야만 알 수 있었다. */
-  font-size: 20px;
-  /* 800은 레포 전체에서 여기 한 곳뿐이었다 — 위계는 크기(20 vs 14)가 이미 만들고 있고,
+  /* 세기 : 연도 : 행 제목 = 23 : 17 : 14(cozy)로 **세 단 단조**. 예전엔 20 : 14 : 14라
+     아래 두 단이 같은 값이었다 — 연 머리글이 행과 구별되지 않던 근인이 거기 있었다.
+     크기는 밀도 토큰이 소유한다(--century-label). */
+  font-size: var(--century-label, 18px);
+  /* 800은 레포 전체에서 여기 한 곳뿐이었다 — 위계는 크기가 이미 만들고 있고,
      굵기까지 최대치를 쓰면 화면에서 가장 큰 텍스트가 필요 이상으로 무거워진다. */
   font-weight: 700;
   /* 같은 레포가 "한글에 라틴 트래킹을 그대로 쓰지 않는다"를 명문화해 놓고, 정작 화면에서
@@ -922,6 +1385,9 @@ export const CenturyDividerYears = styled.span`
   letter-spacing: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
+  /* '(1901–' / '2000)'으로 토큰 중간에서 접히던 것 — 좁은 폭에서는 통째로 다음 줄에
+     가거나 리더 룰이 줄어들면 된다. 연도 범위가 두 줄에 걸치면 값처럼 읽히지 않는다. */
+  white-space: nowrap;
 `
 
 /* 카운트 — chip 외곽 제거, 단색 회색 숫자만 (datum-style) */
@@ -931,6 +1397,7 @@ export const CenturyDividerCount = styled.span`
   letter-spacing: -0.005em;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
 `
 
 /**
