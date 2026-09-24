@@ -33,6 +33,11 @@ export default defineConfig(({ mode }) => {
           ? JSON.stringify('http://localhost:8000')
           : JSON.stringify(process.env.VITE_API_BASE_URL || ''),
       'import.meta.env.VITE_APP_TITLE': JSON.stringify(appTitle),
+      // 데스크톱 셸(apps/desktop)은 API를 같은 오리진으로 프록시해 주므로
+      // VITE_API_BASE_URL을 비운 채 빌드한다 — 그 사실을 런타임에 알려 주는 표식
+      'import.meta.env.VITE_RUNTIME_TARGET': JSON.stringify(
+        mode === 'desktop' ? 'desktop' : 'web',
+      ),
     },
     plugins: [
       react(),

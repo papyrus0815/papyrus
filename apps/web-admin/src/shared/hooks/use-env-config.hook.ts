@@ -25,6 +25,13 @@ export function useEnvConfig(): UseEnvConfigReturn {
   const [missingEnvKeys, setMissingEnvKeys] = useState<string[]>([])
 
   useEffect(() => {
+    // 데스크톱 셸은 자체 프록시로 API를 같은 오리진에 붙여준다.
+    // VITE_API_BASE_URL이 비어 있는 게 정상 상태이므로 검사 대상이 아니다.
+    if (import.meta.env.VITE_RUNTIME_TARGET === 'desktop') {
+      setMissingEnvKeys([])
+      return
+    }
+
     const missing: string[] = []
 
     REQUIRED_ENV_KEYS.forEach((key) => {

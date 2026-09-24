@@ -1,0 +1,51 @@
+{
+  "name": "papyrus-desktop",
+  "version": "0.1.0",
+  "description": "Papyrus 관리자 화면 데스크톱 앱 (Electron 셸)",
+  "author": "Papyrus Team",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "dist/main.js",
+  "build": {
+    "appId": "com.papyrus.desktop",
+    "productName": "Papyrus",
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "dist/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web-admin/dist",
+        "to": "papyrus/apps/web-admin/dist"
+      }
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "electronVersion": "39.5.0"
+  }
+}
