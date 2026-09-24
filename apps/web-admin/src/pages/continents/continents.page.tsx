@@ -513,7 +513,10 @@ const TableWrap = styled.div`
   border: 1px solid
     ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e0e0e0')};
   border-radius: 12px;
-  overflow: hidden;
+  /* 폭이 모자라면 **가로로 흘린다**. overflow:hidden이면 모자란 폭이 셀을 쥐어짜는데,
+     한글은 음절마다 끊을 수 있어서 '남아메리카'가 3줄로 쪼개지고 숫자는 멀쩡했다. */
+  overflow-x: auto;
+  overflow-y: hidden;
 
   @media (max-width: 1024px) {
     display: none; /* 태블릿/모바일에서는 숨기고 MobileListPane 사용 */
@@ -802,6 +805,9 @@ const Table = styled.table`
 const Th = styled.th`
   padding: 14px 16px;
   text-align: left;
+  /* 머리글은 라벨이라 접히면 안 된다 — '대륙 명' · 'ISO 코드' · '국가 수'가 두 줄로
+     쪼개져 머리글 줄만 키우고 있었다. */
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
@@ -815,6 +821,10 @@ const Th = styled.th`
 const Td = styled.td`
   padding: 16px;
   font-size: 14px;
+  /* ⚠️ 자동 표 배치는 **끊을 수 있는 칸부터 쥐어짠다**. 한글 이름은 음절 단위로 끊기고
+     '10,573,960' 같은 수는 끊기지 않아서, 남는 폭을 수가 다 가져가고 이름이 3줄이 됐다.
+     이름·수 모두 한 줄로 못 박고, 모자란 폭은 TableWrap이 가로 스크롤로 받는다. */
+  white-space: nowrap;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a')};
   border-bottom: 1px solid
     ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0')};

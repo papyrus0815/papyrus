@@ -61,3 +61,32 @@ export const readCompactKo = (raw: string): string => {
   const num = strToNum(raw)
   return num != null ? formatCompactKo(num) : raw
 }
+
+/**
+ * 인구 한국어 단위 — 목록 둘째 줄처럼 **폭이 귀한 자리**에서 자릿수 대신 규모를 읽힌다.
+ * 예 143,000,000 → '1.4억', 51,700,000 → '5,170만'.
+ *
+ * `formatCompactKo`(조·억·만)와 달리 '조'를 쓰지 않고 1억 미만은 만 단위로 반올림한다 —
+ * 인구는 조 단위가 없고, '5,170만'이 '0.5억'보다 바로 읽힌다.
+ */
+export const formatPopulationKo = (people: number): string => {
+  if (people >= 100_000_000) {
+    const eok = people / 100_000_000
+    return `${eok >= 10 ? Math.round(eok).toLocaleString() : eok.toFixed(1)}억`
+  }
+  if (people >= 10_000) {
+    return `${Math.round(people / 10_000).toLocaleString()}만`
+  }
+  return people.toLocaleString()
+}
+
+/** 면적 한국어 단위 — '1,710만 km²' / '4.2만 km²' / '2,586 km²' */
+export const formatAreaKo = (squareKm: number): string => {
+  if (squareKm >= 100_000) {
+    return `${Math.round(squareKm / 10_000).toLocaleString()}만 km²`
+  }
+  if (squareKm >= 10_000) {
+    return `${(squareKm / 10_000).toFixed(1)}만 km²`
+  }
+  return `${Math.round(squareKm).toLocaleString()} km²`
+}
