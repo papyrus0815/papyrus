@@ -16,14 +16,9 @@ import React, { useMemo, useState } from 'react'
 
 import { FiClock, FiLayers, FiStar } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import { useTheme } from 'styled-components'
 
 import { useEvents } from '@/entities/event/model'
 import type { HistoricalEvent } from '@/entities/event/model'
-import {
-  categoryAccent,
-  resolveCategory,
-} from '@/pages/events/ledger/styles/ledger-tokens'
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import {
   compareByDate,
@@ -42,8 +37,7 @@ import {
   useSidebarRecents,
 } from '@/widgets/entity-list-sidebar'
 
-import { categoryInk } from './category-ink'
-import { EventListScope } from './event-list-sidebar.styles'
+import { EventListScope, ParentTail } from './event-list-sidebar.styles'
 
 /**
  * 세기 앵커 ramp — 최신(인디고)에서 먼 과거(바랜 슬레이트)로 **단조 감쇠**한다.
@@ -174,8 +168,6 @@ function EventListSidebarInner({
   onAdd,
 }: EventListSidebarProps) {
   const navigate = useNavigate()
-  const theme = useTheme()
-  const mode = theme.mode === 'dark' ? 'dark' : 'light'
   // 사이드바는 세기 그룹을 온전히 보여야 하므로 전량 로드(서버 페이지네이션 위 클라 그룹핑은
   // 1페이지만 그룹이 잡히는 함정이 있다 — event-catalog 회귀와 같은 이유).
   const { events, isLoading, isError, refetch } = useEvents({
@@ -212,6 +204,8 @@ function EventListSidebarInner({
   const { items, groups, totalCount } = useMemo(() => {
     const byId = new Map(events.map((event) => [event.id, event]))
     const chronological = isChronological(sort)
+    /** 검색 중인가 — 행이 '왜 걸렸는지'를 스스로 말해야 하는 유일한 상태다(아래 meta). */
+    const searching = !!query.trim()
 
     /** 한 사건 → 한 행. 빠른 접근 그룹은 같은 사건을 다른 groupId로 한 번 더 싣는다. */
     const toRow = (
@@ -226,45 +220,63 @@ function EventListSidebarInner({
         underYearAnchor: false,
       },
     ): EntitySidebarItem => {
-      const category = resolveCategory(event.category)
       const parent = event.parentEventId ? byId.get(event.parentEventId) : null
       const countries = summarizeCountries(event)
       const childCount = event.hierarchy?.children?.length ?? 0
       const categoryLabel = event.category ? String(event.category) : null
       /* 상위 꼬리표는 **묶음의 첫 행에만**. 한 상위 밑에 다섯 행이 붙는 일이 흔해서
          (NSPM-2 서명 · 러불 동맹 · 독일 함대법) 매 행에 찍으면 같은 문장이 세로로 쌓여
-         정작 그 행만의 정보를 밀어낸다. 되풀이되는 자리에서는 관련국으로 바꿔 단다. */
-      const context =
+         정작 그 행만의 정보를 밀어낸다. 되풀이는 자리에서는 아예 달지 않는다 —
+         그 행들은 꼬리표를 단 행 바로 아래 이어 서서 한 묶음으로 읽힌다. */
+      const parentTail =
         parent && !options.repeatsParent
-          ? `↳ ${shortParentTitle(parent.title)}`
-          : countries
+          ? shortParentTitle(parent.title)
+          : null
       return {
         id: event.id,
-        /* 화면에 세우는 제목은 **자기 날짜 꼬리를 덜어낸** 것 — 바로 아래 메타 줄이 같은
+        /* 화면에 세우는 제목은 **자기 날짜 꼬리를 덜어낸** 것 — 바로 왼쪽 선두 열이 같은
            날짜를 이미 말한다(shared/lib/title-date.ts). 검색·스크린리더는 아래에서 원본을 쓴다. */
         name: titleWithoutOwnDate(
           event.title,
           event.startDate,
           event.startDatePrecision,
         ),
-        /* 둘째 줄은 한 호흡만 — 날짜 · 분류(색) · 어디/무엇의 일부 · 하위 N.
-           맨 뒤 '하위 N'만 줄지 않는다: 긴 국가명에 밀려 사라져도 되는 건 문맥 쪽이다. */
-        meta: [
-          categoryLabel
-            ? {
-                text: categoryLabel,
-                tone: categoryInk(categoryAccent(category, mode), mode),
-              }
-            : null,
-          // 하위 사건은 '어느 국가'보다 '무엇의 일부'가 먼저다 — 상위 제목이 있으면 그걸 쓴다.
-          context ? { text: context, shrink: true } : null,
-          childCount > 0 ? `하위 ${childCount}` : null,
-        ],
+        /*
+         * 둘째 줄(메타)은 **검색 중에만** 있다 — 평소 이 목록은 색인이다.
+         *
+         * 예전에는 분류 · 관련국 · 하위 N을 제목 아래 한 줄로 상시 달았다. 그 줄 하나가
+         * 행마다 16px씩, 목록 전체로 3,200px을 썼고(실측 316행) 정작 같은 값을 바로 옆
+         * 본문 목록이 **전용 열**로 이미 말하고 있었다. 행 72.6 → 45.5px이 그 대가다.
+         *
+         * 다만 검색은 제목 밖(분류·관련국·장소·키워드)에서도 걸린다. '오스만'으로 25행이
+         * 뜨는데 그 25행의 제목 어디에도 '오스만'이 없으면 **왜 이 행이 여기 있는지**가
+         * 화면에서 사라진다. 그래서 검색 중에만 근거를 되살린다 — 본문 목록이 검색 중에만
+         * TrailingNote를 그리는 것과 같은 규약이다(설명과 근거는 다른 질문에 답한다).
+         * 색은 입히지 않는다: 이 줄이 답하는 것은 '왜 걸렸나'이지 '무슨 분류인가'가 아니다.
+         */
+        meta: searching
+          ? [categoryLabel, countries ? { text: countries, shrink: true } : null]
+          : undefined,
         /* 선두 고정폭 열 — 인물 목록의 아바타 자리에 사건은 날짜를 세운다.
            썸네일을 놓을 수도 있었지만 실측 보유율이 13%(13/100)라, 열의 87%가 빈 블록이
            되면서 제목 폭만 먹는다. 인물은 40%(151/380)라 얼굴이 그 자리를 벌 만하다. */
         lead: leadDateToken(event, options.underYearAnchor),
         leadDivider: options.leadDivider,
+        /*
+         * 상위 사건 꼬리표 — 제목 **뒤에 이어 붙는다**(mark는 제목과 같은 줄 안에 흐른다).
+         *
+         * 메타 줄을 없애면서 '이 행이 무엇의 하위인가'가 갈 곳이 없어졌는데, 그건 행 하나로
+         * 자족하지 않는 유일한 값이다(분류·관련국은 본문 열이 말하지만, 계보는 목록에
+         * 다른 출처가 없다). 제목 줄 안에 두면 세로 예산을 0px 쓰고 2줄 클램프에 함께 접힌다.
+         */
+        mark: parentTail ? (
+          <>
+            {/* 줄바꿈 기회는 꼬리표 **앞에만** 둔다 — 아래 nbsp 참고 */}{' '}
+            <ParentTail title={`상위 사건: ${parentTail}`}>
+              {`\u21b3\u00a0${parentTail}`}
+            </ParentTail>
+          </>
+        ) : undefined,
         /* 읽어 주는 쪽에는 **줄이기 전 값**을 그대로 준다 — 화면에서는 연 소제목이 연도를
            대신 말해 날짜를 '9.4'로 줄였고, 제목에서도 중복 날짜 꼬리를 덜어냈다. */
         ariaLabel: [
@@ -444,7 +456,6 @@ function EventListSidebarInner({
     query,
     categoryFilter,
     sort,
-    mode,
     hasActiveFilter,
     pinnedIds,
     recentIds,

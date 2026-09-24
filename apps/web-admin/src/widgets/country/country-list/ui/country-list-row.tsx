@@ -5,7 +5,9 @@
  * - 행 클릭 → onSelect, 더블클릭 → onEditHistorical (역사 국가만)
  * - 별 버튼은 stopPropagation으로 행 선택과 분리
  * - 좌측: ISO 박스(현대) 또는 SVG fallback(역사) — flagEmoji 미사용
- * - 두 줄: 이름 + 부가(수도·인구 / 영문명·연도)
+ * - 두 줄: 이름 + 부가(현대=수도·인구·면적 / 역사=영문명·존속기간)
+ *   둘째 줄에서 **현재 정렬 기준**(인구순·면적순)에 해당하는 지표만 굵게 — 정렬을 바꿨는데
+ *   근거가 화면에 없던 문제(면적순인데 면적 미표시)를 행 안에서 해소한다.
  * - 자식 있는 부모는 우측에 작은 chevron 표시 (현재 컬럼 active로 자식 컬럼 트리거)
  */
 import React from 'react'
@@ -38,15 +40,36 @@ const UnlinkedBadge = styled.span`
 `
 
 /** 인구 한국어 단위 변환: ≥1억은 "1.4억", 만 단위는 "5,170만" */
-function formatPopulation(n: number): string {
-  if (n >= 100_000_000) {
-    const eok = n / 100_000_000
+function formatPopulation(people: number): string {
+  if (people >= 100_000_000) {
+    const eok = people / 100_000_000
     return `${eok >= 10 ? Math.round(eok).toLocaleString() : eok.toFixed(1)}억`
   }
-  if (n >= 10_000) {
-    return `${Math.round(n / 10_000).toLocaleString()}만`
+  if (people >= 10_000) {
+    return `${Math.round(people / 10_000).toLocaleString()}만`
   }
-  return n.toLocaleString()
+  return people.toLocaleString()
+}
+
+/** 면적 한국어 단위 변환: "1,710만 km²" / "4.2만 km²" / "2,586 km²" */
+function formatArea(squareKm: number): string {
+  if (squareKm >= 100_000) {
+    return `${Math.round(squareKm / 10_000).toLocaleString()}만 km²`
+  }
+  if (squareKm >= 10_000) {
+    return `${(squareKm / 10_000).toFixed(1)}만 km²`
+  }
+  return `${Math.round(squareKm).toLocaleString()} km²`
+}
+
+/** population은 BigInt 문자열로도 내려오므로(서버 규약) 수치로 정규화 */
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 }
 
 interface CountryListRowProps {
@@ -85,7 +108,7 @@ export function CountryListRow({
   onEditHistorical,
   onContextMenu,
 }: CountryListRowProps) {
-  const { unlinkedHistoricalIds } = useCountryListState()
+  const { unlinkedHistoricalIds, sortBy } = useCountryListState()
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const hasChildren =
@@ -100,6 +123,17 @@ export function CountryListRow({
       : ''
   const isUnlinked =
     country.type === 'historical' && unlinkedHistoricalIds.has(country.id)
+
+  // 둘째 줄 지표 — 수도는 실데이터가 없어(0/71) 있을 때만, 인구·면적은 71/71 채워져 있다.
+  const population = toFiniteNumber(country.population)
+  const area = toFiniteNumber(country.areaSqKm)
+  const metrics: { key: 'population' | 'area'; text: string }[] = []
+  if (population !== null) {
+    metrics.push({ key: 'population', text: formatPopulation(population) })
+  }
+  if (area !== null) {
+    metrics.push({ key: 'area', text: formatArea(area) })
+  }
 
   return (
     <>
@@ -158,18 +192,26 @@ export function CountryListRow({
               <S.SubMeta>
                 {country.type === 'modern' ? (
                   <>
-                    {country.capital && <span>{country.capital}</span>}
-                    {country.capital &&
-                      typeof country.population === 'number' && (
-                        <span className="dot" />
-                      )}
-                    {typeof country.population === 'number' && (
-                      <span>인구 {formatPopulation(country.population)}</span>
+                    {country.capital && (
+                      <S.SubMetaText>{country.capital}</S.SubMetaText>
                     )}
+                    {country.capital && metrics.length > 0 && (
+                      <span className="dot" />
+                    )}
+                    {metrics.map((metric, metricIndex) => (
+                      <React.Fragment key={metric.key}>
+                        {metricIndex > 0 && <span className="dot" />}
+                        <S.SubMetric $emphasized={sortBy === metric.key}>
+                          {metric.text}
+                        </S.SubMetric>
+                      </React.Fragment>
+                    ))}
                   </>
                 ) : (
                   <>
-                    {country.enName && <span>{country.enName}</span>}
+                    {country.enName && (
+                      <S.SubMetaText>{country.enName}</S.SubMetaText>
+                    )}
                     {country.enName && periodText && <span className="dot" />}
                     {periodText && <span>{periodText}</span>}
                     {isUnlinked && (

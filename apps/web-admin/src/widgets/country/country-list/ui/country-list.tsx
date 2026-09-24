@@ -78,7 +78,8 @@ function CountryListInner({
     showPersonRegisterModal,
     setShowPersonRegisterModal,
   } = useCountryListState()
-  // 'all' sentinel — 첫 진입(localStorage 없음) 시. 데이터 로드 전에도 모든 그룹 collapsed로 렌더 → 깜빡임 없음.
+  // 'all' sentinel — 첫 진입(localStorage 없음) 시. 데이터 로드 전에도 접힘 기준으로 렌더 → 깜빡임 없음.
+  // 실제 의미는 '첫 그룹만 펼침'(defaultExpandedGroupId 참조).
   // 사용자가 그룹을 토글하면 'all' → 실제 Set으로 materialize.
   const [collapsedGroups, setCollapsedGroups] = React.useState<
     Set<string> | 'all'
@@ -90,16 +91,92 @@ function CountryListInner({
       return 'all'
     }
   })
+
+  // 대륙별로 그룹화 (현대 국가만; continentId 기준). 과거만 선택 시 단일 그룹으로 플랫 목록
+  const groupedByContinent = React.useMemo(() => {
+    // 과거(역사적)만 선택된 경우: 그룹 없이 단일 섹션으로 표시
+    if (countryTypeFilter === 'historical') {
+      if (filtered.length === 0) return []
+      return [
+        {
+          continentId: '__historical__',
+          name: '과거 국가',
+          countries: filtered,
+        },
+      ]
+    }
+    const groups = new Map<string, typeof filtered>()
+    const UNKNOWN = '__unknown__'
+    const historicalMatches: typeof filtered = []
+    for (const country of filtered) {
+      if (country.type !== 'modern') {
+        historicalMatches.push(country)
+        continue
+      }
+      const key = country.continentId ?? UNKNOWN
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(country)
+    }
+    // 명시적 표시 순서: 유럽 → 아시아 → 북아메리카 → 남아메리카 → 아프리카 → ...
+    // (continent-colors.ts의 NAME_ORDER 매핑). 매핑 안 된 대륙은 뒤에 데이터 순서대로.
+    const orderedContinents = [...continents].sort(
+      (contA, contB) => getContinentOrder(contA.name) - getContinentOrder(contB.name),
+    )
+    const result: {
+      continentId: string
+      name: string
+      countries: typeof filtered
+    }[] = []
+    const emittedKeys = new Set<string>()
+    for (const cont of orderedContinents) {
+      const list = groups.get(cont.id)
+      if (list?.length) {
+        result.push({ continentId: cont.id, name: cont.name, countries: list })
+        emittedKeys.add(cont.id)
+      }
+    }
+    // never-drop (F4): 로드된 대륙 섹션에 못 들어간 국가 — 대륙 목록이 아직 로딩 중이거나
+    // continentId가 현재 대륙 목록에 없는(고아) 경우 포함 — 를 전부 '미분류'로 모은다.
+    // 어떤 시점에도 국가가 조용히 사라지지 않게 하는 안전망. (__unknown__ 버킷도 여기서 흡수)
+    const unclassified: typeof filtered = []
+    for (const [groupKey, list] of groups) {
+      if (emittedKeys.has(groupKey)) continue
+      unclassified.push(...list)
+    }
+    if (unclassified.length > 0) {
+      result.push({
+        continentId: '__unknown__',
+        name: '미분류',
+        countries: unclassified,
+      })
+    }
+    // 검색으로 매칭된 역사적 국가가 있으면 별도 섹션으로 추가
+    if (historicalMatches.length > 0) {
+      result.push({
+        continentId: '__historical__',
+        name: '과거 국가',
+        countries: historicalMatches,
+      })
+    }
+    return result
+  }, [filtered, continents, countryTypeFilter])
+
+  // 'all' sentinel이 뜻하는 실제 집합 = "첫 그룹만 펼치고 나머지는 접힘".
+  // 전부 접으면 국가 목록 사이드바가 첫 진입에 0행이 돼 화면 대부분이 빈 공간이 된다.
+  const defaultExpandedGroupId = React.useMemo(
+    () => groupedByContinent[0]?.continentId ?? null,
+    [groupedByContinent],
+  )
   const isGroupCollapsedById = React.useCallback(
     (continentId: string): boolean => {
       // 핀/최근은 'all'이어도 펼침 유지
       if (continentId === '__pinned__' || continentId === '__recent__') {
         return collapsedGroups !== 'all' && (collapsedGroups as Set<string>).has(continentId)
       }
-      if (collapsedGroups === 'all') return true
+      if (collapsedGroups === 'all') return continentId !== defaultExpandedGroupId
       return collapsedGroups.has(continentId)
     },
-    [collapsedGroups],
+    [collapsedGroups, defaultExpandedGroupId],
   )
   // 'all' sentinel을 실제 Set으로 materialize (continents + 특수 그룹 모두 collapsed로 시작)
   const materializeCollapsed = React.useCallback(
@@ -110,9 +187,12 @@ function CountryListInner({
       )
       nextSet.add('__unknown__')
       nextSet.add('__historical__')
+      // 'all'에서 이미 펼쳐 보이던 첫 그룹은 그대로 둔다 — 다른 그룹을 토글했을 뿐인데
+      // 보고 있던 그룹이 접히면 안 된다.
+      if (defaultExpandedGroupId) nextSet.delete(defaultExpandedGroupId)
       return nextSet
     },
-    [continents],
+    [continents, defaultExpandedGroupId],
   )
   const toggleGroup = React.useCallback(
     (continentId: string) => {
@@ -185,74 +265,6 @@ function CountryListInner({
     return { pinned, recent }
   }, [hasFilterActive, countriesById, pinnedIds, recentIds])
 
-  // 대륙별로 그룹화 (현대 국가만; continentId 기준). 과거만 선택 시 단일 그룹으로 플랫 목록
-  const groupedByContinent = React.useMemo(() => {
-    // 과거(역사적)만 선택된 경우: 그룹 없이 단일 섹션으로 표시
-    if (countryTypeFilter === 'historical') {
-      if (filtered.length === 0) return []
-      return [
-        {
-          continentId: '__historical__',
-          name: '과거 국가',
-          countries: filtered,
-        },
-      ]
-    }
-    const groups = new Map<string, typeof filtered>()
-    const UNKNOWN = '__unknown__'
-    const historicalMatches: typeof filtered = []
-    for (const country of filtered) {
-      if (country.type !== 'modern') {
-        historicalMatches.push(country)
-        continue
-      }
-      const key = country.continentId ?? UNKNOWN
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key)!.push(country)
-    }
-    // 명시적 표시 순서: 유럽 → 아시아 → 북아메리카 → 남아메리카 → 아프리카 → ...
-    // (continent-colors.ts의 NAME_ORDER 매핑). 매핑 안 된 대륙은 뒤에 데이터 순서대로.
-    const orderedContinents = [...continents].sort(
-      (contA, contB) => getContinentOrder(contA.name) - getContinentOrder(contB.name),
-    )
-    const result: {
-      continentId: string
-      name: string
-      countries: typeof filtered
-    }[] = []
-    const emittedKeys = new Set<string>()
-    for (const cont of orderedContinents) {
-      const list = groups.get(cont.id)
-      if (list?.length) {
-        result.push({ continentId: cont.id, name: cont.name, countries: list })
-        emittedKeys.add(cont.id)
-      }
-    }
-    // never-drop (F4): 로드된 대륙 섹션에 못 들어간 국가 — 대륙 목록이 아직 로딩 중이거나
-    // continentId가 현재 대륙 목록에 없는(고아) 경우 포함 — 를 전부 '미분류'로 모은다.
-    // 어떤 시점에도 국가가 조용히 사라지지 않게 하는 안전망. (__unknown__ 버킷도 여기서 흡수)
-    const unclassified: typeof filtered = []
-    for (const [groupKey, list] of groups) {
-      if (emittedKeys.has(groupKey)) continue
-      unclassified.push(...list)
-    }
-    if (unclassified.length > 0) {
-      result.push({
-        continentId: '__unknown__',
-        name: '미분류',
-        countries: unclassified,
-      })
-    }
-    // 검색으로 매칭된 역사적 국가가 있으면 별도 섹션으로 추가
-    if (historicalMatches.length > 0) {
-      result.push({
-        continentId: '__historical__',
-        name: '과거 국가',
-        countries: historicalMatches,
-      })
-    }
-    return result
-  }, [filtered, continents, countryTypeFilter])
 
   // 핀/최근 섹션을 통상 그룹 앞에 prepend (필터 비활성 시에만).
   // isQuickAccess=true면 행 렌더에서 펼침 버튼·자식 표시를 막아 통상 그룹과 충돌 회피.

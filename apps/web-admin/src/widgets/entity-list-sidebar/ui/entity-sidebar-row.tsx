@@ -11,7 +11,7 @@ import { useTheme } from 'styled-components'
 
 import * as S from '@/shared/ui/sidebar-list'
 
-import type { EntitySidebarItem } from '../model/types'
+import { metaPartText, type EntitySidebarItem } from '../model/types'
 
 interface EntitySidebarRowProps {
   item: EntitySidebarItem
@@ -25,6 +25,8 @@ interface EntitySidebarRowProps {
   /** roving tabindex — 목록의 단일 Tab 진입점이면 true */
   isTabStop: boolean
   pinned?: boolean
+  /** 이름 줄 수 — 2 이상이면 말줄임 대신 접는다 (제목이 문장인 도메인) */
+  titleLines?: number
   onSelect: (id: string) => void
   onTogglePin?: (id: string) => void
 }
@@ -38,16 +40,24 @@ function EntitySidebarRowBase({
   rowIndex,
   isTabStop,
   pinned,
+  titleLines,
   onSelect,
   onTogglePin,
 }: EntitySidebarRowProps) {
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
+  // 행 accent가 있으면 배지만 그 색을 쓴다 — 좌측 strip은 '어느 그룹의 선택인지'라는
+  // 원래 의미를 지켜야 하므로 그룹 색 그대로다.
+  const badgeAccent = item.accentColor ?? accentColor
 
   // 빈 조각을 먼저 걸러야 점 구분자가 값 없이 뜨지 않는다
-  const metaParts = (item.meta ?? []).filter(
-    (part): part is string => typeof part === 'string' && part.trim().length > 0,
-  )
+  const metaParts = (item.meta ?? [])
+    .map((part) => ({
+      text: metaPartText(part).trim(),
+      shrink: typeof part === 'object' && !!part && !!part.shrink,
+      tone: typeof part === 'object' && !!part ? part.tone : undefined,
+    }))
+    .filter((part) => part.text.length > 0)
   const hasMetric =
     item.metric !== null &&
     item.metric !== undefined &&
@@ -61,21 +71,24 @@ function EntitySidebarRowBase({
       tabIndex={isTabStop ? 0 : -1}
       data-row-index={rowIndex}
       aria-selected={item.id === selectedId}
+      aria-label={item.ariaLabel}
       $active={item.id === selectedId}
       $accentColor={accentColor}
       onClick={() => onSelect(item.id)}
     >
       <S.RowTop>
         <S.RowLeft>
-          {item.thumbnailUrl ? (
+          {item.lead !== undefined && item.lead !== null ? (
+            <S.RowLead aria-hidden>{item.lead}</S.RowLead>
+          ) : item.thumbnailUrl ? (
             <S.ThumbnailAvatar>
               <img src={item.thumbnailUrl} alt={item.name} loading="lazy" />
             </S.ThumbnailAvatar>
-          ) : (
+          ) : item.noBadge ? null : (
             <S.AvatarBadge
               style={{
-                background: S.withAlpha(accentColor, 0.14),
-                color: S.getBadgeTextColor(accentColor, isDark),
+                background: S.withAlpha(badgeAccent, 0.14),
+                color: S.getBadgeTextColor(badgeAccent, isDark),
               }}
               aria-hidden
             >
@@ -83,16 +96,27 @@ function EntitySidebarRowBase({
             </S.AvatarBadge>
           )}
           <S.TextStack>
-            <S.CodeText $unread={false} title={item.name}>
+            <S.CodeText $unread={false} $lines={titleLines} title={item.name}>
               {item.name}
               {item.mark}
             </S.CodeText>
             {metaParts.length > 0 && (
               <S.SubMeta>
                 {metaParts.map((part, index) => (
-                  <React.Fragment key={`${part}-${index}`}>
+                  <React.Fragment key={`${part.text}-${index}`}>
                     {index > 0 && <span className="dot" />}
-                    <span>{part}</span>
+                    {part.shrink ? (
+                      <S.SubMetaText
+                        title={part.text}
+                        style={part.tone ? { color: part.tone } : undefined}
+                      >
+                        {part.text}
+                      </S.SubMetaText>
+                    ) : (
+                      <span style={part.tone ? { color: part.tone } : undefined}>
+                        {part.text}
+                      </span>
+                    )}
                   </React.Fragment>
                 ))}
               </S.SubMeta>

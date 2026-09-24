@@ -59,6 +59,13 @@ export interface EntityListSidebarProps {
   pinnedIds?: string[]
   onTogglePin?: (id: string) => void
 
+  /**
+   * 행 이름의 최대 줄 수 (기본 1 = 한 줄 말줄임).
+   * 이름이 아니라 문장인 도메인(사건 제목)에서 2를 준다 — 한 줄 말줄임은 구분에 필요한
+   * 꼬리("… 12일 전쟁")를 먼저 잘라낸다.
+   */
+  titleLines?: number
+
   /** 헤더 + 버튼 */
   onAdd?: () => void
   addLabel?: string
@@ -93,6 +100,7 @@ function EntityListSidebarBase({
   discovery,
   pinnedIds,
   onTogglePin,
+  titleLines,
   onAdd,
   addLabel,
   isLoading = false,
@@ -385,8 +393,13 @@ function EntityListSidebarBase({
                           </S.GroupSectionHeader>
                           {!groupCollapsed &&
                             group.items.map((item) => (
+                              <React.Fragment key={`${group.id}-${item.id}`}>
+                                {item.leadDivider && (
+                                  <S.RowDivider aria-hidden>
+                                    {item.leadDivider}
+                                  </S.RowDivider>
+                                )}
                               <EntitySidebarRow
-                                key={`${group.id}-${item.id}`}
                                 item={item}
                                 isQuickAccess={!!group.isQuickAccess}
                                 idPrefix={domainKey}
@@ -400,9 +413,11 @@ function EntityListSidebarBase({
                                   tabStopIndex
                                 }
                                 pinned={pinnedSet.has(item.id)}
+                                titleLines={titleLines}
                                 onSelect={onSelect}
                                 onTogglePin={onTogglePin ? handleTogglePin : undefined}
                               />
+                              </React.Fragment>
                             ))}
                         </React.Fragment>
                       )

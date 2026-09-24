@@ -48,6 +48,7 @@ export {
   ThumbnailAvatar,
   CodeText,
   SubMeta,
+  SubMetaText,
   TextStack,
   EmptyFilterState,
   EmptyFilterIcon,
@@ -70,6 +71,23 @@ export {
   GroupDot as ContinentDot,
   AvatarBadge as IsoBadge,
 } from '@/shared/ui/sidebar-list'
+
+/**
+ * 행 둘째 줄의 개별 지표(인구·면적).
+ * 현재 정렬 기준에 해당하는 지표만 굵고 진하게 — 정렬을 바꿨을 때 무엇으로 줄 세웠는지
+ * 행 안에서 읽히게 한다(면적순인데 면적이 어디에도 없던 문제).
+ */
+export const SubMetric = styled.span<{ $emphasized?: boolean }>`
+  ${({ $emphasized, theme }) =>
+    $emphasized
+      ? css`
+          color: ${theme.colors.text.secondary};
+          font-weight: 600;
+        `
+      : css`
+          color: inherit;
+        `}
+`
 
 /** B-4 — 자식 (역사 국가) 전용 두 번째 컬럼 */
 export const ChildrenPane = styled.div`
