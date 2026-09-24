@@ -10,6 +10,8 @@ import {
   DemographicIndicatorResponse,
   EconomicIndicatorResponse,
   DevelopmentIndicatorResponse,
+  BondYieldResponse,
+  UpsertBondYieldDto,
   UpsertEconomicIndicatorDto,
   UpsertDemographicIndicatorDto,
   UpsertDevelopmentIndicatorDto,
@@ -401,6 +403,70 @@ export class CountryController {
   ): Promise<void> {
     const accountId = req.user?.id ?? req.user?.sub
     await this.countryService.deleteDevelopmentIndicator(id, year, accountId)
+  }
+
+  // ── 국채 금리 (CountryBondYield) ─────────────────────────────
+
+  /**
+   * 국가별 국채 금리 조회 (연도 × 만기)
+   *
+   * @param id 국가 ID
+   * @param query 연도 범위
+   * @returns 국채 금리 목록 (연도 오름차순 · 만기 짧은 순)
+   * @tag countries
+   */
+  @TypedRoute.Get(':id/bond-yields')
+  async getBondYields(
+    @TypedParam('id') id: string,
+    @TypedQuery()
+    query: {
+      startYear?: string
+      endYear?: string
+    },
+    @Request() req: any,
+  ): Promise<BondYieldResponse[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.getBondYields(
+      id,
+      query.startYear ? parseInt(query.startYear) : undefined,
+      query.endYear ? parseInt(query.endYear) : undefined,
+      accountId,
+    )
+  }
+
+  /**
+   * 국채 금리 생성/갱신 (countryId+year+maturity 기준 upsert)
+   * @tag countries
+   */
+  @TypedRoute.Post(':id/bond-yields')
+  async upsertBondYield(
+    @TypedParam('id') id: string,
+    @TypedBody() dto: UpsertBondYieldDto,
+    @Request() req: any,
+  ): Promise<BondYieldResponse> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.upsertBondYield(id, dto, accountId)
+  }
+
+  /**
+   * 국채 금리 삭제 (해당 연도의 그 만기 한 행)
+   * @tag countries
+   */
+  @TypedRoute.Delete(':id/bond-yields/:year/:maturity')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteBondYield(
+    @TypedParam('id') id: string,
+    @TypedParam('year') year: number,
+    @TypedParam('maturity') maturity: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.countryService.deleteBondYield(
+      id,
+      year,
+      maturity as UpsertBondYieldDto['maturity'],
+      accountId,
+    )
   }
 
   // ── 국가 기록 (CountryRecord) CRUD ───────────────────────────

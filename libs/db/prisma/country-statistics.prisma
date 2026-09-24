@@ -14,6 +14,10 @@
 ///   • 출생률, 사망률, 합계출산율
 ///   • 도시화율, 기대수명
 /// 
+/// - 국채 금리(CountryBondYield): 연도 × 만기별 국채 수익률
+///   • 만기별(3개월~30년·영구채) 수익률 → 수익률 곡선
+///   • 표면금리·발행 통화·물가연동 여부
+///
 /// - 발전 지표(CountryDevelopmentIndicator): 사회 발전 수준
 ///   • 교육지수, 문해율
 ///   • 건강지수, 영아사망률
@@ -334,4 +338,93 @@ model CountryDevelopmentIndicator {
   @@index([year], name: "idx_development_indicator_year")
   @@index([countryId, year], name: "idx_development_indicator_country_year")
   @@map("country_development_indicator")
+}
+
+// ========================
+// CountryBondYield
+// ========================
+
+/// 국채 만기 — 금리는 **만기마다 다른 값**이라 한 해에 여러 행이 선다.
+/// (수익률 곡선은 이 축을 가로로 세운 그림이다)
+enum BondMaturity {
+  /// 1개월물
+  M1
+  /// 3개월물
+  M3
+  /// 6개월물
+  M6
+  /// 1년물
+  Y1
+  /// 2년물
+  Y2
+  /// 3년물
+  Y3
+  /// 5년물
+  Y5
+  /// 7년물
+  Y7
+  /// 10년물 — 대표 만기(장기 금리)
+  Y10
+  /// 15년물
+  Y15
+  /// 20년물
+  Y20
+  /// 30년물
+  Y30
+  /// 50년물
+  Y50
+  /// 영구채 (콘솔공채 등 만기 없는 국채)
+  PERPETUAL
+}
+
+/// 국가별·연도별·만기별 국채 금리(수익률).
+///
+/// 경제 지표(CountryEconomicIndicator)와 따로 두는 이유는 **단면이 하나 더 있어서**다.
+/// GDP는 한 해에 한 값이지만 국채 금리는 한 해에 만기 수만큼 값이 있고, 그 묶음이
+/// 곧 수익률 곡선이다. 지표 표의 한 칸으로는 담기지 않는다.
+///
+/// 일(日) 단위 시세가 아니라 **연 단위 관측치**다(연말 또는 연평균 — 무엇인지는 source에).
+model CountryBondYield {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 연도
+  year Int
+
+  /// 만기
+  maturity BondMaturity
+
+  /// 국채 수익률 (연 %, 예: 3.4750)
+  yieldRate Decimal @map("yield_rate") @db.Decimal(7, 4)
+
+  /// 표면금리 (연 %) — 수익률과 다르다(발행 당시 약정 이자)
+  couponRate Decimal? @map("coupon_rate") @db.Decimal(7, 4)
+
+  /// 발행 통화 (ISO 4217). 자국통화 표시채와 외화 표시채는 금리가 같은 뜻이 아니다.
+  currencyCode String? @map("currency_code") @db.VarChar(8)
+
+  /// 물가연동채 여부 — true면 이 수익률은 실질금리다
+  isInflationLinked Boolean @default(false) @map("is_inflation_linked")
+
+  /// 자료 출처·기준 (예: "연말 종가, FRED DGS10")
+  source String? @db.VarChar(255)
+
+  /// 메모
+  note String? @db.Text
+
+  //--- 관계 필드
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([countryId, year, maturity], name: "uniq_bond_yield_country_year_maturity")
+  @@index([countryId], name: "idx_bond_yield_countryId")
+  @@index([countryId, year], name: "idx_bond_yield_country_year")
+  @@index([countryId, maturity], name: "idx_bond_yield_country_maturity")
+  @@map("country_bond_yield")
 }

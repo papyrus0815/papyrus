@@ -23,6 +23,7 @@ import {
   CreateCountryRecordDto,
   UpdateCountryRecordDto,
   UpsertExportImportDto,
+  UpsertBondYieldDto,
 } from '../presentation/dto'
 import {
   RECORD_INCLUDE,
@@ -33,6 +34,27 @@ import {
   buildFlowCreateData,
   buildRecordWritable,
 } from '../../trade/application/trade-write.util'
+
+/**
+ * 만기 짧은 것부터의 정렬 순서 — 수익률 곡선의 가로축 순서다.
+ * (Prisma enum 선언 순서와 같아야 한다)
+ */
+const MATURITY_ORDER = [
+  'M1',
+  'M3',
+  'M6',
+  'Y1',
+  'Y2',
+  'Y3',
+  'Y5',
+  'Y7',
+  'Y10',
+  'Y15',
+  'Y20',
+  'Y30',
+  'Y50',
+  'PERPETUAL',
+] as const
 
 /** 국가 완성도 신호: 썸네일 / 수도 / 현지어명 (각 1신호) */
 function countryCompletenessBonus(c: {
@@ -479,6 +501,84 @@ export class CountryService {
       update: writable,
     })
     return (await this.getEconomicIndicators(countryId, year, year))[0]
+  }
+
+  /**
+   * 국채 금리 조회 — 연도 오름차순, 같은 해 안에서는 만기 짧은 것부터.
+   *
+   * 만기 정렬을 DB에 맡기면 enum **선언 순서**가 아니라 알파벳 순(M1, M3, PERPETUAL,
+   * Y1, Y10, Y15, Y2…)으로 나와 수익률 곡선의 가로축이 뒤엉킨다. 그래서 만기만은
+   * 여기서 선언 순서대로 다시 세운다.
+   */
+  async getBondYields(
+    countryId: string,
+    startYear?: number,
+    endYear?: number,
+    accountId?: string,
+  ) {
+    if (accountId != null) {
+      await this.getCountryById(countryId, accountId)
+    }
+    const where: {
+      countryId: string
+      year?: { gte?: number; lte?: number }
+    } = { countryId }
+
+    if (startYear || endYear) {
+      where.year = {}
+      if (startYear) where.year.gte = startYear
+      if (endYear) where.year.lte = endYear
+    }
+
+    const rows = await this.prisma.countryBondYield.findMany({
+      where,
+      orderBy: { year: 'asc' },
+    })
+
+    return rows
+      .map((row) => ({
+        ...row,
+        yieldRate: Number(row.yieldRate),
+        couponRate: row.couponRate != null ? Number(row.couponRate) : null,
+      }))
+      .sort(
+        (left, right) =>
+          left.year - right.year ||
+          MATURITY_ORDER.indexOf(left.maturity) -
+            MATURITY_ORDER.indexOf(right.maturity),
+      )
+  }
+
+  /** 국채 금리 생성/갱신 (countryId+year+maturity 기준). */
+  async upsertBondYield(
+    countryId: string,
+    dto: UpsertBondYieldDto,
+    accountId?: string,
+  ) {
+    await this.assertCountryAccess(countryId, accountId)
+    const { year, maturity, ...writable } = dto
+    await this.prisma.countryBondYield.upsert({
+      where: {
+        uniq_bond_yield_country_year_maturity: { countryId, year, maturity },
+      },
+      create: { countryId, year, maturity, ...writable },
+      update: writable,
+    })
+    const saved = await this.getBondYields(countryId, year, year)
+    return saved.find((row) => row.maturity === maturity)!
+  }
+
+  /** 국채 금리 삭제 (해당 연도의 그 만기 한 행). */
+  async deleteBondYield(
+    countryId: string,
+    year: number,
+    maturity: UpsertBondYieldDto['maturity'],
+    accountId?: string,
+  ): Promise<void> {
+    await this.assertCountryAccess(countryId, accountId)
+    await this.prisma.countryBondYield.deleteMany({
+      where: { countryId, year, maturity },
+    })
   }
 
   /** 경제 지표 삭제 (해당 연도). */

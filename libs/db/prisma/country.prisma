@@ -84,6 +84,8 @@ model Country {
   economicIndicators        CountryEconomicIndicator[]
   demographicIndicators     CountryDemographicIndicator[]
   developmentIndicators     CountryDevelopmentIndicator[]
+  /// 연도·만기별 국채 금리 (한 해에 만기 수만큼 행이 선다)
+  bondYields                CountryBondYield[]
   ethnicities               Ethnicity[]  @relation("CountryEthnicities")
   persons                   Person[]                         @relation("CountryToPerson")
   personAffiliations        PersonCountryAffiliation[]       @relation("PersonCountryAffiliations")

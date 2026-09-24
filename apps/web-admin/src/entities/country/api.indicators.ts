@@ -7,6 +7,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import * as indicatorsApi from '@/shared/api/country-indicators'
 import type {
+  BondYield,
+  BondMaturity,
+  UpsertBondYieldInput,
   EconomicIndicator,
   DemographicIndicator,
   DevelopmentIndicator,
@@ -17,6 +20,9 @@ import type {
 } from '@/shared/api/country-indicators'
 
 export type {
+  BondYield,
+  BondMaturity,
+  UpsertBondYieldInput,
   EconomicIndicator,
   DemographicIndicator,
   DevelopmentIndicator,
@@ -39,6 +45,10 @@ export const countryIndicatorKeys = {
     ['countries', countryId, 'demographic-indicators', range ?? null] as const,
   development: (countryId: string, range?: IndicatorYearRange) =>
     ['countries', countryId, 'development-indicators', range ?? null] as const,
+  bondYieldsAll: (countryId: string) =>
+    ['countries', countryId, 'bond-yields'] as const,
+  bondYields: (countryId: string, range?: IndicatorYearRange) =>
+    ['countries', countryId, 'bond-yields', range ?? null] as const,
 }
 
 const INDICATOR_STALE_TIME = 1000 * 60 * 5 // 5분
@@ -149,6 +159,48 @@ export function useDeleteDevelopmentIndicator(countryId: string) {
     onSuccess: () =>
       qc.invalidateQueries({
         queryKey: countryIndicatorKeys.developmentAll(countryId),
+      }),
+  })
+}
+
+// ── 국채 금리 ────────────────────────────────────────────────
+
+/**
+ * 국채 금리 — 한 해에 만기 수만큼 행이 온다. 캐시 키는 다른 지표와 같은 자리에 두되
+ * 무효화는 `bondYieldsAll` 프리픽스로 한 번에 한다(연도 범위별 캐시가 갈리므로).
+ */
+export function useBondYields(
+  countryId: string | null | undefined,
+  range?: IndicatorYearRange,
+) {
+  return useQuery<BondYield[]>({
+    queryKey: countryIndicatorKeys.bondYields(countryId ?? '', range),
+    queryFn: () => indicatorsApi.getBondYields(countryId!, range),
+    enabled: !!countryId,
+    staleTime: INDICATOR_STALE_TIME,
+  })
+}
+
+export function useUpsertBondYield(countryId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (dto: UpsertBondYieldInput) =>
+      indicatorsApi.upsertBondYield(countryId, dto),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        queryKey: countryIndicatorKeys.bondYieldsAll(countryId),
+      }),
+  })
+}
+
+export function useDeleteBondYield(countryId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (key: { year: number; maturity: BondMaturity }) =>
+      indicatorsApi.deleteBondYield(countryId, key.year, key.maturity),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        queryKey: countryIndicatorKeys.bondYieldsAll(countryId),
       }),
   })
 }

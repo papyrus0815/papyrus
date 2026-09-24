@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { Modal, ModalBody } from '@/shared/ui/modal'
 
+import { BondYieldPanel } from './bond-yield-panel'
 import { INDICATOR_META, type IndicatorType } from './field-configs'
 import { IndicatorEditorPanel } from './indicator-editor-panel'
 import { PopulationPyramidPanel } from './population-pyramid-panel'
@@ -18,12 +19,14 @@ interface Props {
   initialTab?: MainTab
 }
 
-export type MainTab = 'indicators' | 'pyramid' | 'trade' | 'records'
+export type MainTab = 'indicators' | 'pyramid' | 'bonds' | 'trade' | 'records'
 
 const MAIN_TABS: { key: MainTab; label: string }[] = [
   { key: 'indicators', label: '지표' },
   // 연령대별 성별 인구는 18칸이라 '지표'의 평평한 표에 못 들어간다 — 별도 탭.
   { key: 'pyramid', label: '연령·성별 인구' },
+  // 국채 금리도 한 해에 값이 여럿(만기별)이라 '지표'의 한 칸으로는 못 담는다 — 별도 탭.
+  { key: 'bonds', label: '국채 금리' },
   { key: 'trade', label: '교역' },
   { key: 'records', label: '기록' },
 ]
@@ -35,7 +38,7 @@ const INDICATOR_TYPES: IndicatorType[] = [
 ]
 
 /**
- * 국가 데이터 관리 모달 — 지표(경제·인구·발전) / 교역 / 기록 CRUD.
+ * 국가 데이터 관리 모달 — 지표(경제·인구·발전) / 국채 금리 / 교역 / 기록 CRUD.
  * 백엔드 쓰기 엔드포인트를 실제로 연결한다.
  */
 export function CountryDataManagerModal({
@@ -58,7 +61,7 @@ export function CountryDataManagerModal({
       isOpen={open}
       onClose={onClose}
       title="국가 데이터 관리"
-      subtitle={`${countryName} · 지표 · 연령·성별 인구 · 교역 · 기록`}
+      subtitle={`${countryName} · 지표 · 연령·성별 인구 · 국채 금리 · 교역 · 기록`}
       size="wide"
     >
       <ModalBody>
@@ -100,6 +103,7 @@ export function CountryDataManagerModal({
         )}
 
         {tab === 'pyramid' && <PopulationPyramidPanel countryId={countryId} />}
+        {tab === 'bonds' && <BondYieldPanel countryId={countryId} />}
         {tab === 'trade' && <TradePanel countryId={countryId} />}
         {tab === 'records' && <RecordsPanel countryId={countryId} />}
       </ModalBody>

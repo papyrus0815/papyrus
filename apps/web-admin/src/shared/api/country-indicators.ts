@@ -36,6 +36,18 @@ export type UpsertDevelopmentIndicatorInput = Parameters<
   typeof countriesApi.development_indicators.upsertDevelopmentIndicator
 >[2]
 
+/**
+ * 국채 금리 — 연도 하나에 만기 수만큼 행이 있다(수익률 곡선의 점들).
+ * 그래서 키가 (year, maturity)이고 삭제도 둘을 함께 받는다.
+ */
+export type BondYield = Awaited<
+  ReturnType<typeof countriesApi.bond_yields.getBondYields>
+>[number]
+export type UpsertBondYieldInput = Parameters<
+  typeof countriesApi.bond_yields.upsertBondYield
+>[2]
+export type BondMaturity = BondYield['maturity']
+
 export interface IndicatorYearRange {
   startYear?: number
   endYear?: number
@@ -183,5 +195,47 @@ export async function deleteDevelopmentIndicator(
     getApiConnection(),
     countryId,
     year,
+  )
+}
+
+// ── 국채 금리 ────────────────────────────────────────────────
+
+/** 국채 금리 조회 (연도 오름차순 · 만기 짧은 순) */
+export async function getBondYields(
+  countryId: string,
+  range?: IndicatorYearRange,
+): Promise<BondYield[]> {
+  const response = await countriesApi.bond_yields.getBondYields(
+    getApiConnection(),
+    countryId,
+    toQuery(range),
+  )
+  return unwrap<BondYield>(response)
+}
+
+/** 국채 금리 생성/갱신 (year + maturity 기준) */
+export async function upsertBondYield(
+  countryId: string,
+  dto: UpsertBondYieldInput,
+): Promise<BondYield> {
+  const response = await countriesApi.bond_yields.upsertBondYield(
+    getApiConnection(),
+    countryId,
+    dto,
+  )
+  return unwrapOne<BondYield>(response)
+}
+
+/** 국채 금리 삭제 (year + maturity) */
+export async function deleteBondYield(
+  countryId: string,
+  year: number,
+  maturity: BondMaturity,
+): Promise<void> {
+  await countriesApi.bond_yields.deleteBondYield(
+    getApiConnection(),
+    countryId,
+    year,
+    maturity,
   )
 }
