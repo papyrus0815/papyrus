@@ -23,6 +23,8 @@ import React from 'react'
 
 import styled, { css } from 'styled-components'
 
+import { shortenCountryName } from '@/shared/lib/country-short-name'
+
 interface ModernCountry {
   id: string
   name: string
@@ -53,6 +55,27 @@ interface Props {
    * 옵트인인 이유: 이 컴포넌트는 shared/ui이고 소비처가 목록·트리·격자·갤러리 4개다.
    */
   fit?: boolean
+  /**
+   * 칩 라벨을 **통용 약칭**으로 줄인다(기본 false = 정식 명칭 그대로).
+   *
+   * 좁은 메타 열(목록 행의 관련국 열) 전용이다. 정식 명칭은 폭이 아무리 넉넉해도
+   * '그레이트브리튼 및 아일랜드 연합왕국'(153px)처럼 담기지 않는 것이 있고, 잘리면
+   * 남는 글자가 국가를 특정하지 못한다(실측 521칩 중 190칩 말줄임).
+   *
+   * ⚠️ 약칭은 라벨에만 적용된다 — `title`·`aria-label`은 정식 명칭을 유지한다.
+   */
+  shorten?: boolean
+  /**
+   * 국기 이모지 **옆에 이름도** 적는다(기본 false = 이모지만).
+   *
+   * 이모지 국기는 폭을 거의 안 쓰는 대신, 비슷한 삼색기가 많아 한눈에 특정되지 않는다
+   * (🇮🇹 🇮🇪 🇲🇽 / 🇫🇷 🇳🇱 🇷🇺). 좁은 열에서는 그 모호함을 감수하는 게 옳지만, 열이
+   * 넓어지면 감수할 이유가 없다 — 목록 행의 관련국 열이 설명을 걷어낸 뒤 신축 트랙이
+   * 되면서 이모지 3개가 500px짜리 칸에 떠 있게 됐다.
+   *
+   * ⚠️ 역사국가는 원래부터 이름 칩이라 이 플래그와 무관하다.
+   */
+  withName?: boolean
   className?: string
 }
 
@@ -63,6 +86,8 @@ export const CountryFlags: React.FC<Props> = ({
   size = 'md',
   tone = 'inline',
   fit = false,
+  shorten = false,
+  withName = false,
   className,
 }) => {
   // 표시 우선순위: modern 먼저(flag 있어 컴팩트), 그 다음 historical
@@ -106,14 +131,28 @@ export const CountryFlags: React.FC<Props> = ({
             $tone={tone}
             $size={size}
             $fit={fit}
+            /* 이모지 국기는 그 자체가 이미 색 있는 도형이라 담을 상자가 필요 없다.
+               상자가 필요한 쪽은 **텍스트 칩**(역사국가)뿐이다 — 회색 면이 이름의
+               경계를 대신한다. 어두운 배경 위(overlay)는 두 경우 모두 면이 있어야
+               읽히므로 예외로 둔다. */
+            $plain={Boolean(country.flagEmoji) && !country.historical}
             aria-hidden="true"
             title={country.name}
           >
-            {/* flag emoji 있으면 그것만, 없으면 name 텍스트 */}
+            {/* flag emoji 있으면 그것만(withName이면 이름도), 없으면 name 텍스트 */}
             {country.flagEmoji && !country.historical ? (
-              <FlagText $size={size}>{country.flagEmoji}</FlagText>
+              <>
+                <FlagText $size={size}>{country.flagEmoji}</FlagText>
+                {withName && (
+                  <NameText $size={size}>
+                    {shorten ? shortenCountryName(country.name) : country.name}
+                  </NameText>
+                )}
+              </>
             ) : (
-              <NameText $size={size}>{country.name}</NameText>
+              <NameText $size={size}>
+                {shorten ? shortenCountryName(country.name) : country.name}
+              </NameText>
             )}
           </Item>
         ))}
@@ -168,11 +207,15 @@ type ChipProps = {
   $size: 'sm' | 'md'
   $tone: 'inline' | 'overlay'
   $fit?: boolean
+  /** 면 없는 칩 — 이모지 국기처럼 내용이 이미 자기 모양을 가진 경우 */
+  $plain?: boolean
 }
 
 const chipMixin = css<ChipProps>`
   display: inline-flex;
   align-items: center;
+  /* 국기 + 이름을 함께 쓸 때(withName)만 실제로 쓰이는 간격. 자식이 하나면 무해하다. */
+  gap: ${({ $size }) => ($size === 'sm' ? '3px' : '4px')};
   /* fit 모드에서는 칩이 줄어들 수 있어야 안쪽 NameText의 말줄임이 작동한다.
      min-width:0이 없으면 flex 자식의 기본 min-width:auto가 축소를 막아, 결국
      박스가 글리프 중간에서 잘린다. */
@@ -186,25 +229,36 @@ const chipMixin = css<ChipProps>`
           flex-shrink: 0;
         `}
   border-radius: ${({ $size }) => ($size === 'sm' ? '4px' : '5px')};
-  padding: ${({ $size }) => ($size === 'sm' ? '0 4px' : '1px 5px')};
+  /* 면 없는 칩은 패딩도 없다 — 상자가 사라진 뒤에도 좌우 4px이 남으면 묶음의 오른쪽
+     끝이 트랙(과 열 머리글) 끝에서 4px 안쪽에 서서, 우측 정렬한 이유가 절반만 남는다.
+     칩 사이 간격은 Wrap의 gap이 이미 맡고 있다. */
+  padding: ${({ $size, $plain }) =>
+    $plain ? '0' : $size === 'sm' ? '0 4px' : '1px 5px'};
   height: ${({ $size }) => ($size === 'sm' ? '15px' : '18px')};
   font-size: ${({ $size }) => ($size === 'sm' ? '10.5px' : '11px')};
   font-weight: 600;
   letter-spacing: -0.005em;
   white-space: nowrap;
-  ${({ $tone, theme }) =>
+  ${({ $tone, $plain, theme }) =>
     $tone === 'overlay'
       ? css`
           color: rgba(255, 255, 255, 0.92);
           background: rgba(0, 0, 0, 0.32);
           backdrop-filter: blur(2px);
         `
-      : css`
-          color: ${theme.colors.text.secondary};
-          background: ${theme.mode === 'dark'
-            ? 'rgba(255,255,255,0.05)'
-            : 'rgba(15,23,42,0.05)'};
-        `}
+      : $plain
+        ? css`
+            /* 면 없음 — 국기 이모지 하나를 회색 알약에 넣으면 행 우측에 데이터가 아니라
+               상자가 늘어선다. 폭은 그대로 두어(패딩 유지) 칩 사이 리듬은 지킨다. */
+            color: ${theme.colors.text.secondary};
+            background: none;
+          `
+        : css`
+            color: ${theme.colors.text.secondary};
+            background: ${theme.mode === 'dark'
+              ? 'rgba(255,255,255,0.05)'
+              : 'rgba(15,23,42,0.05)'};
+          `}
 `
 
 const Item = styled.span<ChipProps>`

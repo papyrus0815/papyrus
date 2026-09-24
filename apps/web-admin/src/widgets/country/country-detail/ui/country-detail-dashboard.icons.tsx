@@ -141,3 +141,12 @@ export const IconRefresh = () => (
     <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14" />
   </svg>
 )
+
+/** 국채 금리 — 퍼센트 기호 */
+export const IconPercent = () => (
+  <svg {...SVG_PROPS}>
+    <path d="M19 5 5 19" />
+    <circle cx="6.5" cy="6.5" r="2.5" />
+    <circle cx="17.5" cy="17.5" r="2.5" />
+  </svg>
+)

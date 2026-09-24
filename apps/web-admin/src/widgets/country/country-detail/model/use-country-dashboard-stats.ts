@@ -7,7 +7,7 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import { cityApi } from '@/shared/api/city'
 import { getAllCountries } from '@/shared/api/countries'
 import { getElections } from '@/shared/api/election'
-import { getAllEvents } from '@/shared/api/events'
+import { getAllEventsExhaustive } from '@/shared/api/events'
 import { militaryUnitApi } from '@/shared/api/military-unit'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonsByTenureCountry } from '@/shared/api/persons'
@@ -264,8 +264,19 @@ export function useCountryDashboardStats(
         staleTime: 1000 * 60 * 5,
       },
       {
-        queryKey: ['events-by-country', countryId],
-        queryFn: () => getAllEvents({ countryId, limit: 5000 }),
+        /*
+         * 이 국가의 사건 — 대시보드의 사건 수·연표·캘린더가 모두 이 한 배열을 모수로 쓴다.
+         *
+         * 두 가지를 명시해야 모수가 맞는다.
+         *  · includeSubEvents: 목록 API의 기본 스코프는 최상위 사건뿐이라 하위 사건이
+         *    통째로 빠진다(미국 43건 중 6건이 그래서 안 보였다). 계층을 그리지 않고
+         *    세기만 하는 지면이라 평평하게 받는다.
+         *  · 페이징 소진: 서버가 limit을 100으로 깎으므로 limit:5000은 '전부'가 아니었다.
+         */
+        /* 'flat' 꼬리표 — 같은 국가라도 계층 응답과 평면 응답은 다른 자료다 */
+        queryKey: ['events-by-country', countryId, 'flat'],
+        queryFn: () =>
+          getAllEventsExhaustive({ countryId, includeSubEvents: true }),
         enabled: Boolean(countryId),
         staleTime: 1000 * 60 * 5,
       },

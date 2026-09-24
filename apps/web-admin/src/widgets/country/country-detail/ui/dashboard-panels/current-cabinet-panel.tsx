@@ -18,10 +18,27 @@ import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-re
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import type {
+  DepartmentFrameItem,
+  DepartmentNameFrame,
+} from '@/shared/lib/ministry-department/department-name-frames'
+import {
+  DEPARTMENT_NAME_FRAMES,
+  getDepartmentNameFrame,
+  inferDepartmentFrameId,
+  suggestFrameItems,
+} from '@/shared/lib/ministry-department/department-name-frames'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
-import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
+import {
+  FiCheck,
+  FiChevronLeft,
+  FiChevronRight,
+  FiEdit2,
+  FiPlus,
+  FiX,
+} from 'react-icons/fi'
 
 import { IconBriefcase } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
@@ -64,13 +81,6 @@ interface TenureRow {
   } | null
 }
 
-/**
- * 기본 행정부처 틀.
- *
- * 근대 국가라면 대개 갖는 자리들이다. 나라마다 이름과 구성이 다르지만(내무부가 없는
- * 나라, 식민부가 있던 시대) **처음 한 칸도 없이 시작하는 것보다 골라 담는 편이 빠르다**.
- * 그래서 통째로 넣지 않고 칩으로 늘어놓아 필요한 것만 고르게 한다.
- */
 const ELECTION_TYPE_LABEL: Record<string, string> = {
   PRESIDENTIAL_OR_HEAD: '대통령·수반 직선',
   PARLIAMENTARY_CONSTITUENCY: '의회 지역구',
@@ -88,22 +98,6 @@ const ELECTION_STATUS_LABEL: Record<string, string> = {
   FINALIZED: '확정',
   CANCELLED: '취소',
 }
-
-const DEFAULT_DEPARTMENTS = [
-  '외무부',
-  '국방부',
-  '재무부',
-  '법무부',
-  '내무부',
-  '교육부',
-  '보건부',
-  '노동부',
-  '산업부',
-  '농업부',
-  '교통부',
-  '문화부',
-  '환경부',
-]
 
 const HEAD_TYPES = new Set(['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'])
 
@@ -287,6 +281,57 @@ export function CurrentCabinetPanel({
   const [newDepartmentName, setNewDepartmentName] = useState('')
   const [creatingDepartment, setCreatingDepartment] = useState(false)
 
+  /*
+   * 부처 이름의 틀. 나라마다 같은 자리를 다르게 부른다 — 일본 제국은 외무성·내무성이고
+   * 우두머리는 장관이 아니라 대신, 조선은 이조·호조다. 한국식 '부'만 권하면 다른 나라
+   * 지면을 만드는 사람은 권유를 전부 지우고 손으로 다시 쳐야 한다.
+   *
+   * 사용자가 아직 고르지 않았다면(null) 이미 만들어 둔 부처 이름에서 짐작한다.
+   * 외무성이 있는 나라의 다음 권유가 '외무부'일 이유가 없다.
+   */
+  const [frameIdOverride, setFrameIdOverride] = useState<string | null>(null)
+
+  /** 전역 부처 카테고리 — 틀에서 만든 부처를 중앙부처 탭에 제대로 걸기 위해 */
+  const categoriesQuery = useQuery({
+    queryKey: ['administration-department-categories'],
+    queryFn: () => administrationDepartmentApi.getCategories(),
+    staleTime: 30 * 60_000,
+  })
+
+  /** 이름만 고치는 편집 — 틀에서 담은 이름은 출발점일 뿐이다 */
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renaming, setRenaming] = useState(false)
+
+  const startRename = (departmentId: string, name: string) => {
+    setRenamingId(departmentId)
+    setRenameValue(name)
+  }
+
+  const cancelRename = () => {
+    setRenamingId(null)
+    setRenameValue('')
+  }
+
+  const commitRename = async (departmentId: string, previousName: string) => {
+    const name = renameValue.trim()
+    if (!name || name === previousName) {
+      cancelRename()
+      return
+    }
+    setRenaming(true)
+    try {
+      await administrationDepartmentApi.update(departmentId, { name })
+      await invalidateDepartments()
+      notify.success(`「${name}」으로 바꿨습니다`)
+      cancelRename()
+    } catch {
+      notify.error('부처 이름 변경 실패')
+    } finally {
+      setRenaming(false)
+    }
+  }
+
   const invalidateDepartments = () =>
     queryClient.invalidateQueries({
       queryKey: ['administration-departments', 'by-country', countryId],
@@ -310,28 +355,44 @@ export function CurrentCabinetPanel({
     }
   }
 
-  /** 기본 틀에서 아직 없는 것만 — 이미 만든 부처를 또 권하지 않는다 */
-  const presetSuggestions = useMemo(() => {
-    const existing = new Set(
-      (departmentsQuery.data ?? []).map((department) =>
-        department.name.replace(/\s/g, ''),
-      ),
-    )
-    return DEFAULT_DEPARTMENTS.filter(
-      (preset) =>
-        ![...existing].some((name) => name.includes(preset.replace(/\s/g, ''))),
-    )
-  }, [departmentsQuery.data])
+  const existingDepartmentNames = useMemo(
+    () => (departmentsQuery.data ?? []).map((department) => department.name),
+    [departmentsQuery.data],
+  )
 
-  const addPresets = async (names: string[]) => {
+  const frameId =
+    frameIdOverride ?? inferDepartmentFrameId(existingDepartmentNames)
+  const frame = getDepartmentNameFrame(frameId)
+
+  /** 고른 틀에서 아직 없는 자리만 — 이미 만든 부처를 또 권하지 않는다 */
+  const presetSuggestions = useMemo(
+    () => suggestFrameItems(frame, existingDepartmentNames),
+    [frame, existingDepartmentNames],
+  )
+
+  /** 틀의 카테고리 이름 → 전역 카테고리 id */
+  const categoryIdByName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const category of categoriesQuery.data ?? []) {
+      map.set(category.name, category.id)
+    }
+    return map
+  }, [categoriesQuery.data])
+
+  const addPresets = async (items: DepartmentFrameItem[]) => {
     setCreatingDepartment(true)
     try {
       // 순차 생성 — 서버가 이름 중복을 막을 수 있어 한 건씩 결과를 본다
-      for (const name of names) {
-        await administrationDepartmentApi.create({ name, countryId })
+      for (const item of items) {
+        await administrationDepartmentApi.create({
+          name: item.name,
+          countryId,
+          // 카테고리를 함께 걸어야 「행정조직 → 중앙부처」의 해당 탭에 나타난다
+          categoryId: categoryIdByName.get(item.categoryName) ?? null,
+        })
       }
       await invalidateDepartments()
-      notify.success(`부처 ${names.length}개가 만들어졌습니다`)
+      notify.success(`부처 ${items.length}개가 만들어졌습니다`)
     } catch {
       notify.error('기본 부처 생성 실패')
     } finally {
@@ -436,6 +497,63 @@ export function CurrentCabinetPanel({
     enabled: !!countryId,
     staleTime: 60_000,
   })
+
+  /*
+   * 부처에 등록된 재임 — 슬롯이 '아직 없음'만 말하던 자리를 실제 사람으로 채운다.
+   *
+   * 부처 슬롯에서 사람을 등록하면 재임의 administrationDepartmentId에 그 부처가 박히는데,
+   * 정작 슬롯은 그 재임을 조회하지 않아 등록한 사람이 화면 어디에도 안 나왔다
+   * (마인드맵은 cabinetId 기준이라, 행정부 행이 없는 나라에서는 영원히 보이지 않는다).
+   * 국가 재임 목록 한 번으로 부처별 점유자를 세운다 — 서버가 현대↔역사 브리지를 풀어 주므로
+   * 역사국가 소속 재임(일본 제국 외무대신)도 현대 국가 지면에서 함께 온다.
+   */
+  const departmentOccupants = useMemo(() => {
+    const byDepartment = new Map<
+      string,
+      { personId: string | null; name: string; period: string; count: number }
+    >()
+    const rows = (query.data ?? []) as Array<{
+      administrationDepartmentId?: string | null
+      startDate?: string | null
+      endDate?: string | null
+      person?: {
+        id?: string
+        name?: string
+        surname?: string | null
+        middleName?: string | null
+        nameDisplayOrder?: string | null
+        country?: { defaultNameDisplayOrder?: string | null } | null
+      } | null
+    }>
+    // 서버가 startDate 내림차순으로 주므로 첫 행이 가장 최근 — 그 사람을 대표로 세운다
+    for (const row of rows) {
+      const departmentId = row.administrationDepartmentId
+      if (!departmentId || !row.person) continue
+      const existing = byDepartment.get(departmentId)
+      if (existing) {
+        existing.count += 1
+        continue
+      }
+      const startYear = row.startDate?.slice(0, 4) ?? ''
+      const endYear = row.endDate?.slice(0, 4) ?? ''
+      byDepartment.set(departmentId, {
+        personId: row.person.id ?? null,
+        name:
+          getPersonDisplayName({
+            name: row.person.name ?? '',
+            surname: row.person.surname ?? undefined,
+            middleName: row.person.middleName ?? undefined,
+            nameDisplayOrder: row.person.nameDisplayOrder ?? null,
+            country: row.person.country ?? undefined,
+          }) ||
+          row.person.name ||
+          '이름 없음',
+        period: startYear ? `${startYear}~${endYear || ''}` : '',
+        count: 1,
+      })
+    }
+    return byDepartment
+  }, [query.data])
 
   const { members, heads } = useMemo(() => {
     const overview = overviewQuery.data
@@ -871,15 +989,33 @@ export function CurrentCabinetPanel({
                   <DepartmentSlot
                     key={department.id}
                     name={department.name}
+                    occupant={departmentOccupants.get(department.id) ?? null}
+                    onOpenPerson={(personId) => setModalPersonId(personId)}
                     onRegister={() =>
                       openRegister(department.id, department.name)
                     }
                     onDelete={() =>
                       void removeDepartment(department.id, department.name)
                     }
+                    editing={renamingId === department.id}
+                    renameValue={renameValue}
+                    renaming={renaming}
+                    onRenameStart={() =>
+                      startRename(department.id, department.name)
+                    }
+                    onRenameChange={setRenameValue}
+                    onRenameCommit={() =>
+                      void commitRename(department.id, department.name)
+                    }
+                    onRenameCancel={cancelRename}
                   />
                 ))}
               </SlotGrid>
+              <SlotGridFooter>
+                <PresetAll type="button" onClick={() => setSetupOpen(true)}>
+                  부처 더 담기 · 이름 정리
+                </PresetAll>
+              </SlotGridFooter>
             </>
           ) : (
 <EmptyArea>
@@ -892,32 +1028,13 @@ export function CurrentCabinetPanel({
               * 모달을 열고 닫는 왕복보다 그 자리에서 톡톡 누르는 편이 빠르다.
               * 모달은 '이름 직접 입력·만든 부처 정리·부처 없이 바로 등록'을 맡는다.
               */}
-            {presetSuggestions.length > 0 && (
-              <PresetBlock>
-                <PresetLabel>
-                  기본 틀에서 고르기
-                  <PresetAll
-                    type="button"
-                    disabled={creatingDepartment}
-                    onClick={() => void addPresets(presetSuggestions)}
-                  >
-                    {presetSuggestions.length}개 모두 추가
-                  </PresetAll>
-                </PresetLabel>
-                <PresetChips>
-                  {presetSuggestions.map((preset) => (
-                    <PresetChip
-                      key={preset}
-                      type="button"
-                      disabled={creatingDepartment}
-                      onClick={() => void addPresets([preset])}
-                    >
-                      + {preset}
-                    </PresetChip>
-                  ))}
-                </PresetChips>
-              </PresetBlock>
-            )}
+            <DepartmentFramePicker
+              frame={frame}
+              suggestions={presetSuggestions}
+              disabled={creatingDepartment}
+              onChangeFrame={setFrameIdOverride}
+              onAdd={(items) => void addPresets(items)}
+            />
           </EmptyArea>
           )}
         </>
@@ -982,13 +1099,31 @@ export function CurrentCabinetPanel({
                 <DepartmentSlot
                   key={department.id}
                   name={department.name}
+                  occupant={departmentOccupants.get(department.id) ?? null}
+                  onOpenPerson={(personId) => setModalPersonId(personId)}
                   onRegister={() => openRegister(department.id, department.name)}
                   onDelete={() =>
                     void removeDepartment(department.id, department.name)
                   }
+                  editing={renamingId === department.id}
+                  renameValue={renameValue}
+                  renaming={renaming}
+                  onRenameStart={() =>
+                    startRename(department.id, department.name)
+                  }
+                  onRenameChange={setRenameValue}
+                  onRenameCommit={() =>
+                    void commitRename(department.id, department.name)
+                  }
+                  onRenameCancel={cancelRename}
                 />
               ))}
             </SlotGrid>
+            <SlotGridFooter>
+              <PresetAll type="button" onClick={() => setSetupOpen(true)}>
+                부처 더 담기 · 이름 정리
+              </PresetAll>
+            </SlotGridFooter>
           </>
         ) : (
 <EmptyArea>
@@ -1001,32 +1136,13 @@ export function CurrentCabinetPanel({
               * 모달을 열고 닫는 왕복보다 그 자리에서 톡톡 누르는 편이 빠르다.
               * 모달은 '이름 직접 입력·만든 부처 정리·부처 없이 바로 등록'을 맡는다.
               */}
-            {presetSuggestions.length > 0 && (
-              <PresetBlock>
-                <PresetLabel>
-                  기본 틀에서 고르기
-                  <PresetAll
-                    type="button"
-                    disabled={creatingDepartment}
-                    onClick={() => void addPresets(presetSuggestions)}
-                  >
-                    {presetSuggestions.length}개 모두 추가
-                  </PresetAll>
-                </PresetLabel>
-                <PresetChips>
-                  {presetSuggestions.map((preset) => (
-                    <PresetChip
-                      key={preset}
-                      type="button"
-                      disabled={creatingDepartment}
-                      onClick={() => void addPresets([preset])}
-                    >
-                      + {preset}
-                    </PresetChip>
-                  ))}
-                </PresetChips>
-              </PresetBlock>
-            )}
+            <DepartmentFramePicker
+              frame={frame}
+              suggestions={presetSuggestions}
+              disabled={creatingDepartment}
+              onChangeFrame={setFrameIdOverride}
+              onAdd={(items) => void addPresets(items)}
+            />
           </EmptyArea>
         )
       ) : null}
@@ -1085,7 +1201,7 @@ export function CurrentCabinetPanel({
               <NewDeptInput
                 value={newDepartmentName}
                 onChange={(event) => setNewDepartmentName(event.target.value)}
-                placeholder="새 부처 이름 (예: 외무부)"
+                placeholder={`새 부처 이름 (예: ${frame.items[0]?.name ?? '외무부'})`}
                 aria-label="새 부처 이름"
               />
               <NewDeptSubmit
@@ -1096,24 +1212,85 @@ export function CurrentCabinetPanel({
               </NewDeptSubmit>
             </NewDeptForm>
 
+            {/* 틀은 모달에서도 고를 수 있다 — 여기가 부처를 채우는 자리다 */}
+            <DepartmentFramePicker
+              frame={frame}
+              suggestions={presetSuggestions}
+              disabled={creatingDepartment}
+              onChangeFrame={setFrameIdOverride}
+              onAdd={(items) => void addPresets(items)}
+            />
+
             {departments.length > 0 && (
               <PresetBlock>
-                <PresetLabel>만들어 둔 부처 {departments.length}개</PresetLabel>
+                <PresetLabel>
+                  만들어 둔 부처 {departments.length}개
+                  <PresetHint>이름을 눌러 이 나라에 맞게 고칩니다</PresetHint>
+                </PresetLabel>
                 <PresetChips>
-                  {departments.map((department) => (
-                    <MadeChip key={department.id}>
-                      {department.name}
-                      <MadeChipDelete
-                        type="button"
-                        aria-label={`${department.name} 삭제`}
-                        onClick={() =>
-                          void removeDepartment(department.id, department.name)
-                        }
+                  {departments.map((department) =>
+                    renamingId === department.id ? (
+                      <RenameForm
+                        key={department.id}
+                        onSubmit={(event) => {
+                          event.preventDefault()
+                          void commitRename(department.id, department.name)
+                        }}
                       >
-                        <FiX size={12} />
-                      </MadeChipDelete>
-                    </MadeChip>
-                  ))}
+                        <RenameInput
+                          autoFocus
+                          value={renameValue}
+                          disabled={renaming}
+                          onChange={(event) =>
+                            setRenameValue(event.target.value)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === 'Escape') {
+                              event.preventDefault()
+                              cancelRename()
+                            }
+                          }}
+                          aria-label={`${department.name} 새 이름`}
+                        />
+                        <RenameConfirm
+                          type="submit"
+                          disabled={renaming || !renameValue.trim()}
+                          aria-label="이름 저장"
+                        >
+                          <FiCheck size={12} />
+                        </RenameConfirm>
+                        <MadeChipDelete
+                          type="button"
+                          onClick={cancelRename}
+                          aria-label="이름 변경 취소"
+                        >
+                          <FiX size={12} />
+                        </MadeChipDelete>
+                      </RenameForm>
+                    ) : (
+                      <MadeChip key={department.id}>
+                        <MadeChipName
+                          type="button"
+                          onClick={() =>
+                            startRename(department.id, department.name)
+                          }
+                          title="이름 바꾸기"
+                        >
+                          {department.name}
+                          <FiEdit2 size={11} />
+                        </MadeChipName>
+                        <MadeChipDelete
+                          type="button"
+                          aria-label={`${department.name} 삭제`}
+                          onClick={() =>
+                            void removeDepartment(department.id, department.name)
+                          }
+                        >
+                          <FiX size={12} />
+                        </MadeChipDelete>
+                      </MadeChip>
+                    ),
+                  )}
                 </PresetChips>
               </PresetBlock>
             )}
@@ -1222,34 +1399,215 @@ function GovernmentSkeleton({ ghost = false }: { ghost?: boolean }) {
 }
 
 /**
- * 빈 부처 자리 한 칸. 등록(주 동작)과 삭제(✕)를 **형제 버튼**으로 둔다 —
- * 칸 전체를 버튼으로 만들고 그 안에 ✕를 넣으면 버튼 안 버튼이라 HTML이 깨진다.
+ * 빈 부처 자리 한 칸. 등록(주 동작)과 이름 바꾸기(✎)·삭제(✕)를 **형제 버튼**으로 둔다 —
+ * 칸 전체를 버튼으로 만들고 그 안에 버튼을 넣으면 버튼 안 버튼이라 HTML이 깨진다.
+ *
+ * 이름 바꾸기가 여기 있는 이유: 틀에서 담은 '외무부'는 출발점이고, 이 나라에서 실제로
+ * 쓰던 이름(외무성·예조)으로 고치는 일은 자리를 보고 있는 이 자리에서 일어난다.
  */
 function DepartmentSlot({
   name,
+  occupant,
   onRegister,
+  onOpenPerson,
   onDelete,
+  editing,
+  renameValue,
+  renaming,
+  onRenameStart,
+  onRenameChange,
+  onRenameCommit,
+  onRenameCancel,
 }: {
   name: string
+  /** 이 부처에 등록된 사람(가장 최근 재임). 없으면 '아직 없음' */
+  occupant?: {
+    personId: string | null
+    name: string
+    period: string
+    count: number
+  } | null
   onRegister: () => void
+  onOpenPerson: (personId: string) => void
   onDelete: () => void
+  editing: boolean
+  renameValue: string
+  renaming: boolean
+  onRenameStart: () => void
+  onRenameChange: (value: string) => void
+  onRenameCommit: () => void
+  onRenameCancel: () => void
 }) {
+  if (editing) {
+    return (
+      <SlotShell>
+        <SlotRenameForm
+          onSubmit={(event) => {
+            event.preventDefault()
+            onRenameCommit()
+          }}
+        >
+          <RenameInput
+            autoFocus
+            value={renameValue}
+            disabled={renaming}
+            onChange={(event) => onRenameChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                onRenameCancel()
+              }
+            }}
+            aria-label={`${name} 새 이름`}
+          />
+          <SlotIconButton
+            type="submit"
+            disabled={renaming || !renameValue.trim()}
+            aria-label="이름 저장"
+            title="저장"
+          >
+            <FiCheck size={13} />
+          </SlotIconButton>
+          <SlotIconButton
+            type="button"
+            $danger
+            onClick={onRenameCancel}
+            aria-label="이름 변경 취소"
+            title="취소"
+          >
+            <FiX size={13} />
+          </SlotIconButton>
+        </SlotRenameForm>
+      </SlotShell>
+    )
+  }
+  /*
+   * 사람이 있으면 칸을 누르는 뜻이 '등록'에서 '보기'로 바뀐다 — 이미 채워진 자리에서
+   * 먼저 하고 싶은 일은 그 사람을 보는 것이다. 한 명 더 넣는 건 우측 + 버튼.
+   */
+  const filled = !!occupant
   return (
     <SlotShell>
-      <SlotMain type="button" onClick={onRegister}>
-        <SlotTitle>{name}</SlotTitle>
-        <SlotEmptyName>아직 없음</SlotEmptyName>
-        <SlotAdd>+ 등록</SlotAdd>
-      </SlotMain>
-      <SlotDelete
+      <SlotMain
         type="button"
-        onClick={onDelete}
-        aria-label={`${name} 삭제`}
-        title="부처 삭제"
+        onClick={() =>
+          filled && occupant?.personId
+            ? onOpenPerson(occupant.personId)
+            : onRegister()
+        }
       >
-        <FiX size={13} />
-      </SlotDelete>
+        <SlotTitle>{name}</SlotTitle>
+        {filled ? (
+          <SlotOccupant>
+            {occupant?.name}
+            {occupant?.period ? ` · ${occupant.period}` : ''}
+            {occupant && occupant.count > 1 ? ` 외 ${occupant.count - 1}명` : ''}
+          </SlotOccupant>
+        ) : (
+          <SlotEmptyName>아직 없음</SlotEmptyName>
+        )}
+        <SlotAdd>{filled ? '보기' : '+ 등록'}</SlotAdd>
+      </SlotMain>
+      <SlotActions>
+        {filled && (
+          <SlotIconButton
+            type="button"
+            onClick={onRegister}
+            aria-label={`${name} 인물 추가 등록`}
+            title="이 부처에 한 명 더 등록"
+          >
+            <FiPlus size={13} />
+          </SlotIconButton>
+        )}
+        <SlotIconButton
+          type="button"
+          onClick={onRenameStart}
+          aria-label={`${name} 이름 바꾸기`}
+          title="이름 바꾸기"
+        >
+          <FiEdit2 size={12} />
+        </SlotIconButton>
+        <SlotIconButton
+          type="button"
+          $danger
+          onClick={onDelete}
+          aria-label={`${name} 삭제`}
+          title="부처 삭제"
+        >
+          <FiX size={13} />
+        </SlotIconButton>
+      </SlotActions>
     </SlotShell>
+  )
+}
+
+/**
+ * 부처 이름의 **틀**을 고르고, 그 틀에서 아직 없는 자리를 칩으로 담는다.
+ *
+ * 나라마다 같은 자리를 다르게 부른다 — 일본 제국은 외무성·내무성(우두머리는 대신),
+ * 조선은 이조·호조(판서). 기본은 '부'이되 다른 틀로 갈아끼울 수 있어야, 일본 지면을
+ * 만드는 사람이 권유를 통째로 지우고 손으로 다시 치지 않는다.
+ */
+function DepartmentFramePicker({
+  frame,
+  suggestions,
+  disabled,
+  onChangeFrame,
+  onAdd,
+}: {
+  frame: DepartmentNameFrame
+  suggestions: DepartmentFrameItem[]
+  disabled: boolean
+  onChangeFrame: (frameId: string) => void
+  onAdd: (items: DepartmentFrameItem[]) => void
+}) {
+  return (
+    <PresetBlock>
+      <PresetLabel>
+        기본 틀에서 고르기
+        <FrameSelect
+          value={frame.id}
+          disabled={disabled}
+          onChange={(event) => onChangeFrame(event.target.value)}
+          aria-label="부처 명칭 틀"
+        >
+          {DEPARTMENT_NAME_FRAMES.map((row) => (
+            <option key={row.id} value={row.id}>
+              {row.label}
+            </option>
+          ))}
+        </FrameSelect>
+        {suggestions.length > 0 && (
+          <PresetAll
+            type="button"
+            disabled={disabled}
+            onClick={() => onAdd(suggestions)}
+          >
+            {suggestions.length}개 모두 추가
+          </PresetAll>
+        )}
+      </PresetLabel>
+      <PresetHint>
+        {frame.hint} · 우두머리는 「{frame.headTitle}」 · 담은 뒤 이름은 고칠 수
+        있습니다
+      </PresetHint>
+      {suggestions.length > 0 ? (
+        <PresetChips>
+          {suggestions.map((item) => (
+            <PresetChip
+              key={item.slot + item.name}
+              type="button"
+              disabled={disabled}
+              onClick={() => onAdd([item])}
+            >
+              + {item.name}
+            </PresetChip>
+          ))}
+        </PresetChips>
+      ) : (
+        <PresetHint>이 틀의 자리는 모두 만들어 두셨습니다.</PresetHint>
+      )}
+    </PresetBlock>
   )
 }
 
@@ -1413,21 +1771,33 @@ const SlotGrid = styled.div`
   margin-inline: auto;
 `
 
+/* 이름 바꾸기·삭제 — 평소엔 숨긴다. 등록이 주 동작이고, 늘 보이면 실수를 부른다 */
+const SlotActions = styled.div`
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+`
+
 const SlotShell = styled.div`
   position: relative;
   display: flex;
   min-width: 0;
 
-  /* 삭제는 평소엔 숨긴다 — 등록이 주 동작이고 삭제가 늘 보이면 실수를 부른다 */
-  &:hover button:last-child,
-  &:focus-within button:last-child {
+  &:hover ${SlotActions},
+  &:focus-within ${SlotActions} {
     opacity: 1;
   }
 `
 
 const SlotMain = styled.button`
   ${slotBase}
-  padding: 10px 30px 10px 12px;
+  padding: 10px 52px 10px 12px;
   border-color: ${({ theme }) => theme.colors.border.light};
 
   &:hover {
@@ -1436,11 +1806,7 @@ const SlotMain = styled.button`
   }
 `
 
-const SlotDelete = styled.button`
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
+const SlotIconButton = styled.button<{ $danger?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1450,14 +1816,32 @@ const SlotDelete = styled.button`
   border-radius: 6px;
   background: none;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  opacity: 0;
   cursor: pointer;
-  transition: opacity 0.15s ease;
 
   &:hover {
-    color: #dc2626;
-    background: rgba(220, 38, 38, 0.1);
+    color: ${({ $danger, theme }) =>
+      $danger ? '#dc2626' : theme.colors.text.primary};
+    background: ${({ $danger, theme }) =>
+      $danger ? 'rgba(220, 38, 38, 0.1)' : theme.colors.hover};
   }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+`
+
+/* 자리 안에서 이름만 고치는 줄 — 칸 모양을 유지한 채 입력으로 바뀐다 */
+const SlotRenameForm = styled.form`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 
@@ -1813,6 +2197,104 @@ const SetupHint = styled.p`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/* 틀 선택기 — 칩 줄 위에 붙어 '무엇을 권하는 중인지'를 바꾼다 */
+const FrameSelect = styled.select`
+  height: 26px;
+  max-width: 190px;
+  padding: 0 6px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const PresetHint = styled.p`
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RenameForm = styled.form`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 6px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.active};
+  background: ${({ theme }) => theme.colors.background.primary};
+`
+
+const RenameInput = styled.input`
+  width: 124px;
+  min-width: 0;
+  flex: 1;
+  height: 22px;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12px;
+  font-weight: 600;
+
+  &:focus {
+    outline: none;
+  }
+`
+
+const RenameConfirm = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#4ade80' : '#16a34a')};
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled) {
+    background: rgba(22, 163, 74, 0.12);
+  }
+`
+
+const MadeChipName = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+
+  svg {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  &:hover svg,
+  &:focus-visible svg {
+    opacity: 0.7;
+  }
+`
+
 const MadeChip = styled.span`
   display: inline-flex;
   align-items: center;
@@ -1905,6 +2387,10 @@ const PresetChip = styled.button`
   }
 `
 
+const SlotGridFooter = styled.div`
+  margin-top: 8px;
+`
+
 const SlotTitle = styled.span`
   /* 이름이 길면 이름이 줄어든다 — 옆의 '아직 없음'이 두 글자씩 접히는 것보다 낫다 */
   flex: 1;
@@ -1915,6 +2401,18 @@ const SlotTitle = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+`
+
+/** 그 자리에 있는 사람 — '아직 없음' 자리를 대신한다 */
+const SlotOccupant = styled.span`
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SlotEmptyName = styled.span`
