@@ -666,6 +666,15 @@ const COUNTRIES: CountryData[] = [
     areaSqKm: 33846.0,
     continentName: '유럽',
   },
+  {
+    name: '스웨덴',
+    localName: 'Sverige',
+    flagEmoji: '🇸🇪',
+    isoCode: 'SE',
+    population: 10587710,
+    areaSqKm: 450295.0,
+    continentName: '유럽',
+  },
 ]
 
 export async function seedCountries(

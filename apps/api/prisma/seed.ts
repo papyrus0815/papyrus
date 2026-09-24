@@ -50,6 +50,12 @@ import {
   seedGreeceHistoricalCountryRelations,
   seedAlbaniaHistoricalCountries,
   seedAlbaniaHistoricalCountryRelations,
+  seedSwedenHistoricalCountries,
+  seedSwedenHistoricalCountryRelations,
+  seedUkraineHistoricalCountries,
+  seedUkraineHistoricalCountryRelations,
+  seedSpainHistoricalCountries,
+  seedSpainHistoricalCountryRelations,
   seedJoseonHistoricalCountries,
   seedJoseonHistoricalCountryRelations,
   seedNapoleonIII,
@@ -81,6 +87,7 @@ import {
   seedConrad,
   seedWillemI,
   seedLeopoldIBelgium,
+  seedKarlXISweden,
   seedSardiniaItalyMonarchs,
   seedSavoyDynasty,
   seedJapanMeijiEra,
@@ -352,6 +359,53 @@ async function main() {
         //  · 의존: 선재 행 '일본 제국'·'청나라' — 없으면 warn+skip 후 재실행에서 채움
         await seedJoseonHistoricalCountryRelations(prisma)
 
+        // 7-31. 스웨덴 관련 역사 국가 시딩 (스웨덴 왕국·제국·스웨덴-노르웨이 연합·발트 속령·신스웨덴·핀란드 대공국 8건)
+        //  · 의존: seedCountries(현대 SE·FI·EE·LV·DE·PL·US)
+        //    + seedDenmarkHistoricalCountries(칼마르 동맹·노르웨이 왕국·덴마크-노르웨이 — 계승/소속 관계 대상)
+        //    + seedRussiaHistoricalCountries(러시아 제국 — 발트 속령 이양·핀란드 대공국 소속 대상)
+        //    + seedGermanyHistoricalCountries(신성로마제국·프로이센 왕국) + seedBeneluxHistoricalCountries(네덜란드 공화국 — 신스웨덴 병합)
+        //  · 칼마르 동맹의 SE 링크는 denmark 시드가 이미 '미래용'으로 표기해 둔 것이라 여기서 중복 링크하지 않는다
+        //    (단독 러너에서는 SE 생성 뒤 denmark 엔티티 시드를 한 번 더 돌려 활성화한다)
+        //  · 현대 NO는 country 시드 미포함 — 스웨덴-노르웨이 연합의 NO 링크는 미래용 표기(warn+skip)
+        await seedSwedenHistoricalCountries(prisma)
+
+        // 7-32. 스웨덴 역사 국가 계승·소속 관계 시딩
+        await seedSwedenHistoricalCountryRelations(prisma)
+
+        // 7-33. 우크라이나 관련 역사 국가 시딩 (스키타이~우크라이나 공화국 17건)
+        //  · 의존: seedCountries(현대 UA·RU·PL·RO·KZ)
+        //    + seedRussiaHistoricalCountries(키예프 루스·체르니고프 공국·러시아 차르국/제국·러시아 공화국·
+        //      우크라이나 소비에트 사회주의 공화국·소련 — 계승/소속 관계 대상)
+        //    + seedPolandHistoricalCountries(폴란드 왕국·리투아니아 대공국·폴란드-리투아니아 연방·폴란드 제2공화국)
+        //    + seedAustriaHistoricalCountries(오스트리아 제국·오스트리아-헝가리 — 왕관령 소속 대상)
+        //    + seedBulgariaHistoricalCountries(고대 대불가리아) + seedRomaniaHistoricalCountries(몰다비아 공국·루마니아 왕국)
+        //    + seedGermanyHistoricalCountries(나치 독일) + 체코슬로바키아·헝가리 왕국(인물·사건 시드 유래)
+        //  · 동로마 제국·오스만 제국은 사건 시드 유래(7-19 불가리아 주석 참조) — 없으면 warn+skip 후 재실행에서 채움
+        //  · 금장 칸국은 크림 칸국의 전신이라 우크라이나 시드가 소유한다(아바르 칸국을 bohemia가 맡은 전례)
+        //  · 러시아 제국(RU 단독 링크)은 규범 B대로 UA를 달지 않는다 —
+        //    1783~1917년 드니프로 우안·좌안은 별도 행 없이 비어 있는 것이 의도된 상태다
+        await seedUkraineHistoricalCountries(prisma)
+
+        // 7-34. 우크라이나 역사 국가 계승·소속 관계 시딩
+        await seedUkraineHistoricalCountryRelations(prisma)
+
+        // 7-35. 스페인 관련 역사 국가 시딩 (타르테소스~스페인 왕국·해외 속령 39건)
+        //  · 의존: seedCountries(현대 ES·PT·FR·MX·CO·US·PH)
+        //    + seedItalyHistoricalCountries(로마 공화국·로마 제국·서로마 제국 — ES·PT 링크 보강 대상,
+        //      나폴리 왕국·시칠리아 왕국·밀라노 공국 — 스페인령 속령 소속 대상)
+        //    + seedFranceHistoricalCountries(프랑크 왕국·프랑스 왕국·프랑스 제1제국)
+        //    + seedBeneluxHistoricalCountries(스페인령 네덜란드 — 소속 대상)
+        //    + 카스티야 왕국·아라곤 왕국·포르투갈 왕국(인물 시드 유래 선재 행 — 계승 관계의 허브라
+        //      없으면 warn+skip 후 재실행에서 채움. 이 시드는 NULL 필드만 가드 백필한다)
+        //  · '스페인 제국'은 본국 왕국 행들과 겹쳐 등록하는 제국 행이다(대영제국 전례) —
+        //    모국 ES만 링크하고 부왕령·식민지는 규범 (C)대로 별도 행이 각자의 현대 국가를 잇는다
+        //  · 페루·리오데라플라타 부왕령과 아프리카 3속령은 대상 현대 국가(PE·BO·CL·AR·MA·GQ·EH)가
+        //    미등록이라 링크가 비어 있다 — 등록 시 이 시드를 다시 돌리면 활성화된다
+        await seedSpainHistoricalCountries(prisma)
+
+        // 7-36. 스페인 역사 국가 계승·소속·동군연합 관계 시딩
+        await seedSpainHistoricalCountryRelations(prisma)
+
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
         //  ⚠️ 적용 범위(스코프) 시딩은 여기가 아니라 **맨 끝(16)** 이다.
@@ -506,6 +560,22 @@ async function main() {
         //  · 「벨기에 왕가」 왕조의 founderId가 NULL이라 이 인물로 채운다
         //  · Person x1 + 부모 2 + 재위 1 + 별칭 6 + 소속국가 6 + 연보 40건 + 능력치
         await seedLeopoldIBelgium(prisma)
+
+        // 11-19. 칼 11세 — 스웨덴 국왕(1660~1697)·대환수와 절대왕정의 왕
+        //  · 의존: seedSwedenHistoricalCountries(「스웨덴 제국」·「스웨덴 왕국」·「스웨덴령
+        //    포메라니아」 HC) + 관직 정의('국왕'). 「비텔스바흐 가문」 왕조는 있으면 연결
+        //  · ⚠️군주 변형 — SovereignReign 1건. 재위를 다는 곳이 **「스웨덴 왕국」(970~현존)이
+        //    아니라 「스웨덴 제국」(1611~1721)**이다: regnalNumber는 그 HC 행 안의 통산 제N대인데
+        //    970년부터의 왕국 행은 중세 군주 목록이 사료마다 갈려 순번 확정이 불가능하고,
+        //    대국 시대 행 안에서는 구스타브 2세 아돌프 1 → 크리스티나 2 → 칼 10세 구스타브 3 →
+        //    **칼 11세 4** → 칼 12세 5로 일의적이다. 상위 정체 「스웨덴 왕국」은 소속 국가로 연결
+        //  · ⚠️모든 날짜가 **율리우스력(구력)** — 스웨덴은 1700년까지 율리우스력을 썼다
+        //    (사망 1697-04-05 구력 = 04-15 신력). 신력 환산은 notes·연보 설명에 병기
+        //  · 부모·배우자·아들은 만들지 않는다 — DB에 스웨덴 인물이 0행이라 만들어도 새 고립
+        //    섬이 될 뿐이고, 칼 12세는 스텁으로 선점하면 delete-recreate 위험이 생긴다
+        //    (레오폴트 1세 시드의 «기존 그래프에 붙는가» 기준). 후속 person.sweden-monarchs 몫
+        //  · Person x1 + 재위 1 + 별칭 5 + 소속국가 4 + 연보 26건 + 능력치
+        await seedKarlXISweden(prisma)
 
         // 11-2. 일본 메이지·다이쇼·쇼와 천황 + 1~10대 내각총리대신 시딩
         await seedJapanMeijiEra(prisma)
