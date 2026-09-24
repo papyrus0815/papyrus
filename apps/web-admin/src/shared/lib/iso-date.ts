@@ -242,5 +242,11 @@ export function formatDateRange(
   const startStr = formatDateWithPrecision(start, startPrecision)
   if (!end) return startStr
   const endStr = formatDateWithPrecision(end, endPrecision)
+  /* 하루짜리 사건은 **한 번만** 쓴다. 종료일을 시작일과 같게 저장하는 게 기본값이라
+     실데이터의 63%(57/91)가 여기 걸렸고, 그 지면들은 모두 '2025년 2월 4일 ~ 2025년
+     2월 4일'처럼 같은 날짜를 두 번 찍고 있었다.
+     문자열로 비교하는 건 **정밀도까지 같아야** 한 날로 볼 수 있기 때문이다 — 시작이
+     '2025년 2월'(월 정밀도)이고 끝이 '2025년 2월 4일'이면 서로 다른 정보라 범위로 남긴다. */
+  if (startStr === endStr) return startStr
   return `${startStr} ~ ${endStr}`
 }

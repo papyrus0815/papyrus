@@ -7,6 +7,7 @@ import {
   compareByDate,
   dateSortKey,
   formatCenturyLabel,
+  formatDateRange,
   formatDateWithPrecision,
   getCentury,
   getCenturyFromIso,
@@ -202,5 +203,29 @@ describe('formatDateWithPrecision — BC(음수 연도) 기원전 표기 (P3-4)'
 
   it('precision 미지정은 day로 간주', () => {
     expect(formatDateWithPrecision('-0044-03-15')).toBe('기원전 44년 3월 15일')
+  })
+})
+
+describe('formatDateRange — 하루짜리', () => {
+  it('시작과 끝이 같은 날이면 한 번만 쓴다', () => {
+    expect(
+      formatDateRange('2025-02-04', '2025-02-04', 'day', 'day'),
+    ).toBe(formatDateWithPrecision('2025-02-04', 'day'))
+  })
+
+  it('끝이 없으면 시작만', () => {
+    expect(formatDateRange('2025-02-04', undefined, 'day')).toBe(
+      formatDateWithPrecision('2025-02-04', 'day'),
+    )
+  })
+
+  it('다른 날이면 범위로 남긴다', () => {
+    const label = formatDateRange('2025-04-12', '2025-05-31', 'day', 'day')
+    expect(label).toContain('~')
+  })
+
+  it('정밀도가 다르면 같은 날이라도 범위다 — 서로 다른 정보이므로', () => {
+    const label = formatDateRange('2025-02-04', '2025-02-04', 'month', 'day')
+    expect(label).toContain('~')
   })
 })

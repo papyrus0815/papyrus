@@ -273,13 +273,20 @@ export const Rail = styled.aside`
   overflow-y: auto;
   scrollbar-width: thin;
 
+  /**
+   * 1100px 아래에서는 옆 칼럼이 사라져 **본문 흐름 위로 내려온다**(Body가 1단이 됨).
+   * 이때 세로 목록 모양을 그대로 끌고 내려오면 642px 폭에 33px짜리 줄이 8개 쌓여
+   * 289px — 첫 섹션이 화면 밖으로 밀린다. 아래 RailNavList/RailNavItem이 같은
+   * 중단점에서 **가로 한 줄**로 바꾼다(실측 289 → 40px).
+   */
   @media (max-width: 1100px) {
     position: static;
     max-height: none;
     overflow: visible;
-    padding: 0;
+    padding: 0 0 14px;
     background: transparent;
     border: none;
+    gap: 0;
   }
 `
 
@@ -287,6 +294,13 @@ export const RailGroup = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
+
+  /* 라벨과 목록을 한 줄에 — '목차'가 제 줄을 차지할 이유가 없다 */
+  @media (max-width: 1100px) {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 12px;
+  }
 `
 
 export const RailGroupLabel = styled.div`
@@ -295,6 +309,12 @@ export const RailGroupLabel = styled.div`
   text-transform: uppercase;
   letter-spacing: 0.14em;
   color: ${({ theme }) => theme.colors.text.tertiary};
+
+  @media (max-width: 1100px) {
+    flex-shrink: 0;
+    /* 가로 줄에서는 칩들의 글자선에 맞춰 내려앉는다 */
+    transform: translateY(-1px);
+  }
 `
 
 export const RailNavList = styled.ul`
@@ -304,6 +324,15 @@ export const RailNavList = styled.ul`
   display: flex;
   flex-direction: column;
   border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  /* 흐름으로 내려오면 축이 눕는다 — 세로 자를 가로 자로 */
+  @media (max-width: 1100px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    border-left: none;
+    border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
 `
 
 /**
@@ -338,6 +367,18 @@ export const RailNavItem = styled.button<{ $active: boolean }>`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
     border-radius: 2px;
+  }
+
+  /* 가로 줄에서는 현재 위치 표시도 같이 눕는다 — 왼쪽 막대 → 밑줄 */
+  @media (max-width: 1100px) {
+    width: auto;
+    margin-left: 0;
+    margin-bottom: -1px;
+    padding: 6px 11px;
+    border-left: 0;
+    border-bottom: 2px solid
+      ${({ theme, $active }) =>
+        $active ? ledgerAccent(theme.mode) : 'transparent'};
   }
 `
 
