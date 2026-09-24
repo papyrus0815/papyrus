@@ -75,6 +75,9 @@ export const pathKeys = {
   /** 국가 상세 내 행정조직 탭 고유 URL */
   countryGovernment: (countryId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/government`,
+  /** 국가 상세 → 행정조직 → '정체' 서브탭 고유 URL */
+  countryPoliticalSystem: (countryId: string) =>
+    `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/government/system`,
   /** 국가 상세 내 선거·투표 탭 고유 URL */
   countryElections: (countryId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/elections`,

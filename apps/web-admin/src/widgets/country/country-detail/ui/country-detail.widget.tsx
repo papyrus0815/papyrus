@@ -31,10 +31,11 @@ import { TreatySectionWidget } from './treaty-section.widget'
 /**
  * 국가 상세 위젯이 다루는 탭 키.
  *
- * - `OverviewSubTab`(서브 탭) ∪ `'heads'`(역대 수반은 government 탭의 sub-view) 로 구성.
+ * - `OverviewSubTab`(서브 탭) ∪ `'heads'`·`'political-system'`(둘 다 government 탭의
+ *   sub-view) 로 구성.
  * - URL과 어휘 일치 — 페이지 → 위젯으로 그대로 전달, 위젯 → 페이지로 그대로 전달된다.
  */
-export type CountryDetailTabKey = OverviewSubTab | 'heads'
+export type CountryDetailTabKey = OverviewSubTab | 'heads' | 'political-system'
 
 export interface CountryDetailProps {
   country: UnifiedCountry | null
@@ -53,12 +54,15 @@ export interface CountryDetailProps {
   onDetailTabChange?: (tab: CountryDetailTabKey | null) => void
 }
 
-/** `initialDetailTab` → 실제 표시할 서브 탭으로 변환. 'heads'는 government 탭의 sub-view라 government로 매핑. */
+/**
+ * `initialDetailTab` → 실제 표시할 서브 탭으로 변환.
+ * 'heads'·'political-system'은 government 탭 안의 sub-view라 government로 매핑.
+ */
 function resolveSubTab(
   initial: CountryDetailTabKey | undefined,
 ): OverviewSubTab {
   if (!initial) return 'dashboard'
-  if (initial === 'heads') return 'government'
+  if (initial === 'heads' || initial === 'political-system') return 'government'
   return initial
 }
 
@@ -139,16 +143,19 @@ function CountryDetailInner({
   // historical 위젯이 동기화하는 탭 키와 widget tab key가 겹치는 것만 forward —
   // 'dashboard'/'linked-historical'는 historical에 매칭되는 탭이 없어 overview로 폴백.
   if (country.type === 'historical') {
+    /* 역사 국가엔 행정조직 안의 서브탭이 없다 — 정체 딥링크는 행정조직 탭으로 접는다 */
     const historicalInitialTab =
-      initialDetailTab === 'heads' ||
-      initialDetailTab === 'regions' ||
-      initialDetailTab === 'government' ||
-      initialDetailTab === 'elections' ||
-      initialDetailTab === 'laws' ||
-      initialDetailTab === 'ethnicity' ||
-      initialDetailTab === 'treaty'
-        ? initialDetailTab
-        : undefined
+      initialDetailTab === 'political-system'
+        ? ('government' as const)
+        : initialDetailTab === 'heads' ||
+            initialDetailTab === 'regions' ||
+            initialDetailTab === 'government' ||
+            initialDetailTab === 'elections' ||
+            initialDetailTab === 'laws' ||
+            initialDetailTab === 'ethnicity' ||
+            initialDetailTab === 'treaty'
+          ? initialDetailTab
+          : undefined
     return (
       <HistoricalCountryDetail
         country={country}
@@ -281,7 +288,11 @@ function CountryDetailInner({
                       country={country}
                       countryId={country.id}
                       initialContentTab={
-                        initialDetailTab === 'heads' ? 'heads' : undefined
+                        initialDetailTab === 'heads'
+                          ? 'heads'
+                          : initialDetailTab === 'political-system'
+                            ? 'system'
+                            : undefined
                       }
                     />
                   </S.TabContentPane>

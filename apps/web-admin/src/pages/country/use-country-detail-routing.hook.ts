@@ -33,6 +33,8 @@ function urlTabToWidgetTab(
       return 'regions'
     case 'government':
       return 'government'
+    case 'political-system':
+      return 'political-system'
     case 'elections':
       return 'elections'
     case 'laws':
@@ -56,6 +58,8 @@ function tabToPath(countryId: string, tab: CountryDetailTabKey | null): string {
     case 'heads':
     case 'government':
       return pathKeys.countryGovernment(countryId)
+    case 'political-system':
+      return pathKeys.countryPoliticalSystem(countryId)
     case 'linked-historical':
       return pathKeys.countryHistorical(countryId)
     case 'regions':

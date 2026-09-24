@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import type {
@@ -18,6 +19,7 @@ import {
   STATE_STRUCTURE_ORDER,
   type LegislatureType,
 } from '@/entities/political-system/model/political-system'
+import { personCareerApi } from '@/shared/api/person-career'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
@@ -45,8 +47,14 @@ type FormState = {
   lowerHouseSeats: string
   upperHouseName: string
   upperHouseSeats: string
+  /**
+   * 직함 선택 — 관직 정의 id, 또는 '카탈로그에 없음'을 뜻하는 센티널(CUSTOM_TITLE),
+   * 또는 빈 값(지정 안 함). 자유입력 칸은 센티널일 때만 열린다.
+   */
+  headOfStateChoice: string
   headOfStateTitle: string
   headOfStateHasPower: boolean
+  headOfGovernmentChoice: string
   headOfGovernmentTitle: string
   headOfGovernmentHasPower: boolean
   stateStructure: string
@@ -67,8 +75,10 @@ const EMPTY: FormState = {
   lowerHouseSeats: '',
   upperHouseName: '',
   upperHouseSeats: '',
+  headOfStateChoice: '',
   headOfStateTitle: '',
   headOfStateHasPower: true,
+  headOfGovernmentChoice: '',
   headOfGovernmentTitle: '',
   headOfGovernmentHasPower: true,
   stateStructure: '',
@@ -77,6 +87,25 @@ const EMPTY: FormState = {
 }
 
 const toText = (value: unknown) => (value == null ? '' : String(value))
+
+/**
+ * '카탈로그에 없음' 센티널.
+ *
+ * 직함의 정본은 관직 정의 카탈로그(재임·재위가 참조하는 그 테이블)다. 그래도 자유입력을
+ * 남겨 두는 이유 — '연합회의 의장'·'임시정부 수반'처럼 한 정체에서만 쓰인 칭호까지
+ * 카탈로그에 올리면 다른 나라 직책 피커가 그만큼 지저분해진다.
+ */
+const CUSTOM_TITLE = '__custom__'
+
+/** 카탈로그에서 이 축에 쓸 수 있는 유형 */
+type HeadAxis = 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+
+interface DefinitionOption {
+  id: string
+  title: string
+  positionType: string
+  titleLocal?: string | null
+}
 
 function hydrate(system: PoliticalSystem): FormState {
   return {
@@ -92,8 +121,18 @@ function hydrate(system: PoliticalSystem): FormState {
     lowerHouseSeats: toText(system.lowerHouseSeats),
     upperHouseName: toText(system.upperHouseName),
     upperHouseSeats: toText(system.upperHouseSeats),
+    headOfStateChoice: system.headOfStatePositionId
+      ? system.headOfStatePositionId
+      : system.headOfStateTitle
+        ? CUSTOM_TITLE
+        : '',
     headOfStateTitle: toText(system.headOfStateTitle),
     headOfStateHasPower: system.headOfStateHasPower ?? true,
+    headOfGovernmentChoice: system.headOfGovernmentPositionId
+      ? system.headOfGovernmentPositionId
+      : system.headOfGovernmentTitle
+        ? CUSTOM_TITLE
+        : '',
     headOfGovernmentTitle: toText(system.headOfGovernmentTitle),
     headOfGovernmentHasPower: system.headOfGovernmentHasPower ?? true,
     stateStructure: system.stateStructure ?? '',
@@ -112,6 +151,41 @@ const numberOrNull = (raw: string) => {
 const textOrNull = (raw: string) => (raw.trim() === '' ? null : raw.trim())
 
 /**
+ * 국가원수·정부수반 한 축을 DTO 조각으로 옮긴다.
+ * 지정 안 함이면 세 칸 모두 null — 감춘 값이 뒤에 남아 되살아나지 않게.
+ */
+function headAxisPayload(
+  axis: 'headOfState' | 'headOfGovernment',
+  form: FormState,
+): Partial<UpdatePoliticalSystemInput> {
+  const choice = axis === 'headOfState' ? form.headOfStateChoice : form.headOfGovernmentChoice
+  const title = axis === 'headOfState' ? form.headOfStateTitle : form.headOfGovernmentTitle
+  const hasPower =
+    axis === 'headOfState' ? form.headOfStateHasPower : form.headOfGovernmentHasPower
+
+  if (choice === CUSTOM_TITLE) {
+    const text = textOrNull(title)
+    return {
+      [`${axis}PositionId`]: null,
+      [`${axis}Title`]: text,
+      [`${axis}HasPower`]: text ? hasPower : null,
+    } as Partial<UpdatePoliticalSystemInput>
+  }
+  if (choice) {
+    return {
+      [`${axis}PositionId`]: choice,
+      [`${axis}Title`]: null,
+      [`${axis}HasPower`]: hasPower,
+    } as Partial<UpdatePoliticalSystemInput>
+  }
+  return {
+    [`${axis}PositionId`]: null,
+    [`${axis}Title`]: null,
+    [`${axis}HasPower`]: null,
+  } as Partial<UpdatePoliticalSystemInput>
+}
+
+/**
  * 정체 등록·수정 폼.
  *
  * 입법부 상세는 **양원제를 고를 때만** 상원 칸을 연다. 단원제인데 상원 칸이 떠 있으면
@@ -121,11 +195,56 @@ export function PoliticalSystemFormModal({
   open,
   onClose,
   editing,
+  countryId,
+  historicalCountryId,
   countryName,
   onSubmit,
 }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
+
+  /*
+   * 직함 후보 = 관직 정의 카탈로그. 재임·재위가 쓰는 것과 **같은 목록·같은 쿼리키**를
+   * 쓴다 — 여기만 자유 문자열로 두면 같은 '대통령'이 두 어휘로 갈라진다.
+   * 국가를 주면 서버가 적용 범위(스코프)로 하드컷해 그 나라 것만 내려준다.
+   */
+  const { data: definitions = [] } = useQuery<DefinitionOption[]>({
+    queryKey: [
+      'position-definitions',
+      'list',
+      countryId ?? null,
+      historicalCountryId ?? null,
+    ],
+    queryFn: () =>
+      personCareerApi.getPositionDefinitions({
+        countryId,
+        historicalCountryId,
+      }) as Promise<DefinitionOption[]>,
+    enabled: open,
+    staleTime: 60_000,
+  })
+
+  /**
+   * 수정 중인 정체가 이미 참조하는 정의는 목록에서 빠져도 되살린다.
+   * 스코프 하드컷(예: 다른 나라 전용으로 스코프된 '국가주석')에 걸려 사라지면
+   * select 값이 매칭되지 않아 선택이 조용히 '지정 안 함'으로 떨어진다.
+   */
+  const optionsFor = useMemo(() => {
+    const pinned: DefinitionOption[] = [
+      editing?.headOfStatePosition as DefinitionOption | null,
+      editing?.headOfGovernmentPosition as DefinitionOption | null,
+    ].filter((def): def is DefinitionOption => !!def?.id)
+
+    return (axis: HeadAxis) => {
+      const pool = [...definitions]
+      for (const def of pinned) {
+        if (!pool.some((row) => row.id === def.id)) pool.push(def)
+      }
+      return pool
+        .filter((def) => def.positionType === axis)
+        .sort((left, right) => left.title.localeCompare(right.title, 'ko-KR'))
+    }
+  }, [definitions, editing])
 
   // 열릴 때마다 대상에 맞춰 채운다 — 직전에 열었던 값이 남지 않도록
   useEffect(() => {
@@ -169,14 +288,13 @@ export function PoliticalSystemFormModal({
       lowerHouseSeats: hasLegislature ? numberOrNull(form.lowerHouseSeats) : null,
       upperHouseName: isBicameral ? textOrNull(form.upperHouseName) : null,
       upperHouseSeats: isBicameral ? numberOrNull(form.upperHouseSeats) : null,
-      headOfStateTitle: textOrNull(form.headOfStateTitle),
-      headOfStateHasPower: form.headOfStateTitle.trim()
-        ? form.headOfStateHasPower
-        : null,
-      headOfGovernmentTitle: textOrNull(form.headOfGovernmentTitle),
-      headOfGovernmentHasPower: form.headOfGovernmentTitle.trim()
-        ? form.headOfGovernmentHasPower
-        : null,
+      /*
+       * 한 축에 값은 한 벌만 간다. 카탈로그를 골랐으면 id만, '카탈로그에 없음'이면
+       * 자유입력만 — 둘을 함께 보내면 나중에 어느 쪽이 진실인지 알 수 없어진다.
+       * (서버도 같은 규칙으로 한 번 더 정리한다.)
+       */
+      ...headAxisPayload('headOfState', form),
+      ...headAxisPayload('headOfGovernment', form),
       stateStructure: (form.stateStructure ||
         null) as UpdatePoliticalSystemInput['stateStructure'],
       partySystem: (form.partySystem ||
@@ -358,15 +476,35 @@ export function PoliticalSystemFormModal({
         )}
 
         <SectionLabel>국가원수 · 정부수반</SectionLabel>
+        {/*
+          직함은 관직 정의 카탈로그에서 고른다 — 재임·재위가 참조하는 그 목록이다.
+          여기만 자유 문자열이면 같은 '대통령'이 두 어휘로 갈라져 직책으로 잇지 못한다.
+          카탈로그에 없는 칭호만 '직접 입력'으로 떨어진다.
+        */}
         <Grid>
           <Field>
             국가원수 직함
-            <Input
-              value={form.headOfStateTitle}
-              onChange={(event) => set('headOfStateTitle', event.target.value)}
-              placeholder="대통령 · 국왕 · 천황"
-            />
-            {form.headOfStateTitle.trim() && (
+            <Select
+              value={form.headOfStateChoice}
+              onChange={(event) => set('headOfStateChoice', event.target.value)}
+            >
+              <option value="">지정 안 함</option>
+              {optionsFor('HEAD_OF_STATE').map((def) => (
+                <option key={def.id} value={def.id}>
+                  {def.title}
+                </option>
+              ))}
+              <option value={CUSTOM_TITLE}>직접 입력…</option>
+            </Select>
+            {form.headOfStateChoice === CUSTOM_TITLE && (
+              <Input
+                value={form.headOfStateTitle}
+                onChange={(event) => set('headOfStateTitle', event.target.value)}
+                placeholder="연합회의 의장 · 국가주석"
+                aria-label="국가원수 직함 직접 입력"
+              />
+            )}
+            {form.headOfStateChoice && (
               <CheckLabel>
                 <input
                   type="checkbox"
@@ -381,14 +519,31 @@ export function PoliticalSystemFormModal({
           </Field>
           <Field>
             정부수반 직함
-            <Input
-              value={form.headOfGovernmentTitle}
+            <Select
+              value={form.headOfGovernmentChoice}
               onChange={(event) =>
-                set('headOfGovernmentTitle', event.target.value)
+                set('headOfGovernmentChoice', event.target.value)
               }
-              placeholder="국무총리 · 수상 (대통령제면 비움)"
-            />
-            {form.headOfGovernmentTitle.trim() && (
+            >
+              <option value="">지정 안 함 (대통령제면 비움)</option>
+              {optionsFor('HEAD_OF_GOVERNMENT').map((def) => (
+                <option key={def.id} value={def.id}>
+                  {def.title}
+                </option>
+              ))}
+              <option value={CUSTOM_TITLE}>직접 입력…</option>
+            </Select>
+            {form.headOfGovernmentChoice === CUSTOM_TITLE && (
+              <Input
+                value={form.headOfGovernmentTitle}
+                onChange={(event) =>
+                  set('headOfGovernmentTitle', event.target.value)
+                }
+                placeholder="임시정부 수반"
+                aria-label="정부수반 직함 직접 입력"
+              />
+            )}
+            {form.headOfGovernmentChoice && (
               <CheckLabel>
                 <input
                   type="checkbox"
@@ -402,6 +557,10 @@ export function PoliticalSystemFormModal({
             )}
           </Field>
         </Grid>
+        <FieldHint>
+          목록에 없는 직함은 「직위 정의」 탭에서 먼저 만들면 재임·재위 기록과 같은
+          직책으로 이어집니다.
+        </FieldHint>
 
         <SectionLabel>국가 구조 · 정당제</SectionLabel>
         <Grid>
@@ -507,6 +666,14 @@ const controlBase = `
   font-weight: 400;
   width: 100%;
   box-sizing: border-box;
+`
+
+/* 카탈로그로 유도하는 한 줄 — 폼 아래 회색 각주 톤 */
+const FieldHint = styled.p`
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Input = styled.input`

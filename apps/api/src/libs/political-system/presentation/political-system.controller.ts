@@ -34,6 +34,19 @@ function signedYear(era: string | null, year: number | null): number {
 
 const COUNTRY_REF_SELECT = { select: { id: true, name: true } } as const
 
+/** 직함은 관직 정의 카탈로그가 정본 — 표시에 필요한 칸만 딸려 보낸다 */
+const POSITION_REF_SELECT = {
+  select: { id: true, title: true, titleLocal: true, positionType: true },
+} as const
+
+/** 응답 include 한 벌 — 목록·단건·생성·수정이 같은 모양을 내려야 한다 */
+const RESPONSE_INCLUDE = {
+  country: COUNTRY_REF_SELECT,
+  historicalCountry: COUNTRY_REF_SELECT,
+  headOfStatePosition: POSITION_REF_SELECT,
+  headOfGovernmentPosition: POSITION_REF_SELECT,
+} as const
+
 /**
  * 정체(政體) CRUD — 대통령제/의원내각제, 단원제/양원제 등.
  *
@@ -73,10 +86,7 @@ export class PoliticalSystemController {
 
     const rows = await this.prisma.politicalSystem.findMany({
       where: Object.keys(where).length ? where : undefined,
-      include: {
-        country: COUNTRY_REF_SELECT,
-        historicalCountry: COUNTRY_REF_SELECT,
-      },
+      include: RESPONSE_INCLUDE,
     })
 
     // 정렬은 부호 연도로 — Prisma orderBy는 startYear만 보므로 BC가 뒤집힌다.
@@ -93,10 +103,7 @@ export class PoliticalSystemController {
   async detail(@Param('id') id: string): Promise<PoliticalSystemResponseDto> {
     const row = await this.prisma.politicalSystem.findUnique({
       where: { id },
-      include: {
-        country: COUNTRY_REF_SELECT,
-        historicalCountry: COUNTRY_REF_SELECT,
-      },
+      include: RESPONSE_INCLUDE,
     })
     if (!row) throw new NotFoundException('정체를 찾을 수 없습니다')
     return row as PoliticalSystemResponseDto
@@ -117,6 +124,7 @@ export class PoliticalSystemController {
       )
     }
     this.assertPeriodOrder(rest)
+    await this.assertPositionRefs(rest)
 
     const row = await this.prisma.politicalSystem.create({
       data: {
@@ -125,10 +133,7 @@ export class PoliticalSystemController {
         historicalCountryId: historicalCountryId ?? null,
         accountId: accountId ?? null,
       },
-      include: {
-        country: COUNTRY_REF_SELECT,
-        historicalCountry: COUNTRY_REF_SELECT,
-      },
+      include: RESPONSE_INCLUDE,
     })
     return row as PoliticalSystemResponseDto
   }
@@ -142,14 +147,12 @@ export class PoliticalSystemController {
   ): Promise<PoliticalSystemResponseDto> {
     await this.assertOwnership(id, req)
     this.assertPeriodOrder(dto)
+    await this.assertPositionRefs(dto)
 
     const row = await this.prisma.politicalSystem.update({
       where: { id },
       data: this.writable(dto),
-      include: {
-        country: COUNTRY_REF_SELECT,
-        historicalCountry: COUNTRY_REF_SELECT,
-      },
+      include: RESPONSE_INCLUDE,
     })
     return row as PoliticalSystemResponseDto
   }
@@ -174,6 +177,49 @@ export class PoliticalSystemController {
     if (!existing) throw new NotFoundException('정체를 찾을 수 없습니다')
     if (existing.accountId && existing.accountId !== accountId) {
       throw new ForbiddenException('이 정체를 수정할 권한이 없습니다')
+    }
+  }
+
+  /**
+   * 카탈로그 참조 검증. 없는 id면 FK 위반이 500으로 새고, 유형이 어긋난 정의
+   * (예: 국가원수 칸에 각료 정의)를 그대로 받으면 화면 라벨이 거짓이 된다.
+   */
+  private async assertPositionRefs(dto: UpdatePoliticalSystemDto) {
+    const checks: Array<{
+      id: string
+      expected: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+      label: string
+    }> = []
+    if (dto.headOfStatePositionId)
+      checks.push({
+        id: dto.headOfStatePositionId,
+        expected: 'HEAD_OF_STATE',
+        label: '국가원수',
+      })
+    if (dto.headOfGovernmentPositionId)
+      checks.push({
+        id: dto.headOfGovernmentPositionId,
+        expected: 'HEAD_OF_GOVERNMENT',
+        label: '정부수반',
+      })
+    if (checks.length === 0) return
+
+    const definitions = await this.prisma.governmentPositionDefinition.findMany({
+      where: { id: { in: checks.map((check) => check.id) } },
+      select: { id: true, positionType: true },
+    })
+    for (const check of checks) {
+      const found = definitions.find((def) => def.id === check.id)
+      if (!found) {
+        throw new BadRequestException(
+          `${check.label} 직함으로 지정한 관직 정의를 찾을 수 없습니다`,
+        )
+      }
+      if (found.positionType !== check.expected) {
+        throw new BadRequestException(
+          `${check.label} 칸에는 ${check.label} 유형의 관직 정의만 지정할 수 있습니다`,
+        )
+      }
     }
   }
 
@@ -209,8 +255,10 @@ export class PoliticalSystemController {
       'lowerHouseSeats',
       'upperHouseName',
       'upperHouseSeats',
+      'headOfStatePositionId',
       'headOfStateTitle',
       'headOfStateHasPower',
+      'headOfGovernmentPositionId',
       'headOfGovernmentTitle',
       'headOfGovernmentHasPower',
       'stateStructure',
@@ -220,6 +268,14 @@ export class PoliticalSystemController {
     for (const key of keys) {
       if (dto[key] !== undefined) data[key] = dto[key]
     }
+    /*
+     * 한 직함에 두 진실을 두지 않는다. 카탈로그에서 고른 정의가 오면 같은 축의
+     * 자유입력은 비운다 — 남겨 두면 정의를 바꾼 뒤에도 옛 문자열이 화면에 남는다.
+     * (반대 방향은 건드리지 않는다: 자유입력만 보내는 건 정의를 떼겠다는 뜻이 아니라
+     *  카탈로그에 없는 칭호를 적는 뜻일 수 있어, FK 해제는 명시적 null로만 받는다.)
+     */
+    if (data.headOfStatePositionId) data.headOfStateTitle = null
+    if (data.headOfGovernmentPositionId) data.headOfGovernmentTitle = null
     return data
   }
 }

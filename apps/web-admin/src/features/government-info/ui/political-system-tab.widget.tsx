@@ -13,6 +13,8 @@ import {
   comparePoliticalSystems,
   formatPeriod,
   GOVERNMENT_FORM_LABEL,
+  headOfGovernmentTitleOf,
+  headOfStateTitleOf,
   LEGISLATURE_TYPE_LABEL,
   PARTY_SYSTEM_LABEL,
   primaryHouseLabel,
@@ -165,22 +167,23 @@ export function PoliticalSystemTab({
                         </FactValue>
                       </Fact>
                     )}
-                  {system.headOfStateTitle && (
+                  {/* 직함은 카탈로그가 정본 — 자유입력 칸을 직접 읽지 않는다 */}
+                  {headOfStateTitleOf(system) && (
                     <Fact>
                       <FactKey>국가원수</FactKey>
                       <FactValue>
-                        {system.headOfStateTitle}
+                        {headOfStateTitleOf(system)}
                         {system.headOfStateHasPower === false && (
                           <Muted> (상징)</Muted>
                         )}
                       </FactValue>
                     </Fact>
                   )}
-                  {system.headOfGovernmentTitle && (
+                  {headOfGovernmentTitleOf(system) && (
                     <Fact>
                       <FactKey>정부수반</FactKey>
                       <FactValue>
-                        {system.headOfGovernmentTitle}
+                        {headOfGovernmentTitleOf(system)}
                         {system.headOfGovernmentHasPower === false && (
                           <Muted> (상징)</Muted>
                         )}

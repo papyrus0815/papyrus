@@ -45,6 +45,7 @@ import {
   formatPopulation,
   parsePopulation,
 } from './dashboard-panels/format'
+import { BondYieldSection } from './dashboard-panels/bond-yield-section'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
 import { CountryCompaniesSection } from './dashboard-panels/country-companies-section'
@@ -52,6 +53,7 @@ import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
 import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
+import { PoliticalSystemPanel } from './dashboard-panels/political-system-panel'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
 import { TradeSection } from './dashboard-panels/trade-section'
 
@@ -116,6 +118,9 @@ export function CountryDetailDashboard({
   const goElections = () => navigate(pathKeys.countryElections(country.id))
   const goTreaty = () => navigate(pathKeys.countryTreaty(country.id))
   const goHistorical = () => navigate(pathKeys.countryHistorical(country.id))
+  /* 행정조직의 '정체' 탭을 바로 연다 — countryGovernment로 보내면 역대 수반에 떨어진다 */
+  const goPoliticalSystem = () =>
+    navigate(pathKeys.countryPoliticalSystem(country.id))
 
   /** 기록 완성도 칩 → 그 축을 채우는 탭으로 */
   const goFillTarget = (field: CompletenessField) => {
@@ -459,6 +464,17 @@ export function CountryDetailDashboard({
        * 보여줘 제거했다 — 정체(대통령제/양원제)는 행정조직 → 정체 탭에 그대로 있다.
        * 각료 데이터가 없는 역사 국가는 옛 카드를 유지한다.
        */}
+      {/*
+        2-1. 정체 — "누가 수반인가"보다 "어떤 체제인가"가 먼저다. 행정조직 탭 순서와
+        같은 판단이고, 그 탭 안에만 두었더니 세 번 눌러야 닿아 없는 기능처럼 읽혔다.
+      */}
+      <PoliticalSystemPanel
+        countryId={isModern ? country.id : undefined}
+        historicalCountryId={isModern ? undefined : country.id}
+        countryName={country.name}
+        onOpenAll={goPoliticalSystem}
+      />
+
       {governmentSection}
 
       {/*
@@ -570,6 +586,15 @@ export function CountryDetailDashboard({
             countryName={country.name}
           />
           <IndicatorTrendsSection
+            countryId={country.id}
+            countryName={country.name}
+          />
+          {/*
+            국채 금리 — 성장률·인구 바로 아래에 둔다. 같은 '지표'지만 한 해에 값이
+            여럿(만기별)이라 카드 두 장을 따로 쓰고, 추이만 보는 위 섹션과 달리
+            그 해의 곡선 모양(장단기 역전)까지 말한다.
+          */}
+          <BondYieldSection
             countryId={country.id}
             countryName={country.name}
           />

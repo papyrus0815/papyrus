@@ -32,6 +32,7 @@ export type CountryDetailTab =
   | 'linked-historical'
   | 'regions'
   | 'government'
+  | 'political-system'
   | 'elections'
   | 'laws'
   | 'events'
@@ -82,6 +83,11 @@ const DETAIL_TAB_PATTERNS: Array<{
     match: /^\/country\/[^/]+\/historical\/?$/,
   },
   { tab: 'regions', match: /^\/country\/[^/]+\/regions\/?$/ },
+  // 더 긴 경로가 먼저 — /government/system이 /government 패턴에 먹히지 않게
+  {
+    tab: 'political-system',
+    match: /^\/country\/[^/]+\/government\/system\/?$/,
+  },
   { tab: 'government', match: /^\/country\/[^/]+\/government\/?$/ },
   {
     tab: 'elections',

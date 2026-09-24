@@ -29,6 +29,17 @@ export type PartySystemDto =
 
 export type EraDto = 'BC' | 'AD'
 
+/**
+ * 직함 요약 — 관직 정의 카탈로그(government_position_definition) 행.
+ * 정체의 국가원수·정부수반 직함은 이 카탈로그가 정본이다(재임·재위와 같은 테이블).
+ */
+export interface PoliticalSystemPositionRefDto {
+  id: string
+  title: string
+  titleLocal: string | null
+  positionType: string
+}
+
 /** 소속 국가 요약 — 어느 FK가 찼는지로 현대/역사를 가른다 (선거 목록 선례 동형) */
 export interface PoliticalSystemCountryRefDto {
   id: string
@@ -62,8 +73,15 @@ export interface PoliticalSystemResponseDto {
   upperHouseName: string | null
   upperHouseSeats: number | null
 
+  /** 카탈로그에서 고른 국가원수 직함 — 있으면 이쪽이 표시의 정본 */
+  headOfStatePositionId: string | null
+  headOfStatePosition: PoliticalSystemPositionRefDto | null
+  /** 카탈로그에 없는 칭호일 때만 쓰는 자유입력 */
   headOfStateTitle: string | null
   headOfStateHasPower: boolean | null
+
+  headOfGovernmentPositionId: string | null
+  headOfGovernmentPosition: PoliticalSystemPositionRefDto | null
   headOfGovernmentTitle: string | null
   headOfGovernmentHasPower: boolean | null
 
@@ -104,8 +122,15 @@ export interface CreatePoliticalSystemDto {
   upperHouseName?: string | null
   upperHouseSeats?: number | null
 
+  /**
+   * 관직 정의 id. 카탈로그에서 고른 직함은 이 필드로 보낸다 —
+   * 같이 온 자유입력 title은 서버가 비운다(한 칸에 두 진실을 두지 않는다).
+   */
+  headOfStatePositionId?: string | null
   headOfStateTitle?: string | null
   headOfStateHasPower?: boolean | null
+
+  headOfGovernmentPositionId?: string | null
   headOfGovernmentTitle?: string | null
   headOfGovernmentHasPower?: boolean | null
 

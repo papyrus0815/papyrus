@@ -143,3 +143,42 @@ export function comparePoliticalSystems(
   if (rightYear == null) return -1
   return leftYear - rightYear
 }
+
+/**
+ * 지금의 정체 하나를 고른다.
+ *
+ * `isCurrent`가 진실의 원천이다 — 종료 연도가 비어 있는 것과 "아직 지속 중"은 다른
+ * 뜻이라 이 필드를 따로 둔다. 그런 줄이 여럿이면(과거 국가 정체가 브리지로 함께 올 때
+ * 생긴다) 시작이 가장 늦은 줄을 고르고, 하나도 없으면 시작이 가장 늦은 줄로 떨어진다 —
+ * 아무 표시가 없는 나라에서도 요약 한 줄은 나와야 한다.
+ */
+export function resolveCurrentSystem(
+  systems: PoliticalSystem[],
+): PoliticalSystem | null {
+  if (systems.length === 0) return null
+  const sorted = [...systems].sort(comparePoliticalSystems)
+  const current = sorted.filter((system) => system.isCurrent)
+  const pool = current.length > 0 ? current : sorted
+  return pool[pool.length - 1] ?? null
+}
+
+/**
+ * 국가원수·정부수반 직함 — **관직 정의 카탈로그가 정본**이다.
+ *
+ * 화면은 반드시 이 함수를 거친다. 자유입력 칸을 직접 읽으면 카탈로그에서 고른 직함이
+ * 빈칸으로 보인다(백필 이후 실DB 14행 중 13행이 FK 쪽에 있다). 카탈로그에 없는 칭호
+ * ('연합회의 의장'·'임시정부 수반')만 자유입력으로 남는다.
+ */
+export function headOfStateTitleOf(system: PoliticalSystem): string | null {
+  return system.headOfStatePosition?.title ?? system.headOfStateTitle ?? null
+}
+
+export function headOfGovernmentTitleOf(
+  system: PoliticalSystem,
+): string | null {
+  return (
+    system.headOfGovernmentPosition?.title ??
+    system.headOfGovernmentTitle ??
+    null
+  )
+}

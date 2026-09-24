@@ -46,6 +46,10 @@ import {
   recentTitleValue,
   type PositionDefinitionLike,
 } from './group-position-options'
+import {
+  deriveCountryScopedPositionDefinition,
+  ScopedDefinitionError,
+} from '@/shared/lib/government-position/derive-scoped-definition'
 import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
 import {
   APPOINTMENT_METHOD_OPTIONS,
@@ -291,6 +295,59 @@ const ManualEntryField = styled.label`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/** 「명칭 바꾸기」 — 힌트 문장 안에 들어가는 텍스트 버튼 */
+const LocalTitleLink = styled.button`
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const LocalTitleActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const LocalTitleSubmit = styled.button`
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: #6366f1;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const LocalTitleCancel = styled.button`
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
 const CheckboxLabelRow = styled.div`
   display: flex;
   align-items: center;
@@ -388,6 +445,14 @@ export function TenureRegisterPanel({
   const [presetPositionType, setPresetPositionType] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [titleEn, setTitleEn] = useState('')
+  /**
+   * 「외무장관」을 고른 뒤 이 나라에서 부르는 이름(외무대신)으로 바꾸는 입력.
+   * 고른 정의 위에 다른 표기를 덧씌우는 게 아니라, 그 나라 전용 정의를 새로 담는다 —
+   * 덧씌우기는 표시 지면이 정의 이름을 우선하므로 저장돼도 보이지 않는다.
+   */
+  const [localTitleOpen, setLocalTitleOpen] = useState(false)
+  const [localTitleDraft, setLocalTitleDraft] = useState('')
+  const [localTitleSaving, setLocalTitleSaving] = useState(false)
   const [startDate, setStartDate] = useState('')
   /** 취임일 정밀도 'year' — 연도만 앎(월일은 01-01 관행 채움) */
   const [startDateYearOnly, setStartDateYearOnly] = useState(false)
@@ -614,6 +679,9 @@ export function TenureRegisterPanel({
 
   const handlePositionSelect = (value: string) => {
     setPositionModalOpen(false)
+    // 다른 직책을 고르면 열어 둔 '이 나라 명칭' 입력은 원본이 바뀌므로 닫는다
+    setLocalTitleOpen(false)
+    setLocalTitleDraft('')
     const builtin = BUILTIN_POSITIONS.find((b) => b.value === value)
     if (builtin) {
       setPositionDefinitionId(null)
@@ -645,6 +713,47 @@ export function TenureRegisterPanel({
         setTitleEn(def.titleEn ?? '')
         setPresetPositionType(null)
       }
+    }
+  }
+
+  /**
+   * 이 나라에서 부르는 이름으로 담기 — 원본(외무장관)은 그대로 두고 국가 스코프 정의를
+   * 새로 만들어 그것을 고른다. 만들어진 정의는 다음부터 이 나라 피커에 바로 뜬다.
+   */
+  const applyLocalTitle = async () => {
+    if (!selectedDef?.id) return
+    setLocalTitleSaving(true)
+    try {
+      const result = await deriveCountryScopedPositionDefinition({
+        source: {
+          id: selectedDef.id,
+          title: selectedDef.title ?? (selectedDef as { name?: string }).name ?? '',
+          positionType: selectedDef.positionType ?? null,
+        },
+        newTitle: localTitleDraft,
+        countryId: countryId || null,
+        historicalCountryId: historicalCountryId || null,
+        pool: definitionPool,
+      })
+      await queryClient.invalidateQueries({ queryKey: ['position-definitions'] })
+      setPositionDefinitionId(result.id)
+      setTitle(result.title)
+      setPresetPositionType(null)
+      setLocalTitleOpen(false)
+      setLocalTitleDraft('')
+      notify.success(
+        result.reused
+          ? `「${result.title}」 직책을 골랐습니다`
+          : `이 나라 직책 「${result.title}」을(를) 담았습니다`,
+      )
+    } catch (error) {
+      notify.error(
+        error instanceof ScopedDefinitionError
+          ? error.message
+          : '이 나라 명칭으로 담지 못했습니다.',
+      )
+    } finally {
+      setLocalTitleSaving(false)
     }
   }
 
@@ -1057,6 +1166,81 @@ export function TenureRegisterPanel({
                     <FieldHint style={{ marginTop: 6 }}>
                       국가를 먼저 고르면 그 나라의 직책만 추려서 보여줍니다.
                     </FieldHint>
+                  )}
+                  {/*
+                    카탈로그에 외무장관은 있는데 외무대신은 없다 — 고른 정의 위에 표기만
+                    덧씌우면 표시 지면(정의 우선)에 안 나오므로, 원본은 그대로 두고 이 나라
+                    전용 정의를 새로 담는다.
+                  */}
+                  {positionDefinitionId && !localTitleOpen && (
+                    <FieldHint style={{ marginTop: 6 }}>
+                      {countryId || historicalCountryId ? (
+                        <>
+                          이 나라에서 다르게 부르나요? (예: 외무장관 → 외무대신){' '}
+                          <LocalTitleLink
+                            type="button"
+                            onClick={() => {
+                              setLocalTitleDraft(
+                                selectedDef?.title ??
+                                  (selectedDef as { name?: string } | null)?.name ??
+                                  title,
+                              )
+                              setLocalTitleOpen(true)
+                            }}
+                          >
+                            명칭 바꾸기
+                          </LocalTitleLink>
+                        </>
+                      ) : (
+                        '국가를 고르면 그 나라에서 부르는 이름(예: 외무대신)으로 바꿀 수 있습니다.'
+                      )}
+                    </FieldHint>
+                  )}
+                  {positionDefinitionId && localTitleOpen && (
+                    <ManualEntryGroup>
+                      <ManualEntryCaption>이 나라에서 부르는 이름</ManualEntryCaption>
+                      <ManualEntryField>
+                        <Input
+                          autoFocus
+                          value={localTitleDraft}
+                          onChange={(event) =>
+                            setLocalTitleDraft(event.target.value)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              void applyLocalTitle()
+                            }
+                            if (event.key === 'Escape') {
+                              event.preventDefault()
+                              setLocalTitleOpen(false)
+                            }
+                          }}
+                          placeholder="예: 외무대신"
+                        />
+                      </ManualEntryField>
+                      <LocalTitleActions>
+                        <LocalTitleSubmit
+                          type="button"
+                          disabled={localTitleSaving || !localTitleDraft.trim()}
+                          onClick={() => void applyLocalTitle()}
+                        >
+                          {localTitleSaving ? '담는 중…' : '이 나라 직책으로 담기'}
+                        </LocalTitleSubmit>
+                        <LocalTitleCancel
+                          type="button"
+                          disabled={localTitleSaving}
+                          onClick={() => setLocalTitleOpen(false)}
+                        >
+                          취소
+                        </LocalTitleCancel>
+                      </LocalTitleActions>
+                      <FieldHint>
+                        「{selectedDef?.title ?? title}」은 그대로 두고 이 나라 전용 직책을
+                        새로 만듭니다. 다른 나라 재임에는 영향이 없고, 다음부터 이 나라
+                        직책 목록에 바로 나옵니다.
+                      </FieldHint>
+                    </ManualEntryGroup>
                   )}
                   {/* 정의를 고르지 않은 경우(기타·내장 직책·정의 없음)에만 직접 입력 — 선택 트리거에 종속.
                       정의를 고른 상태에서 다른 표기를 적어도 표시 지면(정의 우선)에 반영되지 않으므로

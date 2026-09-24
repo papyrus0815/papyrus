@@ -12,6 +12,7 @@ import {
   formatCountryPeriod,
   getCountryDurationYears,
 } from '@/shared/lib/country-period'
+import { PoliticalSystemTab } from '@/features/government-info/ui/political-system-tab.widget'
 import { pathKeys } from '@/shared/router'
 import { uploadImage } from '@/shared/api/upload'
 import * as DetailStyles from './country-detail.styles'
@@ -332,9 +333,21 @@ export function HistoricalCountryDetail({
                     <HistoricalRegionsSection country={country} />
                   )}
                   {activeTab === 'government' && (
-                    <div style={{ padding: 32, textAlign: 'center', color: isDark ? '#a1a1aa' : '#64748b', fontSize: 14 }}>
-                      행정조직 정보는 현대 국가 상세에서 확인할 수 있습니다.
-                    </div>
+                    /*
+                      예전엔 "행정조직 정보는 현대 국가 상세에서" 한 줄이 전부였다.
+                      정체(政體)만은 과거 국가에 그대로 붙는다 — 스키마도 dual FK고,
+                      조선이 절대군주제·의회 없음이라는 사실을 적을 자리가 여기 말고는
+                      없었다. 관직 정의·행정기구는 여전히 현대 국가 지면 몫이다.
+                    */
+                    <HistoricalGovernmentPane>
+                      <PoliticalSystemTab
+                        historicalCountryId={country.id}
+                        countryName={country.name}
+                      />
+                      <HistoricalGovernmentNote>
+                        관직 정의·행정기구는 현대 국가 상세의 행정조직 탭에서 관리합니다.
+                      </HistoricalGovernmentNote>
+                    </HistoricalGovernmentPane>
                   )}
                   {activeTab === 'elections' && (
                     <div
@@ -2082,3 +2095,20 @@ function InfoCard({
     </div>
   )
 }
+
+/* 역사 국가의 행정조직 탭 = 정체 + 안내 한 줄 */
+const HistoricalGovernmentPane = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 24px 32px;
+  flex: 1;
+  min-height: 0;
+`
+
+const HistoricalGovernmentNote = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`

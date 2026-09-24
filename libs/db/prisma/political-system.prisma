@@ -120,11 +120,23 @@ model PoliticalSystem {
   upperHouseSeats Int?    @map("upper_house_seats")
 
   //--- 국가원수 / 정부수반
-  /// 국가원수 직함 — '대통령', '국왕', '천황', '서기장'
+  ///
+  /// 직함은 **관직 정의 카탈로그**(GovernmentPositionDefinition)를 정본으로 본다 —
+  /// 재임·재위가 이미 그 테이블을 참조하므로, 여기만 자유 문자열로 두면 같은 '대통령'이
+  /// 두 어휘로 갈라진다. FK가 있으면 그 정의의 title이 표시의 진실이고, 아래 텍스트 칸은
+  /// 카탈로그에 없는 칭호('연합회의 의장'·'임시정부 수반')를 위한 자유입력으로 남는다.
+  /// 표시 우선순위: 정의.title → 자유입력 텍스트.
+  headOfStatePositionId String?                       @map("head_of_state_position_id") @db.Char(36)
+  headOfStatePosition   GovernmentPositionDefinition? @relation("PoliticalSystemHeadOfStatePosition", fields: [headOfStatePositionId], references: [id], onDelete: SetNull)
+
+  /// 국가원수 직함 자유입력 — 카탈로그에 없는 칭호일 때만. FK가 있으면 비운다.
   headOfStateTitle String? @map("head_of_state_title") @db.VarChar(100)
   /// 국가원수가 실권을 갖는가 — 입헌군주제의 국왕은 false, 대통령제의 대통령은 true
   headOfStateHasPower Boolean? @map("head_of_state_has_power")
-  /// 정부수반 직함 — '국무총리', '수상', '총리대신'. 대통령제처럼 국가원수와 같으면 비운다
+  headOfGovernmentPositionId String?                       @map("head_of_government_position_id") @db.Char(36)
+  headOfGovernmentPosition   GovernmentPositionDefinition? @relation("PoliticalSystemHeadOfGovernmentPosition", fields: [headOfGovernmentPositionId], references: [id], onDelete: SetNull)
+
+  /// 정부수반 직함 자유입력 — 카탈로그에 없는 칭호일 때만. 대통령제처럼 국가원수와 같으면 비운다
   headOfGovernmentTitle String? @map("head_of_government_title") @db.VarChar(100)
   headOfGovernmentHasPower Boolean? @map("head_of_government_has_power")
 
@@ -145,5 +157,7 @@ model PoliticalSystem {
   @@index([countryId], name: "idx_political_system_countryId")
   @@index([historicalCountryId], name: "idx_political_system_historicalCountryId")
   @@index([startYear], name: "idx_political_system_startYear")
+  @@index([headOfStatePositionId], name: "idx_political_system_headOfStatePositionId")
+  @@index([headOfGovernmentPositionId], name: "idx_political_system_headOfGovernmentPositionId")
   @@map("political_system")
 }
