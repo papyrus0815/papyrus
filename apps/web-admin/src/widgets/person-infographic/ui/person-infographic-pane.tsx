@@ -1,13 +1,13 @@
 /**
  * 인물 목록 페인.
  *
- * 목록(연대 원장) / 카드 / 시대 스토리 / 왕조 / 매트릭스 / 은하계 / 능력치 / 기록 비교 8개 뷰.
+ * 카드 / 시대 스토리 / 왕조 / 매트릭스 / 은하계 / 능력치 / 기록 비교 7개 뷰.
  * 크롬(검색·필터·뷰 전환·결과 요약)은 사건 목록(/events)과 같은 문법으로 짠다.
  * 기록 비교(records)는 필터 스코프와 무관한 별도 데이터(compare API)라
  * InfographicContent 대신 전용 뷰로 분기한다.
  *
  * 국가 상세 → "이 나라 인물 보기" 진입은 ?countries=<id>로 들어와
- * useFilterUrlSync가 scope.country에 적용 → 동일 목록 + 국가 필터로 표시.
+ * useFilterUrlSync가 scope.country에 적용 → 동일 뷰 + 국가 필터로 표시.
  */
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 
@@ -17,7 +17,6 @@ import {
   FiBookOpen,
   FiGrid,
   FiLayout,
-  FiList,
   FiShield,
   FiTrendingUp,
 } from 'react-icons/fi'
@@ -28,7 +27,6 @@ import { usePersonInfographicFilterStore } from '../model/filter.store'
 import { useFilterUrlSync } from '../model/url-sync'
 
 import {
-  ViewHint,
   ViewRow,
   ViewSegment,
   ViewSegmented,
@@ -41,55 +39,41 @@ const VIEW_OPTIONS: Array<{
   key: PersonInfographicView
   label: string
   icon: ReactNode
-  hint: string
 }> = [
-  {
-    key: 'list',
-    label: '목록',
-    icon: <FiList size={13} />,
-    hint: '전체 인물을 출생 세기별로 훑기 — 레일을 따라 시대순 연대 원장',
-  },
   {
     key: 'cards',
     label: '카드',
     icon: <FiGrid size={13} />,
-    hint: '정렬 기준(영향력·이름·출생·사망)으로 전체 인물을 한 그리드에',
   },
   {
     key: 'story',
     label: '시대 스토리',
     icon: <FiBookOpen size={13} />,
-    hint: '출생 세기별 카드 묶음 — 시대마다 누가 있었는지',
   },
   {
     key: 'dynasty',
     label: '왕조',
     icon: <FiShield size={13} />,
-    hint: '왕조·가문 단위로 묶어 보기',
   },
   {
     key: 'matrix',
     label: '매트릭스',
     icon: <FiLayout size={13} />,
-    hint: '시대 × 국가 분포 매트릭스',
   },
   {
     key: 'galaxy',
     label: '은하계',
     icon: <FiAperture size={13} />,
-    hint: '시간축 위 인물 분포 — 점 크기는 영향력',
   },
   {
     key: 'stats',
     label: '능력치',
     icon: <FiActivity size={13} />,
-    hint: '능력치 분포·비교',
   },
   {
     key: 'records',
     label: '기록 비교',
     icon: <FiTrendingUp size={13} />,
-    hint: '인물을 골라 재임·기록을 나란히 비교',
   },
 ]
 
@@ -149,26 +133,18 @@ export function PersonInfographicPane({
     </ViewSegmented>
   )
 
-  const hint = (
-    <ViewHint>
-      {VIEW_OPTIONS.find((option) => option.key === activeView)?.hint}
-    </ViewHint>
-  )
-
   return (
     <PaneWrap>
       <VisuallyHiddenTitle>인물</VisuallyHiddenTitle>
       {activeView === 'records' ? (
         <>
           <ViewRow>{viewSwitcher}</ViewRow>
-          {hint}
           <RecordsCompareView onPersonClick={onPersonClick} />
         </>
       ) : (
         <InfographicContent
           onPersonClick={onPersonClick}
           viewSwitcher={viewSwitcher}
-          viewHint={hint}
         />
       )}
     </PaneWrap>

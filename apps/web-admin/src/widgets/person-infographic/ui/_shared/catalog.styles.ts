@@ -539,10 +539,3 @@ export const MetaDot = styled.span<{ $color: string }>`
   background: ${({ $color }) => $color};
   transform: translateY(-1px);
 `
-
-export const ViewHint = styled.p`
-  margin: 10px 0 0;
-  padding: 0 2px;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`

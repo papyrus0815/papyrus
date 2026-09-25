@@ -8,13 +8,10 @@
  */
 import { useState } from 'react'
 
-import styled from 'styled-components'
-
-import { glassOrSolidMixin } from '@/shared/styles/mixins'
-
 import { INFOGRAPHIC_DEFAULTS } from '../../model/constants'
 import type { AdaptedPerson } from '../../model/types'
 
+import { GroupSection, MoreBtn } from './group-section'
 import { EraCardGrid, PersonCardItem } from './person-card'
 
 interface Props {
@@ -25,6 +22,7 @@ interface Props {
   onOpen: (id: string) => void
 }
 
+/** GroupPanel 안에서 첫 그룹으로 렌더된다(호박색 도트). */
 export function PinnedPeopleSection({
   people,
   query,
@@ -32,6 +30,7 @@ export function PinnedPeopleSection({
   onOpen,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   if (people.length === 0) return null
 
   const shown = expanded
@@ -40,18 +39,20 @@ export function PinnedPeopleSection({
   const hasMore = people.length > INFOGRAPHIC_DEFAULTS.GROUP_TOP_N
 
   return (
-    <Block>
-      <BlockHdr>
-        <BlockTitle>★ 고정</BlockTitle>
-        <BlockCount>{people.length}명</BlockCount>
-      </BlockHdr>
+    <GroupSection
+      id="pinned"
+      label="고정"
+      count={people.length}
+      tone="pinned"
+      collapsed={collapsed}
+      onToggle={() => setCollapsed((prev) => !prev)}
+    >
       <EraCardGrid>
         {shown.map((person) => (
           <PersonCardItem
             key={person.id}
-            p={person}
-            era={person.era}
-            q={query}
+            person={person}
+            query={query}
             pinned
             onTogglePin={onTogglePin}
             onOpen={onOpen}
@@ -59,57 +60,12 @@ export function PinnedPeopleSection({
         ))}
       </EraCardGrid>
       {hasMore && (
-        <MoreBtn onClick={() => setExpanded((prev) => !prev)}>
+        <MoreBtn type="button" onClick={() => setExpanded((prev) => !prev)}>
           {expanded
             ? '접기'
-            : `+ ${people.length - INFOGRAPHIC_DEFAULTS.GROUP_TOP_N}명 더보기`}
+            : `+ ${people.length - INFOGRAPHIC_DEFAULTS.GROUP_TOP_N}명 더 보기`}
         </MoreBtn>
       )}
-    </Block>
+    </GroupSection>
   )
 }
-
-const Block = styled.div`
-  border-radius: 12px;
-  padding: 16px 18px;
-  ${({ theme }) => glassOrSolidMixin(theme)}
-`
-
-const BlockHdr = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 12px;
-`
-
-const BlockTitle = styled.span`
-  font-size: 18px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.active};
-`
-
-const BlockCount = styled.span`
-  margin-left: auto;
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const MoreBtn = styled.button`
-  margin: 12px auto 0;
-  display: block;
-  padding: 6px 16px;
-  border-radius: 16px;
-  border: none;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  transition: background 0.12s, color 0.12s;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f3f4f6'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
