@@ -14,6 +14,18 @@ export interface PersonSovereignReignSummaryDto {
   startDatePrecision: string | null
   /** 재위 종료일 — 현직·미상이면 null */
   endDate: string | null
+  /** 구조화 즉위일 — BC·고대·연단위 재위의 유일 진실(startDate가 NULL일 수 있음). year=크기값, era=BC/AD */
+  startEra: Era | null
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  /** 퇴위일 정밀도 — 'year'/'month'/NULL(일 단위) */
+  endDatePrecision: string | null
+  /** 구조화 퇴위일 — 시작측 대칭 */
+  endEra: Era | null
+  endYear: number | null
+  endMonth: number | null
+  endDay: number | null
   /** 즉위·대관식 사건(Event 정본) 링크 */
   accessionEventId: string | null
   accessionEvent: { id: string; title: string | null; deletedAt: string | null } | null

@@ -52,6 +52,19 @@ const baseProps = {
 }
 
 describe('EventListItem', () => {
+  it('군주 재위 표시 — 라벨이 있으면 배지와 낭독 문구를, 없으면 아무것도 싣지 않는다', () => {
+    const { container, rerender } = renderWithTheme(
+      <EventListItem {...baseProps} reignLabel="조선 세종 재위 중 (1418–1450)" />,
+    )
+    expect(container.querySelector('[data-reign="true"]')).not.toBeNull()
+    expect(screen.getByText('조선 세종 재위 중 (1418–1450)')).toBeInTheDocument()
+    expect(screen.getByText('재위')).toBeInTheDocument()
+
+    rerender(<EventListItem {...baseProps} />)
+    expect(container.querySelector('[data-reign]')).toBeNull()
+    expect(screen.queryByText('재위')).toBeNull()
+  })
+
   it('로빙 tabindex는 행 안 액션 버튼까지 전부 적용된다', () => {
     // 행만 -1이고 안쪽 버튼이 0으로 남으면, 252행 × 액션 2개가 그대로 탭 정지점이 돼
     // 목록을 빠져나가는 데 수백 번 Tab을 눌러야 한다(3차 검토에서 238→2로 고친 계약).
