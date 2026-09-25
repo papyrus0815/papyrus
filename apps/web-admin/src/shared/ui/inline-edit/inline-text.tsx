@@ -45,6 +45,11 @@ interface InlineTextProps {
    * value를 그대로 편집한다. 빈 값엔 적용 안 함.
    */
   formatRead?: (value: string) => string
+  /**
+   * 읽기 모드 마크업 렌더러 — formatRead와 같되 ReactNode를 돌려준다(예: `*강조*` → 굵게).
+   * 편집 진입 시엔 raw value 그대로. 빈 값엔 적용 안 함. 둘 다 주면 renderRead 우선.
+   */
+  renderRead?: (value: string) => ReactNode
   /** 숫자 정렬용 tabular-nums(주가·목표가 등 수치 필드). */
   numeric?: boolean
   /** 입력 최대 글자 수 — input/textarea maxLength로 하드 제한(초과 입력 차단). */
@@ -82,6 +87,7 @@ export function InlineText({
   prefix,
   validate,
   formatRead,
+  renderRead,
   numeric,
   maxLength,
   showCount,
@@ -225,7 +231,13 @@ export function InlineText({
         data-empty={isEmpty || undefined}
       >
         {prefix}
-        {isEmpty ? placeholder : formatRead ? formatRead(value) : value}
+        {isEmpty
+          ? placeholder
+          : renderRead
+            ? renderRead(value)
+            : formatRead
+              ? formatRead(value)
+              : value}
       </ReadValue>
       <S.InlineEditButton
         type="button"

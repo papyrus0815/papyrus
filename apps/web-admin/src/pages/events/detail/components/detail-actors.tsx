@@ -1,11 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiArrowDown, FiArrowUp, FiSettings, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
-import { ledgerAccent,
+import {
+  ledgerAccent,
+  ledgerHairlineStrong,
   RADIUS,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 
@@ -54,6 +63,10 @@ interface DetailActorsProps {
  *   현대/역사를 한 목록으로 합쳐 sortOrder 순으로 세운다 — 순서가 두 배열에 걸쳐
  *   하나이기 때문.
  * - 액션(×, 편집)은 hover 시에만 노출.
+ * - 인물·국가는 같은 모양의 무리 머리글(이름 · 수 · + 추가)로 연다 — 예전엔 국가에만
+ *   머리글이 있고 '+ 인물 추가'가 두 목록 사이에 떠 있었다.
+ * - 비고·서술은 절반이 150자를 넘어(인물 비고 83/160) 15명짜리 사건에서 섹션이
+ *   4,000px을 넘었다. 3줄에서 접고 '더 보기'로 펼친다. 시드가 쓰는 `*강조*`는 굵게 렌더.
  */
 export function DetailActors({
   event,
@@ -173,6 +186,7 @@ export function DetailActors({
       ...modernCountries.map((country, index) => ({
         id: country.id,
         name: country.name,
+        flagEmoji: country.flagEmoji ?? null,
         isHistorical: false,
         role: country.role ?? null,
         roleDescription: country.roleDescription ?? null,
@@ -182,6 +196,7 @@ export function DetailActors({
       ...historicalCountries.map((country, index) => ({
         id: country.id,
         name: country.name,
+        flagEmoji: null,
         isHistorical: true,
         role: country.role ?? null,
         roleDescription: country.roleDescription ?? null,
@@ -236,6 +251,7 @@ export function DetailActors({
       {
         id: country.id,
         name: '',
+        flagEmoji: null,
         isHistorical: country.isHistorical,
         role: null,
         roleDescription: null,
@@ -268,16 +284,11 @@ export function DetailActors({
       <S.Section id="actors">
         <S.SectionHeader>
           <S.SectionTitle>참여 행위자</S.SectionTitle>
-          {hasAnything && (
-            <S.SectionSubtitle>
-              {totals(persons.length, totalCountries)}
-            </S.SectionSubtitle>
-          )}
           {canManage && (
             <S.SectionActions>
               <ManageToggle
                 type="button"
-                onClick={() => setManageMode((v) => !v)}
+                onClick={() => setManageMode((previous) => !previous)}
                 $active={manageMode}
                 aria-pressed={manageMode}
               >
@@ -294,7 +305,7 @@ export function DetailActors({
             <S.EmptyStateHead>
               <S.EmptyStateIcon aria-hidden>👥</S.EmptyStateIcon>
               <S.EmptyStateLine>
-                아직 등록된 인물·국가가 없습니다. 아래 <strong>인물 추가</strong>·
+                아직 등록된 인물·국가가 없습니다. <strong>인물 추가</strong>·
                 <strong>국가 추가</strong>로 시작하세요.
               </S.EmptyStateLine>
             </S.EmptyStateHead>
@@ -302,6 +313,15 @@ export function DetailActors({
         )}
 
         {/* 인물 — 세로 리스트, hairline 구분선 */}
+        <GroupHead>
+          <GroupLabel>
+            인물
+            {persons.length > 0 && <GroupCount>{persons.length}</GroupCount>}
+          </GroupLabel>
+          <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
+            인물 추가
+          </AddBtn>
+        </GroupHead>
         {persons.length > 0 && (
           <PersonList>
             {persons.map((person, idx) => {
@@ -364,16 +384,20 @@ export function DetailActors({
                       />
                     </PersonRoleLine>
                     <PersonNoteLine $hasContent={hasNote}>
-                      <InlineText
-                        value={person.note ?? ''}
-                        onSave={(next) =>
-                          updatePerson(person.personId, { note: next })
-                        }
-                        placeholder="비고 추가"
-                        multiline
-                        /* 여러 줄 비고 — Enter는 줄바꿈, 저장은 blur로. */
-                        multilineEnter
-                      />
+                      <ClampedProse measureKey={person.note ?? ''}>
+                        <InlineText
+                          value={person.note ?? ''}
+                          onSave={(next) =>
+                            updatePerson(person.personId, { note: next })
+                          }
+                          placeholder="비고 추가"
+                          label={`${fullName} 비고`}
+                          multiline
+                          /* 여러 줄 비고 — Enter는 줄바꿈, 저장은 blur로. */
+                          multilineEnter
+                          renderRead={renderEmphasis}
+                        />
+                      </ClampedProse>
                     </PersonNoteLine>
                   </PersonBody>
 
@@ -411,14 +435,19 @@ export function DetailActors({
             })}
           </PersonList>
         )}
-        <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
-          인물 추가
-        </AddBtn>
 
         {/* 참여국 — 인물 행과 같은 편집 수준(역할·서술·비고) */}
-        {countryRows.length > 0 && (
-          <NationsBlock>
-            <NationsEyebrow>참여국</NationsEyebrow>
+        <NationsBlock>
+          <GroupHead>
+            <GroupLabel>
+              국가
+              {totalCountries > 0 && <GroupCount>{totalCountries}</GroupCount>}
+            </GroupLabel>
+            <AddBtn type="button" onClick={() => setCountryModalOpen(true)}>
+              국가 추가
+            </AddBtn>
+          </GroupHead>
+          {countryRows.length > 0 && (
             <CountryList>
               {countryRows.map((row, index) => {
                 const rowKey = countryRowKey(row)
@@ -439,6 +468,9 @@ export function DetailActors({
                             onCountryClick(row.id)
                           }}
                         >
+                          {row.flagEmoji && (
+                            <CountryFlag aria-hidden>{row.flagEmoji}</CountryFlag>
+                          )}
                           {row.name}
                         </NameLink>
                         <CountryRolePicker>
@@ -462,15 +494,19 @@ export function DetailActors({
                         </CountryRolePicker>
                       </CountryNameLine>
                       <CountryRoleLine>
-                        <InlineText
-                          value={row.roleDescription ?? ''}
-                          onSave={(next) =>
-                            updateCountry(rowKey, { roleDescription: next })
-                          }
-                          placeholder="이 나라가 한 일 추가"
-                          multiline
-                          multilineEnter
-                        />
+                        <ClampedProse measureKey={row.roleDescription ?? ''}>
+                          <InlineText
+                            value={row.roleDescription ?? ''}
+                            onSave={(next) =>
+                              updateCountry(rowKey, { roleDescription: next })
+                            }
+                            placeholder="이 나라가 한 일 추가"
+                            label={`${row.name}이(가) 한 일`}
+                            multiline
+                            multilineEnter
+                            renderRead={renderEmphasis}
+                          />
+                        </ClampedProse>
                       </CountryRoleLine>
                       <CountryNoteLine $hasContent={hasNote}>
                         <InlineText
@@ -479,6 +515,7 @@ export function DetailActors({
                           placeholder="비고 추가"
                           multiline
                           multilineEnter
+                          renderRead={renderEmphasis}
                         />
                       </CountryNoteLine>
                     </CountryBody>
@@ -516,11 +553,8 @@ export function DetailActors({
                 )
               })}
             </CountryList>
-          </NationsBlock>
-        )}
-        <AddBtn type="button" onClick={() => setCountryModalOpen(true)}>
-          국가 추가
-        </AddBtn>
+          )}
+        </NationsBlock>
       </S.Section>
 
       {personModalOpen && (
@@ -551,11 +585,83 @@ export function DetailActors({
 
 /* ───────────────────────── helpers ───────────────────────── */
 
-function totals(persons: number, countries: number): string {
-  const parts: string[] = []
-  if (persons > 0) parts.push(`${persons}명`)
-  if (countries > 0) parts.push(`${countries}국`)
-  return parts.join(' · ')
+/**
+ * 시드·편집자가 비고에 쓰는 `*강조*`(한 겹 별표) → 굵게. 실측 인물 비고 49/160,
+ * 국가 서술 28/307행이 쓴다. 한글 이탤릭은 기울기만 흉내 내 읽기 어려워 굵기로 옮긴다.
+ * 줄을 넘는 별표·짝 없는 별표는 그대로 둔다(편집 진입 시엔 원문 그대로).
+ */
+const EMPHASIS_PATTERN = /\*([^*\n]+)\*/g
+
+function renderEmphasis(text: string): ReactNode {
+  const parts: ReactNode[] = []
+  let cursor = 0
+  for (const match of text.matchAll(EMPHASIS_PATTERN)) {
+    const start = match.index ?? 0
+    if (start > cursor) parts.push(text.slice(cursor, start))
+    parts.push(<strong key={start}>{match[1]}</strong>)
+    cursor = start + match[0].length
+  }
+  if (parts.length === 0) return text
+  if (cursor < text.length) parts.push(text.slice(cursor))
+  return parts
+}
+
+const CLAMP_LINES = 3
+
+/**
+ * 긴 산문을 3줄에서 접는다. 넘칠 때만 '더 보기'를 단다(짧은 글엔 흔적 없음).
+ * 편집 중(focus-within)엔 CSS가 접힘을 풀어 textarea가 잘리지 않게 한다.
+ */
+function ClampedProse({
+  children,
+  measureKey,
+}: {
+  children: ReactNode
+  /** 값이 바뀌면 넘침을 다시 잰다 — 접힌 상자는 크기가 그대로라 관찰자가 못 잡는다. */
+  measureKey: string
+}) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [overflowing, setOverflowing] = useState(false)
+
+  useLayoutEffect(() => {
+    const box = boxRef.current
+    if (!box || expanded) return
+    /*
+     * 반 줄 미만 넘침은 넘침이 아니다 — 인라인 키트의 inline-flex 호스트가 1~2px를
+     * 더 먹어, 딱 3줄인 글에도 '더 보기'가 붙고 마지막 줄이 흐려졌다(실측 +1.5px).
+     */
+    const measure = () => {
+      const lineHeight = parseFloat(getComputedStyle(box).lineHeight) || 20
+      setOverflowing(box.scrollHeight - box.clientHeight > lineHeight / 2)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [expanded, measureKey])
+
+  const collapsed = !expanded
+  return (
+    <>
+      <ProseClamp
+        ref={boxRef}
+        $collapsed={collapsed}
+        $faded={collapsed && overflowing}
+      >
+        {children}
+      </ProseClamp>
+      {(overflowing || expanded) && (
+        <MoreToggle
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? '접기' : '더 보기'}
+        </MoreToggle>
+      )}
+    </>
+  )
 }
 
 /**
@@ -707,10 +813,10 @@ const PersonList = styled.ol`
 
 const PersonRow = styled.li`
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
   align-items: start;
-  gap: 16px;
-  padding: 18px 12px;
+  gap: 14px;
+  padding: 14px 12px;
   margin: 0 -12px;
   border-radius: ${RADIUS.MD};
   border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
@@ -725,15 +831,10 @@ const PersonRow = styled.li`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
   }
 
-  @media (max-width: 540px) {
-    grid-template-columns: 52px minmax(0, 1fr) auto;
-    gap: 12px;
-    padding: 14px 12px;
-  }
-
   @media (max-width: 400px) {
-    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
     gap: 10px;
+    padding: 12px;
   }
 `
 
@@ -754,8 +855,8 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: 48px;
+  height: 48px;
   overflow: hidden;
   border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
   background: ${({ theme, $hasImage }) =>
@@ -764,9 +865,9 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
       : theme.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.06)'
       : 'rgba(15, 23, 42, 0.05)'};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 24px;
-  font-weight: 700;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  font-size: 18px;
+  font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1;
   /* 정사각 — editorial photo */
@@ -785,25 +886,18 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
     filter: grayscale(0) contrast(1);
   }
 
-  @media (max-width: 540px) {
-    width: 52px;
-    height: 52px;
-    font-size: 21px;
-  }
-
   @media (max-width: 400px) {
-    width: 44px;
-    height: 44px;
-    font-size: 18px;
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
   }
 `
 
 const PersonBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
-  padding-top: 2px;
 `
 
 const PersonNameBtn = styled.button`
@@ -813,7 +907,7 @@ const PersonNameBtn = styled.button`
   background: transparent;
   cursor: pointer;
   font-family: inherit;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.012em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -829,9 +923,9 @@ const PersonNameBtn = styled.button`
   }
 `
 
+/* 한글 이탤릭은 기울기만 흉내 내 흐려 보인다 — 역할은 곧은 보조 잉크로 */
 const PersonRoleLine = styled.div`
-  font-style: italic;
-  font-size: 14px;
+  font-size: 13.5px;
   line-height: 1.5;
   letter-spacing: -0.005em;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
@@ -849,6 +943,8 @@ const PersonNoteLine = styled.div<{ $hasContent: boolean }>`
   letter-spacing: -0.005em;
   color: ${({ theme }) => theme.colors.text.primary};
   margin-top: 4px;
+  display: flex;
+  flex-direction: column;
 
   /**
    * 빈 상태도 항상 placeholder가 보이도록 유지(과거엔 opacity 0 → hover 시 0.7로
@@ -916,21 +1012,109 @@ const RemoveInline = styled.button`
 /* ─── Nations paragraph ─── */
 
 const NationsBlock = styled.div`
-  margin-top: 22px;
+  margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid ${({ theme }) => editorialRuleColor(theme.mode)};
   display: flex;
   flex-direction: column;
-  gap: 8px;
 `
 
-/* 한글 eyebrow — 0.18em은 라틴 스몰캡스용이라 11px 한글이 낱자로 흩어졌다.
-   uppercase도 한글엔 무효. 목록의 라벨 트래킹(0.04em)으로 맞춘다. */
-const NationsEyebrow = styled.div`
-  font-size: 11.5px;
-  font-weight: 600;
+/**
+ * 무리 머리글 — 인물·국가가 같은 모양으로 연다(라벨 · 수 ······ + 추가).
+ * 한글 라벨이라 라틴 스몰캡스 트래킹(0.18em)을 쓰지 않는다 — 낱자로 흩어진다.
+ */
+const GroupHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+`
+
+const GroupLabel = styled.h3`
+  margin: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const GroupCount = styled.span`
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
+`
+
+/**
+ * 3줄 접힘. 높이는 줄 수 × 1lh(부모 line-height) — 인물 1.62·국가 1.6 어느 쪽이든 맞는다.
+ * 편집 중엔 풀어서 textarea가 잘리지 않게 한다.
+ */
+const ProseClamp = styled.div<{ $collapsed: boolean; $faded: boolean }>`
+  ${({ $collapsed }) =>
+    $collapsed &&
+    css`
+      /* +4px — 호스트가 더 먹는 1~2px에 셋째 줄 받침이 잘리지 않게 */
+      max-height: calc(${CLAMP_LINES} * 1lh + 4px);
+      overflow: hidden;
+    `}
+  ${({ $faded }) =>
+    $faded &&
+    css`
+      mask-image: linear-gradient(to bottom, #000 calc(100% - 1lh), transparent);
+    `}
+
+  &:focus-within {
+    max-height: none;
+    mask-image: none;
+  }
+
+  /* 산문 속 강조는 굵기로 — 잉크는 본문과 같게 */
+  strong {
+    font-weight: 650;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  /*
+   * 인라인 키트의 점선 밑줄은 한 줄짜리 값의 편집 신호다. 3줄 산문 전체에 깔리면
+   * 글보다 선이 먼저 읽힌다 — 산문은 행에 들어왔을 때만 밑줄을 띄운다(✎는 그대로).
+   */
+  [data-edit-host] > span:first-child:not([data-empty='true']) {
+    text-decoration-color: transparent;
+  }
+
+  li:hover & [data-edit-host] > span:first-child:not([data-empty='true']),
+  li:focus-within & [data-edit-host] > span:first-child:not([data-empty='true']) {
+    text-decoration-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+const MoreToggle = styled.button`
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-style: normal;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: ${RADIUS.FOCUS};
+  }
 `
 
 /**
@@ -1048,6 +1232,8 @@ const CountryNameLine = styled.div`
 
 
 const CountryRoleLine = styled.div`
+  display: flex;
+  flex-direction: column;
   font-size: 14px;
   line-height: 1.6;
   letter-spacing: -0.005em;
@@ -1060,6 +1246,11 @@ const CountryRoleLine = styled.div`
 `
 
 
+
+const CountryFlag = styled.span`
+  margin-right: 6px;
+  font-style: normal;
+`
 
 const CountryLink = styled(Link)`
   color: inherit;
@@ -1091,8 +1282,7 @@ const HistoricalCountryName = styled(CountryLink)`
 /* ─── Add buttons (editorial) ─── */
 
 const AddBtn = styled.button`
-  align-self: flex-start;
-  margin-top: 14px;
+  flex-shrink: 0;
   padding: 0;
   border: none;
   background: transparent;
