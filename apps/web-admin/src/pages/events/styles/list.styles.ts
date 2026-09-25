@@ -1054,6 +1054,8 @@ export const GapMarker = styled.div`
  * 읽기 위계는 그대로 세 단 — 이름(본문색·굵게) > 기간(보조색) > '즉위'·공백 문구(메타색).
  */
 export const ReignMarker = styled.div<{
+  /** 즉위만 있는 해 — 연 머리글과 말풍선을 한 줄로 합친 행 */
+  $asYear?: boolean
   $beforeCentury?: boolean
   /** 공백 표지와 합친 줄 — 공백 표지의 점선 rule을 이어받는다 */
   $withGap?: boolean
@@ -1071,6 +1073,12 @@ export const ReignMarker = styled.div<{
   /* 세기 머리글 바로 앞이면 그 세기에 붙어 읽히지 않게 띄운다 — 표지는 앞 시대의 끝이다 */
   margin-bottom: ${({ $beforeCentury, $withGap }) =>
     $beforeCentury ? '14px' : $withGap ? '4px' : '0'};
+  /* 연 머리글 자리를 대신하므로 머리글과 같은 위 여백을 받는다 */
+  ${({ $asYear }) =>
+    $asYear &&
+    css`
+      margin-top: var(--year-mt);
+    `}
   font-size: calc(var(--row-meta, 12px) + 0.5px);
   line-height: 1.55;
   letter-spacing: 0;
@@ -1122,6 +1130,25 @@ export const ReignMarkerIcon = styled.span`
   }
 `
 
+/**
+ * 즉위만 있는 해의 연 라벨 — 연 머리글(YearDivider > span)과 같은 옷.
+ *
+ * 사건 없는 즉위 연도는 예전에 '● 1587년' 머리글 한 줄 + '👑 말풍선' 한 줄, 축 표지 둘로
+ * 약 80px을 썼다. 머리글은 말풍선이 이미 말하는 연도 말고는 담은 것이 없고, 펼칠 행도
+ * 없어 셰브론은 아무 일도 하지 않았다. 한 줄로 합치고 셰브론 폭만큼 들여 다른 연 라벨과
+ * 같은 x에 세운다.
+ */
+export const ReignYearLabel = styled.span`
+  /* 셰브론(13px) + 라벨 gap(6px) — 다른 연 라벨의 글자 시작점과 맞춘다 */
+  margin-left: 19px;
+  font-size: var(--year-label, 13px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
 /** 합친 줄의 공백 문구 — 말풍선 **뒤**에 온다(말풍선이 왕관에 붙어 있어야 해서) */
 export const ReignMarkerGap = styled.span`
   display: inline-flex;
@@ -1147,7 +1174,7 @@ export const ReignMarkerGap = styled.span`
  * 꼬리는 45° 돌린 정사각형의 왼쪽·아래 테두리다. 면이 상자 테두리를 덮어야 이음매가
  * 안 보이므로 **면은 불투명**이어야 한다(반투명 tint면 꼬리와 상자가 겹친 곳만 진해진다).
  */
-export const ReignMarkerList = styled.span`
+export const ReignMarkerList = styled.span<{ $afterLabel?: boolean }>`
   --bubble-bg: ${({ theme }) => (theme.mode === 'dark' ? '#1e1912' : '#fff8ee')};
   --bubble-line: ${({ theme }) =>
     theme.mode === 'dark' ? '#4a3a22' : '#efd6b4'};
@@ -1158,8 +1185,9 @@ export const ReignMarkerList = styled.span`
   column-gap: 0;
   row-gap: 2px;
   max-width: 100%;
-  /* 글자 좌단은 행 패딩(= 셰브론 x)에 두고 상자만 왼쪽으로 내민다 */
-  margin-left: -11px;
+  /* 글자 좌단은 행 패딩(= 셰브론 x)에 두고 상자만 왼쪽으로 내민다.
+     연 라벨 뒤에 올 때는 내밀면 라벨을 덮는다 — 꼬리가 라벨을 가리키게 제자리에 둔다. */
+  margin-left: ${({ $afterLabel }) => ($afterLabel ? '0' : '-11px')};
   padding: 3px 11px 4px;
   border: 1px solid var(--bubble-line);
   border-radius: 10px;
@@ -1189,6 +1217,12 @@ export const ReignMarkerList = styled.span`
   @media (max-width: 640px) {
     margin-left: 0;
   }
+`
+
+/** 동군연합 등으로 묶인 항목의 나라 꼬리표들 */
+export const ReignMarkerCountries = styled.span`
+  display: inline-flex;
+  gap: 3px;
 `
 
 export const ReignMarkerItem = styled.span`

@@ -5,6 +5,7 @@ import {
   interleaveReignMarkers,
   planReignMarkers,
   reignAccessionYears,
+  groupReignEntries,
   toReignMarkers,
 } from './reign-markers'
 
@@ -134,6 +135,11 @@ describe('toReignMarkers', () => {
     expect(qin.startYear).toBe(-221)
     expect(qin.endYear).toBe(-210)
     expect(formatReignSpan(qin)).toBe('BC 221–BC 210')
+  })
+
+  it('같은 해에 끝난 재위는 연도 하나로 쓴다', () => {
+    expect(formatReignSpan(marker('friedrich', 1888, 1888))).toBe('1888')
+    expect(formatReignSpan(marker('current', 1952, null))).toBe('1952–')
   })
 
   it('즉위일을 모르거나 목록 국가가 없으면 비운다', () => {
@@ -289,5 +295,30 @@ describe('reignAccessionYears', () => {
       { min: 1433, max: 1597 },
     )
     expect(years).toEqual([1418, 1455])
+  })
+})
+
+describe('groupReignEntries', () => {
+  it('같은 이름·기간의 여러 나라 재위를 한 항목으로 묶고 나라만 모은다', () => {
+    const germany = {
+      ...marker('wilhelm-de', 1888, 1918),
+      name: 'Wilhelm',
+      countryName: '독일 제국',
+    }
+    const prussia = {
+      ...marker('wilhelm-pr', 1888, 1918),
+      name: 'Wilhelm',
+      countryName: '프로이센 왕국',
+    }
+    const other = {
+      ...marker('friedrich', 1888, 1888),
+      name: 'Friedrich',
+      countryName: '독일 제국',
+    }
+    const entries = groupReignEntries([germany, prussia, other])
+    expect(entries).toHaveLength(2)
+    expect(entries[0].marker.id).toBe('wilhelm-de')
+    expect(entries[0].countryNames).toEqual(['독일 제국', '프로이센 왕국'])
+    expect(entries[1].countryNames).toEqual(['독일 제국'])
   })
 })

@@ -196,10 +196,48 @@ export function toReignMarkers(
 const formatSignedYear = (year: number) =>
   year < 0 ? `BC ${-year}` : String(year)
 
-/** '1418–1450' / 'BC 221–BC 210' / '1952–' (현직·미상) */
+/** '1418–1450' / 'BC 221–BC 210' / '1952–' (현직·미상) / '1888' (같은 해 즉위·퇴위) */
 export function formatReignSpan(marker: ReignMarker): string {
+  // '1888–1888'은 같은 숫자를 두 번 읽힌다 — 한 해 안에 끝난 재위는 연도 하나로 쓴다.
+  if (marker.endYear === marker.startYear) return formatSignedYear(marker.startYear)
   const end = marker.endYear == null ? '' : formatSignedYear(marker.endYear)
   return `${formatSignedYear(marker.startYear)}–${end}`
+}
+
+/** 말풍선 한 항목 — 같은 군주·같은 기간이 여러 나라 재위로 들어온 것을 하나로 묶는다 */
+export interface ReignMarkerEntry {
+  /** 대표 재위(첫 번째) — key·인물 모달 */
+  marker: ReignMarker
+  /** 묶인 재위들의 나라 이름(중복 제거, 등장 순) */
+  countryNames: string[]
+}
+
+/**
+ * 같은 이름·같은 기간 재위를 한 항목으로 묶는다.
+ *
+ * 동군연합(독일 황제 = 프로이센 왕)은 나라마다 재위 행이 따로라, 그대로 찍으면 한 말풍선에
+ * '독일 제국 Wilhelm 즉위 1888–1918 · 프로이센 왕국 Wilhelm 즉위 1888–1918'처럼 같은
+ * 즉위가 두 번 읽힌다. 나라 꼬리표만 늘리고 이름·기간은 한 번 쓴다.
+ */
+export function groupReignEntries(markers: ReignMarker[]): ReignMarkerEntry[] {
+  const entries: ReignMarkerEntry[] = []
+  const byKey = new Map<string, ReignMarkerEntry>()
+  for (const marker of markers) {
+    const key = `${marker.name}|${formatReignSpan(marker)}`
+    const existing = byKey.get(key)
+    if (existing) {
+      if (marker.countryName && !existing.countryNames.includes(marker.countryName))
+        existing.countryNames.push(marker.countryName)
+      continue
+    }
+    const entry = {
+      marker,
+      countryNames: marker.countryName ? [marker.countryName] : [],
+    }
+    byKey.set(key, entry)
+    entries.push(entry)
+  }
+  return entries
 }
 
 /**

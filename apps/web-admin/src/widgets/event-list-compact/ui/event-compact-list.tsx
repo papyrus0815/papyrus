@@ -46,6 +46,7 @@ import {
   type ReignMarker,
   eventStartKey,
   formatReignSpan,
+  groupReignEntries,
   interleaveReignMarkers,
   planReignMarkers,
 } from '../lib/reign-markers'
@@ -501,11 +502,17 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   const renderReignMarkers = (
     markers: ReignMarker[],
     inList: boolean,
-    options: { beforeCentury?: boolean; gapLabel?: string | null } = {},
+    options: {
+      beforeCentury?: boolean
+      gapLabel?: string | null
+      /** 즉위만 있는 해 — 연 라벨을 말풍선 앞에 세워 연 머리글을 대신한다 */
+      yearLabel?: string
+    } = {},
   ) => (
     <List.ReignMarker
       key={`reign-${markers[0].id}`}
       role={inList ? 'listitem' : 'note'}
+      $asYear={!!options.yearLabel}
       $beforeCentury={options.beforeCentury}
       $withGap={!!options.gapLabel}
       data-reign-marker=""
@@ -513,17 +520,27 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       <List.ReignMarkerIcon aria-hidden="true">
         <FaCrown />
       </List.ReignMarkerIcon>
-      <List.ReignMarkerList>
-        {markers.map((marker) => {
-          const foreign =
-            marker.countryName && marker.countryName !== reignHomeCountry
-              ? marker.countryName
-              : null
+      {options.yearLabel && (
+        <List.ReignYearLabel aria-hidden="true">
+          {options.yearLabel}
+        </List.ReignYearLabel>
+      )}
+      <List.ReignMarkerList $afterLabel={!!options.yearLabel}>
+        {groupReignEntries(markers).map(({ marker, countryNames }) => {
+          const foreign = countryNames.filter(
+            (name) => name !== reignHomeCountry,
+          )
           const span = formatReignSpan(marker)
           return (
             <List.ReignMarkerItem key={marker.id}>
-              {foreign && (
-                <List.ReignMarkerCountry>{foreign}</List.ReignMarkerCountry>
+              {foreign.length > 0 && (
+                <List.ReignMarkerCountries>
+                  {foreign.map((name) => (
+                    <List.ReignMarkerCountry key={name}>
+                      {name}
+                    </List.ReignMarkerCountry>
+                  ))}
+                </List.ReignMarkerCountries>
               )}
               {onOpenPerson ? (
                 <List.ReignMarkerName
@@ -531,7 +548,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   type="button"
                   tabIndex={-1}
                   onClick={() => onOpenPerson(marker.personId)}
-                  aria-label={`${marker.countryName ? `${marker.countryName} ` : ''}${marker.name} 인물 정보 보기 — 즉위, 재위 ${span}`}
+                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.name} 인물 정보 보기 — 즉위, 재위 ${span}`}
                 >
                   {marker.name}
                 </List.ReignMarkerName>
@@ -1069,6 +1086,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                         (yearEventCount !== 1 || yearSubCount > 0)
 
                       const yearHeadingId = `events-year-${currentYear}`
+                      const inYearReigns = reignPlan.inYear.get(currentYear)
+                      /** 즉위 연도로만 세운 해 — 머리글과 말풍선을 한 줄로 합친다 */
+                      const reignOnlyYear =
+                        yearItems.length === 0 && !!inYearReigns?.length
                       return (
                         <List.YearSection
                           key={`year-${currentYear}`}
@@ -1106,98 +1127,114 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               <List.GapMarker role="note">{label}</List.GapMarker>
                             ) : null
                           })()}
-                          <List.GroupHeading id={yearHeadingId} aria-level={4}>
-                            {`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건${
-                              yearSubCount > 0
-                                ? `, 하위 ${yearSubCount}건 포함 (${yearItems.length}행)`
-                                : ''
-                            }`}
-                          </List.GroupHeading>
-                          <List.YearDivider
-                            type="button"
-                            /* 세기 머리글과 같은 규약 — 탭 정지점이 아니라 ↑↓ 순회 대상 */
-                            tabIndex={-1}
-                            data-band-toggle="year"
-                            aria-expanded={!isYearCollapsed}
-                            aria-label={`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건${
-                              yearSubCount > 0
-                                ? `, 하위 ${yearSubCount}건 포함 (${yearItems.length}행)`
-                                : ''
-                            } ${isYearCollapsed ? '펼치기' : '접기'}`}
-                            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                              e.preventDefault()
-                              onToggleYearCollapse(currentYear)
-                            }}
-                          >
-                            <span>
-                              <FiChevronDown
-                                size={13}
-                                aria-hidden="true"
-                                style={{
-                                  transform: isYearCollapsed
-                                    ? 'rotate(-90deg)'
-                                    : 'rotate(0deg)',
-                                }}
-                              />
-                              {formatYearLabel(currentYear)}
-                              {/* 단위 '건' 필수 — 숫자만 두면 '2026년 6'이 6월로 읽힌다.
-                                  세기 헤더는 이미 'N건'이라 표기도 함께 통일된다.
-                                  하위가 있으면 두 번째 숫자를 덧붙인다 — 헤더 하나가
-                                  '1건'이라 말하고 16행이 놓이던 어긋남(IDX-3).
-                                  '1건'뿐인 그룹은 생략한다 — 바로 아래 한 행이 이미 그 말이다.
-                                  (낭독용 aria-label에는 항상 남는다 — 스크린리더는 '바로 아래
-                                  한 행'을 눈으로 확인할 수 없다.) */}
-                              {showYearCount && (
-                                <List.CollapsedCount>
-                                  {yearSubCount > 0
-                                    ? `${yearEventCount}건 · 하위 ${yearSubCount}`
-                                    : `${yearEventCount}건`}
-                                </List.CollapsedCount>
-                              )}
-                            </span>
-                          </List.YearDivider>
-                          {isYearCollapsed ? (
-                            <List.CollapsedPlaceholder>
-                              <span>
-                                {/* 접기가 실제로 숨기는 것은 **렌더되던 행 전체**(하위 사건 포함)다.
-                                    yearEventCount(depth 0만)를 쓰면 '2개 사건이 접혀있습니다'라며
-                                    7행이 사라져 숫자가 화면과 어긋난다. */}
-                                {yearItems.length > 0
-                                  ? `${yearItems.length}행이 접혀있습니다`
-                                  : formatYearLabel(currentYear)}
-                              </span>
-                            </List.CollapsedPlaceholder>
+                          {reignOnlyYear ? (
+                            <>
+                              <List.GroupHeading
+                                id={yearHeadingId}
+                                aria-level={4}
+                              >
+                                {`${formatYearLabel(currentYear)} — 사건 없음, 즉위`}
+                              </List.GroupHeading>
+                              {renderReignMarkers(inYearReigns, false, {
+                                yearLabel: formatYearLabel(currentYear),
+                              })}
+                            </>
                           ) : (
-                            <List.RowList
-                              role="list"
-                              aria-labelledby={yearHeadingId}
+                            <>
+                            <List.GroupHeading id={yearHeadingId} aria-level={4}>
+                              {`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건${
+                                yearSubCount > 0
+                                  ? `, 하위 ${yearSubCount}건 포함 (${yearItems.length}행)`
+                                  : ''
+                              }`}
+                            </List.GroupHeading>
+                            <List.YearDivider
+                              type="button"
+                              /* 세기 머리글과 같은 규약 — 탭 정지점이 아니라 ↑↓ 순회 대상 */
+                              tabIndex={-1}
+                              data-band-toggle="year"
+                              aria-expanded={!isYearCollapsed}
+                              aria-label={`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건${
+                                yearSubCount > 0
+                                  ? `, 하위 ${yearSubCount}건 포함 (${yearItems.length}행)`
+                                  : ''
+                              } ${isYearCollapsed ? '펼치기' : '접기'}`}
+                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                e.preventDefault()
+                                onToggleYearCollapse(currentYear)
+                              }}
                             >
-                              {/* ⚠️ aria-posinset은 **1부터** 시작한다. index를 그대로
-                                  넘기면 첫 행이 '0번째'로 낭독되고, 이 경로가
-                                  grouped 기본값(true)이라 LIST의 상시 경로다. */}
-                              {interleaveReignMarkers(
-                                yearItems,
-                                reignPlan.inYear.get(currentYear),
-                                {
-                                  direction: sortDirection,
-                                  // 연 그룹 안이 시간순일 때만 날짜로 자리를 잡는다
-                                  chronological: sortBy === 'recent',
-                                  rowStartKey: (item) =>
-                                    item.depth === 0
-                                      ? eventStartKey(item.node.period)
-                                      : null,
-                                },
-                              ).map((entry) =>
-                                entry.kind === 'reign'
-                                  ? renderReignMarkers(entry.markers, true)
-                                  : renderRow(
-                                      entry.item,
-                                      currentYear,
-                                      yearItems.indexOf(entry.item) + 1,
-                                      yearItems.length,
-                                    ),
-                              )}
-                            </List.RowList>
+                              <span>
+                                <FiChevronDown
+                                  size={13}
+                                  aria-hidden="true"
+                                  style={{
+                                    transform: isYearCollapsed
+                                      ? 'rotate(-90deg)'
+                                      : 'rotate(0deg)',
+                                  }}
+                                />
+                                {formatYearLabel(currentYear)}
+                                {/* 단위 '건' 필수 — 숫자만 두면 '2026년 6'이 6월로 읽힌다.
+                                    세기 헤더는 이미 'N건'이라 표기도 함께 통일된다.
+                                    하위가 있으면 두 번째 숫자를 덧붙인다 — 헤더 하나가
+                                    '1건'이라 말하고 16행이 놓이던 어긋남(IDX-3).
+                                    '1건'뿐인 그룹은 생략한다 — 바로 아래 한 행이 이미 그 말이다.
+                                    (낭독용 aria-label에는 항상 남는다 — 스크린리더는 '바로 아래
+                                    한 행'을 눈으로 확인할 수 없다.) */}
+                                {showYearCount && (
+                                  <List.CollapsedCount>
+                                    {yearSubCount > 0
+                                      ? `${yearEventCount}건 · 하위 ${yearSubCount}`
+                                      : `${yearEventCount}건`}
+                                  </List.CollapsedCount>
+                                )}
+                              </span>
+                            </List.YearDivider>
+                            {isYearCollapsed ? (
+                              <List.CollapsedPlaceholder>
+                                <span>
+                                  {/* 접기가 실제로 숨기는 것은 **렌더되던 행 전체**(하위 사건 포함)다.
+                                      yearEventCount(depth 0만)를 쓰면 '2개 사건이 접혀있습니다'라며
+                                      7행이 사라져 숫자가 화면과 어긋난다. */}
+                                  {yearItems.length > 0
+                                    ? `${yearItems.length}행이 접혀있습니다`
+                                    : formatYearLabel(currentYear)}
+                                </span>
+                              </List.CollapsedPlaceholder>
+                            ) : (
+                              <List.RowList
+                                role="list"
+                                aria-labelledby={yearHeadingId}
+                              >
+                                {/* ⚠️ aria-posinset은 **1부터** 시작한다. index를 그대로
+                                    넘기면 첫 행이 '0번째'로 낭독되고, 이 경로가
+                                    grouped 기본값(true)이라 LIST의 상시 경로다. */}
+                                {interleaveReignMarkers(
+                                  yearItems,
+                                  inYearReigns,
+                                  {
+                                    direction: sortDirection,
+                                    // 연 그룹 안이 시간순일 때만 날짜로 자리를 잡는다
+                                    chronological: sortBy === 'recent',
+                                    rowStartKey: (item) =>
+                                      item.depth === 0
+                                        ? eventStartKey(item.node.period)
+                                        : null,
+                                  },
+                                ).map((entry) =>
+                                  entry.kind === 'reign'
+                                    ? renderReignMarkers(entry.markers, true)
+                                    : renderRow(
+                                        entry.item,
+                                        currentYear,
+                                        yearItems.indexOf(entry.item) + 1,
+                                        yearItems.length,
+                                      ),
+                                )}
+                              </List.RowList>
+                            )}
+                            </>
                           )}
                         </List.YearSection>
                       )
