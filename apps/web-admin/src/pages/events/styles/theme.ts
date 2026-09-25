@@ -209,6 +209,25 @@ export const metaText = ({ theme }: { theme: { mode: string } }) =>
   theme.mode === 'dark' ? META_TEXT.dark : META_TEXT.light
 
 /**
+ * 목록 좌측 레일(시간축) 색 — 축선·앵커 도트 외곽 링·sticky 헤더 오클루전이 공유한다.
+ *
+ * surface는 목록 카드의 **실측 합성색**이다(라이트 #ffffff / 다크 카드
+ * rgba(255,255,255,0.02) over #0f0f0f = #141414). 예전엔 도트 외곽 링만 #0f0f12를 써서
+ * 다크에서 모든 앵커 도트 둘레에 검은 테가 떴다 — 링이 '뚫린 구멍'이 아니라 '스티커'처럼
+ * 보이던 원인. 한 곳에서 선언해 링과 오클루전이 같은 색을 쓰게 한다.
+ */
+export const RAIL = {
+  line: { light: 'rgba(37, 99, 235, 0.34)', dark: 'rgba(147, 197, 253, 0.32)' },
+  surface: { light: '#ffffff', dark: '#141414' },
+} as const
+
+export const railLine = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? RAIL.line.dark : RAIL.line.light
+
+export const railSurface = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? RAIL.surface.dark : RAIL.surface.light
+
+/**
  * 중요도 색상
  */
 export const IMPORTANCE_COLORS = {
