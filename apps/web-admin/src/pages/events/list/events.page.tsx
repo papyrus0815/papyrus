@@ -6,14 +6,11 @@
  * 페이지 전용 훅은 ./hooks/* 에 위임한다.
  */
 import React, {
-  Suspense,
-  lazy,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useTransition,
 } from 'react'
 
 import {
@@ -44,11 +41,7 @@ import {
   selectVisibleRows,
   useEventHierarchy,
 } from '@/features/event-hierarchy/model'
-import {
-  FILTER_ALL,
-  VIEW_MODES,
-  type ViewMode,
-} from '@/features/event-list/lib'
+import { FILTER_ALL } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -60,43 +53,6 @@ import type { ListDensity } from '@/pages/events/styles/theme'
 import { EventCompactList } from '@/widgets/event-list-compact/ui/event-compact-list'
 import { EventDetailPanel } from '@/widgets/event-list/ui/event-detail-panel'
 
-/**
- * 신규 5개 뷰는 lazy import — 사용자가 그 모드를 한 번도 안 열면 코드 안 받음.
- * 특히 Map은 Leaflet/마커 클러스터 ~150KB.
- *
- * 각 모듈은 named export `Event*View`이므로 default 어댑터로 매핑.
- */
-const EventMapView = lazy(() =>
-  import('@/widgets/event-map-view/ui/event-map-view').then((m) => ({
-    default: m.EventMapView,
-  })),
-)
-const EventGridView = lazy(() =>
-  import('@/widgets/event-grid-view/ui/event-grid-view').then((m) => ({
-    default: m.EventGridView,
-  })),
-)
-const EventDashboardView = lazy(() =>
-  import('@/widgets/event-dashboard-view/ui/event-dashboard-view').then((m) => ({
-    default: m.EventDashboardView,
-  })),
-)
-const EventTreeView = lazy(() =>
-  import('@/widgets/event-tree-view/ui/event-tree-view').then((m) => ({
-    default: m.EventTreeView,
-  })),
-)
-const EventGalleryView = lazy(() =>
-  import('@/widgets/event-gallery-view/ui/event-gallery-view').then((m) => ({
-    default: m.EventGalleryView,
-  })),
-)
-const EventEraView = lazy(() =>
-  import('@/widgets/event-era-view/ui/event-era-view').then((m) => ({
-    default: m.EventEraView,
-  })),
-)
-
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -106,7 +62,6 @@ import * as PageStyles from '../styles/list-page.styles'
 
 import { CatalogDetailDrawer } from './components/catalog-detail-drawer'
 import { CatalogEntityFilterModals } from './components/catalog-entity-filter-modals'
-import { CatalogMainContent } from './components/catalog-main-content'
 import { CatalogOverlayModals } from './components/catalog-overlay-modals'
 import { CatalogHeaderStats } from './components/catalog-header-stats'
 import {
@@ -115,7 +70,6 @@ import {
 } from './components/catalog-toolbar'
 import { useCatalogEventIndex } from './hooks/use-catalog-event-index'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
-import type { EventParentPreset } from '@/widgets/event-form/ui/event-register-modal'
 import { useEventRegisterModalUrl } from '@/widgets/event-form/model/use-event-register-modal-url'
 import { useCatalogModals } from './hooks/use-catalog-modals'
 import { useCatalogReferenceData } from './hooks/use-catalog-reference-data'
@@ -433,34 +387,12 @@ export const EventsCatalogPage: React.FC = () => {
   )
 
   // ===== UI 상태 =====
-  // 디폴트 viewMode 결정: URL 우선 → 모바일이면 LIST → 데스크톱이면 TIMELINE.
-  // 타임라인은 가로 panning이 Space+드래그·Ctrl+휠뿐이라 터치 디바이스에서 사실상 비-인터랙티브 →
-  // 첫 진입을 LIST로 두고, 사용자가 명시적으로 타임라인을 선택하면 그 선택은 URL로 보존됨.
-  // useCatalogUrlSync도 동일 디폴트를 사용해야 첫 마운트 직후 force-overwrite를 피함.
-  const [viewMode, setViewMode] = useState<ViewMode>(initialUrlState.viewMode)
-  /**
-   * 사용자가 뷰를 **직접 골랐는가**(검토 URL-12).
-   *
-   * 예전엔 상태→URL이 `view`를 항상 기록했다. 그래서 모바일에서 만든 링크에는
-   * 디바이스가 추론한 `view=list`가 사용자 선택처럼 실렸고, 데스크톱에서 열면
-   * 타임라인 대신 목록이 떴다. 반대로 데스크톱 링크의 `view=timeline`은 모바일의
-   * 'LIST 폴백'(타임라인은 터치로 사실상 조작 불가)을 무력화했다.
-   * URL에 유효한 view가 있었거나 사용자가 스위처를 눌렀을 때만 true다.
+  /*
+   * (제거) `viewMode`·`viewExplicit`·`changeViewMode` — 뷰가 목록 하나뿐이다.
+   * 2026-09-24까지 이 페이지는 지도·격자·통계·트리·갤러리·시대까지 일곱 지면을
+   * 겸했고, 그 전환을 위해 상태 둘·URL 축 하나·startTransition·lazy 슬롯 스위치가
+   * 있었다. 전부 사라졌으므로 아래 파이프라인은 **항상 목록 기준**으로 읽으면 된다.
    */
-  const [viewExplicit, setViewExplicit] = useState(initialUrlState.viewExplicit)
-  /**
-   * 뷰 전환(시간↔카테고리↔타임라인 등)은 전체 pivot을 같은 events로 다시 그리는
-   * *무거운 동기 재렌더*다(특히 가상화 안 된 뷰). 사용자 클릭은 startTransition으로
-   * 비긴급 처리해 전환 중에도 버튼/UI가 멈추지 않게 한다. URL→state 동기화 경로는
-   * 그대로 raw setViewMode를 사용한다.
-   */
-  const [, startViewTransition] = useTransition()
-  const changeViewMode = useCallback((next: ViewMode) => {
-    // 사용자의 명시적 선택 — 이때부터 URL이 view를 싣는다.
-    setViewExplicit(true)
-    startViewTransition(() => setViewMode(next))
-  }, [])
-
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
     initialUrlState.selectedEventId,
   )
@@ -495,30 +427,12 @@ export const EventsCatalogPage: React.FC = () => {
     onDirtyChange: onCreateFormDirtyChange,
   } = useEventRegisterModalUrl()
 
-  /**
-   * 트리 노드 '+ 하위 사건'이 채우는 상위 사건 프리셋 — **같은 등록 모달 인스턴스**를
-   * initialParent만 다르게 연다(새 모달 표면 금지). 닫힘은 URL(뒤로가기)로도 오므로
-   * onClose 훅킹이 아니라 열림 상태의 **열림→닫힘 전이**를 보고 클리어한다 — 프리셋이
-   * 남으면 다음 일반 등록('새 사건' 버튼)까지 상위가 미리 채워진 채 열린다.
-   * ⚠️ '닫혀 있으면 클리어'로 쓰면 안 된다: open()의 URL 반영이 transition 렌더로
-   * 늦게 오면, 프리셋만 먼저 설정된 렌더에서 즉시 지워져 기능이 통째로 죽는다.
+  /*
+   * (제거) `createParentPreset`·`handleCreateChildEvent` — 유일한 호출자였던 트리 뷰의
+   * 노드 '+ 하위 사건'과 함께 사라졌다. 목록 행에는 같은 어포던스가 없었고, 하위 사건
+   * 추가는 사건 상세의 '하위 사건' 블록이 계속 담당한다. 되살릴 땐 등록 모달의
+   * `initialParent` 계약(같은 모달 인스턴스에 프리셋만 다르게)을 그대로 쓸 것.
    */
-  const [createParentPreset, setCreateParentPreset] =
-    useState<EventParentPreset | null>(null)
-  const handleCreateChildEvent = useCallback(
-    (parent: EventParentPreset) => {
-      setCreateParentPreset(parent)
-      openCreateModal()
-    },
-    [openCreateModal],
-  )
-  const wasCreateModalOpenRef = useRef(false)
-  useEffect(() => {
-    if (wasCreateModalOpenRef.current && !createModalOpen) {
-      setCreateParentPreset(null)
-    }
-    wasCreateModalOpenRef.current = createModalOpen
-  }, [createModalOpen])
 
   // ===== 모달 상태 묶음 (스크롤 잠금 effect 포함) =====
   const {
@@ -595,8 +509,6 @@ export const EventsCatalogPage: React.FC = () => {
     sortBy,
     sortDirection,
     showFlatView,
-    viewMode,
-    viewExplicit,
     pageSize,
     setKeywordInput,
     setSelectedEventId,
@@ -610,8 +522,6 @@ export const EventsCatalogPage: React.FC = () => {
     setSortBy,
     setSortDirection,
     setShowFlatView,
-    setViewMode,
-    setViewExplicit,
     setPageSize,
   })
 
@@ -901,9 +811,9 @@ export const EventsCatalogPage: React.FC = () => {
    * 목록이 세기›연도 그룹으로 묶이는가 — **페이지의 단일 변수**(검토 GAP-2).
    *
    * 이 값은 두 곳이 읽는다. ⑴ `EventCompactList`의 `grouped` prop(렌더)과
-   * ⑵ 아래 `navigableItems`의 밴드 접힘 적용 여부(내비 모수)다. 예전엔 ⑴만 있고
-   * ⑵는 `viewMode === LIST`만 봐서, '등록순' 정렬로 그룹이 꺼지면 위젯은 접힘을
-   * 무시하고 전량 렌더하는데 페이지는 접힘을 계속 적용했다 — 화면에 보이는 행을
+   * ⑵ 아래 `navigableItems`의 밴드 접힘 적용 여부(내비 모수)다. 예전엔 둘이 서로
+   * 다른 판정을 해서, '등록순' 정렬로 그룹이 꺼지면 위젯은 접힘을 무시하고 전량
+   * 렌더하는데 페이지는 접힘을 계속 적용했다 — 화면에 보이는 행을
    * ↓키·드로어 '다음'이 건너뛰고, 그 행을 클릭하면 '조건 밖' 배너가 떴다.
    * (연/세기를 접어 둔 상태에서만 발현한다 — 접힘 집합이 비면 selectVisibleRows가
    *  원본을 그대로 돌려주기 때문이다.)
@@ -912,7 +822,6 @@ export const EventsCatalogPage: React.FC = () => {
    * 같은 회귀가 재발한다.
    */
   const listGrouped =
-    viewMode === VIEW_MODES.LIST &&
     // '등록순'은 전역 순서 자체가 목적이라 연도 그룹이 켜져 있으면 화면이 전혀 안 바뀐다.
     sortBy !== 'created' &&
     // '하위 많은 순'도 마찬가지다 — 연도 그룹이 켜지면 정렬이 그룹 **내부**로 갇혀,
@@ -947,21 +856,11 @@ export const EventsCatalogPage: React.FC = () => {
   )
 
   /**
-   * 화면에 실제로 렌더되는 행 — 목록에서는 계층 접힘 + 세기/연도 밴드 접힘을 모두 반영(단계 ④).
+   * 화면에 실제로 렌더되는 행 — 계층 접힘 + 세기/연도 밴드 접힘을 모두 반영(단계 ④).
    * ↑↓ 키(DOM 렌더 행 기준)와 드로어 이전/다음, '조건 밖' 배너가 이 하나의 집합을 공유한다.
-   *
-   * 목록이 아닌 뷰에서는 **그 뷰에 넘긴 배열 그대로**여야 한다 — 아니면 화면에 보이는
-   * 막대·카드를 클릭했는데 '조건 밖'이라고 하거나, 드로어 '다음'이 화면에 없는 사건으로
-   * 건너뛴다(GAP-2와 같은 계열의 어긋남).
    */
-  const activeViewItems =
-    viewMode === VIEW_MODES.TREE
-      ? // 트리만 문맥 부모를 포함한 완전한 배열을 렌더한다(위 GAP-1 주석 참고).
-        visibleFlattenedHierarchy
-      : matchedOnlyHierarchy
   const navigableItems = useMemo(
     () => {
-      if (viewMode !== VIEW_MODES.LIST) return activeViewItems
       return listGrouped
         ? selectVisibleRows(
             /**
@@ -978,8 +877,6 @@ export const EventsCatalogPage: React.FC = () => {
         : listRenderedHierarchy
     },
     [
-      viewMode,
-      activeViewItems,
       listGrouped,
       listRenderedHierarchy,
       yearBuckets,
@@ -1057,9 +954,9 @@ export const EventsCatalogPage: React.FC = () => {
   useCatalogListNavigation({
     setSelectedEventId,
     navigate,
-    // 목록 뷰에서, 오버레이가 닫혀 있을 때만. 다른 뷰·모달 위에서는 리스너를 아예
-    // 걸지 않아 브라우저 기본 키 동작(스크롤·select 조작)을 되돌려준다.
-    enabled: viewMode === VIEW_MODES.LIST && !anyOverlayOpen,
+    // 오버레이가 닫혀 있을 때만. 모달 위에서는 리스너를 아예 걸지 않아
+    // 브라우저 기본 키 동작(스크롤·select 조작)을 되돌려준다.
+    enabled: !anyOverlayOpen,
     // ←/→ 트리 키가 부른다. 안정 참조(useCallback)라 리스너를 다시 걸지 않는다.
     toggleEventExpansion,
   })
@@ -1563,202 +1460,98 @@ export const EventsCatalogPage: React.FC = () => {
     debouncedKeyword,
   ])
 
-  /** lazy 슬롯 fallback — 위젯 chunk 다운로드 동안 유지되는 빈 박스. layout shift 방지. */
-  const lazyFallback = (
-    <PageStyles.LazyViewFallback aria-busy="true" aria-live="polite">
-      <PageStyles.LazyViewSpinner aria-hidden="true" />
-      <span>뷰 불러오는 중…</span>
-    </PageStyles.LazyViewFallback>
+  // ===== 정렬 핸들러 — ⋯ 표시 설정 메뉴와 열 머리글 클릭이 **같은 함수**를 부른다 =====
+  const handleSortChange = useCallback(
+    (newSortBy: SortOption) => {
+      setSortBy(newSortBy)
+      if (newSortBy === 'recent' || newSortBy === 'duration') {
+        setSortDirection('desc')
+      }
+    },
+    [setSortBy, setSortDirection],
   )
 
+  const handleSortDirectionToggle = useCallback(() => {
+    setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+  }, [setSortDirection])
+
   /**
-   * 활성 viewMode에 해당하는 슬롯 *하나만* 빌드.
-   * 이전엔 7개 슬롯의 React element를 매 렌더마다 모두 생성했으나, 한 번에 하나만 그려지므로
-   * 나머지 6개의 prop computation은 순수 낭비였음. switch로 한 슬롯만 만든다.
+   * 목록 슬롯 — 이 페이지가 그리는 **유일한** 본문이다.
    *
-   * ⚠️ 목록·트리를 제외한 뷰는 `matchedOnlyHierarchy`(단계 ①)를 받는다 —
-   * 문맥 부모를 데이터로 세지 않기 위해서다(검토 GAP-1). 새 뷰를 붙일 때도 같은 배열을 쓸 것.
+   * 예전에는 `switch (viewMode)`가 일곱 슬롯 중 하나를 골랐다(지도·격자·통계·트리·
+   * 갤러리·시대·목록). 뷰 여섯이 사라지면서 분기도 함께 사라졌다 — 새 표현이 필요하면
+   * 여기에 case를 되살리지 말고 별도 라우트를 검토할 것.
    */
-  let activeSlot: React.ReactNode
-  /** 아직 받아올 페이지가 남았는가 — 빈 상태를 '0건'으로 확정하지 않기 위한 신호(검토 GAP-3) */
-  const stillLoadingMore = hasMore || isFetchingNextPage
-  const firstPageLoading = isLoading && events.length === 0
-  switch (viewMode) {
-    case VIEW_MODES.MAP:
-      activeSlot = (
-        <Suspense fallback={lazyFallback}>
-          <EventMapView
-            flattenedHierarchy={matchedOnlyHierarchy}
-            events={events}
-            selectedEventId={selectedEventId}
-            onSelectEvent={setSelectedEventId}
-            hasActiveFilters={filtersOrSearchActive}
-            onResetFilters={handleResetAll}
-          />
-        </Suspense>
-      )
-      break
-    case VIEW_MODES.GRID:
-      activeSlot = (
-        <Suspense fallback={lazyFallback}>
-          <EventGridView
-            flattenedHierarchy={matchedOnlyHierarchy}
-            events={events}
-            selectedEventId={selectedEventId}
-            dbCategories={dbCategories}
-            onSelectEvent={setSelectedEventId}
-            isLoading={firstPageLoading}
-            hasMoreData={stillLoadingMore}
-            hasActiveFilters={filtersOrSearchActive}
-            onResetFilters={handleResetAll}
-          />
-        </Suspense>
-      )
-      break
-    case VIEW_MODES.DASHBOARD:
-      activeSlot = (
-        <Suspense fallback={lazyFallback}>
-          <EventDashboardView
-            flattenedHierarchy={matchedOnlyHierarchy}
-            events={events}
-            dbCategories={dbCategories}
-            onSelectEvent={setSelectedEventId}
-            serverTotal={serverTotal}
-            isLoading={firstPageLoading}
-            hasMoreData={stillLoadingMore}
-            hasActiveFilters={filtersOrSearchActive}
-            filterLabels={barFilterChips.map((chip) => chip.label)}
-            onResetFilters={handleResetAll}
-          />
-        </Suspense>
-      )
-      break
-    case VIEW_MODES.TREE:
-      activeSlot = (
-        <Suspense fallback={lazyFallback}>
-          <EventTreeView
-            // 트리만 완전한 배열 — 문맥 부모를 빼면 그 아래 매칭된 자식이 함께 사라진다.
-            // 강등(흐림)과 가지치기는 위젯이 isMatch로 직접 처리한다.
-            flattenedHierarchy={visibleFlattenedHierarchy}
-            events={events}
-            selectedEventId={selectedEventId}
-            dbCategories={dbCategories}
-            onSelectEvent={setSelectedEventId}
-            // 노드에서 가지 낳기 — 기존 등록 모달을 initialParent와 함께 연다.
-            onCreateChild={handleCreateChildEvent}
-            // lazy 서브트리 응답 수집 — 미발견 판정·드로어 해석의 폴백 레지스트리.
-            onLazyEventsLoaded={handleLazyEventsLoaded}
-            isLoading={firstPageLoading}
-            hasMoreData={stillLoadingMore}
-            hasActiveFilters={filtersOrSearchActive}
-            onResetFilters={handleResetAll}
-          />
-        </Suspense>
-      )
-      break
-    case VIEW_MODES.GALLERY:
-      activeSlot = (
-        <Suspense fallback={lazyFallback}>
-          <EventGalleryView
-            flattenedHierarchy={matchedOnlyHierarchy}
-            events={events}
-            selectedEventId={selectedEventId}
-            dbCategories={dbCategories}
-            onSelectEvent={setSelectedEventId}
-            isLoading={firstPageLoading}
-            hasMoreData={stillLoadingMore}
-            hasActiveFilters={filtersOrSearchActive}
-            onResetFilters={handleResetAll}
-          />
-        </Suspense>
-      )
-      break
-    case VIEW_MODES.ERA:
-      activeSlot = (
-        <Suspense fallback={lazyFallback}>
-          <EventEraView
-            flattenedHierarchy={matchedOnlyHierarchy}
-            events={events}
-            selectedEventId={selectedEventId}
-            onSelectEvent={setSelectedEventId}
-            isLoading={firstPageLoading}
-            hasMoreData={stillLoadingMore}
-            hasActiveFilters={filtersOrSearchActive}
-            onResetFilters={handleResetAll}
-          />
-        </Suspense>
-      )
-      break
-    case VIEW_MODES.LIST:
-    default:
-      activeSlot = (
-        <EventCompactList
-          density={listDensity}
-          onCreateEvent={handleCreateEvent}
-          isLoading={isLoading && events.length === 0}
-          // 목록은 접힘으로 숨긴 행을 뺀 배열만 받는다. 완전한 모집단은 다른 뷰·내보내기 몫.
-          flattenedHierarchy={listRenderedHierarchy}
-          // 연도 버킷은 페이지가 계산한 **바로 그 객체**를 내려준다(검토 PERF-4).
-          // 위젯이 다시 계산하면 입력 한 톨 차이로 DOM과 내비 모수가 갈린다.
-          yearBuckets={yearBuckets}
-          events={events}
-          expandedEventIds={expandedEventIds}
-          selectedEventId={selectedEventId}
-          hasActiveFilters={filtersOrSearchActive}
-          // 칩마다 '이 축만 풀면 몇 건'이 붙어 있다 — 0건에서 범인을 지목한다(검토 IA-12).
-          activeFilterChips={emptyStateFilterChips}
-          // 북마크는 브라우저 로컬이라 공유 링크의 `bookmarks=1`은 받는 쪽에서 항상
-          // 0건이 된다 — 그 사실을 빈 상태에서 밝힌다(검토 URL-11).
-          showBookmarkStorageHint={bookmarksOnly && bookmarks.size === 0}
+  const activeSlot = (
+    <EventCompactList
+      density={listDensity}
+      onCreateEvent={handleCreateEvent}
+      isLoading={isLoading && events.length === 0}
+      // 목록은 접힘으로 숨긴 행을 뺀 배열만 받는다. 완전한 모집단은 내보내기(JSON) 몫.
+      flattenedHierarchy={listRenderedHierarchy}
+      // 연도 버킷은 페이지가 계산한 **바로 그 객체**를 내려준다(검토 PERF-4).
+      // 위젯이 다시 계산하면 입력 한 톨 차이로 DOM과 내비 모수가 갈린다.
+      yearBuckets={yearBuckets}
+      events={events}
+      expandedEventIds={expandedEventIds}
+      selectedEventId={selectedEventId}
+      hasActiveFilters={filtersOrSearchActive}
+      // 칩마다 '이 축만 풀면 몇 건'이 붙어 있다 — 0건에서 범인을 지목한다(검토 IA-12).
+      activeFilterChips={emptyStateFilterChips}
+      // 북마크는 브라우저 로컬이라 공유 링크의 `bookmarks=1`은 받는 쪽에서 항상
+      // 0건이 된다 — 그 사실을 빈 상태에서 밝힌다(검토 URL-11).
+      showBookmarkStorageHint={bookmarksOnly && bookmarks.size === 0}
+      dbCategories={dbCategories}
+      isLoadingMore={isFetchingNextPage}
+      loadMoreFailed={loadMoreFailed}
+      onRetryLoadMore={fetchMoreEvents}
+      // 세기·연도 밴드 접힘까지 반영한 '실제 표시 행' — 접어도 값이 안 변하면
+      // 라이브 영역 고지(A11Y-12)와 하단 '표시 N행'이 화면과 어긋난다.
+      displayedCount={navigableItems.length}
+      displayedRootCount={
+        navigableItems.filter((item) => item.depth === 0).length
+      }
+      hasMoreData={hasMore}
+      bookmarks={bookmarks}
+      searchQuery={debouncedKeyword}
+      recentEventIds={recentEvents}
+      // 열 머리글이 '지금 어느 열이 순서를 만드는가'를 표시한다 — 도구줄의
+      // 정렬 컨트롤과 표를 잇는 유일한 시각 고리다.
+      sortBy={sortBy}
+      sortDirection={sortDirection}
+      // 열 머리글 클릭 = 정렬의 **1차 진입점**(마우스). ⋯ 표시 설정 메뉴가 같은 핸들러를
+      // 받아 네 축 전부와 키보드 경로를 책임진다 — 머리글은 aria-hidden 시각 보조다.
+      onSortChange={handleSortChange}
+      onSortDirectionToggle={handleSortDirectionToggle}
+      // 건수 스트립은 표의 머리글이 싣는다 — 숫자가 설명하는 대상이 바로 아래 표다.
+      // 모수 규약(검토 IA-13): statsEvents = 총계와 같은 모수.
+      headerStats={
+        <CatalogHeaderStats
+          events={statsEvents}
           dbCategories={dbCategories}
-          isLoadingMore={isFetchingNextPage}
-          loadMoreFailed={loadMoreFailed}
-          onRetryLoadMore={fetchMoreEvents}
-          // 세기·연도 밴드 접힘까지 반영한 '실제 표시 행' — 접어도 값이 안 변하면
-          // 라이브 영역 고지(A11Y-12)와 하단 '표시 N행'이 화면과 어긋난다.
-          displayedCount={navigableItems.length}
-          displayedRootCount={
-            navigableItems.filter((item) => item.depth === 0).length
-          }
-          hasMoreData={hasMore}
-          bookmarks={bookmarks}
-          searchQuery={debouncedKeyword}
-          recentEventIds={recentEvents}
-          // 열 머리글이 '지금 어느 열이 순서를 만드는가'를 표시한다 — 도구줄의
-          // 정렬 컨트롤과 표를 잇는 유일한 시각 고리다.
-          sortBy={sortBy}
-          sortDirection={sortDirection}
-          // 건수 스트립은 표의 머리글이 싣는다 — 도구줄 MetaArea는 LIST에서 렌더되지 않는다.
-          // 모수 규약은 도구줄과 동일(검토 IA-13): statsEvents = 총계와 같은 모수.
-          headerStats={
-            <CatalogHeaderStats
-              events={statsEvents}
-              dbCategories={dbCategories}
-              visibleCount={filtersOrSearchActive ? matchedCount : undefined}
-              serverTotal={serverTotal}
-              authoritativeTotal={serverTotal ?? rootLoadedCount}
-            />
-          }
-          collapsedYears={collapsedYears}
-          collapsedCenturies={collapsedCenturies}
-          onToggleYearCollapse={toggleYearCollapse}
-          onToggleCenturyCollapse={toggleCenturyCollapse}
-          onToggleExpansion={toggleEventExpansion}
-          onSelectEvent={setSelectedEventId}
-          onShowSummary={openSummary}
-          // 목록 행의 ⚑ 배지 = 조망 진입점. 신규 지면 없이 모수만 좁힌다.
-          onEnterAnchorScope={enterAnchorScope}
-          onResetFilters={handleResetAll}
-          onToggleBookmark={handleToggleBookmark}
-          onScroll={handleScroll}
-          // 접힌 밴드가 반영된 첫 '보이는 행' — 위젯이 접힘을 재계산하지 않게 페이지가 내린다.
-          rovingTargetId={rovingTargetId}
-          // ⚠️ 위젯의 렌더 분기와 페이지의 navigableItems가 **같은 변수**를 읽는다(검토 GAP-2).
-          grouped={listGrouped}
+          visibleCount={filtersOrSearchActive ? matchedCount : undefined}
+          serverTotal={serverTotal}
+          authoritativeTotal={serverTotal ?? rootLoadedCount}
         />
-      )
-      break
-  }
+      }
+      collapsedYears={collapsedYears}
+      collapsedCenturies={collapsedCenturies}
+      onToggleYearCollapse={toggleYearCollapse}
+      onToggleCenturyCollapse={toggleCenturyCollapse}
+      onToggleExpansion={toggleEventExpansion}
+      onSelectEvent={setSelectedEventId}
+      onShowSummary={openSummary}
+      // 목록 행의 ⚑ 배지 = 조망 진입점. 신규 지면 없이 모수만 좁힌다.
+      onEnterAnchorScope={enterAnchorScope}
+      onResetFilters={handleResetAll}
+      onToggleBookmark={handleToggleBookmark}
+      onScroll={handleScroll}
+      // 접힌 밴드가 반영된 첫 '보이는 행' — 위젯이 접힘을 재계산하지 않게 페이지가 내린다.
+      rovingTargetId={rovingTargetId}
+      // ⚠️ 위젯의 렌더 분기와 페이지의 navigableItems가 **같은 변수**를 읽는다(검토 GAP-2).
+      grouped={listGrouped}
+    />
+  )
 
   const handleAfterDelete = useCallback(
     (deletedId: string) => {
@@ -1884,15 +1677,10 @@ export const EventsCatalogPage: React.FC = () => {
       onAfterDelete={handleAfterDelete}
       onPrev={onDrawerPrev}
       onNext={onDrawerNext}
-      // 선택은 살아 있는데 화면에 보이는 행 목록에 없다 = 필터·검색·북마크로 잘려나간 상태.
-      // lazy 레지스트리로 해석된 사건은 **TREE 뷰에서만** 예외 — 그 뷰에서만 실제 행이
-      // 보여 '조건 밖' 고지(+필터 초기화 권유)가 거짓말이 된다. 다른 뷰로 전환하면
-      // 행 자체가 없으므로 기존 고지를 그대로 타야 한다.
-      isOutOfScope={
-        selectedEventId !== null &&
-        selectedIndex === -1 &&
-        !(viewMode === VIEW_MODES.TREE && lazyEventById.has(selectedEventId))
-      }
+      // 선택은 살아 있는데 화면에 보이는 행 목록에 없다 = 필터·검색·북마크로 잘려나갔거나
+      // (딥링크로 해석된 손자처럼) 애초에 목록이 싣지 않는 사건이다. 트리 뷰가 있던 시절엔
+      // 그 뷰에서만 행이 실제로 보여 예외가 하나 있었지만, 지면이 목록 하나가 되며 사라졌다.
+      isOutOfScope={selectedEventId !== null && selectedIndex === -1}
       onResetFilters={handleResetAll}
       onClose={clearSelectedEvent}
     />
@@ -1965,8 +1753,8 @@ export const EventsCatalogPage: React.FC = () => {
      */
     filterSummaryChips: barFilterChips,
     handleResetAll,
-    /* ≤900px 전용 자리 — 넓은 폭에서는 CatalogMainContent의 보기 행이 같은 노드를 그린다.
-       둘 중 하나는 항상 display:none이라 화면에도 접근성 트리에도 한 벌만 존재한다. */
+    /* 표시 설정(⋯) — **이제 한 벌뿐이다**. 예전엔 같은 노드를 보기 행(넓은 폭)과
+       필터 바(≤900px)가 각각 만들고 미디어쿼리로 한쪽을 껐다. 보기 행이 사라졌다. */
     viewUtilities: (
       <CatalogViewUtilities
         showFlatView={showFlatView}
@@ -1978,24 +1766,15 @@ export const EventsCatalogPage: React.FC = () => {
         onOpenShortcutHelp={openShortcutHelp}
         pageSize={pageSize}
         onPageSizeChange={handlePageSizeChange}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSortChange={handleSortChange}
+        onSortDirectionToggle={handleSortDirectionToggle}
+        listDensity={listDensity}
+        onChangeListDensity={changeListDensity}
       />
     ),
   }
-
-  // ===== 표시 옵션 묶음 (CatalogMainContent의 ViewSwitcherRow가 소비) =====
-  const handleSortChange = useCallback(
-    (newSortBy: SortOption) => {
-      setSortBy(newSortBy)
-      if (newSortBy === 'recent' || newSortBy === 'duration') {
-        setSortDirection('desc')
-      }
-    },
-    [setSortBy, setSortDirection],
-  )
-
-  const handleSortDirectionToggle = useCallback(() => {
-    setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-  }, [setSortDirection])
 
   const entityFilterModalProps = {
     showCategoryModal,
@@ -2057,44 +1836,9 @@ export const EventsCatalogPage: React.FC = () => {
          * 사건 클릭 시에만 drawer 마운트되어 데스크톱 column 표시 / 모바일 슬라이드인.
          */
         <Layout.CatalogSplit $hasSelection={!!selectedEventId}>
-        <CatalogMainContent
-          viewMode={viewMode}
-          setViewMode={changeViewMode}
-          visibleCount={visibleFlattenedHierarchy.length}
-          matchedCount={matchedCount}
-          // 로드된 *최상위* 사건 수 — serverTotal(최상위 기준)과 같은 모수여야
-          // '표시 152 / 등록 전체 110' 같은 모순이 안 생긴다.
-          totalCount={rootLoadedCount}
-          serverTotal={serverTotal}
-          // 필터 여부는 카운트 비교가 아니라 실제 필터 상태로 판정한다 —
-          // 예전엔 계층을 접기만 해도 '필터됨'으로 둔갑했다(검토 M10).
-          filtersActive={filtersOrSearchActive}
-          // 헤더 통계는 총계와 같은 모수를 써야 한다(검토 IA-13)
-          events={statsEvents}
-          dbCategories={dbCategories}
-          sortBy={sortBy}
-          sortDirection={sortDirection}
-          onSortChange={handleSortChange}
-          onSortDirectionToggle={handleSortDirectionToggle}
-          listDensity={listDensity}
-          onChangeListDensity={changeListDensity}
-          /* 표시 제어는 필터 바가 아니라 보기 행에 산다 — 결과를 좁히지 않는 컨트롤이고,
-             필터 바에 있을 때는 액션 트랙을 4px 넘겨 '새 사건 등록'을 다음 줄로 밀었다. */
-          viewUtilities={
-            <CatalogViewUtilities
-              showFlatView={showFlatView}
-              childrenCollapsed={childrenCollapsed}
-              hasCollapsibleChildren={hasCollapsibleChildren}
-              onCollapseAllChildren={collapseAllChildren}
-              onExpandAllChildren={expandAllChildren}
-              onExportJson={handleExportJson}
-              onOpenShortcutHelp={openShortcutHelp}
-              pageSize={pageSize}
-              onPageSizeChange={handlePageSizeChange}
-            />
-          }
-          activeSlot={activeSlot}
-        />
+        {/* 목록 — 예전에는 `CatalogMainContent`가 뷰 전환 행을 얹어 감쌌다. 그 행이
+            사라지면서 남은 일은 폭·스크롤 컨테이너를 쓰는 것뿐이라 지면이 직접 든다. */}
+        <PageStyles.ActiveContent>{activeSlot}</PageStyles.ActiveContent>
         <PageStyles.DrawerAnnouncer role="status" aria-live="polite">
           {drawerAnnouncement}
         </PageStyles.DrawerAnnouncer>
@@ -2143,8 +1887,6 @@ export const EventsCatalogPage: React.FC = () => {
         isOpen={createModalOpen}
         onClose={closeCreateModal}
         onDirtyChange={onCreateFormDirtyChange}
-        // 트리 '+ 하위 사건' 경유일 때만 값이 있다 — 일반 등록은 undefined(프리필 없음).
-        initialParent={createParentPreset ?? undefined}
       />
     </>
   )

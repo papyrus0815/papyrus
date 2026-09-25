@@ -652,6 +652,15 @@ export const ColumnHeaderCell = styled.span<{
   $sorted?: boolean
   /** 라벨 아래 축(DurationAxis)을 다는 칸 — 셀 밖으로 나가는 잉크가 있어 잘라내지 않는다 */
   $axis?: boolean
+  /**
+   * 눌러서 이 열로 정렬할 수 있는 칸.
+   *
+   * ⚠️ 머리글 띠 전체가 `aria-hidden`인 **시각 보조**라, 여기에 포커스 가능한 버튼을
+   * 두면 접근성 트리에서 지워진 탭 정지점이 생긴다. 그래서 이 칸은 끝까지 `span`이고
+   * 마우스 전용 **보조** 진입점이다 — 네 축 전부와 키보드 경로는 도구줄의 ⋯ 표시 설정
+   * 메뉴가 책임진다. 둘은 같은 핸들러를 부른다.
+   */
+  $clickable?: boolean
 }>`
   min-width: 0;
   overflow: hidden;
@@ -683,6 +692,16 @@ export const ColumnHeaderCell = styled.span<{
     $textIndent &&
     css`
       padding-left: var(--row-disc-btn);
+    `}
+  ${({ $clickable, theme }) =>
+    $clickable &&
+    css`
+      cursor: pointer;
+      /* 라벨만 바뀌는 hover — 머리글 띠에 배경을 깔면 sticky 상태에서 아래 행이 비쳐
+         보이던 문제(불투명 규약)를 다시 건드린다. 잉크 한 단으로만 말한다. */
+      &:hover {
+        color: ${theme.colors.text.primary};
+      }
     `}
 
   ${({ $col, $showFrom }) =>

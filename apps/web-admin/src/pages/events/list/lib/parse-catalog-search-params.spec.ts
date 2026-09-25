@@ -6,7 +6,7 @@
  * URL→state effect 양쪽이 동시에 보호된다.
  */
 import { CENTURY_UNKNOWN } from '@/entities/event/model/types'
-import { FILTER_ALL, VIEW_MODES } from '@/features/event-list/lib'
+import { FILTER_ALL } from '@/features/event-list/lib'
 
 import {
   DEFAULT_PAGE_SIZE,
@@ -83,12 +83,11 @@ describe('parseCatalogSearchParams', () => {
     expect(state.sortBy).toBe('recent')
     expect(state.sortDirection).toBe('desc')
     expect(state.showFlatView).toBe(false)
-    expect(state.viewExplicit).toBe(false)
   })
 
   it('정상 딥링크를 그대로 복원한다', () => {
     const state = parse(
-      'q=%EC%A0%84%EC%9F%81&cat=cat-1&country=c-1&continent=asia&century=17&size=50&sort=duration&dir=asc&flat=1&view=list&bookmarks=1&event=ev-1',
+      'q=%EC%A0%84%EC%9F%81&cat=cat-1&country=c-1&continent=asia&century=17&size=50&sort=duration&dir=asc&flat=1&bookmarks=1&event=ev-1',
     )
     expect(state.keyword).toBe('전쟁')
     expect(state.selectedCategory).toBe('cat-1')
@@ -99,8 +98,6 @@ describe('parseCatalogSearchParams', () => {
     expect(state.sortBy).toBe('duration')
     expect(state.sortDirection).toBe('asc')
     expect(state.showFlatView).toBe(true)
-    expect(state.viewMode).toBe(VIEW_MODES.LIST)
-    expect(state.viewExplicit).toBe(true)
     expect(state.bookmarksOnly).toBe(true)
     expect(state.selectedEventId).toBe('ev-1')
   })
@@ -120,19 +117,18 @@ describe('parseCatalogSearchParams', () => {
     expect(state.selectedEventId).toBeNull()
   })
 
-  it('무효한 size·dir·view는 기본값으로 낙하한다', () => {
-    const state = parse('size=7&dir=sideways&view=hologram')
+  it('무효한 size·dir은 기본값으로 낙하한다', () => {
+    const state = parse('size=7&dir=sideways')
     expect(state.pageSize).toBe(DEFAULT_PAGE_SIZE)
     expect(state.sortDirection).toBe('desc')
-    expect(state.viewExplicit).toBe(false)
   })
 
-  it('폐지된 타임라인 뷰의 링크는 죽지 않고 목록으로 받는다', () => {
-    // `view=timeline`은 **명시로 치지 않는다** — 명시로 받으면 상태→URL이 `view=list`를
-    // 되써서, 사라진 뷰의 이름이 새 URL로 되살아난다.
-    const state = parse('view=timeline&tlw=y1901..2000&hide=%EC%A0%84%EC%9F%81')
-    expect(state.viewMode).toBe(VIEW_MODES.LIST)
-    expect(state.viewExplicit).toBe(false)
+  it('폐지된 뷰의 링크가 와도 나머지 축은 정상 복원된다', () => {
+    // 뷰 축(`view`)은 더 이상 파싱되지 않는다 — 목록 하나뿐이라 고를 것이 없다.
+    // 죽은 키가 상태를 오염시키지 않는지만 고정한다(URL에서 걷어내는 일은 url-sync 몫).
+    const state = parse('view=timeline&tlw=y1901..2000&cat=cat-1')
+    expect(state).not.toHaveProperty('viewMode')
+    expect(state.selectedCategory).toBe('cat-1')
   })
 
   it('bookmarks는 정확히 "1"일 때만 켜진다', () => {

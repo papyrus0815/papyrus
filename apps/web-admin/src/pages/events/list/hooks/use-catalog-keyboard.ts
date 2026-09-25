@@ -19,7 +19,7 @@
  * 지금 규칙:
  *  1. 리스트 네비게이션은 **포커스가 실제 목록 행(`[data-event-id]`) 안에 있을 때만**
  *     동작한다. 그 밖에서는 브라우저 기본 동작(스크롤·select 조작)을 건드리지 않는다.
- *  2. 목록 뷰가 아니거나 오버레이가 열려 있으면 훅 자체가 등록되지 않는다(`enabled`).
+ *  2. 오버레이(모달·메뉴)가 열려 있으면 훅 자체가 등록되지 않는다(`enabled`).
  *  3. Enter는 **눌린 그 행**의 id로 이동한다 — 상태 클로저를 읽지 않아 stale이 없다.
  *  4. 선택이 바뀌면 그 행으로 포커스를 옮긴다(스크롤은 페이지의 단일 지점이 담당).
  */
@@ -171,7 +171,7 @@ export function useCatalogShortcuts(args: CatalogShortcutsArgs) {
 interface CatalogListNavigationArgs {
   setSelectedEventId: (id: string | null) => void
   navigate: ReturnType<typeof useNavigate>
-  /** 목록 뷰이고 오버레이가 닫혀 있을 때만 true — false면 리스너를 아예 안 건다 */
+  /** 오버레이가 닫혀 있을 때만 true — false면 리스너를 아예 안 건다 */
   enabled: boolean
   /** ←/→ 트리 키가 부르는 하위 사건 펼치기/접기 토글 */
   toggleEventExpansion: (eventId: string) => void

@@ -157,6 +157,12 @@ interface EventCompactListProps {
   sortBy?: SortOption
   sortDirection?: 'asc' | 'desc'
   /**
+   * 열 머리글 클릭 정렬 — 넘기지 않으면 머리글은 **읽기 전용 라벨**로 남는다.
+   * 도구줄의 ⋯ 표시 설정 메뉴와 같은 핸들러를 받아야 두 진입점이 갈리지 않는다.
+   */
+  onSortChange?: (next: SortOption) => void
+  onSortDirectionToggle?: () => void
+  /**
    * 건수 스트립('180건 · 전쟁/군사 49') — **표의 머리글이 싣는다**.
    *
    * 페이지가 노드째 내려준다. 도구줄에 있던 자리에서는 컨트롤 13개 사이에 낀 토큰이었고,
@@ -190,6 +196,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   recentEventIds = [],
   sortBy,
   sortDirection = 'desc',
+  onSortChange,
+  onSortDirectionToggle,
   headerStats,
   collapsedYears,
   collapsedCenturies,
@@ -451,6 +459,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           <ListColumnHeader
             sortBy={sortBy}
             sortDirection={sortDirection}
+            onSortChange={onSortChange}
+            onSortDirectionToggle={onSortDirectionToggle}
             headerStats={headerStats}
           />
           {[...Array(SKELETON_ROW_COUNT)].map((_, index) => {
@@ -656,6 +666,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           <ListColumnHeader
             sortBy={sortBy}
             sortDirection={sortDirection}
+            onSortChange={onSortChange}
+            onSortDirectionToggle={onSortDirectionToggle}
             headerStats={headerStats}
           />
           {!grouped && (
@@ -1272,8 +1284,36 @@ const ListColumnHeader: React.FC<{
   sortBy?: SortOption
   sortDirection?: 'asc' | 'desc'
   headerStats?: React.ReactNode
-}> = ({ sortBy, sortDirection = 'desc', headerStats }) => {
+  onSortChange?: (next: SortOption) => void
+  onSortDirectionToggle?: () => void
+}> = ({
+  sortBy,
+  sortDirection = 'desc',
+  headerStats,
+  onSortChange,
+  onSortDirectionToggle,
+}) => {
   const sortedCol = sortBy ? SORT_COLUMN[sortBy] : undefined
+  /**
+   * 열을 눌러 그 축으로 줄 세운다 — 이미 그 축이면 방향만 뒤집는다(표 관습).
+   *
+   * 도구줄의 ⋯ 표시 설정 메뉴와 **같은 두 핸들러**를 부른다. 정렬 규칙(시기·기간은
+   * 내림차순으로 리셋)은 페이지 한 곳에 있으므로 여기서 다시 판단하지 않는다.
+   */
+  const sortHandler = (axis: SortOption) =>
+    onSortChange
+      ? () => {
+          if (sortBy === axis) onSortDirectionToggle?.()
+          else onSortChange(axis)
+        }
+      : undefined
+  /** 라벨이 '무엇을 하는 칸인지' 말한다 — 머리글은 aria-hidden이라 title이 유일한 설명이다. */
+  const sortTitle = (axis: SortOption, label: string) =>
+    onSortChange
+      ? sortBy === axis
+        ? `${label} — 눌러서 오름/내림 바꾸기`
+        : `${label}으로 정렬`
+      : undefined
   /* 방향 글리프는 **한 곳에서만** 만든다 — 열마다 따로 쓰면 오름/내림이 엇갈린다. */
   const caret = (col: 'date' | 'dur' | 'reg') =>
     sortedCol === col ? (
@@ -1291,6 +1331,9 @@ const ListColumnHeader: React.FC<{
       $col="date"
       $align="right"
       $sorted={sortedCol === 'date'}
+      $clickable={!!onSortChange}
+      onClick={sortHandler('recent')}
+      title={sortTitle('recent', '시기순')}
     >
       시작
       {caret('date')}
@@ -1307,9 +1350,31 @@ const ListColumnHeader: React.FC<{
     <List.ColumnHeaderCell $col="cat" $align="right">
       분류
     </List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="title" $textIndent>
+    {/* '사건' 열에 걸리는 축은 **하위 많은 순**이다 — 이 열이 제목과 하위 펼침을 함께
+        싣는 칸이고, 그 정렬이 세우는 것도 '자손을 몇 개 거느린 사건인가'다.
+        ⚠️ 건수 스트립(headerStats)은 클릭 대상이 아니다 — 숫자를 누르려다 정렬이
+        바뀌면 안 되므로 전파를 여기서 끊는다. */}
+    <List.ColumnHeaderCell
+      $col="title"
+      $textIndent
+      $sorted={sortBy === 'descendants'}
+      $clickable={!!onSortChange}
+      onClick={sortHandler('descendants')}
+      title={sortTitle('descendants', '하위 많은 순')}
+    >
       사건
-      {headerStats && <HeaderStatsSlot>{headerStats}</HeaderStatsSlot>}
+      {sortBy === 'descendants' && (
+        <List.ColumnSortCaret aria-hidden="true">
+          {sortDirection === 'asc' ? '▲' : '▼'}
+        </List.ColumnSortCaret>
+      )}
+      {headerStats && (
+        <HeaderStatsSlot
+          onClick={(clickEvent) => clickEvent.stopPropagation()}
+        >
+          {headerStats}
+        </HeaderStatsSlot>
+      )}
     </List.ColumnHeaderCell>
     {/* (제거) '설명' 열 머리글 — 설명이 별도 열이 아니라 '사건' 셀 안에서 제목 뒤를
         잇는 글이 됐다. 없는 열에 머리글만 남으면 그 라벨이 가리키는 트랙이 없다. */}
@@ -1323,7 +1388,17 @@ const ListColumnHeader: React.FC<{
       $align="center"
       $axis
       $sorted={sortedCol === 'dur'}
-      title="이 행이 속한 해의 1월 1일 ~ 12월 31일 · 눈금과 세로 격자는 4·7·10월"
+      $clickable={!!onSortChange}
+      onClick={sortHandler('duration')}
+      title={
+        onSortChange
+          ? `이 행이 속한 해의 1월 1일 ~ 12월 31일 · 눈금은 4·7·10월 — ${
+              sortBy === 'duration'
+                ? '눌러서 오름/내림 바꾸기'
+                : '눌러서 기간순 정렬'
+            }`
+          : '이 행이 속한 해의 1월 1일 ~ 12월 31일 · 눈금과 세로 격자는 4·7·10월'
+      }
     >
       {/* 축의 양 끝 — 이 열이 '한 해'라는 사실을 화면에 적는 유일한 잉크.
           좁은 대역에서는 스스로 꺼진다(AxisEndLabel의 컨테이너 쿼리). */}
@@ -1346,6 +1421,9 @@ const ListColumnHeader: React.FC<{
       $align="right"
       $showFrom={LIST_STEPS.atlas}
       $sorted={sortedCol === 'reg'}
+      $clickable={!!onSortChange}
+      onClick={sortHandler('created')}
+      title={sortTitle('created', '등록순')}
     >
       등록
       {caret('reg')}

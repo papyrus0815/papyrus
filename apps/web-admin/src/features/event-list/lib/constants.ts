@@ -31,35 +31,19 @@ export const SORT_OPTIONS = {
 
 export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]
 
-/**
- * 뷰 모드 — 사건의 다양한 차원을 각자의 1차 표현으로.
- *  - TIMELINE  : 시간×카테고리 가로 막대 (동시대성·기간·밀도)
- *  - LIST      : 행 기반 컴팩트 리스트 (검색·정렬·관리)
- *  - MAP       : 지도 위 마커 (공간 차원)
- *  - GRID      : 연대(decade) 카드 격자 (거시 탐색 진입점)
- *  - DASHBOARD : 분포 차트·통계 (인사이트·데이터 품질)
- *  - TREE      : root + hierarchy 1차 표현 (위계 구조)
- *  - GALLERY   : heroImage 기반 카드 (비주얼 발견)
+/*
+ * (제거) 뷰 모드 — `VIEW_MODES`·`ViewMode`.
+ *
+ * 한때 사건 카탈로그에는 뷰가 일곱 개 있었다(타임라인·목록·지도·격자·통계·트리·갤러리,
+ * 나중에 '시대'까지 여덟). 타임라인이 목록에 흡수된 뒤로도 나머지 여섯이 남아 있었지만,
+ * 전부 **같은 사건 집합을 다르게 칠한 변주**였고 목록만이 검색·정렬·필터·상세·계층을
+ * 모두 지원하는 정본이었다. 뷰 전환 세그먼트·`?view=` 축·디바이스별 기본값 추론·
+ * lazy 슬롯 스위치가 그 여섯을 살려 두기 위한 배선이었다.
+ *
+ * 2026-09-24 사용자 결정으로 목록 하나만 남기고 전부 제거했다. 뷰를 다시 늘리려면
+ * 이 상수를 되살리는 것이 아니라, 새 지면을 별도 라우트로 두는 쪽을 먼저 검토할 것 —
+ * 여덟 개가 한 지면에 겹쳐 있던 시절의 근인이 '축 하나에 지면 여덟'이었다.
  */
-export const VIEW_MODES = {
-  /**
-   * 유일한 기본 뷰. 예전에는 `TIMELINE`(연속 가로 시간축)이 함께 있었지만, 둘 다
-   * '시간순으로 묶인 행 목록'이라 사실상 같은 화면이었다 — 타임라인 쪽이 제목·설명·
-   * 분류를 잃고 막대를 얻었을 뿐이다. 두 뷰를 합쳐 목록의 조판을 정본으로 삼고,
-   * 타임라인이 유일하게 더 갖고 있던 인코딩(시간 비례 막대)은 기간 열이 흡수했다
-   * (`widgets/event-list-compact/lib/year-span.ts`).
-   */
-  LIST: 'list',
-  MAP: 'map',
-  GRID: 'grid',
-  DASHBOARD: 'dashboard',
-  TREE: 'tree',
-  GALLERY: 'gallery',
-  /** 시대별 — 재위(빅토리아·건륭제 등)로 사건을 묶어 본다 */
-  ERA: 'era',
-} as const
-
-export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
 
 /**
  * 요약 뷰 모드

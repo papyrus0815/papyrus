@@ -20,7 +20,7 @@ import { useEffect, useRef } from 'react'
 import type { useSearchParams } from 'react-router-dom'
 
 import type { CenturyFilter } from '@/entities/event/model'
-import { FILTER_ALL, type ViewMode } from '@/features/event-list/lib'
+import { FILTER_ALL } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 
 import {
@@ -59,12 +59,6 @@ interface CatalogUrlSyncArgs {
   sortBy: SortOption
   sortDirection: 'asc' | 'desc'
   showFlatView: boolean
-  viewMode: ViewMode
-  /**
-   * 사용자가 뷰를 **명시적으로 골랐는가**(검토 URL-12). false면 `view` 키를 URL에 싣지
-   * 않는다 — 디바이스가 추론한 기본값이 링크에 실려 받는 쪽의 판단을 덮어쓰지 않도록.
-   */
-  viewExplicit: boolean
   /** 페이지 크기 — 표시 선호. 새로고침·공유 시 보존 */
   pageSize: number
 
@@ -81,8 +75,6 @@ interface CatalogUrlSyncArgs {
   setSortBy: (value: SortOption) => void
   setSortDirection: (value: 'asc' | 'desc') => void
   setShowFlatView: (value: boolean) => void
-  setViewMode: (value: ViewMode) => void
-  setViewExplicit: (value: boolean) => void
   setPageSize: (value: number) => void
 }
 
@@ -103,8 +95,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     sortBy,
     sortDirection,
     showFlatView,
-    viewMode,
-    viewExplicit,
     pageSize,
     setKeywordInput,
     setSelectedEventId,
@@ -118,8 +108,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setSortBy,
     setSortDirection,
     setShowFlatView,
-    setViewMode,
-    setViewExplicit,
     setPageSize,
   } = args
 
@@ -180,9 +168,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
 
     if (next.showFlatView !== showFlatView) setShowFlatView(next.showFlatView)
 
-    if (next.viewMode !== viewMode) setViewMode(next.viewMode)
-    if (next.viewExplicit !== viewExplicit) setViewExplicit(next.viewExplicit)
-
     // 의도적: 마운트 시·뒤로가기 시 한 번씩 끌어오면 충분. 양방향 동기화는 아래 effect에서.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
@@ -225,14 +210,10 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setOrDel('sort', sortBy, DEFAULT_SORT)
     setOrDel('dir', sortDirection, DEFAULT_SORT_DIRECTION)
     setOrDel('flat', showFlatView ? '1' : null)
-    /**
-     * view는 **사용자가 직접 고른 경우에만** 기록한다(검토 URL-12).
-     * 뷰가 하나로 합쳐진 지금은 추론 디폴트도 LIST 하나뿐이지만, 규약은 유지한다 —
-     * 뷰가 다시 늘어나도 추론값이 URL에 새어 나가지 않는다.
-     */
-    setOrDel('view', viewExplicit ? viewMode : null)
-    /* 폐지된 타임라인 뷰가 남긴 파라미터 — 구 URL에 실려 오면 첫 write에서 정리한다
-       (`lane`은 v3, `tlw`·`hide`는 v4~v6). */
+    /* 폐지된 뷰들이 남긴 파라미터 — 구 URL에 실려 오면 첫 write에서 정리한다.
+       `view`는 뷰 6종(지도·격자·통계·트리·갤러리·시대) 제거로, `lane`은 타임라인 v3,
+       `tlw`·`hide`는 v4~v6에서 죽었다. 배포된 링크를 깨뜨리지 않고 목록으로 받는다. */
+    next.delete('view')
     next.delete('lane')
     next.delete('tlw')
     next.delete('hide')
@@ -261,8 +242,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     sortBy,
     sortDirection,
     showFlatView,
-    viewMode,
-    viewExplicit,
     pageSize,
   ])
 }

@@ -17,8 +17,8 @@
  * 그래서 **파싱과 검증을 이 파일 하나로 모으고**, initializer와 effect가 같은 함수를
  * 쓴다. 새 파라미터를 추가할 때도 여기만 고치면 두 경로가 자동으로 같아진다.
  *
- * ⚠️ 순수 함수 계약 — `searchParams` 외의 입력을 읽지 말 것(하나 예외: `viewMode`는
- * 디바이스 폭에 따른 기본값이 있어 `resolveDefaultViewMode`가 matchMedia를 본다).
+ * ⚠️ 순수 함수 계약 — `searchParams` 외의 입력을 읽지 말 것. 예전엔 `viewMode` 하나가
+ * 예외였지만(디바이스 폭으로 기본 뷰를 추론), 뷰가 목록 하나로 합쳐지며 사라졌다.
  *
  * ⚠️ 값(런타임) import는 배럴(`@/entities/event/model`)이 아니라 `.../model/types`에서
  * 직접 한다 — 배럴은 `useEvents → api.service`를 끌고 오고 그 안의 `import.meta`가
@@ -30,10 +30,7 @@ import {
   FILTER_ALL,
   SORT_OPTIONS,
   type SortOption,
-  type ViewMode,
 } from '@/features/event-list/lib'
-
-import { isExplicitViewMode, resolveDefaultViewMode } from './resolve-default-view-mode'
 
 /** URL에 노출하는 유효 page size — 그 외 값은 기본(100)으로 폴백 */
 export const VALID_PAGE_SIZES = [20, 50, 100]
@@ -75,15 +72,10 @@ export interface CatalogUrlState {
   sortBy: SortOption
   sortDirection: 'asc' | 'desc'
   showFlatView: boolean
-  viewMode: ViewMode
-  /**
-   * URL이 뷰를 **명시**했는가(검토 URL-12).
-   *
-   * 예전엔 상태→URL이 `view`를 항상 기록해서, 디바이스가 추론한 기본값(모바일 LIST)이
-   * 사용자 선택처럼 링크에 실렸다. 그 링크를 데스크톱에서 열면 타임라인 대신 목록이 뜨고,
-   * 반대로 모바일 폴백('타임라인은 터치로 거의 조작 불가')도 무력화된다.
+  /*
+   * (제거) `viewMode`·`viewExplicit` — 뷰가 목록 하나뿐이라 고를 것이 없다.
+   * `?view=` 키는 이제 파싱되지 않고, use-catalog-url-sync가 구 링크에서 걷어낸다.
    */
-  viewExplicit: boolean
 }
 
 /** 빈 문자열·공백만 있는 값은 '없음'과 같다 — `?cat=`이 '이름 없는 카테고리' 필터가 되면 결과가 0건이 된다 */
@@ -144,7 +136,6 @@ export const parsePageSizeParam = (raw: string | null): number => {
 export function parseCatalogSearchParams(
   searchParams: URLSearchParams,
 ): CatalogUrlState {
-  const viewParam = searchParams.get('view')
   const directionParam = searchParams.get('dir')
 
   return {
@@ -164,7 +155,5 @@ export function parseCatalogSearchParams(
         ? directionParam
         : DEFAULT_SORT_DIRECTION,
     showFlatView: searchParams.get('flat') === '1',
-    viewMode: resolveDefaultViewMode(viewParam),
-    viewExplicit: isExplicitViewMode(viewParam),
   }
 }

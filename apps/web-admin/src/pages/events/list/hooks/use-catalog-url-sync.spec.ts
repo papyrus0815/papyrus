@@ -8,7 +8,7 @@
  */
 import { renderHook } from '@testing-library/react'
 
-import { FILTER_ALL, VIEW_MODES } from '@/features/event-list/lib'
+import { FILTER_ALL } from '@/features/event-list/lib'
 
 import {
   DEFAULT_PAGE_SIZE,
@@ -42,8 +42,6 @@ const makeArgs = (
   sortBy: 'recent',
   sortDirection: 'desc',
   showFlatView: false,
-  viewMode: VIEW_MODES.LIST,
-  viewExplicit: false,
   pageSize: DEFAULT_PAGE_SIZE,
   setKeywordInput: noopSetter,
   setSelectedEventId: noopSetter,
@@ -57,8 +55,6 @@ const makeArgs = (
   setSortBy: noopSetter,
   setSortDirection: noopSetter,
   setShowFlatView: noopSetter,
-  setViewMode: noopSetter,
-  setViewExplicit: noopSetter,
   setPageSize: noopSetter,
   ...overrides,
 })
@@ -157,8 +153,6 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
       sortBy: seed.sortBy,
       sortDirection: seed.sortDirection,
       showFlatView: seed.showFlatView,
-      viewMode: seed.viewMode,
-      viewExplicit: seed.viewExplicit,
       pageSize: seed.pageSize,
     }
   }
@@ -166,21 +160,21 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
   it('완전한 딥링크는 첫 커밋에서 URL을 한 번도 쓰지 않는다', () => {
     const search =
       'q=foo&event=e1&bookmarks=1&cat=c1&country=k1&continent=eu&century=17' +
-      '&size=50&sort=duration&dir=asc&flat=1&view=grid'
+      '&size=50&sort=duration&dir=asc&flat=1'
     const setSearchParams = renderSync(search, seedFromUrl(search))
     expect(setSearchParams).not.toHaveBeenCalled()
   })
 
-  it('폐지된 타임라인 파라미터(tlw·hide)는 첫 write 한 번으로 정리된다', () => {
-    // 타임라인 뷰가 목록에 합쳐지면서 두 축 모두 사라졌다. 배포된 딥링크는 열리되
-    // (view=timeline → 목록), 죽은 파라미터를 URL에 계속 끌고 다니지는 않는다.
+  it('폐지된 뷰 파라미터(view·tlw·hide)는 첫 write 한 번으로 정리된다', () => {
+    // 타임라인이 목록에 합쳐지고(tlw·hide), 뒤이어 뷰 6종이 사라지며 view 축까지 죽었다.
+    // 배포된 딥링크는 그대로 **열리되**(전부 목록으로 받는다), 죽은 파라미터를 URL에
+    // 계속 끌고 다니지는 않는다.
     const search = 'tlw=y1871..1880&hide=%EC%A0%84%EC%9F%81&view=timeline&cat=c1'
     const setSearchParams = renderSync(search, seedFromUrl(search))
     expect(setSearchParams).toHaveBeenCalledTimes(1)
     const written = lastWritten(setSearchParams)
     expect(written.has('tlw')).toBe(false)
     expect(written.has('hide')).toBe(false)
-    // 사라진 뷰 이름을 되쓰지 않는다 — view=timeline은 '명시'가 아니다.
     expect(written.has('view')).toBe(false)
     expect(written.get('cat')).toBe('c1')
   })
@@ -188,26 +182,23 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
   it('무효값은 첫 write 한 번으로 URL에서 사라지고 정상 축은 그대로 남는다', () => {
     // century=0(존재하지 않는 세기) · sort=bogus(화이트리스트 밖) — 파서가 기본값으로
     // 낙하시키고 setOrDel이 기본값 키를 지우므로, 별도 정리 코드 없이 한 번에 정리된다.
-    const search = 'century=0&sort=bogus&cat=c1&view=list'
+    const search = 'century=0&sort=bogus&cat=c1'
     const setSearchParams = renderSync(search, seedFromUrl(search))
     expect(setSearchParams).toHaveBeenCalledTimes(1)
     const written = lastWritten(setSearchParams)
     expect(written.has('century')).toBe(false)
     expect(written.has('sort')).toBe(false)
     expect(written.get('cat')).toBe('c1')
-    // 명시된 view는 사용자 선택이므로 남는다(URL-12).
-    expect(written.get('view')).toBe('list')
   })
 
   it('폐지된 lane 파라미터는 첫 write 한 번으로 정리되고 나머지 축은 남는다', () => {
     // v3의 레인 축 URL — v4에서 폐지. 구 링크가 열리면 조용히 걷어낸다.
-    const search = 'cat=c1&view=grid&lane=country'
+    const search = 'cat=c1&lane=country'
     const setSearchParams = renderSync(search, seedFromUrl(search))
     expect(setSearchParams).toHaveBeenCalledTimes(1)
     const written = lastWritten(setSearchParams)
     expect(written.has('lane')).toBe(false)
     expect(written.get('cat')).toBe('c1')
-    expect(written.get('view')).toBe('grid')
   })
 
   it('앵커 축은 켜졌을 때만 anchors=1로 실리고, 끄면 키가 사라진다', () => {
@@ -243,9 +234,12 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
     expect(renderSync(search, seedFromUrl(search))).not.toHaveBeenCalled()
   })
 
-  it('view가 없는 진입에서는 디바이스 추론 기본값을 URL에 싣지 않는다', () => {
-    // 모바일 LIST 폴백이 링크로 새어 나가 받는 쪽 판단을 덮어쓰던 문제(URL-12).
-    const setSearchParams = renderSync('cat=c1', seedFromUrl('cat=c1'))
-    expect(setSearchParams).not.toHaveBeenCalled()
+  it('죽은 view 축은 어떤 값이 와도 되쓰이지 않는다', () => {
+    // 예전엔 '사용자가 명시한 view'만 URL에 남기는 규약이 있었다(URL-12). 뷰가 목록
+    // 하나가 된 뒤로는 명시든 추론이든 남길 값 자체가 없다.
+    const search = 'cat=c1&view=list'
+    const setSearchParams = renderSync(search, seedFromUrl(search))
+    expect(setSearchParams).toHaveBeenCalledTimes(1)
+    expect(lastWritten(setSearchParams).has('view')).toBe(false)
   })
 })

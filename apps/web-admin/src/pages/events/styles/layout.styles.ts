@@ -174,6 +174,25 @@ export const CreateEventFab = styled.button`
 
 /* toolbar — *카드 아닌 단순 flex row*. border / bg 모두 제거.
  * (이전: card-in-card 인상 → 14개 bordered children 위에 또 카드 1개) */
+/**
+ * 툴바의 **기준면** — 3존 격자를 유지할지 wrap으로 풀지는 뷰포트가 아니라 이 폭이 정한다.
+ *
+ * 임계를 미디어 쿼리로 두던 시절, 좌측 사건 목록 사이드바(약 360px)가 계산에서 빠져
+ * 있었다. 뷰포트 1100이면 분기는 '넓은 폭'인데 툴바가 실제로 쓸 수 있는 폭은 700px이라,
+ * 액션 트랙이 0px로 눌리고 그 안의 버튼 넷이 카드 밖으로 밀려 나갔다(실측 1100:
+ * 필요 835 / 가용 700). 사이드바는 접을 수 있어 같은 뷰포트에서 폭이 두 가지다 —
+ * 미디어 쿼리로는 원리상 맞출 수 없다.
+ *
+ * ⚠️ `container-type: inline-size`는 layout 봉쇄를 동반해 이 요소를 fixed 자손의
+ * 컨테이닝 블록으로 만든다. 툴바의 드롭다운·메뉴는 전부 body 포털(useAnchoredPosition)
+ * 이라 자손에 fixed가 0건이라는 전제 위에서만 안전하다 — 여기에 fixed를 들이지 말 것.
+ */
+export const TopFilterBarShell = styled.div`
+  width: 100%;
+  container-type: inline-size;
+  container-name: catalogtoolbar;
+`
+
 export const TopFilterBar = styled.div.attrs(
   /* 실측 하네스가 툴바 hairline을 잡을 손잡이(`data-list-scroller` 전례).
      스타일 훅이 아니라 "카드 우측 끝 == 툴바 우측 끝"을 한 줄로 검증하기 위한 것이다. */
@@ -188,7 +207,11 @@ export const TopFilterBar = styled.div.attrs(
    * 안에 들어오고, 액션군은 그 안에서 margin-left:auto로 우측 끝에 선다.
    */
   display: grid;
-  grid-template-columns: clamp(280px, 22vw, 560px) auto minmax(0, 1fr);
+  /* 검색 트랙은 **컨테이너 비례**(cqw)다 — vw로 재면 좌측 사이드바 360px을 모르는 채
+     넓게 잡아, 같은 줄의 액션 트랙을 굶기고 '새 사건 등록'을 다음 줄로 밀어낸다
+     (실측 컨테이너 1240: 검색 369 + 필터 543 + 간격 20 = 932, 액션은 308만 받는데
+     필요량은 411). 하한 240px은 placeholder '제목·설명·키워드·장소 검색'의 잉크 폭이다. */
+  grid-template-columns: clamp(240px, 20cqw, 520px) auto minmax(0, 1fr);
   column-gap: 10px;
   align-items: center;
   /* 8/14 → 6/10. 세로 크롬에서 6px 회수(목록은 세로가 곧 행 수다). */
@@ -201,8 +224,16 @@ export const TopFilterBar = styled.div.attrs(
 
   /* ── 좁은 폭: 기존 wrap 규약으로 복귀 ──────────────────────────────────────
    * ⚠️ 이 분기를 빼면 태블릿에서 3존이 그대로 유지돼 컨트롤이 압착된다.
-   * 임계는 툴바 라벨이 sr-only로 접히는 1024와 맞춘다. */
-  @media (max-width: 1023px) {
+   *
+   * 임계는 **툴바가 실제로 쓸 수 있는 폭**(TopFilterBarShell)으로 잰다 — 뷰포트로 재면
+   * 좌측 사이드바 360px이 빠져 1024~1450 대역에서 3존이 유지된 채 액션 트랙이 0px로
+   * 눌린다. 사이드바는 접을 수 있어 같은 뷰포트에서 폭이 두 가지이므로 미디어 쿼리로는
+   * 원리상 맞출 수 없다.
+   *
+   * 1220은 셋이 **한 줄에** 서는 최소 폭이다: 검색 240 + 필터 543 + 액션 411 + 간격 20.
+   * 액션 411 = 최근 64 · 북마크 74 · 최상위 104 · 구분선과 표시 설정 47 · CTA 115 + 간격.
+   * 이 아래로는 3존을 유지해 봐야 액션이 안에서 두 줄이 되므로 통째로 wrap이 낫다. */
+  @container catalogtoolbar (max-width: 1220px) {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
