@@ -225,7 +225,8 @@ export function DetailNarrative({
             value={event.background ?? ''}
             /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
             onSave={(next) => onPatch({ background: next })}
-            placeholder="사건 직전의 정세·도화선이 된 사건·인물 배치 등"
+            /* 아래 번호 단락이 본론이고 이 줄은 그 앞에 두는 요약 — 선택이라고 적는다. */
+            placeholder="사건 직전의 정세·도화선 — 요약 한 문단(선택)"
             label="배경 요약"
             onPersonClick={onPersonClick}
             onEntityLink={handleEntityLink}
@@ -242,6 +243,7 @@ export function DetailNarrative({
             onEntityLink={handleEntityLink}
             labelPrefix="배경"
             bodyPlaceholder="이 배경 단락의 본문"
+            anchorPrefix="background"
           />
         )}
         <AddSectionButton
@@ -288,6 +290,7 @@ export function DetailNarrative({
             onEntityLink={handleEntityLink}
             labelPrefix="전개"
             bodyPlaceholder="이 전개 단락의 본문"
+            anchorPrefix="narrative"
           />
         )}
         <AddSectionButton
