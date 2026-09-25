@@ -287,7 +287,6 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
               ? '업로드 중…'
               : '파일을 끌어다 놓거나 클릭해 업로드'}
           </span>
-          <small>또는 아래 "+ 이미지 추가"로 URL 입력</small>
         </EmptyDropZone>
       )}
 
@@ -423,13 +422,16 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
         </AddForm>
       ) : (
         <AddRow>
-          <AddBtn
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-          >
-            <FiUploadCloud /> {uploading ? '업로드 중…' : '파일 업로드'}
-          </AddBtn>
+          {/* 비어 있을 땐 드롭존이 곧 업로드 버튼이다 — 같은 동작을 두 번 세우지 않는다. */}
+          {images.length > 0 && (
+            <AddBtn
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              <FiUploadCloud /> {uploading ? '업로드 중…' : '파일 업로드'}
+            </AddBtn>
+          )}
           <AddBtn type="button" onClick={() => setAdding(true)}>
             <FiPlus /> URL로 추가
           </AddBtn>
@@ -503,13 +505,17 @@ const Grid = styled.div<{ $dragOver: boolean }>`
     `}
 `
 
+/**
+ * 빈 드롭존 — 한 줄 높이(아이콘 + 안내). 예전엔 36px 패딩의 세로 3단(140px)이라
+ * 대부분의 사건에서 비어 있는 섹션이 문서 끝에서 가장 큰 상자였다.
+ */
 const EmptyDropZone = styled.div<{ $dragOver: boolean }>`
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 36px 20px;
+  gap: 8px;
+  padding: 18px 20px;
   border-radius: ${RADIUS.MD};
   border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
@@ -538,18 +544,13 @@ const EmptyDropZone = styled.div<{ $dragOver: boolean }>`
   }
 
   svg {
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
   }
 
   span {
-    font-size: 13.5px;
+    font-size: 13px;
     font-weight: 600;
-  }
-
-  small {
-    font-size: 11.5px;
-    color: ${metaText};
   }
 `
 

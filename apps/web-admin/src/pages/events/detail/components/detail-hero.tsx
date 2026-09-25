@@ -390,7 +390,7 @@ function HeroActors({
                       )}
                     </PersonAvatar>
                     <PersonName>{name}</PersonName>
-                    {p.role && <PersonRole>, {p.role}</PersonRole>}
+                    {p.role && <PersonRole>{p.role}</PersonRole>}
                   </PersonInlineButton>
                   {i < persons.length - 1 && <PersonSep>·</PersonSep>}
                 </span>
@@ -480,8 +480,16 @@ const PersonInline = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.005em;
 
+  /*
+   * 한 인물 = 버튼 + 뒤따르는 '·' — 한 덩어리로 묶어 구분점만 다음 줄 머리로 떨어지지
+   * 않게 한다. 폭이 모자라면(390px) 역할이 말줄임으로 줄어든다 — 예전엔 nowrap 토큰이
+   * 화면 밖으로 삐져나갔다.
+   */
   > span {
-    display: inline;
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    vertical-align: middle;
   }
 `
 
@@ -500,6 +508,8 @@ const PersonInlineButton = styled.button`
   vertical-align: middle;
   /* 한 인물 = atomic 토큰 — 줄 끝에서 이름·역할이 갈라지지 않도록. */
   white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
 
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
@@ -550,20 +560,35 @@ const PersonName = styled.span`
   }
 `
 
+/**
+ * 역할 — 이름 옆 보조 잉크. 예전엔 ', 역할'을 따로 된 flex 항목으로 두어 버튼의 gap(7px)이
+ * 쉼표 **앞**에 끼었다("요시다 시게루 , 일본 총리"). 쉼표를 걷고 간격·잉크로만 가른다.
+ * italic도 걷는다 — 한글엔 italic face가 없어 기울인 가짜 글꼴이 된다(Overflow와 같은 규약).
+ */
 const PersonRole = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12.5px;
-  font-style: italic;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${metaText};
 `
 
 const PersonSep = styled.span`
+  flex-shrink: 0;
   margin: 0 8px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /* ── 국가 인라인 — 현대(roman) · 역사(italic) — flag 미사용 ── */
 
+/* 나라 이름은 글자 중간에서 끊지 않는다('네덜란/드') — 이름 하나 = 한 덩어리. */
 const CountryInline = styled.div`
+  word-break: keep-all;
+
+  > span {
+    white-space: nowrap;
+  }
+
   font-size: 14px;
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -609,6 +634,7 @@ const CountryHardSep = styled.span`
 /* italic 제거 — 한글은 italic face가 없어 브라우저가 기울인 가짜 글꼴이 된다.
    이 레포는 italic을 placeholder 같은 '보조 메타'에만 쓰기로 이미 정리해 두었다. */
 const Overflow = styled.a`
+  white-space: nowrap;
   font-size: 12.5px;
   margin-left: 10px;
   color: ${({ theme }) => theme.colors.text.secondary};

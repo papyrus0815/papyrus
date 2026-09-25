@@ -290,14 +290,14 @@ function EventDetailContent({ eventId }: { eventId: string }) {
         <ReadingProgress targetRef={scrollRef} color={accentColor} />
         <S.PageInner>
           <SaveStatus isPending={mutation.isPending} lastSavedAt={lastSavedAt} />
-          <DetailHero
-            event={event}
-            onPatch={onPatch}
-            onPersonClick={onPersonClick}
-            onCountryClick={onCountryClick}
-          />
-
           <S.Body>
+            <DetailHero
+              event={event}
+              onPatch={onPatch}
+              onPersonClick={onPersonClick}
+              onCountryClick={onCountryClick}
+            />
+
             {/* 문서 열이 DOM에서 먼저 온다 — 읽기·스크린리더 순서는 '글 → 장부'.
                 좁은 폭에서 장부가 위로 올라가는 것은 시각 순서만 바꾸는 order다. */}
             <S.Main>

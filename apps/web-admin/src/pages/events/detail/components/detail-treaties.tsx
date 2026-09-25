@@ -16,7 +16,11 @@ import { FiExternalLink, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerHairlineStrong,
+  RADIUS,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 
 import {
   TREATY_EVENT_LINK_LABELS,
@@ -360,7 +364,13 @@ const Actions = styled.div`
   margin-top: 14px;
 `
 
-/* 두 동작의 무게를 가른다 — 만들기가 이 섹션의 본 동작이고 연결은 보조다. */
+/**
+ * 두 동작의 무게를 가른다 — 만들기가 이 섹션의 본 동작이고 연결은 보조다.
+ *
+ * 다만 **검은 면 버튼**은 이 지면 전체에서 가장 진한 덩어리였다 — 조약은 대개 비어 있는
+ * 섹션이라(실측 0건이 다수) 문서 끝자락의 빈 칸이 본문보다 먼저 시선을 끌었다. 면을 걷고
+ * 진한 테두리 + 본문 잉크로만 무게를 준다. 보조는 흐린 테두리 + 보조 잉크.
+ */
 const ActionBtn = styled.button<{ $primary?: boolean }>`
   display: inline-flex;
   align-items: center;
@@ -369,12 +379,11 @@ const ActionBtn = styled.button<{ $primary?: boolean }>`
   padding: 0 12px;
   border: 1px solid
     ${({ theme, $primary }) =>
-      $primary ? theme.colors.text.primary : theme.colors.border};
+      $primary ? theme.colors.text.secondary : ledgerHairlineStrong(theme.mode)};
   border-radius: ${RADIUS.SM};
-  background-color: ${({ theme, $primary }) =>
-    $primary ? theme.colors.text.primary : 'transparent'};
+  background-color: transparent;
   color: ${({ theme, $primary }) =>
-    $primary ? theme.colors.background.primary : theme.colors.text.secondary};
+    $primary ? theme.colors.text.primary : theme.colors.text.secondary};
   font-family: inherit;
   font-size: 13px;
   font-weight: ${({ $primary }) => ($primary ? 600 : 500)};
@@ -382,10 +391,13 @@ const ActionBtn = styled.button<{ $primary?: boolean }>`
   transition: color 0.14s, border-color 0.14s, opacity 0.14s;
 
   &:hover:not(:disabled) {
-    ${({ $primary, theme }) =>
-      $primary
-        ? 'opacity: 0.86;'
-        : `color: ${theme.colors.text.primary}; border-color: ${theme.colors.text.tertiary};`}
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
   }
 
   &:disabled {

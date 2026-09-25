@@ -82,17 +82,25 @@ export const PageInner = styled.div`
  * (사실 색인 + 목차). 역사 사건 기록이 원래 갖는 두 축이고, 둘을 한 줄에 쌓아 둔 것이
  * 이 지면의 근본 문제였다.
  *
- * Wide(≥1101px): 1fr 문서 + 312px 장부, gap 48
- * Narrow(≤1100): 한 열 — 장부가 **문서보다 먼저** 온다(order: -1). 좁은 화면일수록
- *                "무엇이 있는 사건인가"를 먼저 알아야 스크롤을 결정할 수 있다.
+ * Wide(≥920 컨테이너): 1fr 문서 + 312px 장부, gap 48
+ * Narrow: 한 열 — 히어로 → 장부 → 문서. 좁은 화면일수록 "무엇이 있는 사건인가"를
+ *         먼저 알아야 스크롤을 결정할 수 있다.
+ *
+ * 히어로도 이 격자 안에 산다(grid-area: hero). 예전엔 히어로가 격자 **위**에 따로 있어서
+ * 장부가 히어로 높이만큼 내려와 시작했다 — 첫 화면의 오른쪽 위 370px가 통째로 비었다
+ * (실측 h1 top 73 / 장부 top 444). 장부를 hero·main 두 행에 걸쳐 세우면 제목과 같은
+ * 높이에서 시작하고, sticky는 그대로 문서 끝까지 따라온다.
  */
 export const Body = styled.div`
   display: grid;
   /* 기본은 한 열 — 컨테이너 쿼리 미지원 환경의 폴백이기도 하다. */
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'hero'
+    'aside'
+    'main';
   gap: 24px;
   align-items: start;
-  margin-top: 24px;
 
   /**
    * 2열은 **문서 열이 560px 이상 확보될 때만**. 312(장부) + 48(gap) + 560 = 920.
@@ -101,8 +109,11 @@ export const Body = styled.div`
    */
   @container eventdetail (min-width: 920px) {
     grid-template-columns: minmax(0, 1fr) 312px;
-    gap: 48px;
-    margin-top: 36px;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'hero aside'
+      'main aside';
+    gap: 36px 48px;
   }
 `
 
@@ -114,13 +125,12 @@ export const Aside = styled.aside`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  /* 한 열일 때는 문서보다 **먼저** 보인다 — DOM 순서(문서 먼저)는 읽기 순서를 지킨다. */
-  order: -1;
+  /* 한 열일 때는 문서보다 **먼저** 보인다(grid-area) — DOM 순서(문서 먼저)는 읽기 순서를 지킨다. */
+  grid-area: aside;
 
   @container eventdetail (min-width: 920px) {
     position: sticky;
     top: 24px;
-    order: 0;
     gap: 24px;
     max-height: calc(100vh - var(--header-height, 64px) - 60px);
     overflow-y: auto;
@@ -138,6 +148,7 @@ export const Main = styled.main`
    * 축을 뒤집은 뒤로는 **좌측 기준선**에 고정한다 — 히어로 제목과 본문의 첫 글자가
    * 같은 x에서 시작해야 한 문서로 읽힌다(가운데 정렬이면 둘이 어긋난다).
    */
+  grid-area: main;
   min-width: 0;
   max-width: 720px;
   width: 100%;
@@ -154,6 +165,8 @@ export const Main = styled.main`
 /* ───────────────────────── Hero ───────────────────────── */
 
 export const Hero = styled.section`
+  grid-area: hero;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -179,28 +192,11 @@ export const Hero = styled.section`
     }
   }
   /**
-   * 히어로도 문서 열과 **같은 좌측 기준선**에서 시작한다.
-   *
-   * 레일이 좌측에 있던 시절엔 그 폭(200 + gap 56)만큼 히어로를 오른쪽으로 밀어야
-   * 본문과 줄이 맞았다. 장부가 우측으로 간 지금은 밀 것이 없다 — 제목·요약·본문이
-   * 모두 x=0에서 시작한다.
-   */
-  /**
-   * ⚠️ 상한을 **문서 열과 같은 식**으로 잡는다. 720px 고정이면 뷰포트 1101~1180 구간에서
-   * 문서 열(1fr = 남은 폭)이 720보다 좁아지는데 히어로만 720을 유지해, 제목이 본문보다
-   * 오른쪽으로 더 나가는 어긋남이 생긴다(실측 685 vs 720).
+   * 히어로는 문서 열과 **같은 격자 칸**(1fr)에 산다 — 상한도 Main과 같은 720이면
+   * 제목·요약·본문이 늘 같은 좌측 기준선·같은 폭에서 끝난다(예전의 calc 보정 불필요).
    */
   max-width: 720px;
-  margin-left: 0;
-  margin-right: auto;
-
-  /**
-   * 2열일 때는 문서 열과 **같은 식**으로 상한을 잡는다. 720px 고정이면 장부가 차지한
-   * 만큼 문서 열만 좁아지는 구간에서 제목이 본문보다 오른쪽으로 더 나간다.
-   */
-  @container eventdetail (min-width: 920px) {
-    max-width: min(720px, calc(100% - 312px - 48px));
-  }
+  width: 100%;
 `
 
 /**
