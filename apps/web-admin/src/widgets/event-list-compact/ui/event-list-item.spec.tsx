@@ -144,6 +144,98 @@ describe('EventListItem', () => {
    * 연도는 그룹 머리글이 대므로 같은 해면 월·일만 적는다. jsdom은 컨테이너 쿼리를
    * 평가하지 않으므로 '언제 보이는지'가 아니라 **무엇이 실리는지**만 고정한다.
    */
+  /**
+   * 시작 열 — **연도를 뺄 수 있을 때만 뺀다**.
+   *
+   * 연 머리글이 이미 말한 해를 행이 한 번 더 적지 않는 것은 이 목록의 오랜 규약이다.
+   * 그런데 그 생략이 *뺄 월·일이 없을 때도* 걸려, 연도만 아는 사건(연 정밀도·01-01
+   * sentinel)의 칸이 통째로 비었다(실측 331행 중 9행. 그중에는 연 그룹의 대표 행도
+   * 있었다). 바로 옆 종료 열에서 빈칸은 '종료 미상'을 뜻하므로 같은 빈칸이 한 칸
+   * 건너 다른 뜻이기도 했다. 그래서 여기서는 **빈칸이 나오지 않는다**는 것까지 잠근다.
+   */
+  describe('시작 열', () => {
+    const startText = () =>
+      document.querySelector('[data-row-start]')?.textContent ?? null
+    const startCell = () => document.querySelector('[data-row-start]')
+    const withPeriod = (start: string, end?: string) =>
+      ({ ...baseNode, period: { start, end } }) as never
+    const withPrecision = (precision: string | null) =>
+      ({ ...(baseEvent as object), startDatePrecision: precision }) as never
+
+    it('머리글이 말한 해 안이면 월·일만 쓴다 — 연도는 머리글 몫이다', () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          groupYear={2025}
+          node={withPeriod('2025-06-13')}
+        />,
+      )
+      expect(startText()).toBe('6.13')
+    })
+
+    it('뺄 월·일이 없으면 연도를 남긴다 — 연 정밀도', () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          groupYear={1870}
+          node={withPeriod('1870-01-01')}
+          event={withPrecision('year')}
+        />,
+      )
+      expect(startText()).toBe('1870')
+    })
+
+    it('01-01 sentinel도 빈칸이 아니라 연도다 — 그 행은 연도까지만 아는 사건이다', () => {
+      // '신성 로마 제국-폴란드 전쟁 (1002~1018)'처럼 연 그룹의 **대표 행**이
+      // 시작 칸을 비운 채 서 있었다.
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          groupYear={1002}
+          node={withPeriod('1002-01-01', '1018-12-31')}
+          event={withPrecision(null)}
+        />,
+      )
+      expect(startText()).toBe('1002')
+    })
+
+    it("연 그룹이 없는 지면(평면 보기·'연도 미상')은 행이 연도를 되살린다", () => {
+      // groupYear가 null이면 연도를 말해 줄 머리글이 화면에 없다.
+      renderWithTheme(
+        <EventListItem {...baseProps} node={withPeriod('1205-06-19')} />,
+      )
+      expect(startText()).toBe('1205.6.19')
+    })
+
+    it('머리글과 다른 해면 일(日)까지 적는다 — 종료 열과 같은 문법', () => {
+      // 예전엔 '(1909.4)'로 잘려, 같은 달 안의 다섯 행이 선후를 알 단서 없이
+      // 똑같은 토큰으로 찍혔다(실측 69행 = 21%).
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          groupYear={1908}
+          node={withPeriod('1909-04-01')}
+        />,
+      )
+      expect(startText()).toBe('1909.4.1')
+      // 마디가 셋이면 월·일과 생김새로 이미 갈린다 — 괄호는 붙지 않는다.
+      expect(startCell()).not.toHaveAttribute('data-offgroup')
+    })
+
+    it('마디가 하나뿐인 다른 해 연도에는 괄호가 붙는다', () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          groupYear={977}
+          node={withPeriod('0974-01-01')}
+          event={withPrecision('year')}
+        />,
+      )
+      expect(startText()).toBe('974')
+      expect(startCell()).toHaveAttribute('data-offgroup', 'true')
+    })
+  })
+
   describe('종료 열', () => {
     const endText = () =>
       document.querySelector('[data-row-end]')?.textContent ?? null

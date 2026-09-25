@@ -334,9 +334,20 @@ export const CompactList = styled.div.attrs(
    * 어떤 대역에서도 열을 **없애지는 않는다** — 기간·국가는 정보이고, 뷰포트가 좁다는
    * 이유로 정보를 통째로 감추면 그게 바로 이전 라운드가 지적당한 패턴이다. */
   @media (max-width: 1179px) {
-    --col-date: 62px;
+    /* 68px = 'YYYY.M.D'(tabular-nums 12px)의 실폭. 이 아래로 내리면 시작·종료가
+       '1018.10.3…'으로 잘린다 — 두 열이 같은 문법을 쓰므로 하한도 하나다. */
+    --col-date: 70px;
     --col-chip: 56px;
-    --col-dur: 52px;
+    /*
+     * 52px이었다. 이 열은 문자열이 아니라 **한 해를 가로지르는 축**이라 폭이 곧
+     * 해상도다 — 52px에서 한 달은 4.3px이고, 그건 이 열을 만들 때 "한 달이 최소
+     * 7px은 돼야 4월과 6월이 눈으로 갈린다"며 기각했던 바로 그 값이다.
+     * 실측(1066px·335행): 막대 중앙값 6px·60%가 8px 미만이라 사실상 점의 열이었고,
+     * 그 점들이 말할 수 있는 유일한 것(연 안에서의 위치)조차 읽히지 않았다.
+     * 96px이면 한 달 8px. 대가는 제목 트랙 44px(428 → 384)이고 잘린 제목은
+     * 335행 중 12 → 14행으로 2행 늘 뿐이다(실측).
+     */
+    --col-dur: 96px;
     --col-flags: 96px;
     --col-act: 58px;
     --row-col-gap: 10px;
@@ -358,10 +369,21 @@ export const CompactList = styled.div.attrs(
   }
 
   @media (max-width: 899px) {
-    --col-date: 58px;
+    /* 위와 같은 하한(68px). 이 대역은 step 0이라 종료 열이 없고, 그래서 날짜 열이
+       이 행의 시간을 말하는 **유일한 칸**이다 — 여기서 자르면 되살릴 곳이 없다. */
+    --col-date: 68px;
     --col-chip: 52px;
-    --col-dur: 48px;
-    --col-flags: 60px;
+    /* 위 대역과 같은 근거 — 한 달 7px이 이 축의 하한이다(84 / 12 = 7). */
+    --col-dur: 84px;
+    /*
+     * 60px이었다. 그 폭에는 **이름 칩 하나도 안 들어간다** — 역사국가 칩은 이모지가
+     * 없어 국가명 텍스트가 곧 칩이고('러시아 제국' 47px), 여기에 '+N'(21px)과 간격
+     * (6px)을 더하면 74px이 필요하다. 그래서 칩 개수를 1로 줄여도 그 하나가 33px로
+     * 눌려 '러시아 …'가 됐다(실측 880px: 185행 중 73행 = 39%).
+     * 88px이면 같은 행이 13행(7%)으로 떨어진다. 대가는 제목 트랙 28px(잘린 제목
+     * 25 → 29행)이고, 국가명을 통째로 못 읽는 것보다 제목 한두 글자가 싸다.
+     */
+    --col-flags: 88px;
     --col-act: 56px;
     --row-col-gap: 8px;
     /*
@@ -810,7 +832,16 @@ export const ColumnHeaderCell = styled.span.attrs<{ $col: string }>(
 export const DurationAxis = styled.span`
   position: absolute;
   right: 0;
-  bottom: 0;
+  /*
+   * 라벨 **아래**로 내려 깐다.
+   *
+   * 0이었다. 그런데 머리글 셀의 높이는 글자 한 줄(15px)이라 bottom:0이 곧
+   * 텍스트의 베이스라인이고, 5개 눈금 중 셋(25%·75%·100%)이 '1월'·'기간'·'12월'
+   * 사이의 **빈칸에 떨어져 쉼표처럼 읽혔다** — 머리글이 '1월 , 기간 ▾ , 12월,'로
+   * 보였다. 자는 라벨 옆이 아니라 라벨 밑에 있어야 자로 읽힌다.
+   * -7px이면 30px 머리글 띠의 바닥선에 눈금이 앉는다($axis 칸은 잘라내지 않는다).
+   */
+  bottom: -7px;
   left: 0;
   height: 4px;
   pointer-events: none;
@@ -1074,7 +1105,9 @@ export const YearDivider = styled.button`
   ${bleedToEdges}
   margin-top: var(--year-mt);
   margin-bottom: var(--year-mb);
-  padding: 6px calc(var(--list-pad-r, 20px) + 12px) 6px var(--rail-gutter);
+  /* 세로 패딩 6 → 3. 머리글이 51개에서 119개로 늘어난 만큼(모든 연 그룹) 한 벌의
+     높이를 줄여 총량을 지킨다 — 라벨은 13px 한 줄이라 3px 패딩으로 충분하다. */
+  padding: 3px calc(var(--list-pad-r, 20px) + 12px) 3px var(--rail-gutter);
   min-height: var(--year-h);
   border: none;
   /*
@@ -1458,9 +1491,11 @@ export const CenturyDividerLabel = styled.span`
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  /* 세기 : 연도 : 행 제목 = 23 : 17 : 14(cozy)로 **세 단 단조**. 예전엔 20 : 14 : 14라
-     아래 두 단이 같은 값이었다 — 연 머리글이 행과 구별되지 않던 근인이 거기 있었다.
-     크기는 밀도 토큰이 소유한다(--century-label). */
+  /* 세기 : 행 제목 : 연도 = 21 : 14 : 13(cozy)로 **세 단 단조**.
+     한때 20 : 14 : 14로 아래 두 단이 같았고(연 머리글이 행과 구별되지 않던 근인),
+     2026-09-25 실측에서도 연 14 = 행 14로 다시 동률이 돼 있었다 — 연 라벨을 한 단
+     내려 되돌린다(머리글은 행보다 **작고** 흐리고 자간이 벌어진 다른 종류의 글자다).
+     크기는 밀도 토큰이 소유한다(--century-label · --year-label). */
   font-size: var(--century-label, 18px);
   /* 800은 레포 전체에서 여기 한 곳뿐이었다 — 위계는 크기가 이미 만들고 있고,
      굵기까지 최대치를 쓰면 화면에서 가장 큰 텍스트가 필요 이상으로 무거워진다. */

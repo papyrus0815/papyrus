@@ -9,14 +9,15 @@ import {
 import type { FlattenedHierarchyItem } from './useEventHierarchy'
 
 /**
- * 연도 버킷·헤더리스·가시 행 계약 (2026-08-01 4차 검토 배치 C2).
+ * 연도 버킷·가시 행 계약 (2026-08-01 4차 검토 배치 C2).
  *
  * 이 파일에는 spec이 0개였고, 그래서 같은 실패 모드를 두 번 태웠다 —
  * 버킷 귀속을 위치 휴리스틱으로 하다 자식이 엉뚱한 연도 그룹에 편입됐고(IA-2),
  * 접힘 판정이 렌더와 모수에서 갈려 DOM에는 있는데 ↑↓ 내비에서는 빠지는 행이 생겼다(INT-4).
  *
- * 헤더리스 연 그룹은 그 두 실패가 **동시에** 재현될 수 있는 지점이다:
- * 시각 헤더를 지우면 접기 토글도 사라지므로, 접힘을 허용하면 되돌릴 수단 없이 행이 사라진다.
+ * (2026-09-25) '헤더리스 연 그룹'(1행짜리는 시각 헤더를 지운다)은 폐지됐다 — 연 그룹
+ * 119개 중 68개가 라벨을 잃어 그 행들이 바로 위 연 밴드에 속한 것처럼 보였다.
+ * 이제 **모든 연 그룹이 머리글과 접기 토글을 갖는다**.
  */
 const row = (
   id: string,
@@ -35,8 +36,8 @@ const row = (
     hiddenChildCount: 0,
   }) as unknown as FlattenedHierarchyItem
 
-describe('buildYearBuckets — 헤더리스 판정', () => {
-  it('행이 하나뿐인 연도만 헤더리스가 된다', () => {
+describe('buildYearBuckets — 연 그룹은 행 수와 무관하게 모두 선다', () => {
+  it('1행짜리 연도도 자기 버킷을 갖는다', () => {
     const buckets = buildYearBuckets(
       [
         row('a', '2026-07-27'),
@@ -45,28 +46,26 @@ describe('buildYearBuckets — 헤더리스 판정', () => {
       ],
       'desc',
     )
-    expect(buckets.headerlessYears.has(1996)).toBe(true)
-    expect(buckets.headerlessYears.has(2026)).toBe(false)
+    expect(buckets.allYears).toEqual([2026, 1996])
+    expect(buckets.eventsByYear.get(1996)).toHaveLength(1)
   })
 
-  it('자식이 부모 버킷으로 들어와 2행이 되면 헤더리스가 아니다', () => {
-    // 부모 1건 + 그 자식 1건 = 버킷에 2행. 헤더를 지우면 자식 행이 미아가 된다.
+  it('자식이 부모 버킷으로 들어오면 한 그룹에 2행이 된다', () => {
     const buckets = buildYearBuckets(
       [row('parent', '1996-03-01'), row('child', '1997-05-02', 'parent')],
       'desc',
     )
     expect(buckets.eventsByYear.get(1996)).toHaveLength(2)
-    expect(buckets.headerlessYears.has(1996)).toBe(false)
   })
 
   it('연도 미상 행은 어떤 버킷에도 들어가지 않는다', () => {
     const buckets = buildYearBuckets([row('x', '')], 'desc')
     expect(buckets.unknownItems).toHaveLength(1)
-    expect(buckets.headerlessYears.size).toBe(0)
+    expect(buckets.allYears).toHaveLength(0)
   })
 })
 
-describe('selectVisibleRows — 헤더리스 연도는 접히지 않는다', () => {
+describe('selectVisibleRows — 접힘은 모든 연도에 똑같이 걸린다', () => {
   const items = [
     row('a', '2026-07-27'),
     row('b', '2026-06-26'),
@@ -74,7 +73,7 @@ describe('selectVisibleRows — 헤더리스 연도는 접히지 않는다', () 
   ]
   const buckets = buildYearBuckets(items, 'desc')
 
-  it('헤더 있는 연도는 접힘이 적용된다', () => {
+  it('접은 연도의 행은 빠진다', () => {
     const visible = selectVisibleRows(
       items,
       buckets,
@@ -84,29 +83,27 @@ describe('selectVisibleRows — 헤더리스 연도는 접히지 않는다', () 
     expect(visible.map((item) => item.node.id)).toEqual(['solo'])
   })
 
-  it('헤더리스 연도는 접힘 집합에 들어 있어도 살아남는다', () => {
-    // 토글이 화면에 없으므로 접히면 되돌릴 방법이 없다.
+  it('1행짜리 연도도 접힌다 — 자기 토글이 화면에 있으므로 되돌릴 수 있다', () => {
     const visible = selectVisibleRows(
       items,
       buckets,
       new Set([1996]),
       new Set(),
     )
-    expect(visible.map((item) => item.node.id)).toContain('solo')
+    expect(visible.map((item) => item.node.id)).not.toContain('solo')
   })
 
-  it('전 연도 일괄 접기에서도 헤더리스 행은 남는다', () => {
+  it('전 연도 일괄 접기는 모든 행을 접는다', () => {
     const visible = selectVisibleRows(
       items,
       buckets,
       new Set(buckets.allYears),
       new Set(),
     )
-    expect(visible.map((item) => item.node.id)).toEqual(['solo'])
+    expect(visible).toHaveLength(0)
   })
 
-  it('세기 접힘은 헤더리스 연도에도 그대로 적용된다', () => {
-    // 세기 헤더는 항상 있으므로 되돌릴 수단이 존재한다.
+  it('세기 접힘도 그대로 적용된다', () => {
     const visible = selectVisibleRows(items, buckets, new Set(), new Set([20]))
     expect(visible.map((item) => item.node.id)).not.toContain('solo')
   })
@@ -131,7 +128,6 @@ describe('버킷 귀속 — 위치가 아니라 실제 부모를 따른다', () 
     // 그룹 단위(부모가 목록에 없는 행)는 1건, 렌더 행은 3행 — 둘은 다른 모수다.
     expect(buckets.yearRootCount.get(2020)).toBe(1)
     expect(buckets.eventsByYear.get(2020)).toHaveLength(3)
-    expect(buckets.headerlessYears.has(2020)).toBe(false)
   })
 })
 
@@ -331,28 +327,6 @@ describe('buildYearBuckets — 공백 판정은 행의 자기 연도를 본다',
       baselineItems: [parentRow, hiddenChild, oldRow],
     })
     expect(buckets.yearGapBefore.get(965)).toBeUndefined()
-  })
-})
-
-/**
- * 검토 IDX-9 — 헤더리스(1행짜리 연도)는 **접기 토글이 없다**는 뜻이다.
- * 접힘 *이후* 행 수로 판정하면 '하위 접기' 한 번에 헤더와 토글이 통째로 사라지고
- * 접어 뒀던 행이 되살아난다(실측: 시각 연 헤더 38→28, 연도 10개에서 동시 발생).
- */
-describe('buildYearBuckets — 헤더리스 판정은 하위 접힘에 흔들리지 않는다', () => {
-  it('접혀서 1행만 남아도 모수가 2행이면 헤더리스가 아니다', () => {
-    const parentRow = row('parent', '1894-01-01')
-    const childRow = row('child', '1904-01-01', 'parent')
-    const buckets = buildYearBuckets([parentRow], 'desc', false, {
-      baselineItems: [parentRow, childRow],
-    })
-    expect(buckets.eventsByYear.get(1894)).toHaveLength(1)
-    expect(buckets.headerlessYears.has(1894)).toBe(false)
-  })
-
-  it('모수를 주지 않으면 지금 행들이 곧 모수다(기존 계약)', () => {
-    const buckets = buildYearBuckets([row('only', '1894-01-01')], 'desc')
-    expect(buckets.headerlessYears.has(1894)).toBe(true)
   })
 })
 

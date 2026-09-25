@@ -250,8 +250,55 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     : undefined
   const isWide = useMediaQuery('(min-width: 2200px)')
   const isUltraWide = useMediaQuery('(min-width: 2500px)')
-  const flagMax = isNarrow ? 1 : isMidWidth ? 2 : isUltraWide ? 5 : isWide ? 4 : 3
-  /** 키워드 칩 개수 — 트랙이 넓어진 만큼 더 싣는다(넘치면 '+N'). */
+  /**
+   * 관련국 열이 **96px로 좁아지는 대역**(list.styles.ts의 `@media (max-width: 1179px)`).
+   * 개수 사다리가 폭 사다리와 어긋나 있던 자리가 정확히 여기였다 — 아래 주석 참고.
+   */
+  const isBelowSummary = useMediaQuery(
+    '(min-width: 900px) and (max-width: 1179px)',
+  )
+  /**
+   * 관련국 칩 예산 — **트랙 폭에서 역산한다**.
+   *
+   * 예전엔 개수가 뷰포트 임계(640/899/2200/2500)로만 정해졌고, 폭은 CSS 사다리
+   * (`--col-flags`: 60 / 96 / 172 / 200 / 240)가 따로 정했다. 두 사다리가 어긋나
+   * **열이 가장 좁아지는 대역에서 오히려 칩을 더 많이** 밀어 넣고 있었다
+   * (실측 1066px: 트랙 96px에 칩 3개 → 185행 중 51행(28%)이 '영…' '독일 제…'로 잘림).
+   *
+   * 게다가 칩 폭은 **두 종류**다(실측): 현대 국가는 국기 이모지 **17px**,
+   * 역사 국가는 이름 텍스트 **26~56px**. 한 숫자로는 둘 다 맞출 수 없어,
+   * 같은 96px 트랙이 국기 행에서는 남아돌고 이름 행에서는 세 배 모자랐다.
+   * 그래서 예산을 **국기용·이름용 두 값**으로 나눈다.
+   *
+   * 트랙 폭에서 '+N' 칩(21px)과 칩 간격(6px)을 빼고 나눈 값이다:
+   *   60px  → 국기 2 · 이름 1      96px  → 국기 3 · 이름 1
+   *   172px → 국기 4 · 이름 2      200px+ → 국기 5 · 이름 3 (이름 병기)
+   *   240px+ → 국기 6 · 이름 3 (이름 병기)
+   *
+   * ⚠️ 트랙은 컨테이너(카드) 기준이고 이 판정은 뷰포트 기준이라 좌측 목록이 접히면
+   * 한 계단 어긋날 수 있다. 넘치는 칩은 '+N'으로 흡수되므로 과다 쪽으로 틀려도 깨지지
+   * 않지만, **부족 쪽이 안전**하므로 경계값은 좁은 쪽에 맞춰 두었다.
+   */
+  const flagBudget = isNarrow
+    ? { flags: 1, names: 1, withName: false }
+    : isMidWidth
+      ? { flags: 2, names: 1, withName: false }
+      : isUltraWide
+        ? { flags: 6, names: 3, withName: true }
+        : isWide
+          ? { flags: 5, names: 3, withName: true }
+          : isBelowSummary
+            ? { flags: 3, names: 1, withName: false }
+            : { flags: 4, names: 2, withName: false }
+  /**
+   * 키워드 칩 개수 — 관련국과 같은 근거로 **트랙 폭에서 역산**한다.
+   *
+   * 기본 대역이 2였는데, 그 대역의 트랙은 240px이고 칩 중앙값은 56px이다.
+   * 실측(1600px·키워드 있는 123행): 2칩이 쓰는 폭은 중앙값 **136px = 트랙의 57%**,
+   * 어떤 행도 트랙을 넘지 않는데 **123행 중 119행(97%)이 '+N'** 을 달고 있었고 그렇게
+   * 감춰진 키워드가 **1,342개**였다. 열은 비어 있는데 값은 접혀 있던 셈이다.
+   * 한 칩 더 실으면 중앙값 198px(83%)로 트랙을 쓰고, 넘치는 행은 그대로 '+N'이 받는다.
+   */
   const keywordMax = isNarrow ? 1 : isMidWidth ? 2 : isUltraWide ? 6 : isWide ? 4 : 2
 
   /**
@@ -291,7 +338,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     centuryCount,
     yearRootCount,
     unknownItems,
-    headerlessYears,
     yearGapBefore,
     bucketYearById,
   } = yearBuckets
@@ -386,8 +432,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     groupYear: number | null,
     positionInSet: number,
     setSize: number,
-    /** 이 연 그룹에 시각 헤더가 없는가 — 행이 연도를 되살려야 하는지 결정한다 */
-    groupHeaderless = false,
   ) => {
     const event = eventById.get(node.id) ?? parentEvent
     if (!event) return null
@@ -440,9 +484,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         searchQuery={searchQuery}
         // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)
         groupYear={groupYear}
-        groupHeaderless={groupHeaderless}
         isNarrow={isNarrow}
-        flagMax={flagMax}
+        flagMax={flagBudget.flags}
+        flagNameMax={flagBudget.names}
+        flagsWithName={flagBudget.withName}
         keywordMax={keywordMax}
         // 계층 깊이를 접근성 트리에 전달 — 예전엔 하위 사건이 최상위와 똑같이 읽혔다.
         ariaLevel={depth + 1}
@@ -845,23 +890,23 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                         0,
                       )
                       /**
-                       * 1행짜리 연 그룹(실측 88개 중 50개 = 57%)은 시각 헤더를 렌더하지 않는다.
-                       * 63px 헤더 + 45px 행 = 108px를 사건 한 건에 쓰고 그중 58%가 크롬인데,
-                       * 아래 유일한 행은 자기 날짜를 이미 갖고 있다.
+                       * 연 머리글은 **모든 연 그룹**에 선다.
                        *
-                       * ⚠️ role=group · aria-labelledby · 시각적 숨김 GroupHeading · YearSection
-                       * 래퍼는 **그대로 둔다** — 헤딩 탐색과 sticky containing block 한정이
-                       * 거기에 걸려 있다. 사라지는 것은 시각 밴드뿐이다.
+                       * 한때 1행짜리 그룹(119개 중 68개)은 밴드를 지웠다 — 세로 예산 때문이다.
+                       * 그런데 라벨이 없는 그룹의 행은 *바로 위 연 밴드에 속한 것처럼* 보였고
+                       * (사용자 보고: "867년 아래에 895년 레겐스부르크 의회가 같이 나온다"),
+                       * 한 지면 안에서 같은 것(연 그룹)이 두 가지로 그려지는 상태였다.
+                       * 아껴야 할 것은 '어떤 해는 라벨을 안 준다'가 아니라 라벨의 높이였다 —
+                       * 밴드를 62px → 38px로 줄이고 '1건' 카운트를 생략해 그 비용을 갚는다.
                        */
-                      const isHeaderless = headerlessYears.has(currentYear)
+                      const isYearCollapsed = collapsedYears.has(currentYear)
                       /**
-                       * ⚠️ 이 분기는 selectVisibleRows(list-grouping.ts)와 **정확히 같아야** 한다.
-                       * 헤더가 없으면 접기 토글도 없으므로 접힘을 허용하면 되돌릴 수단이 없다.
-                       * 한쪽만 고치면 DOM에는 행이 보이는데 ↑↓ 내비·드로어 이전/다음
-                       * 모수에서는 빠진다(이 화면이 이미 태운 실패 모드).
+                       * 카운트는 **말할 것이 있을 때만** 싣는다.
+                       * 1행짜리 그룹이 68개인데 그 전부에 '1건'을 붙이면, 바로 아래 한 행이
+                       * 이미 말하는 사실을 68번 되풀이하는 잉크가 된다.
                        */
-                      const isYearCollapsed =
-                        !isHeaderless && collapsedYears.has(currentYear)
+                      const showYearCount =
+                        yearEventCount !== 1 || yearSubCount > 0
 
                       const yearHeadingId = `events-year-${currentYear}`
                       return (
@@ -901,7 +946,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                                 : ''
                             }`}
                           </List.GroupHeading>
-                          {!isHeaderless && (
                           <List.YearDivider
                             type="button"
                             /* 세기 머리글과 같은 규약 — 탭 정지점이 아니라 ↑↓ 순회 대상 */
@@ -932,15 +976,19 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               {/* 단위 '건' 필수 — 숫자만 두면 '2026년 6'이 6월로 읽힌다.
                                   세기 헤더는 이미 'N건'이라 표기도 함께 통일된다.
                                   하위가 있으면 두 번째 숫자를 덧붙인다 — 헤더 하나가
-                                  '1건'이라 말하고 16행이 놓이던 어긋남(IDX-3). */}
-                              <List.CollapsedCount>
-                                {yearSubCount > 0
-                                  ? `${yearEventCount}건 · 하위 ${yearSubCount}`
-                                  : `${yearEventCount}건`}
-                              </List.CollapsedCount>
+                                  '1건'이라 말하고 16행이 놓이던 어긋남(IDX-3).
+                                  '1건'뿐인 그룹은 생략한다 — 바로 아래 한 행이 이미 그 말이다.
+                                  (낭독용 aria-label에는 항상 남는다 — 스크린리더는 '바로 아래
+                                  한 행'을 눈으로 확인할 수 없다.) */}
+                              {showYearCount && (
+                                <List.CollapsedCount>
+                                  {yearSubCount > 0
+                                    ? `${yearEventCount}건 · 하위 ${yearSubCount}`
+                                    : `${yearEventCount}건`}
+                                </List.CollapsedCount>
+                              )}
                             </span>
                           </List.YearDivider>
-                          )}
                           {isYearCollapsed ? (
                             <List.CollapsedPlaceholder>
                               <span>
@@ -966,7 +1014,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                                   currentYear,
                                   index + 1,
                                   yearItems.length,
-                                  isHeaderless,
                                 ),
                               )}
                             </List.RowList>

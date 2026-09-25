@@ -98,22 +98,27 @@ interface EventListItemProps {
    */
   groupYear?: number | null
   /**
-   * 이 행이 속한 연도 그룹에 **시각 헤더가 없는가**(1행짜리 버킷).
-   * 헤더가 연도를 말해 주지 않으므로 행이 연도를 되살려 'YYYY.M.D'로 표시한다.
-   */
-  groupHeaderless?: boolean
-  /**
    * 좁은 폭(≤640px) 여부. 목록이 **한 번만** 계산해 내려준다 — 행마다 useMediaQuery를
    * 부르면 matchMedia 리스너가 행 수만큼(수백 개) 생긴다.
    * 폭이 모자란 곳에서 무엇을 먼저 포기할지(국기 개수·자식 수 배지)를 결정한다.
    */
   isNarrow?: boolean
   /**
-   * 관련국 칩 최대 개수 — 목록이 대역별로 계산해 내려준다.
+   * 관련국 칩 최대 개수(**국기 이모지 행**) — 목록이 대역별로 계산해 내려준다.
    * CSS로는 개수를 못 자르고, 폭만 자르면 글리프 중간에서 절단돼
    * '이탈'·'그레이트' 같은 존재하지 않는 국가명이 만들어진다.
    */
   flagMax?: number
+  /**
+   * 관련국 칩 최대 개수(**이름 텍스트가 섞인 행**).
+   *
+   * 실측으로 칩 폭이 두 종류다 — 국기 이모지 17px vs 역사국가 이름 26~56px.
+   * 한 숫자로 둘을 다 맞출 수 없어(같은 96px 트랙이 국기 행에서는 남고 이름 행에서는
+   * 세 배 모자랐다) 예산을 둘로 나눈다. 목록이 트랙 폭에서 역산해 내려준다.
+   */
+  flagNameMax?: number
+  /** 칩에 국기와 **이름을 함께** 적는가 — 트랙이 신축(ledger/atlas)인 대역에서만 참 */
+  flagsWithName?: boolean
   /** 키워드 칩 개수 상한 — 열 폭에 따라 목록이 정한다 */
   keywordMax?: number
   /** 계층 깊이(1-base) — 하위 사건이 최상위와 똑같이 읽히지 않게 한다 */
@@ -324,9 +329,10 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   isBookmarked = false,
   searchQuery,
   groupYear,
-  groupHeaderless = false,
   isNarrow = false,
   flagMax = 3,
+  flagNameMax = 1,
+  flagsWithName = false,
   keywordMax = 2,
   ariaLevel,
   positionInSet,
@@ -341,67 +347,82 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   const startParts = parseIsoDateParts(node.period.start)
   const endParts = node.period.end ? parseIsoDateParts(node.period.end) : null
   /**
-   * 행 선두 시간 토큰. 연도가 그룹 헤더('YYYY년')와 같으면 중복이라 월·일(정밀도가
-   * 'day'/'month'로 *확정*된 경우만)로 대체하고, 연도만 아는 경우(precision 미확정·'year')는
-   * 생략해 divider에 위임한다. 그룹과 다른 해(평면 뷰·미상 섹션)는 연도를 그대로 노출.
-   * ⚠️ 연도만 아는 이벤트가 01-01로 저장될 수 있어, precision이 명시적으로 'day'일 때만 월.일.
+   * 이 행이 **연 머리글이 말한 해 안에** 놓였는가 — 연도를 생략해도 되는 유일한 조건.
+   *
+   * 모든 연 그룹이 머리글을 갖는다(헤더리스 폐지). 그래서 `groupYear`와 같은 해면
+   * 그 연도는 반드시 화면에 이미 있다 — 행이 다시 적을 이유가 없다.
+   * 연 그룹 자체가 없는 지면(평면 보기·'연도 미상')은 `groupYear`가 null이라 빠진다.
    */
-  /**
-   * 이 행의 시간 토큰이 그룹 헤더와 *다른* 해를 가리키는가.
-   * (평면 뷰의 타 연도·'연도 미상' 섹션·BC 표기) — 좁은 폭에서도 숨기면 안 된다.
-   */
-  /**
-   * 이 행의 시간 토큰이 그룹 헤더와 *다른* 해를 가리키는가 — 괄호로 신호한다.
-   * ⚠️ BC는 제외한다. 'BC' 접두사 자체가 이미 다른 축이라는 신호라 괄호는 중복이고,
-   * 괄호 2자가 날짜 열 예산을 또 잠식한다.
-   */
-  const isOffGroupYear =
+  const insideLabeledYear =
     !!startParts &&
     startParts.year >= 0 &&
-    (groupYear == null || startParts.year !== groupYear)
+    groupYear != null &&
+    startParts.year === groupYear
+  /**
+   * 행 선두 시간 토큰 — **연도를 뺄 수 있을 때만 뺀다**.
+   *
+   * 규칙은 종료 열과 같은 문법 하나다: 연 머리글이 이미 말한 해면 월·일만 쓰고,
+   * 그렇지 않으면(다른 해·평면 뷰·'연도 미상' 섹션) 연·월·일을 전부 쓴다.
+   *
+   * 예전에는 이 '생략'이 **뺄 월·일이 없을 때도** 걸렸다. 연 정밀도 사건과 01-01
+   * sentinel(연도만 아는 값)이 빈 문자열이 돼, 실측 331행 중 9행의 시작 칸이 통째로
+   * 비었다 — 그중에는 '신성 로마 제국-폴란드 전쟁 (1002~1018)'처럼 **그 연 그룹의
+   * 대표 행**도 있었다. 게다가 바로 옆 종료 열에서 빈칸은 '종료 미상'을 뜻하므로,
+   * 같은 빈칸이 한 칸 건너 다른 뜻을 갖고 있었다. 뺄 것이 없으면 연도를 남긴다.
+   */
   const rowDateLabel = (() => {
     if (!startParts) return '미상'
     /**
-     * BC는 행에서 **축약**한다. '기원전 1046'은 11자(~72px)로 날짜 열 예산(66px)을
+     * BC는 행에서 **축약**한다. '기원전 1046'은 11자(~72px)로 날짜 열 예산을
      * 넘겨 그 초과분을 제목이 전부 떠안았다 — 고대사가 이 앱의 주요 콘텐츠라
      * 데이터가 들어오는 순간 좁은 대역 전체에서 발현한다.
      * 전체 표기는 title 속성이 유지한다.
      */
     if (startParts.year < 0) return `BC ${Math.abs(startParts.year)}`
-    if (groupYear != null && startParts.year === groupYear) {
-      const precision = event.startDatePrecision
-      /**
-       * 시각 헤더가 없는 연도(1행 버킷)는 연도를 **행이 되살린다**.
-       * 헤더를 지우고도 월·일만 남기면 '7.27'만 보이는 미아 행이 된다.
-       */
-      const yearPrefix = groupHeaderless ? `${startParts.year}.` : ''
-      if (precision === 'year') return groupHeaderless ? `${startParts.year}` : ''
-      if (precision === 'month')
-        return groupHeaderless
-          ? `${startParts.year}.${startParts.month}`
-          : `${startParts.month}월`
-      // 'day' 또는 precision 미기록(대부분 실제 월·일 보유) → 월.일.
-      // 단 01-01은 연도만 아는 값이 sentinel로 저장된 것일 수 있어(BC·고대 재구성 등) 생략.
-      if (startParts.month === 1 && startParts.day === 1)
-        return groupHeaderless ? `${startParts.year}` : ''
-      return `${yearPrefix}${startParts.month}.${startParts.day}`
-    }
-    /**
-     * 그룹 헤더와 다른 해 — 예전엔 연도만 돌려줘 월·일이 통째로 사라졌다(검토 IDX-4).
-     * 1875년 밴드는 날짜 열이 '(1878)(1878)(1877)(1877)(1877)(1876)×5'로 찍혀,
-     * 같은 괄호 연도 안의 선후를 알 단서가 화면에 하나도 없었다(실제 값은 1877-04-24 /
-     * 01-15 / 12-13). 월까지 되살리면 그 순서가 읽힌다.
-     *
-     * 일(day)까지는 넣지 않는다 — '1877.4.24'는 9자로 날짜 열 예산(cozy 66px)을 넘겨
-     * 초과분을 제목이 떠안는다(BC 축약이 같은 이유로 도입됐다). 정밀한 전체 값은
-     * 아래 title 속성이 유지한다.
-     */
     const precision = event.startDatePrecision
-    if (precision === 'year') return `${startParts.year}`
-    if (startParts.month === 1 && startParts.day === 1)
-      return `${startParts.year}`
-    return `${startParts.year}.${startParts.month}`
+    /**
+     * 연도를 뺀 나머지 — 없으면 null이고, 그때는 뺄 것이 없으므로 연도가 남는다.
+     * 01-01은 연도만 아는 값이 sentinel로 저장된 것일 수 있어(BC·고대 재구성 등)
+     * 월·일로 치지 않는다.
+     */
+    const monthDay = (() => {
+      if (precision === 'year') return null
+      if (precision === 'month') return `${startParts.month}월`
+      if (startParts.month === 1 && startParts.day === 1) return null
+      return `${startParts.month}.${startParts.day}`
+    })()
+    if (insideLabeledYear && monthDay) return monthDay
+    if (!monthDay) return `${startParts.year}`
+    /**
+     * 연도까지 쓰는 경우 — **일(日)도 함께 쓴다**(종료 열과 같은 문법).
+     *
+     * 예전엔 여기서 일을 잘라 '(1909.4)'로 찍었다. 근거는 'cozy 66px 예산'이었는데,
+     * 열 사다리(LIST_STEPS) 이후 이 열은 78px이고 **바로 옆 종료 열은 같은 폭에서
+     * 이미 '1909.4.30'을 찍고 있었다**(실측 57px). 한 행의 양 끝이 서로 다른 정밀도로
+     * 적히던 것이고, 잘린 쪽은 하필 정렬 축인 시작이었다(실측 69행 = 21%).
+     */
+    if (precision === 'month') return `${startParts.year}.${startParts.month}`
+    return `${startParts.year}.${startParts.month}.${startParts.day}`
   })()
+  /**
+   * 머리글과 다른 해임을 **괄호로** 신호할 것인가.
+   *
+   * 괄호는 같은 슬롯에 '12.31'(월·일)과 '1893'(연도)이 같은 서식으로 찍히던 시절의
+   * 장치다. 연·월·일을 다 쓰는 토큰('1909.4.30')은 마디가 셋이라 월·일('4.30')과
+   * 생김새부터 다르고, 종료 열이 괄호 없이 같은 구분을 이미 해내고 있다. 그래서
+   * 괄호는 **마디가 하나뿐인 연도 토큰**에만 남긴다 — 좁은 단계(62px)에서 괄호 2자가
+   * 열을 넘겨 '(1018.12.3…'으로 잘리는 것도 같이 피한다.
+   *
+   * ⚠️ BC는 제외한다 — 'BC' 접두사 자체가 이미 다른 축이라는 신호라 괄호는 중복이다.
+   * 연 그룹이 아예 없는 지면(평면 보기·'연도 미상' 섹션)도 제외한다: 다를 대상이
+   * 없는데 모든 행이 괄호를 두르면 그 지면 전체가 '어림값'으로 읽힌다.
+   */
+  const isOffGroupYear =
+    !!startParts &&
+    startParts.year >= 0 &&
+    groupYear != null &&
+    startParts.year !== groupYear
+  const marksOffGroupYear = isOffGroupYear && !rowDateLabel.includes('.')
   /** 날짜 열의 전체 값 — 열 예산 때문에 축약된 토큰(BC·off-group)의 원본. */
   const rowDateTitle = (() => {
     if (!startParts) return undefined
@@ -462,14 +483,16 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   /**
    * 행이 **그 사건의 날짜를 온전히(연·월·일) 보여주는가**.
    *
-   * 연도는 그룹 머리글('2025년')이, 월·일은 날짜 열('6.12')이 댄다. 둘이 맞아떨어질 때만
-   * 참이다 — 연 정밀도(열이 빈칸)·월 정밀도('9월')·그룹 밖 연도('(2024.3)', 일이 없다)·
-   * 1월 1일 sentinel에서는 행이 날짜를 다 말하지 못한다.
+   * 연도는 그룹 머리글('2025년')이나 날짜 열 자신이 대고, 월·일은 항상 날짜 열이 댄다.
+   * 그래서 남는 조건은 **날짜 열이 일(日)까지 말할 수 있는가** 하나뿐이다 —
+   * 연 정밀도·월 정밀도('9월')·1월 1일 sentinel·BC 축약에서는 말하지 못한다.
+   *
+   * 그룹 밖 연도(`isOffGroupYear`)는 예전엔 일이 잘려 나가 여기서 제외됐지만,
+   * 이제 '1909.4.30'처럼 전부 적으므로 온전하다.
    */
   const rowShowsFullDate =
     !!startParts &&
     startParts.year >= 0 &&
-    !isOffGroupYear &&
     event.startDatePrecision !== 'year' &&
     event.startDatePrecision !== 'month' &&
     !(startParts.month === 1 && startParts.day === 1)
@@ -558,19 +581,18 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
    */
   const hasTextChips = (event.relatedHistoricalCountries?.length ?? 0) > 0
   /**
-   * 관련국 칩에 **이름도** 적을 만큼 열이 넓은가.
+   * 이 행의 칩 예산 — 칩이 **이름인가 국기인가**로 갈린다.
    *
-   * 별도 prop을 만들지 않고 flagMax로 판정한다 — 그 값 자체가 '이 열에 칩을 몇 개 놓을
-   * 수 있는가'를 대역별로 이미 재어 둔 값이라, 폭 판정이 두 벌로 갈리지 않는다.
-   * 4 이상 = 열 사다리 step 2·3(ledger/atlas) 대역이고, 거기서 관련국 열은 신축 트랙이다.
+   * 예전엔 `Math.min(flagMax, 3)` 한 줄이었다. 그런데 이 대역의 `flagMax`가 이미 3이라
+   * 그 min은 아무 일도 하지 않았고, 96px 트랙에 이름 칩 3개가 그대로 들어가 전부
+   * '영…' '독일 제…'로 잘렸다(실측 185행 중 51행). 개수는 이제 목록이 트랙 폭에서
+   * 역산해 두 값으로 내려준다 — 여기서는 고르기만 한다.
+   *
+   * 이름을 병기하는 대역(`flagsWithName`)은 국기 행도 칩이 이름만큼 넓어지므로
+   * 같은 이름용 예산을 쓴다.
    */
-  const flagsWithName = flagMax >= 4
-  /* 이름이 붙으면 칩 하나가 3~5배 넓어진다 — 개수는 도로 줄인다(넘치는 분은 '+N'). */
-  const effectiveFlagMax = hasTextChips
-    ? Math.min(flagMax, 3)
-    : flagsWithName
-      ? Math.min(flagMax, 3)
-      : flagMax
+  const effectiveFlagMax =
+    hasTextChips || flagsWithName ? flagNameMax : flagMax
   /* 키워드 열(step 2) — 검색 중에는 매칭된 키워드를 첫 칩으로 올린다. '왜 이 행이 결과에
      있는가'를 말하는 계약(CR-3)과 같은 방향이다. */
   const searchTerm = searchQuery?.trim().toLowerCase()
@@ -661,7 +683,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
        * 폭 고정 트랙 5개 + minmax(0,1fr) 하나로 전 행·전 그룹 공통 축을 만든다. */}
       <Body>
         <Year
-          data-offgroup={isOffGroupYear ? 'true' : undefined}
+          data-row-start=""
+          data-offgroup={marksOffGroupYear ? 'true' : undefined}
           title={rowDateTitle}
         >
           {rowDateLabel}
@@ -2012,9 +2035,11 @@ const Year = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
 
-  /* 그룹 헤더와 *다른* 해를 가리키는 토큰 — 같은 슬롯에 '12.31'(월·일)과 '1893'(연도)이
-   * 완전히 같은 서식으로 찍히면 두 단위가 구분되지 않는다. 실측상 자식 87건 중 62건(71%)이
-   * 부모와 다른 해다. 한 단계 진한 색 + 앞 구분점으로 '이건 다른 해'를 신호한다(검토 VIS-6). */
+  /* 그룹 헤더와 *다른* 해를 가리키는 **마디 하나짜리** 토큰 — 같은 슬롯에 '12.31'(월·일)과
+   * '1893'(연도)이 완전히 같은 서식으로 찍히면 두 단위가 구분되지 않는다. 실측상 자식
+   * 87건 중 62건(71%)이 부모와 다른 해다.
+   * ⚠️ 연·월·일을 다 쓰는 토큰('1909.4.30')에는 붙지 않는다 — 마디가 셋이라 생김새로
+   * 이미 갈리고, 괄호 2자가 좁은 단계(62px)에서 열을 넘긴다(marksOffGroupYear 참고). */
   &[data-offgroup='true'] {
     /* ⚠️ 색으로 구분하려 하지 말 것 — 이 테마에서 text.secondary는 라이트 #6b7280 /
        다크 #a1a1aa로 메타 토큰과 **값이 같아** 색 분기가 no-op이 된다(실측 확인).
