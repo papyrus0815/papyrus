@@ -189,7 +189,11 @@ describe('interleaveReignMarkers', () => {
   ]
   const sejong = marker('m', 1443, null, 8, 10)
   const ids = (entries: ReturnType<typeof interleaveReignMarkers<(typeof rows)[number]>>) =>
-    entries.map((entry) => (entry.kind === 'row' ? entry.item.id : `👑${entry.marker.id}`))
+    entries.map((entry) =>
+      entry.kind === 'row'
+        ? entry.item.id
+        : `👑${entry.markers.map((item) => item.id).join('+')}`,
+    )
 
   it('오름차순: 즉위일 이후 첫 최상위 행 앞', () => {
     expect(
@@ -214,6 +218,18 @@ describe('interleaveReignMarkers', () => {
         }),
       ),
     ).toEqual(['dec', '👑m', 'jan', 'child'])
+  })
+
+  it('같은 자리에 연달아 오는 즉위는 한 줄로 묶는다', () => {
+    expect(
+      ids(
+        interleaveReignMarkers(rows, [marker('a', 1443, null, 3, 1), sejong], {
+          direction: 'asc',
+          chronological: true,
+          rowStartKey: (row) => row.key,
+        }),
+      ),
+    ).toEqual(['jan', 'child', '👑a+m', 'dec'])
   })
 
   it('시간순이 아닌 정렬이면 그룹 맨 앞', () => {

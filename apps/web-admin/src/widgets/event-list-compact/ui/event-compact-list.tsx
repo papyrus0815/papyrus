@@ -427,29 +427,73 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   )
 
   /**
-   * 즉위 구분선 한 줄. 인물 이름은 인물 상세로 가는 링크다 — 구분선이 곧 '이 시기를
-   * 다스린 사람'으로 건너가는 입구가 된다. 행 목록 안에 들 때는 listitem이어야 한다.
+   * 이름 앞에 나라를 붙이지 않아도 되는 나라 — 목록 군주 중 **가장 많은 나라**.
+   * 모든 줄에 '조선'을 반복하면 잉크만 늘어난다. 주류 나라는 생략하고, 섞여 든 다른
+   * 나라(임진왜란의 일본 천황 등)만 이름 앞에 나라를 단다.
    */
-  const renderReignMarker = (marker: ReignMarker, inList: boolean) => (
+  const reignHomeCountry = useMemo(() => {
+    const counts = new Map<string | null, number>()
+    for (const marker of reignMarkers ?? []) {
+      counts.set(marker.countryName, (counts.get(marker.countryName) ?? 0) + 1)
+    }
+    let home: string | null = null
+    let best = 0
+    counts.forEach((count, country) => {
+      if (count > best) {
+        best = count
+        home = country
+      }
+    })
+    return home
+  }, [reignMarkers])
+
+  /**
+   * 즉위 표지 한 줄 — **축 위의 눈금**이지 행이 아니다.
+   *
+   * 왕관은 레일 축 위에 연·세기 도트처럼 얹히고, 텍스트는 메타 크기·중립색으로 낮춘다.
+   * 끝까지 달리는 rule을 두지 않는다 — 연 머리글·공백 표지·행 괘선이 이미 가로선을
+   * 쓰고 있어, 선을 하나 더 보태면 목록이 줄무늬가 된다. 같은 자리의 즉위는 한 줄에
+   * 이어 쓴다(세조 1455–1468 · 성종 1469–1494). 이름은 인물 상세 링크.
+   * 행 목록 안에 들 때는 listitem이어야 한다.
+   */
+  const renderReignMarkers = (
+    markers: ReignMarker[],
+    inList: boolean,
+    beforeCentury = false,
+  ) => (
     <List.ReignMarker
-      key={`reign-${marker.id}`}
+      key={`reign-${markers[0].id}`}
       role={inList ? 'listitem' : 'note'}
+      $beforeCentury={beforeCentury}
       data-reign-marker=""
+      aria-label={markers
+        .map(
+          (marker) =>
+            `${marker.countryName ? `${marker.countryName} ` : ''}${marker.name} 즉위, 재위 ${formatReignSpan(marker)}`,
+        )
+        .join('; ')}
     >
-      <FaCrown aria-hidden="true" />
-      <span>
-        <Link
-          to={pathKeys.personsTimelineDetail(marker.personId)}
-          tabIndex={-1}
+      <List.ReignMarkerIcon aria-hidden="true">
+        <FaCrown />
+      </List.ReignMarkerIcon>
+      {markers.map((marker) => (
+        <List.ReignMarkerItem
+          key={marker.id}
+          aria-hidden="true"
+          title={`${marker.countryName ? `${marker.countryName} ` : ''}${marker.name} 즉위 · 재위 ${formatReignSpan(marker)}`}
         >
-          {marker.name}
-        </Link>{' '}
-        즉위
-      </span>
-      {marker.countryName && (
-        <List.ReignMarkerMeta>{marker.countryName}</List.ReignMarkerMeta>
-      )}
-      <List.ReignMarkerMeta>재위 {formatReignSpan(marker)}</List.ReignMarkerMeta>
+          {marker.countryName && marker.countryName !== reignHomeCountry && (
+            <List.ReignMarkerSpan>{marker.countryName}</List.ReignMarkerSpan>
+          )}
+          <Link
+            to={pathKeys.personsTimelineDetail(marker.personId)}
+            tabIndex={-1}
+          >
+            {marker.name}
+          </Link>
+          <List.ReignMarkerSpan>{formatReignSpan(marker)}</List.ReignMarkerSpan>
+        </List.ReignMarkerItem>
+      ))}
     </List.ReignMarker>
   )
 
@@ -856,9 +900,12 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     <List.GapMarker role="note">{label}</List.GapMarker>
                   ) : null
                 })()}
-                {reignPlan.beforeCentury
-                  .get(century)
-                  ?.map((marker) => renderReignMarker(marker, false))}
+                {reignPlan.beforeCentury.has(century) &&
+                  renderReignMarkers(
+                    reignPlan.beforeCentury.get(century)!,
+                    false,
+                    true,
+                  )}
                 {/* 헤딩 탐색용 — 시각적으로는 숨기고 접근성 트리에만 남긴다. */}
                 <List.GroupHeading id={centuryHeadingId} aria-level={3}>
                   {`${centuryLabel} (${centuryRangeLabel}) — 사건 ${centuryUnitCount}건${
@@ -996,9 +1043,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               <List.GapMarker role="note">{label}</List.GapMarker>
                             ) : null
                           })()}
-                          {reignPlan.beforeYear
-                            .get(currentYear)
-                            ?.map((marker) => renderReignMarker(marker, false))}
+                          {reignPlan.beforeYear.has(currentYear) &&
+                            renderReignMarkers(
+                              reignPlan.beforeYear.get(currentYear)!,
+                              false,
+                            )}
                           <List.GroupHeading id={yearHeadingId} aria-level={4}>
                             {`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건${
                               yearSubCount > 0
@@ -1082,7 +1131,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                                 },
                               ).map((entry) =>
                                 entry.kind === 'reign'
-                                  ? renderReignMarker(entry.marker, true)
+                                  ? renderReignMarkers(entry.markers, true)
                                   : renderRow(
                                       entry.item,
                                       currentYear,
@@ -1101,7 +1150,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             })}
 
           {grouped &&
-            reignPlan.trailing.map((marker) => renderReignMarker(marker, false))}
+            reignPlan.trailing.length > 0 &&
+            renderReignMarkers(reignPlan.trailing, false)}
 
           {/* 연도 미상 — period.start가 비었거나 파싱 불가하고 귀속할 상위 연도도 없는 항목.
            * 그룹핑에서 드롭하지 않고 여기 모아 렌더한다(자식만 남은 북마크 필터·날짜 완전 미상). */}
