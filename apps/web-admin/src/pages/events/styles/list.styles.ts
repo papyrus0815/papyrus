@@ -275,11 +275,18 @@ export const CompactList = styled.div.attrs(
   /* 잉크는 1px인데 100% 폭 그라디언트 셰이더가 도는 건 순 낭비다(전폭에서 3,300px).
      no-repeat이 이미 걸려 있어 시각 결과는 픽셀 동일하다. */
   background-size: calc(var(--rail-x) + 2px)
-    calc(100% - var(--rail-tail) - var(--col-header-h, 26px));
+    calc(
+      100% - var(--rail-tail) - var(--col-header-h, 26px) -
+        var(--col-header-gap, 8px)
+    );
   /* 축은 **표가 시작하는 곳**에서 시작한다 — 안 그러면 컨테이너 상단 패딩 구간에
      축 토막이 남아 열 헤더('날짜') 위에 정체불명의 눈금처럼 떠 있다(스크롤 최상단에서만
      보이던 잔상). local 첨부라 스크롤하면 어차피 화면 밖이므로 부작용이 없다. */
-  background-position: 0 var(--col-header-h, 26px);
+  /* 머리글 아래 숨 틈(--col-header-gap)도 건너뛴다 — 그 8px에 남은 축 토막이 첫 세기 도트
+     위로 삐져나와, 축이 '도트에서 시작'하지 않고 머리글 밑에서 흘러내리는 것처럼 보였다.
+     나머지 절반(밴드 위쪽)은 CenturyDivider가 첫 세기에서 스스로 비운다. */
+  background-position: 0
+    calc(var(--col-header-h, 26px) + var(--col-header-gap, 8px));
 
   /* 스크롤바 — 중립 크롬. 브랜드 파랑 20%는 라이트 표면 대비 1.33:1로 사실상 안 보였고,
      브랜드 hue를 중립 크롬에 쓰는 것 자체가 BRAND 규약(primary CTA·활성 상태 전용) 위반이다.
@@ -394,6 +401,8 @@ export const CompactList = styled.div.attrs(
      * 레일 배경(background-position·size)도 같은 변수를 읽으므로 함께 맞는다.
      */
     --col-header-h: 0px;
+    /* 머리글이 없으면 그 아래 숨 틈도 없다 — 레일 시점 계산이 같은 쌍을 읽는다. */
+    --col-header-gap: 0px;
   }
 
   /* 모바일 — 좁은 폭에서 거터를 더 줄이고 축선을 12px로 동기화. */
@@ -668,7 +677,8 @@ export const ColumnHeader = styled.div`
   /* 2px이었다. 머리글 띠와 첫 세기 밴드가 맞붙어, 표의 '머리'와 '첫 장'이 한 덩어리로
      읽혔다. 8px은 행 사이(0)보다 크고 세기 사이(--century-gap)보다 작아, 세로 간격의
      3단 사다리(행 0 < 머리글 8 < 세기 38~56)에서 자기 칸을 갖는다. */
-  margin-bottom: 8px;
+  /* 값은 CompactList의 --col-header-gap(레일 시점이 같은 값을 읽는다). */
+  margin-bottom: var(--col-header-gap, 8px);
   /* 잉크는 컨테이너 패딩 + 행 자신의 안쪽 패딩만큼 되돌려 받는다 — 라벨 x가 행 셀과
      픽셀 단위로 같아야 머리글이 '그 열'을 가리킨다(어긋났던 12px 회귀 이력 참고). */
   padding: 0 calc(var(--list-pad-r, 20px) + var(--row-pad-r)) 0
@@ -1475,6 +1485,16 @@ export const CenturyDivider = styled.button`
       theme.mode === 'dark'
         ? `${railAxisOverlay(true)}, ${GROUP_BAND_HOVER.dark.century}`
         : `${railAxisOverlay(false)}, ${GROUP_BAND_HOVER.light.century}`};
+  }
+
+  /* 첫 세기 — 축은 이 도트의 중심에서 시작한다. 밴드가 위쪽 절반에도 축을 다시 그리면
+   * 목록 최상단에서 도트 위로 축 토막이 솟아, 시간축이 도트가 아니라 머리글(모바일은 카드
+   * 윗변)에서 흘러내리는 것처럼 보였다. 특이도가 더 높아 :hover의 background 단축형이
+   * 크기·위치를 되돌리지 못한다. */
+  ${CenturySection}:not(${CenturySection} + ${CenturySection}) > & {
+    background-position: 0 100%;
+    background-size: 100% 50%;
+    background-repeat: no-repeat;
   }
 
   &:focus-visible {
