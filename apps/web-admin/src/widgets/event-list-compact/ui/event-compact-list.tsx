@@ -700,7 +700,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             </List.RowList>
           )}
           {grouped &&
-            centuryGroups.map(({ century, years }) => {
+            centuryGroups.map(({ century, years }, centuryIndex) => {
             const isCenturyCollapsed = collapsedCenturies.has(century)
 
             // 세기 라벨/범위 — getCentury 정의(양수 ceil, 음수 BC)에 맞춰 BC 안전.
@@ -767,6 +767,18 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                 </List.GroupHeading>
                 <List.CenturyDivider
                   type="button"
+                  /**
+                   * 밴드 머리글은 **탭 정지점이 아니다** — ↑↓ 순회에 편입돼 있다.
+                   *
+                   * 실측: 정지점을 그대로 두면 목록 안 64개 중 62개가 머리글이라,
+                   * 목록을 지나 다음 컨트롤로 가는 데 Tab이 62번 필요했다(로빙 규약 위반).
+                   *
+                   * 단 하나 예외 — 세기를 전부 접어 **행이 0개**가 되면 로빙 대상이 사라져
+                   * 목록의 탭 정지점이 0이 된다. 그러면 키보드로는 다시 펼칠 방법이 없다.
+                   * 그 경우에만 첫 세기 머리글이 정지점 노릇을 한다.
+                   */
+                  tabIndex={!rovingTargetId && centuryIndex === 0 ? 0 : -1}
+                  data-band-toggle="century"
                   aria-expanded={!isCenturyCollapsed}
                   aria-label={`${centuryLabel} — 사건 ${centuryUnitCount}건${
                     centurySubCount > 0
@@ -892,6 +904,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           {!isHeaderless && (
                           <List.YearDivider
                             type="button"
+                            /* 세기 머리글과 같은 규약 — 탭 정지점이 아니라 ↑↓ 순회 대상 */
+                            tabIndex={-1}
+                            data-band-toggle="year"
                             aria-expanded={!isYearCollapsed}
                             aria-label={`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건${
                               yearSubCount > 0

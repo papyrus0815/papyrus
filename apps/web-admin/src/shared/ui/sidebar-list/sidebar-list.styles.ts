@@ -927,7 +927,20 @@ export const CodeText = styled.div<{ $unread?: boolean; $lines?: number }>`
           -webkit-box-orient: vertical;
           -webkit-line-clamp: ${$lines};
           white-space: normal;
-          overflow-wrap: anywhere;
+          /*
+           * 줄을 **낱말 경계에서** 넘긴다.
+           *
+           * anywhere는 어디서든 끊을 수 있다는 뜻이라, 한국어에서는 한 낱말을 음절 단위로
+           * 쪼갠다 — 실측 2줄 이상 제목 154행 중 39행(25%)이 그랬다('아스트라(Astra) 공 /
+           * 식 출시', '이스라엘 신질 / 서 작전', '상하이증권거래 / 소 과창판'). 읽는 사람은
+           * 그때마다 두 줄을 도로 붙여야 한다.
+           *
+           * keep-all이 낱말을 지키고, break-word가 '한 낱말이 한 줄보다 긴' 예외
+           * (Heeresvorlage 같은 긴 라틴 표기)에서만 쪼갠다 — anywhere를 쓰던 이유는 그
+           * 예외 하나뿐이었다. 실측 줄 수 분포는 사실상 그대로다(1줄 192 · 2줄 111).
+           */
+          word-break: keep-all;
+          overflow-wrap: break-word;
         `
       : css`
           white-space: nowrap;

@@ -101,19 +101,27 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                   <li>
                     <kbd aria-label="위쪽 화살표">↑</kbd> /{' '}
                     <kbd aria-label="아래쪽 화살표">↓</kbd>
-                    <span>이전 / 다음 사건 선택 (목록 행에 포커스가 있을 때)</span>
+                    <span>
+                      이전 / 다음 행 — 사건과 연·세기 머리글을 함께 지납니다
+                    </span>
                   </li>
                   <li>
                     <kbd aria-label="오른쪽 화살표">→</kbd>
-                    <span>하위 사건 펼치기 · 이미 펼쳐져 있으면 첫 하위로</span>
+                    <span>
+                      하위 사건 펼치기 · 이미 펼쳐져 있으면 첫 하위로 (연·세기
+                      머리글에서는 그 구간 펼치기)
+                    </span>
                   </li>
                   <li>
                     <kbd aria-label="왼쪽 화살표">←</kbd>
-                    <span>하위 사건 접기 · 접혀 있으면 상위 사건으로</span>
+                    <span>
+                      하위 사건 접기 · 접혀 있으면 상위 사건으로 (연·세기
+                      머리글에서는 그 구간 접기)
+                    </span>
                   </li>
                   <li>
                     <kbd>Home</kbd> / <kbd>End</kbd>
-                    <span>맨 처음 / 맨 끝 (목록 행에 포커스가 있을 때)</span>
+                    <span>맨 처음 / 맨 끝 (목록에 포커스가 있을 때)</span>
                   </li>
                   <li>
                     <kbd>Enter</kbd> / <kbd>Space</kbd>

@@ -11,14 +11,23 @@
  */
 import { useEffect, useRef } from 'react'
 
+/**
+ * ⚠️ 모든 후보에 `:not([tabindex="-1"])`가 붙어야 한다 — 브라우저가 실제로 Tab을 주는
+ * 집합과 같아야 하기 때문이다. 예전엔 `button:not([disabled])`만 있어서, 로빙
+ * tabindex를 쓰는 그룹(라디오·세그먼트)이 안에 있으면 트랩이 계산한 첫/마지막 요소가
+ * 진짜 첫/마지막 탭 대상과 어긋났다. 그러면 경계에서 가로채지 못해 **포커스가 트랩을
+ * 빠져나간다** — 트랩이 있는데도 Tab 한 번에 뒤 문서로 새는 상태.
+ */
 const FOCUSABLE = [
   'a[href]',
   'button:not([disabled])',
   'textarea:not([disabled])',
   'input:not([disabled])',
   'select:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',')
+  '[tabindex]',
+]
+  .map((selector) => `${selector}:not([tabindex="-1"])`)
+  .join(',')
 
 export function useFocusTrap<T extends HTMLElement>(active: boolean) {
   const containerRef = useRef<T | null>(null)

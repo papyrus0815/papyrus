@@ -36,6 +36,9 @@ interface HarnessProps {
    * 평평하면 "그룹 마지막 행에서 ↓가 무동작"이라는 실제 결함을 구조적으로 재현할 수 없다.
    */
   renderedGroups?: string[][]
+  /** 접힌 밴드 인덱스 — 머리글의 aria-expanded를 뒤집어 ←/→ 계약을 재현한다 */
+  collapsedBands?: number[]
+  onToggleBand?: (groupIndex: number) => void
 }
 
 const NavHarness = ({
@@ -48,6 +51,8 @@ const NavHarness = ({
     ['evt-1', 'evt-2'],
     ['evt-3', 'evt-4'],
   ],
+  collapsedBands = [],
+  onToggleBand,
 }: HarnessProps) => {
   useCatalogListNavigation({
     setSelectedEventId,
@@ -71,6 +76,19 @@ const NavHarness = ({
             role="list"
             aria-label={`연도 그룹 ${groupIndex + 1}`}
           >
+            {/* 연도 밴드 머리글 — 실제 목록처럼 그룹 **앞**에 서고 탭 정지점이 아니다.
+                ↑↓ 순회에 편입돼 있으므로 하네스에도 같은 계약으로 둔다. */}
+            <button
+              type="button"
+              tabIndex={-1}
+              data-band-toggle="year"
+              aria-expanded={
+                collapsedBands.includes(groupIndex) ? 'false' : 'true'
+              }
+              onClick={() => onToggleBand?.(groupIndex)}
+            >
+              {`밴드 ${groupIndex + 1}`}
+            </button>
             {groupIds.map((eventId) => {
               const meta = rowMeta[eventId] ?? {}
               return (
@@ -97,6 +115,54 @@ const NavHarness = ({
     </div>
   )
 }
+
+describe('useCatalogListNavigation — 밴드 머리글', () => {
+  /**
+   * 머리글은 원래 각자 탭 정지점이었다. 실측에서 목록 안 정지점 64개 중 **62개**가
+   * 머리글이라, 목록을 지나 다음 컨트롤로 가는 데 Tab을 62번 눌러야 했다. 정지점을
+   * 내리는 대신 화살표 순회에 편입했으므로, 그 순회가 곧 도달성의 유일한 보증이다.
+   */
+  it('↓가 행과 밴드 머리글을 DOM 순서대로 함께 지난다', () => {
+    const setSelectedEventId = jest.fn()
+    render(
+      <NavHarness setSelectedEventId={setSelectedEventId} navigate={jest.fn()} />,
+    )
+
+    // 그룹 1의 마지막 행에서 ↓ → 다음 그룹의 **머리글**로 간다(행을 건너뛰지 않는다)
+    fireEvent.keyDown(screen.getByText('evt-2'), { key: 'ArrowDown' })
+    expect(screen.getByText('밴드 2')).toHaveFocus()
+    // 머리글은 사건이 아니므로 선택을 바꾸지 않는다 — 드로어가 엉뚱한 사건으로 갈리지 않게.
+    expect(setSelectedEventId).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(screen.getByText('밴드 2'), { key: 'ArrowDown' })
+    expect(setSelectedEventId).toHaveBeenCalledWith('evt-3')
+  })
+
+  it('머리글 위의 →/←는 그 구간을 펼치고 접는다', () => {
+    const onToggleBand = jest.fn()
+    render(
+      <NavHarness
+        setSelectedEventId={jest.fn()}
+        navigate={jest.fn()}
+        collapsedBands={[0]}
+        onToggleBand={onToggleBand}
+      />,
+    )
+
+    // 접혀 있으면 →가 펼친다
+    fireEvent.keyDown(screen.getByText('밴드 1'), { key: 'ArrowRight' })
+    expect(onToggleBand).toHaveBeenCalledWith(0)
+
+    // 이미 접혀 있는데 ←를 누르면 아무 일도 하지 않는다(가로 스크롤을 뺏지 않는다)
+    onToggleBand.mockClear()
+    fireEvent.keyDown(screen.getByText('밴드 1'), { key: 'ArrowLeft' })
+    expect(onToggleBand).not.toHaveBeenCalled()
+
+    // 펼쳐진 머리글에서는 ←가 접는다
+    fireEvent.keyDown(screen.getByText('밴드 2'), { key: 'ArrowLeft' })
+    expect(onToggleBand).toHaveBeenCalledWith(1)
+  })
+})
 
 describe('useCatalogListNavigation — 스코프', () => {
   it('목록 행에 포커스가 있을 때만 ↓가 선택을 옮긴다', () => {
@@ -181,7 +247,11 @@ describe('useCatalogListNavigation — 스코프', () => {
       />,
     )
 
+    // 사이에 낀 것은 다음 밴드의 **머리글**이지 숨은 행이 아니다 — 접힌 evt-2는
+    // DOM에 없으므로 후보에서 통째로 빠진다(이 테스트의 본래 계약).
     fireEvent.keyDown(screen.getByText('evt-1'), { key: 'ArrowDown' })
+    expect(screen.getByText('밴드 2')).toHaveFocus()
+    fireEvent.keyDown(screen.getByText('밴드 2'), { key: 'ArrowDown' })
     expect(setSelectedEventId).toHaveBeenCalledWith('evt-3')
   })
 
@@ -192,24 +262,38 @@ describe('useCatalogListNavigation — 스코프', () => {
    * 있으므로 그룹의 마지막 행에서 ↓가 무동작이었다. 1행짜리 연도 그룹에서는 ↑↓가
    * 아예 아무 일도 하지 않았다.
    */
-  it('연도 그룹의 마지막 행에서 ↓는 다음 그룹의 첫 행으로 넘어간다', () => {
+  /**
+   * ⚠️ 그룹 경계에는 **밴드 머리글이 한 칸 낀다**(2026-09-24). 머리글이 탭 정지점에서
+   * 내려오며 ↑↓ 순회에 편입됐기 때문이다 — 파일 탐색기·에디터의 그룹 목록과 같은
+   * 관습이고, 머리글에 내려선 자리에서 바로 그 구간을 접을 수 있다.
+   * 그룹을 건너뛰는 이동 자체는 그대로다(스코프는 여전히 스크롤 컨테이너).
+   */
+  it('연도 그룹의 마지막 행에서 ↓는 다음 그룹 머리글을 거쳐 첫 행으로 간다', () => {
     const setSelectedEventId = jest.fn()
     render(
       <NavHarness setSelectedEventId={setSelectedEventId} navigate={jest.fn()} />,
     )
 
-    // evt-2 = 첫 그룹의 마지막 행, evt-3 = 다음 그룹의 첫 행
+    // evt-2 = 첫 그룹의 마지막 행 → 다음 그룹의 머리글
     fireEvent.keyDown(screen.getByText('evt-2'), { key: 'ArrowDown' })
+    expect(screen.getByText('밴드 2')).toHaveFocus()
+    expect(setSelectedEventId).not.toHaveBeenCalled()
+
+    // 한 칸 더 → 다음 그룹의 첫 행
+    fireEvent.keyDown(screen.getByText('밴드 2'), { key: 'ArrowDown' })
     expect(setSelectedEventId).toHaveBeenCalledWith('evt-3')
   })
 
-  it('다음 그룹의 첫 행에서 ↑는 이전 그룹의 마지막 행으로 돌아간다', () => {
+  it('다음 그룹의 첫 행에서 ↑는 머리글을 거쳐 이전 그룹의 마지막 행으로 돌아간다', () => {
     const setSelectedEventId = jest.fn()
     render(
       <NavHarness setSelectedEventId={setSelectedEventId} navigate={jest.fn()} />,
     )
 
     fireEvent.keyDown(screen.getByText('evt-3'), { key: 'ArrowUp' })
+    expect(screen.getByText('밴드 2')).toHaveFocus()
+
+    fireEvent.keyDown(screen.getByText('밴드 2'), { key: 'ArrowUp' })
     expect(setSelectedEventId).toHaveBeenCalledWith('evt-2')
   })
 

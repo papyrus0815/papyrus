@@ -30,6 +30,13 @@ import styled from 'styled-components'
 
 import * as S from '@/shared/ui/sidebar-list'
 
+/**
+ * 핀 받침 한 장 — 왼쪽 12px은 투명에서 면색으로 이어지는 사라짐, 그 뒤는 불투명.
+ * 겹친 제목 글자를 자르지 않고 흐리게 끝내는 것이 목적이다(아래 PinButton 주석 참고).
+ */
+const pinPlate = (color: string) =>
+  `linear-gradient(to right, transparent, ${color} 12px)`
+
 export const EventListScope = styled.div`
   display: contents;
 
@@ -200,13 +207,62 @@ export const EventListScope = styled.div`
     align-self: flex-start;
   }
 
-  /* 제목이 두 줄까지 접히는 도메인이라 선두 열·우측 슬롯은 첫 줄에 붙어야 한다 */
+  /* 제목이 두 줄까지 접히는 도메인이라 선두 열은 첫 줄에 붙어야 한다 */
   ${S.RowTop} {
     align-items: flex-start;
   }
+
+  /*
+   * ── 핀은 열이 아니라 덧댐 ───────────────────────────────────────────────
+   * 핀 버튼은 평소 opacity 0(hover·포커스·고정된 행에서만 보인다)인데도 행마다 18px짜리
+   * 트랙을 **항상** 잡고 있었다. 320px 패널에서 제목이 쓰는 폭은 215px뿐 — 나머지
+   * 105px이 선두 날짜(36) · 좌우 패딩(24+16) · 그리고 이 보이지 않는 18px이었다.
+   *
+   * 실측 326행: 제목이 한 줄에 드는 행 192 · 두 줄 113 · **두 줄로도 모자라 말줄임된 행 21**.
+   * 열을 걷어내니 207 / 119 / 10 — 잘려 나가던 제목이 절반으로 줄었다.
+   *
+   * 보이는 동안에는 제목 첫 줄의 끝 위에 겹친다(Slack·Notion의 행 액션과 같은 방식).
+   * 겹치는 글자가 비치지 않게 버튼이 **행과 같은 면**을 받침으로 깐다(바로 아래).
+   */
   ${S.RowRight} {
-    align-self: flex-start;
-    padding-top: 2px;
+    position: absolute;
+    /* 제목 첫 줄(21px) 한가운데. 행 패딩 8 + (21 - 18) / 2 */
+    top: 9px;
+    right: 6px;
+  }
+
+  /*
+   * 핀 받침 — 행의 세 상태(기본 · hover · 선택)를 그대로 입는다.
+   *
+   * ⚠️ background-color: inherit로 물려받으면 안 된다. 다크의 공용 면은 **반투명**이라
+   *    (hover rgba(255,255,255,.08) · 선택 rgba(99,102,241,.2)) 같은 값을 자식이 다시 칠하면
+   *    그 자리만 한 겹 더 쌓인다 — RowTop에 걸었더니 행 전체에 밝은 네모가 떴고, 버튼에만
+   *    걸어도 18px 네모가 떴다. 그래서 지면색과 **미리 합성한 불투명 값**을 쓴다
+   *    (라이트의 공용 값은 이미 불투명이라 그대로).
+   * ⚠️ 그 세 값은 공용 sidebarFillHover/sidebarRowSelected와 SIDEBAR_SURFACE의 합성이다.
+   *    어느 한쪽을 바꾸면 여기도 다시 합성해야 한다.
+   */
+  ${S.PinButton} {
+    /*
+     * 18 -> 30px. 늘어난 12px은 별이 아니라 **사라짐**이다 — 받침이 네모나면 겹친 글자가
+     * 세로로 뚝 잘려 반쪽 글자가 남는다(실측 'NSPM-2 서명 — 이란 최대 압박 재발동'의 '동').
+     * 왼쪽 12px을 투명에서 면색으로 이어 주면 글자가 잘리지 않고 흐려지며 끝난다.
+     * 덤으로 누를 자리가 30px로 넓어진다. 별의 위치는 그대로(오른끝 정렬 + 패딩 3px).
+     */
+    width: 30px;
+    justify-content: flex-end;
+    padding-right: 3px;
+    border-radius: 0 4px 4px 0;
+    background: ${({ theme }) => pinPlate(S.sidebarSurface(theme))};
+  }
+  ${S.ListRow}:hover ${S.PinButton} {
+    background: ${({ theme }) =>
+      pinPlate(theme.mode === 'dark' ? '#282828' : '#f0f0f2')};
+  }
+  ${S.ListRow}[aria-selected='true'] ${S.PinButton},
+  ${S.ListRow}[aria-selected='true']:hover ${S.PinButton} {
+    background: ${({ theme }) =>
+      pinPlate(theme.mode === 'dark' ? '#252541' : '#eef0fe')};
   }
 `
 
@@ -229,10 +285,10 @@ export const ParentTail = styled.span`
   letter-spacing: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
   /*
-   * ⚠️ 제목(CodeText)은 2줄 클램프를 위해 overflow-wrap: anywhere를 쓴다. 그 값이 그대로
-   * 상속되면 꼬리표가 **음절 사이에서** 갈린다(실측: '↳ 대동방' / '위기'). 꼬리표는 넘치면
-   * 클램프가 잘라 주면 되고 title 속성에 전값이 남으므로, 여기서는 단어를 지킨다.
+   * 낱말을 지키는 줄바꿈은 이제 제목(CodeText)이 keep-all로 갖고 있어 그대로 상속된다.
+   * (예전엔 제목이 overflow-wrap: anywhere였고 그 값이 내려와 꼬리표를 **음절 사이에서**
+   * 갈랐다 — '↳ 대동방' / '위기'. 그래서 여기서 normal로 되돌리고 있었다.)
+   * break-word만 남겨 '한 낱말이 한 줄보다 긴' 예외에서 가로로 넘치지 않게 한다.
    */
-  overflow-wrap: normal;
-  word-break: keep-all;
+  overflow-wrap: break-word;
 `

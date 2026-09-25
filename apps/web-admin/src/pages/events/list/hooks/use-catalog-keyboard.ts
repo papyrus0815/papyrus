@@ -31,6 +31,16 @@ import { pathKeys } from '@/shared/router'
 
 /** 목록 행 하나를 식별하는 속성 — 행 렌더러(event-list-item)와 공유하는 계약 */
 const ROW_SELECTOR = '[data-event-id]'
+/**
+ * ↑↓가 순회하는 **정지점 전체** — 행 + 세기·연도 밴드 머리글.
+ *
+ * 밴드 머리글도 여기 들어오는 이유: 머리글은 원래 각자 탭 정지점이었는데, 실측 결과
+ * 목록 안 탭 정지점 64개 중 **62개가 머리글**이었다(행은 로빙 규약대로 1개). 목록을
+ * 지나 다음 컨트롤로 가려면 Tab을 62번 눌러야 했고, 이는 '목록의 유일한 탭 정지점'
+ * 이라는 이 파일의 계약과도 정면으로 어긋난다. 머리글을 tabIndex -1로 내리는 대신
+ * **화살표 순회에 편입**해, 정지점은 하나로 줄이면서 접기/펼치기 도달성은 지킨다.
+ */
+const STOP_SELECTOR = '[data-event-id], [data-band-toggle]'
 
 /**
  * (제거됨) `isInteractiveTarget` — `button, a, [role="button"]`까지 막던 넓은 가드.
@@ -193,10 +203,12 @@ export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
     const handleKeyDown = (event: KeyboardEvent) => {
       // 포커스가 목록 행 안에 있을 때만 반응한다. 이 게이트 하나가 툴바 버튼·
       // select·드로어·타임라인에서의 오작동과 페이지 스크롤 차단을 함께 없앤다.
-      const focusedRow = (event.target as HTMLElement | null)?.closest?.(
-        ROW_SELECTOR,
+      const focusedStop = (event.target as HTMLElement | null)?.closest?.(
+        STOP_SELECTOR,
       ) as HTMLElement | null
-      if (!focusedRow) return
+      if (!focusedStop) return
+      /** 행 위인가 밴드 머리글 위인가 — 행에서만 성립하는 키(←/→ 트리, ⌘+Enter)를 가른다 */
+      const focusedRow = focusedStop.matches(ROW_SELECTOR) ? focusedStop : null
       /**
        * ⚠️ 인터랙티브 가드는 **행 밖**에만 건다(검토 A11Y-3).
        *
@@ -218,7 +230,27 @@ export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
        *   ← : 펼쳐져 있으면 접고, 아니면 부모 행으로 올라간다
        * 자식이 없는 행에서는 preventDefault를 하지 않는다 — 가로 스크롤을 뺏지 않기 위해.
        */
-      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      /**
+       * 밴드 머리글 위의 ←/→ — 행의 트리 키와 **같은 의미**로 맞춘다.
+       * → 펼치기 / ← 접기. 이미 그 상태면 아무 일도 하지 않는다(가로 스크롤을 뺏지 않기 위해).
+       * Enter·Space는 button 기본 동작이 이미 토글이라 따로 가로채지 않는다.
+       */
+      if (!focusedRow) {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+          const expanded = focusedStop.getAttribute('aria-expanded') === 'true'
+          const wantExpand = event.key === 'ArrowRight'
+          if (expanded !== wantExpand) {
+            event.preventDefault()
+            focusedStop.click()
+          }
+          return
+        }
+      }
+
+      if (
+        focusedRow &&
+        (event.key === 'ArrowRight' || event.key === 'ArrowLeft')
+      ) {
         const rowId = focusedRow.dataset.eventId
         if (!rowId) return
         const canExpand = focusedRow.dataset.canExpand === 'true'
@@ -271,7 +303,7 @@ export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
        * 이제 Enter/Space는 둘 다 '선택(드로어)'이고(행 자체 onKeyDown이 담당),
        * 여기서는 수식키가 있을 때만 이동한다 — 링크의 관례(⌘+클릭)와도 맞는다.
        */
-      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      if (focusedRow && event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
         // 눌린 *그 행*으로 이동 — 상태 클로저를 읽지 않으므로 stale이 없다.
         const rowId = focusedRow.dataset.eventId
         if (!rowId) return
@@ -291,18 +323,18 @@ export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
        *
        * 접힌 밴드의 행은 애초에 DOM에 없으므로 '보이는 행만 순회'라는 계약은 그대로다.
        */
-      const listRoot = focusedRow.closest('[data-list-scroller]') ?? document
-      const rows = Array.from(
-        listRoot.querySelectorAll<HTMLElement>(ROW_SELECTOR),
+      const listRoot = focusedStop.closest('[data-list-scroller]') ?? document
+      const stops = Array.from(
+        listRoot.querySelectorAll<HTMLElement>(STOP_SELECTOR),
       )
-      if (rows.length === 0) return
+      if (stops.length === 0) return
 
-      const currentIndex = rows.indexOf(focusedRow)
+      const currentIndex = stops.indexOf(focusedStop)
       let newIndex = currentIndex
 
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        newIndex = Math.min(currentIndex + 1, rows.length - 1)
+        newIndex = Math.min(currentIndex + 1, stops.length - 1)
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
         newIndex = Math.max(currentIndex - 1, 0)
@@ -311,21 +343,23 @@ export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
         newIndex = 0
       } else if (event.key === 'End') {
         event.preventDefault()
-        newIndex = rows.length - 1
+        newIndex = stops.length - 1
       } else {
         return
       }
 
       if (newIndex === currentIndex) return
-      const nextRow = rows[newIndex]
-      const nextId = nextRow?.dataset.eventId
-      if (!nextId) return
+      const nextStop = stops[newIndex]
+      if (!nextStop) return
 
-      setSelectedEventId(nextId)
-      // 포커스를 새 행으로 옮긴다 — 다음 화살표 입력이 같은 게이트를 통과하고,
-      // 스크린리더도 선택 이동을 따라온다. 스크롤은 여기서 하지 않는다:
+      /* 밴드 머리글로 옮길 때는 **선택을 건드리지 않는다** — 머리글은 사건이 아니라
+         구간이라, 지나간다고 상세가 바뀌면 드로어가 엉뚱한 사건을 계속 갈아 끼운다. */
+      const nextId = nextStop.dataset.eventId
+      if (nextId) setSelectedEventId(nextId)
+      // 포커스를 새 정지점으로 옮긴다 — 다음 화살표 입력이 같은 게이트를 통과하고,
+      // 스크린리더도 이동을 따라온다. 스크롤은 여기서 하지 않는다:
       // 선택 변경 시 스크롤은 events.page의 단일 effect가 담당한다(중복 방지).
-      nextRow.focus({ preventScroll: true })
+      nextStop.focus({ preventScroll: true })
     }
 
     window.addEventListener('keydown', handleKeyDown)

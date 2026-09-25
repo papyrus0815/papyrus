@@ -46,6 +46,8 @@ import { Badge } from '@/shared/ui/badge/badge'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { FiltersPanel } from '@/widgets/event-filters-panel/ui/filters-panel'
 
+import { useFocusTrap } from '../hooks/use-focus-trap'
+
 import type { HistoricalEvent } from '../../create/events.types'
 import * as Layout from '../../styles/layout.styles'
 import * as ToolbarStyles from '../../styles/list-toolbar.styles'
@@ -466,6 +468,34 @@ interface ViewUtilitiesProps {
   onResetColumns: () => void
 }
 
+/**
+ * 라디오 그룹 안의 ←→↑↓ — **그룹 하나가 탭 정지점 하나**(WAI-ARIA roving tabindex).
+ *
+ * 이 메뉴에는 라디오 그룹이 셋(정렬 4 · 밀도 3 · 개수 3)이다. 로빙이 없으면 열 벌의
+ * 라디오가 전부 탭 정지점이라, 메뉴를 가로지르는 데만 Tab이 열 번 더 든다. 라디오는
+ * **이동과 동시에 선택**되는 것이 표준 동작이라 화살표 한 번이 곧 적용이다.
+ */
+const handleRadioGroupKeys = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const delta =
+    event.key === 'ArrowRight' || event.key === 'ArrowDown'
+      ? 1
+      : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+        ? -1
+        : 0
+  if (delta === 0) return
+  const group = event.currentTarget
+  const radios = Array.from(
+    group.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
+  )
+  const current = radios.indexOf(document.activeElement as HTMLButtonElement)
+  if (current === -1) return
+  event.preventDefault()
+  const next = radios[(current + delta + radios.length) % radios.length]
+  // 포커스와 선택을 함께 옮긴다 — 포커스만 옮기면 다음 화살표가 같은 자리에서 돈다.
+  next.focus()
+  next.click()
+}
+
 /** 정렬 옵션 — 라벨과 '무엇을 기준으로 줄 세우는가'를 한 줄 설명으로 함께 싣는다. */
 const SORT_CHOICES: Array<{
   value: SortOption
@@ -546,10 +576,22 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   const [menuOpen, setMenuOpen] = useState(false)
   const menuWrapRef = useRef<HTMLDivElement | null>(null)
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
   const menuPosition = useAnchoredPosition(menuTriggerRef, menuOpen, {
     maxWidth: 260,
   })
+  /**
+   * 포커스 트랩 — **없으면 이 메뉴는 키보드로 사실상 닿지 않는다**.
+   *
+   * 메뉴는 body로 포털되므로 DOM 순서상 문서 맨 끝에 붙는다. 트리거에서 Tab을 누르면
+   * 다음 툴바 버튼으로 갈 뿐이고, 메뉴 첫 항목까지는 실측 **489번**이 걸렸다. 정렬·밀도·
+   * 열 표시·개수·내보내기가 전부 이 안으로 들어온 뒤라, 그건 기능 전체가 마우스 전용이
+   * 됐다는 뜻이다. 훅이 열 때 첫 항목으로 옮기고, Tab을 안에 가두고, 닫힐 때 트리거로
+   * 되돌린다(언마운트 시 복귀라 Esc·바깥 클릭·항목 선택 어느 경로든 같다).
+   *
+   * ⚠️ `menuOpen`만으로 켜면 안 된다 — 좌표(menuPosition)가 잡히기 전 프레임에는 메뉴가
+   * 아직 마운트되지 않아 트랩이 빈 컨테이너를 잡고 조용히 아무 일도 하지 않는다.
+   */
+  const menuRef = useFocusTrap<HTMLDivElement>(menuOpen && !!menuPosition)
   const closeMenu = useCallback(() => setMenuOpen(false), [])
 
   useEffect(() => {
@@ -607,7 +649,11 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
           >
             <UtilityMenuLabel id="catalog-sort-label">정렬</UtilityMenuLabel>
             {/* 라디오 그룹 — 값 자체가 상태이므로 선택지를 한눈에 편다(셀렉트 재현 금지) */}
-            <ChoiceColumn role="radiogroup" aria-labelledby="catalog-sort-label">
+            <ChoiceColumn
+              role="radiogroup"
+              aria-labelledby="catalog-sort-label"
+              onKeyDown={handleRadioGroupKeys}
+            >
               {SORT_CHOICES.map((choice) => {
                 const active = sortBy === choice.value
                 return (
@@ -616,6 +662,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
                     type="button"
                     role="radio"
                     aria-checked={active}
+                    tabIndex={active ? 0 : -1}
                     $active={active}
                     title={choice.hint}
                     onClick={() => onSortChange(choice.value)}
@@ -652,6 +699,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
             <ChoiceGrid
               role="radiogroup"
               aria-labelledby="catalog-density-label"
+              onKeyDown={handleRadioGroupKeys}
               $columns={DENSITY_CHOICES.length}
             >
               {DENSITY_CHOICES.map((choice) => (
@@ -660,6 +708,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
                   type="button"
                   role="radio"
                   aria-checked={listDensity === choice.value}
+                  tabIndex={listDensity === choice.value ? 0 : -1}
                   $active={listDensity === choice.value}
                   title={choice.hint}
                   onClick={() => onChangeListDensity(choice.value)}
@@ -753,6 +802,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
             <ChoiceGrid
               role="radiogroup"
               aria-labelledby="catalog-page-size-label"
+              onKeyDown={handleRadioGroupKeys}
               $columns={PAGE_SIZE_OPTIONS.length}
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
@@ -761,6 +811,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
                   type="button"
                   role="radio"
                   aria-checked={pageSize === size}
+                  tabIndex={pageSize === size ? 0 : -1}
                   $active={pageSize === size}
                   onClick={() => onPageSizeChange(size)}
                 >
