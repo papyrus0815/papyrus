@@ -4,7 +4,7 @@ import { fireEvent, screen } from '@testing-library/react'
 
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 
-import type { SortOption } from '@/features/event-list/lib'
+import type { ListColumnKey, SortOption } from '@/features/event-list/lib'
 import type { ListDensity } from '@/pages/events/styles/theme'
 
 import { CatalogViewUtilities } from './catalog-toolbar'
@@ -34,6 +34,9 @@ const baseProps = {
   onSortDirectionToggle: jest.fn(),
   listDensity: 'cozy' as ListDensity,
   onChangeListDensity: jest.fn(),
+  hiddenColumns: [] as ListColumnKey[],
+  onToggleColumn: jest.fn(),
+  onResetColumns: jest.fn(),
 }
 
 const openMenu = (props: Partial<typeof baseProps> = {}) => {
@@ -96,6 +99,38 @@ describe('CatalogViewUtilities — 표시 설정 메뉴', () => {
     const item = screen.getByRole('button', { name: /하위 사건 모두 펼치기/ })
     fireEvent.click(item)
     expect(baseProps.onExpandAllChildren).toHaveBeenCalled()
+  })
+
+  it('열 여섯을 switch로 펴고, 끄면 그 열을 토글 핸들러로 올린다', () => {
+    openMenu()
+    for (const label of ['종료', '분류', '키워드', '기간', '관련국', '등록']) {
+      expect(screen.getByRole('switch', { name: label })).toBeChecked()
+    }
+    fireEvent.click(screen.getByRole('switch', { name: '키워드' }))
+    expect(baseProps.onToggleColumn).toHaveBeenCalledWith('kw')
+  })
+
+  it('끈 열은 switch가 꺼지고 되돌리기가 함께 선다', () => {
+    // '전부 표시'는 하나라도 꺼져 있을 때만 — 항상 있으면 누를 일 없는 링크가 상주한다.
+    openMenu({ hiddenColumns: ['kw', 'reg'] })
+    expect(screen.getByRole('switch', { name: '키워드' })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: '분류' })).toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: '전부 표시' }))
+    expect(baseProps.onResetColumns).toHaveBeenCalled()
+  })
+
+  it('전부 표시 중이면 되돌리기 버튼 자체가 없다', () => {
+    openMenu()
+    expect(screen.queryByRole('button', { name: '전부 표시' })).toBeNull()
+  })
+
+  it('닫힌 트리거가 숨긴 열 수를 싣는다 — 메뉴를 열지 않고도 안다', () => {
+    renderWithTheme(
+      <CatalogViewUtilities {...baseProps} hiddenColumns={['kw', 'reg']} />,
+    )
+    expect(
+      screen.getByRole('button', { name: /열 2개 숨김/ }),
+    ).toBeInTheDocument()
   })
 
   it('닫힌 트리거가 현재 정렬을 싣는다 — 메뉴를 열지 않고도 순서를 안다', () => {

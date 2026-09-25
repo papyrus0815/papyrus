@@ -4,6 +4,8 @@
  */
 import styled, { css } from 'styled-components'
 
+import { HIDEABLE_COLUMNS } from '@/features/event-list/lib'
+
 import type { HistoricalEventCategory } from '../create/events.types'
 import {
   BRAND,
@@ -81,6 +83,41 @@ const densityVars = (density: ListDensity) => {
     --col-flags-ultra: ${box.colFlagsUltra}px;
     --col-kw: ${box.colKw}px;
     --col-reg: ${box.colReg}px;
+
+    /* ── 열 트랙식 — 끌 수 있는 열은 **컨테이너가** 소유한다 ─────────────────
+     *
+     * 왜 행(rowGridTemplate)이 아니라 여기인가: 표시 설정의 '이 열 숨기기'는 스크롤
+     * 컨테이너에 걸리는데, 행이 자기 트랙식을 들고 있으면 **더 가까운 선언**인 행 쪽이
+     * 이겨서 설정이 화면에 아무 일도 못 한다. 그래서 트랙식과 단계별 폭 전환
+     * (--col-*-wide / -ultra)을 통째로 올렸다 — 행은 이제 트랙 '이름'만 알고 폭은 모른다.
+     *
+     * ⚠️ 커스텀 속성 값 안의 var()는 **선언된 요소**(= 이 컨테이너)에서 해석된다.
+     *    단계 전환을 행에 남겨 두면 행이 --col-dur를 덮어도 --track-dur는 안 따라와,
+     *    광폭에서 기간 열이 좁은 폭 값으로 굳는다. 한 요소 안이므로 선언 **순서**는
+     *    무관하다 — 아래 컨테이너 쿼리가 --col-dur를 덮으면 --track-dur도 그 값을 읽는다.
+     */
+    --track-end: var(--col-date);
+    --track-cat: var(--col-chip);
+    --track-kw: var(--col-kw);
+    --track-dur: var(--col-dur);
+    --track-flags: var(--col-flags);
+    --track-reg: var(--col-reg);
+
+    /* 광폭(ledger) — 기간·관련국이 넓어지고, 키워드·관련국이 **신축 트랙**이 된다
+       (제목 1.5 : 키워드 1 : 관련국 1). 예전엔 이 두 줄이 rowGridTemplate 안에 있었다. */
+    @container eventcard (min-width: ${LIST_STEPS.ledger}px) {
+      --col-dur: var(--col-dur-wide);
+      --col-flags: var(--col-flags-wide);
+      --track-kw: minmax(var(--col-kw), 1fr);
+      --track-flags: minmax(var(--col-flags), 1fr);
+    }
+
+    /* 초광폭(atlas) — 날짜(BC·YYYY.M.D 극단값)와 기간 해상도, 관련국 이름이 한 번 더. */
+    @container eventcard (min-width: ${LIST_STEPS.atlas}px) {
+      --col-date: var(--col-date-wide);
+      --col-dur: var(--col-dur-ultra);
+      --col-flags: var(--col-flags-ultra);
+    }
     --row-indent: ${box.indent}px;
     --row-title: ${type.title};
     --row-meta: ${type.meta};
@@ -198,6 +235,32 @@ export const CompactList = styled.div.attrs(
   &[data-density='roomy'] {
     ${densityVars('roomy')}
   }
+
+  /**
+   * 사용자가 끈 열 — data-hidden-cols="kw reg"(공백 구분, ~= 로 한 토큰씩 본다).
+   *
+   * 한 열당 두 가지를 한다. ⑴ 트랙식을 0px로 눌러 격자에서 폭을 회수하고(광폭에서
+   * 신축 트랙이던 키워드·관련국도 같은 선언 하나로 fr째 사라진다 — 트랙 **식 전체**가
+   * 변수에 들어 있기 때문이다), ⑵ 그 열의 셀을 전부 숨긴다.
+   *
+   * ⚠️ 0px이지 빈 값이 아니다. --track-kw 를 빈 값으로 두어 트랙을 통째 지우면
+   *    [sumend kw] [dur] 처럼 라인 이름이 연달아 붙어 트랙 목록 문법이 깨진다. 0px은 column-gap
+   *    한 칸(10~12px)을 남기지만, 열 하나가 주던 150~200px에 비하면 잔돈이다.
+   *
+   * ⚠️ 셀 선택자는 [data-col=...] 하나로 충분하다 — 셀 자신의 켜짐 규칙은 컨테이너
+   *    쿼리 안에 있어도 특이도가 (0,1,0)이고, 이 규칙은 (0,2,0)이라 항상 이긴다.
+   */
+  ${HIDEABLE_COLUMNS.map(
+    (column) => css`
+      &[data-hidden-cols~='${column}'] {
+        --track-${column}: 0px;
+
+        [data-col='${column}'] {
+          display: none;
+        }
+      }
+    `,
+  )}
 
   /* 축선 — 좌표는 --rail-x가 소유하므로 밴드가 거터를 바꾸면 자동 추종한다.
    *
@@ -440,10 +503,10 @@ export const rowGridTemplate = css`
   /* ── step 0 (카드 < summary) — 6트랙. 신축은 제목. */
   grid-template-columns:
     [date] var(--col-date)
-    [cat] var(--col-chip)
+    [cat] var(--track-cat)
     [title] minmax(0, 1fr)
-    [sumend dur] var(--col-dur)
-    [flags] var(--col-flags)
+    [sumend dur] var(--track-dur)
+    [flags] var(--track-flags)
     [act] var(--col-act);
 
   /* ── step 1 summary — **종료 열과 키워드 열이 켜진다**(9트랙).
@@ -473,12 +536,12 @@ export const rowGridTemplate = css`
        아니라 뷰포트로 재고 있어(keywordMax) 이 대역에서 2로 고정이다. */
     grid-template-columns:
       [date] var(--col-date)
-      [end] var(--col-date)
-      [cat] var(--col-chip)
+      [end] var(--track-end)
+      [cat] var(--track-cat)
       [title] minmax(0, 1fr)
-      [sumend kw] var(--col-kw)
-      [dur] var(--col-dur)
-      [flags] var(--col-flags)
+      [sumend kw] var(--track-kw)
+      [dur] var(--track-dur)
+      [flags] var(--track-flags)
       [act] var(--col-act);
   }
 
@@ -498,37 +561,33 @@ export const rowGridTemplate = css`
    * 이 배분에서는 어떤 제목도 잘리지 않는다.
    */
   @container eventcard (min-width: ${LIST_STEPS.ledger}px) {
-    --col-dur: var(--col-dur-wide);
-    --col-flags: var(--col-flags-wide);
+    /* (이동) --col-dur/--col-flags 폭 전환과 fr 승격은 densityVars로 올라갔다 —
+       숨김 설정이 행 선언에 가리지 않게 하려면 트랙식의 소유자가 하나여야 한다. */
     grid-template-columns:
       [date] var(--col-date)
-      [end] var(--col-date)
-      [cat] var(--col-chip)
+      [end] var(--track-end)
+      [cat] var(--track-cat)
       [title] minmax(0, 1.5fr)
-      [sumend kw] minmax(var(--col-kw), 1fr)
-      [dur] var(--col-dur)
-      [flags] minmax(var(--col-flags), 1fr)
+      [sumend kw] var(--track-kw)
+      [dur] var(--track-dur)
+      [flags] var(--track-flags)
       [act] var(--col-act);
   }
 
   /* ── step 3 atlas — 9트랙. 등록 시각이 켜지고(‘등록순’ 정렬의 근거가 화면에 0픽셀이던
        문제), 날짜(BC·YYYY.M.D 극단값)와 관련국이 한 번 더 넓어진다. */
   @container eventcard (min-width: ${LIST_STEPS.atlas}px) {
-    --col-date: var(--col-date-wide);
-    /* 기간 트랙은 여기서 한 번 더 넓어진다 — 이 단계에서만 켜지는 '등록' 열과 달리
-       기간은 처음부터 있던 열이라, 폭이 늘면 새 정보가 아니라 **해상도**가 는다
-       (한 달 ≈ 19px = 분기 격자 한 칸이 58px). */
-    --col-dur: var(--col-dur-ultra);
-    --col-flags: var(--col-flags-ultra);
+    /* (이동) 날짜·기간·관련국의 폭 전환은 densityVars로. 기간은 이 단계에서 폭이
+       늘면 새 정보가 아니라 **해상도**가 는다(한 달 ≈ 19px = 분기 격자 한 칸 58px). */
     grid-template-columns:
       [date] var(--col-date)
-      [end] var(--col-date)
-      [cat] var(--col-chip)
+      [end] var(--track-end)
+      [cat] var(--track-cat)
       [title] minmax(0, 1.5fr)
-      [sumend kw] minmax(var(--col-kw), 1fr)
-      [dur] var(--col-dur)
-      [flags] minmax(var(--col-flags), 1fr)
-      [reg] var(--col-reg)
+      [sumend kw] var(--track-kw)
+      [dur] var(--track-dur)
+      [flags] var(--track-flags)
+      [reg] var(--track-reg)
       [act] var(--col-act);
   }
 `
@@ -635,7 +694,11 @@ export const ColumnHeader = styled.div`
  * 그래서 늦게 켜지는 열(sum·kw·reg)은 자기 단계에 도달할 때까지 박스를 만들지 않는다 —
  * 행 셀(`Snippet`·`KeywordCell`·`RegisteredCell`)이 쓰는 것과 **같은 게이트**다.
  */
-export const ColumnHeaderCell = styled.span<{
+export const ColumnHeaderCell = styled.span.attrs<{ $col: string }>(
+  /* 머리글 라벨도 자기 열의 손잡이를 갖는다 — 열을 끄면 트랙과 셀과 라벨이 **한 선언**
+     (CompactList의 data-hidden-cols)으로 함께 사라진다. */
+  ({ $col }) => ({ 'data-col': $col }) as Record<string, string>,
+)<{
   $col: string
   $align?: 'right' | 'center'
   /** 이 라벨이 켜지는 컨테이너 폭(LIST_STEPS 값). 생략 = step 0부터 항상 존재하는 열 */
@@ -803,13 +866,33 @@ export const AxisEndLabel = styled.span<{ $side: 'start' | 'end' }>`
   }
 `
 
-export const ColumnSortCaret = styled.span`
+/**
+ * 정렬 글리프 — 정렬 중인 열은 방향을, 그 밖의 정렬 가능한 열은 **흐린 ▾**를 단다.
+ *
+ * idle 글리프는 '이 칸은 누르면 줄이 선다'는 안내다. 0.18은 라벨(11px/700)의 잉크를
+ * 흐리지 않으면서 존재는 읽히는 값이고, 머리글에 hover가 오면 한 단 진해져 어느 칸을
+ * 누르려는지 확인시켜 준다(터치에는 hover가 없으므로 idle 상태만으로도 성립해야 한다).
+ */
+export const ColumnSortCaret = styled.span<{ $idle?: boolean }>`
   margin-left: 3px;
   font-size: 7px;
   line-height: 1;
   vertical-align: 1px;
   letter-spacing: 0;
-  opacity: 0.75;
+  opacity: ${({ $idle }) => ($idle ? 0.18 : 0.75)};
+  transition: opacity ${MOTION.fast};
+
+  ${({ $idle }) =>
+    $idle &&
+    css`
+      [data-col]:hover > & {
+        opacity: 0.5;
+      }
+    `}
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export type ListItemImportance = 'critical' | 'major' | 'normal'

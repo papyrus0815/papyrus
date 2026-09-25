@@ -41,7 +41,11 @@ import {
   selectVisibleRows,
   useEventHierarchy,
 } from '@/features/event-hierarchy/model'
-import { FILTER_ALL } from '@/features/event-list/lib'
+import {
+  FILTER_ALL,
+  HIDEABLE_COLUMNS,
+  type ListColumnKey,
+} from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -89,6 +93,25 @@ import {
 /** 목록 밀도 선택 영속 키 — 세션 간 유지. */
 const LIST_DENSITY_KEY = 'papyrus.events.listDensity'
 const LIST_DENSITIES: ListDensity[] = ['compact', 'cozy', 'roomy']
+/** 끈 열 목록 영속 키 — 밀도와 같은 '표시 선호' 계열이라 같은 이름 공간을 쓴다. */
+const HIDDEN_COLUMNS_KEY = 'papyrus.events.hiddenColumns'
+
+/** 저장된 열 설정 읽기 — 모르는 키는 버린다(열 이름이 바뀌어도 화면이 깨지지 않게). */
+const readHiddenColumns = (): ListColumnKey[] => {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_COLUMNS_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((key): key is ListColumnKey =>
+      HIDEABLE_COLUMNS.includes(key as ListColumnKey),
+    )
+  } catch {
+    /* storage 비활성·깨진 JSON — 기본값(전부 표시)으로 */
+    return []
+  }
+}
 /**
  * (제거됨) EventsCatalogPageProps — `countryId`·`embed`.
  *
@@ -197,6 +220,41 @@ export const EventsCatalogPage: React.FC = () => {
           .querySelector(`[data-event-id="${anchorId}"]`)
           ?.scrollIntoView({ block: 'start', behavior: 'instant' })
       })
+    }
+  }, [])
+
+  /**
+   * ===== 열 표시 =====
+   *
+   * 밀도가 세로 픽셀의 소유권을 사용자에게 넘긴 것과 같은 이유로, 가로 픽셀도 넘긴다.
+   * 이 목록은 최대 9트랙까지 벌어지는데 어떤 열이 필요한지는 과업마다 다르다 —
+   * 키워드로 찾는 사람과 연표를 훑는 사람이 같은 열을 쓰지 않는다.
+   *
+   * ⚠️ **끄기 전용** 축이다. 켜 두어도 카드 폭이 모자라면 열 사다리(LIST_STEPS)가
+   * 알아서 접는다. 없는 폭을 설정으로 만들어 낼 수는 없고, 그 사실을 메뉴가 적는다.
+   */
+  const [hiddenColumns, setHiddenColumns] =
+    useState<ListColumnKey[]>(readHiddenColumns)
+  const toggleColumn = useCallback((column: ListColumnKey) => {
+    setHiddenColumns((prev) => {
+      const next = prev.includes(column)
+        ? prev.filter((key) => key !== column)
+        : [...prev, column]
+      try {
+        window.localStorage.setItem(HIDDEN_COLUMNS_KEY, JSON.stringify(next))
+      } catch {
+        /* storage 비활성 — 세션 내 변경만 동작 */
+      }
+      return next
+    })
+  }, [])
+  /** 전부 표시로 되돌리기 — 열을 하나씩 켜지 않고 한 번에 원상복구하는 탈출로. */
+  const resetColumns = useCallback(() => {
+    setHiddenColumns([])
+    try {
+      window.localStorage.removeItem(HIDDEN_COLUMNS_KEY)
+    } catch {
+      /* storage 비활성 — 세션 내 변경만 동작 */
     }
   }, [])
 
@@ -1485,6 +1543,7 @@ export const EventsCatalogPage: React.FC = () => {
   const activeSlot = (
     <EventCompactList
       density={listDensity}
+      hiddenColumns={hiddenColumns}
       onCreateEvent={handleCreateEvent}
       isLoading={isLoading && events.length === 0}
       // 목록은 접힘으로 숨긴 행을 뺀 배열만 받는다. 완전한 모집단은 내보내기(JSON) 몫.
@@ -1772,6 +1831,9 @@ export const EventsCatalogPage: React.FC = () => {
         onSortDirectionToggle={handleSortDirectionToggle}
         listDensity={listDensity}
         onChangeListDensity={changeListDensity}
+        hiddenColumns={hiddenColumns}
+        onToggleColumn={toggleColumn}
+        onResetColumns={resetColumns}
       />
     ),
   }

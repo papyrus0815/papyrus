@@ -1947,7 +1947,7 @@ const FilteredOutHint = styled.span`
  * ⚠️ step 0(6트랙)에는 [end] 라인이 없다. grid-column을 걸면 CSS가 **암묵 트랙**을
  * 만들어 행이 헤더보다 넓어지므로, 열 사다리의 다른 늦은 열들과 같은 게이트를 쓴다.
  */
-const EndCell = styled.span`
+const EndCell = styled.span.attrs(() => ({ 'data-col': 'end' }) as Record<string, string>)`
   display: none;
 
   @container eventcard (min-width: ${LIST_STEPS.summary}px) {
@@ -2104,7 +2104,7 @@ const Mark = styled.mark`
 
 /* 저채도 soft chip — 원색 텍스트(AA 미달)를 대신. 배경 tint + 어둡게 조정한 텍스트색으로
  * 대비 확보하고, 칩 형태로 '분류'임을 명확히(중요도=별과 신호 분리). */
-const CategoryLabel = styled.span<{
+const CategoryLabel = styled.span.attrs(() => ({ 'data-col': 'cat' }) as Record<string, string>)<{
   $text: string
   $textDark: string
 }>`
@@ -2259,7 +2259,7 @@ const MatchReasonKind = styled.span`
  * ⚠️ 카테고리 hue를 쓰지 말 것 — 칩 색은 '분류' 전용 채널이다. amber 계열도 금지다
  *    (검색 하이라이트 전용). 중립 표면 토큰만 쓴다.
  */
-const KeywordCell = styled.span`
+const KeywordCell = styled.span.attrs(() => ({ 'data-col': 'kw' }) as Record<string, string>)`
   display: none;
 
   /* ⚠️ ledger(8트랙)에서 summary로 **내려왔다**. 이 열이 ledger에 있던 이유는 그 아래
@@ -2316,7 +2316,7 @@ const KeywordMore = styled.span`
  * ⚠️ 조건부 트랙(정렬이 '등록순'일 때만 켜기)으로 만들지 말 것 — 정렬을 바꿀 때마다
  *    전 행의 열 축이 흔들린다. 폭이 허락하면 항상 있는 열이다.
  */
-const RegisteredCell = styled.span`
+const RegisteredCell = styled.span.attrs(() => ({ 'data-col': 'reg' }) as Record<string, string>)`
   display: none;
 
   @container eventcard (min-width: ${LIST_STEPS.atlas}px) {
@@ -2493,7 +2493,7 @@ const SpanPoint = styled.span`
   border-radius: 50%;
 `
 
-const Duration = styled.span<{ $field: boolean }>`
+const Duration = styled.span.attrs(() => ({ 'data-col': 'dur' }) as Record<string, string>)<{ $field: boolean }>`
   grid-column: dur;
   /*
    * 격자 기본은 baseline이지만 이 칸의 주 내용은 글자가 아니라 **막대**다.
@@ -2596,7 +2596,7 @@ const Duration = styled.span<{ $field: boolean }>`
   }
 `
 
-const Flags = styled.span`
+const Flags = styled.span.attrs(() => ({ 'data-col': 'flags' }) as Record<string, string>)`
   grid-column: flags;
   align-self: center;
   /*

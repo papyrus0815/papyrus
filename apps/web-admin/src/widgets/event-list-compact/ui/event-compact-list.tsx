@@ -16,7 +16,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
-import type { SortOption } from '@/features/event-list/lib'
+import type { ListColumnKey, SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { formatYearLabel, getCentury } from '@/shared/lib/iso-date'
@@ -157,6 +157,12 @@ interface EventCompactListProps {
   sortBy?: SortOption
   sortDirection?: 'asc' | 'desc'
   /**
+   * 사용자가 끈 열(표시 설정) — 공백으로 이어 `data-hidden-cols`로 내린다.
+   * 트랙·셀·머리글 라벨이 그 한 선언을 함께 읽는다(list.styles의 HIDEABLE_COLUMNS 규칙).
+   * 폭이 모자라 열 사다리가 스스로 접는 것과는 **다른 축**이다 — 이건 끄기 전용이다.
+   */
+  hiddenColumns?: readonly ListColumnKey[]
+  /**
    * 열 머리글 클릭 정렬 — 넘기지 않으면 머리글은 **읽기 전용 라벨**로 남는다.
    * 도구줄의 ⋯ 표시 설정 메뉴와 같은 핸들러를 받아야 두 진입점이 갈리지 않는다.
    */
@@ -196,6 +202,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   recentEventIds = [],
   sortBy,
   sortDirection = 'desc',
+  hiddenColumns,
   onSortChange,
   onSortDirectionToggle,
   headerStats,
@@ -234,6 +241,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * ⚠️ 뷰포트 기준이고 트랙은 컨테이너 기준이라 좌측 목록이 접히면 한 계단 어긋날 수 있다.
    * 넘치는 칩은 어차피 말줄임·'+N'으로 흡수되므로 과다 쪽으로 틀려도 깨지지 않는다.
    */
+  /**
+   * 끈 열 — 공백으로 이어 한 속성에 싣는다(`~=` 선택자가 토큰 단위로 읽는다).
+   * 빈 배열이면 속성 자체를 달지 않는다 — 빈 문자열도 DOM에 남아 diff를 만든다.
+   */
+  const hiddenColsAttr = hiddenColumns?.length
+    ? hiddenColumns.join(' ')
+    : undefined
   const isWide = useMediaQuery('(min-width: 2200px)')
   const isUltraWide = useMediaQuery('(min-width: 2500px)')
   const flagMax = isNarrow ? 1 : isMidWidth ? 2 : isUltraWide ? 5 : isWide ? 4 : 3
@@ -455,7 +469,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       {isLoading ? (
         /* ⚠️ data-density가 없으면 조밀 모드 사용자에게 로딩 45px → 데이터 32px 세로 점프가
            난다(밀도 변수는 스크롤 컨테이너가 한 번만 선언한다). */
-        <List.CompactList data-density={density}>
+        <List.CompactList
+          data-density={density}
+          data-hidden-cols={hiddenColsAttr}
+        >
           <ListColumnHeader
             sortBy={sortBy}
             sortDirection={sortDirection}
@@ -632,6 +649,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           onScroll={onScroll}
           aria-busy={isLoadingMore}
           data-density={density}
+          /* ⚠️ 스켈레톤 경로에도 **같은 값**을 내린다 — 한쪽만 주면 로딩에서 데이터로
+             넘어갈 때 열이 하나 늘었다 줄며 가로 점프가 난다(data-density 전례). */
+          data-hidden-cols={hiddenColsAttr}
         >
           {/*
            * 목록 상태 고지 — **항상 마운트된 단일 라이브 영역**.
@@ -1294,6 +1314,7 @@ const ListColumnHeader: React.FC<{
   onSortDirectionToggle,
 }) => {
   const sortedCol = sortBy ? SORT_COLUMN[sortBy] : undefined
+  const sortable = !!onSortChange
   /**
    * 열을 눌러 그 축으로 줄 세운다 — 이미 그 축이면 방향만 뒤집는다(표 관습).
    *
@@ -1314,13 +1335,23 @@ const ListColumnHeader: React.FC<{
         ? `${label} — 눌러서 오름/내림 바꾸기`
         : `${label}으로 정렬`
       : undefined
-  /* 방향 글리프는 **한 곳에서만** 만든다 — 열마다 따로 쓰면 오름/내림이 엇갈린다. */
-  const caret = (col: 'date' | 'dur' | 'reg') =>
-    sortedCol === col ? (
-      <List.ColumnSortCaret aria-hidden="true">
-        {sortDirection === 'asc' ? '▲' : '▼'}
+  /**
+   * 방향 글리프는 **한 곳에서만** 만든다 — 열마다 따로 쓰면 오름/내림이 엇갈린다.
+   *
+   * 정렬 중이 아닌 열에도 **흐린 ▾**를 남긴다. 머리글 클릭이 정렬의 1차 진입점이 된
+   * 뒤로, 그 사실이 화면에 적히는 곳은 hover 색 변화뿐이었다 — 마우스를 얹기 전에는
+   * 누를 수 있는 칸인지 알 방법이 없었고, 터치에는 hover가 없다. 글리프 자리를 늘
+   * 비워 두면 라벨 x가 정렬 상태에 따라 흔들리는 문제도 함께 사라진다.
+   */
+  const caret = (col: 'date' | 'title' | 'dur' | 'reg') => {
+    const active = sortedCol === col || (col === 'title' && sortBy === 'descendants')
+    if (!active && !sortable) return null
+    return (
+      <List.ColumnSortCaret aria-hidden="true" $idle={!active}>
+        {active && sortDirection === 'asc' ? '▲' : '▼'}
       </List.ColumnSortCaret>
-    ) : null
+    )
+  }
 
   return (
   <List.ColumnHeader aria-hidden="true">
@@ -1363,11 +1394,7 @@ const ListColumnHeader: React.FC<{
       title={sortTitle('descendants', '하위 많은 순')}
     >
       사건
-      {sortBy === 'descendants' && (
-        <List.ColumnSortCaret aria-hidden="true">
-          {sortDirection === 'asc' ? '▲' : '▼'}
-        </List.ColumnSortCaret>
-      )}
+      {caret('title')}
       {headerStats && (
         <HeaderStatsSlot
           onClick={(clickEvent) => clickEvent.stopPropagation()}

@@ -15,6 +15,7 @@ import {
   FiBookmark,
   FiChevronsDown,
   FiChevronsUp,
+  FiCheck,
   FiDownload,
   FiFlag,
   FiSliders,
@@ -26,7 +27,12 @@ import {
 } from 'react-icons/fi'
 
 import type { CenturyFilter, FilterChip } from '@/entities/event/model'
-import type { SortOption } from '@/features/event-list/lib'
+import {
+  HIDEABLE_COLUMNS,
+  LIST_COLUMNS,
+  type ListColumnKey,
+  type SortOption,
+} from '@/features/event-list/lib'
 import type { ListDensity } from '@/pages/events/styles/theme'
 import type { FilterOptionCounts } from '@/features/event-filters/model/option-facets'
 import type { FilterReferenceState } from '@/features/event-filters/model/reference-label'
@@ -454,6 +460,10 @@ interface ViewUtilitiesProps {
   /** 목록 밀도 — 행 높이의 소유권을 사용자에게 넘기는 축 */
   listDensity: ListDensity
   onChangeListDensity: (next: ListDensity) => void
+  /** 사용자가 끈 열 — 가로 픽셀의 소유권을 넘기는 축(끄기 전용) */
+  hiddenColumns: readonly ListColumnKey[]
+  onToggleColumn: (column: ListColumnKey) => void
+  onResetColumns: () => void
 }
 
 /** 정렬 옵션 — 라벨과 '무엇을 기준으로 줄 세우는가'를 한 줄 설명으로 함께 싣는다. */
@@ -516,6 +526,9 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   onSortDirectionToggle,
   listDensity,
   onChangeListDensity,
+  hiddenColumns,
+  onToggleColumn,
+  onResetColumns,
 }) => {
   /**
    * 하위 일괄 접기/펼치기가 할 일이 있는가. 평면 보기는 자손이 이미 전부 depth 0으로
@@ -555,6 +568,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   useOverlayEscape(menuOpen, closeMenu)
 
   const activeSort = SORT_CHOICES.find((choice) => choice.value === sortBy)
+  const hiddenCount = hiddenColumns.length
 
   return (
     <UtilityMenuWrap ref={menuWrapRef}>
@@ -564,13 +578,19 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
         $active={menuOpen}
         /* 트리거가 **현재 정렬을 말한다** — 정렬이 메뉴 뒤로 들어간 이상, 지금 무엇이
            순서를 만드는지 닫힌 상태에서도 읽혀야 한다(열 머리글의 캐럿과 한 쌍). */
-        title={`표시 설정 — 정렬 ${activeSort?.label ?? ''} · 밀도 · 하위 접기 · 개수`}
-        aria-label={`표시 설정 — 현재 정렬 ${activeSort?.label ?? ''}`}
+        title={`표시 설정 — 정렬 ${activeSort?.label ?? ''} · 열 표시 · 밀도 · 하위 접기 · 개수${
+          hiddenCount > 0 ? ` (열 ${hiddenCount}개 숨김)` : ''
+        }`}
+        aria-label={`표시 설정 — 현재 정렬 ${activeSort?.label ?? ''}${
+          hiddenCount > 0 ? `, 열 ${hiddenCount}개 숨김` : ''
+        }`}
         aria-haspopup="true"
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen((prev) => !prev)}
       >
-        <FiSliders size={ICON_SIZE.base} aria-hidden="true" />
+        <UtilityGlyph $marked={hiddenCount > 0}>
+          <FiSliders size={ICON_SIZE.base} aria-hidden="true" />
+        </UtilityGlyph>
       </ToolbarStyles.ToolbarBtn>
       {menuOpen &&
         menuPosition &&
@@ -648,6 +668,46 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
                 </PageSizeBtn>
               ))}
             </ChoiceGrid>
+
+            <UtilityMenuDivider role="presentation" />
+
+            <ColumnSectionHead>
+              <UtilityMenuLabel as="span" id="catalog-columns-label">
+                열 표시
+              </UtilityMenuLabel>
+              {/* 되돌리기는 **하나라도 꺼져 있을 때만** 선다 — 항상 있으면 누를 일 없는
+                  링크가 섹션 머리에 상주한다. */}
+              {hiddenCount > 0 && (
+                <ColumnResetBtn type="button" onClick={onResetColumns}>
+                  전부 표시
+                </ColumnResetBtn>
+              )}
+            </ColumnSectionHead>
+            <ChoiceColumn role="group" aria-labelledby="catalog-columns-label">
+              {HIDEABLE_COLUMNS.map((column) => {
+                const shown = !hiddenColumns.includes(column)
+                return (
+                  <ColumnRow
+                    key={column}
+                    type="button"
+                    role="switch"
+                    aria-checked={shown}
+                    $active={shown}
+                    onClick={() => onToggleColumn(column)}
+                  >
+                    <ColumnCheck aria-hidden="true">
+                      {shown ? <FiCheck size={12} /> : null}
+                    </ColumnCheck>
+                    <span>{LIST_COLUMNS[column]}</span>
+                  </ColumnRow>
+                )
+              })}
+            </ChoiceColumn>
+            {/* 켜 둔 열이 안 보일 수 있다는 사실을 **설정 옆에서** 밝힌다 — 이 축은
+                끄기 전용이고, 폭이 모자라면 열 사다리가 따로 접기 때문이다. */}
+            <ColumnNote role="note">
+              폭이 좁으면 켜 둔 열도 자동으로 접힙니다
+            </ColumnNote>
 
             <UtilityMenuDivider role="presentation" />
 
@@ -833,6 +893,128 @@ const ChoiceRow = styled.button<{ $active: boolean }>`
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
+`
+
+/**
+ * ⋯ 트리거 글리프 — 숨긴 열이 있으면 **점 하나**가 붙는다.
+ *
+ * '키워드 열이 왜 없지'의 답이 메뉴 두 겹 안에만 있으면 안 되므로 닫힌 상태에도 신호가
+ * 필요하다. 그런데 숫자 배지(24px)를 달았더니 액션 트랙이 넘쳐 '새 사건 등록'이 혼자
+ * 다음 줄로 밀렸다 — 같은 트랙이 4px 모자라 무너지던 전례를 그대로 재현했다(실측 컨테이너
+ * 1240). 점은 폭을 **0** 쓰면서 같은 사실을 말한다. 개수는 title·aria-label이 싣는다.
+ */
+const UtilityGlyph = styled.span<{ $marked: boolean }>`
+  position: relative;
+  display: inline-flex;
+
+  ${({ $marked, theme }) =>
+    $marked &&
+    `&::after {
+       content: '';
+       position: absolute;
+       top: -1px;
+       right: -2px;
+       width: 5px;
+       height: 5px;
+       border-radius: 50%;
+       background: ${
+         theme.mode === 'dark' ? BRAND.primaryTextOnDark : BRAND.primaryHover
+       };
+     }`}
+`
+
+/** 열 표시 섹션 머리 — 라벨과 '전부 표시'가 같은 줄의 양 끝에 선다. */
+const ColumnSectionHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-right: 4px;
+`
+
+const ColumnResetBtn = styled.button`
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? BRAND.primaryTextOnDark : BRAND.primaryHover};
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? BRAND.primaryFillDark
+        : BRAND.primarySoftHover};
+  }
+`
+
+/**
+ * 열 토글 한 줄 — `role="switch"`다.
+ *
+ * 라디오가 아닌 이유: 여섯 열은 **서로 배타가 아니고** 각자 켜짐/꺼짐을 갖는다.
+ * 체크박스도 되지만 switch가 '지금 보이는가'라는 상태를 더 정확히 낭독한다.
+ */
+const ColumnRow = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  background: transparent;
+  /* 꺼진 열은 **흐린 글자**로 말한다 — 체크 칸이 비었다는 사실만으로는 한 줄씩
+     확인해야 하지만, 잉크 대비가 다르면 섹션을 한눈에 훑어 읽힌다. */
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.07)'
+        : 'rgba(15,23,42,0.05)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/** 체크 칸 — 빈 칸도 자리를 지킨다(라벨 x가 행마다 흔들리면 목록이 아니라 얼룩이 된다). */
+const ColumnCheck = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? BRAND.primaryTextOnDark : BRAND.primaryHover};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
+const ColumnNote = styled.p`
+  margin: 0;
+  padding: 0 8px 4px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /** 축에 딸린 조건 — 라벨보다 한 단 뒤로 물러선다. */

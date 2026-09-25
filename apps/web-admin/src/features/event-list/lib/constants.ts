@@ -46,6 +46,32 @@ export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]
  */
 
 /**
+ * 사용자가 끌 수 있는 목록 열 — 키는 행 격자의 **트랙 이름**과 같다(`--track-<key>`,
+ * `grid-column: <key>`, 셀의 `data-col`). 셋이 같은 문자열이라야 설정 하나가 트랙·셀·
+ * 머리글을 동시에 움직인다.
+ *
+ * 여기 없는 열(시작·사건·액션)은 목록의 정체성이라 끄는 축을 주지 않는다 —
+ * 날짜 없는 연표와 제목 없는 목록은 다른 화면이지 '설정이 다른 같은 화면'이 아니다.
+ *
+ * ⚠️ 이 설정은 **끄기 전용**이다. 켜 두어도 카드 폭이 모자라면 열 사다리가 알아서
+ * 접는다(LIST_STEPS) — 사용자가 없는 폭을 만들어 낼 수는 없기 때문이다.
+ */
+export const LIST_COLUMNS = {
+  end: '종료',
+  cat: '분류',
+  kw: '키워드',
+  dur: '기간',
+  flags: '관련국',
+  reg: '등록',
+} as const
+
+export type ListColumnKey = keyof typeof LIST_COLUMNS
+
+export const HIDEABLE_COLUMNS = Object.keys(
+  LIST_COLUMNS,
+) as ListColumnKey[]
+
+/**
  * 요약 뷰 모드
  */
 export const SUMMARY_VIEW_MODES = {
