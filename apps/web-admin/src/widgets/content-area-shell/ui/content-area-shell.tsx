@@ -75,16 +75,25 @@ function specFor(pathname: string): DomainSpec | null {
     }
   }
   if (pathname.startsWith('/events')) {
+    const selectedEventId = idFromPath(pathname, 'events', ['create'])
+    /*
+     * 목록(/events)과 상세(/events/:id)는 같은 사이드바를 쓰지만 **역할이 다르다**.
+     *
+     * 카탈로그는 "목록이 전체 화면을 써야 한다"는 결정으로 캡·중앙정렬을 걷어낸 지면이라,
+     * 사이드바를 기본으로 펼치면 툴바가 3줄로 접히며 그 결정을 되돌린다 — 그래서 기본 접힘.
+     * 상세에는 그 툴바가 없고, 본문은 읽는 폭으로 묶여 있다. 거기서 이 목록은 사건 사이를
+     * 오가는 **유일한 길**이자 '334개 중 지금 어디인가'를 말하는 자리다 — 기본 펼침.
+     *
+     * 접힘 상태도 키를 나눈다. 한 키를 공유하면 카탈로그에서 접은 선택이 상세까지 따라와,
+     * 상세에 들어설 때마다 좌측이 통째로 없는 지면이 된다(그 반대도 마찬가지).
+     */
     return {
-      /* 기본 접힘 — 사건 카탈로그는 "목록이 전체 화면을 써야 한다"는 결정으로 캡·중앙정렬을
-         걷어낸 지면이라, 사이드바를 기본으로 펼치면 툴바가 3줄로 접히며 그 결정을 되돌린다. */
-      storageKey: 'events-list-collapsed',
-      defaultCollapsed: true,
+      storageKey: selectedEventId
+        ? 'events-detail-collapsed'
+        : 'events-list-collapsed',
+      defaultCollapsed: !selectedEventId,
       render: (context) => (
-        <EventListSidebar
-          selectedId={idFromPath(pathname, 'events', ['create'])}
-          {...context}
-        />
+        <EventListSidebar selectedId={selectedEventId} {...context} />
       ),
     }
   }
