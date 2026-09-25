@@ -1,5 +1,5 @@
 /**
- * 카드 그리드(카드·시대 스토리·왕조·고정)에서 쓰는 인물 카드 — 이미지가 주인공인 포트레이트 카드.
+ * 카드 그리드(세기별·왕조·고정)에서 쓰는 인물 카드 — 이미지가 주인공인 포트레이트 카드.
  *
  *   ┌──────────────────────┐
  *   │ 군주            [고정] │
@@ -123,7 +123,8 @@ function PersonCardItemBase({
         </PinBtn>
 
         <Caption>
-          <FieldTag>{person.field}</FieldTag>
+          {/* '기타'는 분류 잔여라 배지로 내지 않는다(카드 절반 이상에 같은 배지가 붙던 소음) */}
+          {person.field !== '기타' && <FieldTag>{person.field}</FieldTag>}
           <Name title={person.name}>{highlight(person.name, query)}</Name>
           {person.primaryTitle && (
             <Title title={person.primaryTitle}>
@@ -186,8 +187,9 @@ export const PersonCardItem = memo(PersonCardItemBase)
 
 export const EraCardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  /* 172px — 본문 920px에서 한 줄 5장. 220px일 땐 3장이라 한 화면에 3명만 보였다. */
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: 14px;
 
   @media (max-width: 640px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -200,7 +202,7 @@ const Card = styled.div<{ $pinned?: boolean }>`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   background: ${surface};
   border: 1px solid ${hairline};
@@ -266,17 +268,18 @@ const Empty = styled.div`
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 16%;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3f49' : '#aab4c2')};
+  padding-top: 20%;
+  /* 하단 스크림(검정)과 이어지는 어두운 중립 — 밝은 회색이면 스크림과 겹쳐 탁한 띠가 생겼다 */
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3f49' : '#5b6474')};
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'linear-gradient(180deg, #23262d 0%, #17191e 100%)'
-      : 'linear-gradient(180deg, #dfe4eb 0%, #c7cfda 100%)'};
+      : 'linear-gradient(180deg, #414957 0%, #262b34 100%)'};
   ${zoomOnHover}
 
   svg {
     display: block;
-    width: 58%;
+    width: 42%;
     height: auto;
   }
 `
@@ -364,8 +367,8 @@ const Caption = styled.div`
   bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 14px 14px 13px;
+  gap: 2px;
+  padding: 12px 12px 11px;
   color: #ffffff;
 
   @media (max-width: 640px) {
@@ -385,7 +388,7 @@ const FieldTag = styled.span`
 `
 
 const Name = styled.div`
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 800;
   line-height: 1.25;
   letter-spacing: -0.02em;
@@ -402,7 +405,7 @@ const Name = styled.div`
 `
 
 const Title = styled.div`
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.82);
   white-space: nowrap;
@@ -413,8 +416,8 @@ const Title = styled.div`
 const Body = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px 13px;
+  gap: 4px;
+  padding: 10px 12px 11px;
 
   @media (max-width: 640px) {
     padding: 10px 10px 11px;
@@ -430,7 +433,7 @@ const Row = styled.div`
 `
 
 const Years = styled.span`
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -460,7 +463,7 @@ const Age = styled.span`
 
 const Place = styled.span`
   min-width: 0;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;

@@ -51,7 +51,6 @@ import {
 import { filterPersons } from '../model/filter-persons'
 import { SORT_OPTIONS } from '../model/sort-helpers'
 import { usePersonQueryInput } from '../model/use-person-query-input'
-import type { AdaptedPerson } from '../model/types'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
 import { DynastyView } from './dynasty-view'
@@ -80,7 +79,6 @@ import {
   ViewRow,
 } from './_shared/catalog.styles'
 import { EmptyState } from './_shared/empty-state'
-import { PersonPreviewModal } from './_shared/person-preview-modal'
 import { ScopeDropdown } from './_shared/scope-dropdown'
 import { EraStoryView } from './era-story-view'
 import { GalaxyView } from './galaxy-view'
@@ -89,7 +87,7 @@ import { MatrixView } from './matrix-view'
 import { StatsView } from './stats-view'
 
 interface InfographicContentProps {
-  /** 인물 상세로 이동 — 카드 클릭은 프리뷰 모달을 거쳐 '상세 보기'에서 호출된다 */
+  /** 인물 클릭 — 페이지가 인물 상세 모달을 띄운다(모달의 '상세 페이지'로 상세 진입) */
   onPersonClick: (id: string) => void
   /** 뷰 전환 세그먼트 — 페인이 소유(records 분기와 공유)하고 여기서는 자리만 잡는다 */
   viewSwitcher: ReactNode
@@ -140,25 +138,6 @@ export function InfographicContent({
   )
 
   const [formOpen, setFormOpen] = useState(false)
-
-  /**
-   * 인물 클릭 → 프리뷰 모달 먼저(매트릭스·능력치 뷰와 같은 모달), '상세 보기'로 상세 진입.
-   * 세기별·왕조·은하계 뷰가 이 핸들러를 쓴다. 매트릭스·능력치는 자체 프리뷰를 이미 띄우므로
-   * onPersonClick(상세 이동)을 그대로 받는다 — 여기로 넘기면 모달이 두 번 뜬다.
-   */
-  const [previewPerson, setPreviewPerson] = useState<AdaptedPerson | null>(null)
-  const peopleById = useMemo(
-    () => new Map(allPeople.map((person) => [person.id, person])),
-    [allPeople],
-  )
-  const openPreview = useCallback(
-    (id: string) => {
-      const person = peopleById.get(id)
-      if (person) setPreviewPerson(person)
-      else onPersonClick(id) // 데이터에 없으면 폴백으로 바로 상세
-    },
-    [peopleById, onPersonClick],
-  )
 
   // 통계 차트 접힘 — 기본 접힘. localStorage persist.
   const [statsOpen, setStatsOpen] = useState<boolean>(() => {
@@ -313,8 +292,10 @@ export function InfographicContent({
   // 결과 요약의 대표 분야 — 사건 목록 우측의 '● 전쟁/군사 78'과 같은 자리.
   const topField = useMemo(() => {
     const counts = new Map<string, number>()
+    // '기타'는 분류 잔여라 대표 분야가 될 수 없다 — 분야 미분류가 다수면 요약에서 뺀다.
     for (const person of filtered)
-      counts.set(person.field, (counts.get(person.field) ?? 0) + 1)
+      if (person.field !== '기타')
+        counts.set(person.field, (counts.get(person.field) ?? 0) + 1)
     let best: [string, number] | null = null
     for (const entry of counts) if (!best || entry[1] > best[1]) best = entry
     return best
@@ -534,12 +515,12 @@ export function InfographicContent({
                 <MatrixView people={filtered} onOpen={onPersonClick} />
               )}
               {activeView === 'galaxy' && (
-                <GalaxyView people={filtered} onOpen={openPreview} />
+                <GalaxyView people={filtered} onOpen={onPersonClick} />
               )}
               {activeView === 'story' && (
                 <EraStoryView
                   people={filtered}
-                  onOpen={openPreview}
+                  onOpen={onPersonClick}
                   query={dq}
                   pinned={pinned}
                   togglePin={togglePin}
@@ -548,7 +529,7 @@ export function InfographicContent({
               {activeView === 'dynasty' && (
                 <DynastyView
                   people={filtered}
-                  onOpen={openPreview}
+                  onOpen={onPersonClick}
                   query={dq}
                   pinned={pinned}
                   togglePin={togglePin}
@@ -566,20 +547,9 @@ export function InfographicContent({
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
         onSuccess={() => setFormOpen(false)}
-        // 등록 후 '상세 보기'는 이 지면의 정본 경로(onPersonClick)로 — 같은 화면의 인물
-        // 카드 클릭과 목적지·전환 방식을 한 곳에서 관리한다. 모달 기본값도 지금은 같은
-        // /persons-timeline/:id지만, 이 지면의 이동은 이 prop 하나만 보면 되도록 명시.
-        onViewDetail={onPersonClick}
+        // 등록 후 '상세 보기'는 모달 기본값(/persons-timeline/:id)으로 바로 상세 진입
       />
 
-      <PersonPreviewModal
-        person={previewPerson}
-        onClose={() => setPreviewPerson(null)}
-        onOpenDetail={(id) => {
-          setPreviewPerson(null)
-          onPersonClick(id)
-        }}
-      />
     </motion.div>
   )
 }

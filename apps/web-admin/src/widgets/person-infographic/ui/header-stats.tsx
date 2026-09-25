@@ -31,20 +31,58 @@ import {
   REGIONS,
 } from '../model/constants'
 import { usePersonInfographicFilterStore } from '../model/filter.store'
+import { pickTickStep } from '../model/tick-step'
 import type { AdaptedPerson } from '../model/types'
 
 import { BRAND, hairline, metaText, MOTION_FAST, surface } from './_shared/catalog.styles'
 
-const MIN_Y = -200
+/** 축 상한 — 당대 인물까지 담는다 */
 const MAX_Y = 2030
-const RANGE = MAX_Y - MIN_Y
+/** 축 하한의 바닥 — 데이터가 더 오래돼도 이 이전은 한 칸으로 몰린다 */
+const FLOOR_Y = -3000
+/** 막대 폭 후보(년) — 막대 수가 BINS 목표를 넘지 않는 가장 촘촘한 값을 고른다 */
+const BIN_WIDTHS = [10, 20, 25, 50, 100, 200, 250, 500]
 const BINS = INFOGRAPHIC_DEFAULTS.ERA_DENSITY_BINS
-const BIN_W = RANGE / BINS
+
+/**
+ * 시대 분포 축 — 고정 -200~2030 이 아니라 실제 인물 범위에 맞춘다.
+ * (중세 이후 인물만 있으면 왼쪽 40%가 빈 막대로 남던 문제)
+ * 막대 경계가 25·50·100년처럼 떨어져야 툴팁 구간이 읽힌다.
+ */
+function buildDomain(people: AdaptedPerson[]) {
+  let earliest = MAX_Y
+  for (const person of people) {
+    if (person.activityYear < earliest) earliest = person.activityYear
+  }
+  earliest = Math.max(FLOOR_Y, earliest)
+  const span = Math.max(100, MAX_Y - earliest)
+  const binWidth =
+    BIN_WIDTHS.find((width) => span / width <= BINS) ??
+    BIN_WIDTHS[BIN_WIDTHS.length - 1]
+  const minYear = Math.floor(earliest / binWidth) * binWidth
+  const binCount = Math.ceil((MAX_Y - minYear) / binWidth)
+  const maxYear = minYear + binCount * binWidth
+  const range = maxYear - minYear
+  const tickStep = pickTickStep(range / 7)
+  const ticks: number[] = []
+  for (let year = Math.ceil(minYear / tickStep) * tickStep; year <= maxYear; year += tickStep)
+    ticks.push(year)
+  return {
+    minYear,
+    binWidth,
+    binCount,
+    ticks,
+    pct: (year: number) => ((year - minYear) / range) * 100,
+  }
+}
+
+/** '기타'는 분류 잔여라 순위에 끼지 않는다 — 항상 목록 맨 뒤, 회색 막대 */
+const RESIDUAL = '기타'
+const residualLast = (left: readonly [string, number], right: readonly [string, number]) =>
+  Number(left[0] === RESIDUAL) - Number(right[0] === RESIDUAL) || right[1] - left[1]
 
 const colorForRegion = (region: string): string =>
   REGION_COLORS[Math.max(0, REGIONS.indexOf(region)) % REGION_COLORS.length]
-
-const pct = (year: number) => ((year - MIN_Y) / RANGE) * 100
 
 interface HoverBin {
   index: number
@@ -63,8 +101,11 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
   const [hoverBin, setHoverBin] = useState<HoverBin | null>(null)
   const [countriesExpanded, setCountriesExpanded] = useState(false)
 
+  const domain = useMemo(() => buildDomain(people), [people])
+  const { pct } = domain
+
   const stats = useMemo(() => {
-    const bins = new Array<number>(BINS).fill(0)
+    const bins = new Array<number>(domain.binCount).fill(0)
     const eraCount: Record<string, number> = {}
     const regionCount: Record<string, number> = {}
     const fieldCount: Record<string, number> = {}
@@ -75,8 +116,8 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
     let rulers = 0
     for (const person of people) {
       const binIndex = Math.min(
-        BINS - 1,
-        Math.max(0, Math.floor((person.activityYear - MIN_Y) / BIN_W)),
+        domain.binCount - 1,
+        Math.max(0, Math.floor((person.activityYear - domain.minYear) / domain.binWidth)),
       )
       bins[binIndex]++
       eraCount[person.era.key] = (eraCount[person.era.key] || 0) + 1
@@ -94,10 +135,10 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
     const maxBin = Math.max(1, ...bins)
     const regions = REGIONS.filter((region) => regionCount[region])
       .map((region) => [region, regionCount[region]] as const)
-      .sort((left, right) => right[1] - left[1])
+      .sort(residualLast)
     const fields = FIELDS.filter((field) => fieldCount[field])
       .map((field) => [field, fieldCount[field]] as const)
-      .sort((left, right) => right[1] - left[1])
+      .sort(residualLast)
     const countries = Object.entries(countryCount).sort(
       (left, right) => right[1] - left[1],
     )
@@ -112,7 +153,7 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
       alive,
       rulers,
     }
-  }, [people])
+  }, [people, domain])
 
   const total = people.length
   const countryList = stats.countries.slice(
@@ -126,8 +167,7 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
     INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_DEFAULT
 
   const eraFiltered = scopes.era.length > 0
-  const yearTicks: number[] = []
-  for (let year = 0; year <= MAX_Y; year += 250) if (year >= MIN_Y) yearTicks.push(year)
+  const yearTicks = domain.ticks
 
   const share = (value: number) => (total ? Math.round((value / total) * 100) : 0)
 
@@ -180,9 +220,9 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
             <GridLine style={{ bottom: '100%' }} aria-hidden />
             <GridLine style={{ bottom: '50%' }} aria-hidden />
             {stats.bins.map((count, index) => {
-              const from = Math.round(MIN_Y + BIN_W * index)
-              const to = Math.round(MIN_Y + BIN_W * (index + 1))
-              const era = yearOfEra(MIN_Y + BIN_W * (index + 0.5))
+              const from = domain.minYear + domain.binWidth * index
+              const to = from + domain.binWidth
+              const era = yearOfEra(from + domain.binWidth / 2)
               const inFilter = !eraFiltered || scopes.era.includes(era.key)
               const label = `${era.lbl} ${formatYear(from)}–${formatYear(to)}, ${count}명`
               const show = (x: number, y: number) =>
@@ -251,12 +291,14 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
             {ERAS.map((era) => {
               const count = stats.eraCount[era.key] ?? 0
               const active = scopes.era.includes(era.key)
+              // 0명 시대는 칩을 내지 않는다(누를 것이 없는 칩) — 필터로 켜져 있으면 끌 수 있게 남김
+              if (count === 0 && !active) return null
               return (
                 <EraChip
                   key={era.key}
                   type="button"
                   $active={active}
-                  $dim={(eraFiltered && !active) || count === 0}
+                  $dim={eraFiltered && !active}
                   aria-label={`${era.lbl} ${count}명, 시대 필터 토글`}
                   aria-pressed={active}
                   onClick={() => toggleScope('era', era.key)}
@@ -398,7 +440,10 @@ function BarSection({
                 <BarName title={row.label}>{row.label}</BarName>
               </BarLabel>
               <BarTrack aria-hidden>
-                <BarFill style={{ width: `${(row.count / max) * 100}%` }} />
+                <BarFill
+                  $residual={row.label === RESIDUAL}
+                  style={{ width: `${(row.count / max) * 100}%` }}
+                />
               </BarTrack>
               <BarValue>
                 {row.count.toLocaleString()}
@@ -796,11 +841,12 @@ const BarTrack = styled.span`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
 `
 
-const BarFill = styled.span`
+const BarFill = styled.span<{ $residual?: boolean }>`
   display: block;
   height: 100%;
   border-radius: 0 4px 4px 0;
-  background: ${BRAND.primary};
+  background: ${({ $residual, theme }) =>
+    $residual ? (theme.mode === 'dark' ? '#52525b' : '#a1a1aa') : BRAND.primary};
   transition: width 0.25s ease;
 
   @media (prefers-reduced-motion: reduce) {
