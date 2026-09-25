@@ -56,6 +56,11 @@ export function CountryDetailHeader({
   }, [menuOpen])
 
   const isoCode = country.isoCode?.trim() || null
+  const trimmedLocalName = country.localName?.trim() || null
+  const localName =
+    trimmedLocalName && trimmedLocalName !== country.name.trim()
+      ? trimmedLocalName
+      : null
 
   return (
     <S.HeroBand
@@ -82,10 +87,9 @@ export function CountryDetailHeader({
       <S.HeroTitleCol>
         <S.HeroName>{country.name}</S.HeroName>
         <S.HeroMetaRow>
-          {country.localName && (
-            <S.HeroLocalName>{country.localName}</S.HeroLocalName>
-          )}
-          {country.localName && (continentName || isoCode) && (
+          {/* 현지명이 이름과 같으면(대한민국·대한민국) 두 번 적지 않는다 */}
+          {localName && <S.HeroLocalName>{localName}</S.HeroLocalName>}
+          {localName && (continentName || isoCode) && (
             <S.HeroMetaSep aria-hidden>·</S.HeroMetaSep>
           )}
           {continentName && <S.HeroMetaChip>{continentName}</S.HeroMetaChip>}

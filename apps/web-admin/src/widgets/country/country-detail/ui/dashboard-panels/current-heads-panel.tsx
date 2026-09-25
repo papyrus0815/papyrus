@@ -21,7 +21,7 @@ export function CurrentHeadsPanel({
   const featured = heads[0]
   const rest = heads.slice(1)
   return (
-    <S.CardPanel $accent="violet">
+    <S.CardPanel>
       <S.CardPanelTitleRow>
         <S.CardPanelTitle>현임 정부 수반</S.CardPanelTitle>
         <S.CardPanelHint>

@@ -147,10 +147,14 @@ export function CountryCompaniesSection({
   )
 }
 
+/*
+ * 여러 열 카드 격자. 한 줄 목록일 땐 행이 760px에서 멈춰 '›'가 본문 한가운데 떠 있고
+ * 오른쪽 400px가 비었다. 칸마다 테두리를 둘러 '›'가 제 칸 안에 머문다.
+ */
 const List = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
 `
 
 const Row = styled.button`
@@ -160,11 +164,10 @@ const Row = styled.button`
   align-items: center;
   gap: 12px;
   width: 100%;
-  max-width: 760px;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 10px;
-  background: none;
+  padding: 12px 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 12px;
+  background: ${({ theme }) => theme.colors.background.primary};
   font-family: inherit;
   text-align: left;
   cursor: pointer;

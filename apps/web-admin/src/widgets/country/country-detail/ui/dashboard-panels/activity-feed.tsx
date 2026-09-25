@@ -4,6 +4,7 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 
 import { formatRelativeTime } from '../../lib/relative-time'
 import type { RecentActivityItem } from '../../model/use-country-dashboard-stats'
+import { IconCalendar } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import { getPersonInitial, startOfDay } from './format'
 
@@ -106,9 +107,13 @@ function ActivityRow({
           )}
         </S.FeedAvatar>
       ) : (
-        <S.FeedAvatarSpacer aria-hidden />
+        /* 사건 줄만 아바타 자리가 비어 들여쓰기가 들쭉날쭉했다 — 달력 표지로 채운다 */
+        <S.FeedAvatar $accent="amber" aria-hidden>
+          <IconCalendar />
+        </S.FeedAvatar>
       )}
       <S.FeedLabel>{item.label}</S.FeedLabel>
+      <S.FeedKind>{item.kind === 'person' ? '인물' : '사건'}</S.FeedKind>
       <S.FeedTime>{formatRelativeTime(item.createdAt)}</S.FeedTime>
     </S.FeedRow>
   )

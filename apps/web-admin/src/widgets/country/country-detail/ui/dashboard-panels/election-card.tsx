@@ -27,7 +27,7 @@ export function ElectionCard({
 }: ElectionCardProps) {
   if (isLoading) {
     return (
-      <S.CardPanel $accent="indigo">
+      <S.CardPanel>
         <S.CardPanelTitleRow>
           <S.CardPanelTitle>선거</S.CardPanelTitle>
         </S.CardPanelTitleRow>

@@ -29,7 +29,7 @@ export function CompletenessPanel({
 
   if (isLoading) {
     return (
-      <S.CardPanel $accent="indigo">
+      <S.CardPanel>
         <S.CardPanelTitleRow>
           <S.CardPanelTitle>기록 완성도</S.CardPanelTitle>
         </S.CardPanelTitleRow>
@@ -39,7 +39,7 @@ export function CompletenessPanel({
   }
 
   return (
-    <S.CardPanel $accent={isFull ? 'emerald' : 'indigo'}>
+    <S.CardPanel>
       <S.CardPanelTitleRow>
         <S.CardPanelTitle>기록 완성도</S.CardPanelTitle>
         <S.CardPanelHint>
