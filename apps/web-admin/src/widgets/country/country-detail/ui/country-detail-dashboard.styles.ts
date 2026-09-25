@@ -314,23 +314,19 @@ export const TwoColRow = styled.div`
   }
 `
 
-export const CardPanel = styled.div<{ $accent?: AccentKey }>`
+/**
+ * 보조 카드(기록 완성도·선거 등). 예전엔 왼쪽에 제 색 줄(남색·장미·보라·초록)을 세웠다 —
+ * 장 머리 아이콘을 단색으로 묶은 뒤로 이 줄만 옛 무지개 언어로 남아 있었다. 면과 테두리로만.
+ */
+export const CardPanel = styled.div`
   position: relative;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: ${space.xl}px ${space.xxl}px;
   ${surfaceStatic}
   display: flex;
   flex-direction: column;
   gap: ${space.md}px;
   overflow: hidden;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 3px;
-    background: ${({ $accent }) => accent($accent, 'base')};
-  }
 `
 
 export const CardPanelTitleRow = styled.div`
@@ -1133,7 +1129,7 @@ export const FeedItem = styled.li`
 export const FeedDot = styled.span<{ $accent?: AccentKey }>`
   position: absolute;
   left: -22px;
-  top: 16px;
+  top: 17px;
   width: 10px;
   height: 10px;
   border-radius: ${radius.pill}px;
@@ -1142,26 +1138,26 @@ export const FeedDot = styled.span<{ $accent?: AccentKey }>`
     ${({ theme }) => (theme.mode === 'dark' ? '#0b0d12' : '#ffffff')};
 `
 
+/*
+ * 행 높이 58 → 44px. 열 줄이 650px를 먹어 옆 '더 채울 것' 카드 아래가 통째로 비었다.
+ * 호버는 남색 면·테두리·밀림을 걷고 옅은 면 하나로 — 목록 한 줄에 버튼 셋의 신호를 줄 이유가 없다.
+ */
 export const FeedRow = styled.div`
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: ${space.md}px;
-  padding: 10px ${space.md}px;
+  gap: 10px;
+  padding: 7px 10px;
   border-radius: 8px;
-  border: 1px solid transparent;
+  border: none;
   background: transparent;
+  font-family: inherit;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.15s ease;
+  transition: background 0.15s ease;
   &:hover {
-    background: ${PRIMARY_SOFT_BG};
-    border-color: ${PRIMARY_SOFT_BORDER};
-    transform: translateX(2px);
+    background: ${({ theme }) => theme.colors.hover};
   }
   &:focus-visible {
     outline: 2px solid ${PRIMARY};
@@ -1170,8 +1166,8 @@ export const FeedRow = styled.div`
 `
 
 export const FeedAvatar = styled.div<{ $accent?: AccentKey }>`
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: ${radius.pill}px;
   flex-shrink: 0;
   display: flex;
@@ -1194,10 +1190,12 @@ export const FeedAvatar = styled.div<{ $accent?: AccentKey }>`
   }
 `
 
-export const FeedAvatarSpacer = styled.span`
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
+/** 인물·사건 — 색(점·아바타)만으로 종류를 말하지 않게 글자로도 적는다 */
+export const FeedKind = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
 `
 
 export const FeedLabel = styled.span`
@@ -1451,10 +1449,20 @@ export const ElectionName = styled.span`
 
 export const LastUpdatedHint = styled.span`
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
+
+  /* 아이콘이 글자(12px)보다 커서 20px로 떠 있었다 — 글자 높이에 맞춘다 */
+  svg {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+  }
 `
 
 export const EmptyCtaButton = styled.button`
@@ -2081,6 +2089,14 @@ export const SectionLink = styled.button`
 
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
+  }
+
+  /*
+   * 머리에 동작 버튼(수정·등록)과 링크가 함께 있으면 둘 다 margin-left:auto라 남는 폭을
+   * 나눠 가져, 버튼이 제목 줄 한가운데 떴다(정체의 '수정'). 버튼 뒤에 오는 링크는 붙인다.
+   */
+  ${SectionAction} + & {
+    margin-left: 0;
   }
 `
 

@@ -15,7 +15,7 @@ export function GovernmentCard({
   onOpen,
 }: GovernmentCardProps) {
   return (
-    <S.CardPanel $accent="rose">
+    <S.CardPanel>
       <S.CardPanelTitleRow>
         <S.CardPanelTitle>현 정부</S.CardPanelTitle>
         {cabinet?.ministerCount != null && cabinet.ministerCount > 0 && (
