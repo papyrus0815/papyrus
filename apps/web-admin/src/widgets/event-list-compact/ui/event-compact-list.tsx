@@ -272,7 +272,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     : undefined
   const [cardEl, setCardEl] = useState<HTMLElement | null>(null)
   const cardStep = useCardStep(cardEl)
-  const isWide = cardStep !== 'base'
+  const isWide = cardStep === 'ledger' || cardStep === 'atlas'
   const isUltraWide = cardStep === 'atlas'
   /**
    * 관련국 열이 **96px로 좁아지는 대역**(list.styles.ts의 `@media (max-width: 1179px)`).
@@ -311,9 +311,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         ? { flags: 6, names: 3, withName: true }
         : isWide
           ? { flags: 5, names: 3, withName: true }
-          : isBelowSummary
-            ? { flags: 3, names: 1, withName: false }
-            : { flags: 4, names: 2, withName: false }
+          : cardStep === 'summary'
+            ? { flags: 4, names: 2, withName: true }
+            : isBelowSummary
+              ? { flags: 3, names: 1, withName: false }
+              : { flags: 4, names: 2, withName: false }
   /**
    * 키워드 칩 개수 — 관련국과 같은 근거로 **트랙 폭에서 역산**한다.
    *
@@ -1304,7 +1306,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 // styled (theme-aware)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type CardStep = 'base' | 'ledger' | 'atlas'
+type CardStep = 'base' | 'summary' | 'ledger' | 'atlas'
 
 /**
  * 카드(컨테이너 eventcard)의 열 사다리 단계 — CSS 컨테이너 쿼리와 **같은 입력**(콘텐츠 상자
@@ -1324,7 +1326,9 @@ function useCardStep(el: HTMLElement | null): CardStep {
           ? 'atlas'
           : width >= LIST_STEPS.ledger
             ? 'ledger'
-            : 'base',
+            : width >= LIST_STEPS.summary
+              ? 'summary'
+              : 'base',
       )
     })
     observer.observe(el)

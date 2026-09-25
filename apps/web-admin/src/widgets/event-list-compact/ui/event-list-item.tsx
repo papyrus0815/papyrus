@@ -1426,6 +1426,10 @@ const RowBreak = styled.span`
 const RowActions = styled.div`
   grid-column: act;
   align-self: center;
+  /* 28px 아이콘 버튼이 행 트랙 높이를 정하지 못하게 위아래로 넘치게 둔다.
+   * 트랙이 28px로 부풀면 날짜·제목 베이스라인 묶음은 트랙 **위**에 붙고 분류·키워드·
+   * 국기는 가운데에 서서, 한 행 안에서 글자 중심이 4~5px 어긋났다(실측 전 행). */
+  margin-block: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -1477,6 +1481,7 @@ const RowActions = styled.div`
   @media (max-width: 640px) {
     margin-left: auto;
     order: 2;
+    margin-block: 0;
     /* 좁은 폭은 포인터 hover 규약이 불안정한 경계라 상시 노출 */
     opacity: 1;
   }
@@ -1669,24 +1674,39 @@ const Indent = styled.span<{ $depth: number }>`
   grid-column: ind;
   /* baseline 정렬이 걸린 격자라 명시하지 않으면 높이가 글자 한 줄로 접힌다. */
   align-self: stretch;
-  background-image: repeating-linear-gradient(
-    to right,
-    ${({ theme }) => (theme.mode === 'dark' ? '#6b7076' : '#8f9296')} 0 1px,
-    transparent 1px var(--row-indent)
-  );
-  background-repeat: no-repeat;
-  background-size: min(calc(var(--row-indent) * var(--depth, 0)), 96px) 100%;
-  /* 선은 트랙 왼쪽 끝이 아니라 **부모 디스클로저(∨)의 중심 아래**에 선다 — 트리 표기의
-     관례대로 '부모에게서 내려온 선'으로 읽힌다. 트랙 왼쪽 끝은 곧 분류 칸의 오른쪽
-     경계라, 거기 서 있던 선은 칸 구분선처럼 '회담/조약 |'로 붙어 읽혔다.
-     주기(--row-indent)가 한 단 들여쓰기와 같으므로 depth 2의 둘째 선도 자기 부모
-     (depth 1) 디스클로저 중심에 맞는다. 오프셋 < 주기라 마지막 선도 트랙 안에 남는다. */
-  background-position: calc(var(--row-disc-btn) / 2) 0;
+  /* 선은 트랙이 아니라 **행 전체 높이**로 긋는다. 트랙 높이(글자 한 줄 ≈ 18px)만큼만
+   * 그으면 45px 행 가운데 떠 있는 짧은 토막이 되어, 분류 칸 오른쪽의 칸 구분선처럼
+   * 읽혔다('회담/조약 |'). 행 높이로 그으면 연속한 자식 행의 선이 이어져 부모
+   * 디스클로저 아래로 내려오는 트리 선이 된다. 가로 위치는 static position(left 미지정)
+   * 그대로 이 트랙 자리, 세로 기준은 가장 가까운 positioned 조상인 행(Stop)이다. */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: min(calc(var(--row-indent) * var(--depth, 0)), 96px);
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      to right,
+      ${({ theme }) => (theme.mode === 'dark' ? '#6b7076' : '#8f9296')} 0 1px,
+      transparent 1px var(--row-indent)
+    );
+    background-repeat: no-repeat;
+    background-size: min(calc(var(--row-indent) * var(--depth, 0)), 96px) 100%;
+    /* 선은 트랙 왼쪽 끝이 아니라 **부모 디스클로저(∨)의 중심 아래**에 선다 — 트리 표기의
+       관례대로 '부모에게서 내려온 선'으로 읽힌다. 트랙 왼쪽 끝은 곧 분류 칸의 오른쪽
+       경계라, 거기 서 있던 선은 칸 구분선처럼 '회담/조약 |'로 붙어 읽혔다.
+       주기(--row-indent)가 한 단 들여쓰기와 같으므로 depth 2의 둘째 선도 자기 부모
+       (depth 1) 디스클로저 중심에 맞는다. 오프셋 < 주기라 마지막 선도 트랙 안에 남는다. */
+    background-position: calc(var(--row-disc-btn) / 2) 0;
+  }
 
   /* 강제 색 모드(Windows 고대비)는 배경 이미지를 통째로 지운다 — 계층이 사라지므로
      테두리로 대체한다. 깊이별 줄 수는 포기하고 '자식이다'만 남긴다. */
   @media (forced-colors: active) {
-    background-image: none;
+    &::before {
+      background-image: none;
+    }
     ${({ $depth }) => $depth > 0 && 'border-left: 1px solid CanvasText;'}
   }
 
@@ -1711,6 +1731,9 @@ const Disclosure = styled.button<{ $expanded: boolean }>`
   gap: 1px;
   width: var(--row-disc-btn);
   height: var(--row-disc-btn);
+  /* 제목 줄(약 18px)보다 큰 버튼이 셀 높이를 키우지 않게 위아래로 넘치게 둔다
+     (DiscSpacer 주석 참고 — 자식 있는 행만 제목이 뜨는 비대칭이 생긴다). */
+  margin-block: calc((18px - var(--row-disc-btn)) / 2);
   padding: 0;
   /* 시각 크기는 그대로 두고 **히트 영역만** 확장한다(포인터·터치 오탭 방지). */
   position: relative;
@@ -1747,6 +1770,7 @@ const Disclosure = styled.button<{ $expanded: boolean }>`
        한 행에 좌측 기준선이 두 개 생긴다(실측 제목 85px vs 메타 55px).
        세로로 훑을 때 눈이 두 축을 오가야 하고, 제목이 쓸 수 있는 폭도 그만큼 준다. */
     order: 1;
+    margin-block: 0;
   }
   &:hover {
     background: rgba(37, 99, 235, 0.16);
@@ -1788,10 +1812,13 @@ const DiscSpacer = styled.span`
   grid-column: disc;
   align-self: center;
   width: var(--row-disc-btn);
-  height: var(--row-disc-btn);
+  /* 높이는 주지 않는다 — 폭만 예약하면 된다. 24px 높이를 들고 있을 때는 제목 셀이
+   * 26px로 부풀고 제목 글자(18px 줄)가 그 **위쪽**에 붙어, 행 가운데에 선 분류·국기보다
+   * 5px 높이 떠 있었다. */
   flex-shrink: 0;
 
   @media (max-width: 640px) {
+    height: var(--row-disc-btn);
     /* 자식 없는 행도 같은 자리를 예약한다 — 아니면 메타 줄의 날짜 x가 행마다
        30px씩 튀어 방금 세운 열이 다시 무너진다. */
     order: 1;
