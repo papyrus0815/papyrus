@@ -259,6 +259,20 @@ export function CurrentCabinetPanel({
     placeholderData: keepPreviousData,
   })
 
+  /*
+   * 지금 고른 정권의 개요만 쓴다.
+   *
+   * keepPreviousData는 정권을 바꾸는 동안 앞 정권을 붙잡아 둔다. 그런데 그걸 그대로
+   * 쓰면 '다른 정권으로 바꿨는데 앞 정권의 수반·각료가 그대로 나온다'가 된다 — 새 개요가
+   * 늦거나 실패하면 끝까지. 응답의 id로 가려, 불러오는 동안만 앞 것을 흐리게 들고 있고
+   * 불러오기가 끝났는데 맞지 않으면 비운다.
+   */
+  const rawOverview = overviewQuery.data ?? null
+  const overviewMatches =
+    !!rawOverview && rawOverview.id === selectedCabinetId
+  const overviewSwitching = !overviewMatches && overviewQuery.isFetching
+  const overview = overviewMatches || overviewSwitching ? rawOverview : null
+
   const personsQuery = useQuery({
     queryKey: ['persons', 'all'],
     queryFn: getAllPersons,
@@ -278,7 +292,7 @@ export function CurrentCabinetPanel({
    * 보려면 한 번 더 눌러야 했다 — 정권을 고르면 그 선거도 함께 펼쳐져야 한다.
    */
   const linkedElectionId =
-    overviewQuery.data?.headTenure?.electionCandidacy?.election?.id ?? null
+    overview?.headTenure?.electionCandidacy?.election?.id ?? null
 
   const electionDetailQuery = useQuery({
     queryKey: ['election-detail', linkedElectionId],
@@ -532,8 +546,9 @@ export function CurrentCabinetPanel({
       string,
       { personId: string | null; name: string; period: string; count: number }
     >()
-    const rows = (query.data ?? []) as Array<{
+    const allRows = (query.data ?? []) as Array<{
       administrationDepartmentId?: string | null
+      cabinetId?: string | null
       startDate?: string | null
       endDate?: string | null
       person?: {
@@ -545,6 +560,27 @@ export function CurrentCabinetPanel({
         country?: { defaultNameDisplayOrder?: string | null } | null
       } | null
     }>
+    /*
+     * 고른 정권의 재임만 센다. 예전엔 국가의 **모든** 재임을 모아, 각료가 없는 정권으로
+     * 바꾸면 부처 칸에 다른 정권의 장관이 앉아 있었다. 정권이 박힌 재임은 그 정권 것만,
+     * 정권이 비어 있는 재임은 그 정권 수반의 임기와 겹칠 때만 넣는다.
+     */
+    const scopeCabinet = cabinets.find(
+      (cabinet) => cabinet.id === selectedCabinetId,
+    )
+    const scopeStart = scopeCabinet?.headTenure?.startDate?.slice(0, 10) ?? null
+    const scopeEnd = scopeCabinet?.headTenure?.endDate?.slice(0, 10) ?? null
+    const rows = !scopeCabinet
+      ? allRows
+      : allRows.filter((row) => {
+          if (row.cabinetId) return row.cabinetId === scopeCabinet.id
+          const start = row.startDate?.slice(0, 10) ?? null
+          const end = row.endDate?.slice(0, 10) ?? null
+          if (!start || !scopeStart) return false
+          const startsBeforeScopeEnds = !scopeEnd || start <= scopeEnd
+          const endsAfterScopeStarts = !end || end >= scopeStart
+          return startsBeforeScopeEnds && endsAfterScopeStarts
+        })
     // 서버가 startDate 내림차순으로 주므로 첫 행이 가장 최근 — 그 사람을 대표로 세운다
     for (const row of rows) {
       const departmentId = row.administrationDepartmentId
@@ -573,10 +609,9 @@ export function CurrentCabinetPanel({
       })
     }
     return byDepartment
-  }, [query.data])
+  }, [query.data, cabinets, selectedCabinetId])
 
   const { members, heads } = useMemo(() => {
-    const overview = overviewQuery.data
     if (!overview) return { members: [] as Member[], heads: [] as Member[] }
 
     type OverviewTenure = NonNullable<typeof overview.headTenure>
@@ -651,7 +686,7 @@ export function CurrentCabinetPanel({
         ? [toMember(overview.headTenure, true, false, null)]
         : [],
     }
-  }, [overviewQuery.data])
+  }, [overview])
 
   const selectedCabinet =
     cabinets.find((cabinet) => cabinet.id === selectedCabinetId) ?? null
@@ -696,7 +731,7 @@ export function CurrentCabinetPanel({
   }
   /** 이 정권을 낳은 선거 — 수반 임기의 후보 기록을 거쳐 온다 */
   const linkedElection =
-    overviewQuery.data?.headTenure?.electionCandidacy?.election ?? null
+    overview?.headTenure?.electionCandidacy?.election ?? null
 
   /*
    * 후보 목록의 person에는 country가 없어 표시 순서를 스스로 못 정한다(그대로 두면
@@ -704,12 +739,12 @@ export function CurrentCabinetPanel({
    * 넘긴다 — 헬퍼의 countryDefaultNameDisplayOrder가 정확히 이 자리를 위한 옵션이다.
    */
   const voteShareRaw =
-    overviewQuery.data?.headTenure?.electionCandidacy?.result?.voteSharePercent
+    overview?.headTenure?.electionCandidacy?.result?.voteSharePercent
   const voteShare =
     voteShareRaw != null && voteShareRaw !== '' ? Number(voteShareRaw) : null
 
   const countryNameOrder =
-    overviewQuery.data?.headTenure?.person?.country?.defaultNameDisplayOrder ??
+    overview?.headTenure?.person?.country?.defaultNameDisplayOrder ??
     null
   const elections = electionsQuery.data ?? []
 
@@ -962,6 +997,90 @@ export function CurrentCabinetPanel({
 
   const isEmpty = heads.length === 0 && members.length === 0
 
+  /*
+   * 각료가 없을 때의 칸 격자 — 채워진 각료 격자와 **같은 규격**(232px 칸·54px 높이).
+   * 부처가 있으면 부처마다 등록 칸, 없으면 고른 이름 틀의 자리(외무부·국방부…)를
+   * 흐린 칸으로 세워 누르면 그 부처가 만들어진다. 틀 고르기·직접 입력은 아래 한 줄로.
+   */
+  const emptyRoster = (
+    <>
+      <SlotGrid>
+        {departments.length > 0
+          ? departments.map((department) => (
+              <DepartmentSlot
+                key={department.id}
+                name={department.name}
+                occupant={departmentOccupants.get(department.id) ?? null}
+                onOpenPerson={(personId) => setModalPersonId(personId)}
+                onRegister={() => openRegister(department.id, department.name)}
+                onDelete={() =>
+                  void removeDepartment(department.id, department.name)
+                }
+                editing={renamingId === department.id}
+                renameValue={renameValue}
+                renaming={renaming}
+                onRenameStart={() => startRename(department.id, department.name)}
+                onRenameChange={setRenameValue}
+                onRenameCommit={() =>
+                  void commitRename(department.id, department.name)
+                }
+                onRenameCancel={cancelRename}
+              />
+            ))
+          : presetSuggestions.map((item) => (
+              <GhostSlot
+                key={item.slot + item.name}
+                type="button"
+                disabled={creatingDepartment}
+                onClick={() => void addPresets([item])}
+                title={`「${item.name}」 부처를 만들고 자리를 세웁니다`}
+              >
+                <SlotCircle aria-hidden>
+                  <FiPlus size={14} />
+                </SlotCircle>
+                <SlotText>
+                  <SlotTitle>{item.name}</SlotTitle>
+                  <SlotEmptyName>부처 만들기</SlotEmptyName>
+                </SlotText>
+              </GhostSlot>
+            ))}
+      </SlotGrid>
+      <RosterFooter>
+        {departments.length === 0 && (
+          <>
+            <RosterFooterLabel>이름 틀</RosterFooterLabel>
+            <FrameSelect
+              value={frame.id}
+              disabled={creatingDepartment}
+              onChange={(event) => setFrameIdOverride(event.target.value)}
+              aria-label="부처 명칭 틀"
+            >
+              {DEPARTMENT_NAME_FRAMES.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.label}
+                </option>
+              ))}
+            </FrameSelect>
+            {presetSuggestions.length > 0 && (
+              <PresetAll
+                type="button"
+                disabled={creatingDepartment}
+                onClick={() => void addPresets(presetSuggestions)}
+              >
+                {presetSuggestions.length}개 모두 만들기
+              </PresetAll>
+            )}
+          </>
+        )}
+        <RosterFooterLink type="button" onClick={() => setSetupOpen(true)}>
+          {departments.length > 0
+            ? '부처 더 담기 · 이름 정리'
+            : '부처 이름 직접 입력 · 부처 없이 등록'}
+        </RosterFooterLink>
+      </RosterFooter>
+    </>
+  )
+
   return (
     <S.Section>
       <S.SectionTitleRow>
@@ -1027,79 +1146,43 @@ export function CurrentCabinetPanel({
         </CabinetStrip>
       )}
 
+      <SwitchFade $switching={overviewSwitching} aria-busy={overviewSwitching}>
       {cabinetsQuery.isLoading || overviewQuery.isLoading ? (
         <GovernmentSkeleton />
       ) : isEmpty ? (
         <>
-          {/* 수장 자리 — 부처와 무관한 국가원수·정부수반 */}
-          <EmptySlotHead
+          {/*
+            등록 전 지면도 등록 후와 같은 모양이다 — 가로로 누운 수반 카드 + 각료 칸 격자.
+            예전엔 점선 한 줄('정부 수반 아직 등록되지 않음')과 '각료 등록' 버튼·부처 틀
+            칩 목록이 깔려, 자료가 들어오는 순간 지면이 통째로 다른 모양으로 바뀌었다.
+          */}
+          <EmptyHeadCard
             type="button"
             onClick={() => openRegister(null, '정부 수반')}
           >
-            <SlotFace />
-            <SlotHeadText>
+            <EmptyFace aria-hidden>
+              <FiPlus size={30} />
+            </EmptyFace>
+            <EmptyHeadText>
               <SlotRole>정부 수반</SlotRole>
-              <SlotEmptyName>아직 등록되지 않음</SlotEmptyName>
-            </SlotHeadText>
-            <SlotAdd>+ 등록</SlotAdd>
-          </EmptySlotHead>
-
-          {departments.length > 0 ? (
-            <>
-              <SlotGroupLabel>부처별 우두머리</SlotGroupLabel>
-              <SlotGrid>
-                {departments.map((department) => (
-                  <DepartmentSlot
-                    key={department.id}
-                    name={department.name}
-                    occupant={departmentOccupants.get(department.id) ?? null}
-                    onOpenPerson={(personId) => setModalPersonId(personId)}
-                    onRegister={() =>
-                      openRegister(department.id, department.name)
-                    }
-                    onDelete={() =>
-                      void removeDepartment(department.id, department.name)
-                    }
-                    editing={renamingId === department.id}
-                    renameValue={renameValue}
-                    renaming={renaming}
-                    onRenameStart={() =>
-                      startRename(department.id, department.name)
-                    }
-                    onRenameChange={setRenameValue}
-                    onRenameCommit={() =>
-                      void commitRename(department.id, department.name)
-                    }
-                    onRenameCancel={cancelRename}
-                  />
-                ))}
-              </SlotGrid>
-              <SlotGridFooter>
-                <PresetAll type="button" onClick={() => setSetupOpen(true)}>
-                  부처 더 담기 · 이름 정리
-                </PresetAll>
-              </SlotGridFooter>
-            </>
-          ) : (
-<EmptyArea>
-            <SetupCta type="button" onClick={() => setSetupOpen(true)}>
-              <IconBriefcase />
-              각료 등록
-            </SetupCta>
-            {/*
-              * 기본 틀 칩은 지면에 둔다. 한 번에 하나씩 눌러 자리를 세우는 동작이라
-              * 모달을 열고 닫는 왕복보다 그 자리에서 톡톡 누르는 편이 빠르다.
-              * 모달은 '이름 직접 입력·만든 부처 정리·부처 없이 바로 등록'을 맡는다.
-              */}
-            <DepartmentFramePicker
-              frame={frame}
-              suggestions={presetSuggestions}
-              disabled={creatingDepartment}
-              onChangeFrame={setFrameIdOverride}
-              onAdd={(items) => void addPresets(items)}
-            />
-          </EmptyArea>
-          )}
+              <EmptyHeadName>아직 등록되지 않음</EmptyHeadName>
+              <EmptyHeadHint>
+                {selectedCabinet
+                  ? `${cabinetLabel(selectedCabinet)} · ${cabinetPeriod(selectedCabinet)}`
+                  : '수반을 등록하면 취임·재임·각료 수가 여기 요약됩니다'}
+              </EmptyHeadHint>
+            </EmptyHeadText>
+            <EmptyHeadStats aria-hidden>
+              {['취임', '재임', '각료'].map((label) => (
+                <EmptyHeadStat key={label}>
+                  <span>{label}</span>
+                  <strong>—</strong>
+                </EmptyHeadStat>
+              ))}
+            </EmptyHeadStats>
+            <EmptyHeadAction>+ 수반 등록</EmptyHeadAction>
+          </EmptyHeadCard>
+          {emptyRoster}
         </>
       ) : (
         <>
@@ -1150,68 +1233,14 @@ export function CurrentCabinetPanel({
       )}
 
 
-      {members.length === 0 ? (
-        /*
-         * 수반은 있는데 각료가 0명인 정권(독일 베트만홀베크 내각 등). 격자를 비워 두면
-         * 이 정권에 각료가 없다는 사실만 남고 채울 길이 없다 — 부처별 슬롯을 그 자리에.
-         */
-        departments.length > 0 ? (
-          <>
-            <SlotGroupLabel>부처별 우두머리</SlotGroupLabel>
-            <SlotGrid>
-              {departments.map((department) => (
-                <DepartmentSlot
-                  key={department.id}
-                  name={department.name}
-                  occupant={departmentOccupants.get(department.id) ?? null}
-                  onOpenPerson={(personId) => setModalPersonId(personId)}
-                  onRegister={() => openRegister(department.id, department.name)}
-                  onDelete={() =>
-                    void removeDepartment(department.id, department.name)
-                  }
-                  editing={renamingId === department.id}
-                  renameValue={renameValue}
-                  renaming={renaming}
-                  onRenameStart={() =>
-                    startRename(department.id, department.name)
-                  }
-                  onRenameChange={setRenameValue}
-                  onRenameCommit={() =>
-                    void commitRename(department.id, department.name)
-                  }
-                  onRenameCancel={cancelRename}
-                />
-              ))}
-            </SlotGrid>
-            <SlotGridFooter>
-              <PresetAll type="button" onClick={() => setSetupOpen(true)}>
-                부처 더 담기 · 이름 정리
-              </PresetAll>
-            </SlotGridFooter>
-          </>
-        ) : (
-<EmptyArea>
-            <SetupCta type="button" onClick={() => setSetupOpen(true)}>
-              <IconBriefcase />
-              각료 등록
-            </SetupCta>
-            {/*
-              * 기본 틀 칩은 지면에 둔다. 한 번에 하나씩 눌러 자리를 세우는 동작이라
-              * 모달을 열고 닫는 왕복보다 그 자리에서 톡톡 누르는 편이 빠르다.
-              * 모달은 '이름 직접 입력·만든 부처 정리·부처 없이 바로 등록'을 맡는다.
-              */}
-            <DepartmentFramePicker
-              frame={frame}
-              suggestions={presetSuggestions}
-              disabled={creatingDepartment}
-              onChangeFrame={setFrameIdOverride}
-              onAdd={(items) => void addPresets(items)}
-            />
-          </EmptyArea>
-        )
-      ) : null}
+      {/*
+        수반은 있는데 각료가 0명인 정권(독일 베트만홀베크 내각 등) — 각료 격자 자리에
+        같은 규격의 빈 칸을 깐다.
+      */}
+      {members.length === 0 ? emptyRoster : null}
         </>
       )}
+      </SwitchFade>
 
       {children && (
         <Extra>
@@ -1569,23 +1598,31 @@ function DepartmentSlot({
     <SlotShell>
       <SlotMain
         type="button"
+        $filled={filled}
         onClick={() =>
           filled && occupant?.personId
             ? onOpenPerson(occupant.personId)
             : onRegister()
         }
       >
-        <SlotTitle>{name}</SlotTitle>
-        {filled ? (
-          <SlotOccupant>
-            {occupant?.name}
-            {occupant?.period ? ` · ${occupant.period}` : ''}
-            {occupant && occupant.count > 1 ? ` 외 ${occupant.count - 1}명` : ''}
-          </SlotOccupant>
-        ) : (
-          <SlotEmptyName>아직 없음</SlotEmptyName>
-        )}
-        <SlotAdd>{filled ? '보기' : '+ 등록'}</SlotAdd>
+        {/* 채워진 각료 칸과 같은 뼈대 — 얼굴 자리 원 + 직책/이름 두 줄 */}
+        <SlotCircle $filled={filled} aria-hidden>
+          {filled ? occupant?.name.slice(0, 1) : <FiPlus size={14} />}
+        </SlotCircle>
+        <SlotText>
+          <SlotTitle>{name}</SlotTitle>
+          {filled ? (
+            <SlotOccupant>
+              {occupant?.name}
+              {occupant?.period ? ` · ${occupant.period}` : ''}
+              {occupant && occupant.count > 1
+                ? ` 외 ${occupant.count - 1}명`
+                : ''}
+            </SlotOccupant>
+          ) : (
+            <SlotEmptyName>+ 등록</SlotEmptyName>
+          )}
+        </SlotText>
       </SlotMain>
       <SlotActions>
         {filled && (
@@ -1822,35 +1859,8 @@ const slotBase = `
   cursor: pointer;
 `
 
-const EmptySlotHead = styled.button`
-  ${slotBase}
-  gap: 16px;
-  padding: 16px 18px;
-  margin-bottom: 18px;
-  border-radius: 14px;
-  border-color: ${({ theme }) => theme.colors.border.default};
 
-  &:hover {
-    border-color: rgba(190, 18, 60, 0.45);
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
 
-/** 수장 자리의 빈 얼굴 — 실제 얼굴과 같은 지름이라 채워졌을 때와 자리가 어긋나지 않는다 */
-const SlotFace = styled.span`
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-`
-
-const SlotHeadText = styled.span`
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-`
 
 const SlotRole = styled.span`
   font-size: 12.5px;
@@ -1858,22 +1868,12 @@ const SlotRole = styled.span`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fb7185' : '#be123c')};
 `
 
-const SlotGroupLabel = styled.div`
-  width: 100%;
-  /* 지도·선거 카드의 바깥 모서리와 같은 축 (가지 560 + 거터 88 + 카드 340) */
-  max-width: 1636px;
-  margin-inline: auto;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
 
+/* 채워진 각료 격자(cabinet-mind-map 좁은 칼럼)와 같은 규격 */
 const SlotGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 10px;
   width: 100%;
   /* 지도·선거 카드의 바깥 모서리와 같은 축 (가지 560 + 거터 88 + 카드 340) */
   max-width: 1636px;
@@ -1904,14 +1904,227 @@ const SlotShell = styled.div`
   }
 `
 
-const SlotMain = styled.button`
+/* 각료 칸과 같은 54px 높이·12px 모서리. 빈 칸은 점선, 사람이 앉으면 실선 */
+const SlotMain = styled.button<{ $filled?: boolean }>`
   ${slotBase}
-  padding: 10px 52px 10px 12px;
-  border-color: ${({ theme }) => theme.colors.border.light};
+  gap: 9px;
+  height: 54px;
+  padding: 0 60px 0 12px;
+  border-radius: 12px;
+  border-style: ${({ $filled }) => ($filled ? 'solid' : 'dashed')};
+  border-color: ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-family: inherit;
 
   &:hover {
     border-color: rgba(190, 18, 60, 0.4);
     background: ${({ theme }) => theme.colors.hover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
+`
+
+/** 틀에서 권하는 아직 없는 부처 — 흐린 점선 칸. 누르면 부처가 만들어진다 */
+const GhostSlot = styled.button`
+  ${slotBase}
+  gap: 9px;
+  height: 54px;
+  padding: 0 12px;
+  border-radius: 12px;
+  /* light 테두리는 다크 바탕에서 사라졌다 — 칸으로 읽힐 만큼은 남긴다 */
+  border-color: ${({ theme }) => theme.colors.border.medium};
+  font-family: inherit;
+  opacity: 0.8;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    opacity: 1;
+    border-color: rgba(190, 18, 60, 0.4);
+    background: ${({ theme }) => theme.colors.hover};
+  }
+  &:disabled {
+    cursor: progress;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+    opacity: 1;
+  }
+`
+
+/* 얼굴 자리 — 채워진 칸의 36px 얼굴과 같은 지름 */
+const SlotCircle = styled.span<{ $filled?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px ${({ $filled }) => ($filled ? 'solid' : 'dashed')}
+    ${({ theme }) => theme.colors.border.medium};
+  background: ${({ $filled, theme }) =>
+    $filled
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.05)'
+      : 'transparent'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SlotText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+`
+
+const RosterFooter = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 10px;
+`
+
+const RosterFooterLabel = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RosterFooterLink = styled.button`
+  margin-left: auto;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+/*
+ * 수반 자리 — 불러온 뒤의 가로 수반 카드와 같은 틀(얼굴 112px | 직함·이름 | 요약).
+ * 점선이 '비어 있는 자리'를 말하고, 요약 칸은 값 없이 '—'만 남긴다(지어내지 않는다).
+ */
+const EmptyHeadCard = styled.button`
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 18px 22px;
+  border-radius: 20px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: rgba(190, 18, 60, 0.45);
+    background: ${({ theme }) => theme.colors.hover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 900px) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+`
+
+const EmptyFace = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  border: 2px dashed rgba(190, 18, 60, 0.35);
+  color: rgba(190, 18, 60, 0.55);
+`
+
+const EmptyHeadText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+const EmptyHeadName = styled.span`
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptyHeadHint = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptyHeadStats = styled.span`
+  display: flex;
+  gap: 18px;
+  padding-left: 22px;
+  border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+`
+
+const EmptyHeadStat = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 44px;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  strong {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const EmptyHeadAction = styled.span`
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  background: #be123c;
+
+  @media (max-width: 900px) {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 `
 
@@ -2266,37 +2479,7 @@ const ElectionOptionName = styled.span`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const EmptyArea = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-`
 
-const SetupCta = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 14px;
-  border-radius: 10px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  background: none;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    border-style: solid;
-    border-color: rgba(190, 18, 60, 0.4);
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
 
 const SetupSection = styled.section`
   & + & {
@@ -2510,17 +2693,13 @@ const PresetChip = styled.button`
   }
 `
 
-const SlotGridFooter = styled.div`
-  margin-top: 8px;
-`
 
 const SlotTitle = styled.span`
-  /* 이름이 길면 이름이 줄어든다 — 옆의 '아직 없음'이 두 글자씩 접히는 것보다 낫다 */
-  flex: 1;
+  /* 채워진 칸의 직책 줄과 같은 결 — 부처 이름이 윗줄, 사람(또는 '+ 등록')이 아랫줄 */
   min-width: 0;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2528,9 +2707,8 @@ const SlotTitle = styled.span`
 
 /** 그 자리에 있는 사람 — '아직 없음' 자리를 대신한다 */
 const SlotOccupant = styled.span`
-  flex-shrink: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -2539,19 +2717,12 @@ const SlotOccupant = styled.span`
 `
 
 const SlotEmptyName = styled.span`
-  flex-shrink: 0;
-  font-size: 12px;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const SlotAdd = styled.span`
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fb7185' : '#be123c')};
 `
+
 
 const EmptyActions = styled.div`
   padding: 16px;
@@ -2793,4 +2964,14 @@ const CabinetTabPeriod = styled.span`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/*
+ * 정권을 바꾸는 동안 — 앞 정권을 흐리게 들고 있는다. 골격으로 번쩍 갈아끼우면 고르는
+ * 동작마다 지면이 무너졌다 서고, 선명하게 두면 새 정권인 줄 안다.
+ */
+const SwitchFade = styled.div<{ $switching: boolean }>`
+  opacity: ${({ $switching }) => ($switching ? 0.4 : 1)};
+  pointer-events: ${({ $switching }) => ($switching ? 'none' : 'auto')};
+  transition: opacity 0.15s ease;
 `
