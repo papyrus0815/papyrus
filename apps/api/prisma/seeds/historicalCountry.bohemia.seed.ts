@@ -72,6 +72,29 @@ const ENTRIES: HistoricalCountryEntry[] = [
 
   // ── 서슬라브 초기 국가 ────────────────────────────────────────────
   {
+    name: '니트라 공국',
+    enName: 'Principality of Nitra',
+    nameOrigin:
+      '니트라강과 그 강변 도시 니트라(슬로바키아어 Nitra)에서 온 이름으로, ' +
+      '라틴 사료는 ducatus Nitriensis(니트라 공령), 슬로바키아어로는 Nitrianske kniežatstvo라 적는다.',
+    description:
+      '9세기 초 프리비나가 니트라를 중심으로 다스린 서슬라브 정치체로, 오늘날 슬로바키아 지역 최초의 국가로 여겨진다. ' +
+      '828년경 잘츠부르크 대주교 아달람이 니트라에 봉헌한 성당은 서슬라브권에서 확인되는 가장 오래된 교회 기록이다. ' +
+      '833년경 모이미르 1세에게 프리비나가 축출되면서 모라바에 병합되어 대모라비아의 두 축 가운데 하나가 되었고, ' +
+      '870년대부터 스바토플루크 1세가 이곳을 분봉받아 다스리다 대모라비아 전체의 군주가 되었다. ' +
+      '907년 대모라비아 붕괴 뒤에는 마자르인의 지배권에 들어갔으며, 1048년경부터는 아르파드 왕조 왕자에게 주어지는 ' +
+      "분봉 영지('왕국의 3분의 1', tercia pars regni)로 존속했다. 1108년 칼만 왕이 분봉령을 폐지했고 " +
+      '니트라 공작 칭호는 1110년 사료를 끝으로 사라졌다.',
+    startEra: 'AD', startYear: 825,
+    endEra: 'AD', endYear: 1110,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 48.31, longitude: 18.09,
+    // 정주핵이 오늘날 서·중부 슬로바키아에 온전히 들어가므로 단일 링크.
+    // 헝가리 왕국의 분봉령이던 시기는 상위 국가(헝가리 왕국) 행이 담당한다(규범 B)
+    linkToIsoCodes: ['SK'],
+  },
+  {
     name: '대모라비아 왕국',
     enName: 'Great Moravia',
     description:

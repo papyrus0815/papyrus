@@ -23,6 +23,12 @@ const TRANSITIONS: {
   { predecessor: '아바르 칸국', successor: '프랑크 왕국', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 아바르 붕괴 공백에서 모라비아 세력 성장 (822~833 갭은 카란타니아→케른텐 148년 갭 단순화 전례)
   { predecessor: '아바르 칸국', successor: '대모라비아 왕국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 같은 공백에서 니트라의 프리비나 세력도 성장 (825년경)
+  { predecessor: '아바르 칸국', successor: '니트라 공국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 833년경 모이미르 1세가 프리비나를 축출하고 니트라를 병합 — 대모라비아의 두 축이 합류 (머시아→잉글랜드형 UNION)
+  { predecessor: '니트라 공국', successor: '대모라비아 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 1108 칼만 왕의 분봉령 폐지 → 헝가리 왕국 직할로 흡수 (칭호는 1110년까지 사료에 등장)
+  { predecessor: '니트라 공국', successor: '헝가리 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 대모라비아 붕괴 후 보헤미아 분지의 패권 승계
   { predecessor: '대모라비아 왕국', successor: '보헤미아 공국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 공국 → 왕국 (1198 오타카르 1세 세습 왕위)
@@ -49,6 +55,10 @@ const MEMBERSHIPS: {
   membershipStartDate?: string
   membershipEndDate?: string
 }[] = [
+  // 니트라는 병합 이후에도 자체 공(스바토플루크 1세 등)을 둔 분봉 정치체로 존속 — 속국 관계로 기록
+  { parent: '대모라비아 왕국', member: '니트라 공국', role: HistoricalMembershipRole.VASSAL_STATE, membershipStartDate: '833-01-01', membershipEndDate: '907-01-01' },
+  // 아르파드 왕조의 '왕국의 3분의 1' 분봉령 (1048년경 벨러 공작 ~ 1108 폐지, 칭호는 1110까지)
+  { parent: '헝가리 왕국', member: '니트라 공국', role: HistoricalMembershipRole.VASSAL_STATE, membershipStartDate: '1048-01-01', membershipEndDate: '1110-01-01' },
   // 신성로마제국 제후국 — 공국은 11세기 초 편입, 왕국은 1806 제국 해체까지
   { parent: '신성로마제국', member: '보헤미아 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER, membershipStartDate: '1002-01-01' },
   { parent: '신성로마제국', member: '보헤미아 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER, membershipEndDate: '1806-08-06' },
