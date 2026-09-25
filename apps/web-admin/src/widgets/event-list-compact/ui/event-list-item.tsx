@@ -22,9 +22,11 @@ import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import {
+  BRAND,
   CATEGORY_SOFT_COLORS,
   LIST_WIDTH,
   metaText,
+  railSurface,
 } from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
@@ -363,6 +365,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
       $active={isActive}
       $depth={depth}
       $context={!isMatch}
+      /* 헤더 없는 1행 연 그룹의 대표 행 — 축 위에 연도 앵커를 대신 찍는다 */
+      $yearAnchor={groupHeaderless && depth === 0}
       /* depth를 인라인 CSS 변수로 넘긴다 — styled prop이면 depth마다 클래스가 생성돼
          252행에서 클래스 캐시가 부풀고 React.memo 이득이 깎인다. */
       style={{ '--depth': depth } as React.CSSProperties}
@@ -595,6 +599,8 @@ const Stop = styled.div<{
   $depth: number
   /** 필터 문맥용으로만 남은 행(자기 자신은 조건 불일치) — 매칭 행과 구별해 강등 표시 */
   $context: boolean
+  /** 시각 헤더가 생략된 연 그룹의 대표 행 — 축 위 연도 앵커를 이 행이 대신 찍는다 */
+  $yearAnchor: boolean
 }>`
   position: relative;
   display: flex;
@@ -699,6 +705,71 @@ const Stop = styled.div<{
    * 축(수직선)과 세기·연도 앵커 도트는 존치한다 — 스크롤 중 '지금 어느 시대인가'를
    * 읽으려면 좌측 단일 축이 필요하고, 축이 없으면 헤더는 그냥 텍스트 줄이 된다.
    */
+
+  /**
+   * 축 위 행 마커 — 두 경우에만 찍는다. 위 폐지 결정(행마다 도트)을 되살리는 것이 아니다.
+   *
+   * ① 연도 앵커(헤더 없는 연 그룹). 1행짜리 연 그룹은 시각 헤더를 생략하는데(실측 57%),
+   *    그러면 **그 해의 앵커 도트도 함께 사라져** 축에 눈금이 없는 긴 구간이 생겼다 —
+   *    2024 · 2022 · 2001이 연달아 헤더 없이 오면 축만 봐서는 21세기 안에 몇 해가 지나갔는지
+   *    알 수 없다. 축의 눈금은 '세기·연도 앵커뿐'이라는 원칙 그대로, 빠진 연도 앵커를
+   *    행이 대신 찍는다. 헤더 도트(10px)보다 한 단계 작은 7px — 서열 역전 없음.
+   *
+   * ② 선택 표지. 선택 행은 좌측 4px 막대로 표시되지만 막대는 행 안에 있어 **축과 무관**했다 —
+   *    긴 목록을 훑으며 '선택한 사건이 시간축 어디쯤인가'를 축에서 읽을 수 없었다.
+   *    축 → 행 막대를 2px 커넥터로 잇고 축 위에 링을 찍는다. 링은 속이 빈 8px라 연도
+   *    앵커(속 찬 10px)보다 가볍다 — 예전 폐지 사유였던 '선택 도트가 앵커보다 커지는
+   *    서열 역전'을 되풀이하지 않는다. 선택이 연도 앵커 행이면 속 찬 도트에 링을 두른다.
+   *
+   * 좌표 — 행 좌측 끝에서 축까지 거리가 곧 --rail-inset이다(헤더 도트와 같은 산식).
+   * 모바일(≤640)은 depth만큼 행 자체를 미므로 그 이동분을 되돌려 축에 고정한다.
+   */
+  --marker-x: calc(-1 * var(--rail-inset, 19px));
+  @media (max-width: 640px) {
+    --marker-x: calc(
+      -1 * (var(--rail-inset, 19px) + min(calc(var(--row-indent) * var(--depth, 0)), 72px))
+    );
+  }
+
+  ${({ $active }) =>
+    $active &&
+    css`
+      &::before {
+        content: '';
+        position: absolute;
+        left: var(--marker-x);
+        right: 100%;
+        top: 50%;
+        height: 2px;
+        margin-top: -1px;
+        background: ${BRAND.primary};
+        pointer-events: none;
+      }
+    `}
+
+  ${({ $active, $yearAnchor }) =>
+    ($active || $yearAnchor) &&
+    css`
+      &::after {
+        content: '';
+        position: absolute;
+        left: var(--marker-x);
+        top: 50%;
+        transform: translate(-50%, -50%);
+        box-sizing: border-box;
+        width: ${$yearAnchor ? '7px' : '8px'};
+        height: ${$yearAnchor ? '7px' : '8px'};
+        border-radius: 50%;
+        background: ${$yearAnchor ? BRAND.primary : railSurface};
+        border: ${$active && !$yearAnchor ? `2px solid ${BRAND.primary}` : 'none'};
+        /* 표면색 외곽 링 — 축선이 도트 밑을 관통하지 않고 '끊겨' 보이게 한다.
+           선택된 연도 앵커는 그 바깥에 인디고 링을 한 겹 더 둘러 선택을 겸한다. */
+        box-shadow: 0 0 0 2px ${railSurface}
+          ${$active && $yearAnchor ? `, 0 0 0 3.5px ${BRAND.primary}` : ''};
+        z-index: 1;
+        pointer-events: none;
+      }
+    `}
 
   /* active별 bg tint — 활성 행이 hover 행과 명확히 구분되도록 강화. */
   ${({ $active, theme }) => {

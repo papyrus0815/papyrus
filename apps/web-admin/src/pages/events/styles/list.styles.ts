@@ -14,6 +14,9 @@ import {
   ROW_TYPE,
   SHADOW,
   metaText,
+  RAIL,
+  railLine,
+  railSurface,
   type ListDensity,
 } from './theme'
 
@@ -58,6 +61,42 @@ const densityVars = (density: ListDensity) => {
 }
 
 /**
+ * sticky 헤더가 축 좌측으로 더 덮어야 하는 폭(px).
+ *
+ * 헤더 박스의 좌측 끝은 정확히 축선(--rail-x)이다. 그런데 축 위에 찍히는 행 마커
+ * (연도 앵커·선택 표지, 최대 8px + 외곽 링)는 축을 중심으로 좌우 반폭씩 걸쳐 있어,
+ * 헤더가 박스만 덮으면 stuck 헤더 아래로 마커 왼쪽 반쪽이 비쳐 나온다.
+ * 이 폭만큼 표면색으로 덮고 그 위에 축을 다시 그려, 헤더가 축을 끊지 않게 한다.
+ */
+const RAIL_GUARD = 8
+
+/** 헤더 호버 틴트 — 불투명 표면 **위에** 얹는 층으로만 쓴다(반투명 배경 단독 금지). */
+const HEADER_HOVER_TINT = {
+  light: 'rgba(15, 23, 42, 0.03)',
+  dark: 'rgba(255, 255, 255, 0.04)',
+} as const
+
+/**
+ * 불투명 표면 + 1px 축선(+ 선택적 호버 틴트) 배경.
+ *
+ * sticky 헤더는 스크롤되는 행을 가려야 하므로 표면이 완전 불투명해야 하고, 동시에 축을
+ * 끊으면 안 된다 — 두 요구를 한 배경 스택으로 푼다. 축 위치는 요소 기준 `x`px.
+ * 층 순서: 축선(맨 위) → 틴트 → 표면색.
+ */
+const railBand = (x: number, hover = false) => css`
+  background-color: ${railSurface};
+  background-image: ${({ theme }) => {
+    const isDark = theme.mode === 'dark'
+    const line = isDark ? RAIL.line.dark : RAIL.line.light
+    const axis = `linear-gradient(to right, transparent ${x}px, ${line} ${x}px, ${line} ${x + 1}px, transparent ${x + 1}px)`
+    if (!hover) return axis
+    const tint = isDark ? HEADER_HOVER_TINT.dark : HEADER_HOVER_TINT.light
+    return `${axis}, linear-gradient(${tint}, ${tint})`
+  }};
+  background-repeat: no-repeat;
+`
+
+/**
  * 타임라인 레일 — 좌측 거터 안에 1px 수직선.
  *
  * 좌표는 세 변수가 한 세트로 소유한다: `--rail-gutter`(패딩) · `--rail-x`(축선) ·
@@ -96,7 +135,10 @@ export const CompactList = styled.div.attrs(
   /* 하단 여백 120 → 32px. 120px은 모바일 FAB(56px) 회피가 목적인데 데스크톱에는
      FAB가 없어 아무것도 피하지 않았다 — 마지막 세기에 도착하면 화면 3분의 1이
      안내문과 빈칸이었다. 모바일에서만 안전 영역과 함께 되살린다. */
-  padding: 4px 12px 32px var(--rail-gutter);
+  /* 상단 패딩 0 — sticky의 기준면은 스크롤포트에서 **패딩을 뺀** 박스라, 예전 4px는
+   * stuck 세기 헤더 위에 4px 띠를 남겼고 그 틈으로 아래 행(활성 행의 인디고 막대 등)이
+   * 비쳐 올라왔다. 세기 헤더가 목록 최상단에 붙으면 그 띠 자체가 없다. */
+  padding: 0 12px 32px var(--rail-gutter);
   position: relative;
 
   /* 레일 3좌표는 한 세트로 움직인다 — 거터(패딩) · 축선 x · 인셋(=거터-축선).
@@ -122,29 +164,25 @@ export const CompactList = styled.div.attrs(
 
   /* 축선 — 좌표는 --rail-x가 소유하므로 밴드가 거터를 바꾸면 자동 추종한다.
    *
-   * alpha를 0.20/0.22 → 0.32/0.34로 올린다. 행 도트를 폐지하기 전에는 축(1.38:1)이
-   * 그 위의 눈금(도트)보다 흐린 역전 상태였다 — 이제 축이 유일한 선이므로 자기 몫의
-   * 대비를 가져야 한다. */
-  background-image: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? `linear-gradient(
-          to right,
-          transparent var(--rail-x),
-          rgba(147, 197, 253, 0.32) var(--rail-x),
-          rgba(147, 197, 253, 0.32) calc(var(--rail-x) + 1px),
-          transparent calc(var(--rail-x) + 1px)
-        )`
-      : `linear-gradient(
-          to right,
-          transparent var(--rail-x),
-          rgba(37, 99, 235, 0.34) var(--rail-x),
-          rgba(37, 99, 235, 0.34) calc(var(--rail-x) + 1px),
-          transparent calc(var(--rail-x) + 1px)
-        )`};
+   * alpha 0.32/0.34 — 행 도트 폐지 후 축이 유일한 선이므로 자기 몫의 대비를 가진다.
+   * 색은 RAIL 토큰이 단일 출처다(sticky 헤더가 같은 색으로 축을 이어 그린다).
+   *
+   * **시점** — 축은 첫 세기 도트의 중심에서 시작한다. 예전엔 목록 맨 위(y=0)부터 그려
+   * 첫 세기 도트 위로 선이 삐져나와, 시간축이 '카드 밖에서 흘러 들어오는' 것처럼 보였다.
+   * **종단** — 하단 패딩 구간에는 그리지 않는다(마지막 사건 아래로 축이 이어져 목록이
+   * 끝나지 않는 것처럼 보이던 문제). local 첨부라 높이는 콘텐츠 전체 길이다. */
+  --rail-start: calc(var(--century-header-h, 44px) / 2);
+  background-image: linear-gradient(
+    to right,
+    transparent var(--rail-x),
+    ${railLine} var(--rail-x),
+    ${railLine} calc(var(--rail-x) + 1px),
+    transparent calc(var(--rail-x) + 1px)
+  );
   background-attachment: local;
   background-repeat: no-repeat;
-  /* 종단 — 하단 패딩 구간에는 축을 그리지 않는다. local 첨부라 높이는 콘텐츠 전체 길이다. */
-  background-size: 100% calc(100% - var(--rail-tail));
+  background-position: 0 var(--rail-start);
+  background-size: 100% calc(100% - var(--rail-start) - var(--rail-tail));
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -208,15 +246,18 @@ export const CompactList = styled.div.attrs(
      * ⚠️ 앰퍼샌드를 두 번 겹쳐 특이도를 2배로 올린다. 밀도 변수를 속성 선택자
      * [data-density=...](0,2,0)로 선언하기 때문에, 여기서 단일 앰퍼샌드(0,1,0)로 쓰면
      * 모바일에서 밀도 선택자가 이겨 레일 인셋이 데스크톱 값(24~38px)으로 되돌아간다 —
-     * 디바이더가 화면 밖으로 삐져나가던 그 회귀다. */
+     * 디바이더가 화면 밖으로 삐져나가던 그 회귀다.
+     *
+     * 인셋은 반드시 거터 − 축선(24 − 11 = 13)이어야 한다. 예전 12px는 헤더 좌측 끝을 축선보다
+     * 1px 오른쪽에 두어, 헤더 도트·오클루전 띠가 축에서 반 픽셀씩 어긋났다. */
     && {
-      --rail-inset: 12px;
+      --rail-inset: 13px;
     }
     --rail-gutter: 24px;
     --rail-x: 11px;
     /* 배경 그라디언트는 --rail-x를 읽으므로 여기서 재선언할 필요가 없다
        (이전에는 11/12px 리터럴을 두 번째로 적어 두 좌표가 따로 놀았다). */
-    padding: 4px 10px max(96px, env(safe-area-inset-bottom)) var(--rail-gutter);
+    padding: 0 10px max(96px, env(safe-area-inset-bottom)) var(--rail-gutter);
   }
 
   /* ≤400px — 메타 줄이 1px 차이로 넘쳐 3줄로 무너지던 구간(실측 320px).
@@ -788,7 +829,12 @@ export const YearDivider = styled.button`
   border-radius: 0;
   cursor: pointer;
   text-align: left;
-  background: transparent;
+  /* 버튼 자체도 불투명 — 상단 hairline은 반투명 색이라, 배경이 투명하면 stuck 상태에서
+   * 그 1px 틈으로 아래 행(활성 행의 인디고 막대 등)이 비쳤다. 축은 이 층에서도 이어 그린다. */
+  ${railBand(0)}
+  /* 축 왼쪽 가드 띠 — ::after는 패딩 박스 기준이라 상단 hairline(1px) 줄을 못 덮는다.
+   * border-box 전체 높이를 덮는 box-shadow가 그 1px까지 막는다(CenturyDivider와 같은 방식). */
+  box-shadow: -${RAIL_GUARD}px 0 0 0 ${railSurface};
   position: sticky;
   top: var(--century-header-h, 44px);
   z-index: 5;
@@ -807,31 +853,37 @@ export const YearDivider = styled.button`
     border-radius: 50%;
     background: ${BRAND.primary};
     box-shadow: 0 0 0 2.5px
-      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+      ${railSurface};
     z-index: 1;
     pointer-events: none;
   }
 
-  /* sticky 시 라벨 쪽 오클루전 띠 — 본문 텍스트 위에 떠도 가독 유지.
-   * 도트(left:0)와 라벨 시작(padding-left) 사이는 transparent — 레일이 그대로 보임.
+  /* sticky 시 오클루전 띠 — 본문 텍스트 위에 떠도 가독 유지.
    *
-   * ⚠️ left는 반드시 var(--rail-inset). 이전엔 38px 데스크톱 값이 하드코딩돼 있어
-   * 모바일(--rail-inset: 12px)에서 라벨 앞 26px에 배경이 없었고, 스크롤 시 그 구간으로
-   * 본문 제목이 비쳐 라벨과 겹쳐 읽혔다.
+   * 띠는 축 왼쪽 RAIL_GUARD px부터 우측 끝까지 덮고, 축은 railBand가 다시 그린다.
+   * 예전엔 left: var(--rail-inset)에서 시작해 도트와 라벨 사이를 투명으로 비웠는데,
+   * 그 구간과 축 왼쪽은 stuck 상태에서 아래로 흐르는 행 마커(연도 앵커·선택 표지)가
+   * 그대로 비쳐 헤더 도트와 겹쳐 보였다.
    *
    * ⚠️ 반투명 금지. alpha 0.94~0.95는 한 겹만으로도 아래 행이 5~6% 비친다(헤더가 여러 겹
-   * stuck되던 시절엔 유령 텍스트로 누적됐다). 실측 표면색으로 완전 불투명하게 덮는다 —
-   * 라이트 #ffffff / 다크 #141414(카드 #0f0f0f + rgba(255,255,255,0.02) 합성 결과). */
+   * stuck되던 시절엔 유령 텍스트로 누적됐다). RAIL.surface(실측 합성색)로 완전히 덮는다.
+   *
+   * 호버 틴트도 이 띠 위에 얹는다. 띠는 z-index -1이지만 헤더(sticky, z 5)가 만든 쌓임
+   * 맥락 안이라 **버튼 자기 배경보다 위에** 칠해진다 — 버튼 background로 준 호버는
+   * 띠에 가려 도트 옆 19px 틈에서만 보였다. */
   &::after {
     content: '';
     position: absolute;
-    left: var(--rail-inset);
+    left: -${RAIL_GUARD}px;
     top: 0;
     right: 0;
     bottom: 0;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? '#141414' : '#ffffff'};
+    ${railBand(RAIL_GUARD)}
     z-index: -1;
+  }
+
+  &:hover::after {
+    ${railBand(RAIL_GUARD, true)}
   }
 
   /* (제거됨) 예전의 '&:first-child { margin-top:0; border-top:none }'.
@@ -865,16 +917,11 @@ export const YearDivider = styled.button`
     }
   }
 
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.04)'
-        : 'rgba(15, 23, 42, 0.03)'};
-  }
-
   &:focus-visible {
     outline: none;
-    box-shadow: ${BRAND.focusRing};
+    box-shadow:
+      ${BRAND.focusRing},
+      -${RAIL_GUARD}px 0 0 0 ${railSurface};
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -891,14 +938,14 @@ export const UnknownYearDivider = styled(YearDivider)`
   /* 이 헤더는 as="div"로 렌더되는 **비대화형** 요소다. YearDivider의 hover 배경을 그대로
    * 상속하면 '접을 수 있다'고 약속해 놓고 아무 일도 하지 않는다(검토 VIS-9). */
   cursor: default;
-  &:hover {
-    background: transparent;
+  &:hover::after {
+    ${railBand(RAIL_GUARD)}
   }
 
   &::before {
     width: 8px;
     height: 8px;
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+    background: ${railSurface};
     border: 1.5px solid ${({ theme }) => theme.colors.text.tertiary};
   }
   span {
@@ -970,17 +1017,11 @@ export const CenturyDivider = styled.button`
      아래 행이 5~6% 비친다) 세기 헤더만 0.78/0.82로 남아 있었다. 세기 헤더는 섹션 전체
      구간에서 상시 stuck이라 비침이 가장 오래 노출되는 표면이고, blur까지 겹쳐 라벨 뒤에
      회색 얼룩을 만들었다. 실측 표면색으로 완전히 덮는다. */
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: #141414;
-          color: ${theme.colors.text.primary};
-        `
-      : css`
-          background: #ffffff;
-          color: ${theme.colors.text.primary};
-        `}
-  transition: background 0.15s ease-out;
+  color: ${({ theme }) => theme.colors.text.primary};
+  /* 표면 + 축선을 한 배경 스택으로 — 헤더가 축을 끊지 않는다. 박스 좌측 끝이 곧 축선이므로
+   * 축 x = 0. 축 왼쪽(행 마커 반폭)은 box-shadow 띠가 덮는다(RAIL_GUARD 주석 참고). */
+  ${railBand(0)}
+  box-shadow: -${RAIL_GUARD}px 0 0 0 ${railSurface};
 
   /* 레일(divider padding-box left=rail) 솔리드 큰 도트 — 시대 분기 */
   &::before {
@@ -995,7 +1036,7 @@ export const CenturyDivider = styled.button`
     border-radius: 50%;
     background: ${BRAND.primary};
     box-shadow: 0 0 0 3px
-      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+      ${railSurface};
     z-index: 1;
     pointer-events: none;
   }
@@ -1005,20 +1046,28 @@ export const CenturyDivider = styled.button`
    * YearSection 래퍼가 생기며 형제 관계가 끊겼다. 같은 역할을 YearSection의
    * '&:first-of-type > button'이 이어받는다. */
 
+  /* 첫 세기 — 축은 이 도트의 중심에서 시작한다(CompactList의 --rail-start와 같은 점).
+   * 헤더 위쪽 절반에는 축을 그리지 않는다. */
+  ${CenturySection}:first-of-type > & {
+    background-position: 0 100%;
+    background-size: 100% 50%;
+  }
+
+  /* 호버 — 예전엔 불투명 표면을 반투명 틴트로 **교체**해, stuck 상태에서 커서를 올리면
+   * 그 순간 아래 행이 비쳤다. 틴트는 표면 위에 얹는 층으로만 쓴다. */
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.05)'
-        : 'rgba(15, 23, 42, 0.03)'};
+    ${railBand(0, true)}
+  }
+  ${CenturySection}:first-of-type > &:hover {
+    background-position: 0 100%, 0 0;
+    background-size: 100% 50%, 100% 100%;
   }
 
   &:focus-visible {
     outline: none;
-    box-shadow: ${BRAND.focusRing};
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
+    box-shadow:
+      ${BRAND.focusRing},
+      -${RAIL_GUARD}px 0 0 0 ${railSurface};
   }
 `
 
@@ -1193,8 +1242,7 @@ export const CollapsedPlaceholder = styled.div`
     transform: translate(-50%, -50%);
     width: 7px;
     height: 7px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? '#0f0f12' : '#ffffff'};
+    background: ${railSurface};
     border: 1.5px solid
       ${({ theme }) =>
         theme.mode === 'dark'
