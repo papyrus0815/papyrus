@@ -27,7 +27,6 @@ import { usePersonInfographicFilterStore } from './filter.store'
 import { MAX_RECORD_PERSONS } from './records-compare'
 
 const VIEWS: PersonInfographicView[] = [
-  'cards',
   'matrix',
   'galaxy',
   'story',
@@ -188,15 +187,14 @@ export function useFilterUrlSync(): void {
       if (v) next.set(k, v)
       else next.delete(k)
     }
-    setOrDel('view', view !== 'cards' ? view : '')
+    setOrDel('view', view !== 'story' ? view : '')
     setOrDel('q', query)
     setOrDel('alive', aliveFilter !== 'all' ? aliveFilter : '')
     setOrDel('minInf', minInfluence > 0 ? String(minInfluence) : '')
     // sort/order는 실제로 소비하는 뷰에서만 URL에 노출 — matrix·galaxy·stats·records엔
     // inert 파라미터를 남기지 않는다(값은 store·persist에 유지되어 뷰 복귀 시 재노출).
-    // sort=카드/스토리/왕조, order(세기 방향)=스토리 전용.
-    const sortConsumed =
-      view === 'cards' || view === 'story' || view === 'dynasty'
+    // sort=세기별/왕조, order(세기 방향)=세기별 전용.
+    const sortConsumed = view === 'story' || view === 'dynasty'
     const orderConsumed = view === 'story'
     setOrDel('sort', sortConsumed && sort !== 'influence' ? sort : '')
     setOrDel('order', orderConsumed && eraGroupOrder !== 'desc' ? eraGroupOrder : '')

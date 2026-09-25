@@ -6,7 +6,7 @@
  *   [활성 필터 칩 … 모두 해제]
  *   [뷰 세그먼트] [정렬·순서] ··· [N명 · 평균 수명 · 대표 분야]
  *
- * 뷰(cards/matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
+ * 뷰(matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
  * records(기록 비교) 뷰는 상위 PersonInfographicPane이 별도 분기.
  * 필터·뷰·정렬 상태는 zustand store + URL 쿼리 동기화로 공유.
  */
@@ -54,7 +54,6 @@ import { usePersonQueryInput } from '../model/use-person-query-input'
 import type { AdaptedPerson } from '../model/types'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
-import { CardsView } from './cards-view'
 import { DynastyView } from './dynasty-view'
 import { CardGridSkeleton } from './_shared/card-grid-skeleton'
 import {
@@ -144,7 +143,7 @@ export function InfographicContent({
 
   /**
    * 인물 클릭 → 프리뷰 모달 먼저(매트릭스·능력치 뷰와 같은 모달), '상세 보기'로 상세 진입.
-   * 카드·시대·왕조·은하계 뷰가 이 핸들러를 쓴다. 매트릭스·능력치는 자체 프리뷰를 이미 띄우므로
+   * 세기별·왕조·은하계 뷰가 이 핸들러를 쓴다. 매트릭스·능력치는 자체 프리뷰를 이미 띄우므로
    * onPersonClick(상세 이동)을 그대로 받는다 — 여기로 넘기면 모달이 두 번 뜬다.
    */
   const [previewPerson, setPreviewPerson] = useState<AdaptedPerson | null>(null)
@@ -216,9 +215,9 @@ export function InfographicContent({
     ? Math.round(knownAges.reduce((sum, age) => sum + age, 0) / knownAges.length)
     : 0
 
-  // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 cards(평면 목록) 포함 나머지를 다룬다.
+  // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 나머지를 다룬다.
   const activeView: Exclude<PersonInfographicView, 'records'> =
-    view === 'records' ? 'cards' : view
+    view === 'records' ? 'story' : view
 
   // '/' 로 검색 포커스 — 사건 목록과 같은 단축키. 입력 중에는 가로채지 않는다.
   useEffect(() => {
@@ -440,10 +439,8 @@ export function InfographicContent({
         <ViewRow>
           {viewSwitcher}
           <DisplayOptions>
-            {/* 정렬은 카드 그리드 뷰(카드·스토리·왕조)에서만 의미 */}
-            {(activeView === 'cards' ||
-              activeView === 'story' ||
-              activeView === 'dynasty') && (
+            {/* 정렬은 카드 그리드 뷰(세기별·왕조)에서만 의미 */}
+            {(activeView === 'story' || activeView === 'dynasty') && (
               <Select
                 value={sort}
                 onChange={(event) => setSort(event.target.value as PersonSortKey)}
@@ -533,15 +530,6 @@ export function InfographicContent({
 
           {!isLoading && filtered.length > 0 && (
             <ViewArea>
-              {activeView === 'cards' && (
-                <CardsView
-                  people={filtered}
-                  onOpen={openPreview}
-                  query={dq}
-                  pinned={pinned}
-                  togglePin={togglePin}
-                />
-              )}
               {activeView === 'matrix' && (
                 <MatrixView people={filtered} onOpen={onPersonClick} />
               )}

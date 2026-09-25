@@ -4,7 +4,6 @@ import { persist } from 'zustand/middleware'
 import { MAX_RECORD_PERSONS } from './records-compare'
 
 export type PersonInfographicView =
-  | 'cards'
   | 'matrix'
   | 'galaxy'
   | 'story'
@@ -109,7 +108,7 @@ export const usePersonInfographicFilterStore =
         scopes: EMPTY_SCOPES,
         minInfluence: 0,
         aliveFilter: 'all',
-        view: 'cards',
+        view: 'story',
         query: '',
         sort: 'influence',
         eraGroupOrder: 'desc',
@@ -175,9 +174,10 @@ export const usePersonInfographicFilterStore =
       }),
       {
         name: 'person-infographic-filter',
-        version: 4,
+        version: 5,
         // v1(scope: Scope) → v2(scopes: MultiScopes): 단일 scope는 버리고 pinned·view만 유지.
         // v3 → v4: 폐기된 '목록'(list) 뷰가 저장돼 있으면 카드로 되돌린다.
+        // v4 → v5: '카드' 뷰도 폐기 — list·cards가 저장돼 있으면 세기별(story)로 되돌린다.
         migrate: (persisted: unknown, version: number) => {
           const previous =
             (persisted as Partial<
@@ -187,7 +187,9 @@ export const usePersonInfographicFilterStore =
               > & { view: string }
             >) ?? {}
           const view = (
-            previous.view && previous.view !== 'list' ? previous.view : 'cards'
+            previous.view && previous.view !== 'list' && previous.view !== 'cards'
+              ? previous.view
+              : 'story'
           ) as PersonInfographicView
           if (version < 2) {
             return {

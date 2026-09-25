@@ -1,7 +1,7 @@
 /**
  * 인물 목록 페인.
  *
- * 카드 / 시대 스토리 / 왕조 / 매트릭스 / 은하계 / 능력치 / 기록 비교 7개 뷰.
+ * 세기별 / 왕조 / 매트릭스 / 은하계 / 능력치 / 기록 비교 6개 뷰.
  * 크롬(검색·필터·뷰 전환·결과 요약)은 사건 목록(/events)과 같은 문법으로 짠다.
  * 기록 비교(records)는 필터 스코프와 무관한 별도 데이터(compare API)라
  * InfographicContent 대신 전용 뷰로 분기한다.
@@ -15,7 +15,6 @@ import {
   FiActivity,
   FiAperture,
   FiBookOpen,
-  FiGrid,
   FiLayout,
   FiShield,
   FiTrendingUp,
@@ -41,13 +40,8 @@ const VIEW_OPTIONS: Array<{
   icon: ReactNode
 }> = [
   {
-    key: 'cards',
-    label: '카드',
-    icon: <FiGrid size={13} />,
-  },
-  {
     key: 'story',
-    label: '시대 스토리',
+    label: '세기별',
     icon: <FiBookOpen size={13} />,
   },
   {
