@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { useNavigate } from 'react-router-dom'
 
@@ -55,6 +55,7 @@ import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inlin
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PoliticalSystemPanel } from './dashboard-panels/political-system-panel'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
+import { SectionNav } from './dashboard-panels/section-nav'
 import { TradeSection } from './dashboard-panels/trade-section'
 
 /** 대시보드 계보 요약에 한 번에 보여줄 과거 국가 수 */
@@ -75,6 +76,7 @@ export function CountryDetailDashboard({
 }: CountryDetailDashboardProps) {
   const navigate = useNavigate()
   const stats = useCountryDashboardStats(country)
+  const rootRef = useRef<HTMLDivElement | null>(null)
 
   const totalRegistered =
     stats.personCount +
@@ -285,7 +287,7 @@ export function CountryDetailDashboard({
   ) : (
     <S.Section>
       <S.SectionTitleRow>
-        <S.SectionTitleIcon $accent="rose">
+        <S.SectionTitleIcon>
           <IconVote />
         </S.SectionTitleIcon>
         <S.SectionTitleText>지금</S.SectionTitleText>
@@ -351,7 +353,7 @@ export function CountryDetailDashboard({
     <>
         <S.Section>
           <S.SectionTitleRow>
-            <S.SectionTitleIcon $accent="amber">
+            <S.SectionTitleIcon>
               <IconClock />
             </S.SectionTitleIcon>
             <S.SectionTitleText>최근 활동</S.SectionTitleText>
@@ -378,7 +380,7 @@ export function CountryDetailDashboard({
 
         <S.Section>
           <S.SectionTitleRow>
-            <S.SectionTitleIcon $accent="emerald">
+            <S.SectionTitleIcon>
               <IconGlobe />
             </S.SectionTitleIcon>
             <S.SectionTitleText>더 채울 것</S.SectionTitleText>
@@ -397,7 +399,7 @@ export function CountryDetailDashboard({
   return (
     <>
       {header}
-      <S.DashboardRoot>
+      <S.DashboardRoot ref={rootRef}>
       {/*
         구성 원칙 — 위에서부터 "이 나라가 어떤 나라인가"로 답한다.
         예전 배치는 데이터 완성도·등록 현황(관리 지표)이 첫 화면을 차지하고, 이 국가에서
@@ -414,11 +416,17 @@ export function CountryDetailDashboard({
       */}
       {factBar}
 
+      {/*
+        목차 — 장이 열 개 넘게 한 칼럼으로 이어져 5,000px가 넘는다. 규모 줄 바로 아래에서
+        붙어 따라오며 지금 장을 표시한다(장 목록은 지면의 <section>에서 읽는다).
+      */}
+      <SectionNav rootRef={rootRef} />
+
       {/* 2. 계보 — 이 국가의 시간축. 예전엔 맨 아래에 있어 사실상 보이지 않았다. */}
       {lineage.length === 0 ? (
         <S.Section>
           <S.SectionTitleRow>
-            <S.SectionTitleIcon $accent="amber">
+            <S.SectionTitleIcon>
               <IconHistory />
             </S.SectionTitleIcon>
             <S.SectionTitleText>계보</S.SectionTitleText>
@@ -432,7 +440,7 @@ export function CountryDetailDashboard({
       ) : (
         <S.Section>
           <S.SectionTitleRow>
-            <S.SectionTitleIcon $accent="amber">
+            <S.SectionTitleIcon>
               <IconHistory />
             </S.SectionTitleIcon>
             <S.SectionTitleText>계보</S.SectionTitleText>
@@ -490,7 +498,7 @@ export function CountryDetailDashboard({
       */}
       <S.Section>
         <S.SectionTitleRow>
-          <S.SectionTitleIcon $accent="violet">
+          <S.SectionTitleIcon>
             <IconChart />
           </S.SectionTitleIcon>
           <S.SectionTitleText>기록</S.SectionTitleText>
@@ -498,21 +506,29 @@ export function CountryDetailDashboard({
             총 {totalRegistered.toLocaleString('ko-KR')}건
           </S.SectionCountChip>
         </S.SectionTitleRow>
-        <RecordLedger rows={recordAxes} />
         {/*
-          사건 연표 — 숫자 하나로는 "이 나라에 사건이 몇 건"까지만 답한다. 어느 시대의
-          나라인지는 분포가 말한다. 달력이 아니라 세기 막대인 이유는 한 나라의 사건이
-          세기 단위로 흩어져 있어서다(미국 41건이 18~21세기).
+          원장과 연표를 나란히 — 연표를 원장 아래에 따로 두었더니 막대 몇 개짜리 상자가
+          왼쪽에 홀로 떠 오른쪽이 통째로 비었다. 둘 다 '얼마나 쌓였나'의 답이라 한 줄에 둔다.
         */}
-        {stats.eventCenturyCounts.length > 0 && (
-          <S.EventTimelineBlock>
-            <S.EventTimelineLabel>사건 연표</S.EventTimelineLabel>
-            <EventCenturyStrip
-              counts={stats.eventCenturyCounts}
-              onOpen={goEventsCentury}
-            />
-          </S.EventTimelineBlock>
-        )}
+        <S.RecordGrid>
+          <S.RecordGridBody>
+            <RecordLedger rows={recordAxes} />
+            {/*
+              사건 연표 — 숫자 하나로는 "이 나라에 사건이 몇 건"까지만 답한다. 어느 시대의
+              나라인지는 분포가 말한다. 달력이 아니라 세기 막대인 이유는 한 나라의 사건이
+              세기 단위로 흩어져 있어서다(미국 41건이 18~21세기).
+            */}
+            {stats.eventCenturyCounts.length > 0 && (
+              <S.EventTimelineBlock>
+                <S.EventTimelineLabel>사건 연표</S.EventTimelineLabel>
+                <EventCenturyStrip
+                  counts={stats.eventCenturyCounts}
+                  onOpen={goEventsCentury}
+                />
+              </S.EventTimelineBlock>
+            )}
+          </S.RecordGridBody>
+        </S.RecordGrid>
         {totalRegistered === 0 && !stats.isLoading && (
           <S.EmptyHint>
             아직 이 국가에 등록된 기록이 없습니다. 위 항목을 눌러 각 탭에서
@@ -533,7 +549,7 @@ export function CountryDetailDashboard({
       {stats.calendarEvents.length === 0 ? (
         <S.Section>
           <S.SectionTitleRow>
-            <S.SectionTitleIcon $accent="amber">
+            <S.SectionTitleIcon>
               <IconCalendar />
             </S.SectionTitleIcon>
             <S.SectionTitleText>사건 캘린더</S.SectionTitleText>
@@ -550,7 +566,7 @@ export function CountryDetailDashboard({
       ) : (
         <S.Section>
           <S.SectionTitleRow>
-            <S.SectionTitleIcon $accent="amber">
+            <S.SectionTitleIcon>
               <IconCalendar />
             </S.SectionTitleIcon>
             <S.SectionTitleText>사건 캘린더</S.SectionTitleText>

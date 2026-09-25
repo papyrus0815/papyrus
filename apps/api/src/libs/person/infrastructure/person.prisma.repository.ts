@@ -1832,6 +1832,17 @@ export class PersonPrismaRepository implements IPersonRepository {
             appointmentMethod: true,
             appointmentDetail: true,
             startDatePrecision: true,
+            // 구조화 재위 기간 — BC·고대·연단위 재위는 startDate/endDate가 NULL이라
+            // 이 축이 유일 진실(사건 목록의 군주 재위 표시가 사용).
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            endDatePrecision: true,
+            endEra: true,
+            endYear: true,
+            endMonth: true,
+            endDay: true,
             accessionEventId: true,
             accessionEvent: { select: { id: true, title: true, deletedAt: true } },
             endReason: true,

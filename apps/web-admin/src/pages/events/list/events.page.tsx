@@ -25,6 +25,7 @@ import { transformEventsFromApi, useEvents } from '@/entities/event/model'
 import type { FilterChip } from '@/entities/event/model'
 import { getEventById, getEventsCount } from '@/shared/api/events'
 import type { EventFetchError, EventResponseDto } from '@/shared/api/events'
+import { getAllPersons } from '@/shared/api/persons'
 import { eventKeys } from '@/pages/events/detail/use-event-detail'
 import { useEventFilters } from '@/features/event-filters/model'
 import {
@@ -49,6 +50,7 @@ import {
 import type { SortOption } from '@/features/event-list/lib/constants'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { notify } from '@/shared/ui/toast'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
@@ -82,6 +84,7 @@ import {
   useCatalogShortcuts,
 } from './hooks/use-catalog-keyboard'
 import { useCatalogUrlSync } from './hooks/use-catalog-url-sync'
+import { useReignHighlight } from './hooks/use-reign-highlight'
 import { exportEventsAsJson } from './lib/export-events'
 import { parseCatalogSearchParams } from './lib/parse-catalog-search-params'
 import {
@@ -169,6 +172,30 @@ export const EventsCatalogPage: React.FC = () => {
   // 기본 page size 100 — 타임라인 뷰가 한 번에 더 많은 사건을 보여주도록.
   // 사용자는 toolbar의 page size 컨트롤로 변경 가능.
   const [pageSize, setPageSize] = useState(initialUrlState.pageSize)
+
+  // ===== 군주 재위 표시 =====
+  // 고른 군주의 재위 기간과 겹치는 사건을 목록에서 따로 표시(필터 아님). `?reign=`로 URL 동기화.
+  const [reignPersonId, setReignPersonId] = useState<string | null>(
+    searchParams.get('reign'),
+  )
+  const [reignPickerOpen, setReignPickerOpen] = useState(false)
+  const openReignPicker = useCallback(() => setReignPickerOpen(true), [])
+  const closeReignPicker = useCallback(() => setReignPickerOpen(false), [])
+  const clearReign = useCallback(() => setReignPersonId(null), [])
+  const { data: allPersons, isLoading: allPersonsLoading } = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
+    enabled: reignPickerOpen,
+    staleTime: 5 * 60 * 1000,
+  })
+  /** 재위(SovereignReign) 기록이 하나라도 있는 인물만 후보로 — 목록 응답의 sovereignReigns로 판정 */
+  const monarchCandidates = useMemo(
+    () =>
+      (allPersons ?? []).filter(
+        (person) => (person.sovereignReigns?.length ?? 0) > 0,
+      ),
+    [allPersons],
+  )
 
   // ===== 목록 밀도 =====
   // 세로 픽셀의 소유권을 사용자에게 넘긴다. 행 높이의 60%가 데이터가 아니라 여백과
@@ -508,7 +535,7 @@ export const EventsCatalogPage: React.FC = () => {
     openSummary,
     anyOverlayOpen,
     closeTopOverlay,
-  } = useCatalogModals(createModalOpen)
+  } = useCatalogModals(createModalOpen || reignPickerOpen)
 
   // ===== 사건 선택 시 최근 본 목록에 추가 =====
   useEffect(() => {
@@ -568,6 +595,7 @@ export const EventsCatalogPage: React.FC = () => {
     sortDirection,
     showFlatView,
     pageSize,
+    reignPersonId,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
@@ -581,6 +609,7 @@ export const EventsCatalogPage: React.FC = () => {
     setSortDirection,
     setShowFlatView,
     setPageSize,
+    setReignPersonId,
   })
 
   /**
@@ -807,6 +836,12 @@ export const EventsCatalogPage: React.FC = () => {
   const listRenderedHierarchy = useMemo(
     () => visibleFlattenedHierarchy.filter((item) => !item.isCollapsedAway),
     [visibleFlattenedHierarchy],
+  )
+
+  /** 군주 재위 표시 — 목록이 실제로 그리는 행 기준으로 겹침을 판정·계수한다 */
+  const reignHighlight = useReignHighlight(
+    reignPersonId,
+    listRenderedHierarchy,
   )
 
   /**
@@ -1572,6 +1607,7 @@ export const EventsCatalogPage: React.FC = () => {
       }
       hasMoreData={hasMore}
       bookmarks={bookmarks}
+      reignLabels={reignHighlight.labelByEventId}
       searchQuery={debouncedKeyword}
       recentEventIds={recentEvents}
       // 열 머리글이 '지금 어느 열이 순서를 만드는가'를 표시한다 — 도구줄의
@@ -1797,6 +1833,12 @@ export const EventsCatalogPage: React.FC = () => {
     hasCollapsibleChildren,
     collapsedBandCount: collapsedYears.size + collapsedCenturies.size,
     onExpandAllBands: handleExpandAllBands,
+    reignActive: reignPersonId !== null,
+    reignPersonName: reignHighlight.personName,
+    reignMatchedCount: reignHighlight.matchedCount,
+    reignLoading: reignHighlight.isLoading,
+    onOpenReignPicker: openReignPicker,
+    onClearReign: clearReign,
     onCollapseAllChildren: collapseAllChildren,
     onExpandAllChildren: expandAllChildren,
     onExportJson: handleExportJson,
@@ -1941,6 +1983,22 @@ export const EventsCatalogPage: React.FC = () => {
 
       <CatalogEntityFilterModals {...entityFilterModalProps} />
       <CatalogOverlayModals {...overlayModalProps} />
+
+      {reignPickerOpen && (
+        <PersonSelectModal
+          persons={monarchCandidates}
+          loading={allPersonsLoading}
+          selectedPersonId={reignPersonId ?? ''}
+          onSelect={(personId) => {
+            setReignPersonId(personId)
+            closeReignPicker()
+          }}
+          onClose={closeReignPicker}
+          title="군주 선택 — 재위 기간 사건 표시"
+          searchPlaceholder="재위 기간을 표시할 군주 검색..."
+          allowCreate={false}
+        />
+      )}
 
       <EventRegisterModal
         isOpen={createModalOpen}

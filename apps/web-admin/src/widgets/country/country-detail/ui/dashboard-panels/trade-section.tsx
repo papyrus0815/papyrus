@@ -161,7 +161,7 @@ export function TradeSection({
     return (
       <S.Section>
         <S.SectionTitleRow>
-          <S.SectionTitleIcon $accent="emerald">
+          <S.SectionTitleIcon>
             <IconChart />
           </S.SectionTitleIcon>
           <S.SectionTitleText>교역</S.SectionTitleText>
@@ -223,7 +223,7 @@ export function TradeSection({
   return (
     <S.Section>
       <S.SectionTitleRow>
-        <S.SectionTitleIcon $accent="emerald">
+        <S.SectionTitleIcon>
           <IconChart />
         </S.SectionTitleIcon>
         <S.SectionTitleText>교역</S.SectionTitleText>

@@ -65,7 +65,7 @@ export function CountryCompaniesSection({
     return (
       <S.Section>
         <S.SectionTitleRow>
-          <S.SectionTitleIcon $accent="sky">
+          <S.SectionTitleIcon>
             <IconLandmark />
           </S.SectionTitleIcon>
           <S.SectionTitleText>기업</S.SectionTitleText>
@@ -84,7 +84,7 @@ export function CountryCompaniesSection({
   return (
     <S.Section>
       <S.SectionTitleRow>
-        <S.SectionTitleIcon $accent="sky">
+        <S.SectionTitleIcon>
           <IconLandmark />
         </S.SectionTitleIcon>
         <S.SectionTitleText>기업</S.SectionTitleText>

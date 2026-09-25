@@ -12,23 +12,12 @@ import { yearOfEra } from '../model/adapt'
 import {
   ERAS,
   FIELDS,
+  colorForField,
   INFOGRAPHIC_DEFAULTS,
   REGIONS,
   REGION_COLORS,
 } from '../model/constants'
 import { usePersonInfographicFilterStore } from '../model/filter.store'
-
-const FIELD_COLOR_MAP: Record<string, string> = {
-  '정치': '#6366f1',
-  '군사': '#ef4444',
-  '사상': '#8b5cf6',
-  '과학': '#0ea5e9',
-  '예술': '#f59e0b',
-  '기타': '#64748b',
-}
-
-const colorForField = (f: string): string =>
-  FIELD_COLOR_MAP[f] ?? FIELD_COLOR_MAP['기타']
 
 const colorForRegion = (r: string): string =>
   REGION_COLORS[Math.max(0, REGIONS.indexOf(r)) % REGION_COLORS.length]
