@@ -425,10 +425,16 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 
   /** 즉위 구분선을 세기›연 그룹 사이 어디에 둘지 — 표시 방향을 따른다 */
   const reignPlan = useMemo(() => {
+    const eventYears = allYears.filter(
+      (year) => (eventsByYear.get(year)?.length ?? 0) > 0,
+    )
     const plan = planReignMarkers(
       reignMarkers ?? [],
       centuryGroups,
       sortDirection,
+      eventYears.length > 0
+        ? { min: Math.min(...eventYears), max: Math.max(...eventYears) }
+        : undefined,
     )
     /**
      * 세기 머리글 앞 즉위라도, 그 세기 첫 해 앞에 공백 표지('107년 기록 없음')가 서면
@@ -447,7 +453,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       plan.beforeCentury.delete(century)
     }
     return plan
-  }, [reignMarkers, centuryGroups, sortDirection, yearGapBefore])
+  }, [
+    reignMarkers,
+    centuryGroups,
+    sortDirection,
+    yearGapBefore,
+    allYears,
+    eventsByYear,
+  ])
 
   /**
    * 이름 앞에 나라를 붙이지 않아도 되는 나라 — 목록 군주 중 **가장 많은 나라**.
@@ -1048,8 +1061,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                        * 1행짜리 그룹이 68개인데 그 전부에 '1건'을 붙이면, 바로 아래 한 행이
                        * 이미 말하는 사실을 68번 되풀이하는 잉크가 된다.
                        */
+                      // 즉위 연도로 세운 빈 연 그룹은 '0건'을 말하지 않는다 — 표지가 곧 내용이다.
                       const showYearCount =
-                        yearEventCount !== 1 || yearSubCount > 0
+                        yearItems.length > 0 &&
+                        (yearEventCount !== 1 || yearSubCount > 0)
 
                       const yearHeadingId = `events-year-${currentYear}`
                       return (

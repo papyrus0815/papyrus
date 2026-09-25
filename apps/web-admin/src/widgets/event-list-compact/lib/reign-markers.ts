@@ -193,6 +193,39 @@ export function formatReignSpan(marker: ReignMarker): string {
   return `${formatSignedYear(marker.startYear)}–${end}`
 }
 
+/**
+ * 목록 범위 판정 — 이 즉위를 목록에 실을 것인가.
+ * 마지막 사건 이후의 즉위, 첫 사건보다 이르면서 그 시점에 이미 퇴위한 재위는 버린다.
+ * 첫 사건 시점에 **재위 중**인 군주는 남긴다('목록이 시작될 때 누가 다스렸나').
+ */
+export function isReignInRange(
+  marker: ReignMarker,
+  range: { min: number; max: number },
+): boolean {
+  if (marker.startYear > range.max) return false
+  if (
+    marker.startYear < range.min &&
+    marker.endYear != null &&
+    marker.endYear < range.min
+  ) {
+    return false
+  }
+  return true
+}
+
+/**
+ * 즉위 연도 — 사건이 없어도 연 그룹을 세울 연도들(`buildYearBuckets`의 `extraYears`).
+ * 즉위 해가 곧 연 머리글이 되어, 표지는 그 해 안에 선다.
+ */
+export function reignAccessionYears(
+  markers: ReignMarker[],
+  range: { min: number; max: number },
+): number[] {
+  return markers
+    .filter((marker) => isReignInRange(marker, range))
+    .map((marker) => marker.startYear)
+}
+
 export interface ReignMarkerPlan {
   /** 세기 머리글 **앞**에 놓일 구분선 — 즉위 세기에 사건이 하나도 없을 때 */
   beforeCentury: Map<number, ReignMarker[]>
@@ -224,6 +257,12 @@ export function planReignMarkers(
   markers: ReignMarker[],
   centuryGroups: Array<{ century: number; years: number[] }>,
   direction: 'asc' | 'desc',
+  /**
+   * 범위 판정의 모수 — **사건이 있는** 연도의 최소·최대. 즉위 연도로 세운 빈 연 그룹까지
+   * 모수에 넣으면 범위가 스스로 넓어져, 연 그룹을 받지 못한 즉위가 끼어든다.
+   * 생략하면 표시 연도 전체.
+   */
+  eventRange?: { min: number; max: number },
 ): ReignMarkerPlan {
   const plan: ReignMarkerPlan = {
     beforeCentury: new Map(),
@@ -238,19 +277,14 @@ export function planReignMarkers(
   const firstYearOfCentury = new Set(
     centuryGroups.map((group) => group.years[0]),
   )
-  const minYear = Math.min(...displayYears)
-  const maxYear = Math.max(...displayYears)
+  const range = eventRange ?? {
+    min: Math.min(...displayYears),
+    max: Math.max(...displayYears),
+  }
 
   for (const marker of markers) {
     const startYear = marker.startYear
-    if (startYear > maxYear) continue
-    if (
-      startYear < minYear &&
-      marker.endYear != null &&
-      marker.endYear < minYear
-    ) {
-      continue
-    }
+    if (!isReignInRange(marker, range)) continue
     if (yearSet.has(startYear)) {
       pushTo(plan.inYear, startYear, marker)
       continue

@@ -75,6 +75,13 @@ export interface BuildYearBucketsOptions {
    * 안 보일 뿐 엄연히 있는 사건을 없다고 말하면 안 되기 때문이다.
    */
   baselineItems?: FlattenedHierarchyItem[]
+  /**
+   * 사건이 없어도 **연 그룹을 세울 연도**(예: 군주 즉위 연도). 사건 연도의 범위
+   * `{ min, max }`를 받아 추가할 연도를 돌려준다 — 범위 밖을 버릴지는 호출부 규칙이다.
+   * 추가된 연도는 행 0개짜리 버킷이 되고, 공백('N년 기록 없음') 계산에도 기록 연도로
+   * 참여한다(그 해를 사이에 둔 거짓 공백을 만들지 않도록). 세기·연 카운트는 늘지 않는다.
+   */
+  extraYears?: (range: { min: number; max: number }) => Iterable<number>
 }
 
 /** 한 행의 버킷 귀속 결과 — 본 패스와 모수 패스가 같은 규칙을 쓰도록 뽑아 둔다. */
@@ -179,7 +186,7 @@ export function buildYearBuckets(
   items: FlattenedHierarchyItem[],
   sortDirection: 'asc' | 'desc',
   filteringActive = false,
-  { hierarchy = true, baselineItems }: BuildYearBucketsOptions = {},
+  { hierarchy = true, baselineItems, extraYears }: BuildYearBucketsOptions = {},
 ): YearBuckets {
   const eventYears = new Set<number>()
   const eventsByYear = new Map<number, FlattenedHierarchyItem[]>()
@@ -214,6 +221,22 @@ export function buildYearBuckets(
     }
   })
 
+  /** 사건 없는 연 그룹 — 사건 연도 범위가 있어야(사건이 하나라도 있어야) 정할 수 있다 */
+  const addedYears: number[] = []
+  if (extraYears && eventYears.size > 0) {
+    const eventYearList = Array.from(eventYears)
+    const range = {
+      min: Math.min(...eventYearList),
+      max: Math.max(...eventYearList),
+    }
+    for (const year of extraYears(range)) {
+      if (eventYears.has(year)) continue
+      eventYears.add(year)
+      eventsByYear.set(year, [])
+      addedYears.push(year)
+    }
+  }
+
   const sortedYears = Array.from(eventYears).sort((yearA, yearB) => yearA - yearB)
   const allYears =
     sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
@@ -237,9 +260,9 @@ export function buildYearBuckets(
    * 8개가 거짓**이 됐다("977년과 965년 사이 12년 기록 없음" — 실제로는 976·974·968·966에
    * 6건이 있다). 사이에 실제 기록이 하나라도 있으면 표지도 여백도 만들지 않는다.
    */
-  const coveredYears = Array.from(baseline?.ownYears ?? ownYears).sort(
-    (yearA, yearB) => yearA - yearB,
-  )
+  const coveredYears = Array.from(
+    new Set([...(baseline?.ownYears ?? ownYears), ...addedYears]),
+  ).sort((yearA, yearB) => yearA - yearB)
   /** `lower < year < upper`인 기록 연도가 하나라도 있는가 (정렬된 배열 이분 탐색). */
   const hasRecordBetween = (lower: number, upper: number): boolean => {
     let low = 0

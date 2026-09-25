@@ -378,3 +378,43 @@ describe('buildYearBuckets — 입력 행은 전부 버킷이나 미상에 담�
     expect(bucketed + buckets.unknownItems.length).toBe(items.length)
   })
 })
+
+describe('buildYearBuckets — extraYears: 사건 없는 연도에도 연 그룹을 세운다', () => {
+  const items = [row('a', '1443-12-30'), row('b', '1485-01-01')]
+
+  it('추가 연도는 행 0개짜리 버킷이 되고 표시 순서에 끼며 카운트는 늘지 않는다', () => {
+    const buckets = buildYearBuckets(items, 'asc', false, {
+      extraYears: () => [1455, 1469],
+    })
+    expect(buckets.allYears).toEqual([1443, 1455, 1469, 1485])
+    expect(buckets.eventsByYear.get(1455)).toEqual([])
+    expect(buckets.centuryCount.get(15)).toBe(2)
+    expect(buckets.yearRootCount.has(1455)).toBe(false)
+  })
+
+  it('공백은 추가 연도를 사이에 두고 다시 잰다', () => {
+    const buckets = buildYearBuckets(items, 'asc', false, {
+      extraYears: () => [1455],
+    })
+    expect(buckets.yearGapBefore.get(1455)?.years).toBe(12)
+    expect(buckets.yearGapBefore.get(1485)?.years).toBe(30)
+  })
+
+  it('범위는 사건 연도 기준으로 넘겨 준다', () => {
+    const received: Array<{ min: number; max: number }> = []
+    buildYearBuckets(items, 'desc', false, {
+      extraYears: (range) => {
+        received.push(range)
+        return []
+      },
+    })
+    expect(received).toEqual([{ min: 1443, max: 1485 }])
+  })
+
+  it('사건이 없으면 연도를 세우지 않는다', () => {
+    const buckets = buildYearBuckets([], 'asc', false, {
+      extraYears: () => [1455],
+    })
+    expect(buckets.allYears).toEqual([])
+  })
+})
