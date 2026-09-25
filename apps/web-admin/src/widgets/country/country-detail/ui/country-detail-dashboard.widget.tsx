@@ -38,6 +38,7 @@ import { CompletenessPanel } from './dashboard-panels/completeness-panel'
 import { CurrentCabinetPanel } from './dashboard-panels/current-cabinet-panel'
 import { CurrentHeadsPanel } from './dashboard-panels/current-heads-panel'
 import { ChartEmpty } from './dashboard-panels/chart-empty'
+import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { SectionEmpty } from './dashboard-panels/section-empty'
 import { ElectionCard } from './dashboard-panels/election-card'
 import {
@@ -546,7 +547,18 @@ export function CountryDetailDashboard({
         작은 상자에 점만 찍던 시절엔 "여기 뭔가 있다"까지만 말했다. 폭을 다 쓰고
         제목을 칸 안에 넣어 한눈에 읽히게 한다.
       */}
-      {stats.calendarEvents.length === 0 ? (
+      {stats.loading.events ? (
+        /* 로딩 중을 '자료 없음 + 사건 등록'으로 말하지 않는다 */
+        <S.Section>
+          <S.SectionTitleRow>
+            <S.SectionTitleIcon>
+              <IconCalendar />
+            </S.SectionTitleIcon>
+            <S.SectionTitleText>사건 캘린더</S.SectionTitleText>
+          </S.SectionTitleRow>
+          <ChartSkeleton variant="calendar" />
+        </S.Section>
+      ) : stats.calendarEvents.length === 0 ? (
         <S.Section>
           <S.SectionTitleRow>
             <S.SectionTitleIcon>

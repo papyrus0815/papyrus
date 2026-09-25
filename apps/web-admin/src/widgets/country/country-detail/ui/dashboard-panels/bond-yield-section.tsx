@@ -17,6 +17,7 @@ import { IconPercent } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import { BondYieldCurve, type CurveSeries } from './bond-yield-curve'
 import { ChartEmpty } from './chart-empty'
+import { ChartSkeleton } from './chart-skeleton'
 import { IndicatorTrendChart, type TrendPoint } from './indicator-trend-chart'
 
 interface BondYieldSectionProps {
@@ -194,11 +195,7 @@ export function BondYieldSection({
       {manager}
 
       {bondQuery.isLoading ? (
-        <GridContainer>
-          <Grid>
-            <Placeholder />
-          </Grid>
-        </GridContainer>
+        <ChartSkeleton variant="line" count={2} />
       ) : model == null ? (
         <ChartEmpty
           text="연도·만기별 국채 금리를 넣으면 그 해의 수익률 곡선과 10년물 추이가 여기에 그려집니다."
@@ -315,12 +312,6 @@ const Grid = styled.div`
   }
 `
 
-const Placeholder = styled.div`
-  height: 320px;
-  border-radius: 14px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.02)'};
-`
 
 const Headline = styled.div`
   display: flex;

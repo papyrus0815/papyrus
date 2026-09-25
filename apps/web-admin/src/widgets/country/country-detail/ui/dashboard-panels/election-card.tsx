@@ -3,6 +3,7 @@ import styled from 'styled-components'
 import type { ElectionSummary } from '../../model/use-country-dashboard-stats'
 import { IconVote } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
+import { ChartSkeleton } from './chart-skeleton'
 import { formatDDay, formatDaysAgo, formatStartDate } from './format'
 
 export interface ElectionCardProps {
@@ -30,7 +31,7 @@ export function ElectionCard({
         <S.CardPanelTitleRow>
           <S.CardPanelTitle>선거</S.CardPanelTitle>
         </S.CardPanelTitleRow>
-        <S.FeedEmpty>불러오는 중...</S.FeedEmpty>
+        <ChartSkeleton variant="text" lines={2} />
       </S.CardPanel>
     )
   }

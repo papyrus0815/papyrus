@@ -1376,21 +1376,36 @@ export function CurrentCabinetPanel({
 function GovernmentSkeleton({ ghost = false }: { ghost?: boolean }) {
   const animation = 'wave' as const
   return (
+    /*
+     * 불러온 뒤의 지면과 같은 뼈대 — 가로로 누운 수반 카드(얼굴 | 직함·이름 | 요약)와
+     * 각료 칸 격자. 예전 골격은 옛 배치(파란 띠 + 세 칸 줄 목록)를 그대로 흉내 내
+     * 자료가 오는 순간 모양이 통째로 바뀌었다.
+     */
     <SkeletonRoot $ghost={ghost} aria-hidden>
       <SkeletonHead $ghost={ghost}>
-        <Skeleton variant="circular" width={104} height={104} animation={animation} />
+        <Skeleton variant="circular" width={112} height={112} animation={animation} />
         <SkeletonHeadText>
           <Skeleton width={92} height={13} animation={animation} />
-          <Skeleton width={188} height={26} animation={animation} />
-          <Skeleton width={150} height={13} animation={animation} />
+          <Skeleton width={148} height={24} animation={animation} />
+          <Skeleton width={120} height={12} animation={animation} />
         </SkeletonHeadText>
+        <SkeletonStats>
+          {Array.from({ length: 4 }, (_, index) => (
+            <SkeletonStat key={index}>
+              <Skeleton width={34} height={11} animation={animation} />
+              <Skeleton width={52} height={13} animation={animation} />
+            </SkeletonStat>
+          ))}
+        </SkeletonStats>
       </SkeletonHead>
       <SkeletonRoster>
-        {Array.from({ length: 9 }, (_, index) => (
+        {Array.from({ length: 8 }, (_, index) => (
           <SkeletonCell key={index}>
-            <Skeleton variant="circular" width={26} height={26} animation={animation} />
-            <Skeleton width={68} height={12} animation={animation} />
-            <Skeleton width={96} height={13} animation={animation} />
+            <Skeleton variant="circular" width={36} height={36} animation={animation} />
+            <SkeletonCellText>
+              <Skeleton width={84} height={11} animation={animation} />
+              <Skeleton width={56} height={13} animation={animation} />
+            </SkeletonCellText>
           </SkeletonCell>
         ))}
       </SkeletonRoster>
@@ -1665,35 +1680,65 @@ const SkeletonRoot = styled.div<{ $ghost: boolean }>`
 const SkeletonHead = styled.div<{ $ghost?: boolean }>`
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 18px 20px;
+  gap: 22px;
+  padding: 18px 22px;
   margin-bottom: 16px;
-  border-radius: 14px;
+  /* 불러온 뒤의 수반 카드와 같은 모서리·면 — 자료가 와도 틀이 그대로다 */
+  border-radius: 20px;
   /* 점선 = 채워야 할 자리. 실선은 '불러오는 중인 실제 카드'로 읽힌다 */
   border: 1px ${({ $ghost }) => ($ghost ? 'dashed' : 'solid')}
-    ${({ theme }) => theme.colors.border.light};
-  background: ${({ $ghost, theme }) =>
-    $ghost ? 'transparent' : theme.colors.hover};
+    ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const SkeletonHeadText = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 `
 
+/* 오른쪽 요약 칸(취임·재임·각료·교체) — 좁으면 접는다 */
+const SkeletonStats = styled.div`
+  display: flex;
+  gap: 18px;
+  padding-left: 22px;
+  border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+`
+
+const SkeletonStat = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+`
+
+/* 불러온 뒤의 각료 칸 격자(232px 최소 폭·54px 높이)와 같은 규격 */
 const SkeletonRoster = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 0 20px;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 10px;
 `
 
 const SkeletonCell = styled.div`
-  display: grid;
-  grid-template-columns: 26px 96px minmax(0, 1fr);
+  display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px;
+  height: 54px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const SkeletonCellText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 `
 
 

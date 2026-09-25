@@ -15,6 +15,7 @@ import {
 } from '@/entities/trade/vocab'
 
 import { ChartEmpty } from './chart-empty'
+import { ChartSkeleton } from './chart-skeleton'
 import { TradeCompositionTreemap } from './trade-composition-treemap'
 import { TradeYearBars } from './trade-year-bars'
 import {
@@ -157,6 +158,21 @@ export function TradeSection({
    * 자료가 없어도 **연도 막대 골격**은 그대로 둔다. 연도·금액은 지어낼 수 없으니
    * 빈 트랙과 눈금선만 남긴다 — 값이 들어오면 같은 자리에 막대가 찬다.
    */
+  /* 로딩 중을 '자료 없음'으로 말하지 않는다 — 예전엔 불러오는 동안 등록 안내가 떴다 */
+  if (query.isLoading) {
+    return (
+      <S.Section>
+        <S.SectionTitleRow>
+          <S.SectionTitleIcon>
+            <IconChart />
+          </S.SectionTitleIcon>
+          <S.SectionTitleText>교역</S.SectionTitleText>
+        </S.SectionTitleRow>
+        <ChartSkeleton variant="bars" rows={4} />
+      </S.Section>
+    )
+  }
+
   if (years.length === 0 || !current) {
     return (
       <S.Section>

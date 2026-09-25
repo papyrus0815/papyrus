@@ -38,6 +38,7 @@ import { notify } from '@/shared/ui/toast'
 
 import { IconLandmark } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
+import { ChartSkeleton } from './chart-skeleton'
 import { SectionEmpty } from './section-empty'
 
 interface Props {
@@ -196,7 +197,7 @@ export function PoliticalSystemPanel({
       </S.SectionTitleRow>
 
       {query.isLoading ? (
-        <LoadingLine>불러오는 중…</LoadingLine>
+        <ChartSkeleton variant="text" lines={2} />
       ) : !current ? (
         <SectionEmpty
           text="이 국가가 대통령제인지 의원내각제인지, 단원제인지 양원제인지가 아직 없습니다. 헌법 체제를 기간과 함께 남기면 여기 요약이 서고, 바뀔 때마다 한 줄씩 쌓입니다."
@@ -294,11 +295,6 @@ export function PoliticalSystemPanel({
   )
 }
 
-const LoadingLine = styled.p`
-  margin: 0;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
 
 const Card = styled.div`
   display: flex;

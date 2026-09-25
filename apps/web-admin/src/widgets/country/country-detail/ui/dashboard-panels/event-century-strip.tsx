@@ -144,11 +144,16 @@ const SkipText = styled.span`
   white-space: nowrap;
 `
 
+/**
+ * 막대는 24px — 칸 폭(46px)을 다 채우면 두꺼운 벽돌이 된다. 남는 폭은 누르는 자리로만
+ * 쓴다. 위쪽 끝만 둥글고 바닥은 각지게 — 바닥선에서 자라는 막대로 읽히게 한다.
+ */
 const BarFill = styled.span`
   display: block;
-  width: 100%;
-  border-radius: 6px;
-  background: rgba(245, 158, 11, 0.55);
+  width: 24px;
+  border-radius: 4px 4px 0 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.8)' : 'rgba(217, 119, 6, 0.75)'};
   transition: background 0.15s ease;
 `
 
@@ -166,7 +171,7 @@ const Bar = styled.button`
 
   &:hover ${BarFill},
   &:focus-visible ${BarFill} {
-    background: #f59e0b;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#f59e0b' : '#d97706')};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.active};
@@ -175,15 +180,17 @@ const Bar = styled.button`
   }
 `
 
+/*
+ * 회색 칸을 깔지 않는다 — 칸 전체가 '만점 그릇'처럼 보여 1건짜리 세기가 '거의 빈 통'으로
+ * 읽혔다. 세기 사이 비교는 공통 바닥선 하나로 충분하다.
+ */
 const BarTrack = styled.span`
   display: flex;
   align-items: flex-end;
   justify-content: center;
   width: 46px;
   height: 64px;
-  border-radius: 6px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.medium};
 `
 
 const BarCount = styled.span`

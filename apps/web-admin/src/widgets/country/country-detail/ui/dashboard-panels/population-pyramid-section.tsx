@@ -24,6 +24,7 @@ import type { DemographicIndicator } from '@/shared/api/country-indicators'
 
 import { CountryDataManagerModal } from '../country-data-manager/country-data-manager-modal'
 import { ChartEmpty } from './chart-empty'
+import { ChartSkeleton } from './chart-skeleton'
 import {
   IconChart,
   IconUsers,
@@ -259,7 +260,18 @@ export function PopulationPyramidSection({
     />
   )
 
-  if (query.isLoading) return null
+  /*
+   * 로딩 중에도 섹션은 선다. null을 돌려주던 시절엔 자료가 오는 순간 피라미드가 통째로
+   * 끼어들며 아래 지면을 400px 밀어냈고, 그 사이 목차에서도 이 장이 빠져 있었다.
+   */
+  if (query.isLoading) {
+    return (
+      <S.Section>
+        <Title onRegister={null} />
+        <ChartSkeleton variant="pyramid" />
+      </S.Section>
+    )
+  }
   if (years.length === 0) {
     /*
      * 자료가 없어도 **피라미드 골격**은 그대로 둔다. 연령대 라벨은 카탈로그라 이미

@@ -55,6 +55,8 @@ export function BondYieldCurve({ title, caption, series }: Props) {
   const compareInk = isDark ? 'rgba(255,255,255,0.42)' : '#94a3b8'
   const grid = isDark ? 'rgba(255,255,255,0.08)' : '#eef1f5'
   const axisInk = theme.colors.text.secondary
+  /* 점 둘레 링 — 두 해의 선이 겹치는 자리에서도 점이 떠 보이게 */
+  const surface = isDark ? '#171717' : '#ffffff'
 
   const chart = useMemo(() => {
     const drawn = series.slice(0, 2).filter((row) => row.points.length > 0)
@@ -193,21 +195,47 @@ export function BondYieldCurve({ title, caption, series }: Props) {
               `${name.replace(/^y/, '')}년`,
             ]}
           />
-          {chart.drawn.map((entry, index) => (
-            <Line
-              key={entry.year}
-              type="monotone"
-              dataKey={`y${entry.year}`}
-              stroke={index === 0 ? accent : compareInk}
-              strokeWidth={index === 0 ? 2 : 1.5}
-              strokeDasharray={index === 0 ? undefined : '5 4'}
-              /* 만기는 점이 8개 안팎이라 각 점을 찍어야 '어느 만기의 값'인지 짚인다 */
-              dot={<Dot r={3} strokeWidth={0} />}
-              activeDot={<Dot r={5} strokeWidth={2} />}
-              connectNulls
-              isAnimationActive={false}
-            />
-          ))}
+          {/*
+            비교 연도를 먼저 그려 기준 연도가 위에 오게 한다.
+
+            점은 계열 색으로 채우고 표면색 링을 두른다. 예전엔 <Dot strokeWidth={0}>만
+            넘겨 recharts 기본 채움(흰색)이 그대로 남았고, 점마다 선에 흰 구멍이 뚫려
+            곡선이 토막 난 것처럼 보였다.
+
+            비교 연도는 파선이 아니라 옅은 실선이다 — 파선은 '추정·임계'로 읽히고,
+            범례 견본(실선)과도 모양이 달랐다. 두 해는 색과 굵기로 갈린다.
+
+            곧은 선으로 잇는다 — 만기 사이의 곡률은 잰 값이 아니다.
+          */}
+          {[...chart.drawn].reverse().map((entry) => {
+            const isBase = entry.year === chart.drawn[0].year
+            const ink = isBase ? accent : compareInk
+            return (
+              <Line
+                key={entry.year}
+                type="linear"
+                dataKey={`y${entry.year}`}
+                stroke={ink}
+                strokeWidth={isBase ? 2 : 1.5}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                /* 만기는 점이 8개 안팎이라 각 점을 찍어야 '어느 만기의 값'인지 짚인다 */
+                dot={
+                  <Dot
+                    r={isBase ? 4 : 3}
+                    fill={ink}
+                    stroke={surface}
+                    strokeWidth={2}
+                  />
+                }
+                activeDot={
+                  <Dot r={5} fill={ink} stroke={surface} strokeWidth={2} />
+                }
+                connectNulls
+                isAnimationActive={false}
+              />
+            )
+          })}
         </LineChart>
       </ResponsiveContainer>
     </Card>
