@@ -1050,22 +1050,50 @@ export const GapMarker = styled.div`
  * 갖지 않는다: 가로 rule 없음, 배경 없음, 메타 크기·중립색 텍스트. 색은 축 위 왕관 하나만
  * 싣는다 — 연 도트(파랑)와 구별되는 유일한 신호다. 좌단은 연 머리글 라벨과 같은 x.
  */
-export const ReignMarker = styled.div<{ $beforeCentury?: boolean }>`
+export const ReignMarker = styled.div<{
+  $beforeCentury?: boolean
+  /** 공백 표지와 합친 줄 — 공백 표지의 점선 rule을 이어받는다 */
+  $withGap?: boolean
+}>`
   position: relative;
-  /* 세기 머리글 바로 앞이면 그 세기에 붙어 읽히지 않게 띄운다 — 표지는 앞 시대의 끝이다 */
-  margin-bottom: ${({ $beforeCentury }) => ($beforeCentury ? '14px' : '0')};
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   column-gap: 14px;
   row-gap: 2px;
   ${bleedToEdges}
-  padding: 3px var(--list-pad-r, 20px) 3px calc(var(--rail-gutter) + 2px);
+  /* 좌단 = 공백 표지·연 머리글 셰브론과 같은 x — 메타 줄들이 한 세로선에 선다 */
+  padding: 3px var(--list-pad-r, 20px) 3px var(--rail-gutter);
+  /* 세기 머리글 바로 앞이면 그 세기에 붙어 읽히지 않게 띄운다 — 표지는 앞 시대의 끝이다 */
+  margin-bottom: ${({ $beforeCentury, $withGap }) =>
+    $beforeCentury ? '14px' : $withGap ? '4px' : '0'};
   font-size: var(--row-meta, 12px);
   line-height: 1.5;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
+
+  ${({ $withGap, theme }) =>
+    $withGap &&
+    css`
+      &::after {
+        content: '';
+        flex: 1;
+        min-width: 24px;
+        align-self: center;
+        height: 0;
+        border-top: 1px dashed
+          ${theme.mode === 'dark'
+            ? 'rgba(255, 255, 255, 0.14)'
+            : 'rgba(15, 23, 42, 0.14)'};
+      }
+    `}
+`
+
+/** 합친 줄의 공백 문구 — 공백 표지와 같은 무게 */
+export const ReignMarkerGap = styled.span`
+  font-weight: 500;
+  white-space: nowrap;
 `
 
 /** 축 위 왕관 — 연 도트와 같은 좌표·같은 표면 링으로 축을 끊고 앉는다 */
