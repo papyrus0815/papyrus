@@ -34,6 +34,8 @@ interface CatalogUrlSyncArgs {
   viewMode: ViewMode
   /** 페이지 크기 — 표시 선호. 새로고침·공유 시 보존 */
   pageSize: number
+  /** 군주 재위 표시 대상 인물 id — 없으면 null */
+  reignPersonId: string | null
 
   // 세터 (URL → state)
   setKeywordInput: (v: string) => void
@@ -48,6 +50,7 @@ interface CatalogUrlSyncArgs {
   setShowFlatView: (v: boolean) => void
   setViewMode: (v: ViewMode) => void
   setPageSize: (v: number) => void
+  setReignPersonId: (v: string | null) => void
 }
 
 /** URL에 노출하는 유효 page size — 그 외 값은 기본(100)으로 폴백 */
@@ -73,6 +76,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     showFlatView,
     viewMode,
     pageSize,
+    reignPersonId,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
@@ -85,6 +89,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setShowFlatView,
     setViewMode,
     setPageSize,
+    setReignPersonId,
   } = args
 
   /** 우리(state → URL effect)가 마지막으로 쓴 URL serialized 값. 이 값과 동일하면
@@ -144,6 +149,9 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
 
     const nextView = resolveDefaultViewMode(searchParams.get('view'))
     if (nextView !== viewMode) setViewMode(nextView)
+
+    const reign = searchParams.get('reign')
+    if (reign !== reignPersonId) setReignPersonId(reign)
     // 의도적: 마운트 시·뒤로가기 시 한 번씩 끌어오면 충분. 양방향 동기화는 아래 effect에서.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
@@ -175,6 +183,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     /* 디폴트 viewMode가 디바이스에 따라 다름(모바일 LIST, 데스크톱 TIMELINE)이므로
      * default 인자 없이 항상 view 키를 명시. URL 공유 시 viewMode 정확히 보존. */
     setOrDel('view', viewMode)
+    setOrDel('reign', reignPersonId)
     const nextStr = next.toString()
     if (nextStr !== searchParams.toString()) {
       lastSelfWriteRef.current = nextStr
@@ -194,5 +203,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     showFlatView,
     viewMode,
     pageSize,
+    reignPersonId,
   ])
 }

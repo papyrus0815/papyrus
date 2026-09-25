@@ -74,6 +74,11 @@ interface EventCompactListProps {
   onRetryLoadMore?: () => void
   bookmarks?: Set<string>
   /**
+   * 군주 재위 표시 — 사건 id → 배지 설명 문구. 여기 있는 행만 '재위' 배지·tint를 받는다.
+   * 미전달이면 표시 없음.
+   */
+  reignLabels?: Map<string, string>
+  /**
    * 행 밀도. 세로 픽셀의 소유권을 사용자에게 넘긴다 — 밀도는 취향이 아니라 과업 의존적이라
    * (특정 사건을 찾을 땐 조밀, 읽을 땐 편안) 자동 추정하지 않고 선택을 그대로 따른다.
    */
@@ -127,6 +132,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   loadMoreFailed = false,
   onRetryLoadMore,
   bookmarks = new Set(),
+  reignLabels,
   searchQuery,
   density = 'cozy',
   recentEventIds = [],
@@ -245,6 +251,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         isActive={selectedEventId === node.id}
         dbCategories={dbCategories}
         isBookmarked={bookmarks.has(node.id)}
+        reignLabel={reignLabels?.get(node.id)}
         searchQuery={searchQuery}
         // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)
         groupYear={groupYear}

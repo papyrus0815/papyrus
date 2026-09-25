@@ -6,6 +6,7 @@
  */
 import React from 'react'
 
+import { FaCrown } from 'react-icons/fa'
 import {
   FiBookmark,
   FiChevronsDown,
@@ -66,6 +67,19 @@ interface Props {
   bookmarksOnly: boolean
   toggleBookmarksOnly: () => void
   bookmarksCount: number
+
+  /**
+   * 군주 재위 표시 — 고른 군주의 재위 기간과 겹치는 사건을 목록에서 따로 표시한다.
+   * 필터가 아니므로 활성 필터 칩·개수에는 포함하지 않는다.
+   */
+  reignActive: boolean
+  /** 표시 중인 군주 이름 — 로딩 중이면 null */
+  reignPersonName: string | null
+  /** 재위 기간과 겹치는 표시 행 수 */
+  reignMatchedCount: number
+  reignLoading: boolean
+  onOpenReignPicker: () => void
+  onClearReign: () => void
   /**
    * 하위 사건 일괄 접기/펼치기 — 자식 보유 사건은 로드될 때마다 전부 자동 전개되는데
    * 되돌릴 일괄 수단이 목록에 없었다('계층' 토글은 평면 모드라 오히려 행이 늘어난다).
@@ -116,6 +130,12 @@ export const CatalogToolbar: React.FC<Props> = ({
   bookmarksOnly,
   toggleBookmarksOnly,
   bookmarksCount,
+  reignActive,
+  reignPersonName,
+  reignMatchedCount,
+  reignLoading,
+  onOpenReignPicker,
+  onClearReign,
   allChildrenCollapsed,
   onCollapseAllChildren,
   onExpandAllChildren,
@@ -230,6 +250,37 @@ export const CatalogToolbar: React.FC<Props> = ({
             <Badge tone="primary">{bookmarksCount}</Badge>
           )}
         </ToolbarStyles.ToolbarBtn>
+        <ToolbarStyles.ToolbarBtn
+          type="button"
+          $active={reignActive}
+          title={
+            reignActive
+              ? `${reignPersonName ?? '군주'} 재위 기간의 사건 ${reignMatchedCount}건을 목록에 표시 중 — 눌러서 다른 군주 선택`
+              : '군주를 골라 그 재위 기간의 사건을 목록에 따로 표시'
+          }
+          aria-pressed={reignActive}
+          onClick={onOpenReignPicker}
+        >
+          <FaCrown size={ICON_SIZE.sm} aria-hidden="true" />
+          <span>
+            {reignActive
+              ? `${reignPersonName ?? '불러오는 중…'} 재위`
+              : '군주 재위'}
+          </span>
+          {reignActive && !reignLoading && (
+            <Badge tone="primary">{reignMatchedCount}</Badge>
+          )}
+        </ToolbarStyles.ToolbarBtn>
+        {reignActive && (
+          <ToolbarStyles.ToolbarBtn
+            type="button"
+            title="군주 재위 표시 끄기"
+            aria-label="군주 재위 표시 끄기"
+            onClick={onClearReign}
+          >
+            <FiX size={ICON_SIZE.sm} aria-hidden="true" />
+          </ToolbarStyles.ToolbarBtn>
+        )}
         <ToolbarStyles.ToolbarBtn
           type="button"
           title="현재 필터된 결과를 내보내기"

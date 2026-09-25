@@ -13,6 +13,7 @@
  */
 import React from 'react'
 
+import { FaCrown } from 'react-icons/fa'
 import { FiBookmark, FiChevronRight, FiLayers } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
@@ -50,6 +51,12 @@ interface EventListItemProps {
   isActive: boolean
   dbCategories: EventCategoryDto[]
   isBookmarked?: boolean
+  /**
+   * 군주 재위 표시 — 선택한 군주의 재위 기간과 겹치는 사건이면 설명 문구
+   * (예: '조선 세종 재위 중 (1418–1450)'), 아니면 undefined. 필터가 아니라 표시라
+   * 행을 숨기지 않고 배지·배경 tint만 얹는다.
+   */
+  reignLabel?: string
   /** 활성 검색어 — Title에서 매칭 부분 노란 배경 */
   searchQuery?: string
   /**
@@ -265,6 +272,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   isActive,
   dbCategories,
   isBookmarked = false,
+  reignLabel,
   searchQuery,
   groupYear,
   groupHeaderless = false,
@@ -363,6 +371,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
       $active={isActive}
       $depth={depth}
       $context={!isMatch}
+      $reign={!!reignLabel}
       /* depth를 인라인 CSS 변수로 넘긴다 — styled prop이면 depth마다 클래스가 생성돼
          252행에서 클래스 캐시가 부풀고 React.memo 이득이 깎인다. */
       style={{ '--depth': depth } as React.CSSProperties}
@@ -383,6 +392,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
       aria-current={isActive ? 'true' : undefined}
       data-event-id={node.id}
       data-active={isActive ? 'true' : undefined}
+      data-reign={reignLabel ? 'true' : undefined}
     >
       {/* 6트랙 원장 격자 — [날짜][분류][제목][기간][국가][액션].
        *
@@ -446,6 +456,13 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
             <Title data-row-title="">
               {highlightMatches(node.title, searchQuery)}
             </Title>
+            {reignLabel && (
+              <ReignBadge title={reignLabel}>
+                <FaCrown size={10} aria-hidden="true" />
+                <span aria-hidden="true">재위</span>
+                <SrOnly>{reignLabel}</SrOnly>
+              </ReignBadge>
+            )}
             {matchReason && (
               <MatchReason
                 title={`${matchReason.kind} 일치: ${matchReason.text}`}
@@ -595,6 +612,8 @@ const Stop = styled.div<{
   $depth: number
   /** 필터 문맥용으로만 남은 행(자기 자신은 조건 불일치) — 매칭 행과 구별해 강등 표시 */
   $context: boolean
+  /** 선택한 군주의 재위 기간과 겹치는 사건 — 호박색 tint + 우측 막대 */
+  $reign?: boolean
 }>`
   position: relative;
   display: flex;
@@ -659,7 +678,7 @@ const Stop = styled.div<{
    * depth>0 행은 좌측 1px vertical guide(box-shadow inset)로 부모-자식 위계 시각화.
    * 두 효과 모두 box-shadow 스택으로 한 번에 적용 — 덕분에 active 위에 guide도 같이 표시. */
   border-radius: ${({ $active }) => ($active ? '6px' : '0')};
-  box-shadow: ${({ $active, $depth, theme }) => {
+  box-shadow: ${({ $active, $depth, $reign, theme }) => {
     const shadows: string[] = []
     if ($depth > 0) {
       const c =
@@ -670,6 +689,10 @@ const Stop = styled.div<{
     }
     if ($active) {
       shadows.push('inset 4px 0 0 0 #2563eb')
+    }
+    // 재위 표시는 **우측** 막대 — 좌측은 활성(인디고)·계층 가이드가 이미 쓴다.
+    if ($reign) {
+      shadows.push('inset -3px 0 0 0 #d97706')
     }
     return shadows.length ? shadows.join(', ') : 'none'
   }};
@@ -701,7 +724,7 @@ const Stop = styled.div<{
    */
 
   /* active별 bg tint — 활성 행이 hover 행과 명확히 구분되도록 강화. */
-  ${({ $active, theme }) => {
+  ${({ $active, $reign, theme }) => {
     const isDark = theme.mode === 'dark'
     if ($active) {
       /* 라이트 0.13은 그 위 metaText를 4.04:1로 떨어뜨려 AA에 미달시켰다.
@@ -710,6 +733,13 @@ const Stop = styled.div<{
         background: ${isDark
           ? 'rgba(37, 99, 235, 0.20)'
           : 'rgba(37, 99, 235, 0.08)'};
+      `
+    }
+    if ($reign) {
+      return css`
+        background: ${isDark
+          ? 'rgba(245, 158, 11, 0.08)'
+          : 'rgba(245, 158, 11, 0.07)'};
       `
     }
     return css`
@@ -1170,6 +1200,32 @@ const Title = styled.span`
  * amber는 이 목록에서 **검색 전용**이다(TYPE-6 vs RHYTHM-13 충돌의 결론). 하이라이트는
  * 제목 텍스트 *안*에 나타나 대체 채널이 없는 반면, 북마크는 fill 유무라는 형태 채널이
  * 이미 있기 때문이다. */
+/** 군주 재위 배지 — 제목 바로 뒤. 색만으로 말하지 않도록 왕관 + '재위' 텍스트를 함께 싣는다. */
+const ReignBadge = styled.span`
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: var(--row-meta);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#92400e')};
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(252, 211, 77, 0.32)'
+        : 'rgba(217, 119, 6, 0.32)'};
+
+  @media (forced-colors: active) {
+    border-color: CanvasText;
+  }
+`
+
 const Mark = styled.mark`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? '#fbbf24' : '#fde68a'};
