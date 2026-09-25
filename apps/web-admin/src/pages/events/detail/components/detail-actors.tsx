@@ -66,7 +66,7 @@ interface DetailActorsProps {
  * - 인물·국가는 같은 모양의 무리 머리글(이름 · 수 · + 추가)로 연다 — 예전엔 국가에만
  *   머리글이 있고 '+ 인물 추가'가 두 목록 사이에 떠 있었다.
  * - 비고·서술은 절반이 150자를 넘어(인물 비고 83/160) 15명짜리 사건에서 섹션이
- *   4,000px을 넘었다. 3줄에서 접고 '더 보기'로 펼친다. 시드가 쓰는 `*강조*`는 굵게 렌더.
+ *   4,000px을 넘었다. 2줄에서 접고 '더 보기'로 펼친다. 시드가 쓰는 `*강조*`는 굵게 렌더.
  */
 export function DetailActors({
   event,
@@ -81,6 +81,11 @@ export function DetailActors({
    * 사용 빈도 낮은 액션을 평소엔 숨겨 read-first 톤을 유지.
    */
   const [manageMode, setManageMode] = useState(false)
+  /**
+   * 인물은 앞 PERSON_PREVIEW_COUNT명만 보이고 '모두 보기'로 펼친다 — 15명짜리 사건에서
+   * 인물 목록만 2,100px을 넘었다. 순서 변경 중엔 전원이 보여야 옮길 수 있어 강제로 펼친다.
+   */
+  const [showAllPersons, setShowAllPersons] = useState(false)
 
   const persons = event.relatedPersons ?? []
   const modernCountries = event.relatedCountries ?? []
@@ -173,6 +178,8 @@ export function DetailActors({
   const addPerson = (personId: string) => {
     if (persons.some((p) => p.personId === personId)) return
     patchPersons([...persons.map(toPersonPayload), { personId }])
+    /* 새 인물은 끝에 붙는다 — 접혀 있으면 추가한 사람이 안 보이므로 펼친다. */
+    if (persons.length >= PERSON_PREVIEW_COUNT) setShowAllPersons(true)
   }
 
   /**
@@ -271,6 +278,22 @@ export function DetailActors({
     persons.length > 0 || totalCountries > 0
   /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다. */
   const canManage = persons.length > 1 || totalCountries > 1
+  const personsCollapsed =
+    !showAllPersons && !manageMode && persons.length > PERSON_PREVIEW_COUNT
+  const showAllToggleRef = useRef<HTMLButtonElement>(null)
+  /**
+   * 긴 목록을 접으면 버튼이 수천 px 위로 올라가 화면엔 국가 목록 한가운데가 남는다.
+   * 접은 직후 버튼을 화면에 다시 데려온다.
+   */
+  const togglePersons = () => {
+    const willCollapse = showAllPersons
+    setShowAllPersons(!showAllPersons)
+    if (willCollapse) {
+      requestAnimationFrame(() =>
+        showAllToggleRef.current?.scrollIntoView({ block: 'center' }),
+      )
+    }
+  }
   /**
    * 항목을 1개 이하로 지우면 토글 버튼이 사라지는데, manageMode가 true로 남으면
    * reorder 액션이 갇힌 채 끌 길이 없다. 토글이 사라지는 시점에 모드도 해제.
@@ -324,7 +347,10 @@ export function DetailActors({
         </GroupHead>
         {persons.length > 0 && (
           <PersonList>
-            {persons.map((person, idx) => {
+            {(personsCollapsed
+              ? persons.slice(0, PERSON_PREVIEW_COUNT)
+              : persons
+            ).map((person, idx) => {
               const fullName = person.person
                 ? getPersonDisplayName({
                     name: person.person.name ?? '',
@@ -434,6 +460,18 @@ export function DetailActors({
               )
             })}
           </PersonList>
+        )}
+        {persons.length > PERSON_PREVIEW_COUNT && !manageMode && (
+          <ShowAllToggle
+            ref={showAllToggleRef}
+            type="button"
+            aria-expanded={showAllPersons}
+            onClick={togglePersons}
+          >
+            {showAllPersons
+              ? '접기'
+              : `${persons.length}명 모두 보기 (+${persons.length - PERSON_PREVIEW_COUNT})`}
+          </ShowAllToggle>
         )}
 
         {/* 참여국 — 인물 행과 같은 편집 수준(역할·서술·비고) */}
@@ -606,10 +644,11 @@ function renderEmphasis(text: string): ReactNode {
   return parts
 }
 
-const CLAMP_LINES = 3
+const CLAMP_LINES = 2
+const PERSON_PREVIEW_COUNT = 6
 
 /**
- * 긴 산문을 3줄에서 접는다. 넘칠 때만 '더 보기'를 단다(짧은 글엔 흔적 없음).
+ * 긴 산문을 2줄에서 접는다. 넘칠 때만 '더 보기'를 단다(짧은 글엔 흔적 없음).
  * 편집 중(focus-within)엔 CSS가 접힘을 풀어 textarea가 잘리지 않게 한다.
  */
 function ClampedProse({
@@ -629,7 +668,7 @@ function ClampedProse({
     if (!box || expanded) return
     /*
      * 반 줄 미만 넘침은 넘침이 아니다 — 인라인 키트의 inline-flex 호스트가 1~2px를
-     * 더 먹어, 딱 3줄인 글에도 '더 보기'가 붙고 마지막 줄이 흐려졌다(실측 +1.5px).
+     * 더 먹어, 딱 2줄인 글에도 '더 보기'가 붙고 마지막 줄이 흐려졌다(실측 +1.5px).
      */
     const measure = () => {
       const lineHeight = parseFloat(getComputedStyle(box).lineHeight) || 20
@@ -1049,14 +1088,14 @@ const GroupCount = styled.span`
 `
 
 /**
- * 3줄 접힘. 높이는 줄 수 × 1lh(부모 line-height) — 인물 1.62·국가 1.6 어느 쪽이든 맞는다.
+ * 2줄 접힘. 높이는 줄 수 × 1lh(부모 line-height) — 인물 1.62·국가 1.6 어느 쪽이든 맞는다.
  * 편집 중엔 풀어서 textarea가 잘리지 않게 한다.
  */
 const ProseClamp = styled.div<{ $collapsed: boolean; $faded: boolean }>`
   ${({ $collapsed }) =>
     $collapsed &&
     css`
-      /* +4px — 호스트가 더 먹는 1~2px에 셋째 줄 받침이 잘리지 않게 */
+      /* +4px — 호스트가 더 먹는 1~2px에 마지막 줄 받침이 잘리지 않게 */
       max-height: calc(${CLAMP_LINES} * 1lh + 4px);
       overflow: hidden;
     `}
@@ -1078,7 +1117,7 @@ const ProseClamp = styled.div<{ $collapsed: boolean; $faded: boolean }>`
   }
 
   /*
-   * 인라인 키트의 점선 밑줄은 한 줄짜리 값의 편집 신호다. 3줄 산문 전체에 깔리면
+   * 인라인 키트의 점선 밑줄은 한 줄짜리 값의 편집 신호다. 여러 줄 산문 전체에 깔리면
    * 글보다 선이 먼저 읽힌다 — 산문은 행에 들어왔을 때만 밑줄을 띄운다(✎는 그대로).
    */
   [data-edit-host] > span:first-child:not([data-empty='true']) {
@@ -1088,6 +1127,36 @@ const ProseClamp = styled.div<{ $collapsed: boolean; $faded: boolean }>`
   li:hover & [data-edit-host] > span:first-child:not([data-empty='true']),
   li:focus-within & [data-edit-host] > span:first-child:not([data-empty='true']) {
     text-decoration-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+/** 인물 목록 '모두 보기' — 목록 폭 전체를 쓰는 얇은 버튼. 행 구분선과 같은 룰을 위에 둔다. */
+const ShowAllToggle = styled.button`
+  display: block;
+  width: 100%;
+  margin-top: 0;
+  padding: 10px 0;
+  border: none;
+  border-top: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  transition: color 0.14s, background 0.14s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `
 
