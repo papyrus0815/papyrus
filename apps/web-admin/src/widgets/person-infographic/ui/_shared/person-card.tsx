@@ -1,18 +1,21 @@
 /**
- * 카드 그리드(카드·시대 스토리·왕조·고정)에서 쓰는 인물 카드.
+ * 카드 그리드(카드·시대 스토리·왕조·고정)에서 쓰는 인물 카드 — 가로형 프로필 카드(최소 296px — 사이드바 펼친 1440 폭에서 3열).
  *
- * 사건 목록(/events)의 잉크 규율을 따른다 — 평면 표면 + 헤어라인, 떠오르는 그림자·그라데이션 없음,
- * 분류(분야)는 칩 면 없이 **분류색 글자**로, 연도는 tabular 숫자로, 강조색은 indigo 하나.
+ *   ┌─────────────────────────────────────────────┐
+ *   │ ┌────────┐  정치 · 군주                  [고정] │
+ *   │ │        │  나폴레옹 보나파르트                  │
+ *   │ │  초상   │  프랑스 황제                        │
+ *   │ │ 96×120 │                                   │
+ *   │ │        │  1769 – 1821  · 52세              │
+ *   │ └────────┘                                   │
+ *   ├─────────────────────────────────────────────┤
+ *   │ 국가 프랑스      시대 ● 근대 19c    가문 부르봉 │
+ *   │ 영향력 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  95 │
+ *   └─────────────────────────────────────────────┘
  *
- *   ┌───────────────────────────────┐
- *   │ [초상]  이름            [고정]  │
- *   │        직함 · 군주              │
- *   │ 1769 – 1821 · 52세        정치  │
- *   │ 프랑스 · 보나파르트가             │
- *   │ 영향력 ━━━━━━━━━━━━━━━━━━  95   │
- *   └───────────────────────────────┘
- *
- * 이름·국가·소속·직책에 검색어 하이라이트 적용.
+ * 사건 목록(/events)의 잉크 규율 — 평면 표면 + 헤어라인, 떠오르는 그림자 없음,
+ * 분류(분야)는 면 없는 분류색 글자, 연도는 tabular 숫자, 강조색은 indigo 하나.
+ * 이름·직함·국가·가문에 검색어 하이라이트 적용.
  */
 import type React from 'react'
 import { memo, useMemo } from 'react'
@@ -80,7 +83,10 @@ function PersonCardItemBase({
       role="button"
       tabIndex={0}
       aria-label={ariaLabel}
-      style={{ ['--field' as string]: colorForField(person.field) }}
+      style={{
+        ['--field' as string]: colorForField(person.field),
+        ['--era' as string]: person.era.color,
+      }}
       onKeyDown={(event) => {
         // 카드 전체가 클릭 대상 — 키보드(Enter/Space)로도 열기. Space의 스크롤 기본동작 차단.
         if (event.key === 'Enter' || event.key === ' ') {
@@ -89,7 +95,7 @@ function PersonCardItemBase({
         }
       }}
     >
-      <Head>
+      <Main>
         <Portrait>
           {person.profileImageUrl ? (
             <img src={person.profileImageUrl} alt="" loading="lazy" />
@@ -97,15 +103,33 @@ function PersonCardItemBase({
             <Initial aria-hidden>{person.name.slice(0, 1)}</Initial>
           )}
         </Portrait>
+
         <Identity>
-          <Name title={person.name}>{highlight(person.name, query)}</Name>
-          <TitleLine>
-            {person.primaryTitle && (
-              <span title={person.primaryTitle}>{highlight(person.primaryTitle, query)}</span>
+          <Eyebrow>
+            <Field>{person.field}</Field>
+            {role && (
+              <>
+                <EyebrowDot aria-hidden>·</EyebrowDot>
+                <Role $monarch={person.isMonarch}>{role}</Role>
+              </>
             )}
-            {role && <Role $monarch={person.isMonarch}>{role}</Role>}
-          </TitleLine>
+          </Eyebrow>
+          <Name title={person.name}>{highlight(person.name, query)}</Name>
+          {person.primaryTitle && (
+            <Title title={person.primaryTitle}>
+              {highlight(person.primaryTitle, query)}
+            </Title>
+          )}
+          <Life>
+            <Years>
+              {born}
+              <Dash>–</Dash>
+              {died}
+            </Years>
+            {person.age != null && <Age>{person.isAlive ? `${person.age}세` : `향년 ${person.age}세`}</Age>}
+          </Life>
         </Identity>
+
         <PinBtn
           $active={pinned}
           onClick={(event) => onTogglePin(person.id, event)}
@@ -114,24 +138,31 @@ function PersonCardItemBase({
           aria-pressed={pinned}
           type="button"
         >
-          <FiBookmark size={14} fill={pinned ? 'currentColor' : 'none'} />
+          <FiBookmark size={16} fill={pinned ? 'currentColor' : 'none'} />
         </PinBtn>
-      </Head>
+      </Main>
 
-      <MetaRow>
-        <Years>
-          {born}
-          <Dash>–</Dash>
-          {died}
-          {person.age != null && <Age> · {person.age}세</Age>}
-        </Years>
-        <Field>{person.field}</Field>
-      </MetaRow>
-
-      <Place>
-        {hasCountry ? highlight(person.country, query) : <Unknown>국가 미상</Unknown>}
-        {person.faction && <Faction title={person.faction}> · {highlight(person.faction, query)}</Faction>}
-      </Place>
+      <Facts>
+        <Fact>
+          <FactLabel>국가</FactLabel>
+          <FactValue title={hasCountry ? person.country : undefined}>
+            {hasCountry ? highlight(person.country, query) : <Muted>미상</Muted>}
+          </FactValue>
+        </Fact>
+        <Fact>
+          <FactLabel>시대</FactLabel>
+          <FactValue>
+            <EraDot aria-hidden />
+            {person.era.lbl}
+          </FactValue>
+        </Fact>
+        <Fact>
+          <FactLabel>가문</FactLabel>
+          <FactValue title={person.faction || undefined}>
+            {person.faction ? highlight(person.faction, query) : <Muted>—</Muted>}
+          </FactValue>
+        </Fact>
+      </Facts>
 
       <Influence>
         <InfluenceLabel>영향력</InfluenceLabel>
@@ -152,12 +183,12 @@ export const PersonCardItem = memo(PersonCardItemBase)
 
 export const EraCardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(296px, 1fr));
+  gap: 14px;
 
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 10px;
   }
 `
 
@@ -165,20 +196,31 @@ const Card = styled.div<{ $pinned?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   min-width: 0;
-  padding: 14px 14px 12px;
-  border-radius: 10px;
+  border-radius: 14px;
   border: 1px solid
     ${({ $pinned }) => ($pinned ? BRAND.primaryBorderHover : 'var(--card-line)')};
   background: ${surface};
   cursor: pointer;
+  overflow: hidden;
   transition: background ${MOTION_FAST}, border-color ${MOTION_FAST};
   --card-line: ${hairline};
 
+  /* 좌측 분야색 띠 — 카드 격자를 훑을 때 분야가 색으로 먼저 읽힌다 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--field);
+    opacity: 0.85;
+  }
+
   &:hover {
     --card-line: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(15, 23, 42, 0.2)'};
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(15, 23, 42, 0.2)'};
     background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#fbfcfe')};
   }
   &:focus-visible {
@@ -196,20 +238,32 @@ const Card = styled.div<{ $pinned?: boolean }>`
   }
 `
 
-const Head = styled.div`
+const Main = styled.div`
+  /* 남는 높이를 머리가 흡수 — 같은 줄 카드끼리 사실 줄·영향력 줄 y가 맞는다 */
+  flex: 1;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: stretch;
+  gap: 16px;
+  padding: 18px 16px 16px 20px;
   min-width: 0;
+
+  @media (max-width: 640px) {
+    gap: 14px;
+    padding: 16px 12px 14px 16px;
+  }
 `
 
 const Portrait = styled.div`
-  width: 44px;
-  height: 44px;
+  width: 96px;
+  height: 120px;
   flex-shrink: 0;
   border-radius: 10px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--field) 12%, transparent);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--field) 18%, transparent),
+    color-mix(in srgb, var(--field) 6%, transparent)
+  );
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--field) 22%, transparent);
 
   img {
@@ -219,6 +273,11 @@ const Portrait = styled.div`
     object-position: top center;
     display: block;
   }
+
+  @media (max-width: 640px) {
+    width: 76px;
+    height: 96px;
+  }
 `
 
 const Initial = styled.span`
@@ -227,9 +286,15 @@ const Initial = styled.span`
   justify-content: center;
   width: 100%;
   height: 100%;
-  font-size: 17px;
+  font-size: 38px;
   font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--field);
+  opacity: 0.9;
+
+  @media (max-width: 640px) {
+    font-size: 30px;
+  }
 `
 
 const Identity = styled.div`
@@ -237,45 +302,29 @@ const Identity = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding-top: 2px;
+  gap: 4px;
 `
 
-const Name = styled.div`
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
-  color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const TitleLine = styled.div`
+const Eyebrow = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
-  min-height: 17px;
+  gap: 5px;
+  min-height: 16px;
   font-size: 12px;
-  font-weight: 500;
-  color: ${metaText};
-
-  & > span:first-child:not(:last-child),
-  & > span:only-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
+  font-weight: 700;
 `
 
-/** 군주·국가원수 — 칩 면 없이 색 글자(사건 목록 분류와 같은 잉크) */
+/** 분야 — 사건 목록의 '분류' 열처럼 면 없는 분류색 글자 */
+const Field = styled.span`
+  color: var(--field);
+`
+
+const EyebrowDot = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 군주·국가원수 — 칩 면 없이 색 글자 */
 const Role = styled.span<{ $monarch: boolean }>`
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
   color: ${({ $monarch, theme }) =>
     $monarch
       ? theme.mode === 'dark'
@@ -286,16 +335,72 @@ const Role = styled.span<{ $monarch: boolean }>`
         : BRAND.primary};
 `
 
+const Name = styled.div`
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  /* 긴 이름은 두 줄까지 — 한 줄 말줄임으로 '보나파르트 나…'가 되던 문제 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: keep-all;
+`
+
+const Title = styled.div`
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`
+
+const Life = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: auto;
+  padding-top: 8px;
+`
+
+const Years = styled.span`
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+`
+
+const Dash = styled.span`
+  margin: 0 4px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const Age = styled.span`
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${metaText};
+  white-space: nowrap;
+`
+
 const PinBtn = styled.button<{ $active: boolean }>`
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  margin: -4px -6px 0 0;
+  align-self: flex-start;
+  width: 32px;
+  height: 32px;
+  margin: -6px -4px 0 -8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   cursor: pointer;
   color: ${({ $active, theme }) =>
@@ -322,77 +427,80 @@ const PinBtn = styled.button<{ $active: boolean }>`
   }
 `
 
-const MetaRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 2px;
-  padding-top: 10px;
+const Facts = styled.dl`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px 0 20px;
   border-top: 1px solid ${hairline};
+
+  @media (max-width: 640px) {
+    padding: 12px 12px 0 16px;
+  }
 `
 
-const Years = styled.span`
-  font-size: 12.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
+const Fact = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 `
 
-const Dash = styled.span`
-  margin: 0 3px;
-  font-weight: 500;
+const FactLabel = styled.dt`
+  font-size: 11px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const Age = styled.span`
-  font-weight: 500;
-  color: ${metaText};
-`
-
-/** 분야 — 사건 목록의 '분류' 열처럼 면 없는 분류색 글자 */
-const Field = styled.span`
-  flex-shrink: 0;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--field);
-`
-
-const Place = styled.div`
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
+const FactValue = styled.dd`
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 16px;
+  min-width: 0;
 `
 
-const Faction = styled.span`
-  color: ${metaText};
+const EraDot = styled.span`
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: 1px;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--era);
 `
 
-const Unknown = styled.span`
+const Muted = styled.span`
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Influence = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 12px 16px 16px 20px;
+
+  @media (max-width: 640px) {
+    padding: 12px 12px 14px 16px;
+  }
 `
 
 const InfluenceLabel = styled.span`
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Track = styled.div`
   flex: 1;
-  height: 4px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 3px;
   overflow: hidden;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.07)'};
@@ -400,15 +508,15 @@ const Track = styled.div`
 
 const Fill = styled.div`
   height: 100%;
-  border-radius: 2px;
+  border-radius: 3px;
   background: ${BRAND.primary};
 `
 
 const InfluenceValue = styled.span`
-  min-width: 20px;
+  min-width: 24px;
   text-align: right;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
 `
