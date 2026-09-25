@@ -56,6 +56,7 @@ function EntitySidebarRowBase({
       text: metaPartText(part).trim(),
       shrink: typeof part === 'object' && !!part && !!part.shrink,
       tone: typeof part === 'object' && !!part ? part.tone : undefined,
+      node: typeof part === 'object' && !!part ? part.node : undefined,
     }))
     .filter((part) => part.text.length > 0)
   const hasMetric =
@@ -97,7 +98,7 @@ function EntitySidebarRowBase({
           )}
           <S.TextStack>
             <S.CodeText $unread={false} $lines={titleLines} title={item.name}>
-              {item.name}
+              {item.nameNode ?? item.name}
               {item.mark}
             </S.CodeText>
             {metaParts.length > 0 && (
@@ -110,11 +111,11 @@ function EntitySidebarRowBase({
                         title={part.text}
                         style={part.tone ? { color: part.tone } : undefined}
                       >
-                        {part.text}
+                        {part.node ?? part.text}
                       </S.SubMetaText>
                     ) : (
                       <span style={part.tone ? { color: part.tone } : undefined}>
-                        {part.text}
+                        {part.node ?? part.text}
                       </span>
                     )}
                   </React.Fragment>

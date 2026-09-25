@@ -82,6 +82,13 @@ export interface EntityListSidebarProps {
 
 const UNGROUPED = '__ungrouped__'
 
+/**
+ * 선택 행이 나타나기를 기다리는 최대 프레임 수(60fps에서 약 1초).
+ * 목록이 서버 페이지를 다 받을 때까지 행이 없을 수 있어서 몇 프레임 다시 본다 —
+ * 무한히 돌지 않게 상한을 둔다(선택 id가 목록에 아예 없는 경우).
+ */
+const REVEAL_MAX_FRAMES = 60
+
 function EntityListSidebarBase({
   title,
   noun,
@@ -203,7 +210,7 @@ function EntityListSidebarBase({
       ?.focus()
   }, [collapsed])
 
-  // 외부 진입(딥링크 등)으로 선택이 바뀌면 그 그룹을 임시로 펼치고 행으로 스크롤.
+  // 선택 항목이 속한 통상 그룹 — 빠른 접근(고정·최근) 사본은 앵커가 아니므로 건너뛴다.
   const selectedGroupId = useMemo(() => {
     if (!selectedId) return null
     for (const group of renderedGroups) {
@@ -213,24 +220,50 @@ function EntityListSidebarBase({
     return null
   }, [selectedId, renderedGroups])
 
+  /**
+   * 외부 진입(딥링크·상세 라우트)으로 선택이 바뀌면 그 그룹을 임시로 펼치고 그 행을 드러낸다.
+   *
+   * 상세 지면에서 이 목록이 하는 일은 '334개 중 지금 어디인가'에 답하는 것이다. 그래서
+   * 화면 밖에 있던 행은 **가운데**로 데려온다 — `nearest`는 먼 행을 스크롤러 가장자리에
+   * 붙여서 한쪽에 이웃이 하나도 남지 않고, 목록의 끝에 선 것처럼 보인다.
+   * 이미 온전히 보이는 행은 건드리지 않는다(`nearest`가 그랬듯): 목록 안에서 행을 고르는
+   * 중에 화면이 매번 가운데로 튀면 고른 사람의 자리 감각을 빼앗는다.
+   *
+   * 애니메이션도 **가까울 때만**. 사건 목록은 스크롤러가 2만 px을 넘어서(334행) 먼 거리를
+   * smooth로 굴리면 몇 초짜리 이동이 되고 그 사이 사용자의 스크롤을 가로챈다.
+   *
+   * 목록은 페이지가 다 도착할 때까지 자라므로(autoLoadAll) 이 효과는 행이 **아직 없는**
+   * 상태에서도 돈다. rAF 두 겹으로 한 번만 보고 말면 그 사이에 조용히 놓치므로, 행이
+   * 나타날 때까지 몇 프레임 다시 본다.
+   */
   useEffect(() => {
     if (!selectedId || !selectedGroupId) return
     expandForSelection(selectedGroupId)
-    // 펼침이 커밋·레이아웃된 뒤 스크롤 — 전역 조회 대신 listRef 내부만 본다.
-    let innerRaf = 0
-    const outerRaf = requestAnimationFrame(() => {
-      innerRaf = requestAnimationFrame(() => {
-        listRef.current
-          ?.querySelector<HTMLElement>(
-            `#${domainKey}-${CSS.escape(selectedId)}`,
-          )
-          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    let frame = 0
+    let framesLeft = REVEAL_MAX_FRAMES
+    const reveal = () => {
+      const list = listRef.current
+      // 전역 조회 대신 listRef 내부만 본다
+      const row = list?.querySelector<HTMLElement>(
+        `#${domainKey}-${CSS.escape(selectedId)}`,
+      )
+      if (!list || !row) {
+        if (framesLeft-- > 0) frame = requestAnimationFrame(reveal)
+        return
+      }
+      const listRect = list.getBoundingClientRect()
+      const rowRect = row.getBoundingClientRect()
+      if (rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom) return
+      const distance = Math.abs(
+        rowRect.top + rowRect.height / 2 - (listRect.top + listRect.height / 2),
+      )
+      row.scrollIntoView({
+        behavior: distance > listRect.height ? 'auto' : 'smooth',
+        block: 'center',
       })
-    })
-    return () => {
-      cancelAnimationFrame(outerRaf)
-      if (innerRaf) cancelAnimationFrame(innerRaf)
     }
+    frame = requestAnimationFrame(reveal)
+    return () => cancelAnimationFrame(frame)
   }, [selectedId, selectedGroupId, expandForSelection, domainKey])
 
   /**

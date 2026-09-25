@@ -16,7 +16,16 @@ import type React from 'react'
  */
 export type EntitySidebarMetaPart =
   | string
-  | { text: string; shrink?: boolean; tone?: string }
+  | {
+      text: string
+      shrink?: boolean
+      tone?: string
+      /**
+       * 이 조각을 **꾸며서** 그릴 때의 노드 — 검색어 `<mark>` 강조 등.
+       * `text`는 그대로 둬야 한다: 툴팁과 빈 조각 판정이 계속 문자열을 본다.
+       */
+      node?: React.ReactNode
+    }
 
 /** 메타 조각의 표시 문자열 (검색 색인·렌더가 같은 값을 보게 하는 단일 출처) */
 export function metaPartText(
@@ -30,6 +39,14 @@ export interface EntitySidebarItem {
   id: string
   /** 행 첫 줄 */
   name: string
+  /**
+   * 행 첫 줄을 **꾸며서** 그릴 때의 노드 — 검색어 `<mark>` 강조 등.
+   *
+   * 지정해도 `name`은 그대로 남겨야 한다: 툴팁(title 속성)·대체 배지 첫 글자는 계속
+   * 문자열을 쓰고, 그래야 노드를 넘긴 도메인만 겉모습이 바뀐다.
+   * 값이 없으면 `name`을 그대로 그리므로 다른 도메인은 픽셀 무변화다.
+   */
+  nameNode?: React.ReactNode
   /**
    * 행 둘째 줄 조각 — 빈 값은 자동으로 걸러지고 남은 것 사이에만 점 구분자가 들어간다.
    * (호출부가 구분자를 직접 넣으면 값이 비었을 때 점이 떠버린다)

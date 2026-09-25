@@ -29,6 +29,7 @@ import {
 import { formatCenturyLabel } from '@/shared/lib/lifespan-text'
 import { titleWithoutOwnDate } from '@/shared/lib/title-date'
 import { pathKeys } from '@/shared/router'
+import { HighlightedText } from '@/shared/ui/highlighted-text'
 import {
   EntityListSidebar,
   type EntitySidebarGroup,
@@ -101,7 +102,27 @@ function leadDateToken(
   const precision = event.startDatePrecision
   if (precision === 'year') return ''
   if (precision === 'month') return `${parts.month}월`
+  if (isJanuaryFirstSentinel(parts)) return ''
   return `${parts.month}.${parts.day}`
+}
+
+/**
+ * 1월 1일은 **날짜가 아니라 자리 표시**로 본다 — 카탈로그 본문(event-list-item의
+ * `rowShowsFullDate`)이 이미 같은 판정을 하고 있고, 두 지면이 같은 사건을 두고 다르게
+ * 말하면 안 된다.
+ *
+ * 근거는 데이터다. `start_date_precision`이 실DB 328행 중 **237행에서 NULL**이라
+ * '연 정밀도'라는 신호 자체가 거의 없고, 1월 1일로 들어온 18행은 **전부** NULL이다.
+ * 그 18행은 '신성 로마 제국-폴란드 전쟁 (1002~1018)'(끝 1018-12-31) · '네덜란드 튤립
+ * 파동'(끝 1637-02-03)처럼 연 단위 사건에 1월 1일을 넣어 둔 것들이다.
+ *
+ * ⚠️ 대가: 진짜 1월 1일 사건('대한민국 금융소득종합과세 최초 시행' 1996-01-01)은
+ *    사이드바에서 일자를 잃는다. 연 머리글이 연도를 대므로 **틀린 말은 하지 않지만**
+ *    덜 말한다 — 16행의 거짓 '1.1'보다 이쪽이 싼 실수라고 봤다. 본문 목록의 날짜 열에는
+ *    그대로 남는다.
+ */
+function isJanuaryFirstSentinel(parts: { month: number; day: number }): boolean {
+  return parts.month === 1 && parts.day === 1
 }
 
 /**
@@ -114,6 +135,29 @@ function leadDateToken(
 function shortParentTitle(title: string): string {
   const head = title.split(/[—–(:·]/)[0].trim()
   return head.length >= 2 ? head : title.trim()
+}
+
+/** 상위 꼬리표 최대 길이 — 아래 주석 참고 */
+const PARENT_TAIL_MAX = 16
+
+/**
+ * 화면에 세우는 꼬리표 길이 — 여기서만 자른다(검색·스크린리더는 전값을 쓴다).
+ *
+ * 꼬리표는 제목에 딸린 **주석**이지 두 번째 제목이 아니다. 실측 73개 꼬리표의 중앙값은
+ * 8자로 멀쩡한데 꼬리 쪽이 길다 — 17자 이상이 8개, 최장 28자('엔비디아 차세대 AI 칩
+ * 아키텍처 블랙웰 공개')다. 그런 꼬리표는 혼자 한 줄을 다 먹고도 말줄임됐고, 정작 자기가
+ * 붙은 제목('다고메 유덱스 작성' 8자)보다 세 배 길었다(실측 17행에서 꼬리표가 제목보다 길다).
+ * 16자에서 끊는다 — 중앙값의 두 배라 짧은 꼬리표는 하나도 건드리지 않는다.
+ */
+function clampParentTail(text: string): string {
+  if (text.length <= PARENT_TAIL_MAX) return text
+  const head = text.slice(0, PARENT_TAIL_MAX)
+  /* 낱말 한가운데서 끊지 않는다 — 그냥 자르면 '오토 3세 섭정 분쟁과 하인리…'처럼 이름이
+     쪼개진다(제목 줄바꿈을 keep-all로 고친 것과 같은 이유). 다만 첫 낱말이 통째로 한도를
+     넘으면(긴 고유명사) 되돌릴 자리가 없으므로 그때는 그대로 끊는다. */
+  const lastSpace = head.lastIndexOf(' ')
+  const cut = lastSpace >= PARENT_TAIL_MAX / 2 ? head.slice(0, lastSpace) : head
+  return `${cut.trimEnd()}…`
 }
 
 /** 관련국 요약 — 앞 하나만 이름으로, 나머지는 '외 N' (조약 사이드바와 같은 규약) */
@@ -206,6 +250,10 @@ function EventListSidebarInner({
     const chronological = isChronological(sort)
     /** 검색 중인가 — 행이 '왜 걸렸는지'를 스스로 말해야 하는 유일한 상태다(아래 meta). */
     const searching = !!query.trim()
+    /** 검색어 매치를 mark로 짚는다 — 검색 중일 때만 부른다 */
+    const highlight = (text: string) => (
+      <HighlightedText text={text} query={query.trim()} />
+    )
 
     /** 한 사건 → 한 행. 빠른 접근 그룹은 같은 사건을 다른 groupId로 한 번 더 싣는다. */
     const toRow = (
@@ -228,19 +276,33 @@ function EventListSidebarInner({
          (NSPM-2 서명 · 러불 동맹 · 독일 함대법) 매 행에 찍으면 같은 문장이 세로로 쌓여
          정작 그 행만의 정보를 밀어낸다. 되풀이는 자리에서는 아예 달지 않는다 —
          그 행들은 꼬리표를 단 행 바로 아래 이어 서서 한 묶음으로 읽힌다. */
-      const parentTail =
+      const parentTailFull =
         parent && !options.repeatsParent
           ? shortParentTitle(parent.title)
           : null
+      const parentTail = parentTailFull
+        ? clampParentTail(parentTailFull)
+        : null
+      /* 화면에 세우는 제목은 **자기 날짜 꼬리를 덜어낸** 것 — 바로 왼쪽 선두 열과 연
+         머리글이 같은 날짜를 이미 말한다(shared/lib/title-date.ts).
+         연도 하나뿐인 꼬리('포츠담 회담 (1945)')까지 덜어내는 건 이 지면이 연도를 늘
+         보여 주기 때문이다 — 연 머리글이 있으면 그 머리글이, 없으면(고정·최근, 이름순)
+         선두 열이 연도를 쓴다. 검색·스크린리더는 아래에서 원본을 쓴다. */
+      const displayTitle = titleWithoutOwnDate(
+        event.title,
+        event.startDate,
+        event.startDatePrecision,
+        { rowShowsYear: true },
+      )
       return {
         id: event.id,
-        /* 화면에 세우는 제목은 **자기 날짜 꼬리를 덜어낸** 것 — 바로 왼쪽 선두 열이 같은
-           날짜를 이미 말한다(shared/lib/title-date.ts). 검색·스크린리더는 아래에서 원본을 쓴다. */
-        name: titleWithoutOwnDate(
-          event.title,
-          event.startDate,
-          event.startDatePrecision,
-        ),
+        name: displayTitle,
+        /* 검색 중에만 매치 강조 — 이 목록은 평소 색인이라 잉크를 아끼지만, 결과 목록에서는
+           '어디가 걸렸나'가 제목 안에서 보여야 한다. 원본 문자열은 name에 그대로 남아
+           툴팁·정렬·검색 색인이 쓴다. */
+        nameNode: searching ? (
+          <HighlightedText text={displayTitle} query={query.trim()} />
+        ) : undefined,
         /*
          * 둘째 줄(메타)은 **검색 중에만** 있다 — 평소 이 목록은 색인이다.
          *
@@ -255,7 +317,14 @@ function EventListSidebarInner({
          * 색은 입히지 않는다: 이 줄이 답하는 것은 '왜 걸렸나'이지 '무슨 분류인가'가 아니다.
          */
         meta: searching
-          ? [categoryLabel, countries ? { text: countries, shrink: true } : null]
+          ? [
+              categoryLabel
+                ? { text: categoryLabel, node: highlight(categoryLabel) }
+                : null,
+              countries
+                ? { text: countries, shrink: true, node: highlight(countries) }
+                : null,
+            ]
           : undefined,
         /* 선두 고정폭 열 — 인물 목록의 아바타 자리에 사건은 날짜를 세운다.
            썸네일을 놓을 수도 있었지만 실측 보유율이 13%(13/100)라, 열의 87%가 빈 블록이
@@ -272,7 +341,7 @@ function EventListSidebarInner({
         mark: parentTail ? (
           <>
             {/* 줄바꿈 기회는 꼬리표 **앞에만** 둔다 — 아래 nbsp 참고 */}{' '}
-            <ParentTail title={`상위 사건: ${parentTail}`}>
+            <ParentTail title={`상위 사건: ${parent?.title ?? parentTail}`}>
               {`\u21b3\u00a0${parentTail}`}
             </ParentTail>
           </>
@@ -418,8 +487,13 @@ function EventListSidebarInner({
       const pinnedEvents = pinnedIds
         .map((id) => byId.get(id))
         .filter((event): event is HistoricalEvent => !!event)
+      /* 지금 보고 있는 사건은 뺀다 — 상세 지면에서 '최근 본 사건'의 첫 행은 **언제나**
+         자기 자신이다(방문하는 순간 맨 앞으로 올라오므로). 갈 수 없는 목적지가 목록 맨
+         위 한 줄을 차지하고, 같은 사건이 아래 세기 그룹에서 한 번 더 선택 표시를 받아
+         '지금 어디인가'가 두 곳으로 갈라진다. 고정(핀)은 사용자가 직접 박아 둔 자리라
+         그대로 둔다. */
       const recentEvents = recentIds
-        .filter((id) => !pinnedIds.includes(id))
+        .filter((id) => id !== selectedId && !pinnedIds.includes(id))
         .map((id) => byId.get(id))
         .filter((event): event is HistoricalEvent => !!event)
         .slice(0, 5)
@@ -459,6 +533,7 @@ function EventListSidebarInner({
     hasActiveFilter,
     pinnedIds,
     recentIds,
+    selectedId,
   ])
 
   return (

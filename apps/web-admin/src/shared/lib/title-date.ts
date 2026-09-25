@@ -18,6 +18,10 @@
  * 가진 정보라 지우면 안 된다.
  * ⚠️ 괄호 안에 날짜 말고 다른 내용이 있으면 그 내용은 남긴다
  * ('미-이란 핵 협상 (오만·로마, 2025-04-12 ~ 05-31)' → '미-이란 핵 협상 (오만·로마)').
+ *
+ * **연도 하나뿐인 꼬리**('포츠담 회담 (1945)')는 `rowShowsYear`를 켠 지면에서만 덜어낸다.
+ * 연 그룹 머리글이 있는 목록에서는 '1914년' 아래에 '…최후통첩 (1914)'이 다섯 줄 연속으로
+ * 서는 일이 실제로 있었다. 범위('1989~1999')는 끝 연도가 행 어디에도 없으므로 남긴다.
  * ⚠️ 원본 제목은 검색(searchText)·스크린리더(ariaLabel)에 그대로 쓴다 — 화면에서만 줄인다.
  */
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
@@ -37,6 +41,14 @@ const SEPARATORS_ONLY = /^[\s,·/~–—-]*$/
 const TRIM_SEPARATORS = /^[\s,·/~–—-]+|[\s,·/~–—-]+$/g
 
 /**
+ * 괄호 안이 **연도 하나**뿐인가 — '(1945)' · '(1945년)'.
+ *
+ * 범위('1989~1999')·설명이 섞인 괄호는 일부러 안 잡는다. 범위의 끝 연도는 행 어디에도
+ * 없는 정보이고('세 하인리히 전쟁 (974~978)'의 978), 설명은 애초에 날짜가 아니다.
+ */
+const SINGLE_YEAR_ONLY = /^\s*(\d{3,4})\s*년?\s*$/
+
+/**
  * 제목에서 중복 날짜 꼬리를 덜어낸 **표시용** 문자열.
  * 조건이 하나라도 안 맞으면 원본을 그대로 돌려준다(가장 안전한 쪽).
  */
@@ -45,6 +57,20 @@ export function titleWithoutOwnDate(
   startDate?: string | null,
   /** 'year'면 행이 날짜를 안 쓰므로 제목의 날짜가 유일한 출처 — 손대지 않는다 */
   precision?: string | null,
+  options?: {
+    /**
+     * 행이 **연도**를 따로 보여주는가(연 그룹 머리글·연도 열 등).
+     *
+     * 참이면 '(1945)'처럼 연도 하나뿐인 꼬리도 덜어낸다. 전체 날짜 꼬리와 달리 이쪽은
+     * 호출하는 쪽이 켜 줘야 한다 — 연도를 어디에도 안 적는 지면에서 지우면 그 행은
+     * 자기가 몇 년인지 말할 길이 없어진다.
+     *
+     * 사이드바 실측: 326행 중 19행이 바로 위 연 머리글이 이미 말한 연도를 제목 끝에
+     * 한 번 더 적고 있었고('1914년' 아래 '…최후통첩 (1914)'이 다섯 줄 연속),
+     * 그중 10행은 그 괄호 때문에 두 줄이 됐다.
+     */
+    rowShowsYear?: boolean
+  },
 ): string {
   if (!title || !startDate) return title
   if (precision === 'year') return title
@@ -52,11 +78,19 @@ export function titleWithoutOwnDate(
   const parenthetical = TRAILING_PARENS.exec(title)
   if (!parenthetical) return title
 
-  const dateToken = DATE_TOKEN.exec(parenthetical[1])
-  if (!dateToken) return title
-
   const parts = parseIsoDateParts(startDate)
   if (!parts) return title
+
+  const dateToken = DATE_TOKEN.exec(parenthetical[1])
+  if (!dateToken) {
+    if (!options?.rowShowsYear) return title
+    const yearOnly = SINGLE_YEAR_ONLY.exec(parenthetical[1])
+    if (!yearOnly) return title
+    // 시작 연도와 다른 연도는 제목만의 정보다(준공 연도 등) — 전체 날짜와 같은 규약.
+    if (parseInt(yearOnly[1], 10) !== parts.year) return title
+    return title.slice(0, parenthetical.index).trimEnd()
+  }
+
   const sameDate =
     parseInt(dateToken[1], 10) === parts.year &&
     parseInt(dateToken[2], 10) === parts.month &&

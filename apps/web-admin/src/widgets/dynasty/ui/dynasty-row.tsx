@@ -9,7 +9,7 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { formatCountryYearShort } from '@/shared/lib/country-period'
 
 import { primarySoft } from './dynasty.styles'
-import { HighlightedText } from './text-highlight'
+import { HighlightedText } from '@/shared/ui/highlighted-text'
 
 export interface DynastyDerived {
   dynasty: Dynasty
