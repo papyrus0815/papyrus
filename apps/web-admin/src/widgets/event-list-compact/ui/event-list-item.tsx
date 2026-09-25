@@ -36,7 +36,6 @@ import {
 import {
   BRAND,
   CATEGORY_SOFT_COLORS,
-  CONTROL,
   LIST_STEPS,
   MOTION,
   focusRingInset,
@@ -2279,7 +2278,8 @@ const KeywordCell = styled.span.attrs(() => ({ 'data-col': 'kw' }) as Record<str
     grid-column: kw;
     align-self: center;
     align-items: center;
-    gap: 4px;
+    /* 칩 사이 — 면을 걷어낸 뒤 토큰 경계를 만드는 유일한 장치다(위 KeywordChip 주석). */
+    gap: 10px;
     min-width: 0;
     overflow: hidden;
   }
@@ -2289,21 +2289,29 @@ const KeywordCell = styled.span.attrs(() => ({ 'data-col': 'kw' }) as Record<str
   }
 `
 
+/**
+ * 키워드 — **면(fill) 없음**. 분류 칩과 같은 문법이다.
+ *
+ * 면이 있었다. 그런데 그 면의 실측 대비는 라이트 표면 위 **1.03:1**로, 분류 칩의 면을
+ * 걷어낼 때 '배지로 읽히지 않는다'고 판정한 구간(1.06~1.25:1)보다도 아래였다 — 0비트를
+ * 나르면서 한 행 안에 칩 문법만 두 벌로 갈라놓고 있었다(분류=글자만 · 키워드=면).
+ *
+ * ⚠️ 면이 하던 일 하나는 진짜였다: 한국어 키워드는 안에 띄어쓰기가 있어('최대 압박')
+ * 토큰 경계가 공백만으로는 안 선다. 그 일은 이제 **간격**이 한다 — 4px(띄어쓰기와
+ * 구별 안 됨)에서 10px로 벌려 글자 사이 공백(약 3px)의 세 배를 준다.
+ */
 const KeywordChip = styled.span`
   flex: 0 1 auto;
   min-width: 0;
   max-width: 96px;
-  padding: 0 6px;
+  padding: 0;
   height: 16px;
   line-height: 16px;
-  border-radius: 4px;
   font-size: var(--row-chip);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? CONTROL.bgDark : CONTROL.bgLight};
   color: ${metaText};
 `
 
