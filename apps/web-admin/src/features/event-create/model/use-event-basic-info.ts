@@ -12,6 +12,13 @@ export interface EventSection {
   id: string
   title: string
   content: string
+  /**
+   * 서버 EventSection.sectionType — 이 폼은 '전개' 단락만 편집하지만, 편집 모드에서
+   * 읽어온 단락이 **배경 단락('background')일 수 있다**. 사건 상세가 배경/전개를
+   * 같은 eventSections 배열의 sectionType으로 가르므로, 여기서 값을 떨어뜨리면
+   * 저장 한 번에 배경 단락이 전개로 옮겨 붙는다. 신규 단락은 undefined(→ 'content').
+   */
+  sectionType?: string
   mentions: Array<{
     type: MentionEntityType
     id: string

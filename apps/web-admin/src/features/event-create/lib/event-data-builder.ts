@@ -239,7 +239,8 @@ export const buildEventSubmitData = (params: {
             title: section.title,
             content: section.content,
             order: index,
-            sectionType: 'content',
+            /* 편집 모드에서 읽어온 배경 단락('background')을 전개로 옮기지 않는다. */
+            sectionType: section.sectionType ?? 'content',
           }))
         : undefined,
     // ✅ 새 구조: eventImages (썸네일 또는 다중 이미지)

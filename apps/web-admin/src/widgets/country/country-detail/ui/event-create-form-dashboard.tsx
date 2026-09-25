@@ -781,6 +781,7 @@ export function EventCreateFormDashboard({
             title: string
             content: string
             order?: number
+            sectionType?: string
           }
           const sectionsRaw: SectionRow[] = event.eventSections as SectionRow[]
           setSections(
@@ -794,6 +795,8 @@ export function EventCreateFormDashboard({
                 id: s.id,
                 title: s.title,
                 content: s.content,
+                /* 배경 단락을 전개로 옮기지 않기 위해 원래 타입을 들고 간다. */
+                sectionType: s.sectionType,
                 mentions: [],
               })),
           )
