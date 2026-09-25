@@ -1,686 +1,908 @@
 /**
- * 인포그래픽 상단 4-column 통계 스트립.
- * 시대 밀도(전체 너비 차트) + 지역 / 분야 / 상위 국가 막대 카드.
- * 각 항목 클릭 → 해당 scope 토글 (필터 패널과 양방향).
+ * 인물 통계 패널 — '통계' 토글로 여닫는다. 현재 필터 결과(people)만 집계한다.
+ *
+ *   ┌ 인물 ─────┬ 평균 수명 ─┬ 생존 ─────┬ 군주·국가원수 ┐   ← 스탯 타일 4
+ *   │ 시대 분포                                  최대 12명 │
+ *   │ ▁▂▃▅▇▆▃▂▁ … (연대별 막대, 단색)                     │   ← 막대 = 인물 수(크기)
+ *   │ 200BC  0  200  400 …                              │
+ *   │ ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬ │   ← 시대 구간 리본(연도 비례)
+ *   │ [■고대 4][■중세 4][■근세 9][■근대 19c 4][■현대 20c 9] │   ← 시대 칩(글자 라벨·필터)
+ *   ├ 지역 ────────────┬ 분야 ────────────┬ 상위 국가 ────┤   ← 가로 막대 목록 3
+ *
+ * 색의 역할(데이터 시각화 원칙):
+ *  - 막대는 '몇 명인가(크기)'라 **단색 indigo**. 항목 식별은 막대 옆 글자가 한다.
+ *  - 시대·분야처럼 앱 전역에서 쓰는 식별색은 막대가 아니라 **작은 견본 점**으로만 곁들인다
+ *    (현대 20c·당대 두 시대색은 색각 이상에서 구분되지 않아 색 단독 식별 금지 — 글자 라벨 필수).
+ *  - 글자·수치는 항상 텍스트 토큰 색(식별색으로 글자를 칠하지 않는다).
+ * 모든 항목·막대·시대 띠는 클릭하면 해당 scope 필터를 토글한다(필터 패널과 양방향).
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 
-import styled, { css, useTheme } from 'styled-components'
+import styled, { css } from 'styled-components'
 
-import type { AdaptedPerson } from '../model/types'
 import { yearOfEra } from '../model/adapt'
+import { formatYear } from '../model/century'
 import {
+  colorForField,
   ERAS,
   FIELDS,
-  colorForField,
   INFOGRAPHIC_DEFAULTS,
-  REGIONS,
   REGION_COLORS,
+  REGIONS,
 } from '../model/constants'
 import { usePersonInfographicFilterStore } from '../model/filter.store'
+import type { AdaptedPerson } from '../model/types'
 
-const colorForRegion = (r: string): string =>
-  REGION_COLORS[Math.max(0, REGIONS.indexOf(r)) % REGION_COLORS.length]
+import { BRAND, hairline, metaText, MOTION_FAST, surface } from './_shared/catalog.styles'
 
 const MIN_Y = -200
-const RANGE = 2230
+const MAX_Y = 2030
+const RANGE = MAX_Y - MIN_Y
 const BINS = INFOGRAPHIC_DEFAULTS.ERA_DENSITY_BINS
-const binW = RANGE / BINS
+const BIN_W = RANGE / BINS
+
+const colorForRegion = (region: string): string =>
+  REGION_COLORS[Math.max(0, REGIONS.indexOf(region)) % REGION_COLORS.length]
+
+const pct = (year: number) => ((year - MIN_Y) / RANGE) * 100
+
+interface HoverBin {
+  index: number
+  count: number
+  from: number
+  to: number
+  eraLbl: string
+  eraColor: string
+  x: number
+  y: number
+}
 
 export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
-  const theme = useTheme()
-  const dark = theme.mode === 'dark'
-  const scopes = usePersonInfographicFilterStore((s) => s.scopes)
-  const toggleScope = usePersonInfographicFilterStore((s) => s.toggleScope)
-  const [hoveredEraKey, setHoveredEraKey] = useState<string | null>(null)
-  const [hoverBin, setHoverBin] = useState<{
-    index: number
-    count: number
-    from: number
-    to: number
-    eraKey: string
-    eraLbl: string
-    eraColor: string
-    x: number
-    y: number
-  } | null>(null)
+  const scopes = usePersonInfographicFilterStore((state) => state.scopes)
+  const toggleScope = usePersonInfographicFilterStore((state) => state.toggleScope)
+  const [hoverBin, setHoverBin] = useState<HoverBin | null>(null)
   const [countriesExpanded, setCountriesExpanded] = useState(false)
 
   const stats = useMemo(() => {
     const bins = new Array<number>(BINS).fill(0)
-    const eraC: Record<string, number> = {}
-    const regC: Record<string, number> = {}
-    const fieldC: Record<string, number> = {}
-    const ctC: Record<string, number> = {}
-    const countryRegion: Record<string, string> = {}
-    for (const p of people) {
-      const i = Math.min(
+    const eraCount: Record<string, number> = {}
+    const regionCount: Record<string, number> = {}
+    const fieldCount: Record<string, number> = {}
+    const countryCount: Record<string, number> = {}
+    let ageSum = 0
+    let ageN = 0
+    let alive = 0
+    let rulers = 0
+    for (const person of people) {
+      const binIndex = Math.min(
         BINS - 1,
-        Math.max(0, Math.floor((p.activityYear - MIN_Y) / binW)),
+        Math.max(0, Math.floor((person.activityYear - MIN_Y) / BIN_W)),
       )
-      bins[i]++
-      const eraKey = p.era.key
-      eraC[eraKey] = (eraC[eraKey] || 0) + 1
-      regC[p.region] = (regC[p.region] || 0) + 1
-      fieldC[p.field] = (fieldC[p.field] || 0) + 1
-      ctC[p.country] = (ctC[p.country] || 0) + 1
-      if (!countryRegion[p.country]) countryRegion[p.country] = p.region
+      bins[binIndex]++
+      eraCount[person.era.key] = (eraCount[person.era.key] || 0) + 1
+      regionCount[person.region] = (regionCount[person.region] || 0) + 1
+      fieldCount[person.field] = (fieldCount[person.field] || 0) + 1
+      if (person.country && person.country !== '미상')
+        countryCount[person.country] = (countryCount[person.country] || 0) + 1
+      if (person.age != null && !person.isAlive) {
+        ageSum += person.age
+        ageN++
+      }
+      if (person.isAlive) alive++
+      if (person.isMonarch || person.isHeadOfState) rulers++
     }
-    let maxBin = 1
-    for (const v of bins) if (v > maxBin) maxBin = v
-    let regionMax = 1
-    for (const v of Object.values(regC)) if (v > regionMax) regionMax = v
-    let fieldMax = 1
-    for (const v of Object.values(fieldC)) if (v > fieldMax) fieldMax = v
-    const topCt = Object.entries(ctC).sort((a, b) => b[1] - a[1])
+    const maxBin = Math.max(1, ...bins)
+    const regions = REGIONS.filter((region) => regionCount[region])
+      .map((region) => [region, regionCount[region]] as const)
+      .sort((left, right) => right[1] - left[1])
+    const fields = FIELDS.filter((field) => fieldCount[field])
+      .map((field) => [field, fieldCount[field]] as const)
+      .sort((left, right) => right[1] - left[1])
+    const countries = Object.entries(countryCount).sort(
+      (left, right) => right[1] - left[1],
+    )
     return {
       bins,
-      eraC,
-      regC,
-      fieldC,
-      topCt,
-      countryRegion,
       maxBin,
-      regionMax,
-      fieldMax,
+      eraCount,
+      regions,
+      fields,
+      countries,
+      avgAge: ageN ? Math.round(ageSum / ageN) : null,
+      alive,
+      rulers,
     }
   }, [people])
 
-  const {
-    bins,
-    eraC,
-    regC,
-    fieldC,
-    topCt,
-    countryRegion,
-    maxBin,
-    regionMax,
-    fieldMax,
-  } = stats
+  const total = people.length
+  const countryList = stats.countries.slice(
+    0,
+    countriesExpanded
+      ? INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_EXPANDED
+      : INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_DEFAULT,
+  )
+  const hiddenCountries =
+    Math.min(stats.countries.length, INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_EXPANDED) -
+    INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_DEFAULT
 
-  const countryList = countriesExpanded
-    ? topCt.slice(0, INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_EXPANDED)
-    : topCt.slice(0, INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_DEFAULT)
-  const hasMoreCountries = topCt.length > INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_DEFAULT
-  const ctMax = topCt[0]?.[1] || 1
-
-  const muted = theme.colors.text.tertiary
-  const gridStroke = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'
-  const maxGuideStroke = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'
-  const inactiveBinFill = dark ? 'rgba(255,255,255,0.14)' : '#d1d5db'
-
-  const VB_W = 1200
-  const CHART_H = 90
-  const BAR_TOP_PAD = 10
-  const YEAR_LABEL_BAND = 14
-  const RIBBON_GAP = 3
-  const RIBBON_H = 2
-  const TOTAL_H = CHART_H + YEAR_LABEL_BAND + RIBBON_GAP + RIBBON_H
+  const eraFiltered = scopes.era.length > 0
   const yearTicks: number[] = []
-  for (let y = Math.ceil(MIN_Y / 200) * 200; y <= MIN_Y + RANGE; y += 200)
-    yearTicks.push(y)
+  for (let year = 0; year <= MAX_Y; year += 250) if (year >= MIN_Y) yearTicks.push(year)
+
+  const share = (value: number) => (total ? Math.round((value / total) * 100) : 0)
 
   return (
-    <>
-      <Strip>
-        <EraDensityCard>
-          <EraDensityHead>
-            <StatLabel>시대 밀도</StatLabel>
-            <EraDensityLegend>
-              {ERAS.map((e) => {
-                const n = eraC[e.key] ?? 0
-                const isDim =
-                  hoveredEraKey != null && hoveredEraKey !== e.key
-                return (
-                  <EraDensityLegendItem
-                    key={e.key}
-                    $active={scopes.era.includes(e.key)}
-                    $color={e.color}
-                    style={isDim ? { opacity: 0.45 } : undefined}
-                    aria-label={`${e.lbl} ${n}명, 필터 토글`}
-                    onMouseEnter={() => setHoveredEraKey(e.key)}
-                    onMouseLeave={() => setHoveredEraKey(null)}
-                    onFocus={() => setHoveredEraKey(e.key)}
-                    onBlur={() => setHoveredEraKey(null)}
-                    onClick={() => toggleScope('era', e.key)}
-                  >
-                    <span style={{ background: e.color }} />
-                    {e.lbl}
-                    <EraLegendCount>{n}</EraLegendCount>
-                  </EraDensityLegendItem>
-                )
-              })}
-            </EraDensityLegend>
-          </EraDensityHead>
-          <EraDensityChartWrap>
-            <svg
-              viewBox={`0 0 ${VB_W} ${TOTAL_H}`}
-              width="100%"
-              preserveAspectRatio="none"
-              style={{ display: 'block', marginTop: 6 }}
-              role="img"
-              aria-label="시대별 인물 밀도"
-            >
-              <line
-                x1={0}
-                y1={BAR_TOP_PAD}
-                x2={VB_W}
-                y2={BAR_TOP_PAD}
-                stroke={maxGuideStroke}
-                strokeWidth={1}
-                strokeDasharray="2 4"
-              />
-              {yearTicks.map((y) => {
-                const x = ((y - MIN_Y) / RANGE) * VB_W
-                return (
-                  <line
-                    key={y}
-                    x1={x}
-                    y1={0}
-                    x2={x}
-                    y2={CHART_H}
-                    stroke={gridStroke}
-                    strokeWidth={1}
-                    strokeDasharray="3 4"
+    <Panel aria-label="인물 통계">
+      <Tiles>
+        <Tile>
+          <TileLabel>인물</TileLabel>
+          <TileValue>
+            {total.toLocaleString()}
+            <TileUnit>명</TileUnit>
+          </TileValue>
+          <TileNote>현재 필터 기준</TileNote>
+        </Tile>
+        <Tile>
+          <TileLabel>평균 수명</TileLabel>
+          <TileValue>
+            {stats.avgAge ?? '—'}
+            {stats.avgAge != null && <TileUnit>년</TileUnit>}
+          </TileValue>
+          <TileNote>생몰이 모두 확인된 인물</TileNote>
+        </Tile>
+        <Tile>
+          <TileLabel>생존</TileLabel>
+          <TileValue>
+            {stats.alive.toLocaleString()}
+            <TileUnit>명</TileUnit>
+          </TileValue>
+          <TileNote>전체의 {share(stats.alive)}%</TileNote>
+        </Tile>
+        <Tile>
+          <TileLabel>군주·국가원수</TileLabel>
+          <TileValue>
+            {stats.rulers.toLocaleString()}
+            <TileUnit>명</TileUnit>
+          </TileValue>
+          <TileNote>전체의 {share(stats.rulers)}%</TileNote>
+        </Tile>
+      </Tiles>
+
+      <Section>
+        <SectionHead>
+          <SectionTitle>시대 분포</SectionTitle>
+          <SectionHint>활동 연도 기준 · 막대를 누르면 그 시대로 거릅니다</SectionHint>
+          <SectionMeta>최대 {stats.maxBin.toLocaleString()}명</SectionMeta>
+        </SectionHead>
+
+        <Chart>
+          <Plot onMouseLeave={() => setHoverBin(null)}>
+            <GridLine style={{ bottom: '100%' }} aria-hidden />
+            <GridLine style={{ bottom: '50%' }} aria-hidden />
+            {stats.bins.map((count, index) => {
+              const from = Math.round(MIN_Y + BIN_W * index)
+              const to = Math.round(MIN_Y + BIN_W * (index + 1))
+              const era = yearOfEra(MIN_Y + BIN_W * (index + 0.5))
+              const inFilter = !eraFiltered || scopes.era.includes(era.key)
+              const label = `${era.lbl} ${formatYear(from)}–${formatYear(to)}, ${count}명`
+              const show = (x: number, y: number) =>
+                setHoverBin({
+                  index,
+                  count,
+                  from,
+                  to,
+                  eraLbl: era.lbl,
+                  eraColor: era.color,
+                  x,
+                  y,
+                })
+              return (
+                <Column
+                  key={index}
+                  type="button"
+                  aria-label={`${label}, 시대 필터 토글`}
+                  $hovered={hoverBin?.index === index}
+                  onMouseMove={(event) => show(event.clientX, event.clientY)}
+                  onFocus={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect()
+                    show(rect.left + rect.width / 2, rect.top)
+                  }}
+                  onBlur={() => setHoverBin(null)}
+                  onClick={() => toggleScope('era', era.key)}
+                >
+                  <ColumnBar
+                    $dim={!inFilter}
+                    style={{
+                      height: count ? `${Math.max(3, (count / stats.maxBin) * 100)}%` : 0,
+                    }}
                   />
-                )
-              })}
-              {bins.map((n, i) => {
-                const barW = VB_W / BINS
-                const x = (i / BINS) * VB_W
-                const h = (n / maxBin) * (CHART_H - BAR_TOP_PAD)
-                const fromYear = MIN_Y + binW * i
-                const toYear = MIN_Y + binW * (i + 1)
-                const eraInfo = yearOfEra(MIN_Y + binW * (i + 0.5))
-                const isActiveEra = scopes.era.includes(eraInfo.key)
-                const anyActive = scopes.era.length > 0
-                const isHoverDimmed =
-                  hoveredEraKey != null && hoveredEraKey !== eraInfo.key
-                const fill = anyActive
-                  ? isActiveEra
-                    ? eraInfo.color
-                    : inactiveBinFill
-                  : eraInfo.color
-                const opacity = isHoverDimmed ? 0.3 : anyActive ? 1 : 0.85
-                return (
-                  <rect
-                    key={i}
-                    x={x + 1.5}
-                    y={CHART_H - h}
-                    width={Math.max(1, barW - 3)}
-                    height={h}
-                    rx={1.5}
-                    fill={fill}
-                    opacity={opacity}
-                    style={{ cursor: 'pointer', transition: 'opacity 0.12s' }}
-                    aria-label={`${eraInfo.lbl} ${Math.round(fromYear)}–${Math.round(toYear)}, ${n}명`}
-                    onMouseEnter={(ev) => {
-                      setHoveredEraKey(eraInfo.key)
-                      setHoverBin({
-                        index: i,
-                        count: n,
-                        from: Math.round(fromYear),
-                        to: Math.round(toYear),
-                        eraKey: eraInfo.key,
-                        eraLbl: eraInfo.lbl,
-                        eraColor: eraInfo.color,
-                        x: ev.clientX,
-                        y: ev.clientY,
-                      })
-                    }}
-                    onMouseMove={(ev) =>
-                      setHoverBin((prev) =>
-                        prev && prev.index === i
-                          ? { ...prev, x: ev.clientX, y: ev.clientY }
-                          : prev,
-                      )
-                    }
-                    onMouseLeave={() => {
-                      setHoveredEraKey(null)
-                      setHoverBin(null)
-                    }}
-                    onClick={() => toggleScope('era', eraInfo.key)}
-                  >
-                    <title>
-                      {eraInfo.lbl} · {Math.round(fromYear)}–
-                      {Math.round(toYear)} · {n}명
-                    </title>
-                  </rect>
-                )
-              })}
-              {yearTicks.map((y) => {
-                const x = ((y - MIN_Y) / RANGE) * VB_W
-                return (
-                  <text
-                    key={y}
-                    x={x}
-                    y={CHART_H + YEAR_LABEL_BAND - 3}
-                    textAnchor="middle"
-                    fontSize={9}
-                    fill={muted}
-                    style={{ fontVariantNumeric: 'tabular-nums' }}
-                  >
-                    {y < 0 ? `${-y}BC` : y === 0 ? '0' : y}
-                  </text>
-                )
-              })}
-              {ERAS.map((e) => {
-                const x1 = Math.max(0, ((e.from - MIN_Y) / RANGE) * VB_W)
-                const x2 = Math.min(VB_W, ((e.to - MIN_Y) / RANGE) * VB_W)
-                if (x2 <= x1) return null
-                const isActive = scopes.era.includes(e.key)
-                const anyActive = scopes.era.length > 0
-                const isHoverEmphasized = hoveredEraKey === e.key
-                const isHoverDimmed =
-                  hoveredEraKey != null && !isHoverEmphasized
-                const opacity = isHoverEmphasized
-                  ? 1
-                  : isHoverDimmed
-                    ? 0.18
-                    : anyActive
-                      ? isActive
-                        ? 1
-                        : 0.25
-                      : 0.75
-                return (
-                  <rect
-                    key={e.key}
-                    x={x1}
-                    y={CHART_H + YEAR_LABEL_BAND + RIBBON_GAP}
-                    width={x2 - x1}
-                    height={RIBBON_H}
-                    fill={e.color}
-                    opacity={opacity}
-                    style={{ cursor: 'pointer', transition: 'opacity 0.12s' }}
-                    aria-label={`${e.lbl} (${eraC[e.key] ?? 0}명)`}
-                    onMouseEnter={() => setHoveredEraKey(e.key)}
-                    onMouseLeave={() => setHoveredEraKey(null)}
-                    onClick={() => toggleScope('era', e.key)}
-                  >
-                    <title>
-                      {e.lbl} · {eraC[e.key] ?? 0}명
-                    </title>
-                  </rect>
-                )
-              })}
-            </svg>
-            <EraDensityMax>최대 {maxBin}명</EraDensityMax>
-          </EraDensityChartWrap>
-        </EraDensityCard>
-
-        <StatCard>
-          <StatLabel>지역 분포</StatLabel>
-          <BarList>
-            {REGIONS.filter((r) => regC[r])
-              .sort((a, b) => (regC[b] || 0) - (regC[a] || 0))
-              .map((r) => {
-                const n = regC[r] || 0
-                const isActive = scopes.region.includes(r)
-                const color =
-                  REGION_COLORS[REGIONS.indexOf(r) % REGION_COLORS.length]
-                return (
-                  <BarRow
-                    key={r}
-                    $active={isActive}
-                    onClick={() => toggleScope('region', r)}
-                  >
-                    <BarLabel>{r}</BarLabel>
-                    <BarTrack>
-                      <BarFill
-                        style={{
-                          width: `${(n / regionMax) * 100}%`,
-                          background: color,
-                        }}
-                      />
-                    </BarTrack>
-                    <BarValue>{n}</BarValue>
-                  </BarRow>
-                )
-              })}
-          </BarList>
-        </StatCard>
-
-        <StatCard>
-          <StatLabel>분야</StatLabel>
-          <BarList>
-            {FIELDS.filter((f) => fieldC[f]).map((f) => {
-              const n = fieldC[f] || 0
-              const isActive = scopes.field.includes(f)
-              const color = colorForField(f)
-              return (
-                <BarRow
-                  key={f}
-                  $active={isActive}
-                  aria-label={`${f} ${n}명, 필터 토글`}
-                  onClick={() => toggleScope('field', f)}
-                >
-                  <BarLabel>{f}</BarLabel>
-                  <BarTrack>
-                    <BarFill
-                      style={{
-                        width: `${(n / fieldMax) * 100}%`,
-                        background: color,
-                      }}
-                    />
-                  </BarTrack>
-                  <BarValue>{n}</BarValue>
-                </BarRow>
+                </Column>
               )
             })}
-          </BarList>
-        </StatCard>
+          </Plot>
 
-        <StatCard>
-          <StatLabel>상위 국가</StatLabel>
-          <BarList>
-            {countryList.map(([c, n], i) => {
-              const isActive = scopes.country.includes(c)
-              const color = colorForRegion(countryRegion[c] ?? '')
+          <Axis aria-hidden>
+            {yearTicks.map((year) => (
+              <Tick key={year} style={{ left: `${pct(year)}%` }}>
+                {year === 0 ? '0' : formatYear(year)}
+              </Tick>
+            ))}
+          </Axis>
+
+          {/* 시대 구간 리본 — 연도 비례 위치만 보여주는 얇은 띠(라벨은 아래 칩 줄이 담당) */}
+          <EraRibbon aria-hidden>
+            {ERAS.map((era) => {
+              const left = Math.max(0, pct(era.from))
+              const right = Math.min(100, pct(era.to))
+              if (right <= left) return null
               return (
-                <BarRow
-                  key={c}
-                  $active={isActive}
-                  aria-label={`${i + 1}위 ${c} ${n}명, 필터 토글`}
-                  onClick={() => toggleScope('country', c)}
-                >
-                  <BarRank>{i + 1}</BarRank>
-                  <BarLabel $flex>{c}</BarLabel>
-                  <BarTrack $compact>
-                    <BarFill
-                      style={{
-                        width: `${(n / ctMax) * 100}%`,
-                        background: color,
-                      }}
-                    />
-                  </BarTrack>
-                  <BarValue>{n}</BarValue>
-                </BarRow>
+                <EraRibbonPart
+                  key={era.key}
+                  $dim={eraFiltered && !scopes.era.includes(era.key)}
+                  style={{ left: `${left}%`, width: `${right - left}%`, background: era.color }}
+                />
               )
             })}
-          </BarList>
-          {hasMoreCountries && (
-            <TopCountryToggle
-              type="button"
-              onClick={() => setCountriesExpanded((v) => !v)}
-            >
-              {countriesExpanded
-                ? '접기'
-                : `+ ${Math.min(topCt.length, INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_EXPANDED) - INFOGRAPHIC_DEFAULTS.TOP_COUNTRY_DEFAULT}개 더보기`}
-            </TopCountryToggle>
-          )}
-        </StatCard>
-      </Strip>
+          </EraRibbon>
+
+          {/* 시대 칩 — 연도 비례가 아니라 같은 폭 규칙으로 나열해, 좁은 근·현대 구간도
+              이름과 인원이 항상 글자로 읽힌다(색만으로 시대를 식별하지 않는다). */}
+          <EraChips>
+            {ERAS.map((era) => {
+              const count = stats.eraCount[era.key] ?? 0
+              const active = scopes.era.includes(era.key)
+              return (
+                <EraChip
+                  key={era.key}
+                  type="button"
+                  $active={active}
+                  $dim={(eraFiltered && !active) || count === 0}
+                  aria-label={`${era.lbl} ${count}명, 시대 필터 토글`}
+                  aria-pressed={active}
+                  onClick={() => toggleScope('era', era.key)}
+                >
+                  <EraSwatch style={{ background: era.color }} aria-hidden />
+                  <EraName>{era.lbl}</EraName>
+                  <EraCount>{count.toLocaleString()}</EraCount>
+                </EraChip>
+              )
+            })}
+          </EraChips>
+        </Chart>
+      </Section>
+
+      <Lists>
+        <BarSection
+          title="지역"
+          rows={stats.regions.map(([region, count]) => ({
+            key: region,
+            label: region,
+            count,
+            swatch: colorForRegion(region),
+            active: scopes.region.includes(region),
+            onToggle: () => toggleScope('region', region),
+          }))}
+          total={total}
+          anyActive={scopes.region.length > 0}
+        />
+        <BarSection
+          title="분야"
+          rows={stats.fields.map(([field, count]) => ({
+            key: field,
+            label: field,
+            count,
+            swatch: colorForField(field),
+            active: scopes.field.includes(field),
+            onToggle: () => toggleScope('field', field),
+          }))}
+          total={total}
+          anyActive={scopes.field.length > 0}
+        />
+        <BarSection
+          title="상위 국가"
+          ranked
+          rows={countryList.map(([country, count]) => ({
+            key: country,
+            label: country,
+            count,
+            active: scopes.country.includes(country),
+            onToggle: () => toggleScope('country', country),
+          }))}
+          total={total}
+          anyActive={scopes.country.length > 0}
+          footer={
+            hiddenCountries > 0 && (
+              <MoreToggle
+                type="button"
+                onClick={() => setCountriesExpanded((prev) => !prev)}
+              >
+                {countriesExpanded ? '접기' : `+ ${hiddenCountries}개국 더 보기`}
+              </MoreToggle>
+            )
+          }
+        />
+      </Lists>
+
       {hoverBin && (
-        <EraDensityTooltip
-          style={{ top: hoverBin.y + 14, left: hoverBin.x + 14 }}
+        <Tooltip
+          role="tooltip"
+          style={{ top: hoverBin.y - 12, left: hoverBin.x }}
         >
-          <EraDensityTooltipDot style={{ background: hoverBin.eraColor }} />
-          <strong style={{ color: hoverBin.eraColor }}>{hoverBin.eraLbl}</strong>
-          <span>
-            {hoverBin.from < 0 ? `${-hoverBin.from}BC` : hoverBin.from} –{' '}
-            {hoverBin.to < 0 ? `${-hoverBin.to}BC` : hoverBin.to}
-          </span>
-          <EraDensityTooltipCount>{hoverBin.count}명</EraDensityTooltipCount>
-        </EraDensityTooltip>
+          <TooltipValue>{hoverBin.count.toLocaleString()}명</TooltipValue>
+          <TooltipRow>
+            <TooltipKey style={{ background: hoverBin.eraColor }} aria-hidden />
+            {hoverBin.eraLbl}
+          </TooltipRow>
+          <TooltipRange>
+            {formatYear(hoverBin.from)} – {formatYear(hoverBin.to)}
+          </TooltipRange>
+        </Tooltip>
       )}
-    </>
+    </Panel>
   )
 }
 
-const Strip = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 16px;
+/* ─── 가로 막대 목록 ─────────────────────────────────────────────────── */
 
-  @media (max-width: 1024px) {
-    grid-template-columns: repeat(2, 1fr);
+interface BarRowData {
+  key: string
+  label: string
+  count: number
+  swatch?: string
+  active: boolean
+  onToggle: () => void
+}
+
+function BarSection({
+  title,
+  rows,
+  total,
+  anyActive,
+  ranked,
+  footer,
+}: {
+  title: string
+  rows: BarRowData[]
+  total: number
+  anyActive: boolean
+  ranked?: boolean
+  footer?: ReactNode
+}) {
+  const max = Math.max(1, ...rows.map((row) => row.count))
+  return (
+    <ListSection>
+      <SectionHead>
+        <SectionTitle>{title}</SectionTitle>
+        <SectionMeta>{rows.length}개</SectionMeta>
+      </SectionHead>
+      {rows.length === 0 ? (
+        <Empty>데이터 없음</Empty>
+      ) : (
+        <BarList>
+          {rows.map((row, index) => (
+            <BarRow
+              key={row.key}
+              type="button"
+              $active={row.active}
+              $dim={anyActive && !row.active}
+              aria-pressed={row.active}
+              aria-label={`${ranked ? `${index + 1}위 ` : ''}${row.label} ${row.count}명, 필터 토글`}
+              onClick={row.onToggle}
+            >
+              <BarLabel>
+                {ranked ? (
+                  <Rank>{index + 1}</Rank>
+                ) : (
+                  <Swatch style={{ background: row.swatch }} aria-hidden />
+                )}
+                <BarName title={row.label}>{row.label}</BarName>
+              </BarLabel>
+              <BarTrack aria-hidden>
+                <BarFill style={{ width: `${(row.count / max) * 100}%` }} />
+              </BarTrack>
+              <BarValue>
+                {row.count.toLocaleString()}
+                <BarShare>{total ? Math.round((row.count / total) * 100) : 0}%</BarShare>
+              </BarValue>
+            </BarRow>
+          ))}
+        </BarList>
+      )}
+      {footer}
+    </ListSection>
+  )
+}
+
+/* ─── 스타일 ─────────────────────────────────────────────────────────── */
+
+const Panel = styled.section`
+  margin-top: 16px;
+  border-radius: 14px;
+  border: 1px solid ${hairline};
+  background: ${surface};
+  overflow: hidden;
+`
+
+const Tiles = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid ${hairline};
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const Tile = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 20px;
+  min-width: 0;
+
+  & + & {
+    border-left: 1px solid ${hairline};
+  }
+  @media (max-width: 900px) {
+    &:nth-child(3) {
+      border-left: none;
+    }
+    &:nth-child(n + 3) {
+      border-top: 1px solid ${hairline};
+    }
+  }
+`
+
+const TileLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const TileValue = styled.span`
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TileUnit = styled.span`
+  margin-left: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TileNote = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const Section = styled.div`
+  padding: 16px 20px 18px;
+  border-bottom: 1px solid ${hairline};
+`
+
+const SectionHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+  min-width: 0;
+`
+
+const SectionTitle = styled.h3`
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SectionHint = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const SectionMeta = styled.span`
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const Chart = styled.div`
+  position: relative;
+`
+
+const Plot = styled.div`
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 120px;
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.18)')};
+`
+
+const GridLine = styled.div`
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: ${hairline};
+  pointer-events: none;
+`
+
+/** 열 전체가 히트 영역 — 막대가 작아도 겨누기 쉽다 */
+const Column = styled.button<{ $hovered: boolean }>`
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  border: none;
+  border-radius: 4px 4px 0 0;
+  background: ${({ $hovered, theme }) =>
+    $hovered ? (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)') : 'transparent'};
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const ColumnBar = styled.span<{ $dim: boolean }>`
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: ${({ $dim, theme }) =>
+    $dim ? (theme.mode === 'dark' ? 'rgba(255,255,255,0.14)' : '#d5dbe4') : BRAND.primary};
+  transition: height 0.25s ease, background ${MOTION_FAST};
+
+  ${Column}:hover & {
+    background: ${({ $dim }) => ($dim ? undefined : BRAND.primaryHover)};
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+const Axis = styled.div`
+  position: relative;
+  height: 20px;
+`
+
+const Tick = styled.span`
+  /* 좁은 화면 — 눈금 글자가 겹치지 않게 격번만 */
+  @media (max-width: 640px) {
+    &:nth-child(even) {
+      display: none;
+    }
+  }
+  position: absolute;
+  top: 5px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+const EraRibbon = styled.div`
+  position: relative;
+  height: 4px;
+  margin-top: 2px;
+`
+
+const EraRibbonPart = styled.span<{ $dim: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  /* 이웃 구간과 2px 표면 간격 */
+  box-shadow: 0 0 0 1px ${surface};
+  opacity: ${({ $dim }) => ($dim ? 0.25 : 0.9)};
+  transition: opacity ${MOTION_FAST};
+`
+
+const EraChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+`
+
+const EraChip = styled.button<{ $active: boolean; $dim: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid ${hairline};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff')};
+  cursor: pointer;
+  opacity: ${({ $dim }) => ($dim ? 0.55 : 1)};
+  transition: background ${MOTION_FAST}, border-color ${MOTION_FAST}, opacity ${MOTION_FAST};
+
+  &:hover {
+    opacity: 1;
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f4f6f9')};
+  }
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      border-color: ${BRAND.primaryBorderHover};
+      background: ${theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+      &:hover {
+        background: ${theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primarySoftHover};
+      }
+    `}
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const EraSwatch = styled.span`
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 2px;
+`
+
+const EraName = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EraCount = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const Lists = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
 `
 
-const StatCard = styled.div`
-  padding: 14px 4px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  &:last-child {
-    border-bottom: none;
+const ListSection = styled.div`
+  padding: 16px 16px 14px 20px;
+  min-width: 0;
+
+  & + & {
+    border-left: 1px solid ${hairline};
   }
-`
-
-const EraDensityCard = styled(StatCard)`
-  grid-column: 1 / -1;
-  padding: 12px 4px 14px;
-`
-
-const EraDensityChartWrap = styled.div`
-  position: relative;
-`
-
-const EraDensityMax = styled.div`
-  position: absolute;
-  top: 2px;
-  right: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  pointer-events: none;
-`
-
-const EraDensityTooltip = styled.div`
-  position: fixed;
-  z-index: 50;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(20, 20, 25, 0.95);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          color: rgba(255, 255, 255, 0.92);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        `
-      : css`
-          background: #fff;
-          border: 1px solid #e5e7eb;
-          color: #111827;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-        `}
-  strong {
-    font-weight: 700;
+  @media (max-width: 1100px) {
+    &:nth-child(3) {
+      grid-column: 1 / -1;
+      border-left: none;
+      border-top: 1px solid ${hairline};
+    }
   }
-  span {
-    color: ${({ theme }) => theme.colors.text.secondary};
+  @media (max-width: 640px) {
+    & + & {
+      border-left: none;
+      border-top: 1px solid ${hairline};
+    }
   }
-`
-
-const EraDensityTooltipDot = styled.span`
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-`
-
-const EraDensityTooltipCount = styled.span`
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary} !important;
-  margin-left: 2px;
-`
-
-const EraLegendCount = styled.span`
-  font-size: 10px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.7;
-  margin-left: 2px;
-`
-
-const TopCountryToggle = styled.button`
-  margin-top: 6px;
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 11px;
-  font-weight: 500;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const EraDensityHead = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-`
-
-const EraDensityLegend = styled.div`
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-  flex-wrap: wrap;
-`
-
-const EraDensityLegendItem = styled.button<{
-  $active: boolean
-  $color: string
-}>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  transition: background 0.12s, opacity 0.12s;
-
-  > span:first-child {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-  }
-
-  ${({ $active, $color }) =>
-    $active &&
-    css`
-      background: ${$color}1f;
-      color: ${$color};
-      font-weight: 600;
-    `}
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const StatLabel = styled.div`
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const BarList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: 8px;
 `
 
-const BarRow = styled.button<{ $active?: boolean }>`
-  display: flex;
+const BarRow = styled.button<{ $active: boolean; $dim: boolean }>`
+  display: grid;
+  grid-template-columns: minmax(64px, 104px) minmax(0, 1fr) 64px;
   align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
+  gap: 10px;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
   border: none;
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
+  border-radius: 8px;
+  background: ${({ $active, theme }) =>
+    $active ? (theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft) : 'transparent'};
   text-align: left;
-  width: 100%;
-  transition: background 0.12s;
+  cursor: pointer;
+  opacity: ${({ $dim }) => ($dim ? 0.55 : 1)};
+  transition: background ${MOTION_FAST}, opacity ${MOTION_FAST};
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
+    opacity: 1;
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? BRAND.primaryFillDark
+          : BRAND.primarySoftHover
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.05)'
+          : 'rgba(15,23,42,0.035)'};
   }
-
-  ${({ $active, theme }) =>
-    $active &&
-    css`
-      background: ${theme.colors.activeLight};
-    `}
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
 `
 
-const BarLabel = styled.span<{ $flex?: boolean }>`
-  ${({ $flex }) =>
-    $flex
-      ? css`
-          flex: 1;
-          min-width: 0;
-        `
-      : css`
-          width: 70px;
-          flex-shrink: 0;
-        `}
+const BarLabel = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+`
+
+const Swatch = styled.span`
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 2px;
+`
+
+const Rank = styled.span`
+  width: 14px;
+  flex-shrink: 0;
   font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const BarName = styled.span`
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 `
 
-const BarTrack = styled.div<{ $compact?: boolean }>`
-  flex: ${({ $compact }) => ($compact ? '0 0 64px' : '1')};
-  height: 5px;
-  border-radius: 3px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  position: relative;
+const BarTrack = styled.span`
+  height: 8px;
+  border-radius: 4px;
   overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
 `
 
-const BarFill = styled.div`
-  position: absolute;
-  inset: 0;
-  border-radius: 3px;
-  background: currentColor;
-  transition: width 0.18s ease;
+const BarFill = styled.span`
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: ${BRAND.primary};
+  transition: width 0.25s ease;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 const BarValue = styled.span`
-  width: 28px;
-  font-size: 10px;
-  text-align: right;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  flex-shrink: 0;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const BarRank = styled.span`
-  width: 14px;
-  font-size: 10px;
+const BarShare = styled.span`
+  min-width: 28px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const Empty = styled.p`
+  margin: 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const MoreToggle = styled.button`
+  margin-top: 8px;
+  padding: 5px 12px;
+  border: 1px solid ${hairline};
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${BRAND.primary};
+    border-color: ${BRAND.primaryBorder};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const Tooltip = styled.div`
+  position: fixed;
+  z-index: 50;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: #1c1c20;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid rgba(15, 23, 42, 0.1);
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+        `}
+`
+
+const TooltipValue = styled.strong`
+  font-size: 15px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  text-align: center;
-  flex-shrink: 0;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TooltipRow = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 선 키(line key) — 툴팁 밀도에서는 상자 대신 짧은 선 */
+const TooltipKey = styled.span`
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+`
+
+const TooltipRange = styled.span`
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `

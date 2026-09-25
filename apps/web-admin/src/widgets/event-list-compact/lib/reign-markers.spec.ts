@@ -4,6 +4,7 @@ import {
   formatReignSpan,
   interleaveReignMarkers,
   planReignMarkers,
+  reignAccessionYears,
   toReignMarkers,
 } from './reign-markers'
 
@@ -242,5 +243,20 @@ describe('interleaveReignMarkers', () => {
         }),
       ),
     ).toEqual(['👑m', 'jan', 'child', 'dec'])
+  })
+})
+
+describe('reignAccessionYears', () => {
+  it('목록 범위 안 즉위 연도 — 첫 사건 때 재위 중인 군주는 남긴다', () => {
+    const years = reignAccessionYears(
+      [
+        marker('taejong', 1400, 1418),
+        marker('sejong', 1418, 1450),
+        marker('sejo', 1455, 1468),
+        marker('late', 1700, 1720),
+      ],
+      { min: 1433, max: 1597 },
+    )
+    expect(years).toEqual([1418, 1455])
   })
 })

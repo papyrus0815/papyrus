@@ -30,6 +30,9 @@ interface Props {
   unit?: string
 }
 
+/** 관측점을 찍는 상한 — 이보다 촘촘하면 점이 선을 덮어 오히려 안 읽힌다 */
+const SPARSE_POINT_LIMIT = 24
+
 /** 1.66 → '1.66%', 0.5 → '0.5%' (뒤따르는 0은 잡음) */
 function formatRate(value: number, unit: string): string {
   const text = Number(value.toFixed(2)).toLocaleString('ko-KR')
@@ -56,6 +59,8 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
   const accent = isDark ? '#3987e5' : '#2a78d6'
   const grid = isDark ? 'rgba(255,255,255,0.08)' : '#eef1f5'
   const axisInk = theme.colors.text.secondary
+  /* 점 둘레의 링 — 선과 겹치는 자리에서 점이 떠 보이게 하는 표면색 */
+  const surface = isDark ? '#171717' : '#ffffff'
 
   const chart = useMemo(() => {
     const rows = [...points].sort((left, right) => left.year - right.year)
@@ -140,10 +145,21 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
     )
   }
 
+  /*
+   * 최저점 라벨은 점 **옆**에 단다. 아래에 달면 최저점이 축 바닥에 붙는 일이 잦아
+   * x축 연도와 겹쳤다(-4.9%가 '2000' 위에 포개졌다). 최저점은 양옆의 선이 모두 위에
+   * 있으니 같은 높이의 옆자리는 늘 비어 있다. 오른쪽 끝 근처면 왼쪽으로.
+   */
+  const troughIndex = chart.rows.findIndex(
+    (row) => row.year === chart.trough.year,
+  )
+  const troughPlace =
+    troughIndex > chart.rows.length * 0.8 ? ('left' as const) : ('right' as const)
+
   /** 최고·최저·최신 — 겹치면(같은 해) 하나만 남긴다 */
   const marks = [
     { point: chart.peak, place: 'top' as const },
-    { point: chart.trough, place: 'bottom' as const },
+    { point: chart.trough, place: troughPlace },
     { point: chart.last, place: 'top' as const },
   ].filter(
     (mark, index, all) =>
@@ -238,13 +254,33 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
               labelFormatter={(year: number) => `${year}년`}
               formatter={(value: number) => [formatRate(value, unit), title]}
             />
+            {/*
+              곧은 선으로 잇는다. monotone 곡선은 5년 간격 자료(인구 증가율 1990·1995…)
+              사이를 매끄럽게 메워, 재지 않은 해의 값을 지어낸 모양이 됐다.
+              관측이 드문 계열은 점을 찍어 어디가 잰 값인지 보이게 한다.
+            */}
             <Line
-              type="monotone"
+              type="linear"
               dataKey="value"
               stroke={accent}
               strokeWidth={2}
-              dot={false}
-              activeDot={<Dot r={4} strokeWidth={2} />}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              dot={
+                chart.rows.length <= SPARSE_POINT_LIMIT ? (
+                  <Dot
+                    r={4}
+                    fill={accent}
+                    stroke={surface}
+                    strokeWidth={2}
+                  />
+                ) : (
+                  false
+                )
+              }
+              activeDot={
+                <Dot r={5} fill={accent} stroke={surface} strokeWidth={2} />
+              }
               isAnimationActive={false}
             />
             {marks.map((mark) => (
@@ -254,7 +290,7 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
                 y={mark.point.value}
                 r={4}
                 fill={accent}
-                stroke={isDark ? '#171717' : '#ffffff'}
+                stroke={surface}
                 strokeWidth={2}
                 label={{
                   value: formatRate(mark.point.value, unit),

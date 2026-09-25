@@ -1,8 +1,8 @@
 /**
- * 카드 그리드 로딩 스켈레톤 — person-card와 **같은 틀**(8px 인셋 4:5 초상 + 분야·이름·직함 + 푸터).
+ * 카드 그리드 로딩 스켈레톤 — person-card와 **같은 틀**(카드 폭 전체 4:5 초상 + 본문 두 줄).
  *
  * 카드와 치수가 같아야 로딩→완료 전환에서 격자가 튀지 않는다. 그래서 틀은 카드의 격자
- * (EraCardGrid)·radius·padding·푸터 헤어라인을 그대로 쓰고, 채움만 shimmer로 둔다.
+ * (EraCardGrid)·radius·본문 padding을 그대로 쓰고, 채움만 shimmer로 둔다.
  * shimmer는 격자 전체가 한 번에 쓸리도록 background-attachment: fixed로 위상을 맞춘다.
  */
 import styled, { css, keyframes } from 'styled-components'
@@ -20,15 +20,22 @@ export function CardGridSkeleton({ count = 8 }: Props) {
     <EraCardGrid aria-hidden role="presentation">
       {Array.from({ length: count }).map((_unused, index) => (
         <SkeletonCard key={index}>
-          <SkeletonVisual />
+          <SkeletonVisual>
+            <CaptionBars>
+              <Bar $onImage style={{ width: 34, height: 16 }} />
+              <Bar $onImage style={{ width: '72%', height: 18 }} />
+              <Bar $onImage style={{ width: '48%', height: 11 }} />
+            </CaptionBars>
+          </SkeletonVisual>
           <SkeletonBody>
-            <Bar style={{ width: '42%', height: 11 }} />
-            <Bar style={{ width: '78%', height: 17, marginTop: 4 }} />
-            <Bar style={{ width: '56%', height: 12 }} />
-            <SkeletonFooter>
-              <Bar style={{ width: '48%', height: 12 }} />
+            <SkeletonRow>
+              <Bar style={{ width: '52%', height: 13 }} />
+              <Bar style={{ width: 52, height: 11 }} />
+            </SkeletonRow>
+            <SkeletonRow>
+              <Bar style={{ width: '64%', height: 12 }} />
               <Bar style={{ width: 34, height: 12 }} />
-            </SkeletonFooter>
+            </SkeletonRow>
           </SkeletonBody>
         </SkeletonCard>
       ))}
@@ -65,34 +72,48 @@ const shimmer = css`
 const SkeletonCard = styled.div`
   display: flex;
   flex-direction: column;
-  padding: 8px;
-  border-radius: 16px;
+  border-radius: 14px;
+  overflow: hidden;
   border: 1px solid ${hairline};
   background: ${surface};
 `
 
 const SkeletonVisual = styled.div`
+  position: relative;
   aspect-ratio: 4 / 5;
-  border-radius: 10px;
   ${shimmer}
+`
+
+/** 초상 하단 캡션 자리(분야·이름·직함) — 실제 카드처럼 이미지 안쪽 아래에 */
+const CaptionBars = styled.div`
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
 `
 
 const SkeletonBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 13px 6px 4px;
+  gap: 9px;
+  padding: 13px 14px 14px;
 `
 
-const SkeletonFooter = styled.div`
+const SkeletonRow = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-top: 9px;
-  padding-top: 11px;
-  border-top: 1px solid ${hairline};
+  gap: 12px;
 `
 
-const Bar = styled.div`
+const Bar = styled.div<{ $onImage?: boolean }>`
   border-radius: 5px;
-  ${shimmer}
+  ${({ $onImage, theme }) =>
+    $onImage
+      ? css`
+          background: ${theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.7)'};
+        `
+      : shimmer}
 `

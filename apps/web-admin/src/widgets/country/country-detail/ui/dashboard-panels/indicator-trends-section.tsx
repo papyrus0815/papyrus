@@ -12,6 +12,7 @@ import { IconChart } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import { IndicatorTrendChart, type TrendPoint } from './indicator-trend-chart'
 import { ChartEmpty } from './chart-empty'
+import { ChartSkeleton } from './chart-skeleton'
 
 interface IndicatorTrendsSectionProps {
   /** 모던 국가 ID. 역사 국가에는 지표가 없으므로 호출하지 않는다. */
@@ -102,13 +103,9 @@ export function IndicatorTrendsSection({
 
       {manager}
 
-      {/* 로딩 중엔 자리를 잡아만 둔다 — 뼈대가 번쩍이면 레이아웃이 튄다 */}
+      {/* 로딩 중엔 그려질 두 그래프와 같은 모양·높이로 자리를 잡는다 — 자료가 와도 지면이 튀지 않는다 */}
       {isLoading ? (
-        <GridContainer>
-          <Grid>
-            <Placeholder />
-          </Grid>
-        </GridContainer>
+        <ChartSkeleton variant="line" count={2} />
       ) : (
         hasAny && (
           <GridContainer>
@@ -155,10 +152,4 @@ const Grid = styled.div`
   }
 `
 
-const Placeholder = styled.div`
-  height: 320px;
-  border-radius: 14px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.02)'};
-`
 

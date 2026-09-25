@@ -84,6 +84,7 @@ import {
 } from './hooks/use-catalog-keyboard'
 import { useCatalogUrlSync } from './hooks/use-catalog-url-sync'
 import { useReignMarkers } from './hooks/use-reign-markers'
+import { reignAccessionYears } from '@/widgets/event-list-compact/lib/reign-markers'
 import { exportEventsAsJson } from './lib/export-events'
 import { parseCatalogSearchParams } from './lib/parse-catalog-search-params'
 import {
@@ -919,6 +920,12 @@ export const EventsCatalogPage: React.FC = () => {
         hierarchy: !showFlatView,
         // 헤더리스·공백 판정의 모수는 **하위 접힘 이전**이어야 한다(검토 IDX-6·IDX-9).
         baselineItems: visibleFlattenedHierarchy,
+        // 군주 즉위 연도는 사건이 없어도 연 그룹을 세운다 — 표지가 그 해 머리글 아래에 선다.
+        // 연 그룹이 꺼지는 '등록순'에서는 싣지 않는다(위젯도 그때는 표지를 그리지 않는다).
+        extraYears:
+          sortBy !== 'created'
+            ? (range) => reignAccessionYears(reignMarkers, range)
+            : undefined,
       }),
     [
       listRenderedHierarchy,
@@ -926,6 +933,8 @@ export const EventsCatalogPage: React.FC = () => {
       sortDirection,
       hasNarrowingFilters,
       showFlatView,
+      sortBy,
+      reignMarkers,
     ],
   )
 

@@ -173,10 +173,16 @@ export function TradeYearBars({ years, selectedId, onSelect }: Props) {
         const inUnit = tick / VALUE_SCALE_MULTIPLIER[baseline?.valueScale ?? 'ONE']
         return {
           value: tick,
-          /* 축은 딱 떨어지는 값이라 소수를 붙이지 않는다 (값 열과 규칙이 다르다) */
-          label: Number.isInteger(inUnit)
-            ? inUnit.toLocaleString('ko-KR')
-            : format(inUnit),
+          /*
+           * 축은 딱 떨어지는 값이라 소수를 붙이지 않는다 (값 열과 규칙이 다르다).
+           * 단, 자릿수가 크면 값 열처럼 '억·조'로 접는다 — 배율 없이(USD 그대로) 들어온
+           * 해는 눈금이 '200,000,000,000'으로 찍혀, 옆 값 열의 '6,830억'과 같은 축으로
+           * 읽히지 않았다.
+           */
+          label:
+            Number.isInteger(inUnit) && Math.abs(inUnit) < 10_000
+              ? inUnit.toLocaleString('ko-KR')
+              : format(inUnit),
           at: all.length > 1 ? (index / (all.length - 1)) * 100 : 0,
         }
       }),
