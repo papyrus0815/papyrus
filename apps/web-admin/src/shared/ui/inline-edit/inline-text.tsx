@@ -51,6 +51,15 @@ interface InlineTextProps {
   maxLength?: number
   /** 편집 중 "n/max" 카운터 표시(maxLength와 함께 쓸 때 의미). */
   showCount?: boolean
+  /**
+   * 마운트 시점부터 편집 모드로 시작한다(기본 false).
+   *
+   * "방금 만든 빈 칸"을 위한 것이다 — 사용자가 '단락 추가'를 눌러 새 줄을 만들었는데
+   * 거기서 또 ✎를 찾아 눌러야 한다면, 만든 행위 자체가 이미 '여기에 쓰겠다'는 뜻인데도
+   * 클릭을 한 번 더 요구하는 셈이 된다. 기존 값을 *읽는* 자리에서는 쓰지 말 것
+   * (읽기 화면이 입력란으로 뒤덮인다).
+   */
+  autoEdit?: boolean
 }
 
 /**
@@ -76,8 +85,10 @@ export function InlineText({
   numeric,
   maxLength,
   showCount,
+  autoEdit = false,
 }: InlineTextProps) {
-  const [editing, setEditing] = useState(false)
+  /* autoEdit는 *초기값*으로만 쓴다 — 이후 열고 닫는 것은 온전히 사용자 몫. */
+  const [editing, setEditing] = useState(autoEdit)
   const [draft, setDraft] = useState(value)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
