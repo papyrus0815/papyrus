@@ -16,6 +16,7 @@ import styled, { keyframes } from 'styled-components'
 import {
   ledgerAccent,
   ledgerHairlineStrong,
+  RADIUS,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { toParticipants } from '@/entities/event/model'
 import { type UpdateEventDto } from '@/shared/api/events'
@@ -412,7 +413,7 @@ const UndoBtn = styled.button`
   padding: 4px 10px;
   margin: -2px 0;
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   color: ${({ theme }) => ledgerAccent(theme.mode)};
   transition: background 0.14s;
 
@@ -439,7 +440,7 @@ const Kbd = styled.kbd`
   font-weight: 600;
   line-height: 1;
   padding: 2px 5px;
-  border-radius: 5px;
+  border-radius: ${RADIUS.SM};
   color: ${({ theme }) => ledgerAccent(theme.mode)};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
@@ -450,7 +451,7 @@ const Track = styled.span`
   display: block;
   width: 100%;
   height: 2px;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   overflow: hidden;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.07)'};

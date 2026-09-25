@@ -19,8 +19,10 @@ import styled from 'styled-components'
 import {
   DIGIT_DISPLAY,
   MOTION,
+  ledgerAccent,
   ledgerBackground,
   ledgerHairlineStrong,
+  RADIUS,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type MentionItem } from '@/shared/lib/mention/mention-system'
@@ -254,14 +256,14 @@ const AddTitleBtn = styled.button`
 
   &:hover {
     opacity: 1;
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 
   &:focus-visible {
     opacity: 1;
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 3px;
-    border-radius: 3px;
+    border-radius: ${RADIUS.XS};
   }
 
   svg {
@@ -303,7 +305,7 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 5px;
+  border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   /* 지면색으로 채운다 — 글 위에 겹쳐 뜨므로 투명하면 본문 글자가 비쳐 읽힌다. */
   background: ${({ theme }) => ledgerBackground(theme.mode)};
@@ -323,7 +325,7 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
   /* 보이지 않는 동안에도 Tab이 닿는다 — 닿는 순간 RowActions가 focus-within으로 드러난다. */
   &:focus-visible {
     outline: 2px solid
-      ${({ theme, $danger }) => ($danger ? theme.colors.error : theme.colors.primary)};
+      ${({ theme, $danger }) => ($danger ? theme.colors.error : ledgerAccent(theme.mode))};
     outline-offset: 1px;
   }
 
@@ -365,13 +367,13 @@ const AddBtn = styled.button`
   transition: color ${MOTION.fast};
 
   &:hover {
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: ${RADIUS.XS};
   }
 
   svg {

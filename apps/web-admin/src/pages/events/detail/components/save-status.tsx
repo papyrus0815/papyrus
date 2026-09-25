@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import { FiCheck, FiLoader } from 'react-icons/fi'
 import styled, { css, keyframes } from 'styled-components'
 
-import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
+import { ledgerHairlineStrong,
+  RADIUS,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 
 interface SaveStatusProps {
   isPending: boolean
@@ -81,7 +83,7 @@ const Pill = styled.div<{ $state: 'pending' | 'saved' }>`
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   font-size: 12px;
   font-weight: 600;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};

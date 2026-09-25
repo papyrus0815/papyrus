@@ -1,6 +1,8 @@
 import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import {
@@ -143,7 +145,7 @@ const Row = styled.div`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  border-radius: 10px;
+  border-radius: ${RADIUS.MD};
 
   @media (max-width: 520px) {
     grid-template-columns: 1fr 1fr auto;
@@ -190,7 +192,7 @@ const RemoveBtn = styled.button`
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: ${RADIUS.XS};
   transition: color 0.14s, background 0.14s;
 
   &:hover {
@@ -212,7 +214,7 @@ const AddBtn = styled.button`
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border-radius: 8px;
+  border-radius: ${RADIUS.SM};
   border: 1px dashed
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(15,23,42,0.2)'};

@@ -3,7 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import { FiPlus, FiStar, FiUploadCloud, FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
-import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairlineStrong,
+  RADIUS,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
@@ -475,7 +481,7 @@ const Grid = styled.div<{ $dragOver: boolean }>`
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
   padding: 6px;
-  border-radius: 8px;
+  border-radius: ${RADIUS.MD};
   border: 1px dashed transparent;
   transition: border-color 0.14s, background 0.14s;
 
@@ -488,10 +494,9 @@ const Grid = styled.div<{ $dragOver: boolean }>`
   ${({ $dragOver, theme }) =>
     $dragOver &&
     css`
-      border-color: ${theme.colors.primary};
-      background: ${theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.08)'
-        : 'rgba(99,102,241,0.05)'};
+      border-color: ${ledgerAccent(theme.mode)};
+      /* 드래그 중 강조면 — 생 rgba(99,102,241)이 아니라 액센트 면 토큰으로. */
+      background: ${ledgerAccentSubtle(theme.mode)};
     `}
 `
 
@@ -502,7 +507,7 @@ const EmptyDropZone = styled.div<{ $dragOver: boolean }>`
   justify-content: center;
   gap: 6px;
   padding: 36px 20px;
-  border-radius: 10px;
+  border-radius: ${RADIUS.MD};
   border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -513,11 +518,10 @@ const EmptyDropZone = styled.div<{ $dragOver: boolean }>`
   ${({ $dragOver, theme }) =>
     $dragOver &&
     css`
-      border-color: ${theme.colors.primary};
+      border-color: ${ledgerAccent(theme.mode)};
       color: ${theme.colors.text.primary};
-      background: ${theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.08)'
-        : 'rgba(99,102,241,0.05)'};
+      /* 드래그 중 강조면 — 생 rgba(99,102,241)이 아니라 액센트 면 토큰으로. */
+      background: ${ledgerAccentSubtle(theme.mode)};
     `}
 
   &:hover {
@@ -526,7 +530,7 @@ const EmptyDropZone = styled.div<{ $dragOver: boolean }>`
   }
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
 
@@ -560,7 +564,7 @@ const ImageButton = styled.button`
   flex-direction: column;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   overflow: hidden;
   cursor: pointer;
   padding: 0;
@@ -699,7 +703,7 @@ const AddBtn = styled.button`
   align-self: flex-start;
   gap: 5px;
   padding: 6px 12px;
-  border-radius: 7px;
+  border-radius: ${RADIUS.SM};
   border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -751,7 +755,7 @@ const FormInput = styled.input`
   font-family: inherit;
   font-size: 13.5px;
   padding: 7px 10px;
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -759,7 +763,7 @@ const FormInput = styled.input`
   transition: border-color 0.14s;
 
   &:focus {
-    border-color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
@@ -774,7 +778,7 @@ const baseFormBtn = `
   display: inline-flex;
   align-items: center;
   padding: 6px 14px;
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
@@ -799,8 +803,10 @@ const FormCancel = styled.button`
 
 const FormSave = styled.button`
   ${baseFormBtn}
-  background: ${({ theme }) => theme.colors.primary};
-  color: #fff;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  /* 다크의 액센트는 밝은 인디고라 흰 글자로는 대비가 무너진다 — 지면 잉크색을 쓴다. */
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? ledgerBackground(theme.mode) : '#fff'};
 
   &:hover:not(:disabled) {
     filter: brightness(1.05);

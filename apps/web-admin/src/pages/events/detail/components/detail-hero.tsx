@@ -9,6 +9,7 @@ import {
   ledgerSubtleFill,
   resolveCategory,
   withAlpha,
+  RADIUS,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { CATEGORY_SOFT_COLORS, metaText } from '@/pages/events/styles/theme'
 import {
@@ -247,7 +248,7 @@ const LocationMetaItem = styled(S.HeroMetaItem)`
 const TitleAccent = styled.div<{ $color: string; $colorDark?: string }>`
   width: 56px;
   height: 3px;
-  border-radius: 2px;
+  border-radius: ${RADIUS.FOCUS};
   margin-top: -10px;
   background: ${({ theme, $color, $colorDark }) => {
     const applied = theme.mode === 'dark' ? $colorDark ?? $color : $color
@@ -337,7 +338,7 @@ function extractYear(input: string | null | undefined): number | null {
 
 const ContemporaryLink = styled(Link)`
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   text-decoration: none;
   &:hover {
     text-decoration: underline;
@@ -346,7 +347,7 @@ const ContemporaryLink = styled(Link)`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `
 
@@ -537,7 +538,7 @@ const PersonInlineButton = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `
 
@@ -618,7 +619,7 @@ const CountryName = styled(Link)`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `
 
@@ -656,7 +657,7 @@ const Overflow = styled.a`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `
 
@@ -688,7 +689,7 @@ const BackLink = styled(Link)`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `
 
@@ -728,6 +729,6 @@ const ExtraParentBadge = styled.a`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `

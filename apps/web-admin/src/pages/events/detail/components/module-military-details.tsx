@@ -1,5 +1,7 @@
 import styled from 'styled-components'
 
+import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import {
@@ -172,7 +174,7 @@ const ChipRow = styled.div`
 
 const ToggleChip = styled.button<{ $active: boolean }>`
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   border: 1px solid
     ${({ theme, $active }) =>
       $active

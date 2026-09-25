@@ -4,6 +4,8 @@ import { FiPlus, FiX } from 'react-icons/fi'
 import { useQuery } from '@tanstack/react-query'
 import styled from 'styled-components'
 
+import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+
 import { getAllCountries } from '@/shared/api/countries'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
@@ -366,7 +368,7 @@ const RemoveSideBtn = styled.button`
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: ${RADIUS.XS};
   transition: color 0.14s, background 0.14s;
 
   &:hover {
@@ -394,7 +396,7 @@ const CountryItem = styled.span`
   align-items: center;
   gap: 2px;
   padding: 3px 4px 3px 10px;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)'};
@@ -448,7 +450,7 @@ const AddCountryBtn = styled.button`
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   border: 1px dashed
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.18)'};
@@ -477,7 +479,7 @@ const AddSideBtn = styled.button`
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border-radius: 8px;
+  border-radius: ${RADIUS.SM};
   border: 1px dashed
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(15,23,42,0.2)'};

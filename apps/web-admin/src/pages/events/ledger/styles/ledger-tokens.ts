@@ -123,6 +123,28 @@ export const fontTier = (tier: FontTier) => css`
   font-weight: ${FONT_SCALE[tier].weight};
 `
 
+/**
+ * 모서리 반경 4단 + pill.
+ *
+ * FONT_SCALE이 폰트에 한 정리를 모서리에도 한다 — 사건 상세 한 지면에서만 2·3·4·5·6·7·8·
+ * 10·12·999의 **10종**이 쓰이고 있었고, 3 vs 4, 7 vs 8처럼 눈으로 구별되지 않는 차이가
+ * 대부분이라 값이 아니라 **역할**이 흩어진 상태였다(같은 크기의 아이콘 버튼이 파일마다
+ * 5·6·8px로 갈렸다).
+ *
+ *  - FOCUS (2px)  : 텍스트·링크의 focus-visible 링처럼 '거의 직각'이어야 하는 자리
+ *  - XS    (4px)  : 인라인 마커·작은 표지
+ *  - SM    (6px)  : 버튼·입력·칩 — 손으로 누르는 것들
+ *  - MD    (10px) : 카드·패널·드롭존 — 내용을 담는 면
+ *  - PILL         : 완전한 알약(상태 배지 등)
+ */
+export const RADIUS = {
+  FOCUS: '2px',
+  XS: '4px',
+  SM: '6px',
+  MD: '10px',
+  PILL: '999px',
+} as const
+
 /** 표준 transition 시간 — 모션 일관성 */
 export const MOTION = {
   fast: '0.12s',

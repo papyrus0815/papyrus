@@ -6,10 +6,14 @@ import {
   categoryAccent,
   ledgerAccent,
   ledgerAccentBorder,
+  ledgerAccentHover,
+  ledgerAccentSubtle,
+  ledgerBackground,
   ledgerHairlineStrong,
   ledgerRowWash,
   withAlpha,
   type LedgerCategory,
+  RADIUS,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 
@@ -79,12 +83,21 @@ export const StageCommitBtn = styled.button`
   min-height: 28px;
   padding: 0 12px;
   border: none;
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 700;
-  color: #fff;
-  background: #2563eb;
+  /**
+   * 강조색은 ledgerAccent 하나로 — 여기엔 생 블루(#2563eb)가 박혀 있어 같은 화면의
+   * 인디고 액센트(레일·포커스 링)와 계열이 갈려 있었다. ledger-tokens가 "곳곳의 하드코딩을
+   * 이 토큰으로 통일한다"고 선언한 바로 그 자리다.
+   *
+   * ⚠️ 채운 버튼이라 전경색은 모드마다 다르다 — 다크의 ledgerAccent는 **밝은** 인디고
+   *    (#a5b4fc)여서 흰 글자를 얹으면 대비가 무너진다. 다크에서는 지면 잉크색을 글자로 쓴다.
+   */
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? ledgerBackground(theme.mode) : '#fff'};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
   cursor: pointer;
 
   &:disabled {
@@ -96,7 +109,7 @@ export const StageCommitBtn = styled.button`
   }
 
   &:not(:disabled):hover {
-    background: #1d4ed8;
+    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
   }
 `
 
@@ -105,13 +118,13 @@ export const AnchorBadge = styled.span<{ $declared?: boolean }>`
   align-items: center;
   gap: 4px;
   padding: 2px 7px;
-  border-radius: 5px;
+  border-radius: ${RADIUS.SM};
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(37,99,235,0.18)' : 'rgba(37,99,235,0.10)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93b4fc' : '#1d4ed8')};
+  /* 면·글자 모두 액센트 토큰에서 — 여기도 생 블루 tint(37,99,235)였다. */
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 
   /* 명시 지정(오버라이드)임을 점선 테두리로만 구분 — 색을 하나 더 늘리지 않는다. */
   ${({ $declared, theme }) =>
@@ -148,7 +161,7 @@ export const TextBtn = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: ${RADIUS.XS};
     color: ${({ theme }) => theme.colors.text.primary};
     opacity: 1;
   }
@@ -197,7 +210,7 @@ export const MoreBtn = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: ${RADIUS.XS};
   }
 `
 
@@ -255,7 +268,7 @@ export const ParentLink = styled(Link)`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `
 
@@ -334,7 +347,7 @@ export const ExtraChipLink = styled(Link)<{ $pending?: boolean }>`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `
 
@@ -412,7 +425,7 @@ export const SiblingLink = styled(Link)<{ $alignEnd?: boolean }>`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 
   svg {
@@ -442,7 +455,7 @@ export const RemoveChildBtn = styled.button`
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: ${RADIUS.SM};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
@@ -509,7 +522,7 @@ export const ChildRow = styled.li`
     content: '';
     position: absolute;
     inset: 6px 4px;
-    border-radius: 10px;
+    border-radius: ${RADIUS.MD};
     background: ${({ theme }) => ledgerRowWash(theme.mode)};
     opacity: 0;
     transition: opacity ${MOTION.fast};
@@ -584,7 +597,7 @@ export const ChildCard = styled(Link)`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: ${RADIUS.XS};
   }
 `
 
@@ -607,7 +620,7 @@ export const ChildEyebrow = styled.div<{ $cat: LedgerCategory }>`
     justify-content: center;
     width: 18px;
     height: 18px;
-    border-radius: 6px;
+    border-radius: ${RADIUS.SM};
     font-size: 10px;
     line-height: 1;
     flex-shrink: 0;
@@ -722,7 +735,7 @@ export const AddBtn = styled.button`
   align-items: center;
   gap: 5px;
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   border: 1px dashed transparent;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -763,7 +776,7 @@ export const KeywordInput = styled.input`
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};

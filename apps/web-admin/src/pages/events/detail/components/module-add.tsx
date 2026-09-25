@@ -14,6 +14,7 @@ import styled from 'styled-components'
 import {
   ledgerAccentSubtle,
   ledgerHairlineStrong,
+  RADIUS,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
@@ -192,7 +193,7 @@ const Trigger = styled.button`
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 7px;
+  border-radius: ${RADIUS.SM};
   border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -221,7 +222,7 @@ const Menu = styled.div`
   display: flex;
   flex-direction: column;
   padding: 6px;
-  border-radius: 8px;
+  border-radius: ${RADIUS.MD};
   background: ${({ theme }) => theme.colors.background.primary};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   box-shadow: ${({ theme }) =>
@@ -241,7 +242,7 @@ const MenuItem = styled.button`
   cursor: pointer;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.primary};
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   transition: background 0.12s;
 
   &:hover:not(:disabled) {

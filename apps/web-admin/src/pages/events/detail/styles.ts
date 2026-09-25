@@ -20,6 +20,7 @@ import {
   ledgerHairline,
   ledgerHairlineHover,
   ledgerHairlineStrong,
+  RADIUS,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 
 /* ───────────────────────── Page Shell ───────────────────────── */
@@ -187,7 +188,7 @@ export const Breadcrumb = styled.nav`
     &:focus-visible {
       outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
       outline-offset: 2px;
-      border-radius: 2px;
+      border-radius: ${RADIUS.FOCUS};
     }
 
     &:not(:last-child)::after {
@@ -390,7 +391,7 @@ export const RailNavItem = styled.button<{ $active: boolean }>`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 
   /* 가로 줄에서는 현재 위치 표시도 같이 눕는다 — 왼쪽 막대 → 밑줄 */
@@ -490,7 +491,7 @@ export const EditIconButton = styled.button`
   align-items: center;
   gap: 5px;
   padding: 4px 9px;
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   border: 1px solid transparent;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -538,7 +539,7 @@ export const ModuleDataCard = styled.div<{ $accent: string }>`
   padding: 14px 16px 14px 18px;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   /* 12px은 이 지면에서 가장 둥근 값이었다 — 목록이 flat rows로 간 뒤의 톤에 맞춘다. */
-  border-radius: 8px;
+  border-radius: ${RADIUS.MD};
   /**
    * 면(fill) 없음. 이 파일 머리말이 "카드/모듈은 hairline border 위주 — fill 카드 사용처
    * 없음"이라 적어 두고 정작 여기서 1.5~2% tint를 깔고 있었다. 목록도 그룹 머리글의

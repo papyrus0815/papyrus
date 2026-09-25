@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { ledgerAccent,
+  RADIUS,
+} from '@/pages/events/ledger/styles/ledger-tokens'
+
 import { pathKeys } from '@/shared/router'
 
 import * as S from '../styles'
@@ -101,7 +105,7 @@ const Row = styled.div`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  border-radius: 12px;
+  border-radius: ${RADIUS.MD};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
   transition: border-color 0.15s, background 0.15s;
@@ -140,7 +144,7 @@ const Main = styled.div`
   }
 
   a:hover {
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 

@@ -16,6 +16,8 @@ import { FiExternalLink, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+
 import {
   TREATY_EVENT_LINK_LABELS,
   TREATY_TYPE_LABELS,
@@ -330,7 +332,7 @@ const TreatyLink = styled(Link)`
 
 const LinkKindBadge = styled.span`
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   border: 1px solid ${({ theme }) => theme.colors.border};
   font-size: 11px;
   font-weight: 600;
@@ -368,7 +370,7 @@ const ActionBtn = styled.button<{ $primary?: boolean }>`
   border: 1px solid
     ${({ theme, $primary }) =>
       $primary ? theme.colors.text.primary : theme.colors.border};
-  border-radius: 8px;
+  border-radius: ${RADIUS.SM};
   background-color: ${({ theme, $primary }) =>
     $primary ? theme.colors.text.primary : 'transparent'};
   color: ${({ theme, $primary }) =>
@@ -400,7 +402,7 @@ const UnlinkBtn = styled.button`
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   background-color: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;

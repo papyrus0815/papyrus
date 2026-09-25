@@ -5,6 +5,10 @@ import { FiArrowDown, FiArrowUp, FiSettings, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
+import { ledgerAccent,
+  RADIUS,
+} from '@/pages/events/ledger/styles/ledger-tokens'
+
 import {
   EVENT_COUNTRY_ROLE_OPTIONS,
   type EventCountryRole,
@@ -616,7 +620,7 @@ const ManageToggle = styled.button<{ $active: boolean }>`
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   border: 1px solid
     ${({ theme, $active }) =>
       $active ? theme.colors.text.tertiary : softRuleColor(theme.mode)};
@@ -637,7 +641,7 @@ const ManageToggle = styled.button<{ $active: boolean }>`
   }
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 1px;
   }
 
@@ -663,7 +667,7 @@ const ReorderBtn = styled.button`
   height: 22px;
   padding: 0;
   border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  border-radius: 4px;
+  border-radius: ${RADIUS.XS};
   background: transparent;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
   cursor: pointer;
@@ -675,7 +679,7 @@ const ReorderBtn = styled.button`
   }
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
 
@@ -708,7 +712,7 @@ const PersonRow = styled.li`
   gap: 16px;
   padding: 18px 12px;
   margin: 0 -12px;
-  border-radius: 10px;
+  border-radius: ${RADIUS.MD};
   border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
   transition: background 0.15s;
 
@@ -741,7 +745,7 @@ const PersonAvatarBtn = styled.button`
   display: block;
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
 `
@@ -884,7 +888,7 @@ const RemoveInline = styled.button`
 
   &:focus-visible {
     opacity: 1;
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
 
@@ -964,7 +968,7 @@ const CountryRolePicker = styled.span`
   align-items: center;
   padding: 1px 4px 1px 8px;
   border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  border-radius: 999px;
+  border-radius: ${RADIUS.PILL};
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -1004,7 +1008,7 @@ const CountryRow = styled.li`
   gap: 16px;
   padding: 14px 12px;
   margin: 0 -12px;
-  border-radius: 10px;
+  border-radius: ${RADIUS.MD};
   border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
   transition: background 0.15s;
 
@@ -1118,8 +1122,8 @@ const AddBtn = styled.button`
 
   &:focus-visible {
     color: ${({ theme }) => theme.colors.text.primary};
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 3px;
-    border-radius: 2px;
+    border-radius: ${RADIUS.FOCUS};
   }
 `

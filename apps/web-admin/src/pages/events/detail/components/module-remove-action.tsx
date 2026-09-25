@@ -1,7 +1,10 @@
 import { FiTrash2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
+import { ledgerHairlineStrong,
+  ledgerAccent,
+  RADIUS,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 import { confirm } from '@/shared/ui/confirm-dialog'
 
 interface ModuleRemoveActionProps {
@@ -47,7 +50,7 @@ const RemoveBtn = styled.button`
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -67,7 +70,7 @@ const RemoveBtn = styled.button`
   }
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
 `

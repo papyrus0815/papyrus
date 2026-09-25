@@ -4,7 +4,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { resolveCategory } from '@/pages/events/ledger/styles/ledger-tokens'
+import { resolveCategory,
+  ledgerAccent,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 import { CommentSection } from '@/entities/comment'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
@@ -383,7 +385,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
 
 /** 하위 사건 → 상위 사건 댓글로 유도하는 인라인 링크. */
 const ParentCommentsLink = styled(Link)`
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   font-weight: 600;
   text-decoration: none;
 
