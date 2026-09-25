@@ -421,10 +421,30 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   const centuryGroups = useMemo(() => groupYearsByCentury(allYears), [allYears])
 
   /** 즉위 구분선을 세기›연 그룹 사이 어디에 둘지 — 표시 방향을 따른다 */
-  const reignPlan = useMemo(
-    () => planReignMarkers(reignMarkers ?? [], centuryGroups, sortDirection),
-    [reignMarkers, centuryGroups, sortDirection],
-  )
+  const reignPlan = useMemo(() => {
+    const plan = planReignMarkers(
+      reignMarkers ?? [],
+      centuryGroups,
+      sortDirection,
+    )
+    /**
+     * 세기 머리글 앞 즉위라도, 그 세기 첫 해 앞에 공백 표지('107년 기록 없음')가 서면
+     * 그 줄로 옮겨 합친다. 공백과 즉위가 같은 구간의 이야기인데 세기 머리글을 사이에 두고
+     * 두 줄로 갈리면 한쪽 방향(내림차순)에서만 줄이 하나 더 생긴다.
+     */
+    for (const { century, years } of centuryGroups) {
+      const reigns = plan.beforeCentury.get(century)
+      const gap = yearGapBefore.get(years[0])
+      if (!reigns || !gap || gap.missingCenturies.length > 0) continue
+      if (!formatGapLabel(gap)) continue
+      plan.beforeYear.set(years[0], [
+        ...reigns,
+        ...(plan.beforeYear.get(years[0]) ?? []),
+      ])
+      plan.beforeCentury.delete(century)
+    }
+    return plan
+  }, [reignMarkers, centuryGroups, sortDirection, yearGapBefore])
 
   /**
    * 이름 앞에 나라를 붙이지 않아도 되는 나라 — 목록 군주 중 **가장 많은 나라**.
@@ -455,27 +475,37 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 쓰고 있어, 선을 하나 더 보태면 목록이 줄무늬가 된다. 같은 자리의 즉위는 한 줄에
    * 이어 쓴다(세조 1455–1468 · 성종 1469–1494). 이름은 인물 상세 링크.
    * 행 목록 안에 들 때는 listitem이어야 한다.
+   *
+   * `gapLabel`이 있으면 공백 표지('32년 기록 없음')와 **한 줄로 합친다**. 공백 구간의
+   * 즉위는 거의 항상 공백 표지 바로 아래에 오는데, 메타 두 줄이 연달아 쌓이면 그 자리만
+   * 목록이 두꺼워진다. '기록 없는 32년 — 그 사이 세조·성종 즉위'는 한 문장이다.
    */
   const renderReignMarkers = (
     markers: ReignMarker[],
     inList: boolean,
-    beforeCentury = false,
+    options: { beforeCentury?: boolean; gapLabel?: string | null } = {},
   ) => (
     <List.ReignMarker
       key={`reign-${markers[0].id}`}
       role={inList ? 'listitem' : 'note'}
-      $beforeCentury={beforeCentury}
+      $beforeCentury={options.beforeCentury}
+      $withGap={!!options.gapLabel}
       data-reign-marker=""
-      aria-label={markers
+      aria-label={`${options.gapLabel ? `${options.gapLabel}; ` : ''}${markers
         .map(
           (marker) =>
             `${marker.countryName ? `${marker.countryName} ` : ''}${marker.name} 즉위, 재위 ${formatReignSpan(marker)}`,
         )
-        .join('; ')}
+        .join('; ')}`}
     >
       <List.ReignMarkerIcon aria-hidden="true">
         <FaCrown />
       </List.ReignMarkerIcon>
+      {options.gapLabel && (
+        <List.ReignMarkerGap aria-hidden="true">
+          {options.gapLabel}
+        </List.ReignMarkerGap>
+      )}
       {markers.map((marker) => (
         <List.ReignMarkerItem
           key={marker.id}
@@ -893,19 +923,20 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     (연도 그룹 안에 두면 11세기 헤더 아래에 12세기 얘기가 나온다.) */}
                 {(() => {
                   const firstGap = yearGapBefore.get(years[0])
-                  if (!firstGap || firstGap.missingCenturies.length === 0)
-                    return null
-                  const label = formatGapLabel(firstGap)
+                  const label =
+                    firstGap && firstGap.missingCenturies.length > 0
+                      ? formatGapLabel(firstGap)
+                      : null
+                  const reigns = reignPlan.beforeCentury.get(century)
+                  if (reigns)
+                    return renderReignMarkers(reigns, false, {
+                      beforeCentury: true,
+                      gapLabel: label,
+                    })
                   return label ? (
                     <List.GapMarker role="note">{label}</List.GapMarker>
                   ) : null
                 })()}
-                {reignPlan.beforeCentury.has(century) &&
-                  renderReignMarkers(
-                    reignPlan.beforeCentury.get(century)!,
-                    false,
-                    true,
-                  )}
                 {/* 헤딩 탐색용 — 시각적으로는 숨기고 접근성 트리에만 남긴다. */}
                 <List.GroupHeading id={centuryHeadingId} aria-level={3}>
                   {`${centuryLabel} (${centuryRangeLabel}) — 사건 ${centuryUnitCount}건${
@@ -1037,17 +1068,19 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           {(() => {
                             const gap = yearGapBefore.get(currentYear)
                             // 세기를 건너뛴 공백은 세기 헤더 앞에서 이미 고지했다.
-                            if (!gap || gap.missingCenturies.length > 0) return null
-                            const label = formatGapLabel(gap)
+                            const label =
+                              gap && gap.missingCenturies.length === 0
+                                ? formatGapLabel(gap)
+                                : null
+                            const reigns = reignPlan.beforeYear.get(currentYear)
+                            if (reigns)
+                              return renderReignMarkers(reigns, false, {
+                                gapLabel: label,
+                              })
                             return label ? (
                               <List.GapMarker role="note">{label}</List.GapMarker>
                             ) : null
                           })()}
-                          {reignPlan.beforeYear.has(currentYear) &&
-                            renderReignMarkers(
-                              reignPlan.beforeYear.get(currentYear)!,
-                              false,
-                            )}
                           <List.GroupHeading id={yearHeadingId} aria-level={4}>
                             {`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건${
                               yearSubCount > 0
