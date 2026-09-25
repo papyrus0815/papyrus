@@ -48,6 +48,7 @@ import {
 } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 import { pathKeys } from '@/shared/router'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
@@ -170,6 +171,13 @@ export const EventsCatalogPage: React.FC = () => {
   // 기본 page size 100 — 타임라인 뷰가 한 번에 더 많은 사건을 보여주도록.
   // 사용자는 toolbar의 page size 컨트롤로 변경 가능.
   const [pageSize, setPageSize] = useState(initialUrlState.pageSize)
+
+  /**
+   * 즉위 표지의 군주 이름을 눌렀을 때 띄우는 인물 모달 — 사건 상세·행정부와 같은
+   * 공용 `PersonInlineModal`. 페이지를 떠나지 않아 접힘·스크롤 위치가 그대로 남는다.
+   */
+  const [modalPersonId, setModalPersonId] = useState<string | null>(null)
+  const closePersonModal = useCallback(() => setModalPersonId(null), [])
 
   // ===== 목록 밀도 =====
   // 세로 픽셀의 소유권을 사용자에게 넘긴다. 행 높이의 60%가 데이터가 아니라 여백과
@@ -509,7 +517,7 @@ export const EventsCatalogPage: React.FC = () => {
     openSummary,
     anyOverlayOpen,
     closeTopOverlay,
-  } = useCatalogModals(createModalOpen)
+  } = useCatalogModals(createModalOpen || modalPersonId !== null)
 
   // ===== 사건 선택 시 최근 본 목록에 추가 =====
   useEffect(() => {
@@ -1560,6 +1568,7 @@ export const EventsCatalogPage: React.FC = () => {
       // 위젯이 다시 계산하면 입력 한 톨 차이로 DOM과 내비 모수가 갈린다.
       yearBuckets={yearBuckets}
       reignMarkers={reignMarkers}
+      onOpenPerson={setModalPersonId}
       events={events}
       expandedEventIds={expandedEventIds}
       selectedEventId={selectedEventId}
@@ -1950,6 +1959,15 @@ export const EventsCatalogPage: React.FC = () => {
 
       <CatalogEntityFilterModals {...entityFilterModalProps} />
       <CatalogOverlayModals {...overlayModalProps} />
+
+      <PersonInlineModal
+        personId={modalPersonId}
+        onClose={closePersonModal}
+        onEdit={(personId) => {
+          closePersonModal()
+          navigate(pathKeys.personsTimelineDetail(personId))
+        }}
+      />
 
       <EventRegisterModal
         isOpen={createModalOpen}

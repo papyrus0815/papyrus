@@ -14,7 +14,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { FaCrown } from 'react-icons/fa'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import type { ListColumnKey, SortOption } from '@/features/event-list/lib'
@@ -79,6 +79,8 @@ interface EventCompactListProps {
    * 범위(어느 나라 군주인가)는 페이지가 정해 내려준다. 연도 그룹이 꺼진 평면 목록에는 싣지 않는다.
    */
   reignMarkers?: ReignMarker[]
+  /** 즉위 표지의 군주 이름 클릭 — 페이지가 공용 인물 모달을 띄운다 */
+  onOpenPerson?: (personId: string) => void
   events: HistoricalEvent[]
   expandedEventIds: Set<string>
   selectedEventId: string | null
@@ -197,6 +199,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   flattenedHierarchy,
   yearBuckets,
   reignMarkers,
+  onOpenPerson,
   events,
   expandedEventIds,
   selectedEventId,
@@ -491,39 +494,44 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       $beforeCentury={options.beforeCentury}
       $withGap={!!options.gapLabel}
       data-reign-marker=""
-      aria-label={`${options.gapLabel ? `${options.gapLabel}; ` : ''}${markers
-        .map(
-          (marker) =>
-            `${marker.countryName ? `${marker.countryName} ` : ''}${marker.name} 즉위, 재위 ${formatReignSpan(marker)}`,
-        )
-        .join('; ')}`}
     >
       <List.ReignMarkerIcon aria-hidden="true">
         <FaCrown />
       </List.ReignMarkerIcon>
       {options.gapLabel && (
-        <List.ReignMarkerGap aria-hidden="true">
-          {options.gapLabel}
-        </List.ReignMarkerGap>
+        <List.ReignMarkerGap>{options.gapLabel}</List.ReignMarkerGap>
       )}
-      {markers.map((marker) => (
-        <List.ReignMarkerItem
-          key={marker.id}
-          aria-hidden="true"
-          title={`${marker.countryName ? `${marker.countryName} ` : ''}${marker.name} 즉위 · 재위 ${formatReignSpan(marker)}`}
-        >
-          {marker.countryName && marker.countryName !== reignHomeCountry && (
-            <List.ReignMarkerSpan>{marker.countryName}</List.ReignMarkerSpan>
-          )}
-          <Link
-            to={pathKeys.personsTimelineDetail(marker.personId)}
-            tabIndex={-1}
-          >
-            {marker.name}
-          </Link>
-          <List.ReignMarkerSpan>{formatReignSpan(marker)}</List.ReignMarkerSpan>
-        </List.ReignMarkerItem>
-      ))}
+      <List.ReignMarkerList>
+        {markers.map((marker) => {
+          const foreign =
+            marker.countryName && marker.countryName !== reignHomeCountry
+              ? marker.countryName
+              : null
+          const span = formatReignSpan(marker)
+          return (
+            <List.ReignMarkerItem key={marker.id}>
+              {foreign && (
+                <List.ReignMarkerCountry>{foreign}</List.ReignMarkerCountry>
+              )}
+              {onOpenPerson ? (
+                <List.ReignMarkerName
+                  as="button"
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => onOpenPerson(marker.personId)}
+                  aria-label={`${marker.countryName ? `${marker.countryName} ` : ''}${marker.name} 인물 정보 보기 — 즉위, 재위 ${span}`}
+                >
+                  {marker.name}
+                </List.ReignMarkerName>
+              ) : (
+                <List.ReignMarkerName>{marker.name}</List.ReignMarkerName>
+              )}
+              <List.ReignMarkerLabel aria-hidden="true">즉위</List.ReignMarkerLabel>
+              <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
+            </List.ReignMarkerItem>
+          )
+        })}
+      </List.ReignMarkerList>
     </List.ReignMarker>
   )
 

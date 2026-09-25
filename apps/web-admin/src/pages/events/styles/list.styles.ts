@@ -1044,11 +1044,12 @@ export const GapMarker = styled.div`
 `
 
 /**
- * 군주 즉위 표지 — 연대 흐름 사이의 '👑 세종 1418–1450'.
+ * 군주 즉위 표지 — 연대 흐름 사이의 '👑 세종 즉위 1418–1450'.
  *
  * **축 위의 눈금**으로 그린다. 사건 행도, 머리글도 아니므로 둘 중 어느 것과도 같은 무게를
- * 갖지 않는다: 가로 rule 없음, 배경 없음, 메타 크기·중립색 텍스트. 색은 축 위 왕관 하나만
- * 싣는다 — 연 도트(파랑)와 구별되는 유일한 신호다. 좌단은 연 머리글 라벨과 같은 x.
+ * 갖지 않는다: 가로 rule 없음(공백 표지와 합친 줄만 그 점선을 이어받는다), 배경 없음.
+ * 읽기 위계는 세 단 — 이름(본문색·굵게) > 기간(보조색) > '즉위'·공백 문구(메타색).
+ * 색은 축 위 왕관 하나만 싣는다 — 연 도트(파랑)와 구별되는 유일한 신호다.
  */
 export const ReignMarker = styled.div<{
   $beforeCentury?: boolean
@@ -1059,18 +1060,17 @@ export const ReignMarker = styled.div<{
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  column-gap: 14px;
+  column-gap: 12px;
   row-gap: 2px;
   ${bleedToEdges}
   /* 좌단 = 공백 표지·연 머리글 셰브론과 같은 x — 메타 줄들이 한 세로선에 선다 */
-  padding: 3px var(--list-pad-r, 20px) 3px var(--rail-gutter);
+  padding: 5px var(--list-pad-r, 20px) 5px var(--rail-gutter);
   /* 세기 머리글 바로 앞이면 그 세기에 붙어 읽히지 않게 띄운다 — 표지는 앞 시대의 끝이다 */
   margin-bottom: ${({ $beforeCentury, $withGap }) =>
     $beforeCentury ? '14px' : $withGap ? '4px' : '0'};
-  font-size: var(--row-meta, 12px);
-  line-height: 1.5;
+  font-size: calc(var(--row-meta, 12px) + 0.5px);
+  line-height: 1.55;
   letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
   color: ${metaText};
 
   ${({ $withGap, theme }) =>
@@ -1090,13 +1090,7 @@ export const ReignMarker = styled.div<{
     `}
 `
 
-/** 합친 줄의 공백 문구 — 공백 표지와 같은 무게 */
-export const ReignMarkerGap = styled.span`
-  font-weight: 500;
-  white-space: nowrap;
-`
-
-/** 축 위 왕관 — 연 도트와 같은 좌표·같은 표면 링으로 축을 끊고 앉는다 */
+/** 축 위 왕관 — 연 도트와 같은 좌표. 표면색 원판이 축을 끊고, 얇은 호박 테가 눈금을 만든다 */
 export const ReignMarkerIcon = styled.span`
   position: absolute;
   left: var(--rail-x);
@@ -1105,12 +1099,17 @@ export const ReignMarkerIcon = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#d6a64a' : '#b7791f')};
+  box-shadow: inset 0 0 0 1px
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(240, 182, 74, 0.45)'
+        : 'rgba(180, 83, 9, 0.35)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f0b64a' : '#b45309')};
   z-index: 1;
   pointer-events: none;
 
@@ -1120,28 +1119,101 @@ export const ReignMarkerIcon = styled.span`
   }
 `
 
+/** 합친 줄의 공백 문구 — 즉위 목록과 가는 세로선으로 가른다 */
+export const ReignMarkerGap = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &::after {
+    content: '';
+    width: 1px;
+    height: 11px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.16)'
+        : 'rgba(15, 23, 42, 0.16)'};
+  }
+`
+
+/** 같은 자리 즉위들 — 가운뎃점으로 이어 쓴다 */
+export const ReignMarkerList = styled.span`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0;
+  row-gap: 2px;
+`
+
 export const ReignMarkerItem = styled.span`
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 5px;
   white-space: nowrap;
 
-  a {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    text-decoration: none;
+  & + &::before {
+    content: '·';
+    margin: 0 10px;
+    color: ${metaText};
+  }
+`
+
+/** 군주 이름 — 표지의 주인공. 누르면 공용 인물 모달 */
+export const ReignMarkerName = styled.span`
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 650;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: default;
+
+  &:is(button) {
+    cursor: pointer;
+    border-radius: 3px;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.12s ease, color 0.12s ease;
 
     &:hover {
-      color: ${({ theme }) => theme.colors.text.primary};
-      text-decoration: underline;
-      text-underline-offset: 2px;
+      color: ${({ theme }) => (theme.mode === 'dark' ? '#f0b64a' : '#b45309')};
+      text-decoration-color: currentColor;
+    }
+
+    &:focus-visible {
+      outline: 2px solid
+        ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+      outline-offset: 2px;
     }
   }
 `
 
-/** 재위 기간·나라 — 이름보다 한 단 낮게 */
-export const ReignMarkerSpan = styled.span`
+/** '즉위' — 이름에 붙는 동사. 메타색·한 단 작게 */
+export const ReignMarkerLabel = styled.span`
+  font-size: 0.92em;
   color: ${metaText};
+`
+
+/** 재위 기간 — 보조색·등폭 숫자 */
+export const ReignMarkerYears = styled.span`
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-variant-numeric: tabular-nums;
+`
+
+/** 섞여 든 나라(주류 나라는 생략) — 이름 앞 작은 꼬리표 */
+export const ReignMarkerCountry = styled.span`
+  font-size: 0.88em;
+  padding: 0 5px;
+  border-radius: 4px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(15, 23, 42, 0.05)'};
 `
 
 export const YearSection = styled.div`
