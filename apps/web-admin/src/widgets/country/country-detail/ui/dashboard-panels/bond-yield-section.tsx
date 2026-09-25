@@ -177,7 +177,7 @@ export function BondYieldSection({
   return (
     <S.Section>
       <S.SectionTitleRow>
-        <S.SectionTitleIcon $accent="sky">
+        <S.SectionTitleIcon>
           <IconPercent />
         </S.SectionTitleIcon>
         <S.SectionTitleText>국채 금리</S.SectionTitleText>

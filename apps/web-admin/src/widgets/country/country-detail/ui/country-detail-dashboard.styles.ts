@@ -20,7 +20,6 @@ const PRIMARY_SOFT_BORDER = 'rgba(99, 102, 241, 0.2)'
 
 const SUCCESS = '#10b981'
 const SUCCESS_SOFT_BG = 'rgba(16, 185, 129, 0.12)'
-const DANGER_DOT = '#ef4444'
 
 /* 카테고리별 액센트 — KPI는 indigo, 등록현황은 5색 */
 export type AccentKey =
@@ -153,20 +152,10 @@ export const DashboardRoot = styled.div`
   padding: ${space.xxxl}px 40px 48px;
   gap: ${space.xxxl}px;
 
-  /* 헤더 ↔ 본문 사이 단일 indigo 약한 fade */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 80px;
-    pointer-events: none;
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'linear-gradient(to bottom, rgba(99, 102, 241, 0.06), transparent)'
-        : 'linear-gradient(to bottom, rgba(99, 102, 241, 0.04), transparent)'};
-  }
+  /*
+   * 예전엔 머리 아래에 옅은 남색 띠를 깔았다. 히어로 띠가 이미 경계를 긋고 있어
+   * 띠가 두 겹이 됐고, 이 지면에서 남색은 '누를 수 있는 것'의 색이라 뜻도 흐렸다.
+   */
 
   @media (max-width: 1024px) {
     padding: ${space.xxl}px 28px 36px;
@@ -199,6 +188,8 @@ export const Section = styled.section`
   gap: ${space.lg}px;
   padding-top: 30px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  /* 목차에서 건너올 때 장 머리가 붙어 있는 목차 밑에 깔리지 않게 */
+  scroll-margin-top: 64px;
 
   /* 첫 장 위에는 선을 긋지 않는다 — 위가 이미 히어로·요약이다 */
   &:first-of-type {
@@ -220,7 +211,15 @@ export const SectionTitleRow = styled.div`
   margin-bottom: ${space.sm}px;
 `
 
-export const SectionTitleIcon = styled.div<{ $accent?: AccentKey }>`
+/**
+ * 장 머리 아이콘 — 한 가지 색.
+ *
+ * 예전엔 장마다 제 색(계보 호박, 행정부 장미, 기록 보라, 지표 하늘, 활동 초록…)을
+ * 입혔다. 열 개 넘는 장이 여섯 색으로 돌아가 지면이 알록달록했고, 색이 뜻하는 바도
+ * 없었다(같은 호박색이 계보·캘린더·최근 활동에 겹쳤다). 아이콘은 장을 알아보는
+ * 표지일 뿐이라 무채색으로 묶고, 색은 값(막대·차트)에 양보한다.
+ */
+export const SectionTitleIcon = styled.div`
   width: 26px;
   height: 26px;
   border-radius: 8px;
@@ -228,9 +227,10 @@ export const SectionTitleIcon = styled.div<{ $accent?: AccentKey }>`
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: ${({ $accent }) => accent($accent, 'soft')};
-  color: ${({ $accent }) => accent($accent, 'ink')};
-  border: 1px solid ${({ $accent }) => accent($accent, 'border')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15, 23, 42, 0.045)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 
   svg {
     width: 14px;
@@ -496,12 +496,15 @@ const missingChipBase = css`
       theme.mode === 'dark'
         ? 'rgba(255,255,255,0.08)'
         : 'rgba(15, 23, 42, 0.06)'};
+  /* 비어 있다는 표시는 속 빈 점으로 — 빨간 점은 '오류'로 읽혀 할 일 목록이 경고판이 됐다 */
   &::before {
     content: '';
     width: 6px;
     height: 6px;
+    box-sizing: border-box;
     border-radius: ${radius.pill}px;
-    background: ${DANGER_DOT};
+    border: 1.5px solid currentColor;
+    opacity: 0.6;
     flex-shrink: 0;
   }
 `
@@ -1312,7 +1315,14 @@ export const CompareLine = styled.div`
   z-index: 1;
 `
 
-export const ComparePill = styled.span<{ $direction: 'up' | 'down' | 'flat' }>`
+/**
+ * 대륙 평균 대비 — 방향은 부호(+/−)가 이미 말한다. 색은 쓰지 않는다.
+ *
+ * 예전엔 크면 초록, 작으면 빨강이었다. 인구·면적은 성적이 아니라 크기라서, 한국
+ * 인구가 아시아 평균보다 적다는 사실이 빨간 경고로 찍혔다(-93%). 좋고 나쁨이 없는
+ * 비교에 신호등 색을 입히면 없는 판단을 지어낸다.
+ */
+export const ComparePill = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -1321,25 +1331,10 @@ export const ComparePill = styled.span<{ $direction: 'up' | 'down' | 'flat' }>`
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  background: ${({ $direction }) =>
-    $direction === 'up'
-      ? 'rgba(16, 185, 129, 0.10)'
-      : $direction === 'down'
-        ? 'rgba(244, 63, 94, 0.10)'
-        : 'rgba(15, 23, 42, 0.06)'};
-  color: ${({ $direction }) =>
-    $direction === 'up'
-      ? '#059669'
-      : $direction === 'down'
-        ? '#e11d48'
-        : '#64748b'};
-  border: 1px solid
-    ${({ $direction }) =>
-      $direction === 'up'
-        ? 'rgba(16, 185, 129, 0.22)'
-        : $direction === 'down'
-          ? 'rgba(244, 63, 94, 0.22)'
-          : 'rgba(15, 23, 42, 0.10)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15, 23, 42, 0.045)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 /* ─── 정치 카드 (정부/선거) ─────────────────────────────────────────── */
@@ -1667,6 +1662,29 @@ export const EventTimelineRow = styled.div`
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 16px;
+`
+
+/**
+ * 기록 원장 + 사건 연표 한 줄.
+ *
+ * 원장은 막대가 폭을 흡수하고 연표는 내용만큼이라, 넓을 땐 원장이 남는 폭을 갖고
+ * 연표가 오른쪽에 붙는다. 칼럼이 좁으면(이 그릇 기준 — 뷰포트가 아니다) 위아래로 쌓는다.
+ */
+export const RecordGrid = styled.div`
+  /* 컨테이너 쿼리는 그릇 자신이 아니라 자손에게만 걸린다 — 격자는 한 겹 안쪽에 둔다 */
+  container-type: inline-size;
+`
+
+export const RecordGridBody = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+
+  @container (min-width: 960px) {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    gap: 28px;
+  }
 `
 
 /** 막대 몇 개짜리 띠가 본문 폭 전체를 상자로 두르면 빈 면이 주인공이 된다 — 내용만큼만 */

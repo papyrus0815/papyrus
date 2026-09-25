@@ -21,19 +21,11 @@ export function CompareLine({ comparison, metric }: CompareLineProps) {
   if (delta == null && rank == null) return null
   if (comparison.sampleSize < 3) return null
   const rounded = delta != null ? Math.round(delta) : null
-  const direction: 'up' | 'down' | 'flat' =
-    rounded == null
-      ? 'flat'
-      : rounded >= 5
-        ? 'up'
-        : rounded <= -5
-          ? 'down'
-          : 'flat'
   const sign = rounded != null && rounded > 0 ? '+' : ''
   return (
     <S.CompareLine>
       {rounded != null && (
-        <S.ComparePill $direction={direction}>
+        <S.ComparePill>
           대륙 평균 대비 {sign}
           {rounded}%
         </S.ComparePill>

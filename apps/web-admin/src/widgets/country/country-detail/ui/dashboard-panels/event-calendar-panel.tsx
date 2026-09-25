@@ -328,8 +328,14 @@ const Weekday = styled.span<{ $weekend: boolean }>`
     $weekend ? '#be123c' : theme.colors.text.tertiary};
 `
 
+/*
+ * 칸 높이 — 제목 두 줄(line-clamp 2)과 날짜가 들어가는 만큼만.
+ * 96px일 땐 사건 한 건짜리 달도 격자가 600px를 먹어 캘린더 한 장이 한 화면이었다.
+ */
+const CELL_MIN_HEIGHT = 76
+
 const EmptyCell = styled.span`
-  min-height: 96px;
+  min-height: ${CELL_MIN_HEIGHT}px;
   border-radius: 10px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.012)' : 'rgba(15,23,42,0.012)'};
@@ -339,7 +345,7 @@ const DayCell = styled.div<{ $has: boolean; $weekend: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 3px;
-  min-height: 96px;
+  min-height: ${CELL_MIN_HEIGHT}px;
   padding: 6px;
   border-radius: 10px;
   border: 1px solid

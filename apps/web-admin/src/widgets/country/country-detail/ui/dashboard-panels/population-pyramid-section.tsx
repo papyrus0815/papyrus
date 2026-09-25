@@ -579,7 +579,7 @@ function Title({
 }) {
   return (
     <S.SectionTitleRow>
-      <S.SectionTitleIcon $accent="sky">
+      <S.SectionTitleIcon>
         <IconChart />
       </S.SectionTitleIcon>
       <S.SectionTitleText>인구 피라미드</S.SectionTitleText>

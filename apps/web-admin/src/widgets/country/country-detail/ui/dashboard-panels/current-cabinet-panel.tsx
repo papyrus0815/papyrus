@@ -939,7 +939,7 @@ export function CurrentCabinetPanel({
   return (
     <S.Section>
       <S.SectionTitleRow>
-        <S.SectionTitleIcon $accent="rose">
+        <S.SectionTitleIcon>
           <IconBriefcase />
         </S.SectionTitleIcon>
         {/*

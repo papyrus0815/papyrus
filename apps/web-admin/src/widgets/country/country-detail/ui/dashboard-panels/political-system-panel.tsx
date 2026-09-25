@@ -173,7 +173,7 @@ export function PoliticalSystemPanel({
   return (
     <S.Section>
       <S.SectionTitleRow>
-        <S.SectionTitleIcon $accent="indigo">
+        <S.SectionTitleIcon>
           <IconLandmark />
         </S.SectionTitleIcon>
         <S.SectionTitleText>정체</S.SectionTitleText>

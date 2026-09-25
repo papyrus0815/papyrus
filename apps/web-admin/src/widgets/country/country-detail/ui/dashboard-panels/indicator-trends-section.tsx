@@ -68,7 +68,7 @@ export function IndicatorTrendsSection({
   return (
     <S.Section>
       <S.SectionTitleRow>
-        <S.SectionTitleIcon $accent="violet">
+        <S.SectionTitleIcon>
           <IconChart />
         </S.SectionTitleIcon>
         <S.SectionTitleText>지표 추이</S.SectionTitleText>
