@@ -24,7 +24,6 @@ import {
   RADIUS,
   ledgerAccent,
   ledgerHairline,
-  ledgerHairlineStrong,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
@@ -95,7 +94,7 @@ export function DetailFacts({
         />
       </DateLine>
 
-      <EditableLine title={event.location ?? ''}>
+      <LocationLine title={event.location ?? ''}>
         <PinIcon aria-hidden>
           <FiMapPin />
         </PinIcon>
@@ -106,7 +105,7 @@ export function DetailFacts({
           placeholder="위치"
           label="위치"
         />
-      </EditableLine>
+      </LocationLine>
 
       {contemporaryLink}
 
@@ -210,12 +209,22 @@ const Panel = styled.section`
  */
 const YearDisplay = styled.div`
   ${DIGIT_DISPLAY}
-  font-size: 34px;
+  /**
+   * 한 열로 떨어지면 이 숫자는 **제목 바로 아래**에 놓인다 — 34px이면 h1(36px)과 거의
+   * 같은 크기라 "큰 글자가 두 번" 나오는 인상이 되고, 제목에 이미 날짜가 들어 있는
+   * 사건에서는 같은 값이 두 번 크게 찍힌다. 좁을 땐 장부의 머리글 크기로 내린다.
+   */
+  font-size: 22px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 2px;
+
+  /* 2열일 때는 옆 칼럼이라 제목과 경쟁하지 않는다 — 장부의 첫 축으로 크게. */
+  @container eventdetail (min-width: 920px) {
+    font-size: 34px;
+  }
 `
 
 const EditableLine = styled.div`
@@ -233,9 +242,31 @@ const EditableLine = styled.div`
   }
 `
 
-/** 날짜 줄만 mono tabular — 위치(한글)에까지 mono를 걸면 폰트가 폴백으로 갈린다. */
+/**
+ * 위치 — 실데이터가 길다("이란(테헤란·나탄즈·포르도…), 이스라엘(텔아비브…), 카타르(…)
+ * — 광역 중동 전구."). 312px 패널에서 4줄을 먹으며 장부의 첫 화면을 밀어냈다.
+ * 색인이므로 **두 줄로 자르고** 전체는 title(hover)과 편집 모드가 갖는다.
+ */
+const LocationLine = styled(EditableLine)`
+  align-items: flex-start;
+
+  [data-edit-host] > span:first-child {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+`
+
+/**
+ * 날짜 줄 — **tabular-nums만** 걸고 mono 글꼴은 쓰지 않는다.
+ *
+ * 처음엔 DIGIT_DISPLAY(mono 스택)를 걸었는데, 값이 '2025년 6월 12일'처럼 한글을 품고 있어
+ * '년·월·일'이 mono 스택에서 폴백되며 앞뒤 간격이 벌어졌다(실측 확인). 자릿수 정렬이라는
+ * 목적은 tabular-nums 하나로 달성되고, 글꼴은 본문과 같아야 한 줄로 읽힌다.
+ */
 const DateLine = styled(EditableLine)`
-  ${DIGIT_DISPLAY}
+  font-variant-numeric: tabular-nums;
 `
 
 const PinIcon = styled.span`
@@ -249,9 +280,17 @@ const PinIcon = styled.span`
   }
 `
 
+/**
+ * 색인 행 묶음.
+ *
+ * 한 열 배치에서는 이 패널이 문서 폭(720px)을 그대로 받는다. 행을 세로로만 쌓으면
+ * 라벨(좌)과 값(우) 사이가 600px 비어, 한 행을 읽는 데 눈이 화면을 가로질러야 했다.
+ * 폭이 남으면 **여러 열로 접는다** — 색인은 훑는 것이지 읽는 것이 아니다.
+ */
 const Rows = styled.div`
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  column-gap: 28px;
   margin-top: 12px;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
@@ -292,17 +331,21 @@ const RowLabel = styled.span`
 `
 
 /**
- * 값 — 채워진 것은 또렷한 수치(tabular), 빈 것은 '—'. 빈 칸을 숨기지 않는 대신
- * 잉크를 낮춰, 훑을 때 채워진 행만 눈에 들어오게 한다.
+ * 값 — 채워진 것은 또렷한 수치(tabular), 빈 것은 '—'.
+ *
+ * ⚠️ 빈 값의 색을 hairline(alpha 0.1)으로 두었더니 화면에서 **거의 보이지 않았다**.
+ * 이 패널을 만든 이유가 "여기는 아직 비었다"를 말해 주기 위해서인데, 정작 그 신호가
+ * 가장 안 읽히는 모순이었다. 채워진 값보다는 흐리되 읽히는 단계(metaText)로 올린다 —
+ * 위계는 굵기(600 vs 400)와 색 한 단 차이가 만든다.
  */
 const RowValue = styled.span<{ $empty: boolean }>`
-  ${DIGIT_DISPLAY}
   min-width: 0;
   font-size: 12.5px;
   font-weight: ${({ $empty }) => ($empty ? 400 : 600)};
+  font-variant-numeric: tabular-nums;
   text-align: right;
   color: ${({ theme, $empty }) =>
-    $empty ? ledgerHairlineStrong(theme.mode) : theme.colors.text.primary};
+    $empty ? metaText({ theme }) : theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

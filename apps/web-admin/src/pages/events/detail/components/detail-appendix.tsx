@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { FiPlus, FiStar, FiUploadCloud, FiX } from 'react-icons/fi'
+import { createPortal } from 'react-dom'
 import styled, { css } from 'styled-components'
 
 import {
@@ -445,14 +446,15 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
         }}
       />
 
-      {lightbox && (
-        <Lightbox
-          ref={lightboxRef}
-          onClick={() => setLightbox(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="이미지 미리보기"
-        >
+      {lightbox &&
+        createPortal(
+          <Lightbox
+            ref={lightboxRef}
+            onClick={() => setLightbox(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="이미지 미리보기"
+          >
           <LightboxClose
             type="button"
             onClick={(e) => {
@@ -470,8 +472,9 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
             decoding="async"
           />
           {lightbox.caption && <LightboxCaption>{lightbox.caption}</LightboxCaption>}
-        </Lightbox>
-      )}
+          </Lightbox>,
+          document.body,
+        )}
     </S.Section>
   )
 }
@@ -813,6 +816,13 @@ const FormSave = styled.button`
   }
 `
 
+/**
+ * 전체화면 이미지 뷰어 — **body로 포털**한다.
+ *
+ * `position: fixed`는 조상 중 하나라도 contain/transform을 만들면 그 안에 갇힌다.
+ * 지면 셸이 컨테이너 쿼리(container-type: inline-size)를 쓰기 시작하면서 실제로 갇히는
+ * 조건이 됐다 — 전체화면 오버레이는 애초에 지면 트리에 매달려 있을 이유가 없다.
+ */
 const Lightbox = styled.div`
   position: fixed;
   inset: 0;

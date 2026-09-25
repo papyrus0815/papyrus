@@ -8,7 +8,7 @@
  * - ledger 페이지의 토큰 체계(ledger-tokens.ts)를 그대로 차용해 다크/라이트 일관 유지.
  */
 import { Link } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import { metaText } from '@/pages/events/styles/theme'
 
@@ -45,7 +45,23 @@ export const Page = styled.div`
   scrollbar-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)} transparent;
 `
 
+/**
+ * 지면 셸 — **컨테이너 쿼리의 기준**이다(container-name: eventdetail).
+ *
+ * 이 지면은 전역 좌측 사이드바(목록) 안에 놓인다. 실측하면 사이드바가 **396px**를 먹어서,
+ * 뷰포트 기준 미디어 쿼리는 실제 가용 폭보다 그만큼 낙관적이다 — 임계를 1100px로 두었더니
+ * 뷰포트 1150에서 2열이 유지되며 **문서 열 366px / 장부 312px**가 됐다(실측). 읽는 글이
+ * 색인보다 54px 넓을 뿐인 배치다. 게다가 사이드바는 접을 수 있어서 뷰포트로는 맞출 수 없다.
+ *
+ * 그래서 임계를 **자기 폭**에 건다. 레포가 목록 툴바에서 같은 함정을 같은 방법으로 고쳤다
+ * (`@container catalogtoolbar`).
+ *
+ * ⚠️ container-type은 contain: layout을 함의해 **fixed 자손의 컨테이닝 블록**이 된다.
+ *    전체화면 오버레이(이미지 라이트박스)는 그래서 body로 포털한다.
+ */
 export const PageInner = styled.div`
+  container-type: inline-size;
+  container-name: eventdetail;
   max-width: 1180px;
   margin: 0 auto;
   padding: 32px 28px 96px;
@@ -72,39 +88,43 @@ export const PageInner = styled.div`
  */
 export const Body = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 312px;
-  gap: 48px;
+  /* 기본은 한 열 — 컨테이너 쿼리 미지원 환경의 폴백이기도 하다. */
+  grid-template-columns: 1fr;
+  gap: 24px;
   align-items: start;
-  margin-top: 36px;
+  margin-top: 24px;
 
-  @media (max-width: 1100px) {
-    grid-template-columns: 1fr;
-    gap: 24px;
-    margin-top: 24px;
+  /**
+   * 2열은 **문서 열이 560px 이상 확보될 때만**. 312(장부) + 48(gap) + 560 = 920.
+   * 이 아래에서는 장부를 문서 위로 올린다(Aside의 order) — 좁을수록 "무엇이 있는
+   * 사건인가"를 먼저 알아야 스크롤을 결정할 수 있다.
+   */
+  @container eventdetail (min-width: 920px) {
+    grid-template-columns: minmax(0, 1fr) 312px;
+    gap: 48px;
+    margin-top: 36px;
   }
 `
 
 /**
  * 우측 칼럼 — 사실 장부 + 목차를 함께 들고 스크롤을 따라온다.
- * (sticky는 이 컨테이너가 소유한다. 안쪽 Rail은 더 이상 자기 sticky를 갖지 않는다.)
+ * (sticky는 이 컨테이너가 소유한다. 안쪽 Rail은 자기 sticky를 갖지 않는다.)
  */
 export const Aside = styled.aside`
-  position: sticky;
-  top: 24px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  max-height: calc(100vh - var(--header-height, 64px) - 60px);
-  overflow-y: auto;
-  scrollbar-width: thin;
+  gap: 16px;
+  /* 한 열일 때는 문서보다 **먼저** 보인다 — DOM 순서(문서 먼저)는 읽기 순서를 지킨다. */
+  order: -1;
 
-  @media (max-width: 1100px) {
-    position: static;
-    max-height: none;
-    overflow: visible;
-    /* 한 열로 떨어지면 장부가 문서 위로 — DOM 순서(문서 먼저)는 읽기 순서를 지킨다. */
-    order: -1;
-    gap: 16px;
+  @container eventdetail (min-width: 920px) {
+    position: sticky;
+    top: 24px;
+    order: 0;
+    gap: 24px;
+    max-height: calc(100vh - var(--header-height, 64px) - 60px);
+    overflow-y: auto;
+    scrollbar-width: thin;
   }
 `
 
@@ -170,12 +190,16 @@ export const Hero = styled.section`
    * 문서 열(1fr = 남은 폭)이 720보다 좁아지는데 히어로만 720을 유지해, 제목이 본문보다
    * 오른쪽으로 더 나가는 어긋남이 생긴다(실측 685 vs 720).
    */
-  max-width: min(720px, calc(100% - 312px - 48px));
+  max-width: 720px;
   margin-left: 0;
   margin-right: auto;
 
-  @media (max-width: 1100px) {
-    max-width: 720px;
+  /**
+   * 2열일 때는 문서 열과 **같은 식**으로 상한을 잡는다. 720px 고정이면 장부가 차지한
+   * 만큼 문서 열만 좁아지는 구간에서 제목이 본문보다 오른쪽으로 더 나간다.
+   */
+  @container eventdetail (min-width: 920px) {
+    max-width: min(720px, calc(100% - 312px - 48px));
   }
 `
 
@@ -293,24 +317,26 @@ export const HeroActions = styled.div`
 export const Rail = styled.nav`
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 0;
+  padding: 0 0 14px;
 
-  @media (max-width: 1100px) {
-    padding: 0 0 14px;
-    gap: 0;
+  @container eventdetail (min-width: 920px) {
+    gap: 28px;
+    padding: 0;
   }
 `
 
 export const RailGroup = styled.div`
+  /* 한 열로 떨어졌을 때는 라벨과 목록을 한 줄에 — '목차'가 제 줄을 차지할 이유가 없다. */
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 12px;
 
-  /* 라벨과 목록을 한 줄에 — '목차'가 제 줄을 차지할 이유가 없다 */
-  @media (max-width: 1100px) {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 12px;
+  @container eventdetail (min-width: 920px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 `
 
@@ -325,10 +351,12 @@ export const RailGroupLabel = styled.div`
   letter-spacing: 0.04em;
   color: ${metaText};
 
-  @media (max-width: 1100px) {
-    flex-shrink: 0;
-    /* 가로 줄에서는 칩들의 글자선에 맞춰 내려앉는다 */
-    transform: translateY(-1px);
+  flex-shrink: 0;
+  /* 가로 줄에서는 칩들의 글자선에 맞춰 내려앉는다 */
+  transform: translateY(-1px);
+
+  @container eventdetail (min-width: 920px) {
+    transform: none;
   }
 `
 
@@ -337,16 +365,17 @@ export const RailNavList = styled.ul`
   margin: 0;
   padding: 0;
   display: flex;
-  flex-direction: column;
-  border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  /* 한 열로 떨어지면 축이 눕는다 — 세로 자를 가로 자로(세로로 두면 8줄 289px을 먹는다). */
+  flex-direction: row;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
-  /* 흐름으로 내려오면 축이 눕는다 — 세로 자를 가로 자로 */
-  @media (max-width: 1100px) {
-    flex-direction: row;
-    flex-wrap: wrap;
-    row-gap: 2px;
-    border-left: none;
-    border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  @container eventdetail (min-width: 920px) {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    border-bottom: none;
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   }
 `
 
@@ -357,9 +386,11 @@ export const RailNavList = styled.ul`
  */
 export const RailNavItem = styled.button<{ $active: boolean }>`
   position: relative;
-  width: 100%;
-  padding: 7px 0 7px 14px;
-  margin-left: -1px;
+  /* 기본은 가로 줄(한 열 배치) — 현재 위치 표시도 눕는다(왼쪽 막대 → 밑줄). */
+  width: auto;
+  margin-left: 0;
+  margin-bottom: -1px;
+  padding: 6px 11px;
   font: inherit;
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? 600 : 400)};
@@ -368,7 +399,7 @@ export const RailNavItem = styled.button<{ $active: boolean }>`
     $active ? theme.colors.text.primary : metaText({ theme })};
   background: transparent;
   border: 0;
-  border-left: 2px solid
+  border-bottom: 2px solid
     ${({ theme, $active }) =>
       $active ? ledgerAccent(theme.mode) : 'transparent'};
   text-align: left;
@@ -385,14 +416,14 @@ export const RailNavItem = styled.button<{ $active: boolean }>`
     border-radius: ${RADIUS.FOCUS};
   }
 
-  /* 가로 줄에서는 현재 위치 표시도 같이 눕는다 — 왼쪽 막대 → 밑줄 */
-  @media (max-width: 1100px) {
-    width: auto;
-    margin-left: 0;
-    margin-bottom: -1px;
-    padding: 6px 11px;
-    border-left: 0;
-    border-bottom: 2px solid
+  /* 세로 목록(2열 배치)에서는 축이 서고, 현재 위치 표시도 왼쪽 막대로 선다. */
+  @container eventdetail (min-width: 920px) {
+    width: 100%;
+    margin-left: -1px;
+    margin-bottom: 0;
+    padding: 7px 0 7px 14px;
+    border-bottom: 0;
+    border-left: 2px solid
       ${({ theme, $active }) =>
         $active ? ledgerAccent(theme.mode) : 'transparent'};
   }
@@ -508,9 +539,34 @@ export const EditIconButton = styled.button`
 `
 
 /**
+ * 긴 본문의 편집 어포던스 — **점선은 hover/focus에서만**.
+ *
+ * 인라인 편집 키트는 읽기 모드 값에 상시 dashed underline을 깔아 "여기는 고칠 수 있다"를
+ * 알린다. 날짜·위치처럼 한 줄짜리 필드에서는 맞는 처방이지만, 문단이 이어지는 본문에서는
+ * 화면이 통째로 밑줄로 덮인다 — 실측: 이 지면의 편집 호스트 43개가 전부 점선을 달고 있었고,
+ * 요약 3문단과 배경·전개·여파 본문이 전부 거기 포함됐다. 긴 글에 깔린 점선은 어포던스가
+ * 아니라 **맞춤법 오류나 깨진 링크**로 읽히고, 본문 안 엔티티 링크(진짜 밑줄)와도 다툰다.
+ *
+ * 같은 판단이 이미 h1에 있었다(detail-hero TitleHost: "44px 굵은 제목 밑의 상시 점선은
+ * 맞춤법 오류/깨진 링크처럼 보인다"). 그 규칙을 긴 본문 전체로 넓힌다 — 어포던스는
+ * hover 시의 점선과 ✎ 버튼이 충분히 진다. 키보드 사용자를 위해 focus-within도 함께.
+ */
+export const longFormEditAffordance = css`
+  [data-edit-host] > span:first-child {
+    text-decoration-line: none;
+  }
+
+  [data-edit-host]:hover > span:first-child,
+  [data-edit-host]:focus-within > span:first-child {
+    text-decoration-line: underline;
+  }
+`
+
+/**
  * SectionBody — 읽기 본문(배경·전개·여파). 좁은 가독폭과 넉넉한 line-height.
  */
 export const SectionBody = styled.div`
+  ${longFormEditAffordance}
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};

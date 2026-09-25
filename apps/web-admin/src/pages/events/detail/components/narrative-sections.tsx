@@ -27,6 +27,7 @@ import {
 import { metaText } from '@/pages/events/styles/theme'
 import { type MentionItem } from '@/shared/lib/mention/mention-system'
 
+import * as S from '../styles'
 import { InlineRichText, InlineText } from './inline'
 import { type SectionRow } from './narrative-sections.lib'
 
@@ -222,6 +223,7 @@ const SectionIndex = styled.span`
  * 바로 아래 본문(15.5)과는 크기가 아니라 **굵기**(700 vs 400)가 가른다.
  */
 const SectionTitleHost = styled.div`
+  ${S.longFormEditAffordance}
   flex: 1;
   min-width: 0;
   font-size: 16px;
@@ -342,6 +344,7 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
 
 /** 단락 본문 — 섹션 리드 문단과 **같은 좌측 기준선·같은 가독폭**. */
 const SectionBodyHost = styled.div`
+  ${S.longFormEditAffordance}
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};
