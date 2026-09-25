@@ -513,9 +513,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       <List.ReignMarkerIcon aria-hidden="true">
         <FaCrown />
       </List.ReignMarkerIcon>
-      {options.gapLabel && (
-        <List.ReignMarkerGap>{options.gapLabel}</List.ReignMarkerGap>
-      )}
       <List.ReignMarkerList>
         {markers.map((marker) => {
           const foreign =
@@ -547,6 +544,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           )
         })}
       </List.ReignMarkerList>
+      {options.gapLabel && (
+        <List.ReignMarkerGap>{options.gapLabel}</List.ReignMarkerGap>
+      )}
     </List.ReignMarker>
   )
 

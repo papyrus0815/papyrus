@@ -60,6 +60,37 @@ describe('toReignMarkers', () => {
     expect(formatReignSpan(markers[0])).toBe('1418–1450')
   })
 
+  it('나라·이름·기간이 같은 재위는 인물 행이 달라도 한 번만 싣는다', () => {
+    const markers = toReignMarkers(
+      [
+        reign({
+          id: 'dup-a',
+          personId: 'person-a',
+          regnalName: '세종',
+          startDate: '1418-08-10T00:00:00.000Z',
+          endDate: '1450-02-17T00:00:00.000Z',
+        }),
+        reign({
+          id: 'dup-b',
+          personId: 'person-b',
+          regnalName: '세종',
+          startDate: '1418-08-10T00:00:00.000Z',
+          endDate: '1450-02-17T00:00:00.000Z',
+        }),
+        // 기간이 다르면(복위 등) 별개 재위로 남는다
+        reign({
+          id: 'restored',
+          personId: 'person-a',
+          regnalName: '세종',
+          startDate: '1451-01-01T00:00:00.000Z',
+        }),
+      ],
+      new Set([JOSEON]),
+      personName,
+    )
+    expect(markers.map((item) => item.id)).toEqual(['dup-a', 'restored'])
+  })
+
   it('표시명 폴백: 레거시 왕명(notes) → 묘호 → 인물 이름', () => {
     const [fromNotes, fromTemple, fromName] = toReignMarkers(
       [

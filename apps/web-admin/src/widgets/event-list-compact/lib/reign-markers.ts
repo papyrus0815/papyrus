@@ -125,6 +125,10 @@ export function toReignMarkers(
 ): ReignMarker[] {
   if (!reigns?.length || countryIds.size === 0) return []
   const markers: ReignMarker[] = []
+  /* 표시 문구(나라·이름·기간)가 같은 재위는 하나만 남긴다. 실측: 프리드리히 3세가 **인물 행
+   * 두 개**로 시딩돼 있어 '프로이센 왕국 Friedrich 1888–1888'이 한 말풍선에 두 번 찍혔다.
+   * personId로 가르면 이 경우를 못 잡는다 — 글자가 같으면 두 번 찍을 이유가 없다. */
+  const seen = new Set<string>()
   for (const reign of reigns) {
     const inScope =
       (reign.countryId && countryIds.has(reign.countryId)) ||
@@ -170,12 +174,17 @@ export function toReignMarkers(
       (person ? personName(person) : '') ||
       '군주'
 
+    const countryName =
+      reign.historicalCountry?.name ?? reign.country?.name ?? null
+    const dedupeKey = [countryName, name, start.year, end?.year ?? ''].join('|')
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+
     markers.push({
       id: reign.id,
       personId: reign.personId,
       name,
-      countryName:
-        reign.historicalCountry?.name ?? reign.country?.name ?? null,
+      countryName,
       startKey: lowerKey(start),
       startYear: start.year,
       endYear: end?.year ?? null,

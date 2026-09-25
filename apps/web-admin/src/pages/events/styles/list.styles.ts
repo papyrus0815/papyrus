@@ -1044,12 +1044,14 @@ export const GapMarker = styled.div`
 `
 
 /**
- * 군주 즉위 표지 — 연대 흐름 사이의 '👑 세종 즉위 1418–1450'.
+ * 군주 즉위 표지 — 연대 흐름 사이의 '👑 ◁[세종 즉위 1418–1450]'.
  *
- * **축 위의 눈금**으로 그린다. 사건 행도, 머리글도 아니므로 둘 중 어느 것과도 같은 무게를
- * 갖지 않는다: 가로 rule 없음(공백 표지와 합친 줄만 그 점선을 이어받는다), 배경 없음.
- * 읽기 위계는 세 단 — 이름(본문색·굵게) > 기간(보조색) > '즉위'·공백 문구(메타색).
- * 색은 축 위 왕관 하나만 싣는다 — 연 도트(파랑)와 구별되는 유일한 신호다.
+ * 축 위 왕관이 **말하는** 말풍선으로 그린다. 예전엔 배경 없는 메타 한 줄이었는데,
+ * 사건 행 사이에 끼면 행의 부스러기(설명 줄이 밀려 내려온 것)처럼 읽혔고, 왕관과 글이
+ * 32px 떨어져 있어 둘이 한 표지라는 연결도 약했다. 말풍선은 ① 자기 윤곽으로 행과 다른
+ * 종류의 것임을 말하고 ② 꼬리가 왕관을 가리켜 '이 축 위 지점의 주석'임을 말한다.
+ * 사건 행보다 가볍게 — 내용 폭만 차지하는 작은 상자, 옅은 호박 면(왕관과 같은 계열).
+ * 읽기 위계는 그대로 세 단 — 이름(본문색·굵게) > 기간(보조색) > '즉위'·공백 문구(메타색).
  */
 export const ReignMarker = styled.div<{
   $beforeCentury?: boolean
@@ -1058,13 +1060,14 @@ export const ReignMarker = styled.div<{
 }>`
   position: relative;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   column-gap: 12px;
-  row-gap: 2px;
+  row-gap: 4px;
   ${bleedToEdges}
-  /* 좌단 = 공백 표지·연 머리글 셰브론과 같은 x — 메타 줄들이 한 세로선에 선다 */
-  padding: 5px var(--list-pad-r, 20px) 5px var(--rail-gutter);
+  /* 좌단 = 공백 표지·연 머리글 셰브론과 같은 x — 말풍선 **글자**가 이 세로선에 선다
+     (상자는 ReignMarkerList의 음수 여백만큼 왼쪽으로 나와 꼬리를 왕관 쪽으로 뻗는다) */
+  padding: 6px var(--list-pad-r, 20px) 6px var(--rail-gutter);
   /* 세기 머리글 바로 앞이면 그 세기에 붙어 읽히지 않게 띄운다 — 표지는 앞 시대의 끝이다 */
   margin-bottom: ${({ $beforeCentury, $withGap }) =>
     $beforeCentury ? '14px' : $withGap ? '4px' : '0'};
@@ -1119,7 +1122,7 @@ export const ReignMarkerIcon = styled.span`
   }
 `
 
-/** 합친 줄의 공백 문구 — 즉위 목록과 가는 세로선으로 가른다 */
+/** 합친 줄의 공백 문구 — 말풍선 **뒤**에 온다(말풍선이 왕관에 붙어 있어야 해서) */
 export const ReignMarkerGap = styled.span`
   display: inline-flex;
   align-items: center;
@@ -1127,7 +1130,7 @@ export const ReignMarkerGap = styled.span`
   font-weight: 500;
   white-space: nowrap;
 
-  &::after {
+  &::before {
     content: '';
     width: 1px;
     height: 11px;
@@ -1138,13 +1141,54 @@ export const ReignMarkerGap = styled.span`
   }
 `
 
-/** 같은 자리 즉위들 — 가운뎃점으로 이어 쓴다 */
+/**
+ * 말풍선 — 같은 자리 즉위들을 가운뎃점으로 이어 쓴 상자.
+ *
+ * 꼬리는 45° 돌린 정사각형의 왼쪽·아래 테두리다. 면이 상자 테두리를 덮어야 이음매가
+ * 안 보이므로 **면은 불투명**이어야 한다(반투명 tint면 꼬리와 상자가 겹친 곳만 진해진다).
+ */
 export const ReignMarkerList = styled.span`
+  --bubble-bg: ${({ theme }) => (theme.mode === 'dark' ? '#1e1912' : '#fff8ee')};
+  --bubble-line: ${({ theme }) =>
+    theme.mode === 'dark' ? '#4a3a22' : '#efd6b4'};
+  position: relative;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: 0;
   row-gap: 2px;
+  max-width: 100%;
+  /* 글자 좌단은 행 패딩(= 셰브론 x)에 두고 상자만 왼쪽으로 내민다 */
+  margin-left: -11px;
+  padding: 3px 11px 4px;
+  border: 1px solid var(--bubble-line);
+  border-radius: 10px;
+  background: var(--bubble-bg);
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    background: var(--bubble-bg);
+    border-left: 1px solid var(--bubble-line);
+    border-bottom: 1px solid var(--bubble-line);
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  @media (forced-colors: active) {
+    border-color: CanvasText;
+    &::before {
+      display: none;
+    }
+  }
+
+  /* 좁은 폭은 레일 거터가 좁아 내민 상자가 왕관 밑으로 파고든다 — 글자 좌단에 상자를 맞춘다 */
+  @media (max-width: 640px) {
+    margin-left: 0;
+  }
 `
 
 export const ReignMarkerItem = styled.span`
@@ -1153,7 +1197,9 @@ export const ReignMarkerItem = styled.span`
   gap: 5px;
   white-space: nowrap;
 
-  & + &::before {
+  /* 구분점은 **앞 항목 끝**에 붙인다. 뒤 항목 머리에 두면 말풍선 안에서 줄이 넘어갈 때
+     새 줄이 '·'로 시작했다(390px 실측). */
+  &:not(:last-child)::after {
     content: '·';
     margin: 0 10px;
     color: ${metaText};
@@ -1210,10 +1256,11 @@ export const ReignMarkerCountry = styled.span`
   border-radius: 4px;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
+  /* 말풍선 면(호박) 위라 회색 꼬리표는 탁해진다 — 같은 계열로 한 단 진하게 */
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(15, 23, 42, 0.05)'};
+      ? 'rgba(240, 182, 74, 0.1)'
+      : 'rgba(180, 83, 9, 0.07)'};
 `
 
 export const YearSection = styled.div`
