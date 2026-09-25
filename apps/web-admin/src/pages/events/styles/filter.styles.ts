@@ -54,16 +54,19 @@ export const FilterGroup = styled.div<{ $overflowing?: boolean }>`
   border-radius: 8px;
   overflow: hidden;
   transition: border-color ${MOTION.fast};
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: ${CONTROL.bgDark};
-          border: 1px solid ${CONTROL.borderDark};
-        `
-      : css`
-          background: ${CONTROL.bgLight};
-          border: 1px solid ${CONTROL.borderLight};
-        `}
+  /*
+   * 면(fill) 없음 — **테두리 한 겹만** 그룹을 만든다.
+   *
+   * 453px짜리 회색 면이 검색 필드(흰 면 + 테두리) 바로 옆에 서면, 도구줄 상단이 큰
+   * 색 덩어리 둘로 읽혀 목록 지면에서 가장 무거운 층이 된다("상단 툴바가 무겁다",
+   * 사용자 판정 2026-09-24). 그룹의 경계·내부 구획·높이는 테두리와 hairline이 이미
+   * 전부 만들고 있어, 면은 무게만 싣고 있었다.
+   * 면은 **상태**에만 남는다 — 트리거 hover(insetHover)와 활성 필터의 tint.
+   */
+  background: transparent;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? CONTROL.borderDark : CONTROL.borderLight};
 
   /* 형제 **사이**의 hairline — '사이'는 컨테이너의 관심사라 여기 남는다.
    * 자손 결합자도 !important도 필요 없다: 직속 자식(PopoverWrap)은 자기 보더가 없다. */

@@ -2,8 +2,9 @@
  * Event Filters Panel Widget
  * FSD: widgets/event-filters-panel/ui
  *
- * 검색 입력 / 활성 칩 / reset / *정렬·페이지 크기*는 페이지 또는 ViewSwitcherRow가
- * 담당. 이 위젯은 "데이터 좁히기"인 카테고리·국가·세기 + 표시 토글만.
+ * 검색 입력 / 활성 칩 / reset / 정렬·밀도·계층 같은 표시 옵션은 페이지(도구줄의 ⋯
+ * 표시 설정 메뉴)가 담당한다. 이 위젯의 소관은 **데이터 좁히기** 하나 —
+ * 분류·대륙·국가·세기뿐이다.
  *
  * v2 — 인라인 팝오버: 카테고리·국가 모두 클릭 시 *드롭다운 리스트*로 즉시 선택 가능.
  * 항목이 많으면 popover 내부 검색 박스 노출. 기존 모달 진입은 "전체 보기" 풋터에서.
@@ -27,7 +28,6 @@ import {
   FiChevronDown,
   FiGlobe,
   FiGrid,
-  FiLayers,
   FiMap,
   FiSearch,
   FiX,
@@ -65,7 +65,6 @@ interface FiltersPanelProps {
   selectedCountry: typeof FILTER_ALL | string
   selectedContinent: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
-  showFlatView: boolean
 
   dbCategories: EventCategoryDto[]
   availableCenturies: number[]
@@ -105,7 +104,6 @@ interface FiltersPanelProps {
   /** 모달 트리거 — "전체 보기"용 fallback */
   onShowCategoryModal: () => void
   onShowCountryModal: () => void
-  onToggleFlatView: () => void
   onSelectCentury: (century: CenturyFilter) => void
 }
 
@@ -140,7 +138,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   selectedCountry,
   selectedContinent,
   selectedCentury,
-  showFlatView,
   dbCategories,
   availableCenturies,
   countries = [],
@@ -154,7 +151,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   onSelectContinent,
   onShowCategoryModal,
   onShowCountryModal,
-  onToggleFlatView,
   onSelectCentury,
 }) => {
   /**
@@ -516,28 +512,18 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
         />
       </Filter.FilterGroup>
 
-      {/* 토글들 — segmented group 외부, inline group.
+      {/*
+       * (이동) '계층' 토글 — 도구줄 ⋯ 표시 설정 메뉴로 갔다(2026-09-24).
        *
-       * ⚠️ FilterToggle(label)에 onClick을 걸지 말 것. label 안의 Switch는 button —
-       * HTML labelable 요소라 label의 피제어 컨트롤이 된다. 라벨 영역을 누르면
-       * ⑴ label 자신의 onClick ⑵ 브라우저가 button으로 전달한 활성화 클릭이 연달아 실행돼
-       * **짝수 번 토글 = 순 변화 0**이 됐다. 라이브 실측에선 URL만 flat=1로 바뀌고 목록은
-       * 계층 그대로 남아, 새로고침하면 다른 화면이 뜨는 URL↔화면 desync까지 생겼다.
-       * 토글 주체는 Switch 하나로 단일화한다(라벨 클릭은 브라우저가 알아서 버튼으로 전달). */}
-      <Filter.FilterToggle>
-        <FiLayers size={12} style={{ color: '#64748b' }} aria-hidden="true" />
-        <Filter.FilterToggleLabel>계층</Filter.FilterToggleLabel>
-        <Filter.Switch
-          type="button"
-          role="switch"
-          aria-checked={!showFlatView}
-          aria-label="계층 보기"
-          $active={!showFlatView}
-          onClick={onToggleFlatView}
-        >
-          <Filter.SwitchThumb $active={!showFlatView} />
-        </Filter.Switch>
-      </Filter.FilterToggle>
+       * 이 위젯의 소관은 주석 첫 줄대로 **데이터 좁히기**인데, 계층/평면은 같은 사건을
+       * 다르게 나열할 뿐 결과 집합을 바꾸지 않는다. 필터 바에 서 있는 동안은 ⑴ 성격이
+       * 다른 컨트롤이 모수를 바꾸는 축들과 한 줄에 섞였고 ⑵ 켜져 있을 때의 파란 tint가
+       * 'N번 축에 필터가 걸렸다'는 신호와 같은 색으로 경합했다.
+       *
+       * ⚠️ 되살릴 일이 있으면 Switch 하나로만 토글할 것. label에 onClick을 걸면 label의
+       * 핸들러와 브라우저가 button으로 전달한 활성화 클릭이 연달아 실행돼 **짝수 번 토글
+       * = 순 변화 0**이 된다(URL만 flat=1로 바뀌고 목록은 계층 그대로 남던 실측 결함).
+       */}
     </Filter.FilterBlock>
   )
 }

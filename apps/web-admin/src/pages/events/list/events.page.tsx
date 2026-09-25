@@ -1772,7 +1772,6 @@ export const EventsCatalogPage: React.FC = () => {
     optionCounts,
     setShowCategoryModal,
     setShowCountryModal,
-    toggleShowFlatView,
     setSelectedCentury,
     onSelectCategory: setSelectedCategory,
     onSelectCountry: setSelectedCountry,
@@ -1800,9 +1799,6 @@ export const EventsCatalogPage: React.FC = () => {
     onExpandAllBands: handleExpandAllBands,
     onCollapseAllChildren: collapseAllChildren,
     onExpandAllChildren: expandAllChildren,
-    recentEventIds: recentEvents,
-    events,
-    onSelectEvent: setSelectedEventId,
     onExportJson: handleExportJson,
     onOpenShortcutHelp: openShortcutHelp,
     onCreateEvent: handleCreateEvent,
@@ -1817,6 +1813,7 @@ export const EventsCatalogPage: React.FC = () => {
     viewUtilities: (
       <CatalogViewUtilities
         showFlatView={showFlatView}
+        onToggleFlatView={toggleShowFlatView}
         childrenCollapsed={childrenCollapsed}
         hasCollapsibleChildren={hasCollapsibleChildren}
         onCollapseAllChildren={collapseAllChildren}

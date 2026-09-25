@@ -20,6 +20,7 @@ import { CatalogViewUtilities } from './catalog-toolbar'
  */
 const baseProps = {
   showFlatView: false,
+  onToggleFlatView: jest.fn(),
   childrenCollapsed: false,
   hasCollapsibleChildren: true,
   onCollapseAllChildren: jest.fn(),
@@ -81,6 +82,21 @@ describe('CatalogViewUtilities — 표시 설정 메뉴', () => {
     expect(pageSize).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: '조밀' }))
     expect(baseProps.onChangeListDensity).toHaveBeenCalledWith('compact')
+  })
+
+  it('계층 보기 스위치가 메뉴 안에 있다 — 필터 바에서 내려온 표시 축', () => {
+    // 계층/평면은 같은 사건을 다르게 나열할 뿐 결과 집합을 바꾸지 않는다. 필터 바에
+    // 있던 동안은 켜짐 tint가 '이 축에 필터가 걸렸다'는 신호와 같은 색으로 경합했다.
+    openMenu()
+    const toggle = screen.getByRole('switch', { name: '계층 보기' })
+    expect(toggle).toBeChecked()
+    fireEvent.click(toggle)
+    expect(baseProps.onToggleFlatView).toHaveBeenCalled()
+  })
+
+  it('평면 보기이면 계층 스위치가 꺼진 상태로 읽힌다', () => {
+    openMenu({ showFlatView: true })
+    expect(screen.getByRole('switch', { name: '계층 보기' })).not.toBeChecked()
   })
 
   it('평면 보기에서는 하위 접기가 비활성 — 지우지 않고 흐려 이유를 남긴다', () => {

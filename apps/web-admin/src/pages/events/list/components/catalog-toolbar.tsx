@@ -17,6 +17,7 @@ import {
   FiChevronsUp,
   FiCheck,
   FiDownload,
+  FiLayers,
   FiFlag,
   FiSliders,
   FiArrowDown,
@@ -48,11 +49,9 @@ import { FiltersPanel } from '@/widgets/event-filters-panel/ui/filters-panel'
 
 import { useFocusTrap } from '../hooks/use-focus-trap'
 
-import type { HistoricalEvent } from '../../create/events.types'
 import * as Layout from '../../styles/layout.styles'
 import * as ToolbarStyles from '../../styles/list-toolbar.styles'
 import { BRAND, ICON_SIZE, MOTION, SHADOW } from '../../styles/theme'
-import { RecentEventsDropdown } from './recent-events-dropdown'
 
 interface Props {
   // 검색
@@ -84,7 +83,6 @@ interface Props {
 
   setShowCategoryModal: (v: boolean) => void
   setShowCountryModal: (v: boolean) => void
-  toggleShowFlatView: () => void
   setSelectedCentury: (v: CenturyFilter) => void
 
   /** 인라인 팝오버에서 직접 선택 — FILTER_ALL 또는 id */
@@ -119,11 +117,6 @@ interface Props {
   hasCollapsibleChildren: boolean
   onCollapseAllChildren: () => void
   onExpandAllChildren: () => void
-
-  // 최근 본 (toolbar dropdown — Discovery Hub 제거 후 진입점)
-  recentEventIds: string[]
-  events: HistoricalEvent[]
-  onSelectEvent: (id: string) => void
 
   // 내보내기 / 도움말 / 새 사건
   onExportJson: () => void
@@ -167,7 +160,6 @@ export const CatalogToolbar: React.FC<Props> = ({
   optionCounts,
   setShowCategoryModal,
   setShowCountryModal,
-  toggleShowFlatView,
   setSelectedCentury,
   onSelectCategory,
   onSelectCountry,
@@ -184,9 +176,6 @@ export const CatalogToolbar: React.FC<Props> = ({
   onExpandAllBands,
   onCollapseAllChildren,
   onExpandAllChildren,
-  recentEventIds,
-  events,
-  onSelectEvent,
   onExportJson,
   onOpenShortcutHelp,
   onCreateEvent,
@@ -263,7 +252,6 @@ export const CatalogToolbar: React.FC<Props> = ({
           selectedCountry={selectedCountry}
           selectedContinent={selectedContinent}
           selectedCentury={selectedCentury}
-          showFlatView={showFlatView}
           dbCategories={dbCategories}
           availableCenturies={availableCenturies}
           countries={countries}
@@ -277,16 +265,17 @@ export const CatalogToolbar: React.FC<Props> = ({
           onSelectContinent={onSelectContinent}
           onShowCategoryModal={() => setShowCategoryModal(true)}
           onShowCountryModal={() => setShowCountryModal(true)}
-          onToggleFlatView={toggleShowFlatView}
           onSelectCentury={setSelectedCentury}
         />
 
         <ToolbarStyles.ToolbarActions>
-          <RecentEventsDropdown
-            recentEventIds={recentEventIds}
-            events={events}
-            onSelectEvent={onSelectEvent}
-          />
+          {/*
+           * (제거) '최근 본 사건' 드롭다운 — 좌측 사건 목록 사이드바가 같은 것을
+           * **상시** 보여준다(클릭 한 번이 아예 필요 없다). 게다가 둘은 저장소가 달라
+           * (`papyrus.events.recent` vs `event-sidebar-recents`) 같은 화면에서 서로 다른
+           * 목록을 내놓을 수 있었다 — 한 개념에 진실이 둘이던 상태.
+           * 데이터(useRecentEvents)는 그대로 살아 있다: 필터 0건 빈 상태의 추천이 그것을 쓴다.
+           */}
           <ToolbarStyles.ToolbarBtn
             type="button"
             $active={bookmarksOnly}
@@ -445,6 +434,8 @@ const Utilities = styled.span`
 
 interface ViewUtilitiesProps {
   showFlatView: boolean
+  /** 계층 ↔ 평면 — 결과를 좁히지 않는 **표시** 축이라 필터 바에서 이리로 내려왔다 */
+  onToggleFlatView: () => void
   childrenCollapsed: boolean
   hasCollapsibleChildren: boolean
   onCollapseAllChildren: () => void
@@ -542,6 +533,7 @@ const DENSITY_CHOICES: Array<{
  */
 export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   showFlatView,
+  onToggleFlatView,
   childrenCollapsed,
   hasCollapsibleChildren,
   onCollapseAllChildren,
@@ -760,6 +752,29 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
 
             <UtilityMenuDivider role="presentation" />
 
+            {/*
+             * 계층 보기 — '하위 사건 모두 접기'와 한 묶음이다. 둘 다 "하위를 어떻게
+             * 보여줄 것인가"이고, 평면이면 접을 것이 없어 아래 항목이 비활성이 된다.
+             * 필터 바에 있던 시절에는 이 둘이 서로 다른 지면에 흩어져 있었다.
+             */}
+            <UtilityMenuItem
+              type="button"
+              role="switch"
+              aria-checked={!showFlatView}
+              title={
+                showFlatView
+                  ? '계층 보기로 — 하위 사건을 상위 아래로 들여 쓴다'
+                  : '평면 보기로 — 모든 사건을 같은 단에 나열한다'
+              }
+              onClick={onToggleFlatView}
+            >
+              <FiLayers size={13} aria-hidden="true" />
+              <span>계층 보기</span>
+              <MenuSwitch $active={!showFlatView} aria-hidden="true">
+                <MenuSwitchThumb $active={!showFlatView} />
+              </MenuSwitch>
+            </UtilityMenuItem>
+
             {/**
              * ⚠️ 라벨과 `aria-pressed`를 **같은 조건으로 동시에 뒤집지 않는다**(검토 A11Y-8).
              * 예전엔 접힌 상태에서 이름이 '하위 펼치기'인데 상태가 '눌림'이라
@@ -972,6 +987,44 @@ const UtilityGlyph = styled.span<{ $marked: boolean }>`
          theme.mode === 'dark' ? BRAND.primaryTextOnDark : BRAND.primaryHover
        };
      }`}
+`
+
+/** 메뉴 안 스위치 — 항목 우측 끝. 필터 바의 Switch와 같은 어휘를 축소해 옮긴 것. */
+const MenuSwitch = styled.span<{ $active: boolean }>`
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  transition: background ${MOTION.fast};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? BRAND.primaryFillDark
+        : BRAND.primary
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.14)'
+        : 'rgba(15,23,42,0.16)'};
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+const MenuSwitchThumb = styled.span<{ $active: boolean }>`
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: ${({ $active }) => ($active ? 'translateX(11px)' : 'none')};
+  transition: transform ${MOTION.fast};
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 /** 열 표시 섹션 머리 — 라벨과 '전부 표시'가 같은 줄의 양 끝에 선다. */
