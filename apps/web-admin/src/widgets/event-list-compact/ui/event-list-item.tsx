@@ -13,7 +13,6 @@
  */
 import React from 'react'
 
-import { FaCrown } from 'react-icons/fa'
 import {
   FiBookmark,
   FiChevronRight,
@@ -90,12 +89,6 @@ interface EventListItemProps {
   isActive: boolean
   dbCategories: EventCategoryDto[]
   isBookmarked?: boolean
-  /**
-   * 군주 재위 표시 — 선택한 군주의 재위 기간과 겹치는 사건이면 설명 문구
-   * (예: '조선 세종 재위 중 (1418–1450)'), 아니면 undefined. 필터가 아니라 표시라
-   * 행을 숨기지 않고 배지·배경 tint만 얹는다.
-   */
-  reignLabel?: string
   /** 활성 검색어 — Title에서 매칭 부분 노란 배경 */
   searchQuery?: string
   /**
@@ -334,7 +327,6 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   isActive,
   dbCategories,
   isBookmarked = false,
-  reignLabel,
   searchQuery,
   groupYear,
   isNarrow = false,
@@ -630,7 +622,6 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
       $active={isActive}
       $depth={depth}
       $context={!isMatch}
-      $reign={!!reignLabel}
       /* depth를 인라인 CSS 변수로 넘긴다 — styled prop이면 depth마다 클래스가 생성돼
          252행에서 클래스 캐시가 부풀고 React.memo 이득이 깎인다. */
       style={{ '--depth': depth } as React.CSSProperties}
@@ -666,7 +657,6 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           : undefined,
       }}
       data-active={isActive ? 'true' : undefined}
-      data-reign={reignLabel ? 'true' : undefined}
     >
       {/* 가지선 — **구슬은 언제나 선 위에 얹힌다**가 이 레일의 단일 문법이다.
           최상위 구슬이 줄기(축선) 위에 앉듯, 하위 구슬은 자기 가지선 위에 앉는다.
@@ -765,13 +755,6 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
             <Title data-row-title="" $withTrailing={Boolean(matchReason)}>
               {highlightMatches(displayTitle, searchQuery)}
             </Title>
-            {reignLabel && (
-              <ReignBadge title={reignLabel}>
-                <FaCrown size={10} aria-hidden="true" />
-                <span aria-hidden="true">재위</span>
-                <SrOnly>{reignLabel}</SrOnly>
-              </ReignBadge>
-            )}
             {/* 최상위(앵커) 배지 — 루트만 '최상위 사건'이라 부르고, 상위가 있는 앵커는
                 '하위 N건'으로 표기한다. '상위가 있는 최상위 사건'이라는 자기모순 라벨을
                 만들지 않기 위한 규약(사용자 결정 2026-08-11). 판정·문구는 전부
@@ -1064,8 +1047,6 @@ const Stop = styled.div<{
   $depth: number
   /** 필터 문맥용으로만 남은 행(자기 자신은 조건 불일치) — 매칭 행과 구별해 강등 표시 */
   $context: boolean
-  /** 선택한 군주의 재위 기간과 겹치는 사건 — 호박색 tint + 우측 막대 */
-  $reign?: boolean
 }>`
   position: relative;
   display: flex;
@@ -1156,13 +1137,8 @@ const Stop = styled.div<{
    * ⚠️ 이 주석 안에서 백틱을 쓰지 말 것 — styled 템플릿 리터럴이 끊겨 TS1005가 난다.
    * 여기 남는 것은 활성 막대뿐이다(그래서 활성 행에서 guide가 지워지던 문제도 사라진다). */
   border-radius: ${({ $active }) => ($active ? '6px' : '0')};
-  box-shadow: ${({ $active, $reign }) => {
-    const shadows: string[] = []
-    if ($active) shadows.push('inset 4px 0 0 0 #2563eb')
-    // 재위 표시는 **우측** 막대 — 좌측은 활성(인디고) 막대가 이미 쓴다.
-    if ($reign) shadows.push('inset -3px 0 0 0 #d97706')
-    return shadows.length ? shadows.join(', ') : 'none'
-  }};
+  box-shadow: ${({ $active }) =>
+    $active ? 'inset 4px 0 0 0 #2563eb' : 'none'};
   ${({ $active }) =>
     $active &&
     css`
@@ -1320,7 +1296,7 @@ const Stop = styled.div<{
    */
 
   /* active별 bg tint — 활성 행이 hover 행과 명확히 구분되도록 강화. */
-  ${({ $active, $reign, theme }) => {
+  ${({ $active, theme }) => {
     const isDark = theme.mode === 'dark'
     if ($active) {
       /* 라이트 0.13은 그 위 metaText를 4.04:1로 떨어뜨려 AA에 미달시켰다.
@@ -1329,13 +1305,6 @@ const Stop = styled.div<{
         background: ${isDark
           ? 'rgba(37, 99, 235, 0.20)'
           : 'rgba(37, 99, 235, 0.08)'};
-      `
-    }
-    if ($reign) {
-      return css`
-        background: ${isDark
-          ? 'rgba(245, 158, 11, 0.08)'
-          : 'rgba(245, 158, 11, 0.07)'};
       `
     }
     return css`
@@ -1707,6 +1676,12 @@ const Indent = styled.span<{ $depth: number }>`
   );
   background-repeat: no-repeat;
   background-size: min(calc(var(--row-indent) * var(--depth, 0)), 96px) 100%;
+  /* 선은 트랙 왼쪽 끝이 아니라 **부모 디스클로저(∨)의 중심 아래**에 선다 — 트리 표기의
+     관례대로 '부모에게서 내려온 선'으로 읽힌다. 트랙 왼쪽 끝은 곧 분류 칸의 오른쪽
+     경계라, 거기 서 있던 선은 칸 구분선처럼 '회담/조약 |'로 붙어 읽혔다.
+     주기(--row-indent)가 한 단 들여쓰기와 같으므로 depth 2의 둘째 선도 자기 부모
+     (depth 1) 디스클로저 중심에 맞는다. 오프셋 < 주기라 마지막 선도 트랙 안에 남는다. */
+  background-position: calc(var(--row-disc-btn) / 2) 0;
 
   /* 강제 색 모드(Windows 고대비)는 배경 이미지를 통째로 지운다 — 계층이 사라지므로
      테두리로 대체한다. 깊이별 줄 수는 포기하고 '자식이다'만 남긴다. */
@@ -2157,32 +2132,6 @@ const Title = styled.span<{ $withTrailing?: boolean }>`
  * amber는 이 목록에서 **검색 전용**이다(TYPE-6 vs RHYTHM-13 충돌의 결론). 하이라이트는
  * 제목 텍스트 *안*에 나타나 대체 채널이 없는 반면, 북마크는 fill 유무라는 형태 채널이
  * 이미 있기 때문이다. */
-/** 군주 재위 배지 — 제목 바로 뒤. 색만으로 말하지 않도록 왕관 + '재위' 텍스트를 함께 싣는다. */
-const ReignBadge = styled.span`
-  position: relative;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: var(--row-meta);
-  font-weight: 600;
-  line-height: 1.4;
-  white-space: nowrap;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#92400e')};
-  background: rgba(245, 158, 11, 0.16);
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(252, 211, 77, 0.32)'
-        : 'rgba(217, 119, 6, 0.32)'};
-
-  @media (forced-colors: active) {
-    border-color: CanvasText;
-  }
-`
-
 const Mark = styled.mark`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? '#fbbf24' : '#fde68a'};

@@ -1510,6 +1510,13 @@ const SearchRow = styled.div`
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
   color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: border-color ${MOTION.fast}, color ${MOTION.fast};
+
+  /* 포커스는 줄 전체가 말한다 — 입력 자체의 전역 링(app/css.ts, 보라 3px)은 끈다. */
+  &:focus-within {
+    border-bottom-color: ${BRAND.primaryBorderHover};
+    color: ${BRAND.primary};
+  }
 `
 
 const SearchInput = styled.input`
@@ -1526,6 +1533,11 @@ const SearchInput = styled.input`
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  /* 전역 :where(input):focus-visible의 보라 링 — 팝오버 안에서 브랜드 파랑 체계와 갈라져
+     입력 글자 둘레에 딱 붙은 보라 상자로 떴다. 포커스는 SearchRow의 :focus-within이 맡는다. */
+  &:focus-visible {
+    box-shadow: none;
   }
 `
 

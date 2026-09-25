@@ -11,7 +11,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import styled from 'styled-components'
 
-import { FaCrown } from 'react-icons/fa'
 import {
   FiBookmark,
   FiChevronsDown,
@@ -99,19 +98,6 @@ interface Props {
   bookmarksOnly: boolean
   toggleBookmarksOnly: () => void
   bookmarksCount: number
-
-  /**
-   * 군주 재위 표시 — 고른 군주의 재위 기간과 겹치는 사건을 목록에서 따로 표시한다.
-   * 필터가 아니므로 활성 필터 칩·개수에는 포함하지 않는다.
-   */
-  reignActive: boolean
-  /** 표시 중인 군주 이름 — 로딩 중이면 null */
-  reignPersonName: string | null
-  /** 재위 기간과 겹치는 표시 행 수 */
-  reignMatchedCount: number
-  reignLoading: boolean
-  onOpenReignPicker: () => void
-  onClearReign: () => void
   /**
    * 최상위(앵커) 사건 축 — 자손이 있는 루트만 남긴다.
    * 생존 루트의 88%가 자식 0인 단독 사건이라, 이 칩이 없으면 앵커가 파묻힌다
@@ -192,12 +178,6 @@ export const CatalogToolbar: React.FC<Props> = ({
   hasCollapsibleChildren,
   collapsedBandCount,
   onExpandAllBands,
-  reignActive,
-  reignPersonName,
-  reignMatchedCount,
-  reignLoading,
-  onOpenReignPicker,
-  onClearReign,
   onCollapseAllChildren,
   onExpandAllChildren,
   onExportJson,
@@ -328,37 +308,6 @@ export const CatalogToolbar: React.FC<Props> = ({
             <span>최상위</span>
             {anchorsCount > 0 && <Badge tone="primary">{anchorsCount}</Badge>}
           </ToolbarStyles.ToolbarBtn>
-          <ToolbarStyles.ToolbarBtn
-            type="button"
-            $active={reignActive}
-            title={
-              reignActive
-                ? `${reignPersonName ?? '군주'} 재위 기간의 사건 ${reignMatchedCount}건을 목록에 표시 중 — 눌러서 다른 군주 선택`
-                : '군주를 골라 그 재위 기간의 사건을 목록에 따로 표시'
-            }
-            aria-pressed={reignActive}
-            onClick={onOpenReignPicker}
-          >
-            <FaCrown size={ICON_SIZE.sm} aria-hidden="true" />
-            <span>
-              {reignActive
-                ? `${reignPersonName ?? '불러오는 중…'} 재위`
-                : '군주 재위'}
-            </span>
-            {reignActive && !reignLoading && (
-              <Badge tone="primary">{reignMatchedCount}</Badge>
-            )}
-          </ToolbarStyles.ToolbarBtn>
-          {reignActive && (
-            <ToolbarStyles.ToolbarBtn
-              type="button"
-              title="군주 재위 표시 끄기"
-              aria-label="군주 재위 표시 끄기"
-              onClick={onClearReign}
-            >
-              <FiX size={ICON_SIZE.sm} aria-hidden="true" />
-            </ToolbarStyles.ToolbarBtn>
-          )}
           {viewUtilities && <Utilities>{viewUtilities}</Utilities>}
           <Layout.CreateEventButton onClick={onCreateEvent}>
             <FiPlus size={ICON_SIZE.md} />새 사건 등록

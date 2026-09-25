@@ -61,8 +61,6 @@ interface CatalogUrlSyncArgs {
   showFlatView: boolean
   /** 페이지 크기 — 표시 선호. 새로고침·공유 시 보존 */
   pageSize: number
-  /** 군주 재위 표시 대상 인물 id — 없으면 null */
-  reignPersonId: string | null
 
   // 세터 (URL → state)
   setKeywordInput: (value: string) => void
@@ -78,7 +76,6 @@ interface CatalogUrlSyncArgs {
   setSortDirection: (value: 'asc' | 'desc') => void
   setShowFlatView: (value: boolean) => void
   setPageSize: (value: number) => void
-  setReignPersonId: (value: string | null) => void
 }
 
 export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
@@ -99,7 +96,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     sortDirection,
     showFlatView,
     pageSize,
-    reignPersonId,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
@@ -113,7 +109,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setSortDirection,
     setShowFlatView,
     setPageSize,
-    setReignPersonId,
   } = args
 
   /**
@@ -173,8 +168,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
 
     if (next.showFlatView !== showFlatView) setShowFlatView(next.showFlatView)
 
-    const reign = searchParams.get('reign')
-    if (reign !== reignPersonId) setReignPersonId(reign)
     // 의도적: 마운트 시·뒤로가기 시 한 번씩 끌어오면 충분. 양방향 동기화는 아래 effect에서.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
@@ -224,7 +217,6 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     next.delete('lane')
     next.delete('tlw')
     next.delete('hide')
-    setOrDel('reign', reignPersonId)
     const nextStr = next.toString()
     if (nextStr !== searchParams.toString()) {
       lastSelfWriteRef.current = nextStr
@@ -251,6 +243,5 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     sortDirection,
     showFlatView,
     pageSize,
-    reignPersonId,
   ])
 }

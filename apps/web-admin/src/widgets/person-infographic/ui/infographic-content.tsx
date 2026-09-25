@@ -6,7 +6,7 @@
  *   [활성 필터 칩 … 모두 해제]
  *   [뷰 세그먼트] [정렬·순서] ··· [N명 · 평균 수명 · 대표 분야]
  *
- * 뷰(list/cards/matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
+ * 뷰(cards/matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
  * records(기록 비교) 뷰는 상위 PersonInfographicPane이 별도 분기.
  * 필터·뷰·정렬 상태는 zustand store + URL 쿼리 동기화로 공유.
  */
@@ -84,7 +84,6 @@ import { ScopeDropdown } from './_shared/scope-dropdown'
 import { EraStoryView } from './era-story-view'
 import { GalaxyView } from './galaxy-view'
 import { HeaderStats } from './header-stats'
-import { ListView } from './list-view'
 import { MatrixView } from './matrix-view'
 import { StatsView } from './stats-view'
 
@@ -93,8 +92,6 @@ interface InfographicContentProps {
   onPersonClick: (id: string) => void
   /** 뷰 전환 세그먼트 — 페인이 소유(records 분기와 공유)하고 여기서는 자리만 잡는다 */
   viewSwitcher: ReactNode
-  /** 활성 뷰 한 줄 설명 */
-  viewHint: ReactNode
 }
 
 const STATS_KEY = 'person-infographic-stats-open'
@@ -102,7 +99,6 @@ const STATS_KEY = 'person-infographic-stats-open'
 export function InfographicContent({
   onPersonClick,
   viewSwitcher,
-  viewHint,
 }: InfographicContentProps) {
   // URL ↔ store 동기화는 상위 PersonInfographicPane이 담당 (records 뷰 분기 공유)
   const { isLoading, isError, refetch } = usePersonsInfographic()
@@ -199,9 +195,9 @@ export function InfographicContent({
     ? Math.round(knownAges.reduce((sum, age) => sum + age, 0) / knownAges.length)
     : 0
 
-  // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 목록 포함 나머지를 다룬다.
+  // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 cards(평면 목록) 포함 나머지를 다룬다.
   const activeView: Exclude<PersonInfographicView, 'records'> =
-    view === 'records' ? 'list' : view
+    view === 'records' ? 'cards' : view
 
   // '/' 로 검색 포커스 — 사건 목록과 같은 단축키. 입력 중에는 가로채지 않는다.
   useEffect(() => {
@@ -439,8 +435,8 @@ export function InfographicContent({
                 ))}
               </Select>
             )}
-            {/* 세기 나열 방향은 세기 그룹 뷰(목록·스토리) 전용 */}
-            {(activeView === 'list' || activeView === 'story') && (
+            {/* 세기 나열 방향은 세기 그룹 뷰(스토리) 전용 */}
+            {activeView === 'story' && (
               <IconBtn
                 type="button"
                 onClick={() =>
@@ -480,7 +476,6 @@ export function InfographicContent({
             </ViewMeta>
           )}
         </ViewRow>
-        {viewHint}
 
         {!isLoading && filtered.length > 0 && statsOpen && (
           <StatsArea>
@@ -517,15 +512,6 @@ export function InfographicContent({
 
           {!isLoading && filtered.length > 0 && (
             <ViewArea>
-              {activeView === 'list' && (
-                <ListView
-                  people={filtered}
-                  onOpen={onPersonClick}
-                  query={dq}
-                  pinned={pinned}
-                  togglePin={togglePin}
-                />
-              )}
               {activeView === 'cards' && (
                 <CardsView
                   people={filtered}

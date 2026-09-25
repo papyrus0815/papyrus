@@ -15,6 +15,7 @@ import { usePersonInfographicFilterStore } from '../model/filter.store'
 import { makeSortFnWithPinned } from '../model/sort-helpers'
 import type { AdaptedPerson } from '../model/types'
 
+import { MoreBtn } from './_shared/group-section'
 import { EraCardGrid, PersonCardItem } from './_shared/person-card'
 
 interface Props {
@@ -46,9 +47,8 @@ export function CardsView({ people, onOpen, query, pinned, togglePin }: Props) {
         {shown.map((person) => (
           <PersonCardItem
             key={person.id}
-            p={person}
-            era={person.era}
-            q={query}
+            person={person}
+            query={query}
             pinned={pinned.has(person.id)}
             onTogglePin={togglePin}
             onOpen={onOpen}
@@ -70,24 +70,4 @@ export function CardsView({ people, onOpen, query, pinned, togglePin }: Props) {
 const Wrap = styled.div`
   display: flex;
   flex-direction: column;
-`
-
-const MoreBtn = styled.button`
-  margin: 16px auto 0;
-  display: block;
-  padding: 6px 16px;
-  border-radius: 16px;
-  border: none;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  transition: background 0.12s, color 0.12s;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f3f4f6'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
 `
