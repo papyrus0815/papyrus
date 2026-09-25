@@ -12,10 +12,9 @@ interface DetailRailProps {
 }
 
 /**
- * Sticky 좌측 레일 — *섹션 nav 전용*.
+ * 목차 — 우측 장부 칼럼(S.Aside) 안의 섹션 내비.
  *
- * 인물/국가 사이드 칼럼은 본문 actors 섹션과 중복이라 이번 정리에서 제거.
- * Rail은 본문 흐름에서 시선을 빼앗지 않는 단일 책무(현재 위치 + 점프).
+ * sticky·스크롤은 Aside가 소유한다. 여기는 '현재 위치 + 점프' 단일 책무.
  */
 export function DetailRail({ sections }: DetailRailProps) {
   const [activeId, setActiveId] = useState<string>(sections[0]?.id ?? '')
@@ -68,9 +67,12 @@ export function DetailRail({ sections }: DetailRailProps) {
     window.history.replaceState(null, '', `#${id}`)
   }
 
-  /* 섹션이 5개 미만이면 page 스크롤이 짧아 nav 가치가 거의 없음 — rail 자체를 숨김.
-     본문 max-width가 줄지 않도록 main 그리드 컬럼은 페이지 단에서 처리. */
-  if (sections.length < 5) return null
+  /**
+   * 예전엔 섹션 5개 미만이면 레일을 통째로 숨겼다 — 좌측 200px가 목차뿐이라 비면
+   * 빈 칸만 남았기 때문이다. 이제 이 칼럼은 사실 장부가 채우고 목차는 그 아래 블록이라,
+   * 숨길 이유가 없다(섹션이 적어도 '이 문서에 무엇이 있는지'는 여전히 목차가 말한다).
+   */
+  if (sections.length === 0) return null
 
   return (
     <S.Rail>

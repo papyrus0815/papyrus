@@ -15,10 +15,11 @@ import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-bounda
 import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
-import { DetailHero } from './components/detail-hero'
+import { ContemporaryHeadsLink, DetailHero } from './components/detail-hero'
 import { DetailNarrative } from './components/detail-narrative'
 import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
+import { DetailFacts } from './components/detail-facts'
 import { DetailRail } from './components/detail-rail'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
@@ -297,8 +298,8 @@ function EventDetailContent({ eventId }: { eventId: string }) {
           />
 
           <S.Body>
-            <DetailRail sections={sections} />
-
+            {/* 문서 열이 DOM에서 먼저 온다 — 읽기·스크린리더 순서는 '글 → 장부'.
+                좁은 폭에서 장부가 위로 올라가는 것은 시각 순서만 바꾸는 order다. */}
             <S.Main>
               <DetailNarrative
                 event={event}
@@ -368,6 +369,15 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 )}
               </S.Section>
             </S.Main>
+
+            <S.Aside>
+              <DetailFacts
+                event={event}
+                onPatch={onPatch}
+                contemporaryLink={<ContemporaryHeadsLink event={event} />}
+              />
+              <DetailRail sections={sections} />
+            </S.Aside>
           </S.Body>
         </S.PageInner>
       </S.Page>

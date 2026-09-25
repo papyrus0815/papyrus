@@ -56,20 +56,24 @@ export const PageInner = styled.div`
 `
 
 /**
- * Body grid — sticky rail + main column.
- * Wide(≥1101px): 200px rail + 1fr main, gap 56
- * Narrow(≤1100): single column, rail collapses 위로.
+ * Body grid — **문서(좌) + 사실 장부(우)**.
  *
- * 이전에는 sections.length<5일 때 `$noRail`로 grid 컬럼을 1fr 단일 + 가운데 정렬로
- * 바꿨지만, 모듈 활성화에 따라 임계값을 오가며 main 컬럼 위치가 점프하는 jitter가
- * 발생했다. 지금은 항상 동일한 2-컬럼 grid를 유지하고, rail 컨텐츠 자체는
- * `DetailRail`이 sections<5에서 null을 반환해 시각적으로만 사라진다 — main 위치는
- * 절대 흔들리지 않는다.
+ * 예전에는 좌측 200px가 목차 글자 목록뿐이었고, 날짜·위치·참여국·하위 사건 수 같은
+ * **사실**은 12개 섹션에 흩어져 있었다. 그래서 "조약이 걸려 있나?", "사진은 있나?"를
+ * 알려면 끝까지 스크롤해야 했고, 비어 있는 섹션조차 스크롤해 봐야 비었음을 알았다.
+ *
+ * 축을 뒤집는다 — 왼쪽은 처음부터 끝까지 **읽는 글**, 오른쪽은 **한눈에 보는 장부**
+ * (사실 색인 + 목차). 역사 사건 기록이 원래 갖는 두 축이고, 둘을 한 줄에 쌓아 둔 것이
+ * 이 지면의 근본 문제였다.
+ *
+ * Wide(≥1101px): 1fr 문서 + 312px 장부, gap 48
+ * Narrow(≤1100): 한 열 — 장부가 **문서보다 먼저** 온다(order: -1). 좁은 화면일수록
+ *                "무엇이 있는 사건인가"를 먼저 알아야 스크롤을 결정할 수 있다.
  */
 export const Body = styled.div`
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 56px;
+  grid-template-columns: minmax(0, 1fr) 312px;
+  gap: 48px;
   align-items: start;
   margin-top: 36px;
 
@@ -80,6 +84,30 @@ export const Body = styled.div`
   }
 `
 
+/**
+ * 우측 칼럼 — 사실 장부 + 목차를 함께 들고 스크롤을 따라온다.
+ * (sticky는 이 컨테이너가 소유한다. 안쪽 Rail은 더 이상 자기 sticky를 갖지 않는다.)
+ */
+export const Aside = styled.aside`
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-height: calc(100vh - var(--header-height, 64px) - 60px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+
+  @media (max-width: 1100px) {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    /* 한 열로 떨어지면 장부가 문서 위로 — DOM 순서(문서 먼저)는 읽기 순서를 지킨다. */
+    order: -1;
+    gap: 16px;
+  }
+`
+
 export const Main = styled.main`
   /**
    * narrative-first 가독폭. 이전에는 760이었으나 내부 SectionBody·HeroSummary·
@@ -87,14 +115,13 @@ export const Main = styled.main`
    * 섹션(actors·network·modules·appendix) 사이에 40px 가로 차이가 발생했음.
    * Main을 720으로 통일해 모든 섹션이 동일 폭으로 정렬되도록 한다.
    *
-   * grid cell(868px 폭)의 *가운데*에 배치해 Hero 콘텐츠 영역의 시각 중앙과
-   * 정렬한다. 이전에는 좌측 정렬이라 Hero(폭 868)와 본문(폭 720) 사이에
-   * 우측으로 148px 비대칭이 보였다.
+   * 축을 뒤집은 뒤로는 **좌측 기준선**에 고정한다 — 히어로 제목과 본문의 첫 글자가
+   * 같은 x에서 시작해야 한 문서로 읽힌다(가운데 정렬이면 둘이 어긋난다).
    */
   min-width: 0;
   max-width: 720px;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 64px;
@@ -132,23 +159,23 @@ export const Hero = styled.section`
     }
   }
   /**
-   * Hero 콘텐츠 폭을 Main(720px)과 동일하게 잡고 가운데 정렬.
-   * Main이 grid cell 안에서 margin: auto로 가운데 오므로, Hero도 같은
-   * 시각 좌표(좌측 시작·우측 끝)를 가져야 본문과 정렬이 어긋나지 않는다.
+   * 히어로도 문서 열과 **같은 좌측 기준선**에서 시작한다.
+   *
+   * 레일이 좌측에 있던 시절엔 그 폭(200 + gap 56)만큼 히어로를 오른쪽으로 밀어야
+   * 본문과 줄이 맞았다. 장부가 우측으로 간 지금은 밀 것이 없다 — 제목·요약·본문이
+   * 모두 x=0에서 시작한다.
    */
-  max-width: 720px;
-  margin-left: auto;
+  /**
+   * ⚠️ 상한을 **문서 열과 같은 식**으로 잡는다. 720px 고정이면 뷰포트 1101~1180 구간에서
+   * 문서 열(1fr = 남은 폭)이 720보다 좁아지는데 히어로만 720을 유지해, 제목이 본문보다
+   * 오른쪽으로 더 나가는 어긋남이 생긴다(실측 685 vs 720).
+   */
+  max-width: min(720px, calc(100% - 312px - 48px));
+  margin-left: 0;
   margin-right: auto;
 
-  /**
-   * wide 화면에서는 Body grid의 rail(200) + gap(56) = 256px만큼 콘텐츠를
-   * 우측으로 밀어 main column의 좌측 시작 좌표와 정렬한다. max-width는 그
-   * padding을 포함해 늘려 콘텐츠 영역은 여전히 720px를 유지(box-sizing: border-box).
-   * Body의 미디어 브레이크(1100px)와 동일한 임계값을 사용한다.
-   */
-  @media (min-width: 1101px) {
-    padding-left: calc(200px + 56px);
-    max-width: calc(720px + 200px + 56px);
+  @media (max-width: 1100px) {
+    max-width: 720px;
   }
 `
 
@@ -246,33 +273,6 @@ export const CategoryChip = styled.span<{ $color: string; $colorDark?: string }>
   }
 `
 
-export const HeroMeta = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px 28px;
-  align-items: center;
-  font-size: 13.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  padding-top: 4px;
-`
-
-/**
- * HeroMetaItem — 좌측 prefix 아이콘 한 개만 스코프해서 스타일.
- * 안쪽의 다른 svg(✎ 등)에 cascade 되지 않도록 `> svg:first-child` 선택자 사용.
- */
-export const HeroMetaItem = styled.span`
-  display: inline-flex;
-  align-items: center;
-  ${DIGIT_DISPLAY}
-
-  > svg:first-child {
-    width: 14px;
-    height: 14px;
-    margin-right: 6px;
-    opacity: 0.65;
-  }
-`
-
 export const HeroActions = styled.div`
   display: flex;
   gap: 8px;
@@ -282,30 +282,21 @@ export const HeroActions = styled.div`
 
 /* ───────────────────────── Rail (sticky 좌측) ───────────────────────── */
 
-export const Rail = styled.aside`
-  position: sticky;
-  top: 24px;
+/**
+ * 목차 블록 — 이제 우측 장부 칼럼(Aside) 안에 산다.
+ * sticky·스크롤은 Aside가 소유하므로 여기서는 흐름만 잡는다.
+ *
+ * ⚠️ 1100px 아래에서 한 열로 떨어질 때 세로 목록을 그대로 끌고 내려오면 642px 폭에
+ *    33px짜리 줄이 8개 쌓여 289px — 첫 섹션이 화면 밖으로 밀린다. 아래
+ *    RailNavList/RailNavItem이 같은 중단점에서 **가로 한 줄**로 바꾼다(실측 289 → 40px).
+ */
+export const Rail = styled.nav`
   display: flex;
   flex-direction: column;
   gap: 28px;
-  padding-right: 4px;
-  max-height: calc(100vh - var(--header-height, 64px) - 60px);
-  overflow-y: auto;
-  scrollbar-width: thin;
 
-  /**
-   * 1100px 아래에서는 옆 칼럼이 사라져 **본문 흐름 위로 내려온다**(Body가 1단이 됨).
-   * 이때 세로 목록 모양을 그대로 끌고 내려오면 642px 폭에 33px짜리 줄이 8개 쌓여
-   * 289px — 첫 섹션이 화면 밖으로 밀린다. 아래 RailNavList/RailNavItem이 같은
-   * 중단점에서 **가로 한 줄**로 바꾼다(실측 289 → 40px).
-   */
   @media (max-width: 1100px) {
-    position: static;
-    max-height: none;
-    overflow: visible;
     padding: 0 0 14px;
-    background: transparent;
-    border: none;
     gap: 0;
   }
 `

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { FiArrowLeft, FiAward, FiCalendar, FiMapPin } from 'react-icons/fi'
+import { FiArrowLeft, FiAward } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -26,7 +26,6 @@ import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-mod
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import {
-  InlineDateRange,
   InlineSelect,
   InlineText,
   type InlineSelectOption,
@@ -174,30 +173,8 @@ export function DetailHero({
         aria-hidden
       />
 
-      <S.HeroMeta>
-        <S.HeroMetaItem>
-          <FiCalendar />
-          <InlineDateRange
-            startDate={event.startDate}
-            startDatePrecision={event.startDatePrecision}
-            endDate={event.endDate}
-            endDatePrecision={event.endDatePrecision}
-            onSave={(patch) => onPatch(patch)}
-          />
-        </S.HeroMetaItem>
-        <LocationMetaItem title={event.location ?? ''}>
-          <FiMapPin />
-          <InlineText
-            value={event.location ?? ''}
-            /* 비우면 빈 문자열을 보내 컬럼을 비운다. `|| undefined`는 서버가 무시해
-               기존 값이 지워지지 않던 버그가 있었음. */
-            onSave={(next) => onPatch({ location: next.trim() })}
-            placeholder="위치"
-          />
-        </LocationMetaItem>
-        <ContemporaryHeadsLink event={event} />
-      </S.HeroMeta>
-
+      {/* 날짜·위치·'동시대 수장'은 **사실**이라 우측 장부(DetailFacts)로 옮겼다.
+          히어로에는 제목·요약·행위자 — 서사의 도입만 남는다. */}
       <HeroActors
         event={event}
         onPersonClick={onPersonClick}
@@ -218,33 +195,6 @@ export function DetailHero({
   )
 }
 
-/**
- * 위치 메타 — 야마마궁 같은 긴 위치 표기는 한 줄을 통째로 차지해 다른 메타 항목을
- * 다음 줄로 밀어내고 HeroMeta wrap 정렬을 흩트린다. 폭을 제한하고 ellipsis 처리.
- * 풀텍스트는 wrapper의 title 속성으로 hover 시 native tooltip 노출.
- */
-const LocationMetaItem = styled(S.HeroMetaItem)`
-  max-width: min(440px, 55%);
-  min-width: 0;
-  [data-edit-host] {
-    overflow: hidden;
-    min-width: 0;
-  }
-  [data-edit-host] > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    display: inline-block;
-    max-width: 100%;
-    vertical-align: middle;
-  }
-`
-
-/**
- * 제목 아래 카테고리 톤 밴드 — 56px 길이 액센트 룰. 카테고리 색에서 시작해
- * 투명으로 페이드. Hero flex gap(20px)에서 위쪽으로 당겨 제목에 붙인다.
- * 다크에서는 $colorDark(카테고리 다크 쌍)로 스왑 — 미전달 시 $color 폴백.
- */
 const TitleAccent = styled.div<{ $color: string; $colorDark?: string }>`
   width: 56px;
   height: 3px;
@@ -312,22 +262,22 @@ const TitleHost = styled.h1`
  * 사건 시작 연도로 「역대 수장 비교」 페이지의 동시대 가이드라인을 자동으로 꽂아 진입.
  * 사건 startDate가 비어있으면 미렌더.
  */
-function ContemporaryHeadsLink({ event }: { event: EventDetail }) {
+export function ContemporaryHeadsLink({ event }: { event: EventDetail }) {
   const year = extractYear(event.startDate)
   if (year == null) return null
   // 목적지 headsOfState가 BC 미지원(재임 tenure era 마이그 없음) — BC 연도는 빈
   // 화면으로 유도하는 셈이라 링크 자체를 내리지 않는다. BC 지원 마이그 후 가드 제거.
   if (year < 0) return null
   return (
-    <S.HeroMetaItem>
-      <FiAward />
+    <ContemporaryLine>
+      <FiAward aria-hidden />
       <ContemporaryLink
         to={pathKeys.headsOfState(year)}
         title={`${formatYearLabel(year)} 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
       >
         {formatYearLabel(year)} 동시대 수장 비교
       </ContemporaryLink>
-    </S.HeroMetaItem>
+    </ContemporaryLine>
   )
 }
 
@@ -335,6 +285,22 @@ function extractYear(input: string | null | undefined): number | null {
   // 캐논 파서에 위임 — BC 음수·타임존 안전성을 단일 출처(parseIsoDateParts)로 공유.
   return parseIsoDateParts(input)?.year ?? null
 }
+
+/* 우측 장부 안 한 줄 — 패널의 다른 줄(날짜·위치)과 같은 크기·정렬. */
+const ContemporaryLine = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+
+  > svg {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+`
 
 const ContemporaryLink = styled(Link)`
   font-weight: 600;
