@@ -1,22 +1,22 @@
 /**
- * 카드 그리드(카드·시대 스토리·왕조·고정)에서 쓰는 인물 카드 — 이미지가 주인공인 인셋 포트레이트 카드.
+ * 카드 그리드(카드·시대 스토리·왕조·고정)에서 쓰는 인물 카드 — 이미지가 주인공인 포트레이트 카드.
  *
- *   ┌────────────────────────┐
- *   │ ┌────────────────────┐ │
- *   │ │ 군주          [고정] │ │   ← 카드 안쪽 8px 여백에 4:5 초상(카드 면적의 대부분)
- *   │ │                    │ │      hover 시 살짝 확대
- *   │ │       초상 4:5      │ │
- *   │ │                    │ │      사진 없음/깨짐 → 공통 빈 초상(EmptyPortrait)
- *   │ └────────────────────┘ │
- *   │ 정치 · 프랑스            │   ← 분야(분류색) · 국가
- *   │ 나폴레옹 보나파르트        │   ← 이름 17/800, 두 줄까지
- *   │ 프랑스 황제              │
- *   │ ────────────────────── │
- *   │ 1769 – 1821 · 52세  ◔ 95 │
- *   └────────────────────────┘
+ *   ┌──────────────────────┐
+ *   │ 군주            [고정] │
+ *   │                      │
+ *   │      초상 4 : 5       │   ← 카드 폭 전체, hover 시 살짝 확대
+ *   │                      │
+ *   │▁▁▁▁ 어둠 그라데이션 ▁▁▁│
+ *   │ 정치                  │   ← 이름·직함은 이미지 위 흰 글자
+ *   │ 나폴레옹 보나파르트      │
+ *   │ 프랑스 황제            │
+ *   ├──────────────────────┤
+ *   │ 1769 – 1821  향년 52세 │
+ *   │ 프랑스 · 부르봉    ◔ 95 │
+ *   └──────────────────────┘
  *
- * 글자를 이미지 위에 얹지 않는다 — 사진 밝기·빈 초상과 무관하게 같은 대비로 읽힌다.
- * 이름·직함·국가에 검색어 하이라이트 적용.
+ * 사진이 없거나 깨지면 공통 빈 초상(EmptyPortrait — 사람 실루엣, 글자 없음)으로 대체한다.
+ * 이름·직함·국가·가문에 검색어 하이라이트 적용.
  */
 import type React from 'react'
 import { memo, useMemo, useState } from 'react'
@@ -46,7 +46,7 @@ function PersonCardItemBase({
   onTogglePin,
   onOpen,
 }: PersonCardProps) {
-  // 깨진 이미지 URL은 공통 빈 초상으로 대체 — 브라우저 깨진 아이콘이 격자에 남지 않게.
+  // 깨진 이미지 URL은 공통 빈 초상으로 대체 — 빈 상자가 격자 한가운데 남지 않게.
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = !!person.profileImageUrl && !imageFailed
 
@@ -108,7 +108,7 @@ function PersonCardItemBase({
         ) : (
           <EmptyPortrait />
         )}
-        {showImage && <TopShade aria-hidden />}
+        <Scrim aria-hidden />
 
         {role && <RoleTag $monarch={person.isMonarch}>{role}</RoleTag>}
         <PinBtn
@@ -121,37 +121,60 @@ function PersonCardItemBase({
         >
           <FiBookmark size={15} fill={pinned ? 'currentColor' : 'none'} />
         </PinBtn>
+
+        <Caption>
+          <FieldTag>{person.field}</FieldTag>
+          <Name title={person.name}>{highlight(person.name, query)}</Name>
+          {person.primaryTitle && (
+            <Title title={person.primaryTitle}>
+              {highlight(person.primaryTitle, query)}
+            </Title>
+          )}
+        </Caption>
       </Visual>
 
       <Body>
-        <Eyebrow>
-          <Field>{person.field}</Field>
-          {hasCountry && (
-            <>
-              <Sep aria-hidden>·</Sep>
-              <Country>{highlight(person.country, query)}</Country>
-            </>
-          )}
-        </Eyebrow>
-        <Name title={person.name}>{highlight(person.name, query)}</Name>
-        <Title title={person.primaryTitle ?? undefined}>
-          {person.primaryTitle ? highlight(person.primaryTitle, query) : person.era.lbl}
-        </Title>
-
-        <Footer>
+        <Row>
           <Years>
             {born}
             <Dash>–</Dash>
             {died}
-            {person.age != null && <Age> · {person.age}세</Age>}
           </Years>
+          {person.age != null && (
+            <Age>{person.isAlive ? `${person.age}세` : `향년 ${person.age}세`}</Age>
+          )}
+        </Row>
+        <Row>
+          <Place>
+            {hasCountry ? highlight(person.country, query) : '국가 미상'}
+            <PlaceSub>
+              {' · '}
+              {person.faction ? highlight(person.faction, query) : person.era.lbl}
+            </PlaceSub>
+          </Place>
           <Influence title={`영향력 ${person.influence}`}>
             <Ring style={{ ['--value' as string]: `${person.influence}` }} aria-hidden />
             {person.influence}
           </Influence>
-        </Footer>
+        </Row>
       </Body>
     </Card>
+  )
+}
+
+/**
+ * 공통 빈 초상 — 사진이 없거나 깨진 모든 인물에 같은 모양(사람 실루엣만, 글자 없음).
+ * 인물마다 다른 글자·색을 만들지 않아 '사진 없음'이 데이터 상태로 한눈에 읽힌다.
+ * 하단 캡션(흰 글자)이 얹히므로 양 테마 모두 중간 톤 이상 어두운 중립 바탕을 쓴다.
+ */
+export function EmptyPortrait() {
+  return (
+    <Empty aria-hidden>
+      <svg viewBox="0 0 64 64" fill="none">
+        <circle cx="32" cy="23" r="11" fill="currentColor" />
+        <path d="M9 60c0-13 10.3-21.5 23-21.5S55 47 55 60z" fill="currentColor" />
+      </svg>
+    </Empty>
   )
 }
 
@@ -161,25 +184,9 @@ function PersonCardItemBase({
  */
 export const PersonCardItem = memo(PersonCardItemBase)
 
-/**
- * 공통 빈 초상 — 사진이 없는 모든 인물에 같은 모양. 인물마다 다른 글자·색을 만들지 않아
- * '사진 없음'이 데이터 상태로 한눈에 읽히고 격자가 조용해진다.
- */
-export function EmptyPortrait() {
-  return (
-    <Empty aria-hidden>
-      <svg viewBox="0 0 64 64" fill="none">
-        <circle cx="32" cy="24" r="11" fill="currentColor" />
-        <path d="M10 58c0-12.2 9.8-20 22-20s22 7.8 22 20" fill="currentColor" />
-      </svg>
-      <EmptyLabel>사진 없음</EmptyLabel>
-    </Empty>
-  )
-}
-
 export const EraCardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
 
   @media (max-width: 640px) {
@@ -193,21 +200,20 @@ const Card = styled.div<{ $pinned?: boolean }>`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 8px;
-  border-radius: 16px;
+  border-radius: 14px;
+  overflow: hidden;
   background: ${surface};
   border: 1px solid ${hairline};
   cursor: pointer;
-  transition: border-color ${MOTION_FAST}, box-shadow ${MOTION_FAST}, transform ${MOTION_FAST};
+  transition: border-color ${MOTION_FAST}, box-shadow ${MOTION_FAST};
 
   &:hover {
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(15, 23, 42, 0.14)'};
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(15, 23, 42, 0.18)'};
     box-shadow: ${({ theme }) =>
       theme.mode === 'dark'
-        ? '0 12px 28px rgba(0, 0, 0, 0.5)'
-        : '0 12px 28px rgba(15, 23, 42, 0.1)'};
-    transform: translateY(-2px);
+        ? '0 8px 24px rgba(0, 0, 0, 0.45)'
+        : '0 8px 24px rgba(15, 23, 42, 0.1)'};
   }
   &:focus-visible {
     outline: none;
@@ -218,47 +224,24 @@ const Card = styled.div<{ $pinned?: boolean }>`
     css`
       border-color: ${BRAND.primary};
       box-shadow: 0 0 0 1px ${BRAND.primary};
-      &:hover {
-        border-color: ${BRAND.primary};
-      }
     `}
 
   @media (prefers-reduced-motion: reduce) {
     transition: none;
-    &:hover {
-      transform: none;
-    }
   }
 `
 
 const Visual = styled.div`
   position: relative;
   aspect-ratio: 4 / 5;
-  border-radius: 10px;
   overflow: hidden;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1b1d22' : '#eef1f5')};
-  /* 사진 가장자리 헤어라인 — 흰 배경 사진이 카드 면과 섞이지 않게 */
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    box-shadow: inset 0 0 0 1px
-      ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)')};
-    pointer-events: none;
-  }
+  background: #111111;
 `
 
-const Photo = styled.img`
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  display: block;
-  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
-
+const zoomOnHover = css`
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
   ${Card}:hover & {
-    transform: scale(1.05);
+    transform: scale(1.04);
   }
   @media (prefers-reduced-motion: reduce) {
     transition: none;
@@ -268,68 +251,75 @@ const Photo = styled.img`
   }
 `
 
-/** 상단 칩 대비용 옅은 어둠 — 사진일 때만 */
-const TopShade = styled.div`
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 30%;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0));
-  pointer-events: none;
+const Photo = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  ${zoomOnHover}
 `
 
 const Empty = styled.div`
   width: 100%;
   height: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  gap: 12px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#343842' : '#cfd6e0')};
+  padding-top: 16%;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3f49' : '#aab4c2')};
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'linear-gradient(180deg, #1f2228 0%, #16181c 100%)'
-      : 'linear-gradient(180deg, #f4f6f9 0%, #e7ebf1 100%)'};
+      ? 'linear-gradient(180deg, #23262d 0%, #17191e 100%)'
+      : 'linear-gradient(180deg, #dfe4eb 0%, #c7cfda 100%)'};
+  ${zoomOnHover}
 
   svg {
     display: block;
-    width: 38%;
+    width: 58%;
     height: auto;
   }
 `
 
-const EmptyLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+/** 상·하단 어둠 — 흰 캡션·칩 대비 확보(사진 밝기와 무관) */
+const Scrim = styled.div`
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.28) 0%,
+    rgba(0, 0, 0, 0) 22%,
+    rgba(0, 0, 0, 0) 45%,
+    rgba(0, 0, 0, 0.55) 70%,
+    rgba(0, 0, 0, 0.86) 100%
+  );
+  pointer-events: none;
 `
 
 const glassChip = css`
-  background: rgba(15, 15, 20, 0.5);
+  background: rgba(15, 15, 20, 0.45);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
 `
 
 const RoleTag = styled.span<{ $monarch: boolean }>`
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 10px;
+  left: 10px;
   padding: 3px 9px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  ${glassChip}
   color: ${({ $monarch }) => ($monarch ? '#fcd34d' : '#bfdbfe')};
+  ${glassChip}
 `
 
 const PinBtn = styled.button<{ $active: boolean }>`
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   width: 32px;
   height: 32px;
   display: inline-flex;
@@ -337,6 +327,7 @@ const PinBtn = styled.button<{ $active: boolean }>`
   justify-content: center;
   border-radius: 999px;
   cursor: pointer;
+  color: #ffffff;
   ${glassChip}
   opacity: ${({ $active }) => ($active ? 1 : 0)};
   transition: opacity ${MOTION_FAST}, background ${MOTION_FAST};
@@ -354,7 +345,7 @@ const PinBtn = styled.button<{ $active: boolean }>`
     opacity: 1;
   }
   &:hover {
-    background: ${({ $active }) => ($active ? BRAND.primaryHover : 'rgba(15, 15, 20, 0.72)')};
+    background: ${({ $active }) => ($active ? BRAND.primaryHover : 'rgba(15, 15, 20, 0.7)')};
   }
   &:focus-visible {
     outline: none;
@@ -366,50 +357,39 @@ const PinBtn = styled.button<{ $active: boolean }>`
   }
 `
 
-const Body = styled.div`
-  flex: 1;
+const Caption = styled.div`
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 12px 6px 4px;
-  min-width: 0;
+  padding: 14px 14px 13px;
+  color: #ffffff;
+
+  @media (max-width: 640px) {
+    padding: 10px 10px 10px;
+  }
 `
 
-const Eyebrow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  font-size: 12px;
+const FieldTag = styled.span`
+  align-self: flex-start;
+  margin-bottom: 3px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 11px;
   font-weight: 700;
-`
-
-/** 분야 — 사건 목록 '분류'처럼 면 없는 분류색 글자 */
-const Field = styled.span`
-  flex-shrink: 0;
-  color: var(--field);
-`
-
-const Sep = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const Country = styled.span`
-  min-width: 0;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: #ffffff;
+  background: color-mix(in srgb, var(--field) 78%, #000000);
 `
 
 const Name = styled.div`
-  margin-top: 1px;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.25;
   letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -417,34 +397,40 @@ const Name = styled.div`
   word-break: keep-all;
 
   @media (max-width: 640px) {
-    font-size: 15px;
+    font-size: 16px;
   }
 `
 
 const Title = styled.div`
-  /* 푸터(margin-top:auto)와의 최소 간격 — 같은 줄 카드끼리 푸터 y는 auto가 맞춘다 */
-  margin-bottom: 10px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
-  color: ${metaText};
+  color: rgba(255, 255, 255, 0.82);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `
 
-const Footer = styled.div`
+const Body = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 13px;
+
+  @media (max-width: 640px) {
+    padding: 10px 10px 11px;
+  }
+`
+
+const Row = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid ${hairline};
+  min-width: 0;
 `
 
 const Years = styled.span`
-  min-width: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
@@ -452,26 +438,39 @@ const Years = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-
-  @media (max-width: 640px) {
-    font-size: 11.5px;
-    letter-spacing: -0.02em;
-  }
 `
 
 const Dash = styled.span`
-  margin: 0 3px;
+  margin: 0 4px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Age = styled.span`
+  flex-shrink: 0;
+  font-size: 12px;
   font-weight: 500;
   color: ${metaText};
+  white-space: nowrap;
 
   @media (max-width: 640px) {
     display: none;
   }
+`
+
+const Place = styled.span`
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const PlaceSub = styled.span`
+  font-weight: 500;
+  color: ${metaText};
 `
 
 const Influence = styled.span`
