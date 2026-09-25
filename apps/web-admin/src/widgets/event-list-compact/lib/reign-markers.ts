@@ -1,0 +1,354 @@
+/**
+ * 군주 즉위 구분선 — 사건 목록의 연대 흐름 사이에 '👑 세종 즉위 · 조선 · 재위 1418–1450'을
+ * 끼워 넣기 위한 순수 계산.
+ *
+ * 날짜는 전부 `부호연도×10000 + 월×100 + 일` 정수 키로 비교한다(iso-date의 dateSortKey와
+ * 같은 규약). 네이티브 Date는 BC·연도<100에서 부호 소실/오연도를 내므로 쓰지 않는다.
+ * 정밀도가 낮은 즉위일은 그 해(또는 달)의 **첫날**로, 퇴위일은 **마지막 날**로 본다.
+ */
+import { getCentury, parseIsoDateParts } from '@/shared/lib/iso-date'
+
+/** 'BC' | 'AD' — 서버 enum 문자열 */
+type EraValue = string | null | undefined
+
+/** `GET /government-positions/sovereign-reigns` 항목 중 여기서 쓰는 필드 */
+export interface SovereignReignTimelineItem {
+  id: string
+  personId: string
+  countryId?: string | null
+  historicalCountryId?: string | null
+  regnalName?: string | null
+  notes?: string | null
+  startDate?: string | null
+  startDatePrecision?: string | null
+  startEra?: EraValue
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endDate?: string | null
+  endDatePrecision?: string | null
+  endEra?: EraValue
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  country?: { id: string; name?: string | null } | null
+  historicalCountry?: { id: string; name?: string | null } | null
+  person?: {
+    id: string
+    name: string
+    surname?: string | null
+    middleName?: string | null
+    nameDisplayOrder?: string | null
+    regnalName?: string | null
+    templeName?: string | null
+    isAlive?: boolean | null
+    deathDate?: string | null
+    deathDatePrecision?: string | null
+    deathEra?: EraValue
+  } | null
+}
+
+export interface ReignMarker {
+  /** 재위 기록 id */
+  id: string
+  personId: string
+  /** 표시명 — 재위명 > 왕명(notes) > 인물 재위명 > 묘호 > 인물 표시명 */
+  name: string
+  countryName: string | null
+  /** 즉위 시점 키(포함 하한) */
+  startKey: number
+  /** 부호 연도 — BC는 음수 */
+  startYear: number
+  /** 퇴위 연도 — 현직·미상이면 null */
+  endYear: number | null
+}
+
+interface DateParts {
+  year: number
+  month: number | null
+  day: number | null
+}
+
+const signedYear = (year: number, era: EraValue) =>
+  era === 'BC' ? -Math.abs(year) : year
+
+/**
+ * 구조화 축(Era/Year/Month/Day)이 우선, 없으면 DATETIME 컬럼.
+ * 정밀도가 'year'/'month'면 모르는 부분은 null로 돌려 호출부가 채우게 한다.
+ */
+function resolveParts(
+  era: EraValue,
+  year: number | null | undefined,
+  month: number | null | undefined,
+  day: number | null | undefined,
+  iso: string | null | undefined,
+  precision: string | null | undefined,
+): DateParts | null {
+  const dropMonth = precision === 'year'
+  const dropDay = precision === 'year' || precision === 'month'
+  if (year != null) {
+    return {
+      year: signedYear(year, era),
+      month: dropMonth ? null : (month ?? null),
+      day: dropDay ? null : (day ?? null),
+    }
+  }
+  const parsed = parseIsoDateParts(iso)
+  if (!parsed) return null
+  return {
+    year: parsed.year,
+    month: dropMonth ? null : parsed.month,
+    day: dropDay ? null : parsed.day,
+  }
+}
+
+const lowerKey = (parts: DateParts) =>
+  parts.year * 10000 + (parts.month ?? 1) * 100 + (parts.day ?? 1)
+
+/** 재임 `notes`에 저장된 레거시 `왕명: …` 인코딩 */
+function regnalNameFromNotes(notes: string | null | undefined): string | null {
+  const match = notes?.match(/왕명\s*:\s*(.+?)(?:\n|$)/)
+  return match ? match[1].trim() || null : null
+}
+
+/**
+ * 재위 기록 → 즉위 구분선. 즉위일을 모르는 기록은 연표에 놓을 수 없어 뺀다.
+ *
+ * @param countryIds 목록에 나온 사건들의 관련 국가(현대·역사) id — 이 국가의 재위만 남긴다.
+ *   목록과 무관한 나라의 즉위가 연대 흐름을 채우지 않게 하는 범위 한정이다.
+ * @param personName 인물 표시명 함수(이름 표기 규칙은 호출부의 공용 헬퍼를 따른다)
+ */
+export function toReignMarkers(
+  reigns: SovereignReignTimelineItem[] | null | undefined,
+  countryIds: ReadonlySet<string>,
+  personName: (person: NonNullable<SovereignReignTimelineItem['person']>) => string,
+): ReignMarker[] {
+  if (!reigns?.length || countryIds.size === 0) return []
+  const markers: ReignMarker[] = []
+  for (const reign of reigns) {
+    const inScope =
+      (reign.countryId && countryIds.has(reign.countryId)) ||
+      (reign.historicalCountryId && countryIds.has(reign.historicalCountryId))
+    if (!inScope) continue
+
+    const start = resolveParts(
+      reign.startEra,
+      reign.startYear,
+      reign.startMonth,
+      reign.startDay,
+      reign.startDate,
+      reign.startDatePrecision,
+    )
+    if (!start) continue
+    const person = reign.person ?? null
+    const end =
+      resolveParts(
+        reign.endEra,
+        reign.endYear,
+        reign.endMonth,
+        reign.endDay,
+        reign.endDate,
+        reign.endDatePrecision,
+      ) ??
+      // 퇴위일이 없으면 사망일로 닫는다(현직이면 열어 둔다).
+      (person && !person.isAlive
+        ? resolveParts(
+            person.deathEra,
+            null,
+            null,
+            null,
+            person.deathDate,
+            person.deathDatePrecision,
+          )
+        : null)
+
+    const name =
+      reign.regnalName?.trim() ||
+      regnalNameFromNotes(reign.notes) ||
+      person?.regnalName?.trim() ||
+      person?.templeName?.trim() ||
+      (person ? personName(person) : '') ||
+      '군주'
+
+    markers.push({
+      id: reign.id,
+      personId: reign.personId,
+      name,
+      countryName:
+        reign.historicalCountry?.name ?? reign.country?.name ?? null,
+      startKey: lowerKey(start),
+      startYear: start.year,
+      endYear: end?.year ?? null,
+    })
+  }
+  return markers.sort((left, right) => left.startKey - right.startKey)
+}
+
+const formatSignedYear = (year: number) =>
+  year < 0 ? `BC ${-year}` : String(year)
+
+/** '1418–1450' / 'BC 221–BC 210' / '1952–' (현직·미상) */
+export function formatReignSpan(marker: ReignMarker): string {
+  const end = marker.endYear == null ? '' : formatSignedYear(marker.endYear)
+  return `${formatSignedYear(marker.startYear)}–${end}`
+}
+
+export interface ReignMarkerPlan {
+  /** 세기 머리글 **앞**에 놓일 구분선 — 즉위 세기에 사건이 하나도 없을 때 */
+  beforeCentury: Map<number, ReignMarker[]>
+  /** 연 머리글 **앞**에 놓일 구분선 — 즉위 해에 사건이 없을 때(공백 구간의 즉위) */
+  beforeYear: Map<number, ReignMarker[]>
+  /** 즉위 해에 사건이 있어 그 연 그룹 **안**에 끼워 넣을 구분선 */
+  inYear: Map<number, ReignMarker[]>
+  /** 표시 순서상 마지막 그룹 뒤 — 내림차순에서 목록 첫 사건보다 이른 즉위 */
+  trailing: ReignMarker[]
+}
+
+const pushTo = <Key,>(map: Map<Key, ReignMarker[]>, key: Key, marker: ReignMarker) => {
+  const list = map.get(key)
+  if (list) list.push(marker)
+  else map.set(key, [marker])
+}
+
+/**
+ * 구분선을 목록의 세기›연 그룹 사이 어디에 놓을지 정한다.
+ *
+ * - 즉위 해에 연 그룹이 있으면 → 그 그룹 안(행 사이 위치는 `interleaveReignMarkers`).
+ * - 없으면 → 시간상 다음에 **표시되는** 그룹 앞. 그 그룹이 세기의 첫 해이고 즉위가
+ *   다른 세기면 세기 머리글 앞에 둔다(15세기 머리글 아래에 14세기 즉위가 오지 않게).
+ * - 목록 범위 밖은 버린다: 마지막 사건 이후의 즉위, 그리고 첫 사건보다 이르면서
+ *   그 시점에 이미 퇴위한 재위. 첫 사건 시점에 **재위 중**인 군주는 남긴다 —
+ *   '목록이 시작될 때 누가 다스리고 있었나'는 필요한 문맥이다.
+ */
+export function planReignMarkers(
+  markers: ReignMarker[],
+  centuryGroups: Array<{ century: number; years: number[] }>,
+  direction: 'asc' | 'desc',
+): ReignMarkerPlan {
+  const plan: ReignMarkerPlan = {
+    beforeCentury: new Map(),
+    beforeYear: new Map(),
+    inYear: new Map(),
+    trailing: [],
+  }
+  const displayYears = centuryGroups.flatMap((group) => group.years)
+  if (markers.length === 0 || displayYears.length === 0) return plan
+
+  const yearSet = new Set(displayYears)
+  const firstYearOfCentury = new Set(
+    centuryGroups.map((group) => group.years[0]),
+  )
+  const minYear = Math.min(...displayYears)
+  const maxYear = Math.max(...displayYears)
+
+  for (const marker of markers) {
+    const startYear = marker.startYear
+    if (startYear > maxYear) continue
+    if (
+      startYear < minYear &&
+      marker.endYear != null &&
+      marker.endYear < minYear
+    ) {
+      continue
+    }
+    if (yearSet.has(startYear)) {
+      pushTo(plan.inYear, startYear, marker)
+      continue
+    }
+    const nextYear = displayYears.find((year) =>
+      direction === 'asc' ? year > startYear : year < startYear,
+    )
+    if (nextYear == null) {
+      plan.trailing.push(marker)
+      continue
+    }
+    if (
+      firstYearOfCentury.has(nextYear) &&
+      getCentury(nextYear) !== getCentury(startYear)
+    ) {
+      pushTo(plan.beforeCentury, getCentury(nextYear), marker)
+    } else {
+      pushTo(plan.beforeYear, nextYear, marker)
+    }
+  }
+
+  // 한 자리에 여럿이면 표시 방향의 시간순으로.
+  const order = (list: ReignMarker[]) =>
+    list.sort((left, right) =>
+      direction === 'asc'
+        ? left.startKey - right.startKey
+        : right.startKey - left.startKey,
+    )
+  plan.beforeCentury.forEach(order)
+  plan.beforeYear.forEach(order)
+  plan.inYear.forEach(order)
+  order(plan.trailing)
+  return plan
+}
+
+export type InterleavedEntry<T> =
+  | { kind: 'row'; item: T }
+  | { kind: 'reign'; marker: ReignMarker }
+
+/**
+ * 연 그룹 안에서 행과 즉위 구분선을 섞는다.
+ *
+ * 행이 시간순일 때(`chronological`)만 날짜로 위치를 잡는다 — 구분선은 즉위일 이후 첫
+ * 최상위 행 앞(오름차순), 즉위일 이전 첫 최상위 행 앞(내림차순)에 온다. 하위 행은 부모에
+ * 붙어 다니므로 최상위 행 경계에만 끼운다. 기간·하위 수 정렬처럼 연 그룹 안이 시간순이
+ * 아니면 날짜 위치가 의미 없으니 그룹 맨 앞에 모은다.
+ */
+export function interleaveReignMarkers<T>(
+  items: T[],
+  markers: ReignMarker[] | undefined,
+  options: {
+    direction: 'asc' | 'desc'
+    chronological: boolean
+    /** 최상위 행이면 그 행의 시작 키, 하위 행·날짜 미상이면 null */
+    rowStartKey: (item: T) => number | null
+  },
+): InterleavedEntry<T>[] {
+  const rows = items.map((item) => ({ kind: 'row', item }) as const)
+  if (!markers?.length) return rows
+  const reignEntries = markers.map(
+    (marker) => ({ kind: 'reign', marker }) as const,
+  )
+  if (!options.chronological) return [...reignEntries, ...rows]
+
+  const result: InterleavedEntry<T>[] = []
+  let pending = [...reignEntries]
+  for (const item of items) {
+    const key = options.rowStartKey(item)
+    if (key != null && pending.length > 0) {
+      const due = pending.filter(({ marker }) =>
+        options.direction === 'asc'
+          ? marker.startKey <= key
+          : marker.startKey > key,
+      )
+      if (due.length > 0) {
+        result.push(...due)
+        pending = pending.filter((entry) => !due.includes(entry))
+      }
+    }
+    result.push({ kind: 'row', item })
+  }
+  result.push(...pending)
+  return result
+}
+
+/** 사건 기간 시작(ISO + 정밀도) → 하한 키. 시작을 모르면 null. */
+export function eventStartKey(period: {
+  start: string
+  startPrecision?: string | null
+}): number | null {
+  const start = parseIsoDateParts(period.start)
+  if (!start) return null
+  const yearOnly =
+    period.startPrecision === 'year' ||
+    (period.startPrecision == null && start.month === 1 && start.day === 1)
+  return lowerKey({
+    year: start.year,
+    month: yearOnly ? null : start.month,
+    day: yearOnly || period.startPrecision === 'month' ? null : start.day,
+  })
+}

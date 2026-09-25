@@ -1,0 +1,230 @@
+import {
+  type ReignMarker,
+  type SovereignReignTimelineItem,
+  formatReignSpan,
+  interleaveReignMarkers,
+  planReignMarkers,
+  toReignMarkers,
+} from './reign-markers'
+
+const JOSEON = 'hc-joseon'
+const personName = (person: { name: string }) => person.name
+
+const reign = (
+  overrides: Partial<SovereignReignTimelineItem>,
+): SovereignReignTimelineItem => ({
+  id: 'r',
+  personId: 'p',
+  historicalCountryId: JOSEON,
+  historicalCountry: { id: JOSEON, name: '조선' },
+  person: { id: 'p', name: '이도' },
+  ...overrides,
+})
+
+const marker = (
+  id: string,
+  startYear: number,
+  endYear: number | null,
+  month = 1,
+  day = 1,
+): ReignMarker => ({
+  id,
+  personId: id,
+  name: id,
+  countryName: '조선',
+  startKey: startYear * 10000 + month * 100 + day,
+  startYear,
+  endYear,
+})
+
+describe('toReignMarkers', () => {
+  it('목록에 나온 국가의 재위만 남기고 즉위순으로 정렬한다', () => {
+    const markers = toReignMarkers(
+      [
+        reign({ id: 'munjong', startDate: '1450-02-22T00:00:00.000Z' }),
+        reign({
+          id: 'sejong',
+          regnalName: '세종',
+          startDate: '1418-08-10T00:00:00.000Z',
+          endDate: '1450-02-17T00:00:00.000Z',
+        }),
+        reign({ id: 'other', historicalCountryId: 'hc-ming' }),
+      ],
+      new Set([JOSEON]),
+      personName,
+    )
+    expect(markers.map((item) => item.id)).toEqual(['sejong', 'munjong'])
+    expect(markers[0].name).toBe('세종')
+    expect(markers[0].countryName).toBe('조선')
+    expect(formatReignSpan(markers[0])).toBe('1418–1450')
+  })
+
+  it('표시명 폴백: 레거시 왕명(notes) → 묘호 → 인물 이름', () => {
+    const [fromNotes, fromTemple, fromName] = toReignMarkers(
+      [
+        reign({ id: 'a', startYear: 1400, notes: '왕명: 정종' }),
+        reign({
+          id: 'b',
+          startYear: 1401,
+          person: { id: 'p', name: '이방원', templeName: '태종' },
+        }),
+        reign({ id: 'c', startYear: 1402 }),
+      ],
+      new Set([JOSEON]),
+      personName,
+    )
+    expect(fromNotes.name).toBe('정종')
+    expect(fromTemple.name).toBe('태종')
+    expect(fromName.name).toBe('이도')
+  })
+
+  it('BC 재위는 구조화 축을 쓰고, 퇴위 미상이면 사망일로 닫는다', () => {
+    const [qin] = toReignMarkers(
+      [
+        reign({
+          id: 'qin',
+          startEra: 'BC',
+          startYear: 221,
+          startDatePrecision: 'year',
+          person: {
+            id: 'p',
+            name: '영정',
+            isAlive: false,
+            deathEra: 'BC',
+            deathDate: '-0210-01-01',
+            deathDatePrecision: 'year',
+          },
+        }),
+      ],
+      new Set([JOSEON]),
+      personName,
+    )
+    expect(qin.startYear).toBe(-221)
+    expect(qin.endYear).toBe(-210)
+    expect(formatReignSpan(qin)).toBe('BC 221–BC 210')
+  })
+
+  it('즉위일을 모르거나 목록 국가가 없으면 비운다', () => {
+    expect(toReignMarkers([reign({})], new Set([JOSEON]), personName)).toEqual([])
+    expect(
+      toReignMarkers([reign({ startYear: 1418 })], new Set(), personName),
+    ).toEqual([])
+  })
+})
+
+describe('planReignMarkers', () => {
+  const groups = [
+    { century: 15, years: [1443, 1453] },
+    { century: 16, years: [1592] },
+  ]
+
+  it('즉위 해에 연 그룹이 있으면 그 안에', () => {
+    const plan = planReignMarkers([marker('m', 1443, 1450)], groups, 'asc')
+    expect(plan.inYear.get(1443)?.map((item) => item.id)).toEqual(['m'])
+  })
+
+  it('공백 구간의 즉위는 다음에 표시되는 연 그룹 앞 — 방향에 따라 다르다', () => {
+    const munjong = marker('munjong', 1450, 1452)
+    expect(
+      planReignMarkers([munjong], groups, 'asc').beforeYear.get(1453),
+    ).toEqual([munjong])
+    expect(
+      planReignMarkers(
+        [munjong],
+        [
+          { century: 16, years: [1592] },
+          { century: 15, years: [1453, 1443] },
+        ],
+        'desc',
+      ).beforeYear.get(1443),
+    ).toEqual([munjong])
+  })
+
+  it('다음 그룹이 세기 첫 해이고 즉위가 다른 세기면 세기 머리글 앞', () => {
+    // 16세기에 사건이 하나도 없다 — 16세기 즉위를 17세기 머리글 아래에 두면 오독된다.
+    const seonjo = marker('seonjo', 1567, 1608)
+    const plan = planReignMarkers(
+      [seonjo],
+      [
+        { century: 15, years: [1443] },
+        { century: 17, years: [1620] },
+      ],
+      'asc',
+    )
+    expect(plan.beforeCentury.get(17)).toEqual([seonjo])
+    expect(plan.beforeYear.size).toBe(0)
+
+    // 같은 세기면 세기 머리글 뒤, 연 머리글 앞
+    expect(planReignMarkers([seonjo], groups, 'asc').beforeYear.get(1592)).toEqual([
+      seonjo,
+    ])
+  })
+
+  it('목록 범위 밖은 버리되, 첫 사건 시점에 재위 중인 군주는 남긴다', () => {
+    const sejong = marker('sejong', 1418, 1450)
+    const taejo = marker('taejo', 1392, 1398)
+    const late = marker('late', 1700, 1720)
+    const plan = planReignMarkers([sejong, taejo, late], groups, 'asc')
+    // 같은 15세기라 세기 머리글 뒤, 1443년 머리글 앞
+    expect(plan.beforeYear.get(1443)).toEqual([sejong])
+    expect(plan.inYear.size + plan.beforeCentury.size + plan.trailing.length).toBe(0)
+
+    const descPlan = planReignMarkers(
+      [sejong],
+      [
+        { century: 16, years: [1592] },
+        { century: 15, years: [1453, 1443] },
+      ],
+      'desc',
+    )
+    expect(descPlan.trailing).toEqual([sejong])
+  })
+})
+
+describe('interleaveReignMarkers', () => {
+  const rows = [
+    { id: 'jan', key: 14430101 },
+    { id: 'child', key: null },
+    { id: 'dec', key: 14431230 },
+  ]
+  const sejong = marker('m', 1443, null, 8, 10)
+  const ids = (entries: ReturnType<typeof interleaveReignMarkers<(typeof rows)[number]>>) =>
+    entries.map((entry) => (entry.kind === 'row' ? entry.item.id : `👑${entry.marker.id}`))
+
+  it('오름차순: 즉위일 이후 첫 최상위 행 앞', () => {
+    expect(
+      ids(
+        interleaveReignMarkers(rows, [sejong], {
+          direction: 'asc',
+          chronological: true,
+          rowStartKey: (row) => row.key,
+        }),
+      ),
+    ).toEqual(['jan', 'child', '👑m', 'dec'])
+  })
+
+  it('내림차순: 즉위일 이전 첫 최상위 행 앞', () => {
+    const descRows = [rows[2], rows[0], rows[1]]
+    expect(
+      ids(
+        interleaveReignMarkers(descRows, [sejong], {
+          direction: 'desc',
+          chronological: true,
+          rowStartKey: (row) => row.key,
+        }),
+      ),
+    ).toEqual(['dec', '👑m', 'jan', 'child'])
+  })
+
+  it('시간순이 아닌 정렬이면 그룹 맨 앞', () => {
+    expect(
+      ids(
+        interleaveReignMarkers(rows, [sejong], {
+          direction: 'asc',
+          chronological: false,
+          rowStartKey: (row) => row.key,
+        }),
+      ),
+    ).toEqual(['👑m', 'jan', 'child', 'dec'])
+  })
+})

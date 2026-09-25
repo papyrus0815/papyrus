@@ -13,7 +13,8 @@ import {
   FiSearch,
   FiX,
 } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
+import { FaCrown } from 'react-icons/fa'
+import { Link, useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import type { ListColumnKey, SortOption } from '@/features/event-list/lib'
@@ -41,6 +42,13 @@ import {
   gapSpacingPx,
   groupYearsByCentury,
 } from '@/features/event-hierarchy/model'
+import {
+  type ReignMarker,
+  eventStartKey,
+  formatReignSpan,
+  interleaveReignMarkers,
+  planReignMarkers,
+} from '../lib/reign-markers'
 import type {
   FlattenedHierarchyItem,
   YearBuckets,
@@ -66,6 +74,11 @@ interface EventCompactListProps {
    * 정하므로, 두 곳이 각자 계산하면 입력이 한 톨만 달라도 DOM과 내비 모수가 갈린다.
    */
   yearBuckets: YearBuckets
+  /**
+   * 군주 즉위 구분선 — 연대 흐름 사이에 '👑 세종 즉위 · 조선 · 재위 1418–1450'을 끼운다.
+   * 범위(어느 나라 군주인가)는 페이지가 정해 내려준다. 연도 그룹이 꺼진 평면 목록에는 싣지 않는다.
+   */
+  reignMarkers?: ReignMarker[]
   events: HistoricalEvent[]
   expandedEventIds: Set<string>
   selectedEventId: string | null
@@ -104,11 +117,6 @@ interface EventCompactListProps {
   loadMoreFailed?: boolean
   onRetryLoadMore?: () => void
   bookmarks?: Set<string>
-  /**
-   * 군주 재위 표시 — 사건 id → 배지 설명 문구. 여기 있는 행만 '재위' 배지·tint를 받는다.
-   * 미전달이면 표시 없음.
-   */
-  reignLabels?: Map<string, string>
   /**
    * 행 밀도. 세로 픽셀의 소유권을 사용자에게 넘긴다 — 밀도는 취향이 아니라 과업 의존적이라
    * (특정 사건을 찾을 땐 조밀, 읽을 땐 편안) 자동 추정하지 않고 선택을 그대로 따른다.
@@ -188,6 +196,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   isLoading,
   flattenedHierarchy,
   yearBuckets,
+  reignMarkers,
   events,
   expandedEventIds,
   selectedEventId,
@@ -202,7 +211,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   loadMoreFailed = false,
   onRetryLoadMore,
   bookmarks = new Set(),
-  reignLabels,
   searchQuery,
   density = 'cozy',
   recentEventIds = [],
@@ -412,6 +420,39 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    */
   const centuryGroups = useMemo(() => groupYearsByCentury(allYears), [allYears])
 
+  /** 즉위 구분선을 세기›연 그룹 사이 어디에 둘지 — 표시 방향을 따른다 */
+  const reignPlan = useMemo(
+    () => planReignMarkers(reignMarkers ?? [], centuryGroups, sortDirection),
+    [reignMarkers, centuryGroups, sortDirection],
+  )
+
+  /**
+   * 즉위 구분선 한 줄. 인물 이름은 인물 상세로 가는 링크다 — 구분선이 곧 '이 시기를
+   * 다스린 사람'으로 건너가는 입구가 된다. 행 목록 안에 들 때는 listitem이어야 한다.
+   */
+  const renderReignMarker = (marker: ReignMarker, inList: boolean) => (
+    <List.ReignMarker
+      key={`reign-${marker.id}`}
+      role={inList ? 'listitem' : 'note'}
+      data-reign-marker=""
+    >
+      <FaCrown aria-hidden="true" />
+      <span>
+        <Link
+          to={pathKeys.personsTimelineDetail(marker.personId)}
+          tabIndex={-1}
+        >
+          {marker.name}
+        </Link>{' '}
+        즉위
+      </span>
+      {marker.countryName && (
+        <List.ReignMarkerMeta>{marker.countryName}</List.ReignMarkerMeta>
+      )}
+      <List.ReignMarkerMeta>재위 {formatReignSpan(marker)}</List.ReignMarkerMeta>
+    </List.ReignMarker>
+  )
+
   /**
    * 로빙 tabindex의 대상 행 id.
    *
@@ -494,7 +535,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         isActive={selectedEventId === node.id}
         dbCategories={dbCategories}
         isBookmarked={bookmarks.has(node.id)}
-        reignLabel={reignLabels?.get(node.id)}
         searchQuery={searchQuery}
         // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)
         groupYear={groupYear}
@@ -816,6 +856,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     <List.GapMarker role="note">{label}</List.GapMarker>
                   ) : null
                 })()}
+                {reignPlan.beforeCentury
+                  .get(century)
+                  ?.map((marker) => renderReignMarker(marker, false))}
                 {/* 헤딩 탐색용 — 시각적으로는 숨기고 접근성 트리에만 남긴다. */}
                 <List.GroupHeading id={centuryHeadingId} aria-level={3}>
                   {`${centuryLabel} (${centuryRangeLabel}) — 사건 ${centuryUnitCount}건${
@@ -953,6 +996,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               <List.GapMarker role="note">{label}</List.GapMarker>
                             ) : null
                           })()}
+                          {reignPlan.beforeYear
+                            .get(currentYear)
+                            ?.map((marker) => renderReignMarker(marker, false))}
                           <List.GroupHeading id={yearHeadingId} aria-level={4}>
                             {`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건${
                               yearSubCount > 0
@@ -1022,13 +1068,27 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               {/* ⚠️ aria-posinset은 **1부터** 시작한다. index를 그대로
                                   넘기면 첫 행이 '0번째'로 낭독되고, 이 경로가
                                   grouped 기본값(true)이라 LIST의 상시 경로다. */}
-                              {yearItems.map((item, index) =>
-                                renderRow(
-                                  item,
-                                  currentYear,
-                                  index + 1,
-                                  yearItems.length,
-                                ),
+                              {interleaveReignMarkers(
+                                yearItems,
+                                reignPlan.inYear.get(currentYear),
+                                {
+                                  direction: sortDirection,
+                                  // 연 그룹 안이 시간순일 때만 날짜로 자리를 잡는다
+                                  chronological: sortBy === 'recent',
+                                  rowStartKey: (item) =>
+                                    item.depth === 0
+                                      ? eventStartKey(item.node.period)
+                                      : null,
+                                },
+                              ).map((entry) =>
+                                entry.kind === 'reign'
+                                  ? renderReignMarker(entry.marker, true)
+                                  : renderRow(
+                                      entry.item,
+                                      currentYear,
+                                      yearItems.indexOf(entry.item) + 1,
+                                      yearItems.length,
+                                    ),
                               )}
                             </List.RowList>
                           )}
@@ -1039,6 +1099,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                 </List.CenturySection>
               )
             })}
+
+          {grouped &&
+            reignPlan.trailing.map((marker) => renderReignMarker(marker, false))}
 
           {/* 연도 미상 — period.start가 비었거나 파싱 불가하고 귀속할 상위 연도도 없는 항목.
            * 그룹핑에서 드롭하지 않고 여기 모아 렌더한다(자식만 남은 북마크 필터·날짜 완전 미상). */}

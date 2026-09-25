@@ -1043,6 +1043,68 @@ export const GapMarker = styled.div`
   }
 `
 
+/**
+ * 군주 즉위 구분선 — 연대 흐름 사이에 끼는 '👑 세종 즉위 · 조선 · 재위 1418–1450'.
+ *
+ * 사건 행이 아니라 **시간축 위의 표지**다. 그래서 GapMarker(공백 표지)와 같은 문법 —
+ * 레일 거터에서 시작하는 한 줄 + 끝까지 이어지는 rule — 을 따르되, 공백 표지의 점선과
+ * 구별되게 실선 hairline에 호박색 왕관 하나만 색을 싣는다. 행 높이 토큰을 쓰지 않고
+ * 메타 크기로 낮게 눌러 사건 행보다 앞에 나서지 않게 한다.
+ */
+export const ReignMarker = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  ${bleedToEdges}
+  padding: 5px var(--list-pad-r, 20px) 5px var(--rail-gutter);
+  font-size: var(--row-meta, 12px);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  > svg {
+    flex-shrink: 0;
+    width: 11px;
+    height: 11px;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  }
+
+  a {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+  }
+
+  &::after {
+    content: '';
+    flex: 1;
+    min-width: 12px;
+    height: 0;
+    border-top: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(251, 191, 36, 0.22)'
+          : 'rgba(180, 83, 9, 0.2)'};
+  }
+`
+
+/** 즉위 구분선의 부가 정보(국가·재위 기간) — 가운뎃점으로 이어 붙인다 */
+export const ReignMarkerMeta = styled.span`
+  color: ${metaText};
+
+  &::before {
+    content: '·';
+    margin-right: 8px;
+  }
+`
+
 export const YearSection = styled.div`
   display: flex;
   flex-direction: column;

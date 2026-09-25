@@ -44,7 +44,6 @@ const makeArgs = (
   sortDirection: 'desc',
   showFlatView: false,
   pageSize: DEFAULT_PAGE_SIZE,
-  reignPersonId: null,
   setKeywordInput: noopSetter,
   setSelectedEventId: noopSetter,
   setBookmarksOnly: noopSetter,
@@ -58,7 +57,6 @@ const makeArgs = (
   setSortDirection: noopSetter,
   setShowFlatView: noopSetter,
   setPageSize: noopSetter,
-  setReignPersonId: noopSetter,
   ...overrides,
 })
 

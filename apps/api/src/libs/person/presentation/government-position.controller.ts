@@ -134,6 +134,58 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 군주 재위 연표 (경량) — GET /government-positions/sovereign-reigns
+   *
+   * 사건 목록이 연대 흐름 사이에 '즉위' 구분선을 끼워 넣는 데 쓴다. 날짜는 구조화 축
+   * (Era/Year/Month/Day)까지 싣는다 — BC·고대·연단위 재위는 startDate가 NULL이다.
+   * 즉위일을 전혀 모르는 기록은 연표에 놓을 수 없으므로 뺀다.
+   */
+  @Get('sovereign-reigns')
+  async listSovereignReigns(): Promise<any[]> {
+    const reigns = await this.prisma.sovereignReign.findMany({
+      where: { OR: [{ startDate: { not: null } }, { startYear: { not: null } }] },
+      select: {
+        id: true,
+        personId: true,
+        countryId: true,
+        historicalCountryId: true,
+        regnalName: true,
+        notes: true,
+        startDate: true,
+        startDatePrecision: true,
+        startEra: true,
+        startYear: true,
+        startMonth: true,
+        startDay: true,
+        endDate: true,
+        endDatePrecision: true,
+        endEra: true,
+        endYear: true,
+        endMonth: true,
+        endDay: true,
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            middleName: true,
+            nameDisplayOrder: true,
+            regnalName: true,
+            templeName: true,
+            isAlive: true,
+            deathDate: true,
+            deathDatePrecision: true,
+            deathEra: true,
+          },
+        },
+      },
+    })
+    return reigns.map(serializeBigInt)
+  }
+
+  /**
    * 역사적 국가별 재임 기록 (REST) - GET /government-positions/historical-countries/:id/tenures
    */
   @Get('historical-countries/:historicalCountryId/tenures')
