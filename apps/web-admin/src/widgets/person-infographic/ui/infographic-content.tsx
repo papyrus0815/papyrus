@@ -1,68 +1,135 @@
 /**
- * 인물 인포그래픽 콘텐츠 — 헤더 + 검색 + 통계 토글 + 뷰 디스패치.
+ * 인물 목록 콘텐츠 — 검색·필터 툴바 + 뷰 전환 줄 + 결과 요약 + 뷰 디스패치.
  *
- * 5개 뷰(matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
+ * 크롬은 사건 목록(/events)과 같은 순서·같은 컨트롤 문법:
+ *   [검색 /] [시대|지역|분야] ··· [통계] [+ 새 인물 등록]
+ *   [활성 필터 칩 … 모두 해제]
+ *   [뷰 세그먼트] [정렬·순서] ··· [N명 · 평균 수명 · 대표 분야]
+ *
+ * 뷰(list/cards/matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
  * records(기록 비교) 뷰는 상위 PersonInfographicPane이 별도 분기.
  * 필터·뷰·정렬 상태는 zustand store + URL 쿼리 동기화로 공유.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import { motion } from 'framer-motion'
-import { FiBarChart2, FiPlus, FiSearch, FiX } from 'react-icons/fi'
-import styled, { css } from 'styled-components'
+import {
+  FiArrowDown,
+  FiBarChart2,
+  FiClock,
+  FiGlobe,
+  FiLayers,
+  FiPlus,
+  FiSearch,
+  FiX,
+} from 'react-icons/fi'
+import styled from 'styled-components'
 
 import { usePersonsInfographic } from '@/entities/person/api'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
-import { PersonTabSharedTitle } from '@/widgets/country/country-detail/ui/country-detail.styles'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 
-import { ERAS } from '../model/constants'
+import {
+  colorForField,
+  ERAS,
+  FIELDS,
+  REGION_COLORS,
+  REGIONS,
+} from '../model/constants'
 import {
   countActiveScopes,
   matchesScopes,
   usePersonInfographicFilterStore,
   type PersonInfographicView,
+  type PersonSortKey,
 } from '../model/filter.store'
+import { SORT_OPTIONS } from '../model/sort-helpers'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
 import { CardsView } from './cards-view'
 import { DynastyView } from './dynasty-view'
 import { CardGridSkeleton } from './_shared/card-grid-skeleton'
+import {
+  Actions,
+  ActiveFilterChip,
+  ActiveFilterClear,
+  ActiveFilterLabel,
+  ActiveFiltersRow,
+  DisplayOptions,
+  FilterGroup,
+  GhostBtn,
+  IconBtn,
+  MetaDot,
+  PrimaryBtn,
+  Search,
+  SearchClear,
+  SearchIcon,
+  SearchInput,
+  SearchKbd,
+  Select,
+  srOnly,
+  TopBar,
+  ViewMeta,
+  ViewRow,
+} from './_shared/catalog.styles'
 import { EmptyState } from './_shared/empty-state'
-import { EraOrderToggle } from './_shared/era-order-toggle'
-import { SortBar } from './_shared/sort-bar'
+import { ScopeDropdown } from './_shared/scope-dropdown'
 import { EraStoryView } from './era-story-view'
 import { GalaxyView } from './galaxy-view'
 import { HeaderStats } from './header-stats'
+import { ListView } from './list-view'
 import { MatrixView } from './matrix-view'
 import { StatsView } from './stats-view'
 
 interface InfographicContentProps {
   /** 인물 카드/아이템 클릭 시 상세로 이동 */
   onPersonClick: (id: string) => void
+  /** 뷰 전환 세그먼트 — 페인이 소유(records 분기와 공유)하고 여기서는 자리만 잡는다 */
+  viewSwitcher: ReactNode
+  /** 활성 뷰 한 줄 설명 */
+  viewHint: ReactNode
 }
 
 const STATS_KEY = 'person-infographic-stats-open'
 
 export function InfographicContent({
   onPersonClick,
+  viewSwitcher,
+  viewHint,
 }: InfographicContentProps) {
   // URL ↔ store 동기화는 상위 PersonInfographicPane이 담당 (records 뷰 분기 공유)
   const { isLoading, isError, refetch } = usePersonsInfographic()
   const allPeople = useAdaptedPersons()
 
-  const scopes = usePersonInfographicFilterStore((s) => s.scopes)
-  const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
-  const view = usePersonInfographicFilterStore((s) => s.view)
-  const storeQuery = usePersonInfographicFilterStore((s) => s.query)
-  const setStoreQuery = usePersonInfographicFilterStore((s) => s.setQuery)
+  const scopes = usePersonInfographicFilterStore((state) => state.scopes)
+  const toggleScope = usePersonInfographicFilterStore((state) => state.toggleScope)
+  const setMinInfluence = usePersonInfographicFilterStore((state) => state.setMinInfluence)
+  const setAliveFilter = usePersonInfographicFilterStore((state) => state.setAliveFilter)
+  const sort = usePersonInfographicFilterStore((state) => state.sort)
+  const setSort = usePersonInfographicFilterStore((state) => state.setSort)
+  const eraGroupOrder = usePersonInfographicFilterStore((state) => state.eraGroupOrder)
+  const setEraGroupOrder = usePersonInfographicFilterStore(
+    (state) => state.setEraGroupOrder,
+  )
+  const searchRef = useRef<HTMLInputElement>(null)
+  const resetFilters = usePersonInfographicFilterStore((state) => state.resetFilters)
+  const view = usePersonInfographicFilterStore((state) => state.view)
+  const storeQuery = usePersonInfographicFilterStore((state) => state.query)
+  const setStoreQuery = usePersonInfographicFilterStore((state) => state.setQuery)
   // 검색 입력은 로컬 state로 즉시 반영하고, 디바운스된 값만 store(→URL)에 커밋.
   // (이전엔 키 입력마다 store.query→url-sync가 URL을 replaceState로 갱신해 history 스팸)
   const [searchInput, setSearchInput] = useState(storeQuery)
-  const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
-  const aliveFilter = usePersonInfographicFilterStore((s) => s.aliveFilter)
-  const pinnedList = usePersonInfographicFilterStore((s) => s.pinned)
-  const storeTogglePin = usePersonInfographicFilterStore((s) => s.togglePin)
+  const minInfluence = usePersonInfographicFilterStore((state) => state.minInfluence)
+  const aliveFilter = usePersonInfographicFilterStore((state) => state.aliveFilter)
+  const pinnedList = usePersonInfographicFilterStore((state) => state.pinned)
+  const storeTogglePin = usePersonInfographicFilterStore((state) => state.togglePin)
 
   const pinned = useMemo(() => new Set(pinnedList), [pinnedList])
   const togglePin = useCallback(
@@ -145,9 +212,28 @@ export function InfographicContent({
     ? Math.round(knownAges.reduce((sum, age) => sum + age, 0) / knownAges.length)
     : 0
 
-  // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 cards(평면 목록) 포함 나머지를 다룬다.
+  // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 목록 포함 나머지를 다룬다.
   const activeView: Exclude<PersonInfographicView, 'records'> =
-    view === 'records' ? 'cards' : view
+    view === 'records' ? 'list' : view
+
+  // '/' 로 검색 포커스 — 사건 목록과 같은 단축키. 입력 중에는 가로채지 않는다.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey)
+        return
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target.isContentEditable ||
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      )
+        return
+      event.preventDefault()
+      searchRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   const hasActiveFilter =
     totalScopeCount > 0 ||
@@ -155,12 +241,90 @@ export function InfographicContent({
     aliveFilter !== 'all' ||
     !!dq.trim()
 
+  // 상단 필터 드롭다운 옵션 — 카운트는 전체 모수(필터 전) 기준이라 선택해도 숫자가 흔들리지 않는다.
+  const scopeOptions = useMemo(() => {
+    const eraCount = new Map<string, number>()
+    const regionCount = new Map<string, number>()
+    const fieldCount = new Map<string, number>()
+    for (const person of allPeople) {
+      eraCount.set(person.era.key, (eraCount.get(person.era.key) ?? 0) + 1)
+      regionCount.set(person.region, (regionCount.get(person.region) ?? 0) + 1)
+      fieldCount.set(person.field, (fieldCount.get(person.field) ?? 0) + 1)
+    }
+    return {
+      era: ERAS.map((era) => ({
+        value: era.key,
+        label: era.lbl,
+        color: era.color,
+        count: eraCount.get(era.key) ?? 0,
+      })),
+      region: REGIONS.map((region, index) => ({
+        value: region,
+        label: region,
+        color: REGION_COLORS[index % REGION_COLORS.length],
+        count: regionCount.get(region) ?? 0,
+      })),
+      field: FIELDS.map((field) => ({
+        value: field,
+        label: field,
+        color: colorForField(field),
+        count: fieldCount.get(field) ?? 0,
+      })),
+    }
+  }, [allPeople])
+
+  // 활성 필터 칩 — 좌측 레일·상단 드롭다운 어디서 걸었든 한 줄에서 보고 하나씩 해제.
+  const activeChips: Array<{ key: string; label: string; onRemove: () => void }> = [
+    ...scopes.era.map((value) => ({
+      key: `era-${value}`,
+      label: ERAS.find((era) => era.key === value)?.lbl ?? value,
+      onRemove: () => toggleScope('era', value),
+    })),
+    ...(['region', 'field', 'country'] as const).flatMap((kind) =>
+      scopes[kind].map((value) => ({
+        key: `${kind}-${value}`,
+        label: value,
+        onRemove: () => toggleScope(kind, value),
+      })),
+    ),
+    ...(minInfluence > 0
+      ? [
+          {
+            key: 'min-influence',
+            label: `영향력 ${minInfluence}+`,
+            onRemove: () => setMinInfluence(0),
+          },
+        ]
+      : []),
+    ...(aliveFilter !== 'all'
+      ? [
+          {
+            key: 'alive',
+            label: aliveFilter === 'alive' ? '생존 인물' : '사망 인물',
+            onRemove: () => setAliveFilter('all'),
+          },
+        ]
+      : []),
+  ]
+
+  // 결과 요약의 대표 분야 — 사건 목록 우측의 '● 전쟁/군사 78'과 같은 자리.
+  const topField = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const person of filtered)
+      counts.set(person.field, (counts.get(person.field) ?? 0) + 1)
+    let best: [string, number] | null = null
+    for (const entry of counts) if (!best || entry[1] > best[1]) best = entry
+    return best
+  }, [filtered])
+
+  const aliveCount = useMemo(
+    () => filtered.filter((person) => person.isAlive).length,
+    [filtered],
+  )
+
   return (
     <motion.div
       key="infographic"
-      id="person-view-panel"
-      role="tabpanel"
-      aria-labelledby={`person-view-tab-${activeView}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -175,141 +339,245 @@ export function InfographicContent({
               ? '인물 데이터를 불러오는 중'
               : `${scopeLabel}, ${filtered.length}명`}
         </SrStatus>
-        <Toolbar>
-          <ToolbarHead>
-            <PersonTabSharedTitle>
-              {scopeLabel}
-              {filtered.length > 0 && (
-                <TitleMeta>
-                  {filtered.length}명
-                  {avgLifespan > 0 && ` · 평균 수명 ${avgLifespan}년`}
-                </TitleMeta>
-              )}
-            </PersonTabSharedTitle>
-          </ToolbarHead>
 
-          <ToolbarMid>
-            <SearchBox>
-              <SearchIconWrap>
-                <FiSearch size={13} />
-              </SearchIconWrap>
-              <SearchInput
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="이름, 국가, 소속 검색…"
-                aria-label="인물 검색"
-              />
-              {searchInput && (
-                <ClearBtn
-                  onClick={() => setSearchInput('')}
-                  aria-label="검색어 지우기"
-                >
-                  <FiX size={13} />
-                </ClearBtn>
-              )}
-            </SearchBox>
-            {/* 정렬은 카드 그리드 뷰(카드·스토리·왕조)에서만 의미 */}
-            {(activeView === 'cards' ||
-              activeView === 'story' ||
-              activeView === 'dynasty') && <SortBar />}
-            {/* 세기 그룹 나열 방향(최신/오래된순)은 세기 그룹 뷰(스토리) 전용 */}
-            {activeView === 'story' && <EraOrderToggle />}
-          </ToolbarMid>
+        <TopBar>
+          <Search>
+            <SearchIcon>
+              <FiSearch size={16} />
+            </SearchIcon>
+            <SearchInput
+              ref={searchRef}
+              type="search"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && searchInput) {
+                  event.preventDefault()
+                  setSearchInput('')
+                }
+              }}
+              placeholder="이름·국가·소속·직함 검색"
+              aria-label="인물 검색"
+            />
+            {searchInput ? (
+              <SearchClear
+                type="button"
+                onClick={() => {
+                  setSearchInput('')
+                  searchRef.current?.focus()
+                }}
+                aria-label="검색어 지우기"
+              >
+                <FiX size={13} />
+              </SearchClear>
+            ) : (
+              <SearchKbd aria-hidden>/</SearchKbd>
+            )}
+          </Search>
 
-          <ToolbarActions>
-            <StatsToggleBtn
+          <FilterGroup role="group" aria-label="빠른 필터">
+            <ScopeDropdown
+              kind="era"
+              label="시대"
+              icon={<FiClock size={14} aria-hidden />}
+              options={scopeOptions.era}
+            />
+            <ScopeDropdown
+              kind="region"
+              label="지역"
+              icon={<FiGlobe size={14} aria-hidden />}
+              options={scopeOptions.region}
+            />
+            <ScopeDropdown
+              kind="field"
+              label="분야"
+              icon={<FiLayers size={14} aria-hidden />}
+              options={scopeOptions.field}
+            />
+          </FilterGroup>
+
+          <Actions>
+            <GhostBtn
               type="button"
               onClick={toggleStats}
               aria-pressed={statsOpen}
               title={statsOpen ? '통계 숨기기' : '통계 보기'}
+              $hideOnMobile
             >
-              <FiBarChart2 size={13} />
+              <FiBarChart2 size={14} />
               통계
-            </StatsToggleBtn>
-            <AddPersonBtn onClick={() => setFormOpen(true)}>
-              <FiPlus size={14} />새 인물
-            </AddPersonBtn>
-          </ToolbarActions>
-        </Toolbar>
+            </GhostBtn>
+            <PrimaryBtn type="button" onClick={() => setFormOpen(true)}>
+              <FiPlus size={16} />새 인물 등록
+            </PrimaryBtn>
+          </Actions>
+        </TopBar>
+
+        {activeChips.length > 0 && (
+          <ActiveFiltersRow>
+            <ActiveFilterLabel>필터 {activeChips.length}</ActiveFilterLabel>
+            {activeChips.map((chip) => (
+              <ActiveFilterChip
+                key={chip.key}
+                type="button"
+                onClick={chip.onRemove}
+                aria-label={`${chip.label} 필터 해제`}
+              >
+                {chip.label}
+                <FiX size={11} aria-hidden />
+              </ActiveFilterChip>
+            ))}
+            <ActiveFilterClear type="button" onClick={resetFilters}>
+              모두 해제
+            </ActiveFilterClear>
+          </ActiveFiltersRow>
+        )}
+
+        <ViewRow>
+          {viewSwitcher}
+          <DisplayOptions>
+            {/* 정렬은 카드 그리드 뷰(카드·스토리·왕조)에서만 의미 */}
+            {(activeView === 'cards' ||
+              activeView === 'story' ||
+              activeView === 'dynasty') && (
+              <Select
+                value={sort}
+                onChange={(event) => setSort(event.target.value as PersonSortKey)}
+                aria-label="인물 정렬 기준"
+              >
+                {SORT_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}순
+                  </option>
+                ))}
+              </Select>
+            )}
+            {/* 세기 나열 방향은 세기 그룹 뷰(목록·스토리) 전용 */}
+            {(activeView === 'list' || activeView === 'story') && (
+              <IconBtn
+                type="button"
+                onClick={() =>
+                  setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
+                }
+                aria-label={
+                  eraGroupOrder === 'desc'
+                    ? '세기 순서: 최신순 (오래된순으로 바꾸기)'
+                    : '세기 순서: 오래된순 (최신순으로 바꾸기)'
+                }
+                title={eraGroupOrder === 'desc' ? '최신순' : '오래된순'}
+              >
+                <FiArrowDown
+                  size={15}
+                  style={{
+                    transform: eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
+                  }}
+                />
+              </IconBtn>
+            )}
+          </DisplayOptions>
+          {!isLoading && !isError && (
+            <ViewMeta aria-hidden>
+              <span>
+                <strong>{filtered.length.toLocaleString()}</strong>명
+                {filtered.length !== allPeople.length &&
+                  ` / ${allPeople.length.toLocaleString()}`}
+              </span>
+              {avgLifespan > 0 && <span>평균 수명 {avgLifespan}년</span>}
+              {aliveCount > 0 && <span>생존 {aliveCount}</span>}
+              {topField && (
+                <span>
+                  <MetaDot $color={colorForField(topField[0])} />
+                  {topField[0]} {topField[1]}
+                </span>
+              )}
+            </ViewMeta>
+          )}
+        </ViewRow>
+        {viewHint}
 
         {!isLoading && filtered.length > 0 && statsOpen && (
-          <HeaderStats people={filtered} />
+          <StatsArea>
+            <HeaderStats people={filtered} />
+          </StatsArea>
         )}
 
-        {isError && (
-          <EmptyState
-            title="인물 데이터를 불러오지 못했어요"
-            description="네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
-            actionLabel="다시 시도"
-            onAction={() => refetch()}
-          />
-        )}
+        <div
+          id="person-view-panel"
+          role="tabpanel"
+          aria-labelledby={`person-view-tab-${activeView}`}
+        >
+          {isError && (
+            <EmptyState
+              title="인물 데이터를 불러오지 못했어요"
+              description="네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+              actionLabel="다시 시도"
+              onAction={() => refetch()}
+            />
+          )}
 
-        {!isError && isLoading && (
-          <ViewArea>
-            <CardGridSkeleton />
-          </ViewArea>
-        )}
+          {!isError && isLoading && (
+            <ViewArea>
+              <CardGridSkeleton />
+            </ViewArea>
+          )}
 
-        {!isError && !isLoading && filtered.length === 0 && (
-          <EmptyState
-            hasActiveFilter={hasActiveFilter}
-            onClearFilters={resetFilters}
-          />
-        )}
+          {!isError && !isLoading && filtered.length === 0 && (
+            <EmptyState
+              hasActiveFilter={hasActiveFilter}
+              onClearFilters={resetFilters}
+            />
+          )}
 
-        {!isLoading && filtered.length > 0 && (
-          <ViewArea>
-            {activeView === 'cards' && (
-              <CardsView
-                people={filtered}
-                onOpen={onPersonClick}
-                query={dq}
-                pinned={pinned}
-                togglePin={togglePin}
-              />
-            )}
-            {activeView === 'matrix' && (
-              <MatrixView people={filtered} onOpen={onPersonClick} />
-            )}
-            {activeView === 'galaxy' && (
-              <GalaxyView people={filtered} onOpen={onPersonClick} />
-            )}
-            {activeView === 'story' && (
-              <EraStoryView
-                people={filtered}
-                onOpen={onPersonClick}
-                query={dq}
-                pinned={pinned}
-                togglePin={togglePin}
-              />
-            )}
-            {activeView === 'dynasty' && (
-              <DynastyView
-                people={filtered}
-                onOpen={onPersonClick}
-                query={dq}
-                pinned={pinned}
-                togglePin={togglePin}
-              />
-            )}
-            {activeView === 'stats' && (
-              <StatsView people={filtered} onPersonClick={onPersonClick} />
-            )}
-          </ViewArea>
-        )}
-
-        {!isLoading && filtered.length > 0 && (
-          <Footer>
-            <span>총 {filtered.length}명</span>
-            <span>
-              · 평균 영향력{' '}
-              {Math.round(
-                filtered.reduce((s, p) => s + p.influence, 0) / filtered.length,
+          {!isLoading && filtered.length > 0 && (
+            <ViewArea>
+              {activeView === 'list' && (
+                <ListView
+                  people={filtered}
+                  onOpen={onPersonClick}
+                  query={dq}
+                  pinned={pinned}
+                  togglePin={togglePin}
+                />
               )}
-            </span>
-          </Footer>
-        )}
+              {activeView === 'cards' && (
+                <CardsView
+                  people={filtered}
+                  onOpen={onPersonClick}
+                  query={dq}
+                  pinned={pinned}
+                  togglePin={togglePin}
+                />
+              )}
+              {activeView === 'matrix' && (
+                <MatrixView people={filtered} onOpen={onPersonClick} />
+              )}
+              {activeView === 'galaxy' && (
+                <GalaxyView people={filtered} onOpen={onPersonClick} />
+              )}
+              {activeView === 'story' && (
+                <EraStoryView
+                  people={filtered}
+                  onOpen={onPersonClick}
+                  query={dq}
+                  pinned={pinned}
+                  togglePin={togglePin}
+                />
+              )}
+              {activeView === 'dynasty' && (
+                <DynastyView
+                  people={filtered}
+                  onOpen={onPersonClick}
+                  query={dq}
+                  pinned={pinned}
+                  togglePin={togglePin}
+                />
+              )}
+              {activeView === 'stats' && (
+                <StatsView people={filtered} onPersonClick={onPersonClick} />
+              )}
+            </ViewArea>
+          )}
+        </div>
       </Wrap>
 
       <PersonRegisterViewModal
@@ -327,170 +595,22 @@ export function InfographicContent({
 
 const Wrap = styled.div`
   /* 상위(PersonInfographicPane)가 좌우/상단 padding을 담당. 여기서는 하단 여백만. */
-  padding: 12px 0 60px;
+  padding: 0 0 60px;
 
   @media (max-width: 768px) {
-    padding: 8px 0 40px;
+    padding: 0 0 40px;
   }
 `
 
 const ViewArea = styled.div`
-  margin-top: 18px;
+  margin-top: 16px;
+`
+
+const StatsArea = styled.div`
+  margin-top: 16px;
 `
 
 /** 시각적으로 숨기되 스크린리더에는 노출되는 라이브 영역. */
 const SrStatus = styled.div`
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-`
-
-const Footer = styled.div`
-  margin-top: 24px;
-  display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const Toolbar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px 16px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
-`
-
-const ToolbarHead = styled.div`
-  flex-shrink: 0;
-  min-width: 0;
-`
-
-const TitleMeta = styled.span`
-  margin-left: 10px;
-  font-size: 13px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const ToolbarMid = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1 1 260px;
-  min-width: 0;
-  flex-wrap: wrap;
-`
-
-const ToolbarActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  margin-left: auto;
-`
-
-const SearchBox = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: 1;
-  max-width: 320px;
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        `
-      : css`
-          background: ${theme.colors.background.secondary};
-          border: 1px solid ${theme.colors.border.default};
-        `}
-`
-
-const SearchInput = styled.input`
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.primary};
-  &::placeholder {
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-`
-
-const SearchIconWrap = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-`
-
-const ClearBtn = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  padding: 0 2px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const AddPersonBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  /* 테마 액센트 토큰 사용 — empty-state의 기본 버튼과 동일(다크모드 일관성) */
-  background: ${({ theme }) => theme.colors.active};
-  color: ${({ theme }) => theme.colors.background.primary};
-  transition: opacity 0.14s;
-  &:hover {
-    opacity: 0.9;
-  }
-`
-
-const StatsToggleBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  transition: background 0.14s, color 0.14s, border-color 0.14s;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &[aria-pressed='true'] {
-    background: ${({ theme }) => theme.colors.activeLight};
-    color: ${({ theme }) => theme.colors.active};
-    border-color: transparent;
-  }
+  ${srOnly}
 `

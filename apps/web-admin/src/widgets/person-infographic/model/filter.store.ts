@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware'
 import { MAX_RECORD_PERSONS } from './records-compare'
 
 export type PersonInfographicView =
+  | 'list'
   | 'cards'
   | 'matrix'
   | 'galaxy'
@@ -104,7 +105,7 @@ export const usePersonInfographicFilterStore =
         scopes: EMPTY_SCOPES,
         minInfluence: 0,
         aliveFilter: 'all',
-        view: 'cards',
+        view: 'list',
         query: '',
         sort: 'influence',
         eraGroupOrder: 'desc',
@@ -168,18 +169,25 @@ export const usePersonInfographicFilterStore =
       }),
       {
         name: 'person-infographic-filter',
-        version: 2,
-        // v1(scope: Scope) → v2(scopes: MultiScopes) 마이그레이션 — 단일 scope는 버림
-        migrate: (persisted: unknown) => {
-          const p =
-            (persisted as {
-              pinned?: string[]
-              view?: PersonInfographicView
-            }) ?? {}
-          return {
-            pinned: p.pinned ?? [],
-            view: p.view ?? 'cards',
-          } as Partial<PersonInfographicFilterState>
+        version: 3,
+        // v1(scope: Scope) → v2(scopes: MultiScopes): 단일 scope는 버리고 pinned·view만 유지.
+        // v2 → v3: 기본 뷰가 '목록'(연대 원장)으로 바뀌어 저장된 뷰를 한 번 목록으로 되돌린다
+        //          (정렬·세기 순서·핀 같은 표시 환경설정은 그대로 유지).
+        migrate: (persisted: unknown, version: number) => {
+          const previous =
+            (persisted as Partial<
+              Pick<
+                PersonInfographicFilterState,
+                'pinned' | 'view' | 'sort' | 'eraGroupOrder'
+              >
+            >) ?? {}
+          if (version < 2) {
+            return {
+              pinned: previous.pinned ?? [],
+              view: 'list',
+            } as Partial<PersonInfographicFilterState>
+          }
+          return { ...previous, view: 'list' } as Partial<PersonInfographicFilterState>
         },
         // sort·eraGroupOrder도 표시 환경설정이라 view와 함께 유지(새로고침 시 선택 보존).
         partialize: (state) => ({
