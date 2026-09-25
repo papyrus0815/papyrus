@@ -332,7 +332,7 @@ const Axis = styled.span`
   background: ${({ theme }) => theme.colors.border.medium};
 `
 
-/* 캘린더 — EventCalendarPanel과 같은 76px 칸 */
+/* 캘린더 — EventCalendarPanel과 같은 68px 줄(칸 상자 없이 주마다 가로 실선) */
 const CalendarWrap = styled.div`
   display: flex;
   flex-direction: column;
@@ -348,16 +348,14 @@ const CalendarHead = styled.div`
 const CalendarGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 28px;
+  column-gap: 4px;
+  margin-top: 26px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const CalendarCell = styled.span`
-  min-height: 76px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  ${skeletonFill}
-  background-color: transparent;
+  min-height: 68px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const TextLines = styled.div`
