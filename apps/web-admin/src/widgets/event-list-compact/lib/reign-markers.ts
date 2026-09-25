@@ -288,7 +288,8 @@ export function planReignMarkers(
 
 export type InterleavedEntry<T> =
   | { kind: 'row'; item: T }
-  | { kind: 'reign'; marker: ReignMarker }
+  /** 같은 자리에 연달아 오는 즉위는 한 줄로 묶는다 — 줄 수가 곧 소음이다 */
+  | { kind: 'reign'; markers: ReignMarker[] }
 
 /**
  * 연 그룹 안에서 행과 즉위 구분선을 섞는다.
@@ -308,31 +309,31 @@ export function interleaveReignMarkers<T>(
     rowStartKey: (item: T) => number | null
   },
 ): InterleavedEntry<T>[] {
-  const rows = items.map((item) => ({ kind: 'row', item }) as const)
+  const rows: InterleavedEntry<T>[] = items.map((item) => ({
+    kind: 'row',
+    item,
+  }))
   if (!markers?.length) return rows
-  const reignEntries = markers.map(
-    (marker) => ({ kind: 'reign', marker }) as const,
-  )
-  if (!options.chronological) return [...reignEntries, ...rows]
+  if (!options.chronological) return [{ kind: 'reign', markers }, ...rows]
 
   const result: InterleavedEntry<T>[] = []
-  let pending = [...reignEntries]
+  let pending = [...markers]
   for (const item of items) {
     const key = options.rowStartKey(item)
     if (key != null && pending.length > 0) {
-      const due = pending.filter(({ marker }) =>
+      const due = pending.filter((marker) =>
         options.direction === 'asc'
           ? marker.startKey <= key
           : marker.startKey > key,
       )
       if (due.length > 0) {
-        result.push(...due)
-        pending = pending.filter((entry) => !due.includes(entry))
+        result.push({ kind: 'reign', markers: due })
+        pending = pending.filter((marker) => !due.includes(marker))
       }
     }
     result.push({ kind: 'row', item })
   }
-  result.push(...pending)
+  if (pending.length > 0) result.push({ kind: 'reign', markers: pending })
   return result
 }
 
