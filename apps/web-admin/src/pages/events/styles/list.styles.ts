@@ -855,12 +855,16 @@ export const AxisEndLabel = styled.span<{ $side: 'start' | 'end' }>`
     ${({ $side }) => ($side === 'start' ? 'left: 1px;' : 'right: 1px;')}
     top: 50%;
     transform: translateY(-50%);
-    font-size: 9px;
+    /* 9px · opacity 0.75였다. 실측 대비 4.06:1(다크)로 9px 글자가 읽히는 값이 아니라,
+       머리글 줄에서 '1월'·'12월'이 글자가 아니라 **쉼표 같은 얼룩**으로 보였다.
+       이 두 라벨은 기간 열이 '한 해'라는 사실을 화면에 적는 유일한 잉크인데, 읽히지
+       않으면 그 열은 점 하나짜리 칸으로만 읽힌다. 한 단 키우고 불투명도를 올린다. */
+    font-size: 10px;
     font-weight: 600;
     line-height: 1;
     letter-spacing: 0;
     color: ${metaText};
-    opacity: 0.75;
+    opacity: 0.92;
     pointer-events: none;
     white-space: nowrap;
   }

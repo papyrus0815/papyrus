@@ -145,9 +145,25 @@ export const FilterTriggerButton = styled.button<{ $inGroup?: boolean }>`
   transition: background ${MOTION.fast}, border-color ${MOTION.fast},
     color ${MOTION.fast};
 
+  /**
+   * 아이콘은 **중립**이다 — 브랜드 색은 상태에만 쓴다.
+   *
+   * 예전엔 네 트리거(분류·대륙·국가·세기)의 아이콘이 필터가 걸렸든 아니든 늘
+   * BRAND.primary였다. 그런데 이 지면에서 파랑은 ⑴ '이 축에 필터가 걸려 있다',
+   * ⑵ '계층 보기 켜짐', ⑶ 주 액션(새 사건 등록) 세 가지를 말한다. 아무것도 안 걸린
+   * 기본 상태에서 이미 파랑이 네 군데 있으니, 실제로 하나가 켜져도 **한눈에 구별되지
+   * 않았다**(실측: 세기만 활성인 화면에서 파란 잉크 5곳).
+   * 중립으로 내리면 도구줄의 파랑은 '지금 걸려 있는 것'과 '주 액션'만 남는다.
+   */
   svg {
-    color: ${BRAND.primary};
+    color: ${({ theme }) => theme.colors.text.tertiary};
     flex-shrink: 0;
+    transition: color ${MOTION.fast};
+  }
+
+  /* 활성일 때만 버튼 색(= 브랜드)을 물려받는다 — 아래 [data-active] 블록이 color를 준다. */
+  &[data-active='true'] svg {
+    color: inherit;
   }
 
   ${({ $inGroup, theme }) =>

@@ -835,7 +835,11 @@ export const SPAN_GRID = {
  */
 export const ROW_HAIRLINE = {
   light: 'rgba(15, 23, 42, 0.08)',
-  dark: 'rgba(255, 255, 255, 0.08)',
+  /* 다크는 0.08이었다. 목록 표면(#1c1c1c) 위 실측 대비 **1.25:1**로, 32px 조밀 행에서는
+     행 경계가 사실상 사라져 여러 행이 한 덩어리로 뭉쳤다(라이트는 흰 바탕이라 같은
+     alpha가 더 잘 선다). 0.12로 올려 ~1.4:1 — 여전히 SPAN_GRID(연 격자)보다 진해
+     '표가 모눈종이가 되지 않는다'는 규약은 유지된다. */
+  dark: 'rgba(255, 255, 255, 0.12)',
 } as const
 
 /** styled에서 바로 쓰는 헬퍼 — `border-bottom: 1px solid ${rowHairline};` */
