@@ -2,7 +2,7 @@
  * Event Compact List Widget
  * FSD: widgets/event-list-compact/ui
  */
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import {
   FiAlertCircle,
@@ -244,8 +244,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 남은 폭이 키워드·관련국 열로 넘어갔는데, 트랙만 넓히면 칩 개수가 상수(2·3)라 **넓어진
    * 만큼 빈 칸**이 된다. CSS가 못 하는 개수 판정을 여기서 한 번만 한다(행마다 matchMedia를
    * 다는 것을 막는 것이 이 블록의 원래 이유다).
-   * ⚠️ 뷰포트 기준이고 트랙은 컨테이너 기준이라 좌측 목록이 접히면 한 계단 어긋날 수 있다.
-   * 넘치는 칩은 어차피 말줄임·'+N'으로 흡수되므로 과다 쪽으로 틀려도 깨지지 않는다.
+   *
+   * **카드 폭**으로 잰다 — 트랙을 넓히는 CSS(densityVars의 @container eventcard)와 같은 자로.
+   * 예전엔 뷰포트 2200/2500px로 쟀는데, 그 값은 좌측 목록 사이드바(320px)가 있던 시절의
+   * 환산이다. 사이드바가 없어진 지금 카드는 뷰포트 ≈1880px에서 이미 ledger(1740)에 들어서
+   * 관련국 트랙이 1fr로 넓어지는데, 이름 병기는 2200px부터라 **그 사이 320px 구간 내내
+   * 넓은 칸에 국기만 떠 있었다**(실측 1920: 328px 칸에 12px 국기 1~4개). 상세 패널이 열려
+   * 카드가 460px 좁아질 때도 뷰포트는 그대로라 반대 방향으로 틀렸다.
    */
   /**
    * 끈 열 — 공백으로 이어 한 속성에 싣는다(`~=` 선택자가 토큰 단위로 읽는다).
@@ -254,8 +259,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   const hiddenColsAttr = hiddenColumns?.length
     ? hiddenColumns.join(' ')
     : undefined
-  const isWide = useMediaQuery('(min-width: 2200px)')
-  const isUltraWide = useMediaQuery('(min-width: 2500px)')
+  const [cardEl, setCardEl] = useState<HTMLElement | null>(null)
+  const cardStep = useCardStep(cardEl)
+  const isWide = cardStep !== 'base'
+  const isUltraWide = cardStep === 'atlas'
   /**
    * 관련국 열이 **96px로 좁아지는 대역**(list.styles.ts의 `@media (max-width: 1179px)`).
    * 개수 사다리가 폭 사다리와 어긋나 있던 자리가 정확히 여기였다 — 아래 주석 참고.
@@ -517,7 +524,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   }
 
   return (
-    <List.CatalogSection>
+    <List.CatalogSection ref={setCardEl}>
       {isLoading ? (
         /* ⚠️ data-density가 없으면 조밀 모드 사용자에게 로딩 45px → 데이터 32px 세로 점프가
            난다(밀도 변수는 스크롤 컨테이너가 한 번만 선언한다). */
@@ -1127,6 +1134,35 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 // ─────────────────────────────────────────────────────────────────────────────
 // styled (theme-aware)
 // ─────────────────────────────────────────────────────────────────────────────
+
+type CardStep = 'base' | 'ledger' | 'atlas'
+
+/**
+ * 카드(컨테이너 eventcard)의 열 사다리 단계 — CSS 컨테이너 쿼리와 **같은 입력**(콘텐츠 상자
+ * 인라인 폭)과 같은 임계(LIST_STEPS)로 판정한다. 관찰자는 목록에 하나뿐이고, 단계가 바뀔
+ * 때만 상태를 갱신하므로 창 크기를 끌어도 행이 다시 그려지지 않는다.
+ * ResizeObserver가 없는 환경(jsdom)에서는 기본 단계로 남는다.
+ */
+function useCardStep(el: HTMLElement | null): CardStep {
+  const [step, setStep] = useState<CardStep>('base')
+  useEffect(() => {
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => {
+      const width =
+        entry.contentBoxSize?.[0]?.inlineSize ?? entry.contentRect.width
+      setStep(
+        width >= LIST_STEPS.atlas
+          ? 'atlas'
+          : width >= LIST_STEPS.ledger
+            ? 'ledger'
+            : 'base',
+      )
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [el])
+  return step
+}
 
 const LoadingMoreRow = styled.div`
   /* 40 → 14px. 이 행은 4개 분기 중 하나가 **항상** 렌더되므로 목록 끝에 상시 존재한다.

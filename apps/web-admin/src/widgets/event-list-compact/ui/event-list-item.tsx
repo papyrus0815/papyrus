@@ -1707,6 +1707,12 @@ const Indent = styled.span<{ $depth: number }>`
   );
   background-repeat: no-repeat;
   background-size: min(calc(var(--row-indent) * var(--depth, 0)), 96px) 100%;
+  /* 선은 트랙 왼쪽 끝이 아니라 **부모 디스클로저(∨)의 중심 아래**에 선다 — 트리 표기의
+     관례대로 '부모에게서 내려온 선'으로 읽힌다. 트랙 왼쪽 끝은 곧 분류 칸의 오른쪽
+     경계라, 거기 서 있던 선은 칸 구분선처럼 '회담/조약 |'로 붙어 읽혔다.
+     주기(--row-indent)가 한 단 들여쓰기와 같으므로 depth 2의 둘째 선도 자기 부모
+     (depth 1) 디스클로저 중심에 맞는다. 오프셋 < 주기라 마지막 선도 트랙 안에 남는다. */
+  background-position: calc(var(--row-disc-btn) / 2) 0;
 
   /* 강제 색 모드(Windows 고대비)는 배경 이미지를 통째로 지운다 — 계층이 사라지므로
      테두리로 대체한다. 깊이별 줄 수는 포기하고 '자식이다'만 남긴다. */

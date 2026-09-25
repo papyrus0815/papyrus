@@ -114,6 +114,12 @@ export const PromSearchInput = styled.input`
   &::-webkit-search-cancel-button {
     display: none;
   }
+  /* 포커스 표시는 바깥 상자(:focus-within의 파란 링)가 전담한다. 전역 규칙
+     (app/css.ts의 :where(input):focus-visible → 보라 3px box-shadow)이 입력 자체에도
+     걸리면 상자 안쪽에서 잘린 링의 양 끝이 **세로 보라선 두 개**로 남았다. */
+  &:focus-visible {
+    box-shadow: none;
+  }
 `
 
 /* 검색바 우측의 키 힌트 — 빈 입력일 때만 노출. focus 시 fade out.

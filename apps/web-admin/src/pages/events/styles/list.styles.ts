@@ -1526,6 +1526,9 @@ export const CenturyDividerLabel = styled.span`
   /* 세기 숫자가 자릿수에 따라 흔들리지 않게 — 형제(연도·건수)에는 이미 걸려 있었다 */
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
+  /* 한글은 기본 줄바꿈이 **글자 단위**라, 좁은 폭에서 '21세 / 기'처럼 낱말이 쪼개졌다.
+     낱말 단위로만 꺾는다 — 연도 범위는 CenturyDividerYears가 통째로 넘긴다. */
+  word-break: keep-all;
 
   svg {
     color: ${metaText};
@@ -1659,49 +1662,12 @@ export const EmptyCatalogState = styled.div`
   min-height: 420px;
   padding: 80px 40px;
   position: relative;
-  margin-left: 40px;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: linear-gradient(
-      to bottom,
-      ${({ theme }) =>
-          theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.15)' : '#e2e8f0'}
-        0%,
-      ${({ theme }) =>
-          theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.25)' : '#cbd5e1'}
-        50%,
-      ${({ theme }) =>
-          theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.15)' : '#e2e8f0'}
-        100%
-    );
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    left: -7px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-    border: 2px solid
-      ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.3)' : '#cbd5e1'};
-    box-shadow: 0 0 0 4px
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(37, 99, 235, 0.08)'
-          : 'rgba(226, 232, 240, 0.3)'};
-  }
+  /* (제거) 자체 장식 축 — 2px 회색 그라디언트 선 + 16px 속 빈 원, 그리고 그 자리를 위한
+     margin-left 40px. 목록 축(1px · RAIL_AXIS · --rail-x)과 **굵기·색·x가 모두 다른 두 번째
+     축**이라, 결과가 0건이 되는 순간 시간축이 옆으로 튀고 최소 높이(420px)에서 카드
+     한가운데서 뚝 끊겼다. 원도 안내 문구와 높이가 맞지 않아 무엇을 가리키는지 없었다.
+     빈 상태는 '사건이 없다'는 **문장**이다 — 시간축 장식 없이 카드 중앙에 둔다.
+     (목록 축 자체는 스크롤러 배경이라 빈 상태에서는 원래 그려지지 않는다.) */
 
   @media (max-width: 768px) {
     padding: 60px 30px;
@@ -1802,6 +1768,8 @@ export const EmptyDescription = styled.p`
    * **정확히 뒤바뀐** 상태였다 — 다크 2.43:1 / 라이트 2.56:1로 둘 다 AA 미달이고,
    * 결과 0건 화면에서 '무엇을 하라'고 알려주는 유일한 문장이 제목보다 어두웠다. */
   color: ${({ theme }) => theme.colors.text.secondary};
+  /* 좁은 카드에서 '초 / 기화해보세요'처럼 낱말 중간에서 꺾이던 것 — 한글도 낱말 단위로 */
+  word-break: keep-all;
 
   @media (max-width: 768px) {
     font-size: 12px;
