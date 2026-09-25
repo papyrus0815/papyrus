@@ -18,7 +18,6 @@ import { hasAnyActiveScope, isPersonInScopes } from '../model/sort-helpers'
 
 import { EmptyState } from './_shared/empty-state'
 import { PersonHoverTooltip } from './_shared/tooltip'
-import { PersonPreviewModal } from './_shared/person-preview-modal'
 import {
   ViewLegend,
   ViewLegendItem,
@@ -54,7 +53,6 @@ export function MatrixView({ people, onOpen }: Props) {
     id: string
   } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [previewPerson, setPreviewPerson] = useState<AdaptedPerson | null>(null)
   const [showAll, setShowAll] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [W, setW] = useState(1100)
@@ -333,12 +331,7 @@ export function MatrixView({ people, onOpen }: Props) {
                         }–${p.died == null ? '?' : formatYear(p.died)}`}
                         onClick={() => {
                           setSelectedId(p.id)
-                          setPreviewPerson(p)
                           setHover(null)
-                        }}
-                        onDoubleClick={() => {
-                          setSelectedId(p.id)
-                          setPreviewPerson(null)
                           onOpen(p.id)
                         }}
                         style={{
@@ -408,14 +401,6 @@ export function MatrixView({ people, onOpen }: Props) {
           }
         />
       )}
-      <PersonPreviewModal
-        person={previewPerson}
-        onClose={() => setPreviewPerson(null)}
-        onOpenDetail={(id) => {
-          setPreviewPerson(null)
-          onOpen(id)
-        }}
-      />
     </ViewPanel>
   )
 }

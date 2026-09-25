@@ -8,7 +8,7 @@
  * 모바일 필터 트리거도 여기 있다. 같은 시트를 여는 컨트롤이 둘(사이드바 배지·모바일 FAB)인데
  * 시트 상태가 페이지에 있으면 사이드바 쪽 배지가 그걸 열 수 없다.
  */
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 
 import { FiFilter } from 'react-icons/fi'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -17,12 +17,10 @@ import styled from 'styled-components'
 import { pathKeys } from '@/shared/router'
 import { SidebarSheet, SidebarSheetTrigger } from '@/widgets/content-shell'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import {
-  type AdaptedPerson,
   countActiveScopes,
   PersonFilterPanel,
-  PersonPreviewModal,
-  useAdaptedPersons,
   usePersonInfographicFilterStore,
 } from '@/widgets/person-infographic'
 
@@ -61,32 +59,18 @@ export function PersonSidebar({
 
   const openAdvanced = useCallback(() => setAdvancedFilterOpen(true), [])
 
-  // 목록 행 클릭 → 프리뷰 모달 먼저(본문 카드와 같은 모달), '상세 보기'로 상세 진입.
-  // 목록과 같은 인포그래픽 쿼리를 공유하므로 추가 요청 없음. 못 찾으면 바로 상세.
-  const allPersons = useAdaptedPersons()
-  const personsById = useMemo(
-    () => new Map(allPersons.map((person) => [person.id, person])),
-    [allPersons],
-  )
-  const [previewPerson, setPreviewPerson] = useState<AdaptedPerson | null>(null)
+  // 목록 행 클릭 → 인물 상세 모달 먼저(본문 목록과 같은 공용 모달), '상세 페이지'로 상세 진입.
+  const [modalPersonId, setModalPersonId] = useState<string | null>(null)
   const openDetail = useCallback(
     (id: string) => navigate(pathKeys.personsTimelineDetail(id)),
     [navigate],
-  )
-  const handleSelect = useCallback(
-    (id: string) => {
-      const person = personsById.get(id)
-      if (person) setPreviewPerson(person)
-      else openDetail(id)
-    },
-    [personsById, openDetail],
   )
 
   return (
     <>
       <PersonList
         selectedId={personId}
-        onSelect={handleSelect}
+        onSelect={setModalPersonId}
         onAdd={() => setCreateOpen(true)}
         onOpenAdvancedFilters={openAdvanced}
         collapsed={collapsed}
@@ -120,13 +104,10 @@ export function PersonSidebar({
         <PersonFilterPanel />
       </SidebarSheet>
 
-      <PersonPreviewModal
-        person={previewPerson}
-        onClose={() => setPreviewPerson(null)}
-        onOpenDetail={(id) => {
-          setPreviewPerson(null)
-          openDetail(id)
-        }}
+      <PersonInlineModal
+        personId={modalPersonId}
+        onClose={() => setModalPersonId(null)}
+        onOpenDetail={openDetail}
       />
 
       {/* 등록 전용 — 수정 모달은 상세 패널을 가진 페이지가 따로 소유한다 */}

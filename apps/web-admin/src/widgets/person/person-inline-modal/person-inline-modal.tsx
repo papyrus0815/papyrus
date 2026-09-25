@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiX } from 'react-icons/fi'
+import { FiArrowUpRight, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { getPersonDetailById } from '@/shared/api/persons-detail'
@@ -37,12 +37,18 @@ export interface PersonInlineModalProps {
   onClose: () => void
   /** 패널 안에서 ✎ 편집 클릭 시. id는 stack 최상단(현재 보이는 인물). */
   onEdit?: (id: string) => void
+  /**
+   * 주면 헤더에 '상세 페이지' 버튼을 띄운다 — 모달에서 보던 인물(stack 최상단)의 전용 상세로 이동.
+   * 모달을 먼저 띄우고 상세로 들어가게 하는 지면(인물 목록)용. 호출 전에 모달은 닫힌다.
+   */
+  onOpenDetail?: (id: string) => void
 }
 
 export function PersonInlineModal({
   personId,
   onClose,
   onEdit,
+  onOpenDetail,
 }: PersonInlineModalProps) {
   /** 모달 안에서 다른 인물 링크 클릭 시 stack push — 같은 오버레이 위에서 인물 전환. */
   const [stack, setStack] = useState<string[]>([])
@@ -113,13 +119,27 @@ export function PersonInlineModal({
               <ModalTitle id="person-inline-modal-title" title={titleName}>
                 {titleName || '인물'}
               </ModalTitle>
-              <ModalCloseButton
-                type="button"
-                onClick={handleHeaderClose}
-                aria-label={stack.length > 0 ? '뒤로' : '닫기'}
-              >
-                <FiX size={20} strokeWidth={2.5} />
-              </ModalCloseButton>
+              <HeaderActions>
+                {onOpenDetail && (
+                  <OpenDetailButton
+                    type="button"
+                    onClick={() => {
+                      onClose()
+                      onOpenDetail(activeId)
+                    }}
+                  >
+                    상세 페이지
+                    <FiArrowUpRight size={15} aria-hidden />
+                  </OpenDetailButton>
+                )}
+                <ModalCloseButton
+                  type="button"
+                  onClick={handleHeaderClose}
+                  aria-label={stack.length > 0 ? '뒤로' : '닫기'}
+                >
+                  <FiX size={20} strokeWidth={2.5} />
+                </ModalCloseButton>
+              </HeaderActions>
             </ModalHeader>
             <Body>
               <PersonDetailPanel
@@ -174,6 +194,38 @@ const Box = styled(motion.div)`
   display: flex;
   flex-direction: column;
   overflow: hidden;
+`
+
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+`
+
+const OpenDetailButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 8px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
 `
 
 const Body = styled(ModalBody)`

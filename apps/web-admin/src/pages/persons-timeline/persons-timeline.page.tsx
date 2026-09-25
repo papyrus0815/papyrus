@@ -25,6 +25,7 @@ import styled from 'styled-components'
 import { goBackOr, pathKeys } from '@/shared/router'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { useRecentPersonsStore } from '@/widgets/person/person-list'
 import { PersonInfographicPane } from '@/widgets/person-infographic'
 
@@ -105,10 +106,14 @@ export default function PersonsTimelinePage() {
     }
   }, [personId])
 
-  const handlePersonClick = useCallback(
+  const openDetail = useCallback(
     (id: string) => navigate(pathKeys.personsTimelineDetail(id)),
     [navigate],
   )
+
+  // 목록 지면의 인물 클릭 → 인물 상세 모달 먼저(사건·행정부와 같은 공용 모달),
+  // 모달 헤더의 '상세 페이지'로 전용 상세 진입. 목록 스크롤·필터가 그대로 남는다.
+  const [modalPersonId, setModalPersonId] = useState<string | null>(null)
 
   return (
     <>
@@ -126,7 +131,7 @@ export default function PersonsTimelinePage() {
               setEditingPersonId(id)
               setEditModalOpen(true)
             }}
-            onLinkedPersonClick={handlePersonClick}
+            onLinkedPersonClick={openDetail}
             closeLabel="뒤로"
           />
         </DetailWrap>
@@ -138,9 +143,15 @@ export default function PersonsTimelinePage() {
           style={{ width: '100%', minHeight: '100%' }}
         >
           <div ref={setScrollSentinel} aria-hidden style={{ height: 0 }} />
-          <PersonInfographicPane onPersonClick={handlePersonClick} />
+          <PersonInfographicPane onPersonClick={setModalPersonId} />
         </motion.div>
       )}
+
+      <PersonInlineModal
+        personId={modalPersonId}
+        onClose={() => setModalPersonId(null)}
+        onOpenDetail={openDetail}
+      />
 
       <PersonRegisterViewModal
         isOpen={editModalOpen}
