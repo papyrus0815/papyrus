@@ -29,6 +29,19 @@ export const REGION_COLORS = [
 
 export const FIELDS = ['정치', '군사', '사상', '과학', '예술', '기타']
 
+/** 분야 색 — 통계·목록 뷰가 같은 분야에 같은 색을 쓰도록 단일 출처. */
+export const FIELD_COLORS: Record<string, string> = {
+  정치: '#6366f1',
+  군사: '#ef4444',
+  사상: '#8b5cf6',
+  과학: '#0ea5e9',
+  예술: '#f59e0b',
+  기타: '#64748b',
+}
+
+export const colorForField = (field: string): string =>
+  FIELD_COLORS[field] ?? FIELD_COLORS['기타']
+
 /**
  * 인포그래픽 뷰 공용 상수.
  * 매트릭스/은하계/스토리/통계가 공유하는 임계값·기본값 — 한 곳에서 조정.
