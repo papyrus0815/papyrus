@@ -6,6 +6,8 @@
  */
 import { Fragment, useMemo, useState } from 'react'
 
+import styled from 'styled-components'
+
 import type { AdaptedPerson } from '../model/types'
 import {
   centuryOf,
@@ -20,6 +22,7 @@ import {
 } from '../model/filter.store'
 import { makeSortFnWithPinned } from '../model/sort-helpers'
 
+import { BRAND, hairline, metaText, MOTION_FAST, surface } from './_shared/catalog.styles'
 import { EmptyState } from './_shared/empty-state'
 import {
   GapMarker,
@@ -107,6 +110,17 @@ export function EraStoryView({
     [groups, sortFn],
   )
 
+  /** 세기 바로가기 — 접혀 있으면 펼치고 그 세기 머리로 스크롤 */
+  const jumpTo = (key: string) => {
+    setCollapsed((prevState) => ({ ...prevState, [key]: false }))
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`person-group-${key}`)
+        ?.closest('section')
+        ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
+  }
+
   if (!groups.length && pinnedPeople.length === 0) {
     return (
       <EmptyState hasActiveFilter={hasFilter} onClearFilters={resetFilters} />
@@ -121,6 +135,22 @@ export function EraStoryView({
         onTogglePin={togglePin}
         onOpen={onOpen}
       />
+      {/* 세기가 셋 이상일 때만 — 20명씩 끊긴 긴 지면에서 원하는 세기로 바로 간다 */}
+      {sortedGroups.length >= 3 && (
+        <CenturyIndex aria-label="세기 바로가기">
+          {sortedGroups.map(({ meta, arr }) => (
+            <CenturyJump
+              key={meta.key}
+              type="button"
+              onClick={() => jumpTo(meta.key)}
+              aria-label={`${meta.label} ${arr.length}명으로 이동`}
+            >
+              {meta.label}
+              <CenturyJumpCount>{arr.length}</CenturyJumpCount>
+            </CenturyJump>
+          ))}
+        </CenturyIndex>
+      )}
       {sortedGroups.map(({ meta, arr }, index) => {
         const isExpanded = !!expanded[meta.key]
         const shown = isExpanded
@@ -192,3 +222,61 @@ export function EraStoryView({
     </GroupPanel>
   )
 }
+
+const CenturyIndex = styled.nav`
+  /* 판의 좌측 시간 레일이 첫 세기 머리부터 시작하도록 레일 자리까지 지면색으로 덮는다 */
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 4px calc(-1 * var(--rail-inset));
+  padding: 12px 0 12px var(--rail-inset);
+  border-bottom: 1px solid ${hairline};
+  background: ${surface};
+
+  /* 좁은 폭에선 줄바꿈 대신 한 줄 가로 스크롤 — 5줄로 불어나 첫 카드를 밀어내지 않게 */
+  @media (max-width: 640px) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+`
+
+const CenturyJump = styled.button`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  border: 1px solid ${hairline};
+  background: transparent;
+  font-size: 12.5px;
+  white-space: nowrap;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  transition: color ${MOTION_FAST}, border-color ${MOTION_FAST}, background ${MOTION_FAST};
+
+  &:hover {
+    color: ${BRAND.primary};
+    border-color: ${BRAND.primaryBorder};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const CenturyJumpCount = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+`

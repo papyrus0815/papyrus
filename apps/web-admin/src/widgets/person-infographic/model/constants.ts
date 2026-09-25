@@ -60,9 +60,9 @@ export const INFOGRAPHIC_DEFAULTS = {
   CARDS_PAGE_SIZE: 60,
   /** Galaxy 라벨 — 영향력 임계, 라벨 최대 표시 수, x/y 충돌 거리 */
   GALAXY_LABEL_MIN_INFLUENCE: 60,
-  GALAXY_LABEL_MAX: 50,
-  GALAXY_LABEL_MIN_X_DIST: 52,
-  GALAXY_LABEL_Y_BAND: 14,
+  GALAXY_LABEL_MAX: 36,
+  GALAXY_LABEL_MIN_X_DIST: 72,
+  GALAXY_LABEL_Y_BAND: 16,
   /** Galaxy 점 jitter 범위 (px) */
   GALAXY_JITTER_RANGE: 6,
   /** Galaxy density underlay 발동 인물 수 */

@@ -464,9 +464,10 @@ export function InfographicContent({
                 {filtered.length !== allPeople.length &&
                   ` / ${allPeople.length.toLocaleString()}`}
               </span>
-              {avgLifespan > 0 && <span>평균 수명 {avgLifespan}년</span>}
-              {aliveCount > 0 && <span>생존 {aliveCount}</span>}
-              {topField && (
+              {/* 통계 패널이 열려 있으면 같은 수치가 타일로 크게 나오므로 인원만 남긴다 */}
+              {!statsOpen && avgLifespan > 0 && <span>평균 수명 {avgLifespan}년</span>}
+              {!statsOpen && aliveCount > 0 && <span>생존 {aliveCount}</span>}
+              {!statsOpen && topField && (
                 <span>
                   <MetaDot $color={colorForField(topField[0])} />
                   {topField[0]} {topField[1]}

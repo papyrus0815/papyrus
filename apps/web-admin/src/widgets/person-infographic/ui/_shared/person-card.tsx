@@ -123,8 +123,10 @@ function PersonCardItemBase({
         </PinBtn>
 
         <Caption>
-          {/* '기타'는 분류 잔여라 배지로 내지 않는다(카드 절반 이상에 같은 배지가 붙던 소음) */}
-          {person.field !== '기타' && <FieldTag>{person.field}</FieldTag>}
+          {/* 배지는 새 정보일 때만 — '기타'는 분류 잔여, 군주·국가원수의 '정치'는 역할 표지와 같은 말 */}
+          {person.field !== '기타' && !(role && person.field === '정치') && (
+            <FieldTag>{person.field}</FieldTag>
+          )}
           <Name title={person.name}>{highlight(person.name, query)}</Name>
           {person.primaryTitle && (
             <Title title={person.primaryTitle}>

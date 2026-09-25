@@ -608,9 +608,14 @@ export function GalaxyView({ people, onOpen }: Props) {
                 x={x}
                 y={y + offset}
                 textAnchor="middle"
-                fontSize={9}
-                fill={theme.colors.text.secondary}
-                fontWeight={500}
+                fontSize={10}
+                fill={theme.colors.text.primary}
+                fontWeight={600}
+                // 점·배경 띠 위에서도 읽히게 지면색 후광(글자 뒤에 stroke를 먼저 칠한다)
+                stroke={theme.colors.background.primary}
+                strokeWidth={3}
+                strokeLinejoin="round"
+                paintOrder="stroke"
                 style={{ pointerEvents: 'none' }}
               >
                 {p.name.length > 8 ? p.name.slice(0, 7) + '…' : p.name}
