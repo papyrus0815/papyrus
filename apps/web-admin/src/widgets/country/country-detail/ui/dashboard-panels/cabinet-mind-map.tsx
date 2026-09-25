@@ -11,6 +11,11 @@ export interface CabinetMindMapProps {
   members: CabinetMember[]
   /** 정권 이름 (예: 트럼프 2기 행정부) */
   cabinetLabel: string | null
+  /**
+   * 몇 번째 정권인지(카드 안 '1 / 3대', 좁은 화면의 아래 넘기기 줄)를 지도가 직접 그릴지.
+   * 패널이 위에 정권 띠를 깔면 같은 정보가 두 번 나오므로 끈다. 기본 true.
+   */
+  showPosition?: boolean
   /** 가운데 노드 안 요약 — 취임·재임·각료 수 등 */
   stats: Array<{ key: string; label: string; value: string; warn?: boolean }>
   /** 얼굴은 패널이 그린다(이미지 실패 폴백을 그쪽이 들고 있다) */
@@ -108,6 +113,7 @@ export function CabinetMindMap({
   onToggleExpand,
   electionSlot,
   nav,
+  showPosition = true,
 }: CabinetMindMapProps) {
   const visible = expanded ? members : members.slice(0, collapsedLimit)
   const hidden = members.length - visible.length
@@ -170,7 +176,7 @@ export function CabinetMindMap({
               </CenterRole>
               <CenterName>{head.name}</CenterName>
               {cabinetLabel && <CenterCabinet>{cabinetLabel}</CenterCabinet>}
-              {nav && nav.total > 1 && (
+              {showPosition && nav && nav.total > 1 && (
                 /* 목록을 걷은 대신 위치를 여기 적는다 — 줄기 위에 두면 선을 끊는다 */
                 <CenterOrdinal>
                   {nav.index + 1} / {nav.total}대
@@ -226,7 +232,7 @@ export function CabinetMindMap({
         )}
       </MapRoot>
 
-      {nav && nav.total > 1 && (
+      {showPosition && nav && nav.total > 1 && (
         <NavRow>
           <NavCompact
             type="button"
@@ -348,7 +354,8 @@ function BranchNode({
         <NodeTitle>{member.title}</NodeTitle>
         <NodeName>
           {member.name}
-          {member.replaced && <Swap aria-label="임기 중 교체">↻</Swap>}
+          {/* ↻ 기호만으로는 무슨 뜻인지 몰랐다 — 글자로. 전임자는 title 툴팁에 */}
+          {member.replaced && <Swap>교체</Swap>}
         </NodeName>
       </NodeText>
       {/*
@@ -1000,6 +1007,12 @@ const NodeName = styled.span`
 `
 
 const Swap = styled.span`
-  font-size: 12px;
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  background: rgba(245, 158, 11, 0.14);
 `

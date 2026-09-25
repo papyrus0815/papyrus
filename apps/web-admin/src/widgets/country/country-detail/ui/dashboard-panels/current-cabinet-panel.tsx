@@ -101,6 +101,13 @@ const ELECTION_STATUS_LABEL: Record<string, string> = {
 
 const HEAD_TYPES = new Set(['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'])
 
+/** 명단 서열 — 총리(수상) 0, 부총리 1, 나머지 2 */
+function protocolRank(title: string): number {
+  if (/부총리/.test(title)) return 1
+  if (/총리|수상/.test(title)) return 0
+  return 2
+}
+
 const shortDate = (iso: string | null) => {
   if (!iso) return ''
   const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
@@ -225,6 +232,19 @@ export function CurrentCabinetPanel({
   const selectCabinet = (cabinetId: string) => {
     setSelectedCabinetId(cabinetId)
   }
+
+  /* 고른 정권이 띠 밖(가로 스크롤)에 있으면 끌어온다 — 지도 양옆 버튼으로 넘길 때도 */
+  const stripRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const strip = stripRef.current
+    const tab = strip?.querySelector<HTMLElement>('[data-active]')
+    if (!strip || !tab) return
+    const left = tab.offsetLeft
+    const right = left + tab.offsetWidth
+    if (left < strip.scrollLeft || right > strip.scrollLeft + strip.clientWidth) {
+      strip.scrollTo({ left: Math.max(0, left - 12), behavior: 'smooth' })
+    }
+  }, [selectedCabinetId])
 
   const overviewQuery = useQuery({
     queryKey: ['cabinet-overview', selectedCabinetId],
@@ -615,8 +635,14 @@ export function CurrentCabinetPanel({
         ),
       )
     }
-    mapped.sort((left, right) =>
-      (left.startDate ?? '').localeCompare(right.startDate ?? ''),
+    /*
+     * 총리·부총리가 먼저, 나머지는 취임 순. 취임 순만 따르면 앞 정권에서 유임된
+     * 장관(농림축산식품부)이 국무총리보다 앞에 섰다 — 명단의 첫 줄은 서열이어야 한다.
+     */
+    mapped.sort(
+      (left, right) =>
+        protocolRank(left.title) - protocolRank(right.title) ||
+        (left.startDate ?? '').localeCompare(right.startDate ?? ''),
     )
 
     return {
@@ -964,6 +990,43 @@ export function CurrentCabinetPanel({
         </HeaderActions>
       </S.SectionTitleRow>
 
+      {/*
+        정권 띠 — 이 나라의 행정부를 한 줄로 깔고 고른다.
+
+        예전엔 지도 아래 '‹ 1 / 3대 ›'가 유일한 넘기기였다. 각료 격자 14칸 아래라 눈에
+        안 띄었고, 무엇이 앞뒤에 있는지는 한 칸씩 넘겨 봐야 알았다(카드 안에도 같은
+        '1 / 3대'가 한 번 더 있었다). 한때 위에 큰 정권 카드 목록을 깔았다가 '지금'보다
+        '몇 대'가 먼저 읽혀 걷었으므로, 이번엔 글자 한 줄 높이의 띠로만 둔다.
+        빈 상태 분기 **위**에 둔다 — 각료가 없는 정권을 고르면 지면이 빈 상태로 바뀌는데,
+        띠가 그 안에 있으면 함께 사라져 다른 정권으로 돌아갈 길이 없어진다.
+        최신이 왼쪽 — 지도 양옆 버튼(왼쪽 = 더 최근)과 방향이 같다.
+      */}
+      {cabinets.length > 1 && (
+        <CabinetStrip
+          ref={stripRef}
+          role="tablist"
+          aria-label="정권 고르기"
+        >
+          {cabinets.map((cabinet) => {
+            const active = cabinet.id === selectedCabinetId
+            return (
+              <CabinetTab
+                key={cabinet.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-active={active || undefined}
+                $active={active}
+                onClick={() => selectCabinet(cabinet.id)}
+              >
+                <CabinetTabName>{cabinetLabel(cabinet)}</CabinetTabName>
+                <CabinetTabPeriod>{cabinetPeriod(cabinet)}</CabinetTabPeriod>
+              </CabinetTab>
+            )
+          })}
+        </CabinetStrip>
+      )}
+
       {cabinetsQuery.isLoading || overviewQuery.isLoading ? (
         <GovernmentSkeleton />
       ) : isEmpty ? (
@@ -1050,6 +1113,7 @@ export function CurrentCabinetPanel({
         */}
       {(heads.length > 0 || members.length > 0) && (
         <CabinetMindMap
+          showPosition={cabinets.length <= 1}
           head={heads[0] ?? null}
           members={members}
           cabinetLabel={selectedCabinet ? cabinetLabel(selectedCabinet) : null}
@@ -1907,11 +1971,13 @@ const DetailValue = styled.dd`
 `
 
 
+/*
+ * 후보는 상자가 아니라 줄이다. 후보마다 테두리를 두르니 패널(상자) 안에 상자가 셋 쌓여
+ * 결과 막대보다 테두리가 먼저 보였다. 줄 사이 실선 하나로 가른다.
+ */
 const CandidacyList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 14px;
 `
 
 const CandidacyRow = styled.button`
@@ -1919,15 +1985,25 @@ const CandidacyRow = styled.button`
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
-  padding: 11px 12px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding: 10px 8px;
+  border: none;
+  border-radius: 8px;
   background: none;
+  font-family: inherit;
   text-align: left;
   cursor: pointer;
 
+  & + & {
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    border-radius: 0;
+  }
+
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: -2px;
   }
 `
 
@@ -1956,7 +2032,7 @@ const CandidacyShare = styled.span`
 
 const ShareTrack = styled.span`
   display: block;
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: ${({ theme }) => theme.colors.hover};
   overflow: hidden;
@@ -2093,9 +2169,11 @@ const ElectionMore = styled.button`
   border: none;
   background: none;
   padding: 0;
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-weight: 700;
+  /* 본문 글자색이면 누를 수 있는 줄로 안 읽혔다 — 다른 장의 '전체 보기'와 같은 링크색 */
+  color: ${({ theme }) => theme.colors.primary};
   cursor: pointer;
 
   &:hover {
@@ -2656,4 +2734,63 @@ const Extra = styled.div`
   &:empty {
     display: none;
   }
+`
+
+/* ─── 정권 띠 ─────────────────────────────────────────────────────────── */
+
+const CabinetStrip = styled.div`
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  scrollbar-width: thin;
+`
+
+const CabinetTab = styled.button<{ $active: boolean }>`
+  appearance: none;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? 'rgba(190, 18, 60, 0.45)' : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(190, 18, 60, 0.16)'
+        : 'rgba(190, 18, 60, 0.06)'
+      : 'transparent'};
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: ${({ $active, theme }) =>
+      $active ? undefined : theme.colors.hover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 1px;
+  }
+`
+
+const CabinetTabName = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CabinetTabPeriod = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
