@@ -45,6 +45,7 @@ import {
 import {
   type ReignMarker,
   eventStartKey,
+  formatAccessionDate,
   formatReignSpan,
   groupReignEntries,
   interleaveReignMarkers,
@@ -507,6 +508,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       gapLabel?: string | null
       /** 즉위만 있는 해 — 연 라벨을 말풍선 앞에 세워 연 머리글을 대신한다 */
       yearLabel?: string
+      /** 표지가 놓인 연 그룹 — 같은 해면 날짜 열에 월·일만 쓴다 */
+      contextYear?: number
     } = {},
   ) => (
     <List.ReignMarker
@@ -520,12 +523,17 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       <List.ReignMarkerIcon aria-hidden="true">
         <FaCrown />
       </List.ReignMarkerIcon>
-      {options.yearLabel && (
+      {options.yearLabel ? (
         <List.ReignYearLabel aria-hidden="true">
           {options.yearLabel}
         </List.ReignYearLabel>
+      ) : (
+        // 같은 자리 즉위들은 한 시점에 모인 것이라 첫 즉위일로 대표한다
+        <List.ReignMarkerDate>
+          {formatAccessionDate(markers[0], options.contextYear)}
+        </List.ReignMarkerDate>
       )}
-      <List.ReignMarkerList $afterLabel={!!options.yearLabel}>
+      <List.ReignMarkerList>
         {groupReignEntries(markers).map(({ marker, countryNames }) => {
           const foreign = countryNames.filter(
             (name) => name !== reignHomeCountry,
@@ -555,8 +563,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               ) : (
                 <List.ReignMarkerName>{marker.name}</List.ReignMarkerName>
               )}
-              <List.ReignMarkerLabel aria-hidden="true">즉위</List.ReignMarkerLabel>
-              <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
+              {/* '즉위'와 기간은 한 덩어리 — 좁은 폭에서 '즉위'만 줄 끝에 남지 않게 */}
+              <List.ReignMarkerSpan>
+                <List.ReignMarkerLabel aria-hidden="true">즉위</List.ReignMarkerLabel>
+                <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
+              </List.ReignMarkerSpan>
             </List.ReignMarkerItem>
           )
         })}
@@ -1224,7 +1235,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                                   },
                                 ).map((entry) =>
                                   entry.kind === 'reign'
-                                    ? renderReignMarkers(entry.markers, true)
+                                    ? renderReignMarkers(entry.markers, true, {
+                                      contextYear: currentYear,
+                                    })
                                     : renderRow(
                                         entry.item,
                                         currentYear,

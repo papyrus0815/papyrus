@@ -5,6 +5,7 @@ import {
   interleaveReignMarkers,
   planReignMarkers,
   reignAccessionYears,
+  formatAccessionDate,
   groupReignEntries,
   toReignMarkers,
 } from './reign-markers'
@@ -36,6 +37,8 @@ const marker = (
   countryName: '조선',
   startKey: startYear * 10000 + month * 100 + day,
   startYear,
+  startMonth: month,
+  startDay: day,
   endYear,
 })
 
@@ -320,5 +323,23 @@ describe('groupReignEntries', () => {
     expect(entries[0].marker.id).toBe('wilhelm-de')
     expect(entries[0].countryNames).toEqual(['독일 제국', '프로이센 왕국'])
     expect(entries[1].countryNames).toEqual(['독일 제국'])
+  })
+})
+
+describe('formatAccessionDate', () => {
+  it('연 그룹 안이면 월.일, 연도가 다른 자리면 연도를 붙인다', () => {
+    const wilhelm = marker('wilhelm', 1888, 1918, 6, 15)
+    expect(formatAccessionDate(wilhelm, 1888)).toBe('6.15')
+    expect(formatAccessionDate(wilhelm)).toBe('1888.6.15')
+  })
+
+  it('정밀도가 모자라면 아는 데까지만 쓴다', () => {
+    const monthOnly = { ...marker('m', 1888, null, 6), startDay: null }
+    const yearOnly = { ...monthOnly, startMonth: null }
+    expect(formatAccessionDate(monthOnly, 1888)).toBe('6월')
+    expect(formatAccessionDate(monthOnly)).toBe('1888.6')
+    expect(formatAccessionDate(yearOnly, 1888)).toBe('')
+    expect(formatAccessionDate(yearOnly)).toBe('1888')
+    expect(formatAccessionDate({ ...yearOnly, startYear: -221 })).toBe('BC 221')
   })
 })

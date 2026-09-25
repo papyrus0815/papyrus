@@ -59,6 +59,9 @@ export interface ReignMarker {
   startKey: number
   /** 부호 연도 — BC는 음수 */
   startYear: number
+  /** 즉위 월·일 — 정밀도가 연/월이면 null */
+  startMonth: number | null
+  startDay: number | null
   /** 퇴위 연도 — 현직·미상이면 null */
   endYear: number | null
 }
@@ -187,6 +190,8 @@ export function toReignMarkers(
       countryName,
       startKey: lowerKey(start),
       startYear: start.year,
+      startMonth: start.month,
+      startDay: start.day,
       endYear: end?.year ?? null,
     })
   }
@@ -202,6 +207,29 @@ export function formatReignSpan(marker: ReignMarker): string {
   if (marker.endYear === marker.startYear) return formatSignedYear(marker.startYear)
   const end = marker.endYear == null ? '' : formatSignedYear(marker.endYear)
   return `${formatSignedYear(marker.startYear)}–${end}`
+}
+
+/**
+ * 즉위 시점 라벨 — 표지를 행과 같은 날짜 열에 세울 때 쓴다.
+ *
+ * 연 그룹 안(`contextYear`가 즉위 연도와 같음)이면 행 날짜와 같은 'M.D' / 'M월'이고,
+ * 연도가 머리글에 없는 자리(연 사이·세기 앞·목록 끝)면 연도를 앞에 붙인다.
+ * 연 정밀도뿐인 즉위가 연 그룹 안에 있으면 빈 문자열 — 머리글이 이미 그 연도다.
+ */
+export function formatAccessionDate(
+  marker: ReignMarker,
+  contextYear?: number,
+): string {
+  const monthDay =
+    marker.startMonth == null
+      ? ''
+      : marker.startDay == null
+        ? `${marker.startMonth}월`
+        : `${marker.startMonth}.${marker.startDay}`
+  if (contextYear === marker.startYear) return monthDay
+  const year = formatSignedYear(marker.startYear)
+  if (!monthDay) return year
+  return marker.startDay == null ? `${year}.${marker.startMonth}` : `${year}.${monthDay}`
 }
 
 /** 말풍선 한 항목 — 같은 군주·같은 기간이 여러 나라 재위로 들어온 것을 하나로 묶는다 */

@@ -1067,9 +1067,22 @@ export const ReignMarker = styled.div<{
   column-gap: 12px;
   row-gap: 4px;
   ${bleedToEdges}
-  /* 좌단 = 공백 표지·연 머리글 셰브론과 같은 x — 말풍선 **글자**가 이 세로선에 선다
-     (상자는 ReignMarkerList의 음수 여백만큼 왼쪽으로 나와 꼬리를 왕관 쪽으로 뻗는다) */
-  padding: 6px var(--list-pad-r, 20px) 6px var(--rail-gutter);
+  /* 좌단 = 행 내용과 같은 x(레일 거터 + 행 안쪽 여백) — 즉위일이 행 날짜 열에 선다.
+     즉위만 있는 해(연 라벨 행)는 연 머리글과 같은 x(레일 거터)에서 시작한다. */
+  padding: 6px var(--list-pad-r, 20px) 6px
+    ${({ $asYear }) =>
+      $asYear
+        ? 'var(--rail-gutter)'
+        : 'calc(var(--rail-gutter) + var(--row-pad-l, 10px))'};
+  column-gap: var(--row-col-gap, 12px);
+
+  @media (max-width: 640px) {
+    padding-left: var(--rail-gutter);
+    /* 날짜(또는 연 라벨)와 말풍선을 한 줄에 둔다 — 감싸면 날짜가 말풍선 위로 홀로 올라가
+       꼬리가 가리킬 대상을 잃는다. 좁으면 말풍선 **안**에서 줄을 바꾼다.
+       공백 문구와 합친 줄은 문구가 다음 줄로 내려가야 하므로 감싸기를 유지한다. */
+    ${({ $withGap }) => !$withGap && 'flex-wrap: nowrap;'}
+  }
   /* 세기 머리글 바로 앞이면 그 세기에 붙어 읽히지 않게 띄운다 — 표지는 앞 시대의 끝이다 */
   margin-bottom: ${({ $beforeCentury, $withGap }) =>
     $beforeCentury ? '14px' : $withGap ? '4px' : '0'};
@@ -1131,6 +1144,32 @@ export const ReignMarkerIcon = styled.span`
 `
 
 /**
+ * 즉위일 — **행 날짜 열과 같은 칸·같은 옷**(우측 정렬, 등폭 숫자, 행 날짜 크기).
+ *
+ * 연 그룹 안의 말풍선은 즉위일 순으로 행 사이에 끼워지는데(8.10 행과 5.14 행 사이 =
+ * 6.15 즉위), 날짜를 싣지 않아 **왜 그 자리인지**를 말하지 못했다. 날짜 열에 세우면
+ * 표지가 행과 같은 시간축 위에서 읽힌다. 연도만 아는 즉위는 빈 칸으로 자리만 지킨다 —
+ * 말풍선 x가 행마다 흔들리지 않게.
+ */
+export const ReignMarkerDate = styled.span`
+  flex: none;
+  width: var(--col-date, 72px);
+  text-align: right;
+  font-size: var(--row-meta, 12px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f0b64a' : '#b45309')};
+
+  @media (max-width: 640px) {
+    width: auto;
+    &:empty {
+      display: none;
+    }
+  }
+`
+
+/**
  * 즉위만 있는 해의 연 라벨 — 연 머리글(YearDivider > span)과 같은 옷.
  *
  * 사건 없는 즉위 연도는 예전에 '● 1587년' 머리글 한 줄 + '👑 말풍선' 한 줄, 축 표지 둘로
@@ -1139,6 +1178,7 @@ export const ReignMarkerIcon = styled.span`
  * 같은 x에 세운다.
  */
 export const ReignYearLabel = styled.span`
+  flex: none;
   /* 셰브론(13px) + 라벨 gap(6px) — 다른 연 라벨의 글자 시작점과 맞춘다 */
   margin-left: 19px;
   font-size: var(--year-label, 13px);
@@ -1174,7 +1214,7 @@ export const ReignMarkerGap = styled.span`
  * 꼬리는 45° 돌린 정사각형의 왼쪽·아래 테두리다. 면이 상자 테두리를 덮어야 이음매가
  * 안 보이므로 **면은 불투명**이어야 한다(반투명 tint면 꼬리와 상자가 겹친 곳만 진해진다).
  */
-export const ReignMarkerList = styled.span<{ $afterLabel?: boolean }>`
+export const ReignMarkerList = styled.span`
   --bubble-bg: ${({ theme }) => (theme.mode === 'dark' ? '#1e1912' : '#fff8ee')};
   --bubble-line: ${({ theme }) =>
     theme.mode === 'dark' ? '#4a3a22' : '#efd6b4'};
@@ -1185,9 +1225,9 @@ export const ReignMarkerList = styled.span<{ $afterLabel?: boolean }>`
   column-gap: 0;
   row-gap: 2px;
   max-width: 100%;
-  /* 글자 좌단은 행 패딩(= 셰브론 x)에 두고 상자만 왼쪽으로 내민다.
-     연 라벨 뒤에 올 때는 내밀면 라벨을 덮는다 — 꼬리가 라벨을 가리키게 제자리에 둔다. */
-  margin-left: ${({ $afterLabel }) => ($afterLabel ? '0' : '-11px')};
+  /* 꼬리가 앞의 날짜(또는 연 라벨)를 가리킨다 — 열 간격 안에 꼬리가 든다. */
+  margin-left: 0;
+  min-width: 0;
   padding: 3px 11px 4px;
   border: 1px solid var(--bubble-line);
   border-radius: 10px;
@@ -1213,10 +1253,6 @@ export const ReignMarkerList = styled.span<{ $afterLabel?: boolean }>`
     }
   }
 
-  /* 좁은 폭은 레일 거터가 좁아 내민 상자가 왕관 밑으로 파고든다 — 글자 좌단에 상자를 맞춘다 */
-  @media (max-width: 640px) {
-    margin-left: 0;
-  }
 `
 
 /** 동군연합 등으로 묶인 항목의 나라 꼬리표들 */
@@ -1230,6 +1266,12 @@ export const ReignMarkerItem = styled.span`
   align-items: baseline;
   gap: 5px;
   white-space: nowrap;
+
+  /* 한 항목(나라 꼬리표 여럿 + 이름 + 기간)이 390px 폭을 넘는다 — 조각 단위로 줄을 바꾼다 */
+  @media (max-width: 640px) {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
 
   /* 구분점은 **앞 항목 끝**에 붙인다. 뒤 항목 머리에 두면 말풍선 안에서 줄이 넘어갈 때
      새 줄이 '·'로 시작했다(390px 실측). */
@@ -1269,6 +1311,13 @@ export const ReignMarkerName = styled.span`
       outline-offset: 2px;
     }
   }
+`
+
+export const ReignMarkerSpan = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
 `
 
 /** '즉위' — 이름에 붙는 동사. 메타색·한 단 작게 */
