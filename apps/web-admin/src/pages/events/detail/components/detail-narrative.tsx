@@ -10,7 +10,6 @@ import {
   AddSectionButton,
   BACKGROUND_TYPE,
   isBackgroundSection,
-  ManageSectionsToggle,
   mergeSectionPayload,
   NARRATIVE_TYPE,
   NarrativeSectionList,
@@ -144,7 +143,10 @@ export function DetailNarrative({
     add: () => {
       /* 빈 row를 *로컬에만* 추가 — 사용자가 내용을 채우기 전엔 server로 안 보냄.
          빈 row는 commit의 filter에서 자동 제거. */
-      setRows([...rows, { key: nextKey(), title: '', content: '', sectionType }])
+      const key = nextKey()
+      setRows([...rows, { key, title: '', content: '', sectionType }])
+      /* 만든 행위가 곧 '여기에 쓰겠다'는 뜻 — 제목 입력을 열어 둔 채로 띄운다. */
+      setAutoEditKey(key)
     },
     change: (index: number, patch: Partial<SectionRow>) => {
       commitPair(
@@ -192,15 +194,11 @@ export function DetailNarrative({
     setNarrativeRows,
   )
 
-  const [backgroundManage, setBackgroundManage] = useState(false)
-  const [narrativeManage, setNarrativeManage] = useState(false)
-  /* 단락이 모두 사라지면 관리 토글도 사라지므로 모드도 함께 해제(갇힘 방지). */
-  useEffect(() => {
-    if (backgroundRows.length === 0 && backgroundManage) setBackgroundManage(false)
-  }, [backgroundRows.length, backgroundManage])
-  useEffect(() => {
-    if (narrativeRows.length === 0 && narrativeManage) setNarrativeManage(false)
-  }, [narrativeRows.length, narrativeManage])
+  /**
+   * 방금 '단락 추가'로 만든 단락의 key — 그 단락의 제목 입력만 열린 채로 뜬다.
+   * 배경·전개가 한 값을 나눠 쓴다(동시에 두 곳에 새 단락을 만들 수는 없다).
+   */
+  const [autoEditKey, setAutoEditKey] = useState<string | null>(null)
 
   return (
     <>
@@ -210,14 +208,6 @@ export function DetailNarrative({
           <S.SectionTitle>배경</S.SectionTitle>
           {backgroundRows.length > 0 && (
             <S.SectionSubtitle>{backgroundRows.length}단락</S.SectionSubtitle>
-          )}
-          {backgroundRows.length > 0 && (
-            <S.SectionActions>
-              <ManageSectionsToggle
-                active={backgroundManage}
-                onToggle={() => setBackgroundManage((active) => !active)}
-              />
-            </S.SectionActions>
           )}
         </S.SectionHeader>
         <S.SectionBody>
@@ -235,7 +225,6 @@ export function DetailNarrative({
         {backgroundRows.length > 0 && (
           <NarrativeSectionList
             rows={backgroundRows}
-            manageMode={backgroundManage}
             onFieldChange={background.change}
             onMove={background.move}
             onRemove={background.remove}
@@ -244,12 +233,12 @@ export function DetailNarrative({
             labelPrefix="배경"
             bodyPlaceholder="이 배경 단락의 본문"
             anchorPrefix="background"
+            autoEditKey={autoEditKey}
           />
         )}
         <AddSectionButton
           onClick={background.add}
           label="배경 단락 추가"
-          indent={backgroundRows.length > 0}
         />
       </S.Section>
 
@@ -259,14 +248,6 @@ export function DetailNarrative({
           <S.SectionTitle>전개</S.SectionTitle>
           {narrativeRows.length > 0 && (
             <S.SectionSubtitle>{narrativeRows.length}단락</S.SectionSubtitle>
-          )}
-          {narrativeRows.length > 0 && (
-            <S.SectionActions>
-              <ManageSectionsToggle
-                active={narrativeManage}
-                onToggle={() => setNarrativeManage((active) => !active)}
-              />
-            </S.SectionActions>
           )}
         </S.SectionHeader>
         {narrativeRows.length === 0 ? (
@@ -282,7 +263,6 @@ export function DetailNarrative({
         ) : (
           <NarrativeSectionList
             rows={narrativeRows}
-            manageMode={narrativeManage}
             onFieldChange={narrative.change}
             onMove={narrative.move}
             onRemove={narrative.remove}
@@ -291,12 +271,12 @@ export function DetailNarrative({
             labelPrefix="전개"
             bodyPlaceholder="이 전개 단락의 본문"
             anchorPrefix="narrative"
+            autoEditKey={autoEditKey}
           />
         )}
         <AddSectionButton
           onClick={narrative.add}
           label="전개 단락 추가"
-          indent={narrativeRows.length > 0}
         />
       </S.Section>
 
