@@ -11,6 +11,7 @@ import {
   withAlpha,
   type LedgerCategory,
 } from '@/pages/events/ledger/styles/ledger-tokens'
+import { metaText } from '@/pages/events/styles/theme'
 
 /**
  * 연관(네트워크) 섹션 styled 레이어 — detail-network 컨테이너·블록(parent/children/
@@ -28,20 +29,26 @@ export const HierBlock = styled.div`
   gap: 10px;
 `
 
-/** 블록 마이크로 라벨 — 상위/추가 상위/하위/키워드 공용(용도중립 이름으로 복제 방지). */
+/**
+ * 블록 마이크로 라벨 — 상위/추가 상위/하위/키워드 공용(용도중립 이름으로 복제 방지).
+ *
+ * 받는 값이 전부 한글이다('상위 사건'·'하위 사건'·'키워드'). uppercase는 한글에 아무
+ * 일도 하지 않고, 0.08em은 라틴 스몰캡스용 트래킹이라 11px 한글을 낱자로 흩뜨린다.
+ * 색도 metaText로 — 11px은 text.tertiary가 AA에 가장 크게 미달하는 크기대다.
+ */
 export const BlockLabel = styled.span`
   display: block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: ${metaText};
 `
 
+/* 안내·고지문 — 목록이 '조건 밖 N건' 같은 누락 고지를 metaText로 옮긴 것과 같은 자리. */
 export const HelperNote = styled.span`
   font-size: 12.5px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 `
 
 /**

@@ -10,6 +10,7 @@ import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 import { notify } from '@/shared/ui/toast'
 
+import { metaText } from '@/pages/events/styles/theme'
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { InlineText } from './inline'
@@ -541,7 +542,7 @@ const EmptyDropZone = styled.div<{ $dragOver: boolean }>`
 
   small {
     font-size: 11.5px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    color: ${metaText};
   }
 `
 
@@ -632,7 +633,7 @@ const CaptionEdit = styled.div`
 
 const SourceEdit = styled.span`
   font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 `
 
 const PrimaryToggle = styled.button<{ $active: boolean }>`
@@ -737,12 +738,13 @@ const FormField = styled.div`
   gap: 4px;
 `
 
+/* '이미지 URL'·'캡션'·'출처' — 한글 폼 라벨. 라틴 스몰캡스를 걷고, 라벨은 입력값이
+   무엇인지 말하는 유일한 단서라 색도 AA(metaText)로 올린다. */
 const FormLabel = styled.label`
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: ${metaText};
 `
 
 const FormInput = styled.input`

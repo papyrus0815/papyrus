@@ -15,6 +15,7 @@ import {
   ledgerAccentSubtle,
   ledgerHairlineStrong,
 } from '@/pages/events/ledger/styles/ledger-tokens'
+import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import { buildMilitaryPatch } from '../military-edit'
@@ -269,8 +270,9 @@ const Divider = styled.div`
   background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
+/* 모듈을 왜 못 켜는지 설명하는 줄 — 읽히지 않으면 비활성 이유가 화면에서 사라진다. */
 const Reason = styled.span`
   margin-left: auto;
   font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 `

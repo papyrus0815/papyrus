@@ -29,6 +29,7 @@ import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
+import { metaText } from '@/pages/events/styles/theme'
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 
@@ -336,16 +337,18 @@ const LinkKindBadge = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/* 조약의 체결일·종류 — 이 섹션에서 사용자가 실제로 읽는 데이텀이다. */
 const TreatyMeta = styled.div`
   font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
 `
 
 const EmptyNote = styled.p`
   margin: 0;
   font-size: 14px;
   line-height: 1.65;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 `
 
 const Actions = styled.div`

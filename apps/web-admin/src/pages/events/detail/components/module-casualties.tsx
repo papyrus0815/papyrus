@@ -8,6 +8,7 @@ import {
   buildMilitaryPatch,
   getMilitary,
 } from '../military-edit'
+import { metaText } from '@/pages/events/styles/theme'
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { InlineText } from './inline'
@@ -169,12 +170,13 @@ const NumCell = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+/* '전사'·'부상'·'실종' — 한글이다. uppercase는 무의미하고 0.08em은 낱자로 흩뜨린다.
+   바로 옆이 사상자 **수치**라, 이 라벨이 안 읽히면 그 숫자가 무엇의 수인지 사라진다. */
 const NumLabel = styled.span`
   font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: ${metaText};
 `
 
 const RemoveBtn = styled.button`

@@ -10,7 +10,7 @@ import {
   resolveCategory,
   withAlpha,
 } from '@/pages/events/ledger/styles/ledger-tokens'
-import { CATEGORY_SOFT_COLORS } from '@/pages/events/styles/theme'
+import { CATEGORY_SOFT_COLORS, metaText } from '@/pages/events/styles/theme'
 import {
   type EventCategoryDto,
   getAllEventCategories,
@@ -255,7 +255,9 @@ const TitleAccent = styled.div<{ $color: string; $colorDark?: string }>`
   }};
 
   @media (prefers-reduced-motion: no-preference) {
-    animation: accentGrow 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    /* 히어로 페이드업(heroRise)과 **같은 값** — 한 화면에서 동시에 도는 두 진입
+       애니메이션이 0.5s와 0.55s로 미세하게 갈릴 이유가 없다(의미 없는 차이). */
+    animation: accentGrow 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
     transform-origin: left center;
   }
 
@@ -637,8 +639,9 @@ const CountryHardSep = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/* italic 제거 — 한글은 italic face가 없어 브라우저가 기울인 가짜 글꼴이 된다.
+   이 레포는 italic을 placeholder 같은 '보조 메타'에만 쓰기로 이미 정리해 두었다. */
 const Overflow = styled.a`
-  font-style: italic;
   font-size: 12.5px;
   margin-left: 10px;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -671,7 +674,7 @@ const BackLink = styled(Link)`
   font-size: 12px;
   font-weight: 600;
   text-decoration: none;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 
   svg {
     width: 13px;
@@ -689,15 +692,17 @@ const BackLink = styled(Link)`
   }
 `
 
+/* 구분자 '·' — 읽는 토큰이 아니라 장식이라 색은 tertiary 그대로(AA 대상 아님).
+   다만 크기는 같은 줄의 다른 토큰과 맞춘다(12/12.5/13 세 종류가 섞여 있었다). */
 const Sep = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   opacity: 0.5;
-  font-size: 13px;
+  font-size: 12px;
 `
 
 const ParentEllipsis = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 12.5px;
+  color: ${metaText};
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
   cursor: help;
@@ -709,8 +714,8 @@ const ParentEllipsis = styled.span`
  * (같은 페이지 앵커 — HeroActors의 Overflow(#actors)와 동일 수단).
  */
 const ExtraParentBadge = styled.a`
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12.5px;
+  color: ${metaText};
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
 

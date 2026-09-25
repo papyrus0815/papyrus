@@ -920,11 +920,12 @@ const NationsBlock = styled.div`
   gap: 8px;
 `
 
+/* 한글 eyebrow — 0.18em은 라틴 스몰캡스용이라 11px 한글이 낱자로 흩어졌다.
+   uppercase도 한글엔 무효. 목록의 라벨 트래킹(0.04em)으로 맞춘다. */
 const NationsEyebrow = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
 `
 
@@ -1093,10 +1094,10 @@ const AddBtn = styled.button`
   background: transparent;
   cursor: pointer;
   font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 600;
+  /* 한글 라벨 — 라틴 스몰캡스(uppercase + 0.16em)를 걷는다. */
+  letter-spacing: 0.04em;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
   display: inline-flex;
   align-items: center;

@@ -183,7 +183,7 @@ const SectionHead = styled.div`
   gap: 10px;
   /* 우측 액션이 제목 위로 올라타지 않도록 비워 두는 폭(3 × 24 + 간격). */
   padding-right: 84px;
-  min-height: 25px;
+  min-height: 23px;
 `
 
 /**
@@ -197,7 +197,7 @@ const SectionHead = styled.div`
 const SectionIndex = styled.span`
   ${DIGIT_DISPLAY}
   flex-shrink: 0;
-  font-size: 17.5px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.4;
   /* 한글 규약대로 라틴 트래킹을 줄인다(숫자만 있는 토큰이라 -0.01em으로 족하다). */
@@ -207,21 +207,29 @@ const SectionIndex = styled.span`
   user-select: none;
 
   @media (max-width: 640px) {
-    font-size: 16px;
+    font-size: 15px;
   }
 `
 
+/**
+ * 단락 제목 — **섹션 제목(20px)과 본문(15.5px) 사이**의 단.
+ *
+ * 17.5px이던 시절엔 섹션 제목과 2.5px 차이라, 목록이 근인으로 짚었던 "머리글이 행
+ * 제목과 픽셀 단위로 같다"와 같은 상태였다(섹션 24 → 20으로 내린 직후 생긴 동률).
+ * 16px으로 한 단 내려 20 : 16 = 1.25배 — 목록의 세기 18 : 행 14(1.29)와 같은 층이다.
+ * 바로 아래 본문(15.5)과는 크기가 아니라 **굵기**(700 vs 400)가 가른다.
+ */
 const SectionTitleHost = styled.div`
   flex: 1;
   min-width: 0;
-  font-size: 17.5px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.4;
-  letter-spacing: -0.012em;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
 
   @media (max-width: 640px) {
-    font-size: 16px;
+    font-size: 15px;
   }
 `
 
