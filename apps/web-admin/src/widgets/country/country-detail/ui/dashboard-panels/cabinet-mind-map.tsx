@@ -352,9 +352,9 @@ function BranchNode({
         </NodeName>
       </NodeText>
       {/*
-        * 넓어진 가지 칸을 이름 하나로 비워 두지 않는다. 취임일은 각료 명단에서 가장
-        * 자주 찾는 값이고, 오른쪽 끝에 세우면 여러 줄이 세로로 정렬돼 표처럼 읽힌다.
-        */}
+       * 넓어진 가지 칸을 이름 하나로 비워 두지 않는다. 취임일은 각료 명단에서 가장
+       * 자주 찾는 값이고, 오른쪽 끝에 세우면 여러 줄이 세로로 정렬돼 표처럼 읽힌다.
+       */}
       {member.startDate && (
         <NodeDate>{formatNodeDate(member.startDate)}</NodeDate>
       )}
@@ -421,10 +421,20 @@ const MapRoot = styled.div<{ $nav?: boolean; $branches?: boolean }>`
     animation: none;
   }
 
+  /*
+   * 좁은 칼럼 — 수반 카드를 맨 위 한 줄에 눕히고 각료는 여러 열 격자로 깐다.
+   *
+   * 예전엔 한 줄 목록으로 접었다. 그러면 각료 14명이 칼럼 폭을 통째로 먹는 행이 되어
+   * (1,120px 행 안에 이름 한 줄) 세로 900px를 쓰고, 왼쪽 가지 절반은 오른쪽 정렬이
+   * 남아 이름이 행의 반대편 끝에 붙었다. 1,600px 화면의 본문이 딱 이 폭이라 대부분의
+   * 사용자가 보는 모양이 이것이었다. 가지 칸과 묶음을 display: contents로 풀어
+   * 좌·우 가지가 한 격자에 순서대로 흘러든다(왼쪽 절반이 앞이라 순서가 유지된다).
+   */
   @container (max-width: 1120px) {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+    gap: 10px;
     justify-content: stretch;
+    align-items: stretch;
   }
 `
 
@@ -527,7 +537,7 @@ const MapSide = styled.div<{ $side: 'left' | 'right' }>`
     $side === 'left' ? 'flex-end' : 'flex-start'};
 
   @container (max-width: 1120px) {
-    order: 2;
+    display: contents;
   }
 `
 
@@ -538,19 +548,9 @@ const GroupBox = styled.div<{ $side: 'left' | 'right' }>`
   gap: ${NODE_GAP}px;
   width: 100%;
 
-  /* 좁은 화면에서는 곡선 대신 왼쪽 세로줄 하나로 접는다 */
+  /* 좁은 화면에서는 묶음을 풀어 각료가 지도 격자에 바로 앉는다 */
   @container (max-width: 1120px) {
-    padding-left: 18px;
-
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: ${NODE_HEIGHT / 2}px;
-      bottom: ${NODE_HEIGHT / 2}px;
-      width: 1px;
-      background: ${lineColor};
-    }
+    display: contents;
   }
 `
 
@@ -578,8 +578,12 @@ const MapCenter = styled.div`
   justify-content: center;
   min-width: 0;
 
+  /* 격자에선 DOM 순서(왼쪽 가지 → 가운데 → 오른쪽 가지)대로면 수반이 각료 사이에 낀다 */
   @container (max-width: 1120px) {
-    order: 1;
+    grid-column: 1 / -1;
+    order: -1;
+    justify-content: stretch;
+    margin-bottom: 6px;
   }
 `
 
@@ -591,16 +595,35 @@ const centerSurface = css`
   width: 340px;
   padding: 22px 24px 18px;
   border-radius: 20px;
-  border: 1px solid rgba(190, 18, 60, 0.3);
   text-align: center;
+  /*
+   * 예전엔 카드 전체를 장미색으로 물들이고 같은 색 그림자를 깔았다. 지면에서 가장
+   * 큰 면이 붉게 칠해져 '경고'처럼 읽혔고, 정작 강조하려던 얼굴·직함이 바탕에 묻혔다.
+   * 면은 무채색으로 두고 장미색은 직함·현직 표시·얼굴 테두리에만 남긴다.
+   */
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'linear-gradient(180deg, rgba(190,18,60,0.16), rgba(190,18,60,0.05))'
-      : 'linear-gradient(180deg, rgba(190,18,60,0.07), rgba(255,255,255,0.9))'};
+      ? 'rgba(255,255,255,0.035)'
+      : theme.colors.background.primary};
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
-      ? '0 10px 30px rgba(0,0,0,0.35)'
-      : '0 10px 26px rgba(190,18,60,0.10)'};
+      ? '0 8px 24px rgba(0,0,0,0.3)'
+      : '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06)'};
+
+  /* 좁은 칼럼 — 가로로 눕힌다: 얼굴 | 직함·이름·정권 | 요약 */
+  @container (max-width: 1120px) {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 22px;
+    row-gap: 2px;
+    align-content: center;
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+    padding: 18px 22px;
+  }
 `
 
 const CenterCard = styled.button`
@@ -615,8 +638,7 @@ const CenterCard = styled.button`
 
   &:hover {
     transform: translateY(-2px);
-    border-color: rgba(190, 18, 60, 0.55);
-    box-shadow: 0 14px 34px rgba(190, 18, 60, 0.18);
+    border-color: rgba(190, 18, 60, 0.45);
   }
   &:focus-visible {
     outline: 2px solid ${CENTER_ACCENT};
@@ -634,14 +656,17 @@ const CenterFace = styled.span`
   padding: 4px;
   margin-bottom: 12px;
   border-radius: 999px;
-  border: 3px solid rgba(190, 18, 60, 0.5);
-  box-shadow:
-    0 0 0 1px rgba(190, 18, 60, 0.12),
-    0 8px 22px rgba(190, 18, 60, 0.22);
+  border: 2px solid rgba(190, 18, 60, 0.55);
 
   img,
   span {
     border-radius: 999px;
+  }
+
+  @container (max-width: 1120px) {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+    margin-bottom: 0;
   }
 `
 
@@ -653,6 +678,9 @@ const CenterRole = styled.span`
   font-weight: 700;
   letter-spacing: 0.01em;
   color: ${CENTER_ACCENT};
+  @container (max-width: 1120px) {
+    grid-column: 2;
+  }
 `
 
 const CenterNow = styled.span`
@@ -670,6 +698,9 @@ const CenterName = styled.span`
   letter-spacing: -0.03em;
   line-height: 1.25;
   color: ${({ theme }) => theme.colors.text.primary};
+  @container (max-width: 1120px) {
+    grid-column: 2;
+  }
 `
 
 const CenterOrdinal = styled.span`
@@ -683,12 +714,18 @@ const CenterOrdinal = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+  @container (max-width: 1120px) {
+    grid-column: 2;
+  }
 `
 
 const CenterCabinet = styled.span`
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
+  @container (max-width: 1120px) {
+    grid-column: 2;
+  }
 `
 
 /**
@@ -707,7 +744,34 @@ const CenterStats = styled.dl`
   width: 100%;
   margin: 14px 0 0;
   padding-top: 12px;
-  border-top: 1px solid rgba(190, 18, 60, 0.18);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  /* 눕힌 카드에선 오른쪽 칸 — 세로 구분선으로 이름 칸과 가른다 */
+  @container (max-width: 1120px) {
+    grid-column: 3;
+    grid-row: 1 / span 4;
+    align-self: center;
+    width: auto;
+    max-width: 520px;
+    justify-content: flex-end;
+    margin: 0;
+    padding: 0 0 0 22px;
+    border-top: none;
+    border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  /* 더 좁으면 요약이 이름 칸을 짓눌러 직함이 한 글자씩 꺾였다 — 요약은 아래 줄로 */
+  @container (max-width: 760px) {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-self: stretch;
+    max-width: none;
+    justify-content: flex-start;
+    margin-top: 14px;
+    padding: 12px 0 0;
+    border-left: none;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
 `
 
 const CenterStat = styled.div`
@@ -792,12 +856,14 @@ const ElectionBranch = styled.div<{ $nav?: boolean; $branches?: boolean }>`
           }
         `}
 
+  /* 좁은 칼럼 — 위 각료 격자와 같은 폭으로 맞춘다. 640px로 가운데 두면 격자 아래 섬처럼 떴다 */
   @container (max-width: 1120px) {
-    display: flex;
-    justify-content: center;
+    display: block;
+    margin-top: 16px;
 
     > * {
-      max-width: 640px;
+      width: 100%;
+      max-width: none;
     }
   }
 `
@@ -867,8 +933,14 @@ const Node = styled.button<{ $side: 'left' | 'right'; $replaced: boolean }>`
       border-color: rgba(180, 83, 9, 0.35);
     `}
 
+  /* 격자 칸에서는 좌·우 가지 구분이 없다 — 모두 얼굴이 왼쪽 */
   @container (max-width: 1120px) {
-    transform: none;
+    flex-direction: row;
+    text-align: left;
+
+    &:hover {
+      transform: none;
+    }
   }
 `
 
@@ -884,6 +956,10 @@ const NodeText = styled.span<{ $side: 'left' | 'right' }>`
   min-width: 0;
   flex: 1;
   gap: 1px;
+
+  @container (max-width: 1120px) {
+    align-items: flex-start;
+  }
 `
 
 /** 좁아지면 이름이 먼저다 — 날짜는 그때 물러난다 */

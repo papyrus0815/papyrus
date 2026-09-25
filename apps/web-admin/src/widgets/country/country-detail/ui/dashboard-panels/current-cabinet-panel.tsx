@@ -2606,4 +2606,9 @@ const Extra = styled.div`
   > * {
     max-width: 320px;
   }
+
+  /* 선거 카드가 위 '이 정권을 낳은 선거'와 겹쳐 스스로 빠지면 빈 줄이 여백만 먹는다 */
+  &:empty {
+    display: none;
+  }
 `
