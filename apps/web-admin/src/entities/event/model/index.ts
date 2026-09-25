@@ -23,7 +23,7 @@ export type {
   HistoricalEvent,
   HistoricalEventCategory,
 } from './types'
-export { CENTURY_UNKNOWN } from './types'
+export { CENTURY_UNKNOWN, EVENTS_PAGE_SIZE_ALL } from './types'
 export {
   EVENT_COUNTRY_ROLE_OPTIONS,
   eventCountryRoleLabel,

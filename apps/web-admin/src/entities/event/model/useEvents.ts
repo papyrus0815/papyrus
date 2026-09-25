@@ -11,13 +11,15 @@ import { useEffect, useMemo } from 'react'
 import { queryOptions, useInfiniteQuery } from '@tanstack/react-query'
 
 import {
+  EVENTS_LIMIT_ALL,
+  EVENTS_LIMIT_ALL_MAX,
   type GetAllEventsParams,
   getAllEvents,
   getEventsByAccount,
 } from '@/shared/api/events'
 
 import { transformEventsFromApi } from './eventTransformers'
-import type { HistoricalEvent } from './types'
+import { EVENTS_PAGE_SIZE_ALL, type HistoricalEvent } from './types'
 
 const DEFAULT_PAGE_SIZE = 50
 
@@ -35,7 +37,10 @@ export const visitedEventsQueryOptions = (accountId: string) =>
 
 export interface UseEventsOptions
   extends Omit<GetAllEventsParams, 'offset' | 'limit'> {
-  /** 페이지당 사건 수 (default 50) */
+  /**
+   * 페이지당 사건 수 (default 50).
+   * `EVENTS_PAGE_SIZE_ALL`(0)이면 쪼개지 않고 한 번에 전부 받는다.
+   */
   pageSize?: number
   /** false 시 fetch 완전 보류 */
   enabled?: boolean
@@ -75,7 +80,14 @@ const buildQueryKey = (opts: UseEventsOptions) =>
   ] as const
 
 export const useEvents = (options: UseEventsOptions = {}) => {
-  const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE
+  const requestedPageSize = options.pageSize ?? DEFAULT_PAGE_SIZE
+  const fetchAll = requestedPageSize === EVENTS_PAGE_SIZE_ALL
+  /*
+   * 페이징 종료 판정(`getNextPageParam`)이 보는 '가득 찬 페이지'의 크기.
+   * '모두'일 때 서버가 실제로 싣는 최대치가 이 값이므로, 여기에 sentinel 0을
+   * 그대로 넘기면 모든 페이지가 '가득 찼다'로 읽혀 offset이 영원히 제자리다.
+   */
+  const pageSize = fetchAll ? EVENTS_LIMIT_ALL_MAX : requestedPageSize
   const enabled = options.enabled ?? true
 
   const query = useInfiniteQuery({
@@ -86,7 +98,7 @@ export const useEvents = (options: UseEventsOptions = {}) => {
       const offset = typeof pageParam === 'number' ? pageParam : 0
       return getAllEvents({
         offset,
-        limit: pageSize,
+        limit: fetchAll ? EVENTS_LIMIT_ALL : pageSize,
         countryId: options.countryId ?? undefined,
         countryIds: options.countryIds,
         historicalCountryIds: options.historicalCountryIds,

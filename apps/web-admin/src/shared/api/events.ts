@@ -33,13 +33,30 @@ export async function getEventsByAccount(
 }
 
 /**
+ * `limit=all` — 페이지를 나누지 말고 한 번에 전부 달라는 요청('모두 가져오기').
+ * 서버가 숫자 limit에 거는 100 상한을 푼다.
+ */
+export const EVENTS_LIMIT_ALL = 'all' as const
+
+/**
+ * `limit=all`일 때 서버가 한 응답에 싣는 상한(event.controller: LIST_LIMIT_ALL_MAX).
+ * 이보다 많으면 여전히 offset으로 이어 받아야 한다 — 호출자의 페이징 종료 판정이
+ * 이 값을 기준으로 서야 한다.
+ */
+export const EVENTS_LIMIT_ALL_MAX = 1000
+
+/**
  * 모든 사건 조회 (페이징 + 다축 필터).
  * 클라이언트 lens 칩(country/hcountry/category/decade/century/quality)을
  * 1:1 매핑하기 위한 옵션을 모두 받는다. 누락 검사 플래그는 true 시에만 적용.
  */
 export interface GetAllEventsParams {
   offset?: number
-  limit?: number
+  /**
+   * 한 요청이 받을 개수. 서버는 숫자 limit을 100으로 깎는다 —
+   * `'all'`을 주면 그 상한을 풀고 한 번에 전부(서버 안전 상한 1,000건) 내려받는다.
+   */
+  limit?: number | typeof EVENTS_LIMIT_ALL
   /** 7 전달 시 createdAt이 최근 N일 이내인 사건만 반환 */
   createdSinceDays?: number
   /** (legacy) 단일 국가 — 현대/역사적 양쪽 매칭 */

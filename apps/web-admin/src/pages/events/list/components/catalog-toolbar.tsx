@@ -28,6 +28,10 @@ import {
 } from 'react-icons/fi'
 
 import type { CenturyFilter, FilterChip } from '@/entities/event/model'
+/* 값(런타임) import는 배럴이 아니라 `model/types`에서 — 배럴은 `useEvents → api.service`를
+   끌고 오고 그 안의 `import.meta`가 ts-jest(CJS)를 깨뜨려 이 파일을 쓰는 spec이 통째로
+   실행 불가가 된다(파서 파일 상단의 같은 주의와 한 쌍). */
+import { EVENTS_PAGE_SIZE_ALL } from '@/entities/event/model/types'
 import {
   HIDEABLE_COLUMNS,
   LIST_COLUMNS,
@@ -442,7 +446,10 @@ interface ViewUtilitiesProps {
   onExpandAllChildren: () => void
   onExportJson: () => void
   onOpenShortcutHelp: () => void
-  /** 한 번에 불러올 사건 수 — 저빈도 설정(메뉴 안에 산다) */
+  /**
+   * 한 번에 불러올 사건 수 — 저빈도 설정(메뉴 안에 산다).
+   * `EVENTS_PAGE_SIZE_ALL`(0)이면 '모두'(쪼개지 않고 한 번에 전부).
+   */
   pageSize: number
   onPageSizeChange: (size: number) => void
   /** 정렬 축 — 메뉴가 전체 목록을 펴고, 그중 셋은 열 머리글 클릭으로도 닿는다 */
@@ -462,7 +469,7 @@ interface ViewUtilitiesProps {
 /**
  * 라디오 그룹 안의 ←→↑↓ — **그룹 하나가 탭 정지점 하나**(WAI-ARIA roving tabindex).
  *
- * 이 메뉴에는 라디오 그룹이 셋(정렬 4 · 밀도 3 · 개수 3)이다. 로빙이 없으면 열 벌의
+ * 이 메뉴에는 라디오 그룹이 셋(정렬 4 · 밀도 3 · 개수 4)이다. 로빙이 없으면 열 벌의
  * 라디오가 전부 탭 정지점이라, 메뉴를 가로지르는 데만 Tab이 열 번 더 든다. 라디오는
  * **이동과 동시에 선택**되는 것이 표준 동작이라 화살표 한 번이 곧 적용이다.
  */
@@ -861,19 +868,23 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
               role="radiogroup"
               aria-labelledby="catalog-page-size-label"
               onKeyDown={handleRadioGroupKeys}
-              $columns={PAGE_SIZE_OPTIONS.length}
+              $columns={PAGE_SIZE_CHOICES.length}
             >
-              {PAGE_SIZE_OPTIONS.map((size) => (
+              {PAGE_SIZE_CHOICES.map((choice) => (
                 <PageSizeBtn
-                  key={size}
+                  key={choice.value}
                   type="button"
                   role="radio"
-                  aria-checked={pageSize === size}
-                  tabIndex={pageSize === size ? 0 : -1}
-                  $active={pageSize === size}
-                  onClick={() => onPageSizeChange(size)}
+                  aria-checked={pageSize === choice.value}
+                  tabIndex={pageSize === choice.value ? 0 : -1}
+                  $active={pageSize === choice.value}
+                  title={choice.hint}
+                  /* 숫자 셋 사이에 낱말 하나가 서므로 낭독 라벨을 따로 준다 —
+                     '모두'만 읽히면 무엇이 모두인지 알 수 없다. */
+                  aria-label={choice.hint}
+                  onClick={() => onPageSizeChange(choice.value)}
                 >
-                  {size}
+                  {choice.label}
                 </PageSizeBtn>
               ))}
             </ChoiceGrid>
@@ -906,8 +917,23 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   )
 }
 
-/** 한 번에 불러올 사건 수 — 스크롤 시 이 단위로 추가 로드된다. */
-const PAGE_SIZE_OPTIONS = [20, 50, 100] as const
+/**
+ * 한 번에 불러올 사건 수 — 목록은 이 단위로 페이지를 이어 받는다.
+ *
+ * '모두'는 쪼개지 않고 한 요청으로 전부 받는다. 목록이 정렬·세기 필터·계층 평탄화를
+ * 클라이언트 전역으로 하는 이상 어차피 전량을 소진하는데, 100건 상한 때문에 그게
+ * 수십 번의 왕복으로 쪼개져 있었다 — '모두'는 그 왕복을 한 번으로 줄인다.
+ */
+const PAGE_SIZE_CHOICES = [
+  { value: 20, label: '20', hint: '20건씩 이어 받기' },
+  { value: 50, label: '50', hint: '50건씩 이어 받기' },
+  { value: 100, label: '100', hint: '100건씩 이어 받기' },
+  {
+    value: EVENTS_PAGE_SIZE_ALL,
+    label: '모두',
+    hint: '쪼개지 않고 한 번에 전부 불러오기',
+  },
+] as const
 
 const UtilityMenuWrap = styled.div`
   position: relative;

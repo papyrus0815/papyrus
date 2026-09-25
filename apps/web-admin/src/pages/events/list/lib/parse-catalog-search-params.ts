@@ -25,16 +25,28 @@
  * ts-jest(CJS) 컴파일을 깨뜨려 이 파일을 쓰는 spec이 통째로 실행 불가가 된다.
  */
 import type { CenturyFilter } from '@/entities/event/model'
-import { CENTURY_UNKNOWN } from '@/entities/event/model/types'
+import {
+  CENTURY_UNKNOWN,
+  EVENTS_PAGE_SIZE_ALL,
+} from '@/entities/event/model/types'
 import {
   FILTER_ALL,
   SORT_OPTIONS,
   type SortOption,
 } from '@/features/event-list/lib'
 
-/** URL에 노출하는 유효 page size — 그 외 값은 기본(100)으로 폴백 */
+/** URL에 노출하는 유효 page size(숫자) — 그 외 값은 기본(100)으로 폴백 */
 export const VALID_PAGE_SIZES = [20, 50, 100]
 export const DEFAULT_PAGE_SIZE = 100
+
+/**
+ * '모두 가져오기'가 URL에 실리는 표기 — `?size=all`.
+ *
+ * 숫자로 쓰지 않는다: sentinel 값(0)이 그대로 URL에 나가면 링크를 읽는 사람에게
+ * '0건 불러오기'로 읽히고, `Number('')`·`Number(null)`이 0이라 빈 파라미터가
+ * '모두'로 둔갑한다.
+ */
+export const PAGE_SIZE_ALL_PARAM = 'all'
 
 export const DEFAULT_SORT: SortOption = SORT_OPTIONS.RECENT
 export const DEFAULT_SORT_DIRECTION: 'asc' | 'desc' = 'desc'
@@ -68,6 +80,7 @@ export interface CatalogUrlState {
   selectedCountry: string
   selectedContinent: string
   selectedCentury: CenturyFilter
+  /** `size` — 20·50·100 또는 `EVENTS_PAGE_SIZE_ALL`(0, '모두 가져오기') */
   pageSize: number
   sortBy: SortOption
   sortDirection: 'asc' | 'desc'
@@ -120,10 +133,19 @@ export const parseSortParam = (raw: string | null): SortOption => {
     : DEFAULT_SORT
 }
 
-/** 페이지 크기 — 화이트리스트 밖이면 기본값 */
+/** 페이지 크기 — `all`은 '모두 가져오기', 화이트리스트 밖 숫자는 기본값 */
 export const parsePageSizeParam = (raw: string | null): number => {
+  if (raw !== null && raw.trim().toLowerCase() === PAGE_SIZE_ALL_PARAM) {
+    return EVENTS_PAGE_SIZE_ALL
+  }
   const size = Number(raw)
   return VALID_PAGE_SIZES.includes(size) ? size : DEFAULT_PAGE_SIZE
+}
+
+/** 페이지 크기 → URL 표기. 기본값이면 null(= 키를 싣지 않는다) */
+export const serializePageSizeParam = (size: number): string | null => {
+  if (size === EVENTS_PAGE_SIZE_ALL) return PAGE_SIZE_ALL_PARAM
+  return size !== DEFAULT_PAGE_SIZE ? String(size) : null
 }
 
 /**

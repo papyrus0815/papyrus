@@ -5,7 +5,10 @@
  * 검증은 `parseCatalogSearchParams` 한 곳에만 있으므로, 여기서 고정하면 initializer와
  * URL→state effect 양쪽이 동시에 보호된다.
  */
-import { CENTURY_UNKNOWN } from '@/entities/event/model/types'
+import {
+  CENTURY_UNKNOWN,
+  EVENTS_PAGE_SIZE_ALL,
+} from '@/entities/event/model/types'
 import { FILTER_ALL } from '@/features/event-list/lib'
 
 import {
@@ -13,6 +16,7 @@ import {
   parseCatalogSearchParams,
   parseCenturyParam,
   parseSortParam,
+  serializePageSizeParam,
 } from './parse-catalog-search-params'
 
 const parse = (search: string) =>
@@ -121,6 +125,28 @@ describe('parseCatalogSearchParams', () => {
     const state = parse('size=7&dir=sideways')
     expect(state.pageSize).toBe(DEFAULT_PAGE_SIZE)
     expect(state.sortDirection).toBe('desc')
+  })
+
+  it("size=all은 '모두 가져오기' sentinel이 된다", () => {
+    expect(parse('size=all').pageSize).toBe(EVENTS_PAGE_SIZE_ALL)
+    expect(parse('size=ALL').pageSize).toBe(EVENTS_PAGE_SIZE_ALL)
+  })
+
+  it("빈 size는 '모두'로 둔갑하지 않는다", () => {
+    // sentinel이 0이라 Number('')·Number(null)이 그대로 통과하면 `?size=`가
+    // 전량 로드로 읽힌다 — 화이트리스트가 숫자만 보는 이유.
+    expect(parse('size=').pageSize).toBe(DEFAULT_PAGE_SIZE)
+    expect(parse('size=0').pageSize).toBe(DEFAULT_PAGE_SIZE)
+    expect(parse('').pageSize).toBe(DEFAULT_PAGE_SIZE)
+  })
+
+  it('serializePageSizeParam은 파서와 왕복한다', () => {
+    expect(serializePageSizeParam(DEFAULT_PAGE_SIZE)).toBeNull()
+    expect(serializePageSizeParam(50)).toBe('50')
+    expect(serializePageSizeParam(EVENTS_PAGE_SIZE_ALL)).toBe('all')
+    expect(parse(`size=${serializePageSizeParam(EVENTS_PAGE_SIZE_ALL)}`).pageSize).toBe(
+      EVENTS_PAGE_SIZE_ALL,
+    )
   })
 
   it('폐지된 뷰의 링크가 와도 나머지 축은 정상 복원된다', () => {

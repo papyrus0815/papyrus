@@ -8,6 +8,7 @@
  */
 import { renderHook } from '@testing-library/react'
 
+import { EVENTS_PAGE_SIZE_ALL } from '@/entities/event/model/types'
 import { FILTER_ALL } from '@/features/event-list/lib'
 
 import {
@@ -231,6 +232,21 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
   it('anchors=1 딥링크는 첫 커밋에서 URL을 다시 쓰지 않는다', () => {
     // 시딩이 파서를 경유하므로 state === URL — 딥링크가 첫 write에 지워지면 안 된다(URL-5).
     const search = 'anchors=1&cat=c1'
+    expect(renderSync(search, seedFromUrl(search))).not.toHaveBeenCalled()
+  })
+
+  it("'모두 가져오기'는 size=all로 왕복한다", () => {
+    // sentinel(0)을 숫자 그대로 실으면 `?size=0`이 되어 '0건 불러오기'로 읽히고,
+    // 파서의 숫자 화이트리스트에 걸려 기본값으로 낙하해 선택이 새로고침에 증발한다.
+    const written = lastWritten(
+      renderSync('cat=c1', {
+        ...seedFromUrl('cat=c1'),
+        pageSize: EVENTS_PAGE_SIZE_ALL,
+      }),
+    )
+    expect(written.get('size')).toBe('all')
+
+    const search = 'size=all&cat=c1'
     expect(renderSync(search, seedFromUrl(search))).not.toHaveBeenCalled()
   })
 

@@ -16,6 +16,19 @@ export type CenturyFilter = 'all' | typeof CENTURY_UNKNOWN | number
 /** 세기 축의 '연도 미상' sentinel. URL(`century=unknown`)에도 이 문자열 그대로 실린다. */
 export const CENTURY_UNKNOWN = 'unknown' as const
 
+/**
+ * 페이지 크기의 '모두 가져오기' sentinel — 쪼개지 말고 한 번에 전부 받으라는 뜻.
+ *
+ * 0인 이유: '개수'로 읽으면 0은 애초에 의미가 없는 값이라 정상 크기(20·50·100)와
+ * 절대 충돌하지 않는다. 실제 요청은 `limit=all`로 나가 서버의 100건 상한을 풀고,
+ * 서버 안전 상한(1,000건)을 넘는 나머지는 평소처럼 offset으로 이어 받는다 —
+ * '모두'는 **왕복 수를 줄이는 축**이지 모수를 바꾸는 축이 아니다.
+ *
+ * ⚠️ 이 상수는 `types`에 산다(배럴 아님). URL 파서가 런타임 값으로 쓰는데,
+ * 배럴을 거치면 `useEvents → api.service`의 `import.meta`가 딸려와 ts-jest가 깨진다.
+ */
+export const EVENTS_PAGE_SIZE_ALL = 0
+
 export interface FilterChip {
   key: string
   label: string

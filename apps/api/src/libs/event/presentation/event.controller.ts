@@ -124,6 +124,15 @@ export interface VisitedEventCardDto {
  * ⚠️ 따라서 *목록 응답에 background가 없다는 사실은 "배경 없음"의 근거가 될 수 없다* —
  * 본문 유무 판정은 상세 응답(getEventById)으로만 하라.
  */
+/** `limit=all` — 페이지를 나누지 말고 한 번에 전부 달라는 요청 */
+const LIST_LIMIT_ALL = 'all'
+
+/**
+ * `limit=all`의 안전 상한. '모두'라도 한 응답이 무한정 커질 수는 없다 —
+ * 이보다 많으면 호출자가 offset으로 이어 받는다(클라이언트는 이미 그렇게 한다).
+ */
+const LIST_LIMIT_ALL_MAX = 1000
+
 const LIST_OMITTED_BODY_FIELDS = {
   background: true,
   aftermath: true,
@@ -433,7 +442,9 @@ export class EventController {
    * "true"/"1"만 의미 있음.
    *
    * @param offset 시작 위치 (기본값: 0)
-   * @param limit 가져올 개수 (기본값: 20, 최대: 100)
+   * @param limit 가져올 개수 (기본값: 20, 최대: 100). `"all"`을 주면 한 번에 전부
+   *   내려보낸다 — 페이지를 나눠 받을 필요가 없는 '모두 가져오기'용. 무제한은
+   *   아니고 안전 상한(1,000건)이 걸려 있어, 그보다 많으면 offset으로 이어 받는다.
    * @param countryId (legacy) 단일 국가 — 현대/역사적 양쪽 매칭
    * @param countryIds 쉼표 구분 현대 국가 id 목록 — 다중 OR
    * @param historicalCountryIds 쉼표 구분 역사 국가 id 목록 — 다중 OR
@@ -469,7 +480,22 @@ export class EventController {
   ): Promise<EventResponseDto[]> {
     const userId = req.user?.id || req.user?.sub // AuthGuard가 이미 인증 체크함
     const skip = offset ? parseInt(offset, 10) : 0
-    const take = limit ? Math.min(parseInt(limit, 10), 100) : 20
+    /*
+     * limit=all — '모두 가져오기'. 목록 화면은 정렬·세기 필터·계층 평탄화를 전부
+     * 클라이언트 전역으로 하므로 어차피 전 페이지를 소진하는데, 100건 상한 때문에
+     * 그 소진이 수십 번의 왕복으로 쪼개졌다. 한 번에 받겠다고 명시한 요청만 상한을
+     * 푼다(기본값·숫자 limit의 100 상한은 그대로 — 남의 호출은 건드리지 않는다).
+     * 무제한은 아니다: 한 응답이 감당할 수 있는 선(1,000건)에서 끊고, 그보다 많으면
+     * 호출자가 offset으로 이어 받는다.
+     */
+    const rawLimit = limit?.trim().toLowerCase()
+    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : NaN
+    const take =
+      rawLimit === LIST_LIMIT_ALL
+        ? LIST_LIMIT_ALL_MAX
+        : Number.isNaN(parsedLimit)
+          ? 20
+          : Math.min(Math.max(parsedLimit, 1), 100)
     const sinceDays = createdSinceDays ? parseInt(createdSinceDays, 10) : undefined
     const createdAtGte =
       sinceDays != null && !Number.isNaN(sinceDays) && sinceDays > 0

@@ -24,10 +24,10 @@ import { FILTER_ALL } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 
 import {
-  DEFAULT_PAGE_SIZE,
   DEFAULT_SORT,
   DEFAULT_SORT_DIRECTION,
   parseCatalogSearchParams,
+  serializePageSizeParam,
 } from '../lib/parse-catalog-search-params'
 
 interface CatalogUrlSyncArgs {
@@ -206,7 +206,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
       'century',
       selectedCentury !== FILTER_ALL ? String(selectedCentury) : null,
     )
-    setOrDel('size', pageSize !== DEFAULT_PAGE_SIZE ? String(pageSize) : null)
+    setOrDel('size', serializePageSizeParam(pageSize))
     setOrDel('sort', sortBy, DEFAULT_SORT)
     setOrDel('dir', sortDirection, DEFAULT_SORT_DIRECTION)
     setOrDel('flat', showFlatView ? '1' : null)

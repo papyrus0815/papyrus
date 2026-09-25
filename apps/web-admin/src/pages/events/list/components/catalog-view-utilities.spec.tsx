@@ -4,6 +4,8 @@ import { fireEvent, screen } from '@testing-library/react'
 
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 
+import { EVENTS_PAGE_SIZE_ALL } from '@/entities/event/model/types'
+
 import type { ListColumnKey, SortOption } from '@/features/event-list/lib'
 import type { ListDensity } from '@/pages/events/styles/theme'
 
@@ -74,7 +76,7 @@ describe('CatalogViewUtilities — 표시 설정 메뉴', () => {
     expect(baseProps.onSortDirectionToggle).toHaveBeenCalled()
   })
 
-  it('밀도 3단과 개수 3종이 각자 라디오 그룹으로 선다', () => {
+  it('밀도 3단과 개수 4종이 각자 라디오 그룹으로 선다', () => {
     openMenu()
     const density = screen.getByRole('radiogroup', { name: '목록 밀도' })
     const pageSize = screen.getByRole('radiogroup', { name: '한 번에 불러올 개수' })
@@ -82,6 +84,24 @@ describe('CatalogViewUtilities — 표시 설정 메뉴', () => {
     expect(pageSize).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: '조밀' }))
     expect(baseProps.onChangeListDensity).toHaveBeenCalledWith('compact')
+  })
+
+  it("개수에 '모두'가 있고, 고르면 전량 sentinel을 올린다", () => {
+    // 목록은 어차피 전 페이지를 소진하는데 상한이 100이라 그 소진이 수십 번의
+    // 왕복으로 쪼개져 있었다 — 한 번에 받겠다는 선택지가 없으면 그걸 고를 수 없다.
+    openMenu()
+    const all = screen.getByRole('radio', { name: /한 번에 전부/ })
+    expect(all).not.toBeChecked()
+    fireEvent.click(all)
+    expect(baseProps.onPageSizeChange).toHaveBeenCalledWith(EVENTS_PAGE_SIZE_ALL)
+  })
+
+  it("'모두'로 불러오는 중이면 그 칸만 checked다", () => {
+    openMenu({ pageSize: EVENTS_PAGE_SIZE_ALL })
+    expect(screen.getByRole('radio', { name: /한 번에 전부/ })).toBeChecked()
+    expect(
+      screen.getByRole('radio', { name: /100건씩 이어 받기/ }),
+    ).not.toBeChecked()
   })
 
   it('계층 보기 스위치가 메뉴 안에 있다 — 필터 바에서 내려온 표시 축', () => {
