@@ -10,6 +10,7 @@ import {
   resolveCategory,
   withAlpha,
 } from '@/pages/events/ledger/styles/ledger-tokens'
+import { CATEGORY_SOFT_COLORS } from '@/pages/events/styles/theme'
 import {
   type EventCategoryDto,
   getAllEventCategories,
@@ -63,6 +64,14 @@ export function DetailHero({
   })
 
   const category = resolveCategory(event.category?.name)
+  /**
+   * 분류 글자색 — 원색(category.color)이 아니라 **AA 대비 shade**를 쓴다.
+   * 목록이 같은 이유로 CATEGORY_SOFT_COLORS로 옮겨 갔다(원색 텍스트는 소형에서 AA 미달).
+   */
+  const categorySoft =
+    CATEGORY_SOFT_COLORS[
+      (event.category?.name ?? '기타') as keyof typeof CATEGORY_SOFT_COLORS
+    ] ?? CATEGORY_SOFT_COLORS.기타
 
   // 부모 사건 체인 — 표시 가능한 깊이(최대 3단)까지. 더 깊으면 truncated 플래그.
   const PARENT_CHAIN_CAP = 3
@@ -96,7 +105,7 @@ export function DetailHero({
           목록
         </BackLink>
         <Sep>·</Sep>
-        <S.CategoryChip $color={category.color} $colorDark={category.dark}>
+        <S.CategoryChip $color={categorySoft.text} $colorDark={categorySoft.textDark}>
           <span aria-hidden>{category.icon}</span>
           <InlineSelect
             value={event.categoryId ?? ''}
@@ -265,10 +274,21 @@ const TitleAccent = styled.div<{ $color: string; $colorDark?: string }>`
 /* 사건 제목 = 페이지 유일 h1(문서 아웃라인·스크린리더 진입점). 안의 편집 span을 감싼다. */
 const TitleHost = styled.h1`
   margin: 0;
-  font-size: clamp(30px, 4.2vw, 44px);
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.018em;
+  /**
+   * 크기·굵기·자간 세 축 모두 목록의 판정을 따른다.
+   *
+   * - **800 폐기**: 목록은 화면에서 가장 큰 텍스트(세기 머리글)의 800을 700으로 내리며
+   *   "위계는 크기가 이미 만들고 있고, 굵기까지 최대치를 쓰면 필요 이상으로 무거워진다"로
+   *   정리했다. 800은 그때 레포에서 그 한 곳뿐이었는데, 여기가 남아 있었다.
+   * - **자간**: 한글에 라틴 트래킹을 그대로 쓰지 않는다는 레포 규약대로 -0.018 → -0.01em.
+   *   목록도 같은 자리에서 -0.02em을 되돌렸다.
+   * - **크기**: 44px 상한은 본문(15.5px)의 2.8배였다. 목록의 단조(세기 18 : 행 14 : 연 13)
+   *   처럼 상세도 제목 36 : 섹션 20 : 본문 15.5로 층을 좁힌다 — 커서 이기는 화면을 만들지 않는다.
+   */
+  font-size: clamp(27px, 3.4vw, 36px);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
 
   /**

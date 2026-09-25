@@ -18,9 +18,11 @@ import styled from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
+  MOTION,
   ledgerBackground,
   ledgerHairlineStrong,
 } from '@/pages/events/ledger/styles/ledger-tokens'
+import { metaText } from '@/pages/events/styles/theme'
 import { type MentionItem } from '@/shared/lib/mention/mention-system'
 
 import { InlineRichText, InlineText } from './inline'
@@ -198,8 +200,10 @@ const SectionIndex = styled.span`
   font-size: 17.5px;
   font-weight: 700;
   line-height: 1.4;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  /* 한글 규약대로 라틴 트래킹을 줄인다(숫자만 있는 토큰이라 -0.01em으로 족하다). */
+  letter-spacing: -0.01em;
+  /* 이 번호가 단락의 유일한 표지일 때가 있다 — text.tertiary는 AA 미달(라이트 2.54:1). */
+  color: ${metaText};
   user-select: none;
 
   @media (max-width: 640px) {
@@ -232,13 +236,13 @@ const AddTitleBtn = styled.button`
   padding: 0;
   border: none;
   background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   font-size: 13px;
   font-weight: 500;
   line-height: 1.4;
   cursor: pointer;
   opacity: 0.6;
-  transition: opacity 0.14s, color 0.14s;
+  transition: opacity ${MOTION.fast}, color ${MOTION.fast};
 
   &:hover {
     opacity: 1;
@@ -272,7 +276,7 @@ const RowActions = styled.div`
   display: inline-flex;
   gap: 4px;
   opacity: 0;
-  transition: opacity 0.14s;
+  transition: opacity ${MOTION.fast};
 
   ${SectionItem}:hover &,
   ${SectionItem}:focus-within & {
@@ -298,7 +302,8 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
   color: ${({ theme, $danger }) =>
     $danger ? theme.colors.error : theme.colors.text.secondary};
   cursor: pointer;
-  transition: border-color 0.14s, color 0.14s, background 0.14s;
+  transition: border-color ${MOTION.fast}, color ${MOTION.fast},
+    background ${MOTION.fast};
 
   &:hover:not(:disabled) {
     border-color: ${({ theme, $danger }) =>
@@ -345,11 +350,11 @@ const AddBtn = styled.button`
   padding: 7px 12px 7px 0;
   border: none;
   background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.14s;
+  transition: color ${MOTION.fast};
 
   &:hover {
     color: ${({ theme }) => theme.colors.primary};

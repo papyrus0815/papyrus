@@ -10,6 +10,8 @@
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { metaText } from '@/pages/events/styles/theme'
+
 import {
   DIGIT_DISPLAY,
   MOTION,
@@ -18,7 +20,6 @@ import {
   ledgerHairline,
   ledgerHairlineHover,
   ledgerHairlineStrong,
-  withAlpha,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 
 /* ───────────────────────── Page Shell ───────────────────────── */
@@ -150,13 +151,20 @@ export const Hero = styled.section`
   }
 `
 
+/**
+ * 히어로 상단 줄(목록 링크 · 분류 · 상위 체인) — **보조 데이텀**이라 metaText를 쓴다.
+ *
+ * text.tertiary는 소형 텍스트 기준 WCAG AA(4.5:1)에 미달한다(실측 라이트 2.54:1 ·
+ * 다크 3.82:1). 목록이 날짜·건수·누락 고지를 이 토큰에서 metaText로 옮긴 것과 같은
+ * 이유다 — 이 줄이 담은 '어느 사건 아래인가'는 화면에서 가장 안 읽히면 안 되는 축이다.
+ */
 export const HeroTopRow = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 `
 
 export const Breadcrumb = styled.nav`
@@ -165,7 +173,8 @@ export const Breadcrumb = styled.nav`
   gap: 8px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  /* 상위 사건 체인 — 링크다. 읽히지 않으면 위계가 통째로 사라진다(metaText 근거는 HeroTopRow). */
+  color: ${metaText};
 
   a {
     color: inherit;
@@ -205,25 +214,35 @@ const dualColor = (
   colorDark?: string,
 ) => (mode === 'dark' ? colorDark ?? color : color)
 
+/**
+ * 분류 표지 — **색 면(fill) 없음. hue는 글자와 글리프에만 싣는다.**
+ *
+ * 목록이 2026-08-02에 같은 판단을 실측으로 내렸다(event-list-item CategoryLabel):
+ *  ⑴ 칩 배경과 표면의 대비가 10색 전부 1.06~1.25:1 — '배지'로 읽히지도 않으면서 화면
+ *     색 면적의 대부분을 차지한다.
+ *  ⑵ 원색 텍스트는 소형에서 AA 미달이라, 목록은 hue별 **AA 대비 shade**
+ *     (CATEGORY_SOFT_COLORS.text / .textDark)로 글자를 칠한다.
+ *
+ * 이 칩은 그 폐기된 조합(반투명 fill + 30% border + pill + 원색 텍스트)을 그대로 갖고
+ * 있었다. 게다가 히어로 상단의 조용한 12px 줄에서 혼자 가장 큰 색 면이라, 바로 아래
+ * h1이 가져야 할 시선을 앞에서 가로챘다.
+ *
+ * ⚠️ $color/$colorDark에는 원색이 아니라 **AA shade**를 넘길 것(소비처가 CATEGORY_SOFT_COLORS
+ *    에서 꺼내 전달한다). 원색을 넘기면 ⑵의 대비 미달로 되돌아간다.
+ */
 export const CategoryChip = styled.span<{ $color: string; $colorDark?: string }>`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  background: ${({ theme, $color, $colorDark }) =>
-    withAlpha(
-      dualColor(theme.mode, $color, $colorDark),
-      theme.mode === 'dark' ? 0.14 : 0.1,
-    )};
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: ${({ theme, $color, $colorDark }) =>
     dualColor(theme.mode, $color, $colorDark)};
-  border: 1px solid
-    ${({ theme, $color, $colorDark }) =>
-      withAlpha(dualColor(theme.mode, $color, $colorDark), 0.3)};
+
+  > [aria-hidden] {
+    line-height: 1;
+  }
 `
 
 export const HeroMeta = styled.div`
@@ -303,12 +322,16 @@ export const RailGroup = styled.div`
   }
 `
 
+/**
+ * '목차' — 한글 두 글자다. uppercase는 아무 일도 하지 않고, 0.14em은 라틴 스몰캡스용
+ * 트래킹이라 한글에서는 글자가 흩어진다(DefLabel과 같은 규약). 목록의 라벨 트래킹
+ * (연 머리글 0.04em)에 맞추고, 크기는 FONT_SCALE의 META(10.5/600)로.
+ */
 export const RailGroupLabel = styled.div`
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: ${metaText};
 
   @media (max-width: 1100px) {
     flex-shrink: 0;
@@ -348,8 +371,9 @@ export const RailNavItem = styled.button<{ $active: boolean }>`
   font: inherit;
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? 600 : 400)};
+  /* 비활성 항목도 '지금 어디쯤인가'를 읽어야 하는 내비다 — metaText(AA)로. */
   color: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+    $active ? theme.colors.text.primary : metaText({ theme })};
   background: transparent;
   border: 0;
   border-left: 2px solid
@@ -404,25 +428,30 @@ export const SectionHeader = styled.header`
   margin-bottom: 4px;
 `
 
+/**
+ * 섹션 제목 — 제목 36 : 섹션 20 : 본문 15.5의 가운데 단.
+ * 24px이던 시절엔 본문의 1.55배로 목록의 단조(1.29배)보다 층이 넓었다.
+ * 자간도 한글 규약대로 -0.012 → -0.01em.
+ */
 export const SectionTitle = styled.h2`
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.012em;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
   margin: 0;
   color: ${({ theme }) => theme.colors.text.primary};
   display: inline-flex;
   align-items: center;
 
   @media (max-width: 640px) {
-    font-size: 21px;
+    font-size: 18px;
   }
 `
 
 /**
  * 모듈 SectionTitle 좌측 카테고리 점 — 페이지 안에서 카테고리 색이 여러 톤으로
- * 흩뿌려지는 노이즈를 줄이기 위해 작고 옅게. Hero CategoryChip이 이미 같은
- * 시그널을 강하게 전달하므로 여기서는 섹션 그루핑만.
+ * 흩뿌려지는 노이즈를 줄이기 위해 작고 옅게. 히어로가 이미 분류를 한 번 말했으므로
+ * (제목 아래 액센트 막대 + 상단 줄의 분류 글자) 여기서는 섹션 그루핑만 한다.
  * $colorDark는 optional — module-*.tsx 소비처는 미전달($color 폴백, known-gap).
  */
 export const SectionTitleDot = styled.span<{
@@ -444,7 +473,8 @@ export const SectionTitleDot = styled.span<{
 export const SectionSubtitle = styled.span`
   font-size: 12.5px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  /* 건수·단락 수 = 목록이 metaText로 옮긴 바로 그 '보조 데이텀'이다. */
+  color: ${metaText};
   ${DIGIT_DISPLAY}
 `
 
@@ -507,10 +537,15 @@ export const ModuleDataCard = styled.div<{ $accent: string }>`
   position: relative;
   padding: 14px 16px 14px 18px;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
-  transition: border-color 0.15s, background 0.15s;
+  /* 12px은 이 지면에서 가장 둥근 값이었다 — 목록이 flat rows로 간 뒤의 톤에 맞춘다. */
+  border-radius: 8px;
+  /**
+   * 면(fill) 없음. 이 파일 머리말이 "카드/모듈은 hairline border 위주 — fill 카드 사용처
+   * 없음"이라 적어 두고 정작 여기서 1.5~2% tint를 깔고 있었다. 목록도 그룹 머리글의
+   * 회색 밴드(GROUP_BAND)를 폐기하고 지면색으로 갔다 — 경계는 선이 긋고, 면은 비운다.
+   */
+  background: transparent;
+  transition: border-color ${MOTION.normal};
 
   &::before {
     content: '';
@@ -551,12 +586,17 @@ export const DefRow = styled.div`
   display: contents;
 `
 
+/**
+ * 라벨 — 받는 값이 전부 한글이다('지휘관'·'병력'·'분쟁 유형'·'전쟁 비용').
+ * uppercase는 한글에 아무 일도 하지 않고, 0.06em 라틴 트래킹은 자간만 벌려 읽기를
+ * 해친다(목록이 한글 큰 제목에서 되돌린 것과 같은 규약). 색은 metaText — 11px은
+ * text.tertiary가 AA에 가장 크게 미달하는 크기대다.
+ */
 export const DefLabel = styled.dt`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: ${metaText};
   padding-top: 3px;
 
   @media (max-width: 640px) {
@@ -568,6 +608,8 @@ export const DefValue = styled.dd`
   margin: 0;
   font-size: 14px;
   line-height: 1.6;
+  /* 병력·사상자·전쟁 비용이 들어오는 자리 — 목록의 모든 수치가 그렇듯 자릿수를 세운다. */
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -581,7 +623,7 @@ export const Tag = styled.span<{ $color?: string }>`
   font-size: 12.5px;
   font-weight: 500;
   background: transparent;
-  color: ${({ theme, $color }) => $color ?? theme.colors.text.tertiary};
+  color: ${({ theme, $color }) => $color ?? metaText({ theme })};
   border: none;
   white-space: nowrap;
 `
