@@ -34,7 +34,7 @@ import {
   type ListColumnKey,
   type SortOption,
 } from '@/features/event-list/lib'
-import type { ListDensity } from '@/pages/events/styles/theme'
+import { LIST_STEPS, type ListDensity } from '@/pages/events/styles/theme'
 import type { FilterOptionCounts } from '@/features/event-filters/model/option-facets'
 import type { FilterReferenceState } from '@/features/event-filters/model/reference-label'
 import type { ContinentResponseDto } from '@/shared/api/continents'
@@ -604,6 +604,36 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   const activeSort = SORT_CHOICES.find((choice) => choice.value === sortBy)
   const hiddenCount = hiddenColumns.length
 
+  /**
+   * **폭이 모자라 접힌 열** — 사용자가 끈 것과 다른 축이다.
+   *
+   * '열 표시'가 체크를 켠 채로 보여 주는데 화면에는 그 열이 없으면, 설정이 거짓말을
+   * 하는 것으로 읽힌다(실측: 뷰포트 1600에서도 좌측 사이드바가 360px을 가져가 카드가
+   * 1,162px이라 종료·키워드·등록 셋이 접혀 있다). 끌 수는 있어도 **켤 수는 없는** 축이
+   * 따로 있다는 사실을 그 자리에서 밝힌다.
+   *
+   * 메뉴가 열리는 순간 한 번만 잰다 — 순수 읽기이고, 열려 있는 동안 카드 폭이 바뀌는
+   * 경우(창 리사이즈)는 메뉴를 닫았다 여는 것으로 충분하다. ResizeObserver를 상시로
+   * 걸면 이 버튼 하나 때문에 목록 전체가 리사이즈마다 렌더된다.
+   */
+  const [widthHiddenColumns, setWidthHiddenColumns] = useState<ListColumnKey[]>(
+    [],
+  )
+  useEffect(() => {
+    if (!menuOpen) return
+    const card = document.querySelector('[data-list-scroller]')?.parentElement
+    if (!card) {
+      setWidthHiddenColumns([])
+      return
+    }
+    const cardWidth = card.getBoundingClientRect().width
+    const folded: ListColumnKey[] = []
+    // 열 사다리와 **같은 임계**를 읽는다 — 값을 여기 베껴 쓰면 곧 갈린다.
+    if (cardWidth < LIST_STEPS.summary) folded.push('end', 'kw')
+    if (cardWidth < LIST_STEPS.atlas) folded.push('reg')
+    setWidthHiddenColumns(folded)
+  }, [menuOpen])
+
   return (
     <UtilityMenuWrap ref={menuWrapRef}>
       <ToolbarStyles.ToolbarBtn
@@ -727,6 +757,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
             <ChoiceColumn role="group" aria-labelledby="catalog-columns-label">
               {HIDEABLE_COLUMNS.map((column) => {
                 const shown = !hiddenColumns.includes(column)
+                const foldedByWidth = shown && widthHiddenColumns.includes(column)
                 return (
                   <ColumnRow
                     key={column}
@@ -734,12 +765,22 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
                     role="switch"
                     aria-checked={shown}
                     $active={shown}
+                    title={
+                      foldedByWidth
+                        ? `${LIST_COLUMNS[column]} — 켜져 있지만 지금 폭에서는 접혀 있습니다. 창을 넓히거나 좌측 목록을 접으면 나타납니다`
+                        : undefined
+                    }
                     onClick={() => onToggleColumn(column)}
                   >
                     <ColumnCheck aria-hidden="true">
                       {shown ? <FiCheck size={12} /> : null}
                     </ColumnCheck>
                     <span>{LIST_COLUMNS[column]}</span>
+                    {/* 켜져 있는데 화면에 없는 열 — 그 사실을 행 자신이 말한다.
+                        (끈 열은 이미 흐린 글자로 구별되므로 여기 오지 않는다.) */}
+                    {foldedByWidth && (
+                      <ColumnFoldedNote>폭 부족</ColumnFoldedNote>
+                    )}
                   </ColumnRow>
                 )
               })}
@@ -747,7 +788,9 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
             {/* 켜 둔 열이 안 보일 수 있다는 사실을 **설정 옆에서** 밝힌다 — 이 축은
                 끄기 전용이고, 폭이 모자라면 열 사다리가 따로 접기 때문이다. */}
             <ColumnNote role="note">
-              폭이 좁으면 켜 둔 열도 자동으로 접힙니다
+              {widthHiddenColumns.length > 0
+                ? '좌측 목록을 접거나 창을 넓히면 접힌 열이 돌아옵니다'
+                : '폭이 좁으면 켜 둔 열도 자동으로 접힙니다'}
             </ColumnNote>
 
             <UtilityMenuDivider role="presentation" />
@@ -1111,6 +1154,19 @@ const ColumnCheck = styled.span`
     theme.mode === 'dark' ? BRAND.primaryTextOnDark : BRAND.primaryHover};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
+/** '폭 부족' 꼬리표 — 값이 아니라 **상태**라 라벨보다 한 단 뒤로 물러선다. */
+const ColumnFoldedNote = styled.span`
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)'};
 `
 
 const ColumnNote = styled.p`

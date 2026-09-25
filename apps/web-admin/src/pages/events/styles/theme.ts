@@ -535,9 +535,18 @@ export const LIST_DENSITY = {
     yearMt: 16,
     yearMb: 4,
     centuryH: 30,
+    /**
+     * 세기 사이 간격 — **장(章)이 바뀌는 숨**이다.
+     *
+     * 26/34/40이었다. 그 값에서는 '20세기 → 19세기' 전환이 연도가 하나 더 바뀌는
+     * 정도의 틈이라, 300행을 스크롤하는 동안 시대가 넘어간 사실이 조판으로 읽히지
+     * 않았다. 세기 경계는 선이 아니라 **여백과 타입**이 만든다는 이 지면의 규약
+     * (세기 hairline은 2026-08에 폐기됐다)을 여백 쪽에서 실제로 이행한다.
+     * 비용은 세기당 +12~16px, 21개 세기 전부 합쳐 300px 남짓이다.
+     */
     /** 세기 헤더 라벨 크기 — 연 헤더보다 한 단 위. */
     centuryLabel: 19,
-    centuryGap: 26,
+    centuryGap: 38,
     railInset: 31,
     /** sticky 열 헤더 높이 — 3겹 사다리의 첫 단 */
     colHeaderH: 28,
@@ -615,7 +624,7 @@ export const LIST_DENSITY = {
     centuryH: 36,
     /** 세기 헤더 라벨 크기 — 연 헤더보다 한 단 위, 행 제목보다는 조금 위. */
     centuryLabel: 21,
-    centuryGap: 34,
+    centuryGap: 48,
     railInset: 31,
     /** sticky 열 헤더 높이 — 3겹 사다리의 첫 단 */
     colHeaderH: 30,
@@ -688,7 +697,7 @@ export const LIST_DENSITY = {
     centuryH: 40,
     /** 세기 헤더 라벨 크기 — 연 헤더보다 한 단 위. */
     centuryLabel: 23,
-    centuryGap: 40,
+    centuryGap: 56,
     railInset: 31,
     /** sticky 열 헤더 높이 — 3겹 사다리의 첫 단 */
     colHeaderH: 32,
