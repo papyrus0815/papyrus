@@ -187,6 +187,8 @@ export function InlineText({
             rows={3}
             maxLength={maxLength}
             aria-label={label ?? placeholder}
+            /* 빈 입력칸이 무엇을 받는지 — 읽기 모드 안내와 같은 문구를 입력칸 안에도(예전엔 빈 상자). */
+            placeholder={placeholder}
             aria-invalid={error ? true : undefined}
             data-invalid={error ? 'true' : undefined}
           />
@@ -205,6 +207,8 @@ export function InlineText({
             onKeyDown={onKey}
             maxLength={maxLength}
             aria-label={label ?? placeholder}
+            /* 빈 입력칸이 무엇을 받는지 — 읽기 모드 안내와 같은 문구를 입력칸 안에도(예전엔 빈 상자). */
+            placeholder={placeholder}
             aria-invalid={error ? true : undefined}
             data-invalid={error ? 'true' : undefined}
           />

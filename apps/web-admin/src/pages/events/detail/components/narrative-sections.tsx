@@ -71,6 +71,11 @@ export function NarrativeSectionList({
    * (값이 여전히 빈 문자열이라 title만 보고는 "열어 둔 것"과 "없는 것"을 구분 못 한다).
    */
   const [titleOpenKeys, setTitleOpenKeys] = useState<string[]>([])
+  /**
+   * 본문이 빈 단락에서 제목을 저장하면 그 단락의 본문 편집기를 곧장 연다. 예전엔 Enter 뒤
+   * 포커스가 body로 떨어지고, 본문을 쓰려면 옆의 작은 ✎를 다시 찾아 눌러야 했다(실측).
+   */
+  const [bodyOpenKey, setBodyOpenKey] = useState<string | null>(null)
 
   return (
     <SectionStack>
@@ -87,8 +92,13 @@ export function NarrativeSectionList({
                 <SectionTitleHost>
                   <InlineText
                     value={row.title}
-                    onSave={(next) => onFieldChange(index, { title: next })}
-                    placeholder="단락 제목"
+                    onSave={(next) => {
+                      onFieldChange(index, { title: next })
+                      if (next.trim() && !hasBodyText(row.content)) {
+                        setBodyOpenKey(row.key)
+                      }
+                    }}
+                    placeholder="단락 제목 — 예: 개전 배경, 전쟁 경과"
                     label={`${labelPrefix} ${ordinal}단락 제목`}
                     /* 방금 만든 단락·방금 연 제목은 입력이 열린 채로 뜬다. */
                     autoEdit={!hasTitle}
@@ -144,6 +154,7 @@ export function NarrativeSectionList({
                 onPersonClick={onPersonClick}
                 onEntityLink={onEntityLink}
                 transformReadHtml={emphasisToHtml}
+                autoOpen={row.key === bodyOpenKey}
                 /**
                  * sticky ✎ 금지 — sticky는 '개요'처럼 페이지를 통째로 차지하는 긴 본문
                  * 하나를 위한 것이다. 단락이 여럿 쌓인 목록에서 켜 두면 각 단락의 버튼이
@@ -157,6 +168,11 @@ export function NarrativeSectionList({
       })}
     </SectionStack>
   )
+}
+
+/** 태그를 걷어낸 글자가 있는가 — 빈 <p></p>만 남은 본문을 '비었다'로 본다. */
+function hasBodyText(html: string): boolean {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0
 }
 
 /* ───────────────────────── 조판 ───────────────────────── */

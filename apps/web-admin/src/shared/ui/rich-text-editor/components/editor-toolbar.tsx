@@ -1,4 +1,9 @@
 /**
+ * 아이콘 규약 — **한 뜻에 한 글리프**. 예전엔 가로줄(FiMinus)이 취소선·작은 수평선·행 삭제
+ * 세 뜻을, 'T'(FiType)가 제목 1·2·3과 용어 연결 네 뜻을 겸했고, 번호 목록은 글머리 목록을
+ * 90° 돌린 'iii'였다. 제목·목록·취소선·엔티티(@)·용어(책)·수평선은 뜻이 보이는 Lucide로.
+ */
+/**
  * 리치 텍스트 에디터 서식 툴바 — 굵게/기울임/제목/정렬/목록/링크/엔티티·용어/이미지/표/코드/색/수평선.
  * 모든 상태·핸들러는 부모가 보유하고 props로 받는 표현 컴포넌트.
  * 색/표 피커 토글은 교차 닫힘 로직 때문에 부모 콜백(onToggleColorPicker/onToggleTablePicker)에 위임.
@@ -20,13 +25,21 @@ import {
   FiImage,
   FiItalic,
   FiLink,
-  FiList,
   FiMessageSquare,
   FiMinus,
-  FiMoreHorizontal,
   FiTrash2,
-  FiType,
 } from 'react-icons/fi'
+import {
+  LuAtSign,
+  LuBookA,
+  LuHeading1,
+  LuHeading2,
+  LuHeading3,
+  LuList,
+  LuListOrdered,
+  LuSeparatorHorizontal,
+  LuStrikethrough,
+} from 'react-icons/lu'
 import styled, { css } from 'styled-components'
 
 import { PROSE_HR_HTML, PROSE_HR_SMALL_HTML } from '@/shared/styles/prose-hr'
@@ -136,7 +149,8 @@ const ToolbarButton = styled.button.attrs({ type: 'button' })<{
   svg {
     width: 18px;
     height: 18px;
-    stroke-width: 2.5;
+    /* 2.5는 18px 글리프에서 획이 뭉개져 H1·H2처럼 작은 숫자가 읽히지 않았다 */
+    stroke-width: 2;
   }
 
   span {
@@ -266,7 +280,7 @@ function EditorToolbarComponent({
         aria-label="취소선"
         aria-pressed={isStrike}
       >
-        <FiMinus />
+        <LuStrikethrough />
       </ToolbarButton>
       <ToolbarDivider />
       <ToolbarButton
@@ -280,8 +294,7 @@ function EditorToolbarComponent({
         aria-label="제목 1"
         aria-pressed={currentHeading === 1}
       >
-        <FiType />
-        <span style={{ fontSize: '10px', marginLeft: '2px' }}>1</span>
+        <LuHeading1 />
       </ToolbarButton>
       <ToolbarButton
         onMouseDown={preventMouseDown}
@@ -294,8 +307,7 @@ function EditorToolbarComponent({
         aria-label="제목 2"
         aria-pressed={currentHeading === 2}
       >
-        <FiType />
-        <span style={{ fontSize: '10px', marginLeft: '2px' }}>2</span>
+        <LuHeading2 />
       </ToolbarButton>
       <ToolbarButton
         onMouseDown={preventMouseDown}
@@ -308,8 +320,7 @@ function EditorToolbarComponent({
         aria-label="제목 3"
         aria-pressed={currentHeading === 3}
       >
-        <FiType />
-        <span style={{ fontSize: '10px', marginLeft: '2px' }}>3</span>
+        <LuHeading3 />
       </ToolbarButton>
       <ToolbarDivider />
       <ToolbarButton
@@ -350,7 +361,7 @@ function EditorToolbarComponent({
         aria-label="순서 없는 목록"
         aria-pressed={isBulletList}
       >
-        <FiList />
+        <LuList />
       </ToolbarButton>
       <ToolbarButton
         onMouseDown={preventMouseDown}
@@ -363,7 +374,7 @@ function EditorToolbarComponent({
         aria-label="순서 있는 목록"
         aria-pressed={isOrderedList}
       >
-        <FiList style={{ transform: 'rotate(90deg)' }} />
+        <LuListOrdered />
       </ToolbarButton>
       <ToolbarDivider />
       <ToolbarButton
@@ -401,7 +412,7 @@ function EditorToolbarComponent({
               : undefined,
         }}
       >
-        <FiLink style={{ transform: 'rotate(-45deg)' }} />
+        <LuAtSign />
       </ToolbarButton>
       <ToolbarButton
         onMouseDown={preventMouseDown}
@@ -413,7 +424,7 @@ function EditorToolbarComponent({
         title="용어 연결 (문구 선택 후 클릭)"
         aria-label="용어 연결 (문구 선택 후 클릭)"
       >
-        <FiType />
+        <LuBookA />
       </ToolbarButton>
       {hasDocumentScope ? (
         <ToolbarButton
@@ -590,7 +601,7 @@ function EditorToolbarComponent({
         title="수평선 삽입"
         aria-label="수평선 삽입"
       >
-        <FiMoreHorizontal />
+        <LuSeparatorHorizontal />
       </ToolbarButton>
       <ToolbarButton
         onMouseDown={preventMouseDown}

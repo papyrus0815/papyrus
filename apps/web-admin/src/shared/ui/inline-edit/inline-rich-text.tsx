@@ -58,6 +58,11 @@ interface InlineRichTextProps {
    * 원문 value를 그대로 편집한다. 결과는 읽기 뷰의 sanitize를 그대로 거친다.
    */
   transformReadHtml?: (html: string) => string
+  /**
+   * true가 되는 순간 편집기를 연다 — '단락 추가 → 제목 Enter' 직후 본문 편집으로 곧장
+   * 이어지게 하는 용도. 값이 false→true로 바뀔 때만 동작한다(열린 뒤 닫는 건 사용자 몫).
+   */
+  autoOpen?: boolean
 }
 
 /**
@@ -79,6 +84,7 @@ export function InlineRichText({
   stickyEditButton = true,
   label,
   transformReadHtml,
+  autoOpen = false,
 }: InlineRichTextProps) {
   const editorId = useId()
   const { editing, open, close } = useInlineEditCoordinator(editorId)
@@ -126,6 +132,11 @@ export function InlineRichText({
     }
     wasEditingRef.current = editing
   }, [editing, value])
+
+  useEffect(() => {
+    if (autoOpen) open()
+    // autoOpen의 전이만 본다 — open은 coordinator가 매 렌더 새로 만든다.
+  }, [autoOpen])
 
   const commit = () => {
     // 디바운스로 아직 emit되지 않은 마지막 입력까지 즉시 반영(반환값 = 최신 html).
@@ -217,7 +228,12 @@ export function InlineRichText({
     <ReadHost data-edit-host $sticky={stickyEditButton}>
       <ReadBody data-empty={isEmpty || undefined}>
         {isEmpty ? (
-          <Placeholder>{placeholder}</Placeholder>
+          /*
+           * 빈 본문 안내는 **누르면 바로 쓰기**다 — 예전엔 기울임 안내만 있고 진입점은 옆의
+           * 작은 ✎(hover 때만 또렷)뿐이라, 새 단락을 만든 뒤 어디를 눌러야 할지 몰랐다.
+           * 키보드 진입점은 ✎ 버튼이 그대로 맡는다(중복 탭 정지를 만들지 않는다).
+           */
+          <Placeholder onClick={open}>{placeholder}</Placeholder>
         ) : (
           <RichTextProseWithEntityClicks
             html={transformReadHtml ? transformReadHtml(value) : value}
@@ -353,7 +369,21 @@ const ReadBody = styled.div`
   }
 `
 
+/**
+ * 편집 상자 — ✎를 누르는 순간 **글이 제자리에 머물게** 한다.
+ *
+ * 상자의 테두리(1) + 안쪽 여백(12)만큼 글이 오른쪽으로 13px 밀리고, 글줄 폭도 읽기 본문
+ * (호스트 − ✎ 칸 32px)과 달라 줄바꿈이 통째로 바뀌었다 — 방금 읽던 문장을 다시 찾아야
+ * 했다(실측 읽기 x=428 → 편집 x=441). 상자를 왼쪽으로 13px 내어 글의 x를 맞추고, 폭은
+ * 읽기 본문 폭 + 좌우 13으로 잡아 줄바꿈까지 같게 한다. 위로는 내지 않는다 — 단락 제목과 겹친다.
+ */
+const EDIT_BOX_INSET = 13
+const READ_EDIT_BUTTON_COLUMN = 32
+
 const EditHost = styled.div`
+  margin-left: -${EDIT_BOX_INSET}px;
+  width: calc(100% - ${READ_EDIT_BUTTON_COLUMN}px + ${EDIT_BOX_INSET * 2}px);
+
   [role='textbox'] {
     padding-left: 12px;
     padding-right: 12px;
@@ -363,6 +393,13 @@ const EditHost = styled.div`
 const Placeholder = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-style: italic;
+  cursor: text;
+  transition: color 0.14s;
+
+  /* 누르면 쓰기 — 손이 닿으면 한 단 진해져 '여기가 입력 자리'임을 알린다. */
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
 `
 
 /* 용어·가문 정의 툴팁 — body 포털. 바깥 클릭/ESC로 닫힘. */

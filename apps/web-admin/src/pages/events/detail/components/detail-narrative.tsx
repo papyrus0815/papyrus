@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import styled from 'styled-components'
+
+import { ledgerAccent } from '@/pages/events/ledger/styles/ledger-tokens'
+
 import { type UpdateEventDto } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { emphasisToHtml } from '@/shared/lib/emphasis-markup'
@@ -253,15 +257,14 @@ export function DetailNarrative({
           )}
         </S.SectionHeader>
         {narrativeRows.length === 0 ? (
-          <S.EmptyState>
-            <S.EmptyStateHead>
-              <S.EmptyStateIcon aria-hidden>📖</S.EmptyStateIcon>
-              <S.EmptyStateLine>
-                아직 전개 단락이 없습니다. 아래 <strong>+ 전개 단락 추가</strong>로
-                시작하세요.
-              </S.EmptyStateLine>
-            </S.EmptyStateHead>
-          </S.EmptyState>
+          /*
+           * 빈 전개 — 배경·여파의 빈 안내(기울임 한 줄, 누르면 쓰기)와 같은 모양으로.
+           * 예전엔 세 섹션이 세 모양이었다: 배경=기울임 안내, 전개=📖 점선 상자 +
+           * "아래 버튼을 누르세요", 여파=기울임 안내만. 누르면 첫 단락이 열린다.
+           */
+          <EmptyLead type="button" onClick={narrative.add}>
+            사건이 어떻게 흘러갔는지 — 단락을 나눠 차례로 (발단 · 전환점 · 결말)
+          </EmptyLead>
         ) : (
           <NarrativeSectionList
             rows={narrativeRows}
@@ -303,3 +306,31 @@ export function DetailNarrative({
     </>
   )
 }
+
+/**
+ * 빈 전개 안내 — InlineRichText의 빈 안내(기울임 · text.tertiary · 누르면 쓰기)와 같은 조판.
+ * 버튼이지만 버튼처럼 보이지 않게: 본문 자리에 놓인 '여기에 쓰세요' 한 줄이다.
+ */
+const EmptyLead = styled.button`
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 15.5px;
+  line-height: 1.78;
+  font-style: italic;
+  text-align: left;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: text;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+`
