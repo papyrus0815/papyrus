@@ -210,6 +210,8 @@ export function HeaderStats({
       fields,
       countries,
       avgAge: ageN ? Math.round(ageSum / ageN) : null,
+      ageKnown: ageN,
+      eraPresent: Object.keys(eraCount).length,
       alive,
       rulers,
     }
@@ -240,7 +242,9 @@ export function HeaderStats({
             {total.toLocaleString()}
             <TileUnit>명</TileUnit>
           </TileValue>
-          <TileNote>현재 필터 기준</TileNote>
+          <TileNote>
+            {stats.eraPresent}개 시대 · {stats.countries.length.toLocaleString()}개국
+          </TileNote>
         </Tile>
         <Tile>
           <TileLabel>평균 수명</TileLabel>
@@ -248,7 +252,7 @@ export function HeaderStats({
             {stats.avgAge ?? '—'}
             {stats.avgAge != null && <TileUnit>년</TileUnit>}
           </TileValue>
-          <TileNote>생몰이 모두 확인된 인물</TileNote>
+          <TileNote>생몰 확인 {stats.ageKnown.toLocaleString()}명 기준</TileNote>
         </Tile>
         <Tile>
           <TileLabel>생존</TileLabel>
@@ -256,6 +260,9 @@ export function HeaderStats({
             {stats.alive.toLocaleString()}
             <TileUnit>명</TileUnit>
           </TileValue>
+          <TileMeter aria-hidden>
+            <TileMeterFill style={{ width: `${share(stats.alive)}%` }} />
+          </TileMeter>
           <TileNote>전체의 {share(stats.alive)}%</TileNote>
         </Tile>
         <Tile>
@@ -264,6 +271,9 @@ export function HeaderStats({
             {stats.rulers.toLocaleString()}
             <TileUnit>명</TileUnit>
           </TileValue>
+          <TileMeter aria-hidden>
+            <TileMeterFill style={{ width: `${share(stats.rulers)}%` }} />
+          </TileMeter>
           <TileNote>전체의 {share(stats.rulers)}%</TileNote>
         </Tile>
       </Tiles>
@@ -338,13 +348,19 @@ export function HeaderStats({
         <SectionHead>
           <SectionTitle>시대 분포</SectionTitle>
           <SectionHint>활동 연도 기준 · 막대를 누르면 그 시대로 거릅니다</SectionHint>
-          <SectionMeta>최대 {stats.maxBin.toLocaleString()}명</SectionMeta>
         </SectionHead>
 
         <Chart>
           <Plot onMouseLeave={() => setHoverBin(null)}>
             <GridLine style={{ bottom: '100%' }} aria-hidden />
             <GridLine style={{ bottom: '50%' }} aria-hidden />
+            {/* 세로축 눈금 — 격자선에 값을 붙여 막대 높이를 숫자로 읽게 한다 */}
+            <YLabel style={{ top: 0 }} aria-hidden>
+              {stats.maxBin.toLocaleString()}명
+            </YLabel>
+            <YLabel style={{ top: '50%' }} aria-hidden>
+              {Math.round(stats.maxBin / 2).toLocaleString()}
+            </YLabel>
             {stats.bins.map((count, index) => {
               const from = domain.minYear + domain.binWidth * index
               const to = from + domain.binWidth
@@ -441,33 +457,36 @@ export function HeaderStats({
       )}
 
       {variant === 'full' && (
-      <Lists>
-        <BarSection
-          title="지역"
-          rows={stats.regions.map(([region, count]) => ({
-            key: region,
-            label: region,
-            count,
-            swatch: colorForRegion(region),
-            active: scopes.region.includes(region),
-            onToggle: () => toggleScope('region', region),
-          }))}
-          total={total}
-          anyActive={scopes.region.length > 0}
-        />
-        <BarSection
-          title="분야"
-          rows={stats.fields.map(([field, count]) => ({
-            key: field,
-            label: field,
-            count,
-            swatch: colorForField(field),
-            active: scopes.field.includes(field),
-            onToggle: () => toggleScope('field', field),
-          }))}
-          total={total}
-          anyActive={scopes.field.length > 0}
-        />
+      <Lists $cols={2}>
+        {/* 분야는 3~4줄뿐이라 독립 열이면 아래가 비었다 — 지역 아래에 쌓아 두 열 높이를 맞춘다 */}
+        <ListColumn>
+          <BarSection
+            title="지역"
+            rows={stats.regions.map(([region, count]) => ({
+              key: region,
+              label: region,
+              count,
+              swatch: colorForRegion(region),
+              active: scopes.region.includes(region),
+              onToggle: () => toggleScope('region', region),
+            }))}
+            total={total}
+            anyActive={scopes.region.length > 0}
+          />
+          <BarSection
+            title="분야"
+            rows={stats.fields.map(([field, count]) => ({
+              key: field,
+              label: field,
+              count,
+              swatch: colorForField(field),
+              active: scopes.field.includes(field),
+              onToggle: () => toggleScope('field', field),
+            }))}
+            total={total}
+            anyActive={scopes.field.length > 0}
+          />
+        </ListColumn>
         <BarSection
           title="상위 국가"
           ranked
@@ -666,6 +685,24 @@ const TileUnit = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/** 전체 대비 비율 막대 — 생존·군주 타일의 %를 눈으로 읽게 */
+const TileMeter = styled.span`
+  display: block;
+  height: 4px;
+  margin: 2px 0 1px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.07)'};
+`
+
+const TileMeterFill = styled.span`
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: ${BRAND.primary};
+`
+
 const TileNote = styled.span`
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -736,6 +773,21 @@ const GridLine = styled.div`
   right: 0;
   height: 1px;
   background: ${hairline};
+  pointer-events: none;
+`
+
+/** 격자선 값 — 선 바로 아래 왼쪽(제목 줄과 붙지 않게), 지면색 받침으로 막대 위에서도 읽힌다 */
+const YLabel = styled.span`
+  position: absolute;
+  left: 0;
+  z-index: 1;
+  padding: 2px 4px 1px 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+  background: ${surface};
   pointer-events: none;
 `
 
@@ -872,9 +924,9 @@ const EraCount = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const Lists = styled.div`
+const Lists = styled.div<{ $cols?: 2 | 3 }>`
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(${({ $cols = 3 }) => $cols}, minmax(0, 1fr));
 
   @media (max-width: 1100px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -884,12 +936,29 @@ const Lists = styled.div`
   }
 `
 
+/** 한 열에 목록 둘을 쌓는 칸(지역 위 · 분야 아래) — 열 사이 세로선은 칸이 진다 */
+const ListColumn = styled.div`
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    & + * {
+      border-top: 1px solid ${hairline};
+    }
+  }
+`
+
 const ListSection = styled.div`
   padding: 16px 16px 14px 20px;
   min-width: 0;
 
-  & + & {
+  & + &,
+  ${ListColumn} + & {
     border-left: 1px solid ${hairline};
+  }
+  /* 칸 안에서 쌓인 두 목록은 세로선이 아니라 가로선으로 가른다 */
+  ${ListColumn} > & + & {
+    border-left: none;
+    border-top: 1px solid ${hairline};
   }
   @media (max-width: 1100px) {
     &:nth-child(3) {
@@ -899,7 +968,8 @@ const ListSection = styled.div`
     }
   }
   @media (max-width: 640px) {
-    & + & {
+    & + &,
+    ${ListColumn} + & {
       border-left: none;
       border-top: 1px solid ${hairline};
     }

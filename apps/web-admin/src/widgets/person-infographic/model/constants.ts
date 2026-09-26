@@ -50,7 +50,7 @@ export const INFOGRAPHIC_DEFAULTS = {
   /** HeaderStats 시대 밀도 차트 bin 개수 */
   ERA_DENSITY_BINS: 42,
   /** HeaderStats 상위 국가 기본/펼침 개수 */
-  TOP_COUNTRY_DEFAULT: 6,
+  TOP_COUNTRY_DEFAULT: 8,
   TOP_COUNTRY_EXPANDED: 15,
   /** Matrix 뷰 — 기본 표시 국가 개수 (top N) */
   MATRIX_COUNTRY_TOP_N: 20,
