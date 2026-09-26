@@ -186,6 +186,21 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const startDateTriggerRef = useRef<HTMLDivElement>(null)
   const startTimeTriggerRef = useRef<HTMLDivElement>(null)
   const endTimeTriggerRef = useRef<HTMLDivElement>(null)
+  /**
+   * 날짜·시간 칸은 div라 키보드로 닿지 않았다(시작일·시간 칸은 탭 정지점조차 없었고,
+   * 종료일은 tabIndex -1로 프로그램 포커스만 받았다) — 키보드만으로는 날짜를 넣을 수 없었다.
+   * 버튼 역할·탭 정지점·Enter/Space를 준다. Enter/Space는 클릭과 같은 경로(onClick)를 탄다.
+   */
+  const keyboardTrigger = {
+    role: 'button',
+    tabIndex: 0,
+    onKeyDown: (keyEvent: React.KeyboardEvent<HTMLDivElement>) => {
+      if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+        keyEvent.preventDefault()
+        keyEvent.currentTarget.click()
+      }
+    },
+  } as const
   const [keywordInput, setKeywordInput] = useState(keywords.join(', '))
   const [keywordValidationMsg, setKeywordValidationMsg] = useState('')
   const skipKeywordSyncRef = useRef(false)
@@ -342,6 +357,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <S.DateInputWrapper
                 ref={startDateTriggerRef}
                 aria-haspopup="dialog"
+                {...keyboardTrigger}
                 aria-expanded={isStartDateModalOpen}
                 data-open={isStartDateModalOpen || undefined}
                 onClick={() => {
@@ -357,6 +373,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <S.DateInputWrapper
                 ref={startTimeTriggerRef}
                 aria-haspopup="dialog"
+                {...keyboardTrigger}
                 aria-expanded={isStartTimeModalOpen}
                 data-open={isStartTimeModalOpen || undefined}
                 onClick={() => {
@@ -374,9 +391,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <S.DateRangeLabel>종료일</S.DateRangeLabel>
               <S.DateInputWrapper
                 ref={endDateTriggerRef}
-                // 프로그램적 포커스만 받는다(탭 정지점을 늘리지 않음)
-                tabIndex={-1}
                 aria-haspopup="dialog"
+                {...keyboardTrigger}
                 aria-expanded={isEndDateModalOpen}
                 data-open={isEndDateModalOpen || undefined}
                 onClick={() => {
@@ -392,6 +408,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <S.DateInputWrapper
                 ref={endTimeTriggerRef}
                 aria-haspopup="dialog"
+                {...keyboardTrigger}
                 aria-expanded={isEndTimeModalOpen}
                 data-open={isEndTimeModalOpen || undefined}
                 onClick={() => {
