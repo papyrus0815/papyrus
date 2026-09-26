@@ -1,3 +1,5 @@
+import { type ReactNode } from 'react'
+
 import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -100,6 +102,7 @@ export function ModuleCasualties({ event, onPatch }: ModuleCasualtiesProps) {
                   updateRow(idx, { totalKilled: next.trim() || undefined })
                 }
                 placeholder="—"
+                renderRead={renderCasualtyValue}
               />
             </NumCell>
             <NumCell>
@@ -110,6 +113,7 @@ export function ModuleCasualties({ event, onPatch }: ModuleCasualtiesProps) {
                   updateRow(idx, { totalWounded: next.trim() || undefined })
                 }
                 placeholder="—"
+                renderRead={renderCasualtyValue}
               />
             </NumCell>
             <RemoveBtn
@@ -129,6 +133,35 @@ export function ModuleCasualties({ event, onPatch }: ModuleCasualtiesProps) {
     </S.Section>
   )
 }
+
+/**
+ * 사상자 값은 자유 서술이다 — "약 7만 (전사·전상사)", "약 14만 (전사·전상사, 질병 사망 별도)".
+ * 통째로 16px 굵게 두면 수치 칸(1fr ≈ 170px)에서 두세 줄로 꺾여, 정작 **수치**가 괄호 설명에
+ * 묻혔다. 읽기 표시에서만 수치는 굵게, 괄호 설명은 그 아래 작은 보조 글씨로 가른다.
+ * 편집 진입 시엔 원문 그대로다.
+ */
+const CASUALTY_NOTE = /^(.+?)\s*[(（](.+)[)）]\s*$/
+
+function renderCasualtyValue(value: string): ReactNode {
+  const match = value.match(CASUALTY_NOTE)
+  if (!match) return value
+  return (
+    <>
+      {match[1]}
+      <CasualtyNote>{match[2]}</CasualtyNote>
+    </>
+  )
+}
+
+const CasualtyNote = styled.span`
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  word-break: keep-all;
+  color: ${metaText};
+`
 
 const Rows = styled.div`
   display: flex;

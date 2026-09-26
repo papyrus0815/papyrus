@@ -492,6 +492,32 @@ export const RemoveChildBtn = styled.button`
   }
 `
 
+/**
+ * 빈 연결 사유의 진입점 — 흐름 밖(absolute) ✕ 왼쪽에 뜨는 작은 '사유' 버튼.
+ *
+ * 예전엔 사유가 빈 행마다 '연결 사유 추가' 줄이 상시 서 있어, 하위 18개 사건(1차세계대전)
+ * 에서 빈 안내 18줄이 목록 높이의 1/6을 먹었다. hover로 줄을 펼치는 방식은 마우스가 목록을
+ * 훑을 때마다 행이 26px씩 늘었다 줄어 목록이 출렁인다 — 그래서 레이아웃 밖에 띄운다.
+ */
+export const AddReasonBtn = styled(RemoveChildBtn)`
+  right: 32px;
+  width: auto;
+  gap: 3px;
+  padding: 0 7px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  svg {
+    width: 11px;
+    height: 11px;
+  }
+`
+
 /** 하위 사건 리스트 — 시간순 단일 칼럼(2열 그리드 폐기, 시간축과 읽기 순서 정합). */
 export const ChildList = styled.ol`
   list-style: none;
@@ -533,24 +559,27 @@ export const ChildRow = styled.li`
   &:active::before {
     opacity: 1;
   }
+
   &:focus-within::before {
     opacity: 1;
     box-shadow: 0 0 0 1.5px ${({ theme }) => ledgerAccentBorder(theme.mode)};
   }
 
-  /* 항목 귀속 편집 컨트롤(제거 ✕)만 행 스코프 hover-reveal. */
-  ${RemoveChildBtn} {
+  /* 항목 귀속 편집 컨트롤(제거 ✕ · 사유 추가)만 행 스코프 hover-reveal. */
+  ${RemoveChildBtn}, ${AddReasonBtn} {
     opacity: 0;
   }
   &:hover ${RemoveChildBtn},
-  &:focus-within ${RemoveChildBtn} {
+  &:focus-within ${RemoveChildBtn},
+  &:hover ${AddReasonBtn},
+  &:focus-within ${AddReasonBtn} {
     opacity: 1;
     transform: scale(1);
   }
 
   /* 터치 환경 — hover-reveal은 발견성 0이 되므로 반투명 상시 노출. */
   @media (hover: none) {
-    ${RemoveChildBtn} {
+    ${RemoveChildBtn}, ${AddReasonBtn} {
       opacity: 0.55;
       transform: scale(1);
     }

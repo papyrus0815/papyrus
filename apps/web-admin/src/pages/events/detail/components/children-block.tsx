@@ -66,6 +66,12 @@ export function ChildrenBlock({
 
   const childIds = childEvents.map((child) => child.id)
 
+  /**
+   * 사유가 빈 행은 사유 줄을 세우지 않는다(행 hover 때 ✕ 옆 '사유' 버튼만). 누르면 이 id의
+   * 행에만 입력이 열린다. 포커스가 그 행을 떠나면 닫는다 — 저장된 사유는 값으로 계속 보인다.
+   */
+  const [reasonDraftId, setReasonDraftId] = useState<string | null>(null)
+
   const removeChild = (childId: string) => {
     focusNextRemovalTarget(
       childRemoveRefs.current,
@@ -103,6 +109,7 @@ export function ChildrenBlock({
                   child.startDatePrecision,
                   child.endDatePrecision,
                 )
+              const hasReason = Boolean(child.reason?.trim())
               return (
                 <NetStyles.ChildRow key={child.id}>
                   <NetStyles.ChildCard
@@ -123,6 +130,17 @@ export function ChildrenBlock({
                       )}
                     </NetStyles.ChildBody>
                   </NetStyles.ChildCard>
+                  {/* ✕보다 먼저 — 화면에서 왼쪽에 서므로 Tab 순서도 앞. */}
+                  {!hasReason && reasonDraftId !== child.id && (
+                    <NetStyles.AddReasonBtn
+                      type="button"
+                      data-reason-add
+                      onClick={() => setReasonDraftId(child.id)}
+                      aria-label={`'${child.title}' 연결 사유 추가`}
+                    >
+                      <FiPlus aria-hidden /> 사유
+                    </NetStyles.AddReasonBtn>
+                  )}
                   <NetStyles.RemoveChildBtn
                     type="button"
                     ref={(node) => {
@@ -136,18 +154,41 @@ export function ChildrenBlock({
                   </NetStyles.RemoveChildBtn>
                   {/* 연결 사유 — 링크(a) 바깥 형제로 배치(a 안에 button/textarea 중첩 금지).
                       onPatch({ childLinkReasons })는 자기 사건 채널이라 undo 토스트 탑승. */}
-                  <NetStyles.ChildReasonRow>
-                    <InlineText
-                      value={child.reason ?? ''}
-                      onSave={(next) => saveChildReason(child.id, next)}
-                      placeholder="연결 사유 추가"
-                      label={`'${child.title}' 연결 사유`}
-                      multiline
-                      maxLength={REASON_MAX}
-                      showCount
-                      style={{ flex: 1 }}
-                    />
-                  </NetStyles.ChildReasonRow>
+                  {(hasReason || reasonDraftId === child.id) && (
+                    <NetStyles.ChildReasonRow
+                      onBlur={(blurEvent) => {
+                        const next = blurEvent.relatedTarget as Node | null
+                        if (next && blurEvent.currentTarget.contains(next)) return
+                        if (reasonDraftId === child.id) setReasonDraftId(null)
+                      }}
+                      onKeyDown={(keyEvent) => {
+                        /*
+                         * Esc 취소는 입력칸을 **떼어 내므로** blur가 오지 않는다 — 빈 '연결 사유
+                         * 추가' 줄이 남았다. 직접 닫고, 되살아난 '사유' 버튼으로 포커스를 돌린다.
+                         */
+                        if (keyEvent.key !== 'Escape' || reasonDraftId !== child.id) return
+                        const rowNode = keyEvent.currentTarget.closest('li')
+                        setReasonDraftId(null)
+                        requestAnimationFrame(() =>
+                          rowNode
+                            ?.querySelector<HTMLButtonElement>('[data-reason-add]')
+                            ?.focus(),
+                        )
+                      }}
+                    >
+                      <InlineText
+                        value={child.reason ?? ''}
+                        onSave={(next) => saveChildReason(child.id, next)}
+                        placeholder="연결 사유 추가"
+                        label={`'${child.title}' 연결 사유`}
+                        multiline
+                        maxLength={REASON_MAX}
+                        showCount
+                        style={{ flex: 1 }}
+                        autoEdit={!hasReason}
+                      />
+                    </NetStyles.ChildReasonRow>
+                  )}
                 </NetStyles.ChildRow>
               )
             })}
