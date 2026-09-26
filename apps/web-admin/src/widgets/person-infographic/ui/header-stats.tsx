@@ -20,7 +20,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import styled, { css } from 'styled-components'
 
-import { yearOfEra } from '../model/adapt'
+import { bornForPlot, diedForPlot, yearOfEra } from '../model/adapt'
 import { formatYear } from '../model/century'
 import {
   colorForField,
@@ -35,6 +35,7 @@ import { pickTickStep } from '../model/tick-step'
 import type { AdaptedPerson } from '../model/types'
 
 import { BRAND, hairline, metaText, MOTION_FAST, surface } from './_shared/catalog.styles'
+import { DynastySpanChart } from './dynasty-span-chart'
 
 /** 축 상한 — 당대 인물까지 담는다 */
 const MAX_Y = 2030
@@ -105,7 +106,6 @@ interface HoverBin {
 export type HeaderStatsVariant = 'full' | 'dynasty' | 'tiles'
 
 const TOP_DYNASTY_DEFAULT = 6
-const TOP_DYNASTY_EXPANDED = 15
 
 /** 왕조 뷰 가문 그룹 머리로 스크롤 (dynasty-view의 GroupSection id 규약: dynasty-<가문>) */
 function jumpToDynasty(faction: string) {
@@ -126,23 +126,22 @@ export function HeaderStats({
   const toggleScope = usePersonInfographicFilterStore((state) => state.toggleScope)
   const [hoverBin, setHoverBin] = useState<HoverBin | null>(null)
   const [countriesExpanded, setCountriesExpanded] = useState(false)
-  const [dynastiesExpanded, setDynastiesExpanded] = useState(false)
 
   // 가문 축 집계 — 왕조 뷰에서만 쓴다(소속 없음은 순위에서 빼고 따로 센다)
   const dynastyStats = useMemo(() => {
     if (variant !== 'dynasty') return null
-    const memberCount = new Map<string, number>()
-    const monarchCount = new Map<string, number>()
+    const range = new Map<string, { from: number; to: number; members: number }>()
     const factionsByCountry = new Map<string, Set<string>>()
-    let unaffiliated = 0
     for (const person of people) {
-      if (!person.faction) {
-        unaffiliated++
-        continue
-      }
-      memberCount.set(person.faction, (memberCount.get(person.faction) ?? 0) + 1)
-      if (person.isMonarch)
-        monarchCount.set(person.faction, (monarchCount.get(person.faction) ?? 0) + 1)
+      if (!person.faction) continue
+      const current = range.get(person.faction)
+      const born = bornForPlot(person)
+      const died = diedForPlot(person)
+      if (current) {
+        current.from = Math.min(current.from, born)
+        current.to = Math.max(current.to, died)
+        current.members++
+      } else range.set(person.faction, { from: born, to: died, members: 1 })
       if (person.country && person.country !== '미상') {
         const set = factionsByCountry.get(person.country) ?? new Set<string>()
         set.add(person.faction)
@@ -152,12 +151,14 @@ export function HeaderStats({
     const byCount = (left: [string, number], right: [string, number]) =>
       right[1] - left[1] || left[0].localeCompare(right[0], 'ko')
     return {
-      members: [...memberCount.entries()].sort(byCount),
-      monarchs: [...monarchCount.entries()].sort(byCount),
+      // 존속 폭 — 구성원 첫 출생~마지막 사망. 1인 가문은 한 사람의 생애라 순위에서 뺀다
+      durations: [...range.entries()]
+        .filter(([, span]) => span.members >= 2)
+        .map(([faction, span]) => [faction, Math.round(span.to - span.from)] as [string, number])
+        .sort(byCount),
       countries: [...factionsByCountry.entries()]
         .map(([country, set]) => [country, set.size] as [string, number])
         .sort(byCount),
-      unaffiliated,
     }
   }, [people, variant])
 
@@ -295,42 +296,20 @@ export function HeaderStats({
       </Tiles>
 
       {variant === 'dynasty' && dynastyStats && (
-        <Lists>
+        <DynastySpanChart people={people} onJump={jumpToDynasty} />
+      )}
+      {variant === 'dynasty' && dynastyStats && (
+        // '인원 많은 가문'은 연대표가 인원순으로 이미 보여주므로 목록은 나머지 두 축만
+        <Lists $cols={2}>
           <BarSection
-            title="인원 많은 가문"
+            title="가장 오래 이어진 가문"
             ranked
-            metaText={`가문 ${dynastyStats.members.length}개 · 소속 없음 ${dynastyStats.unaffiliated}명`}
+            unit="년"
+            valueSuffix="년"
+            showShare={false}
+            metaText="구성원 2명 이상"
             actionHint="가문으로 이동"
-            rows={dynastyStats.members
-              .slice(0, dynastiesExpanded ? TOP_DYNASTY_EXPANDED : TOP_DYNASTY_DEFAULT)
-              .map(([faction, count]) => ({
-                key: faction,
-                label: faction,
-                count,
-                active: false,
-                onToggle: () => jumpToDynasty(faction),
-              }))}
-            total={total}
-            anyActive={false}
-            footer={
-              dynastyStats.members.length > TOP_DYNASTY_DEFAULT && (
-                <MoreToggle
-                  type="button"
-                  onClick={() => setDynastiesExpanded((prev) => !prev)}
-                >
-                  {dynastiesExpanded
-                    ? '접기'
-                    : `+ ${Math.min(dynastyStats.members.length, TOP_DYNASTY_EXPANDED) - TOP_DYNASTY_DEFAULT}개 가문 더 보기`}
-                </MoreToggle>
-              )
-            }
-          />
-          <BarSection
-            title="군주 많은 가문"
-            ranked
-            metaText={`군주 ${dynastyStats.monarchs.reduce((sum, [, count]) => sum + count, 0)}명`}
-            actionHint="가문으로 이동"
-            rows={dynastyStats.monarchs.slice(0, TOP_DYNASTY_DEFAULT).map(([faction, count]) => ({
+            rows={dynastyStats.durations.slice(0, TOP_DYNASTY_DEFAULT).map(([faction, count]) => ({
               key: faction,
               label: faction,
               count,
@@ -586,6 +565,7 @@ function BarSection({
   actionHint = '필터 토글',
   unit = '명',
   showShare = true,
+  valueSuffix,
 }: {
   title: string
   rows: BarRowData[]
@@ -600,6 +580,8 @@ function BarSection({
   unit?: string
   /** 전체 인원 대비 % — 인원이 아닌 값(가문 수)엔 의미가 없다 */
   showShare?: boolean
+  /** 값 옆에 보이는 단위 — 인원이 아닌 값(존속 년수)을 숫자만 두면 뜻을 모른다 */
+  valueSuffix?: string
 }) {
   const max = Math.max(1, ...rows.map((row) => row.count))
   return (
@@ -660,6 +642,7 @@ function BarSection({
               </BarTrack>
               <BarValue>
                 {row.count.toLocaleString()}
+                {valueSuffix && <BarUnit>{valueSuffix}</BarUnit>}
                 {showShare && (
                   <BarShare>{total ? Math.round((row.count / total) * 100) : 0}%</BarShare>
                 )}
@@ -1192,6 +1175,14 @@ const BarValue = styled.span`
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/** 값 바로 옆 단위(년 등) — %처럼 따로 정렬하지 않고 숫자에 붙인다 */
+const BarUnit = styled.span`
+  margin-left: -3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const BarShare = styled.span`
