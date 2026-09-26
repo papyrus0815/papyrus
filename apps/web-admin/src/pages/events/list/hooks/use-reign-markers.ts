@@ -11,17 +11,24 @@ import { useQuery } from '@tanstack/react-query'
 
 import type { FlattenedHierarchyItem } from '@/features/event-hierarchy/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
-import { getSovereignReignTimeline } from '@/shared/api/sovereign-reigns'
+import {
+  getHeadTenureTimeline,
+  getSovereignReignTimeline,
+} from '@/shared/api/sovereign-reigns'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
+  type HeadTenureTimelineItem,
   type ReignMarker,
   type SovereignReignTimelineItem,
+  mergeLeaderMarkers,
+  toHeadTenureMarkers,
   toReignMarkers,
 } from '@/widgets/event-list-compact/lib/reign-markers'
 
 import type { HistoricalEvent } from '../../create/events.types'
 
 export const sovereignReignTimelineKey = ['sovereign-reign-timeline'] as const
+export const headTenureTimelineKey = ['head-tenure-timeline'] as const
 
 const NO_MARKERS: ReignMarker[] = []
 
@@ -33,6 +40,12 @@ export function useReignMarkers(
   const { data: reigns } = useQuery({
     queryKey: sovereignReignTimelineKey,
     queryFn: getSovereignReignTimeline,
+    staleTime: 5 * 60 * 1000,
+  })
+  /* 대통령·총리 — 군주 즉위 말풍선과 같은 자리에 '취임'으로 선다 */
+  const { data: heads } = useQuery({
+    queryKey: headTenureTimelineKey,
+    queryFn: getHeadTenureTimeline,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -50,11 +63,21 @@ export function useReignMarkers(
   }, [items, eventById, selectedCountry])
 
   return useMemo(() => {
-    if (!reigns?.length) return NO_MARKERS
-    return toReignMarkers(
-      reigns as SovereignReignTimelineItem[],
-      countryIds,
-      (person) => getPersonDisplayName(person, true),
+    if (!reigns?.length && !heads?.length) return NO_MARKERS
+    const personName = (
+      person: NonNullable<SovereignReignTimelineItem['person']>,
+    ) => getPersonDisplayName(person, true)
+    return mergeLeaderMarkers(
+      toReignMarkers(
+        (reigns ?? []) as SovereignReignTimelineItem[],
+        countryIds,
+        personName,
+      ),
+      toHeadTenureMarkers(
+        (heads ?? []) as HeadTenureTimelineItem[],
+        countryIds,
+        personName,
+      ),
     )
-  }, [reigns, countryIds])
+  }, [reigns, heads, countryIds])
 }

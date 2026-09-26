@@ -1059,7 +1059,11 @@ export const ReignMarker = styled.div<{
 `
 
 /** 축 위 왕관 — 연 도트와 같은 좌표. 표면색 원판이 축을 끊고, 얇은 호박 테가 눈금을 만든다 */
-export const ReignMarkerIcon = styled.span`
+/** 공화국 원수·정부 수반(대통령·총리) 표지의 강조색 — 군주 호박과 구별되는 파랑 */
+const civicInk = (dark: boolean) => (dark ? '#93c5fd' : '#1d4ed8')
+const royalInk = (dark: boolean) => (dark ? '#f0b64a' : '#b45309')
+
+export const ReignMarkerIcon = styled.span<{ $civic?: boolean }>`
   position: absolute;
   left: var(--rail-x);
   top: 50%;
@@ -1073,11 +1077,16 @@ export const ReignMarkerIcon = styled.span`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
   box-shadow: inset 0 0 0 1px
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(240, 182, 74, 0.45)'
-        : 'rgba(180, 83, 9, 0.35)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f0b64a' : '#b45309')};
+    ${({ theme, $civic }) =>
+      $civic
+        ? theme.mode === 'dark'
+          ? 'rgba(147, 197, 253, 0.45)'
+          : 'rgba(29, 78, 216, 0.3)'
+        : theme.mode === 'dark'
+          ? 'rgba(240, 182, 74, 0.45)'
+          : 'rgba(180, 83, 9, 0.35)'};
+  color: ${({ theme, $civic }) =>
+    $civic ? civicInk(theme.mode === 'dark') : royalInk(theme.mode === 'dark')};
   z-index: 1;
   pointer-events: none;
 
@@ -1095,7 +1104,7 @@ export const ReignMarkerIcon = styled.span`
  * 표지가 행과 같은 시간축 위에서 읽힌다. 연도만 아는 즉위는 빈 칸으로 자리만 지킨다 —
  * 말풍선 x가 행마다 흔들리지 않게.
  */
-export const ReignMarkerDate = styled.span`
+export const ReignMarkerDate = styled.span<{ $civic?: boolean }>`
   flex: none;
   width: var(--col-date, 72px);
   text-align: right;
@@ -1103,7 +1112,8 @@ export const ReignMarkerDate = styled.span`
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f0b64a' : '#b45309')};
+  color: ${({ theme, $civic }) =>
+    $civic ? civicInk(theme.mode === 'dark') : royalInk(theme.mode === 'dark')};
 
   @media (max-width: 640px) {
     width: auto;
@@ -1282,11 +1292,21 @@ export const ReignMarkerSpan = styled.span`
 `
 
 /** '즉위' — 이름에 붙는 동사. 메타색·한 단 작게 */
-export const ReignMarkerLabel = styled.span`
+export const ReignMarkerLabel = styled.span<{ $civic?: boolean }>`
   font-size: 0.92em;
   font-weight: 600;
-  /* 표지의 유일한 색 글자 — 날짜·왕관과 같은 호박색으로 '무슨 표지인가'를 말한다 */
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f0b64a' : '#b45309')};
+  /* 표지의 유일한 색 글자 — 날짜·축 표지와 같은 색으로 '무슨 표지인가'를 말한다
+     (군주 즉위 = 호박, 대통령·총리 취임 = 파랑) */
+  color: ${({ theme, $civic }) =>
+    $civic ? civicInk(theme.mode === 'dark') : royalInk(theme.mode === 'dark')};
+`
+
+/** 직함 — '대통령'·'총리'. 이름 앞 보조색 글자(나라와 같은 무게) */
+export const ReignMarkerRole = styled.span`
+  font-size: 0.92em;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
 `
 
 /** 재위 기간 — 보조색·등폭 숫자 */

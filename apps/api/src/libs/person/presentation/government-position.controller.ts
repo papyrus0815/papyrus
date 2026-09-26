@@ -188,6 +188,64 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 대통령·총리 취임 연표 (경량) — GET /government-positions/head-tenures
+   *
+   * 사건 목록이 군주 '즉위' 말풍선 옆에 공화국 원수·정부 수반의 '취임'을 끼워 넣는 데 쓴다.
+   * 축은 **정의의** positionType이 진실이다(재임 행의 positionType은 어긋난 행이 있다).
+   * 군주 직(isMonarchical)은 SovereignReign 연표가 이미 싣으므로 뺀다 — 둘 다 실으면
+   * 같은 즉위가 두 번 뜬다. 정의 없이 자유입력된 행만 재임 행의 positionType으로 판정한다.
+   */
+  @Get('head-tenures')
+  async listHeadTenures(): Promise<any[]> {
+    const HEAD_TYPES = ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'] as const
+    const tenures = await this.prisma.governmentPositionTenure.findMany({
+      where: {
+        OR: [
+          {
+            positionDefinition: {
+              positionType: { in: [...HEAD_TYPES] },
+              isMonarchical: false,
+            },
+          },
+          { positionDefinitionId: null, positionType: { in: [...HEAD_TYPES] } },
+        ],
+      },
+      select: {
+        id: true,
+        personId: true,
+        countryId: true,
+        historicalCountryId: true,
+        positionType: true,
+        title: true,
+        termNumber: true,
+        // 재임 행은 구조화 날짜축이 없다(BC 재임은 미계획) — 대통령·총리는 전부 AD라
+        // DATETIME + 정밀도로 충분하다.
+        startDate: true,
+        startDatePrecision: true,
+        endDate: true,
+        positionDefinition: { select: { title: true, positionType: true } },
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            middleName: true,
+            nameDisplayOrder: true,
+            profileImageUrl: true,
+            isAlive: true,
+            deathDate: true,
+            deathDatePrecision: true,
+            deathEra: true,
+          },
+        },
+      },
+    })
+    return tenures.map(serializeBigInt)
+  }
+
+  /**
    * 역사적 국가별 재임 기록 (REST) - GET /government-positions/historical-countries/:id/tenures
    */
   @Get('historical-countries/:historicalCountryId/tenures')

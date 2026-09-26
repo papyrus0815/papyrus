@@ -13,7 +13,7 @@ import {
   FiSearch,
   FiX,
 } from 'react-icons/fi'
-import { FaCrown } from 'react-icons/fa'
+import { FaCrown, FaLandmark } from 'react-icons/fa'
 import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
@@ -487,7 +487,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       /** 표지가 놓인 연 그룹 — 같은 해면 날짜 열에 월·일만 쓴다 */
       contextYear?: number
     } = {},
-  ) => (
+  ) => {
+    /* 대통령·총리만 모인 자리 — 축 표지를 왕관 대신 의사당으로, 강조색을 호박 대신 파랑으로.
+       군주가 하나라도 섞이면 왕관(즉위가 그 자리의 주된 사건이다). */
+    const civic = markers.every((marker) => marker.kind !== 'monarch')
+    return (
     <List.ReignMarker
       key={`reign-${markers[0].id}`}
       role={inList ? 'listitem' : 'note'}
@@ -495,8 +499,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       $beforeCentury={options.beforeCentury}
       data-reign-marker=""
     >
-      <List.ReignMarkerIcon aria-hidden="true">
-        <FaCrown />
+      <List.ReignMarkerIcon aria-hidden="true" $civic={civic}>
+        {civic ? <FaLandmark /> : <FaCrown />}
       </List.ReignMarkerIcon>
       {options.yearLabel ? (
         <List.ReignYearLabel aria-hidden="true">
@@ -504,7 +508,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         </List.ReignYearLabel>
       ) : (
         // 같은 자리 즉위들은 한 시점에 모인 것이라 첫 즉위일로 대표한다
-        <List.ReignMarkerDate>
+        <List.ReignMarkerDate $civic={civic}>
           {formatAccessionDate(markers[0], options.contextYear)}
         </List.ReignMarkerDate>
       )}
@@ -514,7 +518,12 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             (name) => name !== reignHomeCountry,
           )
           const span = formatReignSpan(marker)
-          const verb = accessionVerb(countryNames[0])
+          const verb = accessionVerb(
+            countryNames[0],
+            marker.kind,
+            marker.reappointed,
+          )
+          const markerCivic = marker.kind !== 'monarch'
           const length = reignLengthYears(marker)
           return (
             <List.ReignMarkerItem key={marker.id}>
@@ -528,13 +537,17 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   ))}
                 </List.ReignMarkerCountries>
               )}
+              {/* 직함 — '대통령'·'총리'. 군주는 이름이 곧 왕명이라 없다 */}
+              {marker.roleTitle && (
+                <List.ReignMarkerRole>{marker.roleTitle}</List.ReignMarkerRole>
+              )}
               {onOpenPerson ? (
                 <List.ReignMarkerName
                   as="button"
                   type="button"
                   tabIndex={-1}
                   onClick={() => onOpenPerson(marker.personId)}
-                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.name} 인물 정보 보기 — ${verb}, ${verb === '즉위' ? '재위' : '재임'} ${span}`}
+                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.roleTitle ? `${marker.roleTitle} ` : ''}${marker.name} 인물 정보 보기 — ${verb}, ${verb === '즉위' ? '재위' : '재임'} ${span}`}
                 >
                   {marker.name}
                 </List.ReignMarkerName>
@@ -543,7 +556,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               )}
               {/* '즉위'와 기간은 한 덩어리 — 좁은 폭에서 '즉위'만 줄 끝에 남지 않게 */}
               <List.ReignMarkerSpan>
-                <List.ReignMarkerLabel aria-hidden="true">{verb}</List.ReignMarkerLabel>
+                <List.ReignMarkerLabel aria-hidden="true" $civic={markerCivic}>
+                  {verb}
+                </List.ReignMarkerLabel>
                 <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
                 {length != null && (
                   <List.ReignMarkerLength>{length}년</List.ReignMarkerLength>
@@ -554,7 +569,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         })}
       </List.ReignMarkerList>
     </List.ReignMarker>
-  )
+    )
+  }
 
   /**
    * 로빙 tabindex의 대상 행 id.

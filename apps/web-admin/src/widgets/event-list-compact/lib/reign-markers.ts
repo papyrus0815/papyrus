@@ -49,10 +49,38 @@ export interface SovereignReignTimelineItem {
   } | null
 }
 
+/**
+ * `GET /government-positions/head-tenures` — 공화국 원수·정부 수반(대통령·총리) 재임.
+ * 재임 행에는 구조화 날짜축이 없어 DATETIME + 정밀도뿐이다(대통령·총리는 전부 AD).
+ */
+export interface HeadTenureTimelineItem {
+  id: string
+  personId: string
+  countryId?: string | null
+  historicalCountryId?: string | null
+  positionType?: string | null
+  title?: string | null
+  startDate?: string | null
+  startDatePrecision?: string | null
+  endDate?: string | null
+  positionDefinition?: { title?: string | null; positionType?: string | null } | null
+  country?: { id: string; name?: string | null } | null
+  historicalCountry?: { id: string; name?: string | null } | null
+  person?: SovereignReignTimelineItem['person']
+}
+
+/** 표지의 종류 — 군주 즉위 / 국가원수(대통령) 취임 / 정부수반(총리) 취임 */
+export type ReignMarkerKind = 'monarch' | 'headOfState' | 'headOfGovernment'
+
 export interface ReignMarker {
   /** 재위 기록 id */
   id: string
   personId: string
+  kind: ReignMarkerKind
+  /** 직함 — '대통령'·'총리'. 군주는 null(이름 자체가 왕명이다) */
+  roleTitle: string | null
+  /** 같은 사람이 같은 직을 끊김 없이 이어 맡음(내각 재구성 등) — 동사가 '연임' */
+  reappointed?: boolean
   /** 표시명 — 재위명 > 왕명(notes) > 인물 재위명 > 묘호 > 인물 표시명 */
   name: string
   countryName: string | null
@@ -189,6 +217,8 @@ export function toReignMarkers(
     markers.push({
       id: reign.id,
       personId: reign.personId,
+      kind: 'monarch',
+      roleTitle: null,
       name,
       countryName,
       imageUrl: person?.profileImageUrl?.trim() || null,
@@ -253,8 +283,111 @@ export function reignLengthYears(marker: ReignMarker): number | null {
  * (실측: '프랑스 제3공화국 푸앵카레 레몽 즉위 1913–1920'). 나라 이름이 유일한 단서라
  * 그것으로 가른다 — 틀리는 쪽은 '즉위'로 남는 것이니 기존보다 나빠지지 않는다.
  */
-export function accessionVerb(countryName: string | null | undefined): '즉위' | '취임' {
+export function accessionVerb(
+  countryName: string | null | undefined,
+  kind: ReignMarkerKind = 'monarch',
+  reappointed = false,
+): '즉위' | '취임' | '연임' {
+  if (kind !== 'monarch') return reappointed ? '연임' : '취임'
   return countryName && /공화국|공화정|막부/.test(countryName) ? '취임' : '즉위'
+}
+
+/**
+ * 대통령·총리 재임 → 표지. 목록에 나온 나라만, 날짜를 아는 것만.
+ * 직함은 정의 제목 > 재임 행 제목(오버라이드) 순.
+ */
+export function toHeadTenureMarkers(
+  tenures: HeadTenureTimelineItem[] | null | undefined,
+  countryIds: ReadonlySet<string>,
+  personName: (person: NonNullable<SovereignReignTimelineItem['person']>) => string,
+): ReignMarker[] {
+  if (!tenures?.length || countryIds.size === 0) return []
+  const markers: ReignMarker[] = []
+  const endKeys = new Map<string, number | null>()
+  for (const tenure of tenures) {
+    const inScope =
+      (tenure.countryId && countryIds.has(tenure.countryId)) ||
+      (tenure.historicalCountryId && countryIds.has(tenure.historicalCountryId))
+    if (!inScope || !tenure.person) continue
+    const start = resolveParts(null, null, null, null, tenure.startDate, tenure.startDatePrecision)
+    if (!start) continue
+    const end = resolveParts(null, null, null, null, tenure.endDate, null)
+    const type = tenure.positionDefinition?.positionType ?? tenure.positionType
+    markers.push({
+      id: tenure.id,
+      personId: tenure.personId,
+      kind: type === 'HEAD_OF_STATE' ? 'headOfState' : 'headOfGovernment',
+      roleTitle:
+        tenure.positionDefinition?.title?.trim() || tenure.title?.trim() || null,
+      name: personName(tenure.person),
+      countryName:
+        tenure.historicalCountry?.name ?? tenure.country?.name ?? null,
+      imageUrl: tenure.person.profileImageUrl?.trim() || null,
+      startKey: lowerKey(start),
+      startYear: start.year,
+      startMonth: start.month,
+      startDay: start.day,
+      endYear: end?.year ?? null,
+    })
+    endKeys.set(tenure.id, end ? lowerKey(end) : null)
+  }
+  markReappointments(markers, endKeys)
+  return markers
+}
+
+/** 전임 끝과 후임 시작 사이가 이 안이면 '끊김 없이 이어 맡음'(내각 재구성·재선출 공백) */
+const REAPPOINT_GAP_DAYS = 31
+
+/**
+ * 연임 판정 — 같은 사람·같은 나라·같은 직함의 **바로 앞** 재임이 한 달 안에 끝났으면
+ * 이번 재임은 새 취임이 아니라 연임이다. 요시다 시게루처럼 내각이 바뀔 때마다 재임 행이
+ * 새로 생겨, 네 번 연달아 '취임'으로 찍히면 매번 새로 권좌에 오른 것처럼 읽혔다.
+ */
+function markReappointments(
+  markers: ReignMarker[],
+  endKeys: Map<string, number | null>,
+): void {
+  const byRole = new Map<string, ReignMarker[]>()
+  for (const marker of markers) {
+    const key = `${marker.personId}|${marker.countryName}|${marker.roleTitle}`
+    const list = byRole.get(key)
+    if (list) list.push(marker)
+    else byRole.set(key, [marker])
+  }
+  // 날짜 키(YYYYMMDD)의 차이를 대략의 일수로 — 월 경계에서 조금 어긋나도 판정엔 충분하다
+  const approxDays = (key: number) =>
+    Math.floor(key / 10000) * 365 + (Math.floor(key / 100) % 100) * 31 + (key % 100)
+  byRole.forEach((list) => {
+    list.sort((left, right) => left.startKey - right.startKey)
+    for (let index = 1; index < list.length; index += 1) {
+      const previousEnd = endKeys.get(list[index - 1].id)
+      if (previousEnd == null) continue
+      const gap = approxDays(list[index].startKey) - approxDays(previousEnd)
+      if (gap >= -1 && gap <= REAPPOINT_GAP_DAYS) list[index].reappointed = true
+    }
+  })
+}
+
+/**
+ * 군주 표지와 대통령·총리 표지를 합친다(즉위순).
+ * 같은 사람이 같은 해에 양쪽에 있으면 군주 쪽만 남긴다 — 재위 표에 들어간 공화국 원수
+ * (예: 푸앵카레)가 재임 표에도 있으면 한 말풍선에 두 번 뜬다.
+ */
+export function mergeLeaderMarkers(
+  reigns: ReignMarker[],
+  heads: ReignMarker[],
+): ReignMarker[] {
+  if (heads.length === 0) return reigns
+  const reignKeys = new Set(
+    reigns.map((marker) => `${marker.personId}|${marker.startYear}`),
+  )
+  const merged = [
+    ...reigns,
+    ...heads.filter(
+      (marker) => !reignKeys.has(`${marker.personId}|${marker.startYear}`),
+    ),
+  ]
+  return merged.sort((left, right) => left.startKey - right.startKey)
 }
 
 /** 말풍선 한 항목 — 같은 군주·같은 기간이 여러 나라 재위로 들어온 것을 하나로 묶는다 */

@@ -6,6 +6,8 @@ import {
   planReignMarkers,
   reignAccessionYears,
   accessionVerb,
+  mergeLeaderMarkers,
+  toHeadTenureMarkers,
   reignLengthYears,
   formatAccessionDate,
   groupReignEntries,
@@ -35,6 +37,8 @@ const marker = (
 ): ReignMarker => ({
   id,
   personId: id,
+  kind: 'monarch',
+  roleTitle: null,
   name: id,
   countryName: '조선',
   imageUrl: null,
@@ -367,5 +371,78 @@ describe('reignLengthYears', () => {
   it('BC에서 AD로 건너면 0년이 없다', () => {
     expect(reignLengthYears(marker('augustus', -27, 14))).toBe(40)
     expect(reignLengthYears(marker('qin', -221, -210))).toBe(11)
+  })
+})
+
+describe('대통령·총리 표지', () => {
+  const person = { id: 'p-trump', name: '도널드 트럼프', profileImageUrl: null }
+  const tenure = {
+    id: 't1',
+    personId: 'p-trump',
+    countryId: 'us',
+    country: { id: 'us', name: '미국' },
+    startDate: '2025-01-20T00:00:00.000Z',
+    positionDefinition: { title: '대통령', positionType: 'HEAD_OF_STATE' },
+    person,
+  }
+
+  it('목록 나라의 재임만 표지로, 직함·종류·동사를 싣는다', () => {
+    const [marker] = toHeadTenureMarkers(
+      [tenure, { ...tenure, id: 't2', countryId: 'fr', country: { id: 'fr' } }],
+      new Set(['us']),
+      personName,
+    )
+    expect(marker).toMatchObject({
+      kind: 'headOfState',
+      roleTitle: '대통령',
+      countryName: '미국',
+      startYear: 2025,
+      startMonth: 1,
+      startDay: 20,
+    })
+    expect(accessionVerb(marker.countryName, marker.kind)).toBe('취임')
+  })
+
+  it('같은 사람·같은 해가 재위 표에도 있으면 군주 쪽만 남긴다', () => {
+    const reign = { ...marker('poincare', 1913, 1920, 2, 18), personId: 'p1' }
+    const head = { ...reign, id: 'h', kind: 'headOfState' as const }
+    const other = { ...marker('pm', 1912, 1913), kind: 'headOfGovernment' as const }
+    expect(mergeLeaderMarkers([reign], [head, other]).map((item) => item.id)).toEqual([
+      'pm',
+      'poincare',
+    ])
+  })
+})
+
+describe('연임 판정', () => {
+  const person = { id: 'p-yoshida', name: '요시다 시게루' }
+  const tenure = (id: string, start: string, end: string | null) => ({
+    id,
+    personId: 'p-yoshida',
+    countryId: 'jp',
+    country: { id: 'jp', name: '일본국' },
+    startDate: start,
+    endDate: end,
+    positionDefinition: { title: '내각총리대신', positionType: 'HEAD_OF_GOVERNMENT' },
+    person,
+  })
+
+  it('같은 직을 한 달 안에 이어 맡으면 연임, 공백이 길면 다시 취임', () => {
+    const markers = toHeadTenureMarkers(
+      [
+        tenure('first', '1946-05-22', '1947-05-24'),
+        tenure('comeback', '1948-10-15', '1949-02-16'),
+        tenure('renewed', '1949-02-16', '1952-10-30'),
+      ],
+      new Set(['jp']),
+      personName,
+    )
+    const verbs = Object.fromEntries(
+      markers.map((marker) => [
+        marker.id,
+        accessionVerb(marker.countryName, marker.kind, marker.reappointed),
+      ]),
+    )
+    expect(verbs).toEqual({ first: '취임', comeback: '취임', renewed: '연임' })
   })
 })
