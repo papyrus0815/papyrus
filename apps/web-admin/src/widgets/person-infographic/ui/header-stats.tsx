@@ -95,11 +95,71 @@ interface HoverBin {
   y: number
 }
 
-export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
+/**
+ * 뷰별 통계 구성 — 요약 타일 4칸(필터 결과 요약)은 어느 뷰든 같고, 아래 분포는 뷰가
+ * 스스로 보여주지 않는 것만 싣는다.
+ *  - full    : 세기별 — 카드만 있는 지면이라 시대·지역·분야·국가 분포를 여기서 본다
+ *  - dynasty : 왕조 — 가문 축(인원 많은 가문·군주 많은 가문·가문 많은 나라)
+ *  - tiles   : 매트릭스·은하계 — 차트가 이미 연도·국가·지역 분포라 타일만
+ */
+export type HeaderStatsVariant = 'full' | 'dynasty' | 'tiles'
+
+const TOP_DYNASTY_DEFAULT = 6
+const TOP_DYNASTY_EXPANDED = 15
+
+/** 왕조 뷰 가문 그룹 머리로 스크롤 (dynasty-view의 GroupSection id 규약: dynasty-<가문>) */
+function jumpToDynasty(faction: string) {
+  document
+    .getElementById(`person-group-dynasty-${faction}`)
+    ?.closest('section')
+    ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+}
+
+export function HeaderStats({
+  people,
+  variant = 'full',
+}: {
+  people: AdaptedPerson[]
+  variant?: HeaderStatsVariant
+}) {
   const scopes = usePersonInfographicFilterStore((state) => state.scopes)
   const toggleScope = usePersonInfographicFilterStore((state) => state.toggleScope)
   const [hoverBin, setHoverBin] = useState<HoverBin | null>(null)
   const [countriesExpanded, setCountriesExpanded] = useState(false)
+  const [dynastiesExpanded, setDynastiesExpanded] = useState(false)
+
+  // 가문 축 집계 — 왕조 뷰에서만 쓴다(소속 없음은 순위에서 빼고 따로 센다)
+  const dynastyStats = useMemo(() => {
+    if (variant !== 'dynasty') return null
+    const memberCount = new Map<string, number>()
+    const monarchCount = new Map<string, number>()
+    const factionsByCountry = new Map<string, Set<string>>()
+    let unaffiliated = 0
+    for (const person of people) {
+      if (!person.faction) {
+        unaffiliated++
+        continue
+      }
+      memberCount.set(person.faction, (memberCount.get(person.faction) ?? 0) + 1)
+      if (person.isMonarch)
+        monarchCount.set(person.faction, (monarchCount.get(person.faction) ?? 0) + 1)
+      if (person.country && person.country !== '미상') {
+        const set = factionsByCountry.get(person.country) ?? new Set<string>()
+        set.add(person.faction)
+        factionsByCountry.set(person.country, set)
+      }
+    }
+    const byCount = (left: [string, number], right: [string, number]) =>
+      right[1] - left[1] || left[0].localeCompare(right[0], 'ko')
+    return {
+      members: [...memberCount.entries()].sort(byCount),
+      monarchs: [...monarchCount.entries()].sort(byCount),
+      countries: [...factionsByCountry.entries()]
+        .map(([country, set]) => [country, set.size] as [string, number])
+        .sort(byCount),
+      unaffiliated,
+    }
+  }, [people, variant])
 
   const domain = useMemo(() => buildDomain(people), [people])
   const { pct } = domain
@@ -208,6 +268,72 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
         </Tile>
       </Tiles>
 
+      {variant === 'dynasty' && dynastyStats && (
+        <Lists>
+          <BarSection
+            title="인원 많은 가문"
+            ranked
+            metaText={`가문 ${dynastyStats.members.length}개 · 소속 없음 ${dynastyStats.unaffiliated}명`}
+            actionHint="가문으로 이동"
+            rows={dynastyStats.members
+              .slice(0, dynastiesExpanded ? TOP_DYNASTY_EXPANDED : TOP_DYNASTY_DEFAULT)
+              .map(([faction, count]) => ({
+                key: faction,
+                label: faction,
+                count,
+                active: false,
+                onToggle: () => jumpToDynasty(faction),
+              }))}
+            total={total}
+            anyActive={false}
+            footer={
+              dynastyStats.members.length > TOP_DYNASTY_DEFAULT && (
+                <MoreToggle
+                  type="button"
+                  onClick={() => setDynastiesExpanded((prev) => !prev)}
+                >
+                  {dynastiesExpanded
+                    ? '접기'
+                    : `+ ${Math.min(dynastyStats.members.length, TOP_DYNASTY_EXPANDED) - TOP_DYNASTY_DEFAULT}개 가문 더 보기`}
+                </MoreToggle>
+              )
+            }
+          />
+          <BarSection
+            title="군주 많은 가문"
+            ranked
+            metaText={`군주 ${dynastyStats.monarchs.reduce((sum, [, count]) => sum + count, 0)}명`}
+            actionHint="가문으로 이동"
+            rows={dynastyStats.monarchs.slice(0, TOP_DYNASTY_DEFAULT).map(([faction, count]) => ({
+              key: faction,
+              label: faction,
+              count,
+              active: false,
+              onToggle: () => jumpToDynasty(faction),
+            }))}
+            total={total}
+            anyActive={false}
+          />
+          <BarSection
+            title="가문이 많은 나라"
+            ranked
+            unit="개 가문"
+            showShare={false}
+            metaText={`${dynastyStats.countries.length}개국`}
+            rows={dynastyStats.countries.slice(0, TOP_DYNASTY_DEFAULT).map(([country, count]) => ({
+              key: country,
+              label: country,
+              count,
+              active: scopes.country.includes(country),
+              onToggle: () => toggleScope('country', country),
+            }))}
+            total={total}
+            anyActive={scopes.country.length > 0}
+          />
+        </Lists>
+      )}
+
+      {variant === 'full' && (
       <Section>
         <SectionHead>
           <SectionTitle>시대 분포</SectionTitle>
@@ -312,7 +438,9 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
           </EraChips>
         </Chart>
       </Section>
+      )}
 
+      {variant === 'full' && (
       <Lists>
         <BarSection
           title="지역"
@@ -364,6 +492,7 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
           }
         />
       </Lists>
+      )}
 
       {hoverBin && (
         <Tooltip
@@ -402,6 +531,10 @@ function BarSection({
   anyActive,
   ranked,
   footer,
+  metaText: metaOverride,
+  actionHint = '필터 토글',
+  unit = '명',
+  showShare = true,
 }: {
   title: string
   rows: BarRowData[]
@@ -409,13 +542,20 @@ function BarSection({
   anyActive: boolean
   ranked?: boolean
   footer?: ReactNode
+  /** 제목 옆 보조 값 — 기본은 행 수. 잘라 보여주는 순위 목록은 전체 수를 따로 준다 */
+  metaText?: string
+  /** 스크린리더에 읽히는 행 동작 — 필터가 아닌 이동 행도 있다 */
+  actionHint?: string
+  unit?: string
+  /** 전체 인원 대비 % — 인원이 아닌 값(가문 수)엔 의미가 없다 */
+  showShare?: boolean
 }) {
   const max = Math.max(1, ...rows.map((row) => row.count))
   return (
     <ListSection>
       <SectionHead>
         <SectionTitle>{title}</SectionTitle>
-        <SectionMeta>{rows.length}개</SectionMeta>
+        <SectionMeta>{metaOverride ?? `${rows.length}개`}</SectionMeta>
       </SectionHead>
       {rows.length === 0 ? (
         <Empty>데이터 없음</Empty>
@@ -428,7 +568,7 @@ function BarSection({
               $active={row.active}
               $dim={anyActive && !row.active}
               aria-pressed={row.active}
-              aria-label={`${ranked ? `${index + 1}위 ` : ''}${row.label} ${row.count}명, 필터 토글`}
+              aria-label={`${ranked ? `${index + 1}위 ` : ''}${row.label} ${row.count}${unit}, ${actionHint}`}
               onClick={row.onToggle}
             >
               <BarLabel>
@@ -447,7 +587,9 @@ function BarSection({
               </BarTrack>
               <BarValue>
                 {row.count.toLocaleString()}
-                <BarShare>{total ? Math.round((row.count / total) * 100) : 0}%</BarShare>
+                {showShare && (
+                  <BarShare>{total ? Math.round((row.count / total) * 100) : 0}%</BarShare>
+                )}
               </BarValue>
             </BarRow>
           ))}
@@ -466,6 +608,11 @@ const Panel = styled.section`
   border: 1px solid ${hairline};
   background: ${surface};
   overflow: hidden;
+
+  /* 타일만 있는 구성(매트릭스·은하계)에서 패널 바닥에 이중선이 생기지 않게 */
+  & > :last-child {
+    border-bottom: none;
+  }
 `
 
 const Tiles = styled.div`

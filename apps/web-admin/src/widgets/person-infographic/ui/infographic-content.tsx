@@ -82,7 +82,7 @@ import { EmptyState } from './_shared/empty-state'
 import { ScopeDropdown } from './_shared/scope-dropdown'
 import { EraStoryView } from './era-story-view'
 import { GalaxyView } from './galaxy-view'
-import { HeaderStats } from './header-stats'
+import { HeaderStats, type HeaderStatsVariant } from './header-stats'
 import { MatrixView } from './matrix-view'
 import { StatsView } from './stats-view'
 
@@ -197,6 +197,16 @@ export function InfographicContent({
   // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 나머지를 다룬다.
   const activeView: Exclude<PersonInfographicView, 'records'> =
     view === 'records' ? 'story' : view
+
+  // 통계 패널 구성 — 요약 타일은 공통, 분포는 뷰가 스스로 보여주지 않는 것만
+  const hasStatsPanel = activeView !== 'stats'
+  const statsPanelShown = statsOpen && hasStatsPanel
+  const statsVariant: HeaderStatsVariant =
+    activeView === 'dynasty'
+      ? 'dynasty'
+      : activeView === 'matrix' || activeView === 'galaxy'
+        ? 'tiles'
+        : 'full'
 
   // '/' 로 검색 포커스 — 사건 목록과 같은 단축키. 입력 중에는 가로채지 않는다.
   useEffect(() => {
@@ -381,16 +391,19 @@ export function InfographicContent({
           </FilterGroup>
 
           <Actions>
-            <GhostBtn
-              type="button"
-              onClick={toggleStats}
-              aria-pressed={statsOpen}
-              title={statsOpen ? '통계 숨기기' : '통계 보기'}
-              $hideOnMobile
-            >
-              <FiBarChart2 size={14} />
-              통계
-            </GhostBtn>
+            {/* 능력치 뷰는 자체 '개요'(평가 진행률·축별 평균)를 가져서 통계가 두 겹이 된다 */}
+            {hasStatsPanel && (
+              <GhostBtn
+                type="button"
+                onClick={toggleStats}
+                aria-pressed={statsOpen}
+                title={statsOpen ? '통계 숨기기' : '통계 보기'}
+                $hideOnMobile
+              >
+                <FiBarChart2 size={14} />
+                통계
+              </GhostBtn>
+            )}
             <PrimaryBtn type="button" onClick={() => setFormOpen(true)}>
               <FiPlus size={16} />새 인물 등록
             </PrimaryBtn>
@@ -465,9 +478,9 @@ export function InfographicContent({
                   ` / ${allPeople.length.toLocaleString()}`}
               </span>
               {/* 통계 패널이 열려 있으면 같은 수치가 타일로 크게 나오므로 인원만 남긴다 */}
-              {!statsOpen && avgLifespan > 0 && <span>평균 수명 {avgLifespan}년</span>}
-              {!statsOpen && aliveCount > 0 && <span>생존 {aliveCount}</span>}
-              {!statsOpen && topField && (
+              {!statsPanelShown && avgLifespan > 0 && <span>평균 수명 {avgLifespan}년</span>}
+              {!statsPanelShown && aliveCount > 0 && <span>생존 {aliveCount}</span>}
+              {!statsPanelShown && topField && (
                 <span>
                   <MetaDot $color={colorForField(topField[0])} />
                   {topField[0]} {topField[1]}
@@ -477,9 +490,9 @@ export function InfographicContent({
           )}
         </ViewRow>
 
-        {!isLoading && filtered.length > 0 && statsOpen && (
+        {!isLoading && filtered.length > 0 && statsPanelShown && (
           <StatsArea>
-            <HeaderStats people={filtered} />
+            <HeaderStats people={filtered} variant={statsVariant} />
           </StatsArea>
         )}
 
