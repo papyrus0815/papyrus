@@ -75,6 +75,12 @@ export function invalidateTenureQueries(
   //    직전 저장분이 조용히 지워지는 회귀가 있어 반드시 함께 무효화한다.
   invalidate(['sovereign-reign-detail'])
 
+  // ── 사건 목록의 즉위·취임 말풍선 연표 — 군주 재위(sovereign-reign-timeline)와
+  //    대통령·총리 재임(head-tenure-timeline). 없으면 5분 staleTime 동안 방금 고친
+  //    재임/재위가 목록에 반영되지 않았다. (키 정의: pages/events/list/hooks/use-reign-markers)
+  invalidate(['sovereign-reign-timeline'])
+  invalidate(['head-tenure-timeline'])
+
   // ── 인물 상세 — 같은 재임/업적이 인물 패널에도 박혀 있어 함께 무효화 ──
   if (scope.personId) {
     invalidate(['person-detail', scope.personId])
