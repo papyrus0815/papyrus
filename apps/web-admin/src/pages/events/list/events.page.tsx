@@ -83,6 +83,11 @@ import {
   useCatalogShortcuts,
 } from './hooks/use-catalog-keyboard'
 import { useCatalogUrlSync } from './hooks/use-catalog-url-sync'
+import {
+  readCollapsedBands,
+  saveCatalogQuery,
+  saveCollapsedBands,
+} from './lib/catalog-memory'
 import { useReignMarkers } from './hooks/use-reign-markers'
 import { reignAccessionYears } from '@/widgets/event-list-compact/lib/reign-markers'
 import { exportEventsAsJson } from './lib/export-events'
@@ -149,6 +154,14 @@ export const EventsCatalogPage: React.FC = () => {
   const [initialUrlState] = useState(() =>
     parseCatalogSearchParams(searchParams),
   )
+
+  /**
+   * 설정 기억 — URL이 곧 설정이므로 바뀔 때마다 통째로 적어 둔다. 다음에 맨 `/events`로
+   * 들어오면 라우트 loader가 이 값으로 되돌린다(catalog-memory 참고).
+   */
+  useEffect(() => {
+    saveCatalogQuery(searchParams)
+  }, [searchParams])
 
   // ===== 검색 / 페이지 상태 =====
   const [bookmarksOnly, setBookmarksOnly] = useState(
@@ -859,12 +872,16 @@ export const EventsCatalogPage: React.FC = () => {
    * 페이지 훅에 전부 보존되는데 접힘만 예외였다), ⑵ 드로어의 이전/다음은 접힘을 몰라
    * 화면에 없는 사건으로 이동했다(검토 INT-4/INT-6).
    */
+  /* 접힘도 기억한다 — 페이지를 떠나면 언마운트돼 매번 전부 펼쳐졌다(catalog-memory). */
   const [collapsedYears, setCollapsedYears] = useState<Set<number>>(
-    () => new Set(),
+    () => new Set(readCollapsedBands().years),
   )
   const [collapsedCenturies, setCollapsedCenturies] = useState<Set<number>>(
-    () => new Set(),
+    () => new Set(readCollapsedBands().centuries),
   )
+  useEffect(() => {
+    saveCollapsedBands({ years: collapsedYears, centuries: collapsedCenturies })
+  }, [collapsedYears, collapsedCenturies])
   const toggleYearCollapse = useCallback((year: number) => {
     setCollapsedYears((prev) => {
       const next = new Set(prev)

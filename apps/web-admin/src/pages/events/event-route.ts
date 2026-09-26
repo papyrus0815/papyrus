@@ -6,6 +6,8 @@ import {
 
 import { pathKeys } from '@/shared/router'
 
+import { readCatalogQuery } from './list/lib/catalog-memory'
+
 /**
  * `/events/:eventId/edit` → `/events/:eventId` 흡수.
  *
@@ -22,6 +24,18 @@ const editRedirect = ({ params }: LoaderFunctionArgs) =>
   redirect(pathKeys.events.detail(params.eventId ?? ''))
 
 /**
+ * 맨 `/events`로 들어오면 **마지막 설정**으로 되돌린다(좌측 레일 링크가 쿼리 없이 온다).
+ * 렌더 전 loader에서 처리해 기본 목록이 한 번 그려졌다 바뀌는 깜빡임이 없다.
+ * 쿼리를 싣고 온 진입(딥링크·뒤로가기)은 건드리지 않는다. 규약은 catalog-memory 참고.
+ */
+const restoreCatalogQuery = ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url)
+  if (url.search) return null
+  const saved = readCatalogQuery()
+  return saved ? redirect(`${url.pathname}?${saved}`) : null
+}
+
+/**
  * 🗺️ Events 페이지 라우트 설정
  *
  * 목록·상세는 콘텐츠 영역(ContentLayout) 안에 있고, 좌측 사건 목록 사이드바는
@@ -34,6 +48,7 @@ export const eventPageRoute: RouteObject = {
     {
       // /events — 사건 리스트(catalog). ledger 페이지는 보류·미라우트.
       index: true,
+      loader: restoreCatalogQuery,
       lazy: async () => {
         const { EventsCatalogPage } = await import('./list/events.page')
         return { Component: EventsCatalogPage }
