@@ -41,6 +41,13 @@ export interface EntityListSidebarProps {
   items: EntitySidebarItem[]
   /** 카운트 분모(필터 전 전체). 표시 수와 다르면 헤더가 분수로 바뀐다 */
   totalCount: number
+  /** 헤더 보조 줄을 직접 지정 — 전체 목록이 아닌 모드(바로가기 등)에서 개수 분수 대신 */
+  subtitle?: string
+  /**
+   * 검색·셀렉트 줄을 그리지 않는다 — 같은 지면 본문이 검색·필터를 이미 가진 모드에서
+   * 조작 도구가 두 벌 서지 않게.
+   */
+  hideFilters?: boolean
   /** 표시 순서대로 넘긴 그룹 정의. items의 groupId가 여기 없으면 '미분류'로 흡수 */
   groups: EntitySidebarGroup[]
 
@@ -95,6 +102,8 @@ function EntityListSidebarBase({
   domainKey,
   items,
   totalCount,
+  subtitle,
+  hideFilters = false,
   groups,
   selectedId,
   onSelect,
@@ -315,9 +324,9 @@ function EntityListSidebarBase({
           <>
             <SidebarHeader
               title={title}
-              subtitle={headerCount}
+              subtitle={subtitle ?? headerCount}
               subtitleTitle={
-                visibleCount !== totalCount
+                subtitle == null && visibleCount !== totalCount
                   ? `표시 ${visibleCount} / 전체 ${totalCount}`
                   : undefined
               }
@@ -341,17 +350,19 @@ function EntityListSidebarBase({
               onCollapse={onToggleCollapse}
             />
 
-            <EntitySidebarFilters
-              query={query}
-              onQueryChange={onQueryChange}
-              searchLabel={`${noun} 검색`}
-              searchPlaceholder={searchPlaceholder ?? `${noun} 검색...`}
-              onSearchKeyDown={handleSearchKeyDown}
-              selects={selects}
-              hasActiveFilter={hasActiveFilter}
-              onClearFilters={onClearFilters}
-              discovery={discovery}
-            />
+            {!hideFilters && (
+              <EntitySidebarFilters
+                query={query}
+                onQueryChange={onQueryChange}
+                searchLabel={`${noun} 검색`}
+                searchPlaceholder={searchPlaceholder ?? `${noun} 검색...`}
+                onSearchKeyDown={handleSearchKeyDown}
+                selects={selects}
+                hasActiveFilter={hasActiveFilter}
+                onClearFilters={onClearFilters}
+                discovery={discovery}
+              />
+            )}
 
             <S.SrLiveRegion role="status" aria-live="polite">
               {liveMessage}

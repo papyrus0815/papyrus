@@ -125,7 +125,7 @@ function EntitySidebarRowBase({
           </S.TextStack>
         </S.RowLeft>
         <S.RowRight>
-          {onTogglePin && (
+          {onTogglePin && !item.noPin && (
             <S.PinButton
               type="button"
               $pinned={pinned}

@@ -92,6 +92,11 @@ export interface EntitySidebarItem {
    * 화면에서 축약한 값(연도를 앵커로 빼고 '9.4'만 남긴 날짜 등)을 보완할 때 쓴다.
    */
   ariaLabel?: string
+  /**
+   * 이 행에는 고정(★) 버튼을 두지 않는다 — 같은 목록에 도메인이 다른 행(인물 사이드바의
+   * '인물 그룹' 링크)이 섞일 때, 고정 목록에 엉뚱한 id가 들어가지 않게.
+   */
+  noPin?: boolean
   /** 이 항목이 속한 그룹 id — groups에 없으면 '미분류'로 흡수된다(never-drop) */
   groupId: string
   /** 검색 매칭용 소문자 텍스트. 미지정 시 name + meta로 자동 생성 */
