@@ -10,7 +10,8 @@
  *
  *   표시 1,247건 · 정치 47
  *
- * 카테고리는 TOP 1만 표기(과부하 방지).
+ * (제거) 최다 카테고리 'TOP 1' — 라벨 없이 '● 전쟁/군사 62'로 열 머리글에 끼어 흘린 조각처럼
+ * 읽혔다(2026-09-25). 건수(N건)만 남긴다.
  *
  * 중요도(핵심·주요) 칩은 **제거됐다**(2026-07-28 검토 M9) — importance는 스키마·DTO에
  * 없는 값이라 transformer가 전부 'notable'로 채웠고, 그래서 이 칩은 단 한 번도 렌더된
@@ -18,19 +19,19 @@
  *
  * 모수 규약: `events`는 **총계와 같은 모수**여야 한다(검토 IA-13).
  */
-import React, { useMemo } from 'react'
+import React from 'react'
 
 import styled from 'styled-components'
 
-import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 import type { HistoricalEvent } from '../../create/events.types'
-import { CATEGORY_BADGE_COLORS, metaText } from '../../styles/theme'
+import { metaText } from '../../styles/theme'
 
 interface Props {
   events: HistoricalEvent[]
-  dbCategories: EventCategoryDto[]
+  /** (미사용) 최다 카테고리 표기를 걷어낸 뒤 남은 prop — 호출부 호환을 위해 둔다 */
+  dbCategories?: EventCategoryDto[]
   /** 필터를 만족하는 사건 수 — undefined(미필터)면 serverTotal/events.length로 폴백 */
   visibleCount?: number
   /** 서버 권위 총개수(최상위 기준) — 미필터 상태의 "N건" */
@@ -44,37 +45,10 @@ interface Props {
 
 export const CatalogHeaderStats: React.FC<Props> = ({
   events,
-  dbCategories,
   visibleCount,
   serverTotal,
   authoritativeTotal,
 }) => {
-  const { topCategory } = useMemo(() => {
-    const catCount = new Map<string, number>()
-
-    for (const historicalEvent of events) {
-      const key = historicalEvent.category || 'other'
-      catCount.set(key, (catCount.get(key) ?? 0) + 1)
-    }
-
-    const top1 = Array.from(catCount.entries()).sort(
-      (left, right) => right[1] - left[1],
-    )[0]
-
-    return {
-      topCategory: top1
-        ? {
-            key: top1[0],
-            label: getCategoryName(top1[0], dbCategories),
-            count: top1[1],
-            color:
-              CATEGORY_BADGE_COLORS[
-                top1[0] as keyof typeof CATEGORY_BADGE_COLORS
-              ] ?? '#2563eb',
-          }
-        : null,
-    }
-  }, [events, dbCategories])
 
   if (events.length === 0) return null
 
@@ -98,17 +72,6 @@ export const CatalogHeaderStats: React.FC<Props> = ({
         <TotalHint title="등록된 최상위 사건 수(필터 적용 전). 앞의 숫자는 현재 조건을 만족하는 사건 수이므로 모수가 다릅니다.">
           / 등록 전체 {authoritativeTotal.toLocaleString()}건(최상위)
         </TotalHint>
-      )}
-      {topCategory && (
-        <>
-          <Sep aria-hidden="true">·</Sep>
-          <StatItem title={`${topCategory.label} ${topCategory.count}건`}>
-            <Dot style={{ background: topCategory.color }} />
-            <span>
-              {topCategory.label} {topCategory.count.toLocaleString()}
-            </span>
-          </StatItem>
-        </>
       )}
     </Strip>
   )
@@ -142,20 +105,7 @@ const TotalPrefix = styled.span`
   color: ${metaText};
 `
 
-const StatItem = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
 
-const Dot = styled.span`
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-`
 
 const TotalHint = styled.span`
   font-weight: 500;
@@ -163,8 +113,3 @@ const TotalHint = styled.span`
   opacity: 0.9;
 `
 
-const Sep = styled.span`
-  color: ${metaText};
-  opacity: 0.45;
-  user-select: none;
-`

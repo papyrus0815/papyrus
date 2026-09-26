@@ -1008,42 +1008,6 @@ export const CenturySection = styled.div`
 `
 
 /**
- * 기록 공백 표지 — 연 그룹 사이가 10년 이상 벌어질 때만 나타난다.
- *
- * 여백만 키우면 '왜 벌어졌는지'를 사용자가 추론해야 하고, 라벨만 달면 스크롤 감각과
- * 어긋난다. 둘을 함께 둔다 — 여백은 순서(더 크다)를, 라벨은 정확한 값을 싣는다.
- * 축(레일) 위에 그리지 않고 콘텐츠 폭에 두어 '시간축을 끊는 눈금'이 아니라
- * '이 구간에 데이터가 없다'는 **데이터에 대한 진술**로 읽히게 한다.
- */
-export const GapMarker = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  ${bleedToEdges}
-  margin-bottom: 4px;
-  padding-left: var(--rail-gutter);
-  padding-right: var(--list-pad-r, 20px);
-  font-size: var(--row-meta, 12px);
-  font-weight: 500;
-  letter-spacing: 0;
-  color: ${metaText};
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-
-  /* 점선 rule — 실선은 그룹 hairline과 같은 무게라 '경계'로 오독된다. */
-  &::after {
-    content: '';
-    flex: 1;
-    height: 0;
-    border-top: 1px dashed
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.14)'
-          : 'rgba(15, 23, 42, 0.14)'};
-  }
-`
-
-/**
  * 군주 즉위 표지 — 연대 흐름 사이의 '👑 ◁[세종 즉위 1418–1450]'.
  *
  * 축 위 왕관이 **말하는** 말풍선으로 그린다. 예전엔 배경 없는 메타 한 줄이었는데,
@@ -1051,14 +1015,12 @@ export const GapMarker = styled.div`
  * 32px 떨어져 있어 둘이 한 표지라는 연결도 약했다. 말풍선은 ① 자기 윤곽으로 행과 다른
  * 종류의 것임을 말하고 ② 꼬리가 왕관을 가리켜 '이 축 위 지점의 주석'임을 말한다.
  * 사건 행보다 가볍게 — 내용 폭만 차지하는 작은 상자, 옅은 호박 면(왕관과 같은 계열).
- * 읽기 위계는 그대로 세 단 — 이름(본문색·굵게) > 기간(보조색) > '즉위'·공백 문구(메타색).
+ * 읽기 위계는 세 단 — 이름(본문색·굵게) > 기간(보조색) > 나라·햇수(메타색).
  */
 export const ReignMarker = styled.div<{
   /** 즉위만 있는 해 — 연 머리글과 말풍선을 한 줄로 합친 행 */
   $asYear?: boolean
   $beforeCentury?: boolean
-  /** 공백 표지와 합친 줄 — 공백 표지의 점선 rule을 이어받는다 */
-  $withGap?: boolean
 }>`
   position: relative;
   display: flex;
@@ -1079,13 +1041,11 @@ export const ReignMarker = styled.div<{
   @media (max-width: 640px) {
     padding-left: var(--rail-gutter);
     /* 날짜(또는 연 라벨)와 말풍선을 한 줄에 둔다 — 감싸면 날짜가 말풍선 위로 홀로 올라가
-       꼬리가 가리킬 대상을 잃는다. 좁으면 말풍선 **안**에서 줄을 바꾼다.
-       공백 문구와 합친 줄은 문구가 다음 줄로 내려가야 하므로 감싸기를 유지한다. */
-    ${({ $withGap }) => !$withGap && 'flex-wrap: nowrap;'}
+       꼬리가 가리킬 대상을 잃는다. 좁으면 말풍선 **안**에서 줄을 바꾼다. */
+    flex-wrap: nowrap;
   }
   /* 세기 머리글 바로 앞이면 그 세기에 붙어 읽히지 않게 띄운다 — 표지는 앞 시대의 끝이다 */
-  margin-bottom: ${({ $beforeCentury, $withGap }) =>
-    $beforeCentury ? '14px' : $withGap ? '4px' : '0'};
+  margin-bottom: ${({ $beforeCentury }) => ($beforeCentury ? '14px' : '0')};
   /* 연 머리글 자리를 대신하므로 머리글과 같은 위 여백을 받는다 */
   ${({ $asYear }) =>
     $asYear &&
@@ -1096,22 +1056,6 @@ export const ReignMarker = styled.div<{
   line-height: 1.55;
   letter-spacing: 0;
   color: ${metaText};
-
-  ${({ $withGap, theme }) =>
-    $withGap &&
-    css`
-      &::after {
-        content: '';
-        flex: 1;
-        min-width: 24px;
-        align-self: center;
-        height: 0;
-        border-top: 1px dashed
-          ${theme.mode === 'dark'
-            ? 'rgba(255, 255, 255, 0.14)'
-            : 'rgba(15, 23, 42, 0.14)'};
-      }
-    `}
 `
 
 /** 축 위 왕관 — 연 도트와 같은 좌표. 표면색 원판이 축을 끊고, 얇은 호박 테가 눈금을 만든다 */
@@ -1196,25 +1140,6 @@ export const ReignYearLabel = styled.span`
 
   @media (max-width: 640px) {
     min-width: 0;
-  }
-`
-
-/** 합친 줄의 공백 문구 — 말풍선 **뒤**에 온다(말풍선이 왕관에 붙어 있어야 해서) */
-export const ReignMarkerGap = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-
-  &::before {
-    content: '';
-    width: 1px;
-    height: 11px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.16)'
-        : 'rgba(15, 23, 42, 0.16)'};
   }
 `
 
@@ -1419,10 +1344,6 @@ export const ReignMarkerLength = styled.span`
 export const YearSection = styled.div`
   display: flex;
   flex-direction: column;
-
-  /* 공백 크기에 비례한 추가 여백 — 인라인 변수로 그룹마다 주입한다.
-     선언이 없으면 0이라 기존 리듬 그대로다. */
-  margin-top: var(--gap-space, 0);
 
   /* 세기 헤더 직후 첫 연도 헤더 — 세기 하단 hairline과 이중선이 되지 않게 상단선 제거.
    * (이전 규칙 'CenturyDivider + button'은 래퍼 도입으로 형제 관계가 끊겨 대체된다.) */

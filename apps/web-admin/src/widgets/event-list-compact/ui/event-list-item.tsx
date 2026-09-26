@@ -1148,14 +1148,14 @@ const Stop = styled.div<{
    *     제목 셀 안. 눈이 둘을 한 신호로 묶지 못한다.
    * 이제 Indent 트랙이 depth만큼의 중립 회색 세로선을 **들여쓰기와 같은 자리에** 그린다.
    * ⚠️ 이 주석 안에서 백틱을 쓰지 말 것 — styled 템플릿 리터럴이 끊겨 TS1005가 난다.
-   * 여기 남는 것은 활성 막대뿐이다(그래서 활성 행에서 guide가 지워지던 문제도 사라진다). */
-  border-radius: ${({ $active }) => ($active ? '6px' : '0')};
-  box-shadow: ${({ $active }) =>
-    $active ? 'inset 4px 0 0 0 #2563eb' : 'none'};
+   * (제거) 활성 행의 좌측 4px 인디고 막대 — 사용자 지시로 폐지(2026-09-25, "좌측 border-left
+   * 컬러 쓰지 마라"). 선택은 아래 떠 있는 카드(::after)가 말한다. */
   ${({ $active }) =>
     $active &&
     css`
       border-bottom-color: transparent;
+      /* ::after 카드를 z-index -1로 행 **안쪽** 맨 아래에 깔기 위한 쌓임 맥락 */
+      isolation: isolate;
     `}
 
   /**
@@ -1308,29 +1308,53 @@ const Stop = styled.div<{
    * 읽으려면 좌측 단일 축이 필요하고, 축이 없으면 헤더는 그냥 텍스트 줄이 된다.
    */
 
-  /* active별 bg tint — 활성 행이 hover 행과 명확히 구분되도록 강화. */
+  /**
+   * 선택 행 — **떠 있는 카드**. 예전엔 전폭 파란 면 + 좌측 4px 막대였다.
+   *
+   * 카드는 행 상자 자체가 아니라 ::after로 그린다. 행은 목록 좌우 끝까지 번지는
+   * 상자(bleedToEdges)라, 행에 테·모서리를 주면 목록 카드의 테두리 위에 겹친다.
+   * 레일 축 오른쪽에서 시작해(축·구슬은 카드 밖에 남아 시간축이 끊기지 않는다) 오른쪽
+   * 가장자리 조금 안에서 멈추고, 위아래로 3px 들어앉는다 — 목록 위에 한 장이 얹힌 모양.
+   * 면은 옅은 브랜드 tint, 테는 1px 브랜드 링(모든 변 — 한쪽 변만 칠하지 않는다).
+   * tint가 옅어 그 위 metaText 대비는 비선택 행과 같은 AA를 유지한다.
+   */
+  background: transparent;
   ${({ $active, theme }) => {
+    if (!$active) return ''
     const isDark = theme.mode === 'dark'
-    if ($active) {
-      /* 라이트 0.13은 그 위 metaText를 4.04:1로 떨어뜨려 AA에 미달시켰다.
-         식별은 좌측 4px 인디고 막대가 이미 담당하므로 tint는 낮춰도 된다. */
-      return css`
-        background: ${isDark
-          ? 'rgba(37, 99, 235, 0.20)'
-          : 'rgba(37, 99, 235, 0.08)'};
-      `
-    }
     return css`
-      background: transparent;
+      &::after {
+        content: '';
+        position: absolute;
+        top: 3px;
+        bottom: 3px;
+        left: calc(var(--rail-gutter) - 6px);
+        right: max(8px, calc(var(--list-pad-r, 20px) - 8px));
+        z-index: -1;
+        border-radius: 10px;
+        background: ${isDark
+          ? 'rgba(59, 130, 246, 0.14)'
+          : 'rgba(37, 99, 235, 0.055)'};
+        box-shadow:
+          inset 0 0 0 1px
+            ${isDark ? 'rgba(147, 197, 253, 0.38)' : 'rgba(37, 99, 235, 0.32)'},
+          0 1px 2px
+            ${isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(37, 99, 235, 0.08)'};
+        pointer-events: none;
+        transition: background ${MOTION.fast};
+      }
+      &:hover::after {
+        background: ${isDark
+          ? 'rgba(59, 130, 246, 0.2)'
+          : 'rgba(37, 99, 235, 0.085)'};
+      }
     `
   }}
 
   &:hover {
     background: ${({ theme, $active }) =>
       $active
-        ? theme.mode === 'dark'
-          ? 'rgba(37, 99, 235, 0.26)'
-          : 'rgba(37, 99, 235, 0.13)'
+        ? 'transparent'
         : theme.mode === 'dark'
           ? 'rgba(255, 255, 255, 0.06)'
           : 'rgba(15, 23, 42, 0.05)'};
@@ -2075,6 +2099,11 @@ const Year = styled.span`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#d4d4d8' : '#4b5563')};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+
+  /* 선택 행은 날짜도 브랜드색 — 카드 테와 같은 색이 날짜 열에서 '여기'를 한 번 더 짚는다 */
+  ${Stop}[data-active='true'] & {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8')};
+  }
   /* 극단값(BC·헤더리스 승격 'YYYY.M.D')이 열을 넘기더라도 제목을 잠식하지 못하게
      여기서 흡수한다 — 격자에서 줄어들 수 있는 건 제목 트랙뿐이기 때문이다. */
   min-width: 0;

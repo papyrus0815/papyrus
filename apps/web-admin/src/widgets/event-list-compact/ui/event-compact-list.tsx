@@ -38,11 +38,7 @@ import {
   rowHairline,
   type ListDensity,
 } from '../../../pages/events/styles/theme'
-import {
-  formatGapLabel,
-  gapSpacingPx,
-  groupYearsByCentury,
-} from '@/features/event-hierarchy/model'
+import { groupYearsByCentury } from '@/features/event-hierarchy/model'
 import {
   type ReignMarker,
   eventStartKey,
@@ -369,7 +365,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     centuryCount,
     yearRootCount,
     unknownItems,
-    yearGapBefore,
     bucketYearById,
   } = yearBuckets
 
@@ -443,28 +438,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         ? { min: Math.min(...eventYears), max: Math.max(...eventYears) }
         : undefined,
     )
-    /**
-     * 세기 머리글 앞 즉위라도, 그 세기 첫 해 앞에 공백 표지('107년 기록 없음')가 서면
-     * 그 줄로 옮겨 합친다. 공백과 즉위가 같은 구간의 이야기인데 세기 머리글을 사이에 두고
-     * 두 줄로 갈리면 한쪽 방향(내림차순)에서만 줄이 하나 더 생긴다.
-     */
-    for (const { century, years } of centuryGroups) {
-      const reigns = plan.beforeCentury.get(century)
-      const gap = yearGapBefore.get(years[0])
-      if (!reigns || !gap || gap.missingCenturies.length > 0) continue
-      if (!formatGapLabel(gap)) continue
-      plan.beforeYear.set(years[0], [
-        ...reigns,
-        ...(plan.beforeYear.get(years[0]) ?? []),
-      ])
-      plan.beforeCentury.delete(century)
-    }
     return plan
   }, [
     reignMarkers,
     centuryGroups,
     sortDirection,
-    yearGapBefore,
     allYears,
     eventsByYear,
   ])
@@ -498,17 +476,12 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 쓰고 있어, 선을 하나 더 보태면 목록이 줄무늬가 된다. 같은 자리의 즉위는 한 줄에
    * 이어 쓴다(세조 1455–1468 · 성종 1469–1494). 이름은 인물 상세 링크.
    * 행 목록 안에 들 때는 listitem이어야 한다.
-   *
-   * `gapLabel`이 있으면 공백 표지('32년 기록 없음')와 **한 줄로 합친다**. 공백 구간의
-   * 즉위는 거의 항상 공백 표지 바로 아래에 오는데, 메타 두 줄이 연달아 쌓이면 그 자리만
-   * 목록이 두꺼워진다. '기록 없는 32년 — 그 사이 세조·성종 즉위'는 한 문장이다.
    */
   const renderReignMarkers = (
     markers: ReignMarker[],
     inList: boolean,
     options: {
       beforeCentury?: boolean
-      gapLabel?: string | null
       /** 즉위만 있는 해 — 연 라벨을 말풍선 앞에 세워 연 머리글을 대신한다 */
       yearLabel?: string
       /** 표지가 놓인 연 그룹 — 같은 해면 날짜 열에 월·일만 쓴다 */
@@ -520,7 +493,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       role={inList ? 'listitem' : 'note'}
       $asYear={!!options.yearLabel}
       $beforeCentury={options.beforeCentury}
-      $withGap={!!options.gapLabel}
       data-reign-marker=""
     >
       <List.ReignMarkerIcon aria-hidden="true">
@@ -581,9 +553,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           )
         })}
       </List.ReignMarkerList>
-      {options.gapLabel && (
-        <List.ReignMarkerGap>{options.gapLabel}</List.ReignMarkerGap>
-      )}
     </List.ReignMarker>
   )
 
@@ -978,24 +947,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                 role="group"
                 aria-labelledby={centuryHeadingId}
               >
-                {/* 통째로 빠진 세기는 **세기 헤더 앞**에 고지한다 — 13세기 블록이 끝나고
-                    '12세기 기록 없음'을 지난 뒤 11세기 헤더가 오는 순서라야 연대기로 읽힌다.
-                    (연도 그룹 안에 두면 11세기 헤더 아래에 12세기 얘기가 나온다.) */}
+                {/* (제거) 'N세기 기록 없음' 공백 표지 — 사용자 지시로 폐지(2026-09-25).
+                    데이터가 없다는 진술이 목록의 절반 가까운 구간 경계마다 끼어 소음이었다. */}
                 {(() => {
-                  const firstGap = yearGapBefore.get(years[0])
-                  const label =
-                    firstGap && firstGap.missingCenturies.length > 0
-                      ? formatGapLabel(firstGap)
-                      : null
                   const reigns = reignPlan.beforeCentury.get(century)
-                  if (reigns)
-                    return renderReignMarkers(reigns, false, {
-                      beforeCentury: true,
-                      gapLabel: label,
-                    })
-                  return label ? (
-                    <List.GapMarker role="note">{label}</List.GapMarker>
-                  ) : null
+                  return reigns
+                    ? renderReignMarkers(reigns, false, { beforeCentury: true })
+                    : null
                 })()}
                 {/* 헤딩 탐색용 — 시각적으로는 숨기고 접근성 트리에만 남긴다. */}
                 <List.GroupHeading id={centuryHeadingId} aria-level={3}>
@@ -1115,37 +1073,15 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           key={`year-${currentYear}`}
                           role="group"
                           aria-labelledby={yearHeadingId}
-                          /* 공백에 비례한 추가 여백 — 스크롤 거리로 시간 흐름을 읽을 때
-                             '연속된 해'와 '기록 없는 200년'이 같아 보이던 문제.
-                             ⚠️ 세기를 통째로 건너뛴 공백은 세기 헤더 앞에서 이미 표지와
-                             여백을 받았다. 여기서 또 주면 세기 헤더 아래에 정체불명의
-                             빈 띠가 생긴다(실측: 11세기 헤더 밑 28px 공백). */
-                          style={
-                            {
-                              '--gap-space': (() => {
-                                const gap = yearGapBefore.get(currentYear)
-                                if (!gap || gap.missingCenturies.length > 0)
-                                  return '0px'
-                                return `${gapSpacingPx(gap.years)}px`
-                              })(),
-                            } as React.CSSProperties
-                          }
+                          /* (제거) 공백에 비례한 추가 여백과 'N년 기록 없음' 표지 — 사용자
+                             지시로 폐지(2026-09-25). 설명 없는 여백만 남기면 결함처럼 보이므로
+                             여백도 함께 걷어 연 그룹 리듬을 한 가지로 둔다. */
                         >
                           {(() => {
-                            const gap = yearGapBefore.get(currentYear)
-                            // 세기를 건너뛴 공백은 세기 헤더 앞에서 이미 고지했다.
-                            const label =
-                              gap && gap.missingCenturies.length === 0
-                                ? formatGapLabel(gap)
-                                : null
                             const reigns = reignPlan.beforeYear.get(currentYear)
-                            if (reigns)
-                              return renderReignMarkers(reigns, false, {
-                                gapLabel: label,
-                              })
-                            return label ? (
-                              <List.GapMarker role="note">{label}</List.GapMarker>
-                            ) : null
+                            return reigns
+                              ? renderReignMarkers(reigns, false)
+                              : null
                           })()}
                           {reignOnlyYear ? (
                             <>
