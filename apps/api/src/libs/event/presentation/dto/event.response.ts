@@ -475,3 +475,47 @@ export class EventLinkCandidateDto {
   extraParents?: Array<{ id: string; title: string }>
 }
 
+
+/**
+ * 국가의 건국·멸망 사건 한 줄 — 참여국 역할 FOUNDED/DISSOLVED로 걸린 사건.
+ * 역사국가 개요의 '존속 기간' 옆에 "무엇으로 시작해 무엇으로 끝났나"를 싣는다.
+ */
+export class StatehoodEventDto {
+  @ApiProperty({ description: '사건 ID' })
+  id!: string
+
+  @ApiProperty({ description: '사건명' })
+  title!: string
+
+  @ApiProperty({ description: '시작일 (AD 1000+만 — 그 밖은 구조화 필드)', required: false })
+  startDate?: string | null
+
+  @ApiProperty({ description: '시작일 정밀도', required: false })
+  startDatePrecision?: string | null
+
+  @ApiProperty({ description: '시작 연대 (BC/AD)', required: false })
+  startEra?: string | null
+
+  @ApiProperty({ description: '시작 연도 (구조화)', required: false })
+  startYear?: number | null
+
+  @ApiProperty({ description: '시작 월 (구조화)', required: false })
+  startMonth?: number | null
+
+  @ApiProperty({ description: '시작 일 (구조화)', required: false })
+  startDay?: number | null
+
+  @ApiProperty({ description: '사건 카테고리명', required: false })
+  categoryName?: string | null
+
+  @ApiProperty({ description: '이 나라가 이 사건에서 무엇을 했나 (참여국 역할 설명)', required: false })
+  roleDescription?: string | null
+}
+
+export class CountryStatehoodEventsDto {
+  @ApiProperty({ description: '이 사건으로 건국(성립·독립)', type: [StatehoodEventDto] })
+  founded!: StatehoodEventDto[]
+
+  @ApiProperty({ description: '이 사건으로 멸망(병합·해체)', type: [StatehoodEventDto] })
+  dissolved!: StatehoodEventDto[]
+}

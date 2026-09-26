@@ -27,6 +27,8 @@ import {
   UpdateEventDto,
   EventResponseDto,
   EventLinkCandidateDto,
+  CountryStatehoodEventsDto,
+  StatehoodEventDto,
 } from './dto'
 import { Event } from '../domain/event.entity'
 import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
@@ -1105,6 +1107,84 @@ export class EventController {
       }
       return (left.endYear ?? Infinity) - (right.endYear ?? Infinity)
     })
+  }
+
+  /**
+   * 국가의 건국·멸망 사건 — 참여국 역할 FOUNDED/DISSOLVED로 이 나라를 건 사건들.
+   *
+   * 역사국가는 historicalCountryId, 현대국가는 countryId 중 하나를 준다.
+   * 건국·멸망은 사건의 **카테고리**('건국/멸망')가 아니라 **국가별 배역**으로 판정한다 —
+   * 한 사건(예: 명 멸망·청 입관)이 한 나라에겐 멸망, 다른 나라에겐 건국일 수 있어서다.
+   * 계층(루트 여부)은 따지지 않는다: 건국 선포가 전쟁의 하위 사건이어도 그 나라의 건국이다.
+   *
+   * ⚠️ 라우트는 반드시 @Get(':id')보다 먼저 선언 — 아니면 'statehood'가 :id로 매칭된다.
+   * @tag events
+   */
+  @Get('statehood')
+  async getCountryStatehoodEvents(
+    @Query('historicalCountryId') historicalCountryId?: string,
+    @Query('countryId') countryId?: string,
+    @Request() req?: any,
+  ): Promise<CountryStatehoodEventsDto> {
+    const userId = req.user?.id || req.user?.sub
+    const hcId = historicalCountryId?.trim()
+    const mcId = countryId?.trim()
+    if (!hcId && !mcId) {
+      throw new BadRequestException('historicalCountryId 또는 countryId가 필요합니다.')
+    }
+
+    const relations = await this.prisma.eventCountryRelation.findMany({
+      where: {
+        role: { in: ['FOUNDED', 'DISSOLVED'] },
+        ...(hcId ? { historicalCountryId: hcId } : { countryId: mcId }),
+        // 목록 API와 같은 스코프 — 본인이 등록한 미삭제 사건만
+        event: { createdById: userId, deletedAt: null },
+      },
+      select: {
+        role: true,
+        roleDescription: true,
+        event: {
+          select: {
+            id: true,
+            title: true,
+            startDate: true,
+            startDatePrecision: true,
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            category: { select: { name: true } },
+          },
+        },
+      },
+    })
+
+    // 연대순 — BC는 음수 부호 연도. 구조화 연도가 없으면 DATETIME에서 읽는다.
+    const signedYear = (event: (typeof relations)[number]['event']): number => {
+      if (event.startYear != null) {
+        return event.startEra === 'BC' ? -event.startYear : event.startYear
+      }
+      return event.startDate ? event.startDate.getFullYear() : Number.POSITIVE_INFINITY
+    }
+    const sorted = [...relations].sort((left, right) => signedYear(left.event) - signedYear(right.event))
+
+    const toDto = (row: (typeof relations)[number]): StatehoodEventDto => ({
+      id: row.event.id,
+      title: row.event.title,
+      startDate: row.event.startDate ? row.event.startDate.toISOString() : null,
+      startDatePrecision: row.event.startDatePrecision,
+      startEra: row.event.startEra,
+      startYear: row.event.startYear,
+      startMonth: row.event.startMonth,
+      startDay: row.event.startDay,
+      categoryName: row.event.category?.name ?? null,
+      roleDescription: row.roleDescription,
+    })
+
+    return {
+      founded: sorted.filter((row) => row.role === 'FOUNDED').map(toDto),
+      dissolved: sorted.filter((row) => row.role === 'DISSOLVED').map(toDto),
+    }
   }
 
   /**

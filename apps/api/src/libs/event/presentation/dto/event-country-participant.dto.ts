@@ -12,6 +12,8 @@ export const EVENT_COUNTRY_ROLE_VALUES = [
   'OBSERVER',
   'VICTIM',
   'BENEFICIARY',
+  'FOUNDED',
+  'DISSOLVED',
   'OTHER',
 ] as const
 
