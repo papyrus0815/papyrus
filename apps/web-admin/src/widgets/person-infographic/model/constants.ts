@@ -48,7 +48,7 @@ export const colorForField = (field: string): string =>
  */
 export const INFOGRAPHIC_DEFAULTS = {
   /** HeaderStats 시대 밀도 차트 bin 개수 */
-  ERA_DENSITY_BINS: 42,
+  ERA_DENSITY_BINS: 56,
   /** HeaderStats 상위 국가 기본/펼침 개수 */
   TOP_COUNTRY_DEFAULT: 8,
   TOP_COUNTRY_EXPANDED: 15,

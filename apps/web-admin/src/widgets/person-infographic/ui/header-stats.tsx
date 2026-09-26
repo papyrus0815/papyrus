@@ -16,7 +16,7 @@
  *  - 글자·수치는 항상 텍스트 토큰 색(식별색으로 글자를 칠하지 않는다).
  * 모든 항목·막대·시대 띠는 클릭하면 해당 scope 필터를 토글한다(필터 패널과 양방향).
  */
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import styled, { css } from 'styled-components'
 
@@ -230,6 +230,22 @@ export function HeaderStats({
 
   const eraFiltered = scopes.era.length > 0
   const yearTicks = domain.ticks
+  const peakIndex = stats.bins.indexOf(stats.maxBin)
+
+  // 시대 띠 이름은 띠 폭에 들어갈 때만 — 좁은 화면에서 이웃 이름끼리 붙어 겹치지 않게 실측
+  const plotRef = useRef<HTMLDivElement>(null)
+  const [plotWidth, setPlotWidth] = useState(0)
+  useEffect(() => {
+    const element = plotRef.current
+    if (!element) return
+    const observer = new ResizeObserver(([entry]) =>
+      setPlotWidth(entry.contentRect.width),
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  /** 띠 이름 한 개가 차지하는 폭(px) — 11px 굵은 글씨 '근대 19c' 기준 + 간격 */
+  const BAND_LABEL_PX = 60
 
   const share = (value: number) => (total ? Math.round((value / total) * 100) : 0)
 
@@ -348,10 +364,40 @@ export function HeaderStats({
         <SectionHead>
           <SectionTitle>시대 분포</SectionTitle>
           <SectionHint>활동 연도 기준 · 막대를 누르면 그 시대로 거릅니다</SectionHint>
+          {/* 요점 한 줄 — 가장 붐빈 구간(진한 막대)을 글로 */}
+          {stats.maxBin > 0 && (
+            <SectionMeta>
+              최다 {formatYear(domain.minYear + domain.binWidth * peakIndex)}–
+              {formatYear(domain.minYear + domain.binWidth * (peakIndex + 1))} ·{' '}
+              <PeakValue>{stats.maxBin.toLocaleString()}명</PeakValue>
+            </SectionMeta>
+          )}
         </SectionHead>
 
         <Chart>
-          <Plot onMouseLeave={() => setHoverBin(null)}>
+          <Plot ref={plotRef} onMouseLeave={() => setHoverBin(null)}>
+            {/* 시대 띠 — 막대 뒤에 시대 구간을 옅게 깔아 '어느 시대의 봉우리인가'를 차트 안에서 읽게 한다 */}
+            {ERAS.map((era) => {
+              const left = Math.max(0, pct(era.from))
+              const right = Math.min(100, pct(era.to))
+              if (right <= left) return null
+              return (
+                <EraBand
+                  key={era.key}
+                  aria-hidden
+                  $dim={eraFiltered && !scopes.era.includes(era.key)}
+                  style={{
+                    left: `${left}%`,
+                    width: `${right - left}%`,
+                    ['--band' as string]: era.color,
+                  }}
+                >
+                  {plotWidth > 0 && ((right - left) / 100) * plotWidth >= BAND_LABEL_PX && (
+                    <EraBandLabel>{era.lbl}</EraBandLabel>
+                  )}
+                </EraBand>
+              )
+            })}
             <GridLine style={{ bottom: '100%' }} aria-hidden />
             <GridLine style={{ bottom: '50%' }} aria-hidden />
             {/* 세로축 눈금 — 격자선에 값을 붙여 막대 높이를 숫자로 읽게 한다 */}
@@ -394,6 +440,7 @@ export function HeaderStats({
                 >
                   <ColumnBar
                     $dim={!inFilter}
+                    $peak={index === peakIndex}
                     style={{
                       height: count ? `${Math.max(3, (count / stats.maxBin) * 100)}%` : 0,
                     }}
@@ -411,21 +458,6 @@ export function HeaderStats({
             ))}
           </Axis>
 
-          {/* 시대 구간 리본 — 연도 비례 위치만 보여주는 얇은 띠(라벨은 아래 칩 줄이 담당) */}
-          <EraRibbon aria-hidden>
-            {ERAS.map((era) => {
-              const left = Math.max(0, pct(era.from))
-              const right = Math.min(100, pct(era.to))
-              if (right <= left) return null
-              return (
-                <EraRibbonPart
-                  key={era.key}
-                  $dim={eraFiltered && !scopes.era.includes(era.key)}
-                  style={{ left: `${left}%`, width: `${right - left}%`, background: era.color }}
-                />
-              )
-            })}
-          </EraRibbon>
 
           {/* 시대 칩 — 연도 비례가 아니라 같은 폭 규칙으로 나열해, 좁은 근·현대 구간도
               이름과 인원이 항상 글자로 읽힌다(색만으로 시대를 식별하지 않는다). */}
@@ -755,6 +787,8 @@ const SectionMeta = styled.span`
 
 const Chart = styled.div`
   position: relative;
+  /* 시대 띠 이름 줄(차트 위) 자리 — 막대가 이름을 가리지 않게 차트 밖에 둔다 */
+  padding-top: 20px;
 `
 
 const Plot = styled.div`
@@ -762,7 +796,7 @@ const Plot = styled.div`
   display: flex;
   align-items: stretch;
   gap: 2px;
-  height: 120px;
+  height: 168px;
   border-bottom: 1px solid
     ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.18)')};
 `
@@ -776,12 +810,15 @@ const GridLine = styled.div`
   pointer-events: none;
 `
 
-/** 격자선 값 — 선 바로 아래 왼쪽(제목 줄과 붙지 않게), 지면색 받침으로 막대 위에서도 읽힌다 */
+/**
+ * 격자선 값 — 선 바로 아래 **오른쪽**. 왼쪽 위는 시대 띠 이름 자리라 비킨다.
+ * 지면색 받침으로 막대·띠 위에서도 읽힌다.
+ */
 const YLabel = styled.span`
   position: absolute;
-  left: 0;
-  z-index: 1;
-  padding: 2px 4px 1px 0;
+  right: 0;
+  z-index: 2;
+  padding: 2px 0 1px 4px;
   font-size: 10.5px;
   font-weight: 600;
   line-height: 1.2;
@@ -794,6 +831,7 @@ const YLabel = styled.span`
 /** 열 전체가 히트 영역 — 막대가 작아도 겨누기 쉽다 */
 const Column = styled.button<{ $hovered: boolean }>`
   position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -811,11 +849,20 @@ const Column = styled.button<{ $hovered: boolean }>`
   }
 `
 
-const ColumnBar = styled.span<{ $dim: boolean }>`
+const ColumnBar = styled.span<{ $dim: boolean; $peak?: boolean }>`
   width: 100%;
   border-radius: 4px 4px 0 0;
-  background: ${({ $dim, theme }) =>
-    $dim ? (theme.mode === 'dark' ? 'rgba(255,255,255,0.14)' : '#d5dbe4') : BRAND.primary};
+  /* 최고치만 진한 단색, 나머지는 한 단계 옅게 — 봉우리가 먼저 읽힌다 */
+  background: ${({ $dim, $peak, theme }) =>
+    $dim
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.14)'
+        : '#d5dbe4'
+      : $peak
+        ? BRAND.primary
+        : theme.mode === 'dark'
+          ? '#3b6fd8'
+          : '#5b8def'};
   transition: height 0.25s ease, background ${MOTION_FAST};
 
   ${Column}:hover & {
@@ -824,6 +871,35 @@ const ColumnBar = styled.span<{ $dim: boolean }>`
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
+`
+
+const EraBand = styled.span<{ $dim: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  background: color-mix(in srgb, var(--band) ${({ theme }) => (theme.mode === 'dark' ? '13%' : '8%')}, transparent);
+  /* 시대 경계 — 띠 왼쪽 가장자리를 그 시대 색으로 한 줄 */
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--band) 35%, transparent);
+  opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
+  transition: opacity ${MOTION_FAST};
+  pointer-events: none;
+`
+
+const EraBandLabel = styled.span`
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+`
+
+const PeakValue = styled.strong`
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const Axis = styled.div`
@@ -845,23 +921,6 @@ const Tick = styled.span`
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
-`
-
-const EraRibbon = styled.div`
-  position: relative;
-  height: 4px;
-  margin-top: 2px;
-`
-
-const EraRibbonPart = styled.span<{ $dim: boolean }>`
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-radius: 2px;
-  /* 이웃 구간과 2px 표면 간격 */
-  box-shadow: 0 0 0 1px ${surface};
-  opacity: ${({ $dim }) => ($dim ? 0.25 : 0.9)};
-  transition: opacity ${MOTION_FAST};
 `
 
 const EraChips = styled.div`
