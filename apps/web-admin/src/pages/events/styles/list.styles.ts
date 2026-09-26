@@ -1313,6 +1313,29 @@ export const ReignMarkerRole = styled.span`
 export const ReignMarkerYears = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
   font-variant-numeric: tabular-nums;
+
+  /* 누르면 그 기간의 사건만 — 이름(인물 모달)과 같은 어포던스: 평소엔 글자, hover에 밑줄 */
+  &:is(button) {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 3px;
+    text-decoration: underline dotted;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.12s ease, color 0.12s ease;
+
+    &:hover {
+      color: ${({ theme }) => theme.colors.text.primary};
+      text-decoration-color: currentColor;
+    }
+    &:focus-visible {
+      outline: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+      outline-offset: 2px;
+    }
+  }
 `
 
 /**

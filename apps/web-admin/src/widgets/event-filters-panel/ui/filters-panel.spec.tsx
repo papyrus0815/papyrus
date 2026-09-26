@@ -443,6 +443,7 @@ describe('FiltersPanel — 옵션 모집단 (검토 배치 7)', () => {
         century: 30,
         keyword: 30,
         bookmark: 30,
+        period: 30,
       },
       unfiltered: 30,
     }

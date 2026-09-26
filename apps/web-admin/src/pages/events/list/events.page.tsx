@@ -19,7 +19,12 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { FiAlertTriangle, FiPlus, FiRefreshCw } from 'react-icons/fi'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  Navigate,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom'
 
 import { transformEventsFromApi, useEvents } from '@/entities/event/model'
 import type { FilterChip } from '@/entities/event/model'
@@ -84,6 +89,7 @@ import {
 } from './hooks/use-catalog-keyboard'
 import { useCatalogUrlSync } from './hooks/use-catalog-url-sync'
 import {
+  readCatalogQuery,
   readCollapsedBands,
   saveCatalogQuery,
   saveCollapsedBands,
@@ -185,6 +191,49 @@ export const EventsCatalogPage: React.FC = () => {
   useEffect(() => {
     saveCatalogQuery(searchParams)
   }, [searchParams])
+
+  /**
+   * 기간 축 — `?period=1888_1918&periodOf=Wilhelm 재위`. 즉위·취임 말풍선의 기간을 누르면
+   * 선다. 다른 필터처럼 상태를 두지 않고 **URL에서 바로 읽는다**(설정 기억·딥링크가
+   * 그대로 따라온다). 부호 연도라 BC는 음수('-27_14').
+   */
+  const periodParam = searchParams.get('period')
+  const periodOfParam = searchParams.get('periodOf')
+  const period = useMemo(() => {
+    const match = periodParam?.match(/^(-?\d+)_(-?\d+)$/)
+    if (!match) return null
+    const from = Number(match[1])
+    const to = Number(match[2])
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) return null
+    const fmt = (year: number) => (year < 0 ? `BC ${-year}` : String(year))
+    const span = from === to ? fmt(from) : `${fmt(from)}–${fmt(to)}`
+    return {
+      from,
+      to,
+      label: periodOfParam ? `${periodOfParam} (${span})` : span,
+    }
+  }, [periodParam, periodOfParam])
+  const setPeriodParams = useCallback(
+    (value: { period: string; periodOf: string | null } | null) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (value) {
+            next.set('period', value.period)
+            if (value.periodOf) next.set('periodOf', value.periodOf)
+            else next.delete('periodOf')
+          } else {
+            next.delete('period')
+            next.delete('periodOf')
+          }
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+  const clearPeriod = useCallback(() => setPeriodParams(null), [setPeriodParams])
 
   // ===== 검색 / 페이지 상태 =====
   const [bookmarksOnly, setBookmarksOnly] = useState(
@@ -488,6 +537,8 @@ export const EventsCatalogPage: React.FC = () => {
       },
       // 칩 라벨의 폴백 문구를 원인별로 가른다(검토 GAP-5).
       referenceState,
+      period,
+      onClearPeriod: clearPeriod,
     },
   )
 
@@ -1401,6 +1452,8 @@ export const EventsCatalogPage: React.FC = () => {
    */
   const handleResetAll = useCallback(() => {
     const snapshot = {
+      period: periodParam,
+      periodOf: periodOfParam,
       selectedCategory,
       selectedCountry,
       selectedContinent,
@@ -1429,6 +1482,7 @@ export const EventsCatalogPage: React.FC = () => {
       visibleFlattenedHierarchy.length !== listRenderedHierarchy.length
 
     handleResetFilters()
+    clearPeriod()
     setKeywordInput('')
     setBookmarksOnly(false)
     setAnchorsOnly(false)
@@ -1450,6 +1504,11 @@ export const EventsCatalogPage: React.FC = () => {
           setSelectedCountry(snapshot.selectedCountry)
           setSelectedContinent(snapshot.selectedContinent)
           setSelectedCentury(snapshot.selectedCentury)
+          if (snapshot.period)
+            setPeriodParams({
+              period: snapshot.period,
+              periodOf: snapshot.periodOf,
+            })
           // 검색어는 입력값만 되돌리면 디바운스 effect가 술어까지 잇는다.
           setKeywordInput(snapshot.keywordInput)
           setBookmarksOnly(snapshot.bookmarksOnly)
@@ -1464,6 +1523,10 @@ export const EventsCatalogPage: React.FC = () => {
     )
   }, [
     handleResetFilters,
+    clearPeriod,
+    setPeriodParams,
+    periodParam,
+    periodOfParam,
     filterSummaryChips,
     selectedCategory,
     selectedCountry,
@@ -1648,6 +1711,14 @@ export const EventsCatalogPage: React.FC = () => {
       yearBuckets={yearBuckets}
       reignMarkers={reignMarkers}
       onOpenPerson={setModalPersonId}
+      onFilterPeriod={(marker) => {
+        const role = marker.roleTitle ? `${marker.roleTitle} ` : ''
+        const noun = marker.kind === 'monarch' ? '재위' : '재임'
+        setPeriodParams({
+          period: `${marker.startYear}_${marker.endYear ?? new Date().getFullYear()}`,
+          periodOf: `${role}${marker.name} ${noun}`,
+        })
+      }}
       events={events}
       expandedEventIds={expandedEventIds}
       selectedEventId={selectedEventId}
@@ -2057,6 +2128,25 @@ export const EventsCatalogPage: React.FC = () => {
       />
     </>
   )
+}
+
+/**
+ * 라우트 진입점 — 맨 `/events`로 **들어올 때만** 마지막 설정으로 되돌린다.
+ *
+ * ⚠️ 라우트 loader에서 하면 안 된다(처음엔 그렇게 했다). loader는 **같은 페이지 안의 URL
+ * 변경마다** 다시 돌아서, 마지막 남은 필터 하나를 풀어 쿼리가 비는 순간 '방금 들어왔다'로
+ * 오판해 저장된 쿼리(= 방금 푼 그 필터)로 되돌렸다 — 마지막 필터를 절대 못 푸는 상태.
+ * 이 컴포넌트는 지면에 들어올 때 한 번만 마운트되므로 판정도 그때 한 번뿐이다.
+ * 복원은 페이지를 그리기 전의 <Navigate replace>라 기본 목록이 한 번 그려지는 깜빡임이 없다.
+ */
+export const EventsCatalogRoute: React.FC = () => {
+  const location = useLocation()
+  const [restoreTo] = useState(() =>
+    location.search ? null : readCatalogQuery(),
+  )
+  if (restoreTo && !location.search)
+    return <Navigate to={{ pathname: location.pathname, search: `?${restoreTo}` }} replace />
+  return <EventsCatalogPage />
 }
 
 export default EventsCatalogPage

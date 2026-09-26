@@ -22,6 +22,8 @@ import type { CenturyFilter } from '@/entities/event/model'
 import { CENTURY_UNKNOWN } from '@/entities/event/model/types'
 import { FILTER_ALL } from '@/features/event-list/lib'
 
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
+
 import { eventSpansCentury, isCenturyUnknown } from './century-span'
 
 /**
@@ -49,6 +51,7 @@ export type FilterAxisKey =
   | 'century'
   | 'keyword'
   | 'bookmark'
+  | 'period'
 
 /** 축 열거의 단일 출처 — 새 축을 추가하면 건수·drop-one-out이 자동으로 따라온다. */
 export const FILTER_AXIS_KEYS = [
@@ -58,6 +61,7 @@ export const FILTER_AXIS_KEYS = [
   'century',
   'keyword',
   'bookmark',
+  'period',
 ] as const satisfies readonly FilterAxisKey[]
 
 /**
@@ -79,6 +83,11 @@ export interface FilterAxisContext {
   linkedHistoricalIdsByModernId: ReadonlyMap<string, ReadonlySet<string>>
   /** event.id → 소문자 검색 건초더미(사전 계산) */
   searchHaystackById: ReadonlyMap<string, string>
+  /**
+   * 기간(부호 연도, 양끝 포함) — 즉위 말풍선의 '이 기간의 사건만 보기'. 없으면 축이 꺼진 것.
+   * 선택 필드인 이유: 이 축을 모르는 호출부(테스트 픽스처 등)는 그대로 둔다.
+   */
+  periodRange?: { from: number; to: number } | null
 }
 
 /**
@@ -184,6 +193,22 @@ export function matchesFilterAxis(
     /** 북마크 — 다른 축과 동등한 술어. gate가 null이면 이 축은 꺼져 있다. */
     case 'bookmark':
       return context.bookmarkGate === null || context.bookmarkGate.has(event.id)
+
+    /**
+     * 기간 — 세기와 같은 **구간 겹침**. 재위 중에 시작했든, 그 전에 시작해 재위 중까지
+     * 이어졌든 '그 재위 동안의 사건'이다. 연도를 모르는 사건은 넣지 않는다.
+     */
+    case 'period': {
+      const range = context.periodRange
+      if (!range) return true
+      const startYear = parseIsoDateParts(event.startDate)?.year
+      if (startYear == null) return false
+      const endYear = parseIsoDateParts(event.endDate)?.year ?? startYear
+      return (
+        Math.min(startYear, endYear) <= range.to &&
+        Math.max(startYear, endYear) >= range.from
+      )
+    }
 
     default:
       return true

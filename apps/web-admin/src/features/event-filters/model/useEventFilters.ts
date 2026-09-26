@@ -95,6 +95,12 @@ export interface EventFilterOptions {
   scopeAnchorId?: string | null
   /** 북마크된 사건 id 집합(브라우저 로컬) */
   bookmarks?: ReadonlySet<string>
+  /**
+   * 기간 축 — 즉위 말풍선의 '이 기간의 사건만 보기'. 상태는 페이지(URL)가 소유하고
+   * 여기서는 술어·칩에만 합류시킨다(북마크와 같은 방식).
+   */
+  period?: { from: number; to: number; label: string } | null
+  onClearPeriod?: () => void
   /** URL에서 읽어 온 초기 필터 값 — 첫 렌더에만 적용 */
   initial?: EventFilterInitialState
   /**
@@ -136,7 +142,11 @@ export const useEventFilters = (
     bookmarks,
     initial,
     referenceState = READY_REFERENCE_STATE,
+    period = null,
+    onClearPeriod,
   } = options
+  const periodFrom = period?.from ?? null
+  const periodTo = period?.to ?? null
   /**
    * 북마크만 모드가 아닐 때는 `bookmarks` 참조 변화를 술어 deps에서 끊는다 —
    * 아니면 북마크 토글 한 번이 `matchesEvent` → 트리 전체 재평탄화를 유발한다.
@@ -298,7 +308,8 @@ export const useEventFilters = (
     selectedContinent !== FILTER_ALL ||
     selectedCentury !== FILTER_ALL ||
     normalizedKeyword.length > 0 ||
-    bookmarksOnly
+    bookmarksOnly ||
+    periodFrom !== null
 
   /**
    * 축 술어가 읽는 값 묶음 — `matchesEvent`와 옵션 건수(facet)가 **같은 객체**를 본다.
@@ -317,8 +328,14 @@ export const useEventFilters = (
       countryContinentMap,
       linkedHistoricalIdsByModernId,
       searchHaystackById,
+      periodRange:
+        periodFrom !== null && periodTo !== null
+          ? { from: periodFrom, to: periodTo }
+          : null,
     }),
     [
+      periodFrom,
+      periodTo,
       selectedCategory,
       selectedCountry,
       selectedContinent,
@@ -549,8 +566,18 @@ export const useEventFilters = (
       })
     }
 
+    if (period && onClearPeriod) {
+      chips.push({
+        key: 'period',
+        label: `기간 · ${period.label}`,
+        onClear: onClearPeriod,
+      })
+    }
+
     return chips
   }, [
+    period,
+    onClearPeriod,
     selectedCategory,
     selectedCountry,
     selectedContinent,

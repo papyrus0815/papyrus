@@ -82,6 +82,8 @@ interface EventCompactListProps {
   reignMarkers?: ReignMarker[]
   /** 즉위 표지의 군주 이름 클릭 — 페이지가 공용 인물 모달을 띄운다 */
   onOpenPerson?: (personId: string) => void
+  /** 표지의 기간을 누르면 — 목록을 그 재위·재임 기간의 사건으로 좁힌다 */
+  onFilterPeriod?: (marker: ReignMarker) => void
   events: HistoricalEvent[]
   expandedEventIds: Set<string>
   selectedEventId: string | null
@@ -201,6 +203,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   yearBuckets,
   reignMarkers,
   onOpenPerson,
+  onFilterPeriod,
   events,
   expandedEventIds,
   selectedEventId,
@@ -559,7 +562,20 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                 <List.ReignMarkerLabel aria-hidden="true" $civic={markerCivic}>
                   {verb}
                 </List.ReignMarkerLabel>
-                <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
+                {onFilterPeriod ? (
+                  <List.ReignMarkerYears
+                    as="button"
+                    type="button"
+                    tabIndex={-1}
+                    title="이 기간의 사건만 보기"
+                    aria-label={`${marker.name} ${verb === '즉위' ? '재위' : '재임'} 기간(${span})의 사건만 보기`}
+                    onClick={() => onFilterPeriod(marker)}
+                  >
+                    {span}
+                  </List.ReignMarkerYears>
+                ) : (
+                  <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
+                )}
                 {length != null && (
                   <List.ReignMarkerLength>{length}년</List.ReignMarkerLength>
                 )}
