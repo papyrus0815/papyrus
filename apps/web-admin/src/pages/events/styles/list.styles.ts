@@ -1169,6 +1169,7 @@ export const ReignMarkerDate = styled.span`
   }
 `
 
+
 /**
  * 즉위만 있는 해의 연 라벨 — 연 머리글(YearDivider > span)과 같은 옷.
  *
@@ -1181,12 +1182,21 @@ export const ReignYearLabel = styled.span`
   flex: none;
   /* 셰브론(13px) + 라벨 gap(6px) — 다른 연 라벨의 글자 시작점과 맞춘다 */
   margin-left: 19px;
+  /* 라벨 칸의 오른쪽 끝을 행 날짜 열의 오른쪽 끝에 맞춘다 — 그래야 이 줄의 말풍선도
+     연 그룹 안 말풍선(날짜 열 뒤)과 **같은 x**에서 시작한다. 예전엔 라벨 바로 뒤에 붙어
+     두 종류의 말풍선이 22px 어긋나 목록을 내려가며 지그재그로 읽혔다.
+     'BC 1046년'처럼 긴 라벨은 min이라 칸을 넘겨 자란다. */
+  min-width: calc(var(--row-pad-l, 10px) + var(--col-date, 72px) - 19px);
   font-size: var(--year-label, 13px);
   font-weight: 700;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: ${({ theme }) => theme.colors.text.secondary};
+
+  @media (max-width: 640px) {
+    min-width: 0;
+  }
 `
 
 /** 합친 줄의 공백 문구 — 말풍선 **뒤**에 온다(말풍선이 왕관에 붙어 있어야 해서) */

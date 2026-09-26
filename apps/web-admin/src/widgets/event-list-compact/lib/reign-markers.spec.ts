@@ -5,6 +5,7 @@ import {
   interleaveReignMarkers,
   planReignMarkers,
   reignAccessionYears,
+  accessionVerb,
   formatAccessionDate,
   groupReignEntries,
   toReignMarkers,
@@ -341,5 +342,15 @@ describe('formatAccessionDate', () => {
     expect(formatAccessionDate(yearOnly, 1888)).toBe('')
     expect(formatAccessionDate(yearOnly)).toBe('1888')
     expect(formatAccessionDate({ ...yearOnly, startYear: -221 })).toBe('BC 221')
+  })
+})
+
+describe('accessionVerb', () => {
+  it('공화국 원수·막부 쇼군은 취임, 그 밖은 즉위', () => {
+    expect(accessionVerb('프랑스 제3공화국')).toBe('취임')
+    expect(accessionVerb('도쿠가와 막부')).toBe('취임')
+    expect(accessionVerb('로마 공화정')).toBe('취임')
+    expect(accessionVerb('독일 제국')).toBe('즉위')
+    expect(accessionVerb(null)).toBe('즉위')
   })
 })

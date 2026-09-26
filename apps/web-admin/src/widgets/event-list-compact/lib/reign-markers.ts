@@ -232,6 +232,17 @@ export function formatAccessionDate(
   return marker.startDay == null ? `${year}.${marker.startMonth}` : `${year}.${monthDay}`
 }
 
+/**
+ * 표지 동사 — 군주는 '즉위', 공화국 원수·막부 쇼군은 '취임'.
+ *
+ * 재위 기록(SovereignReign)에는 직위 유형이 없고, 공화국 대통령·쇼군도 같은 표에 든다
+ * (실측: '프랑스 제3공화국 푸앵카레 레몽 즉위 1913–1920'). 나라 이름이 유일한 단서라
+ * 그것으로 가른다 — 틀리는 쪽은 '즉위'로 남는 것이니 기존보다 나빠지지 않는다.
+ */
+export function accessionVerb(countryName: string | null | undefined): '즉위' | '취임' {
+  return countryName && /공화국|공화정|막부/.test(countryName) ? '취임' : '즉위'
+}
+
 /** 말풍선 한 항목 — 같은 군주·같은 기간이 여러 나라 재위로 들어온 것을 하나로 묶는다 */
 export interface ReignMarkerEntry {
   /** 대표 재위(첫 번째) — key·인물 모달 */

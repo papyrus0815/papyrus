@@ -45,6 +45,7 @@ import {
 import {
   type ReignMarker,
   eventStartKey,
+  accessionVerb,
   formatAccessionDate,
   formatReignSpan,
   groupReignEntries,
@@ -539,6 +540,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             (name) => name !== reignHomeCountry,
           )
           const span = formatReignSpan(marker)
+          const verb = accessionVerb(countryNames[0])
           return (
             <List.ReignMarkerItem key={marker.id}>
               {foreign.length > 0 && (
@@ -556,7 +558,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   type="button"
                   tabIndex={-1}
                   onClick={() => onOpenPerson(marker.personId)}
-                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.name} 인물 정보 보기 — 즉위, 재위 ${span}`}
+                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.name} 인물 정보 보기 — ${verb}, ${verb === '즉위' ? '재위' : '재임'} ${span}`}
                 >
                   {marker.name}
                 </List.ReignMarkerName>
@@ -565,7 +567,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               )}
               {/* '즉위'와 기간은 한 덩어리 — 좁은 폭에서 '즉위'만 줄 끝에 남지 않게 */}
               <List.ReignMarkerSpan>
-                <List.ReignMarkerLabel aria-hidden="true">즉위</List.ReignMarkerLabel>
+                <List.ReignMarkerLabel aria-hidden="true">{verb}</List.ReignMarkerLabel>
                 <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
               </List.ReignMarkerSpan>
             </List.ReignMarkerItem>
