@@ -53,6 +53,11 @@ interface InlineRichTextProps {
   stickyEditButton?: boolean
   /** 스크린리더용 필드명 — 편집 트리거가 "{label} 편집"으로 읽힌다. 미지정 시 "편집". */
   label?: string
+  /**
+   * 읽기 뷰에 넘기기 전 HTML 변환(예: `*강조*` → <strong>). 표시만 바꾸고 편집 진입 시엔
+   * 원문 value를 그대로 편집한다. 결과는 읽기 뷰의 sanitize를 그대로 거친다.
+   */
+  transformReadHtml?: (html: string) => string
 }
 
 /**
@@ -73,6 +78,7 @@ export function InlineRichText({
   onEntityLink,
   stickyEditButton = true,
   label,
+  transformReadHtml,
 }: InlineRichTextProps) {
   const editorId = useId()
   const { editing, open, close } = useInlineEditCoordinator(editorId)
@@ -214,7 +220,7 @@ export function InlineRichText({
           <Placeholder>{placeholder}</Placeholder>
         ) : (
           <RichTextProseWithEntityClicks
-            html={value}
+            html={transformReadHtml ? transformReadHtml(value) : value}
             onPersonClick={handlePersonClick}
             setTermTooltip={setTermTooltip}
             setDynastyTooltip={setDynastyTooltip}

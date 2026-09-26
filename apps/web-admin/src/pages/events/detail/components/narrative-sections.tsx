@@ -26,6 +26,7 @@ import {
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type MentionItem } from '@/shared/lib/mention/mention-system'
+import { emphasisToHtml } from '@/shared/lib/emphasis-markup'
 
 import * as S from '../styles'
 import { InlineRichText, InlineText } from './inline'
@@ -142,6 +143,7 @@ export function NarrativeSectionList({
                 label={`${labelPrefix} ${ordinal}단락 본문`}
                 onPersonClick={onPersonClick}
                 onEntityLink={onEntityLink}
+                transformReadHtml={emphasisToHtml}
                 /**
                  * sticky ✎ 금지 — sticky는 '개요'처럼 페이지를 통째로 차지하는 긴 본문
                  * 하나를 위한 것이다. 단락이 여럿 쌓인 목록에서 켜 두면 각 단락의 버튼이
@@ -346,6 +348,7 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
 const SectionBodyHost = styled.div`
   ${S.longFormEditAffordance}
   ${S.proseTableBreakout}
+  ${S.proseHeadingRhythm}
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};

@@ -19,6 +19,7 @@ import {
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
+import { renderEmphasis } from '@/shared/lib/emphasis-markup'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
@@ -189,6 +190,7 @@ export function DetailHero({
           placeholder="요약 — 한두 단락"
           multiline
           multilineEnter
+          renderRead={renderEmphasis}
         />
       </SummaryHost>
     </S.Hero>

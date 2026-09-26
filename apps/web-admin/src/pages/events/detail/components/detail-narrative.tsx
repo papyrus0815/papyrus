@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { type UpdateEventDto } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { emphasisToHtml } from '@/shared/lib/emphasis-markup'
 
 import * as S from '../styles'
 import { type EventDetail, type EventDetailSection } from '../use-event-detail'
@@ -220,6 +221,7 @@ export function DetailNarrative({
             label="배경 요약"
             onPersonClick={onPersonClick}
             onEntityLink={handleEntityLink}
+            transformReadHtml={emphasisToHtml}
           />
         </S.SectionBody>
         {backgroundRows.length > 0 && (
@@ -294,6 +296,7 @@ export function DetailNarrative({
             label="여파"
             onPersonClick={onPersonClick}
             onEntityLink={handleEntityLink}
+            transformReadHtml={emphasisToHtml}
           />
         </S.SectionBody>
       </S.Section>

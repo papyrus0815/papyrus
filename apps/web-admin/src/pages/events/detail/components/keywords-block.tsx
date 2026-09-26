@@ -14,12 +14,23 @@ interface KeywordsBlockProps {
 }
 
 /**
+ * 앞 몇 개만 보이고 나머지는 '+N개 더'로 — 키워드는 사건당 평균 11개지만 25개 사건이
+ * 20개를 넘고 최대 58개다(실측). 58개가 9줄 벽이 되어 연관 섹션 전체를 차지했다.
+ */
+const KEYWORD_PREVIEW_COUNT = 16
+
+/**
  * 키워드 블록 — inline chip 편집. 칩의 ✕로 제거, "+" 인풋으로 추가. 별도 폼 X.
  * 입력·펼침 상태가 다른 블록과 얽히지 않아 상태까지 이 파일에 자급자족.
  */
 export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
+  const [showAll, setShowAll] = useState(false)
+  const collapsed = !showAll && keywords.length > KEYWORD_PREVIEW_COUNT
+  const visibleKeywords = collapsed
+    ? keywords.slice(0, KEYWORD_PREVIEW_COUNT)
+    : keywords
 
   /* 제거 버튼 포커스 이양용 ref — 칩을 지우면 포커스가 body로 낙하해 키보드
    * 흐름이 끊기므로, 제거 직전 다음 형제의 제거 버튼(없으면 '추가' 버튼)으로 옮긴다. */
@@ -33,6 +44,8 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
     if (!next) return
     if (keywords.includes(next)) return
     onPatch({ keywords: [...keywords, next] })
+    /* 새 키워드는 끝에 붙는다 — 접혀 있으면 방금 넣은 것이 안 보이므로 펼친다. */
+    if (keywords.length >= KEYWORD_PREVIEW_COUNT) setShowAll(true)
   }
 
   /**
@@ -59,7 +72,8 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
   const removeKeyword = (keyword: string) => {
     focusNextRemovalTarget(
       keywordRemoveRefs.current,
-      keywords,
+      /* 접힌 동안엔 보이는 칩만 ref가 있다 — 다음 포커스 대상도 보이는 목록에서 찾는다. */
+      visibleKeywords,
       keyword,
       keywordAddRef.current,
     )
@@ -70,7 +84,7 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
     <NetStyles.HierBlock role="group" aria-labelledby="network-keywords-label">
       <NetStyles.BlockLabel id="network-keywords-label">키워드</NetStyles.BlockLabel>
       <NetStyles.KeywordsRow>
-        {keywords.map((keyword) => (
+        {visibleKeywords.map((keyword) => (
           <NetStyles.KeywordChip key={keyword}>
             <span>{keyword}</span>
             <NetStyles.ChipX
@@ -86,6 +100,17 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
             </NetStyles.ChipX>
           </NetStyles.KeywordChip>
         ))}
+        {keywords.length > KEYWORD_PREVIEW_COUNT && (
+          <NetStyles.AddBtn
+            type="button"
+            aria-expanded={showAll}
+            onClick={() => setShowAll((previous) => !previous)}
+          >
+            {showAll
+              ? '접기'
+              : `+${keywords.length - KEYWORD_PREVIEW_COUNT}개 더`}
+          </NetStyles.AddBtn>
+        )}
         {adding ? (
           <NetStyles.KeywordInput
             autoFocus

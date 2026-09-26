@@ -634,11 +634,29 @@ export const proseTableBreakout = css`
 `
 
 /**
+ * 본문 속 소제목(h2~h4) 리듬 — 본문 단락 228개가 h3/h4 소제목을 쓴다(실측). 읽기 뷰의
+ * 기본값(위 12px·아래 6px, 앞 문단 margin 8px에 겹침)이면 소제목이 **앞 문단의 끝줄처럼**
+ * 붙어 읽히고, 바로 아래 본문과는 거의 붙는다. 위를 넓혀 새 덩어리의 시작으로, 아래는
+ * 좁혀 딸린 본문과 한 묶음으로 — 근접성으로 위계를 만든다.
+ */
+export const proseHeadingRhythm = css`
+  [role='region'] :is(h2, h3, h4) {
+    margin: 1.6em 0 0.35em;
+    line-height: 1.45;
+  }
+
+  [role='region'] > :is(h2, h3, h4):first-child {
+    margin-top: 0;
+  }
+`
+
+/**
  * SectionBody — 읽기 본문(배경·전개·여파). 좁은 가독폭과 넉넉한 line-height.
  */
 export const SectionBody = styled.div`
   ${longFormEditAffordance}
   ${proseTableBreakout}
+  ${proseHeadingRhythm}
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};

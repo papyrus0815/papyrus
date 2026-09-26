@@ -27,6 +27,7 @@ import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { renderEmphasis } from '@/shared/lib/emphasis-markup'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
@@ -624,27 +625,6 @@ export function DetailActors({
 }
 
 /* ───────────────────────── helpers ───────────────────────── */
-
-/**
- * 시드·편집자가 비고에 쓰는 `*강조*`(한 겹 별표) → 굵게. 실측 인물 비고 49/160,
- * 국가 서술 28/307행이 쓴다. 한글 이탤릭은 기울기만 흉내 내 읽기 어려워 굵기로 옮긴다.
- * 줄을 넘는 별표·짝 없는 별표는 그대로 둔다(편집 진입 시엔 원문 그대로).
- */
-const EMPHASIS_PATTERN = /\*([^*\n]+)\*/g
-
-function renderEmphasis(text: string): ReactNode {
-  const parts: ReactNode[] = []
-  let cursor = 0
-  for (const match of text.matchAll(EMPHASIS_PATTERN)) {
-    const start = match.index ?? 0
-    if (start > cursor) parts.push(text.slice(cursor, start))
-    parts.push(<strong key={start}>{match[1]}</strong>)
-    cursor = start + match[0].length
-  }
-  if (parts.length === 0) return text
-  if (cursor < text.length) parts.push(text.slice(cursor))
-  return parts
-}
 
 const CLAMP_LINES = 2
 const PERSON_PREVIEW_COUNT = 6
