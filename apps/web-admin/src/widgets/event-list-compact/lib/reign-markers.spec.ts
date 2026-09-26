@@ -6,6 +6,7 @@ import {
   planReignMarkers,
   reignAccessionYears,
   accessionVerb,
+  reignLengthYears,
   formatAccessionDate,
   groupReignEntries,
   toReignMarkers,
@@ -352,5 +353,18 @@ describe('accessionVerb', () => {
     expect(accessionVerb('로마 공화정')).toBe('취임')
     expect(accessionVerb('독일 제국')).toBe('즉위')
     expect(accessionVerb(null)).toBe('즉위')
+  })
+})
+
+describe('reignLengthYears', () => {
+  it('끝이 있는 여러 해 재위만 햇수를 낸다', () => {
+    expect(reignLengthYears(marker('wilhelm', 1888, 1918))).toBe(30)
+    expect(reignLengthYears(marker('friedrich', 1888, 1888))).toBeNull()
+    expect(reignLengthYears(marker('current', 1952, null))).toBeNull()
+  })
+
+  it('BC에서 AD로 건너면 0년이 없다', () => {
+    expect(reignLengthYears(marker('augustus', -27, 14))).toBe(40)
+    expect(reignLengthYears(marker('qin', -221, -210))).toBe(11)
   })
 })

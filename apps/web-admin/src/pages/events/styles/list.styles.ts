@@ -1268,7 +1268,9 @@ export const ReignMarkerList = styled.span`
 /** 동군연합 등으로 묶인 항목의 나라 꼬리표들 */
 export const ReignMarkerCountries = styled.span`
   display: inline-flex;
-  gap: 3px;
+  align-items: baseline;
+  /* 나라 → 이름 사이는 항목 안 간격(5px)보다 한 단 넓게 — 둘이 한 낱말로 붙어 읽히지 않게 */
+  margin-right: 2px;
 `
 
 export const ReignMarkerItem = styled.span`
@@ -1283,12 +1285,17 @@ export const ReignMarkerItem = styled.span`
     row-gap: 2px;
   }
 
-  /* 구분점은 **앞 항목 끝**에 붙인다. 뒤 항목 머리에 두면 말풍선 안에서 줄이 넘어갈 때
-     새 줄이 '·'로 시작했다(390px 실측). */
+  /* 항목 사이는 **세로 괘선** — 가운뎃점은 이제 나라 사이(독일 제국 · 프로이센 왕국)와
+     기간·햇수 사이가 쓰므로, 항목 경계까지 같은 점이면 어디서 한 군주가 끝나는지 안 보인다.
+     구분자는 **앞 항목 끝**에 붙인다 — 뒤 항목 머리에 두면 말풍선 안에서 줄이 넘어갈 때
+     새 줄이 구분자로 시작했다(390px 실측). */
   &:not(:last-child)::after {
-    content: '·';
-    margin: 0 10px;
-    color: ${metaText};
+    content: '';
+    align-self: center;
+    width: 1px;
+    height: 11px;
+    margin: 0 7px;
+    background: var(--bubble-line);
   }
 `
 
@@ -1342,18 +1349,33 @@ export const ReignMarkerYears = styled.span`
   font-variant-numeric: tabular-nums;
 `
 
-/** 섞여 든 나라(주류 나라는 생략) — 이름 앞 작은 꼬리표 */
+/**
+ * 섞여 든 나라(주류 나라는 생략) — 이름 앞 **맨 글자**.
+ *
+ * 채운 꼬리표였는데, 채운 말풍선 안의 채운 알약이라 상자가 두 겹이었고 동군연합에서는
+ * 알약 둘(약 150px)이 군주 이름보다 먼저·더 크게 읽혔다. 말풍선의 주인공은 사람이다 —
+ * 나라는 한 단 작은 보조색 글자로 물러난다.
+ */
 export const ReignMarkerCountry = styled.span`
-  font-size: 0.88em;
-  padding: 0 5px;
-  border-radius: 4px;
-  line-height: 1.5;
+  font-size: 0.92em;
   color: ${({ theme }) => theme.colors.text.secondary};
-  /* 말풍선 면(호박) 위라 회색 꼬리표는 탁해진다 — 같은 계열로 한 단 진하게 */
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(240, 182, 74, 0.1)'
-      : 'rgba(180, 83, 9, 0.07)'};
+
+  & + &::before {
+    content: '·';
+    margin: 0 4px;
+    color: ${metaText};
+  }
+`
+
+/** 재위 햇수 — 기간 뒤 메타 글자. 가운뎃점으로 기간과 가른다 */
+export const ReignMarkerLength = styled.span`
+  color: ${metaText};
+  font-variant-numeric: tabular-nums;
+
+  &::before {
+    content: '·';
+    margin-right: 5px;
+  }
 `
 
 export const YearSection = styled.div`

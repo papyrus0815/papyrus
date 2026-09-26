@@ -233,6 +233,16 @@ export function formatAccessionDate(
 }
 
 /**
+ * 재위 햇수 — '1888–1918' 옆의 '30년'. 현직·미상(끝 없음)과 한 해 안에 끝난 재위는 null.
+ * 부호 연도라 BC→AD를 건너면 0년이 없으므로 1을 뺀다(BC 27 → AD 14 = 40년).
+ */
+export function reignLengthYears(marker: ReignMarker): number | null {
+  if (marker.endYear == null || marker.endYear <= marker.startYear) return null
+  const crossesEra = marker.startYear < 0 && marker.endYear > 0
+  return marker.endYear - marker.startYear - (crossesEra ? 1 : 0)
+}
+
+/**
  * 표지 동사 — 군주는 '즉위', 공화국 원수·막부 쇼군은 '취임'.
  *
  * 재위 기록(SovereignReign)에는 직위 유형이 없고, 공화국 대통령·쇼군도 같은 표에 든다

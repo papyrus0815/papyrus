@@ -49,6 +49,7 @@ import {
   formatAccessionDate,
   formatReignSpan,
   groupReignEntries,
+  reignLengthYears,
   interleaveReignMarkers,
   planReignMarkers,
 } from '../lib/reign-markers'
@@ -541,6 +542,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           )
           const span = formatReignSpan(marker)
           const verb = accessionVerb(countryNames[0])
+          const length = reignLengthYears(marker)
           return (
             <List.ReignMarkerItem key={marker.id}>
               {foreign.length > 0 && (
@@ -569,6 +571,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               <List.ReignMarkerSpan>
                 <List.ReignMarkerLabel aria-hidden="true">{verb}</List.ReignMarkerLabel>
                 <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
+                {length != null && (
+                  <List.ReignMarkerLength>{length}년</List.ReignMarkerLength>
+                )}
               </List.ReignMarkerSpan>
             </List.ReignMarkerItem>
           )
