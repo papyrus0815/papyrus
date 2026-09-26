@@ -11,7 +11,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
-import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
+import { FiArrowDown, FiArrowUp, FiCheck, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { useContinents } from '@/features/continent/use-continents.hook'
@@ -28,7 +28,6 @@ import {
   matchesHintYearRange,
   type CountryHintYearRange,
 } from '@/shared/lib/country-picker-filter'
-import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { useModalBehavior } from '@/shared/ui/modal/use-modal-behavior.hook'
 import {
@@ -337,6 +336,23 @@ export const AdvancedCountrySelectModal: React.FC<
 
   if (!isOpen) return null
 
+  /**
+   * 고른 국가 트레이 — 탭·검색·대륙 필터와 무관하게 **지금 담긴 것**을 늘 보여 주고 한 번에 뺀다.
+   * 예전엔 고른 국가가 카드 격자 속 체크 배지로만 남아, 탭을 바꾸거나 스크롤하면 무엇을 골랐는지
+   * 확인할 수 없었다. 글자는 국기와 이름을 **한 문자열**로 — 목록 행 이름과 겹치지 않게.
+   */
+  const selectedEntries = selectedCountryIds
+    .map((id) => {
+      const modern = modernCountries.find((country) => country.id === id)
+      if (modern)
+        return { id, name: modern.name, flag: modern.flagEmoji || '🌐', isHistorical: false }
+      const historical = historicalCountries.find((country) => country.id === id)
+      if (historical)
+        return { id, name: historical.name, flag: '🏛️', isHistorical: true }
+      return null
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+
   const modal = (
     <Modal onClick={onClose}>
       <ModalContent
@@ -348,7 +364,12 @@ export const AdvancedCountrySelectModal: React.FC<
         onClick={(event) => event.stopPropagation()}
       >
         <ModalHeader>
-          <ModalTitle>{title}</ModalTitle>
+          <ModalTitle>
+            {title}
+            {multiSelect && selectedEntries.length > 0 && (
+              <SelectedCount>{selectedEntries.length}개 선택</SelectedCount>
+            )}
+          </ModalTitle>
           <ModalHeaderActions>
             {/**
              * 선택 해제(검토 IA-14) — **탭·정렬과 무관한** 자리다.
@@ -366,245 +387,228 @@ export const AdvancedCountrySelectModal: React.FC<
                 선택 해제
               </ClearSelectionButton>
             )}
-            <ModalCloseButton onClick={onClose}>
+            <ModalCloseButton type="button" aria-label="닫기" onClick={onClose}>
               <FiX />
             </ModalCloseButton>
           </ModalHeaderActions>
         </ModalHeader>
 
-        <ModalBody>
-          {/* 좌측 필터 영역 */}
-          <FilterSidebar>
-            <FilterSidebarSection>
-              <FilterSidebarTitle>국가 타입</FilterSidebarTitle>
-              <CountryTypeOption
-                $active={countryType === 'modern'}
+        {/*
+         * 조작 한 줄 — [현대|역사] 전환 · 검색 · 정렬. 예전엔 전환이 좌측 사이드바의 라디오였고
+         * 대륙 목록까지 세로로 쌓여 목록 폭 200px을 상시 먹었다.
+         */}
+        <Controls>
+          <TypeSegment role="radiogroup" aria-label="국가 종류">
+            {(
+              [
+                ['modern', '현대 국가'],
+                ['historical', '역사적 국가'],
+              ] as const
+            ).map(([type, label]) => (
+              <TypeSegmentBtn
+                key={type}
+                type="button"
+                role="radio"
+                aria-checked={countryType === type}
+                $active={countryType === type}
                 onClick={() => {
-                  setCountryType('modern')
+                  setCountryType(type)
                   setSelectedContinentId('all')
                 }}
               >
-                <RadioButton $active={countryType === 'modern'}>
-                  <ModalRadioDot $active={countryType === 'modern'} />
-                </RadioButton>
-                <span>현대 국가</span>
-              </CountryTypeOption>
-              <CountryTypeOption
-                $active={countryType === 'historical'}
-                onClick={() => {
-                  setCountryType('historical')
-                  setSelectedContinentId('all')
-                }}
+                {label}
+              </TypeSegmentBtn>
+            ))}
+          </TypeSegment>
+          <SearchWrapper>
+            <FiSearch aria-hidden="true" />
+            <SearchInput
+              type="text"
+              placeholder={countryType === 'modern' ? '국가·ISO 코드 검색' : '역사국가 검색'}
+              aria-label="국가 검색"
+              data-autofocus=""
+              value={countrySearchTerm}
+              onChange={(e) => setCountrySearchTerm(e.target.value)}
+            />
+          </SearchWrapper>
+          <SortRow>
+            <SortFieldSelect
+              aria-label="정렬 기준"
+              value={sortBy}
+              onChange={(e) =>
+                setSortBy(
+                  e.target.value as
+                    | 'name'
+                    | 'isoCode'
+                    | 'continent'
+                    | 'startYear'
+                    | 'population'
+                    | 'areaSqKm',
+                )
+              }
+            >
+              {countryType === 'modern' ? (
+                <>
+                  <option value="name">이름순</option>
+                  <option value="isoCode">ISO 코드순</option>
+                  <option value="continent">대륙순</option>
+                  <option value="population">인구순</option>
+                  <option value="areaSqKm">면적순</option>
+                </>
+              ) : (
+                <>
+                  <option value="name">이름순</option>
+                  <option value="startYear">시작년도순</option>
+                </>
+              )}
+            </SortFieldSelect>
+            <SortOrderBtn
+              type="button"
+              aria-label={sortOrder === 'asc' ? '오름차순 — 누르면 내림차순' : '내림차순 — 누르면 오름차순'}
+              title={sortOrder === 'asc' ? '오름차순' : '내림차순'}
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            >
+              {sortOrder === 'asc' ? <FiArrowUp size={14} /> : <FiArrowDown size={14} />}
+            </SortOrderBtn>
+          </SortRow>
+        </Controls>
+
+        {countryType === 'modern' && continents.length > 0 && (
+          <ContinentRow role="radiogroup" aria-label="대륙">
+            {[{ id: 'all', name: '전체' }, ...continents].map((continent) => (
+              <ContinentChip
+                key={continent.id}
+                type="button"
+                role="radio"
+                aria-checked={selectedContinentId === continent.id}
+                $active={selectedContinentId === continent.id}
+                onClick={() => setSelectedContinentId(continent.id)}
               >
-                <RadioButton $active={countryType === 'historical'}>
-                  <ModalRadioDot $active={countryType === 'historical'} />
-                </RadioButton>
-                <span>역사적 국가</span>
-              </CountryTypeOption>
-            </FilterSidebarSection>
+                {continent.name}
+              </ContinentChip>
+            ))}
+          </ContinentRow>
+        )}
 
-            {countryType === 'modern' && (
-              <FilterSidebarSection>
-                <FilterSidebarTitle>대륙</FilterSidebarTitle>
-                <FilterOptionButton
-                  $active={selectedContinentId === 'all'}
-                  onClick={() => setSelectedContinentId('all')}
+        {multiSelect && selectedEntries.length > 0 && (
+          <SelectedTray aria-label="고른 국가">
+            {selectedEntries.map((entry) => (
+              <SelectedChip key={entry.id}>
+                <span>{`${entry.flag} ${entry.name}`}</span>
+                <SelectedChipRemove
+                  type="button"
+                  aria-label={`${entry.name} 빼기`}
+                  onClick={() => {
+                    playClick()
+                    onSelect({ id: entry.id, name: entry.name, isHistorical: entry.isHistorical })
+                  }}
                 >
-                  전체
-                </FilterOptionButton>
-                {continents.map((continent) => (
-                  <FilterOptionButton
-                    key={continent.id}
-                    $active={selectedContinentId === continent.id}
-                    onClick={() => setSelectedContinentId(continent.id)}
-                  >
-                    {continent.name}
-                  </FilterOptionButton>
-                ))}
-              </FilterSidebarSection>
-            )}
-          </FilterSidebar>
+                  <FiX size={12} />
+                </SelectedChipRemove>
+              </SelectedChip>
+            ))}
+          </SelectedTray>
+        )}
 
-          {/* 우측 리스트 영역 */}
-          <ListArea>
-            <SearchWrapper>
-              <FiSearch />
-              <SearchInput
-                type="text"
-                placeholder="국가 검색..."
-                value={countrySearchTerm}
-                onChange={(e) => setCountrySearchTerm(e.target.value)}
-              />
-              <SortRow>
-                <SortLabel>정렬</SortLabel>
-                <SortFieldSelect
-                  value={sortBy}
-                  onChange={(e) =>
-                    setSortBy(
-                      e.target.value as
-                        | 'name'
-                        | 'isoCode'
-                        | 'continent'
-                        | 'startYear'
-                        | 'population'
-                        | 'areaSqKm',
-                    )
-                  }
-                >
-                  {countryType === 'modern' ? (
-                    <>
-                      <option value="name">이름</option>
-                      <option value="isoCode">ISO 코드</option>
-                      <option value="continent">대륙</option>
-                      <option value="population">인구</option>
-                      <option value="areaSqKm">면적</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="name">이름</option>
-                      <option value="startYear">시작년도</option>
-                    </>
-                  )}
-                </SortFieldSelect>
-                <SortOrderGroup>
-                  <SortOrderBtn
-                    $active={sortOrder === 'asc'}
-                    onClick={() => setSortOrder('asc')}
-                  >
-                    오름차순
-                  </SortOrderBtn>
-                  <SortOrderBtn
-                    $active={sortOrder === 'desc'}
-                    onClick={() => setSortOrder('desc')}
-                  >
-                    내림차순
-                  </SortOrderBtn>
-                </SortOrderGroup>
-              </SortRow>
-            </SearchWrapper>
+        {/* 시대 힌트 안내 — '걸러내지 않았다'를 함께 알린다 (F42) */}
+        {hintActive && countryType === 'historical' && (
+          <HintNotice>
+            <HintChip>시대 일치</HintChip>
+            {formatHintYearRange(hintYearRange)}에 존속한 국가를 위로
+            올렸습니다. 나머지도 그대로 있습니다.
+          </HintNotice>
+        )}
 
-            {/* 시대 힌트 안내 — '걸러내지 않았다'를 함께 알린다 (F42) */}
-            {hintActive && countryType === 'historical' && (
-              <HintNotice>
-                <HintChip>시대 일치</HintChip>
-                {formatHintYearRange(hintYearRange)}에 존속한 국가를 위로
-                올렸습니다. 나머지도 그대로 있습니다.
-              </HintNotice>
-            )}
-
-            <CardGrid>
-              {filteredCountries.map((country) => {
-                const isSelected = selectedCountryIds.includes(country.id)
-                const modern = country as CountryResponseDto
-                const historical = country as HistoricalCountryResponseDto
-                const continentName = modern.continentId
-                  ? continentNameById.get(modern.continentId)
-                  : undefined
-                return (
-                  <CountryCard
-                    key={country.id}
-                    $selected={isSelected}
-                    onClick={() => handleCountryClick(country)}
-                  >
-                    <CardFlag>{modern.flagEmoji || '🌐'}</CardFlag>
-                    <CardName>{country.name}</CardName>
+        {/*
+         * 목록 — 한 나라 = 한 줄(국기 · 이름 · 메타 한 줄 · 체크). 예전 카드는 메타를 여섯 줄
+         * (현지명·ISO·대륙·수도·인구·면적)로 쌓아 한 화면에 15장 남짓이었다. 고르는 데 필요한 건
+         * 이름이고, 동명·혼동 구별에 필요한 최소(ISO·대륙 / 존속기간·형태)만 한 줄로 남긴다.
+         */}
+        <CountryList>
+          {filteredCountries.map((country) => {
+            const isSelected = selectedCountryIds.includes(country.id)
+            const modern = country as CountryResponseDto
+            const historical = country as HistoricalCountryResponseDto
+            const continentName = modern.continentId
+              ? continentNameById.get(modern.continentId)
+              : undefined
+            const meta =
+              countryType === 'modern'
+                ? [modern.isoCode, continentName, modern.capital && `수도 ${modern.capital}`]
+                : [
+                    formatCountryPeriod(historical),
+                    historical.stateType ? getStateTypeLabel(historical.stateType) : null,
+                    historical.enName,
+                  ]
+            return (
+              <CountryRow
+                key={country.id}
+                type="button"
+                aria-pressed={isSelected}
+                $selected={isSelected}
+                onClick={() => handleCountryClick(country)}
+              >
+                <RowFlag aria-hidden="true">
+                  {countryType === 'modern' ? modern.flagEmoji || '🌐' : '🏛️'}
+                </RowFlag>
+                <RowText>
+                  <RowName>
+                    <span>{country.name}</span>
                     {countryType === 'historical' &&
                       hintActive &&
                       matchesHintYearRange(historical, hintYearRange) && (
                         <HintChip>시대 일치</HintChip>
                       )}
-                    <CardMetaList>
-                      {countryType === 'modern' ? (
-                        <>
-                          {modern.localName && (
-                            <CardMetaRow>{modern.localName}</CardMetaRow>
-                          )}
-                          {modern.isoCode && (
-                            <CardMetaRow>ISO {modern.isoCode}</CardMetaRow>
-                          )}
-                          {continentName && (
-                            <CardMetaRow>{continentName}</CardMetaRow>
-                          )}
-                          {modern.capital && (
-                            <CardMetaRow>수도 {modern.capital}</CardMetaRow>
-                          )}
-                          {modern.population && (
-                            <CardMetaRow>인구 {modern.population}</CardMetaRow>
-                          )}
-                          {modern.areaSqKm != null && (
-                            <CardMetaRow>
-                              면적 {Number(modern.areaSqKm).toLocaleString()}{' '}
-                              km²
-                            </CardMetaRow>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {historical.enName && (
-                            <CardMetaRow>{historical.enName}</CardMetaRow>
-                          )}
-                          {/* 존속기간·국가형태는 공용 포맷터/라벨로 — raw 표기는 BC를
-                              AD로, 종료 미상을 '현재'로 오독시켰다(F19③) */}
-                          {formatCountryPeriod(historical) && (
-                            <CardMetaRow>
-                              {formatCountryPeriod(historical)}
-                            </CardMetaRow>
-                          )}
-                          {historical.stateType && (
-                            <CardMetaRow>
-                              {getStateTypeLabel(historical.stateType)}
-                            </CardMetaRow>
-                          )}
-                          {historical.description && (
-                            <CardMetaRow className="desc">
-                              {historical.description.length > 24
-                                ? `${historical.description.slice(0, 24)}…`
-                                : historical.description}
-                            </CardMetaRow>
-                          )}
-                        </>
-                      )}
-                    </CardMetaList>
-                    {/**
-                     * 체크 배지는 **단일 선택에도** 붙는다(검토 IA-14).
-                     * `multiSelect`일 때만 그리던 시절, 단일 선택 피커에서 현재 값은
-                     * 옅은 배경색 하나로만 구별됐다 — 정렬을 바꾸거나 스크롤하면
-                     * "무엇이 지금 걸려 있는지" 확인할 방법이 사실상 없었다.
-                     */}
-                    {isSelected && (
-                      <CardCheck>
-                        <FiCheck size={14} />
-                      </CardCheck>
-                    )}
-                  </CountryCard>
-                )
-              })}
-              {filteredCountries.length === 0 && (
-                <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
-              )}
-              {/* F20: 없으면 폼을 떠나야 했던 흐름 — 여기서 등록하고 자동 선택 */}
-              {showCreateCta && (
-                <CreateCtaRow>
-                  <HistoricalCountryCreateButton
-                    type="button"
-                    $variant={
-                      filteredCountries.length === 0 ? 'block' : 'inline'
-                    }
-                    onClick={() => {
-                      playClick()
-                      setCreateOpen(true)
-                    }}
-                  >
-                    <HistoricalCountryCreateIcon />
-                    {filteredCountries.length === 0
-                      ? '새 역사국가 등록'
-                      : '찾는 국가가 없나요? 새 역사국가 등록'}
-                  </HistoricalCountryCreateButton>
-                </CreateCtaRow>
-              )}
-            </CardGrid>
-          </ListArea>
-        </ModalBody>
+                  </RowName>
+                  <RowMeta>{meta.filter(Boolean).join(' · ')}</RowMeta>
+                </RowText>
+                {/**
+                 * 체크는 **단일 선택에도** 붙는다(검토 IA-14) — 지금 걸려 있는 값을
+                 * 정렬·스크롤 뒤에도 확인할 수 있어야 한다.
+                 */}
+                <RowCheck $selected={isSelected} aria-hidden="true">
+                  {isSelected && <FiCheck size={13} />}
+                </RowCheck>
+              </CountryRow>
+            )
+          })}
+          {filteredCountries.length === 0 && (
+            <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
+          )}
+          {/* F20: 없으면 폼을 떠나야 했던 흐름 — 여기서 등록하고 자동 선택 */}
+          {showCreateCta && (
+            <CreateCtaRow>
+              <HistoricalCountryCreateButton
+                type="button"
+                $variant={filteredCountries.length === 0 ? 'block' : 'inline'}
+                onClick={() => {
+                  playClick()
+                  setCreateOpen(true)
+                }}
+              >
+                <HistoricalCountryCreateIcon />
+                {filteredCountries.length === 0
+                  ? '새 역사국가 등록'
+                  : '찾는 국가가 없나요? 새 역사국가 등록'}
+              </HistoricalCountryCreateButton>
+            </CreateCtaRow>
+          )}
+        </CountryList>
+
+        {/* 다중 선택은 고를 때마다 닫히지 않는다 — 끝났다는 동작이 있어야 한다(예전엔 ✕뿐) */}
+        {multiSelect && (
+          <ModalFooter>
+            <FooterSummary>
+              {selectedEntries.length > 0
+                ? `${selectedEntries.length}개 국가를 골랐습니다`
+                : '누르면 담기고, 다시 누르면 빠집니다'}
+            </FooterSummary>
+            <DoneButton type="button" onClick={onClose}>
+              완료
+            </DoneButton>
+          </ModalFooter>
+        )}
+
         {/* 등록 모달 — ModalContent(stopPropagation) 안에 두어야 폼 클릭이
             Modal onClick={onClose}로 버블링돼 피커까지 닫히지 않는다 */}
         <HistoricalCountryCreateHost
@@ -626,441 +630,445 @@ export const AdvancedCountrySelectModal: React.FC<
 // Styled Components
 const Modal = styled.div`
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   z-index: ${Z_INDEX.MODAL_OVERLAY};
 `
 
 const ModalContent = styled.div`
-  ${({ theme }) => glassCardMixin(theme)}
-  border-radius: 16px;
-  width: 92%;
-  max-width: 1000px;
-  max-height: 68vh;
+  width: 100%;
+  max-width: 760px;
+  height: min(720px, 86vh);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  border-radius: 16px;
+  outline: none;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#18181b' : '#ffffff')};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22);
 `
 
 const ModalHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px 28px;
-  border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
+  gap: 12px;
+  padding: 16px 16px 12px 20px;
 `
 
 const ModalTitle = styled.h3`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SelectedCount = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
 `
 
 /** 헤더 우측 액션 묶음 — '선택 해제'(IA-14)와 닫기 ✕ */
 const ModalHeaderActions = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 `
 
 /** 탭·정렬과 무관한 선택 해제(검토 IA-14) */
 const ClearSelectionButton = styled.button`
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.35);
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#818cf8' : '#6366f1'};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
 const ModalCloseButton = styled.button`
-  background: none;
-  border: none;
-  padding: 8px;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  transition: all 0.2s ease;
-  border-radius: 8px;
-
-  &:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-  }
-
-  svg {
-    width: 20px;
-    height: 20px;
-  }
-`
-
-const ModalBody = styled.div`
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 0;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  max-height: calc(68vh - 72px);
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    max-height: none;
-  }
-`
-
-const FilterSidebar = styled.div`
-  background: ${({ theme }) => theme.colors.background.secondary};
-  padding: 24px 20px;
-  border-right: 1.5px solid ${({ theme }) => theme.colors.border.light};
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  @media (max-width: 768px) {
-    border-right: none;
-    border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
-    padding: 16px 16px;
-    gap: 16px;
-    max-height: 40vh;
-  }
-`
-
-const FilterSidebarSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const FilterSidebarTitle = styled.h4`
-  margin: 0 0 8px 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-`
-
-const CountryTypeOption = styled.button<{ $active: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.1)'
-        : '#ffffff'
-      : 'transparent'};
-  border: 1.5px solid
-    ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.3)' : 'transparent')};
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-  font-weight: ${({ $active }) => ($active ? '600' : '500')};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.secondary};
-  text-align: left;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#ffffff'};
-    border-color: rgba(99, 102, 241, 0.2);
-  }
-`
-
-const RadioButton = styled.div<{ $active: boolean }>`
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid ${({ $active }) => ($active ? '#6366f1' : '#cbd5e1')};
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-`
-
-const ModalRadioDot = styled.div<{ $active: boolean }>`
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: ${({ $active }) => ($active ? '#6366f1' : 'transparent')};
-  transition: all 0.2s ease;
-`
-
-const FilterOptionButton = styled.button<{ $active: boolean }>`
-  padding: 8px 12px;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.1)'
-        : '#ffffff'
-      : 'transparent'};
-  border: 1px solid
-    ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.2)' : 'transparent')};
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
   border-radius: 8px;
-  font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? '600' : '500')};
-  color: ${({ $active, theme }) =>
-    $active ? '#818cf8' : theme.colors.text.secondary};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
 
+  svg {
+    width: 18px;
+    height: 18px;
+  }
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
-const ListArea = styled.div`
+const Controls = styled.div`
   display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 12px;
+`
+
+const TypeSegment = styled.div`
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  flex-shrink: 0;
+`
+
+const TypeSegmentBtn = styled.button<{ $active: boolean }>`
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  background: ${({ theme, $active }) =>
+    $active ? (theme.mode === 'dark' ? '#27272a' : '#ffffff') : 'transparent'};
+  box-shadow: ${({ $active }) =>
+    $active ? '0 1px 2px rgba(0, 0, 0, 0.12)' : 'none'};
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 1px;
+  }
 `
 
 const SearchWrapper = styled.div`
-  padding: 20px 24px;
-  border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
+  flex: 1 1 200px;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#111113' : '#fafafa')};
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   svg {
-    color: ${({ theme }) => theme.colors.text.tertiary};
     flex-shrink: 0;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:focus-within {
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
   }
 `
 
 const SearchInput = styled.input`
   flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
+  background: transparent;
+  font-family: inherit;
   font-size: 14px;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: transparent;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
+  /* 포커스 표시는 감싼 칸(SearchWrapper:focus-within)이 한다 — 입력 자체의 전역 링까지
+     그리면 링이 안팎 두 겹이 된다 */
+  &:focus,
+  &:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
 `
 
 const SortRow = styled.div`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
   flex-shrink: 0;
-`
-
-const SortLabel = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const SortFieldSelect = styled.select`
-  padding: 8px 28px 8px 12px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background-color: ${({ theme }) => (theme.mode === 'dark' ? '#111113' : '#ffffff')};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
   font-size: 13px;
+  cursor: pointer;
+`
+
+const SortOrderBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#111113' : '#ffffff')};
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => theme.colors.background.tertiary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 8px;
   cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  min-width: 100px;
-  outline: none;
-
-  &:focus {
-    border-color: rgba(99, 102, 241, 0.4);
-  }
-`
-
-const SortOrderGroup = styled.div`
-  display: flex;
-  gap: 4px;
-`
-
-const SortOrderBtn = styled.button<{ $active: boolean }>`
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ $active, theme }) =>
-    $active ? '#ffffff' : theme.colors.text.secondary};
-  background: ${({ $active, theme }) =>
-    $active
-      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : theme.colors.background.tertiary};
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? 'transparent' : theme.colors.border.light};
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-        : 'rgba(99, 102, 241, 0.1)'};
-    color: ${({ $active }) => ($active ? '#ffffff' : '#6366f1')};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
-const CardGrid = styled.div`
+/** 대륙 — 좌측 세로 목록이던 것을 가로 칩 한 줄로(넘치면 가로 스크롤) */
+const ContinentRow = styled.div`
+  display: flex;
+  gap: 6px;
+  padding: 0 20px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`
+
+const ContinentChip = styled.button<{ $active: boolean }>`
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme, $active }) => ($active ? theme.colors.primary : theme.colors.border.default)};
+  background: ${({ $active, theme }) =>
+    $active ? (theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : '#eef2ff') : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca') : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+`
+
+/** 고른 국가 트레이 — 한 줄 칩, 넘치면 줄바꿈(높이 상한 안에서 스크롤) */
+const SelectedTray = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 76px;
+  overflow-y: auto;
+  padding: 10px 20px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#131316' : '#fafafa')};
+  flex-shrink: 0;
+`
+
+const SelectedChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#27272a' : '#ffffff')};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const SelectedChipRemove = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+    background: rgba(239, 68, 68, 0.1);
+  }
+`
+
+/** 목록 — 넓으면 두 칸, 좁으면 한 칸 */
+const CountryList = styled.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 16px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   align-content: start;
-
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: ${({ theme }) => theme.colors.background.secondary};
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) => theme.colors.border.default};
-    border-radius: 4px;
-  }
+  gap: 2px 8px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const CountryCard = styled.button<{ $selected: boolean }>`
-  position: relative;
-  aspect-ratio: 1;
-  min-height: 140px;
-  padding: 12px 10px;
+const CountryRow = styled.button<{ $selected: boolean }>`
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  background: ${({ $selected, theme }) =>
-    $selected
-      ? 'rgba(99, 102, 241, 0.08)'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : '#ffffff'};
-  border: 1.5px solid
-    ${({ $selected, theme }) =>
-      $selected ? 'rgba(99, 102, 241, 0.35)' : theme.colors.border.light};
-  border-radius: 12px;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  text-align: left;
+  font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  background: ${({ $selected, theme }) =>
+    $selected ? (theme.mode === 'dark' ? 'rgba(99,102,241,0.16)' : '#eef2ff') : 'transparent'};
+  transition: background 0.12s ease;
 
   &:hover {
-    background: ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.04)'};
-    border-color: rgba(99, 102, 241, 0.35);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    background: ${({ $selected, theme }) =>
+      $selected
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.22)'
+          : '#e0e7ff'
+        : theme.colors.background.tertiary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: -2px;
   }
 `
 
-const CardFlag = styled.span`
-  font-size: 28px;
-  line-height: 1;
+const RowFlag = styled.span`
   flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+  font-size: 22px;
+  line-height: 1;
 `
 
-const CardName = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  line-height: 1.25;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: keep-all;
-`
-
-const CardMetaList = styled.div`
-  width: 100%;
+const RowText = styled.span`
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  align-items: center;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
 `
 
-const CardMetaRow = styled.span`
-  font-size: 10px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-weight: 400;
-  line-height: 1.3;
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+const RowName = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
 
-  &.desc {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+  & > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 `
 
-const CardCheck = styled.div`
-  position: absolute;
-  top: 6px;
-  right: 6px;
+const RowMeta = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:empty {
+    display: none;
+  }
+`
+
+const RowCheck = styled.span<{ $selected: boolean }>`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #6366f1;
+  border: 1.5px solid
+    ${({ $selected, theme }) => ($selected ? theme.colors.primary : theme.colors.border.default)};
+  background: ${({ $selected, theme }) => ($selected ? theme.colors.primary : 'transparent')};
   color: #ffffff;
+`
+
+const ModalFooter = styled.div`
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 12px 20px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
 `
 
-/** 시대 힌트 안내 줄 (F42) */
+const FooterSummary = styled.span`
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const DoneButton = styled.button`
+  padding: 8px 20px;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  background: ${({ theme }) => theme.colors.primary};
+  cursor: pointer;
+
+  &:hover {
+    filter: brightness(1.06);
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
+`
+
 const HintNotice = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 8px 20px;
   font-size: 12px;
   font-weight: 500;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
 `
 
@@ -1075,7 +1083,7 @@ const HintChip = styled.span`
   border: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
-/** 인라인 등록 CTA 행 (F20) — 그리드 전체 폭 차지 */
+/** 인라인 등록 CTA 행 (F20) — 목록 전체 폭 차지 */
 const CreateCtaRow = styled.div`
   grid-column: 1 / -1;
   display: flex;
