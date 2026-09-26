@@ -37,6 +37,7 @@ const marker = (
   personId: id,
   name: id,
   countryName: '조선',
+  imageUrl: null,
   startKey: startYear * 10000 + month * 100 + day,
   startYear,
   startMonth: month,

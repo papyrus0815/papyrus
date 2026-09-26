@@ -1367,6 +1367,23 @@ export const ReignMarkerCountry = styled.span`
   }
 `
 
+/**
+ * 초상 — 말풍선 글자 줄 높이 안에 드는 20px 원. 얼굴이 원의 위쪽에 오는 초상화가 많아
+ * 위쪽 기준으로 자른다. 옅은 테로 호박 면과 가른다.
+ */
+export const ReignMarkerPortrait = styled.img`
+  flex: none;
+  align-self: center;
+  width: 20px;
+  height: 20px;
+  margin-left: -4px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center 20%;
+  box-shadow: 0 0 0 1px var(--bubble-line);
+  background: var(--bubble-line);
+`
+
 /** 재위 햇수 — 기간 뒤 메타 글자. 가운뎃점으로 기간과 가른다 */
 export const ReignMarkerLength = styled.span`
   color: ${metaText};

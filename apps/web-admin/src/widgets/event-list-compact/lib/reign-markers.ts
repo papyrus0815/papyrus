@@ -41,6 +41,7 @@ export interface SovereignReignTimelineItem {
     nameDisplayOrder?: string | null
     regnalName?: string | null
     templeName?: string | null
+    profileImageUrl?: string | null
     isAlive?: boolean | null
     deathDate?: string | null
     deathDatePrecision?: string | null
@@ -55,6 +56,8 @@ export interface ReignMarker {
   /** 표시명 — 재위명 > 왕명(notes) > 인물 재위명 > 묘호 > 인물 표시명 */
   name: string
   countryName: string | null
+  /** 인물 초상(업로드 상대경로) — 없으면 null */
+  imageUrl: string | null
   /** 즉위 시점 키(포함 하한) */
   startKey: number
   /** 부호 연도 — BC는 음수 */
@@ -188,6 +191,7 @@ export function toReignMarkers(
       personId: reign.personId,
       name,
       countryName,
+      imageUrl: person?.profileImageUrl?.trim() || null,
       startKey: lowerKey(start),
       startYear: start.year,
       startMonth: start.month,

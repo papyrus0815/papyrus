@@ -19,6 +19,7 @@ import styled, { css } from 'styled-components'
 
 import type { ListColumnKey, SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { formatYearLabel, getCentury } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
@@ -545,6 +546,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           const length = reignLengthYears(marker)
           return (
             <List.ReignMarkerItem key={marker.id}>
+              <ReignPortrait path={marker.imageUrl} />
               {foreign.length > 0 && (
                 <List.ReignMarkerCountries>
                   {foreign.map((name) => (
@@ -1362,6 +1364,30 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 // ─────────────────────────────────────────────────────────────────────────────
 // styled (theme-aware)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 즉위 말풍선의 초상 — 말풍선이 **누구의 말인지**를 얼굴로 보인다(군주 58%가 초상 보유).
+ * 없거나 로드에 실패하면 아무것도 그리지 않는다 — 빈 원·실루엣은 '초상 없음'이라는
+ * 정보 없는 잉크라, 이름만 있는 항목이 더 깨끗하다. 축 위 왕관이 이미 표지 종류를 말한다.
+ */
+function ReignPortrait({ path }: { path: string | null }) {
+  const src = path ? getUploadImageUrl(path) || path : null
+  const [broken, setBroken] = useState(false)
+  useEffect(() => {
+    setBroken(false)
+  }, [src])
+  if (!src || broken) return null
+  return (
+    <List.ReignMarkerPortrait
+      src={src}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      decoding="async"
+      onError={() => setBroken(true)}
+    />
+  )
+}
 
 type CardStep = 'base' | 'summary' | 'ledger' | 'atlas'
 

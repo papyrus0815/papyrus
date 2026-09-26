@@ -174,6 +174,8 @@ export class GovernmentPositionController {
             nameDisplayOrder: true,
             regnalName: true,
             templeName: true,
+            // 목록 즉위 말풍선의 초상 — 말풍선이 '누가 말하는지'를 얼굴로 보인다
+            profileImageUrl: true,
             isAlive: true,
             deathDate: true,
             deathDatePrecision: true,
