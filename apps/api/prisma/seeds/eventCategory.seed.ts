@@ -18,6 +18,11 @@ const EVENT_CATEGORIES: EventCategoryData[] = [
   { name: '외교', description: '외교 관련 사건' },
   { name: '회담/조약', description: '국제 회담 및 협상' },
   { name: '종교', description: '종교 관련 사건' },
+  {
+    name: '건국/멸망',
+    description:
+      '국가·왕조·정권의 성립(건국·독립·수립)과 소멸(멸망·병합·해체). 국가별 배역은 참여국 역할 건국/멸망으로 단다',
+  },
   { name: '기타', description: '기타 사건' },
 ]
 

@@ -21,7 +21,7 @@
  *                    톈안먼 선포식의 6시간/중앙인민정부 조직/잔여 전선·대만 후퇴/
  *                    외교 승인과 중·소 동맹/유산(한국전쟁·양안 75년)
  *  - HistoricalCountry 신규: 중화민국 (Republic of China, 1912-) — STATE
- *  - EventCountryRelation: 중국(INITIATOR)·중화민국(ADVERSARY)·소련(ALLY)·
+ *  - EventCountryRelation: 중국(FOUNDED)·중화민국(ADVERSARY)·소련(ALLY)·
  *                         미국(ADVERSARY)·영국(OBSERVER)·일본(OBSERVER)
  *  - Person 신규 6: 저우언라이·류사오치·주더·쑹칭링·천윈·장제스
  *  - Person 기존 활용: Mao Zedong(한국전쟁 시드)·Joseph Stalin(러볼셰비키 시드)
@@ -43,7 +43,7 @@ import {
 import { PrismaService } from '../prisma.service'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
-const EVENT_CATEGORY_NAME = '정치'
+const EVENT_CATEGORY_NAME = '건국/멸망'
 const ROC_NAME = '중화민국'
 
 interface PersonStatsInput {
@@ -707,7 +707,8 @@ export async function seedPrcFounding(prisma: PrismaService): Promise<void> {
   const RELATIONS: RelInput[] = [
     {
       countryName: '중국',
-      role: EventCountryRole.INITIATOR,
+      // 이 사건으로 성립한 나라 — 개요의 '건국' 줄이 이 배역을 읽는다
+      role: EventCountryRole.FOUNDED,
       roleDescription:
         '1949-10-01 톈안먼 광장 건국 선포로 출범한 중화인민공화국. 마오쩌둥(주석)·저우언라이(정무원 총리)·류사오치·주더(부주석) 4두 체제. 본 시드는 *현대 중국(modern country)*을 PRC로 등록.',
     },
