@@ -12,6 +12,7 @@ import {
 import styled from 'styled-components'
 
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { useDropdownPosition } from '@/shared/hooks/use-dropdown-position.hook'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
@@ -26,7 +27,17 @@ interface DatePickerModalProps {
   minDate?: string
   maxDate?: string
   title?: string
+  /**
+   * 주면 **드롭다운**으로 뜬다 — 이 요소 바로 아래(공간이 없으면 위)에 붙고, 화면을 덮는
+   * 어두운 배경·머리글 없이 달력만. 폼 안의 날짜 칸처럼 '고르고 계속 쓰는' 자리용.
+   * 없으면 예전처럼 화면 가운데 모달(기존 29곳 호출부 무변경).
+   */
+  anchorEl?: HTMLElement | null
 }
+
+/** 드롭다운 달력 폭 — 모달(최대 440)보다 좁게, 날짜 칸 두 개 폭 안에 든다 */
+const DROPDOWN_WIDTH = 340
+const VIEWPORT_MARGIN = 8
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -87,7 +98,9 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   minDate,
   maxDate,
   title = '날짜 선택',
+  anchorEl,
 }) => {
+  const anchored = Boolean(anchorEl)
   const initialDate = initialDateProp ?? selectedDateProp
   const playClickSound = useClickSound()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
@@ -129,6 +142,14 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
    */
   const initialDateParsed = parseFlexibleDate(initialDate)
   const initialDateKey = initialDateParsed ? initialDateParsed.getTime() : null
+
+  /** 드롭다운 좌표 — 첫 측정 전엔 null(보이지 않게 한 번 그려 높이를 잰다) */
+  const dropdownPos = useDropdownPosition(
+    isOpen,
+    anchorEl,
+    containerRef,
+    DROPDOWN_WIDTH,
+  )
 
   useEffect(() => {
     if (isOpen) {
@@ -463,7 +484,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   }
 
   const modal = (
-    <Overlay onClick={onClose}>
+    <Overlay onClick={onClose} $anchored={anchored}>
       <ModalContainer
         ref={containerRef}
         tabIndex={-1}
@@ -471,8 +492,18 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
+        $anchored={anchored}
+        style={
+          anchored
+            ? {
+                top: dropdownPos?.top ?? 0,
+                left: dropdownPos?.left ?? 0,
+                visibility: dropdownPos ? 'visible' : 'hidden',
+              }
+            : undefined
+        }
       >
-        <ModalHeader>
+        <ModalHeader $anchored={anchored}>
           <ModalTitle>{title}</ModalTitle>
           <CloseButton onClick={onClose} aria-label="닫기">
             <FiX size={18} />
@@ -642,15 +673,16 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   return createPortal(modal, document.body)
 }
 
-const Overlay = styled.div`
+const Overlay = styled.div<{ $anchored?: boolean }>`
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
+  /* 드롭다운은 화면을 어둡히지 않는다 — 투명한 판은 '바깥 클릭으로 닫기'만 맡는다 */
+  background: ${({ $anchored }) => ($anchored ? 'transparent' : 'rgba(0, 0, 0, 0.4)')};
+  backdrop-filter: ${({ $anchored }) => ($anchored ? 'none' : 'blur(4px)')};
+  display: ${({ $anchored }) => ($anchored ? 'block' : 'flex')};
   align-items: center;
   justify-content: center;
   z-index: ${Z_INDEX.MODAL_OVERLAY};
@@ -669,7 +701,7 @@ const Overlay = styled.div`
   }
 `
 
-const ModalContainer = styled.div`
+const ModalContainer = styled.div<{ $anchored?: boolean }>`
   ${({ theme }) => glassCardMixin(theme)}
   border-radius: 16px;
   width: 92%;
@@ -677,7 +709,28 @@ const ModalContainer = styled.div`
   outline: none;
 
   @media (prefers-reduced-motion: no-preference) {
-    animation: slideUp 0.26s ease;
+    animation: ${({ $anchored }) =>
+      $anchored ? 'dropIn 0.16s ease' : 'slideUp 0.26s ease'};
+  }
+
+  ${({ $anchored }) =>
+    $anchored &&
+    `
+    position: fixed;
+    width: ${DROPDOWN_WIDTH}px;
+    max-width: calc(100vw - ${VIEWPORT_MARGIN * 2}px);
+    border-radius: 12px;
+  `}
+
+  @keyframes dropIn {
+    from {
+      transform: translateY(-4px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 
   @keyframes slideUp {
@@ -692,8 +745,9 @@ const ModalContainer = styled.div`
   }
 `
 
-const ModalHeader = styled.div`
-  display: flex;
+const ModalHeader = styled.div<{ $anchored?: boolean }>`
+  /* 드롭다운엔 머리글이 없다 — 어떤 칸의 달력인지는 바로 위 칸이 말하고, 닫기는 Esc·바깥 클릭 */
+  display: ${({ $anchored }) => ($anchored ? 'none' : 'flex')};
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;

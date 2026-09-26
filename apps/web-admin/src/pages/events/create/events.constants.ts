@@ -5,6 +5,7 @@ import {
   FiFlag,
   FiGlobe,
   FiHeart,
+  FiHome,
   FiMessageSquare,
   FiMoreHorizontal,
   FiShield,
@@ -39,12 +40,15 @@ export const CATEGORY_LABEL: Partial<Record<string, string>> = {
 export const CATEGORY_ICON_MAP: Partial<Record<string, IconType>> = {
   military: FiShield,
   군사: FiShield,
+  // DB 카테고리 이름 그대로 — 없으면 FiFileText(문서)로 떨어져 전쟁/군사가 문서 아이콘이었다
+  '전쟁/군사': FiShield,
   political: FiUsers,
   정치: FiUsers,
   economic: FiTrendingUp,
   경제: FiTrendingUp,
-  social: FiGlobe,
-  사회: FiGlobe,
+  // 외교(지구본)와 겹치지 않게 — 사회는 '공동체'
+  social: FiHome,
+  사회: FiHome,
   technological: FiCpu,
   기술: FiCpu,
   과학기술: FiCpu,
@@ -54,6 +58,7 @@ export const CATEGORY_ICON_MAP: Partial<Record<string, IconType>> = {
   외교: FiGlobe,
   conference: FiMessageSquare,
   회담: FiMessageSquare,
+  '회담/조약': FiMessageSquare,
   religious: FiHeart,
   종교: FiHeart,
   statehood: FiFlag,

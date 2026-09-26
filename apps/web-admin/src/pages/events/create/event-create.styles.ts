@@ -506,18 +506,17 @@ export const CategoryCard = styled.button<{
 }>`
   position: relative;
   /*
-   * 선택 상태는 **브랜드 강조색**으로 통일한다. 카테고리별 색은 DB id가 예전 'cat-military-1'
-   * 형식이 아니어서 extractCategoryKey가 전부 'other'(회색)로 떨어졌고, 선택한 칩이 안 고른
-   * 칩과 거의 구별되지 않았다. 고른 것이 무엇인지는 칩의 글자가 말한다.
+   * 색은 **카테고리 자기 색**(목록과 같은 CATEGORY_SOFT_COLORS) — 칩이 인라인 CSS 변수
+   * --cat-rgb / --cat-text로 받는다. 예전엔 DB id에서 키를 뽑아 전부 회색('other')이었다.
    */
   border: 1px solid
     ${({ $selected, theme }) =>
-      $selected ? getC(theme).border.focus : getC(theme).border.default};
+      $selected ? 'rgba(var(--cat-rgb), 0.6)' : getC(theme).border.default};
   border-radius: 999px;
   padding: 5px 13px 5px 5px;
   background: ${({ $selected, theme }) =>
     $selected
-      ? pickC(theme, '#eef2ff', 'rgba(99, 102, 241, 0.16)')
+      ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.2 : 0.09})`
       : getC(theme).background.content};
   cursor: pointer;
   transition:
@@ -528,8 +527,8 @@ export const CategoryCard = styled.button<{
   align-items: center;
   gap: 7px;
   /* 선택은 색만으로 말하지 않는다 — 테를 한 겹 더 두껍게(안쪽 링) */
-  box-shadow: ${({ $selected, theme }) =>
-    $selected ? `inset 0 0 0 1px ${getC(theme).border.focus}` : 'none'};
+  box-shadow: ${({ $selected }) =>
+    $selected ? 'inset 0 0 0 1px rgba(var(--cat-rgb), 0.6)' : 'none'};
 
   &:focus-visible {
     outline: 2px solid ${({ theme }) => getC(theme).border.focus};
@@ -537,12 +536,12 @@ export const CategoryCard = styled.button<{
   }
 
   &:hover {
-    border-color: ${({ $selected, theme }) =>
-      $selected ? getC(theme).border.focus : getC(theme).border.hover};
+    border-color: ${({ $selected }) =>
+      $selected ? 'rgba(var(--cat-rgb), 0.75)' : 'rgba(var(--cat-rgb), 0.45)'};
     background: ${({ $selected, theme }) =>
       $selected
-        ? pickC(theme, '#e0e7ff', 'rgba(99, 102, 241, 0.22)')
-        : getC(theme).background.section};
+        ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.26 : 0.13})`
+        : `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.1 : 0.04})`};
   }
 `
 
@@ -554,10 +553,12 @@ export const CategoryIcon = styled.div<{
   height: 24px;
   border-radius: 50%;
   flex: none;
+  /* 안 고른 칩도 아이콘 원에 자기 색을 옅게 — 11개를 훑을 때 색이 먼저 길을 안내한다 */
   background: ${({ $selected, theme }) =>
-    $selected ? getC(theme).primary.main : getC(theme).border.light};
-  color: ${({ $selected, theme }) =>
-    $selected ? '#ffffff' : getC(theme).text.secondary};
+    $selected
+      ? 'rgb(var(--cat-rgb))'
+      : `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.2 : 0.1})`};
+  color: ${({ $selected }) => ($selected ? '#ffffff' : 'var(--cat-text)')};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -570,7 +571,7 @@ export const CategoryLabel = styled.span`
   white-space: nowrap;
 
   [aria-pressed='true'] > & {
-    color: ${({ theme }) => pickC(theme, '#4338ca', '#c7d2fe')};
+    color: var(--cat-text);
   }
 `
 
@@ -619,7 +620,9 @@ export const DateInputWrapper = styled.div`
     border-color: ${({ theme }) => getC(theme).border.hover};
   }
 
-  &:focus-within {
+  &:focus-within,
+  /* 드롭다운이 이 칸에서 열려 있는 동안 — 달력이 어느 칸 것인지 칸이 말한다 */
+  &[data-open] {
     border-color: ${({ theme }) => getC(theme).border.focus};
     box-shadow: 0 0 0 3px ${({ theme }) => getC(theme).border.focusHalo};
   }

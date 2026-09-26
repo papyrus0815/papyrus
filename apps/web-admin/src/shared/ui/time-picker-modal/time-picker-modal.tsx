@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom'
 import styled from 'styled-components'
 import { FiClock, FiX, FiCheck } from 'react-icons/fi'
 import { glassCardMixin } from '@/shared/styles/mixins'
+import { useDropdownPosition } from '@/shared/hooks/use-dropdown-position.hook'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { useModalBehavior } from '@/shared/ui/modal/use-modal-behavior.hook'
 
@@ -22,7 +23,11 @@ interface TimePickerModalProps {
   onSelect: (time: string) => void
   initialTime?: string
   title?: string
+  /** 주면 이 칸 아래 **드롭다운**으로(어두운 배경·머리글 없이). 없으면 가운데 모달 */
+  anchorEl?: HTMLElement | null
 }
+
+const DROPDOWN_WIDTH = 320
 
 export const TimePickerModal: React.FC<TimePickerModalProps> = ({
   isOpen,
@@ -30,7 +35,9 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
   onSelect,
   initialTime = '',
   title = '시간 선택',
+  anchorEl,
 }) => {
+  const anchored = Boolean(anchorEl)
   const [selectedHour, setSelectedHour] = useState<number>(0)
   const [selectedMinute, setSelectedMinute] = useState<number>(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -38,6 +45,12 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
   // Esc·포커스 트랩·스크롤락·포커스 복원 일괄. root 바인딩이라 포털과 짝을 이뤄야
   // 부모 모달이 Esc를 가로채지 않는다.
   useModalBehavior({ isOpen, onClose, containerRef })
+  const dropdownPos = useDropdownPosition(
+    isOpen,
+    anchorEl,
+    containerRef,
+    DROPDOWN_WIDTH,
+  )
 
   useEffect(() => {
     if (isOpen && initialTime) {
@@ -53,6 +66,23 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
       setSelectedMinute(now.getMinutes())
     }
   }, [isOpen, initialTime])
+
+  /* 열리면 고른 시·분이 목록 가운데 오게 — 23시를 골라 둬도 목록은 00부터 보였다.
+     scrollIntoView는 바깥 모달까지 스크롤하므로 목록 자신의 scrollTop만 옮긴다. */
+  useEffect(() => {
+    if (!isOpen) return
+    const frame = window.requestAnimationFrame(() => {
+      containerRef.current
+        ?.querySelectorAll<HTMLElement>('[data-selected="true"]')
+        .forEach((item) => {
+          const list = item.parentElement
+          if (!list) return
+          list.scrollTop =
+            item.offsetTop - list.clientHeight / 2 + item.clientHeight / 2
+        })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [isOpen, selectedHour, selectedMinute])
 
   if (!isOpen) return null
 
@@ -71,7 +101,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
   }
 
   const modal = (
-    <Overlay onClick={onClose}>
+    <Overlay onClick={onClose} $anchored={anchored}>
       <ModalContainer
         ref={containerRef}
         role="dialog"
@@ -79,8 +109,19 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
         aria-label={title}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
+        $anchored={anchored}
+        data-anchored={anchored || undefined}
+        style={
+          anchored
+            ? {
+                top: dropdownPos?.top ?? 0,
+                left: dropdownPos?.left ?? 0,
+                visibility: dropdownPos ? 'visible' : 'hidden',
+              }
+            : undefined
+        }
       >
-        <ModalHeader>
+        <ModalHeader $anchored={anchored}>
           <HeaderLeft>
             <ClockIcon>
               <FiClock size={20} />
@@ -111,6 +152,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                   <TimeItem
                     key={hour}
                     $selected={hour === selectedHour}
+                    data-selected={hour === selectedHour}
                     onClick={() => setSelectedHour(hour)}
                   >
                     {hour.toString().padStart(2, '0')}
@@ -126,6 +168,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                   <TimeItem
                     key={minute}
                     $selected={minute === selectedMinute}
+                    data-selected={minute === selectedMinute}
                     onClick={() => setSelectedMinute(minute)}
                   >
                     {minute.toString().padStart(2, '0')}
@@ -179,15 +222,16 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
   return createPortal(modal, document.body)
 }
 
-const Overlay = styled.div`
+const Overlay = styled.div<{ $anchored?: boolean }>`
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
+  /* 드롭다운은 화면을 어둡히지 않는다 — 투명한 판은 바깥 클릭 닫기만 맡는다 */
+  background: ${({ $anchored }) => ($anchored ? 'transparent' : 'rgba(0, 0, 0, 0.6)')};
+  backdrop-filter: ${({ $anchored }) => ($anchored ? 'none' : 'blur(4px)')};
+  display: ${({ $anchored }) => ($anchored ? 'block' : 'flex')};
   align-items: center;
   justify-content: center;
   z-index: ${Z_INDEX.MODAL_OVERLAY};
@@ -203,7 +247,7 @@ const Overlay = styled.div`
   }
 `
 
-const ModalContainer = styled.div`
+const ModalContainer = styled.div<{ $anchored?: boolean }>`
   ${({ theme }) => glassCardMixin(theme)}
   border-radius: 16px;
   width: 420px;
@@ -211,6 +255,27 @@ const ModalContainer = styled.div`
   max-height: 90vh;
   overflow: hidden;
   animation: slideUp 0.3s ease-out;
+
+  ${({ $anchored }) =>
+    $anchored &&
+    `
+    position: fixed;
+    width: ${DROPDOWN_WIDTH}px;
+    max-width: calc(100vw - 16px);
+    border-radius: 12px;
+    animation: dropIn 0.16s ease;
+  `}
+
+  @keyframes dropIn {
+    from {
+      transform: translateY(-4px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
 
   @keyframes slideUp {
     from {
@@ -224,8 +289,9 @@ const ModalContainer = styled.div`
   }
 `
 
-const ModalHeader = styled.div`
-  display: flex;
+const ModalHeader = styled.div<{ $anchored?: boolean }>`
+  /* 드롭다운엔 머리글이 없다 — 어느 칸의 시간인지는 바로 위 칸이 말한다 */
+  display: ${({ $anchored }) => ($anchored ? 'none' : 'flex')};
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
@@ -276,9 +342,18 @@ const CloseButton = styled.button`
 
 const ModalBody = styled.div`
   padding: 24px;
+
+  /* 드롭다운 — 칸 아래 붙어야 하므로 세로를 아낀다 */
+  [data-anchored] & {
+    padding: 14px 14px 12px;
+  }
 `
 
 const TimeDisplay = styled.div`
+  /* 드롭다운에선 큰 시계 표시를 뺀다 — 목록이 이미 고른 값을 강조하고, 약 100px을 먹었다 */
+  [data-anchored] & {
+    display: none;
+  }
   display: flex;
   align-items: center;
   justify-content: center;
@@ -330,6 +405,10 @@ const PickerLabel = styled.div`
 
 const ScrollContainer = styled.div`
   height: 200px;
+
+  [data-anchored] & {
+    height: 164px;
+  }
   overflow-y: auto;
   border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   border-radius: 8px;
@@ -425,6 +504,10 @@ const QuickButton = styled.button`
 `
 
 const ModalFooter = styled.div`
+  [data-anchored] & {
+    padding: 12px 14px;
+    gap: 8px;
+  }
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -434,6 +517,10 @@ const ModalFooter = styled.div`
 `
 
 const ClearButton = styled.button`
+  white-space: nowrap;
+  [data-anchored] & {
+    padding: 8px 10px;
+  }
   padding: 10px 16px;
   border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
@@ -457,6 +544,10 @@ const ButtonGroup = styled.div`
 `
 
 const CancelButton = styled.button`
+  white-space: nowrap;
+  [data-anchored] & {
+    padding: 8px 12px;
+  }
   padding: 10px 20px;
   border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
   background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
@@ -473,6 +564,10 @@ const CancelButton = styled.button`
 `
 
 const ConfirmButton = styled.button`
+  white-space: nowrap;
+  [data-anchored] & {
+    padding: 8px 14px;
+  }
   display: flex;
   align-items: center;
   gap: 6px;

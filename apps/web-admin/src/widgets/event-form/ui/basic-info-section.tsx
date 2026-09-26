@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import styled, { useTheme } from 'styled-components'
+import styled, { type DefaultTheme, useTheme } from 'styled-components'
 import {
   FiAlertCircle,
   FiCalendar,
   FiClock,
   FiFileText,
-  FiGlobe,
   FiImage,
   FiPlus,
   FiX,
@@ -22,6 +21,7 @@ import { extractCategoryKey } from '@/features/event-create/lib'
 import * as S from '@/pages/events/create/event-create.styles'
 import { CATEGORY_ICON_MAP } from '@/pages/events/create/events.constants'
 import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
+import { CATEGORY_SOFT_COLORS } from '@/pages/events/styles/theme'
 import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
@@ -183,6 +183,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   /** 시작일 선택 직후 종료일 필드로 포커스를 옮길지 (피커 닫힘 후 1회) */
   const pendingEndDateFocusRef = useRef(false)
   const endDateTriggerRef = useRef<HTMLDivElement>(null)
+  const startDateTriggerRef = useRef<HTMLDivElement>(null)
+  const startTimeTriggerRef = useRef<HTMLDivElement>(null)
+  const endTimeTriggerRef = useRef<HTMLDivElement>(null)
   const [keywordInput, setKeywordInput] = useState(keywords.join(', '))
   const [keywordValidationMsg, setKeywordValidationMsg] = useState('')
   const skipKeywordSyncRef = useRef(false)
@@ -337,6 +340,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             <S.DateRangeColumn>
               <S.DateRangeLabel>시작일</S.DateRangeLabel>
               <S.DateInputWrapper
+                ref={startDateTriggerRef}
+                aria-haspopup="dialog"
+                aria-expanded={isStartDateModalOpen}
+                data-open={isStartDateModalOpen || undefined}
                 onClick={() => {
                   playClickSound()
                   setIsStartDateModalOpen(true)
@@ -348,6 +355,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 </S.DateInputDisplay>
               </S.DateInputWrapper>
               <S.DateInputWrapper
+                ref={startTimeTriggerRef}
+                aria-haspopup="dialog"
+                aria-expanded={isStartTimeModalOpen}
+                data-open={isStartTimeModalOpen || undefined}
                 onClick={() => {
                   playClickSound()
                   setIsStartTimeModalOpen(true)
@@ -365,6 +376,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 ref={endDateTriggerRef}
                 // 프로그램적 포커스만 받는다(탭 정지점을 늘리지 않음)
                 tabIndex={-1}
+                aria-haspopup="dialog"
+                aria-expanded={isEndDateModalOpen}
+                data-open={isEndDateModalOpen || undefined}
                 onClick={() => {
                   playClickSound()
                   setIsEndDateModalOpen(true)
@@ -376,6 +390,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 </S.DateInputDisplay>
               </S.DateInputWrapper>
               <S.DateInputWrapper
+                ref={endTimeTriggerRef}
+                aria-haspopup="dialog"
+                aria-expanded={isEndTimeModalOpen}
+                data-open={isEndTimeModalOpen || undefined}
                 onClick={() => {
                   playClickSound()
                   setIsEndTimeModalOpen(true)
@@ -418,6 +436,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         initialDate={startDate}
         maxDate={endDate}
         title="시작 일자 선택"
+        /* 모달 대신 칸 아래 드롭다운 — 폼을 가리지 않고 고른 뒤 바로 이어 쓴다 */
+        anchorEl={startDateTriggerRef.current}
       />
       <DatePickerModal
         isOpen={isEndDateModalOpen}
@@ -426,6 +446,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         initialDate={endDate || startDate}
         minDate={startDate}
         title="종료 일자 선택"
+        anchorEl={endDateTriggerRef.current}
       />
       <TimePickerModal
         isOpen={isStartTimeModalOpen}
@@ -433,6 +454,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         onSelect={(time) => setStartTime(time)}
         initialTime={startTime}
         title="시작 시간 선택"
+        anchorEl={startTimeTriggerRef.current}
       />
       <TimePickerModal
         isOpen={isEndTimeModalOpen}
@@ -440,6 +462,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         onSelect={(time) => setEndTime(time)}
         initialTime={endTime}
         title="종료 시간 선택"
+        anchorEl={endTimeTriggerRef.current}
       />
 
       {/* 상위 사건 — 고아 생성 후 수동 연결 대신, 등록 시점에 바로 가지로 붙인다 */}
@@ -511,12 +534,24 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 const categoryKey = extractCategoryKey(categoryId)
                 const Icon = CATEGORY_ICON_MAP[categoryName] || FiFileText
                 const isSelected = category === categoryId
+                /* 목록과 **같은 팔레트** — DB 이름(정치·전쟁/군사…)이 곧 키다. 예전 키 추출
+                   (extractCategoryKey)은 'cat-xxx-n' id를 전제해 UUID에서 전부 회색이었다. */
+                const tone =
+                  CATEGORY_SOFT_COLORS[
+                    categoryName as keyof typeof CATEGORY_SOFT_COLORS
+                  ] ?? CATEGORY_SOFT_COLORS.other
 
                 return (
                   <S.CategoryCard
                     key={dbCat.id}
                     type="button"
                     aria-pressed={isSelected}
+                    style={
+                      {
+                        '--cat-rgb': tone.rgb,
+                        '--cat-text': isDark ? tone.textDark : tone.text,
+                      } as React.CSSProperties
+                    }
                     $selected={isSelected}
                     $category={categoryKey}
                     onClick={() => {
@@ -762,16 +797,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             참여국<OptionalTag>(선택)</OptionalTag>
           </S.FormLabel>
           <S.FormField>
-            <S.AddButton
-              type="button"
-              onClick={() => {
-                playClickSound()
-                onOpenCountryModal()
-              }}
-            >
-              <FiGlobe size={16} />
-              국가 추가
-            </S.AddButton>
             {relatedCountries.length > 0 && (
               <ParticipantList>
                 {relatedCountries.map((participant, index) => {
@@ -842,6 +867,17 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 })}
               </ParticipantList>
             )}
+            {/* 추가는 목록 **뒤** — 쌓이는 쪽에서 이어 붙이는 흐름 */}
+            <S.AddButton
+              type="button"
+              onClick={() => {
+                playClickSound()
+                onOpenCountryModal()
+              }}
+            >
+              <FiPlus size={15} />
+              {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
+            </S.AddButton>
             {historicalLifespanWarnings.map((item) => (
               <AlertBox
                 key={item.id}
@@ -877,19 +913,36 @@ const OptionalTag = styled.span`
 /* ─── 참여국 행 ───
  * 한 줄 = 국가 + 역할 + 한 줄 서술. 등록 시점에 이미 "누가 어떤 자격으로"가 적히므로
  * 조약처럼 국가별 사정이 다른 사건도 상세로 넘기지 않고 여기서 끝낼 수 있다. */
+/*
+ * 참여국 목록 — 한 나라 = 한 장의 옅은 행 카드 [국기·이름 | 역할 | 한 일 | 삭제].
+ *
+ * ⚠️ 예전 선택·입력칸은 테두리를 `theme.colors.border`(객체)로 칠해 값이 무효가 됐고,
+ * 브라우저 기본 테(진한 1.5px)와 네이티브 화살표로 그려져 폼의 다른 입력칸과 딴판이었다.
+ * 폼 토큰(S.getC)으로 맞춘다.
+ */
 const ParticipantList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 8px;
+  margin-bottom: 4px;
 `
 
 const ParticipantRow = styled.div`
   display: grid;
   /* 국가명이 주인공 — 이름 열을 역할 열보다 넓게 잡아 긴 국호도 잘리지 않게 한다. */
-  grid-template-columns: minmax(132px, 1.1fr) 108px minmax(0, 1.7fr) auto;
+  grid-template-columns: minmax(132px, 1fr) 118px minmax(0, 1.7fr) 28px;
   align-items: center;
   gap: 8px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  border-radius: 10px;
+  background: ${({ theme }) => S.getC(theme).background.section};
+  transition: border-color 0.14s ease;
+
+  &:hover,
+  &:focus-within {
+    border-color: ${({ theme }) => S.getC(theme).border.default};
+  }
 
   @media (max-width: 720px) {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -898,8 +951,8 @@ const ParticipantRow = styled.div`
 `
 
 /**
- * 행에서 가장 강한 잉크가 '삭제'가 되면 안 된다 — 공용 RemoveButton은 칩 전용이라
- * 상시 빨강이었다. 평소엔 중성색으로 물러나고 hover·focus에서만 파괴색을 띤다.
+ * 행에서 가장 강한 잉크가 '삭제'가 되면 안 된다 — 평소엔 중성색으로 물러나고
+ * hover·focus에서만 파괴색을 띤다.
  */
 const ParticipantRemove = styled.button`
   display: inline-flex;
@@ -909,9 +962,9 @@ const ParticipantRemove = styled.button`
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background-color: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => S.getC(theme).text.muted};
   cursor: pointer;
   transition: color 0.14s, background-color 0.14s;
 
@@ -921,50 +974,61 @@ const ParticipantRemove = styled.button`
     background-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.08)'};
   }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => S.getC(theme).border.focus};
+    outline-offset: 1px;
+  }
 `
 
 const ParticipantName = styled.span`
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `
 
-/* background-color만 지정 — background 단축 속성은 네이티브 화살표 SVG를 지운다. */
-const RoleSelect = styled.select`
-  height: 32px;
-  padding: 0 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 6px;
-  background-color: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.primary};
+/* 행 안 입력칸 공통 — 폼의 다른 입력칸과 같은 테·모서리·포커스 헤일로 */
+const participantControl = ({ theme }: { theme: DefaultTheme }) => `
+  height: 34px;
+  border: 1px solid ${S.getC(theme).border.default};
+  border-radius: 8px;
+  background-color: ${S.getC(theme).background.content};
+  color: ${theme.colors.text.primary};
   font-family: inherit;
   font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
+  &:hover {
+    border-color: ${S.getC(theme).border.hover};
+  }
+  &:focus,
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 1px;
+    outline: none;
+    border-color: ${S.getC(theme).border.focus};
+    box-shadow: 0 0 0 3px ${S.getC(theme).border.focusHalo};
   }
 `
 
+/* 네이티브 화살표 대신 자체 셰브론 — 다른 선택칸과 같은 모양 */
+const RoleSelect = styled.select`
+  ${participantControl}
+  appearance: none;
+  padding: 0 28px 0 10px;
+  font-weight: 600;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+`
+
 const RoleDescriptionInput = styled.input`
-  height: 32px;
+  ${participantControl}
   padding: 0 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 6px;
-  background-color: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 13px;
+  min-width: 0;
 
   &::placeholder {
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 1px;
+    color: ${({ theme }) => S.getC(theme).text.muted};
   }
 `
