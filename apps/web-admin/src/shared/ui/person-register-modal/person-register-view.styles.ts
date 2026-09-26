@@ -8,9 +8,12 @@ import {
   FieldControl,
   FieldLabel,
   FieldRow,
+  FormRows,
+  FormSectionInner,
+  Required,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
-import { FONT, InlineFields, RADIUS } from './_form-primitives'
+import { AdvancedSection, FONT, InlineFields, RADIUS } from './_form-primitives'
 
 // 중복 제거 — disclosure 카드·InlineFields·FieldError는 단일 정의(_form-primitives)에서
 // re-export. person-register-view.tsx의 기존 import 경로를 유지하기 위함.
@@ -30,12 +33,34 @@ export {
 // "데이터 입력"이 아니라 "사람을 만든다"는 인상으로 상단 hero 격상.
 // 좌: 원형 썸네일(드롭존) / 우: namePreview + 국가·향년 칩 + 업로드 hint·삭제
 
-export const ThumbnailHero = styled.div`
+/** 사진 | 이름 칸 한 줄 — 좁은 폰에선 사진이 위로 올라간다. */
+export const NameHero = styled.div`
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+
+  && > ${FieldRow} {
+    margin-top: 0;
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+`
+
+export const PhotoCol = styled.div`
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 18px;
-  padding: 4px 0 6px;
-  flex-wrap: wrap;
+  gap: 4px;
+  /* 이름 입력칸 윗선(라벨 한 줄 아래)에 원의 위쪽을 맞춘다 */
+  padding-top: 2px;
+
+  @media (max-width: 640px) {
+    justify-self: start;
+  }
 `
 
 export const ThumbnailCircle = styled.label<{
@@ -43,8 +68,8 @@ export const ThumbnailCircle = styled.label<{
   $dragOver?: boolean
 }>`
   position: relative;
-  width: 88px;
-  height: 88px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   overflow: hidden;
   background: ${({ theme }) =>
@@ -129,48 +154,15 @@ export const ThumbnailUploadInput = styled.input`
   border: 0;
 `
 
-export const ThumbnailHeroBody = styled.div`
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-export const ThumbnailHeroName = styled.div<{ $empty: boolean }>`
-  font-size: ${({ $empty }) => ($empty ? '14px' : '18px')};
-  font-weight: ${({ $empty }) => ($empty ? '400' : '600')};
-  color: ${({ $empty, theme }) =>
-    $empty ? theme.colors.text.tertiary : theme.colors.text.primary};
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-`
-
-export const ThumbnailHeroMeta = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-`
-
-export const HeroMetaChip = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 9px;
-  font-size: ${FONT.meta};
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  border-radius: ${RADIUS.pill};
-  letter-spacing: -0.005em;
-  font-variant-numeric: tabular-nums;
-`
-
+/** 업로드 방법 안내 — 스크린리더 전용(aria-describedby). 시각 신호는 원 위 카메라 오버레이. */
 export const ThumbnailHeroHint = styled.div`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.4;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 `
 
 export const ThumbnailHeroRemoveBtn = styled.button`
@@ -203,17 +195,17 @@ export const OriginalNameInputWrap = styled.div`
 
 
 /**
- * 짧은 코어 컨트롤(성별·국적)을 가로 2열로 묶어 세로 길이를 줄이고 960px 폭을 활용.
+ * 짧은 코어 컨트롤(성별·국적)을 가로 2열로 묶어 세로 길이를 줄인다.
  * FieldRow가 아니라 자체 margin-top을 가지며, 좁은 화면(<640px)에선 1열로 떨어진다.
+ * 폭 상한은 두지 않는다 — 폼 전체가 한 측정폭(PersonFormLayoutWrap)을 공유한다.
  */
 export const CoreFieldPair = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 18px 16px;
+  gap: 18px 24px;
   align-items: start;
-  /* 상단 간격은 앞의 CoreDivider가 제공(이중 마진 방지) */
-  margin-top: 0;
-  max-width: 600px;
+  /* 이름 묶음과 같은 '기본 정보' 안의 하위 묶음 — 구분선·머리글 없이 간격만 */
+  margin-top: 24px;
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
     gap: 18px;
@@ -235,35 +227,74 @@ export const CoreFieldCell = styled.div`
 export const CoreDivider = styled.div`
   height: 1px;
   background: ${({ theme }) => theme.colors.border.light};
-  margin: 24px 0;
+  margin: 28px 0 24px;
 `
 
 /**
- * 코어 블록 eyebrow 라벨(이름/신원/생몰) — 작은 대문자 톤으로 필드 라벨(13px)과
- * 위계를 분리해 "섹션 마커"임을 알린다. DeathTypeGroupLabel과 동일 시각 언어.
+ * 블록 머리글(이름/신원/생몰/생애 상세/소속/가족) — 폼의 유일한 섹션 마커.
+ * 예전엔 11px 대문자 eyebrow(tertiary)였는데, 한글엔 대문자·자간이 먹지 않아 작은 회색 글자만
+ * 남았고(대비 2.5:1) 필드 라벨(13px)보다 **약해** 섹션 경계가 읽히지 않았다.
+ * 이제 필드 라벨(13/500 secondary)보다 한 단 위(15/700 primary)로 둔다 — 마커 종류는 여전히 하나.
  */
 export const CoreSectionLabel = styled.h3`
-  /* 태그만 heading(상시 긴 폼의 스크린리더 랜드마크) — 시각은 eyebrow 그대로.
-     UA margin-top을 0으로 눌러 24px CoreDivider 리듬을 보호. */
-  margin: 0 0 10px;
-  font-size: ${FONT.eyebrow};
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  /* UA margin-top을 0으로 눌러 CoreDivider 리듬을 보호. */
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
-/** '(이름만 필수)' 보조 문구 — 필수 별표가 세 필드 전체로 오독되지 않게 라벨에 덧대는 경량 톤. */
-export const NameOnlyRequiredNote = styled.span`
-  font-size: ${FONT.meta};
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+/** 성·이름·중간이름 한 칸 — 칸마다 자기 라벨을 위에 둔다(필수 별표는 '이름' 칸에만). */
+export const NameCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 `
 
 // ─── Layout wrapper (Top-aligned modern form layout) ────────────────────────
 // 상단 정렬 라벨 (Linear/Stripe/Notion 류) — 라벨이 위, 컨트롤이 아래.
 
 export const PersonFormLayoutWrap = styled.div`
+  /*
+   * 폼 전체가 **한 측정폭**을 쓴다. 예전엔 컨트롤마다 600·480px 상한이 따로 걸려
+   * 이름·국적·출생지는 600에서, 구분선·가족·seam은 본문 끝에서 끝나 오른쪽 가장자리가
+   * 들쭉날쭉했다(모달 본문 735px 중 135px가 행마다 다르게 비었다). 상한은 여기 하나.
+   */
+  form {
+    max-width: 760px;
+  }
+
+  /* 모달 셸의 스크롤 여백(28px)과 겹쳐 머리글 아래 56px 빈 띠가 생기던 것 — 셸 여백만 남긴다. */
+  ${FormSectionInner} {
+    padding-top: 0;
+  }
+
+  /* 필수 표식 — 5px 점은 기준선 아래로 떨어져 오탈자처럼 보였다. 사건 등록 폼과 같은 붉은 '*'. */
+  ${Required} {
+    display: inline;
+    width: auto;
+    height: auto;
+    margin-left: 2px;
+    border-radius: 0;
+    background: none;
+    overflow: visible;
+    font-size: 13px;
+    font-weight: 600;
+    vertical-align: baseline;
+    color: ${({ theme }) => theme.colors.alert.danger.fg};
+  }
+
+  /*
+   * 한 블록 안에 FormRows가 이어 붙거나(출생지 → 출생 상세) disclosure 뒤에 올 때(이름의 뜻 → 별칭)
+   * 뒤쪽 첫 줄이 ':first-child 여백 0'을 받아 앞 컨트롤에 8px로 달라붙었다 — 행 간격을 되살린다.
+   */
+  ${FormRows} + ${FormRows},
+  ${AdvancedSection} + ${FormRows} {
+    margin-top: 20px;
+  }
+
   ${FieldRow} {
     display: flex;
     flex-direction: column;
@@ -271,10 +302,6 @@ export const PersonFormLayoutWrap = styled.div`
     padding: 0;
     border-bottom: none;
     margin-top: 20px;
-  }
-
-  ${ThumbnailHero} {
-    margin-top: 0;
   }
 
   ${FieldRow}:first-child {
@@ -292,14 +319,10 @@ export const PersonFormLayoutWrap = styled.div`
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 
-  /*
-   * 컨트롤 폭 — 960px 모달에서 단일 입력이 ~800px로 늘어지면 라인이 길어 가독성↓.
-   * 생몰(480px)·hero와 톤을 맞춰 ~600px로 캡. 3-필드 인라인은 충분히 넓고,
-   * 단일 텍스트/셀렉트/textarea도 읽기 좋은 라인 길이를 유지.
-   */
+  /* 컨트롤 폭 — 개별 상한 없이 폼 측정폭(위 form max-width)을 채운다. */
   ${FieldControl} {
     width: 100%;
-    max-width: 600px;
+    max-width: none;
   }
 
   ${InlineFields} {

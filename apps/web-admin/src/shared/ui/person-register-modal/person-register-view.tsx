@@ -67,7 +67,6 @@ import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { type PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
   FieldControl,
-  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
@@ -126,11 +125,12 @@ import {
   DraftDiscardBtn,
   DraftRestoreBtn,
   FieldError,
-  HeroMetaChip,
   InlineFields,
   LoadingHost,
   LoadingOverlay,
-  NameOnlyRequiredNote,
+  NameCell,
+  NameHero,
+  PhotoCol,
   NotFoundDesc,
   NotFoundIcon,
   NotFoundPanel,
@@ -139,11 +139,7 @@ import {
   OriginalNameInputWrap,
   PersonFormLayoutWrap,
   ThumbnailCircle,
-  ThumbnailHero,
-  ThumbnailHeroBody,
   ThumbnailHeroHint,
-  ThumbnailHeroMeta,
-  ThumbnailHeroName,
   ThumbnailHeroRemoveBtn,
   ThumbnailUploadInput,
   TopAlert,
@@ -283,8 +279,6 @@ export function PersonRegisterView({
   const [countryName, setCountryName] = useState<string>('')
   /** 주 국적 id — 현대(countryId) 우선, 없으면 역사(historicalCountryId). 읽기 전용 파생. */
   const primaryCountryId = countryId || historicalCountryId
-  /** 주 국적이 역사(과거) 국가인지 — historicalCountryId 보유가 source of truth. */
-  const countryIsHistorical = !!historicalCountryId
   // 추가 국가 소속(다중) — 주 국적 외 출생지·복무·망명 등
   const [countryAffiliations, setCountryAffiliations] = useState<
     CountryAffiliationRow[]
@@ -2068,7 +2062,7 @@ export function PersonRegisterView({
       },
       {
         id: 'affiliation',
-        label: '가문 · 종교 · 소속',
+        label: '소속',
         filled: !!dynastyId || !!religionId || countryAffiliations.length > 0,
       },
       {
@@ -2179,73 +2173,64 @@ export function PersonRegisterView({
              * 세부(이름 원어/뜻·사망 상세·군주 호칭)는 필드 단위 disclosure로만 접어 첫인상 부담을 관리.
              */}
             <FormRows data-form-section="basic">
-                <CoreSectionLabel>이름</CoreSectionLabel>
-                {/* 인물 hero — 좌: 원형 썸네일(드롭존), 우: 이름 미리보기·국가/향년 칩 */}
-                <ThumbnailHero>
-                  <ThumbnailCircle
-                    htmlFor="person-thumbnail-upload"
-                    $hasImage={!!(thumbnailObjectUrl || profileImageUrl)}
-                    $dragOver={thumbnailDragOver}
-                    onDragEnter={(e) => {
-                      e.preventDefault()
-                      setThumbnailDragOver(true)
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      setThumbnailDragOver(true)
-                    }}
-                    onDragLeave={() => setThumbnailDragOver(false)}
-                    onDrop={handleThumbnailDrop}
-                    aria-label="프로필 사진 업로드"
-                  >
-                    {thumbnailObjectUrl || profileImageUrl ? (
-                      <img
-                        src={
-                          thumbnailObjectUrl ||
-                          getUploadImageUrl(profileImageUrl) ||
-                          profileImageUrl
-                        }
-                        alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
-                      />
-                    ) : (
-                      <svg
-                        className="placeholder"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                      </svg>
-                    )}
-                    <span className="overlay" aria-hidden="true">
-                      <FiCamera size={20} />
-                    </span>
-                    {/* 라벨 안에 두어 :focus-within 링이 원형 썸네일에 뜨고, 키보드(Tab→Space)로
-                        네이티브 파일 대화상자가 열리게 한다(display:none이면 포커스 불가). */}
-                    <ThumbnailUploadInput
-                      id="person-thumbnail-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleThumbnailChange}
-                      disabled={isSubmitting}
+                <CoreSectionLabel>기본 정보</CoreSectionLabel>
+                {/*
+                 * 사진 | 이름 칸을 한 줄에. 예전 hero(원형 88px + 이름 미리보기 + 국가·향년 칩 + 업로드 안내)는
+                 * 입력칸이 이미 보여 주는 이름을 한 번 더 그려 첫 입력칸을 110px 아래로 밀었다.
+                 * 업로드 방법 안내는 스크린리더용으로만 남긴다(원 위 카메라 오버레이가 시각 신호).
+                 */}
+                <NameHero>
+                  <PhotoCol>
+                    <ThumbnailCircle
+                      htmlFor="person-thumbnail-upload"
+                      $hasImage={!!(thumbnailObjectUrl || profileImageUrl)}
+                      $dragOver={thumbnailDragOver}
+                      onDragEnter={(e) => {
+                        e.preventDefault()
+                        setThumbnailDragOver(true)
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        setThumbnailDragOver(true)
+                      }}
+                      onDragLeave={() => setThumbnailDragOver(false)}
+                      onDrop={handleThumbnailDrop}
                       aria-label="프로필 사진 업로드"
-                      aria-describedby="person-thumbnail-hint"
-                    />
-                  </ThumbnailCircle>
-                  <ThumbnailHeroBody>
-                    <ThumbnailHeroName $empty={!namePreview}>
-                      {namePreview || '이름을 입력해 시작하세요'}
-                    </ThumbnailHeroName>
-                    {(countryName || lifespanText) && (
-                      <ThumbnailHeroMeta>
-                        {countryName && (
-                          <HeroMetaChip>{countryName}</HeroMetaChip>
-                        )}
-                        {lifespanText && (
-                          <HeroMetaChip>{lifespanText}</HeroMetaChip>
-                        )}
-                      </ThumbnailHeroMeta>
-                    )}
+                    >
+                      {thumbnailObjectUrl || profileImageUrl ? (
+                        <img
+                          src={
+                            thumbnailObjectUrl ||
+                            getUploadImageUrl(profileImageUrl) ||
+                            profileImageUrl
+                          }
+                          alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
+                        />
+                      ) : (
+                        <svg
+                          className="placeholder"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                        </svg>
+                      )}
+                      <span className="overlay" aria-hidden="true">
+                        <FiCamera size={20} />
+                      </span>
+                      {/* 라벨 안에 두어 :focus-within 링이 원형 썸네일에 뜨고, 키보드(Tab→Space)로
+                          네이티브 파일 대화상자가 열리게 한다(display:none이면 포커스 불가). */}
+                      <ThumbnailUploadInput
+                        id="person-thumbnail-upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleThumbnailChange}
+                        disabled={isSubmitting}
+                        aria-label="프로필 사진 업로드"
+                        aria-describedby="person-thumbnail-hint"
+                      />
+                    </ThumbnailCircle>
                     <ThumbnailHeroHint id="person-thumbnail-hint">
                       {thumbnailDragOver
                         ? '여기에 놓아 업로드'
@@ -2269,87 +2254,94 @@ export function PersonRegisterView({
                         }
                       >
                         <FiTrash2 size={13} />
-                        {pendingThumbnailFile ? '선택 취소' : '프로필 사진 제거'}
+                        {pendingThumbnailFile ? '취소' : '제거'}
                       </ThumbnailHeroRemoveBtn>
                     )}
-                  </ThumbnailHeroBody>
-                </ThumbnailHero>
-
-                <FieldRow>
-                  {/* 필수 표식은 '이름'에만 귀속 — 성·중간이름은 선택(외자·성 미상 인물 대응).
-                      htmlFor도 필수 필드(name)를 가리켜 라벨 클릭·SR이 이름으로 착지한다. */}
-                  <FieldLabel htmlFor={fid('name')}>
-                    성 · 이름<Required>*</Required> · 중간이름{' '}
-                    <NameOnlyRequiredNote>(이름만 필수)</NameOnlyRequiredNote>
-                  </FieldLabel>
-                  <FieldControl>
-                    <InlineFields $template="minmax(90px, 0.8fr) minmax(140px, 1.4fr) minmax(110px, 1fr)">
-                      <FormInput
-                        id={fid('surname')}
-                        value={surname}
-                        onChange={(e) => setSurname(e.target.value)}
-                        placeholder="홍"
-                      />
-                      <FormInput
-                        id={fid('name')}
-                        value={name}
-                        onChange={(e) => {
-                          setName(e.target.value)
-                          clearFieldError('name')
-                        }}
-                        onBlur={() => handleRequiredTextBlur('name', name)}
-                        placeholder="길동"
-                        data-jump-target="name"
-                        aria-required
-                        $error={!!errors.name}
-                        aria-invalid={!!errors.name}
-                        aria-describedby={
-                          errors.name ? fid('name-err') : undefined
-                        }
-                      />
-                      <FormInput
-                        id={fid('middleName')}
-                        value={middleName}
-                        onChange={(e) => setMiddleName(e.target.value)}
-                        placeholder="중간이름"
-                      />
-                    </InlineFields>
-                    {/* namePreview는 상단 hero에 표시. 성·중간이름은 선택, 이름만 필수. */}
-                    {errors.name && (
-                      <FieldError id={fid('name-err')} role="alert">
-                        <FiAlertCircle size={13} />
-                        {errors.name}
-                      </FieldError>
-                    )}
-                    {/* 표시 순서 — 기본은 국가 설정 따름, 필요 시 개인 단위로 오버라이드 */}
-                    <NameOrderControl>
-                      <NameOrderLabel htmlFor={fid('nameFormat')}>
-                        표시 순서
-                      </NameOrderLabel>
-                      <SegmentControl
-                        value={nameFormat}
-                        onChange={(v) => {
-                          setNameFormat(v as 'auto' | 'korean' | 'western')
-                          markDirty()
-                        }}
-                        options={[
-                          {
-                            value: 'auto',
-                            label: `국가 기본 (${
-                              (countryNameOrderById.get(primaryCountryId) ??
-                                'korean') === 'western'
-                                ? '이름·성'
-                                : '성·이름'
-                            })`,
-                          },
-                          { value: 'korean', label: '성·이름' },
-                          { value: 'western', label: '이름·성' },
-                        ]}
-                        ariaLabel="이름 표시 순서"
-                      />
-                    </NameOrderControl>
-                  </FieldControl>
-                </FieldRow>
+                  </PhotoCol>
+                  <FieldRow>
+                    {/* 칸마다 자기 라벨 — 한 줄 라벨 '성 · 이름* · 중간이름'은 별표가 가운데 끼어
+                        오탈자처럼 보였고 '(이름만 필수)' 해설이 따로 필요했다. 필수 표식은 '이름' 칸에만
+                        (성·중간이름은 선택 — 외자·성 미상 인물). */}
+                    <FieldControl>
+                      <InlineFields $template="minmax(90px, 0.8fr) minmax(140px, 1.4fr) minmax(110px, 1fr)">
+                        <NameCell>
+                          <FieldLabel htmlFor={fid('surname')}>성</FieldLabel>
+                          <FormInput
+                            id={fid('surname')}
+                            value={surname}
+                            onChange={(e) => setSurname(e.target.value)}
+                            placeholder="홍"
+                          />
+                        </NameCell>
+                        <NameCell>
+                          <FieldLabel htmlFor={fid('name')}>
+                            이름<Required>*</Required>
+                          </FieldLabel>
+                          <FormInput
+                            id={fid('name')}
+                            value={name}
+                            onChange={(e) => {
+                              setName(e.target.value)
+                              clearFieldError('name')
+                            }}
+                            onBlur={() => handleRequiredTextBlur('name', name)}
+                            placeholder="길동"
+                            data-jump-target="name"
+                            aria-required
+                            $error={!!errors.name}
+                            aria-invalid={!!errors.name}
+                            aria-describedby={
+                              errors.name ? fid('name-err') : undefined
+                            }
+                          />
+                        </NameCell>
+                        <NameCell>
+                          <FieldLabel htmlFor={fid('middleName')}>중간이름</FieldLabel>
+                          <FormInput
+                            id={fid('middleName')}
+                            value={middleName}
+                            onChange={(e) => setMiddleName(e.target.value)}
+                            placeholder="없으면 비움"
+                          />
+                        </NameCell>
+                      </InlineFields>
+                      {/* namePreview는 상단 hero에 표시. 성·중간이름은 선택, 이름만 필수. */}
+                      {errors.name && (
+                        <FieldError id={fid('name-err')} role="alert">
+                          <FiAlertCircle size={13} />
+                          {errors.name}
+                        </FieldError>
+                      )}
+                      {/* 표시 순서 — 기본은 국가 설정 따름, 필요 시 개인 단위로 오버라이드 */}
+                      <NameOrderControl>
+                        <NameOrderLabel htmlFor={fid('nameFormat')}>
+                          표시 순서
+                        </NameOrderLabel>
+                        <SegmentControl
+                          value={nameFormat}
+                          onChange={(v) => {
+                            setNameFormat(v as 'auto' | 'korean' | 'western')
+                            markDirty()
+                          }}
+                          options={[
+                            {
+                              value: 'auto',
+                              label: `국가 기본 (${
+                                (countryNameOrderById.get(primaryCountryId) ??
+                                  'korean') === 'western'
+                                  ? '이름·성'
+                                  : '성·이름'
+                              })`,
+                            },
+                            { value: 'korean', label: '성·이름' },
+                            { value: 'western', label: '이름·성' },
+                          ]}
+                          ariaLabel="이름 표시 순서"
+                        />
+                      </NameOrderControl>
+                    </FieldControl>
+                  </FieldRow>
+                </NameHero>
 
                 {/* 이름 원어 — 성·이름 클러스터에 인접(구 '이름 상세' 섹션에서 이관) */}
                 <FieldRow>
@@ -2380,7 +2372,7 @@ export function PersonRegisterView({
                     <AdvancedToggleBody>
                       <AdvancedToggleTitle>이름의 뜻</AdvancedToggleTitle>
                       <AdvancedToggleDesc>
-                        성·이름·중간이름의 한자/뜻 (선택)
+                        한자·뜻
                       </AdvancedToggleDesc>
                     </AdvancedToggleBody>
                   </AdvancedToggle>
@@ -2422,9 +2414,6 @@ export function PersonRegisterView({
                   markDirty={markDirty}
                 />
 
-                <CoreDivider />
-
-                <CoreSectionLabel>신원</CoreSectionLabel>
                 {/* 성별·국적 — 짧은 코어 컨트롤이라 가로 2열로 묶음 */}
                 <CoreFieldPair>
                   <CoreFieldCell>
@@ -2492,11 +2481,6 @@ export function PersonRegisterView({
                         {errors.countryId}
                       </FieldError>
                     )}
-                    <FieldHint>
-                      {countryIsHistorical
-                        ? '역사 국가(과거)를 선택했어요.'
-                        : '과거 국가(예: 잉글랜드 왕국)는 선택 창의 ‘역사 국가’ 탭에서 고를 수 있어요.'}
-                    </FieldHint>
                   </CoreFieldCell>
                 </CoreFieldPair>
               </FormRows>
@@ -2505,7 +2489,7 @@ export function PersonRegisterView({
 
               {/* 생몰 요약 — 출생~사망·생존 여부 (essentials, 늘 노출) */}
               <div data-form-section="life">
-              <CoreSectionLabel>생몰</CoreSectionLabel>
+              <CoreSectionLabel>생애</CoreSectionLabel>
               <LifeSection
                 mode="essentials"
                 fid={fid}
@@ -2561,11 +2545,11 @@ export function PersonRegisterView({
                 lifespanText={lifespanText}
                 errors={errors}
                 markDirty={markDirty}
+                birthPickerOpen={showBirthDateModal}
+                deathPickerOpen={showDeathDateModal}
               />
 
               {/* 생애 상세 — 출생지·사망지 + 사망 유형·원인·메모 + 군주 호칭 (생몰과 한 챕터로 인접 배치) */}
-              <CoreDivider />
-              <CoreSectionLabel>생애 상세</CoreSectionLabel>
               {/* 출생지·사망지 — 생몰 날짜와 한 흐름에 두어 발견성 회복 */}
               <PlaceFields
                 countryId={primaryCountryId}
@@ -2638,13 +2622,13 @@ export function PersonRegisterView({
 
               {/* 필수/선택 경계 — 접기(MoreToggle)가 겸하던 '여기까지면 등록 끝' 표식을 seam으로 복원 */}
               <OptionalSeam>
-                여기까지가 인물 기본 정보예요 · 아래 소속·가족은 선택이라 지금 등록해도 돼요
+                여기부터는 선택 — 지금 등록해도 돼요
               </OptionalSeam>
 
               <>
                 {/* 가문 · 종교 · 국가 — 가문·종교 + 다중 국가 소속 */}
                 <div data-form-section="affiliation">
-                <CoreSectionLabel>가문 · 종교 · 소속</CoreSectionLabel>
+                <CoreSectionLabel>소속</CoreSectionLabel>
                 <AffiliationSection
                   dynastyOptions={dynastySelectOptions}
                   religionOptions={religionSelectOptions}
@@ -2779,6 +2763,8 @@ export function PersonRegisterView({
             birthDay,
           )}
           title="출생일 선택"
+          /* 사건 등록 폼처럼 칸 바로 아래 드롭다운(모달이 폼을 가리지 않게) */
+          anchorEl={document.getElementById(fid('birth-date'))}
         />
       )}
       {showDeathDateModal && (
@@ -2793,6 +2779,7 @@ export function PersonRegisterView({
             deathDay,
           )}
           title="사망일 선택"
+          anchorEl={document.getElementById(fid('death-date'))}
         />
       )}
     </PersonFormLayoutWrap>

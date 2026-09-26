@@ -386,8 +386,11 @@ export function FamilySection({
             markDirty()
           }}
         />
-        <IllegitimateLabel htmlFor={fid('illegitimate')}>
-          사생아·서출 <IllegitimateHint>가계도에서 이름 옆 별표(*)로 표시됩니다</IllegitimateHint>
+        <IllegitimateLabel
+          htmlFor={fid('illegitimate')}
+          title="가계도에서 이름 옆 별표(*)로 표시됩니다"
+        >
+          사생아·서출
         </IllegitimateLabel>
       </IllegitimateRow>
       {/* 배우자 — 반복 행(다중 배우자·혼인일·메모). 정실/후궁·순차 재혼을 직접 편집. */}
@@ -395,9 +398,6 @@ export function FamilySection({
         <FieldLabel>배우자</FieldLabel>
         <FieldControl>
           <SpouseRowList>
-            {spouseRows.length === 0 && (
-              <SpouseEmptyHint>등록된 배우자가 없습니다</SpouseEmptyHint>
-            )}
             {spouseRows.map((rawRow, index) => {
               // 구형 draft 스냅샷 방어 — 어떤 저장 형상이 와도 파츠 행으로 승격
               const row = normalizeSpouseRow(rawRow)
@@ -670,7 +670,8 @@ export function FamilySection({
 const FamilyParentsRow = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  /* 성별·국적·생몰·출생지와 같은 열 간격 — 블록마다 두 열 경계가 한 줄로 맞게 */
+  gap: 24px;
   padding: 8px 0;
 
   @media (max-width: 640px) {
@@ -710,12 +711,6 @@ const IllegitimateLabel = styled.label`
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-`
-
-const IllegitimateHint = styled.span`
-  font-size: ${FONT.meta};
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const FamilySlotLabel = styled.label`
@@ -825,12 +820,6 @@ const SpouseRowList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
-`
-
-const SpouseEmptyHint = styled.div`
-  font-size: ${FONT.meta};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  padding: 2px 0;
 `
 
 const SpouseRowCard = styled.div`

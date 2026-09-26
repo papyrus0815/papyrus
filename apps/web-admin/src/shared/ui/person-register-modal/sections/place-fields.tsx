@@ -115,9 +115,8 @@ export function PlaceFields({
 const PlaceGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 18px 16px;
+  gap: 18px 24px;
   align-items: start;
-  max-width: 600px;
 
   && > ${FieldRow} {
     margin-top: 0;

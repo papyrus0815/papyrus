@@ -22,7 +22,10 @@ import React, { useRef } from 'react'
 
 import styled from 'styled-components'
 
-import { segmentToggleMixin } from '../person-register-modal/_form-primitives'
+import {
+  segmentGroupMixin,
+  segmentItemMixin,
+} from '../person-register-modal/_form-primitives'
 
 export interface SegmentOption<V extends string = string> {
   value: V
@@ -42,14 +45,13 @@ interface SegmentControlProps<V extends string = string> {
   ariaDescribedBy?: string
 }
 
-const Wrap = styled.div`
-  display: inline-flex;
+const Wrap = styled.div<{ $error?: boolean }>`
+  ${({ theme, $error }) => segmentGroupMixin(theme, $error)}
   flex-wrap: wrap;
-  gap: 6px;
 `
 
-const Btn = styled.button<{ $active?: boolean; $error?: boolean }>`
-  ${({ theme, $active, $error }) => segmentToggleMixin(theme, $active, $error)}
+const Btn = styled.button<{ $active?: boolean }>`
+  ${({ theme, $active }) => segmentItemMixin(theme, $active)}
 `
 
 export function SegmentControl<V extends string = string>({
@@ -118,6 +120,7 @@ export function SegmentControl<V extends string = string>({
       aria-invalid={error || undefined}
       aria-describedby={ariaDescribedBy}
       onKeyDown={handleKeyDown}
+      $error={error}
     >
       {options.map((opt, index) => (
         <Btn
@@ -130,7 +133,6 @@ export function SegmentControl<V extends string = string>({
           aria-checked={value === opt.value}
           tabIndex={index === tabStopIndex ? 0 : -1}
           $active={value === opt.value}
-          $error={error}
           disabled={opt.disabled}
           onClick={() => onChange(opt.value)}
         >

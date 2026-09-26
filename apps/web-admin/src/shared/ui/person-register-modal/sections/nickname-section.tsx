@@ -15,7 +15,6 @@ import {
 } from '@/shared/lib/nickname-type-labels'
 import {
   FieldControl,
-  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
@@ -64,9 +63,6 @@ export function NicknameSection({
     <FormRows>
       <FieldRow>
         <FieldLabel>별칭</FieldLabel>
-        <FieldHint>
-          출생명·아명·자(字)·호·필명도 여기에서 유형을 골라 등록해요.
-        </FieldHint>
         <FieldControl>
           {rows.map((row, idx) => (
             <NicknameRowWrap key={idx}>

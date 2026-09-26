@@ -74,8 +74,12 @@ export function AffiliationSection({
 
 // ─── Styled ──────────────────────────────────────────────────────────────────
 
-/* Top-aligned 패턴 — 세로 여백만(단일 자식이라 :not(:first-child) border-top은 死코드였음). */
+/*
+ * Top-aligned 패턴 — FieldRow와 같은 '라벨 위 · 컨트롤 아래(8px)'. 예전 상하 18px 패딩은
+ * 블록 머리글(소속) 아래에 34px 빈 띠를 만들었다 — 다음 행 간격은 폼 공통 규칙(20px)이 준다.
+ */
 const FieldRowMulti = styled.div`
-  display: block;
-  padding: 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 `

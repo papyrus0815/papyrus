@@ -192,11 +192,6 @@ export function CountryAffiliationsSection({
           추가 국가 소속
         </FieldLabel>
         <ControlWide>
-          <HintText>
-            주 국적 외 출생 국가·복무·망명·이중국적 등을 추가합니다. 도시 단위
-            출생지는 ‘생애 상세’에서 입력해요.
-          </HintText>
-
           {rows.length > 0 && (
             <RowList>
               {rows.map((row, idx) => {
@@ -347,13 +342,6 @@ const ControlWide = styled.div`
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-`
-
-const HintText = styled.p`
-  margin: 0;
-  font-size: ${FONT.meta};
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const RowList = styled.div`

@@ -35,6 +35,9 @@ import {
   InlineFields,
   inputFocusMixin,
   mobileInputFontMixin,
+  CheckLabel,
+  segmentGroupMixin,
+  segmentItemMixin,
   segmentToggleMixin,
 } from '../_form-primitives'
 import { DEATH_TYPE_GROUPS } from '../person-register-view.helpers'
@@ -91,6 +94,9 @@ export interface LifeSectionProps {
   // 군주 호칭
   monarchTitlesOpen: boolean
   setMonarchTitlesOpen: React.Dispatch<React.SetStateAction<boolean>>
+  /** 출생일/사망일 드롭다운 달력이 열려 있는지 — 날짜 칸 포커스 링 유지용 */
+  birthPickerOpen?: boolean
+  deathPickerOpen?: boolean
   regnalName: string
   templeName: string
   posthumousName: string
@@ -167,6 +173,8 @@ export function LifeSection({
   mode = 'all',
   errors,
   markDirty,
+  birthPickerOpen,
+  deathPickerOpen,
 }: LifeSectionProps) {
   const showEssentials = mode !== 'details'
   const showDetails = mode !== 'essentials'
@@ -192,6 +200,9 @@ export function LifeSection({
                 <LifeSubLabel>출생일</LifeSubLabel>
                 <InlineDateField
                   ariaLabel="출생일"
+                  appearance="field"
+                  anchorId={fid('birth-date')}
+                  pickerOpen={birthPickerOpen}
                   era={birthEra}
                   year={birthYear}
                   month={birthMonth}
@@ -221,37 +232,40 @@ export function LifeSection({
                   }
                 />
               </LifeFieldGroup>
-              <SegmentBtn
-                type="button"
-                $active={isBirthDateUnknown}
-                aria-pressed={isBirthDateUnknown}
-                onClick={() => {
-                  setIsBirthDateUnknown((v) => {
-                    if (!v) setIsBirthDateApproximate(false) // 미상↔추정 배타
-                    return !v
-                  })
-                  markDirty()
-                }}
-              >
-                출생일 미상
-              </SegmentBtn>
-              <SegmentBtn
-                type="button"
-                $active={isBirthDateApproximate}
-                aria-pressed={isBirthDateApproximate}
-                disabled={isBirthDateUnknown}
-                onClick={() => {
-                  setIsBirthDateApproximate((v) => {
-                    if (!v) setIsBirthDateUnknown(false) // 미상↔추정 배타
-                    return !v
-                  })
-                  markDirty()
-                }}
-                aria-label="추정 연도"
-                title="'약 1500년'처럼 추정 연도"
-              >
-                추정
-              </SegmentBtn>
+              <LifeToggleRow>
+                <CheckLabel>
+                  <input
+                    type="checkbox"
+                    checked={isBirthDateUnknown}
+                    onChange={() => {
+                      setIsBirthDateUnknown((wasUnknown) => {
+                        if (!wasUnknown) setIsBirthDateApproximate(false) // 미상↔추정 배타
+                        return !wasUnknown
+                      })
+                      markDirty()
+                    }}
+                  />
+                  미상
+                </CheckLabel>
+                <CheckLabel
+                  $disabled={isBirthDateUnknown}
+                  title="'약 1500년'처럼 추정 연도"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isBirthDateApproximate}
+                    disabled={isBirthDateUnknown}
+                    onChange={() => {
+                      setIsBirthDateApproximate((wasApproximate) => {
+                        if (!wasApproximate) setIsBirthDateUnknown(false) // 미상↔추정 배타
+                        return !wasApproximate
+                      })
+                      markDirty()
+                    }}
+                  />
+                  추정 연도
+                </CheckLabel>
+              </LifeToggleRow>
               {errors.birth && (
                 <FieldError id={fid('birth-err')} role="alert">
                   <FiAlertCircle size={13} />
@@ -266,6 +280,9 @@ export function LifeSection({
                 <LifeSubLabel>사망일</LifeSubLabel>
                 <InlineDateField
                   ariaLabel="사망일"
+                  appearance="field"
+                  anchorId={fid('death-date')}
+                  pickerOpen={deathPickerOpen}
                   era={deathEra}
                   year={deathYear}
                   month={deathMonth}
@@ -299,51 +316,54 @@ export function LifeSection({
                * 사망 여부 분기 — 사망일 열에 합쳐 두 날짜를 가로로 나란히 둔다.
                * 진짜 segmented control(인접 버튼 한 덩어리)로 "한 그룹의 분기"임을 강조.
                */}
-              <Segmented3Way role="radiogroup" aria-label="사망 여부">
-                <Segmented3WayBtn
-                  type="button"
-                  role="radio"
-                  aria-checked={isAlive}
-                  $active={isAlive}
-                  onClick={() => setDeathStatus('alive')}
-                >
-                  생존 중
-                </Segmented3WayBtn>
-                <Segmented3WayBtn
-                  type="button"
-                  role="radio"
-                  aria-checked={!isAlive && !isDeathDateUnknown}
-                  $active={!isAlive && !isDeathDateUnknown}
-                  onClick={() => setDeathStatus('deceased')}
-                >
-                  사망
-                </Segmented3WayBtn>
-                <Segmented3WayBtn
-                  type="button"
-                  role="radio"
-                  aria-checked={!isAlive && isDeathDateUnknown}
-                  $active={!isAlive && isDeathDateUnknown}
-                  onClick={() => setDeathStatus('unknown')}
-                >
-                  사망 (일자 미상)
-                </Segmented3WayBtn>
-              </Segmented3Way>
-              {!isAlive && (
-                <SegmentBtn
-                  type="button"
-                    $active={isDeathDateApproximate}
-                  aria-pressed={isDeathDateApproximate}
-                  disabled={isDeathDateUnknown}
-                  onClick={() => {
-                    setIsDeathDateApproximate((v) => !v)
-                    markDirty()
-                  }}
-                  aria-label="추정 연도"
-                  title="'약 1500년'처럼 추정 연도"
-                >
-                  추정
-                </SegmentBtn>
-              )}
+              <LifeToggleRow>
+                <Segmented3Way role="radiogroup" aria-label="사망 여부">
+                  <Segmented3WayBtn
+                    type="button"
+                    role="radio"
+                    aria-checked={isAlive}
+                    $active={isAlive}
+                    onClick={() => setDeathStatus('alive')}
+                  >
+                    생존 중
+                  </Segmented3WayBtn>
+                  <Segmented3WayBtn
+                    type="button"
+                    role="radio"
+                    aria-checked={!isAlive && !isDeathDateUnknown}
+                    $active={!isAlive && !isDeathDateUnknown}
+                    onClick={() => setDeathStatus('deceased')}
+                  >
+                    사망
+                  </Segmented3WayBtn>
+                  <Segmented3WayBtn
+                    type="button"
+                    role="radio"
+                    aria-checked={!isAlive && isDeathDateUnknown}
+                    $active={!isAlive && isDeathDateUnknown}
+                    onClick={() => setDeathStatus('unknown')}
+                  >
+                    일자 미상
+                  </Segmented3WayBtn>
+                </Segmented3Way>
+                {!isAlive && (
+                  <CheckLabel
+                    $disabled={isDeathDateUnknown}
+                    title="'약 1500년'처럼 추정 연도"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isDeathDateApproximate}
+                      disabled={isDeathDateUnknown}
+                      onChange={() => {
+                        setIsDeathDateApproximate((wasApproximate) => !wasApproximate)
+                        markDirty()
+                      }}
+                    />
+                    추정 연도
+                  </CheckLabel>
+                )}
+              </LifeToggleRow>
               {lifespanText && (
                 <LifespanText aria-live="polite">{lifespanText}</LifespanText>
               )}
@@ -371,7 +391,7 @@ export function LifeSection({
             <FloruitRow>
               <FloruitEraToggle role="group" aria-label="활동시기 기원">
                 {(['AD', 'BC'] as const).map((era) => (
-                  <SegmentBtn
+                  <SegmentItem
                     key={era}
                     type="button"
                     $active={floruitEra === era}
@@ -382,7 +402,7 @@ export function LifeSection({
                     }}
                   >
                     {era === 'AD' ? '서기' : '기원전'}
-                  </SegmentBtn>
+                  </SegmentItem>
                 ))}
               </FloruitEraToggle>
               <FloruitYearInput
@@ -453,16 +473,16 @@ export function LifeSection({
       {/* 출생 상세 — 출생 메모(탄생 설화·유복자 등). deathNote 대칭. details 영역. */}
       {showDetails && (
         <FieldRow>
-          <FieldLabel>출생 상세</FieldLabel>
+          <FieldLabel>출생 메모</FieldLabel>
           <FieldControl>
-            <Textarea
+            <MemoArea
               value={birthNote}
               onChange={(e) => {
                 setBirthNote(e.target.value)
                 markDirty()
               }}
-              placeholder="출생 메모 (탄생 설화·유복자·조산 등 맥락)"
-              rows={2}
+              placeholder="탄생 설화·유복자·조산 등"
+              rows={1}
             />
           </FieldControl>
         </FieldRow>
@@ -471,7 +491,7 @@ export function LifeSection({
       {/* 사망 상세 — 원인·메모. details 영역(유형은 essentials로 분리). */}
       {showDetails && !isAlive && (
         <FieldRow>
-          <FieldLabel>사망 상세</FieldLabel>
+          <FieldLabel>사망 원인 · 메모</FieldLabel>
           <FieldControl>
             <LifeDeathDetails>
               <FormInput
@@ -480,16 +500,16 @@ export function LifeSection({
                   setDeathCause(e.target.value)
                   markDirty()
                 }}
-                placeholder="사망 원인 상세"
+                placeholder="사망 원인"
               />
-              <Textarea
+              <MemoArea
                 value={deathNote}
                 onChange={(e) => {
                   setDeathNote(e.target.value)
                   markDirty()
                 }}
-                placeholder="사망 메모 (논란·맥락)"
-                rows={2}
+                placeholder="메모 (논란·맥락)"
+                rows={1}
               />
             </LifeDeathDetails>
           </FieldControl>
@@ -511,7 +531,7 @@ export function LifeSection({
           <AdvancedToggleBody>
             <AdvancedToggleTitle>군주 호칭</AdvancedToggleTitle>
             <AdvancedToggleDesc>
-              군주명·묘호·시호 (예: 루이 14세, 世宗 — 군주에 한해, 선택)
+              군주명·묘호·시호 (루이 14세, 世宗)
             </AdvancedToggleDesc>
           </AdvancedToggleBody>
         </AdvancedToggle>
@@ -569,13 +589,15 @@ const LifeStack = styled.div`
   min-width: 0;
 `
 
-/** 출생일 · 사망일 가로 2열 — 앱 공통 date-pair(480px)와 동일 폭. 좁은 화면은 1열. */
+/**
+ * 출생일 · 사망일 가로 2열 — 성별·국적(CoreFieldPair)·출생지·사망지와 같은 두 열(간격 24)이라
+ * 위아래 블록의 열 경계가 한 줄로 맞는다. 예전 480px 상한에선 사망 열 버튼 줄이 열을 넘쳤다.
+ */
 const LifePairGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px 12px;
+  gap: 18px 24px;
   align-items: start;
-  max-width: 480px;
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
@@ -590,24 +612,43 @@ const LifeCol = styled.div`
   min-width: 0;
 `
 
+/** 날짜 아래 상태 토글 한 줄 — '출생일 미상·추정', '생존 중|사망|일자 미상 · 추정'. 좁으면 줄바꿈. */
+const LifeToggleRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+`
+
 const LifeFieldGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  /* LifeCol이 flex-start라 날짜 칸(width 100%)이 내용 폭으로 줄지 않게 열 폭을 채운다 */
+  align-self: stretch;
   min-width: 0;
 `
 
 const LifeSubLabel = styled.span`
-  font-size: ${FONT.meta};
+  font-size: ${FONT.label};
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/*
+ * 메모 칸 — 빈 상태에선 입력칸 한 줄 높이, 쓰는 만큼 늘어난다(field-sizing 미지원 브라우저는
+ * 손잡이로 늘림). 두 줄짜리 빈 상자 두 개가 생애 블록에서 가장 큰 면적이었다.
+ */
+const MemoArea = styled(Textarea)`
+  min-height: 42px;
+  max-height: 240px;
+  field-sizing: content;
 `
 
 const LifeDeathDetails = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 0 0;
+  gap: 8px;
 `
 
 const LifespanText = styled.span`
@@ -634,8 +675,7 @@ const FloruitRow = styled.div`
 `
 
 const FloruitEraToggle = styled.div`
-  display: inline-flex;
-  gap: 6px;
+  ${({ theme }) => segmentGroupMixin(theme)}
 `
 
 const FloruitYearInput = styled.input`
@@ -657,36 +697,18 @@ const FloruitTilde = styled.span`
 `
 
 /** 사망 유형 chip — 채움 톤 + active=indigo. 사망 분기 segmented는 별도 컴포넌트 사용. */
-const SegmentBtn = styled.button<{
-  $active?: boolean
-  $error?: boolean
-}>`
-  ${({ theme, $active, $error }) => segmentToggleMixin(theme, $active, $error)}
+/** 이어 붙은 세그먼트 항목 — 활동시기 서기|기원전 */
+const SegmentItem = styled.button<{ $active?: boolean }>`
+  ${({ theme, $active }) => segmentItemMixin(theme, $active)}
 `
 
-/**
- * 진짜 segmented control — "사망 여부" 3-way 분기를 단일 덩어리 시각으로.
- * 인접 button + container fill로 "이건 한 그룹의 분기"임을 강조 (chip과 위계 분리).
- */
+/** "사망 여부" 3-way 분기 — 테 하나 안의 세그먼트(성별·AD|BC와 같은 모양). */
 const Segmented3Way = styled.div`
-  display: flex;
-  align-items: center;
-  width: 100%;
-  gap: 6px;
-
-  /* 사망 열 폭(=절반)에 맞춰 세 버튼을 균등 분할. */
-  > button {
-    flex: 1;
-  }
+  ${({ theme }) => segmentGroupMixin(theme)}
 `
 
 const Segmented3WayBtn = styled.button<{ $active?: boolean }>`
-  ${({ theme, $active }) => segmentToggleMixin(theme, $active)}
-  /* 균등 분할 컬럼이라 좌우 패딩을 줄여 좁은 폭에서도 라벨이 잘리지 않게 */
-  padding-left: 8px;
-  padding-right: 8px;
-  text-align: center;
-  justify-content: center;
+  ${({ theme, $active }) => segmentItemMixin(theme, $active)}
 `
 
 /** 사망 유형 카테고리 그룹 — 4그룹 (자연/외부/자해/기타) */
