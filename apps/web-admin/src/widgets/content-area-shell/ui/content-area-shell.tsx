@@ -77,21 +77,20 @@ function specFor(pathname: string): DomainSpec | null {
   if (pathname.startsWith('/events')) {
     const selectedEventId = idFromPath(pathname, 'events', ['create'])
     /*
-     * 목록(/events)과 상세(/events/:id)는 같은 사이드바를 쓰지만 **역할이 다르다**.
-     *
-     * 카탈로그는 "목록이 전체 화면을 써야 한다"는 결정으로 캡·중앙정렬을 걷어낸 지면이라,
-     * 사이드바를 기본으로 펼치면 툴바가 3줄로 접히며 그 결정을 되돌린다 — 그래서 기본 접힘.
-     * 상세에는 그 툴바가 없고, 본문은 읽는 폭으로 묶여 있다. 거기서 이 목록은 사건 사이를
-     * 오가는 **유일한 길**이자 '334개 중 지금 어디인가'를 말하는 자리다 — 기본 펼침.
-     *
-     * 접힘 상태도 키를 나눈다. 한 키를 공유하면 카탈로그에서 접은 선택이 상세까지 따라와,
-     * 상세에 들어설 때마다 좌측이 통째로 없는 지면이 된다(그 반대도 마찬가지).
+     * 목록(/events)에는 사이드바를 두지 않는다(2026-09-26). 본문이 이미 전체 사건 목록이라
+     * 좌측에 같은 목록이 한 벌 더 서는 것이었고(검색창도 둘), 기본 접힘이라도 48px 띠가
+     * 상시 남았다. 사건 사이를 오가는 길이 필요한 상세(/events/:id)에만 둔다.
+     */
+    if (!selectedEventId) return null
+    /*
+     * 상세에는 목록이 없고 본문은 읽는 폭으로 묶여 있다 — 이 사이드바가 사건 사이를 오가는
+     * **유일한 길**이자 '334개 중 지금 어디인가'를 말하는 자리라 기본 펼침.
+     * (접힘 키가 상세 전용인 이유: 예전엔 목록에도 같은 사이드바가 있어 키를 나눴다 —
+     *  사용자가 저장해 둔 값을 그대로 이어받도록 키 이름은 유지한다.)
      */
     return {
-      storageKey: selectedEventId
-        ? 'events-detail-collapsed'
-        : 'events-list-collapsed',
-      defaultCollapsed: !selectedEventId,
+      storageKey: 'events-detail-collapsed',
+      defaultCollapsed: false,
       render: (context) => (
         <EventListSidebar selectedId={selectedEventId} {...context} />
       ),

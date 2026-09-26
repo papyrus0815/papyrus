@@ -169,16 +169,28 @@ export const EventListScope = styled.div`
     }
   }
 
+  /*
+   * 좌측 색 막대(공용 ListRow의 ::before strip)는 사건 지면에서 쓰지 않는다 — 사용자 지시
+   * (2026-09-25 "좌측 border-left 컬러 쓰지 마라"). 본문 목록의 선택 행과 같은 말투로:
+   * 옅은 면 + **모든 변** 1px 링.
+   */
+  ${S.ListRow}::before {
+    display: none;
+  }
+
   /* aria-selected는 $active prop과 별개 경로라 공용 규칙이 닿지 않는다 — 같은 값으로 맞춘다 */
   ${S.ListRow}[aria-selected='true'],
   ${S.ListRow}[aria-selected='true']:hover {
     background: ${({ theme }) => S.sidebarRowSelected(theme)};
+    box-shadow: inset 0 0 0 1px
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(165, 180, 252, 0.35)' : 'rgba(79, 70, 229, 0.28)'};
     /*
      * 제목 잉크를 한 단 **더 진한 인디고**로. 공용 값(theme.colors.active #6366f1)을 선택
      * 배경 위에 얹으면 실측 대비가 라이트 3.94:1 · 다크 3.31:1로, 15px/600 본문 기준
      * WCAG AA(4.5:1)에 못 미친다 — 하필 목록에서 가장 중요한 한 행이 가장 안 읽혔다.
      * 색상(인디고)은 그대로 두고 명도만 옮긴다: 라이트 indigo-600 5.55:1 ·
-     * 다크 indigo-300 7.42:1. 선택 신호는 어차피 면(틴트)과 좌측 strip이 함께 진다.
+     * 다크 indigo-300 7.42:1. 선택 신호는 면(틴트)과 링이 함께 진다.
      */
     color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   }
