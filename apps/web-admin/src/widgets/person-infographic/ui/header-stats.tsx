@@ -608,6 +608,23 @@ function BarSection({
         <SectionTitle>{title}</SectionTitle>
         <SectionMeta>{metaOverride ?? `${rows.length}개`}</SectionMeta>
       </SectionHead>
+      {/* 구성비 띠 — 식별색이 있는 분류(지역·분야)만. 몇 %씩 나뉘는지 한 줄로 먼저 보여준다 */}
+      {!ranked && rows.length > 1 && rows.some((row) => row.swatch) && (
+        <Composition aria-hidden>
+          {rows.map((row) => (
+            <CompositionPart
+              key={row.key}
+              title={`${row.label} ${total ? Math.round((row.count / total) * 100) : 0}%`}
+              $dim={anyActive && !row.active}
+              style={{
+                flexGrow: row.count,
+                background: row.label === RESIDUAL ? undefined : row.swatch,
+              }}
+              $residual={row.label === RESIDUAL}
+            />
+          ))}
+        </Composition>
+      )}
       {rows.length === 0 ? (
         <Empty>데이터 없음</Empty>
       ) : (
@@ -633,7 +650,12 @@ function BarSection({
               <BarTrack aria-hidden>
                 <BarFill
                   $residual={row.label === RESIDUAL}
-                  style={{ width: `${(row.count / max) * 100}%` }}
+                  $tone={ranked && row.count < max ? 'rest' : 'lead'}
+                  style={{
+                    width: `${(row.count / max) * 100}%`,
+                    // 식별색이 있는 분류는 막대도 그 색 — 옆 점과 막대가 같은 항목으로 읽힌다
+                    ...(row.swatch && row.label !== RESIDUAL ? { background: row.swatch } : null),
+                  }}
                 />
               </BarTrack>
               <BarValue>
@@ -1110,24 +1132,55 @@ const BarName = styled.span`
 `
 
 const BarTrack = styled.span`
-  height: 8px;
-  border-radius: 4px;
+  height: 10px;
+  border-radius: 5px;
   overflow: hidden;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
 `
 
-const BarFill = styled.span<{ $residual?: boolean }>`
+const BarFill = styled.span<{ $residual?: boolean; $tone?: 'lead' | 'rest' }>`
   display: block;
   height: 100%;
-  border-radius: 0 4px 4px 0;
-  background: ${({ $residual, theme }) =>
-    $residual ? (theme.mode === 'dark' ? '#52525b' : '#a1a1aa') : BRAND.primary};
+  border-radius: 0 5px 5px 0;
+  /* 순위 목록은 1위만 진한 단색, 나머지 한 단계 옅게 — 시대 분포의 최다 막대와 같은 문법 */
+  background: ${({ $residual, $tone, theme }) =>
+    $residual
+      ? theme.mode === 'dark'
+        ? '#52525b'
+        : '#a1a1aa'
+      : $tone === 'rest'
+        ? theme.mode === 'dark'
+          ? '#3b6fd8'
+          : '#5b8def'
+        : BRAND.primary};
   transition: width 0.25s ease;
 
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
+`
+
+/** 100% 누적 띠 — 조각 사이 2px 지면색 간격, 양 끝만 둥글게 */
+const Composition = styled.div`
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  margin: 0 0 14px;
+  border-radius: 6px;
+  overflow: hidden;
+`
+
+const CompositionPart = styled.span<{ $dim: boolean; $residual: boolean }>`
+  flex-basis: 0;
+  min-width: 3px;
+  opacity: ${({ $dim }) => ($dim ? 0.3 : 1)};
+  transition: opacity ${MOTION_FAST};
+  ${({ $residual, theme }) =>
+    $residual &&
+    css`
+      background: ${theme.mode === 'dark' ? '#52525b' : '#a1a1aa'};
+    `}
 `
 
 const BarValue = styled.span`
