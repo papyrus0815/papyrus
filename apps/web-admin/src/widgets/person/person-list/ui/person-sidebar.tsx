@@ -17,7 +17,6 @@ import styled from 'styled-components'
 import { pathKeys } from '@/shared/router'
 import { SidebarSheet, SidebarSheetTrigger } from '@/widgets/content-shell'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
-import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import {
   countActiveScopes,
   PersonFilterPanel,
@@ -25,6 +24,7 @@ import {
 } from '@/widgets/person-infographic'
 
 import { PersonList } from './person-list'
+import { PersonQuickList } from './person-quick-list'
 
 /** `/persons-timeline/:personId` 에서 선택 id 추출 (목록 지면이면 null) */
 function selectedPersonId(pathname: string): string | null {
@@ -59,23 +59,39 @@ export function PersonSidebar({
 
   const openAdvanced = useCallback(() => setAdvancedFilterOpen(true), [])
 
-  // 목록 행 클릭 → 인물 상세 모달 먼저(본문 목록과 같은 공용 모달), '상세 페이지'로 상세 진입.
-  const [modalPersonId, setModalPersonId] = useState<string | null>(null)
+  // 사이드바는 내비게이션 — 어느 모드든 행을 누르면 모달 없이 곧장 상세로 간다.
+  // (상세 지면에서 모달을 거치면 '옆 인물로 바로 넘어가기'라는 이 목록의 쓸모가 사라진다)
   const openDetail = useCallback(
     (id: string) => navigate(pathKeys.personsTimelineDetail(id)),
+    [navigate],
+  )
+  const openGroup = useCallback(
+    (groupId: string) => navigate(pathKeys.personGroupDetail(groupId)),
     [navigate],
   )
 
   return (
     <>
-      <PersonList
-        selectedId={personId}
-        onSelect={setModalPersonId}
-        onAdd={() => setCreateOpen(true)}
-        onOpenAdvancedFilters={openAdvanced}
-        collapsed={collapsed}
-        onToggleCollapse={onToggleCollapse}
-      />
+      {/* 목록 지면: 본문이 전체 목록·검색·필터를 가지므로 사이드바는 바로가기(고정·최근·그룹)만.
+          상세 지면: 전체 목록으로 '지금 어디인가'와 옆 인물 이동을 맡는다. */}
+      {personId ? (
+        <PersonList
+          selectedId={personId}
+          onSelect={openDetail}
+          onAdd={() => setCreateOpen(true)}
+          onOpenAdvancedFilters={openAdvanced}
+          collapsed={collapsed}
+          onToggleCollapse={onToggleCollapse}
+        />
+      ) : (
+        <PersonQuickList
+          onSelectPerson={openDetail}
+          onSelectGroup={openGroup}
+          onAdd={() => setCreateOpen(true)}
+          collapsed={collapsed}
+          onToggleCollapse={onToggleCollapse}
+        />
+      )}
 
       {/* 모바일 floating 트리거 — 좌측이 숨는 폭에서 상세 필터로 가는 유일한 경로.
           상세를 보는 중에는 본문 조작을 가리므로 목록 지면에서만 띄운다. */}
@@ -103,12 +119,6 @@ export function PersonSidebar({
       >
         <PersonFilterPanel />
       </SidebarSheet>
-
-      <PersonInlineModal
-        personId={modalPersonId}
-        onClose={() => setModalPersonId(null)}
-        onOpenDetail={openDetail}
-      />
 
       {/* 등록 전용 — 수정 모달은 상세 패널을 가진 페이지가 따로 소유한다 */}
       <PersonRegisterViewModal

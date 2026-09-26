@@ -114,6 +114,14 @@ export default function PersonsTimelinePage() {
   // 목록 지면의 인물 클릭 → 인물 상세 모달 먼저(사건·행정부와 같은 공용 모달),
   // 모달 헤더의 '상세 페이지'로 전용 상세 진입. 목록 스크롤·필터가 그대로 남는다.
   const [modalPersonId, setModalPersonId] = useState<string | null>(null)
+  // 모달로 연 인물도 '최근 본 인물'에 올린다 — 사이드바 바로가기가 이 기록을 읽는다
+  const openPersonModal = useCallback(
+    (id: string) => {
+      setModalPersonId(id)
+      pushRecentPerson(id)
+    },
+    [pushRecentPerson],
+  )
 
   return (
     <>
@@ -143,7 +151,7 @@ export default function PersonsTimelinePage() {
           style={{ width: '100%', minHeight: '100%' }}
         >
           <div ref={setScrollSentinel} aria-hidden style={{ height: 0 }} />
-          <PersonInfographicPane onPersonClick={setModalPersonId} />
+          <PersonInfographicPane onPersonClick={openPersonModal} />
         </motion.div>
       )}
 
