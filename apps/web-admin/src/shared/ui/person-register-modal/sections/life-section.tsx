@@ -38,7 +38,6 @@ import {
   CheckLabel,
   segmentGroupMixin,
   segmentItemMixin,
-  segmentToggleMixin,
 } from '../_form-primitives'
 import { DEATH_TYPE_GROUPS } from '../person-register-view.helpers'
 import { InlineDateField } from './inline-date-field'
@@ -364,6 +363,38 @@ export function LifeSection({
                   </CheckLabel>
                 )}
               </LifeToggleRow>
+              {/*
+               * 사망 유형(사인) — 사망 열 안, 상태 줄 바로 아래. 예전엔 전폭 행에 그룹 머리글 4개
+               * (자연·외부 요인·자해·기타)를 세로로 쌓아 한 개 고르는 데 250px를 썼고('자해'는 칩 1개에
+               * 한 줄), 오른쪽은 비었다. 이제 한 흐름의 알약 줄 — 그룹은 머리글 대신 넓은 간격으로 끊고(세로선은 줄바꿈 때 줄 끝·줄 머리에 홀로 남았다)
+               * 이름은 aria-label로만 남긴다. 사망 날짜·유형 입력 후에만 보이는 점진 공개는 그대로.
+               */}
+              {!isAlive &&
+                (!!deathType || !!deathYear.trim() || isDeathDateUnknown) && (
+                  <DeathTypeField role="group" aria-labelledby={fid('death-type-label')}>
+                    <DeathTypeLabel id={fid('death-type-label')}>사망 유형</DeathTypeLabel>
+                    <DeathTypeChips>
+                      {DEATH_TYPE_GROUPS.map((group) => (
+                        <DeathTypeGroup key={group.key} role="group" aria-label={group.label}>
+                          {group.options.map((opt) => (
+                            <DeathTypeChip
+                              key={opt.value}
+                              type="button"
+                              aria-pressed={deathType === opt.value}
+                              $active={deathType === opt.value}
+                              onClick={() => {
+                                setDeathType(deathType === opt.value ? '' : opt.value)
+                                markDirty()
+                              }}
+                            >
+                              {opt.label}
+                            </DeathTypeChip>
+                          ))}
+                        </DeathTypeGroup>
+                      ))}
+                    </DeathTypeChips>
+                  </DeathTypeField>
+                )}
               {lifespanText && (
                 <LifespanText aria-live="polite">{lifespanText}</LifespanText>
               )}
@@ -431,44 +462,6 @@ export function LifeSection({
         </FieldRow>
       )}
 
-      {/*
-       * 사망 유형(사인) — 사망/일자미상일 때만(=생존중 아닐 때). essentials 영역.
-       * 암살·전사·처형은 역사 인물의 핵심 사실이라 "더 입력"을 펼치지 않아도 보이게 코어로 올림.
-       * 원인 상세·메모는 details(아래)에 유지 — 유형 칩이 두 번 그려지지 않도록 details에선 제외.
-       * 13개 평면 chip → 4그룹 mini-header. 그룹 내 chip은 active=indigo fill.
-       */}
-      {showEssentials &&
-        !isAlive &&
-        (!!deathType || !!deathYear.trim() || isDeathDateUnknown) && (
-        <FieldRow>
-          <FieldLabel>사망 유형</FieldLabel>
-          <FieldControl>
-            <DeathTypeGrouped role="group" aria-label="사망 유형">
-              {DEATH_TYPE_GROUPS.map((group) => (
-                <DeathTypeGroupBox key={group.key}>
-                  <DeathTypeGroupLabel>{group.label}</DeathTypeGroupLabel>
-                  <DeathTypeChips>
-                    {group.options.map((opt) => (
-                      <DeathTypeChip
-                        key={opt.value}
-                        type="button"
-                        aria-pressed={deathType === opt.value}
-                        $active={deathType === opt.value}
-                        onClick={() => {
-                          setDeathType(deathType === opt.value ? '' : opt.value)
-                          markDirty()
-                        }}
-                      >
-                        {opt.label}
-                      </DeathTypeChip>
-                    ))}
-                  </DeathTypeChips>
-                </DeathTypeGroupBox>
-              ))}
-            </DeathTypeGrouped>
-          </FieldControl>
-        </FieldRow>
-      )}
 
       {/* 출생 상세 — 출생 메모(탄생 설화·유복자 등). deathNote 대칭. details 영역. */}
       {showDetails && (
@@ -711,36 +704,76 @@ const Segmented3WayBtn = styled.button<{ $active?: boolean }>`
   ${({ theme, $active }) => segmentItemMixin(theme, $active)}
 `
 
-/** 사망 유형 카테고리 그룹 — 4그룹 (자연/외부/자해/기타) */
-const DeathTypeGrouped = styled.div`
+/** 사망 유형 — 사망 열 안의 라벨 + 알약 줄 */
+const DeathTypeField = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  align-self: stretch;
+  margin-top: 6px;
 `
 
-const DeathTypeGroupBox = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+const DeathTypeLabel = styled.span`
+  font-size: ${FONT.label};
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const DeathTypeGroupLabel = styled.span`
-  font-size: ${FONT.eyebrow};
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-`
-
+/** 그룹 사이는 14px, 그룹 안 칩 사이는 4px — 간격 차이가 그룹을 말한다 */
 const DeathTypeChips = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 6px 14px;
 `
 
-/** 사망 유형 chip — 모달 공용 토글 규약(active=연한 indigo 채움 + indigo 텍스트/보더). */
+/** 한 그룹의 칩 묶음 — 줄바꿈 시 그룹이 쪼개지지 않게 한 덩어리 */
+const DeathTypeGroup = styled.div`
+  display: inline-flex;
+  gap: 4px;
+`
+
+/**
+ * 사망 유형 알약 — 안 고른 칩은 테 없이 옅은 면(9개가 모두 테를 두르면 다시 시끄럽다),
+ * 고른 칩은 모달 공용 선택 언어(activeLight 면 + active 글자 + primary 테).
+ */
 const DeathTypeChip = styled.button<{ $active?: boolean }>`
-  ${({ theme, $active }) => segmentToggleMixin(theme, $active)}
+  padding: 5px 11px;
+  font-size: ${FONT.label};
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $active, theme }) => ($active ? theme.colors.primary : 'transparent')};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.colors.activeLight
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : '#f1f5f9'};
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+
+  &:hover {
+    color: ${({ $active, theme }) =>
+      $active ? theme.colors.active : theme.colors.text.primary};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.colors.activeLight
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#e2e8f0'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  }
 `
 
 // Disclosure 카드·InlineFields·FieldError는 ../_form-primitives에서 import (중복 제거).
