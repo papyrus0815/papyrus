@@ -87,6 +87,15 @@ export function useFilterUrlSync(): void {
   }, [countries, historicalCountries])
 
   const initializedRef = useRef(false)
+  /**
+   * URL→store가 이번 커밋에서 값을 채택했는지.
+   *
+   * 두 효과는 같은 커밋에서 연달아 돈다. 채택 직후의 store→URL은 아직 **이 렌더의 옛 store 값**을
+   * 들고 있어서, 그대로 쓰면 방금 채택한 URL을 옛 값으로 되돌린다 → 다음 렌더에서 URL→store가
+   * 그걸 다시 채택 → 무한 핑퐁(저장된 뷰≠?view= 로 진입하면 초당 수 회 replaceState).
+   * 채택한 커밋의 store→URL은 한 번 건너뛰고, 새 store 값이 반영된 다음 렌더에서 수렴시킨다.
+   */
+  const adoptedThisCommitRef = useRef(false)
 
   // URL → store : URL에 "존재하는" 파라미터만 store에 반영(adopt).
   //
@@ -174,13 +183,20 @@ export function useFilterUrlSync(): void {
       }
     }
 
-    if (Object.keys(patch).length > 0) setMany(patch)
+    if (Object.keys(patch).length > 0) {
+      adoptedThisCommitRef.current = true
+      setMany(patch)
+    }
     initializedRef.current = true
   }, [searchParams, setMany, idToCountryName])
 
   // store → URL : 값 변경 시 replaceState
   useEffect(() => {
     if (!initializedRef.current) return
+    if (adoptedThisCommitRef.current) {
+      adoptedThisCommitRef.current = false
+      return
+    }
     const next = new URLSearchParams(searchParams)
 
     const setOrDel = (k: string, v: string) => {
