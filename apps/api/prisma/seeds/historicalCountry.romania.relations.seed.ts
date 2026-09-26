@@ -17,6 +17,8 @@ const TRANSITIONS: {
 }[] = [
   // 트라야누스의 다키아 정복 (106)
   { predecessor: '다키아 왕국', successor: '로마 제국', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 쿠니문드 전사, 랑고바르드·아바르 연합에 멸망 (567 — 아바르 칸국은 bohemia 시드 유래 노드)
+  { predecessor: '게피드 왕국', successor: '아바르 칸국', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 포사다 전투로 헝가리 종주권 이탈 (1330)
   { predecessor: '헝가리 왕국', successor: '왈라키아 공국', eventType: TransitionEventType.INDEPENDENCE, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 보그단 1세의 자립 (1359)
