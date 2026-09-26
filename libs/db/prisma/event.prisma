@@ -65,6 +65,10 @@ enum EventCountryRole {
   VICTIM
   /// 수혜국
   BENEFICIARY
+  /// 이 사건으로 건국(성립·독립)된 국가 — 조직의 FOUNDED와 같은 의미축
+  FOUNDED
+  /// 이 사건으로 멸망(병합·해체)한 국가 — 조직의 DISSOLVED와 같은 의미축
+  DISSOLVED
   /// 기타
   OTHER
 }
