@@ -1225,23 +1225,42 @@ export const ReignMarkerGap = styled.span`
  * 안 보이므로 **면은 불투명**이어야 한다(반투명 tint면 꼬리와 상자가 겹친 곳만 진해진다).
  */
 export const ReignMarkerList = styled.span`
-  --bubble-bg: ${({ theme }) => (theme.mode === 'dark' ? '#1e1912' : '#fff8ee')};
+  /*
+   * 중립 떠 있는 알약 — 호박색으로 **칠한** 상자였다. 132개가 목록 전체에 반복되니 면
+   * 자체가 소음이었고(포스트잇 같은 인상), 강조가 면·테·날짜·왕관 네 곳에 흩어져
+   * 어디에도 초점이 없었다. 면은 지면 위 한 단 떠 있는 중립색 + 머리카락 테 + 부드러운
+   * 그림자로 물리고, 호박색은 **동사('즉위')·날짜·왕관**에만 남긴다.
+   * ⚠️ 면·테는 불투명이어야 한다 — 꼬리(회전 정사각형)가 상자 테를 덮어 이음매를 지운다.
+   */
+  --bubble-bg: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d20' : '#ffffff')};
   --bubble-line: ${({ theme }) =>
-    theme.mode === 'dark' ? '#4a3a22' : '#efd6b4'};
+    theme.mode === 'dark' ? '#303036' : '#e7e5e4'};
   position: relative;
   display: inline-flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   column-gap: 0;
-  row-gap: 2px;
+  row-gap: 3px;
   max-width: 100%;
   /* 꼬리가 앞의 날짜(또는 연 라벨)를 가리킨다 — 열 간격 안에 꼬리가 든다. */
   margin-left: 0;
   min-width: 0;
-  padding: 3px 11px 4px;
+  min-height: 30px;
+  padding: 3px 12px;
   border: 1px solid var(--bubble-line);
-  border-radius: 10px;
+  /* 한 줄이면 완전한 알약(높이 30의 절반), 줄이 넘어가도 모서리가 과하게 부풀지 않는 값 */
+  border-radius: 15px;
   background: var(--bubble-bg);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 1px 2px rgba(0, 0, 0, 0.45)'
+      : // 번짐은 행 위아래 여백(6px) 안에 든다 — 넘치면 구간 경계에서 잘려 각진 띠가 남았다
+        '0 1px 2px rgba(28, 25, 23, 0.06), 0 2px 6px -2px rgba(28, 25, 23, 0.1)'};
+
+  /* 초상으로 시작하는 항목이 첫 항목이면 알약 왼쪽 안쪽 여백을 초상이 채운다(아바타 칩) */
+  &:has(> :first-child > img:first-child) {
+    padding-left: 4px;
+  }
 
   &::before {
     content: '';
@@ -1340,7 +1359,9 @@ export const ReignMarkerSpan = styled.span`
 /** '즉위' — 이름에 붙는 동사. 메타색·한 단 작게 */
 export const ReignMarkerLabel = styled.span`
   font-size: 0.92em;
-  color: ${metaText};
+  font-weight: 600;
+  /* 표지의 유일한 색 글자 — 날짜·왕관과 같은 호박색으로 '무슨 표지인가'를 말한다 */
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f0b64a' : '#b45309')};
 `
 
 /** 재위 기간 — 보조색·등폭 숫자 */
@@ -1374,9 +1395,9 @@ export const ReignMarkerCountry = styled.span`
 export const ReignMarkerPortrait = styled.img`
   flex: none;
   align-self: center;
-  width: 20px;
-  height: 20px;
-  margin-left: -4px;
+  width: 22px;
+  height: 22px;
+  margin-right: 3px;
   border-radius: 50%;
   object-fit: cover;
   object-position: center 20%;
