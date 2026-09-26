@@ -50,6 +50,7 @@ import { useOverlayEscape } from '@/shared/hooks/use-overlay-escape.hook'
 import { Badge } from '@/shared/ui/badge/badge'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { FiltersPanel } from '@/widgets/event-filters-panel/ui/filters-panel'
+import type { ReignMarkerKind } from '@/widgets/event-list-compact/lib/reign-markers'
 
 import { useFocusTrap } from '../hooks/use-focus-trap'
 
@@ -464,7 +465,16 @@ interface ViewUtilitiesProps {
   hiddenColumns: readonly ListColumnKey[]
   onToggleColumn: (column: ListColumnKey) => void
   onResetColumns: () => void
+  /** 끈 연표 표지 종류 — 군주 즉위·대통령 취임·총리 취임 */
+  hiddenLeaderKinds?: readonly ReignMarkerKind[]
+  onToggleLeaderKind?: (kind: ReignMarkerKind) => void
 }
+
+const LEADER_TOGGLES: ReadonlyArray<{ kind: ReignMarkerKind; label: string }> = [
+  { kind: 'monarch', label: '군주 즉위' },
+  { kind: 'headOfState', label: '대통령 취임' },
+  { kind: 'headOfGovernment', label: '총리 취임' },
+]
 
 /**
  * 라디오 그룹 안의 ←→↑↓ — **그룹 하나가 탭 정지점 하나**(WAI-ARIA roving tabindex).
@@ -558,6 +568,8 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   hiddenColumns,
   onToggleColumn,
   onResetColumns,
+  hiddenLeaderKinds = [],
+  onToggleLeaderKind,
 }) => {
   /**
    * 하위 일괄 접기/펼치기가 할 일이 있는가. 평면 보기는 자손이 이미 전부 depth 0으로
@@ -799,6 +811,37 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
                 ? '좌측 목록을 접거나 창을 넓히면 접힌 열이 돌아옵니다'
                 : '폭이 좁으면 켜 둔 열도 자동으로 접힙니다'}
             </ColumnNote>
+
+            {onToggleLeaderKind && (
+              <>
+                <UtilityMenuDivider role="presentation" />
+                <ColumnSectionHead>
+                  <UtilityMenuLabel as="span" id="catalog-leaders-label">
+                    연표 표지
+                  </UtilityMenuLabel>
+                </ColumnSectionHead>
+                <ChoiceColumn role="group" aria-labelledby="catalog-leaders-label">
+                  {LEADER_TOGGLES.map(({ kind, label }) => {
+                    const shown = !hiddenLeaderKinds.includes(kind)
+                    return (
+                      <ColumnRow
+                        key={kind}
+                        type="button"
+                        role="switch"
+                        aria-checked={shown}
+                        $active={shown}
+                        onClick={() => onToggleLeaderKind(kind)}
+                      >
+                        <ColumnCheck aria-hidden="true">
+                          {shown ? <FiCheck size={12} /> : null}
+                        </ColumnCheck>
+                        <span>{label}</span>
+                      </ColumnRow>
+                    )
+                  })}
+                </ChoiceColumn>
+              </>
+            )}
 
             <UtilityMenuDivider role="presentation" />
 

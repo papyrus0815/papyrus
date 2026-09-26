@@ -89,7 +89,10 @@ import {
   saveCollapsedBands,
 } from './lib/catalog-memory'
 import { useReignMarkers } from './hooks/use-reign-markers'
-import { reignAccessionYears } from '@/widgets/event-list-compact/lib/reign-markers'
+import {
+  type ReignMarkerKind,
+  reignAccessionYears,
+} from '@/widgets/event-list-compact/lib/reign-markers'
 import { exportEventsAsJson } from './lib/export-events'
 import { parseCatalogSearchParams } from './lib/parse-catalog-search-params'
 import {
@@ -103,6 +106,26 @@ const LIST_DENSITY_KEY = 'papyrus.events.listDensity'
 const LIST_DENSITIES: ListDensity[] = ['compact', 'cozy', 'roomy']
 /** 끈 열 목록 영속 키 — 밀도와 같은 '표시 선호' 계열이라 같은 이름 공간을 쓴다. */
 const HIDDEN_COLUMNS_KEY = 'papyrus.events.hiddenColumns'
+/** 끈 연표 표지 종류(군주 즉위·대통령 취임·총리 취임) — 열 표시와 같은 끄기 전용 축 */
+const HIDDEN_LEADERS_KEY = 'papyrus.events.hiddenLeaders'
+const LEADER_KINDS: readonly ReignMarkerKind[] = [
+  'monarch',
+  'headOfState',
+  'headOfGovernment',
+]
+function readHiddenLeaders(): ReignMarkerKind[] {
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_LEADERS_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed)
+      ? parsed.filter((kind): kind is ReignMarkerKind =>
+          LEADER_KINDS.includes(kind as ReignMarkerKind),
+        )
+      : []
+  } catch {
+    return []
+  }
+}
 
 /** 저장된 열 설정 읽기 — 모르는 키는 버린다(열 이름이 바뀌어도 화면이 깨지지 않게). */
 const readHiddenColumns = (): ListColumnKey[] => {
@@ -279,6 +302,27 @@ export const EventsCatalogPage: React.FC = () => {
     } catch {
       /* storage 비활성 — 세션 내 변경만 동작 */
     }
+  }, [])
+
+  /**
+   * 연표 표지 끄기 — 대통령·총리까지 실리며 표지가 164개가 됐다. 사건만 훑고 싶을 때
+   * 종류별로 걷어낸다(끄면 그 즉위만으로 세운 연 그룹도 함께 사라진다).
+   */
+  const [hiddenLeaderKinds, setHiddenLeaderKinds] =
+    useState<ReignMarkerKind[]>(readHiddenLeaders)
+  const toggleLeaderKind = useCallback((kind: ReignMarkerKind) => {
+    setHiddenLeaderKinds((prev) => {
+      const next = prev.includes(kind)
+        ? prev.filter((key) => key !== kind)
+        : [...prev, kind]
+      try {
+        if (next.length) window.localStorage.setItem(HIDDEN_LEADERS_KEY, JSON.stringify(next))
+        else window.localStorage.removeItem(HIDDEN_LEADERS_KEY)
+      } catch {
+        /* storage 비활성 — 세션 내 변경만 동작 */
+      }
+      return next
+    })
   }, [])
 
   // ===== 북마크 / 최근 본 =====
@@ -833,10 +877,19 @@ export const EventsCatalogPage: React.FC = () => {
   )
 
   /** 군주 즉위 구분선 — 목록에 나온 사건들의 관련국 군주만(국가 필터가 있으면 그 나라만) */
-  const reignMarkers = useReignMarkers(
+  const allReignMarkers = useReignMarkers(
     listRenderedHierarchy,
     eventByIdMap,
     selectedCountry,
+  )
+  const reignMarkers = useMemo(
+    () =>
+      hiddenLeaderKinds.length === 0
+        ? allReignMarkers
+        : allReignMarkers.filter(
+            (marker) => !hiddenLeaderKinds.includes(marker.kind),
+          ),
+    [allReignMarkers, hiddenLeaderKinds],
   )
 
   /**
@@ -1875,6 +1928,8 @@ export const EventsCatalogPage: React.FC = () => {
         hiddenColumns={hiddenColumns}
         onToggleColumn={toggleColumn}
         onResetColumns={resetColumns}
+        hiddenLeaderKinds={hiddenLeaderKinds}
+        onToggleLeaderKind={toggleLeaderKind}
       />
     ),
   }
