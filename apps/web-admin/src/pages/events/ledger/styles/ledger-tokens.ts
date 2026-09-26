@@ -29,6 +29,9 @@ export const LEDGER_CATEGORY = {
   외교: { key: 'diplomacy', color: '#0ea5e9', dark: '#38bdf8', icon: '☍' }, // 하늘
   '회담/조약': { key: 'treaty', color: '#1e3a8a', dark: '#93c5fd', icon: '✎' }, // 네이비
   종교: { key: 'religion', color: '#a16207', dark: '#facc15', icon: '✚' }, // 황금
+  // 라임 — 남은 색상군 중 기존 10색과 가장 멀다(라이트 최근접 사회 ΔE 25.0, 다크 최근접 종교 22.9).
+  // 녹색(#15803d)은 사회(청록)와 다크 ΔE 12.7로 식별성 예산 경계라 기각.
+  '건국/멸망': { key: 'statehood', color: '#4d7c0f', dark: '#a3e635', icon: '⚑' },
   기타: { key: 'other', color: '#6b7280', dark: '#9ca3af', icon: '·' }, // 회색
 } as const
 

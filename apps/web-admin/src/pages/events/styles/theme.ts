@@ -104,6 +104,15 @@ export const CATEGORY_COLORS: Partial<
     accent: '#a16207',
     tagline: '신앙, 종교 개혁, 영적 운동',
   },
+  statehood: {
+    background: '#ffffff',
+    border: 'rgba(77, 124, 15, 0.35)',
+    iconBackground: 'rgba(77, 124, 15, 0.15)',
+    iconColor: '#3f6212',
+    shadow: 'rgba(77, 124, 15, 0.18)',
+    accent: '#4d7c0f',
+    tagline: '국가의 성립·독립과 멸망·병합',
+  },
   other: {
     background: '#ffffff',
     border: 'rgba(107, 114, 128, 0.35)',
@@ -136,6 +145,7 @@ export const CATEGORY_BADGE_COLORS: Record<HistoricalEventCategory, string> = {
   diplomatic: '#0284c7',
   conference: '#1e3a8a',
   religious: '#a16207',
+  statehood: '#4d7c0f',
   other: '#6b7280',
   // 한글 alias — DB EventCategory.name과 직접 매칭
   '전쟁/군사': '#b91c1c',
@@ -147,6 +157,7 @@ export const CATEGORY_BADGE_COLORS: Record<HistoricalEventCategory, string> = {
   외교: '#0284c7',
   '회담/조약': '#1e3a8a',
   종교: '#a16207',
+  '건국/멸망': '#4d7c0f',
   기타: '#6b7280',
   // 배치3이 미지정 라벨을 '기타' → '미분류'로 바꿨는데 색 맵 키는 추가되지 않아,
   // 도트만 '#2563eb' 브랜드 폴백을 타고 칩은 회색이 되는 모순이 생겼다.
@@ -201,6 +212,9 @@ export const CATEGORY_SOFT_COLORS: Record<
      (sky → indigo)이라 뷰 사이 색 점프가 없다. 다크 대비 6.18:1 · 외교와 ΔE 23.1. */
   conference: { rgb: '30, 58, 138', text: '#1e3a8a', textDark: '#818cf8', sparkEnd: '#60a5fa' },
   religious: { rgb: '161, 98, 7', text: '#854d0e', textDark: '#fcd34d', sparkEnd: '#fbbf24' },
+  /* 라임 — 라이트 대비 4.99:1 · 최근접 사회 ΔE 25.0 / 다크 대비 14.1:1 · 최근접 종교 ΔE 21.1.
+     녹색(#15803d/#86efac)은 다크에서 사회와 ΔE 12.7로 예산 경계라 기각. */
+  statehood: { rgb: '77, 124, 15', text: '#4d7c0f', textDark: '#bef264', sparkEnd: '#84cc16' },
   other: { rgb: '107, 114, 128', text: '#374151', textDark: '#cbd5e1', sparkEnd: '#94a3b8' },
   // 한글 alias
   '전쟁/군사': { rgb: '185, 28, 28', text: '#991b1b', textDark: '#fca5a5', sparkEnd: '#f87171' },
@@ -212,6 +226,7 @@ export const CATEGORY_SOFT_COLORS: Record<
   외교: { rgb: '2, 132, 199', text: '#0369a1', textDark: '#7dd3fc', sparkEnd: '#38bdf8' },
   '회담/조약': { rgb: '30, 58, 138', text: '#1e3a8a', textDark: '#818cf8', sparkEnd: '#60a5fa' },
   종교: { rgb: '161, 98, 7', text: '#854d0e', textDark: '#fcd34d', sparkEnd: '#fbbf24' },
+  '건국/멸망': { rgb: '77, 124, 15', text: '#4d7c0f', textDark: '#bef264', sparkEnd: '#84cc16' },
   기타: { rgb: '107, 114, 128', text: '#374151', textDark: '#cbd5e1', sparkEnd: '#94a3b8' },
   미분류: { rgb: '107, 114, 128', text: '#374151', textDark: '#cbd5e1', sparkEnd: '#94a3b8' },
 }

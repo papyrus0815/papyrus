@@ -320,6 +320,50 @@ export async function getEventsOnThisDay(params?: {
   }
 }
 
+/** 건국·멸망 사건 한 줄 — GET /events/statehood (서버 StatehoodEventDto와 같은 모양) */
+export interface StatehoodEvent {
+  id: string
+  title: string
+  startDate?: string | null
+  startDatePrecision?: string | null
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  categoryName?: string | null
+  roleDescription?: string | null
+}
+
+export interface CountryStatehoodEvents {
+  founded: StatehoodEvent[]
+  dissolved: StatehoodEvent[]
+}
+
+/**
+ * 국가의 건국·멸망 사건 — 참여국 역할 FOUNDED/DISSOLVED로 이 나라를 건 사건.
+ * 역사국가는 historicalCountryId, 현대국가는 countryId.
+ */
+export async function getCountryStatehoodEvents(params: {
+  historicalCountryId?: string
+  countryId?: string
+}): Promise<CountryStatehoodEvents> {
+  const connection = getConnection()
+  const url = new URL(`${connection.host}/events/statehood`)
+  if (params.historicalCountryId) {
+    url.searchParams.set('historicalCountryId', params.historicalCountryId)
+  }
+  if (params.countryId) url.searchParams.set('countryId', params.countryId)
+
+  const response = await fetch(url.toString(), {
+    headers: (connection.headers ?? {}) as HeadersInit,
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    throw new Error(`건국·멸망 사건 조회 실패: HTTP ${response.status}`)
+  }
+  return (await response.json()) as CountryStatehoodEvents
+}
+
 /**
  * ID로 사건 조회
  */

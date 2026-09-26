@@ -12,6 +12,8 @@ export type EventCountryRoleValue =
   | 'OBSERVER'
   | 'VICTIM'
   | 'BENEFICIARY'
+  | 'FOUNDED'
+  | 'DISSOLVED'
   | 'OTHER'
 
 export interface EventHierarchyNode {

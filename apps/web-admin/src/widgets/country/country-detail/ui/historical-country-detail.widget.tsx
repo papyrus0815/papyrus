@@ -9,7 +9,12 @@ import { useThemeStore } from '@/shared/styles/theme.store'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getPersonsByHistoricalCountryUnion } from '@/shared/api/persons'
 import {
+  getCountryStatehoodEvents,
+  type StatehoodEvent,
+} from '@/shared/api/events'
+import {
   formatCountryPeriod,
+  formatCountryYear,
   getCountryDurationYears,
 } from '@/shared/lib/country-period'
 import { PoliticalSystemTab } from '@/features/government-info/ui/political-system-tab.widget'
@@ -785,6 +790,9 @@ function HistoricalOverviewSection({
         )}
       </div>
 
+      {/* 건국·멸망 사건 — 존속 기간의 양 끝이 '무슨 일로' 열리고 닫혔나 */}
+      <StatehoodEventsStrip historicalCountryId={country.id} isDark={isDark} />
+
       {/* 개요 섹션 */}
       {isEditorOpen ? (
         /* 에디터 모드: 개요 카드 없이 에디터만 */
@@ -931,6 +939,105 @@ function HistoricalOverviewSection({
         </div>
       )}
     </div>
+  )
+}
+
+// ============================================
+// 건국·멸망 사건
+// ============================================
+
+/** 사건 시작 연도(부호) — 구조화 필드가 진실, 없으면 DATETIME(AD 1000+)에서 읽는다 */
+function statehoodSignedYear(event: StatehoodEvent): number | null {
+  if (event.startYear != null) {
+    return event.startEra === 'BC' ? -event.startYear : event.startYear
+  }
+  if (!event.startDate) return null
+  // 'YYYY-…' 앞 4자리 — new Date()는 TZ에 따라 연초 사건을 전년으로 밀 수 있다
+  const year = Number.parseInt(event.startDate.slice(0, 4), 10)
+  return Number.isNaN(year) ? null : year
+}
+
+const STATEHOOD_ACCENT = { light: '#4d7c0f', dark: '#bef264' } as const
+
+/**
+ * 참여국 역할 '건국'(FOUNDED)·'멸망'(DISSOLVED)으로 이 나라를 건 사건을 두 줄로 싣는다.
+ * 둘 다 비면 저작 경로를 알려주는 한 줄만 남긴다 — 칸을 통째로 숨기면 기능이 있는 줄 모른다.
+ */
+function StatehoodEventsStrip({
+  historicalCountryId,
+  isDark,
+}: {
+  historicalCountryId: string
+  isDark: boolean
+}) {
+  const { data } = useQuery({
+    queryKey: ['events', 'statehood', { historicalCountryId }],
+    queryFn: () => getCountryStatehoodEvents({ historicalCountryId }),
+    staleTime: 60_000,
+  })
+
+  if (!data) return null
+
+  const accent = isDark ? STATEHOOD_ACCENT.dark : STATEHOOD_ACCENT.light
+  const muted = isDark ? '#a1a1aa' : '#6b7280'
+  const rows: Array<{ label: string; events: StatehoodEvent[] }> = [
+    { label: '건국', events: data.founded },
+    { label: '멸망', events: data.dissolved },
+  ]
+
+  if (data.founded.length === 0 && data.dissolved.length === 0) {
+    return (
+      <p style={{ margin: 0, fontSize: '12px', color: muted }}>
+        건국·멸망 사건이 아직 연결되지 않았습니다. 사건의 관련국 역할을 ‘건국’ 또는
+        ‘멸망’으로 지정하면 여기에 표시됩니다.
+      </p>
+    )
+  }
+
+  return (
+    <dl
+      style={{
+        margin: 0,
+        display: 'grid',
+        gridTemplateColumns: 'max-content minmax(0, 1fr)',
+        columnGap: '14px',
+        rowGap: '6px',
+        fontSize: '13px',
+      }}
+    >
+      {rows.map((row) => (
+        <div key={row.label} style={{ display: 'contents' }}>
+          <dt style={{ fontSize: '12px', fontWeight: 700, color: accent, lineHeight: '20px' }}>
+            {row.label}
+          </dt>
+          <dd style={{ margin: 0, minWidth: 0, lineHeight: '20px' }}>
+            {row.events.length === 0 ? (
+              <span style={{ color: muted }}>—</span>
+            ) : (
+              row.events.map((event, index) => {
+                const year = formatCountryYear(statehoodSignedYear(event))
+                return (
+                  <span key={event.id}>
+                    {index > 0 && <span style={{ color: muted }}> · </span>}
+                    <Link
+                      to={pathKeys.events.detail(event.id)}
+                      style={{
+                        color: isDark ? '#f5f5f5' : '#111827',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      {event.title}
+                    </Link>
+                    {year && <span style={{ color: muted }}> ({year})</span>}
+                  </span>
+                )
+              })
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 

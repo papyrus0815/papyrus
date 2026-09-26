@@ -19,6 +19,8 @@ export type EventCountryRole =
   | 'OBSERVER'
   | 'VICTIM'
   | 'BENEFICIARY'
+  | 'FOUNDED'
+  | 'DISSOLVED'
   | 'OTHER'
 
 export interface EventCountryParticipant {
@@ -33,7 +35,7 @@ export interface EventCountryParticipant {
 
 /**
  * 역할 라벨. 배열 순서가 곧 선택지 순서다 — 흔한 것부터, 서로 짝이 되는 것끼리.
- * (주도↔대상, 동맹↔적대, 중재↔관찰, 피해↔수혜)
+ * (주도↔대상, 동맹↔적대, 중재↔관찰, 피해↔수혜, 건국↔멸망)
  */
 export const EVENT_COUNTRY_ROLE_OPTIONS: ReadonlyArray<{
   value: EventCountryRole
@@ -50,6 +52,8 @@ export const EVENT_COUNTRY_ROLE_OPTIONS: ReadonlyArray<{
   { value: 'OBSERVER', label: '관찰국', hint: '참관·배석만 한 쪽' },
   { value: 'VICTIM', label: '피해국', hint: '손해를 입은 쪽' },
   { value: 'BENEFICIARY', label: '수혜국', hint: '이득을 본 쪽' },
+  { value: 'FOUNDED', label: '건국', hint: '이 사건으로 성립·독립한 나라' },
+  { value: 'DISSOLVED', label: '멸망', hint: '이 사건으로 망하거나 병합된 나라' },
   { value: 'OTHER', label: '기타', hint: '위에 없는 관계' },
 ]
 
