@@ -275,8 +275,6 @@ export const PageWrapper = styled.div`
 
 export const ContentWrapper = styled.div`
   width: 100%;
-  max-width: 1040px;
-  margin: 0 auto;
   padding-top: 32px;
 `
 

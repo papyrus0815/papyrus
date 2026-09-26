@@ -13,8 +13,6 @@ import { notify } from '@/shared/ui/toast'
 
 const Page = styled.div`
   padding: 1.5rem 2rem;
-  max-width: 1000px;
-  margin: 0 auto;
 `
 
 const Title = styled.h1`

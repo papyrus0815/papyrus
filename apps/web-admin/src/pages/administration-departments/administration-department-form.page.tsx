@@ -1699,8 +1699,6 @@ const ContentLayout = styled.div`
   display: grid;
   grid-template-columns: 240px 1fr;
   gap: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
   padding: 40px;
 
   @media (max-width: 1024px) {

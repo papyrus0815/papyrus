@@ -510,8 +510,6 @@ export default function PersonGroupDetailPage() {
 /* ─── styles ───────────────────────────────────────────────────────────── */
 
 const Page = styled.div`
-  max-width: 960px;
-  margin: 0 auto;
   padding: 24px 24px 60px;
   display: flex;
   flex-direction: column;

@@ -436,8 +436,6 @@ export default function WalletPage() {
 
 // ── styles ────────────────────────────────────────────────────────────────
 const Page = styled.div`
-  max-width: 1040px;
-  margin: 0 auto;
   /* 고정 헤더(var(--header-height)) 아래로 콘텐츠를 내려 상단 잘림 방지 (leaderboard 컨벤션) */
   padding: calc(var(--header-height, 64px) + 20px) 16px 64px;
   display: flex;

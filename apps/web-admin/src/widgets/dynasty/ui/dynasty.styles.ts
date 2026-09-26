@@ -53,8 +53,6 @@ export const StickyHeader = styled.div<{ $compact?: boolean }>`
 `
 
 export const StickyHeaderInner = styled.div<{ $compact?: boolean }>`
-  max-width: 1280px;
-  margin: 0 auto;
   padding: ${({ $compact }) => ($compact ? '10px 32px' : '18px 32px 16px')};
   display: flex;
   flex-direction: column;
@@ -129,8 +127,6 @@ export const KpiInlineValue = styled.strong`
 
 /** 스크롤되는 본문 컨테이너 */
 export const ScrollBody = styled.div`
-  max-width: 1280px;
-  margin: 0 auto;
   width: 100%;
   padding: 24px 32px 80px;
 

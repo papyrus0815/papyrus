@@ -2093,16 +2093,10 @@ export const EventsCatalogPage: React.FC = () => {
 
   return (
     <>
-      <Layout.PageScene
-        /*
-         * 사건 목록은 **화면 전체 폭**(2026-09-26 사용자 결정 — '사건 목록만 전체 폭, 다른
-         * 지면은 고정폭 가운데'). 앱 전역 폭 상한 --content-max-width를 이 지면에서만 풀어
-         * PageWrapper의 캡이 사라지게 한다. 전역 값·PageWrapper 정의는 건드리지 않는다
-         * (다른 지면의 우측 끝 규약은 그대로). 늘어난 가로 픽셀은 행 격자의 열 사다리
-         * (theme.ts LIST_STEPS)가 흡수하고, 좌우 거터는 PageWrapper의 padding clamp가 준다.
-         */
-        style={{ '--content-max-width': 'none' } as React.CSSProperties}
-      >
+      <Layout.PageScene>
+        {/* 폭 상한 없음 — 앱 전체가 화면 전체 폭(2026-09-26 사용자 결정). 좌우 거터의 유일한
+            소유자는 PageWrapper의 padding clamp이고, 늘어난 가로 픽셀 흡수는 행 격자의 열
+            사다리가 한다(theme.ts LIST_STEPS). 여기에 캡을 되살리지 말 것. */}
         <Layout.PageWrapper>{content}</Layout.PageWrapper>
       </Layout.PageScene>
 

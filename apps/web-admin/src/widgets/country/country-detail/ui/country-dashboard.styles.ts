@@ -69,8 +69,6 @@ export const GlobalDashboard = styled.div`
   gap: 0;
   overflow-y: auto;
   animation: ${fadeSlideIn} 0.35s ease;
-  max-width: 1320px;
-  margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
 

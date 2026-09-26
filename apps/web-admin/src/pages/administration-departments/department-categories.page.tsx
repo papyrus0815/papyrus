@@ -198,8 +198,7 @@ const PageWrapper = styled.div`
 `
 
 const PageContainer = styled.div`
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
 `
 
 const PageHeader = styled.div`

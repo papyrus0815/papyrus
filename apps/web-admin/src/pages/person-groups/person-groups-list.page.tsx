@@ -188,8 +188,6 @@ export default function PersonGroupsListPage() {
 /* ─── styles ───────────────────────────────────────────────────────────── */
 
 const Page = styled.div`
-  max-width: 1100px;
-  margin: 0 auto;
   padding: 28px 24px 60px;
   display: flex;
   flex-direction: column;

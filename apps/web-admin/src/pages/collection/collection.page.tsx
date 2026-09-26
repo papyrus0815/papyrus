@@ -255,8 +255,6 @@ export default function CollectionPage() {
 
 // ── styles ────────────────────────────────────────────────────────────────
 const Page = styled.div`
-  max-width: 1040px;
-  margin: 0 auto;
   padding: calc(var(--header-height, 64px) + 20px) 16px 64px;
   display: flex;
   flex-direction: column;
