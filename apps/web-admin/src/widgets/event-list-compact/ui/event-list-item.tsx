@@ -910,15 +910,28 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         <Duration
           title={durationTitle}
           /* 연 격자는 **좌표계가 있는 행**에만 — 기간 문자열로 되돌아간 행의 글자 뒤에
-             세로선을 깔면 그건 좌표가 아니라 무늬다. */
-          $field={Boolean(span)}
+             세로선을 깔면 그건 좌표가 아니라 무늬다. 축 밖 행('1900 ›')도 마찬가지 —
+             이 해의 눈금 위에 다른 해의 연도를 얹으면 그 눈금을 가리키는 것처럼 읽힌다. */
+          $field={Boolean(span) && !span?.outside}
           data-sameday={!span && duration === '1일' ? 'true' : undefined}
         >
           {span?.outside ? (
             /* 이 연 축 밖 — 부모를 따라 다른 해의 그룹에 놓인 자식. 막대를 그리면
                거짓이고, 빈 칸으로 두면 '기간 정보 없음'과 구별되지 않는다. */
             <OutsideMark $side={span.outside}>
-              {span.outside === 'after' ? '›' : '‹'}
+              {/* 방향 글리프만 두면 13px 회색 '›' 하나가 트랙 끝에 떠 **흘린 글자**처럼
+                  읽혔다. 그 사건이 실제로 놓인 해를 붙여 '어느 쪽으로 얼마나'를 말한다. */}
+              <span aria-hidden="true">
+                {span.outside === 'after' ? (
+                  <>
+                    {formatOutsideYear(span.year)} <OutsideArrow>›</OutsideArrow>
+                  </>
+                ) : (
+                  <>
+                    <OutsideArrow>‹</OutsideArrow> {formatOutsideYear(span.year)}
+                  </>
+                )}
+              </span>
               <SrOnly>
                 {span.outside === 'after'
                   ? '이 연도 이후의 사건'
@@ -2518,6 +2531,14 @@ const SpanBar = styled.span<{
  * 연 축 밖 표지 — 트랙의 그 방향 끝에 붙는 홑화살표. 막대가 없는 이유를 한 글자로
  * 말한다(‹ = 이 해 이전, › = 이 해 이후). 조용해야 한다 — 이건 사실이 아니라 각주다.
  */
+const formatOutsideYear = (year: number) =>
+  year < 0 ? `BC ${-year}` : String(year)
+
+const OutsideArrow = styled.span`
+  font-size: 13px;
+  opacity: 0.7;
+`
+
 const OutsideMark = styled.span<{ $side: 'before' | 'after' }>`
   display: block;
   /* ⚠️ flex 항목이라 width 를 주지 않으면 글리프 폭으로 쪼그라들어, '‹'(이 해 이전)가
@@ -2528,10 +2549,11 @@ const OutsideMark = styled.span<{ $side: 'before' | 'after' }>`
   position: relative;
   z-index: 1;
   text-align: ${({ $side }) => ($side === 'after' ? 'right' : 'left')};
-  font-size: 13px;
+  font-size: var(--row-meta, 12px);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  opacity: 0.7;
+  white-space: nowrap;
+  color: ${metaText};
 `
 
 /**

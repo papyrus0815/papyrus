@@ -78,6 +78,8 @@ const isDayPrecise = (precision: DatePrecision): boolean =>
  */
 export interface YearSpanOutside {
   outside: 'before' | 'after'
+  /** 사건이 실제로 놓인 해 — 'after'면 시작 연도, 'before'면 끝 연도(축에 가까운 쪽) */
+  year: number
 }
 
 export interface YearSpanGeometry {
@@ -127,8 +129,8 @@ export function yearSpanGeometry(input: {
    * 막대를 포기하되, 어느 쪽 바깥인지는 말한다 — 빈 칸으로 두면 '기간 정보 없음'과
    * 구별되지 않는다.
    */
-  if (start.year > scopeYear) return { outside: 'after' }
-  if (endYear < scopeYear) return { outside: 'before' }
+  if (start.year > scopeYear) return { outside: 'after', year: start.year }
+  if (endYear < scopeYear) return { outside: 'before', year: endYear }
 
   const approximate = !isDayPrecise(startPrecision) || !isDayPrecise(endPrecision)
   const clippedStart = start.year < scopeYear

@@ -160,7 +160,7 @@ describe('yearSpanGeometry', () => {
     expect(geo.start).toBeCloseTo(116 / 365, 5)
   })
 
-  it('연 축 밖의 행은 막대를 지어내지 않고 어느 쪽 바깥인지만 말한다', () => {
+  it('연 축 밖의 행은 막대를 지어내지 않고 어느 쪽 바깥인지·축에 가까운 해를 말한다', () => {
     // 하위 사건은 부모의 버킷을 따라오므로 실제로 생기는 상태다.
     expect(
       yearSpanGeometry({
@@ -168,14 +168,14 @@ describe('yearSpanGeometry', () => {
         start: parts(1920, 1, 1),
         end: parts(1920, 2, 1),
       }),
-    ).toEqual({ outside: 'after' })
+    ).toEqual({ outside: 'after', year: 1920 })
     expect(
       yearSpanGeometry({
         scopeYear: 1911,
         start: parts(1850, 1, 1),
         end: parts(1900, 1, 1),
       }),
-    ).toEqual({ outside: 'before' })
+    ).toEqual({ outside: 'before', year: 1900 })
   })
 
   it('BC 연도를 네이티브 Date로 흘리지 않는다 — 기원전 44년도 같은 축에 놓인다', () => {
