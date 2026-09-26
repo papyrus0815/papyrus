@@ -11,6 +11,7 @@ import styled, { keyframes } from 'styled-components'
 import { attachAuthInterceptor } from '@/entities/session/session.lib'
 import { BackgroundSlideshow } from '@/features/auth/login/ui/background-slideshow'
 import { useEnvConfig } from '@/shared/hooks/use-env-config.hook'
+import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { queryClient } from '@/shared/queryClient'
 import { useBackgroundStore } from '@/shared/store/background.store'
 import { getTheme } from '@/shared/styles/theme'
@@ -271,10 +272,7 @@ export default function App() {
           <ContentContainer $hasGlobalBackground={isBackgroundEnabled}>
             <QueryClientProvider client={queryClient}>
               <BootstrappedRouter />
-              <ReactQueryDevtools
-                initialIsOpen={false}
-                buttonPosition="bottom-left"
-              />
+              <DevtoolsLauncher />
               {/* Toast 알림 */}
               <ThemedToaster />
               {/* 명령형 confirm() 호스트 (window.confirm 대체) */}
@@ -291,5 +289,19 @@ export default function App() {
         </SmartErrorBoundary>
       </MotionConfig>
     </ThemeProvider>
+  )
+}
+
+/**
+ * 개발용 React Query 도구 — 좁은 화면(≤640)에서는 좌하단이 메뉴(서랍) 버튼 자리라
+ * 우상단으로 비켜 준다. 운영 빌드에는 이 도구가 없다.
+ */
+function DevtoolsLauncher() {
+  const isNarrow = useMediaQuery('(max-width: 640px)')
+  return (
+    <ReactQueryDevtools
+      initialIsOpen={false}
+      buttonPosition={isNarrow ? 'top-right' : 'bottom-left'}
+    />
   )
 }

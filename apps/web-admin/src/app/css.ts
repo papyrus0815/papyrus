@@ -46,9 +46,10 @@ export const GlobalStyle = createGlobalStyle`
     }
   }
 
+  /* 좁은 화면 — 레일은 서랍(NavRail)이 되어 본문을 밀지 않는다 */
   @media (max-width: 640px) {
     :root {
-      --nav-rail-width: 64px;
+      --nav-rail-width: 0px;
     }
   }
 

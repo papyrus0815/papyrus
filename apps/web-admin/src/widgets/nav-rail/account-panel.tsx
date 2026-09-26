@@ -69,6 +69,18 @@ const Panel = styled.div`
   box-shadow: 0 4px 14px ${({ theme }) => theme.colors.shadow.sm};
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* 좁은 화면 — 레일이 서랍이 되어 레일 폭이 0이다. 평소엔 숨고(좌하단은 메뉴 버튼 자리),
+     서랍이 열리면 서랍 바닥에 아바타만으로 선다. */
+  @media (max-width: 640px) {
+    display: none;
+    width: 56px;
+
+    html[data-mobile-nav='open'] & {
+      display: flex;
+      z-index: ${Z_INDEX.MODAL_OVERLAY + 2};
+    }
+  }
+
   /* 패널은 화면 맨 아래라 드롭다운(사운드·계정)이 아래로 열리면 뷰포트를 벗어난다.
      헤더 시절 규약(top:44px/right:0)을 위로 펴지도록 덮어쓴다. */
   ${DropdownPanel} {
