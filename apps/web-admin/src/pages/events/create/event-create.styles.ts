@@ -367,7 +367,7 @@ export const FormSection = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 8px 0 0;
+  padding: 0;
   flex: 1;
   overflow: visible;
   width: 100%;
@@ -387,6 +387,10 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   &:last-child {
     border-bottom: none;
   }
+  /* 첫 행 위 여백은 감싸는 스크롤 영역이 이미 준다 — 겹치면 머리글 아래 56px 빈 띠가 됐다 */
+  &:first-child {
+    padding-top: 4px;
+  }
 
   @media (max-width: 1024px) {
     grid-template-columns: 160px 1fr;
@@ -400,15 +404,18 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   }
 `
 
+/*
+ * 라벨은 **글 흐름(block)**이다. column flex였을 때는 맨 텍스트와 뒤의 필수(*)·(선택) 표기가
+ * 서로 다른 flex 항목이 되어 세로로 쌓였다 — '사건명' 아래 줄에 '*'가 홀로 떨어지고,
+ * 라벨을 <div>로 감싼 행(기간·카테고리)만 한 줄이라 행마다 표기가 달랐다.
+ */
 export const FormLabel = styled.label`
+  display: block;
   font-size: 14px;
   font-weight: 600;
+  line-height: 1.4;
   color: ${({ theme }) => theme.colors.text.primary};
-  padding-top: 9px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  padding-top: 10px;
 
   @media (max-width: 768px) {
     padding-top: 0;
@@ -416,6 +423,9 @@ export const FormLabel = styled.label`
 `
 
 export const PeriodBadge = styled.div`
+  /* 라벨(글 흐름) 아래 줄에 선다 */
+  width: fit-content;
+  margin-top: 8px;
   font-size: 11px;
   font-weight: 600;
   color: ${({ theme }) => getC(theme).primary.dark};
@@ -478,10 +488,14 @@ export const Required = styled.span.attrs({
 /** 공용 Input — FormInput 컴포넌트 직접 re-export */
 export { FormInput as Input, FormTextarea as Textarea } from '@/shared/ui/form-input/form-input'
 
+/*
+ * 카테고리 — **알약 칩**이 줄바꿈하며 흐른다. 132px 타일 11장(아이콘 34 + 이름, 3줄 격자)이
+ * 폼 세로의 3분의 1(약 290px)을 먹었는데, 고르는 것은 이름 한 개다. 칩으로 두 줄에 담는다.
+ */
 export const CategoryGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 `
 
 // 확장 가능한 카테고리 카드
@@ -491,31 +505,43 @@ export const CategoryCard = styled.button<{
   $category: HistoricalEventCategory | ''
 }>`
   position: relative;
+  /*
+   * 선택 상태는 **브랜드 강조색**으로 통일한다. 카테고리별 색은 DB id가 예전 'cat-military-1'
+   * 형식이 아니어서 extractCategoryKey가 전부 'other'(회색)로 떨어졌고, 선택한 칩이 안 고른
+   * 칩과 거의 구별되지 않았다. 고른 것이 무엇인지는 칩의 글자가 말한다.
+   */
   border: 1px solid
-    ${({ $selected, $category, theme }) =>
-      $selected
-        ? getCategoryColor($category).border
-        : getC(theme).border.default};
-  border-radius: 10px;
-  padding: 14px;
-  background: ${({ $selected, $category, theme }) =>
+    ${({ $selected, theme }) =>
+      $selected ? getC(theme).border.focus : getC(theme).border.default};
+  border-radius: 999px;
+  padding: 5px 13px 5px 5px;
+  background: ${({ $selected, theme }) =>
     $selected
-      ? getCategoryColor($category).background
+      ? pickC(theme, '#eef2ff', 'rgba(99, 102, 241, 0.16)')
       : getC(theme).background.content};
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-  display: flex;
-  flex-direction: column;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  text-align: center;
+  gap: 7px;
+  /* 선택은 색만으로 말하지 않는다 — 테를 한 겹 더 두껍게(안쪽 링) */
+  box-shadow: ${({ $selected, theme }) =>
+    $selected ? `inset 0 0 0 1px ${getC(theme).border.focus}` : 'none'};
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => getC(theme).border.focus};
+    outline-offset: 2px;
+  }
 
   &:hover {
-    border-color: ${({ $selected, $category, theme }) =>
-      $selected ? getCategoryColor($category).border : getC(theme).border.hover};
-    background: ${({ $selected, $category, theme }) =>
+    border-color: ${({ $selected, theme }) =>
+      $selected ? getC(theme).border.focus : getC(theme).border.hover};
+    background: ${({ $selected, theme }) =>
       $selected
-        ? getCategoryColor($category).background
+        ? pickC(theme, '#e0e7ff', 'rgba(99, 102, 241, 0.22)')
         : getC(theme).background.section};
   }
 `
@@ -524,13 +550,14 @@ export const CategoryIcon = styled.div<{
   $category: HistoricalEventCategory | ''
   $selected?: boolean
 }>`
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: ${({ $selected, $category, theme }) =>
-    $selected ? getCategoryColor($category).iconBackground : getC(theme).border.light};
-  color: ${({ $selected, $category, theme }) =>
-    $selected ? getCategoryColor($category).iconColor : getC(theme).text.secondary};
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex: none;
+  background: ${({ $selected, theme }) =>
+    $selected ? getC(theme).primary.main : getC(theme).border.light};
+  color: ${({ $selected, theme }) =>
+    $selected ? '#ffffff' : getC(theme).text.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -540,6 +567,11 @@ export const CategoryLabel = styled.span`
   font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) => getC(theme).text.secondary};
+  white-space: nowrap;
+
+  [aria-pressed='true'] > & {
+    color: ${({ theme }) => pickC(theme, '#4338ca', '#c7d2fe')};
+  }
 `
 
 export const CategoryCheck = styled.div`

@@ -100,7 +100,9 @@ export function useModalBehavior({
           return
         const target =
           initialFocusRef?.current ??
-          root.querySelector<HTMLElement>('[autofocus]') ??
+          // React의 autoFocus prop은 DOM에 autofocus 속성을 남기지 않는다 — 폼이 첫 입력을
+          // 지목하려면 data-autofocus를 단다.
+          root.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ??
           getFocusable(root)[0] ??
           root
         target.focus()

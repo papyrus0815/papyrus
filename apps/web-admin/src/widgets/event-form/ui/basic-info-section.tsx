@@ -5,13 +5,11 @@ import styled, { useTheme } from 'styled-components'
 import {
   FiAlertCircle,
   FiCalendar,
-  FiCheck,
   FiClock,
   FiFileText,
   FiGlobe,
   FiImage,
   FiPlus,
-  FiTag,
   FiX,
 } from 'react-icons/fi'
 
@@ -159,6 +157,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
+  /**
+   * 모달 안이면 열리자마자 사건명에 포커스. 폼 본문이 모달의 첫 프레임 포커스 처리보다
+   * 늦게 그려져, 모달은 첫 focusable인 닫기(✕)를 잡고 보라 링을 띄우고 있었다.
+   * 사용자가 이미 다른 **입력칸**을 잡았으면 빼앗지 않는다(버튼·본문일 때만).
+   */
+  useEffect(() => {
+    const input = titleInputRef.current
+    const dialog = input?.closest('[role="dialog"]')
+    if (!input || !dialog) return
+    const active = document.activeElement
+    const idle =
+      !active ||
+      active === document.body ||
+      active === dialog ||
+      (dialog.contains(active) && active.tagName === 'BUTTON')
+    if (idle) input.focus({ preventScroll: true })
+  }, [])
   const [isStartDateModalOpen, setIsStartDateModalOpen] = useState(false)
   const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
   const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
@@ -270,8 +287,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         </S.FormLabel>
         <S.FormField>
           <S.Input
+            ref={titleInputRef}
             id="event-form-title"
             type="text"
+            /* 모달이 열리면 닫기(✕)가 아니라 여기로 — 등록의 첫 동작은 이름 쓰기다 */
+            data-autofocus=""
             placeholder="예: 제2차 세계 대전"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -495,6 +515,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 return (
                   <S.CategoryCard
                     key={dbCat.id}
+                    type="button"
+                    aria-pressed={isSelected}
                     $selected={isSelected}
                     $category={categoryKey}
                     onClick={() => {
@@ -506,14 +528,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       $category={categoryKey}
                       $selected={isSelected}
                     >
-                      <Icon size={18} />
+                      <Icon size={13} />
                     </S.CategoryIcon>
                     <S.CategoryLabel>{categoryName}</S.CategoryLabel>
-                    {isSelected && (
-                      <S.CategoryCheck>
-                        <FiCheck size={14} />
-                      </S.CategoryCheck>
-                    )}
                   </S.CategoryCard>
                 )
               })}
@@ -559,10 +576,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
       <S.FormRow>
         <S.FormLabel>
-          <FiTag
-            size={14}
-            style={{ marginRight: 6, verticalAlign: 'middle' }}
-          />
           키워드<OptionalTag>(선택)</OptionalTag>
         </S.FormLabel>
         <S.FormField>
