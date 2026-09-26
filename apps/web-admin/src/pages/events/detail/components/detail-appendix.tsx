@@ -293,6 +293,7 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
       {images.length > 0 && (
         <Grid
           $dragOver={dragOver}
+          $wide={images.length >= WIDE_GALLERY_MIN}
           onDragOver={(e) => {
             if (uploading) return
             e.preventDefault()
@@ -481,7 +482,15 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
   )
 }
 
-const Grid = styled.div<{ $dragOver: boolean }>`
+/**
+ * 갤러리는 넓은 트랙에서 한 줄에 4장(220px 최소) — 720 산문 열은 3장. 한 줄을 채울 만큼
+ * 있을 때만 트랙으로 편다: 1~3장을 펴면 사진이 산문 왼쪽 선보다 160px 튀어나온 채
+ * 오른쪽이 비어, 넓어지는 이득 없이 기준선만 어긋난다(실측 1장 사건).
+ */
+const WIDE_GALLERY_MIN = 4
+
+const Grid = styled.div<{ $dragOver: boolean; $wide: boolean }>`
+  ${({ $wide }) => $wide && S.breakout}
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;

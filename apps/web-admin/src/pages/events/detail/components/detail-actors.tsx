@@ -305,7 +305,7 @@ export function DetailActors({
   return (
     <>
       <S.Section id="actors">
-        <S.SectionHeader>
+        <ActorsHeader>
           <S.SectionTitle>참여 행위자</S.SectionTitle>
           {canManage && (
             <S.SectionActions>
@@ -320,7 +320,7 @@ export function DetailActors({
               </ManageToggle>
             </S.SectionActions>
           )}
-        </S.SectionHeader>
+        </ActorsHeader>
 
         {/* 비어 있을 때 통일 안내 — persons·countries 모두 없을 때만 */}
         {!hasAnything && (
@@ -335,7 +335,8 @@ export function DetailActors({
           </S.EmptyState>
         )}
 
-        {/* 인물 — 세로 리스트, hairline 구분선 */}
+        {/* 인물 — 세로 리스트, hairline 구분선. 넓은 화면에선 트랙 전체 + 2열. */}
+        <PersonsBlock>
         <GroupHead>
           <GroupLabel>
             인물
@@ -473,6 +474,7 @@ export function DetailActors({
               : `${persons.length}명 모두 보기 (+${persons.length - PERSON_PREVIEW_COUNT})`}
           </ShowAllToggle>
         )}
+        </PersonsBlock>
 
         {/* 참여국 — 인물 행과 같은 편집 수준(역할·서술·비고) */}
         <NationsBlock>
@@ -760,6 +762,15 @@ const mutedTextColor = (mode: 'light' | 'dark') =>
 
 /* ─── Section header — '순서 변경' 토글(공용 S.SectionHeader 안에 배치) ─── */
 
+/**
+ * 머리글도 넓은 트랙으로 펴되 제목은 여백만큼 안으로 들인다 — 제목은 다른 섹션 제목과 같은
+ * x(산문 열)에, '순서 변경'은 아래 목록의 '+ 추가'와 같은 오른쪽 끝에 선다.
+ */
+const ActorsHeader = styled(S.SectionHeader)`
+  ${S.breakout}
+  padding-left: ${S.breakoutGutter};
+`
+
 const ManageToggle = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
@@ -842,12 +853,41 @@ const ReorderBtn = styled.button`
 
 /* ─── Person list (vertical, hairline separators) ─── */
 
+/**
+ * 인물·국가 묶음은 **넓은 트랙**으로 편다(S.breakout) — 산문이 아니라 훑는 목록이다.
+ * 트랙이 880px 이상 열리면 2열 격자가 된다: 15명이 8줄로, 6명 미리보기는 3줄로.
+ * 1440px 화면(사이드바 포함)에서는 여백이 0이라 지금과 같은 한 열이다.
+ */
+const PersonsBlock = styled.div`
+  ${S.breakout}
+  display: flex;
+  flex-direction: column;
+`
+
+/**
+ * 2열일 때 행 구분선 — 각 행의 border-bottom을 그대로 쓰되, 마지막 **줄**(홀수 개면 1개,
+ * 짝수 개면 2개)의 선을 지운다. 한 열 규칙(&:last-child)만으로는 짝수 개일 때 왼쪽 칸에
+ * 선이 하나 남는다.
+ */
+const twoColumnRows = css`
+  @container eventdetail ${S.WIDE_TRACK_QUERY} {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 40px;
+
+    > li:nth-last-child(2):nth-child(odd) {
+      border-bottom: none;
+    }
+  }
+`
+
 const PersonList = styled.ol`
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
+  ${twoColumnRows}
 `
 
 const PersonRow = styled.li`
@@ -1051,6 +1091,7 @@ const RemoveInline = styled.button`
 /* ─── Nations paragraph ─── */
 
 const NationsBlock = styled.div`
+  ${S.breakout}
   margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid ${({ theme }) => editorialRuleColor(theme.mode)};
@@ -1251,6 +1292,7 @@ const CountryList = styled.ol`
   padding: 0;
   display: flex;
   flex-direction: column;
+  ${twoColumnRows}
 `
 
 /* 인물 행과 같은 골격 — 아바타 열만 없다(국기 이모지는 이름 옆이 자연스러워 생략). */

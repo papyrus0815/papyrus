@@ -345,6 +345,7 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
 /** 단락 본문 — 섹션 리드 문단과 **같은 좌측 기준선·같은 가독폭**. */
 const SectionBodyHost = styled.div`
   ${S.longFormEditAffordance}
+  ${S.proseTableBreakout}
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};

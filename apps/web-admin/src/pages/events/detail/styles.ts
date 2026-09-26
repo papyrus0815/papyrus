@@ -23,6 +23,46 @@ import {
   RADIUS,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 
+/* ───────────────────────── Width system ───────────────────────── */
+
+/**
+ * 폭 체계 — **산문은 720에 고정하고, 넓은 블록만 양옆으로 튀어나온다**(breakout).
+ *
+ * 한글 산문은 15.5px에서 한 줄 약 46자 — 편하게 읽히는 35~50자 안이다. 화면이 넓다고 글줄을
+ * 늘리면 1,800px에서 110자를 넘어 줄바꿈 추적이 무너진다. 반면 표·인물 목록·이미지는
+ * 720에 갇혀 칸 안 글자가 서너 줄로 꺾이거나(표) 세로로만 길어졌다(인물 15명 2,600px).
+ *
+ * 그래서 문서 열을 '넓은 트랙'(720 + 좌우 여백 최대 160 = 1040)으로 잡고, 산문은 그
+ * 가운데 720에, 넓은 블록은 트랙 전체에 놓는다. 여백은 **남는 폭만큼만** 생긴다 —
+ * 1440px 화면(사이드바 포함)에서는 0이라 지금과 같고, 1920 이상에서 열린다.
+ * 한쪽으로만 넓히면 산문 구간마다 장부와의 사이에 빈 띠가 생겨, 양옆 대칭으로 둔다.
+ *
+ * ⚠️ 여백은 새 컨테이너가 아니라 **지면 셸(eventdetail)의 cqi**로 계산한다. 문서 열에
+ *    container-type을 걸면 contain: layout이 되어, 포털 없이 인라인으로 뜨는 모달들
+ *    (인물·국가 선택 등)의 fixed 기준이 문서 열로 갇힌다(PageInner 주석과 같은 함정).
+ *    2열일 때 문서 열 = 100cqi − 장부 − gap이므로 식이 닫힌다. 한 열일 때는 음수 → 0.
+ */
+export const PROSE_WIDTH = 720
+export const BREAKOUT_MAX = 160
+const ASIDE_WIDTH = 312
+const COLUMN_GAP = 48
+
+/** 넓은 블록의 한쪽 여백 — 0~160px. 지면 셸 컨테이너 안에서만 쓴다. */
+export const breakoutGutter = `clamp(0px, (100cqi - ${ASIDE_WIDTH + COLUMN_GAP + PROSE_WIDTH}px) / 2, ${BREAKOUT_MAX}px)`
+
+/** 산문 열(720) 안에 놓인 블록을 넓은 트랙 전체로 편다. */
+export const breakout = css`
+  width: calc(100% + 2 * ${breakoutGutter});
+  max-width: none;
+  margin-inline: calc(-1 * ${breakoutGutter});
+`
+
+/**
+ * 넓은 트랙이 인물 2열을 받을 만큼 열리는 지면 폭 — 트랙 880px(여백 80×2) 이상.
+ * 100cqi − 360 − 720 ≥ 160  ⇔  100cqi ≥ 1240.
+ */
+export const WIDE_TRACK_QUERY = '(min-width: 1240px)'
+
 /* ───────────────────────── Page Shell ───────────────────────── */
 
 /**
@@ -62,7 +102,8 @@ export const Page = styled.div`
 export const PageInner = styled.div`
   container-type: inline-size;
   container-name: eventdetail;
-  max-width: 1180px;
+  /* 넓은 트랙 1040 + gap 48 + 장부 312 = 1400, 좌우 패딩 28×2. 그 이상은 가운데 정렬로 비운다. */
+  max-width: ${PROSE_WIDTH + 2 * BREAKOUT_MAX + COLUMN_GAP + ASIDE_WIDTH + 56}px;
   margin: 0 auto;
   padding: 32px 28px 96px;
 
@@ -108,12 +149,12 @@ export const Body = styled.div`
    * 사건인가"를 먼저 알아야 스크롤을 결정할 수 있다.
    */
   @container eventdetail (min-width: 920px) {
-    grid-template-columns: minmax(0, 1fr) 312px;
+    grid-template-columns: minmax(0, 1fr) ${ASIDE_WIDTH}px;
     grid-template-rows: auto 1fr;
     grid-template-areas:
       'hero aside'
       'main aside';
-    gap: 36px 48px;
+    gap: 36px ${COLUMN_GAP}px;
   }
 `
 
@@ -150,12 +191,19 @@ export const Main = styled.main`
    */
   grid-area: main;
   min-width: 0;
-  max-width: 720px;
+  /* 넓은 트랙 — 산문은 그 가운데 720(아래 > *), 넓은 블록만 breakout으로 트랙 전체. */
+  max-width: ${PROSE_WIDTH + 2 * BREAKOUT_MAX}px;
   width: 100%;
   margin: 0;
   display: flex;
   flex-direction: column;
   gap: 64px;
+
+  > * {
+    width: 100%;
+    max-width: ${PROSE_WIDTH}px;
+    margin-inline: auto;
+  }
 
   @media (max-width: 768px) {
     gap: 44px;
@@ -195,8 +243,10 @@ export const Hero = styled.section`
    * 히어로는 문서 열과 **같은 격자 칸**(1fr)에 산다 — 상한도 Main과 같은 720이면
    * 제목·요약·본문이 늘 같은 좌측 기준선·같은 폭에서 끝난다(예전의 calc 보정 불필요).
    */
-  max-width: 720px;
+  /* 문서 열의 산문과 같은 칸 — 넓은 트랙 가운데 720(Main > *와 같은 식). */
+  max-width: ${PROSE_WIDTH}px;
   width: 100%;
+  margin-inline: auto;
 `
 
 /**
@@ -559,14 +609,40 @@ export const longFormEditAffordance = css`
 `
 
 /**
+ * 본문 속 표는 넓은 트랙으로 편다 — 720 안에서 4열 표의 칸이 130px 남짓이라 '영토 —
+ * 독도'가 세 줄로 꺾였다. 편집 중(textarea·에디터)엔 건드리지 않도록 읽기 뷰의 표만.
+ */
+export const proseTableBreakout = css`
+  [role='region'] table {
+    ${breakout}
+    /*
+     * 읽기 뷰는 인라인 편집 호스트 안에서 ✎ 버튼 칸(32px)만큼 좁다 — 그대로 펴면 오른쪽 끝이
+     * 넓은 트랙(인물 목록·갤러리)보다 32px 모자란다. 여백이 열린 만큼만(최대 32px) 더한다.
+     */
+    width: calc(100% + 2 * ${breakoutGutter} + min(${breakoutGutter}, 32px));
+  }
+
+  /*
+   * ⚠️ 공용 읽기 뷰(RichTextReadView)는 content-visibility: auto라 **paint containment**가
+   *    걸려 자식을 자기 박스(산문 폭) 밖으로 그리지 못한다 — 표 박스는 1,008px로 넓어졌는데
+   *    양옆 160px이 잘려 첫 열이 사라졌다(실측). 표가 든 영역만 풀어 준다. 그 최적화는
+   *    16MB 전기용이라 사건 단락 몇 개에서 잃는 것은 없다.
+   */
+  [role='region']:has(table) {
+    content-visibility: visible;
+  }
+`
+
+/**
  * SectionBody — 읽기 본문(배경·전개·여파). 좁은 가독폭과 넉넉한 line-height.
  */
 export const SectionBody = styled.div`
   ${longFormEditAffordance}
+  ${proseTableBreakout}
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};
-  max-width: 720px;
+  max-width: ${PROSE_WIDTH}px;
 `
 
 /* ───────────────────────── Module data card ──────────────────────────── */
