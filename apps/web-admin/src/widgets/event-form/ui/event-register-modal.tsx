@@ -35,7 +35,7 @@ import {
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 
-import { EventFormSkeleton } from './event-form-skeleton'
+import { EventFormLoading } from './event-form-loading'
 import type {
   EventBasicFormHandle,
   EventBasicFormState,
@@ -191,10 +191,10 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
               {isEditMode ? '수정 사항을 저장하는 중...' : '사건을 등록하는 중...'}
             </BusyBar>
           )}
-          {/* 수정 모드에서 사건을 불러오는 동안 — 빈 폼 위의 안내 띠 대신 폼 모양 스켈레톤.
+          {/* 수정 모드에서 사건을 불러오는 동안 — 빈 폼 위의 안내 띠 대신 도는 로딩.
               폼은 마운트해 둔 채(불러오기·하이드레이션이 돌아야 한다) 가려 둔다. */}
-          {isLoading && <EventFormSkeleton label="사건 정보를 불러오는 중" />}
-          <Suspense fallback={<EventFormSkeleton />}>
+          {isLoading && <EventFormLoading label="사건 정보를 불러오는 중" />}
+          <Suspense fallback={<EventFormLoading />}>
             {isOpen && (
               <FormReveal hidden={isLoading}>
                 <LazyEventBasicForm
@@ -290,7 +290,7 @@ const BusyBar = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-/** 스켈레톤 자리에 폼이 들어설 때 짧게 페이드인 — 같은 격자라 위치 이동은 없다 */
+/** 로딩이 걷히고 폼이 들어설 때 짧게 페이드인 */
 const FormReveal = styled.div`
   @media (prefers-reduced-motion: no-preference) {
     animation: eventFormReveal 0.2s ease;
