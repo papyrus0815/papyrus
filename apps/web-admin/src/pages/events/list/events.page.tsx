@@ -118,6 +118,8 @@ const LEADER_KINDS: readonly ReignMarkerKind[] = [
   'monarch',
   'headOfState',
   'headOfGovernment',
+  'founding',
+  'dissolution',
 ]
 function readHiddenLeaders(): ReignMarkerKind[] {
   try {
@@ -947,6 +949,7 @@ export const EventsCatalogPage: React.FC = () => {
     listRenderedHierarchy,
     eventByIdMap,
     selectedCountry,
+    historicalCountries,
   )
   const reignMarkers = useMemo(
     () =>
@@ -1727,6 +1730,14 @@ export const EventsCatalogPage: React.FC = () => {
       reignMarkers={reignMarkers}
       onOpenPerson={setModalPersonId}
       onFilterPeriod={(marker) => {
+        // 건국·멸망 표지 — 나라의 존속 기간으로 거른다
+        if (marker.statehood) {
+          setPeriodParams({
+            period: `${marker.statehood.startYear}_${marker.statehood.endYear ?? new Date().getFullYear()}`,
+            periodOf: `${marker.name} 존속`,
+          })
+          return
+        }
         const role = marker.roleTitle ? `${marker.roleTitle} ` : ''
         const noun = marker.kind === 'monarch' ? '재위' : '재임'
         setPeriodParams({

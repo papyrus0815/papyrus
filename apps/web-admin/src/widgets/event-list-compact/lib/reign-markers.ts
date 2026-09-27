@@ -69,8 +69,36 @@ export interface HeadTenureTimelineItem {
   person?: SovereignReignTimelineItem['person']
 }
 
-/** 표지의 종류 — 군주 즉위 / 국가원수(대통령) 취임 / 정부수반(총리) 취임 */
-export type ReignMarkerKind = 'monarch' | 'headOfState' | 'headOfGovernment'
+/**
+ * 표지의 종류 — 군주 즉위 / 국가원수(대통령) 취임 / 정부수반(총리) 취임
+ * / 역사 국가 건국(founding) · 멸망(dissolution).
+ */
+export type ReignMarkerKind =
+  | 'monarch'
+  | 'headOfState'
+  | 'headOfGovernment'
+  | 'founding'
+  | 'dissolution'
+
+/** 역사 국가 건국·멸망 표지인가 — 사람이 아니라 나라가 주어인 표지 */
+export const isStatehoodMarker = (marker: { kind: ReignMarkerKind }) =>
+  marker.kind === 'founding' || marker.kind === 'dissolution'
+
+/** `GET /historical-countries` 항목 중 여기서 쓰는 필드 */
+export interface HistoricalCountryTimelineItem {
+  id: string
+  name: string
+  startEra?: EraValue
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: EraValue
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  entityKind?: string | null
+  parentModernCountryIds?: string[] | null
+}
 
 export interface ReignMarker {
   /** 재위 기록 id */
@@ -93,8 +121,20 @@ export interface ReignMarker {
   /** 즉위 월·일 — 정밀도가 연/월이면 null */
   startMonth: number | null
   startDay: number | null
-  /** 퇴위 연도 — 현직·미상이면 null */
+  /** 퇴위 연도 — 현직·미상이면 null. 건국·멸망 표지는 **그 시점 하나**라 startYear와 같다 */
   endYear: number | null
+  /**
+   * 건국·멸망 표지만 — 나라의 존속 기간(표시·기간 필터용).
+   * 범위 판정(isReignInRange)은 endYear(=시점)를 보므로, '목록 시작 때 이미 있던 나라'가
+   * 목록 끝에 몰려 쌓이지 않는다(군주의 '그때 재위 중'과 달리 건국은 한 시점의 사건이다).
+   */
+  statehood?: {
+    historicalCountryId: string
+    /** STATE면 건국·멸망, REGIME·PERIOD 등이면 성립·종료 */
+    entityKind: string | null
+    startYear: number
+    endYear: number | null
+  }
 }
 
 interface DateParts {
@@ -237,6 +277,12 @@ const formatSignedYear = (year: number) =>
 
 /** '1418–1450' / 'BC 221–BC 210' / '1952–' (현직·미상) / '1888' (같은 해 즉위·퇴위) */
 export function formatReignSpan(marker: ReignMarker): string {
+  if (marker.statehood) {
+    // 건국·멸망 표지는 나라의 존속 기간을 쓴다(현존국은 '1991–')
+    const { startYear, endYear } = marker.statehood
+    if (endYear === startYear) return formatSignedYear(startYear)
+    return `${formatSignedYear(startYear)}–${endYear == null ? '' : formatSignedYear(endYear)}`
+  }
   // '1888–1888'은 같은 숫자를 두 번 읽힌다 — 한 해 안에 끝난 재위는 연도 하나로 쓴다.
   if (marker.endYear === marker.startYear) return formatSignedYear(marker.startYear)
   const end = marker.endYear == null ? '' : formatSignedYear(marker.endYear)
@@ -271,9 +317,11 @@ export function formatAccessionDate(
  * 부호 연도라 BC→AD를 건너면 0년이 없으므로 1을 뺀다(BC 27 → AD 14 = 40년).
  */
 export function reignLengthYears(marker: ReignMarker): number | null {
-  if (marker.endYear == null || marker.endYear <= marker.startYear) return null
-  const crossesEra = marker.startYear < 0 && marker.endYear > 0
-  return marker.endYear - marker.startYear - (crossesEra ? 1 : 0)
+  const startYear = marker.statehood?.startYear ?? marker.startYear
+  const endYear = marker.statehood ? marker.statehood.endYear : marker.endYear
+  if (endYear == null || endYear <= startYear) return null
+  const crossesEra = startYear < 0 && endYear > 0
+  return endYear - startYear - (crossesEra ? 1 : 0)
 }
 
 /**
@@ -287,7 +335,11 @@ export function accessionVerb(
   countryName: string | null | undefined,
   kind: ReignMarkerKind = 'monarch',
   reappointed = false,
-): '즉위' | '취임' | '연임' {
+  entityKind?: string | null,
+): '즉위' | '취임' | '연임' | '건국' | '멸망' | '성립' | '종료' {
+  // 나라가 주어인 표지 — 국가(STATE)는 건국·멸망, 정권·시대(REGIME·PERIOD)는 성립·종료
+  if (kind === 'founding') return !entityKind || entityKind === 'STATE' ? '건국' : '성립'
+  if (kind === 'dissolution') return !entityKind || entityKind === 'STATE' ? '멸망' : '종료'
   if (kind !== 'monarch') return reappointed ? '연임' : '취임'
   return countryName && /공화국|공화정|막부/.test(countryName) ? '취임' : '즉위'
 }
@@ -333,6 +385,88 @@ export function toHeadTenureMarkers(
   }
   markReappointments(markers, endKeys)
   return markers
+}
+
+/**
+ * 역사 국가 → 건국·멸망 표지. 연표에 놓을 수 없는(시작 연도 없는) 나라는 뺀다.
+ *
+ * @param inScope 이 나라를 목록에 실을 것인가 — 범위(관련 국가·국가 필터)는 호출부가 정한다.
+ * @param alreadyAnEvent 같은 해에 이 나라의 건국·멸망이 **사건으로 이미** 목록에 있는가 —
+ *   손으로 만든 '랑고바르드 왕국 건국' 사건 옆에 같은 표지가 또 서지 않게.
+ */
+export function toStatehoodMarkers(
+  countries: HistoricalCountryTimelineItem[] | null | undefined,
+  inScope: (country: HistoricalCountryTimelineItem) => boolean,
+  alreadyAnEvent: (
+    country: HistoricalCountryTimelineItem,
+    kind: 'founding' | 'dissolution',
+    year: number,
+  ) => boolean = () => false,
+): ReignMarker[] {
+  if (!countries?.length) return []
+  const markers: ReignMarker[] = []
+  for (const country of countries) {
+    if (country.startYear == null || !inScope(country)) continue
+    const start = resolveParts(
+      country.startEra,
+      country.startYear,
+      country.startMonth,
+      country.startDay,
+      null,
+      null,
+    )
+    if (!start) continue
+    const end =
+      country.endYear == null
+        ? null
+        : resolveParts(
+            country.endEra,
+            country.endYear,
+            country.endMonth,
+            country.endDay,
+            null,
+            null,
+          )
+    const statehood = {
+      historicalCountryId: country.id,
+      entityKind: country.entityKind ?? null,
+      startYear: start.year,
+      endYear: end?.year ?? null,
+    }
+    const base = {
+      personId: '',
+      roleTitle: null,
+      name: country.name,
+      countryName: null,
+      imageUrl: null,
+      statehood,
+    }
+    if (!alreadyAnEvent(country, 'founding', start.year)) {
+      markers.push({
+        ...base,
+        id: `hc-founding-${country.id}`,
+        kind: 'founding',
+        startKey: lowerKey(start),
+        startYear: start.year,
+        startMonth: start.month,
+        startDay: start.day,
+        endYear: start.year,
+      })
+    }
+    if (end && !alreadyAnEvent(country, 'dissolution', end.year)) {
+      markers.push({
+        ...base,
+        id: `hc-dissolution-${country.id}`,
+        kind: 'dissolution',
+        startKey: lowerKey(end),
+        startYear: end.year,
+        startMonth: end.month,
+        startDay: end.day,
+        endYear: end.year,
+      })
+    }
+  }
+  return markers.sort((left, right) => left.startKey - right.startKey)
 }
 
 /** 전임 끝과 후임 시작 사이가 이 안이면 '끊김 없이 이어 맡음'(내각 재구성·재선출 공백) */

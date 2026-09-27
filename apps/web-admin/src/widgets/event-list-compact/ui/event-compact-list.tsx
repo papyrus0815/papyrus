@@ -13,7 +13,7 @@ import {
   FiSearch,
   FiX,
 } from 'react-icons/fi'
-import { FaCrown, FaLandmark } from 'react-icons/fa'
+import { FaCrown, FaFlag, FaLandmark } from 'react-icons/fa'
 import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
@@ -43,6 +43,7 @@ import {
   type ReignMarker,
   eventStartKey,
   accessionVerb,
+  isStatehoodMarker,
   formatAccessionDate,
   formatReignSpan,
   groupReignEntries,
@@ -458,6 +459,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   const reignHomeCountry = useMemo(() => {
     const counts = new Map<string | null, number>()
     for (const marker of reignMarkers ?? []) {
+      // 건국·멸망 표지는 나라가 곧 이름이라 '주류 나라' 셈에 넣지 않는다
+      if (isStatehoodMarker(marker)) continue
       counts.set(marker.countryName, (counts.get(marker.countryName) ?? 0) + 1)
     }
     let home: string | null = null
@@ -494,6 +497,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     /* 대통령·총리만 모인 자리 — 축 표지를 왕관 대신 의사당으로, 강조색을 호박 대신 파랑으로.
        군주가 하나라도 섞이면 왕관(즉위가 그 자리의 주된 사건이다). */
     const civic = markers.every((marker) => marker.kind !== 'monarch')
+    /* 건국·멸망만 모인 자리 — 축 표지를 깃발로(색은 civic 파랑을 그대로 쓴다) */
+    const statehoodOnly = markers.every(isStatehoodMarker)
     return (
     <List.ReignMarker
       key={`reign-${markers[0].id}`}
@@ -503,7 +508,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       data-reign-marker=""
     >
       <List.ReignMarkerIcon aria-hidden="true" $civic={civic}>
-        {civic ? <FaLandmark /> : <FaCrown />}
+        {statehoodOnly ? <FaFlag /> : civic ? <FaLandmark /> : <FaCrown />}
       </List.ReignMarkerIcon>
       {options.yearLabel ? (
         <List.ReignYearLabel aria-hidden="true">
@@ -525,7 +530,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             countryNames[0],
             marker.kind,
             marker.reappointed,
+            marker.statehood?.entityKind,
           )
+          const statehood = isStatehoodMarker(marker)
+          const periodNoun = statehood ? '존속' : verb === '즉위' ? '재위' : '재임'
           const markerCivic = marker.kind !== 'monarch'
           const length = reignLengthYears(marker)
           return (
@@ -544,13 +552,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               {marker.roleTitle && (
                 <List.ReignMarkerRole>{marker.roleTitle}</List.ReignMarkerRole>
               )}
-              {onOpenPerson ? (
+              {/* 나라가 주어인 표지는 인물 모달로 가지 않는다 — 이름만 */}
+              {onOpenPerson && !statehood ? (
                 <List.ReignMarkerName
                   as="button"
                   type="button"
                   tabIndex={-1}
                   onClick={() => onOpenPerson(marker.personId)}
-                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.roleTitle ? `${marker.roleTitle} ` : ''}${marker.name} 인물 정보 보기 — ${verb}, ${verb === '즉위' ? '재위' : '재임'} ${span}`}
+                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.roleTitle ? `${marker.roleTitle} ` : ''}${marker.name} 인물 정보 보기 — ${verb}, ${periodNoun} ${span}`}
                 >
                   {marker.name}
                 </List.ReignMarkerName>
@@ -568,7 +577,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     type="button"
                     tabIndex={-1}
                     title="이 기간의 사건만 보기"
-                    aria-label={`${marker.name} ${verb === '즉위' ? '재위' : '재임'} 기간(${span})의 사건만 보기`}
+                    aria-label={`${marker.name} ${periodNoun} 기간(${span})의 사건만 보기`}
                     onClick={() => onFilterPeriod(marker)}
                   >
                     {span}

@@ -15,14 +15,17 @@ import {
   getHeadTenureTimeline,
   getSovereignReignTimeline,
 } from '@/shared/api/sovereign-reigns'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   type HeadTenureTimelineItem,
+  type HistoricalCountryTimelineItem,
   type ReignMarker,
   type SovereignReignTimelineItem,
   mergeLeaderMarkers,
   toHeadTenureMarkers,
   toReignMarkers,
+  toStatehoodMarkers,
 } from '@/widgets/event-list-compact/lib/reign-markers'
 
 import type { HistoricalEvent } from '../../create/events.types'
@@ -32,10 +35,24 @@ export const headTenureTimelineKey = ['head-tenure-timeline'] as const
 
 const NO_MARKERS: ReignMarker[] = []
 
+/** 사건 제목이 그 나라의 건국·멸망을 말하는가 — 손으로 만든 건국 사건과 표지가 겹치지 않게 */
+const FOUNDING_WORDS = /건국|성립|수립|창건|개국/
+const DISSOLUTION_WORDS = /멸망|해체|소멸|붕괴|폐지|병합/
+
+/**
+ * 연표 표지 — 군주 즉위·대통령/총리 취임·**역사 국가 건국/멸망**.
+ *
+ * 역사 국가 범위(사용자 결정 2026-09-27 '관련 국가 + 국가 필터'):
+ * - 국가 필터가 걸려 있으면 → 그 나라 자체(역사 국가 필터) 또는 그 현대 국가에 연결된 역사 국가 전부
+ *   ('독일'로 거르면 알레만니아·동프랑크 …의 건국·멸망이 연대 흐름에 선다).
+ * - 필터가 없으면 → 목록에 나온 사건들의 관련 역사 국가만(지도자 표지와 같은 규칙).
+ *   등록된 352개 나라를 전부 세우면 건국·멸망 약 680개 표지와 빈 연도 머리글로 목록이 묻힌다.
+ */
 export function useReignMarkers(
   items: FlattenedHierarchyItem[],
   eventById: Map<string, HistoricalEvent>,
   selectedCountry: string,
+  historicalCountries: readonly HistoricalCountryTimelineItem[] = [],
 ): ReignMarker[] {
   const { data: reigns } = useQuery({
     queryKey: sovereignReignTimelineKey,
@@ -62,7 +79,65 @@ export function useReignMarkers(
     return ids
   }, [items, eventById, selectedCountry])
 
-  return useMemo(() => {
+  /**
+   * 목록에 **이미 사건으로** 있는 건국·멸망 — 역할(FOUNDED/DISSOLVED)로 이어진 것,
+   * 또는 같은 해 제목이 '<나라 이름> … 건국/멸망'인 것. 표지를 그 옆에 또 세우지 않는다.
+   */
+  const statehoodEvents = useMemo(() => {
+    const byRole = new Set<string>()
+    const titlesByYear = new Map<number, string[]>()
+    /** 연도|나라 id → 그 해 그 나라에 연결된 사건 제목들(표기가 달라도 연결로 잡는다 —
+     *  '알레마니 공국 건국' 사건이 '알레만니아 공국'에 연결돼 있으면 같은 건국이다) */
+    const linkedTitles = new Map<string, string[]>()
+    for (const item of items) {
+      const event = eventById.get(item.node.id)
+      if (!event) continue
+      event.relatedHistoricalCountries?.forEach((country) => {
+        if (country.role === 'FOUNDED') byRole.add(`${country.id}|founding`)
+        if (country.role === 'DISSOLVED') byRole.add(`${country.id}|dissolution`)
+      })
+      const year = parseIsoDateParts(event.startDate)?.year
+      if (year == null) continue
+      const list = titlesByYear.get(year)
+      if (list) list.push(event.title)
+      else titlesByYear.set(year, [event.title])
+      event.relatedHistoricalCountries?.forEach((country) => {
+        const key = `${year}|${country.id}`
+        const titles = linkedTitles.get(key)
+        if (titles) titles.push(event.title)
+        else linkedTitles.set(key, [event.title])
+      })
+    }
+    return { byRole, titlesByYear, linkedTitles }
+  }, [items, eventById])
+
+  const statehoodMarkers = useMemo(() => {
+    if (historicalCountries.length === 0) return NO_MARKERS
+    const inScope = (country: HistoricalCountryTimelineItem) =>
+      selectedCountry !== FILTER_ALL
+        ? country.id === selectedCountry ||
+          (country.parentModernCountryIds ?? []).includes(selectedCountry)
+        : countryIds.has(country.id)
+    return toStatehoodMarkers(
+      historicalCountries as HistoricalCountryTimelineItem[],
+      inScope,
+      (country, kind, year) => {
+        if (statehoodEvents.byRole.has(`${country.id}|${kind}`)) return true
+        const words = kind === 'founding' ? FOUNDING_WORDS : DISSOLUTION_WORDS
+        if (
+          (statehoodEvents.linkedTitles.get(`${year}|${country.id}`) ?? []).some(
+            (title) => words.test(title),
+          )
+        )
+          return true
+        return (statehoodEvents.titlesByYear.get(year) ?? []).some(
+          (title) => title.includes(country.name) && words.test(title),
+        )
+      },
+    )
+  }, [historicalCountries, selectedCountry, countryIds, statehoodEvents])
+
+  const leaderMarkers = useMemo(() => {
     if (!reigns?.length && !heads?.length) return NO_MARKERS
     const personName = (
       person: NonNullable<SovereignReignTimelineItem['person']>,
@@ -80,4 +155,12 @@ export function useReignMarkers(
       ),
     )
   }, [reigns, heads, countryIds])
+
+  return useMemo(() => {
+    if (statehoodMarkers.length === 0) return leaderMarkers
+    if (leaderMarkers.length === 0) return statehoodMarkers
+    return [...leaderMarkers, ...statehoodMarkers].sort(
+      (left, right) => left.startKey - right.startKey,
+    )
+  }, [leaderMarkers, statehoodMarkers])
 }
