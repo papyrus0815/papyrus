@@ -2562,32 +2562,26 @@ export const HeaderActions = styled.div`
   flex-shrink: 0;
 `
 
+/**
+ * 상세 탭 — 밑줄 탭. (테두리 상자 안의 보라 알약이었을 때 바로 아래 개요 바로가기 칩 줄과
+ * 함께 '상자·알약'이 두 겹으로 쌓여 본문보다 내비가 무거웠다)
+ */
 export const TabNav = styled.nav`
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   flex-wrap: nowrap;
-  gap: 6px;
-  padding: 10px;
-  margin-bottom: 24px;
+  gap: 4px;
+  margin-bottom: 20px;
   width: 100%;
   min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  border-radius: 20px;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: none;
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(20, 19, 34, 0.08);
-          box-shadow: none;
-        `}
+  scrollbar-width: none;
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0')};
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `
 
 export const TabBtn = styled.button<{ $active: boolean }>`
@@ -2595,58 +2589,38 @@ export const TabBtn = styled.button<{ $active: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 7px;
+  padding: 12px 14px 11px;
+  margin-bottom: -1px;
   border: none;
-  font-size: 13px;
+  border-bottom: 2px solid ${({ $active }) => ($active ? '#6366f1' : 'transparent')};
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
   font-weight: ${({ $active }) => ($active ? '700' : '600')};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
   cursor: pointer;
   white-space: nowrap;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  transition: color 0.15s ease, border-color 0.15s ease;
 
-  ${({ $active, theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          color: ${$active ? '#ffffff' : 'rgba(255,255,255,0.55)'};
-          background: ${$active
-            ? '#6366f1'
-            : 'transparent'};
-          box-shadow: none;
-          svg {
-            flex-shrink: 0;
-            opacity: ${$active ? 1 : 0.7};
-          }
-          &:hover {
-            ${!$active &&
-            css`
-              color: #a5b4fc;
-              background: rgba(99, 102, 241, 0.12);
-            `}
-          }
-        `
-      : css`
-          color: ${$active ? '#ffffff' : '#64748b'};
-          background: ${$active
-            ? '#6366f1'
-            : 'transparent'};
-          box-shadow: none;
-          svg {
-            flex-shrink: 0;
-            opacity: ${$active ? 1 : 0.7};
-          }
-          &:hover {
-            ${!$active &&
-            css`
-              color: #6366f1;
-              background: rgba(99, 102, 241, 0.08);
-            `}
-          }
-        `}
+  svg {
+    flex-shrink: 0;
+    color: ${({ $active, theme }) =>
+      $active ? (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1') : 'currentColor'};
+  }
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px #6366f1;
+    border-radius: 6px 6px 0 0;
+  }
 
   @media (max-width: 768px) {
-    padding: 9px 14px;
-    font-size: 12px;
+    padding: 10px 11px 9px;
+    font-size: 13px;
     gap: 6px;
   }
 `

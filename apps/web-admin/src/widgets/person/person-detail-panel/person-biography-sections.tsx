@@ -1261,10 +1261,6 @@ const Toc = styled.nav`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 10px 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  background: ${({ theme }) => theme.colors.background.secondary};
 `
 
 const TocChip = styled.button`
@@ -1293,13 +1289,17 @@ const TocChip = styled.button`
   }
 `
 
+/**
+ * 전기 한 절 — 상자 대신 위 구분선 하나로 가른다(읽는 글이지 카드 목록이 아니다).
+ * 드래그로 순서를 바꿀 때만 테두리가 드러나 놓일 자리를 보여준다.
+ */
 const SectionItem = styled.div<{ $dragging?: boolean; $dropTarget?: boolean }>`
-  border: 1px solid
-    ${({ theme, $dropTarget }) =>
-      $dropTarget ? '#4f46e5' : theme.colors.border.default};
-  border-radius: 12px;
-  padding: 14px 16px;
-  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ $dropTarget }) => ($dropTarget ? '#4f46e5' : 'transparent')};
+  border-top-color: ${({ theme, $dropTarget }) =>
+    $dropTarget ? '#4f46e5' : theme.colors.border.light};
+  border-radius: ${({ $dropTarget }) => ($dropTarget ? '12px' : '0')};
+  padding: 20px 0 8px;
+  background: transparent;
   /* 고정 헤더 아래로 가리지 않도록 목차 점프 시 여백 확보. */
   scroll-margin-top: calc(var(--header-height, 64px) + 16px);
   opacity: ${({ $dragging }) => ($dragging ? 0.5 : 1)};
@@ -1359,7 +1359,7 @@ const SectionTypeBadge = styled.span`
 const SectionTitle = styled.h4`
   flex: 1 1 auto;
   margin: 0;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -1409,9 +1409,14 @@ const IconBtn = styled.button<{ $danger?: boolean }>`
   }
 `
 
+/** 본문 — 읽는 글의 조판: 15px·1.85, 한 줄을 ~46자(한글)로 묶어 눈이 줄 끝에서 길을 잃지 않게 */
 const SectionBody = styled.div`
-  font-size: 14px;
-  line-height: 1.7;
+  max-width: 46em;
+  font-size: 15px;
+  line-height: 1.85;
+  /* 한국어 낱말이 줄 끝에서 쪼개지지 않게('거래/로') — 긴 영문·URL은 overflow-wrap이 받는다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -1524,9 +1529,14 @@ const StickyEditBtn = styled(IconBtn)`
   top: calc(var(--header-height, 64px) + 16px);
   flex: 0 0 auto;
   align-self: flex-start;
-  /* 본문 위에 떠 있을 때 글자가 비치지 않도록 불투명 배경·테두리. */
+  /* 평소엔 옅게 — 절마다 테두리 버튼이 서 있으면 글보다 도구가 먼저 보인다 */
   background: ${({ theme }) => theme.colors.background.primary};
-  border-color: ${({ theme }) => theme.colors.border.default};
+  border-color: transparent;
+  opacity: 0.55;
+  &:hover:not(:disabled),
+  &:focus-visible {
+    opacity: 1;
+  }
   &:hover:not(:disabled) {
     border-color: #4f46e5;
     color: #4f46e5;
@@ -1592,9 +1602,11 @@ const PlainText = styled.div`
   /* HTML 전기(RichTextReadView, 15px/1.7)와 활자 크기를 통일해 저장 형식에 따라
      같은 지면 본문이 갈라지지 않게 한다(RD6). */
   font-size: 15px;
-  line-height: 1.7;
+  line-height: 1.85;
   white-space: pre-wrap;
-  word-break: break-word;
+  /* break-word는 한국어 낱말을 줄 끝에서 쪼갰다('거래/로') — 낱말 단위로, 넘치는 긴 토큰만 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 `
 
 const EmptyHint = styled.div`

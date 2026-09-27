@@ -39,7 +39,10 @@ const Root = styled.div`
      소스 포맷 개행(\\n)까지 공백으로 렌더되어 단락 간 빈 줄이 누적됨.
      평문 입력은 사용처에서 별도 pre-wrap 컨테이너로 분기 (예: CardDesc). */
   white-space: normal;
-  word-break: break-word;
+  /* 한국어 낱말이 줄 끝에서 쪼개지지 않게(break-word는 '거래/로'처럼 끊었다) —
+     URL·긴 영문 같은 넘치는 토큰만 overflow-wrap이 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 
   p {
     margin: 0 0 1em;
