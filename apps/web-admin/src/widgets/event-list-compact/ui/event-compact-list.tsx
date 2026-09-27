@@ -83,6 +83,8 @@ interface EventCompactListProps {
   reignMarkers?: ReignMarker[]
   /** 즉위 표지의 군주 이름 클릭 — 페이지가 공용 인물 모달을 띄운다 */
   onOpenPerson?: (personId: string) => void
+  /** 건국·멸망 표지의 나라 이름 클릭 — 페이지가 공용 국가 모달을 띄운다 */
+  onOpenHistoricalCountry?: (country: { id: string; name: string }) => void
   /** 표지의 기간을 누르면 — 목록을 그 재위·재임 기간의 사건으로 좁힌다 */
   onFilterPeriod?: (marker: ReignMarker) => void
   events: HistoricalEvent[]
@@ -204,6 +206,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   yearBuckets,
   reignMarkers,
   onOpenPerson,
+  onOpenHistoricalCountry,
   onFilterPeriod,
   events,
   expandedEventIds,
@@ -552,8 +555,23 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               {marker.roleTitle && (
                 <List.ReignMarkerRole>{marker.roleTitle}</List.ReignMarkerRole>
               )}
-              {/* 나라가 주어인 표지는 인물 모달로 가지 않는다 — 이름만 */}
-              {onOpenPerson && !statehood ? (
+              {/* 나라가 주어인 표지 — 이름을 누르면 인물 모달 대신 국가 모달 */}
+              {statehood && marker.statehood && onOpenHistoricalCountry ? (
+                <List.ReignMarkerName
+                  as="button"
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() =>
+                    onOpenHistoricalCountry({
+                      id: marker.statehood!.historicalCountryId,
+                      name: marker.name,
+                    })
+                  }
+                  aria-label={`${marker.name} 국가 정보 보기 — ${verb}, ${periodNoun} ${span}`}
+                >
+                  {marker.name}
+                </List.ReignMarkerName>
+              ) : onOpenPerson && !statehood ? (
                 <List.ReignMarkerName
                   as="button"
                   type="button"

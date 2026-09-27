@@ -53,6 +53,10 @@ import {
 } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 import { pathKeys } from '@/shared/router'
+import {
+  CountryInlineModal,
+  type CountryInlineModalTarget,
+} from '@/widgets/country/country-inline-modal/country-inline-modal'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
@@ -266,6 +270,14 @@ export const EventsCatalogPage: React.FC = () => {
    */
   const [modalPersonId, setModalPersonId] = useState<string | null>(null)
   const closePersonModal = useCallback(() => setModalPersonId(null), [])
+
+  /**
+   * 건국·멸망 표지의 나라 이름을 눌렀을 때 띄우는 국가 모달 — 사건 상세 관련국과 같은
+   * 공용 `CountryInlineModal`(역사 국가 조회). 모달 안의 전신·후신 칩으로 옮겨 다닐 수 있다.
+   */
+  const [modalCountry, setModalCountry] =
+    useState<CountryInlineModalTarget | null>(null)
+  const closeCountryModal = useCallback(() => setModalCountry(null), [])
 
   // ===== 목록 밀도 =====
   // 세로 픽셀의 소유권을 사용자에게 넘긴다. 행 높이의 60%가 데이터가 아니라 여백과
@@ -628,7 +640,9 @@ export const EventsCatalogPage: React.FC = () => {
     openSummary,
     anyOverlayOpen,
     closeTopOverlay,
-  } = useCatalogModals(createModalOpen || modalPersonId !== null)
+  } = useCatalogModals(
+    createModalOpen || modalPersonId !== null || modalCountry !== null,
+  )
 
   // ===== 사건 선택 시 최근 본 목록에 추가 =====
   useEffect(() => {
@@ -1729,6 +1743,9 @@ export const EventsCatalogPage: React.FC = () => {
       yearBuckets={yearBuckets}
       reignMarkers={reignMarkers}
       onOpenPerson={setModalPersonId}
+      onOpenHistoricalCountry={(country) =>
+        setModalCountry({ id: country.id, name: country.name, kind: 'historical' })
+      }
       onFilterPeriod={(marker) => {
         // 건국·멸망 표지 — 나라의 존속 기간으로 거른다
         if (marker.statehood) {
@@ -2146,6 +2163,12 @@ export const EventsCatalogPage: React.FC = () => {
           closePersonModal()
           navigate(pathKeys.personsTimelineDetail(personId))
         }}
+      />
+
+      <CountryInlineModal
+        target={modalCountry}
+        onClose={closeCountryModal}
+        onSwitch={setModalCountry}
       />
 
       <EventRegisterModal
