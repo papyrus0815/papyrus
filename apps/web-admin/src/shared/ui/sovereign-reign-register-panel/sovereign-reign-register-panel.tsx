@@ -5,7 +5,7 @@
  */
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiChevronDown, FiLink, FiX } from 'react-icons/fi'
+import { FiChevronDown, FiLink, FiUser, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { useCountries } from '@/features/country/api'
@@ -57,8 +57,21 @@ import {
   FieldHint,
   Input,
   Textarea,
+  Required,
+  LabeledRowsWrap,
+  OptionalTag,
+  SubFieldPair,
+  SubField,
+  SubFieldLabel,
+  ChoiceChips,
+  ChoiceChip,
+  PersonChip,
+  PersonChipThumb,
+  FooterMissingHint,
 } from '@/shared/ui/register-form-layout'
-import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
+import { getPersonDetailById } from '@/shared/api/persons-detail'
+import { getUploadImageUrl } from '@/shared/api/upload'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   APPOINTMENT_METHOD_OPTIONS,
   TENURE_END_REASON_OPTIONS,
@@ -68,34 +81,8 @@ import { notify } from '@/shared/ui/toast'
 
 const FORM_ID = 'sovereign-reign-register-form'
 
-const ModalFormWrap = styled.div`
-  width: 100%;
-  min-width: 0;
-
-  ${FieldRow} {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 0;
-    align-items: stretch;
-    border: none;
-    border-bottom: none;
-  }
-  ${FieldRow}:first-child {
-    padding-top: 0;
-  }
-  ${FieldLabel} {
-    padding-top: 0;
-    font-size: 13px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    letter-spacing: -0.01em;
-  }
-  ${FieldControl} {
-    max-width: none;
-    width: 100%;
-  }
-`
+/** 폼 행 — 재임 등록 모달과 같은 공용 문법(사건 등록 모달 계열): [라벨 | 입력] + 가는 선 */
+const ModalFormWrap = LabeledRowsWrap
 
 const FooterDeleteBtn = styled.button`
   margin-right: auto;
@@ -127,8 +114,9 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   gap: 12px;
   width: 100%;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
-  padding: 13px 16px;
+  border-radius: 10px;
+  /* 다른 입력칸과 같은 40px 높이(재임 모달과 통일) */
+  padding: 9px 12px;
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255,255,255,0.04)'
@@ -175,8 +163,12 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
 `
 
 
-const RequiredMark = styled.span`
-  color: ${({ theme }) => theme.colors.error};
+/** 즉위 행 안 사건 연결 줄 — 버튼(또는 연결된 사건 칩) 옆에 짧은 설명 */
+const AccessionEventLine = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 `
 
 /** 재위 시작/종료 날짜 파츠 입력 2열 — 좁은 폭에선 세로로 랩 */
@@ -302,6 +294,13 @@ export function SovereignReignRegisterPanel({
   initialHistoricalCountryId,
 }: SovereignReignRegisterPanelProps) {
   const queryClient = useQueryClient()
+  // 누구의 재위인지 — 재임 모달과 같은 캐시 키라 상세 지면에서 열면 추가 요청이 없다
+  const { data: personDetail } = useQuery({
+    queryKey: ['person-detail', personId],
+    queryFn: () => getPersonDetailById(personId),
+    enabled: open && !!personId,
+  })
+  const [personImageError, setPersonImageError] = useState(false)
   const isEdit = !!reignId
 
   const [countryId, setCountryId] = useState('')
@@ -655,23 +654,45 @@ export function SovereignReignRegisterPanel({
         isOpen={open}
         onClose={() => void requestClose()}
         title={isEdit ? '군주 재위 수정' : '군주 재위 등록'}
-        maxWidth="min(560px, 94vw)"
+        maxWidth="min(900px, 94vw)"
         minHeight="auto"
       >
         <PersonRegisterModalFormScroll>
           <ModalFormWrap>
             <form id={FORM_ID} onSubmit={handleSubmit}>
               <FormRows>
+                {personDetail && (
+                  <FieldRow>
+                    <FieldLabel as="span">인물</FieldLabel>
+                    <FieldControl>
+                      <PersonChip>
+                        <PersonChipThumb aria-hidden>
+                          {personDetail.profileImageUrl && !personImageError ? (
+                            <img
+                              src={getUploadImageUrl(personDetail.profileImageUrl) || personDetail.profileImageUrl}
+                              alt=""
+                              onError={() => setPersonImageError(true)}
+                            />
+                          ) : (
+                            <FiUser size={16} />
+                          )}
+                        </PersonChipThumb>
+                        {getPersonDisplayName(personDetail)}
+                      </PersonChip>
+                    </FieldControl>
+                  </FieldRow>
+                )}
+
                 {/* 국가 */}
                 <FieldRow>
-                  <FieldLabel>국가</FieldLabel>
+                  <FieldLabel>국가<OptionalTag>(선택)</OptionalTag></FieldLabel>
                   <FieldControl>
                     <SelectTriggerButton
                       type="button"
                       $hasValue={!!countryId}
                       onClick={() => setCountryModalOpen(true)}
                     >
-                      <span>{selectedCountry?.name ?? '현대 국가 선택 (선택)'}</span>
+                      <span>{selectedCountry?.name ?? '현대 국가 선택'}</span>
                       <FiChevronDown size={16} />
                     </SelectTriggerButton>
                   </FieldControl>
@@ -679,7 +700,7 @@ export function SovereignReignRegisterPanel({
 
                 {/* 역사적 국가 */}
                 <FieldRow>
-                  <FieldLabel>역사적 국가</FieldLabel>
+                  <FieldLabel>역사적 국가<OptionalTag>(선택)</OptionalTag></FieldLabel>
                   <FieldControl>
                     <SelectTriggerButton
                       type="button"
@@ -689,7 +710,7 @@ export function SovereignReignRegisterPanel({
                       <span>
                         {historicalCountryId
                           ? (selectedHistorical?.name ?? '역사적 국가')
-                          : '역사적 국가 선택 (선택)'}
+                          : '역사적 국가 선택'}
                       </span>
                       <FiChevronDown size={16} />
                     </SelectTriggerButton>
@@ -701,13 +722,13 @@ export function SovereignReignRegisterPanel({
 
                 {/* 왕명 */}
                 <FieldRow>
-                  <FieldLabel>왕명 (군주명)</FieldLabel>
+                  <FieldLabel>왕명<OptionalTag>(선택)</OptionalTag></FieldLabel>
                   <FieldControl>
                     <Input
                       type="text"
                       value={regnalName}
                       onChange={(e) => setRegnalName(e.target.value)}
-                      placeholder="예: 빅토리아, 루이 14세 (선택)"
+                      placeholder="예: 빅토리아, 루이 14세"
                     />
                     <FieldHint>인물 리스트·가계도에 이 이름으로 표시됩니다.</FieldHint>
                   </FieldControl>
@@ -715,14 +736,14 @@ export function SovereignReignRegisterPanel({
 
                 {/* 직위 */}
                 <FieldRow>
-                  <FieldLabel>직위 (예: 국왕, 황제)</FieldLabel>
+                  <FieldLabel>직위<OptionalTag>(선택)</OptionalTag></FieldLabel>
                   <FieldControl>
                     <SelectTriggerButton
                       type="button"
                       $hasValue={!!positionDefinitionId}
                       onClick={() => setPositionModalOpen(true)}
                     >
-                      <span>{selectedDef?.title ?? '직위 선택 (선택)'}</span>
+                      <span>{selectedDef?.title ?? '직위 선택 — 국왕·황제 등'}</span>
                       <FiChevronDown size={16} />
                     </SelectTriggerButton>
                   </FieldControl>
@@ -731,7 +752,7 @@ export function SovereignReignRegisterPanel({
                 {/* 재위 기간 */}
                 <FieldRow>
                   <FieldLabel>
-                    재위 기간 <RequiredMark>*</RequiredMark>
+                    재위 기간 <Required aria-label="필수" />
                   </FieldLabel>
                   <FieldControl>
                     <ReignDateRow>
@@ -793,47 +814,55 @@ export function SovereignReignRegisterPanel({
                   </FieldControl>
                 </FieldRow>
 
-                {/* 대수 */}
+                {/* 즉위 순서·기수 — 한 행 안 소제목 둘(재임 모달 대수·기수와 같은 문법) */}
                 <FieldRow>
-                  <FieldLabel>즉위 순서 (n대)</FieldLabel>
+                  <FieldLabel as="span">
+                    즉위 순서·기수<OptionalTag>(선택)</OptionalTag>
+                  </FieldLabel>
                   <FieldControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={regnalNumber}
-                      onChange={(e) => setRegnalNumber(e.target.value)}
-                      placeholder="예: 1 (해당 국가의 1대 군주)"
-                    />
+                    <SubFieldPair>
+                      <SubField>
+                        <SubFieldLabel htmlFor="sovereign-regnal-number">즉위 순서 (제N대)</SubFieldLabel>
+                        <Input
+                          id="sovereign-regnal-number"
+                          type="number"
+                          min={1}
+                          value={regnalNumber}
+                          onChange={(e) => setRegnalNumber(e.target.value)}
+                          placeholder="예: 해당 국가의 1대 군주 → 1"
+                        />
+                      </SubField>
+                      <SubField>
+                        <SubFieldLabel htmlFor="sovereign-subterm">기수</SubFieldLabel>
+                        <Input
+                          id="sovereign-subterm"
+                          type="number"
+                          min={1}
+                          value={subTermNumber}
+                          onChange={(e) => setSubTermNumber(e.target.value)}
+                          placeholder="같은 대에서 재위가 나뉠 때(복위)"
+                        />
+                      </SubField>
+                    </SubFieldPair>
                     <FieldHint>
-                      위에서 고른 국가/정체 기준의 통산 순번 — 한 대상에 같은 대수의 군주는 단 한 명입니다 (예: 표트르 대제 = 러시아 제국 1대). 루이 14세·이반 6세식 이름별 번호는 재위명에 적으세요(숫자 축 아님).
+                      위에서 고른 국가/정체 기준의 통산 순번 — 한 대상에 같은 대수의 군주는 단 한 명입니다 (예: 표트르 대제 = 러시아 제국 1대). 루이 14세·이반 6세식 이름별 번호는 왕명에 적으세요(숫자 축 아님).
                     </FieldHint>
-                  </FieldControl>
-                </FieldRow>
-
-                {/* 기수 */}
-                <FieldRow>
-                  <FieldLabel>기수 (선택)</FieldLabel>
-                  <FieldControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={subTermNumber}
-                      onChange={(e) => setSubTermNumber(e.target.value)}
-                      placeholder="같은 대 안에서 재위가 나뉠 때 (예: 복위)"
-                    />
                   </FieldControl>
                 </FieldRow>
 
                 {/* 왕조 서수 (유럽식 "왕조 N대 국왕") */}
                 <FieldRow>
-                  <FieldLabel>왕조 서수 (선택)</FieldLabel>
+                  <FieldLabel htmlFor="sovereign-dynasty-ordinal">
+                    왕조 서수<OptionalTag>(선택)</OptionalTag>
+                  </FieldLabel>
                   <FieldControl>
                     <Input
+                      id="sovereign-dynasty-ordinal"
                       type="number"
                       min={1}
                       value={dynastyOrdinal}
                       onChange={(event) => setDynastyOrdinal(event.target.value)}
-                      placeholder="예: 5 (부르봉 왕조 5대 국왕)"
+                      placeholder="예: 부르봉 왕조 5대 국왕 → 5"
                     />
                     <FieldHint>
                       인물의 소속 왕조 안에서의 계승 순번. 국가 통산 대수·재위번호와 별개입니다.
@@ -841,104 +870,87 @@ export function SovereignReignRegisterPanel({
                   </FieldControl>
                 </FieldRow>
 
-                {/* 즉위 방식 */}
+                {/* 즉위 — 방식 칩 + 서술 + 대관식 사건(서술의 구조화 쌍)을 한 행에 */}
                 <FieldRow>
-                  <FieldLabel>즉위 방식</FieldLabel>
-                  <FieldControl>
-                    <FormSelectNative
-                      value={appointmentMethod}
-                      onChange={(e) => setAppointmentMethod(e.target.value)}
-                    >
-                      <option value="">선택 안 함</option>
-                      {APPOINTMENT_METHOD_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </FormSelectNative>
-                  </FieldControl>
-                </FieldRow>
-
-                {/* 즉위 상세 — 즉위 방식(enum)의 서사 쌍: 승계 경위·대관식 언급·선왕 관계 등 */}
-                <FieldRow>
-                  <FieldLabel htmlFor="sovereign-appointment-detail">
-                    즉위 상세
+                  <FieldLabel as="span">
+                    즉위<OptionalTag>(선택)</OptionalTag>
                   </FieldLabel>
                   <FieldControl>
+                    <ChoiceChips role="group" aria-label="즉위 방식">
+                      {APPOINTMENT_METHOD_OPTIONS.map((option) => (
+                        <ChoiceChip
+                          key={option.value}
+                          type="button"
+                          aria-pressed={appointmentMethod === option.value}
+                          $selected={appointmentMethod === option.value}
+                          onClick={() =>
+                            setAppointmentMethod(appointmentMethod === option.value ? '' : option.value)
+                          }
+                        >
+                          {option.label}
+                        </ChoiceChip>
+                      ))}
+                    </ChoiceChips>
                     <Textarea
                       id="sovereign-appointment-detail"
+                      aria-label="즉위 상세"
                       value={appointmentDetail}
-                      onChange={(event) =>
-                        setAppointmentDetail(event.target.value)
-                      }
-                      placeholder="선택 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관"
+                      onChange={(event) => setAppointmentDetail(event.target.value)}
+                      placeholder="어떻게 즉위했나 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관"
                       rows={2}
                     />
-                  </FieldControl>
-                </FieldRow>
-
-                {/* 즉위·대관식 사건 — 즉위 상세 서사의 구조화 쌍(Event 정본 링크) */}
-                <FieldRow>
-                  <FieldLabel>즉위·대관식 사건</FieldLabel>
-                  <FieldControl>
-                    {linkedAccessionEvent ? (
-                      <EventPickerLinkedChip title={linkedAccessionEvent.title}>
-                        <FiLink size={12} />
-                        <span>{linkedAccessionEvent.title}</span>
-                        <EventPickerLinkClearBtn
+                    <AccessionEventLine>
+                      {linkedAccessionEvent ? (
+                        <EventPickerLinkedChip title={linkedAccessionEvent.title}>
+                          <FiLink size={12} />
+                          <span>{linkedAccessionEvent.title}</span>
+                          <EventPickerLinkClearBtn
+                            type="button"
+                            aria-label="사건 연결 해제"
+                            onClick={() => setLinkedAccessionEvent(null)}
+                          >
+                            <FiX size={13} />
+                          </EventPickerLinkClearBtn>
+                        </EventPickerLinkedChip>
+                      ) : (
+                        <EventPickerLinkBtn
                           type="button"
-                          aria-label="사건 연결 해제"
-                          onClick={() => setLinkedAccessionEvent(null)}
+                          onClick={() => setAccessionEventPickerOpen(true)}
                         >
-                          <FiX size={13} />
-                        </EventPickerLinkClearBtn>
-                      </EventPickerLinkedChip>
-                    ) : (
-                      <EventPickerLinkBtn
-                        type="button"
-                        onClick={() => setAccessionEventPickerOpen(true)}
-                      >
-                        <FiLink size={12} />
-                        사건 연결
-                      </EventPickerLinkBtn>
-                    )}
-                    <FieldHint>
-                      대관식·즉위식을 사건으로 등록했다면 여기서 연결합니다.
-                    </FieldHint>
+                          <FiLink size={12} />
+                          사건 연결
+                        </EventPickerLinkBtn>
+                      )}
+                      <FieldHint>대관식·즉위식을 사건으로 등록했다면 연결합니다.</FieldHint>
+                    </AccessionEventLine>
                   </FieldControl>
                 </FieldRow>
 
-                {/* 퇴위 사유 */}
+                {/* 퇴위 — 사유 칩 + 서술 */}
                 <FieldRow>
-                  <FieldLabel>퇴위 사유</FieldLabel>
-                  <FieldControl>
-                    <FormSelectNative
-                      value={endReason}
-                      onChange={(e) => setEndReason(e.target.value)}
-                    >
-                      <option value="">선택 안 함</option>
-                      {TENURE_END_REASON_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </FormSelectNative>
-                  </FieldControl>
-                </FieldRow>
-
-                {/* 퇴위 사유 상세 — endReason(enum)의 서사 쌍, 즉위 상세의 종료측 대칭 */}
-                <FieldRow>
-                  <FieldLabel htmlFor="sovereign-end-reason-detail">
-                    퇴위 사유 상세
+                  <FieldLabel as="span">
+                    퇴위<OptionalTag>(선택)</OptionalTag>
                   </FieldLabel>
                   <FieldControl>
+                    <ChoiceChips role="group" aria-label="퇴위 사유">
+                      {TENURE_END_REASON_OPTIONS.map((option) => (
+                        <ChoiceChip
+                          key={option.value}
+                          type="button"
+                          aria-pressed={endReason === option.value}
+                          $selected={endReason === option.value}
+                          onClick={() => setEndReason(endReason === option.value ? '' : option.value)}
+                        >
+                          {option.label}
+                        </ChoiceChip>
+                      ))}
+                    </ChoiceChips>
                     <Textarea
                       id="sovereign-end-reason-detail"
+                      aria-label="퇴위 사유 상세"
                       value={endReasonDetail}
-                      onChange={(event) =>
-                        setEndReasonDetail(event.target.value)
-                      }
-                      placeholder="선택 — 예: 명예혁명으로 폐위, 아들 조지 2세에게 양위"
+                      onChange={(event) => setEndReasonDetail(event.target.value)}
+                      placeholder="왜 물러났나 — 예: 명예혁명으로 폐위, 아들 조지 2세에게 양위"
                       rows={2}
                     />
                   </FieldControl>
@@ -946,12 +958,12 @@ export function SovereignReignRegisterPanel({
 
                 {/* 비고 */}
                 <FieldRow>
-                  <FieldLabel>비고</FieldLabel>
+                  <FieldLabel>비고<OptionalTag>(선택)</OptionalTag></FieldLabel>
                   <FieldControl>
                     <Textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="선택 — 재위 관련 특이사항"
+                      placeholder="재위 관련 특이사항"
                       rows={2}
                     />
                   </FieldControl>
@@ -969,6 +981,9 @@ export function SovereignReignRegisterPanel({
             >
               {deleting ? '삭제 중…' : '삭제'}
             </FooterDeleteBtn>
+          )}
+          {!canSubmit && !submitting && (
+            <FooterMissingHint role="status">재위 시작 연도를 채우면 등록할 수 있습니다</FooterMissingHint>
           )}
           <PersonRegisterModalCancelBtn
             type="button"

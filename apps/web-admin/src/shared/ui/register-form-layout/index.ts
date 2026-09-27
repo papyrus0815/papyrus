@@ -28,3 +28,18 @@ export {
   TEXT_SECONDARY,
   TEXT_MUTED,
 } from './register-form-layout.styles'
+export {
+  LABELED_ROW_LABEL_COL,
+  LABELED_ROW_GAP,
+  LabeledRowsWrap,
+  OptionalTag,
+  SubFieldPair,
+  SubField,
+  SubFieldLabel,
+  ChoiceChips,
+  ChoiceChip,
+  PersonChip,
+  PersonChipThumb,
+  FooterMissingHint,
+  objectParticle,
+} from './labeled-rows.styles'

@@ -64,86 +64,30 @@ import {
   Required,
   Input,
   Textarea,
+  LABELED_ROW_GAP,
+  LABELED_ROW_LABEL_COL,
+  LabeledRowsWrap,
+  OptionalTag,
+  SubFieldPair,
+  SubField,
+  SubFieldLabel,
+  ChoiceChips,
+  ChoiceChip,
+  PersonChip,
+  PersonChipThumb,
+  FooterMissingHint,
+  objectParticle,
 } from '@/shared/ui/register-form-layout'
 
-/** 라벨 열 폭 — 사건 등록 모달(200px)보다 조금 좁게: 이 폼의 라벨은 짧다 */
-const LABEL_COL = 168
-
 /**
- * 폼 행 — 사건 등록 모달과 같은 문법: [라벨 | 입력] 두 열, 행 사이 가는 선, 섹션 머리 없음.
- * DateRangeField처럼 공용 FieldRow를 쓰는 하위 컴포넌트도 이 래퍼 안에서 같은 모양이 된다.
+ * 폼 행 — 사건 등록 모달과 같은 문법(공용 LabeledRowsWrap) + 이 패널만의 규칙 하나:
+ * 날짜 행 바로 뒤에 정밀도 줄이 붙으면 그 사이 선을 걷고 선은 정밀도 줄 아래로.
+ * (공용 DateRangeField 행이라 안에 끼워 넣을 수 없어 형제 선택자로 잇는다)
  */
-const SidebarFormWrap = styled.div`
-  width: 100%;
-  min-width: 0;
-
-  ${FieldRow} {
-    display: grid;
-    grid-template-columns: ${LABEL_COL}px minmax(0, 1fr);
-    gap: 24px;
-    align-items: start;
-    padding: 18px 0;
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-
-    @media (max-width: 720px) {
-      grid-template-columns: 1fr;
-      gap: 8px;
-      padding: 14px 0;
-    }
-  }
-  ${FieldLabel} {
-    display: block;
-    padding-top: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: ${({ theme }) => theme.colors.text.primary};
-    letter-spacing: -0.01em;
-
-    @media (max-width: 720px) {
-      padding-top: 0;
-    }
-  }
-  ${FieldControl} {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-width: 640px;
-    width: 100%;
-  }
-  ${FieldControl} ${FieldHint} {
-    margin-top: 0;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-  ${DateFieldsRow} {
-    max-width: none;
-  }
-  /* 첫 행 위 여백은 스크롤 영역이 이미 준다(사건 모달과 같은 처리) · 마지막 행은 선 없음 */
-  ${FieldRow}:first-child {
-    padding-top: 4px;
-  }
-  ${FieldRow}:last-child {
-    border-bottom: none;
-  }
-  /* 날짜 행 바로 뒤에 정밀도 줄이 붙으면 그 사이 선을 걷고 선은 정밀도 줄 아래로 —
-     (공용 DateRangeField 행이라 안에 끼워 넣을 수 없어 형제 선택자로 잇는다) */
+const SidebarFormWrap = styled(LabeledRowsWrap)`
   ${FieldRow}:has(+ .tenure-precision-row) {
     border-bottom: none;
     padding-bottom: 10px;
-  }
-  /* 필수 표시 — 점 대신 사건 모달과 같은 빨간 * (스크린리더 텍스트는 그대로) */
-  ${Required} {
-    width: auto;
-    height: auto;
-    margin-left: 4px;
-    background: none;
-    vertical-align: baseline;
-    overflow: visible;
-    &::after {
-      content: '*';
-      font-size: 14px;
-      color: #ef4444;
-    }
   }
 `
 
@@ -243,7 +187,7 @@ const PrecisionRow = styled.div`
   flex-wrap: wrap;
   gap: 4px 8px;
   /* 날짜 행 바로 아래, 입력 열에 맞춰(공용 DateRangeField 행 밖이라 들여쓰기로 붙인다) */
-  margin: 0 0 0 ${LABEL_COL + 24}px;
+  margin: 0 0 0 ${LABELED_ROW_LABEL_COL + LABELED_ROW_GAP}px;
   padding-bottom: 18px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   @media (max-width: 720px) {
@@ -268,111 +212,6 @@ const PrecisionRow = styled.div`
 const PrecisionHint = styled.span`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-/** 선택(비필수) 라벨 옆 표기 — 사건 등록 모달의 OptionalTag와 같은 모양 */
-const OptionalTag = styled.span`
-  margin-left: 6px;
-  font-size: 12px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-/** 한 행 안의 두 소항목(대수·기수) — 사건 모달의 시작일/종료일 소제목 문법 */
-const SubFieldPair = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  @media (max-width: 560px) {
-    grid-template-columns: 1fr;
-  }
-`
-const SubField = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-`
-const SubFieldLabel = styled.label`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-/** 방식·사유 칩 — 사건 카테고리 칩 문법(10~11개라 드롭다운보다 한눈에). 다시 누르면 해제 */
-const ChoiceChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-const ChoiceChip = styled.button<{ $selected: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ $selected, theme }) => ($selected ? '#6366f1' : theme.colors.border.default)};
-  background: ${({ $selected, theme }) =>
-    $selected
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.22)'
-        : 'rgba(99, 102, 241, 0.1)'
-      : 'transparent'};
-  color: ${({ $selected, theme }) =>
-    $selected ? (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca') : theme.colors.text.secondary};
-  font-size: 13px;
-  font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-
-  &:hover {
-    border-color: ${({ $selected, theme }) => ($selected ? '#6366f1' : theme.colors.text.tertiary)};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px #6366f1;
-  }
-`
-
-/** 등록 버튼 옆 — 아직 비어 있는 필수 항목 */
-const FooterMissingHint = styled.span`
-  margin-right: auto;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-/** 인물 바 — 누구의 재임인지만 한 줄로(사진·이름만 든 큰 카드가 본문 위 ~80px을 먹었다) */
-const PersonInfoBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  padding: 6px 14px 6px 6px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 999px;
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-weight: 500;
-`
-const PersonThumbnail = styled.div`
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  overflow: hidden;
-  background: ${({ theme }) => theme.colors.background.primary};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
 `
 
 const PersonPrimaryLabel = styled.span`
@@ -1145,12 +984,7 @@ export function TenureRegisterPanel({
     !hasPosition && '직책',
     !hasStartDate && (editingIsSovereign ? '즉위일' : '취임일'),
   ].filter(Boolean) as string[]
-  // 마지막 항목 받침에 맞춘 목적격 조사 — '취임일을', '국가를'
-  const missingParticle = (() => {
-    const last = missingRequired[missingRequired.length - 1] ?? ''
-    const code = last.charCodeAt(last.length - 1) - 0xac00
-    return code >= 0 && code <= 11171 && code % 28 !== 0 ? '을' : '를'
-  })()
+  const missingParticle = objectParticle(missingRequired[missingRequired.length - 1] ?? '')
 
   /** 행정부 탭에서 "각료 추가"로 열렸을 때 → 각료 등록 문구 사용 (수반 아님) */
   const isMinisterFlow = !isEdit && initialCabinetId != null
@@ -1198,8 +1032,8 @@ export function TenureRegisterPanel({
                 <FieldRow>
                   <FieldLabel as="span">인물</FieldLabel>
                   <FieldControl>
-                    <PersonInfoBar>
-            <PersonThumbnail aria-hidden>
+                    <PersonChip>
+            <PersonChipThumb aria-hidden>
               {(personDetail as { profileImageUrl?: string | null }).profileImageUrl && !personImageError ? (
                 <img
                   src={
@@ -1212,14 +1046,14 @@ export function TenureRegisterPanel({
               ) : (
                 <FiUser size={20} />
               )}
-            </PersonThumbnail>
+            </PersonChipThumb>
             <span style={{ fontWeight: 500 }}>
               {getPersonDisplayName(personDetail)}
               {personDetail.primaryLabel && (
                 <PersonPrimaryLabel> · {personDetail.primaryLabel}</PersonPrimaryLabel>
               )}
             </span>
-                    </PersonInfoBar>
+                    </PersonChip>
                   </FieldControl>
                 </FieldRow>
               )}
