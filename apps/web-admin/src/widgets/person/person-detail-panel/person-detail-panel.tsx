@@ -1662,46 +1662,13 @@ export function PersonDetailPanel({
 
         {/* 기본정보 + 요약: 생몰·국가·성별·가문·종교·배우자·저작·정부직위·사건·조직 */}
         <KpiStrip $compact={embedInModal}>
-          {person.country && (
-            <KpiItem>
-              <KpiLabel>국가</KpiLabel>
-              <KpiValue>
-                <KpiLink
-                  type="button"
-                  onClick={() => {
-                    if (!person.country?.id) return
-                    playClickSound()
-                    navigate(pathKeys.countryDetail(person.country.id))
-                  }}
-                >
-                  {person.country.name}
-                </KpiLink>
-              </KpiValue>
-            </KpiItem>
-          )}
+          {/* 국가·생존 기간은 머리(국기 칩·'향년 N세' 부제)에 이미 있어 여기서 반복하지 않는다 */}
           {(person.gender === 'MALE' || person.gender === 'FEMALE') && (
             <KpiItem>
               <KpiLabel>성별</KpiLabel>
               <KpiValue>{genderLabel}</KpiValue>
             </KpiItem>
           )}
-          {(() => {
-            if (p.birthYear == null) return null
-            const span = isDeceased
-              ? ageAtDeath != null
-                ? `${ageAtDeath}년`
-                : null
-              : currentAge != null
-                ? `${currentAge}년 (생존 중)`
-                : null
-            if (!span) return null
-            return (
-              <KpiItem>
-                <KpiLabel>생존 기간</KpiLabel>
-                <KpiValue>{span}</KpiValue>
-              </KpiItem>
-            )
-          })()}
           {tenureTotalYears != null && (
             <KpiItem>
               <KpiLabel>재임·재위 총</KpiLabel>
@@ -2055,6 +2022,7 @@ export function PersonDetailPanel({
                                 key={a.value}
                                 $active={current >= a.value}
                                 $tier={a.tier}
+                                style={{ left: `${a.value}%` }}
                                 title={
                                   a.tier
                                     ? `${a.value} 이상 — ${getInfluenceTierLabel(a.tier)}`

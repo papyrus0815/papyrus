@@ -270,16 +270,27 @@ export const TopNavBar = styled.div`
   margin-bottom: 16px;
 `
 
+/**
+ * 인물 머리 — 사진 왼쪽 · 이름·정보 오른쪽 가로 배치.
+ * (가운데 세로 쌓기일 땐 사진·이름·국가·생몰이 한 줄씩 내려가 본문 전에 ~440px을 먹었다)
+ * 좁은 폭(≤640)에서만 다시 가운데 세로로 쌓는다.
+ */
 export const HeaderRow = styled.header`
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+  flex-direction: row;
+  align-items: flex-start;
+  text-align: left;
   gap: 16px;
-  padding: 36px 32px 28px;
+  padding: 28px 28px 24px;
   border-radius: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 24px 18px 20px;
+  }
   background: transparent;
   border: 1px solid
     ${({ theme }) =>
@@ -289,17 +300,22 @@ export const HeaderRow = styled.header`
 
 export const HeaderLeft = styled.div`
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 28px;
   min-width: 0;
   width: 100%;
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
 `
 
 export const AvatarButton = styled.button<{ $loading?: boolean }>`
   position: relative;
-  width: 132px;
-  height: 132px;
+  width: 120px;
+  height: 120px;
   border-radius: 9999px;
   overflow: hidden;
   flex-shrink: 0;
@@ -371,13 +387,21 @@ export const HeaderTitleBlock = styled.div`
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 6px;
+  @media (max-width: 640px) {
+    align-items: center;
+    padding-top: 0;
+  }
 `
 
 export const PageTitleRow = styled.div`
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  @media (max-width: 640px) {
+    justify-content: center;
+  }
   gap: 8px;
   flex-wrap: wrap;
 `
@@ -447,11 +471,11 @@ export const DetailCountryName = styled.span`
 
 export const PageTitle = styled.h1`
   margin: 0;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  line-height: 1.25;
-  text-align: center;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  line-height: 1.2;
+  text-align: inherit;
   word-break: keep-all;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
@@ -524,9 +548,7 @@ export const RegisteredByline = styled.p`
   margin: 8px 0 0;
   font-size: 11px;
   font-weight: 400;
-  letter-spacing: 0.03em;
-  font-style: italic;
-  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -857,8 +879,8 @@ export const KpiStrip = styled.div<{ $compact?: boolean }>`
   flex-wrap: wrap;
   align-items: stretch;
   gap: 0;
-  margin-bottom: 28px;
-  padding: 22px 4px;
+  margin-bottom: 24px;
+  padding: 14px 0;
   border-top: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
@@ -868,15 +890,21 @@ export const KpiStrip = styled.div<{ $compact?: boolean }>`
 `
 
 export const KpiItem = styled.div`
-  flex: 1 1 0;
+  /* 내용 폭만큼 — 항목이 2~3개뿐인 인물에서 칸이 화면 전체로 벌어지지 않게 */
+  flex: 0 1 auto;
   min-width: 120px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  gap: 8px;
-  padding: 4px 18px;
-  text-align: center;
+  gap: 4px;
+  padding: 4px 32px 4px 20px;
+  text-align: left;
+
+  /* 첫 칸은 머리 글줄과 왼쪽 선을 맞춘다 */
+  &:first-child {
+    padding-left: 28px;
+  }
 
   & + & {
     border-left: 1px solid
@@ -913,7 +941,7 @@ export const KpiLabel = styled.span`
 `
 
 export const KpiValue = styled.span`
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.4px;
   line-height: 1.15;
@@ -1526,12 +1554,16 @@ export const InfluenceFill = styled.div<{
     background 0.3s;
 `
 
+/** 값 칸 폭 — 아래 눈금 줄이 이 폭(+간격)만큼 오른쪽을 비워 막대와 같은 길이가 된다 */
+const INFLUENCE_VALUE_COL = 72
+
 export const InfluenceValueGroup = styled.div`
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
-  min-width: 64px;
+  width: ${INFLUENCE_VALUE_COL}px;
+  flex-shrink: 0;
 `
 
 export const InfluenceValue = styled.span<{ $tier: InfluenceTier | null }>`
@@ -1564,20 +1596,36 @@ export const InfluenceTierLabel = styled.span<{ $tier: InfluenceTier }>`
           : '#64748b'};
 `
 
+/**
+ * 기준점 눈금 — 막대와 **같은 좌표**에 둔다(각 기준점을 값 % 위치에 절대 배치).
+ * 예전엔 5칸 균등 격자라 30이 20% 자리, 60이 50% 자리에 찍혀 막대 길이와 어긋났다.
+ */
 export const InfluenceAnchorRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
-  padding: 0 2px;
+  position: relative;
+  height: 30px;
+  margin-right: ${INFLUENCE_VALUE_COL + 12}px;
 `
 
 export const InfluenceAnchor = styled.div<{
   $active: boolean
   $tier: InfluenceTier | null
 }>`
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  /* 양 끝(0·100)은 막대 끝에 붙여 바깥으로 삐져나가지 않게 */
+  &:first-child {
+    transform: none;
+    align-items: flex-start;
+  }
+  &:last-child {
+    transform: translateX(-100%);
+    align-items: flex-end;
+  }
   display: flex;
   flex-direction: column;
   align-items: center;
+  white-space: nowrap;
   gap: 1px;
   font-size: 10.5px;
   font-weight: 500;
@@ -1941,8 +1989,8 @@ export const LifeCard = styled.section<{ $tone: 'birth' | 'death' }>`
         ? 'rgba(34, 197, 94, 0.06)'
         : 'rgba(34, 197, 94, 0.04)'
       : theme.mode === 'dark'
-        ? 'rgba(239, 68, 68, 0.06)'
-        : 'rgba(239, 68, 68, 0.04)'};
+        ? 'rgba(148, 163, 184, 0.07)'
+        : 'rgba(100, 116, 139, 0.05)'};
   border: 1px solid
     ${({ theme, $tone }) =>
       $tone === 'birth'
@@ -1950,8 +1998,8 @@ export const LifeCard = styled.section<{ $tone: 'birth' | 'death' }>`
           ? 'rgba(34, 197, 94, 0.20)'
           : 'rgba(34, 197, 94, 0.14)'
         : theme.mode === 'dark'
-          ? 'rgba(239, 68, 68, 0.20)'
-          : 'rgba(239, 68, 68, 0.14)'};
+          ? 'rgba(148, 163, 184, 0.22)'
+          : 'rgba(100, 116, 139, 0.18)'};
 `
 
 export const LifeCardHeader = styled.header`
@@ -1967,15 +2015,17 @@ export const LifeCardIconWrap = styled.span<{ $tone: 'birth' | 'death' }>`
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  color: ${({ $tone }) => ($tone === 'birth' ? '#16a34a' : '#dc2626')};
+  /* 사망은 경고가 아니다 — 빨강 대신 중립 슬레이트 */
+  color: ${({ $tone, theme }) =>
+    $tone === 'birth' ? '#16a34a' : theme.mode === 'dark' ? '#cbd5e1' : '#475569'};
   background: ${({ $tone, theme }) =>
     $tone === 'birth'
       ? theme.mode === 'dark'
         ? 'rgba(34, 197, 94, 0.18)'
         : 'rgba(34, 197, 94, 0.12)'
       : theme.mode === 'dark'
-        ? 'rgba(239, 68, 68, 0.18)'
-        : 'rgba(239, 68, 68, 0.12)'};
+        ? 'rgba(148, 163, 184, 0.18)'
+        : 'rgba(100, 116, 139, 0.12)'};
 `
 
 export const LifeCardTitle = styled.h3`

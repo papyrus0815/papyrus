@@ -2,7 +2,7 @@
  * 출생 / 사망 카드 — 개요 탭. 좌우 분리하여 장소·일자·사망정보를 묶어 보여준다.
  * (기존 person-detail-panel.tsx 인라인 IIFE에서 추출 — 순수 표시 컴포넌트)
  */
-import { FiAlertTriangle, FiCalendar } from 'react-icons/fi'
+import { FiCalendar, FiSunset } from 'react-icons/fi'
 
 import { formatFloruit } from '@/shared/lib/lifespan-text'
 
@@ -137,7 +137,7 @@ export function BirthDeathCards({
         <LifeCard $tone="death" aria-label="사망 정보">
           <LifeCardHeader>
             <LifeCardIconWrap $tone="death">
-              <FiAlertTriangle size={14} strokeWidth={2.2} />
+              <FiSunset size={14} strokeWidth={2.2} />
             </LifeCardIconWrap>
             <LifeCardTitle>사망</LifeCardTitle>
             {ageAtDeath != null && <LifeCardAge>향년 {ageAtDeath}세</LifeCardAge>}
