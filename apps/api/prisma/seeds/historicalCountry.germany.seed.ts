@@ -20,6 +20,11 @@ interface HistoricalCountryEntry {
   latitude?: number
   longitude?: number
   linkToGermany: boolean
+  /**
+   * DE 외에 함께 링크할 현대 국가 ISO 코드 — 정체성 핵심부가 여러 현대 국가로 나뉜 행만.
+   * 미등록 국가(예: CH)는 경고 후 건너뛰고, 등록 뒤 이 시드를 다시 돌리면 링크된다(오스트리아 시드 linkToIsoCodes 전례).
+   */
+  extraLinkIsoCodes?: string[]
 }
 
 const ENTRIES: HistoricalCountryEntry[] = [
@@ -45,6 +50,32 @@ const ENTRIES: HistoricalCountryEntry[] = [
     entityKind: HistoricalEntityKind.STATE,
     latitude: 49.0, longitude: 7.0,
     linkToGermany: true,
+  },
+  {
+    name: '알레만니아 공국',
+    enName: 'Duchy of Alamannia',
+    nameOrigin:
+      '게르만 부족 연합 알레만니(Alamanni)의 땅이라는 뜻이다. 부족명은 "모든 사람들(all men)"을 뜻하는 게르만어로 풀이되며(6세기 아가티아스가 전한 해석), ' +
+      '프랑스어 Allemagne·스페인어 Alemania처럼 여러 언어에서 독일을 가리키는 말의 어원이 되었다. ' +
+      '한국어로는 알라만니아·알레마니아로도 적으며, "알레마니 공국"이라는 제보 표기로 등록 요청되었다.',
+    description:
+      '게르만 부족 연합 알레만니족이 3세기 로마의 리메스를 넘어 라인강 상류·보덴호 일대(옛 아그리 데쿠마테스)에 정착한 뒤 형성된 부족 공국. ' +
+      '496년(또는 506년) 클로비스 1세에게 패해 북부가 프랑크에 복속되었고, 동고트 왕국의 보호를 받던 남부도 536~537년 비티게스가 프랑크에 넘기면서 ' +
+      '프랑크 왕국의 종주권 아래 공작(dux)이 다스리는 종속 공국이 되었다. 보덴호 서안의 보드만 궁정과 600년경 세워진 콘스탄츠 주교좌가 중심이었고, ' +
+      '8세기 초 란트프리트 공 시기에는 부족법 "알레만 법전(Lex Alamannorum)"이 편찬되었다. ' +
+      '카롤링거 궁재들의 거듭된 원정 끝에 746년 카를만이 칸슈타트에서 알레만 귀족을 대거 처형한 "칸슈타트 피의 법정"으로 공작위가 폐지되고 프랑크 백작령으로 재편되며 소멸했다. ' +
+      '영역은 오늘날 독일 남서부(바덴뷔르템베르크·바이에른 슈바벤)와 스위스 북·중부에 걸쳤으며(알자스는 7세기 중엽 별도 공국으로 분리), ' +
+      '10세기 초 같은 땅에서 슈바벤 공국으로 부활했다.',
+    startEra: 'AD', startYear: 536,
+    endEra: 'AD', endYear: 746,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 47.8, longitude: 9.02,
+    linkToGermany: true,
+    // 스위스 북·중부(취리히·장크트갈렌 일대)는 알레만 정주 핵심부 — 규범 A(정체성 핵심부 분할) 복수 링크.
+    // CH는 현대 국가 미등록이라 지금은 건너뛰고, 등록 후 이 시드를 다시 돌리면 링크된다.
+    // 알자스(FR)·포어아를베르크(AT)는 각각 별도 공국·라이티아 쪽 주변부라 링크하지 않는다.
+    extraLinkIsoCodes: ['CH'],
   },
   {
     name: '동프랑크 왕국',
@@ -542,6 +573,20 @@ export async function seedGermanyHistoricalCountries(
     console.warn('  ⚠️  현대 독일(DE) 국가를 찾을 수 없습니다.')
   }
 
+  // DE 외 추가 링크 대상(extraLinkIsoCodes) — ISO → 현대 국가 id. 미등록은 경고 후 건너뛴다.
+  const extraIsoToModernId = new Map<string, string>()
+  const extraIsoCodes = [
+    ...new Set(ENTRIES.flatMap((entry) => entry.extraLinkIsoCodes ?? [])),
+  ]
+  for (const isoCode of extraIsoCodes) {
+    const country = await prisma.country.findFirst({
+      where: { isoCode },
+      select: { id: true },
+    })
+    if (country) extraIsoToModernId.set(isoCode, country.id)
+    else console.warn(`  ⚠️  현대 국가를 찾을 수 없음(미등록 — 등록 후 재실행): ${isoCode}`)
+  }
+
   for (const entry of ENTRIES) {
     const existing = await prisma.historicalCountry.findFirst({
       where: { name: entry.name },
@@ -582,6 +627,19 @@ export async function seedGermanyHistoricalCountries(
       if (!linkExists) {
         await prisma.historicalCountryModernCountry.create({
           data: { historicalCountryId: id, modernCountryId: modernGermany.id },
+        })
+      }
+    }
+
+    for (const isoCode of entry.extraLinkIsoCodes ?? []) {
+      const modernCountryId = extraIsoToModernId.get(isoCode)
+      if (!modernCountryId) continue
+      const linkExists = await prisma.historicalCountryModernCountry.findFirst({
+        where: { historicalCountryId: id, modernCountryId },
+      })
+      if (!linkExists) {
+        await prisma.historicalCountryModernCountry.create({
+          data: { historicalCountryId: id, modernCountryId },
         })
       }
     }

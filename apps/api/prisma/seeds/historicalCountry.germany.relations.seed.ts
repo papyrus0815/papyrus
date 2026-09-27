@@ -16,6 +16,10 @@ const TRANSITIONS: {
 }[] = [
   // 게르만 → 프랑크
   { predecessor: '게르마니아', successor: '프랑크 왕국', eventType: TransitionEventType.FOUNDED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 알레만니아 소멸 (746: 칸슈타트 피의 법정 — 공작위 폐지, 프랑크 백작령 직할)
+  { predecessor: '알레만니아 공국', successor: '프랑크 왕국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 알레만니아 → 슈바벤 공국 (10세기 초 같은 땅에서 부족공국 부활 — 746~915 프랑크·동프랑크 직할기는 단순화, 카란타니아→케른텐 전례)
+  { predecessor: '알레만니아 공국', successor: '슈바벤 공국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 프랑크 분열
   { predecessor: '프랑크 왕국', successor: '동프랑크 왕국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 동프랑크 → 신성로마제국 / 독일 왕국
@@ -96,6 +100,8 @@ const MEMBERSHIPS: {
   { parent: '신성로마제국', member: '작센 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '슈바벤 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '프랑켄 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  // 알레만니아 종속 (536/537~746 프랑크 종주권 아래 공작 통치)
+  { parent: '프랑크 왕국', member: '알레만니아 공국', role: HistoricalMembershipRole.VASSAL_STATE },
   // 부족공국 시기(843~962)는 동프랑크 왕국 소속
   { parent: '동프랑크 왕국', member: '작센 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '동프랑크 왕국', member: '슈바벤 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
