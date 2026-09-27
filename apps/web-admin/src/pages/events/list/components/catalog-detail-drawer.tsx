@@ -8,7 +8,7 @@
  * 모바일 drawer는 dialog로 동작 — focus trap + aria-modal + 닫기 시 트리거 복귀.
  * desktop column 모드에서는 일반 inline panel (a11y 처리 불필요).
  */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import * as PageStyles from '../../styles/list-page.styles'
 import { BREAKPOINTS } from '../../styles/theme'
@@ -22,6 +22,8 @@ interface Props {
   onClose: () => void
   /** 모바일 drawer header에 표시할 사건 제목 (없으면 비워둠) */
   title?: string | null
+  /** 사건이 바뀌면 내용을 교차 페이드한다 — 보통 선택된 사건 id */
+  contentKey?: string | null
   children: React.ReactNode
 }
 
@@ -29,8 +31,30 @@ export const CatalogDetailDrawer: React.FC<Props> = ({
   open,
   onClose,
   title,
+  contentKey,
   children,
 }) => {
+  /**
+   * 부드럽게 열고 닫기.
+   * ⑴ 마운트 첫 프레임은 **닫힌 모양**으로 그리고 다음 프레임에 연다 — 처음부터 열린 채
+   *    마운트되면 전환(transition)이 시작할 '이전 상태'가 없어 패널이 툭 튀어나왔다
+   *    (모바일 슬라이드인 transform 전환이 한 번도 재생된 적 없던 이유).
+   * ⑵ 닫힐 때는 부모가 잠시 더 마운트해 두고(open=false) 나가는 모양을 재생한다 —
+   *    그동안 보일 내용이 비지 않게 **열려 있던 마지막 내용**을 붙들어 둔다.
+   */
+  const [entered, setEntered] = useState(false)
+  useEffect(() => {
+    if (!open) {
+      setEntered(false)
+      return
+    }
+    const frame = window.requestAnimationFrame(() => setEntered(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [open])
+  const shown = open && entered
+  const lastChildrenRef = useRef(children)
+  if (open) lastChildrenRef.current = children
+
   // SSR 안전: window 접근은 effect 안에서만
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
@@ -57,7 +81,7 @@ export const CatalogDetailDrawer: React.FC<Props> = ({
   return (
     <>
       <PageStyles.DetailDrawerBackdrop
-        $open={open}
+        $open={shown}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -66,7 +90,8 @@ export const CatalogDetailDrawer: React.FC<Props> = ({
        * 라이브 영역이 텍스트를 품은 채 삽입돼 첫 열림이 낭독되지 않는다. */}
       <PageStyles.DetailPanelHost
         ref={trapRef}
-        $open={open}
+        data-detail-panel=""
+        $open={shown}
         /**
          * 모바일 = dialog(트랩·aria-modal), 데스크톱 = region 랜드마크.
          * 데스크톱에서 role을 비워 두면 SR이 이 영역으로 건너뛸 방법이 없다 —
@@ -92,7 +117,10 @@ export const CatalogDetailDrawer: React.FC<Props> = ({
          * 패널 헤더 쪽이 제목을 h2로 들고 있고 이전/다음·공유·수정·삭제까지 함께 제공하므로
          * 그쪽을 정본으로 두고 drawer 자체 헤더를 걷어낸다. 닫기 어포던스는 패널 헤더의 ✕가 잇는다.
          */}
-        {children}
+        {/* 사건을 바꾸면 내용만 교차 페이드 — 패널 틀은 제자리 */}
+        <PageStyles.DetailPanelSwap key={contentKey ?? 'none'}>
+          {open ? children : lastChildrenRef.current}
+        </PageStyles.DetailPanelSwap>
       </PageStyles.DetailPanelHost>
     </>
   )

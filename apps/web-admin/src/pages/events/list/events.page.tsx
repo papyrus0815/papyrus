@@ -853,6 +853,21 @@ export const EventsCatalogPage: React.FC = () => {
   /** 미발견 전용 상태를 실제로 보여줄 것인가 — 선택이 다시 생겼으면 아니다 */
   const showMissingEvent = Boolean(missingEventId) && !selectedEventId
 
+  /**
+   * 상세 패널 마운트 수명 — 닫힘 전환(0.24s)을 재생하도록 **닫힌 뒤 잠깐 더** 마운트한다.
+   * 그동안 CatalogSplit도 두 열을 유지해야 패널이 목록 아래 줄로 떨어지지 않는다.
+   */
+  const drawerOpen = Boolean(selectedEventId || showMissingEvent)
+  const [drawerMounted, setDrawerMounted] = useState(drawerOpen)
+  useEffect(() => {
+    if (drawerOpen) {
+      setDrawerMounted(true)
+      return
+    }
+    const timer = window.setTimeout(() => setDrawerMounted(false), 240)
+    return () => window.clearTimeout(timer)
+  }, [drawerOpen])
+
   // ===== 페이지네이션 핸들러 =====
   // pageSize state 변경만으로 react-query queryKey가 바뀌어 새 페이지로 자동 fetch됨
   const handlePageSizeChange = useCallback((newSize: number) => {
@@ -2064,7 +2079,7 @@ export const EventsCatalogPage: React.FC = () => {
          * 사건 미선택 = 우측 상세 패널 *완전 미렌더* → CatalogSplit이 1-col로 메인 뷰가 풀 폭.
          * 사건 클릭 시에만 drawer 마운트되어 데스크톱 column 표시 / 모바일 슬라이드인.
          */
-        <Layout.CatalogSplit $hasSelection={!!selectedEventId}>
+        <Layout.CatalogSplit $hasSelection={drawerMounted}>
         {/* 목록 — 예전에는 `CatalogMainContent`가 뷰 전환 행을 얹어 감쌌다. 그 행이
             사라지면서 남은 일은 폭·스크롤 컨테이너를 쓰는 것뿐이라 지면이 직접 든다. */}
         <PageStyles.ActiveContent>{activeSlot}</PageStyles.ActiveContent>
@@ -2073,9 +2088,10 @@ export const EventsCatalogPage: React.FC = () => {
         </PageStyles.DrawerAnnouncer>
         {/* 미발견 상태도 패널을 유지한다 — 링크가 왜 아무 것도 안 여는지 설명할 지면이
             사라지면 사용자는 '앱이 멈췄다'로 읽는다(검토 URL-4). */}
-        {(selectedEventId || showMissingEvent) && (
+        {drawerMounted && (
           <CatalogDetailDrawer
-            open
+            open={drawerOpen}
+            contentKey={selectedEventId}
             onClose={clearSelectedEvent}
             title={
               showMissingEvent

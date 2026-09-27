@@ -307,6 +307,20 @@ export const DetailPanelHost = styled.div<{ $open: boolean }>`
   min-height: 0;
   overflow: hidden;
 
+  /* 데스크톱(그리드 두 번째 열) — 오른쪽에서 16px 미끄러지며 나타나고, 닫힐 때 거꾸로.
+     열 폭 자체는 보간하지 않는다(CatalogSplit 주석: 목록 250행이 매 프레임 재조판). */
+  @media (min-width: 1201px) {
+    opacity: ${({ $open }) => ($open ? 1 : 0)};
+    transform: translateX(${({ $open }) => ($open ? '0' : '16px')});
+    transition:
+      opacity 0.2s ease,
+      transform ${MOTION.drawer};
+  }
+  @media (min-width: 1201px) and (prefers-reduced-motion: reduce) {
+    transition: none;
+    transform: none;
+  }
+
   @media (max-width: 1200px) {
     position: fixed;
     top: var(--header-height, 0);
@@ -338,6 +352,29 @@ export const DetailPanelHost = styled.div<{ $open: boolean }>`
 
   @media (max-width: 1200px) and (prefers-reduced-motion: reduce) {
     transition: none;
+  }
+`
+
+/**
+ * 패널 내용 갈아끼우기 — 사건을 바꿀 때 내용만 짧게 페이드인. 스크롤 컨테이너(자식)가
+ * 높이를 받도록 flex 열·min-height 0을 이어 준다.
+ */
+export const DetailPanelSwap = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: detailSwapIn 0.18s ease;
+  }
+  @keyframes detailSwapIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 `
 
