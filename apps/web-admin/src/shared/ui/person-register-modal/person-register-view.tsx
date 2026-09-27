@@ -1201,7 +1201,6 @@ export function PersonRegisterView({
     name: string
     isHistorical: boolean
   }) => {
-    const prev = countryId || historicalCountryId
     // 상호배타: 현대/역사 중 한쪽만 세팅하고 반대 필드는 비운다.
     if (c.isHistorical) {
       setHistoricalCountryId(c.id)
@@ -1214,40 +1213,8 @@ export function PersonRegisterView({
     setShowCountryModal(false)
     clearFieldError('countryId')
     markDirty()
-    // 출생지/사망지는 이전 국가의 도시·행정구역 ID에 묶여 있어 국가가 바뀌면 데이터 정합이 깨짐.
-    // 자동으로 비우고 "되돌리기" 액션을 제공해 실수 회복을 빠르게.
-    if (prev && prev !== c.id && (birthPlace || deathPlace)) {
-      const snapshot = {
-        birthPlace,
-        deathPlace,
-        birthCityId,
-        deathCityId,
-      }
-      setBirthPlace(null)
-      setBirthCityId('')
-      setDeathPlace(null)
-      setDeathCityId('')
-      notify.show(
-        (t) => (
-          <UndoToastBody>
-            <span>출생지·사망지를 비웠습니다</span>
-            <UndoToastButton
-              type="button"
-              onClick={() => {
-                setBirthPlace(snapshot.birthPlace)
-                setBirthCityId(snapshot.birthCityId)
-                setDeathPlace(snapshot.deathPlace)
-                setDeathCityId(snapshot.deathCityId)
-                notify.dismiss(t.id)
-              }}
-            >
-              되돌리기
-            </UndoToastButton>
-          </UndoToastBody>
-        ),
-        { duration: 6000, icon: '🔄' },
-      )
-    }
+    // 출생지·사망지는 국적이 바뀌어도 그대로 둔다 — 장소 제안이 국가 구분 없이 검색되고
+    // DB 장소는 제 나라를 스스로 갖는다(해외 출생 인물). 예전엔 '이전 국가의 ID에 묶였다'며 비웠다.
   }
 
   /**

@@ -128,42 +128,40 @@ const PlaceGrid = styled.div`
   }
 `
 
+/* 라벨 줄 높이를 '출생지' 라벨과 같게 고정 — 복사 버튼이 줄을 키워 사망지 칸이 8px 내려앉았다 */
 const DeathLabelRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 20px;
+  height: 18px;
 `
 
 const PlaceAutocompleteWrap = styled.div`
   width: 100%;
 `
 
+/** '출생지와 동일' — 테 없는 글 버튼(폼의 '+ 추가' 버튼과 같은 언어), 라벨 줄 높이 안에 든다 */
 const InlineActionBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 2px 6px;
+  margin-right: -6px;
   font-size: ${FONT.meta};
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => theme.colors.active};
   background: transparent;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.35)'
-        : 'rgba(99,102,241,0.25)'};
-  border-radius: ${RADIUS.pill};
+  border: none;
+  border-radius: ${RADIUS.control};
   cursor: pointer;
-  transition:
-    color 0.15s,
-    background 0.15s,
-    border-color 0.15s;
+  transition: background 0.15s;
   &:hover:not(:disabled) {
-    color: #fff;
-    background: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.activeLight};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
   &:disabled {
     opacity: 0.4;

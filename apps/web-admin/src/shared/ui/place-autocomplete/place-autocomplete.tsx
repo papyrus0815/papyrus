@@ -1,27 +1,29 @@
 /**
- * PlaceSelect — 출생지/사망지 선택 컴포넌트
+ * PlaceSelect — 출생지/사망지(·주둔지) 입력
  *
- * 두 가지 모드:
- *  1. DB 선택: 국가 → 행정구역 → 도시 계층 선택
- *  2. 직접 입력: 자유 텍스트 (역사 지명 등)
+ * **한 칸 콤보박스**: 지명을 치면 그대로 값이 된다(직접 입력). 입력하는 동안 DB에 등록된
+ * 도시·행정구역이 제안으로 뜨고, 고르면 DB 장소(cityId/adminDivisionId)로 바뀐다.
+ *
+ * 예전 모양(탭 '등록된 지역 선택 | 직접 입력' + 국가→행정구역→도시 셀렉트 사슬 + 결과 뱃지)을
+ * 버린 이유:
+ *  - DB에 도시가 3개뿐이라 기본 탭(DB)의 셀렉트 사슬은 대부분 '등록된 행정구역 없음'으로 끝났다.
+ *  - 직접 입력은 '저장' 버튼을 눌러야 값이 되어, 치고 폼을 제출하면 지명이 조용히 사라졌다.
+ *  - 탭을 바꾸면 값이 지워졌고, 선택 결과가 입력칸 아래 뱃지로 한 번 더 그려졌다.
+ *
+ * 값 계약(PlaceResult)은 그대로 — 호출부(인물 등록·군부대 주둔지) 무변경.
  */
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 
-import {
-  FiChevronDown,
-  FiDatabase,
-  FiEdit3,
-  FiMapPin,
-  FiX,
-} from 'react-icons/fi'
+import { FiMapPin, FiX } from 'react-icons/fi'
 import styled, { keyframes } from 'styled-components'
 
 import {
-  type AdministrativeDivision,
+  type AdministrativeDivisionSearchHit,
   type City,
   cityApi,
 } from '@/shared/api/city'
 import { type Country, countryApi } from '@/shared/api/country'
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,271 +45,92 @@ export interface PlaceResult {
 export interface PlaceSelectProps {
   value?: PlaceResult | null
   onChange: (place: PlaceResult | null) => void
-  /** 외부에서 국가를 미리 고정할 때 (설정 시 국가 선택 드롭다운 숨김) */
+  /** 이 국가의 등록 장소를 제안 맨 앞에 둔다(다른 국가 장소도 검색된다) */
   countryId?: string
   disabled?: boolean
+  /** @deprecated 강조색은 테마 토큰을 따른다 — 호환용으로만 받는다 */
   accentColor?: string
+  placeholder?: string
 }
 
-type TabMode = 'db' | 'manual'
+/** 제안 한 줄 — DB 도시 또는 행정구역 */
+interface Suggestion {
+  key: string
+  place: PlaceResult
+  /** 보조 줄(상위 행정구역 · 국가) */
+  context: string
+  kind: '도시' | string
+  inScope: boolean
+}
 
-// ---------------------------------------------------------------------------
-// Styled Components
-// ---------------------------------------------------------------------------
+const SEARCH_DEBOUNCE_MS = 200
+const MAX_SUGGESTIONS = 8
 
-const spin = keyframes`from{transform:rotate(0deg)}to{transform:rotate(360deg)}`
-
-const Wrap = styled.div`
-  width: 100%;
-`
-
-const TabBar = styled.div`
-  display: flex;
-  margin-bottom: 8px;
-  border: 1.5px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 10px;
-  overflow: hidden;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f9fafb'};
-`
-
-const Tab = styled.button<{ $active: boolean; $accent: string }>`
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border: none;
-  background: ${(p) =>
-    p.$active
-      ? p.theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.12)'
-        : '#fff'
-      : 'transparent'};
-  color: ${(p) =>
-    p.$active
-      ? p.theme.mode === 'dark'
-        ? '#ffffff'
-        : p.$accent
-      : p.theme.colors.text.secondary};
-  font-size: 12.5px;
-  font-weight: ${(p) => (p.$active ? 600 : 400)};
-  cursor: pointer;
-  transition: all 0.15s;
-  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  box-shadow: ${(p) => (p.$active ? '0 1px 3px rgba(0,0,0,0.06)' : 'none')};
-  &:last-child {
-    border-right: none;
+// 국가명 조회용 — 제안의 '· 국가' 표기에만 쓴다. 폼마다 한 번만 받는다.
+let countriesPromise: Promise<Country[]> | null = null
+function loadCountries(): Promise<Country[]> {
+  if (!countriesPromise) {
+    countriesPromise = countryApi
+      .getAll()
+      .then((list) => list ?? [])
+      .catch(() => {
+        countriesPromise = null
+        return []
+      })
   }
-  &:hover:not(:disabled) {
-    color: ${(p) => (p.theme.mode === 'dark' ? '#ffffff' : p.$accent)};
-    background: ${(p) =>
-      p.theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#fff'};
+  return countriesPromise
+}
+
+function toCitySuggestion(
+  city: City,
+  countryNameById: Map<string, string>,
+  scopeCountryId?: string,
+): Suggestion {
+  const countryName = city.countryId
+    ? countryNameById.get(city.countryId)
+    : undefined
+  const region = city.administrativeDivisionName ?? undefined
+  return {
+    key: `city:${city.id}`,
+    place: {
+      cityId: city.id,
+      adminDivisionId: city.administrativeDivisionId ?? undefined,
+      displayName: [city.name, region, countryName].filter(Boolean).join(', '),
+      shortName: city.name,
+      region,
+      countryName,
+    },
+    context: [region, countryName].filter(Boolean).join(' · '),
+    kind: '도시',
+    inScope: !!scopeCountryId && city.countryId === scopeCountryId,
   }
-`
+}
 
-const SelectGrid = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const FieldLabel = styled.div`
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #6b7280;
-  margin-bottom: 4px;
-`
-
-const SelectWrap = styled.div`
-  position: relative;
-`
-
-const StyledSelect = styled.select<{ $hasValue: boolean; $accent: string }>`
-  width: 100%;
-  padding: 9px 36px 9px 13px;
-  border: 1.5px solid ${(p) => (p.$hasValue ? p.$accent : p.theme.colors.border.light)};
-  border-radius: 10px;
-  font-size: 14px;
-  color: ${(p) => (p.$hasValue ? p.theme.colors.text.primary : p.theme.colors.text.secondary)};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-  outline: none;
-  appearance: none;
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-  &:focus {
-    border-color: ${(p) => p.$accent};
-    box-shadow: 0 0 0 3px ${(p) => p.$accent}22;
+function toDivisionSuggestion(
+  hit: AdministrativeDivisionSearchHit,
+  countryNameById: Map<string, string>,
+  scopeCountryId?: string,
+): Suggestion {
+  const countryName = hit.countryId
+    ? countryNameById.get(hit.countryId)
+    : undefined
+  const parent = hit.parentPath.length
+    ? hit.parentPath[hit.parentPath.length - 1]
+    : undefined
+  return {
+    key: `div:${hit.id}`,
+    place: {
+      adminDivisionId: hit.id,
+      displayName: [hit.name, parent, countryName].filter(Boolean).join(', '),
+      shortName: hit.name,
+      region: parent,
+      countryName,
+    },
+    context: [...hit.parentPath, countryName].filter(Boolean).join(' · '),
+    kind: hit.divisionLabel || '행정구역',
+    inScope: !!scopeCountryId && hit.countryId === scopeCountryId,
   }
-  &:disabled {
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
-    cursor: default;
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-`
-
-const SelectIcon = styled.span`
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  display: flex;
-  align-items: center;
-`
-
-const LoadingIcon = styled.span`
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: ${({ theme }) => theme.colors.text.secondary};
-  display: flex;
-  align-items: center;
-  animation: ${spin} 0.7s linear infinite;
-`
-
-const SaveRow = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 2px;
-`
-
-const SaveBtn = styled.button<{ $accent: string }>`
-  padding: 7px 18px;
-  background: ${(p) => p.$accent};
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-  &:hover {
-    opacity: 0.85;
-  }
-  &:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-`
-
-const ManualPanel = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const TextInput = styled.input<{ $accent: string }>`
-  width: 100%;
-  padding: 9px 13px;
-  border: 1.5px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 10px;
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-  outline: none;
-  box-sizing: border-box;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-  &:focus {
-    border-color: ${(p) => p.$accent};
-    box-shadow: 0 0 0 3px ${(p) => p.$accent}22;
-  }
-  &::placeholder {
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-  &:disabled {
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
-  }
-`
-
-const ResultBadge = styled.div<{ $manual: boolean; $accent: string }>`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: ${(p) => p.theme.mode === 'dark'
-    ? (p.$manual ? 'rgba(253,216,168,0.08)' : `${p.$accent}18`)
-    : (p.$manual ? '#fdf8f0' : `${p.$accent}0d`)};
-  border: 1px solid ${(p) => p.theme.mode === 'dark'
-    ? (p.$manual ? 'rgba(240,217,168,0.2)' : `${p.$accent}33`)
-    : (p.$manual ? '#f0d9a8' : `${p.$accent}33`)};
-  border-radius: 10px;
-`
-
-const BadgeText = styled.div`
-  flex: 1;
-  min-width: 0;
-`
-
-const BadgeMain = styled.div`
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`
-
-const BadgeSub = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  margin-top: 1px;
-`
-
-const TypeTag = styled.em<{ $manual: boolean; $accent: string }>`
-  flex-shrink: 0;
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: 4px;
-  padding: 2px 6px;
-  background: ${(p) => p.theme.mode === 'dark'
-    ? (p.$manual ? 'rgba(254,243,199,0.12)' : `${p.$accent}1a`)
-    : (p.$manual ? '#fef3c7' : `${p.$accent}1a`)};
-  border: 1px solid ${(p) => p.theme.mode === 'dark'
-    ? (p.$manual ? 'rgba(240,217,168,0.25)' : `${p.$accent}40`)
-    : (p.$manual ? '#f0d9a8' : `${p.$accent}40`)};
-  color: ${(p) => p.$manual
-    ? (p.theme.mode === 'dark' ? '#fbbf24' : '#92650a')
-    : p.$accent};
-`
-
-const ClearBtn = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  flex-shrink: 0;
-  padding: 0;
-  transition: background 0.12s;
-  &:hover {
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#d1d5db'};
-  }
-`
-
-const EmptyNote = styled.div`
-  padding: 10px 13px;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f9fafb'};
-  border: 1px dashed ${({ theme }) => theme.colors.border.light};
-  border-radius: 10px;
-  text-align: center;
-`
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -316,403 +139,378 @@ const EmptyNote = styled.div`
 export function PlaceSelect({
   value,
   onChange,
-  countryId: fixedCountryId,
+  countryId,
   disabled = false,
-  accentColor = '#6366f1',
+  placeholder = '지명 입력 (예: 한성부, 코르시카)',
 }: PlaceSelectProps) {
-  const [tab, setTab] = useState<TabMode>(value?.isManual ? 'manual' : 'db')
+  const listId = useId()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [text, setText] = useState(value?.shortName ?? '')
+  const [open, setOpen] = useState(false)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [loading, setLoading] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const searchSeqRef = useRef(0)
 
-  // 국가
-  const [countries, setCountries] = useState<Country[]>([])
-  const [selectedCountryId, setSelectedCountryId] = useState(
-    fixedCountryId ?? '',
-  )
-  const [loadingCountries, setLoadingCountries] = useState(false)
+  const isRegistered = !!value && !value.isManual
 
-  // 행정구역
-  const [adminDivisions, setAdminDivisions] = useState<
-    AdministrativeDivision[]
-  >([])
-  const [selectedDivId, setSelectedDivId] = useState('')
-  const [loadingDivs, setLoadingDivs] = useState(false)
-
-  // 도시
-  const [cities, setCities] = useState<City[]>([])
-  const [selectedCityId, setSelectedCityId] = useState('')
-  const [loadingCities, setLoadingCities] = useState(false)
-
-  // 직접 입력
-  const [manualText, setManualText] = useState('')
-  const manualInputRef = useRef<HTMLInputElement>(null)
-
-  // 외부 countryId 고정 여부
-  const isCountryFixed = !!fixedCountryId
-
-  // 국가 목록 로드 (고정 아닐 때만)
+  // 밖에서 값이 바뀌면(편집 하이드레이트·'출생지와 동일'·국가 변경으로 비움) 칸 글자를 맞춘다.
+  // 직접 입력 중에는 value.shortName === text.trim()이라 커서가 튀지 않는다.
   useEffect(() => {
-    if (isCountryFixed) return
-    setLoadingCountries(true)
-    countryApi
-      .getAll()
-      .then((list) => setCountries(list ?? []))
-      .finally(() => setLoadingCountries(false))
-  }, [isCountryFixed])
+    const next = value?.shortName ?? ''
+    setText((current) => (current.trim() === next ? current : next))
+  }, [value?.shortName])
 
-  // 고정 국가 변경 반영
+  // 제안 검색 — 도시·행정구역을 함께, 지정 국가 것을 앞에.
   useEffect(() => {
-    if (fixedCountryId) setSelectedCountryId(fixedCountryId)
-  }, [fixedCountryId])
-
-  // 국가 선택 시 행정구역 로드
-  useEffect(() => {
-    if (!selectedCountryId) {
-      setAdminDivisions([])
-      setSelectedDivId('')
-      setCities([])
-      setSelectedCityId('')
+    const query = text.trim()
+    if (!open || !query || isRegistered) {
+      setSuggestions([])
+      setLoading(false)
       return
     }
-    setLoadingDivs(true)
-    setSelectedDivId('')
-    setCities([])
-    setSelectedCityId('')
-    cityApi
-      .getAdministrativeDivisions(selectedCountryId)
-      .then(setAdminDivisions)
-      .finally(() => setLoadingDivs(false))
-  }, [selectedCountryId])
+    const seq = ++searchSeqRef.current
+    setLoading(true)
+    const timer = window.setTimeout(async () => {
+      const [cities, divisions, countries] = await Promise.all([
+        cityApi.searchCities(query),
+        // owner '' = 국가 필터 없음(서버가 빈 countryId를 무시) — 해외 출생지도 제안
+        cityApi.searchAdministrativeDivisions(query, '', MAX_SUGGESTIONS),
+        loadCountries(),
+      ])
+      if (seq !== searchSeqRef.current) return
+      const countryNameById = new Map(
+        countries.map((country) => [country.id, country.name]),
+      )
+      const merged = [
+        ...cities.map((city) => toCitySuggestion(city, countryNameById, countryId)),
+        ...divisions.map((hit) =>
+          toDivisionSuggestion(hit, countryNameById, countryId),
+        ),
+      ]
+        // 안정 정렬 — 지정 국가 것이 앞, 그 안에선 도시 → 행정구역 순 유지
+        .sort((left, right) => Number(right.inScope) - Number(left.inScope))
+        .slice(0, MAX_SUGGESTIONS)
+      setSuggestions(merged)
+      setActiveIndex(-1)
+      setLoading(false)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [text, open, isRegistered, countryId])
 
-  // 행정구역 선택 시 도시 로드
-  useEffect(() => {
-    if (!selectedDivId) {
-      setCities([])
-      setSelectedCityId('')
-      return
+  /** 친 글자가 곧 값 — '저장' 단계 없음 */
+  const handleType = (next: string) => {
+    setText(next)
+    setOpen(true)
+    const trimmed = next.trim()
+    onChange(
+      trimmed
+        ? { displayName: trimmed, shortName: trimmed, isManual: true }
+        : null,
+    )
+  }
+
+  const pick = (suggestion: Suggestion) => {
+    onChange(suggestion.place)
+    setText(suggestion.place.shortName)
+    setOpen(false)
+    setActiveIndex(-1)
+  }
+
+  const clear = () => {
+    onChange(null)
+    setText('')
+    setOpen(false)
+    inputRef.current?.focus()
+  }
+
+  const showList = open && !isRegistered && !!text.trim() && suggestions.length > 0
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      if (!suggestions.length) return
+      event.preventDefault()
+      setOpen(true)
+      setActiveIndex((index) => (index + 1) % suggestions.length)
+    } else if (event.key === 'ArrowUp') {
+      if (!suggestions.length) return
+      event.preventDefault()
+      setActiveIndex((index) =>
+        index <= 0 ? suggestions.length - 1 : index - 1,
+      )
+    } else if (event.key === 'Enter') {
+      // 폼 조기 제출 방지 — 제안을 고르거나, 없으면 친 글자를 그대로 두고 닫는다
+      event.preventDefault()
+      if (showList && activeIndex >= 0) pick(suggestions[activeIndex])
+      else setOpen(false)
+    } else if (event.key === 'Escape' && showList) {
+      // 셸의 Esc(모달 닫기)로 번지지 않게 — 목록만 닫는다
+      event.preventDefault()
+      event.stopPropagation()
+      setOpen(false)
+    } else if (event.key === 'Tab') {
+      setOpen(false)
     }
-    setLoadingCities(true)
-    setSelectedCityId('')
-    cityApi
-      .getByAdministrativeDivisionId(selectedDivId)
-      .then(setCities)
-      .finally(() => setLoadingCities(false))
-  }, [selectedDivId])
-
-  // value 초기 복원 (1회)
-  useEffect(() => {
-    if (!value) return
-    if (value.isManual) {
-      setTab('manual')
-      setManualText(value.shortName)
-    } else {
-      setTab('db')
-      if (value.adminDivisionId) setSelectedDivId(value.adminDivisionId)
-      if (value.cityId) setSelectedCityId(value.cityId)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // --- 핸들러 ---
-
-  const handleCountryChange = (id: string) => {
-    setSelectedCountryId(id)
-    onChange(null)
   }
-
-  const handleDivChange = (divId: string) => {
-    setSelectedDivId(divId)
-    setSelectedCityId('')
-    onChange(null)
-  }
-
-  const handleCityChange = (cityId: string) => {
-    setSelectedCityId(cityId)
-    if (!cityId) {
-      onChange(null)
-      return
-    }
-    const city = cities.find((c) => c.id === cityId)
-    const div = flatDivisions.find((d) => d.id === selectedDivId)
-    const country = countries.find((c) => c.id === selectedCountryId)
-    if (!city) return
-    const parts = [city.name, div?.name, country?.name].filter(Boolean)
-    onChange({
-      cityId: city.id,
-      adminDivisionId: selectedDivId || undefined,
-      displayName: parts.join(', '),
-      shortName: city.name,
-      region: div?.name,
-      countryName: country?.name,
-    })
-  }
-
-  const handleDivOnly = () => {
-    const div = flatDivisions.find((d) => d.id === selectedDivId)
-    const country = countries.find((c) => c.id === selectedCountryId)
-    if (!div) return
-    const parts = [div.name, country?.name].filter(Boolean)
-    onChange({
-      adminDivisionId: div.id,
-      displayName: parts.join(', '),
-      shortName: div.name,
-      countryName: country?.name,
-    })
-  }
-
-  const handleManualSave = () => {
-    const text = manualText.trim()
-    if (!text) return
-    onChange({ displayName: text, shortName: text, isManual: true })
-  }
-
-  const handleClear = () => {
-    onChange(null)
-    setSelectedDivId('')
-    setSelectedCityId('')
-    setManualText('')
-    if (!isCountryFixed) setSelectedCountryId('')
-  }
-
-  const handleTabChange = (next: TabMode) => {
-    setTab(next)
-    onChange(null)
-    setSelectedDivId('')
-    setSelectedCityId('')
-    setManualText('')
-    if (!isCountryFixed) setSelectedCountryId('')
-  }
-
-  const flatDivisions = adminDivisions.flatMap((d) => [
-    d,
-    ...(d.children ?? []),
-  ])
-
-  // 고정 국가명 (badge 표시용)
-  const fixedCountryName = isCountryFixed
-    ? countries.find((c) => c.id === fixedCountryId)?.name
-    : undefined
 
   return (
     <Wrap>
-      <TabBar>
-        <Tab
-          type="button"
-          $active={tab === 'db'}
-          $accent={accentColor}
-          onClick={() => handleTabChange('db')}
+      <Box $disabled={disabled} $open={showList}>
+        <FiMapPin size={14} aria-hidden="true" />
+        <Input
+          ref={inputRef}
+          type="text"
+          role="combobox"
+          aria-expanded={showList}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            showList && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined
+          }
+          value={text}
+          placeholder={placeholder}
           disabled={disabled}
-        >
-          <FiDatabase size={12} />
-          등록된 지역 선택
-        </Tab>
-        <Tab
-          type="button"
-          $active={tab === 'manual'}
-          $accent="#b45309"
-          onClick={() => handleTabChange('manual')}
-          disabled={disabled}
-        >
-          <FiEdit3 size={12} />
-          직접 입력
-        </Tab>
-      </TabBar>
-
-      {/* DB 선택 탭 */}
-      {tab === 'db' && (
-        <SelectGrid>
-          {/* 국가 선택 (외부에서 고정된 경우 숨김) */}
-          {!isCountryFixed && (
-            <div>
-              <FieldLabel>국가</FieldLabel>
-              <SelectWrap>
-                <StyledSelect
-                  $hasValue={!!selectedCountryId}
-                  $accent={accentColor}
-                  value={selectedCountryId}
-                  onChange={(e) => handleCountryChange(e.target.value)}
-                  disabled={disabled || loadingCountries}
-                >
-                  <option value="">
-                    {loadingCountries ? '불러오는 중...' : '국가 선택'}
-                  </option>
-                  {countries.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.flagEmoji ? `${c.flagEmoji} ` : ''}
-                      {c.name}
-                    </option>
-                  ))}
-                </StyledSelect>
-                {loadingCountries ? (
-                  <LoadingIcon>↻</LoadingIcon>
-                ) : (
-                  <SelectIcon>
-                    <FiChevronDown size={15} />
-                  </SelectIcon>
-                )}
-              </SelectWrap>
-            </div>
-          )}
-
-          {/* 행정구역 선택 */}
-          {(selectedCountryId || isCountryFixed) && (
-            <div>
-              <FieldLabel>행정구역 (시·도·주 등)</FieldLabel>
-              <SelectWrap>
-                <StyledSelect
-                  $hasValue={!!selectedDivId}
-                  $accent={accentColor}
-                  value={selectedDivId}
-                  onChange={(e) => handleDivChange(e.target.value)}
-                  disabled={disabled || loadingDivs}
-                >
-                  <option value="">
-                    {loadingDivs
-                      ? '불러오는 중...'
-                      : adminDivisions.length === 0
-                        ? '등록된 행정구역 없음'
-                        : '행정구역 선택'}
-                  </option>
-                  {adminDivisions.map((div) => (
-                    <React.Fragment key={div.id}>
-                      <option value={div.id}>{div.name}</option>
-                      {(div.children ?? []).map((child) => (
-                        <option key={child.id} value={child.id}>
-                          &nbsp;&nbsp;└ {child.name}
-                        </option>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </StyledSelect>
-                {loadingDivs ? (
-                  <LoadingIcon>↻</LoadingIcon>
-                ) : (
-                  <SelectIcon>
-                    <FiChevronDown size={15} />
-                  </SelectIcon>
-                )}
-              </SelectWrap>
-              {!loadingDivs && adminDivisions.length === 0 && (
-                <EmptyNote style={{ marginTop: 6 }}>
-                  등록된 행정구역이 없습니다. 직접 입력 탭을 이용해주세요.
-                </EmptyNote>
-              )}
-            </div>
-          )}
-
-          {/* 도시 선택 */}
-          {selectedDivId && (
-            <div>
-              <FieldLabel>도시 (선택)</FieldLabel>
-              <SelectWrap>
-                <StyledSelect
-                  $hasValue={!!selectedCityId}
-                  $accent={accentColor}
-                  value={selectedCityId}
-                  onChange={(e) => handleCityChange(e.target.value)}
-                  disabled={disabled || loadingCities}
-                >
-                  <option value="">
-                    {loadingCities
-                      ? '불러오는 중...'
-                      : cities.length === 0
-                        ? '등록된 도시 없음'
-                        : '도시 선택 (선택 안 해도 됨)'}
-                  </option>
-                  {cities.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </StyledSelect>
-                {loadingCities ? (
-                  <LoadingIcon>↻</LoadingIcon>
-                ) : (
-                  <SelectIcon>
-                    <FiChevronDown size={15} />
-                  </SelectIcon>
-                )}
-              </SelectWrap>
-            </div>
-          )}
-
-          {/* 행정구역만 저장 버튼 */}
-          {selectedDivId && !selectedCityId && (
-            <SaveRow>
-              <SaveBtn
-                type="button"
-                $accent={accentColor}
-                onClick={handleDivOnly}
-              >
-                행정구역만 저장
-              </SaveBtn>
-            </SaveRow>
-          )}
-        </SelectGrid>
-      )}
-
-      {/* 직접 입력 탭 */}
-      {tab === 'manual' && (
-        <ManualPanel>
-          <div>
-            <FieldLabel>지명 입력</FieldLabel>
-            <TextInput
-              ref={manualInputRef}
-              $accent="#b45309"
-              value={manualText}
-              onChange={(e) => setManualText(e.target.value)}
-              placeholder="예: 사쓰마번, 한성부, 프로이센 왕국, 불명"
-              disabled={disabled}
-              autoComplete="off"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleManualSave()
-                }
+          autoComplete="off"
+          onChange={(event) => handleType(event.target.value)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onKeyDown={handleKeyDown}
+        />
+        {isRegistered && value && (
+          <RegisteredTag title={value.displayName}>
+            {[value.region, value.countryName].filter(Boolean).join(' · ') ||
+              '등록 지역'}
+          </RegisteredTag>
+        )}
+        {loading && open && !isRegistered && <Spinner aria-hidden="true" />}
+        {!!text && !disabled && (
+          <ClearBtn
+            type="button"
+            onClick={clear}
+            aria-label="지우기"
+            title="지우기"
+          >
+            <FiX size={13} />
+          </ClearBtn>
+        )}
+      </Box>
+      {showList && (
+        <List id={listId} role="listbox">
+          {suggestions.map((suggestion, index) => (
+            <Option
+              key={suggestion.key}
+              id={`${listId}-${index}`}
+              role="option"
+              aria-selected={index === activeIndex}
+              $active={index === activeIndex}
+              // blur보다 먼저 — 고르기 전에 목록이 닫히지 않게
+              onMouseDown={(event) => {
+                event.preventDefault()
+                pick(suggestion)
               }}
-            />
-          </div>
-          <SaveRow>
-            <SaveBtn
-              type="button"
-              $accent="#b45309"
-              onClick={handleManualSave}
-              disabled={!manualText.trim() || disabled}
+              onMouseEnter={() => setActiveIndex(index)}
             >
-              저장
-            </SaveBtn>
-          </SaveRow>
-        </ManualPanel>
-      )}
-
-      {/* 선택 결과 뱃지 */}
-      {value && (
-        <ResultBadge $manual={!!value.isManual} $accent={accentColor}>
-          {value.isManual ? (
-            <FiEdit3 size={13} color="#b45309" />
-          ) : (
-            <FiMapPin size={13} color={accentColor} />
-          )}
-          <BadgeText>
-            <BadgeMain>{value.shortName}</BadgeMain>
-            {(value.region || value.countryName) && !value.isManual && (
-              <BadgeSub>
-                {[value.region, value.countryName].filter(Boolean).join(' · ')}
-              </BadgeSub>
-            )}
-          </BadgeText>
-          <TypeTag $manual={!!value.isManual} $accent={accentColor}>
-            {value.isManual
-              ? '직접입력'
-              : value.cityId
-                ? 'DB 도시'
-                : 'DB 행정구역'}
-          </TypeTag>
-          {!disabled && (
-            <ClearBtn type="button" onClick={handleClear} title="지우기">
-              <FiX size={11} />
-            </ClearBtn>
-          )}
-        </ResultBadge>
+              <OptionName>{suggestion.place.shortName}</OptionName>
+              {suggestion.context && (
+                <OptionContext>{suggestion.context}</OptionContext>
+              )}
+              <OptionKind>{suggestion.kind}</OptionKind>
+            </Option>
+          ))}
+          <ListFoot>
+            목록에 없으면 친 그대로 저장돼요
+          </ListFoot>
+        </List>
       )}
     </Wrap>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Styled — 인물 등록 폼의 날짜 칸(InlineDateField field)과 같은 40px 한 칸
+// ---------------------------------------------------------------------------
+
+const Wrap = styled.div`
+  position: relative;
+  width: 100%;
+`
+
+const Box = styled.div<{ $disabled?: boolean; $open?: boolean }>`
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 40px;
+  padding: 0 6px 0 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  background: ${({ theme, $disabled }) =>
+    $disabled
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.02)'
+        : '#f8fafc'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.03)'
+        : '#fff'};
+  opacity: ${({ $disabled }) => ($disabled ? 0.6 : 1)};
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  > svg {
+    flex-shrink: 0;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  &:hover {
+    border-color: ${({ theme, $disabled }) =>
+      $disabled ? theme.colors.border.default : theme.colors.border.medium};
+  }
+  &:focus-within {
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  }
+`
+
+const Input = styled.input`
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: transparent;
+  border: none;
+  outline: none;
+
+  /* 전역 input:focus 테·링을 누른다 — 테는 칸(Box) 하나만 가진다 */
+  &&,
+  &&:focus {
+    border: none;
+    box-shadow: none;
+    outline: none;
+  }
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:disabled {
+    cursor: not-allowed;
+  }
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
+`
+
+/** DB 장소를 골랐을 때 — 상위 행정구역·국가를 칸 안 오른쪽에 옅게(예전 결과 뱃지 대신) */
+const RegisteredTag = styled.span`
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.active};
+  background: ${({ theme }) => theme.colors.activeLight};
+  border-radius: 999px;
+`
+
+const spin = keyframes`to { transform: rotate(360deg); }`
+
+const Spinner = styled.span`
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
+  border-top-color: ${({ theme }) => theme.colors.primary};
+  border-radius: 50%;
+  animation: ${spin} 0.7s linear infinite;
+`
+
+const ClearBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  padding: 0;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  }
+`
+
+const List = styled.div`
+  position: absolute;
+  z-index: ${Z_INDEX.DROPDOWN};
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+  /* 인물 폼 InlineSearchSelect 드롭다운과 같은 표면 */
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(28,28,32,0.98)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
+`
+
+const Option = styled.div<{ $active: boolean }>`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+`
+
+const OptionName = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+`
+
+const OptionContext = styled.span`
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const OptionKind = styled.span`
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ListFoot = styled.div`
+  padding: 6px 10px 4px;
+  margin-top: 2px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`

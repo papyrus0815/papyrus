@@ -1049,8 +1049,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     onChange={(p) => setGarrisonPlace(p)}
                   />
                   <FieldHint>
-                    소속 국가를 먼저 선택한 뒤, 등록된 행정구역·도시에서 고르거나
-                    「직접 입력」으로 적을 수 있습니다.
+                    소속 국가를 먼저 선택한 뒤 지명을 입력하세요. 등록된 행정구역·도시는
+                    제안에서 고를 수 있고, 없으면 입력한 그대로 저장됩니다.
                   </FieldHint>
                 </FullWidthFieldControl>
               </FieldRow>
