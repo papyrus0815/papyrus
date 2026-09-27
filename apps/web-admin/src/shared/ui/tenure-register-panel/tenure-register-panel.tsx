@@ -105,8 +105,9 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   gap: 12px;
   width: 100%;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
-  padding: 13px 16px;
+  border-radius: 10px;
+  /* 다른 입력칸(Input·네이티브 select)과 같은 높이 — 48px이던 선택 버튼만 도드라졌다 */
+  padding: 9px 12px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa'};
   color: ${({ $hasValue, theme }) =>
@@ -184,53 +185,70 @@ function splitLegacyRegnalNote(raw: string): { regnalLine: string; rest: string 
   return { regnalLine: m[0].trim(), rest }
 }
 
-/** 필수 항목 안내 래퍼 — 깔끔한 톤 */
-const RequiredNoticeWrap = styled.div`
-  margin: 0 26px 0;
-  padding: 12px 18px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 12px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  .required-title {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
-    margin-right: 6px;
-  }
-  .required-list {
-    font-weight: 500;
-  }
-  .required-item {
-    transition: color 0.2s, opacity 0.2s;
-  }
-  .required-item.completed {
-    color: ${({ theme }) => theme.colors.success};
-    text-decoration: line-through;
-    opacity: 0.85;
+/** 인물 바 — 미니멀 카드 */
+/** 두 칸 한 줄 — 짧은 짝 항목(대수·기수, 취임·퇴임). 좁은 폭에선 다시 한 칸씩 */
+const FieldPair = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+  align-items: start;
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
   }
 `
 
-/** 인물 바 — 미니멀 카드 */
+/** 날짜 아래 정밀도 한 줄 — 체크 · 라벨 · 옅은 설명 */
+const PrecisionRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: -6px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #6366f1;
+    cursor: pointer;
+  }
+  label {
+    font-weight: 600;
+    cursor: pointer;
+  }
+`
+
+const PrecisionHint = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 등록 버튼 옆 — 아직 비어 있는 필수 항목 */
+const FooterMissingHint = styled.span`
+  margin-right: auto;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 인물 바 — 누구의 재임인지만 한 줄로(사진·이름만 든 큰 카드가 본문 위 ~80px을 먹었다) */
 const PersonInfoBar = styled.div`
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 28px;
-  padding: 16px 20px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? theme.colors.background.secondary
-      : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'};
-  border-radius: 14px;
-  font-size: 15px;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-radius: 12px;
+  font-size: 14px;
   color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 500;
 `
 const PersonThumbnail = styled.div`
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   flex-shrink: 0;
   overflow: hidden;
   background: ${({ theme }) => theme.colors.background.primary};
@@ -451,6 +469,11 @@ export function TenureRegisterPanel({
    * 덧씌우기는 표시 지면이 정의 이름을 우선하므로 저장돼도 보이지 않는다.
    */
   const [localTitleOpen, setLocalTitleOpen] = useState(false)
+  /**
+   * 직책 '직접 입력' 칸을 연 상태 — '기타 (직접 입력)'을 고르거나 링크를 눌렀을 때만 연다.
+   * (예전엔 '정의 미선택'이면 열려서 아무것도 고르지 않은 첫 화면부터 한글·영문 입력칸이 늘 펼쳐져 있었다)
+   */
+  const [manualEntryOpen, setManualEntryOpen] = useState(false)
   const [localTitleDraft, setLocalTitleDraft] = useState('')
   const [localTitleSaving, setLocalTitleSaving] = useState(false)
   const [startDate, setStartDate] = useState('')
@@ -679,6 +702,8 @@ export function TenureRegisterPanel({
 
   const handlePositionSelect = (value: string) => {
     setPositionModalOpen(false)
+    // 정의를 고르면 직접 입력은 닫고, '기타'를 고르면 연다(아래 분기)
+    setManualEntryOpen(value === OTHER_POSITION_VALUE)
     // 다른 직책을 고르면 열어 둔 '이 나라 명칭' 입력은 원본이 바뀌므로 닫는다
     setLocalTitleOpen(false)
     setLocalTitleDraft('')
@@ -774,6 +799,7 @@ export function TenureRegisterPanel({
   }
 
   const resetForm = () => {
+    setManualEntryOpen(false)
     setCountryId('')
     setHistoricalCountryId(null)
     setPositionDefinitionId(null)
@@ -1003,6 +1029,18 @@ export function TenureRegisterPanel({
   const hasCountry = !!countryId || !!historicalCountryId
   const hasPosition = !!(selectedDef as any)?.title || !!title.trim()
   const hasStartDate = !!startDate.trim()
+  /** 등록 버튼이 잠긴 이유 — 상단 '필수 항목' 띠 대신 버튼 옆 한 줄로(빨간 점과 중복되던 띠 제거) */
+  const missingRequired = [
+    !hasCountry && '국가',
+    !hasPosition && '직책',
+    !hasStartDate && (editingIsSovereign ? '즉위일' : '취임일'),
+  ].filter(Boolean) as string[]
+  // 마지막 항목 받침에 맞춘 목적격 조사 — '취임일을', '국가를'
+  const missingParticle = (() => {
+    const last = missingRequired[missingRequired.length - 1] ?? ''
+    const code = last.charCodeAt(last.length - 1) - 0xac00
+    return code >= 0 && code <= 11171 && code % 28 !== 0 ? '을' : '를'
+  })()
 
   /** 행정부 탭에서 "각료 추가"로 열렸을 때 → 각료 등록 문구 사용 (수반 아님) */
   const isMinisterFlow = !isEdit && initialCabinetId != null
@@ -1029,16 +1067,6 @@ export function TenureRegisterPanel({
         minHeight="auto"
       >
         <PersonRegisterModalFormScroll>
-          <RequiredNoticeWrap>
-            <span className="required-title">필수 항목:</span>
-            <span className="required-list">
-              <span className={`required-item ${hasCountry ? 'completed' : ''}`}>국가</span>
-              {', '}
-              <span className={`required-item ${hasPosition ? 'completed' : ''}`}>직책</span>
-              {', '}
-              <span className={`required-item ${hasStartDate ? 'completed' : ''}`}>취임일</span>
-            </span>
-          </RequiredNoticeWrap>
           <S.Form id={FORM_ID} onSubmit={handleSubmit}>
         {personDetail && (
           <PersonInfoBar>
@@ -1245,7 +1273,16 @@ export function TenureRegisterPanel({
                   {/* 정의를 고르지 않은 경우(기타·내장 직책·정의 없음)에만 직접 입력 — 선택 트리거에 종속.
                       정의를 고른 상태에서 다른 표기를 적어도 표시 지면(정의 우선)에 반영되지 않으므로
                       입력칸 자체를 열지 않는다. 주재지가 붙는 직함은 '기타'로 남기는 게 정직하다. */}
-                  {!positionDefinitionId && (
+                  {/* 목록을 고르기 전 첫 화면에선 입력칸 대신 여는 링크만 — 목록에 없을 때의 탈출구 */}
+                  {!positionDefinitionId && !manualEntryOpen && !title.trim() && (
+                    <FieldHint style={{ marginTop: 6 }}>
+                      목록에 없는 직책인가요?{' '}
+                      <LocalTitleLink type="button" onClick={() => setManualEntryOpen(true)}>
+                        직접 입력
+                      </LocalTitleLink>
+                    </FieldHint>
+                  )}
+                  {!positionDefinitionId && (manualEntryOpen || !!title.trim()) && (
                     <ManualEntryGroup>
                       <ManualEntryCaption>직접 입력</ManualEntryCaption>
                       <ManualEntryField>
@@ -1327,29 +1364,19 @@ export function TenureRegisterPanel({
                 </AlertBox>
               )}
 
-              <FieldRow>
-                <FieldLabel>
-                  {editingIsSovereign ? '즉위일 정밀도' : '취임일 정밀도'}
-                </FieldLabel>
-                <FieldControl>
-                  <CheckboxLabelRow>
-                    <input
-                      type="checkbox"
-                      id="tenure-start-year-only"
-                      checked={startDateYearOnly}
-                      onChange={(event) =>
-                        setStartDateYearOnly(event.target.checked)
-                      }
-                    />
-                    <label htmlFor="tenure-start-year-only">
-                      {editingIsSovereign ? '즉위 연도만 앎' : '취임 연도만 앎'}
-                    </label>
-                  </CheckboxLabelRow>
-                  <FieldHint>
-                    날짜는 관행상 1월 1일로 입력 — 표시는 연도만
-                  </FieldHint>
-                </FieldControl>
-              </FieldRow>
+              {/* 정밀도 — 날짜 바로 아래 한 줄(제목·체크·설명 세 줄로 떨어져 ~100px을 먹었다) */}
+              <PrecisionRow>
+                <input
+                  type="checkbox"
+                  id="tenure-start-year-only"
+                  checked={startDateYearOnly}
+                  onChange={(event) => setStartDateYearOnly(event.target.checked)}
+                />
+                <label htmlFor="tenure-start-year-only">
+                  {editingIsSovereign ? '즉위 연도만 앎' : '취임 연도만 앎'}
+                </label>
+                <PrecisionHint>날짜는 1월 1일로 입력 — 표시는 연도만</PrecisionHint>
+              </PrecisionRow>
             </FormRows>
           </SidebarFormWrap>
         </S.FormSection>
@@ -1374,6 +1401,8 @@ export function TenureRegisterPanel({
 
           <SidebarFormWrap>
             <FormRows>
+              {/* 대수·기수 — 짧은 숫자 둘이라 한 줄에 나란히 */}
+              <FieldPair>
               <FieldRow>
                 {/* 재위(SOVEREIGN_REIGN)는 즉위 순서(regnalNumber), 일반 재임은 대수(termNumber) — 둘 다 '선택한 국가/정체 기준 통산 제N대', 이중 기록 금지 */}
                 <FieldLabel>{editingIsSovereign ? '즉위 순서 (제N대)' : '대수'}</FieldLabel>
@@ -1406,6 +1435,7 @@ export function TenureRegisterPanel({
                   />
                 </FieldControl>
               </FieldRow>
+              </FieldPair>
 
               {editingIsSovereign && (
                 <FieldRow>
@@ -1423,6 +1453,8 @@ export function TenureRegisterPanel({
                 </FieldRow>
               )}
 
+              {/* 취임(왼쪽)·퇴임(오른쪽) — 열이 짝을 말한다: 방식↔사유, 상세↔상세 */}
+              <FieldPair>
               <FieldRow>
                 <FieldLabel>{editingIsSovereign ? '즉위 방식' : '취임 방식'}</FieldLabel>
                 <FieldControl>
@@ -1437,26 +1469,6 @@ export function TenureRegisterPanel({
                       </option>
                     ))}
                   </FormSelectNative>
-                </FieldControl>
-              </FieldRow>
-
-              <FieldRow>
-                {/* 재위(SOVEREIGN_REIGN)는 '즉위 상세', 일반 재임은 '취임 상세' — appointmentMethod의 서사 쌍 */}
-                <FieldLabel htmlFor="tenure-appointment-detail">
-                  {editingIsSovereign ? '즉위 상세' : '취임 상세'}
-                </FieldLabel>
-                <FieldControl>
-                  <Textarea
-                    id="tenure-appointment-detail"
-                    value={appointmentDetail}
-                    onChange={(event) => setAppointmentDetail(event.target.value)}
-                    placeholder={
-                      editingIsSovereign
-                        ? '선택 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관'
-                        : '선택 (예: 권한대행 후 정식 취임)'
-                    }
-                    rows={2}
-                  />
                 </FieldControl>
               </FieldRow>
 
@@ -1477,6 +1489,28 @@ export function TenureRegisterPanel({
                 </FieldControl>
               </FieldRow>
 
+              </FieldPair>
+              <FieldPair>
+              <FieldRow>
+                {/* 재위(SOVEREIGN_REIGN)는 '즉위 상세', 일반 재임은 '취임 상세' — appointmentMethod의 서사 쌍 */}
+                <FieldLabel htmlFor="tenure-appointment-detail">
+                  {editingIsSovereign ? '즉위 상세' : '취임 상세'}
+                </FieldLabel>
+                <FieldControl>
+                  <Textarea
+                    id="tenure-appointment-detail"
+                    value={appointmentDetail}
+                    onChange={(event) => setAppointmentDetail(event.target.value)}
+                    placeholder={
+                      editingIsSovereign
+                        ? '선택 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관'
+                        : '선택 (예: 권한대행 후 정식 취임)'
+                    }
+                    rows={2}
+                  />
+                </FieldControl>
+              </FieldRow>
+
               {/* 퇴임 사유 상세 — endReason(enum)의 서사 쌍. 취임 상세·재위 패널의 퇴위 사유 상세와
                   동일하게 여러 줄(Textarea): 실각 경위 등 한 줄로 안 끝나는 서술이 대부분 */}
               <FieldRow>
@@ -1493,6 +1527,8 @@ export function TenureRegisterPanel({
                   />
                 </FieldControl>
               </FieldRow>
+
+              </FieldPair>
 
               <FieldRow>
                 <FieldLabel>비고</FieldLabel>
@@ -1541,6 +1577,11 @@ export function TenureRegisterPanel({
             >
               삭제
             </FooterDeleteBtn>
+          )}
+          {missingRequired.length > 0 && !submitting && (
+            <FooterMissingHint role="status">
+              {missingRequired.join('·')}{missingParticle} 채우면 등록할 수 있습니다
+            </FooterMissingHint>
           )}
           <PersonRegisterModalCancelBtn
             type="button"
