@@ -50,7 +50,6 @@ import {
   deriveCountryScopedPositionDefinition,
   ScopedDefinitionError,
 } from '@/shared/lib/government-position/derive-scoped-definition'
-import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
 import {
   APPOINTMENT_METHOD_OPTIONS,
   TENURE_END_REASON_OPTIONS,
@@ -67,33 +66,84 @@ import {
   Textarea,
 } from '@/shared/ui/register-form-layout'
 
-/** 폼 필드: 세로 배치, 넉넉한 여백 */
+/** 라벨 열 폭 — 사건 등록 모달(200px)보다 조금 좁게: 이 폼의 라벨은 짧다 */
+const LABEL_COL = 168
+
+/**
+ * 폼 행 — 사건 등록 모달과 같은 문법: [라벨 | 입력] 두 열, 행 사이 가는 선, 섹션 머리 없음.
+ * DateRangeField처럼 공용 FieldRow를 쓰는 하위 컴포넌트도 이 래퍼 안에서 같은 모양이 된다.
+ */
 const SidebarFormWrap = styled.div`
   width: 100%;
   min-width: 0;
 
   ${FieldRow} {
+    display: grid;
+    grid-template-columns: ${LABEL_COL}px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+    padding: 18px 0;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    @media (max-width: 720px) {
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding: 14px 0;
+    }
+  }
+  ${FieldLabel} {
+    display: block;
+    padding-top: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: ${({ theme }) => theme.colors.text.primary};
+    letter-spacing: -0.01em;
+
+    @media (max-width: 720px) {
+      padding-top: 0;
+    }
+  }
+  ${FieldControl} {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 16px 0;
-    align-items: stretch;
-    border: none;
-    border-bottom: none;
-  }
-  ${FieldLabel} {
-    padding-top: 0;
-    font-size: 13px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    letter-spacing: -0.01em;
-  }
-  ${FieldControl} {
-    max-width: none;
+    max-width: 640px;
     width: 100%;
+  }
+  ${FieldControl} ${FieldHint} {
+    margin-top: 0;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   ${DateFieldsRow} {
     max-width: none;
+  }
+  /* 첫 행 위 여백은 스크롤 영역이 이미 준다(사건 모달과 같은 처리) · 마지막 행은 선 없음 */
+  ${FieldRow}:first-child {
+    padding-top: 4px;
+  }
+  ${FieldRow}:last-child {
+    border-bottom: none;
+  }
+  /* 날짜 행 바로 뒤에 정밀도 줄이 붙으면 그 사이 선을 걷고 선은 정밀도 줄 아래로 —
+     (공용 DateRangeField 행이라 안에 끼워 넣을 수 없어 형제 선택자로 잇는다) */
+  ${FieldRow}:has(+ .tenure-precision-row) {
+    border-bottom: none;
+    padding-bottom: 10px;
+  }
+  /* 필수 표시 — 점 대신 사건 모달과 같은 빨간 * (스크린리더 텍스트는 그대로) */
+  ${Required} {
+    width: auto;
+    height: auto;
+    margin-left: 4px;
+    background: none;
+    vertical-align: baseline;
+    overflow: visible;
+    &::after {
+      content: '*';
+      font-size: 14px;
+      color: #ef4444;
+    }
   }
 `
 
@@ -186,24 +236,19 @@ function splitLegacyRegnalNote(raw: string): { regnalLine: string; rest: string 
 }
 
 /** 인물 바 — 미니멀 카드 */
-/** 두 칸 한 줄 — 짧은 짝 항목(대수·기수, 취임·퇴임). 좁은 폭에선 다시 한 칸씩 */
-const FieldPair = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 14px;
-  align-items: start;
-  @media (max-width: 560px) {
-    grid-template-columns: 1fr;
-  }
-`
-
 /** 날짜 아래 정밀도 한 줄 — 체크 · 라벨 · 옅은 설명 */
 const PrecisionRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 8px;
-  margin-top: -6px;
+  /* 날짜 행 바로 아래, 입력 열에 맞춰(공용 DateRangeField 행 밖이라 들여쓰기로 붙인다) */
+  margin: 0 0 0 ${LABEL_COL + 24}px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  @media (max-width: 720px) {
+    margin-left: 0;
+  }
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.primary};
 
@@ -225,6 +270,71 @@ const PrecisionHint = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/** 선택(비필수) 라벨 옆 표기 — 사건 등록 모달의 OptionalTag와 같은 모양 */
+const OptionalTag = styled.span`
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 한 행 안의 두 소항목(대수·기수) — 사건 모달의 시작일/종료일 소제목 문법 */
+const SubFieldPair = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+`
+const SubField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+`
+const SubFieldLabel = styled.label`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 방식·사유 칩 — 사건 카테고리 칩 문법(10~11개라 드롭다운보다 한눈에). 다시 누르면 해제 */
+const ChoiceChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+const ChoiceChip = styled.button<{ $selected: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $selected, theme }) => ($selected ? '#6366f1' : theme.colors.border.default)};
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.22)'
+        : 'rgba(99, 102, 241, 0.1)'
+      : 'transparent'};
+  color: ${({ $selected, theme }) =>
+    $selected ? (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca') : theme.colors.text.secondary};
+  font-size: 13px;
+  font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+
+  &:hover {
+    border-color: ${({ $selected, theme }) => ($selected ? '#6366f1' : theme.colors.text.tertiary)};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #6366f1;
+  }
+`
+
 /** 등록 버튼 옆 — 아직 비어 있는 필수 항목 */
 const FooterMissingHint = styled.span`
   margin-right: auto;
@@ -236,19 +346,19 @@ const FooterMissingHint = styled.span`
 const PersonInfoBar = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 10px 14px;
+  gap: 10px;
+  width: fit-content;
+  padding: 6px 14px 6px 6px;
   background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 12px;
+  border-radius: 999px;
   font-size: 14px;
   color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 500;
 `
 const PersonThumbnail = styled.div`
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   flex-shrink: 0;
   overflow: hidden;
   background: ${({ theme }) => theme.colors.background.primary};
@@ -1063,13 +1173,32 @@ export function TenureRegisterPanel({
         isOpen={open}
         onClose={onClose}
         title={panelTitle}
-        maxWidth="min(640px, 94vw)"
+        maxWidth="min(900px, 94vw)"
         minHeight="auto"
       >
         <PersonRegisterModalFormScroll>
           <S.Form id={FORM_ID} onSubmit={handleSubmit}>
-        {personDetail && (
-          <PersonInfoBar>
+
+        {isEdit && tenureId && !editingTenure && loadingTenures && (
+          <InlineMessage $variant="loading">불러오는 중…</InlineMessage>
+        )}
+        {isEdit && tenureId && !editingTenure && !loadingTenures && (
+          <InlineMessage $variant="error">재임 기록을 찾을 수 없습니다.</InlineMessage>
+        )}
+
+        {/* 사건 등록 모달과 같은 문법 — 섹션 머리 없이 [라벨 | 입력] 행을 가는 선으로 가른다 */}
+        {isMinisterFlow && (
+          <FieldHint style={{ margin: '0 0 8px' }}>
+            해당 행정부에서의 직위와 취임·퇴임일을 입력하세요. 국가·행정부는 이미 선택된 상태입니다.
+          </FieldHint>
+        )}
+          <SidebarFormWrap>
+            <FormRows>
+              {personDetail && (
+                <FieldRow>
+                  <FieldLabel as="span">인물</FieldLabel>
+                  <FieldControl>
+                    <PersonInfoBar>
             <PersonThumbnail aria-hidden>
               {(personDetail as { profileImageUrl?: string | null }).profileImageUrl && !personImageError ? (
                 <img
@@ -1090,38 +1219,10 @@ export function TenureRegisterPanel({
                 <PersonPrimaryLabel> · {personDetail.primaryLabel}</PersonPrimaryLabel>
               )}
             </span>
-          </PersonInfoBar>
-        )}
-
-        {isEdit && tenureId && !editingTenure && loadingTenures && (
-          <InlineMessage $variant="loading">불러오는 중…</InlineMessage>
-        )}
-        {isEdit && tenureId && !editingTenure && !loadingTenures && (
-          <InlineMessage $variant="error">재임 기록을 찾을 수 없습니다.</InlineMessage>
-        )}
-
-        <S.FormSection>
-          <S.FormSectionHeader>
-            <S.FormSectionIcon>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-                  fill="currentColor"
-                />
-              </svg>
-            </S.FormSectionIcon>
-            <div>
-              <S.FormSectionTitle>기본 정보</S.FormSectionTitle>
-              <S.FormSectionDescription>
-                {isMinisterFlow
-                  ? '해당 행정부에서의 직위와 취임·퇴임일을 입력하세요. 국가·행정부는 이미 선택된 상태입니다.'
-                  : '재임한 국가, 직책, 취임·퇴임일을 입력하세요'}
-              </S.FormSectionDescription>
-            </div>
-          </S.FormSectionHeader>
-
-          <SidebarFormWrap>
-            <FormRows>
+                    </PersonInfoBar>
+                  </FieldControl>
+                </FieldRow>
+              )}
               <FieldRow>
                 <FieldLabel>
                   국가 <Required aria-label="필수" />
@@ -1146,7 +1247,7 @@ export function TenureRegisterPanel({
 
               {/* 현대 국가에 매이지 않는 정치체(교황령·신성로마제국 등)도 직접 고를 수 있도록 항상 렌더 */}
               <FieldRow>
-                <FieldLabel>역사적 국가 (선택)</FieldLabel>
+                <FieldLabel>역사적 국가<OptionalTag>(선택)</OptionalTag></FieldLabel>
                 <FieldControl>
                   <SelectTriggerButton
                     type="button"
@@ -1309,7 +1410,7 @@ export function TenureRegisterPanel({
               {/* 수반 직책은 cabinetId 동시 지정 시 백엔드 400 — 필드 자체를 숨겨 사전 차단 */}
               {!isHeadPositionType && (countryId || historicalCountryId) && cabinetOptions.length > 0 && (
                 <FieldRow>
-                  <FieldLabel>소속 행정부 (선택)</FieldLabel>
+                  <FieldLabel>소속 행정부<OptionalTag>(선택)</OptionalTag></FieldLabel>
                   <FieldControl>
                     <SelectTriggerButton
                       type="button"
@@ -1365,7 +1466,7 @@ export function TenureRegisterPanel({
               )}
 
               {/* 정밀도 — 날짜 바로 아래 한 줄(제목·체크·설명 세 줄로 떨어져 ~100px을 먹었다) */}
-              <PrecisionRow>
+              <PrecisionRow className="tenure-precision-row">
                 <input
                   type="checkbox"
                   id="tenure-start-year-only"
@@ -1377,69 +1478,53 @@ export function TenureRegisterPanel({
                 </label>
                 <PrecisionHint>날짜는 1월 1일로 입력 — 표시는 연도만</PrecisionHint>
               </PrecisionRow>
-            </FormRows>
-          </SidebarFormWrap>
-        </S.FormSection>
-
-        <S.FormSection>
-          <S.FormSectionHeader>
-            <S.FormSectionIcon>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h12v2H3v-2z"
-                  fill="currentColor"
-                />
-              </svg>
-            </S.FormSectionIcon>
-            <div>
-              <S.FormSectionTitle>임기 상세</S.FormSectionTitle>
-              <S.FormSectionDescription>
-                대수·취임 방식·퇴임 사유 등 부가 정보 (모두 선택)
-              </S.FormSectionDescription>
-            </div>
-          </S.FormSectionHeader>
-
-          <SidebarFormWrap>
-            <FormRows>
-              {/* 대수·기수 — 짧은 숫자 둘이라 한 줄에 나란히 */}
-              <FieldPair>
+              {/* 대수·기수 — 한 행 안에 작은 소제목 둘(사건 모달의 시작일/종료일 문법) */}
               <FieldRow>
-                {/* 재위(SOVEREIGN_REIGN)는 즉위 순서(regnalNumber), 일반 재임은 대수(termNumber) — 둘 다 '선택한 국가/정체 기준 통산 제N대', 이중 기록 금지 */}
-                <FieldLabel>{editingIsSovereign ? '즉위 순서 (제N대)' : '대수'}</FieldLabel>
+                <FieldLabel as="span">
+                  {editingIsSovereign ? '즉위 순서·기수' : '대수·기수'}
+                  <OptionalTag>(선택)</OptionalTag>
+                </FieldLabel>
                 <FieldControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={ordinalNumber}
-                    onChange={(e) => setOrdinalNumber(e.target.value)}
-                    placeholder={editingIsSovereign ? '선택 (예: 러시아 제국 제1대 → 1)' : '선택 (예: 제20대 → 20)'}
-                    title={
-                      editingIsSovereign
-                        ? '선택한 국가/정체 기준 통산 즉위 순서 — 루이 14세식 이름별 번호는 재위명(왕명)에'
-                        : '공식 통산 대수 — 없으면 비워두기'
-                    }
-                  />
+                  <SubFieldPair>
+                    <SubField>
+                      <SubFieldLabel htmlFor="tenure-ordinal">
+                        {editingIsSovereign ? '즉위 순서 (제N대)' : '대수'}
+                      </SubFieldLabel>
+                      {/* 재위(SOVEREIGN_REIGN)는 즉위 순서(regnalNumber), 일반 재임은 대수(termNumber) — 둘 다 '선택한 국가/정체 기준 통산 제N대', 이중 기록 금지 */}
+                      <Input
+                        id="tenure-ordinal"
+                        type="number"
+                        min={1}
+                        value={ordinalNumber}
+                        onChange={(e) => setOrdinalNumber(e.target.value)}
+                        placeholder={editingIsSovereign ? '예: 러시아 제국 제1대 → 1' : '예: 제20대 → 20'}
+                        title={
+                          editingIsSovereign
+                            ? '선택한 국가/정체 기준 통산 즉위 순서 — 루이 14세식 이름별 번호는 재위명(왕명)에'
+                            : '공식 통산 대수 — 없으면 비워두기'
+                        }
+                      />
+                    </SubField>
+                    <SubField>
+                      <SubFieldLabel htmlFor="tenure-subterm">기수</SubFieldLabel>
+                      <Input
+                        id="tenure-subterm"
+                        type="number"
+                        min={1}
+                        value={subTermNumber}
+                        onChange={(e) => setSubTermNumber(e.target.value)}
+                        placeholder="예: 1기 → 1, 2기 → 2"
+                        title="같은 대수 내 복수 임기 구분 (예: 클린턴 42대 1기/2기)"
+                      />
+                    </SubField>
+                  </SubFieldPair>
+                  <FieldHint>공식 통산 대수가 없으면 비워 두세요. 기수는 같은 대수 안의 연임 구분입니다.</FieldHint>
                 </FieldControl>
               </FieldRow>
-
-              <FieldRow>
-                <FieldLabel>기수</FieldLabel>
-                <FieldControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={subTermNumber}
-                    onChange={(e) => setSubTermNumber(e.target.value)}
-                    placeholder="선택 (예: 1기→1, 2기→2)"
-                    title="같은 대수 내 복수 임기 구분 (예: 클린턴 42대 1기/2기)"
-                  />
-                </FieldControl>
-              </FieldRow>
-              </FieldPair>
 
               {editingIsSovereign && (
                 <FieldRow>
-                  <FieldLabel>왕조 서수</FieldLabel>
+                  <FieldLabel>왕조 서수<OptionalTag>(선택)</OptionalTag></FieldLabel>
                   <FieldControl>
                     <Input
                       type="number"
@@ -1453,85 +1538,77 @@ export function TenureRegisterPanel({
                 </FieldRow>
               )}
 
-              {/* 취임(왼쪽)·퇴임(오른쪽) — 열이 짝을 말한다: 방식↔사유, 상세↔상세 */}
-              <FieldPair>
+              {/* 취임 — 방식은 칩(사건 카테고리 문법, 다시 누르면 해제) + 서술 */}
               <FieldRow>
-                <FieldLabel>{editingIsSovereign ? '즉위 방식' : '취임 방식'}</FieldLabel>
-                <FieldControl>
-                  <FormSelectNative
-                    value={appointmentMethod}
-                    onChange={(e) => setAppointmentMethod(e.target.value)}
-                  >
-                    <option value="">선택 안 함</option>
-                    {APPOINTMENT_METHOD_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </FormSelectNative>
-                </FieldControl>
-              </FieldRow>
-
-              <FieldRow>
-                <FieldLabel>퇴임 사유</FieldLabel>
-                <FieldControl>
-                  <FormSelectNative
-                    value={endReason}
-                    onChange={(e) => setEndReason(e.target.value)}
-                  >
-                    <option value="">선택 안 함</option>
-                    {TENURE_END_REASON_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </FormSelectNative>
-                </FieldControl>
-              </FieldRow>
-
-              </FieldPair>
-              <FieldPair>
-              <FieldRow>
-                {/* 재위(SOVEREIGN_REIGN)는 '즉위 상세', 일반 재임은 '취임 상세' — appointmentMethod의 서사 쌍 */}
-                <FieldLabel htmlFor="tenure-appointment-detail">
-                  {editingIsSovereign ? '즉위 상세' : '취임 상세'}
+                <FieldLabel as="span">
+                  {editingIsSovereign ? '즉위' : '취임'}
+                  <OptionalTag>(선택)</OptionalTag>
                 </FieldLabel>
                 <FieldControl>
+                  <ChoiceChips role="group" aria-label={editingIsSovereign ? '즉위 방식' : '취임 방식'}>
+                    {APPOINTMENT_METHOD_OPTIONS.map((option) => (
+                      <ChoiceChip
+                        key={option.value}
+                        type="button"
+                        aria-pressed={appointmentMethod === option.value}
+                        $selected={appointmentMethod === option.value}
+                        onClick={() =>
+                          setAppointmentMethod(appointmentMethod === option.value ? '' : option.value)
+                        }
+                      >
+                        {option.label}
+                      </ChoiceChip>
+                    ))}
+                  </ChoiceChips>
+                  {/* appointmentMethod의 서사 쌍 — 재위는 '즉위 상세' */}
                   <Textarea
                     id="tenure-appointment-detail"
+                    aria-label={editingIsSovereign ? '즉위 상세' : '취임 상세'}
                     value={appointmentDetail}
                     onChange={(event) => setAppointmentDetail(event.target.value)}
                     placeholder={
                       editingIsSovereign
-                        ? '선택 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관'
-                        : '선택 (예: 권한대행 후 정식 취임)'
+                        ? '어떻게 즉위했나 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관'
+                        : '어떻게 취임했나 — 예: 권한대행 후 정식 취임'
                     }
                     rows={2}
                   />
                 </FieldControl>
               </FieldRow>
 
-              {/* 퇴임 사유 상세 — endReason(enum)의 서사 쌍. 취임 상세·재위 패널의 퇴위 사유 상세와
-                  동일하게 여러 줄(Textarea): 실각 경위 등 한 줄로 안 끝나는 서술이 대부분 */}
+              {/* 퇴임 — 사유 칩 + 서술(실각 경위 등 한 줄로 안 끝나는 서술이 대부분) */}
               <FieldRow>
-                <FieldLabel htmlFor="tenure-end-reason-detail">
-                  퇴임 사유 상세
+                <FieldLabel as="span">
+                  {editingIsSovereign ? '퇴위' : '퇴임'}
+                  <OptionalTag>(선택)</OptionalTag>
                 </FieldLabel>
                 <FieldControl>
+                  <ChoiceChips role="group" aria-label="퇴임 사유">
+                    {TENURE_END_REASON_OPTIONS.map((option) => (
+                      <ChoiceChip
+                        key={option.value}
+                        type="button"
+                        aria-pressed={endReason === option.value}
+                        $selected={endReason === option.value}
+                        onClick={() => setEndReason(endReason === option.value ? '' : option.value)}
+                      >
+                        {option.label}
+                      </ChoiceChip>
+                    ))}
+                  </ChoiceChips>
                   <Textarea
                     id="tenure-end-reason-detail"
+                    aria-label="퇴임 사유 상세"
                     value={endReasonDetail}
                     onChange={(event) => setEndReasonDetail(event.target.value)}
-                    placeholder="선택 — 예: 12·12 군사반란으로 실각, 임기 만료 후 정계 은퇴"
+                    placeholder="왜 물러났나 — 예: 12·12 군사반란으로 실각, 임기 만료 후 정계 은퇴"
                     rows={2}
                   />
                 </FieldControl>
               </FieldRow>
 
-              </FieldPair>
-
               <FieldRow>
-                <FieldLabel>비고</FieldLabel>
+                <FieldLabel>비고<OptionalTag>(선택)</OptionalTag></FieldLabel>
                 <FieldControl>
                   {legacyRegnalNote && (
                     <FieldHint style={{ marginBottom: 6 }}>
@@ -1542,14 +1619,14 @@ export function TenureRegisterPanel({
                   <Textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="선택 — 재임 관련 특이사항"
+                    placeholder="재임 관련 특이사항"
                     rows={2}
                   />
                 </FieldControl>
               </FieldRow>
 
               <FieldRow>
-                <FieldLabel>연대표에 표시</FieldLabel>
+                <FieldLabel>연대표에 표시<OptionalTag>(선택)</OptionalTag></FieldLabel>
                 <FieldControl>
                   <CheckboxLabelRow>
                     <input
@@ -1564,7 +1641,6 @@ export function TenureRegisterPanel({
               </FieldRow>
             </FormRows>
           </SidebarFormWrap>
-        </S.FormSection>
 
           </S.Form>
         </PersonRegisterModalFormScroll>
