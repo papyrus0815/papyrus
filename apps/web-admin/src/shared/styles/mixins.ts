@@ -49,16 +49,19 @@ type ThemeBase = {
 }
 
 /**
- * 모달/카드 컨테이너 — 다크: 리퀴드 글래스, 라이트: 솔리드 화이트
+ * 모달/카드 컨테이너 — 다크: 불투명 #181818, 라이트: 솔리드 화이트 (이름은 옛 글래스 시절 그대로)
  * @example
  *   const Modal = styled.div`${({ theme }) => glassCardMixin(theme)}`
  */
 export function glassCardMixin(theme: ThemeBase) {
   if (theme.mode === 'dark') {
+    /*
+     * 다크도 **불투명**(2026-09-26 사용자 지시). 예전엔 rgba(20,20,20,0.92) + blur라 8%가 비쳐,
+     * 모달 뒤 목록 글자가 폼 칸 사이로 희미하게 읽혔다. 같은 톤(#181818 ≈ 20,20,20 위 합성)을
+     * 불투명으로 — 불투명 면 뒤의 backdrop blur는 아무 일도 안 하므로 함께 걷는다.
+     */
     return css`
-      background: rgba(20, 20, 20, 0.92);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
+      background: #181818;
       border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     `
