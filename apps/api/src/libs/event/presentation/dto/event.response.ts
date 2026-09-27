@@ -123,6 +123,14 @@ export class EventResponseDto {
 
   @ApiProperty({
     description:
+      '관련 사건(EventRelation) *개수* — 이 사건이 출발점·도착점인 관계의 합(소프트삭제 상대 제외). ' +
+      '목록 응답의 행 표지 근거 — 상세는 GET /events/:id/relations가 정본. _count 미로드 경로에선 undefined.',
+    required: false,
+  })
+  relatedCount?: number
+
+  @ApiProperty({
+    description:
       '추가 하위 사건 목록(EventParentLink 역방향 — 이 사건을 추가 상위로 갖는 사건들). ' +
       '읽기전용 표시용 — 편집은 자식 쪽에서. 소프트삭제 자식은 걸러짐. reason=쌍 연결 사유.',
     required: false,

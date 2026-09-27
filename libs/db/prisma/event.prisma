@@ -653,6 +653,23 @@ model EventOrganizationRelation {
 // ========================
 // 사건 간 관계 (관련 사건)
 // ========================
+/// 관련 사건의 관계 유형 — 상위/하위(계보 소속)와 별개인 '별개 사건끼리의 연결'.
+/// 방향이 있는 유형은 eventId → relatedEventId 방향으로 읽는다(한 쌍에 한 행, 반대편 사건에는
+/// 역방향 문구로 보여 준다). CONCURRENT·RELATED는 무방향.
+/// 예: '아바르 칸국 건국' —LED_TO→ '롬바르드 왕국 건국'
+enum EventRelationType {
+  /// 직접 계기 — A가 B를 일으켰다(A: '계기가 됨' / B: '계기로 일어남')
+  LED_TO
+  /// 배경·영향 — A가 B의 배경이 되었다(A: '배경이 됨' / B: '배경')
+  INFLUENCED
+  /// 대응 — B가 A에 대한 대응·반작용이다(A: '대응을 불렀음' / B: '대응')
+  RESPONSE_TO
+  /// 같은 국면 — 동시에 얽혀 진행된 사건(무방향)
+  CONCURRENT
+  /// 관련(기타) — 무방향
+  RELATED
+}
+
 model EventRelation {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
@@ -663,8 +680,11 @@ model EventRelation {
   /// 관련 사건 FK
   relatedEventId String @map("related_event_id") @db.Char(36)
 
-  /// 관계 설명
+  /// 관계 설명 — 한두 문장 사유(서사는 사건 본문에)
   relationDescription String? @map("relation_description") @db.Text
+
+  /// 관계 유형 — 방향 유형은 eventId → relatedEventId로 읽는다
+  relationType EventRelationType @default(RELATED) @map("relation_type")
 
   //--- 관계 필드
   event        Event @relation("EventToRelated", fields: [eventId], references: [id], onDelete: Cascade)

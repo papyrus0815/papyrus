@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { EventService } from '../application/event.service'
 import { MilitaryEventService } from '../application/military-event.service'
 import { EventCountryParticipantService } from '../application/event-country-participant.service'
+import { EventRelationService } from '../application/event-relation.service'
 import { EventPrismaRepository } from './event.prisma.repository'
 import { EventController } from '../presentation/event.controller'
 import { PrismaModule } from '../../shared/database'
@@ -14,6 +15,7 @@ import { NotificationModule } from '../../notification/notification.module'
     EventService,
     MilitaryEventService,
     EventCountryParticipantService,
+    EventRelationService,
     EventPrismaRepository,
     { provide: 'EventRepository', useClass: EventPrismaRepository },
   ],

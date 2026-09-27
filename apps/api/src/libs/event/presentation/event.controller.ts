@@ -22,6 +22,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { ApiTags } from '@nestjs/swagger'
 import { EventService } from '../application/event.service'
 import { MilitaryEventService } from '../application/military-event.service'
+import { EventRelationService } from '../application/event-relation.service'
 import {
   CreateEventDto,
   UpdateEventDto,
@@ -29,6 +30,9 @@ import {
   EventLinkCandidateDto,
   CountryStatehoodEventsDto,
   StatehoodEventDto,
+  CreateEventRelationDto,
+  UpdateEventRelationDto,
+  EventRelationItemDto,
 } from './dto'
 import { Event } from '../domain/event.entity'
 import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
@@ -147,6 +151,7 @@ export class EventController {
   constructor(
     private readonly eventService: EventService,
     private readonly militaryEventService: MilitaryEventService,
+    private readonly eventRelationService: EventRelationService,
     private readonly prisma: PrismaClient,
   ) {}
 
@@ -322,6 +327,12 @@ export class EventController {
       extraParentCount:
         typeof event._count?.extraParentLinks === 'number'
           ? event._count.extraParentLinks
+          : undefined,
+      // 관련 사건 개수 — 같은 _count 계약(미로드면 undefined, 0 채움 금지). 양방향 합.
+      relatedCount:
+        typeof event._count?.relatedEvents === 'number' &&
+        typeof event._count?.relatedByEvents === 'number'
+          ? event._count.relatedEvents + event._count.relatedByEvents
           : undefined,
       keywords: event.keywords != null ? (Array.isArray(event.keywords) ? event.keywords : []) : null,
       cityId: event.cityId,
@@ -624,6 +635,10 @@ export class EventController {
         _count: {
           select: {
             extraParentLinks: { where: { parentEvent: { deletedAt: null } } },
+            // 관련 사건(EventRelation) 개수 — 목록 행 '관련 N' 표지. 한 관계가 양쪽 사건에 걸리므로
+            // 이 사건이 출발점인 행 + 도착점인 행을 더한다. 상세와 같게 소프트삭제 상대는 제외.
+            relatedEvents: { where: { relatedEvent: { deletedAt: null } } },
+            relatedByEvents: { where: { event: { deletedAt: null } } },
           },
         },
         category: true,
@@ -648,6 +663,8 @@ export class EventController {
                   _count: {
                     select: {
                       extraParentLinks: { where: { parentEvent: { deletedAt: null } } },
+                      relatedEvents: { where: { relatedEvent: { deletedAt: null } } },
+                      relatedByEvents: { where: { event: { deletedAt: null } } },
                     },
                   },
                   category: true,
@@ -1948,5 +1965,52 @@ export class EventController {
 
     await this.prisma.cabinetEvent.deleteMany({ where: { cabinetId, eventId: id } })
   }
-}
 
+  // ========================================================================
+  // 관련 사건 (EventRelation) — 상위/하위와 별개인 '별개 사건끼리의 연결'
+  // ========================================================================
+
+  /**
+   * 이 사건에 걸린 관련 사건 목록 — 양방향(이 사건이 출발점·도착점인 행 모두).
+   * direction은 이 사건 기준(outgoing = 이 사건 → 상대).
+   */
+  @Get(':id/relations')
+  async getEventRelations(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<EventRelationItemDto[]> {
+    return this.eventRelationService.list(id, req.user?.id)
+  }
+
+  /** 관련 사건 연결 — 한 쌍에 한 행(역방향 중복은 409) */
+  @Post(':id/relations')
+  async createEventRelation(
+    @Param('id') id: string,
+    @Body() body: CreateEventRelationDto,
+    @Request() req?: any,
+  ): Promise<EventRelationItemDto> {
+    return this.eventRelationService.create(id, req.user?.id, body)
+  }
+
+  /** 관련 사건 수정 — 유형·설명·방향(뒤집기) */
+  @Patch(':id/relations/:relationId')
+  async updateEventRelation(
+    @Param('id') id: string,
+    @Param('relationId') relationId: string,
+    @Body() body: UpdateEventRelationDto,
+    @Request() req?: any,
+  ): Promise<EventRelationItemDto> {
+    return this.eventRelationService.update(id, relationId, req.user?.id, body)
+  }
+
+  /** 관련 사건 연결 해제 */
+  @Delete(':id/relations/:relationId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteEventRelation(
+    @Param('id') id: string,
+    @Param('relationId') relationId: string,
+    @Request() req?: any,
+  ): Promise<void> {
+    await this.eventRelationService.remove(id, relationId, req.user?.id)
+  }
+}
