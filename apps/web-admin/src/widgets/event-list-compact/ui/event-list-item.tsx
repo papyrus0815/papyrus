@@ -18,6 +18,7 @@ import {
   FiChevronRight,
   FiCornerLeftUp,
   FiFlag,
+  FiLink2,
   FiLayers,
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
@@ -785,6 +786,18 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                   {anchorBadgeLabel}
                 </AnchorBadge>
               ))}
+            {/* 관련 사건(EventRelation) 표지 — 상위/하위가 아닌 연결(계기·배경·대응…)이 있음을
+                제목 옆에서 말한다. 누르는 곳이 아니다(행 클릭 = 상세, 거기 '연관'에 목록이 있다).
+                테 없는 메타 톤 — 앵커 배지와 위계를 다투지 않게. relatedCount 미로드면 안 그린다. */}
+            {(event.relatedCount ?? 0) > 0 && (
+              <RelatedTag
+                title={`관련 사건 ${event.relatedCount}건 — 상세의 '연관'에서 확인`}
+                aria-label={`관련 사건 ${event.relatedCount}건`}
+              >
+                <FiLink2 size={10} aria-hidden="true" />
+                {event.relatedCount}
+              </RelatedTag>
+            )}
             {/*
               (제거) 단독 토큰 '· 단독'.
               "앵커만 강조하면 표시 없는 147행이 기본값으로 읽혀 배지가 장식처럼 보인다"는
@@ -1940,6 +1953,19 @@ const AnchorChip = styled.button`
 `
 
 /** 앵커 칩의 제목 부분 — 긴 상위 제목이 행을 밀지 않게 말줄임. */
+/** 관련 사건 개수 표지 — 아이콘 + 숫자만, 테·면 없이 메타 톤 */
+const RelatedTag = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--row-chip);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+  white-space: nowrap;
+`
+
 const AnchorChipText = styled.span`
   max-width: 15ch;
   overflow: hidden;

@@ -30,6 +30,7 @@ import { type UpdateEventDto } from '@/shared/api/events'
 import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import { type EventDetail } from '../use-event-detail'
+import { useEventRelations } from '../use-event-relations'
 import { InlineDateRange, InlineText } from './inline'
 
 interface DetailFactsProps {
@@ -75,6 +76,8 @@ export function DetailFacts({
   const treatyCount = event.treaties?.length ?? 0
   const imageCount = event.eventImages?.length ?? 0
   const keywordCount = event.keywords?.length ?? 0
+  // 관련 사건 — 상세 응답 밖의 별도 리소스라 연관 섹션과 같은 캐시를 읽는다
+  const relatedCount = useEventRelations(event.id).data?.length ?? 0
 
   return (
     <Panel aria-label="사건 사실 요약">
@@ -153,6 +156,11 @@ export function DetailFacts({
           label="하위"
           anchor="network"
           value={childCount > 0 ? `${childCount}` : null}
+        />
+        <FactRow
+          label="관련"
+          anchor="network"
+          value={relatedCount > 0 ? `${relatedCount}` : null}
         />
         <FactRow
           label="키워드"

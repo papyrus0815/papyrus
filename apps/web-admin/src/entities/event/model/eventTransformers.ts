@@ -159,6 +159,8 @@ export const transformEventsFromApi = (
       // 같은 사고의 원본 — 서버 `_count.extraParentLinks`가 실려 오는데 매핑이 없어
       // 런타임엔 늘 undefined였다. '미로드'와 '0개'를 구분해야 하므로 ?? 0 금지.
       extraParentCount: (evt as { extraParentCount?: number }).extraParentCount,
+      // 관련 사건 개수 — 같은 '미로드 vs 0' 계약. 매핑을 빠뜨리면 위와 똑같이 조용히 죽는다.
+      relatedCount: (evt as { relatedCount?: number }).relatedCount,
       sectionTitles: evt.sectionTitles ?? [],
       eventSections: evt.eventSections,
       eventImages: evt.eventImages,

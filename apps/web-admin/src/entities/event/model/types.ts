@@ -235,6 +235,8 @@ export interface HistoricalEvent {
    * 미로드 응답에서는 undefined로 남는다('없음(0)'과 '미로드'를 구분하는 계약).
    */
   extraParentCount?: number
+  /** 관련 사건(EventRelation) 개수 — 목록 `_count` 양방향 합. 미로드면 undefined */
+  relatedCount?: number
   sectionTitles?: string[] // 작성된 섹션 제목 리스트 (deprecated)
   eventSections?: EventSection[] // 사건 섹션 목록 (새 구조)
   eventImages?: EventImage[] // 사건 이미지 목록 (새 구조)

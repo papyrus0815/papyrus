@@ -23,6 +23,7 @@ import { notify } from '@/shared/ui/toast'
 import * as S from '../styles'
 import * as NetStyles from './detail-network.styles'
 import { type EventDetail, eventKeys } from '../use-event-detail'
+import { useEventRelations } from '../use-event-relations'
 import { ChildrenBlock } from './children-block'
 import {
   compareEventStart,
@@ -32,6 +33,7 @@ import {
 } from './detail-network.lib'
 import { KeywordsBlock } from './keywords-block'
 import { ParentBlock } from './parent-block'
+import { RelatedBlock } from './related-block'
 import { useLinkCandidatePicker } from './use-link-candidate-picker'
 
 /**
@@ -66,6 +68,8 @@ const PROMOTE_CLEAR_ALL_VALUE = '__clear-all-parents__'
  */
 export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const queryClient = useQueryClient()
+  // 섹션 부제의 '관련 N' — RelatedBlock과 같은 캐시를 읽는다(추가 요청 없음)
+  const relatedQuery = useEventRelations(event.id)
 
   /* '새 하위 사건 만들기' — 기존 사건 연결(SelectModal)이 아니라 등록 모달을
    * initialParent={현재 사건}으로 열어, 고아 생성→상세 이동→수동 연결 3단계를
@@ -587,6 +591,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   /* 섹션 부제 — 상위(있으면)·자식·키워드를 요약. 과거엔 자식·키워드만 세어, 상위만 있고
    * 자식·키워드가 없는 사건은 부제가 통째 사라졌다(관계 신호 은닉). 다중 상위는
    * '상위 1+N', 주 상위 부재/유령 + 추가 상위 잔존은 '상위 0+N'으로 상태를 드러낸다. */
+  const relatedCount = relatedQuery.data?.length ?? 0
   const relationSummary = [
     parentEvent || extraParents.length > 0
       ? `상위 ${parentEvent ? 1 : 0}${
@@ -594,6 +599,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         }`
       : null,
     children.length > 0 ? `자식 ${children.length}` : null,
+    relatedCount > 0 ? `관련 ${relatedCount}` : null,
     keywords.length > 0 ? `키워드 ${keywords.length}` : null,
   ]
     .filter(Boolean)
@@ -630,6 +636,9 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         onOpenChildModal={() => setChildModalOpen(true)}
         onOpenCreateChild={() => setCreateChildOpen(true)}
       />
+
+      {/* 관련 사건 — 상위/하위가 아닌 별개 사건끼리의 연결(계기·배경·대응·같은 국면) */}
+      <RelatedBlock eventId={event.id} eventTitle={event.title} />
 
       <KeywordsBlock keywords={keywords} onPatch={onPatch} />
 
