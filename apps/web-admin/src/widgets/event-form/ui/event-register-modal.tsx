@@ -34,6 +34,8 @@ import {
   PersonRegisterModalStickyFooter,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
+
+import { EventFormSkeleton } from './event-form-skeleton'
 import type {
   EventBasicFormHandle,
   EventBasicFormState,
@@ -184,27 +186,28 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
         closeOnOverlayClick={!isSubmitting}
       >
         <PersonRegisterModalFormScroll>
-          {busy && (
+          {isSubmitting && (
             <BusyBar role="status" aria-live="polite">
-              {isLoading
-                ? '사건 정보를 불러오는 중...'
-                : isEditMode
-                  ? '수정 사항을 저장하는 중...'
-                  : '사건을 등록하는 중...'}
+              {isEditMode ? '수정 사항을 저장하는 중...' : '사건을 등록하는 중...'}
             </BusyBar>
           )}
-          <Suspense fallback={<LoadingNote>폼을 불러오는 중...</LoadingNote>}>
+          {/* 수정 모드에서 사건을 불러오는 동안 — 빈 폼 위의 안내 띠 대신 폼 모양 스켈레톤.
+              폼은 마운트해 둔 채(불러오기·하이드레이션이 돌아야 한다) 가려 둔다. */}
+          {isLoading && <EventFormSkeleton label="사건 정보를 불러오는 중" />}
+          <Suspense fallback={<EventFormSkeleton />}>
             {isOpen && (
-              <LazyEventBasicForm
-                eventId={eventId}
-                initialParent={initialParent}
-                formRef={formRef}
-                onDirtyChange={markDirty}
-                onStateChange={setFormState}
-                onSaved={handleSaved}
-                // 모달은 열 때마다 마운트라 로드 토스트가 매번 뜬다 — 제목으로 대체
-                notifyOnLoad={false}
-              />
+              <FormReveal hidden={isLoading}>
+                <LazyEventBasicForm
+                  eventId={eventId}
+                  initialParent={initialParent}
+                  formRef={formRef}
+                  onDirtyChange={markDirty}
+                  onStateChange={setFormState}
+                  onSaved={handleSaved}
+                  // 모달은 열 때마다 마운트라 로드 토스트가 매번 뜬다 — 제목으로 대체
+                  notifyOnLoad={false}
+                />
+              </FormReveal>
             )}
           </Suspense>
         </PersonRegisterModalFormScroll>
@@ -287,11 +290,19 @@ const BusyBar = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const LoadingNote = styled.div`
-  padding: 48px 0;
-  text-align: center;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+/** 스켈레톤 자리에 폼이 들어설 때 짧게 페이드인 — 같은 격자라 위치 이동은 없다 */
+const FormReveal = styled.div`
+  @media (prefers-reduced-motion: no-preference) {
+    animation: eventFormReveal 0.2s ease;
+  }
+  @keyframes eventFormReveal {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 `
 
 const FooterHint = styled.p`
