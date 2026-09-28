@@ -59,6 +59,10 @@ import { LoadingOverlay } from './loading-overlay'
 import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { HistoricalFoundingCards } from './historical-founding-cards'
+import {
+  historicalCountryKeys,
+  useHistoricalCountry,
+} from '@/entities/historical-country/api'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view/rich-text-read-view'
 import { notify } from '@/shared/ui/toast'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
@@ -703,18 +707,29 @@ function HistoricalOverviewSection({
     | null
     | undefined
 
+  const queryClient = useQueryClient()
   const [isEditorOpen, setIsEditorOpen] = useState(false)
-  // 현재 표시할 description. country.description으로 초기화하고 저장 시 직접 교체
+  /*
+   * 개요 원문 — 이 화면의 country는 국가 목록에서 온 **경량 항목**일 수 있다(description 없음 →
+   * historicalToUnified가 undefined). 그대로 쓰면 DB에 개요가 있는데도 '개요가 없습니다'가 떴다
+   * (실측: 벨기에 왕국 544자). 없을 때만 상세를 단건 조회해 채운다.
+   */
+  const needsFullRecord = country.description === undefined
+  const fullRecordQuery = useHistoricalCountry(needsFullRecord ? country.id : '')
+  const resolvedDescription = needsFullRecord
+    ? fullRecordQuery.data?.description
+    : country.description
+  // 현재 표시할 description. 원문으로 초기화하고 저장 시 직접 교체
   const [savedDescription, setSavedDescription] = useState<string | null | undefined>(
-    () => country.description,
+    () => resolvedDescription,
   )
   // stale closure 방지용 ref — 항상 최신 에디터 값을 보관
   const editorValueRef = useRef('')
 
   // 국가 변경 시 리셋
   useEffect(() => {
-    setSavedDescription(country.description)
-  }, [country.id, country.description])
+    setSavedDescription(resolvedDescription)
+  }, [country.id, resolvedDescription])
 
   const updateMutation = useMutation({
     mutationFn: (description: string) =>
@@ -724,6 +739,8 @@ function HistoricalOverviewSection({
       console.log('[OverviewSave] onSuccess description =', description, '/ saved =', saved)
       setSavedDescription(saved)
       setIsEditorOpen(false)
+      // 단건 캐시도 새 개요로 — 다시 들어왔을 때 옛 값으로 되돌아가지 않게
+      void queryClient.invalidateQueries({ queryKey: historicalCountryKeys.detail(country.id) })
       notify.success('개요가 저장되었습니다.')
     },
     onError: () => {

@@ -86,6 +86,22 @@ function rulerSpan(ruler: FirstRuler): string {
   return `${start}–${end ?? ''}`
 }
 
+/** 가장 이른 기록이 건국에서 이만큼(년) 넘게 떨어지면 초대로 보지 않는다 */
+const FIRST_RULER_MAX_GAP = 10
+
+function gapFromFounding(ruler: FirstRuler, foundingYear: number | null): number | null {
+  const start = signedYear(ruler.startEra, ruler.startYear)
+  if (start == null || foundingYear == null) return null
+  return start - foundingYear
+}
+
+/** 제1대 기록이 아니고, 건국보다 한참 뒤에 시작한 기록인가 */
+function isFarFromFounding(ruler: FirstRuler, foundingYear: number | null): boolean {
+  if (ruler.basis === 'numbered') return false
+  const gap = gapFromFounding(ruler, foundingYear)
+  return gap != null && gap > FIRST_RULER_MAX_GAP
+}
+
 function statehoodEventYear(event: StatehoodEvent): number | null {
   if (event.startYear != null) return event.startEra === 'BC' ? -event.startYear : event.startYear
   if (!event.startDate) return null
@@ -328,11 +344,23 @@ function FoundingCard({
         <FactValue>
           <Inline>
             {events.map((event) => {
-              const eventYear = formatCountryYearShort(statehoodEventYear(event))
+              const signedEventYear = statehoodEventYear(event)
+              const eventYear = formatCountryYearShort(signedEventYear)
+              /* 사건 연도와 등록된 존속 연도가 어긋나면 알린다 — 어느 쪽이 맞는지는 사용자가
+                 판단한다(랑고바르드: 이주 568 / 파비아 함락 572처럼 기준 사건이 다를 수 있다). */
+              const mismatch =
+                signedEventYear != null && year != null && signedEventYear !== year
               return (
                 <Chip key={event.id}>
                   <ChipLink to={pathKeys.events.detail(event.id)}>{event.title}</ChipLink>
                   {eventYear && <Muted>{eventYear}</Muted>}
+                  {mismatch && (
+                    <Warn
+                      title={`사건은 ${eventYear}, 국가 존속 ${side === 'founding' ? '시작' : '끝'}은 ${yearLabel}로 등록돼 있습니다 — 한쪽을 고치거나 그대로 두세요`}
+                    >
+                      등록 연도({yearLabel})와 다름
+                    </Warn>
+                  )}
                   <ChipX
                     type="button"
                     aria-label={`'${event.title}' ${title} 사건 연결 해제`}
@@ -353,7 +381,9 @@ function FoundingCard({
         {/* ── 초대(건국 카드만) ── */}
         {side === 'founding' && (
           <>
-            <FactLabel>초대</FactLabel>
+            {/* 가장 이른 기록이 건국과 멀면 '초대'라 부르지 않는다 — 랑고바르드의 첫 재위 기록이
+                774년 카를 1세(건국 206년 뒤)였다. 그때는 '첫 기록'으로 부르고 거리를 밝힌다. */}
+            <FactLabel>{firstRulers.length > 0 && firstRulers.every((ruler) => isFarFromFounding(ruler, year)) ? '첫 기록' : '초대'}</FactLabel>
             <FactValue>
               {firstRulers.length > 0 ? (
                 <Stack>
@@ -366,11 +396,16 @@ function FoundingCard({
                           {ruler.regnalName?.trim() || getPersonDisplayName(ruler.person, true)}
                         </PersonLink>
                         {span && <Muted>{span}</Muted>}
-                        {ruler.basis === 'earliest' && (
-                          <Hint title="제1대로 기록된 재위·재임이 없어 가장 이른 기록을 보여 줍니다">
-                            가장 이른 기록
-                          </Hint>
-                        )}
+                        {ruler.basis === 'earliest' &&
+                          (isFarFromFounding(ruler, year) ? (
+                            <Hint title="제1대로 기록된 재위·재임이 없고, 가장 이른 기록도 건국과 멀어 초대로 보지 않습니다">
+                              건국 {gapFromFounding(ruler, year)}년 뒤 · 초대 기록 없음
+                            </Hint>
+                          ) : (
+                            <Hint title="제1대로 기록된 재위·재임이 없어 가장 이른 기록을 보여 줍니다">
+                              가장 이른 기록
+                            </Hint>
+                          ))}
                       </RulerLine>
                     )
                   })}
@@ -553,6 +588,13 @@ const Muted = styled.span`
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 사건 연도 ≠ 등록 존속 연도 — 경고색이 아니라 옅은 호박 글자(오류가 아닐 수도 있다) */
+const Warn = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
 `
 
 const Hint = styled.span`
