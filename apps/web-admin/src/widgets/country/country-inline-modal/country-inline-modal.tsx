@@ -16,12 +16,15 @@
  */
 import { useEffect, useMemo, useRef, type MouseEvent } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
 import { FiArrowRight } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import { useCountry } from '@/entities/country/api'
 import { useHistoricalCountry } from '@/entities/historical-country/api'
+import { getHistoricalCountryFoundingSummary } from '@/shared/api/historical-countries'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   getEntityKindLabel,
   getStateTypeLabel,
@@ -110,6 +113,27 @@ export function CountryInlineModal({
   const historical = isHistorical ? historicalQuery.data : undefined
 
   const errorStatus = (activeQuery.error as { status?: number } | null)?.status
+
+  /* 건국 요약 — 초대 통치자·건국 배경 한 줄(개요 탭 건국 카드와 같은 캐시 키) */
+  const foundingQuery = useQuery({
+    queryKey: ['historical-countries', target?.id ?? '', 'founding-summary'],
+    queryFn: () => getHistoricalCountryFoundingSummary(target!.id),
+    enabled: isHistorical && !!target?.id,
+    staleTime: 60_000,
+  })
+  const firstRuler = foundingQuery.data?.firstRulers[0]
+  const foundingExcerpt = useMemo(() => {
+    const html = foundingQuery.data?.foundingNote
+    if (!html) return null
+    const text = html
+      .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/<\/(p|li|h\d)>/gi, ' ')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    return text || null
+  }, [foundingQuery.data?.foundingNote])
 
   /**
    * 열린 채 다른 국가로 전환하면 클릭했던 칩이 unmount되며 포커스가 body로
@@ -236,6 +260,25 @@ export function CountryInlineModal({
                   <MetaValue>
                     {getEntityKindLabel(historical.entityKind)}
                   </MetaValue>
+                </>
+              )}
+              {/* 초대 — 재위·재임 기록에서 파생(개요 탭 건국 카드와 같은 판정) */}
+              {firstRuler && (
+                <>
+                  <MetaLabel>초대</MetaLabel>
+                  <MetaValue>
+                    {firstRuler.title && <MetaAside>{firstRuler.title} </MetaAside>}
+                    {firstRuler.regnalName?.trim() ||
+                      getPersonDisplayName(firstRuler.person, true)}
+                  </MetaValue>
+                </>
+              )}
+              {foundingExcerpt && (
+                <>
+                  <MetaLabel>건국 배경</MetaLabel>
+                  <FoundingExcerpt title={foundingExcerpt}>
+                    {foundingExcerpt}
+                  </FoundingExcerpt>
                 </>
               )}
             </MetaGrid>
@@ -418,6 +461,14 @@ const MetaValue = styled.dd`
   font-size: 13px;
   line-height: 1.6;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/** 건국 배경 발췌 — 세 줄에서 자르고 전문은 국가 상세 개요의 건국 카드에서 */
+const FoundingExcerpt = styled(MetaValue)`
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `
 
 const MetaAside = styled.span`

@@ -365,6 +365,33 @@ export async function getCountryStatehoodEvents(params: {
 }
 
 /**
+ * 역사 국가 쪽에서 '이 사건이 건국(멸망) 사건'이라고 연결 — 사건의 그 나라 참여국 역할을 바꾼다.
+ * 참여국이 아니면 그 역할로 추가, role=null(해제)은 행을 지우지 않고 '참여국'으로 되돌린다.
+ */
+export async function setEventStatehoodRole(
+  eventId: string,
+  historicalCountryId: string,
+  role: 'FOUNDED' | 'DISSOLVED' | null,
+): Promise<void> {
+  const connection = getConnection()
+  const response = await fetch(
+    `${connection.host}/events/${encodeURIComponent(eventId)}/statehood-role`,
+    {
+      method: 'PUT',
+      headers: {
+        ...((connection.headers ?? {}) as Record<string, string>),
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ historicalCountryId, role }),
+    },
+  )
+  if (!response.ok) {
+    throw new Error(`건국·멸망 사건 연결 실패: HTTP ${response.status}`)
+  }
+}
+
+/**
  * ID로 사건 조회
  */
 /** 조회 실패 사유 구분용 — 페이지가 404(없음/삭제)와 일반 오류를 다르게 안내. */

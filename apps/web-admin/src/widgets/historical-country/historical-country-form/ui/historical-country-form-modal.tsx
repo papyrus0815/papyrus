@@ -18,7 +18,11 @@ export interface HistoricalCountryFormModalProps {
   modernCountries: Array<{ id: string; name: string }>
   historicalCountries?: Array<{ id: string; name: string }>
   onSave: (
-    data: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
+    // 건국·멸망 배경은 개요 카드 소유 — 폼 저장이 싣지 않는다(undefined=그대로)
+    data: Omit<
+      HistoricalCountry,
+      'id' | 'createdAt' | 'updatedAt' | 'foundingNote' | 'dissolutionNote'
+    > & {
       id?: string
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]

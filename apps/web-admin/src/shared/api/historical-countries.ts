@@ -466,3 +466,63 @@ export async function deleteHistoricalCountryRelation(
   })
   if (!res.ok) throw new Error(await res.text())
 }
+
+// ── 건국·멸망 요약 ────────────────────────────────────────────────────────────
+
+export interface FoundingPerson {
+  id: string
+  name: string
+  surname: string | null
+  middleName: string | null
+  nameDisplayOrder: string | null
+  regnalName: string | null
+  profileImageUrl: string | null
+}
+
+export interface FirstRuler {
+  kind: 'monarch' | 'headOfState' | 'headOfGovernment'
+  recordId: string
+  regnalName: string | null
+  title: string | null
+  /** numbered = 제1대로 기록된 행, earliest = 대수 기록이 없어 가장 이른 기록 */
+  basis: 'numbered' | 'earliest'
+  startEra: 'BC' | 'AD' | null
+  startYear: number | null
+  endEra: 'BC' | 'AD' | null
+  endYear: number | null
+  person: FoundingPerson
+}
+
+export interface FoundingLinkedCountry {
+  id: string
+  name: string
+  eventType: string
+  startEra: 'BC' | 'AD' | null
+  startYear: number | null
+  endEra: 'BC' | 'AD' | null
+  endYear: number | null
+}
+
+export interface FoundingSummary {
+  foundingNote: string | null
+  dissolutionNote: string | null
+  firstRulers: FirstRuler[]
+  predecessors: FoundingLinkedCountry[]
+  successors: FoundingLinkedCountry[]
+}
+
+/**
+ * 건국·멸망 요약 — 배경 서술 + 초대 통치자(재위·재임에서 파생) + 전신·후신(계승 관계).
+ * GET /historical-countries/:id/founding-summary
+ */
+export async function getHistoricalCountryFoundingSummary(
+  id: string,
+): Promise<FoundingSummary> {
+  const conn = getApiConnection()
+  const res = await fetch(
+    `${conn.host}/historical-countries/${encodeURIComponent(id)}/founding-summary`,
+    { headers: { ...conn.headers } as HeadersInit, credentials: 'include' },
+  )
+  if (!res.ok) throw new Error(`건국 요약 조회 실패: HTTP ${res.status}`)
+  return (await res.json()) as FoundingSummary
+}

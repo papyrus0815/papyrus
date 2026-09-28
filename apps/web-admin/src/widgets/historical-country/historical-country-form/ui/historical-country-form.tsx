@@ -335,7 +335,11 @@ interface HistoricalCountryFormProps {
   historicalCountries?: HistoricalCountryOption[]
   onClose: () => void
   onSave: (
-    data: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
+    // 건국·멸망 배경은 개요 카드 소유 — 폼 저장이 싣지 않는다(undefined=그대로)
+    data: Omit<
+      HistoricalCountry,
+      'id' | 'createdAt' | 'updatedAt' | 'foundingNote' | 'dissolutionNote'
+    > & {
       id?: string
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]
@@ -595,7 +599,12 @@ export function HistoricalCountryForm({
    */
   const onSubmit = async (data: HistoricalCountryFormData) => {
     // API 페이로드 구성
-    const payload: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
+    // 건국·멸망 배경(foundingNote·dissolutionNote)은 개요 탭 카드가 소유한다 — 폼이 null을
+    // 실어 보내면 폼 저장 한 번에 써 둔 배경이 지워진다. 타입에서 빼 아예 싣지 않는다(undefined=그대로).
+    const payload: Omit<
+      HistoricalCountry,
+      'id' | 'createdAt' | 'updatedAt' | 'foundingNote' | 'dissolutionNote'
+    > & {
       id?: string
       parentModernCountryIds?: string[]
       /** 변천 전환 성격 — 후임 역사 국가 연결 시에만 포함 */
