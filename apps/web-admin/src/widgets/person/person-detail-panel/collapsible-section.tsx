@@ -66,8 +66,8 @@ export function CollapsibleSection({
   const bodyId = `overview-collapsible-${storageKey}`
 
   return (
-    <section aria-label={ariaLabel}>
-      <HeaderRow>
+    <section aria-label={ariaLabel} data-collapsible>
+      <HeaderRow $open={open}>
         <ToggleButton
           type="button"
           onClick={toggle}
@@ -100,12 +100,13 @@ export function CollapsibleSection({
   )
 }
 
-const HeaderRow = styled.div`
+const HeaderRow = styled.div<{ $open: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  /* 접혀 있으면 아래에 아무것도 없으므로 여백도 두지 않는다 */
+  margin-bottom: ${({ $open }) => ($open ? '14px' : '0')};
 `
 
 const ToggleButton = styled.button`

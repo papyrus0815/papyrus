@@ -3096,13 +3096,15 @@ const EmptyCta = styled.button`
   }
 `
 
+/** 관계 카드 격자 — 전폭 한 줄씩이면 오른쪽 절반이 비었다. 넓으면 두 열, 좁으면 한 열 */
 const RelList = styled.ul`
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  align-items: start;
+  gap: 10px;
 `
 
 const RelCard = styled(motion.li)<{ $variant: 'mentor' | 'general' }>`
@@ -3893,10 +3895,25 @@ const RelNote = styled.p`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/**
+ * 카드 도구(수정·시기 추가·삭제) — 평소엔 숨기고 카드에 올리거나 안으로 포커스가 들어오면 보인다.
+ * 카드마다 도구 줄이 늘 서 있으면 관계 내용보다 버튼이 먼저 읽혔다. 자리는 그대로(투명도만) 두어
+ * 나타날 때 카드 높이가 흔들리지 않게, 터치 기기(hover 없음)에서는 늘 보인다.
+ */
 const RelCardActions = styled.div`
   display: flex;
   gap: 8px;
   margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+
+  ${RelCard}:hover &,
+  ${RelCard}:focus-within & {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    opacity: 1;
+  }
 `
 
 const IconTextBtn = styled.button<{ $danger?: boolean }>`

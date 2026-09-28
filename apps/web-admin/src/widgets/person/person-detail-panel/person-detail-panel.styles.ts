@@ -1021,6 +1021,11 @@ export const OverviewSections = styled.div`
   display: flex;
   flex-direction: column;
   gap: 32px;
+
+  /* 접이식 섹션(분야별 경력·학력·수상…)이 연달아 오면 한 목록처럼 촘촘히 — 비어 접힌 줄마다 ~80px이었다 */
+  & > [data-collapsible] + [data-collapsible] {
+    margin-top: -18px;
+  }
 `
 
 /** 개요 4클러스터(생애·요약 / 이력·활동 / 관계 / 소속·맥락) 구분 라벨 — 라벨 + 우측 divider 선.
@@ -1028,13 +1033,15 @@ export const OverviewSections = styled.div`
 export const OverviewClusterLabel = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 4px 0 -8px;
-  font-size: 11px;
+  gap: 14px;
+  /* 장(章) 제목 — 아래 섹션 제목(전기·재임·재위 15px)보다 커야 위계가 선다.
+     예전 11px 대문자 회색 라벨은 섹션 제목보다 약해 묶음이 안 읽혔다 */
+  margin: 16px 0 -12px;
+  font-size: 18px;
   font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  scroll-margin-top: 16px;
   &::after {
     content: '';
     flex: 1;
@@ -1487,6 +1494,8 @@ export const InfluenceBlock = styled.div`
   flex-direction: column;
   gap: 10px;
   padding: 4px 2px 2px;
+  /* 0~100 한 줄 척도가 본문 전폭(~1000px)으로 늘어지면 막대 한 칸이 과하게 크다 */
+  max-width: 760px;
 `
 
 /** 영향력 미평가(null) 빈 상태(UX7) — 능력치 섹션 빈 상태와 동일 톤. */
