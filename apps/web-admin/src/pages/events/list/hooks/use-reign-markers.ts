@@ -42,11 +42,13 @@ const DISSOLUTION_WORDS = /멸망|해체|소멸|붕괴|폐지|병합/
 /**
  * 연표 표지 — 군주 즉위·대통령/총리 취임·**역사 국가 건국/멸망**.
  *
- * 역사 국가 범위(사용자 결정 2026-09-27 '관련 국가 + 국가 필터'):
+ * 역사 국가 범위(사용자 결정 2026-09-27 수정 — "등록되어 있으면 나와야 한다"):
  * - 국가 필터가 걸려 있으면 → 그 나라 자체(역사 국가 필터) 또는 그 현대 국가에 연결된 역사 국가 전부
  *   ('독일'로 거르면 알레만니아·동프랑크 …의 건국·멸망이 연대 흐름에 선다).
- * - 필터가 없으면 → 목록에 나온 사건들의 관련 역사 국가만(지도자 표지와 같은 규칙).
- *   등록된 352개 나라를 전부 세우면 건국·멸망 약 680개 표지와 빈 연도 머리글로 목록이 묻힌다.
+ * - 국가 필터가 없으면 → **등록된 역사 국가 전부**. 사건이 하나도 연결되지 않은 나라도 건국·멸망이
+ *   연표에 선다(사건을 만들어야만 보이는 것이 아니다). 처음엔 '목록 사건의 관련 국가만'으로
+ *   좁혔으나 그러면 사건 없는 나라가 숨어 사용자 결정으로 뒤집었다. 너무 많으면 ⋯ 표시 설정의
+ *   '국가 건국'·'국가 멸망' 스위치로 끈다. 연도 범위는 목록 사건의 범위를 따른다(planReignMarkers).
  */
 export function useReignMarkers(
   items: FlattenedHierarchyItem[],
@@ -117,7 +119,7 @@ export function useReignMarkers(
       selectedCountry !== FILTER_ALL
         ? country.id === selectedCountry ||
           (country.parentModernCountryIds ?? []).includes(selectedCountry)
-        : countryIds.has(country.id)
+        : true
     return toStatehoodMarkers(
       historicalCountries as HistoricalCountryTimelineItem[],
       inScope,
@@ -135,7 +137,7 @@ export function useReignMarkers(
         )
       },
     )
-  }, [historicalCountries, selectedCountry, countryIds, statehoodEvents])
+  }, [historicalCountries, selectedCountry, statehoodEvents])
 
   const leaderMarkers = useMemo(() => {
     if (!reigns?.length && !heads?.length) return NO_MARKERS
