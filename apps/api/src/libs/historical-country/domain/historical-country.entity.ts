@@ -11,6 +11,10 @@ export class HistoricalCountry {
   nameOrigin: string | null
   description: string | null
   history: string | null
+  /** 건국 배경 서술(리치 텍스트) */
+  foundingNote: string | null
+  /** 멸망 배경 서술(리치 텍스트) */
+  dissolutionNote: string | null
   thumbnailUrl: string | null
 
   // 존속 시작 정보
@@ -40,6 +44,8 @@ export class HistoricalCountry {
     nameOrigin?: string | null
     description?: string | null
     history?: string | null
+    foundingNote?: string | null
+    dissolutionNote?: string | null
     thumbnailUrl?: string | null
     startEra?: Era | null
     startYear?: number | null
@@ -61,6 +67,8 @@ export class HistoricalCountry {
     this.nameOrigin = data.nameOrigin ?? null
     this.description = data.description ?? null
     this.history = data.history ?? null
+    this.foundingNote = data.foundingNote ?? null
+    this.dissolutionNote = data.dissolutionNote ?? null
     this.thumbnailUrl = data.thumbnailUrl ?? null
     this.startEra = data.startEra ?? null
     this.startYear = data.startYear ?? null

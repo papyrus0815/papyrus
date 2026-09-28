@@ -10,6 +10,10 @@ export interface HistoricalCountryResponseDto {
   nameOrigin: string | null
   description: string | null
   history: string | null
+  /** 건국 배경 서술 */
+  foundingNote: string | null
+  /** 멸망 배경 서술 */
+  dissolutionNote: string | null
   thumbnailUrl: string | null
 
   // 존속 시작 정보

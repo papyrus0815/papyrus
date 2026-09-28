@@ -8,16 +8,19 @@ import {
   Delete,
   Body,
   Param,
+  NotFoundException,
   Query,
   UseGuards,
   Request,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
+import { PrismaClient } from '@prisma/client'
 import { HistoricalCountryService } from '../application/historical-country.service'
 import { CreateHistoricalCountryDto } from './dto/create-historical-country.dto'
 import { UpdateHistoricalCountryDto } from './dto/update-historical-country.dto'
 import { HistoricalCountryResponseDto } from './dto/historical-country.response'
+import type { FirstRulerDto, FoundingSummaryDto, LinkedCountryDto } from './dto/founding-summary.response'
 import { HistoricalCountry } from '../domain/historical-country.entity'
 import { CreateHistoricalCountryTransitionDto } from './dto/create-transition.dto'
 import { UpdateHistoricalCountryTransitionDto } from './dto/update-transition.dto'
@@ -43,6 +46,7 @@ import {
 export class HistoricalCountryController {
   constructor(
     private readonly historicalCountryService: HistoricalCountryService,
+    private readonly prisma: PrismaClient,
   ) {}
 
   /**
@@ -125,6 +129,170 @@ export class HistoricalCountryController {
    * @returns 계승·변천 목록
    * @tag historical-countries
    */
+  /**
+   * 건국·멸망 요약 — 개요 탭 '건국'·'멸망' 카드용. 새로 저장하는 값 없이 기존 기록에서 파생한다.
+   *
+   * - 초대 군주: 재위 중 제1대(regnalNumber=1 — 국가 통산 대수 규약, 없으면 termNumber=1),
+   *   그런 기록이 없으면 가장 이른 재위(basis='earliest').
+   * - 초대 국가원수·정부수반: 재임 중 통산 1대(termNumber=1), 없으면 가장 이른 재임.
+   *   군주 직(정의 isMonarchical) 재임은 재위 표와 겹치므로 뺀다.
+   * - 전신·후신: 계승 관계(transition)의 양쪽.
+   *
+   * ⚠️ 라우트는 @Get(':id')보다 먼저 선언한다(구체 경로 우선).
+   */
+  @Get(':id/founding-summary')
+  async getFoundingSummary(@Param('id') id: string): Promise<FoundingSummaryDto> {
+    const country = await this.prisma.historicalCountry.findUnique({
+      where: { id },
+      select: { foundingNote: true, dissolutionNote: true },
+    })
+    if (!country) throw new NotFoundException('역사 국가를 찾을 수 없습니다.')
+
+    const personSelect = {
+      id: true,
+      name: true,
+      surname: true,
+      middleName: true,
+      nameDisplayOrder: true,
+      regnalName: true,
+      profileImageUrl: true,
+    } as const
+    const signed = (era: string | null | undefined, year: number | null | undefined) =>
+      year == null ? Number.POSITIVE_INFINITY : era === 'BC' ? -year : year
+
+    const firstRulers: FirstRulerDto[] = []
+
+    const reigns = await this.prisma.sovereignReign.findMany({
+      where: { historicalCountryId: id },
+      select: {
+        id: true,
+        regnalName: true,
+        regnalNumber: true,
+        termNumber: true,
+        startEra: true,
+        startYear: true,
+        startDate: true,
+        endEra: true,
+        endYear: true,
+        endDate: true,
+        positionDefinition: { select: { title: true } },
+        person: { select: personSelect },
+      },
+    })
+    const reignStart = (reign: (typeof reigns)[number]) =>
+      reign.startYear != null
+        ? signed(reign.startEra, reign.startYear)
+        : reign.startDate
+          ? reign.startDate.getUTCFullYear()
+          : Number.POSITIVE_INFINITY
+    const numberedReign =
+      reigns.find((reign) => reign.regnalNumber === 1) ??
+      reigns.find((reign) => reign.termNumber === 1)
+    const firstReign =
+      numberedReign ?? [...reigns].sort((left, right) => reignStart(left) - reignStart(right))[0]
+    if (firstReign) {
+      firstRulers.push({
+        kind: 'monarch',
+        recordId: firstReign.id,
+        regnalName: firstReign.regnalName ?? null,
+        title: firstReign.positionDefinition?.title ?? null,
+        basis: numberedReign ? 'numbered' : 'earliest',
+        startEra: (firstReign.startEra as 'BC' | 'AD' | null) ?? (firstReign.startDate ? 'AD' : null),
+        startYear: firstReign.startYear ?? firstReign.startDate?.getUTCFullYear() ?? null,
+        endEra: (firstReign.endEra as 'BC' | 'AD' | null) ?? (firstReign.endDate ? 'AD' : null),
+        endYear: firstReign.endYear ?? firstReign.endDate?.getUTCFullYear() ?? null,
+        person: firstReign.person,
+      })
+    }
+
+    const tenures = await this.prisma.governmentPositionTenure.findMany({
+      where: {
+        historicalCountryId: id,
+        NOT: { positionDefinition: { isMonarchical: true } },
+      },
+      select: {
+        id: true,
+        title: true,
+        termNumber: true,
+        positionType: true,
+        startDate: true,
+        endDate: true,
+        positionDefinition: { select: { title: true, positionType: true } },
+        person: { select: personSelect },
+      },
+      orderBy: { startDate: 'asc' },
+    })
+    for (const [type, kind] of [
+      ['HEAD_OF_STATE', 'headOfState'],
+      ['HEAD_OF_GOVERNMENT', 'headOfGovernment'],
+    ] as const) {
+      const ofType = tenures.filter(
+        (tenure) => (tenure.positionDefinition?.positionType ?? tenure.positionType) === type,
+      )
+      const numbered = ofType.find((tenure) => tenure.termNumber === 1)
+      const first = numbered ?? ofType[0]
+      if (!first) continue
+      firstRulers.push({
+        kind,
+        recordId: first.id,
+        regnalName: null,
+        title: first.positionDefinition?.title?.trim() || first.title?.trim() || null,
+        basis: numbered ? 'numbered' : 'earliest',
+        startEra: 'AD',
+        startYear: first.startDate.getUTCFullYear(),
+        endEra: first.endDate ? 'AD' : null,
+        endYear: first.endDate ? first.endDate.getUTCFullYear() : null,
+        person: first.person,
+      })
+    }
+
+    const countrySelect = {
+      id: true,
+      name: true,
+      startEra: true,
+      startYear: true,
+      endEra: true,
+      endYear: true,
+    } as const
+    const transitions = await this.prisma.historicalCountryTransition.findMany({
+      where: { OR: [{ predecessorId: id }, { successorId: id }] },
+      select: {
+        predecessorId: true,
+        eventType: true,
+        predecessor: { select: countrySelect },
+        successor: { select: countrySelect },
+      },
+    })
+    const toLinked = (
+      linked: (typeof transitions)[number]['predecessor'],
+      eventType: string,
+    ): LinkedCountryDto => ({
+      id: linked.id,
+      name: linked.name,
+      eventType,
+      startEra: (linked.startEra as 'BC' | 'AD' | null) ?? null,
+      startYear: linked.startYear ?? null,
+      endEra: (linked.endEra as 'BC' | 'AD' | null) ?? null,
+      endYear: linked.endYear ?? null,
+    })
+    const byStart = (left: LinkedCountryDto, right: LinkedCountryDto) =>
+      signed(left.startEra, left.startYear) - signed(right.startEra, right.startYear)
+
+    return {
+      foundingNote: country.foundingNote ?? null,
+      dissolutionNote: country.dissolutionNote ?? null,
+      firstRulers,
+      predecessors: transitions
+        .filter((transition) => transition.predecessorId !== id)
+        .map((transition) => toLinked(transition.predecessor, transition.eventType))
+        .sort(byStart),
+      successors: transitions
+        .filter((transition) => transition.predecessorId === id)
+        .map((transition) => toLinked(transition.successor, transition.eventType))
+        .sort(byStart),
+    }
+  }
+
   @Get(':id/transitions')
   async getTransitionsByHistoricalCountryId(
     @Param('id') id: string,
@@ -373,6 +541,8 @@ export class HistoricalCountryController {
         nameOrigin: dto.nameOrigin,
         description: dto.description,
         history: dto.history,
+        foundingNote: dto.foundingNote,
+        dissolutionNote: dto.dissolutionNote,
         thumbnailUrl: dto.thumbnailUrl,
         startEra: dto.startEra,
         startYear: dto.startYear,
@@ -459,6 +629,8 @@ export class HistoricalCountryController {
       nameOrigin: country.nameOrigin,
       description: country.description,
       history: country.history ?? null,
+      foundingNote: country.foundingNote ?? null,
+      dissolutionNote: country.dissolutionNote ?? null,
       thumbnailUrl: country.thumbnailUrl,
 
       // 존속 시작 정보

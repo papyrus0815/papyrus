@@ -36,7 +36,7 @@ import {
 } from './dto'
 import { Event } from '../domain/event.entity'
 import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
-import { PrismaClient } from '@prisma/client'
+import { EventCountryRole, PrismaClient } from '@prisma/client'
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
 import {
   reignYear,
@@ -2012,5 +2012,75 @@ export class EventController {
     @Request() req?: any,
   ): Promise<void> {
     await this.eventRelationService.remove(id, relationId, req.user?.id)
+  }
+
+  // ========================================================================
+  // 건국·멸망 역할 — 역사 국가 쪽에서 '이 사건이 건국(멸망) 사건'이라고 연결
+  // ========================================================================
+
+  /**
+   * 사건의 관련 역사 국가 역할을 건국(FOUNDED)·멸망(DISSOLVED)으로 지정/해제.
+   *
+   * 참여국 행은 (사건, 나라)당 한 행이고 역할은 그 행의 속성이다(EventCountryParticipantService
+   * 자연키). 그래서 이미 참여국이면 역할만 바꾸고, 아니면 그 역할로 새 행을 만든다.
+   * role=null(해제)은 행을 지우지 않고 '참여국'으로 되돌린다 — 참여 사실까지 지우면
+   * 역사 국가 화면의 '연결 해제'가 사건의 참여국 목록을 조용히 줄이게 된다.
+   */
+  @Put(':id/statehood-role')
+  async setStatehoodRole(
+    @Param('id') id: string,
+    @Body() body: { historicalCountryId: string; role: 'FOUNDED' | 'DISSOLVED' | null },
+    @Request() req?: { user?: { id?: string } },
+  ): Promise<{ eventId: string; historicalCountryId: string; role: string }> {
+    const userId = req?.user?.id
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      select: { createdById: true, deletedAt: true },
+    })
+    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
+    if (event.createdById !== userId) {
+      throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
+    }
+    if (event.deletedAt) {
+      throw new ConflictException('삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.')
+    }
+    if (!body?.historicalCountryId) {
+      throw new BadRequestException('historicalCountryId가 필요합니다.')
+    }
+    if (body.role !== null && body.role !== 'FOUNDED' && body.role !== 'DISSOLVED') {
+      throw new BadRequestException('role은 FOUNDED·DISSOLVED·null 중 하나여야 합니다.')
+    }
+    const country = await this.prisma.historicalCountry.findUnique({
+      where: { id: body.historicalCountryId },
+      select: { id: true },
+    })
+    if (!country) throw new NotFoundException('역사 국가를 찾을 수 없습니다.')
+
+    const nextRole: EventCountryRole = body.role ?? EventCountryRole.PARTICIPANT
+    const existing = await this.prisma.eventCountryRelation.findFirst({
+      where: { eventId: id, historicalCountryId: body.historicalCountryId },
+      select: { id: true },
+    })
+    if (existing) {
+      await this.prisma.eventCountryRelation.update({
+        where: { id: existing.id },
+        data: { role: nextRole },
+      })
+    } else if (body.role) {
+      const last = await this.prisma.eventCountryRelation.findFirst({
+        where: { eventId: id },
+        orderBy: { sortOrder: 'desc' },
+        select: { sortOrder: true },
+      })
+      await this.prisma.eventCountryRelation.create({
+        data: {
+          eventId: id,
+          historicalCountryId: body.historicalCountryId,
+          role: body.role,
+          sortOrder: (last?.sortOrder ?? -1) + 1,
+        },
+      })
+    }
+    return { eventId: id, historicalCountryId: body.historicalCountryId, role: nextRole }
   }
 }

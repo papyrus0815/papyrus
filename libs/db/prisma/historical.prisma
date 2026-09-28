@@ -184,6 +184,10 @@ model HistoricalCountry {
   description  String? @map("description") @db.Text
   /// 역사 서술 (자유 텍스트, 마크다운)
   history      String? @map("history") @db.Text
+  /// 건국 배경 — 이 나라가 어떤 경위로 세워졌는가(리치 텍스트). 개요(description)와 분리해 따로 찾게 한다.
+  foundingNote    String? @map("founding_note") @db.Text
+  /// 멸망 배경 — 이 나라가 어떤 경위로 사라졌는가(리치 텍스트)
+  dissolutionNote String? @map("dissolution_note") @db.Text
   /// 대표 이미지 URL
   thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
 

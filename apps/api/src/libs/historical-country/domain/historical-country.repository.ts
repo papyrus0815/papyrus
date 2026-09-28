@@ -48,6 +48,8 @@ export interface UpdateHistoricalCountryData {
   nameOrigin?: string | null
   description?: string | null
   history?: string | null
+  foundingNote?: string | null
+  dissolutionNote?: string | null
   thumbnailUrl?: string | null
   startEra?: Era | null
   startYear?: number | null

@@ -52,6 +52,20 @@ export class UpdateHistoricalCountryDto {
   history?: string | null
 
   /**
+   * 건국 배경 — 이 나라가 어떤 경위로 세워졌는가(리치 텍스트). null이면 비운다.
+   */
+  @IsOptional()
+  @IsString()
+  foundingNote?: string | null
+
+  /**
+   * 멸망 배경 — 이 나라가 어떤 경위로 사라졌는가(리치 텍스트). null이면 비운다.
+   */
+  @IsOptional()
+  @IsString()
+  dissolutionNote?: string | null
+
+  /**
    * 썸네일 URL
    * @example "https://example.com/joseon.jpg"
    */
