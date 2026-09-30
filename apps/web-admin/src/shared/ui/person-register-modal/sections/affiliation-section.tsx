@@ -5,11 +5,11 @@
  */
 import React from 'react'
 
-import styled from 'styled-components'
 
 import {
   FieldControl,
   FieldLabel,
+  FieldRow,
   FormRows,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
@@ -41,7 +41,7 @@ export function AffiliationSection({
 }: AffiliationSectionProps) {
   return (
     <FormRows>
-      <FieldRowMulti>
+      <FieldRow>
         <FieldLabel>가문 · 종교</FieldLabel>
         <FieldControl>
           <InlineFields $cols={2}>
@@ -67,19 +67,7 @@ export function AffiliationSection({
             />
           </InlineFields>
         </FieldControl>
-      </FieldRowMulti>
+      </FieldRow>
     </FormRows>
   )
 }
-
-// ─── Styled ──────────────────────────────────────────────────────────────────
-
-/*
- * Top-aligned 패턴 — FieldRow와 같은 '라벨 위 · 컨트롤 아래(8px)'. 예전 상하 18px 패딩은
- * 블록 머리글(소속) 아래에 34px 빈 띠를 만들었다 — 다음 행 간격은 폼 공통 규칙(20px)이 준다.
- */
-const FieldRowMulti = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`

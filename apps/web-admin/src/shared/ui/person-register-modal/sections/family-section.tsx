@@ -340,7 +340,11 @@ export function FamilySection({
   return (
     <FormRows>
       {renderRecentChips()}
-      {/* 부 · 모 — 한 쌍의 부모. 2-col grid로 의미적 grouping. */}
+      {/* 부 · 모 — 사건 등록 폼 '기간' 행처럼 왼쪽 라벨 하나, 오른쪽 두 칸(칸별 작은 머리).
+          사생아·서출은 부모 관계의 성격이라 같은 행 아래 줄에 둔다. */}
+      <FieldRow>
+      <FieldLabel>부모</FieldLabel>
+      <FieldControl>
       <FamilyParentsRow>
         <FamilySlot>
           <FamilySlotLabel>아버지</FamilySlotLabel>
@@ -375,7 +379,6 @@ export function FamilySection({
           />
         </FamilySlot>
       </FamilyParentsRow>
-      {/* 사생아·서출 — 가계도 카드 별표(*) 마커. 부모 관계의 성격이라 부모 슬롯 아래. */}
       <IllegitimateRow>
         <IllegitimateCheckbox
           type="checkbox"
@@ -393,6 +396,8 @@ export function FamilySection({
           사생아·서출
         </IllegitimateLabel>
       </IllegitimateRow>
+      </FieldControl>
+      </FieldRow>
       {/* 배우자 — 반복 행(다중 배우자·혼인일·메모). 정실/후궁·순차 재혼을 직접 편집. */}
       <FieldRow>
         <FieldLabel>배우자</FieldLabel>
@@ -671,8 +676,7 @@ const FamilyParentsRow = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   /* 성별·국적·생몰·출생지와 같은 열 간격 — 블록마다 두 열 경계가 한 줄로 맞게 */
-  gap: 24px;
-  padding: 8px 0;
+  gap: 16px;
 
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
@@ -692,7 +696,7 @@ const IllegitimateRow = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0 8px;
+  padding-top: 12px;
 `
 
 const IllegitimateCheckbox = styled.input`
@@ -713,9 +717,11 @@ const IllegitimateLabel = styled.label`
   cursor: pointer;
 `
 
+/** 아버지·어머니 칸 머리 — 사건 등록 폼 기간 행의 '시작일·종료일'과 같은 11/700 */
 const FamilySlotLabel = styled.label`
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 

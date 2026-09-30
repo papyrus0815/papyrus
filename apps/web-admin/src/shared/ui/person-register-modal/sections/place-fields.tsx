@@ -108,34 +108,18 @@ export function PlaceFields({
 // ─── Styled ──────────────────────────────────────────────────────────────────
 
 /**
- * 출생지·사망지 2열 그리드 — CoreFieldPair(성별·국적)와 동형. `&&`로 특이도를 높여
- * PersonFormLayoutWrap의 `${FieldRow} { margin-top: 20px }`(둘째 칸이 20px 밀려 라벨
- * 어긋남)를 확실히 눌러 두 칸 상단 정렬을 보장.
+ * 출생지·사망지 묶음 — 옆 라벨 행 문법(PersonFormLayoutWrap)에선 두 칸이 **각자 한 행**이라
+ * 묶음 상자를 지운다(display: contents). 예전 2열 그리드는 위 라벨 시절 배치.
  */
 const PlaceGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px 24px;
-  align-items: start;
-
-  && > ${FieldRow} {
-    margin-top: 0;
-  }
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
+  display: contents;
 `
 
-/* 라벨 줄 높이를 '출생지' 라벨과 같게 고정 — 복사 버튼이 줄을 키워 사망지 칸이 8px 내려앉았다 */
-const DeathLabelRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  height: 18px;
-`
+/*
+ * 사망지 머리 줄 — 라벨 열(200px) 안에서 '사망지' 아래에 '출생지와 동일' 글 버튼을 둔다.
+ * 레이아웃(세로 스택)은 PersonFormLayoutWrap의 `FieldRow > :has(> FieldLabel)` 규칙이 정한다.
+ */
+const DeathLabelRow = styled.div``
 
 const PlaceAutocompleteWrap = styled.div`
   width: 100%;

@@ -17,11 +17,11 @@ import React, {
 import {
   FiAlertCircle,
   FiAlertTriangle,
-  FiCamera,
   FiChevronDown,
   FiChevronRight,
+  FiImage,
   FiRotateCcw,
-  FiTrash2,
+  FiX,
 } from 'react-icons/fi'
 
 import { getAllCountries } from '@/shared/api/countries'
@@ -67,6 +67,7 @@ import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { type PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
   FieldControl,
+  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
@@ -76,6 +77,13 @@ import {
   Required,
   SubmitButton,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
+import {
+  KitFormLoading,
+  KitUploadArea,
+  KitUploadButton,
+  KitUploadDeleteButton,
+  KitUploadPreview,
+} from '@/shared/ui/register-form-kit/register-form-kit'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -127,10 +135,7 @@ import {
   FieldError,
   InlineFields,
   LoadingHost,
-  LoadingOverlay,
   NameCell,
-  NameHero,
-  PhotoCol,
   NotFoundDesc,
   NotFoundIcon,
   NotFoundPanel,
@@ -138,9 +143,6 @@ import {
   OptionalSeam,
   OriginalNameInputWrap,
   PersonFormLayoutWrap,
-  ThumbnailCircle,
-  ThumbnailHeroHint,
-  ThumbnailHeroRemoveBtn,
   ThumbnailUploadInput,
   TopAlert,
   UndoToastBody,
@@ -1367,7 +1369,7 @@ export function PersonRegisterView({
     acceptThumbnailFile(file)
   }
 
-  const handleThumbnailDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+  const handleThumbnailDrop = (e: React.DragEvent<HTMLElement>) => {
     e.preventDefault()
     setThumbnailDragOver(false)
     const file = e.dataTransfer.files?.[0]
@@ -2128,12 +2130,12 @@ export function PersonRegisterView({
         hidden={loadFailed}
       >
         <LoadingHost>
-          {isLoadingEdit && (
-            <LoadingOverlay aria-live="polite">
-              인물 정보를 불러오는 중…
-            </LoadingOverlay>
-          )}
-          <FormSectionInner aria-busy={isLoadingEdit}>
+          {/* 사건 등록 모달과 같은 로딩 — 폼은 마운트해 둔 채 가리고 가운데 도는 링 */}
+          {isLoadingEdit && <KitFormLoading label="인물 정보를 불러오는 중" />}
+          <FormSectionInner
+            aria-busy={isLoadingEdit}
+            style={isLoadingEdit ? { display: 'none' } : undefined}
+          >
             {/*
              * 4개 챕터(기본 정보 · 생애 · 가문/종교/국가 · 가족)를 늘 펼쳐 두되,
              * 필수(이름·성별·국적)를 앞에 모으고 OptionalSeam으로 '여기까지면 등록 끝'을 표식.
@@ -2141,91 +2143,11 @@ export function PersonRegisterView({
              */}
             <FormRows data-form-section="basic">
                 <CoreSectionLabel>기본 정보</CoreSectionLabel>
-                {/*
-                 * 사진 | 이름 칸을 한 줄에. 예전 hero(원형 88px + 이름 미리보기 + 국가·향년 칩 + 업로드 안내)는
-                 * 입력칸이 이미 보여 주는 이름을 한 번 더 그려 첫 입력칸을 110px 아래로 밀었다.
-                 * 업로드 방법 안내는 스크린리더용으로만 남긴다(원 위 카메라 오버레이가 시각 신호).
-                 */}
-                <NameHero>
-                  <PhotoCol>
-                    <ThumbnailCircle
-                      htmlFor="person-thumbnail-upload"
-                      $hasImage={!!(thumbnailObjectUrl || profileImageUrl)}
-                      $dragOver={thumbnailDragOver}
-                      onDragEnter={(e) => {
-                        e.preventDefault()
-                        setThumbnailDragOver(true)
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault()
-                        setThumbnailDragOver(true)
-                      }}
-                      onDragLeave={() => setThumbnailDragOver(false)}
-                      onDrop={handleThumbnailDrop}
-                      aria-label="프로필 사진 업로드"
-                    >
-                      {thumbnailObjectUrl || profileImageUrl ? (
-                        <img
-                          src={
-                            thumbnailObjectUrl ||
-                            getUploadImageUrl(profileImageUrl) ||
-                            profileImageUrl
-                          }
-                          alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
-                        />
-                      ) : (
-                        <svg
-                          className="placeholder"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                        </svg>
-                      )}
-                      <span className="overlay" aria-hidden="true">
-                        <FiCamera size={20} />
-                      </span>
-                      {/* 라벨 안에 두어 :focus-within 링이 원형 썸네일에 뜨고, 키보드(Tab→Space)로
-                          네이티브 파일 대화상자가 열리게 한다(display:none이면 포커스 불가). */}
-                      <ThumbnailUploadInput
-                        id="person-thumbnail-upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleThumbnailChange}
-                        disabled={isSubmitting}
-                        aria-label="프로필 사진 업로드"
-                        aria-describedby="person-thumbnail-hint"
-                      />
-                    </ThumbnailCircle>
-                    <ThumbnailHeroHint id="person-thumbnail-hint">
-                      {thumbnailDragOver
-                        ? '여기에 놓아 업로드'
-                        : '클릭·드래그·붙여넣기(⌘V)로 사진 업로드'}
-                      {pendingThumbnailFile && !thumbnailDragOver
-                        ? ' · 저장 시 업로드'
-                        : ''}
-                    </ThumbnailHeroHint>
-                    {(thumbnailObjectUrl || profileImageUrl.trim()) && (
-                      <ThumbnailHeroRemoveBtn
-                        type="button"
-                        onClick={() => {
-                          handleRemoveThumbnail()
-                          markDirty()
-                        }}
-                        disabled={isSubmitting}
-                        aria-label={
-                          pendingThumbnailFile
-                            ? '선택한 이미지 취소'
-                            : '프로필 사진 제거'
-                        }
-                      >
-                        <FiTrash2 size={13} />
-                        {pendingThumbnailFile ? '취소' : '제거'}
-                      </ThumbnailHeroRemoveBtn>
-                    )}
-                  </PhotoCol>
+                {/* 성명 — 사건 등록 폼 '기간' 행처럼 왼쪽 라벨 하나, 오른쪽 성·이름·중간이름 칸(칸별 작은 머리) */}
                   <FieldRow>
+                    <FieldLabel htmlFor={fid('surname')} data-no-optional>
+                      성명
+                    </FieldLabel>
                     {/* 칸마다 자기 라벨 — 한 줄 라벨 '성 · 이름* · 중간이름'은 별표가 가운데 끼어
                         오탈자처럼 보였고 '(이름만 필수)' 해설이 따로 필요했다. 필수 표식은 '이름' 칸에만
                         (성·중간이름은 선택 — 외자·성 미상 인물). */}
@@ -2285,6 +2207,7 @@ export function PersonRegisterView({
                           표시 순서
                         </NameOrderLabel>
                         <SegmentControl
+                          appearance="chips"
                           value={nameFormat}
                           onChange={(v) => {
                             setNameFormat(v as 'auto' | 'korean' | 'western')
@@ -2308,7 +2231,6 @@ export function PersonRegisterView({
                       </NameOrderControl>
                     </FieldControl>
                   </FieldRow>
-                </NameHero>
 
                 {/* 이름 원어 — 성·이름 클러스터에 인접(구 '이름 상세' 섹션에서 이관) */}
                 <FieldRow>
@@ -2397,6 +2319,7 @@ export function PersonRegisterView({
                       tabIndex={-1}
                     >
                       <SegmentControl
+                        appearance="chips"
                         value={gender || undefined}
                         onChange={(v) => {
                           setGender(v)
@@ -2450,6 +2373,92 @@ export function PersonRegisterView({
                     )}
                   </CoreFieldCell>
                 </CoreFieldPair>
+
+                {/*
+                 * 프로필 사진 — 사건 등록 폼 썸네일 칸과 같은 점선 업로드 칸(register-form-kit).
+                 * 이름이 폼의 첫 칸이 되도록 기본 정보 끝에 둔다(사건 폼도 제목 먼저, 이미지는 뒤).
+                 * 고른 파일은 저장 시 업로드 — 드래그·붙여넣기(⌘V)도 그대로 받는다.
+                 */}
+                <FieldRow>
+                  <FieldLabel htmlFor="person-thumbnail-upload">
+                    프로필 사진
+                  </FieldLabel>
+                  <FieldControl
+                    onDragEnter={(e) => {
+                      e.preventDefault()
+                      setThumbnailDragOver(true)
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setThumbnailDragOver(true)
+                    }}
+                    onDragLeave={() => setThumbnailDragOver(false)}
+                    onDrop={handleThumbnailDrop}
+                  >
+                    {thumbnailObjectUrl || profileImageUrl.trim() ? (
+                      <KitUploadPreview
+                        onClick={() =>
+                          document.getElementById('person-thumbnail-upload')?.click()
+                        }
+                        title="눌러서 사진 바꾸기"
+                      >
+                        <img
+                          src={
+                            thumbnailObjectUrl ||
+                            getUploadImageUrl(profileImageUrl) ||
+                            profileImageUrl
+                          }
+                          alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
+                        />
+                        <KitUploadDeleteButton
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            handleRemoveThumbnail()
+                            markDirty()
+                          }}
+                          disabled={isSubmitting}
+                          aria-label={
+                            pendingThumbnailFile ? '선택한 이미지 취소' : '프로필 사진 제거'
+                          }
+                        >
+                          <FiX size={16} />
+                        </KitUploadDeleteButton>
+                      </KitUploadPreview>
+                    ) : (
+                      <KitUploadArea $dragOver={thumbnailDragOver}>
+                        <FiImage size={32} aria-hidden="true" />
+                        <p>
+                          {thumbnailDragOver
+                            ? '여기에 놓아 업로드'
+                            : '프로필 사진을 업로드하세요'}
+                        </p>
+                        <KitUploadButton
+                          type="button"
+                          onClick={() =>
+                            document.getElementById('person-thumbnail-upload')?.click()
+                          }
+                          disabled={isSubmitting}
+                        >
+                          이미지 업로드
+                        </KitUploadButton>
+                      </KitUploadArea>
+                    )}
+                    <ThumbnailUploadInput
+                      id="person-thumbnail-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleThumbnailChange}
+                      disabled={isSubmitting}
+                      aria-label="프로필 사진 업로드"
+                      aria-describedby="person-thumbnail-hint"
+                    />
+                    <FieldHint id="person-thumbnail-hint">
+                      드래그하거나 붙여넣기(⌘V)해도 됩니다
+                      {pendingThumbnailFile ? ' · 저장 시 업로드' : ''}
+                    </FieldHint>
+                  </FieldControl>
+                </FieldRow>
               </FormRows>
 
               <CoreDivider />

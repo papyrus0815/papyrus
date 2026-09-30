@@ -6,6 +6,7 @@ import styled, { keyframes } from 'styled-components'
 
 import {
   FieldControl,
+  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
@@ -13,7 +14,13 @@ import {
   Required,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
-import { AdvancedSection, FONT, InlineFields, RADIUS } from './_form-primitives'
+import {
+  AdvancedBody,
+  AdvancedSection,
+  FONT,
+  InlineFields,
+  RADIUS,
+} from './_form-primitives'
 
 // 중복 제거 — disclosure 카드·InlineFields·FieldError는 단일 정의(_form-primitives)에서
 // re-export. person-register-view.tsx의 기존 import 경로를 유지하기 위함.
@@ -29,118 +36,12 @@ export {
   InlineFields,
 } from './_form-primitives'
 
-// ─── Profile hero (thumbnail + 이름 미리보기 + 메타칩) ──────────────────────
-// "데이터 입력"이 아니라 "사람을 만든다"는 인상으로 상단 hero 격상.
-// 좌: 원형 썸네일(드롭존) / 우: namePreview + 국가·향년 칩 + 업로드 hint·삭제
-
-/** 사진 | 이름 칸 한 줄 — 좁은 폰에선 사진이 위로 올라간다. */
-export const NameHero = styled.div`
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-
-  && > ${FieldRow} {
-    margin-top: 0;
-  }
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-`
-
-export const PhotoCol = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  /* 이름 입력칸 윗선(라벨 한 줄 아래)에 원의 위쪽을 맞춘다 */
-  padding-top: 2px;
-
-  @media (max-width: 640px) {
-    justify-self: start;
-  }
-`
-
-export const ThumbnailCircle = styled.label<{
-  $hasImage?: boolean
-  $dragOver?: boolean
-}>`
-  position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.04)'
-      : 'linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%)'};
-  border: 1px ${({ $hasImage }) => ($hasImage ? 'solid' : 'dashed')}
-    ${({ $dragOver, $hasImage, theme }) =>
-      $dragOver
-        ? theme.colors.primary
-        : $hasImage
-          ? theme.colors.border.medium
-          : theme.mode === 'dark'
-            ? 'rgba(255,255,255,0.18)'
-            : '#cbd5e1'};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-
-  /* 라벨 안의 sr-only 파일 input이 키보드 포커스를 받으면 원형에 포커스 링 표시. */
-  &:focus-within {
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
-  }
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  /* 빈 상태 placeholder — 옅은 사람 실루엣 */
-  > svg.placeholder {
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    width: 30px;
-    height: 30px;
-    opacity: 0.55;
-  }
-
-  /* hover/drag-over 카메라 오버레이 — 클릭/드롭 액션 신호 */
-  > .overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(15, 23, 42, 0.5);
-    color: #fff;
-    opacity: ${({ $dragOver }) => ($dragOver ? 1 : 0)};
-    transition: opacity 0.15s ease;
-    border-radius: 50%;
-  }
-
-  &:hover > .overlay {
-    opacity: 1;
-  }
-`
+// ─── 프로필 사진 ────────────────────────────────────────────────────────────
+// 모양은 사건 등록 폼 썸네일 칸(register-form-kit KitUpload*)을 그대로 쓴다. 여기엔 파일 입력만.
 
 /**
  * 시각적으로 숨기되 포커스 가능(sr-only) — display:none이면 Tab 순서에서 빠져 키보드로
- * 사진을 못 올린다. 라벨(ThumbnailCircle) 안에 두어 클릭·드롭·키보드 모두 지원.
+ * 사진을 못 올린다. '이미지 업로드' 버튼·칸 클릭이 이 입력을 연다.
  */
 export const ThumbnailUploadInput = styled.input`
   position: absolute;
@@ -152,38 +53,6 @@ export const ThumbnailUploadInput = styled.input`
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-`
-
-/** 업로드 방법 안내 — 스크린리더 전용(aria-describedby). 시각 신호는 원 위 카메라 오버레이. */
-export const ThumbnailHeroHint = styled.div`
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-`
-
-export const ThumbnailHeroRemoveBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  font-size: 12px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.12s;
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.alert.danger.fg};
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
 `
 
 // ─── Inline grouping ────────────────────────────────────────────────────────
@@ -253,84 +122,191 @@ export const NameCell = styled.div`
   min-width: 0;
 `
 
-// ─── Layout wrapper (Top-aligned modern form layout) ────────────────────────
-// 상단 정렬 라벨 (Linear/Stripe/Notion 류) — 라벨이 위, 컨트롤이 아래.
+// ─── Layout wrapper — 사건 등록 폼과 같은 옆 라벨 행 ─────────────────────────
+// 라벨 열 200px(14/600 primary) | 간격 24 | 필드 열(상한 680px), 행 padding 20px 0 + 행 아래
+// hairline. 치수는 사건 등록 폼(event-create.styles FormRow·FormLabel·FormField)과 같다.
+// 예전 위 라벨(13/500 회색) 배치는 같은 등록 모달 셸 안에서 사건 폼과 딴 제품처럼 보였다.
+//
+// 격자 규칙 — 라벨(또는 라벨을 품은 머리 줄)은 1열 1행에 못박고, 나머지 자식은 전부 2열.
+// 라벨을 `grid-row: 1 / span N`으로 늘리면 빈 암묵 행마다 row-gap이 쌓여 행이 부푼다.
+
+const SIDE_LABEL_COLUMN = '200px'
+const FIELD_MAX_WIDTH = '680px'
 
 export const PersonFormLayoutWrap = styled.div`
-  /*
-   * 폼 전체가 **한 측정폭**을 쓴다. 예전엔 컨트롤마다 600·480px 상한이 따로 걸려
-   * 이름·국적·출생지는 600에서, 구분선·가족·seam은 본문 끝에서 끝나 오른쪽 가장자리가
-   * 들쭉날쭉했다(모달 본문 735px 중 135px가 행마다 다르게 비었다). 상한은 여기 하나.
-   */
-  form {
-    max-width: 760px;
-  }
-
   /* 모달 셸의 스크롤 여백(28px)과 겹쳐 머리글 아래 56px 빈 띠가 생기던 것 — 셸 여백만 남긴다. */
   ${FormSectionInner} {
     padding-top: 0;
   }
 
-  /* 필수 표식 — 5px 점은 기준선 아래로 떨어져 오탈자처럼 보였다. 사건 등록 폼과 같은 붉은 '*'. */
+  /* 필수 표식 — 사건 등록 폼과 같은 붉은 '*' (5px 점은 기준선 아래로 떨어져 오탈자처럼 보였다) */
   ${Required} {
     display: inline;
     width: auto;
     height: auto;
-    margin-left: 2px;
+    margin-left: 4px;
     border-radius: 0;
     background: none;
     overflow: visible;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 400;
     vertical-align: baseline;
-    color: ${({ theme }) => theme.colors.alert.danger.fg};
+    color: #ef4444;
   }
 
-  /*
-   * 한 블록 안에 FormRows가 이어 붙거나(출생지 → 출생 상세) disclosure 뒤에 올 때(이름의 뜻 → 별칭)
-   * 뒤쪽 첫 줄이 ':first-child 여백 0'을 받아 앞 컨트롤에 8px로 달라붙었다 — 행 간격을 되살린다.
-   */
-  ${FormRows} + ${FormRows},
-  ${AdvancedSection} + ${FormRows} {
-    margin-top: 20px;
+  /* ── 행 ── */
+  ${FieldRow},
+  ${CoreFieldCell} {
+    display: grid;
+    grid-template-columns: ${SIDE_LABEL_COLUMN} minmax(0, 1fr);
+    gap: 8px 24px;
+    align-items: start;
+    margin: 0;
+    padding: 20px 0;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   }
-
-  ${FieldRow} {
+  ${FieldRow} > *,
+  ${CoreFieldCell} > * {
+    grid-column: 2;
+    min-width: 0;
+    max-width: ${FIELD_MAX_WIDTH};
+  }
+  /* 라벨 — 맨 라벨이든, 라벨+보조버튼을 묶은 머리 줄(사망지 '출생지와 동일')이든 1열 */
+  ${FieldRow} > ${FieldLabel},
+  ${CoreFieldCell} > ${FieldLabel},
+  ${FieldRow} > :has(> ${FieldLabel}) {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+  }
+  ${FieldRow} > :has(> ${FieldLabel}) {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 0;
-    border-bottom: none;
-    margin-top: 20px;
+    align-items: flex-start;
+    gap: 6px;
   }
-
-  ${FieldRow}:first-child {
-    margin-top: 0;
-  }
-
-  /* 라벨 — country/historical과 동일 (13px 500, secondary) */
   ${FieldLabel} {
     display: block;
     margin: 0;
-    padding-top: 0;
-    font-size: 13px;
-    font-weight: 500;
+    padding-top: 10px;
+    font-size: 14px;
+    font-weight: 600;
     line-height: 1.4;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  /*
+   * 선택 항목 꼬리표 — 사건 등록 폼처럼 필수(*) 아닌 행 라벨마다 '(선택)'. 라벨이 섹션 파일
+   * 8곳에 흩어져 있어 한 규칙으로 붙인다. 안에 필수 칸을 품은 묶음 라벨('성명')은 data-no-optional로 뺀다.
+   */
+  ${FieldRow} > ${FieldLabel}:not(:has(${Required})):not([data-no-optional])::after,
+  ${CoreFieldCell} > ${FieldLabel}:not(:has(${Required}))::after,
+  ${FieldRow} > :has(> ${FieldLabel}) > ${FieldLabel}:not(:has(${Required}))::after {
+    content: '(선택)';
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 400;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  /* 두 칸 묶음(성별·국적 / 출생지·사망지)은 행 문법에선 각자 한 행 */
+  ${CoreFieldPair} {
+    display: contents;
+  }
+
+  /* 성·이름·중간이름 칸 머리 — 사건 폼 기간 행 '시작일·종료일'(DateRangeLabel)과 같은 11/700 */
+  ${NameCell} ${Required} {
+    font-size: 11px;
+    font-weight: 700;
+  }
+  ${NameCell} > ${FieldLabel} {
+    padding-top: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 
-  /* 컨트롤 폭 — 개별 상한 없이 폼 측정폭(위 form max-width)을 채운다. */
+  /* 도움말 — 사건 등록 폼 Hint(12px · muted #94a3b8 / 다크 #71717a) */
+  ${FieldHint} {
+    margin-top: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
+  }
+
+  /* 컨트롤 폭 — 필드 열(680)을 채운다 */
   ${FieldControl} {
     width: 100%;
-    max-width: none;
+    max-width: ${FIELD_MAX_WIDTH};
   }
-
-  ${InlineFields} {
-    max-width: none;
-  }
-
+  ${InlineFields},
   ${OriginalNameInputWrap} {
     max-width: none;
+  }
+
+  /* 2차 disclosure(이름의 뜻·군주 호칭) — 행 사이에 끼는 보조 줄이라 필드 열에 맞춰 들인다 */
+  ${AdvancedSection} {
+    margin: 0;
+    padding: 12px 0 12px calc(${SIDE_LABEL_COLUMN} + 24px);
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+  ${AdvancedBody} ${FieldLabel} {
+    padding: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  /*
+   * 행 경계는 모든 행의 아래 hairline 하나가 맡는다. 섹션 파일마다 FormRows가 따로라 예전
+   * '묶음 마지막 행은 선 없음'(FormRows 기본값)이 출생지·사망지 같은 파일 경계에서 선을 지웠다.
+   */
+  ${FormRows} > *:last-child {
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+  ${FormRows} > ${AdvancedSection}:last-child,
+  ${FormRows} > :not(${FieldRow}):not(${AdvancedSection}):last-child {
+    border-bottom: none;
+  }
+  /* 장 구분선은 바로 위 행의 hairline과 겹쳐 두 줄이 된다 — 간격만 남긴다 */
+  ${CoreDivider} {
+    height: 0;
+    margin: 0 0 36px;
+    background: none;
+  }
+
+  /* 사건 폼과 같은 단계: 좁은 화면은 라벨 열 160, 모바일은 한 열 */
+  @media (max-width: 1024px) {
+    ${FieldRow},
+    ${CoreFieldCell} {
+      grid-template-columns: 160px minmax(0, 1fr);
+      column-gap: 16px;
+    }
+    ${AdvancedSection} {
+      padding-left: 176px;
+    }
+  }
+  @media (max-width: 768px) {
+    ${FieldRow},
+    ${CoreFieldCell} {
+      grid-template-columns: minmax(0, 1fr);
+      padding: 16px 0;
+    }
+    ${FieldRow} > *,
+    ${CoreFieldCell} > *,
+    ${FieldRow} > ${FieldLabel},
+    ${CoreFieldCell} > ${FieldLabel},
+    ${FieldRow} > :has(> ${FieldLabel}) {
+      grid-column: 1;
+      grid-row: auto;
+    }
+    ${FieldLabel} {
+      padding-top: 0;
+    }
+    ${AdvancedSection} {
+      padding-left: 0;
+    }
   }
 `
 
@@ -508,21 +484,6 @@ export const DraftRestoreBtn = styled.button`
 // FieldError는 _form-primitives에서 정의·re-export.
 
 // ─── Loading ────────────────────────────────────────────────────────────────
-
-export const LoadingOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.6)'};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  backdrop-filter: blur(2px);
-  border-radius: 12px;
-`
 
 export const LoadingHost = styled.div`
   position: relative;

@@ -36,9 +36,12 @@ import {
   inputFocusMixin,
   mobileInputFontMixin,
   CheckLabel,
-  segmentGroupMixin,
-  segmentItemMixin,
 } from '../_form-primitives'
+import {
+  KitChipGroup,
+  KitChoiceChip,
+  KitGroupLabel,
+} from '@/shared/ui/register-form-kit/register-form-kit'
 import { DEATH_TYPE_GROUPS } from '../person-register-view.helpers'
 import { InlineDateField } from './inline-date-field'
 
@@ -185,6 +188,8 @@ export function LifeSection({
        */}
       {showEssentials && (
       <FieldRow>
+        {/* 사건 등록 폼의 '기간' 행처럼 — 왼쪽 라벨 하나, 오른쪽 출생일·사망일 두 칸(칸별 작은 머리) */}
+        <FieldLabel>생몰</FieldLabel>
         <LifeStack>
           {/*
            * 출생일 · 사망일을 가로 2열로 (앱 공통 date-pair 하우스 스타일).
@@ -321,7 +326,7 @@ export function LifeSection({
                     type="button"
                     role="radio"
                     aria-checked={isAlive}
-                    $active={isAlive}
+                    $selected={isAlive}
                     onClick={() => setDeathStatus('alive')}
                   >
                     생존 중
@@ -330,7 +335,7 @@ export function LifeSection({
                     type="button"
                     role="radio"
                     aria-checked={!isAlive && !isDeathDateUnknown}
-                    $active={!isAlive && !isDeathDateUnknown}
+                    $selected={!isAlive && !isDeathDateUnknown}
                     onClick={() => setDeathStatus('deceased')}
                   >
                     사망
@@ -339,7 +344,7 @@ export function LifeSection({
                     type="button"
                     role="radio"
                     aria-checked={!isAlive && isDeathDateUnknown}
-                    $active={!isAlive && isDeathDateUnknown}
+                    $selected={!isAlive && isDeathDateUnknown}
                     onClick={() => setDeathStatus('unknown')}
                   >
                     일자 미상
@@ -381,7 +386,7 @@ export function LifeSection({
                               key={opt.value}
                               type="button"
                               aria-pressed={deathType === opt.value}
-                              $active={deathType === opt.value}
+                              $selected={deathType === opt.value}
                               onClick={() => {
                                 setDeathType(deathType === opt.value ? '' : opt.value)
                                 markDirty()
@@ -425,7 +430,7 @@ export function LifeSection({
                   <SegmentItem
                     key={era}
                     type="button"
-                    $active={floruitEra === era}
+                    $selected={floruitEra === era}
                     aria-pressed={floruitEra === era}
                     onClick={() => {
                       setFloruitEra(era)
@@ -622,9 +627,11 @@ const LifeFieldGroup = styled.div`
   min-width: 0;
 `
 
+/** 출생일·사망일 칸 머리 — 사건 등록 폼 기간 행의 '시작일·종료일'(DateRangeLabel)과 같은 11/700 */
 const LifeSubLabel = styled.span`
-  font-size: ${FONT.label};
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
@@ -667,14 +674,15 @@ const FloruitRow = styled.div`
   flex-wrap: wrap;
 `
 
-const FloruitEraToggle = styled.div`
-  ${({ theme }) => segmentGroupMixin(theme)}
-`
+/** 활동시기 서기|기원전 — 사건 등록 폼 카테고리 칩과 같은 알약 */
+const FloruitEraToggle = styled(KitChipGroup)``
 
+/** 활동시기 연도 — 텍스트 입력(FormInput)과 같은 41px 칸 */
 const FloruitYearInput = styled.input`
+  box-sizing: border-box;
   width: 96px;
-  height: 36px;
-  padding: 0 10px;
+  height: 41px;
+  padding: 0 12px;
   font-size: ${FONT.body};
   border-radius: 8px;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -689,20 +697,13 @@ const FloruitTilde = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-/** 사망 유형 chip — 채움 톤 + active=indigo. 사망 분기 segmented는 별도 컴포넌트 사용. */
-/** 이어 붙은 세그먼트 항목 — 활동시기 서기|기원전 */
-const SegmentItem = styled.button<{ $active?: boolean }>`
-  ${({ theme, $active }) => segmentItemMixin(theme, $active)}
-`
+/** 활동시기 서기|기원전 항목 — 사건 등록 폼 카테고리 칩 */
+const SegmentItem = KitChoiceChip
 
-/** "사망 여부" 3-way 분기 — 테 하나 안의 세그먼트(성별·AD|BC와 같은 모양). */
-const Segmented3Way = styled.div`
-  ${({ theme }) => segmentGroupMixin(theme)}
-`
+/** "사망 여부" 3-way 분기(생존 중·사망·일자 미상) — 사건 등록 폼 카테고리 칩 */
+const Segmented3Way = styled(KitChipGroup)``
 
-const Segmented3WayBtn = styled.button<{ $active?: boolean }>`
-  ${({ theme, $active }) => segmentItemMixin(theme, $active)}
-`
+const Segmented3WayBtn = KitChoiceChip
 
 /** 사망 유형 — 사망 열 안의 라벨 + 알약 줄 */
 const DeathTypeField = styled.div`
@@ -713,67 +714,25 @@ const DeathTypeField = styled.div`
   margin-top: 6px;
 `
 
-const DeathTypeLabel = styled.span`
-  font-size: ${FONT.label};
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
+/** 사망 유형 머리 — 사건 폼 기간 행 '시작일·종료일'과 같은 11/700 */
+const DeathTypeLabel = styled(KitGroupLabel).attrs({ as: 'span' })``
 
-/** 그룹 사이는 14px, 그룹 안 칩 사이는 4px — 간격 차이가 그룹을 말한다 */
+/** 그룹 사이는 14px, 그룹 안 칩 사이는 6px — 간격 차이가 그룹을 말한다 */
 const DeathTypeChips = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 14px;
+  gap: 8px 14px;
 `
 
 /** 한 그룹의 칩 묶음 — 줄바꿈 시 그룹이 쪼개지지 않게 한 덩어리 */
 const DeathTypeGroup = styled.div`
   display: inline-flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 6px;
 `
 
-/**
- * 사망 유형 알약 — 안 고른 칩은 테 없이 옅은 면(9개가 모두 테를 두르면 다시 시끄럽다),
- * 고른 칩은 모달 공용 선택 언어(activeLight 면 + active 글자 + primary 테).
- */
-const DeathTypeChip = styled.button<{ $active?: boolean }>`
-  padding: 5px 11px;
-  font-size: ${FONT.label};
-  font-weight: ${({ $active }) => ($active ? 600 : 500)};
-  line-height: 1.2;
-  white-space: nowrap;
-  cursor: pointer;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ $active, theme }) => ($active ? theme.colors.primary : 'transparent')};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.active : theme.colors.text.secondary};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.colors.activeLight
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : '#f1f5f9'};
-  transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease;
-
-  &:hover {
-    color: ${({ $active, theme }) =>
-      $active ? theme.colors.active : theme.colors.text.primary};
-    background: ${({ $active, theme }) =>
-      $active
-        ? theme.colors.activeLight
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.1)'
-          : '#e2e8f0'};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
-  }
-`
+/** 사망 유형 알약 — 사건 등록 폼 카테고리 칩 */
+const DeathTypeChip = KitChoiceChip
 
 // Disclosure 카드·InlineFields·FieldError는 ../_form-primitives에서 import (중복 제거).
