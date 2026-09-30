@@ -185,10 +185,26 @@ export interface PersonLifeTimelineInfographicProps {
 }
 
 // ───── 유틸 ─────
+/**
+ * ISO 날짜 → **달력 날짜 그대로의 로컬 Date**.
+ *
+ * 서버는 날짜를 UTC 자정(`1773-09-01T00:00:00.000Z`)으로 보낸다. 이를 `new Date(iso)`로 읽고
+ * 로컬 게터(getDate 등)로 표시하면, UTC보다 서쪽 시간대(예: 미국 PDT)에서는 전날 저녁이 되어
+ * **하루 당겨져** 보였다(푸가초의 난 1773-09-01 → '8월 31일'). 앞의 연-월-일을 그대로 떼어
+ * 로컬 자정으로 만들면 어느 시간대에서도 저장된 날짜가 보인다. 연도 0~99는 JS가 19xx로
+ * 바꾸므로 setFullYear로 다시 박고, 음수(기원전) 표기(-0044-03-15)도 받는다.
+ */
 function parseDate(iso?: string | null): Date | null {
   if (!iso) return null
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? null : d
+  const match = /^(-?\d{1,6})-(\d{2})-(\d{2})/.exec(iso)
+  if (match) {
+    const year = Number(match[1])
+    const local = new Date(2000, Number(match[2]) - 1, Number(match[3]))
+    local.setFullYear(year)
+    return isNaN(local.getTime()) ? null : local
+  }
+  const fallback = new Date(iso)
+  return isNaN(fallback.getTime()) ? null : fallback
 }
 
 function yearOf(d: Date | null): number | null {
