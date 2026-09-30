@@ -102,8 +102,15 @@ export const Page = styled.div`
 export const PageInner = styled.div`
   container-type: inline-size;
   container-name: eventdetail;
-  /* 넓은 트랙 1040 + gap 48 + 장부 312 = 1400, 좌우 패딩 28×2. 그 이상은 가운데 정렬로 비운다. */
-  max-width: ${PROSE_WIDTH + 2 * BREAKOUT_MAX + COLUMN_GAP + ASIDE_WIDTH + 56}px;
+  /*
+   * **폭 고정 + 가운데 정렬**(2026-09-26 사용자 지시: "옆으로 넓게 나오는데 무조건 사이즈 고정,
+   * 가운데로만"). 산문 720 + gap 48 + 장부 312 = 1080, 좌우 패딩 28×2 = 1136에서 멈춘다.
+   * 예전 상한은 넓은 블록의 양옆 여백(breakout 160×2)까지 포함한 1456이라, 넓은 창에서는
+   * 문서와 장부 사이가 200px로 벌어지고 장부가 창 오른쪽 끝으로 밀려났다.
+   * 이 폭에서는 breakoutGutter = (100cqi − 1080)/2 = 0이 되어 표·행위자·갤러리도 산문 폭에
+   * 맞춰진다(breakout 코드는 그대로 두되 여백이 0으로 닫힌다). 상한을 다시 키우지 말 것.
+   */
+  max-width: ${PROSE_WIDTH + COLUMN_GAP + ASIDE_WIDTH + 56}px;
   margin: 0 auto;
   padding: 32px 28px 96px;
 

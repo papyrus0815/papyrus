@@ -58,10 +58,18 @@ export const editableTrigger = css`
   ${editableSurface}
 `
 
+/** 편집 중 입력칸 둘레의 옅은 면 — 강조색 8~16%. */
+const accentWash = (mode: Mode) =>
+  mode === 'dark' ? 'rgba(165,180,252,0.12)' : 'rgba(79,70,229,0.06)'
+
 /**
  * 편집 모드 input/textarea — 배경·테두리 없음.
- * 위치/크기를 read 모드와 일치시키려고 패딩/마진 0. focus 시 outline만.
- * `data-invalid="true"` 시 outline을 error 색으로 강제.
+ * 위치/크기를 read 모드와 일치시키려고 패딩/마진 0 — 누르는 순간 글이 움직이지 않는다.
+ *
+ * 포커스 표시는 **입력칸 바깥으로만** 그린다(box-shadow라 레이아웃 불변). 예전엔 1px 선이
+ * 글자에서 2px 떨어져 딱 붙어, 36px 제목에선 글자가 상자에 끼인 듯했고 입력칸이라기보다
+ * 선택 영역처럼 보였다. 둘레 4px에 옅은 면을 깔고 그 바깥에 선을 그어 '필드'로 읽히게 한다.
+ * `data-invalid="true"` 시 선을 error 색으로.
  */
 const inputBase = css`
   font-family: inherit;
@@ -78,15 +86,23 @@ const inputBase = css`
   width: 100%;
   box-sizing: border-box;
 
+  border-radius: 4px;
+
+  /*
+   * 면(box-shadow 4px)과 선(outline, 4px 바깥 1px)을 따로 그린다 — 선까지 box-shadow로 겹치면
+   * 반투명한 면 뒤로 선이 비쳐 5px 굵은 테두리가 됐다(실측). outline은 radius를 따른다.
+   */
   &:focus {
+    background: ${({ theme }) => accentWash(theme.mode)};
+    box-shadow: 0 0 0 4px ${({ theme }) => accentWash(theme.mode)};
     outline: 1px solid ${({ theme }) => accent(theme.mode)};
-    outline-offset: 2px;
+    outline-offset: 4px;
   }
 
   &[data-invalid='true'],
   &[data-invalid='true']:focus {
     outline: 1px solid ${({ theme }) => theme.colors.error ?? '#dc2626'};
-    outline-offset: 2px;
+    outline-offset: 4px;
   }
 `
 
@@ -94,10 +110,11 @@ export const InlineInput = styled.input`
   ${inputBase}
 `
 
+/* 높이는 InlineText가 내용에 맞춰 잰다(최소 줄 수 = rows) — 크기 조절 손잡이는 필요 없다. */
 export const InlineTextArea = styled.textarea`
   ${inputBase}
-  min-height: 2em;
-  resize: vertical;
+  resize: none;
+  overflow: hidden;
 `
 
 /** 저장/취소 inline 버튼(rich text 등 명시 저장 필요한 곳용) */

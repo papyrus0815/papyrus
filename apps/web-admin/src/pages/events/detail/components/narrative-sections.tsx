@@ -99,6 +99,7 @@ export function NarrativeSectionList({
                       }
                     }}
                     placeholder="단락 제목 — 예: 개전 배경, 전쟁 경과"
+                    hint="Enter 저장 · Esc 취소"
                     label={`${labelPrefix} ${ordinal}단락 제목`}
                     /* 방금 만든 단락·방금 연 제목은 입력이 열린 채로 뜬다. */
                     autoEdit={!hasTitle}

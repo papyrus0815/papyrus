@@ -4,6 +4,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
@@ -65,6 +66,13 @@ interface InlineTextProps {
    * (읽기 화면이 입력란으로 뒤덮인다).
    */
   autoEdit?: boolean
+  /**
+   * multiline 입력칸의 최소 줄 수(기본 3). 칸은 내용에 맞춰 자란다. 한 줄이 보통인 값
+   * (제목 등)은 1 — 3줄 상자가 열리며 아래 내용을 밀어내지 않게.
+   */
+  minRows?: number
+  /** 입력칸 아래 작은 안내(예: 'Enter 저장 · Esc 취소'). 오류가 있으면 오류가 대신 선다. */
+  hint?: ReactNode
 }
 
 /**
@@ -92,6 +100,8 @@ export function InlineText({
   maxLength,
   showCount,
   autoEdit = false,
+  minRows = 3,
+  hint,
 }: InlineTextProps) {
   /* autoEdit는 *초기값*으로만 쓴다 — 이후 열고 닫는 것은 온전히 사용자 몫. */
   const [editing, setEditing] = useState(autoEdit)
@@ -167,6 +177,15 @@ export function InlineText({
     }
   }
 
+  /* multiline 칸을 내용 높이에 맞춘다 — 최소는 rows(minRows)가 잡는다. */
+  useLayoutEffect(() => {
+    if (!editing || !multiline) return
+    const node = inputRef.current
+    if (!node) return
+    node.style.height = 'auto'
+    node.style.height = `${node.scrollHeight}px`
+  }, [editing, multiline, draft])
+
   const nearLimit = maxLength != null && draft.length >= maxLength * 0.9
 
   if (editing) {
@@ -184,7 +203,7 @@ export function InlineText({
             }}
             onBlur={() => commit(true)}
             onKeyDown={onKey}
-            rows={3}
+            rows={minRows}
             maxLength={maxLength}
             aria-label={label ?? placeholder}
             /* 빈 입력칸이 무엇을 받는지 — 읽기 모드 안내와 같은 문구를 입력칸 안에도(예전엔 빈 상자). */
@@ -214,7 +233,13 @@ export function InlineText({
           />
         )}
         <EditFootRow>
-          {error ? <ErrorHint role="alert">{error}</ErrorHint> : <span />}
+          {error ? (
+            <ErrorHint role="alert">{error}</ErrorHint>
+          ) : hint ? (
+            <HintText>{hint}</HintText>
+          ) : (
+            <span />
+          )}
           {showCount && maxLength != null && (
             <CharCount $warn={nearLimit} aria-hidden>
               {draft.length}/{maxLength}
@@ -288,6 +313,7 @@ const EditHost = styled.span`
 `
 
 const ErrorHint = styled.span`
+  padding-top: 4px;
   font-size: 12px;
   color: ${({ theme }) => theme.colors.error ?? '#dc2626'};
 `
@@ -298,6 +324,17 @@ const EditFootRow = styled.span`
   justify-content: space-between;
   gap: 8px;
   min-height: 0;
+`
+
+/* 위 4px — 입력칸 바깥 포커스 링(5px) 아래로 비켜 선다. */
+const HintText = styled.span`
+  padding-top: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CharCount = styled.span<{ $warn?: boolean }>`

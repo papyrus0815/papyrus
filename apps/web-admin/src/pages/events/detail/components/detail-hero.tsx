@@ -159,10 +159,14 @@ export function DetailHero({
             next.trim() ? null : '제목은 비워둘 수 없습니다'
           }
           placeholder="사건명 입력"
+          label="사건 제목"
           as="span"
           /* 긴 제목은 textarea로 줄바꿈 표시 — Enter는 여전히 저장(Shift+Enter 줄바꿈). */
           multiline
           multilineEnter={false}
+          /* 제목은 대개 한 줄 — 3줄 상자가 열리며 아래를 85px 밀어내던 것을 막는다. */
+          minRows={1}
+          hint="Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소"
         />
       </TitleHost>
 
