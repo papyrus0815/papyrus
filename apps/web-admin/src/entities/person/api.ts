@@ -15,6 +15,8 @@ import type {
   Era,
 } from '@/shared/api/persons'
 
+import { personKeys } from './query-keys'
+
 // SDK 타입을 그대로 사용
 export type Person = PersonResponseDto
 /** 인포그래픽 목록(경량) 아이템 — adapt가 쓰는 최소 필드만 */
@@ -23,34 +25,9 @@ export type CreatePersonData = CreatePersonDto
 export type UpdatePersonData = UpdatePersonDto
 export type { Era }
 
-/**
- * Person API 쿼리 키
- */
-export const personKeys = {
-  all: ['persons'] as const,
-  /** GET /persons/infographic (경량 목록) — ['persons'] 프리픽스라 all 무효화 시 함께 갱신됨 */
-  infographic: ['persons', 'infographic'] as const,
-  /** GET /persons/:id (요약) */
-  detail: (id: string) => ['persons', id] as const,
-  /** GET /persons/:id/detail (관계·재임 등 포함 상세) */
-  detailFull: (id: string) => ['person-detail', id] as const,
-  /** person-detail prefix 전체 (모달 스택의 다른 personId 상세까지 broad invalidate용) */
-  detailFullAll: ['person-detail'] as const,
-  /** 가계도 (다른 인물 상세에 박힌 가족 노드 profileImageUrl 공유) */
-  familyTree: ['person-family-tree'] as const,
-  /** 동시대 수장 스트립 */
-  contemporaries: ['person-contemporaries'] as const,
-  /** 같은 국가 전/후 재위(승계) */
-  reignAdjacency: ['person-reign-adjacency'] as const,
-  /** 국가 대시보드 인물 통계 */
-  byCountry: ['persons-by-country'] as const,
-  /** 가문 구성원 */
-  byDynasty: ['persons-by-dynasty'] as const,
-  /** 국가 상세 수장 섹션 */
-  byTenureCountry: ['persons-by-tenure-country'] as const,
-  /** GET /persons/dashboard/person-counts-by-modern-country */
-  modernCountryPersonCounts: ['persons', 'modern-country-person-counts'] as const,
-}
+// 쿼리 키 정본은 query-keys.ts — API 클라이언트를 끌지 않는 가벼운 모듈이라 다른 도메인(사건)이
+// 캐시 무효화에 가져다 써도 jest 모듈 그래프(import.meta.env)가 깨지지 않는다.
+export { personKeys }
 
 /**
  * 인물 관련 모든 쿼리 캐시 무효화 — 아바타·이름·생몰 수정, 생성, 삭제 후 공통 호출.

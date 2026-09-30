@@ -3,7 +3,10 @@
  * P2-1(하위 다중선택 무성유실)·P3-8(상위 지정/해제 지연)의 핵심 로직: 캐시(childEvents/
  * parentEvent)가 즉시 전진해야 childIds/selectedValues가 stale해지지 않는다.
  */
-import { QueryClient } from '@tanstack/react-query'
+import { createElement, type ReactNode } from 'react'
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, renderHook } from '@testing-library/react'
 
 // @/shared/api/events는 api.service(import.meta.env, Vite 전용)를 끌어와 jest에서 로드 불가 —
 // 런타임 export만 목킹해 모듈 그래프를 끊는다(테스트는 순수 함수 buildOptimisticEvent만 검증).
@@ -12,10 +15,13 @@ jest.mock('@/shared/api/events', () => ({
   getEventById: jest.fn(),
 }))
 
+import { updateEvent } from '@/shared/api/events'
+
 import {
   LISTING_FIELDS,
   buildOptimisticEvent,
   detectReasonRevival,
+  useEventMutation,
 } from './use-event-mutation'
 import { type EventDetail } from './use-event-detail'
 
@@ -345,5 +351,41 @@ describe('detectReasonRevival — 하위 신규 연결', () => {
 describe('LISTING_FIELDS — 목록 갱신 화이트리스트(DATA-9)', () => {
   it('참여국 정본 필드가 포함된다 — 현대·역사가 한 배열이라 키도 하나다', () => {
     expect(LISTING_FIELDS).toContain('relatedCountries')
+  })
+})
+
+/**
+ * 사건의 참여 인물·참여국은 다른 지면(인물 상세 '사건' 탭, 국가 대시보드)에도 박혀 있다 —
+ * 사건 쪽 캐시만 갱신하면 사건에서 인물을 추가해도 그 인물 상세엔 한동안 안 보였다.
+ */
+describe('useEventMutation — 다른 지면 캐시 무효화', () => {
+  const runPatch = async (patch: Patch) => {
+    ;(updateEvent as jest.Mock).mockResolvedValue({ id: 'E', title: '루트 사건' })
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+    client.setQueryData(['event-detail', 'E'], makeEvent())
+    const invalidate = jest.spyOn(client, 'invalidateQueries')
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children)
+    const { result } = renderHook(() => useEventMutation('E'), { wrapper })
+    await act(async () => {
+      await result.current.mutateAsync(patch)
+    })
+    return invalidate.mock.calls.map(([filters]) => filters?.queryKey)
+  }
+
+  it('참여 인물을 바꾸면 인물 상세(person-detail) 캐시를 무효화한다', async () => {
+    const keys = await runPatch({ relatedPersons: [{ personId: 'P1' }] } as unknown as Patch)
+    expect(keys).toContainEqual(['person-detail'])
+  })
+
+  it('참여국을 바꾸면 국가별 사건(events-by-country) 캐시를 무효화한다', async () => {
+    const keys = await runPatch({ relatedCountries: [] } as unknown as Patch)
+    expect(keys).toContainEqual(['events-by-country'])
+  })
+
+  it('본문만 바꾸면 다른 지면은 건드리지 않는다', async () => {
+    const keys = await runPatch({ background: '본문' } as unknown as Patch)
+    expect(keys).not.toContainEqual(['person-detail'])
+    expect(keys).not.toContainEqual(['events-by-country'])
   })
 })

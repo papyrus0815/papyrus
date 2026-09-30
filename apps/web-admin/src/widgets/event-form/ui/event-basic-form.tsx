@@ -23,6 +23,7 @@ import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, us
 
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { personKeys } from '@/entities/person/query-keys'
 import { invalidateGamification } from '@/entities/gamification'
 import { useFormEntities } from '@/entities/event-form/model'
 import { buildEventSubmitData, checkBasicInfo, validateBasicInfo } from '@/features/event-create/lib'
@@ -591,6 +592,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           refetchType: 'none',
         })
       }
+      /*
+       * 사건의 참여 인물·참여국이 박힌 **다른 지면** — 인물 상세 '사건' 탭(person-detail),
+       * 국가 대시보드(events-by-country). 모달이 국가 대시보드 위에서 열렸다면 등록 즉시 그
+       * 대시보드에 새 사건이 보여야 한다. 마운트된 쿼리만 다시 받는다(목록과 달리 N페이지 소진 없음).
+       */
+      queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
+      queryClient.invalidateQueries({ queryKey: ['events-by-country'] })
       invalidateGamification(queryClient)
 
       // 캐시 시딩·상세 프리페치는 **셸 종류와 무관하게 항상** 수행한다.

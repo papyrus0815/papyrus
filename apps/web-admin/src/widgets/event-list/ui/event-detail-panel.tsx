@@ -32,6 +32,7 @@ import {
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
 /** 드로어 하위 사건 목록의 기본 노출 개수 — 나머지는 '더 보기'로 편다. */
@@ -39,6 +40,7 @@ const CHILD_PREVIEW_COUNT = 5
 /** 본문 구성(목차) 미리보기 상한 — 실측 사건당 섹션 수 1~14개. */
 const SECTION_PREVIEW_COUNT = 6
 
+import { personKeys } from '@/entities/person/query-keys'
 import { getCategoryName } from '@/features/event-list/lib'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { formatDateWithPrecision, isoDaySpan } from '@/shared/lib/iso-date'
@@ -119,6 +121,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   missingEventId = null,
 }) => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [descExpanded, setDescExpanded] = useState(false)
   /** 하위 사건 미리보기 개수 — 이 수를 넘으면 '더 보기'가 붙는다. */
   const [childrenExpanded, setChildrenExpanded] = useState(false)
@@ -206,6 +209,9 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
     setConfirmDeleteOpen(false)
     try {
       await deleteEvent(selectedNode.id)
+      // 사건은 인물 상세 '사건' 탭·국가 대시보드에도 박혀 있다 — 지운 사건이 거기 남지 않게
+      void queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
+      void queryClient.invalidateQueries({ queryKey: ['events-by-country'] })
       // 관리자 UI에 복구 동선이 없으므로 '복구 가능'을 약속하지 않는다.
       notify.success('사건이 삭제되었습니다.')
       if (onAfterDelete) {

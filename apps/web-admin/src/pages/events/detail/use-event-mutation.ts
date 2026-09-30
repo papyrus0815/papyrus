@@ -11,6 +11,7 @@ import {
   type UpdateEventDto,
   updateEvent,
 } from '@/shared/api/events'
+import { personKeys } from '@/entities/person/query-keys'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -148,6 +149,19 @@ export function useEventMutation(eventId: string) {
        */
       if (patchAffectsListing(patch)) {
         queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+      }
+      /**
+       * 사건의 참여 인물·참여국은 **다른 지면**에도 박혀 있다 — 인물 상세 '사건' 탭은
+       * person-detail 응답의 events를, 국가 대시보드는 events-by-country를 읽는다.
+       * 예전엔 사건 쪽 캐시만 갱신해, 사건에서 인물을 추가해도 그 인물 상세엔 한동안 안 보였다
+       * (반대 방향 invalidatePersonCaches는 이미 event-detail을 갱신한다). 마운트된 쿼리만
+       * 다시 받으므로 prefix 무효화의 비용은 작다.
+       */
+      if ('relatedPersons' in patch) {
+        queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
+      }
+      if ('relatedCountries' in patch || 'historicalCountryId' in patch) {
+        queryClient.invalidateQueries({ queryKey: ['events-by-country'] })
       }
       /**
        * 계층 patch(parentEventId·childEventIds)는 *다른* 사건의 상세 캐시도 바꾼다 —

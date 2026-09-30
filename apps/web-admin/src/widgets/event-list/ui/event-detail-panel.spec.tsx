@@ -8,7 +8,16 @@
 import '@testing-library/jest-dom'
 import { fireEvent, screen } from '@testing-library/react'
 
+import type { ReactElement } from 'react'
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
 import { renderWithTheme } from '@/shared/test/render-with-theme'
+
+/** 패널이 삭제 후 인물·국가 캐시를 무효화하느라 useQueryClient를 쓴다 — 앱처럼 공급자로 감싼다 */
+const withQueryClient = (ui: ReactElement) => (
+  <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
+)
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -79,11 +88,13 @@ describe('EventDetailPanel — 상위 사건 링크', () => {
   it('parentEventRef가 있으면 행이 뜨고 클릭 시 onSelectEvent(parent.id)로 전환된다', () => {
     const onSelectEvent = jest.fn()
     renderWithTheme(
-      <EventDetailPanel
-        {...baseProps}
-        parentEventRef={{ id: 'r1', title: '제1차 세계 대전' }}
-        onSelectEvent={onSelectEvent}
-      />,
+      withQueryClient(
+        <EventDetailPanel
+          {...baseProps}
+          parentEventRef={{ id: 'r1', title: '제1차 세계 대전' }}
+          onSelectEvent={onSelectEvent}
+        />,
+      ),
     )
 
     expect(screen.getByText('상위 사건')).toBeInTheDocument()
@@ -94,7 +105,7 @@ describe('EventDetailPanel — 상위 사건 링크', () => {
   })
 
   it('최상위 사건(parentEventRef 없음)은 행을 그리지 않는다', () => {
-    renderWithTheme(<EventDetailPanel {...baseProps} />)
+    renderWithTheme(withQueryClient(<EventDetailPanel {...baseProps} />))
     expect(screen.queryByText('상위 사건')).not.toBeInTheDocument()
   })
 })
