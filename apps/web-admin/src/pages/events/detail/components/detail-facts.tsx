@@ -93,6 +93,8 @@ export function DetailFacts({
           startDatePrecision={event.startDatePrecision}
           endDate={event.endDate}
           endDatePrecision={event.endDatePrecision}
+          // 사건은 정밀도 컬럼이 있다 — 연도만 아는 사건을 '1월 1일'로 두지 않게
+          allowPartial
           onSave={(patch) => onPatch(patch)}
         />
       </DateLine>

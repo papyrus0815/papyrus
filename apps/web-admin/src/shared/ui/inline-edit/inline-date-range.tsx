@@ -31,6 +31,16 @@ interface InlineDateRangeProps {
   label?: string
   /** BC 선택 차단(opt-in) — plain DateTime 컬럼(기업 설립·해산 등)에 쓸 때 켠다. */
   blockBc?: boolean
+  /**
+   * 연도만·연월만 입력 허용(opt-in) — 정밀도 컬럼이 있는 모델(사건)에서만 켠다.
+   * 켜면 달력에서 월·일을 비울 수 있고, 고른 정밀도를 그대로 저장한다.
+   */
+  allowPartial?: boolean
+}
+
+/** 서버 정밀도 문자열 → 3종. null·미지정은 서버 규약대로 day */
+function asPrecision(value?: string | null): DatePrecision {
+  return value === 'year' || value === 'month' ? value : 'day'
 }
 
 /**
@@ -51,6 +61,7 @@ export function InlineDateRange({
   endPlaceholder = '종료일 (선택)',
   label,
   blockBc = false,
+  allowPartial = false,
 }: InlineDateRangeProps) {
   const [editing, setEditing] = useState(false)
   // 편집은 로컬 draft에 모았다가 '완료' 시 한 번의 onSave로 커밋한다.
@@ -58,6 +69,10 @@ export function InlineDateRange({
   //  undo 토스트 2개가 생기고 되돌리기 한 번이 종료일만 복구했다.)
   const [draftStart, setDraftStart] = useState(startDate ?? '')
   const [draftEnd, setDraftEnd] = useState(endDate ?? '')
+  const savedStartPrecision = asPrecision(startDatePrecision)
+  const savedEndPrecision = asPrecision(endDatePrecision)
+  const [draftStartPrecision, setDraftStartPrecision] = useState(savedStartPrecision)
+  const [draftEndPrecision, setDraftEndPrecision] = useState(savedEndPrecision)
 
   // edit 진입(false→true) 시에만 draft를 현재 server 값으로 동기화.
   const wasEditingRef = useRef(editing)
@@ -65,12 +80,32 @@ export function InlineDateRange({
     if (editing && !wasEditingRef.current) {
       setDraftStart(startDate ?? '')
       setDraftEnd(endDate ?? '')
+      setDraftStartPrecision(savedStartPrecision)
+      setDraftEndPrecision(savedEndPrecision)
     }
     wasEditingRef.current = editing
-  }, [editing, startDate, endDate])
+  }, [editing, startDate, endDate, savedStartPrecision, savedEndPrecision])
 
   const commit = () => {
     const patch: DateRangePatch = {}
+    if (allowPartial) {
+      // 정밀도를 사용자가 직접 고른다 — 고른 값 그대로. 날짜가 같아도 정밀도만 바뀌면
+      // ('1950년 1월 1일' → '1950년') 저장해야 하므로 둘 중 하나라도 바뀌면 보낸다.
+      if (draftStart !== (startDate ?? '') || draftStartPrecision !== savedStartPrecision) {
+        patch.startDate = draftStart
+        patch.startDatePrecision = draftStartPrecision
+      }
+      if (
+        draftEnd !== (endDate ?? '') ||
+        (draftEnd && draftEndPrecision !== savedEndPrecision)
+      ) {
+        patch.endDate = draftEnd
+        patch.endDatePrecision = draftEndPrecision
+      }
+      if (Object.keys(patch).length > 0) onSave(patch)
+      setEditing(false)
+      return
+    }
     // 달력은 일 단위까지 고르지만, 사료적으로 연/월만 아는 사건의 기존 정밀도를
     // 임의로 'day'로 덮지 않는다 — 기존 정밀도를 보존하고, 정밀도가 없던 필드에
     // 새 값이 들어온 경우에만 'day'로 둔다(거짓 정밀도 영속화 방지).
@@ -111,6 +146,12 @@ export function InlineDateRange({
           endPickerTitle="종료 일자 선택"
           openEndAfterStart={false}
           blockBc={blockBc}
+          {...(allowPartial && {
+            startPrecision: draftStartPrecision,
+            endPrecision: draftEndPrecision,
+            onStartPrecisionChange: setDraftStartPrecision,
+            onEndPrecisionChange: setDraftEndPrecision,
+          })}
         />
         <DoneButton type="button" onClick={commit} aria-label="기간 편집 완료">
           <FiCheck />

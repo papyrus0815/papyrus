@@ -6,7 +6,10 @@ import React, { useRef, useState } from 'react'
 import styled from 'styled-components'
 import { FiCalendar, FiChevronDown, FiX } from 'react-icons/fi'
 
-import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import {
+  DatePickerModal,
+  type DatePickerPrecision,
+} from '@/shared/ui/date-picker/date-picker-modal'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import {
   DateFieldBtn,
@@ -56,14 +59,17 @@ const ClearEndBtn = styled.button`
   }
 `
 
-function formatDateDisplay(iso: string): string {
+function formatDateDisplay(iso: string, precision: DatePickerPrecision = 'day'): string {
   if (!iso) return ''
   // 문자열 직접 파싱(TZ 안전) — new Date(iso)는 UTC 자정 해석이라
   // UTC 서쪽 타임존에서 toLocaleDateString이 하루 빠진 날짜를 보여준다.
-  const p = parseIsoDateParts(iso)
-  if (!p) return iso
-  if (p.year < 0) return `BC ${Math.abs(p.year)}년 ${p.month}월 ${p.day}일`
-  return `${p.year}년 ${p.month}월 ${p.day}일`
+  const parts = parseIsoDateParts(iso)
+  if (!parts) return iso
+  const yearText = parts.year < 0 ? `BC ${Math.abs(parts.year)}년` : `${parts.year}년`
+  // 모르는 월·일은 1로 채워져 있다 — 정밀도만큼만('1950년'이 '1950년 1월 1일'로 둔갑 방지)
+  if (precision === 'year') return yearText
+  if (precision === 'month') return `${yearText} ${parts.month}월`
+  return `${yearText} ${parts.month}월 ${parts.day}일`
 }
 
 export interface DateRangeFieldProps {
@@ -100,6 +106,14 @@ export interface DateRangeFieldProps {
    * `값 || undefined` 전송 소비처에서 켜면 지워도 저장이 안 되는 silent no-op이 된다.
    */
   clearableEnd?: boolean
+  /**
+   * 날짜 정밀도(연만·연월만) — 변경 콜백을 주면 달력에서 월·일을 비울 수 있다(opt-in).
+   * 정밀도 컬럼이 있는 모델(사건 등)에서만 켤 것. 없으면 예전처럼 일까지 고른다.
+   */
+  startPrecision?: DatePickerPrecision
+  endPrecision?: DatePickerPrecision
+  onStartPrecisionChange?: (precision: DatePickerPrecision) => void
+  onEndPrecisionChange?: (precision: DatePickerPrecision) => void
 }
 
 export const DateRangeField: React.FC<DateRangeFieldProps> = ({
@@ -117,7 +131,12 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
   endPickerTitle = '퇴임일 선택',
   blockBc = false,
   clearableEnd = false,
+  startPrecision = 'day',
+  endPrecision = 'day',
+  onStartPrecisionChange,
+  onEndPrecisionChange,
 }) => {
+  const allowPartial = Boolean(onStartPrecisionChange && onEndPrecisionChange)
   const [startModalOpen, setStartModalOpen] = useState(false)
   const [endModalOpen, setEndModalOpen] = useState(false)
   const startBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -153,9 +172,10 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
    */
   const chainedToEndRef = useRef(false)
 
-  const handleStartSelect = (date: string) => {
+  const handleStartSelect = (date: string, precision: DatePickerPrecision) => {
     if (isBlockedBc(date)) return
     onStartChange(date)
+    onStartPrecisionChange?.(precision)
     setStartModalOpen(false)
     // 퇴임일이 아직 비어 있을 때만 자동 오픈 — 이미 선택했으면 취임일 재수정 시 다시 띄우지 않음
     if (openEndAfterStart && !endValue) {
@@ -174,9 +194,10 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
     focusTriggerAfterClose(startBtnRef)
   }
 
-  const handleEndSelect = (date: string) => {
+  const handleEndSelect = (date: string, precision: DatePickerPrecision) => {
     if (isBlockedBc(date)) return
     onEndChange(date)
+    onEndPrecisionChange?.(precision)
     setEndModalOpen(false)
     focusTriggerAfterClose(endBtnRef)
   }
@@ -194,7 +215,7 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
       $hasValue={!!endValue}
     >
       <FiCalendar size={16} />
-      <span>{endValue ? formatDateDisplay(endValue) : endPlaceholder}</span>
+      <span>{endValue ? formatDateDisplay(endValue, endPrecision) : endPlaceholder}</span>
       <FiChevronDown size={20} />
     </DateFieldBtn>
   )
@@ -208,7 +229,7 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
         $hasValue={!!startValue}
       >
         <FiCalendar size={16} />
-        <span>{startValue ? formatDateDisplay(startValue) : startPlaceholder}</span>
+        <span>{startValue ? formatDateDisplay(startValue, startPrecision) : startPlaceholder}</span>
         <FiChevronDown size={20} />
       </DateFieldBtn>
       {clearableEnd ? (
@@ -253,6 +274,8 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
         onClose={handleStartClose}
         title={startPickerTitle}
         initialDate={startValue || undefined}
+        allowPartial={allowPartial}
+        initialPrecision={startPrecision}
         onSelect={handleStartSelect}
       />
       <DatePickerModal
@@ -260,6 +283,8 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
         onClose={handleEndClose}
         title={endPickerTitle}
         initialDate={endValue || undefined}
+        allowPartial={allowPartial}
+        initialPrecision={endPrecision}
         onSelect={handleEndSelect}
       />
     </>
