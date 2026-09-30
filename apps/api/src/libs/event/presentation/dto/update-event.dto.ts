@@ -166,6 +166,16 @@ export class UpdateEventDto {
         personId: { type: 'string' },
         role: { type: 'string' },
         note: { type: 'string' },
+        countryId: {
+          type: 'string',
+          nullable: true,
+          description: '참여 자격 현대국(생략=유지·새 줄은 인물 국적으로 추론 / null=비움)',
+        },
+        historicalCountryId: {
+          type: 'string',
+          nullable: true,
+          description: '참여 자격 역사국(생략=유지·새 줄은 인물 국적으로 추론 / null=비움)',
+        },
       },
     },
   })
@@ -174,6 +184,10 @@ export class UpdateEventDto {
     personId: string
     role?: string
     note?: string
+    /** 참여 자격 현대국 — 생략=유지(새 줄은 추론) / null=비움 */
+    countryId?: string | null
+    /** 참여 자격 역사국 — 생략=유지(새 줄은 추론) / null=비움 */
+    historicalCountryId?: string | null
   }>
 
   @ApiProperty({

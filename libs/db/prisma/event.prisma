@@ -553,15 +553,29 @@ model PersonEvent {
   /// 비고
   note String? @db.Text
 
+  /// 표시 순서(사건 상세 참여 인물 목록). 없던 시절엔 ORDER BY 없이 읽어 무작위 UUID 순으로
+  /// 보였고, 저장마다 행을 다시 만들어 '위로·아래로' 이동이 유지되지 않았다.
+  sortOrder Int @default(0) @map("sort_order")
+
+  /// 어느 나라 자격으로 참여했나(선택) — 현대·역사 dual-fill. 사건 참여국 중 하나를 가리킨다.
+  /// 비어 있으면 연결할 때 인물의 국적·소속이 사건 참여국과 맞으면 자동으로 채운다.
+  countryId           String? @map("country_id") @db.Char(36)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
   //--- 관계 필드
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
-  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  person            Person             @relation(fields: [personId], references: [id], onDelete: Cascade)
+  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  country           Country?           @relation("PersonEventCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry? @relation("PersonEventHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([personId, eventId])
+  @@index([eventId, sortOrder], name: "idx_person_event_eventId_sortOrder")
+  @@index([countryId], name: "idx_person_event_countryId")
+  @@index([historicalCountryId], name: "idx_person_event_histCountryId")
   @@map("person_event")
 }
 

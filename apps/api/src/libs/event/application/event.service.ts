@@ -7,6 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common'
 import { EventRepository } from '../domain/event.repository'
+import { inferParticipationCountries } from './person-participation'
 import { Event } from '../domain/event.entity'
 import { AggregateType, EventMethod, Prisma, PrismaClient } from '@prisma/client'
 import { PointService } from '../../gamification/application/point.service'
@@ -30,8 +31,20 @@ type ExtraParentEdgePlan =
   | { kind: 'diff'; finalExtras: string[] }
 
 /** 사건 본문 외의 하위 리소스 — 전부 선택. 생략한 항목은 손대지 않는다. */
+/**
+ * 참여 인물 한 줄. countryId·historicalCountryId(참여 자격 국가)는 3상:
+ * 생략=유지(새 줄이면 인물 국적으로 추론) / null=비움 / 값=설정.
+ */
+export interface RelatedPersonInput {
+  personId: string
+  role?: string
+  note?: string
+  countryId?: string | null
+  historicalCountryId?: string | null
+}
+
 export interface CreateEventOptions {
-  relatedPersons?: Array<{ personId: string; role?: string; note?: string }>
+  relatedPersons?: RelatedPersonInput[]
   /**
    * 생성과 동시에 기입하는 계층 연결 사유(이 사건=자식) — 유효 쌍은 이번 요청의
    * 주 상위·추가 상위뿐. 엣지 쓰기 뒤 같은 tx에서 applyHierarchyReasons로 적용.
@@ -73,9 +86,9 @@ export interface UpdateEventOptions
   relatedCountries?: EventCountryParticipantInput[]
   /**
    * 관련 인물 목록. undefined면 손대지 않음(부분 patch), 빈 배열이면 모두 제거.
-   * 아직 delete-and-recreate다(참여국만 머지로 승격 — 큐레이션된 데이터가 거기 있다).
+   * 자연키(personId) 머지 — 배열 순서가 표시 순서(sortOrder).
    */
-  relatedPersons?: Array<{ personId: string; role?: string; note?: string }>
+  relatedPersons?: RelatedPersonInput[]
   /**
    * 계층 연결 사유 — *부분 업서트* 규약(전체목록 아님): undefined=변경 없음, 나열된
    * 쌍만 터치. reason 문자열=업서트, null(또는 공백)=행 삭제. 인접(멤버십) 채널과
@@ -291,48 +304,59 @@ export class EventService {
     const allMentionedPersons = new Map<string, string>()
 
     // 관련 인물 연결 (명시적으로 선택한 인물 + 멘션된 인물)
-    const allRelatedPersons = new Map<string, { role?: string; note?: string }>()
+    const allRelatedPersons = new Map<string, RelatedPersonInput>()
 
     // 명시적으로 선택한 인물
     if (relatedPersons) {
       relatedPersons.forEach((person) => {
-        allRelatedPersons.set(person.personId, {
-          role: person.role,
-          note: person.note,
-        })
+        if (!allRelatedPersons.has(person.personId)) {
+          allRelatedPersons.set(person.personId, person)
+        }
       })
     }
 
     // 멘션된 인물 추가 (중복 제거)
     allMentionedPersons.forEach((role, personId) => {
       if (!allRelatedPersons.has(personId)) {
-        allRelatedPersons.set(personId, { role })
+        allRelatedPersons.set(personId, { personId, role })
       }
     })
 
-    // PersonEvent 생성
-    if (allRelatedPersons.size > 0) {
-      await Promise.all(
-        Array.from(allRelatedPersons.entries()).map(([personId, info]) =>
-          this.prisma.personEvent.create({
-            data: {
-              personId,
-              eventId: event.id,
-              role: info.role,
-              note: info.note,
-            },
-          }),
-        ),
-      )
-    }
-
     // 참여국 — 배열 순서가 표시 순서, 역할은 각 줄이 들고 온다(주도국=INITIATOR).
+    // 참여 인물보다 **먼저** 쓴다 — 인물의 참여 자격 국가를 이 참여국에서 추론하기 때문.
     if (relatedCountries && relatedCountries.length > 0) {
       await this.countryParticipants.createAll(
         this.prisma,
         event.id,
         relatedCountries,
       )
+    }
+
+    // PersonEvent 생성 — 배열 순서 = 표시 순서(sortOrder), 참여 자격 국가는 안 주면 추론
+    if (allRelatedPersons.size > 0) {
+      const entries = Array.from(allRelatedPersons.entries())
+      const inferred = await inferParticipationCountries(
+        this.prisma,
+        event.id,
+        entries.map(([personId]) => personId),
+      )
+      await this.prisma.personEvent.createMany({
+        data: entries.map(([personId, info], index) => ({
+          personId,
+          eventId: event.id,
+          role: info.role,
+          note: info.note,
+          sortOrder: index,
+          countryId:
+            info.countryId !== undefined
+              ? info.countryId
+              : (inferred.get(personId)?.countryId ?? null),
+          historicalCountryId:
+            info.historicalCountryId !== undefined
+              ? info.historicalCountryId
+              : (inferred.get(personId)?.historicalCountryId ?? null),
+        })),
+      })
     }
 
     // 🆕 하위 사건 자동 생성
@@ -606,7 +630,7 @@ export class EventService {
      * 같은 인물이 두 번 오면 앞의 것 하나로 접는다.
      */
     if (relatedPersons !== undefined) {
-      const wanted = new Map<string, { role?: string; note?: string }>()
+      const wanted = new Map<string, RelatedPersonInput>()
       for (const person of relatedPersons) {
         if (person.personId && !wanted.has(person.personId)) {
           wanted.set(person.personId, person)
@@ -616,7 +640,29 @@ export class EventService {
         await tx.personEvent.deleteMany({
           where: { eventId: id, personId: { notIn: [...wanted.keys()] } },
         })
+        // 참여 자격 국가: 새로 오는 인물 + 아직 비어 있는 기존 인물만 추론한다(사람이 고른 값은 보존).
+        const existing = await tx.personEvent.findMany({
+          where: { eventId: id },
+          select: { personId: true, countryId: true, historicalCountryId: true },
+        })
+        const existingById = new Map(existing.map((row) => [row.personId, row]))
+        const inferred = await inferParticipationCountries(
+          tx,
+          id,
+          [...wanted.keys()].filter((personId) => {
+            const row = existingById.get(personId)
+            return !row || (!row.countryId && !row.historicalCountryId)
+          }),
+        )
+        let index = 0
         for (const [personId, person] of wanted) {
+          const guess = inferred.get(personId)
+          const countryId =
+            person.countryId !== undefined ? person.countryId : guess?.countryId
+          const historicalCountryId =
+            person.historicalCountryId !== undefined
+              ? person.historicalCountryId
+              : guess?.historicalCountryId
           await tx.personEvent.upsert({
             where: { personId_eventId: { personId, eventId: id } },
             create: {
@@ -624,9 +670,20 @@ export class EventService {
               eventId: id,
               role: person.role,
               note: person.note,
+              sortOrder: index,
+              countryId: countryId ?? null,
+              historicalCountryId: historicalCountryId ?? null,
             },
-            update: { role: person.role ?? null, note: person.note ?? null },
+            update: {
+              role: person.role ?? null,
+              note: person.note ?? null,
+              // 배열 순서가 곧 표시 순서 — '위로·아래로'가 여기서 저장된다
+              sortOrder: index,
+              ...(countryId !== undefined && { countryId }),
+              ...(historicalCountryId !== undefined && { historicalCountryId }),
+            },
           })
+          index += 1
         }
       })
     }

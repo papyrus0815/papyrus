@@ -323,6 +323,14 @@ export class EventResponseDto {
     role?: string | null
     /** 그 인물 시점의 사건 서술 (장문) — 인물 연보에도 그대로 표시됨 */
     note?: string | null
+    /** 참여 자격 현대국 ID */
+    countryId?: string | null
+    /** 참여 자격 역사국 ID */
+    historicalCountryId?: string | null
+    /** 참여 자격 국가 표시명(역사국 우선) */
+    participationCountryName?: string | null
+    /** 사건 당시 직위(재임·재위에서 파생, 최대 2개) — 상세 응답에서만 */
+    officesAtEvent?: string[]
     person?: {
       id: string
       name?: string | null

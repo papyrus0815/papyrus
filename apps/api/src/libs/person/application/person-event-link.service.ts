@@ -17,6 +17,7 @@ import {
 import { PrismaService } from '../../../../prisma/prisma.service'
 
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
+import { inferParticipationCountries } from '../../event/application/person-participation'
 
 /** 후보 한 줄 */
 export interface PersonEventCandidateDto {
@@ -286,9 +287,36 @@ export class PersonEventLinkService {
     if (role && role.length > 100) {
       throw new BadRequestException('역할은 100자 이내로 적어 주세요.')
     }
+    const existing = await this.prisma.personEvent.findUnique({
+      where: { personId_eventId: { personId, eventId } },
+      select: { id: true },
+    })
+    // 새 연결이면 사건 참여 인물 목록의 끝에 서고, 참여 자격 국가는 국적으로 추론한다
+    const createExtras = existing
+      ? { sortOrder: 0, countryId: null, historicalCountryId: null }
+      : await (async () => {
+          const last = await this.prisma.personEvent.aggregate({
+            where: { eventId },
+            _max: { sortOrder: true },
+          })
+          const inferred = (
+            await inferParticipationCountries(this.prisma, eventId, [personId])
+          ).get(personId)
+          return {
+            sortOrder: (last._max.sortOrder ?? -1) + 1,
+            countryId: inferred?.countryId ?? null,
+            historicalCountryId: inferred?.historicalCountryId ?? null,
+          }
+        })()
     const row = await this.prisma.personEvent.upsert({
       where: { personId_eventId: { personId, eventId } },
-      create: { personId, eventId, role: role ?? null, note: note ?? null },
+      create: {
+        personId,
+        eventId,
+        role: role ?? null,
+        note: note ?? null,
+        ...createExtras,
+      },
       update: {
         ...(role !== undefined && { role }),
         ...(note !== undefined && { note }),

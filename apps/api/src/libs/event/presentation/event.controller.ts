@@ -21,6 +21,7 @@ import { AuthGuard } from '@nestjs/passport'
 
 import { ApiTags } from '@nestjs/swagger'
 import { EventService } from '../application/event.service'
+import { resolveOfficesAtEvent } from '../application/person-participation'
 import { MilitaryEventService } from '../application/military-event.service'
 import { EventRelationService } from '../application/event-relation.service'
 import {
@@ -411,6 +412,11 @@ export class EventController {
             personId: pe.personId,
             role: pe.role ?? null,
             note: pe.note ?? null,
+            countryId: pe.countryId ?? null,
+            historicalCountryId: pe.historicalCountryId ?? null,
+            // 참여 자격 국가 표시명 — 역사국가 우선(당시의 나라)
+            participationCountryName:
+              pe.historicalCountry?.name ?? pe.country?.name ?? null,
             person: pe.person
               ? {
                   id: pe.person.id,
@@ -1487,7 +1493,8 @@ export class EventController {
         eventImages: {
           orderBy: { order: 'asc' },
         },
-        // 참여 인물(PersonEvent) — 인물 시점의 role/note(장문) 포함
+        // 참여 인물(PersonEvent) — 인물 시점의 role/note(장문) 포함.
+        // sortOrder가 표시 순서('위로·아래로'), 참여 자격 국가 이름도 함께.
         persons: {
           include: {
             person: {
@@ -1555,7 +1562,10 @@ export class EventController {
     @Query('limit') limit?: string,
   ): Promise<VisitedEventCardDto[]> {
     const parsedLimit = parseInt(limit ?? '', 10)
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     const take = Number.isNaN(parsedLimit) ? 60 : Math.min(Math.max(parsedLimit, 1), 100)
+            country: { select: { id: true, name: true, flagEmoji: true } },
+            historicalCountry: { select: { id: true, name: true } },
     const rows = await this.prisma.event.findMany({
       // 루트 판정 — domain/event-hierarchy.ts 단일출처(INV-2 의존, 다중 상위 무영향)
       where: { createdById: accountId, ...ROOT_EVENT_WHERE, deletedAt: null },
@@ -1599,6 +1609,18 @@ export class EventController {
 
     return loaded.response
   }
+    // 참여 인물별 '사건 당시 직위' — 재임·재위 기록에서 파생(저장하지 않는다)
+    if (response.relatedPersons && response.relatedPersons.length > 0) {
+      const offices = await resolveOfficesAtEvent(
+        this.prisma,
+        event,
+        response.relatedPersons.map((person) => person.personId),
+      )
+      for (const person of response.relatedPersons) {
+        person.officesAtEvent = offices.get(person.personId) ?? []
+      }
+    }
+
 
   /**
    * 사건 생성

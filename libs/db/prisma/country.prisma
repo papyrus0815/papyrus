@@ -96,6 +96,8 @@ model Country {
   /// 이 국가에만 적용되는 관직 정의 스코프 (없으면 그 정의는 전역)
   positionDefinitionScopes  GovernmentPositionDefinitionScope[] @relation("CountryPositionDefinitionScopes")
   historicalConnections     HistoricalCountryModernCountry[]
+  /// 이 나라 자격으로 사건에 참여한 인물(PersonEvent.countryId)
+  personEventParticipations PersonEvent[] @relation("PersonEventCountry")
   Law                       Law[]
   groundVehicles            GroundVehicle[]
   aircraft                  Aircraft[]
