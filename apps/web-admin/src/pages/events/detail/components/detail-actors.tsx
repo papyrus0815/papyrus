@@ -111,9 +111,8 @@ export function DetailActors({
     staleTime: 5 * 60_000,
   })
 
-  const patchPersons = (
-    next: Array<{ personId: string; role?: string; note?: string }>,
-  ) => onPatch({ relatedPersons: next })
+  const patchPersons = (next: PersonPayload[]) =>
+    onPatch({ relatedPersons: next })
 
   const updatePerson = (
     personId: string,
@@ -134,6 +133,25 @@ export function DetailActors({
       }
     })
     patchPersons(next)
+  }
+
+  /**
+   * 참여 자격 국가 — 사건 참여국 중 하나('h:역사국id' | 'c:현대국id') 또는 ''(지정 안 함).
+   * 고른 쪽만 채우고 다른 쪽은 비운다(현대·역사를 둘 다 잡고 있으면 어느 자격인지 흐려진다).
+   */
+  const setParticipationCountry = (personId: string, value: string) => {
+    const [kind, targetId] = value ? value.split(':') : ['', '']
+    patchPersons(
+      persons.map((person) =>
+        person.personId !== personId
+          ? toPersonPayload(person)
+          : {
+              ...toPersonPayload(person),
+              countryId: kind === 'c' ? targetId : null,
+              historicalCountryId: kind === 'h' ? targetId : null,
+            },
+      ),
+    )
   }
 
   const removePerson = (personId: string) => {
@@ -286,6 +304,30 @@ export function DetailActors({
    * 긴 목록을 접으면 버튼이 수천 px 위로 올라가 화면엔 국가 목록 한가운데가 남는다.
    * 접은 직후 버튼을 화면에 다시 데려온다.
    */
+  /** 참여 자격 국가 선택지 — 이 사건의 참여국(역사국 먼저 표시되는 순서 그대로) */
+  const participationOptions = useMemo(
+    () =>
+      countryRows.length === 0
+        ? []
+        : [
+            { value: '', label: '지정 안 함' },
+            ...countryRows.map((row) => ({
+              value: `${row.isHistorical ? 'h' : 'c'}:${row.id}`,
+              label: `${row.flagEmoji ? `${row.flagEmoji} ` : ''}${row.name}`,
+            })),
+          ],
+    [countryRows],
+  )
+  const participationValueOf = (person: {
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }) =>
+    person.historicalCountryId
+      ? `h:${person.historicalCountryId}`
+      : person.countryId
+        ? `c:${person.countryId}`
+        : ''
+
   const togglePersons = () => {
     const willCollapse = showAllPersons
     setShowAllPersons(!showAllPersons)
@@ -397,13 +439,36 @@ export function DetailActors({
                     >
                       {fullName}
                     </PersonNameBtn>
+                    {(participationOptions.length > 1 ||
+                      (person.officesAtEvent?.length ?? 0) > 0) && (
+                      <PersonMetaLine>
+                        {participationOptions.length > 1 && (
+                          <InlineSelect
+                            value={participationValueOf(person)}
+                            options={participationOptions}
+                            onSave={(next) =>
+                              setParticipationCountry(person.personId, next)
+                            }
+                            placeholder={
+                              person.participationCountryName ?? '참여 국가 지정'
+                            }
+                            label={`${fullName}의 참여 국가`}
+                          />
+                        )}
+                        {(person.officesAtEvent?.length ?? 0) > 0 && (
+                          <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">
+                            당시 {person.officesAtEvent!.join(' · ')}
+                          </OfficeAtEvent>
+                        )}
+                      </PersonMetaLine>
+                    )}
                     <PersonRoleLine>
                       <InlineText
                         value={person.role ?? ''}
                         onSave={(next) =>
                           updatePerson(person.personId, { role: next })
                         }
-                        placeholder="역할 추가"
+                        placeholder="무엇을 했나 (예: 협상 대표, 지휘관)"
                         validate={(next) =>
                           next.length > 100
                             ? '역할은 100자 이내로 입력하세요'
@@ -690,7 +755,21 @@ function ClampedProse({
  * 서버 `=== undefined` 가드와 정합. update/add/remove 모두 동일 매핑을 쓰므로
  * 헬퍼로 한 곳에 둔다.
  */
-function toPersonPayload(p: { personId: string; role?: string | null; note?: string | null }) {
+/** 참여 인물 한 줄 — 참여 자격 국가는 3상(생략=유지 / null=비움 / 값=설정) */
+type PersonPayload = {
+  personId: string
+  role?: string
+  note?: string
+  countryId?: string | null
+  historicalCountryId?: string | null
+}
+
+function toPersonPayload(p: {
+  personId: string
+  role?: string | null
+  note?: string | null
+}): PersonPayload {
+  // 참여 자격 국가는 싣지 않는다(생략=유지) — 역할·순서만 바꾸는 저장이 그 값을 건드리지 않게
   return {
     personId: p.personId,
     role: p.role ?? undefined,
@@ -983,6 +1062,21 @@ const PersonNameBtn = styled.button`
 `
 
 /* 한글 이탤릭은 기울기만 흉내 내 흐려 보인다 — 역할은 곧은 보조 잉크로 */
+/** 참여 국가 · 당시 직위 한 줄 */
+const PersonMetaLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+`
+
+const OfficeAtEvent = styled.span`
+  font-weight: 500;
+`
+
 const PersonRoleLine = styled.div`
   font-size: 13.5px;
   line-height: 1.5;

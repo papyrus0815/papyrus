@@ -21,6 +21,14 @@ export interface EventDetailPerson {
   personId: string
   role?: string | null
   note?: string | null
+  /** 참여 자격 현대국 */
+  countryId?: string | null
+  /** 참여 자격 역사국 */
+  historicalCountryId?: string | null
+  /** 참여 자격 국가 표시명(역사국 우선) */
+  participationCountryName?: string | null
+  /** 사건 당시 직위 — 재임·재위 기록에서 서버가 파생(최대 2개) */
+  officesAtEvent?: string[]
   person?: {
     id: string
     name?: string | null

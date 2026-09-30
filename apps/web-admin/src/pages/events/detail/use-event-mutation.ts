@@ -777,7 +777,13 @@ function resolveHistoricalCountries(
 }
 
 function resolvePersons(
-  items: Array<{ personId: string; role?: string; note?: string }>,
+  items: Array<{
+    personId: string
+    role?: string
+    note?: string
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }>,
   prevList: EventDetailPerson[] | undefined,
   all: unknown,
 ): EventDetailPerson[] | null {
@@ -815,11 +821,22 @@ function resolvePersons(
         }
       else return null
     }
+    // 참여 자격 국가·당시 직위는 patch에 없으면 이전 값 유지(3상: 생략=유지) — 안 그러면
+    // 역할 한 글자 고칠 때마다 국가 칩·직위 줄이 재조회까지 사라졌다.
+    const countryTouched =
+      item.countryId !== undefined || item.historicalCountryId !== undefined
     out.push({
       id: ex?.id ?? `opt-${item.personId}`,
       personId: item.personId,
       role: item.role ?? null,
       note: item.note ?? null,
+      countryId: countryTouched ? (item.countryId ?? null) : (ex?.countryId ?? null),
+      historicalCountryId: countryTouched
+        ? (item.historicalCountryId ?? null)
+        : (ex?.historicalCountryId ?? null),
+      // 새로 고른 국가의 이름은 화면이 참여국 목록에서 id로 찾는다
+      participationCountryName: countryTouched ? null : (ex?.participationCountryName ?? null),
+      officesAtEvent: ex?.officesAtEvent ?? [],
       person,
     })
   }
