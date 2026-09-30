@@ -362,6 +362,8 @@ model Event {
   historicalCountry   HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
   persons               PersonEvent[]
+  /// 이 사건을 관련 사건으로 가리키는 인물 연보 항목
+  personLifeEvents      PersonLifeEvent[] @relation("PersonLifeEventEvent")
   BookEvent             BookEvent[]
   countryRelations      EventCountryRelation[]
 

@@ -94,6 +94,14 @@ export class CreatePersonLifeEventDto {
   @IsOptional()
   @IsInt()
   sortOrder?: number
+
+  @ApiProperty({
+    description: '관련 사건 ID(선택) — 이 연보 항목이 사건 목록의 어느 사건에 해당하는지',
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID()
+  eventId?: string
 }
 
 /**
@@ -153,6 +161,11 @@ export class UpdatePersonLifeEventDto {
   @IsOptional()
   @IsInt()
   sortOrder?: number | null
+
+  @ApiProperty({ description: '관련 사건 ID — null이면 연결 해제', required: false })
+  @IsOptional()
+  @IsUUID()
+  eventId?: string | null
 }
 
 export interface PersonLifeEventResponseDto {
@@ -167,7 +180,20 @@ export interface PersonLifeEventResponseDto {
   endDatePrecision?: string | null
   sortOrder?: number | null
   accountId?: string | null
+  /** 관련 사건 ID (없으면 null) */
+  eventId?: string | null
+  /** 관련 사건 요약 — 연보 항목에서 사건으로 바로 가기용 */
+  event?: PersonLifeEventLinkedEventDto | null
   createdAt: string
   updatedAt: string
+}
+
+/** 연보 항목에 연결된 사건 요약 */
+export interface PersonLifeEventLinkedEventDto {
+  id: string
+  title: string
+  startEra?: string | null
+  startYear?: number | null
+  startDate?: string | null
 }
 

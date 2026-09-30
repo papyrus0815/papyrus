@@ -457,10 +457,16 @@ model PersonLifeEvent {
   /// 이 사건을 근거로 삼는 인간관계들
   humanRelationshipSources PersonHumanRelationshipSource[] @relation("PersonLifeEventSources")
 
+  /// 관련 사건(선택) — 연보 항목이 사건 목록의 어느 사건에 해당하는지. 연보와 사건이 따로 놀아
+  /// '이 인물이 X 전쟁에 참전'을 두 번 적던 것을 잇는다. 사건이 지워져도 연보는 남는다(SetNull).
+  eventId String? @map("event_id") @db.Char(36)
+  event   Event?  @relation("PersonLifeEventEvent", fields: [eventId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([personId], name: "idx_person_life_event_personId")
+  @@index([eventId], name: "idx_person_life_event_eventId")
   @@index([accountId], name: "idx_person_life_event_accountId")
   @@index([startDate], name: "idx_person_life_event_startDate")
   @@map("person_life_event")

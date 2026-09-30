@@ -33,6 +33,15 @@ import {
 } from '../domain/person.repository'
 import { careerItemLabel, educationItemLabel, awardItemLabel } from '../domain/subresource-label.util'
 import { mapStructuredDateInput } from '../domain/structured-date.util'
+
+/** 연보 항목에 실어 보내는 관련 사건 요약 필드 */
+const PERSON_LIFE_EVENT_LINKED_EVENT_SELECT = {
+  id: true,
+  title: true,
+  startEra: true,
+  startYear: true,
+  startDate: true,
+} as const
 import {
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
@@ -4924,8 +4933,10 @@ export class PersonPrismaRepository implements IPersonRepository {
         endDate: dto.endDate ? new Date(dto.endDate) : null,
         endDatePrecision: dto.endDatePrecision ?? null,
         sortOrder: dto.sortOrder ?? 0,
+        eventId: dto.eventId ?? null,
         ...(accountId != null && { accountId }),
       },
+      include: { event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT } },
     })
   }
 
@@ -4950,7 +4961,16 @@ export class PersonPrismaRepository implements IPersonRepository {
       data.endDatePrecision = dto.endDatePrecision
     }
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder
-    return this.prisma.personLifeEvent.update({ where: { id }, data })
+    if (dto.eventId !== undefined) {
+      data.event = dto.eventId
+        ? { connect: { id: dto.eventId } }
+        : { disconnect: true }
+    }
+    return this.prisma.personLifeEvent.update({
+      where: { id },
+      data,
+      include: { event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT } },
+    })
   }
 
   async deletePersonLifeEvent(id: string): Promise<void> {
@@ -4962,14 +4982,30 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   async findPersonLifeEventsByPersonId(personId: string): Promise<any[]> {
-    return this.prisma.personLifeEvent.findMany({
+    const rows = await this.prisma.personLifeEvent.findMany({
       where: { personId },
+      // 관련 사건 요약 — 소프트삭제된 사건은 연결이 없는 것처럼 보여야 한다(아래 매핑에서 null로)
+      include: {
+        event: { select: { ...PERSON_LIFE_EVENT_LINKED_EVENT_SELECT, deletedAt: true } },
+      },
       orderBy: [
         { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
         { sortOrder: Prisma.SortOrder.asc },
         { createdAt: Prisma.SortOrder.asc },
       ],
     })
+    return rows.map(({ event, ...row }) => ({
+      ...row,
+      event: event && !event.deletedAt
+        ? {
+            id: event.id,
+            title: event.title,
+            startEra: event.startEra,
+            startYear: event.startYear,
+            startDate: event.startDate,
+          }
+        : null,
+    }))
   }
 
   /**

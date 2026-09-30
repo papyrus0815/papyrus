@@ -1057,7 +1057,29 @@ export class PersonService {
       throw new ForbiddenException('본인이 등록한 인물에만 연보를 추가할 수 있습니다.')
     }
     this.assertLifeEventDateRange(dto.startDate, dto.endDate)
+    await this.assertLifeEventLinkableEvent(dto.eventId, accountId)
     return this.personRepository.addPersonLifeEvent(dto, accountId)
+  }
+
+  /**
+   * 연보의 관련 사건 — 본인이 등록한, 지워지지 않은 사건만 잇는다(사건 쪽 참여 인물 연결과 같은 정책).
+   * eventId가 없거나 null(연결 해제)이면 통과.
+   */
+  private async assertLifeEventLinkableEvent(
+    eventId: string | null | undefined,
+    accountId?: string,
+  ): Promise<void> {
+    if (!eventId) return
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { createdById: true, deletedAt: true },
+    })
+    if (!event || event.deletedAt) {
+      throw new NotFoundException('관련 사건을 찾을 수 없습니다.')
+    }
+    if (accountId != null && event.createdById !== accountId) {
+      throw new ForbiddenException('본인이 등록한 사건만 연결할 수 있습니다.')
+    }
   }
 
   async updatePersonLifeEvent(
@@ -1092,6 +1114,7 @@ export class PersonService {
         ? toIsoOrNull(dto.endDate)
         : toIsoOrNull((existing as { endDate?: unknown }).endDate)
     this.assertLifeEventDateRange(effectiveStart, effectiveEnd)
+    await this.assertLifeEventLinkableEvent(dto.eventId, accountId)
     return this.personRepository.updatePersonLifeEvent(id, dto)
   }
 
