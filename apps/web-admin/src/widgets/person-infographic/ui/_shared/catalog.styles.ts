@@ -55,13 +55,12 @@ export const VisuallyHiddenTitle = styled.h1`
 
 /* ─── 상단 툴바: 검색 · 필터 그룹 · 액션 ─────────────────────────────── */
 
+/* 사건 목록 툴바처럼 아래 구분선 없이 — 선 하나 + 여백 14px가 목록을 70px 아래로 밀었다 */
 export const TopBar = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding-bottom: 14px;
-  border-bottom: 1px solid ${hairline};
 `
 
 export const Search = styled.div`
@@ -366,7 +365,7 @@ export const ViewRow = styled.div`
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  padding-top: 14px;
+  padding-top: 10px;
 
   @media (max-width: 640px) {
     gap: 8px 10px;

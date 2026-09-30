@@ -24,6 +24,7 @@ import {
   FiArrowDown,
   FiBarChart2,
   FiClock,
+  FiFilter,
   FiGlobe,
   FiLayers,
   FiPlus,
@@ -56,6 +57,7 @@ import { useAdaptedPersons } from '../model/use-adapted-persons'
 import { DynastyView } from './dynasty-view'
 import { CardGridSkeleton } from './_shared/card-grid-skeleton'
 import {
+  BRAND,
   Actions,
   ActiveFilterChip,
   ActiveFilterClear,
@@ -91,6 +93,11 @@ interface InfographicContentProps {
   onPersonClick: (id: string) => void
   /** 뷰 전환 세그먼트 — 페인이 소유(records 분기와 공유)하고 여기서는 자리만 잡는다 */
   viewSwitcher: ReactNode
+  /**
+   * 상세 필터 시트 열기 — 시트는 페이지가 소유한다. 예전엔 좌측 사이드바의 배지·모바일 FAB만
+   * 열 수 있었는데 목록 지면에서 사이드바를 걷어 내면서 툴바로 옮겼다. 없으면 버튼을 그리지 않는다.
+   */
+  onOpenFilters?: () => void
 }
 
 const STATS_KEY = 'person-infographic-stats-open'
@@ -98,6 +105,7 @@ const STATS_KEY = 'person-infographic-stats-open'
 export function InfographicContent({
   onPersonClick,
   viewSwitcher,
+  onOpenFilters,
 }: InfographicContentProps) {
   // URL ↔ store 동기화는 상위 PersonInfographicPane이 담당 (records 뷰 분기 공유)
   const { isLoading, isError, refetch } = usePersonsInfographic()
@@ -174,6 +182,9 @@ export function InfographicContent({
 
   // 활성 scope 라벨 — 단일이면 그 값, 다중이면 "필터링됨". 모두 비면 "전체 인물".
   const totalScopeCount = countActiveScopes(scopes)
+  /** 상세 필터 시트가 다루는 것만 센다(검색어는 툴바 검색창이 따로 보여 준다) */
+  const sheetFilterCount =
+    totalScopeCount + (minInfluence > 0 ? 1 : 0) + (aliveFilter !== 'all' ? 1 : 0)
   const scopeLabel =
     totalScopeCount === 0
       ? '전체 인물'
@@ -391,6 +402,25 @@ export function InfographicContent({
           </FilterGroup>
 
           <Actions>
+            {onOpenFilters && (
+              <GhostBtn
+                type="button"
+                onClick={onOpenFilters}
+                aria-haspopup="dialog"
+                aria-label={
+                  sheetFilterCount > 0
+                    ? `상세 필터 열기, ${sheetFilterCount}개 적용 중`
+                    : '상세 필터 열기'
+                }
+                title="시대·지역·분야·영향력·생존 필터"
+              >
+                <FiFilter size={14} />
+                필터
+                {sheetFilterCount > 0 && (
+                  <FilterCount aria-hidden>{sheetFilterCount}</FilterCount>
+                )}
+              </GhostBtn>
+            )}
             {/* 능력치 뷰는 자체 '개요'(평가 진행률·축별 평균)를 가져서 통계가 두 겹이 된다 */}
             {hasStatsPanel && (
               <GhostBtn
@@ -568,6 +598,22 @@ export function InfographicContent({
   )
 }
 
+/** 필터 버튼 옆 적용 개수 — 사건 목록 '최상위' 배지와 같은 알약 */
+const FilterCount = styled.span`
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: ${BRAND.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
+`
+
 const Wrap = styled.div`
   /* 상위(PersonInfographicPane)가 좌우/상단 padding을 담당. 여기서는 하단 여백만. */
   padding: 0 0 60px;
@@ -578,7 +624,7 @@ const Wrap = styled.div`
 `
 
 const ViewArea = styled.div`
-  margin-top: 16px;
+  margin-top: 12px;
 `
 
 const StatsArea = styled.div`

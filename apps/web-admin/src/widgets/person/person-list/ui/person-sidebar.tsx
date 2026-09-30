@@ -5,26 +5,19 @@
  * 페이지가 내려주던 것(선택 id·등록 모달·상세 필터 시트)을 여기서 직접 소유한다 —
  * 페이지에 의존하면 페이지가 언마운트될 때 사이드바가 같이 죽는다.
  *
- * 모바일 필터 트리거도 여기 있다. 같은 시트를 여는 컨트롤이 둘(사이드바 배지·모바일 FAB)인데
- * 시트 상태가 페이지에 있으면 사이드바 쪽 배지가 그걸 열 수 없다.
+ * 상세 지면 전용이다 — 목록 지면(/persons-timeline)은 사이드바 없이 본문 툴바의 '필터'가
+ * 같은 상세 필터 시트를 연다(persons-timeline.page).
  */
 import React, { useCallback, useState } from 'react'
 
-import { FiFilter } from 'react-icons/fi'
 import { useLocation, useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
 
 import { pathKeys } from '@/shared/router'
-import { SidebarSheet, SidebarSheetTrigger } from '@/widgets/content-shell'
+import { SidebarSheet } from '@/widgets/content-shell'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
-import {
-  countActiveScopes,
-  PersonFilterPanel,
-  usePersonInfographicFilterStore,
-} from '@/widgets/person-infographic'
+import { PersonFilterPanel } from '@/widgets/person-infographic'
 
 import { PersonList } from './person-list'
-import { PersonQuickList } from './person-quick-list'
 
 /** `/persons-timeline/:personId` 에서 선택 id 추출 (목록 지면이면 null) */
 function selectedPersonId(pathname: string): string | null {
@@ -48,15 +41,6 @@ export function PersonSidebar({
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
 
-  // 필터 트리거 배지용 — 활성 필터 개수 (scope + 영향력 + 생존 + 검색어)
-  const activeFilterCount = usePersonInfographicFilterStore(
-    (state) =>
-      countActiveScopes(state.scopes) +
-      (state.minInfluence > 0 ? 1 : 0) +
-      (state.aliveFilter !== 'all' ? 1 : 0) +
-      (state.query.trim() ? 1 : 0),
-  )
-
   const openAdvanced = useCallback(() => setAdvancedFilterOpen(true), [])
 
   // 사이드바는 내비게이션 — 어느 모드든 행을 누르면 모달 없이 곧장 상세로 간다.
@@ -65,52 +49,19 @@ export function PersonSidebar({
     (id: string) => navigate(pathKeys.personsTimelineDetail(id)),
     [navigate],
   )
-  const openGroup = useCallback(
-    (groupId: string) => navigate(pathKeys.personGroupDetail(groupId)),
-    [navigate],
-  )
 
   return (
     <>
-      {/* 목록 지면: 본문이 전체 목록·검색·필터를 가지므로 사이드바는 바로가기(고정·최근·그룹)만.
-          상세 지면: 전체 목록으로 '지금 어디인가'와 옆 인물 이동을 맡는다. */}
-      {personId ? (
-        <PersonList
-          selectedId={personId}
-          onSelect={openDetail}
-          onAdd={() => setCreateOpen(true)}
-          onOpenAdvancedFilters={openAdvanced}
-          collapsed={collapsed}
-          onToggleCollapse={onToggleCollapse}
-        />
-      ) : (
-        <PersonQuickList
-          onSelectPerson={openDetail}
-          onSelectGroup={openGroup}
-          onAdd={() => setCreateOpen(true)}
-          collapsed={collapsed}
-          onToggleCollapse={onToggleCollapse}
-        />
-      )}
-
-      {/* 모바일 floating 트리거 — 좌측이 숨는 폭에서 상세 필터로 가는 유일한 경로.
-          상세를 보는 중에는 본문 조작을 가리므로 목록 지면에서만 띄운다. */}
-      {!personId && (
-        <SidebarSheetTrigger
-          type="button"
-          onClick={openAdvanced}
-          aria-label={
-            activeFilterCount > 0
-              ? `필터 열기, ${activeFilterCount}개 적용 중`
-              : '필터 열기'
-          }
-        >
-          <FiFilter size={20} />
-          {activeFilterCount > 0 && (
-            <FilterCountBadge aria-hidden>{activeFilterCount}</FilterCountBadge>
-          )}
-        </SidebarSheetTrigger>
-      )}
+      {/* 레이아웃은 상세 지면에서만 이 사이드바를 그린다(목록 지면은 본문이 목록·필터를 가진다).
+          전체 목록으로 '지금 어디인가'와 옆 인물 이동을 맡는다. */}
+      <PersonList
+        selectedId={personId}
+        onSelect={openDetail}
+        onAdd={() => setCreateOpen(true)}
+        onOpenAdvancedFilters={openAdvanced}
+        collapsed={collapsed}
+        onToggleCollapse={onToggleCollapse}
+      />
 
       <SidebarSheet
         open={advancedFilterOpen}
@@ -131,21 +82,3 @@ export function PersonSidebar({
   )
 }
 
-/** 모바일 필터 트리거 우상단 — 활성 필터 개수 배지 */
-const FilterCountBadge = styled.span`
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: ${({ theme }) => theme.colors.active};
-  color: ${({ theme }) => theme.colors.background.primary};
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 18px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.background.primary};
-`

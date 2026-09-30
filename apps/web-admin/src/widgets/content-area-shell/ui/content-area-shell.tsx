@@ -69,6 +69,13 @@ function specFor(pathname: string): DomainSpec | null {
     }
   }
   if (pathname.startsWith('/persons-timeline')) {
+    /*
+     * 목록(/persons-timeline)에는 사이드바를 두지 않는다(2026-09-30, 사건 목록과 같은 결정).
+     * 목록 지면의 사이드바는 '바로가기'(고정·영향력 상위·인물 그룹·최근)였는데 고정은 본문
+     * 상단 섹션, 영향력 상위는 본문 기본 정렬, 인물 그룹은 레일 메뉴와 겹쳤고 본문 폭만
+     * 360px 먹었다. 인물 사이를 오가는 길이 필요한 상세(/persons-timeline/:id)에만 둔다.
+     */
+    if (!idFromPath(pathname, 'persons-timeline', ['create'])) return null
     return {
       storageKey: 'persons-list-collapsed',
       render: (context) => <PersonSidebar {...context} />,

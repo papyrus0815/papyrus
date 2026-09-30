@@ -5,8 +5,8 @@
  * 인물 대시보드 — 인포그래픽 6뷰 (매트릭스/은하계/세기별/왕조/능력치/기록 비교).
  * 인물 상세는 같은 페이지에서 PersonDetailPanel로 렌더.
  *
- * 좌측 인물 목록·상세 필터 시트·등록 모달은 이 페이지가 아니라 레이아웃이 소유한다
- * (ContentAreaShell → PersonSidebar). 셸이 지면 간에 살아남아야 사이드바가 안 깜빡인다.
+ * 좌측 인물 목록은 **상세 지면에서만** 레이아웃이 그린다(ContentAreaShell → PersonSidebar).
+ * 목록 지면은 사이드바가 없어 상세 필터 시트를 이 페이지가 소유하고 툴바 '필터'로 연다.
  * (구 단독 상세 `/persons/:id`는 이 지면으로 통합 — app/legacy-redirects.tsx가 흡수)
  *
  * URL 쿼리(useFilterUrlSync 가 store와 양방향 동기화):
@@ -23,11 +23,12 @@ import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { goBackOr, pathKeys } from '@/shared/router'
+import { SidebarSheet } from '@/widgets/content-shell'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { useRecentPersonsStore } from '@/widgets/person/person-list'
-import { PersonInfographicPane } from '@/widgets/person-infographic'
+import { PersonFilterPanel, PersonInfographicPane } from '@/widgets/person-infographic'
 
 const SCROLL_KEY = 'person-list-scroll'
 
@@ -114,6 +115,8 @@ export default function PersonsTimelinePage() {
   // 목록 지면의 인물 클릭 → 인물 상세 모달 먼저(사건·행정부와 같은 공용 모달),
   // 모달 헤더의 '상세 페이지'로 전용 상세 진입. 목록 스크롤·필터가 그대로 남는다.
   const [modalPersonId, setModalPersonId] = useState<string | null>(null)
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const openFilterSheet = useCallback(() => setFilterSheetOpen(true), [])
   // 모달로 연 인물도 '최근 본 인물'에 올린다 — 사이드바 바로가기가 이 기록을 읽는다
   const openPersonModal = useCallback(
     (id: string) => {
@@ -151,8 +154,21 @@ export default function PersonsTimelinePage() {
           style={{ width: '100%', minHeight: '100%' }}
         >
           <div ref={setScrollSentinel} aria-hidden style={{ height: 0 }} />
-          <PersonInfographicPane onPersonClick={openPersonModal} />
+          <PersonInfographicPane
+            onPersonClick={openPersonModal}
+            onOpenFilters={openFilterSheet}
+          />
         </motion.div>
+      )}
+
+      {!personId && (
+        <SidebarSheet
+          open={filterSheetOpen}
+          onClose={() => setFilterSheetOpen(false)}
+          title="인물 상세 필터"
+        >
+          <PersonFilterPanel />
+        </SidebarSheet>
       )}
 
       <PersonInlineModal

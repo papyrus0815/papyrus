@@ -73,10 +73,13 @@ const VIEW_OPTIONS: Array<{
 
 interface PersonInfographicPaneProps {
   onPersonClick: (id: string) => void
+  /** 상세 필터 시트 열기 — 시트는 페이지가 소유 */
+  onOpenFilters?: () => void
 }
 
 export function PersonInfographicPane({
   onPersonClick,
+  onOpenFilters,
 }: PersonInfographicPaneProps) {
   // URL ↔ store 동기화 — records 뷰에서 InfographicContent가 언마운트돼도
   // view·recordPersonIds 등 쿼리 동기화가 유지되도록 페인 레벨에서 1회 등록.
@@ -139,15 +142,17 @@ export function PersonInfographicPane({
         <InfographicContent
           onPersonClick={onPersonClick}
           viewSwitcher={viewSwitcher}
+          onOpenFilters={onOpenFilters}
         />
       )}
     </PaneWrap>
   )
 }
 
+/* 사건 목록(PageWrapper)과 같은 거터 — 폭 비례 clamp, 768 이하는 하한 16px */
 const PaneWrap = styled.div`
-  padding: 24px 28px 0;
+  padding: 18px clamp(16px, 1.2vw, 32px) 0;
   @media (max-width: 768px) {
-    padding: 16px 16px 0;
+    padding-top: 16px;
   }
 `

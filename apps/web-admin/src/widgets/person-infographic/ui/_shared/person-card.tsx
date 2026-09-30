@@ -242,7 +242,7 @@ const Visual = styled.div`
   aspect-ratio: 1 / 1;
   overflow: hidden;
   border-bottom: 1px solid ${hairline};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1d21' : '#f1f3f6')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1b1f' : '#f4f5f7')};
 `
 
 const zoomOnHover = css`
@@ -274,13 +274,13 @@ const Empty = styled.div`
   align-items: flex-end;
   justify-content: center;
   /* 사진 없음은 데이터 상태 — 사진보다 한 단계 물러선 옅은 중립(예전 짙은 판은 격자를 검게 덮었다) */
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#33363d' : '#d5dae1')};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1d21' : '#f1f3f6')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#2f3238' : '#dfe3e8')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1b1f' : '#f4f5f7')};
   ${zoomOnHover}
 
   svg {
     display: block;
-    width: 56%;
+    width: 48%;
     height: auto;
   }
 `
