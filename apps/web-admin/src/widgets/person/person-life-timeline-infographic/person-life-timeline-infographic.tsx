@@ -596,7 +596,15 @@ export function PersonLifeTimelineInfographic({
       })
     }
 
+    // 연보 항목이 관련 사건으로 가리키는 사건은 '사건' 카드를 따로 세우지 않는다 — 같은 일이
+    // 카드 두 장으로 보이면 '연보·사건에 두 번 적은' 상태처럼 읽힌다. 연보 카드가 그 사건으로 잇는다.
+    const eventIdsCoveredByLife = new Set(
+      lifeEvents
+        .map((lifeEvent) => lifeEvent.event?.id)
+        .filter((id): id is string => !!id),
+    )
     for (const evt of events ?? []) {
+      if (evt.event?.id && eventIdsCoveredByLife.has(evt.event.id)) continue
       const s = parseDate(evt.event?.startDate)
       const e = parseDate(evt.event?.endDate)
       result.push({
@@ -1237,6 +1245,22 @@ export function PersonLifeTimelineInfographic({
                           + 설명 추가
                         </EmptyDescHint>
                       )}
+                      {/* 관련 사건 — 연보 카드 클릭은 편집이므로, 사건으로 가는 길은 따로 둔다 */}
+                      {node.kind === 'life' &&
+                        node.lifeEventSource?.event &&
+                        onEventClick && (
+                          <LinkedEventLink
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onEventClick(node.lifeEventSource!.event!.id)
+                            }}
+                            aria-label={`관련 사건 '${node.lifeEventSource.event.title}' 보기`}
+                          >
+                            <FiLink size={11} strokeWidth={2.4} aria-hidden="true" />
+                            사건: {node.lifeEventSource.event.title}
+                          </LinkedEventLink>
+                        )}
                       </EventCard>
                     )
                   })()}
@@ -1794,6 +1818,32 @@ const CardTopRow = styled.div`
 `
 
 /** 카드 우상단 — 이 연보 링크 복사 (작은 아이콘 버튼) */
+/** 연보 카드 안 '관련 사건' 바로가기 */
+const LinkedEventLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary};
+  background: rgba(99, 102, 241, 0.08);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(99, 102, 241, 0.16);
+  }
+`
+
 const CardLinkCopyBtn = styled.button`
   position: absolute;
   top: 10px;

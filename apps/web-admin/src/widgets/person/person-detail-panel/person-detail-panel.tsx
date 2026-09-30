@@ -29,6 +29,7 @@ import {
   FiFlag,
   FiGitBranch,
   FiInfo,
+  FiLink,
   FiMapPin,
   FiPlus,
   FiTrash2,
@@ -101,6 +102,7 @@ import { AwardRegisterModal } from '@/widgets/person/award-register-modal/award-
 import { CareerRegisterModal } from '@/widgets/person/career-register-modal/career-register-modal'
 import { EducationRegisterModal } from '@/widgets/person/education-register-modal/education-register-modal'
 import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
+import { PersonEventLinkModal } from '@/widgets/person/person-event-link-modal/person-event-link-modal'
 import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
 import { classifySiblingKinship } from '@/widgets/person/person-genealogy-infographic/family-tree-derive'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
@@ -441,6 +443,8 @@ export function PersonDetailPanel({
    *  기존 등록 패널(SovereignReign/GovernmentPositionTenure)로 라우팅한다. 두 폼·백엔드 무변경. */
   const [addKindChooserOpen, setAddKindChooserOpen] = useState(false)
   const [lifeEventModalOpen, setLifeEventModalOpen] = useState(false)
+  /** 인물 쪽에서 사건 참여를 잇는 모달('사건' 탭 '사건 연결') */
+  const [eventLinkModalOpen, setEventLinkModalOpen] = useState(false)
   const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
   /** 헤더 아바타 이미지 로드 실패 → 글리프 폴백(MD1). src 변경 시 리셋. */
   const [avatarBroken, setAvatarBroken] = useState(false)
@@ -3063,6 +3067,17 @@ export function PersonDetailPanel({
                           <FiUsers size={14} />
                           다른 인물과 비교
                         </TenureAddButton>
+                        {/* 사건 목록의 사건에 이 인물을 바로 잇는다 — 연보에 같은 일을 또 적지 않게 */}
+                        <TenureAddButton
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            setEventLinkModalOpen(true)
+                          }}
+                        >
+                          <FiLink size={14} />
+                          사건 연결
+                        </TenureAddButton>
                         <TenureAddButton
                           type="button"
                           onClick={() => {
@@ -3155,6 +3170,12 @@ export function PersonDetailPanel({
         </TabContentArea>
       </PanelRoot>
 
+      <PersonEventLinkModal
+        isOpen={eventLinkModalOpen}
+        onClose={() => setEventLinkModalOpen(false)}
+        personId={person.id}
+        personName={getPersonDisplayName(person as unknown as PersonNameFields)}
+      />
       <PersonLifeEventFormModal
         open={lifeEventModalOpen}
         personId={person.id}

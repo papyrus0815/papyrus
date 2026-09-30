@@ -75,8 +75,21 @@ export interface PersonLifeEvent {
   endDatePrecision: DatePrecision | null
   sortOrder: number | null
   accountId: string | null
+  /** 관련 사건 ID — 이 연보 항목이 사건 목록의 어느 사건인지(없으면 null) */
+  eventId?: string | null
+  /** 관련 사건 요약 — 사건이 지워졌으면 null */
+  event?: PersonLifeEventLinkedEvent | null
   createdAt: string
   updatedAt: string
+}
+
+/** 연보 항목에 연결된 사건 요약 */
+export interface PersonLifeEventLinkedEvent {
+  id: string
+  title: string
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startDate?: string | null
 }
 
 export interface CreatePersonLifeEventBody {
@@ -89,6 +102,8 @@ export interface CreatePersonLifeEventBody {
   endDate?: string
   endDatePrecision?: DatePrecision
   sortOrder?: number
+  /** 관련 사건 ID(선택) */
+  eventId?: string
 }
 
 export interface UpdatePersonLifeEventBody {
@@ -100,6 +115,8 @@ export interface UpdatePersonLifeEventBody {
   endDate?: string | null
   endDatePrecision?: DatePrecision | null
   sortOrder?: number | null
+  /** 관련 사건 ID — null이면 연결 해제 */
+  eventId?: string | null
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

@@ -1,7 +1,7 @@
 /**
  * 인물 연보 등록/수정 모달 — 공용 Modal 프리미티브 기반
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -17,6 +17,7 @@ import {
   FiGlobe,
   FiHeart,
   FiHome,
+  FiLink,
   FiRotateCcw,
   FiShield,
   FiStar,
@@ -51,6 +52,17 @@ import {
 } from '@/shared/ui/modal'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { notify } from '@/shared/ui/toast'
+import type { PersonEventCandidate } from '@/shared/api/person-event-links'
+import {
+  KitAddButton,
+  KitOptionalTag,
+  KitRemoveButton,
+  KitSelectedItem,
+} from '@/shared/ui/register-form-kit/register-form-kit'
+import {
+  PersonEventLinkModal,
+  formatCandidateYear,
+} from '@/widgets/person/person-event-link-modal/person-event-link-modal'
 
 type DatePrecision = 'year' | 'month' | 'day'
 const DATE_PRECISIONS: DatePrecision[] = ['day', 'month', 'year']
@@ -126,6 +138,52 @@ const POSITIONAL_CATEGORIES: PersonLifeEventCategory[] = [
   'DIPLOMATIC',
   'CAREER',
 ]
+
+/** 연보 항목에 고른 관련 사건(표시용) */
+interface LinkedEventChoice {
+  id: string
+  title: string
+  yearLabel: string
+}
+
+/** 연결된 사건 요약 → 폼 표시값 */
+function toLinkedEventChoice(
+  event: PersonLifeEvent['event'] | null | undefined,
+): LinkedEventChoice | null {
+  if (!event) return null
+  const signedYear =
+    event.startYear != null
+      ? event.startEra === 'BC'
+        ? -event.startYear
+        : event.startYear
+      : event.startDate
+        ? Number(event.startDate.slice(0, 4))
+        : null
+  return { id: event.id, title: event.title, yearLabel: formatCandidateYear(signedYear) }
+}
+
+/**
+ * 고른 사건의 시작 시점 → 연보 시작일 칸 값. 연보 날짜는 DATETIME이라 **서기 1000년 이후만**
+ * 안전하게 담긴다(그 전·기원전은 저장 시 연도가 뒤틀린다) — 그런 사건은 날짜를 채우지 않는다.
+ */
+function startDateFromCandidate(
+  candidate: PersonEventCandidate,
+): { date: string; precision: DatePrecision } | null {
+  if (candidate.year == null || candidate.year < 1000) return null
+  const pad = (value: number, width: number) => String(value).padStart(width, '0')
+  if (candidate.startYear != null) {
+    const month = candidate.startMonth ?? null
+    const day = candidate.startDay ?? null
+    return {
+      date: `${pad(candidate.startYear, 4)}-${pad(month ?? 1, 2)}-${pad(day ?? 1, 2)}`,
+      precision: month && day ? 'day' : month ? 'month' : 'year',
+    }
+  }
+  if (candidate.startDate) {
+    return { date: candidate.startDate.slice(0, 10), precision: 'day' }
+  }
+  return null
+}
 
 export interface PersonLifeEventFormModalProps {
   open: boolean
@@ -234,6 +292,9 @@ export function PersonLifeEventFormModal({
   const [startPrecision, setStartPrecision] = useState<DatePrecision>('day')
   const [endPrecision, setEndPrecision] = useState<DatePrecision>('day')
   const [sortOrder, setSortOrder] = useState<number | ''>('')
+  /** 관련 사건 — 이 연보 항목이 사건 목록의 어느 사건인지 */
+  const [linkedEvent, setLinkedEvent] = useState<LinkedEventChoice | null>(null)
+  const [eventPickerOpen, setEventPickerOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false)
@@ -257,6 +318,7 @@ export function PersonLifeEventFormModal({
         startPrecision,
         endPrecision,
         sortOrder,
+        eventId: linkedEvent?.id ?? null,
       }),
     [
       title,
@@ -267,6 +329,7 @@ export function PersonLifeEventFormModal({
       startPrecision,
       endPrecision,
       sortOrder,
+      linkedEvent,
     ],
   )
 
@@ -292,6 +355,8 @@ export function PersonLifeEventFormModal({
       'day') as DatePrecision
     const baseEndPrec = (lifeEvent?.endDatePrecision ?? 'day') as DatePrecision
     const baseSort = lifeEvent?.sortOrder ?? ''
+    const baseLinked = toLinkedEventChoice(lifeEvent?.event)
+    setLinkedEvent(baseLinked)
 
     // 드래프트 확인: 대상 레코드 updatedAt 이후 저장된 드래프트만 유효
     let restoredFromDraft = false
@@ -344,6 +409,7 @@ export function PersonLifeEventFormModal({
       startPrecision: baseStartPrec,
       endPrecision: baseEndPrec,
       sortOrder: baseSort as number | '',
+      eventId: baseLinked?.id ?? null,
     })
   }, [open, lifeEvent, personId])
 
@@ -590,6 +656,7 @@ export function PersonLifeEventFormModal({
           endDate: endDate || null,
           endDatePrecision: endDate ? endPrecision : null,
           sortOrder: sortForSave,
+          eventId: linkedEvent?.id ?? null,
         })
         savedId = updated?.id ?? lifeEventId
         notify.success('연보가 수정되었습니다.')
@@ -606,6 +673,7 @@ export function PersonLifeEventFormModal({
           endDate: endDate || undefined,
           endDatePrecision: endDate ? endPrecision : undefined,
           sortOrder: sortForSave ?? undefined,
+          eventId: linkedEvent?.id,
         })
         savedId = created?.id
         notify.success('연보가 등록되었습니다.')
@@ -622,6 +690,7 @@ export function PersonLifeEventFormModal({
         setEndDate('')
         setDescription('')
         setSortOrder('')
+        setLinkedEvent(null)
         setTitleTouched(false)
         initialSnapshotRef.current = JSON.stringify({
           title: '',
@@ -632,6 +701,7 @@ export function PersonLifeEventFormModal({
           startPrecision,
           endPrecision,
           sortOrder: '' as number | '',
+          eventId: null,
         })
         // 다음 입력 빠르게 시작하도록 제목에 포커스
         setTimeout(() => {
@@ -684,11 +754,35 @@ export function PersonLifeEventFormModal({
     setEndDate('')
     setDescription('')
     setSortOrder('')
+    setLinkedEvent(null)
     setTitleTouched(false)
     // title·category·precision은 유지 — 반복 패턴 입력 가속
     initialSnapshotRef.current = '' // 복제 후는 기본적으로 dirty
     clearDraft()
     notify.success('복제 모드 — 날짜·설명만 새로 입력하세요.')
+  }
+
+  /**
+   * 관련 사건 버튼을 눌러도 제목 칸이 blur되지 않게 — blur되면 빈 제목이 '입력하세요' 오류로
+   * 빨갛게 뜬다(사건을 고르면 곧 채워질 칸인데). 키보드 조작은 그대로 동작한다.
+   */
+  const keepTitleFocus = (event: MouseEvent) => event.preventDefault()
+
+  /** 관련 사건 선택 — 비어 있는 제목·시작일만 채운다(적어 둔 값은 건드리지 않음) */
+  const handlePickEvent = (candidate: PersonEventCandidate) => {
+    setLinkedEvent({
+      id: candidate.id,
+      title: candidate.title,
+      yearLabel: formatCandidateYear(candidate.year),
+    })
+    if (!title.trim()) setTitle(candidate.title)
+    if (!startDate) {
+      const filled = startDateFromCandidate(candidate)
+      if (filled) {
+        setStartDate(filled.date)
+        setStartPrecision(filled.precision)
+      }
+    }
   }
 
   const formId = 'person-life-event-form'
@@ -813,6 +907,49 @@ export function PersonLifeEventFormModal({
                 </DraftBannerBtn>
               </DraftBanner>
             )}
+
+            {/* 관련 사건 — 사건 목록의 사건이면 먼저 고른다(제목·날짜가 채워지고 연보에서 그 사건으로 간다) */}
+            <Field>
+              <Label as="span">
+                관련 사건<KitOptionalTag>(선택)</KitOptionalTag>
+              </Label>
+              {linkedEvent ? (
+                <LinkedEventRow>
+                  <KitSelectedItem>
+                    <FiLink size={13} aria-hidden="true" />
+                    <span>
+                      {linkedEvent.yearLabel} · {linkedEvent.title}
+                    </span>
+                    <KitRemoveButton
+                      type="button"
+                      onClick={() => setLinkedEvent(null)}
+                      aria-label="관련 사건 연결 해제"
+                    >
+                      <FiX size={14} />
+                    </KitRemoveButton>
+                  </KitSelectedItem>
+                  <ChangeEventButton
+                    type="button"
+                    onMouseDown={keepTitleFocus}
+                    onClick={() => setEventPickerOpen(true)}
+                  >
+                    바꾸기
+                  </ChangeEventButton>
+                </LinkedEventRow>
+              ) : (
+                <KitAddButton
+                  type="button"
+                  onMouseDown={keepTitleFocus}
+                  onClick={() => setEventPickerOpen(true)}
+                >
+                  <FiLink size={14} aria-hidden="true" />
+                  사건 목록에서 고르기
+                </KitAddButton>
+              )}
+              <FieldHint>
+                고르면 비어 있는 제목·날짜가 채워지고, 연보에서 그 사건으로 바로 갈 수 있습니다.
+              </FieldHint>
+            </Field>
 
             {/* 제목 */}
             <Field>
@@ -1132,6 +1269,14 @@ export function PersonLifeEventFormModal({
         }}
         onCancel={() => setConfirmCloseOpen(false)}
       />
+      <PersonEventLinkModal
+        isOpen={eventPickerOpen}
+        onClose={() => setEventPickerOpen(false)}
+        personId={personId}
+        mode="pick"
+        selectedEventId={linkedEvent?.id ?? null}
+        onPick={handlePickEvent}
+      />
     </>
   )
 }
@@ -1245,6 +1390,34 @@ const AdvancedToggle = styled.button`
   &:hover {
     color: ${({ theme }) => theme.colors.text.secondary};
   }
+`
+
+const LinkedEventRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+`
+
+const ChangeEventButton = styled.button`
+  padding: 6px 8px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    background: rgba(99, 102, 241, 0.08);
+  }
+`
+
+const FieldHint = styled.span`
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
 `
 
 const Field = styled.div`
