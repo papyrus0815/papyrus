@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 import type {
   HistoricalCountry,
@@ -15,128 +16,27 @@ import type { TransitionEventType } from '@/shared/api/historical-countries'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { FormInput, FormTextarea } from '@/shared/ui/form-input/form-input'
-import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
-import { RadioCardGroup } from '@/shared/ui/radio-card-group/radio-card-group'
-import { SelectionChips } from '@/shared/ui/selection-chips/selection-chips'
+import {
+  ChoiceChips,
+  KitAddButton,
+  KitDateRangeColumn,
+  KitDateRangeLabel,
+  KitDateRangeRow,
+  KitRemoveButton,
+  KitSelectedItem,
+  KitSelectedItems,
+} from '@/shared/ui/register-form-kit/register-form-kit'
 import { TextareaWithCounterWrap } from '@/shared/ui/textarea-with-counter/textarea-with-counter'
 import { ThumbnailUploader } from '@/shared/ui/thumbnail-uploader/thumbnail-uploader'
 import * as S from '@/widgets/country/country-form/ui/country-form.styles'
-import { EraDateInline } from './era-date-inline'
-import { StateTypeModal } from './state-type-modal'
-
-/** 모달 본문 레이아웃 — 미니멀 (탭 제거됨, 좌측 인덱스로 점프) */
-const ModalFormLayoutWrap = styled.div`
-  padding: 0;
-  &[data-inner] {
-    padding: 0;
-  }
-  ${S.FormSection} {
-    margin-top: 0;
-    padding: 0;
-    border: none;
-    gap: 0;
-  }
-  ${S.FormSection}:first-of-type {
-    margin-top: 0;
-  }
-  ${S.FormSection}:not(:first-of-type) {
-    margin-top: 40px;
-  }
-  ${S.FormSection} ${S.FormSection} {
-    margin-top: 40px;
-  }
-  ${S.FormSectionHeader} {
-    margin-bottom: 12px;
-    padding: 0;
-  }
-  ${S.FormSectionIcon} {
-    display: none;
-  }
-  ${S.FormSectionTitle} {
-    font-size: 11px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    margin: 0;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  ${S.FormSectionDescription} {
-    display: none;
-  }
-  /* 필드: top-label */
-  ${S.FormRow} {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    padding: 0;
-    border: none;
-  }
-  @media (max-width: 640px) {
-    ${S.FormRow} {
-      grid-template-columns: 1fr;
-    }
-  }
-  ${S.FormField} {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 0;
-    border: none;
-    margin-top: 18px;
-  }
-  ${S.FormSection} > ${S.FormField}:first-of-type {
-    margin-top: 0;
-  }
-  ${S.FormSection} > ${S.FormRow} {
-    margin-top: 18px;
-  }
-  ${S.FormSection} > ${S.FormRow}:first-of-type {
-    margin-top: 0;
-  }
-  ${S.FormLabel} {
-    font-size: 13px;
-    font-weight: 500;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    padding-top: 0;
-    margin: 0;
-  }
-  ${S.FormField} input:not([type='hidden']),
-  ${S.FormField} button[type='button'],
-  ${S.FormField} select,
-  ${S.FormField} textarea {
-    min-width: 0;
-  }
-  ${S.FormField} ${S.ErrorMessage} {
-    font-size: 12px;
-    color: ${({ theme }) => theme.colors.alert.danger.fg};
-    margin-top: 0;
-  }
-  ${S.SelectButton} {
-    max-width: 100%;
-  }
-`
-
-/** 시작/종료 시점을 한 줄에 — 좁으면 줄바꿈 */
-const DateRange = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-`
-
-const RangeSep = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 14px;
-  padding: 0 2px;
-`
+import { PeriodDateField } from './period-date-field'
 
 /** 후임 국가 관계 미리보기: [현재] —[이벤트]→ [다음] */
 const RelationPreview = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 12px;
-  padding: 8px 0;
+  padding: 4px 0 0;
   font-size: 12.5px;
   flex-wrap: wrap;
 `
@@ -167,8 +67,8 @@ const DurationHint = styled.div<{ $invalid?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 12px;
-  padding: 4px 0;
+  margin-top: 0;
+  padding: 0;
   color: ${({ $invalid, theme }) =>
     $invalid ? theme.colors.alert.danger.fg : theme.colors.text.tertiary};
   font-size: 12px;
@@ -356,11 +256,20 @@ interface HistoricalCountryFormProps {
 /**
  * 역사적 국가 Form 컴포넌트
  */
-// 국가 형태 옵션 (라벨 + 설명만, 이모지 없음)
-import type {
-  StateTypeOption,
-  StateTypeCategory,
-} from './state-type-modal'
+// 국가 형태 옵션 (라벨 + 설명만, 이모지 없음) — 칩 묶음(category)별로 표시
+type StateTypeCategoryKey = 'monarchy' | 'republic' | 'regime' | 'tribal' | 'other'
+
+interface StateTypeOption {
+  value: string
+  label: string
+  desc: string
+  category: StateTypeCategoryKey
+}
+
+interface StateTypeCategory {
+  key: StateTypeCategoryKey
+  label: string
+}
 
 const STATE_TYPE_OPTIONS: StateTypeOption[] = [
   // ─ 군주제·제국
@@ -426,9 +335,6 @@ export function HistoricalCountryForm({
 
   /** 썸네일 이미지 미리보기 URL (ThumbnailUploader가 업로드·진행률·삭제 모두 처리) */
   const [thumbnailPreview, setThumbnailPreview] = useState<string>('')
-
-  /** 국가 형태 선택 모달 표시 여부 */
-  const [showStateTypeModal, setShowStateTypeModal] = useState(false)
 
   /** 현대 국가 선택 모달 표시 여부 */
   const [showModernCountryModal, setShowModernCountryModal] = useState(false)
@@ -499,19 +405,6 @@ export function HistoricalCountryForm({
     return () => sub.unsubscribe()
   }, [watch])
 
-  // create 모드 자동 저장 (localStorage draft)
-  const watchedAll = watch()
-  const isCreateMode = !editing?.id
-  const { clear: clearDraft } = useFormDraft({
-    key: 'historical-country-create',
-    enabled: isCreateMode,
-    values: watchedAll,
-    onRestore: (data) => {
-      reset(data)
-      if (data.thumbnailUrl) setThumbnailPreview(data.thumbnailUrl)
-    },
-  })
-
   // ==================== useEffect 훅 ====================
 
   /**
@@ -519,6 +412,8 @@ export function HistoricalCountryForm({
    * - 수정 모드: 상세 API 우선 사용해 시작/종료 시점까지 확실히 채움
    * - 생성 모드: 빈 값으로 초기화
    */
+  const editingKey = editing ? (editing.id ?? '__create__') : null
+  const editSource = editing?.id ? formSource : null
   useEffect(() => {
     if (editing) {
       if (editing.id) {
@@ -587,7 +482,25 @@ export function HistoricalCountryForm({
         setTransitionScope('')
       }
     }
-  }, [editing, formSource, reset, initialPreset])
+    // 의존성은 **정체성**만 — 편집 대상 id(신규는 고정 키)와 수정 모드의 서버 원본.
+    // `editing` 객체 참조에 걸면 호출부가 렌더마다 `{}`를 새로 넘길 때 타이핑할 때마다
+    // reset()이 돌아 입력이 지워진다.
+  }, [editingKey, editSource, reset, initialPreset?.stateType, initialPreset?.entityKind])
+
+  // create 모드 자동 저장 (localStorage draft) — 위 초기화 effect **뒤에** 둔다. effect는
+  // 선언 순서대로 돌므로, 앞에 있으면 복원한 draft를 빈 값 reset이 곧바로 덮어썼다.
+  const watchedAll = watch()
+  const isCreateMode = !editing?.id
+  const { clear: clearDraft } = useFormDraft({
+    key: 'historical-country-create',
+    enabled: isCreateMode,
+    values: watchedAll,
+    onRestore: (data) => {
+      reset(data)
+      if (data.thumbnailUrl) setThumbnailPreview(data.thumbnailUrl)
+    },
+  })
+
 
   // ==================== 이벤트 핸들러 ====================
 
@@ -678,115 +591,12 @@ export function HistoricalCountryForm({
     onClose()
   }
 
-  /**
-   * 국가 형태 선택 핸들러
-   * - 선택한 값을 폼에 설정하고 모달 닫기
-   */
-  const handleStateTypeSelect = (value: string) => {
-    setValue('stateType', value, { shouldValidate: true })
-    setShowStateTypeModal(false)
-  }
-
-  /**
-   * 현대 국가 선택/해제 핸들러 (다중 선택 지원)
-   * - 이미 선택된 국가는 제거, 없으면 추가
-   */
-  const handleModernCountryToggle = (countryId: string) => {
-    setSelectedModernCountries((prev) => {
-      if (prev.includes(countryId)) {
-        // 이미 선택됨 -> 제거
-        return prev.filter((id) => id !== countryId)
-      } else {
-        // 선택 안됨 -> 추가
-        return [...prev, countryId]
-      }
-    })
-  }
-
-  /**
-   * 모든 현대 국가 선택 해제
-   */
-  const handleClearModernCountries = () => {
-    setSelectedModernCountries([])
-  }
-
-  /**
-   * 후임 국가 선택/해제 (다중 선택)
-   */
-  const handleParentHistoricalToggle = (historicalCountryId: string) => {
-    setSelectedParentHistoricalIds((prev) =>
-      prev.includes(historicalCountryId)
-        ? prev.filter((id) => id !== historicalCountryId)
-        : [...prev, historicalCountryId],
-    )
-  }
-
-  const handleClearParentHistorical = () => {
-    setSelectedParentHistoricalIds([])
-  }
-
   // ==================== Helper 함수 ====================
 
   /** 선택된 국가 형태 값 */
   const selectedStateType = watch('stateType')
   /** 선택된 정치체 성격 (REGIME일 때 국가 형태 막부 권장 힌트 표시) */
   const selectedEntityKind = watch('entityKind')
-
-  /** 선택된 시작 기원 */
-  const selectedStartEra = watch('startEra')
-
-  /** 선택된 종료 기원 */
-  const selectedEndEra = watch('endEra')
-
-  /** 국가 형태 선택 버튼 라벨 */
-  const getStateTypeLabel = () => {
-    const option = STATE_TYPE_OPTIONS.find(
-      (opt) => opt.value === selectedStateType,
-    )
-    return option?.label ?? '선택하세요'
-  }
-
-  /**
-   * 시작 기원 라벨 생성
-   */
-  const getStartEraLabel = () => {
-    if (selectedStartEra === 'BC') return '기원전'
-    if (selectedStartEra === 'AD') return '기원후'
-    return '선택'
-  }
-
-  /**
-   * 종료 기원 라벨 생성
-   */
-  const getEndEraLabel = () => {
-    if (selectedEndEra === 'BC') return '기원전'
-    if (selectedEndEra === 'AD') return '기원후'
-    return '선택'
-  }
-
-  /**
-   * 선택된 현대 국가들의 라벨 생성
-   * @returns 선택된 국가명 목록 또는 기본 텍스트
-   */
-  const getModernCountriesLabel = () => {
-    if (selectedModernCountries.length === 0) {
-      return '없음 (독립적인 역사 국가)'
-    }
-    const selectedNames = modernCountries
-      .filter((country) => selectedModernCountries.includes(country.id))
-      .map((country) => country.name)
-    return selectedNames.join(', ')
-  }
-
-  const getParentHistoricalLabel = () => {
-    if (selectedParentHistoricalIds.length === 0) {
-      return '없음'
-    }
-    const names = historicalCountries
-      .filter((c) => selectedParentHistoricalIds.includes(c.id))
-      .map((c) => c.name)
-    return `📜 ${names.join(', ')}`
-  }
 
   // ==================== 조기 반환 ====================
 
@@ -812,7 +622,9 @@ export function HistoricalCountryForm({
 
         {/* 대표 이미지 — 미니멀 정사각형 96px */}
         <S.FormField data-field="thumbnail">
-          <S.FormLabel htmlFor="thumbnail-upload">대표 이미지</S.FormLabel>
+          <S.FormLabel htmlFor="thumbnail-upload">
+            대표 이미지<S.OptionalTag>(선택)</S.OptionalTag>
+          </S.FormLabel>
           <ThumbnailUploader
             value={thumbnailPreview}
             category="countries"
@@ -844,7 +656,9 @@ export function HistoricalCountryForm({
         </S.FormField>
 
         <S.FormField>
-          <S.FormLabel htmlFor="enName">영문 표기 (선택)</S.FormLabel>
+          <S.FormLabel htmlFor="enName">
+            영문 표기<S.OptionalTag>(선택)</S.OptionalTag>
+          </S.FormLabel>
           <FormInput
             id="enName"
             type="text"
@@ -857,22 +671,33 @@ export function HistoricalCountryForm({
           )}
         </S.FormField>
 
-        {/* 국가 형태 */}
+        {/* 국가 형태 — 사건 등록 폼 카테고리처럼 칩을 바로 고른다(예전: 버튼 → 목록 모달) */}
         <S.FormField>
           <S.FormLabel htmlFor="stateType">
-            국가 형태 <S.RequiredStar>*</S.RequiredStar>
+            국가 형태<S.RequiredStar>*</S.RequiredStar>
           </S.FormLabel>
-          <S.SelectButton
-            type="button"
-            onClick={() => setShowStateTypeModal(true)}
-            $error={!!errors.stateType}
-            $hasValue={!!selectedStateType}
-          >
-            <span>{getStateTypeLabel()}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
-            </svg>
-          </S.SelectButton>
+          <ChoiceChips
+            ariaLabel="국가 형태"
+            jumpTarget="stateType"
+            value={selectedStateType}
+            error={!!errors.stateType}
+            onChange={(next) =>
+              setValue('stateType', next, {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
+            groups={STATE_TYPE_CATEGORIES.map((category) => ({
+              label: category.label,
+              options: STATE_TYPE_OPTIONS.filter(
+                (option) => option.category === category.key,
+              ).map((option) => ({
+                value: option.value,
+                label: option.label,
+                title: option.desc,
+              })),
+            }))}
+          />
           <input type="hidden" {...register('stateType')} />
           {selectedEntityKind === 'REGIME' && (
             <AlertBox variant="warning">
@@ -883,86 +708,86 @@ export function HistoricalCountryForm({
           {errors.stateType && (
             <S.ErrorMessage>{errors.stateType.message}</S.ErrorMessage>
           )}
+          <S.FormHelp>
+            {STATE_TYPE_OPTIONS.find((option) => option.value === selectedStateType)
+              ?.desc ?? '국가의 통치 형태를 선택하세요'}
+          </S.FormHelp>
         </S.FormField>
 
         {/* 역사적 단위 분류 */}
         <S.FormField>
-          <S.FormLabel>역사적 단위 분류 (선택)</S.FormLabel>
-          <RadioCardGroup
-            value={selectedEntityKind ?? undefined}
-            onChange={(v) =>
-              setValue('entityKind', v ?? null, {
+          <S.FormLabel>
+            역사적 단위 분류<S.OptionalTag>(선택)</S.OptionalTag>
+          </S.FormLabel>
+          <ChoiceChips
+            ariaLabel="역사적 단위 분류"
+            value={selectedEntityKind ?? ''}
+            onChange={(next) =>
+              setValue('entityKind', next === '' ? null : next, {
                 shouldValidate: true,
                 shouldDirty: true,
               })
             }
-            allowEmpty
-            emptyLabel="자동"
-            options={ENTITY_KIND_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: opt.label,
-              hint: opt.example,
-            }))}
+            options={[
+              { value: '' as const, label: '자동' },
+              ...ENTITY_KIND_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.label,
+                title: `예: ${option.example}`,
+              })),
+            ]}
           />
-          <S.FormHelp>막부 같은 정권은 정권/시대로 구분</S.FormHelp>
+          <S.FormHelp>
+            {ENTITY_KIND_OPTIONS.map(
+              (option) => `${option.label}: ${option.example}`,
+            ).join(' · ')}
+          </S.FormHelp>
         </S.FormField>
 
-        {/* 존속 기간 — 시작/종료 한 그룹 */}
+        {/* 존속 기간 — 사건 등록 폼 '기간'처럼 시작 | 종료 두 칸 */}
         <S.FormField>
-          <S.FormLabel>존속 기간</S.FormLabel>
-          <DateRange>
-            <EraDateInline
-              era={watch('startEra')}
-              year={watch('startYear')}
-              month={watch('startMonth')}
-              day={watch('startDay')}
-              idPrefix="start"
-              onChange={({ era, year, month, day }) => {
-                setValue('startEra', era, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-                setValue('startYear', year, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-                setValue('startMonth', month, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-                setValue('startDay', day, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-              }}
-            />
-            <RangeSep>→</RangeSep>
-            <EraDateInline
-              era={watch('endEra')}
-              year={watch('endYear')}
-              month={watch('endMonth')}
-              day={watch('endDay')}
-              idPrefix="end"
-              onChange={({ era, year, month, day }) => {
-                setValue('endEra', era, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-                setValue('endYear', year, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-                setValue('endMonth', month, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-                setValue('endDay', day, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-              }}
-            />
-          </DateRange>
+          <S.FormLabel>
+            존속 기간<S.OptionalTag>(선택)</S.OptionalTag>
+          </S.FormLabel>
+          <KitDateRangeRow>
+            <KitDateRangeColumn>
+              <KitDateRangeLabel>시작</KitDateRangeLabel>
+              <PeriodDateField
+                ariaLabel="존속 시작"
+                pickerTitle="존속 시작 선택"
+                era={watch('startEra')}
+                year={watch('startYear')}
+                month={watch('startMonth')}
+                day={watch('startDay')}
+                onChange={({ era, year, month, day }) => {
+                  const opts = { shouldValidate: true, shouldDirty: true }
+                  setValue('startEra', era, opts)
+                  setValue('startYear', year, opts)
+                  setValue('startMonth', month, opts)
+                  setValue('startDay', day, opts)
+                }}
+              />
+            </KitDateRangeColumn>
+            <KitDateRangeColumn>
+              <KitDateRangeLabel>종료</KitDateRangeLabel>
+              <PeriodDateField
+                ariaLabel="존속 종료"
+                pickerTitle="존속 종료 선택"
+                error={!!errors.endYear}
+                era={watch('endEra')}
+                year={watch('endYear')}
+                month={watch('endMonth')}
+                day={watch('endDay')}
+                onChange={({ era, year, month, day }) => {
+                  const opts = { shouldValidate: true, shouldDirty: true }
+                  setValue('endEra', era, opts)
+                  setValue('endYear', year, opts)
+                  setValue('endMonth', month, opts)
+                  setValue('endDay', day, opts)
+                }}
+              />
+            </KitDateRangeColumn>
+          </KitDateRangeRow>
           {(() => {
             const sEra = watch('startEra')
             const sYear = watch('startYear')
@@ -985,6 +810,10 @@ export function HistoricalCountryForm({
               </DurationHint>
             )
           })()}
+          <S.FormHelp>
+            연도만 알면 연도만 적으세요. 달력 아이콘으로 고를 수도 있고, 오른쪽
+            &lsquo;서기&rsquo;를 누르면 기원전으로 바뀝니다 (존속 중이면 종료 비워두기)
+          </S.FormHelp>
         </S.FormField>
       </S.FormSection>
 
@@ -998,90 +827,108 @@ export function HistoricalCountryForm({
 
         <S.FormField>
           <S.FormLabel htmlFor="parentModernCountryIds">
-            오늘날 속한 국가
+            오늘날 속한 국가<S.OptionalTag>(선택)</S.OptionalTag>
           </S.FormLabel>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <SelectionChips
-              items={modernCountries
-                .filter((c) => selectedModernCountries.includes(c.id))
-                .map((c) => ({ id: c.id, label: c.name }))}
-              onRemove={(id) =>
-                setSelectedModernCountries((prev) =>
-                  prev.filter((x) => x !== id),
-                )
-              }
-              addLabel={
-                selectedModernCountries.length === 0 ? '국가 선택' : '추가'
-              }
-              onAdd={() => setShowModernCountryModal(true)}
-            />
-            {selectedModernCountries.length === 0 && (
-              <AlertBox variant="warning">
-                미연결 시 이 역사국가에 등록된 인물의 임기·내각이 현대 국가
-                행정조직 뷰(국가 → 행정부)에서 보이지 않을 수 있습니다.
-              </AlertBox>
-            )}
-          </div>
+          <KitSelectedItems>
+            {modernCountries
+              .filter((country) => selectedModernCountries.includes(country.id))
+              .map((country) => (
+                <KitSelectedItem key={country.id}>
+                  <span>{country.name}</span>
+                  <KitRemoveButton
+                    type="button"
+                    aria-label={`'${country.name}' 연결 해제`}
+                    onClick={() =>
+                      setSelectedModernCountries((prev) =>
+                        prev.filter((id) => id !== country.id),
+                      )
+                    }
+                  >
+                    <FiX size={14} />
+                  </KitRemoveButton>
+                </KitSelectedItem>
+              ))}
+            <KitAddButton
+              type="button"
+              onClick={() => setShowModernCountryModal(true)}
+            >
+              <FiPlus size={16} />
+              {selectedModernCountries.length === 0 ? '국가 선택' : '추가'}
+            </KitAddButton>
+          </KitSelectedItems>
+          {selectedModernCountries.length === 0 && (
+            <AlertBox variant="warning">
+              미연결 시 이 역사국가에 등록된 인물의 임기·내각이 현대 국가
+              행정조직 뷰(국가 → 행정부)에서 보이지 않을 수 있습니다.
+            </AlertBox>
+          )}
         </S.FormField>
 
         {historicalCountries.length > 0 && (
           <>
             <S.FormField>
               <S.FormLabel htmlFor="parentHistoricalCountryIds">
-                다음으로 이어진 국가
+                다음으로 이어진 국가<S.OptionalTag>(선택)</S.OptionalTag>
               </S.FormLabel>
-              <div
-                style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
-              >
-                <SelectionChips
-                  items={historicalCountries
-                    .filter((c) =>
-                      selectedParentHistoricalIds.includes(c.id),
-                    )
-                    .map((c) => ({ id: c.id, label: c.name }))}
-                  onRemove={(id) =>
-                    setSelectedParentHistoricalIds((prev) =>
-                      prev.filter((x) => x !== id),
-                    )
-                  }
-                  addLabel={
-                    selectedParentHistoricalIds.length === 0
-                      ? '국가 선택'
-                      : '추가'
-                  }
-                  onAdd={() => setShowParentHistoricalModal(true)}
-                />
-                <S.FormHelp>예: 고려 → 조선, 무로마치 → 에도</S.FormHelp>
-              </div>
+              <KitSelectedItems>
+                {historicalCountries
+                  .filter((country) =>
+                    selectedParentHistoricalIds.includes(country.id),
+                  )
+                  .map((country) => (
+                    <KitSelectedItem key={country.id}>
+                      <span>{country.name}</span>
+                      <KitRemoveButton
+                        type="button"
+                        aria-label={`'${country.name}' 연결 해제`}
+                        onClick={() =>
+                          setSelectedParentHistoricalIds((prev) =>
+                            prev.filter((id) => id !== country.id),
+                          )
+                        }
+                      >
+                        <FiX size={14} />
+                      </KitRemoveButton>
+                    </KitSelectedItem>
+                  ))}
+                <KitAddButton
+                  type="button"
+                  onClick={() => setShowParentHistoricalModal(true)}
+                >
+                  <FiPlus size={16} />
+                  {selectedParentHistoricalIds.length === 0
+                    ? '국가 선택'
+                    : '추가'}
+                </KitAddButton>
+              </KitSelectedItems>
+              <S.FormHelp>예: 고려 → 조선, 무로마치 → 에도</S.FormHelp>
             </S.FormField>
             {selectedParentHistoricalIds.length > 0 && (
               <S.FormField>
                 <S.FormLabel>어떻게 이어졌나</S.FormLabel>
-                <FormSelectNative
+                <ChoiceChips
+                  ariaLabel="어떻게 이어졌나"
                   value={transitionEventType}
-                  onChange={(e) => {
-                    const next = e.target.value as TransitionEventType
+                  onChange={(next) => {
+                    if (next === '') return
                     setTransitionEventType(next)
-                    const group = TRANSITION_EVENT_GROUPS.find((g) =>
-                      g.items.includes(next),
+                    const group = TRANSITION_EVENT_GROUPS.find((candidate) =>
+                      candidate.items.includes(next),
                     )
                     if (group) setTransitionScope(group.defaultScope)
                   }}
-                >
-                  {TRANSITION_EVENT_GROUPS.map((group) => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.items.map((k) => (
-                        <option key={k} value={k}>
-                          {TRANSITION_EVENT_LABELS[k]}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </FormSelectNative>
+                  groups={TRANSITION_EVENT_GROUPS.map((group) => ({
+                    label: group.label,
+                    options: group.items.map((item) => ({
+                      value: item,
+                      label: TRANSITION_EVENT_LABELS[item],
+                    })),
+                  }))}
+                />
                 <S.FormHelp>
                   {(() => {
-                    const group = TRANSITION_EVENT_GROUPS.find((g) =>
-                      g.items.includes(transitionEventType),
+                    const group = TRANSITION_EVENT_GROUPS.find((candidate) =>
+                      candidate.items.includes(transitionEventType),
                     )
                     if (group?.hint) return group.hint
                     return '변환 날짜는 다음 국가의 존속 시작 시점을 참조합니다.'
@@ -1094,27 +941,29 @@ export function HistoricalCountryForm({
                     후임에만 적용됩니다.
                   </S.FormHelp>
                 )}
-                <S.FormLabel style={{ marginTop: 12 }}>변환 성격</S.FormLabel>
-                <FormSelectNative
+              </S.FormField>
+            )}
+            {selectedParentHistoricalIds.length > 0 && (
+              <S.FormField>
+                <S.FormLabel>변환 성격</S.FormLabel>
+                <ChoiceChips
+                  ariaLabel="변환 성격"
                   value={transitionScope}
-                  onChange={(e) =>
-                    setTransitionScope(
-                      e.target.value as
-                        | 'STATE_SUCCESSION'
-                        | 'REGIME_CHANGE'
-                        | '',
-                    )
-                  }
-                  style={{ marginTop: 6 }}
-                >
-                  <option value="">자동 (변환 유형으로 추정)</option>
-                  <option value="STATE_SUCCESSION">
-                    국가 계승 — 주권 단위 변경
-                  </option>
-                  <option value="REGIME_CHANGE">
-                    정권 교체 — 영토는 그대로
-                  </option>
-                </FormSelectNative>
+                  onChange={(next) => setTransitionScope(next)}
+                  options={[
+                    { value: '' as const, label: '자동', title: '변환 유형으로 추정' },
+                    {
+                      value: 'STATE_SUCCESSION' as const,
+                      label: '국가 계승',
+                      title: '주권 단위 변경',
+                    },
+                    {
+                      value: 'REGIME_CHANGE' as const,
+                      label: '정권 교체',
+                      title: '영토는 그대로',
+                    },
+                  ]}
+                />
 
                 <RelationPreview>
                   <RelationNode>{watch('name') || '이 국가'}</RelationNode>
@@ -1175,7 +1024,9 @@ export function HistoricalCountryForm({
         </S.FormSectionHeader>
 
         <S.FormField>
-          <S.FormLabel htmlFor="nameOrigin">이름의 유래</S.FormLabel>
+          <S.FormLabel htmlFor="nameOrigin">
+            이름의 유래<S.OptionalTag>(선택)</S.OptionalTag>
+          </S.FormLabel>
           <TextareaWithCounterWrap
             length={(watch('nameOrigin') ?? '').length}
             max={500}
@@ -1195,7 +1046,9 @@ export function HistoricalCountryForm({
         </S.FormField>
 
         <S.FormField>
-          <S.FormLabel htmlFor="description">설명</S.FormLabel>
+          <S.FormLabel htmlFor="description">
+            설명<S.OptionalTag>(선택)</S.OptionalTag>
+          </S.FormLabel>
           <TextareaWithCounterWrap
             length={(watch('description') ?? '').length}
             max={1000}
@@ -1215,7 +1068,9 @@ export function HistoricalCountryForm({
         </S.FormField>
 
         <S.FormField>
-          <S.FormLabel htmlFor="history">역사</S.FormLabel>
+          <S.FormLabel htmlFor="history">
+            역사<S.OptionalTag>(선택)</S.OptionalTag>
+          </S.FormLabel>
           <TextareaWithCounterWrap
             length={(watch('history') ?? '').length}
             max={10000}
@@ -1245,18 +1100,8 @@ export function HistoricalCountryForm({
         autoComplete="off"
         noValidate
       >
-        <ModalFormLayoutWrap data-inner>{formBody}</ModalFormLayoutWrap>
+        <S.SideLabelFormLayout>{formBody}</S.SideLabelFormLayout>
       </S.Form>
-
-      {/* 국가 형태 선택 모달 (카테고리 + 검색) */}
-      <StateTypeModal
-        open={showStateTypeModal}
-        onClose={() => setShowStateTypeModal(false)}
-        options={STATE_TYPE_OPTIONS}
-        categories={STATE_TYPE_CATEGORIES}
-        selectedValue={selectedStateType}
-        onSelect={handleStateTypeSelect}
-      />
 
       {/* 연결된 현대 국가 선택: 공용 모달 (현대 국가만 표시, 다중 선택) */}
       <CountrySearchModal

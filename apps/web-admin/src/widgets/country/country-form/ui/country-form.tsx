@@ -20,7 +20,7 @@ import { useLanguages } from '@/features/language/use-languages.hook'
 import { EmptyHint } from '@/shared/ui/empty-hint/empty-hint'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import { ThumbnailUploader } from '@/shared/ui/thumbnail-uploader/thumbnail-uploader'
-import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
+import { ChoiceChips } from '@/shared/ui/register-form-kit/register-form-kit'
 import {
   SelectModal,
   SelectOption,
@@ -33,87 +33,8 @@ import * as S from './country-form.styles'
  * 국가 등록/수정 폼 — 모달 전용
  * (사이드패널 모드는 사용처가 없어 제거됨)
  */
-const CountryFormLayout = styled.div`
+const CountryFormLayout = styled(S.SideLabelFormLayout)`
   padding-bottom: 24px;
-  ${S.FormSection} {
-    margin-top: 0;
-    padding: 0;
-    border: none;
-    gap: 0;
-  }
-  ${S.FormSection}:not(:first-of-type) {
-    margin-top: 40px;
-  }
-  ${S.FormSectionHeader} {
-    margin-bottom: 12px;
-    padding: 0;
-  }
-  ${S.FormSectionIcon} {
-    display: none;
-  }
-  ${S.FormSectionTitle} {
-    font-size: 11px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    margin: 0;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
-  ${S.FormSectionDescription} {
-    display: none;
-  }
-  /* 필드: top-label (라벨 위, 입력 아래) */
-  ${S.FormRow} {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    padding: 0;
-    border: none;
-  }
-  @media (max-width: 640px) {
-    ${S.FormRow} {
-      grid-template-columns: 1fr;
-    }
-  }
-  ${S.FormField} {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 0;
-    border: none;
-    margin-top: 18px;
-  }
-  ${S.FormField}:first-child,
-  ${S.FormRow} ${S.FormField} {
-    margin-top: 0;
-  }
-  ${S.FormSection} > ${S.FormField}:first-of-type,
-  ${S.FormSection} > ${S.FormRow}:first-of-type {
-    margin-top: 0;
-  }
-  ${S.FormSection} > ${S.FormRow} {
-    margin-top: 18px;
-  }
-  ${S.FormLabel} {
-    font-size: 13px;
-    font-weight: 500;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    padding-top: 0;
-    margin: 0;
-  }
-  ${S.FormField} input:not([type='hidden']),
-  ${S.FormField} button[type='button'],
-  ${S.FormField} select,
-  ${S.FormField} textarea {
-    min-width: 0;
-  }
-  ${S.FormField} ${S.ErrorMessage} {
-    font-size: 12px;
-    margin-top: 0;
-  }
-  ${S.FormHelp} {
-    margin-top: 0;
-  }
   /* 입력 폭 — 3단계 통일 */
   ${S.FormField} .input-xs {
     max-width: 88px;
@@ -129,13 +50,8 @@ const CountryFormLayout = styled.div`
   ${S.FormField} .input-number {
     max-width: 200px;
   }
-  ${S.FormField} .input-name,
-  ${S.FormField} .input-local-name {
-    max-width: 100%;
-  }
   ${S.SelectButton} {
     font-size: 14px;
-    max-width: 100%;
   }
 `
 
@@ -154,7 +70,10 @@ const NumberWithSuffix = styled.div`
   position: relative;
   display: inline-flex;
   align-items: center;
-  max-width: 220px;
+  /* 폼 레이아웃의 '필드 열 자식 상한 680'보다 특이도를 높여 입력 폭(200)에 단위를 붙인다 */
+  &&& {
+    max-width: 200px;
+  }
 
   input {
     padding-right: 44px;
@@ -457,7 +376,9 @@ export function CountryForm({
 
           {/* 대표 이미지 — 미니멀 정사각형 96px */}
           <S.FormField data-field="thumbnail">
-            <S.FormLabel htmlFor="flag-image-upload">대표 이미지</S.FormLabel>
+            <S.FormLabel htmlFor="flag-image-upload">
+              대표 이미지<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
             <ThumbnailUploader
               value={thumbnailPreview}
               category="countries"
@@ -492,7 +413,9 @@ export function CountryForm({
 
           {/* 로컬명 */}
           <S.FormField>
-            <S.FormLabel>로컬명</S.FormLabel>
+            <S.FormLabel>
+              로컬명<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
             <FormInput
               className="input-local-name"
               {...register('localName')}
@@ -509,7 +432,9 @@ export function CountryForm({
 
           {/* 풀네임 */}
           <S.FormField>
-            <S.FormLabel>공식 명칭</S.FormLabel>
+            <S.FormLabel>
+              공식 명칭<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
             <FormInput
               {...register('fullName')}
               placeholder="Republic of Korea"
@@ -526,7 +451,9 @@ export function CountryForm({
           {/* ISO 코드 + 국기 한 행 */}
           <S.FormRow>
             <S.FormField>
-              <S.FormLabel>ISO 코드</S.FormLabel>
+              <S.FormLabel>
+                ISO 코드<S.OptionalTag>(선택)</S.OptionalTag>
+              </S.FormLabel>
               <FormInput
                 className="input-xs"
                 {...register('isoCode')}
@@ -549,7 +476,9 @@ export function CountryForm({
             </S.FormField>
 
             <S.FormField>
-              <S.FormLabel>국기</S.FormLabel>
+              <S.FormLabel>
+                국기<S.OptionalTag>(선택)</S.OptionalTag>
+              </S.FormLabel>
               <FormInput
                 className="input-xs"
                 {...register('flagEmoji', {
@@ -581,7 +510,9 @@ export function CountryForm({
 
           {/* 수도 */}
           <S.FormField>
-            <S.FormLabel>수도</S.FormLabel>
+            <S.FormLabel>
+              수도<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
             <FormInput
               className="input-capital"
               {...register('capital')}
@@ -593,27 +524,28 @@ export function CountryForm({
             )}
           </S.FormField>
 
-          {/* 대륙 — 옵션 5~8개라 인라인 dropdown이 모달보다 가벼움 */}
+          {/* 대륙 — 옵션 5~8개라 사건 등록 폼 카테고리처럼 칩으로 바로 고른다 */}
           <S.FormField>
             <S.FormLabel htmlFor="continentId">
               대륙 <S.RequiredStar>*</S.RequiredStar>
             </S.FormLabel>
-            <FormSelectNative
-              id="continentId"
-              {...register('continentId')}
-              className="input-continent"
-              aria-label="대륙"
-              aria-required="true"
-              aria-invalid={!!errors.continentId}
-              $error={!!errors.continentId}
-            >
-              <option value="">대륙 선택</option>
-              {continents.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </FormSelectNative>
+            <ChoiceChips
+              ariaLabel="대륙"
+              jumpTarget="continentId"
+              value={watch('continentId') ?? ''}
+              error={!!errors.continentId}
+              onChange={(next) =>
+                setValue('continentId', next, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              options={continents.map((continent) => ({
+                value: continent.id,
+                label: continent.name,
+              }))}
+            />
+            <input type="hidden" id="continentId" {...register('continentId')} />
             {errors.continentId && (
               <S.ErrorMessage>{errors.continentId.message}</S.ErrorMessage>
             )}
@@ -633,7 +565,9 @@ export function CountryForm({
           </S.FormSectionHeader>
 
           <S.FormField>
-            <S.FormLabel>인구</S.FormLabel>
+            <S.FormLabel>
+              인구<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
             <FormInput
               className="input-number"
               type="text"
@@ -665,7 +599,9 @@ export function CountryForm({
           </S.FormField>
 
           <S.FormField>
-            <S.FormLabel>면적</S.FormLabel>
+            <S.FormLabel>
+              면적<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
             <NumberWithSuffix>
               <FormInput
                 className="input-number"
@@ -707,7 +643,9 @@ export function CountryForm({
           </S.FormSectionHeader>
 
           <S.FormField>
-            <S.FormLabel>화폐</S.FormLabel>
+            <S.FormLabel>
+              화폐<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
             <S.SelectButton
               type="button"
               onClick={() => setShowCurrencyModal(true)}
@@ -735,7 +673,9 @@ export function CountryForm({
           </S.FormField>
 
           <S.FormField>
-            <S.FormLabel>언어</S.FormLabel>
+            <S.FormLabel>
+              언어<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
             <S.SelectButton
               type="button"
               onClick={() => setShowLanguageModal(true)}
@@ -775,20 +715,27 @@ export function CountryForm({
           </S.FormSectionHeader>
 
           <S.FormField>
-            <S.FormLabel>인물 이름 표기 순서</S.FormLabel>
-            <FormSelectNative
-              {...register('defaultNameDisplayOrder', {
-                onChange: () => {
-                  nameOrderTouchedRef.current = true
-                  setLastInferredFromIso(null)
-                },
-              })}
-              className="input-name-order"
-              aria-label="인물 이름 표기 순서 기본값"
-            >
-              <option value="korean">동양식 (성 → 이름)</option>
-              <option value="western">서양식 (이름 → 성)</option>
-            </FormSelectNative>
+            <S.FormLabel>
+              인물 이름 표기 순서<S.OptionalTag>(선택)</S.OptionalTag>
+            </S.FormLabel>
+            <ChoiceChips
+              ariaLabel="인물 이름 표기 순서 기본값"
+              value={watchedNameOrder ?? 'korean'}
+              onChange={(next) => {
+                if (next === '') return
+                nameOrderTouchedRef.current = true
+                setLastInferredFromIso(null)
+                setValue('defaultNameDisplayOrder', next, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }}
+              options={[
+                { value: 'korean' as const, label: '동양식 (성 → 이름)' },
+                { value: 'western' as const, label: '서양식 (이름 → 성)' },
+              ]}
+            />
+            <input type="hidden" {...register('defaultNameDisplayOrder')} />
             <S.FormHelp>
               {lastInferredFromIso &&
               !nameOrderTouchedRef.current &&

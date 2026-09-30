@@ -4,6 +4,11 @@
  */
 import styled from 'styled-components'
 
+import {
+  KitOptionalTag,
+  kitSelectTriggerCss,
+} from '@/shared/ui/register-form-kit/register-form-kit'
+
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 
 // ─── 사이드 패널 ──────────────────────────────────────────────────────────────
@@ -591,5 +596,111 @@ export const SelectModalFooterButton = styled.button`
   transition: background 0.2s;
   &:hover {
     background: ${({ theme }) => theme.colors.button.hover};
+  }
+`
+
+// ─── 등록 모달 폼 레이아웃 (사건 등록 폼과 같은 문법) ───────────────────────────
+
+/** 선택(비필수) 라벨 꼬리표 — 사건 등록 폼 '(선택)'과 같은 표기(정본: register-form-kit) */
+export const OptionalTag = KitOptionalTag
+
+/**
+ * 국가·역사 국가 등록 모달의 폼 레이아웃 — **사건 등록 폼(event-create.styles)의 치수를 그대로**:
+ * 라벨 열 200px(14/600 primary, 위 10px) | 간격 24 | 필드 열(상한 680px), 행 padding 20px 0,
+ * 행 아래 hairline, 마지막 행은 선 없음. 섹션 머리글도 없다 — 사건 폼은 행이 한 줄로 흐르는
+ * 한 장의 서류라, 머리글·섹션 구분선을 두면 같은 모달 셸 안에서도 딴 폼처럼 보였다.
+ * (`data-form-section`은 그대로 남아 필수 진척 점프 대상이 된다.)
+ *
+ * 격자 규칙 — 라벨은 1열 1행에 못박고, 나머지 자식(입력·힌트·오류)은 전부 2열로 흘린다.
+ * 라벨을 `grid-row: 1 / span N`으로 늘리면 빈 암묵 행마다 row-gap이 쌓여 행이 부푼다.
+ */
+export const SideLabelFormLayout = styled.div`
+  ${Form} {
+    gap: 0;
+  }
+  ${FormSection} {
+    display: contents;
+  }
+  ${FormSectionHeader} {
+    display: none;
+  }
+  /* 두 칸 묶음(ISO·국기 등)은 행 문법에선 각자 한 행 — 묶음 상자를 지운다 */
+  ${FormRow} {
+    display: contents;
+  }
+
+  ${FormField} {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    column-gap: 24px;
+    row-gap: 8px;
+    align-items: start;
+    margin: 0;
+    padding: 20px 0;
+    border: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+  /* 첫 행 위 여백은 스크롤 영역이 이미 준다 (사건 폼 FormRow:first-child와 같은 4px) */
+  [data-form-section='basic'] > ${FormSectionHeader} + ${FormField} {
+    padding-top: 4px;
+  }
+  [data-form-section]:last-of-type > ${FormField}:last-child {
+    border-bottom: none;
+  }
+  ${FormField} > * {
+    grid-column: 2;
+    min-width: 0;
+    max-width: 680px;
+  }
+  ${FormField} > ${FormLabel} {
+    grid-column: 1;
+    grid-row: 1;
+    display: block;
+    max-width: none;
+    margin: 0;
+    padding-top: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  ${RequiredStar} {
+    margin-left: 4px;
+    font-size: 14px;
+    font-weight: 400;
+    color: #ef4444;
+  }
+  ${FormField} ${ErrorMessage} {
+    margin-top: 0;
+  }
+  /* 모달·목록을 여는 선택 칸 = 텍스트 입력과 같은 칸(41px·r8) — 사건 폼 입력 칸과 같은 모양 */
+  ${SelectButton} {
+    ${kitSelectTriggerCss}
+  }
+  ${FormHelp} {
+    margin-top: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
+  }
+
+  /* 사건 폼과 같은 단계: 좁은 화면은 라벨 열 160, 모바일은 한 열 */
+  @media (max-width: 1024px) {
+    ${FormField} {
+      grid-template-columns: 160px minmax(0, 1fr);
+      column-gap: 16px;
+    }
+  }
+  @media (max-width: 768px) {
+    ${FormField} {
+      grid-template-columns: minmax(0, 1fr);
+      padding: 16px 0;
+    }
+    ${FormField} > * {
+      grid-column: 1;
+    }
+    ${FormField} > ${FormLabel} {
+      padding-top: 0;
+    }
   }
 `

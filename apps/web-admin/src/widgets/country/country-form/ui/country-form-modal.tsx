@@ -86,24 +86,6 @@ export function CountryFormModal({
           jumpTarget: 'continentId',
         },
       ]}
-      sectionIndex={[
-        {
-          id: 'basic',
-          label: '기본 정보',
-          filled: !!filled.name && !!filled.continentId,
-        },
-        {
-          id: 'stats',
-          label: '통계 정보',
-          filled: !!filled.population || !!filled.areaSqKm,
-        },
-        {
-          id: 'extra',
-          label: '부가 정보',
-          filled: !!filled.currencyId || !!filled.languageId,
-        },
-        { id: 'display', label: '표시 설정', filled: false },
-      ]}
     >
       <CountryForm
         mode={mode ?? 'create'}

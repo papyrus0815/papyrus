@@ -67,11 +67,15 @@ export function HistoricalCountryFormModal({
     }
   }
 
+  // 신규 등록의 빈 편집 대상은 **한 번 만든 객체를 계속** 넘긴다. 렌더마다 `{}`를 새로
+  // 만들면 폼의 초기화 effect가 그 참조 변화에 매번 반응해 reset() — 한 글자 칠 때마다
+  // 부모가 다시 그려지며(filled·isDirty 갱신) 입력이 지워져 "아무것도 안 적히던" 원인이었다.
+  const blankEditingRef = React.useRef<HistoricalCountry>({} as HistoricalCountry)
   const effectiveEditing =
     editing && typeof editing === 'object' && 'id' in editing
       ? (editing as HistoricalCountry)
       : editing && Object.keys(editing).length === 0
-        ? ({} as HistoricalCountry)
+        ? blankEditingRef.current
         : null
 
   React.useEffect(() => {
@@ -106,19 +110,6 @@ export function HistoricalCountryFormModal({
           done: !!filled.stateType,
           jumpTarget: 'stateType',
         },
-      ]}
-      sectionIndex={[
-        {
-          id: 'basic',
-          label: '기본 정보',
-          filled: !!filled.name && !!filled.stateType,
-        },
-        {
-          id: 'relations',
-          label: '관계',
-          filled: !!filled.parentModernCountryIds,
-        },
-        { id: 'narrative', label: '서술', filled: !!filled.description },
       ]}
     >
       {effectiveEditing && (
