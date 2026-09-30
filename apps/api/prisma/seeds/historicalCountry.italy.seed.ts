@@ -7,6 +7,8 @@ const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 interface HistoricalCountryEntry {
   name: string
   enName?: string
+  /** 국명 유래 — 이 필드를 도입하기 전 항목들은 비어 있다(선재 행은 덮어쓰지 않음) */
+  nameOrigin?: string
   description?: string
   startEra?: 'BC' | 'AD'
   startYear?: number
@@ -74,6 +76,28 @@ const ENTRIES: HistoricalCountryEntry[] = [
   },
 
   // ── 민족 이동기 ───────────────────────────────────────────────────
+  // 476~493 — 서로마 멸망과 동고트 사이 17년. 이 행이 없을 땐 서로마→동고트가 바로 이어져 공백이 가려졌다.
+  {
+    name: '오도아케르 왕국',
+    enName: 'Kingdom of Odoacer',
+    nameOrigin:
+      '왕의 이름 오도아케르(Odoacer, Odovacar)에서 왔다. 스스로는 이탈리아 왕(rex Italiae) 또는 ' +
+      '민족들의 왕(rex gentium)을 칭했고, 학계에서는 흔히 "오도아케르의 이탈리아 왕국"이라 부른다.',
+    description:
+      '476년 게르만 용병대장 오도아케르가 서로마의 마지막 황제 로물루스 아우구스툴루스를 폐위하고 라벤나를 ' +
+      '수도로 세운 이탈리아 왕국. 황제의 휘장을 콘스탄티노폴리스로 돌려보내 동로마 황제 제논의 명목상 종주권을 ' +
+      '인정하고 파트리키우스 칭호로 다스렸으며, 로마 원로원과 행정 조직을 그대로 두었다. 반달족에게서 시칠리아를 ' +
+      '돌려받고(477) 달마티아를 병합했으며(481), 루기족을 쳐 노리쿰을 정리했다(487~488). 그러나 제논의 사주를 받은 ' +
+      '동고트 왕 테오도리쿠스가 489년 이탈리아에 침입해 3년에 걸친 라벤나 포위 끝에 493년 화약을 맺었고, 연회에서 ' +
+      '오도아케르를 직접 살해하면서 동고트 왕국으로 넘어갔다.',
+    startEra: 'AD', startYear: 476, startMonth: 9,
+    endEra: 'AD', endYear: 493, endMonth: 3,
+    stateType: HistoricalStateType.KINGDOM,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 44.42, longitude: 12.2,
+    // 달마티아(481~)·노리쿰은 획득·주변부라 단일 링크(규범 B)
+    linkToIsoCodes: ['IT'],
+  },
   {
     name: '동고트 왕국',
     enName: 'Ostrogothic Kingdom',
@@ -94,6 +118,47 @@ const ENTRIES: HistoricalCountryEntry[] = [
     stateType: HistoricalStateType.KINGDOM,
     entityKind: HistoricalEntityKind.STATE,
     latitude: 45.5, longitude: 9.2,
+    linkToIsoCodes: ['IT'],
+  },
+  // 랑고바르드 왕국의 남·중부 두 대공국 — 왕국 본토(북부)와 동로마령 로마·라벤나 회랑에 가로막혀
+  // 사실상 독자 세력으로 움직였다. 774년 왕국이 망한 뒤에도 각자 수백 년 존속해 별도 행으로 둔다.
+  {
+    name: '스폴레토 공국',
+    enName: 'Duchy of Spoleto',
+    nameOrigin:
+      '수도 스폴레토(라틴어 Spoletium)에서 왔다. 움브리아의 옛 도시 이름으로, 공국은 이탈리아어로 Ducato di Spoleto라 한다.',
+    description:
+      '570년 무렵 랑고바르드 장수 파로알드 1세가 움브리아의 스폴레토를 거점으로 세운 공국. 북부의 왕국 본토와는 ' +
+      '로마-라벤나를 잇는 동로마 회랑으로 떨어져 있어, 이름뿐인 왕권 아래 사실상 독자적으로 움브리아·마르케·아브루초 ' +
+      '일대를 다스렸다. 774년 카롤루스 대제가 랑고바르드 왕국을 무너뜨린 뒤 776년 프랑크의 공작령으로 편입되었고, ' +
+      '9세기에는 귀도 가문(귀데스키)의 공작 귀도 3세·람베르토가 이탈리아 왕과 황제 자리까지 차지했다. 이후 신성로마제국 ' +
+      '이탈리아 왕국의 봉토로 이어지다가, 1198년 교황 인노첸시오 3세가 황제파 공작 콘라트 폰 우르슬링겐을 몰아내고 ' +
+      '교황령에 병합했다(1201년 오토 4세, 1213년 프리드리히 2세가 확인).',
+    startEra: 'AD', startYear: 570,
+    endEra: 'AD', endYear: 1198,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 42.73, longitude: 12.74,
+    linkToIsoCodes: ['IT'],
+  },
+  {
+    name: '베네벤토 공국',
+    enName: 'Duchy of Benevento',
+    nameOrigin:
+      '수도 베네벤토(라틴어 Beneventum)에서 왔다. 본래 이름 Maleventum(나쁜 바람)이 불길하다 하여 기원전 268년 ' +
+      '로마가 Beneventum(좋은 바람)으로 고쳤다고 전한다. 774년 이후의 군주국(Principality of Benevento)도 이 행에 포함한다.',
+    description:
+      '571년 무렵 랑고바르드 장수 초토가 캄파니아 내륙의 베네벤토를 거점으로 세운 공국. 왕국 본토에서 멀리 떨어진 ' +
+      '남이탈리아 최대의 랑고바르드 세력으로, 동로마령 나폴리·아말피·칼라브리아와 경쟁하며 남부 대부분을 차지했다. ' +
+      '774년 랑고바르드 왕국이 프랑크에 멸망하자 공작 아레키스 2세가 스스로 군주(princeps)를 칭해 독립 군주국이 ' +
+      '되었고, 787년 카롤루스 대제에게 조공을 약속했으나 실질적 독립을 지켰다. 9세기 내전 끝에 849년 살레르노 ' +
+      '군주국이 떨어져 나가고 이후 카푸아도 갈라지면서 약해졌으며, 11세기 노르만의 남하 속에 1077년 마지막 군주 ' +
+      '란돌포 6세가 후사 없이 죽자 도시 베네벤토는 교황령이 되고 나머지 영토는 노르만에게 넘어갔다.',
+    startEra: 'AD', startYear: 571,
+    endEra: 'AD', endYear: 1077,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 41.13, longitude: 14.78,
     linkToIsoCodes: ['IT'],
   },
 
@@ -281,6 +346,7 @@ export async function seedItalyHistoricalCountries(
         data: {
           name: entry.name,
           enName: entry.enName,
+          nameOrigin: entry.nameOrigin,
           description: entry.description,
           startEra: entry.startEra as any,
           startYear: entry.startYear,
