@@ -17,7 +17,7 @@
  * 편집도 `eventId`로 지원하지만 **편집 진입점은 만들지 않는다** — 사건 상세가 이미 같은
  * 필드를 인라인 PATCH하므로 세 번째 편집 표면이 된다(흡수는 별도 배치).
  */
-import React, { Suspense, useCallback, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -108,6 +108,16 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   )
   /** 저장 직후 3지 분기 다이얼로그 대상 */
   const [savedEventId, setSavedEventId] = useState<string | null>(null)
+
+  /**
+   * 완료 다이얼로그가 뜨면 상세 페이지 청크를 미리 받는다 — 라우트가 `lazy`라 '상세 보기'
+   * 클릭 후에야 받기 시작하면 그동안 목록에 멈춰 있다. 라우트의 import와 같은 모듈이라
+   * 두 번 받지 않는다. 그래도 남는 대기는 레이아웃의 RouteProgressBar가 표시한다.
+   */
+  useEffect(() => {
+    if (savedEventId === null) return
+    void import('@/pages/events/detail/event-detail.page').catch(() => undefined)
+  }, [savedEventId])
 
   const { isEditMode, isLoading, isSubmitting, isValid, firstError } = formState
   const busy = isLoading || isSubmitting

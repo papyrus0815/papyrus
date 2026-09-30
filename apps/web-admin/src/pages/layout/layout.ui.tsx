@@ -16,6 +16,7 @@ import { useBgmPlaylist } from '@/shared/hooks/use-bgm-playlist.hook'
 import { logError } from '@/shared/ui/error-handler/error-handler.lib'
 import { ErrorHandler } from '@/shared/ui/error-handler/error.handler.ui'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
+import { RouteProgressBar } from '@/shared/ui/route-progress'
 import DashboardSkeleton from '@/shared/ui/skeleton/dashboard-skeleton.ui'
 import ContentSkeleton from '@/shared/ui/skeleton/content-skeleton.ui'
 import LayoutSkeleton from '@/shared/ui/skeleton/layout-skeleton.ui'
@@ -79,6 +80,9 @@ export default function Layout() {
 
   return (
     <>
+      {/* lazy 라우트 청크를 받는 동안 옛 화면에 멈춰 있는 구간의 표시 */}
+      <RouteProgressBar />
+
       {/* 전역 내비게이션 — 상단 바가 아니라 좌측 레일(디스코드식) */}
       {isAuthenticated && <NavRail />}
 
