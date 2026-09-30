@@ -2,7 +2,7 @@
  * 이벤트 생성/수정 시 유효성 검증 함수들
  * FSD: features/event-create/lib
  */
-import { compareByDate } from '@/shared/lib/iso-date'
+import { compareByDate, isoPeriodEnd } from '@/shared/lib/iso-date'
 import { notify } from '@/shared/ui/toast'
 
 /**
@@ -19,6 +19,8 @@ export const checkBasicInfo = (data: {
   title: string
   startDate: string
   endDate?: string
+  /** 종료일 정밀도 — 연·월만 아는 종료는 그 기간의 끝과 비교한다 */
+  endDatePrecision?: string | null
 }): BasicInfoValidationResult => {
   const fields: BasicInfoValidationResult['fields'] = {}
   if (!data.title.trim()) {
@@ -32,7 +34,7 @@ export const checkBasicInfo = (data: {
   if (
     data.startDate &&
     data.endDate &&
-    compareByDate(data.startDate, data.endDate) > 0
+    compareByDate(data.startDate, isoPeriodEnd(data.endDate, data.endDatePrecision)) > 0
   ) {
     fields.endDate = '종료일은 시작일보다 이후여야 합니다.'
   }

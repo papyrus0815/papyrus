@@ -32,7 +32,11 @@ import {
 } from '@/shared/lib/country-period'
 import { uploadImage } from '@/shared/api/upload'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
-import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { isoPeriodEnd } from '@/shared/lib/iso-date'
+import {
+  DatePickerModal,
+  type DatePickerPrecision,
+} from '@/shared/ui/date-picker/date-picker-modal'
 import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
 import { notify } from '@/shared/ui/toast'
 
@@ -41,7 +45,7 @@ import { notify } from '@/shared/ui/toast'
  * 네이티브 `new Date()`는 BC(천문학적 연도번호)·고대(타임존)에서 어긋나므로, ISO 문자열의
  * 선행 연도 자릿수와 부호를 직접 파싱한다(date-picker `-YYYY-MM-DD` 표기와 일치).
  */
-function formatEventDateLabel(iso: string): string {
+function formatEventDateLabel(iso: string, precision: DatePickerPrecision = 'day'): string {
   const neg = iso.startsWith('-')
   const body = neg ? iso.slice(1) : iso
   const m = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
@@ -54,7 +58,11 @@ function formatEventDateLabel(iso: string): string {
   const year = parseInt(m[1], 10)
   const month = parseInt(m[2], 10)
   const day = parseInt(m[3], 10)
-  return `${neg ? '기원전 ' : ''}${year}년 ${month}월 ${day}일`
+  const era = neg ? '기원전 ' : ''
+  // 모르는 월·일은 1로 채워져 있다 — 정밀도만큼만 보여 준다('1950년 1월 1일'로 둔갑 방지)
+  if (precision === 'year') return `${era}${year}년`
+  if (precision === 'month') return `${era}${year}년 ${month}월`
+  return `${era}${year}년 ${month}월 ${day}일`
 }
 
 /**
@@ -74,6 +82,14 @@ interface BasicInfoSectionProps {
   setEndDate: (value: string) => void
   endTime: string
   setEndTime: (value: string) => void
+  /**
+   * 날짜 정밀도 — 연도만·연월만 아는 사건. 세터를 주면 달력에서 월·일을 비울 수 있다.
+   * 없으면 예전처럼 연·월·일을 모두 고른다(다른 호출부 무변경).
+   */
+  startDatePrecision?: DatePickerPrecision
+  setStartDatePrecision?: (value: DatePickerPrecision) => void
+  endDatePrecision?: DatePickerPrecision
+  setEndDatePrecision?: (value: DatePickerPrecision) => void
   category: HistoricalEventCategory | ''
   setCategory: (value: HistoricalEventCategory | '') => void
   thumbnail: string
@@ -133,6 +149,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   setEndDate,
   endTime,
   setEndTime,
+  startDatePrecision = 'day',
+  setStartDatePrecision,
+  endDatePrecision = 'day',
+  setEndDatePrecision,
   category,
   setCategory,
   thumbnail,
@@ -176,6 +196,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       (dialog.contains(active) && active.tagName === 'BUTTON')
     if (idle) input.focus({ preventScroll: true })
   }, [])
+  /** 정밀도 세터가 오면 달력에서 월·일을 비울 수 있다 */
+  const allowPartialDate = Boolean(setStartDatePrecision && setEndDatePrecision)
+  /** 일까지 알 때만 시각이 의미 있다 — 연도만 아는 사건에 '14:00'은 거짓 정밀도 */
+  const showStartTime = startDatePrecision === 'day'
+  const showEndTime = endDatePrecision === 'day'
   const [isStartDateModalOpen, setIsStartDateModalOpen] = useState(false)
   const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
   const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
@@ -336,7 +361,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           <div>
             기간 <S.Required>*</S.Required>
           </div>
-          {startDate && endDate && !getDateError() && (
+          {/* 일수는 둘 다 일까지 알 때만 — '1950 ~ 1953'에 1,096일은 지어낸 숫자다 */}
+          {startDate && endDate && !getDateError() && showStartTime && showEndTime && (
             <S.PeriodBadge>
               <FiClock size={12} />
               {calculateDaysDifference()}일
@@ -367,9 +393,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               >
                 <FiCalendar size={14} />
                 <S.DateInputDisplay>
-                  {startDate ? formatEventDateLabel(startDate) : '날짜 선택'}
+                  {startDate
+                    ? formatEventDateLabel(startDate, startDatePrecision)
+                    : '날짜 선택'}
                 </S.DateInputDisplay>
               </S.DateInputWrapper>
+              {showStartTime && (
               <S.DateInputWrapper
                 ref={startTimeTriggerRef}
                 aria-haspopup="dialog"
@@ -385,6 +414,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 <FiClock size={14} />
                 <S.DateInputDisplay>{startTime || '시간'}</S.DateInputDisplay>
               </S.DateInputWrapper>
+              )}
             </S.DateRangeColumn>
 
             <S.DateRangeColumn>
@@ -402,9 +432,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               >
                 <FiCalendar size={14} />
                 <S.DateInputDisplay>
-                  {endDate ? formatEventDateLabel(endDate) : '날짜 선택'}
+                  {endDate
+                    ? formatEventDateLabel(endDate, endDatePrecision)
+                    : '날짜 선택'}
                 </S.DateInputDisplay>
               </S.DateInputWrapper>
+              {showEndTime && (
               <S.DateInputWrapper
                 ref={endTimeTriggerRef}
                 aria-haspopup="dialog"
@@ -420,6 +453,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 <FiClock size={14} />
                 <S.DateInputDisplay>{endTime || '시간'}</S.DateInputDisplay>
               </S.DateInputWrapper>
+              )}
             </S.DateRangeColumn>
           </S.DateRangeRow>
           {(startDateError || endDateError || getDateError()) && (
@@ -428,8 +462,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.ErrorMessage>
           )}
           <S.Hint>
-            사건의 시작과 종료 날짜/시간을 설정하세요 (진행중이면 종료일
-            비워두기)
+            {allowPartialDate
+              ? '연도만 알면 달력에서 월·일 칸을 비우세요. 진행 중이면 종료일은 비워 둡니다.'
+              : '사건의 시작과 종료 날짜/시간을 설정하세요 (진행중이면 종료일 비워두기)'}
           </S.Hint>
         </S.FormField>
       </S.FormRow>
@@ -438,8 +473,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       <DatePickerModal
         isOpen={isStartDateModalOpen}
         onClose={() => setIsStartDateModalOpen(false)}
-        onSelect={(date) => {
+        onSelect={(date, precision) => {
           setStartDate(date)
+          setStartDatePrecision?.(precision)
+          // 일을 모르게 되면 시각도 모른다 — 숨긴 칸에 값이 남아 저장되지 않게
+          if (precision !== 'day') setStartTime('')
           setIsStartDateModalOpen(false)
           /**
            * 예전엔 `setTimeout(() => setIsEndDateModalOpen(true), 200)`으로 종료일
@@ -451,7 +489,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           pendingEndDateFocusRef.current = true
         }}
         initialDate={startDate}
-        maxDate={endDate}
+        allowPartial={allowPartialDate}
+        initialPrecision={startDatePrecision}
+        /* 연도만 아는 종료(1953-01-01로 저장)면 그해 끝까지 고를 수 있어야 한다 */
+        maxDate={endDate ? isoPeriodEnd(endDate, endDatePrecision) : undefined}
         title="시작 일자 선택"
         /* 모달 대신 칸 아래 드롭다운 — 폼을 가리지 않고 고른 뒤 바로 이어 쓴다 */
         anchorEl={startDateTriggerRef.current}
@@ -459,8 +500,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       <DatePickerModal
         isOpen={isEndDateModalOpen}
         onClose={() => setIsEndDateModalOpen(false)}
-        onSelect={(date) => setEndDate(date)}
+        onSelect={(date, precision) => {
+          setEndDate(date)
+          setEndDatePrecision?.(precision)
+          if (precision !== 'day') setEndTime('')
+        }}
         initialDate={endDate || startDate}
+        allowPartial={allowPartialDate}
+        initialPrecision={endDate ? endDatePrecision : startDatePrecision}
         minDate={startDate}
         title="종료 일자 선택"
         anchorEl={endDateTriggerRef.current}

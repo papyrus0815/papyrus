@@ -218,6 +218,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setEndDate,
     endTime,
     setEndTime,
+    startDatePrecision,
+    setStartDatePrecision,
+    endDatePrecision,
+    setEndDatePrecision,
     category,
     setCategory,
     thumbnail,
@@ -321,8 +325,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   }, [])
 
   const validation = useMemo(
-    () => checkBasicInfo({ title, startDate, endDate }),
-    [title, startDate, endDate],
+    () => checkBasicInfo({ title, startDate, endDate, endDatePrecision }),
+    [title, startDate, endDate, endDatePrecision],
   )
 
   // 편집 모드: 기본 정보만 로드 (본문·군사·관계 등은 상세에서 편집).
@@ -344,14 +348,19 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           const matched = iso.match(/T(\d{2}):(\d{2})/)
           return { date, time: matched ? `${matched[1]}:${matched[2]}` : '' }
         }
+        // 저장된 정밀도를 되살린다 — 없으면(null) 서버 규약대로 day
+        const asPrecision = (value?: string | null) =>
+          value === 'year' || value === 'month' ? value : 'day'
         if (event.startDate) {
           const { date, time } = splitDateTime(event.startDate)
           setStartDate(date)
+          setStartDatePrecision(asPrecision(event.startDatePrecision))
           if (time) setStartTime(time)
         }
         if (event.endDate) {
           const { date, time } = splitDateTime(event.endDate)
           setEndDate(date)
+          setEndDatePrecision(asPrecision(event.endDatePrecision))
           if (time) setEndTime(time)
         }
 
@@ -418,8 +427,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         description,
         startDate,
         startTime,
+        startDatePrecision,
         endDate,
         endTime,
+        endDatePrecision,
         category,
         thumbnail,
         keywords,
@@ -433,8 +444,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       description,
       startDate,
       startTime,
+      startDatePrecision,
       endDate,
       endTime,
+      endDatePrecision,
       category,
       thumbnail,
       keywords,
@@ -508,8 +521,11 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         description: description.trim(),
         startDate,
         startTime,
+        startDatePrecision,
         endDate,
         endTime,
+        // 종료일이 없으면 정밀도도 보내지 않는다(기본 day가 빈 종료에 붙지 않게)
+        endDatePrecision: endDate ? endDatePrecision : undefined,
         category,
         location,
         thumbnail,
@@ -655,6 +671,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         setEndDate={setEndDate}
         endTime={endTime}
         setEndTime={setEndTime}
+        startDatePrecision={startDatePrecision}
+        setStartDatePrecision={setStartDatePrecision}
+        endDatePrecision={endDatePrecision}
+        setEndDatePrecision={setEndDatePrecision}
         category={category}
         setCategory={setCategory}
         thumbnail={thumbnail}

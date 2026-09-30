@@ -13,6 +13,7 @@ import {
   getCenturyFromIso,
   getDecade,
   isoDaySpan,
+  isoPeriodEnd,
   isoYearSpan,
   parseIsoDateParts,
   stepCentury,
@@ -227,5 +228,27 @@ describe('formatDateRange — 하루짜리', () => {
   it('정밀도가 다르면 같은 날이라도 범위다 — 서로 다른 정보이므로', () => {
     const label = formatDateRange('2025-02-04', '2025-02-04', 'month', 'day')
     expect(label).toContain('~')
+  })
+})
+
+describe('isoPeriodEnd — 정밀도만큼만 아는 날짜의 기간 끝', () => {
+  it('year → 그해 12월 31일', () => {
+    expect(isoPeriodEnd('1953-01-01', 'year')).toBe('1953-12-31')
+  })
+  it('month → 그달 말일(윤년 2월 포함)', () => {
+    expect(isoPeriodEnd('1950-06-01', 'month')).toBe('1950-06-30')
+    expect(isoPeriodEnd('2024-02-01', 'month')).toBe('2024-02-29')
+    expect(isoPeriodEnd('2023-02-01', 'month')).toBe('2023-02-28')
+  })
+  it('day·미지정은 입력 그대로', () => {
+    expect(isoPeriodEnd('1950-06-25', 'day')).toBe('1950-06-25')
+    expect(isoPeriodEnd('1950-06-25', null)).toBe('1950-06-25')
+  })
+  it('BC 부호와 4자리 연도 유지', () => {
+    expect(isoPeriodEnd('-0044-01-01', 'year')).toBe('-0044-12-31')
+    expect(isoPeriodEnd('0050-03-01', 'month')).toBe('0050-03-31')
+  })
+  it('연도만 아는 종료는 같은 해 중간 시작보다 뒤로 비교된다', () => {
+    expect(compareByDate('1953-05-03', isoPeriodEnd('1953-01-01', 'year'))).toBeLessThan(0)
   })
 })

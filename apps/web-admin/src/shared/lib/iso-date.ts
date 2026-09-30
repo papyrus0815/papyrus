@@ -149,6 +149,30 @@ export function compareByDate(
   return direction === 'asc' ? cmp : -cmp
 }
 
+/**
+ * 정밀도만큼만 아는 날짜의 **기간 끝** — 비교·상한용.
+ *
+ * 연도만 아는 날짜는 '1953-01-01'처럼 모르는 월·일을 1로 채워 저장한다. 그 값을 그대로
+ * 상한으로 쓰면 '1953년 5월 시작 ~ 1953년 끝'이 '종료가 시작보다 이르다'로 막힌다.
+ * year → 그해 12월 31일, month → 그달 말일, day(또는 미지정) → 입력 그대로. BC 부호 유지.
+ */
+export function isoPeriodEnd(
+  value: string,
+  precision?: string | null,
+): string {
+  if (precision !== 'year' && precision !== 'month') return value
+  const parts = parseIsoDateParts(value)
+  if (!parts) return value
+  const sign = parts.year < 0 ? '-' : ''
+  const yearText = String(Math.abs(parts.year)).padStart(4, '0')
+  if (precision === 'year') return `${sign}${yearText}-12-31`
+  // 말일 — setUTCFullYear는 연도를 곧이곧대로 잡아 고대·BC에서도 2자리 연도 함정이 없다
+  const probe = new Date(0)
+  probe.setUTCFullYear(parts.year, parts.month, 0)
+  const lastDay = probe.getUTCDate()
+  return `${sign}${yearText}-${String(parts.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+}
+
 /** start~end ISO의 연 단위 기간. end 없거나 어느 쪽이든 파싱 불가면 0. BC 지원. */
 export function isoYearSpan(
   start?: string | null,

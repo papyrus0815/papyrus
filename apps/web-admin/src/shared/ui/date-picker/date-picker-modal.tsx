@@ -16,10 +16,24 @@ import { useDropdownPosition } from '@/shared/hooks/use-dropdown-position.hook'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
+/** 어디까지 아는가 — year(연만)·month(연·월)·day(연·월·일) */
+export type DatePickerPrecision = 'year' | 'month' | 'day'
+
 interface DatePickerModalProps {
   isOpen: boolean
   onClose: () => void
-  onSelect: (date: string) => void
+  /**
+   * 고른 날짜(ISO, BC는 '-YYYY-MM-DD'). `allowPartial`이면 두 번째 인자로 정밀도가 온다 —
+   * 모르는 월·일은 1로 채운 날짜를 주므로(1950 → '1950-01-01') 정밀도와 함께 저장할 것.
+   */
+  onSelect: (date: string, precision: DatePickerPrecision) => void
+  /**
+   * 월·일을 비워 둘 수 있게 한다(opt-in). 연도만 아는 사건처럼 달력의 '일'을 강제하면
+   * 거짓 정밀도가 저장되는 자리용. 비운 채 '선택 적용' → year/month 정밀도로 onSelect.
+   */
+  allowPartial?: boolean
+  /** allowPartial일 때 열면서 월·일 칸을 비워 둘지 — 저장된 정밀도를 그대로 되살린다 */
+  initialPrecision?: DatePickerPrecision | null
   /** 초기 선택 날짜 (ISO 형식). selectedDate도 동일하게 사용 가능 */
   initialDate?: string
   /** @deprecated initialDate를 사용하세요 */
@@ -99,6 +113,8 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   maxDate,
   title = '날짜 선택',
   anchorEl,
+  allowPartial = false,
+  initialPrecision,
 }) => {
   const anchored = Boolean(anchorEl)
   const initialDate = initialDateProp ?? selectedDateProp
@@ -161,14 +177,17 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       setYearInputValue(absYear.toString())
       setIsBCE(year < 0)
       setViewMonth(date.getMonth())
-      setMonthInputValue(String(date.getMonth() + 1))
-      setDayInputValue(String(date.getDate()))
+      const precision = allowPartial && initialDateParsed ? initialPrecision : 'day'
+      setMonthInputValue(precision === 'year' ? '' : String(date.getMonth() + 1))
+      setDayInputValue(
+        precision === 'year' || precision === 'month' ? '' : String(date.getDate()),
+      )
       setFocusedDay(date.getDate())
       setInputError(null)
     }
     // initialDateParsed는 initialDateKey로 정체성을 안정화 — deps에서 제외.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialDateKey])
+  }, [isOpen, initialDateKey, initialPrecision])
 
   /* 열림: 포커스를 모달로 이동 + Escape 닫기 + Tab 트랩. 닫힘: 직전 포커스 복귀. */
   useEffect(() => {
@@ -269,6 +288,8 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     setInputError(null)
     const value = e.target.value.replace(/\D/g, '')
     setMonthInputValue(value)
+    // 월을 모르면 일도 모른다 — 월을 비우면 일도 함께 비운다
+    if (allowPartial && value === '') setDayInputValue('')
     const num = parseInt(value, 10)
     if (!isNaN(num) && num >= 1 && num <= 12) {
       setViewMonth(num - 1)
@@ -280,6 +301,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   }
 
   const handleMonthInputBlur = () => {
+    if (allowPartial && monthInputValue === '') return
     const num = parseInt(monthInputValue, 10)
     if (isNaN(num) || num < 1 || num > 12) {
       setMonthInputValue(String(viewMonth + 1))
@@ -301,6 +323,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   }
 
   const handleDayInputBlur = () => {
+    if (allowPartial && dayInputValue === '') return
     const num = parseInt(dayInputValue, 10)
     const lastDay = getDaysInMonth(actualYear, viewMonth)
     if (isNaN(num) || num < 1 || num > lastDay) {
@@ -342,7 +365,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
         ? `-${yearStr}-${monthStr}-${dayStr}`
         : `${yearStr}-${monthStr}-${dayStr}`
 
-    onSelect(formatted)
+    onSelect(formatted, 'day')
     onClose()
   }
 
@@ -352,6 +375,22 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     const day = parseInt(dayInputValue, 10)
     if (isNaN(year) || year < 1 || year > 9999) {
       setInputError({ field: 'year', message: '년도는 1~9999 사이여야 합니다.' })
+      return
+    }
+    // 비운 칸 = 모름. 모르는 월·일은 1로 채워 날짜 모양을 유지하고 정밀도로 알린다.
+    const monthBlank = allowPartial && monthInputValue === ''
+    const dayBlank = allowPartial && (monthBlank || dayInputValue === '')
+    if (monthBlank || dayBlank) {
+      if (!monthBlank && (isNaN(month) || month < 1 || month > 12)) {
+        setInputError({ field: 'month', message: '월은 1~12 사이여야 합니다.' })
+        return
+      }
+      setInputError(null)
+      const partial = `${year.toString().padStart(4, '0')}-${
+        monthBlank ? '01' : String(month).padStart(2, '0')
+      }-01`
+      onSelect(isBCE ? `-${partial}` : partial, monthBlank ? 'year' : 'month')
+      onClose()
       return
     }
     if (isNaN(month) || month < 1 || month > 12) {
@@ -370,7 +409,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     const formatted = isBCE
       ? `-${yearStr}-${monthStr}-${dayStr}`
       : `${yearStr}-${monthStr}-${dayStr}`
-    onSelect(formatted)
+    onSelect(formatted, 'day')
     onClose()
   }
 
@@ -553,8 +592,8 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   onChange={handleMonthInputChange}
                   onBlur={handleMonthInputBlur}
                   onKeyDown={(e) => e.key === 'Enter' && applyTypedDate()}
-                  placeholder="월"
-                  aria-label="월"
+                  placeholder={allowPartial ? '–' : '월'}
+                  aria-label={allowPartial ? '월 (모르면 비워 두기)' : '월'}
                   aria-invalid={inputError?.field === 'month'}
                   $invalid={inputError?.field === 'month'}
                   maxLength={2}
@@ -570,8 +609,8 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   onChange={handleDayInputChange}
                   onBlur={handleDayInputBlur}
                   onKeyDown={(e) => e.key === 'Enter' && applyTypedDate()}
-                  placeholder="일"
-                  aria-label="일"
+                  placeholder={allowPartial ? '–' : '일'}
+                  aria-label={allowPartial ? '일 (모르면 비워 두기)' : '일'}
                   aria-invalid={inputError?.field === 'day'}
                   $invalid={inputError?.field === 'day'}
                   maxLength={2}
@@ -582,8 +621,14 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
             </InputGroup>
           </TopControls>
 
-          {inputError && (
+          {inputError ? (
             <InputErrorText role="alert">{inputError.message}</InputErrorText>
+          ) : (
+            allowPartial && (
+              <PartialHint>
+                연도만·연월만 알면 나머지 칸을 비우고 &lsquo;선택 적용&rsquo;
+              </PartialHint>
+            )
           )}
 
           <CalendarHeader>
@@ -672,6 +717,13 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   return createPortal(modal, document.body)
 }
+
+const PartialHint = styled.p`
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
 
 const Overlay = styled.div<{ $anchored?: boolean }>`
   position: fixed;

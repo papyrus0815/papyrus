@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react'
 
 import type { EventCountryParticipant } from '@/entities/event/model'
 import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
-import { compareByDate, isoDaySpan } from '@/shared/lib/iso-date'
+import { compareByDate, isoDaySpan, isoPeriodEnd } from '@/shared/lib/iso-date'
 
 type DatePrecision = 'year' | 'month' | 'day'
 
@@ -100,13 +100,19 @@ export const useBasicInfoForm = () => {
     const hasTitle = title.trim().length > 0
     const hasStartDate = startDate.length > 0
     const isDateValid =
-      !endDate || !startDate || compareByDate(startDate, endDate) <= 0
+      !endDate ||
+      !startDate ||
+      compareByDate(startDate, isoPeriodEnd(endDate, endDatePrecision)) <= 0
     return hasTitle && hasStartDate && isDateValid
   }
 
   // 날짜 에러 메시지
   const getDateError = (): string | null => {
-    if (startDate && endDate && compareByDate(startDate, endDate) > 0) {
+    if (
+      startDate &&
+      endDate &&
+      compareByDate(startDate, isoPeriodEnd(endDate, endDatePrecision)) > 0
+    ) {
       return '종료일은 시작일보다 이후여야 합니다'
     }
     return null
