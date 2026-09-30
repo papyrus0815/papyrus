@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 import { useThemeStore } from '@/shared/styles/theme.store'
@@ -11,6 +11,7 @@ import { getPersonsByHistoricalCountryUnion } from '@/shared/api/persons'
 import {
   formatCountryPeriod,
   getCountryDurationYears,
+  getCountryYearRange,
 } from '@/shared/lib/country-period'
 import { PoliticalSystemTab } from '@/features/government-info/ui/political-system-tab.widget'
 import { pathKeys } from '@/shared/router'
@@ -23,30 +24,8 @@ const CountryStyles = { ...DetailStyles, ...ListStyles }
 import {
   updateHistoricalCountry,
   getTransitionsByHistoricalCountryId,
-  createHistoricalCountryTransition,
-  deleteHistoricalCountryTransition,
-  getAllHistoricalCountries,
-  getMembershipsByHistoricalCountryId,
-  createHistoricalCountryMembership,
-  updateHistoricalCountryMembership,
-  deleteHistoricalCountryMembership,
-  getRelationsByHistoricalCountryId,
-  createHistoricalCountryRelation,
-  deleteHistoricalCountryRelation,
-  type HistoricalCountryTransitionDto,
-  type CreateHistoricalCountryTransitionDto,
-  type TransitionEventType,
-  type HistoricalCountryMembershipDto,
-  type CreateHistoricalCountryMembershipDto,
-  type UpdateHistoricalCountryMembershipDto,
-  type HistoricalMembershipRole,
-  type HistoricalCountryRelationDto,
-  type CreateHistoricalCountryRelationDto,
-  type HistoricalRelationType,
 } from '@/shared/api/historical-countries'
 
-import { CountryFlag } from '../../shared'
-import * as S from './country-detail.styles'
 import { CountryElectionsSection } from './country-elections-section.widget'
 import { CountryLawsSection } from './country-laws-section.widget'
 import { TradePanel } from './country-data-manager/trade-panel'
@@ -60,94 +39,52 @@ import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { HistoricalFoundingCards } from './historical-founding-cards'
 import {
+  MembershipSection,
+  RelationSection,
+  SuccessionSection,
+  TRANSITION_EVENT_LABELS,
+} from './historical-relations-sections'
+import { CountryDetailHeader } from './country-detail-header.widget'
+import * as TabStyles from './overview-sub-tabs.styles'
+import * as DashboardStyles from './country-detail-dashboard.styles'
+import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
+import {
   historicalCountryKeys,
   useHistoricalCountry,
 } from '@/entities/historical-country/api'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view/rich-text-read-view'
 import { notify } from '@/shared/ui/toast'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { ENTITY_KIND_LABELS } from '@/entities/historical-country/model/constants'
+import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import {
-  STATE_TYPE_COLORS,
-  STATE_TYPE_EMOJIS,
-  ENTITY_KIND_LABELS,
-  ENTITY_KIND_COLORS,
-  ENTITY_KIND_EMOJIS,
-} from '@/entities/historical-country/model/constants'
-
-// 역사적 국가 전용 컴팩트 스타일 (자리 최소화)
-const CompactFlagWrapper = styled(S.MiniFlagWrapper)`
-  height: 200px;
-  @media (max-width: 768px) {
-    height: 160px;
-  }
-`
-const CompactNameOverlay = styled(S.CountryNameOverlay)`
-  top: 20px;
-  left: 20px;
-  @media (max-width: 768px) {
-    top: 12px;
-    left: 16px;
-  }
-`
-const CompactCountryName = styled(S.AnalyticsCountryName)`
-  font-size: 28px;
-  @media (max-width: 768px) {
-    font-size: 22px;
-  }
-`
-const CompactCountryLocalName = styled(S.AnalyticsCountryLocalName)`
-  font-size: 14px;
-  @media (max-width: 768px) {
-    font-size: 12px;
-  }
-`
-const CompactStrip = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-top: 6px;
-  margin-bottom: 0;
-  padding: 6px 0;
-  border-bottom: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'var(--border-color-light, #e5e7eb)')};
-  min-height: 0;
-`
-const CompactBadge = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'rgba(255, 255, 255, 0.95)')};
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  font-size: 11px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  & span:last-child {
-    font-size: 12px;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
-    font-weight: 700;
-    text-transform: none;
-    letter-spacing: -0.01em;
-  }
-`
-const CompactTabBar = styled(S.PersonInnerTabBar)`
-  padding: 0;
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-`
-const CompactTabButton = styled(S.PersonInnerTabButton)`
-  padding: 8px 12px;
-  font-size: 12px;
-`
-
-// ============================================
-// 역사적 국가 전용 탭 타입
-// ============================================
+  useHistoricalCountryDashboard,
+  type HistoricalCompletenessField,
+} from '../model/use-historical-country-dashboard'
+import type { CompletenessField } from '../model/use-country-dashboard-stats'
+import {
+  IconCalendar,
+  IconChart,
+  IconClock,
+  IconGlobe,
+  IconHistory,
+  IconLandmark,
+  IconScroll,
+  IconUserCheck,
+  IconVote,
+} from './country-detail-dashboard.icons'
+import { ActivityFeed } from './dashboard-panels/activity-feed'
+import { ChartEmpty } from './dashboard-panels/chart-empty'
+import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
+import { CompletenessPanel } from './dashboard-panels/completeness-panel'
+import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
+import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
+import { HistoricalRulerTimeline } from './dashboard-panels/historical-ruler-timeline'
+import { LineageFlow } from './dashboard-panels/lineage-flow'
+import { PoliticalSystemPanel } from './dashboard-panels/political-system-panel'
+import { RecordLedger, type RecordLedgerRow } from './dashboard-panels/record-ledger'
+import { SectionEmpty } from './dashboard-panels/section-empty'
+import { SectionNav } from './dashboard-panels/section-nav'
 
 export type HistoricalCountryTab =
   | 'overview' // 역사 개요
@@ -192,8 +129,12 @@ interface HistoricalCountryDetailProps {
   onTabChangeToUrl?: (tab: HistoricalSyncedTab | null) => void
 }
 
+/*
+ * 'heads'(역대 수반)는 URL에 싣지 않는다 — 라우팅 훅이 현대 국가 규약대로 heads를 행정조직
+ * URL(/government)로 접어, 역사 국가에서 '역대 수반'을 누르면 행정조직(정체) 탭으로 튕겼다.
+ * 역사 국가엔 역대 수반이 독립 탭이라 로컬 상태로만 둔다.
+ */
 const SYNCED_TAB_SET = new Set<HistoricalCountryTab>([
-  'heads',
   'regions',
   'government',
   'elections',
@@ -206,19 +147,6 @@ const SYNCED_TAB_SET = new Set<HistoricalCountryTab>([
  * 역사적 국가 상세 페이지
  */
 // 계승 이벤트 유형 한글 라벨 (배지·개요용, SuccessionSection보다 위에 정의)
-const TRANSITION_EVENT_LABELS: Record<string, string> = {
-  FOUNDED: '건국',
-  CONQUEST: '정복',
-  TREATY: '조약',
-  INDEPENDENCE: '독립',
-  UNIFICATION: '통일',
-  UNION: '합병/연합',
-  DISSOLVED: '멸망',
-  SUCCESSION: '계승',
-  SECULARIZATION: '세속화',
-  SPLIT: '분열',
-  OTHER: '기타',
-}
 
 export function HistoricalCountryDetail({
   country,
@@ -231,8 +159,6 @@ export function HistoricalCountryDetail({
   const [activeTab, setActiveTab] = useState<HistoricalCountryTab>(
     () => initialTab ?? 'overview',
   )
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
 
   // 이 위젯은 country-detail.widget이 country.type === 'historical'로 분기 후에만 마운트됨 — id 직접 사용.
   const historicalCountryId = country.id
@@ -286,18 +212,17 @@ export function HistoricalCountryDetail({
               animate={{ opacity: 1 }}
               style={{ gap: 0 }}
             >
-              <HistoricalCountryHeader
-                country={country}
-                onEdit={onEdit}
-                onDelete={onDelete}
-              />
-
-              <HistoricalCountryTabs
-                country={country}
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
-                incomingCategoryLabel={incomingCategoryLabel}
-              />
+              {/*
+                현대 국가 상세와 같은 골격 — 탭이 맨 위(스티키), 국가 머리글은 개요 탭 안.
+                예전엔 썸네일이 없는 나라(대부분)에서도 200px 회색 그라데이션 배너가 모든 탭 위를
+                차지했고, 탭 줄은 '변천' 배지와 15개 탭이 한 줄에 끼여 화면 끝에서 잘렸다.
+              */}
+              <CountryStyles.StickyTopBar>
+                <HistoricalCountryTabs
+                  activeTab={activeTab}
+                  onTabChange={handleTabChange}
+                />
+              </CountryStyles.StickyTopBar>
 
               <AnimatePresence mode="wait">
                 <motion.div
@@ -315,11 +240,24 @@ export function HistoricalCountryDetail({
                   }}
                 >
                   {activeTab === 'overview' && (
-                    <HistoricalOverviewSection
-                      country={country}
-                      incomingCategoryLabel={incomingCategoryLabel}
-                      onGoToHeads={() => handleTabChange('heads')}
-                    />
+                    <>
+                      <CountryDetailHeader
+                        country={country}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        fallbackIcon="🏛️"
+                        meta={
+                          <HistoricalHeaderMeta
+                            country={country}
+                            incomingCategoryLabel={incomingCategoryLabel}
+                          />
+                        }
+                      />
+                      <HistoricalOverviewSection
+                        country={country}
+                        onGoToTab={handleTabChange}
+                      />
+                    </>
                   )}
                   {/*
                     주요 사건 — 현대 국가와 동일한 연대표 위젯을 재사용한다.
@@ -450,141 +388,27 @@ export function HistoricalCountryDetail({
 // 역사적 국가 헤더 (현대 국가와 동일 레이아웃/스타일)
 // ============================================
 
-interface HistoricalCountryHeaderProps {
-  country: UnifiedCountry
-  onEdit?: (country: UnifiedCountry) => void
-  onDelete?: (id: string) => void
-}
-
-function HistoricalCountryHeader({
+/** 머리글 메타 줄 — 영문 표기 · 존속 기간 · 국가 형태 · 변천 */
+function HistoricalHeaderMeta({
   country,
-  onEdit,
-  onDelete,
-}: HistoricalCountryHeaderProps) {
+  incomingCategoryLabel,
+}: {
+  country: UnifiedCountry
+  incomingCategoryLabel?: string | null
+}) {
+  const period = formatCountryPeriod(country)
   return (
     <>
-      <CompactFlagWrapper
-        as={motion.div}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6 }}
-      >
-        <motion.div
-          initial={{ scale: 1.1, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          style={{ width: '100%', height: '100%' }}
-        >
-          <CountryFlag
-            thumbnailUrl={country.thumbnailUrl}
-            countryName={country.name}
-            size="full"
-          />
-        </motion.div>
-
-        <CompactNameOverlay
-          as={motion.div}
-          initial={{ x: -30, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <motion.div whileHover={{ x: 4, transition: { duration: 0.2 } }}>
-            <CompactCountryName>{country.name}</CompactCountryName>
-          </motion.div>
-          {country.enName && (
-            <motion.div whileHover={{ x: 4, transition: { duration: 0.2 } }}>
-              <CompactCountryLocalName>
-                {country.enName}
-              </CompactCountryLocalName>
-            </motion.div>
-          )}
-        </CompactNameOverlay>
-
-        <S.FlagGradientOverlay />
-      </CompactFlagWrapper>
-
-      {(onEdit || onDelete) && (
-        <S.CompactKebabMenu
-          as={motion.div}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
-        >
-          <S.KebabButton
-            as={motion.button}
-            whileHover={{ scale: 1.1, rotate: 90 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            onClick={(e) => {
-              e.stopPropagation()
-              const menu = e.currentTarget.nextElementSibling as HTMLElement
-              if (menu) {
-                menu.style.display =
-                  menu.style.display === 'block' ? 'none' : 'block'
-              }
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="5" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="19" r="1.5" />
-            </svg>
-          </S.KebabButton>
-          <S.DropdownMenu>
-            {onEdit && (
-              <S.DropdownButton
-                as={motion.button}
-                whileHover={{ x: 4 }}
-                transition={{ duration: 0.2 }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onEdit(country)
-                  const menu = e.currentTarget.parentElement as HTMLElement
-                  if (menu) menu.style.display = 'none'
-                }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                수정
-              </S.DropdownButton>
-            )}
-            {onDelete && (
-              <S.DropdownButton
-                as={motion.button}
-                whileHover={{ x: 4 }}
-                transition={{ duration: 0.2 }}
-                $isDelete
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDelete(country.id)
-                  const menu = e.currentTarget.parentElement as HTMLElement
-                  if (menu) menu.style.display = 'none'
-                }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-                삭제
-              </S.DropdownButton>
-            )}
-          </S.DropdownMenu>
-        </S.CompactKebabMenu>
+      {country.enName && <CountryStyles.HeroLocalName>{country.enName}</CountryStyles.HeroLocalName>}
+      {country.enName && period && <CountryStyles.HeroMetaSep aria-hidden>·</CountryStyles.HeroMetaSep>}
+      {period && <span>{period}</span>}
+      {country.stateType && (
+        <CountryStyles.HeroMetaChip>{getStateTypeLabel(country.stateType)}</CountryStyles.HeroMetaChip>
+      )}
+      {incomingCategoryLabel && (
+        <CountryStyles.HeroMetaChip title="이 나라가 성립한 변천 유형">
+          {incomingCategoryLabel}
+        </CountryStyles.HeroMetaChip>
       )}
     </>
   )
@@ -618,61 +442,95 @@ function getStateTypeLabel(stateType: string): string {
 }
 
 // ============================================
-// 배지 + 탭 한 줄 (컴팩트)
+// 탭 — 현대 국가 상세와 같은 밑줄 탭(스티키 상단)
 // ============================================
 
-interface HistoricalCountryTabsProps {
-  country: UnifiedCountry
-  activeTab: HistoricalCountryTab
-  onTabChange: (tab: HistoricalCountryTab) => void
-  /** 이 국가가 후임인 변천의 카테고리 라벨 (예: 계승, 세속화) */
-  incomingCategoryLabel?: string | null
-}
+/**
+ * 순서 = 이 나라를 이해하는 순서: 개요 → 사건·인물·수반 → 나라 사이 관계(계승·소속·관계·조약)
+ * → 내부 제도(행정·법·민족·교역·선거). '문화'는 기능이 없는 자리표시라 목록에서 뺐다
+ * (URL로 들어오면 안내 화면은 그대로 뜬다).
+ */
+const HISTORICAL_TABS: ReadonlyArray<{ id: HistoricalCountryTab; label: string }> = [
+  { id: 'overview', label: '개요' },
+  { id: 'events', label: '주요 사건' },
+  { id: 'figures', label: '인물' },
+  { id: 'heads', label: '역대 수반' },
+  { id: 'succession', label: '계승' },
+  { id: 'membership', label: '소속·구성' },
+  { id: 'relation', label: '국가 관계' },
+  { id: 'treaty', label: '조약' },
+  { id: 'government', label: '행정조직' },
+  { id: 'regions', label: '행정구역' },
+  { id: 'laws', label: '법령' },
+  { id: 'ethnicity', label: '민족' },
+  { id: 'trade', label: '교역' },
+  { id: 'elections', label: '선거·투표' },
+]
+
+const historicalTabId = (tab: HistoricalCountryTab) => `historical-country-tab-${tab}`
 
 function HistoricalCountryTabs({
-  country: _country,
   activeTab,
   onTabChange,
-  incomingCategoryLabel,
-}: HistoricalCountryTabsProps) {
-  const tabs: { id: HistoricalCountryTab; label: string }[] = [
-    { id: 'overview', label: '개요' },
-    { id: 'events', label: '주요 사건' },
-    { id: 'figures', label: '인물' },
-    { id: 'heads', label: '역대 수반' },
-    { id: 'regions', label: '행정구역' },
-    { id: 'government', label: '행정조직' },
-    { id: 'elections', label: '선거·투표' },
-    { id: 'laws', label: '법령' },
-    { id: 'ethnicity', label: '민족' },
-    { id: 'trade', label: '교역' },
-    { id: 'succession', label: '계승' },
-    { id: 'membership', label: '소속·구성' },
-    { id: 'relation', label: '국가 관계' },
-    { id: 'treaty', label: '조약' },
-    { id: 'culture', label: '문화' },
-  ]
+}: {
+  activeTab: HistoricalCountryTab
+  onTabChange: (tab: HistoricalCountryTab) => void
+}) {
+  const listRef = useRef<HTMLDivElement | null>(null)
+
+  /* WAI-ARIA tabs — ←/→ 이웃 탭, Home/End 처음/끝(현대 국가 상세 OverviewSubTabs와 같은 규약) */
+  const handleKeyDown = (keyEvent: React.KeyboardEvent<HTMLDivElement>) => {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
+    if (!keys.includes(keyEvent.key)) return
+    keyEvent.preventDefault()
+    const index = HISTORICAL_TABS.findIndex((tab) => tab.id === activeTab)
+    const last = HISTORICAL_TABS.length - 1
+    const nextIndex =
+      keyEvent.key === 'Home'
+        ? 0
+        : keyEvent.key === 'End'
+          ? last
+          : keyEvent.key === 'ArrowLeft'
+            ? index > 0 ? index - 1 : last
+            : index < last ? index + 1 : 0
+    const target = HISTORICAL_TABS[nextIndex]
+    onTabChange(target.id)
+    requestAnimationFrame(() => {
+      listRef.current
+        ?.querySelector<HTMLButtonElement>(`#${CSS.escape(historicalTabId(target.id))}`)
+        ?.focus()
+    })
+  }
 
   return (
-    <CompactStrip>
-      {incomingCategoryLabel && (
-        <CompactBadge>
-          <span>변천</span>
-          <span>{incomingCategoryLabel}</span>
-        </CompactBadge>
-      )}
-      <CompactTabBar>
-        {tabs.map((tab) => (
-          <CompactTabButton
-            key={tab.id}
-            $active={activeTab === tab.id}
-            onClick={() => onTabChange(tab.id)}
-          >
-            {tab.label}
-          </CompactTabButton>
-        ))}
-      </CompactTabBar>
-    </CompactStrip>
+    <TabStyles.Row>
+      <TabStyles.Left>
+        <TabStyles.TopUnderlineTabNav
+          ref={listRef}
+          role="tablist"
+          aria-label="역사 국가 상세 메뉴"
+          onKeyDown={handleKeyDown}
+        >
+          {HISTORICAL_TABS.map((tab) => {
+            const active = activeTab === tab.id
+            return (
+              <UnderlineTabButton
+                key={tab.id}
+                id={historicalTabId(tab.id)}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                tabIndex={active ? 0 : -1}
+                $active={active}
+                onClick={() => onTabChange(tab.id)}
+              >
+                {tab.label}
+              </UnderlineTabButton>
+            )
+          })}
+        </TabStyles.TopUnderlineTabNav>
+      </TabStyles.Left>
+    </TabStyles.Row>
   )
 }
 
@@ -682,13 +540,11 @@ function HistoricalCountryTabs({
 
 function HistoricalOverviewSection({
   country,
-  incomingCategoryLabel,
-  onGoToHeads,
+  onGoToTab,
 }: {
   country: UnifiedCountry
-  incomingCategoryLabel?: string | null
-  /** 건국 카드의 '초대' 기록이 없을 때 — 역대 수반 탭으로 */
-  onGoToHeads?: () => void
+  /** 요약 칸에서 해당 탭으로(역대 수반·사건·계승 …) */
+  onGoToTab: (tab: HistoricalCountryTab) => void
 }) {
   /* 구조화 존속 연도 — UnifiedCountry 타입엔 없지만 역사 국가 응답에는 실려 온다 */
   const structuredSpan = country as UnifiedCountry & {
@@ -697,10 +553,8 @@ function HistoricalOverviewSection({
     endEra?: string | null
     endYear?: number | null
   }
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
 
-  const entityKind = (country as any).entityKind as
+  const entityKind = (country as UnifiedCountry & { entityKind?: unknown }).entityKind as
     | 'STATE'
     | 'REGIME'
     | 'PERIOD'
@@ -767,73 +621,180 @@ function HistoricalOverviewSection({
   // 로컬 재구현 금지 — 종료 미상을 '현재'로 둔갑시키던 옛 구현을 여기서 폐기했다.
   const period = formatCountryPeriod(country, { emptyText: '알 수 없음' })
   const durationYears = getCountryDurationYears(country)
-  const duration = durationYears != null ? `${durationYears}년` : null
-  const stateTypeColor = country.stateType
-    ? (STATE_TYPE_COLORS as Record<string, string>)[country.stateType] ?? '#6b7280'
-    : '#6b7280'
-  const stateTypeEmoji = country.stateType
-    ? (STATE_TYPE_EMOJIS as Record<string, string>)[country.stateType] ?? '🏛️'
-    : '🏛️'
-  const entityKindColor = entityKind ? ENTITY_KIND_COLORS[entityKind] : null
-  const entityKindEmoji = entityKind ? ENTITY_KIND_EMOJIS[entityKind] : null
   const entityKindLabel = entityKind ? ENTITY_KIND_LABELS[entityKind] : null
 
+  const navigate = useNavigate()
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const stats = useHistoricalCountryDashboard(country, savedDescription)
+  const span = getCountryYearRange(country)
+  const [previewEventId, setPreviewEventId] = useState<string | null>(null)
+  const goPerson = (personId: string) =>
+    navigate(pathKeys.personsTimelineDetail(personId))
+  const capitalText = country.capital ? String(country.capital).trim() : ''
+  const headOfStateCount = stats.rulers.filter(
+    (ruler) => ruler.axis === 'HEAD_OF_STATE',
+  ).length
+
+  /* 기록 원장 — 현대 국가 대시보드와 같은 막대 목록, 축만 역사 국가 것으로 */
+  const recordAxes: RecordLedgerRow[] = [
+    {
+      key: 'person',
+      label: '인물',
+      unit: '명',
+      value: stats.personCount,
+      delta: 0,
+      isLoading: stats.loading.persons,
+      icon: <IconUserCheck />,
+      onClick: () => onGoToTab('figures'),
+    },
+    {
+      key: 'event',
+      label: '사건',
+      unit: '건',
+      value: stats.eventCount,
+      delta: 0,
+      isLoading: stats.loading.events,
+      icon: <IconCalendar />,
+      onClick: () => onGoToTab('events'),
+    },
+    {
+      key: 'ruler',
+      label: '역대 수반',
+      unit: '명',
+      value: stats.rulers.length,
+      delta: 0,
+      isLoading: stats.loading.tenures,
+      icon: <IconVote />,
+      onClick: () => onGoToTab('heads'),
+    },
+    {
+      key: 'succession',
+      label: '계승',
+      unit: '건',
+      value: stats.transitionCount,
+      delta: 0,
+      isLoading: stats.loading.lineage,
+      icon: <IconHistory />,
+      onClick: () => onGoToTab('succession'),
+    },
+    {
+      key: 'membership',
+      label: '소속·구성',
+      unit: '건',
+      value: stats.membershipCount,
+      delta: 0,
+      isLoading: stats.loading.memberships,
+      icon: <IconLandmark />,
+      onClick: () => onGoToTab('membership'),
+    },
+    {
+      key: 'relation',
+      label: '국가 관계',
+      unit: '건',
+      value: stats.relationCount,
+      delta: 0,
+      isLoading: stats.loading.relations,
+      icon: <IconGlobe />,
+      onClick: () => onGoToTab('relation'),
+    },
+    {
+      key: 'treaty',
+      label: '조약',
+      unit: '건',
+      value: stats.treatyCount,
+      delta: 0,
+      isLoading: stats.loading.treaties,
+      icon: <IconScroll />,
+      onClick: () => onGoToTab('treaty'),
+    },
+  ]
+  const totalRecords = recordAxes.reduce((sum, row) => sum + row.value, 0)
+
+  /* 더 채울 것 칩 → 그 축을 채우는 자리로 */
+  const goFill = (field: CompletenessField) => {
+    const target = (field as HistoricalCompletenessField).historicalTarget
+    if (target === 'overview') {
+      handleOpenEditor()
+      document
+        .getElementById('historical-overview-heading')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+    if (target === 'founding') {
+      document
+        .getElementById('historical-founding-heading')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+    onGoToTab(target)
+  }
+
   return (
-    <div
-      style={{
-        padding: '24px 28px 0',
-        background: 'transparent',
-        minHeight: 'calc(100vh - 300px)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-      }}
-    >
-      {/* 핵심 지표 칩 */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-        <OverviewStatChip label="존속 기간" value={period} color="#6366f1" isDark={isDark} />
-        {duration && <OverviewStatChip label="존속 연수" value={duration} color="#8b5cf6" isDark={isDark} />}
+    <DashboardStyles.DashboardRoot ref={rootRef}>
+      {/* 규모 줄 — 현대 국가 대시보드와 같은 칸(FactBar). 역사 국가의 '규모'는 시간이다 */}
+      <DashboardStyles.FactBar aria-label="국가 개요 지표">
+        <DashboardStyles.Fact>
+          <DashboardStyles.FactLabel>존속 기간</DashboardStyles.FactLabel>
+          <DashboardStyles.FactValue>{period}</DashboardStyles.FactValue>
+        </DashboardStyles.Fact>
+        {durationYears != null && (
+          <DashboardStyles.Fact>
+            <DashboardStyles.FactLabel>존속 연수</DashboardStyles.FactLabel>
+            <DashboardStyles.FactValue>
+              {durationYears.toLocaleString()}
+              <DashboardStyles.FactUnit>년</DashboardStyles.FactUnit>
+            </DashboardStyles.FactValue>
+          </DashboardStyles.Fact>
+        )}
         {country.stateType && (
-          <OverviewStatChip
-            label="국가 형태"
-            value={`${stateTypeEmoji} ${getStateTypeLabel(country.stateType)}`}
-            color={stateTypeColor}
-            isDark={isDark}
-          />
+          <DashboardStyles.Fact>
+            <DashboardStyles.FactLabel>국가 형태</DashboardStyles.FactLabel>
+            <DashboardStyles.FactValue>{getStateTypeLabel(country.stateType)}</DashboardStyles.FactValue>
+          </DashboardStyles.Fact>
         )}
         {entityKind && entityKindLabel && (
-          <OverviewStatChip
-            label="정치체 성격"
-            value={`${entityKindEmoji ?? ''} ${entityKindLabel}`}
-            color={entityKindColor ?? '#6b7280'}
-            isDark={isDark}
-          />
+          <DashboardStyles.Fact>
+            <DashboardStyles.FactLabel>정치체 성격</DashboardStyles.FactLabel>
+            <DashboardStyles.FactValue>{entityKindLabel}</DashboardStyles.FactValue>
+          </DashboardStyles.Fact>
         )}
-        {incomingCategoryLabel && (
-          <OverviewStatChip label="변천" value={incomingCategoryLabel} color="#f59e0b" isDark={isDark} />
+        {headOfStateCount > 0 && (
+          <DashboardStyles.Fact>
+            <DashboardStyles.FactLabel>역대 국가원수</DashboardStyles.FactLabel>
+            <DashboardStyles.FactValue>
+              {headOfStateCount}
+              <DashboardStyles.FactUnit>명</DashboardStyles.FactUnit>
+            </DashboardStyles.FactValue>
+          </DashboardStyles.Fact>
         )}
-      </div>
+        {capitalText && (
+          <DashboardStyles.Fact>
+            <DashboardStyles.FactLabel>수도</DashboardStyles.FactLabel>
+            <DashboardStyles.FactValue>{capitalText}</DashboardStyles.FactValue>
+          </DashboardStyles.Fact>
+        )}
+      </DashboardStyles.FactBar>
 
-      {/* 건국·멸망 — 존속 기간의 양 끝이 '어떻게' 열리고 닫혔나(배경·사건·초대·전신/후신) */}
-      <HistoricalFoundingCards
-        historicalCountryId={country.id}
-        entityKind={entityKind ?? null}
-        startYear={foundingSignedYear(structuredSpan.startEra, structuredSpan.startYear)}
-        endYear={foundingSignedYear(structuredSpan.endEra, structuredSpan.endYear)}
-        onGoToHeads={onGoToHeads}
-      />
+      {/* 목차 — 장이 열 개 가까이 이어진다. 장 목록은 아래 <section>+<h2>에서 읽는다 */}
+      <SectionNav rootRef={rootRef} />
 
-      {/* 개요 섹션 */}
-      {isEditorOpen ? (
-        /* 에디터 모드: 개요 카드 없이 에디터만 */
-        <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: '40px' }}>
-          <div
-            style={{
-              maxWidth: '680px',
-              width: '100%',
-              margin: '0 auto',
-            }}
-          >
+      {/* 개요 — 이 나라가 무엇이었나. 글이 곧 이 지면의 첫 답이다 */}
+      <DashboardStyles.Section aria-labelledby="historical-overview-heading">
+        <DashboardStyles.SectionTitleRow>
+          <DashboardStyles.SectionTitleIcon>
+            <IconScroll />
+          </DashboardStyles.SectionTitleIcon>
+          <DashboardStyles.SectionTitleText id="historical-overview-heading">
+            개요
+          </DashboardStyles.SectionTitleText>
+          {!isEditorOpen && (
+            <DashboardStyles.SectionLink type="button" onClick={handleOpenEditor}>
+              {savedDescription ? '수정' : '+ 작성'}
+            </DashboardStyles.SectionLink>
+          )}
+        </DashboardStyles.SectionTitleRow>
+        {isEditorOpen ? (
+          <OverviewBody>
             <RichTextEditor
               value={savedDescription ?? ''}
               onChange={(html) => {
@@ -843,194 +804,296 @@ function HistoricalOverviewSection({
               showTitle={false}
               onImageUpload={async (file) => {
                 const result = await uploadImage(file, 'attachments')
-                return result.url ?? (result as any)
+                return result.url ?? (result as unknown as string)
               }}
             />
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-              <button
-                onClick={handleClose}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: '12px',
-                  border: `1px solid ${isDark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'}`,
-                  background: isDark ? '#1e1e3a' : 'white',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#6366f1',
-                  cursor: 'pointer',
-                }}
-              >
+            <OverviewActions>
+              <OverviewEditButton type="button" onClick={handleClose}>
                 취소
-              </button>
-              <button
+              </OverviewEditButton>
+              <OverviewSaveButton
+                type="button"
                 onClick={handleSave}
                 disabled={updateMutation.isPending}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: updateMutation.isPending ? '#a5b4fc' : '#6366f1',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: 'white',
-                  cursor: updateMutation.isPending ? 'not-allowed' : 'pointer',
-                }}
               >
                 {updateMutation.isPending ? '저장 중…' : '저장'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* 읽기 모드 */
-        <div style={{ paddingBottom: '40px' }}>
-          {/* 레이블 + 버튼 */}
-          <div
-            style={{
-              maxWidth: '680px',
-              width: '100%',
-              margin: '0 auto',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '12px',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#6366f1',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-              }}
-            >
-              개요
-            </span>
-            <button
-              onClick={handleOpenEditor}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '10px',
-                border: `1px solid ${isDark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'}`,
-                background: isDark ? '#1e1e3a' : 'white',
-                fontSize: '12px',
-                fontWeight: 700,
-                color: '#6366f1',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = isDark ? '#252547' : 'rgba(99,102,241,0.06)'
-                e.currentTarget.style.borderColor = 'rgba(99,102,241,0.5)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = isDark ? '#1e1e3a' : 'white'
-                e.currentTarget.style.borderColor = isDark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'
-              }}
-            >
-              {savedDescription ? '수정' : '+ 작성'}
-            </button>
-          </div>
-
-          {/* 본문 or 빈 상태 */}
-          <div style={{ maxWidth: '680px', width: '100%', margin: '0 auto' }}>
-            {savedDescription ? (
-              isLikelyRichTextHtml(savedDescription) ? (
-                <RichTextReadView html={savedDescription} />
-              ) : (
-                <p
-                  style={{
-                    fontSize: '14.5px',
-                    lineHeight: '1.85',
-                    color: isDark ? '#d1d5db' : '#374151',
-                    whiteSpace: 'pre-wrap',
-                    margin: 0,
-                  }}
-                >
-                  {savedDescription}
-                </p>
-              )
+              </OverviewSaveButton>
+            </OverviewActions>
+          </OverviewBody>
+        ) : savedDescription ? (
+          <OverviewBody>
+            {isLikelyRichTextHtml(savedDescription) ? (
+              <RichTextReadView html={savedDescription} />
             ) : (
-              <p
-                style={{
-                  fontSize: '14px',
-                  color: isDark ? '#52525b' : '#9ca3af',
-                  margin: 0,
-                }}
-              >
-                개요가 없습니다. 수정 버튼으로 추가할 수 있습니다.
-              </p>
+              <OverviewPlain>{savedDescription}</OverviewPlain>
             )}
-          </div>
-        </div>
-      )}
-    </div>
+          </OverviewBody>
+        ) : (
+          <SectionEmpty
+            text="이 나라가 어떤 나라였는지 몇 문단으로 적어 두면 지면 맨 위에서 먼저 읽힙니다."
+            actionLabel="개요 작성"
+            onAction={handleOpenEditor}
+          />
+        )}
+      </DashboardStyles.Section>
+
+      {/* 건국·멸망 — 존속 기간의 양 끝이 '어떻게' 열리고 닫혔나(배경·사건·초대·전신/후신) */}
+      <DashboardStyles.Section aria-labelledby="historical-founding-heading">
+        <DashboardStyles.SectionTitleRow>
+          <DashboardStyles.SectionTitleIcon>
+            <IconCalendar />
+          </DashboardStyles.SectionTitleIcon>
+          <DashboardStyles.SectionTitleText id="historical-founding-heading">
+            건국·멸망
+          </DashboardStyles.SectionTitleText>
+        </DashboardStyles.SectionTitleRow>
+        <HistoricalFoundingCards
+          historicalCountryId={country.id}
+          entityKind={entityKind ?? null}
+          startYear={foundingSignedYear(structuredSpan.startEra, structuredSpan.startYear)}
+          endYear={foundingSignedYear(structuredSpan.endEra, structuredSpan.endYear)}
+          onGoToHeads={() => onGoToTab('heads')}
+        />
+      </DashboardStyles.Section>
+
+      {/* 계보 — 전신·후신 두 대까지 세기 축 위에. 이 나라는 강조, 나머지는 눌러 건너간다 */}
+      <DashboardStyles.Section>
+        <DashboardStyles.SectionTitleRow>
+          <DashboardStyles.SectionTitleIcon>
+            <IconHistory />
+          </DashboardStyles.SectionTitleIcon>
+          <DashboardStyles.SectionTitleText>계보</DashboardStyles.SectionTitleText>
+          {stats.lineage.length > 1 && (
+            <DashboardStyles.SectionCountChip>
+              앞뒤 {stats.lineage.length - 1}개국
+            </DashboardStyles.SectionCountChip>
+          )}
+          <DashboardStyles.SectionLink type="button" onClick={() => onGoToTab('succession')}>
+            계승 관리
+          </DashboardStyles.SectionLink>
+        </DashboardStyles.SectionTitleRow>
+        {stats.loading.lineage ? (
+          <ChartSkeleton variant="bars" />
+        ) : stats.lineage.length <= 1 ? (
+          <SectionEmpty
+            text="이 나라가 무엇에서 나와 무엇으로 이어졌는지 계승 관계를 걸면, 앞뒤 두 대까지 세기 축 위에 그려집니다."
+            actionLabel="계승 관계 추가"
+            onAction={() => onGoToTab('succession')}
+          />
+        ) : (
+          <LineageFlow
+            historicalCountries={stats.lineage}
+            currentId={country.id}
+            onSelect={(id) => navigate(pathKeys.countryDetail(id))}
+          />
+        )}
+      </DashboardStyles.Section>
+
+      {/* 정체 — 어떤 체제였나(현대 국가와 같은 패널, 역사 국가 FK로) */}
+      <PoliticalSystemPanel
+        historicalCountryId={country.id}
+        countryName={country.name}
+        onOpenAll={() => onGoToTab('government')}
+      />
+
+      {/* 역대 수반 — 끝난 나라엔 '지금'이 없다. 누가 얼마나 다스렸나가 이 나라의 윤곽이다 */}
+      <DashboardStyles.Section>
+        <DashboardStyles.SectionTitleRow>
+          <DashboardStyles.SectionTitleIcon>
+            <IconVote />
+          </DashboardStyles.SectionTitleIcon>
+          <DashboardStyles.SectionTitleText>역대 수반</DashboardStyles.SectionTitleText>
+          {stats.rulers.length > 0 && (
+            <DashboardStyles.SectionCountChip>
+              {stats.rulers.length}명
+            </DashboardStyles.SectionCountChip>
+          )}
+          <DashboardStyles.SectionLink type="button" onClick={() => onGoToTab('heads')}>
+            전체 보기
+          </DashboardStyles.SectionLink>
+        </DashboardStyles.SectionTitleRow>
+        {stats.loading.tenures ? (
+          <ChartSkeleton variant="bars" />
+        ) : stats.rulers.length === 0 ? (
+          <SectionEmpty
+            text="군주·국가원수·정부수반의 재위를 등록하면 존속 기간 위에 치세가 띠로 깔리고, 사람마다 카드가 섭니다."
+            actionLabel="수반 등록"
+            onAction={() => onGoToTab('heads')}
+          />
+        ) : (
+          <HistoricalRulerTimeline
+            rulers={stats.rulers}
+            spanStart={span.start}
+            spanEnd={span.end}
+            onSelectPerson={goPerson}
+          />
+        )}
+      </DashboardStyles.Section>
+
+      {/* 기록 — 각 탭으로 가는 입구(숫자가 곧 링크) + 사건의 세기 분포 */}
+      <DashboardStyles.Section>
+        <DashboardStyles.SectionTitleRow>
+          <DashboardStyles.SectionTitleIcon>
+            <IconChart />
+          </DashboardStyles.SectionTitleIcon>
+          <DashboardStyles.SectionTitleText>기록</DashboardStyles.SectionTitleText>
+          <DashboardStyles.SectionCountChip>
+            총 {totalRecords.toLocaleString('ko-KR')}건
+          </DashboardStyles.SectionCountChip>
+        </DashboardStyles.SectionTitleRow>
+        <DashboardStyles.RecordGrid>
+          <DashboardStyles.RecordGridBody>
+            <RecordLedger rows={recordAxes} />
+            {stats.eventCenturyCounts.length > 0 && (
+              <DashboardStyles.EventTimelineBlock>
+                <DashboardStyles.EventTimelineLabel>사건 연표</DashboardStyles.EventTimelineLabel>
+                <EventCenturyStrip
+                  counts={stats.eventCenturyCounts}
+                  onOpen={() => onGoToTab('events')}
+                />
+              </DashboardStyles.EventTimelineBlock>
+            )}
+          </DashboardStyles.RecordGridBody>
+        </DashboardStyles.RecordGrid>
+      </DashboardStyles.Section>
+
+      {/* 사건 캘린더 — 연표가 '어느 세기'를 말하면 달력은 '그 달 며칠'을 말한다 */}
+      <DashboardStyles.Section>
+        <DashboardStyles.SectionTitleRow>
+          <DashboardStyles.SectionTitleIcon>
+            <IconCalendar />
+          </DashboardStyles.SectionTitleIcon>
+          <DashboardStyles.SectionTitleText>사건 캘린더</DashboardStyles.SectionTitleText>
+          {stats.calendarEvents.length > 0 && (
+            <DashboardStyles.SectionLink type="button" onClick={() => onGoToTab('events')}>
+              주요 사건 전체 보기
+            </DashboardStyles.SectionLink>
+          )}
+        </DashboardStyles.SectionTitleRow>
+        {stats.loading.events ? (
+          <ChartSkeleton variant="calendar" />
+        ) : stats.calendarEvents.length === 0 ? (
+          <ChartEmpty
+            text="날짜가 있는 사건을 이 나라에 걸면 여기 달력에 그 날짜로 앉습니다."
+            actionLabel="주요 사건으로"
+            onAction={() => onGoToTab('events')}
+          >
+            <EventCalendarPanel events={[]} onSelectEvent={() => {}} />
+          </ChartEmpty>
+        ) : (
+          <EventCalendarPanel
+            events={stats.calendarEvents}
+            onSelectEvent={setPreviewEventId}
+          />
+        )}
+      </DashboardStyles.Section>
+
+      {/* 활동과 보완 — 기록 관리 축 */}
+      <DashboardStyles.BottomRow>
+        <DashboardStyles.Section>
+          <DashboardStyles.SectionTitleRow>
+            <DashboardStyles.SectionTitleIcon>
+              <IconClock />
+            </DashboardStyles.SectionTitleIcon>
+            <DashboardStyles.SectionTitleText>최근 활동</DashboardStyles.SectionTitleText>
+            {stats.recentActivity.length > 0 && (
+              <DashboardStyles.SectionCountChip>
+                {stats.recentActivity.length}건
+              </DashboardStyles.SectionCountChip>
+            )}
+          </DashboardStyles.SectionTitleRow>
+          <DashboardStyles.FeedPanel>
+            <ActivityFeed
+              items={stats.recentActivity}
+              isLoading={stats.loading.persons || stats.loading.events}
+              onPersonClick={goPerson}
+              onEventClick={() => onGoToTab('events')}
+            />
+          </DashboardStyles.FeedPanel>
+        </DashboardStyles.Section>
+        <DashboardStyles.Section>
+          <DashboardStyles.SectionTitleRow>
+            <DashboardStyles.SectionTitleIcon>
+              <IconGlobe />
+            </DashboardStyles.SectionTitleIcon>
+            <DashboardStyles.SectionTitleText>더 채울 것</DashboardStyles.SectionTitleText>
+          </DashboardStyles.SectionTitleRow>
+          <CompletenessPanel
+            filled={stats.completeness.filled}
+            total={stats.completeness.total}
+            missing={stats.completeness.missing}
+            isLoading={stats.isCompletenessLoading}
+            onFillMissing={goFill}
+          />
+        </DashboardStyles.Section>
+      </DashboardStyles.BottomRow>
+
+      {/* 달력에서 누른 사건 미리보기 — 섹션 조건 밖에 두어 열린 모달이 사라지지 않게 */}
+      <EventInlineModal
+        eventId={previewEventId}
+        onClose={() => setPreviewEventId(null)}
+        onNavigate={(eventId) => navigate(pathKeys.events.detail(eventId))}
+      />
+    </DashboardStyles.DashboardRoot>
   )
 }
+
+const OverviewBody = styled.div`
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14.5px;
+  line-height: 1.8;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const OverviewPlain = styled.p`
+  margin: 0;
+  white-space: pre-wrap;
+`
+
+const OverviewActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`
+
+const OverviewEditButton = styled.button`
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.activeLight};
+  }
+`
+
+const OverviewSaveButton = styled.button`
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.primary};
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`
 
 /** 구조화 존속 연도 → 부호 연도(BC 음수) — 건국·멸망 카드 머리글 */
 function foundingSignedYear(era: unknown, year: unknown): number | null {
   if (typeof year !== 'number') return null
   return era === 'BC' ? -year : year
-}
-
-// ============================================
-// 개요 스탯 칩
-// ============================================
-
-function OverviewStatChip({
-  label,
-  value,
-  color,
-  isDark,
-}: {
-  label: string
-  value: string
-  color: string
-  isDark: boolean
-}) {
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        flexDirection: 'column',
-        gap: '3px',
-        padding: '10px 16px',
-        background: isDark ? '#212121' : 'white',
-        border: `1px solid ${color}${isDark ? '50' : '30'}`,
-        borderRadius: '10px',
-        minWidth: '100px',
-      }}
-    >
-      <span
-        style={{
-          fontSize: '10px',
-          fontWeight: 600,
-          color: color,
-          textTransform: 'uppercase',
-          letterSpacing: '0.07em',
-          opacity: 0.85,
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: '13px',
-          fontWeight: 700,
-          color: isDark ? '#f5f5f5' : '#111827',
-          letterSpacing: '-0.02em',
-          lineHeight: 1.3,
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  )
 }
 
 // ============================================
@@ -1127,790 +1190,6 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
   )
 }
 
-// ============================================
-// 관계 행 공용 — 상대 국가명 링크
-// ============================================
-
-/** 관계 행에서 상대 국가명을 나타내는 링크. 평문과 구분되도록 인디고 계열. */
-const RelatedCountryLink = styled(Link)<{ $isDark: boolean }>`
-  font-weight: 600;
-  color: ${({ $isDark }) => ($isDark ? '#a5b4fc' : '#4f46e5')};
-  text-decoration: none;
-  border-radius: 6px;
-  &:hover {
-    text-decoration: underline;
-  }
-  &:focus-visible {
-    outline: 2px solid #6366f1;
-    outline-offset: 2px;
-  }
-`
-
-/**
- * 계승·소속·관계 행의 상대 국가명 → 그 역사국가 상세로 이동.
- *
- * `/country/:historicalCountryId`가 이미 이 위젯(14탭 전용 상세)을 렌더하므로
- * 브리지 현대국을 경유할 필요가 없다 — 과거국가 탭 카드와 같은 목적지로 통일한다.
- * 지금 보고 있는 국가 자신이거나 이름이 없으면 링크하지 않는다(제자리 이동 방지).
- */
-function RelatedCountryName({
-  countryId,
-  name,
-  currentCountryId,
-  fallbackLabel,
-  isDark,
-}: {
-  countryId?: string | null
-  name?: string | null
-  currentCountryId: string
-  fallbackLabel: string
-  isDark: boolean
-}) {
-  const label = name?.trim()
-  if (!label) {
-    return (
-      <span style={{ fontWeight: 600, color: isDark ? '#71717a' : '#94a3b8' }}>
-        {fallbackLabel}
-      </span>
-    )
-  }
-  if (!countryId || countryId === currentCountryId) {
-    return (
-      <span style={{ fontWeight: 600, color: isDark ? '#f5f5f5' : '#0f172a' }}>
-        {label}
-      </span>
-    )
-  }
-  return (
-    <RelatedCountryLink
-      to={pathKeys.countryDetail(countryId)}
-      $isDark={isDark}
-      title={`${label} 상세로 이동`}
-    >
-      {label}
-    </RelatedCountryLink>
-  )
-}
-
-// ============================================
-// 계승 관계 섹션
-// ============================================
-
-function SuccessionSection({ country }: { country: UnifiedCountry }) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  const queryClient = useQueryClient()
-  const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState<{
-    successorId: string
-    eventType: TransitionEventType
-  }>({ successorId: '', eventType: 'SUCCESSION' })
-
-  const isHistorical = country.type === 'historical'
-  const historicalCountryId = isHistorical ? country.id : null
-
-  const { data: transitions = [], isLoading } = useQuery({
-    queryKey: ['historical-country-transitions', historicalCountryId],
-    queryFn: () => getTransitionsByHistoricalCountryId(historicalCountryId!),
-    enabled: !!historicalCountryId,
-  })
-
-  const { data: historicalCountries = [] } = useQuery({
-    queryKey: ['historical-countries-list'],
-    queryFn: getAllHistoricalCountries,
-    enabled: addOpen,
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (body: CreateHistoricalCountryTransitionDto) =>
-      createHistoricalCountryTransition(body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['historical-country-transitions', historicalCountryId] })
-      setAddOpen(false)
-      setForm({ successorId: '', eventType: 'SUCCESSION' })
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (tid: string) => deleteHistoricalCountryTransition(tid),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['historical-country-transitions', historicalCountryId] })
-    },
-  })
-
-  const handleAddSubmit = () => {
-    if (!historicalCountryId || !form.successorId) return
-    createMutation.mutate({
-      predecessorId: historicalCountryId,
-      successorId: form.successorId,
-      eventType: form.eventType,
-    })
-  }
-
-  if (!isHistorical) {
-    return (
-      <div style={{ padding: 48, background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
-        <EmptyState message="계승 관계는 역사적 국가에서만 조회·등록할 수 있습니다." isDark={isDark} />
-      </div>
-    )
-  }
-
-  return (
-    <div
-      style={{
-        padding: '32px 48px 48px',
-        background: isDark ? '#1d1d1d' : '#fafafa',
-        minHeight: 'calc(100vh - 300px)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 24,
-          flexWrap: 'wrap',
-          gap: 16,
-        }}
-      >
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a' }}>
-          계승·변천 관계
-        </h3>
-        <button
-          type="button"
-          onClick={() => setAddOpen(true)}
-          style={{
-            padding: '10px 20px',
-            background: '#6366f1',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 12,
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          계승 추가
-        </button>
-      </div>
-
-      {isLoading ? (
-        <div style={{ padding: 48, textAlign: 'center', color: isDark ? '#a1a1aa' : '#64748b' }}>불러오는 중…</div>
-      ) : transitions.length === 0 ? (
-        <EmptyState
-          message="등록된 계승·변천 관계가 없습니다"
-          description="전임 국가 → 후임 국가, 이벤트 유형(계승·정복 등), 날짜를 등록할 수 있습니다."
-          isDark={isDark}
-        />
-      ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {transitions.map((t) => (
-            <SuccessionRow
-              key={t.id}
-              transition={t}
-              currentCountryId={country.id}
-              onDelete={() => deleteMutation.mutate(t.id)}
-              isDeleting={deleteMutation.isPending}
-              isDark={isDark}
-            />
-          ))}
-        </ul>
-      )}
-
-      {addOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-          onClick={() => setAddOpen(false)}
-        >
-          <div
-            style={{
-              background: isDark ? '#212121' : '#fff',
-              borderRadius: 20,
-              border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-              padding: 24,
-              width: '90%',
-              maxWidth: 440,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827' }}>
-              계승·변천 추가
-            </h4>
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b' }}>
-              전임: <strong>{country.name}</strong> → 후임 국가 선택
-            </p>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>
-                후임 국가
-              </label>
-              <select
-                value={form.successorId}
-                onChange={(e) => setForm((f) => ({ ...f, successorId: e.target.value }))}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
-                  borderRadius: 12,
-                  fontSize: 14,
-                  color: isDark ? '#f5f5f5' : '#111827',
-                  background: isDark ? '#1d1d1d' : '#fff',
-                }}
-              >
-                <option value="">선택</option>
-                {historicalCountries
-                  .filter((c) => c.id !== historicalCountryId)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>
-                유형
-              </label>
-              <select
-                value={form.eventType}
-                onChange={(e) => setForm((f) => ({ ...f, eventType: e.target.value as TransitionEventType }))}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
-                  borderRadius: 12,
-                  fontSize: 14,
-                  color: isDark ? '#f5f5f5' : '#111827',
-                  background: isDark ? '#1d1d1d' : '#fff',
-                }}
-              >
-                {(Object.keys(TRANSITION_EVENT_LABELS) as TransitionEventType[]).map((k) => (
-                  <option key={k} value={k}>
-                    {TRANSITION_EVENT_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ fontSize: 12, color: isDark ? '#a1a1aa' : '#6b7280', marginBottom: 16 }}>
-              변천 날짜는 후임 국가의 존속 시작 시점을 참조합니다.
-            </div>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => setAddOpen(false)}
-                style={{
-                  padding: '12px 24px',
-                  border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
-                  borderRadius: 12,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: isDark ? '#a1a1aa' : '#64748b',
-                  background: isDark ? '#212121' : '#fff',
-                  cursor: 'pointer',
-                }}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleAddSubmit}
-                disabled={!form.successorId || createMutation.isPending}
-                style={{
-                  padding: '12px 24px',
-                  border: 'none',
-                  borderRadius: 12,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#fff',
-                  background: '#6366f1',
-                  cursor: 'pointer',
-                }}
-              >
-                {createMutation.isPending ? '등록 중…' : '등록'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-const MEMBERSHIP_ROLE_LABELS: Record<HistoricalMembershipRole, string> = {
-  COLONY: '식민지',
-  PROTECTORATE: '보호국',
-  DOMINION: '자치령',
-  CONFEDERATION_MEMBER: '연방 구성원',
-  VASSAL_STATE: '속국',
-  ALLY: '동맹',
-  UNION: '연합',
-  SUCCESSION: '계승',
-  OTHER: '기타',
-}
-
-const RELATION_TYPE_LABELS: Record<HistoricalRelationType, string> = {
-  ALLIANCE: '동맹',
-  WAR: '전쟁',
-  SUZERAIN_VASSAL: '종주국-속국',
-  TRIBUTARY: '조공·책봉',
-  PERSONAL_UNION: '동군연합',
-}
-
-function MembershipSection({ country }: { country: UnifiedCountry }) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  const queryClient = useQueryClient()
-  const [addOpen, setAddOpen] = useState(false)
-  const [editingMembership, setEditingMembership] = useState<HistoricalCountryMembershipDto | null>(null)
-  const [form, setForm] = useState<{
-    asParent: boolean
-    otherCountryId: string
-    role: HistoricalMembershipRole
-    isLeadingMember: boolean
-  }>({ asParent: true, otherCountryId: '', role: 'VASSAL_STATE', isLeadingMember: false })
-  const [editForm, setEditForm] = useState<{ role: HistoricalMembershipRole; isLeadingMember: boolean }>({
-    role: 'VASSAL_STATE',
-    isLeadingMember: false,
-  })
-
-  const isHistorical = country.type === 'historical'
-  const historicalCountryId = isHistorical ? country.id : null
-
-  const { data: memberships = [], isLoading } = useQuery({
-    queryKey: ['historical-country-memberships', historicalCountryId],
-    queryFn: () => getMembershipsByHistoricalCountryId(historicalCountryId!),
-    enabled: !!historicalCountryId,
-  })
-
-  const { data: historicalCountries = [] } = useQuery({
-    queryKey: ['historical-countries-list'],
-    queryFn: getAllHistoricalCountries,
-    enabled: addOpen,
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (body: CreateHistoricalCountryMembershipDto) =>
-      createHistoricalCountryMembership(body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['historical-country-memberships', historicalCountryId] })
-      setAddOpen(false)
-      setForm({ asParent: true, otherCountryId: '', role: 'VASSAL_STATE', isLeadingMember: false })
-    },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ mid, data }: { mid: string; data: UpdateHistoricalCountryMembershipDto }) =>
-      updateHistoricalCountryMembership(mid, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['historical-country-memberships', historicalCountryId] })
-      setEditingMembership(null)
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (mid: string) => deleteHistoricalCountryMembership(mid),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['historical-country-memberships', historicalCountryId] })
-    },
-  })
-
-  const handleAddSubmit = () => {
-    if (!historicalCountryId || !form.otherCountryId) return
-    createMutation.mutate({
-      historicalCountryId: form.asParent ? historicalCountryId : form.otherCountryId,
-      memberCountryId: form.asParent ? form.otherCountryId : historicalCountryId,
-      role: form.role,
-      isLeadingMember: form.role === 'CONFEDERATION_MEMBER' || form.role === 'UNION' ? form.isLeadingMember : undefined,
-    })
-  }
-
-  const openEdit = (m: HistoricalCountryMembershipDto) => {
-    setEditingMembership(m)
-    setEditForm({ role: m.role, isLeadingMember: !!m.isLeadingMember })
-  }
-
-  const handleEditSubmit = () => {
-    if (!editingMembership) return
-    updateMutation.mutate({
-      mid: editingMembership.id,
-      data: {
-        role: editForm.role,
-        isLeadingMember: editForm.role === 'CONFEDERATION_MEMBER' || editForm.role === 'UNION' ? editForm.isLeadingMember : false,
-      },
-    })
-  }
-
-  if (!isHistorical) {
-    return (
-      <div style={{ padding: 48, background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
-        <EmptyState message="소속·구성 관계는 역사적 국가에서만 조회·등록할 수 있습니다." isDark={isDark} />
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ padding: '32px 48px 48px', background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a' }}>소속·구성 관계</h3>
-        <button type="button" onClick={() => setAddOpen(true)} style={{ padding: '10px 20px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-          소속 추가
-        </button>
-      </div>
-      <p style={{ margin: '0 0 16px', fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b' }}>
-        신성로마제국–제후국, 종주국–속국 등 상위·하위 관계를 등록합니다.
-      </p>
-      {isLoading ? (
-        <div style={{ padding: 48, textAlign: 'center', color: isDark ? '#a1a1aa' : '#64748b' }}>불러오는 중…</div>
-      ) : memberships.length === 0 ? (
-        <EmptyState message="등록된 소속·구성 관계가 없습니다" description="상위 국가–하위 국가, 역할(속국·연방 구성원 등)을 등록할 수 있습니다." isDark={isDark} />
-      ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {memberships.map((membership) => (
-            <li key={membership.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: isDark ? '#212121' : '#fff', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 14 }}>
-              <RelatedCountryName
-                countryId={membership.historicalCountryId}
-                name={membership.parentName}
-                currentCountryId={country.id}
-                fallbackLabel="(상위)"
-                isDark={isDark}
-              />
-              <span style={{ color: isDark ? '#71717a' : '#94a3b8' }}>—</span>
-              <RelatedCountryName
-                countryId={membership.memberCountryId}
-                name={membership.memberName}
-                currentCountryId={country.id}
-                fallbackLabel="(하위)"
-                isDark={isDark}
-              />
-              <span style={{ padding: '4px 10px', background: isDark ? '#2a2a2a' : '#f1f5f9', borderRadius: 8, fontSize: 12, fontWeight: 600, color: isDark ? '#a5b4fc' : '#4f46e5' }}>
-                {MEMBERSHIP_ROLE_LABELS[membership.role] ?? membership.role}
-              </span>
-              {membership.isLeadingMember && (
-                <span style={{ padding: '4px 8px', background: '#fef3c7', borderRadius: 8, fontSize: 11, fontWeight: 600, color: '#b45309' }}>주축</span>
-              )}
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                <button type="button" onClick={() => openEdit(membership)} style={{ padding: '6px 12px', fontSize: 12, color: '#4f46e5', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, cursor: 'pointer', fontWeight: 500 }}>
-                  수정
-                </button>
-                <button type="button" onClick={() => deleteMutation.mutate(membership.id)} disabled={deleteMutation.isPending} style={{ padding: '6px 12px', fontSize: 12, color: '#dc2626', background: 'transparent', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>
-                  삭제
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      {editingMembership && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setEditingMembership(null)}>
-          <div style={{ background: isDark ? '#212121' : '#fff', borderRadius: 20, border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827' }}>소속·구성 수정</h4>
-            <p style={{ margin: '0 0 16px', fontSize: 14, color: isDark ? '#a1a1aa' : '#64748b' }}>
-              {editingMembership.parentName ?? '(상위)'} — {editingMembership.memberName ?? '(하위)'}
-            </p>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>역할</label>
-              <select value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value as HistoricalMembershipRole }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
-                {(Object.keys(MEMBERSHIP_ROLE_LABELS) as HistoricalMembershipRole[]).map((k) => (
-                  <option key={k} value={k}>{MEMBERSHIP_ROLE_LABELS[k]}</option>
-                ))}
-              </select>
-            </div>
-            {(editForm.role === 'CONFEDERATION_MEMBER' || editForm.role === 'UNION') && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: isDark ? '#d1d5db' : '#374151', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={editForm.isLeadingMember} onChange={(e) => setEditForm((f) => ({ ...f, isLeadingMember: e.target.checked }))} />
-                  주축(주도국)
-                </label>
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setEditingMembership(null)} style={{ padding: '12px 24px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, fontWeight: 600, color: isDark ? '#a1a1aa' : '#64748b', background: isDark ? '#212121' : '#fff', cursor: 'pointer' }}>취소</button>
-              <button type="button" onClick={handleEditSubmit} disabled={updateMutation.isPending} style={{ padding: '12px 24px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#fff', background: '#6366f1', cursor: 'pointer' }}>
-                {updateMutation.isPending ? '저장 중…' : '저장'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {addOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setAddOpen(false)}>
-          <div style={{ background: isDark ? '#212121' : '#fff', borderRadius: 20, border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827' }}>소속·구성 추가</h4>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>이 국가의 위치</label>
-              <select value={form.asParent ? 'parent' : 'member'} onChange={(e) => setForm((f) => ({ ...f, asParent: e.target.value === 'parent' }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
-                <option value="parent">상위 (이 국가가 포함하는 하위 국가 추가)</option>
-                <option value="member">하위 (이 국가가 소속된 상위 국가 추가)</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>{form.asParent ? '하위 국가' : '상위 국가'}</label>
-              <select value={form.otherCountryId} onChange={(e) => setForm((f) => ({ ...f, otherCountryId: e.target.value }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
-                <option value="">선택</option>
-                {historicalCountries.filter((c) => c.id !== historicalCountryId).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>역할</label>
-              <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as HistoricalMembershipRole }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
-                {(Object.keys(MEMBERSHIP_ROLE_LABELS) as HistoricalMembershipRole[]).map((k) => (
-                  <option key={k} value={k}>{MEMBERSHIP_ROLE_LABELS[k]}</option>
-                ))}
-              </select>
-            </div>
-            {(form.role === 'CONFEDERATION_MEMBER' || form.role === 'UNION') && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: isDark ? '#d1d5db' : '#374151', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={form.isLeadingMember} onChange={(e) => setForm((f) => ({ ...f, isLeadingMember: e.target.checked }))} />
-                  주축(주도국)
-                </label>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: isDark ? '#a1a1aa' : '#64748b' }}>연방·연합 내에서 주도적 역할을 한 구성원 (예: 독일 제국 내 프로이센)</p>
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setAddOpen(false)} style={{ padding: '12px 24px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, fontWeight: 600, color: isDark ? '#a1a1aa' : '#64748b', background: isDark ? '#212121' : '#fff', cursor: 'pointer' }}>취소</button>
-              <button type="button" onClick={handleAddSubmit} disabled={!form.otherCountryId || createMutation.isPending} style={{ padding: '12px 24px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#fff', background: '#6366f1', cursor: 'pointer' }}>
-                {createMutation.isPending ? '등록 중…' : '등록'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function RelationSection({ country }: { country: UnifiedCountry }) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  const queryClient = useQueryClient()
-  const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState<{
-    asSubject: boolean
-    otherCountryId: string
-    relationType: HistoricalRelationType
-  }>({ asSubject: true, otherCountryId: '', relationType: 'TRIBUTARY' })
-
-  const isHistorical = country.type === 'historical'
-  const historicalCountryId = isHistorical ? country.id : null
-
-  const { data: relations = [], isLoading } = useQuery({
-    queryKey: ['historical-country-relations', historicalCountryId],
-    queryFn: () => getRelationsByHistoricalCountryId(historicalCountryId!),
-    enabled: !!historicalCountryId,
-  })
-
-  const { data: historicalCountries = [] } = useQuery({
-    queryKey: ['historical-countries-list'],
-    queryFn: getAllHistoricalCountries,
-    enabled: addOpen,
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (body: CreateHistoricalCountryRelationDto) =>
-      createHistoricalCountryRelation(body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['historical-country-relations', historicalCountryId] })
-      setAddOpen(false)
-      setForm({ asSubject: true, otherCountryId: '', relationType: 'TRIBUTARY' })
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (rid: string) => deleteHistoricalCountryRelation(rid),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['historical-country-relations', historicalCountryId] })
-    },
-  })
-
-  const handleAddSubmit = () => {
-    if (!historicalCountryId || !form.otherCountryId) return
-    createMutation.mutate({
-      subjectCountryId: form.asSubject ? historicalCountryId : form.otherCountryId,
-      objectCountryId: form.asSubject ? form.otherCountryId : historicalCountryId,
-      relationType: form.relationType,
-    })
-  }
-
-  if (!isHistorical) {
-    return (
-      <div style={{ padding: 48, background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
-        <EmptyState message="국가 관계는 역사적 국가에서만 조회·등록할 수 있습니다." isDark={isDark} />
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ padding: '32px 48px 48px', background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a' }}>국가 관계</h3>
-        <button type="button" onClick={() => setAddOpen(true)} style={{ padding: '10px 20px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-          관계 추가
-        </button>
-      </div>
-      <p style={{ margin: '0 0 16px', fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b' }}>
-        한·중 조공·책봉, 동맹, 전쟁 등 수평적 관계를 등록합니다.
-      </p>
-      {isLoading ? (
-        <div style={{ padding: 48, textAlign: 'center', color: isDark ? '#a1a1aa' : '#64748b' }}>불러오는 중…</div>
-      ) : relations.length === 0 ? (
-        <EmptyState message="등록된 국가 관계가 없습니다" description="조공·책봉, 동맹, 전쟁, 종주국-속국, 동군연합 등을 등록할 수 있습니다." isDark={isDark} />
-      ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {relations.map((relation) => (
-            <li key={relation.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: isDark ? '#212121' : '#fff', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 14 }}>
-              <RelatedCountryName
-                countryId={relation.subjectCountryId}
-                name={relation.subjectCountryName}
-                currentCountryId={country.id}
-                fallbackLabel="(주체)"
-                isDark={isDark}
-              />
-              <span style={{ color: isDark ? '#71717a' : '#94a3b8' }}>—</span>
-              <span style={{ padding: '4px 10px', background: isDark ? '#2a2a2a' : '#f1f5f9', borderRadius: 8, fontSize: 12, fontWeight: 600, color: isDark ? '#a5b4fc' : '#4f46e5' }}>{RELATION_TYPE_LABELS[relation.relationType] ?? relation.relationType}</span>
-              <span style={{ color: isDark ? '#71717a' : '#94a3b8' }}>—</span>
-              <RelatedCountryName
-                countryId={relation.objectCountryId}
-                name={relation.objectCountryName}
-                currentCountryId={country.id}
-                fallbackLabel="(대상)"
-                isDark={isDark}
-              />
-              <button type="button" onClick={() => deleteMutation.mutate(relation.id)} disabled={deleteMutation.isPending} style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: 12, color: '#dc2626', background: 'transparent', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>
-                삭제
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {addOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setAddOpen(false)}>
-          <div style={{ background: isDark ? '#212121' : '#fff', borderRadius: 20, border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827' }}>국가 관계 추가</h4>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>이 국가의 위치</label>
-              <select value={form.asSubject ? 'subject' : 'object'} onChange={(e) => setForm((f) => ({ ...f, asSubject: e.target.value === 'subject' }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
-                <option value="subject">주체 (이 국가 → 상대 국가)</option>
-                <option value="object">대상 (상대 국가 → 이 국가)</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>상대 국가</label>
-              <select value={form.otherCountryId} onChange={(e) => setForm((f) => ({ ...f, otherCountryId: e.target.value }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
-                <option value="">선택</option>
-                {historicalCountries.filter((c) => c.id !== historicalCountryId).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>관계 유형</label>
-              <select value={form.relationType} onChange={(e) => setForm((f) => ({ ...f, relationType: e.target.value as HistoricalRelationType }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
-                {(Object.keys(RELATION_TYPE_LABELS) as HistoricalRelationType[]).map((k) => (
-                  <option key={k} value={k}>{RELATION_TYPE_LABELS[k]}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setAddOpen(false)} style={{ padding: '12px 24px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, fontWeight: 600, color: isDark ? '#a1a1aa' : '#64748b', background: isDark ? '#212121' : '#fff', cursor: 'pointer' }}>취소</button>
-              <button type="button" onClick={handleAddSubmit} disabled={!form.otherCountryId || createMutation.isPending} style={{ padding: '12px 24px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#fff', background: '#6366f1', cursor: 'pointer' }}>
-                {createMutation.isPending ? '등록 중…' : '등록'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function SuccessionRow({
-  transition,
-  currentCountryId,
-  onDelete,
-  isDeleting,
-  isDark,
-}: {
-  transition: HistoricalCountryTransitionDto
-  /** 지금 보고 있는 국가 — 자기 자신은 링크하지 않는다. */
-  currentCountryId: string
-  onDelete: () => void
-  isDeleting: boolean
-  isDark: boolean
-}) {
-  const eventLabel = TRANSITION_EVENT_LABELS[transition.eventType as TransitionEventType] ?? transition.eventType
-  const dateStr = transition.successorStartDate ?? '—'
-
-  return (
-    <li
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 16,
-        padding: '16px 20px',
-        background: isDark ? '#212121' : '#fff',
-        border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
-        borderRadius: 14,
-      }}
-    >
-      <RelatedCountryName
-        countryId={transition.predecessorId}
-        name={transition.predecessorName}
-        currentCountryId={currentCountryId}
-        fallbackLabel="(전임)"
-        isDark={isDark}
-      />
-      <span style={{ color: isDark ? '#71717a' : '#94a3b8' }}>→</span>
-      <RelatedCountryName
-        countryId={transition.successorId}
-        name={transition.successorName}
-        currentCountryId={currentCountryId}
-        fallbackLabel="(후임)"
-        isDark={isDark}
-      />
-      <span
-        style={{
-          padding: '4px 10px',
-          background: isDark ? '#2a2a2a' : '#f1f5f9',
-          borderRadius: 8,
-          fontSize: 12,
-          fontWeight: 600,
-          color: isDark ? '#a5b4fc' : '#4f46e5',
-        }}
-      >
-        {eventLabel}
-      </span>
-      <span style={{ fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b' }}>{dateStr}</span>
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={isDeleting}
-        style={{
-          marginLeft: 'auto',
-          padding: '8px 12px',
-          fontSize: 12,
-          color: '#dc2626',
-          background: 'transparent',
-          border: '1px solid #fecaca',
-          borderRadius: 8,
-          cursor: isDeleting ? 'not-allowed' : 'pointer',
-        }}
-      >
-        {isDeleting ? '삭제 중…' : '삭제'}
-      </button>
-    </li>
-  )
-}
 
 // ============================================
 // 행정구역 섹션 — 현대 국가와 동일한 등록/드릴다운 UI를 historicalCountryId 소속으로 사용

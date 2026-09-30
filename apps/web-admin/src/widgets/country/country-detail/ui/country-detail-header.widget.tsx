@@ -14,6 +14,13 @@ interface CountryDetailHeaderProps {
   onDelete?: (id: string) => void
   /** 헤더 우측에 배치할 액션 (예: 카테고리 설정 버튼) */
   rightSlot?: React.ReactNode
+  /**
+   * 이름 아래 메타 줄을 통째로 바꾼다 — 역사 국가는 현지명·대륙·ISO 대신
+   * 영문 표기·존속 기간·국가 형태를 싣는다. 없으면 현대 국가 기본 메타.
+   */
+  meta?: React.ReactNode
+  /** 썸네일·국기 이모지가 없을 때 타일에 세울 표지(역사 국가는 🏛). 없으면 이름 두 글자 */
+  fallbackIcon?: React.ReactNode
 }
 
 /**
@@ -32,6 +39,8 @@ export function CountryDetailHeader({
   onEdit,
   onDelete,
   rightSlot,
+  meta,
+  fallbackIcon,
 }: CountryDetailHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const kebabRef = useRef<HTMLDivElement>(null)
@@ -77,6 +86,8 @@ export function CountryDetailHeader({
           />
         ) : country.flagEmoji ? (
           country.flagEmoji
+        ) : fallbackIcon ? (
+          fallbackIcon
         ) : (
           <S.HeroFlagInitial>
             {(isoCode ?? country.name).slice(0, 2)}
@@ -87,6 +98,9 @@ export function CountryDetailHeader({
       <S.HeroTitleCol>
         <S.HeroName>{country.name}</S.HeroName>
         <S.HeroMetaRow>
+          {meta}
+          {!meta && (
+          <>
           {/* 현지명이 이름과 같으면(대한민국·대한민국) 두 번 적지 않는다 */}
           {localName && <S.HeroLocalName>{localName}</S.HeroLocalName>}
           {localName && (continentName || isoCode) && (
@@ -99,6 +113,8 @@ export function CountryDetailHeader({
           */}
           {isoCode && (
             <S.HeroMetaChip title="ISO 국가 코드">{isoCode}</S.HeroMetaChip>
+          )}
+          </>
           )}
         </S.HeroMetaRow>
       </S.HeroTitleCol>

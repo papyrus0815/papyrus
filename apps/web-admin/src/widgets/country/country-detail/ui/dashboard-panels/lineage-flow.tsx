@@ -74,6 +74,10 @@ function groupByCentury(nodes: LineageNode[]): CenturyColumn[] {
 export interface LineageFlowProps {
   /** 시간순 정렬 전 historical countries (전체/경량 DTO 모두 허용) */
   historicalCountries: LineageSource[]
+  /** 지금 보고 있는 나라 — 강조해 계보 안의 자기 자리를 보여준다(역사 국가 대시보드) */
+  currentId?: string
+  /** 카드를 누르면 그 나라로 — 없으면 카드는 읽기 전용 */
+  onSelect?: (id: string) => void
 }
 
 /**
@@ -92,7 +96,11 @@ export interface LineageFlowProps {
  * 열이 칼럼 폭을 넘으면 가로로 넘기되 **가장 최근 쪽에서 연다** — 이 나라가 무엇에서
  * 곧바로 이어졌는지가 제일 궁금한 것이라서다(요약도 최근 쪽을 남긴다).
  */
-export function LineageFlow({ historicalCountries }: LineageFlowProps) {
+export function LineageFlow({
+  historicalCountries,
+  currentId,
+  onSelect,
+}: LineageFlowProps) {
   // era 인지 비교기로 시간순 정렬 — BC 국가가 역순으로 이어지던 문제(F7) 해소
   const nodes = [...historicalCountries].sort(compareByCountryStart).map(toNode)
   const columns = groupByCentury(nodes)
@@ -104,8 +112,21 @@ export function LineageFlow({ historicalCountries }: LineageFlowProps) {
   useLayoutEffect(() => {
     const scroller = scrollerRef.current
     if (!scroller) return
+    /* 자기 자리가 있으면 그 카드를 가운데로 — 전신·후신이 양옆에 보이게 */
+    const current = currentId
+      ? scroller.querySelector<HTMLElement>('[aria-current="page"]')
+      : null
+    if (current) {
+      const scrollerRect = scroller.getBoundingClientRect()
+      const currentRect = current.getBoundingClientRect()
+      scroller.scrollLeft +=
+        currentRect.left -
+        scrollerRect.left -
+        (scrollerRect.width - currentRect.width) / 2
+      return
+    }
     scroller.scrollLeft = scroller.scrollWidth
-  }, [columns.length])
+  }, [columns.length, currentId])
 
   /* 가려진 쪽 가장자리를 흐리게 — 넘길 게 있다는 표시 */
   useLayoutEffect(() => {
@@ -144,14 +165,26 @@ export function LineageFlow({ historicalCountries }: LineageFlowProps) {
                 <TickLabel>{column.label}</TickLabel>
               </Tick>
               <Stack>
-                {column.nodes.map((node) => (
-                  <Card key={node.id}>
-                    <CardName>{node.name}</CardName>
-                    {node.yearsLabel && (
-                      <CardYears>{node.yearsLabel}</CardYears>
-                    )}
-                  </Card>
-                ))}
+                {column.nodes.map((node) => {
+                  const isCurrent = node.id === currentId
+                  const interactive = !!onSelect && !isCurrent
+                  return (
+                    <Card
+                      key={node.id}
+                      as={interactive ? 'button' : 'div'}
+                      type={interactive ? 'button' : undefined}
+                      onClick={interactive ? () => onSelect(node.id) : undefined}
+                      aria-current={isCurrent ? 'page' : undefined}
+                      $current={isCurrent}
+                      $interactive={interactive}
+                    >
+                      <CardName>{node.name}</CardName>
+                      {node.yearsLabel && (
+                        <CardYears>{node.yearsLabel}</CardYears>
+                      )}
+                    </Card>
+                  )
+                })}
               </Stack>
             </Column>
           ))}
@@ -242,17 +275,37 @@ const Stack = styled.div`
   gap: 6px;
 `
 
-const Card = styled.div`
+const Card = styled.div<{ $current?: boolean; $interactive?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 8px 11px;
   border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.035)'
-      : 'rgba(15, 23, 42, 0.025)'};
+  font: inherit;
+  text-align: left;
+  border: 1px solid
+    ${({ theme, $current }) =>
+      $current ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ theme, $current }) =>
+    $current
+      ? theme.colors.activeLight
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.035)'
+        : 'rgba(15, 23, 42, 0.025)'};
+  box-shadow: ${({ theme, $current }) =>
+    $current ? `inset 0 0 0 1px ${theme.colors.primary}` : 'none'};
+  cursor: ${({ $interactive }) => ($interactive ? 'pointer' : 'default')};
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: ${({ theme, $interactive, $current }) =>
+      $interactive || $current ? theme.colors.primary : theme.colors.border.light};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.focusRing.primary};
+    outline-offset: 2px;
+  }
 `
 
 const CardName = styled.span`
