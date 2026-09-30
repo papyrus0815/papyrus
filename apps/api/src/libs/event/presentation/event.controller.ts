@@ -144,6 +144,34 @@ const LIST_OMITTED_BODY_FIELDS = {
   aftermath: true,
 } as const
 
+/**
+ * 국가별 사건 스코프 — 참여국 표(event_country_relation) **또는** 사건 본체의 주 무대 역사국가
+ * (Event.historicalCountryId).
+ *
+ * 주 무대만 지정된 사건(시드로 들어온 하위 사건 등, 실측 14건)은 참여국 표에 행이 없어, 그 역사국가의
+ * '주요 사건' 목록·개수에서 빠졌다. 상세 화면은 이미 주 무대를 관련국에 합쳐 보여 주므로(F17)
+ * 목록·개수도 같은 정의를 쓴다. 참여국 조건 중 역사국가 id 조건을 주 무대 필드에도 그대로 건다.
+ * '국가 없음' 필터는 주 무대도 없는 사건만.
+ */
+function buildCountryScopeWhere(
+  countryRelationsFilter: Record<string, unknown> | undefined,
+  countryRelationOr: Array<Record<string, unknown>>,
+): Record<string, unknown> | undefined {
+  if (!countryRelationsFilter) return undefined
+  if ('none' in countryRelationsFilter) {
+    return { countryRelations: countryRelationsFilter, historicalCountryId: null }
+  }
+  const mainStageConditions = countryRelationOr
+    .filter((condition) => 'historicalCountryId' in condition)
+    .map((condition) => ({ historicalCountryId: condition.historicalCountryId }))
+  if (mainStageConditions.length === 0) {
+    return { countryRelations: countryRelationsFilter }
+  }
+  return {
+    OR: [{ countryRelations: countryRelationsFilter }, ...mainStageConditions],
+  }
+}
+
 @ApiTags('events')
 @Controller('events')
 @UseGuards(AuthGuard('jwt'))
@@ -571,10 +599,11 @@ export class EventController {
     // countryRelations 단일 필터 — has-no-countries 우선(country 지정 + 빈 관계는
     // 항상 0이라 사용자의 has-no 명시 요청을 그대로 따른다).
     let countryRelationsFilter: Record<string, unknown> | undefined
+    const countryRelationOrForScope: Array<Record<string, unknown>> = []
     if (isFlagOn(hasNoCountries)) {
       countryRelationsFilter = { none: {} }
     } else {
-      const countryRelationOr: Array<Record<string, unknown>> = []
+      const countryRelationOr = countryRelationOrForScope
       if (filterCountryId) {
         countryRelationOr.push({ countryId: filterCountryId })
         countryRelationOr.push({ historicalCountryId: filterCountryId })
@@ -603,6 +632,10 @@ export class EventController {
         countryRelationsFilter = { some: { OR: countryRelationOr } }
       }
     }
+    const countryScopeWhere = buildCountryScopeWhere(
+      countryRelationsFilter,
+      countryRelationOrForScope,
+    )
 
     // 최상위 사건만 페이징 (본인이 등록한 것만, 삭제되지 않은 것만)
     // — includeSubEvents=true면 루트 조건을 풀어 하위 사건도 한 행씩 선다.
@@ -615,7 +648,7 @@ export class EventController {
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
         ...(categoryId && { categoryId }),
         ...((dateRange.gte || dateRange.lt) && { startDate: dateRange }),
-        ...(countryRelationsFilter && { countryRelations: countryRelationsFilter }),
+        ...(countryScopeWhere && { AND: [countryScopeWhere] }),
         ...(isFlagOn(hasNoDescription) && {
           OR: [{ description: null }, { description: '' }],
         }),
@@ -826,10 +859,11 @@ export class EventController {
     }
 
     let countryRelationsFilter: Record<string, unknown> | undefined
+    const countryRelationOrForScope: Array<Record<string, unknown>> = []
     if (isFlagOn(hasNoCountries)) {
       countryRelationsFilter = { none: {} }
     } else {
-      const countryRelationOr: Array<Record<string, unknown>> = []
+      const countryRelationOr = countryRelationOrForScope
       if (filterCountryId) {
         countryRelationOr.push({ countryId: filterCountryId })
         countryRelationOr.push({ historicalCountryId: filterCountryId })
@@ -855,6 +889,10 @@ export class EventController {
         countryRelationsFilter = { some: { OR: countryRelationOr } }
       }
     }
+    const countryScopeWhere = buildCountryScopeWhere(
+      countryRelationsFilter,
+      countryRelationOrForScope,
+    )
 
     const total = await this.prisma.event.count({
       where: {
@@ -865,7 +903,7 @@ export class EventController {
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
         ...(categoryId && { categoryId }),
         ...((dateRange.gte || dateRange.lt) && { startDate: dateRange }),
-        ...(countryRelationsFilter && { countryRelations: countryRelationsFilter }),
+        ...(countryScopeWhere && { AND: [countryScopeWhere] }),
         ...(isFlagOn(hasNoDescription) && {
           OR: [{ description: null }, { description: '' }],
         }),

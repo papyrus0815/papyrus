@@ -597,28 +597,38 @@ export class EventService {
       }
     }
 
-    // PersonEvent 업데이트 — 다른 array 필드와 동일한 delete-and-recreate.
-    // createEvent에는 처리 로직이 있었지만 updateEvent에 누락되어 있어 사용자가
-    // 인라인으로 인물을 추가/제거해도 서버 반영이 안 되던 결함을 보정.
+    /**
+     * 참여 인물 동기화 — 참여국과 같은 **자연키(personId) 머지**를 한 트랜잭션으로.
+     *
+     * 예전엔 트랜잭션 밖에서 `deleteMany` 후 행마다 `create`(delete-and-recreate)라, 중간에
+     * 하나라도 실패하면(같은 인물 중복 → @@unique 위반 등) 이미 지운 참여자가 **통째로 사라졌다**.
+     * 이제 요청에 없는 인물만 지우고, 남는 인물은 역할·비고만 갱신(생성 시각 보존)한다.
+     * 같은 인물이 두 번 오면 앞의 것 하나로 접는다.
+     */
     if (relatedPersons !== undefined) {
-      await this.prisma.personEvent.deleteMany({
-        where: { eventId: id },
-      })
-
-      if (relatedPersons.length > 0) {
-        await Promise.all(
-          relatedPersons.map((person) =>
-            this.prisma.personEvent.create({
-              data: {
-                personId: person.personId,
-                eventId: id,
-                role: person.role,
-                note: person.note,
-              },
-            }),
-          ),
-        )
+      const wanted = new Map<string, { role?: string; note?: string }>()
+      for (const person of relatedPersons) {
+        if (person.personId && !wanted.has(person.personId)) {
+          wanted.set(person.personId, person)
+        }
       }
+      await this.prisma.$transaction(async (tx) => {
+        await tx.personEvent.deleteMany({
+          where: { eventId: id, personId: { notIn: [...wanted.keys()] } },
+        })
+        for (const [personId, person] of wanted) {
+          await tx.personEvent.upsert({
+            where: { personId_eventId: { personId, eventId: id } },
+            create: {
+              personId,
+              eventId: id,
+              role: person.role,
+              note: person.note,
+            },
+            update: { role: person.role ?? null, note: person.note ?? null },
+          })
+        }
+      })
     }
 
     // 🆕 계층 쓰기(하위 재설정·추가 상위 엣지 diff)와 본체 update를 단일 $transaction으로
