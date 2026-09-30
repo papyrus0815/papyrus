@@ -11,6 +11,11 @@
  */
 import styled, { css } from 'styled-components'
 
+import {
+  KitAddButton,
+  kitSelectTriggerCss,
+} from '@/shared/ui/register-form-kit/register-form-kit'
+
 import type { DefaultTheme } from 'styled-components'
 
 // ─── 디자인 토큰 (이 모달 전용 canon) ────────────────────────────────────────
@@ -247,8 +252,8 @@ export const SelectBtn = styled.button<{
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 9px 12px;
-  font-size: ${FONT.body};
+  /* 텍스트 입력(FormInput)과 같은 칸 — 41px·r8 (사건 등록 폼 입력 칸) */
+  ${kitSelectTriggerCss}
   color: ${({ $hasValue, theme }) =>
     $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   background: ${({ theme }) =>
@@ -368,28 +373,7 @@ export const AdvancedBody = styled.div`
  * 위계 경쟁을 낮춰, 상시 노출되는 반복행 어포던스를 가볍게 한다.
  * 아이콘(FiPlus)+라벨은 사용처에서 children으로 넣는다.
  */
-export const AddRowBtn = styled.button`
+export const AddRowBtn = styled(KitAddButton)`
+  /* 사건 등록 폼 AddButton('+ 상위 사건 선택', '+ 국가 추가')과 같은 흰 바탕 테 버튼 */
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  /* 테 없는 글 버튼 — 점선 알약 3개(별칭·소속·배우자)가 빈 폼에서 가장 시끄러운 테였다 */
-  padding: 4px 6px;
-  margin-left: -6px;
-  font-size: ${FONT.label};
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.active};
-  background: transparent;
-  border: none;
-  border-radius: ${RADIUS.control};
-  cursor: pointer;
-  transition: background 0.15s ease;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.activeLight};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
-  }
 `

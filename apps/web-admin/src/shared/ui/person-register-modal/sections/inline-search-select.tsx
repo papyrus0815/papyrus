@@ -236,6 +236,9 @@ const Wrap = styled.div`
 const InputBox = styled.div<{ $open?: boolean }>`
   display: flex;
   align-items: center;
+  /* 텍스트 입력(FormInput)과 같은 41px 칸 — 사건 등록 폼 입력 칸 높이 */
+  box-sizing: border-box;
+  min-height: 41px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid

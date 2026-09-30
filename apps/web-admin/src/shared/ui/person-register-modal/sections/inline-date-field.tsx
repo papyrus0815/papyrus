@@ -10,6 +10,10 @@ import { FiCalendar } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { Era } from '@/shared/api/persons'
+import {
+  kitC,
+  kitDateTriggerCss,
+} from '@/shared/ui/register-form-kit/register-form-kit'
 
 import {
   FONT,
@@ -338,52 +342,26 @@ const DisabledBox = styled.div`
 
 // ─── appearance='field' — 사건 등록 폼 날짜 칸(DateInputWrapper)과 같은 한 칸 ────────
 
+/*
+ * 사건 등록 폼 날짜 칸(DateInputWrapper)과 **같은 칸** — 흰 바탕·테 #e2e8f0·r8·높이 36,
+ * 포커스/드롭다운 열림이면 primary 테 + 3px 헤일로. 값은 register-form-kit(kitDateTriggerCss).
+ */
 const FieldBox = styled.div<{ $error?: boolean; $disabled?: boolean }>`
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
+  ${kitDateTriggerCss}
   gap: 2px;
   width: 100%;
-  height: 40px;
+  height: 36px;
   padding: 0 8px 0 4px;
-  border: 1px solid
-    ${({ $error, theme }) =>
-      $error ? theme.colors.alert.danger.fg : theme.colors.border.default};
-  border-radius: ${RADIUS.control};
-  background: ${({ theme, $disabled }) =>
-    $disabled
-      ? theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.02)'
-        : '#f8fafc'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.03)'
-        : '#fff'};
   cursor: ${({ $disabled }) => ($disabled ? 'default' : 'text')};
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+  ${({ $disabled, theme }) =>
+    $disabled
+      ? `background: ${theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc'};`
+      : ''}
 
   > svg {
     margin: 0 6px 0 8px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    color: ${({ theme }) => kitC(theme).textMuted};
     flex-shrink: 0;
-  }
-
-  &:hover {
-    border-color: ${({ $error, $disabled, theme }) =>
-      $error
-        ? theme.colors.alert.danger.fg
-        : $disabled
-          ? theme.colors.border.default
-          : theme.colors.border.medium};
-  }
-
-  /* 칸 안 어느 입력에 있든, 또는 이 칸의 달력이 열려 있는 동안 — 칸 전체가 포커스 링 */
-  &:focus-within,
-  &[data-open] {
-    border-color: ${({ $error, theme }) =>
-      $error ? theme.colors.alert.danger.fg : theme.colors.primary};
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
 `
 
@@ -391,11 +369,11 @@ const FieldIconBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   margin-right: 4px;
   flex-shrink: 0;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => kitC(theme).textMuted};
   background: transparent;
   border: none;
   border-radius: 6px;

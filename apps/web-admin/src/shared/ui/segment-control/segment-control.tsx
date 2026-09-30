@@ -26,6 +26,7 @@ import {
   segmentGroupMixin,
   segmentItemMixin,
 } from '../person-register-modal/_form-primitives'
+import { KitChipGroup, KitChoiceChip } from '../register-form-kit/register-form-kit'
 
 export interface SegmentOption<V extends string = string> {
   value: V
@@ -43,6 +44,11 @@ interface SegmentControlProps<V extends string = string> {
   ariaLabel?: string
   /** 오류 메시지 요소 id(radiogroup에 aria-describedby로 연결) */
   ariaDescribedBy?: string
+  /**
+   * 'chips' — 사건 등록 폼 카테고리 칩과 같은 **떨어진 알약**(등록 폼용, register-form-kit).
+   * 'segments'(기본) — 테 하나 안에 이어 붙은 세그먼트. 기존 호출부 무변경.
+   */
+  appearance?: 'segments' | 'chips'
 }
 
 const Wrap = styled.div<{ $error?: boolean }>`
@@ -61,6 +67,7 @@ export function SegmentControl<V extends string = string>({
   error,
   ariaLabel,
   ariaDescribedBy,
+  appearance = 'segments',
 }: SegmentControlProps<V>) {
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([])
 
@@ -111,6 +118,37 @@ export function SegmentControl<V extends string = string>({
         }
       }
     }
+  }
+
+  if (appearance === 'chips') {
+    return (
+      <KitChipGroup
+        role="radiogroup"
+        aria-label={ariaLabel}
+        aria-invalid={error || undefined}
+        aria-describedby={ariaDescribedBy}
+        onKeyDown={handleKeyDown}
+      >
+        {options.map((opt, index) => (
+          <KitChoiceChip
+            key={opt.value}
+            ref={(el) => {
+              buttonsRef.current[index] = el
+            }}
+            type="button"
+            role="radio"
+            aria-checked={value === opt.value}
+            tabIndex={index === tabStopIndex ? 0 : -1}
+            $selected={value === opt.value}
+            disabled={opt.disabled}
+            $error={error}
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.label}
+          </KitChoiceChip>
+        ))}
+      </KitChipGroup>
+    )
   }
 
   return (

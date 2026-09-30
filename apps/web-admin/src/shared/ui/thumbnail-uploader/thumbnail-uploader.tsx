@@ -1,24 +1,27 @@
 /**
- * 미니멀 정사각형 썸네일 업로더 — 국가/인물/조직 등 공용.
+ * 대표 이미지 업로더 — 국가·역사 국가 등록 폼 공용.
  *
- * 디자인:
- * - 96×96 정사각형, radius 8px
- * - 빈 상태: 1px 회색 실선 + 작은 아이콘 + 라벨
- * - 채워진 상태: 이미지만 표시
- * - 호버 시: 반투명 오버레이 + 인라인 변경/삭제 텍스트 버튼
- * - 업로드 중: 단순 spinner (장식 X)
- * - D&D 지원
+ * 모양은 **사건 등록 폼의 썸네일 칸 그대로**(register-form-kit KitUpload*): 빈 상태는 필드 폭
+ * 점선 칸 가운데 아이콘·안내·'이미지 업로드' 버튼, 채운 상태는 같은 점선 칸 가운데 미리보기 +
+ * 오른쪽 위 붉은 × 삭제. 예전 96px 정사각 칸은 사건 등록 모달과 나란히 두면 딴 부품이었다.
+ * 업로드는 고르는 즉시 서버로(업로드 중엔 버튼이 '업로드 중…'), D&D 지원.
  */
 import React, { useRef, useState } from 'react'
 
-import { FiImage } from 'react-icons/fi'
-import styled, { keyframes } from 'styled-components'
+import { FiImage, FiX } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import {
   type UploadImageCategory,
   uploadImage,
   validateImageFile,
 } from '@/shared/api/upload'
+import {
+  KitUploadArea,
+  KitUploadButton,
+  KitUploadDeleteButton,
+  KitUploadPreview,
+} from '@/shared/ui/register-form-kit/register-form-kit'
 
 interface ThumbnailUploaderProps {
   /** 현재 이미지 URL (없으면 placeholder) */
@@ -38,125 +41,21 @@ interface ThumbnailUploaderProps {
 }
 
 const Wrap = styled.div`
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   gap: 6px;
-  align-items: flex-start;
-`
-
-const DropZone = styled.label<{ $hasImage: boolean; $dragOver: boolean }>`
-  position: relative;
-  width: 96px;
-  height: 96px;
-  border-radius: 8px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
-  border: 1px solid
-    ${({ theme, $dragOver }) =>
-      $dragOver ? theme.colors.primary : theme.colors.border.default};
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-  }
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-`
-
-/** 빈 상태 placeholder */
-const Placeholder = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-
-  svg {
-    opacity: 0.7;
-  }
-
-  span {
-    font-size: 11.5px;
-    font-weight: 400;
-  }
-`
-
-/** 호버 오버레이 — 반투명 + 인라인 액션 */
-const HoverOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-
-  ${DropZone}:hover & {
-    opacity: 1;
-  }
-`
-
-const InlineAction = styled.span`
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #fff;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: background 0.1s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.15);
-  }
-
-  &.danger {
-    color: #fca5a5;
-  }
-`
-
-/** 업로드 중 spinner */
-const spin = keyframes`
-  to { transform: rotate(360deg); }
-`
-
-const Spinner = styled.span`
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border: 2px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.15)'
-        : 'rgba(15,23,42,0.1)'};
-  border-top-color: ${({ theme }) => theme.colors.primary};
-  border-radius: 50%;
-  animation: ${spin} 0.7s linear infinite;
-`
-
-const Hint = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.4;
+  width: 100%;
 `
 
 const ErrorText = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.alert.danger.fg};
+  line-height: 1.4;
+`
+
+const Hint = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.4;
 `
 
@@ -169,7 +68,7 @@ export function ThumbnailUploader({
   onChange,
   category,
   inputId = 'thumbnail-uploader',
-  emptyLabel = '이미지 추가',
+  emptyLabel = '대표 이미지를 업로드하세요',
   hasImageHint,
   alt = '대표 이미지',
 }: ThumbnailUploaderProps) {
@@ -208,19 +107,19 @@ export function ThumbnailUploader({
     if (file) handleFile(file)
   }
 
-  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragOver(false)
     const file = e.dataTransfer.files?.[0]
     if (file) handleFile(file)
   }
 
-  const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragOver(true)
   }
 
-  const handleDragLeave = (e: React.DragEvent<HTMLLabelElement>) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragOver(false)
   }
@@ -241,34 +140,44 @@ export function ThumbnailUploader({
 
   return (
     <Wrap>
-      <DropZone
-        htmlFor={inputId}
-        $hasImage={!!value}
-        $dragOver={dragOver}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-      >
-        {value ? (
+      {value ? (
+        <KitUploadPreview
+          onClick={() => {
+            if (!uploading) inputRef.current?.click()
+          }}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          title="눌러서 이미지 바꾸기"
+        >
           <img src={value} alt={alt} />
-        ) : (
-          <Placeholder>
-            <FiImage size={20} />
-            <span>{emptyLabel}</span>
-          </Placeholder>
-        )}
-
-        {value && !uploading && (
-          <HoverOverlay>
-            <InlineAction onClick={handleReplace}>변경</InlineAction>
-            <InlineAction className="danger" onClick={handleDelete}>
-              삭제
-            </InlineAction>
-          </HoverOverlay>
-        )}
-
-        {uploading && <Spinner />}
-      </DropZone>
+          <KitUploadDeleteButton
+            type="button"
+            onClick={handleDelete}
+            aria-label="이미지 삭제"
+          >
+            <FiX size={16} />
+          </KitUploadDeleteButton>
+        </KitUploadPreview>
+      ) : (
+        <KitUploadArea
+          $dragOver={dragOver}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+        >
+          <FiImage size={32} aria-hidden="true" />
+          <p>{emptyLabel}</p>
+          <KitUploadButton
+            type="button"
+            onClick={handleReplace}
+            disabled={uploading}
+            aria-controls={inputId}
+          >
+            {uploading ? '업로드 중…' : '이미지 업로드'}
+          </KitUploadButton>
+        </KitUploadArea>
+      )}
 
       <HiddenInput
         ref={inputRef}
@@ -279,7 +188,7 @@ export function ThumbnailUploader({
         disabled={uploading}
       />
 
-      {error && <ErrorText>{error}</ErrorText>}
+      {error && <ErrorText role="alert">{error}</ErrorText>}
       {!error && hasImageHint && value && <Hint>{hasImageHint}</Hint>}
     </Wrap>
   )

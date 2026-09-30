@@ -341,7 +341,8 @@ const Box = styled.div<{ $disabled?: boolean; $open?: boolean }>`
   align-items: center;
   gap: 6px;
   width: 100%;
-  height: 40px;
+  /* 텍스트 입력(FormInput)과 같은 칸 — 41px·옅은 회색 면, 포커스 시 흰 면 */
+  height: 41px;
   padding: 0 6px 0 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
@@ -352,7 +353,7 @@ const Box = styled.div<{ $disabled?: boolean; $open?: boolean }>`
         : '#f8fafc'
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.03)'
-        : '#fff'};
+        : '#f9fafb'};
   opacity: ${({ $disabled }) => ($disabled ? 0.6 : 1)};
   transition:
     border-color 0.15s ease,
@@ -370,6 +371,8 @@ const Box = styled.div<{ $disabled?: boolean; $open?: boolean }>`
   &:focus-within {
     border-color: ${({ theme }) => theme.colors.primary};
     box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
   }
 `
 
