@@ -1,5 +1,5 @@
 /**
- * 카드 그리드 로딩 스켈레톤 — person-card와 **같은 틀**(카드 폭 전체 4:5 초상 + 본문 두 줄).
+ * 카드 그리드 로딩 스켈레톤 — person-card와 **같은 틀**(카드 폭 전체 1:1 초상 + 이름·직함·메타 두 줄).
  *
  * 카드와 치수가 같아야 로딩→완료 전환에서 격자가 튀지 않는다. 그래서 틀은 카드의 격자
  * (EraCardGrid)·radius·본문 padding을 그대로 쓰고, 채움만 shimmer로 둔다.
@@ -20,14 +20,10 @@ export function CardGridSkeleton({ count = 8 }: Props) {
     <EraCardGrid aria-hidden role="presentation">
       {Array.from({ length: count }).map((_unused, index) => (
         <SkeletonCard key={index}>
-          <SkeletonVisual>
-            <CaptionBars>
-              <Bar $onImage style={{ width: 34, height: 16 }} />
-              <Bar $onImage style={{ width: '72%', height: 18 }} />
-              <Bar $onImage style={{ width: '48%', height: 11 }} />
-            </CaptionBars>
-          </SkeletonVisual>
+          <SkeletonVisual />
           <SkeletonBody>
+            <Bar style={{ width: '68%', height: 15 }} />
+            <Bar style={{ width: '44%', height: 11, marginBottom: 4 }} />
             <SkeletonRow>
               <Bar style={{ width: '52%', height: 13 }} />
               <Bar style={{ width: 52, height: 11 }} />
@@ -72,7 +68,7 @@ const shimmer = css`
 const SkeletonCard = styled.div`
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
   border: 1px solid ${hairline};
   background: ${surface};
@@ -80,26 +76,15 @@ const SkeletonCard = styled.div`
 
 const SkeletonVisual = styled.div`
   position: relative;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 1 / 1;
   ${shimmer}
-`
-
-/** 초상 하단 캡션 자리(분야·이름·직함) — 실제 카드처럼 이미지 안쪽 아래에 */
-const CaptionBars = styled.div`
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 13px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
 `
 
 const SkeletonBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 13px 14px 14px;
+  gap: 7px;
+  padding: 11px 12px 12px;
 `
 
 const SkeletonRow = styled.div`
@@ -108,12 +93,7 @@ const SkeletonRow = styled.div`
   gap: 12px;
 `
 
-const Bar = styled.div<{ $onImage?: boolean }>`
+const Bar = styled.div`
   border-radius: 5px;
-  ${({ $onImage, theme }) =>
-    $onImage
-      ? css`
-          background: ${theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.7)'};
-        `
-      : shimmer}
+  ${shimmer}
 `

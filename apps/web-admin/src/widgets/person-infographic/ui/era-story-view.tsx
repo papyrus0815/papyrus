@@ -66,11 +66,11 @@ export function EraStoryView({
   pinned,
   togglePin,
 }: Props) {
-  const sort = usePersonInfographicFilterStore((s) => s.sort)
+  const sort = usePersonInfographicFilterStore((state) => state.sort)
   const eraGroupOrder = usePersonInfographicFilterStore(
     (state) => state.eraGroupOrder,
   )
-  const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
+  const resetFilters = usePersonInfographicFilterStore((state) => state.resetFilters)
   const hasFilter = useHasActiveFilter()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -229,9 +229,9 @@ const CenturyIndex = styled.nav`
   z-index: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 2px 4px;
   margin: 0 0 4px calc(-1 * var(--rail-inset));
-  padding: 12px 0 12px var(--rail-inset);
+  padding: 10px 0 10px calc(var(--rail-inset) - 8px);
   border-bottom: 1px solid ${hairline};
   background: ${surface};
 
@@ -250,21 +250,21 @@ const CenturyJump = styled.button`
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
-  padding: 5px 10px;
-  border-radius: 999px;
+  /* 테두리 알약 대신 글 버튼 — 사건 목록 머리글처럼 잉크를 아낀다(알약 14개가 한 줄을 채웠다) */
+  padding: 4px 8px;
+  border-radius: 6px;
   flex-shrink: 0;
-  border: 1px solid ${hairline};
+  border: none;
   background: transparent;
   font-size: 12.5px;
   white-space: nowrap;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  transition: color ${MOTION_FAST}, border-color ${MOTION_FAST}, background ${MOTION_FAST};
+  transition: color ${MOTION_FAST}, background ${MOTION_FAST};
 
   &:hover {
     color: ${BRAND.primary};
-    border-color: ${BRAND.primaryBorder};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   }

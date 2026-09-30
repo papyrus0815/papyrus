@@ -1,21 +1,19 @@
 /**
- * 카드 그리드(세기별·왕조·고정)에서 쓰는 인물 카드 — 이미지가 주인공인 포트레이트 카드.
+ * 카드 그리드(세기별·왕조·고정)에서 쓰는 인물 카드.
  *
  *   ┌──────────────────────┐
  *   │ 군주            [고정] │
- *   │                      │
- *   │      초상 4 : 5       │   ← 카드 폭 전체, hover 시 살짝 확대
- *   │                      │
- *   │▁▁▁▁ 어둠 그라데이션 ▁▁▁│
- *   │ 정치                  │   ← 이름·직함은 이미지 위 흰 글자
- *   │ 나폴레옹 보나파르트      │
- *   │ 프랑스 황제            │
+ *   │      초상 1 : 1       │   ← 사진은 사진만. hover 시 살짝 확대
  *   ├──────────────────────┤
+ *   │ 나폴레옹 보나파르트      │   ← 글은 지면 위 — 사건 목록 행과 같은 잉크
+ *   │ 프랑스 황제            │
  *   │ 1769 – 1821  향년 52세 │
- *   │ 프랑스 · 부르봉    ◔ 95 │
+ *   │ ● 정치 · 프랑스    ◔ 95 │   ← 색은 분야 점 하나에만
  *   └──────────────────────┘
  *
- * 사진이 없거나 깨지면 공통 빈 초상(EmptyPortrait — 사람 실루엣, 글자 없음)으로 대체한다.
+ * 예전엔 이름·직함을 사진 위 흰 글자로 얹느라 모든 카드에 검은 스크림을 깔았고, 사진 없는
+ * 인물(다수)은 짙은 회색 판이라 격자 절반이 검은 벽이었다. 사건 목록처럼 밝은 지면 + 절제된
+ * 색으로 바꾼다. 사진이 없거나 깨지면 공통 빈 초상(EmptyPortrait — 옅은 실루엣)으로 대체.
  * 이름·직함·국가·가문에 검색어 하이라이트 적용.
  */
 import type React from 'react'
@@ -108,7 +106,8 @@ function PersonCardItemBase({
         ) : (
           <EmptyPortrait />
         )}
-        <Scrim aria-hidden />
+        {/* 위쪽 칩(역할·고정) 대비용 옅은 그늘 — 글자를 얹지 않으니 아래쪽 어둠은 없다 */}
+        {(role || pinned) && showImage && <Scrim aria-hidden />}
 
         {role && <RoleTag $monarch={person.isMonarch}>{role}</RoleTag>}
         <PinBtn
@@ -121,23 +120,17 @@ function PersonCardItemBase({
         >
           <FiBookmark size={15} fill={pinned ? 'currentColor' : 'none'} />
         </PinBtn>
-
-        <Caption>
-          {/* 배지는 새 정보일 때만 — '기타'는 분류 잔여, 군주·국가원수의 '정치'는 역할 표지와 같은 말 */}
-          {person.field !== '기타' && !(role && person.field === '정치') && (
-            <FieldTag>{person.field}</FieldTag>
-          )}
-          <Name title={person.name}>{highlight(person.name, query)}</Name>
-          {person.primaryTitle && (
-            <Title title={person.primaryTitle}>
-              {highlight(person.primaryTitle, query)}
-            </Title>
-          )}
-        </Caption>
       </Visual>
 
       <Body>
-        <Row>
+        <Name title={person.name}>{highlight(person.name, query)}</Name>
+        {person.primaryTitle && (
+          <Title title={person.primaryTitle}>
+            {highlight(person.primaryTitle, query)}
+          </Title>
+        )}
+        {/* 직함 유무와 무관하게 메타 두 줄은 카드 바닥에 — 같은 줄 카드끼리 생몰·영향력이 나란히 */}
+        <Row $pushDown>
           <Years>
             {born}
             <Dash>–</Dash>
@@ -149,11 +142,22 @@ function PersonCardItemBase({
         </Row>
         <Row>
           <Place>
+            {/* 분야는 점 하나의 색으로 — 사건 목록의 분류처럼 색은 이 한 곳에만 쓴다 */}
+            {/* '기타'는 분류 잔여라 새 정보가 아니다 — 대부분의 카드에 반복되던 소음 */}
+            {person.field !== '기타' && (
+              <>
+                <FieldDot aria-hidden />
+                <FieldName>{person.field}</FieldName>
+                <PlaceSub>{' · '}</PlaceSub>
+              </>
+            )}
             {hasCountry ? highlight(person.country, query) : '국가 미상'}
-            <PlaceSub>
-              {' · '}
-              {person.faction ? highlight(person.faction, query) : person.era.lbl}
-            </PlaceSub>
+            {person.faction && (
+              <PlaceSub>
+                {' · '}
+                {highlight(person.faction, query)}
+              </PlaceSub>
+            )}
           </Place>
           <Influence title={`영향력 ${person.influence}`}>
             <Ring style={{ ['--value' as string]: `${person.influence}` }} aria-hidden />
@@ -191,7 +195,7 @@ export const EraCardGrid = styled.div`
   display: grid;
   /* 172px — 본문 920px에서 한 줄 5장. 220px일 땐 3장이라 한 화면에 3명만 보였다. */
   grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
-  gap: 14px;
+  gap: 16px 14px;
 
   @media (max-width: 640px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -204,20 +208,18 @@ const Card = styled.div<{ $pinned?: boolean }>`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
   background: ${surface};
   border: 1px solid ${hairline};
   cursor: pointer;
-  transition: border-color ${MOTION_FAST}, box-shadow ${MOTION_FAST};
+  transition: border-color ${MOTION_FAST}, background ${MOTION_FAST};
 
+  /* 사건 목록 행처럼 hover는 면의 옅은 틴트 — 그림자로 띄우지 않는다 */
   &:hover {
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(15, 23, 42, 0.18)'};
-    box-shadow: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? '0 8px 24px rgba(0, 0, 0, 0.45)'
-        : '0 8px 24px rgba(15, 23, 42, 0.1)'};
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.18)' : 'rgba(15, 23, 42, 0.16)'};
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#f8fafc')};
   }
   &:focus-visible {
     outline: none;
@@ -237,9 +239,10 @@ const Card = styled.div<{ $pinned?: boolean }>`
 
 const Visual = styled.div`
   position: relative;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
-  background: #111111;
+  border-bottom: 1px solid ${hairline};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1d21' : '#f1f3f6')};
 `
 
 const zoomOnHover = css`
@@ -268,36 +271,25 @@ const Empty = styled.div`
   width: 100%;
   height: 100%;
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: center;
-  padding-top: 20%;
-  /* 하단 스크림(검정)과 이어지는 어두운 중립 — 밝은 회색이면 스크림과 겹쳐 탁한 띠가 생겼다 */
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3f49' : '#5b6474')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'linear-gradient(180deg, #23262d 0%, #17191e 100%)'
-      : 'linear-gradient(180deg, #414957 0%, #262b34 100%)'};
+  /* 사진 없음은 데이터 상태 — 사진보다 한 단계 물러선 옅은 중립(예전 짙은 판은 격자를 검게 덮었다) */
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#33363d' : '#d5dae1')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1d21' : '#f1f3f6')};
   ${zoomOnHover}
 
   svg {
     display: block;
-    width: 42%;
+    width: 56%;
     height: auto;
   }
 `
 
-/** 상·하단 어둠 — 흰 캡션·칩 대비 확보(사진 밝기와 무관) */
+/** 위쪽 칩 뒤 옅은 그늘 — 밝은 사진 위에서도 칩 테두리가 읽히게 */
 const Scrim = styled.div`
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.28) 0%,
-    rgba(0, 0, 0, 0) 22%,
-    rgba(0, 0, 0, 0) 45%,
-    rgba(0, 0, 0, 0.55) 70%,
-    rgba(0, 0, 0, 0.86) 100%
-  );
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.26) 0%, rgba(0, 0, 0, 0) 28%);
   pointer-events: none;
 `
 
@@ -362,63 +354,32 @@ const PinBtn = styled.button<{ $active: boolean }>`
   }
 `
 
-const Caption = styled.div`
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 12px 12px 11px;
-  color: #ffffff;
-
-  @media (max-width: 640px) {
-    padding: 10px 10px 10px;
-  }
-`
-
-const FieldTag = styled.span`
-  align-self: flex-start;
-  margin-bottom: 3px;
-  padding: 2px 8px;
-  border-radius: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #ffffff;
-  background: color-mix(in srgb, var(--field) 78%, #000000);
-`
-
 const Name = styled.div`
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
   overflow: hidden;
-  word-break: keep-all;
-
-  @media (max-width: 640px) {
-    font-size: 16px;
-  }
+  text-overflow: ellipsis;
 `
 
 const Title = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `
 
 const Body = styled.div`
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   padding: 10px 12px 11px;
 
   @media (max-width: 640px) {
@@ -426,7 +387,13 @@ const Body = styled.div`
   }
 `
 
-const Row = styled.div`
+const Row = styled.div<{ $pushDown?: boolean }>`
+  ${({ $pushDown }) =>
+    $pushDown &&
+    css`
+      margin-top: auto;
+      padding-top: 6px;
+    `}
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -435,8 +402,8 @@ const Row = styled.div`
 `
 
 const Years = styled.span`
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -466,11 +433,26 @@ const Age = styled.span`
 const Place = styled.span`
   min-width: 0;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+`
+
+const FieldDot = styled.span`
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 5px 1px 0;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--field);
+`
+
+const FieldName = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const PlaceSub = styled.span`
@@ -483,8 +465,8 @@ const Influence = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
 `
