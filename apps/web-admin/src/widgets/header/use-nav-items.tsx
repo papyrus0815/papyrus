@@ -14,7 +14,7 @@ import {
   FiLayers,
   FiMap,
 } from 'react-icons/fi'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
@@ -28,9 +28,12 @@ export interface NavItemSpec {
   active?: boolean
 }
 
-export function useNavItems(): NavItemSpec[] {
+/**
+ * @param pathname 현재 경로 — 호출부가 넘긴다. 여기서 useLocation을 부르면 `?event=` 같은
+ *   **쿼리만 바뀌어도** 레일 전체가 다시 그려졌다(사건 목록에서 행 하나 누를 때마다).
+ */
+export function useNavItems(pathname: string): NavItemSpec[] {
   const navigate = useNavigate()
-  const location = useLocation()
   const playClickSound = useClickSound()
 
   return useMemo(() => {
@@ -52,7 +55,7 @@ export function useNavItems(): NavItemSpec[] {
           </span>
         ),
         onClick: go(item.path),
-        active: item.matchPath(location.pathname),
+        active: item.matchPath(pathname),
       }
     }
 
@@ -68,14 +71,14 @@ export function useNavItems(): NavItemSpec[] {
         icon: <FiMap size={18} />,
         onClick: go(pathKeys.country()),
         // 국가 브라우즈(/country)와 상세(/country/:id/*) 모두 활성 표시
-        active: /^\/country(\/|$)/.test(location.pathname),
+        active: /^\/country(\/|$)/.test(pathname),
       },
       {
         key: 'events',
         label: '사건',
         icon: <FiLayers size={18} />,
         onClick: go('/events'),
-        active: location.pathname.startsWith('/events'),
+        active: pathname.startsWith('/events'),
       },
       ...(personItem ? [dashboardItemToSpec(personItem)] : []),
       ...restDashboardItems.map(dashboardItemToSpec),
@@ -84,29 +87,29 @@ export function useNavItems(): NavItemSpec[] {
         label: '대륙',
         icon: <FiGlobe size={18} />,
         onClick: go(pathKeys.continents()),
-        active: location.pathname.startsWith('/continents'),
+        active: pathname.startsWith('/continents'),
       },
       {
         key: 'heads-of-state',
         label: '수장 비교',
         icon: <FiAward size={18} />,
         onClick: go(pathKeys.headsOfState()),
-        active: location.pathname.startsWith('/heads-of-state'),
+        active: pathname.startsWith('/heads-of-state'),
       },
       {
         key: 'treaties',
         label: '조약',
         icon: <FiFileText size={18} />,
         onClick: go(pathKeys.treaties.list()),
-        active: location.pathname.startsWith('/treaties'),
+        active: pathname.startsWith('/treaties'),
       },
       {
         key: 'companies',
         label: '기업',
         icon: <FiBriefcase size={18} />,
         onClick: go('/companies'),
-        active: location.pathname.startsWith('/companies'),
+        active: pathname.startsWith('/companies'),
       },
     ]
-  }, [location.pathname, navigate, playClickSound])
+  }, [pathname, navigate, playClickSound])
 }

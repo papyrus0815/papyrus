@@ -54,23 +54,6 @@ export default function Layout() {
 
   useCommandPaletteShortcut()
 
-  // 대시보드 BGM 플레이리스트 (자동 재생 비활성화 — 헤더 컨트롤로 수동 재생만 가능)
-  useBgmPlaylist({
-    playlist: [
-      dashboardBgm,
-      dashboardBgm2,
-      dashboardBgm3,
-      dnNunonchonKyungmae,
-      etMiniGame,
-      flChinaVillage,
-      flChosunVillage,
-      flJapanVillage,
-    ],
-    initialVolume: 0.1,
-    autoPlay: false,
-    shuffle: true,
-  })
-
   // 라우트별 적절한 스켈레톤 선택
   const getSkeleton = () => {
     if (isDashboardRoute) return <DashboardSkeleton />
@@ -80,6 +63,8 @@ export default function Layout() {
 
   return (
     <>
+      <BgmPlaylistHost />
+
       {/* lazy 라우트 청크를 받는 동안 옛 화면에 멈춰 있는 구간의 표시 */}
       <RouteProgressBar />
 
@@ -102,6 +87,34 @@ export default function Layout() {
       {isAuthenticated && <CommandPalette />}
     </>
   )
+}
+
+/**
+ * 배경음악 플레이리스트 — 아무것도 그리지 않는 자리.
+ *
+ * 이 훅은 재생 중 재생 시각을 초당 여러 번 상태로 올린다. 예전엔 Layout이 직접 불러
+ * (반환값은 쓰지도 않으면서) 음악이 켜져 있는 내내 **레이아웃 전체가 초당 여러 번** 다시
+ * 그려졌다 — 사건 목록 스크롤 중 프로파일에 Layout이 잡힌 까닭. 컨트롤은 전역
+ * (getPlaylistControls)으로 공유되므로 자리를 옮겨도 동작은 같다.
+ */
+function BgmPlaylistHost() {
+  // 대시보드 BGM 플레이리스트 (자동 재생 비활성화 — 헤더 컨트롤로 수동 재생만 가능)
+  useBgmPlaylist({
+    playlist: [
+      dashboardBgm,
+      dashboardBgm2,
+      dashboardBgm3,
+      dnNunonchonKyungmae,
+      etMiniGame,
+      flChinaVillage,
+      flChosunVillage,
+      flJapanVillage,
+    ],
+    initialVolume: 0.1,
+    autoPlay: false,
+    shuffle: true,
+  })
+  return null
 }
 
 const ContentArea = styled.div<{ $railed: boolean }>`

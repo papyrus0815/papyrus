@@ -61,7 +61,7 @@ function matches(item: PaletteItem, q: string): boolean {
   )
 }
 
-export function CommandPalette() {
+function CommandPaletteImpl() {
   const open = useCommandPaletteStore((s) => s.open)
   const closePalette = useCommandPaletteStore((s) => s.closePalette)
   const recentIds = useRecentCountriesStore((s) => s.recentIds)
@@ -256,3 +256,6 @@ export function CommandPalette() {
     document.body,
   )
 }
+
+/** props가 없다 — 레이아웃이 URL 쿼리 변화마다 다시 그려져도 닫힌 팔레트는 따라 그리지 않는다 */
+export const CommandPalette = React.memo(CommandPaletteImpl)

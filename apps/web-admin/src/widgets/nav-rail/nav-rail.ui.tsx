@@ -39,14 +39,23 @@ const detectIsMac = (): boolean => {
   return /Mac/i.test(source)
 }
 
+/**
+ * 레일은 **경로**만 본다. 위치 구독(useLocation)은 쿼리만 바뀌어도 다시 그려지게 하므로 —
+ * 사건 목록에서 행 하나를 누르면 `?event=`가 바뀌어 레일·버튼 20여 개가 매번 다시 그려졌다 —
+ * 바깥에서 경로만 뽑고 본체는 경로가 바뀔 때만 그린다.
+ */
 export function NavRail() {
-  const navigate = useNavigate()
   const { pathname } = useLocation()
+  return <NavRailBody pathname={pathname} />
+}
+
+const NavRailBody = React.memo(function NavRailBody({ pathname }: { pathname: string }) {
+  const navigate = useNavigate()
   const { mode, toggleTheme } = useThemeStore()
   const openCommandPalette = useCommandPaletteStore((state) => state.openPalette)
   const playClickSound = useClickSound()
   const isMac = useMemo(detectIsMac, [])
-  const items = useNavItems()
+  const items = useNavItems(pathname)
 
   const [isBellOpen, setIsBellOpen] = useState(false)
 
@@ -147,7 +156,7 @@ export function NavRail() {
     </Rail>
     </>
   )
-}
+})
 
 const Rail = styled.nav`
   position: fixed;

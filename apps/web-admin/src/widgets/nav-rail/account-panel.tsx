@@ -19,7 +19,7 @@ import { DropdownPanel, IconButton } from '@/widgets/header/header-shared.ui'
 import { SoundSettings } from '@/widgets/header/sound-settings.ui'
 import { UserMenu } from '@/widgets/header/user-menu.ui'
 
-export function AccountPanel() {
+function AccountPanelImpl() {
   const playClickSound = useClickSound()
   const [isUserOpen, setIsUserOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -47,6 +47,12 @@ export function AccountPanel() {
     </Panel>
   )
 }
+
+/**
+ * props가 없다 — 레이아웃이 URL 쿼리 변화(`?event=`)마다 다시 그려져도 이 패널(사용자 메뉴·
+ * 소리 설정)은 따라 그릴 까닭이 없다.
+ */
+export const AccountPanel = React.memo(AccountPanelImpl)
 
 const Panel = styled.div`
   position: fixed;
