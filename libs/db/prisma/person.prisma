@@ -290,6 +290,8 @@ model Person {
   foundedCompanies   Company[]             @relation("FounderToCompany")
   /// 시조로 등록된 가문들 (보통 0~1)
   foundedDynasties   Dynasty[]             @relation("DynastyFounder")
+  /// 건국·멸망 주체로 지목된 역사 국가 (건국자·멸망시킨 인물)
+  statehoodAgentOf   HistoricalCountryStatehoodAgent[] @relation("StatehoodAgentPerson")
 
   // 배우자 관계 (혼인 시작/종료일 등)
   spouseRelationsAsPerson PersonSpouse[]   @relation("PersonAsPerson")

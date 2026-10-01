@@ -5,10 +5,13 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
   NotFoundException,
+  BadRequestException,
+  ForbiddenException,
   Query,
   UseGuards,
   Request,
@@ -20,7 +23,13 @@ import { HistoricalCountryService } from '../application/historical-country.serv
 import { CreateHistoricalCountryDto } from './dto/create-historical-country.dto'
 import { UpdateHistoricalCountryDto } from './dto/update-historical-country.dto'
 import { HistoricalCountryResponseDto } from './dto/historical-country.response'
-import type { FirstRulerDto, FoundingSummaryDto, LinkedCountryDto } from './dto/founding-summary.response'
+import type {
+  FirstRulerDto,
+  FoundingSummaryDto,
+  LinkedCountryDto,
+  StatehoodAgentDto,
+} from './dto/founding-summary.response'
+import { CreateStatehoodAgentDto, UpdateStatehoodAgentDto } from './dto/statehood-agent.dto'
 import { HistoricalCountry } from '../domain/historical-country.entity'
 import { CreateHistoricalCountryTransitionDto } from './dto/create-transition.dto'
 import { UpdateHistoricalCountryTransitionDto } from './dto/update-transition.dto'
@@ -188,21 +197,33 @@ export class HistoricalCountryController {
     const numberedReign =
       reigns.find((reign) => reign.regnalNumber === 1) ??
       reigns.find((reign) => reign.termNumber === 1)
-    const firstReign =
-      numberedReign ?? [...reigns].sort((left, right) => reignStart(left) - reignStart(right))[0]
+    const reignsByStart = [...reigns]
+      .filter((reign) => Number.isFinite(reignStart(reign)))
+      .sort((left, right) => reignStart(left) - reignStart(right))
+    const firstReign = numberedReign ?? reignsByStart[0] ?? reigns[0]
+    const toReignRuler = (
+      reign: (typeof reigns)[number],
+      basis: FirstRulerDto['basis'],
+    ): FirstRulerDto => ({
+      kind: 'monarch',
+      recordId: reign.id,
+      regnalName: reign.regnalName ?? null,
+      title: reign.positionDefinition?.title ?? null,
+      basis,
+      startEra: (reign.startEra as 'BC' | 'AD' | null) ?? (reign.startDate ? 'AD' : null),
+      startYear: reign.startYear ?? reign.startDate?.getUTCFullYear() ?? null,
+      endEra: (reign.endEra as 'BC' | 'AD' | null) ?? (reign.endDate ? 'AD' : null),
+      endYear: reign.endYear ?? reign.endDate?.getUTCFullYear() ?? null,
+      person: reign.person,
+    })
     if (firstReign) {
-      firstRulers.push({
-        kind: 'monarch',
-        recordId: firstReign.id,
-        regnalName: firstReign.regnalName ?? null,
-        title: firstReign.positionDefinition?.title ?? null,
-        basis: numberedReign ? 'numbered' : 'earliest',
-        startEra: (firstReign.startEra as 'BC' | 'AD' | null) ?? (firstReign.startDate ? 'AD' : null),
-        startYear: firstReign.startYear ?? firstReign.startDate?.getUTCFullYear() ?? null,
-        endEra: (firstReign.endEra as 'BC' | 'AD' | null) ?? (firstReign.endDate ? 'AD' : null),
-        endYear: firstReign.endYear ?? firstReign.endDate?.getUTCFullYear() ?? null,
-        person: firstReign.person,
-      })
+      firstRulers.push(toReignRuler(firstReign, numberedReign ? 'numbered' : 'earliest'))
+    }
+    // 마지막 군주 — 가장 늦게 즉위한 기록. 초대와 같은 행이면(재위 기록 1건) 되풀이하지 않는다.
+    const lastRulers: FirstRulerDto[] = []
+    const lastReign = reignsByStart[reignsByStart.length - 1]
+    if (lastReign && lastReign.id !== firstReign?.id) {
+      lastRulers.push(toReignRuler(lastReign, 'latest'))
     }
 
     const tenures = await this.prisma.governmentPositionTenure.findMany({
@@ -232,18 +253,25 @@ export class HistoricalCountryController {
       const numbered = ofType.find((tenure) => tenure.termNumber === 1)
       const first = numbered ?? ofType[0]
       if (!first) continue
-      firstRulers.push({
+      const toTenureRuler = (
+        tenure: (typeof ofType)[number],
+        basis: FirstRulerDto['basis'],
+      ): FirstRulerDto => ({
         kind,
-        recordId: first.id,
+        recordId: tenure.id,
         regnalName: null,
-        title: first.positionDefinition?.title?.trim() || first.title?.trim() || null,
-        basis: numbered ? 'numbered' : 'earliest',
+        title: tenure.positionDefinition?.title?.trim() || tenure.title?.trim() || null,
+        basis,
         startEra: 'AD',
-        startYear: first.startDate.getUTCFullYear(),
-        endEra: first.endDate ? 'AD' : null,
-        endYear: first.endDate ? first.endDate.getUTCFullYear() : null,
-        person: first.person,
+        startYear: tenure.startDate.getUTCFullYear(),
+        endEra: tenure.endDate ? 'AD' : null,
+        endYear: tenure.endDate ? tenure.endDate.getUTCFullYear() : null,
+        person: tenure.person,
       })
+      firstRulers.push(toTenureRuler(first, numbered ? 'numbered' : 'earliest'))
+      // startDate 오름차순이라 끝 행이 마지막 재임
+      const last = ofType[ofType.length - 1]
+      if (last && last.id !== first.id) lastRulers.push(toTenureRuler(last, 'latest'))
     }
 
     const countrySelect = {
@@ -278,10 +306,15 @@ export class HistoricalCountryController {
     const byStart = (left: LinkedCountryDto, right: LinkedCountryDto) =>
       signed(left.startEra, left.startYear) - signed(right.startEra, right.startYear)
 
+    const agents = await this.findStatehoodAgents(id)
+
     return {
       foundingNote: country.foundingNote ?? null,
       dissolutionNote: country.dissolutionNote ?? null,
+      founders: agents.filter((agent) => agent.side === 'FOUNDING'),
+      dissolvers: agents.filter((agent) => agent.side === 'DISSOLUTION'),
       firstRulers,
+      lastRulers,
       predecessors: transitions
         .filter((transition) => transition.predecessorId !== id)
         .map((transition) => toLinked(transition.predecessor, transition.eventType))
@@ -291,6 +324,183 @@ export class HistoricalCountryController {
         .map((transition) => toLinked(transition.successor, transition.eventType))
         .sort(byStart),
     }
+  }
+
+  /** 건국·멸망 주체 목록 — founding-summary와 같은 모양 */
+  private async findStatehoodAgents(historicalCountryId: string): Promise<StatehoodAgentDto[]> {
+    const rows = await this.prisma.historicalCountryStatehoodAgent.findMany({
+      where: { historicalCountryId },
+      orderBy: [{ side: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            middleName: true,
+            nameDisplayOrder: true,
+            regnalName: true,
+            profileImageUrl: true,
+          },
+        },
+        agentHistoricalCountry: {
+          select: { id: true, name: true, startEra: true, startYear: true, endEra: true, endYear: true },
+        },
+        agentCountry: { select: { id: true, name: true } },
+      },
+    })
+    return rows.map((row) => {
+      const hc = row.agentHistoricalCountry
+      const base = {
+        id: row.id,
+        side: row.side,
+        person: null,
+        startEra: null,
+        startYear: null,
+        endEra: null,
+        endYear: null,
+        note: row.note ?? null,
+        sortOrder: row.sortOrder,
+      } as const
+      if (row.person) {
+        return { ...base, kind: 'person', refId: row.person.id, name: row.person.name, person: row.person }
+      }
+      if (hc) {
+        return {
+          ...base,
+          kind: 'historicalCountry',
+          refId: hc.id,
+          name: hc.name,
+          startEra: (hc.startEra as 'BC' | 'AD' | null) ?? null,
+          startYear: hc.startYear ?? null,
+          endEra: (hc.endEra as 'BC' | 'AD' | null) ?? null,
+          endYear: hc.endYear ?? null,
+        }
+      }
+      if (row.agentCountry) {
+        return { ...base, kind: 'country', refId: row.agentCountry.id, name: row.agentCountry.name }
+      }
+      return { ...base, kind: 'name', refId: null, name: row.name ?? '' }
+    })
+  }
+
+  /**
+   * 건국·멸망 주체 추가 — 이 나라를 누가 세웠나 / 누구에게 멸망했나.
+   * 주체는 인물·역사 국가·현대 국가·이름 중 정확히 하나. 대상 국가의 소유자만.
+   * @tag historical-countries
+   */
+  @Post(':id/statehood-agents')
+  async createStatehoodAgent(
+    @Param('id') id: string,
+    @Body() dto: CreateStatehoodAgentDto,
+    @Request() req: any,
+  ): Promise<StatehoodAgentDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.historicalCountryService.getHistoricalCountryById(id, accountId)
+
+    const name = dto.name?.trim() || undefined
+    const provided = [dto.personId, dto.agentHistoricalCountryId, dto.agentCountryId, name].filter(
+      (value) => value != null,
+    )
+    if (provided.length !== 1) {
+      throw new BadRequestException('주체는 인물·역사 국가·현대 국가·이름 중 하나만 지정해야 합니다.')
+    }
+    if (dto.agentHistoricalCountryId === id) {
+      throw new BadRequestException('자기 자신을 건국·멸망 주체로 지정할 수 없습니다.')
+    }
+
+    // 참조 대상은 존재해야 하고, 다른 계정 소유면 막는다(공유 정본 accountId=null은 허용)
+    const referenced = dto.personId
+      ? await this.prisma.person.findUnique({ where: { id: dto.personId }, select: { accountId: true } })
+      : dto.agentHistoricalCountryId
+        ? await this.prisma.historicalCountry.findUnique({
+            where: { id: dto.agentHistoricalCountryId },
+            select: { accountId: true },
+          })
+        : dto.agentCountryId
+          ? await this.prisma.country.findUnique({
+              where: { id: dto.agentCountryId },
+              select: { accountId: true },
+            })
+          : { accountId: null }
+    if (!referenced) throw new NotFoundException('지정한 주체를 찾을 수 없습니다.')
+    if (referenced.accountId != null && accountId != null && referenced.accountId !== accountId) {
+      throw new ForbiddenException('다른 계정 소유 항목은 주체로 지정할 수 없습니다.')
+    }
+
+    const duplicate = await this.prisma.historicalCountryStatehoodAgent.findFirst({
+      where: {
+        historicalCountryId: id,
+        side: dto.side,
+        personId: dto.personId ?? null,
+        agentHistoricalCountryId: dto.agentHistoricalCountryId ?? null,
+        agentCountryId: dto.agentCountryId ?? null,
+        name: name ?? null,
+      },
+      select: { id: true },
+    })
+    if (duplicate) throw new BadRequestException('이미 지정된 주체입니다.')
+
+    const last = await this.prisma.historicalCountryStatehoodAgent.findFirst({
+      where: { historicalCountryId: id, side: dto.side },
+      orderBy: { sortOrder: 'desc' },
+      select: { sortOrder: true },
+    })
+    const created = await this.prisma.historicalCountryStatehoodAgent.create({
+      data: {
+        historicalCountryId: id,
+        side: dto.side,
+        personId: dto.personId ?? null,
+        agentHistoricalCountryId: dto.agentHistoricalCountryId ?? null,
+        agentCountryId: dto.agentCountryId ?? null,
+        name: name ?? null,
+        note: dto.note?.trim() || null,
+        sortOrder: (last?.sortOrder ?? -1) + 1,
+      },
+      select: { id: true },
+    })
+    const agents = await this.findStatehoodAgents(id)
+    return agents.find((agent) => agent.id === created.id)!
+  }
+
+  /** 건국·멸망 주체의 역할 메모·순서 수정 — 대상 국가의 소유자만 */
+  @Patch('statehood-agents/:agentId')
+  async updateStatehoodAgent(
+    @Param('agentId') agentId: string,
+    @Body() dto: UpdateStatehoodAgentDto,
+    @Request() req: any,
+  ): Promise<StatehoodAgentDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const row = await this.findOwnedStatehoodAgent(agentId, accountId)
+    await this.prisma.historicalCountryStatehoodAgent.update({
+      where: { id: agentId },
+      data: {
+        ...(dto.note !== undefined ? { note: dto.note?.trim() || null } : {}),
+        ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
+      },
+    })
+    const agents = await this.findStatehoodAgents(row.historicalCountryId)
+    return agents.find((agent) => agent.id === agentId)!
+  }
+
+  /** 건국·멸망 주체 삭제 — 대상 국가의 소유자만 */
+  @Delete('statehood-agents/:agentId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteStatehoodAgent(@Param('agentId') agentId: string, @Request() req: any): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.findOwnedStatehoodAgent(agentId, accountId)
+    await this.prisma.historicalCountryStatehoodAgent.delete({ where: { id: agentId } })
+  }
+
+  private async findOwnedStatehoodAgent(agentId: string, accountId: string | undefined) {
+    const row = await this.prisma.historicalCountryStatehoodAgent.findUnique({
+      where: { id: agentId },
+      select: { id: true, historicalCountryId: true },
+    })
+    if (!row) throw new NotFoundException('건국·멸망 주체를 찾을 수 없습니다.')
+    // 대상 국가 소유 검사 — 남의 나라면 403/404를 서비스가 던진다
+    await this.historicalCountryService.getHistoricalCountryById(row.historicalCountryId, accountId)
+    return row
   }
 
   @Get(':id/transitions')

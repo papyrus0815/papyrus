@@ -98,6 +98,8 @@ model Country {
   historicalConnections     HistoricalCountryModernCountry[]
   /// 이 나라 자격으로 사건에 참여한 인물(PersonEvent.countryId)
   personEventParticipations PersonEvent[] @relation("PersonEventCountry")
+  /// 건국·멸망 주체로 지목된 역사 국가 (예: 대한민국이 세운 임시정부 등)
+  statehoodAgentOf          HistoricalCountryStatehoodAgent[] @relation("StatehoodAgentCountry")
   Law                       Law[]
   groundVehicles            GroundVehicle[]
   aircraft                  Aircraft[]

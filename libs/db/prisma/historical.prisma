@@ -287,6 +287,11 @@ model HistoricalCountry {
   /// 구성 민족 (예: 슬라브족, 게르만족) — Ethnicity와 다대다
   ethnicities Ethnicity[] @relation("HistoricalCountryEthnicities")
 
+  /// 건국·멸망 주체 — 누가 세웠고 누구에게 멸망했나 (이 나라가 대상)
+  statehoodAgents   HistoricalCountryStatehoodAgent[] @relation("StatehoodAgentTarget")
+  /// 다른 나라의 건국·멸망 주체로 지목된 행 (이 나라가 세우거나 멸망시킨 나라)
+  statehoodAgentOf  HistoricalCountryStatehoodAgent[] @relation("StatehoodAgentHistoricalCountry")
+
   /// 용어 사전 (본문 문구·관직 설명)
   glossaryTerms GlossaryTerm[] @relation("GlossaryTermHistoricalCountry")
 
@@ -310,6 +315,60 @@ model HistoricalCountry {
 
   @@index([accountId], name: "idx_historical_country_accountId")
   @@map("historical_country")
+}
+
+/// 건국·멸망 쪽
+enum StatehoodAgentSide {
+  /// 건국(성립) — 이 나라를 세운 주체
+  FOUNDING
+  /// 멸망(종료) — 이 나라를 무너뜨린 주체
+  DISSOLUTION
+}
+
+// ========================
+// HistoricalCountryStatehoodAgent
+// ========================
+/// 역사 국가의 건국·멸망 주체 — "누가 세웠나 / 누구에게 멸망했나".
+///
+/// 주체는 인물·역사 국가·현대 국가·자유 입력(name) 중 **정확히 하나**다(서비스가 강제).
+/// 예: 조선 FOUNDING=이성계(인물) / 백제 DISSOLUTION=신라·당(역사 국가) /
+///     동로마 DISSOLUTION=오스만 제국(역사 국가)+메흐메트 2세(인물).
+///
+/// 계승 관계(HistoricalCountryTransition)와 다르다 — 그쪽은 '뒤를 이은 나라'(후신),
+/// 이쪽은 '무너뜨린 쪽'이다. 백제의 후신은 없어도 멸망시킨 나라는 신라·당이다.
+model HistoricalCountryStatehoodAgent {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 대상 역사 국가 (세워지거나 멸망한 나라)
+  historicalCountryId String @map("historical_country_id") @db.Char(36)
+  side                StatehoodAgentSide
+
+  /// 주체 — 인물
+  personId                 String? @map("person_id") @db.Char(36)
+  /// 주체 — 역사 국가
+  agentHistoricalCountryId String? @map("agent_historical_country_id") @db.Char(36)
+  /// 주체 — 현대 국가
+  agentCountryId           String? @map("agent_country_id") @db.Char(36)
+  /// 주체 — 등록되지 않은 이름(예: '훈족 연합', '반란군')
+  name                     String? @db.VarChar(100)
+
+  /// 역할 한 줄 (예: '위화도 회군 후 즉위', '사비성 함락')
+  note      String? @db.VarChar(255)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  historicalCountry      HistoricalCountry  @relation("StatehoodAgentTarget", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+  person                 Person?            @relation("StatehoodAgentPerson", fields: [personId], references: [id], onDelete: Cascade)
+  agentHistoricalCountry HistoricalCountry? @relation("StatehoodAgentHistoricalCountry", fields: [agentHistoricalCountryId], references: [id], onDelete: Cascade)
+  agentCountry           Country?           @relation("StatehoodAgentCountry", fields: [agentCountryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([historicalCountryId, side], name: "idx_statehood_agent_target_side")
+  @@index([personId], name: "idx_statehood_agent_person")
+  @@index([agentHistoricalCountryId], name: "idx_statehood_agent_hc")
+  @@index([agentCountryId], name: "idx_statehood_agent_country")
+  @@map("historical_country_statehood_agent")
 }
 
 /// 국가 계승/변천 관계 모델 (예: 신라 -> 고려)

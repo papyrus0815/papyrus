@@ -939,6 +939,9 @@ export class EventController {
    * ⚠️ 라우트는 반드시 @Get(':id')보다 먼저 선언 — 아니면 'link-candidates'가 :id로 매칭된다.
    * @param q 사건명 부분일치 검색어 (비면 최근 수정순)
    * @param limit 가져올 개수 (기본 30, 최대 100)
+   * @param near 이 부호 연도(BC 음수) 근처 사건만 — 가까운 순. 건국·멸망 사건 연결처럼
+   *   시점이 정해진 연결에서 '최근 수정순'은 엉뚱한 세기를 보여 줘서 둔다.
+   * @param window near 앞뒤 몇 년까지 (기본 30, 최대 500)
    * @returns 경량 후보 목록 (id·제목·날짜·현재 상위 사건)
    * @tag events
    */
@@ -947,6 +950,8 @@ export class EventController {
     @Query('q') q?: string,
     @Query('limit') limit?: string,
     @Request() req?: any,
+    @Query('near') near?: string,
+    @Query('window') windowParam?: string,
   ): Promise<EventLinkCandidateDto[]> {
     const userId = req.user?.id || req.user?.sub
     const term = (q ?? '').trim()
@@ -955,13 +960,55 @@ export class EventController {
       ? 30
       : Math.min(Math.max(parsedLimit, 1), 100)
 
+    /*
+     * near — 부호 연도 창. 사건 날짜는 두 갈래로 저장된다: 구조화(startEra+startYear, BC·고대)와
+     * DATETIME(startDate, AD 1000년 이후만 믿을 수 있음). 둘 다 창으로 거르고, 거리순 정렬은
+     * DB가 못 하니(절댓값 정렬) 창 안을 넉넉히 받아 여기서 세운다.
+     */
+    const parsedNear = near != null && near !== '' ? parseInt(near, 10) : NaN
+    const nearYear = Number.isNaN(parsedNear) ? null : parsedNear
+    const parsedWindow = windowParam ? parseInt(windowParam, 10) : NaN
+    const yearWindow = Number.isNaN(parsedWindow) ? 30 : Math.min(Math.max(parsedWindow, 1), 500)
+    const nearWhere =
+      nearYear == null
+        ? {}
+        : (() => {
+            const low = nearYear - yearWindow
+            const high = nearYear + yearWindow
+            const branches: object[] = []
+            if (high >= 1) {
+              branches.push({
+                OR: [{ startEra: 'AD' as const }, { startEra: null }],
+                startYear: { gte: Math.max(low, 1), lte: high },
+              })
+            }
+            if (low <= -1) {
+              branches.push({
+                startEra: 'BC' as const,
+                startYear: { gte: Math.max(-high, 1), lte: -low },
+              })
+            }
+            if (high >= 1000) {
+              branches.push({
+                startYear: null,
+                startDate: {
+                  gte: new Date(Date.UTC(Math.max(low, 1000), 0, 1)),
+                  lt: new Date(Date.UTC(high + 1, 0, 1)),
+                },
+              })
+            }
+            return { OR: branches.length > 0 ? branches : [{ id: '__none__' }] }
+          })()
+
     const events = await this.prisma.event.findMany({
       where: {
         createdById: userId,
         deletedAt: null,
         ...(term && { title: { contains: term } }),
+        ...nearWhere,
       },
-      take,
+      // 거리순은 받은 뒤 세우므로 창 안은 넉넉히(캡 300) 받는다
+      take: nearYear != null ? 300 : take,
       // 검색 시엔 시대순(내림), 기본 목록은 최근 손댄 순 — 방금 만든 사건을 바로 연결하는 흐름.
       // id 2차 정렬로 결정성 확보 — startDate/updatedAt 동률(특히 BC·미상 startDate=NULL이
       // 다수 동률)일 때 순서가 요청마다 뒤바뀌어 take 캡 경계에서 목록이 흔들리던 것 방지.
@@ -991,7 +1038,26 @@ export class EventController {
       },
     })
 
-    return events.map((event) => {
+    const signedStartYear = (event: (typeof events)[number]): number | null =>
+      event.startYear != null
+        ? event.startEra === 'BC'
+          ? -event.startYear
+          : event.startYear
+        : event.startDate
+          ? event.startDate.getUTCFullYear()
+          : null
+    const ordered =
+      nearYear == null
+        ? events
+        : [...events]
+            .sort((left, right) => {
+              const leftDistance = Math.abs((signedStartYear(left) ?? Infinity) - nearYear)
+              const rightDistance = Math.abs((signedStartYear(right) ?? Infinity) - nearYear)
+              return leftDistance - rightDistance || left.id.localeCompare(right.id)
+            })
+            .slice(0, take)
+
+    return ordered.map((event) => {
       // 부모가 소프트 삭제됐으면 연결 UX상 무부모로 취급 — 삭제된 사건명을
       // "현재 X의 하위" 안내·이동 confirm에 생존 사건처럼 노출하지 않는다.
       const liveParent =
@@ -1502,7 +1568,10 @@ export class EventController {
         // 참여 인물(PersonEvent) — 인물 시점의 role/note(장문) 포함.
         // sortOrder가 표시 순서('위로·아래로'), 참여 자격 국가 이름도 함께.
         persons: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
           include: {
+            country: { select: { id: true, name: true, flagEmoji: true } },
+            historicalCountry: { select: { id: true, name: true } },
             person: {
               select: {
                 id: true,
@@ -1546,72 +1615,6 @@ export class EventController {
       response.militaryEvent = militaryEvent
     }
 
-    return { event, response }
-  }
-
-  /**
-   * 사건 상세 조회
-   *
-   * @param id 사건 ID
-   * @returns 사건 정보
-   * @tag events
-   */
-  /**
-   * 방문(놀러가기): 타 계정이 등록한 사건 목록(카드, 읽기전용).
-   * 보수 노출 — 카드 레벨만(제목·날짜·카테고리). 본문·하위사건·이미지·행위자 미개방.
-   * 최상위(parentEventId=null)·미삭제만. 편집/삭제 액션은 프론트 viewerIsOwner로 숨김.
-   * 주의: `:id` 라우트보다 위에 위치해야 함 (NestJS 라우트 매칭 순서).
-   */
-  @Get('by-account/:accountId')
-  async getEventsByAccount(
-    @Param('accountId') accountId: string,
-    @Query('limit') limit?: string,
-  ): Promise<VisitedEventCardDto[]> {
-    const parsedLimit = parseInt(limit ?? '', 10)
-          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-            country: { select: { id: true, name: true, flagEmoji: true } },
-            historicalCountry: { select: { id: true, name: true } },
-    const take = Number.isNaN(parsedLimit) ? 60 : Math.min(Math.max(parsedLimit, 1), 100)
-    const rows = await this.prisma.event.findMany({
-      // 루트 판정 — domain/event-hierarchy.ts 단일출처(INV-2 의존, 다중 상위 무영향)
-      where: { createdById: accountId, ...ROOT_EVENT_WHERE, deletedAt: null },
-      take,
-      orderBy: { startDate: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        startDate: true,
-        startEra: true,
-        startYear: true,
-        category: { select: { name: true } },
-      },
-    })
-    return rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      startEra: row.startEra ?? null,
-      startYear: row.startYear ?? null,
-      startDate: row.startDate ? row.startDate.toISOString() : null,
-      categoryName: row.category?.name ?? null,
-    }))
-  }
-
-  @Get(':id')
-  async getEventById(
-    @Param('id') id: string,
-    @Request() req?: any,
-  ): Promise<EventResponseDto> {
-    const userId = req.user?.id // AuthGuard가 이미 인증 체크함
-
-    const loaded = await this.loadEventDetail(id)
-    if (!loaded) {
-      throw new NotFoundException('사건을 찾을 수 없습니다.')
-    }
-
-    // 권한 체크: 본인 사건만 조회 가능
-    if (loaded.event.createdById !== userId) {
-      throw new ForbiddenException('본인이 등록한 사건만 조회할 수 있습니다.')
-    }
     // 참여 인물별 '사건 당시 직위' — 재임·재위 기록에서 파생(저장하지 않는다)
     if (response.relatedPersons && response.relatedPersons.length > 0) {
       const offices = await resolveOfficesAtEvent(
@@ -1672,6 +1675,69 @@ export class EventController {
       }
     }
 
+    return { event, response }
+  }
+
+  /**
+   * 사건 상세 조회
+   *
+   * @param id 사건 ID
+   * @returns 사건 정보
+   * @tag events
+   */
+  /**
+   * 방문(놀러가기): 타 계정이 등록한 사건 목록(카드, 읽기전용).
+   * 보수 노출 — 카드 레벨만(제목·날짜·카테고리). 본문·하위사건·이미지·행위자 미개방.
+   * 최상위(parentEventId=null)·미삭제만. 편집/삭제 액션은 프론트 viewerIsOwner로 숨김.
+   * 주의: `:id` 라우트보다 위에 위치해야 함 (NestJS 라우트 매칭 순서).
+   */
+  @Get('by-account/:accountId')
+  async getEventsByAccount(
+    @Param('accountId') accountId: string,
+    @Query('limit') limit?: string,
+  ): Promise<VisitedEventCardDto[]> {
+    const parsedLimit = parseInt(limit ?? '', 10)
+    const take = Number.isNaN(parsedLimit) ? 60 : Math.min(Math.max(parsedLimit, 1), 100)
+    const rows = await this.prisma.event.findMany({
+      // 루트 판정 — domain/event-hierarchy.ts 단일출처(INV-2 의존, 다중 상위 무영향)
+      where: { createdById: accountId, ...ROOT_EVENT_WHERE, deletedAt: null },
+      take,
+      orderBy: { startDate: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        startEra: true,
+        startYear: true,
+        category: { select: { name: true } },
+      },
+    })
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      startEra: row.startEra ?? null,
+      startYear: row.startYear ?? null,
+      startDate: row.startDate ? row.startDate.toISOString() : null,
+      categoryName: row.category?.name ?? null,
+    }))
+  }
+
+  @Get(':id')
+  async getEventById(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<EventResponseDto> {
+    const userId = req.user?.id // AuthGuard가 이미 인증 체크함
+
+    const loaded = await this.loadEventDetail(id)
+    if (!loaded) {
+      throw new NotFoundException('사건을 찾을 수 없습니다.')
+    }
+
+    // 권한 체크: 본인 사건만 조회 가능
+    if (loaded.event.createdById !== userId) {
+      throw new ForbiddenException('본인이 등록한 사건만 조회할 수 있습니다.')
+    }
 
     return loaded.response
   }
