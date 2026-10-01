@@ -180,6 +180,45 @@ const lowerKey = (parts: DateParts) =>
   parts.year * 10000 + (parts.month ?? 1) * 100 + (parts.day ?? 1)
 
 /** 재임 `notes`에 저장된 레거시 `왕명: …` 인코딩 */
+const ROMAN_VALUES = new Map([
+  ['I', 1],
+  ['V', 5],
+  ['X', 10],
+  ['L', 50],
+  ['C', 100],
+  ['D', 500],
+  ['M', 1000],
+])
+
+function romanToInt(roman: string): number {
+  let total = 0
+  for (let index = 0; index < roman.length; index += 1) {
+    const current = ROMAN_VALUES.get(roman[index]) ?? 0
+    const next = ROMAN_VALUES.get(roman[index + 1] ?? '') ?? 0
+    total += current < next ? -current : current
+  }
+  return total
+}
+
+/**
+ * 인물의 `regnalName`으로 표지 이름을 만든다 — **원어 표기면 한국어로 되돌린다**.
+ *
+ * `Person.regnalName`은 오염 필드다. 시드 다수가 원어 군주명('Umberto I', 'Victoria',
+ * 'Carlo Alberto')을 넣어, 표지가 한글 이름들 사이에 원어로 섞여 나왔다. 원어면 한국어
+ * 이름(person.name)에 로마 숫자 서수만 '1세'로 옮겨 붙인다. 한글이 들어 있으면 그대로 쓴다.
+ */
+export function koreanRegnalFromPerson(
+  person: { name?: string | null; regnalName?: string | null } | null | undefined,
+): string | null {
+  const regnal = person?.regnalName?.trim()
+  if (!regnal) return null
+  if (/[가-힣]/.test(regnal)) return regnal
+  const given = person?.name?.trim()
+  if (!given) return regnal
+  const ordinal = regnal.match(/\s([IVXLCDM]+)$/)
+  return ordinal ? `${given} ${romanToInt(ordinal[1])}세` : given
+}
+
 function regnalNameFromNotes(notes: string | null | undefined): string | null {
   const match = notes?.match(/왕명\s*:\s*(.+?)(?:\n|$)/)
   return match ? match[1].trim() || null : null
@@ -243,7 +282,7 @@ export function toReignMarkers(
     const name =
       reign.regnalName?.trim() ||
       regnalNameFromNotes(reign.notes) ||
-      person?.regnalName?.trim() ||
+      koreanRegnalFromPerson(person) ||
       person?.templeName?.trim() ||
       (person ? personName(person) : '') ||
       '군주'
@@ -591,6 +630,62 @@ export function reignAccessionYears(
   return markers
     .filter((marker) => isReignInRange(marker, range))
     .map((marker) => marker.startYear)
+}
+
+/**
+ * 세기 안의 연도 줄을 **표지만 있는 해의 연속 구간**으로 묶는다.
+ *
+ * 즉위·건국·멸망은 사건이 없어도 연 그룹을 세우므로, 사건이 드문 세기에서는 화면이
+ * 표지로 덮였다(실측: 16세기·11세기 한 화면에 사건 1~2행, 표지 15행 · 연 머리글 517개 중
+ * 다수가 표지만 있는 해). 사건 사이에 표지만 있는 해가 **둘 이상 이어지면** 한 줄 요약으로
+ * 접는다. 하나뿐이면 요약이 원래 줄보다 길어지므로 그대로 둔다.
+ */
+export type MarkerYearSegment =
+  | { kind: 'year'; year: number }
+  | { kind: 'markerRun'; years: number[] }
+
+export const MARKER_RUN_MIN = 2
+
+export function segmentMarkerOnlyYears(
+  years: number[],
+  isMarkerOnly: (year: number) => boolean,
+): MarkerYearSegment[] {
+  const segments: MarkerYearSegment[] = []
+  let run: number[] = []
+  const flush = () => {
+    if (run.length >= MARKER_RUN_MIN) segments.push({ kind: 'markerRun', years: run })
+    else run.forEach((year) => segments.push({ kind: 'year', year }))
+    run = []
+  }
+  for (const year of years) {
+    if (isMarkerOnly(year)) {
+      run.push(year)
+      continue
+    }
+    flush()
+    segments.push({ kind: 'year', year })
+  }
+  flush()
+  return segments
+}
+
+/** 접힌 표지 구간의 종류별 개수 — 요약 줄이 '무엇이' 접혔는지 말한다 */
+export function countMarkerKinds(
+  markers: ReignMarker[],
+): Array<{ kind: 'accession' | 'founding' | 'dissolution'; label: string; count: number }> {
+  let accession = 0
+  let founding = 0
+  let dissolution = 0
+  for (const marker of markers) {
+    if (marker.kind === 'founding') founding += 1
+    else if (marker.kind === 'dissolution') dissolution += 1
+    else accession += 1
+  }
+  return [
+    { kind: 'accession' as const, label: '즉위·취임', count: accession },
+    { kind: 'founding' as const, label: '건국', count: founding },
+    { kind: 'dissolution' as const, label: '멸망', count: dissolution },
+  ].filter((entry) => entry.count > 0)
 }
 
 export interface ReignMarkerPlan {

@@ -667,6 +667,31 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   }, [menuOpen])
 
   return (
+    <>
+    {/*
+     * '세기만 보기'를 메뉴 밖으로 — 목록 전체를 한 화면에 훑는 유일한 개관 수단인데
+     * ⋯ 메뉴 맨 아래에 있어 거의 발견되지 않았다(전체 스크롤 ≈ 화면 72장).
+     * 메뉴 안의 스위치도 그대로 둔다(키보드 경로·설정 모음).
+     */}
+    {onToggleCenturiesOnly && (
+      <ToolbarStyles.ToolbarBtn
+        type="button"
+        $active={centuriesOnly}
+        disabled={!canToggleCenturiesOnly}
+        title={
+          !canToggleCenturiesOnly
+            ? '평면 보기에서는 세기로 묶지 않아 접을 세기가 없습니다'
+            : centuriesOnly
+              ? '세기를 모두 펼친다'
+              : '세기를 모두 접어 세기별 10년 분포만 본다 — 전체 시간 분포 훑기'
+        }
+        aria-pressed={centuriesOnly}
+        onClick={onToggleCenturiesOnly}
+      >
+        <FiBarChart2 size={ICON_SIZE.base} aria-hidden="true" />
+        <span>세기 개관</span>
+      </ToolbarStyles.ToolbarBtn>
+    )}
     <UtilityMenuWrap ref={menuWrapRef}>
       <ToolbarStyles.ToolbarBtn
         ref={menuTriggerRef}
@@ -996,6 +1021,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
           document.body,
         )}
     </UtilityMenuWrap>
+    </>
   )
 }
 

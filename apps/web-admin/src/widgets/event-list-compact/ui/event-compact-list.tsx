@@ -50,6 +50,8 @@ import {
   reignLengthYears,
   interleaveReignMarkers,
   planReignMarkers,
+  segmentMarkerOnlyYears,
+  countMarkerKinds,
 } from '../lib/reign-markers'
 import type {
   FlattenedHierarchyItem,
@@ -458,6 +460,68 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     allYears,
     eventsByYear,
   ])
+
+  /**
+   * 표지만 있는 해의 연속 구간 — **기본 접힘**, 펼친 구간만 기억한다(세션 한정).
+   * 사건이 드문 세기에서 즉위·건국·멸망 말풍선이 화면을 덮어, 목록이 사건 목록이 아니라
+   * 국가 연표가 됐다. 구간을 한 줄로 접고 무엇이 몇 개 접혔는지만 말한다.
+   */
+  const [expandedMarkerRuns, setExpandedMarkerRuns] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const isMarkerOnlyYear = (year: number) =>
+    (eventsByYear.get(year)?.length ?? 0) === 0 &&
+    (reignPlan.inYear.get(year)?.length ?? 0) > 0
+
+  const renderMarkerRun = (
+    runYears: number[],
+    renderYear: (year: number) => React.ReactNode,
+  ) => {
+    const runKey = `${runYears[0]}~${runYears[runYears.length - 1]}`
+    const expanded = expandedMarkerRuns.has(runKey)
+    const markers = runYears.flatMap((year) => [
+      ...(reignPlan.beforeYear.get(year) ?? []),
+      ...(reignPlan.inYear.get(year) ?? []),
+    ])
+    const kindSummary = countMarkerKinds(markers)
+      .map((entry) => `${entry.label} ${entry.count}`)
+      .join(' · ')
+    const earliest = Math.min(...runYears)
+    const latest = Math.max(...runYears)
+    const rangeLabel = `${formatYearLabel(earliest)} ~ ${formatYearLabel(latest)}`
+    const toggle = () =>
+      setExpandedMarkerRuns((previous) => {
+        const next = new Set(previous)
+        if (next.has(runKey)) next.delete(runKey)
+        else next.add(runKey)
+        return next
+      })
+    return (
+      <React.Fragment key={`marker-run-${runKey}`}>
+        <List.YearSection role="group" aria-label={`${rangeLabel} 연표 표지`}>
+          <List.CollapsedPeek
+            type="button"
+            /* 연·세기 머리글과 같은 규약 — 탭 정지점이 아니라 ↑↓ 순회 대상 */
+            tabIndex={-1}
+            data-band-toggle="markers"
+            aria-expanded={expanded}
+            aria-label={`${rangeLabel} — 사건 없이 연표 표지만 있는 ${runYears.length}개 해, ${kindSummary} ${expanded ? '접기' : '펼치기'}`}
+            onClick={toggle}
+          >
+            <List.MarkerRunIcon aria-hidden="true">
+              <FaFlag size={9} />
+            </List.MarkerRunIcon>
+            <List.PeekTitles aria-hidden="true">{rangeLabel}</List.PeekTitles>
+            <List.PeekMore aria-hidden="true">{kindSummary}</List.PeekMore>
+            <List.PeekAction aria-hidden="true">
+              {expanded ? '접기' : '연표 펼치기'}
+            </List.PeekAction>
+          </List.CollapsedPeek>
+        </List.YearSection>
+        {expanded && runYears.map((year) => renderYear(year))}
+      </React.Fragment>
+    )
+  }
 
   /**
    * 이름 앞에 나라를 붙이지 않아도 되는 나라 — 목록 군주 중 **가장 많은 나라**.
@@ -1113,7 +1177,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     )
                   })()
                 ) : (
-                  years.map((currentYear) => {
+                  (() => {
+                    const renderYear = (currentYear: number) => {
                       const yearItems = eventsByYear.get(currentYear) ?? []
                       /**
                        * 연 헤더 카운트 — depth 0이 아니라 **그룹 단위**(부모가 목록에 없는 행)를 센다.
@@ -1333,7 +1398,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           )}
                         />
                       )
-                    })
+                    }
+                    return segmentMarkerOnlyYears(years, isMarkerOnlyYear).map(
+                      (segment) =>
+                        segment.kind === 'year'
+                          ? renderYear(segment.year)
+                          : renderMarkerRun(segment.years, renderYear),
+                    )
+                  })()
                 )}
                 </List.CenturySection>
               )

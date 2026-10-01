@@ -2018,6 +2018,20 @@ export const CollapsedPeek = styled.button`
   }
 `
 
+/** 접힌 표지 구간의 깃발 — 연표 표지 줄과 같은 색 계열, 사건 행보다 한 단 옅게 */
+export const MarkerRunIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
+`
+
 /** 접힌 연의 제목 미리보기 — 한 줄, 넘치면 말줄임. 늘어나지 않아 '외 N건'이 바로 뒤에 붙는다 */
 export const PeekTitles = styled.span`
   flex: 0 1 auto;

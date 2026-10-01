@@ -12,6 +12,9 @@ import {
   formatAccessionDate,
   groupReignEntries,
   toReignMarkers,
+  segmentMarkerOnlyYears,
+  koreanRegnalFromPerson,
+  countMarkerKinds,
 } from './reign-markers'
 
 const JOSEON = 'hc-joseon'
@@ -444,5 +447,69 @@ describe('연임 판정', () => {
       ]),
     )
     expect(verbs).toEqual({ first: '취임', comeback: '취임', renewed: '연임' })
+  })
+})
+
+describe('segmentMarkerOnlyYears', () => {
+  const markerOnly = new Set([1500, 1502, 1503, 1504, 1507])
+  const isMarkerOnly = (year: number) => markerOnly.has(year)
+
+  it('표지만 있는 해가 둘 이상 이어지면 한 구간으로 묶는다', () => {
+    expect(segmentMarkerOnlyYears([1501, 1502, 1503, 1504, 1505], isMarkerOnly)).toEqual([
+      { kind: 'year', year: 1501 },
+      { kind: 'markerRun', years: [1502, 1503, 1504] },
+      { kind: 'year', year: 1505 },
+    ])
+  })
+
+  it('하나뿐인 표지 해는 그대로 둔다(요약이 원래 줄보다 길다)', () => {
+    expect(segmentMarkerOnlyYears([1500, 1501, 1507], isMarkerOnly)).toEqual([
+      { kind: 'year', year: 1500 },
+      { kind: 'year', year: 1501 },
+      { kind: 'year', year: 1507 },
+    ])
+  })
+
+  it('세기 끝에 걸친 구간도 묶는다', () => {
+    expect(segmentMarkerOnlyYears([1505, 1504, 1503], isMarkerOnly)).toEqual([
+      { kind: 'year', year: 1505 },
+      { kind: 'markerRun', years: [1504, 1503] },
+    ])
+  })
+})
+
+describe('countMarkerKinds', () => {
+  it('즉위·취임을 한 묶음으로, 건국·멸망은 따로 센다', () => {
+    const marker = (kind: ReignMarker['kind']) => ({ kind }) as ReignMarker
+    expect(
+      countMarkerKinds([
+        marker('monarch'),
+        marker('headOfGovernment'),
+        marker('founding'),
+        marker('founding'),
+      ]),
+    ).toEqual([
+      { kind: 'accession', label: '즉위·취임', count: 2 },
+      { kind: 'founding', label: '건국', count: 2 },
+    ])
+  })
+})
+
+describe('koreanRegnalFromPerson', () => {
+  it('원어 군주명은 한국어 이름 + 서수로 옮긴다', () => {
+    expect(koreanRegnalFromPerson({ name: '움베르토', regnalName: 'Umberto I' })).toBe('움베르토 1세')
+    expect(koreanRegnalFromPerson({ name: '비토리오 에마누엘레', regnalName: 'Vittorio Emanuele II' })).toBe('비토리오 에마누엘레 2세')
+    expect(koreanRegnalFromPerson({ name: '미하일로', regnalName: 'Mihailo III' })).toBe('미하일로 3세')
+    expect(koreanRegnalFromPerson({ name: '카를', regnalName: 'Karl XIV' })).toBe('카를 14세')
+  })
+
+  it('서수가 없으면 한국어 이름만', () => {
+    expect(koreanRegnalFromPerson({ name: '빅토리아', regnalName: 'Victoria' })).toBe('빅토리아')
+    expect(koreanRegnalFromPerson({ name: '카를로 알베르토', regnalName: 'Carlo Alberto' })).toBe('카를로 알베르토')
+  })
+
+  it('한글 군주명은 그대로, 비어 있으면 null', () => {
+    expect(koreanRegnalFromPerson({ name: '이도', regnalName: '세종' })).toBe('세종')
+    expect(koreanRegnalFromPerson({ name: '이도', regnalName: ' ' })).toBeNull()
   })
 })
