@@ -1273,7 +1273,7 @@ export function PersonDetailPanel({
     firstReign?.positionDefinition?.title || null
 
   // 사망 판정을 몰년뿐 아니라 생존 플래그·사망일 미상 플래그까지 확장(UX1) — 몰년 미상
-  // 고인이 '생존'으로 둔갑하지 않게. 향년은 era 안전 계산(BC·BC→AD 교차, TC1).
+  // 고인이 '생존'으로 둔갑하지 않게. 향년은 era 안전 계산(BC·BC→AD 교차, TC1) + 생일 전 사망 보정.
   const isDeceased =
     p.deathYear != null ||
     p.isAlive === false ||
@@ -1284,6 +1284,12 @@ export function PersonDetailPanel({
     p.birthEra,
     p.deathYear,
     p.deathEra,
+    {
+      birthMonth: p.birthMonth,
+      birthDay: p.birthDay,
+      deathMonth: p.deathMonth,
+      deathDay: p.deathDay,
+    },
   )
   const currentAge =
     !isDeceased && p.birthYear != null && p.birthEra !== 'BC'

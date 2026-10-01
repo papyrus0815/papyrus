@@ -197,7 +197,8 @@ export function astroYearFromEra(
 }
 
 /**
- * 출생~사망 향년(만 나이 근사, era 안전). 연 단위 — 월·일 정밀 보정은 생략.
+ * 출생~사망 향년(만 나이, era 안전). 월·일을 알면 사망일이 그해 생일 전인지 보아 1을 뺀다
+ * (등록 모달의 calcLifespan과 같은 규칙 — 7월생이 3월에 죽으면 한 살 적다).
  * 한쪽이라도 연도 미상이면 null, 음수(데이터 오류)면 null.
  */
 export function ageBetweenYears(
@@ -205,11 +206,24 @@ export function ageBetweenYears(
   birthEra: string | null | undefined,
   deathYear: number | null | undefined,
   deathEra: string | null | undefined,
+  monthDay: {
+    birthMonth?: number | null
+    birthDay?: number | null
+    deathMonth?: number | null
+    deathDay?: number | null
+  } = {},
 ): number | null {
   const birthAstro = astroYearFromEra(birthYear, birthEra)
   const deathAstro = astroYearFromEra(deathYear, deathEra)
   if (birthAstro == null || deathAstro == null) return null
-  const age = deathAstro - birthAstro
+  let age = deathAstro - birthAstro
+  const { birthMonth, birthDay, deathMonth, deathDay } = monthDay
+  if (birthMonth && deathMonth) {
+    const beforeBirthday =
+      deathMonth < birthMonth ||
+      (deathMonth === birthMonth && !!birthDay && !!deathDay && deathDay < birthDay)
+    if (beforeBirthday) age -= 1
+  }
   return age >= 0 ? age : null
 }
 
