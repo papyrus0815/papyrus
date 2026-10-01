@@ -7,10 +7,12 @@
  */
 import React, {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useTransition,
 } from 'react'
 
 import {
@@ -39,6 +41,7 @@ import {
 } from '@/features/event-filters/model/reference-label'
 import {
   buildYearBuckets,
+  groupYearsByCentury,
   isAnchorEvent,
   isTreeRoot,
   orderRowsForRender,
@@ -599,9 +602,19 @@ export const EventsCatalogPage: React.FC = () => {
    * `isSearchPending`은 디바운스 idle 구간을 toolbar의 spinner로 노출 (UX: 적용됐는지 인지) */
   const [keywordInput, setKeywordInput] = useState(initialUrlState.keyword)
   const debouncedKeyword = useDebouncedValue(keywordInput, 250)
-  const isSearchPending = debouncedKeyword !== keywordInput
+  /*
+   * 검색 결과를 그리는 일은 **저우선**으로 — 거르기 자체는 2ms인데 결과 행을 새로 그리는 데
+   * 수백 ms가 들어, 디바운스가 끝난 순간 그 렌더가 이어지는 키 입력을 막았다. transition은
+   * 도중에 입력이 오면 양보하고, 강조(searchQuery)와 거르기가 한 번의 렌더로 합쳐진다.
+   */
+  const [isFilterTransitionPending, startFilterTransition] = useTransition()
+  const deferredSearchQuery = useDeferredValue(debouncedKeyword)
+  const isSearchPending =
+    debouncedKeyword !== keywordInput ||
+    isFilterTransitionPending ||
+    deferredSearchQuery !== debouncedKeyword
   useEffect(() => {
-    setKeyword(debouncedKeyword)
+    startFilterTransition(() => setKeyword(debouncedKeyword))
     // setKeyword는 useEventFilters 내부의 setter — 안정적
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedKeyword])
@@ -1092,6 +1105,28 @@ export const EventsCatalogPage: React.FC = () => {
   )
 
   /**
+   * 세기만 보기 — 지금 목록에 있는 세기(위젯이 세우는 세기 밴드와 **같은 계산**)를 전부 접었나.
+   * 연 그룹 목록(allYears)에는 즉위 표지만 있는 해도 들어 있어 centuryCount보다 이쪽이 정확하다.
+   */
+  const presentCenturies = useMemo(
+    () => groupYearsByCentury(yearBuckets.allYears).map((group) => group.century),
+    [yearBuckets.allYears],
+  )
+  const centuriesOnly =
+    !showFlatView &&
+    presentCenturies.length > 0 &&
+    presentCenturies.every((century) => collapsedCenturies.has(century))
+  const toggleCenturiesOnly = useCallback(() => {
+    setCollapsedCenturies((previous) => {
+      const allCollapsed =
+        presentCenturies.length > 0 &&
+        presentCenturies.every((century) => previous.has(century))
+      if (allCollapsed) return new Set()
+      return new Set([...previous, ...presentCenturies])
+    })
+  }, [presentCenturies])
+
+  /**
    * 화면에 실제로 렌더되는 행 — 계층 접힘 + 세기/연도 밴드 접힘을 모두 반영(단계 ④).
    * ↑↓ 키(DOM 렌더 행 기준)와 드로어 이전/다음, '조건 밖' 배너가 이 하나의 집합을 공유한다.
    */
@@ -1237,6 +1272,12 @@ export const EventsCatalogPage: React.FC = () => {
   // 임계값을 고정 300px → viewport 비율로. 모바일 600px 화면에서 300px 임계는 한 화면의 절반 →
   // 너무 일찍/자주 트리거됨. clientHeight의 40%(또는 최소 200)면 데스크톱·모바일 모두 자연스러움.
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    /*
+     * 더 받을 게 없으면 기하를 읽지 않는다. scrollHeight를 읽으면 그 자리에서 레이아웃이
+     * 강제되는데, 전량을 받은 뒤에도 스크롤 이벤트마다 읽어 스크롤 중 300ms를 먹었다
+     * (화면 밖 연 그룹이 content-visibility로 막 그려지는 순간과 겹치면 더 컸다).
+     */
+    if (!hasMore || isLoading) return
     const target = e.currentTarget
     const scrollBottom =
       target.scrollHeight - target.scrollTop - target.clientHeight
@@ -1744,7 +1785,12 @@ export const EventsCatalogPage: React.FC = () => {
       reignMarkers={reignMarkers}
       onOpenPerson={setModalPersonId}
       onOpenHistoricalCountry={(country) =>
-        setModalCountry({ id: country.id, name: country.name, kind: 'historical' })
+        setModalCountry({
+          id: country.id,
+          name: country.name,
+          kind: 'historical',
+          focus: country.focus,
+        })
       }
       onFilterPeriod={(marker) => {
         // 건국·멸망 표지 — 나라의 존속 기간으로 거른다
@@ -1783,7 +1829,7 @@ export const EventsCatalogPage: React.FC = () => {
       }
       hasMoreData={hasMore}
       bookmarks={bookmarks}
-      searchQuery={debouncedKeyword}
+      searchQuery={deferredSearchQuery}
       recentEventIds={recentEvents}
       // 열 머리글이 '지금 어느 열이 순서를 만드는가'를 표시한다 — 도구줄의
       // 정렬 컨트롤과 표를 잇는 유일한 시각 고리다.
@@ -2029,6 +2075,9 @@ export const EventsCatalogPage: React.FC = () => {
         hasCollapsibleChildren={hasCollapsibleChildren}
         onCollapseAllChildren={collapseAllChildren}
         onExpandAllChildren={expandAllChildren}
+        centuriesOnly={centuriesOnly}
+        canToggleCenturiesOnly={!showFlatView && presentCenturies.length > 0}
+        onToggleCenturiesOnly={toggleCenturiesOnly}
         onExportJson={handleExportJson}
         onOpenShortcutHelp={openShortcutHelp}
         pageSize={pageSize}

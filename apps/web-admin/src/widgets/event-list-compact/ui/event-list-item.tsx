@@ -850,7 +850,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                   onToggleExpansion(node.id)
                 }}
               >
-                하위 {childCount}건 접힘
+                {/* '접힘'은 앞 셰브론(›)이 이미 말한다 — 글자를 줄여 제목 폭을 돌려준다 */}
+                하위 {childCount}건
               </FilteredOutHint>
             )}
             {/* 필터로 잘려나간 자식이 있으면 조용히 사라진 것처럼 보이지 않게 알린다.
@@ -1056,7 +1057,24 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
  * React.memo — 부모(CompactList) 1회 리렌더에 전 행이 재조정되던 비용 차단.
  * props가 모두 원시값/안정 콜백이라 얕은 비교로 충분(콜백은 상위에서 useCallback 안정화).
  */
-export const EventListItem = React.memo(EventListItemImpl)
+/**
+ * `anchorParent`만은 목록이 렌더마다 새 객체로 만든다(부모가 다른 밴드에 있을 때의 앵커 칩).
+ * 얕은 비교면 그런 하위 사건 행은 **매번** 다시 그려진다 — 값으로 비교한다.
+ */
+function sameEventListItemProps(previous: EventListItemProps, next: EventListItemProps) {
+  for (const key of Object.keys(next) as (keyof EventListItemProps)[]) {
+    if (key === 'anchorParent') continue
+    if (!Object.is(previous[key], next[key])) return false
+  }
+  if (Object.keys(previous).length !== Object.keys(next).length) return false
+  const left = previous.anchorParent
+  const right = next.anchorParent
+  if (left === right) return true
+  if (!left || !right) return false
+  return left.id === right.id && left.title === right.title && left.year === right.year
+}
+
+export const EventListItem = React.memo(EventListItemImpl, sameEventListItemProps)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // styled — Timeline stop (2-row)

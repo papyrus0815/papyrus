@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom'
 import styled from 'styled-components'
 
 import {
+  FiBarChart2,
   FiBookmark,
   FiChevronsDown,
   FiChevronsUp,
@@ -445,6 +446,13 @@ interface ViewUtilitiesProps {
   hasCollapsibleChildren: boolean
   onCollapseAllChildren: () => void
   onExpandAllChildren: () => void
+  /**
+   * 세기만 보기 — 목록의 세기를 전부 접어 **세기 머리글 + 10년 분포**만 남긴다.
+   * 사건이 수백 건이면 전체 시간 분포를 한 화면에서 훑는 개요가 된다. 계층 보기에서만 뜻이 있다.
+   */
+  centuriesOnly?: boolean
+  canToggleCenturiesOnly?: boolean
+  onToggleCenturiesOnly?: () => void
   onExportJson: () => void
   onOpenShortcutHelp: () => void
   /**
@@ -557,6 +565,9 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   hasCollapsibleChildren,
   onCollapseAllChildren,
   onExpandAllChildren,
+  centuriesOnly = false,
+  canToggleCenturiesOnly = false,
+  onToggleCenturiesOnly,
   onExportJson,
   onOpenShortcutHelp,
   pageSize,
@@ -903,6 +914,32 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
                 {childrenCollapsed ? '하위 사건 모두 펼치기' : '하위 사건 모두 접기'}
               </span>
             </UtilityMenuItem>
+
+            {onToggleCenturiesOnly && (
+              <UtilityMenuItem
+                type="button"
+                role="switch"
+                aria-checked={centuriesOnly}
+                disabled={!canToggleCenturiesOnly}
+                title={
+                  !canToggleCenturiesOnly
+                    ? '평면 보기에서는 세기로 묶지 않아 접을 세기가 없습니다'
+                    : centuriesOnly
+                      ? '세기를 모두 펼친다'
+                      : '세기를 모두 접어 세기별 10년 분포만 본다 — 전체 시간 분포 훑기'
+                }
+                onClick={() => {
+                  onToggleCenturiesOnly()
+                  setMenuOpen(false)
+                }}
+              >
+                <FiBarChart2 size={13} aria-hidden="true" />
+                <span>세기만 보기</span>
+                <MenuSwitch $active={centuriesOnly} aria-hidden="true">
+                  <MenuSwitchThumb $active={centuriesOnly} />
+                </MenuSwitch>
+              </UtilityMenuItem>
+            )}
 
             <UtilityMenuDivider role="presentation" />
 

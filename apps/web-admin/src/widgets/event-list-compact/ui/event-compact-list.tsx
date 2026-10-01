@@ -84,7 +84,12 @@ interface EventCompactListProps {
   /** 즉위 표지의 군주 이름 클릭 — 페이지가 공용 인물 모달을 띄운다 */
   onOpenPerson?: (personId: string) => void
   /** 건국·멸망 표지의 나라 이름 클릭 — 페이지가 공용 국가 모달을 띄운다 */
-  onOpenHistoricalCountry?: (country: { id: string; name: string }) => void
+  onOpenHistoricalCountry?: (country: {
+    id: string
+    name: string
+    /** 누른 표지가 건국 쪽인지 멸망 쪽인지 — 모달이 그 절을 앞세운다 */
+    focus: 'founding' | 'dissolution'
+  }) => void
   /** 표지의 기간을 누르면 — 목록을 그 재위·재임 기간의 사건으로 좁힌다 */
   onFilterPeriod?: (marker: ReignMarker) => void
   events: HistoricalEvent[]
@@ -477,15 +482,22 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     return home
   }, [reignMarkers])
 
-  /**
-   * 즉위 표지 한 줄 — **축 위의 눈금**이지 행이 아니다.
-   *
-   * 왕관은 레일 축 위에 연·세기 도트처럼 얹히고, 텍스트는 메타 크기·중립색으로 낮춘다.
-   * 끝까지 달리는 rule을 두지 않는다 — 연 머리글·공백 표지·행 괘선이 이미 가로선을
-   * 쓰고 있어, 선을 하나 더 보태면 목록이 줄무늬가 된다. 같은 자리의 즉위는 한 줄에
-   * 이어 쓴다(세조 1455–1468 · 성종 1469–1494). 이름은 인물 상세 링크.
-   * 행 목록 안에 들 때는 listitem이어야 한다.
+  /*
+   * 표지 콜백은 최신값 ref로 고정한다. 페이지는 이 콜백들을 렌더마다 새 화살표 함수로 넘기므로
+   * 그대로 내리면 표지 memo가 매번 깨진다 — 표지 묶음 443개(DOM 7,800개)가 행 하나 클릭,
+   * 검색 한 글자마다 전부 다시 그려져 목록 렌더의 80%를 먹었다(2026-09-30 프로파일).
    */
+  const reignHandlersRef = React.useRef({ onOpenHistoricalCountry, onOpenPerson, onFilterPeriod })
+  reignHandlersRef.current = { onOpenHistoricalCountry, onOpenPerson, onFilterPeriod }
+  const reignHandlers = useMemo<ReignHandlers>(
+    () => ({
+      openCountry: (country) => reignHandlersRef.current.onOpenHistoricalCountry?.(country),
+      openPerson: (personId) => reignHandlersRef.current.onOpenPerson?.(personId),
+      filterPeriod: (marker) => reignHandlersRef.current.onFilterPeriod?.(marker),
+    }),
+    [],
+  )
+
   const renderReignMarkers = (
     markers: ReignMarker[],
     inList: boolean,
@@ -496,124 +508,21 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       /** 표지가 놓인 연 그룹 — 같은 해면 날짜 열에 월·일만 쓴다 */
       contextYear?: number
     } = {},
-  ) => {
-    /* 대통령·총리만 모인 자리 — 축 표지를 왕관 대신 의사당으로, 강조색을 호박 대신 파랑으로.
-       군주가 하나라도 섞이면 왕관(즉위가 그 자리의 주된 사건이다). */
-    const civic = markers.every((marker) => marker.kind !== 'monarch')
-    /* 건국·멸망만 모인 자리 — 축 표지를 깃발로(색은 civic 파랑을 그대로 쓴다) */
-    const statehoodOnly = markers.every(isStatehoodMarker)
-    return (
-    <List.ReignMarker
+  ) => (
+    <ReignMarkerGroup
       key={`reign-${markers[0].id}`}
-      role={inList ? 'listitem' : 'note'}
-      $asYear={!!options.yearLabel}
-      $beforeCentury={options.beforeCentury}
-      data-reign-marker=""
-    >
-      <List.ReignMarkerIcon aria-hidden="true" $civic={civic}>
-        {statehoodOnly ? <FaFlag /> : civic ? <FaLandmark /> : <FaCrown />}
-      </List.ReignMarkerIcon>
-      {options.yearLabel ? (
-        <List.ReignYearLabel aria-hidden="true">
-          {options.yearLabel}
-        </List.ReignYearLabel>
-      ) : (
-        // 같은 자리 즉위들은 한 시점에 모인 것이라 첫 즉위일로 대표한다
-        <List.ReignMarkerDate $civic={civic}>
-          {formatAccessionDate(markers[0], options.contextYear)}
-        </List.ReignMarkerDate>
-      )}
-      <List.ReignMarkerList>
-        {groupReignEntries(markers).map(({ marker, countryNames }) => {
-          const foreign = countryNames.filter(
-            (name) => name !== reignHomeCountry,
-          )
-          const span = formatReignSpan(marker)
-          const verb = accessionVerb(
-            countryNames[0],
-            marker.kind,
-            marker.reappointed,
-            marker.statehood?.entityKind,
-          )
-          const statehood = isStatehoodMarker(marker)
-          const periodNoun = statehood ? '존속' : verb === '즉위' ? '재위' : '재임'
-          const markerCivic = marker.kind !== 'monarch'
-          const length = reignLengthYears(marker)
-          return (
-            <List.ReignMarkerItem key={marker.id}>
-              <ReignPortrait path={marker.imageUrl} />
-              {foreign.length > 0 && (
-                <List.ReignMarkerCountries>
-                  {foreign.map((name) => (
-                    <List.ReignMarkerCountry key={name}>
-                      {name}
-                    </List.ReignMarkerCountry>
-                  ))}
-                </List.ReignMarkerCountries>
-              )}
-              {/* 직함 — '대통령'·'총리'. 군주는 이름이 곧 왕명이라 없다 */}
-              {marker.roleTitle && (
-                <List.ReignMarkerRole>{marker.roleTitle}</List.ReignMarkerRole>
-              )}
-              {/* 나라가 주어인 표지 — 이름을 누르면 인물 모달 대신 국가 모달 */}
-              {statehood && marker.statehood && onOpenHistoricalCountry ? (
-                <List.ReignMarkerName
-                  as="button"
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() =>
-                    onOpenHistoricalCountry({
-                      id: marker.statehood!.historicalCountryId,
-                      name: marker.name,
-                    })
-                  }
-                  aria-label={`${marker.name} 국가 정보 보기 — ${verb}, ${periodNoun} ${span}`}
-                >
-                  {marker.name}
-                </List.ReignMarkerName>
-              ) : onOpenPerson && !statehood ? (
-                <List.ReignMarkerName
-                  as="button"
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => onOpenPerson(marker.personId)}
-                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.roleTitle ? `${marker.roleTitle} ` : ''}${marker.name} 인물 정보 보기 — ${verb}, ${periodNoun} ${span}`}
-                >
-                  {marker.name}
-                </List.ReignMarkerName>
-              ) : (
-                <List.ReignMarkerName>{marker.name}</List.ReignMarkerName>
-              )}
-              {/* '즉위'와 기간은 한 덩어리 — 좁은 폭에서 '즉위'만 줄 끝에 남지 않게 */}
-              <List.ReignMarkerSpan>
-                <List.ReignMarkerLabel aria-hidden="true" $civic={markerCivic}>
-                  {verb}
-                </List.ReignMarkerLabel>
-                {onFilterPeriod ? (
-                  <List.ReignMarkerYears
-                    as="button"
-                    type="button"
-                    tabIndex={-1}
-                    title="이 기간의 사건만 보기"
-                    aria-label={`${marker.name} ${periodNoun} 기간(${span})의 사건만 보기`}
-                    onClick={() => onFilterPeriod(marker)}
-                  >
-                    {span}
-                  </List.ReignMarkerYears>
-                ) : (
-                  <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
-                )}
-                {length != null && (
-                  <List.ReignMarkerLength>{length}년</List.ReignMarkerLength>
-                )}
-              </List.ReignMarkerSpan>
-            </List.ReignMarkerItem>
-          )
-        })}
-      </List.ReignMarkerList>
-    </List.ReignMarker>
-    )
-  }
+      markers={markers}
+      inList={inList}
+      beforeCentury={options.beforeCentury}
+      yearLabel={options.yearLabel}
+      contextYear={options.contextYear}
+      homeCountry={reignHomeCountry}
+      handlers={reignHandlers}
+      canOpenCountry={!!onOpenHistoricalCountry}
+      canOpenPerson={!!onOpenPerson}
+      canFilterPeriod={!!onFilterPeriod}
+    />
+  )
 
   /**
    * 로빙 tabindex의 대상 행 id.
@@ -632,6 +541,48 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 판정해 내려보낸다 — "한 곳에서만 판정" 규약.
    */
   const rovingRowId = rovingTargetId
+
+  /**
+   * 연 그룹 슬롯이 공유하는 입력 — 이 중 하나라도 바뀌면 모든 연 그룹을 다시 그린다.
+   * 연 그룹 렌더(행·표지 포함)가 읽는 컴포넌트 범위 값을 **빠짐없이** 여기 둔다. 빠뜨리면 그 값이
+   * 바뀌어도 화면이 옛 상태로 남는다. 연마다 다른 값(접힘·선택·로빙)은 슬롯 prop으로 따로 준다.
+   * (flagBudget은 렌더마다 새 객체라 필드로 넣는다)
+   */
+  const yearSlotShared = useMemo(
+    () => ({}),
+    // eslint 규칙이 없어 수동 관리 — 렌더 함수가 읽는 값 목록과 같아야 한다
+    [
+      yearBuckets,
+      bookmarks,
+      dbCategories,
+      eventById,
+      events,
+      expandedEventIds,
+      flagBudget.flags,
+      flagBudget.names,
+      flagBudget.withName,
+      grouped,
+      isNarrow,
+      keywordMax,
+      levelPositionById,
+      nodeTitleById,
+      onEnterAnchorScope,
+      onSelectEvent,
+      onShowSummary,
+      onToggleBookmark,
+      onToggleExpansion,
+      onToggleYearCollapse,
+      reignPlan,
+      reignHomeCountry,
+      reignHandlers,
+      !!onOpenHistoricalCountry,
+      !!onOpenPerson,
+      !!onFilterPeriod,
+      searchQuery,
+      sortBy,
+      sortDirection,
+    ],
+  )
 
   /** 행 하나 렌더 — 연도 섹션과 '연도 미상' 섹션이 같은 계약을 공유한다. */
   const renderRow = (
@@ -741,26 +692,75 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             onSortDirectionToggle={onSortDirectionToggle}
             headerStats={headerStats}
           />
-          {[...Array(SKELETON_ROW_COUNT)].map((_, index) => {
-            // 실제 행과 **같은 트랙 선언**으로 렌더 → 로딩→데이터 전환 시 가로·세로 점프 없음.
-            // 동일 폭 반복 회피 — index 기반 폭으로 자연스러운 다양성.
-            // ⚠️ %가 아니라 px 상한이다. 트랙이 3,294px일 때 70%면 2,300px 막대가 된다.
-            const titleWidth = 220 + ((index * 37) % 180) // 220~400px
-            const snippetWidth = 55 + ((index * 11) % 35) // 55~90%
-            return (
-              /* $depth 0 고정 — 예전엔 index % 3으로 인위적 계단 들여쓰기를 그려,
-                 데이터가 도착하면 그 계단이 평평해지며 레이아웃이 한 번 무너졌다 잡혔다. */
-              <SkeletonStop key={index} $depth={0}>
-                <SkeletonRail aria-hidden="true" />
-                <SkeletonBody>
-                  <SkeletonYear />
-                  <SkeletonCategory />
-                  <SkeletonTitleBar style={{ maxWidth: `${titleWidth}px` }} />
-                  <SkeletonSnippet style={{ maxWidth: `${snippetWidth}%` }} />
-                </SkeletonBody>
-              </SkeletonStop>
-            )
-          })}
+          {/*
+           * 스켈레톤은 **실제 지면의 뼈대**다 — 세기 머리글 하나, 그 아래 연 머리글과 행 묶음.
+           * 예전엔 평평한 행 18개뿐이라, 데이터가 오면 머리글 두 줄이 끼어들며 첫 행이
+           * 130 → 210px로 내려앉았다. 머리글은 실제 컴포넌트를 as="div"로 그려 높이가 같다.
+           */}
+          <List.CenturySection aria-hidden="true">
+            <List.CenturyDivider as="div">
+              <List.CenturyDividerLabel>
+                {/* 화살표도 실제와 같은 크기로 — 줄 높이가 같아야 데이터 도착 때 안 밀린다 */}
+                <FiChevronDown size={14} aria-hidden="true" style={{ opacity: 0.3 }} />
+                <span>
+                  <SkeletonText>00세기</SkeletonText>
+                </span>
+              </List.CenturyDividerLabel>
+              <List.CenturyDividerCount>
+                <SkeletonText>00건</SkeletonText>
+              </List.CenturyDividerCount>
+            </List.CenturyDivider>
+            {SKELETON_YEAR_GROUPS.map((rowCount, groupIndex) => (
+              <List.YearSection key={groupIndex}>
+                <List.YearDivider as="div">
+                  <span>
+                    <FiChevronDown size={13} aria-hidden="true" style={{ opacity: 0.3 }} />
+                    <SkeletonText>0000년</SkeletonText>
+                  </span>
+                </List.YearDivider>
+                {Array.from({ length: rowCount }, (_, rowIndex) => {
+                  // 행마다 다른 길이 — 같은 리듬이 반복되면 기계적으로 보인다(소수 곱으로 흩뜨림)
+                  const index = SKELETON_YEAR_GROUPS.slice(0, groupIndex).reduce(
+                    (sum, count) => sum + count,
+                    0,
+                  ) + rowIndex
+                  const titleWidth = 180 + ((index * 53) % 220) // 180~400px
+                  const hasEnd = index % 3 === 0
+                  const keywordCount = index % 4 === 1 ? 1 : 2
+                  const flagCount = index % 5 === 2 ? 0 : index % 3 === 0 ? 2 : 1
+                  const dotPosition = 8 + ((index * 37) % 84) // 기간 축 위 8~92%
+                  return (
+                    /* $depth 0 고정 — 예전엔 index % 3으로 인위적 계단 들여쓰기를 그려,
+                       데이터가 도착하면 그 계단이 평평해지며 레이아웃이 한 번 무너졌다 잡혔다. */
+                    <SkeletonStop key={rowIndex} $depth={0} data-skeleton-row="">
+                      <SkeletonRail aria-hidden="true" />
+                      <SkeletonBody>
+                        <SkeletonYear />
+                        {hasEnd && <SkeletonEnd />}
+                        <SkeletonCategory />
+                        <SkeletonTitleGroup>
+                          <SkeletonTitleBar style={{ width: `${titleWidth}px` }} />
+                        </SkeletonTitleGroup>
+                        <SkeletonKeywords>
+                          {Array.from({ length: keywordCount }, (_, chipIndex) => (
+                            <SkeletonChip key={chipIndex} style={{ width: `${36 + ((index + chipIndex) * 17) % 30}px` }} />
+                          ))}
+                        </SkeletonKeywords>
+                        <SkeletonDuration>
+                          <SkeletonDurationDot style={{ left: `${dotPosition}%` }} />
+                        </SkeletonDuration>
+                        <SkeletonFlags>
+                          {Array.from({ length: flagCount }, (_, chipIndex) => (
+                            <SkeletonChip key={chipIndex} style={{ width: `${34 + chipIndex * 8}px` }} />
+                          ))}
+                        </SkeletonFlags>
+                      </SkeletonBody>
+                    </SkeletonStop>
+                  )
+                })}
+              </List.YearSection>
+            ))}
+          </List.CenturySection>
         </List.CompactList>
       ) : flattenedHierarchy.length === 0 && (isLoadingMore || hasMoreData) ? (
         /**
@@ -1003,6 +1003,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             return (
               <List.CenturySection
                 key={`century-${century}`}
+                data-collapsed={isCenturyCollapsed || undefined}
                 role="group"
                 aria-labelledby={centuryHeadingId}
               >
@@ -1075,13 +1076,42 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     신호는 반대로 사라져, 접힌 세기와 '사건이 없는 세기'가 화면상
                     구별되지 않았다 — 스크롤 중 데이터 공백으로 오독된다. */}
                 {isCenturyCollapsed ? (
-                  <List.CollapsedPlaceholder>
-                    <span>
-                      {/* 자리표시자는 **사라진 것**을 센다 — 연 쪽은 이미 '행' 단위인데
-                          세기만 '건'이라 '20세기 76건 접힘'이라 말하고 107행이 사라졌다. */}
-                      {`${centuryLabel} — ${centuryRowCount}행 접힘`}
-                    </span>
-                  </List.CollapsedPlaceholder>
+                  (() => {
+                    /* 접힌 세기 요약 — 10년 단위 분포와 가장 붐빈 10년. 숫자는 그룹 단위(건)다.
+                       '몇 행이 사라졌나'는 머리글 aria-label과 아래 aria-label이 계속 말한다. */
+                    const decades = decadeBuckets(years, yearRootCount)
+                    const peakCount = Math.max(0, ...decades.map((bucket) => bucket.count))
+                    const peak = decades.find((bucket) => bucket.count === peakCount && peakCount > 0)
+                    return (
+                      <List.CollapsedPeek
+                        type="button"
+                        tabIndex={-1}
+                        aria-label={`${centuryLabel} 펼치기 — ${centuryRowCount}행 접힘${
+                          peak ? `, 가장 많은 10년 ${peak.label} ${peak.count}건` : ''
+                        }`}
+                        onClick={() => onToggleCenturyCollapse(century)}
+                      >
+                        <List.DecadeBars aria-hidden="true">
+                          {decades.map((bucket) => (
+                            <List.DecadeBar
+                              key={bucket.label}
+                              $ratio={peakCount > 0 ? bucket.count / peakCount : 0}
+                              title={`${bucket.label} · ${bucket.count}건`}
+                            />
+                          ))}
+                        </List.DecadeBars>
+                        <List.PeekTitles aria-hidden="true">
+                          {peak
+                            ? peak.count === decades.reduce((sum, bucket) => sum + bucket.count, 0)
+                              ? `전부 ${peak.label}`
+                              : `가장 많은 10년 ${peak.label} · ${peak.count}건`
+                            : centuryRangeLabel}
+                        </List.PeekTitles>
+                        <List.PeekMore aria-hidden="true">{`${centuryRowCount}행 접힘`}</List.PeekMore>
+                        <List.PeekAction aria-hidden="true">펼치기</List.PeekAction>
+                      </List.CollapsedPeek>
+                    )
+                  })()
                 ) : (
                   years.map((currentYear) => {
                       const yearItems = eventsByYear.get(currentYear) ?? []
@@ -1127,9 +1157,29 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                       /** 즉위 연도로만 세운 해 — 머리글과 말풍선을 한 줄로 합친다 */
                       const reignOnlyYear =
                         yearItems.length === 0 && !!inYearReigns?.length
+                      /*
+                       * 선택·로빙은 **이 연 그룹에 든 행일 때만** 슬롯에 알린다 — 행 하나를 누르면
+                       * 예전 선택 행과 새 선택 행이 든 두 그룹만 다시 그려진다.
+                       */
+                      const selectedHere =
+                        selectedEventId != null &&
+                        yearItems.some((item) => item.node.id === selectedEventId)
+                          ? selectedEventId
+                          : null
+                      const rovingHere =
+                        rovingRowId != null &&
+                        yearItems.some((item) => item.node.id === rovingRowId)
+                          ? rovingRowId
+                          : null
                       return (
-                        <List.YearSection
+                        <YearSlot
                           key={`year-${currentYear}`}
+                          shared={yearSlotShared}
+                          collapsed={isYearCollapsed}
+                          selectedHere={selectedHere}
+                          rovingHere={rovingHere}
+                          render={() => (
+                        <List.YearSection
                           role="group"
                           aria-labelledby={yearHeadingId}
                           /* (제거) 공백에 비례한 추가 여백과 'N년 기록 없음' 표지 — 사용자
@@ -1207,16 +1257,42 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               </span>
                             </List.YearDivider>
                             {isYearCollapsed ? (
-                              <List.CollapsedPlaceholder>
-                                <span>
-                                  {/* 접기가 실제로 숨기는 것은 **렌더되던 행 전체**(하위 사건 포함)다.
-                                      yearEventCount(depth 0만)를 쓰면 '2개 사건이 접혀있습니다'라며
-                                      7행이 사라져 숫자가 화면과 어긋난다. */}
-                                  {yearItems.length > 0
-                                    ? `${yearItems.length}행이 접혀있습니다`
-                                    : formatYearLabel(currentYear)}
-                                </span>
-                              </List.CollapsedPlaceholder>
+                              (() => {
+                                /* 접힌 연 요약 — 최상위 사건 제목 앞 셋과 나머지 수.
+                                   접기가 숨기는 것은 **렌더되던 행 전체**(하위 포함)라
+                                   '외 N건'은 그룹 단위, 하위는 따로 말한다. */
+                                const rootTitles = yearItems
+                                  .filter((item) => item.depth === 0)
+                                  .map((item) => nodeTitleById.get(item.node.id) ?? item.node.title)
+                                const shown = rootTitles.slice(0, PEEK_TITLE_COUNT)
+                                const restCount = Math.max(0, yearEventCount - shown.length)
+                                const moreLabel = [
+                                  restCount > 0 ? `외 ${restCount}건` : null,
+                                  yearSubCount > 0 ? `하위 ${yearSubCount}` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')
+                                return (
+                                  <List.CollapsedPeek
+                                    type="button"
+                                    tabIndex={-1}
+                                    aria-label={`${formatYearLabel(currentYear)} 펼치기 — ${yearItems.length}행 접힘${
+                                      shown.length > 0 ? `: ${shown.join(', ')}${restCount > 0 ? ` 외 ${restCount}건` : ''}` : ''
+                                    }`}
+                                    onClick={() => onToggleYearCollapse(currentYear)}
+                                  >
+                                    <List.PeekTitles aria-hidden="true">
+                                      {shown.length > 0
+                                        ? shown.join(' · ')
+                                        : `${formatYearLabel(currentYear)} — 즉위 표지만 있는 해`}
+                                    </List.PeekTitles>
+                                    {moreLabel && (
+                                      <List.PeekMore aria-hidden="true">{moreLabel}</List.PeekMore>
+                                    )}
+                                    <List.PeekAction aria-hidden="true">펼치기</List.PeekAction>
+                                  </List.CollapsedPeek>
+                                )
+                              })()
                             ) : (
                               <List.RowList
                                 role="list"
@@ -1254,6 +1330,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                             </>
                           )}
                         </List.YearSection>
+                          )}
+                        />
                       )
                     })
                 )}
@@ -1360,6 +1438,310 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 // styled (theme-aware)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** 한 말풍선에서 접지 않고 보이는 건국·멸망 수 — 하나만 더 있으면 접지 않는다('1 더 보기'는 손해) */
+const STATEHOOD_VISIBLE_COUNT = 2
+
+/** 접힌 연 요약에 싣는 제목 수 — 넷부터는 한 줄에 안 들어가 말줄임만 늘었다 */
+const PEEK_TITLE_COUNT = 3
+
+interface DecadeBucket {
+  /** '1911–1920' · '기원전 760–751' */
+  label: string
+  count: number
+}
+
+/**
+ * 한 세기의 연도들을 10년 칸 10개로 — **왼쪽이 이른 10년**(목록 정렬 방향과 무관).
+ * 세기 정의(20세기 = 1901–2000)를 따라 칸도 1901–1910 … 1991–2000으로 자른다.
+ * 기원전은 절댓값이 클수록 이르므로 칸 순서를 뒤집는다.
+ */
+function decadeBuckets(years: number[], rootCount: Map<number, number>): DecadeBucket[] {
+  const buckets: DecadeBucket[] = Array.from({ length: 10 }, () => ({ label: '', count: 0 }))
+  const sample = years[0]
+  if (sample == null) return buckets
+  const isBc = sample < 0
+  const centuryStart = Math.floor((Math.abs(sample) - 1) / 100) * 100 + 1
+  for (let index = 0; index < 10; index += 1) {
+    const from = centuryStart + index * 10
+    const to = from + 9
+    const position = isBc ? 9 - index : index
+    buckets[position].label = isBc ? `기원전 ${to}–${from}` : `${from}–${to}`
+  }
+  for (const year of years) {
+    const index = Math.floor(((Math.abs(year) - 1) % 100) / 10)
+    const position = year < 0 ? 9 - index : index
+    buckets[position].count += rootCount.get(year) ?? 0
+  }
+  return buckets
+}
+
+interface YearSlotProps {
+  /** 이 연 그룹을 그리는 함수 — 슬롯이 다시 그려질 때만 불린다(그때의 최신 값으로) */
+  render: () => React.ReactNode
+  /** 모든 연 그룹이 공유하는 입력 묶음(바뀌면 전부 다시) */
+  shared: object
+  collapsed: boolean
+  /** 선택 행이 이 그룹에 있으면 그 id, 아니면 null */
+  selectedHere: string | null
+  rovingHere: string | null
+}
+
+/**
+ * 연 그룹 memo 슬롯 — 행 하나를 누르거나 연 하나를 접을 때 **바뀐 그룹만** 다시 그린다.
+ *
+ * 예전엔 어떤 상태가 바뀌어도 연 그룹 전부(행 360·표지 443·DOM 2만 2천)의 JSX를 새로 만들었다.
+ * 행(EventListItem)과 표지는 memo라 DOM은 안 바뀌어도, 요소를 만드는 일 자체가 개발 빌드에선
+ * 요소마다 호출 스택을 기록해 행 클릭 한 번에 330ms를 먹었다(2026-09-30 프로파일).
+ */
+const YearSlot = React.memo(
+  function YearSlot({ render }: YearSlotProps) {
+    return <>{render()}</>
+  },
+  (previous, next) =>
+    previous.shared === next.shared &&
+    previous.collapsed === next.collapsed &&
+    previous.selectedHere === next.selectedHere &&
+    previous.rovingHere === next.rovingHere,
+)
+
+interface ReignHandlers {
+  openCountry: (country: {
+    id: string
+    name: string
+    focus: 'founding' | 'dissolution'
+  }) => void
+  openPerson: (personId: string) => void
+  filterPeriod: (marker: ReignMarker) => void
+}
+
+interface ReignMarkerGroupProps {
+  markers: ReignMarker[]
+  inList: boolean
+  beforeCentury?: boolean
+  yearLabel?: string
+  contextYear?: number
+  /** 이 목록의 주류 나라 — 그 나라 이름은 표지에서 생략한다 */
+  homeCountry: string | null
+  /** 목록이 고정해 넘기는 콜백 묶음(최신값 ref) */
+  handlers: ReignHandlers
+  canOpenCountry: boolean
+  canOpenPerson: boolean
+  canFilterPeriod: boolean
+}
+
+/**
+ * 즉위 표지 한 줄 — **축 위의 눈금**이지 행이 아니다.
+ *
+ * 왕관은 레일 축 위에 연·세기 도트처럼 얹히고, 텍스트는 메타 크기·중립색으로 낮춘다.
+ * 끝까지 달리는 rule을 두지 않는다 — 연 머리글·공백 표지·행 괘선이 이미 가로선을
+ * 쓰고 있어, 선을 하나 더 보태면 목록이 줄무늬가 된다. 같은 자리의 즉위는 한 줄에
+ * 이어 쓴다(세조 1455–1468 · 성종 1469–1494). 이름은 인물 상세 링크.
+ * 행 목록 안에 들 때는 listitem이어야 한다.
+ */
+function ReignMarkerGroupImpl({
+  markers,
+  inList,
+  beforeCentury,
+  yearLabel,
+  contextYear,
+  homeCountry,
+  handlers,
+  canOpenCountry,
+  canOpenPerson,
+  canFilterPeriod,
+}: ReignMarkerGroupProps) {
+    /* 대통령·총리만 모인 자리 — 축 표지를 왕관 대신 의사당으로, 강조색을 호박 대신 파랑으로.
+       군주가 하나라도 섞이면 왕관(즉위가 그 자리의 주된 사건이다). */
+    const civic = markers.every((marker) => marker.kind !== 'monarch')
+    /* 건국·멸망만 모인 자리 — 축 표지를 깃발로(색은 civic 파랑을 그대로 쓴다) */
+    const statehoodOnly = markers.every(isStatehoodMarker)
+    /*
+     * 건국·멸망이 많은 해는 앞 둘만 보이고 나머지는 동사별 개수로 접는다 — 1795년 한 해에
+     * 멸망 12개가 세 줄 말풍선이 되어 사건 행보다 큰 벽이었다. 즉위·취임은 접지 않는다.
+     */
+    const [statehoodExpanded, setStatehoodExpanded] = React.useState(false)
+    const entries = groupReignEntries(markers)
+    const statehoodEntries = entries.filter((entry) => isStatehoodMarker(entry.marker))
+    const compactStatehood =
+      !statehoodExpanded && statehoodEntries.length > STATEHOOD_VISIBLE_COUNT + 1
+    const hiddenStatehood = compactStatehood
+      ? new Set(statehoodEntries.slice(STATEHOOD_VISIBLE_COUNT))
+      : new Set<(typeof entries)[number]>()
+    const hiddenSummary = (() => {
+      if (!compactStatehood) return ''
+      const byVerb = new Map<string, number>()
+      for (const entry of hiddenStatehood) {
+        const verb = accessionVerb(
+          entry.countryNames[0],
+          entry.marker.kind,
+          entry.marker.reappointed,
+          entry.marker.statehood?.entityKind,
+        )
+        byVerb.set(verb, (byVerb.get(verb) ?? 0) + 1)
+      }
+      return [...byVerb.entries()].map(([verb, count]) => `${verb} ${count}`).join(' · ')
+    })()
+    return (
+    <List.ReignMarker
+      role={inList ? 'listitem' : 'note'}
+      $asYear={!!yearLabel}
+      $beforeCentury={beforeCentury}
+      data-reign-marker=""
+    >
+      <List.ReignMarkerIcon aria-hidden="true" $civic={civic}>
+        {statehoodOnly ? <FaFlag /> : civic ? <FaLandmark /> : <FaCrown />}
+      </List.ReignMarkerIcon>
+      {yearLabel ? (
+        <List.ReignYearLabel aria-hidden="true">
+          {yearLabel}
+        </List.ReignYearLabel>
+      ) : (
+        // 같은 자리 즉위들은 한 시점에 모인 것이라 첫 즉위일로 대표한다
+        <List.ReignMarkerDate $civic={civic}>
+          {formatAccessionDate(markers[0], contextYear)}
+        </List.ReignMarkerDate>
+      )}
+      <List.ReignMarkerList>
+        {entries.filter((entry) => !hiddenStatehood.has(entry)).map(({ marker, countryNames }) => {
+          const foreign = countryNames.filter(
+            (name) => name !== homeCountry,
+          )
+          const span = formatReignSpan(marker)
+          const verb = accessionVerb(
+            countryNames[0],
+            marker.kind,
+            marker.reappointed,
+            marker.statehood?.entityKind,
+          )
+          const statehood = isStatehoodMarker(marker)
+          const periodNoun = statehood ? '존속' : verb === '즉위' ? '재위' : '재임'
+          const markerCivic = marker.kind !== 'monarch'
+          const length = reignLengthYears(marker)
+          return (
+            <List.ReignMarkerItem key={marker.id}>
+              <ReignPortrait path={marker.imageUrl} />
+              {foreign.length > 0 && (
+                <List.ReignMarkerCountries>
+                  {foreign.map((name) => (
+                    <List.ReignMarkerCountry key={name}>
+                      {name}
+                    </List.ReignMarkerCountry>
+                  ))}
+                </List.ReignMarkerCountries>
+              )}
+              {/* 직함 — '대통령'·'총리'. 군주는 이름이 곧 왕명이라 없다 */}
+              {marker.roleTitle && (
+                <List.ReignMarkerRole>{marker.roleTitle}</List.ReignMarkerRole>
+              )}
+              {/* 나라가 주어인 표지 — 이름을 누르면 인물 모달 대신 국가 모달 */}
+              {statehood && marker.statehood && canOpenCountry ? (
+                <List.ReignMarkerName
+                  as="button"
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() =>
+                    handlers.openCountry({
+                      id: marker.statehood!.historicalCountryId,
+                      name: marker.name,
+                      focus:
+                        marker.kind === 'dissolution' ? 'dissolution' : 'founding',
+                    })
+                  }
+                  aria-label={`${marker.name} 국가 정보 보기 — ${verb}, ${periodNoun} ${span}`}
+                >
+                  {marker.name}
+                </List.ReignMarkerName>
+              ) : canOpenPerson && !statehood ? (
+                <List.ReignMarkerName
+                  as="button"
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => handlers.openPerson(marker.personId)}
+                  aria-label={`${countryNames.length ? `${countryNames.join('·')} ` : ''}${marker.roleTitle ? `${marker.roleTitle} ` : ''}${marker.name} 인물 정보 보기 — ${verb}, ${periodNoun} ${span}`}
+                >
+                  {marker.name}
+                </List.ReignMarkerName>
+              ) : (
+                <List.ReignMarkerName>{marker.name}</List.ReignMarkerName>
+              )}
+              {/* '즉위'와 기간은 한 덩어리 — 좁은 폭에서 '즉위'만 줄 끝에 남지 않게 */}
+              <List.ReignMarkerSpan>
+                <List.ReignMarkerLabel aria-hidden="true" $civic={markerCivic}>
+                  {verb}
+                </List.ReignMarkerLabel>
+                {canFilterPeriod ? (
+                  <List.ReignMarkerYears
+                    as="button"
+                    type="button"
+                    tabIndex={-1}
+                    title="이 기간의 사건만 보기"
+                    aria-label={`${marker.name} ${periodNoun} 기간(${span})의 사건만 보기`}
+                    onClick={() => handlers.filterPeriod(marker)}
+                  >
+                    {span}
+                  </List.ReignMarkerYears>
+                ) : (
+                  <List.ReignMarkerYears>{span}</List.ReignMarkerYears>
+                )}
+                {length != null && (
+                  <List.ReignMarkerLength>{length}년</List.ReignMarkerLength>
+                )}
+              </List.ReignMarkerSpan>
+            </List.ReignMarkerItem>
+          )
+        })}
+        {compactStatehood && (
+          <List.ReignMarkerItem>
+            <List.ReignMarkerMore
+              type="button"
+              tabIndex={-1}
+              aria-label={`${hiddenSummary} 더 보기`}
+              onClick={() => setStatehoodExpanded(true)}
+            >
+              {`${hiddenSummary} 더 보기`}
+            </List.ReignMarkerMore>
+          </List.ReignMarkerItem>
+        )}
+        {statehoodExpanded && statehoodEntries.length > STATEHOOD_VISIBLE_COUNT + 1 && (
+          <List.ReignMarkerItem>
+            <List.ReignMarkerMore
+              type="button"
+              tabIndex={-1}
+              onClick={() => setStatehoodExpanded(false)}
+            >
+              접기
+            </List.ReignMarkerMore>
+          </List.ReignMarkerItem>
+        )}
+      </List.ReignMarkerList>
+    </List.ReignMarker>
+    )
+}
+
+/**
+ * 표지 배열은 행 사이에 끼울 때 렌더마다 새로 잘려 나오지만 **원소는 같은 객체**다
+ * (reignPlan이 memo). 배열 자체가 아니라 원소 동일성으로 비교해야 memo가 산다.
+ */
+function sameReignGroupProps(previous: ReignMarkerGroupProps, next: ReignMarkerGroupProps) {
+  if (previous.markers.length !== next.markers.length) return false
+  for (let index = 0; index < next.markers.length; index += 1) {
+    if (previous.markers[index] !== next.markers[index]) return false
+  }
+  return (
+    previous.inList === next.inList &&
+    previous.beforeCentury === next.beforeCentury &&
+    previous.yearLabel === next.yearLabel &&
+    previous.contextYear === next.contextYear &&
+    previous.homeCountry === next.homeCountry &&
+    previous.handlers === next.handlers &&
+    previous.canOpenCountry === next.canOpenCountry &&
+    previous.canOpenPerson === next.canOpenPerson &&
+    previous.canFilterPeriod === next.canFilterPeriod
+  )
+}
+
+const ReignMarkerGroup = React.memo(ReignMarkerGroupImpl, sameReignGroupProps)
+
 /**
  * 즉위 말풍선의 초상 — 말풍선이 **누구의 말인지**를 얼굴로 보인다(군주 58%가 초상 보유).
  * 없거나 로드에 실패하면 아무것도 그리지 않는다 — 빈 원·실루엣은 '초상 없음'이라는
@@ -1399,7 +1781,12 @@ function useCardStep(el: HTMLElement | null): CardStep {
     const observer = new ResizeObserver(([entry]) => {
       const width =
         entry.contentBoxSize?.[0]?.inlineSize ?? entry.contentRect.width
-      setStep(
+      /*
+       * 단계가 바뀌면 칩 예산(국기·키워드 수)이 달라져 **모든 행**이 다시 그려진다. 행을 눌러
+       * 상세 패널이 열릴 때가 바로 그 순간이라, 이 갱신을 저우선으로 돌려 패널이 먼저 그려지고
+       * 목록은 뒤따라 맞춰지게 한다(예전엔 둘이 한 프레임에 묶여 클릭 반응이 400ms였다).
+       */
+      React.startTransition(() => setStep(
         width >= LIST_STEPS.atlas
           ? 'atlas'
           : width >= LIST_STEPS.ledger
@@ -1407,7 +1794,7 @@ function useCardStep(el: HTMLElement | null): CardStep {
             : width >= LIST_STEPS.summary
               ? 'summary'
               : 'base',
-      )
+      ))
     })
     observer.observe(el)
     return () => observer.disconnect()
@@ -1639,7 +2026,8 @@ const FallbackTitle = styled.span`
  * 540px라 1440 화면 목록 뷰포트(약 1,200px)의 절반 이상이 빈 채로 로딩됐다.
  * 컨테이너 높이 실측(ResizeObserver)은 별건이고, 상수 18이면 전 대역에서 화면을 덮는다.
  */
-const SKELETON_ROW_COUNT = 18
+/** 스켈레톤의 연 묶음별 행 수 — 합 18행. 실제 첫 화면(최근 연도들)과 비슷한 고르지 않은 리듬 */
+const SKELETON_YEAR_GROUPS = [5, 2, 4, 3, 4] as const
 
 /**
  * 열 헤더 한 줄 — 데이터 경로와 스켈레톤 경로가 **같은 것**을 렌더한다.
@@ -1832,22 +2220,33 @@ const HeaderStatsSlot = styled.span`
   }
 `
 
+/*
+ * 자리표시 막대 — 무채색. 파란 기운(primary 8~15%)이었을 땐 실제 지면의 글자(무채색)와
+ * 결이 달라 '이게 곧 무엇이 될지'를 말하지 못했고, 목록이 온통 파랗게 번졌다.
+ */
 const skeletonBarBg = css`
   background: linear-gradient(
     90deg,
     ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(147, 197, 253, 0.08)'
-        : 'rgba(37, 99, 235, 0.08)'} 0%,
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)'} 0%,
     ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(147, 197, 253, 0.15)'
-        : 'rgba(37, 99, 235, 0.15)'} 50%,
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.11)' : 'rgba(15, 23, 42, 0.11)'} 50%,
     ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(147, 197, 253, 0.08)'
-        : 'rgba(37, 99, 235, 0.08)'} 100%
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)'} 100%
   );
+`
+
+/**
+ * 머리글 라벨 자리 — 막대가 아니라 **투명한 같은 글자**('00세기'·'0000년')를 칠한다.
+ * 글꼴 크기·줄 높이를 실제 머리글이 그대로 정하므로, 고정 높이 막대(20px)일 때 세기
+ * 머리글이 5px 낮아 데이터가 오면 목록이 그만큼 밀리던 어긋남이 사라진다.
+ */
+const SkeletonText = styled.span`
+  color: transparent;
+  border-radius: 4px;
+  user-select: none;
+  ${skeletonBarBg}
+  ${shimmerAnimation}
 `
 
 const SkeletonStop = styled.div<{ $depth: number }>`
@@ -1899,20 +2298,62 @@ const SkeletonBody = styled.div`
   min-width: 0;
   ${List.rowGridTemplate}
   align-items: center;
+
+  /* 모바일 — 실제 행(Body)과 같은 2줄 규약: 격자를 풀고 제목이 첫 줄 전체, 날짜·분류가 둘째 줄.
+     이 규칙이 없을 땐 390px 격자에서 제목 칸이 0폭이라 제목 막대가 아예 안 보였다. */
+  @media (max-width: 640px) {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    column-gap: 8px;
+
+    > :first-child,
+    > :not(:first-child) {
+      order: 1;
+    }
+  }
 `
 
 const SkeletonYear = styled.span`
   grid-column: date;
+  /* 실제 날짜는 우측 정렬(7.27 · 12.31) — 막대도 오른쪽 끝에 짧게 */
+  justify-self: end;
+  width: 34px;
   height: 11px;
   border-radius: 4px;
   ${skeletonBarBg}
   ${shimmerAnimation}
 `
 
+/* 종료 — 실제 셀과 같은 게이트(요약 대역 이상에서만 트랙이 있다). 없는 라인 이름으로
+   grid-column을 걸면 암묵 트랙이 생겨 행이 넓어진다. */
+const SkeletonEnd = styled.span`
+  display: none;
+
+  @container eventcard (min-width: ${LIST_STEPS.summary}px) {
+    display: block;
+    grid-column: end;
+    justify-self: end;
+    width: 30px;
+    height: 11px;
+    border-radius: 4px;
+    opacity: 0.7;
+    ${skeletonBarBg}
+    ${shimmerAnimation}
+  }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
 const SkeletonCategory = styled.span`
   grid-column: cat;
-  height: 16px;
-  border-radius: 6px;
+  /* 실제 분류 글자('정치')도 우측 정렬의 짧은 낱말 */
+  justify-self: end;
+  width: 26px;
+  height: 11px;
+  border-radius: 4px;
   ${skeletonBarBg}
   ${shimmerAnimation}
   opacity: 0.7;
@@ -1922,6 +2363,13 @@ const SkeletonCategory = styled.span`
    제목 뒤를 잇는 글) 스켈레톤도 같은 구조여야 데이터 도착 시 폭이 튀지 않는다. */
 const SkeletonTitleGroup = styled.span`
   grid-column: title;
+
+  @media (max-width: 640px) {
+    order: -1 !important;
+    flex: 1 0 100%;
+    margin-left: 0 !important;
+  }
+
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1931,25 +2379,77 @@ const SkeletonTitleGroup = styled.span`
 `
 
 const SkeletonTitleBar = styled.span`
+  /* 줄어들지 않되 칸 폭을 넘지 않는다 — flex-shrink로 두면 모바일(제목 칸이 내용 폭)에서
+     0으로 접혀 막대가 사라졌고, 상한 없이 두면 좁은 카드에서 옆 열을 덮는다. */
   flex: 0 0 auto;
+  max-width: 100%;
   height: 14px;
   border-radius: 4px;
   ${skeletonBarBg}
   ${shimmerAnimation}
 `
 
-/* 설명이 켜지는 대역에서만 — 실제 행과 같은 게이트를 읽는다. */
-const SkeletonSnippet = styled.span`
+/* 키워드 — 짧은 칩 1~2개. 실제 셀과 같은 게이트 */
+const SkeletonKeywords = styled.span`
   display: none;
 
   @container eventcard (min-width: ${LIST_STEPS.summary}px) {
-    display: block;
-    flex: 1 1 0;
+    display: inline-flex;
+    grid-column: kw;
+    gap: 6px;
     min-width: 0;
-    height: 11px;
-    border-radius: 4px;
-    opacity: 0.6;
-    ${skeletonBarBg}
-    ${shimmerAnimation}
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const SkeletonChip = styled.span`
+  flex: 0 0 auto;
+  height: 10px;
+  border-radius: 999px;
+  opacity: 0.75;
+  ${skeletonBarBg}
+  ${shimmerAnimation}
+`
+
+/* 기간 — 연 축 위의 점 하나. 실제 기간 열이 그리는 모양(가는 축 + 점)을 그대로 흉내 낸다 */
+const SkeletonDuration = styled.span.attrs(() => ({ 'data-col': 'dur' }) as Record<string, string>)`
+  grid-column: dur;
+  position: relative;
+  align-self: center;
+  height: 1px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'};
+
+  @media (max-width: 480px) {
+    display: none;
+  }
+`
+
+const SkeletonDurationDot = styled.span`
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  ${skeletonBarBg}
+  ${shimmerAnimation}
+`
+
+/* 관련국 — 우측 정렬 칩. 실제 셀처럼 비는 행도 있다 */
+const SkeletonFlags = styled.span.attrs(() => ({ 'data-col': 'flags' }) as Record<string, string>)`
+  grid-column: flags;
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+
+  @media (max-width: 640px) {
+    display: none;
   }
 `

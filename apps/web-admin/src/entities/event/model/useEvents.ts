@@ -81,7 +81,14 @@ const buildQueryKey = (opts: UseEventsOptions) =>
 
 export const useEvents = (options: UseEventsOptions = {}) => {
   const requestedPageSize = options.pageSize ?? DEFAULT_PAGE_SIZE
-  const fetchAll = requestedPageSize === EVENTS_PAGE_SIZE_ALL
+  /*
+   * autoLoadAll은 어차피 끝까지 받는다 — 그렇다면 서버 최대치(EVENTS_LIMIT_ALL_MAX) 단위로 받는다.
+   * 100건씩 받을 땐 서버는 페이지당 20ms인데, 클라이언트가 한 페이지를 받아 **목록 전체를
+   * 다시 그린 뒤에야** 다음 페이지를 불러 240건이 세 번에 나뉘어 2.4초 걸렸고, 그동안 이미
+   * 보이는 행이 두 번 밀렸다(하위 사건이 늦게 도착해 부모 아래로 끼어듦). 전량 한 번은 41ms.
+   */
+  const fetchAll =
+    requestedPageSize === EVENTS_PAGE_SIZE_ALL || options.autoLoadAll === true
   /*
    * 페이징 종료 판정(`getNextPageParam`)이 보는 '가득 찬 페이지'의 크기.
    * '모두'일 때 서버가 실제로 싣는 최대치가 이 값이므로, 여기에 sentinel 0을

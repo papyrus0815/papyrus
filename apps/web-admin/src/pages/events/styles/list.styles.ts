@@ -262,6 +262,28 @@ export const CompactList = styled.div.attrs(
     `,
   )}
 
+  /**
+   * 좁은 카드(900px 미만)에서는 기간 열을 스스로 접는다 — 사용자가 끈 것과 같은 선언.
+   *
+   * 1280px 화면에서 행을 골라 상세 패널이 열리면 카드가 808px이 되고, 그때 제목 트랙이
+   * 186px(한글 12자)까지 눌려 '오픈AI GPT-6 아스트라(…'·'NSPM-2 …'처럼 거의 모든 제목이
+   * 잘렸다. 같은 줄에서 기간 열은 104px을 쓰는데 이 폭의 기간 열이 말하는 것은 '연 축 위의
+   * 점 하나'다 — 날짜 열이 이미 말한다. 그 폭을 제목에 돌려 186 → 302px이 된다.
+   * (관련국 열은 줄이지 않는다 — 역사 국가는 국기가 없어 이름 칩이라 172px이 실측 폭이다)
+   *
+   * 밀도 규칙(data-density)이 트랙 변수를 다시 선언하므로 같은 특이도로 뒤에서 덮는다.
+   */
+  @container eventcard (max-width: 899px) {
+    &,
+    &[data-density] {
+      --track-dur: 0px;
+    }
+
+    [data-col='dur'] {
+      display: none;
+    }
+  }
+
   /* 축선 — 좌표는 --rail-x가 소유하므로 밴드가 거터를 바꾸면 자동 추종한다.
    *
    * alpha를 0.20/0.22 → 0.32/0.34로 올린다. 행 도트를 폐지하기 전에는 축(1.38:1)이
@@ -1005,6 +1027,12 @@ export const CenturySection = styled.div`
   & + & {
     margin-top: var(--century-gap);
   }
+
+  /* 접힌 세기가 이어지면 간격을 좁힌다 — 접은 이유가 '훑어 넘기기'라서, 접힌 세기
+     사이마다 펼친 세기와 같은 숨 틈을 두면 접어도 한 화면에 두어 세기밖에 안 들어왔다. */
+  &[data-collapsed] + &[data-collapsed] {
+    margin-top: calc(var(--century-gap) * 0.35);
+  }
 `
 
 /**
@@ -1310,6 +1338,34 @@ export const ReignMarkerRole = styled.span`
 `
 
 /** 재위 기간 — 보조색·등폭 숫자 */
+/**
+ * 말풍선 안 '건국 1 · 멸망 9 더 보기' — 한 해에 나라가 여럿 서고 무너질 때(1795년 멸망 12개)
+ * 말풍선이 세 줄 벽이 되던 것을 앞 두 개 + 요약으로 접는다. 기간 버튼과 같은 글자 어포던스.
+ */
+export const ReignMarkerMore = styled.button`
+  padding: 0 2px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.primary};
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+
+  &:hover {
+    text-decoration-style: solid;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+`
+
 export const ReignMarkerYears = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
   font-variant-numeric: tabular-nums;
@@ -1387,6 +1443,23 @@ export const ReignMarkerLength = styled.span`
 export const YearSection = styled.div`
   display: flex;
   flex-direction: column;
+
+  /*
+   * 화면 밖 연 그룹은 레이아웃·페인트를 건너뛴다. 목록은 가상화 없이 전량(연 그룹 190여 개,
+   * DOM 2만 2천)을 그리는데, 행 하나를 골라 상세 패널이 열리면 목록 폭이 바뀌어 **모든 행**을
+   * 다시 배치했다 — 그 강제 레이아웃이 클릭 한 번에 160ms였다(2026-09-30 프로파일).
+   * 'auto'라 한 번 그린 크기를 기억해 스크롤 막대가 튀지 않는다. 처음 보는 그룹은 한 행
+   * 높이쯤으로 어림한다.
+   * ⚠️ 페인트 격리가 따라온다 — 그룹 상자 밖으로 삐져나오는 그림은 잘린다. 행은 bleedToEdges로
+   * 목록 패딩(레일 거터·오른쪽 여백)까지 번져 레일 점·눈금을 거기 그리므로, 그룹 상자도 같은
+   * 폭만큼 번지고 그만큼 안쪽 여백을 둔다 — 배치는 그대로, 레일은 상자 안으로.
+   */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+  margin-left: calc(-1 * var(--rail-gutter));
+  margin-right: calc(-1 * var(--list-pad-r, 20px));
+  padding-left: var(--rail-gutter);
+  padding-right: var(--list-pad-r, 20px);
 
   /* 세기 헤더 직후 첫 연도 헤더 — 세기 하단 hairline과 이중선이 되지 않게 상단선 제거.
    * (이전 규칙 'CenturyDivider + button'은 래퍼 도입으로 형제 관계가 끊겨 대체된다.) */
@@ -1905,90 +1978,109 @@ export const CenturyDividerCount = styled.span`
 `
 
 /**
- * 접힌 연도 — 타임라인 *압축 구간* 인상.
+ * 접힌 밴드의 요약 — **무엇이** 접혔는지 한 줄로 보인다. 누르면 펼친다.
  *
- * 1. 사선 해치 패턴 배경 — "이 구간은 표시되지 않음"을 시각적으로 즉시 인지
- * 2. 좌측 도트는 레일(left:32px = placeholder 좌측에서 -38px)에 정렬, surface 외곽 링으로 *비어있는* 인상
- * 3. 도트 → placeholder 연결선은 1px dashed (시간이 흘렀음을 암시)
- * 4. 컴팩트한 한 줄 — Year/Century divider 사이의 *여백* 대용으로 가볍게
+ * 예전엔 빗금 친 점선 상자('9행이 접혀있습니다')가 폭 전체를 차지했다. 머리글이 이미
+ * '▸ 2026년 9건'이라 말하는데 같은 사실을 가장 시끄러운 잉크로 한 번 더 말했고, 정작
+ * 무엇이 접혔는지는 말하지 않았다. 이제 연은 첫 제목 몇 개를, 세기는 10년 단위 분포를 싣는다.
+ * 행 셀과 같은 들여쓰기(날짜 열 시작)에 붙여 목록의 왼쪽 정렬선을 지킨다.
  */
-export const CollapsedPlaceholder = styled.div`
-  /* '압축 구간'인데 펼친 행만큼 두꺼우면 접기가 공간을 안 아낀다 → 얇은 밴드(~40→~24px)로
-   * 눌러 '이 구간은 압축됨' 인상을 강화한다. */
-  margin: 1px 0 4px 0;
-  padding: 4px 14px;
-  border-radius: 8px;
-  text-align: center;
-  position: relative;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background-color: rgba(37, 99, 235, 0.025);
-          background-image: repeating-linear-gradient(
-            -45deg,
-            transparent 0,
-            transparent 4px,
-            rgba(147, 197, 253, 0.045) 4px,
-            rgba(147, 197, 253, 0.045) 7px
-          );
-          border: 1px dashed rgba(147, 197, 253, 0.18);
-        `
-      : css`
-          background-color: rgba(37, 99, 235, 0.02);
-          background-image: repeating-linear-gradient(
-            -45deg,
-            transparent 0,
-            transparent 4px,
-            rgba(37, 99, 235, 0.045) 4px,
-            rgba(37, 99, 235, 0.045) 7px
-          );
-          border: 1px dashed rgba(37, 99, 235, 0.22);
-        `}
+export const CollapsedPeek = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 6px;
+  padding: 4px var(--row-pad-r, 12px) 6px var(--row-pad-l, 12px);
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: ${metaText};
+  cursor: pointer;
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
 
-  /* 레일 → placeholder 연결선 */
-  &::before {
-    content: '';
-    position: absolute;
-    left: calc(-1 * var(--rail-inset));
-    top: 50%;
-    width: var(--rail-inset);
-    height: 1px;
-    border-top: 1px dashed
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(147, 197, 253, 0.35)'
-          : 'rgba(37, 99, 235, 0.35)'};
-  }
-
-  /* 레일 위 *비어있는* 도트 — Year 도트와 같은 톤이지만 한 단계 흐리게.
-   * surface 색 외곽 링으로 도트가 레일 위에 *얹힌* 듯 보이게. */
-  &::after {
-    content: '';
-    position: absolute;
-    left: calc(-1 * var(--rail-inset));
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 7px;
-    height: 7px;
+  &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
-    border: 1.5px solid
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(147, 197, 253, 0.4)'
-          : 'rgba(37, 99, 235, 0.4)'};
-    border-radius: 50%;
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.035)'};
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 
-  span {
-    font-size: 10.5px;
-    font-weight: 500;
-    letter-spacing: -0.005em;
-    /* 접힌 밴드의 유일한 콘텐츠 — 하드코딩 슬레이트(#94a3b8 2.56:1 / #64748b 4.02:1)는
-     * 양쪽 테마 모두 AA 미달이라 밴드가 빈 띠처럼 보였다. 프로젝트 스케일 밖 값이기도 하다. */
-    color: ${metaText};
-    font-variant-numeric: tabular-nums;
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: -2px;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/** 접힌 연의 제목 미리보기 — 한 줄, 넘치면 말줄임. 늘어나지 않아 '외 N건'이 바로 뒤에 붙는다 */
+export const PeekTitles = styled.span`
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.5;
+`
+
+/** '외 6건' — 제목보다 한 단 진하게, 줄어들지 않는다 */
+export const PeekMore = styled.span`
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 펼치기 안내 — 누를 수 있다는 표시. 평소엔 옅게, 올리면 진하게 */
+export const PeekAction = styled.span`
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary};
+  opacity: 0.55;
+
+  ${CollapsedPeek}:hover &,
+  ${CollapsedPeek}:focus-visible & {
+    opacity: 1;
+  }
+`
+
+/**
+ * 접힌 세기의 10년 단위 분포 — 막대 10개. 왼쪽이 이른 10년이다(정렬 방향과 무관하게 시간순).
+ * 높이는 그 세기 안의 최댓값 기준이고, 0건인 10년은 바닥선만 남긴다.
+ */
+export const DecadeBars = styled.span`
+  flex-shrink: 0;
+  display: inline-grid;
+  grid-template-columns: repeat(10, 8px);
+  align-items: end;
+  gap: 3px;
+  height: 20px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.medium};
+`
+
+export const DecadeBar = styled.span<{ $ratio: number }>`
+  display: block;
+  height: ${({ $ratio }) => ($ratio === 0 ? 0 : Math.max(2, Math.round($ratio * 18)))}px;
+  border-radius: 2px 2px 0 0;
+  background: ${({ theme }) => theme.colors.primary};
+  opacity: ${({ $ratio }) => (0.35 + $ratio * 0.5).toFixed(2)};
+`
+
+/** 분포 막대 양 끝 연도 — 막대가 어느 100년인지 말한다 */
+export const DecadeRange = styled.span`
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
 `
 
 export const EmptyCatalogState = styled.div`
