@@ -1,4 +1,6 @@
 import {
+  describeExistenceMismatch,
+  describeLifespanMismatch,
   inferParticipationCountries,
   resolveOfficesAtEvent,
 } from './person-participation'
@@ -137,5 +139,23 @@ describe('resolveOfficesAtEvent — 사건 당시 직위', () => {
     const db = fakeDb({ tenures: [tenure('1993-01-20T00:00:00Z', null, '대통령')] })
     const result = await resolveOfficesAtEvent(db, {}, ['p1'])
     expect(result.size).toBe(0)
+  })
+})
+
+describe('앞뒤 안 맞는 연결 경고', () => {
+  it('생몰년 밖이면 문구, 안이면 null(태어난 해·죽은 해는 안)', () => {
+    expect(describeLifespanMismatch(1700, 1770, 1861)).toBe('생몰(1770~1861) 밖의 사건입니다')
+    expect(describeLifespanMismatch(1861, 1770, 1861)).toBeNull()
+    expect(describeLifespanMismatch(1900, null, null)).toBeNull()
+  })
+
+  it('존속 기간 밖이면 문구 — 건국·멸망 역할은 경계라 보지 않는다', () => {
+    expect(describeExistenceMismatch(1911, 'PARTICIPANT', 1912, 1949)).toBe(
+      '존속(1912~1949) 밖의 사건입니다',
+    )
+    expect(describeExistenceMismatch(1911, 'FOUNDED', 1912, 1949)).toBeNull()
+    expect(describeExistenceMismatch(-100, 'PARTICIPANT', -27, 476)).toBe(
+      '존속(기원전 27~476) 밖의 사건입니다',
+    )
   })
 })

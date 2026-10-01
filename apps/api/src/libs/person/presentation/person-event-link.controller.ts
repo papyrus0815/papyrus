@@ -18,6 +18,7 @@ import {
   PersonEventCandidatesDto,
   PersonEventLinkDto,
   PersonEventLinkService,
+  RecordEventSuggestionsDto,
 } from '../application/person-event-link.service'
 
 /** 인물↔사건 연결 본문 — 둘 다 선택(빈 문자열은 비움) */
@@ -62,6 +63,18 @@ export class PersonEventLinkController {
     @Query('q') query?: string,
   ): Promise<PersonEventCandidatesDto> {
     return this.personEventLinkService.getCandidates(personId, accountIdOf(req), query)
+  }
+
+  /**
+   * 재임·재위별 '이 기간의 사건' 제안 — 업적으로 한 번에 잇기 위한 후보(카드마다 최대 8).
+   * @tag persons
+   */
+  @Get(':personId/record-event-suggestions')
+  async getRecordEventSuggestions(
+    @Param('personId') personId: string,
+    @Req() req: Request,
+  ): Promise<RecordEventSuggestionsDto> {
+    return this.personEventLinkService.getRecordEventSuggestions(personId, accountIdOf(req))
   }
 
   /**

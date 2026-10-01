@@ -17,7 +17,12 @@ import {
 import { PrismaService } from '../../../../prisma/prisma.service'
 
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
-import { inferParticipationCountries } from '../../event/application/person-participation'
+import {
+  inferParticipationCountries,
+  keyRange,
+  partsOf,
+  type DateParts,
+} from '../../event/application/person-participation'
 
 /** 후보 한 줄 */
 export interface PersonEventCandidateDto {
@@ -44,6 +49,26 @@ export interface PersonEventCandidatesDto {
   /** 추천 기준 한 줄(예: '대한민국 · 1917~1979') — 추천일 때만 */
   basis: string | null
   items: PersonEventCandidateDto[]
+}
+
+/** 재임·재위 카드 한 장에 붙는 '이 기간의 사건' 제안 */
+export interface RecordEventSuggestionDto {
+  id: string
+  title: string
+  year: number | null
+  startEra: string | null
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  startDate: string | null
+  countryNames: string[]
+  /** 이 인물이 참여 인물로 연결된 사건인지(맨 앞에 선다) */
+  participated: boolean
+}
+
+export interface RecordEventSuggestionsDto {
+  /** recordId → 제안(최대 8) */
+  byRecordId: Record<string, RecordEventSuggestionDto[]>
 }
 
 export interface PersonEventLinkDto {
@@ -271,6 +296,183 @@ export class PersonEventLinkService {
       basis,
       items: [...linkedItems.sort(byYear), ...suggested],
     }
+  }
+
+  /**
+   * 재임·재위별 '이 기간의 사건' 제안 — 업적(achievement)으로 한 번에 잇도록.
+   * 기간이 겹치고 (그 직위의 나라가 참여했거나 이 인물이 참여한) 사건, 이미 업적·즉위 사건으로
+   * 이은 것은 뺀다. 인물이 참여한 사건 먼저, 그다음 시간순. 카드마다 최대 8.
+   */
+  async getRecordEventSuggestions(
+    personId: string,
+    accountId: string,
+  ): Promise<RecordEventSuggestionsDto> {
+    await this.assertPersonWritable(personId, accountId)
+    const [tenures, reigns, events] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: { personId },
+        select: {
+          id: true,
+          countryId: true,
+          historicalCountryId: true,
+          startDate: true,
+          endDate: true,
+          accessionEventId: true,
+          achievements: { select: { eventId: true } },
+        },
+      }),
+      this.prisma.sovereignReign.findMany({
+        where: { personId },
+        select: {
+          id: true,
+          countryId: true,
+          historicalCountryId: true,
+          startEra: true,
+          startYear: true,
+          startMonth: true,
+          startDay: true,
+          startDate: true,
+          endEra: true,
+          endYear: true,
+          endMonth: true,
+          endDay: true,
+          endDate: true,
+          accessionEventId: true,
+          achievements: { select: { eventId: true } },
+        },
+      }),
+      this.prisma.event.findMany({
+        where: { createdById: accountId, deletedAt: null },
+        select: {
+          id: true,
+          title: true,
+          startEra: true,
+          startYear: true,
+          startMonth: true,
+          startDay: true,
+          startDate: true,
+          historicalCountryId: true,
+          countryRelations: {
+            select: {
+              countryId: true,
+              historicalCountryId: true,
+              country: { select: { name: true } },
+              historicalCountry: { select: { name: true } },
+            },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          },
+          persons: { where: { personId }, select: { id: true } },
+        },
+        take: SCAN_LIMIT,
+        orderBy: { updatedAt: 'desc' },
+      }),
+    ])
+
+    type RecordShape = {
+      id: string
+      countryId: string | null
+      historicalCountryId: string | null
+      start: DateParts
+      end: DateParts
+      excluded: Set<string>
+    }
+    const records: RecordShape[] = [
+      ...tenures.map((tenure) => ({
+        id: tenure.id,
+        countryId: tenure.countryId,
+        historicalCountryId: tenure.historicalCountryId,
+        start: partsOf(null, null, null, null, tenure.startDate),
+        end: partsOf(null, null, null, null, tenure.endDate),
+        excluded: new Set(
+          [tenure.accessionEventId, ...tenure.achievements.map((row) => row.eventId)].filter(
+            (id): id is string => !!id,
+          ),
+        ),
+      })),
+      ...reigns.map((reign) => ({
+        id: reign.id,
+        countryId: reign.countryId,
+        historicalCountryId: reign.historicalCountryId,
+        start: partsOf(reign.startEra, reign.startYear, reign.startMonth, reign.startDay, reign.startDate),
+        end: partsOf(reign.endEra, reign.endYear, reign.endMonth, reign.endDay, reign.endDate),
+        excluded: new Set(
+          [reign.accessionEventId, ...reign.achievements.map((row) => row.eventId)].filter(
+            (id): id is string => !!id,
+          ),
+        ),
+      })),
+    ]
+
+    // 현대국 직위면 브리지로 이어진 역사국 사건도 그 나라 사건으로 본다
+    const bridgedByModern = new Map<string, Set<string>>()
+    for (const modernId of new Set(records.map((record) => record.countryId).filter(Boolean) as string[])) {
+      bridgedByModern.set(
+        modernId,
+        new Set(await resolveLinkedHistoricalCountryIds(this.prisma, modernId)),
+      )
+    }
+
+    const eventRows = events.map((event) => {
+      const parts = partsOf(event.startEra, event.startYear, event.startMonth, event.startDay, event.startDate)
+      return {
+        event,
+        range: keyRange(parts.year, parts.month, parts.day),
+        year: parts.year,
+        participated: event.persons.length > 0,
+        modernIds: new Set(
+          event.countryRelations.map((relation) => relation.countryId).filter(Boolean) as string[],
+        ),
+        historicalIds: new Set(
+          [
+            event.historicalCountryId,
+            ...event.countryRelations.map((relation) => relation.historicalCountryId),
+          ].filter(Boolean) as string[],
+        ),
+      }
+    })
+
+    const byRecordId: Record<string, RecordEventSuggestionDto[]> = {}
+    for (const record of records) {
+      const startRange = keyRange(record.start.year, record.start.month, record.start.day)
+      if (!startRange) {
+        byRecordId[record.id] = []
+        continue
+      }
+      const endRange = keyRange(record.end.year, record.end.month, record.end.day)
+      const recordEnd = endRange ? endRange[1] : Number.MAX_SAFE_INTEGER
+      const bridged = record.countryId ? bridgedByModern.get(record.countryId) : undefined
+
+      const matches = eventRows.filter((row) => {
+        if (!row.range || record.excluded.has(row.event.id)) return false
+        if (row.range[0] > recordEnd || row.range[1] < startRange[0]) return false
+        const sameCountry =
+          (record.countryId != null && row.modernIds.has(record.countryId)) ||
+          (record.historicalCountryId != null && row.historicalIds.has(record.historicalCountryId)) ||
+          (bridged != null && [...row.historicalIds].some((id) => bridged.has(id)))
+        return sameCountry || row.participated
+      })
+      matches.sort(
+        (left, right) =>
+          Number(right.participated) - Number(left.participated) ||
+          (left.year ?? 0) - (right.year ?? 0),
+      )
+      byRecordId[record.id] = matches.slice(0, 8).map((row) => ({
+        id: row.event.id,
+        title: row.event.title,
+        year: row.year,
+        startEra: row.event.startEra,
+        startYear: row.event.startYear,
+        startMonth: row.event.startMonth,
+        startDay: row.event.startDay,
+        startDate: row.event.startDate ? row.event.startDate.toISOString() : null,
+        countryNames: row.event.countryRelations
+          .map((relation) => relation.country?.name ?? relation.historicalCountry?.name)
+          .filter((name): name is string => !!name)
+          .slice(0, 3),
+        participated: row.participated,
+      }))
+    }
+    return { byRecordId }
   }
 
   /** 연결(없으면 만들고, 있으면 역할·비고만 갱신) — 여러 번 눌러도 같은 결과 */

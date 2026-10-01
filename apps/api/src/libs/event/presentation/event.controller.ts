@@ -21,7 +21,13 @@ import { AuthGuard } from '@nestjs/passport'
 
 import { ApiTags } from '@nestjs/swagger'
 import { EventService } from '../application/event.service'
-import { resolveOfficesAtEvent } from '../application/person-participation'
+import {
+  describeExistenceMismatch,
+  describeLifespanMismatch,
+  partsOf,
+  resolveOfficesAtEvent,
+  signedYearOfDate,
+} from '../application/person-participation'
 import { MilitaryEventService } from '../application/military-event.service'
 import { EventRelationService } from '../application/event-relation.service'
 import {
@@ -1563,9 +1569,9 @@ export class EventController {
   ): Promise<VisitedEventCardDto[]> {
     const parsedLimit = parseInt(limit ?? '', 10)
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-    const take = Number.isNaN(parsedLimit) ? 60 : Math.min(Math.max(parsedLimit, 1), 100)
             country: { select: { id: true, name: true, flagEmoji: true } },
             historicalCountry: { select: { id: true, name: true } },
+    const take = Number.isNaN(parsedLimit) ? 60 : Math.min(Math.max(parsedLimit, 1), 100)
     const rows = await this.prisma.event.findMany({
       // 루트 판정 — domain/event-hierarchy.ts 단일출처(INV-2 의존, 다중 상위 무영향)
       where: { createdById: accountId, ...ROOT_EVENT_WHERE, deletedAt: null },
@@ -1606,9 +1612,6 @@ export class EventController {
     if (loaded.event.createdById !== userId) {
       throw new ForbiddenException('본인이 등록한 사건만 조회할 수 있습니다.')
     }
-
-    return loaded.response
-  }
     // 참여 인물별 '사건 당시 직위' — 재임·재위 기록에서 파생(저장하지 않는다)
     if (response.relatedPersons && response.relatedPersons.length > 0) {
       const offices = await resolveOfficesAtEvent(
@@ -1621,6 +1624,57 @@ export class EventController {
       }
     }
 
+    // 앞뒤 안 맞는 연결 — 생몰년 밖 참여 인물, 존속 기간 밖 역사 참여국(표시만, 막지 않음)
+    const eventYear = partsOf(
+      event.startEra,
+      event.startYear,
+      event.startMonth,
+      event.startDay,
+      event.startDate,
+    ).year
+    if (eventYear != null) {
+      if (response.relatedPersons && response.relatedPersons.length > 0) {
+        const lifespans = await this.prisma.person.findMany({
+          where: { id: { in: response.relatedPersons.map((person) => person.personId) } },
+          select: { id: true, birthEra: true, birthDate: true, deathEra: true, deathDate: true },
+        })
+        const lifespanById = new Map(lifespans.map((row) => [row.id, row]))
+        for (const person of response.relatedPersons) {
+          const row = lifespanById.get(person.personId)
+          person.lifespanWarning = row
+            ? describeLifespanMismatch(
+                eventYear,
+                signedYearOfDate(row.birthEra, row.birthDate),
+                signedYearOfDate(row.deathEra, row.deathDate),
+              )
+            : null
+        }
+      }
+      if (response.relatedHistoricalCountries) {
+        const relationByHistoricalId = new Map(
+          (event.countryRelations ?? [])
+            .filter((relation: any) => relation.historicalCountryId && relation.historicalCountry)
+            .map((relation: any) => [relation.historicalCountryId, relation]),
+        )
+        for (const country of response.relatedHistoricalCountries) {
+          const relation: any = relationByHistoricalId.get(country.id)
+          const period = relation?.historicalCountry
+          if (!period) continue
+          const toSigned = (era: string | null, year: number | null) =>
+            year == null ? null : era === 'BC' ? -year : year
+          country.existenceWarning = describeExistenceMismatch(
+            eventYear,
+            relation.role,
+            toSigned(period.startEra, period.startYear),
+            toSigned(period.endEra, period.endYear),
+          )
+        }
+      }
+    }
+
+
+    return loaded.response
+  }
 
   /**
    * 사건 생성

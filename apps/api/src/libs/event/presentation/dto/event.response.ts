@@ -288,6 +288,8 @@ export class EventResponseDto {
     roleDescription?: string | null
     note?: string | null
     sortOrder?: number
+    /** 존속 기간 밖 사건이면 안내 문구(표시만, 건국·멸망 역할 제외) — 상세 응답에서만 */
+    existenceWarning?: string | null
   }>
 
   @ApiProperty({
@@ -331,6 +333,8 @@ export class EventResponseDto {
     participationCountryName?: string | null
     /** 사건 당시 직위(재임·재위에서 파생, 최대 2개) — 상세 응답에서만 */
     officesAtEvent?: string[]
+    /** 생몰년 밖 사건이면 안내 문구(표시만) — 상세 응답에서만 */
+    lifespanWarning?: string | null
     person?: {
       id: string
       name?: string | null

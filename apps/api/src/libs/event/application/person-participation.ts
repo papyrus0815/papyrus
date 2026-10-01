@@ -89,7 +89,7 @@ export async function inferParticipationCountries(
 // ─── 사건 당시 직위 ──────────────────────────────────────────────────────────
 
 /** 부호 연·월·일 → 비교 키 범위. 모르는 부분은 그 단위 전체로 넓힌다 */
-function keyRange(
+export function keyRange(
   year: number | null,
   month: number | null,
   day: number | null,
@@ -102,10 +102,10 @@ function keyRange(
   return [key, key]
 }
 
-type DateParts = { year: number | null; month: number | null; day: number | null }
+export type DateParts = { year: number | null; month: number | null; day: number | null }
 
 /** 구조화 날짜(BC 안전) 우선, 없으면 DATETIME */
-function partsOf(
+export function partsOf(
   era: string | null | undefined,
   year: number | null | undefined,
   month: number | null | undefined,
@@ -218,4 +218,55 @@ export async function resolveOfficesAtEvent(
     push(tenure.personId, `${countryName} ${office}`.trim())
   }
   return result
+}
+
+// ─── 앞뒤 안 맞는 연결 경고(표시만, 막지 않음) ─────────────────────────────
+
+const formatSignedYear = (year: number) => (year < 0 ? `기원전 ${-year}` : `${year}`)
+
+/** DATETIME + era → 부호 연도(Person 생몰처럼 구조화 칸이 없는 경우) */
+export function signedYearOfDate(
+  era: string | null | undefined,
+  date: Date | null | undefined,
+): number | null {
+  if (!date) return null
+  const year = date.getUTCFullYear()
+  return era === 'BC' ? -year : year
+}
+
+/**
+ * 참여 인물의 생몰년 밖 사건이면 안내 문구, 아니면 null.
+ * 사망한 해·태어난 해 안의 사건은 맞는 것으로 본다(연도 단위 비교).
+ */
+export function describeLifespanMismatch(
+  eventYear: number | null,
+  birthYear: number | null,
+  deathYear: number | null,
+): string | null {
+  if (eventYear == null || (birthYear == null && deathYear == null)) return null
+  const before = birthYear != null && eventYear < birthYear
+  const after = deathYear != null && eventYear > deathYear
+  if (!before && !after) return null
+  const range = `${birthYear != null ? formatSignedYear(birthYear) : '?'}~${deathYear != null ? formatSignedYear(deathYear) : ''}`
+  return `생몰(${range}) 밖의 사건입니다`
+}
+
+/**
+ * 역사국가가 존속 기간 밖 사건에 참여국으로 걸렸으면 안내 문구, 아니면 null.
+ * 건국·멸망 역할(FOUNDED·DISSOLVED)은 경계에 걸치는 게 정상이라 보지 않는다
+ * (예: 중화민국 수립 전의 신해혁명).
+ */
+export function describeExistenceMismatch(
+  eventYear: number | null,
+  role: string | null | undefined,
+  startYear: number | null,
+  endYear: number | null,
+): string | null {
+  if (eventYear == null || role === 'FOUNDED' || role === 'DISSOLVED') return null
+  if (startYear == null && endYear == null) return null
+  const before = startYear != null && eventYear < startYear
+  const after = endYear != null && eventYear > endYear
+  if (!before && !after) return null
+  const range = `${startYear != null ? formatSignedYear(startYear) : '?'}~${endYear != null ? formatSignedYear(endYear) : ''}`
+  return `존속(${range}) 밖의 사건입니다`
 }
