@@ -1523,7 +1523,10 @@ export const Fact = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 0 1 auto;
+  /* 늘어나도 된다 — 바(FactBar)가 max-content라 한 줄일 땐 남는 폭이 없어 효과가 없고,
+     좁은 화면에서 줄이 넘어갈 때만 남은 자리를 나눠 갖는다. 0이던 시절엔 390px에서
+     줄 끝에 틈새 배경(회색 칸)이 드러났다. */
+  flex: 1 1 auto;
   min-width: 168px;
   padding: 14px 16px;
   background: ${({ theme }) => theme.colors.background.primary};

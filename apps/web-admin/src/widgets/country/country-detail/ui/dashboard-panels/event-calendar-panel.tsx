@@ -489,18 +489,25 @@ const Weekday = styled.span<{ $tone: DayTone }>`
  * 96px일 땐 사건 한 건짜리 달도 격자가 600px를 먹어 캘린더 한 장이 한 화면이었다.
  */
 const CELL_MIN_HEIGHT = 68
+/**
+ * 사건이 없는 칸 — 날짜 숫자만 들어갈 높이. 주(행) 높이는 그 주에서 가장 큰 칸이 정하므로,
+ * 사건이 하나도 없는 주만 얇아진다. 68px 고정일 땐 사건 2건짜리 달(1914년 8월)도 다섯 주가
+ * 모두 68px라 격자의 80%가 빈 칸이었다.
+ */
+const EMPTY_CELL_MIN_HEIGHT = 34
 
 const cellBase = css`
-  min-height: ${CELL_MIN_HEIGHT}px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const EmptyCell = styled.span`
   ${cellBase}
+  min-height: ${EMPTY_CELL_MIN_HEIGHT}px;
 `
 
 const DayCell = styled.div<{ $has: boolean }>`
   ${cellBase}
+  min-height: ${({ $has }) => ($has ? CELL_MIN_HEIGHT : EMPTY_CELL_MIN_HEIGHT)}px;
   display: flex;
   flex-direction: column;
   gap: 3px;

@@ -78,6 +78,12 @@ export interface LineageFlowProps {
   currentId?: string
   /** 카드를 누르면 그 나라로 — 없으면 카드는 읽기 전용 */
   onSelect?: (id: string) => void
+  /**
+   * 세기 한 칸에 처음 보일 카드 수 — 넘치면 '+N개 더'로 접는다. 미지정이면 전부.
+   * 독일 제국 계보의 19세기 칸은 10장이 쌓여 계보 하나가 화면 한 장(560px)을 먹었다.
+   * 지금 보는 나라(currentId)는 접혀도 늘 보인다.
+   */
+  maxPerColumn?: number
 }
 
 /**
@@ -100,6 +106,7 @@ export function LineageFlow({
   historicalCountries,
   currentId,
   onSelect,
+  maxPerColumn,
 }: LineageFlowProps) {
   // era 인지 비교기로 시간순 정렬 — BC 국가가 역순으로 이어지던 문제(F7) 해소
   const nodes = [...historicalCountries].sort(compareByCountryStart).map(toNode)
@@ -107,6 +114,17 @@ export function LineageFlow({
 
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const [edges, setEdges] = useState({ start: false, end: false })
+  const [expandedColumns, setExpandedColumns] = useState<ReadonlySet<string>>(() => new Set())
+
+  /** 접힌 칸에서 보일 카드 — 앞에서부터 채우되 지금 보는 나라는 반드시 넣는다 */
+  const visibleNodesOf = (column: CenturyColumn): LineageNode[] => {
+    if (maxPerColumn == null || expandedColumns.has(column.key)) return column.nodes
+    if (column.nodes.length <= maxPerColumn) return column.nodes
+    const head = column.nodes.slice(0, maxPerColumn)
+    const current = column.nodes.find((node) => node.id === currentId)
+    if (current && !head.includes(current)) head[maxPerColumn - 1] = current
+    return head
+  }
 
   /* 처음 그릴 때 최근 쪽 끝으로 — 열 수가 바뀌어도(이전 N개 펼치기) 다시 맞춘다 */
   useLayoutEffect(() => {
@@ -165,7 +183,7 @@ export function LineageFlow({
                 <TickLabel>{column.label}</TickLabel>
               </Tick>
               <Stack>
-                {column.nodes.map((node) => {
+                {visibleNodesOf(column).map((node) => {
                   const isCurrent = node.id === currentId
                   const interactive = !!onSelect && !isCurrent
                   return (
@@ -185,6 +203,27 @@ export function LineageFlow({
                     </Card>
                   )
                 })}
+                {(() => {
+                  if (maxPerColumn == null || column.nodes.length <= maxPerColumn) return null
+                  const expanded = expandedColumns.has(column.key)
+                  const hidden = column.nodes.length - maxPerColumn
+                  return (
+                    <MoreButton
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() =>
+                        setExpandedColumns((previous) => {
+                          const next = new Set(previous)
+                          if (next.has(column.key)) next.delete(column.key)
+                          else next.add(column.key)
+                          return next
+                        })
+                      }
+                    >
+                      {expanded ? '접기' : `+${hidden}개 더`}
+                    </MoreButton>
+                  )
+                })()}
               </Stack>
             </Column>
           ))}
@@ -300,6 +339,30 @@ const Card = styled.div<{ $current?: boolean; $interactive?: boolean }>`
   &:hover {
     border-color: ${({ theme, $interactive, $current }) =>
       $interactive || $current ? theme.colors.primary : theme.colors.border.light};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.focusRing.primary};
+    outline-offset: 2px;
+  }
+`
+
+const MoreButton = styled.button`
+  align-self: flex-start;
+  padding: 4px 8px;
+  margin-left: -2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.activeLight};
   }
 
   &:focus-visible {
