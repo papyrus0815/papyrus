@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -16,6 +17,7 @@ import { queryClient } from '@/shared/queryClient'
 import { useBackgroundStore } from '@/shared/store/background.store'
 import { getTheme } from '@/shared/styles/theme'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { Z_INDEX } from '@/shared/styles/z-index'
 import { ConfirmHost } from '@/shared/ui/confirm-dialog'
 import { EnvConfigModal } from '@/shared/ui/env-config-modal/env-config-modal.ui'
 import { logError } from '@/shared/ui/error-handler/error-handler.lib'
@@ -54,11 +56,17 @@ function ThemedToaster() {
     minWidth: '260px',
   } as const
 
-  return (
+  /*
+   * body로 포털한다. 이 컴포넌트는 ContentContainer(position:relative; z-index:10) 안에 있어서
+   * 알림의 z-index가 그 쌓임 맥락에 갇혔다 — body에 바로 붙는 모달 오버레이(9999)가 늘 위에
+   * 와서, 모달 안에서 한 일의 알림(연결 모달의 '추가했습니다')이 어두운 배경 밑에 깔렸다.
+   * 포털은 React 컨텍스트(테마)를 그대로 잇는다.
+   */
+  return createPortal(
     <Toaster
       position="bottom-center"
       gutter={12}
-      containerStyle={{ bottom: 28 }}
+      containerStyle={{ bottom: 28, zIndex: Z_INDEX.TOAST }}
       toastOptions={{
         duration: 3500,
         style: toastBase,
@@ -104,7 +112,8 @@ function ThemedToaster() {
           },
         },
       }}
-    />
+    />,
+    document.body,
   )
 }
 
