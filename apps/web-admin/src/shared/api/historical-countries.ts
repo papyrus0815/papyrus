@@ -484,8 +484,11 @@ export interface FirstRuler {
   recordId: string
   regnalName: string | null
   title: string | null
-  /** numbered = 제1대로 기록된 행, earliest = 대수 기록이 없어 가장 이른 기록 */
-  basis: 'numbered' | 'earliest'
+  /**
+   * numbered = 제1대로 기록된 행, earliest = 대수 기록이 없어 가장 이른 기록,
+   * latest = 마지막 통치자(가장 늦게 시작한 기록)
+   */
+  basis: 'numbered' | 'earliest' | 'latest'
   startEra: 'BC' | 'AD' | null
   startYear: number | null
   endEra: 'BC' | 'AD' | null
@@ -503,10 +506,35 @@ export interface FoundingLinkedCountry {
   endYear: number | null
 }
 
+export type StatehoodAgentSide = 'FOUNDING' | 'DISSOLUTION'
+
+/** 건국·멸망 주체 — 인물·역사 국가·현대 국가·자유 입력 중 하나 */
+export interface StatehoodAgent {
+  id: string
+  side: StatehoodAgentSide
+  kind: 'person' | 'historicalCountry' | 'country' | 'name'
+  /** 인물·국가 id — kind='name'이면 null */
+  refId: string | null
+  name: string
+  person: FoundingPerson | null
+  startEra: 'BC' | 'AD' | null
+  startYear: number | null
+  endEra: 'BC' | 'AD' | null
+  endYear: number | null
+  note: string | null
+  sortOrder: number
+}
+
 export interface FoundingSummary {
   foundingNote: string | null
   dissolutionNote: string | null
+  /** 건국 주체 — 누가 세웠나(구버전 서버면 undefined) */
+  founders?: StatehoodAgent[]
+  /** 멸망 주체 — 누구에게 멸망했나(구버전 서버면 undefined) */
+  dissolvers?: StatehoodAgent[]
   firstRulers: FirstRuler[]
+  /** 마지막 통치자 — 종류별 한 명. 초대와 같은 기록이면 빠진다(구버전 서버면 undefined) */
+  lastRulers?: FirstRuler[]
   predecessors: FoundingLinkedCountry[]
   successors: FoundingLinkedCountry[]
 }
@@ -525,4 +553,78 @@ export async function getHistoricalCountryFoundingSummary(
   )
   if (!res.ok) throw new Error(`건국 요약 조회 실패: HTTP ${res.status}`)
   return (await res.json()) as FoundingSummary
+}
+
+// ── 건국·멸망 주체 ────────────────────────────────────────────────────────────
+
+export interface CreateStatehoodAgentInput {
+  side: StatehoodAgentSide
+  personId?: string
+  agentHistoricalCountryId?: string
+  agentCountryId?: string
+  /** 등록되지 않은 주체의 이름 */
+  name?: string
+  note?: string
+}
+
+async function statehoodAgentRequest<T>(
+  path: string,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  body?: unknown,
+): Promise<T> {
+  const conn = getApiConnection()
+  const res = await fetch(`${conn.host}${path}`, {
+    method,
+    headers: {
+      ...(conn.headers as Record<string, string>),
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`
+    try {
+      const parsed = (await res.json()) as { message?: string; error?: { message?: string } }
+      message = parsed.error?.message ?? parsed.message ?? message
+    } catch {
+      /* 본문 없음 */
+    }
+    throw new Error(message)
+  }
+  if (res.status === 204) return undefined as T
+  const out = (await res.json()) as { data?: T } & T
+  return (out?.data ?? out) as T
+}
+
+/** 건국·멸망 주체 추가 — POST /historical-countries/:id/statehood-agents */
+export function createStatehoodAgent(
+  historicalCountryId: string,
+  input: CreateStatehoodAgentInput,
+): Promise<StatehoodAgent> {
+  return statehoodAgentRequest(
+    `/historical-countries/${encodeURIComponent(historicalCountryId)}/statehood-agents`,
+    'POST',
+    input,
+  )
+}
+
+/** 역할 메모 수정 — PATCH /historical-countries/statehood-agents/:agentId */
+export function updateStatehoodAgent(
+  agentId: string,
+  input: { note?: string | null; sortOrder?: number },
+): Promise<StatehoodAgent> {
+  return statehoodAgentRequest(
+    `/historical-countries/statehood-agents/${encodeURIComponent(agentId)}`,
+    'PATCH',
+    input,
+  )
+}
+
+/** 건국·멸망 주체 삭제 — DELETE /historical-countries/statehood-agents/:agentId */
+export function deleteStatehoodAgent(agentId: string): Promise<void> {
+  return statehoodAgentRequest(
+    `/historical-countries/statehood-agents/${encodeURIComponent(agentId)}`,
+    'DELETE',
+  )
 }

@@ -257,6 +257,10 @@ export async function getEventLinkCandidates(params?: {
   query?: string
   /** 기본 30, 최대 100 (서버 캡) */
   limit?: number
+  /** 이 부호 연도(BC 음수) 근처 사건만, 가까운 순 — 건국·멸망처럼 시점이 정해진 연결용 */
+  near?: number | null
+  /** near 앞뒤 몇 년까지 (기본 30) */
+  window?: number
 }): Promise<EventLinkCandidate[]> {
   try {
     const connection = getConnection()
@@ -264,6 +268,8 @@ export async function getEventLinkCandidates(params?: {
     const term = params?.query?.trim()
     if (term) url.searchParams.set('q', term)
     if (params?.limit != null) url.searchParams.set('limit', String(params.limit))
+    if (params?.near != null) url.searchParams.set('near', String(params.near))
+    if (params?.window != null) url.searchParams.set('window', String(params.window))
 
     const response = await fetch(url.toString(), {
       headers: (connection.headers ?? {}) as HeadersInit,

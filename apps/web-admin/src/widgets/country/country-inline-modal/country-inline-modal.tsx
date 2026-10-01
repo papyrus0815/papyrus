@@ -23,7 +23,15 @@ import styled, { css } from 'styled-components'
 
 import { useCountry } from '@/entities/country/api'
 import { useHistoricalCountry } from '@/entities/historical-country/api'
-import { getHistoricalCountryFoundingSummary } from '@/shared/api/historical-countries'
+import { ethnicityApi } from '@/shared/api/ethnicity'
+import { getCountryStatehoodEvents, type StatehoodEvent } from '@/shared/api/events'
+import {
+  getHistoricalCountryFoundingSummary,
+  type FirstRuler,
+  type FoundingLinkedCountry,
+  type StatehoodAgent,
+} from '@/shared/api/historical-countries'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   getEntityKindLabel,
@@ -31,7 +39,9 @@ import {
 } from '@/entities/historical-country/lib/utils'
 import {
   formatCountryPeriod,
+  formatCountryYearShort,
   getCountryDurationYears,
+  getCountryYearRange,
 } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
@@ -44,6 +54,11 @@ export interface CountryInlineModalTarget {
   kind: 'modern' | 'historical'
   /** 클릭 지점에서 이미 아는 이름 — 로딩 중에도 헤더를 즉시 그린다. */
   name?: string
+  /**
+   * 어느 끝에서 열었나 — 사건 목록의 건국·멸망 표지. 그 절을 앞에 세우고 강조한다.
+   * 칩으로 다른 나라로 옮기면 비운다(그 나라엔 이 맥락이 없다).
+   */
+  focus?: 'founding' | 'dissolution'
 }
 
 interface CountryInlineModalProps {
@@ -78,6 +93,72 @@ export function shouldInterceptEntityClick(
     !clickEvent.shiftKey &&
     !clickEvent.altKey
   )
+}
+
+/** 리치 텍스트(HTML)·마크다운 조각을 한 문단 평문으로 — 모달은 발췌만 보여 준다 */
+function toPlainExcerpt(html: string | null | undefined): string | null {
+  if (!html) return null
+  const text = html
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/(p|li|h\d|div)>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[#*_`>]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text || null
+}
+
+const signedYear = (era: string | null | undefined, year: number | null | undefined) =>
+  year == null ? null : era === 'BC' ? -year : year
+
+const RULER_FALLBACK_TITLE: Record<FirstRuler['kind'], string> = {
+  monarch: '군주',
+  headOfState: '국가원수',
+  headOfGovernment: '정부수반',
+}
+
+/** 계승 관계 유형 — 개요 탭 건국·멸망 카드와 같은 말 */
+const TRANSITION_LABEL: Record<string, string> = {
+  FOUNDED: '건국',
+  CONQUEST: '정복',
+  TREATY: '조약',
+  INDEPENDENCE: '독립',
+  UNIFICATION: '통일',
+  UNION: '합병',
+  DISSOLVED: '멸망',
+  SUCCESSION: '계승',
+  SPLIT: '분열',
+  OTHER: '기타',
+}
+
+function rulerSpan(ruler: FirstRuler): string {
+  const start = formatCountryYearShort(signedYear(ruler.startEra, ruler.startYear))
+  const end = formatCountryYearShort(signedYear(ruler.endEra, ruler.endYear))
+  if (!start) return ''
+  if (end === start) return start
+  return `${start}–${end ?? ''}`
+}
+
+function linkedSpan(country: FoundingLinkedCountry): string {
+  const start = formatCountryYearShort(signedYear(country.startEra, country.startYear))
+  const end = formatCountryYearShort(signedYear(country.endEra, country.endYear))
+  if (!start) return ''
+  return `${start}–${end ?? ''}`
+}
+
+function statehoodEventYear(event: StatehoodEvent): string | null {
+  if (event.startYear != null) {
+    return formatCountryYearShort(signedYear(event.startEra, event.startYear))
+  }
+  if (!event.startDate) return null
+  const year = Number.parseInt(event.startDate.slice(0, 4), 10)
+  return Number.isFinite(year) ? formatCountryYearShort(year) : null
 }
 
 /** 인구 값(문자열 BigInt 직렬화 | 숫자)을 천 단위 구분 표기로. 비수치면 원문 유지. */
@@ -121,19 +202,36 @@ export function CountryInlineModal({
     enabled: isHistorical && !!target?.id,
     staleTime: 60_000,
   })
-  const firstRuler = foundingQuery.data?.firstRulers[0]
-  const foundingExcerpt = useMemo(() => {
-    const html = foundingQuery.data?.foundingNote
-    if (!html) return null
-    const text = html
-      .replace(/<br\s*\/?>/gi, ' ')
-      .replace(/<\/(p|li|h\d)>/gi, ' ')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-    return text || null
-  }, [foundingQuery.data?.foundingNote])
+  /* 건국·멸망 사건 — 참여국 역할로 이 나라를 건 사건(개요 탭 카드와 같은 캐시 키) */
+  const statehoodQuery = useQuery({
+    queryKey: ['events', 'statehood', { historicalCountryId: target?.id ?? '' }],
+    queryFn: () => getCountryStatehoodEvents({ historicalCountryId: target!.id }),
+    enabled: isHistorical && !!target?.id,
+    staleTime: 60_000,
+  })
+  /* 구성 민족 — 국가 상세 '민족' 섹션이 편집한다(그쪽은 캐시를 안 써 열 때마다 새로 받는다) */
+  const ethnicityQuery = useQuery({
+    queryKey: ['ethnicities', { historicalCountryId: target?.id ?? '' }],
+    queryFn: () => ethnicityApi.getAll({ historicalCountryId: target!.id }),
+    enabled: isHistorical && !!target?.id,
+  })
+  const summary = foundingQuery.data
+  const foundingExcerpt = useMemo(
+    () => toPlainExcerpt(summary?.foundingNote),
+    [summary?.foundingNote],
+  )
+  const dissolutionExcerpt = useMemo(
+    () => toPlainExcerpt(summary?.dissolutionNote),
+    [summary?.dissolutionNote],
+  )
+  const descriptionExcerpt = useMemo(
+    () => toPlainExcerpt(historicalQuery.data?.description),
+    [historicalQuery.data?.description],
+  )
+  const nameOriginExcerpt = useMemo(
+    () => toPlainExcerpt(historicalQuery.data?.nameOrigin),
+    [historicalQuery.data?.nameOrigin],
+  )
 
   /**
    * 열린 채 다른 국가로 전환하면 클릭했던 칩이 unmount되며 포커스가 body로
@@ -193,6 +291,235 @@ export function CountryInlineModal({
   const historicalDuration = historical
     ? getCountryDurationYears(historical)
     : null
+  const historicalRange = historical ? getCountryYearRange(historical) : null
+  // 정권·시대는 '건국·멸망'이 아니라 '성립·종료'(표지 동사와 같은 규칙)
+  const isSovereignState = !historical?.entityKind || historical.entityKind === 'STATE'
+  const foundingWord = isSovereignState ? '건국' : '성립'
+  const dissolutionWord = isSovereignState ? '멸망' : '종료'
+  const hasEnded = historicalRange?.end != null
+
+  const switchToHistorical = (country: { id: string; name: string }) =>
+    onSwitch?.({ id: country.id, kind: 'historical', name: country.name })
+
+  const handleOpenEvent = (eventId: string) => {
+    onClose()
+    navigate(pathKeys.events.detail(eventId))
+  }
+
+  const renderRulers = (rulers: FirstRuler[]) => (
+    <RulerStack>
+      {rulers.map((ruler) => {
+        const span = rulerSpan(ruler)
+        return (
+          <li key={ruler.recordId}>
+            <MetaAside>{ruler.title || RULER_FALLBACK_TITLE[ruler.kind]} </MetaAside>
+            {ruler.regnalName?.trim() || getPersonDisplayName(ruler.person, true)}
+            {span && <MetaAside> · {span}</MetaAside>}
+            {ruler.basis === 'earliest' && <MetaAside> (가장 이른 기록)</MetaAside>}
+          </li>
+        )
+      })}
+    </RulerStack>
+  )
+
+  /** 세운 쪽·멸망시킨 쪽 — 역사 국가 주체는 모달 안에서 그 나라로 옮겨 간다 */
+  const renderAgents = (agents: StatehoodAgent[]) => (
+    <RulerStack>
+      {agents.map((agent) => {
+        const label =
+          // Person.regnalName은 오염 필드라 쓰지 않는다
+          agent.kind === 'person' && agent.person
+            ? getPersonDisplayName(agent.person, true) || agent.name
+            : agent.name
+        return (
+          <li key={agent.id}>
+            {agent.kind === 'historicalCountry' && agent.refId && onSwitch ? (
+              <InlineLinkButton
+                type="button"
+                onClick={() => switchToHistorical({ id: agent.refId!, name: agent.name })}
+              >
+                {label}
+              </InlineLinkButton>
+            ) : (
+              label
+            )}
+            {agent.note && <MetaAside> · {agent.note}</MetaAside>}
+          </li>
+        )
+      })}
+    </RulerStack>
+  )
+
+  const renderEvents = (events: StatehoodEvent[]) => (
+    <RulerStack>
+      {events.map((event) => {
+        const yearText = statehoodEventYear(event)
+        return (
+          <li key={event.id}>
+            <InlineLinkButton type="button" onClick={() => handleOpenEvent(event.id)}>
+              {event.title}
+            </InlineLinkButton>
+            {yearText && <MetaAside> · {yearText}</MetaAside>}
+          </li>
+        )
+      })}
+    </RulerStack>
+  )
+
+  const renderLinked = (linked: FoundingLinkedCountry[]) => (
+    <ChipRow>
+      {linked.map((country) => {
+        const span = linkedSpan(country)
+        const chipBody = (
+          <>
+            <ChipName $italic>{country.name}</ChipName>
+            <ChipPeriod>
+              {[TRANSITION_LABEL[country.eventType] ?? country.eventType, span]
+                .filter(Boolean)
+                .join(' · ')}
+            </ChipPeriod>
+          </>
+        )
+        return onSwitch ? (
+          <ChipButton
+            key={`${country.id}-${country.eventType}`}
+            type="button"
+            onClick={() => switchToHistorical(country)}
+          >
+            {chipBody}
+          </ChipButton>
+        ) : (
+          <ChipStatic key={`${country.id}-${country.eventType}`}>{chipBody}</ChipStatic>
+        )
+      })}
+    </ChipRow>
+  )
+
+  const foundingEvents = statehoodQuery.data?.founded ?? []
+  const dissolutionEvents = statehoodQuery.data?.dissolved ?? []
+  const founders = summary?.founders ?? []
+  const dissolvers = summary?.dissolvers ?? []
+  const firstRulers = summary?.firstRulers ?? []
+  const lastRulers = summary?.lastRulers ?? []
+  const predecessorLinks = summary?.predecessors ?? []
+  const successorLinks = summary?.successors ?? []
+
+  const foundingSection = historical ? (
+    <EndSection key="founding" $focused={target?.focus === 'founding'}>
+      <EndSectionHead>
+        <span>{foundingWord}</span>
+        {historicalRange?.start != null && (
+          <EndSectionYear>{formatCountryYearShort(historicalRange.start)}</EndSectionYear>
+        )}
+      </EndSectionHead>
+      {founders.length > 0 ||
+      firstRulers.length > 0 ||
+      foundingEvents.length > 0 ||
+      predecessorLinks.length > 0 ||
+      foundingExcerpt ? (
+        <MetaGrid>
+          {founders.length > 0 && (
+            <>
+              <MetaLabel>{isSovereignState ? '건국자' : '세운 쪽'}</MetaLabel>
+              <MetaValue>{renderAgents(founders)}</MetaValue>
+            </>
+          )}
+          {firstRulers.length > 0 && (
+            <>
+              <MetaLabel>초대</MetaLabel>
+              <MetaValue>{renderRulers(firstRulers)}</MetaValue>
+            </>
+          )}
+          {foundingEvents.length > 0 && (
+            <>
+              <MetaLabel>{foundingWord} 사건</MetaLabel>
+              <MetaValue>{renderEvents(foundingEvents)}</MetaValue>
+            </>
+          )}
+          {predecessorLinks.length > 0 && (
+            <>
+              <MetaLabel>전신</MetaLabel>
+              <MetaValue>{renderLinked(predecessorLinks)}</MetaValue>
+            </>
+          )}
+          {foundingExcerpt && (
+            <>
+              <MetaLabel>배경</MetaLabel>
+              <NoteExcerpt title={foundingExcerpt}>{foundingExcerpt}</NoteExcerpt>
+            </>
+          )}
+        </MetaGrid>
+      ) : (
+        <Muted>
+          {foundingQuery.isLoading ? '불러오는 중…' : `${foundingWord}에 관한 기록이 아직 없습니다.`}
+        </Muted>
+      )}
+    </EndSection>
+  ) : null
+
+  const dissolutionSection =
+    historical && hasEnded ? (
+      <EndSection key="dissolution" $focused={target?.focus === 'dissolution'}>
+        <EndSectionHead>
+          <span>{dissolutionWord}</span>
+          {historicalRange?.end != null && (
+            <EndSectionYear>{formatCountryYearShort(historicalRange.end)}</EndSectionYear>
+          )}
+        </EndSectionHead>
+        {dissolvers.length > 0 ||
+        lastRulers.length > 0 ||
+        dissolutionEvents.length > 0 ||
+        successorLinks.length > 0 ||
+        dissolutionExcerpt ? (
+          <MetaGrid>
+            {dissolvers.length > 0 && (
+              <>
+                <MetaLabel>{isSovereignState ? '멸망시킨 쪽' : '끝낸 쪽'}</MetaLabel>
+                <MetaValue>{renderAgents(dissolvers)}</MetaValue>
+              </>
+            )}
+            {lastRulers.length > 0 && (
+              <>
+                <MetaLabel>마지막</MetaLabel>
+                <MetaValue>{renderRulers(lastRulers)}</MetaValue>
+              </>
+            )}
+            {dissolutionEvents.length > 0 && (
+              <>
+                <MetaLabel>{dissolutionWord} 사건</MetaLabel>
+                <MetaValue>{renderEvents(dissolutionEvents)}</MetaValue>
+              </>
+            )}
+            {successorLinks.length > 0 && (
+              <>
+                <MetaLabel>후신</MetaLabel>
+                <MetaValue>{renderLinked(successorLinks)}</MetaValue>
+              </>
+            )}
+            {dissolutionExcerpt && (
+              <>
+                <MetaLabel>배경</MetaLabel>
+                <NoteExcerpt title={dissolutionExcerpt}>
+                  {dissolutionExcerpt}
+                </NoteExcerpt>
+              </>
+            )}
+          </MetaGrid>
+        ) : (
+          <Muted>
+            {foundingQuery.isLoading
+              ? '불러오는 중…'
+              : `${dissolutionWord}에 관한 기록이 아직 없습니다.`}
+          </Muted>
+        )}
+      </EndSection>
+    ) : null
+
+  // 멸망 표지에서 열었으면 멸망 절을 먼저 — 누른 쪽의 답이 첫 화면에 온다
+  const endSections =
+    target?.focus === 'dissolution'
+      ? [dissolutionSection, foundingSection]
+      : [foundingSection, dissolutionSection]
 
   // 서버 linkKind가 있으면 퀵뷰엔 직계 전신선만, 없으면(데이터 부족·구버전) 전체.
   const historicalAll = modern?.historicalCountries ?? []
@@ -240,6 +567,20 @@ export function CountryInlineModal({
           </ErrorNote>
         ) : isHistorical && historical ? (
           <>
+            {(historical.thumbnailUrl || descriptionExcerpt) && (
+              <Lead>
+                {historical.thumbnailUrl && (
+                  <LeadImage
+                    src={getUploadImageUrl(historical.thumbnailUrl)}
+                    alt=""
+                    loading="lazy"
+                  />
+                )}
+                {descriptionExcerpt && (
+                  <LeadText title={descriptionExcerpt}>{descriptionExcerpt}</LeadText>
+                )}
+              </Lead>
+            )}
             <MetaGrid>
               {historicalPeriod && (
                 <>
@@ -262,26 +603,22 @@ export function CountryInlineModal({
                   </MetaValue>
                 </>
               )}
-              {/* 초대 — 재위·재임 기록에서 파생(개요 탭 건국 카드와 같은 판정) */}
-              {firstRuler && (
+              {(ethnicityQuery.data?.length ?? 0) > 0 && (
                 <>
-                  <MetaLabel>초대</MetaLabel>
+                  <MetaLabel>구성 민족</MetaLabel>
                   <MetaValue>
-                    {firstRuler.title && <MetaAside>{firstRuler.title} </MetaAside>}
-                    {firstRuler.regnalName?.trim() ||
-                      getPersonDisplayName(firstRuler.person, true)}
+                    {ethnicityQuery.data!.map((ethnicity) => ethnicity.name).join(', ')}
                   </MetaValue>
                 </>
               )}
-              {foundingExcerpt && (
+              {nameOriginExcerpt && (
                 <>
-                  <MetaLabel>건국 배경</MetaLabel>
-                  <FoundingExcerpt title={foundingExcerpt}>
-                    {foundingExcerpt}
-                  </FoundingExcerpt>
+                  <MetaLabel>국호 유래</MetaLabel>
+                  <NoteExcerpt title={nameOriginExcerpt}>{nameOriginExcerpt}</NoteExcerpt>
                 </>
               )}
             </MetaGrid>
+            {endSections}
           </>
         ) : modern ? (
           <>
@@ -463,12 +800,99 @@ const MetaValue = styled.dd`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-/** 건국 배경 발췌 — 세 줄에서 자르고 전문은 국가 상세 개요의 건국 카드에서 */
-const FoundingExcerpt = styled(MetaValue)`
+/** 배경 발췌 — 세 줄에서 자르고 전문은 국가 상세 개요의 건국·멸망 카드에서 */
+const NoteExcerpt = styled(MetaValue)`
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+`
+
+const Lead = styled.div`
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+`
+
+const LeadImage = styled.img`
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const LeadText = styled.p`
+  margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`
+
+/** 존속의 한쪽 끝(건국·멸망) — 표지에서 연 쪽은 좌측 선으로 표시 */
+const EndSection = styled.section<{ $focused?: boolean }>`
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  ${({ $focused, theme }) =>
+    $focused &&
+    css`
+      padding-left: 12px;
+      box-shadow: inset 3px 0 0 ${theme.colors.primary};
+    `}
+`
+
+const EndSectionHead = styled.h3`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EndSectionYear = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RulerStack = styled.ul`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+`
+
+const InlineLinkButton = styled.button`
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: ${({ theme }) => theme.colors.primary};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 `
 
 const MetaAside = styled.span`

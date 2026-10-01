@@ -451,7 +451,8 @@ function getStateTypeLabel(stateType: string): string {
  * (URL로 들어오면 안내 화면은 그대로 뜬다).
  */
 const HISTORICAL_TABS: ReadonlyArray<{ id: HistoricalCountryTab; label: string }> = [
-  { id: 'overview', label: '개요' },
+  // id는 URL·동기화 탭 키라 그대로 두고 이름만 — 현대 국가 지면도 '대시보드'다
+  { id: 'overview', label: '대시보드' },
   { id: 'events', label: '주요 사건' },
   { id: 'figures', label: '인물' },
   { id: 'heads', label: '역대 수반' },
@@ -631,9 +632,14 @@ function HistoricalOverviewSection({
   const goPerson = (personId: string) =>
     navigate(pathKeys.personsTimelineDetail(personId))
   const capitalText = country.capital ? String(country.capital).trim() : ''
-  const headOfStateCount = stats.rulers.filter(
-    (ruler) => ruler.axis === 'HEAD_OF_STATE',
-  ).length
+  /*
+   * 역대 수반 수 — 지표 칸과 장 머리 칩이 같은 수를 말하게 한다. 예전엔 지표는 국가원수만
+   * (독일 제국 5명), 칩은 존속 기간 밖 기록까지(7명) 세어 한 화면에 두 숫자가 떴다.
+   * 존속 기간 밖 기록은 잘못 걸린 행일 가능성이 높아 따로 센다.
+   */
+  const rulersInSpan = stats.rulers.filter((ruler) => !ruler.isOutOfSpan)
+  const rulerCount = rulersInSpan.length
+  const outOfSpanRulerCount = stats.rulers.length - rulerCount
 
   /* 기록 원장 — 현대 국가 대시보드와 같은 막대 목록, 축만 역사 국가 것으로 */
   const recordAxes: RecordLedgerRow[] = [
@@ -661,7 +667,7 @@ function HistoricalOverviewSection({
       key: 'ruler',
       label: '역대 수반',
       unit: '명',
-      value: stats.rulers.length,
+      value: rulerCount,
       delta: 0,
       isLoading: stats.loading.tenures,
       icon: <IconVote />,
@@ -730,7 +736,7 @@ function HistoricalOverviewSection({
   }
 
   return (
-    <DashboardStyles.DashboardRoot ref={rootRef}>
+    <DashboardRoot ref={rootRef}>
       {/* 규모 줄 — 현대 국가 대시보드와 같은 칸(FactBar). 역사 국가의 '규모'는 시간이다 */}
       <DashboardStyles.FactBar aria-label="국가 개요 지표">
         <DashboardStyles.Fact>
@@ -758,11 +764,11 @@ function HistoricalOverviewSection({
             <DashboardStyles.FactValue>{entityKindLabel}</DashboardStyles.FactValue>
           </DashboardStyles.Fact>
         )}
-        {headOfStateCount > 0 && (
+        {rulerCount > 0 && (
           <DashboardStyles.Fact>
-            <DashboardStyles.FactLabel>역대 국가원수</DashboardStyles.FactLabel>
+            <DashboardStyles.FactLabel>역대 수반</DashboardStyles.FactLabel>
             <DashboardStyles.FactValue>
-              {headOfStateCount}
+              {rulerCount}
               <DashboardStyles.FactUnit>명</DashboardStyles.FactUnit>
             </DashboardStyles.FactValue>
           </DashboardStyles.Fact>
@@ -778,64 +784,111 @@ function HistoricalOverviewSection({
       {/* 목차 — 장이 열 개 가까이 이어진다. 장 목록은 아래 <section>+<h2>에서 읽는다 */}
       <SectionNav rootRef={rootRef} />
 
-      {/* 개요 — 이 나라가 무엇이었나. 글이 곧 이 지면의 첫 답이다 */}
-      <DashboardStyles.Section aria-labelledby="historical-overview-heading">
-        <DashboardStyles.SectionTitleRow>
-          <DashboardStyles.SectionTitleIcon>
-            <IconScroll />
-          </DashboardStyles.SectionTitleIcon>
-          <DashboardStyles.SectionTitleText id="historical-overview-heading">
-            개요
-          </DashboardStyles.SectionTitleText>
-          {!isEditorOpen && (
-            <DashboardStyles.SectionLink type="button" onClick={handleOpenEditor}>
-              {savedDescription ? '수정' : '+ 작성'}
-            </DashboardStyles.SectionLink>
-          )}
-        </DashboardStyles.SectionTitleRow>
-        {isEditorOpen ? (
-          <OverviewBody>
-            <RichTextEditor
-              value={savedDescription ?? ''}
-              onChange={(html) => {
-                editorValueRef.current = html
-              }}
-              placeholder="역사적 국가에 대한 개요를 작성하세요..."
-              showTitle={false}
-              onImageUpload={async (file) => {
-                const result = await uploadImage(file, 'attachments')
-                return result.url ?? (result as unknown as string)
-              }}
-            />
-            <OverviewActions>
-              <OverviewEditButton type="button" onClick={handleClose}>
-                취소
-              </OverviewEditButton>
-              <OverviewSaveButton
-                type="button"
-                onClick={handleSave}
-                disabled={updateMutation.isPending}
-              >
-                {updateMutation.isPending ? '저장 중…' : '저장'}
-              </OverviewSaveButton>
-            </OverviewActions>
-          </OverviewBody>
-        ) : savedDescription ? (
-          <OverviewBody>
-            {isLikelyRichTextHtml(savedDescription) ? (
-              <RichTextReadView html={savedDescription} />
-            ) : (
-              <OverviewPlain>{savedDescription}</OverviewPlain>
+      {/* 첫 줄 — 글(이 나라가 무엇이었나) 옆에 기록 입구(무엇이 얼마나 쌓였나) */}
+      <DashboardPair $lead $tall="aside">
+        {/* 개요 — 이 나라가 무엇이었나. 글이 곧 이 지면의 첫 답이다 */}
+        <DashboardStyles.Section aria-labelledby="historical-overview-heading">
+          <DashboardStyles.SectionTitleRow>
+            <DashboardStyles.SectionTitleIcon>
+              <IconScroll />
+            </DashboardStyles.SectionTitleIcon>
+            <DashboardStyles.SectionTitleText id="historical-overview-heading">
+              개요
+            </DashboardStyles.SectionTitleText>
+            {!isEditorOpen && (
+              <DashboardStyles.SectionLink type="button" onClick={handleOpenEditor}>
+                {savedDescription ? '수정' : '+ 작성'}
+              </DashboardStyles.SectionLink>
             )}
-          </OverviewBody>
-        ) : (
-          <SectionEmpty
-            text="이 나라가 어떤 나라였는지 몇 문단으로 적어 두면 지면 맨 위에서 먼저 읽힙니다."
-            actionLabel="개요 작성"
-            onAction={handleOpenEditor}
+          </DashboardStyles.SectionTitleRow>
+          {isEditorOpen ? (
+            <OverviewBody>
+              <RichTextEditor
+                value={savedDescription ?? ''}
+                onChange={(html) => {
+                  editorValueRef.current = html
+                }}
+                placeholder="역사적 국가에 대한 개요를 작성하세요..."
+                showTitle={false}
+                onImageUpload={async (file) => {
+                  const result = await uploadImage(file, 'attachments')
+                  return result.url ?? (result as unknown as string)
+                }}
+              />
+              <OverviewActions>
+                <OverviewEditButton type="button" onClick={handleClose}>
+                  취소
+                </OverviewEditButton>
+                <OverviewSaveButton
+                  type="button"
+                  onClick={handleSave}
+                  disabled={updateMutation.isPending}
+                >
+                  {updateMutation.isPending ? '저장 중…' : '저장'}
+                </OverviewSaveButton>
+              </OverviewActions>
+            </OverviewBody>
+          ) : savedDescription ? (
+            <OverviewBody>
+              {isLikelyRichTextHtml(savedDescription) ? (
+                <RichTextReadView html={savedDescription} />
+              ) : (
+                <OverviewPlain>{savedDescription}</OverviewPlain>
+              )}
+            </OverviewBody>
+          ) : (
+            <SectionEmpty
+              text="이 나라가 어떤 나라였는지 몇 문단으로 적어 두면 지면 맨 위에서 먼저 읽힙니다."
+              actionLabel="개요 작성"
+              onAction={handleOpenEditor}
+            />
+          )}
+        </DashboardStyles.Section>
+
+        {/* 기록 — 각 탭으로 가는 입구(숫자가 곧 링크) + 사건의 세기 분포 */}
+        <DashboardStyles.Section>
+          <DashboardStyles.SectionTitleRow>
+            <DashboardStyles.SectionTitleIcon>
+              <IconChart />
+            </DashboardStyles.SectionTitleIcon>
+            <DashboardStyles.SectionTitleText>기록</DashboardStyles.SectionTitleText>
+            <DashboardStyles.SectionCountChip>
+              총 {totalRecords.toLocaleString('ko-KR')}건
+            </DashboardStyles.SectionCountChip>
+          </DashboardStyles.SectionTitleRow>
+          <DashboardStyles.RecordGrid>
+            <DashboardStyles.RecordGridBody>
+              <RecordLedger rows={recordAxes} />
+              {stats.eventCenturyCounts.length > 0 && (
+                <DashboardStyles.EventTimelineBlock>
+                  <DashboardStyles.EventTimelineLabel>사건 연표</DashboardStyles.EventTimelineLabel>
+                  <EventCenturyStrip
+                    counts={stats.eventCenturyCounts}
+                    onOpen={() => onGoToTab('events')}
+                  />
+                </DashboardStyles.EventTimelineBlock>
+              )}
+            </DashboardStyles.RecordGridBody>
+          </DashboardStyles.RecordGrid>
+        </DashboardStyles.Section>
+
+        {/* 더 채울 것 — 개요가 짧으면 그 아래가 비어 있었다. 무엇을 쓸지 바로 이어 보이게 */}
+        <DashboardStyles.Section>
+          <DashboardStyles.SectionTitleRow>
+            <DashboardStyles.SectionTitleIcon>
+              <IconGlobe />
+            </DashboardStyles.SectionTitleIcon>
+            <DashboardStyles.SectionTitleText>더 채울 것</DashboardStyles.SectionTitleText>
+          </DashboardStyles.SectionTitleRow>
+          <CompletenessPanel
+            filled={stats.completeness.filled}
+            total={stats.completeness.total}
+            missing={stats.completeness.missing}
+            isLoading={stats.isCompletenessLoading}
+            onFillMissing={goFill}
           />
-        )}
-      </DashboardStyles.Section>
+        </DashboardStyles.Section>
+      </DashboardPair>
 
       {/* 건국·멸망 — 존속 기간의 양 끝이 '어떻게' 열리고 닫혔나(배경·사건·초대·전신/후신) */}
       <DashboardStyles.Section aria-labelledby="historical-founding-heading">
@@ -885,77 +938,83 @@ function HistoricalOverviewSection({
             historicalCountries={stats.lineage}
             currentId={country.id}
             onSelect={(id) => navigate(pathKeys.countryDetail(id))}
+            maxPerColumn={4}
           />
         )}
       </DashboardStyles.Section>
 
-      {/* 정체 — 어떤 체제였나(현대 국가와 같은 패널, 역사 국가 FK로) */}
-      <PoliticalSystemPanel
-        historicalCountryId={country.id}
-        countryName={country.name}
-        onOpenAll={() => onGoToTab('government')}
-      />
-
-      {/* 역대 수반 — 끝난 나라엔 '지금'이 없다. 누가 얼마나 다스렸나가 이 나라의 윤곽이다 */}
-      <DashboardStyles.Section>
-        <DashboardStyles.SectionTitleRow>
-          <DashboardStyles.SectionTitleIcon>
-            <IconVote />
-          </DashboardStyles.SectionTitleIcon>
-          <DashboardStyles.SectionTitleText>역대 수반</DashboardStyles.SectionTitleText>
-          {stats.rulers.length > 0 && (
-            <DashboardStyles.SectionCountChip>
-              {stats.rulers.length}명
-            </DashboardStyles.SectionCountChip>
-          )}
-          <DashboardStyles.SectionLink type="button" onClick={() => onGoToTab('heads')}>
-            전체 보기
-          </DashboardStyles.SectionLink>
-        </DashboardStyles.SectionTitleRow>
-        {stats.loading.tenures ? (
-          <ChartSkeleton variant="bars" />
-        ) : stats.rulers.length === 0 ? (
-          <SectionEmpty
-            text="군주·국가원수·정부수반의 재위를 등록하면 존속 기간 위에 치세가 띠로 깔리고, 사람마다 카드가 섭니다."
-            actionLabel="수반 등록"
-            onAction={() => onGoToTab('heads')}
-          />
-        ) : (
-          <HistoricalRulerTimeline
-            rulers={stats.rulers}
-            spanStart={span.start}
-            spanEnd={span.end}
-            onSelectPerson={goPerson}
-          />
-        )}
-      </DashboardStyles.Section>
-
-      {/* 기록 — 각 탭으로 가는 입구(숫자가 곧 링크) + 사건의 세기 분포 */}
-      <DashboardStyles.Section>
-        <DashboardStyles.SectionTitleRow>
-          <DashboardStyles.SectionTitleIcon>
-            <IconChart />
-          </DashboardStyles.SectionTitleIcon>
-          <DashboardStyles.SectionTitleText>기록</DashboardStyles.SectionTitleText>
-          <DashboardStyles.SectionCountChip>
-            총 {totalRecords.toLocaleString('ko-KR')}건
-          </DashboardStyles.SectionCountChip>
-        </DashboardStyles.SectionTitleRow>
-        <DashboardStyles.RecordGrid>
-          <DashboardStyles.RecordGridBody>
-            <RecordLedger rows={recordAxes} />
-            {stats.eventCenturyCounts.length > 0 && (
-              <DashboardStyles.EventTimelineBlock>
-                <DashboardStyles.EventTimelineLabel>사건 연표</DashboardStyles.EventTimelineLabel>
-                <EventCenturyStrip
-                  counts={stats.eventCenturyCounts}
-                  onOpen={() => onGoToTab('events')}
-                />
-              </DashboardStyles.EventTimelineBlock>
+      {/* 누가 다스렸나 옆에 어떤 체제였나 — 둘 다 '통치'의 두 얼굴이다 */}
+      <DashboardPair $tall="main">
+        {/* 역대 수반 — 끝난 나라엔 '지금'이 없다. 누가 얼마나 다스렸나가 이 나라의 윤곽이다 */}
+        <DashboardStyles.Section>
+          <DashboardStyles.SectionTitleRow>
+            <DashboardStyles.SectionTitleIcon>
+              <IconVote />
+            </DashboardStyles.SectionTitleIcon>
+            <DashboardStyles.SectionTitleText>역대 수반</DashboardStyles.SectionTitleText>
+            {rulerCount > 0 && (
+              <DashboardStyles.SectionCountChip>{rulerCount}명</DashboardStyles.SectionCountChip>
             )}
-          </DashboardStyles.RecordGridBody>
-        </DashboardStyles.RecordGrid>
-      </DashboardStyles.Section>
+            {outOfSpanRulerCount > 0 && (
+              <DashboardStyles.SectionCountChip
+                title="존속 기간 밖에서 시작·종료한 기록 — 다른 나라에 걸려야 할 행일 수 있습니다"
+              >
+                기간 밖 {outOfSpanRulerCount}
+              </DashboardStyles.SectionCountChip>
+            )}
+            <DashboardStyles.SectionLink type="button" onClick={() => onGoToTab('heads')}>
+              전체 보기
+            </DashboardStyles.SectionLink>
+          </DashboardStyles.SectionTitleRow>
+          {stats.loading.tenures ? (
+            <ChartSkeleton variant="bars" />
+          ) : stats.rulers.length === 0 ? (
+            <SectionEmpty
+              text="군주·국가원수·정부수반의 재위를 등록하면 존속 기간 위에 치세가 띠로 깔리고, 사람마다 카드가 섭니다."
+              actionLabel="수반 등록"
+              onAction={() => onGoToTab('heads')}
+            />
+          ) : (
+            <HistoricalRulerTimeline
+              rulers={stats.rulers}
+              spanStart={span.start}
+              spanEnd={span.end}
+              onSelectPerson={goPerson}
+            />
+          )}
+        </DashboardStyles.Section>
+
+        {/* 정체 — 어떤 체제였나(현대 국가와 같은 패널, 역사 국가 FK로) */}
+        <PoliticalSystemPanel
+          historicalCountryId={country.id}
+          countryName={country.name}
+          onOpenAll={() => onGoToTab('government')}
+        />
+
+        {/* 최근 활동 — 정체 아래 빈자리로(예전엔 맨 아래 따로 한 줄) */}
+        <DashboardStyles.Section>
+          <DashboardStyles.SectionTitleRow>
+            <DashboardStyles.SectionTitleIcon>
+              <IconClock />
+            </DashboardStyles.SectionTitleIcon>
+            <DashboardStyles.SectionTitleText>최근 활동</DashboardStyles.SectionTitleText>
+            {stats.recentActivity.length > 0 && (
+              <DashboardStyles.SectionCountChip>
+                최근 {Math.min(stats.recentActivity.length, RECENT_ACTIVITY_LIMIT)}건
+              </DashboardStyles.SectionCountChip>
+            )}
+          </DashboardStyles.SectionTitleRow>
+          <DashboardStyles.FeedPanel>
+            <ActivityFeed
+              // 정체 아래 좁은 칸이라 6건 — 옆 역대 수반보다 길어지면 그쪽 아래가 빈다
+              items={stats.recentActivity.slice(0, RECENT_ACTIVITY_LIMIT)}
+              isLoading={stats.loading.persons || stats.loading.events}
+              onPersonClick={goPerson}
+              onEventClick={() => onGoToTab('events')}
+            />
+          </DashboardStyles.FeedPanel>
+        </DashboardStyles.Section>
+      </DashboardPair>
 
       {/* 사건 캘린더 — 연표가 '어느 세기'를 말하면 달력은 '그 달 며칠'을 말한다 */}
       <DashboardStyles.Section>
@@ -988,55 +1047,96 @@ function HistoricalOverviewSection({
         )}
       </DashboardStyles.Section>
 
-      {/* 활동과 보완 — 기록 관리 축 */}
-      <DashboardStyles.BottomRow>
-        <DashboardStyles.Section>
-          <DashboardStyles.SectionTitleRow>
-            <DashboardStyles.SectionTitleIcon>
-              <IconClock />
-            </DashboardStyles.SectionTitleIcon>
-            <DashboardStyles.SectionTitleText>최근 활동</DashboardStyles.SectionTitleText>
-            {stats.recentActivity.length > 0 && (
-              <DashboardStyles.SectionCountChip>
-                {stats.recentActivity.length}건
-              </DashboardStyles.SectionCountChip>
-            )}
-          </DashboardStyles.SectionTitleRow>
-          <DashboardStyles.FeedPanel>
-            <ActivityFeed
-              items={stats.recentActivity}
-              isLoading={stats.loading.persons || stats.loading.events}
-              onPersonClick={goPerson}
-              onEventClick={() => onGoToTab('events')}
-            />
-          </DashboardStyles.FeedPanel>
-        </DashboardStyles.Section>
-        <DashboardStyles.Section>
-          <DashboardStyles.SectionTitleRow>
-            <DashboardStyles.SectionTitleIcon>
-              <IconGlobe />
-            </DashboardStyles.SectionTitleIcon>
-            <DashboardStyles.SectionTitleText>더 채울 것</DashboardStyles.SectionTitleText>
-          </DashboardStyles.SectionTitleRow>
-          <CompletenessPanel
-            filled={stats.completeness.filled}
-            total={stats.completeness.total}
-            missing={stats.completeness.missing}
-            isLoading={stats.isCompletenessLoading}
-            onFillMissing={goFill}
-          />
-        </DashboardStyles.Section>
-      </DashboardStyles.BottomRow>
-
       {/* 달력에서 누른 사건 미리보기 — 섹션 조건 밖에 두어 열린 모달이 사라지지 않게 */}
       <EventInlineModal
         eventId={previewEventId}
         onClose={() => setPreviewEventId(null)}
         onNavigate={(eventId) => navigate(pathKeys.events.detail(eventId))}
       />
-    </DashboardStyles.DashboardRoot>
+    </DashboardRoot>
   )
 }
+
+/**
+ * 대시보드 뿌리 — 폭 판단을 뷰포트가 아니라 **지면 자신의 폭**으로 한다(좌측 목록·레일을
+ * 접고 펴면 같은 뷰포트에서도 본문 폭이 400px 넘게 달라진다).
+ */
+/** 최근 활동 칸 건수 — 정체 아래 좁은 칸에 들어간다 */
+const RECENT_ACTIVITY_LIMIT = 6
+
+const DashboardRoot = styled(DashboardStyles.DashboardRoot)`
+  container-type: inline-size;
+  container-name: historical-dashboard;
+`
+
+/**
+ * 두 장을 나란히 — 한 줄로 길게 이어지던 지면(1440×1000에서 화면 5장)을 줄인다.
+ * 좁으면 한 줄로 되돌아간다. 선은 줄이 긋고 안의 장은 긋지 않는다(BottomRow와 같은 규약).
+ * 두 칸이 높이를 맞추지 않게 start 정렬 — 짧은 쪽 아래가 통째로 비지 않도록.
+ */
+const DashboardPair = styled.div<{ $lead?: boolean; $tall: 'main' | 'aside' }>`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 32px 40px;
+  padding-top: 30px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  /* 목차 바로 밑의 첫 줄 — 목차가 이미 선을 긋고 있어 두 겹이 된다 */
+  ${({ $lead }) =>
+    $lead &&
+    `
+    padding-top: 0;
+    border-top: none;
+  `}
+
+  > section {
+    padding-top: 0;
+    border-top: none;
+  }
+
+  /* 한 줄일 때 둘째 장은 첫째와 선으로 가른다 */
+  > section + section {
+    padding-top: 30px;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  }
+
+  /* 1440 화면·목록 펼침에서 본문이 960px — 이때 두 칸이 서야 한다 */
+  @container historical-dashboard (min-width: 880px) {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    /* 첫 줄은 내용만큼, 남는 높이는 둘째 줄로 — 긴 칸 옆 짧은 칸 사이에 틈이 벌어지지 않게 */
+    grid-template-rows: auto 1fr;
+
+    > section + section {
+      padding-top: 0;
+      border-top: none;
+    }
+
+    /*
+     * 세 장을 두 칸에 — 한쪽은 긴 장 하나가 두 줄을 차지하고, 다른 쪽은 짧은 장 둘을 쌓는다.
+     * aside: [개요 | 기록] / [더 채울 것 | 기록]
+     * main:  [역대 수반 | 정체] / [역대 수반 | 최근 활동]
+     */
+    ${({ $tall }) =>
+      $tall === 'aside'
+        ? `
+      > :nth-child(1) { grid-column: 1; grid-row: 1; }
+      > :nth-child(2) { grid-column: 2; grid-row: 1 / span 2; }
+      > :nth-child(3) { grid-column: 1; grid-row: 2; }
+    `
+        : `
+      > :nth-child(1) { grid-column: 1; grid-row: 1 / span 2; }
+      > :nth-child(2) { grid-column: 2; grid-row: 1; }
+      > :nth-child(3) { grid-column: 2; grid-row: 2; }
+    `}
+
+    /* 같은 칸에 쌓인 둘째 장 — 옅은 선으로만 가른다 */
+    > :nth-child(3) {
+      padding-top: 24px;
+      border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
 
 const OverviewBody = styled.div`
   max-width: 760px;
