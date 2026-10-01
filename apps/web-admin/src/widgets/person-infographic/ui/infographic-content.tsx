@@ -67,7 +67,6 @@ import {
   FilterGroup,
   GhostBtn,
   IconBtn,
-  MetaDot,
   PrimaryBtn,
   Search,
   SearchClear,
@@ -78,7 +77,6 @@ import {
   srOnly,
   TopBar,
   ViewMeta,
-  ViewRow,
 } from './_shared/catalog.styles'
 import { EmptyState } from './_shared/empty-state'
 import { ScopeDropdown } from './_shared/scope-dropdown'
@@ -197,14 +195,6 @@ export function InfographicContent({
             '필터링됨'
         : `${totalScopeCount}개 필터 적용됨`
 
-  // 평균 수명: 생몰이 모두 확인돼 age가 산출된 인물만 집계(미상 born=0 오염 제거).
-  const knownAges = filtered
-    .map((p) => p.age)
-    .filter((age): age is number => age != null)
-  const avgLifespan = knownAges.length
-    ? Math.round(knownAges.reduce((sum, age) => sum + age, 0) / knownAges.length)
-    : 0
-
   // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 나머지를 다룬다.
   const activeView: Exclude<PersonInfographicView, 'records'> =
     view === 'records' ? 'story' : view
@@ -310,23 +300,6 @@ export function InfographicContent({
       : []),
   ]
 
-  // 결과 요약의 대표 분야 — 사건 목록 우측의 '● 전쟁/군사 78'과 같은 자리.
-  const topField = useMemo(() => {
-    const counts = new Map<string, number>()
-    // '기타'는 분류 잔여라 대표 분야가 될 수 없다 — 분야 미분류가 다수면 요약에서 뺀다.
-    for (const person of filtered)
-      if (person.field !== '기타')
-        counts.set(person.field, (counts.get(person.field) ?? 0) + 1)
-    let best: [string, number] | null = null
-    for (const entry of counts) if (!best || entry[1] > best[1]) best = entry
-    return best
-  }, [filtered])
-
-  const aliveCount = useMemo(
-    () => filtered.filter((person) => person.isAlive).length,
-    [filtered],
-  )
-
   return (
     <motion.div
       key="infographic"
@@ -401,7 +374,60 @@ export function InfographicContent({
             />
           </FilterGroup>
 
+          {/* 보기 전환·정렬 — 예전엔 툴바 아래 한 줄을 따로 먹었다(목록이 46px 더 내려갔다) */}
+          <ViewControls>
+            {viewSwitcher}
+            <DisplayOptions>
+              {/* 정렬은 카드 그리드 뷰(세기별·왕조)에서만 의미 */}
+              {(activeView === 'story' || activeView === 'dynasty') && (
+                <Select
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value as PersonSortKey)}
+                  aria-label="인물 정렬 기준"
+                >
+                  {SORT_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}순
+                    </option>
+                  ))}
+                </Select>
+              )}
+              {/* 세기 나열 방향은 세기 그룹 뷰(스토리) 전용 */}
+              {activeView === 'story' && (
+                <IconBtn
+                  type="button"
+                  onClick={() =>
+                    setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
+                  }
+                  aria-label={
+                    eraGroupOrder === 'desc'
+                      ? '세기 순서: 최신순 (오래된순으로 바꾸기)'
+                      : '세기 순서: 오래된순 (최신순으로 바꾸기)'
+                  }
+                  title={eraGroupOrder === 'desc' ? '최신순' : '오래된순'}
+                >
+                  <FiArrowDown
+                    size={15}
+                    style={{
+                      transform: eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
+                    }}
+                  />
+                </IconBtn>
+              )}
+            </DisplayOptions>
+          </ViewControls>
+
           <Actions>
+            {!isLoading && !isError && (
+              <ViewMeta aria-hidden>
+                {/* 한 span에 — ViewMeta가 flex gap이라 숫자와 '명'이 벌어졌다 */}
+                <span>
+                  <strong>{filtered.length.toLocaleString()}</strong>명
+                  {filtered.length !== allPeople.length &&
+                    ` / ${allPeople.length.toLocaleString()}`}
+                </span>
+              </ViewMeta>
+            )}
             {onOpenFilters && (
               <GhostBtn
                 type="button"
@@ -460,65 +486,6 @@ export function InfographicContent({
           </ActiveFiltersRow>
         )}
 
-        <ViewRow>
-          {viewSwitcher}
-          <DisplayOptions>
-            {/* 정렬은 카드 그리드 뷰(세기별·왕조)에서만 의미 */}
-            {(activeView === 'story' || activeView === 'dynasty') && (
-              <Select
-                value={sort}
-                onChange={(event) => setSort(event.target.value as PersonSortKey)}
-                aria-label="인물 정렬 기준"
-              >
-                {SORT_OPTIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}순
-                  </option>
-                ))}
-              </Select>
-            )}
-            {/* 세기 나열 방향은 세기 그룹 뷰(스토리) 전용 */}
-            {activeView === 'story' && (
-              <IconBtn
-                type="button"
-                onClick={() =>
-                  setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
-                }
-                aria-label={
-                  eraGroupOrder === 'desc'
-                    ? '세기 순서: 최신순 (오래된순으로 바꾸기)'
-                    : '세기 순서: 오래된순 (최신순으로 바꾸기)'
-                }
-                title={eraGroupOrder === 'desc' ? '최신순' : '오래된순'}
-              >
-                <FiArrowDown
-                  size={15}
-                  style={{
-                    transform: eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
-                  }}
-                />
-              </IconBtn>
-            )}
-          </DisplayOptions>
-          {!isLoading && !isError && (
-            <ViewMeta aria-hidden>
-              <span>
-                <strong>{filtered.length.toLocaleString()}</strong>명
-                {filtered.length !== allPeople.length &&
-                  ` / ${allPeople.length.toLocaleString()}`}
-              </span>
-              {/* 통계 패널이 열려 있으면 같은 수치가 타일로 크게 나오므로 인원만 남긴다 */}
-              {!statsPanelShown && avgLifespan > 0 && <span>평균 수명 {avgLifespan}년</span>}
-              {!statsPanelShown && aliveCount > 0 && <span>생존 {aliveCount}</span>}
-              {!statsPanelShown && topField && (
-                <span>
-                  <MetaDot $color={colorForField(topField[0])} />
-                  {topField[0]} {topField[1]}
-                </span>
-              )}
-            </ViewMeta>
-          )}
-        </ViewRow>
 
         {!isLoading && filtered.length > 0 && statsPanelShown && (
           <StatsArea>
@@ -612,6 +579,15 @@ const FilterCount = styled.span`
   color: ${BRAND.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
+`
+
+/** 툴바 안 보기 전환 묶음 — 좁아지면 통째로 다음 줄로 */
+const ViewControls = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 `
 
 const Wrap = styled.div`

@@ -57,6 +57,8 @@ export const VisuallyHiddenTitle = styled.h1`
 
 /* 사건 목록 툴바처럼 아래 구분선 없이 — 선 하나 + 여백 14px가 목록을 70px 아래로 밀었다 */
 export const TopBar = styled.div`
+  /* 보기 탭 라벨 접힘을 뷰포트가 아니라 툴바 자신의 폭으로 — 사이드바 유무와 무관하게 */
+  container: persontoolbar / inline-size;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -67,9 +69,10 @@ export const Search = styled.div`
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1 1 280px;
-  min-width: 220px;
-  max-width: 480px;
+  /* 보기 탭·정렬까지 한 줄에 들어오도록 — 예전 280/480은 툴바가 두 줄일 때 값 */
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 400px;
   height: 34px;
   border-radius: 8px;
   transition: border-color ${MOTION_FAST}, background ${MOTION_FAST},
@@ -438,6 +441,12 @@ export const ViewSegment = styled.button<{ $active: boolean }>`
   /* 좁은 폭 — 라벨은 sr-only로 내리고 아이콘만 (사건 뷰 전환과 같은 규칙) */
   & > span.label {
     @media (max-width: 1100px) {
+      ${srOnly}
+    }
+  }
+  /* 툴바 한 줄에 들 때 — 고른 탭만 라벨을 남기고 나머지는 아이콘(이름은 sr-only·title로) */
+  @container persontoolbar (max-width: 1640px) {
+    &[aria-selected='false'] > span.label {
       ${srOnly}
     }
   }
