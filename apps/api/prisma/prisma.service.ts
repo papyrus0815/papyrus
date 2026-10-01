@@ -1,5 +1,6 @@
-import { PrismaMariaDb } from '@prisma/adapter-mariadb'
 import { PrismaClient } from '@prisma/client'
+
+import { EarlyYearSafePrismaMariaDb } from './early-year-safe-mariadb'
 
 /**
  * Prisma 공통 설정
@@ -34,8 +35,8 @@ export class PrismaService extends PrismaClient {
 
     const logConfig = log ? ['info', 'warn', 'error'] : ['warn', 'error']
 
-    // Prisma v7에서는 adapter가 필수
-    const adapter = new PrismaMariaDb({
+    // Prisma v7에서는 adapter가 필수 — 서기 1~99년 DATETIME 읽기 보정판(early-year-safe-mariadb.ts)
+    const adapter = new EarlyYearSafePrismaMariaDb({
       host: dbHost,
       port: dbPort,
       user: dbUser,
