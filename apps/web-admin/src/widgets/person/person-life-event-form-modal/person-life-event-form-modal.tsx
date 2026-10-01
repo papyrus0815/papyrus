@@ -53,6 +53,7 @@ import {
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { notify } from '@/shared/ui/toast'
 import type { PersonEventCandidate } from '@/shared/api/person-event-links'
+import { dateSortKey, isoToDateInput, signedDateFromParts } from '@/shared/lib/iso-date'
 import {
   KitAddButton,
   KitOptionalTag,
@@ -163,24 +164,21 @@ function toLinkedEventChoice(
 }
 
 /**
- * 고른 사건의 시작 시점 → 연보 시작일 칸 값. 연보 날짜는 DATETIME이라 **서기 1000년 이후만**
- * 안전하게 담긴다(그 전·기원전은 저장 시 연도가 뒤틀린다) — 그런 사건은 날짜를 채우지 않는다.
+ * 고른 사건의 시작 시점 → 연보 시작일 칸 값. 연보 날짜는 이제 구조화 칸에 저장돼 기원전·서기
+ * 1000년 이전도 그대로 채운다(예전엔 DATETIME 한계로 그 사건들의 날짜를 비워 뒀다).
  */
 function startDateFromCandidate(
   candidate: PersonEventCandidate,
 ): { date: string; precision: DatePrecision } | null {
-  if (candidate.year == null || candidate.year < 1000) return null
-  const pad = (value: number, width: number) => String(value).padStart(width, '0')
   if (candidate.startYear != null) {
     const month = candidate.startMonth ?? null
     const day = candidate.startDay ?? null
-    return {
-      date: `${pad(candidate.startYear, 4)}-${pad(month ?? 1, 2)}-${pad(day ?? 1, 2)}`,
-      precision: month && day ? 'day' : month ? 'month' : 'year',
-    }
+    const date = signedDateFromParts(candidate.startEra, candidate.startYear, month, day)
+    if (!date) return null
+    return { date, precision: month && day ? 'day' : month ? 'month' : 'year' }
   }
   if (candidate.startDate) {
-    return { date: candidate.startDate.slice(0, 10), precision: 'day' }
+    return { date: isoToDateInput(candidate.startDate), precision: 'day' }
   }
   return null
 }
@@ -348,9 +346,9 @@ export function PersonLifeEventFormModal({
       | ''
     const baseDescription = descriptionToEditorValue(lifeEvent?.description)
     const baseStart = lifeEvent?.startDate
-      ? lifeEvent.startDate.slice(0, 10)
+      ? isoToDateInput(lifeEvent.startDate)
       : ''
-    const baseEnd = lifeEvent?.endDate ? lifeEvent.endDate.slice(0, 10) : ''
+    const baseEnd = lifeEvent?.endDate ? isoToDateInput(lifeEvent.endDate) : ''
     const baseStartPrec = (lifeEvent?.startDatePrecision ??
       'day') as DatePrecision
     const baseEndPrec = (lifeEvent?.endDatePrecision ?? 'day') as DatePrecision
@@ -496,7 +494,9 @@ export function PersonLifeEventFormModal({
 
   const titleError = titleTouched && title.trim().length === 0
   const dateError =
-    startDate && endDate && new Date(endDate) < new Date(startDate)
+    startDate &&
+    endDate &&
+    (dateSortKey(endDate) ?? 0) < (dateSortKey(startDate) ?? 0)
       ? '종료일은 시작일 이후여야 합니다.'
       : ''
 
@@ -504,17 +504,18 @@ export function PersonLifeEventFormModal({
       자동 필터되어 안 보일 수 있음을 사용자에게 미리 알림) */
   const dateRangeWarning = useMemo(() => {
     if (!startDate) return ''
-    const start = new Date(startDate).getTime()
-    if (Number.isNaN(start)) return ''
+    // 부호 연-월-일 키 비교 — new Date()는 기원전('-0044-…')을 서기로 읽거나 NaN
+    const start = dateSortKey(startDate)
+    if (start == null) return ''
     if (birthDate) {
-      const birth = new Date(birthDate).getTime()
-      if (!Number.isNaN(birth) && start < birth) {
+      const birth = dateSortKey(birthDate)
+      if (birth != null && start < birth) {
         return '시작일이 인물 출생 이전입니다 — 타임라인에 표시되지 않을 수 있습니다.'
       }
     }
     if (deathDate) {
-      const death = new Date(deathDate).getTime()
-      if (!Number.isNaN(death) && start > death) {
+      const death = dateSortKey(deathDate)
+      if (death != null && start > death) {
         return '시작일이 인물 사망 이후입니다 — 타임라인에 표시되지 않을 수 있습니다.'
       }
     }
@@ -524,12 +525,12 @@ export function PersonLifeEventFormModal({
   /** 동일 제목+날짜 연보 중복 경고 (자기 자신 제외) — 저장은 허용 */
   const duplicateWarning = useMemo(() => {
     if (!title.trim() || !startDate) return ''
-    const startKey = startDate.slice(0, 10)
+    const startKey = isoToDateInput(startDate)
     const existing = (existingLifeEvents ?? []).find(
       (le) =>
         le.id !== lifeEventId &&
         le.title.trim() === title.trim() &&
-        le.startDate?.slice(0, 10) === startKey,
+        isoToDateInput(le.startDate) === startKey,
     )
     return existing
       ? '같은 제목·날짜 연보가 이미 있습니다 — 그래도 등록하시겠어요?'
@@ -540,20 +541,20 @@ export function PersonLifeEventFormModal({
       이미 관리 중일 수 있음을 알림 (저장은 허용). 직책·임기는 재임 기록이 단일 출처. */
   const positionalOverlapWarning = useMemo(() => {
     if (!startDate) return ''
-    const start = new Date(startDate).getTime()
-    if (Number.isNaN(start)) return ''
+    const start = dateSortKey(startDate)
+    if (start == null) return ''
     const records = [
       ...(existingTenures ?? []).map((t) => ({ ...t, kind: '재임' })),
       ...(existingReigns ?? []).map((r) => ({ ...r, kind: '재위' })),
     ]
     const hit = records.find((rec) => {
       if (!rec.startDate) return false
-      const s = new Date(rec.startDate).getTime()
-      if (Number.isNaN(s)) return false
-      const e = rec.endDate
-        ? new Date(rec.endDate).getTime()
+      const recordStart = dateSortKey(rec.startDate)
+      if (recordStart == null) return false
+      const recordEnd = rec.endDate
+        ? (dateSortKey(rec.endDate) ?? Number.POSITIVE_INFINITY)
         : Number.POSITIVE_INFINITY
-      return start >= s && start <= e
+      return start >= recordStart && start <= recordEnd
     })
     if (!hit) return ''
     const label = hit.title?.trim() || '직위'
@@ -628,7 +629,7 @@ export function PersonLifeEventFormModal({
         const sameDay = (existingLifeEvents ?? []).filter(
           (le) =>
             le.id !== lifeEventId &&
-            le.startDate?.slice(0, 10) === startDate.slice(0, 10),
+            isoToDateInput(le.startDate) === isoToDateInput(startDate),
         )
         if (sameDay.length > 0) {
           const maxSort = sameDay.reduce(
@@ -876,11 +877,11 @@ export function PersonLifeEventFormModal({
                       )
                       setStartDate(
                         lifeEvent.startDate
-                          ? lifeEvent.startDate.slice(0, 10)
+                          ? isoToDateInput(lifeEvent.startDate)
                           : '',
                       )
                       setEndDate(
-                        lifeEvent.endDate ? lifeEvent.endDate.slice(0, 10) : '',
+                        lifeEvent.endDate ? isoToDateInput(lifeEvent.endDate) : '',
                       )
                       setStartPrecision(
                         (lifeEvent.startDatePrecision as DatePrecision) ??

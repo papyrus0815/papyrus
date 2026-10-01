@@ -40,6 +40,7 @@ import {
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
 import { onContentRegistered } from '@/entities/gamification'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
+import { isoToDateInput, signedDateFromParts } from '@/shared/lib/iso-date'
 import { getAllReligions } from '@/shared/api/religions'
 import {
   getUploadImageUrl,
@@ -837,10 +838,13 @@ export function PersonRegisterView({
                 historicalCountryId: a.historicalCountryId ?? undefined,
                 countryLabel:
                   a.historicalCountry?.name ?? a.country?.name ?? '',
-                startDate: a.startDate
-                  ? String(a.startDate).slice(0, 10)
-                  : undefined,
-                endDate: a.endDate ? String(a.endDate).slice(0, 10) : undefined,
+                // 구조화 날짜가 진실(기원전·서기 1000년 이전 포함) — 없으면 DATETIME에서
+                startDate:
+                  signedDateFromParts(a.startEra, a.startYear, a.startMonth, a.startDay) ??
+                  (isoToDateInput(a.startDate) || undefined),
+                endDate:
+                  signedDateFromParts(a.endEra, a.endYear, a.endMonth, a.endDay) ??
+                  (isoToDateInput(a.endDate) || undefined),
                 note: a.note ?? undefined,
                 // 정렬 메타 — 폼에 편집 UI는 없지만 보존해 왕복(미보존 시 서버가 전부 1로 재기록).
                 priority: a.priority ?? undefined,

@@ -18,6 +18,7 @@ import {
   FiUserMinus,
   FiUserPlus,
 } from 'react-icons/fi'
+import { dateSortKey } from '@/shared/lib/iso-date'
 import styled, { css, keyframes } from 'styled-components'
 
 import {
@@ -224,7 +225,9 @@ function formatWithPrecision(
   precision?: string | null,
 ): string {
   if (!d) return ''
-  const y = d.getFullYear()
+  const fullYear = d.getFullYear()
+  // 기원전 연보(부호 날짜 '-0044-…')는 음수 연도로 온다
+  const y = fullYear < 0 ? `기원전 ${-fullYear}` : `${fullYear}`
   const m = d.getMonth() + 1
   const day = d.getDate()
   if (precision === 'year') return `${y}년`
@@ -351,8 +354,9 @@ function exportLifeEvents(
 ) {
   if (typeof document === 'undefined' || lifeEvents.length === 0) return
   const sorted = [...lifeEvents].sort((a, b) => {
-    const aTs = a.startDate ? new Date(a.startDate).getTime() : 0
-    const bTs = b.startDate ? new Date(b.startDate).getTime() : 0
+    // 부호 연-월-일 키 — new Date()는 기원전 연보에서 NaN이 돼 내보내기 순서가 뒤섞였다
+    const aTs = dateSortKey(a.startDate) ?? 0
+    const bTs = dateSortKey(b.startDate) ?? 0
     if (aTs !== bTs) return aTs - bTs
     return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
   })
@@ -1085,11 +1089,13 @@ export function PersonLifeTimelineInfographic({
                   {year != null && !sameYearAsPrev ? (
                     <>
                       <YearLabel>
-                        {(node.kind === 'death'
-                          ? (deathEra ?? birthEra)
-                          : birthEra) === 'BC'
-                          ? `기원전 ${year}`
-                          : year}
+                        {year < 0
+                          ? `기원전 ${-year}`
+                          : (node.kind === 'death'
+                                ? (deathEra ?? birthEra)
+                                : birthEra) === 'BC'
+                            ? `기원전 ${year}`
+                            : year}
                       </YearLabel>
                       {age != null && age >= 0 && node.kind !== 'birth' && (
                         <AgeLabel>{age}세</AgeLabel>

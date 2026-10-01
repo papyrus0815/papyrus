@@ -11,6 +11,7 @@ import React, { useEffect, useState } from 'react'
 import { FiPlus, FiTrash2, FiChevronDown, FiCalendar, FiAlertCircle } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   FieldLabel,
@@ -88,7 +89,21 @@ const hasDataButNoCountry = (row: CountryAffiliationRow) =>
   !hasCountry(row) && !!(row.startDate || row.endDate || row.note?.trim())
 
 /** YYYY-MM-DD 표시 포맷 (YYYY.MM.DD). 빈 값이면 placeholder. */
-const fmtDate = (iso?: string) => (iso ? iso.replace(/-/g, '.') : '')
+/** '1773-09-01' → '1773.09.01', '-0044-03-15' → '기원전 44.03.15' */
+const fmtDate = (iso?: string) => {
+  const parts = parseIsoDateParts(iso)
+  if (!parts) return ''
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const yearText = parts.year < 0 ? `기원전 ${-parts.year}` : String(parts.year)
+  return `${yearText}.${pad(parts.month)}.${pad(parts.day)}`
+}
+
+/** 시작 > 종료 — 부호 연-월-일 비교(문자열 비교는 기원전에서 거꾸로 나온다) */
+const isReversed = (start?: string, end?: string) => {
+  const startKey = dateSortKey(start)
+  const endKey = dateSortKey(end)
+  return startKey != null && endKey != null && startKey > endKey
+}
 
 /**
  * 행 검증 — 저장 전 사용자에게 보일 사유.
@@ -97,7 +112,7 @@ const fmtDate = (iso?: string) => (iso ? iso.replace(/-/g, '.') : '')
  */
 function rowError(row: CountryAffiliationRow): string | null {
   if (hasDataButNoCountry(row)) return '국가를 선택해야 이 소속이 저장됩니다.'
-  if (row.startDate && row.endDate && row.startDate > row.endDate)
+  if (isReversed(row.startDate, row.endDate))
     return '종료일이 시작일보다 빠릅니다.'
   return null
 }
@@ -110,7 +125,7 @@ export function hasAffiliationDateError(
   rows: CountryAffiliationRow[],
 ): boolean {
   return rows.some(
-    (r) => !!r.startDate && !!r.endDate && r.startDate > r.endDate,
+    (r) => isReversed(r.startDate, r.endDate),
   )
 }
 
@@ -200,9 +215,7 @@ export function CountryAffiliationsSection({
                 // 제출 차단 대상(종료<시작)인 행만 날짜 버튼에 aria-invalid 표시 —
                 // 제출 실패 시 폼의 첫 [aria-invalid] 스크롤이 이 행을 잡도록.
                 const dateInvalid =
-                  !!row.startDate &&
-                  !!row.endDate &&
-                  row.startDate > row.endDate
+                  isReversed(row.startDate, row.endDate)
                 return (
                   <RowCard key={row.key} $invalid={!!err}>
                     <RowTop>

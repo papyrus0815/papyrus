@@ -221,6 +221,21 @@ export function isoToDateInput(value?: string | null): string {
   return `${sign}${yyyy}-${mm}-${dd}`
 }
 
+/**
+ * 구조화 날짜(era + 크기값 연/월/일) → "YYYY-MM-DD"(BC는 "-YYYY-MM-DD"). 연도 없으면 null.
+ * 연보·국가 소속처럼 서버가 구조화 칸을 진실로 두는 기록을 폼 날짜 칸 값으로 바꿀 때.
+ */
+export function signedDateFromParts(
+  era: string | null | undefined,
+  year: number | null | undefined,
+  month?: number | null,
+  day?: number | null,
+): string | null {
+  if (year == null) return null
+  const pad = (value: number, width: number) => String(value).padStart(width, '0')
+  return `${era === 'BC' ? '-' : ''}${pad(year, 4)}-${pad(month ?? 1, 2)}-${pad(day ?? 1, 2)}`
+}
+
 /** ISO 문자열 → "HH:MM". 자정(00:00)이면 ''(시간 미입력 취급). 타임존 무관. */
 export function isoToTimeInput(value?: string | null): string {
   const p = parseIsoDateParts(value)
