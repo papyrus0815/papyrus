@@ -29,6 +29,8 @@ export interface EventDetailPerson {
   participationCountryName?: string | null
   /** 사건 당시 직위 — 재임·재위 기록에서 서버가 파생(최대 2개) */
   officesAtEvent?: string[]
+  /** 생몰년 밖 사건이면 안내 문구(표시만) */
+  lifespanWarning?: string | null
   person?: {
     id: string
     name?: string | null
@@ -87,6 +89,8 @@ export interface EventDetailHistoricalCountryRef {
   roleDescription?: string | null
   note?: string | null
   sortOrder?: number
+  /** 존속 기간 밖 사건이면 안내 문구(표시만, 건국·멸망 역할 제외) */
+  existenceWarning?: string | null
 }
 
 /** 사건에 걸린 조약 요약 — 본문·서명자 전문은 GET /treaties/:id가 정본 */

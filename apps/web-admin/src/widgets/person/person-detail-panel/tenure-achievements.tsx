@@ -9,6 +9,7 @@
 import { useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import styled from 'styled-components'
 import {
   FiAward,
   FiCalendar,
@@ -22,6 +23,7 @@ import {
 } from 'react-icons/fi'
 
 import { personCareerApi } from '@/shared/api/person-career'
+import type { RecordEventSuggestion } from '@/shared/api/person-event-links'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { EventPickerModal } from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { notify } from '@/shared/ui/toast'
@@ -84,6 +86,11 @@ interface TenureAchievementsProps {
   hostId: string
   hostKind: 'tenure' | 'reign'
   achievements: TenureAchievementItem[]
+  /**
+   * '이 기간의 사건' 제안 — 기간이 겹치고 그 나라(또는 이 인물)가 참여한 사건. 누르면 그 사건에
+   * 연결된 업적으로 바로 추가된다. 업적·즉위 사건으로 이미 이은 것은 서버가 뺀다.
+   */
+  suggestions?: RecordEventSuggestion[]
   /** 읽기 전용 모드(모달 임베드) — 추가·수정·삭제 컨트롤 숨김 */
   readOnly?: boolean
   /** 변경 후 부모가 상세 쿼리를 무효화하도록 알림 */
@@ -104,6 +111,7 @@ export function TenureAchievements({
   hostId,
   hostKind,
   achievements,
+  suggestions = [],
   readOnly = false,
   onChanged,
   onPlayClick,
@@ -124,6 +132,76 @@ export function TenureAchievements({
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const isReign = hostKind === 'reign'
+  const [addingSuggestionId, setAddingSuggestionId] = useState<string | null>(null)
+
+  /**
+   * 제안 사건 → 업적 한 번에 추가(제목·연결 사건·시작일). 업적 날짜는 DATETIME이라 서기
+   * 1000년 이후만 채운다(그 전·기원전은 저장 시 연도가 뒤틀린다).
+   */
+  const addFromSuggestion = async (suggestion: RecordEventSuggestion) => {
+    onPlayClick?.()
+    setAddingSuggestionId(suggestion.id)
+    const pad = (value: number, width: number) => String(value).padStart(width, '0')
+    const startDate =
+      suggestion.year != null && suggestion.year >= 1000
+        ? suggestion.startYear != null
+          ? `${pad(suggestion.startYear, 4)}-${pad(suggestion.startMonth ?? 1, 2)}-${pad(suggestion.startDay ?? 1, 2)}`
+          : suggestion.startDate?.slice(0, 10)
+        : undefined
+    const dto = {
+      title: suggestion.title,
+      eventId: suggestion.id,
+      startDate,
+      showOnEventsPage: true,
+    }
+    try {
+      if (isReign) {
+        await personCareerApi.createSovereignReignAchievement(hostId, dto)
+      } else {
+        await personCareerApi.createTenureAchievement(hostId, dto)
+      }
+      notify.success(`'${suggestion.title}'을(를) 업적으로 추가했습니다.`)
+      setExpanded(true)
+      onChanged()
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : '추가하지 못했습니다.')
+    } finally {
+      setAddingSuggestionId(null)
+    }
+  }
+
+  const suggestionBlock =
+    !readOnly && suggestions.length > 0 ? (
+      <AchievementSuggestions>
+        <AchievementSuggestionsLabel>
+          이 기간의 사건 — 누르면 업적으로 추가
+        </AchievementSuggestionsLabel>
+        {suggestions.map((suggestion) => (
+          <AchievementSuggestionRow
+            key={suggestion.id}
+            type="button"
+            disabled={addingSuggestionId === suggestion.id}
+            onClick={() => addFromSuggestion(suggestion)}
+            aria-label={`'${suggestion.title}' 업적으로 추가`}
+          >
+            <FiPlus size={11} aria-hidden="true" />
+            <AchievementSuggestionYear>
+              {suggestion.year == null
+                ? '연도 미상'
+                : suggestion.year < 0
+                  ? `기원전 ${-suggestion.year}`
+                  : suggestion.year}
+            </AchievementSuggestionYear>
+            <AchievementSuggestionTitle>{suggestion.title}</AchievementSuggestionTitle>
+            {suggestion.participated && (
+              <AchievementSuggestionBadge title="이 인물이 참여 인물로 연결된 사건">
+                참여
+              </AchievementSuggestionBadge>
+            )}
+          </AchievementSuggestionRow>
+        ))}
+      </AchievementSuggestions>
+    ) : null
 
   const resetForm = () => {
     setFormOpen(false)
@@ -257,10 +335,13 @@ export function TenureAchievements({
    */
   if (list.length === 0 && !formOpen) {
     return (
-      <AchievementEmptyAdd type="button" onClick={openAddForm}>
-        <FiPlus size={11} />
-        업적·한일 추가
-      </AchievementEmptyAdd>
+      <>
+        {suggestionBlock}
+        <AchievementEmptyAdd type="button" onClick={openAddForm}>
+          <FiPlus size={11} />
+          {suggestionBlock ? '업적·한일 직접 추가' : '업적·한일 추가'}
+        </AchievementEmptyAdd>
+      </>
     )
   }
 
@@ -375,6 +456,8 @@ export function TenureAchievements({
               </AchievementTimeline>
             )}
 
+            {!formOpen && suggestionBlock}
+
             {!readOnly && formOpen && (
               <AchievementForm
                 initial={{ opacity: 0, y: -4 }}
@@ -475,3 +558,85 @@ export function TenureAchievements({
     </AchievementSection>
   )
 }
+
+// ─── '이 기간의 사건' 제안 ──────────────────────────────────────────────────
+
+const AchievementSuggestions = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 4px;
+`
+
+const AchievementSuggestionsLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-bottom: 2px;
+`
+
+const AchievementSuggestionRow = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  text-align: left;
+  font: inherit;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+
+  > svg {
+    flex-shrink: 0;
+    color: ${({ theme }) => theme.colors.primary};
+  }
+
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: rgba(99, 102, 241, 0.06);
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+`
+
+const AchievementSuggestionYear = styled.span`
+  flex-shrink: 0;
+  min-width: 36px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const AchievementSuggestionTitle = styled.span`
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const AchievementSuggestionBadge = styled.span`
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.alert.success.fg};
+  background: ${({ theme }) => theme.colors.alert.success.bg};
+  border-radius: 999px;
+`

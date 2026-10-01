@@ -6,12 +6,24 @@
  */
 import * as eventCandidatesApi from '@api/functional/persons/event_candidates'
 import * as personEventsApi from '@api/functional/persons/events'
+import * as recordSuggestionsApi from '@api/functional/persons/record_event_suggestions'
 
 import { getApiConnection } from './client'
 
 export type PersonEventCandidates = eventCandidatesApi.getEventCandidates.Output
 export type PersonEventCandidate = PersonEventCandidates['items'][number]
 export type PersonEventLink = personEventsApi.linkEvent.Output
+export type RecordEventSuggestions =
+  recordSuggestionsApi.getRecordEventSuggestions.Output
+export type RecordEventSuggestion =
+  RecordEventSuggestions['byRecordId'][string][number]
+
+/** 재임·재위별 '이 기간의 사건' 제안 — 업적으로 한 번에 잇기 위한 후보 */
+export function getRecordEventSuggestions(
+  personId: string,
+): Promise<RecordEventSuggestions> {
+  return recordSuggestionsApi.getRecordEventSuggestions(getApiConnection(), personId)
+}
 
 export function getPersonEventCandidates(
   personId: string,

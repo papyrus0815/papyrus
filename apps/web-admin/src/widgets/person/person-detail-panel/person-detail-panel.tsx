@@ -103,6 +103,7 @@ import { CareerRegisterModal } from '@/widgets/person/career-register-modal/care
 import { EducationRegisterModal } from '@/widgets/person/education-register-modal/education-register-modal'
 import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
 import { PersonEventLinkModal } from '@/widgets/person/person-event-link-modal/person-event-link-modal'
+import { getRecordEventSuggestions } from '@/shared/api/person-event-links'
 import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
 import { classifySiblingKinship } from '@/widgets/person/person-genealogy-infographic/family-tree-derive'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
@@ -754,6 +755,17 @@ export function PersonDetailPanel({
     }
     return map
   }, [reignAdjacencyQuery.data])
+
+  /**
+   * 재임·재위별 '이 기간의 사건' 제안 — 업적으로 한 번에 잇는 후보. 인물당 한 번 받아
+   * 카드마다 나눠 준다(모달 임베드는 읽기 전용이라 받지 않음).
+   */
+  const recordEventSuggestionsQuery = useQuery({
+    queryKey: ['person-record-event-suggestions', personId],
+    queryFn: () => getRecordEventSuggestions(personId),
+    enabled: !!personId && !embedInModal && combinedTenures.items.length > 0,
+    staleTime: 60_000,
+  })
 
   /**
    * 종료일 미입력 구간의 상한(근사 일수). 사망자는 사망일까지만 합산해 재임 총 연수가
@@ -2097,6 +2109,9 @@ export function PersonDetailPanel({
                       currentPersonId={personId}
                       onPersonClick={handlePersonClick}
                       adjacencyByRecordId={adjacencyByRecordId}
+                      achievementSuggestionsByRecordId={
+                        recordEventSuggestionsQuery.data?.byRecordId
+                      }
                       onPlayClick={playClickSound}
                       onEditTenure={(id) => {
                         setEditingTenureId(id)
@@ -2109,6 +2124,10 @@ export function PersonDetailPanel({
                       onAchievementChanged={() => {
                         // 업적은 행정부·수장 비교 화면에도 박혀 있어 함께 무효화
                         invalidateTenureQueries(queryClient, { personId })
+                        // 업적으로 이은 사건은 제안에서 빠져야 한다
+                        void queryClient.invalidateQueries({
+                          queryKey: ['person-record-event-suggestions', personId],
+                        })
                       }}
                     />
                     {/* 동시대 수장 — 클릭 0회 발견 스트립. 수장비교 딥링크 CTA는

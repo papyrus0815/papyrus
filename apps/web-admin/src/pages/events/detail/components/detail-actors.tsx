@@ -140,7 +140,8 @@ export function DetailActors({
    * 고른 쪽만 채우고 다른 쪽은 비운다(현대·역사를 둘 다 잡고 있으면 어느 자격인지 흐려진다).
    */
   const setParticipationCountry = (personId: string, value: string) => {
-    const [kind, targetId] = value ? value.split(':') : ['', '']
+    const [kind, targetId] =
+      value && value !== 'none' ? value.split(':') : ['', '']
     patchPersons(
       persons.map((person) =>
         person.personId !== personId
@@ -218,6 +219,8 @@ export function DetailActors({
         roleDescription: country.roleDescription ?? null,
         note: country.note ?? null,
         sortOrder: country.sortOrder ?? index,
+        // 존속 기간 경고는 역사국가만(현대국은 기간 개념이 없다)
+        existenceWarning: null as string | null,
       })),
       ...historicalCountries.map((country, index) => ({
         id: country.id,
@@ -228,6 +231,7 @@ export function DetailActors({
         roleDescription: country.roleDescription ?? null,
         note: country.note ?? null,
         sortOrder: country.sortOrder ?? index,
+        existenceWarning: (country.existenceWarning ?? null) as string | null,
       })),
     ]
     rows.sort((left, right) => left.sortOrder - right.sortOrder)
@@ -283,6 +287,7 @@ export function DetailActors({
         roleDescription: null,
         note: null,
         sortOrder: countryRows.length,
+        existenceWarning: null,
       },
     ])
   }
@@ -310,7 +315,9 @@ export function DetailActors({
       countryRows.length === 0
         ? []
         : [
-            { value: '', label: '지정 안 함' },
+            // 비우기는 별도 값 — ''(미지정)과 겹치면 칩이 '지정 안 함'이라는 상태로 읽혀
+            // '참여 국가 지정'(누르라는 안내)이 안 보였다
+            { value: 'none', label: '지정 안 함' },
             ...countryRows.map((row) => ({
               value: `${row.isHistorical ? 'h' : 'c'}:${row.id}`,
               label: `${row.flagEmoji ? `${row.flagEmoji} ` : ''}${row.name}`,
@@ -440,7 +447,8 @@ export function DetailActors({
                       {fullName}
                     </PersonNameBtn>
                     {(participationOptions.length > 1 ||
-                      (person.officesAtEvent?.length ?? 0) > 0) && (
+                      (person.officesAtEvent?.length ?? 0) > 0 ||
+                      !!person.lifespanWarning) && (
                       <PersonMetaLine>
                         {participationOptions.length > 1 && (
                           <InlineSelect
@@ -459,6 +467,11 @@ export function DetailActors({
                           <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">
                             당시 {person.officesAtEvent!.join(' · ')}
                           </OfficeAtEvent>
+                        )}
+                        {person.lifespanWarning && (
+                          <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
+                            ⚠ {person.lifespanWarning}
+                          </MismatchNote>
                         )}
                       </PersonMetaLine>
                     )}
@@ -579,6 +592,11 @@ export function DetailActors({
                           )}
                           {row.name}
                         </NameLink>
+                        {row.existenceWarning && (
+                          <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
+                            ⚠ {row.existenceWarning}
+                          </MismatchNote>
+                        )}
                         <CountryRolePicker>
                           <InlineSelect
                             value={row.role ?? ''}
@@ -1075,6 +1093,20 @@ const PersonMetaLine = styled.div`
 
 const OfficeAtEvent = styled.span`
   font-weight: 500;
+`
+
+/** 앞뒤 안 맞는 연결 안내 — 막지 않고 알리기만(옅은 호박색) */
+const MismatchNote = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.alert.warning.fg};
+  background: ${({ theme }) => theme.colors.alert.warning.bg};
+  border-radius: 999px;
+  white-space: nowrap;
 `
 
 const PersonRoleLine = styled.div`

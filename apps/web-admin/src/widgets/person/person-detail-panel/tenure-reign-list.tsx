@@ -47,6 +47,7 @@ import { TenureAchievements } from './tenure-achievements'
 import { SuccessionBox } from './succession-box'
 import type { CombinedTenureItem } from './types'
 import type { ReignAdjacencyEntry } from '@/shared/api/person-reign-adjacency'
+import type { RecordEventSuggestion } from '@/shared/api/person-event-links'
 
 interface TenureReignListProps {
   items: CombinedTenureItem[]
@@ -67,6 +68,8 @@ interface TenureReignListProps {
   onPersonClick?: (id: string) => void
   /** 재위 record별 같은 국가 선대/후대 (GET /persons/:id/reign-adjacency) — recordId로 조인 */
   adjacencyByRecordId?: Map<string, ReignAdjacencyEntry>
+  /** 재임·재위 recordId → '이 기간의 사건' 제안(업적으로 한 번에 잇기) */
+  achievementSuggestionsByRecordId?: Record<string, RecordEventSuggestion[]>
   onEditTenure: (id: string) => void
   onEditReign: (id: string) => void
   onPlayClick: () => void
@@ -86,6 +89,7 @@ export function TenureReignList({
   currentPersonId,
   onPersonClick,
   adjacencyByRecordId,
+  achievementSuggestionsByRecordId,
   onEditTenure,
   onEditReign,
   onPlayClick,
@@ -338,6 +342,7 @@ export function TenureReignList({
                 hostId={record.id}
                 hostKind={kind}
                 achievements={record.achievements ?? []}
+                suggestions={achievementSuggestionsByRecordId?.[record.id]}
                 readOnly={embedInModal}
                 onPlayClick={onPlayClick}
                 onChanged={onAchievementChanged}
