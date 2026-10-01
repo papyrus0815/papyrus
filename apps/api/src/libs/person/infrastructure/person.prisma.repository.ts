@@ -32,7 +32,69 @@ import {
   DeletedSubResource,
 } from '../domain/person.repository'
 import { careerItemLabel, educationItemLabel, awardItemLabel } from '../domain/subresource-label.util'
-import { mapStructuredDateInput } from '../domain/structured-date.util'
+import {
+  applyDatePrecision,
+  mapStructuredDateInput,
+  structuredDateKey,
+  toSignedDateString,
+} from '../domain/structured-date.util'
+
+/**
+ * 연보·국가 소속 날짜 한쪽 → 저장 칸들. ISO(기원전 '-0044-…' 포함)를 구조화 날짜로 읽고,
+ * 정밀도가 오면 그 아래 단위를 비운다. DATETIME은 서기 1000~9999만(그 밖은 구조화가 진실).
+ */
+function structuredDateColumns(
+  prefix: 'start' | 'end',
+  iso: string | null | undefined,
+  precision?: string | null,
+): Record<string, unknown> {
+  if (!iso) {
+    return {
+      [`${prefix}Date`]: null,
+      [`${prefix}Era`]: null,
+      [`${prefix}Year`]: null,
+      [`${prefix}Month`]: null,
+      [`${prefix}Day`]: null,
+    }
+  }
+  const parsed = applyDatePrecision(mapStructuredDateInput(null, iso), precision)
+  return {
+    [`${prefix}Date`]: parsed.date,
+    [`${prefix}Era`]: parsed.era,
+    [`${prefix}Year`]: parsed.year,
+    [`${prefix}Month`]: parsed.month,
+    [`${prefix}Day`]: parsed.day,
+  }
+}
+
+type StructuredDateRow = {
+  startDate?: Date | null
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endDate?: Date | null
+  endEra?: string | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+}
+
+/** 응답용 — startDate/endDate를 구조화 날짜에서 만든 부호 날짜 문자열로(없으면 기존 DATETIME) */
+function withSignedDates<T extends StructuredDateRow>(row: T): T {
+  const signed = (
+    prefix: 'start' | 'end',
+  ): string | Date | null | undefined => {
+    const fromParts = toSignedDateString(
+      row[`${prefix}Era`],
+      row[`${prefix}Year`],
+      row[`${prefix}Month`],
+      row[`${prefix}Day`],
+    )
+    return fromParts ?? row[`${prefix}Date`]
+  }
+  return { ...row, startDate: signed('start'), endDate: signed('end') } as T
+}
 
 /** 연보 항목에 실어 보내는 관련 사건 요약 필드 */
 const PERSON_LIFE_EVENT_LINKED_EVENT_SELECT = {
@@ -2079,23 +2141,25 @@ export class PersonPrismaRepository implements IPersonRepository {
     slot: {
       countryId?: string | null
       historicalCountryId?: string | null
-      startDate?: Date | null
-      endDate?: Date | null
+      /** ISO(기원전 '-0044-…' 포함) — 구조화 날짜로 저장 */
+      startDate?: string | null
+      endDate?: string | null
       note?: string | null
     },
   ): Promise<void> {
-    const patch: {
+    const patch: Record<string, unknown> & {
       countryId: string | null
       historicalCountryId: string | null
-      startDate?: Date | null
-      endDate?: Date | null
-      note?: string | null
     } = {
       countryId: slot.countryId ?? null,
       historicalCountryId: slot.historicalCountryId ?? null,
     }
-    if (slot.startDate !== undefined) patch.startDate = slot.startDate
-    if (slot.endDate !== undefined) patch.endDate = slot.endDate
+    if (slot.startDate !== undefined) {
+      Object.assign(patch, structuredDateColumns('start', slot.startDate))
+    }
+    if (slot.endDate !== undefined) {
+      Object.assign(patch, structuredDateColumns('end', slot.endDate))
+    }
     if (slot.note !== undefined) patch.note = slot.note
 
     const existing = await client.personCountryAffiliation.findFirst({
@@ -2218,8 +2282,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       await this.syncPrimaryCitizenshipSlot(this.prisma, person.id, {
         countryId: primary.countryId || null,
         historicalCountryId: primary.historicalCountryId || null,
-        startDate: primary.startDate ? new Date(primary.startDate) : null,
-        endDate: primary.endDate ? new Date(primary.endDate) : null,
+        startDate: primary.startDate || null,
+        endDate: primary.endDate || null,
         note: primary.note || null,
       })
     }
@@ -2232,8 +2296,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           affiliationType: a.affiliationType as any,
           countryId: a.countryId || null,
           historicalCountryId: a.historicalCountryId || null,
-          startDate: a.startDate ? new Date(a.startDate) : null,
-          endDate: a.endDate ? new Date(a.endDate) : null,
+          ...structuredDateColumns('start', a.startDate),
+          ...structuredDateColumns('end', a.endDate),
           priority: a.priority ?? 1,
           note: a.note || null,
         })),
@@ -2474,8 +2538,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         await this.syncPrimaryCitizenshipSlot(tx, id, {
           countryId: primary.countryId || null,
           historicalCountryId: primary.historicalCountryId || null,
-          startDate: primary.startDate ? new Date(primary.startDate) : null,
-          endDate: primary.endDate ? new Date(primary.endDate) : null,
+          startDate: primary.startDate || null,
+          endDate: primary.endDate || null,
           note: primary.note || null,
         })
       }
@@ -2495,8 +2559,8 @@ export class PersonPrismaRepository implements IPersonRepository {
               affiliationType: a.affiliationType as any,
               countryId: a.countryId || null,
               historicalCountryId: a.historicalCountryId || null,
-              startDate: a.startDate ? new Date(a.startDate) : null,
-              endDate: a.endDate ? new Date(a.endDate) : null,
+              ...structuredDateColumns('start', a.startDate),
+              ...structuredDateColumns('end', a.endDate),
               priority: a.priority ?? 1,
               note: a.note || null,
             })),
@@ -4928,16 +4992,16 @@ export class PersonPrismaRepository implements IPersonRepository {
         title: dto.title,
         description: dto.description ?? null,
         category: dto.category ?? null,
-        startDate: dto.startDate ? new Date(dto.startDate) : null,
-        startDatePrecision: dto.startDatePrecision ?? null,
-        endDate: dto.endDate ? new Date(dto.endDate) : null,
-        endDatePrecision: dto.endDatePrecision ?? null,
+        ...structuredDateColumns('start', dto.startDate, dto.startDatePrecision),
+        startDatePrecision: dto.startDate ? (dto.startDatePrecision ?? 'day') : null,
+        ...structuredDateColumns('end', dto.endDate, dto.endDatePrecision),
+        endDatePrecision: dto.endDate ? (dto.endDatePrecision ?? 'day') : null,
         sortOrder: dto.sortOrder ?? 0,
         eventId: dto.eventId ?? null,
         ...(accountId != null && { accountId }),
       },
       include: { event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT } },
-    })
+    }).then(withSignedDates)
   }
 
   async updatePersonLifeEvent(
@@ -4949,13 +5013,19 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.description !== undefined) data.description = dto.description
     if (dto.category !== undefined) data.category = dto.category
     if (dto.startDate !== undefined) {
-      data.startDate = dto.startDate ? new Date(dto.startDate) : null
+      Object.assign(
+        data,
+        structuredDateColumns('start', dto.startDate, dto.startDatePrecision),
+      )
     }
     if (dto.startDatePrecision !== undefined) {
       data.startDatePrecision = dto.startDatePrecision
     }
     if (dto.endDate !== undefined) {
-      data.endDate = dto.endDate ? new Date(dto.endDate) : null
+      Object.assign(
+        data,
+        structuredDateColumns('end', dto.endDate, dto.endDatePrecision),
+      )
     }
     if (dto.endDatePrecision !== undefined) {
       data.endDatePrecision = dto.endDatePrecision
@@ -4966,11 +5036,13 @@ export class PersonPrismaRepository implements IPersonRepository {
         ? { connect: { id: dto.eventId } }
         : { disconnect: true }
     }
-    return this.prisma.personLifeEvent.update({
-      where: { id },
-      data,
-      include: { event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT } },
-    })
+    return this.prisma.personLifeEvent
+      .update({
+        where: { id },
+        data,
+        include: { event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT } },
+      })
+      .then(withSignedDates)
   }
 
   async deletePersonLifeEvent(id: string): Promise<void> {
@@ -4994,8 +5066,19 @@ export class PersonPrismaRepository implements IPersonRepository {
         { createdAt: Prisma.SortOrder.asc },
       ],
     })
+    // 정렬은 구조화 날짜로 — DATETIME 정렬은 기원전·서기 1000년 이전 연보(DATETIME 없음)를 맨 뒤로 보냈다
+    const keyOf = (row: (typeof rows)[number]) =>
+      structuredDateKey(row.startEra, row.startYear, row.startMonth, row.startDay)
+    rows.sort((left, right) => {
+      const leftKey = keyOf(left)
+      const rightKey = keyOf(right)
+      if (leftKey == null || rightKey == null) {
+        return leftKey == null ? (rightKey == null ? 0 : 1) : -1
+      }
+      return leftKey - rightKey
+    })
     return rows.map(({ event, ...row }) => ({
-      ...row,
+      ...withSignedDates(row),
       event: event && !event.deletedAt
         ? {
             id: event.id,

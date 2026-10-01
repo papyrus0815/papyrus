@@ -59,6 +59,11 @@ import {
   UpsertPersonEvaluationDto,
   PersonEvaluationResponseDto,
 } from '../presentation/dto'
+import {
+  mapStructuredDateInput,
+  structuredDateKey,
+  toSignedDateString,
+} from '../domain/structured-date.util'
 
 /**
  * 인물 도메인 서비스
@@ -1032,7 +1037,14 @@ export class PersonService {
     endDate?: string | null,
   ): void {
     if (!startDate || !endDate) return
-    if (new Date(endDate) < new Date(startDate)) {
+    // 부호 연-월-일로 비교 — new Date()는 기원전('-0044-…')을 서기로 읽거나 거부한다
+    const keyOf = (iso: string) => {
+      const parsed = mapStructuredDateInput(null, iso)
+      return structuredDateKey(parsed.era, parsed.year, parsed.month, parsed.day)
+    }
+    const startKey = keyOf(startDate)
+    const endKey = keyOf(endDate)
+    if (startKey != null && endKey != null && endKey < startKey) {
       throw new BadRequestException('종료일은 시작일 이후여야 합니다.')
     }
   }
@@ -1105,14 +1117,22 @@ export class PersonService {
       if (v instanceof Date) return v.toISOString()
       return null
     }
+    // 저장된 쪽은 구조화 날짜(기원전 포함)에서 — DATETIME은 기원전·서기 1000년 이전이 비어 있다
+    const storedSigned = (prefix: 'start' | 'end') => {
+      const row = existing as Record<string, unknown>
+      return (
+        toSignedDateString(
+          row[`${prefix}Era`] as string | null,
+          row[`${prefix}Year`] as number | null,
+          row[`${prefix}Month`] as number | null,
+          row[`${prefix}Day`] as number | null,
+        ) ?? toIsoOrNull(row[`${prefix}Date`])
+      )
+    }
     const effectiveStart =
-      dto.startDate !== undefined
-        ? toIsoOrNull(dto.startDate)
-        : toIsoOrNull((existing as { startDate?: unknown }).startDate)
+      dto.startDate !== undefined ? toIsoOrNull(dto.startDate) : storedSigned('start')
     const effectiveEnd =
-      dto.endDate !== undefined
-        ? toIsoOrNull(dto.endDate)
-        : toIsoOrNull((existing as { endDate?: unknown }).endDate)
+      dto.endDate !== undefined ? toIsoOrNull(dto.endDate) : storedSigned('end')
     this.assertLifeEventDateRange(effectiveStart, effectiveEnd)
     await this.assertLifeEventLinkableEvent(dto.eventId, accountId)
     return this.personRepository.updatePersonLifeEvent(id, dto)

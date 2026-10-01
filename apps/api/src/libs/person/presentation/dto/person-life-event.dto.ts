@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger'
 import {
   IsString,
   IsOptional,
-  IsDateString,
+  Matches,
   IsNotEmpty,
   IsUUID,
   IsIn,
@@ -34,6 +34,9 @@ export type PersonLifeEventCategory = (typeof PERSON_LIFE_EVENT_CATEGORIES)[numb
 
 const DATE_PRECISIONS = ['year', 'month', 'day'] as const
 
+/** 부호 날짜(앞에 시각이 붙어도 됨): 1773-09-01, 1773-09-01T00:00:00.000Z, -0044-03-15 */
+const SIGNED_DATE_PATTERN = /^-?\d{1,6}-\d{2}-\d{2}/
+
 /**
  * 인물 연보 생성 DTO
  */
@@ -64,7 +67,8 @@ export class CreatePersonLifeEventDto {
 
   @ApiProperty({ description: '시작일 (ISO)', required: false })
   @IsOptional()
-  @IsDateString()
+  // 기원전('-0044-03-15')도 받는다 — IsDateString은 BC 표기를 거부해 고대 연보를 못 적었다
+  @Matches(SIGNED_DATE_PATTERN, { message: '날짜는 YYYY-MM-DD(기원전은 앞에 -) 형식이어야 합니다.' })
   startDate?: string
 
   @ApiProperty({
@@ -78,7 +82,8 @@ export class CreatePersonLifeEventDto {
 
   @ApiProperty({ description: '종료일 (ISO)', required: false })
   @IsOptional()
-  @IsDateString()
+  // 기원전('-0044-03-15')도 받는다 — IsDateString은 BC 표기를 거부해 고대 연보를 못 적었다
+  @Matches(SIGNED_DATE_PATTERN, { message: '날짜는 YYYY-MM-DD(기원전은 앞에 -) 형식이어야 합니다.' })
   endDate?: string
 
   @ApiProperty({
@@ -131,7 +136,8 @@ export class UpdatePersonLifeEventDto {
 
   @ApiProperty({ description: '시작일 (ISO)', required: false })
   @IsOptional()
-  @IsDateString()
+  // 기원전('-0044-03-15')도 받는다 — IsDateString은 BC 표기를 거부해 고대 연보를 못 적었다
+  @Matches(SIGNED_DATE_PATTERN, { message: '날짜는 YYYY-MM-DD(기원전은 앞에 -) 형식이어야 합니다.' })
   startDate?: string | null
 
   @ApiProperty({
@@ -145,7 +151,8 @@ export class UpdatePersonLifeEventDto {
 
   @ApiProperty({ description: '종료일 (ISO)', required: false })
   @IsOptional()
-  @IsDateString()
+  // 기원전('-0044-03-15')도 받는다 — IsDateString은 BC 표기를 거부해 고대 연보를 못 적었다
+  @Matches(SIGNED_DATE_PATTERN, { message: '날짜는 YYYY-MM-DD(기원전은 앞에 -) 형식이어야 합니다.' })
   endDate?: string | null
 
   @ApiProperty({

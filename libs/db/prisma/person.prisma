@@ -449,6 +449,17 @@ model PersonLifeEvent {
 
   /// 같은 시점의 여러 이벤트 정렬용
   sortOrder Int? @default(0) @map("sort_order")
+  /// 구조화 날짜(진실) — BC·서기 1000년 이전·연 단위. startDate/endDate(DATETIME)는 서기
+  /// 1000~9999 완전일자일 때만 병행 저장(MySQL DATETIME이 그 밖을 조용히 손상시킨다).
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  startDay   Int? @map("start_day")
+  endEra     Era? @map("end_era")
+  endYear    Int? @map("end_year")
+  endMonth   Int? @map("end_month")
+  endDay     Int? @map("end_day")
+
 
   /// 등록 계정
   accountId String?  @map("account_id") @db.Char(36)
@@ -701,6 +712,17 @@ model PersonCountryAffiliation {
 
   /// 우선순위 (주 국적 판단 등에 사용, 낮을수록 우선)
   priority Int? @default(0)
+  /// 구조화 날짜(진실) — BC·서기 1000년 이전 소속(고대 시민권·봉신 관계 등). startDate/endDate는
+  /// 서기 1000~9999일 때만 병행 저장.
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  startDay   Int? @map("start_day")
+  endEra     Era? @map("end_era")
+  endYear    Int? @map("end_year")
+  endMonth   Int? @map("end_month")
+  endDay     Int? @map("end_day")
+
 
   /// 비고
   note String? @db.Text

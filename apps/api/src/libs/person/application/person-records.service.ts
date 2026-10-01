@@ -6,6 +6,7 @@ import {
   PersonRecordsCompareResponseDto,
   PersonRecordsPersonDto,
 } from '../presentation/dto/person-records-compare.response'
+import { toSignedDateString } from '../domain/structured-date.util'
 
 /** 한 번에 비교할 수 있는 인물 수 상한 (read-union 비용 가드) */
 export const PERSON_RECORDS_COMPARE_MAX_PERSONS = 12
@@ -222,13 +223,25 @@ export class PersonRecordsService {
         title: row.title,
         summary: toPlainSummary(row.description),
         category: row.category ?? null,
-        startYear: yearOf(row.startDate),
-        endYear: yearOf(row.endDate),
+        // 구조화 날짜가 진실 — 기원전·서기 1000년 이전 연보는 DATETIME이 비어 있다
+        startYear:
+          row.startYear != null
+            ? row.startEra === 'BC' ? -row.startYear : row.startYear
+            : yearOf(row.startDate),
+        endYear:
+          row.endYear != null
+            ? row.endEra === 'BC' ? -row.endYear : row.endYear
+            : yearOf(row.endDate),
         ongoing: false,
-        startDate: isoOf(row.startDate),
-        endDate: isoOf(row.endDate),
+        startDate:
+          toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay) ??
+          isoOf(row.startDate),
+        endDate:
+          toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay) ??
+          isoOf(row.endDate),
         precision: row.startDatePrecision ?? null,
-        linkEventId: null,
+        // 연보가 가리키는 관련 사건(연보 ↔ 사건 연결)
+        linkEventId: row.eventId ?? null,
         countryName: null,
         role: null,
       })

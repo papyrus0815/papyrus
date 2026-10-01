@@ -81,3 +81,53 @@ export function mapStructuredDateInput(
   }
   return { date: null, era: null, precision: null, year: null, month: null, day: null }
 }
+
+/**
+ * 명시 정밀도를 결과에 적용 — 연보처럼 ISO(항상 일자까지)와 정밀도를 따로 받는 입력용.
+ * 'year'면 월·일을, 'month'면 일을 비우고 DATETIME(서기 1000~9999만)을 다시 만든다.
+ */
+export function applyDatePrecision(
+  result: StructuredDateResult,
+  precision: string | null | undefined,
+): StructuredDateResult {
+  if (!precision || result.year == null || result.era == null) return result
+  const month = precision === 'year' ? null : result.month
+  const day = precision === 'day' ? result.day : null
+  return {
+    ...result,
+    month,
+    day,
+    precision,
+    date:
+      result.era === 'AD' && result.year >= 1000 && result.year <= 9999
+        ? buildUtcDateFromParts(result.year, month ?? undefined, day ?? undefined)
+        : null,
+  }
+}
+
+/**
+ * 구조화 날짜 → 부호 날짜 문자열('1773-09-01', '-0044-03-15'). 모르는 월·일은 01.
+ * 응답용 — 웹은 앞의 연-월-일을 그대로 떼어 쓴다(BC·TZ 안전).
+ */
+export function toSignedDateString(
+  era: string | null | undefined,
+  year: number | null | undefined,
+  month: number | null | undefined,
+  day: number | null | undefined,
+): string | null {
+  if (year == null) return null
+  const pad = (value: number, width: number) => String(value).padStart(width, '0')
+  return `${era === 'BC' ? '-' : ''}${pad(year, 4)}-${pad(month ?? 1, 2)}-${pad(day ?? 1, 2)}`
+}
+
+/** 구조화 날짜 → 비교 키(부호 연·월·일). 연도 모르면 null */
+export function structuredDateKey(
+  era: string | null | undefined,
+  year: number | null | undefined,
+  month: number | null | undefined,
+  day: number | null | undefined,
+): number | null {
+  if (year == null) return null
+  const signed = era === 'BC' ? -year : year
+  return signed * 10000 + (month ?? 1) * 100 + (day ?? 1)
+}
