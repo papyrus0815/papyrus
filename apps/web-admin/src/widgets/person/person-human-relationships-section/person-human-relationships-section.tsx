@@ -1375,9 +1375,18 @@ export function PersonHumanRelationshipsSection({
           </HeaderActionGroup>
         </HeaderRow>
 
+        {/*
+          둘 다 비면 한 줄로 — 예전엔 '친밀도 0' + 점선 상자 '첫 일반 관계 추가', '멘토 0' + 점선
+          상자 '첫 멘토 관계 추가'가 빈 인물마다 약 190px를 차지했다(실데이터 대부분이 빈 상태).
+          추가 진입은 머리의 '관계 추가'가 맡는다. 하나라도 있으면 아래 두 묶음 구성을 그대로 쓴다.
+        */}
+        {generalRelationships.length === 0 && mentorRelationships.length === 0 ? (
+          <EmptyLine>아직 기록된 관계가 없습니다.</EmptyLine>
+        ) : (
         <RelListStack>
           <RelGroupHead>
-            <RelGroupTitle>친밀도</RelGroupTitle>
+            {/* '친밀도'는 이 묶음의 속성이지 이름이 아니다 — 멘토 관계와 나란히 '일반 관계'로 */}
+            <RelGroupTitle>일반 관계</RelGroupTitle>
             <RelGroupCount>{generalRelationships.length}</RelGroupCount>
           </RelGroupHead>
           {generalRelationships.length === 0 ? (
@@ -1404,6 +1413,7 @@ export function PersonHumanRelationshipsSection({
             </RelList>
           )}
         </RelListStack>
+        )}
       </Root>
 
       {/* 인라인 확인 다이얼로그 — 등록/수정 모달과 동일 스킨(컴팩트) */}
@@ -3062,6 +3072,13 @@ const RelGroupCount = styled.span`
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/* 빈 관계 — 상자 없이 한 줄(섹션 머리 바로 아래, 흐린 글자) */
+const EmptyLine = styled.p`
+  margin: 2px 0 0;
+  font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 

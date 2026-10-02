@@ -170,13 +170,32 @@ export function TenureAchievements({
     }
   }
 
+  /**
+   * 사건 제안은 **접어 둔다**. 예전엔 재임 카드마다 펼쳐진 채로 서서, 재임 15건인 인물
+   * (조제프 조프르)의 개요가 같은 '이 기간의 사건 — 누르면 업적으로 추가' 목록을 15번
+   * 반복했다 — 읽는 지면에 편집 도구가 섞여 카드 하나가 1/3씩 길어졌다. 이제 한 줄
+   * ('이 기간의 사건 N건')만 두고, 누르면 그 자리에서 펼친다.
+   */
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const suggestionBlock =
     !readOnly && suggestions.length > 0 ? (
       <AchievementSuggestions>
-        <AchievementSuggestionsLabel>
-          이 기간의 사건 — 누르면 업적으로 추가
-        </AchievementSuggestionsLabel>
-        {suggestions.map((suggestion) => (
+        <AchievementSuggestionsToggle
+          type="button"
+          aria-expanded={suggestionsOpen}
+          onClick={() => setSuggestionsOpen((open) => !open)}
+        >
+          <FiChevronRight
+            size={12}
+            aria-hidden="true"
+            style={{ transform: suggestionsOpen ? 'rotate(90deg)' : 'none' }}
+          />
+          이 기간의 사건 {suggestions.length}건
+          <AchievementSuggestionsHint>
+            {suggestionsOpen ? '누르면 업적으로 추가' : '업적으로 추가할 수 있음'}
+          </AchievementSuggestionsHint>
+        </AchievementSuggestionsToggle>
+        {suggestionsOpen && suggestions.map((suggestion) => (
           <AchievementSuggestionRow
             key={suggestion.id}
             type="button"
@@ -337,7 +356,7 @@ export function TenureAchievements({
     return (
       <>
         {suggestionBlock}
-        <AchievementEmptyAdd type="button" onClick={openAddForm}>
+        <AchievementEmptyAdd type="button" onClick={openAddForm} data-hover-reveal>
           <FiPlus size={11} />
           {suggestionBlock ? '업적·한일 직접 추가' : '업적·한일 추가'}
         </AchievementEmptyAdd>
@@ -568,12 +587,44 @@ const AchievementSuggestions = styled.div`
   margin: 6px 0 4px;
 `
 
-const AchievementSuggestionsLabel = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+const AchievementSuggestionsToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
   margin-bottom: 2px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  > svg {
+    transition: transform 0.15s ease;
+  }
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+`
+
+const AchievementSuggestionsHint = styled.span`
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.8;
+
+  &::before {
+    content: '· ';
+  }
 `
 
 const AchievementSuggestionRow = styled.button`

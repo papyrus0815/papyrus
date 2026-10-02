@@ -1758,23 +1758,22 @@ const EventCard = styled.div<{
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px 20px;
-  border-radius: 14px;
+  gap: 4px;
+  /* 촘촘하게 — 16·20이던 여백에 카드가 130px씩 서서 연보 한 화면에 5~6건뿐이었다 */
+  padding: 12px 16px 12px 18px;
+  border-radius: 12px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(255,255,255,0.06)'
-        : 'rgba(15,23,42,0.06)'};
-  background: ${({ theme, $soft }) =>
-    $soft
-      ? // soft는 이미 alpha 0.14의 rgba 토큰 — 그대로 한 겹 깔면 살짝 입혀짐
-        theme.mode === 'dark'
-        ? `linear-gradient(${$soft}, ${$soft}), rgba(255,255,255,0.03)`
-        : `linear-gradient(${$soft}, ${$soft}), #ffffff`
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.03)'
-        : '#ffffff'};
+        : 'rgba(15,23,42,0.08)'};
+  /*
+   * 바탕은 칠하지 않는다. 예전엔 종류 색(soft, 알파 0.14)을 카드 전체에 깔아 분홍·하늘·빨강
+   * 판이 줄줄이 섰다 — 색이 '구분'이 아니라 '소음'이 됐다. 종류는 왼쪽 색 띠·축 위 점·칩이
+   * 이미 말한다. ($soft는 그대로 받아 두되 바탕에는 쓰지 않는다.)
+   */
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
   text-align: left;
   width: 100%;
   overflow: hidden;

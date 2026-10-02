@@ -18,6 +18,26 @@ describe('deriveTenurePeriodLabel', () => {
     expect(result.hasEndDate).toBe(true)
   })
 
+  it('종료일 1월 1일은 연도만 — 정밀도 컬럼이 없어 연 단위 종료의 자리 표시다', () => {
+    const result = deriveTenurePeriodLabel({
+      startDate: '1885-01-01',
+      startDatePrecision: 'month',
+      endDate: '1888-01-01T16:00:00.000Z',
+    })
+    expect(result.endLabel).toBe('1888년')
+    expect(result.rangeLabel).toBe('1885년 1월 – 1888년')
+    expect(result.hasEndDate).toBe(true)
+  })
+
+  it('1월 1일이 아닌 종료일은 그대로 일자까지', () => {
+    const result = deriveTenurePeriodLabel({
+      startDate: '1907-01-01',
+      startDatePrecision: 'year',
+      endDate: '1908-05-01',
+    })
+    expect(result.endLabel).toBe('1908년 5월 1일')
+  })
+
   it('연 정밀도 시작 → "N년" + startYearOnly=true(‘경’ 배지 게이트)', () => {
     const result = deriveTenurePeriodLabel({
       startDate: '1643-01-01',

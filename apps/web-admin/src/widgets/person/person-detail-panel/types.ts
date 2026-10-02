@@ -2,7 +2,8 @@ import type { PersonNameFields } from '@/shared/lib/person-display-name'
 import type { BiographySectionData } from './person-biography-sections'
 import type { TenureAchievementItem } from './tenure-achievements'
 
-export type TabType = 'overview' | 'genealogy' | 'politics' | 'events'
+/** 'politics'(정치·선거)는 개요 '이력·활동'으로 흡수됐다 — URL의 옛 값은 parseTab이 개요로 받는다 */
+export type TabType = 'overview' | 'genealogy' | 'events'
 
 /**
  * 재임(GovernmentTenure)·재위(SovereignReign) 공통 카드 레코드.

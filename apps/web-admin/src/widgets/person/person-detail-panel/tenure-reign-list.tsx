@@ -205,7 +205,13 @@ export function TenureReignList({
           ageAtStart != null ||
           ageAtEnd != null
         return (
-          <UnifiedCard key={`${kind}-${record.id}`} $kind={kind} role="listitem">
+          <UnifiedCard
+            key={`${kind}-${record.id}`}
+            // 생애 타임라인 막대가 이 카드로 스크롤하는 앵커
+            id={`person-record-${kind}-${record.id}`}
+            $kind={kind}
+            role="listitem"
+          >
             <UnifiedCardMain>
               <UnifiedEyebrow>
                 {isReign ? (
@@ -376,6 +382,7 @@ export function TenureReignList({
             {!embedInModal && (
               <UnifiedEditBtn
                 type="button"
+                data-hover-reveal
                 /* 15행이 전부 '수정'이면 버튼 목록에서 어느 행인지 구분이 안 된다 */
                 aria-label={`${mainTitle} 수정`}
                 onClick={() => {

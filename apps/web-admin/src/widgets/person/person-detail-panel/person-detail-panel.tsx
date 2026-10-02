@@ -85,11 +85,15 @@ import {
 } from '@/shared/lib/influence-tier'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 
+import { BioClamp } from './bio-clamp'
 import { BirthDeathCards } from './birth-death-cards'
 import { CollapsibleSection } from './collapsible-section'
 import { PersonBiographySections } from './person-biography-sections'
 import { SpouseDetailSection } from './spouse-detail-section'
+import { getRecordFamily } from '@/entities/government-position/model/record-family'
 import { TenureReignList } from './tenure-reign-list'
+import { computeLifeTimeline } from './life-timeline.lib'
+import { LifeTimeline } from './life-timeline'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
@@ -115,6 +119,7 @@ import { PersonStatsSection } from '@/widgets/person/person-stats-section/person
 import {
   type ElectionCandidacyDetail,
   PersonPoliticsSection,
+  type PersonPoliticsSectionActions,
 } from '@/widgets/person/person-politics-section/person-politics-section'
 
 import {
@@ -185,6 +190,14 @@ import {
   HeaderActions,
   HeaderLeft,
   HeaderRow,
+  CompactIdentity,
+  CompactIdentityAvatarFallback,
+  CompactIdentityMeta,
+  CompactIdentityName,
+  CompactIdentityRow,
+  HeroCard,
+  StickyNavBar,
+  TabCount,
   HeaderTitleBlock,
   InfluenceAnchor,
   InfluenceAnchorRow,
@@ -329,6 +342,7 @@ const OVERVIEW_CLUSTERS = [
   { id: 'overview-cluster-history', label: '이력·활동' },
   { id: 'overview-cluster-relations', label: '관계' },
   { id: 'overview-cluster-context', label: '소속·맥락' },
+  { id: 'overview-cluster-evaluation', label: '평가' },
 ] as const
 
 /** 개요 클러스터로 스크롤(UX8) — prefers-reduced-motion 존중(AY5). */
@@ -385,10 +399,8 @@ export function PersonDetailPanel({
    */
   const [searchParams, setSearchParams] = useSearchParams()
   const parseTab = useCallback((raw: string | null): TabType => {
-    return raw === 'overview' ||
-      raw === 'genealogy' ||
-      raw === 'politics' ||
-      raw === 'events'
+    // 'politics'는 개요로 흡수된 옛 탭 — 북마크·공유된 ?tab=politics는 개요로 받는다
+    return raw === 'overview' || raw === 'genealogy' || raw === 'events'
       ? raw
       : 'overview'
   }, [])
@@ -420,7 +432,7 @@ export function PersonDetailPanel({
   /** 탭바 화살표 키 내비게이션(AY4) — ←/→ 순환, Home/End. roving tabindex와 함께 완결. */
   const handleTabKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      const order: TabType[] = ['overview', 'genealogy', 'politics', 'events']
+      const order: TabType[] = ['overview', 'genealogy', 'events']
       const idx = order.indexOf(activeTab)
       let nextIdx = idx
       if (event.key === 'ArrowRight') nextIdx = (idx + 1) % order.length
@@ -834,6 +846,61 @@ export function PersonDetailPanel({
     return years > 0 ? years : null
   }, [combinedTenures])
 
+  /**
+   * 생애 타임라인 배치 — 머리 카드 안에서 재임·작위·재위 구간을 생애 축 위에 보여준다.
+   * 가족 판정은 카드 목록(tenure-reign-list)과 같은 getRecordFamily — 막대 색과 카드 눈썹이 같은 말을 한다.
+   */
+  const lifeTimeline = useMemo(() => {
+    if (!person) return null
+    const signed = (year?: number | null, era?: string | null) =>
+      year == null ? null : era === 'BC' ? -year : year
+    return computeLifeTimeline({
+      records: combinedTenures.items.map(({ kind, data }) => ({
+        key: `${kind}-${data.id}`,
+        family:
+          kind === 'reign'
+            ? 'reign'
+            : getRecordFamily({
+                  positionType:
+                    data.positionType ?? data.positionDefinition?.positionType ?? null,
+                  isMonarchical: data.positionDefinition?.isMonarchical ?? null,
+                }) === 'NOBLE_TITLE'
+              ? 'noble'
+              : 'office',
+        title:
+          kind === 'reign' && data.regnalName
+            ? data.regnalName
+            : data.positionDefinition?.title ?? data.title ?? '직책',
+        startDate: data.startDate,
+        endDate: data.endDate,
+      })),
+      birthYear: signed(person.birthYear, person.birthEra),
+      deathYear: signed(person.deathYear, person.deathEra),
+      isDeceased:
+        person.deathYear != null ||
+        person.isAlive === false ||
+        person.isDeathDateUnknown === true,
+      nowYear: new Date().getFullYear(),
+    })
+  }, [person, combinedTenures])
+
+  /** 타임라인 막대 → 개요 탭의 그 카드로. 다른 탭이면 개요로 바꾼 뒤 렌더를 기다려 스크롤한다. */
+  const jumpToRecord = useCallback(
+    (key: string) => {
+      const scroll = () =>
+        document
+          .getElementById(`person-record-${key}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      if (activeTab !== 'overview') {
+        handleTabChange('overview')
+        window.setTimeout(scroll, 60)
+        return
+      }
+      scroll()
+    },
+    [activeTab, handleTabChange],
+  )
+
   /** KPI 배우자 목록 — spouseRelations 우선, 없으면 spouse 단건 폴백 */
   const kpiSpouses = useMemo(() => {
     const rels = (person?.spouseRelations ?? []) as NonNullable<
@@ -1199,6 +1266,68 @@ export function PersonDetailPanel({
     }
   }, [entryDeleteTarget, queryClient, personId])
 
+  /**
+   * 고정 내비(StickyNavBar) 상태 —
+   *  - heroOut: 머리 카드가 화면 밖이면 축약 머리(사진·이름)를 고정 내비 위에 띄운다.
+   *  - activeCluster: 개요에서 지금 읽고 있는 묶음 — 섹션 칩 강조.
+   *  - stickyHeight: 고정 내비 높이 → CSS 변수 --person-sticky-offset(앵커 착지 여백).
+   * 스크롤 컨테이너가 window가 아니라 레이아웃 내부 요소라, scroll은 capture로 문서 전체에서 받는다.
+   */
+  const heroRef = useRef<HTMLDivElement>(null)
+  /** 개요 '정당·선거' 머리의 추가 버튼 → 섹션 안 등록 모달 */
+  const politicsActionsRef = useRef<PersonPoliticsSectionActions>(null)
+  const stickyNavRef = useRef<HTMLDivElement>(null)
+  const [heroOut, setHeroOut] = useState(false)
+  const [activeCluster, setActiveCluster] = useState<string>(OVERVIEW_CLUSTERS[0].id)
+  const [stickyHeight, setStickyHeight] = useState(0)
+  const personLoaded = !!person
+
+  useEffect(() => {
+    const hero = heroRef.current
+    if (!hero || embedInModal) return undefined
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeroOut(!entry.isIntersecting),
+      // 고정 내비에 가려지는 머리 카드 아래쪽은 '안 보이는' 것으로 친다
+      { rootMargin: '-120px 0px 0px 0px', threshold: 0 },
+    )
+    observer.observe(hero)
+    return () => observer.disconnect()
+  }, [personLoaded, embedInModal])
+
+  useEffect(() => {
+    const nav = stickyNavRef.current
+    if (!nav) return undefined
+    const observer = new ResizeObserver(() => setStickyHeight(nav.offsetHeight))
+    observer.observe(nav)
+    return () => observer.disconnect()
+  }, [personLoaded])
+
+  useEffect(() => {
+    if (activeTab !== 'overview' || embedInModal) return undefined
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const navBottom = stickyNavRef.current?.getBoundingClientRect().bottom ?? 0
+      let current: string = OVERVIEW_CLUSTERS[0].id
+      for (const cluster of OVERVIEW_CLUSTERS) {
+        const label = document.getElementById(cluster.id)
+        if (label && label.getBoundingClientRect().top <= navBottom + 24) {
+          current = cluster.id
+        }
+      }
+      setActiveCluster(current)
+    }
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(update)
+    }
+    update()
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      document.removeEventListener('scroll', onScroll, { capture: true })
+    }
+  }, [activeTab, embedInModal, personLoaded])
+
   // 전기 편집·키보드 단축키·인물 링크 클릭은 PersonBiographySections로 이관됨.
   // termTooltip/dynastyTooltip 포털은 그대로 유지 — 자식이 setter로 구동.
   useRichTextTooltipEscape(
@@ -1350,6 +1479,28 @@ export function PersonDetailPanel({
   const genderLabel =
     p.gender === 'MALE' ? '남' : p.gender === 'FEMALE' ? '여' : (p.gender ?? '—')
 
+  /** 축약 머리의 생몰 — '1852–1931'(BC는 '기원전 N'). 머리 카드의 긴 부제를 한 토막으로. */
+  const compactLifespan = (() => {
+    const yearText = (year?: number | null, era?: string | null) =>
+      year == null ? '?' : era === 'BC' ? `기원전 ${year}` : `${year}`
+    if (p.birthYear == null && p.deathYear == null) return ''
+    return `${yearText(p.birthYear, p.birthEra)}–${
+      isDeceased ? yearText(p.deathYear, p.deathEra) : ''
+    }`
+  })()
+
+  /** 탭 건수 — 누르기 전에 비었는지 알게(가계도: 직계·형제, 정치: 당적·후보·당직) */
+  const genealogyCount =
+    (p.father ? 1 : 0) +
+    (p.mother ? 1 : 0) +
+    (p.spouseRelations?.length ?? 0) +
+    (person.children?.length ?? 0) +
+    (p.siblings?.length ?? 0)
+  const politicsCount =
+    ((person as { partyMemberships?: unknown[] }).partyMemberships?.length ?? 0) +
+    ((person as { electionCandidacies?: unknown[] }).electionCandidacies?.length ?? 0) +
+    (p.partyLeaderships?.length ?? 0)
+
   const backLabel = closeLabel
 
   const familyFather = p.father
@@ -1383,6 +1534,7 @@ export function PersonDetailPanel({
     <>
       <PanelRoot
         $embed={embedInModal}
+        style={{ ['--person-sticky-offset' as string]: `${stickyHeight + 16}px` }}
         as={motion.div}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1426,7 +1578,8 @@ export function PersonDetailPanel({
           </TopNavBar>
         )}
 
-        {/* 헤더: 썸네일 + 이름 */}
+        {/* 머리 카드: 썸네일·이름 + 핵심 정보 줄 + 생애 타임라인 */}
+        <HeroCard ref={heroRef}>
         <HeaderRow>
           <HeaderLeft>
             {/* 숨긴 파일 입력 */}
@@ -1772,6 +1925,36 @@ export function PersonDetailPanel({
           })()}
         </KpiStrip>
 
+        {lifeTimeline && (
+          <LifeTimeline layout={lifeTimeline} onSelect={jumpToRecord} />
+        )}
+        </HeroCard>
+
+        {/* 고정 내비: 축약 머리 + 탭 + (개요) 섹션 칩 */}
+        <StickyNavBar ref={stickyNavRef} $sticky={!embedInModal} $raised={heroOut}>
+        {!embedInModal && (
+          <CompactIdentity $visible={heroOut} aria-hidden={!heroOut}>
+            <div>
+              <CompactIdentityRow>
+                {person.profileImageUrl && !avatarBroken ? (
+                  <img
+                    src={
+                      getUploadImageUrl(person.profileImageUrl) ||
+                      person.profileImageUrl
+                    }
+                    alt=""
+                  />
+                ) : (
+                  <CompactIdentityAvatarFallback>
+                    <FiUsers size={14} aria-hidden />
+                  </CompactIdentityAvatarFallback>
+                )}
+                <CompactIdentityName>{fullName}</CompactIdentityName>
+                <CompactIdentityMeta>{compactLifespan}</CompactIdentityMeta>
+              </CompactIdentityRow>
+            </div>
+          </CompactIdentity>
+        )}
         {/* 탭 네비게이션 */}
         <TabNav
           role="tablist"
@@ -1802,6 +1985,7 @@ export function PersonDetailPanel({
             aria-selected={activeTab === 'genealogy'}
             tabIndex={activeTab === 'genealogy' ? 0 : -1}
             $active={activeTab === 'genealogy'}
+            $empty={genealogyCount === 0}
             onClick={() => {
               playClickSound()
               handleTabChange('genealogy')
@@ -1809,22 +1993,7 @@ export function PersonDetailPanel({
           >
             <FiUsers size={14} />
             가계도
-          </TabBtn>
-          <TabBtn
-            type="button"
-            role="tab"
-            id="person-detail-tab-politics"
-            aria-controls="person-detail-panel-politics"
-            aria-selected={activeTab === 'politics'}
-            tabIndex={activeTab === 'politics' ? 0 : -1}
-            $active={activeTab === 'politics'}
-            onClick={() => {
-              playClickSound()
-              handleTabChange('politics')
-            }}
-          >
-            <FiFlag size={14} />
-            정치·선거
+            <TabCount aria-label={`${genealogyCount}명`}>{genealogyCount}</TabCount>
           </TabBtn>
           <TabBtn
             type="button"
@@ -1843,6 +2012,24 @@ export function PersonDetailPanel({
             연보
           </TabBtn>
         </TabNav>
+        {/* 개요 점프 내비(UX8) — 4묶음 바로가기. 고정 내비 안이라 어디까지 내려가도 남고,
+            지금 읽는 묶음이 강조된다. 풀 페이지에서만(임베드는 묶음이 조건부라 앵커 부재 가능). */}
+        {activeTab === 'overview' && !embedInModal && (
+          <OverviewJumpNav aria-label="개요 섹션 바로가기">
+            {OVERVIEW_CLUSTERS.map((cluster) => (
+              <OverviewJumpChip
+                key={cluster.id}
+                type="button"
+                $active={activeCluster === cluster.id}
+                aria-current={activeCluster === cluster.id ? 'location' : undefined}
+                onClick={() => scrollToOverviewCluster(cluster.id)}
+              >
+                {cluster.label}
+              </OverviewJumpChip>
+            ))}
+          </OverviewJumpNav>
+        )}
+        </StickyNavBar>
 
         {/* 탭 컨텐츠 */}
         <TabContentArea>
@@ -1860,25 +2047,18 @@ export function PersonDetailPanel({
                 transition={{ duration: 0.2 }}
               >
                 <OverviewSections>
-                  {/* 개요 점프 내비(UX8) — 4클러스터로 바로 이동. 선형 스크롤 완화.
-                      풀 페이지에서만(임베드는 클러스터가 조건부라 앵커 부재 가능). */}
-                  {!embedInModal && (
-                    <OverviewJumpNav aria-label="개요 섹션 바로가기">
-                      {OVERVIEW_CLUSTERS.map((cluster) => (
-                        <OverviewJumpChip
-                          key={cluster.id}
-                          type="button"
-                          onClick={() => scrollToOverviewCluster(cluster.id)}
-                        >
-                          {cluster.label}
-                        </OverviewJumpChip>
-                      ))}
-                    </OverviewJumpNav>
-                  )}
                   {/* ── 클러스터 ① 생애·요약 ── */}
                   <OverviewClusterLabel id="overview-cluster-life">
                     생애·요약
                   </OverviewClusterLabel>
+
+                  {/* 출생 / 사망 카드 — 기본 사실이라 생애 묶음 맨 앞(예전엔 전기·영향력·능력치 뒤 약 2,700px 지점) */}
+                  <BirthDeathCards
+                    person={p}
+                    birthDateStr={birthDateStr}
+                    deathDateStr={deathDateStr}
+                    ageAtDeath={ageAtDeath}
+                  />
 
                   {/* 1. 전기 — 가장 중요한 서술 정보 */}
                   <section aria-label="전기">
@@ -1888,6 +2068,8 @@ export function PersonDetailPanel({
                         <span>전기</span>
                       </OverviewSectionHeading>
                     </OverviewSectionHeaderRow>
+                    {/* 긴 전기는 처음 ~10줄만 — 기본 사실(출생·사망·재임)이 1,500px 아래로 밀리지 않게 */}
+                    <BioClamp>
                     <PersonBiographySections
                       personId={person.id}
                       sections={p.biographySections ?? undefined}
@@ -1916,161 +2098,8 @@ export function PersonDetailPanel({
                       setTermTooltip={setTermTooltip}
                       setDynastyTooltip={setDynastyTooltip}
                     />
+                    </BioClamp>
                   </section>
-
-                  {/* 2. 역사적 영향력 */}
-                  <section aria-label="역사적 영향력">
-                    <OverviewSectionHeaderRow>
-                      <OverviewSectionHeading>
-                        <FiTrendingUp size={14} strokeWidth={2.2} />
-                        <span>역사적 영향력</span>
-                      </OverviewSectionHeading>
-                      {!embedInModal && !editingInfluence && (
-                        <OutlineButton
-                          type="button"
-                          onClick={() => {
-                            setInfluenceDraft(person.influence ?? 0)
-                            setEditingInfluence(true)
-                          }}
-                        >
-                          {person.influence != null ? '수정' : '설정'}
-                        </OutlineButton>
-                      )}
-                      {editingInfluence && (
-                        <InlineActions>
-                          <OutlineButton
-                            type="button"
-                            disabled={savingInfluence}
-                            onClick={() => {
-                              const nextInfluence = influenceDraft
-                              setSavingInfluence(true)
-                              startTransition(async () => {
-                                // 낙관적 반영(트랜지션 내부에서만 허용) — 즉시 새 값 표시
-                                setOptimisticInfluence(nextInfluence)
-                                try {
-                                  await updatePerson(person.id, {
-                                    influence: nextInfluence,
-                                  })
-                                  // 영향력은 목록·인포그래픽·가문 그리드에도 박혀 있어
-                                  // detail만이 아니라 넓게 무효화한다. await로 refetch 착지까지
-                                  // 트랜지션을 pending 유지 → 낙관값이 옛 base로 되돌아가는
-                                  // 깜빡임(새값→옛값→새값) 없이 새 base로 매끄럽게 수렴.
-                                  await invalidatePersonCaches()
-                                  // 성공 시에만 편집 모드 종료 — 실패하면 편집 모드·
-                                  // influenceDraft를 그대로 유지해 즉시 재시도 가능.
-                                  setEditingInfluence(false)
-                                  notify.success('영향력이 저장되었습니다.')
-                                } catch (err) {
-                                  // 편집 모드 유지(닫지 않음). 낙관적 값은 트랜지션
-                                  // 종료 후 base(person.influence)로 자연 수렴.
-                                  notify.error(
-                                    err instanceof Error
-                                      ? err.message
-                                      : '영향력 저장에 실패했습니다.',
-                                  )
-                                } finally {
-                                  setSavingInfluence(false)
-                                }
-                              })
-                            }}
-                          >
-                            {savingInfluence ? '저장 중…' : '저장'}
-                          </OutlineButton>
-                          <OutlineButton
-                            type="button"
-                            disabled={savingInfluence}
-                            onClick={() => setEditingInfluence(false)}
-                          >
-                            취소
-                          </OutlineButton>
-                        </InlineActions>
-                      )}
-                    </OverviewSectionHeaderRow>
-                    {(() => {
-                      // 미평가(null)를 0점으로 둔갑시키지 않는다(UX7) — 편집 중이 아니면
-                      // 빈 상태로. 임베드(읽기)에서는 의미 없는 빈 게이지 대신 숨김.
-                      if (!editingInfluence && person.influence == null) {
-                        if (embedInModal) return null
-                        return (
-                          <InfluenceEmpty>
-                            아직 영향력 평가가 없습니다. ‘설정’을 눌러 기록해 보세요.
-                          </InfluenceEmpty>
-                        )
-                      }
-                      const current = editingInfluence
-                        ? influenceDraft
-                        : optimisticInfluence
-                      const currentTier = getInfluenceTier(current)
-                      return (
-                        <InfluenceBlock>
-                          <InfluenceSliderRow>
-                            {editingInfluence ? (
-                              <InfluenceSliderInput
-                                type="range"
-                                min={0}
-                                max={100}
-                                step={5}
-                                value={influenceDraft}
-                                onChange={(e) =>
-                                  setInfluenceDraft(Number(e.target.value))
-                                }
-                                aria-valuenow={influenceDraft}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-label="역사적 영향력"
-                              />
-                            ) : (
-                              <InfluenceBar>
-                                <InfluenceFill
-                                  $pct={current}
-                                  $tier={currentTier}
-                                />
-                              </InfluenceBar>
-                            )}
-                            <InfluenceValueGroup>
-                              <InfluenceValue $tier={currentTier}>
-                                {current}
-                              </InfluenceValue>
-                              {currentTier && (
-                                <InfluenceTierLabel $tier={currentTier}>
-                                  {getInfluenceTierLabel(currentTier)}
-                                </InfluenceTierLabel>
-                              )}
-                            </InfluenceValueGroup>
-                          </InfluenceSliderRow>
-                          <InfluenceAnchorRow>
-                            {INFLUENCE_ANCHORS.map((a) => (
-                              <InfluenceAnchor
-                                key={a.value}
-                                $active={current >= a.value}
-                                $tier={a.tier}
-                                style={{ left: `${a.value}%` }}
-                                title={
-                                  a.tier
-                                    ? `${a.value} 이상 — ${getInfluenceTierLabel(a.tier)}`
-                                    : '영향력 없음'
-                                }
-                              >
-                                <b>{a.value}</b>
-                                <span>{a.label}</span>
-                              </InfluenceAnchor>
-                            ))}
-                          </InfluenceAnchorRow>
-                        </InfluenceBlock>
-                      )
-                    })()}
-                  </section>
-
-                  {/* 2.5. 능력치 · 성격 — 영향력과 같은 0–100 평가 메트릭 클러스터 */}
-                  <PersonStatsSection personId={person.id} personName={fullName} />
-
-                  {/* 2.55. 출생 / 사망 카드 — 좌우 분리. 장소 + 일자 + 사망정보를 함께 묶음 */}
-                  <BirthDeathCards
-                    person={p}
-                    birthDateStr={birthDateStr}
-                    deathDateStr={deathDateStr}
-                    ageAtDeath={ageAtDeath}
-                  />
 
                   {/* ── 클러스터 ② 이력·활동 ── */}
                   <OverviewClusterLabel id="overview-cluster-history">
@@ -2724,6 +2753,100 @@ export function PersonDetailPanel({
                     )
                   })()}
 
+                  {/* 3.5. 정당·선거 — 옛 '정치·선거' 탭을 이력의 한 갈래로 흡수.
+                      당원·후보 기록은 일부 인물에게만 있어 최상위 탭(4개 중 1개)을 차지할 이유가 없었고,
+                      대부분의 인물에서 '눌러 보면 빈 탭'이었다. 비어 있으면 한 줄만 선다. */}
+                  {(!embedInModal || politicsCount > 0) && (
+                    <section aria-label="정당·선거" id="person-politics">
+                      <OverviewSectionHeaderRow>
+                        <OverviewSectionHeading>
+                          <FiFlag size={14} strokeWidth={2.2} />
+                          <span>정당·선거</span>
+                          {politicsCount > 0 && <CountMuted>{politicsCount}</CountMuted>}
+                        </OverviewSectionHeading>
+                        {!embedInModal && (
+                          <UnifiedActionRow>
+                            <TenureAddButton
+                              type="button"
+                              onClick={() => {
+                                playClickSound()
+                                politicsActionsRef.current?.openCreate()
+                              }}
+                            >
+                              <FiPlus size={12} />
+                              당원 소속
+                            </TenureAddButton>
+                          </UnifiedActionRow>
+                        )}
+                      </OverviewSectionHeaderRow>
+                      <PersonPoliticsSection
+                        personId={person.id}
+                        countryId={person.countryId ?? null}
+                        variant="overview"
+                        actionsRef={politicsActionsRef}
+                        partyMemberships={
+                          (
+                            person as {
+                              partyMemberships?: import('@/shared/api/election').PartyMembershipRow[]
+                            }
+                          ).partyMemberships
+                        }
+                        electionCandidacies={
+                          (
+                            person as {
+                              electionCandidacies?: ElectionCandidacyDetail[]
+                            }
+                          ).electionCandidacies
+                        }
+                        footer={
+                          p.partyLeaderships && p.partyLeaderships.length > 0 ? (
+                            <section aria-label="당 지도부 이력">
+                              <SectionLabelRow>
+                                <SectionLabel>당 지도부 이력</SectionLabel>
+                                <CountMuted>{p.partyLeaderships.length}</CountMuted>
+                              </SectionLabelRow>
+                              <SimpleEntryList>
+                                {p.partyLeaderships
+                                  .slice()
+                                  .sort((a, b) => {
+                                    const ta = a.startDate ? new Date(a.startDate).getTime() : 0
+                                    const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                                    return tb - ta
+                                  })
+                                  .map((l, partyIdx) => {
+                                    const start = formatIsoDateKo(l.startDate)
+                                    const end = formatIsoDateKo(l.endDate)
+                                    const period =
+                                      formatPeriod(start, end, isDeceased ? '미상' : '현재')
+                                    return (
+                                      <SimpleEntryItem key={l.id ?? `party-${partyIdx}`}>
+                                        <SimpleEntryHeader>
+                                          <SimpleEntryTitle>
+                                            {l.party?.name ?? '정당 미상'}
+                                            {l.party?.shortName && (
+                                              <SimpleEntrySub>
+                                                {' '}({l.party.shortName})
+                                              </SimpleEntrySub>
+                                            )}
+                                          </SimpleEntryTitle>
+                                          {l.roleTitle && (
+                                            <SimpleEntryRole>{l.roleTitle}</SimpleEntryRole>
+                                          )}
+                                        </SimpleEntryHeader>
+                                        {period && (
+                                          <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
+                                        )}
+                                      </SimpleEntryItem>
+                                    )
+                                  })}
+                              </SimpleEntryList>
+                            </section>
+                          ) : null
+                        }
+                      />
+                    </section>
+                  )}
+
                   {/* ── 클러스터 ③ 관계 ── */}
                   {(!embedInModal ||
                     (p.spouseRelations?.length ?? 0) > 0 ||
@@ -2866,6 +2989,158 @@ export function PersonDetailPanel({
                       embedInModal ? onLinkedPersonClick : pushPersonToModalStack
                     }
                   />
+                  {/* ── 클러스터 ⑤ 평가 ──
+                      영향력·능력치는 사실이 아니라 **매긴 값**이다. 예전엔 전기와 출생·사망 사이에 끼어
+                      기본 사실을 아래로 밀었다. 영향력 수치는 머리 카드 KPI에 이미 있어, 상세는 맨 끝에 둔다. */}
+                  <OverviewClusterLabel id="overview-cluster-evaluation">
+                    평가
+                  </OverviewClusterLabel>
+                  {/* 2. 역사적 영향력 */}
+                  <section aria-label="역사적 영향력">
+                    <OverviewSectionHeaderRow>
+                      <OverviewSectionHeading>
+                        <FiTrendingUp size={14} strokeWidth={2.2} />
+                        <span>역사적 영향력</span>
+                      </OverviewSectionHeading>
+                      {!embedInModal && !editingInfluence && (
+                        <OutlineButton
+                          type="button"
+                          onClick={() => {
+                            setInfluenceDraft(person.influence ?? 0)
+                            setEditingInfluence(true)
+                          }}
+                        >
+                          {person.influence != null ? '수정' : '설정'}
+                        </OutlineButton>
+                      )}
+                      {editingInfluence && (
+                        <InlineActions>
+                          <OutlineButton
+                            type="button"
+                            disabled={savingInfluence}
+                            onClick={() => {
+                              const nextInfluence = influenceDraft
+                              setSavingInfluence(true)
+                              startTransition(async () => {
+                                // 낙관적 반영(트랜지션 내부에서만 허용) — 즉시 새 값 표시
+                                setOptimisticInfluence(nextInfluence)
+                                try {
+                                  await updatePerson(person.id, {
+                                    influence: nextInfluence,
+                                  })
+                                  // 영향력은 목록·인포그래픽·가문 그리드에도 박혀 있어
+                                  // detail만이 아니라 넓게 무효화한다. await로 refetch 착지까지
+                                  // 트랜지션을 pending 유지 → 낙관값이 옛 base로 되돌아가는
+                                  // 깜빡임(새값→옛값→새값) 없이 새 base로 매끄럽게 수렴.
+                                  await invalidatePersonCaches()
+                                  // 성공 시에만 편집 모드 종료 — 실패하면 편집 모드·
+                                  // influenceDraft를 그대로 유지해 즉시 재시도 가능.
+                                  setEditingInfluence(false)
+                                  notify.success('영향력이 저장되었습니다.')
+                                } catch (err) {
+                                  // 편집 모드 유지(닫지 않음). 낙관적 값은 트랜지션
+                                  // 종료 후 base(person.influence)로 자연 수렴.
+                                  notify.error(
+                                    err instanceof Error
+                                      ? err.message
+                                      : '영향력 저장에 실패했습니다.',
+                                  )
+                                } finally {
+                                  setSavingInfluence(false)
+                                }
+                              })
+                            }}
+                          >
+                            {savingInfluence ? '저장 중…' : '저장'}
+                          </OutlineButton>
+                          <OutlineButton
+                            type="button"
+                            disabled={savingInfluence}
+                            onClick={() => setEditingInfluence(false)}
+                          >
+                            취소
+                          </OutlineButton>
+                        </InlineActions>
+                      )}
+                    </OverviewSectionHeaderRow>
+                    {(() => {
+                      // 미평가(null)를 0점으로 둔갑시키지 않는다(UX7) — 편집 중이 아니면
+                      // 빈 상태로. 임베드(읽기)에서는 의미 없는 빈 게이지 대신 숨김.
+                      if (!editingInfluence && person.influence == null) {
+                        if (embedInModal) return null
+                        return (
+                          <InfluenceEmpty>
+                            아직 영향력 평가가 없습니다. ‘설정’을 눌러 기록해 보세요.
+                          </InfluenceEmpty>
+                        )
+                      }
+                      const current = editingInfluence
+                        ? influenceDraft
+                        : optimisticInfluence
+                      const currentTier = getInfluenceTier(current)
+                      return (
+                        <InfluenceBlock>
+                          <InfluenceSliderRow>
+                            {editingInfluence ? (
+                              <InfluenceSliderInput
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={influenceDraft}
+                                onChange={(e) =>
+                                  setInfluenceDraft(Number(e.target.value))
+                                }
+                                aria-valuenow={influenceDraft}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-label="역사적 영향력"
+                              />
+                            ) : (
+                              <InfluenceBar>
+                                <InfluenceFill
+                                  $pct={current}
+                                  $tier={currentTier}
+                                />
+                              </InfluenceBar>
+                            )}
+                            <InfluenceValueGroup>
+                              <InfluenceValue $tier={currentTier}>
+                                {current}
+                              </InfluenceValue>
+                              {currentTier && (
+                                <InfluenceTierLabel $tier={currentTier}>
+                                  {getInfluenceTierLabel(currentTier)}
+                                </InfluenceTierLabel>
+                              )}
+                            </InfluenceValueGroup>
+                          </InfluenceSliderRow>
+                          <InfluenceAnchorRow>
+                            {INFLUENCE_ANCHORS.map((a) => (
+                              <InfluenceAnchor
+                                key={a.value}
+                                $active={current >= a.value}
+                                $tier={a.tier}
+                                style={{ left: `${a.value}%` }}
+                                title={
+                                  a.tier
+                                    ? `${a.value} 이상 — ${getInfluenceTierLabel(a.tier)}`
+                                    : '영향력 없음'
+                                }
+                              >
+                                <b>{a.value}</b>
+                                <span>{a.label}</span>
+                              </InfluenceAnchor>
+                            ))}
+                          </InfluenceAnchorRow>
+                        </InfluenceBlock>
+                      )
+                    })()}
+                  </section>
+
+                  {/* 2.5. 능력치 · 성격 — 영향력과 같은 0–100 평가 메트릭 클러스터 */}
+                  <PersonStatsSection personId={person.id} personName={fullName} />
+
                 </OverviewSections>
               </TabContent>
             )}
@@ -2986,82 +3261,6 @@ export function PersonDetailPanel({
               </TabContent>
             )}
 
-            {activeTab === 'politics' && (
-              <TabContent
-                key="politics"
-                role="tabpanel"
-                id="person-detail-panel-politics"
-                aria-labelledby="person-detail-tab-politics"
-                as={motion.div}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-              >
-                <PersonPoliticsSection
-                  personId={person.id}
-                  countryId={person.countryId ?? null}
-                  variant="tab"
-                  partyMemberships={
-                    (
-                      person as {
-                        partyMemberships?: import('@/shared/api/election').PartyMembershipRow[]
-                      }
-                    ).partyMemberships
-                  }
-                  electionCandidacies={
-                    (
-                      person as {
-                        electionCandidacies?: ElectionCandidacyDetail[]
-                      }
-                    ).electionCandidacies
-                  }
-                />
-                {p.partyLeaderships && p.partyLeaderships.length > 0 && (
-                  <section aria-label="당 지도부 이력">
-                    <SectionLabelRow>
-                      <SectionLabel>당 지도부 이력</SectionLabel>
-                      <CountMuted>{p.partyLeaderships.length}</CountMuted>
-                    </SectionLabelRow>
-                    <SimpleEntryList>
-                      {p.partyLeaderships
-                        .slice()
-                        .sort((a, b) => {
-                          const ta = a.startDate ? new Date(a.startDate).getTime() : 0
-                          const tb = b.startDate ? new Date(b.startDate).getTime() : 0
-                          return tb - ta
-                        })
-                        .map((l, partyIdx) => {
-                          const start = formatIsoDateKo(l.startDate)
-                          const end = formatIsoDateKo(l.endDate)
-                          const period =
-                            formatPeriod(start, end, isDeceased ? '미상' : '현재')
-                          return (
-                            <SimpleEntryItem key={l.id ?? `party-${partyIdx}`}>
-                              <SimpleEntryHeader>
-                                <SimpleEntryTitle>
-                                  {l.party?.name ?? '정당 미상'}
-                                  {l.party?.shortName && (
-                                    <SimpleEntrySub>
-                                      {' '}({l.party.shortName})
-                                    </SimpleEntrySub>
-                                  )}
-                                </SimpleEntryTitle>
-                                {l.roleTitle && (
-                                  <SimpleEntryRole>{l.roleTitle}</SimpleEntryRole>
-                                )}
-                              </SimpleEntryHeader>
-                              {period && (
-                                <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
-                              )}
-                            </SimpleEntryItem>
-                          )
-                        })}
-                    </SimpleEntryList>
-                  </section>
-                )}
-              </TabContent>
-            )}
 
 
             {activeTab === 'events' && (

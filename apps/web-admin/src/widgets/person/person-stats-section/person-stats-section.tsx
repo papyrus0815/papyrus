@@ -96,21 +96,17 @@ export function PersonStatsSection({ personId, personName }: Props) {
               <FiGitMerge size={12} /> 비교
             </CompareBtn>
           )}
-          <PrimaryHeaderBtn
-            type="button"
-            onClick={() => setModalOpen(true)}
-            disabled={isLoading}
-          >
-            {hasEvaluation ? (
-              <>
-                <FiEdit2 size={13} /> 수정
-              </>
-            ) : (
-              <>
-                <FiPlus size={13} /> 평가 시작
-              </>
-            )}
-          </PrimaryHeaderBtn>
+          {/* 평가가 없을 땐 아래 빈 상태 줄의 '평가 시작'이 유일한 진입점 — 머리에도 같은 버튼을
+              두면 한 화면에 같은 CTA가 두 개 선다(실측: 머리 오른쪽 + 빈 상태 오른쪽). */}
+          {hasEvaluation && (
+            <PrimaryHeaderBtn
+              type="button"
+              onClick={() => setModalOpen(true)}
+              disabled={isLoading}
+            >
+              <FiEdit2 size={13} /> 수정
+            </PrimaryHeaderBtn>
+          )}
         </HeaderActions>
       </HeaderRow>
 

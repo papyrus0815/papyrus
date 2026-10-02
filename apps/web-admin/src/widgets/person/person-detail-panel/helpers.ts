@@ -323,7 +323,18 @@ export function deriveTenurePeriodLabel(
   } else {
     startStr = formatIsoDateKo(input.startDate)
   }
-  const endStr = input.endDate ? formatIsoDateKo(input.endDate) : ''
+  /**
+   * 종료일 1월 1일 = '그해에 끝났다'는 자리 표시로 본다. 재임 테이블엔 종료 정밀도 컬럼이
+   * 없어서, 연 단위로만 아는 종료를 1월 1일로 넣어 왔다(실DB 220행 중 26행). 그대로 찍으면
+   * '1885년 1월 – 1888년 1월 1일'처럼 시작보다 끝이 더 정밀한 거짓 표기가 된다 — 사건 목록·
+   * 사이드바·사건 상세(formatDateRange)와 같은 판정. 진짜 1월 1일 퇴임은 덜 말할 뿐 틀리진 않는다.
+   */
+  const endParts = parseIsoDateParts(input.endDate)
+  const endStr = !input.endDate
+    ? ''
+    : endParts && endParts.month === 1 && endParts.day === 1
+      ? `${endParts.era === 'BC' ? '기원전 ' : ''}${endParts.year}년`
+      : formatIsoDateKo(input.endDate)
   const endLabel =
     endStr ||
     (input.endReason === 'DEATH_IN_OFFICE' && input.deathDateStr

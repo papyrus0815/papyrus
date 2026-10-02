@@ -268,6 +268,11 @@ export const TopNavBar = styled.div`
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
+
+  /* 좁은 폭에선 앱 공통 프로필 버블(우상단 고정, 약 48px)이 '삭제' 버튼을 덮었다 — 그만큼 비켜 선다 */
+  @media (max-width: 640px) {
+    padding-right: 56px;
+  }
 `
 
 /**
@@ -283,8 +288,6 @@ export const HeaderRow = styled.header`
   text-align: left;
   gap: 16px;
   padding: 28px 28px 24px;
-  border-radius: 20px;
-  margin-bottom: 16px;
   @media (max-width: 640px) {
     flex-direction: column;
     align-items: center;
@@ -292,10 +295,21 @@ export const HeaderRow = styled.header`
     padding: 24px 18px 20px;
   }
   background: transparent;
+`
+
+/**
+ * 인물 머리 카드 — 머리(사진·이름) · 핵심 정보 줄(KPI) · 생애 타임라인을 한 상자에.
+ *
+ * 예전엔 머리만 테두리 상자였고, KPI 줄('성별 남 | 영향력 ★95')은 상자 **밖**에서 위아래
+ * 괘선만 가진 채 따로 떠 있었다. 정보는 같은 인물의 요약인데 상자가 갈라 '다른 덩어리'로
+ * 읽혔고, 상자 오른쪽 절반은 비어 있었다. 이제 한 상자 안에서 괘선으로만 나눈다.
+ */
+export const HeroCard = styled.div`
+  margin-bottom: 24px;
+  border-radius: 20px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-  box-shadow: none;
 `
 
 export const HeaderLeft = styled.div`
@@ -316,6 +330,11 @@ export const AvatarButton = styled.button<{ $loading?: boolean }>`
   position: relative;
   width: 120px;
   height: 120px;
+  /* 좁은 폭은 사진이 이름 위에 서므로(세로 쌓기) 한 단 줄여 첫 화면에 탭까지 들어오게 */
+  @media (max-width: 640px) {
+    width: 88px;
+    height: 88px;
+  }
   border-radius: 9999px;
   overflow: hidden;
   flex-shrink: 0;
@@ -545,6 +564,10 @@ export const PageSubtitle = styled.p`
 `
 
 export const RegisteredByline = styled.p`
+  /* 관리용 정보 — 좁은 폭에선 머리 카드 높이(첫 화면)를 지키려 내린다 */
+  @media (max-width: 640px) {
+    display: none;
+  }
   margin: 8px 0 0;
   font-size: 11px;
   font-weight: 400;
@@ -592,12 +615,21 @@ export const NicknameRow = styled.div`
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+  /* 좁은 폭에서 머리 블록이 가운데 정렬(align-items:center)이면 이 줄이 내용 폭으로 늘어나
+     머리 카드 밖으로 삐져나갔다(390px 실측) — 부모 폭에 묶고, 칩 안 사유가 말줄임되게 한다 */
+  max-width: 100%;
+  @media (max-width: 640px) {
+    justify-content: center;
+  }
 `
 
 export const NicknameChip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding: 3px 8px;
   border-radius: 999px;
   font-size: 11.5px;
@@ -609,6 +641,9 @@ export const NicknameChip = styled.span`
 `
 
 export const NicknameType = styled.span`
+  /* 좁은 칩에서 '애칭'이 '애 / 칭'으로 세로로 쪼개졌다 — 라벨·값은 줄바꿈하지 않고 사유만 말줄임 */
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -616,6 +651,8 @@ export const NicknameType = styled.span`
 `
 
 export const NicknameValue = styled.span`
+  flex-shrink: 0;
+  white-space: nowrap;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
 `
@@ -623,6 +660,7 @@ export const NicknameValue = styled.span`
 /** 별칭 이유·유래 — 칩 안 값 뒤 muted 접미. 길면 말줄임(전문은 title 툴팁). */
 export const NicknameReason = styled.span`
   max-width: 220px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -879,14 +917,15 @@ export const KpiStrip = styled.div<{ $compact?: boolean }>`
   flex-wrap: wrap;
   align-items: stretch;
   gap: 0;
-  margin-bottom: 24px;
   padding: 14px 0;
+  /* 머리 카드(HeroCard) 안 — 위 괘선 하나로 머리와 나눈다(아래는 카드 테두리 또는 타임라인 괘선) */
   border-top: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+
+  &:empty {
+    display: none;
+  }
 `
 
 export const KpiItem = styled.div`
@@ -1041,7 +1080,8 @@ export const OverviewClusterLabel = styled.div`
   font-weight: 800;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
-  scroll-margin-top: 16px;
+  /* 고정 내비(축약 머리 + 탭 + 섹션 칩 ≈ 130px) 아래로 착지 */
+  scroll-margin-top: var(--person-sticky-offset, 16px);
   &::after {
     content: '';
     flex: 1;
@@ -1055,10 +1095,10 @@ export const OverviewJumpNav = styled.nav`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 4px;
+  padding: 10px 0;
 `
 
-export const OverviewJumpChip = styled.button`
+export const OverviewJumpChip = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   padding: 4px 11px;
@@ -1075,6 +1115,119 @@ export const OverviewJumpChip = styled.button`
     border-color: #6366f1;
     color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   }
+
+  /* 지금 읽고 있는 묶음 — 고정 내비에서 '여기가 어디인가'를 말한다 */
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      border-color: #6366f1;
+      background: ${theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.08)'};
+      color: ${theme.mode === 'dark' ? '#c7d2fe' : '#4338ca'};
+    `}
+`
+
+/**
+ * 고정 내비 — 축약 머리 · 탭 · (개요) 섹션 칩을 한 덩어리로 스크롤 상단에 붙인다.
+ *
+ * 예전엔 탭과 섹션 칩이 본문과 함께 흘러가 버려서, 조프르(개요 9,835px)처럼 긴 인물은
+ * 5,000px 지점에서 '지금 어느 묶음인가'도, 다른 묶음으로 가는 길도 없었다(맨 위로 되돌아가야 했다).
+ * 배경은 지면색(background.primary) 그대로 — 불투명해야 밑으로 지나가는 글자가 비치지 않는다.
+ * 임베드 모달은 유리 표면이라 지면색이 맞지 않고 짧아서 고정하지 않는다($sticky=false).
+ */
+export const StickyNavBar = styled.div<{ $sticky: boolean; $raised: boolean }>`
+  margin-bottom: 20px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  transition: box-shadow 0.18s ease;
+  ${({ $sticky }) =>
+    $sticky &&
+    css`
+      position: sticky;
+      top: 0;
+      z-index: 6;
+    `}
+  /* 실제로 떠 있을 때(머리 카드가 지나간 뒤)만 아래 그림자 — 맨 위에서까지 그리면 탭 밑에 이유 없는 그늘이 진다 */
+  ${({ $sticky, $raised, theme }) =>
+    $sticky &&
+    $raised &&
+    css`
+      box-shadow: 0 8px 12px -12px
+        ${theme.mode === 'dark' ? 'rgba(0,0,0,0.6)' : 'rgba(15,23,42,0.25)'};
+    `}
+`
+
+/**
+ * 축약 머리 — 머리 카드가 화면 밖으로 나가면 고정 내비 위에 한 줄(사진·이름·생몰)로 나타난다.
+ * 높이 0 ↔ 자기 높이를 grid-rows 0fr/1fr로 전환(높이 값을 하드코딩하지 않는다).
+ */
+export const CompactIdentity = styled.div<{ $visible: boolean }>`
+  display: grid;
+  grid-template-rows: ${({ $visible }) => ($visible ? '1fr' : '0fr')};
+  transition: grid-template-rows 0.18s ease;
+
+  > div {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+export const CompactIdentityRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 2px;
+  min-width: 0;
+
+  img,
+  > span:first-child {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: top center;
+  }
+`
+
+export const CompactIdentityAvatarFallback = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const CompactIdentityName = styled.span`
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+export const CompactIdentityMeta = styled.span`
+  flex-shrink: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  @media (max-width: 480px) {
+    display: none;
+  }
+`
+
+/** 탭 이름 옆 건수 — 0이면 탭 자체를 흐리게(TabBtn $empty) */
+export const TabCount = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 export const OverviewSectionHeaderRow = styled.div`
@@ -1171,6 +1324,22 @@ export const unifiedKindColor = {
 /** kind 액센트를 CSS 변수로 1회 계산 — 킥커 글리프 디스크·액센트 텍스트·hover 워시·
     focus 링이 전부 이 변수를 읽는다 (AchievementSection의 --ach-* 패턴과 동형). */
 export const UnifiedCard = styled.li<{ $kind: 'tenure' | 'reign' }>`
+  /*
+   * 편집 도구는 카드에 손이 닿을 때만 — 재임 15건인 인물에서 '✎'와 '+ 업적·한일 추가'가
+   * 15번씩 상시로 서서 읽는 화면을 편집 화면처럼 만들었다. opacity만 내려 자리는 지키고
+   * (hover 때 레이아웃이 흔들리지 않게) 키보드 포커스가 들어오면(focus-within) 다시 보인다.
+   * hover가 없는 터치 기기에서는 항상 보인다.
+   */
+  @media (hover: hover) {
+    &:not(:hover):not(:focus-within) [data-hover-reveal] {
+      opacity: 0;
+    }
+  }
+  [data-hover-reveal] {
+    transition: opacity 0.15s ease;
+  }
+  /* 생애 타임라인에서 점프해 왔을 때 카드 머리가 고정 내비 밑에 가리지 않게 */
+  scroll-margin-top: var(--person-sticky-offset, 24px);
   --entry-accent: ${({ $kind, theme }) =>
     theme.mode === 'dark'
       ? unifiedKindColor[$kind].textDark
@@ -2580,7 +2749,8 @@ export const TabNav = styled.nav`
   align-items: flex-end;
   flex-wrap: nowrap;
   gap: 4px;
-  margin-bottom: 20px;
+  /* 아래 여백은 감싸는 StickyNavBar가 갖는다(고정되는 덩어리 안에 여백을 두면 그만큼 본문을 가린다) */
+  margin-bottom: 0;
   width: 100%;
   min-width: 0;
   overflow-x: auto;
@@ -2593,7 +2763,9 @@ export const TabNav = styled.nav`
   }
 `
 
-export const TabBtn = styled.button<{ $active: boolean }>`
+export const TabBtn = styled.button<{ $active: boolean; $empty?: boolean }>`
+  /* 빈 탭(건수 0)은 한 단 흐리게 — 눌러 봐야 비어 있다는 걸 알던 것을 미리 말한다(누를 수는 있다: 추가 진입점) */
+  opacity: ${({ $active, $empty }) => ($empty && !$active ? 0.55 : 1)};
   flex: 0 0 auto;
   display: flex;
   align-items: center;

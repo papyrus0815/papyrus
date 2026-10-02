@@ -12,7 +12,7 @@ import {
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
-import { useMemo, useState } from 'react'
+import { useImperativeHandle, useMemo, useState } from 'react'
 import styled from 'styled-components'
 
 import {
@@ -154,8 +154,21 @@ type Props = {
   countryId?: string | null
   partyMemberships: PartyMembershipRow[] | undefined
   electionCandidacies: ElectionCandidacyDetail[] | undefined
-  /** 개요에 섞일 때 구분선·여백. 탭 전용이면 상단 구분선 제거 */
-  variant?: 'standalone' | 'tab'
+  /**
+   * 개요에 섞일 때 구분선·여백. 탭 전용이면 상단 구분선 제거.
+   * 'overview' — 인물 상세 개요의 '이력·활동' 안(옛 정치·선거 탭을 흡수). 큰 머리(아이콘·설명·
+   * 버튼)를 그리지 않고 부모가 재임·재위와 같은 작은 머리를 단다. 추가는 `actionsRef.openCreate()`.
+   * 당원·후보가 모두 없으면 한 줄만 — 대부분의 인물이 빈 상태라 두 소제목+두 빈 문장을 세우지 않는다.
+   */
+  variant?: 'standalone' | 'tab' | 'overview'
+  /** 'overview'에서 부모 머리의 추가 버튼이 등록 모달을 여는 손잡이 */
+  actionsRef?: React.Ref<PersonPoliticsSectionActions>
+  /** 목록 아래 덧붙일 내용 — 개요에서는 당 지도부 이력 */
+  footer?: React.ReactNode
+}
+
+export interface PersonPoliticsSectionActions {
+  openCreate: () => void
 }
 
 export function PersonPoliticsSection({
@@ -164,6 +177,8 @@ export function PersonPoliticsSection({
   partyMemberships: membershipsProp,
   electionCandidacies: candidaciesProp,
   variant = 'standalone',
+  actionsRef,
+  footer,
 }: Props) {
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
@@ -192,7 +207,8 @@ export function PersonPoliticsSection({
     queryFn: () =>
       getPoliticalParties(countryId ? { countryId } : undefined),
     /** 탭에 있을 때는 폼·편집 전에도 목록을 미리 불러 두어 선택 지연을 줄임 */
-    enabled: variant === 'tab' || isMembershipModalOpen,
+    // 정당 목록은 등록 모달에서만 쓴다 — 개요에 상시 놓인 뒤로는 모달이 열릴 때만 받는다
+    enabled: isMembershipModalOpen,
   })
 
   const memberships = membershipsProp ?? []
@@ -293,6 +309,8 @@ export function PersonPoliticsSection({
     setPanelOpen(true)
   }
 
+  useImperativeHandle(actionsRef, () => ({ openCreate: openCreateModal }))
+
   const closeMembershipModal = () => {
     setPanelOpen(false)
     setEditingId(null)
@@ -312,6 +330,7 @@ export function PersonPoliticsSection({
 
   return (
     <Root $variant={variant}>
+      {variant !== 'overview' && (
       <HeaderRow>
         <TitleBlock>
           <HeaderIconBadge aria-hidden>
@@ -342,6 +361,7 @@ export function PersonPoliticsSection({
           </HeaderBtn>
         ) : null}
       </HeaderRow>
+      )}
 
       <PoliticalPartyRegisterViewModal
         isOpen={isMembershipModalOpen}
@@ -559,6 +579,12 @@ export function PersonPoliticsSection({
         />
       </PoliticalPartyRegisterViewModal>
 
+      {variant === 'overview' && memberships.length === 0 && candidacySummary.length === 0 ? (
+        <Empty $muted>등록된 당원 소속·선거 후보가 없습니다.</Empty>
+      ) : (
+      <>
+      {(variant !== 'overview' || memberships.length > 0) && (
+      <>
       <SubTitle>당원·소속 이력</SubTitle>
       {memberships.length === 0 ? (
         <Empty>등록된 당원 소속이 없습니다.</Empty>
@@ -620,8 +646,17 @@ export function PersonPoliticsSection({
           </tbody>
         </Table>
       )}
-
-      <SubTitle style={{ marginTop: 22 }}>선거 후보 이력</SubTitle>
+      </>
+      )}
+      {(variant !== 'overview' || candidacySummary.length > 0) && (
+      <>
+      <SubTitle
+        style={{
+          marginTop: variant === 'overview' && memberships.length === 0 ? 0 : 22,
+        }}
+      >
+        선거 후보 이력
+      </SubTitle>
       {candidacySummary.length === 0 ? (
         <Empty>
           후보로 등록된 선거가 없습니다. 선거(선거관리)에서 후보를 추가하면
@@ -649,6 +684,11 @@ export function PersonPoliticsSection({
           ))}
         </CandidacyList>
       )}
+      </>
+      )}
+      </>
+      )}
+      {footer}
 
       <ConfirmDialog
         isOpen={deleteTarget !== null}
@@ -747,11 +787,11 @@ const ClearFieldBtn = styled.button`
   }
 `
 
-const Root = styled.section<{ $variant: 'standalone' | 'tab' }>`
-  margin-top: ${({ $variant }) => ($variant === 'tab' ? '0' : '4px')};
-  padding-top: ${({ $variant }) => ($variant === 'tab' ? '0' : '22px')};
+const Root = styled.section<{ $variant: 'standalone' | 'tab' | 'overview' }>`
+  margin-top: ${({ $variant }) => ($variant === 'standalone' ? '4px' : '0')};
+  padding-top: ${({ $variant }) => ($variant === 'standalone' ? '22px' : '0')};
   border-top: ${({ $variant, theme }) =>
-    $variant === 'tab'
+    $variant !== 'standalone'
       ? 'none'
       : `1px solid ${
           theme.mode === 'dark'
@@ -848,11 +888,12 @@ const SubTitle = styled.h4`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const Empty = styled.p`
+const Empty = styled.p<{ $muted?: boolean }>`
   margin: 0;
-  font-size: 13px;
+  font-size: ${({ $muted }) => ($muted ? '12.5px' : '13px')};
   line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme, $muted }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
 `
 
 const Table = styled.table`
@@ -866,6 +907,10 @@ const Table = styled.table`
     border-bottom: 1px solid
       ${({ theme }) =>
         theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  }
+  /* 글자색을 물려받지 않게 못 박는다 — 상위 지면 색을 물려받아 셀 글자가 거의 안 보였다(실측) */
+  td {
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   th {
     font-size: 11px;

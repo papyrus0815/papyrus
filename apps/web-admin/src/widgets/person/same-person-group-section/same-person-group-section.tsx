@@ -132,10 +132,8 @@ export function SamePersonGroupSection({
       ) : isError ? (
         <StatusMsg $err>소속 그룹을 불러오지 못했습니다.</StatusMsg>
       ) : sortedGroups.length === 0 ? (
-        <StatusMsg>
-          아직 소속된 묶음이 없습니다. ‘그룹 관리’에서 세대·계파·동기를 만들어
-          보세요.
-        </StatusMsg>
+        /* 빈 상태는 상자 없이 한 줄 — 점선 상자는 '여기 뭔가 넣어라'로 읽혀 읽는 화면을 시끄럽게 했다 */
+        <EmptyLine>아직 소속된 묶음이 없습니다.</EmptyLine>
       ) : (
         <Groups>
           {sortedGroups.map((group) => {
@@ -524,6 +522,12 @@ const RoleLabel = styled.div`
 const Years = styled.div`
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptyLine = styled.p`
+  margin: 2px 0 0;
+  font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
