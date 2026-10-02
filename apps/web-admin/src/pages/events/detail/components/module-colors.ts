@@ -6,8 +6,8 @@
 import { LEDGER_CATEGORY } from '@/pages/events/ledger/styles/ledger-tokens'
 
 export const MODULE_COLOR = {
-  belligerents: LEDGER_CATEGORY['전쟁/군사'].color,
-  casualties: LEDGER_CATEGORY['전쟁/군사'].color,
+  sides: LEDGER_CATEGORY['전쟁/군사'].color,
+  metrics: LEDGER_CATEGORY['경제'].color,
   'military-details': LEDGER_CATEGORY['전쟁/군사'].color,
   treaties: LEDGER_CATEGORY['회담/조약'].color,
   cabinets: LEDGER_CATEGORY['정치'].color,

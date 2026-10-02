@@ -15,6 +15,7 @@
  *
  * 문서 구성(섹션별 단락 수)은 목차가 맡는다 — 이 패널 아래에 있다.
  */
+import { useQuery } from '@tanstack/react-query'
 import { FiMapPin } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
@@ -29,10 +30,11 @@ import {
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
+import { formatObservationValue } from '@/entities/evidence/lib/format-observation'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
-import { type EventDetail } from '../use-event-detail'
+import { type EventDetail, eventObservationsQueryOptions } from '../use-event-detail'
 import {
   durationLabel,
   groupCountriesByRole,
@@ -58,6 +60,15 @@ const jumpTo = (anchorId: string) => scrollToAnchor(anchorId)
 /** 배역 한 줄에 세우는 나라 수 — 넘치면 '외 N'(참여 행위자 섹션으로). */
 const COUNTRIES_PER_ROLE = 4
 
+/** 장부 '사상자' 줄이 고르는 지표 — 앞에 있을수록 우선(정의가 다른 수를 섞지 않는다) */
+const CASUALTY_METRIC_PRIORITY = [
+  'military.casualties_total',
+  'military.deaths_total',
+  'military.combat_deaths',
+  'military.killed_in_action',
+  'military.deaths_unspecified',
+]
+
 export function DetailFacts({
   event,
   onPatch,
@@ -75,19 +86,23 @@ export function DetailFacts({
 
   const military = event.militaryEvent
   const outcome = military?.militaryDetails?.outcome?.trim() || null
-  const sideNames = (military?.belligerentSides ?? [])
-    .map((side) => side.name?.trim())
-    .filter((name): name is string => Boolean(name))
-  const casualties = (military?.casualties ?? [])
-    .map((row) => {
-      const parts = [
-        row.totalKilled?.trim() ? `전사 ${row.totalKilled.trim()}` : null,
-        row.totalWounded?.trim() ? `부상 ${row.totalWounded.trim()}` : null,
-      ].filter(Boolean)
-      if (parts.length === 0) return null
-      return row.sideName?.trim()
-        ? `${row.sideName.trim()} ${parts.join(' · ')}`
-        : parts.join(' · ')
+  const sides = event.sides ?? []
+  const sideNames = sides.map((side) => side.name.trim()).filter(Boolean)
+  /*
+   * 사상자 — 측정값(D3)에서 진영마다 한 줄. 정의가 다른 지표를 섞지 않도록 우선순위대로 하나만 고른다.
+   * (군 손실 합계 → 총사망 → 전투 사망 → 전사 → 정의 미상 사망)
+   */
+  const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
+  const casualties = sides
+    .map((side) => {
+      const own = observations.filter(
+        (observation) => observation.subjectType === 'EVENT_SIDE' && observation.subjectId === side.id,
+      )
+      for (const key of CASUALTY_METRIC_PRIORITY) {
+        const hit = own.find((observation) => observation.metric.key === key)
+        if (hit) return `${side.name} — ${hit.metric.name} ${formatObservationValue(hit)}`
+      }
+      return null
     })
     .filter((line): line is string => Boolean(line))
 

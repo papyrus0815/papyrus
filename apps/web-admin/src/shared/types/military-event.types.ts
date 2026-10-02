@@ -1,29 +1,15 @@
+/**
+ * 사건 군사 정보 — **작전 정보만** 남았다.
+ *
+ * 진영·참전국·사상자는 정본이 바뀌었다(docs/event-detail-data-foundation.md D1·D3):
+ * - 진영 = EventSide (`@/shared/api/event-sides`), 소속 = 참여국 줄의 sideId
+ * - 병력·사상자 = 측정값 Observation (`@/shared/api/evidence`)
+ * 서버 검증이 화이트리스트(forbidNonWhitelisted)라 옛 필드를 보내면 400이 난다.
+ */
+
 // ========================
 // Enums
 // ========================
-
-export enum SideLevel {
-  COALITION = 'COALITION',
-  COUNTRY = 'COUNTRY',
-  FORCE = 'FORCE',
-}
-
-export enum MilitaryRelationType {
-  ALLIED = 'ALLIED',
-  COOPERATION = 'COOPERATION',
-  NON_AGGRESSION = 'NON_AGGRESSION',
-  NEUTRAL = 'NEUTRAL',
-  ENEMY = 'ENEMY',
-  PUPPET = 'PUPPET',
-  OCCUPIED = 'OCCUPIED',
-}
-
-export enum ParticipationType {
-  MAIN = 'MAIN',
-  SUPPORT = 'SUPPORT',
-  LIMITED = 'LIMITED',
-  OCCUPIED = 'OCCUPIED',
-}
 
 export enum ConflictType {
   BATTLE = 'BATTLE',
@@ -42,53 +28,6 @@ export enum CombatType {
 }
 
 // ========================
-// Country In Side
-// ========================
-
-export interface CountryInSide {
-  countryId?: string
-  historicalCountryId?: string
-  commander?: string
-  commanderPersonId?: string
-  forces?: string
-  participationType?: ParticipationType
-  joinDate?: string // ISO 8601
-  withdrawDate?: string // ISO 8601
-  description?: string
-}
-
-// ========================
-// Belligerent Side
-// ========================
-
-export interface BelligerentSide {
-  name: string
-  level?: SideLevel
-  commander?: string
-  commanderPersonId?: string
-  forces?: string
-  description?: string
-  color?: string
-  countries?: CountryInSide[]
-}
-
-// ========================
-// Country Relation
-// ========================
-
-export interface EventCountryRelation {
-  fromCountryId?: string
-  fromHistoricalCountryId?: string
-  toCountryId?: string
-  toHistoricalCountryId?: string
-  relationType: MilitaryRelationType
-  startDate?: string // ISO 8601
-  endDate?: string // ISO 8601
-  strength?: number // 1-10
-  description?: string
-}
-
-// ========================
 // Military Details
 // ========================
 
@@ -104,36 +43,7 @@ export interface MilitaryDetails {
   strategicImpact?: string
 }
 
-// ========================
-// Casualties
-// ========================
-
-export interface CountryCasualties {
-  countryId?: string
-  historicalCountryId?: string
-  killed?: string
-  wounded?: string
-  missing?: string
-  captured?: string
-  civilianDeaths?: string
-  total?: string
-}
-
-export interface CasualtiesData {
-  sideName?: string
-  totalKilled?: string
-  totalWounded?: string
-  countryCasualties?: CountryCasualties[]
-}
-
-// ========================
-// Complete Military Event
-// ========================
-
 export interface MilitaryEvent {
-  belligerentSides?: BelligerentSide[]
-  relations?: EventCountryRelation[]
-  militaryDetails?: MilitaryDetails
-  casualties?: CasualtiesData[]
-  warCost?: string
+  /** 작전 정보 — null이면 삭제 */
+  militaryDetails?: MilitaryDetails | null
 }

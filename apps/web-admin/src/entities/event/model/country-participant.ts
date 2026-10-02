@@ -31,6 +31,16 @@ export interface EventCountryParticipant {
   /** "이 나라가 이 사건에서 무엇을 했나" — 조약이면 국가별 사실이 여기 */
   roleDescription?: string | null
   note?: string | null
+  /**
+   * 진영(D1) — 어느 편이었나. **생략=유지**(3상)라, 역할·순서만 바꾸는 저장이 소속을 건드리지 않는다.
+   * '동맹국·적대국' 역할 대신 이걸 쓴다.
+   */
+  sideId?: string | null
+  participation?: 'FULL' | 'LIMITED' | 'INDIRECT' | 'NON_COMBATANT' | null
+  join?: { era: 'BC' | 'AD'; year: number; month?: number | null; day?: number | null } | null
+  joinReason?: string | null
+  withdraw?: { era: 'BC' | 'AD'; year: number; month?: number | null; day?: number | null } | null
+  withdrawReason?: string | null
 }
 
 /**
@@ -42,12 +52,16 @@ export const EVENT_COUNTRY_ROLE_OPTIONS: ReadonlyArray<{
   label: string
   /** 선택 UI의 보조 설명 — 역할이 10종이라 이름만으론 고르기 어렵다 */
   hint: string
+  /** 새로 고르지 않는 역할 — 현재 값일 때만 선택지에 보인다 */
+  deprecated?: boolean
 }> = [
   { value: 'PARTICIPANT', label: '참여국', hint: '사건에 관여한 일반 당사국' },
   { value: 'INITIATOR', label: '주도국', hint: '사건을 일으키거나 이끈 쪽' },
   { value: 'TARGET', label: '대상국', hint: '행위가 겨냥한 쪽' },
-  { value: 'ALLY', label: '동맹국', hint: '주도국 편에서 함께한 쪽' },
-  { value: 'ADVERSARY', label: '적대국', hint: '맞선 쪽' },
+  /* 동맹국·적대국은 '누구의' 동맹·적인지 담지 못해 진영(D1)으로 대체됐다 — 새로 고르지 않는다.
+     기존 값을 읽을 수 있게 목록에는 남기고 deprecated로 표시한다. */
+  { value: 'ALLY', label: '동맹국', hint: '진영으로 대체됨 — 진영 모듈에서 편을 나누세요', deprecated: true },
+  { value: 'ADVERSARY', label: '적대국', hint: '진영으로 대체됨 — 진영 모듈에서 편을 나누세요', deprecated: true },
   { value: 'MEDIATOR', label: '중재국', hint: '조정·중개를 맡은 쪽' },
   { value: 'OBSERVER', label: '관찰국', hint: '참관·배석만 한 쪽' },
   { value: 'VICTIM', label: '피해국', hint: '손해를 입은 쪽' },

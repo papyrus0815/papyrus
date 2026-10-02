@@ -1,8 +1,9 @@
 /**
  * 모듈 추가 — 빈 모듈 발견을 위한 dropdown.
  *
- * 사상자/작전 정보/교전 진영은 정규화 militaryEvent에 빈 stub을 추가해 즉시 활성화하고,
- * 사용자가 각 모듈에서 inline-edit으로 채운다(buildMilitaryPatch로 전체 재구성 저장).
+ * - 진영: 진영 API로 첫 진영 둘을 만든다(이름은 진영 1·2 — 모듈에서 고친다)
+ * - 수치: 저장할 것이 없으므로 모듈만 펼친다(첫 수치를 기록하면 서버 데이터로 유지된다)
+ * - 작전 정보: 빈 작전 정보를 upsert해 활성화
  *
  * 행정부(cabinets)는 cabinet-events API 분리 — 별도 사이클.
  */
@@ -30,16 +31,20 @@ interface ModuleAddProps {
   event: EventDetail
   enabledModules: EventDetailModuleKey[]
   onPatch: (patch: UpdateEventDto) => void
+  /** 진영 모듈 시작 — 첫 진영 둘 생성 */
+  onStartSides: () => Promise<void>
+  /** 수치 모듈 펼치기 — 저장 없음 */
+  onShowMetrics: () => void
 }
 
 interface ModuleOption {
   key: EventDetailModuleKey
   label: string
   hint?: string
-  patch: UpdateEventDto
+  run: () => void | Promise<void>
 }
 
-export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
+export function ModuleAdd({ event, enabledModules, onPatch, onStartSides, onShowMetrics }: ModuleAddProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
   /**
@@ -93,34 +98,20 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
    */
   const allOptions: ModuleOption[] = [
     {
-      key: 'casualties',
-      label: '사상자·피해',
-      // 빈 진영 행 1개로 모듈만 활성화 — 값은 inline-edit으로 채움.
-      patch: buildMilitaryPatch(event, (draft) => ({
-        ...draft,
-        casualties: [...draft.casualties, { sideName: '' }],
-      })),
+      key: 'sides',
+      label: '진영',
+      run: onStartSides,
+    },
+    {
+      key: 'metrics',
+      label: '수치 (병력·사상자·비용)',
+      run: onShowMetrics,
     },
     {
       key: 'military-details',
       label: '작전 정보',
       // 빈 객체로 모듈만 활성화(truthy) — 필드는 inline-edit으로 채움.
-      patch: buildMilitaryPatch(event, (draft) => ({
-        ...draft,
-        militaryDetails: { ...(draft.militaryDetails ?? {}) },
-      })),
-    },
-    {
-      key: 'belligerents',
-      label: '교전 진영',
-      patch: buildMilitaryPatch(event, (draft) => ({
-        ...draft,
-        belligerentSides: [
-          ...draft.belligerentSides,
-          // 빈 이름으로 시작 — 사용자가 채울 때까지 placeholder만 노출.
-          { name: '', countries: [] },
-        ],
-      })),
+      run: () => onPatch(buildMilitaryPatch(event, (current) => ({ ...(current ?? {}) }))),
     },
   ]
 
@@ -138,7 +129,7 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
   if (options.length === 0 && deferredOptions.length === 0) return null
 
   const apply = (opt: ModuleOption) => {
-    onPatch(opt.patch)
+    void opt.run()
     setOpen(false)
     /* 다음 refetch에서 enabledModules에 이 키가 포함되면 위의 useEffect가 스크롤. */
     setPendingScrollKey(opt.key)

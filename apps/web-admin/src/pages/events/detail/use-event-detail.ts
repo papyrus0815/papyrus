@@ -2,13 +2,16 @@ import { useCallback, useMemo } from 'react'
 
 import {
   queryOptions,
+  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query'
 
 import type { EventCountryRole } from '@/entities/event/model'
 import { type NormalizedMilitaryEventResponse } from '@/features/event-create/lib'
+import type { EventSide } from '@/shared/api/event-sides'
 import { getEventById } from '@/shared/api/events'
+import { listEventObservations, type StructuredPoint } from '@/shared/api/evidence'
 
 /**
  * SDK가 Primitive<>로 래핑되면서 EventResponseDto의 다수 중첩 필드 타입이
@@ -31,6 +34,8 @@ export interface EventDetailPerson {
   officesAtEvent?: string[]
   /** 생몰년 밖 사건이면 안내 문구(표시만) */
   lifespanWarning?: string | null
+  /** 진영(D1) */
+  sideId?: string | null
   person?: {
     id: string
     name?: string | null
@@ -80,6 +85,15 @@ export interface EventDetailCountryRef {
   roleDescription?: string | null
   note?: string | null
   sortOrder?: number
+  /** 참여국 줄 id — 진영 소속·측정값(EVENT_PARTICIPANT)의 대상. 위 id는 국가 id다 */
+  participantId?: string | null
+  /** 진영(D1) */
+  sideId?: string | null
+  participation?: 'FULL' | 'LIMITED' | 'INDIRECT' | 'NON_COMBATANT' | null
+  join?: StructuredPoint | null
+  joinReason?: string | null
+  withdraw?: StructuredPoint | null
+  withdrawReason?: string | null
 }
 
 export interface EventDetailHistoricalCountryRef {
@@ -91,6 +105,15 @@ export interface EventDetailHistoricalCountryRef {
   sortOrder?: number
   /** 존속 기간 밖 사건이면 안내 문구(표시만, 건국·멸망 역할 제외) */
   existenceWarning?: string | null
+  /** 참여국 줄 id — 진영 소속·측정값(EVENT_PARTICIPANT)의 대상. 위 id는 국가 id다 */
+  participantId?: string | null
+  /** 진영(D1) */
+  sideId?: string | null
+  participation?: 'FULL' | 'LIMITED' | 'INDIRECT' | 'NON_COMBATANT' | null
+  join?: StructuredPoint | null
+  joinReason?: string | null
+  withdraw?: StructuredPoint | null
+  withdrawReason?: string | null
 }
 
 /** 사건에 걸린 조약 요약 — 본문·서명자 전문은 GET /treaties/:id가 정본 */
@@ -172,13 +195,12 @@ export interface EventDetail {
   treaties?: EventDetailTreaty[]
   relatedPersons?: EventDetailPerson[]
   /**
-   * 정규화 군사 정보 — 서버 응답에 런타임 전용으로 실려온다(SDK 타입엔 없어 @ts-ignore로
-   * 주입됨). 상세 군사 모듈(교전 진영·사상자·작전 정보)의 *단일 정본*. 과거의 legacy
-   * belligerents/casualties/militaryDetails 필드는 서버가 내려주지도 저장하지도 않아
-   * 제거했다. 편집은 항상 이 전체 객체를 재구성해 `onPatch({ militaryEvent })`로 보낸다
-   * (saveMilitaryData가 전체 삭제-재생성이므로 부분 전송 금지).
+   * 작전 정보 — 서버 응답에 런타임 전용으로 실려온다(SDK 타입엔 없어 @ts-ignore로 주입됨).
+   * 진영·사상자는 여기 없다: 진영 = `sides`, 병력·사상자 = 측정값(GET /events/:id/observations).
    */
   militaryEvent?: NormalizedMilitaryEventResponse | null
+  /** 진영(D1) — 소속 참여자 포함 */
+  sides?: EventSide[]
   warCost?: string | null
   cabinetEvents?: EventDetailCabinetEvent[]
   createdAt?: string
@@ -192,8 +214,8 @@ export interface EventDetail {
  * 의존하지 않는다(카테고리 → 모듈 매핑을 스키마화하는 건 후속 사이클).
  */
 export type EventDetailModuleKey =
-  | 'belligerents'
-  | 'casualties'
+  | 'sides'
+  | 'metrics'
   | 'military-details'
   | 'cabinets'
 
@@ -208,6 +230,17 @@ export const eventKeys = {
   detail: (eventId: string) => ['event-detail', eventId] as const,
   /** 헤더 "전체 N건" 권위 총개수 — 생성·수정·삭제 시 lists()와 함께 무효화할 것 */
   count: () => ['events-count'] as const,
+  /** 사건 단위 측정값(사건 + 참여국 줄 + 진영) */
+  observations: (eventId: string) => ['event-detail', eventId, 'observations'] as const,
+}
+
+/** 사건 측정값 쿼리 — 수치 모듈·사실 장부·비교 차트가 같은 캐시를 쓴다 */
+export function eventObservationsQueryOptions(eventId: string) {
+  return queryOptions({
+    queryKey: eventKeys.observations(eventId),
+    queryFn: () => listEventObservations(eventId),
+    staleTime: 30_000,
+  })
 }
 
 /**
@@ -238,18 +271,20 @@ export function useEventDetail(eventId: string): UseEventDetailResult {
 
   // event 전체를 deps로 두면 매 patch/refetch마다 새 배열을 만들어 하위 sections
   // memo까지 무효화된다. 모듈 활성 여부만 결정하는 원시값으로 deps를 좁힌다.
-  const belligerentCount = event.militaryEvent?.belligerentSides?.length ?? 0
-  const casualtyCount = event.militaryEvent?.casualties?.length ?? 0
+  const sideCount = event.sides?.length ?? 0
+  /* 측정값은 상세 본문과 따로 받는다 — 모듈 노출만 정하므로 수만 본다 */
+  const { data: observations } = useQuery(eventObservationsQueryOptions(eventId))
+  const observationCount = observations?.length ?? 0
   const hasMilitaryDetails = Boolean(event.militaryEvent?.militaryDetails)
   const cabinetCount = event.cabinetEvents?.length ?? 0
   const enabledModules = useMemo<EventDetailModuleKey[]>(() => {
     const keys: EventDetailModuleKey[] = []
-    if (belligerentCount) keys.push('belligerents')
-    if (casualtyCount) keys.push('casualties')
+    if (sideCount) keys.push('sides')
+    if (observationCount) keys.push('metrics')
     if (hasMilitaryDetails) keys.push('military-details')
     if (cabinetCount) keys.push('cabinets')
     return keys
-  }, [belligerentCount, casualtyCount, hasMilitaryDetails, cabinetCount])
+  }, [sideCount, observationCount, hasMilitaryDetails, cabinetCount])
 
   return { event, enabledModules }
 }

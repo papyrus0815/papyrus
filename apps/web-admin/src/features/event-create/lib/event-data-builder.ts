@@ -67,41 +67,9 @@ export const extractMentions = (sections: EventSection[]) => {
 }
 
 /**
- * 편집 로드 시 응답에 (런타임 전용으로) 실려오는 정규화 militaryEvent 형태.
- * 백엔드 getMilitaryData()가 돌려주는 DTO를 느슨하게 표현한다. (SDK 타입엔 없음)
+ * 상세 응답의 militaryEvent — 작전 정보만(진영·사상자는 EventSide·Observation이 정본).
  */
 export interface NormalizedMilitaryEventResponse {
-  belligerentSides?: Array<{
-    name?: string
-    level?: string
-    commander?: string
-    commanderPersonId?: string
-    forces?: string
-    description?: string
-    color?: string
-    countries?: Array<{
-      countryId?: string
-      historicalCountryId?: string
-      commander?: string
-      commanderPersonId?: string
-      forces?: string
-      participationType?: string
-      joinDate?: string
-      withdrawDate?: string
-      description?: string
-    }>
-  }>
-  relations?: Array<{
-    fromCountryId?: string
-    fromHistoricalCountryId?: string
-    toCountryId?: string
-    toHistoricalCountryId?: string
-    relationType?: string
-    startDate?: string
-    endDate?: string
-    strength?: number
-    description?: string
-  }>
   militaryDetails?: {
     conflictType?: string
     combatTypes?: string[]
@@ -112,12 +80,7 @@ export interface NormalizedMilitaryEventResponse {
     territoryChanges?: string
     treaty?: string
     strategicImpact?: string
-  }
-  casualties?: Array<{
-    sideName?: string
-    totalKilled?: string
-    totalWounded?: string
-  }>
+  } | null
 }
 
 /**
@@ -245,19 +208,9 @@ export const buildEventSubmitData = (params: {
         : undefined,
     // ✅ 새 구조: eventImages (썸네일 또는 다중 이미지)
     eventImages: resolvedEventImages,
-    militaryEvent:
-      params.militaryEvent &&
-      (params.militaryEvent.belligerentSides?.length ||
-        params.militaryEvent.relations?.length ||
-        params.militaryEvent.militaryDetails?.conflictType ||
-        params.militaryEvent.militaryDetails?.combatTypes?.length ||
-        params.militaryEvent.casualties?.length ||
-        params.militaryEvent.warCost)
-        ? // 레거시 이중모델: 프론트 MilitaryEvent와 MilitaryEventDto는 enum이 명목상만
-          // 분리(값 동일). 은폐 캐스트를 이 필드 하나로 국소화 — 나머지 필드는
-          // 콜사이트 satisfies가 DTO 표류를 잡는다.
-          (params.militaryEvent as CreateEventDto['militaryEvent'])
-        : undefined,
+    militaryEvent: params.militaryEvent?.militaryDetails
+      ? { militaryDetails: params.militaryEvent.militaryDetails as NonNullable<CreateEventDto['militaryEvent']>['militaryDetails'] }
+      : undefined,
     conferenceEvent: params.conferenceEvent
       ? params.conferenceEvent
       : undefined,

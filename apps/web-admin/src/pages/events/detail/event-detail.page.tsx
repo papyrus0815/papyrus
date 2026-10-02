@@ -1,6 +1,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
+
+import { syncEventSides } from '@/shared/api/event-sides'
+import { notify } from '@/shared/ui/toast'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -24,10 +27,10 @@ import { DetailRail } from './components/detail-rail'
 import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
-import { ModuleBelligerents } from './components/module-belligerents'
 import { ModuleCabinets } from './components/module-cabinets'
-import { ModuleCasualties } from './components/module-casualties'
+import { ModuleMetrics } from './components/module-metrics'
 import { ModuleMilitaryDetails } from './components/module-military-details'
+import { ModuleSides } from './components/module-sides'
 import { PersonDetailModal } from './components/person-detail-modal'
 import { ReadingProgress } from './components/reading-progress'
 import { SaveStatus } from './components/save-status'
@@ -89,7 +92,19 @@ const EventDetailPage = () => {
 /* ───────────────────────── 본문(데이터 해소 후) ───────────────────────── */
 
 function EventDetailContent({ eventId }: { eventId: string }) {
-  const { event, enabledModules } = useEventDetail(eventId)
+  const { event, enabledModules: serverModules } = useEventDetail(eventId)
+  /*
+   * 수치 모듈은 저장할 빈 값이 없다 — '모듈 추가'로 펼치면 첫 수치를 기록할 때까지 화면에서만 연다.
+   * (빈 stub을 저장하던 예전 방식은 '전사 0명'이 데이터로 굳는 오염을 낳았다.)
+   */
+  const [metricsOpened, setMetricsOpened] = useState(false)
+  const enabledModules = useMemo(
+    () =>
+      metricsOpened && !serverModules.includes('metrics')
+        ? [...serverModules, 'metrics' as const]
+        : serverModules,
+    [metricsOpened, serverModules],
+  )
   /* 탭·히스토리 식별 — 사건명을 문서 제목에 반영. */
   useDocumentTitle(event.title)
 
@@ -316,10 +331,10 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     if (shown('aftermath')) items.push({ id: 'aftermath', label: '여파' })
     if (shown('actors')) items.push({ id: 'actors', label: '참여 행위자' })
 
-    if (enabledModules.includes('belligerents'))
-      items.push({ id: 'module-belligerents', label: '교전 진영' })
-    if (enabledModules.includes('casualties'))
-      items.push({ id: 'module-casualties', label: '사상자' })
+    if (enabledModules.includes('sides'))
+      items.push({ id: 'module-sides', label: '진영' })
+    if (enabledModules.includes('metrics'))
+      items.push({ id: 'module-metrics', label: '수치' })
     if (enabledModules.includes('military-details'))
       items.push({ id: 'module-military-details', label: '작전 정보' })
     if (enabledModules.includes('cabinets'))
@@ -401,14 +416,22 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 event={event}
                 enabledModules={enabledModules}
                 onPatch={onPatch}
+                onStartSides={async () => {
+                  try {
+                    await syncEventSides(event.id, [
+                      { name: '진영 1', level: 'COALITION', color: '#1d4ed8' },
+                      { name: '진영 2', level: 'COALITION', color: '#b91c1c' },
+                    ])
+                    await queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
+                  } catch (error) {
+                    notify.error(error instanceof Error ? error.message : '진영을 만들지 못했습니다')
+                  }
+                }}
+                onShowMetrics={() => setMetricsOpened(true)}
               />
 
-              {enabledModules.includes('belligerents') && (
-                <ModuleBelligerents event={event} onPatch={onPatch} />
-              )}
-              {enabledModules.includes('casualties') && (
-                <ModuleCasualties event={event} onPatch={onPatch} />
-              )}
+              {enabledModules.includes('sides') && <ModuleSides event={event} onPatch={onPatch} />}
+              {enabledModules.includes('metrics') && <ModuleMetrics event={event} />}
               {enabledModules.includes('military-details') && (
                 <ModuleMilitaryDetails event={event} onPatch={onPatch} />
               )}

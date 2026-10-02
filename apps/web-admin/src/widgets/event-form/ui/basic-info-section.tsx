@@ -898,7 +898,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           })
                         }
                       >
-                        {EVENT_COUNTRY_ROLE_OPTIONS.map((option) => (
+                        {EVENT_COUNTRY_ROLE_OPTIONS.filter(
+                          // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
+                          (option) => !option.deprecated || option.value === participant.role,
+                        ).map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>

@@ -600,7 +600,10 @@ export function DetailActors({
                         <CountryRolePicker>
                           <InlineSelect
                             value={row.role ?? ''}
-                            options={EVENT_COUNTRY_ROLE_OPTIONS.map(
+                            options={EVENT_COUNTRY_ROLE_OPTIONS.filter(
+                              // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
+                              (option) => !option.deprecated || option.value === row.role,
+                            ).map(
                               (option) => ({
                                 value: option.value,
                                 label: option.label,

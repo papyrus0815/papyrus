@@ -60,10 +60,7 @@ export function ModuleMilitaryDetails({
 
   const updateDetails = (patch: Partial<MilitaryDetailsShape>) => {
     onPatch(
-      buildMilitaryPatch(event, (draft) => ({
-        ...draft,
-        militaryDetails: { ...(draft.militaryDetails ?? {}), ...patch },
-      })),
+      buildMilitaryPatch(event, (current) => ({ ...(current ?? {}), ...patch })),
     )
   }
 
@@ -88,10 +85,7 @@ export function ModuleMilitaryDetails({
             label="작전 정보"
             onRemove={() =>
               onPatch(
-                buildMilitaryPatch(event, (draft) => ({
-                  ...draft,
-                  militaryDetails: undefined,
-                })),
+                buildMilitaryPatch(event, () => null),
               )
             }
           />
