@@ -288,11 +288,10 @@ export const HeaderRow = styled.header`
   text-align: left;
   gap: 16px;
   padding: 28px 28px 24px;
+  /* 좁은 폭도 가로 배치(작은 사진 왼쪽) — 가운데 세로 쌓기는 사진·이름·국가·생몰이 한 줄씩
+     내려가 390px에서 머리 카드만 첫 화면 대부분(약 600px)을 먹었다 */
   @media (max-width: 640px) {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 24px 18px 20px;
+    padding: 18px 16px 16px;
   }
   background: transparent;
 `
@@ -320,8 +319,6 @@ export const HeaderLeft = styled.div`
   min-width: 0;
   width: 100%;
   @media (max-width: 640px) {
-    flex-direction: column;
-    align-items: center;
     gap: 14px;
   }
 `
@@ -332,8 +329,8 @@ export const AvatarButton = styled.button<{ $loading?: boolean }>`
   height: 120px;
   /* 좁은 폭은 사진이 이름 위에 서므로(세로 쌓기) 한 단 줄여 첫 화면에 탭까지 들어오게 */
   @media (max-width: 640px) {
-    width: 88px;
-    height: 88px;
+    width: 64px;
+    height: 64px;
   }
   border-radius: 9999px;
   overflow: hidden;
@@ -409,7 +406,6 @@ export const HeaderTitleBlock = styled.div`
   align-items: flex-start;
   padding-top: 6px;
   @media (max-width: 640px) {
-    align-items: center;
     padding-top: 0;
   }
 `
@@ -559,6 +555,8 @@ export const PageSubtitle = styled.p`
   margin: 8px 0 0;
   font-size: 13px;
   line-height: 1.5;
+  /* 좁은 폭에서 '(향년 78 / 세)'처럼 낱말 중간에서 쪼개지지 않게 — 공백에서만 줄바꿈 */
+  word-break: keep-all;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -618,9 +616,6 @@ export const NicknameRow = styled.div`
   /* 좁은 폭에서 머리 블록이 가운데 정렬(align-items:center)이면 이 줄이 내용 폭으로 늘어나
      머리 카드 밖으로 삐져나갔다(390px 실측) — 부모 폭에 묶고, 칩 안 사유가 말줄임되게 한다 */
   max-width: 100%;
-  @media (max-width: 640px) {
-    justify-content: center;
-  }
 `
 
 export const NicknameChip = styled.span`
@@ -958,16 +953,9 @@ export const KpiItem = styled.div`
       border-left: none;
     }
   }
+  /* 390px에서도 3칸 한 줄 — 값이 '남'·'약 36년'·'★72'처럼 짧아 50%(두 줄)로 쪼갤 이유가 없었다 */
   @media (max-width: 480px) {
-    flex: 1 1 50%;
-    &:nth-child(3n+1) {
-      border-left: 1px solid
-        ${({ theme }) =>
-          theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
-    }
-    &:nth-child(2n+1) {
-      border-left: none;
-    }
+    padding: 8px 10px;
   }
 `
 

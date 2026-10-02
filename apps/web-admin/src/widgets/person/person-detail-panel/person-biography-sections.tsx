@@ -18,6 +18,7 @@
  *  4) 읽기 UX — 섹션 3개 이상이면 목차(TOC)로 점프, 관리 모드에서 드래그로 순서변경.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -265,6 +266,11 @@ type Props = {
   legacyBiography?: string | null
   /** 읽기 전용(임베드 모달) — 편집 어포던스(관리·추가·✎) 숨김(UX2). */
   readOnly?: boolean
+  /**
+   * '관리' 토글을 그릴 자리 — 부모의 '전기' 제목 줄 오른쪽. 주면 거기로 포털한다.
+   * (없으면 예전처럼 본문 위 한 줄. 버튼 하나가 제 줄을 통째로 차지하던 배치를 피하려는 것)
+   */
+  toolbarContainer?: HTMLElement | null
   /** 생몰 부호연도 경계 — 전기 서술 연도가 이 범위 밖이면 편집 중 비차단 힌트(RD7). */
   lifespanBounds?: { minSigned: number | null; maxSigned: number | null }
   /** 읽기 본문 인물 멘션 클릭 (패널 모달 스택 등) */
@@ -284,6 +290,7 @@ export function PersonBiographySections({
   sections,
   legacyBiography,
   readOnly = false,
+  toolbarContainer,
   lifespanBounds,
   onPersonClick,
   setTermTooltip,
@@ -921,18 +928,24 @@ export function PersonBiographySections({
           </RetryBtn>
         </SaveFailedBanner>
       )}
-      {!readOnly && (
-        <Toolbar>
-          <ManageToggle
-            type="button"
-            $active={manageMode}
-            onClick={() => setManageMode((v) => !v)}
-          >
-            <FiSettings size={13} />
-            {manageMode ? '관리 끝' : '관리'}
-          </ManageToggle>
-        </Toolbar>
-      )}
+      {!readOnly &&
+        (() => {
+          const toggle = (
+            <ManageToggle
+              type="button"
+              $active={manageMode}
+              onClick={() => setManageMode((v) => !v)}
+            >
+              <FiSettings size={13} />
+              {manageMode ? '관리 끝' : '관리'}
+            </ManageToggle>
+          )
+          return toolbarContainer ? (
+            createPortal(toggle, toolbarContainer)
+          ) : (
+            <Toolbar>{toggle}</Toolbar>
+          )
+        })()}
 
       {showToc && (
         <Toc aria-label="전기 목차">
@@ -1201,7 +1214,12 @@ export function PersonBiographySections({
       })}
 
       {!readOnly && (
+        /*
+          섹션 '추가' 줄 — 예전엔 '생애 · 업적 · 평가 · 일화'가 + 없이 칩으로 서서 전기 끝의
+          목차(이동)처럼 읽혔다. 라벨과 +를 붙여 '만드는' 버튼임을 밝히고, 읽는 동안엔 한 단 물러선다.
+        */
         <AddRow>
+          <AddRowLabel>섹션 추가</AddRowLabel>
           {SECTION_TYPES.filter((t) => t.value !== 'narrative').map((t, addIdx) => (
             <AddTypeBtn
               key={t.value}
@@ -1210,7 +1228,7 @@ export function PersonBiographySections({
               disabled={saving}
               onClick={() => addSection(t.value, t.label)}
             >
-              <t.Icon size={13} />
+              <FiPlus size={12} aria-hidden />
               {t.label}
             </AddTypeBtn>
           ))}
@@ -1621,17 +1639,35 @@ const AddRow = styled.div`
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  margin-top: 4px;
+  transition: opacity 0.15s ease;
+
+  /* 전기에 손이 닿기 전엔 흐리게 — 편집 도구가 읽는 글과 같은 무게로 서지 않게 */
+  @media (hover: hover) {
+    opacity: 0.55;
+  }
+  &:hover,
+  &:focus-within {
+    opacity: 1;
+  }
+`
+
+const AddRowLabel = styled.span`
+  margin-right: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const AddTypeBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 7px 12px;
-  font-size: 13px;
+  padding: 4px 10px;
+  font-size: 12px;
   font-weight: 600;
   border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
@@ -1650,8 +1686,8 @@ const AddButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 7px 12px;
-  font-size: 13px;
+  padding: 4px 10px;
+  font-size: 12px;
   font-weight: 600;
   border-radius: 8px;
   border: 1px dashed ${({ theme }) => theme.colors.border.default};

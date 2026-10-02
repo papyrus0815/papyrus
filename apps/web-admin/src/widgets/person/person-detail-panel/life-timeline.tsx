@@ -19,6 +19,11 @@ interface LifeTimelineProps {
   layout: LifeTimelineLayout
   /** 막대 클릭 → 해당 카드로 이동(개요 탭이 아니면 탭 전환까지 부모가 맡는다) */
   onSelect: (key: string) => void
+  /**
+   * '연보 전체 보기' — 이 축은 재임·재위만 보여주는 요약이다. 출생·학업·참전·가족사까지 이어진
+   * 전체 흐름은 연보 탭이 정본이라, 요약에서 정본으로 가는 길을 둔다. 없으면 버튼을 그리지 않는다.
+   */
+  onOpenAnnals?: () => void
 }
 
 const FAMILY_LABEL: Record<LifeRecordFamily, string> = {
@@ -42,6 +47,7 @@ const formatYear = (year: number) => (year < 0 ? `기원전 ${-year}` : `${year}
 export function LifeTimeline({
   layout,
   onSelect,
+  onOpenAnnals,
 }: LifeTimelineProps) {
   const families = Array.from(new Set(layout.bars.map((bar) => bar.family)))
   const trackHeight =
@@ -59,6 +65,11 @@ export function LifeTimeline({
             </LegendItem>
           ))}
         </Legend>
+        {onOpenAnnals && (
+          <AnnalsLink type="button" onClick={onOpenAnnals}>
+            연보 전체 보기 →
+          </AnnalsLink>
+        )}
       </Head>
 
       <Axis>
@@ -148,6 +159,28 @@ const Legend = styled.div`
   display: flex;
   gap: 10px;
   margin-left: auto;
+`
+
+const AnnalsLink = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 `
 
 const LegendItem = styled.span`

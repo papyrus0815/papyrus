@@ -1274,6 +1274,8 @@ export function PersonDetailPanel({
    * 스크롤 컨테이너가 window가 아니라 레이아웃 내부 요소라, scroll은 capture로 문서 전체에서 받는다.
    */
   const heroRef = useRef<HTMLDivElement>(null)
+  /** 전기 '관리' 토글 포털 자리(state — 마운트 뒤 자식이 다시 그려지도록) */
+  const [bioToolbarEl, setBioToolbarEl] = useState<HTMLSpanElement | null>(null)
   /** 개요 '정당·선거' 머리의 추가 버튼 → 섹션 안 등록 모달 */
   const politicsActionsRef = useRef<PersonPoliticsSectionActions>(null)
   const stickyNavRef = useRef<HTMLDivElement>(null)
@@ -1926,7 +1928,18 @@ export function PersonDetailPanel({
         </KpiStrip>
 
         {lifeTimeline && (
-          <LifeTimeline layout={lifeTimeline} onSelect={jumpToRecord} />
+          <LifeTimeline
+            layout={lifeTimeline}
+            onSelect={jumpToRecord}
+            onOpenAnnals={
+              activeTab === 'events'
+                ? undefined
+                : () => {
+                    playClickSound()
+                    handleTabChange('events')
+                  }
+            }
+          />
         )}
         </HeroCard>
 
@@ -2067,6 +2080,8 @@ export function PersonDetailPanel({
                         <FiBookOpen size={14} strokeWidth={2.2} />
                         <span>전기</span>
                       </OverviewSectionHeading>
+                      {/* 전기의 '관리' 토글이 포털로 들어오는 자리 — 버튼 하나가 제 줄을 차지하지 않게 */}
+                      <span ref={setBioToolbarEl} />
                     </OverviewSectionHeaderRow>
                     {/* 긴 전기는 처음 ~10줄만 — 기본 사실(출생·사망·재임)이 1,500px 아래로 밀리지 않게 */}
                     <BioClamp>
@@ -2076,6 +2091,7 @@ export function PersonDetailPanel({
                       legacyBiography={person.biography}
                       // 임베드(읽기) 모달에서는 편집 어포던스(✎·관리·추가) 숨김(UX2).
                       readOnly={embedInModal}
+                      toolbarContainer={bioToolbarEl}
                       lifespanBounds={{
                         minSigned:
                           p.birthYear != null
