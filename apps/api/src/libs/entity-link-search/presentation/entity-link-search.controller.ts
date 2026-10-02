@@ -4,6 +4,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { PrismaService } from '@prisma/prisma.service'
 
 import { getActorAccountId } from '../../shared/actor-context'
+import { displayPersonName } from '../../shared/person-display-name'
 import {
   EntityLinkSearchItemDto,
   EntityLinkSearchResponseDto,
@@ -21,24 +22,6 @@ const GROUP_TYPE_LABEL: Record<string, string> = {
   CIRCLE: '동인·사단',
   MOVEMENT: '운동·진영',
   OTHER: '집단',
-}
-
-function displayPersonName(p: {
-  name: string
-  surname: string | null
-  middleName?: string | null
-  nameDisplayOrder?: string | null
-  country?: { defaultNameDisplayOrder?: string | null; isoCode?: string | null } | null
-}): string {
-  // 순서 우선순위는 프론트 getPersonDisplayName과 동일: 개인 오버라이드 → 국가 기본 → 동양식.
-  // 중간이름은 이름 묶음에 붙는다 — western: 이름 중간 성 / korean: 성 이름 중간.
-  const resolved = p.nameDisplayOrder ?? p.country?.defaultNameDisplayOrder
-  const order: 'western' | 'korean' = resolved === 'western' ? 'western' : 'korean'
-  const parts =
-    order === 'western'
-      ? [p.name, p.middleName, p.surname]
-      : [p.surname, p.name, p.middleName]
-  return parts.filter(Boolean).join(' ').trim() || p.name
 }
 
 /**

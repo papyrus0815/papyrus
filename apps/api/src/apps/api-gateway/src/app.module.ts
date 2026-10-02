@@ -31,6 +31,7 @@ import { ElectionModule } from '../../../libs/election/election.module'
 import { PoliticalSystemModule } from '../../../libs/political-system/political-system.module'
 import { TradeModule } from '../../../libs/trade/trade.module'
 import { EntityLinkSearchModule } from '../../../libs/entity-link-search/entity-link-search.module'
+import { EntityGraphModule } from '../../../libs/entity-graph/entity-graph.module'
 import { NaturalFeatureModule } from '../../../libs/natural-feature/natural-feature.module'
 import { InfrastructureModule } from '../../../libs/infrastructure/infrastructure.module'
 import { GamificationModule } from '../../../libs/gamification/gamification.module'
@@ -87,6 +88,7 @@ import {
     PoliticalSystemModule,
     TradeModule,
     EntityLinkSearchModule,
+    EntityGraphModule,
     NaturalFeatureModule,
     InfrastructureModule,
     HealthModule,
