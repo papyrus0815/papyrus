@@ -1,7 +1,7 @@
 import { HistoricalStateType } from '../api'
 
 /** 역사적 정치체 성격 (API와 동기화) */
-export type HistoricalEntityKind = 'STATE' | 'REGIME' | 'PERIOD'
+export type HistoricalEntityKind = 'STATE' | 'REGIME' | 'PERIOD' | 'PEOPLE'
 
 /**
  * 국가 형태 레이블
@@ -29,11 +29,12 @@ export const STATE_TYPE_LABELS: Record<HistoricalStateType | 'SHOGUNATE', string
   OTHER: '기타',
 }
 
-/** 정치체 성격 레이블 (국가/정권/시대) */
+/** 정치체 성격 레이블 (국가/정권/시대/집단) */
 export const ENTITY_KIND_LABELS: Record<HistoricalEntityKind, string> = {
   STATE: '주권 국가',
   REGIME: '정권·군정',
   PERIOD: '시대',
+  PEOPLE: '집단',
 }
 
 /** 정치체 성격 색상 */
@@ -41,6 +42,7 @@ export const ENTITY_KIND_COLORS: Record<HistoricalEntityKind, string> = {
   STATE: '#3b82f6',
   REGIME: '#8b5cf6',
   PERIOD: '#10b981',
+  PEOPLE: '#d97706',
 }
 
 /** 정치체 성격 이모지 */
@@ -48,6 +50,7 @@ export const ENTITY_KIND_EMOJIS: Record<HistoricalEntityKind, string> = {
   STATE: '🏛️',
   REGIME: '⚔️',
   PERIOD: '📅',
+  PEOPLE: '🏕️',
 }
 
 /**

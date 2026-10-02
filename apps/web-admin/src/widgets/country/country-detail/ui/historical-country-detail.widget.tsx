@@ -559,6 +559,7 @@ function HistoricalOverviewSection({
     | 'STATE'
     | 'REGIME'
     | 'PERIOD'
+    | 'PEOPLE'
     | null
     | undefined
 

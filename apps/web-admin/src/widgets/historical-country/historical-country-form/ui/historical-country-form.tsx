@@ -190,7 +190,7 @@ const historicalCountrySchema = z.object({
     .optional()
     .or(z.literal(undefined)),
   stateType: z.string().min(1, '국가 형태를 입력해주세요'),
-  entityKind: z.enum(['STATE', 'REGIME', 'PERIOD']).optional().nullable(),
+  entityKind: z.enum(['STATE', 'REGIME', 'PERIOD', 'PEOPLE']).optional().nullable(),
   parentModernCountryIds: z.array(z.string()).optional(), // 여러 현대 국가 지원
   parentHistoricalCountryIds: z.array(z.string()).optional(), // 후임 국가 ID 배열
 })
@@ -308,17 +308,18 @@ const STATE_TYPE_CATEGORIES: StateTypeCategory[] = [
 ]
 
 /**
- * 역사적 단위 분류 — 주권 국가 / 정권·군정 / 시대.
+ * 역사적 단위 분류 — 주권 국가 / 정권·군정 / 시대 / 집단.
  * 라디오 카드로 표시. 라벨 + 예시 (아이콘 없음, 미니멀 텍스트).
  */
 const ENTITY_KIND_OPTIONS: {
-  value: 'STATE' | 'REGIME' | 'PERIOD'
+  value: 'STATE' | 'REGIME' | 'PERIOD' | 'PEOPLE'
   label: string
   example: string
 }[] = [
   { value: 'STATE', label: '주권 국가', example: '신성로마, 프로이센' },
   { value: 'REGIME', label: '정권·군정', example: '무로마치·에도 막부' },
   { value: 'PERIOD', label: '시대', example: '메이지·다이쇼' },
+  { value: 'PEOPLE', label: '집단', example: '이동기 고트·프랑크족' },
 ]
 
 export function HistoricalCountryForm({

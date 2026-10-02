@@ -49,6 +49,14 @@ import {
 /**
  * 역사적 국가 API (개인 정보 플랫폼: 로그인한 계정 소유 데이터만)
  */
+import {
+  assertPointOrder,
+  normalizePoint,
+  parseLegacyIsoPoint,
+  type StructuredPoint,
+  type StructuredPointInput,
+} from '../../shared/structured-point'
+
 @ApiTags('historical-countries')
 @Controller('historical-countries')
 @UseGuards(AuthGuard('jwt'))
@@ -584,8 +592,7 @@ export class HistoricalCountryController {
         memberCountryId: dto.memberCountryId,
         role: dto.role,
         isLeadingMember: dto.isLeadingMember ?? null,
-        membershipStartDate: dto.membershipStartDate ? new Date(dto.membershipStartDate) : null,
-        membershipEndDate: dto.membershipEndDate ? new Date(dto.membershipEndDate) : null,
+        ...resolveMembershipPeriod(dto),
       },
       accountId,
     )
@@ -701,8 +708,7 @@ export class HistoricalCountryController {
       {
         role: dto.role,
         isLeadingMember: dto.isLeadingMember,
-        membershipStartDate: dto.membershipStartDate ? new Date(dto.membershipStartDate) : undefined,
-        membershipEndDate: dto.membershipEndDate ? new Date(dto.membershipEndDate) : undefined,
+        ...resolveMembershipPeriod(dto),
       },
       accountId,
     )
@@ -887,6 +893,8 @@ export class HistoricalCountryController {
       memberCountryId: m.memberCountryId,
       role: m.role,
       isLeadingMember: m.isLeadingMember,
+      start: m.start,
+      end: m.end,
       membershipStartDate: m.membershipStartDate?.toISOString() ?? null,
       membershipEndDate: m.membershipEndDate?.toISOString() ?? null,
       parentName: m.parentName,
@@ -909,5 +917,34 @@ export class HistoricalCountryController {
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     }
+  }
+}
+
+/**
+ * 소속 기간 입력 → 구조화 시점(3상). 구조화(start/end)가 우선이고, 레거시 ISO 문자열은
+ * `new Date()` 없이 손으로 파싱한다(BC 둔갑·서기 1~99년 20xx 둔갑 방지).
+ * 반환 객체에 키가 없으면 '건드리지 않음'이다.
+ */
+function resolveMembershipPeriod(dto: {
+  start?: StructuredPointInput | null
+  end?: StructuredPointInput | null
+  membershipStartDate?: string
+  membershipEndDate?: string
+}): { start?: StructuredPoint | null; end?: StructuredPoint | null } {
+  const pick = (
+    structured: StructuredPointInput | null | undefined,
+    legacy: string | undefined,
+    label: string,
+  ): StructuredPoint | null | undefined => {
+    if (structured !== undefined) return structured ? normalizePoint(structured, label) : null
+    if (legacy) return parseLegacyIsoPoint(legacy, label)
+    return undefined
+  }
+  const start = pick(dto.start, dto.membershipStartDate, 'start')
+  const end = pick(dto.end, dto.membershipEndDate, 'end')
+  if (start !== undefined && end !== undefined) assertPointOrder(start, end)
+  return {
+    ...(start !== undefined && { start }),
+    ...(end !== undefined && { end }),
   }
 }

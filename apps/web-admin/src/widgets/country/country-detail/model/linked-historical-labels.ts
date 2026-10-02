@@ -41,6 +41,7 @@ export const MEMBERSHIP_ROLE_LABELS: Record<HistoricalMembershipRole, string> = 
   DOMINION: '자치령',
   CONFEDERATION_MEMBER: '연방 구성원',
   VASSAL_STATE: '속국',
+  FOEDERATUS: '동맹부족',
   ALLY: '동맹',
   UNION: '연합',
   SUCCESSION: '계승',

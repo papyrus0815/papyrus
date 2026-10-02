@@ -446,6 +446,8 @@ export function toStatehoodMarkers(
   const markers: ReignMarker[] = []
   for (const country of countries) {
     if (country.startYear == null || !inScope(country)) continue
+    /* 집단(이동기 고트·프랑크족)은 나라를 세운 적이 없다 — '건국 376'을 지어내지 않는다 */
+    if (country.entityKind === 'PEOPLE') continue
     const start = resolveParts(
       country.startEra,
       country.startYear,

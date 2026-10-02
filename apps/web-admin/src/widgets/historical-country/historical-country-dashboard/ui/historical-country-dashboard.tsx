@@ -125,12 +125,12 @@ export function HistoricalCountryDashboard({
         </MetricCard>
       </MetricsGrid>
 
-      {/* 정치체 성격별 분포 (국가/정권/시대) */}
-      {(stats.byEntityKind['STATE'] || stats.byEntityKind['REGIME'] || stats.byEntityKind['PERIOD'] || stats.byEntityKind['_null']) && (
+      {/* 정치체 성격별 분포 (국가/정권/시대/집단) */}
+      {(stats.byEntityKind['STATE'] || stats.byEntityKind['REGIME'] || stats.byEntityKind['PERIOD'] || stats.byEntityKind['PEOPLE'] || stats.byEntityKind['_null']) && (
         <Section>
           <SectionTitle>정치체 성격별 분포</SectionTitle>
           <StateTypeGrid>
-            {(['STATE', 'REGIME', 'PERIOD'] as const).map((kind) => {
+            {(['STATE', 'REGIME', 'PERIOD', 'PEOPLE'] as const).map((kind) => {
               const count = stats.byEntityKind[kind] || 0
               if (count === 0) return null
               const label = ENTITY_KIND_LABELS[kind]

@@ -101,8 +101,14 @@ export function useHistoricalCountryFilters({
         stateTypeFilter === 'ALL' || country.stateType === stateTypeFilter
 
       const entityKind = (country as { entityKind?: HistoricalEntityKind | null }).entityKind
+      /*
+       * 집단(PEOPLE)은 '전체'에서 빠진다 — 이동기 고트·프랑크족 같은 행위자는 국가가 아니라,
+       * 국가 목록에 섞이면 영토도 건국일도 없는 항목이 국가처럼 읽힌다. '집단'을 고르면 보인다.
+       */
       const matchEntityKind =
-        entityKindFilter === 'ALL' || entityKind === entityKindFilter
+        entityKindFilter === 'ALL'
+          ? entityKind !== 'PEOPLE'
+          : entityKind === entityKindFilter
 
       return matchSearch && matchStateType && matchEntityKind
     })

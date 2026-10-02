@@ -6,6 +6,12 @@ import type {
   CreateMembershipData,
   UpdateMembershipData,
 } from '../domain/historical-country-membership.repository'
+import {
+  columnsToPoint,
+  pointToColumns,
+  pointToLegacyDateTime,
+  type StructuredPoint,
+} from '../../shared/structured-point'
 
 @Injectable()
 export class HistoricalCountryMembershipPrismaRepository
@@ -71,8 +77,8 @@ export class HistoricalCountryMembershipPrismaRepository
         memberCountryId: data.memberCountryId,
         role: data.role,
         isLeadingMember: data.isLeadingMember ?? undefined,
-        membershipStartDate: data.membershipStartDate ?? undefined,
-        membershipEndDate: data.membershipEndDate ?? undefined,
+        ...pointColumns('start', data.start ?? null),
+        ...pointColumns('end', data.end ?? null),
       },
       include: {
         historicalCountry: { select: { id: true, name: true } },
@@ -91,12 +97,8 @@ export class HistoricalCountryMembershipPrismaRepository
       data: {
         ...(data.role !== undefined && { role: data.role }),
         ...(data.isLeadingMember !== undefined && { isLeadingMember: data.isLeadingMember }),
-        ...(data.membershipStartDate !== undefined && {
-          membershipStartDate: data.membershipStartDate,
-        }),
-        ...(data.membershipEndDate !== undefined && {
-          membershipEndDate: data.membershipEndDate,
-        }),
+        ...(data.start !== undefined && pointColumns('start', data.start)),
+        ...(data.end !== undefined && pointColumns('end', data.end)),
       },
       include: {
         historicalCountry: { select: { id: true, name: true } },
@@ -118,6 +120,14 @@ export class HistoricalCountryMembershipPrismaRepository
     isLeadingMember: boolean | null
     membershipStartDate: Date | null
     membershipEndDate: Date | null
+    startEra: 'BC' | 'AD' | null
+    startYear: number | null
+    startMonth: number | null
+    startDay: number | null
+    endEra: 'BC' | 'AD' | null
+    endYear: number | null
+    endMonth: number | null
+    endDay: number | null
     historicalCountry: { name: string }
     memberCountry: { name: string }
     createdAt: Date
@@ -129,6 +139,18 @@ export class HistoricalCountryMembershipPrismaRepository
       memberCountryId: row.memberCountryId,
       role: row.role as HistoricalCountryMembershipRecord['role'],
       isLeadingMember: row.isLeadingMember,
+      start: columnsToPoint({
+        era: row.startEra,
+        year: row.startYear,
+        month: row.startMonth,
+        day: row.startDay,
+      }),
+      end: columnsToPoint({
+        era: row.endEra,
+        year: row.endYear,
+        month: row.endMonth,
+        day: row.endDay,
+      }),
       membershipStartDate: row.membershipStartDate,
       membershipEndDate: row.membershipEndDate,
       parentName: row.historicalCountry.name,
@@ -137,4 +159,29 @@ export class HistoricalCountryMembershipPrismaRepository
       updatedAt: row.updatedAt,
     }
   }
+}
+
+/**
+ * 시점 → 저장 칼럼. 구조화 5칸 + 하위 호환 DATETIME 사본(AD 1000+ 완전 날짜만, 그 밖은 NULL).
+ */
+function pointColumns(prefix: 'start' | 'end', point: StructuredPoint | null) {
+  const columns = pointToColumns(point)
+  const legacy = pointToLegacyDateTime(point)
+  return prefix === 'start'
+    ? {
+        startEra: columns.era,
+        startYear: columns.year,
+        startMonth: columns.month,
+        startDay: columns.day,
+        startPrecision: columns.precision,
+        membershipStartDate: legacy,
+      }
+    : {
+        endEra: columns.era,
+        endYear: columns.year,
+        endMonth: columns.month,
+        endDay: columns.day,
+        endPrecision: columns.precision,
+        membershipEndDate: legacy,
+      }
 }

@@ -1,11 +1,17 @@
 import { HistoricalMembershipRole } from '@prisma/client'
 
+import type { StructuredPoint } from '../../shared/structured-point'
+
 export interface HistoricalCountryMembershipRecord {
   id: string
   historicalCountryId: string
   memberCountryId: string
   role: HistoricalMembershipRole
   isLeadingMember: boolean | null
+  /** 소속 시작·종료 — 구조화 칸이 진실(BC·서기 1~999·연 정밀도 안전) */
+  start: StructuredPoint | null
+  end: StructuredPoint | null
+  /** 하위 호환 사본 — AD 1000+ 완전 날짜일 때만 값이 있다 */
   membershipStartDate: Date | null
   membershipEndDate: Date | null
   parentName?: string
@@ -19,15 +25,16 @@ export interface CreateMembershipData {
   memberCountryId: string
   role: HistoricalMembershipRole
   isLeadingMember?: boolean | null
-  membershipStartDate?: Date | null
-  membershipEndDate?: Date | null
+  start?: StructuredPoint | null
+  end?: StructuredPoint | null
 }
 
+/** 3상 — undefined=유지, null=비움 */
 export interface UpdateMembershipData {
   role?: HistoricalMembershipRole
   isLeadingMember?: boolean | null
-  membershipStartDate?: Date | null
-  membershipEndDate?: Date | null
+  start?: StructuredPoint | null
+  end?: StructuredPoint | null
 }
 
 export interface IHistoricalCountryMembershipRepository {

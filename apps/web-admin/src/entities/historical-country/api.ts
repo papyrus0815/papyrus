@@ -17,8 +17,8 @@ export type UpdateHistoricalCountryData = UpdateHistoricalCountryDto
 // Enum 타입도 re-export
 export type { HistoricalStateType, Era }
 
-/** 정치체 성격 (주권 국가 / 정권 / 시대). API 응답에 있으면 사용 */
-export type HistoricalEntityKind = 'STATE' | 'REGIME' | 'PERIOD'
+/** 정치체 성격 (주권 국가 / 정권 / 시대 / 집단). API 응답에 있으면 사용 */
+export type HistoricalEntityKind = 'STATE' | 'REGIME' | 'PERIOD' | 'PEOPLE'
 
 /**
  * 역사적 국가 필터

@@ -230,6 +230,7 @@ export type HistoricalMembershipRole =
   | 'DOMINION'
   | 'CONFEDERATION_MEMBER'
   | 'VASSAL_STATE'
+  | 'FOEDERATUS'
   | 'ALLY'
   | 'UNION'
   | 'SUCCESSION'
@@ -241,6 +242,10 @@ export interface HistoricalCountryMembershipDto {
   memberCountryId: string
   role: HistoricalMembershipRole
   isLeadingMember: boolean | null
+  /** 소속 시작·종료 — 구조화가 진실(BC·연 정밀도 가능) */
+  start: StructuredPeriodPoint | null
+  end: StructuredPeriodPoint | null
+  /** 하위 호환 — AD 1000+ 완전 날짜일 때만 값이 있다 */
   membershipStartDate: string | null
   membershipEndDate: string | null
   parentName?: string
@@ -254,15 +259,41 @@ export interface CreateHistoricalCountryMembershipDto {
   memberCountryId: string
   role: HistoricalMembershipRole
   isLeadingMember?: boolean
+  start?: StructuredPeriodInput | null
+  end?: StructuredPeriodInput | null
+  /** @deprecated start를 쓸 것 */
   membershipStartDate?: string
+  /** @deprecated end를 쓸 것 */
   membershipEndDate?: string
 }
 
 export interface UpdateHistoricalCountryMembershipDto {
   role?: HistoricalMembershipRole
   isLeadingMember?: boolean
+  /** 3상 — 생략=유지, null=비움 */
+  start?: StructuredPeriodInput | null
+  end?: StructuredPeriodInput | null
+  /** @deprecated start를 쓸 것 */
   membershipStartDate?: string
+  /** @deprecated end를 쓸 것 */
   membershipEndDate?: string
+}
+
+/** 구조화 시점 입력 — year는 크기값, BC/AD는 era */
+export interface StructuredPeriodInput {
+  era: 'BC' | 'AD'
+  year: number
+  month?: number | null
+  day?: number | null
+}
+
+/** 구조화 시점 응답 — precision은 서버가 채워진 칸에서 파생 */
+export interface StructuredPeriodPoint {
+  era: 'BC' | 'AD'
+  year: number
+  month: number | null
+  day: number | null
+  precision: 'year' | 'month' | 'day'
 }
 
 export async function getMembershipsByHistoricalCountryId(

@@ -93,6 +93,10 @@ enum HistoricalEntityKind {
   REGIME
   /// 시대·기간 (메이지 시대, 다이쇼 시대 등)
   PERIOD
+  /// 집단 — 영토·건국일 없이 움직이는 부족·부족 연맹·이동 집단 (이동기 고트, 프랑크족, 알란족).
+  /// 민족(Ethnicity)이 '누구인가'의 분류라면 이것은 전쟁·조약·통치의 **행위자**다.
+  /// 국가 목록·건국/멸망 표지에서는 빠지고, 정착하면 전환(Transition)으로 왕국(STATE)에 이어진다.
+  PEOPLE
 }
 
 /// 전환의 성격: 국가 단위 교체 vs 같은 공간 내 정권/시대 교체
@@ -141,6 +145,8 @@ enum HistoricalMembershipRole {
   CONFEDERATION_MEMBER
   /// 속국
   VASSAL_STATE
+  /// 동맹부족(foederati) — 조약으로 제국 영내에 정착해 군역을 지는 집단 (382 고트족 → 로마)
+  FOEDERATUS
   /// 동맹
   ALLY
   /// 연합
@@ -418,6 +424,18 @@ model HistoricalCountryMembership {
   membershipStartDate DateTime? @map("membership_start_date")
   /// 소속 관계 종료일
   membershipEndDate   DateTime? @map("membership_end_date")
+  /// 소속 시작·종료 — **구조화 칸이 진실**(BC·서기 1~999·연 정밀도 안전).
+  /// 위 DATETIME 두 칸은 AD 1000+ 완전 날짜일 때만 채우는 하위 호환 사본이다.
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
 
   // --- 관계 필드
   historicalCountry HistoricalCountry @relation("MembershipParent", fields: [historicalCountryId], references: [id], onDelete: Cascade)
