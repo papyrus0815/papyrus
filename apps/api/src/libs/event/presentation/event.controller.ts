@@ -29,6 +29,8 @@ import {
   signedYearOfDate,
 } from '../application/person-participation'
 import { MilitaryEventService } from '../application/military-event.service'
+import { EventSideService } from '../application/event-side.service'
+import { columnsToPoint } from '../../shared/structured-point'
 import { EventRelationService } from '../application/event-relation.service'
 import {
   CreateEventDto,
@@ -186,6 +188,7 @@ export class EventController {
   constructor(
     private readonly eventService: EventService,
     private readonly militaryEventService: MilitaryEventService,
+    private readonly eventSideService: EventSideService,
     private readonly eventRelationService: EventRelationService,
     private readonly prisma: PrismaClient,
   ) {}
@@ -257,6 +260,7 @@ export class EventController {
             roleDescription: relation.roleDescription ?? null,
             note: relation.note ?? null,
             sortOrder: relation.sortOrder ?? 0,
+            ...participantMembership(relation),
           })
         }
         if (relation.historicalCountryId && relation.historicalCountry) {
@@ -268,6 +272,7 @@ export class EventController {
             roleDescription: relation.roleDescription ?? null,
             note: relation.note ?? null,
             sortOrder: relation.sortOrder ?? 0,
+            ...participantMembership(relation),
           })
         }
       })
@@ -420,6 +425,7 @@ export class EventController {
             note: pe.note ?? null,
             countryId: pe.countryId ?? null,
             historicalCountryId: pe.historicalCountryId ?? null,
+            sideId: pe.sideId ?? null,
             // 참여 자격 국가 표시명 — 역사국가 우선(당시의 나라)
             participationCountryName:
               pe.historicalCountry?.name ?? pe.country?.name ?? null,
@@ -1606,10 +1612,12 @@ export class EventController {
     })
     if (!event) return null
 
-    // 정규화된 군사 정보 조회
+    // 작전 정보(군사) 조회
     const militaryEvent = await this.militaryEventService.getMilitaryData(id)
 
     const response = this.toResponseDto(event as any)
+    // 진영(D1) — 소속 참여자까지. 측정값(D3)은 GET /events/:id/observations로 따로 받는다
+    response.sides = await this.eventSideService.list(id)
     if (militaryEvent) {
       // @ts-ignore
       response.militaryEvent = militaryEvent
@@ -1812,30 +1820,9 @@ export class EventController {
       },
     )
 
-    // 정규화된 군사 정보 저장
+    // 작전 정보 저장 — 진영·사상자는 EventSide·Observation이 정본(D1·D3)
     if (dto.militaryEvent) {
-      console.log('🔵 [Controller] militaryEvent 수신:', {
-        hasBelligerentSides: dto.militaryEvent.belligerentSides?.length || 0,
-        hasRelations: dto.militaryEvent.relations?.length || 0,
-        hasMilitaryDetails: !!dto.militaryEvent.militaryDetails,
-        conflictType: dto.militaryEvent.militaryDetails?.conflictType,
-        combatTypesCount: dto.militaryEvent.militaryDetails?.combatTypes?.length || 0,
-        combatTypes: dto.militaryEvent.militaryDetails?.combatTypes,
-        tactics: dto.militaryEvent.militaryDetails?.tactics,
-        strategy: dto.militaryEvent.militaryDetails?.strategy,
-        outcome: dto.militaryEvent.militaryDetails?.outcome,
-        hasCasualties: dto.militaryEvent.casualties?.length || 0,
-        warCost: dto.militaryEvent.warCost,
-      })
-      
-      await this.militaryEventService.saveMilitaryData(
-        event.id,
-        dto.militaryEvent,
-      )
-      
-      console.log('✅ [Controller] militaryEvent 저장 완료')
-    } else {
-      console.log('⚠️ [Controller] militaryEvent가 없습니다')
+      await this.militaryEventService.saveMilitaryData(event.id, dto.militaryEvent)
     }
 
     // 모든 관계 + 군사정보가 채워진 *조회와 동일한* 응답으로 반환 — 프론트가 시딩만으로
@@ -2262,5 +2249,45 @@ export class EventController {
       })
     }
     return { eventId: id, historicalCountryId: body.historicalCountryId, role: nextRole }
+  }
+}
+
+/**
+ * 참여국 줄의 진영 소속(D1) — 상세 응답용. participantId는 **참여국 줄 id**다
+ * (위 `id`는 국가 id라, 줄 단위 대상(측정값 EVENT_PARTICIPANT)을 가리킬 수 없었다).
+ */
+function participantMembership(relation: {
+  id?: string
+  sideId?: string | null
+  participation?: string | null
+  joinEra?: 'BC' | 'AD' | null
+  joinYear?: number | null
+  joinMonth?: number | null
+  joinDay?: number | null
+  joinReason?: string | null
+  withdrawEra?: 'BC' | 'AD' | null
+  withdrawYear?: number | null
+  withdrawMonth?: number | null
+  withdrawDay?: number | null
+  withdrawReason?: string | null
+}) {
+  return {
+    participantId: relation.id ?? null,
+    sideId: relation.sideId ?? null,
+    participation: relation.participation ?? null,
+    join: columnsToPoint({
+      era: relation.joinEra ?? null,
+      year: relation.joinYear ?? null,
+      month: relation.joinMonth ?? null,
+      day: relation.joinDay ?? null,
+    }),
+    joinReason: relation.joinReason ?? null,
+    withdraw: columnsToPoint({
+      era: relation.withdrawEra ?? null,
+      year: relation.withdrawYear ?? null,
+      month: relation.withdrawMonth ?? null,
+      day: relation.withdrawDay ?? null,
+    }),
+    withdrawReason: relation.withdrawReason ?? null,
   }
 }

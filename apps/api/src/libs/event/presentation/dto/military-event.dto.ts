@@ -1,43 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import {
-  IsString,
-  IsOptional,
-  IsEnum,
-  IsArray,
-  ValidateNested,
-  IsDateString,
-  IsInt,
-  Min,
-  Max,
-} from 'class-validator'
+import { IsArray, IsEnum, IsOptional, IsString, ValidateIf, ValidateNested } from 'class-validator'
+
+/**
+ * 사건 군사 정보 — **작전 정보(MilitaryDetailsNorm)만** 남았다.
+ *
+ * 진영·참전국·사상자는 이 DTO에서 빠졌다(D1·D3, docs/event-detail-data-foundation.md):
+ * - 진영 = EventSide (PUT /events/:id/sides), 소속 = 참여국 줄의 sideId (relatedCountries)
+ * - 병력·사상자 = 측정값 Observation (POST /observations)
+ * 예전 저장은 이 묶음 전체를 지우고 다시 만들어, 저장할 때마다 진영 id가 바뀌었다 —
+ * 진영에 붙은 측정값이 매번 고아가 되는 구조라 정본으로 쓸 수 없었다.
+ */
 
 // ========================
 // Enums
 // ========================
-
-export enum SideLevelDto {
-  COALITION = 'COALITION',
-  COUNTRY = 'COUNTRY',
-  FORCE = 'FORCE',
-}
-
-export enum MilitaryRelationTypeDto {
-  ALLIED = 'ALLIED',
-  COOPERATION = 'COOPERATION',
-  NON_AGGRESSION = 'NON_AGGRESSION',
-  NEUTRAL = 'NEUTRAL',
-  ENEMY = 'ENEMY',
-  PUPPET = 'PUPPET',
-  OCCUPIED = 'OCCUPIED',
-}
-
-export enum ParticipationTypeDto {
-  MAIN = 'MAIN',
-  SUPPORT = 'SUPPORT',
-  LIMITED = 'LIMITED',
-  OCCUPIED = 'OCCUPIED',
-}
 
 export enum ConflictTypeDto {
   BATTLE = 'BATTLE',
@@ -54,181 +31,6 @@ export enum CombatTypeDto {
   AMPHIBIOUS = 'AMPHIBIOUS',
   COMBINED = 'COMBINED',
 }
-
-// ========================
-// Country In Side DTO
-// ========================
-
-export class CountryInSideDto {
-  @ApiProperty({ description: '국가 ID (현대)', required: false })
-  @IsString()
-  @IsOptional()
-  countryId?: string
-
-  @ApiProperty({ description: '역사적 국가 ID', required: false })
-  @IsString()
-  @IsOptional()
-  historicalCountryId?: string
-
-  @ApiProperty({ description: '지휘관', required: false })
-  @IsString()
-  @IsOptional()
-  commander?: string
-
-  @ApiProperty({ description: '지휘관 인물 ID', required: false })
-  @IsString()
-  @IsOptional()
-  commanderPersonId?: string
-
-  @ApiProperty({ description: '병력 규모', required: false })
-  @IsString()
-  @IsOptional()
-  forces?: string
-
-  @ApiProperty({
-    description: '참전 유형',
-    enum: ParticipationTypeDto,
-    required: false,
-  })
-  @IsEnum(ParticipationTypeDto)
-  @IsOptional()
-  participationType?: ParticipationTypeDto
-
-  @ApiProperty({ description: '참전일', required: false })
-  @IsDateString()
-  @IsOptional()
-  joinDate?: string
-
-  @ApiProperty({ description: '철수일', required: false })
-  @IsDateString()
-  @IsOptional()
-  withdrawDate?: string
-
-  @ApiProperty({ description: '설명', required: false })
-  @IsString()
-  @IsOptional()
-  description?: string
-}
-
-// ========================
-// Belligerent Side DTO
-// ========================
-
-export class BelligerentSideDto {
-  @ApiProperty({ description: '세력 이름 (예: 연합군, 추축국)' })
-  @IsString()
-  name!: string
-
-  @ApiProperty({
-    description: '세력 레벨',
-    enum: SideLevelDto,
-    required: false,
-    default: 'COALITION',
-  })
-  @IsEnum(SideLevelDto)
-  @IsOptional()
-  level?: SideLevelDto
-
-  @ApiProperty({ description: '총 지휘관', required: false })
-  @IsString()
-  @IsOptional()
-  commander?: string
-
-  @ApiProperty({ description: '총 지휘관 인물 ID', required: false })
-  @IsString()
-  @IsOptional()
-  commanderPersonId?: string
-
-  @ApiProperty({ description: '총 병력', required: false })
-  @IsString()
-  @IsOptional()
-  forces?: string
-
-  @ApiProperty({ description: '설명', required: false })
-  @IsString()
-  @IsOptional()
-  description?: string
-
-  @ApiProperty({ description: '색상 (HEX)', required: false })
-  @IsString()
-  @IsOptional()
-  color?: string
-
-  @ApiProperty({
-    description: '이 세력에 포함된 국가 목록',
-    type: [CountryInSideDto],
-    required: false,
-  })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CountryInSideDto)
-  @IsOptional()
-  countries?: CountryInSideDto[]
-}
-
-// ========================
-// Country Relation DTO
-// ========================
-
-export class EventCountryRelationDto {
-  @ApiProperty({ description: '출발 국가 ID (현대)', required: false })
-  @IsString()
-  @IsOptional()
-  fromCountryId?: string
-
-  @ApiProperty({ description: '출발 역사적 국가 ID', required: false })
-  @IsString()
-  @IsOptional()
-  fromHistoricalCountryId?: string
-
-  @ApiProperty({ description: '목적 국가 ID (현대)', required: false })
-  @IsString()
-  @IsOptional()
-  toCountryId?: string
-
-  @ApiProperty({ description: '목적 역사적 국가 ID', required: false })
-  @IsString()
-  @IsOptional()
-  toHistoricalCountryId?: string
-
-  @ApiProperty({
-    description: '관계 유형',
-    enum: MilitaryRelationTypeDto,
-  })
-  @IsEnum(MilitaryRelationTypeDto)
-  relationType!: MilitaryRelationTypeDto
-
-  @ApiProperty({ description: '시작일', required: false })
-  @IsDateString()
-  @IsOptional()
-  startDate?: string
-
-  @ApiProperty({ description: '종료일', required: false })
-  @IsDateString()
-  @IsOptional()
-  endDate?: string
-
-  @ApiProperty({
-    description: '관계 강도 (1-10)',
-    required: false,
-    minimum: 1,
-    maximum: 10,
-  })
-  @IsInt()
-  @Min(1)
-  @Max(10)
-  @IsOptional()
-  strength?: number
-
-  @ApiProperty({ description: '설명', required: false })
-  @IsString()
-  @IsOptional()
-  description?: string
-}
-
-// ========================
-// Military Details DTO
-// ========================
 
 export class MilitaryDetailsDto {
   @ApiProperty({
@@ -288,130 +90,19 @@ export class MilitaryDetailsDto {
 }
 
 // ========================
-// Casualties DTO
-// ========================
-
-export class CountryCasualtiesDto {
-  @ApiProperty({ description: '국가 ID (현대)', required: false })
-  @IsString()
-  @IsOptional()
-  countryId?: string
-
-  @ApiProperty({ description: '역사적 국가 ID', required: false })
-  @IsString()
-  @IsOptional()
-  historicalCountryId?: string
-
-  @ApiProperty({ description: '전사자 수', required: false })
-  @IsString()
-  @IsOptional()
-  killed?: string
-
-  @ApiProperty({ description: '부상자 수', required: false })
-  @IsString()
-  @IsOptional()
-  wounded?: string
-
-  @ApiProperty({ description: '실종자 수', required: false })
-  @IsString()
-  @IsOptional()
-  missing?: string
-
-  @ApiProperty({ description: '포로 수', required: false })
-  @IsString()
-  @IsOptional()
-  captured?: string
-
-  @ApiProperty({ description: '민간인 사망자 수', required: false })
-  @IsString()
-  @IsOptional()
-  civilianDeaths?: string
-
-  @ApiProperty({ description: '총 사상자 수', required: false })
-  @IsString()
-  @IsOptional()
-  total?: string
-}
-
-export class CasualtiesDataDto {
-  @ApiProperty({ description: '교전 세력 이름', required: false })
-  @IsString()
-  @IsOptional()
-  sideName?: string
-
-  @ApiProperty({ description: '총 전사자 수', required: false })
-  @IsString()
-  @IsOptional()
-  totalKilled?: string
-
-  @ApiProperty({ description: '총 부상자 수', required: false })
-  @IsString()
-  @IsOptional()
-  totalWounded?: string
-
-  @ApiProperty({
-    description: '국가별 피해 목록',
-    type: [CountryCasualtiesDto],
-    required: false,
-  })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CountryCasualtiesDto)
-  @IsOptional()
-  countryCasualties?: CountryCasualtiesDto[]
-}
-
-// ========================
-// Complete Military Event DTO
+// Military Event DTO
 // ========================
 
 export class MilitaryEventDto {
   @ApiProperty({
-    description: '교전 세력 목록',
-    type: [BelligerentSideDto],
-    required: false,
-  })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => BelligerentSideDto)
-  @IsOptional()
-  belligerentSides?: BelligerentSideDto[]
-
-  @ApiProperty({
-    description: '국가 간 관계 목록',
-    type: [EventCountryRelationDto],
-    required: false,
-  })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EventCountryRelationDto)
-  @IsOptional()
-  relations?: EventCountryRelationDto[]
-
-  @ApiProperty({
-    description: '군사 상세 정보',
+    description: '작전 정보. null이면 삭제',
     type: MilitaryDetailsDto,
     required: false,
+    nullable: true,
   })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
   @ValidateNested()
   @Type(() => MilitaryDetailsDto)
-  @IsOptional()
-  militaryDetails?: MilitaryDetailsDto
-
-  @ApiProperty({
-    description: '피해 규모 정보',
-    type: [CasualtiesDataDto],
-    required: false,
-  })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CasualtiesDataDto)
-  @IsOptional()
-  casualties?: CasualtiesDataDto[]
-
-  @ApiProperty({ description: '전쟁 비용', required: false })
-  @IsString()
-  @IsOptional()
-  warCost?: string
+  militaryDetails?: MilitaryDetailsDto | null
 }
-

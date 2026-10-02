@@ -1,5 +1,21 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import { EventCountryRole, Prisma, PrismaClient } from '@prisma/client'
+import {
+  EventCountryRole,
+  ObservationSubjectType,
+  ParticipationType,
+  Prisma,
+  PrismaClient,
+} from '@prisma/client'
+
+import { removeObservationsForSubjects } from '../../evidence/application/observation-cleanup'
+
+import {
+  assertPointOrder,
+  normalizePoint,
+  pointToColumns,
+  type StructuredPoint,
+  type StructuredPointInput,
+} from '../../shared/structured-point'
 
 /**
  * 사건 참여국 — **쓰기 단일 통로**.
@@ -55,8 +71,13 @@ export class EventCountryParticipantService {
         roleDescription: true,
         note: true,
         sortOrder: true,
+        sideId: true,
+        participation: true,
+        joinReason: true,
+        withdrawReason: true,
       },
     })
+    await assertSidesBelongToEvent(tx, eventId, desired)
     const existingByKey = new Map(existing.map((row) => [partyKeyOf(row), row]))
     const desiredKeys = new Set(desired.map((participant) => participant.key))
 
@@ -65,6 +86,8 @@ export class EventCountryParticipantService {
       .filter((row) => !desiredKeys.has(partyKeyOf(row)))
       .map((row) => row.id)
     if (removedIds.length > 0) {
+      // 참여국 줄에 붙은 측정값(병력·사상자)은 FK가 없어 함께 지워야 고아가 되지 않는다
+      await removeObservationsForSubjects(tx, ObservationSubjectType.EVENT_PARTICIPANT, removedIds)
       await tx.eventCountryRelation.deleteMany({ where: { id: { in: removedIds } } })
     }
 
@@ -82,6 +105,7 @@ export class EventCountryParticipantService {
             roleDescription: participant.roleDescription ?? null,
             note: participant.note ?? null,
             sortOrder: participant.sortOrder,
+            ...membershipCreateData(participant),
           },
         })
         continue
@@ -91,7 +115,7 @@ export class EventCountryParticipantService {
        * 살아남은 행 — 실제로 달라지는 값만 UPDATE한다. 3상 규약상 `undefined`인 필드는
        * 후보에서 빠지므로, id만 보내는 호출(예: 국가 칩 추가)은 역할·서술을 보존한다.
        */
-      const patch: Prisma.EventCountryRelationUpdateInput = {}
+      const patch: Prisma.EventCountryRelationUncheckedUpdateInput = {}
       if (participant.role !== undefined && participant.role !== current.role) {
         patch.role = participant.role
       }
@@ -107,6 +131,7 @@ export class EventCountryParticipantService {
       if (participant.sortOrder !== current.sortOrder) {
         patch.sortOrder = participant.sortOrder
       }
+      Object.assign(patch, membershipPatch(participant, current))
       if (Object.keys(patch).length > 0) {
         await tx.eventCountryRelation.update({ where: { id: current.id }, data: patch })
       }
@@ -126,6 +151,7 @@ export class EventCountryParticipantService {
     )
     assertNoDuplicateParty(desired)
     if (desired.length === 0) return
+    await assertSidesBelongToEvent(tx, eventId, desired)
 
     await tx.eventCountryRelation.createMany({
       data: desired.map((participant) => ({
@@ -136,6 +162,7 @@ export class EventCountryParticipantService {
         roleDescription: participant.roleDescription ?? null,
         note: participant.note ?? null,
         sortOrder: participant.sortOrder,
+        ...membershipCreateData(participant),
       })),
     })
   }
@@ -150,6 +177,13 @@ export interface EventCountryParticipantInput {
   role?: EventCountryRole
   roleDescription?: string | null
   note?: string | null
+  /** 진영(D1) — 3상 */
+  sideId?: string | null
+  participation?: ParticipationType | null
+  join?: StructuredPointInput | null
+  joinReason?: string | null
+  withdraw?: StructuredPointInput | null
+  withdrawReason?: string | null
 }
 
 interface NormalizedParticipant {
@@ -160,6 +194,12 @@ interface NormalizedParticipant {
   roleDescription?: string | null
   note?: string | null
   sortOrder: number
+  sideId?: string | null
+  participation?: ParticipationType | null
+  join?: StructuredPoint | null
+  joinReason?: string | null
+  withdraw?: StructuredPoint | null
+  withdrawReason?: string | null
 }
 
 /**
@@ -204,6 +244,116 @@ function normalizeParticipant(
     roleDescription: trimToNull(participant.roleDescription),
     note: trimToNull(participant.note),
     sortOrder: index,
+    sideId: participant.sideId === undefined ? undefined : emptyToNull(participant.sideId),
+    participation: participant.participation,
+    ...normalizePeriod(participant),
+    joinReason: trimToNull(participant.joinReason),
+    withdrawReason: trimToNull(participant.withdrawReason),
+  }
+}
+
+/** 가담·이탈 시점 — 3상. 둘 다 오면 순서를 검증한다 */
+function normalizePeriod(participant: EventCountryParticipantInput): {
+  join?: StructuredPoint | null
+  withdraw?: StructuredPoint | null
+} {
+  const join =
+    participant.join === undefined
+      ? undefined
+      : participant.join
+        ? normalizePoint(participant.join, '가담 시점')
+        : null
+  const withdraw =
+    participant.withdraw === undefined
+      ? undefined
+      : participant.withdraw
+        ? normalizePoint(participant.withdraw, '이탈 시점')
+        : null
+  if (join && withdraw) assertPointOrder(join, withdraw)
+  return {
+    ...(join !== undefined && { join }),
+    ...(withdraw !== undefined && { withdraw }),
+  }
+}
+
+function joinColumns(point: StructuredPoint | null) {
+  const columns = pointToColumns(point)
+  return {
+    joinEra: columns.era,
+    joinYear: columns.year,
+    joinMonth: columns.month,
+    joinDay: columns.day,
+    joinPrecision: columns.precision,
+  }
+}
+
+function withdrawColumns(point: StructuredPoint | null) {
+  const columns = pointToColumns(point)
+  return {
+    withdrawEra: columns.era,
+    withdrawYear: columns.year,
+    withdrawMonth: columns.month,
+    withdrawDay: columns.day,
+    withdrawPrecision: columns.precision,
+  }
+}
+
+/** 새 줄의 진영 소속 칼럼 */
+function membershipCreateData(participant: NormalizedParticipant) {
+  return {
+    sideId: participant.sideId ?? null,
+    participation: participant.participation ?? null,
+    ...joinColumns(participant.join ?? null),
+    joinReason: participant.joinReason ?? null,
+    ...withdrawColumns(participant.withdraw ?? null),
+    withdrawReason: participant.withdrawReason ?? null,
+  }
+}
+
+/**
+ * 살아남은 줄의 진영 소속 — 3상(undefined=유지). 시점은 바뀔 때만 칼럼 5개를 통째로 쓴다.
+ * (현재 시점 값을 읽지 않고 쓰므로 '같은 값 재기록'은 허용한다 — 칼럼 수를 줄이려 비교하지 않는다.)
+ */
+function membershipPatch(
+  participant: NormalizedParticipant,
+  current: {
+    sideId: string | null
+    participation: ParticipationType | null
+    joinReason: string | null
+    withdrawReason: string | null
+  },
+): Prisma.EventCountryRelationUncheckedUpdateInput {
+  const patch: Prisma.EventCountryRelationUncheckedUpdateInput = {}
+  if (participant.sideId !== undefined && participant.sideId !== current.sideId) {
+    patch.sideId = participant.sideId
+  }
+  if (participant.participation !== undefined && participant.participation !== current.participation) {
+    patch.participation = participant.participation
+  }
+  if (participant.join !== undefined) Object.assign(patch, joinColumns(participant.join))
+  if (participant.withdraw !== undefined) Object.assign(patch, withdrawColumns(participant.withdraw))
+  if (participant.joinReason !== undefined && participant.joinReason !== current.joinReason) {
+    patch.joinReason = participant.joinReason
+  }
+  if (participant.withdrawReason !== undefined && participant.withdrawReason !== current.withdrawReason) {
+    patch.withdrawReason = participant.withdrawReason
+  }
+  return patch
+}
+
+/** 진영은 같은 사건의 것이어야 한다 — 다른 사건의 진영 id로 소속을 거는 것을 막는다 */
+async function assertSidesBelongToEvent(
+  tx: Prisma.TransactionClient,
+  eventId: string,
+  participants: NormalizedParticipant[],
+): Promise<void> {
+  const sideIds = [
+    ...new Set(participants.map((participant) => participant.sideId).filter((id): id is string => !!id)),
+  ]
+  if (sideIds.length === 0) return
+  const found = await tx.eventSide.count({ where: { id: { in: sideIds }, eventId } })
+  if (found !== sideIds.length) {
+    throw new BadRequestException('이 사건의 진영이 아닌 sideId가 들어 있습니다.')
   }
 }
 

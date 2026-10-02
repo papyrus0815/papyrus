@@ -10,155 +10,20 @@
  *  - Event x3 (부모 + 자식 2건)
  *  - EventSection (배경/전개/결과)
  *  - EventCountryRelation (참전국 — 매핑 가능한 역사 국가 우선, 프랑스만 현대 country fallback)
- *  - BelligerentSide x2 (프로이센·독일 측 / 프랑스 측) + CountryInSide
+ *  - EventSide x2 (프로이센·독일 측 / 프랑스 측) + 참여국 진영 소속 + 병력·사상자 측정값(Observation) — data/event-sides.legacy-five-wars.ts
  *  - MilitaryDetailsNorm (전쟁/전투 상세)
- *  - CasualtiesData (양측 사상자)
  *
  * 매핑되지 않는 점:
  *  - 프랑스 제2제국(1852–1870) / 제3공화국(1870–1940) historicalCountry는 시드에 없어
  *    현대 country '프랑스'로 매핑. 추후 프랑스 historicalCountry 시드 추가 시 마이그레이션 권장.
  */
-import { EventCountryRole, SideLevel, ConflictType, CombatType, ParticipationType } from '@prisma/client'
+import { EventCountryRole, ConflictType, CombatType, ParticipationType } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
+import { applyEventSides } from './lib/event-sides'
 
 const EVENT_CATEGORY_NAME = '전쟁/군사'
-
-interface BelligerentInput {
-  /** 진영 식별용(코드) */
-  code: 'germany' | 'france'
-  name: string
-  level: SideLevel
-  commander: string
-  forces: string
-  description: string
-  color: string
-  /** 진영 내 참전국 — 매핑 가능한 곳만. countryName(현대) 또는 historicalCountryName(역사) 중 하나 */
-  countries: Array<{
-    historicalCountryName?: string
-    countryName?: string
-    role?: string
-    forces?: string
-    commander?: string
-    description?: string
-    participation?: ParticipationType
-  }>
-  /** 사상자 (집계) */
-  casualties: {
-    militaryKilled?: string
-    militaryWounded?: string
-    militaryMissing?: string
-    militaryCaptured?: string
-    total?: string
-  }
-}
-
-const GERMANY_SIDE: BelligerentInput = {
-  code: 'germany',
-  name: '프로이센·독일 측',
-  level: SideLevel.COALITION,
-  commander:
-    '빌헬름 1세 (총사령관, 프로이센 국왕·이후 독일 황제) / 헬무트 폰 몰트케 (참모총장) / 오토 폰 비스마르크 (수상)',
-  forces:
-    '동원 약 120만명 (북독일 연방군 + 남독일 4국 연합군). 전선 투입 약 50만명 — 후속 동원으로 단계별 증강.',
-  description:
-    '프로이센 왕국이 주도한 북독일 연방과 남독일 4국(바이에른·뷔르템베르크·바덴·헤센) 연합. 1870년 7월 비밀 동맹 조항이 자동 발효되어 즉시 통합 작전이 가능했고, 종전 직전인 1871년 1월 18일 베르사유에서 독일 제국이 선포되었다.',
-  color: '#1d4ed8',
-  countries: [
-    {
-      historicalCountryName: '프로이센 왕국',
-      role: '주도국',
-      forces: '북독일 연방군 약 90만명 (전선 투입 약 30만)',
-      commander: '빌헬름 1세 / 헬무트 폰 몰트케',
-      description:
-        '북독일 연방의 맹주로서 전쟁 전 과정을 주도. 7월 19일 프랑스의 선전포고를 받자 즉시 동원령을 발효, 8월 초 라인강을 도하해 알자스·로렌으로 진격했다.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '북독일 연방',
-      role: '주(主) 정치체',
-      forces: '북독일 22개 회원국의 군사 통합체',
-      commander: '빌헬름 1세 (연방 대통령)',
-      description:
-        '1867년 보오전쟁 후 프로이센 주도로 결성된 22개국 연방. 보불전쟁의 공식 교전 주체이자 1871년 1월 독일 제국으로 승격되었다.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '바이에른 왕국',
-      role: '남독일 동맹국',
-      forces: '약 5만 5천명 (제1·제2 바이에른 군단)',
-      commander: '루트비히 2세 (국왕) / 야코프 폰 하르트만',
-      description:
-        '1870년 비밀 군사 동맹에 따라 자동 참전. 베르트 전투(8/6)와 스당 전투(9/1)에서 프로이센 제3군에 편성되어 결정적 역할을 수행. 종전 후 독일 제국 가입.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '뷔르템베르크 왕국',
-      role: '남독일 동맹국',
-      forces: '약 2만명',
-      commander: '카를 1세',
-      description:
-        '뷔르템베르크 사단으로 편성되어 프로이센 제3군에 합류. 알자스 진격과 파리 포위에 참여했고 종전 후 독일 제국에 가입했다.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '바덴 대공국',
-      role: '남독일 동맹국',
-      forces: '약 1만 5천명',
-      commander: '프리드리히 1세 폰 바덴 대공',
-      description:
-        '바덴 사단이 프로이센 제3군에 편성되어 알자스 작전에 참여. 종전 후 독일 제국 가입.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '헤센 대공국',
-      role: '남독일 동맹국',
-      forces: '약 1만명',
-      commander: '루트비히 3세 헤센 대공',
-      description:
-        '헤센-다름슈타트 사단으로 편성되어 메스 포위와 파리 포위에 참여했다.',
-      participation: ParticipationType.LIMITED,
-    },
-  ],
-  casualties: {
-    militaryKilled: '약 44,700명',
-    militaryWounded: '약 89,700명',
-    militaryMissing: '약 4,000명',
-    militaryCaptured: '약 720명',
-    total: '약 139,000명 (전사·부상·실종·포로 합계)',
-  },
-}
-
-const FRANCE_SIDE: BelligerentInput = {
-  code: 'france',
-  name: '프랑스 측',
-  level: SideLevel.COUNTRY,
-  commander:
-    '나폴레옹 3세 (황제, ~1870-09-02) / 레옹 강베타 (국방정부 내무장관, 1870-09-04~) / 파트리스 드 마크마옹 (원수, 샬롱군) / 프랑수아 아실 바젠 (원수, 라인군)',
-  forces:
-    '동원 약 90만명 — 정규군 49만 + 국민방위대 + 의용군. 개전 시 전선 투입 약 25만으로 동원·집결 모두 독일 측에 비해 늦었다.',
-  description:
-    '프랑스 제2제국(나폴레옹 3세)이 7월 19일 선전포고로 개전. 9월 2일 스당 전투에서 황제가 항복하며 제정이 붕괴, 9월 4일 파리에서 제3공화국 국방정부가 선포되어 항전을 이어갔다. 그러나 메스(10/27)·파리(1871-01-28) 차례로 항복하며 패전.',
-  color: '#b91c1c',
-  countries: [
-    {
-      countryName: '프랑스',
-      role: '주도국',
-      forces: '약 90만명 (정규군·국민방위대·의용군 총합)',
-      commander: '나폴레옹 3세 → 국방정부(레옹 강베타·줄 파브르)',
-      description:
-        '엠스 전보 사건(7/13)에 격분해 7월 19일 프로이센에 선전포고. 1804–1870 시기 프랑스 제2제국이나 별도 historicalCountry가 시드에 없어 현대 프랑스로 매핑. 9/4 이후 프랑스 제3공화국이 같은 정치적 실체로 항전을 이어감.',
-      participation: ParticipationType.FULL,
-    },
-  ],
-  casualties: {
-    militaryKilled: '약 138,800명',
-    militaryWounded: '약 143,000명',
-    militaryMissing: '약 41,000명',
-    militaryCaptured: '약 474,000명 (스당 10만, 메스 17만, 파리 항복 시 등)',
-    total: '약 756,000명 — 보불전쟁의 인적 손실 대부분이 프랑스 측에 집중되었으며, 특히 포로 수가 압도적이다.',
-  },
-}
 
 export async function seedFrancoPrussianWar(
   prisma: PrismaService,
@@ -432,22 +297,22 @@ export async function seedFrancoPrussianWar(
     },
     {
       historicalCountryName: '바이에른 왕국',
-      role: EventCountryRole.ALLY,
+      role: EventCountryRole.PARTICIPANT,
       roleDescription: '프로이센 측 남독일 동맹국. 종전 후 독일 제국 가입.',
     },
     {
       historicalCountryName: '뷔르템베르크 왕국',
-      role: EventCountryRole.ALLY,
+      role: EventCountryRole.PARTICIPANT,
       roleDescription: '프로이센 측 남독일 동맹국. 종전 후 독일 제국 가입.',
     },
     {
       historicalCountryName: '바덴 대공국',
-      role: EventCountryRole.ALLY,
+      role: EventCountryRole.PARTICIPANT,
       roleDescription: '프로이센 측 남독일 동맹국. 종전 후 독일 제국 가입.',
     },
     {
       historicalCountryName: '헤센 대공국',
-      role: EventCountryRole.ALLY,
+      role: EventCountryRole.PARTICIPANT,
       roleDescription: '프로이센 측 남독일 동맹국 (헤센-다름슈타트).',
     },
     {
@@ -457,7 +322,7 @@ export async function seedFrancoPrussianWar(
     },
     {
       countryName: '프랑스',
-      role: EventCountryRole.ADVERSARY,
+      role: EventCountryRole.PARTICIPANT,
       roleDescription:
         '주(主) 적국. 1852–1870 시기 프랑스 제2제국 → 1870-09-04 이후 제3공화국. 별도 historicalCountry가 시드에 없어 현대 프랑스로 매핑.',
     },
@@ -494,7 +359,6 @@ export async function seedFrancoPrussianWar(
         eventId: parentEvent.id,
         countryId: countryId ?? undefined,
         historicalCountryId: historicalCountryId ?? undefined,
-        role: rel.role,
       },
     })
     if (exists) {
@@ -513,105 +377,17 @@ export async function seedFrancoPrussianWar(
     console.log(`    ✅ 국가관계: ${rel.historicalCountryName ?? rel.countryName} (${rel.role})`)
   }
 
-  // ── 6) BelligerentSide + CountryInSide + 사상자 ────────────────────────
-  for (const side of [GERMANY_SIDE, FRANCE_SIDE]) {
-    let belligerent = await prisma.belligerentSide.findFirst({
-      where: { eventId: parentEvent.id, name: side.name },
-    })
-
-    if (belligerent) {
-      console.log(`    ⏭️  진영 스킵: ${side.name}`)
-    } else {
-      belligerent = await prisma.belligerentSide.create({
-        data: {
-          eventId: parentEvent.id,
-          name: side.name,
-          level: side.level,
-          commander: side.commander,
-          forces: side.forces,
-          description: side.description,
-          color: side.color,
-        },
-      })
-      console.log(`    ✅ 진영 생성: ${side.name}`)
-    }
-
-    // 진영 내 참전국
-    for (const c of side.countries) {
-      let countryId: string | null = null
-      let historicalCountryId: string | null = null
-
-      if (c.historicalCountryName) {
-        const hc = await prisma.historicalCountry.findFirst({
-          where: { name: c.historicalCountryName },
-          select: { id: true },
-        })
-        if (!hc) {
-          console.warn(`      ⚠️  역사 국가 미존재: ${c.historicalCountryName}`)
-          continue
-        }
-        historicalCountryId = hc.id
-      } else if (c.countryName) {
-        const country = await prisma.country.findFirst({
-          where: { name: c.countryName },
-          select: { id: true },
-        })
-        if (!country) {
-          console.warn(`      ⚠️  현대 국가 미존재: ${c.countryName}`)
-          continue
-        }
-        countryId = country.id
-      }
-
-      const exists = await prisma.countryInSide.findFirst({
-        where: {
-          sideId: belligerent.id,
-          countryId: countryId ?? undefined,
-          historicalCountryId: historicalCountryId ?? undefined,
-        },
-      })
-      if (exists) {
-        console.log(`      ⏭️  진영국가 스킵: ${c.historicalCountryName ?? c.countryName}`)
-        continue
-      }
-      await prisma.countryInSide.create({
-        data: {
-          sideId: belligerent.id,
-          countryId,
-          historicalCountryId,
-          commander: c.commander ?? null,
-          forces: c.forces ?? null,
-          role: c.role ?? null,
-          description: c.description ?? null,
-          participation: c.participation ?? ParticipationType.FULL,
-          joinDate: new Date('1870-07-19'),
-        },
-      })
-      console.log(`      ✅ 진영국가: ${c.historicalCountryName ?? c.countryName}`)
-    }
-
-    // 사상자
-    const casualtiesExists = await prisma.casualtiesData.findFirst({
-      where: { eventId: parentEvent.id, sideId: belligerent.id },
-    })
-    if (!casualtiesExists) {
-      await prisma.casualtiesData.create({
-        data: {
-          eventId: parentEvent.id,
-          sideId: belligerent.id,
-          sideName: side.name,
-          militaryKilled: side.casualties.militaryKilled ?? null,
-          militaryWounded: side.casualties.militaryWounded ?? null,
-          militaryMissing: side.casualties.militaryMissing ?? null,
-          militaryCaptured: side.casualties.militaryCaptured ?? null,
-          total: side.casualties.total ?? null,
-        },
-      })
-      console.log(`    ✅ 사상자: ${side.name}`)
-    } else {
-      console.log(`    ⏭️  사상자 스킵: ${side.name}`)
-    }
-  }
+  // ── 6) 진영·소속·병력/사상자 측정값 (D1·D3) ──────────────────
+  // 정본은 seeds/data/event-sides.legacy-five-wars.ts — 진영 이관 스크립트와 같은 데이터
+  const sideResult = await applyEventSides(
+    prisma,
+    parentEvent.id,
+    LEGACY_FIVE_WAR_SIDES['보불전쟁'],
+    LEGACY_FIVE_WAR_SOURCE,
+  )
+  console.log(
+    `    ✅ 진영 ${sideResult.sides} · 소속 ${sideResult.members} · 측정값 ${sideResult.observations}`,
+  )
 
   // ── 7) MilitaryDetailsNorm ─────────────────────────────────────────────
   const milExists = await prisma.militaryDetailsNorm.findUnique({

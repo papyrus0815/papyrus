@@ -173,6 +173,8 @@ export class CreateEventDto {
     countryId?: string | null
     /** 참여 자격 역사국 — 생략=유지(새 줄은 추론) / null=비움 */
     historicalCountryId?: string | null
+    /** 진영(D1) — 생략=유지 / null=해제 */
+    sideId?: string | null
   }>
 
   @ApiProperty({

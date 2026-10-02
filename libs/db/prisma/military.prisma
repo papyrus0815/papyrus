@@ -794,7 +794,6 @@ model MilitaryUnit {
 
   // 🆕 정규화된 군사 사건 관계
   sideDeployedUnits    SideDeployedUnit[]
-  countryDeployedUnits CountryDeployedUnit[]
 
   // --- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")

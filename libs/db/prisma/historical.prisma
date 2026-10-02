@@ -280,9 +280,6 @@ model HistoricalCountry {
   personEventParticipations PersonEvent[] @relation("PersonEventHistoricalCountry")
 
   // 🆕 정규화된 군사 사건 관계
-  countriesInSides               CountryInSide[]
-  fromHistoricalCountryRelations EventCountryRelationNew[] @relation("FromHistoricalCountry")
-  toHistoricalCountryRelations   EventCountryRelationNew[] @relation("ToHistoricalCountry")
   treatySignatories              TreatySignatory[]
   allianceMembers                AllianceMember[]
 

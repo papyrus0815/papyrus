@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsIn, IsOptional, IsString, ValidateIf } from 'class-validator'
+import { Type } from 'class-transformer'
+import { IsIn, IsOptional, IsString, ValidateIf, ValidateNested } from 'class-validator'
+
+import { StructuredPointDto } from '../../../shared/structured-point.dto'
 
 /** Prisma `EventCountryRole`과 동일 — 사건에서 국가가 맡은 배역 */
 export const EVENT_COUNTRY_ROLE_VALUES = [
@@ -72,4 +75,47 @@ export class EventCountryParticipantDto {
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsString()
   note?: string | null
+
+  @ApiProperty({ description: '진영 id — 이 나라가 어느 편이었나(D1). null=진영 해제', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  sideId?: string | null
+
+  @ApiProperty({
+    description: '참여 강도',
+    required: false,
+    nullable: true,
+    enum: ['FULL', 'LIMITED', 'INDIRECT', 'NON_COMBATANT'],
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsIn(['FULL', 'LIMITED', 'INDIRECT', 'NON_COMBATANT'])
+  participation?: 'FULL' | 'LIMITED' | 'INDIRECT' | 'NON_COMBATANT' | null
+
+  @ApiProperty({ description: '가담 시점(구조화) — 사건 시작과 다를 때만', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @ValidateNested()
+  @Type(() => StructuredPointDto)
+  join?: StructuredPointDto | null
+
+  @ApiProperty({ description: '가담 사유', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  joinReason?: string | null
+
+  @ApiProperty({ description: '이탈 시점(구조화) — 사건 종료 전에 빠졌을 때', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @ValidateNested()
+  @Type(() => StructuredPointDto)
+  withdraw?: StructuredPointDto | null
+
+  @ApiProperty({ description: '이탈 사유', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  withdrawReason?: string | null
 }

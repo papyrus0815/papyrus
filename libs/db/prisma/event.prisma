@@ -379,11 +379,10 @@ model Event {
   companyHistories CompanyHistory[] @relation("CompanyHistoryEvent")
 
   // 🆕 정규화된 군사 정보
-  belligerentSides      BelligerentSide[]
-  eventCountryRelations EventCountryRelationNew[]
+  /// 진영 (D1 — 전쟁 전용 아님)
+  sides                 EventSide[]
   alliances             Alliance[]
   militaryDetailsNorm   MilitaryDetailsNorm?
-  casualties            CasualtiesData[]
 
   // 🆕 정규화된 섹션 (본문 내용)
   eventSections EventSection[]
@@ -568,6 +567,10 @@ model PersonEvent {
   country           Country?           @relation("PersonEventCountry", fields: [countryId], references: [id], onDelete: SetNull)
   historicalCountry HistoricalCountry? @relation("PersonEventHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
+  /// 진영 — 이 인물이 어느 편이었나 (D1)
+  sideId String?    @map("side_id") @db.Char(36)
+  side   EventSide? @relation(fields: [sideId], references: [id], onDelete: SetNull)
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -576,6 +579,7 @@ model PersonEvent {
   @@index([eventId, sortOrder], name: "idx_person_event_eventId_sortOrder")
   @@index([countryId], name: "idx_person_event_countryId")
   @@index([historicalCountryId], name: "idx_person_event_histCountryId")
+  @@index([sideId], name: "idx_person_event_sideId")
   @@map("person_event")
 }
 
@@ -610,6 +614,29 @@ model EventCountryRelation {
   /// 같은 밀리초를 공유하는 행이 많아(실측 113묶음) 순서가 비결정적이었다.
   sortOrder Int @default(0) @map("sort_order")
 
+  /// 진영 — 이 나라가 어느 편이었나 (D1). 진영이 지워지면 소속만 풀린다
+  sideId String?    @map("side_id") @db.Char(36)
+  side   EventSide? @relation(fields: [sideId], references: [id], onDelete: SetNull)
+
+  /// 참여 강도 — 전면·제한·간접·비전투
+  participation ParticipationType?
+
+  /// 가담 시점 — 구조화(BC·연 정밀도 안전). 사건 시작과 다를 때만 (예: 사르데냐 1855-01 후발 참전)
+  joinEra       Era?    @map("join_era")
+  joinYear      Int?    @map("join_year")
+  joinMonth     Int?    @map("join_month")
+  joinDay       Int?    @map("join_day")
+  joinPrecision String? @map("join_precision") @db.VarChar(10)
+  joinReason    String? @map("join_reason") @db.Text
+
+  /// 이탈 시점 — 사건 종료 전에 빠졌을 때 (단독 강화·항복·중립 선언)
+  withdrawEra       Era?    @map("withdraw_era")
+  withdrawYear      Int?    @map("withdraw_year")
+  withdrawMonth     Int?    @map("withdraw_month")
+  withdrawDay       Int?    @map("withdraw_day")
+  withdrawPrecision String? @map("withdraw_precision") @db.VarChar(10)
+  withdrawReason    String? @map("withdraw_reason") @db.Text
+
   //--- 관계 필드
   event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   country           Country?           @relation(fields: [countryId], references: [id], onDelete: Cascade)
@@ -626,6 +653,7 @@ model EventCountryRelation {
   @@index([eventId, sortOrder], name: "idx_event_country_eventId_sortOrder")
   @@index([countryId], name: "idx_event_country_countryId")
   @@index([historicalCountryId], name: "idx_event_country_histCountryId")
+  @@index([sideId], name: "idx_event_country_sideId")
   @@map("event_country_relation")
 }
 
@@ -652,6 +680,10 @@ model EventOrganizationRelation {
   /// 비고
   note String? @db.Text
 
+  /// 진영 — 이 조직이 어느 편이었나 (D1)
+  sideId String?    @map("side_id") @db.Char(36)
+  side   EventSide? @relation(fields: [sideId], references: [id], onDelete: SetNull)
+
   //--- 관계 필드
   event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -663,6 +695,7 @@ model EventOrganizationRelation {
   @@unique([eventId, organizationId, role], name: "uniq_event_org_role")
   @@index([eventId], name: "idx_event_org_eventId")
   @@index([organizationId], name: "idx_event_org_organizationId")
+  @@index([sideId], name: "idx_event_org_sideId")
   @@map("event_organization_relation")
 }
 

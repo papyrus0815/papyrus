@@ -100,7 +100,7 @@ export class ObservationService {
     await this.subjectAccess.assertExists(ObservationSubjectType.EVENT, eventId)
     const [participants, sides] = await Promise.all([
       this.prisma.eventCountryRelation.findMany({ where: { eventId }, select: { id: true } }),
-      this.prisma.belligerentSide.findMany({ where: { eventId }, select: { id: true } }),
+      this.prisma.eventSide.findMany({ where: { eventId }, select: { id: true } }),
     ])
     const rows = await this.prisma.observation.findMany({
       where: {

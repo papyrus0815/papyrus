@@ -14,48 +14,22 @@
  *  - Event x6 (부모 + 자식 5)
  *  - EventSection x3 (배경/진출 과정/영향)
  *  - EventCountryRelation
- *  - 플라시 전투 자식: BelligerentSide x2 + CountryInSide + MilitaryDetailsNorm + Casualties
+ *  - 플라시 전투 자식: EventSide x2 + 참여국 진영 소속 + 측정값(data/event-sides.legacy-five-wars.ts) + MilitaryDetailsNorm
  */
 import {
   EventCountryRole,
-  SideLevel,
   ConflictType,
   CombatType,
-  ParticipationType,
   HistoricalEntityKind,
   HistoricalStateType,
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
+import { applyEventSides } from './lib/event-sides'
 
 const EVENT_CATEGORY_NAME = '정치'
 const PLASSEY_CATEGORY_NAME = '전쟁/군사'
-
-interface BelligerentInput {
-  code: 'britain' | 'bengal'
-  name: string
-  level: SideLevel
-  commander: string
-  forces: string
-  description: string
-  color: string
-  countries: Array<{
-    historicalCountryName?: string
-    countryName?: string
-    role?: string
-    forces?: string
-    commander?: string
-    description?: string
-    participation?: ParticipationType
-  }>
-  casualties: {
-    militaryKilled?: string
-    militaryWounded?: string
-    militaryMissing?: string
-    militaryCaptured?: string
-    total?: string
-  }
-}
 
 // ── 부모 사건 본문 ──────────────────────────────────────────────────────────
 const PARENT_EVENT_BODY = {
@@ -495,84 +469,6 @@ const SECTIONS: Array<{
   },
 ]
 
-// ── 플라시 전투 진영 ─────────────────────────────────────────────────────────
-const BRITAIN_SIDE: BelligerentInput = {
-  code: 'britain',
-  name: '영국 동인도회사 측',
-  level: SideLevel.COALITION,
-  commander:
-    '로버트 클라이브(EIC 군 사령관·중령) / 에어 쿠트(부지휘관) / 미르 자파르(벵골 측 내응자, 명목 지휘관) / 본국 정치 결정: 윌리엄 피트(원로원 수석대신)',
-  forces:
-    '약 3,000명 — 영국 정규군 800명(39연대 등) + 인도 세포이 2,200명, 야포 10문(6파운드 8문 + 호위포 2문)',
-  description:
-    'EIC의 캘커타 주재 부대를 핵심으로 한 소규모 원정군. 마드라스에서 1757-01-02 출발한 클라이브 부대가 ' +
-    '캘커타 탈환(1757-01) → 알리나가르 조약(2-09) → 찬다나가르 함락(3-23)을 거쳐 ' +
-    '6월 22일 플라시 인근 망고 숲에 도착. 군사적 우위는 (1)상비 정규군의 훈련도·기율 ' +
-    '(2)영국제 머스킷 소총·야포의 화력·정확도 (3)방수 처리된 화약(우천 시에도 사격 가능) ' +
-    '(4)사전 매수된 벵골 측 사령관 미르 자파르의 미동(내응)이었다. ' +
-    '실제 군사적 충돌은 약 8시간(오전 8시~오후 5시)에 그쳤고, 영국 측 사상자는 65명에 불과했다.',
-  color: '#1d4ed8',
-  countries: [
-    {
-      historicalCountryName: '그레이트브리튼 왕국',
-      role: '주도국 / 본국 정치 결정 주체',
-      forces: '영국 정규군 약 800명 + EIC 함대·해상 보급',
-      commander: '윌리엄 피트(본국) / 로버트 클라이브(현지)',
-      description:
-        '1707년 잉글랜드·스코틀랜드 합방으로 출범한 그레이트브리튼 왕국 시기. ' +
-        '7년 전쟁(1756~1763)이 진행 중이던 시점, 인도 전구의 대 프랑스 견제와 EIC의 벵골 권익 보호가 ' +
-        '본국의 명시적 정책이었다. 윌리엄 피트가 인도·북미 전구를 동시에 강조하는 ' +
-        '글로벌 전략을 추진, EIC에 대한 본국 지원이 강화된 시기.',
-      participation: ParticipationType.LIMITED,
-    },
-  ],
-  casualties: {
-    militaryKilled: '전사 약 22명',
-    militaryWounded: '전상 약 50명',
-    total: '전사·전상 약 72명 (영국 측 정규군·세포이 합산)',
-  },
-}
-
-const BENGAL_SIDE: BelligerentInput = {
-  code: 'bengal',
-  name: '벵골 나와브 측',
-  level: SideLevel.COUNTRY,
-  commander:
-    '시라지 웃 다울라(벵골 나와브, 명목 총사령관) / 미르 마단(친 시라지 사령관, 전사) / 모한 랄(친 시라지) / 미르 자파르·라이 두를라브·야르 라티프(EIC에 매수된 사령관들) / 생프레(Sinfray, 프랑스 포병 50명 지휘)',
-  forces:
-    '약 5만 — 보병 35,000명 + 기병 15,000명 + 대포 53문(인도 토속 + 프랑스 포병 50명 운용 분 포함)',
-  description:
-    '23세의 신임 벵골 나와브 시라지 웃 다울라가 1757년 6월 동원한 벵골군. 명목 병력은 약 5만으로 ' +
-    'EIC군의 약 17배에 달했으나, 실질 전투 가능 부대는 미르 마단·모한 랄 휘하 약 1.2만에 불과했다. ' +
-    '나머지 주력(미르 자파르·라이 두를라브·야르 라티프 휘하 약 3.8만)은 사전에 EIC와 ' +
-    '비밀 협약을 체결한 상태로, 전투 중 일체 움직이지 않는다는 합의를 이행했다. ' +
-    '시라지의 폭정(즉위 직후 일족 숙청·자가트 세트 등 대상인 모욕)에 대한 벵골 귀족·상인층의 ' +
-    '깊은 반감, 무굴 제국 중앙의 약화로 외부 견제 부재, 시라지 본인의 군사적 무경험 ' +
-    '(즉위 14개월의 청년 군주)이 결합된 구조적 취약성이 결정적 패인.',
-  color: '#b91c1c',
-  countries: [
-    {
-      historicalCountryName: '무굴 제국',
-      role: '주(主) 적국 / 영토 침해 피해국 (명목상 종주국)',
-      forces: '벵골 나와브 직속군 약 5만 + 프랑스 포병 50명 (생프레 지휘)',
-      commander: '시라지 웃 다울라 (벵골 나와브, 무굴 제국 명목 신하)',
-      description:
-        '1707년 아우랑제브 사후 무굴 제국 중앙 권력은 사실상 약화되어 ' +
-        '벵골 나와브가 자치권을 행사하는 상태였다. 시라지 웃 다울라는 1756-04 즉위 직후 ' +
-        'EIC의 무단 캘커타 요새 강화에 격분해 6-20 캘커타 공격 → 블랙 홀 사건. ' +
-        '플라시 전투 패배 후 시라지 폐위·살해, 미르 자파르가 EIC 괴뢰 나와브로 즉위. ' +
-        '1764 부크사르 전투에서 무굴 황제 샤 알람 2세까지 패배 → 1765 알라하바드 조약으로 ' +
-        '벵골·비하르·오리사 디와니가 EIC에 부여되며 무굴의 인도 동부 종주권이 사실상 종결.',
-      participation: ParticipationType.FULL,
-    },
-  ],
-  casualties: {
-    militaryKilled: '전사 약 500명 (포격·사격에 의한 직접 사상자 + 미르 마단 전사)',
-    militaryWounded: '미상 (사료 미비)',
-    total: '전사·전상 약 500명 (영국 측 보고). 패주 후 추격 사상자 별도 추정',
-  },
-}
-
 export async function seedBritishEastIndiaCompanyIndia(
   prisma: PrismaService,
 ): Promise<void> {
@@ -888,7 +784,6 @@ export async function seedBritishEastIndiaCompanyIndia(
         eventId: parentEvent.id,
         countryId: countryId ?? undefined,
         historicalCountryId: historicalCountryId ?? undefined,
-        role: rel.role,
       },
     })
     if (exists) {
@@ -911,137 +806,19 @@ export async function seedBritishEastIndiaCompanyIndia(
     console.log(`    ✅ 국가관계: ${rel.historicalCountryName ?? rel.countryName} (${rel.role})`)
   }
 
-  // ── 5) 플라시 전투 자식 — BelligerentSide + CountryInSide + 사상자 ────
+  // ── 5) 플라시 전투 자식 — 진영·소속·병력/사상자 측정값 (D1·D3) ────
   const plasseyEvent = childEventMap.get('플라시 전투')
   if (plasseyEvent) {
-    for (const side of [BRITAIN_SIDE, BENGAL_SIDE]) {
-      let belligerent = await prisma.belligerentSide.findFirst({
-        where: { eventId: plasseyEvent.id, name: side.name },
-      })
-
-      if (belligerent) {
-        belligerent = await prisma.belligerentSide.update({
-          where: { id: belligerent.id },
-          data: {
-            level: side.level,
-            commander: side.commander,
-            forces: side.forces,
-            description: side.description,
-            color: side.color,
-          },
-        })
-        console.log(`    🔄 진영 갱신: ${side.name}`)
-      } else {
-        belligerent = await prisma.belligerentSide.create({
-          data: {
-            eventId: plasseyEvent.id,
-            name: side.name,
-            level: side.level,
-            commander: side.commander,
-            forces: side.forces,
-            description: side.description,
-            color: side.color,
-          },
-        })
-        console.log(`    ✅ 진영 생성: ${side.name}`)
-      }
-
-      for (const c of side.countries) {
-        let countryId: string | null = null
-        let historicalCountryId: string | null = null
-
-        if (c.historicalCountryName) {
-          const hc = await prisma.historicalCountry.findFirst({
-            where: { name: c.historicalCountryName },
-            select: { id: true },
-          })
-          if (!hc) {
-            console.warn(`      ⚠️  역사 국가 미존재: ${c.historicalCountryName}`)
-            continue
-          }
-          historicalCountryId = hc.id
-        } else if (c.countryName) {
-          const country = await prisma.country.findFirst({
-            where: { name: c.countryName },
-            select: { id: true },
-          })
-          if (!country) {
-            console.warn(`      ⚠️  현대 국가 미존재: ${c.countryName}`)
-            continue
-          }
-          countryId = country.id
-        }
-
-        const exists = await prisma.countryInSide.findFirst({
-          where: {
-            sideId: belligerent.id,
-            countryId: countryId ?? undefined,
-            historicalCountryId: historicalCountryId ?? undefined,
-          },
-        })
-        if (exists) {
-          await prisma.countryInSide.update({
-            where: { id: exists.id },
-            data: {
-              commander: c.commander ?? null,
-              forces: c.forces ?? null,
-              role: c.role ?? null,
-              description: c.description ?? null,
-              participation: c.participation ?? ParticipationType.FULL,
-            },
-          })
-          console.log(`      🔄 진영국가 갱신: ${c.historicalCountryName ?? c.countryName}`)
-          continue
-        }
-        await prisma.countryInSide.create({
-          data: {
-            sideId: belligerent.id,
-            countryId,
-            historicalCountryId,
-            commander: c.commander ?? null,
-            forces: c.forces ?? null,
-            role: c.role ?? null,
-            description: c.description ?? null,
-            participation: c.participation ?? ParticipationType.FULL,
-            joinDate: new Date('1757-06-23'),
-          },
-        })
-        console.log(`      ✅ 진영국가: ${c.historicalCountryName ?? c.countryName}`)
-      }
-
-      // 사상자
-      const casualtiesExists = await prisma.casualtiesData.findFirst({
-        where: { eventId: plasseyEvent.id, sideId: belligerent.id },
-      })
-      if (casualtiesExists) {
-        await prisma.casualtiesData.update({
-          where: { id: casualtiesExists.id },
-          data: {
-            sideName: side.name,
-            militaryKilled: side.casualties.militaryKilled ?? null,
-            militaryWounded: side.casualties.militaryWounded ?? null,
-            militaryMissing: side.casualties.militaryMissing ?? null,
-            militaryCaptured: side.casualties.militaryCaptured ?? null,
-            total: side.casualties.total ?? null,
-          },
-        })
-        console.log(`    🔄 사상자 갱신: ${side.name}`)
-      } else {
-        await prisma.casualtiesData.create({
-          data: {
-            eventId: plasseyEvent.id,
-            sideId: belligerent.id,
-            sideName: side.name,
-            militaryKilled: side.casualties.militaryKilled ?? null,
-            militaryWounded: side.casualties.militaryWounded ?? null,
-            militaryMissing: side.casualties.militaryMissing ?? null,
-            militaryCaptured: side.casualties.militaryCaptured ?? null,
-            total: side.casualties.total ?? null,
-          },
-        })
-        console.log(`    ✅ 사상자: ${side.name}`)
-      }
-    }
+    // 정본은 seeds/data/event-sides.legacy-five-wars.ts — 진영 이관 스크립트와 같은 데이터
+    const sideResult = await applyEventSides(
+      prisma,
+      plasseyEvent.id,
+      LEGACY_FIVE_WAR_SIDES['플라시 전투'],
+      LEGACY_FIVE_WAR_SOURCE,
+    )
+    console.log(
+      `    ✅ 진영 ${sideResult.sides} · 소속 ${sideResult.members} · 측정값 ${sideResult.observations}`,
+    )
 
     // ── 6) 플라시 전투 — MilitaryDetailsNorm ─────────────────────────────
     const plasseyMilitaryBody = {

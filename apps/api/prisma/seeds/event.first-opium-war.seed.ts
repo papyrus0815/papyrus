@@ -11,49 +11,22 @@
  *  - Event x3 (부모/자식 2)
  *  - EventSection x3 (배경/경과/결과)
  *  - EventCountryRelation
- *  - BelligerentSide x2 (영국 측 / 청 측) + CountryInSide
+ *  - EventSide x2 (영국 측 / 청 측) + 참여국 진영 소속 + 병력·사상자 측정값(Observation) — data/event-sides.legacy-five-wars.ts
  *  - MilitaryDetailsNorm
- *  - CasualtiesData
  */
 import {
   EventCountryRole,
-  SideLevel,
   ConflictType,
   CombatType,
-  ParticipationType,
   HistoricalEntityKind,
   HistoricalStateType,
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
+import { applyEventSides } from './lib/event-sides'
 
 const EVENT_CATEGORY_NAME = '전쟁/군사'
-
-interface BelligerentInput {
-  code: 'britain' | 'qing'
-  name: string
-  level: SideLevel
-  commander: string
-  forces: string
-  description: string
-  color: string
-  countries: Array<{
-    historicalCountryName?: string
-    countryName?: string
-    role?: string
-    forces?: string
-    commander?: string
-    description?: string
-    participation?: ParticipationType
-  }>
-  casualties: {
-    militaryKilled?: string
-    militaryWounded?: string
-    militaryMissing?: string
-    militaryCaptured?: string
-    total?: string
-  }
-}
 
 // ── 부모 사건 본문 (재시드 시 매번 최신 서술로 갱신) ─────────────────────────
 const PARENT_EVENT_BODY = {
@@ -423,91 +396,6 @@ const SECTIONS: Array<{
   },
 ]
 
-const BRITAIN_SIDE: BelligerentInput = {
-  code: 'britain',
-  name: '영국 측',
-  level: SideLevel.COALITION,
-  // VarChar(200) — 자세한 인사·맥락은 description에 둠
-  commander:
-    '외상 파머스턴(정치 결정) / 찰스 엘리엇 → 헨리 포팅거(외교 전권) / 휴 고프(육군) / 조지 엘리엇 → 윌리엄 파커(해군) / 동인도회사: 인도총독 오클랜드 → 엘렌버러',
-  // VarChar(100)
-  forces: '약 2만명 — 영국 정규 보병 4개 연대 + 영령 인도 사포이, 함정 25~30척, 해병·무장선원 약 5,000명',
-  description:
-    '영국 본토 정규군·왕립해군과 영령 인도(동인도회사군)가 합동 편성한 동방원정군(Expeditionary Force). ' +
-    '의회는 1840년 4월 7~9일 표결에서 271 대 262라는 박빙 표차로 출병안을 가결했고, 출병 명분은 ' +
-    '(1)자국 상인 신변·재산 보호 (2)자유무역 원칙 관철 (3)청의 "야만적 단속"에 대한 응징이었다. ' +
-    '실제 작전은 압도적 함포 화력(68파운더 함포, 명중률·발사속도 모두 청의 구식 화포를 압도)과 ' +
-    '증기선의 천수(淺水) 기동력에 의존하여, 청 연안의 지방군을 점령·차단·우회하는 방식으로 전개되었다. ' +
-    '베이징을 직접 공격하지 않고 양쯔강·대운하 결절점인 진강(鎮江)을 함락해 수운을 끊는 ' +
-    '"간접 압박" 전략을 채택, 최소 비용으로 최대 정치 효과를 얻었다.',
-  color: '#1d4ed8',
-  countries: [
-    {
-      historicalCountryName: '그레이트브리튼 및 아일랜드 연합왕국',
-      role: '주도국 / 정치적 결정 주체',
-      forces: '본토 정규군 약 4,000명 + 왕립해군 25척 이상 + 해병·무장선원 약 5,000명 (사포이 합산 1만 이상)',
-      commander: '찰스 엘리엇 → 헨리 포팅거 (외교) / 휴 고프 (육군) / 조지 엘리엇 → 윌리엄 파커 (해군)',
-      description:
-        '외상 파머스턴이 실질적 주전론자로, 1839년 임칙서의 아편 압수를 "영국 자산 침탈"로 규정해 출병을 추진. ' +
-        '의회 출병안은 271:262로 가까스로 통과했으나(자유당 멜번 정부 신임 결부), 이후 ' +
-        '4년 가까이 인도와 본토를 잇는 보급선을 운영하며 청 연안 13개 거점을 차례로 점거. ' +
-        '난징 조약(1842) 체결로 홍콩 영구 할양·5개항 개항·배상금 2,100만 은량을 확보하면서 ' +
-        '아시아 자유무역 체제의 첫 교두보를 마련했다.',
-      participation: ParticipationType.FULL,
-    },
-  ],
-  casualties: {
-    militaryKilled: '전사 약 69명 (전투 사상)',
-    militaryWounded: '전상 약 451명',
-    militaryMissing: '극소수',
-    // VarChar(100)
-    total: '전사·전상 약 520명 (전투 직접). 풍토병·항해 중 사망 포함 시 추정 1,000~2,000명',
-  },
-}
-
-const QING_SIDE: BelligerentInput = {
-  code: 'qing',
-  name: '청 측',
-  level: SideLevel.COUNTRY,
-  // VarChar(200) — 자세한 인사 약전·전사 일자는 description에 둠
-  commander:
-    '도광제(친정) / 임칙서 → 기선(광저우 흠차대신) / 기영·이리포(강화 전권) / 관텐페이·유겸·해령(전사·자결한 야전 지휘관)',
-  // VarChar(100)
-  forces: '명목 정규군 85만(팔기 25만+녹영 60만), 분쟁지 동원 약 22만. 화승총·구식 청동포 위주의 열세',
-  description:
-    '내륙 농경 제국의 청 정규군은 만주 정복기(17세기) 이래 200년간 본격적 외세 전쟁을 겪지 않아 ' +
-    '전술·무기·지휘체계가 전반적으로 정체된 상태였다. ' +
-    '도광제는 "검약과 친정"으로 알려졌으나 외부 정보 부재로 영국군의 실력을 끝까지 과소평가했고, ' +
-    '강경파(임칙서·왕정·이리포 초기)와 화의파(기선·기영·이리포 후기) 사이의 정책 진동(振動)이 ' +
-    '단속 → 협상 → 결사항전 → 강화로 이어지며 일관된 전략 수립을 방해했다. ' +
-    '또한 만주 팔기와 한족 녹영의 지휘 분리, 지방 총독·순무의 자율 동원 한계, ' +
-    '베이징과 광저우 간 정보 전달 지연(왕복 약 40일) 등으로 각 전선이 사실상 고립 분전했다. ' +
-    '진강 등에서 만주 팔기 부대가 결사항전(가족 동반 자결) 양상을 보였으나 전체 전국(戰局)에는 영향이 미미했다.',
-  color: '#b91c1c',
-  countries: [
-    {
-      historicalCountryName: '청나라',
-      role: '주(主) 적국 / 영토·주권 침해 피해국',
-      forces: '실제 분쟁 지역 동원 약 22만명 (지역별 분산 배치, 통합 야전군 미편성)',
-      commander: '도광제(친정) / 임칙서 → 기선 → 기영·이리포',
-      description:
-        '아편 단속에서 시작된 외교 충돌이 군사 충돌로 확대. ' +
-        '광저우·딩하이·샤먼·닝보·우송·진강에서 차례로 패배하며, ' +
-        '1842년 7월 진강 함락으로 양쯔강·대운하 보급선이 끊기자 8월 강화에 응함. ' +
-        '난징 조약(1842) 체결로 홍콩 할양·5개항 개항·배상금 2,100만 은량·협정관세·공행 폐지를 수락, ' +
-        '동아시아 조공·해금 체제의 종언과 반(半)식민지화의 시발점을 맞이했다.',
-      participation: ParticipationType.FULL,
-    },
-  ],
-  casualties: {
-    militaryKilled: '전사 약 18,000~20,000명 (전투 직접 + 만주 팔기 자결 포함)',
-    militaryWounded: '미상 (사료 미비, 추정 수만 명)',
-    militaryCaptured: '소수 (대부분 처형되거나 도주)',
-    // VarChar(100)
-    total: '추정 22,000~30,000명 (전투 + 학살·자결·도주). 진강 만주 팔기 1,500명 자결 등 편차 큼',
-  },
-}
-
 export async function seedFirstOpiumWar(
   prisma: PrismaService,
 ): Promise<void> {
@@ -729,7 +617,7 @@ export async function seedFirstOpiumWar(
     },
     {
       historicalCountryName: '청나라',
-      role: EventCountryRole.ADVERSARY,
+      role: EventCountryRole.PARTICIPANT,
       roleDescription:
         '주(主) 적국·영토·주권 침해 피해국. ' +
         '도광제 친정 하 임칙서의 아편 단속(1839)에서 시작된 외교 충돌이 군사 충돌로 확대, ' +
@@ -772,7 +660,6 @@ export async function seedFirstOpiumWar(
         eventId: parentEvent.id,
         countryId: countryId ?? undefined,
         historicalCountryId: historicalCountryId ?? undefined,
-        role: rel.role,
       },
     })
     if (exists) {
@@ -795,135 +682,17 @@ export async function seedFirstOpiumWar(
     console.log(`    ✅ 국가관계: ${rel.historicalCountryName ?? rel.countryName} (${rel.role})`)
   }
 
-  // ── 6) BelligerentSide + CountryInSide + 사상자 ────────────────────────
-  for (const side of [BRITAIN_SIDE, QING_SIDE]) {
-    let belligerent = await prisma.belligerentSide.findFirst({
-      where: { eventId: parentEvent.id, name: side.name },
-    })
-
-    if (belligerent) {
-      belligerent = await prisma.belligerentSide.update({
-        where: { id: belligerent.id },
-        data: {
-          level: side.level,
-          commander: side.commander,
-          forces: side.forces,
-          description: side.description,
-          color: side.color,
-        },
-      })
-      console.log(`    🔄 진영 갱신: ${side.name}`)
-    } else {
-      belligerent = await prisma.belligerentSide.create({
-        data: {
-          eventId: parentEvent.id,
-          name: side.name,
-          level: side.level,
-          commander: side.commander,
-          forces: side.forces,
-          description: side.description,
-          color: side.color,
-        },
-      })
-      console.log(`    ✅ 진영 생성: ${side.name}`)
-    }
-
-    for (const c of side.countries) {
-      let countryId: string | null = null
-      let historicalCountryId: string | null = null
-
-      if (c.historicalCountryName) {
-        const hc = await prisma.historicalCountry.findFirst({
-          where: { name: c.historicalCountryName },
-          select: { id: true },
-        })
-        if (!hc) {
-          console.warn(`      ⚠️  역사 국가 미존재: ${c.historicalCountryName}`)
-          continue
-        }
-        historicalCountryId = hc.id
-      } else if (c.countryName) {
-        const country = await prisma.country.findFirst({
-          where: { name: c.countryName },
-          select: { id: true },
-        })
-        if (!country) {
-          console.warn(`      ⚠️  현대 국가 미존재: ${c.countryName}`)
-          continue
-        }
-        countryId = country.id
-      }
-
-      const exists = await prisma.countryInSide.findFirst({
-        where: {
-          sideId: belligerent.id,
-          countryId: countryId ?? undefined,
-          historicalCountryId: historicalCountryId ?? undefined,
-        },
-      })
-      if (exists) {
-        await prisma.countryInSide.update({
-          where: { id: exists.id },
-          data: {
-            commander: c.commander ?? null,
-            forces: c.forces ?? null,
-            role: c.role ?? null,
-            description: c.description ?? null,
-            participation: c.participation ?? ParticipationType.FULL,
-          },
-        })
-        console.log(`      🔄 진영국가 갱신: ${c.historicalCountryName ?? c.countryName}`)
-        continue
-      }
-      await prisma.countryInSide.create({
-        data: {
-          sideId: belligerent.id,
-          countryId,
-          historicalCountryId,
-          commander: c.commander ?? null,
-          forces: c.forces ?? null,
-          role: c.role ?? null,
-          description: c.description ?? null,
-          participation: c.participation ?? ParticipationType.FULL,
-          joinDate: new Date('1839-09-04'),
-        },
-      })
-      console.log(`      ✅ 진영국가: ${c.historicalCountryName ?? c.countryName}`)
-    }
-
-    // 사상자
-    const casualtiesExists = await prisma.casualtiesData.findFirst({
-      where: { eventId: parentEvent.id, sideId: belligerent.id },
-    })
-    if (casualtiesExists) {
-      await prisma.casualtiesData.update({
-        where: { id: casualtiesExists.id },
-        data: {
-          sideName: side.name,
-          militaryKilled: side.casualties.militaryKilled ?? null,
-          militaryWounded: side.casualties.militaryWounded ?? null,
-          militaryMissing: side.casualties.militaryMissing ?? null,
-          militaryCaptured: side.casualties.militaryCaptured ?? null,
-          total: side.casualties.total ?? null,
-        },
-      })
-      console.log(`    🔄 사상자 갱신: ${side.name}`)
-    } else {
-      await prisma.casualtiesData.create({
-        data: {
-          eventId: parentEvent.id,
-          sideId: belligerent.id,
-          sideName: side.name,
-          militaryKilled: side.casualties.militaryKilled ?? null,
-          militaryWounded: side.casualties.militaryWounded ?? null,
-          militaryMissing: side.casualties.militaryMissing ?? null,
-          militaryCaptured: side.casualties.militaryCaptured ?? null,
-          total: side.casualties.total ?? null,
-        },
-      })
-      console.log(`    ✅ 사상자: ${side.name}`)
-    }
-  }
+  // ── 6) 진영·소속·병력/사상자 측정값 (D1·D3) ──────────────────
+  // 정본은 seeds/data/event-sides.legacy-five-wars.ts — 진영 이관 스크립트와 같은 데이터
+  const sideResult = await applyEventSides(
+    prisma,
+    parentEvent.id,
+    LEGACY_FIVE_WAR_SIDES['1차 아편전쟁'],
+    LEGACY_FIVE_WAR_SOURCE,
+  )
+  console.log(
+    `    ✅ 진영 ${sideResult.sides} · 소속 ${sideResult.members} · 측정값 ${sideResult.observations}`,
+  )
 
   // ── 7) MilitaryDetailsNorm ─────────────────────────────────────────────
   const militaryDetailsBody = {

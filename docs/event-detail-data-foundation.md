@@ -319,6 +319,18 @@ const CATEGORY_ORDER: Record<CategoryKey, string[]>
 
 ---
 
+## 6.1 진행 (2026-10-02)
+
+| 단계 | 상태 | 내용 |
+|---|---|---|
+| 0 결정 | ✅ | D1~D5 권고안 채택(사용자: "제일 좋은 방법으로") |
+| 1 근거 | ✅ 커밋 9b579e514 | Source·Citation·MetricDefinition·Observation, 지표 32·역사 통화 7 |
+| 2 진영 | ✅ | `BelligerentSide`→`EventSide`(rename, 무손실), 참여국·인물·조직 줄에 `sideId`+가담/이탈 구조화, `CountryInSide`·`CasualtiesData` 등 7테이블 제거. 사상자·병력 문자열 → 측정값 72개(정의별 지표, 원문은 인용 quote에 보존, 출처 `LEGACY_UNVERIFIED`). 군사 저장 delete-recreate 폐지(작전 정보만 upsert). 5개 전쟁 시드도 같은 데이터(`seeds/data/event-sides.legacy-five-wars.ts`)를 쓴다 |
+| 3 화면 | 🟡 부분 | 진영 모듈(소속 편집)·수치 모듈(진영 비교 막대+범위 수염·목록·입력 모달)·사실 장부 사상자 줄. 남은 것: 모듈 레지스트리 일반화·전개 타임라인(D2 하위 사건)·glance 띠 |
+| 8 집단 | ✅ 커밋 4df537daa | D8 |
+
+남은 데이터 과제: `ALLY`/`ADVERSARY` 64행·36사건(진영 없는 사건) 검수 큐 — '누구의 동맹'을 자동 판정할 수 없어 사람이 진영을 만든다.
+
 ## 7. 결정 요청
 
 1. **D1** — 진영을 참여국 위의 범용 층으로(★C). `ALLY/ADVERSARY` 폐기 포함.

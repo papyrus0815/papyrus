@@ -117,9 +117,6 @@ model Country {
   eventCountryRelations     EventCountryRelation[]
 
   // 🆕 정규화된 군사 사건 관계
-  countriesInSides     CountryInSide[]
-  fromCountryRelations EventCountryRelationNew[] @relation("FromCountry")
-  toCountryRelations   EventCountryRelationNew[] @relation("ToCountry")
   treatySignatories    TreatySignatory[]
   allianceMembers      AllianceMember[]
 

@@ -8,165 +8,26 @@
  *  - Event x2 (부모/자식)
  *  - EventSection (배경/전개/결과)
  *  - EventCountryRelation (참전국 — 매핑 가능한 역사 국가 우선, 오스트리아만 현대 country fallback)
- *  - BelligerentSide x2 (프로이센 측 / 오스트리아 측) + CountryInSide
+ *  - EventSide x2 (프로이센 측 / 오스트리아 측) + 참여국 진영 소속 + 병력·사상자 측정값(Observation) — data/event-sides.legacy-five-wars.ts
  *  - MilitaryDetailsNorm (전쟁/전투 상세)
- *  - CasualtiesData (양측 사상자)
  *
  * 매핑되지 않는 점:
  *  - 오스트리아 제국(1804–1867) historicalCountry는 아직 시드에 없어 현대 country '오스트리아'로 매핑.
  *    추후 오스트리아 historicalCountry 시드 추가 시 마이그레이션 권장.
  */
-import { EventCountryRole, SideLevel, ConflictType, CombatType, ParticipationType } from '@prisma/client'
+import { EventCountryRole, ConflictType, CombatType, ParticipationType } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
+import { applyEventSides } from './lib/event-sides'
 
 const EVENT_CATEGORY_NAME = '전쟁/군사'
 
-interface BelligerentInput {
-  /** 진영 식별용(코드) — 자식 사건과 연결할 때 부모 진영 참조 */
-  code: 'prussia' | 'austria'
-  name: string
-  level: SideLevel
-  commander: string
-  forces: string
-  description: string
-  color: string
-  /** 진영 내 참전국 — 매핑 가능한 곳만. countryName(현대) 또는 historicalCountryName(역사) 중 하나 */
-  countries: Array<{
-    historicalCountryName?: string
-    countryName?: string
-    role?: string
-    forces?: string
-    commander?: string
-    description?: string
-    participation?: ParticipationType
-  }>
-  /** 사상자 (집계) */
-  casualties: {
-    militaryKilled?: string
-    militaryWounded?: string
-    militaryMissing?: string
-    militaryCaptured?: string
-    total?: string
-  }
-}
-
-const PRUSSIA_SIDE: BelligerentInput = {
-  code: 'prussia',
-  name: '프로이센 측',
-  level: SideLevel.COALITION,
-  commander: '빌헬름 1세 (총사령관, 프로이센 국왕) / 헬무트 폰 몰트케 (참모총장)',
-  forces: '약 63만 7천명 (프로이센 43.7만 + 이탈리아 20만)',
-  description:
-    '프로이센 왕국이 주도한 진영. 비스마르크의 외교로 이탈리아 왕국과 1866년 4월 동맹을 맺어 남부 전선을 분산시켰고, 북독일 일부 소국이 가세하였다.',
-  color: '#1d4ed8',
-  countries: [
-    {
-      historicalCountryName: '프로이센 왕국',
-      role: '주도국',
-      forces: '약 43만 7천명',
-      commander: '빌헬름 1세 / 헬무트 폰 몰트케',
-      description:
-        '독일연방 내 패권을 차지하기 위해 1866년 6월 14일 가슈타인 협약 위반을 명분으로 동원령을 발효, 작센과 하노버를 즉시 점령하며 개전.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '이탈리아 왕국',
-      role: '동맹국 (남부 전선)',
-      forces: '약 20만명',
-      commander: '비토리오 에마누엘레 2세 / 알폰소 라 마르모라',
-      description:
-        '베네치아 회복을 목표로 6월 20일 오스트리아에 선전포고. 쿠스토자 전투(6/24)와 리사 해전(7/20)에서 잇따라 패했으나 종전 조약으로 베네치아를 획득.',
-      participation: ParticipationType.FULL,
-    },
-  ],
-  casualties: {
-    militaryKilled: '약 5,750명',
-    militaryWounded: '약 11,300명',
-    militaryMissing: '약 1,400명',
-    total: '약 18,500명',
-  },
-}
-
-const AUSTRIA_SIDE: BelligerentInput = {
-  code: 'austria',
-  name: '오스트리아 측',
-  level: SideLevel.COALITION,
-  commander: '프란츠 요제프 1세 (오스트리아 황제) / 루트비히 폰 베네데크 (북부군 사령관)',
-  forces: '약 60만명 (오스트리아 40.7만 + 독일연방 동맹국 약 15만 + 독일 동맹 부대 등)',
-  description:
-    '오스트리아 제국이 주도한 진영. 독일연방 내 보수 진영(바이에른·작센·하노버·뷔르템베르크·바덴·헤센·나사우 등)을 규합했으나 부대 통합이 부족해 분산 운용되었다.',
-  color: '#b91c1c',
-  countries: [
-    {
-      countryName: '오스트리아',
-      role: '주도국',
-      forces: '약 40만 7천명',
-      commander: '프란츠 요제프 1세 / 루트비히 폰 베네데크',
-      description:
-        '독일연방의 맹주를 자처하며 프로이센의 슐레스비히-홀슈타인 단독 처분에 반발, 6월 14일 연방의회에서 대(對)프로이센 동원안을 가결시키며 개전 책임을 졌다.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '바이에른 왕국',
-      role: '독일연방 동맹국',
-      forces: '약 5만 5천명',
-      commander: '카를 테오도어 폰 바이에른 공',
-      description:
-        '독일연방 군 산하 제7군단 편성. 프랑크푸르트 일대 방어를 맡았으나 통일된 작전을 펴지 못하고 후퇴했다.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '작센 왕국',
-      role: '독일연방 동맹국',
-      forces: '약 2만 4천명',
-      commander: '알베르트 작센 왕세자',
-      description:
-        '개전 직후 프로이센군에 점령되어 본토를 잃고 보헤미아로 후퇴, 오스트리아 북부군에 합류해 쾨니히그레츠에서 함께 싸웠다.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '하노버 왕국',
-      role: '독일연방 동맹국',
-      forces: '약 1만 9천명',
-      commander: '게오르크 5세',
-      description:
-        '랑엔잘차 전투(6/27)에서 일시 승리했으나 보급 단절로 항복, 종전 후 프로이센에 병합되며 왕국이 소멸했다.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '뷔르템베르크 왕국',
-      role: '독일연방 동맹국',
-      forces: '약 2만명',
-      commander: '아우구스트 폰 뷔르템베르크 공',
-      description:
-        '독일연방 제8군단 일부로 마인 전선에서 프로이센군과 교전. 종전 후 프로이센과 단독 평화조약을 체결했다.',
-      participation: ParticipationType.FULL,
-    },
-    {
-      historicalCountryName: '바덴 대공국',
-      role: '독일연방 동맹국',
-      forces: '약 1만명',
-      commander: '빌헬름 폰 바덴 대공자',
-      description:
-        '독일연방 제8군단에 편성되어 프랑크푸르트 방면에서 활동. 종전 후 친(親)프로이센 노선으로 전환했다.',
-      participation: ParticipationType.LIMITED,
-    },
-  ],
-  casualties: {
-    militaryKilled: '약 7,800명',
-    militaryWounded: '약 19,800명',
-    militaryMissing: '약 7,800명',
-    militaryCaptured: '약 73,000명',
-    total: '약 108,000명 (포로 포함, 보헤미아 전선 기준)',
-  },
-}
-
 const COUNTRY_RELATION_ROLE_MAP: Record<string, EventCountryRole> = {
   주도국: EventCountryRole.INITIATOR,
-  '동맹국 (남부 전선)': EventCountryRole.ALLY,
-  독일연방: EventCountryRole.ADVERSARY,
-  '독일연방 동맹국': EventCountryRole.ALLY,
+  '동맹국 (남부 전선)': EventCountryRole.PARTICIPANT,
+  독일연방: EventCountryRole.PARTICIPANT,
+  '독일연방 동맹국': EventCountryRole.PARTICIPANT,
 }
 
 export async function seedAustroPrussianWar(
@@ -366,20 +227,20 @@ export async function seedAustroPrussianWar(
     },
     {
       historicalCountryName: '이탈리아 왕국',
-      role: EventCountryRole.ALLY,
+      role: EventCountryRole.PARTICIPANT,
       roleDescription: '프로이센의 동맹국. 베네치아 회복을 목표로 남부 전선을 담당.',
     },
     {
       countryName: '오스트리아',
-      role: EventCountryRole.ADVERSARY,
+      role: EventCountryRole.PARTICIPANT,
       roleDescription:
         '주(主) 적국. 1804–1867 시기 오스트리아 제국이나 별도 historicalCountry가 시드에 없어 현대 오스트리아로 매핑.',
     },
-    { historicalCountryName: '바이에른 왕국', role: EventCountryRole.ADVERSARY, roleDescription: '오스트리아 측 독일연방 동맹국.' },
-    { historicalCountryName: '작센 왕국', role: EventCountryRole.ADVERSARY, roleDescription: '오스트리아 측 — 개전 즉시 프로이센군에 점령.' },
-    { historicalCountryName: '하노버 왕국', role: EventCountryRole.ADVERSARY, roleDescription: '오스트리아 측 — 종전 후 프로이센에 합병.' },
-    { historicalCountryName: '뷔르템베르크 왕국', role: EventCountryRole.ADVERSARY, roleDescription: '오스트리아 측 독일연방 동맹국.' },
-    { historicalCountryName: '바덴 대공국', role: EventCountryRole.ADVERSARY, roleDescription: '오스트리아 측 독일연방 동맹국.' },
+    { historicalCountryName: '바이에른 왕국', role: EventCountryRole.PARTICIPANT, roleDescription: '오스트리아 측 독일연방 동맹국.' },
+    { historicalCountryName: '작센 왕국', role: EventCountryRole.PARTICIPANT, roleDescription: '오스트리아 측 — 개전 즉시 프로이센군에 점령.' },
+    { historicalCountryName: '하노버 왕국', role: EventCountryRole.PARTICIPANT, roleDescription: '오스트리아 측 — 종전 후 프로이센에 합병.' },
+    { historicalCountryName: '뷔르템베르크 왕국', role: EventCountryRole.PARTICIPANT, roleDescription: '오스트리아 측 독일연방 동맹국.' },
+    { historicalCountryName: '바덴 대공국', role: EventCountryRole.PARTICIPANT, roleDescription: '오스트리아 측 독일연방 동맹국.' },
     { historicalCountryName: '독일 연방', role: EventCountryRole.OTHER, roleDescription: '본 전쟁의 결과로 해체된 정치 공동체.' },
   ]
 
@@ -414,7 +275,6 @@ export async function seedAustroPrussianWar(
         eventId: parentEvent.id,
         countryId: countryId ?? undefined,
         historicalCountryId: historicalCountryId ?? undefined,
-        role: rel.role,
       },
     })
     if (exists) {
@@ -433,105 +293,17 @@ export async function seedAustroPrussianWar(
     console.log(`    ✅ 국가관계: ${rel.historicalCountryName ?? rel.countryName} (${rel.role})`)
   }
 
-  // ── 5) BelligerentSide + CountryInSide + 사상자 ────────────────────────
-  for (const side of [PRUSSIA_SIDE, AUSTRIA_SIDE]) {
-    let belligerent = await prisma.belligerentSide.findFirst({
-      where: { eventId: parentEvent.id, name: side.name },
-    })
-
-    if (belligerent) {
-      console.log(`    ⏭️  진영 스킵: ${side.name}`)
-    } else {
-      belligerent = await prisma.belligerentSide.create({
-        data: {
-          eventId: parentEvent.id,
-          name: side.name,
-          level: side.level,
-          commander: side.commander,
-          forces: side.forces,
-          description: side.description,
-          color: side.color,
-        },
-      })
-      console.log(`    ✅ 진영 생성: ${side.name}`)
-    }
-
-    // 진영 내 참전국
-    for (const c of side.countries) {
-      let countryId: string | null = null
-      let historicalCountryId: string | null = null
-
-      if (c.historicalCountryName) {
-        const hc = await prisma.historicalCountry.findFirst({
-          where: { name: c.historicalCountryName },
-          select: { id: true },
-        })
-        if (!hc) {
-          console.warn(`      ⚠️  역사 국가 미존재: ${c.historicalCountryName}`)
-          continue
-        }
-        historicalCountryId = hc.id
-      } else if (c.countryName) {
-        const country = await prisma.country.findFirst({
-          where: { name: c.countryName },
-          select: { id: true },
-        })
-        if (!country) {
-          console.warn(`      ⚠️  현대 국가 미존재: ${c.countryName}`)
-          continue
-        }
-        countryId = country.id
-      }
-
-      const exists = await prisma.countryInSide.findFirst({
-        where: {
-          sideId: belligerent.id,
-          countryId: countryId ?? undefined,
-          historicalCountryId: historicalCountryId ?? undefined,
-        },
-      })
-      if (exists) {
-        console.log(`      ⏭️  진영국가 스킵: ${c.historicalCountryName ?? c.countryName}`)
-        continue
-      }
-      await prisma.countryInSide.create({
-        data: {
-          sideId: belligerent.id,
-          countryId,
-          historicalCountryId,
-          commander: c.commander ?? null,
-          forces: c.forces ?? null,
-          role: c.role ?? null,
-          description: c.description ?? null,
-          participation: c.participation ?? ParticipationType.FULL,
-          joinDate: new Date('1866-06-14'),
-        },
-      })
-      console.log(`      ✅ 진영국가: ${c.historicalCountryName ?? c.countryName}`)
-    }
-
-    // 사상자
-    const casualtiesExists = await prisma.casualtiesData.findFirst({
-      where: { eventId: parentEvent.id, sideId: belligerent.id },
-    })
-    if (!casualtiesExists) {
-      await prisma.casualtiesData.create({
-        data: {
-          eventId: parentEvent.id,
-          sideId: belligerent.id,
-          sideName: side.name,
-          militaryKilled: side.casualties.militaryKilled ?? null,
-          militaryWounded: side.casualties.militaryWounded ?? null,
-          militaryMissing: side.casualties.militaryMissing ?? null,
-          militaryCaptured: side.casualties.militaryCaptured ?? null,
-          total: side.casualties.total ?? null,
-        },
-      })
-      console.log(`    ✅ 사상자: ${side.name}`)
-    } else {
-      console.log(`    ⏭️  사상자 스킵: ${side.name}`)
-    }
-  }
+  // ── 5) 진영·소속·병력/사상자 측정값 (D1·D3) ──────────────────
+  // 정본은 seeds/data/event-sides.legacy-five-wars.ts — 진영 이관 스크립트와 같은 데이터
+  const sideResult = await applyEventSides(
+    prisma,
+    parentEvent.id,
+    LEGACY_FIVE_WAR_SIDES['보오전쟁'],
+    LEGACY_FIVE_WAR_SOURCE,
+  )
+  console.log(
+    `    ✅ 진영 ${sideResult.sides} · 소속 ${sideResult.members} · 측정값 ${sideResult.observations}`,
+  )
 
   // ── 6) MilitaryDetailsNorm ─────────────────────────────────────────────
   const milExists = await prisma.militaryDetailsNorm.findUnique({

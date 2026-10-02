@@ -49,7 +49,7 @@ export class SubjectAccessService {
         return row?.eventId ?? null
       }
       case ObservationSubjectType.EVENT_SIDE: {
-        const row = await this.prisma.belligerentSide.findUnique({
+        const row = await this.prisma.eventSide.findUnique({
           where: { id: subjectId },
           select: { eventId: true },
         })

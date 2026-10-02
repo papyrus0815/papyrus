@@ -41,6 +41,8 @@ export interface RelatedPersonInput {
   note?: string
   countryId?: string | null
   historicalCountryId?: string | null
+  /** 진영(D1) — 생략=유지 / null=해제 */
+  sideId?: string | null
 }
 
 export interface CreateEventOptions {
@@ -637,6 +639,16 @@ export class EventService {
         }
       }
       await this.prisma.$transaction(async (tx) => {
+        /* 진영은 같은 사건의 것이어야 한다 */
+        const sideIds = [
+          ...new Set([...wanted.values()].map((person) => person.sideId).filter((sideId): sideId is string => !!sideId)),
+        ]
+        if (sideIds.length > 0) {
+          const found = await tx.eventSide.count({ where: { id: { in: sideIds }, eventId: id } })
+          if (found !== sideIds.length) {
+            throw new BadRequestException('이 사건의 진영이 아닌 sideId가 들어 있습니다.')
+          }
+        }
         await tx.personEvent.deleteMany({
           where: { eventId: id, personId: { notIn: [...wanted.keys()] } },
         })
@@ -673,6 +685,7 @@ export class EventService {
               sortOrder: index,
               countryId: countryId ?? null,
               historicalCountryId: historicalCountryId ?? null,
+              sideId: person.sideId ?? null,
             },
             update: {
               role: person.role ?? null,
@@ -681,6 +694,7 @@ export class EventService {
               sortOrder: index,
               ...(countryId !== undefined && { countryId }),
               ...(historicalCountryId !== undefined && { historicalCountryId }),
+              ...(person.sideId !== undefined && { sideId: person.sideId }),
             },
           })
           index += 1

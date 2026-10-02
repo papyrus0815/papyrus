@@ -60,6 +60,17 @@ const METRICS: MetricSeed[] = [
     definition: '복무 중 모든 사망 — 전투·전상·질병·사고 포함.',
   },
   {
+    key: 'military.deaths_unspecified',
+    name: '군 사망(정의 미상)',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: SUM,
+    unit: 'person',
+    definition:
+      '원자료가 전사·전상사·질병 사망을 구분하지 않은 군 사망. 정의가 확인되면 해당 지표로 옮긴다 — ' +
+      '정의가 다른 숫자를 같은 지표로 비교하지 않기 위한 칸이다.',
+  },
+  {
     key: 'military.wounded',
     name: '군 부상자',
     domain: 'military',

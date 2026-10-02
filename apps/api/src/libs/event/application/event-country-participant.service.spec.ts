@@ -46,6 +46,13 @@ describe('EventCountryParticipantService', () => {
           return Promise.resolve(row)
         }),
       },
+      /* 진영 검증·측정값 정리 — 이 스펙의 관심 밖이라 빈 결과 */
+      eventSide: { count: jest.fn(() => Promise.resolve(0)) },
+      observation: {
+        findMany: jest.fn((): Promise<Array<{ id: string }>> => Promise.resolve([])),
+        deleteMany: jest.fn(() => Promise.resolve({ count: 0 })),
+      },
+      citation: { deleteMany: jest.fn(() => Promise.resolve({ count: 0 })) },
     }
     return { tx, state }
   }
@@ -190,5 +197,54 @@ describe('EventCountryParticipantService', () => {
         expect.objectContaining({ historicalCountryId: 'same-uuid', sortOrder: 1 }),
       ],
     })
+  })
+
+  test('진영(sideId)을 생략하면 기존 소속이 유지되고, 주면 그 값만 바뀐다', async () => {
+    const withSide = curated.map((row) => ({ ...row, sideId: row.id === 'r1' ? 'side-a' : null }))
+    const { tx, state } = buildTx(withSide as Row[])
+    tx.eventSide.count.mockImplementation(() => Promise.resolve(1))
+
+    await service.sync(tx as never, 'E1', [
+      { historicalCountryId: 'h-france' },
+      { historicalCountryId: 'h-spain', sideId: 'side-b' },
+    ])
+
+    expect(state.find((row) => row.id === 'r1')).toMatchObject({ sideId: 'side-a' })
+    expect(state.find((row) => row.id === 'r2')).toMatchObject({ sideId: 'side-b' })
+  })
+
+  test('다른 사건의 진영 id로는 소속을 걸 수 없다', async () => {
+    const { tx } = buildTx(curated)
+    tx.eventSide.count.mockImplementation(() => Promise.resolve(0))
+
+    await expect(
+      service.sync(tx as never, 'E1', [{ historicalCountryId: 'h-france', sideId: 'foreign-side' }]),
+    ).rejects.toThrow(BadRequestException)
+  })
+
+  test('참여국 줄을 지우면 그 줄의 측정값도 함께 지운다(다형 대상이라 FK CASCADE가 없다)', async () => {
+    const { tx } = buildTx(curated)
+    tx.observation.findMany.mockImplementation(() => Promise.resolve([{ id: 'obs-1' }]))
+
+    await service.sync(tx as never, 'E1', [{ historicalCountryId: 'h-france' }])
+
+    expect(tx.observation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { subjectType: 'EVENT_PARTICIPANT', subjectId: { in: ['r2'] } } }),
+    )
+    expect(tx.observation.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['obs-1'] } } })
+    expect(tx.eventCountryRelation.deleteMany).toHaveBeenCalled()
+  })
+
+  test('가담이 이탈보다 늦으면 400', async () => {
+    const { tx } = buildTx(curated)
+    await expect(
+      service.sync(tx as never, 'E1', [
+        {
+          historicalCountryId: 'h-france',
+          join: { era: 'AD', year: 1855 },
+          withdraw: { era: 'AD', year: 1854 },
+        },
+      ]),
+    ).rejects.toThrow(BadRequestException)
   })
 })

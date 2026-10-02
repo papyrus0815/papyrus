@@ -12,7 +12,7 @@
  *  - Event x5 (부모 + 자식 4)
  *  - EventSection x3 (배경/경과/전후)
  *  - EventCountryRelation x5 (러시아 INITIATOR / 오스만·프랑스·영국 ADVERSARY / 사르데냐 ALLY)
- *  - BelligerentSide x2 (동맹국 측 COALITION / 러시아 측 COUNTRY) + CountryInSide + CasualtiesData
+ *  - EventSide x2 (동맹국 측 COALITION / 러시아 측 COUNTRY) + 참여국 진영 소속 + 병력·사상자 측정값(Observation) — data/event-sides.legacy-five-wars.ts
  *  - MilitaryDetailsNorm (CombatType LAND + NAVAL)
  *  - PersonEvent (나폴레옹 3세·비토리오 에마누엘레 2세·카보우르·파머스턴·니콜라이 1세·알렉산드르 2세 — 존재 시)
  *
@@ -23,128 +23,13 @@ import {
   CombatType,
   ConflictType,
   EventCountryRole,
-  ParticipationType,
-  SideLevel,
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
+import { applyEventSides } from './lib/event-sides'
 
 const EVENT_CATEGORY_NAME = '전쟁/군사'
-
-// ── 진영 명세 ────────────────────────────────────────────────────────────────
-interface BelligerentInput {
-  name: string
-  level: SideLevel
-  commander: string
-  forces: string
-  description: string
-  color: string
-  countries: Array<{
-    historicalCountryName: string
-    role?: string
-    forces?: string
-    commander?: string
-    description?: string
-    participation?: ParticipationType
-    joinDate?: Date
-  }>
-  casualties: {
-    militaryKilled?: string
-    militaryWounded?: string
-    militaryMissing?: string
-    militaryCaptured?: string
-    total?: string
-  }
-}
-
-const ALLIES_SIDE: BelligerentInput = {
-  name: '동맹국 측 (오스만·프랑스·영국·사르데냐)',
-  level: SideLevel.COALITION,
-  commander:
-    '프랑스: 생타르노 → 캉로베르 → 펠리시에 원수 / 영국: 라글란 경 → 심프슨 / 오스만: 오메르 파샤 / 사르데냐: 알폰소 페레로 라 마르모라',
-  forces:
-    '누계 약 100만명 — 프랑스 약 40만(최대 파병국), 오스만 약 30만, 영국 약 25만, 사르데냐 약 1만 5천. 흑해 연합 함대(증기 군함 포함).',
-  description:
-    '러시아의 남하·흑해 패권 시도를 저지하려는 반(反)러시아 연합. 오스만 제국이 1853-10 단독 개전했고, ' +
-    '시노프 참사 후 1854-03 프랑스 제2제국과 영국이 참전, 1855-01 사르데냐 왕국이 외교적 목적으로 가세했다. ' +
-    '연합군은 크림 반도에 상륙해 세바스토폴 요새 함락을 목표로 삼았다.',
-  color: '#1d4ed8',
-  countries: [
-    {
-      historicalCountryName: '오스만 제국',
-      role: '개전 당사국',
-      forces: '약 30만명',
-      commander: '오메르 파샤(Omer Pasha)',
-      description:
-        '러시아의 다뉴브 공국 점령과 정교도 보호권 요구에 맞서 1853-10-04(율리우스력) 러시아에 선전포고하며 개전한 당사국. 다뉴브 전선과 캅카스(카르스)에서 분전했다.',
-      participation: ParticipationType.FULL,
-      joinDate: new Date('1853-10-16'),
-    },
-    {
-      historicalCountryName: '프랑스 제2제국',
-      role: '주력 파병국',
-      forces: '약 40만명 (최대 파병)',
-      commander: '생타르노 → 캉로베르 → 펠리시에 원수 (황제 나폴레옹 3세)',
-      description:
-        '나폴레옹 3세가 가톨릭 성지 관할권 분쟁과 대(對)러시아 견제를 명분으로 참전한 최대 파병국. 세바스토폴 공방전에서 말라코프 보루를 함락시켜 종전을 이끌었다.',
-      participation: ParticipationType.FULL,
-      joinDate: new Date('1854-03-27'),
-    },
-    {
-      historicalCountryName: '그레이트브리튼 및 아일랜드 연합왕국',
-      role: '주력 파병국',
-      forces: '약 25만명 (누계)',
-      commander: '라글란 경(Lord Raglan) → 제임스 심프슨',
-      description:
-        '러시아의 지중해·인도 방면 남하를 차단하려 참전. 발라클라바·인케르만에서 분전했으나 보급·의료 체계의 난맥이 드러나 플로렌스 나이팅게일의 간호 개혁을 촉발했다.',
-      participation: ParticipationType.FULL,
-      joinDate: new Date('1854-03-28'),
-    },
-    {
-      historicalCountryName: '사르데냐 왕국',
-      role: '후발 동맹국',
-      forces: '약 1만 5천명',
-      commander: '알폰소 페레로 라 마르모라(Alfonso La Marmora)',
-      description:
-        '카보우르 총리의 결정으로 1855-01 참전. 직접적 국익보다 파리 강화회의 참석권을 얻어 "이탈리아 문제"를 열강 외교 무대에 올리려는 포석이었다. 체르나야 전투(1855-08)에 참가.',
-      participation: ParticipationType.LIMITED,
-      joinDate: new Date('1855-01-26'),
-    },
-  ],
-  casualties: {
-    militaryKilled: '약 7만 (전사·전상사)',
-    total:
-      '총사망 약 30만+ (대부분 콜레라·티푸스 등 질병) — 프랑스 10만·오스만 15만+·영국 2만+·사르데냐 2천',
-  },
-}
-
-const RUSSIA_SIDE: BelligerentInput = {
-  name: '러시아 제국 측',
-  level: SideLevel.COUNTRY,
-  commander:
-    '알렉산드르 멘시코프 공 / 미하일 고르차코프 / 파벨 나히모프 제독(세바스토폴 방어, 전사) / 에두아르트 토틀레벤(축성)',
-  forces: '동원 약 70만~90만명. 흑해 함대(범선 위주) + 세바스토폴 요새 수비대.',
-  description:
-    '니콜라이 1세 치하에서 오스만에 대한 압박과 흑해·발칸 남하 정책을 추진하다 개전. 1855-03 니콜라이 1세 사망 후 ' +
-    '알렉산드르 2세가 전쟁을 수습했다. 세바스토폴을 약 11개월간 방어했으나 함락되어 강화에 응했다.',
-  color: '#b91c1c',
-  countries: [
-    {
-      historicalCountryName: '러시아 제국',
-      role: '주(主) 교전국',
-      forces: '동원 약 70만~90만명',
-      commander: '멘시코프 공 / 고르차코프 / 나히모프 제독 / 토틀레벤',
-      description:
-        '다뉴브 공국 점령(1853)과 시노프 해전 승리로 전쟁을 촉발. 그러나 연합 함대·증기 군함·라이플 머스킷의 기술 격차와 보급난으로 세바스토폴을 잃고 패전, 흑해 중립화를 받아들였다.',
-      participation: ParticipationType.FULL,
-      joinDate: new Date('1853-10-16'),
-    },
-  ],
-  casualties: {
-    militaryKilled: '약 14만 (전사·전상사, 질병 사망 별도)',
-    total: '총사망 약 45만 (질병 포함 추정) — 전쟁 전체 최대 손실국',
-  },
-}
 
 // ── 자식 사건 ────────────────────────────────────────────────────────────────
 interface ChildEventInput {
@@ -446,22 +331,22 @@ export async function seedCrimeanWar(prisma: PrismaService): Promise<void> {
     },
     {
       name: '오스만 제국',
-      role: EventCountryRole.ADVERSARY,
+      role: EventCountryRole.PARTICIPANT,
       desc: '러시아 압박의 직접 대상이자 1853-10 단독 개전한 당사국.',
     },
     {
       name: '프랑스 제2제국',
-      role: EventCountryRole.ADVERSARY,
+      role: EventCountryRole.PARTICIPANT,
       desc: '최대 파병국. 세바스토폴 말라코프 보루를 함락시켜 종전을 견인.',
     },
     {
       name: '그레이트브리튼 및 아일랜드 연합왕국',
-      role: EventCountryRole.ADVERSARY,
+      role: EventCountryRole.PARTICIPANT,
       desc: '러시아의 남하 차단을 위해 참전한 주력국.',
     },
     {
       name: '사르데냐 왕국',
-      role: EventCountryRole.ALLY,
+      role: EventCountryRole.PARTICIPANT,
       desc: '1855 가세한 후발 동맹국. 통일 외교의 포석으로 파병.',
     },
   ]
@@ -472,7 +357,7 @@ export async function seedCrimeanWar(prisma: PrismaService): Promise<void> {
       continue
     }
     const exists = await prisma.eventCountryRelation.findFirst({
-      where: { eventId: parentEvent.id, historicalCountryId: id, role: r.role },
+      where: { eventId: parentEvent.id, historicalCountryId: id },
     })
     if (exists) {
       console.log(`    ⏭️  국가관계 스킵: ${r.name}`)
@@ -489,77 +374,17 @@ export async function seedCrimeanWar(prisma: PrismaService): Promise<void> {
     console.log(`    ✅ 국가관계: ${r.name} (${r.role})`)
   }
 
-  // ── 5) BelligerentSide + CountryInSide + 사상자 ────────────────────────────
-  for (const side of [ALLIES_SIDE, RUSSIA_SIDE]) {
-    let belligerent = await prisma.belligerentSide.findFirst({
-      where: { eventId: parentEvent.id, name: side.name },
-    })
-    if (belligerent) {
-      console.log(`    ⏭️  진영 스킵: ${side.name}`)
-    } else {
-      belligerent = await prisma.belligerentSide.create({
-        data: {
-          eventId: parentEvent.id,
-          name: side.name,
-          level: side.level,
-          commander: side.commander,
-          forces: side.forces,
-          description: side.description,
-          color: side.color,
-        },
-      })
-      console.log(`    ✅ 진영 생성: ${side.name}`)
-    }
-
-    for (const c of side.countries) {
-      const id = await hcId(prisma, c.historicalCountryName)
-      if (!id) {
-        console.warn(`      ⚠️  역사 국가 미존재: ${c.historicalCountryName}`)
-        continue
-      }
-      const exists = await prisma.countryInSide.findFirst({
-        where: { sideId: belligerent.id, historicalCountryId: id },
-      })
-      if (exists) {
-        console.log(`      ⏭️  진영국가 스킵: ${c.historicalCountryName}`)
-        continue
-      }
-      await prisma.countryInSide.create({
-        data: {
-          sideId: belligerent.id,
-          historicalCountryId: id,
-          commander: c.commander ?? null,
-          forces: c.forces ?? null,
-          role: c.role ?? null,
-          description: c.description ?? null,
-          participation: c.participation ?? ParticipationType.FULL,
-          joinDate: c.joinDate ?? new Date('1853-10-16'),
-        },
-      })
-      console.log(`      ✅ 진영국가: ${c.historicalCountryName}`)
-    }
-
-    const casualtiesExists = await prisma.casualtiesData.findFirst({
-      where: { eventId: parentEvent.id, sideId: belligerent.id },
-    })
-    if (!casualtiesExists) {
-      await prisma.casualtiesData.create({
-        data: {
-          eventId: parentEvent.id,
-          sideId: belligerent.id,
-          sideName: side.name,
-          militaryKilled: side.casualties.militaryKilled ?? null,
-          militaryWounded: side.casualties.militaryWounded ?? null,
-          militaryMissing: side.casualties.militaryMissing ?? null,
-          militaryCaptured: side.casualties.militaryCaptured ?? null,
-          total: side.casualties.total ?? null,
-        },
-      })
-      console.log(`    ✅ 사상자: ${side.name}`)
-    } else {
-      console.log(`    ⏭️  사상자 스킵: ${side.name}`)
-    }
-  }
+  // ── 5) 진영·소속·병력/사상자 측정값 (D1·D3) ──────────────────
+  // 정본은 seeds/data/event-sides.legacy-five-wars.ts — 진영 이관 스크립트와 같은 데이터
+  const sideResult = await applyEventSides(
+    prisma,
+    parentEvent.id,
+    LEGACY_FIVE_WAR_SIDES['크림 전쟁'],
+    LEGACY_FIVE_WAR_SOURCE,
+  )
+  console.log(
+    `    ✅ 진영 ${sideResult.sides} · 소속 ${sideResult.members} · 측정값 ${sideResult.observations}`,
+  )
 
   // ── 6) MilitaryDetailsNorm ─────────────────────────────────────────────────
   const milExists = await prisma.militaryDetailsNorm.findUnique({

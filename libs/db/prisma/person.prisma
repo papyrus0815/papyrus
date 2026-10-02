@@ -354,8 +354,6 @@ model Person {
   centeredGroups           PersonGroup[]              @relation("PersonGroupCenter")
 
   // 🆕 정규화된 군사 사건 관계
-  commandedBelligerentSides BelligerentSide[]
-  commandedCountriesInSides CountryInSide[]
 
   //--- 등록 계정 (개인 정보 플랫폼: 본인만 수정/삭제)
   accountId String? @map("account_id") @db.Char(36)

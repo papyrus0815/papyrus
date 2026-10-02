@@ -1,3 +1,5 @@
+import type { EventSideView } from '../../application/event-side.service'
+import type { StructuredPoint as StructuredPointView } from '../../../shared/structured-point'
 import { ApiProperty } from '@nestjs/swagger'
 
 export class EventResponseDto {
@@ -263,6 +265,15 @@ export class EventResponseDto {
     note?: string | null
     /** 표시 순서 */
     sortOrder?: number
+    /** 참여국 줄 id — 측정값(EVENT_PARTICIPANT)·진영 소속 편집의 대상 */
+    participantId?: string | null
+    /** 진영(D1) */
+    sideId?: string | null
+    participation?: string | null
+    join?: StructuredPointView | null
+    joinReason?: string | null
+    withdraw?: StructuredPointView | null
+    withdrawReason?: string | null
   }>
 
   @ApiProperty({
@@ -290,6 +301,15 @@ export class EventResponseDto {
     sortOrder?: number
     /** 존속 기간 밖 사건이면 안내 문구(표시만, 건국·멸망 역할 제외) — 상세 응답에서만 */
     existenceWarning?: string | null
+    /** 참여국 줄 id — 측정값(EVENT_PARTICIPANT)·진영 소속 편집의 대상 */
+    participantId?: string | null
+    /** 진영(D1) */
+    sideId?: string | null
+    participation?: string | null
+    join?: StructuredPointView | null
+    joinReason?: string | null
+    withdraw?: StructuredPointView | null
+    withdrawReason?: string | null
   }>
 
   @ApiProperty({
@@ -329,6 +349,8 @@ export class EventResponseDto {
     countryId?: string | null
     /** 참여 자격 역사국 ID */
     historicalCountryId?: string | null
+    /** 진영(D1) */
+    sideId?: string | null
     /** 참여 자격 국가 표시명(역사국 우선) */
     participationCountryName?: string | null
     /** 사건 당시 직위(재임·재위에서 파생, 최대 2개) — 상세 응답에서만 */
@@ -435,6 +457,9 @@ export class EventResponseDto {
 
   @ApiProperty({ description: '수정일시', required: false })
   updatedAt?: string
+
+  @ApiProperty({ description: '진영(D1) — 소속 참여자 포함. 상세 응답에서만', required: false })
+  sides?: EventSideView[]
 }
 
 /**
