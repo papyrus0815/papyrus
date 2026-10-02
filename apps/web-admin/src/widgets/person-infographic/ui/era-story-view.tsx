@@ -47,6 +47,13 @@ interface Group {
 }
 
 /** 세기 연속 인덱스 — 기원전 1세기(-1)와 1세기(1)는 인접(0, 1). */
+/** 레일 구슬 표지 — '20세기'→'20', '기원전 5세기'→'BC5', 연도 미상→'?' */
+const centuryMarker = (meta: CenturyMeta) => {
+  if (meta.key === 'unknown') return '?'
+  const ordinal = Math.abs(meta.sortKey)
+  return meta.sortKey < 0 ? `BC${ordinal}` : `${ordinal}`
+}
+
 const centuryIndex = (meta: CenturyMeta) =>
   meta.sortKey < 0 ? meta.sortKey + 1 : meta.sortKey
 
@@ -109,6 +116,12 @@ export function EraStoryView({
       })),
     [groups, sortFn],
   )
+
+  /**
+   * 레일 도트 무게 — 가장 큰 세기 대비 √비율. 도트 지름(8~16px)만으로 레일 위에서
+   * '사람이 몰린 세기'가 읽힌다. 지름이라 제곱근으로 눌러 둔다(2명 세기도 점으로 남게).
+   */
+  const largestGroup = Math.max(1, ...sortedGroups.map(({ arr }) => arr.length))
 
   /** 세기 바로가기 — 접혀 있으면 펼치고 그 세기 머리로 스크롤 */
   const jumpTo = (key: string) => {
@@ -179,6 +192,8 @@ export function EraStoryView({
                   : `${formatYear(meta.from)}–${formatYear(meta.to)}`
               }
               count={arr.length}
+              weight={Math.sqrt(arr.length / largestGroup)}
+              marker={centuryMarker(meta)}
               tone={isUnknown ? 'muted' : 'primary'}
               collapsed={!!collapsed[meta.key]}
               onToggle={() =>

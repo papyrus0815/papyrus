@@ -64,6 +64,18 @@ function PersonCardItemBase({
   const born = person.born == null ? '?' : formatYear(person.born)
   const died = person.isAlive ? '현재' : person.died == null ? '?' : formatYear(person.died)
   const hasCountry = !!person.country && person.country !== '미상'
+  /**
+   * 영향력 0 = 아직 평가하지 않음(실데이터 470명 중 139명, 30%). 예전엔 빈 링 + '0'으로 그려
+   * '영향력 없음'으로 읽혔다 — 고대 군주들이 줄줄이 0이었다. 값이 아니라 상태로 보인다.
+   */
+  const influenceRated = person.influence > 0
+  /**
+   * 둘째 줄 — 직함이 없으면 가문(소속)을 올린다. 직함 없는 카드는 이름과 생몰 사이가 한 줄
+   * 비어 '정보가 빠진 카드'처럼 보였고, 가문은 정작 맨 아랫줄 꼬리에서 말줄임으로 잘리고 있었다
+   * ('정치 · 프랑크 왕국 · 카롤…'). 올린 가문은 아랫줄에서 뺀다.
+   */
+  const subtitle = person.primaryTitle ?? (person.faction || null)
+  const factionInSubtitle = !person.primaryTitle && !!person.faction
 
   // 카드 핵심 정보를 스크린리더 이름에 포함 (배지·생몰·영향력이 시각에만 의존하던 문제 보강)
   const ariaLabel = [
@@ -72,7 +84,7 @@ function PersonCardItemBase({
     hasCountry ? person.country : null,
     person.field,
     `생몰 ${born === '?' ? '미상' : born}–${died === '?' ? '미상' : died}`,
-    `영향력 ${person.influence}`,
+    influenceRated ? `영향력 ${person.influence}` : '영향력 미평가',
     '상세 보기',
   ]
     .filter(Boolean)
@@ -124,9 +136,9 @@ function PersonCardItemBase({
 
       <Body>
         <Name title={person.name}>{highlight(person.name, query)}</Name>
-        {person.primaryTitle && (
-          <Title title={person.primaryTitle}>
-            {highlight(person.primaryTitle, query)}
+        {subtitle && (
+          <Title title={subtitle} $muted={factionInSubtitle}>
+            {highlight(subtitle, query)}
           </Title>
         )}
         {/* 직함 유무와 무관하게 메타 두 줄은 카드 바닥에 — 같은 줄 카드끼리 생몰·영향력이 나란히 */}
@@ -152,17 +164,24 @@ function PersonCardItemBase({
               </>
             )}
             {hasCountry ? highlight(person.country, query) : '국가 미상'}
-            {person.faction && (
+            {person.faction && !factionInSubtitle && (
               <PlaceSub>
                 {' · '}
                 {highlight(person.faction, query)}
               </PlaceSub>
             )}
           </Place>
-          <Influence title={`영향력 ${person.influence}`}>
-            <Ring style={{ ['--value' as string]: `${person.influence}` }} aria-hidden />
-            {person.influence}
-          </Influence>
+          {influenceRated ? (
+            <Influence title={`영향력 ${person.influence}`}>
+              <Ring
+                style={{ ['--value' as string]: `${person.influence}` }}
+                aria-hidden
+              />
+              {person.influence}
+            </Influence>
+          ) : (
+            <Unrated title="영향력 미평가">미평가</Unrated>
+          )}
         </Row>
       </Body>
     </Card>
@@ -274,13 +293,17 @@ const Empty = styled.div`
   align-items: flex-end;
   justify-content: center;
   /* 사진 없음은 데이터 상태 — 사진보다 한 단계 물러선 옅은 중립(예전 짙은 판은 격자를 검게 덮었다) */
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#2f3238' : '#dfe3e8')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#2a2d33' : '#e3e6eb')};
   background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1b1f' : '#f4f5f7')};
   ${zoomOnHover}
 
+  /*
+   * 실루엣은 판의 38%로 — 48%일 땐 사진 없는 카드(470명 중 250명, 53%)마다 큰 회색 사람이
+   * 서서, 격자의 시선이 '있는 사진'이 아니라 '없는 사진'으로 갔다. 자리만 말하고 물러선다.
+   */
   svg {
     display: block;
-    width: 48%;
+    width: 38%;
     height: auto;
   }
 `
@@ -365,11 +388,13 @@ const Name = styled.div`
   text-overflow: ellipsis;
 `
 
-const Title = styled.div`
+/* $muted — 직함 대신 올린 가문. 직함보다 한 단 흐리게(직함인 척하지 않게) */
+const Title = styled.div<{ $muted?: boolean }>`
   font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme, $muted }) =>
+    $muted ? metaText({ theme }) : theme.colors.text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -469,6 +494,14 @@ const Influence = styled.span`
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/* 미평가 — 수치 자리에 작은 글자. 링을 비워 두면 '0점'으로 읽힌다 */
+const Unrated = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: ${metaText};
 `
 
 /** 영향력 링 — conic-gradient 한 요소로 0~100을 호로 그린다 */

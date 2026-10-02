@@ -136,6 +136,9 @@ export function DynastyView({
     )
   }
 
+  /* 레일 도트 무게 — 가장 큰 가문 대비 √비율(면적이 아니라 지름이라 제곱근으로 눌러 둔다) */
+  const largestFaction = Math.max(1, ...sortedFactions.map(({ arr }) => arr.length))
+
   return (
     <GroupPanel>
       <PinnedPeopleSection
@@ -151,6 +154,7 @@ export function DynastyView({
           label={faction}
           range={`${countryName ? `${countryName} · ` : ''}${formatYear(minYr)}–${formatYear(maxYr)}`}
           count={arr.length}
+          weight={Math.sqrt(arr.length / largestFaction)}
           collapsed={!!collapsed[faction]}
           onToggle={() => toggleCollapsed(faction)}
         >

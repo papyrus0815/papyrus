@@ -55,7 +55,7 @@ import { usePersonQueryInput } from '../model/use-person-query-input'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
 import { DynastyView } from './dynasty-view'
-import { CardGridSkeleton } from './_shared/card-grid-skeleton'
+import { PersonViewSkeleton } from './_shared/view-skeleton'
 import {
   BRAND,
   Actions,
@@ -418,6 +418,12 @@ export function InfographicContent({
           </ViewControls>
 
           <Actions>
+            {/* 로딩 중에도 자리를 지킨다 — 숫자가 늦게 들어오며 검색창이 40px 줄어드는 튐을 막는다 */}
+            {isLoading && (
+              <ViewMeta aria-hidden>
+                <CountPlaceholder />
+              </ViewMeta>
+            )}
             {!isLoading && !isError && (
               <ViewMeta aria-hidden>
                 {/* 한 span에 — ViewMeta가 flex gap이라 숫자와 '명'이 벌어졌다 */}
@@ -509,7 +515,7 @@ export function InfographicContent({
 
           {!isError && isLoading && (
             <ViewArea>
-              <CardGridSkeleton />
+              <PersonViewSkeleton view={activeView} />
             </ViewArea>
           )}
 
@@ -597,6 +603,16 @@ const Wrap = styled.div`
   @media (max-width: 768px) {
     padding: 0 0 40px;
   }
+`
+
+/* '469명' 자리 — 같은 폭의 옅은 막대(숫자 3자리 + '명') */
+const CountPlaceholder = styled.span`
+  display: inline-block;
+  width: 34px;
+  height: 11px;
+  border-radius: 4px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.07)'};
 `
 
 const ViewArea = styled.div`
