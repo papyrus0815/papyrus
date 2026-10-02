@@ -379,7 +379,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         <S.FormField>
           <S.DateRangeRow>
             <S.DateRangeColumn>
-              <S.DateRangeLabel>시작일</S.DateRangeLabel>
+              <S.DateRangeLabel>시작</S.DateRangeLabel>
               <S.DateInputWrapper
                 ref={startDateTriggerRef}
                 aria-haspopup="dialog"
@@ -418,7 +418,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.DateRangeColumn>
 
             <S.DateRangeColumn>
-              <S.DateRangeLabel>종료일</S.DateRangeLabel>
+              <S.DateRangeLabel>종료</S.DateRangeLabel>
               <S.DateInputWrapper
                 ref={endDateTriggerRef}
                 aria-haspopup="dialog"
@@ -463,7 +463,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           )}
           <S.Hint>
             {allowPartialDate
-              ? '연도만 알면 달력에서 월·일 칸을 비우세요. 진행 중이면 종료일은 비워 둡니다.'
+              ? '연도만·연월만 알아도 됩니다 — 달력 위에서 \u2018연도만\u2019·\u2018연·월\u2019을 고르세요. 진행 중이면 종료는 비워 둡니다.'
               : '사건의 시작과 종료 날짜/시간을 설정하세요 (진행중이면 종료일 비워두기)'}
           </S.Hint>
         </S.FormField>

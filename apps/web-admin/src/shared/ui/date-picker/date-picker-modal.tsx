@@ -55,6 +55,20 @@ const VIEWPORT_MARGIN = 8
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
 
+/**
+ * 정밀도 전환 탭 — allowPartial일 때만 보인다.
+ * 예전엔 '모르는 칸을 손으로 비우고 선택 적용'이 유일한 길이라, 오늘 날짜로 채워진 연·월·일
+ * 칸과 큰 일(日) 달력만 보고 **연월일을 다 써야 하는 것처럼** 읽혔다. 선택지를 화면에 올린다.
+ */
+const PRECISION_TABS: { value: DatePickerPrecision; label: string }[] = [
+  { value: 'year', label: '연도만' },
+  { value: 'month', label: '연·월' },
+  { value: 'day', label: '연·월·일' },
+]
+
+/** 연도 격자 한 쪽 = 한 십년(5열×2행) — 2017–2028처럼 십년을 가르는 쪽은 역사 연도로 읽기 어렵다 */
+const YEARS_PER_PAGE = 10
+
 /** 일요일=0, 토요일=6 컬럼 구분 — 한국 달력 관습(일 빨강·토 파랑). */
 function weekendKind(weekday: number): 'sun' | 'sat' | undefined {
   if (weekday === 0) return 'sun'
@@ -126,6 +140,8 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const [yearInputValue, setYearInputValue] = useState('2024')
   const [monthInputValue, setMonthInputValue] = useState('1')
   const [dayInputValue, setDayInputValue] = useState('1')
+  /** 지금 무엇을 고르는 중인가 — allowPartial이 아니면 항상 'day' */
+  const [mode, setMode] = useState<DatePickerPrecision>('day')
   /** 키보드 로빙 포커스 대상 일(day). */
   const [focusedDay, setFocusedDay] = useState(1)
   /** '선택 적용' 시 범위 밖 입력에 대한 필드별 안내. */
@@ -177,7 +193,9 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       setYearInputValue(absYear.toString())
       setIsBCE(year < 0)
       setViewMonth(date.getMonth())
-      const precision = allowPartial && initialDateParsed ? initialPrecision : 'day'
+      const precision: DatePickerPrecision =
+        allowPartial && initialDateParsed ? (initialPrecision ?? 'day') : 'day'
+      setMode(precision)
       setMonthInputValue(precision === 'year' ? '' : String(date.getMonth() + 1))
       setDayInputValue(
         precision === 'year' || precision === 'month' ? '' : String(date.getDate()),
@@ -378,8 +396,10 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       return
     }
     // 비운 칸 = 모름. 모르는 월·일은 1로 채워 날짜 모양을 유지하고 정밀도로 알린다.
-    const monthBlank = allowPartial && monthInputValue === ''
-    const dayBlank = allowPartial && (monthBlank || dayInputValue === '')
+    // 탭으로 고른 정밀도가 우선, 연·월·일 탭에서 칸을 손으로 비운 경우도 예전처럼 받는다
+    const monthBlank = allowPartial && (mode === 'year' || monthInputValue === '')
+    const dayBlank =
+      allowPartial && (monthBlank || mode === 'month' || dayInputValue === '')
     if (monthBlank || dayBlank) {
       if (!monthBlank && (isNaN(month) || month < 1 || month > 12)) {
         setInputError({ field: 'month', message: '월은 1~12 사이여야 합니다.' })
@@ -412,6 +432,60 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     onSelect(formatted, 'day')
     onClose()
   }
+
+  /** 탭 전환 — 모르는 칸은 비우고, 다시 아는 쪽으로 오면 보고 있던 달·날로 채운다 */
+  const changeMode = (next: DatePickerPrecision) => {
+    playClickSound()
+    setInputError(null)
+    setMode(next)
+    if (next === 'year') {
+      setMonthInputValue('')
+      setDayInputValue('')
+      return
+    }
+    if (monthInputValue === '') setMonthInputValue(String(viewMonth + 1))
+    if (next === 'month') {
+      setDayInputValue('')
+      return
+    }
+    if (dayInputValue === '') {
+      setDayInputValue(String(Math.min(selectedDate.getDate(), daysInCurrentMonth)))
+    }
+  }
+
+  const isoOf = (signedYear: number, month: number) => {
+    const body = `${Math.abs(signedYear).toString().padStart(4, '0')}-${String(month).padStart(2, '0')}-01`
+    return signedYear < 0 ? `-${body}` : body
+  }
+
+  /** 기간 [from, to]가 min/max 안에 한 날이라도 걸치는가 — 월·연 칸의 선택 가능 여부 */
+  const isPeriodValid = (from: Date, to: Date) =>
+    !(minBound && to < minBound) && !(maxBound && from > maxBound)
+
+  const selectMonth = (monthIndex: number) => {
+    playClickSound()
+    onSelect(isoOf(actualYear, monthIndex + 1), 'month')
+    onClose()
+  }
+
+  const selectYear = (absYear: number) => {
+    playClickSound()
+    onSelect(isoOf(isBCE ? -absYear : absYear, 1), 'year')
+    onClose()
+  }
+
+  /** 연도 격자 쪽 넘기기 — 보고 있는 해를 십년 단위로 옮긴다 */
+  const shiftYearPage = (delta: number) => {
+    playClickSound()
+    const next = Math.min(9999, Math.max(1, viewYear + delta * YEARS_PER_PAGE))
+    setViewYear(next)
+    setYearInputValue(String(next))
+  }
+
+  /** 십년의 첫해(2020·1950 …). 0년은 없으므로 첫 쪽(1~9년)은 0에서 시작해 걸러 낸다 */
+  const yearPageStart = Math.floor(viewYear / YEARS_PER_PAGE) * YEARS_PER_PAGE
+  const selectedSignedYear = selectedDate.getFullYear()
+  const hasInitial = Boolean(initialDateParsed)
 
   const goToToday = () => {
     playClickSound()
@@ -550,6 +624,22 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
         </ModalHeader>
 
         <Body>
+          {allowPartial && (
+            <PrecisionTabs role="radiogroup" aria-label="어디까지 아는가">
+              {PRECISION_TABS.map((tab) => (
+                <PrecisionTab
+                  key={tab.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === tab.value}
+                  $isSelected={mode === tab.value}
+                  onClick={() => changeMode(tab.value)}
+                >
+                  {tab.label}
+                </PrecisionTab>
+              ))}
+            </PrecisionTabs>
+          )}
           <TopControls>
             <EraSelector>
               <EraButton
@@ -584,6 +674,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                 />
                 <Unit>년</Unit>
               </UnitField>
+              {mode !== 'year' && (
               <UnitField>
                 <ShortInput
                   type="text"
@@ -601,6 +692,8 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                 />
                 <Unit>월</Unit>
               </UnitField>
+              )}
+              {mode === 'day' && (
               <UnitField>
                 <ShortInput
                   type="text"
@@ -618,6 +711,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                 />
                 <Unit>일</Unit>
               </UnitField>
+              )}
             </InputGroup>
           </TopControls>
 
@@ -626,11 +720,105 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
           ) : (
             allowPartial && (
               <PartialHint>
-                연도만·연월만 알면 나머지 칸을 비우고 &lsquo;선택 적용&rsquo;
+                {mode === 'year'
+                  ? '해를 누르거나, 연도를 입력하고 \u2018선택 적용\u2019'
+                  : mode === 'month'
+                    ? '달을 누르거나, 연·월을 입력하고 \u2018선택 적용\u2019'
+                    : '연도만·연월만 알면 위에서 \u2018연도만\u2019·\u2018연·월\u2019을 고르세요'}
               </PartialHint>
             )
           )}
 
+          {mode === 'year' && (
+            <>
+              <CalendarHeader>
+                <NavButton onClick={() => shiftYearPage(-1)} aria-label="이전 십년">
+                  <FiChevronLeft size={18} />
+                </NavButton>
+                <CurrentDateDisplay>
+                  <DateDisplayText>
+                    {isBCE && <EraTag>BC</EraTag>}
+                    {Math.max(1, yearPageStart)}–{Math.min(9999, yearPageStart + YEARS_PER_PAGE - 1)}년
+                  </DateDisplayText>
+                </CurrentDateDisplay>
+                <NavButton onClick={() => shiftYearPage(1)} aria-label="다음 십년">
+                  <FiChevronRight size={18} />
+                </NavButton>
+              </CalendarHeader>
+              <PeriodGrid $columns={5} role="group" aria-label="연도 선택">
+                {Array.from({ length: YEARS_PER_PAGE }, (_, index) => yearPageStart + index)
+                  .filter((absYear) => absYear >= 1 && absYear <= 9999)
+                  .map((absYear) => {
+                    const signed = isBCE ? -absYear : absYear
+                    const valid = isPeriodValid(
+                      makeDate(signed, 0, 1),
+                      makeDate(signed, 11, 31),
+                    )
+                    const selected = hasInitial && selectedSignedYear === signed
+                    return (
+                      <PeriodCell
+                        key={absYear}
+                        type="button"
+                        disabled={!valid}
+                        $isSelected={selected}
+                        aria-pressed={selected}
+                        aria-label={`${isBCE ? '기원전 ' : ''}${absYear}년`}
+                        onClick={() => selectYear(absYear)}
+                      >
+                        {absYear}
+                      </PeriodCell>
+                    )
+                  })}
+              </PeriodGrid>
+            </>
+          )}
+
+          {mode === 'month' && (
+            <>
+              <CalendarHeader>
+                <NavButton onClick={() => handleYearChange(-1)} aria-label="이전 해">
+                  <FiChevronLeft size={18} />
+                </NavButton>
+                <CurrentDateDisplay>
+                  <DateDisplayText>
+                    {isBCE && <EraTag>BC</EraTag>}
+                    {viewYear}년
+                  </DateDisplayText>
+                </CurrentDateDisplay>
+                <NavButton onClick={() => handleYearChange(1)} aria-label="다음 해">
+                  <FiChevronRight size={18} />
+                </NavButton>
+              </CalendarHeader>
+              <PeriodGrid $columns={4} role="group" aria-label="월 선택">
+                {Array.from({ length: 12 }, (_, monthIndex) => {
+                  const valid = isPeriodValid(
+                    makeDate(actualYear, monthIndex, 1),
+                    makeDate(actualYear, monthIndex + 1, 0),
+                  )
+                  const selected =
+                    hasInitial &&
+                    selectedSignedYear === actualYear &&
+                    selectedDate.getMonth() === monthIndex
+                  return (
+                    <PeriodCell
+                      key={monthIndex}
+                      type="button"
+                      disabled={!valid}
+                      $isSelected={selected}
+                      aria-pressed={selected}
+                      aria-label={`${isBCE ? '기원전 ' : ''}${viewYear}년 ${monthIndex + 1}월`}
+                      onClick={() => selectMonth(monthIndex)}
+                    >
+                      {monthIndex + 1}월
+                    </PeriodCell>
+                  )
+                })}
+              </PeriodGrid>
+            </>
+          )}
+
+          {mode === 'day' && (
+          <>
           <CalendarHeader>
             <NavButton onClick={() => handleYearChange(-1)} aria-label="이전 해">
               <FiChevronsLeft size={18} />
@@ -693,11 +881,17 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
               )
             })}
           </CalendarGrid>
+          </>
+          )}
 
           <Footer>
-            <TodayButton type="button" onClick={goToToday}>
-              오늘
-            </TodayButton>
+            {mode === 'day' ? (
+              <TodayButton type="button" onClick={goToToday}>
+                오늘
+              </TodayButton>
+            ) : (
+              <span />
+            )}
             <ApplyButton
               type="button"
               onClick={() => {
@@ -832,6 +1026,89 @@ const CloseButton = styled.button`
   &:hover {
     background: ${({ theme }) => theme.colors.background.tertiary};
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const PrecisionTabs = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 3px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-radius: 10px;
+`
+
+const PrecisionTab = styled.button<{ $isSelected: boolean }>`
+  padding: 7px 0;
+  font-size: 13px;
+  font-weight: ${({ $isSelected }) => ($isSelected ? 700 : 600)};
+  color: ${({ $isSelected, theme }) =>
+    $isSelected ? theme.colors.text.primary : theme.colors.text.secondary};
+  background: ${({ $isSelected, theme }) =>
+    $isSelected
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.12)'
+        : '#fff'
+      : 'transparent'};
+  box-shadow: ${({ $isSelected }) =>
+    $isSelected ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'};
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+`
+
+/** 월·연 격자 — 일 달력과 같은 칸 언어(둥근 칸·선택=채움). 월 4열, 연 5열 */
+const PeriodGrid = styled.div<{ $columns: number }>`
+  display: grid;
+  grid-template-columns: repeat(${({ $columns }) => $columns}, 1fr);
+  gap: 6px;
+`
+
+const PeriodCell = styled.button<{ $isSelected: boolean }>`
+  height: 46px;
+  border: none;
+  border-radius: 11px;
+  font-size: 14px;
+  font-weight: ${({ $isSelected }) => ($isSelected ? 700 : 500)};
+  font-variant-numeric: tabular-nums;
+  color: ${({ $isSelected, theme }) =>
+    $isSelected ? '#fff' : theme.colors.text.primary};
+  background: ${({ $isSelected, theme }) =>
+    $isSelected ? theme.colors.primary : theme.colors.background.secondary};
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: ${({ $isSelected, theme }) =>
+      $isSelected ? theme.colors.primary : theme.colors.background.tertiary};
+  }
+
+  &:disabled {
+    color: ${({ theme }) => theme.colors.border.default};
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.96);
   }
 `
 
