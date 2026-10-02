@@ -37,6 +37,7 @@ import { GamificationModule } from '../../../libs/gamification/gamification.modu
 import { WalletModule } from '../../../libs/wallet/wallet.module'
 import { ArtifactModule } from '../../../libs/artifact/artifact.module'
 import { CommentModule } from '../../../libs/comment/comment.module'
+import { EvidenceModule } from '../../../libs/evidence/evidence.module'
 
 import {
   AppConfigModule,
@@ -58,6 +59,7 @@ import {
     WalletModule,
     ArtifactModule,
     CommentModule,
+    EvidenceModule,
     AuthModule,
     CountryModule,
     ContinentModule,

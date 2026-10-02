@@ -70,6 +70,8 @@ model Currency {
 
   //--- 관계 필드
   countries Country[]
+  /// 이 통화로 잰 측정값 (evidence.prisma)
+  observations Observation[]
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

@@ -1,0 +1,243 @@
+// ========================
+// 근거(Evidence) — 출처 · 인용 · 지표 카탈로그 · 측정값
+// ========================
+//
+// 설계: docs/event-detail-data-foundation.md (D3)
+//
+// 사건 상세의 정량 정보(사상자·병력·비용·지수…)는 그동안 본문 HTML과 문자열 컬럼
+// (casualties_data.military_killed = '약 14만 (질병 사망 별도)')에만 있었다.
+// 숫자의 정본을 여기 두고, 글·차트는 이 정본을 가리킨다.
+//
+// 원칙
+// - 사건 전용이 아니다 — 대상은 다형(ObservationSubjectType)이라 국가·조직·인물도 같은 모델을 쓴다.
+// - 범위가 정상이다 — 역사 수치는 대개 '약'·'18,000~20,000'·'질병 사망 별도'다. value/low/high/approx/qualifier로 그대로 담는다.
+// - 출처가 필수다 — 쓰기 통로(ObservationService)가 인용 1개 이상을 요구한다.
+//   출처를 모르는 기존 데이터는 SourceKind.LEGACY_UNVERIFIED 출처로 *명시적으로* 표시한다.
+// - 시점은 구조화 날짜만 둔다(DATETIME 없음) — BC·연 정밀도를 손상 없이 담는다.
+
+/// 출처 종류
+enum SourceKind {
+  /// 단행본
+  BOOK
+  /// 학술 논문
+  ARTICLE
+  /// 언론 기사
+  NEWS
+  /// 정부·국제기구 공식 발표
+  OFFICIAL
+  /// 통계·데이터셋
+  DATASET
+  /// 웹 문서(위 분류 밖)
+  WEBSITE
+  /// 1차 사료·문서고
+  ARCHIVE
+  /// 출처 미기재 기존 입력 — 이관 데이터를 '출처 있음'으로 위장하지 않기 위한 명시적 표지
+  LEGACY_UNVERIFIED
+  /// 기타
+  OTHER
+}
+
+/// 측정값의 대상 타입 (폴리모픽 — 대상 테이블에 FK를 두지 않는다. Comment와 같은 패턴)
+enum ObservationSubjectType {
+  /// 사건 전체
+  EVENT
+  /// 사건의 진영 (D1 EventSide)
+  EVENT_SIDE
+  /// 사건 참여국 한 줄 (EventCountryRelation)
+  EVENT_PARTICIPANT
+  /// 현대 국가
+  COUNTRY
+  /// 역사 국가
+  HISTORICAL_COUNTRY
+  /// 조직
+  ORGANIZATION
+  /// 인물
+  PERSON
+}
+
+/// 인용의 대상 타입 (폴리모픽)
+enum CitationTargetType {
+  /// 측정값
+  OBSERVATION
+  /// 사건
+  EVENT
+  /// 사건 진영
+  EVENT_SIDE
+  /// 사건 참여국 한 줄
+  EVENT_PARTICIPANT
+  /// 사건 참여 인물 한 줄
+  PERSON_EVENT
+}
+
+/// 지표 값의 성격 — 화면이 숫자를 어떻게 읽고 합칠지 정한다
+enum MetricValueKind {
+  /// 셀 수 있는 수 (사망자·병력·함선)
+  COUNT
+  /// 화폐 금액 — 단위는 측정값의 currency
+  MONEY
+  /// 비율 (%)
+  RATIO
+  /// 지수·가격 (주가지수 pt, 금리 %p 등 수준값)
+  INDEX
+  /// 물리량 (거리·면적·질량·기간)
+  MEASURE
+}
+
+/// 여러 대상(예: 진영들)의 값을 하나로 모을 때의 규칙
+enum MetricAggregation {
+  /// 합산 (사망자)
+  SUM
+  /// 최댓값 (최대 동원 병력)
+  MAX
+  /// 가장 늦은 시점 값 (종가)
+  LATEST
+  /// 합칠 수 없음 (비율)
+  NONE
+}
+
+/// 출처 — 책·논문·기사·공식 발표·데이터셋. 여러 인용이 하나를 공유한다.
+model Source {
+  id String @id @default(uuid()) @db.Char(36)
+
+  kind  SourceKind
+  /// 제목 (책·논문·기사 제목, 데이터셋 이름)
+  title String @db.VarChar(500)
+  /// 저자·기관 (자유 서식, 여러 명이면 '·'로)
+  authors   String? @db.VarChar(500)
+  /// 출판사·매체·발행 기관
+  publisher String? @db.VarChar(300)
+  /// 발행 연도 (BC 사료는 음수)
+  publishedYear Int? @map("published_year")
+  url           String? @db.VarChar(1000)
+  /// ISBN · DOI 등 표준 식별자
+  identifier    String? @db.VarChar(200)
+  /// 웹 출처 열람일 (YYYY-MM-DD)
+  accessedOn    String? @map("accessed_on") @db.VarChar(10)
+  note          String? @db.Text
+
+  /// 등록 계정 (NULL = 시스템/공유)
+  createdById String? @map("created_by_id") @db.Char(36)
+
+  citations Citation[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([kind], name: "idx_source_kind")
+  @@index([identifier], name: "idx_source_identifier")
+  @@map("source")
+}
+
+/// 인용 — 어떤 기록(대상)이 어느 출처의 어디(locator)에 근거하는가
+model Citation {
+  id String @id @default(uuid()) @db.Char(36)
+
+  sourceId String @map("source_id") @db.Char(36)
+  source   Source @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  targetType CitationTargetType @map("target_type")
+  targetId   String             @map("target_id") @db.Char(36)
+
+  /// 출처 안의 위치 — 'p. 123', '§4.2', '표 3'
+  locator String? @db.VarChar(200)
+  /// 근거 구절 (원문 인용)
+  quote   String? @db.Text
+  note    String? @db.Text
+  sortOrder Int @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([targetType, targetId], name: "idx_citation_target")
+  @@index([sourceId], name: "idx_citation_source")
+  @@map("citation")
+}
+
+/// 지표 카탈로그 — '무엇을 쟀는가'의 정의. 같은 이름이라도 정의(질병 사망 포함?)가 다르면 다른 지표다.
+model MetricDefinition {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 안정 키 — 'military.killed', 'military.wounded', 'economy.index.close'
+  key  String @unique @db.VarChar(100)
+  /// 표시 이름 — '군 전사자'
+  name String @db.VarChar(100)
+  /// 묶음 — military · civilian · economy · demography · diplomacy …
+  domain String @db.VarChar(40)
+
+  valueKind   MetricValueKind   @map("value_kind")
+  aggregation MetricAggregation @default(NONE)
+  /// MONEY가 아닐 때의 단위 — 'person' · 'vessel' · 'percent' · 'point' · 'km2' · 'day'
+  unit String? @db.VarChar(20)
+
+  /// 정의 — 무엇을 포함하고 무엇을 빼는가 (예: '전투 중 사망 + 전상 후 사망. 질병 사망 제외')
+  definition String? @db.Text
+
+  sortOrder Int     @default(0) @map("sort_order")
+  /// 시드로 들어온 공용 지표 (편집 잠금)
+  isSystem  Boolean @default(false) @map("is_system")
+  /// 등록 계정 (NULL = 시스템)
+  createdById String? @map("created_by_id") @db.Char(36)
+
+  observations Observation[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([domain, sortOrder], name: "idx_metric_definition_domain")
+  @@map("metric_definition")
+}
+
+/// 측정값 한 줄 — '이 대상의 이 지표가 이 시점(구간)에 이 값이었다'.
+/// 같은 대상·지표에 출처별로 여러 줄이 공존할 수 있다(정부 발표 627 · 서방 추정 1,000+).
+model Observation {
+  id String @id @default(uuid()) @db.Char(36)
+
+  subjectType ObservationSubjectType @map("subject_type")
+  subjectId   String                 @map("subject_id") @db.Char(36)
+
+  metricId String           @map("metric_id") @db.Char(36)
+  metric   MetricDefinition @relation(fields: [metricId], references: [id], onDelete: Restrict)
+
+  /// 점 추정. 범위만 알면 NULL
+  value  Decimal? @db.Decimal(30, 6)
+  /// 범위 하한·상한 ('18,000~20,000')
+  low    Decimal? @db.Decimal(30, 6)
+  high   Decimal? @db.Decimal(30, 6)
+  /// '약' — 근사값
+  approx Boolean  @default(false)
+  /// 하한만 아는 값 ('1,000명 이상')
+  atLeast Boolean @default(false) @map("at_least")
+  /// 정의상 단서 — '질병 사망 별도', '만주 팔기 자결 포함'
+  qualifier String? @db.Text
+
+  /// MONEY 지표의 통화 (역사 통화 포함 — ref_currency에 행으로 둔다)
+  currencyId String?   @map("currency_id") @db.Char(36)
+  currency   Currency? @relation(fields: [currencyId], references: [id], onDelete: Restrict)
+
+  /// 시점(점) 또는 구간 시작 — 구조화 날짜 (precision은 서버 파생: year|month|day)
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  /// 구간 끝 (점이면 NULL)
+  endEra       Era?    @map("end_era")
+  endYear      Int?    @map("end_year")
+  endMonth     Int?    @map("end_month")
+  endDay       Int?    @map("end_day")
+  endPrecision String? @map("end_precision") @db.VarChar(10)
+
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  /// 등록 계정
+  createdById String? @map("created_by_id") @db.Char(36)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([subjectType, subjectId, sortOrder], name: "idx_observation_subject")
+  @@index([metricId], name: "idx_observation_metric")
+  @@index([currencyId], name: "idx_observation_currency")
+  @@map("observation")
+}
