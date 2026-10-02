@@ -66,6 +66,16 @@ const PROMOTE_CLEAR_ALL_VALUE = '__clear-all-parents__'
  * 표시 지면은 parent-block/children-block/keywords-block으로 분할 — 이 컨테이너는
  * 블록을 가로지르는 상태(선택모달 4종·검색 파이프라인·confirm 연쇄 patch 조립)만 가진다.
  */
+type NetworkBlock = 'parent' | 'children' | 'related' | 'keywords'
+
+/** 연관 섹션의 블록 — 배열 순서가 화면 순서이고 '연결 추가' 칩 순서다 */
+const NETWORK_BLOCKS: ReadonlyArray<{ id: NetworkBlock; label: string }> = [
+  { id: 'parent', label: '상위 사건' },
+  { id: 'children', label: '하위 사건' },
+  { id: 'related', label: '관련 사건' },
+  { id: 'keywords', label: '키워드' },
+]
+
 export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const queryClient = useQueryClient()
   // 섹션 부제의 '관련 N' — RelatedBlock과 같은 캐시를 읽는다(추가 요청 없음)
@@ -592,6 +602,44 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
    * 자식·키워드가 없는 사건은 부제가 통째 사라졌다(관계 신호 은닉). 다중 상위는
    * '상위 1+N', 주 상위 부재/유령 + 추가 상위 잔존은 '상위 0+N'으로 상태를 드러낸다. */
   const relatedCount = relatedQuery.data?.length ?? 0
+
+  /**
+   * 블록 접기 — 내용 있는 블록만 그리고, 빈 블록은 아래 '연결 추가' 칩 한 줄로 모은다.
+   * 예전엔 키워드만 있는 사건(한국전쟁: 키워드 58)도 '상위 사건 지정·최상위로 지정·추가 상위·
+   * 하위 사건 추가·새 하위 만들기·관련 사건 연결' 빈 편집 블록 3개가 그대로 섰다.
+   * 칩을 누르면 그 블록이 펼쳐지고(블록의 기존 지정·추가 버튼을 그대로 쓴다), 한 번 보인
+   * 블록은 이 방문 동안 유지한다 — 마지막 키워드를 지운 순간 블록이 사라지지 않게.
+   */
+  const blockFilled: Record<NetworkBlock, boolean> = {
+    parent:
+      Boolean(parentEvent) ||
+      extraParents.length > 0 ||
+      Boolean(event.parentEventId) ||
+      event.anchorOverride != null,
+    children: children.length > 0 || (event.extraChildren?.length ?? 0) > 0,
+    related: relatedCount > 0,
+    keywords: keywords.length > 0,
+  }
+  const [shownBlocks, setShownBlocks] = useState<ReadonlySet<NetworkBlock>>(
+    () => new Set(),
+  )
+  const filledKey = NETWORK_BLOCKS.map((block) =>
+    blockFilled[block.id] ? '1' : '0',
+  ).join('')
+  useEffect(() => {
+    setShownBlocks((prev) => {
+      const missing = NETWORK_BLOCKS.filter(
+        (block, index) => filledKey[index] === '1' && !prev.has(block.id),
+      )
+      if (missing.length === 0) return prev
+      const next = new Set(prev)
+      for (const block of missing) next.add(block.id)
+      return next
+    })
+  }, [filledKey])
+  const isBlockShown = (block: NetworkBlock) =>
+    blockFilled[block] || shownBlocks.has(block)
+  const foldedBlocks = NETWORK_BLOCKS.filter((block) => !isBlockShown(block.id))
   const relationSummary = [
     parentEvent || extraParents.length > 0
       ? `상위 ${parentEvent ? 1 : 0}${
@@ -615,6 +663,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
       </S.SectionHeader>
 
       {/* 상위 사건 — 지정/변경/해제 + 추가 상위 칩 + 형제 네비 */}
+      {isBlockShown('parent') && (
       <ParentBlock
         event={event}
         extraParents={extraParents}
@@ -627,20 +676,44 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         extraRemoveRefs={extraRemoveRefs}
         extrasAddRef={extrasAddRef}
       />
+      )}
 
       {/* 하위 사건 카드 그리드 + 추가 하위(역방향 엣지) 칩 */}
-      <ChildrenBlock
-        childEvents={children}
-        extraChildren={event.extraChildren ?? []}
-        onPatch={onPatch}
-        onOpenChildModal={() => setChildModalOpen(true)}
-        onOpenCreateChild={() => setCreateChildOpen(true)}
-      />
+      {isBlockShown('children') && (
+        <ChildrenBlock
+          childEvents={children}
+          extraChildren={event.extraChildren ?? []}
+          onPatch={onPatch}
+          onOpenChildModal={() => setChildModalOpen(true)}
+          onOpenCreateChild={() => setCreateChildOpen(true)}
+        />
+      )}
 
       {/* 관련 사건 — 상위/하위가 아닌 별개 사건끼리의 연결(계기·배경·대응·같은 국면) */}
-      <RelatedBlock eventId={event.id} eventTitle={event.title} />
+      {isBlockShown('related') && (
+        <RelatedBlock eventId={event.id} eventTitle={event.title} />
+      )}
 
-      <KeywordsBlock keywords={keywords} onPatch={onPatch} />
+      {isBlockShown('keywords') && (
+        <KeywordsBlock keywords={keywords} onPatch={onPatch} />
+      )}
+
+      {foldedBlocks.length > 0 && (
+        <NetStyles.FoldedLinks>
+          <NetStyles.FoldedLinksLabel>연결 추가</NetStyles.FoldedLinksLabel>
+          {foldedBlocks.map((block) => (
+            <NetStyles.FoldedLinkChip
+              key={block.id}
+              type="button"
+              onClick={() =>
+                setShownBlocks((prev) => new Set(prev).add(block.id))
+              }
+            >
+              + {block.label}
+            </NetStyles.FoldedLinkChip>
+          ))}
+        </NetStyles.FoldedLinks>
+      )}
 
       <SelectModal
         isOpen={parentModalOpen}

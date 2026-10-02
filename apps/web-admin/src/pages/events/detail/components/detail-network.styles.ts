@@ -824,3 +824,39 @@ export const KeywordInput = styled.input`
     outline-offset: 1px;
   }
 `
+
+/** 연관 섹션의 '연결 추가' 줄 — 비어 있는 블록(상위·하위·관련·키워드)을 칩 하나씩으로 접은 자리 */
+export const FoldedLinks = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+export const FoldedLinksLabel = styled.span`
+  margin-right: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const FoldedLinkChip = styled.button`
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
+  }
+
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+`
