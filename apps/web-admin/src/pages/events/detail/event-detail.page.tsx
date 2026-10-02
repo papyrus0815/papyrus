@@ -21,6 +21,7 @@ import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
 import { DetailFacts } from './components/detail-facts'
 import { DetailRail } from './components/detail-rail'
+import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
 import { ModuleBelligerents } from './components/module-belligerents'
@@ -30,9 +31,18 @@ import { ModuleMilitaryDetails } from './components/module-military-details'
 import { PersonDetailModal } from './components/person-detail-modal'
 import { ReadingProgress } from './components/reading-progress'
 import { SaveStatus } from './components/save-status'
+import { scrollToAnchor } from './components/scroll-to-anchor'
+import {
+  FOLDABLE_SECTIONS,
+  type FoldableSectionId,
+  type OutlineItem,
+  filledSections,
+  paragraphOutline,
+} from './components/section-outline.lib'
 import * as S from './styles'
 import { type EventDetail, eventKeys, useEventDetail } from './use-event-detail'
 import { useEventMutation } from './use-event-mutation'
+import { useEventRelations } from './use-event-relations'
 import { useUndoablePatch } from './use-undoable-patch'
 
 /**
@@ -230,16 +240,81 @@ function EventDetailContent({ eventId }: { eventId: string }) {
   )
 
   /**
-   * 섹션 목록 — rail에 표시할 anchor + 라벨.
-   * deps는 `event.id`로 좁힌다. 인라인 patch refetch마다 event identity가 바뀌므로
-   * event 전체를 deps에 두면 매번 재계산 — 섹션 구성은 사건 id·enabledModules에만 의존.
+   * 섹션 접힘 — 내용이 없는 섹션은 본문·목차에서 빠지고 본문 끝 '더 채울 수 있는 것'으로
+   * 모인다(판정·배경은 section-outline.lib).
+   *
+   * `pinned` — 이 방문에서 한 번이라도 펼쳐졌던 섹션. 두 경우를 막는다:
+   *  - '채우기'로 펼친 빈 섹션이 아직 저장 전이라 다음 렌더에 다시 접히는 것
+   *  - 마지막 이미지·키워드를 지운 순간 섹션이 눈앞에서 사라지는 것
+   * 다른 사건으로 가면 ErrorBoundary key 리셋으로 리마운트되어 함께 비워진다.
    */
+  const relatedCount = useEventRelations(event.id).data?.length ?? 0
+  const filled = useMemo(
+    () => filledSections(event, relatedCount),
+    [event, relatedCount],
+  )
+  const [pinned, setPinned] = useState<ReadonlySet<FoldableSectionId>>(
+    () => new Set(),
+  )
+  useEffect(() => {
+    const newlyFilled = FOLDABLE_SECTIONS.filter(
+      (section) => filled[section.id] && !pinned.has(section.id),
+    )
+    if (newlyFilled.length === 0) return
+    setPinned((prev) => {
+      const next = new Set(prev)
+      for (const section of newlyFilled) next.add(section.id)
+      return next
+    })
+  }, [filled, pinned])
+  const isVisible = (id: FoldableSectionId) => filled[id] || pinned.has(id)
+  const folded = FOLDABLE_SECTIONS.filter((section) => !isVisible(section.id))
+
+  /* 펼친 섹션으로 스크롤 — 펼침이 렌더에 반영된 뒤라야 앵커가 존재한다.
+     빈 섹션은 짧아(제목 + 안내 한 줄) 'start'로 올리면 문서 끝에 걸려 위로 지나치기 쉽다 —
+     가운데에 세워 앞뒤 맥락과 함께 보이게 한다. */
+  const [revealTarget, setRevealTarget] = useState<FoldableSectionId | null>(null)
+  const revealSection = useCallback((id: FoldableSectionId) => {
+    setPinned((prev) => new Set(prev).add(id))
+    setRevealTarget(id)
+  }, [])
+  useEffect(() => {
+    if (!revealTarget) return
+    scrollToAnchor(revealTarget, { block: 'center', updateHash: false })
+    setRevealTarget(null)
+  }, [revealTarget])
+
+  /**
+   * 목차 — 보이는 섹션만. 배경·전개는 단락이 2개 이상이면 단락 목차를 단다.
+   * 예전엔 빈 섹션까지 전부 세워 '이 문서에 무엇이 있는지'를 부풀려 말했다.
+   */
+  const visibleKey = FOLDABLE_SECTIONS.map((section) =>
+    isVisible(section.id) ? '1' : '0',
+  ).join('')
   const sections = useMemo(() => {
-    const items: Array<{ id: string; label: string }> = []
-    items.push({ id: 'background', label: '배경' })
-    items.push({ id: 'narrative', label: '전개' })
-    items.push({ id: 'aftermath', label: '여파' })
-    items.push({ id: 'actors', label: '참여 행위자' })
+    const items: OutlineItem[] = []
+    const shown = (id: FoldableSectionId) =>
+      visibleKey[FOLDABLE_SECTIONS.findIndex((section) => section.id === id)] ===
+      '1'
+    const withParagraphs = (kind: 'background' | 'narrative') => {
+      const children = paragraphOutline(event, kind)
+      return children.length >= 2 ? children : undefined
+    }
+
+    if (shown('background'))
+      items.push({
+        id: 'background',
+        label: '배경',
+        children: withParagraphs('background'),
+      })
+    if (shown('narrative'))
+      items.push({
+        id: 'narrative',
+        label: '전개',
+        children: withParagraphs('narrative'),
+      })
+    if (shown('aftermath')) items.push({ id: 'aftermath', label: '여파' })
+    if (shown('actors')) items.push({ id: 'actors', label: '참여 행위자' })
 
     if (enabledModules.includes('belligerents'))
       items.push({ id: 'module-belligerents', label: '교전 진영' })
@@ -250,20 +325,19 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     if (enabledModules.includes('cabinets'))
       items.push({ id: 'module-cabinets', label: '관련 행정부' })
 
-    /* 조약 — 모듈이 아니라 상시 섹션이라 조건 없이 목차에 선다(빈 상태도 지면을 지킨다). */
-    items.push({ id: 'treaties', label: '조약' })
-    items.push({ id: 'network', label: '연관' })
-    items.push({ id: 'appendix', label: '이미지' })
+    if (shown('treaties')) items.push({ id: 'treaties', label: '조약' })
+    if (shown('network')) items.push({ id: 'network', label: '연관' })
+    if (shown('appendix')) items.push({ id: 'appendix', label: '이미지' })
     // 댓글 — 최상위 사건은 댓글 스레드, 하위 사건은 상위 댓글로 유도하는 안내(둘 다 #comments
     // 앵커를 렌더하므로 rail 항목은 항상 노출). 백엔드가 하위 사건엔 댓글을 노출/허용하지
-    // 않아(스코프 불일치) 하위에선 스레드 대신 안내만 보여준다. 하위 판정은 *생존* 상위
-    // (parentEvent) 기준 — 유령 상위(스칼라만 잔존)는 실질 루트로 취급.
+    // 않아(스코프 불일치) 하위에선 스레드 대신 안내만 보여준다.
     items.push({ id: 'comments', label: '댓글' })
 
     return items
-    // event는 *식별자 변경* 시에만 재구성. parentEventId는 위계 변경이라 의도적으로 포함.
+    // 섹션 구성은 보임 여부·단락 제목·모듈에만 의존한다 — event 전체를 deps에 두면
+    // 인라인 patch refetch마다 재계산된다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event.id, event.parentEventId, enabledModules])
+  }, [visibleKey, event.eventSections, enabledModules])
 
   /**
    * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
@@ -306,14 +380,21 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 onPatch={onPatch}
                 onPersonClick={onPersonClick}
                 onPersonEntityLink={onPersonEntityLink}
+                visible={{
+                  background: isVisible('background'),
+                  narrative: isVisible('narrative'),
+                  aftermath: isVisible('aftermath'),
+                }}
               />
 
-              <DetailActors
-                event={event}
-                onPatch={onPatch}
-                onPersonClick={onPersonClick}
-                onCountryClick={onCountryClick}
-              />
+              {isVisible('actors') && (
+                <DetailActors
+                  event={event}
+                  onPatch={onPatch}
+                  onPersonClick={onPersonClick}
+                  onCountryClick={onCountryClick}
+                />
+              )}
 
               {/* 모듈 추가 진입점 — 발견성을 위해 actors 직후로 배치. */}
               <ModuleAdd
@@ -334,17 +415,26 @@ function EventDetailContent({ eventId }: { eventId: string }) {
               {enabledModules.includes('cabinets') && <ModuleCabinets event={event} />}
 
               {/* 조약 — 사건과 조약을 잇는 유일한 지점(본문·서명자는 조약이 정본) */}
-              <DetailTreaties
-                event={event}
-                onInvalidate={() =>
-                  void queryClient.invalidateQueries({
-                    queryKey: eventKeys.detail(event.id),
-                  })
-                }
-              />
+              {isVisible('treaties') && (
+                <DetailTreaties
+                  event={event}
+                  onInvalidate={() =>
+                    void queryClient.invalidateQueries({
+                      queryKey: eventKeys.detail(event.id),
+                    })
+                  }
+                />
+              )}
 
-              <DetailNetwork event={event} onPatch={onPatch} />
-              <DetailAppendix event={event} onPatch={onPatch} />
+              {isVisible('network') && (
+                <DetailNetwork event={event} onPatch={onPatch} />
+              )}
+              {isVisible('appendix') && (
+                <DetailAppendix event={event} onPatch={onPatch} />
+              )}
+
+              {/* 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다. */}
+              <FillInStrip items={folded} onReveal={revealSection} />
 
               <S.Section id="comments">
                 <S.SectionHeader>
@@ -375,6 +465,8 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 event={event}
                 onPatch={onPatch}
                 contemporaryLink={<ContemporaryHeadsLink event={event} />}
+                onCountryClick={onCountryClick}
+                foldedCount={folded.length}
               />
               <DetailRail sections={sections} />
             </S.Aside>

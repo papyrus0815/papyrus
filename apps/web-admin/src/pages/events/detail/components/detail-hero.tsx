@@ -18,7 +18,11 @@ import {
 } from '@/shared/api/event-categories'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl } from '@/shared/api/upload'
-import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
+import {
+  formatDateRange,
+  formatYearLabel,
+  parseIsoDateParts,
+} from '@/shared/lib/iso-date'
 import { renderEmphasis } from '@/shared/lib/emphasis-markup'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
@@ -179,7 +183,20 @@ export function DetailHero({
       />
 
       {/* 날짜·위치·'동시대 수장'은 **사실**이라 우측 장부(DetailFacts)로 옮겼다.
-          히어로에는 제목·요약·행위자 — 서사의 도입만 남는다. */}
+          히어로에는 제목·요약·행위자 — 서사의 도입만 남는다.
+          단, 한 열 배치에서는 장부가 히어로(요약 문단까지) **뒤**에 와서 390px에선 '언제'가
+          1.3화면 아래로 밀렸다 — 그 폭에서만 날짜 한 줄을 제목 밑에 둔다(읽기 전용,
+          편집은 여전히 장부). */}
+      {event.startDate && (
+        <NarrowDateLine>
+          {formatDateRange(
+            event.startDate,
+            event.endDate ?? undefined,
+            event.startDatePrecision,
+            event.endDatePrecision,
+          )}
+        </NarrowDateLine>
+      )}
       <HeroActors
         event={event}
         onPersonClick={onPersonClick}
@@ -200,6 +217,19 @@ export function DetailHero({
     </S.Hero>
   )
 }
+
+/* 한 열 배치 전용 날짜 줄 — 2열(≥920)에서는 옆 장부가 같은 값을 크게 말하므로 숨긴다. */
+const NarrowDateLine = styled.p`
+  margin: -4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  @container eventdetail (min-width: 920px) {
+    display: none;
+  }
+`
 
 const TitleAccent = styled.div<{ $color: string; $colorDark?: string }>`
   width: 56px;

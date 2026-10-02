@@ -482,6 +482,77 @@ export const RailNavItem = styled.button<{ $active: boolean }>`
   }
 `
 
+/**
+ * 번호 단락 목차 — 읽고 있는 섹션(배경·전개) 아래에만 펼쳐진다.
+ *
+ * 한 열 배치(가로 칩 줄)에서는 그리지 않는다 — 칩 사이에 세로 목록이 끼면 줄이 깨지고,
+ * 그 폭에서는 목차가 문서 위에 한 번 지나가는 안내일 뿐 따라오지 않는다.
+ * 부모 항목의 왼쪽 축(1px 괘선) 안쪽으로 한 단 들여, 글자는 한 단 작게.
+ */
+export const RailSubList = styled.ol`
+  display: none;
+  list-style: none;
+  margin: 2px 0 6px;
+  padding: 0;
+
+  @container eventdetail (min-width: 920px) {
+    display: flex;
+    flex-direction: column;
+  }
+`
+
+export const RailSubItem = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  margin-left: -1px;
+  padding: 4px 0 4px 26px;
+  border: 0;
+  border-left: 2px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : 'transparent'};
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: ${({ $active }) => ($active ? 600 : 400)};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : metaText({ theme })};
+  text-align: left;
+  cursor: pointer;
+  transition: color ${MOTION.normal}, border-color ${MOTION.normal};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
+    border-radius: ${RADIUS.FOCUS};
+  }
+`
+
+/* 단락 번호 — 본문의 단락 번호와 같은 mono 숫자라 '본문의 3'과 '목차의 3'이 한 눈에 짝이 된다. */
+export const RailSubIndex = styled.span`
+  ${DIGIT_DISPLAY}
+  flex-shrink: 0;
+  min-width: 1.2em;
+  font-size: 11px;
+  color: ${metaText};
+`
+
+/* 단락 제목은 길다('발발과 초기 남진 — 6.25 ~ 9.15 부산교두보의 11주') — 두 줄까지. */
+export const RailSubLabel = styled.span`
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 0;
+`
+
 /* ───────────────────────── Section frame ───────────────────────── */
 
 export const Section = styled.section`

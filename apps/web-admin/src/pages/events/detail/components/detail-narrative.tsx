@@ -37,6 +37,11 @@ interface DetailNarrativeProps {
     name: string
     imageUrl?: string | null
   }) => void
+  /**
+   * 세 섹션 각각을 그릴지 — 내용이 없는 섹션은 본문에서 빠지고 페이지 끝의 '더 채울 수
+   * 있는 것'으로 접힌다(판정은 section-outline.lib). 미지정이면 셋 다 그린다.
+   */
+  visible?: { background: boolean; narrative: boolean; aftermath: boolean }
 }
 
 /**
@@ -54,6 +59,7 @@ export function DetailNarrative({
   onPatch,
   onPersonClick,
   onPersonEntityLink,
+  visible = ALL_VISIBLE,
 }: DetailNarrativeProps) {
   /* 본문(배경·여파·섹션) 공통 — 인물 링크 삽입 시에만 행위자 등록으로 잇는다. */
   const handleEntityLink = useCallback(
@@ -208,104 +214,112 @@ export function DetailNarrative({
   return (
     <>
       {/* 배경 — 요약 본문 1개 + 번호 단락. */}
-      <S.Section id="background">
-        <S.SectionHeader>
-          <S.SectionTitle>배경</S.SectionTitle>
+      {visible.background && (
+        <S.Section id="background">
+          <S.SectionHeader>
+            <S.SectionTitle>배경</S.SectionTitle>
+            {backgroundRows.length > 0 && (
+              <S.SectionSubtitle>{backgroundRows.length}단락</S.SectionSubtitle>
+            )}
+          </S.SectionHeader>
+          <S.SectionBody>
+            <InlineRichText
+              value={event.background ?? ''}
+              /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
+              onSave={(next) => onPatch({ background: next })}
+              /* 아래 번호 단락이 본론이고 이 줄은 그 앞에 두는 요약 — 선택이라고 적는다. */
+              placeholder="사건 직전의 정세·도화선 — 요약 한 문단(선택)"
+              label="배경 요약"
+              onPersonClick={onPersonClick}
+              onEntityLink={handleEntityLink}
+              transformReadHtml={emphasisToHtml}
+            />
+          </S.SectionBody>
           {backgroundRows.length > 0 && (
-            <S.SectionSubtitle>{backgroundRows.length}단락</S.SectionSubtitle>
+            <NarrativeSectionList
+              rows={backgroundRows}
+              onFieldChange={background.change}
+              onMove={background.move}
+              onRemove={background.remove}
+              onPersonClick={onPersonClick}
+              onEntityLink={handleEntityLink}
+              labelPrefix="배경"
+              bodyPlaceholder="이 배경 단락의 본문"
+              anchorPrefix="background"
+              autoEditKey={autoEditKey}
+            />
           )}
-        </S.SectionHeader>
-        <S.SectionBody>
-          <InlineRichText
-            value={event.background ?? ''}
-            /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
-            onSave={(next) => onPatch({ background: next })}
-            /* 아래 번호 단락이 본론이고 이 줄은 그 앞에 두는 요약 — 선택이라고 적는다. */
-            placeholder="사건 직전의 정세·도화선 — 요약 한 문단(선택)"
-            label="배경 요약"
-            onPersonClick={onPersonClick}
-            onEntityLink={handleEntityLink}
-            transformReadHtml={emphasisToHtml}
+          <AddSectionButton
+            onClick={background.add}
+            label="배경 단락 추가"
           />
-        </S.SectionBody>
-        {backgroundRows.length > 0 && (
-          <NarrativeSectionList
-            rows={backgroundRows}
-            onFieldChange={background.change}
-            onMove={background.move}
-            onRemove={background.remove}
-            onPersonClick={onPersonClick}
-            onEntityLink={handleEntityLink}
-            labelPrefix="배경"
-            bodyPlaceholder="이 배경 단락의 본문"
-            anchorPrefix="background"
-            autoEditKey={autoEditKey}
-          />
-        )}
-        <AddSectionButton
-          onClick={background.add}
-          label="배경 단락 추가"
-        />
-      </S.Section>
+        </S.Section>
+      )}
 
       {/* 전개 — 번호 단락. 비어 있어도 +추가 진입점. */}
-      <S.Section id="narrative">
-        <S.SectionHeader>
-          <S.SectionTitle>전개</S.SectionTitle>
-          {narrativeRows.length > 0 && (
-            <S.SectionSubtitle>{narrativeRows.length}단락</S.SectionSubtitle>
+      {visible.narrative && (
+        <S.Section id="narrative">
+          <S.SectionHeader>
+            <S.SectionTitle>전개</S.SectionTitle>
+            {narrativeRows.length > 0 && (
+              <S.SectionSubtitle>{narrativeRows.length}단락</S.SectionSubtitle>
+            )}
+          </S.SectionHeader>
+          {narrativeRows.length === 0 ? (
+            /*
+             * 빈 전개 — 배경·여파의 빈 안내(기울임 한 줄, 누르면 쓰기)와 같은 모양으로.
+             * 예전엔 세 섹션이 세 모양이었다: 배경=기울임 안내, 전개=📖 점선 상자 +
+             * "아래 버튼을 누르세요", 여파=기울임 안내만. 누르면 첫 단락이 열린다.
+             */
+            <EmptyLead type="button" onClick={narrative.add}>
+              사건이 어떻게 흘러갔는지 — 단락을 나눠 차례로 (발단 · 전환점 · 결말)
+            </EmptyLead>
+          ) : (
+            <NarrativeSectionList
+              rows={narrativeRows}
+              onFieldChange={narrative.change}
+              onMove={narrative.move}
+              onRemove={narrative.remove}
+              onPersonClick={onPersonClick}
+              onEntityLink={handleEntityLink}
+              labelPrefix="전개"
+              bodyPlaceholder="이 전개 단락의 본문"
+              anchorPrefix="narrative"
+              autoEditKey={autoEditKey}
+            />
           )}
-        </S.SectionHeader>
-        {narrativeRows.length === 0 ? (
-          /*
-           * 빈 전개 — 배경·여파의 빈 안내(기울임 한 줄, 누르면 쓰기)와 같은 모양으로.
-           * 예전엔 세 섹션이 세 모양이었다: 배경=기울임 안내, 전개=📖 점선 상자 +
-           * "아래 버튼을 누르세요", 여파=기울임 안내만. 누르면 첫 단락이 열린다.
-           */
-          <EmptyLead type="button" onClick={narrative.add}>
-            사건이 어떻게 흘러갔는지 — 단락을 나눠 차례로 (발단 · 전환점 · 결말)
-          </EmptyLead>
-        ) : (
-          <NarrativeSectionList
-            rows={narrativeRows}
-            onFieldChange={narrative.change}
-            onMove={narrative.move}
-            onRemove={narrative.remove}
-            onPersonClick={onPersonClick}
-            onEntityLink={handleEntityLink}
-            labelPrefix="전개"
-            bodyPlaceholder="이 전개 단락의 본문"
-            anchorPrefix="narrative"
-            autoEditKey={autoEditKey}
+          <AddSectionButton
+            onClick={narrative.add}
+            label="전개 단락 추가"
           />
-        )}
-        <AddSectionButton
-          onClick={narrative.add}
-          label="전개 단락 추가"
-        />
-      </S.Section>
+        </S.Section>
+      )}
 
       {/* 여파 */}
-      <S.Section id="aftermath">
-        <S.SectionHeader>
-          <S.SectionTitle>여파</S.SectionTitle>
-        </S.SectionHeader>
-        <S.SectionBody>
-          <InlineRichText
-            value={event.aftermath ?? ''}
-            /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
-            onSave={(next) => onPatch({ aftermath: next })}
-            placeholder="사건 직후의 결과·후속 영향·종결 시점의 상태"
-            label="여파"
-            onPersonClick={onPersonClick}
-            onEntityLink={handleEntityLink}
-            transformReadHtml={emphasisToHtml}
-          />
-        </S.SectionBody>
-      </S.Section>
+      {visible.aftermath && (
+        <S.Section id="aftermath">
+          <S.SectionHeader>
+            <S.SectionTitle>여파</S.SectionTitle>
+          </S.SectionHeader>
+          <S.SectionBody>
+            <InlineRichText
+              value={event.aftermath ?? ''}
+              /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
+              onSave={(next) => onPatch({ aftermath: next })}
+              placeholder="사건 직후의 결과·후속 영향·종결 시점의 상태"
+              label="여파"
+              onPersonClick={onPersonClick}
+              onEntityLink={handleEntityLink}
+              transformReadHtml={emphasisToHtml}
+            />
+          </S.SectionBody>
+        </S.Section>
+      )}
     </>
   )
 }
+
+const ALL_VISIBLE = { background: true, narrative: true, aftermath: true }
 
 /**
  * 빈 전개 안내 — InlineRichText의 빈 안내(기울임 · text.tertiary · 누르면 쓰기)와 같은 조판.

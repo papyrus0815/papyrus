@@ -278,9 +278,16 @@ export function formatDateRange(
   startPrecision?: string | null,
   endPrecision?: string | null,
 ): string {
-  const startStr = formatDateWithPrecision(start, startPrecision)
+  const startSentinel = isJanuaryFirstSentinel(start, startPrecision)
+  const startStr = formatDateWithPrecision(
+    start,
+    startSentinel ? 'year' : startPrecision,
+  )
   if (!end) return startStr
-  const endStr = formatDateWithPrecision(end, endPrecision)
+  const endStr = formatDateWithPrecision(
+    end,
+    isYearEndSentinel(end, endPrecision, startSentinel) ? 'year' : endPrecision,
+  )
   /* 하루짜리 사건은 **한 번만** 쓴다. 종료일을 시작일과 같게 저장하는 게 기본값이라
      실데이터의 63%(57/91)가 여기 걸렸고, 그 지면들은 모두 '2025년 2월 4일 ~ 2025년
      2월 4일'처럼 같은 날짜를 두 번 찍고 있었다.
@@ -288,4 +295,42 @@ export function formatDateRange(
      '2025년 2월'(월 정밀도)이고 끝이 '2025년 2월 4일'이면 서로 다른 정보라 범위로 남긴다. */
   if (startStr === endStr) return startStr
   return `${startStr} ~ ${endStr}`
+}
+
+/**
+ * 정밀도를 모르는(NULL) 1월 1일은 **날짜가 아니라 '연도만 안다'는 자리 표시**로 본다.
+ *
+ * 근거는 데이터다 — 사건 362건 중 267건이 정밀도 NULL이고, 그중 1월 1일로 들어온 32건은
+ * '톨비악 전투(496)'처럼 연 단위로만 아는 사건이다. 그대로 찍으면 '496년 1월 1일'이라는
+ * 없는 사실을 말한다. 목록(event-list-item `rowShowsFullDate`)·사이드바
+ * (`isJanuaryFirstSentinel`)가 이미 같은 판정을 하고 있어, 상세가 혼자 일자를 말하면
+ * 두 지면이 같은 사건을 두고 다르게 말하게 된다.
+ *
+ * ⚠️ 정밀도를 **명시적으로 'day'**라고 저장한 1월 1일(예: 1996-01-01 금융소득종합과세
+ *    시행)은 건드리지 않는다 — NULL일 때만 추정한다.
+ */
+function isJanuaryFirstSentinel(
+  value: string,
+  precision?: string | null,
+): boolean {
+  if (precision) return false
+  const parts = parseIsoDateParts(value)
+  return Boolean(parts && parts.month === 1 && parts.day === 1)
+}
+
+/**
+ * 끝 날짜의 짝 — 시작이 연 자리 표시였다면 정밀도 NULL인 끝의 1월 1일·12월 31일도
+ * 연도만 아는 값이다('1002-01-01 ~ 1018-12-31' → '1002년 ~ 1018년').
+ * 시작이 진짜 날짜인데 끝만 12월 31일이면 실제 날짜일 수 있어 그대로 둔다.
+ */
+function isYearEndSentinel(
+  value: string,
+  precision: string | null | undefined,
+  startSentinel: boolean,
+): boolean {
+  if (precision) return false
+  const parts = parseIsoDateParts(value)
+  if (!parts) return false
+  if (parts.month === 1 && parts.day === 1) return true
+  return startSentinel && parts.month === 12 && parts.day === 31
 }

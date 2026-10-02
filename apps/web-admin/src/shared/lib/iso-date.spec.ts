@@ -231,6 +231,34 @@ describe('formatDateRange — 하루짜리', () => {
   })
 })
 
+describe('formatDateRange — 정밀도 NULL인 1월 1일은 연도만', () => {
+  it('정밀도 NULL + 1월 1일 → 연도만 쓴다', () => {
+    expect(formatDateRange('0496-01-01', undefined, null)).toBe('496년')
+  })
+
+  it('명시적 day 정밀도의 1월 1일은 그대로 일자까지', () => {
+    expect(formatDateRange('1996-01-01', undefined, 'day')).toBe(
+      '1996년 1월 1일',
+    )
+  })
+
+  it('시작이 자리 표시면 끝의 12월 31일도 연도만', () => {
+    expect(formatDateRange('1002-01-01', '1018-12-31', null, null)).toBe(
+      '1002년 ~ 1018년',
+    )
+  })
+
+  it('시작이 진짜 날짜면 끝의 12월 31일은 날짜로 남긴다', () => {
+    expect(formatDateRange('2020-03-01', '2020-12-31', null, null)).toBe(
+      '2020년 3월 1일 ~ 2020년 12월 31일',
+    )
+  })
+
+  it('BC 연도도 같은 판정', () => {
+    expect(formatDateRange('-0044-01-01', undefined, null)).toBe('기원전 44년')
+  })
+})
+
 describe('isoPeriodEnd — 정밀도만큼만 아는 날짜의 기간 끝', () => {
   it('year → 그해 12월 31일', () => {
     expect(isoPeriodEnd('1953-01-01', 'year')).toBe('1953-12-31')
