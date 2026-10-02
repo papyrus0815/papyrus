@@ -85,6 +85,8 @@ import {
 } from '@/shared/lib/influence-tier'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 
+import type { EntityConnectionTarget } from '@/shared/api/entity-graph'
+import { ConnectionsPanel } from '@/shared/ui/entity-graph'
 import { BioClamp } from './bio-clamp'
 import { BirthDeathCards } from './birth-death-cards'
 import { CollapsibleSection } from './collapsible-section'
@@ -342,8 +344,12 @@ const OVERVIEW_CLUSTERS = [
   { id: 'overview-cluster-history', label: '이력·활동' },
   { id: 'overview-cluster-relations', label: '관계' },
   { id: 'overview-cluster-context', label: '소속·맥락' },
+  { id: 'overview-cluster-connections', label: '연결' },
   { id: 'overview-cluster-evaluation', label: '평가' },
 ] as const
+
+/** 연결 패널에서 이 화면의 모달로 여는 종류 — 나머지는 상세 경로 */
+const CONNECTION_MODAL_KINDS = ['person', 'event', 'dynasty'] as const
 
 /** 개요 클러스터로 스크롤(UX8) — prefers-reduced-motion 존중(AY5). */
 function scrollToOverviewCluster(anchorId: string) {
@@ -985,6 +991,23 @@ export function PersonDetailPanel({
       else pushPersonToModalStack(id)
     },
     [embedInModal, onLinkedPersonClick, pushPersonToModalStack, playClickSound],
+  )
+
+  /**
+   * 연결 패널 칩 → 이 화면의 미리보기로. 인물은 모달 스택, 사건은 사건 미리보기, 가문은
+   * 가문 한눈에 — 페이지를 떠나지 않고 건너간다. 나머지(국가·조약·묶음)는 칩이 상세 경로로 간다.
+   */
+  const openConnection = useCallback(
+    (target: EntityConnectionTarget) => {
+      if (target.kind === 'person') {
+        handlePersonClick(target.id)
+        return
+      }
+      playClickSound()
+      if (target.kind === 'event') setViewingEventId(target.id)
+      else if (target.kind === 'dynasty') setDynastyModal({ id: target.id, name: target.label })
+    },
+    [handlePersonClick, playClickSound],
   )
 
   /** 인물 관련 모든 쿼리 캐시 무효화 (아바타 변경·삭제·수정 후 공통 호출) — 중앙 헬퍼 위임(G3-2) */
@@ -3005,7 +3028,21 @@ export function PersonDetailPanel({
                       embedInModal ? onLinkedPersonClick : pushPersonToModalStack
                     }
                   />
-                  {/* ── 클러스터 ⑤ 평가 ──
+                  {/* ── 클러스터 ⑤ 연결 ──
+                      이 인물과 이어진 모든 엔티티(국가·직위·가문·가족·관계·사건·조직·조약·군사)를
+                      한 판에. 섹션마다 따로 흩어진 연결을 서버 연결 색인(entity-graph)이 모은다 —
+                      새 도메인은 서버 투영만 추가하면 여기에 저절로 나타난다(docs/entity-graph-design.md). */}
+                  <OverviewClusterLabel id="overview-cluster-connections">
+                    연결
+                  </OverviewClusterLabel>
+                  <ConnectionsPanel
+                    kind="person"
+                    id={person.id}
+                    onOpen={openConnection}
+                    openableKinds={CONNECTION_MODAL_KINDS}
+                  />
+
+                  {/* ── 클러스터 ⑥ 평가 ──
                       영향력·능력치는 사실이 아니라 **매긴 값**이다. 예전엔 전기와 출생·사망 사이에 끼어
                       기본 사실을 아래로 밀었다. 영향력 수치는 머리 카드 KPI에 이미 있어, 상세는 맨 끝에 둔다. */}
                   <OverviewClusterLabel id="overview-cluster-evaluation">
