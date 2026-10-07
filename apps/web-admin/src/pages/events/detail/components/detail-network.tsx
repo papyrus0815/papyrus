@@ -269,7 +269,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
       /* 수동 무효화 — use-event-mutation의 계층 무효화 블록 미러(자기 자신 제외
        * predicate) + 목록 + 자기 상세(이 사건의 '추가 하위' 행 갱신). */
       queryClient.invalidateQueries({
-        queryKey: ['event-detail'],
+        queryKey: eventKeys.detailAll(),
         predicate: (query) => query.queryKey[1] !== event.id,
       })
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })

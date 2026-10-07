@@ -23,7 +23,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { eventKeys } from '@/pages/events/detail/use-event-detail'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog'

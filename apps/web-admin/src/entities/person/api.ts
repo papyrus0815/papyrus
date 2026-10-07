@@ -6,6 +6,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { invalidateGamification } from '@/entities/gamification'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import * as personsApi from '@/shared/api/persons'
 import type {
   PersonResponseDto,
@@ -53,7 +54,7 @@ export function invalidatePersonCaches(
     // 사건 상세 응답이 참여 행위자의 person.profileImageUrl을 박아 두므로 함께 무효화
     ...(skipEventDetail
       ? []
-      : [queryClient.invalidateQueries({ queryKey: ['event-detail'] })]),
+      : [queryClient.invalidateQueries({ queryKey: eventKeys.detailAll() })]),
     queryClient.invalidateQueries({ queryKey: personKeys.all }),
     queryClient.invalidateQueries({ queryKey: personKeys.byCountry }),
     queryClient.invalidateQueries({ queryKey: personKeys.byDynasty }),

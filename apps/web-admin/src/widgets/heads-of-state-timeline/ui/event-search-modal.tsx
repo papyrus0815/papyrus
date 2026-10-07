@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FiCheck, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllEventsExhaustive } from '@/shared/api/events'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
@@ -44,7 +45,7 @@ export function EventSearchModal({ isOpen, onClose, alreadyAddedIds, onAddMany }
 
   const { data, isLoading } = useQuery({
     // ['events'] 아래 — 사건을 만들거나 고치면 함께 무효화된다
-    queryKey: ['events', 'heads-of-state-overlay-list'],
+    queryKey: eventKeys.headsOfStateOverlay(),
     queryFn: () => getAllEventsExhaustive({ includeSubEvents: true }),
     staleTime: 5 * 60 * 1000,
     enabled: isOpen,

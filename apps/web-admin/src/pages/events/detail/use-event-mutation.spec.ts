@@ -378,14 +378,14 @@ describe('useEventMutation — 다른 지면 캐시 무효화', () => {
     expect(keys).toContainEqual(['person-detail'])
   })
 
-  it('참여국을 바꾸면 국가별 사건(events-by-country) 캐시를 무효화한다', async () => {
+  it('참여국을 바꾸면 국가별 사건(events/by-country) 캐시를 무효화한다', async () => {
     const keys = await runPatch({ relatedCountries: [] } as unknown as Patch)
-    expect(keys).toContainEqual(['events-by-country'])
+    expect(keys).toContainEqual(['events', 'by-country'])
   })
 
   it('본문만 바꾸면 다른 지면은 건드리지 않는다', async () => {
     const keys = await runPatch({ background: '본문' } as unknown as Patch)
     expect(keys).not.toContainEqual(['person-detail'])
-    expect(keys).not.toContainEqual(['events-by-country'])
+    expect(keys).not.toContainEqual(['events', 'by-country'])
   })
 })

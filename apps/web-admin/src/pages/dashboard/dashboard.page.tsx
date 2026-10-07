@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
 import { sessionQueryOptions } from '@/entities/session'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllEvents, getEventsOnThisDay } from '@/shared/api/events'
 import type { EventResponseDto } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
@@ -94,7 +95,7 @@ function RecentEventsSection() {
   const navigate = useNavigate()
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['dashboard-recent-events'],
+    queryKey: eventKeys.dashboardRecent(),
     // createdSinceDays를 크게 주면 서버가 createdAt desc(최근 등록순)로 정렬한다.
     // 하단 영역이 가운데 화면과 겹치지 않도록 2개(한 줄)만 노출한다.
     queryFn: () => getAllEvents({ limit: 2, createdSinceDays: 36500 }),

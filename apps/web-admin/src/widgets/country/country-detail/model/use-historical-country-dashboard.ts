@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllEventsExhaustive } from '@/shared/api/events'
 import {
   getAllHistoricalCountries,
@@ -73,7 +74,7 @@ const ACTIVITY_FEED_LIMIT = 10
 /** 쿼리 키 — 탭 위젯들이 쓰는 키와 같아야 캐시를 나눠 쓰고 무효화가 함께 먹는다 */
 export const historicalDashboardKeys = {
   persons: (id: string) => ['historical-country-union-persons', id] as const,
-  events: (id: string) => ['events-by-country', id, 'flat'] as const,
+  events: (id: string) => eventKeys.byCountry(id, 'flat'),
   tenures: (id: string) => ['tenures-by-country', undefined, id] as const,
   transitions: (id: string) => ['historical-country-transitions', id] as const,
   memberships: (id: string) => ['historical-country-memberships', id] as const,

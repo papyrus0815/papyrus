@@ -20,6 +20,7 @@ import {
 
 import { transformEventsFromApi } from './eventTransformers'
 import { EVENTS_PAGE_SIZE_ALL, type HistoricalEvent } from './types'
+import { eventKeys } from '@/shared/api/event-query-keys'
 
 const DEFAULT_PAGE_SIZE = 50
 
@@ -29,7 +30,7 @@ const DEFAULT_PAGE_SIZE = 50
  */
 export const visitedEventsQueryOptions = (accountId: string) =>
   queryOptions({
-    queryKey: ['events', 'by-account', accountId] as const,
+    queryKey: eventKeys.byAccount(accountId),
     queryFn: () => getEventsByAccount(accountId),
     staleTime: 60_000,
     enabled: !!accountId,

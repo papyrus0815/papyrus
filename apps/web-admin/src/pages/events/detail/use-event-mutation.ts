@@ -161,7 +161,7 @@ export function useEventMutation(eventId: string) {
         queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
       }
       if ('relatedCountries' in patch || 'historicalCountryId' in patch) {
-        queryClient.invalidateQueries({ queryKey: ['events-by-country'] })
+        queryClient.invalidateQueries({ queryKey: eventKeys.byCountryAll() })
       }
       /**
        * 계층 patch(parentEventId·childEventIds)는 *다른* 사건의 상세 캐시도 바꾼다 —
@@ -180,7 +180,7 @@ export function useEventMutation(eventId: string) {
         'childLinkReasons' in patch
       ) {
         queryClient.invalidateQueries({
-          queryKey: ['event-detail'],
+          queryKey: eventKeys.detailAll(),
           predicate: (query) => query.queryKey[1] !== eventId,
         })
       }
@@ -615,7 +615,7 @@ function collectLinkCandidates(
 ): Map<string, EventLinkCandidate> {
   const map = new Map<string, EventLinkCandidate>()
   const entries = qc.getQueriesData<EventLinkCandidate[]>({
-    queryKey: ['events', 'link-candidates'],
+    queryKey: eventKeys.linkCandidatesAll(),
   })
   for (const [, list] of entries) {
     if (!Array.isArray(list)) continue

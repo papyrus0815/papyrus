@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 
+import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   queryOptions,
   useQuery,
@@ -229,20 +230,8 @@ export type EventDetailModuleKey =
   | 'military-details'
   | 'cabinets'
 
-/**
- * 사건 캐시 키 — 상세 query·mutation invalidation에서 단일 정의를 공유한다.
- * (키 문자열을 곳곳에 흩뿌리면 invalidate 누락·불일치가 생기므로 중앙화.)
- */
-export const eventKeys = {
-  /** 목록(ledger/catalog) 캐시 루트 */
-  lists: () => ['events'] as const,
-  /** 단일 사건 상세 */
-  detail: (eventId: string) => ['event-detail', eventId] as const,
-  /** 헤더 "전체 N건" 권위 총개수 — 생성·수정·삭제 시 lists()와 함께 무효화할 것 */
-  count: () => ['events-count'] as const,
-  /** 사건 단위 측정값(사건 + 참여국 줄 + 진영) */
-  observations: (eventId: string) => ['event-detail', eventId, 'observations'] as const,
-}
+/** 사건 캐시 키 — 단일 팩토리는 shared/api/event-query-keys (기존 import 경로 호환용 re-export). */
+export { eventKeys }
 
 /** 사건 측정값 쿼리 — 수치 모듈·사실 장부·비교 차트가 같은 캐시를 쓴다 */
 export function eventObservationsQueryOptions(eventId: string) {

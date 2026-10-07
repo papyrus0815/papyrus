@@ -32,7 +32,7 @@ import { transformEventsFromApi, useEvents } from '@/entities/event/model'
 import type { FilterChip } from '@/entities/event/model'
 import { getEventById, getEventsCount } from '@/shared/api/events'
 import type { EventFetchError, EventResponseDto } from '@/shared/api/events'
-import { eventKeys } from '@/pages/events/detail/use-event-detail'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { useEventFilters } from '@/features/event-filters/model'
 import {
   combineReferenceState,
@@ -1902,7 +1902,7 @@ export const EventsCatalogPage: React.FC = () => {
         },
       )
 
-      // 목록(['events'])과 헤더 총개수(['events-count']) 모두 무효화 — 안 하면
+      // 목록과 헤더 총개수 모두 무효화(총개수도 lists() 아래지만 의도를 드러내려 명시) — 안 하면
       // 삭제 후 헤더 "전체 N건"이 staleTime 동안 옛 값을 유지.
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
       queryClient.invalidateQueries({ queryKey: eventKeys.count() })

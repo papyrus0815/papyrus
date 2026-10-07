@@ -23,6 +23,7 @@ import styled, { css } from 'styled-components'
 
 import { useCountry } from '@/entities/country/api'
 import { useHistoricalCountry } from '@/entities/historical-country/api'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getCountryStatehoodEvents, type StatehoodEvent } from '@/shared/api/events'
 import {
@@ -204,7 +205,7 @@ export function CountryInlineModal({
   })
   /* 건국·멸망 사건 — 참여국 역할로 이 나라를 건 사건(개요 탭 카드와 같은 캐시 키) */
   const statehoodQuery = useQuery({
-    queryKey: ['events', 'statehood', { historicalCountryId: target?.id ?? '' }],
+    queryKey: eventKeys.statehood({ historicalCountryId: target?.id ?? '' }),
     queryFn: () => getCountryStatehoodEvents({ historicalCountryId: target!.id }),
     enabled: isHistorical && !!target?.id,
     staleTime: 60_000,

@@ -26,6 +26,7 @@ import {
   linkPersonEvent,
   unlinkPersonEvent,
 } from '@/shared/api/person-event-links'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import { Modal, ModalBody } from '@/shared/ui/modal'
 import {
@@ -108,7 +109,7 @@ export function PersonEventLinkModal({
         },
     )
     void queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
-    void queryClient.invalidateQueries({ queryKey: ['event-detail', eventId] })
+    void queryClient.invalidateQueries({ queryKey: eventKeys.detail(eventId) })
   }
 
   const linkMutation = useMutation({

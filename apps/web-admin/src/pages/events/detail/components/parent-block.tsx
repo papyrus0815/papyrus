@@ -8,6 +8,7 @@ import {
   isAnchorEvent,
   isEmptyAnchorEvent,
 } from '@/features/event-hierarchy/model/anchor'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { type UpdateEventDto, getEventsByParentId } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 import { InlineText } from '@/shared/ui/inline-edit'
@@ -121,7 +122,7 @@ export function ParentBlock({
   /* 형제(같은 상위) 사건 — 하위 사건 상세에서 부모 왕복 없이 이전/다음으로 이동.
    * 상위가 있을 때만 조회. 부모의 하위 목록(미삭제)을 시간순 정렬해 현재 위치의 앞뒤를 잡는다. */
   const { data: siblings = [] } = useQuery({
-    queryKey: ['events', 'siblings', event.parentEventId],
+    queryKey: eventKeys.siblings(event.parentEventId),
     queryFn: () => getEventsByParentId(event.parentEventId as string),
     enabled: Boolean(event.parentEventId),
     staleTime: 60_000,

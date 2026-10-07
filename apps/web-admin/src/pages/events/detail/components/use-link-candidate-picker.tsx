@@ -6,6 +6,7 @@ import {
   type EventLinkCandidate,
   getEventLinkCandidates,
 } from '@/shared/api/events'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
 import { type SelectOption } from '@/shared/ui/select-modal/select-modal'
@@ -63,7 +64,7 @@ export function useLinkCandidatePicker({
     refetch: refetchCandidates,
   } = useQuery({
     // ['events'] 프리픽스(eventKeys.lists()) 아래 — 사건 mutation 시 함께 무효화된다.
-    queryKey: ['events', 'link-candidates', debouncedTerm],
+    queryKey: eventKeys.linkCandidates(debouncedTerm),
     // limit은 표시 상한(50)보다 1 크게 요청 — 정확히 50건일 때 '더 있음' 오탐을 피하고
     // (>50일 때만 절단), 51번째는 표시하지 않고 '더 있음' 신호로만 쓴다.
     queryFn: () => getEventLinkCandidates({ query: debouncedTerm, limit: 51 }),

@@ -43,6 +43,7 @@ const SECTION_PREVIEW_COUNT = 6
 import { personKeys } from '@/entities/person/query-keys'
 import { getCategoryName } from '@/features/event-list/lib'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { formatDateWithPrecision, isoDaySpan } from '@/shared/lib/iso-date'
 import type {
   EventHierarchyNode,
@@ -211,7 +212,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
       await deleteEvent(selectedNode.id)
       // 사건은 인물 상세 '사건' 탭·국가 대시보드에도 박혀 있다 — 지운 사건이 거기 남지 않게
       void queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
-      void queryClient.invalidateQueries({ queryKey: ['events-by-country'] })
+      void queryClient.invalidateQueries({ queryKey: eventKeys.byCountryAll() })
       // 관리자 UI에 복구 동선이 없으므로 '복구 가능'을 약속하지 않는다.
       notify.success('사건이 삭제되었습니다.')
       if (onAfterDelete) {

@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllCountries } from '@/shared/api/countries'
 import { getAllEvents } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
@@ -156,7 +157,7 @@ export function CabinetLinkageModal({
   })
 
   const { data: eventOptions = [], isPending: eventsLoading } = useQuery({
-    queryKey: ['events-for-cabinet-linkage-fallback'],
+    queryKey: eventKeys.cabinetLinkageFallback(),
     queryFn: () => getAllEvents({ limit: 500 }),
     staleTime: 60_000,
     enabled:

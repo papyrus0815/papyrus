@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useQueries } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { cityApi } from '@/shared/api/city'
 import { getAllCountries } from '@/shared/api/countries'
@@ -274,7 +275,7 @@ export function useCountryDashboardStats(
          *  · 페이징 소진: 서버가 limit을 100으로 깎으므로 limit:5000은 '전부'가 아니었다.
          */
         /* 'flat' 꼬리표 — 같은 국가라도 계층 응답과 평면 응답은 다른 자료다 */
-        queryKey: ['events-by-country', countryId, 'flat'],
+        queryKey: eventKeys.byCountry(countryId, 'flat'),
         queryFn: () =>
           getAllEventsExhaustive({ countryId, includeSubEvents: true }),
         enabled: Boolean(countryId),

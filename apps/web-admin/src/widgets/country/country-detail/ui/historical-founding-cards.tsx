@@ -31,6 +31,7 @@ import {
   getHistoricalCountryFoundingSummary,
   updateHistoricalCountry,
 } from '@/shared/api/historical-countries'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { uploadImage } from '@/shared/api/upload'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { formatCountryYearShort } from '@/shared/lib/country-period'
@@ -128,7 +129,7 @@ export function HistoricalFoundingCards({
     staleTime: 60_000,
   })
   const { data: statehood } = useQuery({
-    queryKey: ['events', 'statehood', { historicalCountryId }],
+    queryKey: eventKeys.statehood({ historicalCountryId }),
     queryFn: () => getCountryStatehoodEvents({ historicalCountryId }),
     staleTime: 60_000,
   })
@@ -215,7 +216,7 @@ function FoundingCard({
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: foundingSummaryKey(historicalCountryId) })
-    void queryClient.invalidateQueries({ queryKey: ['events', 'statehood'] })
+    void queryClient.invalidateQueries({ queryKey: eventKeys.statehoodAll() })
   }
 
   const noteMutation = useMutation({
@@ -244,8 +245,8 @@ function FoundingCard({
       notify.success(next ? `${title} 사건으로 연결했습니다` : `${title} 사건 연결을 해제했습니다`)
       invalidate()
       // 사건 쪽 참여국 역할도 바뀌었다 — 목록·상세 캐시
-      void queryClient.invalidateQueries({ queryKey: ['events'] })
-      void queryClient.invalidateQueries({ queryKey: ['event-detail'] })
+      void queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: eventKeys.detailAll() })
     },
     onError: () => notify.error('사건 연결을 저장하지 못했습니다 — 본인이 등록한 사건만 연결할 수 있습니다'),
   })
@@ -256,7 +257,7 @@ function FoundingCard({
    * 검색 중엔 전 기간에서 찾되 역시 기준 해에 가까운 순으로 세운다.
    */
   const candidatesQuery = useQuery({
-    queryKey: ['events', 'link-candidates', debouncedTerm, debouncedTerm ? null : year],
+    queryKey: eventKeys.linkCandidates(debouncedTerm, debouncedTerm ? null : year),
     queryFn: () =>
       getEventLinkCandidates({
         query: debouncedTerm,

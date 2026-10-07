@@ -34,17 +34,6 @@ const refetchQueriesMock = jest.fn()
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ refetchQueries: refetchQueriesMock }),
 }))
-/**
- * `eventKeys`만 필요한데 이 모듈은 API 계층(`api.service.ts`)을 끌어오고, 그 파일의
- * `import.meta`가 현재 jest ts 설정에서 컴파일되지 않는다(리포 기존 제약).
- */
-jest.mock('@/pages/events/detail/use-event-detail', () => ({
-  eventKeys: {
-    lists: () => ['events'],
-    detail: (eventId: string) => ['event-detail', eventId],
-    count: () => ['events-count'],
-  },
-}))
 
 const confirmMock = jest.fn()
 jest.mock('@/shared/ui/confirm-dialog', () => ({

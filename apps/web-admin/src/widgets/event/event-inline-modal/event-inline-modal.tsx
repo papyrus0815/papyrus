@@ -15,6 +15,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { FiArrowRight, FiCalendar, FiMapPin, FiUsers, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { getEventById } from '@/shared/api/events'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { glassCardMixin } from '@/shared/styles/mixins'
@@ -58,7 +59,8 @@ export function EventInlineModal({
   useModalBehavior({ isOpen: !!eventId, onClose, containerRef: panelRef })
 
   const { data: event, isLoading } = useQuery({
-    queryKey: ['event-detail', eventId],
+    // 꺼져 있을 땐(eventId null) enabled:false라 빈 id 키는 조회되지 않는다
+    queryKey: eventKeys.detail(eventId ?? ''),
     queryFn: () => getEventById(eventId!),
     enabled: !!eventId,
   })

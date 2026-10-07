@@ -36,8 +36,8 @@ import type { BasicInfoResetOptions } from '@/features/event-form/model/useBasic
 import {
   type EventDetail,
   eventDetailQueryOptions,
-  eventKeys,
 } from '@/pages/events/detail/use-event-detail'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   type EventLinkCandidate,
   type EventResponseDto,
@@ -284,7 +284,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     refetch: refetchParentCandidates,
   } = useQuery({
     // detail-network의 연결 피커와 동일 키 — ['events'] 프리픽스 아래(사건 mutation 시 무효화).
-    queryKey: ['events', 'link-candidates', debouncedParentTerm],
+    queryKey: eventKeys.linkCandidates(debouncedParentTerm),
     // 서버 take 100 캡(알려진 제약) — 넘치는 후보는 검색어로 좁힌다. 51건 요청은
     // '50건 초과 → 더 있음' 신호용(detail-network와 동일).
     queryFn: () =>
@@ -598,7 +598,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
        * 대시보드에 새 사건이 보여야 한다. 마운트된 쿼리만 다시 받는다(목록과 달리 N페이지 소진 없음).
        */
       queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
-      queryClient.invalidateQueries({ queryKey: ['events-by-country'] })
+      queryClient.invalidateQueries({ queryKey: eventKeys.byCountryAll() })
       invalidateGamification(queryClient)
 
       // 캐시 시딩·상세 프리페치는 **셸 종류와 무관하게 항상** 수행한다.

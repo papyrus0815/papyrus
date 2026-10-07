@@ -24,6 +24,7 @@ import {
   relationGroupKey,
   updateEventRelation,
 } from '@/shared/api/event-relations'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { type EventLinkCandidate, getEventLinkCandidates } from '@/shared/api/events'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { formatYearLabel } from '@/shared/lib/iso-date'
@@ -135,7 +136,7 @@ export function RelatedBlock({ eventId, eventTitle }: RelatedBlockProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const debouncedTerm = useDebouncedValue(searchTerm, 250, String(pickerOpen))
   const candidatesQuery = useQuery({
-    queryKey: ['events', 'link-candidates', debouncedTerm],
+    queryKey: eventKeys.linkCandidates(debouncedTerm),
     queryFn: () => getEventLinkCandidates({ query: debouncedTerm, limit: 51 }),
     enabled: pickerOpen,
     staleTime: 60_000,

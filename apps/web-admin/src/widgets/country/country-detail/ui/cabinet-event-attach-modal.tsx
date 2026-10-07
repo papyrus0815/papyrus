@@ -159,7 +159,7 @@ export function CabinetEventAttachModal({
         } as any)
         eventId = created.id
         // 새 사건 — 사건 목록·사이드바·국가 대시보드가 바로 보이도록
-        invalidateEventQueries(queryClient, { countChanged: true })
+        invalidateEventQueries(queryClient)
       }
       if (!eventId) throw new Error('eventId 없음')
       await linkCabinetToEvent(eventId, cabinetId, role === '' ? null : role, null)

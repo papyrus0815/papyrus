@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { type EventLinkCandidate, getEventLinkCandidates } from '@/shared/api/events'
 
 import { useDebouncedValue } from './use-debounced-value'
@@ -29,7 +30,7 @@ export function useEventSearch(enabled: boolean) {
 
   const { data = [], isFetching, isError } = useQuery({
     // ['events'] 아래 — 사건 mutation의 목록 무효화에 함께 걸린다
-    queryKey: ['events', 'link-candidates', debouncedQuery],
+    queryKey: eventKeys.linkCandidates(debouncedQuery),
     queryFn: () =>
       getEventLinkCandidates({ query: debouncedQuery, limit: SHOWN_LIMIT + 1 }),
     enabled,

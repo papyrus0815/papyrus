@@ -365,7 +365,7 @@ describe('EventBasicForm — 저장', () => {
       refetchType: 'none',
     })
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: ['events-count'],
+      queryKey: ['events', 'count'],
       refetchType: 'none',
     })
   })
