@@ -366,11 +366,14 @@ export function PersonPoliticsSection({
       <PoliticalPartyRegisterViewModal
         isOpen={isMembershipModalOpen}
         onClose={closeMembershipModal}
+        /* 필드 5개짜리 폼 — 기본 960px·라벨 열 360px이면 라벨과 입력 사이가 300px 넘게 비었다 */
+        modalMaxWidth="min(680px, 96vw)"
+        modalMinHeight="auto"
         title={editingId ? '당원 소속 수정' : '당원 소속 추가'}
         description="① 역할 분류로 직책 유형을, ② 지도부면 위계를 고르고, ③ 직함·세부에는 정당·국가마다 다른 실제 직책명·공식 표기를 직접 적습니다. 정당 목록은 국가 상세에서 먼저 등록할 수 있습니다."
       >
         <FormSectionInner>
-          <FormRows>
+          <CompactFormRows>
             <FieldRow>
               <FieldLabel>정당</FieldLabel>
               <FullWidthFieldControl>
@@ -529,7 +532,7 @@ export function PersonPoliticsSection({
                 />
               </FullWidthFieldControl>
             </FieldRow>
-          </FormRows>
+          </CompactFormRows>
           <PersonRegisterModalFormActions>
             <PersonRegisterModalCancelBtn
               type="button"
@@ -725,6 +728,20 @@ export function PersonPoliticsSection({
     </Root>
   )
 }
+
+/* 이 모달 전용 — 공용 FieldRow(라벨 열 360px)는 넓은 국가 폼 기준이라 좁은 모달에선 라벨 열을 줄인다 */
+const CompactFormRows = styled(FormRows)`
+  ${FieldRow} {
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 16px;
+    padding: 14px 0;
+
+    @media (max-width: 640px) {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+  }
+`
 
 const FullWidthFieldControl = styled(FieldControl)`
   max-width: 100% !important;

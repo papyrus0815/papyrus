@@ -96,39 +96,51 @@ export const PersonRegisterModalBox = styled(motion.div)<{
       : ''}
 `
 
+/*
+ * 헤더·제목·닫기는 공용 <Modal>과 같은 치수로 맞춘다 — 상세의 등록 모달이 두 토대(Modal·RegisterModal)에
+ * 나뉘어 있어 제목이 18/700과 16/600, 닫기가 32와 28px로 모달마다 달랐다(당원 소속·인간관계 vs 수상·경력).
+ */
 export const PersonRegisterModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  gap: 12px;
+  padding: 20px 24px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
 `
 
 export const PersonRegisterModalTitle = styled.h2`
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.005em;
+  letter-spacing: -0.02em;
 `
 
 export const PersonRegisterModalCloseBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  transition: color 0.12s;
+  transition: background 0.2s, color 0.2s;
 
   &:hover {
+    background: ${({ theme }) => theme.colors.background.tertiary};
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
   }
 `
 

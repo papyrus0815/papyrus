@@ -88,6 +88,15 @@ body {
 
 
 
+  /*
+   * 폼 컨트롤은 브라우저 기본 글꼴을 쓴다(상속하지 않음) — textarea만 고정폭 계열로 떨어져
+   * placeholder가 '수상 배경·공적 등（선택）'처럼 전각 괄호·넓은 자간으로 벌어졌다(등록 모달 여러 곳).
+   * 글꼴 가족만 앱 글꼴로 물려받게 한다(크기·굵기는 각 컴포넌트가 정한다).
+   */
+  :where(input, select, textarea, button) {
+    font-family: inherit;
+  }
+
   /* 포커스 링(접근성) */
   :where(button, [role="button"], a, input, select, textarea) {
     &:focus-visible {

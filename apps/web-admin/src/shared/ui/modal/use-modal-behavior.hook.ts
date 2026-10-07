@@ -18,6 +18,9 @@ import { type RefObject, useEffect, useRef } from 'react'
 
 import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 
+/** 모달 닫기 버튼 — 공용 헤더의 X(aria-label '닫기')와 명시 표지 data-modal-close */
+const MODAL_CLOSE_SELECTOR = '[aria-label="닫기"], [data-modal-close]'
+
 const FOCUSABLE_SELECTOR = [
   'a[href]',
   'button:not([disabled])',
@@ -103,7 +106,12 @@ export function useModalBehavior({
           // React의 autoFocus prop은 DOM에 autofocus 속성을 남기지 않는다 — 폼이 첫 입력을
           // 지목하려면 data-autofocus를 단다.
           root.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ??
-          getFocusable(root)[0] ??
+          // 닫기(X)는 첫 포커스로 고르지 않는다 — 입력이 없는 모달(선택지 모달 등)이 열리자마자
+          // 오른쪽 위 X에 포커스 링이 서서 '눌린 버튼'처럼 보였다. 입력 칸 → 그 밖의 조작 → 박스 순.
+          getFocusable(root).find((element) =>
+            element.matches('input:not([type=hidden]), select, textarea, [contenteditable=true]'),
+          ) ??
+          getFocusable(root).find((element) => !element.matches(MODAL_CLOSE_SELECTOR)) ??
           root
         target.focus()
       })
