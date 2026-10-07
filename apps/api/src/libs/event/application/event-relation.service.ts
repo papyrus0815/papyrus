@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common'
 import { PrismaClient } from '@prisma/client'
 
+import { assertEventOwnership } from '../domain/event-ownership'
+
 import type {
   CreateEventRelationDto,
   EventRelationDirection,
@@ -38,20 +40,12 @@ export class EventRelationService {
 
   /** 요청자 소유 사건인지 확인 — 쓰기면 소프트삭제도 막는다 */
   private async assertOwnedEvent(eventId: string, userId: string, forWrite: boolean) {
-    const event = await this.prisma.event.findUnique({
-      where: { id: eventId },
-      select: { createdById: true, deletedAt: true },
+    await assertEventOwnership(this.prisma, eventId, userId, {
+      action: forWrite ? '수정' : '조회',
+      deleted: forWrite ? 'conflict' : 'allow',
     })
-    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
-    if (event.createdById !== userId) {
-      throw new ForbiddenException(
-        forWrite ? '본인이 등록한 사건만 수정할 수 있습니다.' : '본인이 등록한 사건만 조회할 수 있습니다.',
-      )
-    }
-    if (forWrite && event.deletedAt) {
-      throw new ConflictException('삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.')
-    }
   }
+
 
   /** 이 사건에 걸린 관계 행을 찾고, 그 행에서 지금 사건의 방향을 돌려준다 */
   private async findRelationFor(eventId: string, relationId: string) {

@@ -13,9 +13,7 @@ import {
   Patch,
   UseGuards,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
-  ConflictException,
 } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 
@@ -47,6 +45,7 @@ import { Event } from '../domain/event.entity'
 import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
 import { EventCountryRole, PrismaClient } from '@prisma/client'
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
+import { assertEventOwnership, ensureEventOwnership } from '../domain/event-ownership'
 
 /** 사건 날짜 구조화 파싱 결과 */
 interface ParsedEventDate {
@@ -1294,18 +1293,10 @@ export class EventController {
     const userId = req.user?.id // AuthGuard가 이미 인증 체크함
     
     // 상위 사건의 권한 체크
-    const parentEvent = await this.prisma.event.findUnique({
-      where: { id: parentEventId },
-      select: { createdById: true },
+    await assertEventOwnership(this.prisma, parentEventId, userId, {
+      action: '조회',
+      notFoundMessage: '상위 사건을 찾을 수 없습니다.',
     })
-    
-    if (!parentEvent) {
-      throw new NotFoundException('상위 사건을 찾을 수 없습니다.')
-    }
-
-    if (parentEvent.createdById !== userId) {
-      throw new ForbiddenException('본인이 등록한 사건의 하위 사건만 조회할 수 있습니다.')
-    }
     
     const events = await this.eventService.getEventsByParentId(parentEventId)
     return events.map((event) => this.toResponseDto(event))
@@ -1610,14 +1601,9 @@ export class EventController {
     const userId = req.user?.id // AuthGuard가 이미 인증 체크함
 
     const loaded = await this.loadEventDetail(id)
-    if (!loaded) {
-      throw new NotFoundException('사건을 찾을 수 없습니다.')
-    }
-
-    // 권한 체크: 본인 사건만 조회 가능
-    if (loaded.event.createdById !== userId) {
-      throw new ForbiddenException('본인이 등록한 사건만 조회할 수 있습니다.')
-    }
+    // 권한 체크: 본인 사건만 조회 가능 — 상세 행을 이미 읽었으니 다시 읽지 않는다
+    ensureEventOwnership(loaded?.event, userId, { action: '조회' })
+    if (!loaded) throw new NotFoundException('사건을 찾을 수 없습니다.')
 
     return loaded.response
   }
@@ -1721,28 +1707,14 @@ export class EventController {
     
     console.log(`👤 사건 수정 사용자: ${userId}`)
 
-    // 권한 체크: 본인이 등록한 사건만 수정 가능
-    const existingEvent = await this.prisma.event.findUnique({
-      where: { id },
-      select: { createdById: true, deletedAt: true },
-    })
-
-    if (!existingEvent) {
-      throw new NotFoundException('사건을 찾을 수 없습니다.')
-    }
-
-    if (existingEvent.createdById !== userId) {
-      throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
-    }
-
+    // 권한 체크: 본인이 등록한 사건만 수정 가능.
     // 소프트삭제된 사건 쓰기 차단(HIER-W3) — 서비스 findById가 deletedAt을 안 거르므로
     // 여기서 막지 않으면 유령 사건에 PUT { childEventIds }로 살아있는 자식이 유령 부모
     // 아래로 attach되어 전 뷰에서 소실된다. 복구(restore) 후 수정해야 한다.
-    if (existingEvent.deletedAt) {
-      throw new ConflictException(
-        '삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.',
-      )
-    }
+    await assertEventOwnership(this.prisma, id, userId, {
+      action: '수정',
+      deleted: 'conflict',
+    })
 
     // categoryName이 제공되면 categoryId로 변환 (우선순위: categoryName > categoryId)
     let categoryId = dto.categoryId
@@ -1827,18 +1799,7 @@ export class EventController {
     console.log(`👤 사건 삭제 사용자: ${userId}`)
     
     // 권한 체크: 본인이 등록한 사건만 삭제 가능
-    const existingEvent = await this.prisma.event.findUnique({
-      where: { id },
-      select: { createdById: true },
-    })
-    
-    if (!existingEvent) {
-      throw new NotFoundException('사건을 찾을 수 없습니다.')
-    }
-    
-    if (existingEvent.createdById !== userId) {
-      throw new ForbiddenException('본인이 등록한 사건만 삭제할 수 있습니다.')
-    }
+    await assertEventOwnership(this.prisma, id, userId, { action: '삭제' })
     
     await this.eventService.deleteEvent(id, userId)
   }
@@ -1893,9 +1854,7 @@ export class EventController {
     @Request() req?: any,
   ): Promise<any[]> {
     const userId = req.user?.id
-    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
-    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
-    if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 조회할 수 있습니다.')
+    await assertEventOwnership(this.prisma, id, userId, { action: '조회' })
 
     const rows = await this.prisma.cabinetEvent.findMany({
       where: { eventId: id },
@@ -1928,11 +1887,8 @@ export class EventController {
     @Request() req?: any,
   ): Promise<any> {
     const userId = req.user?.id
-    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true, deletedAt: true } })
-    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
-    if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
     // 유령 사건에 신규 연결 금지 — PUT 게이트(HIER-W3)와 동일 규약(해제는 정리라 허용)
-    if (event.deletedAt) throw new ConflictException('삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.')
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정', deleted: 'conflict' })
 
     if (!body?.cabinetId) throw new BadRequestException('cabinetId가 필요합니다.')
 
@@ -1972,11 +1928,8 @@ export class EventController {
     @Request() req?: any,
   ): Promise<any> {
     const userId = req.user?.id
-    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true, deletedAt: true } })
-    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
-    if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
     // 유령 사건 쓰기 차단 — PUT 게이트(HIER-W3)와 동일 규약(해제는 정리라 허용)
-    if (event.deletedAt) throw new ConflictException('삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.')
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정', deleted: 'conflict' })
 
     return this.prisma.cabinetEvent.update({
       where: { cabinetId_eventId: { cabinetId, eventId: id } },
@@ -1998,9 +1951,8 @@ export class EventController {
     @Request() req?: any,
   ): Promise<void> {
     const userId = req.user?.id
-    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
-    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
-    if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
+    // 해제는 정리라 삭제된 사건에도 허용
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정' })
 
     await this.prisma.cabinetEvent.deleteMany({ where: { cabinetId, eventId: id } })
   }
@@ -2072,17 +2024,7 @@ export class EventController {
     @Request() req?: { user?: { id?: string } },
   ): Promise<{ eventId: string; historicalCountryId: string; role: string }> {
     const userId = req?.user?.id
-    const event = await this.prisma.event.findUnique({
-      where: { id },
-      select: { createdById: true, deletedAt: true },
-    })
-    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
-    if (event.createdById !== userId) {
-      throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
-    }
-    if (event.deletedAt) {
-      throw new ConflictException('삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.')
-    }
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정', deleted: 'conflict' })
     if (!body?.historicalCountryId) {
       throw new BadRequestException('historicalCountryId가 필요합니다.')
     }

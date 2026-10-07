@@ -1,10 +1,10 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common'
 import { ObservationSubjectType, PrismaClient, SideLevel } from '@prisma/client'
+
+import { assertEventOwnership } from '../domain/event-ownership'
 
 import { removeObservationsForSubjects } from '../../evidence/application/observation-cleanup'
 import { columnsToPoint, type StructuredPoint } from '../../shared/structured-point'
@@ -177,13 +177,9 @@ export class EventSideService {
   }
 
   private async assertOwner(eventId: string, actorId: string): Promise<void> {
-    const event = await this.prisma.event.findUnique({
-      where: { id: eventId },
-      select: { createdById: true, deletedAt: true },
+    await assertEventOwnership(this.prisma, eventId, actorId, {
+      action: '진영 편집',
+      deleted: 'not-found',
     })
-    if (!event || event.deletedAt) throw new NotFoundException('사건을 찾을 수 없습니다')
-    if (event.createdById !== actorId) {
-      throw new ForbiddenException('본인이 등록한 사건의 진영만 편집할 수 있습니다')
-    }
   }
 }
