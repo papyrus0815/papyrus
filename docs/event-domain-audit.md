@@ -172,6 +172,9 @@ web-admin 사건 관련 전 디렉터리. 근거는 실DB 행 수(로컬 DB) · 
 - **배치 2 완료**: D2 장부 페이지·죽은 파일 24개 삭제 + `ledger-tokens`를 `entities/event/ui`로 이전 ·
   D3 `GET /events/eras` 제거 · B1-4 국가 대시보드 전용 폼(1,954줄) → 공용 `EventRegisterModal`
   (편집 분기는 넘겨주는 곳이 없던 죽은 코드라 함께 삭제).
+- **배치 3 완료**: E 캐시 키 단일 팩토리(`shared/api/event-query-keys`, 목록류는 전부 `['events', …]`) ·
+  E 소유권 검사 `domain/event-ownership` 단일화(컨트롤러 9곳 + 관계·진영 서비스) ·
+  A3 휴지통(목록 ⋯ 메뉴 → '삭제한 사건', 복구·영구 삭제, 응답에 `deletedAt`).
 
 ## 권고 순서
 

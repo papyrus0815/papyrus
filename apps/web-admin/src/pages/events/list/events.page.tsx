@@ -86,6 +86,7 @@ import {
   CatalogViewUtilities,
 } from './components/catalog-toolbar'
 import { useCatalogEventIndex } from './hooks/use-catalog-event-index'
+import { DeletedEventsModal } from '@/widgets/event/deleted-events-modal/deleted-events-modal'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 import { useEventRegisterModalUrl } from '@/widgets/event-form/model/use-event-register-modal-url'
 import { useCatalogModals } from './hooks/use-catalog-modals'
@@ -629,6 +630,9 @@ export const EventsCatalogPage: React.FC = () => {
     close: closeCreateModal,
     onDirtyChange: onCreateFormDirtyChange,
   } = useEventRegisterModalUrl()
+
+  /** 삭제한 사건(휴지통) — ⋯ 메뉴에서 연다 */
+  const [deletedEventsOpen, setDeletedEventsOpen] = useState(false)
 
   /*
    * (제거) `createParentPreset`·`handleCreateChildEvent` — 유일한 호출자였던 트리 뷰의
@@ -2080,6 +2084,7 @@ export const EventsCatalogPage: React.FC = () => {
         onToggleCenturiesOnly={toggleCenturiesOnly}
         onExportJson={handleExportJson}
         onOpenShortcutHelp={openShortcutHelp}
+        onOpenDeletedEvents={() => setDeletedEventsOpen(true)}
         pageSize={pageSize}
         onPageSizeChange={handlePageSizeChange}
         sortBy={sortBy}
@@ -2224,6 +2229,11 @@ export const EventsCatalogPage: React.FC = () => {
         isOpen={createModalOpen}
         onClose={closeCreateModal}
         onDirtyChange={onCreateFormDirtyChange}
+      />
+
+      <DeletedEventsModal
+        isOpen={deletedEventsOpen}
+        onClose={() => setDeletedEventsOpen(false)}
       />
     </>
   )

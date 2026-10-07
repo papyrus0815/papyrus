@@ -469,6 +469,12 @@ export class EventResponseDto {
   @ApiProperty({ description: '수정일시', required: false })
   updatedAt?: string
 
+  @ApiProperty({
+    description: '삭제(소프트삭제) 일시 — 삭제 목록(GET /events/deleted/list)에서만 채워진다. 살아 있는 사건은 생략',
+    required: false,
+  })
+  deletedAt?: string
+
   @ApiProperty({ description: '진영(D1) — 소속 참여자 포함. 상세 응답에서만', required: false })
   sides?: EventSideView[]
 }

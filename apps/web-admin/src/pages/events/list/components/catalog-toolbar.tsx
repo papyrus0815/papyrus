@@ -23,6 +23,7 @@ import {
   FiSliders,
   FiArrowDown,
   FiHelpCircle,
+  FiTrash2,
   FiPlus,
   FiSearch,
   FiX,
@@ -455,6 +456,8 @@ interface ViewUtilitiesProps {
   onToggleCenturiesOnly?: () => void
   onExportJson: () => void
   onOpenShortcutHelp: () => void
+  /** 삭제한 사건(휴지통) 열기 — 없으면 메뉴 항목을 그리지 않는다 */
+  onOpenDeletedEvents?: () => void
   /**
    * 한 번에 불러올 사건 수 — 저빈도 설정(메뉴 안에 산다).
    * `EVENTS_PAGE_SIZE_ALL`(0)이면 '모두'(쪼개지 않고 한 번에 전부).
@@ -570,6 +573,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
   onToggleCenturiesOnly,
   onExportJson,
   onOpenShortcutHelp,
+  onOpenDeletedEvents,
   pageSize,
   onPageSizeChange,
   sortBy,
@@ -1006,6 +1010,18 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
               <FiDownload size={13} aria-hidden="true" />
               <span>JSON 내보내기</span>
             </UtilityMenuItem>
+            {onOpenDeletedEvents && (
+              <UtilityMenuItem
+                type="button"
+                onClick={() => {
+                  onOpenDeletedEvents()
+                  setMenuOpen(false)
+                }}
+              >
+                <FiTrash2 size={13} aria-hidden="true" />
+                <span>삭제한 사건</span>
+              </UtilityMenuItem>
+            )}
             <UtilityMenuItem
               type="button"
               onClick={() => {

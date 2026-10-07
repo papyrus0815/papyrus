@@ -501,6 +501,8 @@ export class EventController {
         : undefined,
       createdAt: event.createdAt?.toISOString ? event.createdAt.toISOString() : event.createdAt,
       updatedAt: event.updatedAt?.toISOString ? event.updatedAt.toISOString() : event.updatedAt,
+      // 휴지통 화면의 '언제 지웠나' — 살아 있는 사건엔 싣지 않는다(목록 페이로드 불변)
+      ...(event.deletedAt ? { deletedAt: new Date(event.deletedAt).toISOString() } : {}),
     }
   }
 
