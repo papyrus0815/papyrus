@@ -14,7 +14,7 @@ import {
   withAlpha,
   type LedgerCategory,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 
 /**

@@ -10,7 +10,7 @@ import {
   resolveCategory,
   withAlpha,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { CATEGORY_SOFT_COLORS, metaText } from '@/pages/events/styles/theme'
 import {
   type EventCategoryDto,

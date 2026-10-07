@@ -23,7 +23,7 @@ import {
   ledgerBackground,
   ledgerHairlineStrong,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type MentionItem } from '@/shared/lib/mention/mention-system'
 import { emphasisToHtml } from '@/shared/lib/emphasis-markup'

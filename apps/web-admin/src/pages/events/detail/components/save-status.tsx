@@ -5,7 +5,7 @@ import styled, { css, keyframes } from 'styled-components'
 
 import { ledgerHairlineStrong,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 
 interface SaveStatusProps {
   isPending: boolean

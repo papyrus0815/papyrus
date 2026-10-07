@@ -26,7 +26,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
-import { resolveCategory } from '@/pages/events/ledger/styles/ledger-tokens'
+import { resolveCategory } from '@/entities/event/ui/ledger-tokens'
 
 export interface EventInlineModalProps {
   /** 열려 있는 사건 id. null이면 모달 닫힘. */

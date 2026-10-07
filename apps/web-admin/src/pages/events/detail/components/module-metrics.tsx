@@ -10,7 +10,7 @@ import {
   isUnverified,
   observationExtent,
 } from '@/entities/evidence/lib/format-observation'
-import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+import { RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { deleteObservation, type Observation } from '@/shared/api/evidence'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { notify } from '@/shared/ui/toast'

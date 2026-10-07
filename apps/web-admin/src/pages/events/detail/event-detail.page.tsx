@@ -9,7 +9,7 @@ import styled from 'styled-components'
 
 import { resolveCategory,
   ledgerAccent,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { CommentSection } from '@/entities/comment'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'

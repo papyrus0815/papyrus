@@ -7,7 +7,7 @@ import {
   ledgerAccent,
   ledgerHairline,
   ledgerHairlineStrong,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 
 import * as S from '../styles'

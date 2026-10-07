@@ -32,7 +32,7 @@ export const eventPageRoute: RouteObject = {
   path: 'events',
   children: [
     {
-      // /events — 사건 리스트(catalog). ledger 페이지는 보류·미라우트.
+      // /events — 사건 리스트(catalog).
       index: true,
       lazy: async () => {
         // 진입 시 마지막 설정 복원은 라우트 컴포넌트가 한다(EventsCatalogRoute 주석 참고)

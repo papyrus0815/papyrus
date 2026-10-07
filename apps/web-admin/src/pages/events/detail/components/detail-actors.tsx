@@ -16,7 +16,7 @@ import {
   ledgerAccent,
   ledgerHairlineStrong,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 
 import {
   EVENT_COUNTRY_ROLE_OPTIONS,

@@ -3,7 +3,7 @@
  *
  * SectionTitle 좌측 색 점에 사용. 색상은 ledger 카테고리 토큰 재사용.
  */
-import { LEDGER_CATEGORY } from '@/pages/events/ledger/styles/ledger-tokens'
+import { LEDGER_CATEGORY } from '@/entities/event/ui/ledger-tokens'
 
 export const MODULE_COLOR = {
   sides: LEDGER_CATEGORY['전쟁/군사'].color,

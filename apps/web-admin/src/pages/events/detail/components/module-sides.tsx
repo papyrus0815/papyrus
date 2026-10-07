@@ -6,7 +6,7 @@ import styled from 'styled-components'
 
 import { toParticipants, participantKey } from '@/entities/event/model'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+import { RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { type EventSide, syncEventSides, toSideInputs } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'

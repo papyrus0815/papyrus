@@ -5,6 +5,10 @@
  * 톤: atlas/ledger — 잡지 매거진 톤이 아님. 좁은 행간·단단한 격자·강한 숫자 타이포.
  *
  * 모든 ledger 컴포넌트는 색·라인·표면을 이 파일의 토큰으로만 참조한다 (다크/라이트 일관성).
+ *
+ * 원래 `pages/events/ledger/styles/`에 있었다. 장부 페이지는 라우트에 연결되지 않은 채
+ * 남았고, 살아 있는 사건 상세·인라인 모달이 그 죽은 페이지에서 토큰을 가져다 쓰고 있어
+ * (widgets → pages 역방향 의존) 페이지를 지우고 토큰만 entities로 옮겼다.
  */
 import { css } from 'styled-components'
 

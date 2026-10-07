@@ -8,7 +8,7 @@ import {
   RADIUS,
   ledgerAccent,
   resolveCategory,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import {

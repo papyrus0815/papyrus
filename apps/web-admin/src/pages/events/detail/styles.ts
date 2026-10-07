@@ -21,7 +21,7 @@ import {
   ledgerHairlineHover,
   ledgerHairlineStrong,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 
 /* ───────────────────────── Width system ───────────────────────── */
 

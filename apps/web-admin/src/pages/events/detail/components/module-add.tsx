@@ -16,7 +16,7 @@ import {
   ledgerAccentSubtle,
   ledgerHairlineStrong,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 

@@ -17,7 +17,7 @@ import {
   ledgerAccent,
   ledgerHairlineStrong,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { toParticipants } from '@/entities/event/model'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { notify } from '@/shared/ui/toast'

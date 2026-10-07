@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styled from 'styled-components'
 
-import { ledgerAccent } from '@/pages/events/ledger/styles/ledger-tokens'
+import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
 
 import { type UpdateEventDto } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog'

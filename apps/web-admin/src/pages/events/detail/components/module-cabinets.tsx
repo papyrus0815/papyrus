@@ -3,7 +3,7 @@ import styled from 'styled-components'
 
 import { ledgerAccent,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 
 import { pathKeys } from '@/shared/router'
 

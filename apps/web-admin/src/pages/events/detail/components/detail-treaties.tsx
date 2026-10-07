@@ -20,7 +20,7 @@ import {
   ledgerAccent,
   ledgerHairlineStrong,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 
 import {
   TREATY_EVENT_LINK_LABELS,

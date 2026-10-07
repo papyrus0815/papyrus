@@ -4,7 +4,7 @@ import styled from 'styled-components'
 import { ledgerHairlineStrong,
   ledgerAccent,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { confirm } from '@/shared/ui/confirm-dialog'
 
 interface ModuleRemoveActionProps {

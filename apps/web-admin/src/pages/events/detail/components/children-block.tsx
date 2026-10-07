@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 
 import { FiPlus, FiX } from 'react-icons/fi'
 
-import { resolveCategory } from '@/pages/events/ledger/styles/ledger-tokens'
+import { resolveCategory } from '@/entities/event/ui/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { pathKeys } from '@/shared/router'

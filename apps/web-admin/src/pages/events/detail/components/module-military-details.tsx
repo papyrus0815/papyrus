@@ -1,6 +1,6 @@
 import styled from 'styled-components'
 
-import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+import { RADIUS } from '@/entities/event/ui/ledger-tokens'
 
 import { type UpdateEventDto } from '@/shared/api/events'
 

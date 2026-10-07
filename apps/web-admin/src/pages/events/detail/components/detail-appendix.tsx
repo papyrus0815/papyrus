@@ -10,7 +10,7 @@ import {
   ledgerBackground,
   ledgerHairlineStrong,
   RADIUS,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+} from '@/entities/event/ui/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 
-import { RADIUS } from '@/pages/events/ledger/styles/ledger-tokens'
+import { RADIUS } from '@/entities/event/ui/ledger-tokens'
 import {
   type CitationInput,
   createObservation,
