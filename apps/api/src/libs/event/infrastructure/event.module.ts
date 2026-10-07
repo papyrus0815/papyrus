@@ -6,6 +6,8 @@ import { EventRelationService } from '../application/event-relation.service'
 import { EventSideService } from '../application/event-side.service'
 import { EventSectionService } from '../application/event-section.service'
 import { EventSideController } from '../presentation/event-side.controller'
+import { EventOverviewController } from '../presentation/event-overview.controller'
+import { EventOverviewService } from '../application/event-overview.service'
 import { EventPrismaRepository } from './event.prisma.repository'
 import { EventController } from '../presentation/event.controller'
 import { PrismaModule } from '../../shared/database'
@@ -13,7 +15,7 @@ import { NotificationModule } from '../../notification/notification.module'
 
 @Module({
   imports: [PrismaModule, NotificationModule],
-  controllers: [EventController, EventSideController],
+  controllers: [EventController, EventSideController, EventOverviewController],
   providers: [
     EventService,
     MilitaryEventService,
@@ -21,6 +23,7 @@ import { NotificationModule } from '../../notification/notification.module'
     EventRelationService,
     EventSideService,
     EventSectionService,
+    EventOverviewService,
     EventPrismaRepository,
     { provide: 'EventRepository', useClass: EventPrismaRepository },
   ],

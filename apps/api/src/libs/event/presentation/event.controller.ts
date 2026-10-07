@@ -46,6 +46,7 @@ import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
 import { EventCountryRole, PrismaClient } from '@prisma/client'
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
 import { assertEventOwnership, ensureEventOwnership } from '../domain/event-ownership'
+import { formatEventDate } from '../domain/event-date'
 
 /** 사건 날짜 구조화 파싱 결과 */
 interface ParsedEventDate {
@@ -86,28 +87,6 @@ function parseEventDate(iso?: string | null): ParsedEventDate | undefined {
   const date =
     !neg && year >= 1000 && year <= 9999 ? new Date(Date.UTC(year, month - 1, day)) : null
   return { date, era, year, month, day }
-}
-
-/**
- * 응답용 날짜 문자열 재구성. 저장 DateTime이 있으면 기존 동작 보존(toISOString),
- * 없으면 구조화 필드로 ISO(음수=BC) 재구성. 둘 다 없으면 null.
- */
-function formatEventDate(
-  date: Date | string | null | undefined,
-  era: 'BC' | 'AD' | null | undefined,
-  year: number | null | undefined,
-  month: number | null | undefined,
-  day: number | null | undefined,
-): string | null {
-  if (date) {
-    if (typeof (date as Date).toISOString === 'function') return (date as Date).toISOString()
-    return date as string // 이미 문자열로 들어온 경우
-  }
-  if (year == null) return null
-  const yyyy = String(year).padStart(4, '0')
-  const mm = String(month ?? 1).padStart(2, '0')
-  const dd = String(day ?? 1).padStart(2, '0')
-  return `${era === 'BC' ? '-' : ''}${yyyy}-${mm}-${dd}`
 }
 
 /** 방문(놀러가기)용 사건 카드 — 제목·날짜·카테고리만(상세·본문·하위사건·이미지 미개방, 읽기전용) */
