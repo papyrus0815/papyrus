@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { FiChevronRight } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { CountMuted } from './person-detail-panel.styles'
+import { CountMuted, sectionHeadingCss } from './person-detail-panel.styles'
 
 const STORAGE_PREFIX = 'papyrus.person-overview.collapse.'
 
@@ -110,29 +110,17 @@ const HeaderRow = styled.div<{ $open: boolean }>`
 `
 
 const ToggleButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  ${sectionHeadingCss}
   flex: 1 1 auto;
   min-width: 0;
-  margin: 0;
   padding: 0;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
   text-align: left;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  svg {
-    flex-shrink: 0;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
+
   &:hover {
-    /* theme.colors.primary는 문자열 토큰 */
-    color: ${({ theme }) => theme.colors.primary ?? '#4338ca'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
   }
 `
 

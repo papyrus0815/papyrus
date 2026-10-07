@@ -250,6 +250,91 @@ export const BioDynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
   }
 `
 
+/**
+ * ── 개요 디자인 체계 ──
+ * 개요의 섹션 머리와 버튼이 섹션마다 따로 놀았다(실측 버튼 스타일 12종: 높이 17~38px,
+ * 모서리 0·7·8·9·10·12·999px, 인디고 틴트·보라 틴트·그라데이션 채움·회색 테두리가 섞임).
+ * 여기 두 가지가 단일 출처다 — 개요에 섹션을 더할 때는 이 둘을 쓴다.
+ */
+
+/** 섹션 소제목 — 15px 굵게 + 아이콘 타일(24px, 옅은 인디고). 접는 섹션·관계·묶음·능력치가 같은 모양 */
+export const sectionHeadingCss = css`
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+
+  /* 직속 아이콘만 타일로 — 접기 화살표(span 안 svg)는 그대로 */
+  > svg {
+    flex-shrink: 0;
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    padding: 5px;
+    border-radius: 7px;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)'};
+  }
+`
+
+/**
+ * 섹션 액션 버튼 — 섹션 머리 오른쪽의 추가·관리·수정·비교. 높이 32 · 모서리 8 · 회색 테두리 ·
+ * 지면색 바탕. 추가(+) 아이콘만 인디고로 '만드는 버튼'임을 말하고, 나머지는 hover에서만 색이 든다.
+ * 한 화면에 꽉 찬 색 버튼은 머리의 '수정'·'삭제'뿐 — 섹션 안에서 색 덩어리가 경쟁하지 않게.
+ */
+export const sectionActionButtonCss = css`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease,
+    background 0.12s ease;
+
+  svg {
+    flex-shrink: 0;
+    width: 13px;
+    height: 13px;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(165,180,252,0.55)' : 'rgba(79,70,229,0.45)'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.04)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+`
+
 export const PanelRoot = styled.div<{ $embed?: boolean }>`
   display: flex;
   flex-direction: column;
@@ -702,37 +787,7 @@ export const BackToListButton = styled.button`
 `
 
 export const OutlineButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 12px;
-  cursor: pointer;
-  color: #6366f1;
-  transition: all 0.2s ease;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          &:hover {
-            background: rgba(99, 102, 241, 0.12);
-            transform: translateY(-1px);
-          }
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(99, 102, 241, 0.2);
-          &:hover {
-            background: rgba(99, 102, 241, 0.06);
-            border-color: rgba(99, 102, 241, 0.35);
-            transform: translateY(-1px);
-            box-shadow: none;
-          }
-        `}
+  ${sectionActionButtonCss}
 `
 
 export const DeleteButton = styled.button`
@@ -1048,6 +1103,8 @@ export const OverviewSections = styled.div`
   display: flex;
   flex-direction: column;
   gap: 32px;
+  /* 묶음(장) 번호 — OverviewClusterLabel이 01·02…를 매긴다. 조건부 묶음이 빠져도 번호가 이어진다 */
+  counter-reset: person-chapter;
 
   /* 접이식 섹션(분야별 경력·학력·수상…)이 연달아 오면 한 목록처럼 촘촘히 — 비어 접힌 줄마다 ~80px이었다 */
   & > [data-collapsible] + [data-collapsible] {
@@ -1058,23 +1115,45 @@ export const OverviewSections = styled.div`
 /** 개요 4클러스터(생애·요약 / 이력·활동 / 관계 / 소속·맥락) 구분 라벨 — 라벨 + 우측 divider 선.
     위쪽에 여백을 더하고 아래쪽을 당겨(margin) 라벨이 뒤따르는 섹션 묶음에 붙어 보이게 한다. */
 export const OverviewClusterLabel = styled.div`
+  /*
+   * 장(章) 머리 — 묶음 사이 경계. 예전엔 18px 제목 + 오른쪽 가는 선뿐이라 소제목(14px)과 위계 차가
+   * 작았고, 재임 카드 15장이 이어지면 어디까지가 한 묶음인지 읽히지 않았다.
+   * 이제 위에 넉넉한 숨(48px) + 전폭 괘선 + 장 번호 배지(01·02…) + 20px 제목으로 '새 장'을 연다.
+   */
+  counter-increment: person-chapter;
   display: flex;
   align-items: center;
-  gap: 14px;
-  /* 장(章) 제목 — 아래 섹션 제목(전기·재임·재위 15px)보다 커야 위계가 선다.
-     예전 11px 대문자 회색 라벨은 섹션 제목보다 약해 묶음이 안 읽혔다 */
-  margin: 16px 0 -12px;
-  font-size: 18px;
+  gap: 10px;
+  margin: 24px 0 -10px;
+  padding-top: 28px;
+  border-top: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0')};
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
-  /* 고정 내비(축약 머리 + 탭 + 섹션 칩 ≈ 130px) 아래로 착지 */
+  /* 고정 내비(축약 머리 + 탭 + 섹션 칩) 아래로 착지 */
   scroll-margin-top: var(--person-sticky-offset, 16px);
-  &::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: ${({ theme }) => theme.colors.border.light};
+
+  &::before {
+    content: counter(person-chapter, decimal-leading-zero);
+    flex-shrink: 0;
+    padding: 3px 7px;
+    border-radius: 6px;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.1)'};
+  }
+
+  /* 첫 장은 고정 내비 바로 밑이라 괘선·숨을 두지 않는다 */
+  &:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
   }
 `
 
@@ -1229,19 +1308,7 @@ export const OverviewSectionHeaderRow = styled.div`
 `
 
 export const OverviewSectionHeading = styled.h3`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  svg {
-    flex-shrink: 0;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
+  ${sectionHeadingCss}
 `
 
 export const CountMuted = styled.span`
@@ -1872,40 +1939,12 @@ export const BioEmptyCta = styled.span`
 `
 
 export const TenureAddButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 13px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 10px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.1s ease;
-  color: #6366f1;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(99, 102, 241, 0.08);
-          border: 1px solid rgba(99, 102, 241, 0.25);
-          &:hover {
-            background: rgba(99, 102, 241, 0.14);
-            border-color: rgba(99, 102, 241, 0.45);
-            transform: translateY(-1px);
-          }
-        `
-      : css`
-          background: rgba(99, 102, 241, 0.06);
-          border: 1px solid rgba(99, 102, 241, 0.2);
-          &:hover {
-            background: rgba(99, 102, 241, 0.1);
-            border-color: rgba(99, 102, 241, 0.4);
-            transform: translateY(-1px);
-          }
-        `}
+  ${sectionActionButtonCss}
+
+  /* 추가 버튼 — '+'만 인디고로 '만드는' 버튼임을 표시 */
+  svg {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  }
 `
 
 export const TenureEmpty = styled.p`

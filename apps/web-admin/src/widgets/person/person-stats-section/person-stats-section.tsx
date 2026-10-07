@@ -19,6 +19,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { FiEdit2, FiGitMerge, FiPlus, FiTarget } from 'react-icons/fi'
 import styled from 'styled-components'
+import { sectionActionButtonCss, sectionHeadingCss } from '@/widgets/person/person-detail-panel/person-detail-panel.styles'
 
 import {
   type PersonStats,
@@ -243,19 +244,7 @@ const HeaderRow = styled.div`
 `
 
 const SectionHeading = styled.h3`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  svg {
-    flex-shrink: 0;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
+  ${sectionHeadingCss}
 `
 
 /** 영향력(canonical)과 구분하기 위한 출처 표기 */
@@ -277,47 +266,11 @@ const HeaderActions = styled.div`
 `
 
 const CompareBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  font-size: 11.5px;
-  font-weight: 600;
-  border-radius: 8px;
-  cursor: pointer;
-  background: transparent;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-  &:hover {
-    background: rgba(99, 102, 241, 0.06);
-    color: #6366f1;
-    border-color: rgba(99, 102, 241, 0.45);
-  }
+  ${sectionActionButtonCss}
 `
 
 const PrimaryHeaderBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 12px;
-  font-size: 12.5px;
-  font-weight: 600;
-  border-radius: 9px;
-  cursor: pointer;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  color: #fff;
-  border: 1px solid rgba(99, 102, 241, 0.45);
-  transition: opacity 0.12s ease;
-  &:hover:not(:disabled) {
-    opacity: 0.92;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  ${sectionActionButtonCss}
 `
 
 const BodyRow = styled.div`
@@ -382,25 +335,10 @@ const EmptyText = styled.p`
 `
 
 const EmptyCtaBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
-  font-size: 12.5px;
-  font-weight: 600;
-  border-radius: 9px;
-  cursor: pointer;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  color: #fff;
-  border: 1px solid rgba(99, 102, 241, 0.45);
-  flex-shrink: 0;
-  transition: opacity 0.12s ease;
-  &:hover:not(:disabled) {
-    opacity: 0.92;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  ${sectionActionButtonCss}
+
+  svg {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   }
 `
 

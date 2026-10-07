@@ -35,7 +35,9 @@ import {
   FiTrash2,
   FiUser,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
+
+import { sectionActionButtonCss } from './person-detail-panel.styles'
 
 import { personKeys } from '@/entities/person/api'
 import type {
@@ -1257,21 +1259,16 @@ const Toolbar = styled.div`
 `
 
 const ManageToggle = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 7px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active ? '#4f46e5' : theme.colors.border.default};
-  color: ${({ theme, $active }) =>
-    $active ? '#4f46e5' : theme.colors.text.secondary};
-  background: ${({ theme, $active }) =>
-    $active ? 'rgba(79,70,229,0.08)' : theme.colors.background.primary};
-  cursor: pointer;
+  ${sectionActionButtonCss}
+
+  /* 관리 모드 중 — 눌린 상태 */
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      border-color: #6366f1;
+      color: ${theme.mode === 'dark' ? '#c7d2fe' : '#4338ca'};
+      background: ${theme.mode === 'dark' ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)'};
+    `}
 `
 
 /** 목차 — 섹션 3개 이상일 때 점프 내비게이션. */

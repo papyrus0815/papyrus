@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { FiLayers, FiSettings } from 'react-icons/fi'
 import styled from 'styled-components'
+import { sectionActionButtonCss, sectionHeadingCss } from '@/widgets/person/person-detail-panel/person-detail-panel.styles'
 
 import type { Person } from '@/shared/api/person'
 import {
@@ -264,17 +265,7 @@ const HeaderRow = styled.div`
 `
 
 const HeaderTitle = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.01em;
-
-  svg {
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
+  ${sectionHeadingCss}
 `
 
 const Hint = styled.span`
@@ -285,29 +276,7 @@ const Hint = styled.span`
 `
 
 const ManageBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) =>
-      isDark(theme.mode) ? 'rgba(99,106,242,0.12)' : 'rgba(99,102,241,0.06)'};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 2px;
-  }
+  ${sectionActionButtonCss}
 `
 
 const Groups = styled.div`

@@ -25,10 +25,12 @@ import {
   FiPlus,
   FiTrash2,
   FiUser,
+  FiUsers,
   FiX,
 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
+import { sectionActionButtonCss, sectionHeadingCss } from '@/widgets/person/person-detail-panel/person-detail-panel.styles'
 
 import {
   AFFINITY_LEVELS,
@@ -1353,7 +1355,10 @@ export function PersonHumanRelationshipsSection({
 
       <Root>
         <HeaderRow>
-          <SectionTitle>인간관계</SectionTitle>
+          <SectionTitle>
+            <FiUsers aria-hidden />
+            인간관계
+          </SectionTitle>
           <HeaderActionGroup>
             <HeaderBtn
               type="button"
@@ -2431,12 +2436,7 @@ const HeaderRow = styled.div`
 
 /** 부모 패널의 SectionLabel과 동일 톤(11px upper, indigo) */
 const SectionTitle = styled.h3`
-  margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #6366f1;
+  ${sectionHeadingCss}
 `
 
 const HeaderActionGroup = styled.div`
@@ -2451,95 +2451,7 @@ const HeaderBtn = styled.button<{
   $ghost?: boolean
   $tone?: 'rose' | 'violet'
 }>`
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-  border: 1px solid
-    ${({ theme, $ghost, $tone }) => {
-      if ($ghost) {
-        return theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'
-      }
-      if ($tone === 'rose') {
-        return theme.mode === 'dark'
-          ? 'rgba(251, 113, 133, 0.25)'
-          : 'rgba(251, 113, 133, 0.35)'
-      }
-      if ($tone === 'violet') {
-        return theme.mode === 'dark'
-          ? 'rgba(167, 139, 250, 0.28)'
-          : 'rgba(139, 92, 246, 0.3)'
-      }
-      return theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.25)'
-        : 'rgba(99, 102, 241, 0.22)'
-    }};
-  color: ${({ $ghost, theme, $tone }) => {
-    if ($ghost) return theme.colors.text.secondary
-    if ($tone === 'rose') return theme.mode === 'dark' ? '#fda4af' : '#be123c'
-    if ($tone === 'violet') return theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9'
-    return theme.colors.text.primary
-  }};
-  background: ${({ $ghost, theme, $tone }) => {
-    if ($ghost) {
-      return theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'
-    }
-    if ($tone === 'rose') {
-      return theme.mode === 'dark'
-        ? 'rgba(244, 63, 94, 0.08)'
-        : 'rgba(255, 241, 242, 0.65)'
-    }
-    if ($tone === 'violet') {
-      return theme.mode === 'dark'
-        ? 'rgba(139, 92, 246, 0.1)'
-        : 'rgba(245, 243, 255, 0.85)'
-    }
-    return theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.08)'
-      : 'rgba(99, 102, 241, 0.06)'
-  }};
-  &:hover {
-    border-color: ${({ theme, $ghost, $tone }) => {
-      if ($ghost)
-        return theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#cbd5e1'
-      if ($tone === 'rose')
-        return theme.mode === 'dark'
-          ? 'rgba(251, 113, 133, 0.55)'
-          : 'rgba(244, 63, 94, 0.5)'
-      if ($tone === 'violet')
-        return theme.mode === 'dark'
-          ? 'rgba(167, 139, 250, 0.55)'
-          : 'rgba(139, 92, 246, 0.5)'
-      return theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.45)'
-        : 'rgba(99, 102, 241, 0.4)'
-    }};
-    background: ${({ theme, $ghost, $tone }) => {
-      if ($ghost)
-        return theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'
-      if ($tone === 'rose')
-        return theme.mode === 'dark'
-          ? 'rgba(244, 63, 94, 0.14)'
-          : 'rgba(255, 228, 230, 0.85)'
-      if ($tone === 'violet')
-        return theme.mode === 'dark'
-          ? 'rgba(139, 92, 246, 0.16)'
-          : 'rgba(237, 233, 254, 0.9)'
-      return theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.14)'
-        : 'rgba(99, 102, 241, 0.1)'
-    }};
-    transform: translateY(-1px);
-  }
+  ${sectionActionButtonCss}
 `
 
 const FormAlert = styled.div`
