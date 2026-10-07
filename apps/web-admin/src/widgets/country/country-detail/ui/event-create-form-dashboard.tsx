@@ -13,6 +13,7 @@ import {
   FiPlus,
   FiX,
 } from 'react-icons/fi'
+import { useQueryClient } from '@tanstack/react-query'
 import styled, { useTheme } from 'styled-components'
 
 import { participantKey, toParticipants } from '@/entities/event/model'
@@ -56,6 +57,7 @@ import {
   TabNavigation,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { invalidateEventQueries } from '@/shared/api/invalidate-events'
 import { notify } from '@/shared/ui/toast'
 
 const CategoryChip = styled.button<{ $active?: boolean }>`
@@ -484,6 +486,7 @@ export function EventCreateFormDashboard({
   eventId: editEventId,
 }: EventCreateFormDashboardProps) {
   const isEditMode = Boolean(editEventId)
+  const queryClient = useQueryClient()
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const {
@@ -917,6 +920,12 @@ export function EventCreateFormDashboard({
         )
         notify.success('사건이 등록되었습니다.')
       }
+      /*
+       * 이 폼은 mutation을 직접 불러, 예전엔 저장 뒤 사건 목록·좌측 사이드바·사건 상세·인물
+       * 상세가 staleTime 동안 옛 값을 보였다. 상위/하위 지정은 *다른* 사건의 상세도 바꾸므로
+       * eventId 없이 열린 상세 전부를 무효화한다.
+       */
+      invalidateEventQueries(queryClient, { countChanged: !isEditMode })
       onSuccess()
     } catch (err) {
       const msg =
