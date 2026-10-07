@@ -374,6 +374,29 @@ export const CategoryDot = styled.span<{ $color: string }>`
   background: ${({ $color }) => $color};
 `
 
+/** 사건 제목 — 누르면 조망 속 모달. 링크처럼 보이되 페이지를 떠나지 않는다 */
+export const RowTitleButton = styled.button`
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  cursor: pointer;
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 1px;
+    border-radius: 3px;
+  }
+`
+
 export const RowTitleLink = styled.a`
   min-width: 0;
   overflow: hidden;
@@ -394,6 +417,7 @@ export const RowTitleLink = styled.a`
 export const GanttTrack = styled.div<{ $dim: boolean; $hot: boolean }>`
   position: relative;
   min-height: 30px;
+  cursor: pointer;
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
@@ -463,6 +487,21 @@ export const MatrixTable = styled.table`
 
 export const MatrixHeadCell = styled.th<{ $hot?: boolean }>`
   min-width: 30px;
+  button {
+    padding: 2px 4px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  button:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  button:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  }
   padding: 6px 2px;
   font-weight: 600;
   font-size: 11px;
@@ -517,6 +556,7 @@ export const CountBadge = styled.span`
 
 export const MatrixCell = styled.td<{ $hot: boolean }>`
   text-align: center;
+  cursor: pointer;
   padding: 5px 2px;
   background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
 `
@@ -746,6 +786,7 @@ export const FillBar = styled.span<{ $pct: number }>`
 
 export const ChecklistRow = styled.tr<{ $hot: boolean }>`
   background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
+  cursor: pointer;
 `
 
 /** 열별 빈 칸 수 — 점검표의 결론이라 머리글에서 눈에 띄게. 절반 넘게 비면 경고색 */

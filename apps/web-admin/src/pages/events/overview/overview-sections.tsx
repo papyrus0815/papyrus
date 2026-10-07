@@ -6,13 +6,11 @@
  */
 import { useState } from 'react'
 
-import { Link } from 'react-router-dom'
 import { useTheme } from 'styled-components'
 
 import { categoryAccent, resolveCategory } from '@/entities/event/ui/ledger-tokens'
 import type { EventOverviewNode } from '@/shared/api/event-overview'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { pathKeys } from '@/shared/router'
 
 import {
   CHECK_COLUMNS,
@@ -36,6 +34,8 @@ const isDimmed = (visibleIds: Set<string> | null, id: string) =>
 interface HoverProps {
   hotId: string | null
   onHover: (id: string | null) => void
+  /** 사건 모달 열기 — 조망을 떠나지 않는다 */
+  onOpen: (id: string) => void
 }
 
 // ─── 전개 간트 ─────────────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ export function GanttPanel({
   visibleIds,
   hotId,
   onHover,
+  onOpen,
 }: HoverProps & {
   gantt: GanttLayout
   fit: GanttFit
@@ -114,9 +115,9 @@ export function GanttPanel({
                   <S.GanttLabel $depth={row.node.depth} $dim={dim} $hot={hot}>
                     <S.GanttNumber>{numberById.get(row.node.id)}</S.GanttNumber>
                     <S.CategoryDot $color={color} title={row.node.category?.name ?? '미분류'} />
-                    <S.RowTitleLink
-                      as={Link}
-                      to={pathKeys.events.detail(row.node.id)}
+                    <S.RowTitleButton
+                      type="button"
+                      onClick={() => onOpen(row.node.id)}
                       title={
                         row.parentTitle ? `${row.node.title} — ${row.parentTitle}의 하위` : row.node.title
                       }
@@ -125,9 +126,15 @@ export function GanttPanel({
                     >
                       {row.parentTitle && <S.Muted>↳ </S.Muted>}
                       {row.node.title}
-                    </S.RowTitleLink>
+                    </S.RowTitleButton>
                   </S.GanttLabel>
-                  <S.GanttTrack $dim={dim} $hot={hot} aria-hidden="true">
+                  {/* 막대 영역은 마우스 보조 진입점 — 키보드는 왼쪽 제목 버튼 */}
+                  <S.GanttTrack
+                    $dim={dim}
+                    $hot={hot}
+                    aria-hidden="true"
+                    onClick={() => onOpen(row.node.id)}
+                  >
                     {gantt.parentBand && (
                       <S.ParentBand
                         style={{
@@ -175,6 +182,7 @@ export function CountryMatrixPanel({
   onSelectCountry,
   hotId,
   onHover,
+  onOpen,
 }: HoverProps & {
   matrix: MatrixCountry[]
   events: EventOverviewNode[]
@@ -227,7 +235,13 @@ export function CountryMatrixPanel({
                       onMouseEnter={() => onHover(event.id)}
                       onMouseLeave={() => onHover(null)}
                     >
-                      {numberById.get(event.id)}
+                      <button
+                        type="button"
+                        onClick={() => onOpen(event.id)}
+                        aria-label={`${numberById.get(event.id)}번 ${event.title} 열기`}
+                      >
+                        {numberById.get(event.id)}
+                      </button>
                     </S.MatrixHeadCell>
                   ))}
                 </tr>
@@ -270,6 +284,7 @@ export function CountryMatrixPanel({
                             $hot={hotId === event.id}
                             onMouseEnter={() => onHover(event.id)}
                             onMouseLeave={() => onHover(null)}
+                            onClick={() => onOpen(event.id)}
                           >
                             {has && (
                               <S.RoleMark
@@ -388,9 +403,11 @@ export function PersonsPanel({
   persons,
   numberById,
   wide = false,
+  onOpen,
 }: {
   persons: PersonAggregate[]
   numberById: Map<string, number>
+  onOpen: (id: string) => void
   /** 짝(진영·수치)이 접혀 혼자 설 때는 한 줄을 다 쓴다 — 오른쪽 반이 비지 않게 */
   wide?: boolean
 }) {
@@ -427,8 +444,14 @@ export function PersonsPanel({
                     {events.map((event, index) => (
                       <span key={event.id}>
                         {index > 0 && ', '}
-                        {numberById.has(event.id) ? `${numberById.get(event.id)}. ` : ''}
-                        {event.title}
+                        <S.RowTitleButton
+                          type="button"
+                          onClick={() => onOpen(event.id)}
+                          style={{ whiteSpace: 'normal' }}
+                        >
+                          {numberById.has(event.id) ? `${numberById.get(event.id)}. ` : ''}
+                          {event.title}
+                        </S.RowTitleButton>
                         {event.role && <S.Muted> ({event.role})</S.Muted>}
                       </span>
                     ))}
@@ -512,6 +535,7 @@ export function ChecklistPanel({
   visibleIds,
   hotId,
   onHover,
+  onOpen,
 }: HoverProps & {
   events: EventOverviewNode[]
   numberById: Map<string, number>
@@ -594,15 +618,23 @@ export function ChecklistPanel({
                   $hot={hotId === event.id}
                   onMouseEnter={() => onHover(event.id)}
                   onMouseLeave={() => onHover(null)}
+                  onClick={() => onOpen(event.id)}
                 >
                   <td>
                     <S.Muted>{numberById.get(event.id) ?? '—'}</S.Muted>
                   </td>
                   <td>
-                    <S.RowTitleLink as={Link} to={pathKeys.events.detail(event.id)}>
+                    <S.RowTitleButton
+                      type="button"
+                      onClick={(clickEvent) => {
+                        // 줄 클릭과 겹쳐 두 번 열리지 않게
+                        clickEvent.stopPropagation()
+                        onOpen(event.id)
+                      }}
+                    >
                       {event.depth >= 2 && <S.Muted>↳ </S.Muted>}
                       {event.title}
-                    </S.RowTitleLink>
+                    </S.RowTitleButton>
                   </td>
                   <S.FillCell title={`9칸 중 ${filled}칸`}>
                     <S.FillBar $pct={pct} aria-hidden="true" />

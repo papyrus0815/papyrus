@@ -12,11 +12,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiMaximize2, FiMinimize2, FiX } from 'react-icons/fi'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { durationLabel } from '@/pages/events/detail/components/event-facts.lib'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
+import { pathKeys } from '@/shared/router'
 
 import {
   aggregatePersons,
@@ -38,6 +40,7 @@ import {
   PersonsPanel,
   SidesMetricsPanel,
 } from './overview-sections'
+import { OverviewEventModal } from './overview-event-modal'
 import * as S from './overview.styles'
 
 interface EventOverviewPageProps {
@@ -79,6 +82,27 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [hotId, setHotId] = useState<string | null>(null)
   const [ganttFit, setGanttFit] = useState<GanttFit>('children')
+
+  /**
+   * 열린 사건 — URL(`?event=`)이 정본. 링크로 공유되고, 뒤로 가기가 모달을 닫는다.
+   * 처음 열 때만 기록을 쌓고, 이전·다음으로 넘길 때는 바꿔치기한다(뒤로 가기 한 번에 닫히게).
+   */
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const openEventId = searchParams.get('event')
+  const setOpenEvent = useCallback(
+    (id: string | null, mode: 'push' | 'replace' = 'push') =>
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous)
+          if (id) next.set('event', id)
+          else next.delete('event')
+          return next
+        },
+        { replace: mode === 'replace' },
+      ),
+    [setSearchParams],
+  )
 
   const derived = useMemo(() => {
     if (!data) return null
@@ -144,6 +168,23 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
     root.endDatePrecision,
   )
   const selectedCountry = derived.matrix.find((country) => country.key === selectedCountryKey)
+
+  // 모달 순서 — 거르기가 걸려 있으면 걸린 사건들 안에서 넘긴다(열린 사건이 그 밖이면 전체 순서)
+  const visibleOrder = visibleIds
+    ? derived.ordered.filter((node) => visibleIds.has(node.id))
+    : derived.ordered
+  const navOrder = visibleOrder.some((node) => node.id === openEventId)
+    ? visibleOrder
+    : derived.ordered
+  const openIndex = navOrder.findIndex((node) => node.id === openEventId)
+  const openEvent = openIndex >= 0 ? navOrder[openIndex] : null
+  const titleById = new Map([root, ...descendants].map((node) => [node.id, node.title]))
+  const openChildren = openEvent
+    ? derived.ordered.filter((node) => node.parentEventId === openEvent.id)
+    : []
+  /** 패널 강조 — 마우스가 없으면 열린 사건을 칠해 둔다(모달을 닫아도 어디 있었는지 남게) */
+  const highlightId = hotId ?? openEventId
+  const openEventById = (id: string) => setOpenEvent(id, openEventId ? 'replace' : 'push')
   const hasPersons = derived.persons.length > 0
   const hasSidesOrMetrics = derived.sideCount > 0 || derived.metrics.length > 0
   const emptyRecords = [
@@ -257,8 +298,9 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           onFitChange={setGanttFit}
           numberById={derived.numberById}
           visibleIds={visibleIds}
-          hotId={hotId}
+          hotId={highlightId}
           onHover={setHotId}
+          onOpen={openEventById}
         />
         <CountryMatrixPanel
           matrix={derived.matrix}
@@ -266,8 +308,9 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           numberById={derived.numberById}
           selectedCountryKey={selectedCountryKey}
           onSelectCountry={setSelectedCountryKey}
-          hotId={hotId}
+          hotId={highlightId}
           onHover={setHotId}
+          onOpen={openEventById}
         />
         <CategoryPanel
           bars={derived.categories}
@@ -280,6 +323,7 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           <PersonsPanel
             persons={derived.persons}
             numberById={derived.numberById}
+            onOpen={openEventById}
             wide={!hasSidesOrMetrics}
           />
         )}
@@ -300,10 +344,33 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           events={derived.ordered}
           numberById={derived.numberById}
           visibleIds={visibleIds}
-          hotId={hotId}
+          hotId={highlightId}
           onHover={setHotId}
+          onOpen={openEventById}
         />
       </S.Grid>
+
+      <OverviewEventModal
+        event={openEvent}
+        position={openIndex + 1}
+        total={navOrder.length}
+        parentTitle={
+          openEvent && openEvent.depth >= 2 && openEvent.parentEventId
+            ? (titleById.get(openEvent.parentEventId) ?? null)
+            : null
+        }
+        children={openChildren}
+        numberById={derived.numberById}
+        onClose={() => setOpenEvent(null, 'replace')}
+        onPrev={openIndex > 0 ? () => setOpenEvent(navOrder[openIndex - 1].id, 'replace') : null}
+        onNext={
+          openIndex >= 0 && openIndex < navOrder.length - 1
+            ? () => setOpenEvent(navOrder[openIndex + 1].id, 'replace')
+            : null
+        }
+        onOpenEvent={openEventById}
+        onOpenDocument={(id) => navigate(pathKeys.events.detail(id))}
+      />
     </S.Page>
   )
 }
