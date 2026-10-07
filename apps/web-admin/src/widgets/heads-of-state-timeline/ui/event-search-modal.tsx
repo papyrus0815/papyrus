@@ -1,6 +1,10 @@
 /**
  * 사건 검색 + 다중 선택 모달.
- * 핀 검색 모달과 동일한 UX(검색·체크박스·"N개 추가") — getAllEvents로 페이지 단위 fetch.
+ * 핀 검색 모달과 동일한 UX(검색·체크박스·"N개 추가").
+ *
+ * 카테고리 패싯·연대순 정렬을 전체 모수 위에서 하므로 서버 검색이 아니라 **전량**을 받는다.
+ * 예전엔 `getAllEvents({ limit: 500 })`였는데 서버가 100으로 자르고 최상위만 줘서,
+ * 사건 일부만·하위 사건(개별 전투 등)은 하나도 오버레이에 올릴 수 없었다.
  */
 import {
   useEffect,
@@ -15,7 +19,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FiCheck, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { getAllEvents } from '@/shared/api/events'
+import { getAllEventsExhaustive } from '@/shared/api/events'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 interface Props {
@@ -39,8 +43,9 @@ export function EventSearchModal({ isOpen, onClose, alreadyAddedIds, onAddMany }
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const { data, isLoading } = useQuery({
-    queryKey: ['heads-of-state', 'events-overlay-list'],
-    queryFn: () => getAllEvents({ limit: 500 }),
+    // ['events'] 아래 — 사건을 만들거나 고치면 함께 무효화된다
+    queryKey: ['events', 'heads-of-state-overlay-list'],
+    queryFn: () => getAllEventsExhaustive({ includeSubEvents: true }),
     staleTime: 5 * 60 * 1000,
     enabled: isOpen,
   })

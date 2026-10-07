@@ -13,7 +13,8 @@
  * 없었고(모달 토대 규약 위반), 기간을 native `type="date"`로 받아 **BC·고대 사건을
  * 등록할 수 없었다**. 공용 `<Modal>` + `DatePickerModal`(BC 지원)로 옮겨 둘 다 해소.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 import { FiCalendar } from 'react-icons/fi'
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
@@ -25,7 +26,10 @@ import {
   CabinetEventRole,
   linkCabinetToEvent,
 } from '@/shared/api/cabinet-events'
-import { createEvent, getAllEvents, EventResponseDto } from '@/shared/api/events'
+import { createEvent } from '@/shared/api/events'
+import { invalidateEventQueries } from '@/shared/api/invalidate-events'
+import { useEventSearch } from '@/shared/hooks/use-event-search'
+import { eventDateLabel } from '@/shared/lib/event-date-label'
 import { notify } from '@/shared/ui/toast'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
@@ -111,10 +115,17 @@ export function CabinetEventAttachModal({
   const [role, setRole] = useState<CabinetEventRole | ''>('PARTY')
   const [submitting, setSubmitting] = useState(false)
 
-  // existing search state
-  const [query, setQuery] = useState('')
-  const [allEvents, setAllEvents] = useState<EventResponseDto[]>([])
-  const [loading, setLoading] = useState(false)
+  const queryClient = useQueryClient()
+
+  // existing search state — 서버 검색(하위 사건 포함). 예전엔 목록 API 100건(최상위만)을
+  // 받아 클라에서 걸러, 오래된 사건·하위 사건은 연결할 수 없었다.
+  const {
+    query,
+    setQuery,
+    results,
+    isSearching,
+    hasMore,
+  } = useEventSearch(mode === 'existing')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // create new state
@@ -126,28 +137,10 @@ export function CabinetEventAttachModal({
   const [startPickerOpen, setStartPickerOpen] = useState(false)
   const [endPickerOpen, setEndPickerOpen] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    getAllEvents({ offset: 0, limit: 100 })
-      .then((res: any) => {
-        if (cancelled) return
-        const list = Array.isArray(res) ? res : res?.events ?? res?.items ?? []
-        setAllEvents(list)
-      })
-      .catch((e) => console.error('[CabinetEventAttachModal] load failed', e))
-      .finally(() => !cancelled && setLoading(false))
-    return () => { cancelled = true }
-  }, [])
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const exclude = excludeEventIds ?? new Set<string>()
-    return allEvents
-      .filter((e) => !exclude.has(e.id))
-      .filter((e) => (q ? (e.title ?? '').toLowerCase().includes(q) : true))
-      .slice(0, 50)
-  }, [query, allEvents, excludeEventIds])
+  const filtered = useMemo(
+    () => results.filter((candidate) => !excludeEventIds?.has(candidate.id)),
+    [results, excludeEventIds],
+  )
 
   const canSubmit =
     !submitting && (mode === 'existing' ? !!selectedId : newTitle.trim().length > 0)
@@ -165,6 +158,8 @@ export function CabinetEventAttachModal({
           endDate: newEnd || undefined,
         } as any)
         eventId = created.id
+        // 새 사건 — 사건 목록·사이드바·국가 대시보드가 바로 보이도록
+        invalidateEventQueries(queryClient, { countChanged: true })
       }
       if (!eventId) throw new Error('eventId 없음')
       await linkCabinetToEvent(eventId, cabinetId, role === '' ? null : role, null)
@@ -197,30 +192,38 @@ export function CabinetEventAttachModal({
                 onChange={(e) => setQuery(e.target.value)}
                 autoFocus
               />
-              {loading ? (
-                <Empty>불러오는 중…</Empty>
-              ) : filtered.length === 0 ? (
-                <Empty>일치하는 사건이 없습니다.</Empty>
+              {filtered.length === 0 ? (
+                <Empty>{isSearching ? '불러오는 중…' : '일치하는 사건이 없습니다.'}</Empty>
               ) : (
                 <ResultList>
-                  {filtered.map((ev) => (
-                    <ResultItem
-                      key={ev.id}
-                      $selected={selectedId === ev.id}
-                      onClick={() => setSelectedId(ev.id)}
-                    >
-                      <strong>{ev.title}</strong>
-                      {(ev.startDate || ev.endDate) && (
-                        <span style={{ color: isDark ? '#71717a' : '#9ca3af', marginLeft: 6 }}>
-                          {formatYear(ev.startDate)}
-                          {ev.endDate && ev.endDate !== ev.startDate
-                            ? `–${formatYear(ev.endDate)}`
-                            : ''}
-                        </span>
-                      )}
-                    </ResultItem>
-                  ))}
+                  {filtered.map((candidate) => {
+                    const dateLabel = eventDateLabel(candidate)
+                    return (
+                      <ResultItem
+                        key={candidate.id}
+                        $selected={selectedId === candidate.id}
+                        onClick={() => setSelectedId(candidate.id)}
+                      >
+                        <strong>{candidate.title}</strong>
+                        {(dateLabel || candidate.parentEventTitle) && (
+                          <span style={{ color: isDark ? '#71717a' : '#9ca3af', marginLeft: 6 }}>
+                            {[
+                              dateLabel,
+                              candidate.parentEventTitle
+                                ? `↳ ${candidate.parentEventTitle}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        )}
+                      </ResultItem>
+                    )
+                  })}
                 </ResultList>
+              )}
+              {hasMore && (
+                <Empty>결과가 더 있습니다 — 검색어를 더 구체적으로 입력하세요.</Empty>
               )}
             </>
           ) : (

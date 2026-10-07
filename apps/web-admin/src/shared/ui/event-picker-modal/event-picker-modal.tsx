@@ -1,16 +1,14 @@
 /**
- * 공용 사건 선택 모달 — 최근 200건을 로드해 제목 부분일치로 클라 필터.
+ * 공용 사건 선택 모달 — 제목으로 서버 검색(하위 사건 포함, useEventSearch).
  * 행 클릭 시 {id, title}을 onSelect로 넘긴다(모달 닫기는 소비처 책임).
  * 포털 렌더라 소비처의 CSS 변수가 상속되지 않음 — 테마 토큰만 사용.
  * (person-detail-panel tenure-achievements의 업적 연결 피커를 일반화해 추출)
  */
-import { useEffect, useMemo, useState } from 'react'
-
-import { useQuery } from '@tanstack/react-query'
 import { FiSearch } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { getAllEvents } from '@/shared/api/events'
+import { useEventSearch } from '@/shared/hooks/use-event-search'
+import { eventDateLabel } from '@/shared/lib/event-date-label'
 import { Modal } from '@/shared/ui/modal'
 
 /** 피커에서 선택된 사건 (id + 표시용 제목) */
@@ -178,28 +176,14 @@ export function EventPickerModal({
   onSelect,
   title = '사건 연결',
 }: EventPickerModalProps) {
-  const [search, setSearch] = useState('')
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['events', 'event-link-picker'],
-    queryFn: () => getAllEvents({ limit: 200 }),
-    staleTime: 5 * 60 * 1000,
-    enabled: isOpen,
-  })
-
-  // 재오픈 시 이전 검색어가 남지 않게 닫힐 때 초기화
-  useEffect(() => {
-    if (!isOpen) setSearch('')
-  }, [isOpen])
-
-  const filtered = useMemo(() => {
-    const rows = data ?? []
-    const keyword = search.trim().toLowerCase()
-    if (!keyword) return rows
-    return rows.filter((eventRow) =>
-      (eventRow.title ?? '').toLowerCase().includes(keyword),
-    )
-  }, [data, search])
+  const {
+    query: search,
+    setQuery: setSearch,
+    results,
+    isSearching,
+    isError,
+    hasMore,
+  } = useEventSearch(isOpen)
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="narrow">
@@ -214,34 +198,50 @@ export function EventPickerModal({
         />
       </EventPickerSearchRow>
       <EventPickerList>
-        {isLoading ? (
-          <EventPickerEmpty>불러오는 중…</EventPickerEmpty>
-        ) : isError ? (
+        {isError ? (
           <EventPickerEmpty>사건 목록을 불러오지 못했습니다.</EventPickerEmpty>
-        ) : filtered.length === 0 ? (
+        ) : results.length === 0 ? (
           <EventPickerEmpty>
-            {search.trim() ? '검색 결과가 없습니다.' : '등록된 사건이 없습니다.'}
+            {isSearching
+              ? '불러오는 중…'
+              : search.trim()
+                ? '검색 결과가 없습니다.'
+                : '등록된 사건이 없습니다.'}
           </EventPickerEmpty>
         ) : (
-          filtered.map((eventRow) => (
-            <EventPickerRow
-              key={eventRow.id}
-              type="button"
-              onClick={() =>
-                onSelect({
-                  id: eventRow.id,
-                  title: eventRow.title ?? '연결된 사건',
-                })
-              }
-            >
-              <EventPickerRowTitle>{eventRow.title}</EventPickerRowTitle>
-              {eventRow.startDate && (
-                <EventPickerRowMeta>
-                  {String(eventRow.startDate).slice(0, 10)}
-                </EventPickerRowMeta>
-              )}
-            </EventPickerRow>
-          ))
+          <>
+            {results.map((eventRow) => {
+              const meta = [
+                eventDateLabel(eventRow),
+                // 하위 사건은 어느 사건 아래인지 — 이름이 같은 전투·회담을 가른다
+                eventRow.parentEventTitle ? `↳ ${eventRow.parentEventTitle}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+              return (
+                <EventPickerRow
+                  key={eventRow.id}
+                  type="button"
+                  onClick={() =>
+                    onSelect({
+                      id: eventRow.id,
+                      title: eventRow.title || '연결된 사건',
+                    })
+                  }
+                >
+                  <EventPickerRowTitle>{eventRow.title}</EventPickerRowTitle>
+                  {meta && <EventPickerRowMeta>{meta}</EventPickerRowMeta>}
+                </EventPickerRow>
+              )
+            })}
+            {hasMore && (
+              <EventPickerEmpty>
+                {search.trim()
+                  ? '결과가 더 있습니다 — 검색어를 더 구체적으로 입력하세요.'
+                  : '최근 손댄 사건부터 보여 줍니다 — 제목으로 검색하세요.'}
+              </EventPickerEmpty>
+            )}
+          </>
         )}
       </EventPickerList>
     </Modal>

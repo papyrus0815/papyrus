@@ -6,9 +6,8 @@ import {
   type EventLinkCandidate,
   getEventLinkCandidates,
 } from '@/shared/api/events'
-import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
-import { formatYearLabel } from '@/shared/lib/iso-date'
+import { eventDateLabel } from '@/shared/lib/event-date-label'
 import { type SelectOption } from '@/shared/ui/select-modal/select-modal'
 
 import * as NetStyles from './detail-network.styles'
@@ -166,42 +165,13 @@ export function useLinkCandidatePicker({
   }
 }
 
-/**
- * 후보 날짜 라벨 — startDate가 있으면 정밀도 포맷, BC·고대(DATETIME 저장 불가)는
- * 구조화 연도(startEra/startYear)로 표기. 둘 다 없으면 null.
- */
-function candidateDateLabel(candidate: EventLinkCandidate): string | null {
-  if (candidate.startDate) {
-    return formatDateRange(
-      candidate.startDate,
-      candidate.endDate ?? undefined,
-      candidate.startDatePrecision,
-      candidate.endDatePrecision,
-    )
-  }
-  if (candidate.startYear != null) {
-    // BC는 부호 연도로 접어 shared 포매터 단일출처로 표기(수제 '기원전' 조립 금지).
-    const start = formatYearLabel(
-      candidate.startEra === 'BC' ? -candidate.startYear : candidate.startYear,
-    )
-    if (candidate.endYear != null) {
-      const end = formatYearLabel(
-        candidate.endEra === 'BC' ? -candidate.endYear : candidate.endYear,
-      )
-      if (end !== start) return `${start} ~ ${end}`
-    }
-    return start
-  }
-  return null
-}
-
 /** 후보 설명 라인 — 날짜 · 현재 소속 상위 사건("이미 하위" 안내). */
 function candidateDescription(
   candidate: EventLinkCandidate,
   currentEventId: string,
 ): string | undefined {
   const parts: string[] = []
-  const dateLabel = candidateDateLabel(candidate)
+  const dateLabel = eventDateLabel(candidate)
   if (dateLabel) parts.push(dateLabel)
   const extraCount = candidate.extraParents?.length ?? 0
   const extraBadge = extraCount > 0 ? ` (+${extraCount})` : ''
