@@ -10,7 +10,7 @@
  * (누르면 그 섹션이 펼쳐진다). 그 판정의 단일 출처가 여기다 — 페이지·목차·개요 장부가
  * 같은 판정을 써야 서로 다른 말을 하지 않는다.
  */
-import { isBackgroundSection } from './narrative-sections.lib'
+import { type SectionKind, sectionKindOf } from './narrative-sections.lib'
 
 /** 내용이 없으면 접히는 섹션들 — 모듈·댓글은 대상이 아니다(모듈은 이미 있을 때만 뜬다). */
 export type FoldableSectionId =
@@ -75,16 +75,14 @@ export function filledSections(
   relatedCount: number,
 ): Record<FoldableSectionId, boolean> {
   const sections = event.eventSections ?? []
-  const backgroundRows = sections.filter((section) =>
-    isBackgroundSection(section.sectionType),
-  ).length
-  const narrativeRows = sections.length - backgroundRows
+  const rowsOf = (kind: SectionKind) =>
+    sections.filter((section) => sectionKindOf(section.sectionType) === kind).length
   const count = (list?: unknown[] | null) => list?.length ?? 0
 
   return {
-    background: hasRichText(event.background) || backgroundRows > 0,
-    narrative: narrativeRows > 0,
-    aftermath: hasRichText(event.aftermath),
+    background: hasRichText(event.background) || rowsOf('background') > 0,
+    narrative: rowsOf('narrative') > 0,
+    aftermath: hasRichText(event.aftermath) || rowsOf('aftermath') > 0,
     actors:
       count(event.relatedPersons) +
         count(event.relatedCountries) +
@@ -116,16 +114,12 @@ export interface OutlineItem {
  */
 export function paragraphOutline(
   event: SectionFillSource,
-  kind: 'background' | 'narrative',
+  kind: SectionKind,
 ): Array<{ id: string; label: string }> {
   return (event.eventSections ?? [])
     .slice()
     .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
-    .filter((section) =>
-      kind === 'background'
-        ? isBackgroundSection(section.sectionType)
-        : !isBackgroundSection(section.sectionType),
-    )
+    .filter((section) => sectionKindOf(section.sectionType) === kind)
     .map((section, index) => ({
       id: `${kind}-${index + 1}`,
       label: section.title?.trim() || `${index + 1}단락`,

@@ -6,10 +6,12 @@
  * 아래 테스트는 그 한 줄(두 묶음을 항상 합쳐 보낸다)을 잠근다.
  */
 import {
+  AFTERMATH_TYPE,
   BACKGROUND_TYPE,
   isBackgroundSection,
   mergeSectionPayload,
   NARRATIVE_TYPE,
+  sectionKindOf,
   type SectionRow,
   syncRowsWithServer,
 } from './narrative-sections.lib'
@@ -35,7 +37,30 @@ describe('배경/전개 분류', () => {
   })
 })
 
+describe('여파 분류', () => {
+  /* 시드가 여파 장(章)을 'aftermath'로 쓴다 — 예전엔 전개로 떨어져 전개 단락 사이에 섞였다. */
+  it("'aftermath'는 여파, 'process'는 전개다", () => {
+    expect(sectionKindOf(AFTERMATH_TYPE)).toBe('aftermath')
+    expect(sectionKindOf('process')).toBe('narrative')
+    expect(sectionKindOf(BACKGROUND_TYPE)).toBe('background')
+    expect(sectionKindOf(null)).toBe('narrative')
+  })
+})
+
 describe('mergeSectionPayload', () => {
+  it('전개를 고쳐도 여파 단락이 payload에 남고, order는 배경 → 전개 → 여파', () => {
+    const merged = mergeSectionPayload(
+      [row({ title: '배경1', sectionType: BACKGROUND_TYPE })],
+      [row({ title: '전개1', sectionType: 'process' })],
+      [row({ title: '여파1', sectionType: AFTERMATH_TYPE })],
+    )
+    expect(merged.map((section) => [section.title, section.order, section.sectionType])).toEqual([
+      ['배경1', 0, BACKGROUND_TYPE],
+      ['전개1', 1, 'process'],
+      ['여파1', 2, AFTERMATH_TYPE],
+    ])
+  })
+
   it('배경 한 단락만 고쳐도 전개 단락이 payload에 그대로 실린다', () => {
     const merged = mergeSectionPayload(
       [row({ title: '배경1', sectionType: BACKGROUND_TYPE })],
@@ -43,6 +68,7 @@ describe('mergeSectionPayload', () => {
         row({ title: '전개1', sectionType: NARRATIVE_TYPE }),
         row({ title: '전개2', sectionType: NARRATIVE_TYPE }),
       ],
+      [],
     )
     expect(merged.map((section) => section.title)).toEqual([
       '배경1',
@@ -55,6 +81,7 @@ describe('mergeSectionPayload', () => {
     const merged = mergeSectionPayload(
       [row({ title: '배경1' }), row({ title: '배경2' })],
       [row({ title: '전개1' })],
+      [],
     )
     expect(merged.map((section) => section.order)).toEqual([0, 1, 2])
     expect(merged.map((section) => section.sectionType)).toEqual([
@@ -68,14 +95,17 @@ describe('mergeSectionPayload', () => {
     const merged = mergeSectionPayload(
       [row({ sectionType: undefined })],
       [row({ sectionType: undefined })],
+      [row({ sectionType: undefined })],
     )
     expect(merged[0].sectionType).toBe(BACKGROUND_TYPE)
     expect(merged[1].sectionType).toBe(NARRATIVE_TYPE)
+    expect(merged[2].sectionType).toBe(AFTERMATH_TYPE)
   })
 
   it('"+추가"만 누른 빈 row는 서버로 새지 않는다', () => {
     const merged = mergeSectionPayload(
       [row({ title: '배경1' }), row({ title: '', content: '' })],
+      [],
       [],
     )
     expect(merged).toHaveLength(1)
@@ -84,6 +114,7 @@ describe('mergeSectionPayload', () => {
   it('제목이 비어도 본문이 있으면 그대로 보낸다 — 빈 제목을 대체하지 않는다', () => {
     const merged = mergeSectionPayload(
       [row({ title: '   ', content: '<p>내용</p>' })],
+      [],
       [],
     )
     expect(merged).toEqual([

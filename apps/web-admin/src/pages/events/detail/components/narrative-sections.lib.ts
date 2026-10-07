@@ -1,20 +1,33 @@
 /**
- * 배경·전개 번호 단락의 **순수 로직** — 분류·직렬화·서버 동기화.
+ * 배경·전개·여파 번호 단락의 **순수 로직** — 분류·직렬화·서버 동기화.
  *
  * UI(narrative-sections.tsx)와 분리한 이유: 조판 파일은 rich-text 에디터까지 끌고 와
  * 단위 테스트에서 로드할 수 없다(detail-network.lib.ts와 같은 분리).
  */
 
 /**
- * 배경 단락의 sectionType — eventSections 한 배열 안에서 배경/전개를 가르는 태그.
- * 나머지(전개)는 레거시 값이 'content'·'narrative'·null로 섞여 있어 *배경이 아닌 것*
- * 전부를 전개로 본다(새로 만드는 전개 단락만 'narrative'로 기록).
+ * eventSections 한 배열 안에서 배경/전개/여파를 가르는 sectionType 태그.
+ * 전개는 레거시 값이 'content'·'process'·'narrative'·null로 섞여 있어 *배경도 여파도
+ * 아닌 것* 전부를 전개로 본다(새로 만드는 전개 단락만 'narrative'로 기록).
+ *
+ * ⚠️ 여파('aftermath')를 따로 가르지 않던 시절엔 시드가 쓴 여파 장(章) 90개(60사건)가
+ * 전개 번호 단락 사이에 섞여 그려졌다 — 여파 섹션에는 요약(event.aftermath)만 나왔다.
  */
 export const BACKGROUND_TYPE = 'background'
 export const NARRATIVE_TYPE = 'narrative'
+export const AFTERMATH_TYPE = 'aftermath'
+
+export type SectionKind = 'background' | 'narrative' | 'aftermath'
+
+export const sectionKindOf = (sectionType?: string | null): SectionKind =>
+  sectionType === BACKGROUND_TYPE
+    ? 'background'
+    : sectionType === AFTERMATH_TYPE
+      ? 'aftermath'
+      : 'narrative'
 
 export const isBackgroundSection = (sectionType?: string | null) =>
-  sectionType === BACKGROUND_TYPE
+  sectionKindOf(sectionType) === 'background'
 
 export interface SectionRow {
   /** 클라이언트 임시 키 — React 리스트 식별·child 컴포넌트 인스턴스 보존용. */
@@ -140,11 +153,11 @@ export function syncRowsWithServer(
 }
 
 /**
- * 배경·전개 두 묶음을 **하나의 eventSections 배열**로 직렬화한다.
+ * 배경·전개·여파 세 묶음을 **하나의 eventSections 배열**로 직렬화한다.
  *
- * 서버는 PUT마다 eventSections를 통째로 delete-and-recreate하므로, 한쪽 묶음만 보내면
- * 다른 쪽이 통째로 사라진다 — 어떤 변경이든 항상 두 묶음을 합쳐 보낸다.
- * order는 배경 → 전개 순 통산이고, 이 순서가 다음 GET의 분리·정렬을 되돌린다.
+ * 서버는 PUT마다 eventSections를 통째로 delete-and-recreate하므로, 한 묶음만 보내면
+ * 나머지가 통째로 사라진다 — 어떤 변경이든 항상 세 묶음을 합쳐 보낸다.
+ * order는 배경 → 전개 → 여파 순 통산이고, 이 순서가 다음 GET의 분리·정렬을 되돌린다.
  *
  * 빈 row(title·content 모두 비어 있음)는 제외 — 사용자가 "+추가"만 누르고 아직 채우지
  * 않은 로컬 row가 서버로 새지 않게 한다. 반대로 title이 비어 있어도 content가 있으면
@@ -153,6 +166,7 @@ export function syncRowsWithServer(
 export function mergeSectionPayload(
   backgroundRows: SectionRow[],
   narrativeRows: SectionRow[],
+  aftermathRows: SectionRow[],
 ): Array<{
   id?: string
   title: string
@@ -176,6 +190,7 @@ export function mergeSectionPayload(
   return [
     ...serialize(backgroundRows, BACKGROUND_TYPE),
     ...serialize(narrativeRows, NARRATIVE_TYPE),
+    ...serialize(aftermathRows, AFTERMATH_TYPE),
   ].map((section, index) => ({ ...section, order: index }))
 }
 

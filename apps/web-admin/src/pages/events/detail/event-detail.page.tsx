@@ -301,7 +301,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
   }, [revealTarget])
 
   /**
-   * 목차 — 보이는 섹션만. 배경·전개는 단락이 2개 이상이면 단락 목차를 단다.
+   * 목차 — 보이는 섹션만. 배경·전개·여파는 단락이 2개 이상이면 단락 목차를 단다.
    * 예전엔 빈 섹션까지 전부 세워 '이 문서에 무엇이 있는지'를 부풀려 말했다.
    */
   const visibleKey = FOLDABLE_SECTIONS.map((section) =>
@@ -312,7 +312,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     const shown = (id: FoldableSectionId) =>
       visibleKey[FOLDABLE_SECTIONS.findIndex((section) => section.id === id)] ===
       '1'
-    const withParagraphs = (kind: 'background' | 'narrative') => {
+    const withParagraphs = (kind: 'background' | 'narrative' | 'aftermath') => {
       const children = paragraphOutline(event, kind)
       return children.length >= 2 ? children : undefined
     }
@@ -329,7 +329,12 @@ function EventDetailContent({ eventId }: { eventId: string }) {
         label: '전개',
         children: withParagraphs('narrative'),
       })
-    if (shown('aftermath')) items.push({ id: 'aftermath', label: '여파' })
+    if (shown('aftermath'))
+      items.push({
+        id: 'aftermath',
+        label: '여파',
+        children: withParagraphs('aftermath'),
+      })
     if (shown('actors')) items.push({ id: 'actors', label: '참여 행위자' })
 
     if (enabledModules.includes('sides'))

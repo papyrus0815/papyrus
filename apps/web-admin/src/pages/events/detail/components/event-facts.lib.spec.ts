@@ -77,6 +77,30 @@ describe('filledSections', () => {
   })
 })
 
+describe('여파 단락', () => {
+  it('요약이 비어도 여파 단락이 있으면 여파는 채워진 섹션이고, 전개로 세지 않는다', () => {
+    const filled = filledSections(
+      { eventSections: [{ sectionType: 'aftermath', title: '여파 1장' }] },
+      0,
+    )
+    expect(filled.aftermath).toBe(true)
+    expect(filled.narrative).toBe(false)
+  })
+
+  it('목차의 여파 단락은 여파 단락끼리만 번호를 매긴다', () => {
+    const outline = paragraphOutline(
+      {
+        eventSections: [
+          { sectionType: 'narrative', title: '전개', order: 0 },
+          { sectionType: 'aftermath', title: '결과', order: 1 },
+        ],
+      },
+      'aftermath',
+    )
+    expect(outline).toEqual([{ id: 'aftermath-1', label: '결과' }])
+  })
+})
+
 describe('paragraphOutline', () => {
   it('order 순으로 앵커를 매기고, 빈 제목은 N단락', () => {
     const outline = paragraphOutline(

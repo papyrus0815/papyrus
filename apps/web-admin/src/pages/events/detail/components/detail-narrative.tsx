@@ -13,11 +13,12 @@ import { type EventDetail, type EventDetailSection } from '../use-event-detail'
 import { InlineRichText } from './inline'
 import {
   AddSectionButton,
+  AFTERMATH_TYPE,
   BACKGROUND_TYPE,
-  isBackgroundSection,
   mergeSectionPayload,
   NARRATIVE_TYPE,
   NarrativeSectionList,
+  sectionKindOf,
   type SectionRow,
   syncRowsWithServer,
 } from './narrative-sections'
@@ -48,11 +49,11 @@ interface DetailNarrativeProps {
  * 본문 인라인 편집 — 배경·여파(rich text), eventSections(array) 각각 개별 편집.
  *
  * - 배경: 요약 본문 1개(event.background) + 번호 단락(eventSections/sectionType=background)
- * - 전개: 번호 단락(그 외 sectionType)
- * - 여파: 단일 rich text
+ * - 전개: 번호 단락(배경·여파가 아닌 sectionType 전부)
+ * - 여파: 요약 본문 1개(event.aftermath) + 번호 단락(eventSections/sectionType=aftermath)
  *
- * eventSections는 server가 통째로 delete-and-recreate라 *어떤 변경이든* 배경·전개
- * 두 묶음을 **하나의 배열로 합쳐** PUT한다(order는 배경 → 전개 순 통산).
+ * eventSections는 server가 통째로 delete-and-recreate라 *어떤 변경이든* 배경·전개·여파
+ * 세 묶음을 **하나의 배열로 합쳐** PUT한다(order는 배경 → 전개 → 여파 순 통산).
  */
 export function DetailNarrative({
   event,
@@ -90,11 +91,24 @@ export function DetailNarrative({
   )
 
   const serverBackground = useMemo(
-    () => serverSections.filter((section) => isBackgroundSection(section.sectionType)),
+    () =>
+      serverSections.filter(
+        (section) => sectionKindOf(section.sectionType) === 'background',
+      ),
     [serverSections],
   )
   const serverNarrative = useMemo(
-    () => serverSections.filter((section) => !isBackgroundSection(section.sectionType)),
+    () =>
+      serverSections.filter(
+        (section) => sectionKindOf(section.sectionType) === 'narrative',
+      ),
+    [serverSections],
+  )
+  const serverAftermath = useMemo(
+    () =>
+      serverSections.filter(
+        (section) => sectionKindOf(section.sectionType) === 'aftermath',
+      ),
     [serverSections],
   )
 
@@ -131,6 +145,9 @@ export function DetailNarrative({
   const [narrativeRows, setNarrativeRows] = useState<SectionRow[]>(() =>
     toRows(serverNarrative),
   )
+  const [aftermathRows, setAftermathRows] = useState<SectionRow[]>(() =>
+    toRows(serverAftermath),
+  )
 
   /**
    * 마지막 in-flight commit 시점의 *로컬 rows 길이* 기준으로 positional join을 한다.
@@ -143,16 +160,26 @@ export function DetailNarrative({
   useEffect(() => {
     setNarrativeRows((prev) => syncRowsWithServer(prev, serverNarrative, nextKey))
   }, [serverNarrative, nextKey])
+  useEffect(() => {
+    setAftermathRows((prev) => syncRowsWithServer(prev, serverAftermath, nextKey))
+  }, [serverAftermath, nextKey])
 
   /**
-   * 배경·전개 두 묶음을 한 배열로 직렬화해 patch 호출.
+   * 배경·전개·여파 세 묶음을 한 배열로 직렬화해 patch 호출.
    * 합치는 규칙(빈 row 제외·order 통산)은 mergeSectionPayload가 단일 출처.
    */
   const commit = useCallback(
-    (nextBackground: SectionRow[], nextNarrative: SectionRow[]) => {
+    (
+      nextBackground: SectionRow[],
+      nextNarrative: SectionRow[],
+      nextAftermath: SectionRow[],
+    ) => {
       setBackgroundRows(nextBackground)
       setNarrativeRows(nextNarrative)
-      onPatch({ eventSections: mergeSectionPayload(nextBackground, nextNarrative) })
+      setAftermathRows(nextAftermath)
+      onPatch({
+        eventSections: mergeSectionPayload(nextBackground, nextNarrative, nextAftermath),
+      })
     },
     [onPatch],
   )
@@ -208,19 +235,25 @@ export function DetailNarrative({
   const background = makeHandlers(
     backgroundRows,
     BACKGROUND_TYPE,
-    (next) => commit(next, narrativeRows),
+    (next) => commit(next, narrativeRows, aftermathRows),
     setBackgroundRows,
   )
   const narrative = makeHandlers(
     narrativeRows,
     NARRATIVE_TYPE,
-    (next) => commit(backgroundRows, next),
+    (next) => commit(backgroundRows, next, aftermathRows),
     setNarrativeRows,
+  )
+  const aftermath = makeHandlers(
+    aftermathRows,
+    AFTERMATH_TYPE,
+    (next) => commit(backgroundRows, narrativeRows, next),
+    setAftermathRows,
   )
 
   /**
    * 방금 '단락 추가'로 만든 단락의 key — 그 단락의 제목 입력만 열린 채로 뜬다.
-   * 배경·전개가 한 값을 나눠 쓴다(동시에 두 곳에 새 단락을 만들 수는 없다).
+   * 배경·전개·여파가 한 값을 나눠 쓴다(동시에 두 곳에 새 단락을 만들 수는 없다).
    */
   const [autoEditKey, setAutoEditKey] = useState<string | null>(null)
 
@@ -309,24 +342,45 @@ export function DetailNarrative({
         </S.Section>
       )}
 
-      {/* 여파 */}
+      {/* 여파 — 배경과 같은 규약: 요약 본문 1개 + 번호 단락. */}
       {visible.aftermath && (
         <S.Section id="aftermath">
           <S.SectionHeader>
             <S.SectionTitle>여파</S.SectionTitle>
+            {aftermathRows.length > 0 && (
+              <S.SectionSubtitle>{aftermathRows.length}단락</S.SectionSubtitle>
+            )}
           </S.SectionHeader>
           <S.SectionBody>
             <InlineRichText
               value={event.aftermath ?? ''}
               /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
               onSave={(next) => onPatch({ aftermath: next })}
-              placeholder="사건 직후의 결과·후속 영향·종결 시점의 상태"
-              label="여파"
+              placeholder="사건 직후의 결과·후속 영향 — 요약 한 문단(선택)"
+              label="여파 요약"
               onPersonClick={onPersonClick}
               onEntityLink={handleEntityLink}
               transformReadHtml={emphasisToHtml}
             />
           </S.SectionBody>
+          {aftermathRows.length > 0 && (
+            <NarrativeSectionList
+              rows={aftermathRows}
+              onFieldChange={aftermath.change}
+              onMove={aftermath.move}
+              onRemove={aftermath.remove}
+              onPersonClick={onPersonClick}
+              onEntityLink={handleEntityLink}
+              labelPrefix="여파"
+              bodyPlaceholder="이 여파 단락의 본문"
+              anchorPrefix="aftermath"
+              autoEditKey={autoEditKey}
+            />
+          )}
+          <AddSectionButton
+            onClick={aftermath.add}
+            label="여파 단락 추가"
+          />
         </S.Section>
       )}
     </>
