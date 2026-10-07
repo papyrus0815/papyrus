@@ -64,6 +64,8 @@ export interface EventDetailSection {
   content: string
   order: number
   sectionType: string
+  /** 이 단락이 서술하는 하위 사건(D2) */
+  subjectEventId?: string | null
 }
 
 export interface EventDetailCategory {
@@ -180,7 +182,15 @@ export interface EventDetail {
    */
   extraParents?: Array<{ id: string; title: string; reason?: string | null }>
   /** 추가 하위(역방향 엣지) — 읽기전용 표시용. 편집은 자식 사건 쪽에서만. reason=쌍 연결 사유(읽기전용). */
-  extraChildren?: Array<{ id: string; title: string; reason?: string | null }>
+  extraChildren?: Array<{
+    id: string
+    title: string
+    reason?: string | null
+    startDate?: string | null
+    startDatePrecision?: string | null
+    endDate?: string | null
+    endDatePrecision?: string | null
+  }>
   cityId?: string | null
   administrativeDivisionId?: string | null
   historicalCountryId?: string | null

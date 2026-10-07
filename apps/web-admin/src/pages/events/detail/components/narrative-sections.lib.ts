@@ -20,14 +20,15 @@ export interface SectionRow {
   /** 클라이언트 임시 키 — React 리스트 식별·child 컴포넌트 인스턴스 보존용. */
   key: string
   /**
-   * 마지막으로 매핑된 서버 row id(있다면). 서버는 delete-and-recreate이라 PUT마다
-   * id가 새로 발급되지만, 한 응답 사이클 안에서는 같은 id가 같은 row를 가리킴
-   * — race 동안 위치 join의 보조 시그널로 사용.
+   * 마지막으로 매핑된 서버 row id(있다면). 서버 저장이 id 자연키 머지로 바뀌어(D2) 이 id를
+   * 다시 보내면 **같은 단락이 고쳐지고 id가 유지된다** — 단락이 가리키는 하위 사건이 살아남는다.
    */
   serverId?: string
   title: string
   content: string
   sectionType?: string
+  /** 이 단락이 서술하는 하위 사건(D2). undefined=모름(보내지 않아 서버 값 유지) */
+  subjectEventId?: string | null
 }
 
 /**
@@ -52,6 +53,7 @@ export function syncRowsWithServer(
     title?: string | null
     content?: string | null
     sectionType?: string | null
+    subjectEventId?: string | null
   }>,
   nextKey: () => string,
 ): SectionRow[] {
@@ -73,8 +75,8 @@ export function syncRowsWithServer(
             prevRow.sectionType !== serverType))
 
       if (prevIsAhead) {
-        // prev 값 그대로 두고 serverId만 새로 발급된 id로 갱신.
-        return { ...prevRow, serverId: section.id }
+        // prev 값 그대로 두고 serverId만 갱신.
+        return { ...prevRow, serverId: section.id, subjectEventId: section.subjectEventId ?? null }
       }
       // server 값 채택 — 키 보존.
       return {
@@ -83,6 +85,7 @@ export function syncRowsWithServer(
         title: serverTitle,
         content: serverContent,
         sectionType: serverType,
+        subjectEventId: section.subjectEventId ?? null,
       }
     })
   }
@@ -116,7 +119,7 @@ export function syncRowsWithServer(
     }
     if (matchedIdx >= 0) {
       prevUsed[matchedIdx] = true
-      next.push({ ...prev[matchedIdx], serverId: section.id })
+      next.push({ ...prev[matchedIdx], serverId: section.id, subjectEventId: section.subjectEventId ?? null })
     } else {
       next.push({
         key: nextKey(),
@@ -124,6 +127,7 @@ export function syncRowsWithServer(
         title: serverTitle,
         content: serverContent,
         sectionType: serverType,
+        subjectEventId: section.subjectEventId ?? null,
       })
     }
   }
@@ -149,14 +153,24 @@ export function syncRowsWithServer(
 export function mergeSectionPayload(
   backgroundRows: SectionRow[],
   narrativeRows: SectionRow[],
-): Array<{ title: string; content: string; order: number; sectionType: string }> {
+): Array<{
+  id?: string
+  title: string
+  content: string
+  order: number
+  sectionType: string
+  subjectEventId?: string | null
+}> {
+  /* id를 실어 보내면 서버가 그 단락을 고친다(id 유지) — 하위 사건 연결은 모를 때 싣지 않는다(3상) */
   const serialize = (rows: SectionRow[], fallbackType: string) =>
     rows
       .filter((row) => row.title.trim() || row.content.trim())
       .map((row) => ({
+        ...(row.serverId ? { id: row.serverId } : {}),
         title: row.title.trim(),
         content: row.content,
         sectionType: row.sectionType ?? fallbackType,
+        ...(row.subjectEventId !== undefined ? { subjectEventId: row.subjectEventId } : {}),
       }))
 
   return [

@@ -29,7 +29,7 @@ import { type MentionItem } from '@/shared/lib/mention/mention-system'
 import { emphasisToHtml } from '@/shared/lib/emphasis-markup'
 
 import * as S from '../styles'
-import { InlineRichText, InlineText } from './inline'
+import { InlineRichText, InlineSelect, InlineText } from './inline'
 import { type SectionRow } from './narrative-sections.lib'
 
 export * from './narrative-sections.lib'
@@ -52,6 +52,11 @@ interface NarrativeSectionListProps {
    * 이 값이 바뀌어도 이미 떠 있는 입력을 다시 열지는 않는다(InlineText의 초기값일 뿐).
    */
   autoEditKey?: string | null
+  /**
+   * 단락이 가리킬 수 있는 하위 사건(D2). 주면 단락 머리에 '하위 사건' 선택이 생긴다 —
+   * 전개 타임라인이 이 연결로 하위 사건 막대와 단락을 잇는다.
+   */
+  subjectOptions?: ReadonlyArray<{ value: string; label: string }>
 }
 
 export function NarrativeSectionList({
@@ -65,6 +70,7 @@ export function NarrativeSectionList({
   bodyPlaceholder,
   anchorPrefix,
   autoEditKey,
+  subjectOptions,
 }: NarrativeSectionListProps) {
   /**
    * '제목 붙이기'로 연 단락들 — 제목이 빈 채로도 입력을 띄워 두려면 이 기억이 필요하다
@@ -115,6 +121,18 @@ export function NarrativeSectionList({
                   <FiType aria-hidden />
                   제목 붙이기
                 </AddTitleBtn>
+              )}
+              {subjectOptions && subjectOptions.length > 0 && (
+                <SubjectPicker data-linked={row.subjectEventId ? 'true' : undefined}>
+                  <InlineSelect
+                    value={row.subjectEventId ?? ''}
+                    options={[{ value: '', label: '연결 안 함' }, ...subjectOptions]}
+                    onSave={(next) => onFieldChange(index, { subjectEventId: next || null })}
+                    placeholder="↳ 하위 사건"
+                    label={`${labelPrefix} ${ordinal}단락이 서술하는 하위 사건`}
+                    prefix={row.subjectEventId ? <span aria-hidden="true">↳ </span> : undefined}
+                  />
+                </SubjectPicker>
               )}
               <RowActions>
                 <RowActionBtn
@@ -419,3 +437,15 @@ export function AddSectionButton({
     </AddBtn>
   )
 }
+
+/** 단락 → 하위 사건 연결(D2) — 연결 전에는 옅게, 연결되면 본문 색 */
+const SubjectPicker = styled.div`
+  flex-shrink: 0;
+  max-width: 40%;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  &[data-linked='true'] {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`

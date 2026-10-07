@@ -1,3 +1,4 @@
+import { EventSectionService } from './event-section.service'
 import {
   BadRequestException,
   ConflictException,
@@ -218,6 +219,7 @@ function buildService(
     fakePoint as never,
     fakeNotification as never,
     fakeCountryParticipants as never,
+    new EventSectionService(),
   )
   return { service, fakePrisma, fakeRepo, reasons }
 }

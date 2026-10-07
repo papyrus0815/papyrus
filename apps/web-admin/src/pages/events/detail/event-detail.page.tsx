@@ -24,6 +24,7 @@ import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
 import { DetailFacts } from './components/detail-facts'
 import { DetailRail } from './components/detail-rail'
+import { DevelopmentTimeline } from './components/development-timeline'
 import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
@@ -390,6 +391,8 @@ function EventDetailContent({ eventId }: { eventId: string }) {
             {/* 문서 열이 DOM에서 먼저 온다 — 읽기·스크린리더 순서는 '글 → 장부'.
                 좁은 폭에서 장부가 위로 올라가는 것은 시각 순서만 바꾸는 order다. */}
             <S.Main>
+              {/* 전개 타임라인(D2) — 하위 사건이 날짜를 가질 때만 */}
+              <DevelopmentTimeline event={event} />
               <DetailNarrative
                 event={event}
                 onPatch={onPatch}

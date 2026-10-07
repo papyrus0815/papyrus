@@ -326,7 +326,7 @@ const CATEGORY_ORDER: Record<CategoryKey, string[]>
 | 0 결정 | ✅ | D1~D5 권고안 채택(사용자: "제일 좋은 방법으로") |
 | 1 근거 | ✅ 커밋 9b579e514 | Source·Citation·MetricDefinition·Observation, 지표 32·역사 통화 7 |
 | 2 진영 | ✅ | `BelligerentSide`→`EventSide`(rename, 무손실), 참여국·인물·조직 줄에 `sideId`+가담/이탈 구조화, `CountryInSide`·`CasualtiesData` 등 7테이블 제거. 사상자·병력 문자열 → 측정값 72개(정의별 지표, 원문은 인용 quote에 보존, 출처 `LEGACY_UNVERIFIED`). 군사 저장 delete-recreate 폐지(작전 정보만 upsert). 5개 전쟁 시드도 같은 데이터(`seeds/data/event-sides.legacy-five-wars.ts`)를 쓴다 |
-| 3 화면 | 🟡 부분 | 진영 모듈(소속 편집)·수치 모듈(진영 비교 막대+범위 수염·목록·입력 모달)·사실 장부 사상자 줄. 남은 것: 모듈 레지스트리 일반화·전개 타임라인(D2 하위 사건)·glance 띠 |
+| 3 화면 | 🟡 부분 | 진영 모듈(소속 편집)·수치 모듈(진영 비교 막대+범위 수염·목록·입력 모달)·사실 장부 사상자 줄 · **전개 타임라인(D2, 2026-10-07)**: `EventSection.subjectEventId`(하위 사건 FK), 단락 저장을 id 자연키 머지+트랜잭션으로(단락 id 유지), 하위 사건을 천문 연도 축에 배치(연·월 정밀도는 점선 구간), 단락 머리 '↳ 하위 사건' 연결, 막대→서술 단락 이동. 남은 것: 모듈 레지스트리 일반화·glance 띠 |
 | 8 집단 | ✅ 커밋 4df537daa | D8 |
 
 남은 데이터 과제: `ALLY`/`ADVERSARY` 64행·36사건(진영 없는 사건) 검수 큐 — '누구의 동맹'을 자동 판정할 수 없어 사람이 진영을 만든다.

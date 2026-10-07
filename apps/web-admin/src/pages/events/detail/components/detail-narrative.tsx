@@ -98,6 +98,18 @@ export function DetailNarrative({
     [serverSections],
   )
 
+  /**
+   * 전개 단락이 가리킬 수 있는 하위 사건(D2) — 주 상위·추가 상위로 이어진 자식.
+   * 전개 단계의 정본은 하위 사건이고, 단락은 '이 단계를 서술한다'고 그것을 가리킨다.
+   */
+  const subjectOptions = useMemo(
+    () => [
+      ...(event.childEvents ?? []).map((child) => ({ value: child.id, label: child.title })),
+      ...(event.extraChildren ?? []).map((child) => ({ value: child.id, label: child.title })),
+    ],
+    [event.childEvents, event.extraChildren],
+  )
+
   /* sections는 reorder/add/remove 작업이 묶여 있어 로컬 state 유지.
      server invalidate → refetch 되면 다시 로컬 상태로 동기화. */
   const toRows = useCallback(
@@ -108,6 +120,7 @@ export function DetailNarrative({
         title: section.title ?? '',
         content: section.content ?? '',
         sectionType: section.sectionType,
+        subjectEventId: section.subjectEventId ?? null,
       })),
     [nextKey],
   )
@@ -286,6 +299,7 @@ export function DetailNarrative({
               bodyPlaceholder="이 전개 단락의 본문"
               anchorPrefix="narrative"
               autoEditKey={autoEditKey}
+              subjectOptions={subjectOptions}
             />
           )}
           <AddSectionButton

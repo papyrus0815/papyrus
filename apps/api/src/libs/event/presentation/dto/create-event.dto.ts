@@ -209,6 +209,10 @@ export class CreateEventDto {
     content: string
     order?: number
     sectionType?: string
+    /** 기존 단락 id — 주면 그 단락을 고친다(id 유지). 없으면 새 단락 */
+    id?: string
+    /** 이 단락이 서술하는 하위 사건(D2) — 생략=유지, null=해제 */
+    subjectEventId?: string | null
   }>
 
   @ApiProperty({

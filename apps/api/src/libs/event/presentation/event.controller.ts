@@ -210,6 +210,7 @@ export class EventController {
       content: section.content ?? '',
       order: section.order,
       sectionType: section.sectionType,
+      subjectEventId: section.subjectEventId ?? null,
     }))
 
     // EventImage 변환
@@ -358,6 +359,22 @@ export class EventController {
             .map((link: any) => ({
               id: link.childEvent.id,
               title: link.childEvent.title,
+              startDate: formatEventDate(
+                link.childEvent.startDate,
+                link.childEvent.startEra,
+                link.childEvent.startYear,
+                link.childEvent.startMonth,
+                link.childEvent.startDay,
+              ),
+              startDatePrecision: link.childEvent.startDatePrecision ?? null,
+              endDate: formatEventDate(
+                link.childEvent.endDate,
+                link.childEvent.endEra,
+                link.childEvent.endYear,
+                link.childEvent.endMonth,
+                link.childEvent.endDay,
+              ),
+              endDatePrecision: link.childEvent.endDatePrecision ?? null,
               reason: reasonByChildId.get(link.childEvent.id) ?? undefined,
             }))
         : undefined,
@@ -1512,7 +1529,26 @@ export class EventController {
         },
         extraChildLinks: {
           include: {
-            childEvent: { select: { id: true, title: true, deletedAt: true } },
+            childEvent: {
+              select: {
+                id: true,
+                title: true,
+                deletedAt: true,
+                // 전개 타임라인(D2)이 추가 하위도 시간축에 놓는다 — 날짜·정밀도까지
+                startDate: true,
+                startDatePrecision: true,
+                startEra: true,
+                startYear: true,
+                startMonth: true,
+                startDay: true,
+                endDate: true,
+                endDatePrecision: true,
+                endEra: true,
+                endYear: true,
+                endMonth: true,
+                endDay: true,
+              },
+            },
           },
           orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
         },

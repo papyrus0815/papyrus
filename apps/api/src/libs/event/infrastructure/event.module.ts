@@ -4,6 +4,7 @@ import { MilitaryEventService } from '../application/military-event.service'
 import { EventCountryParticipantService } from '../application/event-country-participant.service'
 import { EventRelationService } from '../application/event-relation.service'
 import { EventSideService } from '../application/event-side.service'
+import { EventSectionService } from '../application/event-section.service'
 import { EventSideController } from '../presentation/event-side.controller'
 import { EventPrismaRepository } from './event.prisma.repository'
 import { EventController } from '../presentation/event.controller'
@@ -19,6 +20,7 @@ import { NotificationModule } from '../../notification/notification.module'
     EventCountryParticipantService,
     EventRelationService,
     EventSideService,
+    EventSectionService,
     EventPrismaRepository,
     { provide: 'EventRepository', useClass: EventPrismaRepository },
   ],

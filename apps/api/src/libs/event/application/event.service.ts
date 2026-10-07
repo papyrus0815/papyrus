@@ -18,6 +18,7 @@ import {
   EventCountryParticipantInput,
   EventCountryParticipantService,
 } from './event-country-participant.service'
+import { EventSectionService, type EventSectionInput } from './event-section.service'
 
 /**
  * updateEvent 계층 트랜잭션이 소비하는 추가 상위 엣지(EventParentLink) 쓰기 계획.
@@ -57,12 +58,7 @@ export interface CreateEventOptions {
    * 주도국은 `role: 'INITIATOR'`로 표현한다(예전의 primaryCountryId 별표를 대체).
    */
   relatedCountries?: EventCountryParticipantInput[]
-  eventSections?: Array<{
-    title: string
-    content: string
-    order?: number
-    sectionType?: string
-  }>
+  eventSections?: EventSectionInput[]
   eventImages?: Array<{
     imageUrl: string
     caption?: string
@@ -111,6 +107,7 @@ export class EventService {
     private readonly pointService: PointService,
     private readonly notificationService: NotificationService,
     private readonly countryParticipants: EventCountryParticipantService,
+    private readonly sections: EventSectionService,
   ) {}
 
   /**
@@ -572,29 +569,9 @@ export class EventService {
       )
     }
 
-    // EventSection 업데이트
+    // EventSection 업데이트 — id 자연키 머지(단락 id 유지 → 단락이 가리키는 하위 사건·인용이 살아남는다)
     if (eventSections !== undefined) {
-      // 기존 섹션 삭제
-      await this.prisma.eventSection.deleteMany({
-        where: { eventId: id },
-      })
-
-      // 새로운 섹션 생성
-      if (eventSections.length > 0) {
-        await Promise.all(
-          eventSections.map((section, index) =>
-            this.prisma.eventSection.create({
-              data: {
-                eventId: id,
-                title: section.title,
-                content: section.content,
-                order: section.order !== undefined ? section.order : index,
-                sectionType: section.sectionType || 'content',
-              },
-            }),
-          ),
-        )
-      }
+      await this.prisma.$transaction((tx) => this.sections.sync(tx, id, eventSections))
     }
 
     // EventImage 업데이트

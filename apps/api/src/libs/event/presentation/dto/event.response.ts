@@ -146,7 +146,16 @@ export class EventResponseDto {
       },
     },
   })
-  extraChildren?: Array<{ id: string; title: string; reason?: string | null }>
+  extraChildren?: Array<{
+    id: string
+    title: string
+    reason?: string | null
+    /** 전개 타임라인(D2)용 — 상세 응답에서만 */
+    startDate?: string | null
+    startDatePrecision?: string | null
+    endDate?: string | null
+    endDatePrecision?: string | null
+  }>
 
   @ApiProperty({ description: '도시 ID', required: false })
   cityId?: string | null
@@ -190,6 +199,8 @@ export class EventResponseDto {
     content: string
     order: number
     sectionType: string
+    /** 이 단락이 서술하는 하위 사건(D2) */
+    subjectEventId?: string | null
   }>
 
   @ApiProperty({

@@ -385,7 +385,9 @@ model Event {
   militaryDetailsNorm   MilitaryDetailsNorm?
 
   // 🆕 정규화된 섹션 (본문 내용)
-  eventSections EventSection[]
+  eventSections EventSection[] @relation("EventSections")
+  /// 이 사건을 서술하는 상위 사건의 단락(D2)
+  describedBySections EventSection[] @relation("SectionSubjectEvent")
 
   // 🆕 이미지 (썸네일 포함)
   eventImages EventImage[]
@@ -440,7 +442,12 @@ model EventSection {
 
   /// 사건 FK
   eventId String @map("event_id") @db.Char(36)
-  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event   Event  @relation("EventSections", fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 이 단락이 서술하는 하위 사건(D2) — 전개 단계의 정본은 하위 사건이고, 단락은 그것을 가리킨다.
+  /// 배경·여파 같은 주제 단락은 비운다. 하위 사건이 지워지면 연결만 풀린다.
+  subjectEventId String? @map("subject_event_id") @db.Char(36)
+  subjectEvent   Event?  @relation("SectionSubjectEvent", fields: [subjectEventId], references: [id], onDelete: SetNull)
 
   /// 섹션 제목
   title String @db.VarChar(500)
@@ -459,6 +466,7 @@ model EventSection {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([eventId], name: "idx_event_section_eventId")
+  @@index([subjectEventId], name: "idx_event_section_subjectEventId")
   @@index([eventId, order], name: "idx_event_section_eventId_order")
   @@map("event_section")
 }
