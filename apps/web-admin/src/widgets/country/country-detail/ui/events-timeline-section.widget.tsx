@@ -1,6 +1,10 @@
 /**
  * 연대표(전체 사건) 섹션 — 가문·민족 메뉴와 동일한 헤더·레이아웃
- * 목록 뷰 + 사건 등록(events/create 전체 기능, 카드만 가문·민족 스타일)
+ * 목록 뷰 + 사건 등록(공용 EventRegisterModal)
+ *
+ * 등록은 예전엔 이 위젯 전용 폼(event-create-form-dashboard, 1,954줄)이 목록 자리를 갈아
+ * 끼웠다. 공용 등록 모달과 같은 일을 다른 코드로 했고, 저장 뒤 캐시를 무효화하지 않아
+ * 사건 목록·상세에 늦게 반영됐다. 이제 공용 모달을 띄운다 — 목록은 언마운트되지 않는다.
  */
 import React, { useEffect, useMemo, useState } from 'react'
 
@@ -16,28 +20,18 @@ import {
   formatSignedYear,
 } from '@/shared/lib/lifespan-text'
 import { pathKeys } from '@/shared/router'
-import { EventCreateFormDashboard } from './event-create-form-dashboard'
+import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 
 const MAIN = '#6366f1'
 
-const Root = styled(motion.div)<{ $isForm?: boolean }>`
+const Root = styled(motion.div)`
   display: flex;
   flex-direction: column;
-  gap: ${(p) => (p.$isForm ? 0 : 32)}px;
-  padding: ${(p) => (p.$isForm ? '24px 28px 0' : '36px 32px 48px')};
+  gap: 32px;
+  padding: 36px 32px 48px;
   position: relative;
-  min-height: ${(p) => (p.$isForm ? 0 : 'calc(100vh - 200px)')};
-  height: ${(p) => (p.$isForm ? '100%' : 'auto')};
-  overflow: ${(p) => (p.$isForm ? 'hidden' : 'visible')};
-  box-sizing: ${(p) => (p.$isForm ? 'border-box' : 'border-box')};
-`
-
-const FormSection = styled.section`
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  min-height: calc(100vh - 200px);
+  box-sizing: border-box;
 `
 
 /* ── 시간축 목록 ─────────────────────────────────────────────────────────────── */
@@ -312,7 +306,7 @@ export interface EventsTimelineSectionProps {
    * 이 집합이 있으면 목록을 같은 기준으로 한 번 더 거른다. 없으면 거르지 않는다.
    */
   scopeCountryIds?: string[]
-  /** URL searchParams form=create 시 true. 사건 등록 폼을 바로 표시 */
+  /** URL searchParams form=create 시 true. 사건 등록 모달을 바로 연다 */
   initialFormFromSearchParams?: boolean
   /**
    * URL의 `century` — 부호 세기 문자열(20 = 20세기, -1 = 기원전 1세기).
@@ -321,14 +315,8 @@ export interface EventsTimelineSectionProps {
    * 전체를 보러 온 사람이 잃는 것이 생긴다.
    */
   focusCentury?: string | null
-  /** 목록↔폼 전환 시 URL 동기화 (form 열기: true, 목록: false) */
+  /** 등록 모달 열고 닫을 때 URL 동기화 (열기: true, 닫기: false) */
   onNavigateToForm?: (toForm: boolean) => void
-  /** 수정 모드: 전달 시 목록/헤더 없이 수정 폼만 표시 (dashboard/events/:id/edit) */
-  editEventId?: string | null
-  /** 수정 폼에서 뒤로가기 시 (상세로 이동) */
-  onEditBack?: () => void
-  /** 수정 완료 시 (상세로 이동) */
-  onEditSuccess?: () => void
 }
 
 export function EventsTimelineSection({
@@ -337,16 +325,13 @@ export function EventsTimelineSection({
   initialFormFromSearchParams,
   focusCentury,
   onNavigateToForm,
-  editEventId,
-  onEditBack,
-  onEditSuccess,
 }: EventsTimelineSectionProps) {
   const navigate = useNavigate()
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const [pageSize] = useState(50)
-  const [view, setView] = useState<'list' | 'form'>(() =>
-    initialFormFromSearchParams ? 'form' : 'list',
+  const [isCreateOpen, setIsCreateOpen] = useState(
+    Boolean(initialFormFromSearchParams),
   )
   // autoLoadAll: 타임라인은 사건을 서버 순서(start_date DESC)로 카드 나열하는데, 1000년 이전
   // 사건은 start_date NULL이라 서버 정렬상 맨 뒤(마지막 페이지)로 밀린다. 전체 페이지를 자동
@@ -355,7 +340,7 @@ export function EventsTimelineSection({
   // loadMoreFailed: 자동 소진 중 한 페이지가 실패하면 무한 재시도 방지를 위해 자동 재개가
   // 멈춘다(useEvents 가드). 이 경우 일부 사건(특히 뒤 페이지의 옛 세기)이 누락된 채로 남으므로
   // 재시도 버튼으로 사용자가 이어받게 한다 — 없으면 부분 데이터가 조용히 묻힌다.
-  const { events, isLoading, loadMoreFailed, fetchMoreEvents, refetch } =
+  const { events, isLoading, loadMoreFailed, fetchMoreEvents } =
     useEvents({
       pageSize,
       countryId: countryId ?? undefined,
@@ -419,8 +404,7 @@ export function EventsTimelineSection({
       return {
         event,
         signedYear,
-        yearLabel:
-          signedYear == null ? '미상' : formatSignedYear(signedYear),
+        yearLabel: signedYear == null ? '미상' : formatSignedYear(signedYear),
         // 연도는 왼쪽 열에 이미 있으므로, 기간이 한 해로 끝나면 중복이라 감춘다
         rangeLabel: event.endDate ? range : null,
         modern: withRelations.relatedCountries ?? [],
@@ -495,7 +479,7 @@ export function EventsTimelineSection({
   }, [focusKey])
 
   useEffect(() => {
-    if (!focusKey || view !== 'list') return
+    if (!focusKey) return
     const target = document.querySelector<HTMLElement>(
       `[data-century-key="${focusKey}"]`,
     )
@@ -520,49 +504,24 @@ export function EventsTimelineSection({
       1600,
     )
     return () => window.clearTimeout(timer)
-  }, [focusKey, centuryFocused, view, list.length])
+  }, [focusKey, centuryFocused, list.length])
 
   useEffect(() => {
-    setView(initialFormFromSearchParams ? 'form' : 'list')
+    setIsCreateOpen(Boolean(initialFormFromSearchParams))
   }, [initialFormFromSearchParams])
 
-  const goToList = () => {
-    setView('list')
+  const closeCreate = () => {
+    setIsCreateOpen(false)
     onNavigateToForm?.(false)
   }
 
   const openCreate = () => {
-    setView('form')
+    setIsCreateOpen(true)
     onNavigateToForm?.(true)
-  }
-
-  const handleCreateSuccess = () => {
-    refetch()
-    goToList()
-  }
-
-  if (editEventId && onEditBack && onEditSuccess) {
-    return (
-      <Root
-        $isForm
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-      >
-        <FormSection aria-label="사건 수정">
-          <EventCreateFormDashboard
-            eventId={editEventId}
-            onBack={onEditBack}
-            onSuccess={onEditSuccess}
-          />
-        </FormSection>
-      </Root>
-    )
   }
 
   return (
     <Root
-      $isForm={view === 'form'}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -577,9 +536,7 @@ export function EventsTimelineSection({
         <HeaderText>
           <HeaderTitleRow>
             <HeaderTitle>연대표</HeaderTitle>
-            {view === 'list' && list.length > 0 && (
-              <HeaderCount>{list.length}건</HeaderCount>
-            )}
+            {list.length > 0 && <HeaderCount>{list.length}건</HeaderCount>}
           </HeaderTitleRow>
           <HeaderDesc>
             {countryId
@@ -587,245 +544,236 @@ export function EventsTimelineSection({
               : '등록된 사건입니다. 행을 클릭하면 상세로 이동합니다.'}
           </HeaderDesc>
         </HeaderText>
-        {view === 'list' && (
-          <HeaderActions>
-            {list.length > 0 && (
-              <OrderToggle role="group" aria-label="정렬 방향">
-                <OrderButton
-                  type="button"
-                  $active={order === 'asc'}
-                  aria-pressed={order === 'asc'}
-                  onClick={() => setOrder('asc')}
-                >
-                  오래된순
-                </OrderButton>
-                <OrderButton
-                  type="button"
-                  $active={order === 'desc'}
-                  aria-pressed={order === 'desc'}
-                  onClick={() => setOrder('desc')}
-                >
-                  최신순
-                </OrderButton>
-              </OrderToggle>
-            )}
-            <CreateButton
-              type="button"
-              onClick={openCreate}
-              aria-label="새 사건 등록"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+        <HeaderActions>
+          {list.length > 0 && (
+            <OrderToggle role="group" aria-label="정렬 방향">
+              <OrderButton
+                type="button"
+                $active={order === 'asc'}
+                aria-pressed={order === 'asc'}
+                onClick={() => setOrder('asc')}
               >
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              새 사건 등록
-            </CreateButton>
-          </HeaderActions>
-        )}
+                오래된순
+              </OrderButton>
+              <OrderButton
+                type="button"
+                $active={order === 'desc'}
+                aria-pressed={order === 'desc'}
+                onClick={() => setOrder('desc')}
+              >
+                최신순
+              </OrderButton>
+            </OrderToggle>
+          )}
+          <CreateButton
+            type="button"
+            onClick={openCreate}
+            aria-label="새 사건 등록"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            새 사건 등록
+          </CreateButton>
+        </HeaderActions>
       </Header>
 
-      {view === 'form' ? (
-        <FormSection aria-label="사건 등록">
-          <EventCreateFormDashboard
-            onBack={goToList}
-            onSuccess={handleCreateSuccess}
-          />
-        </FormSection>
-      ) : (
-        <section aria-label="연대표">
+      {/* 저장 뒤 목록 갱신은 모달이 한다 — 이 목록(useEvents)도 ['events'] 아래라 함께 다시 받는다 */}
+      <EventRegisterModal isOpen={isCreateOpen} onClose={closeCreate} />
 
-          {isLoading && list.length === 0 ? (
+      <section aria-label="연대표">
+        {isLoading && list.length === 0 ? (
+          <div
+            style={{
+              padding: 56,
+              textAlign: 'center',
+              color: theme.colors.text.secondary,
+              fontSize: 14,
+              background: isDark ? 'rgba(255,255,255,0.04)' : '#f9fafb',
+              borderRadius: 16,
+              border: `1px solid ${theme.colors.border.default}`,
+            }}
+          >
+            불러오는 중…
+          </div>
+        ) : list.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+            style={{
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '64px 40px 72px',
+              background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
+              backdropFilter: isDark ? 'blur(12px)' : 'none',
+              borderRadius: 20,
+              border: `1px solid ${theme.colors.border.light}`,
+              boxShadow: isDark
+                ? '0 1px 3px rgba(0,0,0,0.4)'
+                : '0 1px 3px rgba(0,0,0,0.04)',
+              overflow: 'hidden',
+            }}
+          >
             <div
               style={{
-                padding: 56,
-                textAlign: 'center',
-                color: theme.colors.text.secondary,
-                fontSize: 14,
-                background: isDark ? 'rgba(255,255,255,0.04)' : '#f9fafb',
-                borderRadius: 16,
-                border: `1px solid ${theme.colors.border.default}`,
+                position: 'absolute',
+                left: '50%',
+                top: '20%',
+                width: 280,
+                height: 280,
+                marginLeft: -140,
+                marginTop: -140,
+                borderRadius: '50%',
+                background:
+                  'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)',
+                filter: 'blur(32px)',
+                pointerEvents: 'none',
               }}
-            >
-              불러오는 중…
-            </div>
-          ) : list.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+            />
+            <div
               style={{
                 position: 'relative',
+                zIndex: 1,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                padding: '64px 40px 72px',
-                background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
-                backdropFilter: isDark ? 'blur(12px)' : 'none',
-                borderRadius: 20,
-                border: `1px solid ${theme.colors.border.light}`,
-                boxShadow: isDark
-                  ? '0 1px 3px rgba(0,0,0,0.4)'
-                  : '0 1px 3px rgba(0,0,0,0.04)',
-                overflow: 'hidden',
+                textAlign: 'center',
               }}
             >
-              <div
+              <h3
                 style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '20%',
-                  width: 280,
-                  height: 280,
-                  marginLeft: -140,
-                  marginTop: -140,
-                  borderRadius: '50%',
-                  background:
-                    'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)',
-                  filter: 'blur(32px)',
-                  pointerEvents: 'none',
-                }}
-              />
-              <div
-                style={{
-                  position: 'relative',
-                  zIndex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  textAlign: 'center',
+                  margin: 0,
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: theme.colors.text.primary,
+                  letterSpacing: '-0.02em',
                 }}
               >
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: theme.colors.text.primary,
-                    letterSpacing: '-0.02em',
-                  }}
-                >
-                  등록된 사건이 없습니다
-                </h3>
-                <p
-                  style={{
-                    margin: '10px 0 0',
-                    fontSize: 14,
-                    color: theme.colors.text.secondary,
-                    maxWidth: 320,
-                    lineHeight: 1.55,
-                    fontWeight: 500,
-                  }}
-                >
-                  위{' '}
-                  <strong
-                    style={{
-                      color: theme.colors.text.primary,
-                      fontWeight: 600,
-                    }}
-                  >
-                    새 사건 등록
-                  </strong>{' '}
-                  버튼을 눌러 첫 사건을 등록하거나,{' '}
-                  <strong
-                    style={{
-                      color: theme.colors.text.primary,
-                      fontWeight: 600,
-                    }}
-                  >
-                    사건
-                  </strong>{' '}
-                  메뉴에서 연대표를 이용해 보세요.
-                </p>
-              </div>
-            </motion.div>
-          ) : (
-            <Chronology>
-              {centuryGroups.map((group) => (
-                <CenturySection key={group.key} data-century-key={group.key}>
-                  <CenturyHead>
-                    <CenturyLabel>{group.label}</CenturyLabel>
-                    <CenturyCount>{group.events.length}건</CenturyCount>
-                  </CenturyHead>
-                  {group.events.map((entry) => (
-                    <EventRow
-                      key={entry.event.id}
-                      type="button"
-                      onClick={() =>
-                        navigate(pathKeys.events.detail(entry.event.id))
-                      }
-                    >
-                      <RowYear>{entry.yearLabel}</RowYear>
-                      <RowBody>
-                        <RowTitle>{entry.event.title || '제목 없음'}</RowTitle>
-                        {entry.rangeLabel && (
-                          <RowRange>{entry.rangeLabel}</RowRange>
-                        )}
-                      </RowBody>
-                      {(entry.historical.length > 0 ||
-                        entry.modern.length > 0) && (
-                        <CountryChipRow>
-                          {entry.historical.map((item) => (
-                            <CountryChip key={`h-${item.id}`} $past>
-                              {item.name}
-                            </CountryChip>
-                          ))}
-                          {entry.modern.map((item) => (
-                            <CountryChip key={`m-${item.id}`}>
-                              {item.flagEmoji ? `${item.flagEmoji} ` : ''}
-                              {item.name}
-                            </CountryChip>
-                          ))}
-                        </CountryChipRow>
-                      )}
-                    </EventRow>
-                  ))}
-                </CenturySection>
-              ))}
-            </Chronology>
-          )}
-
-          {/* 자동 소진 중 일부 페이지 로드 실패 — 재시도로 이어받기(옛 세기 누락 방지) */}
-          {loadMoreFailed && (
-            <div style={{ marginTop: 24, textAlign: 'center' }}>
-              <div
+                등록된 사건이 없습니다
+              </h3>
+              <p
                 style={{
-                  fontSize: 13,
-                  color: theme.colors.text.secondary,
-                  marginBottom: 10,
-                }}
-              >
-                일부 사건을 불러오지 못했습니다.
-              </div>
-              <button
-                type="button"
-                onClick={() => fetchMoreEvents()}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: 12,
-                  border: `1px solid ${theme.colors.border.default}`,
-                  background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-                  color: theme.colors.text.secondary,
+                  margin: '10px 0 0',
                   fontSize: 14,
-                  fontWeight: 600,
-                  cursor: 'pointer',
+                  color: theme.colors.text.secondary,
+                  maxWidth: 320,
+                  lineHeight: 1.55,
+                  fontWeight: 500,
                 }}
               >
-                다시 시도
-              </button>
+                위{' '}
+                <strong
+                  style={{
+                    color: theme.colors.text.primary,
+                    fontWeight: 600,
+                  }}
+                >
+                  새 사건 등록
+                </strong>{' '}
+                버튼을 눌러 첫 사건을 등록하거나,{' '}
+                <strong
+                  style={{
+                    color: theme.colors.text.primary,
+                    fontWeight: 600,
+                  }}
+                >
+                  사건
+                </strong>{' '}
+                메뉴에서 연대표를 이용해 보세요.
+              </p>
             </div>
-          )}
-        </section>
-      )}
+          </motion.div>
+        ) : (
+          <Chronology>
+            {centuryGroups.map((group) => (
+              <CenturySection key={group.key} data-century-key={group.key}>
+                <CenturyHead>
+                  <CenturyLabel>{group.label}</CenturyLabel>
+                  <CenturyCount>{group.events.length}건</CenturyCount>
+                </CenturyHead>
+                {group.events.map((entry) => (
+                  <EventRow
+                    key={entry.event.id}
+                    type="button"
+                    onClick={() =>
+                      navigate(pathKeys.events.detail(entry.event.id))
+                    }
+                  >
+                    <RowYear>{entry.yearLabel}</RowYear>
+                    <RowBody>
+                      <RowTitle>{entry.event.title || '제목 없음'}</RowTitle>
+                      {entry.rangeLabel && (
+                        <RowRange>{entry.rangeLabel}</RowRange>
+                      )}
+                    </RowBody>
+                    {(entry.historical.length > 0 ||
+                      entry.modern.length > 0) && (
+                      <CountryChipRow>
+                        {entry.historical.map((item) => (
+                          <CountryChip key={`h-${item.id}`} $past>
+                            {item.name}
+                          </CountryChip>
+                        ))}
+                        {entry.modern.map((item) => (
+                          <CountryChip key={`m-${item.id}`}>
+                            {item.flagEmoji ? `${item.flagEmoji} ` : ''}
+                            {item.name}
+                          </CountryChip>
+                        ))}
+                      </CountryChipRow>
+                    )}
+                  </EventRow>
+                ))}
+              </CenturySection>
+            ))}
+          </Chronology>
+        )}
+
+        {/* 자동 소진 중 일부 페이지 로드 실패 — 재시도로 이어받기(옛 세기 누락 방지) */}
+        {loadMoreFailed && (
+          <div style={{ marginTop: 24, textAlign: 'center' }}>
+            <div
+              style={{
+                fontSize: 13,
+                color: theme.colors.text.secondary,
+                marginBottom: 10,
+              }}
+            >
+              일부 사건을 불러오지 못했습니다.
+            </div>
+            <button
+              type="button"
+              onClick={() => fetchMoreEvents()}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 12,
+                border: `1px solid ${theme.colors.border.default}`,
+                background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                color: theme.colors.text.secondary,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
+      </section>
     </Root>
   )
 }
