@@ -42,10 +42,10 @@ export const eventPageRoute: RouteObject = {
     },
     {
       path: ':eventId',
+      // 최상위 사건(하위를 거느린 루트)은 조망, 그 밖은 상세 문서 — 판정은 event-page-switch
       lazy: async () => {
-        const { default: EventDetailPage } =
-          await import('./detail/event-detail.page')
-        return { Component: EventDetailPage }
+        const { default: EventPageSwitch } = await import('./overview/event-page-switch')
+        return { Component: EventPageSwitch }
       },
     },
   ],

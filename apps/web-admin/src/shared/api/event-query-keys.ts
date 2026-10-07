@@ -45,6 +45,11 @@ export const eventKeys = {
   cabinetLinkageFallback: () => ['events', 'cabinet-linkage-fallback'] as const,
   /** 삭제한 사건(휴지통) — 목록류라 사건을 지우면 함께 무효화된다 */
   deleted: () => ['events', 'deleted'] as const,
+  /**
+   * 최상위 사건 조망(하위 전부 집계) — 목록류 아래에 둔다. 하위 사건 편집은 그 하위의 상세 키만
+   * 건드리므로, 조망은 staleTime 0으로 들어올 때마다 다시 받는다.
+   */
+  overview: (eventId: string) => ['events', 'overview', eventId] as const,
   /** 수장 타임라인 사건 오버레이 후보 */
   headsOfStateOverlay: () => ['events', 'heads-of-state-overlay-list'] as const,
 

@@ -334,3 +334,23 @@ function isYearEndSentinel(
   if (parts.month === 1 && parts.day === 1) return true
   return startSentinel && parts.month === 12 && parts.day === 31
 }
+
+/**
+ * 실효 정밀도 — 정밀도 NULL인 1월 1일(·짝이 되는 12월 31일) 자리 표시를 'year'로 읽는다.
+ * `formatDateRange`와 **같은 판정**이라, 날짜를 직접 축에 놓는 지면(조망 간트 등)이 이 값을 쓰면
+ * '974.1.1 ~ 974.12.31'처럼 아는 것보다 정확한 척하는 표기가 사라진다.
+ */
+export function effectiveRangePrecision(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  startPrecision?: string | null,
+  endPrecision?: string | null,
+): { startPrecision: string | null; endPrecision: string | null } {
+  const startSentinel = Boolean(start) && isJanuaryFirstSentinel(start as string, startPrecision)
+  const endSentinel =
+    Boolean(end) && isYearEndSentinel(end as string, endPrecision, startSentinel)
+  return {
+    startPrecision: startSentinel ? 'year' : (startPrecision ?? null),
+    endPrecision: endSentinel ? 'year' : (endPrecision ?? null),
+  }
+}
