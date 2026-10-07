@@ -39,6 +39,7 @@ function setup(over: Partial<React.ComponentProps<typeof OverviewEventModal>> = 
     event,
     position: 2,
     total: 18,
+    rootTitle: '1차세계대전',
     parentTitle: null,
     children: [],
     numberById: new Map([['marne', 2]]),

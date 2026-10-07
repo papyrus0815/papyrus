@@ -58,7 +58,7 @@ export function GanttPanel({
 }) {
   const theme = useTheme()
   return (
-    <S.Panel $wide aria-labelledby="overview-gantt-title">
+    <S.Panel $wide id="overview-gantt" aria-labelledby="overview-gantt-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-gantt-title">전개</S.PanelTitle>
         <S.ViewSwitch role="group" aria-label="시간축 범위">
@@ -91,13 +91,22 @@ export function GanttPanel({
           <S.GanttGrid role="list" aria-label="하위 사건 시간축">
             <div aria-hidden="true" />
             <S.GanttAxis aria-hidden="true">
+              {gantt.parentBand && (
+                <S.ParentBandMark
+                  style={{
+                    left: `${gantt.parentBand.leftPct}%`,
+                    width: `${gantt.parentBand.widthPct}%`,
+                  }}
+                />
+              )}
               {gantt.ticks.map((tick) => (
                 <S.GanttTick key={`${tick.pct}-${tick.label}`} style={{ left: `${tick.pct}%` }}>
                   {tick.label}
                 </S.GanttTick>
               ))}
             </S.GanttAxis>
-            {gantt.rows.map((row) => {
+            {gantt.rows.map((row, rowIndex) => {
+              const stripe = rowIndex % 2 === 1
               const dim = isDimmed(visibleIds, row.node.id)
               const hot = hotId === row.node.id
               const color = categoryAccent(resolveCategory(row.node.category?.name), theme.mode)
@@ -112,7 +121,7 @@ export function GanttPanel({
                   onMouseEnter={() => onHover(row.node.id)}
                   onMouseLeave={() => onHover(null)}
                 >
-                  <S.GanttLabel $depth={row.node.depth} $dim={dim} $hot={hot}>
+                  <S.GanttLabel $depth={row.node.depth} $dim={dim} $hot={hot} $stripe={stripe}>
                     <S.GanttNumber>{numberById.get(row.node.id)}</S.GanttNumber>
                     <S.CategoryDot $color={color} title={row.node.category?.name ?? '미분류'} />
                     <S.RowTitleButton
@@ -132,6 +141,7 @@ export function GanttPanel({
                   <S.GanttTrack
                     $dim={dim}
                     $hot={hot}
+                    $stripe={stripe}
                     aria-hidden="true"
                     onClick={() => onOpen(row.node.id)}
                   >
@@ -192,8 +202,9 @@ export function CountryMatrixPanel({
 }) {
   const theme = useTheme()
   const tones = ['lead', 'target', 'statehood', 'neutral'] as const
+  const maxCount = Math.max(1, ...matrix.map((country) => country.eventCount))
   return (
-    <S.Panel $wide aria-labelledby="overview-matrix-title">
+    <S.Panel $wide id="overview-matrix" aria-labelledby="overview-matrix-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-matrix-title">참여국 × 하위 사건</S.PanelTitle>
         <S.PanelNote>
@@ -263,7 +274,9 @@ export function CountryMatrixPanel({
                             {country.flagEmoji ? `${country.flagEmoji} ` : ''}
                             {country.name}
                           </span>
-                          <S.CountBadge>{country.eventCount}</S.CountBadge>
+                          <S.CountBadge $pct={(country.eventCount / maxCount) * 100}>
+                            {country.eventCount}
+                          </S.CountBadge>
                         </S.CountryButton>
                       </S.MatrixCountryCell>
                       <S.MatrixCell $hot={false}>
@@ -324,7 +337,7 @@ export function CategoryPanel({
   const theme = useTheme()
   const max = Math.max(1, ...bars.map((bar) => bar.count))
   return (
-    <S.Panel aria-labelledby="overview-category-title">
+    <S.Panel id="overview-distribution" aria-labelledby="overview-category-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-category-title">갈래</S.PanelTitle>
         <S.PanelNote>누르면 그 갈래만 남는다</S.PanelNote>
@@ -412,7 +425,7 @@ export function PersonsPanel({
   wide?: boolean
 }) {
   return (
-    <S.Panel $wide={wide} aria-labelledby="overview-persons-title">
+    <S.Panel $wide={wide} id="overview-people" aria-labelledby="overview-persons-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-persons-title">인물</S.PanelTitle>
         <S.PanelNote>{persons.length > 0 ? `${persons.length}명 · 많이 나오는 순` : ''}</S.PanelNote>
@@ -559,7 +572,7 @@ export function ChecklistPanel({
       : scored
   const emptyCounts = emptyCountByColumn(filtered)
   return (
-    <S.Panel $wide aria-labelledby="overview-checklist-title">
+    <S.Panel $wide id="overview-checklist" aria-labelledby="overview-checklist-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-checklist-title">기록 점검</S.PanelTitle>
         <S.ViewSwitch role="group" aria-label="점검표 순서">

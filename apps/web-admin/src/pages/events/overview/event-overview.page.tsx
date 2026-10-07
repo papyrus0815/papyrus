@@ -184,6 +184,14 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
     : []
   /** 패널 강조 — 마우스가 없으면 열린 사건을 칠해 둔다(모달을 닫아도 어디 있었는지 남게) */
   const highlightId = hotId ?? openEventId
+  /** 섹션 내비 — 해시를 주소에 남기지 않고(?event= 등과 섞이지 않게) 부드럽게 스크롤 */
+  const jumpTo = (clickEvent: React.MouseEvent<HTMLAnchorElement>) => {
+    const targetId = clickEvent.currentTarget.getAttribute('href')?.slice(1)
+    const target = targetId ? document.getElementById(targetId) : null
+    if (!target) return
+    clickEvent.preventDefault()
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
   const openEventById = (id: string) => setOpenEvent(id, openEventId ? 'replace' : 'push')
   const hasPersons = derived.persons.length > 0
   const hasSidesOrMetrics = derived.sideCount > 0 || derived.metrics.length > 0
@@ -266,6 +274,25 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           </S.Meter>
         </S.Stat>
       </S.StatRow>
+
+      {/* 머리 아래 따라오는 목차 — 지면이 화면 몇 장이라 섹션으로 바로 뛴다 */}
+      <S.SectionNav aria-label="조망 섹션">
+        <S.SectionNavLink href="#overview-gantt" onClick={jumpTo}>
+          전개 <S.SectionNavCount>{derived.gantt.rows.length}</S.SectionNavCount>
+        </S.SectionNavLink>
+        <S.SectionNavLink href="#overview-matrix" onClick={jumpTo}>
+          참여국 <S.SectionNavCount>{derived.matrix.length}</S.SectionNavCount>
+        </S.SectionNavLink>
+        <S.SectionNavLink href="#overview-distribution" onClick={jumpTo}>분포</S.SectionNavLink>
+        {hasPersons && (
+          <S.SectionNavLink href="#overview-people" onClick={jumpTo}>
+            인물 <S.SectionNavCount>{derived.persons.length}</S.SectionNavCount>
+          </S.SectionNavLink>
+        )}
+        <S.SectionNavLink href="#overview-checklist" onClick={jumpTo}>
+          기록 점검 <S.SectionNavCount>{Math.round(derived.coverage * 100)}%</S.SectionNavCount>
+        </S.SectionNavLink>
+      </S.SectionNav>
 
       {(selectedCountry || selectedCategory) && (
         <S.FilterBar role="status">
@@ -354,6 +381,7 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
         event={openEvent}
         position={openIndex + 1}
         total={navOrder.length}
+        rootTitle={root.title}
         parentTitle={
           openEvent && openEvent.depth >= 2 && openEvent.parentEventId
             ? (titleById.get(openEvent.parentEventId) ?? null)

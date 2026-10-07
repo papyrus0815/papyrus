@@ -15,7 +15,6 @@ import { durationLabel } from '@/pages/events/detail/components/event-facts.lib'
 import {
   categoryAccent,
   ledgerAccent,
-  ledgerHairlineStrong,
   ledgerHoverFill,
   ledgerSubtleFill,
   resolveCategory,
@@ -35,6 +34,9 @@ interface OverviewEventModalProps {
   /** 지금 화면 순서(거르기 반영)에서의 위치 */
   position: number
   total: number
+  /** 최상위 사건 제목 — 머리의 경로 첫 칸 */
+  rootTitle: string
+  /** 바로 위 사건 제목 — 손자 이하일 때만 */
   parentTitle: string | null
   /** 이 사건 바로 아래 하위(조망 범위 안) */
   children: EventOverviewNode[]
@@ -55,6 +57,7 @@ export function OverviewEventModal({
   event,
   position,
   total,
+  rootTitle,
   parentTitle,
   children,
   numberById,
@@ -112,157 +115,196 @@ export function OverviewEventModal({
       onClose={onClose}
       ariaLabelledBy={titleId}
       initialFocusRef={titleRef}
-      maxWidth="720px"
+      maxWidth="880px"
       header={
-        <Head $accent={accent}>
+        <Head>
           <HeadTop>
             <Position>
               {position} / {total}
             </Position>
-            {event.category && (
-              <CategoryChip $color={accent}>
-                <span aria-hidden="true">{category.icon}</span>
-                {event.category.name}
-              </CategoryChip>
-            )}
-            {parentTitle && <ParentLine>↳ {parentTitle}의 하위</ParentLine>}
-            <ModalCloseButton type="button" onClick={onClose} aria-label="닫기" style={{ marginLeft: 'auto' }}>
+            <Trail>
+              {rootTitle}
+              {parentTitle && (
+                <>
+                  <TrailSep aria-hidden="true">›</TrailSep>
+                  {parentTitle}
+                </>
+              )}
+            </Trail>
+            <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
               <FiX />
             </ModalCloseButton>
           </HeadTop>
           <Title id={titleId} ref={titleRef} tabIndex={-1}>
             {event.title}
           </Title>
-          {(dateLabel || duration || event.location) && (
-            <Meta>
-              {dateLabel && <span>{dateLabel}</span>}
-              {duration && <span>{duration}</span>}
-              {event.location && <span>{event.location}</span>}
-            </Meta>
-          )}
+          <Facts>
+            {dateLabel && (
+              <Fact>
+                <FactLabel>기간</FactLabel>
+                <FactValue>{dateLabel}</FactValue>
+              </Fact>
+            )}
+            {duration && (
+              <Fact>
+                <FactLabel>길이</FactLabel>
+                <FactValue>{duration}</FactValue>
+              </Fact>
+            )}
+            {event.category && (
+              <Fact>
+                <FactLabel>갈래</FactLabel>
+                <FactValue>
+                  <Dot $color={accent} aria-hidden="true" />
+                  {event.category.name}
+                </FactValue>
+              </Fact>
+            )}
+            {event.location && (
+              <Fact>
+                <FactLabel>장소</FactLabel>
+                <FactValue>{event.location}</FactValue>
+              </Fact>
+            )}
+          </Facts>
         </Head>
       }
     >
       <Body>
-        {event.description?.trim() ? (
-          <Lead>{event.description}</Lead>
-        ) : (
-          <Missing>개요가 아직 없습니다.</Missing>
-        )}
-
-        <Block aria-labelledby={`${titleId}-countries`}>
-          <BlockTitle id={`${titleId}-countries`}>
-            참여국 <Count>{event.countries.length}</Count>
-          </BlockTitle>
-          {event.countries.length === 0 ? (
-            <Missing>참여국이 없습니다.</Missing>
+        <Main>
+          {event.description?.trim() ? (
+            <Lead>{event.description}</Lead>
           ) : (
-            <ChipRow>
-              {event.countries.map((country) => {
-                const tone = roleTone(country.role)
-                return (
-                  <CountryChip key={country.key}>
-                    <S.RoleMark
-                      $color={S.toneColor(tone, theme.mode)}
-                      $hollow={tone === 'neutral'}
-                      aria-hidden="true"
-                      style={{ width: 12, height: 12, borderRadius: 3 }}
-                    />
-                    <span>
-                      {country.flagEmoji ? `${country.flagEmoji} ` : ''}
-                      {country.name}
-                    </span>
-                    {/* 평범한 참여는 블록 제목('참여국')과 같은 말이라 생략 */}
-                    {country.role && country.role !== 'PARTICIPANT' && (
-                      <RoleText>{roleLabel(country.role)}</RoleText>
-                    )}
-                  </CountryChip>
-                )
-              })}
-            </ChipRow>
+            <Missing>개요가 아직 없습니다 — 사건 문서에서 한 줄 설명을 채울 수 있습니다.</Missing>
           )}
-        </Block>
 
-        {event.persons.length > 0 && (
-          <Block aria-labelledby={`${titleId}-persons`}>
-            <BlockTitle id={`${titleId}-persons`}>
-              인물 <Count>{event.persons.length}</Count>
-            </BlockTitle>
-            <List>
-              {event.persons.map((person) => (
-                <li key={person.personId}>
-                  <strong>
-                    {getPersonDisplayName({
-                      name: person.name ?? '',
-                      surname: person.surname,
-                      middleName: person.middleName,
-                      nameDisplayOrder: person.nameDisplayOrder,
-                      country: { defaultNameDisplayOrder: person.defaultNameDisplayOrder },
-                    })}
-                  </strong>
-                  {person.role && <RoleText> — {person.role}</RoleText>}
-                </li>
-              ))}
-            </List>
-          </Block>
-        )}
-
-        {(event.sides.length > 0 || metrics.length > 0) && (
-          <Block aria-labelledby={`${titleId}-sides`}>
-            <BlockTitle id={`${titleId}-sides`}>진영 · 수치</BlockTitle>
-            {event.sides.length > 0 && (
-              <p style={{ margin: 0 }}>{event.sides.map((side) => side.name).join(' ↔ ')}</p>
-            )}
-            {metrics.length > 0 && (
-              <List>
-                {metrics.map((row, index) => (
-                  <li key={`${row.metricName}-${index}`}>
-                    {row.metricName} <strong>{row.display}</strong>
-                    {row.unit && ` ${row.unit}`}
+          {children.length > 0 && (
+            <Block aria-labelledby={`${titleId}-children`}>
+              <BlockTitle id={`${titleId}-children`}>
+                하위 사건 <Count>{children.length}</Count>
+              </BlockTitle>
+              <ChildList>
+                {children.map((child) => (
+                  <li key={child.id}>
+                    <ChildButton type="button" onClick={() => onOpenEvent(child.id)}>
+                      <ChildNumber>{numberById.get(child.id)}</ChildNumber>
+                      <ChildTitle>{child.title}</ChildTitle>
+                      {eventDateLabel(child) && <ChildDate>{eventDateLabel(child)}</ChildDate>}
+                    </ChildButton>
                   </li>
                 ))}
-              </List>
+              </ChildList>
+            </Block>
+          )}
+        </Main>
+
+        <Aside aria-label="이 사건의 사실">
+          <AsideBlock aria-labelledby={`${titleId}-checks`}>
+            <AsideHead>
+              <BlockTitle id={`${titleId}-checks`}>기록 점검</BlockTitle>
+              <Percent>{fillPct}%</Percent>
+            </AsideHead>
+            <S.Meter aria-hidden="true" style={{ marginTop: 0, order: 0 }}>
+              <S.MeterFill $pct={fillPct} />
+            </S.Meter>
+            <CheckGrid>
+              {CHECK_COLUMNS.map((column) => {
+                const state = checks[column.key]
+                return (
+                  <CheckItem key={column.key} $state={state} title={column.hint}>
+                    <CheckGlyph $state={state} aria-hidden="true" />
+                    {column.label}
+                    <S.VisuallyHidden>
+                      {state === 'full' ? ' 채움' : state === 'partial' ? ' 일부' : ' 비어 있음'}
+                    </S.VisuallyHidden>
+                  </CheckItem>
+                )
+              })}
+            </CheckGrid>
+          </AsideBlock>
+
+          <AsideBlock aria-labelledby={`${titleId}-countries`}>
+            <AsideHead>
+              <BlockTitle id={`${titleId}-countries`}>참여국</BlockTitle>
+              <Count>{event.countries.length}</Count>
+            </AsideHead>
+            {event.countries.length === 0 ? (
+              <Missing>참여국이 없습니다.</Missing>
+            ) : (
+              <FactList>
+                {event.countries.map((country) => {
+                  const tone = roleTone(country.role)
+                  return (
+                    <li key={country.key}>
+                      <S.RoleMark
+                        $color={S.toneColor(tone, theme.mode)}
+                        $hollow={tone === 'neutral'}
+                        aria-hidden="true"
+                      />
+                      <span>
+                        {country.flagEmoji ? `${country.flagEmoji} ` : ''}
+                        {country.name}
+                      </span>
+                      {/* 평범한 참여는 블록 제목('참여국')과 같은 말이라 생략 */}
+                      {country.role && country.role !== 'PARTICIPANT' && (
+                        <RoleText>{roleLabel(country.role)}</RoleText>
+                      )}
+                    </li>
+                  )
+                })}
+              </FactList>
             )}
-          </Block>
-        )}
+          </AsideBlock>
 
-        {children.length > 0 && (
-          <Block aria-labelledby={`${titleId}-children`}>
-            <BlockTitle id={`${titleId}-children`}>
-              하위 사건 <Count>{children.length}</Count>
-            </BlockTitle>
-            <List>
-              {children.map((child) => (
-                <li key={child.id}>
-                  <LinkButton type="button" onClick={() => onOpenEvent(child.id)}>
-                    <Muted>{numberById.get(child.id)}.</Muted> {child.title}
-                  </LinkButton>
-                  {eventDateLabel(child) && <Muted> · {eventDateLabel(child)}</Muted>}
-                </li>
-              ))}
-            </List>
-          </Block>
-        )}
+          {event.persons.length > 0 && (
+            <AsideBlock aria-labelledby={`${titleId}-persons`}>
+              <AsideHead>
+                <BlockTitle id={`${titleId}-persons`}>인물</BlockTitle>
+                <Count>{event.persons.length}</Count>
+              </AsideHead>
+              <FactList>
+                {event.persons.map((person) => (
+                  <li key={person.personId}>
+                    <span>
+                      {getPersonDisplayName({
+                        name: person.name ?? '',
+                        surname: person.surname,
+                        middleName: person.middleName,
+                        nameDisplayOrder: person.nameDisplayOrder,
+                        country: { defaultNameDisplayOrder: person.defaultNameDisplayOrder },
+                      })}
+                    </span>
+                    {person.role && <RoleText>{person.role}</RoleText>}
+                  </li>
+                ))}
+              </FactList>
+            </AsideBlock>
+          )}
 
-        <Block aria-labelledby={`${titleId}-checks`}>
-          <BlockTitle id={`${titleId}-checks`}>
-            기록 점검 <Count>{fillPct}%</Count>
-          </BlockTitle>
-          <CheckGrid>
-            {CHECK_COLUMNS.map((column) => {
-              const state = checks[column.key]
-              return (
-                <CheckItem key={column.key} $state={state} title={column.hint}>
-                  <span aria-hidden="true">{state === 'full' ? '●' : state === 'partial' ? '◐' : '○'}</span>
-                  {column.label}
-                  <S.VisuallyHidden>
-                    {state === 'full' ? ' 채움' : state === 'partial' ? ' 일부' : ' 비어 있음'}
-                  </S.VisuallyHidden>
-                </CheckItem>
-              )
-            })}
-          </CheckGrid>
-        </Block>
+          {(event.sides.length > 0 || metrics.length > 0) && (
+            <AsideBlock aria-labelledby={`${titleId}-sides`}>
+              <AsideHead>
+                <BlockTitle id={`${titleId}-sides`}>진영 · 수치</BlockTitle>
+              </AsideHead>
+              <FactList>
+                {event.sides.length > 0 && (
+                  <li>
+                    <span>{event.sides.map((side) => side.name).join(' ↔ ')}</span>
+                  </li>
+                )}
+                {metrics.map((row, index) => (
+                  <li key={`${row.metricName}-${index}`}>
+                    <span>{row.metricName}</span>
+                    <RoleText>
+                      {row.display}
+                      {row.unit && ` ${row.unit}`}
+                    </RoleText>
+                  </li>
+                ))}
+              </FactList>
+            </AsideBlock>
+          )}
+        </Aside>
       </Body>
 
       <Foot>
@@ -275,7 +317,10 @@ export function OverviewEventModal({
             다음
             <FiArrowRight size={14} aria-hidden="true" />
           </NavButton>
-          <KeyHint aria-hidden="true">← → 로 넘기기</KeyHint>
+          <KeyHint aria-hidden="true">
+            <kbd>←</kbd>
+            <kbd>→</kbd> 로 넘기기
+          </KeyHint>
         </NavGroup>
         <PrimaryButton type="button" onClick={() => onOpenDocument(event.id)}>
           사건 문서 열기
@@ -287,60 +332,56 @@ export function OverviewEventModal({
 }
 
 // ─── 조판 ──────────────────────────────────────────────────────────────────
+// 색 띠·왼쪽 테두리 강조를 쓰지 않는다 — 위계는 글자 크기·굵기·여백·옅은 바탕으로 세운다.
 
-/** 머리 — 왼쪽 갈래색 띠가 이 사건의 정체를 먼저 말한다 */
-const Head = styled.div<{ $accent: string }>`
-  padding: 16px 20px 16px 24px;
+const Head = styled.div`
+  padding: 18px 20px 18px 24px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  box-shadow: inset 4px 0 0 ${({ $accent }) => $accent};
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 `
 
 const HeadTop = styled.div`
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: 10px;
   min-height: 32px;
 `
 
 const Position = styled.span`
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const CategoryChip = styled.span<{ $color: string }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  flex-shrink: 0;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  color: ${({ $color }) => $color};
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
-const ParentLine = styled.span`
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+/** 경로 — 최상위 › 바로 위 */
+const Trail = styled.span`
+  flex: 1;
   min-width: 0;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `
 
+const TrailSep = styled.span`
+  margin: 0 6px;
+`
+
 const Title = styled.h2`
   margin: 0;
-  font-size: clamp(19px, 2.2vw, 24px);
+  font-size: clamp(20px, 2.4vw, 26px);
   font-weight: 800;
   line-height: 1.3;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   word-break: keep-all;
   color: ${({ theme }) => theme.colors.text.primary};
   &:focus {
@@ -348,30 +389,77 @@ const Title = styled.h2`
   }
 `
 
-const Meta = styled.div`
+/** 사실 줄 — 작은 이름표 위에 값 */
+const Facts = styled.dl`
+  margin: 2px 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  gap: 8px 28px;
 `
 
-const Body = styled(ModalBody)`
-  gap: 20px;
+const Fact = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const FactLabel = styled.dt`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const FactValue = styled.dd`
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const Dot = styled.span<{ $color: string }>`
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+`
+
+/** 본문 2단 — 왼쪽 서술, 오른쪽 사실. 좁으면 한 단 */
+const Body = styled(ModalBody)`
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(240px, 1fr);
+  align-items: start;
+  gap: 24px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  @media (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const Main = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
 `
 
 const Lead = styled.p`
   margin: 0;
-  font-size: 14.5px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.75;
   white-space: pre-line;
+  word-break: keep-all;
 `
 
 const Missing = styled.p`
   margin: 0;
   font-size: 13px;
+  line-height: 1.6;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -379,106 +467,167 @@ const Block = styled.section`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 14px;
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  font-size: 13.5px;
 `
 
 const BlockTitle = styled.h3`
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 800;
+  letter-spacing: 0.02em;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const Count = styled.span`
   margin-left: 4px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const ChipRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const CountryChip = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  font-size: 13px;
-`
-
-const RoleText = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const List = styled.ul`
+const ChildList = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 `
 
-const Muted = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-`
-
-const LinkButton = styled.button`
-  padding: 0;
+const ChildButton = styled.button`
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
   border: none;
-  background: none;
-  color: ${({ theme }) => theme.colors.text.primary};
+  border-radius: 8px;
+  background: transparent;
   font: inherit;
   text-align: left;
+  color: ${({ theme }) => theme.colors.text.primary};
   cursor: pointer;
   &:hover {
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-    text-decoration: underline;
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-    border-radius: 3px;
+    outline-offset: 1px;
   }
 `
 
-const CheckGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-  gap: 6px;
+const ChildNumber = styled.span`
+  grid-row: span 2;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  padding-top: 1px;
 `
 
-const CheckItem = styled.span<{ $state: 'full' | 'partial' | 'empty' }>`
-  display: inline-flex;
+const ChildTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 600;
+`
+
+const ChildDate = styled.span`
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 사실 패널 — 테두리 대신 옅은 바탕 한 장 */
+const Aside = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px;
+  border-radius: 12px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  min-width: 0;
+`
+
+const AsideBlock = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const AsideHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const Percent = styled.span`
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+`
+
+const CheckGrid = styled.ul`
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 8px;
+`
+
+const CheckItem = styled.li<{ $state: 'full' | 'partial' | 'empty' }>`
+  display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
-  border-radius: 8px;
   font-size: 12.5px;
   font-weight: 600;
-  background: ${({ $state, theme }) => ($state === 'empty' ? 'transparent' : ledgerSubtleFill(theme.mode))};
-  border: 1px ${({ $state }) => ($state === 'empty' ? 'dashed' : 'solid')}
-    ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   color: ${({ $state, theme }) =>
     $state === 'empty' ? theme.colors.text.tertiary : theme.colors.text.primary};
-  span[aria-hidden] {
-    color: ${({ $state, theme }) =>
-      $state === 'full'
-        ? theme.mode === 'dark' ? '#4ade80' : '#16a34a'
-        : $state === 'partial'
-          ? theme.mode === 'dark' ? '#fbbf24' : '#d97706'
-          : theme.colors.text.tertiary};
+`
+
+/** 채움=꽉 찬 원 · 일부=반원 · 빈 칸=테두리만 */
+const CheckGlyph = styled.span<{ $state: 'full' | 'partial' | 'empty' }>`
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  ${({ $state, theme }) => {
+    const full = theme.mode === 'dark' ? '#4ade80' : '#16a34a'
+    const partial = theme.mode === 'dark' ? '#fbbf24' : '#d97706'
+    if ($state === 'full') return `background: ${full};`
+    if ($state === 'partial') return `background: linear-gradient(90deg, ${partial} 50%, transparent 50%); border: 1.5px solid ${partial};`
+    return `border: 1.5px solid ${theme.colors.text.tertiary}; opacity: 0.6;`
+  }}
+`
+
+const FactList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
   }
+  li > span:not([aria-hidden]) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`
+
+const RoleText = styled.span`
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Foot = styled(ModalFooter)`
@@ -518,9 +667,21 @@ const NavButton = styled.button`
 `
 
 const KeyHint = styled.span`
-  margin-left: 4px;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  kbd {
+    min-width: 18px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
+    font: inherit;
+    font-size: 11px;
+    text-align: center;
+  }
   @media (max-width: 640px) {
     display: none;
   }

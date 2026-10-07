@@ -23,6 +23,11 @@ export const ROLE_TONE_COLOR: Record<RoleTone, { light: string; dark: string; la
   neutral: { light: '#64748b', dark: '#94a3b8', label: '참여·기타' },
 }
 
+/** 줄무늬 — 반투명이면 스티키 첫 칸과 겹쳐 진해지므로 지면색에 섞은 불투명 색 */
+export const stripeFill = (mode: 'light' | 'dark') =>
+  mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.022)'
+const stripeSolid = (mode: 'light' | 'dark') => (mode === 'dark' ? '#1a1a1c' : '#f8f9fb')
+
 export const toneColor = (tone: RoleTone, mode: 'light' | 'dark') =>
   mode === 'dark' ? ROLE_TONE_COLOR[tone].dark : ROLE_TONE_COLOR[tone].light
 
@@ -61,10 +66,16 @@ export const HeaderText = styled.div`
 `
 
 export const Kicker = styled.span`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.06em;
   color: ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerHoverFill(theme.mode)};
 `
 
 export const Title = styled.h1`
@@ -79,10 +90,17 @@ export const Title = styled.h1`
 export const HeaderMeta = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  font-size: 13.5px;
+  align-items: center;
+  gap: 4px 0;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
+  /* 항목 사이 가운뎃점 — 칸막이 대신 */
+  > * + *::before {
+    content: '·';
+    margin: 0 10px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
 
 export const HeaderActions = styled.div`
@@ -243,6 +261,53 @@ export const MeterFill = styled.span<{ $pct: number }>`
   background: ${({ $pct, theme }) => fillColor($pct, theme.mode)};
 `
 
+// ─── 섹션 내비 ─────────────────────────────────────────────────────────────
+// 지면이 길다(1차대전 기준 화면 3장). 머리 아래에 붙어 따라오는 목차.
+
+export const SectionNav = styled.nav`
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: -12px calc(-1 * clamp(16px, 2.6vw, 40px)) 0;
+  padding: 8px clamp(16px, 2.6vw, 40px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  scrollbar-width: none;
+`
+
+export const SectionNavLink = styled.a`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-decoration: none;
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 1px;
+  }
+`
+
+export const SectionNavCount = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 // ─── 필터 줄 ───────────────────────────────────────────────────────────────
 
 export const FilterBar = styled.div`
@@ -284,6 +349,8 @@ export const Panel = styled.section<{ $wide?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* 섹션 내비 높이만큼 — 앵커로 뛰면 제목이 내비 밑에 숨지 않게 */
+  scroll-margin-top: 64px;
 `
 
 export const PanelHead = styled.div`
@@ -331,8 +398,27 @@ export const GanttGrid = styled.div`
 
 export const GanttAxis = styled.div`
   position: relative;
-  height: 22px;
+  /* 위 14px = '상위 기간' 표지, 아래 = 눈금 — 둘이 한 줄에 서면 글자가 겹쳤다 */
+  height: 40px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+/** 축 위 '상위 기간' 표지 — 회색 띠가 무엇인지 범례 없이 읽히게 */
+export const ParentBandMark = styled.span`
+  position: absolute;
+  top: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.border.default};
+  &::after {
+    content: '상위 기간';
+    position: absolute;
+    left: 0;
+    top: 5px;
+    font-size: 10px;
+    white-space: nowrap;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
 
 export const GanttTick = styled.span`
@@ -345,16 +431,17 @@ export const GanttTick = styled.span`
   white-space: nowrap;
 `
 
-export const GanttLabel = styled.div<{ $depth: number; $dim: boolean; $hot: boolean }>`
+export const GanttLabel = styled.div<{ $depth: number; $dim: boolean; $hot: boolean; $stripe?: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 5px 10px 5px ${({ $depth }) => 4 + Math.max(0, $depth - 1) * 16}px;
-  font-size: 13px;
+  min-height: 34px;
+  padding: 0 10px 0 ${({ $depth }) => 4 + Math.max(0, $depth - 1) * 18}px;
+  font-size: 13.5px;
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
-  background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ $hot, $stripe, theme }) =>
+    $hot ? ledgerHoverFill(theme.mode) : $stripe ? stripeFill(theme.mode) : 'transparent'};
 `
 
 export const GanttNumber = styled.span`
@@ -414,13 +501,13 @@ export const RowTitleLink = styled.a`
   }
 `
 
-export const GanttTrack = styled.div<{ $dim: boolean; $hot: boolean }>`
+export const GanttTrack = styled.div<{ $dim: boolean; $hot: boolean; $stripe?: boolean }>`
   position: relative;
-  min-height: 30px;
+  min-height: 34px;
   cursor: pointer;
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
-  background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ $hot, $stripe, theme }) =>
+    $hot ? ledgerHoverFill(theme.mode) : $stripe ? stripeFill(theme.mode) : 'transparent'};
 `
 
 /** 상위 사건 자신의 기간 — 모든 줄 뒤에 깔리는 띠 */
@@ -444,10 +531,10 @@ export const GridLine = styled.div`
 export const Bar = styled.div<{ $color: string; $uncertain: boolean; $point: boolean }>`
   position: absolute;
   top: 50%;
-  height: ${({ $point }) => ($point ? '10px' : '12px')};
-  min-width: ${({ $point }) => ($point ? '10px' : '4px')};
+  height: ${({ $point }) => ($point ? '11px' : '14px')};
+  min-width: ${({ $point }) => ($point ? '11px' : '6px')};
   transform: translate(${({ $point }) => ($point ? '-50%' : '0')}, -50%);
-  border-radius: ${({ $point }) => ($point ? '50%' : '4px')};
+  border-radius: 999px;
   ${({ $uncertain, $color }) =>
     $uncertain
       ? css`
@@ -479,9 +566,14 @@ export const MatrixTable = styled.table`
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12.5px;
-  th,
-  td {
-    border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  tbody tr:nth-child(even) td {
+    background: ${({ theme }) => stripeFill(theme.mode)};
+  }
+  tbody tr:nth-child(even) th {
+    background: ${({ theme }) => stripeSolid(theme.mode)};
+  }
+  thead th {
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   }
 `
 
@@ -546,12 +638,26 @@ export const CountryButton = styled.button<{ $active: boolean }>`
   }
 `
 
-export const CountBadge = styled.span`
+/** 나라별 하위 건수 — 숫자 옆 작은 막대로 많고 적음이 한눈에 */
+export const CountBadge = styled.span<{ $pct?: number }>`
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  &::before {
+    content: '';
+    display: block;
+    width: ${({ $pct = 0 }) => Math.max(4, ($pct / 100) * 40)}px;
+    height: 4px;
+    border-radius: 999px;
+    background: ${({ theme }) => ledgerAccent(theme.mode)};
+    opacity: 0.55;
+  }
 `
 
 export const MatrixCell = styled.td<{ $hot: boolean }>`
@@ -565,14 +671,16 @@ export const MatrixCell = styled.td<{ $hot: boolean }>`
  * 배역 표시 — 주도·대상·건국멸망은 **채운** 칸, 그 밖의 관여는 **속 빈** 칸.
  * 대부분이 '참여'라 같은 무게로 채우면 회색이 매트릭스를 덮어 주도·대상이 묻혔다.
  */
+/**
+ * 배역 표시 — 주도·대상·건국멸망은 **채운 칸**, 그 밖의 관여는 **작은 점**.
+ * 대부분이 '참여'라 같은 크기로 그리면(채움이든 테두리든) 그것이 매트릭스를 덮어 주도·대상이 묻혔다.
+ */
 export const RoleMark = styled.span<{ $color: string; $hollow?: boolean }>`
   display: inline-block;
-  width: 18px;
-  height: 18px;
-  box-sizing: border-box;
-  border-radius: 5px;
-  background: ${({ $color, $hollow }) => ($hollow ? 'transparent' : $color)};
-  border: ${({ $color, $hollow }) => ($hollow ? `2px solid ${$color}` : 'none')};
+  width: ${({ $hollow }) => ($hollow ? '8px' : '15px')};
+  height: ${({ $hollow }) => ($hollow ? '8px' : '15px')};
+  border-radius: ${({ $hollow }) => ($hollow ? '50%' : '4px')};
+  background: ${({ $color }) => $color};
   vertical-align: middle;
 `
 
@@ -735,9 +843,11 @@ export const Table = styled.table`
     white-space: nowrap;
   }
   td {
-    padding: 6px 8px;
-    border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-    vertical-align: top;
+    padding: 8px;
+    vertical-align: middle;
+  }
+  tbody tr:nth-child(even) {
+    background: ${({ theme }) => stripeFill(theme.mode)};
   }
 `
 
@@ -785,8 +895,11 @@ export const FillBar = styled.span<{ $pct: number }>`
 `
 
 export const ChecklistRow = styled.tr<{ $hot: boolean }>`
-  background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
   cursor: pointer;
+  /* 강조는 표의 줄무늬(부모 선택자)보다 이겨야 한다 — 특이도를 올린다 */
+  &&& {
+    ${({ $hot, theme }) => ($hot ? `background: ${ledgerHoverFill(theme.mode)};` : '')}
+  }
 `
 
 /** 열별 빈 칸 수 — 점검표의 결론이라 머리글에서 눈에 띄게. 절반 넘게 비면 경고색 */
