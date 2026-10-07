@@ -19,6 +19,7 @@ import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
 import { ContemporaryHeadsLink, DetailHero } from './components/detail-hero'
+import { EventDetailLoading } from './components/detail-loading'
 import { DetailNarrative } from './components/detail-narrative'
 import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
@@ -531,19 +532,6 @@ const ParentCommentsLink = styled(Link)`
 `
 
 /* ───────────────────────── Suspense / Error fallback ───────────────────────── */
-
-function EventDetailLoading() {
-  return (
-    <S.Page>
-      <S.PageInner>
-        <S.StateBox>
-          <S.Spinner />
-          <S.HelperText>사건 정보를 불러오는 중…</S.HelperText>
-        </S.StateBox>
-      </S.PageInner>
-    </S.Page>
-  )
-}
 
 function EventDetailError({ error }: { error: Error }) {
   const notFound = (error as { status?: number }).status === 404

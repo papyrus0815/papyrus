@@ -864,21 +864,6 @@ export const StateBox = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-export const Spinner = styled.div`
-  width: 28px;
-  height: 28px;
-  border: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-top-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-`
-
 export const ErrorText = styled.p`
   font-size: 14px;
   margin: 0;
