@@ -144,6 +144,13 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
     root.endDatePrecision,
   )
   const selectedCountry = derived.matrix.find((country) => country.key === selectedCountryKey)
+  const hasPersons = derived.persons.length > 0
+  const hasSidesOrMetrics = derived.sideCount > 0 || derived.metrics.length > 0
+  const emptyRecords = [
+    derived.persons.length === 0 && '참여 인물',
+    derived.sideCount === 0 && '진영',
+    derived.metrics.length === 0 && '사상자·병력 같은 수치',
+  ].filter((label): label is string => Boolean(label))
 
   return (
     <S.Page ref={pageRef}>
@@ -197,12 +204,12 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
             {derived.matrix[0] ? `최다 ${derived.matrix[0].name} ${derived.matrix[0].eventCount}건` : '—'}
           </S.StatNote>
         </S.Stat>
-        <S.Stat>
+        <S.Stat $muted={derived.persons.length === 0}>
           <S.StatLabel>인물</S.StatLabel>
           <S.StatValue>{derived.persons.length}</S.StatValue>
           <S.StatNote>하위·상위 합산</S.StatNote>
         </S.Stat>
-        <S.Stat>
+        <S.Stat $muted={derived.sideCount === 0 && derived.metrics.length === 0}>
           <S.StatLabel>진영 · 수치</S.StatLabel>
           <S.StatValue>
             {derived.sideCount} · {derived.metrics.length}
@@ -213,6 +220,9 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           <S.StatLabel>기록 충실도</S.StatLabel>
           <S.StatValue>{Math.round(derived.coverage * 100)}%</S.StatValue>
           <S.StatNote>점검표 칸 중 채운 비율</S.StatNote>
+          <S.Meter aria-hidden="true">
+            <S.MeterFill $pct={Math.round(derived.coverage * 100)} />
+          </S.Meter>
         </S.Stat>
       </S.StatRow>
 
@@ -265,8 +275,27 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           onSelectCategory={setSelectedCategory}
         />
         <HistogramPanel bins={derived.histogram} />
-        <PersonsPanel persons={derived.persons} numberById={derived.numberById} />
-        <SidesMetricsPanel nodes={[root, ...descendants]} metrics={derived.metrics} />
+        {/* 비어 있는 기록은 큰 패널 대신 한 줄로 — 데이터가 생기면 그때 패널이 선다 */}
+        {hasPersons && (
+          <PersonsPanel
+            persons={derived.persons}
+            numberById={derived.numberById}
+            wide={!hasSidesOrMetrics}
+          />
+        )}
+        {hasSidesOrMetrics && (
+          <SidesMetricsPanel
+            nodes={[root, ...descendants]}
+            metrics={derived.metrics}
+            wide={!hasPersons}
+          />
+        )}
+        {emptyRecords.length > 0 && (
+          <S.EmptyStrip>
+            <strong>아직 비어 있는 기록</strong> — {emptyRecords.join(' · ')}. 하위 사건 문서에서
+            채우면 여기에 모입니다.
+          </S.EmptyStrip>
+        )}
         <ChecklistPanel
           events={derived.ordered}
           numberById={derived.numberById}

@@ -30,10 +30,10 @@ export const Page = styled.div`
   box-sizing: border-box;
   width: 100%;
   min-height: 100%;
-  padding: 24px clamp(16px, 2.4vw, 32px) 64px;
+  padding: 28px clamp(16px, 2.6vw, 40px) 72px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 28px;
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.primary};
 
@@ -69,7 +69,8 @@ export const Kicker = styled.span`
 
 export const Title = styled.h1`
   margin: 0;
-  font-size: clamp(22px, 2.4vw, 30px);
+  font-size: clamp(26px, 3vw, 38px);
+  letter-spacing: -0.02em;
   font-weight: 800;
   line-height: 1.25;
   word-break: keep-all;
@@ -146,41 +147,100 @@ export const ViewSwitchItem = styled.button<{ $active: boolean }>`
   }
 `
 
+/**
+ * 채움 정도 색 — 막대 **칠**용 단색. 테마의 alert.warning은 배경용 옅은 색이라 막대에 쓰면
+ * 40~69% 행의 막대가 비어 보였다.
+ */
+const fillColor = (pct: number, mode: 'light' | 'dark') =>
+  pct >= 70
+    ? mode === 'dark' ? '#4ade80' : '#16a34a'
+    : pct >= 40
+      ? mode === 'dark' ? '#fbbf24' : '#d97706'
+      : mode === 'dark' ? '#f87171' : '#dc2626'
+
 // ─── 핵심 숫자 ─────────────────────────────────────────────────────────────
+// 상자 다섯 개 대신 한 줄의 숫자 띠 — 숫자가 주인공이고 테두리는 칸 사이 세로선 하나뿐.
 
 export const StatRow = styled.dl`
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  /* 칸 사이 세로선은 부모에서 — 자식의 '& + &'는 props가 다른 형제(흐린 칸)와 매칭이 안 된다 */
+  > * + * {
+    padding-left: 18px;
+    border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+  /* 좁은 폭은 2열 고정 — auto-fit로 줄이 바뀌면 줄 첫 칸에도 세로선이 붙었다 */
+  @media (max-width: 760px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    > * + * {
+      padding-left: 0;
+      border-left: none;
+    }
+    > *:nth-child(even) {
+      padding-left: 16px;
+      border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    }
+    > *:nth-child(n + 3) {
+      border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    }
+  }
 `
 
-export const Stat = styled.div`
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+export const Stat = styled.div<{ $muted?: boolean }>`
+  padding: 14px 18px 14px 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
+  opacity: ${({ $muted }) => ($muted ? 0.55 : 1)};
 `
 
 export const StatLabel = styled.dt`
-  font-size: 12px;
+  order: 2;
+  font-size: 12.5px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const StatValue = styled.dd`
+  order: 1;
   margin: 0;
-  font-size: 22px;
+  font-size: clamp(26px, 2.4vw, 34px);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 `
 
 export const StatNote = styled.span`
+  order: 3;
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+/** 충실도 막대 — 숫자 밑에 얇게 */
+export const Meter = styled.span`
+  order: 4;
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+export const MeterFill = styled.span<{ $pct: number }>`
+  display: block;
+  height: 100%;
+  width: ${({ $pct }) => $pct}%;
+  border-radius: 999px;
+  background: ${({ $pct, theme }) => fillColor($pct, theme.mode)};
 `
 
 // ─── 필터 줄 ───────────────────────────────────────────────────────────────
@@ -206,18 +266,21 @@ export const FilterChip = styled.button`
 export const Grid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 20px;
+  gap: 36px 40px;
   @media (max-width: 1100px) {
     grid-template-columns: minmax(0, 1fr);
   }
 `
 
+/**
+ * 패널은 상자가 아니다 — 위쪽 선 하나와 제목. 상자 7개 + 숫자 상자 5개가 같은 무게로 서면
+ * 무엇이 주인공인지 사라진다(첫 판 실측).
+ */
 export const Panel = styled.section<{ $wide?: boolean }>`
   grid-column: ${({ $wide }) => ($wide ? '1 / -1' : 'auto')};
   min-width: 0;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 14px;
-  padding: 16px 18px 18px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+  padding-top: 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -233,8 +296,9 @@ export const PanelHead = styled.div`
 
 export const PanelTitle = styled.h2`
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 `
 
 export const PanelNote = styled.span`
@@ -257,7 +321,7 @@ export const Scroll = styled.div`
 
 // ─── 간트 ──────────────────────────────────────────────────────────────────
 
-export const GANTT_LABEL_WIDTH = 'clamp(180px, 26%, 340px)'
+export const GANTT_LABEL_WIDTH = 'clamp(200px, 30%, 420px)'
 
 export const GanttGrid = styled.div`
   display: grid;
@@ -386,6 +450,8 @@ export const BarLabel = styled.span`
 // ─── 매트릭스 ──────────────────────────────────────────────────────────────
 
 export const MatrixTable = styled.table`
+  width: 100%;
+  table-layout: auto;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 12.5px;
@@ -396,8 +462,8 @@ export const MatrixTable = styled.table`
 `
 
 export const MatrixHeadCell = styled.th<{ $hot?: boolean }>`
-  min-width: 28px;
-  padding: 4px 2px;
+  min-width: 30px;
+  padding: 6px 2px;
   font-weight: 600;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -410,6 +476,7 @@ export const MatrixCountryCell = styled.th`
   position: sticky;
   left: 0;
   z-index: 1;
+  width: 1%;
   text-align: left;
   padding: 0;
   background: ${({ theme }) => theme.colors.background.primary};
@@ -420,9 +487,8 @@ export const CountryButton = styled.button<{ $active: boolean }>`
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
-  max-width: 240px;
-  padding: 5px 10px 5px 4px;
+  width: 240px;
+  padding: 6px 12px 6px 6px;
   border: none;
   background: ${({ $active, theme }) => ($active ? ledgerHoverFill(theme.mode) : 'transparent')};
   color: ${({ theme }) => theme.colors.text.primary};
@@ -451,16 +517,23 @@ export const CountBadge = styled.span`
 
 export const MatrixCell = styled.td<{ $hot: boolean }>`
   text-align: center;
-  padding: 3px 2px;
+  padding: 5px 2px;
   background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
 `
 
-export const RoleMark = styled.span<{ $color: string }>`
+/**
+ * 배역 표시 — 주도·대상·건국멸망은 **채운** 칸, 그 밖의 관여는 **속 빈** 칸.
+ * 대부분이 '참여'라 같은 무게로 채우면 회색이 매트릭스를 덮어 주도·대상이 묻혔다.
+ */
+export const RoleMark = styled.span<{ $color: string; $hollow?: boolean }>`
   display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  background: ${({ $color }) => $color};
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  background: ${({ $color, $hollow }) => ($hollow ? 'transparent' : $color)};
+  border: ${({ $color, $hollow }) => ($hollow ? `2px solid ${$color}` : 'none')};
+  vertical-align: middle;
 `
 
 export const Legend = styled.div`
@@ -546,19 +619,49 @@ export const BarCount = styled.span`
 export const Histogram = styled.div`
   display: flex;
   align-items: flex-end;
-  gap: 3px;
-  height: 120px;
-  padding-top: 8px;
+  justify-content: center;
+  gap: 6px;
+  height: 150px;
+  padding-top: 18px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
+/** 칸이 셋뿐이어도 막대가 패널을 다 먹지 않게 폭 상한 */
 export const HistogramColumn = styled.div`
   flex: 1;
+  max-width: 64px;
   min-width: 6px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   align-items: stretch;
   height: 100%;
+  position: relative;
+`
+
+export const HistogramCount = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  margin-bottom: 4px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const HistogramLabels = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  span {
+    flex: 1;
+    max-width: 64px;
+    min-width: 6px;
+    text-align: center;
+    white-space: nowrap;
+  }
 `
 
 export const HistogramBar = styled.div<{ $pct: number }>`
@@ -609,19 +712,69 @@ export const CheckCell = styled.td<{ $state: 'full' | 'partial' | 'empty' }>`
     $state === 'full'
       ? theme.colors.success
       : $state === 'partial'
-        ? theme.colors.alert.warning
+        ? fillColor(50, theme.mode)
         : theme.colors.text.tertiary};
+  opacity: ${({ $state }) => ($state === 'empty' ? 0.45 : 1)};
+`
+
+/** 행별 채움 — 9칸 중 몇 칸 */
+export const FillCell = styled.td`
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  span {
+    display: inline-block;
+    vertical-align: middle;
+  }
+`
+
+export const FillBar = styled.span<{ $pct: number }>`
+  width: 56px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+  &::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: ${({ $pct }) => $pct}%;
+    border-radius: 999px;
+    background: ${({ $pct, theme }) => fillColor($pct, theme.mode)};
+  }
 `
 
 export const ChecklistRow = styled.tr<{ $hot: boolean }>`
   background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
 `
 
-export const EmptyCount = styled.span`
-  display: block;
-  font-size: 10.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+/** 열별 빈 칸 수 — 점검표의 결론이라 머리글에서 눈에 띄게. 절반 넘게 비면 경고색 */
+export const EmptyCount = styled.span<{ $severe: boolean }>`
+  display: inline-block;
+  margin-top: 4px;
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ $severe, theme }) => ($severe ? theme.colors.error : theme.colors.text.secondary)};
+  background: ${({ $severe, theme }) =>
+    $severe ? (theme.mode === 'dark' ? 'rgba(248,113,113,0.14)' : 'rgba(185,28,28,0.08)') : ledgerSubtleFill(theme.mode)};
+`
+
+/** 비어 있는 기록 묶음 — 큰 패널 둘이 '없습니다'만 말하던 자리를 한 줄로 */
+export const EmptyStrip = styled.p`
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 export const Muted = styled.span`

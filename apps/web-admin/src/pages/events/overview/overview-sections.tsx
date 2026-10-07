@@ -4,6 +4,8 @@
  * 패널끼리 **같은 번호**를 쓴다 — 간트의 줄 번호 = 매트릭스의 열 번호 = 점검표의 줄 번호.
  * 한 패널에서 사건에 마우스를 올리면(`hotId`) 세 패널 모두 그 사건을 칠한다.
  */
+import { useState } from 'react'
+
 import { Link } from 'react-router-dom'
 import { useTheme } from 'styled-components'
 
@@ -197,7 +199,11 @@ export function CountryMatrixPanel({
           <S.Legend>
             {tones.map((tone) => (
               <span key={tone}>
-                <S.RoleMark $color={S.toneColor(tone, theme.mode)} aria-hidden="true" />
+                <S.RoleMark
+                  $color={S.toneColor(tone, theme.mode)}
+                  $hollow={tone === 'neutral'}
+                  aria-hidden="true"
+                />
                 {S.ROLE_TONE_COLOR[tone].label}
               </span>
             ))}
@@ -250,6 +256,7 @@ export function CountryMatrixPanel({
                         {country.inRoot ? (
                           <S.RoleMark
                             $color={S.toneColor(roleTone(country.rootRole), theme.mode)}
+                            $hollow={roleTone(country.rootRole) === 'neutral'}
                             title={`상위 사건 — ${roleLabel(country.rootRole)}`}
                           />
                         ) : null}
@@ -267,6 +274,7 @@ export function CountryMatrixPanel({
                             {has && (
                               <S.RoleMark
                                 $color={S.toneColor(roleTone(role), theme.mode)}
+                                $hollow={roleTone(role) === 'neutral'}
                                 title={`${event.title} — ${roleLabel(role)}`}
                                 role="img"
                                 aria-label={`${numberById.get(event.id)}번 ${event.title}: ${roleLabel(role)}`}
@@ -349,15 +357,25 @@ export function HistogramPanel({ bins }: { bins: CountBar[] }) {
           <S.Histogram role="list" aria-label="시기별 하위 사건 수">
             {bins.map((bin) => (
               <S.HistogramColumn key={bin.label} role="listitem" title={`${bin.label}: ${bin.count}건`}>
-                <S.HistogramBar $pct={(bin.count / max) * 100} aria-label={`${bin.label} ${bin.count}건`} />
+                {bin.count > 0 && <S.HistogramCount aria-hidden="true">{bin.count}</S.HistogramCount>}
+                <S.HistogramBar $pct={(bin.count / max) * 82} aria-label={`${bin.label} ${bin.count}건`} />
               </S.HistogramColumn>
             ))}
           </S.Histogram>
-          <S.HistogramAxis aria-hidden="true">
-            <span>{bins[0].label}</span>
-            {bins.length > 2 && <span>{bins[Math.floor(bins.length / 2)].label}</span>}
-            {bins.length > 1 && <span>{bins[bins.length - 1].label}</span>}
-          </S.HistogramAxis>
+          {/* 칸이 12개 이하면 칸마다 라벨, 그보다 많으면 처음·가운데·끝만 */}
+          {bins.length <= 12 ? (
+            <S.HistogramLabels aria-hidden="true">
+              {bins.map((bin) => (
+                <span key={bin.label}>{bin.label}</span>
+              ))}
+            </S.HistogramLabels>
+          ) : (
+            <S.HistogramAxis aria-hidden="true">
+              <span>{bins[0].label}</span>
+              <span>{bins[Math.floor(bins.length / 2)].label}</span>
+              <span>{bins[bins.length - 1].label}</span>
+            </S.HistogramAxis>
+          )}
         </>
       )}
     </S.Panel>
@@ -369,12 +387,15 @@ export function HistogramPanel({ bins }: { bins: CountBar[] }) {
 export function PersonsPanel({
   persons,
   numberById,
+  wide = false,
 }: {
   persons: PersonAggregate[]
   numberById: Map<string, number>
+  /** 짝(진영·수치)이 접혀 혼자 설 때는 한 줄을 다 쓴다 — 오른쪽 반이 비지 않게 */
+  wide?: boolean
 }) {
   return (
-    <S.Panel aria-labelledby="overview-persons-title">
+    <S.Panel $wide={wide} aria-labelledby="overview-persons-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-persons-title">인물</S.PanelTitle>
         <S.PanelNote>{persons.length > 0 ? `${persons.length}명 · 많이 나오는 순` : ''}</S.PanelNote>
@@ -425,13 +446,15 @@ export function PersonsPanel({
 export function SidesMetricsPanel({
   nodes,
   metrics,
+  wide = false,
 }: {
   nodes: EventOverviewNode[]
   metrics: MetricRow[]
+  wide?: boolean
 }) {
   const withSides = nodes.filter((node) => node.sides.length > 0)
   return (
-    <S.Panel aria-labelledby="overview-sides-title">
+    <S.Panel $wide={wide} aria-labelledby="overview-sides-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-sides-title">진영 · 수치</S.PanelTitle>
       </S.PanelHead>
@@ -480,7 +503,7 @@ export function SidesMetricsPanel({
 
 // ─── 기록 점검표 ───────────────────────────────────────────────────────────
 
-const CHECK_MARK = { full: '●', partial: '◐', empty: '·' } as const
+const CHECK_MARK = { full: '●', partial: '◐', empty: '–' } as const
 const CHECK_TEXT = { full: '채움', partial: '일부', empty: '비어 있음' } as const
 
 export function ChecklistPanel({
@@ -494,13 +517,48 @@ export function ChecklistPanel({
   numberById: Map<string, number>
   visibleIds: Set<string> | null
 }) {
-  const shown = visibleIds ? events.filter((event) => visibleIds.has(event.id)) : events
-  const emptyCounts = emptyCountByColumn(shown)
+  /** 번호순 | 빈 칸 많은 순 — 점검은 '어디부터 채울까'라서 뒤쪽이 자주 필요하다 */
+  const [order, setOrder] = useState<'number' | 'gaps'>('number')
+  const filtered = visibleIds ? events.filter((event) => visibleIds.has(event.id)) : events
+  const scored = filtered.map((event) => {
+    const checks = checkNode(event)
+    const filled = CHECK_COLUMNS.reduce(
+      (sum, column) =>
+        sum + (checks[column.key] === 'full' ? 1 : checks[column.key] === 'partial' ? 0.5 : 0),
+      0,
+    )
+    return { event, checks, filled }
+  })
+  const shown =
+    order === 'gaps'
+      ? [...scored].sort((left, right) => left.filled - right.filled)
+      : scored
+  const emptyCounts = emptyCountByColumn(filtered)
   return (
     <S.Panel $wide aria-labelledby="overview-checklist-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-checklist-title">기록 점검</S.PanelTitle>
-        <S.PanelNote>● 채움 · ◐ 일부(연·월만 아는 날짜) · · 비어 있음 — 머리글 아래 숫자는 빈 칸 수</S.PanelNote>
+        <S.ViewSwitch role="group" aria-label="점검표 순서">
+          <S.ViewSwitchItem
+            type="button"
+            $active={order === 'number'}
+            aria-pressed={order === 'number'}
+            onClick={() => setOrder('number')}
+          >
+            번호순
+          </S.ViewSwitchItem>
+          <S.ViewSwitchItem
+            type="button"
+            $active={order === 'gaps'}
+            aria-pressed={order === 'gaps'}
+            onClick={() => setOrder('gaps')}
+          >
+            빈 칸 많은 순
+          </S.ViewSwitchItem>
+        </S.ViewSwitch>
+        <S.PanelNote style={{ flexBasis: '100%' }}>
+          ● 채움 · ◐ 일부(연·월만 아는 날짜) · – 비어 있음 — 머리글 아래 숫자는 그 칸이 빈 사건 수
+        </S.PanelNote>
       </S.PanelHead>
       <S.Scroll>
         <S.Table>
@@ -508,17 +566,28 @@ export function ChecklistPanel({
             <tr>
               <th scope="col">#</th>
               <th scope="col">하위 사건</th>
+              <th scope="col">채움</th>
               {CHECK_COLUMNS.map((column) => (
                 <S.CheckHead key={column.key} scope="col" title={column.hint}>
                   {column.label}
-                  <S.EmptyCount>{emptyCounts[column.key] > 0 ? emptyCounts[column.key] : ''}</S.EmptyCount>
+                  <br />
+                  {emptyCounts[column.key] > 0 ? (
+                    <S.EmptyCount
+                      $severe={emptyCounts[column.key] * 2 > filtered.length}
+                      title={`${column.label}이(가) 빈 사건 ${emptyCounts[column.key]}건`}
+                    >
+                      {emptyCounts[column.key]}
+                    </S.EmptyCount>
+                  ) : (
+                    <S.Muted style={{ fontSize: 11 }}>✓</S.Muted>
+                  )}
                 </S.CheckHead>
               ))}
             </tr>
           </thead>
           <tbody>
-            {shown.map((event) => {
-              const checks = checkNode(event)
+            {shown.map(({ event, checks, filled }) => {
+              const pct = Math.round((filled / CHECK_COLUMNS.length) * 100)
               return (
                 <S.ChecklistRow
                   key={event.id}
@@ -535,6 +604,10 @@ export function ChecklistPanel({
                       {event.title}
                     </S.RowTitleLink>
                   </td>
+                  <S.FillCell title={`9칸 중 ${filled}칸`}>
+                    <S.FillBar $pct={pct} aria-hidden="true" />
+                    <span>{pct}%</span>
+                  </S.FillCell>
                   {CHECK_COLUMNS.map((column) => {
                     const state = checks[column.key]
                     return (
