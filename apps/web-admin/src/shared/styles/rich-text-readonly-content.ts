@@ -17,6 +17,36 @@ export const richTextReadonlyHorizontalRuleCss = css`
   }
 `
 
+/**
+ * 본문 지도 블록 — 구글 지도 퍼가기 iframe(`figure.map-embed`). 에디터와 읽기 뷰가 같은 조각을 쓴다.
+ * 이미지 figure는 이미지 폭만큼(fit-content)이지만 지도는 폭 전체 · 16:10.
+ */
+export const mapEmbedFigureCss = css`
+  figure.map-embed {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 16px 0;
+    text-align: left;
+  }
+  figure.map-embed iframe {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
+    border: 0;
+    border-radius: 12px;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1f2937' : '#e5e7eb')};
+  }
+  figure.map-embed figcaption {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: center;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
 /** 이미지·캡션·표 (에디터 산출물과 동일한 뷰) */
 export const richTextReadonlyMediaAndTablesCss = css`
   figure {
@@ -122,6 +152,8 @@ export const richTextReadonlyMediaAndTablesCss = css`
     min-width: 40px;
     vertical-align: top;
   }
+
+  ${mapEmbedFigureCss}
 `
 
 /**

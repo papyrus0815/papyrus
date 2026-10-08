@@ -23,6 +23,7 @@ import {
   FiDroplet,
   FiGrid,
   FiImage,
+  FiMap,
   FiItalic,
   FiLink,
   FiMessageSquare,
@@ -198,6 +199,8 @@ interface EditorToolbarProps {
   onTermLink: () => void
   onExplanation: () => void
   onImageUpload: () => void
+  /** 지도 넣기(구글 지도 퍼가기) */
+  onInsertMap?: () => void
   onTableOp: (op: (cell: HTMLTableCellElement) => void) => void
   onDeleteTable: () => void
   onInsertHr: (html: string) => void
@@ -234,6 +237,7 @@ function EditorToolbarComponent({
   onTermLink,
   onExplanation,
   onImageUpload,
+  onInsertMap,
   onTableOp,
   onDeleteTable,
   onInsertHr,
@@ -452,6 +456,19 @@ function EditorToolbarComponent({
       >
         <FiImage />
       </ToolbarButton>
+      {onInsertMap && (
+        <ToolbarButton
+          onMouseDown={preventMouseDown}
+          onClick={() => {
+            playClickSound()
+            onInsertMap()
+          }}
+          title="지도 넣기 (구글 지도 주소·퍼가기 코드를 본문에 붙여 넣어도 됩니다)"
+          aria-label="지도 넣기"
+        >
+          <FiMap />
+        </ToolbarButton>
+      )}
       <ToolbarDivider />
       <div style={{ position: 'relative' }}>
         <ToolbarButton

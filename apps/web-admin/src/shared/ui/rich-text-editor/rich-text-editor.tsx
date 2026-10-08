@@ -25,6 +25,12 @@ import {
   plainTextToRichTextHtml,
   resolveRichTextImageSrcsForDisplay,
 } from '@/shared/lib/rich-text-read-view'
+import {
+  looksLikeMapPaste,
+  type MapEmbed,
+  mapEmbedHtml,
+  parseMapInput,
+} from '@/shared/lib/map-embed'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { getUploadImageUrl, validateImageFile } from '@/shared/api/upload'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -35,6 +41,7 @@ import {
   proseHrStyles,
 } from '@/shared/styles/prose-hr'
 import {
+  mapEmbedFigureCss,
   richTextBlockAlignCss,
   richTextEntityLinkStyles,
   richTextProseListCss,
@@ -47,6 +54,7 @@ import { EditorToolbar } from './components/editor-toolbar'
 import { EntityLinkModal } from './components/entity-link-modal'
 import { ImageCaptionModal } from './components/image-caption-modal'
 import { ImageFloatToolbar } from './components/image-float-toolbar'
+import { MapEmbedModal } from './components/map-embed-modal'
 import { ShortcutsHelpModal } from './components/shortcuts-help-modal'
 import { TablePickerPopover } from './components/table-picker-popover'
 import { TermEditModal, TermLinkModal } from './components/term-modals'
@@ -342,6 +350,9 @@ const EditorContent = styled.div<{ $hasTitle?: boolean; $minHeight?: string }>`
   .prose-hr.prose-hr--small {
     ${proseHrSmallStyles}
   }
+
+  /* 지도 블록 — 아래 figure(fit-content) 규칙보다 구체적이라 폭 전체를 쓴다 */
+  ${mapEmbedFigureCss}
 
   figure {
     /**
@@ -721,6 +732,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   /** 문서 전용(설명 넣기) 용어면 true → "설명 수정" 모달로 표시 */
   const [termEditIsDocumentScoped, setTermEditIsDocumentScoped] =
     useState(false)
+
+  // 지도 넣기 모달 — 여는 순간의 캐럿 자리를 기억해 두었다가 그 자리에 끼운다
+  const [mapModalVisible, setMapModalVisible] = useState(false)
+  const savedMapInsertRangeRef = useRef<Range | null>(null)
 
   // 이미지 설명 모달 관련 상태
   const [imageCaptionModalVisible, setImageCaptionModalVisible] =
@@ -1237,65 +1252,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [handleContentChange, playClickSound],
   )
 
-  /** figure+img(+선택 figcaption)를 삽입. `rangeRef`는 사용 후 null로 비움. */
-  const insertFigureAtCaret = useCallback(
-    (
-      imageUrl: string,
-      caption: string,
-      rangeRef: React.MutableRefObject<Range | null>,
-    ) => {
+  /**
+   * 새니타이즈를 마친 figure 블록 HTML을 캐럿(또는 저장해 둔 range) 자리에 끼우고, 캐럿을 그 아래
+   * 단락으로 옮긴다. 이미지와 지도 블록이 같이 쓴다. `rangeRef`는 사용 후 null로 비움.
+   */
+  const insertSanitizedBlockAtCaret = useCallback(
+    (sanitized: string, rangeRef: React.MutableRefObject<Range | null>) => {
       const editor = editorRef.current
-      if (!editor || !imageUrl) return
+      if (!editor) return
 
       editor.focus()
-
-      const imageContainer = document.createElement('figure')
-      // 기본 가운데 정렬 — 인라인 margin auto(좌우)로 확정. 과거 '10px 0'은 좌우 0이라
-      // CSS·data-align의 가운데 정렬을 덮어써 좌측에 붙던 문제가 있었음(인라인 우선).
-      imageContainer.style.margin = '10px auto'
-      imageContainer.style.textAlign = 'center'
-      imageContainer.dataset.align = 'center'
-
-      const img = document.createElement('img')
-      img.src = imageUrl
-      img.style.borderRadius = '12px'
-      img.style.display = 'block'
-      img.style.margin = '0 auto'
-      img.style.cursor = 'pointer'
-      img.style.userSelect = 'none'
-      img.setAttribute('contenteditable', 'false')
-      img.setAttribute('draggable', 'false')
-      img.setAttribute('data-resizable', 'true')
-      img.style.maxWidth = '100%'
-      img.style.height = 'auto'
-      img.style.width = 'auto'
-      // 편집 어포던스 힌트 — 편집 DOM에서만 사용. 저장/읽기 표시 단계
-      // (formatRichTextForReadView → normalizeImageA11y)에서 벗겨내 SR 오낭독을 막는다.
-      img.title = '클릭하여 크기 조절'
-      // 접근성: caption이 있으면 alt로, 없으면 빈 alt(장식 처리)로 명시해
-      // SR이 파일명·URL을 이미지 이름으로 낭독하지 않게 한다(AY2).
-      img.alt = caption || ''
-
-      imageContainer.appendChild(img)
-
-      if (caption) {
-        const figcaption = document.createElement('figcaption')
-        figcaption.style.marginTop = '8px'
-        figcaption.style.fontSize = '13px'
-        figcaption.style.color = '#64748b'
-        figcaption.style.fontStyle = 'italic'
-        figcaption.style.textAlign = 'center'
-        figcaption.textContent = caption
-        imageContainer.appendChild(figcaption)
-      }
-
-      const holder = document.createElement('div')
-      holder.appendChild(imageContainer)
-      const sanitized = sanitizeRichTextHtml(holder.innerHTML)
-      if (!sanitized.trim()) {
-        console.warn('RichTextEditor: image HTML was removed by sanitize')
-        return
-      }
 
       let insertRange: Range | null = null
       if (rangeRef.current) {
@@ -1392,10 +1358,129 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [handleContentChange, updateFormatState],
   )
 
+  /** figure+img(+선택 figcaption)를 삽입. `rangeRef`는 사용 후 null로 비움. */
+  const insertFigureAtCaret = useCallback(
+    (
+      imageUrl: string,
+      caption: string,
+      rangeRef: React.MutableRefObject<Range | null>,
+    ) => {
+      const editor = editorRef.current
+      if (!editor || !imageUrl) return
+
+      editor.focus()
+
+      const imageContainer = document.createElement('figure')
+      // 기본 가운데 정렬 — 인라인 margin auto(좌우)로 확정. 과거 '10px 0'은 좌우 0이라
+      // CSS·data-align의 가운데 정렬을 덮어써 좌측에 붙던 문제가 있었음(인라인 우선).
+      imageContainer.style.margin = '10px auto'
+      imageContainer.style.textAlign = 'center'
+      imageContainer.dataset.align = 'center'
+
+      const img = document.createElement('img')
+      img.src = imageUrl
+      img.style.borderRadius = '12px'
+      img.style.display = 'block'
+      img.style.margin = '0 auto'
+      img.style.cursor = 'pointer'
+      img.style.userSelect = 'none'
+      img.setAttribute('contenteditable', 'false')
+      img.setAttribute('draggable', 'false')
+      img.setAttribute('data-resizable', 'true')
+      img.style.maxWidth = '100%'
+      img.style.height = 'auto'
+      img.style.width = 'auto'
+      // 편집 어포던스 힌트 — 편집 DOM에서만 사용. 저장/읽기 표시 단계
+      // (formatRichTextForReadView → normalizeImageA11y)에서 벗겨내 SR 오낭독을 막는다.
+      img.title = '클릭하여 크기 조절'
+      // 접근성: caption이 있으면 alt로, 없으면 빈 alt(장식 처리)로 명시해
+      // SR이 파일명·URL을 이미지 이름으로 낭독하지 않게 한다(AY2).
+      img.alt = caption || ''
+
+      imageContainer.appendChild(img)
+
+      if (caption) {
+        const figcaption = document.createElement('figcaption')
+        figcaption.style.marginTop = '8px'
+        figcaption.style.fontSize = '13px'
+        figcaption.style.color = '#64748b'
+        figcaption.style.fontStyle = 'italic'
+        figcaption.style.textAlign = 'center'
+        figcaption.textContent = caption
+        imageContainer.appendChild(figcaption)
+      }
+
+      const holder = document.createElement('div')
+      holder.appendChild(imageContainer)
+      const sanitized = sanitizeRichTextHtml(holder.innerHTML)
+      if (!sanitized.trim()) {
+        console.warn('RichTextEditor: image HTML was removed by sanitize')
+        return
+      }
+
+      insertSanitizedBlockAtCaret(sanitized, rangeRef)
+    },
+    [insertSanitizedBlockAtCaret],
+  )
+
+  /** 지금 캐럿 자리를 기억 — 없으면 본문 끝 */
+  const rememberCaret = useCallback((target: React.MutableRefObject<Range | null>) => {
+    const editor = editorRef.current
+    if (!editor) return
+    const selection = window.getSelection()
+    if (
+      selection &&
+      selection.rangeCount > 0 &&
+      editor.contains(selection.getRangeAt(0).commonAncestorContainer)
+    ) {
+      target.current = selection.getRangeAt(0).cloneRange()
+    } else {
+      const range = document.createRange()
+      range.selectNodeContents(editor)
+      range.collapse(false)
+      target.current = range
+    }
+  }, [])
+
+  /** 지도 블록 끼우기 — 모달·붙여넣기 공통 */
+  const insertMapEmbed = useCallback(
+    (embed: MapEmbed, caption: string, rangeRef: React.MutableRefObject<Range | null>) => {
+      const sanitized = sanitizeRichTextHtml(mapEmbedHtml(embed, caption))
+      if (!sanitized.includes('<iframe')) {
+        notify.error('이 지도는 넣을 수 없습니다.')
+        return
+      }
+      insertSanitizedBlockAtCaret(sanitized, rangeRef)
+    },
+    [insertSanitizedBlockAtCaret],
+  )
+
+  const openMapModal = useCallback(() => {
+    rememberCaret(savedMapInsertRangeRef)
+    setMapModalVisible(true)
+  }, [rememberCaret])
+
   // 붙여넣기: 외부 웹 등에서 복사한 HTML 서식은 넣지 않고 평문만 삽입 (같은 에디터 내 복사도 동일)
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
       const clipboardData = e.clipboardData
+      /*
+       * 구글 지도 주소·퍼가기 코드를 붙여 넣으면 글자 대신 지도 블록으로 — 캡처 없이 본문에 지도를 넣는
+       * 가장 짧은 길. 장소 이름 같은 평문은 그대로 글자로 둔다(looksLikeMapPaste).
+       */
+      const pastedText = clipboardData.getData('text/plain')
+      if (!(clipboardData.files && clipboardData.files.length > 0) && looksLikeMapPaste(pastedText)) {
+        const parsed = parseMapInput(pastedText)
+        if (parsed.ok) {
+          e.preventDefault()
+          const pasteRangeRef = { current: null as Range | null }
+          rememberCaret(pasteRangeRef)
+          insertMapEmbed(parsed.embed, '', pasteRangeRef)
+          return
+        }
+        // 짧은 링크처럼 지도로 못 바꾸는 주소 — 글자로 붙이되 왜 안 됐는지 알린다
+        notify.info(parsed.reason)
+      }
       if (clipboardData.files && clipboardData.files.length > 0) {
         const imageFile = Array.from(clipboardData.files).find((f) =>
           f.type.startsWith('image/'),
@@ -1524,7 +1609,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }
       handleContentChange()
     },
-    [handleContentChange, onImageUpload, insertFigureAtCaret],
+    [handleContentChange, onImageUpload, insertFigureAtCaret, rememberCaret, insertMapEmbed],
   )
 
   // 키 입력 핸들러 (Tab 들여쓰기, Ctrl+B 등)
@@ -2771,6 +2856,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         onTermLink={handleOpenTermLinkModal}
         onExplanation={handleOpenExplanationModal}
         onImageUpload={handleImageUpload}
+        onInsertMap={openMapModal}
         onTableOp={runTableOp}
         onDeleteTable={handleDeleteRichTable}
         onInsertHr={insertProseHrBlock}
@@ -2824,6 +2910,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       <ShortcutsHelpModal
         visible={shortcutsHelpVisible}
         onClose={() => setShortcutsHelpVisible(false)}
+      />
+
+      {/* 지도 넣기 — 공용 Modal(포털·Esc·포커스 트랩) */}
+      <MapEmbedModal
+        isOpen={mapModalVisible}
+        onClose={() => setMapModalVisible(false)}
+        onInsert={(embed, caption) => {
+          setMapModalVisible(false)
+          insertMapEmbed(embed, caption, savedMapInsertRangeRef)
+        }}
       />
 
       {/* 이미지 설명 입력 모달 — body 포털 (에디터 글래스 박스가 fixed 뷰포트를 깨뜨리는 것 방지) */}

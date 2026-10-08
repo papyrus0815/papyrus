@@ -1,6 +1,8 @@
 import DOMPurify from 'dompurify'
 import type { Config } from 'dompurify'
 
+import { isAllowedMapEmbedSrc } from './map-embed'
+
 /**
  * URL 프로토콜 화이트리스트 — DOMPurify 기본값에 `blob:`만 추가.
  *
@@ -35,6 +37,8 @@ const RICH_TEXT_PURIFY_CONFIG: Config = {
     'caption',
     'colgroup',
     'col',
+    // 본문 지도 블록 — 구글 지도 퍼가기 주소일 때만 남는다(아래 richTextPurifier 훅)
+    'iframe',
   ],
   ADD_ATTR: [
     'href',
@@ -70,6 +74,9 @@ const RICH_TEXT_PURIFY_CONFIG: Config = {
     'valign',
     'border',
     'span',
+    'allowfullscreen',
+    'loading',
+    'referrerpolicy',
   ],
   ALLOW_ARIA_ATTR: true,
 }
@@ -118,10 +125,34 @@ function collapseEmptyBlockRuns(html: string): string {
     .replace(/(?:<br\s*\/?\s*>\s*){4,}/gi, '<br><br>')
 }
 
+/**
+ * 리치텍스트 전용 DOMPurify 인스턴스. 훅은 인스턴스 전역이라, 앱의 다른 새니타이즈(기본
+ * DOMPurify)에 iframe 허용이 번지지 않도록 따로 만든다.
+ *
+ * iframe은 **구글 지도 퍼가기 주소일 때만** 남기고(isAllowedMapEmbedSrc — 호스트·경로·https 검사),
+ * 남는 iframe엔 지연 로드·리퍼러 정책을 강제한다. srcdoc·이벤트 속성은 허용 목록에 없어 원래 빠진다.
+ */
+const richTextPurifier = typeof window === 'undefined' ? DOMPurify : DOMPurify(window)
+
+richTextPurifier.addHook('uponSanitizeElement', (node, data) => {
+  if (data.tagName !== 'iframe') return
+  const element = node as Element
+  if (!isAllowedMapEmbedSrc(element.getAttribute('src'))) {
+    element.parentNode?.removeChild(element)
+  }
+})
+
+richTextPurifier.addHook('afterSanitizeAttributes', (node) => {
+  if ((node as Element).tagName !== 'IFRAME') return
+  const element = node as Element
+  element.setAttribute('loading', 'lazy')
+  element.setAttribute('referrerpolicy', 'no-referrer-when-downgrade')
+})
+
 /** 에디터·붙여넣기·읽기 전용 뷰 공통 — 뷰에서도 동일하게 호출해 마크업을 허용 목록으로 맞춤 */
 export function sanitizeRichTextHtml(html: string): string {
   const trimmed = html?.trim() ?? ''
   if (trimmed === '') return ''
   const cleaned = collapseEmptyBlockRuns(stripTransientMarkup(html))
-  return DOMPurify.sanitize(cleaned, RICH_TEXT_PURIFY_CONFIG)
+  return richTextPurifier.sanitize(cleaned, RICH_TEXT_PURIFY_CONFIG)
 }
