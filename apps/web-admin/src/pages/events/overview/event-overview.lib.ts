@@ -337,6 +337,69 @@ export function buildCountryMatrix(
   )
 }
 
+export interface MissingRootCountry {
+  key: string
+  id: string
+  kind: EventOverviewCountry['kind']
+  name: string
+  /** 하위 사건 몇 건에 나오나 */
+  eventCount: number
+}
+
+/**
+ * 하위 사건에는 나오는데 상위 사건 자신엔 걸리지 않은 나라 — 1차대전은 상위 0개국·하위 6개국이라
+ * 국가 대시보드·나라별 사건 목록에서 '1차세계대전'이 어느 나라에도 잡히지 않았다.
+ * 많이 나오는 나라부터.
+ */
+export function missingRootCountries(
+  root: EventOverviewNode,
+  descendants: EventOverviewNode[],
+): MissingRootCountry[] {
+  const inRoot = new Set(root.countries.map((country) => country.key))
+  const byKey = new Map<string, MissingRootCountry>()
+  for (const node of descendants) {
+    const seen = new Set<string>()
+    for (const country of node.countries) {
+      if (inRoot.has(country.key) || seen.has(country.key)) continue
+      seen.add(country.key)
+      const entry = byKey.get(country.key) ?? {
+        key: country.key,
+        id: country.id,
+        kind: country.kind,
+        name: country.name,
+        eventCount: 0,
+      }
+      entry.eventCount += 1
+      byKey.set(country.key, entry)
+    }
+  }
+  return [...byKey.values()].sort(
+    (left, right) => right.eventCount - left.eventCount || left.name.localeCompare(right.name),
+  )
+}
+
+/**
+ * 상위 사건 참여국 PUT 본문 — 서버는 자연키 병합(목록에 없는 줄은 삭제, 생략한 필드는 유지)이다.
+ * 그래서 기존 줄은 **키만** 보내 배역·설명·가담 시점을 하나도 건드리지 않고, 새 나라는 '참여국'으로.
+ *
+ * ⚠️ 조망의 상위 참여국에는 사건 본체의 역사국가 칸에서 합류한 줄(배역 null)이 섞일 수 있다
+ * (상세 응답과 같은 규칙). 그건 관계표의 줄이 아니라 보내면 새 줄이 생기므로 뺀다 — 실제 줄은
+ * 배역이 늘 있다.
+ */
+export function rootCountriesPayload(
+  root: EventOverviewNode,
+  adding: MissingRootCountry[],
+): Array<{ countryId?: string; historicalCountryId?: string; role?: 'PARTICIPANT' }> {
+  const keyOf = (kind: EventOverviewCountry['kind'], id: string) =>
+    kind === 'modern' ? { countryId: id } : { historicalCountryId: id }
+  return [
+    ...root.countries
+      .filter((country) => country.role != null)
+      .map((country) => keyOf(country.kind, country.id)),
+    ...adding.map((country) => ({ ...keyOf(country.kind, country.id), role: 'PARTICIPANT' as const })),
+  ]
+}
+
 export const roleLabel = (role: string | null | undefined) =>
   eventCountryRoleLabel(role) ?? '관여'
 

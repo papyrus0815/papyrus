@@ -18,6 +18,7 @@ import {
   type GanttLayout,
   type MatrixCountry,
   type MetricRow,
+  type MissingRootCountry,
   type TimeBin,
   type PersonAggregate,
   applicableCountByColumn,
@@ -242,6 +243,9 @@ export function GanttPanel({
 // ─── 참여국 매트릭스 ───────────────────────────────────────────────────────
 
 export function CountryMatrixPanel({
+  missing,
+  attaching,
+  onAttachMissing,
   matrix,
   events,
   numberById,
@@ -251,6 +255,10 @@ export function CountryMatrixPanel({
   onHover,
   onOpen,
 }: HoverProps & {
+  /** 하위에만 나오고 상위엔 안 걸린 나라 */
+  missing: MissingRootCountry[]
+  attaching: boolean
+  onAttachMissing: () => void
   matrix: MatrixCountry[]
   events: EventOverviewNode[]
   numberById: Map<string, number>
@@ -274,6 +282,22 @@ export function CountryMatrixPanel({
         <S.Empty>참여국이 기록된 하위 사건이 없습니다.</S.Empty>
       ) : (
         <>
+          {missing.length > 0 && (
+            <S.PanelNotice role="note">
+              <span>
+                상위 사건에 걸리지 않은 나라 <strong>{missing.length}개</strong> —{' '}
+                {missing
+                  .slice(0, 4)
+                  .map((country) => `${country.name}(${country.eventCount})`)
+                  .join(' · ')}
+                {missing.length > 4 && ` 외 ${missing.length - 4}`}. 나라별 사건 목록·국가 대시보드에서 이
+                사건이 빠진다.
+              </span>
+              <S.TextButton type="button" onClick={onAttachMissing} disabled={attaching}>
+                {attaching ? '거는 중…' : `상위에도 ${missing.length}개국 걸기`}
+              </S.TextButton>
+            </S.PanelNotice>
+          )}
           <S.Legend>
             {tones.map((tone) => (
               <span key={tone}>

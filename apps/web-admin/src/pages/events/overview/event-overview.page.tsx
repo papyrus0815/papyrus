@@ -10,12 +10,16 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiMaximize2, FiMinimize2, FiX } from 'react-icons/fi'
 import { useSearchParams } from 'react-router-dom'
 
 import { durationLabel } from '@/pages/events/detail/components/event-facts.lib'
 import { getEventOverview } from '@/shared/api/event-overview'
+import { updateEvent } from '@/shared/api/events'
+import { invalidateEventQueries } from '@/shared/api/invalidate-events'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
 
@@ -27,6 +31,8 @@ import {
   type GanttFit,
   coverageGaps,
   coverageRatio,
+  missingRootCountries,
+  rootCountriesPayload,
   metricRows,
   orderedDescendants,
   timeHistogram,
@@ -115,6 +121,8 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
   const setChecklistOrder = (order: 'number' | 'gaps') =>
     setParam('order', order === 'gaps' ? 'gaps' : null)
   const [hotId, setHotId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const [attaching, setAttaching] = useState(false)
   /** 섹션 내비의 현재 위치 — 화면 위쪽 띠에 걸린 패널 */
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const hasData = Boolean(data)
@@ -175,6 +183,7 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
       metrics: metricRows([root, ...descendants]),
       coverage: coverageRatio(descendants),
       gaps: coverageGaps(root, descendants),
+      missingCountries: missingRootCountries(root, descendants),
       directCount: descendants.filter((node) => node.depth === 1).length,
       sideCount: [root, ...descendants].reduce((sum, node) => sum + node.sides.length, 0),
     }
@@ -238,6 +247,41 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
     : []
   /** 패널 강조 — 마우스가 없으면 열린 사건을 칠해 둔다(모달을 닫아도 어디 있었는지 남게) */
   const highlightId = hotId ?? openEventId
+  /**
+   * 하위에만 나오는 나라를 상위에도 건다 — 서버는 자연키 병합이라 기존 줄은 키만 보내 손대지 않는다
+   * (rootCountriesPayload). 한 번에 여러 나라가 바뀌니 확인을 받는다.
+   */
+  const attachMissingCountries = async () => {
+    const adding = derived.missingCountries
+    if (adding.length === 0) return
+    const ok = await confirm({
+      title: '상위 사건에 참여국 걸기',
+      message: `'${root.title}'에 ${adding.map((country) => country.name).join(', ')}을(를) '참여국'으로 겁니다. 기존 참여국의 배역·설명은 그대로 둡니다.`,
+      confirmLabel: `${adding.length}개국 걸기`,
+    })
+    if (!ok) return
+    setAttaching(true)
+    try {
+      await updateEvent(root.id, { relatedCountries: rootCountriesPayload(root, adding) })
+      invalidateEventQueries(queryClient, { eventId: root.id })
+      notify.success(`상위 사건에 ${adding.length}개국을 걸었습니다`)
+    } catch {
+      notify.error('참여국을 걸지 못했습니다')
+    } finally {
+      setAttaching(false)
+    }
+  }
+
+  /** 모달의 개요 저장 — 하위 사건 상세·목록·조망이 함께 갱신된다 */
+  const saveDescription = async (id: string, next: string) => {
+    try {
+      await updateEvent(id, { description: next })
+      invalidateEventQueries(queryClient, { eventId: id })
+    } catch {
+      notify.error('개요를 저장하지 못했습니다')
+    }
+  }
+
   /** 섹션 내비 — 해시를 주소에 남기지 않고(?event= 등과 섞이지 않게) 부드럽게 스크롤 */
   const jumpTo = (clickEvent: React.MouseEvent<HTMLAnchorElement>) => {
     const targetId = clickEvent.currentTarget.getAttribute('href')?.slice(1)
@@ -431,6 +475,9 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           onOpen={openEventById}
         />
         <CountryMatrixPanel
+          missing={derived.missingCountries}
+          attaching={attaching}
+          onAttachMissing={() => void attachMissingCountries()}
           matrix={derived.matrix}
           events={derived.ordered}
           numberById={derived.numberById}
@@ -502,6 +549,7 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
             : null
         }
         onOpenEvent={openEventById}
+        onSaveDescription={(id, next) => void saveDescription(id, next)}
       />
     </S.Page>
   )

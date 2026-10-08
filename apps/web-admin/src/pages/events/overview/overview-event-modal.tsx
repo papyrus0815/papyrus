@@ -24,6 +24,7 @@ import type { EventOverviewNode } from '@/shared/api/event-overview'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { InlineText } from '@/shared/ui/inline-edit/inline-text'
 import { Modal } from '@/shared/ui/modal'
 import { ModalBody, ModalCloseButton, ModalFooter } from '@/shared/ui/modal/modal.styles'
 
@@ -58,6 +59,8 @@ interface OverviewEventModalProps {
   onPrev: (() => void) | null
   onNext: (() => void) | null
   onOpenEvent: (eventId: string) => void
+  /** 개요 저장 — 점검표에서 가장 자주 비는 칸 중 문서 없이 채울 수 있는 것 */
+  onSaveDescription: (eventId: string, next: string) => void
 }
 
 /** 입력 중인 칸에서는 화살표를 가로채지 않는다 */
@@ -79,6 +82,7 @@ export function OverviewEventModal({
   onPrev,
   onNext,
   onOpenEvent,
+  onSaveDescription,
 }: OverviewEventModalProps) {
   const theme = useTheme()
   /** 첫 포커스는 제목 — 기본(첫 버튼)이면 열자마자 하위 사건·'이전'에 링이 떴다 */
@@ -181,11 +185,20 @@ export function OverviewEventModal({
     >
       <Body>
         <Main>
-          {event.description?.trim() ? (
-            <Lead>{event.description}</Lead>
-          ) : (
-            <Missing>개요가 아직 없습니다 — 사건 문서에서 한 줄 설명을 채울 수 있습니다.</Missing>
-          )}
+          {/* 개요는 여기서 바로 고친다 — 누르면 편집, 바깥을 누르거나 ⌘Enter로 저장.
+              key로 사건마다 새 편집기(이전·다음으로 넘길 때 앞 사건의 초안이 따라오지 않게) */}
+          <Lead as="div">
+            <InlineText
+              key={event.id}
+              value={event.description ?? ''}
+              onSave={(next) => onSaveDescription(event.id, next)}
+              placeholder="개요가 아직 없습니다 — 눌러서 한두 문장으로 쓰기"
+              label="개요"
+              multiline
+              maxLength={2000}
+              showCount
+            />
+          </Lead>
 
           {children.length > 0 && (
             <Block aria-labelledby={`${titleId}-children`}>

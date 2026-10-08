@@ -7,6 +7,8 @@ import {
   categoryBreakdown,
   checkNode,
   coverageGaps,
+  missingRootCountries,
+  rootCountriesPayload,
   coverageRatio,
   emptyCountByColumn,
   orderedDescendants,
@@ -240,5 +242,33 @@ describe('배치 B — 점검 신호', () => {
       endDate: '1918-11-11T00:00:00.000Z',
     })
     expect(coverageGaps(root, [covering])).toEqual([])
+  })
+})
+
+describe('배치 D — 상위에 하위 참여국 걸기', () => {
+  it('하위에만 나오는 나라를 많이 나오는 순으로', () => {
+    const missing = missingRootCountries(root, descendants)
+    // 독일은 상위에 이미 있다
+    expect(missing.map((country) => [country.name, country.eventCount])).toEqual([
+      ['오스트리아-헝가리', 2],
+      ['세르비아', 1],
+    ])
+  })
+
+  it('PUT 본문 — 기존 줄은 키만(배역·설명 보존), 새 나라는 참여국, 배역 없는 합류 줄은 뺀다', () => {
+    const withMerged = {
+      ...root,
+      countries: [
+        ...root.countries,
+        // 사건 본체 역사국가 칸에서 합류한 줄 — 관계표 줄이 아니다
+        { key: 'h:body', id: 'body', kind: 'historical' as const, name: '본체', flagEmoji: null, role: null, sideId: null },
+      ],
+    }
+    const payload = rootCountriesPayload(withMerged, missingRootCountries(root, descendants))
+    expect(payload).toEqual([
+      { historicalCountryId: 'de' },
+      { historicalCountryId: 'at', role: 'PARTICIPANT' },
+      { historicalCountryId: 'rs', role: 'PARTICIPANT' },
+    ])
   })
 })

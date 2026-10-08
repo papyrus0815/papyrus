@@ -50,6 +50,7 @@ function setup(over: Partial<React.ComponentProps<typeof OverviewEventModal>> = 
     onPrev: jest.fn(),
     onNext: jest.fn(),
     onOpenEvent: jest.fn(),
+    onSaveDescription: jest.fn(),
     ...over,
   }
   renderWithTheme(

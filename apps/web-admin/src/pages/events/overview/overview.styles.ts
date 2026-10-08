@@ -1066,3 +1066,11 @@ export const StartedBar = styled.div<{ $pct: number }>`
   height: ${({ $pct }) => $pct}%;
   background: ${({ theme }) => ledgerAccent(theme.mode)};
 `
+
+/**
+ * 패널 본문에 바로 놓는 안내 — GapNotice는 머리(가로 줄) 안에서 한 줄을 다 쓰려고 flex-basis 100%를
+ * 갖는데, 세로로 쌓는 패널에 그대로 두면 그 값이 **높이**가 되어 상자가 패널만큼 커졌다.
+ */
+export const PanelNotice = styled(GapNotice)`
+  flex-basis: auto;
+`
