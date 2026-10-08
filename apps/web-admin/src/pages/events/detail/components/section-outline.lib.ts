@@ -10,6 +10,8 @@
  * (누르면 그 섹션이 펼쳐진다). 그 판정의 단일 출처가 여기다 — 페이지·목차·개요 장부가
  * 같은 판정을 써야 서로 다른 말을 하지 않는다.
  */
+import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-empty'
+
 import { type SectionKind, sectionKindOf } from './narrative-sections.lib'
 
 /** 내용이 없으면 접히는 섹션들 — 모듈·댓글은 대상이 아니다(모듈은 이미 있을 때만 뜬다). */
@@ -63,7 +65,9 @@ export interface SectionFillSource {
 
 /** 태그를 걷어낸 실제 글자가 있는가 — 빈 `<p></p>`는 내용이 아니다. */
 export function hasRichText(value?: string | null): boolean {
-  return Boolean(value && value.replace(/<[^>]*>/g, '').trim())
+  // 글자뿐 아니라 지도·이미지·표 같은 시각 콘텐츠도 내용이다 — 지도만 넣은 요약이 '빈 섹션'으로
+  // 접히던 것(태그를 걷어낸 글자만 봤다). 판정은 읽기 뷰와 같은 단일 출처.
+  return !isVisuallyEmptyRichText(value)
 }
 
 /**

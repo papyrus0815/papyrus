@@ -126,8 +126,12 @@ const NODE_INCLUDE = {
 
 type OverviewRow = Prisma.EventGetPayload<{ include: typeof NODE_INCLUDE }>
 
+/** 글자나 시각 콘텐츠(본문 지도 iframe·이미지·표)가 있나 — 지도만 넣은 요약도 채운 것 */
 const hasText = (html: string | null | undefined) =>
-  Boolean(html && html.replace(/<[^>]*>/g, '').trim())
+  Boolean(
+    html &&
+      (html.replace(/<[^>]*>/g, '').trim() || /<(?:iframe|img|figure|table|hr)\b/i.test(html)),
+  )
 
 const toNumber = (value: unknown): number | null =>
   value == null ? null : Number(value)
