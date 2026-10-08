@@ -3,6 +3,7 @@
  */
 import '@testing-library/jest-dom'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 import type { EventOverviewNode } from '@/shared/api/event-overview'
 import { renderWithTheme } from '@/shared/test/render-with-theme'
@@ -37,8 +38,10 @@ const event: EventOverviewNode = {
 function setup(over: Partial<React.ComponentProps<typeof OverviewEventModal>> = {}) {
   const props = {
     event,
+    number: 2,
     position: 2,
     total: 18,
+    filtered: false,
     rootTitle: '1차세계대전',
     parentTitle: null,
     children: [],
@@ -47,10 +50,13 @@ function setup(over: Partial<React.ComponentProps<typeof OverviewEventModal>> = 
     onPrev: jest.fn(),
     onNext: jest.fn(),
     onOpenEvent: jest.fn(),
-    onOpenDocument: jest.fn(),
     ...over,
   }
-  renderWithTheme(<OverviewEventModal {...props} />)
+  renderWithTheme(
+    <MemoryRouter>
+      <OverviewEventModal {...props} />
+    </MemoryRouter>,
+  )
   return props
 }
 
@@ -73,8 +79,12 @@ it('←/→로 이전·다음, 끝에서는 그쪽 버튼이 꺼진다', () => {
   expect(screen.getByRole('button', { name: '이전 사건' })).toBeDisabled()
 })
 
-it('사건 문서 열기는 그 사건 id로', () => {
-  const props = setup()
-  fireEvent.click(screen.getByRole('button', { name: /사건 문서 열기/ }))
-  expect(props.onOpenDocument).toHaveBeenCalledWith('marne')
+it('사건 문서 열기는 링크 — 새 탭으로도 열린다', () => {
+  setup()
+  expect(screen.getByRole('link', { name: /사건 문서 열기/ })).toHaveAttribute('href', '/events/marne/')
+})
+
+it('걸러 둔 상태에선 표 번호와 걸린 집합 안 순서를 함께 말한다', () => {
+  setup({ number: 7, position: 2, total: 5, filtered: true })
+  expect(screen.getByText('7번 · 걸린 5건 중 2')).toBeInTheDocument()
 })

@@ -12,13 +12,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiMaximize2, FiMinimize2, FiX } from 'react-icons/fi'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { durationLabel } from '@/pages/events/detail/components/event-facts.lib'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
-import { pathKeys } from '@/shared/router'
 
 import {
   aggregatePersons,
@@ -82,12 +81,13 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [hotId, setHotId] = useState<string | null>(null)
   const [ganttFit, setGanttFit] = useState<GanttFit>('children')
+  /** 상위 개요 펼침 — 기본은 세 줄 */
+  const [leadOpen, setLeadOpen] = useState(false)
 
   /**
    * 열린 사건 — URL(`?event=`)이 정본. 링크로 공유되고, 뒤로 가기가 모달을 닫는다.
    * 처음 열 때만 기록을 쌓고, 이전·다음으로 넘길 때는 바꿔치기한다(뒤로 가기 한 번에 닫히게).
    */
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const openEventId = searchParams.get('event')
   const setOpenEvent = useCallback(
@@ -236,6 +236,27 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
         </S.HeaderActions>
       </S.Header>
 
+      {/* 상위 사건 자신의 개요 — 하위만 펼치던 지면에서 '이것이 무엇인가'가 빠져 있었다 */}
+      <S.RootLead>
+        {root.description?.trim() ? (
+          <>
+            <S.RootLeadText $clamped={!leadOpen}>{root.description}</S.RootLeadText>
+            {root.description.length > 160 && (
+              <S.TextButton type="button" onClick={() => setLeadOpen((open) => !open)} aria-expanded={leadOpen}>
+                {leadOpen ? '접기' : '더 보기'}
+              </S.TextButton>
+            )}
+          </>
+        ) : (
+          <S.RootLeadText $clamped={false}>
+            이 최상위 사건의 개요가 아직 없습니다.{' '}
+            <S.TextButton type="button" onClick={onShowDocument}>
+              문서에서 쓰기
+            </S.TextButton>
+          </S.RootLeadText>
+        )}
+      </S.RootLead>
+
       <S.StatRow>
         <S.Stat>
           <S.StatLabel>하위 사건</S.StatLabel>
@@ -379,8 +400,10 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
 
       <OverviewEventModal
         event={openEvent}
+        number={openEvent ? (derived.numberById.get(openEvent.id) ?? openIndex + 1) : 0}
         position={openIndex + 1}
         total={navOrder.length}
+        filtered={navOrder.length !== derived.ordered.length}
         rootTitle={root.title}
         parentTitle={
           openEvent && openEvent.depth >= 2 && openEvent.parentEventId
@@ -397,7 +420,6 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
             : null
         }
         onOpenEvent={openEventById}
-        onOpenDocument={(id) => navigate(pathKeys.events.detail(id))}
       />
     </S.Page>
   )

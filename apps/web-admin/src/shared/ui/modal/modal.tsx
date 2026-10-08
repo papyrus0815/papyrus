@@ -3,7 +3,8 @@
  *
  * 기존엔 모달마다 createPortal·Esc·스크롤락·aria 를 직접 구현해 중복/누락이 많았다.
  * 이 컴포넌트는 그 보일러플레이트를 흡수한다:
- *  - 포털(document.body) 렌더
+ *  - 포털 렌더 — 보통 document.body, **전체 화면 중이면 그 전체 화면 요소 안**(브라우저는 전체 화면
+ *    요소의 하위만 그린다. body로 보내면 모달이 화면에 안 나온다 — 사건 조망 전체 화면에서 실측)
  *  - 오버레이 클릭으로 닫기(드래그 아웃 오작동 방지 — mousedown target 일치 검사)
  *  - Esc 닫기 · body 스크롤 락 · 초기 포커스 · focus trap · 포커스 복원 (useModalBehavior)
  *  - role="dialog" · aria-modal · aria-labelledby 자동 배선
@@ -163,6 +164,6 @@ export function Modal({
         {children}
       </Box>
     </ModalOverlay>,
-    document.body,
+    document.fullscreenElement ?? document.body,
   )
 }

@@ -9,6 +9,7 @@
 import { useEffect, useRef } from 'react'
 
 import { FiArrowLeft, FiArrowRight, FiExternalLink, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
 import { durationLabel } from '@/pages/events/detail/components/event-facts.lib'
@@ -22,6 +23,7 @@ import {
 import type { EventOverviewNode } from '@/shared/api/event-overview'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { pathKeys } from '@/shared/router'
 import { Modal } from '@/shared/ui/modal'
 import { ModalBody, ModalCloseButton, ModalFooter } from '@/shared/ui/modal/modal.styles'
 
@@ -31,9 +33,13 @@ import * as S from './overview.styles'
 interface OverviewEventModalProps {
   /** 열린 사건 — null이면 닫힘 */
   event: EventOverviewNode | null
-  /** 지금 화면 순서(거르기 반영)에서의 위치 */
+  /** 전개·점검표와 같은 번호(전체 순서) */
+  number: number
+  /** 지금 넘기는 순서(거르기 반영) 안의 위치 */
   position: number
   total: number
+  /** 나라·갈래로 걸러 둔 상태인가 — 그때는 두 번호가 다르다 */
+  filtered: boolean
   /** 최상위 사건 제목 — 머리의 경로 첫 칸 */
   rootTitle: string
   /** 바로 위 사건 제목 — 손자 이하일 때만 */
@@ -45,7 +51,6 @@ interface OverviewEventModalProps {
   onPrev: (() => void) | null
   onNext: (() => void) | null
   onOpenEvent: (eventId: string) => void
-  onOpenDocument: (eventId: string) => void
 }
 
 /** 입력 중인 칸에서는 화살표를 가로채지 않는다 */
@@ -55,8 +60,10 @@ const isTyping = (target: EventTarget | null) =>
 
 export function OverviewEventModal({
   event,
+  number,
   position,
   total,
+  filtered,
   rootTitle,
   parentTitle,
   children,
@@ -65,7 +72,6 @@ export function OverviewEventModal({
   onPrev,
   onNext,
   onOpenEvent,
-  onOpenDocument,
 }: OverviewEventModalProps) {
   const theme = useTheme()
   /** 첫 포커스는 제목 — 기본(첫 버튼)이면 열자마자 하위 사건·'이전'에 링이 떴다 */
@@ -119,8 +125,9 @@ export function OverviewEventModal({
       header={
         <Head>
           <HeadTop>
-            <Position>
-              {position} / {total}
+            {/* 걸러 둔 상태에선 표의 번호와 넘기는 순서가 다르다 — 둘 다 말한다 */}
+            <Position title={filtered ? '전개·점검표의 번호 · 걸린 사건 중 순서' : undefined}>
+              {filtered ? `${number}번 · 걸린 ${total}건 중 ${position}` : `${number} / ${total}`}
             </Position>
             <Trail>
               {rootTitle}
@@ -322,7 +329,8 @@ export function OverviewEventModal({
             <kbd>→</kbd> 로 넘기기
           </KeyHint>
         </NavGroup>
-        <PrimaryButton type="button" onClick={() => onOpenDocument(event.id)}>
+        {/* 링크 — 가운데 클릭·⌘클릭으로 새 탭에서 열 수 있게(버튼이던 시절엔 못 했다) */}
+        <PrimaryButton as={Link} to={pathKeys.events.detail(event.id)}>
           사건 문서 열기
           <FiExternalLink size={14} aria-hidden="true" />
         </PrimaryButton>
@@ -700,6 +708,7 @@ const PrimaryButton = styled.button`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#111827' : '#fff')};
   font-size: 13px;
   font-weight: 700;
+  text-decoration: none;
   cursor: pointer;
   &:hover {
     filter: brightness(1.08);

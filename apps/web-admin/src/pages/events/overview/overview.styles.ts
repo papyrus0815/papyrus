@@ -176,6 +176,49 @@ const fillColor = (pct: number, mode: 'light' | 'dark') =>
       ? mode === 'dark' ? '#fbbf24' : '#d97706'
       : mode === 'dark' ? '#f87171' : '#dc2626'
 
+// ─── 상위 사건 개요 ─────────────────────────────────────────────────────────
+// 조망에는 원래 상위 자신의 서술이 없었다 — 1차대전이 무엇인지 보려면 [문서]로 가야 했다.
+
+export const RootLead = styled.div`
+  max-width: 78ch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+`
+
+export const RootLeadText = styled.p<{ $clamped: boolean }>`
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.75;
+  white-space: pre-line;
+  word-break: keep-all;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${({ $clamped }) =>
+    $clamped
+      ? `display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;`
+      : ''}
+`
+
+export const TextButton = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+  &:hover {
+    text-decoration: underline;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+`
+
 // ─── 핵심 숫자 ─────────────────────────────────────────────────────────────
 // 상자 다섯 개 대신 한 줄의 숫자 띠 — 숫자가 주인공이고 테두리는 칸 사이 세로선 하나뿐.
 
@@ -440,8 +483,19 @@ export const GanttLabel = styled.div<{ $depth: number; $dim: boolean; $hot: bool
   padding: 0 10px 0 ${({ $depth }) => 4 + Math.max(0, $depth - 1) * 18}px;
   font-size: 13.5px;
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
-  background: ${({ $hot, $stripe, theme }) =>
-    $hot ? ledgerHoverFill(theme.mode) : $stripe ? stripeFill(theme.mode) : 'transparent'};
+  /* 제목 열 고정 — 좁은 화면에서 간트를 가로로 밀면 제목이 함께 사라졌다(매트릭스 나라 열과 같은 규칙).
+     줄무늬·강조는 반투명이라 지면색 위에 겹쳐 불투명하게 만든다 */
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background:
+    linear-gradient(
+      ${({ $hot, $stripe, theme }) =>
+        $hot ? ledgerHoverFill(theme.mode) : $stripe ? stripeFill(theme.mode) : 'transparent'},
+      ${({ $hot, $stripe, theme }) =>
+        $hot ? ledgerHoverFill(theme.mode) : $stripe ? stripeFill(theme.mode) : 'transparent'}
+    ),
+    ${({ theme }) => theme.colors.background.primary};
 `
 
 export const GanttNumber = styled.span`

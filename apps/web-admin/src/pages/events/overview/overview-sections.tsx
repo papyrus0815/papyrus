@@ -203,6 +203,8 @@ export function CountryMatrixPanel({
   const theme = useTheme()
   const tones = ['lead', 'target', 'statehood', 'neutral'] as const
   const maxCount = Math.max(1, ...matrix.map((country) => country.eventCount))
+  /** 상위 자신에 참여국이 하나도 없으면 '상위' 열은 통째로 빈칸이라 그리지 않는다 */
+  const showRootColumn = matrix.some((country) => country.inRoot)
   return (
     <S.Panel $wide id="overview-matrix" aria-labelledby="overview-matrix-title">
       <S.PanelHead>
@@ -234,9 +236,11 @@ export function CountryMatrixPanel({
                   <S.MatrixCountryCell scope="col">
                     <S.Muted style={{ fontSize: 11, padding: '0 4px' }}>나라 (하위 N건)</S.Muted>
                   </S.MatrixCountryCell>
-                  <S.MatrixHeadCell scope="col" title="상위 사건 자신에서의 배역">
-                    상위
-                  </S.MatrixHeadCell>
+                  {showRootColumn && (
+                    <S.MatrixHeadCell scope="col" title="상위 사건 자신에서의 배역">
+                      상위
+                    </S.MatrixHeadCell>
+                  )}
                   {events.map((event) => (
                     <S.MatrixHeadCell
                       key={event.id}
@@ -279,15 +283,17 @@ export function CountryMatrixPanel({
                           </S.CountBadge>
                         </S.CountryButton>
                       </S.MatrixCountryCell>
-                      <S.MatrixCell $hot={false}>
-                        {country.inRoot ? (
-                          <S.RoleMark
-                            $color={S.toneColor(roleTone(country.rootRole), theme.mode)}
-                            $hollow={roleTone(country.rootRole) === 'neutral'}
-                            title={`상위 사건 — ${roleLabel(country.rootRole)}`}
-                          />
-                        ) : null}
-                      </S.MatrixCell>
+                      {showRootColumn && (
+                        <S.MatrixCell $hot={false}>
+                          {country.inRoot ? (
+                            <S.RoleMark
+                              $color={S.toneColor(roleTone(country.rootRole), theme.mode)}
+                              $hollow={roleTone(country.rootRole) === 'neutral'}
+                              title={`상위 사건 — ${roleLabel(country.rootRole)}`}
+                            />
+                          ) : null}
+                        </S.MatrixCell>
+                      )}
                       {events.map((event) => {
                         const has = country.roleByEvent.has(event.id)
                         const role = country.roleByEvent.get(event.id) ?? null
