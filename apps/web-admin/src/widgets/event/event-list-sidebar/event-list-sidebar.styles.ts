@@ -304,3 +304,23 @@ export const ParentTail = styled.span`
    */
   overflow-wrap: break-word;
 `
+
+/**
+ * 최상위 사건 표지 — 하위를 거느린 루트는 상세 대신 '조망' 지면이 열린다. 목록에서 그걸 미리
+ * 알 수 있게 제목 줄 끝에 '하위 N'을 붙인다(꼬리표와 같은 자리라 세로 공간 0).
+ */
+export const OverviewTail = styled.span`
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  vertical-align: 1px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(165,180,252,0.12)' : 'rgba(99,102,241,0.08)'};
+`

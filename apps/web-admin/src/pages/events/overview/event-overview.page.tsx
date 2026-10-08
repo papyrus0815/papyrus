@@ -32,11 +32,10 @@ import {
   timeHistogram,
 } from './event-overview.lib'
 import {
-  CategoryPanel,
   ChecklistPanel,
   CountryMatrixPanel,
+  DistributionPanel,
   GanttPanel,
-  HistogramPanel,
   PersonsPanel,
   SidesMetricsPanel,
 } from './overview-sections'
@@ -87,10 +86,35 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
     staleTime: 0,
   })
 
-  const [selectedCountryKey, setSelectedCountryKey] = useState<string | null>(null)
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  /**
+   * 보기 상태는 URL이 정본 — 열린 사건(`?event=`)만 공유되고 거르기·축·정렬은 새로고침에 사라졌다.
+   * `?country=` 나라 키 · `?cat=` 갈래 · `?fit=parent` 축 · `?order=gaps` 점검표 순서.
+   * 값을 바꿀 땐 기록을 쌓지 않는다(뒤로 가기는 모달 닫기·지면 이동에 남겨 둔다).
+   */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const setParam = useCallback(
+    (key: string, value: string | null) =>
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous)
+          if (value) next.set(key, value)
+          else next.delete(key)
+          return next
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  )
+  const selectedCountryKey = searchParams.get('country')
+  const setSelectedCountryKey = (key: string | null) => setParam('country', key)
+  const selectedCategory = searchParams.get('cat')
+  const setSelectedCategory = (name: string | null) => setParam('cat', name)
+  const ganttFit: GanttFit = searchParams.get('fit') === 'parent' ? 'parent' : 'children'
+  const setGanttFit = (fit: GanttFit) => setParam('fit', fit === 'parent' ? 'parent' : null)
+  const checklistOrder = searchParams.get('order') === 'gaps' ? 'gaps' : 'number'
+  const setChecklistOrder = (order: 'number' | 'gaps') =>
+    setParam('order', order === 'gaps' ? 'gaps' : null)
   const [hotId, setHotId] = useState<string | null>(null)
-  const [ganttFit, setGanttFit] = useState<GanttFit>('children')
   /** 섹션 내비의 현재 위치 — 화면 위쪽 띠에 걸린 패널 */
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const hasData = Boolean(data)
@@ -118,7 +142,6 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
    * 열린 사건 — URL(`?event=`)이 정본. 링크로 공유되고, 뒤로 가기가 모달을 닫는다.
    * 처음 열 때만 기록을 쌓고, 이전·다음으로 넘길 때는 바꿔치기한다(뒤로 가기 한 번에 닫히게).
    */
-  const [searchParams, setSearchParams] = useSearchParams()
   const openEventId = searchParams.get('event')
   const setOpenEvent = useCallback(
     (id: string | null, mode: 'push' | 'replace' = 'push') =>
@@ -417,12 +440,12 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           onHover={setHotId}
           onOpen={openEventById}
         />
-        <CategoryPanel
-          bars={derived.categories}
+        <DistributionPanel
+          categories={derived.categories}
+          bins={derived.histogram}
           selectedCategory={selectedCategory}
           onSelectCategory={setSelectedCategory}
         />
-        <HistogramPanel bins={derived.histogram} />
         {/* 비어 있는 기록은 큰 패널 대신 한 줄로 — 데이터가 생기면 그때 패널이 선다 */}
         {hasPersons && (
           <PersonsPanel
@@ -446,6 +469,8 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
           </S.EmptyStrip>
         )}
         <ChecklistPanel
+          order={checklistOrder}
+          onOrderChange={setChecklistOrder}
           events={derived.ordered}
           numberById={derived.numberById}
           visibleIds={visibleIds}

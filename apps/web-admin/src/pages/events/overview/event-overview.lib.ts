@@ -358,25 +358,41 @@ export function categoryBreakdown(descendants: EventOverviewNode[]): CountBar[] 
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
 }
 
+export interface TimeBin {
+  label: string
+  /** 이 칸에서 **시작한** 하위 수 */
+  started: number
+  /** 이 칸에 **진행 중이던** 하위 수(시작 포함) */
+  active: number
+}
+
 /**
- * 시기별 밀도 — 하위 사건이 **시작한** 시점을 칸에 센다. 칸 단위는 펼쳐진 기간에 맞춘다
+ * 시기별 밀도 — 칸마다 '진행 중'과 '새로 시작'을 함께 센다.
+ *
+ * 시작만 세면 25년짜리 차관 사건(1888~1914)도 1888년 한 칸에 잡혀, 1900년대가 비어 보였다.
+ * 칸 단위는 하위가 펼쳐진 전체 범위(가장 이른 시작 ~ 가장 늦은 끝)에 맞춘다
  * (2년 이하 월, 40년 이하 연, 400년 이하 10년, 그 위 100년).
  */
-export function timeHistogram(gantt: GanttLayout): CountBar[] {
+export function timeHistogram(gantt: GanttLayout): TimeBin[] {
   if (gantt.rows.length === 0) return []
   const from = Math.min(...gantt.rows.map((row) => row.from))
-  const to = Math.max(...gantt.rows.map((row) => row.from))
+  // 끝은 '마지막 순간'이 아니라 마지막 칸 안에 들도록 하루 당겨 잡는다(월 정밀도 9월 = 10월 1일 0시까지)
+  const to = Math.max(...gantt.rows.map((row) => Math.max(row.from, row.to - DAY)))
   const span = to - from
   const unit = span <= 2 ? 1 / 12 : span <= 40 ? 1 : span <= 400 ? 10 : 100
   const start = Math.floor(from / unit + 1e-9) * unit
   const binCount = Math.max(1, Math.floor((to - start) / unit + 1e-9) + 1)
-  const bins = Array.from({ length: binCount }, (_, index) => ({
+  const bins: TimeBin[] = Array.from({ length: binCount }, (_, index) => ({
     label: binLabel(start + index * unit, unit),
-    count: 0,
+    started: 0,
+    active: 0,
   }))
+  const indexOf = (value: number) =>
+    Math.min(binCount - 1, Math.max(0, Math.floor((value - start) / unit + 1e-9)))
   for (const row of gantt.rows) {
-    const index = Math.min(binCount - 1, Math.floor((row.from - start) / unit + 1e-9))
-    bins[index].count += 1
+    bins[indexOf(row.from)].started += 1
+    const last = indexOf(Math.max(row.from, row.to - DAY))
+    for (let index = indexOf(row.from); index <= last; index += 1) bins[index].active += 1
   }
   return bins
 }

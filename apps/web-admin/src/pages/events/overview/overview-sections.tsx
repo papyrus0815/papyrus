@@ -4,8 +4,6 @@
  * 패널끼리 **같은 번호**를 쓴다 — 간트의 줄 번호 = 매트릭스의 열 번호 = 점검표의 줄 번호.
  * 한 패널에서 사건에 마우스를 올리면(`hotId`) 세 패널 모두 그 사건을 칠한다.
  */
-import { useState } from 'react'
-
 import { useTheme } from 'styled-components'
 
 import { categoryAccent, resolveCategory } from '@/entities/event/ui/ledger-tokens'
@@ -20,6 +18,7 @@ import {
   type GanttLayout,
   type MatrixCountry,
   type MetricRow,
+  type TimeBin,
   type PersonAggregate,
   applicableCountByColumn,
   checkNode,
@@ -146,8 +145,11 @@ export function GanttPanel({
               const hot = hotId === row.node.id
               const color = categoryAccent(resolveCategory(row.node.category?.name), theme.mode)
               // 라벨이 막대 오른쪽에 붙되, 오른쪽 끝에 가까우면 막대 왼쪽 안쪽으로 들인다
+              // 날짜 라벨 자리: 막대 오른쪽 → (오른쪽 끝이면) 왼쪽 → (양쪽 다 없으면) 막대 안.
+              // 25년짜리 차관처럼 축 전체를 덮는 막대는 왼쪽에 두면 제목 열 밑으로 잘렸다('14.7.28')
               const labelLeft = row.leftPct + row.widthPct
-              const labelOnLeft = labelLeft > 78
+              const labelPlace: 'right' | 'left' | 'inside' =
+                labelLeft <= 78 ? 'right' : row.leftPct >= 22 ? 'left' : 'inside'
               return (
                 <div
                   key={row.node.id}
@@ -215,10 +217,13 @@ export function GanttPanel({
                       style={{ left: `${row.leftPct}%`, width: row.isPoint ? undefined : `${row.widthPct}%` }}
                     />
                     <S.BarLabel
+                      $inside={labelPlace === 'inside' && !row.uncertain}
                       style={
-                        labelOnLeft
-                          ? { right: `${100 - row.leftPct}%`, paddingLeft: 0, paddingRight: 8 }
-                          : { left: `${labelLeft}%` }
+                        labelPlace === 'right'
+                          ? { left: `${labelLeft}%` }
+                          : labelPlace === 'left'
+                            ? { right: `${100 - row.leftPct}%`, paddingLeft: 0, paddingRight: 8 }
+                            : { right: `${100 - labelLeft}%`, paddingLeft: 0, paddingRight: 10 }
                       }
                     >
                       {row.dateLabel}
@@ -383,73 +388,91 @@ export function CountryMatrixPanel({
 
 // ─── 분포 ──────────────────────────────────────────────────────────────────
 
-export function CategoryPanel({
-  bars,
+/**
+ * 갈래 + 시기 — 한 패널. 예전엔 두 패널을 나란히 두었는데 갈래가 3개면 옆 히스토그램 높이에
+ * 맞춰 패널 절반이 비었다. 갈래는 한 줄 누적 막대(누르면 거르기), 시기는 그 아래 폭 전체.
+ */
+export function DistributionPanel({
+  categories,
+  bins,
   selectedCategory,
   onSelectCategory,
 }: {
-  bars: CountBar[]
+  categories: CountBar[]
+  bins: TimeBin[]
   selectedCategory: string | null
   onSelectCategory: (name: string | null) => void
 }) {
   const theme = useTheme()
-  const max = Math.max(1, ...bars.map((bar) => bar.count))
+  const total = categories.reduce((sum, bar) => sum + bar.count, 0)
+  const maxActive = Math.max(1, ...bins.map((bin) => bin.active))
+  const colorOf = (label: string) => categoryAccent(resolveCategory(label), theme.mode)
   return (
-    <S.Panel id="overview-distribution" aria-labelledby="overview-category-title">
+    <S.Panel $wide id="overview-distribution" aria-labelledby="overview-distribution-title">
       <S.PanelHead>
-        <S.PanelTitle id="overview-category-title">갈래</S.PanelTitle>
-        <S.PanelNote>누르면 그 갈래만 남는다</S.PanelNote>
+        <S.PanelTitle id="overview-distribution-title">분포</S.PanelTitle>
+        <S.PanelNote>갈래를 누르면 그 갈래만 남는다</S.PanelNote>
       </S.PanelHead>
-      <S.BarList>
-        {bars.map((bar) => {
+
+      <S.StackBar aria-hidden="true">
+        {categories.map((bar) => (
+          <S.StackSegment
+            key={bar.label}
+            $color={colorOf(bar.label)}
+            $dim={selectedCategory !== null && selectedCategory !== bar.label}
+            style={{ flexGrow: bar.count }}
+            title={`${bar.label} ${bar.count}건`}
+          />
+        ))}
+      </S.StackBar>
+      <S.StackLegend>
+        {categories.map((bar) => {
           const active = selectedCategory === bar.label
           return (
-            <S.BarItem key={bar.label}>
-              <S.BarRow
+            <li key={bar.label}>
+              <S.LegendButton
                 type="button"
                 $active={active}
                 aria-pressed={active}
                 onClick={() => onSelectCategory(active ? null : bar.label)}
               >
-                <S.BarName $active={active}>{bar.label}</S.BarName>
-                <S.BarTrack aria-hidden="true">
-                  <S.BarFill
-                    $color={categoryAccent(resolveCategory(bar.label), theme.mode)}
-                    $pct={(bar.count / max) * 100}
-                  />
-                </S.BarTrack>
-                <S.BarCount>{bar.count}</S.BarCount>
-              </S.BarRow>
-            </S.BarItem>
+                <S.CategoryDot $color={colorOf(bar.label)} aria-hidden="true" />
+                {bar.label}
+                <S.SectionNavCount>
+                  {bar.count} · {Math.round((bar.count / Math.max(1, total)) * 100)}%
+                </S.SectionNavCount>
+              </S.LegendButton>
+            </li>
           )
         })}
-      </S.BarList>
-    </S.Panel>
-  )
-}
+      </S.StackLegend>
 
-export function HistogramPanel({ bins }: { bins: CountBar[] }) {
-  const max = Math.max(1, ...bins.map((bin) => bin.count))
-  return (
-    <S.Panel aria-labelledby="overview-histogram-title">
-      <S.PanelHead>
-        <S.PanelTitle id="overview-histogram-title">시기별 밀도</S.PanelTitle>
-        <S.PanelNote>하위 사건이 시작한 시점</S.PanelNote>
-      </S.PanelHead>
-      {bins.length === 0 ? (
-        <S.Empty>날짜가 있는 하위 사건이 없습니다.</S.Empty>
-      ) : (
+      {bins.length > 0 && (
         <>
-          <S.Histogram role="list" aria-label="시기별 하위 사건 수">
+          <S.ChartLegend aria-hidden="true">
+            <span>
+              <S.LegendSwatch $tone="active" /> 그 시기에 진행 중
+            </span>
+            <span>
+              <S.LegendSwatch $tone="started" /> 새로 시작
+            </span>
+          </S.ChartLegend>
+          <S.Histogram role="list" aria-label="시기별 하위 사건 — 진행 중과 새로 시작">
             {bins.map((bin) => (
-              <S.HistogramColumn key={bin.label} role="listitem" title={`${bin.label}: ${bin.count}건`}>
-                {bin.count > 0 && <S.HistogramCount aria-hidden="true">{bin.count}</S.HistogramCount>}
-                <S.HistogramBar $pct={(bin.count / max) * 82} aria-label={`${bin.label} ${bin.count}건`} />
+              <S.HistogramColumn
+                key={bin.label}
+                role="listitem"
+                aria-label={`${bin.label}: 진행 중 ${bin.active}건, 새로 시작 ${bin.started}건`}
+                title={`${bin.label} — 진행 중 ${bin.active} · 새로 시작 ${bin.started}`}
+              >
+                {bin.active > 0 && <S.HistogramCount aria-hidden="true">{bin.active}</S.HistogramCount>}
+                <S.ActiveBar $pct={(bin.active / maxActive) * 82}>
+                  <S.StartedBar $pct={bin.active === 0 ? 0 : (bin.started / bin.active) * 100} />
+                </S.ActiveBar>
               </S.HistogramColumn>
             ))}
           </S.Histogram>
-          {/* 칸이 12개 이하면 칸마다 라벨, 그보다 많으면 처음·가운데·끝만 */}
-          {bins.length <= 12 ? (
+          {bins.length <= 16 ? (
             <S.HistogramLabels aria-hidden="true">
               {bins.map((bin) => (
                 <span key={bin.label}>{bin.label}</span>
@@ -601,6 +624,8 @@ const CHECK_MARK = { full: '●', partial: '◐', empty: '–', na: '·' } as co
 const CHECK_TEXT = { full: '채움', partial: '일부', empty: '비어 있음', na: '이 갈래엔 해당 없음' } as const
 
 export function ChecklistPanel({
+  order,
+  onOrderChange,
   events,
   numberById,
   visibleIds,
@@ -608,12 +633,13 @@ export function ChecklistPanel({
   onHover,
   onOpen,
 }: HoverProps & {
+  /** 번호순 | 빈 칸 많은 순 — 점검은 '어디부터 채울까'라서 뒤쪽이 자주 필요하다(URL ?order=) */
+  order: 'number' | 'gaps'
+  onOrderChange: (order: 'number' | 'gaps') => void
   events: EventOverviewNode[]
   numberById: Map<string, number>
   visibleIds: Set<string> | null
 }) {
-  /** 번호순 | 빈 칸 많은 순 — 점검은 '어디부터 채울까'라서 뒤쪽이 자주 필요하다 */
-  const [order, setOrder] = useState<'number' | 'gaps'>('number')
   const filtered = visibleIds ? events.filter((event) => visibleIds.has(event.id)) : events
   const scored = filtered.map((event) => {
     const checks = checkNode(event)
@@ -634,7 +660,7 @@ export function ChecklistPanel({
             type="button"
             $active={order === 'number'}
             aria-pressed={order === 'number'}
-            onClick={() => setOrder('number')}
+            onClick={() => onOrderChange('number')}
           >
             번호순
           </S.ViewSwitchItem>
@@ -642,7 +668,7 @@ export function ChecklistPanel({
             type="button"
             $active={order === 'gaps'}
             aria-pressed={order === 'gaps'}
-            onClick={() => setOrder('gaps')}
+            onClick={() => onOrderChange('gaps')}
           >
             빈 칸 많은 순
           </S.ViewSwitchItem>

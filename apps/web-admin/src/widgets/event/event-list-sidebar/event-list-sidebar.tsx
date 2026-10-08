@@ -38,7 +38,7 @@ import {
   useSidebarRecents,
 } from '@/widgets/entity-list-sidebar'
 
-import { EventListScope, ParentTail } from './event-list-sidebar.styles'
+import { EventListScope, OverviewTail, ParentTail } from './event-list-sidebar.styles'
 
 /**
  * 세기 앵커 ramp — 최신(인디고)에서 먼 과거(바랜 슬레이트)로 **단조 감쇠**한다.
@@ -271,6 +271,9 @@ function EventListSidebarInner({
       const parent = event.parentEventId ? byId.get(event.parentEventId) : null
       const countries = summarizeCountries(event)
       const childCount = event.hierarchy?.children?.length ?? 0
+      /** 조망 지면이 열리는 최상위 — 판정은 pages/events/overview/event-page-switch와 같다 */
+      const opensOverview =
+        !parent && childCount > 0 && event.anchorOverride !== 'PLAIN'
       const categoryLabel = event.category ? String(event.category) : null
       /* 상위 꼬리표는 **묶음의 첫 행에만**. 한 상위 밑에 다섯 행이 붙는 일이 흔해서
          (NSPM-2 서명 · 러불 동맹 · 독일 함대법) 매 행에 찍으면 같은 문장이 세로로 쌓여
@@ -344,6 +347,13 @@ function EventListSidebarInner({
             <ParentTail title={`상위 사건: ${parent?.title ?? parentTail}`}>
               {`\u21b3\u00a0${parentTail}`}
             </ParentTail>
+          </>
+        ) : opensOverview ? (
+          <>
+            {' '}
+            <OverviewTail title="하위 사건을 거느린 최상위 사건 — 누르면 조망 지면이 열립니다">
+              하위 {childCount}
+            </OverviewTail>
           </>
         ) : undefined,
         /* 읽어 주는 쪽에는 **줄이기 전 값**을 그대로 준다 — 화면에서는 연 소제목이 연도를

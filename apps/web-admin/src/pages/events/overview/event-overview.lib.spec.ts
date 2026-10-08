@@ -183,7 +183,17 @@ describe('분포', () => {
   it('짧은 기간은 월 단위 칸', () => {
     const bins = timeHistogram(buildGantt(root, descendants))
     expect(bins.map((bin) => bin.label)).toEqual(['1914.6', '1914.7', '1914.8', '1914.9'])
-    expect(bins.map((bin) => bin.count)).toEqual([1, 0, 0, 2])
+    expect(bins.map((bin) => bin.started)).toEqual([1, 0, 0, 2])
+    expect(bins.map((bin) => bin.active)).toEqual([1, 0, 0, 2])
+  })
+
+  it('긴 사건은 걸친 칸마다 진행 중으로 센다 — 시작한 칸 하나에만 잡히지 않게', () => {
+    const loan = node({ id: 'loan', startDate: '1888-12-10T00:00:00.000Z', endDate: '1914-07-28T00:00:00.000Z' })
+    const visit = node({ id: 'visit', startDate: '1896-10-05T00:00:00.000Z' })
+    const bins = timeHistogram(buildGantt(root, [loan, visit]))
+    const at1896 = bins.find((bin) => bin.label === '1896')
+    expect(at1896).toEqual({ label: '1896', started: 1, active: 2 })
+    expect(bins.find((bin) => bin.label === '1910')?.active).toBe(1)
   })
 })
 

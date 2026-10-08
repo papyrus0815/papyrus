@@ -539,23 +539,6 @@ export const RowTitleButton = styled.button`
   }
 `
 
-export const RowTitleLink = styled.a`
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: inherit;
-  text-decoration: none;
-  &:hover {
-    text-decoration: underline;
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 1px;
-    border-radius: 3px;
-  }
-`
-
 export const GanttTrack = styled.div<{ $dim: boolean; $hot: boolean; $stripe?: boolean }>`
   position: relative;
   min-height: 34px;
@@ -601,7 +584,7 @@ export const Bar = styled.div<{ $color: string; $uncertain: boolean; $point: boo
         `}
 `
 
-export const BarLabel = styled.span`
+export const BarLabel = styled.span<{ $inside?: boolean }>`
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
@@ -609,7 +592,10 @@ export const BarLabel = styled.span`
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  /* 막대 안이면 막대 색 위에서 읽히게 — 갈래색은 라이트에선 짙고 다크에선 옅다(노랑 위 흰 글씨 금지) */
+  color: ${({ $inside, theme }) =>
+    $inside ? (theme.mode === 'dark' ? '#111827' : '#fff') : theme.colors.text.tertiary};
+  font-weight: ${({ $inside }) => ($inside ? 600 : 400)};
   pointer-events: none;
 `
 
@@ -754,70 +740,6 @@ export const Legend = styled.div`
 
 // ─── 막대 분포 ─────────────────────────────────────────────────────────────
 
-export const BarList = styled.ul`
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-export const BarItem = styled.li``
-
-/** 한 줄 전체가 버튼(눌러서 거르기) — 거를 수 없는 막대는 as="div" */
-export const BarRow = styled.button<{ $active?: boolean }>`
-  display: grid;
-  grid-template-columns: minmax(64px, 30%) minmax(0, 1fr) 28px;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 3px 4px;
-  border: none;
-  border-radius: 6px;
-  background: ${({ $active, theme }) => ($active ? ledgerHoverFill(theme.mode) : 'transparent')};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 1px;
-  }
-`
-
-export const BarName = styled.span<{ $active?: boolean }>`
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-`
-
-export const BarTrack = styled.span`
-  position: relative;
-  height: 10px;
-  border-radius: 999px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  overflow: hidden;
-`
-
-export const BarFill = styled.span<{ $color: string; $pct: number }>`
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: ${({ $pct }) => $pct}%;
-  border-radius: 999px;
-  background: ${({ $color }) => $color};
-`
-
-export const BarCount = styled.span`
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 /** 시기 밀도 — 세로 막대 */
 export const Histogram = styled.div`
   display: flex;
@@ -865,13 +787,6 @@ export const HistogramLabels = styled.div`
     text-align: center;
     white-space: nowrap;
   }
-`
-
-export const HistogramBar = styled.div<{ $pct: number }>`
-  height: ${({ $pct }) => $pct}%;
-  min-height: ${({ $pct }) => ($pct > 0 ? '3px' : '0')};
-  border-radius: 3px 3px 0 0;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 export const HistogramAxis = styled.div`
@@ -1059,4 +974,95 @@ export const OutsideTag = styled.span`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(251,191,36,0.12)' : 'rgba(217,119,6,0.10)'};
+`
+
+// ─── 분포 (배치 C) ─────────────────────────────────────────────────────────
+
+/** 갈래 누적 막대 — 한 줄로 비율이 읽힌다 */
+export const StackBar = styled.div`
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+`
+
+export const StackSegment = styled.span<{ $color: string; $dim: boolean }>`
+  flex-basis: 0;
+  min-width: 4px;
+  background: ${({ $color }) => $color};
+  opacity: ${({ $dim }) => ($dim ? 0.25 : 1)};
+  transition: opacity 0.15s;
+`
+
+export const StackLegend = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+export const LegendButton = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ $active, theme }) => ($active ? ledgerAccent(theme.mode) : theme.colors.border.default)};
+  background: ${({ $active, theme }) => ($active ? ledgerHoverFill(theme.mode) : 'transparent')};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  cursor: pointer;
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+`
+
+export const ChartLegend = styled.div`
+  margin-top: 8px;
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+`
+
+export const LegendSwatch = styled.span<{ $tone: 'active' | 'started' }>`
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  opacity: ${({ $tone }) => ($tone === 'active' ? 0.3 : 1)};
+`
+
+/** 진행 중(옅게) 막대 안에 새로 시작(진하게)을 바닥부터 겹친다 */
+export const ActiveBar = styled.div<{ $pct: number }>`
+  position: relative;
+  height: ${({ $pct }) => $pct}%;
+  min-height: ${({ $pct }) => ($pct > 0 ? '3px' : '0')};
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(165,180,252,0.30)' : 'rgba(79,70,229,0.22)'};
+`
+
+export const StartedBar = styled.div<{ $pct: number }>`
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: ${({ $pct }) => $pct}%;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
 `
