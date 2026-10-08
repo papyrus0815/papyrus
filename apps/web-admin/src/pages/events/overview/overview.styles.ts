@@ -322,7 +322,7 @@ export const SectionNav = styled.nav`
   scrollbar-width: none;
 `
 
-export const SectionNavLink = styled.a`
+export const SectionNavLink = styled.a<{ $active?: boolean }>`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -331,8 +331,9 @@ export const SectionNavLink = styled.a`
   padding: 0 12px;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  color: ${({ $active, theme }) => ($active ? theme.colors.text.primary : theme.colors.text.secondary)};
+  background: ${({ $active, theme }) => ($active ? ledgerSubtleFill(theme.mode) : 'transparent')};
   text-decoration: none;
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
@@ -909,7 +910,7 @@ export const CheckHead = styled.th`
   text-align: center !important;
 `
 
-export const CheckCell = styled.td<{ $state: 'full' | 'partial' | 'empty' }>`
+export const CheckCell = styled.td<{ $state: 'full' | 'partial' | 'empty' | 'na' }>`
   text-align: center;
   font-weight: 700;
   color: ${({ $state, theme }) =>
@@ -918,7 +919,7 @@ export const CheckCell = styled.td<{ $state: 'full' | 'partial' | 'empty' }>`
       : $state === 'partial'
         ? fillColor(50, theme.mode)
         : theme.colors.text.tertiary};
-  opacity: ${({ $state }) => ($state === 'empty' ? 0.45 : 1)};
+  opacity: ${({ $state }) => ($state === 'empty' ? 0.45 : $state === 'na' ? 0.25 : 1)};
 `
 
 /** 행별 채움 — 9칸 중 몇 칸 */
@@ -1011,4 +1012,51 @@ export const DocumentViewBar = styled.div`
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+// ─── 점검 신호 (배치 B) ────────────────────────────────────────────────────
+
+/** 하위가 없는 구간 경고 — 점검 지면의 가장 큰 결론이라 간트 머리에 */
+export const GapNotice = styled.div`
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.10)' : 'rgba(217,119,6,0.08)'};
+  strong {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+`
+
+/** 공백 구간 빗금 — 간트 줄 뒤에 깔린다 */
+export const GapHatch = styled.div`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    135deg,
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(251,191,36,0.16)' : 'rgba(217,119,6,0.13)')} 0 2px,
+    transparent 2px 7px
+  );
+`
+
+/** '기간 전'·'기간 후' — 상위 기간 밖 하위 */
+export const OutsideTag = styled.span`
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.12)' : 'rgba(217,119,6,0.10)'};
 `

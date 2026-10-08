@@ -25,6 +25,7 @@ import {
   buildGantt,
   categoryBreakdown,
   type GanttFit,
+  coverageGaps,
   coverageRatio,
   metricRows,
   orderedDescendants,
@@ -41,6 +42,15 @@ import {
 } from './overview-sections'
 import { OverviewEventModal } from './overview-event-modal'
 import * as S from './overview.styles'
+
+/** 섹션 내비가 가리키는 패널 id — overview-sections의 Panel id와 같다 */
+const SECTION_IDS = [
+  'overview-gantt',
+  'overview-matrix',
+  'overview-distribution',
+  'overview-people',
+  'overview-checklist',
+]
 
 interface EventOverviewPageProps {
   eventId: string
@@ -81,6 +91,26 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [hotId, setHotId] = useState<string | null>(null)
   const [ganttFit, setGanttFit] = useState<GanttFit>('children')
+  /** 섹션 내비의 현재 위치 — 화면 위쪽 띠에 걸린 패널 */
+  const [activeSection, setActiveSection] = useState<string | null>(null)
+  const hasData = Boolean(data)
+  useEffect(() => {
+    if (!hasData || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting)
+        if (visible.length > 0) setActiveSection(visible[0].target.id)
+      },
+      // 내비 아래(약 80px)부터 화면 위쪽 35%까지를 '지금 읽는 곳'으로 본다
+      { rootMargin: '-80px 0px -65% 0px' },
+    )
+    for (const id of SECTION_IDS) {
+      const element = document.getElementById(id)
+      if (element) observer.observe(element)
+    }
+    return () => observer.disconnect()
+  }, [hasData])
+
   /** 상위 개요 펼침 — 기본은 세 줄 */
   const [leadOpen, setLeadOpen] = useState(false)
 
@@ -121,6 +151,7 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
       persons: aggregatePersons([root, ...descendants]),
       metrics: metricRows([root, ...descendants]),
       coverage: coverageRatio(descendants),
+      gaps: coverageGaps(root, descendants),
       directCount: descendants.filter((node) => node.depth === 1).length,
       sideCount: [root, ...descendants].reduce((sum, node) => sum + node.sides.length, 0),
     }
@@ -298,19 +329,44 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
 
       {/* 머리 아래 따라오는 목차 — 지면이 화면 몇 장이라 섹션으로 바로 뛴다 */}
       <S.SectionNav aria-label="조망 섹션">
-        <S.SectionNavLink href="#overview-gantt" onClick={jumpTo}>
+        <S.SectionNavLink
+          href="#overview-gantt"
+          onClick={jumpTo}
+          $active={activeSection === 'overview-gantt'}
+          aria-current={activeSection === 'overview-gantt' ? 'location' : undefined}
+        >
           전개 <S.SectionNavCount>{derived.gantt.rows.length}</S.SectionNavCount>
         </S.SectionNavLink>
-        <S.SectionNavLink href="#overview-matrix" onClick={jumpTo}>
+        <S.SectionNavLink
+          href="#overview-matrix"
+          onClick={jumpTo}
+          $active={activeSection === 'overview-matrix'}
+          aria-current={activeSection === 'overview-matrix' ? 'location' : undefined}
+        >
           참여국 <S.SectionNavCount>{derived.matrix.length}</S.SectionNavCount>
         </S.SectionNavLink>
-        <S.SectionNavLink href="#overview-distribution" onClick={jumpTo}>분포</S.SectionNavLink>
+        <S.SectionNavLink
+          href="#overview-distribution"
+          onClick={jumpTo}
+          $active={activeSection === 'overview-distribution'}
+          aria-current={activeSection === 'overview-distribution' ? 'location' : undefined}
+        >분포</S.SectionNavLink>
         {hasPersons && (
-          <S.SectionNavLink href="#overview-people" onClick={jumpTo}>
+          <S.SectionNavLink
+          href="#overview-people"
+          onClick={jumpTo}
+          $active={activeSection === 'overview-people'}
+          aria-current={activeSection === 'overview-people' ? 'location' : undefined}
+        >
             인물 <S.SectionNavCount>{derived.persons.length}</S.SectionNavCount>
           </S.SectionNavLink>
         )}
-        <S.SectionNavLink href="#overview-checklist" onClick={jumpTo}>
+        <S.SectionNavLink
+          href="#overview-checklist"
+          onClick={jumpTo}
+          $active={activeSection === 'overview-checklist'}
+          aria-current={activeSection === 'overview-checklist' ? 'location' : undefined}
+        >
           기록 점검 <S.SectionNavCount>{Math.round(derived.coverage * 100)}%</S.SectionNavCount>
         </S.SectionNavLink>
       </S.SectionNav>
@@ -342,6 +398,7 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
       <S.Grid>
         <GanttPanel
           gantt={derived.gantt}
+          gaps={derived.gaps}
           fit={ganttFit}
           onFitChange={setGanttFit}
           numberById={derived.numberById}

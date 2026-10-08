@@ -6,6 +6,7 @@ import {
   buildGantt,
   categoryBreakdown,
   checkNode,
+  coverageGaps,
   coverageRatio,
   emptyCountByColumn,
   orderedDescendants,
@@ -204,5 +205,30 @@ describe('인물·점검', () => {
     const ratio = coverageRatio([sarajevo])
     // 날짜·개요·참여국 = 3/9
     expect(ratio).toBeCloseTo(3 / 9)
+  })
+})
+
+describe('배치 B — 점검 신호', () => {
+  it('상위 기간 밖 하위 — 개전 전 사라예보는 기간 전', () => {
+    const gantt = buildGantt(root, descendants)
+    expect(gantt.rows.find((row) => row.node.id === 'sarajevo')?.outside).toBe('before')
+    expect(gantt.rows.find((row) => row.node.id === 'marne')?.outside).toBeNull()
+  })
+
+  it('상위 기간 중 하위가 덮지 않는 구간 — 1차대전처럼 첫 두 달만 있으면 나머지가 공백', () => {
+    const gaps = coverageGaps(root, descendants)
+    expect(gaps).toHaveLength(1)
+    // 손자가 '1914년 9월'(월 정밀도)이라 9월 전체를 덮는다 — 공백은 10월부터
+    expect(gaps[0].label).toBe('1914.10 ~ 1918.11')
+    expect(gaps[0].share).toBeGreaterThan(0.9)
+  })
+
+  it('하위가 상위 기간을 고르게 덮으면 공백 없음', () => {
+    const covering = node({
+      id: 'all',
+      startDate: '1914-07-28T00:00:00.000Z',
+      endDate: '1918-11-11T00:00:00.000Z',
+    })
+    expect(coverageGaps(root, [covering])).toEqual([])
   })
 })

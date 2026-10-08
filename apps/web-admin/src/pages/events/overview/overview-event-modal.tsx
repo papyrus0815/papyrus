@@ -27,7 +27,14 @@ import { pathKeys } from '@/shared/router'
 import { Modal } from '@/shared/ui/modal'
 import { ModalBody, ModalCloseButton, ModalFooter } from '@/shared/ui/modal/modal.styles'
 
-import { CHECK_COLUMNS, checkNode, metricRows, roleLabel, roleTone } from './event-overview.lib'
+import {
+  CHECK_COLUMNS,
+  checkNode,
+  checkScore,
+  metricRows,
+  roleLabel,
+  roleTone,
+} from './event-overview.lib'
 import * as S from './overview.styles'
 
 interface OverviewEventModalProps {
@@ -106,12 +113,7 @@ export function OverviewEventModal({
     event.endDatePrecision,
   )
   const checks = checkNode(event)
-  const filled = CHECK_COLUMNS.reduce(
-    (sum, column) =>
-      sum + (checks[column.key] === 'full' ? 1 : checks[column.key] === 'partial' ? 0.5 : 0),
-    0,
-  )
-  const fillPct = Math.round((filled / CHECK_COLUMNS.length) * 100)
+  const fillPct = checkScore(checks).pct
   const metrics = metricRows([event])
   const titleId = `overview-event-modal-${event.id}`
 
@@ -215,7 +217,8 @@ export function OverviewEventModal({
               <S.MeterFill $pct={fillPct} />
             </S.Meter>
             <CheckGrid>
-              {CHECK_COLUMNS.map((column) => {
+              {/* 해당 없는 칸(외교 사건의 수치 등)은 목록에서 뺀다 — 비었다고 읽히지 않게 */}
+              {CHECK_COLUMNS.filter((column) => checks[column.key] !== 'na').map((column) => {
                 const state = checks[column.key]
                 return (
                   <CheckItem key={column.key} $state={state} title={column.hint}>
@@ -583,7 +586,7 @@ const CheckGrid = styled.ul`
   gap: 6px 8px;
 `
 
-const CheckItem = styled.li<{ $state: 'full' | 'partial' | 'empty' }>`
+const CheckItem = styled.li<{ $state: 'full' | 'partial' | 'empty' | 'na' }>`
   display: flex;
   align-items: center;
   gap: 6px;
@@ -594,7 +597,7 @@ const CheckItem = styled.li<{ $state: 'full' | 'partial' | 'empty' }>`
 `
 
 /** 채움=꽉 찬 원 · 일부=반원 · 빈 칸=테두리만 */
-const CheckGlyph = styled.span<{ $state: 'full' | 'partial' | 'empty' }>`
+const CheckGlyph = styled.span<{ $state: 'full' | 'partial' | 'empty' | 'na' }>`
   flex-shrink: 0;
   width: 9px;
   height: 9px;

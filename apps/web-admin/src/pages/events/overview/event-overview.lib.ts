@@ -28,6 +28,11 @@ export interface GanttRow extends AxisSpan {
   dateLabel: string
   /** 손자 이하일 때 바로 위 사건 제목 */
   parentTitle: string | null
+  /**
+   * 상위 사건 기간 밖에서 시작·끝나는가 — 실측 30건 중 12건에서 발생(1차대전 7월 위기 9건은
+   * 개전일 전). 데이터 오류(상위 기간이 좁다)인지 전사(前史)인지 화면이 말하지 않았다.
+   */
+  outside: 'before' | 'after' | null
 }
 
 export interface GanttLayout {
@@ -149,6 +154,15 @@ export function buildGantt(
   )
 
   const rootSpan = toAxisSpan(withEffectivePrecision(root))
+  // 하루 오차는 기간 안으로 본다 — 같은 날을 시각 반올림으로 밖이라 하지 않게
+  const outsideOf = (span: AxisSpan): GanttRow['outside'] =>
+    !rootSpan
+      ? null
+      : span.from < rootSpan.from - DAY
+        ? 'before'
+        : span.to > rootSpan.to + DAY
+          ? 'after'
+          : null
   const froms = placed.map((entry) => entry.span.from)
   const tos = placed.map((entry) => entry.span.to)
   if (rootSpan && (fit === 'parent' || placed.length === 0)) {
@@ -172,6 +186,7 @@ export function buildGantt(
     dateLabel: formatSpanLabel(withEffectivePrecision(node)),
     parentTitle:
       node.depth >= 2 && node.parentEventId ? (titleById.get(node.parentEventId) ?? null) : null,
+    outside: outsideOf(span),
   }))
   // 날짜 없는 사건도 번호는 이어 매긴다 — 매트릭스·점검표가 같은 번호를 쓴다
   return {
@@ -188,6 +203,60 @@ export function buildGantt(
     ticks: axisTicks(low, high).map((tick) => ({ pct: toPct(tick.value), label: tick.label })),
     domain: [low, high],
   }
+}
+
+export interface CoverageGap {
+  from: number
+  to: number
+  /** '1914.8 ~ 1918.11' */
+  label: string
+  /** 상위 기간 대비 비율 0~1 */
+  share: number
+}
+
+/** 천문 연도 실수 → '1914.8' (기원전은 '기원전 44.3') */
+function monthLabel(value: number): string {
+  const yearFloor = Math.floor(value + 1e-9)
+  const signed = yearFloor <= 0 ? yearFloor - 1 : yearFloor
+  const year = signed < 0 ? `기원전 ${-signed}` : String(signed)
+  const month = Math.min(12, Math.floor((value - yearFloor) * 12 + 1e-6) + 1)
+  return `${year}.${month}`
+}
+
+/**
+ * 상위 기간 중 하위 사건이 **하나도 덮지 않는** 구간 — 점검 지면의 가장 큰 결론.
+ * 1차대전은 하위 18건이 개전 첫 두 달에 몰려 1914.8 ~ 1918.11이 비어 있었다(상위 기간의 99%).
+ * 축을 하위 범위에 맞추면 이 공백은 화면 밖이라, 줄로 짚어 준다.
+ *
+ * 문턱: 상위 기간의 20% 이상이면서 한 달 이상 — 짧은 숨 고르기까지 경고하지 않는다.
+ */
+export function coverageGaps(
+  root: EventOverviewNode,
+  descendants: EventOverviewNode[],
+): CoverageGap[] {
+  const rootSpan = toAxisSpan(withEffectivePrecision(root))
+  if (!rootSpan || rootSpan.to - rootSpan.from <= 1 / 12) return []
+  const length = rootSpan.to - rootSpan.from
+  const spans = descendants
+    .map((node) => toAxisSpan(withEffectivePrecision(node)))
+    .filter((span): span is AxisSpan => span !== null)
+    .map((span) => ({ from: Math.max(span.from, rootSpan.from), to: Math.min(span.to, rootSpan.to) }))
+    .filter((span) => span.to > span.from)
+    .sort((left, right) => left.from - right.from)
+
+  const gaps: CoverageGap[] = []
+  let cursor = rootSpan.from
+  const pushGap = (from: number, to: number) => {
+    if (to - from >= Math.max(length * 0.2, 1 / 12)) {
+      gaps.push({ from, to, label: `${monthLabel(from)} ~ ${monthLabel(to)}`, share: (to - from) / length })
+    }
+  }
+  for (const span of spans) {
+    if (span.from > cursor) pushGap(cursor, span.from)
+    cursor = Math.max(cursor, span.to)
+  }
+  if (rootSpan.to > cursor) pushGap(cursor, rootSpan.to)
+  return gaps
 }
 
 /** 화면 전체가 쓰는 하위 사건 순서 — 간트 순(날짜 있는 것) 뒤에 날짜 없는 것 */
@@ -400,8 +469,8 @@ export const CHECK_COLUMNS: ReadonlyArray<{ key: CheckKey; label: string; hint: 
   { key: 'metrics', label: '수치', hint: '사상자·병력 등 측정값 1개 이상' },
 ]
 
-/** full=채움, partial=일부(연·월 정밀도 날짜), empty=비어 있음 */
-export type CheckState = 'full' | 'partial' | 'empty'
+/** full=채움, partial=일부(연·월 정밀도 날짜), empty=비어 있음, na=이 갈래엔 해당 없음 */
+export type CheckState = 'full' | 'partial' | 'empty' | 'na'
 
 export function checkNode(node: EventOverviewNode): Record<CheckKey, CheckState> {
   const has = (value: boolean): CheckState => (value ? 'full' : 'empty')
@@ -429,18 +498,46 @@ export function checkNode(node: EventOverviewNode): Record<CheckKey, CheckState>
   }
 }
 
-/** 칸 단위 충실도(0~1) — 부분은 반으로 센다 */
+/** 한 사건의 점수 — 해당 없음은 분모에서 뺀다. 부분은 반 칸 */
+export function checkScore(checks: Record<CheckKey, CheckState>): {
+  filled: number
+  applicable: number
+  pct: number
+} {
+  let filled = 0
+  let applicable = 0
+  for (const column of CHECK_COLUMNS) {
+    const state = checks[column.key]
+    if (state === 'na') continue
+    applicable += 1
+    filled += state === 'full' ? 1 : state === 'partial' ? 0.5 : 0
+  }
+  return { filled, applicable, pct: applicable === 0 ? 100 : Math.round((filled / applicable) * 100) }
+}
+
+/** 칸 단위 충실도(0~1) — 부분은 반으로, 해당 없음은 분모에서 뺀다 */
 export function coverageRatio(nodes: EventOverviewNode[]): number {
-  if (nodes.length === 0) return 0
-  let score = 0
+  let filled = 0
+  let applicable = 0
+  for (const node of nodes) {
+    const score = checkScore(checkNode(node))
+    filled += score.filled
+    applicable += score.applicable
+  }
+  return applicable === 0 ? 0 : filled / applicable
+}
+
+/** 열별로 그 칸이 해당하는 사건 수 — 빈 칸 비율의 분모 */
+export function applicableCountByColumn(nodes: EventOverviewNode[]): Record<CheckKey, number> {
+  const counts = Object.fromEntries(CHECK_COLUMNS.map((column) => [column.key, 0])) as Record<
+    CheckKey,
+    number
+  >
   for (const node of nodes) {
     const checks = checkNode(node)
-    for (const column of CHECK_COLUMNS) {
-      const state = checks[column.key]
-      score += state === 'full' ? 1 : state === 'partial' ? 0.5 : 0
-    }
+    for (const column of CHECK_COLUMNS) if (checks[column.key] !== 'na') counts[column.key] += 1
   }
-  return score / (nodes.length * CHECK_COLUMNS.length)
+  return counts
 }
 
 /** 열별로 비어 있는 하위 사건 수 — 점검표 머리글의 '빈 칸 N' */

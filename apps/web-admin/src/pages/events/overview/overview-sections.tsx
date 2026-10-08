@@ -15,12 +15,15 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   CHECK_COLUMNS,
   type CountBar,
+  type CoverageGap,
   type GanttFit,
   type GanttLayout,
   type MatrixCountry,
   type MetricRow,
   type PersonAggregate,
+  applicableCountByColumn,
   checkNode,
+  checkScore,
   emptyCountByColumn,
   roleLabel,
   roleTone,
@@ -42,6 +45,7 @@ interface HoverProps {
 
 export function GanttPanel({
   gantt,
+  gaps,
   fit,
   onFitChange,
   numberById,
@@ -51,12 +55,23 @@ export function GanttPanel({
   onOpen,
 }: HoverProps & {
   gantt: GanttLayout
+  /** 상위 기간 중 하위가 덮지 않는 구간 */
+  gaps: CoverageGap[]
   fit: GanttFit
   onFitChange: (fit: GanttFit) => void
   numberById: Map<string, number>
   visibleIds: Set<string> | null
 }) {
   const theme = useTheme()
+  const [low, high] = gantt.domain
+  /** 빗금은 지금 축 안에 드는 부분만 — 하위에 맞춘 축이면 대개 화면 밖이라 경고 줄이 대신 말한다 */
+  const hatches = gaps
+    .map((gap) => ({
+      left: Math.max(0, ((gap.from - low) / (high - low)) * 100),
+      right: Math.min(100, ((gap.to - low) / (high - low)) * 100),
+    }))
+    .filter((hatch) => hatch.right > hatch.left)
+  const outsideCount = gantt.rows.filter((row) => row.outside).length
   return (
     <S.Panel $wide id="overview-gantt" aria-labelledby="overview-gantt-title">
       <S.PanelHead>
@@ -82,7 +97,27 @@ export function GanttPanel({
         <S.PanelNote style={{ flexBasis: '100%' }}>
           회색 띠 = 상위 사건의 기간 · 점선 = 연·월만 아는 날짜(그 기간 어딘가)
           {gantt.undated.length > 0 && ` · 날짜 없음 ${gantt.undated.length}건은 아래 점검표에`}
+          {outsideCount > 0 && ` · 상위 기간 밖 ${outsideCount}건(표지)`}
         </S.PanelNote>
+        {gaps.length > 0 && (
+          <S.GapNotice role="note">
+            <span>
+              하위 사건이 없는 구간{' '}
+              {gaps.map((gap, index) => (
+                <span key={gap.label}>
+                  {index > 0 && ', '}
+                  <strong>{gap.label}</strong> (상위 기간의 {Math.round(gap.share * 100)}%)
+                </span>
+              ))}
+            </span>
+            {/* 하위에 맞춘 축은 공백이 대개 화면 밖(빗금이 끝에 한 줄기만 걸리기도 한다) — 늘 길을 준다 */}
+            {fit === 'children' && (
+              <S.TextButton type="button" onClick={() => onFitChange('parent')}>
+                상위 기간 전체로 보기
+              </S.TextButton>
+            )}
+          </S.GapNotice>
+        )}
       </S.PanelHead>
       {gantt.rows.length === 0 ? (
         <S.Empty>날짜가 있는 하위 사건이 없습니다.</S.Empty>
@@ -124,6 +159,17 @@ export function GanttPanel({
                   <S.GanttLabel $depth={row.node.depth} $dim={dim} $hot={hot} $stripe={stripe}>
                     <S.GanttNumber>{numberById.get(row.node.id)}</S.GanttNumber>
                     <S.CategoryDot $color={color} title={row.node.category?.name ?? '미분류'} />
+                    {row.outside && (
+                      <S.OutsideTag
+                        title={
+                          row.outside === 'before'
+                            ? '상위 사건이 시작하기 전에 시작 — 상위 기간을 넓힐지, 전사(前史)인지 확인'
+                            : '상위 사건이 끝난 뒤까지 이어짐 — 상위 기간을 넓힐지 확인'
+                        }
+                      >
+                        {row.outside === 'before' ? '기간 전' : '기간 후'}
+                      </S.OutsideTag>
+                    )}
                     <S.RowTitleButton
                       type="button"
                       onClick={() => onOpen(row.node.id)}
@@ -153,6 +199,12 @@ export function GanttPanel({
                         }}
                       />
                     )}
+                    {hatches.map((hatch) => (
+                      <S.GapHatch
+                        key={hatch.left}
+                        style={{ left: `${hatch.left}%`, width: `${hatch.right - hatch.left}%` }}
+                      />
+                    ))}
                     {gantt.ticks.map((tick) => (
                       <S.GridLine key={`${tick.pct}-${tick.label}`} style={{ left: `${tick.pct}%` }} />
                     ))}
@@ -545,8 +597,8 @@ export function SidesMetricsPanel({
 
 // ─── 기록 점검표 ───────────────────────────────────────────────────────────
 
-const CHECK_MARK = { full: '●', partial: '◐', empty: '–' } as const
-const CHECK_TEXT = { full: '채움', partial: '일부', empty: '비어 있음' } as const
+const CHECK_MARK = { full: '●', partial: '◐', empty: '–', na: '·' } as const
+const CHECK_TEXT = { full: '채움', partial: '일부', empty: '비어 있음', na: '이 갈래엔 해당 없음' } as const
 
 export function ChecklistPanel({
   events,
@@ -565,18 +617,14 @@ export function ChecklistPanel({
   const filtered = visibleIds ? events.filter((event) => visibleIds.has(event.id)) : events
   const scored = filtered.map((event) => {
     const checks = checkNode(event)
-    const filled = CHECK_COLUMNS.reduce(
-      (sum, column) =>
-        sum + (checks[column.key] === 'full' ? 1 : checks[column.key] === 'partial' ? 0.5 : 0),
-      0,
-    )
-    return { event, checks, filled }
+    return { event, checks, score: checkScore(checks) }
   })
   const shown =
     order === 'gaps'
-      ? [...scored].sort((left, right) => left.filled - right.filled)
+      ? [...scored].sort((left, right) => left.score.pct - right.score.pct)
       : scored
   const emptyCounts = emptyCountByColumn(filtered)
+  const applicableCounts = applicableCountByColumn(filtered)
   return (
     <S.Panel $wide id="overview-checklist" aria-labelledby="overview-checklist-title">
       <S.PanelHead>
@@ -600,7 +648,8 @@ export function ChecklistPanel({
           </S.ViewSwitchItem>
         </S.ViewSwitch>
         <S.PanelNote style={{ flexBasis: '100%' }}>
-          ● 채움 · ◐ 일부(연·월만 아는 날짜) · – 비어 있음 — 머리글 아래 숫자는 그 칸이 빈 사건 수
+          ● 채움 · ◐ 일부(연·월만 아는 날짜) · – 비어 있음 · · 해당 없음(외교·정치 사건의 수치 등) —
+          머리글 아래 숫자는 그 칸이 빈 사건 수
         </S.PanelNote>
       </S.PanelHead>
       <S.Scroll>
@@ -616,7 +665,7 @@ export function ChecklistPanel({
                   <br />
                   {emptyCounts[column.key] > 0 ? (
                     <S.EmptyCount
-                      $severe={emptyCounts[column.key] * 2 > filtered.length}
+                      $severe={emptyCounts[column.key] * 2 > applicableCounts[column.key]}
                       title={`${column.label}이(가) 빈 사건 ${emptyCounts[column.key]}건`}
                     >
                       {emptyCounts[column.key]}
@@ -629,8 +678,8 @@ export function ChecklistPanel({
             </tr>
           </thead>
           <tbody>
-            {shown.map(({ event, checks, filled }) => {
-              const pct = Math.round((filled / CHECK_COLUMNS.length) * 100)
+            {shown.map(({ event, checks, score }) => {
+              const pct = score.pct
               return (
                 <S.ChecklistRow
                   key={event.id}
@@ -655,7 +704,7 @@ export function ChecklistPanel({
                       {event.title}
                     </S.RowTitleButton>
                   </td>
-                  <S.FillCell title={`9칸 중 ${filled}칸`}>
+                  <S.FillCell title={`해당하는 ${score.applicable}칸 중 ${score.filled}칸`}>
                     <S.FillBar $pct={pct} aria-hidden="true" />
                     <span>{pct}%</span>
                   </S.FillCell>
