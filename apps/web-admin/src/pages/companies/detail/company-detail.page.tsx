@@ -61,7 +61,9 @@ const STATUS_OPTIONS: InlineSelectOption[] = [
 /** 8개 섹션을 주제 그룹(탭)으로 묶어 한 번에 한 그룹만 — 세로 스크롤 절감 + 전체폭 활용. */
 const GROUPS = [
   { id: 'overview', label: '개요', hint: '회사 소개' },
-  { id: 'business', label: '사업', hint: '연혁 · 제품' },
+  /* 연혁은 기업 문서의 등뼈라 제품과 한 탭에 섞지 않는다 — 긴 타임라인 뒤에 제품이 묻혔다 */
+  { id: 'history', label: '연혁', hint: '시간순 기록' },
+  { id: 'business', label: '사업', hint: '제품 · 기술' },
   { id: 'finance', label: '재무', hint: '주가 · 목표주가 · 전망' },
   { id: 'ops', label: '운영', hint: '시설 · 업종' },
 ] as const
@@ -185,7 +187,8 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
   /* 탭 옆 건수 — 어느 탭에 기록이 있는지 열어 보기 전에 알 수 있게 */
   const groupCounts: Record<GroupId, number> = {
     overview: 0,
-    business: (company.histories?.length ?? 0) + (company.products?.length ?? 0),
+    history: company.histories?.length ?? 0,
+    business: company.products?.length ?? 0,
     finance:
       (company.stockPoints?.length ?? 0) +
       (company.analystRatings?.length ?? 0) +
@@ -443,12 +446,29 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                       />
                       <CompanyRecentHistory
                         histories={company.histories ?? []}
-                        onShowAll={() => setActiveGroup('business')}
+                        onShowAll={() => setActiveGroup('history')}
                       />
                     </S.OverviewStack>
                   </S.GridCell>
                   <S.GridCell $sticky>
                     <CompanySummaryCard company={company} />
+                  </S.GridCell>
+                </S.GroupGrid>
+              </S.GroupPanel>
+
+              <S.GroupPanel
+                $active={activeGroup === 'history'}
+                role="tabpanel"
+                id="company-panel-history"
+                aria-labelledby="company-tab-history"
+              >
+                <S.GroupGrid $reading>
+                  <S.GridCell>
+                    <CompanyHistorySection
+                      histories={company.histories ?? []}
+                      onPatch={onPatch}
+                      onPersonClick={onPersonClick}
+                    />
                   </S.GridCell>
                 </S.GroupGrid>
               </S.GroupPanel>
@@ -460,13 +480,6 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                 aria-labelledby="company-tab-business"
               >
                 <S.GroupGrid $reading>
-                  <S.GridCell $card>
-                    <CompanyHistorySection
-                      histories={company.histories ?? []}
-                      onPatch={onPatch}
-                      onPersonClick={onPersonClick}
-                    />
-                  </S.GridCell>
                   <S.GridCell $card>
                     <CompanyProductsModule
                       products={company.products ?? []}
