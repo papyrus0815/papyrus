@@ -112,6 +112,9 @@ model Company {
   //--- 회사 고유 내러티브
   /// 재무·주가 분석 코멘터리(리치텍스트 HTML) — 시점별 비고 위의 섹션 단위 서술.
   financialCommentary String? @map("financial_commentary") @db.Text
+  /// 설립 배경(리치텍스트 HTML) — 누가·왜·어떤 시대 조건에서 세웠는가. 개요(description)와 별개 서술.
+  /// MEDIUMTEXT: 리치텍스트는 이미지·표가 섞이면 TEXT(64KB)를 쉽게 넘는다(인물 전기 선례).
+  foundingBackground String? @map("founding_background") @db.MediumText
 
   //--- 관계 필드
   founder      Person?      @relation("FounderToCompany", fields: [founderId], references: [id], onDelete: SetNull)

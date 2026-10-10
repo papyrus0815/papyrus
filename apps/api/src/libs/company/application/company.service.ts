@@ -76,6 +76,44 @@ export class CompanyService {
     return company
   }
 
+  /**
+   * 기업이 등장한 사건 — 사건↔조직 연결(EventOrganizationRelation)을 기업 쪽에서 역방향 조회.
+   * 기업은 Organization 1:1 다리로 사건에 걸리므로 organizationId로 찾는다. 소프트 삭제 사건 제외.
+   * 정렬은 연도순(같은 해는 월·일, 미상은 끝) — 호출부가 '설립 사건'만 골라 쓰기도 한다.
+   */
+  async findRelatedEvents(id: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+      select: { organizationId: true },
+    })
+    if (!company) {
+      throw new NotFoundException(`Company with ID ${id} not found`)
+    }
+    return this.prisma.eventOrganizationRelation.findMany({
+      where: {
+        organizationId: company.organizationId,
+        event: { deletedAt: null },
+      },
+      select: {
+        id: true,
+        role: true,
+        roleDescription: true,
+        event: {
+          select: {
+            id: true,
+            title: true,
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            startDate: true,
+            category: { select: { name: true } },
+          },
+        },
+      },
+    })
+  }
+
   async create(dto: CreateCompanyDto): Promise<CompanyWithRelations> {
     try {
       const company = await this.prisma.$transaction(async (tx) => {
@@ -393,6 +431,7 @@ export class CompanyService {
           data: {
             founderId: passthrough(dto.founderId),
             financialCommentary: passthrough(dto.financialCommentary),
+            foundingBackground: passthrough(dto.foundingBackground),
           },
           include: COMPANY_INCLUDE,
         })

@@ -304,6 +304,8 @@ export interface CompanyOutlookItem {
 export interface CompanyDetailResponseDto extends CompanyResponseDto {
   /** 재무·주가 분석 코멘터리(리치텍스트 HTML) */
   financialCommentary: string | null
+  /** 설립 배경(리치텍스트 HTML) */
+  foundingBackground: string | null
   facilities: CompanyFacilitySummary[]
   histories: CompanyHistoryItem[]
   categories: CompanyCategoryLink[]
@@ -311,4 +313,31 @@ export interface CompanyDetailResponseDto extends CompanyResponseDto {
   stockPoints: CompanyStockPointItem[]
   analystRatings: CompanyAnalystRatingItem[]
   outlooks: CompanyOutlookItem[]
+}
+
+/** 사건에서 기업(=Organization)이 맡은 역할 — Prisma enum EventOrganizationRole과 동기화 */
+export type CompanyEventRoleValue =
+  | 'PRINCIPAL'
+  | 'FOUNDED'
+  | 'DISSOLVED'
+  | 'ACQUIRER'
+  | 'ACQUIRED'
+  | 'PARTICIPANT'
+  | 'CONTRACTOR'
+  | 'BENEFICIARY'
+  | 'VICTIM'
+  | 'OTHER'
+
+/** 기업이 등장한 사건 한 줄 — `GET /companies/:id/events` */
+export interface CompanyRelatedEventDto {
+  relationId: string
+  eventId: string
+  title: string
+  role: CompanyEventRoleValue
+  roleDescription: string | null
+  /** 부호 연도(BC 음수). 구조화 연도 우선, 없으면 DATETIME에서 */
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  categoryName: string | null
 }

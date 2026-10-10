@@ -25,6 +25,8 @@ import {
   CompanyRelationSummary,
   CompanyStatusValue,
   FacilityTypeValue,
+  CompanyEventRoleValue,
+  CompanyRelatedEventDto,
 } from './dto'
 
 /**
@@ -41,6 +43,56 @@ export class CompanyController {
   async getAll(): Promise<CompanyResponseDto[]> {
     const companies = await this.companyService.findAll()
     return companies.map((c) => this.toResponse(c))
+  }
+
+  /** 기업이 등장한 사건(역할 포함) — 사건↔조직 연결의 역방향 */
+  @Get(':id/events')
+  async getRelatedEvents(
+    @Param('id') id: string,
+  ): Promise<CompanyRelatedEventDto[]> {
+    const rows = await this.companyService.findRelatedEvents(id)
+    return rows
+      .map((row) => {
+        const event = row.event
+        // 구조화 연도(BC 포함)가 정본, 없으면 DATETIME(AD1000+ 규약)에서 읽는다
+        const year =
+          event.startYear != null
+            ? event.startEra === 'BC'
+              ? -event.startYear
+              : event.startYear
+            : event.startDate
+              ? event.startDate.getUTCFullYear()
+              : null
+        const hasStructured = event.startYear != null
+        return {
+          relationId: row.id,
+          eventId: event.id,
+          title: event.title,
+          role: row.role as CompanyEventRoleValue,
+          roleDescription: row.roleDescription ?? null,
+          startYear: year,
+          startMonth: hasStructured
+            ? (event.startMonth ?? null)
+            : event.startDate
+              ? event.startDate.getUTCMonth() + 1
+              : null,
+          startDay: hasStructured
+            ? (event.startDay ?? null)
+            : event.startDate
+              ? event.startDate.getUTCDate()
+              : null,
+          categoryName: event.category?.name ?? null,
+        }
+      })
+      .sort((left, right) => {
+        const key = (item: CompanyRelatedEventDto) =>
+          item.startYear == null
+            ? Number.POSITIVE_INFINITY
+            : item.startYear * 10_000 +
+              (item.startMonth ?? 0) * 100 +
+              (item.startDay ?? 0)
+        return key(left) - key(right)
+      })
   }
 
   /** ID로 기업 조회 (시설·연혁·카테고리 포함) */
@@ -117,6 +169,7 @@ export class CompanyController {
     return {
       ...this.toResponse(c),
       financialCommentary: c.financialCommentary,
+      foundingBackground: c.foundingBackground,
       facilities: c.facilities.map((f) => ({
         id: f.id,
         facilityType: (f.facilityType as FacilityTypeValue | null) ?? null,

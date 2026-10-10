@@ -89,6 +89,12 @@ export class UpdateCompanyDto {
   @IsString()
   financialCommentary?: string | null
 
+  /** 설립 배경(리치텍스트 HTML) — null이면 지운다 */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  foundingBackground?: string | null
+
   @IsOptional()
   @ValidateIf((_, value) => value !== '')
   @IsString()
