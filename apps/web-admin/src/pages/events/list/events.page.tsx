@@ -128,6 +128,7 @@ const LEADER_KINDS: readonly ReignMarkerKind[] = [
   'headOfGovernment',
   'founding',
   'dissolution',
+  'companyFounding',
 ]
 function readHiddenLeaders(): ReignMarkerKind[] {
   try {
@@ -1796,11 +1797,15 @@ export const EventsCatalogPage: React.FC = () => {
           focus: country.focus,
         })
       }
+      onOpenCompany={(companyId) =>
+        navigate(pathKeys.companies.detail(companyId))
+      }
       onFilterPeriod={(marker) => {
-        // 건국·멸망 표지 — 나라의 존속 기간으로 거른다
-        if (marker.statehood) {
+        // 건국·멸망·기업 설립 표지 — 나라·기업의 존속 기간으로 거른다
+        const lifespan = marker.statehood ?? marker.company
+        if (lifespan) {
           setPeriodParams({
-            period: `${marker.statehood.startYear}_${marker.statehood.endYear ?? new Date().getFullYear()}`,
+            period: `${lifespan.startYear}_${lifespan.endYear ?? new Date().getFullYear()}`,
             periodOf: `${marker.name} 존속`,
           })
           return

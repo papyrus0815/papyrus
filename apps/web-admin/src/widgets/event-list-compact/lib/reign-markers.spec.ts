@@ -1,4 +1,5 @@
 import {
+  type CompanyTimelineItem,
   type ReignMarker,
   type SovereignReignTimelineItem,
   formatReignSpan,
@@ -15,6 +16,8 @@ import {
   segmentMarkerOnlyYears,
   koreanRegnalFromPerson,
   countMarkerKinds,
+  isEntityMarker,
+  toCompanyFoundingMarkers,
 } from './reign-markers'
 
 const JOSEON = 'hc-joseon'
@@ -511,5 +514,70 @@ describe('koreanRegnalFromPerson', () => {
   it('한글 군주명은 그대로, 비어 있으면 null', () => {
     expect(koreanRegnalFromPerson({ name: '이도', regnalName: '세종' })).toBe('세종')
     expect(koreanRegnalFromPerson({ name: '이도', regnalName: ' ' })).toBeNull()
+  })
+})
+
+describe('toCompanyFoundingMarkers', () => {
+  const company = (
+    overrides: Partial<CompanyTimelineItem>,
+  ): CompanyTimelineItem => ({
+    id: 'c1',
+    name: '삼성전자',
+    foundedAt: '1969-01-13T00:00:00.000Z',
+    country: { id: 'kr', name: '대한민국' },
+    countryId: 'kr',
+    ...overrides,
+  })
+
+  it('설립일이 있는 기업을 설립 표지로 만든다', () => {
+    const [marker] = toCompanyFoundingMarkers([company({})], () => true)
+    expect(marker).toMatchObject({
+      id: 'co-founding-c1',
+      kind: 'companyFounding',
+      name: '삼성전자',
+      countryName: '대한민국',
+      startYear: 1969,
+      startMonth: 1,
+      startDay: 13,
+      company: { companyId: 'c1', startYear: 1969, endYear: null },
+    })
+    expect(accessionVerb(null, marker.kind)).toBe('설립')
+    expect(formatReignSpan(marker)).toBe('1969–')
+    expect(isEntityMarker(marker)).toBe(true)
+  })
+
+  it('1월 1일은 연도만 아는 설립으로 본다', () => {
+    const [marker] = toCompanyFoundingMarkers(
+      [company({ foundedAt: '1938-01-01T00:00:00.000Z' })],
+      () => true,
+    )
+    expect(marker.startMonth).toBeNull()
+    expect(marker.startDay).toBeNull()
+  })
+
+  it('설립일 없음·범위 밖·이미 사건으로 있는 설립은 뺀다', () => {
+    expect(
+      toCompanyFoundingMarkers([company({ foundedAt: null })], () => true),
+    ).toEqual([])
+    expect(toCompanyFoundingMarkers([company({})], () => false)).toEqual([])
+    expect(
+      toCompanyFoundingMarkers([company({})], () => true, () => true),
+    ).toEqual([])
+  })
+
+  it('해산한 기업은 존속 기간과 햇수를 쓴다', () => {
+    const [marker] = toCompanyFoundingMarkers(
+      [company({ foundedAt: '1900-05-01T00:00:00.000Z', dissolvedAt: '1950-01-01T00:00:00.000Z' })],
+      () => true,
+    )
+    expect(formatReignSpan(marker)).toBe('1900–1950')
+    expect(reignLengthYears(marker)).toBe(50)
+  })
+
+  it('종류별 개수에 기업 설립이 따로 잡힌다', () => {
+    const markers = toCompanyFoundingMarkers([company({})], () => true)
+    expect(countMarkerKinds(markers)).toEqual([
+      { kind: 'companyFounding', label: '기업 설립', count: 1 },
+    ])
   })
 })

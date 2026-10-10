@@ -71,7 +71,7 @@ export interface HeadTenureTimelineItem {
 
 /**
  * 표지의 종류 — 군주 즉위 / 국가원수(대통령) 취임 / 정부수반(총리) 취임
- * / 역사 국가 건국(founding) · 멸망(dissolution).
+ * / 역사 국가 건국(founding) · 멸망(dissolution) / 기업 설립(companyFounding).
  */
 export type ReignMarkerKind =
   | 'monarch'
@@ -79,10 +79,33 @@ export type ReignMarkerKind =
   | 'headOfGovernment'
   | 'founding'
   | 'dissolution'
+  | 'companyFounding'
 
 /** 역사 국가 건국·멸망 표지인가 — 사람이 아니라 나라가 주어인 표지 */
 export const isStatehoodMarker = (marker: { kind: ReignMarkerKind }) =>
   marker.kind === 'founding' || marker.kind === 'dissolution'
+
+/** 기업 설립 표지인가 — 주어가 기업이라 이름을 누르면 기업 상세로 간다 */
+export const isCompanyMarker = (marker: { kind: ReignMarkerKind }) =>
+  marker.kind === 'companyFounding'
+
+/** 사람이 아닌 실체(나라·기업)가 주어인 표지 — 초상·연임·주류 나라 셈에서 빠진다 */
+export const isEntityMarker = (marker: { kind: ReignMarkerKind }) =>
+  isStatehoodMarker(marker) || isCompanyMarker(marker)
+
+/** `GET /companies` 항목 중 여기서 쓰는 필드 */
+export interface CompanyTimelineItem {
+  id: string
+  name: string
+  /** 설립일(DATETIME ISO) — 기업은 연도 정밀도 컬럼이 없어 1/1이면 연도만 아는 것으로 본다 */
+  foundedAt?: string | null
+  dissolvedAt?: string | null
+  logoUrl?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  country?: { id: string; name?: string | null } | null
+  historicalCountry?: { id: string; name?: string | null } | null
+}
 
 /** `GET /historical-countries` 항목 중 여기서 쓰는 필드 */
 export interface HistoricalCountryTimelineItem {
@@ -132,6 +155,12 @@ export interface ReignMarker {
     historicalCountryId: string
     /** STATE면 건국·멸망, REGIME·PERIOD 등이면 성립·종료 */
     entityKind: string | null
+    startYear: number
+    endYear: number | null
+  }
+  /** 기업 설립 표지만 — 기업의 존속 기간(표시·기간 필터용). 의미는 statehood와 같다 */
+  company?: {
+    companyId: string
     startYear: number
     endYear: number | null
   }
@@ -316,9 +345,10 @@ const formatSignedYear = (year: number) =>
 
 /** '1418–1450' / 'BC 221–BC 210' / '1952–' (현직·미상) / '1888' (같은 해 즉위·퇴위) */
 export function formatReignSpan(marker: ReignMarker): string {
-  if (marker.statehood) {
-    // 건국·멸망 표지는 나라의 존속 기간을 쓴다(현존국은 '1991–')
-    const { startYear, endYear } = marker.statehood
+  const lifespan = marker.statehood ?? marker.company
+  if (lifespan) {
+    // 건국·멸망·설립 표지는 나라·기업의 존속 기간을 쓴다(현존하면 '1991–')
+    const { startYear, endYear } = lifespan
     if (endYear === startYear) return formatSignedYear(startYear)
     return `${formatSignedYear(startYear)}–${endYear == null ? '' : formatSignedYear(endYear)}`
   }
@@ -356,8 +386,9 @@ export function formatAccessionDate(
  * 부호 연도라 BC→AD를 건너면 0년이 없으므로 1을 뺀다(BC 27 → AD 14 = 40년).
  */
 export function reignLengthYears(marker: ReignMarker): number | null {
-  const startYear = marker.statehood?.startYear ?? marker.startYear
-  const endYear = marker.statehood ? marker.statehood.endYear : marker.endYear
+  const lifespan = marker.statehood ?? marker.company
+  const startYear = lifespan?.startYear ?? marker.startYear
+  const endYear = lifespan ? lifespan.endYear : marker.endYear
   if (endYear == null || endYear <= startYear) return null
   const crossesEra = startYear < 0 && endYear > 0
   return endYear - startYear - (crossesEra ? 1 : 0)
@@ -375,7 +406,8 @@ export function accessionVerb(
   kind: ReignMarkerKind = 'monarch',
   reappointed = false,
   entityKind?: string | null,
-): '즉위' | '취임' | '연임' | '건국' | '멸망' | '성립' | '종료' {
+): '즉위' | '취임' | '연임' | '건국' | '멸망' | '성립' | '종료' | '설립' {
+  if (kind === 'companyFounding') return '설립'
   // 나라가 주어인 표지 — 국가(STATE)는 건국·멸망, 정권·시대(REGIME·PERIOD)는 성립·종료
   if (kind === 'founding') return !entityKind || entityKind === 'STATE' ? '건국' : '성립'
   if (kind === 'dissolution') return !entityKind || entityKind === 'STATE' ? '멸망' : '종료'
@@ -506,6 +538,55 @@ export function toStatehoodMarkers(
         endYear: end.year,
       })
     }
+  }
+  return markers.sort((left, right) => left.startKey - right.startKey)
+}
+
+/**
+ * 기업 → 설립 표지. 설립일을 모르는 기업은 연표에 놓을 수 없어 뺀다.
+ *
+ * 기업에는 설립일 정밀도 컬럼이 없다(`foundedAt` DATETIME 하나). 1월 1일이면 연도만 아는
+ * 것으로 본다 — 사건의 `eventStartKey`와 같은 추정이라, '1969'로 등록한 기업이 '1.1'로
+ * 찍히지 않는다.
+ *
+ * @param inScope 이 기업을 목록에 실을 것인가 — 범위(국가 필터)는 호출부가 정한다.
+ * @param alreadyAnEvent 같은 해에 이 기업의 설립이 **사건으로 이미** 목록에 있는가.
+ */
+export function toCompanyFoundingMarkers(
+  companies: CompanyTimelineItem[] | null | undefined,
+  inScope: (company: CompanyTimelineItem) => boolean,
+  alreadyAnEvent: (company: CompanyTimelineItem, year: number) => boolean = () => false,
+): ReignMarker[] {
+  if (!companies?.length) return []
+  const markers: ReignMarker[] = []
+  for (const company of companies) {
+    if (!company.foundedAt || !inScope(company)) continue
+    const parsed = parseIsoDateParts(company.foundedAt)
+    if (!parsed) continue
+    const yearOnly = parsed.month === 1 && parsed.day === 1
+    const start: DateParts = {
+      year: parsed.year,
+      month: yearOnly ? null : parsed.month,
+      day: yearOnly ? null : parsed.day,
+    }
+    if (alreadyAnEvent(company, start.year)) continue
+    const endYear = parseIsoDateParts(company.dissolvedAt)?.year ?? null
+    markers.push({
+      id: `co-founding-${company.id}`,
+      personId: '',
+      kind: 'companyFounding',
+      roleTitle: null,
+      name: company.name,
+      countryName:
+        company.historicalCountry?.name ?? company.country?.name ?? null,
+      imageUrl: company.logoUrl?.trim() || null,
+      startKey: lowerKey(start),
+      startYear: start.year,
+      startMonth: start.month,
+      startDay: start.day,
+      endYear: start.year,
+      company: { companyId: company.id, startYear: start.year, endYear },
+    })
   }
   return markers.sort((left, right) => left.startKey - right.startKey)
 }
@@ -674,19 +755,26 @@ export function segmentMarkerOnlyYears(
 /** 접힌 표지 구간의 종류별 개수 — 요약 줄이 '무엇이' 접혔는지 말한다 */
 export function countMarkerKinds(
   markers: ReignMarker[],
-): Array<{ kind: 'accession' | 'founding' | 'dissolution'; label: string; count: number }> {
+): Array<{
+  kind: 'accession' | 'founding' | 'dissolution' | 'companyFounding'
+  label: string
+  count: number
+}> {
   let accession = 0
   let founding = 0
   let dissolution = 0
+  let companyFounding = 0
   for (const marker of markers) {
     if (marker.kind === 'founding') founding += 1
     else if (marker.kind === 'dissolution') dissolution += 1
+    else if (marker.kind === 'companyFounding') companyFounding += 1
     else accession += 1
   }
   return [
     { kind: 'accession' as const, label: '즉위·취임', count: accession },
     { kind: 'founding' as const, label: '건국', count: founding },
     { kind: 'dissolution' as const, label: '멸망', count: dissolution },
+    { kind: 'companyFounding' as const, label: '기업 설립', count: companyFounding },
   ].filter((entry) => entry.count > 0)
 }
 

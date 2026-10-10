@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import type { FlattenedHierarchyItem } from '@/features/event-hierarchy/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
+import { companyApi } from '@/shared/api/company'
 import {
   getHeadTenureTimeline,
   getSovereignReignTimeline,
@@ -18,6 +19,7 @@ import {
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
+  type CompanyTimelineItem,
   type HeadTenureTimelineItem,
   type HistoricalCountryTimelineItem,
   type ReignMarker,
@@ -25,6 +27,7 @@ import {
   mergeLeaderMarkers,
   toHeadTenureMarkers,
   toReignMarkers,
+  toCompanyFoundingMarkers,
   toStatehoodMarkers,
 } from '@/widgets/event-list-compact/lib/reign-markers'
 
@@ -38,6 +41,8 @@ const NO_MARKERS: ReignMarker[] = []
 /** 사건 제목이 그 나라의 건국·멸망을 말하는가 — 손으로 만든 건국 사건과 표지가 겹치지 않게 */
 const FOUNDING_WORDS = /건국|성립|수립|창건|개국/
 const DISSOLUTION_WORDS = /멸망|해체|소멸|붕괴|폐지|병합/
+/** 사건 제목이 기업 설립을 말하는가 — '삼성전자 설립' 사건 옆에 같은 표지를 또 세우지 않게 */
+const COMPANY_FOUNDING_WORDS = /설립|창립|창업|창사|출범/
 
 /**
  * 연표 표지 — 군주 즉위·대통령/총리 취임·**역사 국가 건국/멸망**.
@@ -65,6 +70,13 @@ export function useReignMarkers(
   const { data: heads } = useQuery({
     queryKey: headTenureTimelineKey,
     queryFn: getHeadTenureTimeline,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  /* 기업 설립 — 기업 목록·사이드바와 같은 캐시(['companies','all'])를 쓴다 */
+  const { data: companies } = useQuery({
+    queryKey: ['companies', 'all'],
+    queryFn: () => companyApi.getAll(),
     staleTime: 5 * 60 * 1000,
   })
 
@@ -139,6 +151,24 @@ export function useReignMarkers(
     )
   }, [historicalCountries, selectedCountry, statehoodEvents])
 
+  /**
+   * 기업 설립 표지 — 역사 국가 건국과 같은 범위 규약: 국가 필터가 있으면 그 나라(현대·역사)
+   * 기업만, 없으면 **등록된 기업 전부**. 연도 범위는 목록 사건의 범위를 따른다.
+   */
+  const companyMarkers = useMemo(() => {
+    if (!companies?.length) return NO_MARKERS
+    const inScope = (company: CompanyTimelineItem) =>
+      selectedCountry === FILTER_ALL ||
+      company.countryId === selectedCountry ||
+      company.historicalCountryId === selectedCountry
+    return toCompanyFoundingMarkers(companies, inScope, (company, year) =>
+      (statehoodEvents.titlesByYear.get(year) ?? []).some(
+        (title) =>
+          title.includes(company.name) && COMPANY_FOUNDING_WORDS.test(title),
+      ),
+    )
+  }, [companies, selectedCountry, statehoodEvents])
+
   const leaderMarkers = useMemo(() => {
     if (!reigns?.length && !heads?.length) return NO_MARKERS
     const personName = (
@@ -159,10 +189,13 @@ export function useReignMarkers(
   }, [reigns, heads, countryIds])
 
   return useMemo(() => {
-    if (statehoodMarkers.length === 0) return leaderMarkers
-    if (leaderMarkers.length === 0) return statehoodMarkers
-    return [...leaderMarkers, ...statehoodMarkers].sort(
-      (left, right) => left.startKey - right.startKey,
+    const groups = [leaderMarkers, statehoodMarkers, companyMarkers].filter(
+      (group) => group.length > 0,
     )
-  }, [leaderMarkers, statehoodMarkers])
+    if (groups.length === 0) return NO_MARKERS
+    if (groups.length === 1) return groups[0]
+    return groups
+      .flat()
+      .sort((left, right) => left.startKey - right.startKey)
+  }, [leaderMarkers, statehoodMarkers, companyMarkers])
 }

@@ -13,7 +13,7 @@ import {
   FiSearch,
   FiX,
 } from 'react-icons/fi'
-import { FaCrown, FaFlag, FaLandmark } from 'react-icons/fa'
+import { FaBuilding, FaCrown, FaFlag, FaLandmark } from 'react-icons/fa'
 import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
@@ -43,6 +43,8 @@ import {
   type ReignMarker,
   eventStartKey,
   accessionVerb,
+  isCompanyMarker,
+  isEntityMarker,
   isStatehoodMarker,
   formatAccessionDate,
   formatReignSpan,
@@ -92,6 +94,8 @@ interface EventCompactListProps {
     /** 누른 표지가 건국 쪽인지 멸망 쪽인지 — 모달이 그 절을 앞세운다 */
     focus: 'founding' | 'dissolution'
   }) => void
+  /** 기업 설립 표지의 기업 이름 클릭 — 페이지가 기업 상세로 보낸다 */
+  onOpenCompany?: (companyId: string) => void
   /** 표지의 기간을 누르면 — 목록을 그 재위·재임 기간의 사건으로 좁힌다 */
   onFilterPeriod?: (marker: ReignMarker) => void
   events: HistoricalEvent[]
@@ -214,6 +218,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   reignMarkers,
   onOpenPerson,
   onOpenHistoricalCountry,
+  onOpenCompany,
   onFilterPeriod,
   events,
   expandedEventIds,
@@ -531,8 +536,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   const reignHomeCountry = useMemo(() => {
     const counts = new Map<string | null, number>()
     for (const marker of reignMarkers ?? []) {
-      // 건국·멸망 표지는 나라가 곧 이름이라 '주류 나라' 셈에 넣지 않는다
-      if (isStatehoodMarker(marker)) continue
+      // 건국·멸망·기업 설립 표지는 사람이 아니라 '주류 나라' 셈에 넣지 않는다
+      if (isEntityMarker(marker)) continue
       counts.set(marker.countryName, (counts.get(marker.countryName) ?? 0) + 1)
     }
     let home: string | null = null
@@ -551,12 +556,23 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 그대로 내리면 표지 memo가 매번 깨진다 — 표지 묶음 443개(DOM 7,800개)가 행 하나 클릭,
    * 검색 한 글자마다 전부 다시 그려져 목록 렌더의 80%를 먹었다(2026-09-30 프로파일).
    */
-  const reignHandlersRef = React.useRef({ onOpenHistoricalCountry, onOpenPerson, onFilterPeriod })
-  reignHandlersRef.current = { onOpenHistoricalCountry, onOpenPerson, onFilterPeriod }
+  const reignHandlersRef = React.useRef({
+    onOpenHistoricalCountry,
+    onOpenPerson,
+    onOpenCompany,
+    onFilterPeriod,
+  })
+  reignHandlersRef.current = {
+    onOpenHistoricalCountry,
+    onOpenPerson,
+    onOpenCompany,
+    onFilterPeriod,
+  }
   const reignHandlers = useMemo<ReignHandlers>(
     () => ({
       openCountry: (country) => reignHandlersRef.current.onOpenHistoricalCountry?.(country),
       openPerson: (personId) => reignHandlersRef.current.onOpenPerson?.(personId),
+      openCompany: (companyId) => reignHandlersRef.current.onOpenCompany?.(companyId),
       filterPeriod: (marker) => reignHandlersRef.current.onFilterPeriod?.(marker),
     }),
     [],
@@ -584,6 +600,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       handlers={reignHandlers}
       canOpenCountry={!!onOpenHistoricalCountry}
       canOpenPerson={!!onOpenPerson}
+      canOpenCompany={!!onOpenCompany}
       canFilterPeriod={!!onFilterPeriod}
     />
   )
@@ -641,6 +658,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       reignHandlers,
       !!onOpenHistoricalCountry,
       !!onOpenPerson,
+      !!onOpenCompany,
       !!onFilterPeriod,
       searchQuery,
       sortBy,
@@ -1583,6 +1601,7 @@ interface ReignHandlers {
     focus: 'founding' | 'dissolution'
   }) => void
   openPerson: (personId: string) => void
+  openCompany: (companyId: string) => void
   filterPeriod: (marker: ReignMarker) => void
 }
 
@@ -1598,6 +1617,7 @@ interface ReignMarkerGroupProps {
   handlers: ReignHandlers
   canOpenCountry: boolean
   canOpenPerson: boolean
+  canOpenCompany: boolean
   canFilterPeriod: boolean
 }
 
@@ -1620,6 +1640,7 @@ function ReignMarkerGroupImpl({
   handlers,
   canOpenCountry,
   canOpenPerson,
+  canOpenCompany,
   canFilterPeriod,
 }: ReignMarkerGroupProps) {
     /* 대통령·총리만 모인 자리 — 축 표지를 왕관 대신 의사당으로, 강조색을 호박 대신 파랑으로.
@@ -1627,13 +1648,15 @@ function ReignMarkerGroupImpl({
     const civic = markers.every((marker) => marker.kind !== 'monarch')
     /* 건국·멸망만 모인 자리 — 축 표지를 깃발로(색은 civic 파랑을 그대로 쓴다) */
     const statehoodOnly = markers.every(isStatehoodMarker)
+    /* 기업 설립만 모인 자리 — 축 표지를 건물로 */
+    const companyOnly = markers.every(isCompanyMarker)
     /*
-     * 건국·멸망이 많은 해는 앞 둘만 보이고 나머지는 동사별 개수로 접는다 — 1795년 한 해에
-     * 멸망 12개가 세 줄 말풍선이 되어 사건 행보다 큰 벽이었다. 즉위·취임은 접지 않는다.
+     * 건국·멸망·기업 설립이 많은 해는 앞 둘만 보이고 나머지는 동사별 개수로 접는다 — 1795년
+     * 한 해에 멸망 12개가 세 줄 말풍선이 되어 사건 행보다 큰 벽이었다. 즉위·취임은 접지 않는다.
      */
     const [statehoodExpanded, setStatehoodExpanded] = React.useState(false)
     const entries = groupReignEntries(markers)
-    const statehoodEntries = entries.filter((entry) => isStatehoodMarker(entry.marker))
+    const statehoodEntries = entries.filter((entry) => isEntityMarker(entry.marker))
     const compactStatehood =
       !statehoodExpanded && statehoodEntries.length > STATEHOOD_VISIBLE_COUNT + 1
     const hiddenStatehood = compactStatehood
@@ -1661,7 +1684,15 @@ function ReignMarkerGroupImpl({
       data-reign-marker=""
     >
       <List.ReignMarkerIcon aria-hidden="true" $civic={civic}>
-        {statehoodOnly ? <FaFlag /> : civic ? <FaLandmark /> : <FaCrown />}
+        {statehoodOnly ? (
+          <FaFlag />
+        ) : companyOnly ? (
+          <FaBuilding />
+        ) : civic ? (
+          <FaLandmark />
+        ) : (
+          <FaCrown />
+        )}
       </List.ReignMarkerIcon>
       {yearLabel ? (
         <List.ReignYearLabel aria-hidden="true">
@@ -1686,7 +1717,9 @@ function ReignMarkerGroupImpl({
             marker.statehood?.entityKind,
           )
           const statehood = isStatehoodMarker(marker)
-          const periodNoun = statehood ? '존속' : verb === '즉위' ? '재위' : '재임'
+          const company = isCompanyMarker(marker)
+          const periodNoun =
+            statehood || company ? '존속' : verb === '즉위' ? '재위' : '재임'
           const markerCivic = marker.kind !== 'monarch'
           const length = reignLengthYears(marker)
           return (
@@ -1723,7 +1756,17 @@ function ReignMarkerGroupImpl({
                 >
                   {marker.name}
                 </List.ReignMarkerName>
-              ) : canOpenPerson && !statehood ? (
+              ) : company && marker.company && canOpenCompany ? (
+                <List.ReignMarkerName
+                  as="button"
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => handlers.openCompany(marker.company!.companyId)}
+                  aria-label={`${marker.name} 기업 정보 보기 — ${verb}, ${periodNoun} ${span}`}
+                >
+                  {marker.name}
+                </List.ReignMarkerName>
+              ) : canOpenPerson && !statehood && !company ? (
                 <List.ReignMarkerName
                   as="button"
                   type="button"
@@ -1808,6 +1851,7 @@ function sameReignGroupProps(previous: ReignMarkerGroupProps, next: ReignMarkerG
     previous.handlers === next.handlers &&
     previous.canOpenCountry === next.canOpenCountry &&
     previous.canOpenPerson === next.canOpenPerson &&
+    previous.canOpenCompany === next.canOpenCompany &&
     previous.canFilterPeriod === next.canFilterPeriod
   )
 }

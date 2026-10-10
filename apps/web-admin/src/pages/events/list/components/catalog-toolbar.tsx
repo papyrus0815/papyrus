@@ -487,6 +487,7 @@ const LEADER_TOGGLES: ReadonlyArray<{ kind: ReignMarkerKind; label: string }> = 
   { kind: 'headOfGovernment', label: '총리 취임' },
   { kind: 'founding', label: '국가 건국' },
   { kind: 'dissolution', label: '국가 멸망' },
+  { kind: 'companyFounding', label: '기업 설립' },
 ]
 
 /**
