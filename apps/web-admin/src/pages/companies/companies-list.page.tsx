@@ -64,6 +64,22 @@ const periodLabel = (company: Company): string | null => {
   return `${start ?? '?'} – ${end ?? ''}`.trimEnd()
 }
 
+/**
+ * 존속 햇수 — 해산이면 '191년 존속', 활동 중이면 '43년째'. 끝을 모르면(해산 상태인데 해산일 미상) null.
+ * 서력에는 0년이 없으므로 BC→AD를 건너면 1을 뺀다.
+ */
+const lifespanLabel = (company: Company): string | null => {
+  const start = parseIsoDateParts(company.foundedAt)?.year
+  if (start == null) return null
+  const dissolved = parseIsoDateParts(company.dissolvedAt)?.year
+  const ongoing = dissolved == null && (!company.status || company.status === 'ACTIVE')
+  const end = dissolved ?? (ongoing ? new Date().getFullYear() : null)
+  if (end == null) return null
+  const years = end - start - (start < 0 && end > 0 ? 1 : 0)
+  if (years < 0) return null
+  return ongoing ? `${years}년째` : `${years}년 존속`
+}
+
 const sortValue = (company: Company, key: SortKey): string | number | null => {
   switch (key) {
     case 'name':
@@ -233,15 +249,17 @@ export const CompaniesListPage: React.FC = () => {
       return Array.from({ length: 8 }).map((_, index) => (
         <Row key={index} as="div" aria-hidden>
           <NameCell>
-            <Skeleton $w="28px" $h="28px" $r="8px" />
-            <Skeleton $w={`${40 + ((index * 17) % 35)}%`} $h="13px" />
+            <Skeleton $w="32px" $h="32px" $r="9px" />
+            <SkeletonStack>
+              <Skeleton $w={`${30 + ((index * 17) % 30)}%`} $h="13px" />
+              <Skeleton $w={`${50 + ((index * 23) % 35)}%`} $h="10px" />
+            </SkeletonStack>
           </NameCell>
           {COLUMNS.slice(1).map((column) => (
             <Cell key={column.key} $hideBelow={column.hideBelow}>
               <Skeleton $w="60%" $h="11px" />
             </Cell>
           ))}
-          <Cell />
         </Row>
       ))
     }
@@ -285,6 +303,7 @@ export const CompaniesListPage: React.FC = () => {
       const meta = company.status ? COMPANY_STATUS_META[company.status] : null
       const detailPath = pathKeys.companies.detail(company.id)
       const period = periodLabel(company)
+      const lifespan = lifespanLabel(company)
       const subName = [company.shortName, company.localName]
         .filter((value) => value && value !== company.name)
         .join(' · ')
@@ -301,16 +320,32 @@ export const CompaniesListPage: React.FC = () => {
           <NameCell role="cell">
             <CompanyMark company={company} />
             <NameText>
-              <NameLink to={detailPath}>{company.name}</NameLink>
-              {subName && <SubName>{subName}</SubName>}
-              {company.description && <Description>{company.description}</Description>}
+              <NameLine>
+                <NameLink to={detailPath}>{company.name}</NameLink>
+                {subName && <SubName>{subName}</SubName>}
+              </NameLine>
+              {company.description && (
+                <Description title={company.description}>
+                  {company.description}
+                </Description>
+              )}
             </NameText>
           </NameCell>
           <Cell role="cell" $hideBelow={640}>
-            {countryName(company) ?? <Muted>—</Muted>}
+            {company.country?.name ?? company.historicalCountry?.name ?? <Muted>—</Muted>}
+            {!company.country && company.historicalCountry && (
+              <SubValue as="div">역사 국가</SubValue>
+            )}
           </Cell>
           <Cell role="cell" $numeric>
-            {period ?? <Muted>—</Muted>}
+            {period ? (
+              <Stack>
+                <span>{period}</span>
+                {lifespan && <SubValue>{lifespan}</SubValue>}
+              </Stack>
+            ) : (
+              <Muted>—</Muted>
+            )}
           </Cell>
           <Cell role="cell" $hideBelow={960}>
             {company.founder?.name ?? <Muted>—</Muted>}
@@ -472,9 +507,8 @@ export const CompaniesListPage: React.FC = () => {
                 </HeadCell>
               )
             })}
-            <HeadCell role="columnheader">
-              <VisuallyHidden>관리</VisuallyHidden>
-            </HeadCell>
+            {/* 관리 열은 행 위에 떠 있는 오버레이라 격자 트랙이 없다 — 머리글도 보조기기용만 */}
+            <VisuallyHidden role="columnheader">관리</VisuallyHidden>
           </HeadRow>
           <div role="rowgroup">{renderBody()}</div>
         </Table>
@@ -499,6 +533,12 @@ const metaText = ({ theme }: { theme: { mode: string } }) =>
   theme.mode === 'dark' ? '#a1a1aa' : '#6b7280'
 const rowHairline = ({ theme }: { theme: { mode: string } }) =>
   theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)'
+/* 행 hover 틴트 — theme.colors.hover는 다크에서 지면과 거의 구분되지 않았다 */
+const rowHover = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.035)'
+/* 지면색 — sticky 머리글·행 위 오버레이가 불투명해야 해서 명시한다 */
+const surface = ({ theme }: { theme: { mode: string; colors: { background: { primary: string } } } }) =>
+  theme.mode === 'dark' ? theme.colors.background.primary : '#ffffff'
 const focusRing = css`
   &:focus-visible {
     outline: none;
@@ -516,22 +556,22 @@ const rowGrid = css`
   display: grid;
   grid-template-columns:
     minmax(0, 1fr) minmax(96px, 150px) 112px minmax(96px, 150px)
-    minmax(88px, 130px) 84px 100px;
+    minmax(88px, 130px) 76px;
   align-items: center;
   column-gap: 16px;
 
   @container companies (max-width: 1120px) {
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) 112px minmax(96px, 150px) 84px 100px;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) 112px minmax(96px, 150px) 76px;
   }
   @container companies (max-width: 960px) {
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) 112px 84px 100px;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) 112px 76px;
   }
   @container companies (max-width: 640px) {
-    grid-template-columns: minmax(0, 1fr) 96px 72px 76px;
+    grid-template-columns: minmax(0, 1fr) 96px 72px;
     column-gap: 10px;
   }
   @container companies (max-width: 520px) {
-    grid-template-columns: minmax(0, 1fr) 88px 76px;
+    grid-template-columns: minmax(0, 1fr) 88px;
   }
 `
 
@@ -823,8 +863,7 @@ const HeadRow = styled.div`
   height: 32px;
   padding: 0 8px;
   /* sticky라 불투명해야 한다 — 아래로 지나가는 행이 비치면 안 된다 */
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.background.primary : '#ffffff'};
+  background: ${surface};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
@@ -863,14 +902,14 @@ const SortBtn = styled.button<{ $active: boolean }>`
 const Row = styled.div`
   ${rowGrid}
   position: relative;
-  min-height: 48px;
-  padding: 6px 8px;
+  min-height: 56px;
+  padding: 8px 8px;
   border-bottom: 1px solid ${rowHairline};
   cursor: pointer;
   transition: background 0.12s;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
+    background: ${rowHover};
   }
 `
 
@@ -897,15 +936,15 @@ const NameCell = styled.div`
 `
 
 const Mark = styled.span<{ $hasLogo: boolean }>`
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: 9px;
   overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
   background: ${({ $hasLogo, theme }) =>
@@ -922,9 +961,20 @@ const Mark = styled.span<{ $hasLogo: boolean }>`
   }
 `
 
-/* 이름 → 약칭 → 소개를 한 줄에 잇는다(사건 목록의 '제목 뒤 잇는 글'). 넘치면 소개부터 잘린다. */
+/*
+ * 두 줄: 이름·약칭 / 한 줄 소개.
+ * 한 줄에 잇던 시절엔 이름 열(~300px)에서 소개가 '— 대한…' 몇 글자로 잘려 정보가 0이었다.
+ * 소개는 기업을 가장 잘 설명하는 필드라 자기 줄을 준다.
+ */
 const NameText = styled.div`
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const NameLine = styled.div`
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -935,7 +985,7 @@ const NameText = styled.div`
 
 const NameLink = styled(Link)`
   flex-shrink: 0;
-  max-width: 62%;
+  max-width: 75%;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 14px;
@@ -954,7 +1004,9 @@ const NameLink = styled(Link)`
 `
 
 const SubName = styled.span`
-  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
   color: ${metaText};
 `
@@ -962,13 +1014,23 @@ const SubName = styled.span`
 const Description = styled.span`
   min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
   font-size: 12px;
+  line-height: 1.45;
   color: ${metaText};
+`
 
-  &::before {
-    content: '— ';
-  }
+/* 값 아래 보조 줄(존속 햇수·'역사 국가') */
+const Stack = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const SubValue = styled.span`
+  font-size: 11px;
+  color: ${metaText};
 `
 
 const StatusDot = styled.span<{ $tone: string }>`
@@ -993,20 +1055,39 @@ const Muted = styled.span`
   opacity: 0.6;
 `
 
+/*
+ * 행 우측에 떠 있는 관리 버튼 — 격자 트랙을 차지하지 않는다.
+ * 예전엔 100px 열을 늘 비워 두고 hover 때만 채워서, 평소엔 모든 행 끝에 빈 기둥이 섰고
+ * 그만큼 이름 열이 좁았다. 이제 hover/포커스 때 상태 열 위에 겹쳐 뜬다.
+ * 배경은 지면 + hover 틴트를 겹친 불투명 면이라 아래 상태 글자가 비치지 않는다.
+ */
 const ActionsCell = styled.div`
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
   display: flex;
-  justify-content: flex-end;
   gap: 2px;
+  padding: 2px 2px 2px 20px;
+  /* 지면 위에 행 hover 틴트를 한 번 더 — 행 배경과 같은 색이 된다. 왼쪽 20px은 마스크로 녹인다
+     (그라데이션 배경으로 녹이면 투명 구간에 틴트가 이중으로 얹힌다) */
+  background:
+    linear-gradient(${rowHover}, ${rowHover}),
+    ${surface};
+  mask-image: linear-gradient(to right, transparent, #000 20px);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.12s;
 
   /* 키보드 포커스에도 노출(WCAG 2.4.7) · 터치 기기는 상시 */
   ${Row}:hover &,
   ${Row}:focus-within & {
     opacity: 1;
+    pointer-events: auto;
   }
   @media (hover: none) {
     opacity: 1;
+    pointer-events: auto;
   }
 `
 
@@ -1057,6 +1138,14 @@ const EmptyDesc = styled.div`
   font-size: 13px;
   color: ${metaText};
   margin-bottom: 8px;
+`
+
+const SkeletonStack = styled.span`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 `
 
 const shimmer = keyframes`
