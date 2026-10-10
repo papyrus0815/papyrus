@@ -4,7 +4,10 @@ import { FiEdit2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { formatDateWithPrecision } from '@/shared/lib/iso-date'
-import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import {
+  DatePickerModal,
+  type DatePickerPrecision,
+} from '@/shared/ui/date-picker/date-picker-modal'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from './inline.styles'
@@ -12,7 +15,15 @@ import * as S from './inline.styles'
 interface InlineDateProps {
   /** ISO 문자열(단일 시점) 또는 null */
   value?: string | null
-  onSave: (next: string) => void
+  /** 두 번째 인자는 고른 정밀도 — `allowPartial`이 아니면 항상 'day' */
+  onSave: (next: string, precision: DatePickerPrecision) => void
+  /**
+   * 년만·년월만도 고를 수 있게(opt-in). 모달에 '년 / 년·월 / 년·월·일' 탭이 생기고,
+   * 모르는 월·일은 1로 채운 날짜와 함께 정밀도가 onSave로 온다 — 호출부가 정밀도를 저장할 것.
+   */
+  allowPartial?: boolean
+  /** 저장된 정밀도 — 읽기 라벨('1989년')과 모달 초기 탭에 쓴다. null이면 day */
+  precision?: DatePickerPrecision | null
   /** 비어 있을 때 read 라벨. */
   emptyLabel?: string
   /** DatePickerModal 제목. */
@@ -41,10 +52,14 @@ export function InlineDate({
   pickerTitle = '일자 선택',
   label,
   blockBc = false,
+  allowPartial = false,
+  precision = null,
 }: InlineDateProps) {
   const [open, setOpen] = useState(false)
 
-  const dateText = value ? formatDateWithPrecision(value, 'day') : null
+  const dateText = value
+    ? formatDateWithPrecision(value, allowPartial ? (precision ?? 'day') : 'day')
+    : null
   const isEmpty = !dateText
 
   return (
@@ -64,14 +79,21 @@ export function InlineDate({
         onClose={() => setOpen(false)}
         title={pickerTitle}
         initialDate={value || undefined}
-        onSelect={(date) => {
+        allowPartial={allowPartial}
+        initialPrecision={allowPartial ? (precision ?? 'day') : undefined}
+        onSelect={(date, picked) => {
           if (blockBc && date.startsWith('-')) {
             // 손상 방지 — 모달은 열어 두어 다른 날짜를 다시 고를 수 있게 한다.
             notify.error('기원전(BC) 날짜는 이 기록에 사용할 수 없습니다.')
             return
           }
           setOpen(false)
-          if (date !== (value ?? '')) onSave(date)
+          const nextPrecision = allowPartial ? picked : 'day'
+          // 같은 날짜라도 정밀도만 바뀌었으면 저장한다(1989-01-01 '일' → '년만')
+          const samePrecision = (precision ?? 'day') === nextPrecision
+          if (date.slice(0, 10) !== (value ?? '').slice(0, 10) || !samePrecision) {
+            onSave(date, nextPrecision)
+          }
         }}
       />
     </ReadRow>

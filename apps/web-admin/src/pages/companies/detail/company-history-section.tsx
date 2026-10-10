@@ -13,6 +13,7 @@ import type {
   CompanyHistoryInput,
   CompanyHistoryItem,
   CompanyHistoryType,
+  DatePrecision,
   UpdateCompanyInput,
 } from '@/shared/api/company'
 import {
@@ -133,6 +134,24 @@ function compareDateAscNullLast(
   return leftKey < rightKey ? -1 : 1
 }
 
+/** 'day'는 NULL과 같은 뜻 — 저장은 year·month만 남긴다(서버 규약과 동일) */
+const toStoredPrecision = (precision: DatePrecision): DatePrecision | null =>
+  precision === 'day' ? null : precision
+
+/**
+ * 같은 날짜 묶음 키 — 정밀도까지 같아야 한 묶음이다. 년만 기록한 '1989'와
+ * 실제 1989-01-01 기록은 저장값이 같아도 다른 사실이라 묶지 않는다.
+ */
+function dateGroupKey(row: {
+  occurredAt: string | null
+  occurredAtPrecision: DatePrecision | null
+}): string | null {
+  if (!row.occurredAt) return null
+  if (row.occurredAtPrecision === 'year') return `y:${row.occurredAt.slice(0, 4)}`
+  if (row.occurredAtPrecision === 'month') return `m:${row.occurredAt.slice(0, 7)}`
+  return `d:${row.occurredAt.slice(0, 10)}`
+}
+
 interface HistoryRow {
   /** 클라이언트 임시 키 — InlineText/InlineRichText 인스턴스(자체 draft) 보존용. */
   key: string
@@ -141,6 +160,8 @@ interface HistoryRow {
   type: CompanyHistoryType
   title: string
   occurredAt: string | null
+  /** 발생일 정밀도 — null이면 day. 년만이면 occurredAt은 그해 1월 1일 */
+  occurredAtPrecision: DatePrecision | null
   content: string
   /** 경제 맥락 스냅샷 — 입력 편의상 문자열로 보관(커밋 시 number로 변환). */
   stockPrice: string
@@ -160,6 +181,7 @@ function makeRow(
     type: history.type ?? 'GENERAL',
     title: history.title ?? '',
     occurredAt: history.occurredAt,
+    occurredAtPrecision: history.occurredAtPrecision ?? null,
     content: history.content ?? '',
     stockPrice: numToStr(history.stockPrice),
     marketCap: numToStr(history.marketCap),
@@ -241,6 +263,7 @@ export function CompanyHistorySection({
         type: row.type,
         title: row.title.trim(),
         occurredAt: row.occurredAt ?? null,
+        occurredAtPrecision: row.occurredAt ? (row.occurredAtPrecision ?? null) : null,
         content: isVisuallyEmptyRichText(row.content) ? null : row.content,
         note: row.note,
         stockPrice: strToNum(row.stockPrice),
@@ -259,6 +282,7 @@ export function CompanyHistorySection({
         type: 'GENERAL',
         title: '',
         occurredAt: null,
+        occurredAtPrecision: null,
         content: '',
         stockPrice: '',
         marketCap: '',
@@ -368,12 +392,10 @@ export function CompanyHistorySection({
     }))
     let start = 0
     while (start < view.length) {
-      const firstDate = view[start].row.occurredAt
-      const key = firstDate ? firstDate.slice(0, 10) : null
+      const key = dateGroupKey(view[start].row)
       let end = start + 1
       if (key != null) {
-        while (end < view.length && view[end].row.occurredAt?.slice(0, 10) === key)
-          end++
+        while (end < view.length && dateGroupKey(view[end].row) === key) end++
       }
       const count = end - start
       const members = view.slice(start, end).map((entry) => entry.idx)
@@ -386,11 +408,17 @@ export function CompanyHistorySection({
   }, [view])
 
   /* run(같은 날짜 묶음) 전체 행의 발생일을 한 번에 변경 — 날짜 노드에서 일괄. */
-  const setRunDate = (members: number[], next: string | null) => {
+  const setRunDate = (
+    members: number[],
+    next: string | null,
+    precision: DatePrecision | null,
+  ) => {
     const memberSet = new Set(members)
     commitRows(
       rows.map((row, position) =>
-        memberSet.has(position) ? { ...row, occurredAt: next } : row,
+        memberSet.has(position)
+          ? { ...row, occurredAt: next, occurredAtPrecision: precision }
+          : row,
       ),
     )
   }
@@ -518,10 +546,15 @@ export function CompanyHistorySection({
                     <TLDate>
                       <InlineDate
                         value={row.occurredAt}
-                        onSave={(next) =>
+                        precision={row.occurredAtPrecision}
+                        allowPartial
+                        onSave={(next, precision) =>
                           run.count > 1
-                            ? setRunDate(run.members, next)
-                            : updateRow(idx, { occurredAt: next })
+                            ? setRunDate(run.members, next, toStoredPrecision(precision))
+                            : updateRow(idx, {
+                                occurredAt: next,
+                                occurredAtPrecision: toStoredPrecision(precision),
+                              })
                         }
                         emptyLabel="시점 미입력"
                         pickerTitle={
@@ -542,7 +575,14 @@ export function CompanyHistorySection({
                       <S.RowFieldLabel>이 항목 날짜</S.RowFieldLabel>
                       <InlineDate
                         value={row.occurredAt}
-                        onSave={(next) => updateRow(idx, { occurredAt: next })}
+                        precision={row.occurredAtPrecision}
+                        allowPartial
+                        onSave={(next, precision) =>
+                          updateRow(idx, {
+                            occurredAt: next,
+                            occurredAtPrecision: toStoredPrecision(precision),
+                          })
+                        }
                         emptyLabel="시점 미입력"
                         pickerTitle="이 항목만 다른 날로"
                         blockBc

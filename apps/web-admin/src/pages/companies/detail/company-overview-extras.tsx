@@ -206,7 +206,9 @@ export function CompanyRecentHistory({ histories, onShowAll }: RecentHistoryProp
         {recent.map((item) => (
           <li key={item.id}>
             <EventDate>
-              {item.occurredAt ? formatDateWithPrecision(item.occurredAt) : '날짜 미상'}
+              {item.occurredAt
+                ? formatDateWithPrecision(item.occurredAt, item.occurredAtPrecision ?? 'day')
+                : '날짜 미상'}
             </EventDate>
             <EventMain>
               <EventTitle as="span">{item.title}</EventTitle>

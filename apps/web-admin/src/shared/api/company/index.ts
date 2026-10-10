@@ -51,11 +51,16 @@ export type CompanyHistoryType =
   | 'REGULATORY'
   | 'INCIDENT'
 
+/** 날짜 정밀도 — 년만 / 년·월 / 년·월·일 */
+export type DatePrecision = 'year' | 'month' | 'day'
+
 export type CompanyHistoryItem = {
   id: string
   type: CompanyHistoryType | null
   title: string
   occurredAt: string | null
+  /** 발생일 정밀도 — null이면 day */
+  occurredAtPrecision: DatePrecision | null
   content: string | null
   note: string | null
   stockPrice: number | null
@@ -279,6 +284,7 @@ export type CompanyHistoryInput = {
   type?: CompanyHistoryType | null
   title: string
   occurredAt?: string | null
+  occurredAtPrecision?: DatePrecision | null
   content?: string | null
   note?: string | null
   stockPrice?: number | null
