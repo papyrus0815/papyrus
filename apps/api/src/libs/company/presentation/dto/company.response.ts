@@ -112,6 +112,8 @@ export interface CompanyHistoryItem {
   type: CompanyHistoryTypeValue | null
   title: string
   occurredAt: string | null
+  /** 발생일 정밀도 — year·month·day, null이면 day */
+  occurredAtPrecision: 'year' | 'month' | 'day' | null
   content: string | null
   note: string | null
   /** 당시 주가 */

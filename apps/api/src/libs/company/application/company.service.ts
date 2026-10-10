@@ -227,6 +227,13 @@ export class CompanyService {
                 occurredAt: history.occurredAt
                   ? new Date(history.occurredAt)
                   : null,
+                // 날짜가 없으면 정밀도도 의미가 없다. 'day'는 NULL과 같은 뜻이라 굳이 적지 않는다.
+                occurredAtPrecision:
+                  history.occurredAt &&
+                  (history.occurredAtPrecision === 'year' ||
+                    history.occurredAtPrecision === 'month')
+                    ? history.occurredAtPrecision
+                    : null,
                 content: history.content ?? null,
                 note: history.note ?? null,
                 stockPrice: history.stockPrice ?? null,

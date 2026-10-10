@@ -17,6 +17,7 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -113,6 +114,12 @@ export class CompanyHistoryInputDto {
   @ValidateIf((_, value) => value !== '' && value != null)
   @IsDateString()
   occurredAt?: string | null
+
+  /** 발생일 정밀도 — year(년만)·month(년·월)·day. null/미지정은 day로 간주 */
+  @IsOptional()
+  @ValidateIf((_, value) => value != null)
+  @IsIn(['year', 'month', 'day'])
+  occurredAtPrecision?: 'year' | 'month' | 'day' | null
 
   @IsOptional()
   @IsString()

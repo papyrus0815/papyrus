@@ -282,6 +282,9 @@ model CompanyHistory {
 
   /// 이력이 발생한 날짜/시점
   occurredAt DateTime? @map("occurred_at")
+  /// 발생일 정밀도: year(년만), month(년·월), day(년·월·일). null이면 day로 간주(기존 행 백필 불필요).
+  /// 모르는 월·일은 1로 채워 occurredAt에 저장하고, 표시·묶음은 이 값으로 자른다.
+  occurredAtPrecision String? @map("occurred_at_precision") @db.VarChar(10)
 
   /// 상세 내용 (리치텍스트 HTML — VARCHAR(191) 초과 무성 truncate 방지 위해 TEXT)
   content String? @db.Text
