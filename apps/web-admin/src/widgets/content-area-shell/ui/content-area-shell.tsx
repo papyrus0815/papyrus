@@ -108,7 +108,7 @@ function specFor(pathname: string): DomainSpec | null {
       storageKey: 'companies-list-collapsed',
       render: (context) => (
         <CompanyListSidebar
-          selectedId={idFromPath(pathname, 'companies', ['new'])}
+          selectedId={idFromPath(pathname, 'companies')}
           {...context}
         />
       ),

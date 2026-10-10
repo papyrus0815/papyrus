@@ -1,26 +1,25 @@
+/**
+ * 기업 목록 — 사건 목록(`/events`)의 지면 문법을 따른다.
+ *
+ * - 제목은 시각적으로 숨긴다(좌측 내비의 활성 탭과 같은 말). 대신 좌측 강조 막대 + 한 줄 집계.
+ * - 데이터가 1순위: KPI 카드 4장·리스트/테이블 보기 토글·페이지네이션을 걷어내고
+ *   **조밀한 열 표 하나**로 전부 보여 준다. 정렬은 열 머리글 클릭(aria-sort).
+ * - 등록·수정은 페이지 이동이 아니라 `CompanyRegisterModal` — 검색어·필터·정렬·스크롤이
+ *   모달을 닫은 뒤에도 그대로 남는다.
+ * - 목록 데이터는 사이드바·국가 대시보드와 같은 쿼리 키(['companies','all'])라 한 번만 받는다.
+ */
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { motion, useReducedMotion } from 'framer-motion'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  FiPlus,
-  FiEdit2,
-  FiTrash2,
-  FiBriefcase,
-  FiTag,
-  FiSearch,
-  FiMapPin,
-  FiCalendar,
-  FiExternalLink,
-  FiUser,
-  FiCheckCircle,
-  FiGitMerge,
-  FiGlobe,
-  FiList,
-  FiColumns,
-  FiChevronLeft,
-  FiChevronRight,
-  FiArrowUp,
   FiArrowDown,
+  FiArrowUp,
+  FiEdit2,
+  FiExternalLink,
+  FiPlus,
+  FiSearch,
+  FiTag,
+  FiTrash2,
   FiX,
 } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
@@ -28,214 +27,188 @@ import styled, { css, keyframes } from 'styled-components'
 
 import type { Company, CompanyStatus } from '@/shared/api/company'
 import { companyApi } from '@/shared/api/company'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
+import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
+import {
+  COMPANY_STATUS_META,
+  COMPANY_STATUS_ORDER,
+  CompanyRegisterModal,
+} from '@/widgets/company-form'
 
-type StatusMeta = { label: string; color: string; bg: string }
+const COMPANIES_QUERY_KEY = ['companies', 'all'] as const
 
-const STATUS_META: Record<CompanyStatus, StatusMeta> = {
-  ACTIVE: { label: '활동 중', color: '#16a34a', bg: 'rgba(34, 197, 94, 0.14)' },
-  DISSOLVED: { label: '해산', color: '#dc2626', bg: 'rgba(239, 68, 68, 0.12)' },
-  MERGED: { label: '합병', color: '#2563eb', bg: 'rgba(59, 130, 246, 0.12)' },
-  SUSPENDED: { label: '중단', color: '#d97706', bg: 'rgba(245, 158, 11, 0.14)' },
-  OTHER: { label: '기타', color: '#64748b', bg: 'rgba(148, 163, 184, 0.18)' },
-}
+type SortKey = 'name' | 'country' | 'founded' | 'founder' | 'city' | 'status'
+type SortState = { key: SortKey; dir: 'asc' | 'desc' }
 
-const STATUS_ORDER: CompanyStatus[] = [
-  'ACTIVE',
-  'DISSOLVED',
-  'MERGED',
-  'SUSPENDED',
-  'OTHER',
-]
+/** 기본 정렬 — 역사 기록이니 오래된 것이 위(국가 대시보드 기업 섹션과 같은 규약) */
+const DEFAULT_SORT: SortState = { key: 'founded', dir: 'asc' }
 
-const getInitial = (company: Company) =>
-  (company.shortName?.trim()?.[0] ?? company.name.trim()[0] ?? '·').toUpperCase()
+const countryName = (company: Company) =>
+  company.country?.name ?? company.historicalCountry?.name ?? null
 
-/** 설립 연도 라벨 — BC 음수연도 안전(slice(0,4)는 '-0044'를 '-004'로 깨뜨림). */
-const getYear = (iso: string | null): string | null => {
+/** 연도 라벨 — BC 음수연도 안전(slice(0,4)는 '-0044'를 '-004'로 깨뜨림). */
+const yearLabel = (iso: string | null): string | null => {
   const parts = parseIsoDateParts(iso)
   if (!parts) return null
   return parts.year < 0 ? `BC ${Math.abs(parts.year)}` : String(parts.year)
 }
 
-/** 로고 이미지 — 로드 실패 시 이니셜로 폴백(깨진 이미지 박스 방지). */
-const LogoImage: React.FC<{ src: string; fallback: string }> = ({
-  src,
-  fallback,
-}) => {
-  const [broken, setBroken] = useState(false)
-  if (broken) return <>{fallback}</>
-  return <img src={src} alt="" onError={() => setBroken(true)} />
+/** 존속 기간 — '1600 – 1874' · 활동 중이면 '1600 –' · 설립 미상이면 null */
+const periodLabel = (company: Company): string | null => {
+  const start = yearLabel(company.foundedAt)
+  const end = yearLabel(company.dissolvedAt)
+  if (!start && !end) return null
+  return `${start ?? '?'} – ${end ?? ''}`.trimEnd()
 }
-
-type ViewMode = 'list' | 'table'
-
-type SortKey = 'name' | 'status' | 'country' | 'founded'
-type SortState = { key: SortKey; dir: 'asc' | 'desc' }
 
 const sortValue = (company: Company, key: SortKey): string | number | null => {
   switch (key) {
     case 'name':
       return company.name
-    case 'status':
-      return company.status ? STATUS_ORDER.indexOf(company.status) : null
     case 'country':
-      return company.country?.name ?? company.historicalCountry?.name ?? null
+      return countryName(company)
     case 'founded':
       // BC 안전 숫자 키 — raw ISO 문자열 비교는 음수연도를 사전식으로 오정렬.
       return dateSortKey(company.foundedAt)
+    case 'founder':
+      return company.founder?.name ?? null
+    case 'city':
+      return company.headquartersCity?.name ?? null
+    case 'status':
+      return company.status ? COMPANY_STATUS_ORDER.indexOf(company.status) : null
   }
 }
 
-const PAGE_SIZES = [10, 20, 50] as const
+const COLUMNS: { key: SortKey; label: string; hideBelow?: number }[] = [
+  { key: 'name', label: '기업' },
+  { key: 'country', label: '국가', hideBelow: 640 },
+  { key: 'founded', label: '존속' },
+  { key: 'founder', label: '창립자', hideBelow: 960 },
+  { key: 'city', label: '본사', hideBelow: 1120 },
+  { key: 'status', label: '상태', hideBelow: 520 },
+]
 
-/** 페이지 번호 목록 (양 끝 + 현재 주변, 사이는 말줄임) */
-const getPageItems = (current: number, total: number): (number | 'dots')[] => {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const items: (number | 'dots')[] = [1]
-  const left = Math.max(2, current - 1)
-  const right = Math.min(total - 1, current + 1)
-  if (left > 2) items.push('dots')
-  for (let i = left; i <= right; i++) items.push(i)
-  if (right < total - 1) items.push('dots')
-  items.push(total)
-  return items
+/** 로고 — 로드 실패 시 이니셜로 폴백(깨진 이미지 박스 방지). */
+const CompanyMark: React.FC<{ company: Company }> = ({ company }) => {
+  const src = getUploadImageUrl(company.logoUrl)
+  const [broken, setBroken] = useState(false)
+  // 이름에서 딴다 — 약칭은 '000660' 같은 종목코드라 이니셜로 쓰면 '0'이 된다
+  const initial = (company.name.trim()[0] ?? '·').toUpperCase()
+  const showLogo = !!src && !broken
+  return (
+    <Mark $hasLogo={showLogo} aria-hidden>
+      {showLogo ? <img src={src} alt="" onError={() => setBroken(true)} /> : initial}
+    </Mark>
+  )
 }
 
 export const CompaniesListPage: React.FC = () => {
   const navigate = useNavigate()
-  const prefersReducedMotion = useReducedMotion()
-  const [list, setList] = useState<Company[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState(false)
+  const queryClient = useQueryClient()
+  const {
+    data: list = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: COMPANIES_QUERY_KEY,
+    queryFn: () => companyApi.getAll(),
+    staleTime: 60_000,
+  })
+
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [query, setQuery] = useState('') // 입력값(즉시)
   const [search, setSearch] = useState('') // 디바운스된 검색어
   const [statusFilter, setStatusFilter] = useState<CompanyStatus | 'ALL'>('ALL')
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
-  const [sort, setSort] = useState<SortState | null>(null)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState<number>(10)
-
-  // 같은 컬럼 클릭: 오름차순 → 내림차순 → 해제
-  const toggleSort = (key: SortKey) => {
-    setSort((prev) => {
-      if (!prev || prev.key !== key) return { key, dir: 'asc' }
-      if (prev.dir === 'asc') return { key, dir: 'desc' }
-      return null
-    })
-  }
-
-  const load = () => {
-    setLoading(true)
-    setLoadError(false)
-    companyApi
-      .getAll()
-      .then(setList)
-      // 실패를 빈 목록으로 흡수하면 서버 장애가 '등록된 기업 없음'으로 오인된다 — 에러 상태로 분리.
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false))
-  }
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT)
+  /** 등록·수정 모달 — null=닫힘, 'new'=신규, 그 외=수정 대상 id */
+  const [modalTarget, setModalTarget] = useState<string | null>(null)
 
   useEffect(() => {
-    load()
-  }, [])
-
-  // 검색어 디바운스 (250ms)
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(query), 250)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setSearch(query), 200)
+    return () => clearTimeout(timer)
   }, [query])
 
-  // ── KPI 통계 ──
-  const stats = useMemo(() => {
-    const counts: Record<CompanyStatus, number> = {
-      ACTIVE: 0,
-      DISSOLVED: 0,
-      MERGED: 0,
-      SUSPENDED: 0,
-      OTHER: 0,
-    }
-    const countries = new Set<string>()
-    for (const company of list) {
-      if (company.status) counts[company.status] += 1
-      const country = company.country?.name ?? company.historicalCountry?.name
-      if (country) countries.add(country)
-    }
-    return {
-      total: list.length,
-      active: counts.ACTIVE,
-      closed: counts.DISSOLVED + counts.MERGED,
-      countries: countries.size,
-      counts,
-    }
+  // 같은 열 클릭: 방향 반전 / 다른 열: 오름차순으로 시작
+  const toggleSort = (key: SortKey) =>
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' },
+    )
+
+  const statusCounts = useMemo(() => {
+    const counts = Object.fromEntries(
+      COMPANY_STATUS_ORDER.map((status) => [status, 0]),
+    ) as Record<CompanyStatus, number>
+    for (const company of list) if (company.status) counts[company.status] += 1
+    return counts
   }, [list])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return list.filter((company) => {
+  const countryCount = useMemo(
+    () => new Set(list.map(countryName).filter(Boolean)).size,
+    [list],
+  )
+
+  const rows = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    const filtered = list.filter((company) => {
       if (statusFilter !== 'ALL' && company.status !== statusFilter) return false
-      if (!q) return true
-      return (
-        company.name.toLowerCase().includes(q) ||
-        (company.shortName?.toLowerCase().includes(q) ?? false) ||
-        (company.localName?.toLowerCase().includes(q) ?? false)
-      )
+      if (!needle) return true
+      return [
+        company.name,
+        company.shortName,
+        company.localName,
+        countryName(company),
+        company.founder?.name,
+      ].some((value) => value?.toLowerCase().includes(needle))
     })
-  }, [list, search, statusFilter])
-
-  // ── 정렬 (페이지네이션 전에 적용) ──
-  const sorted = useMemo(() => {
-    if (!sort) return filtered
-    const dir = sort.dir === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => {
-      const av = sortValue(a, sort.key)
-      const bv = sortValue(b, sort.key)
+    const direction = sort.dir === 'asc' ? 1 : -1
+    return filtered.sort((left, right) => {
+      const leftValue = sortValue(left, sort.key)
+      const rightValue = sortValue(right, sort.key)
       // 값 없는 항목은 정렬 방향과 무관하게 항상 뒤로
-      if (av == null && bv == null) return 0
-      if (av == null) return 1
-      if (bv == null) return -1
-      if (typeof av === 'number' && typeof bv === 'number') {
-        return (av - bv) * dir
-      }
-      return String(av).localeCompare(String(bv), 'ko') * dir
+      if (leftValue == null && rightValue == null)
+        return left.name.localeCompare(right.name, 'ko')
+      if (leftValue == null) return 1
+      if (rightValue == null) return -1
+      const compared =
+        typeof leftValue === 'number' && typeof rightValue === 'number'
+          ? leftValue - rightValue
+          : String(leftValue).localeCompare(String(rightValue), 'ko')
+      return compared * direction || left.name.localeCompare(right.name, 'ko')
     })
-  }, [filtered, sort])
+  }, [list, search, statusFilter, sort])
 
-  // ── 페이지네이션 ──
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
-  const currentPage = Math.min(page, totalPages)
-  const pageStart = (currentPage - 1) * pageSize
-  const paginated = sorted.slice(pageStart, pageStart + pageSize)
+  const isFiltered = !!search.trim() || statusFilter !== 'ALL'
 
-  // 검색·필터·정렬·페이지크기 변경 시 첫 페이지로
-  useEffect(() => {
-    setPage(1)
-  }, [search, statusFilter, sort, pageSize])
-
-  const handleCreate = () => navigate('/companies/new')
-  const handleEdit = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    navigate(`/companies/${id}/edit`)
+  const resetFilters = () => {
+    setQuery('')
+    setSearch('')
+    setStatusFilter('ALL')
   }
-  const handleDelete = async (id: string, name: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+
+  const handleDelete = async (company: Company) => {
     if (deletingId) return
     if (
       !(await confirm({
         title: '삭제 확인',
-        message: `'${name}' 기업을 삭제하시겠습니까?`,
+        message: `'${company.name}' 기업을 삭제하시겠습니까?`,
         danger: true,
       }))
     )
       return
-    setDeletingId(id)
+    setDeletingId(company.id)
     try {
-      await companyApi.delete(id)
-      // 낙관적 제거 — 전체 재조회 대신 목록에서만 빼서 깜빡임을 줄인다.
-      setList((prev) => prev.filter((company) => company.id !== id))
+      await companyApi.delete(company.id)
+      // 낙관적 제거 후 사이드바 등 같은 키 소비처까지 정본 재조회
+      queryClient.setQueryData<Company[]>(COMPANIES_QUERY_KEY, (prev) =>
+        prev?.filter((item) => item.id !== company.id),
+      )
+      void queryClient.invalidateQueries({ queryKey: ['companies'] })
     } catch (err) {
       notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다.')
     } finally {
@@ -246,523 +219,341 @@ export const CompaniesListPage: React.FC = () => {
   const statusFilters: { key: CompanyStatus | 'ALL'; label: string; count: number }[] =
     [
       { key: 'ALL', label: '전체', count: list.length },
-      ...STATUS_ORDER.filter((s) => stats.counts[s] > 0).map((s) => ({
-        key: s,
-        label: STATUS_META[s].label,
-        count: stats.counts[s],
-      })),
+      ...COMPANY_STATUS_ORDER.filter((status) => statusCounts[status] > 0).map(
+        (status) => ({
+          key: status,
+          label: COMPANY_STATUS_META[status].label,
+          count: statusCounts[status],
+        }),
+      ),
     ]
 
-  const renderSortHeader = (label: string, col: SortKey, hideSm = false) => {
-    const Comp = hideSm ? SortHeaderHideSm : SortHeader
-    const active = sort?.key === col
-    return (
-      <Comp
-        type="button"
-        $active={active}
-        onClick={() => toggleSort(col)}
-        aria-label={
-          active
-            ? `${label}, ${sort.dir === 'asc' ? '오름차순' : '내림차순'} 정렬`
-            : `${label} 정렬`
-        }
-      >
-        {label}
-        {active &&
-          (sort.dir === 'asc' ? (
-            <FiArrowUp size={12} aria-hidden />
-          ) : (
-            <FiArrowDown size={12} aria-hidden />
+  const renderBody = () => {
+    if (isLoading) {
+      return Array.from({ length: 8 }).map((_, index) => (
+        <Row key={index} as="div" aria-hidden>
+          <NameCell>
+            <Skeleton $w="28px" $h="28px" $r="8px" />
+            <Skeleton $w={`${40 + ((index * 17) % 35)}%`} $h="13px" />
+          </NameCell>
+          {COLUMNS.slice(1).map((column) => (
+            <Cell key={column.key} $hideBelow={column.hideBelow}>
+              <Skeleton $w="60%" $h="11px" />
+            </Cell>
           ))}
-      </Comp>
-    )
+          <Cell />
+        </Row>
+      ))
+    }
+    if (isError) {
+      return (
+        <EmptyState>
+          <EmptyTitle>기업을 불러오지 못했습니다</EmptyTitle>
+          <EmptyDesc>일시적인 오류일 수 있습니다. 다시 시도해 주세요.</EmptyDesc>
+          <GhostBtn type="button" onClick={() => void refetch()}>
+            다시 시도
+          </GhostBtn>
+        </EmptyState>
+      )
+    }
+    if (rows.length === 0) {
+      return (
+        <EmptyState>
+          <EmptyTitle>
+            {isFiltered ? '조건에 맞는 기업이 없습니다' : '아직 등록된 기업이 없습니다'}
+          </EmptyTitle>
+          <EmptyDesc>
+            {isFiltered
+              ? '검색어나 상태 필터를 바꿔 보세요.'
+              : '첫 기업을 등록해 데이터베이스를 시작하세요.'}
+          </EmptyDesc>
+          {isFiltered ? (
+            <GhostBtn type="button" onClick={resetFilters}>
+              <FiX size={14} />
+              필터 초기화
+            </GhostBtn>
+          ) : (
+            <PrimaryBtn type="button" onClick={() => setModalTarget('new')}>
+              <FiPlus size={15} />
+              기업 추가
+            </PrimaryBtn>
+          )}
+        </EmptyState>
+      )
+    }
+    return rows.map((company) => {
+      const meta = company.status ? COMPANY_STATUS_META[company.status] : null
+      const detailPath = pathKeys.companies.detail(company.id)
+      const period = periodLabel(company)
+      const subName = [company.shortName, company.localName]
+        .filter((value) => value && value !== company.name)
+        .join(' · ')
+      return (
+        <Row
+          key={company.id}
+          role="row"
+          onClick={(event) => {
+            // 행 안 링크·버튼은 자기 동작만 — 행 클릭은 빈 자리에서만 상세로
+            if ((event.target as HTMLElement).closest('a,button')) return
+            navigate(detailPath)
+          }}
+        >
+          <NameCell role="cell">
+            <CompanyMark company={company} />
+            <NameText>
+              <NameLink to={detailPath}>{company.name}</NameLink>
+              {subName && <SubName>{subName}</SubName>}
+              {company.description && <Description>{company.description}</Description>}
+            </NameText>
+          </NameCell>
+          <Cell role="cell" $hideBelow={640}>
+            {countryName(company) ?? <Muted>—</Muted>}
+          </Cell>
+          <Cell role="cell" $numeric>
+            {period ?? <Muted>—</Muted>}
+          </Cell>
+          <Cell role="cell" $hideBelow={960}>
+            {company.founder?.name ?? <Muted>—</Muted>}
+          </Cell>
+          <Cell role="cell" $hideBelow={1120}>
+            {company.headquartersCity?.name ?? <Muted>—</Muted>}
+          </Cell>
+          <Cell role="cell" $hideBelow={520}>
+            {meta ? <StatusDot $tone={meta.tone}>{meta.label}</StatusDot> : <Muted>—</Muted>}
+          </Cell>
+          <ActionsCell role="cell">
+            {company.websiteUrl && (
+              <IconAction
+                as="a"
+                href={company.websiteUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                title="웹사이트 열기"
+                aria-label={`${company.name} 웹사이트 (새 창)`}
+              >
+                <FiExternalLink size={14} />
+              </IconAction>
+            )}
+            <IconAction
+              type="button"
+              onClick={() => setModalTarget(company.id)}
+              title="기본 정보 수정"
+              aria-label={`${company.name} 수정`}
+            >
+              <FiEdit2 size={14} />
+            </IconAction>
+            <IconAction
+              type="button"
+              $danger
+              disabled={deletingId === company.id}
+              onClick={() => void handleDelete(company)}
+              title="삭제"
+              aria-label={`${company.name} 삭제`}
+            >
+              <FiTrash2 size={14} />
+            </IconAction>
+          </ActionsCell>
+        </Row>
+      )
+    })
   }
-
-  const renderSkeleton = () => (
-    <>
-      <StatRow>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <StatCard key={i} $accent="#cbd5e1">
-            <Skeleton $w="48px" $h="30px" $r="8px" />
-            <Skeleton $w="62px" $h="12px" />
-          </StatCard>
-        ))}
-      </StatRow>
-      <SkeletonToolbar>
-        <Skeleton $w="min(340px, 60%)" $h="40px" $r="12px" />
-        <Skeleton $w="180px" $h="36px" $r="999px" />
-      </SkeletonToolbar>
-      <List>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <SkeletonItem key={i}>
-            <Skeleton $w="46px" $h="46px" $r="12px" />
-            <SkeletonStack style={{ flex: 1 }}>
-              <Skeleton $w="38%" $h="15px" />
-              <Skeleton $w="58%" $h="11px" />
-            </SkeletonStack>
-            <Skeleton $w="96px" $h="34px" $r="10px" />
-          </SkeletonItem>
-        ))}
-      </List>
-    </>
-  )
 
   return (
     <Page>
+      <VisuallyHidden as="h1">기업</VisuallyHidden>
+
       <Header>
-        <HeaderLeft>
-          <TitleBadge>
-            <FiBriefcase size={22} />
-          </TitleBadge>
-          <div>
-            <Title>기업 관리</Title>
-            <Subtitle>
-              기업 마스터 데이터를 등록·관리하고 국가·창립자·조직과 연결합니다.
-            </Subtitle>
-          </div>
-        </HeaderLeft>
+        <HeaderTitle>
+          <TitleText aria-hidden>기업</TitleText>
+          {!isLoading && !isError && (
+            <Stats>
+              {isFiltered && <span>조건 일치</span>}
+              <strong>{rows.length.toLocaleString()}</strong>개
+              {isFiltered ? (
+                <StatsHint>/ 등록 전체 {list.length.toLocaleString()}개</StatsHint>
+              ) : (
+                <StatsHint>
+                  · 활동 중 {statusCounts.ACTIVE.toLocaleString()} · 국가{' '}
+                  {countryCount.toLocaleString()}
+                </StatsHint>
+              )}
+            </Stats>
+          )}
+        </HeaderTitle>
         <HeaderActions>
-          <Btn onClick={() => navigate('/company-categories')}>
-            <FiTag size={16} />
+          <GhostBtn type="button" onClick={() => navigate('/company-categories')}>
+            <FiTag size={14} />
             카테고리 관리
-          </Btn>
-          <Btn $primary onClick={handleCreate}>
-            <FiPlus size={18} />
+          </GhostBtn>
+          <PrimaryBtn type="button" onClick={() => setModalTarget('new')}>
+            <FiPlus size={15} />
             기업 추가
-          </Btn>
+          </PrimaryBtn>
         </HeaderActions>
       </Header>
 
-      <VisuallyHidden role="status" aria-live="polite">
-        {loading
-          ? '불러오는 중'
-          : loadError
-            ? '기업을 불러오지 못했습니다'
-            : filtered.length === 0
-              ? '조건에 맞는 기업이 없습니다'
-              : `${filtered.length}개 기업`}
-      </VisuallyHidden>
-
-      {loading ? (
-        renderSkeleton()
-      ) : loadError ? (
-        <EmptyBox>
-          <EmptyIcon>
-            <FiBriefcase size={26} />
-          </EmptyIcon>
-          <EmptyTitle>기업을 불러오지 못했습니다</EmptyTitle>
-          <EmptyDesc>일시적인 오류일 수 있습니다. 다시 시도해 주세요.</EmptyDesc>
-          <Btn $primary onClick={load}>
-            다시 시도
-          </Btn>
-        </EmptyBox>
-      ) : (
-        <>
-      <StatRow>
-        <StatCard $accent="#6366f1">
-          <StatValue>{stats.total.toLocaleString()}</StatValue>
-          <StatLabel>
-            <StatIcon $accent="#6366f1">
-              <FiBriefcase size={13} />
-            </StatIcon>
-            전체 기업
-          </StatLabel>
-        </StatCard>
-        <StatCard $accent="#16a34a">
-          <StatValue>{stats.active.toLocaleString()}</StatValue>
-          <StatLabel>
-            <StatIcon $accent="#16a34a">
-              <FiCheckCircle size={13} />
-            </StatIcon>
-            활동 중
-          </StatLabel>
-        </StatCard>
-        <StatCard $accent="#64748b">
-          <StatValue>{stats.closed.toLocaleString()}</StatValue>
-          <StatLabel>
-            <StatIcon $accent="#64748b">
-              <FiGitMerge size={13} />
-            </StatIcon>
-            해산 · 합병
-          </StatLabel>
-        </StatCard>
-        <StatCard $accent="#0891b2">
-          <StatValue>{stats.countries.toLocaleString()}</StatValue>
-          <StatLabel>
-            <StatIcon $accent="#0891b2">
-              <FiGlobe size={13} />
-            </StatIcon>
-            등록 국가
-          </StatLabel>
-        </StatCard>
-      </StatRow>
-
       <Toolbar>
         <SearchWrap>
-          <FiSearch size={16} className="lead" />
+          <FiSearch size={14} className="lead" aria-hidden />
           <SearchInput
-            type="text"
-            placeholder="기업명·약칭·원어명 검색..."
+            type="search"
+            placeholder="기업명·약칭·원어명·국가·창립자"
             aria-label="기업 검색"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && query) {
+                event.stopPropagation()
+                setQuery('')
+              }
+            }}
           />
           {query && (
-            <ClearBtn
-              type="button"
-              onClick={() => setQuery('')}
-              aria-label="검색어 지우기"
-            >
-              <FiX size={14} />
+            <ClearBtn type="button" onClick={() => setQuery('')} aria-label="검색어 지우기">
+              <FiX size={13} />
             </ClearBtn>
           )}
         </SearchWrap>
-        <FilterChips role="group" aria-label="상태 필터">
+        <Segment role="group" aria-label="상태 필터">
           {statusFilters.map((filter) => (
-            <FilterChip
+            <SegmentBtn
               key={filter.key}
               type="button"
               $active={statusFilter === filter.key}
               aria-pressed={statusFilter === filter.key}
-              aria-label={`${filter.label} ${filter.count}개`}
               onClick={() => setStatusFilter(filter.key)}
             >
+              {filter.key !== 'ALL' && (
+                <Dot $tone={COMPANY_STATUS_META[filter.key].tone} aria-hidden />
+              )}
               {filter.label}
-              <ChipCount $active={statusFilter === filter.key}>
-                {filter.count}
-              </ChipCount>
-            </FilterChip>
+              <SegmentCount>{filter.count}</SegmentCount>
+            </SegmentBtn>
           ))}
-        </FilterChips>
-        <ViewToggle role="group" aria-label="보기 방식">
-          <ViewToggleBtn
-            type="button"
-            $active={viewMode === 'list'}
-            onClick={() => setViewMode('list')}
-            title="리스트 보기"
-            aria-pressed={viewMode === 'list'}
-          >
-            <FiList size={16} />
-          </ViewToggleBtn>
-          <ViewToggleBtn
-            type="button"
-            $active={viewMode === 'table'}
-            onClick={() => setViewMode('table')}
-            title="테이블 보기"
-            aria-pressed={viewMode === 'table'}
-          >
-            <FiColumns size={16} />
-          </ViewToggleBtn>
-        </ViewToggle>
+        </Segment>
       </Toolbar>
 
-      {filtered.length === 0 ? (
-        <EmptyBox>
-          <EmptyIcon>
-            <FiBriefcase size={26} />
-          </EmptyIcon>
-          <EmptyTitle>
-            {search || statusFilter !== 'ALL'
-              ? '조건에 맞는 기업이 없습니다'
-              : '아직 등록된 기업이 없습니다'}
-          </EmptyTitle>
-          <EmptyDesc>
-            {search || statusFilter !== 'ALL'
-              ? '검색어나 필터를 변경해 보세요.'
-              : '첫 기업을 등록해 데이터베이스를 시작하세요.'}
-          </EmptyDesc>
-          {!search && statusFilter === 'ALL' ? (
-            <Btn $primary onClick={handleCreate}>
-              <FiPlus size={18} />
-              기업 추가
-            </Btn>
-          ) : (
-            <Btn
-              onClick={() => {
-                setQuery('')
-                setSearch('')
-                setStatusFilter('ALL')
-              }}
-            >
-              <FiX size={16} />
-              필터 초기화
-            </Btn>
-          )}
-        </EmptyBox>
-      ) : (
-        <>
-          <ResultBar>
-            <ResultCount>
-              <strong>{filtered.length.toLocaleString()}</strong>개 기업
-            </ResultCount>
-          </ResultBar>
-          {viewMode === 'list' ? (
-            <EditorialList>
-              {paginated.map((company) => {
-              const meta = company.status ? STATUS_META[company.status] : null
-              const country = company.country?.name ?? company.historicalCountry?.name
-              const year = getYear(company.foundedAt)
+      <VisuallyHidden role="status" aria-live="polite">
+        {isLoading
+          ? '불러오는 중'
+          : isError
+            ? '기업을 불러오지 못했습니다'
+            : `${rows.length}개 기업`}
+      </VisuallyHidden>
+
+      <TableWrap>
+        <Table role="table" aria-label="기업 목록" aria-busy={isLoading}>
+          <HeadRow role="row">
+            {COLUMNS.map((column) => {
+              const active = sort.key === column.key
               return (
-                <EditorialItem
-                  key={company.id}
-                  as={motion.li}
-                  initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.15 }}
-                  onClick={() => navigate(`/companies/${company.id}`)}
+                <HeadCell
+                  key={column.key}
+                  role="columnheader"
+                  aria-sort={
+                    active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
+                  }
+                  $hideBelow={column.hideBelow}
+                  $first={column.key === 'name'}
                 >
-                  <EdMain>
-                    <EdTopRow>
-                      <BigName
-                        to={`/companies/${company.id}`}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {company.name}
-                      </BigName>
-                      {company.shortName && <EdShort>{company.shortName}</EdShort>}
-                    </EdTopRow>
-                    <MetaRow>
-                      {country && (
-                        <MetaItem>
-                          <FiMapPin size={13} />
-                          {country}
-                        </MetaItem>
-                      )}
-                      {year && (
-                        <MetaItem>
-                          <FiCalendar size={13} />
-                          {year} 설립
-                        </MetaItem>
-                      )}
-                      {company.headquartersCity?.name && (
-                        <MetaItem>
-                          <FiBriefcase size={13} />
-                          {company.headquartersCity.name}
-                        </MetaItem>
-                      )}
-                      {company.founder?.name && (
-                        <MetaItem>
-                          <FiUser size={13} />
-                          {company.founder.name}
-                        </MetaItem>
-                      )}
-                      {company.organization?.name && (
-                        <MetaItem>
-                          <FiGlobe size={13} />
-                          {company.organization.name}
-                        </MetaItem>
-                      )}
-                      {!country &&
-                        !year &&
-                        !company.headquartersCity?.name &&
-                        !company.founder?.name &&
-                        !company.organization?.name && <MetaItem>—</MetaItem>}
-                    </MetaRow>
-                    {company.description && <EdDesc>{company.description}</EdDesc>}
-                  </EdMain>
-                  <EdRight onClick={(e) => e.stopPropagation()}>
-                    {meta && (
-                      <StatusBadge $color={meta.color}>{meta.label}</StatusBadge>
-                    )}
-                    <EdActions>
-                      {company.websiteUrl && (
-                        <IconLink
-                          href={company.websiteUrl}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          title="웹사이트 열기"
-                          aria-label={`${company.name} 웹사이트 (새 창)`}
-                        >
-                          <FiExternalLink size={16} />
-                        </IconLink>
-                      )}
-                      <IconBtn
-                        type="button"
-                        onClick={(ev) => handleEdit(company.id, ev)}
-                        title="수정"
-                        aria-label="수정"
-                      >
-                        <FiEdit2 size={16} />
-                      </IconBtn>
-                      <IconBtn
-                        type="button"
-                        $danger
-                        disabled={deletingId === company.id}
-                        onClick={(ev) => handleDelete(company.id, company.name, ev)}
-                        title="삭제"
-                        aria-label="삭제"
-                      >
-                        <FiTrash2 size={16} />
-                      </IconBtn>
-                    </EdActions>
-                  </EdRight>
-                </EditorialItem>
+                  <SortBtn
+                    type="button"
+                    $active={active}
+                    onClick={() => toggleSort(column.key)}
+                  >
+                    {column.label}
+                    {active &&
+                      (sort.dir === 'asc' ? (
+                        <FiArrowUp size={11} aria-hidden />
+                      ) : (
+                        <FiArrowDown size={11} aria-hidden />
+                      ))}
+                  </SortBtn>
+                </HeadCell>
               )
             })}
-            </EditorialList>
-          ) : (
-            <TableCard>
-              <TableHead>
-                {renderSortHeader('기업', 'name')}
-                {renderSortHeader('상태', 'status')}
-                {renderSortHeader('국가', 'country', true)}
-                {renderSortHeader('설립', 'founded', true)}
-                <ThRight>관리</ThRight>
-              </TableHead>
-              {paginated.map((company) => {
-                const meta = company.status ? STATUS_META[company.status] : null
-                const country = company.country?.name ?? company.historicalCountry?.name
-                const year = getYear(company.foundedAt)
-                const initial = getInitial(company)
-                return (
-                  <TableRow
-                    key={company.id}
-                    onClick={() => navigate(`/companies/${company.id}`)}
-                  >
-                    <Td>
-                      <CellCompany>
-                        <ThumbSm $hasLogo={!!company.logoUrl}>
-                          {company.logoUrl ? (
-                            <LogoImage src={company.logoUrl} fallback={initial} />
-                          ) : (
-                            initial
-                          )}
-                        </ThumbSm>
-                        <CellCompanyText>
-                          <CellName
-                            to={`/companies/${company.id}`}
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {company.name}
-                          </CellName>
-                          {company.shortName && <CellSub>{company.shortName}</CellSub>}
-                        </CellCompanyText>
-                      </CellCompany>
-                    </Td>
-                    <Td>
-                      {meta ? (
-                        <StatusChip $color={meta.color} $bg={meta.bg}>
-                          {meta.label}
-                        </StatusChip>
-                      ) : (
-                        <MutedDash>—</MutedDash>
-                      )}
-                    </Td>
-                    <TdHideSm>{country ?? <MutedDash>—</MutedDash>}</TdHideSm>
-                    <TdHideSm>{year ?? <MutedDash>—</MutedDash>}</TdHideSm>
-                    <TdRight onClick={(e) => e.stopPropagation()}>
-                      <ItemActions>
-                        {company.websiteUrl && (
-                          <IconLink
-                            href={company.websiteUrl}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            title="웹사이트 열기"
-                            aria-label={`${company.name} 웹사이트 (새 창)`}
-                          >
-                            <FiExternalLink size={15} />
-                          </IconLink>
-                        )}
-                        <IconBtn
-                          type="button"
-                          onClick={(ev) => handleEdit(company.id, ev)}
-                          title="수정"
-                          aria-label="수정"
-                        >
-                          <FiEdit2 size={15} />
-                        </IconBtn>
-                        <IconBtn
-                          type="button"
-                          $danger
-                          disabled={deletingId === company.id}
-                          onClick={(ev) => handleDelete(company.id, company.name, ev)}
-                          title="삭제"
-                          aria-label="삭제"
-                        >
-                          <FiTrash2 size={15} />
-                        </IconBtn>
-                      </ItemActions>
-                    </TdRight>
-                  </TableRow>
-                )
-              })}
-            </TableCard>
-          )}
+            <HeadCell role="columnheader">
+              <VisuallyHidden>관리</VisuallyHidden>
+            </HeadCell>
+          </HeadRow>
+          <div role="rowgroup">{renderBody()}</div>
+        </Table>
+      </TableWrap>
 
-          {totalPages > 1 && (
-            <Pagination as="nav" aria-label="페이지네이션">
-              <PageInfo>
-                {pageStart + 1}–
-                {Math.min(pageStart + pageSize, filtered.length)} / 전체{' '}
-                {filtered.length.toLocaleString()}
-              </PageInfo>
-              <PageControls>
-                <PageBtn
-                  type="button"
-                  disabled={currentPage <= 1}
-                  onClick={() => setPage(currentPage - 1)}
-                  aria-label="이전 페이지"
-                >
-                  <FiChevronLeft size={16} />
-                </PageBtn>
-                {getPageItems(currentPage, totalPages).map((it, i) =>
-                  it === 'dots' ? (
-                    <PageDots key={`d${i}`}>…</PageDots>
-                  ) : (
-                    <PageNum
-                      key={it}
-                      type="button"
-                      $active={it === currentPage}
-                      aria-current={it === currentPage ? 'page' : undefined}
-                      onClick={() => setPage(it)}
-                    >
-                      {it}
-                    </PageNum>
-                  ),
-                )}
-                <PageBtn
-                  type="button"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setPage(currentPage + 1)}
-                  aria-label="다음 페이지"
-                >
-                  <FiChevronRight size={16} />
-                </PageBtn>
-              </PageControls>
-              <PageSize>
-                <span>페이지당</span>
-                <select
-                  value={pageSize}
-                  aria-label="페이지당 항목 수"
-                  onChange={(e) => setPageSize(Number(e.target.value))}
-                >
-                  {PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}개
-                    </option>
-                  ))}
-                </select>
-              </PageSize>
-            </Pagination>
-          )}
-        </>
-      )}
-        </>
-      )}
+      <CompanyRegisterModal
+        isOpen={modalTarget !== null}
+        onClose={() => setModalTarget(null)}
+        companyId={modalTarget && modalTarget !== 'new' ? modalTarget : undefined}
+      />
     </Page>
   )
 }
 
 // ───────────────────────── Styled ─────────────────────────
+// 값은 사건 목록(pages/events/styles/theme.ts)의 토큰과 같다 — 페이지 간 import를 피하려
+// 필요한 몇 개만 옮겨 둔다: 브랜드 #2563eb · 메타 텍스트 #6b7280/#a1a1aa ·
+// 행 헤어라인 rgba(15,23,42,.08)/rgba(255,255,255,.12) · 툴바 컨트롤 34px.
+
+const BRAND = '#2563eb'
+const metaText = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? '#a1a1aa' : '#6b7280'
+const rowHairline = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)'
+const focusRing = css`
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px ${BRAND};
+  }
+`
+
+/*
+ * 열 사다리 — 이름 열이 남는 폭을 흡수하고 나머지는 고정. 좁아지면 뒤 열부터 접는다.
+ * ⚠️ 접힌 셀은 display:none이라 자동 배치에서 빠진다 → 트랙 수도 **같은 임계에서 같이**
+ *    줄여야 한다(0폭 트랙으로 남기면 다음 셀이 그 트랙으로 밀려 들어간다).
+ *    임계는 COLUMNS[].hideBelow와 한 쌍이다.
+ */
+const rowGrid = css`
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) minmax(96px, 150px) 112px minmax(96px, 150px)
+    minmax(88px, 130px) 84px 100px;
+  align-items: center;
+  column-gap: 16px;
+
+  @container companies (max-width: 1120px) {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) 112px minmax(96px, 150px) 84px 100px;
+  }
+  @container companies (max-width: 960px) {
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) 112px 84px 100px;
+  }
+  @container companies (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr) 96px 72px 76px;
+    column-gap: 10px;
+  }
+  @container companies (max-width: 520px) {
+    grid-template-columns: minmax(0, 1fr) 88px 76px;
+  }
+`
+
+const hideBelow = (width?: number) =>
+  width
+    ? css`
+        @container companies (max-width: ${width}px) {
+          display: none;
+        }
+      `
+    : ''
 
 const Page = styled.div`
-  /* 헤더 오프셋과 스크롤 컨테이너는 ContentLayout이 준다 — 좌측 기업 목록 사이드바가
-     붙으면서 companiesRoutes가 ContentLayout 안으로 들어갔다. 여기서 다시
-     margin-top: var(--header-height)를 주면 헤더 높이만큼 두 번 밀린다. */
+  /* 헤더 오프셋과 스크롤 컨테이너는 ContentLayout이 준다 */
   min-height: 100%;
-  /* 가운데 정렬 캡 제거 — 좌우 전체 폭 사용 */
-  padding: 2rem clamp(1.25rem, 2.5vw, 2.5rem) 4rem;
   width: 100%;
+  box-sizing: border-box;
+  padding: 20px clamp(16px, 2.5vw, 32px) 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  container: companies / inline-size;
 `
 
 const VisuallyHidden = styled.span`
@@ -772,122 +563,121 @@ const VisuallyHidden = styled.span`
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 `
 
 const Header = styled.header`
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.75rem;
-  flex-wrap: wrap;
-`
-
-const HeaderLeft = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 0.875rem;
-`
-
-const TitleBadge = styled.div`
-  flex-shrink: 0;
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  display: flex;
   align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.primary};
-  background: ${({ theme }) => theme.colors.activeLight};
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: relative;
+  padding: 2px 0 2px 12px;
+
+  /* 사건 목록과 같은 시그니처 — 좌측 강조 막대 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    border-radius: 2px;
+    background: ${BRAND};
+  }
 `
 
-const Title = styled.h1`
-  font-size: 1.5rem;
+const HeaderTitle = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+`
+
+const TitleText = styled.span`
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  margin: 0 0 0.25rem;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const Subtitle = styled.p`
-  font-size: 0.875rem;
-  line-height: 1.5;
-  margin: 0;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: 46ch;
+const Stats = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const StatsHint = styled.span`
+  margin-left: 4px;
 `
 
 const HeaderActions = styled.div`
   display: flex;
-  gap: 0.5rem;
+  gap: 8px;
   flex-wrap: wrap;
 `
 
-/* ── 미니멀 KPI 스트립 (박스 없이 숫자 + 라벨 + 세로 구분선) ── */
-const StatRow = styled.div`
-  display: flex;
-  align-items: stretch;
-  flex-wrap: wrap;
-  gap: 0;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const StatCard = styled.div<{ $accent: string }>`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 2px 34px;
-  border-left: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  &:first-child {
-    border-left: none;
-    padding-left: 2px;
-  }
-
-  @media (max-width: 640px) {
-    padding: 2px 18px;
-
-    &:first-child {
-      padding-left: 2px;
-    }
-  }
-`
-
-const StatIcon = styled.span<{ $accent: string }>`
-  display: inline-flex;
-  align-items: center;
-  color: ${({ $accent }) => $accent};
-`
-
-const StatValue = styled.div`
-  font-size: 1.875rem;
-  font-weight: 750;
-  line-height: 1.05;
-  letter-spacing: -0.025em;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-variant-numeric: tabular-nums;
-`
-
-const StatLabel = styled.div`
+const buttonBase = css`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+  ${focusRing}
+`
+
+const PrimaryBtn = styled.button`
+  ${buttonBase}
+  border: 1px solid ${BRAND};
+  background: ${BRAND};
+  color: #fff;
+
+  &:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+  }
+`
+
+const GhostBtn = styled.button`
+  ${buttonBase}
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => theme.colors.hover};
+  }
 `
 
 const Toolbar = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
+  gap: 8px 12px;
   flex-wrap: wrap;
 `
 
@@ -895,442 +685,389 @@ const SearchWrap = styled.div`
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1;
-  min-width: 220px;
-  max-width: 340px;
+  flex: 1 1 240px;
+  max-width: 360px;
 
   svg.lead {
     position: absolute;
-    left: 12px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    left: 10px;
+    color: ${metaText};
     pointer-events: none;
-  }
-`
-
-const ClearBtn = styled.button`
-  position: absolute;
-  right: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
 const SearchInput = styled.input`
   width: 100%;
-  padding: 0.6rem 2.25rem 0.6rem 2.25rem;
-  border-radius: 12px;
-  font-size: 0.875rem;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 30px 0 30px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(203, 213, 225, 0.6)'};
   color: ${({ theme }) => theme.colors.text.primary};
   transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+    border-color 0.15s,
+    background 0.15s;
 
   &::placeholder {
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    color: ${metaText};
   }
-
+  &::-webkit-search-cancel-button {
+    display: none;
+  }
   &:focus {
     outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+    border-color: ${BRAND};
+    background: ${({ theme }) => theme.colors.background.primary};
   }
 `
 
-const FilterChips = styled.div`
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+const ClearBtn = styled.button`
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  ${focusRing}
 `
 
-const FilterChip = styled.button<{ $active: boolean }>`
+const Segment = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
+`
+
+const SegmentBtn = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0.45rem 0.8rem;
-  border-radius: 999px;
-  font-size: 0.8125rem;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition:
     background 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    color 0.15s;
+  ${focusRing}
+
   ${({ $active, theme }) =>
     $active
       ? css`
-          background: ${theme.colors.activeLight};
-          color: ${theme.colors.active};
-          border: 1px solid
-            ${theme.mode === 'dark' ? 'rgba(99,102,241,0.45)' : '#c7d2fe'};
+          background: ${theme.colors.background.primary};
+          color: ${theme.colors.text.primary};
+          box-shadow: 0 1px 2px
+            ${theme.mode === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(15,23,42,0.08)'};
         `
       : css`
-          background: ${theme.colors.background.primary};
-          color: ${theme.colors.text.secondary};
-          border: 1px solid ${theme.colors.border.default};
+          background: transparent;
+          color: ${metaText};
           &:hover {
-            background: ${theme.colors.hover};
             color: ${theme.colors.text.primary};
           }
         `}
 `
 
-const ChipCount = styled.span<{ $active: boolean }>`
-  font-size: 0.6875rem;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 999px;
+const SegmentCount = styled.span`
+  font-size: 11px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.3)'
-        : 'rgba(99,102,241,0.16)'
-      : theme.colors.background.tertiary};
-  color: inherit;
+  opacity: 0.75;
 `
 
-const ResultBar = styled.div`
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.75rem;
-`
-
-const ResultCount = styled.div`
-  font-size: 0.8125rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  strong {
-    color: ${({ theme }) => theme.colors.text.primary};
-    font-weight: 700;
-  }
-`
-
-const List = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const StatusChip = styled.span<{ $color: string; $bg: string }>`
-  font-size: 0.6875rem;
-  font-weight: 700;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: ${({ $bg }) => $bg};
-  color: ${({ $color }) => $color};
-`
-
-const MetaRow = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px 16px;
-  margin-top: 9px;
-`
-
-const MetaItem = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.8125rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  svg {
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    flex-shrink: 0;
-  }
-`
-
-const ItemActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
+const Dot = styled.span<{ $tone: string }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${({ $tone }) => $tone};
   flex-shrink: 0;
 `
 
-/* ── 에디토리얼 빅 타이포 리스트 ── */
-const EditorialList = styled.ul`
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* ── 표 ── */
+
+const TableWrap = styled.div`
+  min-width: 0;
 `
 
-const EditorialItem = styled.li`
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1.5rem;
-  padding: 22px 14px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.15s;
+const Table = styled.div`
+  width: 100%;
+`
 
-  &:first-child {
-    border-top: none;
+const HeadRow = styled.div`
+  ${rowGrid}
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 32px;
+  padding: 0 8px;
+  /* sticky라 불투명해야 한다 — 아래로 지나가는 행이 비치면 안 된다 */
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.background.primary : '#ffffff'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const HeadCell = styled.div<{ $hideBelow?: number; $first?: boolean }>`
+  min-width: 0;
+  overflow: hidden;
+  /* 이름 열 머리글은 로고 폭(28)+간격(10)만큼 들여 행의 글자 시작선에 맞춘다 */
+  padding-left: ${({ $first }) => ($first ? '38px' : '0')};
+  ${({ $hideBelow }) => hideBelow($hideBelow)}
+`
+
+const SortBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: pointer;
+  color: ${({ $active, theme }) => ($active ? theme.colors.text.primary : metaText({ theme }))};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
   }
+  svg {
+    color: ${BRAND};
+  }
+  ${focusRing}
+`
+
+const Row = styled.div`
+  ${rowGrid}
+  position: relative;
+  min-height: 48px;
+  padding: 6px 8px;
+  border-bottom: 1px solid ${rowHairline};
+  cursor: pointer;
+  transition: background 0.12s;
+
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
   }
 `
 
-const EdMain = styled.div`
+const Cell = styled.div<{ $hideBelow?: number; $numeric?: boolean }>`
   min-width: 0;
-  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${({ $numeric }) =>
+    $numeric &&
+    css`
+      font-variant-numeric: tabular-nums;
+    `}
+  ${({ $hideBelow }) => hideBelow($hideBelow)}
 `
 
-const EdTopRow = styled.div`
+const NameCell = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+`
+
+const Mark = styled.span<{ $hasLogo: boolean }>`
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  background: ${({ $hasLogo, theme }) =>
+    $hasLogo
+      ? theme.colors.background.tertiary
+      : theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.2)'
+        : '#eef2ff'};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+
+/* 이름 → 약칭 → 소개를 한 줄에 잇는다(사건 목록의 '제목 뒤 잇는 글'). 넘치면 소개부터 잘린다. */
+const NameText = styled.div`
+  flex: 1 1 auto;
   display: flex;
   align-items: baseline;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 `
 
-const BigName = styled(Link)`
-  font-size: 1.5rem;
-  font-weight: 750;
-  letter-spacing: -0.022em;
-  line-height: 1.2;
+const NameLink = styled(Link)`
+  flex-shrink: 0;
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
   text-decoration: none;
-  transition: color 0.15s;
 
+  ${Row}:hover & {
+    color: ${BRAND};
+  }
   &:hover {
     text-decoration: underline;
   }
-
-  ${EditorialItem}:hover & {
-    color: ${({ theme }) => theme.colors.primary};
-  }
-
-  @media (max-width: 640px) {
-    font-size: 1.25rem;
-  }
+  ${focusRing}
 `
 
-const EdShort = styled.span`
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: ${({ theme }) => theme.colors.background.tertiary};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EdDesc = styled.p`
-  margin: 9px 0 0;
-  font-size: 0.875rem;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: 86ch;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-`
-
-const EdRight = styled.div`
+const SubName = styled.span`
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
+  font-size: 12px;
+  color: ${metaText};
 `
 
-const StatusBadge = styled.span<{ $color: string }>`
+const Description = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: ${metaText};
+
+  &::before {
+    content: '— ';
+  }
+`
+
+const StatusDot = styled.span<{ $tone: string }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8125rem;
+  font-size: 12px;
   font-weight: 600;
-  color: ${({ $color }) => $color};
-  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   &::before {
     content: '';
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: ${({ $color }) => $color};
+    background: ${({ $tone }) => $tone};
   }
 `
 
-const EdActions = styled.div`
+const Muted = styled.span`
+  color: ${metaText};
+  opacity: 0.6;
+`
+
+const ActionsCell = styled.div`
   display: flex;
-  align-items: center;
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 2px;
   opacity: 0;
-  transform: translateY(-2px);
-  transition: opacity 0.15s, transform 0.15s;
+  transition: opacity 0.12s;
 
-  /* 키보드 포커스(focus-within)에도 노출 — 안 그러면 Tab으로 수정/삭제 버튼에 닿아도
-     보이지 않아 WCAG 2.4.7(Focus Visible) 위반(hover만 처리하던 누락 보완). */
-  ${EditorialItem}:hover &,
-  ${EditorialItem}:focus-within & {
+  /* 키보드 포커스에도 노출(WCAG 2.4.7) · 터치 기기는 상시 */
+  ${Row}:hover &,
+  ${Row}:focus-within & {
     opacity: 1;
-    transform: none;
   }
-
   @media (hover: none) {
     opacity: 1;
-    transform: none;
   }
 `
 
-const actionBtnStyles = css`
+const IconAction = styled.button<{ $danger?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${metaText};
   cursor: pointer;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  color: ${({ theme }) => theme.colors.text.secondary};
   transition:
-    background 0.15s,
-    color 0.15s,
-    border-color 0.15s;
+    background 0.12s,
+    color 0.12s;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)'};
+    color: ${({ theme, $danger }) =>
+      $danger ? theme.colors.error : theme.colors.text.primary};
   }
-`
-
-const IconBtn = styled.button<{ $danger?: boolean }>`
-  ${actionBtnStyles}
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
-  ${({ $danger, theme }) =>
-    $danger &&
-    css`
-      &:hover {
-        color: ${theme.colors.error};
-        border-color: ${theme.colors.alert.danger.border};
-        background: ${theme.mode === 'dark'
-          ? 'rgba(248,113,113,0.12)'
-          : 'rgba(239,68,68,0.06)'};
-      }
-    `}
+  ${focusRing}
 `
 
-const IconLink = styled.a`
-  ${actionBtnStyles}
-`
-
-const Btn = styled.button<{ $primary?: boolean }>`
-  padding: 0.55rem 1rem;
-  border-radius: 12px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  transition:
-    background 0.18s,
-    border-color 0.18s,
-    transform 0.12s,
-    box-shadow 0.18s;
-
-  &:active {
-    transform: scale(0.97);
-  }
-
-  ${({ theme, $primary }) =>
-    $primary
-      ? css`
-          background: ${theme.colors.gradient.primary};
-          color: ${theme.colors.button.text};
-          border: none;
-          box-shadow: 0 4px 14px ${theme.colors.shadow.md};
-          &:hover {
-            box-shadow: 0 6px 18px ${theme.colors.shadow.lg};
-          }
-        `
-      : css`
-          background: ${theme.colors.background.primary};
-          color: ${theme.colors.text.secondary};
-          border: 1px solid ${theme.colors.border.default};
-          &:hover {
-            background: ${theme.colors.hover};
-            color: ${theme.colors.text.primary};
-            border-color: ${theme.colors.border.medium};
-          }
-        `}
-`
-
-const EmptyBox = styled.div`
+const EmptyState = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 64px 32px;
+  gap: 8px;
+  padding: 64px 24px;
   text-align: center;
-  border-radius: 18px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-`
-
-const EmptyIcon = styled.div`
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 4px;
-  color: ${({ theme }) => theme.colors.primary};
-  background: ${({ theme }) => theme.colors.activeLight};
 `
 
 const EmptyTitle = styled.div`
-  font-size: 1rem;
+  font-size: 15px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const EmptyDesc = styled.div`
-  font-size: 0.875rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 13px;
+  color: ${metaText};
   margin-bottom: 8px;
 `
 
-// ── 스켈레톤 (로딩) ──
 const shimmer = keyframes`
   100% { transform: translateX(100%); }
 `
 
-const Skeleton = styled.div<{ $w?: string; $h?: string; $r?: string }>`
+const Skeleton = styled.span<{ $w?: string; $h?: string; $r?: string }>`
+  display: block;
   width: ${({ $w }) => $w ?? '100%'};
-  height: ${({ $h }) => $h ?? '14px'};
-  border-radius: ${({ $r }) => $r ?? '6px'};
+  height: ${({ $h }) => $h ?? '12px'};
+  border-radius: ${({ $r }) => $r ?? '4px'};
   background: ${({ theme }) => theme.colors.background.tertiary};
   position: relative;
   overflow: hidden;
@@ -1345,340 +1082,9 @@ const Skeleton = styled.div<{ $w?: string; $h?: string; $r?: string }>`
       90deg,
       transparent,
       ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.07)'
-          : 'rgba(255, 255, 255, 0.65)'},
+        theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.65)'},
       transparent
     );
     animation: ${shimmer} 1.4s infinite;
-  }
-`
-
-const SkeletonStack = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-`
-
-const SkeletonToolbar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-`
-
-const SkeletonItem = styled.li`
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px 14px 18px;
-  border-radius: 14px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-`
-
-// ── 보기 토글 ──
-const ViewToggle = styled.div`
-  display: inline-flex;
-  padding: 3px;
-  gap: 2px;
-  border-radius: 12px;
-  background: ${({ theme }) => theme.colors.background.tertiary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  margin-left: auto;
-`
-
-const ViewToggleBtn = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 30px;
-  border: none;
-  border-radius: 9px;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
-  ${({ $active, theme }) =>
-    $active
-      ? css`
-          background: ${theme.colors.background.primary};
-          color: ${theme.colors.primary};
-          box-shadow: 0 1px 3px ${theme.colors.shadow.sm};
-        `
-      : css`
-          background: transparent;
-          color: ${theme.colors.text.tertiary};
-          &:hover {
-            color: ${theme.colors.text.secondary};
-          }
-        `}
-`
-
-// ── 테이블 뷰 ──
-const tableGrid = css`
-  display: grid;
-  grid-template-columns: minmax(0, 2.4fr) 120px minmax(0, 1.4fr) 90px 130px;
-  align-items: center;
-  gap: 12px;
-
-  @media (max-width: 860px) {
-    grid-template-columns: minmax(0, 1fr) 110px 130px;
-  }
-`
-
-const TableCard = styled.div`
-  border-radius: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
-  /* overflow:hidden 은 sticky 헤더를 깨므로 사용하지 않고, 코너는 head/마지막 행에서 처리 */
-`
-
-const TableHead = styled.div`
-  ${tableGrid}
-  position: sticky;
-  /* 스크롤 컨테이너가 이제 Page(헤더 아래에서 시작)이므로 top:0이 곧 뷰포트 상단. */
-  top: 0;
-  z-index: 2;
-  padding: 12px 18px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 16px 16px 0 0;
-`
-
-const Th = styled.div`
-  font-size: 0.6875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const ThRight = styled(Th)`
-  text-align: right;
-`
-
-const SortHeader = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: none;
-  font-family: inherit;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  user-select: none;
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
-  transition: color 0.15s;
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-  svg {
-    color: ${({ theme }) => theme.colors.primary};
-    flex-shrink: 0;
-  }
-`
-
-const SortHeaderHideSm = styled(SortHeader)`
-  @media (max-width: 860px) {
-    display: none;
-  }
-`
-
-const TableRow = styled.div`
-  ${tableGrid}
-  padding: 12px 18px;
-  cursor: pointer;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  transition: background 0.12s;
-  &:last-child {
-    border-bottom: none;
-    border-radius: 0 0 16px 16px;
-  }
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const Td = styled.div`
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  font-size: 0.8125rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const TdHideSm = styled(Td)`
-  @media (max-width: 860px) {
-    display: none;
-  }
-`
-
-const TdRight = styled(Td)`
-  justify-content: flex-end;
-`
-
-const CellCompany = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-`
-
-const ThumbSm = styled.div<{ $hasLogo: boolean }>`
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
-  background: ${({ $hasLogo, theme }) =>
-    $hasLogo
-      ? theme.colors.background.tertiary
-      : theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.2)'
-        : '#eef2ff'};
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-`
-
-const CellCompanyText = styled.div`
-  min-width: 0;
-`
-
-const CellName = styled(Link)`
-  display: block;
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: ${({ theme }) => theme.colors.text.primary};
-  text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  &:hover {
-    text-decoration: underline;
-  }
-`
-
-const CellSub = styled.div`
-  font-size: 0.6875rem;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const MutedDash = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-// ── 페이지네이션 ──
-const Pagination = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 1.25rem;
-  flex-wrap: wrap;
-`
-
-const PageInfo = styled.div`
-  font-size: 0.8125rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-variant-numeric: tabular-nums;
-`
-
-const PageControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-`
-
-const PageBtn = styled.button`
-  ${actionBtnStyles}
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    background: ${({ theme }) => theme.colors.background.primary};
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-`
-
-const PageNum = styled.button<{ $active: boolean }>`
-  min-width: 34px;
-  height: 34px;
-  padding: 0 6px;
-  border-radius: 10px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-variant-numeric: tabular-nums;
-  transition:
-    background 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-  ${({ $active, theme }) =>
-    $active
-      ? css`
-          background: ${theme.colors.activeLight};
-          color: ${theme.colors.active};
-          border: 1px solid
-            ${theme.mode === 'dark' ? 'rgba(99,102,241,0.45)' : '#c7d2fe'};
-        `
-      : css`
-          background: ${theme.colors.background.primary};
-          color: ${theme.colors.text.secondary};
-          border: 1px solid ${theme.colors.border.default};
-          &:hover {
-            background: ${theme.colors.hover};
-            color: ${theme.colors.text.primary};
-          }
-        `}
-`
-
-const PageDots = styled.span`
-  min-width: 22px;
-  text-align: center;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const PageSize = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8125rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  select {
-    padding: 6px 8px;
-    border-radius: 10px;
-    border: 1px solid ${({ theme }) => theme.colors.border.default};
-    background: ${({ theme }) => theme.colors.background.primary};
-    color: ${({ theme }) => theme.colors.text.primary};
-    font-size: 0.8125rem;
-    cursor: pointer;
-    &:focus {
-      outline: none;
-      border-color: ${({ theme }) => theme.colors.primary};
-    }
-    option {
-      background: ${({ theme }) => theme.colors.background.primary};
-      color: ${({ theme }) => theme.colors.text.primary};
-    }
   }
 `

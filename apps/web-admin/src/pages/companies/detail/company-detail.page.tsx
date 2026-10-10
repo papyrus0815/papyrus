@@ -14,6 +14,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import type { UpdateCompanyInput } from '@/shared/api/company'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
+import { CompanyRegisterModal } from '@/widgets/company-form'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 import {
   InlineDateRange,
@@ -87,6 +88,8 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
 
   const navigate = useNavigate()
   const mutation = useCompanyMutation(companyId)
+  /* 기본 정보 수정 — 옛 /companies/:id/edit 페이지 대신 모달 */
+  const [editOpen, setEditOpen] = useState(false)
   const onPatch = useCallback(
     (patch: UpdateCompanyInput) => mutation.mutate(patch),
     [mutation],
@@ -278,15 +281,9 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                 </S.HeroMetaItem>
               )}
               <S.HeroMetaItem>
-                <a
-                  href={`/companies/${companyId}/edit`}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    navigate(`/companies/${companyId}/edit`)
-                  }}
-                >
+                <button type="button" onClick={() => setEditOpen(true)}>
                   <FiSliders size={12} /> 기본 정보 수정
-                </a>
+                </button>
               </S.HeroMetaItem>
             </S.HeroMeta>
           </S.Hero>
@@ -425,6 +422,11 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
           </S.Body>
         </S.PageInner>
       </S.Page>
+      <CompanyRegisterModal
+        isOpen={editOpen}
+        onClose={() => setEditOpen(false)}
+        companyId={companyId}
+      />
     </InlineEditProvider>
   )
 }

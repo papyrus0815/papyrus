@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import { companyApi, type CompanyStatus } from '@/shared/api/company'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
+import { COMPANY_STATUS_META, CompanyRegisterModal } from '@/widgets/company-form'
 import {
   EntityListSidebar,
   filterSidebarItems,
@@ -22,13 +23,10 @@ import {
 const NO_COUNTRY = '__no-country__'
 const PALETTE = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#14b8a6', '#ec4899']
 
-const STATUS_LABEL: Record<string, string> = {
-  ACTIVE: '운영 중',
-  DISSOLVED: '해산',
-  MERGED: '합병',
-  ACQUIRED: '피인수',
-  BANKRUPT: '파산',
-}
+/** 상태 라벨 — 등록 모달·목록과 같은 출처(옛 사본은 존재하지 않는 ACQUIRED/BANKRUPT를 들고 있었다) */
+const STATUS_LABEL: Record<string, string> = Object.fromEntries(
+  Object.entries(COMPANY_STATUS_META).map(([status, meta]) => [status, meta.label]),
+)
 
 interface CompanyListSidebarProps {
   selectedId: string | null
@@ -53,6 +51,8 @@ export function CompanyListSidebar({
   const { pinnedIds, togglePin } = useSidebarPins('company-sidebar-pins')
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  /* 호출부가 onAdd를 안 주면(레이아웃 셸) 등록 모달을 직접 띄운다 — 페이지 이동 없이 */
+  const [createOpen, setCreateOpen] = useState(false)
 
   const { items, groups, statusOptions } = useMemo(() => {
     const list = data ?? []
@@ -111,6 +111,7 @@ export function CompanyListSidebar({
   }, [data, query, statusFilter])
 
   return (
+    <>
     <EntityListSidebar
       title="기업 목록"
       noun="기업"
@@ -144,7 +145,7 @@ export function CompanyListSidebar({
       }}
       pinnedIds={pinnedIds}
       onTogglePin={togglePin}
-      onAdd={onAdd}
+      onAdd={onAdd ?? (() => setCreateOpen(true))}
       addLabel="기업 등록"
       isLoading={isLoading}
       isError={isError}
@@ -153,5 +154,10 @@ export function CompanyListSidebar({
       onToggleCollapse={onToggleCollapse}
       collapsedIcon={<FiBriefcase size={16} />}
     />
+    <CompanyRegisterModal
+      isOpen={createOpen}
+      onClose={() => setCreateOpen(false)}
+    />
+    </>
   )
 }

@@ -218,12 +218,24 @@ export const HeroMetaItem = styled.span`
     opacity: 0.6;
   }
 
-  a {
+  a,
+  > button {
     color: ${({ theme }) => theme.colors.primary};
     text-decoration: none;
     &:hover {
       text-decoration: underline;
     }
+  }
+
+  > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
   }
 `
 

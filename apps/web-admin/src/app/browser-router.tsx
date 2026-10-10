@@ -16,7 +16,7 @@ import { dynastyRoute } from '@/pages/dynasty/dynasty.route'
 import { personGroupsRoutes } from '@/pages/person-groups/person-groups.route'
 import { ethnicitiesRoutes } from '@/pages/ethnicities/ethnicities.route'
 import { organizationsRoutes } from '@/pages/organizations/organizations.route'
-import { companiesRoutes, companyFormRoutes } from '@/pages/companies/companies.route'
+import { companiesRoutes } from '@/pages/companies/companies.route'
 import { treatiesRoutes } from '@/pages/treaties/treaties.route'
 import { companyCategoriesRoutes } from '@/pages/company-categories/company-categories.route'
 import { eventFormRoutes, eventPageRoute } from '@/pages/events/event-route'
@@ -171,7 +171,6 @@ const appRouterConfig = [
           dashboardRoute,
           // 전체 폭을 쓰는 폼 — 좌측 목록이 방해가 되므로 콘텐츠 영역 밖에 둔다
           ...eventFormRoutes,
-          ...companyFormRoutes,
           // 인물 등록/수정 풀 페이지 폼 — /persons-timeline/* URL이지만 ContentLayout 셸 없음
           ...personFormRoutes,
           // 게이미피케이션 리더보드
