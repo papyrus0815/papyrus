@@ -101,11 +101,15 @@ export function CompanySummaryCard({ company }: Props) {
       return (outlook.asOf ?? '') > (best.asOf ?? '') ? outlook : best
     }, null)
 
-  // 데이터 현황 — 항상 표시. 완성도 N/6 + 다음 권장 액션.
+  // 데이터 현황 — 항상 표시. 완성도 N/7 + 다음 권장 액션.
   const checklist = [
     {
       filled: !isVisuallyEmptyRichText(company.description ?? ''),
       hint: '회사 개요를 작성해 보세요.',
+    },
+    {
+      filled: !isVisuallyEmptyRichText(company.foundingBackground ?? ''),
+      hint: '설립 배경을 적어 보세요 — 누가·왜 세웠는지.',
     },
     {
       filled: (company.stockPoints?.length ?? 0) > 0,

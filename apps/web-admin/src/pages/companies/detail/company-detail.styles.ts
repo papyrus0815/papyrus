@@ -24,6 +24,21 @@ export const Page = styled.div`
   /* 자체 스크롤 컨테이너를 만들지 않는다 — overflow:auto/hidden이면 탭 바 sticky가 이 상자에
      붙어(실제로는 스크롤하지 않으므로) 영영 붙지 않는다. 가로 넘침만 clip으로 자른다. */
   overflow-x: clip;
+
+  /*
+   * 빈 선택 칸 안내('출처 (선택)', '리포트 제목 (선택)', '투자의견 근거…')가 기울임 본문색으로
+   * 카드마다 대여섯 개씩 서 있어, 값보다 안내가 더 눈에 띄었다. 이 문서에서만 한 톤 낮춘다
+   * (공용 inline-edit 키트는 사건 상세도 쓰므로 건드리지 않는다).
+   */
+  [data-empty='true'],
+  [data-empty='true'] * {
+    font-style: normal;
+  }
+  [data-empty='true'] {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    opacity: 0.75;
+  }
+
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.primary};
 
@@ -121,15 +136,32 @@ export const GroupGrid = styled.div<{ $aside?: boolean; $reading?: boolean }>`
   }
 `
 
-export const GridCell = styled.div<{ $wide?: boolean; $card?: boolean }>`
+export const GridCell = styled.div<{
+  $wide?: boolean
+  $card?: boolean
+  /** 개요 우측 요약 카드 — 왼쪽 서술이 길어져도 탭 바 아래에 붙어 따라온다 */
+  $sticky?: boolean
+}>`
   min-width: 0;
   ${({ $wide }) => ($wide ? 'grid-column: 1 / -1;' : '')}
+  ${({ $sticky }) => ($sticky ? 'position: sticky; top: 64px;' : '')}
+
+  @media (max-width: 900px) {
+    position: static;
+  }
   /* 카드 경계 — 2단에서 인접 모듈을 시각적으로 구획(투명 배경 + 하어라인, 안쪽 패널과
      배경 충돌 없음). 콘텐츠 높이 차로 인한 ragged는 카드 경계로 흡수된다. */
   ${({ theme, $card }) =>
     $card
       ? `border: 1px solid ${hairline(theme.mode)}; border-radius: 12px; padding: 22px 24px;`
       : ''}
+`
+
+/** 개요 탭 왼쪽 — 개요·설립 배경·관련 사건·최근 연혁을 같은 간격으로 쌓는다 */
+export const OverviewStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
 `
 
 /* ───────────────────────── Hero ───────────────────────── */
@@ -256,9 +288,49 @@ export const HeroSubName = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-export const EditBasicsBtn = styled.button`
+export const HeroActions = styled.div`
   flex-shrink: 0;
   align-self: flex-start;
+  display: flex;
+  gap: 6px;
+`
+
+export const DeleteBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => hairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
+
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.error ?? '#dc2626'};
+    border-color: ${({ theme }) => theme.colors.error ?? '#dc2626'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.1)' : 'rgba(239,68,68,0.05)'};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`
+
+export const EditBasicsBtn = styled.button`
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -752,16 +824,26 @@ export const ChipRemove = styled.button`
 
 /* ───────────────────────── Empty / states ───────────────────────── */
 
+/**
+ * 빈 상태 안내 — 글 한 덩어리.
+ * ⚠️ flex 열이면 안 된다: 안내문 속 <strong>이 별도 flex 항목이 되어
+ *    '…좌우할 / 핵심 변수 / 를 기록하세요'처럼 문장이 세 줄로 끊겼다(연혁·주가·전망 3곳).
+ */
 export const EmptyState = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 12px 0 14px 16px;
-  border-left: 2px dashed ${({ theme }) => hairlineStrong(theme.mode)};
+  display: block;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px dashed ${({ theme }) => hairlineStrong(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.02)'};
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 13.5px;
   line-height: 1.6;
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 600;
+  }
 `
 
 export const StateBox = styled.div`

@@ -12,6 +12,7 @@ import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { InlineDate, InlineRichText, InlineText } from '@/shared/ui/inline-edit'
 
+import { ClampedBlock } from './company-clamped-block'
 import * as S from './company-detail.styles'
 
 interface ProductRow {
@@ -231,14 +232,16 @@ export function CompanyProductsModule({
 
               <S.RowNarrative>
                 <S.RowFieldLabel>설명</S.RowFieldLabel>
-                <InlineRichText
-                  value={row.description}
-                  onSave={(next) => updateRow(idx, { description: next })}
-                  placeholder="제품 의의·특징 — 인물·사건을 인라인으로 링크할 수 있습니다."
-                  onPersonClick={onPersonClick}
-                  stickyEditButton={false}
-                  label="제품 설명"
-                />
+                <ClampedBlock label="제품 설명" collapsedHeight={200}>
+                  <InlineRichText
+                    value={row.description}
+                    onSave={(next) => updateRow(idx, { description: next })}
+                    placeholder="제품 의의·특징 — 인물·사건을 인라인으로 링크할 수 있습니다."
+                    onPersonClick={onPersonClick}
+                    stickyEditButton={false}
+                    label="제품 설명"
+                  />
+                </ClampedBlock>
               </S.RowNarrative>
             </ProductCard>
           ))}

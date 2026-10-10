@@ -31,6 +31,7 @@ import {
   InlineText,
 } from '@/shared/ui/inline-edit'
 
+import { ClampedBlock } from './company-clamped-block'
 import * as S from './company-detail.styles'
 
 /**
@@ -38,7 +39,7 @@ import * as S from './company-detail.styles'
  * union에 값을 추가하고 여기 누락하면 tsc가 잡고, 없는 값을 적어도 tsc가 잡는다
  * (InlineSelectOption.value가 string이라 옵션 배열만으론 잡히지 않는 드리프트의 유일한 안전망).
  */
-const HISTORY_TYPE_LABELS = {
+export const HISTORY_TYPE_LABELS = {
   GENERAL: '일반',
   PRODUCT_LAUNCH: '제품·기술 출시',
   FINANCIAL: '재무·실적',
@@ -527,14 +528,16 @@ export function CompanyHistorySection({
                   </S.RowMetaLine>
                 )}
 
-                <InlineRichText
-                  value={row.content}
-                  onSave={(next) => updateRow(idx, { content: next })}
-                  placeholder="배경·의의 — 인물·사건을 인라인으로 링크할 수 있습니다."
-                  onPersonClick={onPersonClick}
-                  stickyEditButton={false}
-                  label="연혁 본문"
-                />
+                <ClampedBlock label="연혁 본문">
+                  <InlineRichText
+                    value={row.content}
+                    onSave={(next) => updateRow(idx, { content: next })}
+                    placeholder="배경·의의 — 인물·사건을 인라인으로 링크할 수 있습니다."
+                    onPersonClick={onPersonClick}
+                    stickyEditButton={false}
+                    label="연혁 본문"
+                  />
+                </ClampedBlock>
 
                 <S.RowNarrative>
                   <S.RowFieldLabel>메모</S.RowFieldLabel>

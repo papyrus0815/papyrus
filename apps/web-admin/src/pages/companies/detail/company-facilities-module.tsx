@@ -18,6 +18,7 @@ import {
   InlineText,
 } from '@/shared/ui/inline-edit'
 
+import { ClampedBlock } from './company-clamped-block'
 import * as S from './company-detail.styles'
 
 const FACILITY_TYPE_OPTIONS: InlineSelectOption[] = [
@@ -271,16 +272,18 @@ export function CompanyFacilitiesModule({
 
               <S.RowNarrative>
                 <S.RowFieldLabel>건설 배경</S.RowFieldLabel>
-                <InlineRichText
-                  value={row.constructionBackground}
-                  onSave={(next) =>
-                    updateRow(idx, { constructionBackground: next })
-                  }
-                  placeholder="건설 배경·사유 — 인물·사건을 인라인으로 링크할 수 있습니다."
-                  onPersonClick={onPersonClick}
-                  stickyEditButton={false}
-                  label="건설 배경"
-                />
+                <ClampedBlock label="건설 배경" collapsedHeight={200}>
+                  <InlineRichText
+                    value={row.constructionBackground}
+                    onSave={(next) =>
+                      updateRow(idx, { constructionBackground: next })
+                    }
+                    placeholder="건설 배경·사유 — 인물·사건을 인라인으로 링크할 수 있습니다."
+                    onPersonClick={onPersonClick}
+                    stickyEditButton={false}
+                    label="건설 배경"
+                  />
+                </ClampedBlock>
               </S.RowNarrative>
 
               <S.RowNarrative>

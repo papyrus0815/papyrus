@@ -232,6 +232,8 @@ export type CompanyOutlookItem = {
 /** 상세 조회 응답 — 요약 관계 + 시설·연혁·카테고리·제품·주가·목표주가·전망 */
 export type CompanyDetail = Company & {
   financialCommentary: string | null
+  /** 설립 배경(리치텍스트 HTML) */
+  foundingBackground: string | null
   facilities: CompanyFacilitySummary[]
   histories: CompanyHistoryItem[]
   categories: CompanyCategoryLink[]
@@ -385,6 +387,7 @@ export type CompanyOutlookInput = {
 export type UpdateCompanyInput = Partial<CreateCompanyInput> & {
   status?: CompanyStatus | null
   financialCommentary?: string | null
+  foundingBackground?: string | null
   facilities?: CompanyFacilityInput[]
   histories?: CompanyHistoryInput[]
   categories?: CompanyCategoryInput[]
@@ -392,6 +395,33 @@ export type UpdateCompanyInput = Partial<CreateCompanyInput> & {
   stockPoints?: CompanyStockPointInput[]
   analystRatings?: CompanyAnalystRatingInput[]
   outlooks?: CompanyOutlookInput[]
+}
+
+/** 사건에서 기업이 맡은 역할 — API CompanyEventRoleValue와 동기화 */
+export type CompanyEventRole =
+  | 'PRINCIPAL'
+  | 'FOUNDED'
+  | 'DISSOLVED'
+  | 'ACQUIRER'
+  | 'ACQUIRED'
+  | 'PARTICIPANT'
+  | 'CONTRACTOR'
+  | 'BENEFICIARY'
+  | 'VICTIM'
+  | 'OTHER'
+
+/** 기업이 등장한 사건 한 줄 (`GET /companies/:id/events`, 연도순) */
+export type CompanyRelatedEvent = {
+  relationId: string
+  eventId: string
+  title: string
+  role: CompanyEventRole
+  roleDescription: string | null
+  /** 부호 연도(BC 음수) */
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  categoryName: string | null
 }
 
 async function request<T>(
@@ -436,6 +466,14 @@ export const companyApi = {
       `/companies/${encodeURIComponent(id)}`,
     )
     return item ?? null
+  },
+
+  /** 기업이 등장한 사건(역할 포함) — 사건↔조직 연결의 역방향 */
+  getRelatedEvents: async (id: string): Promise<CompanyRelatedEvent[]> => {
+    const list = await request<CompanyRelatedEvent[]>(
+      `/companies/${encodeURIComponent(id)}/events`,
+    )
+    return Array.isArray(list) ? list : []
   },
 
   create: async (data: CreateCompanyInput): Promise<Company> => {

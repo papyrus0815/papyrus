@@ -20,6 +20,7 @@ import {
   InlineText,
 } from '@/shared/ui/inline-edit'
 
+import { ClampedBlock } from './company-clamped-block'
 import { ratingTone, toneColor } from './financial-tone'
 import { TonePill, ToneTag } from './tone-pill'
 import * as S from './company-detail.styles'
@@ -408,18 +409,20 @@ export function CompanyAnalystModule({
 
                 <S.RowNarrative>
                   <S.RowFieldLabel>내용</S.RowFieldLabel>
-                  <InlineRichText
-                    value={row.note ?? ''}
-                    onSave={(next) =>
-                      updateRow(idx, {
-                        note: isVisuallyEmptyRichText(next) ? null : next,
-                      })
-                    }
-                    placeholder="투자의견 근거·리포트 요약 — 인물·사건을 인라인으로 링크할 수 있습니다."
-                    onPersonClick={onPersonClick}
-                    stickyEditButton={false}
-                    label="내용"
-                  />
+                  <ClampedBlock label="리포트 요약" collapsedHeight={180}>
+                    <InlineRichText
+                      value={row.note ?? ''}
+                      onSave={(next) =>
+                        updateRow(idx, {
+                          note: isVisuallyEmptyRichText(next) ? null : next,
+                        })
+                      }
+                      placeholder="투자의견 근거·리포트 요약 — 인물·사건을 인라인으로 링크할 수 있습니다."
+                      onPersonClick={onPersonClick}
+                      stickyEditButton={false}
+                      label="내용"
+                    />
+                  </ClampedBlock>
                 </S.RowNarrative>
               </S.Row>
             )

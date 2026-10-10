@@ -5,14 +5,19 @@ import {
   FiBriefcase,
   FiExternalLink,
   FiSliders,
+  FiTrash2,
 } from 'react-icons/fi'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import type { UpdateCompanyInput } from '@/shared/api/company'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { companyLifespanLabel } from '@/shared/lib/company-lifespan'
+import { companyApi } from '@/shared/api/company'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { COMPANY_STATUS_META, CompanyRegisterModal } from '@/widgets/company-form'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 import {
@@ -34,7 +39,16 @@ import { CompanyProductsModule } from './company-products-module'
 import { CompanyStockModule } from './company-stock-module'
 import { CompanySaveStatus } from './company-save-status'
 import { CompanySummaryCard } from './company-summary-card'
-import { useCompanyDetail, useCompanyMutation } from './use-company-detail'
+import {
+  CompanyFoundingSection,
+  CompanyRecentHistory,
+  CompanyRelatedEventsSection,
+} from './company-overview-extras'
+import {
+  useCompanyDetail,
+  useCompanyMutation,
+  useCompanyRelatedEvents,
+} from './use-company-detail'
 
 const STATUS_OPTIONS: InlineSelectOption[] = [
   { value: 'ACTIVE', label: '활동 중' },
@@ -89,6 +103,36 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
   const mutation = useCompanyMutation(companyId)
   /* 기본 정보 수정 — 옛 /companies/:id/edit 페이지 대신 모달 */
   const [editOpen, setEditOpen] = useState(false)
+  const relatedEvents = useCompanyRelatedEvents(companyId)
+  const foundingEvents = useMemo(
+    () => (relatedEvents.data ?? []).filter((event) => event.role === 'FOUNDED'),
+    [relatedEvents.data],
+  )
+
+  /* 삭제 — 목록에만 있던 동작을 상세에도. 인물 경력이 걸려 있으면 서버가 409로 막는다. */
+  const queryClient = useQueryClient()
+  const [deleting, setDeleting] = useState(false)
+  const handleDelete = async () => {
+    if (deleting) return
+    const ok = await confirm({
+      title: '기업 삭제',
+      message: `'${company.name}'을(를) 삭제합니다. 연혁·제품·주가·시설 기록도 함께 지워지며 되돌릴 수 없습니다.`,
+      confirmLabel: '삭제',
+      danger: true,
+    })
+    if (!ok) return
+    setDeleting(true)
+    try {
+      await companyApi.delete(companyId)
+      queryClient.removeQueries({ queryKey: ['companies', 'detail', companyId] })
+      void queryClient.invalidateQueries({ queryKey: ['companies'] })
+      notify.success(`'${company.name}'을(를) 삭제했습니다.`)
+      navigate(pathKeys.companies.root())
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다.')
+      setDeleting(false)
+    }
+  }
   const onPatch = useCallback(
     (patch: UpdateCompanyInput) => mutation.mutate(patch),
     [mutation],
@@ -239,9 +283,20 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                   />
                 </S.HeroSubName>
               </S.HeroNameRow>
-              <S.EditBasicsBtn type="button" onClick={() => setEditOpen(true)}>
-                <FiSliders aria-hidden /> 기본 정보 수정
-              </S.EditBasicsBtn>
+              <S.HeroActions>
+                <S.EditBasicsBtn type="button" onClick={() => setEditOpen(true)}>
+                  <FiSliders aria-hidden /> 기본 정보 수정
+                </S.EditBasicsBtn>
+                <S.DeleteBtn
+                  type="button"
+                  onClick={() => void handleDelete()}
+                  disabled={deleting}
+                  aria-label={`${company.name} 삭제`}
+                  title="기업 삭제"
+                >
+                  <FiTrash2 aria-hidden />
+                </S.DeleteBtn>
+              </S.HeroActions>
             </S.HeroIdentity>
 
             {/* 사실 띠 — 흩어져 있던 메타 3줄을 라벨·값 칸으로 한 줄에.
@@ -371,8 +426,28 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                 aria-labelledby="company-tab-overview"
               >
                 <S.GroupGrid $aside>
-                  <S.GridCell>{overviewSection}</S.GridCell>
                   <S.GridCell>
+                    <S.OverviewStack>
+                      {overviewSection}
+                      <CompanyFoundingSection
+                        value={company.foundingBackground ?? null}
+                        onSave={(next) => onPatch({ foundingBackground: next })}
+                        onPersonClick={onPersonClick}
+                        foundingEvents={foundingEvents}
+                      />
+                      <CompanyRelatedEventsSection
+                        events={relatedEvents.data}
+                        isLoading={relatedEvents.isLoading}
+                        isError={relatedEvents.isError}
+                        onRetry={() => void relatedEvents.refetch()}
+                      />
+                      <CompanyRecentHistory
+                        histories={company.histories ?? []}
+                        onShowAll={() => setActiveGroup('business')}
+                      />
+                    </S.OverviewStack>
+                  </S.GridCell>
+                  <S.GridCell $sticky>
                     <CompanySummaryCard company={company} />
                   </S.GridCell>
                 </S.GroupGrid>

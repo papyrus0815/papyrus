@@ -1,12 +1,14 @@
 import {
   queryOptions,
   useMutation,
+  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query'
 
 import {
   type CompanyDetail,
+  type CompanyRelatedEvent,
   type UpdateCompanyInput,
   companyApi,
 } from '@/shared/api/company'
@@ -18,6 +20,7 @@ export const companyKeys = {
   root: ['companies'] as const,
   lists: () => ['companies', 'list'] as const,
   detail: (id: string) => ['companies', 'detail', id] as const,
+  events: (id: string) => ['companies', 'detail', id, 'events'] as const,
 }
 
 export function companyDetailQuery(id: string) {
@@ -43,6 +46,19 @@ export function companyDetailQuery(id: string) {
 export function useCompanyDetail(id: string): CompanyDetail {
   const { data } = useSuspenseQuery(companyDetailQuery(id))
   return data
+}
+
+/**
+ * 기업이 등장한 사건 — 상세 본문과 별도 요청이라 Suspense로 묶지 않는다
+ * (사건 목록이 늦어도 기업 문서는 먼저 뜬다). 키가 ['companies', …] 아래라
+ * 기업 저장 시의 root 무효화에 함께 걸린다.
+ */
+export function useCompanyRelatedEvents(id: string) {
+  return useQuery<CompanyRelatedEvent[]>({
+    queryKey: companyKeys.events(id),
+    queryFn: () => companyApi.getRelatedEvents(id),
+    staleTime: 60_000,
+  })
 }
 
 /* ───────────────────────── Mutation (부분 업데이트) ───────────────────────── */
@@ -80,6 +96,7 @@ const OPTIMISTIC_SCALARS = [
   'websiteUrl',
   'logoUrl',
   'financialCommentary',
+  'foundingBackground',
 ] as const satisfies ReadonlyArray<keyof UpdateCompanyInput>
 
 function buildOptimistic(
