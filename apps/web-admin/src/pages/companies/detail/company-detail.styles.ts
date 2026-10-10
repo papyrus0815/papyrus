@@ -21,8 +21,9 @@ export const Page = styled.div`
   /* 헤더 오프셋·스크롤 컨테이너는 ContentLayout이 준다 (좌측 기업 목록 사이드바 도입 시
      companiesRoutes가 그 안으로 이동). 자체 오프셋을 유지하면 두 번 밀린다. */
   min-height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* 자체 스크롤 컨테이너를 만들지 않는다 — overflow:auto/hidden이면 탭 바 sticky가 이 상자에
+     붙어(실제로는 스크롤하지 않으므로) 영영 붙지 않는다. 가로 넘침만 clip으로 자른다. */
+  overflow-x: clip;
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.primary};
 
@@ -40,19 +41,18 @@ export const PageInner = styled.div`
   }
 `
 
-export const TopBar = styled.div`
+export const Breadcrumb = styled.nav`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
 `
 
 export const BackLink = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   text-decoration: none;
 
@@ -61,21 +61,16 @@ export const BackLink = styled(Link)`
   }
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
   }
 `
 
+/** 탭 패널 영역 — 예전 200px 세로 레일 열을 없애 본문이 전폭을 쓴다(좌측엔 이미 기업 사이드바가 있다). */
 export const Body = styled.div`
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 48px;
-  align-items: start;
   margin-top: 28px;
 
-  @media (max-width: 1100px) {
-    grid-template-columns: 1fr;
-    gap: 16px;
+  @media (max-width: 768px) {
     margin-top: 20px;
   }
 `
@@ -112,9 +107,11 @@ export const GroupGrid = styled.div<{ $aside?: boolean; $reading?: boolean }>`
     $reading
       ? 'minmax(0, 880px)'
       : $aside
-        ? 'minmax(0, 1.8fr) minmax(280px, 1fr)'
+        ? 'minmax(0, 760px) minmax(280px, 360px)'
         : 'repeat(2, minmax(0, 1fr))'};
-  justify-content: ${({ $reading }) => ($reading ? 'center' : 'stretch')};
+  /* $aside는 왼쪽부터 붙여 소개 글과 요약 카드 사이에 빈 들판이 생기지 않게 한다 */
+  justify-content: ${({ $reading, $aside }) =>
+    $reading ? 'center' : $aside ? 'start' : 'stretch'};
   gap: 32px 40px;
   align-items: start;
 
@@ -131,7 +128,7 @@ export const GridCell = styled.div<{ $wide?: boolean; $card?: boolean }>`
      배경 충돌 없음). 콘텐츠 높이 차로 인한 ragged는 카드 경계로 흡수된다. */
   ${({ theme, $card }) =>
     $card
-      ? `border: 1px solid ${hairline(theme.mode)}; border-radius: 16px; padding: 22px 24px;`
+      ? `border: 1px solid ${hairline(theme.mode)}; border-radius: 12px; padding: 22px 24px;`
       : ''}
 `
 
@@ -140,33 +137,52 @@ export const GridCell = styled.div<{ $wide?: boolean; $card?: boolean }>`
 export const Hero = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
   width: 100%;
 `
 
 export const HeroIdentity = styled.div`
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
+
+  @media (max-width: 640px) {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
 `
 
-export const Logo = styled.div`
+export const Logo = styled.div<{ $hasLogo?: boolean }>`
   width: 64px;
   height: 64px;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  font-size: 26px;
+  font-weight: 750;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  background: ${({ theme, $hasLogo }) =>
+    $hasLogo
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : '#f1f5f9'
+      : theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.2)'
+        : '#eef2ff'};
+  border: 1px solid ${({ theme }) => hairline(theme.mode)};
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  svg {
+    width: 26px;
+    height: 26px;
   }
 `
 
@@ -175,182 +191,268 @@ export const HeroNameRow = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+
+  /* 좁은 폭에서는 이름 칸이 로고 옆 남은 폭을 다 가져 '기본 정보 수정'이 다음 줄로 내려간다
+     (이름 옆에 끼면 이름이 두 줄로 쪼개지고 전역 떠 있는 아바타와 겹쳤다) */
+  @media (max-width: 640px) {
+    flex-basis: calc(100% - 82px);
+  }
 `
 
-export const HeroName = styled.div`
-  font-size: 26px;
-  font-weight: 750;
-  letter-spacing: -0.015em;
-  line-height: 1.2;
-  color: ${({ theme }) => theme.colors.text.primary};
+export const HeroTitleLine = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px 12px;
   flex-wrap: wrap;
+  min-width: 0;
+`
+
+export const HeroName = styled.h1`
+  margin: 0;
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: ${({ theme }) => theme.colors.text.primary};
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    font-size: 23px;
+  }
+`
+
+/** 상태 — 색 점 + 옅은 틴트 알약. 안쪽은 InlineSelect(클릭해 바꾼다). */
+export const StatusPill = styled.span<{ $tone: string | null }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 오른쪽은 InlineSelect의 편집 아이콘 자리가 여백 역할을 한다 */
+  padding: 2px 4px 2px 9px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: ${({ $tone, theme }) =>
+    $tone ? `${$tone}1f` : theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: ${({ $tone }) => $tone ?? '#a1a1aa'};
+  }
 `
 
 export const HeroSubName = styled.div`
-  font-size: 13.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  display: inline-flex;
-  gap: 10px;
-  flex-wrap: wrap;
-`
-
-export const HeroMeta = styled.div`
+  /* 칸 사이 간격은 InlineText의 편집 아이콘 자리(28px)가 맡는다 — 구분 기호를 따로 두면 이중 간격 */
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px 26px;
   align-items: center;
-  font-size: 13.5px;
+  gap: 2px;
+  flex-wrap: wrap;
+  font-size: 14px;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-export const HeroMetaItem = styled.span`
+export const EditBasicsBtn = styled.button`
+  flex-shrink: 0;
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-
-  > svg:first-child {
-    width: 14px;
-    height: 14px;
-    opacity: 0.6;
-  }
-
-  a,
-  > button {
-    color: ${({ theme }) => theme.colors.primary};
-    text-decoration: none;
-    &:hover {
-      text-decoration: underline;
-    }
-  }
-
-  > button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    cursor: pointer;
-  }
-`
-
-export const HeroMetaLabel = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-right: 4px;
-`
-
-/* ───────────────────────── Rail ───────────────────────── */
-
-export const Rail = styled.aside`
-  position: sticky;
-  top: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-right: 4px;
-  max-height: calc(100vh - var(--header-height, 64px) - 60px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-
-  @media (max-width: 1100px) {
-    position: static;
-    max-height: none;
-    overflow: visible;
-    padding-right: 0;
-  }
-`
-
-export const RailLabel = styled.div`
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-bottom: 2px;
-
-  @media (max-width: 1100px) {
-    display: none;
-  }
-`
-
-export const RailNav = styled.ul`
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-
-  @media (max-width: 1100px) {
-    flex-direction: row;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    scrollbar-width: none;
-  }
-`
-
-export const RailItem = styled.button<{ $active: boolean }>`
-  position: relative;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 9px 12px;
-  font: inherit;
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.secondary};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.hover : 'transparent'};
-  border: 0;
-  border-left: 2px solid
-    ${({ theme, $active }) => ($active ? theme.colors.primary : 'transparent')};
-  border-radius: 0 8px 8px 0;
-  text-align: left;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => hairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background 0.16s, border-color 0.16s, color 0.16s;
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
     color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.tertiary};
+    background: ${({ theme }) => theme.colors.hover};
   }
-
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
     outline-offset: 2px;
-    border-radius: 6px;
   }
 
-  @media (max-width: 1100px) {
-    width: auto;
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+`
+
+/**
+ * 사실 띠 — 라벨(위)·값(아래) 칸을 세로 헤어라인으로 나눈 한 줄.
+ * 폭이 모자라 줄이 바뀌어도 **각 줄의 첫 칸이 왼쪽 끝에 붙도록**, 모든 칸에 같은 왼쪽
+ * 패딩·선을 주고 목록 전체를 그만큼 왼쪽으로 당긴 뒤 바깥 틀이 잘라 낸다.
+ * (첫 칸만 선을 빼는 방식은 둘째 줄 첫 칸이 들여쓰기·선을 단 채 남았다.)
+ */
+export const FactStripFrame = styled.div`
+  overflow: hidden;
+  padding: 14px 0;
+  border-top: 1px solid ${({ theme }) => hairline(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => hairline(theme.mode)};
+`
+
+export const FactStrip = styled.dl`
+  margin: 0 0 0 -25px;
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 14px;
+`
+
+export const Fact = styled.div`
+  min-width: 0;
+  padding: 0 24px;
+  border-left: 1px solid ${({ theme }) => hairline(theme.mode)};
+
+  dt {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    margin-bottom: 4px;
+  }
+
+  dd {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.primary};
     white-space: nowrap;
-    border-left: 0;
-    border-radius: 999px;
-    padding: 7px 16px;
-    border: 1px solid
-      ${({ theme, $active }) =>
-        $active ? theme.colors.primary : theme.colors.border.default};
   }
 `
 
-export const RailItemLabel = styled.span`
-  font-size: 13.5px;
-  font-weight: 650;
-  color: inherit;
+export const FactEmpty = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 400;
 `
 
-export const RailItemHint = styled.span`
+export const FactNote = styled.span`
   font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+`
+
+export const FactLink = styled.button`
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: ${({ theme }) => theme.colors.primary};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+export const ExternalLink = styled.a`
+  display: inline-flex;
+  flex-shrink: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
 
-  @media (max-width: 1100px) {
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+  }
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+`
+
+/* ───────────────────────── Tabs ───────────────────────── */
+
+/**
+ * 가로 밑줄 탭 — 예전엔 200px 세로 레일이었다. 좌측 기업 사이드바 옆에 레일이 또 서서
+ * 왼쪽에 기둥이 둘이었고, 본문 폭이 그만큼 줄었다. sticky라 긴 연혁을 읽다가도 바로 옮긴다.
+ * ⚠️ 불투명 배경 필수 — 아래로 지나가는 본문이 비치면 안 된다.
+ */
+export const TabBar = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin-top: 22px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => hairlineStrong(theme.mode)};
+
+  &::-webkit-scrollbar {
     display: none;
   }
+`
+
+export const Tab = styled.button<{ $active: boolean }>`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 12px 11px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  white-space: nowrap;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  cursor: pointer;
+  transition: color 0.14s;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: ${({ theme, $active }) => ($active ? theme.colors.primary : 'transparent')};
+  }
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: -4px;
+    border-radius: 8px;
+  }
+`
+
+export const TabCount = styled.span`
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
 `
 
 /* ───────────────────────── Section frame ───────────────────────── */
@@ -370,15 +472,15 @@ export const SectionHeader = styled.header`
 `
 
 export const SectionTitle = styled.h2`
-  font-size: 22px;
-  font-weight: 750;
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.012em;
   margin: 0;
   color: ${({ theme }) => theme.colors.text.primary};
 
   @media (max-width: 640px) {
-    font-size: 20px;
+    font-size: 17px;
   }
 `
 

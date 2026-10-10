@@ -28,6 +28,7 @@ import styled, { css, keyframes } from 'styled-components'
 import type { Company, CompanyStatus } from '@/shared/api/company'
 import { companyApi } from '@/shared/api/company'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { companyLifespanLabel } from '@/shared/lib/company-lifespan'
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -62,22 +63,6 @@ const periodLabel = (company: Company): string | null => {
   const end = yearLabel(company.dissolvedAt)
   if (!start && !end) return null
   return `${start ?? '?'} – ${end ?? ''}`.trimEnd()
-}
-
-/**
- * 존속 햇수 — 해산이면 '191년 존속', 활동 중이면 '43년째'. 끝을 모르면(해산 상태인데 해산일 미상) null.
- * 서력에는 0년이 없으므로 BC→AD를 건너면 1을 뺀다.
- */
-const lifespanLabel = (company: Company): string | null => {
-  const start = parseIsoDateParts(company.foundedAt)?.year
-  if (start == null) return null
-  const dissolved = parseIsoDateParts(company.dissolvedAt)?.year
-  const ongoing = dissolved == null && (!company.status || company.status === 'ACTIVE')
-  const end = dissolved ?? (ongoing ? new Date().getFullYear() : null)
-  if (end == null) return null
-  const years = end - start - (start < 0 && end > 0 ? 1 : 0)
-  if (years < 0) return null
-  return ongoing ? `${years}년째` : `${years}년 존속`
 }
 
 const sortValue = (company: Company, key: SortKey): string | number | null => {
@@ -303,7 +288,7 @@ export const CompaniesListPage: React.FC = () => {
       const meta = company.status ? COMPANY_STATUS_META[company.status] : null
       const detailPath = pathKeys.companies.detail(company.id)
       const period = periodLabel(company)
-      const lifespan = lifespanLabel(company)
+      const lifespan = companyLifespanLabel(company)
       const subName = [company.shortName, company.localName]
         .filter((value) => value && value !== company.name)
         .join(' · ')

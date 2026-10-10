@@ -4,17 +4,16 @@ import {
   FiArrowLeft,
   FiBriefcase,
   FiExternalLink,
-  FiGlobe,
-  FiMapPin,
   FiSliders,
-  FiUser,
 } from 'react-icons/fi'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import type { UpdateCompanyInput } from '@/shared/api/company'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
+import { getUploadImageUrl } from '@/shared/api/upload'
+import { companyLifespanLabel } from '@/shared/lib/company-lifespan'
 import { pathKeys } from '@/shared/router'
-import { CompanyRegisterModal } from '@/widgets/company-form'
+import { COMPANY_STATUS_META, CompanyRegisterModal } from '@/widgets/company-form'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 import {
   InlineDateRange,
@@ -110,16 +109,45 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
     [navigate],
   )
 
-  /* Rail 현재 섹션 — viewport 상단에 가장 가까운 섹션을 active로. */
-  const scrollRef = useRef<HTMLDivElement>(null)
   const [activeGroup, setActiveGroup] = useState<GroupId>('overview')
-  // 그룹 전환 시 본문 상단부터 보이도록 스크롤 컨테이너를 위로.
+  /*
+   * 탭 바는 sticky라 길게 내려 읽다가 탭을 바꾸면 새 패널의 *중간*이 보인다.
+   * 탭이 붙어 있는 상태(앵커가 탭 위로 지나감)일 때만 앵커로 되감아 패널을 처음부터 보여 준다 —
+   * 붙지 않았으면 히어로가 보이는 자리 그대로 둔다.
+   */
+  const tabsAnchorRef = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const isFirstGroupRef = useRef(true)
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 })
+    if (isFirstGroupRef.current) {
+      isFirstGroupRef.current = false
+      return
+    }
+    const anchor = tabsAnchorRef.current
+    const tabs = tabsRef.current
+    if (!anchor || !tabs) return
+    if (anchor.getBoundingClientRect().top < tabs.getBoundingClientRect().top - 1) {
+      anchor.scrollIntoView({ block: 'start' })
+    }
   }, [activeGroup])
 
   const country = company.country ?? company.historicalCountry ?? null
   const websiteUrl = company.websiteUrl ?? ''
+  const logoSrc = getUploadImageUrl(company.logoUrl)
+  const lifespan = companyLifespanLabel(company)
+  const statusTone = company.status
+    ? COMPANY_STATUS_META[company.status].tone
+    : null
+  /* 탭 옆 건수 — 어느 탭에 기록이 있는지 열어 보기 전에 알 수 있게 */
+  const groupCounts: Record<GroupId, number> = {
+    overview: 0,
+    business: (company.histories?.length ?? 0) + (company.products?.length ?? 0),
+    finance:
+      (company.stockPoints?.length ?? 0) +
+      (company.analystRatings?.length ?? 0) +
+      (company.outlooks?.length ?? 0),
+    ops: (company.facilities?.length ?? 0) + (company.categories?.length ?? 0),
+  }
 
   const overviewSection = useMemo(
     () => (
@@ -143,7 +171,7 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
 
   return (
     <InlineEditProvider imageCategory="attachments">
-      <S.Page ref={scrollRef}>
+      <S.Page>
         <S.PageInner>
           <CompanySaveStatus
             isPending={mutation.isPending}
@@ -154,163 +182,194 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
             }
           />
 
-          <S.TopBar>
+          <S.Breadcrumb aria-label="위치">
             <S.BackLink to={pathKeys.companies.root()}>
-              <FiArrowLeft /> 목록으로
+              <FiArrowLeft /> 기업
             </S.BackLink>
-          </S.TopBar>
+          </S.Breadcrumb>
 
           <S.Hero>
             <S.HeroIdentity>
-              <S.Logo>
-                {company.logoUrl ? (
-                  <img src={company.logoUrl} alt="" />
+              <S.Logo $hasLogo={!!logoSrc}>
+                {logoSrc ? (
+                  <img src={logoSrc} alt="" />
                 ) : (
-                  <FiBriefcase aria-hidden />
+                  company.name.trim().charAt(0).toUpperCase() || (
+                    <FiBriefcase aria-hidden />
+                  )
                 )}
               </S.Logo>
               <S.HeroNameRow>
-                <S.HeroName>
-                  <InlineText
-                    value={company.name}
-                    onSave={(next) => onPatch({ name: next })}
-                    placeholder="회사명"
-                    label="회사명"
-                    validate={(val) => (val.trim() ? null : '회사명은 필수입니다')}
-                  />
-                </S.HeroName>
+                <S.HeroTitleLine>
+                  <S.HeroName>
+                    <InlineText
+                      value={company.name}
+                      onSave={(next) => onPatch({ name: next })}
+                      placeholder="회사명"
+                      label="회사명"
+                      validate={(val) => (val.trim() ? null : '회사명은 필수입니다')}
+                    />
+                  </S.HeroName>
+                  <S.StatusPill $tone={statusTone}>
+                    <InlineSelect
+                      value={company.status ?? ''}
+                      options={STATUS_OPTIONS}
+                      onSave={(next) =>
+                        onPatch({
+                          status: (next || null) as UpdateCompanyInput['status'],
+                        })
+                      }
+                      placeholder="상태"
+                      label="상태"
+                    />
+                  </S.StatusPill>
+                </S.HeroTitleLine>
                 <S.HeroSubName>
-                  <span>
-                    <S.HeroMetaLabel>약칭</S.HeroMetaLabel>
-                    <InlineText
-                      value={company.shortName ?? ''}
-                      onSave={(next) => onPatch({ shortName: next })}
-                      placeholder="약칭·티커"
-                      label="약칭"
-                    />
-                  </span>
-                  <span>
-                    <S.HeroMetaLabel>원어명</S.HeroMetaLabel>
-                    <InlineText
-                      value={company.localName ?? ''}
-                      onSave={(next) => onPatch({ localName: next })}
-                      placeholder="현지어 명칭"
-                      label="원어명"
-                    />
-                  </span>
+                  <InlineText
+                    value={company.shortName ?? ''}
+                    onSave={(next) => onPatch({ shortName: next })}
+                    placeholder="약칭·티커"
+                    label="약칭"
+                  />
+                  <InlineText
+                    value={company.localName ?? ''}
+                    onSave={(next) => onPatch({ localName: next })}
+                    placeholder="원어명"
+                    label="원어명"
+                  />
                 </S.HeroSubName>
               </S.HeroNameRow>
+              <S.EditBasicsBtn type="button" onClick={() => setEditOpen(true)}>
+                <FiSliders aria-hidden /> 기본 정보 수정
+              </S.EditBasicsBtn>
             </S.HeroIdentity>
 
-            <S.HeroMeta>
-              <S.HeroMetaItem>
-                <S.HeroMetaLabel>상태</S.HeroMetaLabel>
-                <InlineSelect
-                  value={company.status ?? ''}
-                  options={STATUS_OPTIONS}
-                  onSave={(next) =>
-                    onPatch({
-                      status: (next || null) as UpdateCompanyInput['status'],
-                    })
-                  }
-                  placeholder="상태"
-                  label="상태"
-                />
-              </S.HeroMetaItem>
-
-              <S.HeroMetaItem>
-                <S.HeroMetaLabel>설립·해산</S.HeroMetaLabel>
-                <InlineDateRange
-                  startDate={company.foundedAt}
-                  endDate={company.dissolvedAt}
-                  onSave={(patch) => {
-                    const next: UpdateCompanyInput = {}
-                    if ('startDate' in patch)
-                      next.foundedAt = patch.startDate || null
-                    if ('endDate' in patch)
-                      next.dissolvedAt = patch.endDate || null
-                    onPatch(next)
-                  }}
-                  emptyLabel="설립일 미입력"
-                  startPlaceholder="설립일"
-                  endPlaceholder="해산일 (선택)"
-                  label="설립·해산일"
-                  blockBc
-                />
-              </S.HeroMetaItem>
-
-              <S.HeroMetaItem>
-                <FiGlobe />
-                <InlineText
-                  value={websiteUrl}
-                  onSave={(next) => onPatch({ websiteUrl: next })}
-                  placeholder="웹사이트 미입력"
-                  label="웹사이트"
-                  validate={(value) =>
-                    !value.trim() || /^https?:\/\//i.test(value.trim())
-                      ? null
-                      : 'http:// 또는 https:// 로 시작하는 주소만 가능합니다'
-                  }
-                />
-                {websiteUrl && (
-                  <a href={websiteUrl} target="_blank" rel="noreferrer">
-                    <FiExternalLink size={13} />
-                  </a>
-                )}
-              </S.HeroMetaItem>
-            </S.HeroMeta>
-
-            {/* 관계 FK(국가·창립자·본사)는 v1에서 읽기 전용 — 편집은 기본 정보 폼. */}
-            <S.HeroMeta>
-              {country && (
-                <S.HeroMetaItem>
-                  <FiMapPin />
-                  {country.name}
-                </S.HeroMetaItem>
-              )}
-              {company.founder && (
-                <S.HeroMetaItem>
-                  <FiUser />
-                  {company.founder.name}
-                </S.HeroMetaItem>
-              )}
-              {company.headquartersCity && (
-                <S.HeroMetaItem>
-                  <FiMapPin />
-                  {company.headquartersCity.name}
-                </S.HeroMetaItem>
-              )}
-              <S.HeroMetaItem>
-                <button type="button" onClick={() => setEditOpen(true)}>
-                  <FiSliders size={12} /> 기본 정보 수정
-                </button>
-              </S.HeroMetaItem>
-            </S.HeroMeta>
+            {/* 사실 띠 — 흩어져 있던 메타 3줄을 라벨·값 칸으로 한 줄에.
+                관계 FK(국가·본사·창립자)는 인라인 편집이 없어 '기본 정보 수정' 모달에서 고친다. */}
+            <S.FactStripFrame>
+            <S.FactStrip>
+              <S.Fact>
+                <dt>설립 · 해산</dt>
+                <dd>
+                  <InlineDateRange
+                    startDate={company.foundedAt}
+                    endDate={company.dissolvedAt}
+                    onSave={(patch) => {
+                      const next: UpdateCompanyInput = {}
+                      if ('startDate' in patch)
+                        next.foundedAt = patch.startDate || null
+                      if ('endDate' in patch)
+                        next.dissolvedAt = patch.endDate || null
+                      onPatch(next)
+                    }}
+                    emptyLabel="설립일 미입력"
+                    startPlaceholder="설립일"
+                    endPlaceholder="해산일 (선택)"
+                    label="설립·해산일"
+                    blockBc
+                  />
+                </dd>
+              </S.Fact>
+              <S.Fact>
+                <dt>존속</dt>
+                <dd>{lifespan ?? <S.FactEmpty>—</S.FactEmpty>}</dd>
+              </S.Fact>
+              <S.Fact>
+                <dt>국가</dt>
+                <dd>
+                  {country ? (
+                    <>
+                      {country.name}
+                      {!company.country && <S.FactNote>역사 국가</S.FactNote>}
+                    </>
+                  ) : (
+                    <S.FactEmpty>—</S.FactEmpty>
+                  )}
+                </dd>
+              </S.Fact>
+              <S.Fact>
+                <dt>본사</dt>
+                <dd>
+                  {company.headquartersCity?.name ?? <S.FactEmpty>—</S.FactEmpty>}
+                </dd>
+              </S.Fact>
+              <S.Fact>
+                <dt>창립자</dt>
+                <dd>
+                  {company.founder ? (
+                    <S.FactLink
+                      type="button"
+                      onClick={() => onPersonClick(company.founder!.id)}
+                    >
+                      {company.founder.name}
+                    </S.FactLink>
+                  ) : (
+                    <S.FactEmpty>—</S.FactEmpty>
+                  )}
+                </dd>
+              </S.Fact>
+              <S.Fact>
+                <dt>웹사이트</dt>
+                <dd>
+                  <InlineText
+                    value={websiteUrl}
+                    onSave={(next) => onPatch({ websiteUrl: next })}
+                    placeholder="미입력"
+                    label="웹사이트"
+                    validate={(value) =>
+                      !value.trim() || /^https?:\/\//i.test(value.trim())
+                        ? null
+                        : 'http:// 또는 https:// 로 시작하는 주소만 가능합니다'
+                    }
+                  />
+                  {websiteUrl && (
+                    <S.ExternalLink
+                      href={websiteUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      aria-label="웹사이트 새 창으로 열기"
+                      title="새 창으로 열기"
+                    >
+                      <FiExternalLink />
+                    </S.ExternalLink>
+                  )}
+                </dd>
+              </S.Fact>
+            </S.FactStrip>
+            </S.FactStripFrame>
           </S.Hero>
 
-          <S.Body>
-            <S.Rail>
-              <S.RailLabel id="company-rail-label">보기</S.RailLabel>
-              <S.RailNav aria-labelledby="company-rail-label" role="tablist">
-                {GROUPS.map((group) => (
-                  <li key={group.id}>
-                    <S.RailItem
-                      type="button"
-                      role="tab"
-                      $active={activeGroup === group.id}
-                      aria-selected={activeGroup === group.id}
-                      onClick={() => setActiveGroup(group.id)}
-                    >
-                      <S.RailItemLabel>{group.label}</S.RailItemLabel>
-                      <S.RailItemHint>{group.hint}</S.RailItemHint>
-                    </S.RailItem>
-                  </li>
-                ))}
-              </S.RailNav>
-            </S.Rail>
+          <div ref={tabsAnchorRef} />
+          <S.TabBar ref={tabsRef} role="tablist" aria-label="기업 정보 보기">
+            {GROUPS.map((group) => {
+              const count = groupCounts[group.id]
+              return (
+                <S.Tab
+                  key={group.id}
+                  type="button"
+                  role="tab"
+                  id={`company-tab-${group.id}`}
+                  aria-controls={`company-panel-${group.id}`}
+                  $active={activeGroup === group.id}
+                  aria-selected={activeGroup === group.id}
+                  title={group.hint}
+                  onClick={() => setActiveGroup(group.id)}
+                >
+                  {group.label}
+                  {count > 0 && <S.TabCount>{count}</S.TabCount>}
+                </S.Tab>
+              )
+            })}
+          </S.TabBar>
 
+          <S.Body>
             <S.Main>
-              <S.GroupPanel $active={activeGroup === 'overview'} role="tabpanel">
+              <S.GroupPanel
+                $active={activeGroup === 'overview'}
+                role="tabpanel"
+                id="company-panel-overview"
+                aria-labelledby="company-tab-overview"
+              >
                 <S.GroupGrid $aside>
                   <S.GridCell>{overviewSection}</S.GridCell>
                   <S.GridCell>
@@ -319,7 +378,12 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                 </S.GroupGrid>
               </S.GroupPanel>
 
-              <S.GroupPanel $active={activeGroup === 'business'} role="tabpanel">
+              <S.GroupPanel
+                $active={activeGroup === 'business'}
+                role="tabpanel"
+                id="company-panel-business"
+                aria-labelledby="company-tab-business"
+              >
                 <S.GroupGrid $reading>
                   <S.GridCell $card>
                     <CompanyHistorySection
@@ -338,7 +402,12 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                 </S.GroupGrid>
               </S.GroupPanel>
 
-              <S.GroupPanel $active={activeGroup === 'finance'} role="tabpanel">
+              <S.GroupPanel
+                $active={activeGroup === 'finance'}
+                role="tabpanel"
+                id="company-panel-finance"
+                aria-labelledby="company-tab-finance"
+              >
                 <S.GroupGrid>
                   <S.GridCell $wide $card>
                     <CompanyStockModule
@@ -401,7 +470,12 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                 </S.GroupGrid>
               </S.GroupPanel>
 
-              <S.GroupPanel $active={activeGroup === 'ops'} role="tabpanel">
+              <S.GroupPanel
+                $active={activeGroup === 'ops'}
+                role="tabpanel"
+                id="company-panel-ops"
+                aria-labelledby="company-tab-ops"
+              >
                 <S.GroupGrid>
                   <S.GridCell $wide $card>
                     <CompanyCategoriesModule
