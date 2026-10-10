@@ -38,9 +38,24 @@ export const mapEmbedFigureCss = css`
     border-radius: 12px;
     background: ${({ theme }) => (theme.mode === 'dark' ? '#1f2937' : '#e5e7eb')};
   }
+  /* 크기 — 작게(가운데 4:3) · 세로로 길게(남북으로 긴 지역, 화면 높이를 넘지 않게) */
+  figure.map-embed[data-size='small'] {
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  figure.map-embed[data-size='small'] iframe {
+    aspect-ratio: 4 / 3;
+  }
+  figure.map-embed[data-size='tall'] iframe {
+    aspect-ratio: 4 / 5;
+    max-height: 80vh;
+  }
   figure.map-embed figcaption {
     margin-top: 8px;
     font-size: 13px;
+    /* 편집 중엔 이미지 캡션(기울임) 규칙을 물려받아 읽기 뷰와 모양이 달랐다 */
+    font-style: normal;
     line-height: 1.5;
     text-align: center;
     color: ${({ theme }) => theme.colors.text.tertiary};

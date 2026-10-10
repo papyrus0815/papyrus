@@ -3,7 +3,7 @@
  * 라이브러리 없이 ContentEditable 기반으로 직접 구현
  * 프로젝트 디자인 시스템에 맞춘 커스텀 스타일
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -28,8 +28,10 @@ import {
 import {
   looksLikeMapPaste,
   type MapEmbed,
+  type MapEmbedSize,
   mapEmbedHtml,
   parseMapInput,
+  readMapFigure,
 } from '@/shared/lib/map-embed'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { getUploadImageUrl, validateImageFile } from '@/shared/api/upload'
@@ -353,6 +355,29 @@ const EditorContent = styled.div<{ $hasTitle?: boolean; $minHeight?: string }>`
 
   /* 지도 블록 — 아래 figure(fit-content) 규칙보다 구체적이라 폭 전체를 쓴다 */
   ${mapEmbedFigureCss}
+
+  /*
+   * 편집 중에만 — 지도 위 '눌러서 고치기' 띠. 지도 안을 누르면 클릭이 구글 iframe으로 들어가
+   * 에디터가 알 수 없어서, 고치기(설명·주소·크기·삭제)로 들어가는 손잡이를 지도 밖에 둔다.
+   * 가상 요소를 눌러도 이벤트 대상은 figure라 클릭 처리(handleEditorContentClick)가 받는다.
+   */
+  figure.map-embed {
+    cursor: pointer;
+  }
+  figure.map-embed::before {
+    content: '지도 · 눌러서 고치기(설명·주소·크기·삭제)';
+    display: block;
+    margin-bottom: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    background: ${({ theme }) => theme.colors.background.secondary};
+  }
+  figure.map-embed:hover::before {
+    color: ${({ theme }) => theme.colors.primary};
+  }
 
   figure {
     /**
@@ -736,6 +761,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // 지도 넣기 모달 — 여는 순간의 캐럿 자리를 기억해 두었다가 그 자리에 끼운다
   const [mapModalVisible, setMapModalVisible] = useState(false)
   const savedMapInsertRangeRef = useRef<Range | null>(null)
+  /** 고치는 중인 지도 블록 — null이면 새로 넣기 */
+  const [editingMapFigure, setEditingMapFigure] = useState<HTMLElement | null>(null)
+  const editingMapInitial = useMemo(() => {
+    if (!editingMapFigure) return null
+    const current = readMapFigure(editingMapFigure)
+    return { input: current.src, caption: current.caption, size: current.size }
+  }, [editingMapFigure])
 
   // 이미지 설명 모달 관련 상태
   const [imageCaptionModalVisible, setImageCaptionModalVisible] =
@@ -1442,23 +1474,81 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [])
 
+  /**
+   * 목록·표·인용 안의 캐럿 → 그 블록 **바로 뒤**로. 지도는 폭 전체 블록이라 목록 한 칸(li)이나 표 칸
+   * 안에 박히면 깨진다(붙여넣기 실측: li 안에 들어갔다). 에디터 바로 아래 블록을 찾아 그 뒤에 둔다.
+   */
+  const escapeNestedBlocks = useCallback((rangeRef: React.MutableRefObject<Range | null>) => {
+    const editor = editorRef.current
+    const range = rangeRef.current
+    if (!editor || !range) return
+    const startNode = range.startContainer
+    const startElement = startNode instanceof Element ? startNode : startNode.parentElement
+    const nested = startElement?.closest('li, td, th, table, ul, ol, blockquote')
+    if (!nested || !editor.contains(nested)) return
+    let topBlock: Element = nested
+    while (topBlock.parentElement && topBlock.parentElement !== editor) topBlock = topBlock.parentElement
+    // 블록 사이(에디터 직속 위치)에 캐럿만 두면 insertHTML이 가장 가까운 편집 자리(마지막 li)로
+    // 되돌려 넣었다(실측). 뒤에 빈 단락을 만들고 그 안에 캐럿을 둔다 — 남는 빈 단락은
+    // insertSanitizedBlockAtCaret의 정리(removeEmptyBlocksBefore)가 걷는다.
+    const landing = document.createElement('p')
+    landing.innerHTML = '<br>'
+    topBlock.after(landing)
+    const inside = document.createRange()
+    inside.setStart(landing, 0)
+    inside.collapse(true)
+    rangeRef.current = inside
+  }, [])
+
   /** 지도 블록 끼우기 — 모달·붙여넣기 공통 */
   const insertMapEmbed = useCallback(
-    (embed: MapEmbed, caption: string, rangeRef: React.MutableRefObject<Range | null>) => {
-      const sanitized = sanitizeRichTextHtml(mapEmbedHtml(embed, caption))
+    (
+      embed: MapEmbed,
+      caption: string,
+      rangeRef: React.MutableRefObject<Range | null>,
+      size: MapEmbedSize = 'normal',
+    ) => {
+      const sanitized = sanitizeRichTextHtml(mapEmbedHtml(embed, caption, size))
       if (!sanitized.includes('<iframe')) {
         notify.error('이 지도는 넣을 수 없습니다.')
         return
       }
+      escapeNestedBlocks(rangeRef)
       insertSanitizedBlockAtCaret(sanitized, rangeRef)
     },
-    [insertSanitizedBlockAtCaret],
+    [insertSanitizedBlockAtCaret, escapeNestedBlocks],
+  )
+
+  /** 고치기 적용 — 그 자리의 블록을 새 블록으로 바꾼다 */
+  const replaceMapFigure = useCallback(
+    (figure: HTMLElement, embed: MapEmbed, caption: string, size: MapEmbedSize) => {
+      const sanitized = sanitizeRichTextHtml(mapEmbedHtml(embed, caption, size))
+      if (!sanitized.includes('<iframe') || !editorRef.current?.contains(figure)) return
+      figure.outerHTML = sanitized
+      handleContentChange()
+    },
+    [handleContentChange],
+  )
+
+  const removeMapFigure = useCallback(
+    (figure: HTMLElement) => {
+      if (!editorRef.current?.contains(figure)) return
+      figure.remove()
+      handleContentChange()
+    },
+    [handleContentChange],
   )
 
   const openMapModal = useCallback(() => {
     rememberCaret(savedMapInsertRangeRef)
+    setEditingMapFigure(null)
     setMapModalVisible(true)
   }, [rememberCaret])
+
+  const closeMapModal = useCallback(() => {
+    setMapModalVisible(false)
+    setEditingMapFigure(null)
+  }, [])
 
   // 붙여넣기: 외부 웹 등에서 복사한 HTML 서식은 넣지 않고 평문만 삽입 (같은 에디터 내 복사도 동일)
   const handlePaste = useCallback(
@@ -2383,6 +2473,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const handleEditorContentClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
 
+    // 0) 지도 블록 — '눌러서 고치기' 띠(figure 자신)·설명을 누르면 고치기 모드. 지도 안(iframe)은
+    //    구글이 받으므로 여기 오지 않는다.
+    const mapFigure = target.closest('figure.map-embed')
+    if (mapFigure && target.tagName !== 'IFRAME') {
+      e.preventDefault()
+      e.stopPropagation()
+      setEditingMapFigure(mapFigure as HTMLElement)
+      setMapModalVisible(true)
+      return
+    }
+
     // 1) 이미지(figure>img) 클릭 → figure 선택 + 부유 툴바 표시
     const figure = target.closest('figure')
     const isResizeHandle = target.classList.contains('resize-handle')
@@ -2915,11 +3016,23 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       {/* 지도 넣기 — 공용 Modal(포털·Esc·포커스 트랩) */}
       <MapEmbedModal
         isOpen={mapModalVisible}
-        onClose={() => setMapModalVisible(false)}
-        onInsert={(embed, caption) => {
-          setMapModalVisible(false)
-          insertMapEmbed(embed, caption, savedMapInsertRangeRef)
+        onClose={closeMapModal}
+        initial={editingMapInitial}
+        onInsert={(embed, caption, size) => {
+          const target = editingMapFigure
+          closeMapModal()
+          if (target) replaceMapFigure(target, embed, caption, size)
+          else insertMapEmbed(embed, caption, savedMapInsertRangeRef, size)
         }}
+        onDelete={
+          editingMapFigure
+            ? () => {
+                const target = editingMapFigure
+                closeMapModal()
+                removeMapFigure(target)
+              }
+            : undefined
+        }
       />
 
       {/* 이미지 설명 입력 모달 — body 포털 (에디터 글래스 박스가 fixed 뷰포트를 깨뜨리는 것 방지) */}

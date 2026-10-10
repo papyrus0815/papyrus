@@ -22,10 +22,14 @@ export type ParseMapResult = { ok: true; embed: MapEmbed } | { ok: false; reason
 const SHORT_LINK_REASON =
   '짧은 공유 링크(maps.app.goo.gl)는 열 수 없어요 — 구글 지도에서 "공유 → 지도 퍼가기"의 코드나, 브라우저 주소창의 전체 주소를 붙여 주세요.'
 
-/** 키 없이 쓰는 검색 퍼가기 주소 */
-const searchEmbed = (query: string, zoom?: number): MapEmbed => {
+/**
+ * 키 없이 쓰는 검색 퍼가기 주소. 좌표를 알면 `ll`로 그 자리에 맞춘다 — 이름만 넘기면 같은 이름의
+ * 다른 장소(동명 마을·거리)로 갈 수 있었다.
+ */
+const searchEmbed = (query: string, zoom?: number, center?: string): MapEmbed => {
   const params = new URLSearchParams()
   params.set('q', query)
+  if (center) params.set('ll', center)
   params.set('output', 'embed')
   if (zoom != null && Number.isFinite(zoom)) params.set('z', String(Math.round(zoom)))
   return { src: `https://maps.google.com/maps?${params.toString()}`, kind: 'search' }
@@ -104,7 +108,10 @@ export function parseMapInput(raw: string): ParseMapResult {
   const place = decodedPath.match(/\/maps\/(?:place|search)\/([^/@]+)/)
   if (place) {
     const name = place[1].replace(/\+/g, ' ').trim()
-    return { ok: true, embed: searchEmbed(name, at ? Number(at[3]) : undefined) }
+    return {
+      ok: true,
+      embed: searchEmbed(name, at ? Number(at[3]) : undefined, at ? `${at[1]},${at[2]}` : undefined),
+    }
   }
   if (at) return { ok: true, embed: searchEmbed(`${at[1]},${at[2]}`, Number(at[3])) }
   const query = url.searchParams.get('q') ?? url.searchParams.get('query')
@@ -128,13 +135,35 @@ export function isAllowedMapEmbedSrc(src: string | null | undefined): boolean {
   return false
 }
 
-/** 본문에 넣는 지도 블록 HTML — figure 안 iframe(+설명). 크기는 CSS가 정한다(16:10) */
-export function mapEmbedHtml(embed: MapEmbed, caption: string): string {
+/** 지도 블록 크기 — 보통(폭 전체 16:10) · 작게(가운데 4:3) · 세로로 길게(남북으로 긴 지역) */
+export type MapEmbedSize = 'normal' | 'small' | 'tall'
+
+export const MAP_EMBED_SIZES: ReadonlyArray<{ value: MapEmbedSize; label: string }> = [
+  { value: 'normal', label: '보통' },
+  { value: 'small', label: '작게' },
+  { value: 'tall', label: '세로로 길게' },
+]
+
+const isMapEmbedSize = (value: string | null): value is MapEmbedSize =>
+  value === 'normal' || value === 'small' || value === 'tall'
+
+/** 이미 넣은 지도 블록 → 고치기 모드의 초깃값 */
+export function readMapFigure(figure: Element): { src: string; caption: string; size: MapEmbedSize } {
+  const size = figure.getAttribute('data-size')
+  return {
+    src: figure.querySelector('iframe')?.getAttribute('src') ?? '',
+    caption: figure.querySelector('figcaption')?.textContent?.trim() ?? '',
+    size: isMapEmbedSize(size) ? size : 'normal',
+  }
+}
+
+/** 본문에 넣는 지도 블록 HTML — figure 안 iframe(+설명). 비율은 CSS가 크기(data-size)별로 정한다 */
+export function mapEmbedHtml(embed: MapEmbed, caption: string, size: MapEmbedSize = 'normal'): string {
   const escape = (text: string) =>
     text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const title = caption.trim() || '지도'
   return (
-    `<figure class="map-embed" data-type="map-embed" contenteditable="false">` +
+    `<figure class="map-embed" data-type="map-embed"${size === 'normal' ? '' : ` data-size="${size}"`} contenteditable="false">` +
     `<iframe src="${escape(embed.src)}" title="${escape(title)}" loading="lazy" ` +
     `referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>` +
     (caption.trim() ? `<figcaption>${escape(caption.trim())}</figcaption>` : '') +

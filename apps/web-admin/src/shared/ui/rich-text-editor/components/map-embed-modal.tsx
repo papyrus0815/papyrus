@@ -10,44 +10,61 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import styled from 'styled-components'
 
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
-import { type MapEmbed, parseMapInput } from '@/shared/lib/map-embed'
+import {
+  MAP_EMBED_SIZES,
+  type MapEmbed,
+  type MapEmbedSize,
+  parseMapInput,
+} from '@/shared/lib/map-embed'
 import { Modal } from '@/shared/ui/modal'
 import { ModalBody, ModalFooter } from '@/shared/ui/modal/modal.styles'
 
 interface MapEmbedModalProps {
   isOpen: boolean
   onClose: () => void
-  onInsert: (embed: MapEmbed, caption: string) => void
+  onInsert: (embed: MapEmbed, caption: string, size: MapEmbedSize) => void
+  /**
+   * 고치기 모드 — 이미 넣은 지도의 주소·설명·크기. 있으면 제목이 '지도 고치기'가 되고 삭제가 생긴다.
+   * (넣은 지도는 예전엔 고칠 길이 없었다 — 지우고 다시 넣어야 했다)
+   */
+  initial?: { input: string; caption: string; size: MapEmbedSize } | null
+  onDelete?: () => void
 }
 
-export function MapEmbedModal({ isOpen, onClose, onInsert }: MapEmbedModalProps) {
+export function MapEmbedModal({ isOpen, onClose, onInsert, initial, onDelete }: MapEmbedModalProps) {
   const [input, setInput] = useState('')
   const [caption, setCaption] = useState('')
+  const [size, setSize] = useState<MapEmbedSize>('normal')
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const editing = Boolean(initial)
 
-  // 다시 열면 빈 칸에서 시작
+  // 열 때 초깃값(고치기) 또는 빈 칸(넣기)
   useEffect(() => {
-    if (!isOpen) {
-      setInput('')
-      setCaption('')
+    if (isOpen) {
+      setInput(initial?.input ?? '')
+      setCaption(initial?.caption ?? '')
+      setSize(initial?.size ?? 'normal')
     }
-  }, [isOpen])
+  }, [isOpen, initial])
 
   // 미리보기는 타이핑이 멈춘 뒤 — 글자마다 구글 지도를 다시 부르지 않게
   const settledInput = useDebouncedValue(input, 400, isOpen)
   const result = useMemo(() => (settledInput.trim() ? parseMapInput(settledInput) : null), [settledInput])
   const embed = result?.ok ? result.embed : null
 
+  // 적용 판정은 **지금 입력**으로 — 미리보기 디바운스(400ms)를 기다리면 고치기로 열자마자 누른
+  // 확인 버튼이 꺼져 있어 아무 일도 안 일어났다. 해석은 순수 함수라 매 렌더 비용이 작다.
+  const current = input.trim() ? parseMapInput(input) : null
   const insert = () => {
-    if (!embed) return
-    onInsert(embed, caption)
+    if (!current?.ok) return
+    onInsert(current.embed, caption, size)
   }
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="지도 넣기"
+      title={editing ? '지도 고치기' : '지도 넣기'}
       subtitle="장소 이름, 구글 지도 주소, '지도 퍼가기' 코드, 내 지도(My Maps) 링크 중 아무거나"
       maxWidth="680px"
       initialFocusRef={inputRef}
@@ -81,6 +98,26 @@ export function MapEmbedModal({ isOpen, onClose, onInsert }: MapEmbedModalProps)
         </Preview>
 
         <Field>
+          <Label as="span" id="map-embed-size-label">
+            크기
+          </Label>
+          <SizeGroup role="radiogroup" aria-labelledby="map-embed-size-label">
+            {MAP_EMBED_SIZES.map((option) => (
+              <SizeButton
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={size === option.value}
+                $active={size === option.value}
+                onClick={() => setSize(option.value)}
+              >
+                {option.label}
+              </SizeButton>
+            ))}
+          </SizeGroup>
+        </Field>
+
+        <Field>
           <Label htmlFor="map-embed-caption">설명 (선택)</Label>
           <CaptionInput
             id="map-embed-caption"
@@ -106,11 +143,16 @@ export function MapEmbedModal({ isOpen, onClose, onInsert }: MapEmbedModalProps)
         </Help>
       </Body>
       <ModalFooter>
+        {editing && onDelete && (
+          <DangerButton type="button" onClick={onDelete}>
+            지도 삭제
+          </DangerButton>
+        )}
         <SecondaryButton type="button" onClick={onClose}>
           취소
         </SecondaryButton>
-        <PrimaryButton type="button" onClick={insert} disabled={!embed}>
-          지도 넣기
+        <PrimaryButton type="button" onClick={insert} disabled={!current?.ok}>
+          {editing ? '고치기' : '지도 넣기'}
         </PrimaryButton>
       </ModalFooter>
     </Modal>
@@ -233,5 +275,43 @@ const PrimaryButton = styled.button`
   &:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+`
+
+const SizeGroup = styled.div`
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const SizeButton = styled.button<{ $active: boolean }>`
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: ${({ $active, theme }) => ($active ? theme.colors.background.primary : 'transparent')};
+  color: ${({ $active, theme }) => ($active ? theme.colors.text.primary : theme.colors.text.secondary)};
+  box-shadow: ${({ $active }) => ($active ? '0 1px 2px rgba(0,0,0,0.12)' : 'none')};
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+`
+
+/** 삭제는 왼쪽 끝 — 확인 버튼과 떨어뜨려 잘못 누르지 않게 */
+const DangerButton = styled.button`
+  ${buttonBase}
+  margin-right: auto;
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.error};
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.error};
   }
 `

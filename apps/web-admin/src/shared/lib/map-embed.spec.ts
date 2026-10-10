@@ -1,5 +1,6 @@
 import {
   isAllowedMapEmbedSrc,
+  readMapFigure,
   looksLikeMapPaste,
   mapEmbedHtml,
   parseMapInput,
@@ -36,7 +37,10 @@ describe('parseMapInput', () => {
       'https://www.google.com/maps/place/Sarajevo/@43.8563,18.4131,13z/data=!3m1',
     )
     expect(embed.kind).toBe('search')
-    expect(embed.src).toBe('https://maps.google.com/maps?q=Sarajevo&output=embed&z=13')
+    // 좌표를 함께 — 이름만이면 동명 장소로 갈 수 있다
+    expect(embed.src).toBe(
+      'https://maps.google.com/maps?q=Sarajevo&ll=43.8563%2C18.4131&output=embed&z=13',
+    )
   })
 
   it('좌표만 있는 지도 주소 → 좌표 검색', () => {
@@ -94,5 +98,27 @@ describe('mapEmbedHtml · looksLikeMapPaste', () => {
     expect(looksLikeMapPaste('<iframe src="https://www.google.com/maps/embed?pb=1"></iframe>')).toBe(true)
     expect(looksLikeMapPaste('사라예보에서 암살이 일어났다')).toBe(false)
     expect(looksLikeMapPaste('https://example.com')).toBe(false)
+  })
+})
+
+describe('크기·기존 블록 읽기', () => {
+  it('크기는 data-size로 — 보통은 속성 없음', () => {
+    const embed = { src: 'https://www.google.com/maps/embed?pb=1', kind: 'embed' as const }
+    expect(mapEmbedHtml(embed, '', 'tall')).toContain('data-size="tall"')
+    expect(mapEmbedHtml(embed, '')).not.toContain('data-size')
+  })
+
+  it('넣은 지도 블록에서 주소·설명·크기를 되읽는다', () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = mapEmbedHtml(
+      { src: 'https://www.google.com/maps/d/embed?mid=1', kind: 'mymaps' },
+      '진격로',
+      'small',
+    )
+    expect(readMapFigure(holder.firstElementChild as Element)).toEqual({
+      src: 'https://www.google.com/maps/d/embed?mid=1',
+      caption: '진격로',
+      size: 'small',
+    })
   })
 })
