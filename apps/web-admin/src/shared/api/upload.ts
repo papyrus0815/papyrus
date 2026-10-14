@@ -97,6 +97,8 @@ export type UploadImageCategory =
   | 'political-parties'
   | 'dynasties'
   | 'attachments'
+  /** 기업 로고 */
+  | 'companies'
 
 /**
  * 이미지 업로드 (클라이언트 유효성 검사 후 전송)

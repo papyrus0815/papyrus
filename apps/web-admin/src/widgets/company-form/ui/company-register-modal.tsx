@@ -31,7 +31,7 @@ import {
   getAllHistoricalCountries,
   type HistoricalCountryResponseDto,
 } from '@/shared/api/historical-countries'
-import { getAllPersons, type PersonResponseDto } from '@/shared/api/persons'
+import { type PersonSearchItem, searchPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { dateSortKey } from '@/shared/lib/iso-date'
 import { plainTextToRichTextHtml } from '@/shared/lib/rich-text-read-view'
@@ -113,15 +113,13 @@ type FormErrors = {
   logoUrl?: string
 }
 
-function personLabel(person: PersonResponseDto): string {
+function personLabel(person: PersonSearchItem): string {
   return getPersonDisplayName({
     name: person.name ?? '',
-    surname: (person as { surname?: string }).surname ?? '',
-    middleName: (person as { middleName?: string }).middleName ?? '',
+    surname: person.surname ?? '',
+    middleName: person.middleName ?? '',
     nameDisplayOrder: person.nameDisplayOrder ?? null,
-    country:
-      (person as { country?: { defaultNameDisplayOrder?: string | null } | null })
-        .country ?? null,
+    country: person.country ?? null,
   })
 }
 
@@ -333,7 +331,6 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
   const [historicalCountries, setHistoricalCountries] = useState<
     HistoricalCountryResponseDto[]
   >([])
-  const personsRef = useRef<PersonResponseDto[] | null>(null)
   /** 더티 비교 기준 — 신규는 EMPTY, 수정은 hydrate 직후 캡처 */
   const baselineRef = useRef(JSON.stringify(EMPTY))
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -381,28 +378,14 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
     }
   }, [companyId])
 
+  // 서버 이름 검색 — 예전엔 인물 전량(수백 명)을 받아 클라이언트에서 걸렀다(검토 F14)
   const fetchFounderOptions = useCallback(
-    async (query: string): Promise<PickerOption[]> => {
-      if (!personsRef.current) {
-        personsRef.current = await getAllPersons().catch(() => [])
-      }
-      const list = personsRef.current ?? []
-      const norm = query.trim().toLowerCase()
-      const filtered = norm
-        ? list.filter((person) => {
-            const display = personLabel(person).toLowerCase()
-            const orig = (
-              (person as { originalName?: string }).originalName ?? ''
-            ).toLowerCase()
-            return display.includes(norm) || orig.includes(norm)
-          })
-        : list
-      return filtered.slice(0, 30).map((person) => ({
+    async (query: string): Promise<PickerOption[]> =>
+      (await searchPersons(query, 30)).map((person) => ({
         id: person.id,
         label: personLabel(person),
-        sub: (person as { originalName?: string }).originalName ?? undefined,
-      }))
-    },
+        sub: person.originalName ?? undefined,
+      })),
     [],
   )
 
@@ -601,7 +584,6 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
                   selectedLabel={founderLabel}
                   placeholder="인물 이름으로 검색..."
                   label="창립자"
-                  showOnEmpty
                   fetchOptions={fetchFounderOptions}
                   onChange={(founderId, label) => {
                     patch('founderId', founderId)

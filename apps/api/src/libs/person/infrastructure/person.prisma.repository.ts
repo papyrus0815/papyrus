@@ -908,6 +908,39 @@ export class PersonPrismaRepository implements IPersonRepository {
     return persons.map((p) => this.mapToPersonResponse(p))
   }
 
+  /**
+   * 이름 검색(경량) — 인물 피커용. 범위는 findAll과 같다(accountId가 있으면 본인 등록분만).
+   * 띄어 쓴 낱말은 각각 이름·성·원어명 중 하나에 들어 있어야 한다('일론 머스크' → 이름 일론 + 성 머스크).
+   * 예전엔 피커가 인물 전량을 받아 클라이언트에서 걸렀다(기업 상세 검토 F14).
+   */
+  async searchByName(query: string, accountId: string | undefined, limit: number) {
+    const tokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 5)
+    if (tokens.length === 0) return []
+    return this.prisma.person.findMany({
+      where: {
+        ...(accountId != null ? { accountId } : {}),
+        AND: tokens.map((token) => ({
+          OR: [
+            { name: { contains: token } },
+            { surname: { contains: token } },
+            { originalName: { contains: token } },
+          ],
+        })),
+      },
+      select: {
+        id: true,
+        name: true,
+        surname: true,
+        middleName: true,
+        originalName: true,
+        nameDisplayOrder: true,
+        country: { select: { defaultNameDisplayOrder: true } },
+      },
+      orderBy: [{ name: 'asc' }, { surname: 'asc' }],
+      take: limit,
+    })
+  }
+
   async findAllForInfographic(
     accountId?: string,
   ): Promise<PersonInfographicItemDto[]> {

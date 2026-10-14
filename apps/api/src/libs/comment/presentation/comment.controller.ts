@@ -17,7 +17,7 @@ import { CommentService, CommentView } from '../application/comment.service'
 
 /** 댓글 작성 요청 */
 export interface CreateCommentDto {
-  /** 대상 콘텐츠 타입 (현재 'EVENT') */
+  /** 대상 콘텐츠 타입 ('EVENT' | 'COMPANY') */
   ownerType: string
   /** 대상 콘텐츠 PK */
   recordId: string

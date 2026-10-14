@@ -11,6 +11,7 @@ import {
 import {
   FiArrowLeft,
   FiBriefcase,
+  FiCamera,
   FiExternalLink,
   FiSliders,
   FiTrash2,
@@ -20,7 +21,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import type { UpdateCompanyInput } from '@/shared/api/company'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
-import { getUploadImageUrl } from '@/shared/api/upload'
+import { CommentSection } from '@/entities/comment'
+import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { companyLifespanLabel } from '@/shared/lib/company-lifespan'
 import { companyApi } from '@/shared/api/company'
 import { pathKeys } from '@/shared/router'
@@ -115,6 +117,20 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
   const mutation = useCompanyMutation(companyId)
   /* 기본 정보 수정 — 옛 /companies/:id/edit 페이지 대신 모달 */
   const [editOpen, setEditOpen] = useState(false)
+
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const handleLogoFile = async (file: File) => {
+    setLogoUploading(true)
+    try {
+      const uploaded = await uploadImage(file, 'companies')
+      onPatch({ logoUrl: uploaded.url })
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '로고를 올리지 못했습니다.')
+    } finally {
+      setLogoUploading(false)
+    }
+  }
   const relatedEvents = useCompanyRelatedEvents(companyId)
   const foundingEvents = useMemo(
     () => (relatedEvents.data ?? []).filter((event) => event.role === 'FOUNDED'),
@@ -294,15 +310,38 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
 
           <S.Hero>
             <S.HeroIdentity>
-              <S.Logo $hasLogo={!!logoSrc}>
-                {logoSrc ? (
-                  <img src={logoSrc} alt="" />
-                ) : (
-                  company.name.trim().charAt(0).toUpperCase() || (
-                    <FiBriefcase aria-hidden />
-                  )
-                )}
-              </S.Logo>
+              {/* 로고 — 눌러서 이미지 파일을 올린다(검토 F12). 예전엔 등록 모달에 URL을 붙여넣는 길뿐이었다 */}
+              <S.LogoUpload
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                disabled={logoUploading}
+                aria-label={logoSrc ? '로고 이미지 바꾸기' : '로고 이미지 올리기'}
+                title={logoSrc ? '로고 바꾸기' : '로고 올리기'}
+              >
+                <S.Logo $hasLogo={!!logoSrc}>
+                  {logoSrc ? (
+                    <img src={logoSrc} alt="" />
+                  ) : (
+                    company.name.trim().charAt(0).toUpperCase() || (
+                      <FiBriefcase aria-hidden />
+                    )
+                  )}
+                </S.Logo>
+                <S.LogoOverlay $busy={logoUploading} aria-hidden>
+                  {logoUploading ? <S.Spinner /> : <FiCamera />}
+                </S.LogoOverlay>
+              </S.LogoUpload>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (file) void handleLogoFile(file)
+                }}
+              />
               <S.HeroNameRow>
                 <S.HeroTitleLine>
                   <S.HeroName>
@@ -516,6 +555,13 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                         histories={company.histories ?? []}
                         onShowAll={() => setActiveGroup('history')}
                       />
+                      {/* 기업 댓글 — 사건 상세와 같은 공용 스레드(ownerType=COMPANY, 검토 F13) */}
+                      <S.Section id="comments">
+                        <S.SectionHeader>
+                          <S.SectionTitle>댓글</S.SectionTitle>
+                        </S.SectionHeader>
+                        <CommentSection ownerType="COMPANY" recordId={companyId} />
+                      </S.Section>
                     </S.OverviewStack>
                   </S.GridCell>
                   <S.GridCell $sticky>

@@ -235,6 +235,48 @@ export const Logo = styled.div<{ $hasLogo?: boolean }>`
   }
 `
 
+/** 로고 업로드 버튼 — 로고 상자를 감싸고, hover·포커스 때 카메라 덮개를 띄운다 */
+export const LogoUpload = styled.button`
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: progress;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 3px;
+  }
+`
+
+export const LogoOverlay = styled.span<{ $busy: boolean }>`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.45);
+  opacity: ${({ $busy }) => ($busy ? 1 : 0)};
+  transition: opacity 0.14s;
+
+  ${LogoUpload}:hover &,
+  ${LogoUpload}:focus-visible & {
+    opacity: 1;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+`
+
 export const HeroNameRow = styled.div`
   min-width: 0;
   flex: 1;

@@ -130,6 +130,37 @@ export async function getAllPersons(): Promise<PersonResponseDto[]> {
   return response.data || response
 }
 
+/** 인물 이름 검색 결과(경량) — 피커 표시용 */
+export interface PersonSearchItem {
+  id: string
+  name: string
+  surname: string | null
+  middleName: string | null
+  originalName: string | null
+  nameDisplayOrder: string | null
+  country: { defaultNameDisplayOrder: string | null } | null
+}
+
+/**
+ * 인물 이름 검색 — GET /persons/search?q=&limit= (본인 등록분, 최대 50).
+ * 피커가 인물 전량을 받아 클라이언트에서 거르던 것을 대체한다(기업 상세 검토 F14).
+ * 생성 SDK에 아직 없는 경로라 fetch로 직접 호출한다.
+ */
+export async function searchPersons(query: string, limit = 20): Promise<PersonSearchItem[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+  const connection = getApiConnection()
+  const url = new URL(`${connection.host}/persons/search`)
+  url.searchParams.set('q', trimmed)
+  url.searchParams.set('limit', String(limit))
+  const response = await fetch(url.toString(), {
+    headers: (connection.headers ?? {}) as Record<string, string>,
+  })
+  if (!response.ok) throw new Error(`인물 검색 실패 (HTTP ${response.status})`)
+  const list = (await response.json()) as PersonSearchItem[]
+  return Array.isArray(list) ? list : []
+}
+
 /**
  * 방문(놀러가기): 타 계정이 등록한 인물 목록(카드, 읽기전용) — GET /persons/by-account/:accountId
  */

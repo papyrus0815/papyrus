@@ -188,6 +188,20 @@ export class PersonController {
   }
 
   /**
+   * 이름 검색(경량) — 인물 피커용(기업 등록 모달의 창립자 등). 본인 등록분 범위는 목록과 같다.
+   * 주의: `:id` 라우트보다 위에 위치해야 함.
+   */
+  @Get('search')
+  async search(
+    @Request() req: any,
+    @Query('q') query?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.searchByName(query ?? '', accountId, Number(limit) || 20)
+  }
+
+  /**
    * 인물 인포그래픽 목록(경량) 조회 — 대시보드 인포그래픽 전용.
    * adapt()가 쓰는 최소 필드만 내려 전체 목록 payload를 축소한다 (본인 등록분만).
    * 주의: `:id` 라우트보다 위에 위치해야 함.

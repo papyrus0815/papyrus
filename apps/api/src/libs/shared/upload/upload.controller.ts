@@ -30,6 +30,8 @@ export const UPLOAD_IMAGE_CATEGORIES = [
   'political-parties',
   'dynasties',
   'attachments',
+  /** 기업 로고 */
+  'companies',
 ] as const
 export type UploadImageCategory = (typeof UPLOAD_IMAGE_CATEGORIES)[number]
 

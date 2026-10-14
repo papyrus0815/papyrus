@@ -216,6 +216,12 @@ export class PersonService {
     return this.personRepository.findAll(accountId)
   }
 
+  /** 이름 검색(경량, 피커용) — 1~50건 */
+  async searchByName(query: string, accountId?: string, limit = 20) {
+    const capped = Math.min(Math.max(Math.trunc(limit) || 20, 1), 50)
+    return this.personRepository.searchByName(query, accountId, capped)
+  }
+
   /**
    * 인물 인포그래픽 목록(경량) 조회 — 대시보드 인포그래픽 전용 축소 payload.
    */

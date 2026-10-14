@@ -250,8 +250,13 @@ const Section = styled.div`
   flex-direction: column;
   gap: 12px;
 
-  /* 섹션 사이 구분선 — 어느 섹션이 빠져도(조건부 렌더) 인접 섹션 간에만 표시. */
-  & + & {
+  /*
+   * 섹션 사이 구분선 — 어느 섹션이 빠져도(조건부 렌더) 인접 섹션 간에만 표시.
+   * ⚠️ '& + &'로 쓰지 말 것: styled-components가 테마별 클래스로 펼친 형제 선택자를 남겨,
+   * 다크 → 라이트로 돌아와도 나중에 주입된 다크 규칙이 이겨 구분선이 다크 색(#212121)으로 남았다
+   * (검토 F15, 실측). 카드의 자식은 이 섹션뿐이라 :not(:first-child)로 같은 뜻이 된다.
+   */
+  &:not(:first-child) {
     margin-top: 18px;
     padding-top: 18px;
     border-top: 1px solid ${({ theme }) => theme.colors.border.light};

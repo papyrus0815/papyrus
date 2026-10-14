@@ -49,7 +49,7 @@ type CommentRow = {
 }
 
 /**
- * 콘텐츠 댓글 서비스 (폴리모픽 — 현재 EVENT 대상).
+ * 콘텐츠 댓글 서비스 (폴리모픽 — EVENT·COMPANY 대상).
  * Phase A: 알림 없음(전역 공유피드라 소유자 타겟 불가 — recipient 도입은 후속).
  * 삭제 권한 = 댓글 작성자 본인 + 대상 콘텐츠 소유자(자기 방 모더레이션).
  */
@@ -133,7 +133,7 @@ export class CommentService {
   // ── 내부 ──────────────────────────────────────────────────────────────────
   /**
    * 대상 콘텐츠의 소유자 accountId + 표시 라벨 식별 (삭제 권한 판정·존재 확인·알림용).
-   * 현재 EVENT만 지원 — Event.createdById / title. 다른 타입은 MVP 미지원.
+   * EVENT(Event.createdById / title)·COMPANY(Company.createdById / organization.name). 그 밖의 타입은 미지원.
    */
   private async resolveTarget(
     ownerType: AggregateType,
@@ -165,6 +165,19 @@ export class CommentService {
         return { ownerAccountId: null, label: null }
       }
       return { ownerAccountId: event.createdById, label: event.title }
+    }
+    if (ownerType === AggregateType.COMPANY) {
+      // 기업 — 소유자는 등록 계정(createdById, 시드·배치는 NULL이라 소유자 삭제·알림 없음),
+      // 라벨은 정본 Organization 이름. 기업 상세 개요의 댓글(기업 상세 검토 F13).
+      const company = await this.prisma.company.findUnique({
+        where: { id: recordId },
+        select: { createdById: true, organization: { select: { name: true } } },
+      })
+      if (!company) {
+        if (mustExist) throw new NotFoundException('대상 기업을 찾을 수 없습니다')
+        return { ownerAccountId: null, label: null }
+      }
+      return { ownerAccountId: company.createdById, label: company.organization.name }
     }
     if (mustExist) throw new BadRequestException('지원하지 않는 댓글 대상입니다')
     return { ownerAccountId: null, label: null }
