@@ -342,6 +342,73 @@ export class EventResponseDto {
     summary?: string | null
     signatoryCount: number
     termCount: number
+    /** 수명 — 체결(signDate) → 발효 → 만료 / 파기 */
+    effectiveDate?: string | null
+    expiryDate?: string | null
+    violationDate?: string | null
+    violationReason?: string | null
+    /** 서명국 미리보기(앞 12곳) — 전체 수는 signatoryCount */
+    signatories?: Array<{
+      participationType: 'SIGNATORY' | 'GUARANTOR' | 'MEDIATOR' | 'RATIFIER' | 'OBSERVER'
+      countryId: string | null
+      historicalCountryId: string | null
+      countryName: string | null
+      personId: string | null
+      personName: string | null
+    }>
+    /** 조항 미리보기(앞 3개, 본문 140자 발췌) — 전체 수는 termCount */
+    termsPreview?: Array<{
+      id: string
+      order: number
+      title: string | null
+      excerpt: string
+      isSecret: boolean
+    }>
+  }>
+
+  @ApiProperty({
+    description: '관련 조직·기업 (상세 조회에서만). 기업이면 기업 상세 id와 최신 주가 1점',
+    required: false,
+  })
+  organizations?: Array<{
+    relationId: string
+    role: string
+    roleDescription: string | null
+    organizationId: string
+    name: string
+    shortName: string | null
+    type: string
+    logoUrl: string | null
+    companyId: string | null
+    latestStock: {
+      date: string | null
+      price: string | null
+      marketCap: string | null
+      currency: string | null
+    } | null
+  }>
+
+  @ApiProperty({
+    description: '이 사건을 서사로 가진 선거 (상세 조회에서만). 결과는 GET /elections/:id가 정본',
+    required: false,
+  })
+  elections?: Array<{ id: string; name: string; pollDate: string | null }>
+
+  @ApiProperty({
+    description: '이 사건으로 시작된 재임·재위(취임·즉위) (상세 조회에서만)',
+    required: false,
+  })
+  accessions?: Array<{
+    recordId: string
+    recordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+    personId: string
+    personName: string
+    title: string | null
+    regnalName: string | null
+    countryName: string | null
+    startYear: number | null
+    endYear: number | null
+    accessionEventId: string | null
   }>
 
   @ApiProperty({

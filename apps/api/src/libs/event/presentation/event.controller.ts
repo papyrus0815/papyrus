@@ -14,6 +14,7 @@ import {
   UseGuards,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 
@@ -43,10 +44,11 @@ import {
 } from './dto'
 import { Event } from '../domain/event.entity'
 import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
-import { EventCountryRole, PrismaClient } from '@prisma/client'
+import { EventCountryRole, EventOrganizationRole, PrismaClient } from '@prisma/client'
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
 import { assertEventOwnership, ensureEventOwnership } from '../domain/event-ownership'
 import { formatEventDate } from '../domain/event-date'
+import { displayPersonName } from '../../shared/person-display-name'
 
 /** 사건 날짜 구조화 파싱 결과 */
 interface ParsedEventDate {
@@ -113,6 +115,187 @@ export interface VisitedEventCardDto {
  * 본문 유무 판정은 상세 응답(getEventById)으로만 하라.
  */
 /** `limit=all` — 페이지를 나누지 말고 한 번에 전부 달라는 요청 */
+/**
+ * 사건 상세의 조약 미리보기 크기 — 「조약 문서」 카드가 서명국 칩·첫 조항 몇 개만 보여준다.
+ * 전부 싣지 않는 이유: 다자 조약(베스트팔렌·베르사유)은 서명국·조항이 수십 개라 사건 응답이 커진다.
+ * 개수는 `_count`로 따로 오므로 "외 N곳"·"전체 N개 조항"은 정확하다.
+ */
+const TREATY_SIGNATORY_PREVIEW = 12
+const TREATY_TERM_PREVIEW = 3
+const TREATY_TERM_EXCERPT_CHARS = 140
+
+const toIsoOrNull = (value: Date | string | null | undefined): string | null =>
+  value ? new Date(value).toISOString() : null
+
+/** 공백을 접고 `max`자에서 자른다 — 조항 본문 미리보기용. */
+const excerpt = (text: string | null | undefined, max: number): string => {
+  const flat = (text ?? '').replace(/\s+/g, ' ').trim()
+  return flat.length > max ? `${flat.slice(0, max).trimEnd()}…` : flat
+}
+
+/** 취임·즉위 기록 표시에 필요한 필드 — 재임·재위 공통 형태로 접는다(toAccessionDto). */
+const ACCESSION_PERSON_SELECT = {
+  id: true,
+  name: true,
+  surname: true,
+  middleName: true,
+  nameDisplayOrder: true,
+  country: { select: { defaultNameDisplayOrder: true } },
+} as const
+
+const ACCESSION_TENURE_SELECT = {
+  id: true,
+  title: true,
+  positionType: true,
+  startDate: true,
+  endDate: true,
+  accessionEventId: true,
+  person: { select: ACCESSION_PERSON_SELECT },
+  positionDefinition: { select: { title: true } },
+  country: { select: { name: true } },
+  historicalCountry: { select: { name: true } },
+} as const
+
+const ACCESSION_REIGN_SELECT = {
+  id: true,
+  regnalName: true,
+  startDate: true,
+  startEra: true,
+  startYear: true,
+  endDate: true,
+  endEra: true,
+  endYear: true,
+  accessionEventId: true,
+  person: { select: ACCESSION_PERSON_SELECT },
+  positionDefinition: { select: { title: true } },
+  country: { select: { name: true } },
+  historicalCountry: { select: { name: true } },
+} as const
+
+/** 재위는 구조화 연도(BC 포함)가 정본, 재임은 DATETIME(AD1000+ 규약)에서 읽는다 */
+const signedYearOf = (
+  era: string | null | undefined,
+  year: number | null | undefined,
+  date: Date | null | undefined,
+): number | null => {
+  if (year != null) return era === 'BC' ? -year : year
+  return date ? new Date(date).getUTCFullYear() : null
+}
+
+export interface EventAccessionDto {
+  recordId: string
+  recordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+  personId: string
+  personName: string
+  /** 직함 — 재임 title → 직위 정의 → null */
+  title: string | null
+  regnalName: string | null
+  countryName: string | null
+  startYear: number | null
+  endYear: number | null
+  /** 이 기록이 이미 다른 사건에 취임 사건으로 걸려 있으면 그 사건 id(후보 목록에서만 의미) */
+  accessionEventId: string | null
+}
+
+const toAccessionDto = (row: any, recordKind: EventAccessionDto['recordKind']): EventAccessionDto => ({
+  recordId: row.id,
+  recordKind,
+  personId: row.person.id,
+  personName: displayPersonName(row.person),
+  title: row.title ?? row.positionDefinition?.title ?? null,
+  regnalName: row.regnalName ?? null,
+  countryName: row.historicalCountry?.name ?? row.country?.name ?? null,
+  startYear: signedYearOf(row.startEra, row.startYear, row.startDate),
+  endYear: signedYearOf(row.endEra, row.endYear, row.endDate),
+  accessionEventId: row.accessionEventId ?? null,
+})
+
+/** 사건 ↔ 조직 한 줄 — 기업이면 기업 상세 id와 최신 주가 1점 */
+const EVENT_ORGANIZATION_SELECT = {
+  id: true,
+  role: true,
+  roleDescription: true,
+  organization: {
+    select: {
+      id: true,
+      name: true,
+      shortName: true,
+      type: true,
+      logoUrl: true,
+      company: {
+        select: {
+          id: true,
+          stockPoints: {
+            orderBy: { date: 'desc' },
+            take: 1,
+            select: { date: true, price: true, marketCap: true, currency: true },
+          },
+        },
+      },
+    },
+  },
+} as const
+
+export interface EventOrganizationDto {
+  relationId: string
+  role: string
+  roleDescription: string | null
+  organizationId: string
+  name: string
+  shortName: string | null
+  type: string
+  logoUrl: string | null
+  /** 기업이면 기업 상세(/companies/:id) id */
+  companyId: string | null
+  latestStock: {
+    date: string | null
+    price: string | null
+    marketCap: string | null
+    currency: string | null
+  } | null
+}
+
+const decimalToString = (value: unknown): string | null => (value == null ? null : String(value))
+
+const toEventOrganizationDto = (row: any): EventOrganizationDto => {
+  const stock = row.organization.company?.stockPoints?.[0] ?? null
+  return {
+    relationId: row.id,
+    role: row.role,
+    roleDescription: row.roleDescription ?? null,
+    organizationId: row.organization.id,
+    name: row.organization.name,
+    shortName: row.organization.shortName ?? null,
+    type: row.organization.type,
+    logoUrl: row.organization.logoUrl ?? null,
+    companyId: row.organization.company?.id ?? null,
+    latestStock: stock
+      ? {
+          date: toIsoOrNull(stock.date),
+          price: decimalToString(stock.price),
+          marketCap: decimalToString(stock.marketCap),
+          currency: stock.currency ?? null,
+        }
+      : null,
+  }
+}
+
+const EVENT_ORGANIZATION_ROLES = [
+  'PRINCIPAL',
+  'FOUNDED',
+  'DISSOLVED',
+  'ACQUIRER',
+  'ACQUIRED',
+  'PARTICIPANT',
+  'CONTRACTOR',
+  'BENEFICIARY',
+  'VICTIM',
+  'OTHER',
+] as const
+
+/** 취임·즉위 후보 창 — 사건 연도 ±이 값 안에서 시작한 기록만 */
+const ACCESSION_CANDIDATE_YEAR_WINDOW = 1
+
 const LIST_LIMIT_ALL = 'all'
 
 /**
@@ -404,8 +587,49 @@ export class EventController {
             summary: link.treaty.summary ?? null,
             signatoryCount: link.treaty._count?.signatories ?? 0,
             termCount: link.treaty._count?.terms ?? 0,
+            effectiveDate: toIsoOrNull(link.treaty.effectiveDate),
+            expiryDate: toIsoOrNull(link.treaty.expiryDate),
+            violationDate: toIsoOrNull(link.treaty.violationDate),
+            violationReason: link.treaty.violationReason ?? null,
+            signatories: (link.treaty.signatories ?? []).map((signatory: any) => ({
+              participationType: signatory.participationType,
+              countryId: signatory.country?.id ?? null,
+              historicalCountryId: signatory.historicalCountry?.id ?? null,
+              countryName: signatory.country?.name ?? signatory.historicalCountry?.name ?? null,
+              personId: signatory.person?.id ?? null,
+              personName: signatory.person ? displayPersonName(signatory.person) : null,
+            })),
+            termsPreview: (link.treaty.terms ?? []).map((term: any) => ({
+              id: term.id,
+              order: term.order,
+              title: term.title ?? null,
+              excerpt: excerpt(term.content, TREATY_TERM_EXCERPT_CHARS),
+              isSecret: term.isSecret,
+            })),
           }))
         : undefined,
+      /** 관련 조직·기업 — 상세에서만 include */
+      organizations: Array.isArray((event as any).organizationRelations)
+        ? (event as any).organizationRelations.map(toEventOrganizationDto)
+        : undefined,
+      /** 이 사건을 서사로 가진 선거 — 상세에서만 include(conditional 계약) */
+      elections: Array.isArray((event as any).electionsWithNarrative)
+        ? (event as any).electionsWithNarrative.map((election: any) => ({
+            id: election.id,
+            name: election.name,
+            pollDate: toIsoOrNull(election.pollDate),
+          }))
+        : undefined,
+      /** 이 사건으로 시작된 재임·재위 — 상세에서만 include */
+      accessions:
+        Array.isArray((event as any).tenureAccessions) || Array.isArray((event as any).sovereignReignAccessions)
+          ? [
+              ...((event as any).tenureAccessions ?? []).map((row: any) => toAccessionDto(row, 'TENURE')),
+              ...((event as any).sovereignReignAccessions ?? []).map((row: any) =>
+                toAccessionDto(row, 'SOVEREIGN_REIGN'),
+              ),
+            ]
+          : undefined,
       // 참여 인물(PersonEvent) — 인물 시점 role/note(장문) 포함
       relatedPersons: Array.isArray(event.persons) && event.persons.length > 0
         ? event.persons.map((pe: any) => ({
@@ -1082,6 +1306,122 @@ export class EventController {
   }
 
   /**
+   * 관련 조직·기업 연결 — 사건 ↔ 조직 한 줄(역할 포함).
+   *
+   * 표(event_organization_relation)는 있었지만 쓰는 API가 없어 시드(가스프롬)만 채웠다.
+   * 같은 조직이 다른 역할로 두 번 걸릴 수는 있다(인수자이자 수혜) — 같은 역할 중복은 409.
+   * @tag events
+   */
+  @Post(':id/organizations')
+  async addEventOrganization(
+    @Param('id') id: string,
+    @Body() body: { organizationId: string; role: string; roleDescription?: string | null },
+    @Request() req?: any,
+  ): Promise<EventOrganizationDto> {
+    const userId = req.user?.id || req.user?.sub
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정', deleted: 'conflict' })
+    if (!body?.organizationId) throw new BadRequestException('organizationId가 필요합니다.')
+    if (!(EVENT_ORGANIZATION_ROLES as readonly string[]).includes(body.role)) {
+      throw new BadRequestException(`역할은 ${EVENT_ORGANIZATION_ROLES.join(', ')} 중 하나여야 합니다.`)
+    }
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: body.organizationId },
+      select: { id: true },
+    })
+    if (!organization) throw new NotFoundException('조직을 찾을 수 없습니다.')
+    const duplicate = await this.prisma.eventOrganizationRelation.findFirst({
+      where: { eventId: id, organizationId: body.organizationId, role: body.role as EventOrganizationRole },
+      select: { id: true },
+    })
+    if (duplicate) throw new ConflictException('이미 같은 역할로 연결된 조직입니다.')
+
+    const row = await this.prisma.eventOrganizationRelation.create({
+      data: {
+        eventId: id,
+        organizationId: body.organizationId,
+        role: body.role as EventOrganizationRole,
+        roleDescription: body.roleDescription?.trim() || null,
+      },
+      select: EVENT_ORGANIZATION_SELECT,
+    })
+    return toEventOrganizationDto(row)
+  }
+
+  /**
+   * 관련 조직 연결 해제 — 조직 자체는 남는다.
+   * @tag events
+   */
+  @Delete(':id/organizations/:relationId')
+  async removeEventOrganization(
+    @Param('id') id: string,
+    @Param('relationId') relationId: string,
+    @Request() req?: any,
+  ): Promise<void> {
+    const userId = req.user?.id || req.user?.sub
+    // 정리하는 쓰기 — 삭제된 사건이어도 끊을 수 있다(ensureEventOwnership 'allow' 관례)
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정' })
+    const deleted = await this.prisma.eventOrganizationRelation.deleteMany({
+      where: { id: relationId, eventId: id },
+    })
+    if (deleted.count === 0) throw new NotFoundException('연결을 찾을 수 없습니다.')
+  }
+
+  /**
+   * 취임·즉위 후보 — 이 사건의 **참여 인물**이 가진 재임·재위 중, 사건 연도 ±1년 안에 시작한 기록.
+   *
+   * '권력 교체' 카드의 연결 동선이다. 재임·재위의 accessionEventId(이 사건으로 취임)는 지금까지
+   * 인물 쪽 폼에서만 쓸 수 있어 실DB 0건이었다. 사건 쪽에서 고르게 하되 후보를 좁힌다 — 참여
+   * 인물이 아닌 사람이나 수십 년 떨어진 재위를 권하면 잘못 연결하기 쉽다.
+   * 사건에 연도가 없으면 연도 필터 없이 참여 인물의 기록 전부(가까운 순 정렬은 생략).
+   * 이미 이 사건에 걸린 기록은 뺀다. 다른 사건에 걸린 기록은 accessionEventId로 알린다.
+   * @tag events
+   */
+  @Get(':id/accession-candidates')
+  async getAccessionCandidates(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<EventAccessionDto[]> {
+    const userId = req.user?.id || req.user?.sub
+    await assertEventOwnership(this.prisma, id, userId, { action: '조회', deleted: 'not-found' })
+
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      select: {
+        startEra: true,
+        startYear: true,
+        startDate: true,
+        persons: { select: { personId: true } },
+      },
+    })
+    const personIds = [...new Set((event?.persons ?? []).map((row) => row.personId))]
+    if (!event || personIds.length === 0) return []
+    const eventYear = signedYearOf(event.startEra, event.startYear, event.startDate)
+
+    const [tenures, reigns] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: { personId: { in: personIds } },
+        select: ACCESSION_TENURE_SELECT,
+      }),
+      this.prisma.sovereignReign.findMany({
+        where: { personId: { in: personIds } },
+        select: ACCESSION_REIGN_SELECT,
+      }),
+    ])
+    const rows = [
+      ...tenures.map((row) => toAccessionDto(row, 'TENURE')),
+      ...reigns.map((row) => toAccessionDto(row, 'SOVEREIGN_REIGN')),
+    ].filter((row) => row.accessionEventId !== id)
+
+    if (eventYear == null) return rows
+    return rows
+      .filter(
+        (row) =>
+          row.startYear != null && Math.abs(row.startYear - eventYear) <= ACCESSION_CANDIDATE_YEAR_WINDOW,
+      )
+      .sort((left, right) => Math.abs((left.startYear ?? 0) - eventYear) - Math.abs((right.startYear ?? 0) - eventYear))
+  }
+
+  /**
    * 국가의 건국·멸망 사건 — 참여국 역할 FOUNDED/DISSOLVED로 이 나라를 건 사건들.
    *
    * 역사국가는 historicalCountryId, 현대국가는 countryId 중 하나를 준다.
@@ -1391,6 +1731,19 @@ export class EventController {
           // 표시 순서는 sortOrder가 정본. createdAt은 동률 tiebreak(구 데이터 안전망).
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
+        // 이 사건을 서사로 가진 선거 — 결과(정당 의석·후보 득표)는 GET /elections/:id가 정본.
+        electionsWithNarrative: {
+          select: { id: true, name: true, pollDate: true },
+          orderBy: { pollDate: 'asc' },
+        },
+        // 관련 조직·기업 — 기업이면 최신 주가 1점(시총)까지. 지금까지 시드만 쓰고 어디에도 안 보였다.
+        organizationRelations: {
+          select: EVENT_ORGANIZATION_SELECT,
+          orderBy: { createdAt: 'asc' },
+        },
+        // 이 사건으로 시작된 재임·재위(취임·즉위) — 전임자는 프론트가 reign-adjacency로 잇는다.
+        tenureAccessions: { select: ACCESSION_TENURE_SELECT },
+        sovereignReignAccessions: { select: ACCESSION_REIGN_SELECT },
         // 이 사건에 걸린 조약 — 본문·서명자는 Treaty가 정본이라 여기선 요약만 싣는다.
         treatyLinks: {
           include: {
@@ -1401,9 +1754,38 @@ export class EventController {
                 alias: true,
                 type: true,
                 signDate: true,
+                effectiveDate: true,
+                expiryDate: true,
+                violationDate: true,
+                violationReason: true,
                 location: true,
                 summary: true,
                 _count: { select: { signatories: true, terms: true } },
+                // 사건 지면의 「조약 문서」 카드용 미리보기 — 전문은 /treaties/:id가 정본.
+                signatories: {
+                  take: TREATY_SIGNATORY_PREVIEW,
+                  orderBy: { createdAt: 'asc' },
+                  select: {
+                    participationType: true,
+                    country: { select: { id: true, name: true } },
+                    historicalCountry: { select: { id: true, name: true } },
+                    person: {
+                      select: {
+                        id: true,
+                        name: true,
+                        surname: true,
+                        middleName: true,
+                        nameDisplayOrder: true,
+                        country: { select: { defaultNameDisplayOrder: true } },
+                      },
+                    },
+                  },
+                },
+                terms: {
+                  take: TREATY_TERM_PREVIEW,
+                  orderBy: { order: 'asc' },
+                  select: { id: true, order: true, title: true, content: true, isSecret: true },
+                },
               },
             },
           },

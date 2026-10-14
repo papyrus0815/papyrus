@@ -131,6 +131,19 @@ export function useEventMutation(eventId: string) {
         }
       }
 
+      /*
+       * 진영 소속을 바꾼 patch — 진영 카드의 소속 목록(sides[].participants)은 서버가 참여국 줄의
+       * sideId에서 다시 엮는 파생값이다. 응답 시딩 직후에 그 전에 출발한 GET(진영 생성 직후
+       * 재조회 등)이 늦게 도착하면 '소속 없음'으로 덮인다(실측: DB엔 들어갔는데 새로고침 전까지
+       * 비어 보였다). 커밋 뒤에 한 번 더 읽어 마지막 응답이 항상 커밋 이후가 되게 한다.
+       */
+      const touchesSides =
+        'relatedCountries' in patch &&
+        (patch.relatedCountries ?? []).some(
+          (participant) => 'sideId' in participant && participant.sideId !== undefined,
+        )
+      if (touchesSides) queryClient.invalidateQueries({ queryKey: detailKey })
+
       /**
        * 부활 토스트 — 링크를 (재)연결했더니 이전에 기록해 둔 연결 사유(EventHierarchyReason은
        * 해제 시에도 행 보존)가 되살아났을 때 안내. 사용자가 이번 patch로 직접 사유를 친
@@ -356,6 +369,11 @@ export function buildOptimisticEvent(
           roleDescription:
             participant?.roleDescription ?? country.roleDescription ?? null,
           note: participant?.note ?? country.note ?? null,
+          // 진영 소속 — undefined는 서버와 같이 '무변경'(진영 초안·진영 모듈이 이 줄로 배정한다)
+          sideId:
+            participant && 'sideId' in participant && participant.sideId !== undefined
+              ? participant.sideId
+              : country.sideId ?? null,
           sortOrder: orderOf.get(`m:${country.id}`) ?? 0,
         }
       })
@@ -367,6 +385,11 @@ export function buildOptimisticEvent(
           roleDescription:
             participant?.roleDescription ?? country.roleDescription ?? null,
           note: participant?.note ?? country.note ?? null,
+          // 진영 소속 — undefined는 서버와 같이 '무변경'(진영 초안·진영 모듈이 이 줄로 배정한다)
+          sideId:
+            participant && 'sideId' in participant && participant.sideId !== undefined
+              ? participant.sideId
+              : country.sideId ?? null,
           sortOrder: orderOf.get(`h:${country.id}`) ?? 0,
         }
       })

@@ -1,12 +1,15 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
 import { syncEventSides } from '@/shared/api/event-sides'
+import { type UpdateEventDto } from '@/shared/api/events'
+import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { notify } from '@/shared/ui/toast'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { categoryFeatures, participantKey, toParticipants } from '@/entities/event/model'
 import { resolveCategory,
   ledgerAccent,
 } from '@/entities/event/ui/ledger-tokens'
@@ -19,12 +22,20 @@ import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
 import { ContemporaryHeadsLink, DetailHero } from './components/detail-hero'
-import { EventDetailLoading } from './components/detail-loading'
+import {
+  EventDetailLoading,
+  type LoadingGate,
+  MIN_LOADING_MS,
+  createLoadingGate,
+} from './components/detail-loading'
 import { DetailNarrative } from './components/detail-narrative'
 import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
 import { DetailFacts } from './components/detail-facts'
+import { DetailOrganizations } from './components/detail-organizations'
+import { DetailPower, hasPowerData } from './components/detail-power'
 import { DetailRail } from './components/detail-rail'
+import { DetailStatehood, statehoodEntries } from './components/detail-statehood'
 import { DevelopmentTimeline } from './components/development-timeline'
 import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
@@ -48,6 +59,7 @@ import * as S from './styles'
 import { type EventDetail, eventKeys, useEventDetail } from './use-event-detail'
 import { useEventMutation } from './use-event-mutation'
 import { useEventRelations } from './use-event-relations'
+import { draftSidesFromRoles } from './side-draft.lib'
 import { useUndoablePatch } from './use-undoable-patch'
 
 /**
@@ -81,11 +93,27 @@ const EventDetailPage = () => {
     )
   }
 
+  // key={eventId} — 다른 사건으로 이동 시 에러 상태·최소 로딩 타이머를 리셋.
+  return <EventDetailShell key={eventId} eventId={eventId} />
+}
+
+/**
+ * 셸 — ErrorBoundary > Suspense > 본문.
+ *
+ * **최소 로딩 시간**: 응답이 수십 ms라 로딩 화면(초상+명언)이 한 프레임 번쩍이고 사라졌다
+ * (2026-10-07 사용자: "로딩이 너무 짧아서 안 보임"). 타이머를 Suspense *밖*(여기)에서 마운트 시점에
+ * 만들고, 본문이 데이터를 받은 뒤 그 타이머를 `use()`로 한 번 더 기다린다 — 같은 경계 안에서
+ * 두 번 suspend하므로 fallback은 리마운트 없이 이어진다(명언이 중간에 바뀌지 않는다).
+ * 데이터 요청은 첫 렌더에서 바로 시작되므로 둘은 병렬이고, 화면은 max(응답, MIN_LOADING_MS)에 열린다.
+ * 캐시가 있는 재방문도 같은 시간 동안 로딩을 보여준다.
+ */
+function EventDetailShell({ eventId }: { eventId: string }) {
+  const [loadingGate] = useState(() => createLoadingGate(MIN_LOADING_MS))
+
   return (
-    // key={eventId} — 다른 사건으로 이동 시 에러 상태를 리셋.
-    <SmartErrorBoundary key={eventId} FallbackComponent={EventDetailError}>
+    <SmartErrorBoundary FallbackComponent={EventDetailError}>
       <Suspense fallback={<EventDetailLoading />}>
-        <EventDetailContent eventId={eventId} />
+        <EventDetailContent eventId={eventId} loadingGate={loadingGate} />
       </Suspense>
     </SmartErrorBoundary>
   )
@@ -93,8 +121,15 @@ const EventDetailPage = () => {
 
 /* ───────────────────────── 본문(데이터 해소 후) ───────────────────────── */
 
-function EventDetailContent({ eventId }: { eventId: string }) {
+function EventDetailContent({
+  eventId,
+  loadingGate,
+}: {
+  eventId: string
+  loadingGate: LoadingGate
+}) {
   const { event, enabledModules: serverModules } = useEventDetail(eventId)
+  use(loadingGate)
   /*
    * 수치 모듈은 저장할 빈 값이 없다 — '모듈 추가'로 펼치면 첫 수치를 기록할 때까지 화면에서만 연다.
    * (빈 stub을 저장하던 예전 방식은 '전사 0명'이 데이터로 굳는 오염을 낳았다.)
@@ -284,7 +319,20 @@ function EventDetailContent({ eventId }: { eventId: string }) {
       return next
     })
   }, [filled, pinned])
-  const isVisible = (id: FoldableSectionId) => filled[id] || pinned.has(id)
+  /*
+   * 카테고리 기능 — 회담/조약 사건은 조약 섹션을 본문 바로 뒤로 올리고 비어 있어도 접지 않는다
+   * (조약이 그 사건의 결과물이라 '채우기' 띠에 숨기면 핵심 동선이 사라진다).
+   */
+  const features = categoryFeatures(event.category?.name)
+  const promoteTreaties = features.promoteTreaties
+  /* 국가 성립·소멸 — 역할(건국·멸망)이 있으면 늘, 건국/멸망 사건이면 비어 있어도 보인다 */
+  const showStatehood = features.expectStatehood || statehoodEntries(event).length > 0
+  /* 권력 교체·선거 — 취임·즉위·선거가 걸려 있으면 늘, 정치 사건이면 비어 있어도 보인다 */
+  const showPower = features.expectPower || hasPowerData(event)
+  /* 관련 기업·조직 — 연결이 있으면 늘, 경제 사건이면 비어 있어도 보인다 */
+  const showOrganizations = features.expectOrganizations || (event.organizations?.length ?? 0) > 0
+  const isVisible = (id: FoldableSectionId) =>
+    filled[id] || pinned.has(id) || (id === 'treaties' && promoteTreaties)
   const folded = FOLDABLE_SECTIONS.filter((section) => !isVisible(section.id))
 
   /* 펼친 섹션으로 스크롤 — 펼침이 렌더에 반영된 뒤라야 앵커가 존재한다.
@@ -336,6 +384,10 @@ function EventDetailContent({ eventId }: { eventId: string }) {
         label: '여파',
         children: withParagraphs('aftermath'),
       })
+    if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
+    if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
+    if (showOrganizations) items.push({ id: 'organizations', label: '관련 기업·조직' })
+    if (promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
     if (shown('actors')) items.push({ id: 'actors', label: '참여 행위자' })
 
     if (enabledModules.includes('sides'))
@@ -347,7 +399,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     if (enabledModules.includes('cabinets'))
       items.push({ id: 'module-cabinets', label: '관련 행정부' })
 
-    if (shown('treaties')) items.push({ id: 'treaties', label: '조약' })
+    if (!promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
     if (shown('network')) items.push({ id: 'network', label: '연관' })
     if (shown('appendix')) items.push({ id: 'appendix', label: '이미지' })
     // 댓글 — 최상위 사건은 댓글 스레드, 하위 사건은 상위 댓글로 유도하는 안내(둘 다 #comments
@@ -359,7 +411,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     // 섹션 구성은 보임 여부·단락 제목·모듈에만 의존한다 — event 전체를 deps에 두면
     // 인라인 patch refetch마다 재계산된다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleKey, event.eventSections, enabledModules])
+  }, [visibleKey, event.eventSections, enabledModules, promoteTreaties, showStatehood, showPower, showOrganizations])
 
   /**
    * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
@@ -375,6 +427,79 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     if (!target) return
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [event.id])
+
+  /**
+   * 진영 시작 — 참여국 역할(주도·대상…)로 편을 가를 수 있으면 **초안**을 보여 주고 확인받아 만든다
+   * (side-draft.lib). 가를 수 없으면 예전처럼 빈 '진영 1·2'. 초안의 나라 배정은 사건 patch라
+   * 되돌리기(Ctrl+Z 토스트)로 무를 수 있다 — 진영 자체는 진영 모듈에서 지운다.
+   */
+  const startSides = async () => {
+    try {
+      const draft = draftSidesFromRoles(event.relatedCountries, event.relatedHistoricalCountries)
+      if (!draft) {
+        await syncEventSides(event.id, [
+          { name: '진영 1', level: 'COALITION', color: '#1d4ed8' },
+          { name: '진영 2', level: 'COALITION', color: '#b91c1c' },
+        ])
+        await queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
+        return
+      }
+
+      const [sideA, sideB] = draft.sides
+      const ok = await confirm({
+        title: '참여국 역할로 진영 나누기',
+        message:
+          `${sideA.name}: ${sideA.memberNames.join(', ')} / ${sideB.name}: ${sideB.memberNames.join(', ')}` +
+          (draft.unassigned.length > 0
+            ? ` — ${draft.unassigned.join(', ')}은(는) 역할만으로 편을 알 수 없어 넣지 않습니다.`
+            : '') +
+          ' 이름과 소속은 진영 모듈에서 고칠 수 있습니다.',
+        confirmLabel: '이대로 만들기',
+      })
+      if (!ok) return
+
+      const created = await syncEventSides(event.id, draft.sides.map((side) => ({
+        name: side.name,
+        level: 'COALITION' as const,
+        color: side.color,
+      })))
+      /*
+       * 진영을 반영한 상세를 **먼저** 받아 두고 나서 배정 patch를 보낸다. 순서를 바꾸면(patch 뒤
+       * invalidate) 재조회 GET이 patch보다 먼저 끝나 배정 전 상태로 화면을 덮는다(실측 — DB엔 들어갔는데
+       * 새로고침 전까지 '진영 미지정'으로 보였다). patch 응답은 useEventMutation이 캐시에 반영한다.
+       */
+      await queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
+      const ordered = [...created].sort((left, right) => left.sortOrder - right.sortOrder)
+      const sideIdByKey = new Map<string, string>()
+      draft.sides.forEach((side, index) => {
+        const sideId = ordered[index]?.id
+        if (sideId) for (const key of side.memberKeys) sideIdByKey.set(key, sideId)
+      })
+      /* sideId를 안 보낸 줄은 서버가 그대로 둔다(undefined = 무변경) */
+      onPatch({
+        relatedCountries: toParticipants(event.relatedCountries, event.relatedHistoricalCountries).map(
+          (participant) => {
+            const sideId = sideIdByKey.get(participantKey(participant))
+            return sideId ? { ...participant, sideId } : participant
+          },
+        ),
+      } as UpdateEventDto)
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : '진영을 만들지 못했습니다')
+    }
+  }
+
+  /* 조약 — 회담/조약 사건이면 본문 바로 뒤, 그 밖에는 모듈 뒤(연관 앞) */
+  const treatiesSection = isVisible('treaties') ? (
+    <DetailTreaties
+      event={event}
+      onInvalidate={() =>
+        void queryClient.invalidateQueries({
+          queryKey: eventKeys.detail(event.id),
+        })
+      }
+    />
+  ) : null
 
   /* Page = 내부 스크롤 컨테이너 — 읽기 진행률 바가 이 ref로 scrollTop을 읽는다. */
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -411,6 +536,29 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 }}
               />
 
+              {showStatehood && (
+                <DetailStatehood
+                  event={event}
+                  expectStatehood={features.expectStatehood}
+                  onCountryClick={onCountryClick}
+                  onPersonClick={onPersonClick}
+                />
+              )}
+
+              {showPower && (
+                <DetailPower
+                  event={event}
+                  expectPower={features.expectPower}
+                  onPersonClick={onPersonClick}
+                />
+              )}
+
+              {showOrganizations && (
+                <DetailOrganizations event={event} expectOrganizations={features.expectOrganizations} />
+              )}
+
+              {promoteTreaties && treatiesSection}
+
               {isVisible('actors') && (
                 <DetailActors
                   event={event}
@@ -425,17 +573,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 event={event}
                 enabledModules={enabledModules}
                 onPatch={onPatch}
-                onStartSides={async () => {
-                  try {
-                    await syncEventSides(event.id, [
-                      { name: '진영 1', level: 'COALITION', color: '#1d4ed8' },
-                      { name: '진영 2', level: 'COALITION', color: '#b91c1c' },
-                    ])
-                    await queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
-                  } catch (error) {
-                    notify.error(error instanceof Error ? error.message : '진영을 만들지 못했습니다')
-                  }
-                }}
+                onStartSides={startSides}
                 onShowMetrics={() => setMetricsOpened(true)}
               />
 
@@ -447,16 +585,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
               {enabledModules.includes('cabinets') && <ModuleCabinets event={event} />}
 
               {/* 조약 — 사건과 조약을 잇는 유일한 지점(본문·서명자는 조약이 정본) */}
-              {isVisible('treaties') && (
-                <DetailTreaties
-                  event={event}
-                  onInvalidate={() =>
-                    void queryClient.invalidateQueries({
-                      queryKey: eventKeys.detail(event.id),
-                    })
-                  }
-                />
-              )}
+              {!promoteTreaties && treatiesSection}
 
               {isVisible('network') && (
                 <DetailNetwork event={event} onPatch={onPatch} />

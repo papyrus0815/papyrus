@@ -559,6 +559,13 @@ export interface StatehoodAgent {
 export interface FoundingSummary {
   foundingNote: string | null
   dissolutionNote: string | null
+  /** 이 나라의 존속 기간 — 사건 지면 「국가 성립·소멸」이 쓴다(구버전 서버면 undefined) */
+  period?: {
+    startEra: 'BC' | 'AD' | null
+    startYear: number | null
+    endEra: 'BC' | 'AD' | null
+    endYear: number | null
+  }
   /** 건국 주체 — 누가 세웠나(구버전 서버면 undefined) */
   founders?: StatehoodAgent[]
   /** 멸망 주체 — 누구에게 멸망했나(구버전 서버면 undefined) */

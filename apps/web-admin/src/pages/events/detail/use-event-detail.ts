@@ -11,7 +11,7 @@ import {
 import type { EventCountryRole } from '@/entities/event/model'
 import { type NormalizedMilitaryEventResponse } from '@/features/event-create/lib'
 import type { EventSide } from '@/shared/api/event-sides'
-import { getEventById } from '@/shared/api/events'
+import { type EventAccession, type EventOrganization, getEventById } from '@/shared/api/events'
 import { listEventObservations, type StructuredPoint } from '@/shared/api/evidence'
 
 /**
@@ -119,6 +119,23 @@ export interface EventDetailHistoricalCountryRef {
   withdrawReason?: string | null
 }
 
+export interface EventDetailTreatySignatory {
+  participationType: 'SIGNATORY' | 'GUARANTOR' | 'MEDIATOR' | 'RATIFIER' | 'OBSERVER'
+  countryId: string | null
+  historicalCountryId: string | null
+  countryName: string | null
+  personId: string | null
+  personName: string | null
+}
+
+export interface EventDetailTreatyTerm {
+  id: string
+  order: number
+  title: string | null
+  excerpt: string
+  isSecret: boolean
+}
+
 /** 사건에 걸린 조약 요약 — 본문·서명자 전문은 GET /treaties/:id가 정본 */
 export interface EventDetailTreaty {
   /** TreatyEventLink 행 id — 연결 해제에 쓴다 */
@@ -134,6 +151,15 @@ export interface EventDetailTreaty {
   summary?: string | null
   signatoryCount: number
   termCount: number
+  /** 수명 — 체결(signDate) → 발효 → 만료 / 파기 */
+  effectiveDate?: string | null
+  expiryDate?: string | null
+  violationDate?: string | null
+  violationReason?: string | null
+  /** 서명국 미리보기(앞 12곳) — 전체 수는 signatoryCount */
+  signatories?: EventDetailTreatySignatory[]
+  /** 조항 미리보기(앞 3개, 본문 발췌) — 전체 수는 termCount */
+  termsPreview?: EventDetailTreatyTerm[]
 }
 
 export interface EventDetailCabinetEvent {
@@ -204,6 +230,12 @@ export interface EventDetail {
   relatedHistoricalCountries?: EventDetailHistoricalCountryRef[]
   /** 이 사건에서 체결·비준·파기된 조약 */
   treaties?: EventDetailTreaty[]
+  /** 이 사건을 서사로 가진 선거 — 결과는 GET /elections/:id가 정본 */
+  elections?: Array<{ id: string; name: string; pollDate: string | null }>
+  /** 이 사건으로 시작된 재임·재위(취임·즉위) */
+  accessions?: EventAccession[]
+  /** 관련 조직·기업 — 기업이면 최신 주가 1점 */
+  organizations?: EventOrganization[]
   relatedPersons?: EventDetailPerson[]
   /**
    * 작전 정보 — 서버 응답에 런타임 전용으로 실려온다(SDK 타입엔 없어 @ts-ignore로 주입됨).

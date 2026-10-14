@@ -6,6 +6,7 @@ import {
   buildGantt,
   categoryBreakdown,
   checkNode,
+  checkScore,
   coverageGaps,
   missingRootCountries,
   rootCountriesPayload,
@@ -215,12 +216,24 @@ describe('인물·점검', () => {
   it('열별 빈 칸 수와 충실도', () => {
     expect(emptyCountByColumn(descendants).countries).toBe(2)
     const ratio = coverageRatio([sarajevo])
-    // 날짜·개요·참여국 = 3/9
-    expect(ratio).toBeCloseTo(3 / 9)
+    // 외교 사건이라 수치는 해당 없음 — 날짜·개요·참여국 = 3/8
+    expect(ratio).toBeCloseTo(3 / 8)
   })
 })
 
 describe('배치 B — 점검 신호', () => {
+  it('외교 사건의 수치는 해당 없음, 전쟁 사건은 빈 칸, 값이 있으면 갈래와 무관하게 채움', () => {
+    expect(checkNode(sarajevo).metrics).toBe('na')
+    expect(checkNode(marne).metrics).toBe('empty')
+    const withMetric = node({
+      id: 'm',
+      category: { id: 'c1', name: '외교' },
+      metrics: [{ metricKey: 'k', metricName: '배상금', unit: null, value: 1, low: null, high: null, approx: false }],
+    })
+    expect(checkNode(withMetric).metrics).toBe('full')
+    expect(checkScore(checkNode(sarajevo)).applicable).toBe(8)
+  })
+
   it('상위 기간 밖 하위 — 개전 전 사라예보는 기간 전', () => {
     const gantt = buildGantt(root, descendants)
     expect(gantt.rows.find((row) => row.node.id === 'sarajevo')?.outside).toBe('before')

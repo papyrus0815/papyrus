@@ -8,6 +8,10 @@
  * '새 조약 만들기'가 핵심 동선이다. 사건의 참여국·시작일·제목을 그대로 조약 초안으로
  * 승격하므로, 조약 지면에서 서명국을 처음부터 다시 고를 일이 없다. 승격된 뒤 서명
  * 인물·직책·국가별 서명일 같은 **조약 고유의 사실**만 조약 상세에서 채우면 된다.
+ *
+ * 연결된 조약은 한 줄 요약이 아니라 **조약 문서 카드**로 보인다 — 수명(체결→발효→만료·파기),
+ * 서명국, 첫 조항 몇 개. 사건을 읽다가 조약 지면으로 건너가지 않아도 "무엇을 약속했고 언제
+ * 깨졌나"까지 답한다. 전문·편집은 여전히 조약 상세가 정본이다(카드는 미리보기만 받는다).
  */
 import { useMemo, useState } from 'react'
 
@@ -37,7 +41,11 @@ import { notify } from '@/shared/ui/toast'
 
 import { metaText } from '@/pages/events/styles/theme'
 import * as S from '../styles'
-import { type EventDetail } from '../use-event-detail'
+import {
+  type EventDetail,
+  type EventDetailTreaty,
+  type EventDetailTreatySignatory,
+} from '../use-event-detail'
 
 interface DetailTreatiesProps {
   event: EventDetail
@@ -80,6 +88,8 @@ function treatyNameFromEventTitle(title: string): string {
 export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
   const queryClient = useQueryClient()
   const [linkModalOpen, setLinkModalOpen] = useState(false)
+  /** 2단계 연결 — 조약을 고른 뒤 '이 사건과의 관계'(체결·비준·파기·관련)를 고른다 */
+  const [pendingTreatyId, setPendingTreatyId] = useState<string | null>(null)
   const treaties = event.treaties ?? []
 
   /** 연결 후보 — 이미 걸린 조약은 뺀다. 모달을 열 때만 가져온다. */
@@ -115,8 +125,8 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
   }
 
   const linkMutation = useMutation({
-    mutationFn: (treatyId: string) =>
-      treatyApi.linkEvent(treatyId, { eventId: event.id, linkType: 'SIGNING' }),
+    mutationFn: ({ treatyId, linkType }: { treatyId: string; linkType: TreatyEventLinkType }) =>
+      treatyApi.linkEvent(treatyId, { eventId: event.id, linkType }),
     onSuccess: () => {
       notify.success('조약을 이 사건에 연결했습니다')
       invalidateTreaties()
@@ -185,6 +195,21 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
     if (ok) unlinkMutation.mutate(linkId)
   }
 
+  const handleCreate = async () => {
+    const participantCount =
+      (event.relatedCountries?.length ?? 0) + (event.relatedHistoricalCountries?.length ?? 0)
+    const name = treatyNameFromEventTitle(event.title)
+    const ok = await confirm({
+      title: '조약 만들기',
+      message:
+        participantCount > 0
+          ? `「${name}」(${TREATY_TYPE_LABELS[guessTreatyType(event.title)]})을 만들고 참여국 ${participantCount}곳을 서명국으로 옮깁니다. 이름·유형·서명 인물은 조약 상세에서 고칠 수 있습니다.`
+          : `「${name}」(${TREATY_TYPE_LABELS[guessTreatyType(event.title)]})을 만듭니다. 참여국이 없어 서명국은 비어 있습니다.`,
+      confirmLabel: '만들기',
+    })
+    if (ok) createMutation.mutate()
+  }
+
   const hasParticipants =
     (event.relatedCountries?.length ?? 0) +
       (event.relatedHistoricalCountries?.length ?? 0) >
@@ -199,40 +224,11 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
       {treaties.length > 0 ? (
         <TreatyList>
           {treaties.map((treaty) => (
-            <TreatyRow key={treaty.linkId}>
-              <TreatyBody>
-                <TreatyNameLine>
-                  <TreatyLink to={pathKeys.treaties.detail(treaty.id)}>
-                    {treaty.name}
-                    <FiExternalLink size={13} aria-hidden />
-                  </TreatyLink>
-                  <LinkKindBadge>
-                    {
-                      TREATY_EVENT_LINK_LABELS[
-                        treaty.linkType as TreatyEventLinkType
-                      ]
-                    }
-                  </LinkKindBadge>
-                </TreatyNameLine>
-                <TreatyMeta>
-                  {[
-                    TREATY_TYPE_LABELS[treaty.type as TreatyType],
-                    treaty.signDate ? treaty.signDate.slice(0, 10) : null,
-                    `서명국 ${treaty.signatoryCount}`,
-                    treaty.termCount > 0 ? `조항 ${treaty.termCount}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </TreatyMeta>
-              </TreatyBody>
-              <UnlinkBtn
-                type="button"
-                onClick={() => handleUnlink(treaty.linkId, treaty.name)}
-                aria-label={`${treaty.name} 연결 해제`}
-              >
-                <FiX />
-              </UnlinkBtn>
-            </TreatyRow>
+            <TreatyCard
+              key={treaty.linkId}
+              treaty={treaty}
+              onUnlink={() => handleUnlink(treaty.linkId, treaty.name)}
+            />
           ))}
         </TreatyList>
       ) : (
@@ -247,7 +243,7 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
         <ActionBtn
           type="button"
           $primary
-          onClick={() => createMutation.mutate()}
+          onClick={() => void handleCreate()}
           disabled={createMutation.isPending}
           title={
             hasParticipants
@@ -273,10 +269,156 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
         searchPlaceholder="조약명으로 검색..."
         onSelect={(treatyId) => {
           setLinkModalOpen(false)
-          linkMutation.mutate(treatyId)
+          setPendingTreatyId(treatyId)
+        }}
+      />
+
+      <SelectModal
+        isOpen={pendingTreatyId !== null}
+        onClose={() => setPendingTreatyId(null)}
+        title="이 사건과 조약의 관계"
+        options={LINK_TYPE_OPTIONS}
+        onSelect={(linkType) => {
+          const treatyId = pendingTreatyId
+          setPendingTreatyId(null)
+          if (treatyId) linkMutation.mutate({ treatyId, linkType: linkType as TreatyEventLinkType })
         }}
       />
     </S.Section>
+  )
+}
+
+const LINK_TYPE_OPTIONS: Array<{ value: TreatyEventLinkType; label: string; description: string }> = [
+  { value: 'SIGNING', label: TREATY_EVENT_LINK_LABELS.SIGNING, description: '회담·조인식처럼 조약이 서명된 사건' },
+  { value: 'RATIFICATION', label: TREATY_EVENT_LINK_LABELS.RATIFICATION, description: '의회 비준·발효 절차가 이뤄진 사건' },
+  { value: 'VIOLATION', label: TREATY_EVENT_LINK_LABELS.VIOLATION, description: '침공·폐기 선언처럼 조약이 깨진 사건' },
+  { value: 'RELATED', label: TREATY_EVENT_LINK_LABELS.RELATED, description: '그 밖에 조약과 이어지는 사건' },
+]
+
+const PARTICIPATION_SUFFIX: Partial<Record<EventDetailTreatySignatory['participationType'], string>> = {
+  GUARANTOR: '보증',
+  MEDIATOR: '중재',
+  RATIFIER: '비준',
+  OBSERVER: '참관',
+}
+
+/** ISO → '1939. 8. 23' — Date를 거치지 않는다(시간대에 따라 하루 밀리는 사고 방지). */
+function formatTreatyDate(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const match = /^(-?\d{1,6})-(\d{2})-(\d{2})/.exec(iso)
+  if (!match) return null
+  return `${Number(match[1])}. ${Number(match[2])}. ${Number(match[3])}`
+}
+
+interface LifecycleStep {
+  key: string
+  label: string
+  date: string
+  tone: 'normal' | 'ended' | 'broken'
+}
+
+/** 체결 → 발효 → 만료 / 파기. 날짜가 있는 단계만 — 빈 단계를 '미상'으로 세우지 않는다. */
+function lifecycleSteps(treaty: EventDetailTreaty): LifecycleStep[] {
+  const steps: LifecycleStep[] = []
+  const signed = formatTreatyDate(treaty.signDate)
+  const effective = formatTreatyDate(treaty.effectiveDate)
+  const expired = formatTreatyDate(treaty.expiryDate)
+  const violated = formatTreatyDate(treaty.violationDate)
+  if (signed) steps.push({ key: 'signed', label: '체결', date: signed, tone: 'normal' })
+  if (effective && effective !== signed) {
+    steps.push({ key: 'effective', label: '발효', date: effective, tone: 'normal' })
+  }
+  if (violated) steps.push({ key: 'violated', label: '파기', date: violated, tone: 'broken' })
+  else if (expired) steps.push({ key: 'expired', label: '만료', date: expired, tone: 'ended' })
+  return steps
+}
+
+function TreatyCard({ treaty, onUnlink }: { treaty: EventDetailTreaty; onUnlink: () => void }) {
+  const steps = lifecycleSteps(treaty)
+  const signatories = treaty.signatories ?? []
+  const hiddenSignatories = Math.max(0, treaty.signatoryCount - signatories.length)
+  const terms = treaty.termsPreview ?? []
+  const hiddenTerms = Math.max(0, treaty.termCount - terms.length)
+  const detailPath = pathKeys.treaties.detail(treaty.id)
+
+  return (
+    <TreatyRow>
+      <TreatyHead>
+        <TreatyNameLine>
+          <TreatyLink to={detailPath}>
+            {treaty.name}
+            <FiExternalLink size={13} aria-hidden />
+          </TreatyLink>
+          <LinkKindBadge>{TREATY_EVENT_LINK_LABELS[treaty.linkType as TreatyEventLinkType]}</LinkKindBadge>
+        </TreatyNameLine>
+        <UnlinkBtn type="button" onClick={onUnlink} aria-label={`${treaty.name} 연결 해제`}>
+          <FiX />
+        </UnlinkBtn>
+      </TreatyHead>
+
+      <TreatyMeta>
+        {[
+          TREATY_TYPE_LABELS[treaty.type as TreatyType],
+          treaty.location,
+          treaty.alias ? `일명 ${treaty.alias}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </TreatyMeta>
+
+      {steps.length > 0 && (
+        <Lifecycle aria-label="조약 수명">
+          {steps.map((step) => (
+            <LifecycleStepItem key={step.key} $tone={step.tone}>
+              <StepLabel>{step.label}</StepLabel>
+              <StepDate>{step.date}</StepDate>
+            </LifecycleStepItem>
+          ))}
+        </Lifecycle>
+      )}
+      {treaty.violationDate && treaty.violationReason && (
+        <ViolationReason>{treaty.violationReason}</ViolationReason>
+      )}
+
+      {signatories.length > 0 && (
+        <Facet>
+          <FacetLabel>서명국</FacetLabel>
+          <SignatoryList>
+            {signatories.map((signatory, index) => (
+              <Signatory key={`${signatory.countryId ?? signatory.historicalCountryId ?? 'none'}-${index}`}>
+                <span>{signatory.countryName ?? '국가 미상'}</span>
+                {PARTICIPATION_SUFFIX[signatory.participationType] && (
+                  <SignatoryRole>{PARTICIPATION_SUFFIX[signatory.participationType]}</SignatoryRole>
+                )}
+                {signatory.personName && <SignatoryPerson>{signatory.personName}</SignatoryPerson>}
+              </Signatory>
+            ))}
+            {hiddenSignatories > 0 && <MoreNote>외 {hiddenSignatories}곳</MoreNote>}
+          </SignatoryList>
+        </Facet>
+      )}
+
+      {terms.length > 0 && (
+        <Facet>
+          <FacetLabel>조항</FacetLabel>
+          <TermList>
+            {terms.map((term, index) => (
+              <Term key={term.id}>
+                <TermNumber>{index + 1}</TermNumber>
+                <TermText>
+                  {term.title && <TermTitle>{term.title}</TermTitle>}
+                  {term.isSecret && <SecretBadge>비밀</SecretBadge>}
+                  {term.excerpt}
+                </TermText>
+              </Term>
+            ))}
+          </TermList>
+          {hiddenTerms > 0 && (
+            <MoreLink to={detailPath}>조항 {treaty.termCount}개 전체 보기</MoreLink>
+          )}
+        </Facet>
+      )}
+    </TreatyRow>
   )
 }
 
@@ -291,23 +433,26 @@ const TreatyList = styled.ul`
 `
 
 const TreatyRow = styled.li`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  &:first-child {
+    padding-top: 4px;
+  }
 
   &:last-child {
     border-bottom: none;
   }
 `
 
-const TreatyBody = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+const TreatyHead = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
 `
 
 const TreatyNameLine = styled.div`
@@ -348,6 +493,179 @@ const TreatyMeta = styled.div`
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
+`
+
+/* 수명 — 단계 사이를 가는 선으로 잇는다. 파기는 오류색, 만료는 흐린 잉크. */
+const Lifecycle = styled.ol`
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  row-gap: 6px;
+
+  /*
+   * 단계 사이 선은 부모에서 건다 — 단계마다 $tone이 달라 styled 클래스가 갈려,
+   * 자식 쪽 "& + &"로는 색이 다른 형제를 잇지 못한다.
+   */
+  > li + li::before {
+    content: '';
+    align-self: center;
+    width: 20px;
+    height: 1px;
+    margin: 0 10px;
+    background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+const LifecycleStepItem = styled.li<{ $tone: LifecycleStep['tone'] }>`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: ${({ theme, $tone }) =>
+    $tone === 'broken'
+      ? theme.colors.error
+      : $tone === 'ended'
+        ? theme.colors.text.tertiary
+        : theme.colors.text.primary};
+`
+
+const StepLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+`
+
+const StepDate = styled.span`
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+`
+
+const ViolationReason = styled.p`
+  margin: -2px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: ${metaText};
+`
+
+/* 서명국·조항 — 왼쪽 짧은 라벨 열 + 내용. 좁으면 라벨이 위로 올라간다. */
+const Facet = styled.div`
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 6px;
+  align-items: baseline;
+
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const FacetLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const SignatoryList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const Signatory = styled.li`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+`
+
+const SignatoryRole = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const SignatoryPerson = styled.span`
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  &::before {
+    content: '· ';
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const MoreNote = styled.li`
+  font-size: 12.5px;
+  color: ${metaText};
+`
+
+const TermList = styled.ol`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const Term = styled.li`
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 6px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TermNumber = styled.span`
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+`
+
+const TermText = styled.span`
+  min-width: 0;
+  word-break: keep-all;
+`
+
+const TermTitle = styled.strong`
+  margin-right: 6px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SecretBadge = styled.span`
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => theme.colors.error};
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.error};
+`
+
+const MoreLink = styled(Link)`
+  grid-column: 2;
+  justify-self: start;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  @media (max-width: 560px) {
+    grid-column: 1;
+  }
 `
 
 const EmptyNote = styled.p`

@@ -161,7 +161,14 @@ export class HistoricalCountryController {
   async getFoundingSummary(@Param('id') id: string): Promise<FoundingSummaryDto> {
     const country = await this.prisma.historicalCountry.findUnique({
       where: { id },
-      select: { foundingNote: true, dissolutionNote: true },
+      select: {
+        foundingNote: true,
+        dissolutionNote: true,
+        startEra: true,
+        startYear: true,
+        endEra: true,
+        endYear: true,
+      },
     })
     if (!country) throw new NotFoundException('역사 국가를 찾을 수 없습니다.')
 
@@ -319,6 +326,12 @@ export class HistoricalCountryController {
     return {
       foundingNote: country.foundingNote ?? null,
       dissolutionNote: country.dissolutionNote ?? null,
+      period: {
+        startEra: country.startEra ?? null,
+        startYear: country.startYear ?? null,
+        endEra: country.endEra ?? null,
+        endYear: country.endYear ?? null,
+      },
       founders: agents.filter((agent) => agent.side === 'FOUNDING'),
       dissolvers: agents.filter((agent) => agent.side === 'DISSOLUTION'),
       firstRulers,

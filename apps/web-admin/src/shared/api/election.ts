@@ -222,7 +222,14 @@ export type ElectionCandidacyDto = {
   listRank?: number | null
   withdrawnDate?: string | null
   notes?: string | null
-  person?: { id: string; name: string; surname?: string | null } | null
+  person?: {
+    id: string
+    name: string
+    surname?: string | null
+    middleName?: string | null
+    nameDisplayOrder?: string | null
+    country?: { defaultNameDisplayOrder?: string | null } | null
+  } | null
   party?: { id: string; name: string; shortName?: string | null } | null
   electoralDistrict?: { id: string; name: string; code?: string | null } | null
   result?: ElectionResultDto | null

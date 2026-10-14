@@ -321,6 +321,29 @@ const METRICS: MetricSeed[] = [
     unit: 'km2',
     definition: '조약·점령으로 주권이 넘어간 면적.',
   },
+  // ── 재해 ──────────────────────────────────────────────────
+  // 사회 사건 중 지진·대화재(안세이 지진 3건, 긴자 대화재)의 규모를 담을 칸이 없었다
+  // (docs/event-category-features-review.md §3 사회). 인명 피해는 civilian.* 를 그대로 쓴다.
+  // ⚠️ sortOrder가 배열 순서라 새 지표는 끝에 덧붙인다(중간에 넣으면 뒤 지표 순서가 전부 밀린다).
+  {
+    key: 'disaster.magnitude',
+    name: '지진 규모',
+    domain: 'disaster',
+    valueKind: MEASURE,
+    aggregation: MAX,
+    unit: 'M',
+    definition:
+      '지진이 방출한 에너지의 크기 — 모멘트 규모(Mw), 기록이 없으면 리히터 규모(ML). 지점마다 다른 흔들림 정도인 진도와 다르다.',
+  },
+  {
+    key: 'disaster.buildings_destroyed',
+    name: '파괴된 건물',
+    domain: 'disaster',
+    valueKind: COUNT,
+    aggregation: SUM,
+    unit: 'building',
+    definition: '전파·전소된 건물 수(반파 제외). 가옥 수로 기록된 경우 그대로 센다.',
+  },
 ]
 
 interface CurrencySeed {

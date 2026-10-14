@@ -39,3 +39,5 @@ export {
   CATEGORY_ICON_MAP,
   extractCategoryKey,
 } from './category-constants'
+export { categoryFeatures } from './category-features'
+export type { CategoryFeatures, CategoryModuleKey, MetricSubjectPreference } from './category-features'

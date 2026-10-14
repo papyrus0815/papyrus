@@ -68,6 +68,16 @@ export interface StatehoodAgentDto {
 export interface FoundingSummaryDto {
   foundingNote: string | null
   dissolutionNote: string | null
+  /**
+   * 이 나라의 존속 기간(구조화 연도). 사건 지면의 「국가 성립·소멸」 카드가 기간을 보이고
+   * 사건 날짜와 어긋나는지 대조한다 — 국가 상세 쪽은 이미 자기 데이터로 갖고 있어 쓰지 않는다.
+   */
+  period: {
+    startEra: 'BC' | 'AD' | null
+    startYear: number | null
+    endEra: 'BC' | 'AD' | null
+    endYear: number | null
+  }
   /** 종류별 한 명씩 — 군주·국가원수·정부수반 중 기록이 있는 것만 */
   /** 건국 주체 — 누가 세웠나(사용자가 지정) */
   founders: StatehoodAgentDto[]

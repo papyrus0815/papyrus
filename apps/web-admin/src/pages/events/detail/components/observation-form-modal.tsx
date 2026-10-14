@@ -30,6 +30,10 @@ export interface ObservationSubjectOption {
 interface ObservationFormModalProps {
   eventId: string
   subjects: ObservationSubjectOption[]
+  /** 지표 상자 맨 위 '자주 쓰는 지표'(카테고리 추천) — 카탈로그에 없는 키는 건너뛴다 */
+  suggestedMetricKeys?: string[]
+  /** 새 수치의 첫 대상 유형 — 해당 유형이 없으면 목록 첫 항목(사건 전체) */
+  preferredSubjectType?: ObservationSubjectType
   /** null이면 새 수치 */
   initial: Observation | null
   onClose: () => void
@@ -45,6 +49,7 @@ const DOMAIN_LABEL: Record<string, string> = {
   society: '사회',
   demography: '인구',
   territory: '영토',
+  disaster: '재해',
 }
 
 const SOURCE_KIND_OPTIONS: Array<{ value: SourceKind; label: string }> = [
@@ -93,6 +98,8 @@ function fieldsToPoint(fields: ReturnType<typeof pointToFields>): StructuredPoin
 export function ObservationFormModal({
   eventId,
   subjects,
+  suggestedMetricKeys = [],
+  preferredSubjectType,
   initial,
   onClose,
   subjectLabelOf,
@@ -104,7 +111,11 @@ export function ObservationFormModal({
     staleTime: 10 * 60_000,
   })
 
-  const [subject, setSubject] = useState(initial ? subjectKey(initial) : subjectKey(subjects[0]))
+  const [subject, setSubject] = useState(() => {
+    if (initial) return subjectKey(initial)
+    const preferred = subjects.find((option) => option.subjectType === preferredSubjectType)
+    return subjectKey(preferred ?? subjects[0])
+  })
   const [metricKey, setMetricKey] = useState(initial?.metric.key ?? '')
   const [mode, setMode] = useState<ValueMode>(initialMode(initial))
   const [value, setValue] = useState(initial?.value ?? '')
@@ -138,11 +149,21 @@ export function ObservationFormModal({
   })
 
   const metric = metrics.find((candidate) => candidate.key === metricKey) ?? null
+  /* 추천 지표는 맨 위 묶음으로 빼고, 아래 분야별 묶음에서는 뺀다(같은 값이 두 번 보이지 않게). */
+  const suggestedMetrics = useMemo(
+    () =>
+      suggestedMetricKeys.flatMap((key) => metrics.filter((candidate) => candidate.key === key)),
+    [metrics, suggestedMetricKeys],
+  )
   const metricsByDomain = useMemo(() => {
+    const suggestedKeys = new Set(suggestedMetrics.map((candidate) => candidate.key))
     const groups = new Map<string, typeof metrics>()
-    for (const candidate of metrics) groups.set(candidate.domain, [...(groups.get(candidate.domain) ?? []), candidate])
+    for (const candidate of metrics) {
+      if (suggestedKeys.has(candidate.key)) continue
+      groups.set(candidate.domain, [...(groups.get(candidate.domain) ?? []), candidate])
+    }
     return [...groups.entries()]
-  }, [metrics])
+  }, [metrics, suggestedMetrics])
 
   const citationDraft = (): CitationInput | null => {
     const extra = { locator: locator.trim() || null, quote: quote.trim() || null }
@@ -241,6 +262,15 @@ export function ObservationFormModal({
           <Label htmlFor="obs-metric">지표</Label>
           <Select id="obs-metric" value={metricKey} onChange={(change) => setMetricKey(change.target.value)}>
             <option value="">고르세요</option>
+            {suggestedMetrics.length > 0 && (
+              <optgroup label="자주 쓰는 지표">
+                {suggestedMetrics.map((candidate) => (
+                  <option key={candidate.key} value={candidate.key}>
+                    {candidate.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
             {metricsByDomain.map(([domain, group]) => (
               <optgroup key={domain} label={DOMAIN_LABEL[domain] ?? domain}>
                 {group.map((candidate) => (

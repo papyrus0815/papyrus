@@ -10,6 +10,7 @@ import {
   isUnverified,
   observationExtent,
 } from '@/entities/evidence/lib/format-observation'
+import { categoryFeatures } from '@/entities/event/model'
 import { RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { deleteObservation, type Observation } from '@/shared/api/evidence'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
@@ -38,6 +39,8 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
   const [editing, setEditing] = useState<Observation | 'new' | null>(null)
 
   const sides = useMemo(() => event.sides ?? [], [event.sides])
+  /* 지표 추천·첫 대상·빈 안내는 카테고리가 정한다(경제 사건에 '병력·사상자'를 권하지 않게) */
+  const features = categoryFeatures(event.category?.name)
 
   /** 측정값 대상 선택지 — 사건 전체 · 진영 · 참여국 줄 */
   const subjects = useMemo<ObservationSubjectOption[]>(() => {
@@ -212,15 +215,15 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
       ))}
 
       {observations.length === 0 && (
-        <S.HelperText>
-          병력·사상자·비용 같은 숫자를 출처와 함께 기록하면 진영별 비교가 여기 그려집니다.
-        </S.HelperText>
+        <S.HelperText>{features.metricsEmptyHint}</S.HelperText>
       )}
 
       {editing && (
         <ObservationFormModal
           eventId={event.id}
           subjects={subjects}
+          suggestedMetricKeys={features.metricPresets}
+          preferredSubjectType={features.metricSubject === 'side' ? 'EVENT_SIDE' : 'EVENT'}
           initial={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           subjectLabelOf={(observation) => subjectOf(observation)?.label ?? ''}

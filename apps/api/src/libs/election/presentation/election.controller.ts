@@ -42,7 +42,17 @@ const electionInclude = {
   },
   candidacies: {
     include: {
-      person: { select: { id: true, name: true, surname: true } },
+      // 이름 순서(동양식/서양식) 판정에 필요한 필드까지 — 표시 쪽이 getPersonDisplayName으로 조합한다
+      person: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          middleName: true,
+          nameDisplayOrder: true,
+          country: { select: { defaultNameDisplayOrder: true } },
+        },
+      },
       party: { select: { id: true, name: true, shortName: true } },
       electoralDistrict: { select: { id: true, name: true, code: true } },
       result: true,

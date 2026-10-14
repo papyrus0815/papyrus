@@ -9,6 +9,7 @@ import {
   formatSpanLabel,
   toAxisSpan,
 } from '@/pages/events/detail/components/development-timeline.lib'
+import { categoryFeatures } from '@/entities/event/model/category-features'
 import { eventCountryRoleLabel } from '@/entities/event/model/country-participant'
 import { effectiveRangePrecision } from '@/shared/lib/iso-date'
 import type {
@@ -573,7 +574,14 @@ export function checkNode(node: EventOverviewNode): Record<CheckKey, CheckState>
     background: has(node.hasBackground),
     aftermath: has(node.hasAftermath),
     images: has(node.imageCount > 0),
-    metrics: has(node.metrics.length > 0),
+    // 수치는 갈래가 권하는 기능일 때만 센다 — 외교·정치 사건에 '사상자·병력이 비었다'고 감점하면
+    // 충실도가 실제보다 나쁘게 읽혔다(1차대전 37%). 갈래와 무관하게 값이 있으면 채움.
+    metrics:
+      node.metrics.length > 0
+        ? 'full'
+        : categoryFeatures(node.category?.name).suggestedModules.includes('metrics')
+          ? 'empty'
+          : 'na',
   }
 }
 

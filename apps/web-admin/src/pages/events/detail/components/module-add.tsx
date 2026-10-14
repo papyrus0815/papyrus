@@ -1,6 +1,9 @@
 /**
  * 모듈 추가 — 빈 모듈 발견을 위한 dropdown.
  *
+ * 순서는 **사건 카테고리**가 정한다(entities/event/model/category-features). 그 분류에 맞는 모듈이
+ * '이 분류에 맞는 기능'으로 맨 위에 오고, 나머지는 숨기지 않고 '다른 기능'으로 아래에 둔다.
+ *
  * - 진영: 진영 API로 첫 진영 둘을 만든다(이름은 진영 1·2 — 모듈에서 고친다)
  * - 수치: 저장할 것이 없으므로 모듈만 펼친다(첫 수치를 기록하면 서버 데이터로 유지된다)
  * - 작전 정보: 빈 작전 정보를 upsert해 활성화
@@ -12,6 +15,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FiChevronDown, FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { categoryFeatures } from '@/entities/event/model'
 import {
   ledgerAccentSubtle,
   ledgerHairlineStrong,
@@ -96,6 +100,8 @@ export function ModuleAdd({ event, enabledModules, onPatch, onStartSides, onShow
    * 오염이 있었다. 빈 객체 `{}`도 enabledModules 판정에서는 truthy라
    * 모듈은 정상적으로 표시되며, 모든 필드는 빈 InlineText로 렌더된다.
    */
+  const features = categoryFeatures(event.category?.name)
+
   const allOptions: ModuleOption[] = [
     {
       key: 'sides',
@@ -104,7 +110,7 @@ export function ModuleAdd({ event, enabledModules, onPatch, onStartSides, onShow
     },
     {
       key: 'metrics',
-      label: '수치 (병력·사상자·비용)',
+      label: features.metricsMenuLabel,
       run: onShowMetrics,
     },
     {
@@ -116,6 +122,10 @@ export function ModuleAdd({ event, enabledModules, onPatch, onStartSides, onShow
   ]
 
   const options = allOptions.filter((opt) => !enabledModules.includes(opt.key))
+  const suggestedOptions = features.suggestedModules.flatMap((key) =>
+    options.filter((opt) => opt.key === key),
+  )
+  const otherOptions = options.filter((opt) => !features.suggestedModules.some((key) => key === opt.key))
 
   /* 후속 작업이라 dropdown에 disabled로 노출 — 사용자가 무엇이 가능할지 알도록. */
   const deferredOptions: Array<{ label: string; reason: string }> = []
@@ -149,17 +159,23 @@ export function ModuleAdd({ event, enabledModules, onPatch, onStartSides, onShow
       </Trigger>
       {open && (
         <Menu role="menu">
-          {options.map((opt) => (
-            <MenuItem
-              key={opt.key}
-              type="button"
-              role="menuitem"
-              onClick={() => apply(opt)}
-            >
-              <Dot $color={MODULE_COLOR[opt.key]} />
-              {opt.label}
-            </MenuItem>
-          ))}
+          {suggestedOptions.length > 0 && (
+            <MenuGroup role="group" aria-label="이 분류에 맞는 기능">
+              <GroupLabel aria-hidden>이 분류에 맞는 기능</GroupLabel>
+              {suggestedOptions.map((opt) => (
+                <ModuleMenuItem key={opt.key} option={opt} onApply={apply} />
+              ))}
+            </MenuGroup>
+          )}
+          {suggestedOptions.length > 0 && otherOptions.length > 0 && <Divider role="separator" />}
+          {otherOptions.length > 0 && (
+            <MenuGroup role="group" aria-label={suggestedOptions.length > 0 ? '다른 기능' : '모듈'}>
+              {suggestedOptions.length > 0 && <GroupLabel aria-hidden>다른 기능</GroupLabel>}
+              {otherOptions.map((opt) => (
+                <ModuleMenuItem key={opt.key} option={opt} onApply={apply} />
+              ))}
+            </MenuGroup>
+          )}
           {deferredOptions.length > 0 && options.length > 0 && <Divider />}
           {deferredOptions.map((opt) => (
             <MenuItem key={opt.label} type="button" disabled aria-disabled>
@@ -171,6 +187,21 @@ export function ModuleAdd({ event, enabledModules, onPatch, onStartSides, onShow
         </Menu>
       )}
     </Host>
+  )
+}
+
+function ModuleMenuItem({
+  option,
+  onApply,
+}: {
+  option: ModuleOption
+  onApply: (option: ModuleOption) => void
+}) {
+  return (
+    <MenuItem type="button" role="menuitem" onClick={() => onApply(option)}>
+      <Dot $color={MODULE_COLOR[option.key]} />
+      {option.label}
+    </MenuItem>
   )
 }
 
@@ -254,6 +285,20 @@ const Dot = styled.span<{ $color?: string; $muted?: boolean }>`
   background: ${({ $color, $muted, theme }) =>
     $muted ? theme.colors.text.tertiary : $color ?? theme.colors.text.tertiary};
   flex-shrink: 0;
+`
+
+const MenuGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+/* 메뉴 안 묶음 머리글 — 항목이 아니므로 role 없이 시각 구분만. */
+const GroupLabel = styled.div`
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: ${metaText};
 `
 
 const Divider = styled.div`

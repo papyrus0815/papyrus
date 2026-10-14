@@ -252,6 +252,107 @@ export interface EventLinkCandidate {
   extraParents?: Array<{ id: string; title: string }>
 }
 
+export type EventOrganizationRole =
+  | 'PRINCIPAL'
+  | 'FOUNDED'
+  | 'DISSOLVED'
+  | 'ACQUIRER'
+  | 'ACQUIRED'
+  | 'PARTICIPANT'
+  | 'CONTRACTOR'
+  | 'BENEFICIARY'
+  | 'VICTIM'
+  | 'OTHER'
+
+/** 사건 ↔ 조직 한 줄 — 사건 상세 「관련 기업·조직」 */
+export interface EventOrganization {
+  relationId: string
+  role: EventOrganizationRole
+  roleDescription: string | null
+  organizationId: string
+  name: string
+  shortName: string | null
+  type: string
+  logoUrl: string | null
+  /** 기업이면 기업 상세(/companies/:id) id */
+  companyId: string | null
+  latestStock: {
+    date: string | null
+    price: string | null
+    marketCap: string | null
+    currency: string | null
+  } | null
+}
+
+async function eventOrganizationRequest<T>(path: string, init: RequestInit): Promise<T> {
+  const connection = getConnection()
+  const response = await fetch(`${connection.host}${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...((connection.headers ?? {}) as Record<string, string>) },
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    let message = `HTTP ${response.status}`
+    try {
+      message = (JSON.parse(text) as { message?: string }).message ?? message
+    } catch {
+      /* 본문이 JSON이 아니면 상태 코드만 */
+    }
+    throw new Error(message)
+  }
+  return (response.status === 204 ? undefined : await response.json().catch(() => undefined)) as T
+}
+
+/** POST /events/:id/organizations — 같은 조직·같은 역할 중복은 409 */
+export function addEventOrganization(
+  eventId: string,
+  body: { organizationId: string; role: EventOrganizationRole; roleDescription?: string | null },
+): Promise<EventOrganization> {
+  return eventOrganizationRequest(`/events/${encodeURIComponent(eventId)}/organizations`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** DELETE /events/:id/organizations/:relationId — 조직 자체는 남는다 */
+export function removeEventOrganization(eventId: string, relationId: string): Promise<void> {
+  return eventOrganizationRequest(
+    `/events/${encodeURIComponent(eventId)}/organizations/${encodeURIComponent(relationId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+/** 이 사건으로 시작된(또는 시작될 수 있는) 재임·재위 한 줄 — 사건 상세 「권력 교체」 */
+export interface EventAccession {
+  recordId: string
+  recordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+  personId: string
+  personName: string
+  title: string | null
+  regnalName: string | null
+  countryName: string | null
+  /** 부호 연도(BC 음수) */
+  startYear: number | null
+  endYear: number | null
+  /** 후보 목록에서만 의미 — 이미 다른 사건에 취임 사건으로 걸려 있으면 그 사건 id */
+  accessionEventId: string | null
+}
+
+/**
+ * 취임·즉위 후보 — 이 사건의 참여 인물이 가진 재임·재위 중 사건 연도 ±1년 안에 시작한 기록.
+ * GET /events/:id/accession-candidates
+ */
+export async function getEventAccessionCandidates(eventId: string): Promise<EventAccession[]> {
+  const connection = getConnection()
+  const response = await fetch(
+    `${connection.host}/events/${encodeURIComponent(eventId)}/accession-candidates`,
+    { headers: (connection.headers ?? {}) as HeadersInit, credentials: 'include' },
+  )
+  if (!response.ok) throw new Error(`취임·즉위 후보 조회 실패: HTTP ${response.status}`)
+  return (await response.json()) as EventAccession[]
+}
+
 export async function getEventLinkCandidates(params?: {
   /** 사건명 부분일치 검색어 — 비면 최근 수정순 기본 목록 */
   query?: string
