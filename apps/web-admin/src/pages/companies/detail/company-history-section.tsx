@@ -637,7 +637,7 @@ export function CompanyHistorySection({
                     )}
                   </S.RowHeader>
 
-                  <S.RowMetaLine>
+                  <TypeLine>
                     {/* 종류는 색 배지 — '종류' 라벨 줄을 따로 두던 것을 접는다 */}
                     <TypeChip $tone={HISTORY_TYPE_TONES[row.type]}>
                       <InlineSelect
@@ -662,7 +662,7 @@ export function CompanyHistorySection({
                         </S.SnapshotAddBtn>
                       </RevealOnRow>
                     )}
-                  </S.RowMetaLine>
+                  </TypeLine>
 
                   {showFinance && (
                     <FinanceLine>
@@ -939,6 +939,14 @@ const RevealOnRow = styled.span`
   @media (hover: none) {
     opacity: 1;
   }
+`
+
+/** 종류 배지 + 보조 버튼 한 줄 — 사양표 격자(RowMetaLine)가 아니라 그냥 흐르는 줄 */
+const TypeLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
 `
 
 /** 종류 배지 — 색 점 + 옅은 틴트. 안쪽은 InlineSelect(눌러서 바꾼다). */

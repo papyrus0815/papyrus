@@ -307,21 +307,23 @@ export function CompanyAnalystModule({
                 <S.RowMetaLine>
                   <span>
                     <S.RowFieldLabel>목표주가</S.RowFieldLabel>
-                    <InlineText
-                      value={row.targetPrice}
-                      onSave={(next) => updateRow(idx, { targetPrice: next })}
-                      placeholder="예: 250000"
-                      label="목표주가"
-                      formatRead={readGrouped}
-                      numeric
-                    />
+                    <S.ValueWithTag>
+                      <InlineText
+                        value={row.targetPrice}
+                        onSave={(next) => updateRow(idx, { targetPrice: next })}
+                        placeholder="예: 250000"
+                        label="목표주가"
+                        formatRead={readGrouped}
+                        numeric
+                      />
+                      {revision != null && revision !== 0 && (
+                        <ToneTag $tone={revision > 0 ? 'positive' : 'negative'}>
+                          {revision > 0 ? <FiArrowUpRight /> : <FiArrowDownRight />}
+                          {revision > 0 ? '상향' : '하향'}
+                        </ToneTag>
+                      )}
+                    </S.ValueWithTag>
                   </span>
-                  {revision != null && revision !== 0 && (
-                    <ToneTag $tone={revision > 0 ? 'positive' : 'negative'}>
-                      {revision > 0 ? <FiArrowUpRight /> : <FiArrowDownRight />}
-                      {revision > 0 ? '상향' : '하향'}
-                    </ToneTag>
-                  )}
                   <span>
                     <S.RowFieldLabel>통화</S.RowFieldLabel>
                     <InlineText
@@ -382,7 +384,7 @@ export function CompanyAnalystModule({
                 </S.RowMetaLine>
 
                 <S.RowMetaLine>
-                  <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ gridColumn: 'span 2', minWidth: 0 }}>
                     <S.RowFieldLabel>리포트</S.RowFieldLabel>
                     <InlineText
                       value={row.reportTitle}
@@ -391,7 +393,7 @@ export function CompanyAnalystModule({
                       label="리포트 제목"
                     />
                   </span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ minWidth: 0 }}>
                     <S.RowFieldLabel>링크</S.RowFieldLabel>
                     <InlineText
                       value={row.sourceUrl}

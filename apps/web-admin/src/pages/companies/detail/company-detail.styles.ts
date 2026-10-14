@@ -642,19 +642,56 @@ export const RowTitleHost = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-export const RowMetaLine = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 16px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 export const RowFieldLabel = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   margin-right: 6px;
   font-size: 12px;
+`
+
+/**
+ * 사양표 격자 — 라벨(위)·값(아래) 칸을 같은 열 폭으로 늘어놓는다.
+ *
+ * 예전엔 '라벨 값  라벨 값'을 한 줄에 이어 붙이는 flex 줄이라, 값 길이에 따라 칸이 밀려
+ * 행마다 같은 항목(목표주가·통화·투자의견…)이 다른 자리에 섰다. 격자로 바꾸면 행과 행,
+ * 줄과 줄 사이에서 같은 칸이 같은 열에 선다. 긴 값(리포트·링크·출처)은 `gridColumn: 'span 2'`.
+ * 자식은 `<span><RowFieldLabel/>값</span>` 규약 — 라벨 없는 장식 요소는 값 칸 안에 넣을 것.
+ */
+export const RowMetaLine = styled.div`
+  display: grid;
+  /* 120px — 재무 2단(약 450px)에서도 3열이 서야 원래 한 줄이던 세 항목이 한 줄에 남는다(140px면 2열로 접혀 행이 두 배로 길어졌다) */
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px 20px;
+  font-size: 13.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  > span {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  > span > ${RowFieldLabel} {
+    margin-right: 0;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+`
+
+/** 값 옆에 붙는 짧은 표지(↗ 상향 등)를 값과 한 줄로 묶는다 — RowMetaLine 칸 안에서 쓴다 */
+export const ValueWithTag = styled.span`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+
+  /* 좁은 칸에서 표지가 '상/향'으로 세로로 쪼개지지 않게 — 자리가 모자라면 통째로 아랫줄로 */
+  > * {
+    white-space: nowrap;
+  }
 `
 
 /**

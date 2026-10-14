@@ -499,7 +499,7 @@ export function CompanyStockModule({
               </S.RowMetaLine>
 
               <S.RowMetaLine>
-                <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ gridColumn: 'span 2', minWidth: 0 }}>
                   <S.RowFieldLabel>출처</S.RowFieldLabel>
                   <InlineText
                     value={row.source}
