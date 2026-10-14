@@ -2,7 +2,10 @@
  * 기업 ↔ 사건 연결 표시 규약 — 개요 '관련 사건'과 연혁 타임라인의 사건 노드가 함께 쓴다.
  * (두 파일이 서로를 import하면 순환이 생겨 여기로 뺐다.)
  */
+import type { MouseEvent } from 'react'
+
 import type { CompanyEventRole, CompanyRelatedEvent } from '@/shared/api/company'
+import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal/country-inline-modal'
 
 /** 역할 라벨·색 — 선택지 순서도 이 객체의 키 순서를 따른다(자주 쓰는 것부터) */
 export const COMPANY_EVENT_ROLE_META: Record<CompanyEventRole, { label: string; tone: string }> =
@@ -73,4 +76,32 @@ export function isSameFact(
   const right = normalizeTitle(event.title)
   if (!left || !right) return false
   return left === right || left.includes(right) || right.includes(left)
+}
+
+/** 사건 미리보기 모달에 넘길 것 — 어느 사건인지 + 이 기업의 역할 */
+export interface EventPreviewRequest {
+  eventId: string
+  role?: string | null
+  note?: string | null
+}
+
+/**
+ * 사건 링크의 클릭 가로채기 — 평범한 왼쪽 클릭이면 페이지 이동 대신 미리보기 모달을 연다.
+ * Ctrl/⌘·Shift·가운데 클릭은 그대로 두어 새 탭 열기가 살아 있다(href는 링크에 남긴다).
+ */
+export function previewOnClick(
+  onEventClick: ((request: EventPreviewRequest) => void) | undefined,
+  request: EventPreviewRequest,
+) {
+  return (clickEvent: MouseEvent<HTMLElement>) => {
+    if (!onEventClick || !shouldInterceptEntityClick(clickEvent)) return
+    clickEvent.preventDefault()
+    onEventClick(request)
+  }
+}
+
+/** 관련 사건 → 미리보기 요청(역할 라벨을 붙여서) */
+export function previewRequestOf(event: CompanyRelatedEvent): EventPreviewRequest {
+  const meta = COMPANY_EVENT_ROLE_META[event.role] ?? COMPANY_EVENT_ROLE_META.OTHER
+  return { eventId: event.eventId, role: meta.label, note: event.roleDescription }
 }

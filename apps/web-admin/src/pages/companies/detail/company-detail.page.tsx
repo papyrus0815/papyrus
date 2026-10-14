@@ -22,6 +22,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { UpdateCompanyInput } from '@/shared/api/company'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { CommentSection } from '@/entities/comment'
+import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { companyLifespanLabel } from '@/shared/lib/company-lifespan'
 import { companyApi } from '@/shared/api/company'
@@ -58,6 +59,7 @@ import {
   CompanyRecentHistory,
   CompanyRelatedEventsSection,
 } from './company-overview-extras'
+import type { EventPreviewRequest } from './company-related-events.lib'
 import {
   useCompanyDetail,
   useCompanyMutation,
@@ -132,6 +134,11 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
     }
   }
   const relatedEvents = useCompanyRelatedEvents(companyId)
+  /**
+   * 사건 미리보기 — 사건을 누르면 페이지로 바로 가지 않고 모달부터(설립 사건·관련 사건·연혁 노드·'사건 ↗').
+   * 기업 문서를 읽다가 사건을 확인하고 돌아오는 흐름이 대부분이라, 이동은 모달의 '상세로 이동'에서만.
+   */
+  const [eventPreview, setEventPreview] = useState<EventPreviewRequest | null>(null)
   const foundingEvents = useMemo(
     () => (relatedEvents.data ?? []).filter((event) => event.role === 'FOUNDED'),
     [relatedEvents.data],
@@ -543,6 +550,7 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                         onSave={(next) => onPatch({ foundingBackground: next })}
                         onPersonClick={onPersonClick}
                         foundingEvents={foundingEvents}
+                        onEventClick={setEventPreview}
                       />
                       <CompanyRelatedEventsSection
                         companyId={companyId}
@@ -550,6 +558,7 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                         isLoading={relatedEvents.isLoading}
                         isError={relatedEvents.isError}
                         onRetry={() => void relatedEvents.refetch()}
+                        onEventClick={setEventPreview}
                       />
                       <CompanyRecentHistory
                         histories={company.histories ?? []}
@@ -581,6 +590,7 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                     <CompanyHistorySection
                       histories={company.histories ?? []}
                       relatedEvents={relatedEvents.data}
+                      onEventClick={setEventPreview}
                       onPatch={onPatch}
                       onPersonClick={onPersonClick}
                     />
@@ -699,6 +709,19 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
           </S.Body>
         </S.PageInner>
       </S.Page>
+      <EventInlineModal
+        eventId={eventPreview?.eventId ?? null}
+        onClose={() => setEventPreview(null)}
+        onNavigate={(eventId) => {
+          setEventPreview(null)
+          navigate(pathKeys.events.detail(eventId))
+        }}
+        personContext={
+          eventPreview?.role || eventPreview?.note
+            ? { label: '이 기업의 역할', role: eventPreview.role, note: eventPreview.note }
+            : null
+        }
+      />
       <CompanyRegisterModal
         isOpen={editOpen}
         onClose={() => setEditOpen(false)}

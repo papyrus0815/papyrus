@@ -45,7 +45,10 @@ import * as S from './company-detail.styles'
 import { syncRowsById } from './sync-rows-by-id'
 import {
   COMPANY_EVENT_ROLE_META,
+  type EventPreviewRequest,
   isSameFact,
+  previewOnClick,
+  previewRequestOf,
   relatedEventDateLabel,
   relatedEventIsoDate,
 } from './company-related-events.lib'
@@ -219,6 +222,8 @@ interface CompanyHistorySectionProps {
    * 연혁과 사건이 따로 놀아, 설립 사건(1983 등)이 연혁에 없고 같은 사실이 두 곳에 있었다.
    */
   relatedEvents?: CompanyRelatedEvent[]
+  /** 사건을 누르면 페이지 대신 미리보기 모달 */
+  onEventClick?: (request: EventPreviewRequest) => void
 }
 
 /** 기본값을 렌더마다 새 배열로 만들면 메모가 매번 깨진다 — 고정 참조 */
@@ -255,6 +260,7 @@ export function CompanyHistorySection({
   onPatch,
   onPersonClick,
   relatedEvents = NO_EVENTS,
+  onEventClick,
 }: CompanyHistorySectionProps) {
   const counterRef = useRef(0)
   const nextKey = useCallback(
@@ -666,7 +672,7 @@ export function CompanyHistorySection({
               return (
                 <Fragment key={`event-${entry.event.relationId}`}>
                   {marker && <YearMarker>{marker}</YearMarker>}
-                  <EventNode event={entry.event} />
+                  <EventNode event={entry.event} onEventClick={onEventClick} />
                 </Fragment>
               )
             }
@@ -804,6 +810,8 @@ export function CompanyHistorySection({
                       <EventLinkChip
                         to={pathKeys.events.detail(linkedEvent.eventId)}
                         title={`같은 사실의 사건: ${linkedEvent.title}`}
+                        onClick={previewOnClick(onEventClick, { eventId: linkedEvent.eventId })}
+                        aria-haspopup="dialog"
                       >
                         {linkedEvent.explicit ? `사건: ${linkedEvent.title}` : '사건'}{' '}
                         <FiArrowUpRight aria-hidden />
@@ -933,7 +941,13 @@ export function CompanyHistorySection({
  * 타임라인의 사건 노드 — 읽기 전용. 속이 빈 고리(역할 색)로 연혁 행(채운 점)과 구별하고,
  * 제목은 사건 상세로 가는 링크다. 연결·해제는 개요의 '관련 사건'에서 한다.
  */
-function EventNode({ event }: { event: CompanyRelatedEvent }) {
+function EventNode({
+  event,
+  onEventClick,
+}: {
+  event: CompanyRelatedEvent
+  onEventClick?: (request: EventPreviewRequest) => void
+}) {
   const meta = COMPANY_EVENT_ROLE_META[event.role] ?? COMPANY_EVENT_ROLE_META.OTHER
   return (
     <TLItem $tone={meta.tone} $hollow>
@@ -942,7 +956,11 @@ function EventNode({ event }: { event: CompanyRelatedEvent }) {
         사건 · <span style={{ color: meta.tone }}>{meta.label}</span>
         {event.categoryName ? ` · ${event.categoryName}` : ''}
       </EventNodeKicker>
-      <EventNodeTitle to={pathKeys.events.detail(event.eventId)}>
+      <EventNodeTitle
+        to={pathKeys.events.detail(event.eventId)}
+        onClick={previewOnClick(onEventClick, previewRequestOf(event))}
+        aria-haspopup="dialog"
+      >
         {event.title} <FiArrowUpRight aria-hidden />
       </EventNodeTitle>
       {event.roleDescription && <EventNodeNote>{event.roleDescription}</EventNodeNote>}

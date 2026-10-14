@@ -37,6 +37,9 @@ import { HISTORY_TYPE_LABELS } from './company-history-section'
 import {
   COMPANY_EVENT_ROLE_META,
   COMPANY_EVENT_ROLE_ORDER,
+  type EventPreviewRequest,
+  previewOnClick,
+  previewRequestOf,
   relatedEventDateLabel,
 } from './company-related-events.lib'
 import { companyKeys } from './use-company-detail'
@@ -49,6 +52,8 @@ interface FoundingProps {
   onPersonClick: (personId: string) => void
   /** FOUNDED 역할로 걸린 사건 */
   foundingEvents: CompanyRelatedEvent[]
+  /** 사건을 누르면 페이지 대신 미리보기 모달 */
+  onEventClick?: (request: EventPreviewRequest) => void
 }
 
 export function CompanyFoundingSection({
@@ -56,6 +61,7 @@ export function CompanyFoundingSection({
   onSave,
   onPersonClick,
   foundingEvents,
+  onEventClick,
 }: FoundingProps) {
   return (
     <S.Section id="company-founding">
@@ -68,6 +74,8 @@ export function CompanyFoundingSection({
             <FoundingEventLink
               key={event.relationId}
               to={pathKeys.events.detail(event.eventId)}
+              onClick={previewOnClick(onEventClick, previewRequestOf(event))}
+              aria-haspopup="dialog"
             >
               <FiFlag aria-hidden />
               <span>
@@ -103,6 +111,8 @@ interface RelatedEventsProps {
   isLoading: boolean
   isError: boolean
   onRetry: () => void
+  /** 사건을 누르면 페이지 대신 미리보기 모달 */
+  onEventClick?: (request: EventPreviewRequest) => void
 }
 
 /**
@@ -116,6 +126,7 @@ export function CompanyRelatedEventsSection({
   isLoading,
   isError,
   onRetry,
+  onEventClick,
 }: RelatedEventsProps) {
   const queryClient = useQueryClient()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -245,7 +256,11 @@ export function CompanyRelatedEventsSection({
             const date = relatedEventDateLabel(event)
             return (
               <EventItem key={event.relationId}>
-                <EventRow to={pathKeys.events.detail(event.eventId)}>
+                <EventRow
+                  to={pathKeys.events.detail(event.eventId)}
+                  onClick={previewOnClick(onEventClick, previewRequestOf(event))}
+                  aria-haspopup="dialog"
+                >
                   <EventDate>{date ?? '연도 미상'}</EventDate>
                   <EventMain>
                     <EventTitle>{event.title}</EventTitle>

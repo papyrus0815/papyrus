@@ -16,6 +16,7 @@ import { FiArrowRight, FiCalendar, FiMapPin, FiUsers, FiX } from 'react-icons/fi
 import styled from 'styled-components'
 
 import { eventKeys } from '@/shared/api/event-query-keys'
+import { formatDateWithPrecision } from '@/shared/lib/iso-date'
 import { getEventById } from '@/shared/api/events'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { glassCardMixin } from '@/shared/styles/mixins'
@@ -43,6 +44,8 @@ export interface EventInlineModalProps {
   personContext?: {
     role?: string | null
     note?: string | null
+    /** 블록 제목 — 기본 '이 인물의 사건 기록'. 기업 상세는 '이 기업의 역할'처럼 바꿔 쓴다 */
+    label?: string
   } | null
 }
 
@@ -144,7 +147,9 @@ export function EventInlineModal({
 
                   {personContext && (personContext.role || personContext.note) && (
                     <PersonContextBlock>
-                      <PersonContextLabel>이 인물의 사건 기록</PersonContextLabel>
+                      <PersonContextLabel>
+                        {personContext.label ?? '이 인물의 사건 기록'}
+                      </PersonContextLabel>
                       {personContext.role && (
                         <PersonContextRole>역할 — {personContext.role}</PersonContextRole>
                       )}
@@ -190,16 +195,14 @@ export function EventInlineModal({
 }
 
 // ─── date helpers ─────────────────────────────────────────────────────
+/**
+ * 날짜 라벨 — 문자열에서 연·월·일을 그대로 읽는다(공용 formatDateWithPrecision, BC 안전).
+ * 예전엔 new Date(iso).getDate()로 **현지 시각**에서 읽어, UTC 자정으로 오는 날짜
+ * ('1989-08-08T00:00:00.000Z')가 UTC보다 늦은 시간대(미주 등)에서 하루 앞(8월 7일)으로 보였다.
+ */
 function formatWithPrecision(iso: string | null | undefined, precision?: string | null): string {
   if (!iso) return ''
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return ''
-  const y = d.getFullYear()
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  if (precision === 'year') return `${y}년`
-  if (precision === 'month') return `${y}년 ${m}월`
-  return `${y}년 ${m}월 ${day}일`
+  return formatDateWithPrecision(iso, precision)
 }
 
 function formatRange(
