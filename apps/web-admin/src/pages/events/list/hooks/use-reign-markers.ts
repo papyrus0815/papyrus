@@ -43,6 +43,7 @@ const FOUNDING_WORDS = /건국|성립|수립|창건|개국/
 const DISSOLUTION_WORDS = /멸망|해체|소멸|붕괴|폐지|병합/
 /** 사건 제목이 기업 설립을 말하는가 — '삼성전자 설립' 사건 옆에 같은 표지를 또 세우지 않게 */
 const COMPANY_FOUNDING_WORDS = /설립|창립|창업|창사|출범/
+const normalizeName = (text: string) => text.toLowerCase().replace(/\s+/g, '')
 
 /**
  * 연표 표지 — 군주 즉위·대통령/총리 취임·**역사 국가 건국/멸망**.
@@ -161,12 +162,14 @@ export function useReignMarkers(
       selectedCountry === FILTER_ALL ||
       company.countryId === selectedCountry ||
       company.historicalCountryId === selectedCountry
-    return toCompanyFoundingMarkers(companies, inScope, (company, year) =>
-      (statehoodEvents.titlesByYear.get(year) ?? []).some(
+    return toCompanyFoundingMarkers(companies, inScope, (company, year) => {
+      // 'SpaceX 설립' 사건과 기업명 '스페이스x'처럼 대소문자·띄어쓰기만 다른 표기를 같은 이름으로 본다
+      const name = normalizeName(company.name)
+      return (statehoodEvents.titlesByYear.get(year) ?? []).some(
         (title) =>
-          title.includes(company.name) && COMPANY_FOUNDING_WORDS.test(title),
-      ),
-    )
+          normalizeName(title).includes(name) && COMPANY_FOUNDING_WORDS.test(title),
+      )
+    })
   }, [companies, selectedCountry, statehoodEvents])
 
   const leaderMarkers = useMemo(() => {
