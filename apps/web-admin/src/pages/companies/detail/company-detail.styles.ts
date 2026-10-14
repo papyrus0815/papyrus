@@ -114,28 +114,47 @@ export const GroupPanel = styled.div<{ $active: boolean }>`
  * 그룹 내부 — 전체폭을 2단으로 채워 세로 길이 절감(차트 등 wide 섹션은 전폭 span).
  * $aside: 본문+사이드 카드용 비대칭 2단(개요 탭 = 서술 넓게 + 요약 카드 좁게).
  */
+/**
+ * 탭 패널 격자.
+ *
+ * 문법을 하나로 맞춘다(2026-10-13): 예전엔 $reading 탭(연혁·사업)만 **가운데 정렬**이라
+ * 탭을 옮길 때마다 본문 시작선이 43px ↔ 80px로 튀었다. 이제 모든 탭이 같은 왼쪽 선에서 시작한다.
+ *   $reading: 서술형 한 단(연혁·제품) — 줄 길이 상한 880px
+ *   $aside:   서술 + 우측 요약(개요) — 서술 단은 $reading과 같은 폭
+ *   기본:     2단(재무·운영)
+ */
 export const GroupGrid = styled.div<{ $aside?: boolean; $reading?: boolean }>`
   display: grid;
-  /* $reading: 서술형(연혁·제품) — 신문 칼럼식 단일 폭으로 중앙 정렬(2단은 너무 좁고
-     전폭은 줄이 너무 길어 가독성 저하). $aside: 본문+사이드. 기본: 2단. */
   grid-template-columns: ${({ $aside, $reading }) =>
     $reading
       ? 'minmax(0, 880px)'
       : $aside
-        ? 'minmax(0, 760px) minmax(280px, 360px)'
+        ? 'minmax(0, 880px) minmax(280px, 340px)'
         : 'repeat(2, minmax(0, 1fr))'};
-  /* $aside는 왼쪽부터 붙여 소개 글과 요약 카드 사이에 빈 들판이 생기지 않게 한다 */
-  justify-content: ${({ $reading, $aside }) =>
-    $reading ? 'center' : $aside ? 'start' : 'stretch'};
-  gap: 32px 40px;
+  justify-content: start;
+  gap: 40px 56px;
   align-items: start;
+
+  /* 첫 섹션은 탭 바가 곧 위 경계라 구분선을 겹쳐 긋지 않는다.
+     (2단 격자는 모두 전폭 섹션으로 시작한다 — 재무=주가, 운영=업종. 첫 줄에 반폭 두 칸을
+      두게 되면 둘째 칸도 여기서 빼 줄 것) */
+  & > :first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
 
   @media (max-width: 900px) {
     grid-template-columns: 1fr;
-    gap: 28px;
+    gap: 36px;
   }
 `
 
+/**
+ * 격자 칸.
+ * $card는 이제 **상자가 아니라 구분선 섹션**이다. 바깥 테두리 상자 안에 제품 카드·컨센서스 패널이
+ * 또 상자로 들어가 테두리가 이중으로 겹쳤고, 개요·연혁(무상자)과 사업·재무·운영(상자)이 한 문서에서
+ * 두 문법으로 갈렸다. 상자는 '항목 하나'(제품 카드 등)에만 쓰고, 섹션은 위 구분선과 여백으로 나눈다.
+ */
 export const GridCell = styled.div<{
   $wide?: boolean
   $card?: boolean
@@ -145,16 +164,14 @@ export const GridCell = styled.div<{
   min-width: 0;
   ${({ $wide }) => ($wide ? 'grid-column: 1 / -1;' : '')}
   ${({ $sticky }) => ($sticky ? 'position: sticky; top: 64px;' : '')}
+  ${({ theme, $card }) =>
+    $card
+      ? `border-top: 1px solid ${hairline(theme.mode)}; padding-top: 28px;`
+      : ''}
 
   @media (max-width: 900px) {
     position: static;
   }
-  /* 카드 경계 — 2단에서 인접 모듈을 시각적으로 구획(투명 배경 + 하어라인, 안쪽 패널과
-     배경 충돌 없음). 콘텐츠 높이 차로 인한 ragged는 카드 경계로 흡수된다. */
-  ${({ theme, $card }) =>
-    $card
-      ? `border: 1px solid ${hairline(theme.mode)}; border-radius: 12px; padding: 22px 24px;`
-      : ''}
 `
 
 /** 개요 탭 왼쪽 — 개요·설립 배경·관련 사건·최근 연혁을 같은 간격으로 쌓는다 */

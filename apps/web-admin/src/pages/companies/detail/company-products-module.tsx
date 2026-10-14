@@ -300,12 +300,13 @@ function syncRows(
 
 const CardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* auto-fit — 빈 트랙을 접어 2개면 2개가 줄을 채운다(auto-fill은 빈 셋째 칸을 남겼다) */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
   align-items: start;
 `
 
-/** 제품 카드 — 카탈로그식 그리드. 모듈 카드(GridCell) 안의 채워진 카드. */
+/** 제품 카드 — 카탈로그식 그리드. 이 문서에서 테두리 상자는 이런 '항목 하나'에만 쓴다. */
 const ProductCard = styled.div`
   display: flex;
   flex-direction: column;
