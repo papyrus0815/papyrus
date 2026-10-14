@@ -63,6 +63,9 @@ export type CompanyHistoryItem = {
   occurredAt: string | null
   /** 발생일 정밀도 — null이면 day */
   occurredAtPrecision: DatePrecision | null
+  /** 같은 사실로 이어 둔 중앙 사건 */
+  eventId: string | null
+  event: { id: string; title: string } | null
   content: string | null
   note: string | null
   stockPrice: number | null
@@ -269,6 +272,8 @@ export type CreateCompanyInput = {
 
 /** 자식 입력(id 없음 — 서버가 전체배열 delete-and-recreate) */
 export type CompanyFacilityInput = {
+  /** 기존 행 id — 있으면 그 행을 수정(id 기준 대조 저장) */
+  id?: string
   facilityType?: FacilityType | null
   name?: string | null
   address?: string | null
@@ -283,6 +288,10 @@ export type CompanyFacilityInput = {
 }
 
 export type CompanyHistoryInput = {
+  /** 기존 행 id — 있으면 그 행을 수정(id 기준 대조 저장) */
+  id?: string
+  /** 같은 사실의 중앙 사건 — 생략=유지, null=해제 */
+  eventId?: string | null
   type?: CompanyHistoryType | null
   title: string
   occurredAt?: string | null
@@ -303,6 +312,8 @@ export type CompanyCategoryInput = {
 }
 
 export type CompanyProductInput = {
+  /** 기존 행 id — 있으면 그 행을 수정(id 기준 대조 저장) */
+  id?: string
   name: string
   category?: string | null
   productLine?: string | null
@@ -326,6 +337,8 @@ export type CompanyStockPointInput = {
 }
 
 export type CompanyAnalystRatingInput = {
+  /** 기존 행 id — 있으면 그 행을 수정(id 기준 대조 저장) */
+  id?: string
   firm: string
   analyst?: string | null
   targetPrice?: number | null

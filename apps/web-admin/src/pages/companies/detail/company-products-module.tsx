@@ -14,6 +14,7 @@ import { InlineDate, InlineRichText, InlineText } from '@/shared/ui/inline-edit'
 
 import { ClampedBlock } from './company-clamped-block'
 import * as S from './company-detail.styles'
+import { syncRowsById } from './sync-rows-by-id'
 
 interface ProductRow {
   key: string
@@ -78,7 +79,13 @@ export function CompanyProductsModule({
   )
 
   useEffect(() => {
-    setRows((prev) => syncRows(prev, serverRows, nextKey))
+    setRows((prev) =>
+      syncRowsById(prev, serverRows, {
+        toRow: makeRow,
+        newKey: nextKey,
+        isSaveOf: (local, product) => local.name.trim() === (product.name ?? ''),
+      }),
+    )
   }, [serverRows, nextKey])
 
   const commitRows = (next: ProductRow[]) => {
@@ -86,6 +93,7 @@ export function CompanyProductsModule({
     const cleaned: CompanyProductInput[] = next
       .filter((row) => row.name.trim())
       .map((row, idx) => ({
+        id: row.serverId,
         name: row.name.trim(),
         category: row.category.trim() || null,
         productLine: row.productLine.trim() || null,
@@ -255,48 +263,6 @@ export function CompanyProductsModule({
   )
 }
 
-/** server↔로컬 키 보존 동기화(name 기준 매칭). */
-function syncRows(
-  prev: ProductRow[],
-  server: CompanyProductItem[],
-  nextKey: () => string,
-): ProductRow[] {
-  if (prev.length === server.length) {
-    return server.map((srv, i) => {
-      const p = prev[i]
-      const prevIsAhead =
-        p.serverId === undefined ||
-        (p.serverId !== srv.id &&
-          (p.name !== (srv.name ?? '') ||
-            p.description !== (srv.description ?? '')))
-      if (prevIsAhead) return { ...p, serverId: srv.id }
-      return makeRow(srv, p.key)
-    })
-  }
-
-  const prevUsed = new Array<boolean>(prev.length).fill(false)
-  const next: ProductRow[] = []
-  for (const srv of server) {
-    let matchedIdx = prev.findIndex(
-      (p, i) => !prevUsed[i] && p.serverId === srv.id,
-    )
-    if (matchedIdx < 0) {
-      matchedIdx = prev.findIndex(
-        (p, i) => !prevUsed[i] && p.name === (srv.name ?? ''),
-      )
-    }
-    if (matchedIdx >= 0) {
-      prevUsed[matchedIdx] = true
-      next.push(makeRow(srv, prev[matchedIdx].key))
-    } else {
-      next.push(makeRow(srv, nextKey()))
-    }
-  }
-  for (let i = 0; i < prev.length; i++) {
-    if (!prevUsed[i]) next.push(prev[i])
-  }
-  return next
-}
 
 const CardGrid = styled.div`
   display: grid;

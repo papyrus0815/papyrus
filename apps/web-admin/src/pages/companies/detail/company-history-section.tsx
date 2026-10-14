@@ -4,6 +4,8 @@ import {
   FiArrowDown,
   FiArrowUp,
   FiArrowUpRight,
+  FiLink,
+  FiX,
   FiPlus,
   FiSettings,
   FiTrash2,
@@ -29,6 +31,7 @@ import {
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { EventPickerModal } from '@/shared/ui/event-picker-modal/event-picker-modal'
 import {
   InlineDate,
   InlineRichText,
@@ -39,6 +42,7 @@ import {
 
 import { ClampedBlock } from './company-clamped-block'
 import * as S from './company-detail.styles'
+import { syncRowsById } from './sync-rows-by-id'
 import {
   COMPANY_EVENT_ROLE_META,
   isSameFact,
@@ -173,6 +177,9 @@ interface HistoryRow {
   occurredAt: string | null
   /** 발생일 정밀도 — null이면 day. 년만이면 occurredAt은 그해 1월 1일 */
   occurredAtPrecision: DatePrecision | null
+  /** 같은 사실로 이어 둔 중앙 사건 — 저장 때 그대로 실어 보낸다(null이면 연결 없음) */
+  eventId: string | null
+  eventTitle: string | null
   content: string
   /** 경제 맥락 스냅샷 — 입력 편의상 문자열로 보관(커밋 시 number로 변환). */
   stockPrice: string
@@ -193,6 +200,8 @@ function makeRow(
     title: history.title ?? '',
     occurredAt: history.occurredAt,
     occurredAtPrecision: history.occurredAtPrecision ?? null,
+    eventId: history.eventId ?? null,
+    eventTitle: history.event?.title ?? null,
     content: history.content ?? '',
     stockPrice: numToStr(history.stockPrice),
     marketCap: numToStr(history.marketCap),
@@ -275,7 +284,13 @@ export function CompanyHistorySection({
       // syncRows는 미매칭(제목 없는·로컬 신규) 행을 배열 끝에 append하므로, 날짜 정렬 불변을 위해
       // 병합 결과를 한 번 더 발생일순(stable)으로 정렬한다 — 제목 없는 '날짜만 입력' 행이 맨 아래로
       // 튀는 스냅백 방지. null(미입력) 행은 여전히 맨 뒤.
-      syncRows(prev, serverRows, nextKey)
+      syncRowsById(prev, serverRows, {
+        toRow: makeRow,
+        newKey: nextKey,
+        isSaveOf: (local, history) =>
+          local.title.trim() === (history.title ?? '') &&
+          (local.occurredAt ?? '').slice(0, 10) === (history.occurredAt ?? '').slice(0, 10),
+      })
         .slice()
         .sort((left, right) =>
           compareDateAscNullLast(left.occurredAt, right.occurredAt),
@@ -299,6 +314,8 @@ export function CompanyHistorySection({
     const cleaned: CompanyHistoryInput[] = sorted
       .filter((row) => row.title.trim())
       .map((row, idx) => ({
+        id: row.serverId,
+        eventId: row.eventId,
         type: row.type,
         title: row.title.trim(),
         occurredAt: row.occurredAt ?? null,
@@ -322,6 +339,8 @@ export function CompanyHistorySection({
         title: '',
         occurredAt: null,
         occurredAtPrecision: null,
+        eventId: null,
+        eventTitle: null,
         content: '',
         stockPrice: '',
         marketCap: '',
@@ -402,14 +421,27 @@ export function CompanyHistorySection({
    * 남은 사건이 타임라인의 읽기 전용 노드가 된다.
    */
   const { linkedEventByRowKey, eventNodes } = useMemo(() => {
-    const linked = new Map<string, CompanyRelatedEvent>()
+    const linked = new Map<string, { eventId: string; title: string; explicit: boolean }>()
     const used = new Set<string>()
+    // ① 명시 연결(eventId) 먼저 — 그 사건의 관계 행은 모두 노드에서 뺀다
     for (const row of rows) {
+      if (!row.eventId) continue
+      const related = relatedEvents.filter((event) => event.eventId === row.eventId)
+      related.forEach((event) => used.add(event.relationId))
+      linked.set(row.key, {
+        eventId: row.eventId,
+        title: row.eventTitle ?? related[0]?.title ?? '연결된 사건',
+        explicit: true,
+      })
+    }
+    // ② 연결이 없는 행은 같은 사실 추정(같은 날 + 제목)
+    for (const row of rows) {
+      if (row.eventId) continue
       const match = relatedEvents.find(
         (event) => !used.has(event.relationId) && isSameFact(row, event),
       )
       if (match) {
-        linked.set(row.key, match)
+        linked.set(row.key, { eventId: match.eventId, title: match.title, explicit: false })
         used.add(match.relationId)
       }
     }
@@ -537,6 +569,9 @@ export function CompanyHistorySection({
       addButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
     )
   }
+
+  /** '사건 잇기' 피커를 연 연혁 행(key) */
+  const [eventPickerRowKey, setEventPickerRowKey] = useState<string | null>(null)
 
   // 같은 날 안 순서 조정은 필터 중엔 막는다 — 가려진 같은 날 행과 자리를 바꿀 수 있다
   const canReorder = manageMode && !typeFilter
@@ -770,9 +805,29 @@ export function CompanyHistorySection({
                         to={pathKeys.events.detail(linkedEvent.eventId)}
                         title={`같은 사실의 사건: ${linkedEvent.title}`}
                       >
-                        사건 <FiArrowUpRight aria-hidden />
+                        {linkedEvent.explicit ? `사건: ${linkedEvent.title}` : '사건'}{' '}
+                        <FiArrowUpRight aria-hidden />
                       </EventLinkChip>
                     )}
+                    {manageMode &&
+                      (row.eventId ? (
+                        <S.IconBtn
+                          type="button"
+                          onClick={() => updateRow(idx, { eventId: null, eventTitle: null })}
+                          aria-label="사건 연결 풀기"
+                          title="사건 연결 풀기"
+                        >
+                          <FiX />
+                        </S.IconBtn>
+                      ) : (
+                        <S.SnapshotAddBtn
+                          type="button"
+                          onClick={() => setEventPickerRowKey(row.key)}
+                          title="이 연혁과 같은 사실인 사건을 이어 둔다 — 사건 쪽 관련 조직과는 별개"
+                        >
+                          <FiLink /> 사건 잇기
+                        </S.SnapshotAddBtn>
+                      ))}
                     {!showFinance && (
                       <RevealOnRow>
                         <S.SnapshotAddBtn
@@ -859,6 +914,17 @@ export function CompanyHistorySection({
       <S.AddButton ref={addButtonRef} type="button" onClick={addRow}>
         <FiPlus /> 연혁 추가
       </S.AddButton>
+
+      <EventPickerModal
+        isOpen={eventPickerRowKey !== null}
+        onClose={() => setEventPickerRowKey(null)}
+        title="이 연혁과 같은 사실인 사건"
+        onSelect={(picked) => {
+          const target = rows.findIndex((row) => row.key === eventPickerRowKey)
+          setEventPickerRowKey(null)
+          if (target >= 0) updateRow(target, { eventId: picked.id, eventTitle: picked.title })
+        }}
+      />
     </S.Section>
   )
 }
@@ -884,67 +950,6 @@ function EventNode({ event }: { event: CompanyRelatedEvent }) {
   )
 }
 
-/**
- * server 응답과 로컬 rows를 매핑 — 핵심은 child 컴포넌트 키 보존(InlineText/
- * InlineRichText의 자체 draft·커서·IME가 끊기지 않도록).
- */
-function syncRows(
-  prev: HistoryRow[],
-  server: CompanyHistoryItem[],
-  nextKey: () => string,
-): HistoryRow[] {
-  if (prev.length === server.length) {
-    return server.map((srv, i) => {
-      const p = prev[i]
-      const sTitle = srv.title ?? ''
-      const sContent = srv.content ?? ''
-      const prevIsAhead =
-        p.serverId === undefined ||
-        (p.serverId !== srv.id &&
-          (p.title !== sTitle ||
-            p.content !== sContent ||
-            p.occurredAt !== srv.occurredAt))
-      if (prevIsAhead) {
-        return { ...p, serverId: srv.id }
-      }
-      return makeRow(srv, p.key)
-    })
-  }
-
-  const prevUsed = new Array<boolean>(prev.length).fill(false)
-  const next: HistoryRow[] = []
-  for (const srv of server) {
-    const sTitle = srv.title ?? ''
-    const sContent = srv.content ?? ''
-    let matchedIdx = prev.findIndex(
-      (p, i) => !prevUsed[i] && p.serverId === srv.id,
-    )
-    if (matchedIdx < 0) {
-      for (let i = 0; i < prev.length; i++) {
-        if (prevUsed[i]) continue
-        const p = prev[i]
-        if (
-          p.title === sTitle &&
-          p.content === sContent &&
-          p.occurredAt === srv.occurredAt
-        ) {
-          matchedIdx = i
-          break
-        }
-      }
-    }
-    if (matchedIdx >= 0) {
-      prevUsed[matchedIdx] = true
-      next.push({ ...prev[matchedIdx], serverId: srv.id, note: srv.note })
-    } else {
-      next.push(makeRow(srv, nextKey()))
-    }
-  }
-  for (let i = 0; i < prev.length; i++) {
-    if (!prevUsed[i]) next.push(prev[i])
-  }
-  return next
-}
 
 const Toolbar = styled.div`
   display: flex;

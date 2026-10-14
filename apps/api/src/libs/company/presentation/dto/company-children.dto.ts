@@ -46,6 +46,14 @@ const MAX_CAP = 1e21
 
 /** 기업 시설 입력 (손자 facilityHistories/laws/builtNavalVessels는 1차 backlog) */
 export class CompanyFacilityInputDto {
+  /**
+   * 기존 행 id — 있으면 그 행을 **수정**(id·생성일·딸린 데이터 보존), 없으면 새로 만든다.
+   * 이 기업의 행이 아닌 id는 무시하고 새 행으로 만든다(id 기준 대조 저장, 검토 F4).
+   */
+  @IsOptional()
+  @IsString()
+  id?: string
+
   @IsOptional()
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsEnum(FacilityType)
@@ -100,6 +108,14 @@ export class CompanyFacilityInputDto {
 
 /** 기업 연혁 입력 (eventId 연결은 integration-2 별도 작업) */
 export class CompanyHistoryInputDto {
+  /**
+   * 기존 행 id — 있으면 그 행을 **수정**(id·생성일·딸린 데이터 보존), 없으면 새로 만든다.
+   * 이 기업의 행이 아닌 id는 무시하고 새 행으로 만든다(id 기준 대조 저장, 검토 F4).
+   */
+  @IsOptional()
+  @IsString()
+  id?: string
+
   /** 연혁 종류 (제품 발표·재무 등). 미지정 시 GENERAL. */
   @IsOptional()
   @ValidateIf((_, value) => value !== null && value !== undefined && value !== '')
@@ -114,6 +130,15 @@ export class CompanyHistoryInputDto {
   @ValidateIf((_, value) => value !== '' && value != null)
   @IsDateString()
   occurredAt?: string | null
+
+  /**
+   * 같은 사실의 중앙 사건 — 미지정(undefined)은 **기존 연결 유지**, null은 연결 해제.
+   * 예전엔 저장 때마다 행을 지우고 다시 만들어 이 연결이 조용히 사라졌다(검토 F4·F5).
+   */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  eventId?: string | null
 
   /** 발생일 정밀도 — year(년만)·month(년·월)·day. null/미지정은 day로 간주 */
   @IsOptional()
@@ -178,6 +203,14 @@ export class CompanyCategoryInputDto {
 
 /** 기업 제품 입력 (제품·기술 카탈로그) */
 export class CompanyProductInputDto {
+  /**
+   * 기존 행 id — 있으면 그 행을 **수정**(id·생성일·딸린 데이터 보존), 없으면 새로 만든다.
+   * 이 기업의 행이 아닌 id는 무시하고 새 행으로 만든다(id 기준 대조 저장, 검토 F4).
+   */
+  @IsOptional()
+  @IsString()
+  id?: string
+
   @IsString()
   @IsNotEmpty()
   name!: string
@@ -264,6 +297,14 @@ export class CompanyStockPointInputDto {
 
 /** 증권사 목표주가·투자의견 입력 */
 export class CompanyAnalystRatingInputDto {
+  /**
+   * 기존 행 id — 있으면 그 행을 **수정**(id·생성일·딸린 데이터 보존), 없으면 새로 만든다.
+   * 이 기업의 행이 아닌 id는 무시하고 새 행으로 만든다(id 기준 대조 저장, 검토 F4).
+   */
+  @IsOptional()
+  @IsString()
+  id?: string
+
   @IsString()
   @IsNotEmpty()
   firm!: string

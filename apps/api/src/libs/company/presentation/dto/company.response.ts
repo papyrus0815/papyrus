@@ -114,6 +114,9 @@ export interface CompanyHistoryItem {
   occurredAt: string | null
   /** 발생일 정밀도 — year·month·day, null이면 day */
   occurredAtPrecision: 'year' | 'month' | 'day' | null
+  /** 같은 사실로 이어 둔 중앙 사건(삭제된 사건이면 null) */
+  eventId: string | null
+  event: { id: string; title: string } | null
   content: string | null
   note: string | null
   /** 당시 주가 */

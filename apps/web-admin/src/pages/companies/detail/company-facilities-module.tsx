@@ -20,6 +20,7 @@ import {
 
 import { ClampedBlock } from './company-clamped-block'
 import * as S from './company-detail.styles'
+import { syncRowsById } from './sync-rows-by-id'
 
 const FACILITY_TYPE_OPTIONS: InlineSelectOption[] = [
   { value: 'HEADQUARTERS', label: '본사' },
@@ -95,8 +96,16 @@ export function CompanyFacilitiesModule({
   const [rows, setRows] = useState<FacilityRow[]>(() => serverRows.map(toRow))
 
   useEffect(() => {
-    setRows((prev) => syncRows(prev, serverRows, toRow))
-  }, [serverRows, toRow])
+    setRows((prev) =>
+      syncRowsById(prev, serverRows, {
+        toRow: (facility, key) => ({ ...toRow(facility), key }),
+        newKey: nextKey,
+        isSaveOf: (local, facility) =>
+          local.name === (facility.name ?? '') &&
+          local.facilityType === (facility.facilityType ?? ''),
+      }),
+    )
+  }, [serverRows, toRow, nextKey])
 
   const commitRows = (next: FacilityRow[]) => {
     setRows(next)
@@ -111,6 +120,8 @@ export function CompanyFacilitiesModule({
           row.closedAt,
       )
       .map((row) => ({
+        // 기존 행이면 id를 실어 그 행을 수정한다 — 딸린 법규·이력·함정 건조지 연결이 보존된다
+        id: row.serverId,
         facilityType: (row.facilityType || null) as FacilityType | null,
         name: row.name.trim() || null,
         address: row.address.trim() || null,
@@ -312,50 +323,3 @@ export function CompanyFacilitiesModule({
   )
 }
 
-/** server↔로컬 키 보존 동기화(연혁과 동일 전략, name/type/주소 기준 매칭). */
-function syncRows(
-  prev: FacilityRow[],
-  server: CompanyFacilitySummary[],
-  toRow: (facility: CompanyFacilitySummary) => FacilityRow,
-): FacilityRow[] {
-  if (prev.length === server.length) {
-    return server.map((srv, i) => {
-      const p = prev[i]
-      const prevIsAhead =
-        p.serverId === undefined ||
-        (p.serverId !== srv.id &&
-          (p.name !== (srv.name ?? '') ||
-            p.facilityType !== (srv.facilityType ?? '') ||
-            p.address !== (srv.address ?? '') ||
-            p.constructionBackground !== (srv.constructionBackground ?? '')))
-      if (prevIsAhead) return { ...p, serverId: srv.id }
-      return { ...toRow(srv), key: p.key }
-    })
-  }
-
-  const prevUsed = new Array<boolean>(prev.length).fill(false)
-  const next: FacilityRow[] = []
-  for (const srv of server) {
-    let matchedIdx = prev.findIndex(
-      (p, i) => !prevUsed[i] && p.serverId === srv.id,
-    )
-    if (matchedIdx < 0) {
-      matchedIdx = prev.findIndex(
-        (p, i) =>
-          !prevUsed[i] &&
-          p.name === (srv.name ?? '') &&
-          p.facilityType === (srv.facilityType ?? ''),
-      )
-    }
-    if (matchedIdx >= 0) {
-      prevUsed[matchedIdx] = true
-      next.push({ ...toRow(srv), key: prev[matchedIdx].key })
-    } else {
-      next.push(toRow(srv))
-    }
-  }
-  for (let i = 0; i < prev.length; i++) {
-    if (!prevUsed[i]) next.push(prev[i])
-  }
-  return next
-}

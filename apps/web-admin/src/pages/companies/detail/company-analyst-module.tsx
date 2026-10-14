@@ -24,6 +24,7 @@ import { ClampedBlock } from './company-clamped-block'
 import { ratingTone, toneColor } from './financial-tone'
 import { TonePill, ToneTag } from './tone-pill'
 import * as S from './company-detail.styles'
+import { syncRowsById } from './sync-rows-by-id'
 
 const RATING_OPTIONS: InlineSelectOption[] = [
   { value: 'STRONG_BUY', label: '강력매수' },
@@ -108,7 +109,15 @@ export function CompanyAnalystModule({
   )
 
   useEffect(() => {
-    setRows((prev) => syncRows(prev, serverRows, nextKey))
+    setRows((prev) =>
+      syncRowsById(prev, serverRows, {
+        toRow: makeRow,
+        newKey: nextKey,
+        isSaveOf: (local, item) =>
+          local.firm.trim() === (item.firm ?? '') &&
+          local.publishedAt?.slice(0, 10) === item.publishedAt?.slice(0, 10),
+      }),
+    )
   }, [serverRows, nextKey])
 
   const commitRows = (next: RatingRow[]) => {
@@ -117,6 +126,7 @@ export function CompanyAnalystModule({
     const cleaned: CompanyAnalystRatingInput[] = next
       .filter((row) => row.firm.trim())
       .map((row, idx) => ({
+        id: row.serverId,
         firm: row.firm.trim(),
         analyst: row.analyst.trim() || null,
         targetPrice: strToNum(row.targetPrice),
@@ -474,35 +484,3 @@ const DistRow = styled.div`
   gap: 4px;
 `
 
-/** server↔로컬 키 보존 동기화(serverId 우선, 없으면 위치). */
-function syncRows(
-  prev: RatingRow[],
-  server: CompanyAnalystRatingItem[],
-  nextKey: () => string,
-): RatingRow[] {
-  if (prev.length === server.length) {
-    return server.map((srv, i) => {
-      const p = prev[i]
-      const prevIsAhead = p.serverId === undefined && p.firm.trim() !== ''
-      if (prevIsAhead) return p
-      return makeRow(srv, p.key)
-    })
-  }
-  const prevUsed = new Array<boolean>(prev.length).fill(false)
-  const next: RatingRow[] = []
-  for (const srv of server) {
-    const matchedIdx = prev.findIndex(
-      (p, i) => !prevUsed[i] && p.serverId === srv.id,
-    )
-    if (matchedIdx >= 0) {
-      prevUsed[matchedIdx] = true
-      next.push(makeRow(srv, prev[matchedIdx].key))
-    } else {
-      next.push(makeRow(srv, nextKey()))
-    }
-  }
-  for (let i = 0; i < prev.length; i++) {
-    if (!prevUsed[i]) next.push(prev[i])
-  }
-  return next
-}

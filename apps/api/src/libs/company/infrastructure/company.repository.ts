@@ -29,6 +29,7 @@ export const COMPANY_DETAIL_INCLUDE = {
     orderBy: { openedAt: 'asc' },
   },
   CompanyHistory: {
+    include: { event: { select: { id: true, title: true, deletedAt: true } } },
     orderBy: [{ order: 'asc' }, { occurredAt: 'asc' }],
   },
   CompanyCategoryRelation: {

@@ -41,6 +41,47 @@ function passthrough<T>(value: T | null | undefined): T | null | undefined {
   return value
 }
 
+/**
+ * id 기준 대조 저장(검토 F4) — 배열을 통째로 지우고 다시 만들지 않는다.
+ *
+ * - 입력 항목에 **이 기업의 기존 행 id**가 있으면 그 행을 수정한다(id·createdAt·딸린 데이터 보존).
+ * - id가 없거나 남의 id면 새로 만든다. 같은 id가 두 번 오면 두 번째부터는 새 행.
+ * - 입력에 없는 기존 행은 지운다.
+ *
+ * 예전 delete-and-recreate는 저장마다 id를 새로 발급해, 연혁의 사건 연결(eventId)을 조용히 지우고
+ * 시설에 딸린 법규·이력을 연쇄 삭제하고 함정 건조지 연결을 NULL로 만들었다.
+ * 저장 직후 리페치 전에 같은 새 행을 또 보내도(아직 id 모름) 앞서 만든 행은 '입력에 없는 기존 행'으로
+ * 지워지고 새로 만들어지므로 중복이 쌓이지 않는다(같은 기업 저장은 클라이언트에서 직렬화된다).
+ */
+async function reconcileById<Item extends { id?: string | null }, Data>(
+  existingIds: string[],
+  items: Item[],
+  toData: (item: Item, index: number) => Data,
+  ops: {
+    removeMany: (ids: string[]) => Promise<unknown>
+    update: (id: string, data: Data) => Promise<unknown>
+    createMany: (data: Data[]) => Promise<unknown>
+  },
+): Promise<void> {
+  const existing = new Set(existingIds)
+  const kept = new Set<string>()
+  const updates: Array<{ id: string; data: Data }> = []
+  const creates: Data[] = []
+  items.forEach((item, index) => {
+    const data = toData(item, index)
+    if (item.id && existing.has(item.id) && !kept.has(item.id)) {
+      kept.add(item.id)
+      updates.push({ id: item.id, data })
+    } else {
+      creates.push(data)
+    }
+  })
+  const removed = existingIds.filter((existingId) => !kept.has(existingId))
+  if (removed.length > 0) await ops.removeMany(removed)
+  for (const { id, data } of updates) await ops.update(id, data)
+  if (creates.length > 0) await ops.createMany(creates)
+}
+
 /** Json 필드: null은 Prisma.JsonNull로, undefined는 skip. */
 function toJsonInput(
   value: unknown,
@@ -249,60 +290,102 @@ export class CompanyService {
         // 배열이 undefined면 해당 자식 미변경(skip). 같은 $transaction 안이라 중간 실패 시 전체 롤백.
         // 각 자식 배열은 delete 후 단일 createMany로 일괄 삽입(행마다 create 라운드트립·
         // 락 점유 시간을 줄임). 같은 delete-and-recreate 의미·정렬은 그대로 유지한다.
+        // 연혁·시설·제품·목표주가: id 기준 대조 저장(reconcileById). 배열이 undefined면 미변경.
+        // 업종·주가·전망은 아래에서 여전히 delete-and-recreate — 외부 참조가 없고, 업종·주가는
+        // (categoryId|fromDate)·date 키로 중복을 걸러 저장해 id로 맞추면 날짜 교환 때 유일키 충돌이 난다.
         if (dto.facilities !== undefined) {
-          await tx.companyFacility.deleteMany({ where: { companyId: id } })
-          if (dto.facilities.length > 0) {
-            await tx.companyFacility.createMany({
-              data: dto.facilities.map((facility) => ({
-                companyId: id,
-                facilityType: facility.facilityType ?? null,
-                name: facility.name ?? null,
-                address: facility.address ?? null,
-                note: facility.note ?? null,
-                constructionBackground: facility.constructionBackground ?? null,
-                constructionStartDate: facility.constructionStartDate
-                  ? new Date(facility.constructionStartDate)
-                  : null,
-                constructionEndDate: facility.constructionEndDate
-                  ? new Date(facility.constructionEndDate)
-                  : null,
-                openedAt: facility.openedAt ? new Date(facility.openedAt) : null,
-                closedAt: facility.closedAt ? new Date(facility.closedAt) : null,
-                cityId: facility.cityId || null,
-                administrativeDivisionId:
-                  facility.administrativeDivisionId || null,
-              })),
-            })
-          }
+          const existingFacilities = await tx.companyFacility.findMany({
+            where: { companyId: id },
+            select: { id: true },
+          })
+          await reconcileById(
+            existingFacilities.map((row) => row.id),
+            dto.facilities,
+            (facility) => ({
+              facilityType: facility.facilityType ?? null,
+              name: facility.name ?? null,
+              address: facility.address ?? null,
+              note: facility.note ?? null,
+              constructionBackground: facility.constructionBackground ?? null,
+              constructionStartDate: facility.constructionStartDate
+                ? new Date(facility.constructionStartDate)
+                : null,
+              constructionEndDate: facility.constructionEndDate
+                ? new Date(facility.constructionEndDate)
+                : null,
+              openedAt: facility.openedAt ? new Date(facility.openedAt) : null,
+              closedAt: facility.closedAt ? new Date(facility.closedAt) : null,
+              cityId: facility.cityId || null,
+              administrativeDivisionId: facility.administrativeDivisionId || null,
+            }),
+            {
+              removeMany: (ids) =>
+                tx.companyFacility.deleteMany({ where: { companyId: id, id: { in: ids } } }),
+              update: (rowId, data) =>
+                tx.companyFacility.update({ where: { id: rowId }, data }),
+              createMany: (data) =>
+                tx.companyFacility.createMany({
+                  data: data.map((row) => ({ ...row, companyId: id })),
+                }),
+            },
+          )
         }
 
         if (dto.histories !== undefined) {
-          await tx.companyHistory.deleteMany({ where: { companyId: id } })
-          if (dto.histories.length > 0) {
-            await tx.companyHistory.createMany({
-              data: dto.histories.map((history, index) => ({
-                companyId: id,
-                type: history.type ?? undefined,
-                title: history.title,
-                occurredAt: history.occurredAt
-                  ? new Date(history.occurredAt)
-                  : null,
-                // 날짜가 없으면 정밀도도 의미가 없다. 'day'는 NULL과 같은 뜻이라 굳이 적지 않는다.
-                occurredAtPrecision:
-                  history.occurredAt &&
-                  (history.occurredAtPrecision === 'year' ||
-                    history.occurredAtPrecision === 'month')
-                    ? history.occurredAtPrecision
-                    : null,
-                content: history.content ?? null,
-                note: history.note ?? null,
-                stockPrice: history.stockPrice ?? null,
-                marketCap: history.marketCap ?? null,
-                currency: history.currency ?? null,
-                order: history.order ?? index,
-              })),
+          // 사건 연결은 살아 있는 사건만 — 없거나 삭제된 사건 id는 400
+          const linkedEventIds = [
+            ...new Set(
+              dto.histories
+                .map((history) => history.eventId)
+                .filter((eventId): eventId is string => !!eventId),
+            ),
+          ]
+          if (linkedEventIds.length > 0) {
+            const alive = await tx.event.count({
+              where: { id: { in: linkedEventIds }, deletedAt: null },
             })
+            if (alive !== linkedEventIds.length) {
+              throw new BadRequestException('연결하려는 사건을 찾을 수 없습니다.')
+            }
           }
+          const existingHistories = await tx.companyHistory.findMany({
+            where: { companyId: id },
+            select: { id: true },
+          })
+          await reconcileById(
+            existingHistories.map((row) => row.id),
+            dto.histories,
+            (history, index) => ({
+              type: history.type ?? undefined,
+              title: history.title,
+              occurredAt: history.occurredAt ? new Date(history.occurredAt) : null,
+              // 날짜가 없으면 정밀도도 의미가 없다. 'day'는 NULL과 같은 뜻이라 굳이 적지 않는다.
+              occurredAtPrecision:
+                history.occurredAt &&
+                (history.occurredAtPrecision === 'year' ||
+                  history.occurredAtPrecision === 'month')
+                  ? history.occurredAtPrecision
+                  : null,
+              content: history.content ?? null,
+              note: history.note ?? null,
+              stockPrice: history.stockPrice ?? null,
+              marketCap: history.marketCap ?? null,
+              currency: history.currency ?? null,
+              order: history.order ?? index,
+              // undefined는 '기존 연결 유지' — update 때 칸을 아예 빼야 Prisma가 건드리지 않는다
+              ...(history.eventId !== undefined && { eventId: history.eventId }),
+            }),
+            {
+              removeMany: (ids) =>
+                tx.companyHistory.deleteMany({ where: { companyId: id, id: { in: ids } } }),
+              update: (rowId, data) =>
+                tx.companyHistory.update({ where: { id: rowId }, data }),
+              createMany: (data) =>
+                tx.companyHistory.createMany({
+                  data: data.map((row) => ({ ...row, companyId: id })),
+                }),
+            },
+          )
         }
 
         if (dto.categories !== undefined) {
@@ -335,29 +418,37 @@ export class CompanyService {
         }
 
         if (dto.products !== undefined) {
-          await tx.companyProduct.deleteMany({ where: { companyId: id } })
-          if (dto.products.length > 0) {
-            await tx.companyProduct.createMany({
-              data: dto.products.map((product, index) => ({
-                companyId: id,
-                name: product.name,
-                category: product.category ?? null,
-                productLine: product.productLine ?? null,
-                description: product.description ?? null,
-                announcedAt: product.announcedAt
-                  ? new Date(product.announcedAt)
-                  : null,
-                releasedAt: product.releasedAt
-                  ? new Date(product.releasedAt)
-                  : null,
-                discontinuedAt: product.discontinuedAt
-                  ? new Date(product.discontinuedAt)
-                  : null,
-                imageUrl: product.imageUrl ?? null,
-                order: product.order ?? index,
-              })),
-            })
-          }
+          const existingProducts = await tx.companyProduct.findMany({
+            where: { companyId: id },
+            select: { id: true },
+          })
+          await reconcileById(
+            existingProducts.map((row) => row.id),
+            dto.products,
+            (product, index) => ({
+              name: product.name,
+              category: product.category ?? null,
+              productLine: product.productLine ?? null,
+              description: product.description ?? null,
+              announcedAt: product.announcedAt ? new Date(product.announcedAt) : null,
+              releasedAt: product.releasedAt ? new Date(product.releasedAt) : null,
+              discontinuedAt: product.discontinuedAt
+                ? new Date(product.discontinuedAt)
+                : null,
+              imageUrl: product.imageUrl ?? null,
+              order: product.order ?? index,
+            }),
+            {
+              removeMany: (ids) =>
+                tx.companyProduct.deleteMany({ where: { companyId: id, id: { in: ids } } }),
+              update: (rowId, data) =>
+                tx.companyProduct.update({ where: { id: rowId }, data }),
+              createMany: (data) =>
+                tx.companyProduct.createMany({
+                  data: data.map((row) => ({ ...row, companyId: id })),
+                }),
+            },
+          )
         }
 
         if (dto.stockPoints !== undefined) {
@@ -389,27 +480,39 @@ export class CompanyService {
         }
 
         if (dto.analystRatings !== undefined) {
-          await tx.companyAnalystRating.deleteMany({ where: { companyId: id } })
-          if (dto.analystRatings.length > 0) {
-            await tx.companyAnalystRating.createMany({
-              data: dto.analystRatings.map((rating, index) => ({
-                companyId: id,
-                firm: rating.firm,
-                analyst: rating.analyst ?? null,
-                targetPrice: rating.targetPrice ?? null,
-                priorTargetPrice: rating.priorTargetPrice ?? null,
-                currency: rating.currency ?? null,
-                rating: rating.rating ?? null,
-                publishedAt: rating.publishedAt
-                  ? new Date(rating.publishedAt)
-                  : null,
-                reportTitle: rating.reportTitle ?? null,
-                sourceUrl: rating.sourceUrl ?? null,
-                note: rating.note ?? null,
-                order: rating.order ?? index,
-              })),
-            })
-          }
+          const existingRatings = await tx.companyAnalystRating.findMany({
+            where: { companyId: id },
+            select: { id: true },
+          })
+          await reconcileById(
+            existingRatings.map((row) => row.id),
+            dto.analystRatings,
+            (rating, index) => ({
+              firm: rating.firm,
+              analyst: rating.analyst ?? null,
+              targetPrice: rating.targetPrice ?? null,
+              priorTargetPrice: rating.priorTargetPrice ?? null,
+              currency: rating.currency ?? null,
+              rating: rating.rating ?? null,
+              publishedAt: rating.publishedAt ? new Date(rating.publishedAt) : null,
+              reportTitle: rating.reportTitle ?? null,
+              sourceUrl: rating.sourceUrl ?? null,
+              note: rating.note ?? null,
+              order: rating.order ?? index,
+            }),
+            {
+              removeMany: (ids) =>
+                tx.companyAnalystRating.deleteMany({
+                  where: { companyId: id, id: { in: ids } },
+                }),
+              update: (rowId, data) =>
+                tx.companyAnalystRating.update({ where: { id: rowId }, data }),
+              createMany: (data) =>
+                tx.companyAnalystRating.createMany({
+                  data: data.map((row) => ({ ...row, companyId: id })),
+                }),
+            },
+          )
         }
 
         if (dto.outlooks !== undefined) {

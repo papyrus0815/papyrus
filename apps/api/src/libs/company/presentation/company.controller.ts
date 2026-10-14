@@ -218,6 +218,9 @@ export class CompanyController {
         occurredAt: h.occurredAt ? h.occurredAt.toISOString() : null,
         occurredAtPrecision:
           (h.occurredAtPrecision as 'year' | 'month' | 'day' | null) ?? null,
+        eventId: h.event && !h.event.deletedAt ? h.event.id : null,
+        event:
+          h.event && !h.event.deletedAt ? { id: h.event.id, title: h.event.title } : null,
         content: h.content,
         note: h.note,
         stockPrice: h.stockPrice != null ? Number(h.stockPrice) : null,
