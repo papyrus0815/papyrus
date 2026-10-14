@@ -1086,12 +1086,45 @@ export const ReignMarker = styled.div<{
   color: ${metaText};
 `
 
-/** 축 위 왕관 — 연 도트와 같은 좌표. 표면색 원판이 축을 끊고, 얇은 호박 테가 눈금을 만든다 */
-/** 공화국 원수·정부 수반(대통령·총리) 표지의 강조색 — 군주 호박과 구별되는 파랑 */
-const civicInk = (dark: boolean) => (dark ? '#93c5fd' : '#1d4ed8')
-const royalInk = (dark: boolean) => (dark ? '#f0b64a' : '#b45309')
+/**
+ * 연표 표지의 색 — **종류마다 다른 색상(hue)**.
+ *
+ * 예전엔 군주 즉위(호박)만 따로였고 대통령·총리 취임·건국·멸망·종료가 전부 같은 파랑이라,
+ * 연 도트·세기 도트까지 파란 레일 위에서 '건국 2 · 멸망 16'이 한 덩어리로 읽혔다(무엇이
+ * 서고 무엇이 무너졌는지 동사를 다 읽어야 구분). 시작은 초록·끝은 장미, 기업은 청록으로
+ * 가른다. 같은 자리에 종류가 섞이면 축 표지·날짜는 중립(`mixed`) — 색은 동사가 말한다.
+ * 라이트 대비(흰 말풍선): 호박 5.0 · 파랑 6.7 · 초록 5.0 · 장미 6.3 · 청록 5.5 (모두 AA).
+ */
+export type MarkerTone =
+  | 'royal'
+  | 'civic'
+  | 'founding'
+  | 'dissolution'
+  | 'company'
+  | 'mixed'
 
-export const ReignMarkerIcon = styled.span<{ $civic?: boolean }>`
+const MARKER_INK: Record<MarkerTone, { light: string; dark: string }> = {
+  royal: { light: '#b45309', dark: '#f0b64a' },
+  civic: { light: '#1d4ed8', dark: '#93c5fd' },
+  founding: { light: '#15803d', dark: '#86efac' },
+  dissolution: { light: '#be123c', dark: '#fda4af' },
+  company: { light: '#0f766e', dark: '#5eead4' },
+  mixed: { light: '#57534e', dark: '#d6d3d1' },
+}
+/** 축 표지 테 — 같은 색상의 옅은 링 */
+const MARKER_RING: Record<MarkerTone, { light: string; dark: string }> = {
+  royal: { light: 'rgba(180, 83, 9, 0.35)', dark: 'rgba(240, 182, 74, 0.45)' },
+  civic: { light: 'rgba(29, 78, 216, 0.3)', dark: 'rgba(147, 197, 253, 0.45)' },
+  founding: { light: 'rgba(21, 128, 61, 0.35)', dark: 'rgba(134, 239, 172, 0.45)' },
+  dissolution: { light: 'rgba(190, 18, 60, 0.3)', dark: 'rgba(253, 164, 175, 0.45)' },
+  company: { light: 'rgba(15, 118, 110, 0.35)', dark: 'rgba(94, 234, 212, 0.45)' },
+  mixed: { light: 'rgba(87, 83, 78, 0.3)', dark: 'rgba(214, 211, 209, 0.35)' },
+}
+const markerInk = (tone: MarkerTone | undefined, dark: boolean) =>
+  MARKER_INK[tone ?? 'royal'][dark ? 'dark' : 'light']
+
+/** 축 위 표지 — 연 도트와 같은 좌표. 표면색 원판이 축을 끊고, 종류 색의 얇은 테가 눈금을 만든다 */
+export const ReignMarkerIcon = styled.span<{ $tone?: MarkerTone }>`
   position: absolute;
   left: var(--rail-x);
   top: 50%;
@@ -1105,16 +1138,9 @@ export const ReignMarkerIcon = styled.span<{ $civic?: boolean }>`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
   box-shadow: inset 0 0 0 1px
-    ${({ theme, $civic }) =>
-      $civic
-        ? theme.mode === 'dark'
-          ? 'rgba(147, 197, 253, 0.45)'
-          : 'rgba(29, 78, 216, 0.3)'
-        : theme.mode === 'dark'
-          ? 'rgba(240, 182, 74, 0.45)'
-          : 'rgba(180, 83, 9, 0.35)'};
-  color: ${({ theme, $civic }) =>
-    $civic ? civicInk(theme.mode === 'dark') : royalInk(theme.mode === 'dark')};
+    ${({ theme, $tone }) =>
+      MARKER_RING[$tone ?? 'royal'][theme.mode === 'dark' ? 'dark' : 'light']};
+  color: ${({ theme, $tone }) => markerInk($tone, theme.mode === 'dark')};
   z-index: 1;
   pointer-events: none;
 
@@ -1132,7 +1158,7 @@ export const ReignMarkerIcon = styled.span<{ $civic?: boolean }>`
  * 표지가 행과 같은 시간축 위에서 읽힌다. 연도만 아는 즉위는 빈 칸으로 자리만 지킨다 —
  * 말풍선 x가 행마다 흔들리지 않게.
  */
-export const ReignMarkerDate = styled.span<{ $civic?: boolean }>`
+export const ReignMarkerDate = styled.span<{ $tone?: MarkerTone }>`
   flex: none;
   width: var(--col-date, 72px);
   text-align: right;
@@ -1140,8 +1166,7 @@ export const ReignMarkerDate = styled.span<{ $civic?: boolean }>`
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: ${({ theme, $civic }) =>
-    $civic ? civicInk(theme.mode === 'dark') : royalInk(theme.mode === 'dark')};
+  color: ${({ theme, $tone }) => markerInk($tone, theme.mode === 'dark')};
 
   @media (max-width: 640px) {
     width: auto;
@@ -1275,9 +1300,20 @@ export const ReignMarkerItem = styled.span`
     content: '';
     align-self: center;
     width: 1px;
-    height: 11px;
-    margin: 0 7px;
-    background: var(--bubble-line);
+    height: 12px;
+    /* 말풍선 테(#e7e5e4)와 같은 색이면 흰 면 위에서 1.2:1이라 항목 경계가 거의 안 보였다 */
+    margin: 0 10px;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#4a4a52' : '#d6d3d1')};
+  }
+
+  /* 좁은 폭에선 말풍선이 어차피 여러 줄로 꺾인다 — 괘선이 줄 끝에 홀로 매달리지 않게
+     항목마다 한 줄을 주고 괘선을 뺀다(경계는 줄바꿈이 맡는다, 390px 실측). */
+  @media (max-width: 640px) {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    &:not(:last-child)::after {
+      display: none;
+    }
   }
 `
 
@@ -1320,13 +1356,20 @@ export const ReignMarkerSpan = styled.span`
 `
 
 /** '즉위' — 이름에 붙는 동사. 메타색·한 단 작게 */
-export const ReignMarkerLabel = styled.span<{ $civic?: boolean }>`
+export const ReignMarkerLabel = styled.span<{ $tone?: MarkerTone }>`
+  /* 옅은 같은 색 바탕의 태그 — 글자색만으로는 12px 동사 두 글자가 이름·기간 사이에 묻혀,
+     말풍선을 훑을 때 '건국'과 '멸망'을 동사를 읽어야만 갈랐다. 바탕이 있으면 색 면적이
+     커져 종류가 먼저 보인다. 바탕은 글자색에서 섞어 테마·종류가 늘어도 따로 정의하지 않는다. */
+  align-self: center;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 11%, transparent);
+  line-height: 1.6;
   font-size: 0.92em;
   font-weight: 600;
   /* 표지의 유일한 색 글자 — 날짜·축 표지와 같은 색으로 '무슨 표지인가'를 말한다
-     (군주 즉위 = 호박, 대통령·총리 취임 = 파랑) */
-  color: ${({ theme, $civic }) =>
-    $civic ? civicInk(theme.mode === 'dark') : royalInk(theme.mode === 'dark')};
+     (즉위 호박 · 취임 파랑 · 건국 초록 · 멸망 장미 · 기업 설립 청록) */
+  color: ${({ theme, $tone }) => markerInk($tone, theme.mode === 'dark')};
 `
 
 /** 직함 — '대통령'·'총리'. 이름 앞 보조색 글자(나라와 같은 무게) */
@@ -1351,12 +1394,14 @@ export const ReignMarkerMore = styled.button`
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: ${({ theme }) => theme.colors.primary};
+  /* 파랑이면 '건국 2 · 멸망 16'이 취임 동사와 같은 색으로 읽혔다 — 색은 동사 몫, 링크는 보조색 */
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 
   &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
     text-decoration-style: solid;
   }
 
@@ -1581,8 +1626,11 @@ export const YearDivider = styled.button`
      * ⚠️ 다크에서 **세기보다 밝았다**(연 7.11 vs 세기 #2563eb 3.71) — 눈금 3단이 다크에서만
      * 뒤집혀 있었다. 세기 도트를 다크 전용 밝은 파랑으로 올려 같이 고쳤다(CenturyDivider).
      */
+    /* 2026-10-10: 파랑 → 진한 중립. 연 도트·세기 도트·표지·동사가 전부 파래 레일이 한 색으로
+       뭉갰다. 파랑은 세기(시대 분기)에만 남기고 연은 크기(7px)+진한 잉크로 행 눈금 위에 선다
+       (라이트 #475569 7.6:1 · 다크 #cbd5e1 — 둘 다 행 눈금보다 진하다). */
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(147, 197, 253, 0.80)' : BRAND.primary};
+      theme.mode === 'dark' ? '#cbd5e1' : '#475569'};
     box-shadow: 0 0 0 2.5px
       ${({ theme }) => (theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised)};
     z-index: 1;
@@ -1986,6 +2034,7 @@ export const CenturyDividerCount = styled.span`
  * 행 셀과 같은 들여쓰기(날짜 열 시작)에 붙여 목록의 왼쪽 정렬선을 지킨다.
  */
 export const CollapsedPeek = styled.button`
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2018,18 +2067,52 @@ export const CollapsedPeek = styled.button`
   }
 `
 
-/** 접힌 표지 구간의 깃발 — 연표 표지 줄과 같은 색 계열, 사건 행보다 한 단 옅게 */
+/**
+ * 접힌 표지 구간의 깃발 — **레일 축 위**의 구슬(말풍선 표지와 같은 좌표·같은 원판).
+ *
+ * 예전엔 줄 안 왼쪽(레일에서 26px 오른쪽)의 회색 원이라, 축 위에 선 말풍선 표지들과
+ * 문법이 갈렸다 — 같은 '연표 표지'인데 하나는 축의 눈금, 하나는 줄의 아이콘이었다.
+ * 상자는 연 그룹(레일 거터까지 번진 상자) 안이라 content-visibility에 잘리지 않는다.
+ */
 export const MarkerRunIcon = styled.span`
+  position: absolute;
+  left: calc(var(--rail-x) - var(--rail-gutter));
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
-  color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
+    theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
+  box-shadow: inset 0 0 0 1px
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(214, 211, 209, 0.3)' : 'rgba(87, 83, 78, 0.25)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  z-index: 1;
+  pointer-events: none;
+`
+
+/** 접힌 표지 구간의 종류별 개수 — '● 건국 20' (점 색 = 말풍선 동사 색) */
+export const MarkerRunCount = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+
+  & + & {
+    margin-left: 12px;
+  }
+`
+
+export const MarkerRunDot = styled.span<{ $tone: MarkerTone }>`
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${({ theme, $tone }) => markerInk($tone, theme.mode === 'dark')};
 `
 
 /** 접힌 연의 제목 미리보기 — 한 줄, 넘치면 말줄임. 늘어나지 않아 '외 N건'이 바로 뒤에 붙는다 */
@@ -2057,8 +2140,8 @@ export const PeekAction = styled.span`
   flex-shrink: 0;
   font-size: 11.5px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.primary};
-  opacity: 0.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  opacity: 0.7;
 
   ${CollapsedPeek}:hover &,
   ${CollapsedPeek}:focus-visible & {

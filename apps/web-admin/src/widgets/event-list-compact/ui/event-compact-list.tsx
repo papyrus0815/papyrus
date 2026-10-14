@@ -46,6 +46,8 @@ import {
   isCompanyMarker,
   isEntityMarker,
   isStatehoodMarker,
+  markerGroupTone,
+  markerTone,
   formatAccessionDate,
   formatReignSpan,
   groupReignEntries,
@@ -488,9 +490,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       ...(reignPlan.beforeYear.get(year) ?? []),
       ...(reignPlan.inYear.get(year) ?? []),
     ])
-    const kindSummary = countMarkerKinds(markers)
+    const kindCounts = countMarkerKinds(markers)
+    const kindSummary = kindCounts
       .map((entry) => `${entry.label} ${entry.count}`)
       .join(' · ')
+    /* 개수 앞 점 색 = 말풍선 동사 색. 즉위·취임 묶음은 군주가 있으면 호박, 대통령·총리뿐이면 파랑 */
+    const accessionTone = markers.some((marker) => marker.kind === 'monarch')
+      ? 'royal'
+      : 'civic'
     const earliest = Math.min(...runYears)
     const latest = Math.max(...runYears)
     const rangeLabel = `${formatYearLabel(earliest)} ~ ${formatYearLabel(latest)}`
@@ -517,7 +524,22 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               <FaFlag size={9} />
             </List.MarkerRunIcon>
             <List.PeekTitles aria-hidden="true">{rangeLabel}</List.PeekTitles>
-            <List.PeekMore aria-hidden="true">{kindSummary}</List.PeekMore>
+            <List.PeekMore aria-hidden="true">
+              {kindCounts.map((entry) => (
+                <List.MarkerRunCount key={entry.kind}>
+                  <List.MarkerRunDot
+                    $tone={
+                      entry.kind === 'accession'
+                        ? accessionTone
+                        : entry.kind === 'companyFounding'
+                          ? 'company'
+                          : entry.kind
+                    }
+                  />
+                  {`${entry.label} ${entry.count}`}
+                </List.MarkerRunCount>
+              ))}
+            </List.PeekMore>
             <List.PeekAction aria-hidden="true">
               {expanded ? '접기' : '연표 펼치기'}
             </List.PeekAction>
@@ -1646,8 +1668,10 @@ function ReignMarkerGroupImpl({
     /* 대통령·총리만 모인 자리 — 축 표지를 왕관 대신 의사당으로, 강조색을 호박 대신 파랑으로.
        군주가 하나라도 섞이면 왕관(즉위가 그 자리의 주된 사건이다). */
     const civic = markers.every((marker) => marker.kind !== 'monarch')
-    /* 건국·멸망만 모인 자리 — 축 표지를 깃발로(색은 civic 파랑을 그대로 쓴다) */
+    /* 건국·멸망만 모인 자리 — 축 표지를 깃발로 */
     const statehoodOnly = markers.every(isStatehoodMarker)
+    /* 축 표지·날짜 색 — 종류가 하나면 그 색, 섞이면 중립(항목 동사가 각자 색을 말한다) */
+    const groupTone = markerGroupTone(markers)
     /* 기업 설립만 모인 자리 — 축 표지를 건물로 */
     const companyOnly = markers.every(isCompanyMarker)
     /*
@@ -1683,7 +1707,7 @@ function ReignMarkerGroupImpl({
       $beforeCentury={beforeCentury}
       data-reign-marker=""
     >
-      <List.ReignMarkerIcon aria-hidden="true" $civic={civic}>
+      <List.ReignMarkerIcon aria-hidden="true" $tone={groupTone}>
         {statehoodOnly ? (
           <FaFlag />
         ) : companyOnly ? (
@@ -1700,7 +1724,7 @@ function ReignMarkerGroupImpl({
         </List.ReignYearLabel>
       ) : (
         // 같은 자리 즉위들은 한 시점에 모인 것이라 첫 즉위일로 대표한다
-        <List.ReignMarkerDate $civic={civic}>
+        <List.ReignMarkerDate $tone={groupTone}>
           {formatAccessionDate(markers[0], contextYear)}
         </List.ReignMarkerDate>
       )}
@@ -1720,7 +1744,6 @@ function ReignMarkerGroupImpl({
           const company = isCompanyMarker(marker)
           const periodNoun =
             statehood || company ? '존속' : verb === '즉위' ? '재위' : '재임'
-          const markerCivic = marker.kind !== 'monarch'
           const length = reignLengthYears(marker)
           return (
             <List.ReignMarkerItem key={marker.id}>
@@ -1781,7 +1804,7 @@ function ReignMarkerGroupImpl({
               )}
               {/* '즉위'와 기간은 한 덩어리 — 좁은 폭에서 '즉위'만 줄 끝에 남지 않게 */}
               <List.ReignMarkerSpan>
-                <List.ReignMarkerLabel aria-hidden="true" $civic={markerCivic}>
+                <List.ReignMarkerLabel aria-hidden="true" $tone={markerTone(marker)}>
                   {verb}
                 </List.ReignMarkerLabel>
                 {canFilterPeriod ? (

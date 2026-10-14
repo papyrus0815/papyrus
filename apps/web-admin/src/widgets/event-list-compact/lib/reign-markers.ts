@@ -89,6 +89,38 @@ export const isStatehoodMarker = (marker: { kind: ReignMarkerKind }) =>
 export const isCompanyMarker = (marker: { kind: ReignMarkerKind }) =>
   marker.kind === 'companyFounding'
 
+/** 표지 종류 → 색 계열. 즉위 호박 · 취임 파랑 · 건국 초록 · 멸망 장미 · 기업 설립 청록 */
+export type MarkerToneKey = 'royal' | 'civic' | 'founding' | 'dissolution' | 'company'
+
+export function markerTone(marker: { kind: ReignMarkerKind }): MarkerToneKey {
+  switch (marker.kind) {
+    case 'monarch':
+      return 'royal'
+    case 'headOfState':
+    case 'headOfGovernment':
+      return 'civic'
+    case 'founding':
+      return 'founding'
+    case 'dissolution':
+      return 'dissolution'
+    case 'companyFounding':
+      return 'company'
+  }
+}
+
+/**
+ * 한 자리(말풍선)의 축 표지·날짜 색. 한 종류면 그 색, 즉위·취임만 섞이면 호박(즉위가
+ * 그 자리의 주된 사건), 그 밖에 섞이면 중립 — 색은 항목마다 동사가 따로 말한다.
+ */
+export function markerGroupTone(
+  markers: ReadonlyArray<{ kind: ReignMarkerKind }>,
+): MarkerToneKey | 'mixed' {
+  const tones = new Set(markers.map(markerTone))
+  if (tones.size === 1) return [...tones][0]
+  if ([...tones].every((tone) => tone === 'royal' || tone === 'civic')) return 'royal'
+  return 'mixed'
+}
+
 /** 사람이 아닌 실체(나라·기업)가 주어인 표지 — 초상·연임·주류 나라 셈에서 빠진다 */
 export const isEntityMarker = (marker: { kind: ReignMarkerKind }) =>
   isStatehoodMarker(marker) || isCompanyMarker(marker)

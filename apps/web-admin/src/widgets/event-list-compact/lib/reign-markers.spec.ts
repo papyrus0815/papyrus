@@ -17,6 +17,7 @@ import {
   koreanRegnalFromPerson,
   countMarkerKinds,
   isEntityMarker,
+  markerGroupTone,
   toCompanyFoundingMarkers,
 } from './reign-markers'
 
@@ -579,5 +580,16 @@ describe('toCompanyFoundingMarkers', () => {
     expect(countMarkerKinds(markers)).toEqual([
       { kind: 'companyFounding', label: '기업 설립', count: 1 },
     ])
+  })
+})
+
+describe('markerGroupTone', () => {
+  it('한 종류면 그 색, 즉위·취임만 섞이면 호박, 그 밖에 섞이면 중립', () => {
+    expect(markerGroupTone([{ kind: 'founding' }])).toBe('founding')
+    expect(markerGroupTone([{ kind: 'dissolution' }, { kind: 'dissolution' }])).toBe('dissolution')
+    expect(markerGroupTone([{ kind: 'companyFounding' }])).toBe('company')
+    expect(markerGroupTone([{ kind: 'headOfState' }, { kind: 'headOfGovernment' }])).toBe('civic')
+    expect(markerGroupTone([{ kind: 'monarch' }, { kind: 'headOfState' }])).toBe('royal')
+    expect(markerGroupTone([{ kind: 'founding' }, { kind: 'dissolution' }])).toBe('mixed')
   })
 })
