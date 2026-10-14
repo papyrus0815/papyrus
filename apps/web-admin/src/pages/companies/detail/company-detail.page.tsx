@@ -1,4 +1,12 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import {
   FiArrowLeft,
@@ -8,7 +16,7 @@ import {
   FiTrash2,
 } from 'react-icons/fi'
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import type { UpdateCompanyInput } from '@/shared/api/company'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
@@ -157,7 +165,54 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
     [navigate],
   )
 
-  const [activeGroup, setActiveGroup] = useState<GroupId>('overview')
+  /*
+   * 탭은 URL(?tab=)이 정본 — 새로고침·뒤로가기·링크 공유 때 보던 탭이 유지된다(검토 F7).
+   * replace라 탭을 오갈 때마다 기록이 쌓여 '뒤로'가 탭을 하나씩 되감는 일은 없다. 개요는 파라미터 없음.
+   */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeGroup: GroupId = GROUPS.some((group) => group.id === tabParam)
+    ? (tabParam as GroupId)
+    : 'overview'
+  const setActiveGroup = useCallback(
+    (next: GroupId) =>
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev)
+          if (next === 'overview') params.delete('tab')
+          else params.set('tab', next)
+          return params
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  )
+
+  /** ←/→/Home/End로 탭 이동(ARIA 탭 패턴, 검토 F8) — 포커스와 선택이 함께 옮겨 간다 */
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
+    if (!keys.includes(event.key)) return
+    event.preventDefault()
+    const current = GROUPS.findIndex((group) => group.id === activeGroup)
+    const last = GROUPS.length - 1
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? last
+          : event.key === 'ArrowLeft'
+            ? current === 0
+              ? last
+              : current - 1
+            : current === last
+              ? 0
+              : current + 1
+    const next = GROUPS[nextIndex].id
+    setActiveGroup(next)
+    tabsRef.current
+      ?.querySelector<HTMLButtonElement>(`#company-tab-${next}`)
+      ?.focus()
+  }
   /*
    * 탭 바는 sticky라 길게 내려 읽다가 탭을 바꾸면 새 패널의 *중간*이 보인다.
    * 탭이 붙어 있는 상태(앵커가 탭 위로 지나감)일 때만 앵커로 되감아 패널을 처음부터 보여 준다 —
@@ -339,7 +394,10 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                 <dd>
                   {country ? (
                     <>
-                      {country.name}
+                      {/* 현대·역사 국가 모두 같은 국가 상세 경로로 열린다(검토 F9) */}
+                      <S.FactAnchor to={pathKeys.countryDetail(country.id)}>
+                        {country.name}
+                      </S.FactAnchor>
                       {!company.country && <S.FactNote>역사 국가</S.FactNote>}
                     </>
                   ) : (
@@ -400,7 +458,12 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
           </S.Hero>
 
           <div ref={tabsAnchorRef} />
-          <S.TabBar ref={tabsRef} role="tablist" aria-label="기업 정보 보기">
+          <S.TabBar
+            ref={tabsRef}
+            role="tablist"
+            aria-label="기업 정보 보기"
+            onKeyDown={handleTabKeyDown}
+          >
             {GROUPS.map((group) => {
               const count = groupCounts[group.id]
               return (
@@ -412,6 +475,8 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                   aria-controls={`company-panel-${group.id}`}
                   $active={activeGroup === group.id}
                   aria-selected={activeGroup === group.id}
+                  // 탭 목록 전체가 Tab 정지점 하나 — 나머지는 방향키로
+                  tabIndex={activeGroup === group.id ? 0 : -1}
                   title={group.hint}
                   onClick={() => setActiveGroup(group.id)}
                 >

@@ -1,6 +1,10 @@
 /**
  * 기업 목록 — 사건 목록(`/events`)의 지면 문법을 따른다.
  *
+ * - **존속 타임라인**: 국가별로 묶고, 행마다 공통 연도 축 위에 존속 막대를 그린다.
+ *   이름만 줄 세운 표는 '나열'로만 읽혔다 — 축이 있으면 누가 먼저 섰고 얼마나 버텼는지가
+ *   행끼리 비교된다(국가·창립자·본사 열은 묶음 머리글·이름 아래 메타 줄로 흡수).
+ *
  * - 제목은 시각적으로 숨긴다(좌측 내비의 활성 탭과 같은 말). 대신 좌측 강조 막대 + 한 줄 집계.
  * - 데이터가 1순위: KPI 카드 4장·리스트/테이블 보기 토글·페이지네이션을 걷어내고
  *   **조밀한 열 표 하나**로 전부 보여 준다. 정렬은 열 머리글 클릭(aria-sort).
@@ -42,7 +46,7 @@ import {
 
 const COMPANIES_QUERY_KEY = ['companies', 'all'] as const
 
-type SortKey = 'name' | 'country' | 'founded' | 'founder' | 'city'
+type SortKey = 'name' | 'founded'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' }
 
 /** 기본 정렬 — 역사 기록이니 오래된 것이 위(국가 대시보드 기업 섹션과 같은 규약) */
@@ -73,33 +77,112 @@ const periodLabel = (company: Company): string | null => {
   return `${start ?? '?'} – ${end ?? '?'}`
 }
 
-const sortValue = (company: Company, key: SortKey): string | number | null => {
-  switch (key) {
-    case 'name':
-      return company.name
-    case 'country':
-      return countryName(company)
-    case 'founded':
-      // BC 안전 숫자 키 — raw ISO 문자열 비교는 음수연도를 사전식으로 오정렬.
-      return dateSortKey(company.foundedAt)
-    case 'founder':
-      return company.founder?.name ?? null
-    case 'city':
-      return company.headquartersCity?.name ?? null
-  }
+const sortValue = (company: Company, key: SortKey): string | number | null =>
+  // 설립: BC 안전 숫자 키 — raw ISO 문자열 비교는 음수연도를 사전식으로 오정렬.
+  key === 'name' ? company.name : dateSortKey(company.foundedAt)
+
+const SORT_LABEL: Record<SortKey, string> = { name: '기업', founded: '존속' }
+
+/* ── 존속 축 ── */
+
+const startYearOf = (company: Company) => parseIsoDateParts(company.foundedAt)?.year ?? null
+const endYearOf = (company: Company) => parseIsoDateParts(company.dissolvedAt)?.year ?? null
+
+/** 눈금 간격 후보 — 축이 4~6칸이 되는 가장 촘촘한 값을 고른다 */
+const TICK_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000]
+
+type Axis = { from: number; to: number; ticks: number[] }
+
+/**
+ * 공통 연도 축 — 가장 오래된 설립 연도(조금 앞)부터 올해까지.
+ * 필터와 무관하게 **등록 전체**로 잡는다: 검색할 때마다 축이 늘었다 줄면 막대 길이를 비교할 수 없다.
+ */
+const buildAxis = (companies: Company[], currentYear: number): Axis | null => {
+  const starts = companies.map(startYearOf).filter((year): year is number => year != null)
+  if (starts.length === 0) return null
+  const earliest = Math.min(...starts)
+  const span = Math.max(currentYear - earliest, 1)
+  const step = TICK_STEPS.find((candidate) => span / candidate <= 5) ?? 1000
+  // 맨 오래된 막대가 축 왼끝에 달라붙지 않게 4%쯤 앞에서 시작해 눈금에 맞춘다
+  const from = Math.floor((earliest - span * 0.04) / step) * step
+  const ticks: number[] = []
+  // '현재' 라벨과 겹치지 않게 마지막 눈금은 올해에서 반 칸 이상 떨어진 것까지만
+  for (let tick = from; tick <= currentYear - step * 0.5; tick += step) ticks.push(tick)
+  return { from, to: currentYear, ticks }
 }
 
-/*
- * '상태' 열은 없앴다 — 실데이터가 전부 '활동 중'이라 행마다 같은 초록 점이 반복될 뿐이었다.
- * 상태는 존속 열이 대신 말한다: 활동 중은 '– 현재 / N년째', 그 밖(해산·합병…)만 색 점 + 라벨.
+const axisPercent = (axis: Axis, year: number) =>
+  Math.min(100, Math.max(0, ((year - axis.from) / (axis.to - axis.from)) * 100))
+
+const axisYearLabel = (year: number) => (year < 0 ? `BC ${Math.abs(year)}` : String(year))
+
+/* ── 국가 묶음 ── */
+
+type CountryGroup = {
+  key: string
+  label: string
+  historical: boolean
+  earliest: number | null
+  companies: Company[]
+}
+
+const NO_COUNTRY = '__none__'
+
+/**
+ * 행을 국가별로 묶는다 — 묶음 안 순서는 들어온 정렬 그대로.
+ * 묶음 순서는 가장 이른 설립 연도순(역사 기록이니 오래된 쪽이 위), 국가 미상은 맨 뒤.
  */
-const COLUMNS: { key: SortKey; label: string; hideBelow?: number }[] = [
-  { key: 'name', label: '기업' },
-  { key: 'country', label: '국가', hideBelow: 640 },
-  { key: 'founded', label: '존속' },
-  { key: 'founder', label: '창립자', hideBelow: 960 },
-  { key: 'city', label: '본사', hideBelow: 1120 },
-]
+const groupByCountry = (companies: Company[]): CountryGroup[] => {
+  const groups = new Map<string, CountryGroup>()
+  for (const company of companies) {
+    const country = company.country ?? company.historicalCountry
+    const key = country?.id ?? NO_COUNTRY
+    let group = groups.get(key)
+    if (!group) {
+      group = {
+        key,
+        label: country?.name ?? '국가 미상',
+        historical: !company.country && !!company.historicalCountry,
+        earliest: null,
+        companies: [],
+      }
+      groups.set(key, group)
+    }
+    group.companies.push(company)
+    const start = startYearOf(company)
+    if (start != null && (group.earliest == null || start < group.earliest)) group.earliest = start
+  }
+  return [...groups.values()].sort((left, right) => {
+    if (left.key === NO_COUNTRY) return 1
+    if (right.key === NO_COUNTRY) return -1
+    if (left.earliest == null) return 1
+    if (right.earliest == null) return -1
+    return left.earliest - right.earliest || left.label.localeCompare(right.label, 'ko')
+  })
+}
+
+/** 존속 막대 — 설립에서 해산(또는 올해)까지. 끝을 모르면 짧은 점선 꼬리만. */
+const LifespanBar: React.FC<{ company: Company; axis: Axis; tone: string; ongoing: boolean }> = ({
+  company,
+  axis,
+  tone,
+  ongoing,
+}) => {
+  const start = startYearOf(company)
+  if (start == null) return <TrackNote>설립 미상</TrackNote>
+  const end = endYearOf(company) ?? (ongoing ? axis.to : null)
+  const left = axisPercent(axis, start)
+  if (end == null) {
+    return <Bar $tone={tone} $kind="unknown" style={{ left: `${left}%`, width: '6%' }} />
+  }
+  return (
+    <Bar
+      $tone={tone}
+      $kind={ongoing ? 'ongoing' : 'ended'}
+      style={{ left: `${left}%`, width: `${Math.max(axisPercent(axis, end) - left, 0)}%` }}
+    />
+  )
+}
 
 /** 로고 — 로드 실패 시 이니셜로 폴백(깨진 이미지 박스 방지). */
 const CompanyMark: React.FC<{ company: Company }> = ({ company }) => {
@@ -193,6 +276,10 @@ export const CompaniesListPage: React.FC = () => {
     })
   }, [list, search, statusFilter, sort])
 
+  const currentYear = new Date().getFullYear()
+  const axis = useMemo(() => buildAxis(list, currentYear), [list, currentYear])
+  const groups = useMemo(() => groupByCountry(rows), [rows])
+
   const isFiltered = !!search.trim() || statusFilter !== 'ALL'
   /** 상태가 한 가지뿐이면 필터는 '전체'와 같은 집합만 낸다 — 세그먼트를 숨긴다 */
   const statusKinds = COMPANY_STATUS_ORDER.filter((status) => statusCounts[status] > 0).length
@@ -251,11 +338,17 @@ export const CompaniesListPage: React.FC = () => {
               <Skeleton $w={`${50 + ((index * 23) % 35)}%`} $h="10px" />
             </SkeletonStack>
           </NameCell>
-          {COLUMNS.slice(1).map((column) => (
-            <Cell key={column.key} $hideBelow={column.hideBelow}>
-              <Skeleton $w="60%" $h="11px" />
-            </Cell>
-          ))}
+          <TrackCell>
+            <Skeleton
+              $h="6px"
+              $r="3px"
+              style={{ marginLeft: `${20 + ((index * 29) % 50)}%` }}
+              $w={`${20 + ((index * 13) % 25)}%`}
+            />
+          </TrackCell>
+          <Cell>
+            <Skeleton $w="70%" $h="11px" />
+          </Cell>
         </Row>
       ))
     }
@@ -295,13 +388,14 @@ export const CompaniesListPage: React.FC = () => {
         </EmptyState>
       )
     }
-    return rows.map((company) => {
+    const renderRow = (company: Company) => {
       const meta = company.status ? COMPANY_STATUS_META[company.status] : null
       const detailPath = pathKeys.companies.detail(company.id)
       const period = periodLabel(company)
       const lifespan = companyLifespanLabel(company)
+      const ongoing = isOngoing(company)
       // 활동 중은 '– 현재'가 이미 말한다 — 그 밖의 상태만 색 점으로 드러낸다
-      const showStatus = !!meta && !isOngoing(company)
+      const showStatus = !!meta && !ongoing
       // 개요는 리치텍스트(HTML)가 정본 — 목록은 평문 한 줄로(태그가 그대로 보이던 결함, 검토 F1)
       const summary = richTextToPlainText(company.description)
       const subName = [company.shortName, company.localName]
@@ -325,14 +419,39 @@ export const CompaniesListPage: React.FC = () => {
                 {subName && <SubName>{subName}</SubName>}
               </NameLine>
               {summary && <Description title={summary}>{summary}</Description>}
+              {(company.founder || company.headquartersCity) && (
+                <MetaLine>
+                  {company.founder && (
+                    <span>
+                      창립{' '}
+                      <PlainLink to={pathKeys.personsTimelineDetail(company.founder.id)}>
+                        {company.founder.name}
+                      </PlainLink>
+                    </span>
+                  )}
+                  {company.headquartersCity && (
+                    <span>본사 {company.headquartersCity.name}</span>
+                  )}
+                </MetaLine>
+              )}
             </NameText>
           </NameCell>
-          <Cell role="cell" $hideBelow={640}>
-            {company.country?.name ?? company.historicalCountry?.name ?? <Muted>—</Muted>}
-            {!company.country && company.historicalCountry && (
-              <SubValue as="div">역사 국가</SubValue>
+          <TrackCell role="cell" aria-hidden>
+            {axis && (
+              <>
+                {axis.ticks.map((tick) => (
+                  <GridLine key={tick} style={{ left: `${axisPercent(axis, tick)}%` }} />
+                ))}
+                <NowLine />
+                <LifespanBar
+                  company={company}
+                  axis={axis}
+                  tone={showStatus && meta ? meta.tone : BRAND}
+                  ongoing={ongoing}
+                />
+              </>
             )}
-          </Cell>
+          </TrackCell>
           <Cell role="cell" $numeric>
             {period || showStatus ? (
               <Stack>
@@ -349,18 +468,6 @@ export const CompaniesListPage: React.FC = () => {
             ) : (
               <Muted>—</Muted>
             )}
-          </Cell>
-          <Cell role="cell" $hideBelow={960}>
-            {company.founder ? (
-              <PlainLink to={pathKeys.personsTimelineDetail(company.founder.id)}>
-                {company.founder.name}
-              </PlainLink>
-            ) : (
-              <Muted>—</Muted>
-            )}
-          </Cell>
-          <Cell role="cell" $hideBelow={1120}>
-            {company.headquartersCity?.name ?? <Muted>—</Muted>}
           </Cell>
           <ActionsCell role="cell">
             {company.websiteUrl && (
@@ -396,7 +503,20 @@ export const CompaniesListPage: React.FC = () => {
           </ActionsCell>
         </Row>
       )
-    })
+    }
+
+    return groups.map((group) => (
+      <div key={group.key} role="rowgroup" aria-label={group.label}>
+        <GroupHead role="row">
+          <GroupTitle role="cell">
+            {group.label}
+            <GroupCount>{group.companies.length}</GroupCount>
+            {group.historical && <GroupTag>역사 국가</GroupTag>}
+          </GroupTitle>
+        </GroupHead>
+        {group.companies.map(renderRow)}
+      </div>
+    ))
   }
 
   return (
@@ -489,24 +609,39 @@ export const CompaniesListPage: React.FC = () => {
       <TableWrap>
         <Table role="table" aria-label="기업 목록" aria-busy={isLoading}>
           <HeadRow role="row">
-            {COLUMNS.map((column) => {
-              const active = sort.key === column.key
+            {(['name', 'axis', 'founded'] as const).map((column) => {
+              if (column === 'axis') {
+                return (
+                  <AxisHead key="axis" role="columnheader" aria-label="존속 타임라인">
+                    {axis && (
+                      <>
+                        {axis.ticks.map((tick) => (
+                          <AxisLabel
+                            key={tick}
+                            aria-hidden
+                            style={{ left: `${axisPercent(axis, tick)}%` }}
+                          >
+                            {axisYearLabel(tick)}
+                          </AxisLabel>
+                        ))}
+                        <AxisNow aria-hidden>현재</AxisNow>
+                      </>
+                    )}
+                  </AxisHead>
+                )
+              }
+              const active = sort.key === column
               return (
                 <HeadCell
-                  key={column.key}
+                  key={column}
                   role="columnheader"
                   aria-sort={
                     active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
                   }
-                  $hideBelow={column.hideBelow}
-                  $first={column.key === 'name'}
+                  $first={column === 'name'}
                 >
-                  <SortBtn
-                    type="button"
-                    $active={active}
-                    onClick={() => toggleSort(column.key)}
-                  >
-                    {column.label}
+                  <SortBtn type="button" $active={active} onClick={() => toggleSort(column)}>
+                    {SORT_LABEL[column]}
                     {active &&
                       (sort.dir === 'asc' ? (
                         <FiArrowUp size={11} aria-hidden />
@@ -557,39 +692,32 @@ const focusRing = css`
 `
 
 /*
- * 열 사다리 — 이름 열이 남는 폭을 흡수하고 나머지는 고정. 좁아지면 뒤 열부터 접는다.
- * ⚠️ 접힌 셀은 display:none이라 자동 배치에서 빠진다 → 트랙 수도 **같은 임계에서 같이**
- *    줄여야 한다(0폭 트랙으로 남기면 다음 셀이 그 트랙으로 밀려 들어간다).
- *    임계는 COLUMNS[].hideBelow와 한 쌍이다.
+ * 세 트랙 — 이름 | 존속 축 | 기간 글자. 이름과 축이 남는 폭을 나눠 갖는다.
+ * 좁으면(≤720) 축을 접는다 — 축이 200px 아래로 내려가면 막대 길이 차이가 읽히지 않는다.
+ * ⚠️ 접힌 셀은 display:none이라 자동 배치에서 빠진다 → 트랙 수도 같은 임계에서 같이 줄인다.
  */
+const AXIS_HIDE_BELOW = 720
 const rowGrid = css`
   display: grid;
-  grid-template-columns:
-    minmax(0, 1fr) minmax(96px, 140px) 128px minmax(96px, 140px)
-    minmax(88px, 120px);
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 1.15fr) 120px;
   align-items: center;
-  column-gap: 20px;
+  column-gap: 24px;
 
-  @container companies (max-width: 1120px) {
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 140px) 128px minmax(96px, 140px);
-  }
-  @container companies (max-width: 960px) {
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 140px) 128px;
-  }
-  @container companies (max-width: 640px) {
+  @container companies (max-width: ${AXIS_HIDE_BELOW}px) {
     grid-template-columns: minmax(0, 1fr) 112px;
     column-gap: 12px;
   }
 `
 
-const hideBelow = (width?: number) =>
-  width
-    ? css`
-        @container companies (max-width: ${width}px) {
-          display: none;
-        }
-      `
-    : ''
+const hideNarrow = css`
+  @container companies (max-width: ${AXIS_HIDE_BELOW}px) {
+    display: none;
+  }
+`
+
+/* 축 격자선·'현재' 선 색 — 행 헤어라인보다 한 단 옅게 */
+const gridLineColor = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.06)'
 
 const Page = styled.div`
   /* 헤더 오프셋과 스크롤 컨테이너는 ContentLayout이 준다 */
@@ -874,12 +1002,46 @@ const HeadRow = styled.div`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
-const HeadCell = styled.div<{ $hideBelow?: number; $first?: boolean }>`
+const HeadCell = styled.div<{ $first?: boolean }>`
   min-width: 0;
   overflow: hidden;
   /* 이름 열 머리글은 로고 폭(32)+간격(12)만큼 들여 행의 글자 시작선에 맞춘다 */
   padding-left: ${({ $first }) => ($first ? '44px' : '0')};
-  ${({ $hideBelow }) => hideBelow($hideBelow)}
+`
+
+/* 축 머리글 — 눈금 연도를 행 격자선과 같은 x에 단다 */
+const AxisHead = styled.div`
+  position: relative;
+  align-self: stretch;
+  min-width: 0;
+  ${hideNarrow}
+`
+
+const axisLabelBase = css`
+  position: absolute;
+  bottom: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1;
+`
+
+const AxisLabel = styled.span`
+  ${axisLabelBase}
+  transform: translateX(-50%);
+  color: ${metaText};
+
+  /* 왼끝 눈금은 칸 밖으로 반쯤 나가지 않게 시작선 정렬 */
+  &:first-child {
+    transform: none;
+  }
+`
+
+const AxisNow = styled.span`
+  ${axisLabelBase}
+  right: 0;
+  color: ${BRAND};
 `
 
 const SortBtn = styled.button<{ $active: boolean }>`
@@ -920,7 +1082,7 @@ const Row = styled.div`
   }
 `
 
-const Cell = styled.div<{ $hideBelow?: number; $numeric?: boolean }>`
+const Cell = styled.div<{ $numeric?: boolean }>`
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -932,7 +1094,6 @@ const Cell = styled.div<{ $hideBelow?: number; $numeric?: boolean }>`
     css`
       font-variant-numeric: tabular-nums;
     `}
-  ${({ $hideBelow }) => hideBelow($hideBelow)}
 `
 
 const NameCell = styled.div`
@@ -1038,6 +1199,154 @@ const Stack = styled.span`
 const SubValue = styled.span`
   font-size: 11px;
   color: ${metaText};
+`
+
+/* 이름 아래 셋째 줄 — 창립자·본사(예전 독립 열) */
+const MetaLine = styled.span`
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: ${metaText};
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+`
+
+/* ── 국가 묶음 머리글 ── */
+
+const GroupHead = styled.div`
+  display: flex;
+  align-items: flex-end;
+  padding: 22px 8px 8px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const GroupTitle = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const GroupCount = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+`
+
+const GroupTag = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${metaText};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
+`
+
+/* ── 존속 축 칸 ── */
+
+/*
+ * 행 padding(8px)만큼 위아래로 늘려 격자선이 행 경계를 넘어 이어지게 한다 —
+ * 행마다 끊긴 짧은 선이면 축이 아니라 장식으로 읽힌다.
+ */
+const TrackCell = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+  margin: -8px 0;
+  ${hideNarrow}
+`
+
+const GridLine = styled.span`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: ${gridLineColor};
+`
+
+const NowLine = styled.span`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  border-right: 1px dashed
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(96, 165, 250, 0.35)' : 'rgba(37, 99, 235, 0.3)')};
+`
+
+/*
+ * 존속 막대 — 설립 점(원) + 몸통.
+ * ongoing: 올해까지 차오르고 끝이 '현재' 선에 닿는다 / ended: 끝에 마감 눈금 /
+ * unknown: 해산했다는데 날짜가 없음 — 짧은 점선으로 '끝 미상'.
+ */
+const Bar = styled.span<{ $tone: string; $kind: 'ongoing' | 'ended' | 'unknown' }>`
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  min-width: 2px;
+  margin-top: -3px;
+  border-radius: 3px;
+  background: ${({ $tone, $kind }) =>
+    $kind === 'unknown'
+      ? `repeating-linear-gradient(90deg, ${$tone} 0 3px, transparent 3px 6px)`
+      : $kind === 'ended'
+        ? `${$tone}99`
+        : `linear-gradient(90deg, ${$tone}cc, ${$tone})`};
+  transition: filter 0.12s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: ${surface};
+    box-shadow: inset 0 0 0 2px ${({ $tone }) => $tone};
+  }
+
+  ${({ $kind, $tone }) =>
+    $kind === 'ended' &&
+    css`
+      &::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: -3px;
+        width: 2px;
+        height: 12px;
+        border-radius: 1px;
+        background: ${$tone};
+      }
+    `}
+
+  ${Row}:hover & {
+    filter: saturate(1.3) brightness(1.05);
+  }
+`
+
+const TrackNote = styled.span`
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: ${metaText};
+  opacity: 0.7;
 `
 
 /* 활동 중이 아닌 기업만 — 존속 열 둘째 줄에 색 점 + 라벨(+ 존속 햇수) */

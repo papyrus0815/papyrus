@@ -453,6 +453,23 @@ export const FactLink = styled.button`
   }
 `
 
+/** 사실 띠 값 링크(국가 → 국가 상세) — 본문색 그대로, hover에만 링크 신호 */
+export const FactAnchor = styled(Link)`
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted ${({ theme }) => hairlineStrong(theme.mode)};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-bottom-color: currentColor;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+`
+
 export const ExternalLink = styled.a`
   display: inline-flex;
   flex-shrink: 0;
