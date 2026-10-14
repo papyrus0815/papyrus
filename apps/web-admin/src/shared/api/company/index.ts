@@ -485,6 +485,25 @@ export const companyApi = {
     return Array.isArray(list) ? list : []
   },
 
+  /** 기업을 사건에 연결(역할 포함) — 사건 소유자만, 같은 역할 중복은 409 */
+  linkEvent: async (
+    id: string,
+    body: { eventId: string; role: CompanyEventRole; roleDescription?: string | null },
+  ): Promise<void> => {
+    await request<void>(`/companies/${encodeURIComponent(id)}/events`, {
+      method: 'POST',
+      body,
+    })
+  },
+
+  /** 기업–사건 연결 해제(사건·기업은 남는다) */
+  unlinkEvent: async (id: string, relationId: string): Promise<void> => {
+    await request<void>(
+      `/companies/${encodeURIComponent(id)}/events/${encodeURIComponent(relationId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
   create: async (data: CreateCompanyInput): Promise<Company> => {
     return request<Company>('/companies', { method: 'POST', body: data })
   },

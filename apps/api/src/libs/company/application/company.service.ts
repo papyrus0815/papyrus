@@ -11,6 +11,8 @@ import { NotificationService } from '../../notification/application/notification
 import { PointService } from '../../gamification/application/point.service'
 import { completenessBonus } from '../../gamification/domain/point.policy'
 import { getActorAccountId } from '../../shared/actor-context'
+import { assertEventOwnership } from '../../event/domain/event-ownership'
+import { COMPANY_EVENT_ROLES } from '../presentation/dto/company.response'
 import { dateYearRangePreview } from '../../shared/notification-preview.util'
 import {
   CompanyRepository,
@@ -112,6 +114,64 @@ export class CompanyService {
         },
       },
     })
+  }
+
+  /**
+   * 기업을 사건에 연결 — 기업 상세의 '관련 사건'에서 쓰는 쓰기 경로(검토 F6).
+   * 연결은 사건의 관계를 바꾸는 쓰기라 **사건 소유권**을 본다(사건 쪽 편집과 같은 규칙).
+   * 같은 사건·같은 역할 중복은 409, 다른 역할로는 두 번 걸 수 있다(인수자이자 수혜 등).
+   */
+  async linkEvent(
+    id: string,
+    userId: string | null | undefined,
+    input: { eventId?: string; role?: string; roleDescription?: string | null },
+  ) {
+    if (!input?.eventId) throw new BadRequestException('eventId가 필요합니다.')
+    const role = input.role as (typeof COMPANY_EVENT_ROLES)[number]
+    if (!COMPANY_EVENT_ROLES.includes(role)) {
+      throw new BadRequestException(
+        `역할은 ${COMPANY_EVENT_ROLES.join(', ')} 중 하나여야 합니다.`,
+      )
+    }
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+      select: { organizationId: true },
+    })
+    if (!company) throw new NotFoundException(`Company with ID ${id} not found`)
+    await assertEventOwnership(this.prisma, input.eventId, userId, {
+      action: '수정',
+      deleted: 'conflict',
+    })
+    const duplicate = await this.prisma.eventOrganizationRelation.findFirst({
+      where: { eventId: input.eventId, organizationId: company.organizationId, role },
+      select: { id: true },
+    })
+    if (duplicate) throw new ConflictException('이미 같은 역할로 연결된 사건입니다.')
+    await this.prisma.eventOrganizationRelation.create({
+      data: {
+        eventId: input.eventId,
+        organizationId: company.organizationId,
+        role,
+        roleDescription: input.roleDescription?.trim() || null,
+      },
+    })
+  }
+
+  /** 기업–사건 연결 해제 — 사건·기업은 남는다. 이 기업의 연결인지 확인한 뒤 지운다. */
+  async unlinkEvent(id: string, userId: string | null | undefined, relationId: string) {
+    const relation = await this.prisma.eventOrganizationRelation.findUnique({
+      where: { id: relationId },
+      select: { eventId: true, organization: { select: { company: { select: { id: true } } } } },
+    })
+    if (!relation || relation.organization.company?.id !== id) {
+      throw new NotFoundException('연결을 찾을 수 없습니다.')
+    }
+    // 정리하는 쓰기라 삭제된 사건에서도 풀 수 있게(allow)
+    await assertEventOwnership(this.prisma, relation.eventId, userId, {
+      action: '수정',
+      deleted: 'allow',
+    })
+    await this.prisma.eventOrganizationRelation.delete({ where: { id: relationId } })
   }
 
   async create(dto: CreateCompanyDto): Promise<CompanyWithRelations> {

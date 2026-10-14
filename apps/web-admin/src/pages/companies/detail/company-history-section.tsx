@@ -3,19 +3,23 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import {
   FiArrowDown,
   FiArrowUp,
+  FiArrowUpRight,
   FiPlus,
   FiSettings,
   FiTrash2,
 } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import type {
   CompanyHistoryInput,
   CompanyHistoryItem,
   CompanyHistoryType,
+  CompanyRelatedEvent,
   DatePrecision,
   UpdateCompanyInput,
 } from '@/shared/api/company'
+import { dateSortKey } from '@/shared/lib/iso-date'
 import {
   numToStr,
   readCompactKo,
@@ -23,6 +27,7 @@ import {
   strToNum,
 } from '@/shared/lib/number-format'
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
+import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   InlineDate,
@@ -34,6 +39,12 @@ import {
 
 import { ClampedBlock } from './company-clamped-block'
 import * as S from './company-detail.styles'
+import {
+  COMPANY_EVENT_ROLE_META,
+  isSameFact,
+  relatedEventDateLabel,
+  relatedEventIsoDate,
+} from './company-related-events.lib'
 
 /**
  * 종류 라벨 — `satisfies Record<CompanyHistoryType, string>`로 *모든* 종류의 라벨을 강제한다.
@@ -194,6 +205,33 @@ interface CompanyHistorySectionProps {
   histories: CompanyHistoryItem[]
   onPatch: (patch: UpdateCompanyInput) => void
   onPersonClick?: (personId: string) => void
+  /**
+   * 이 기업이 등장한 사건 — 타임라인에 읽기 전용 '사건' 노드로 섞는다(검토 F5).
+   * 연혁과 사건이 따로 놀아, 설립 사건(1983 등)이 연혁에 없고 같은 사실이 두 곳에 있었다.
+   */
+  relatedEvents?: CompanyRelatedEvent[]
+}
+
+/** 기본값을 렌더마다 새 배열로 만들면 메모가 매번 깨진다 — 고정 참조 */
+const NO_EVENTS: CompanyRelatedEvent[] = []
+
+/** 타임라인 한 칸 — 편집 가능한 연혁 행 또는 읽기 전용 사건 노드 */
+type TimelineEntry =
+  | { kind: 'row'; row: HistoryRow; idx: number }
+  | { kind: 'event'; event: CompanyRelatedEvent; date: string | null }
+
+/** 표지·정렬용 연도 문자열 — BC는 '기원전 44' */
+const entryYear = (entry: TimelineEntry): string | null => {
+  if (entry.kind === 'row') return entry.row.occurredAt ? entry.row.occurredAt.slice(0, 4) : null
+  const year = entry.event.startYear
+  if (year == null) return null
+  return year < 0 ? `기원전 ${-year}` : String(year)
+}
+
+/** 정렬 키 — 연혁(AD만)과 사건(BC 가능)을 한 축에 놓는다. 미상은 null */
+const entrySortKey = (entry: TimelineEntry): number | null => {
+  if (entry.kind === 'row') return dateSortKey(entry.row.occurredAt)
+  return dateSortKey(entry.date)
 }
 
 /**
@@ -207,6 +245,7 @@ export function CompanyHistorySection({
   histories,
   onPatch,
   onPersonClick,
+  relatedEvents = NO_EVENTS,
 }: CompanyHistorySectionProps) {
   const counterRef = useRef(0)
   const nextKey = useCallback(
@@ -333,7 +372,8 @@ export function CompanyHistorySection({
   /** 표시 순서 — 저장 순서(발생일 오름차순)는 그대로, 보기만 뒤집는다 */
   const [newestFirst, setNewestFirst] = useState(false)
   /** 종류 필터 — null이면 전체 */
-  const [typeFilter, setTypeFilter] = useState<CompanyHistoryType | null>(null)
+  /** 종류 필터 — 'EVENT'는 사건 노드만 */
+  const [typeFilter, setTypeFilter] = useState<CompanyHistoryType | 'EVENT' | null>(null)
 
   /* 자동노출 종류가 아닌 행에서 '당시 주가·시총' 패널을 수동으로 펼친 행들(클라이언트 key 기준).
      key는 syncRows가 보존하므로 편집 중에도 유지된다. */
@@ -357,28 +397,73 @@ export function CompanyHistorySection({
     }))
   }, [rows])
 
+  /*
+   * 연혁 행과 같은 사실인 사건은 노드를 따로 그리지 않고, 그 행에 '사건' 링크만 단다(이중 표기 방지).
+   * 남은 사건이 타임라인의 읽기 전용 노드가 된다.
+   */
+  const { linkedEventByRowKey, eventNodes } = useMemo(() => {
+    const linked = new Map<string, CompanyRelatedEvent>()
+    const used = new Set<string>()
+    for (const row of rows) {
+      const match = relatedEvents.find(
+        (event) => !used.has(event.relationId) && isSameFact(row, event),
+      )
+      if (match) {
+        linked.set(row.key, match)
+        used.add(match.relationId)
+      }
+    }
+    return {
+      linkedEventByRowKey: linked,
+      eventNodes: relatedEvents.filter((event) => !used.has(event.relationId)),
+    }
+  }, [rows, relatedEvents])
+
   // 고른 종류가 마지막 한 건까지 지워지면 필터를 풀어 빈 화면에 갇히지 않게 한다
   useEffect(() => {
-    if (typeFilter && !typeCounts.some((entry) => entry.type === typeFilter)) {
+    if (typeFilter === 'EVENT' ? eventNodes.length === 0 : typeFilter && !typeCounts.some((entry) => entry.type === typeFilter)) {
       setTypeFilter(null)
     }
-  }, [typeCounts, typeFilter])
+  }, [typeCounts, typeFilter, eventNodes.length])
 
   /**
-   * 화면에 그릴 목록 — 원본 인덱스(idx)를 들고 다닌다. 갱신·삭제·이동은 모두 원본 배열 기준이라
-   * 필터·역순과 무관하게 같은 행을 가리켜야 한다.
+   * 화면에 그릴 목록 — 연혁 행은 원본 인덱스(idx)를 들고 다닌다. 갱신·삭제·이동은 모두 원본 배열
+   * 기준이라 필터·역순과 무관하게 같은 행을 가리켜야 한다. 사건 노드는 날짜 자리에 끼워 넣되,
+   * 같은 날짜면 연혁 행 뒤에 둔다(같은 날 연혁 묶음이 사건 때문에 쪼개지지 않게).
    */
-  const view = useMemo(() => {
-    const indexed = rows.map((row, idx) => ({ row, idx }))
-    const filtered = typeFilter
-      ? indexed.filter((entry) => entry.row.type === typeFilter)
-      : indexed
-    if (!newestFirst) return filtered
+  const view = useMemo<TimelineEntry[]>(() => {
+    const rowEntries: TimelineEntry[] =
+      typeFilter === 'EVENT'
+        ? []
+        : rows
+            .map((row, idx) => ({ kind: 'row' as const, row, idx }))
+            .filter((entry) => !typeFilter || entry.row.type === typeFilter)
+    const eventEntries: TimelineEntry[] =
+      typeFilter && typeFilter !== 'EVENT'
+        ? []
+        : eventNodes.map((event) => ({
+            kind: 'event' as const,
+            event,
+            date: relatedEventIsoDate(event),
+          }))
+    // 연혁 행은 이미 발생일순(저장 규약) — 안정 정렬로 사건만 제자리에 끼운다
+    const merged = [...rowEntries, ...eventEntries]
+      .map((entry, order) => ({ entry, order, key: entrySortKey(entry) }))
+      .sort((left, right) => {
+        if (left.key == null && right.key == null) return left.order - right.order
+        if (left.key == null) return 1
+        if (right.key == null) return -1
+        if (left.key !== right.key) return left.key - right.key
+        if (left.entry.kind !== right.entry.kind) return left.entry.kind === 'row' ? -1 : 1
+        return left.order - right.order
+      })
+      .map((item) => item.entry)
+    if (!newestFirst) return merged
     // 최신순이어도 날짜 미상은 맨 뒤 — 뒤집으면 맨 앞으로 와 '가장 최근'처럼 보인다
-    const dated = filtered.filter((entry) => entry.row.occurredAt)
-    const undated = filtered.filter((entry) => !entry.row.occurredAt)
+    const dated = merged.filter((entry) => entrySortKey(entry) != null)
+    const undated = merged.filter((entry) => entrySortKey(entry) == null)
     return [...dated.reverse(), ...undated]
-  }, [rows, typeFilter, newestFirst])
+  }, [rows, eventNodes, typeFilter, newestFirst])
 
   /* 인접 동일 날짜 run — **화면 순서 기준**으로 같은 날짜가 연속한 구간을 한 날짜 노드로 묶는다.
      isStart=run 첫 행(날짜+N건 배지), isSub=후속 행(날짜 숨김·작은 틱). null 날짜는 병합하지 않는다. */
@@ -390,15 +475,22 @@ export function CompanyHistorySection({
       count: 1,
       members: [] as number[],
     }))
+    // 사건 노드는 묶지 않는다(키 null) — 같은 날 연혁 묶음은 연혁 행끼리만
+    const groupKeyAt = (position: number) => {
+      const entry = view[position]
+      return entry.kind === 'row' ? dateGroupKey(entry.row) : null
+    }
     let start = 0
     while (start < view.length) {
-      const key = dateGroupKey(view[start].row)
+      const key = groupKeyAt(start)
       let end = start + 1
       if (key != null) {
-        while (end < view.length && dateGroupKey(view[end].row) === key) end++
+        while (end < view.length && groupKeyAt(end) === key) end++
       }
       const count = end - start
-      const members = view.slice(start, end).map((entry) => entry.idx)
+      const members = view
+        .slice(start, end)
+        .flatMap((entry) => (entry.kind === 'row' ? [entry.idx] : []))
       info[start] = { isStart: true, isSub: false, isEnd: count === 1, count, members }
       for (let pos = start + 1; pos < end; pos++)
         info[pos] = { isStart: false, isSub: true, isEnd: pos === end - 1, count, members }
@@ -423,16 +515,18 @@ export function CompanyHistorySection({
     )
   }
 
-  /** 기간 요약 — '1983 – 2026' */
+  /** 기간 요약 — '1983 – 2026' (사건 노드 포함 — 설립 사건이 시작점이 된다) */
   const spanLabel = useMemo(() => {
-    const years = rows
-      .map((row) => (row.occurredAt ? Number(row.occurredAt.slice(0, 4)) : NaN))
-      .filter((year) => Number.isFinite(year))
+    const years = [
+      ...rows.map((row) => (row.occurredAt ? Number(row.occurredAt.slice(0, 4)) : NaN)),
+      ...eventNodes.map((event) => event.startYear ?? NaN),
+    ].filter((year) => Number.isFinite(year))
     if (years.length === 0) return null
+    const label = (year: number) => (year < 0 ? `기원전 ${-year}` : `${year}`)
     const first = Math.min(...years)
     const last = Math.max(...years)
-    return first === last ? `${first}` : `${first} – ${last}`
-  }, [rows])
+    return first === last ? label(first) : `${label(first)} – ${label(last)}`
+  }, [rows, eventNodes])
 
   /** 위쪽 '추가' — 새 행은 날짜가 없어 맨 아래에 붙으므로 그 자리로 데려간다 */
   const addButtonRef = useRef<HTMLButtonElement>(null)
@@ -451,9 +545,10 @@ export function CompanyHistorySection({
     <S.Section id="company-history">
       <S.SectionHeader>
         <S.SectionTitle>연혁</S.SectionTitle>
-        {rows.length > 0 && (
+        {(rows.length > 0 || eventNodes.length > 0) && (
           <S.SectionSubtitle>
-            {rows.length}건{spanLabel ? ` · ${spanLabel}` : ''}
+            {rows.length}건{eventNodes.length > 0 ? ` · 사건 ${eventNodes.length}` : ''}
+            {spanLabel ? ` · ${spanLabel}` : ''}
           </S.SectionSubtitle>
         )}
         <S.SectionActions>
@@ -474,7 +569,7 @@ export function CompanyHistorySection({
         </S.SectionActions>
       </S.SectionHeader>
 
-      {rows.length > 1 && (
+      {rows.length + eventNodes.length > 1 && (
         <Toolbar>
           <FilterChips role="group" aria-label="연혁 종류 필터">
             <FilterChip
@@ -483,7 +578,7 @@ export function CompanyHistorySection({
               aria-pressed={typeFilter === null}
               onClick={() => setTypeFilter(null)}
             >
-              전체 <ChipCount>{rows.length}</ChipCount>
+              전체 <ChipCount>{rows.length + eventNodes.length}</ChipCount>
             </FilterChip>
             {typeCounts.map(({ type, count }) => (
               <FilterChip
@@ -497,6 +592,18 @@ export function CompanyHistorySection({
                 {HISTORY_TYPE_LABELS[type]} <ChipCount>{count}</ChipCount>
               </FilterChip>
             ))}
+            {eventNodes.length > 0 && (
+              <FilterChip
+                type="button"
+                $active={typeFilter === 'EVENT'}
+                $hollow
+                aria-pressed={typeFilter === 'EVENT'}
+                onClick={() => setTypeFilter((prev) => (prev === 'EVENT' ? null : 'EVENT'))}
+                title="이 기업이 등장한 사건(개요의 관련 사건)"
+              >
+                사건 <ChipCount>{eventNodes.length}</ChipCount>
+              </FilterChip>
+            )}
           </FilterChips>
           <SortToggle
             type="button"
@@ -509,14 +616,27 @@ export function CompanyHistorySection({
         </Toolbar>
       )}
 
-      {rows.length === 0 ? (
+      {view.length === 0 ? (
         <S.EmptyState>
           아직 연혁이 없습니다. <strong>＋ 연혁 추가</strong>로 설립·합병·상장,
           그리고 제품 발표(예: Blackwell)와 당시 주가까지 시간순으로 적어보세요.
         </S.EmptyState>
       ) : (
         <Timeline>
-          {view.map(({ row, idx }, position) => {
+          {view.map((entry, position) => {
+            const year = entryYear(entry)
+            const prevYear = position > 0 ? (entryYear(view[position - 1]) ?? 'none') : undefined
+            if (entry.kind === 'event') {
+              const marker = (year ?? 'none') !== prevYear ? (year ?? '날짜 미상') : null
+              return (
+                <Fragment key={`event-${entry.event.relationId}`}>
+                  {marker && <YearMarker>{marker}</YearMarker>}
+                  <EventNode event={entry.event} />
+                </Fragment>
+              )
+            }
+            const { row, idx } = entry
+            const linkedEvent = linkedEventByRowKey.get(row.key)
             const showFinance =
               SHOW_FINANCE_TYPES.has(row.type) ||
               !!row.stockPrice ||
@@ -524,13 +644,6 @@ export function CompanyHistorySection({
               !!row.currency ||
               snapshotKeys.has(row.key)
             const run = runInfo[position]
-            const year = row.occurredAt ? row.occurredAt.slice(0, 4) : null
-            const prevYear =
-              position > 0 && view[position - 1].row.occurredAt
-                ? view[position - 1].row.occurredAt!.slice(0, 4)
-                : position > 0
-                  ? 'none'
-                  : undefined
             // 연도가 바뀌는 첫 행 앞에 연도 표지 — 같은 날 묶음 중간에는 생기지 않는다
             const yearMarker =
               !run.isSub && (year ?? 'none') !== prevYear ? (year ?? '날짜 미상') : null
@@ -652,6 +765,14 @@ export function CompanyHistorySection({
                         label="연혁 종류"
                       />
                     </TypeChip>
+                    {linkedEvent && (
+                      <EventLinkChip
+                        to={pathKeys.events.detail(linkedEvent.eventId)}
+                        title={`같은 사실의 사건: ${linkedEvent.title}`}
+                      >
+                        사건 <FiArrowUpRight aria-hidden />
+                      </EventLinkChip>
+                    )}
                     {!showFinance && (
                       <RevealOnRow>
                         <S.SnapshotAddBtn
@@ -743,6 +864,27 @@ export function CompanyHistorySection({
 }
 
 /**
+ * 타임라인의 사건 노드 — 읽기 전용. 속이 빈 고리(역할 색)로 연혁 행(채운 점)과 구별하고,
+ * 제목은 사건 상세로 가는 링크다. 연결·해제는 개요의 '관련 사건'에서 한다.
+ */
+function EventNode({ event }: { event: CompanyRelatedEvent }) {
+  const meta = COMPANY_EVENT_ROLE_META[event.role] ?? COMPANY_EVENT_ROLE_META.OTHER
+  return (
+    <TLItem $tone={meta.tone} $hollow>
+      <TLDate>{relatedEventDateLabel(event) ?? '날짜 미상'}</TLDate>
+      <EventNodeKicker>
+        사건 · <span style={{ color: meta.tone }}>{meta.label}</span>
+        {event.categoryName ? ` · ${event.categoryName}` : ''}
+      </EventNodeKicker>
+      <EventNodeTitle to={pathKeys.events.detail(event.eventId)}>
+        {event.title} <FiArrowUpRight aria-hidden />
+      </EventNodeTitle>
+      {event.roleDescription && <EventNodeNote>{event.roleDescription}</EventNodeNote>}
+    </TLItem>
+  )
+}
+
+/**
  * server 응답과 로컬 rows를 매핑 — 핵심은 child 컴포넌트 키 보존(InlineText/
  * InlineRichText의 자체 draft·커서·IME가 끊기지 않도록).
  */
@@ -820,7 +962,7 @@ const FilterChips = styled.div`
   min-width: 0;
 `
 
-const FilterChip = styled.button<{ $active: boolean; $tone?: string }>`
+const FilterChip = styled.button<{ $active: boolean; $tone?: string; $hollow?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -849,6 +991,19 @@ const FilterChip = styled.button<{ $active: boolean; $tone?: string }>`
         height: 7px;
         border-radius: 50%;
         background: ${$tone};
+      }
+    `}
+  /* 사건 칩 — 타임라인의 속 빈 고리 노드와 같은 모양 */
+  ${({ $hollow, theme }) =>
+    $hollow &&
+    css`
+      &::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        box-sizing: border-box;
+        border-radius: 50%;
+        border: 1.5px solid ${theme.colors.text.secondary};
       }
     `}
 
@@ -1011,7 +1166,7 @@ const Timeline = styled.div`
  * 타임라인 항목 — 좌측 세로선(::before) + 날짜 노드(::after, 종류 색), 콘텐츠는 우측 들여쓰기.
  * $sub: 같은 날짜 묶음의 후속 행(날짜 숨김) — 큰 점 대신 작은 틱 + 위 간격을 좁혀 그룹임을 시각화.
  */
-const TLItem = styled.div<{ $sub?: boolean; $tone: string }>`
+const TLItem = styled.div<{ $sub?: boolean; $tone: string; $hollow?: boolean }>`
   position: relative;
   padding-left: 26px;
   display: flex;
@@ -1031,9 +1186,81 @@ const TLItem = styled.div<{ $sub?: boolean; $tone: string }>`
     width: ${({ $sub }) => ($sub ? '6px' : '10px')};
     height: ${({ $sub }) => ($sub ? '6px' : '10px')};
     border-radius: 50%;
-    background: ${({ $tone }) => $tone};
+    box-sizing: border-box;
+    background: ${({ $tone, $hollow, theme }) =>
+      $hollow ? theme.colors.background.primary : $tone};
+    border: ${({ $tone, $hollow }) => ($hollow ? `2px solid ${$tone}` : '0')};
     box-shadow: ${({ theme, $sub }) =>
       $sub ? 'none' : `0 0 0 3px ${theme.colors.background.primary}`};
+  }
+`
+
+/** 사건 노드 머리 — '사건 · 설립 · 경제' */
+const EventNodeKicker = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EventNodeTitle = styled(Link)`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: none;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    svg {
+      color: currentColor;
+    }
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+`
+
+const EventNodeNote = styled.span`
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 연혁 행에 붙는 '같은 사실의 사건' 링크 */
+const EventLinkChip = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: currentColor;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
   }
 `
 

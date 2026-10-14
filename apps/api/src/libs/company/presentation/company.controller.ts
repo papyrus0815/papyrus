@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Put,
+  Request,
   UseGuards,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
@@ -93,6 +94,28 @@ export class CompanyController {
               (item.startDay ?? 0)
         return key(left) - key(right)
       })
+  }
+
+  /** 기업을 사건에 연결(역할 포함) — 사건 소유자만, 같은 역할 중복 409 */
+  @Post(':id/events')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async linkEvent(
+    @Param('id') id: string,
+    @Body() body: { eventId?: string; role?: string; roleDescription?: string | null },
+    @Request() req?: { user?: { id?: string; sub?: string } },
+  ): Promise<void> {
+    await this.companyService.linkEvent(id, req?.user?.id ?? req?.user?.sub, body)
+  }
+
+  /** 기업–사건 연결 해제 */
+  @Delete(':id/events/:relationId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async unlinkEvent(
+    @Param('id') id: string,
+    @Param('relationId') relationId: string,
+    @Request() req?: { user?: { id?: string; sub?: string } },
+  ): Promise<void> {
+    await this.companyService.unlinkEvent(id, req?.user?.id ?? req?.user?.sub, relationId)
   }
 
   /** ID로 기업 조회 (시설·연혁·카테고리 포함) */

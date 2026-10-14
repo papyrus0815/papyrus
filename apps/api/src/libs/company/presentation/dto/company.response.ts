@@ -318,6 +318,19 @@ export interface CompanyDetailResponseDto extends CompanyResponseDto {
 }
 
 /** 사건에서 기업(=Organization)이 맡은 역할 — Prisma enum EventOrganizationRole과 동기화 */
+export const COMPANY_EVENT_ROLES = [
+  'PRINCIPAL',
+  'FOUNDED',
+  'DISSOLVED',
+  'ACQUIRER',
+  'ACQUIRED',
+  'PARTICIPANT',
+  'CONTRACTOR',
+  'BENEFICIARY',
+  'VICTIM',
+  'OTHER',
+] as const
+
 export type CompanyEventRoleValue =
   | 'PRINCIPAL'
   | 'FOUNDED'

@@ -8,47 +8,38 @@
  *   예전엔 사건 상세에서만 보였고 기업에서는 닿을 길이 없었다.
  * - 최근 연혁: 사업 탭의 연혁 중 최신 3건 — 탭을 열지 않고도 근황을 본다.
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
-import { FiArrowRight, FiFlag } from 'react-icons/fi'
+import { useQueryClient } from '@tanstack/react-query'
+import { FiArrowRight, FiFlag, FiLink, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import type {
-  CompanyEventRole,
-  CompanyHistoryItem,
-  CompanyRelatedEvent,
+import {
+  type CompanyEventRole,
+  type CompanyHistoryItem,
+  type CompanyRelatedEvent,
+  companyApi,
 } from '@/shared/api/company'
 import { dateSortKey, formatDateWithPrecision } from '@/shared/lib/iso-date'
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import {
+  EventPickerModal,
+  type EventPickerSelection,
+} from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { InlineRichText } from '@/shared/ui/inline-edit'
+import { notify } from '@/shared/ui/toast'
 
 import * as S from './company-detail.styles'
 import { HISTORY_TYPE_LABELS } from './company-history-section'
-
-const ROLE_META: Record<CompanyEventRole, { label: string; tone: string }> = {
-  FOUNDED: { label: '설립', tone: '#16a34a' },
-  PRINCIPAL: { label: '주체', tone: '#2563eb' },
-  ACQUIRER: { label: '인수', tone: '#7c3aed' },
-  ACQUIRED: { label: '피인수', tone: '#9333ea' },
-  PARTICIPANT: { label: '참여', tone: '#0891b2' },
-  CONTRACTOR: { label: '시공', tone: '#0d9488' },
-  BENEFICIARY: { label: '수혜', tone: '#65a30d' },
-  VICTIM: { label: '피해', tone: '#dc2626' },
-  DISSOLVED: { label: '해산', tone: '#64748b' },
-  OTHER: { label: '기타', tone: '#64748b' },
-}
-
-/** 부호 연도·월·일 → '1989년 8월 8일' / '기원전 44년' */
-export function relatedEventDateLabel(event: CompanyRelatedEvent): string | null {
-  if (event.startYear == null) return null
-  const year =
-    event.startYear < 0 ? `기원전 ${-event.startYear}년` : `${event.startYear}년`
-  if (event.startMonth == null) return year
-  if (event.startDay == null) return `${year} ${event.startMonth}월`
-  return `${year} ${event.startMonth}월 ${event.startDay}일`
-}
+import {
+  COMPANY_EVENT_ROLE_META,
+  COMPANY_EVENT_ROLE_ORDER,
+  relatedEventDateLabel,
+} from './company-related-events.lib'
+import { companyKeys } from './use-company-detail'
 
 /* ───────────────────────── 설립 배경 ───────────────────────── */
 
@@ -107,18 +98,77 @@ export function CompanyFoundingSection({
 /* ───────────────────────── 관련 사건 ───────────────────────── */
 
 interface RelatedEventsProps {
+  companyId: string
   events: CompanyRelatedEvent[] | undefined
   isLoading: boolean
   isError: boolean
   onRetry: () => void
 }
 
+/**
+ * 관련 사건 — 보기 + 기업 쪽에서 직접 연결·해제(검토 F6).
+ * 예전엔 사건 상세의 '관련 조직'으로 가야만 걸 수 있었고, 빈 상태 안내가 다른 화면으로 내보냈다.
+ * 흐름: '사건 연결' → 사건 검색(공용 EventPickerModal) → 이 자리에서 역할·설명 고르고 확정.
+ */
 export function CompanyRelatedEventsSection({
+  companyId,
   events,
   isLoading,
   isError,
   onRetry,
 }: RelatedEventsProps) {
+  const queryClient = useQueryClient()
+  const [pickerOpen, setPickerOpen] = useState(false)
+  /** 고른 뒤 역할을 정하는 중인 사건 */
+  const [pending, setPending] = useState<EventPickerSelection | null>(null)
+  const [role, setRole] = useState<CompanyEventRole>('PRINCIPAL')
+  const [roleDescription, setRoleDescription] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: companyKeys.events(companyId) })
+
+  const resetPending = () => {
+    setPending(null)
+    setRole('PRINCIPAL')
+    setRoleDescription('')
+  }
+
+  const handleLink = async () => {
+    if (!pending || busy) return
+    setBusy(true)
+    try {
+      await companyApi.linkEvent(companyId, {
+        eventId: pending.id,
+        role,
+        roleDescription: roleDescription.trim() || null,
+      })
+      notify.success(`'${pending.title}'에 연결했습니다.`)
+      resetPending()
+      await refresh()
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '연결에 실패했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleUnlink = async (event: CompanyRelatedEvent) => {
+    const ok = await confirm({
+      title: '연결 해제',
+      message: `'${event.title}'과(와)의 연결을 풉니다. 사건과 기업은 그대로 남습니다.`,
+      confirmLabel: '해제',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await companyApi.unlinkEvent(companyId, event.relationId)
+      await refresh()
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '해제에 실패했습니다.')
+    }
+  }
+
   return (
     <S.Section id="company-related-events">
       <S.SectionHeader>
@@ -126,7 +176,52 @@ export function CompanyRelatedEventsSection({
         {events && events.length > 0 && (
           <S.SectionSubtitle>{events.length}건</S.SectionSubtitle>
         )}
+        <S.SectionActions>
+          <S.ManageToggle type="button" onClick={() => setPickerOpen(true)}>
+            <FiLink /> 사건 연결
+          </S.ManageToggle>
+        </S.SectionActions>
       </S.SectionHeader>
+
+      {pending && (
+        <LinkPanel aria-label="사건 연결 — 역할 선택">
+          <LinkTarget>
+            <LinkKicker>연결할 사건</LinkKicker>
+            <strong>{pending.title}</strong>
+          </LinkTarget>
+          <RoleChips role="radiogroup" aria-label="이 기업의 역할">
+            {COMPANY_EVENT_ROLE_ORDER.map((value) => (
+              <RoleChip
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={role === value}
+                $active={role === value}
+                $tone={COMPANY_EVENT_ROLE_META[value].tone}
+                onClick={() => setRole(value)}
+              >
+                {COMPANY_EVENT_ROLE_META[value].label}
+              </RoleChip>
+            ))}
+          </RoleChips>
+          <RoleInput
+            value={roleDescription}
+            onChange={(event) => setRoleDescription(event.target.value)}
+            placeholder="역할 설명 (선택) — 예: 가스관 운영 주체"
+            aria-label="역할 설명"
+            maxLength={200}
+          />
+          <LinkActions>
+            <S.ManageToggle type="button" onClick={resetPending} disabled={busy}>
+              취소
+            </S.ManageToggle>
+            <PrimarySmall type="button" onClick={() => void handleLink()} disabled={busy}>
+              {busy ? '연결 중…' : '연결'}
+            </PrimarySmall>
+          </LinkActions>
+        </LinkPanel>
+      )}
+
       {isLoading ? (
         <S.HelperText>사건을 불러오는 중…</S.HelperText>
       ) : isError ? (
@@ -137,17 +232,19 @@ export function CompanyRelatedEventsSection({
           </RetryButton>
         </S.EmptyState>
       ) : !events || events.length === 0 ? (
-        <S.EmptyState>
-          이 기업이 등장한 사건이 없습니다. 사건 상세의 <strong>관련 조직</strong>에서 이
-          기업을 연결하면 여기에 모입니다(설립·인수·참여 등 역할 포함).
-        </S.EmptyState>
+        !pending && (
+          <S.EmptyState>
+            이 기업이 등장한 사건이 없습니다. <strong>사건 연결</strong>로 설립·인수·참여
+            같은 역할과 함께 걸어 두면 여기와 연혁 탭에 모입니다.
+          </S.EmptyState>
+        )
       ) : (
         <EventList>
           {events.map((event) => {
-            const role = ROLE_META[event.role] ?? ROLE_META.OTHER
+            const meta = COMPANY_EVENT_ROLE_META[event.role] ?? COMPANY_EVENT_ROLE_META.OTHER
             const date = relatedEventDateLabel(event)
             return (
-              <li key={event.relationId}>
+              <EventItem key={event.relationId}>
                 <EventRow to={pathKeys.events.detail(event.eventId)}>
                   <EventDate>{date ?? '연도 미상'}</EventDate>
                   <EventMain>
@@ -156,13 +253,31 @@ export function CompanyRelatedEventsSection({
                       <EventRoleNote>{event.roleDescription}</EventRoleNote>
                     )}
                   </EventMain>
-                  <RoleBadge $tone={role.tone}>{role.label}</RoleBadge>
+                  <RoleBadge $tone={meta.tone}>{meta.label}</RoleBadge>
                 </EventRow>
-              </li>
+                <UnlinkButton
+                  type="button"
+                  onClick={() => void handleUnlink(event)}
+                  aria-label={`'${event.title}' 연결 해제`}
+                  title="연결 해제"
+                >
+                  <FiX aria-hidden />
+                </UnlinkButton>
+              </EventItem>
             )
           })}
         </EventList>
       )}
+
+      <EventPickerModal
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title="연결할 사건 찾기"
+        onSelect={(picked) => {
+          setPickerOpen(false)
+          setPending(picked)
+        }}
+      />
     </S.Section>
   )
 }
@@ -314,12 +429,18 @@ const EventList = styled.ul`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
 `
 
+/** 행 + 행 밖 해제 버튼 — 링크 안에 버튼을 넣지 않으려고 형제로 둔다 */
+const EventItem = styled.li`
+  position: relative;
+`
+
 const EventRow = styled(Link)`
   display: grid;
   grid-template-columns: 128px minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 4px 16px;
-  padding: 11px 6px;
+  /* 오른쪽 40px은 행 밖에 떠 있는 해제 버튼 자리 */
+  padding: 11px 40px 11px 6px;
   border-bottom: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
@@ -440,6 +561,153 @@ const ShowAllButton = styled.button`
   svg {
     width: 13px;
     height: 13px;
+  }
+`
+
+const UnlinkButton = styled.button`
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+
+  ${EventItem}:hover &,
+  &:focus-visible {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    opacity: 1;
+  }
+  &:hover {
+    color: ${({ theme }) => theme.colors.error ?? '#dc2626'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.12)' : 'rgba(239,68,68,0.06)'};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+  }
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`
+
+const LinkPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 760px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.primary}55;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.04)'};
+`
+
+const LinkTarget = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const LinkKicker = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RoleChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const RoleChip = styled.button<{ $active: boolean; $tone: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid
+    ${({ theme, $active, $tone }) => ($active ? $tone : theme.colors.border.default)};
+  background: ${({ $active, $tone }) => ($active ? `${$tone}1a` : 'transparent')};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${({ $tone }) => $tone};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+`
+
+const RoleInput = styled.input`
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const LinkActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+`
+
+const PrimarySmall = styled.button`
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: ${({ theme }) => theme.colors.primary};
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
   }
 `
 

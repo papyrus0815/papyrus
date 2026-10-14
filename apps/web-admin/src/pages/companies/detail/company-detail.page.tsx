@@ -506,6 +506,7 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                         foundingEvents={foundingEvents}
                       />
                       <CompanyRelatedEventsSection
+                        companyId={companyId}
                         events={relatedEvents.data}
                         isLoading={relatedEvents.isLoading}
                         isError={relatedEvents.isError}
@@ -533,6 +534,7 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                   <S.GridCell>
                     <CompanyHistorySection
                       histories={company.histories ?? []}
+                      relatedEvents={relatedEvents.data}
                       onPatch={onPatch}
                       onPersonClick={onPersonClick}
                     />
