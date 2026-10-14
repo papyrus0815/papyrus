@@ -1,6 +1,10 @@
 /**
  * 기업 목록 — 사건 목록(`/events`)의 지면 문법을 따른다.
  *
+ * - **존속 타임라인**: 국가별로 묶고, 행마다 공통 연도 축 위에 존속 막대를 그린다.
+ *   이름만 줄 세운 표는 '나열'로만 읽혔다 — 축이 있으면 누가 먼저 섰고 얼마나 버텼는지가
+ *   행끼리 비교된다(국가·창립자·본사 열은 묶음 머리글·이름 아래 메타 줄로 흡수).
+ *
  * - 제목은 시각적으로 숨긴다(좌측 내비의 활성 탭과 같은 말). 대신 좌측 강조 막대 + 한 줄 집계.
  * - 데이터가 1순위: KPI 카드 4장·리스트/테이블 보기 토글·페이지네이션을 걷어내고
  *   **조밀한 열 표 하나**로 전부 보여 준다. 정렬은 열 머리글 클릭(aria-sort).
@@ -42,7 +46,7 @@ import {
 
 const COMPANIES_QUERY_KEY = ['companies', 'all'] as const
 
-type SortKey = 'name' | 'country' | 'founded' | 'founder' | 'city'
+type SortKey = 'name' | 'founded'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' }
 
 /** 기본 정렬 — 역사 기록이니 오래된 것이 위(국가 대시보드 기업 섹션과 같은 규약) */
@@ -73,33 +77,172 @@ const periodLabel = (company: Company): string | null => {
   return `${start ?? '?'} – ${end ?? '?'}`
 }
 
-const sortValue = (company: Company, key: SortKey): string | number | null => {
-  switch (key) {
-    case 'name':
-      return company.name
-    case 'country':
-      return countryName(company)
-    case 'founded':
-      // BC 안전 숫자 키 — raw ISO 문자열 비교는 음수연도를 사전식으로 오정렬.
-      return dateSortKey(company.foundedAt)
-    case 'founder':
-      return company.founder?.name ?? null
-    case 'city':
-      return company.headquartersCity?.name ?? null
-  }
+const sortValue = (company: Company, key: SortKey): string | number | null =>
+  // 설립: BC 안전 숫자 키 — raw ISO 문자열 비교는 음수연도를 사전식으로 오정렬.
+  key === 'name' ? company.name : dateSortKey(company.foundedAt)
+
+const SORT_LABEL: Record<SortKey, string> = { name: '기업', founded: '존속' }
+
+/* ── 존속 축 ── */
+
+const startYearOf = (company: Company) => parseIsoDateParts(company.foundedAt)?.year ?? null
+const endYearOf = (company: Company) => parseIsoDateParts(company.dissolvedAt)?.year ?? null
+
+/** 눈금 간격 후보 — 축이 4~6칸이 되는 가장 촘촘한 값을 고른다 */
+const TICK_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000]
+
+type Axis = { from: number; to: number; ticks: number[] }
+
+/**
+ * 공통 연도 축 — 가장 오래된 설립 연도(조금 앞)부터 올해까지.
+ * 필터와 무관하게 **등록 전체**로 잡는다: 검색할 때마다 축이 늘었다 줄면 막대 길이를 비교할 수 없다.
+ */
+const buildAxis = (companies: Company[], currentYear: number): Axis | null => {
+  const starts = companies.map(startYearOf).filter((year): year is number => year != null)
+  if (starts.length === 0) return null
+  const earliest = Math.min(...starts)
+  const span = Math.max(currentYear - earliest, 1)
+  const step = TICK_STEPS.find((candidate) => span / candidate <= 5) ?? 1000
+  // 맨 오래된 막대가 축 왼끝에 달라붙지 않게 4%쯤 앞에서 시작해 눈금에 맞춘다
+  const from = Math.floor((earliest - span * 0.04) / step) * step
+  const ticks: number[] = []
+  // '현재' 라벨과 겹치지 않게 마지막 눈금은 올해에서 반 칸 이상 떨어진 것까지만
+  for (let tick = from; tick <= currentYear - step * 0.5; tick += step) ticks.push(tick)
+  return { from, to: currentYear, ticks }
 }
 
-/*
- * '상태' 열은 없앴다 — 실데이터가 전부 '활동 중'이라 행마다 같은 초록 점이 반복될 뿐이었다.
- * 상태는 존속 열이 대신 말한다: 활동 중은 '– 현재 / N년째', 그 밖(해산·합병…)만 색 점 + 라벨.
+const axisPercent = (axis: Axis, year: number) =>
+  Math.min(100, Math.max(0, ((year - axis.from) / (axis.to - axis.from)) * 100))
+
+const axisYearLabel = (year: number) => (year < 0 ? `BC ${Math.abs(year)}` : String(year))
+
+/* ── 국가 묶음 ── */
+
+type CountryGroup = {
+  key: string
+  label: string
+  historical: boolean
+  earliest: number | null
+  companies: Company[]
+}
+
+const NO_COUNTRY = '__none__'
+
+/* ── 필터(패싯) ── */
+
+type FacetKey = 'country' | 'century' | 'status'
+
+type Filters = {
+  needle: string
+  countries: ReadonlySet<string>
+  centuries: ReadonlySet<number>
+  statuses: ReadonlySet<CompanyStatus>
+}
+
+const countryKeyOf = (company: Company) =>
+  company.country?.id ?? company.historicalCountry?.id ?? NO_COUNTRY
+
+/** 설립 세기 — 1969→20, 1600→16, BC 44→-1. 설립 미상은 0. */
+const centuryOf = (company: Company): number => {
+  const year = startYearOf(company)
+  if (year == null) return 0
+  const century = Math.floor((Math.max(Math.abs(year), 1) - 1) / 100) + 1
+  return year > 0 ? century : -century
+}
+
+const centuryLabel = (century: number) =>
+  century === 0 ? '설립 미상' : century < 0 ? `BC ${-century}세기` : `${century}세기`
+
+/**
+ * 패싯 판정 — `skip`한 축은 보지 않는다.
+ * 칩 옆 숫자는 '그 축만 빼고 나머지 조건을 다 건 결과'라서, 누르면 정확히 그만큼 남는다.
  */
-const COLUMNS: { key: SortKey; label: string; hideBelow?: number }[] = [
-  { key: 'name', label: '기업' },
-  { key: 'country', label: '국가', hideBelow: 640 },
-  { key: 'founded', label: '존속' },
-  { key: 'founder', label: '창립자', hideBelow: 960 },
-  { key: 'city', label: '본사', hideBelow: 1120 },
-]
+const matchesFilters = (company: Company, filters: Filters, skip?: FacetKey) => {
+  if (skip !== 'country' && filters.countries.size && !filters.countries.has(countryKeyOf(company)))
+    return false
+  if (skip !== 'century' && filters.centuries.size && !filters.centuries.has(centuryOf(company)))
+    return false
+  if (
+    skip !== 'status' &&
+    filters.statuses.size &&
+    !(company.status && filters.statuses.has(company.status))
+  )
+    return false
+  if (!filters.needle) return true
+  return [
+    company.name,
+    company.shortName,
+    company.localName,
+    company.country?.name,
+    company.historicalCountry?.name,
+    company.founder?.name,
+  ].some((value) => value?.toLowerCase().includes(filters.needle))
+}
+
+type FacetOption<OptionKey> = { key: OptionKey; label: string; count: number; tone?: string }
+
+const toggleInSet = <OptionKey,>(set: ReadonlySet<OptionKey>, key: OptionKey): Set<OptionKey> => {
+  const next = new Set(set)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  return next
+}
+
+/**
+ * 행을 국가별로 묶는다 — 묶음 안 순서는 들어온 정렬 그대로.
+ * 묶음 순서는 가장 이른 설립 연도순(역사 기록이니 오래된 쪽이 위), 국가 미상은 맨 뒤.
+ */
+const groupByCountry = (companies: Company[]): CountryGroup[] => {
+  const groups = new Map<string, CountryGroup>()
+  for (const company of companies) {
+    const country = company.country ?? company.historicalCountry
+    const key = country?.id ?? NO_COUNTRY
+    let group = groups.get(key)
+    if (!group) {
+      group = {
+        key,
+        label: country?.name ?? '국가 미상',
+        historical: !company.country && !!company.historicalCountry,
+        earliest: null,
+        companies: [],
+      }
+      groups.set(key, group)
+    }
+    group.companies.push(company)
+    const start = startYearOf(company)
+    if (start != null && (group.earliest == null || start < group.earliest)) group.earliest = start
+  }
+  return [...groups.values()].sort((left, right) => {
+    if (left.key === NO_COUNTRY) return 1
+    if (right.key === NO_COUNTRY) return -1
+    if (left.earliest == null) return 1
+    if (right.earliest == null) return -1
+    return left.earliest - right.earliest || left.label.localeCompare(right.label, 'ko')
+  })
+}
+
+/** 존속 막대 — 설립에서 해산(또는 올해)까지. 끝을 모르면 짧은 점선 꼬리만. */
+const LifespanBar: React.FC<{ company: Company; axis: Axis; tone: string; ongoing: boolean }> = ({
+  company,
+  axis,
+  tone,
+  ongoing,
+}) => {
+  const start = startYearOf(company)
+  if (start == null) return <TrackNote>설립 미상</TrackNote>
+  const end = endYearOf(company) ?? (ongoing ? axis.to : null)
+  const left = axisPercent(axis, start)
+  if (end == null) {
+    return <Bar $tone={tone} $kind="unknown" style={{ left: `${left}%`, width: '6%' }} />
+  }
+  return (
+    <Bar
+      $tone={tone}
+      $kind={ongoing ? 'ongoing' : 'ended'}
+      style={{ left: `${left}%`, width: `${Math.max(axisPercent(axis, end) - left, 0)}%` }}
+    />
+  )
+}
 
 /** 로고 — 로드 실패 시 이니셜로 폴백(깨진 이미지 박스 방지). */
 const CompanyMark: React.FC<{ company: Company }> = ({ company }) => {
@@ -132,7 +275,9 @@ export const CompaniesListPage: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [query, setQuery] = useState('') // 입력값(즉시)
   const [search, setSearch] = useState('') // 디바운스된 검색어
-  const [statusFilter, setStatusFilter] = useState<CompanyStatus | 'ALL'>('ALL')
+  const [countryFilter, setCountryFilter] = useState<ReadonlySet<string>>(new Set())
+  const [centuryFilter, setCenturyFilter] = useState<ReadonlySet<number>>(new Set())
+  const [statusFilter, setStatusFilter] = useState<ReadonlySet<CompanyStatus>>(new Set())
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT)
   /** 등록·수정 모달 — null=닫힘, 'new'=신규, 그 외=수정 대상 id */
   const [modalTarget, setModalTarget] = useState<string | null>(null)
@@ -163,19 +308,62 @@ export const CompaniesListPage: React.FC = () => {
     [list],
   )
 
+  const filters = useMemo<Filters>(
+    () => ({
+      needle: search.trim().toLowerCase(),
+      countries: countryFilter,
+      centuries: centuryFilter,
+      statuses: statusFilter,
+    }),
+    [search, countryFilter, centuryFilter, statusFilter],
+  )
+
+  /** 축마다 '자기 축만 뺀' 조건으로 센 선택지 — 등록 전체에 있는 값은 0건이어도 남긴다(사라지면 칩이 튄다) */
+  const facets = useMemo(() => {
+    const countFor = <OptionKey,>(
+      facet: FacetKey,
+      keyOf: (company: Company) => OptionKey | null,
+    ): Map<OptionKey, number> => {
+      const counts = new Map<OptionKey, number>()
+      for (const company of list) {
+        const key = keyOf(company)
+        if (key == null) continue
+        if (!counts.has(key)) counts.set(key, 0)
+        if (matchesFilters(company, filters, facet)) counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+      return counts
+    }
+    const countryLabels = new Map<string, string>()
+    for (const company of list)
+      countryLabels.set(countryKeyOf(company), countryName(company) ?? '국가 미상')
+
+    const countries: FacetOption<string>[] = [...countFor('country', countryKeyOf)]
+      .map(([key, count]) => ({ key, label: countryLabels.get(key) ?? '국가 미상', count }))
+      .sort((left, right) => {
+        if (left.key === NO_COUNTRY) return 1
+        if (right.key === NO_COUNTRY) return -1
+        return left.label.localeCompare(right.label, 'ko')
+      })
+    // 세기는 연대순, 미상(0)은 맨 뒤
+    const centuries: FacetOption<number>[] = [...countFor('century', centuryOf)]
+      .map(([key, count]) => ({ key, label: centuryLabel(key), count }))
+      .sort((left, right) =>
+        left.key === 0 ? 1 : right.key === 0 ? -1 : left.key - right.key,
+      )
+    const statusCountMap = countFor('status', (company) => company.status)
+    const statuses: FacetOption<CompanyStatus>[] = COMPANY_STATUS_ORDER.filter((status) =>
+      statusCountMap.has(status),
+    ).map((status) => ({
+      key: status,
+      label: COMPANY_STATUS_META[status].label,
+      count: statusCountMap.get(status) ?? 0,
+      tone: COMPANY_STATUS_META[status].tone,
+    }))
+    return { countries, centuries, statuses }
+  }, [list, filters])
+
   const rows = useMemo(() => {
-    const needle = search.trim().toLowerCase()
-    const filtered = list.filter((company) => {
-      if (statusFilter !== 'ALL' && company.status !== statusFilter) return false
-      if (!needle) return true
-      return [
-        company.name,
-        company.shortName,
-        company.localName,
-        countryName(company),
-        company.founder?.name,
-      ].some((value) => value?.toLowerCase().includes(needle))
-    })
+    const filtered = list.filter((company) => matchesFilters(company, filters))
     const direction = sort.dir === 'asc' ? 1 : -1
     return filtered.sort((left, right) => {
       const leftValue = sortValue(left, sort.key)
@@ -191,17 +379,81 @@ export const CompaniesListPage: React.FC = () => {
           : String(leftValue).localeCompare(String(rightValue), 'ko')
       return compared * direction || left.name.localeCompare(right.name, 'ko')
     })
-  }, [list, search, statusFilter, sort])
+  }, [list, filters, sort])
 
-  const isFiltered = !!search.trim() || statusFilter !== 'ALL'
-  /** 상태가 한 가지뿐이면 필터는 '전체'와 같은 집합만 낸다 — 세그먼트를 숨긴다 */
-  const statusKinds = COMPANY_STATUS_ORDER.filter((status) => statusCounts[status] > 0).length
+  const currentYear = new Date().getFullYear()
+  const axis = useMemo(() => buildAxis(list, currentYear), [list, currentYear])
+  const groups = useMemo(() => groupByCountry(rows), [rows])
+
+  const facetCount = countryFilter.size + centuryFilter.size + statusFilter.size
+  const isFiltered = !!search.trim() || facetCount > 0
 
   const resetFilters = () => {
     setQuery('')
     setSearch('')
-    setStatusFilter('ALL')
+    setCountryFilter(new Set())
+    setCenturyFilter(new Set())
+    setStatusFilter(new Set())
   }
+
+  /** 걸린 조건을 칩으로 — 패널 아래 한 줄에서 하나씩 뗄 수 있다 */
+  const activeChips: { id: string; label: string; remove: () => void }[] = [
+    ...(search.trim()
+      ? [{ id: 'search', label: `“${search.trim()}”`, remove: () => setQuery('') }]
+      : []),
+    ...facets.countries
+      .filter((option) => countryFilter.has(option.key))
+      .map((option) => ({
+        id: `country-${option.key}`,
+        label: option.label,
+        remove: () => setCountryFilter((prev) => toggleInSet(prev, option.key)),
+      })),
+    ...facets.centuries
+      .filter((option) => centuryFilter.has(option.key))
+      .map((option) => ({
+        id: `century-${option.key}`,
+        label: option.label,
+        remove: () => setCenturyFilter((prev) => toggleInSet(prev, option.key)),
+      })),
+    ...facets.statuses
+      .filter((option) => statusFilter.has(option.key))
+      .map((option) => ({
+        id: `status-${option.key}`,
+        label: option.label,
+        remove: () => setStatusFilter((prev) => toggleInSet(prev, option.key)),
+      })),
+  ]
+
+  const renderFacet = <OptionKey extends string | number>(
+    label: string,
+    options: FacetOption<OptionKey>[],
+    selected: ReadonlySet<OptionKey>,
+    onToggle: (key: OptionKey) => void,
+  ) => (
+    <FacetRow role="group" aria-label={`${label} 필터`}>
+      <FacetLabel aria-hidden>{label}</FacetLabel>
+      <ChipList>
+        {options.map((option) => {
+          const active = selected.has(option.key)
+          return (
+            <Chip
+              key={String(option.key)}
+              type="button"
+              $active={active}
+              aria-pressed={active}
+              // 0건이어도 선택돼 있으면 풀 수 있어야 한다
+              disabled={!active && option.count === 0}
+              onClick={() => onToggle(option.key)}
+            >
+              {option.tone && <Dot $tone={option.tone} aria-hidden />}
+              {option.label}
+              <ChipCount>{option.count}</ChipCount>
+            </Chip>
+          )
+        })}
+      </ChipList>
+    </FacetRow>
+  )
 
   const handleDelete = async (company: Company) => {
     if (deletingId) return
@@ -228,18 +480,6 @@ export const CompaniesListPage: React.FC = () => {
     }
   }
 
-  const statusFilters: { key: CompanyStatus | 'ALL'; label: string; count: number }[] =
-    [
-      { key: 'ALL', label: '전체', count: list.length },
-      ...COMPANY_STATUS_ORDER.filter((status) => statusCounts[status] > 0).map(
-        (status) => ({
-          key: status,
-          label: COMPANY_STATUS_META[status].label,
-          count: statusCounts[status],
-        }),
-      ),
-    ]
-
   const renderBody = () => {
     if (isLoading) {
       return Array.from({ length: 8 }).map((_, index) => (
@@ -251,11 +491,17 @@ export const CompaniesListPage: React.FC = () => {
               <Skeleton $w={`${50 + ((index * 23) % 35)}%`} $h="10px" />
             </SkeletonStack>
           </NameCell>
-          {COLUMNS.slice(1).map((column) => (
-            <Cell key={column.key} $hideBelow={column.hideBelow}>
-              <Skeleton $w="60%" $h="11px" />
-            </Cell>
-          ))}
+          <TrackCell>
+            <Skeleton
+              $h="6px"
+              $r="3px"
+              style={{ marginLeft: `${20 + ((index * 29) % 50)}%` }}
+              $w={`${20 + ((index * 13) % 25)}%`}
+            />
+          </TrackCell>
+          <Cell>
+            <Skeleton $w="70%" $h="11px" />
+          </Cell>
         </Row>
       ))
     }
@@ -278,7 +524,7 @@ export const CompaniesListPage: React.FC = () => {
           </EmptyTitle>
           <EmptyDesc>
             {isFiltered
-              ? '검색어나 상태 필터를 바꿔 보세요.'
+              ? '검색어나 필터 조건을 바꿔 보세요.'
               : '첫 기업을 등록해 데이터베이스를 시작하세요.'}
           </EmptyDesc>
           {isFiltered ? (
@@ -295,13 +541,14 @@ export const CompaniesListPage: React.FC = () => {
         </EmptyState>
       )
     }
-    return rows.map((company) => {
+    const renderRow = (company: Company) => {
       const meta = company.status ? COMPANY_STATUS_META[company.status] : null
       const detailPath = pathKeys.companies.detail(company.id)
       const period = periodLabel(company)
       const lifespan = companyLifespanLabel(company)
+      const ongoing = isOngoing(company)
       // 활동 중은 '– 현재'가 이미 말한다 — 그 밖의 상태만 색 점으로 드러낸다
-      const showStatus = !!meta && !isOngoing(company)
+      const showStatus = !!meta && !ongoing
       // 개요는 리치텍스트(HTML)가 정본 — 목록은 평문 한 줄로(태그가 그대로 보이던 결함, 검토 F1)
       const summary = richTextToPlainText(company.description)
       const subName = [company.shortName, company.localName]
@@ -325,14 +572,39 @@ export const CompaniesListPage: React.FC = () => {
                 {subName && <SubName>{subName}</SubName>}
               </NameLine>
               {summary && <Description title={summary}>{summary}</Description>}
+              {(company.founder || company.headquartersCity) && (
+                <MetaLine>
+                  {company.founder && (
+                    <span>
+                      창립{' '}
+                      <PlainLink to={pathKeys.personsTimelineDetail(company.founder.id)}>
+                        {company.founder.name}
+                      </PlainLink>
+                    </span>
+                  )}
+                  {company.headquartersCity && (
+                    <span>본사 {company.headquartersCity.name}</span>
+                  )}
+                </MetaLine>
+              )}
             </NameText>
           </NameCell>
-          <Cell role="cell" $hideBelow={640}>
-            {company.country?.name ?? company.historicalCountry?.name ?? <Muted>—</Muted>}
-            {!company.country && company.historicalCountry && (
-              <SubValue as="div">역사 국가</SubValue>
+          <TrackCell role="cell" aria-hidden>
+            {axis && (
+              <>
+                {axis.ticks.map((tick) => (
+                  <GridLine key={tick} style={{ left: `${axisPercent(axis, tick)}%` }} />
+                ))}
+                <NowLine />
+                <LifespanBar
+                  company={company}
+                  axis={axis}
+                  tone={showStatus && meta ? meta.tone : BRAND}
+                  ongoing={ongoing}
+                />
+              </>
             )}
-          </Cell>
+          </TrackCell>
           <Cell role="cell" $numeric>
             {period || showStatus ? (
               <Stack>
@@ -349,18 +621,6 @@ export const CompaniesListPage: React.FC = () => {
             ) : (
               <Muted>—</Muted>
             )}
-          </Cell>
-          <Cell role="cell" $hideBelow={960}>
-            {company.founder ? (
-              <PlainLink to={pathKeys.personsTimelineDetail(company.founder.id)}>
-                {company.founder.name}
-              </PlainLink>
-            ) : (
-              <Muted>—</Muted>
-            )}
-          </Cell>
-          <Cell role="cell" $hideBelow={1120}>
-            {company.headquartersCity?.name ?? <Muted>—</Muted>}
           </Cell>
           <ActionsCell role="cell">
             {company.websiteUrl && (
@@ -396,7 +656,20 @@ export const CompaniesListPage: React.FC = () => {
           </ActionsCell>
         </Row>
       )
-    })
+    }
+
+    return groups.map((group) => (
+      <div key={group.key} role="rowgroup" aria-label={group.label}>
+        <GroupHead role="row">
+          <GroupTitle role="cell">
+            {group.label}
+            <GroupCount>{group.companies.length}</GroupCount>
+            {group.historical && <GroupTag>역사 국가</GroupTag>}
+          </GroupTitle>
+        </GroupHead>
+        {group.companies.map(renderRow)}
+      </div>
+    ))
   }
 
   return (
@@ -435,48 +708,109 @@ export const CompaniesListPage: React.FC = () => {
         </HeaderActions>
       </Header>
 
-      <Toolbar>
-        <SearchWrap>
-          <FiSearch size={14} className="lead" aria-hidden />
-          <SearchInput
-            type="search"
-            placeholder="기업명·약칭·원어명·국가·창립자"
-            aria-label="기업 검색"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && query) {
-                event.stopPropagation()
-                setQuery('')
+      <FilterPanel aria-label="기업 필터">
+        <PanelTop>
+          <SearchWrap>
+            <FiSearch size={15} className="lead" aria-hidden />
+            <SearchInput
+              type="search"
+              placeholder="기업명·약칭·원어명·국가·창립자로 검색"
+              aria-label="기업 검색"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && query) {
+                  event.stopPropagation()
+                  setQuery('')
+                }
+              }}
+            />
+            {query && (
+              <ClearBtn type="button" onClick={() => setQuery('')} aria-label="검색어 지우기">
+                <FiX size={13} />
+              </ClearBtn>
+            )}
+          </SearchWrap>
+          <SortGroup role="group" aria-label="정렬">
+            <FacetLabel aria-hidden>정렬</FacetLabel>
+            <Segment>
+              {(['founded', 'name'] as const).map((key) => (
+                <SegmentBtn
+                  key={key}
+                  type="button"
+                  $active={sort.key === key}
+                  aria-pressed={sort.key === key}
+                  onClick={() => setSort((prev) => ({ key, dir: prev.key === key ? prev.dir : 'asc' }))}
+                >
+                  {key === 'founded' ? '설립순' : '이름순'}
+                </SegmentBtn>
+              ))}
+            </Segment>
+            <DirBtn
+              type="button"
+              onClick={() => toggleSort(sort.key)}
+              aria-label={sort.dir === 'asc' ? '오름차순 — 눌러서 내림차순' : '내림차순 — 눌러서 오름차순'}
+              title={
+                sort.key === 'founded'
+                  ? sort.dir === 'asc'
+                    ? '오래된 순'
+                    : '최근 순'
+                  : sort.dir === 'asc'
+                    ? '가나다순'
+                    : '가나다 역순'
               }
-            }}
-          />
-          {query && (
-            <ClearBtn type="button" onClick={() => setQuery('')} aria-label="검색어 지우기">
-              <FiX size={13} />
-            </ClearBtn>
-          )}
-        </SearchWrap>
-        {(statusKinds > 1 || statusFilter !== 'ALL') && (
-          <Segment role="group" aria-label="상태 필터">
-            {statusFilters.map((filter) => (
-              <SegmentBtn
-                key={filter.key}
-                type="button"
-                $active={statusFilter === filter.key}
-                aria-pressed={statusFilter === filter.key}
-                onClick={() => setStatusFilter(filter.key)}
-              >
-                {filter.key !== 'ALL' && (
-                  <Dot $tone={COMPANY_STATUS_META[filter.key].tone} aria-hidden />
-                )}
-                {filter.label}
-                <SegmentCount>{filter.count}</SegmentCount>
-              </SegmentBtn>
-            ))}
-          </Segment>
+            >
+              {sort.dir === 'asc' ? <FiArrowUp size={14} /> : <FiArrowDown size={14} />}
+              {sort.key === 'founded'
+                ? sort.dir === 'asc'
+                  ? '오래된 순'
+                  : '최근 순'
+                : sort.dir === 'asc'
+                  ? 'ㄱ → ㅎ'
+                  : 'ㅎ → ㄱ'}
+            </DirBtn>
+          </SortGroup>
+        </PanelTop>
+
+        {!isLoading && !isError && list.length > 0 && (
+          <Facets>
+            {renderFacet('국가', facets.countries, countryFilter, (key) =>
+              setCountryFilter((prev) => toggleInSet(prev, key)),
+            )}
+            {renderFacet('시기', facets.centuries, centuryFilter, (key) =>
+              setCenturyFilter((prev) => toggleInSet(prev, key)),
+            )}
+            {renderFacet('상태', facets.statuses, statusFilter, (key) =>
+              setStatusFilter((prev) => toggleInSet(prev, key)),
+            )}
+          </Facets>
         )}
-      </Toolbar>
+
+        {isFiltered && (
+          <ActiveBar>
+            <ActiveSummary>
+              <strong>{rows.length.toLocaleString()}</strong>
+              <span>/ {list.length.toLocaleString()}개</span>
+            </ActiveSummary>
+            <ChipList>
+              {activeChips.map((chip) => (
+                <ActiveChip
+                  key={chip.id}
+                  type="button"
+                  onClick={chip.remove}
+                  aria-label={`${chip.label} 조건 해제`}
+                >
+                  {chip.label}
+                  <FiX size={12} aria-hidden />
+                </ActiveChip>
+              ))}
+            </ChipList>
+            <ResetLink type="button" onClick={resetFilters}>
+              모두 지우기
+            </ResetLink>
+          </ActiveBar>
+        )}
+      </FilterPanel>
 
       <VisuallyHidden role="status" aria-live="polite">
         {isLoading
@@ -489,24 +823,39 @@ export const CompaniesListPage: React.FC = () => {
       <TableWrap>
         <Table role="table" aria-label="기업 목록" aria-busy={isLoading}>
           <HeadRow role="row">
-            {COLUMNS.map((column) => {
-              const active = sort.key === column.key
+            {(['name', 'axis', 'founded'] as const).map((column) => {
+              if (column === 'axis') {
+                return (
+                  <AxisHead key="axis" role="columnheader" aria-label="존속 타임라인">
+                    {axis && (
+                      <>
+                        {axis.ticks.map((tick) => (
+                          <AxisLabel
+                            key={tick}
+                            aria-hidden
+                            style={{ left: `${axisPercent(axis, tick)}%` }}
+                          >
+                            {axisYearLabel(tick)}
+                          </AxisLabel>
+                        ))}
+                        <AxisNow aria-hidden>현재</AxisNow>
+                      </>
+                    )}
+                  </AxisHead>
+                )
+              }
+              const active = sort.key === column
               return (
                 <HeadCell
-                  key={column.key}
+                  key={column}
                   role="columnheader"
                   aria-sort={
                     active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'
                   }
-                  $hideBelow={column.hideBelow}
-                  $first={column.key === 'name'}
+                  $first={column === 'name'}
                 >
-                  <SortBtn
-                    type="button"
-                    $active={active}
-                    onClick={() => toggleSort(column.key)}
-                  >
-                    {column.label}
+                  <SortBtn type="button" $active={active} onClick={() => toggleSort(column)}>
+                    {SORT_LABEL[column]}
                     {active &&
                       (sort.dir === 'asc' ? (
                         <FiArrowUp size={11} aria-hidden />
@@ -557,39 +906,32 @@ const focusRing = css`
 `
 
 /*
- * 열 사다리 — 이름 열이 남는 폭을 흡수하고 나머지는 고정. 좁아지면 뒤 열부터 접는다.
- * ⚠️ 접힌 셀은 display:none이라 자동 배치에서 빠진다 → 트랙 수도 **같은 임계에서 같이**
- *    줄여야 한다(0폭 트랙으로 남기면 다음 셀이 그 트랙으로 밀려 들어간다).
- *    임계는 COLUMNS[].hideBelow와 한 쌍이다.
+ * 세 트랙 — 이름 | 존속 축 | 기간 글자. 이름과 축이 남는 폭을 나눠 갖는다.
+ * 좁으면(≤720) 축을 접는다 — 축이 200px 아래로 내려가면 막대 길이 차이가 읽히지 않는다.
+ * ⚠️ 접힌 셀은 display:none이라 자동 배치에서 빠진다 → 트랙 수도 같은 임계에서 같이 줄인다.
  */
+const AXIS_HIDE_BELOW = 720
 const rowGrid = css`
   display: grid;
-  grid-template-columns:
-    minmax(0, 1fr) minmax(96px, 140px) 128px minmax(96px, 140px)
-    minmax(88px, 120px);
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 1.15fr) 120px;
   align-items: center;
-  column-gap: 20px;
+  column-gap: 24px;
 
-  @container companies (max-width: 1120px) {
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 140px) 128px minmax(96px, 140px);
-  }
-  @container companies (max-width: 960px) {
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 140px) 128px;
-  }
-  @container companies (max-width: 640px) {
+  @container companies (max-width: ${AXIS_HIDE_BELOW}px) {
     grid-template-columns: minmax(0, 1fr) 112px;
     column-gap: 12px;
   }
 `
 
-const hideBelow = (width?: number) =>
-  width
-    ? css`
-        @container companies (max-width: ${width}px) {
-          display: none;
-        }
-      `
-    : ''
+const hideNarrow = css`
+  @container companies (max-width: ${AXIS_HIDE_BELOW}px) {
+    display: none;
+  }
+`
+
+/* 축 격자선·'현재' 선 색 — 행 헤어라인보다 한 단 옅게 */
+const gridLineColor = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.06)'
 
 const Page = styled.div`
   /* 헤더 오프셋과 스크롤 컨테이너는 ContentLayout이 준다 */
@@ -721,19 +1063,214 @@ const GhostBtn = styled.button`
   }
 `
 
-const Toolbar = styled.div`
+/*
+ * 필터 패널 — 검색·정렬 한 줄 + 패싯(국가·시기·상태) 칩 줄 + 걸린 조건 줄.
+ * 예전엔 검색창 하나와 (상태가 한 종류면 사라지는) 세그먼트뿐이라 걸러 볼 축이 없었다.
+ */
+const FilterPanel = styled.section`
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#fafbfc'};
+`
+
+const PanelTop = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px 20px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+`
+
+const Facets = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid ${rowHairline};
+`
+
+const FacetRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+`
+
+/* 축 이름 — 칩 높이(28) 가운데에 맞춘다 */
+const FacetLabel = styled.span`
+  flex-shrink: 0;
+  width: 32px;
+  line-height: 28px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: ${metaText};
+`
+
+const ChipList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+`
+
+const Chip = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+  ${focusRing}
+
+  ${({ $active, theme }) =>
+    $active
+      ? css`
+          border: 1px solid ${theme.mode === 'dark' ? 'rgba(96, 165, 250, 0.55)' : BRAND};
+          background: ${theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.22)' : '#eff6ff'};
+          color: ${theme.mode === 'dark' ? '#bfdbfe' : '#1d4ed8'};
+          font-weight: 600;
+        `
+      : css`
+          border: 1px solid ${theme.colors.border.default};
+          background: ${surface};
+          color: ${theme.colors.text.secondary};
+          &:hover:not(:disabled) {
+            border-color: ${theme.colors.border.medium};
+            color: ${theme.colors.text.primary};
+          }
+        `}
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+`
+
+const ChipCount = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+`
+
+const SortGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+`
+
+const DirBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${surface};
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  svg {
+    color: ${BRAND};
+  }
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
+  ${focusRing}
+`
+
+const ActiveBar = styled.div`
   display: flex;
   align-items: center;
   gap: 8px 12px;
   flex-wrap: wrap;
+  padding: 10px 14px;
+  border-top: 1px solid ${rowHairline};
+`
+
+const ActiveSummary = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+
+  strong {
+    font-size: 14px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ActiveChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px 0 9px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.22)' : '#eff6ff')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#bfdbfe' : '#1d4ed8')};
+
+  svg {
+    opacity: 0.7;
+  }
+  &:hover svg {
+    opacity: 1;
+  }
+  ${focusRing}
+`
+
+const ResetLink = styled.button`
+  margin-left: auto;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+  }
+  ${focusRing}
 `
 
 const SearchWrap = styled.div`
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1 1 240px;
-  max-width: 360px;
+  flex: 1 1 280px;
+  max-width: 520px;
 
   svg.lead {
     position: absolute;
@@ -745,16 +1282,14 @@ const SearchWrap = styled.div`
 
 const SearchInput = styled.input`
   width: 100%;
-  height: 34px;
+  height: 36px;
   box-sizing: border-box;
-  padding: 0 30px 0 30px;
+  padding: 0 30px 0 32px;
   border-radius: 8px;
   font-size: 13px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(203, 213, 225, 0.6)'};
+  /* 패널(옅은 회색) 위라 입력칸은 지면색으로 띄운다 */
+  background: ${surface};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   color: ${({ theme }) => theme.colors.text.primary};
   transition:
     border-color 0.15s,
@@ -837,13 +1372,6 @@ const SegmentBtn = styled.button<{ $active: boolean }>`
         `}
 `
 
-const SegmentCount = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.75;
-`
-
 const Dot = styled.span<{ $tone: string }>`
   width: 6px;
   height: 6px;
@@ -874,12 +1402,46 @@ const HeadRow = styled.div`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
-const HeadCell = styled.div<{ $hideBelow?: number; $first?: boolean }>`
+const HeadCell = styled.div<{ $first?: boolean }>`
   min-width: 0;
   overflow: hidden;
   /* 이름 열 머리글은 로고 폭(32)+간격(12)만큼 들여 행의 글자 시작선에 맞춘다 */
   padding-left: ${({ $first }) => ($first ? '44px' : '0')};
-  ${({ $hideBelow }) => hideBelow($hideBelow)}
+`
+
+/* 축 머리글 — 눈금 연도를 행 격자선과 같은 x에 단다 */
+const AxisHead = styled.div`
+  position: relative;
+  align-self: stretch;
+  min-width: 0;
+  ${hideNarrow}
+`
+
+const axisLabelBase = css`
+  position: absolute;
+  bottom: 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1;
+`
+
+const AxisLabel = styled.span`
+  ${axisLabelBase}
+  transform: translateX(-50%);
+  color: ${metaText};
+
+  /* 왼끝 눈금은 칸 밖으로 반쯤 나가지 않게 시작선 정렬 */
+  &:first-child {
+    transform: none;
+  }
+`
+
+const AxisNow = styled.span`
+  ${axisLabelBase}
+  right: 0;
+  color: ${BRAND};
 `
 
 const SortBtn = styled.button<{ $active: boolean }>`
@@ -920,7 +1482,7 @@ const Row = styled.div`
   }
 `
 
-const Cell = styled.div<{ $hideBelow?: number; $numeric?: boolean }>`
+const Cell = styled.div<{ $numeric?: boolean }>`
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -932,7 +1494,6 @@ const Cell = styled.div<{ $hideBelow?: number; $numeric?: boolean }>`
     css`
       font-variant-numeric: tabular-nums;
     `}
-  ${({ $hideBelow }) => hideBelow($hideBelow)}
 `
 
 const NameCell = styled.div`
@@ -1038,6 +1599,154 @@ const Stack = styled.span`
 const SubValue = styled.span`
   font-size: 11px;
   color: ${metaText};
+`
+
+/* 이름 아래 셋째 줄 — 창립자·본사(예전 독립 열) */
+const MetaLine = styled.span`
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: ${metaText};
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+`
+
+/* ── 국가 묶음 머리글 ── */
+
+const GroupHead = styled.div`
+  display: flex;
+  align-items: flex-end;
+  padding: 22px 8px 8px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const GroupTitle = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const GroupCount = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+`
+
+const GroupTag = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${metaText};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
+`
+
+/* ── 존속 축 칸 ── */
+
+/*
+ * 행 padding(8px)만큼 위아래로 늘려 격자선이 행 경계를 넘어 이어지게 한다 —
+ * 행마다 끊긴 짧은 선이면 축이 아니라 장식으로 읽힌다.
+ */
+const TrackCell = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+  margin: -8px 0;
+  ${hideNarrow}
+`
+
+const GridLine = styled.span`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: ${gridLineColor};
+`
+
+const NowLine = styled.span`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  border-right: 1px dashed
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(96, 165, 250, 0.35)' : 'rgba(37, 99, 235, 0.3)')};
+`
+
+/*
+ * 존속 막대 — 설립 점(원) + 몸통.
+ * ongoing: 올해까지 차오르고 끝이 '현재' 선에 닿는다 / ended: 끝에 마감 눈금 /
+ * unknown: 해산했다는데 날짜가 없음 — 짧은 점선으로 '끝 미상'.
+ */
+const Bar = styled.span<{ $tone: string; $kind: 'ongoing' | 'ended' | 'unknown' }>`
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  min-width: 2px;
+  margin-top: -3px;
+  border-radius: 3px;
+  background: ${({ $tone, $kind }) =>
+    $kind === 'unknown'
+      ? `repeating-linear-gradient(90deg, ${$tone} 0 3px, transparent 3px 6px)`
+      : $kind === 'ended'
+        ? `${$tone}99`
+        : `linear-gradient(90deg, ${$tone}cc, ${$tone})`};
+  transition: filter 0.12s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: ${surface};
+    box-shadow: inset 0 0 0 2px ${({ $tone }) => $tone};
+  }
+
+  ${({ $kind, $tone }) =>
+    $kind === 'ended' &&
+    css`
+      &::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: -3px;
+        width: 2px;
+        height: 12px;
+        border-radius: 1px;
+        background: ${$tone};
+      }
+    `}
+
+  ${Row}:hover & {
+    filter: saturate(1.3) brightness(1.05);
+  }
+`
+
+const TrackNote = styled.span`
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: ${metaText};
+  opacity: 0.7;
 `
 
 /* 활동 중이 아닌 기업만 — 존속 열 둘째 줄에 색 점 + 라벨(+ 존속 햇수) */
