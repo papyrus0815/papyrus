@@ -122,8 +122,25 @@ type CountryGroup = {
   key: string
   label: string
   historical: boolean
+  /** 묶음 색 — 이니셜·존속 막대·머리글 띠가 같은 색이라 '이 나라 기업'이 한눈에 묶인다 */
+  hue: string
   earliest: number | null
   companies: Company[]
+}
+
+/*
+ * 묶음 색 팔레트 — 빨강·주황 계열은 뺐다(해산·중단 상태색과 겹치면 막대 색이 거짓말을 한다).
+ * 해시로 고르면 나라가 몇 개 안 될 때도 색이 겹쳤다(7색에 3국인데 둘이 같은 초록) →
+ * 등록 전체의 국가를 id순으로 줄 세워 차례로 배정한다. 필터·정렬과 무관하게 같은 나라는 같은 색.
+ */
+const GROUP_HUES = ['#2563eb', '#0d9488', '#7c3aed', '#0284c7', '#059669', '#4f46e5', '#0891b2']
+const NEUTRAL_HUE = '#64748b'
+
+const buildHueMap = (companies: Company[]): Map<string, string> => {
+  const keys = [...new Set(companies.map(countryKeyOf))]
+    .filter((key) => key !== NO_COUNTRY)
+    .sort()
+  return new Map(keys.map((key, index) => [key, GROUP_HUES[index % GROUP_HUES.length]]))
 }
 
 const NO_COUNTRY = '__none__'
@@ -192,7 +209,10 @@ const toggleInSet = <OptionKey,>(set: ReadonlySet<OptionKey>, key: OptionKey): S
  * 행을 국가별로 묶는다 — 묶음 안 순서는 들어온 정렬 그대로.
  * 묶음 순서는 가장 이른 설립 연도순(역사 기록이니 오래된 쪽이 위), 국가 미상은 맨 뒤.
  */
-const groupByCountry = (companies: Company[]): CountryGroup[] => {
+const groupByCountry = (
+  companies: Company[],
+  hueMap: ReadonlyMap<string, string>,
+): CountryGroup[] => {
   const groups = new Map<string, CountryGroup>()
   for (const company of companies) {
     const country = company.country ?? company.historicalCountry
@@ -203,6 +223,7 @@ const groupByCountry = (companies: Company[]): CountryGroup[] => {
         key,
         label: country?.name ?? '국가 미상',
         historical: !company.country && !!company.historicalCountry,
+        hue: hueMap.get(key) ?? NEUTRAL_HUE,
         earliest: null,
         companies: [],
       }
@@ -221,6 +242,18 @@ const groupByCountry = (companies: Company[]): CountryGroup[] => {
   })
 }
 
+/** 묶음이 걸친 기간 — 가장 이른 설립부터 가장 늦은 끝(활동 중이면 올해)까지 */
+const groupSpan = (group: CountryGroup, currentYear: number) => {
+  if (group.earliest == null) return null
+  let latest = group.earliest
+  for (const company of group.companies) {
+    const end =
+      endYearOf(company) ?? (isOngoing(company) ? currentYear : startYearOf(company))
+    if (end != null && end > latest) latest = end
+  }
+  return { from: group.earliest, to: latest, ongoing: latest === currentYear }
+}
+
 /** 존속 막대 — 설립에서 해산(또는 올해)까지. 끝을 모르면 짧은 점선 꼬리만. */
 const LifespanBar: React.FC<{ company: Company; axis: Axis; tone: string; ongoing: boolean }> = ({
   company,
@@ -232,27 +265,41 @@ const LifespanBar: React.FC<{ company: Company; axis: Axis; tone: string; ongoin
   if (start == null) return <TrackNote>설립 미상</TrackNote>
   const end = endYearOf(company) ?? (ongoing ? axis.to : null)
   const left = axisPercent(axis, start)
+  // 연도 라벨은 행 hover·포커스 때만 — 늘 띄우면 오른쪽 기간 열과 같은 숫자가 두 번 보인다
+  const startLabel = <BarLabel $tone={tone}>{axisYearLabel(start)}</BarLabel>
   if (end == null) {
-    return <Bar $tone={tone} $kind="unknown" style={{ left: `${left}%`, width: '6%' }} />
+    return (
+      <Bar $tone={tone} $kind="unknown" style={{ left: `${left}%`, width: '6%' }}>
+        {startLabel}
+      </Bar>
+    )
   }
   return (
     <Bar
       $tone={tone}
       $kind={ongoing ? 'ongoing' : 'ended'}
       style={{ left: `${left}%`, width: `${Math.max(axisPercent(axis, end) - left, 0)}%` }}
-    />
+    >
+      {startLabel}
+      {/* 활동 중의 끝은 '현재' 선이 이미 말한다 */}
+      {!ongoing && (
+        <BarLabel $tone={tone} $end>
+          {axisYearLabel(end)}
+        </BarLabel>
+      )}
+    </Bar>
   )
 }
 
 /** 로고 — 로드 실패 시 이니셜로 폴백(깨진 이미지 박스 방지). */
-const CompanyMark: React.FC<{ company: Company }> = ({ company }) => {
+const CompanyMark: React.FC<{ company: Company; hue: string }> = ({ company, hue }) => {
   const src = getUploadImageUrl(company.logoUrl)
   const [broken, setBroken] = useState(false)
   // 이름에서 딴다 — 약칭은 '000660' 같은 종목코드라 이니셜로 쓰면 '0'이 된다
   const initial = (company.name.trim()[0] ?? '·').toUpperCase()
   const showLogo = !!src && !broken
   return (
-    <Mark $hasLogo={showLogo} aria-hidden>
+    <Mark $hasLogo={showLogo} $hue={hue} aria-hidden>
       {showLogo ? <img src={src} alt="" onError={() => setBroken(true)} /> : initial}
     </Mark>
   )
@@ -383,7 +430,25 @@ export const CompaniesListPage: React.FC = () => {
 
   const currentYear = new Date().getFullYear()
   const axis = useMemo(() => buildAxis(list, currentYear), [list, currentYear])
-  const groups = useMemo(() => groupByCountry(rows), [rows])
+  const hueMap = useMemo(() => buildHueMap(list), [list])
+  const groups = useMemo(() => groupByCountry(rows, hueMap), [rows, hueMap])
+
+  /** 머리글 한 줄 사실 — 지금 보이는 행 기준 가장 오래된 기업·평균 존속 햇수 */
+  const insight = useMemo(() => {
+    let oldest: { company: Company; year: number } | null = null
+    let totalYears = 0
+    let measured = 0
+    for (const company of rows) {
+      const start = startYearOf(company)
+      if (start == null) continue
+      if (!oldest || start < oldest.year) oldest = { company, year: start }
+      const end = endYearOf(company) ?? (isOngoing(company) ? currentYear : null)
+      if (end == null || end < start) continue
+      totalYears += end - start
+      measured += 1
+    }
+    return { oldest, averageYears: measured ? Math.round(totalYears / measured) : null }
+  }, [rows, currentYear])
 
   const facetCount = countryFilter.size + centuryFilter.size + statusFilter.size
   const isFiltered = !!search.trim() || facetCount > 0
@@ -541,7 +606,7 @@ export const CompaniesListPage: React.FC = () => {
         </EmptyState>
       )
     }
-    const renderRow = (company: Company) => {
+    const renderRow = (company: Company, hue: string) => {
       const meta = company.status ? COMPANY_STATUS_META[company.status] : null
       const detailPath = pathKeys.companies.detail(company.id)
       const period = periodLabel(company)
@@ -565,7 +630,7 @@ export const CompaniesListPage: React.FC = () => {
           }}
         >
           <NameCell role="cell">
-            <CompanyMark company={company} />
+            <CompanyMark company={company} hue={hue} />
             <NameText>
               <NameLine>
                 <NameLink to={detailPath}>{company.name}</NameLink>
@@ -592,14 +657,17 @@ export const CompaniesListPage: React.FC = () => {
           <TrackCell role="cell" aria-hidden>
             {axis && (
               <>
-                {axis.ticks.map((tick) => (
-                  <GridLine key={tick} style={{ left: `${axisPercent(axis, tick)}%` }} />
-                ))}
+                {/* 0% 선은 칸 경계와 겹쳐 열 구분선처럼 보인다 — 그리지 않는다 */}
+                {axis.ticks
+                  .filter((tick) => axisPercent(axis, tick) > 0.5)
+                  .map((tick) => (
+                    <GridLine key={tick} style={{ left: `${axisPercent(axis, tick)}%` }} />
+                  ))}
                 <NowLine />
                 <LifespanBar
                   company={company}
                   axis={axis}
-                  tone={showStatus && meta ? meta.tone : BRAND}
+                  tone={showStatus && meta ? meta.tone : hue}
                   ongoing={ongoing}
                 />
               </>
@@ -658,18 +726,38 @@ export const CompaniesListPage: React.FC = () => {
       )
     }
 
-    return groups.map((group) => (
-      <div key={group.key} role="rowgroup" aria-label={group.label}>
-        <GroupHead role="row">
-          <GroupTitle role="cell">
-            {group.label}
-            <GroupCount>{group.companies.length}</GroupCount>
-            {group.historical && <GroupTag>역사 국가</GroupTag>}
-          </GroupTitle>
-        </GroupHead>
-        {group.companies.map(renderRow)}
-      </div>
-    ))
+    return groups.map((group) => {
+      const span = groupSpan(group, currentYear)
+      return (
+        <div key={group.key} role="rowgroup" aria-label={group.label}>
+          <GroupHead role="row">
+            <GroupTitle role="cell">
+              <GroupSwatch $hue={group.hue} aria-hidden />
+              {group.label}
+              <GroupCount>{group.companies.length}</GroupCount>
+              {group.historical && <GroupTag>역사 국가</GroupTag>}
+            </GroupTitle>
+            {/* 이 나라 기업들이 걸친 기간 — 행 막대들의 그림자 띠 */}
+            <GroupSpanCell role="cell" aria-hidden>
+              {axis && span && (
+                <GroupBand
+                  $hue={group.hue}
+                  style={{
+                    left: `${axisPercent(axis, span.from)}%`,
+                    width: `${Math.max(axisPercent(axis, span.to) - axisPercent(axis, span.from), 0.5)}%`,
+                  }}
+                />
+              )}
+            </GroupSpanCell>
+            <GroupRange role="cell">
+              {span &&
+                `${axisYearLabel(span.from)} – ${span.ongoing ? '현재' : axisYearLabel(span.to)}`}
+            </GroupRange>
+          </GroupHead>
+          {group.companies.map((company) => renderRow(company, group.hue))}
+        </div>
+      )
+    })
   }
 
   return (
@@ -691,6 +779,17 @@ export const CompaniesListPage: React.FC = () => {
                 <StatsHint>
                   · 활동 중 {statusCounts.ACTIVE.toLocaleString()} · 국가{' '}
                   {countryCount.toLocaleString()}
+                </StatsHint>
+              )}
+              {insight.oldest && (
+                <StatsHint>
+                  · 가장 오래된 <em>{insight.oldest.company.name}</em>{' '}
+                  {axisYearLabel(insight.oldest.year)}
+                </StatsHint>
+              )}
+              {insight.averageYears != null && (
+                <StatsHint>
+                  · 평균 존속 <em>{insight.averageYears}년</em>
                 </StatsHint>
               )}
             </Stats>
@@ -1012,6 +1111,12 @@ const Stats = styled.span`
 
 const StatsHint = styled.span`
   margin-left: 4px;
+
+  em {
+    font-style: normal;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
 `
 
 const HeaderActions = styled.div`
@@ -1086,25 +1191,36 @@ const PanelTop = styled.div`
   padding: 12px 14px;
 `
 
+/*
+ * 패싯은 한 줄에 나란히 — 축마다 칩이 1~3개라 세로 3줄이면 패널 대부분이 빈 칸이었다.
+ * 축 사이는 세로 구분선, 좁으면 줄바꿈(줄 머리의 구분선은 왼쪽 여백만 남긴다).
+ */
 const Facets = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 0;
+  padding: 10px 14px;
   border-top: 1px solid ${rowHairline};
 `
 
 const FacetRow = styled.div`
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
+  padding: 0 18px;
+  border-left: 1px solid ${rowHairline};
+
+  &:first-child {
+    padding-left: 0;
+    border-left: none;
+  }
 `
 
 /* 축 이름 — 칩 높이(28) 가운데에 맞춘다 */
 const FacetLabel = styled.span`
   flex-shrink: 0;
-  width: 32px;
   line-height: 28px;
   font-size: 11.5px;
   font-weight: 600;
@@ -1468,12 +1584,16 @@ const SortBtn = styled.button<{ $active: boolean }>`
   ${focusRing}
 `
 
+/*
+ * 행 사이 가로줄은 없앤다 — 줄마다 칸막이가 있으면 '표에 줄 세운 목록'으로 읽혔다.
+ * 구분은 묶음 머리글 선 + 행을 관통하는 축 격자선이 맡고, 행은 hover 면으로만 드러난다.
+ */
 const Row = styled.div`
   ${rowGrid}
   position: relative;
   min-height: 56px;
   padding: 8px 8px;
-  border-bottom: 1px solid ${rowHairline};
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.12s;
 
@@ -1503,7 +1623,7 @@ const NameCell = styled.div`
   min-width: 0;
 `
 
-const Mark = styled.span<{ $hasLogo: boolean }>`
+const Mark = styled.span<{ $hasLogo: boolean; $hue: string }>`
   width: 32px;
   height: 32px;
   flex-shrink: 0;
@@ -1514,13 +1634,14 @@ const Mark = styled.span<{ $hasLogo: boolean }>`
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
-  background: ${({ $hasLogo, theme }) =>
+  /* 묶음 색 틴트 — 다크에선 색 글자가 지면에 묻혀서 글자는 밝게, 면을 진하게 */
+  color: ${({ $hue, theme }) => (theme.mode === 'dark' ? '#f4f4f5' : $hue)};
+  background: ${({ $hasLogo, $hue, theme }) =>
     $hasLogo
       ? theme.colors.background.tertiary
       : theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.2)'
-        : '#eef2ff'};
+        ? `${$hue}59`
+        : `${$hue}17`};
 
   img {
     width: 100%;
@@ -1619,10 +1740,42 @@ const MetaLine = styled.span`
 
 /* ── 국가 묶음 머리글 ── */
 
+const GroupSwatch = styled.span<{ $hue: string }>`
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: ${({ $hue }) => $hue};
+`
+
+const GroupSpanCell = styled.div`
+  position: relative;
+  align-self: center;
+  height: 10px;
+  min-width: 0;
+  ${hideNarrow}
+`
+
+const GroupBand = styled.span<{ $hue: string }>`
+  position: absolute;
+  top: 3px;
+  height: 4px;
+  border-radius: 2px;
+  background: ${({ $hue, theme }) => `${$hue}${theme.mode === 'dark' ? '73' : '40'}`};
+`
+
+const GroupRange = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: ${metaText};
+`
+
 const GroupHead = styled.div`
-  display: flex;
-  align-items: flex-end;
-  padding: 22px 8px 8px;
+  ${rowGrid}
+  align-items: end;
+  padding: 24px 8px 8px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
@@ -1736,6 +1889,39 @@ const Bar = styled.span<{ $tone: string; $kind: 'ongoing' | 'ended' | 'unknown' 
 
   ${Row}:hover & {
     filter: saturate(1.3) brightness(1.05);
+  }
+`
+
+/* 막대 끝 연도 — 설립 점 위·끝 눈금 위. 평소엔 숨기고 행 hover·포커스 때 띄운다 */
+const BarLabel = styled.span<{ $tone: string; $end?: boolean }>`
+  position: absolute;
+  bottom: 9px;
+  ${({ $end }) =>
+    $end
+      ? css`
+          right: 0;
+          transform: translateX(50%);
+        `
+      : css`
+          left: 0;
+          transform: translateX(-50%);
+        `}
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: ${({ $tone, theme }) => (theme.mode === 'dark' ? '#f4f4f5' : $tone)};
+  background: ${surface};
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+
+  ${Row}:hover &,
+  ${Row}:focus-within & {
+    opacity: 1;
   }
 `
 
