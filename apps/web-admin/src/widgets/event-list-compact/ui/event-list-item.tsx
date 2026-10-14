@@ -444,7 +444,9 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
    *
    * 규칙은 날짜 열과 **같은 문법**이다 — 연도는 그룹 머리글이 말하므로 같은 해면 월·일만,
    * 다른 해면 연도까지. 그래야 두 열이 한 범위의 양 끝으로 읽힌다.
-   *  - 종료 없음        → 빈칸(그 빈칸이 '종료 미상'이라는 사실이다. 지어내지 않는다)
+   *  - 종료 없음        → 옅은 '—'(2026-10-13). 빈칸이었으나, 같은 열의 '당일'과 나란히 서면
+   *                       '당일 종료'와 '종료 미상'이 화면에서 갈리지 않았다(팰컨 9 퇴장).
+   *                       미상은 16행(5%)뿐이라 토큰이 텍스처가 되지 않는다.
    *  - 시작과 같은 날   → '당일'. 날짜를 한 번 더 적는 것은 같은 말이고, 이건
    *                       '종료가 기록됐고 그날 끝났다'는 **다른 사실**이다(152행).
    *  - 연 정밀도        → 연도만. 월·일 sentinel(01-01)을 날짜로 내보내지 않는다.
@@ -693,10 +695,11 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         {/* 종료 — 날짜와 한 쌍. 값이 없으면 칸은 비어 있고, 그 빈칸이 '종료 미상'이다. */}
         <EndCell
           data-row-end=""
-          title={rowEndTitle}
+          title={rowEndTitle ?? (startParts ? '종료일 미상' : undefined)}
           data-sameday={rowEndLabel === '당일' ? 'true' : undefined}
+          data-unknown={!rowEndLabel && startParts ? 'true' : undefined}
         >
-          {rowEndLabel}
+          {rowEndLabel ?? (startParts ? '—' : null)}
         </EndCell>
         <CategoryLabel
           $text={soft.text}
@@ -938,11 +941,13 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
               <span aria-hidden="true">
                 {span.outside === 'after' ? (
                   <>
-                    {formatOutsideYear(span.year)} <OutsideArrow>›</OutsideArrow>
+                    {formatOutsideOffset(span.year, groupYear)}{' '}
+                    <OutsideArrow>›</OutsideArrow>
                   </>
                 ) : (
                   <>
-                    <OutsideArrow>‹</OutsideArrow> {formatOutsideYear(span.year)}
+                    <OutsideArrow>‹</OutsideArrow>{' '}
+                    {formatOutsideOffset(span.year, groupYear)}
                   </>
                 )}
               </span>
@@ -1570,7 +1575,7 @@ const TitleCell = styled.div`
   display: grid;
   grid-template-columns:
     [ind] min(calc(var(--row-indent) * var(--depth, 0)), 96px)
-    [disc] var(--row-disc-btn)
+    [disc] var(--row-disc-track)
     [text] minmax(0, 1fr);
   column-gap: 0;
   align-items: baseline;
@@ -1796,8 +1801,14 @@ const Disclosure = styled.button<{ $expanded: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  width: var(--row-disc-btn);
+  gap: 2px;
+  /* 트랙(--row-disc-track)은 버튼보다 넓다 — 버튼은 트랙 왼쪽에 붙고, 셰브론은 개수가 있어도
+     예전 자리(버튼 폭의 가운데)를 지킨다. 하위 가이드선이 그 중심 아래에 서기 때문이다. */
+  justify-self: start;
+  justify-content: flex-start;
+  min-width: var(--row-disc-btn);
+  width: auto;
+  padding-inline: calc((var(--row-disc-btn) - 11px) / 2) 3px;
   height: var(--row-disc-btn);
   /* 제목 줄(약 18px)보다 큰 버튼이 셀 높이를 키우지 않게 위아래로 넘치게 둔다
      (DiscSpacer 주석 참고 — 자식 있는 행만 제목이 뜨는 비대칭이 생긴다). */
@@ -1839,6 +1850,8 @@ const Disclosure = styled.button<{ $expanded: boolean }>`
        세로로 훑을 때 눈이 두 축을 오가야 하고, 제목이 쓸 수 있는 폭도 그만큼 준다. */
     order: 1;
     margin-block: 0;
+    /* 메타 줄 날짜 x가 행마다 흔들리지 않게 — 자식 없는 행의 스페이서와 같은 폭 */
+    min-width: var(--row-disc-track);
   }
   &:hover {
     background: rgba(37, 99, 235, 0.16);
@@ -1861,7 +1874,19 @@ const Disclosure = styled.button<{ $expanded: boolean }>`
  * 내용 고유폭이 버튼을 넘겼다. 스케일 안으로 들여보낸다(검토 VIS-8).
  */
 const DiscCount = styled.span`
-  font-size: var(--row-chip);
+  /* 숫자가 셰브론 버튼 오른쪽 끝에 맨 글자로 붙어 있어, 바로 뒤 제목과 6px 간격으로
+     '5 NSPM-2 서명'·'1 엔비디아 호퍼'처럼 **제목의 첫 낱말**로 읽혔다. 버튼 안 작은 알약으로
+     가둬 '셰브론의 부속'임을 형태로 말한다. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.08)'};
+  font-size: calc(var(--row-chip) - 1px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -1879,7 +1904,7 @@ const DiscCount = styled.span`
 const DiscSpacer = styled.span`
   grid-column: disc;
   align-self: center;
-  width: var(--row-disc-btn);
+  width: var(--row-disc-track);
   /* 높이는 주지 않는다 — 폭만 예약하면 된다. 24px 높이를 들고 있을 때는 제목 셀이
    * 26px로 부풀고 제목 글자(18px 줄)가 그 **위쪽**에 붙어, 행 가운데에 선 분류·국기보다
    * 5px 높이 떠 있었다. */
@@ -2013,16 +2038,20 @@ const AnchorBadge = styled.span`
   line-height: 1;
   font-weight: 600;
   white-space: nowrap;
+  /* 파랑 → 중립(2026-10-13). 최상위 30행마다 파란 칩이라, 지면의 파랑(세기 도트·선택 행·
+     주 버튼)과 겹쳐 '파랗다'가 구조 신호가 되지 못했다. 앵커 여부는 이미 셰브론+개수가 말한다.
+     누를 수 있다는 신호(조망 진입)는 hover에서 파랑으로 되살린다. */
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(37,99,235,0.18)' : 'rgba(37,99,235,0.10)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93b4fc' : '#1d4ed8')};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   &:is(button) {
     cursor: pointer;
   }
   &:is(button):hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(37,99,235,0.30)' : 'rgba(37,99,235,0.18)'};
+      theme.mode === 'dark' ? 'rgba(37,99,235,0.30)' : 'rgba(37,99,235,0.14)'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#93b4fc' : '#1d4ed8')};
   }
   &:is(button):focus-visible {
     ${focusRingInset}
@@ -2119,6 +2148,11 @@ const EndCell = styled.span.attrs(() => ({ 'data-col': 'end' }) as Record<string
      * 알파가 테마마다 다른 이유는 배경이 다르기 때문이다(흰 바탕은 더 진해야 같은 대비).
      */
     opacity: ${({ theme }) => (theme.mode === 'dark' ? 0.58 : 0.75)};
+  }
+
+  /* 종료 미상 — '값이 없다'는 표시라 '당일'보다 한 단 더 옅게(장식 대시, 읽을 글자가 아니다) */
+  &[data-unknown='true'] {
+    opacity: 0.45;
   }
 
   @media (max-width: 640px) {
@@ -2606,6 +2640,22 @@ const SpanBar = styled.span<{
  */
 const formatOutsideYear = (year: number) =>
   year < 0 ? `BC ${-year}` : String(year)
+
+/**
+ * 연 축 밖 표지의 글자 — 그룹 연도로부터의 **거리**('+1년', '−3년').
+ *
+ * 예전엔 그 사건의 연도('2026 ›')를 썼는데, 축 밖 행은 날짜 열이 이미 연도까지
+ * ('2026.9.14')를 적으므로 한 행에 같은 연도가 두 번 찍혔다. 거리는 날짜 열이 말하지
+ * 않는 정보다 — 부모의 해에서 얼마나 떨어진 자식인가. 그룹이 없는 지면은 연도로 둔다.
+ * 부호 연도라 BC→AD를 건너면 0년이 없으므로 1을 뺀다.
+ */
+const formatOutsideOffset = (year: number, groupYear: number | null | undefined) => {
+  if (groupYear == null) return formatOutsideYear(year)
+  const crossesEra = (year < 0) !== (groupYear < 0)
+  const raw = year - groupYear
+  const diff = crossesEra ? raw - Math.sign(raw) : raw
+  return `${diff > 0 ? '+' : '−'}${Math.abs(diff)}년`
+}
 
 const OutsideArrow = styled.span`
   font-size: 13px;

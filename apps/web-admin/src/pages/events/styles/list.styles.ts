@@ -43,6 +43,9 @@ const densityVars = (density: ListDensity) => {
     --row-col-gap: ${box.colGap}px;
     --row-act-btn: ${box.actBtn}px;
     --row-disc-btn: ${box.discBtn}px;
+    /* 제목 셀의 디스클로저 트랙 — 버튼보다 12px 넓다. 셰브론 옆 하위 개수 알약(최대 두 자리)이
+       트랙 안에 들어 제목과 띄어지게(예전엔 '5 NSPM-2'처럼 개수가 제목 첫 낱말로 읽혔다). */
+    --row-disc-track: calc(var(--row-disc-btn) + 12px);
     --col-date: ${box.colDate}px;
     --col-chip: ${box.colChip}px;
     --col-dur: ${box.colDur}px;
@@ -811,7 +814,7 @@ export const ColumnHeaderCell = styled.span.attrs<{ $col: string }>(
   ${({ $textIndent }) =>
     $textIndent &&
     css`
-      padding-left: var(--row-disc-btn);
+      padding-left: var(--row-disc-track);
     `}
   ${({ $clickable, theme }) =>
     $clickable &&
@@ -1032,6 +1035,14 @@ export const CenturySection = styled.div`
      사이마다 펼친 세기와 같은 숨 틈을 두면 접어도 한 화면에 두어 세기밖에 안 들어왔다. */
   &[data-collapsed] + &[data-collapsed] {
     margin-top: calc(var(--century-gap) * 0.35);
+  }
+
+  /* 앞 세기가 **접힌 표지 줄**('1502년 ~ 1556년 즉위·취임 12 …')로 끝나면 절반만 띄운다.
+     표지 줄은 6px 아래 여백 + 세기 간격 + 머리글 윗여백이 겹쳐 세기 머리글까지 약 90px이
+     비었다 — 사건이 1건뿐인 세기(13~16세기)가 이어지는 구간은 한 화면에 세기 둘이 고작이었다.
+     표지 줄은 행보다 가벼워 앞 시대의 '끝'을 떠받칠 무게가 없으므로 숨 틈도 덜 필요하다. */
+  &:has(> :last-child > [data-band-toggle='markers']) + & {
+    margin-top: calc(var(--century-gap) * 0.5);
   }
 `
 
@@ -1661,7 +1672,14 @@ export const YearDivider = styled.button`
      */
     top: calc(-1 * var(--year-mt));
     right: 0;
-    bottom: 0;
+    /*
+     * 아래로 8px 더 내려 **투명으로 사라지게** 한다(2026-10-13). stuck 헤더 바로 밑으로 지나가는
+     * 행은 윗부분만 가려지고 글자 하단 조각이 머리글 아래에 부스러기처럼 남았다(1024px 실측).
+     * 띠 끝을 페이드로 풀면 그 조각이 '아래로 스크롤되어 들어가는 중'으로 읽힌다.
+     * stuck이 아닐 때 이 8px은 첫 행의 위 여백(지면색) 위라 보이지 않는다.
+     */
+    bottom: -8px;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 8px), transparent);
     /*
      * ⚠️ 좌측은 축선 **너머**까지 덮는다(이 버튼의 좌단이 곧 축선이므로 -6px).
      * 예전엔 left 가 --rail-inset 이라 축선 오른쪽에서 시작했는데, 행 레일 눈금이

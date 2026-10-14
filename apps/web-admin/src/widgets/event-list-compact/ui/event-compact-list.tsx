@@ -2514,7 +2514,7 @@ const SkeletonTitleGroup = styled.span`
   gap: 8px;
   min-width: 0;
   /* 실제 제목은 디스클로저 폭만큼 안쪽에서 시작한다 */
-  margin-left: var(--row-disc-btn);
+  margin-left: var(--row-disc-track);
 `
 
 const SkeletonTitleBar = styled.span`

@@ -275,11 +275,11 @@ describe('EventListItem', () => {
       expect(endText()).toBe('당일')
     })
 
-    it('종료가 없으면 빈칸이다 — 그 빈칸이 곧 종료 미상이다', () => {
+    it("종료가 없으면 옅은 '—'다 — '당일'과 구별되는 종료 미상 표지", () => {
       renderWithTheme(
         <EventListItem {...baseProps} groupYear={2025} node={withPeriod('2025-06-13')} />,
       )
-      expect(endText()).toBe('')
+      expect(endText()).toBe('—')
     })
   })
 
