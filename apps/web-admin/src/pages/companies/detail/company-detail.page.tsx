@@ -18,7 +18,11 @@ import { companyApi } from '@/shared/api/company'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
-import { COMPANY_STATUS_META, CompanyRegisterModal } from '@/widgets/company-form'
+import {
+  COMPANY_STATUS_META,
+  COMPANY_STATUS_ORDER,
+  CompanyRegisterModal,
+} from '@/widgets/company-form'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 import {
   InlineDateRange,
@@ -50,13 +54,11 @@ import {
   useCompanyRelatedEvents,
 } from './use-company-detail'
 
-const STATUS_OPTIONS: InlineSelectOption[] = [
-  { value: 'ACTIVE', label: '활동 중' },
-  { value: 'DISSOLVED', label: '해산' },
-  { value: 'MERGED', label: '합병' },
-  { value: 'SUSPENDED', label: '중단' },
-  { value: 'OTHER', label: '기타' },
-]
+/** 상태 선택지 — 목록·모달·사이드바와 같은 출처에서 파생(라벨 사본이 두 벌이던 것, 검토 F10) */
+const STATUS_OPTIONS: InlineSelectOption[] = COMPANY_STATUS_ORDER.map((status) => ({
+  value: status,
+  label: COMPANY_STATUS_META[status].label,
+}))
 
 /** 8개 섹션을 주제 그룹(탭)으로 묶어 한 번에 한 그룹만 — 세로 스크롤 절감 + 전체폭 활용. */
 const GROUPS = [

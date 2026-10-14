@@ -34,6 +34,7 @@ import {
 import { getAllPersons, type PersonResponseDto } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { dateSortKey } from '@/shared/lib/iso-date'
+import { plainTextToRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { ConfirmDialog, confirm } from '@/shared/ui/confirm-dialog'
@@ -134,7 +135,8 @@ function hydrateForm(company: Company): FormState {
     dissolvedAt: company.dissolvedAt ?? '',
     websiteUrl: company.websiteUrl ?? '',
     logoUrl: company.logoUrl ?? '',
-    description: company.description ?? '',
+    // 개요는 리치텍스트(HTML)라 평문 칸에 싣지 않는다 — 수정 모달은 개요를 다루지 않는다(검토 F1)
+    description: '',
     countryId: company.countryId ?? '',
     historicalCountryId: company.historicalCountryId ?? '',
     founderId: company.founderId ?? '',
@@ -161,8 +163,13 @@ function validate(form: FormState): FormErrors {
   return errors
 }
 
-function toPayload(form: FormState): CreateCompanyInput {
-  return {
+/**
+ * 저장 본문. 개요(description)는 **신규 등록일 때만** 싣는다 — 평문 입력을 문단 HTML로 바꿔
+ * 상세의 리치텍스트와 같은 형식으로 저장한다. 수정 때 실으면 상세에서 쓴 서식 있는 개요를
+ * 평문 칸 값으로 덮게 된다.
+ */
+function toPayload(form: FormState, isEdit: boolean): CreateCompanyInput {
+  const base = {
     name: form.name.trim(),
     shortName: form.shortName.trim() || null,
     localName: form.localName.trim() || null,
@@ -171,12 +178,13 @@ function toPayload(form: FormState): CreateCompanyInput {
     dissolvedAt: form.dissolvedAt || null,
     websiteUrl: form.websiteUrl.trim() || null,
     logoUrl: form.logoUrl.trim() || null,
-    description: form.description.trim() || null,
     countryId: form.countryId || null,
     historicalCountryId: form.historicalCountryId || null,
     founderId: form.founderId || null,
     headquartersCityId: form.headquartersCityId || null,
   }
+  if (isEdit) return base
+  return { ...base, description: plainTextToRichTextHtml(form.description) || null }
 }
 
 /* ───────────────────────── 모달 ───────────────────────── */
@@ -440,7 +448,7 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
 
     onSubmittingChange(true)
     try {
-      const payload = toPayload(form)
+      const payload = toPayload(form, Boolean(companyId))
       const saved = companyId
         ? await companyApi.update(companyId, payload)
         : await companyApi.create(payload)
@@ -701,15 +709,21 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
                 )}
               </IconField>
             </Grid2>
-            <Field>
-              <label htmlFor="company-description">한 줄 소개</label>
-              <textarea
-                id="company-description"
-                value={form.description}
-                onChange={(event) => patch('description', event.target.value)}
-                placeholder="기업을 한눈에 설명하는 짧은 소개 (상세 설명은 저장 후 상세에서)"
-              />
-            </Field>
+            {isEdit ? (
+              <DescriptionNote>
+                개요는 상세 페이지의 <strong>개요</strong>에서 서식·인물 링크와 함께 편집합니다.
+              </DescriptionNote>
+            ) : (
+              <Field>
+                <label htmlFor="company-description">한 줄 소개</label>
+                <textarea
+                  id="company-description"
+                  value={form.description}
+                  onChange={(event) => patch('description', event.target.value)}
+                  placeholder="기업을 한눈에 설명하는 짧은 소개 — 저장 후 상세의 '개요'에서 이어서 다듬을 수 있습니다"
+                />
+              </Field>
+            )}
           </>
         )}
       </PersonRegisterModalFormScroll>
@@ -995,6 +1009,18 @@ const StatusChip = styled.button<{ $active: boolean; $tone: string }>`
   &:hover {
     border-color: ${({ theme, $active, $tone }) =>
       $active ? `${$tone}66` : theme.colors.border.medium};
+  }
+`
+
+const DescriptionNote = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    font-weight: 600;
   }
 `
 

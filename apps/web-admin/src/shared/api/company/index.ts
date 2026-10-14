@@ -1,3 +1,5 @@
+import { apiErrorMessageFromBody } from '@/shared/lib/get-api-error-message'
+
 import { getApiConnection } from '../client'
 
 export type CompanyStatus =
@@ -453,7 +455,8 @@ async function request<T>(
   if (res.status === 204) return undefined as T
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(text || `HTTP ${res.status}`)
+    // 본문을 통째로 던지면 토스트에 JSON 원문이 뜬다 — 서버 메시지만 뽑는다(검토 F2)
+    throw new Error(apiErrorMessageFromBody(text) ?? `요청에 실패했습니다 (HTTP ${res.status})`)
   }
   if (res.headers.get('content-type')?.includes('application/json')) {
     return res.json() as Promise<T>

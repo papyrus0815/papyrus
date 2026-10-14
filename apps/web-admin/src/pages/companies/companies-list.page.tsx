@@ -30,6 +30,7 @@ import { companyApi } from '@/shared/api/company'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { companyLifespanLabel } from '@/shared/lib/company-lifespan'
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
+import { richTextToPlainText } from '@/shared/lib/rich-text-plain'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
@@ -41,7 +42,7 @@ import {
 
 const COMPANIES_QUERY_KEY = ['companies', 'all'] as const
 
-type SortKey = 'name' | 'country' | 'founded' | 'founder' | 'city' | 'status'
+type SortKey = 'name' | 'country' | 'founded' | 'founder' | 'city'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' }
 
 /** 기본 정렬 — 역사 기록이니 오래된 것이 위(국가 대시보드 기업 섹션과 같은 규약) */
@@ -57,12 +58,19 @@ const yearLabel = (iso: string | null): string | null => {
   return parts.year < 0 ? `BC ${Math.abs(parts.year)}` : String(parts.year)
 }
 
-/** 존속 기간 — '1600 – 1874' · 활동 중이면 '1600 –' · 설립 미상이면 null */
+/** 활동 중 = 상태가 ACTIVE(또는 미기입)이고 해산일이 없다 — companyLifespanLabel과 같은 판정 */
+const isOngoing = (company: Company) =>
+  !company.dissolvedAt && (!company.status || company.status === 'ACTIVE')
+
+/**
+ * 존속 기간 — '1600 – 1874' · 활동 중이면 '1969 – 현재' · 설립 미상이면 null.
+ * 예전 '1969 –'는 끝이 잘린 것처럼 읽혀서 '현재'를 명시한다.
+ */
 const periodLabel = (company: Company): string | null => {
   const start = yearLabel(company.foundedAt)
-  const end = yearLabel(company.dissolvedAt)
+  const end = yearLabel(company.dissolvedAt) ?? (isOngoing(company) ? '현재' : null)
   if (!start && !end) return null
-  return `${start ?? '?'} – ${end ?? ''}`.trimEnd()
+  return `${start ?? '?'} – ${end ?? '?'}`
 }
 
 const sortValue = (company: Company, key: SortKey): string | number | null => {
@@ -78,18 +86,19 @@ const sortValue = (company: Company, key: SortKey): string | number | null => {
       return company.founder?.name ?? null
     case 'city':
       return company.headquartersCity?.name ?? null
-    case 'status':
-      return company.status ? COMPANY_STATUS_ORDER.indexOf(company.status) : null
   }
 }
 
+/*
+ * '상태' 열은 없앴다 — 실데이터가 전부 '활동 중'이라 행마다 같은 초록 점이 반복될 뿐이었다.
+ * 상태는 존속 열이 대신 말한다: 활동 중은 '– 현재 / N년째', 그 밖(해산·합병…)만 색 점 + 라벨.
+ */
 const COLUMNS: { key: SortKey; label: string; hideBelow?: number }[] = [
   { key: 'name', label: '기업' },
   { key: 'country', label: '국가', hideBelow: 640 },
   { key: 'founded', label: '존속' },
   { key: 'founder', label: '창립자', hideBelow: 960 },
   { key: 'city', label: '본사', hideBelow: 1120 },
-  { key: 'status', label: '상태', hideBelow: 520 },
 ]
 
 /** 로고 — 로드 실패 시 이니셜로 폴백(깨진 이미지 박스 방지). */
@@ -185,6 +194,8 @@ export const CompaniesListPage: React.FC = () => {
   }, [list, search, statusFilter, sort])
 
   const isFiltered = !!search.trim() || statusFilter !== 'ALL'
+  /** 상태가 한 가지뿐이면 필터는 '전체'와 같은 집합만 낸다 — 세그먼트를 숨긴다 */
+  const statusKinds = COMPANY_STATUS_ORDER.filter((status) => statusCounts[status] > 0).length
 
   const resetFilters = () => {
     setQuery('')
@@ -289,6 +300,10 @@ export const CompaniesListPage: React.FC = () => {
       const detailPath = pathKeys.companies.detail(company.id)
       const period = periodLabel(company)
       const lifespan = companyLifespanLabel(company)
+      // 활동 중은 '– 현재'가 이미 말한다 — 그 밖의 상태만 색 점으로 드러낸다
+      const showStatus = !!meta && !isOngoing(company)
+      // 개요는 리치텍스트(HTML)가 정본 — 목록은 평문 한 줄로(태그가 그대로 보이던 결함, 검토 F1)
+      const summary = richTextToPlainText(company.description)
       const subName = [company.shortName, company.localName]
         .filter((value) => value && value !== company.name)
         .join(' · ')
@@ -309,11 +324,7 @@ export const CompaniesListPage: React.FC = () => {
                 <NameLink to={detailPath}>{company.name}</NameLink>
                 {subName && <SubName>{subName}</SubName>}
               </NameLine>
-              {company.description && (
-                <Description title={company.description}>
-                  {company.description}
-                </Description>
-              )}
+              {summary && <Description title={summary}>{summary}</Description>}
             </NameText>
           </NameCell>
           <Cell role="cell" $hideBelow={640}>
@@ -323,23 +334,33 @@ export const CompaniesListPage: React.FC = () => {
             )}
           </Cell>
           <Cell role="cell" $numeric>
-            {period ? (
+            {period || showStatus ? (
               <Stack>
-                <span>{period}</span>
-                {lifespan && <SubValue>{lifespan}</SubValue>}
+                {period && <span>{period}</span>}
+                {showStatus && meta ? (
+                  <StatusDot $tone={meta.tone}>
+                    {meta.label}
+                    {lifespan && <SubValue>· {lifespan}</SubValue>}
+                  </StatusDot>
+                ) : (
+                  lifespan && <SubValue>{lifespan}</SubValue>
+                )}
               </Stack>
             ) : (
               <Muted>—</Muted>
             )}
           </Cell>
           <Cell role="cell" $hideBelow={960}>
-            {company.founder?.name ?? <Muted>—</Muted>}
+            {company.founder ? (
+              <PlainLink to={pathKeys.personsTimelineDetail(company.founder.id)}>
+                {company.founder.name}
+              </PlainLink>
+            ) : (
+              <Muted>—</Muted>
+            )}
           </Cell>
           <Cell role="cell" $hideBelow={1120}>
             {company.headquartersCity?.name ?? <Muted>—</Muted>}
-          </Cell>
-          <Cell role="cell" $hideBelow={520}>
-            {meta ? <StatusDot $tone={meta.tone}>{meta.label}</StatusDot> : <Muted>—</Muted>}
           </Cell>
           <ActionsCell role="cell">
             {company.websiteUrl && (
@@ -388,7 +409,9 @@ export const CompaniesListPage: React.FC = () => {
           {!isLoading && !isError && (
             <Stats>
               {isFiltered && <span>조건 일치</span>}
-              <strong>{rows.length.toLocaleString()}</strong>개
+              <span>
+                <strong>{rows.length.toLocaleString()}</strong>개
+              </span>
               {isFiltered ? (
                 <StatsHint>/ 등록 전체 {list.length.toLocaleString()}개</StatsHint>
               ) : (
@@ -434,23 +457,25 @@ export const CompaniesListPage: React.FC = () => {
             </ClearBtn>
           )}
         </SearchWrap>
-        <Segment role="group" aria-label="상태 필터">
-          {statusFilters.map((filter) => (
-            <SegmentBtn
-              key={filter.key}
-              type="button"
-              $active={statusFilter === filter.key}
-              aria-pressed={statusFilter === filter.key}
-              onClick={() => setStatusFilter(filter.key)}
-            >
-              {filter.key !== 'ALL' && (
-                <Dot $tone={COMPANY_STATUS_META[filter.key].tone} aria-hidden />
-              )}
-              {filter.label}
-              <SegmentCount>{filter.count}</SegmentCount>
-            </SegmentBtn>
-          ))}
-        </Segment>
+        {(statusKinds > 1 || statusFilter !== 'ALL') && (
+          <Segment role="group" aria-label="상태 필터">
+            {statusFilters.map((filter) => (
+              <SegmentBtn
+                key={filter.key}
+                type="button"
+                $active={statusFilter === filter.key}
+                aria-pressed={statusFilter === filter.key}
+                onClick={() => setStatusFilter(filter.key)}
+              >
+                {filter.key !== 'ALL' && (
+                  <Dot $tone={COMPANY_STATUS_META[filter.key].tone} aria-hidden />
+                )}
+                {filter.label}
+                <SegmentCount>{filter.count}</SegmentCount>
+              </SegmentBtn>
+            ))}
+          </Segment>
+        )}
       </Toolbar>
 
       <VisuallyHidden role="status" aria-live="polite">
@@ -540,23 +565,20 @@ const focusRing = css`
 const rowGrid = css`
   display: grid;
   grid-template-columns:
-    minmax(0, 1fr) minmax(96px, 150px) 112px minmax(96px, 150px)
-    minmax(88px, 130px) 76px;
+    minmax(0, 1fr) minmax(96px, 140px) 128px minmax(96px, 140px)
+    minmax(88px, 120px);
   align-items: center;
-  column-gap: 16px;
+  column-gap: 20px;
 
   @container companies (max-width: 1120px) {
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) 112px minmax(96px, 150px) 76px;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 140px) 128px minmax(96px, 140px);
   }
   @container companies (max-width: 960px) {
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) 112px 76px;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 140px) 128px;
   }
   @container companies (max-width: 640px) {
-    grid-template-columns: minmax(0, 1fr) 96px 72px;
-    column-gap: 10px;
-  }
-  @container companies (max-width: 520px) {
-    grid-template-columns: minmax(0, 1fr) 88px;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    column-gap: 12px;
   }
 `
 
@@ -855,8 +877,8 @@ const HeadRow = styled.div`
 const HeadCell = styled.div<{ $hideBelow?: number; $first?: boolean }>`
   min-width: 0;
   overflow: hidden;
-  /* 이름 열 머리글은 로고 폭(28)+간격(10)만큼 들여 행의 글자 시작선에 맞춘다 */
-  padding-left: ${({ $first }) => ($first ? '38px' : '0')};
+  /* 이름 열 머리글은 로고 폭(32)+간격(12)만큼 들여 행의 글자 시작선에 맞춘다 */
+  padding-left: ${({ $first }) => ($first ? '44px' : '0')};
   ${({ $hideBelow }) => hideBelow($hideBelow)}
 `
 
@@ -916,7 +938,7 @@ const Cell = styled.div<{ $hideBelow?: number; $numeric?: boolean }>`
 const NameCell = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 `
 
@@ -1018,21 +1040,42 @@ const SubValue = styled.span`
   color: ${metaText};
 `
 
+/* 활동 중이 아닌 기업만 — 존속 열 둘째 줄에 색 점 + 라벨(+ 존속 햇수) */
 const StatusDot = styled.span<{ $tone: string }>`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
 
   &::before {
     content: '';
-    width: 7px;
-    height: 7px;
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: ${({ $tone }) => $tone};
   }
+
+  ${SubValue} {
+    font-weight: 400;
+  }
+`
+
+/* 셀 안의 보조 링크(창립자) — 평소엔 셀 글자색, hover 때만 밑줄 */
+const PlainLink = styled(Link)`
+  color: inherit;
+  text-decoration: none;
+  border-radius: 3px;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  ${focusRing}
 `
 
 const Muted = styled.span`

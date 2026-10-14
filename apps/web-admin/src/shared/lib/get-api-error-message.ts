@@ -43,3 +43,40 @@ export function getApiErrorMessage(
   if (error instanceof Error && error.message) return error.message
   return fallback
 }
+
+/**
+ * fetch 응답 **본문 문자열**에서 사용자용 메시지를 뽑는다(axios를 거치지 않는 래퍼용).
+ *
+ * 이 API의 전역 예외 필터는 `{ success:false, …, error: { message } }`로 감싸 보내고,
+ * Nest 기본 형식은 `{ message }`(문자열 또는 배열)다. 둘 다 아니면 null —
+ * 호출부가 `HTTP 400` 같은 폴백을 쓴다. 본문을 그대로 메시지로 쓰면 토스트에
+ * `{"success":false,"timestamp":…` JSON 원문이 떴다(기업 상세 검토 F2).
+ */
+export function apiErrorMessageFromBody(body: string | null | undefined): string | null {
+  const text = body?.trim() ?? ''
+  if (!text) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    // JSON이 아닌 짧은 평문은 그대로, HTML 오류 페이지 등 긴 본문은 버린다
+    return text.length <= 200 && !text.startsWith('<') ? text : null
+  }
+  const pick = (value: unknown): string | null => {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (Array.isArray(value)) {
+      const joined = value.filter((item) => typeof item === 'string' && item.trim()).join(', ')
+      return joined || null
+    }
+    return null
+  }
+  if (parsed && typeof parsed === 'object') {
+    const record = parsed as { error?: unknown; message?: unknown }
+    if (record.error && typeof record.error === 'object') {
+      const nested = pick((record.error as { message?: unknown }).message)
+      if (nested) return nested
+    }
+    return pick(record.message) ?? pick(record.error)
+  }
+  return null
+}

@@ -138,6 +138,12 @@ export function useCompanyMutation(id: string) {
 
   return useMutation({
     mutationKey,
+    /*
+     * 같은 기업의 저장은 한 줄로 세운다(검토 F3). 배열 모듈은 편집마다 배열 **전체**를 PUT하고
+     * 서버는 지우고 다시 만들므로, 겹친 두 요청이 서버에서 뒤집혀 커밋되면 나중 편집이 앞 편집
+     * 상태로 덮인다. scope가 같으면 react-query가 앞 요청이 끝난 뒤에 다음을 보낸다.
+     */
+    scope: { id: `company-detail-${id}` },
     mutationFn: (patch: UpdateCompanyInput) => companyApi.update(id, patch),
     onMutate: async (patch: UpdateCompanyInput) => {
       const previous = queryClient.getQueryData<CompanyDetail>(detailKey)
