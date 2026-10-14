@@ -1,4 +1,13 @@
-import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  Suspense,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -21,7 +30,7 @@ import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-bounda
 import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
-import { ContemporaryHeadsLink, DetailHero } from './components/detail-hero'
+import { ContemporaryHeadsLink, DetailHero, DetailSummary } from './components/detail-hero'
 import {
   EventDetailLoading,
   type LoadingGate,
@@ -61,6 +70,38 @@ import { useEventMutation } from './use-event-mutation'
 import { useEventRelations } from './use-event-relations'
 import { draftSidesFromRoles } from './side-draft.lib'
 import { useUndoablePatch } from './use-undoable-patch'
+
+/**
+ * 가로 탭 — 기업 상세와 같은 문법(2026-10-14 사용자: "사건 상세도 기업 상세처럼").
+ * 한 줄로 끝없이 이어지던 문서를 주제별로 나눈다. 우측 사실 장부는 모든 탭에서 그대로 따라온다
+ * (기업 상세의 사실 띠 역할). 목차는 긴 글이 있는 '개요'에서만.
+ */
+type EventTabId = 'overview' | 'actors' | 'modules' | 'links' | 'media'
+
+const EVENT_TABS: ReadonlyArray<{ id: EventTabId; label: string; hint: string }> = [
+  { id: 'overview', label: '개요', hint: '배경 · 전개 · 여파 · 댓글' },
+  { id: 'actors', label: '참여', hint: '인물·국가 · 성립·소멸 · 권력 교체 · 기업·조직' },
+  { id: 'modules', label: '진영·수치', hint: '진영 · 수치 · 작전 정보 · 관련 행정부' },
+  { id: 'links', label: '연관', hint: '조약 · 상위·하위·관련 사건' },
+  { id: 'media', label: '자료', hint: '이미지' },
+]
+
+const isEventTab = (value: string | null): value is EventTabId =>
+  EVENT_TABS.some((tab) => tab.id === value)
+
+/**
+ * 섹션(앵커 id) → 탭. '채우기'·#해시 딥링크·목차가 다른 탭의 섹션을 가리킬 때 먼저 그 탭을 연다.
+ * 단락 앵커(배경·전개·여파의 하위 항목)도 접두사로 개요에 묶인다.
+ */
+function tabOfSection(id: string, promoteTreaties: boolean): EventTabId {
+  if (/^(background|narrative|aftermath|comments|development)/.test(id)) return 'overview'
+  if (/^(actors|statehood|power|organizations)/.test(id)) return 'actors'
+  if (id.startsWith('module-')) return 'modules'
+  if (id === 'treaties') return promoteTreaties ? 'overview' : 'links'
+  if (id === 'network') return 'links'
+  if (id === 'appendix') return 'media'
+  return 'overview'
+}
 
 /**
  * 사건 상세 페이지 — 단일 칼럼 narrative-first.
@@ -335,14 +376,99 @@ function EventDetailContent({
     filled[id] || pinned.has(id) || (id === 'treaties' && promoteTreaties)
   const folded = FOLDABLE_SECTIONS.filter((section) => !isVisible(section.id))
 
+  /* 탭 — URL(?tab=)이 정본(replace: 탭을 오가도 '뒤로'가 탭을 되감지 않는다). 개요는 파라미터 없음 */
+  const tabParam = searchParams.get('tab')
+  const activeTab: EventTabId = isEventTab(tabParam) ? tabParam : 'overview'
+  const setActiveTab = useCallback(
+    (next: EventTabId) =>
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev)
+          if (next === 'overview') params.delete('tab')
+          else params.set('tab', next)
+          return params
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  )
+  const tabOf = useCallback(
+    (sectionId: string) => tabOfSection(sectionId, promoteTreaties),
+    [promoteTreaties],
+  )
+
+  /* 탭 옆 건수 — 열어 보기 전에 어디에 기록이 있는지 */
+  const countOf = (list?: unknown[] | null) => list?.length ?? 0
+  const tabCounts: Record<EventTabId, number> = {
+    overview: 0,
+    actors:
+      countOf(event.relatedPersons) +
+      countOf(event.relatedCountries) +
+      countOf(event.relatedHistoricalCountries) +
+      countOf(event.organizations),
+    modules: enabledModules.length,
+    links:
+      (promoteTreaties ? 0 : countOf(event.treaties)) +
+      (event.parentEvent ? 1 : 0) +
+      countOf(event.extraParents) +
+      countOf(event.childEvents) +
+      countOf(event.extraChildren) +
+      countOf(event.keywords) +
+      relatedCount,
+    media: countOf(event.eventImages),
+  }
+
+  /* 탭 바는 sticky라, 길게 내려 읽다 탭을 바꾸면 새 패널 중간이 보인다 — 붙어 있을 때만 패널 머리로 되감는다 */
+  const tabsAnchorRef = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const isFirstTabRef = useRef(true)
+  useEffect(() => {
+    if (isFirstTabRef.current) {
+      isFirstTabRef.current = false
+      return
+    }
+    const anchor = tabsAnchorRef.current
+    const tabs = tabsRef.current
+    if (anchor && tabs && anchor.getBoundingClientRect().top < tabs.getBoundingClientRect().top - 1) {
+      anchor.scrollIntoView({ block: 'start' })
+    }
+  }, [activeTab])
+
+  /** ←/→/Home/End 탭 이동(ARIA 탭 패턴) — 포커스와 선택이 함께 */
+  const handleTabKeyDown = (keyEvent: KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(keyEvent.key)) return
+    keyEvent.preventDefault()
+    const current = EVENT_TABS.findIndex((tab) => tab.id === activeTab)
+    const last = EVENT_TABS.length - 1
+    const nextIndex =
+      keyEvent.key === 'Home'
+        ? 0
+        : keyEvent.key === 'End'
+          ? last
+          : keyEvent.key === 'ArrowLeft'
+            ? current === 0
+              ? last
+              : current - 1
+            : current === last
+              ? 0
+              : current + 1
+    const next = EVENT_TABS[nextIndex].id
+    setActiveTab(next)
+    tabsRef.current?.querySelector<HTMLButtonElement>(`#event-tab-${next}`)?.focus()
+  }
+
   /* 펼친 섹션으로 스크롤 — 펼침이 렌더에 반영된 뒤라야 앵커가 존재한다.
      빈 섹션은 짧아(제목 + 안내 한 줄) 'start'로 올리면 문서 끝에 걸려 위로 지나치기 쉽다 —
      가운데에 세워 앞뒤 맥락과 함께 보이게 한다. */
   const [revealTarget, setRevealTarget] = useState<FoldableSectionId | null>(null)
-  const revealSection = useCallback((id: FoldableSectionId) => {
-    setPinned((prev) => new Set(prev).add(id))
-    setRevealTarget(id)
-  }, [])
+  const revealSection = useCallback(
+    (id: FoldableSectionId) => {
+      setActiveTab(tabOf(id))
+      setPinned((prev) => new Set(prev).add(id))
+      setRevealTarget(id)
+    },
+    [setActiveTab, tabOf],
+  )
   useEffect(() => {
     if (!revealTarget) return
     scrollToAnchor(revealTarget, { block: 'center', updateHash: false })
@@ -418,15 +544,23 @@ function EventDetailContent({
    * (deps에 event 전체를 두면 매 patch refetch마다 재실행돼 편집 중 위로 점프하는 회귀.)
    */
   const scrolledHashForEventRef = useRef<string | null>(null)
+  /* 해시가 다른 탭의 섹션이면 그 탭을 먼저 열고, 렌더된 다음에 스크롤한다 */
+  const [pendingHash, setPendingHash] = useState<string | null>(null)
   useEffect(() => {
     if (scrolledHashForEventRef.current === event.id) return
     scrolledHashForEventRef.current = event.id
     const hash = window.location.hash.slice(1)
     if (!hash) return
-    const target = document.getElementById(hash)
+    setActiveTab(tabOf(hash))
+    setPendingHash(hash)
+  }, [event.id, setActiveTab, tabOf])
+  useEffect(() => {
+    if (!pendingHash) return
+    const target = document.getElementById(pendingHash)
     if (!target) return
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [event.id])
+    setPendingHash(null)
+  }, [pendingHash, activeTab])
 
   /**
    * 진영 시작 — 참여국 역할(주도·대상…)로 편을 가를 수 있으면 **초안**을 보여 주고 확인받아 만든다
@@ -517,108 +651,161 @@ function EventDetailContent({
               onPatch={onPatch}
               onPersonClick={onPersonClick}
               onCountryClick={onCountryClick}
+              withSummary={false}
             />
+
+            <S.TabsArea>
+              <div ref={tabsAnchorRef} />
+              <S.TabBar
+                ref={tabsRef}
+                role="tablist"
+                aria-label="사건 정보 보기"
+                onKeyDown={handleTabKeyDown}
+              >
+                {EVENT_TABS.map((tab) => {
+                  const count = tabCounts[tab.id]
+                  const selected = activeTab === tab.id
+                  return (
+                    <S.Tab
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      id={`event-tab-${tab.id}`}
+                      aria-controls={`event-panel-${tab.id}`}
+                      aria-selected={selected}
+                      tabIndex={selected ? 0 : -1}
+                      $active={selected}
+                      title={tab.hint}
+                      onClick={() => setActiveTab(tab.id)}
+                    >
+                      {tab.label}
+                      {count > 0 && <S.TabCount>{count}</S.TabCount>}
+                    </S.Tab>
+                  )
+                })}
+              </S.TabBar>
+            </S.TabsArea>
 
             {/* 문서 열이 DOM에서 먼저 온다 — 읽기·스크린리더 순서는 '글 → 장부'.
                 좁은 폭에서 장부가 위로 올라가는 것은 시각 순서만 바꾸는 order다. */}
-            <S.Main>
-              {/* 전개 타임라인(D2) — 하위 사건이 날짜를 가질 때만 */}
-              <DevelopmentTimeline event={event} />
-              <DetailNarrative
-                event={event}
-                onPatch={onPatch}
-                onPersonClick={onPersonClick}
-                onPersonEntityLink={onPersonEntityLink}
-                visible={{
-                  background: isVisible('background'),
-                  narrative: isVisible('narrative'),
-                  aftermath: isVisible('aftermath'),
-                }}
-              />
-
-              {showStatehood && (
-                <DetailStatehood
-                  event={event}
-                  expectStatehood={features.expectStatehood}
-                  onCountryClick={onCountryClick}
-                  onPersonClick={onPersonClick}
-                />
+            <S.Main
+              role="tabpanel"
+              id={`event-panel-${activeTab}`}
+              aria-labelledby={`event-tab-${activeTab}`}
+            >
+              {activeTab === 'overview' && (
+                <>
+                  {/* 요약 — 히어로에서 옮겨 와 개요의 머리글이 된다(히어로는 제목·행위자·국가만) */}
+                  <DetailSummary event={event} onPatch={onPatch} />
+                  {/* 전개 타임라인(D2) — 하위 사건이 날짜를 가질 때만 */}
+                  <DevelopmentTimeline event={event} />
+                  <DetailNarrative
+                    event={event}
+                    onPatch={onPatch}
+                    onPersonClick={onPersonClick}
+                    onPersonEntityLink={onPersonEntityLink}
+                    visible={{
+                      background: isVisible('background'),
+                      narrative: isVisible('narrative'),
+                      aftermath: isVisible('aftermath'),
+                    }}
+                  />
+                  {/* 회담/조약 사건은 조약이 그 사건의 결과물이라 개요에 둔다 */}
+                  {promoteTreaties && treatiesSection}
+                </>
               )}
 
-              {showPower && (
-                <DetailPower
-                  event={event}
-                  expectPower={features.expectPower}
-                  onPersonClick={onPersonClick}
-                />
+              {activeTab === 'actors' && (
+                <>
+                  {isVisible('actors') && (
+                    <DetailActors
+                      event={event}
+                      onPatch={onPatch}
+                      onPersonClick={onPersonClick}
+                      onCountryClick={onCountryClick}
+                    />
+                  )}
+                  {showStatehood && (
+                    <DetailStatehood
+                      event={event}
+                      expectStatehood={features.expectStatehood}
+                      onCountryClick={onCountryClick}
+                      onPersonClick={onPersonClick}
+                    />
+                  )}
+                  {showPower && (
+                    <DetailPower
+                      event={event}
+                      expectPower={features.expectPower}
+                      onPersonClick={onPersonClick}
+                    />
+                  )}
+                  {showOrganizations && (
+                    <DetailOrganizations event={event} expectOrganizations={features.expectOrganizations} />
+                  )}
+                </>
               )}
 
-              {showOrganizations && (
-                <DetailOrganizations event={event} expectOrganizations={features.expectOrganizations} />
+              {activeTab === 'modules' && (
+                <>
+                  <ModuleAdd
+                    event={event}
+                    enabledModules={enabledModules}
+                    onPatch={onPatch}
+                    onStartSides={startSides}
+                    onShowMetrics={() => setMetricsOpened(true)}
+                  />
+                  {enabledModules.includes('sides') && <ModuleSides event={event} onPatch={onPatch} />}
+                  {enabledModules.includes('metrics') && <ModuleMetrics event={event} />}
+                  {enabledModules.includes('military-details') && (
+                    <ModuleMilitaryDetails event={event} onPatch={onPatch} />
+                  )}
+                  {enabledModules.includes('cabinets') && <ModuleCabinets event={event} />}
+                </>
               )}
 
-              {promoteTreaties && treatiesSection}
-
-              {isVisible('actors') && (
-                <DetailActors
-                  event={event}
-                  onPatch={onPatch}
-                  onPersonClick={onPersonClick}
-                  onCountryClick={onCountryClick}
-                />
+              {activeTab === 'links' && (
+                <>
+                  {/* 조약 — 사건과 조약을 잇는 유일한 지점(본문·서명자는 조약이 정본) */}
+                  {!promoteTreaties && treatiesSection}
+                  {isVisible('network') && <DetailNetwork event={event} onPatch={onPatch} />}
+                </>
               )}
 
-              {/* 모듈 추가 진입점 — 발견성을 위해 actors 직후로 배치. */}
-              <ModuleAdd
-                event={event}
-                enabledModules={enabledModules}
-                onPatch={onPatch}
-                onStartSides={startSides}
-                onShowMetrics={() => setMetricsOpened(true)}
-              />
-
-              {enabledModules.includes('sides') && <ModuleSides event={event} onPatch={onPatch} />}
-              {enabledModules.includes('metrics') && <ModuleMetrics event={event} />}
-              {enabledModules.includes('military-details') && (
-                <ModuleMilitaryDetails event={event} onPatch={onPatch} />
-              )}
-              {enabledModules.includes('cabinets') && <ModuleCabinets event={event} />}
-
-              {/* 조약 — 사건과 조약을 잇는 유일한 지점(본문·서명자는 조약이 정본) */}
-              {!promoteTreaties && treatiesSection}
-
-              {isVisible('network') && (
-                <DetailNetwork event={event} onPatch={onPatch} />
-              )}
-              {isVisible('appendix') && (
+              {activeTab === 'media' && isVisible('appendix') && (
                 <DetailAppendix event={event} onPatch={onPatch} />
               )}
 
-              {/* 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다. */}
-              <FillInStrip items={folded} onReveal={revealSection} />
+              {/* 이 탭에서 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다 */}
+              <FillInStrip
+                items={folded.filter((section) => tabOf(section.id) === activeTab)}
+                onReveal={revealSection}
+              />
 
-              <S.Section id="comments">
-                <S.SectionHeader>
-                  <S.SectionTitle>댓글</S.SectionTitle>
-                </S.SectionHeader>
-                {event.parentEvent ? (
-                  // 하위 사건은 자체 댓글 스레드가 없다 — 논의가 이어지는 상위 사건 댓글로 유도.
-                  // 분기 기준은 *생존* 상위(parentEvent 객체) — 상위가 소프트삭제되면 스칼라
-                  // parentEventId만 남는데(유령), 그걸 기준 삼으면 삭제된 사건으로 유도하는
-                  // 데드엔드가 된다. 유령 상태는 실질 루트로 보고 스레드를 렌더(서버 게이트 동일).
-                  <S.HelperText>
-                    이 사건은 하위 사건입니다 — 논의는{' '}
-                    <ParentCommentsLink
-                      to={`${pathKeys.events.detail(event.parentEvent.id)}#comments`}
-                    >
-                      상위 사건 댓글
-                    </ParentCommentsLink>
-                    에서 이어집니다.
-                  </S.HelperText>
-                ) : (
-                  <CommentSection ownerType="EVENT" recordId={eventId} />
-                )}
-              </S.Section>
+              {activeTab === 'overview' && (
+                <S.Section id="comments">
+                  <S.SectionHeader>
+                    <S.SectionTitle>댓글</S.SectionTitle>
+                  </S.SectionHeader>
+                  {event.parentEvent ? (
+                    // 하위 사건은 자체 댓글 스레드가 없다 — 논의가 이어지는 상위 사건 댓글로 유도.
+                    // 분기 기준은 *생존* 상위(parentEvent 객체) — 상위가 소프트삭제되면 스칼라
+                    // parentEventId만 남는데(유령), 그걸 기준 삼으면 삭제된 사건으로 유도하는
+                    // 데드엔드가 된다. 유령 상태는 실질 루트로 보고 스레드를 렌더(서버 게이트 동일).
+                    <S.HelperText>
+                      이 사건은 하위 사건입니다 — 논의는{' '}
+                      <ParentCommentsLink
+                        to={`${pathKeys.events.detail(event.parentEvent.id)}#comments`}
+                      >
+                        상위 사건 댓글
+                      </ParentCommentsLink>
+                      에서 이어집니다.
+                    </S.HelperText>
+                  ) : (
+                    <CommentSection ownerType="EVENT" recordId={eventId} />
+                  )}
+                </S.Section>
+              )}
             </S.Main>
 
             <S.Aside>
@@ -629,7 +816,10 @@ function EventDetailContent({
                 onCountryClick={onCountryClick}
                 foldedCount={folded.length}
               />
-              <DetailRail sections={sections} />
+              {/* 목차는 긴 글이 있는 개요에서만 — 다른 탭은 탭 자체가 목차다 */}
+              {activeTab === 'overview' && (
+                <DetailRail sections={sections.filter((item) => tabOf(item.id) === 'overview')} />
+              )}
             </S.Aside>
           </S.Body>
         </S.PageInner>

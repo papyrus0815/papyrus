@@ -44,6 +44,12 @@ interface DetailHeroProps {
   onPersonClick: (personId: string) => void
   /** 국가명 클릭 시 페이지 레벨 국가 정보 모달 트리거(관련국 단락과 동일 동작). */
   onCountryClick: (countryId: string) => void
+  /**
+   * 요약 단락을 히어로에 둘지(기본 true). 탭 지면은 요약을 '개요' 탭 머리로 옮겨
+   * 히어로를 정체성(제목·행위자·국가)만으로 짧게 한다 — 요약까지 실으면 히어로가 화면 대부분을 먹어
+   * 탭 내용이 접힌 아래에서 시작했다. 옮긴 자리에서는 {@link DetailSummary}를 쓴다.
+   */
+  withSummary?: boolean
 }
 
 /**
@@ -60,6 +66,7 @@ export function DetailHero({
   onPatch,
   onPersonClick,
   onCountryClick,
+  withSummary = true,
 }: DetailHeroProps) {
   const prefetchEvent = usePrefetchEventDetail()
   const { data: categories = [] } = useQuery({
@@ -203,18 +210,31 @@ export function DetailHero({
         onCountryClick={onCountryClick}
       />
 
-      <SummaryHost>
-        <InlineText
-          value={event.description ?? ''}
-          /* 비우면 빈 문자열 전송 → 컬럼 비움(`|| undefined`는 서버가 무시). */
-          onSave={(next) => onPatch({ description: next.trim() })}
-          placeholder="요약 — 한두 단락"
-          multiline
-          multilineEnter
-          renderRead={renderEmphasis}
-        />
-      </SummaryHost>
+      {withSummary && <DetailSummary event={event} onPatch={onPatch} />}
     </S.Hero>
+  )
+}
+
+/** 사건 요약 단락(인라인 편집) — 히어로 안이나 탭 지면의 '개요' 머리에 둔다 */
+export function DetailSummary({
+  event,
+  onPatch,
+}: {
+  event: EventDetail
+  onPatch: (patch: UpdateEventDto) => void
+}) {
+  return (
+    <SummaryHost>
+      <InlineText
+        value={event.description ?? ''}
+        /* 비우면 빈 문자열 전송 → 컬럼 비움(`|| undefined`는 서버가 무시). */
+        onSave={(next) => onPatch({ description: next.trim() })}
+        placeholder="요약 — 한두 단락"
+        multiline
+        multilineEnter
+        renderRead={renderEmphasis}
+      />
+    </SummaryHost>
   )
 }
 

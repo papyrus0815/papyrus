@@ -146,6 +146,7 @@ export const Body = styled.div`
   grid-template-areas:
     'hero'
     'aside'
+    'tabs'
     'main';
   gap: 24px;
   align-items: start;
@@ -157,9 +158,10 @@ export const Body = styled.div`
    */
   @container eventdetail (min-width: 920px) {
     grid-template-columns: minmax(0, 1fr) ${ASIDE_WIDTH}px;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     grid-template-areas:
       'hero aside'
+      'tabs aside'
       'main aside';
     gap: 36px ${COLUMN_GAP}px;
   }
@@ -184,6 +186,84 @@ export const Aside = styled.aside`
     overflow-y: auto;
     scrollbar-width: thin;
   }
+`
+
+/**
+ * 가로 탭 — 기업 상세와 같은 문법. 문서 열에만 걸고(우측 장부는 그대로 따라온다), 페이지 스크롤러 안에서
+ * sticky. ⚠️ 불투명 배경 필수 — 아래로 지나가는 본문이 비치면 안 된다.
+ */
+export const TabsArea = styled.div`
+  grid-area: tabs;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-width: 0;
+  max-width: ${PROSE_WIDTH + 2 * BREAKOUT_MAX}px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+`
+
+export const TabBar = styled.div`
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`
+
+export const Tab = styled.button<{ $active: boolean }>`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 12px 11px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  white-space: nowrap;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  cursor: pointer;
+  transition: color 0.14s;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: ${({ theme, $active }) => ($active ? ledgerAccent(theme.mode) : 'transparent')};
+  }
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -4px;
+    border-radius: 8px;
+  }
+`
+
+export const TabCount = styled.span`
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
 `
 
 export const Main = styled.main`
