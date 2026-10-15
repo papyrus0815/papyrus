@@ -34,6 +34,10 @@ export interface EntityListSidebarProps {
   title: string
   /** 빈 상태·에러 문구에 쓰는 도메인 명사 — '국가', '인물' */
   noun: string
+  /** 헤더 개수의 단위 — 기본 '개'. 사건은 지면 전체가 '건'으로 센다 */
+  countUnit?: string
+  /** 헤더 개수의 모수 설명(툴팁) — 다른 지면과 세는 범위가 다를 때 */
+  countHint?: string
   /** 그룹 접힘·앵커 id 접두어로 쓰는 도메인 키 — 'country', 'person' 등 */
   domainKey: string
 
@@ -99,6 +103,8 @@ const REVEAL_MAX_FRAMES = 60
 function EntityListSidebarBase({
   title,
   noun,
+  countUnit = '개',
+  countHint,
   domainKey,
   items,
   totalCount,
@@ -291,8 +297,8 @@ function EntityListSidebarBase({
 
   const headerCount =
     visibleCount !== totalCount
-      ? `${visibleCount} / ${totalCount}개`
-      : `${totalCount}개`
+      ? `${visibleCount} / ${totalCount}${countUnit}`
+      : `${totalCount}${countUnit}`
 
   // 결과 수 스크린리더 공지 — 타이핑 폭주를 피해 300ms 디바운스
   const [liveMessage, setLiveMessage] = useState('')
@@ -303,11 +309,11 @@ function EntityListSidebarBase({
     }
     const timerId = setTimeout(() => {
       setLiveMessage(
-        visibleCount === 0 ? '검색 결과 없음' : `${noun} ${visibleCount}개`,
+        visibleCount === 0 ? '검색 결과 없음' : `${noun} ${visibleCount}${countUnit}`,
       )
     }, 300)
     return () => clearTimeout(timerId)
-  }, [visibleCount, hasActiveFilter, noun])
+  }, [visibleCount, hasActiveFilter, noun, countUnit])
 
   const pinnedSet = useMemo(() => new Set(pinnedIds ?? []), [pinnedIds])
   const handleTogglePin = useCallback(
@@ -327,8 +333,10 @@ function EntityListSidebarBase({
               subtitle={subtitle ?? headerCount}
               subtitleTitle={
                 subtitle == null && visibleCount !== totalCount
-                  ? `표시 ${visibleCount} / 전체 ${totalCount}`
-                  : undefined
+                  ? `표시 ${visibleCount} / 전체 ${totalCount}${countHint ? ` — ${countHint}` : ''}`
+                  : subtitle == null
+                    ? countHint
+                    : undefined
               }
               action={
                 onAdd ? (

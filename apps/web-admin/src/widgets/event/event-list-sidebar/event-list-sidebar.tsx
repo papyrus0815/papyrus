@@ -12,7 +12,7 @@
  * - 세기는 접히는 섹션, 연은 소제목. 그 밖의 장식(축·눈금·배지)은 두지 않는다.
  * - 유일한 색은 분류(카탈로그·원장과 같은 LEDGER 팔레트, 대비 보정본)다.
  */
-import React, { useMemo, useState } from 'react'
+import React, { Suspense, lazy, useMemo, useState } from 'react'
 
 import { FiClock, FiLayers, FiStar } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
@@ -38,7 +38,18 @@ import {
   useSidebarRecents,
 } from '@/widgets/entity-list-sidebar'
 
-import { EventListScope, OverviewTail, ParentTail } from './event-list-sidebar.styles'
+import { EventListScope } from './event-list-sidebar.styles'
+
+/**
+ * 사건 등록 모달 — 열 때만 불러온다(폼 청크 gzip 약 19KB, 상세의 '새 하위 사건'과 같은 정책).
+ * URL 동기화(`?eventForm=new`) 호스트를 쓰지 않는 이유: 상세 본문도 같은 모달을 띄우는 길이
+ * 있어 두 호스트가 한 파라미터를 동시에 읽으면 모달이 겹친다. 기업 사이드바처럼 로컬 상태로 연다.
+ */
+const LazyEventRegisterModal = lazy(() =>
+  import('@/widgets/event-form/ui/event-register-modal').then((module) => ({
+    default: module.EventRegisterModal,
+  })),
+)
 
 /**
  * 세기 앵커 ramp — 최신(인디고)에서 먼 과거(바랜 슬레이트)로 **단조 감쇠**한다.
@@ -63,11 +74,6 @@ function centuryRampColor(index: number, total: number): string {
 const UNKNOWN_GROUP = '__no-date__'
 const PINNED_GROUP = '__pinned__'
 const RECENT_GROUP = '__recent__'
-type SortKey = 'recent' | 'oldest' | 'title' | 'created'
-
-/** 시간 순서로 늘어선 정렬인가 — 연 앵커는 이때만 뜻이 있다 */
-const isChronological = (sort: SortKey) =>
-  sort === 'recent' || sort === 'oldest'
 
 /**
  * 메타 줄 선두의 날짜 토큰.
@@ -137,28 +143,6 @@ function shortParentTitle(title: string): string {
   return head.length >= 2 ? head : title.trim()
 }
 
-/** 상위 꼬리표 최대 길이 — 아래 주석 참고 */
-const PARENT_TAIL_MAX = 16
-
-/**
- * 화면에 세우는 꼬리표 길이 — 여기서만 자른다(검색·스크린리더는 전값을 쓴다).
- *
- * 꼬리표는 제목에 딸린 **주석**이지 두 번째 제목이 아니다. 실측 73개 꼬리표의 중앙값은
- * 8자로 멀쩡한데 꼬리 쪽이 길다 — 17자 이상이 8개, 최장 28자('엔비디아 차세대 AI 칩
- * 아키텍처 블랙웰 공개')다. 그런 꼬리표는 혼자 한 줄을 다 먹고도 말줄임됐고, 정작 자기가
- * 붙은 제목('다고메 유덱스 작성' 8자)보다 세 배 길었다(실측 17행에서 꼬리표가 제목보다 길다).
- * 16자에서 끊는다 — 중앙값의 두 배라 짧은 꼬리표는 하나도 건드리지 않는다.
- */
-function clampParentTail(text: string): string {
-  if (text.length <= PARENT_TAIL_MAX) return text
-  const head = text.slice(0, PARENT_TAIL_MAX)
-  /* 낱말 한가운데서 끊지 않는다 — 그냥 자르면 '오토 3세 섭정 분쟁과 하인리…'처럼 이름이
-     쪼개진다(제목 줄바꿈을 keep-all로 고친 것과 같은 이유). 다만 첫 낱말이 통째로 한도를
-     넘으면(긴 고유명사) 되돌릴 자리가 없으므로 그때는 그대로 끊는다. */
-  const lastSpace = head.lastIndexOf(' ')
-  const cut = lastSpace >= PARENT_TAIL_MAX / 2 ? head.slice(0, lastSpace) : head
-  return `${cut.trimEnd()}…`
-}
 
 /** 관련국 요약 — 앞 하나만 이름으로, 나머지는 '외 N' (조약 사이드바와 같은 규약) */
 function summarizeCountries(event: HistoricalEvent): string | null {
@@ -212,6 +196,8 @@ function EventListSidebarInner({
   onAdd,
 }: EventListSidebarProps) {
   const navigate = useNavigate()
+  /* 호출부가 onAdd를 안 주면(레이아웃 셸) 등록 모달을 직접 띄운다 — 기업 사이드바와 같은 규약 */
+  const [createOpen, setCreateOpen] = useState(false)
   // 사이드바는 세기 그룹을 온전히 보여야 하므로 전량 로드(서버 페이지네이션 위 클라 그룹핑은
   // 1페이지만 그룹이 잡히는 함정이 있다 — event-catalog 회귀와 같은 이유).
   const { events, isLoading, isError, refetch } = useEvents({
@@ -222,7 +208,6 @@ function EventListSidebarInner({
 
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
-  const [sort, setSort] = useState<SortKey>('recent')
 
   /** 분류 셀렉트 — 건수를 함께 보여 어느 축이 실제로 채워져 있는지 고르기 전에 알 수 있게 */
   const categoryOptions = useMemo(() => {
@@ -247,7 +232,6 @@ function EventListSidebarInner({
 
   const { items, groups, totalCount } = useMemo(() => {
     const byId = new Map(events.map((event) => [event.id, event]))
-    const chronological = isChronological(sort)
     /** 검색 중인가 — 행이 '왜 걸렸는지'를 스스로 말해야 하는 유일한 상태다(아래 meta). */
     const searching = !!query.trim()
     /** 검색어 매치를 mark로 짚는다 — 검색 중일 때만 부른다 */
@@ -262,8 +246,6 @@ function EventListSidebarInner({
       options: {
         underYearAnchor: boolean
         leadDivider?: React.ReactNode
-        /** 바로 윗행이 같은 상위 사건이었나 — 꼬리표를 되풀이하지 않는다 */
-        repeatsParent?: boolean
       } = {
         underYearAnchor: false,
       },
@@ -271,21 +253,7 @@ function EventListSidebarInner({
       const parent = event.parentEventId ? byId.get(event.parentEventId) : null
       const countries = summarizeCountries(event)
       const childCount = event.hierarchy?.children?.length ?? 0
-      /** 조망 지면이 열리는 최상위 — 판정은 pages/events/overview/event-page-switch와 같다 */
-      const opensOverview =
-        !parent && childCount > 0 && event.anchorOverride !== 'PLAIN'
       const categoryLabel = event.category ? String(event.category) : null
-      /* 상위 꼬리표는 **묶음의 첫 행에만**. 한 상위 밑에 다섯 행이 붙는 일이 흔해서
-         (NSPM-2 서명 · 러불 동맹 · 독일 함대법) 매 행에 찍으면 같은 문장이 세로로 쌓여
-         정작 그 행만의 정보를 밀어낸다. 되풀이는 자리에서는 아예 달지 않는다 —
-         그 행들은 꼬리표를 단 행 바로 아래 이어 서서 한 묶음으로 읽힌다. */
-      const parentTailFull =
-        parent && !options.repeatsParent
-          ? shortParentTitle(parent.title)
-          : null
-      const parentTail = parentTailFull
-        ? clampParentTail(parentTailFull)
-        : null
       /* 화면에 세우는 제목은 **자기 날짜 꼬리를 덜어낸** 것 — 바로 왼쪽 선두 열과 연
          머리글이 같은 날짜를 이미 말한다(shared/lib/title-date.ts).
          연도 하나뿐인 꼬리('포츠담 회담 (1945)')까지 덜어내는 건 이 지면이 연도를 늘
@@ -335,27 +303,11 @@ function EventListSidebarInner({
         lead: leadDateToken(event, options.underYearAnchor),
         leadDivider: options.leadDivider,
         /*
-         * 상위 사건 꼬리표 — 제목 **뒤에 이어 붙는다**(mark는 제목과 같은 줄 안에 흐른다).
-         *
-         * 메타 줄을 없애면서 '이 행이 무엇의 하위인가'가 갈 곳이 없어졌는데, 그건 행 하나로
-         * 자족하지 않는 유일한 값이다(분류·관련국은 본문 열이 말하지만, 계보는 목록에
-         * 다른 출처가 없다). 제목 줄 안에 두면 세로 예산을 0px 쓰고 2줄 클램프에 함께 접힌다.
+         * (제거, 2026-10-15) 제목 뒤 꼬리표 — '↳ 상위 사건'·'하위 N'.
+         * 제목이 1~2줄로 접히고 꼬리표가 그 뒤에 붙으면서 행 높이가 37·58·79px로 들쭉날쭉했고,
+         * 사용자 판정이 '너무 지저분하다'였다. 행은 이제 **한 줄 제목**으로 고르다(37px).
+         * 계보는 툴팁(제목 전문)·aria-label('…의 하위 사건')·상세 본문의 상위/하위 지면이 말한다.
          */
-        mark: parentTail ? (
-          <>
-            {/* 줄바꿈 기회는 꼬리표 **앞에만** 둔다 — 아래 nbsp 참고 */}{' '}
-            <ParentTail title={`상위 사건: ${parent?.title ?? parentTail}`}>
-              {`\u21b3\u00a0${parentTail}`}
-            </ParentTail>
-          </>
-        ) : opensOverview ? (
-          <>
-            {' '}
-            <OverviewTail title="하위 사건을 거느린 최상위 사건 — 누르면 조망 지면이 열립니다">
-              하위 {childCount}
-            </OverviewTail>
-          </>
-        ) : undefined,
         /* 읽어 주는 쪽에는 **줄이기 전 값**을 그대로 준다 — 화면에서는 연 소제목이 연도를
            대신 말해 날짜를 '9.4'로 줄였고, 제목에서도 중복 날짜 꼬리를 덜어냈다. */
         ariaLabel: [
@@ -378,25 +330,16 @@ function EventListSidebarInner({
     const rows: EntitySidebarItem[] = []
     const groupMeta = new Map<string, { name: string; sortKey: number }>()
 
-    const sorted = [...events]
-    if (sort === 'title') {
-      sorted.sort((left, right) => left.title.localeCompare(right.title, 'ko'))
-    } else if (sort === 'created') {
-      sorted.sort((left, right) =>
-        (right.createdAt ?? '').localeCompare(left.createdAt ?? ''),
-      )
-    } else {
-      /* 연도가 아니라 **날짜**로 정렬한다(BC 안전·미상은 항상 뒤).
-         예전엔 연도만 비교해 같은 해 안은 서버 응답 순서 그대로였다 — 킥커에 날짜가
-         드러난 뒤로는 '9.4 · 7.27 · … · 9.10 · 9.14'처럼 축이 되돌아가는 게 보였다. */
-      sorted.sort((left, right) =>
-        compareByDate(
-          left.startDate,
-          right.startDate,
-          sort === 'oldest' ? 'asc' : 'desc',
-        ),
-      )
-    }
+    /*
+     * 최신순 하나(2026-10-15). 정렬 셀렉트(최신·오래된·이름·등록순)는 걷어냈다 — 기업 사이드바처럼
+     * 검색칸과 필터 하나를 **한 줄**에 앉히려면 칩이 하나여야 하고(공용 규칙: 칩 ≤1개면 인라인),
+     * 이 사이드바는 상세 사이를 오가는 길이라 정렬 축이 필요한 일은 본문 목록(/events)이 맡는다.
+     * 연도가 아니라 **날짜**로 정렬한다(BC 안전·미상은 항상 뒤) — 같은 해 안이 서버 응답
+     * 순서 그대로면 '9.4 · 7.27 · … · 9.10'처럼 축이 되돌아간다.
+     */
+    const sorted = [...events].sort((left, right) =>
+      compareByDate(left.startDate, right.startDate, 'desc'),
+    )
 
     /* 1단계 — 걸러내기. 분류·검색을 **여기서 모두** 끝낸다. 앵커·꼬리표는 화면에 남는
        행들 사이의 관계라서, 걸러낸 뒤의 목록을 봐야 맞게 붙는다. */
@@ -426,12 +369,9 @@ function EventListSidebarInner({
     }
 
     /* 2단계 — 남은 행들에 앵커·꼬리표를 붙인다.
-       연 앵커는 '연도가 바뀌는 첫 행'에만. 시간 정렬이 아닐 때는 순서가 연도와 무관하므로
-       앵커를 달지 않는다 — 같은 연도가 목록 곳곳에서 되살아나 축을 거짓말로 만든다. */
+       연 앵커는 '연도가 바뀌는 첫 행'에만(같은 연도가 되풀이되면 축이 소음이 된다). */
     let anchoredYear: number | null = null
     let anchoredGroup: string | null = null
-    /** 상위 꼬리표 되풀이 판정용 — 연·세기가 바뀌면 문맥이 끊기므로 같이 초기화한다 */
-    let previousParentId: string | null = null
 
     for (const { event, groupId, signedYear } of visible) {
       if (!groupMeta.has(groupId)) {
@@ -444,34 +384,27 @@ function EventListSidebarInner({
       }
 
       let leadDivider: React.ReactNode
-      if (chronological && signedYear != null) {
+      if (signedYear != null) {
         if (groupId !== anchoredGroup || signedYear !== anchoredYear) {
           leadDivider = formatYearLabel(signedYear)
           anchoredYear = signedYear
           anchoredGroup = groupId
-          previousParentId = null
         }
       }
-      const parentId = event.parentEventId ?? null
       rows.push(
         toRow(event, groupId, {
-          underYearAnchor: chronological && signedYear != null,
+          underYearAnchor: signedYear != null,
           leadDivider,
-          repeatsParent: !!parentId && parentId === previousParentId,
         }),
       )
-      previousParentId = parentId
     }
 
-    // 최신 세기 먼저(기본) — 정렬이 '오래된순'이면 그룹도 오래된 세기 먼저.
-    // '연도 미상'은 방향과 무관하게 맨 끝이다. 예전엔 sortKey=+Infinity에 방향을 곱해서,
-    // 기본값인 최신순에서 -Infinity가 되며 미상 그룹이 목록 맨 위로 올라왔다.
-    const direction = sort === 'oldest' ? 1 : -1
+    // 최신 세기 먼저. '연도 미상'은 맨 끝이다(sortKey=+Infinity를 뒤집으면 맨 위로 올라온다).
     const centuryEntries = [...groupMeta.entries()].sort((left, right) => {
       const leftUnknown = left[0] === UNKNOWN_GROUP
       const rightUnknown = right[0] === UNKNOWN_GROUP
       if (leftUnknown !== rightUnknown) return leftUnknown ? 1 : -1
-      return (left[1].sortKey - right[1].sortKey) * direction
+      return right[1].sortKey - left[1].sortKey
     })
     const rampLength = centuryEntries.filter(
       ([groupId]) => groupId !== UNKNOWN_GROUP,
@@ -539,7 +472,6 @@ function EventListSidebarInner({
     events,
     query,
     categoryFilter,
-    sort,
     hasActiveFilter,
     pinnedIds,
     recentIds,
@@ -551,6 +483,10 @@ function EventListSidebarInner({
       <EntityListSidebar
         title="사건 목록"
         noun="사건"
+        /* 목록 페이지·필터 칩이 모두 '건'으로 센다 — 같은 사건 수가 '개'로 읽히지 않게.
+           이 수는 하위 사건까지 센다 — 목록 머리글은 최상위만 세므로 툴팁으로 모수를 밝힌다. */
+        countUnit="건"
+        countHint="하위 사건 포함(사건 목록 머리글은 최상위만 셉니다)"
         domainKey="event"
         items={items}
         totalCount={totalCount}
@@ -560,7 +496,8 @@ function EventListSidebarInner({
         query={query}
         onQueryChange={setQuery}
         searchPlaceholder="제목·국가·키워드 검색..."
-        titleLines={2}
+        /* 한 줄 — 행 높이를 고르게(37px). 잘린 제목은 행 툴팁이 전문을 보인다 */
+        titleLines={1}
         selects={[
           {
             id: 'category',
@@ -575,19 +512,6 @@ function EventListSidebarInner({
               })),
             ],
           },
-          {
-            id: 'sort',
-            label: '정렬',
-            value: sort,
-            active: false,
-            onChange: (next) => setSort(next as SortKey),
-            options: [
-              { value: 'recent', label: '최신순' },
-              { value: 'oldest', label: '오래된순' },
-              { value: 'title', label: '이름순' },
-              { value: 'created', label: '등록순' },
-            ],
-          },
         ]}
         hasActiveFilter={hasActiveFilter}
         onClearFilters={() => {
@@ -596,7 +520,7 @@ function EventListSidebarInner({
         }}
         pinnedIds={pinnedIds}
         onTogglePin={togglePin}
-        onAdd={onAdd}
+        onAdd={onAdd ?? (() => setCreateOpen(true))}
         addLabel="사건 등록"
         isLoading={isLoading}
         isError={isError}
@@ -605,6 +529,18 @@ function EventListSidebarInner({
         onToggleCollapse={onToggleCollapse}
         collapsedIcon={<FiLayers size={16} />}
       />
+      {createOpen && (
+        <Suspense fallback={null}>
+          <LazyEventRegisterModal
+            isOpen
+            onClose={() => setCreateOpen(false)}
+            onSaved={(eventId) => {
+              setCreateOpen(false)
+              navigate(pathKeys.events.detail(eventId))
+            }}
+          />
+        </Suspense>
+      )}
     </EventListScope>
   )
 }

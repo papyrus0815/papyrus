@@ -84,15 +84,8 @@ export const EventListScope = styled.div`
     }
   }
 
-  /* 건수와 캐럿을 라벨 뒤로 — 공용은 캐럿이 맨 앞이지만, 사건은 세기마다 건수가 크게
-     달라(3건 ↔ 121건) 그 수가 라벨 바로 옆에서 읽혀야 어디를 펼칠지 고를 수 있다. */
-  ${S.GroupCaret} {
-    order: 3;
-    margin: 0 0 0 6px;
-  }
-  ${S.GroupCount} {
-    order: 2;
-  }
+  /* (제거, 2026-10-15) 캐럿·건수를 라벨 뒤로 보내던 재배치. 기업·국가·인물 사이드바와 같은
+     공용 순서('⌄ ● 21세기 ······ 39')로 되돌린다 — 도메인마다 머리글 문법이 달랐다. */
 
   /* ── 연 ─────────────────────────────────────────────────────────────────
      세기 헤더 바로 아래에 이어 붙어 따라다닌다. 한 세기가 121건이면 스크롤 두세 번에
@@ -138,7 +131,8 @@ export const EventListScope = styled.div`
      * auto 키워드라 한 번 그려진 뒤로는 실제 높이를 기억한다 — 이 값은 '첫 추정'일 뿐이다.
      * 새 실측 평균 45.5px(37px 60% · 58px 40%)에 맞춰 40px로 낮춘다.
      */
-    contain-intrinsic-size: auto 40px;
+    /* 제목이 한 줄로 고정된 뒤(2026-10-15) 행은 37px 하나다 */
+    contain-intrinsic-size: auto 37px;
   }
 
   /*
@@ -193,6 +187,20 @@ export const EventListScope = styled.div`
      * 다크 indigo-300 7.42:1. 선택 신호는 면(틴트)과 링이 함께 진다.
      */
     color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  }
+
+  /*
+   * ── 제목 굵기 600 → 500 ─────────────────────────────────────────────────
+   * 공용 600은 이름이 짧은 도메인(국가·인물 — 한 줄 말줄임)의 값이다. 사건 제목은 **문장**이라
+   * 320px 패널에서 40%가 두 줄로 접히고, 굵은 두 줄이 행마다 쌓여 목록 전체가 굵은 글자의 벽이
+   * 됐다 — 날짜·연 소제목·선택 행이 그 벽에 묻혀 위계가 크기 하나로만 갈렸다.
+   * 본문은 500으로 덜고, 굵기는 **선택 행**에 돌려준다('지금 어디인가'가 굵기로도 선다).
+   */
+  ${S.CodeText} {
+    font-weight: 500;
+  }
+  ${S.ListRow}[aria-selected='true'] ${S.CodeText} {
+    font-weight: 650;
   }
 
   /* ── 선두 날짜 열 ────────────────────────────────────────────────────────
@@ -276,51 +284,4 @@ export const EventListScope = styled.div`
     background: ${({ theme }) =>
       pinPlate(theme.mode === 'dark' ? '#252541' : '#eef0fe')};
   }
-`
-
-/**
- * 상위 사건 꼬리표 — 제목 끝에 이어 붙는 계보 한 조각.
- *
- * 둘째 줄을 없애면서 갈 곳이 없어진 값이다. 분류·관련국과 달리 **목록에 다른 출처가 없어**
- * (본문 목록에도 '무엇의 하위인가'를 적는 열이 없다) 버릴 수 없었고, 그렇다고 줄 하나를
- * 되살릴 값도 아니다. 제목과 같은 줄 흐름에 두면 세로 예산을 0px 쓰고 2줄 클램프에 함께 접힌다.
- *
- * ⚠️ 제목(CodeText) **안쪽**에 렌더된다(공용 행의 mark 슬롯). 그래서 크기·색을 여기서
- *    직접 낮춰야 한다 — 상속하면 제목과 같은 15/600으로 서서 제목이 둘로 읽힌다.
- * ⚠️ 꼬리표가 제목을 밀어내지 않도록 줄바꿈을 허용한다(nowrap이면 2줄 클램프 안에서
- *    제목 쪽이 먼저 잘린다). 단 화살표와 이름 사이는 **nbsp**로 묶는다 — 일반 공백이면
- *    거기서 줄이 갈려 첫 줄 끝에 화살표만 고아로 남는다(실측에서 그렇게 보였다).
- */
-export const ParentTail = styled.span`
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  /*
-   * 낱말을 지키는 줄바꿈은 이제 제목(CodeText)이 keep-all로 갖고 있어 그대로 상속된다.
-   * (예전엔 제목이 overflow-wrap: anywhere였고 그 값이 내려와 꼬리표를 **음절 사이에서**
-   * 갈랐다 — '↳ 대동방' / '위기'. 그래서 여기서 normal로 되돌리고 있었다.)
-   * break-word만 남겨 '한 낱말이 한 줄보다 긴' 예외에서 가로로 넘치지 않게 한다.
-   */
-  overflow-wrap: break-word;
-`
-
-/**
- * 최상위 사건 표지 — 하위를 거느린 루트는 상세 대신 '조망' 지면이 열린다. 목록에서 그걸 미리
- * 알 수 있게 제목 줄 끝에 '하위 N'을 붙인다(꼬리표와 같은 자리라 세로 공간 0).
- */
-export const OverviewTail = styled.span`
-  display: inline-block;
-  margin-left: 2px;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 17px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  vertical-align: 1px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(165,180,252,0.12)' : 'rgba(99,102,241,0.08)'};
 `
