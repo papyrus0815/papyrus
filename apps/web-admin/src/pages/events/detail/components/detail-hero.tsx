@@ -32,6 +32,7 @@ import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-mod
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
+import { HeroThumbnail } from './hero-thumbnail'
 import {
   InlineSelect,
   InlineText,
@@ -57,6 +58,8 @@ interface DetailHeroProps {
    * (탭 지면에서 앵커는 다른 탭의 섹션이라 아무 데도 가지 않았다).
    */
   onShowActors?: () => void
+  /** 대표 이미지를 누르면 — 자료 탭. 주면 히어로에 대표 이미지 칸이 선다(탭 지면) */
+  onOpenMedia?: () => void
 }
 
 /**
@@ -75,6 +78,7 @@ export function DetailHero({
   onCountryClick,
   withSummary = true,
   onShowActors,
+  onOpenMedia,
 }: DetailHeroProps) {
   const prefetchEvent = usePrefetchEventDetail()
   const { data: categories = [] } = useQuery({
@@ -170,6 +174,10 @@ export function DetailHero({
         )}
       </S.HeroTopRow>
 
+      {/* 대표 이미지 — 넓으면 제목 오른쪽, 좁으면 제목 위 배너(S.Hero 격자) */}
+      {onOpenMedia && <HeroThumbnail event={event} onPatch={onPatch} onOpenMedia={onOpenMedia} />}
+
+      <S.HeroText>
       <TitleHost>
         <InlineText
           value={event.title}
@@ -220,6 +228,7 @@ export function DetailHero({
       />
 
       {withSummary && <DetailSummary event={event} onPatch={onPatch} />}
+      </S.HeroText>
     </S.Hero>
   )
 }

@@ -360,11 +360,33 @@ export const Main = styled.main`
 export const Hero = styled.section`
   grid-area: hero;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
+  /*
+   * 격자 — 상단 줄 / 대표 이미지 / 제목 묶음. 좁으면 이미지가 제목 위 배너, 문서 열이 880 이상이면
+   * (지면 1240 = 880 + 장부 312 + gap 48) 제목 묶음 오른쪽 340px 칸. 썸네일은 사건의 성격을 보여 주는
+   * 그림이라 첫 화면에 있어야 한다(예전엔 '자료' 탭 안에만 있었다).
+   */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'top'
+    'thumb'
+    'text';
   gap: 20px;
   padding-bottom: 8px;
   width: 100%;
+
+  @container eventdetail (min-width: 1240px) {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-areas:
+      'top top'
+      'text thumb';
+    gap: 20px 40px;
+    align-items: start;
+  }
+
+  > :first-child {
+    grid-area: top;
+  }
 
   /**
    * 진입 페이드업 — 사건 진입(또는 다른 사건으로 이동 시 ErrorBoundary key 리셋으로
@@ -392,6 +414,15 @@ export const Hero = styled.section`
   max-width: 100%;
   width: 100%;
   margin-inline: 0;
+`
+
+/** 히어로의 제목 묶음(제목·밑줄·행위자·요약) — 예전 Hero의 flex 열을 그대로 옮긴 것 */
+export const HeroText = styled.div`
+  grid-area: text;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 `
 
 /**

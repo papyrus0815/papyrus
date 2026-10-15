@@ -654,6 +654,7 @@ function EventDetailContent({
               onCountryClick={onCountryClick}
               withSummary={false}
               onShowActors={() => setActiveTab('actors')}
+              onOpenMedia={() => setActiveTab('media')}
             />
 
             <S.TabsArea>
