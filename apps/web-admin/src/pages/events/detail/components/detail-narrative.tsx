@@ -268,33 +268,34 @@ export function DetailNarrative({
               <S.SectionSubtitle>{backgroundRows.length}단락</S.SectionSubtitle>
             )}
           </S.SectionHeader>
-          <S.SectionBody>
-            <InlineRichText
-              value={event.background ?? ''}
-              /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
-              onSave={(next) => onPatch({ background: next })}
-              /* 아래 번호 단락이 본론이고 이 줄은 그 앞에 두는 요약 — 선택이라고 적는다. */
-              placeholder="사건 직전의 정세·도화선 — 요약 한 문단(선택)"
-              label="배경 요약"
-              onPersonClick={onPersonClick}
-              onEntityLink={handleEntityLink}
-              transformReadHtml={emphasisToHtml}
-            />
-          </S.SectionBody>
-          {backgroundRows.length > 0 && (
-            <NarrativeSectionList
-              rows={backgroundRows}
-              onFieldChange={background.change}
-              onMove={background.move}
-              onRemove={background.remove}
-              onPersonClick={onPersonClick}
-              onEntityLink={handleEntityLink}
-              labelPrefix="배경"
-              bodyPlaceholder="이 배경 단락의 본문"
-              anchorPrefix="background"
-              autoEditKey={autoEditKey}
-            />
-          )}
+          {/* 요약 본문은 타임라인의 첫 마디 — 번호 단락과 한 선에 꿴다 */}
+          <NarrativeSectionList
+            rows={backgroundRows}
+            onFieldChange={background.change}
+            onMove={background.move}
+            onRemove={background.remove}
+            onPersonClick={onPersonClick}
+            onEntityLink={handleEntityLink}
+            labelPrefix="배경"
+            bodyPlaceholder="이 배경 단락의 본문"
+            anchorPrefix="background"
+            autoEditKey={autoEditKey}
+            lead={
+              <S.SectionBody>
+                <InlineRichText
+                  value={event.background ?? ''}
+                  /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
+                  onSave={(next) => onPatch({ background: next })}
+                  /* 아래 번호 단락이 본론이고 이 줄은 그 앞에 두는 요약 — 선택이라고 적는다. */
+                  placeholder="사건 직전의 정세·도화선 — 요약 한 문단(선택)"
+                  label="배경 요약"
+                  onPersonClick={onPersonClick}
+                  onEntityLink={handleEntityLink}
+                  transformReadHtml={emphasisToHtml}
+                />
+              </S.SectionBody>
+            }
+          />
           <AddSectionButton
             onClick={background.add}
             label="배경 단락 추가"
@@ -351,32 +352,33 @@ export function DetailNarrative({
               <S.SectionSubtitle>{aftermathRows.length}단락</S.SectionSubtitle>
             )}
           </S.SectionHeader>
-          <S.SectionBody>
-            <InlineRichText
-              value={event.aftermath ?? ''}
-              /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
-              onSave={(next) => onPatch({ aftermath: next })}
-              placeholder="사건 직후의 결과·후속 영향 — 요약 한 문단(선택)"
-              label="여파 요약"
-              onPersonClick={onPersonClick}
-              onEntityLink={handleEntityLink}
-              transformReadHtml={emphasisToHtml}
-            />
-          </S.SectionBody>
-          {aftermathRows.length > 0 && (
-            <NarrativeSectionList
-              rows={aftermathRows}
-              onFieldChange={aftermath.change}
-              onMove={aftermath.move}
-              onRemove={aftermath.remove}
-              onPersonClick={onPersonClick}
-              onEntityLink={handleEntityLink}
-              labelPrefix="여파"
-              bodyPlaceholder="이 여파 단락의 본문"
-              anchorPrefix="aftermath"
-              autoEditKey={autoEditKey}
-            />
-          )}
+          {/* 요약 본문은 타임라인의 첫 마디 — 번호 단락과 한 선에 꿴다 */}
+          <NarrativeSectionList
+            rows={aftermathRows}
+            onFieldChange={aftermath.change}
+            onMove={aftermath.move}
+            onRemove={aftermath.remove}
+            onPersonClick={onPersonClick}
+            onEntityLink={handleEntityLink}
+            labelPrefix="여파"
+            bodyPlaceholder="이 여파 단락의 본문"
+            anchorPrefix="aftermath"
+            autoEditKey={autoEditKey}
+            lead={
+              <S.SectionBody>
+                <InlineRichText
+                  value={event.aftermath ?? ''}
+                  /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
+                  onSave={(next) => onPatch({ aftermath: next })}
+                  placeholder="사건 직후의 결과·후속 영향 — 요약 한 문단(선택)"
+                  label="여파 요약"
+                  onPersonClick={onPersonClick}
+                  onEntityLink={handleEntityLink}
+                  transformReadHtml={emphasisToHtml}
+                />
+              </S.SectionBody>
+            }
+          />
           <AddSectionButton
             onClick={aftermath.add}
             label="여파 단락 추가"

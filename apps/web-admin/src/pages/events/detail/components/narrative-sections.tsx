@@ -11,7 +11,7 @@
  * - **만들면 바로 쓴다.** '단락 추가'로 생긴 단락은 제목 입력이 열린 채 포커스까지 와 있고,
  *   제목이 빈 단락은 '제목 붙이기' 한 번으로 같은 자리에서 열린다.
  */
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 import { FiArrowDown, FiArrowUp, FiPlus, FiTrash2, FiType } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -57,6 +57,11 @@ interface NarrativeSectionListProps {
    * 전개 타임라인이 이 연결로 하위 사건 막대와 단락을 잇는다.
    */
   subjectOptions?: ReadonlyArray<{ value: string; label: string }>
+  /**
+   * 번호 단락 앞의 요약 본문(배경·여파) — 타임라인의 **첫 마디**로 같은 선에 꿴다(번호 대신 점).
+   * 예전엔 선 밖에 따로 놓여, 단락이 없는 사건(대부분)은 배경에 타임라인이 아예 없었다.
+   */
+  lead?: ReactNode
 }
 
 export function NarrativeSectionList({
@@ -71,6 +76,7 @@ export function NarrativeSectionList({
   anchorPrefix,
   autoEditKey,
   subjectOptions,
+  lead,
 }: NarrativeSectionListProps) {
   /**
    * '제목 붙이기'로 연 단락들 — 제목이 빈 채로도 입력을 띄워 두려면 이 기억이 필요하다
@@ -85,6 +91,13 @@ export function NarrativeSectionList({
 
   return (
     <SectionStack>
+      {lead && (
+        <SectionItem>
+          <LeadNode aria-hidden />
+          <SectionPeriod>요약</SectionPeriod>
+          {lead}
+        </SectionItem>
+      )}
       {rows.map((row, index) => {
         const hasTitle = row.title.trim().length > 0
         const titleOpen =
@@ -288,6 +301,18 @@ const SectionIndex = styled.span`
   /* 이 번호가 단락의 유일한 표지일 때가 있다 — text.tertiary는 AA 미달(라이트 2.54:1). */
   color: ${metaText};
   user-select: none;
+`
+
+/** 요약 마디의 노드 — 번호 노드와 같은 중심선 위의 작은 채운 점(번호가 아니라 '들머리'라서) */
+const LeadNode = styled.span`
+  position: absolute;
+  left: ${NODE_SIZE / 2 - 5}px;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.colors.text.tertiary};
+  box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
 `
 
 /** 시기 줄 — 연혁의 날짜 줄(TLDate)과 같은 크기·굵기. 노드와 같은 높이에서 시작한다. */
