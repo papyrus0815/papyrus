@@ -12,7 +12,7 @@
  */
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-empty'
 
-import { type SectionKind, sectionKindOf } from './narrative-sections.lib'
+import { type SectionKind, sectionKindOf, splitTitlePeriod } from './narrative-sections.lib'
 
 /** 내용이 없으면 접히는 섹션들 — 모듈·댓글은 대상이 아니다(모듈은 이미 있을 때만 뜬다). */
 export type FoldableSectionId =
@@ -126,6 +126,7 @@ export function paragraphOutline(
     .filter((section) => sectionKindOf(section.sectionType) === kind)
     .map((section, index) => ({
       id: `${kind}-${index + 1}`,
-      label: section.title?.trim() || `${index + 1}단락`,
+      /* 시기 '(1870년 12월)'는 본문 타임라인의 날짜 줄이 맡는다 — 목차에선 떼어 한 줄로 */
+      label: splitTitlePeriod(section.title?.trim() ?? '').title.trim() || `${index + 1}단락`,
     }))
 }

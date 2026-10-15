@@ -723,7 +723,7 @@ const SummaryHost = styled.div`
   font-size: 16.5px;
   line-height: 1.65;
   color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: 720px;
+  max-width: ${S.PROSE_WIDTH}px;
 `
 
 const BackLink = styled(Link)`
