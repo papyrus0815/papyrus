@@ -26,7 +26,7 @@ import {
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import styled, { css, keyframes } from 'styled-components'
 
 import type { Company, CompanyStatus } from '@/shared/api/company'
@@ -41,6 +41,7 @@ import { notify } from '@/shared/ui/toast'
 import {
   COMPANY_STATUS_META,
   COMPANY_STATUS_ORDER,
+  CompanyCategoryManagerModal,
   CompanyRegisterModal,
 } from '@/widgets/company-form'
 
@@ -328,6 +329,19 @@ export const CompaniesListPage: React.FC = () => {
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT)
   /** 등록·수정 모달 — null=닫힘, 'new'=신규, 그 외=수정 대상 id */
   const [modalTarget, setModalTarget] = useState<string | null>(null)
+  /* 카테고리 관리 모달 — 옛 /company-categories 주소는 ?categories=open으로 넘어와 바로 연다 */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [categoriesOpen, setCategoriesOpen] = useState(
+    () => searchParams.get('categories') === 'open',
+  )
+  const closeCategories = () => {
+    setCategoriesOpen(false)
+    if (searchParams.has('categories')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('categories')
+      setSearchParams(next, { replace: true })
+    }
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query), 200)
@@ -653,6 +667,39 @@ export const CompaniesListPage: React.FC = () => {
                 </MetaLine>
               )}
             </NameText>
+            {/* 관리 버튼 — 이름 칸 오른끝(소개 꼬리) 위에 뜬다. 예전엔 기간 열 위라 '1983 – 현재'가 반쯤 가려졌다 */}
+            <ActionsCell role="group" aria-label={`${company.name} 관리`}>
+              {company.websiteUrl && (
+                <IconAction
+                  as="a"
+                  href={company.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  title="웹사이트 열기"
+                  aria-label={`${company.name} 웹사이트 (새 창)`}
+                >
+                  <FiExternalLink size={14} />
+                </IconAction>
+              )}
+              <IconAction
+                type="button"
+                onClick={() => setModalTarget(company.id)}
+                title="기본 정보 수정"
+                aria-label={`${company.name} 수정`}
+              >
+                <FiEdit2 size={14} />
+              </IconAction>
+              <IconAction
+                type="button"
+                $danger
+                disabled={deletingId === company.id}
+                onClick={() => void handleDelete(company)}
+                title="삭제"
+                aria-label={`${company.name} 삭제`}
+              >
+                <FiTrash2 size={14} />
+              </IconAction>
+            </ActionsCell>
           </NameCell>
           <TrackCell role="cell" aria-hidden>
             {axis && (
@@ -690,38 +737,6 @@ export const CompaniesListPage: React.FC = () => {
               <Muted>—</Muted>
             )}
           </Cell>
-          <ActionsCell role="cell">
-            {company.websiteUrl && (
-              <IconAction
-                as="a"
-                href={company.websiteUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                title="웹사이트 열기"
-                aria-label={`${company.name} 웹사이트 (새 창)`}
-              >
-                <FiExternalLink size={14} />
-              </IconAction>
-            )}
-            <IconAction
-              type="button"
-              onClick={() => setModalTarget(company.id)}
-              title="기본 정보 수정"
-              aria-label={`${company.name} 수정`}
-            >
-              <FiEdit2 size={14} />
-            </IconAction>
-            <IconAction
-              type="button"
-              $danger
-              disabled={deletingId === company.id}
-              onClick={() => void handleDelete(company)}
-              title="삭제"
-              aria-label={`${company.name} 삭제`}
-            >
-              <FiTrash2 size={14} />
-            </IconAction>
-          </ActionsCell>
         </Row>
       )
     }
@@ -796,7 +811,7 @@ export const CompaniesListPage: React.FC = () => {
           )}
         </HeaderTitle>
         <HeaderActions>
-          <GhostBtn type="button" onClick={() => navigate('/company-categories')}>
+          <GhostBtn type="button" onClick={() => setCategoriesOpen(true)} aria-haspopup="dialog">
             <FiTag size={14} />
             카테고리 관리
           </GhostBtn>
@@ -965,13 +980,12 @@ export const CompaniesListPage: React.FC = () => {
                 </HeadCell>
               )
             })}
-            {/* 관리 열은 행 위에 떠 있는 오버레이라 격자 트랙이 없다 — 머리글도 보조기기용만 */}
-            <VisuallyHidden role="columnheader">관리</VisuallyHidden>
           </HeadRow>
           <div role="rowgroup">{renderBody()}</div>
         </Table>
       </TableWrap>
 
+      <CompanyCategoryManagerModal isOpen={categoriesOpen} onClose={closeCategories} />
       <CompanyRegisterModal
         isOpen={modalTarget !== null}
         onClose={() => setModalTarget(null)}
@@ -1617,6 +1631,7 @@ const Cell = styled.div<{ $numeric?: boolean }>`
 `
 
 const NameCell = styled.div`
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1987,7 +2002,7 @@ const Muted = styled.span`
 const ActionsCell = styled.div`
   position: absolute;
   top: 50%;
-  right: 8px;
+  right: 0;
   transform: translateY(-50%);
   display: flex;
   gap: 2px;
