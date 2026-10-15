@@ -193,7 +193,8 @@ export function InlineRichText({
 
   if (editing) {
     return (
-      <EditHost>
+      /* data-inline-editing — 지면이 편집기 폭을 따로 정할 수 있게(사건 상세는 연혁과 같은 880) */
+      <EditHost data-inline-editing>
         <RichTextEditor
           value={draft}
           onChange={(next) => {

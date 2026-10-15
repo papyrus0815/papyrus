@@ -43,6 +43,12 @@ import {
  *    2열일 때 문서 열 = 100cqi − 장부 − gap이므로 식이 닫힌다. 한 열일 때는 음수 → 0.
  */
 export const PROSE_WIDTH = 720
+/**
+ * 편집기 폭 — 기업 상세 연혁(서술형 한 단 880)과 같은 상한. 읽기 산문(720)보다 넓은 것은 툴바·표 편집 여유.
+ * 예전엔 상한이 없어 넓은 화면에서 편집기가 문서 열 전체(1920 폭 실측 1,040px)로 퍼졌다 — 표가 든 단락은
+ * 읽기 상한(:has(table) 해제)까지 함께 풀려서.
+ */
+export const EDITOR_WIDTH = 880
 export const BREAKOUT_MAX = 160
 const ASIDE_WIDTH = 312
 const COLUMN_GAP = 48
@@ -330,6 +336,14 @@ export const Main = styled.main`
   }
   [role='region']:has(table) > :not(table):not(:has(table)) {
     max-width: ${PROSE_WIDTH}px;
+  }
+
+  /* 편집 중 — 편집기를 감싼 상자들의 읽기 상한(720)·해제(표)를 걷고, 편집기 자체를 연혁 폭에 묶는다 */
+  *:has([data-inline-editing]) {
+    max-width: none;
+  }
+  [data-inline-editing] {
+    max-width: ${EDITOR_WIDTH}px;
   }
 
   @media (max-width: 768px) {
