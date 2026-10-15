@@ -940,7 +940,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                       // 라벨만 두면 '정치'로 읽혀 해제 버튼인지 전달되지 않는다.
                       aria-label={
                         showRelease
-                          ? `${chip.label} 필터 해제 — 해제하면 ${chip.releaseCount}건`
+                          ? `${chip.label} 필터 해제 — 해제하면 하위 사건 포함 ${chip.releaseCount}건`
                           : `${chip.label} 필터 해제`
                       }
                       onClick={chip.onClear}
@@ -948,7 +948,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                       <span>{chip.label}</span>
                       {showRelease && (
                         <ChipReleaseCount aria-hidden="true">
-                          해제 시 {chip.releaseCount}건
+                          {/* 하위 포함 — 머리글의 '249건'은 최상위만 센다. 단위를 밝히지 않으면
+                              '해제 시 377건'이 같은 페이지의 '249건'과 모순으로 읽혔다. */}
+                          해제 시 {chip.releaseCount}건(하위 포함)
                         </ChipReleaseCount>
                       )}
                       <FiX size={12} aria-hidden="true" />

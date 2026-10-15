@@ -983,14 +983,23 @@ export const EventsCatalogPage: React.FC = () => {
     selectedCountry,
     historicalCountries,
   )
+  /**
+   * 검색 중에는 연표 표지를 싣지 않는다(2026-10-15). 표지는 연대 흐름의 **맥락**인데, 검색은
+   * '찾은 것만 보기'라 맥락이 결과를 묽힌다 — '전쟁' 135건 사이에 '트럼프 취임'·'2002~2006
+   * 건국 3 · 멸망 2 · 기업 설립 1' 줄이 끼어 결과 행과 같은 무게로 읽혔다.
+   * 국가·세기·카테고리 필터는 여전히 표지를 싣는다(국가 필터는 표지 범위 자체를 좁힌다).
+   */
+  const searching = debouncedKeyword.trim().length > 0
   const reignMarkers = useMemo(
     () =>
-      hiddenLeaderKinds.length === 0
-        ? allReignMarkers
-        : allReignMarkers.filter(
-            (marker) => !hiddenLeaderKinds.includes(marker.kind),
-          ),
-    [allReignMarkers, hiddenLeaderKinds],
+      searching
+        ? []
+        : hiddenLeaderKinds.length === 0
+          ? allReignMarkers
+          : allReignMarkers.filter(
+              (marker) => !hiddenLeaderKinds.includes(marker.kind),
+            ),
+    [allReignMarkers, hiddenLeaderKinds, searching],
   )
 
   /**
