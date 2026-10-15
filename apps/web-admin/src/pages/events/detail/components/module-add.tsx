@@ -39,6 +39,19 @@ interface ModuleAddProps {
   onStartSides: () => Promise<void>
   /** 수치 모듈 펼치기 — 저장 없음 */
   onShowMetrics: () => void
+  /**
+   * 'menu'(기본) = 드롭다운 버튼. 'cards' = 켠 모듈이 하나도 없을 때 탭을 채우는 카드 목록 —
+   * 빈 탭에 버튼 하나만 덩그러니 있으면 무엇을 붙일 수 있는지 열어 보기 전엔 알 수 없었다.
+   */
+  variant?: 'menu' | 'cards'
+}
+
+/** 카드 변형의 한 줄 설명 — 모듈이 무엇을 기록하는지 */
+const MODULE_DESCRIPTION: Record<EventDetailModuleKey, string> = {
+  sides: '참여국을 편으로 묶는다 — 참여국 역할(주도·적대…)이 있으면 초안을 만들어 준다',
+  metrics: '병력·사상자·비용처럼 숫자로 남는 기록을 출처와 함께',
+  'military-details': '작전명·전장·지휘 체계 같은 군사 작전의 사실',
+  cabinets: '이 사건을 다룬 행정부(내각)',
 }
 
 interface ModuleOption {
@@ -48,7 +61,14 @@ interface ModuleOption {
   run: () => void | Promise<void>
 }
 
-export function ModuleAdd({ event, enabledModules, onPatch, onStartSides, onShowMetrics }: ModuleAddProps) {
+export function ModuleAdd({
+  event,
+  enabledModules,
+  onPatch,
+  onStartSides,
+  onShowMetrics,
+  variant = 'menu',
+}: ModuleAddProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
   /**
@@ -143,6 +163,38 @@ export function ModuleAdd({ event, enabledModules, onPatch, onStartSides, onShow
     setOpen(false)
     /* 다음 refetch에서 enabledModules에 이 키가 포함되면 위의 useEffect가 스크롤. */
     setPendingScrollKey(opt.key)
+  }
+
+  if (variant === 'cards') {
+    return (
+      <CardList aria-label="붙일 수 있는 기능">
+        {[...suggestedOptions, ...otherOptions].map((opt) => (
+          <OptionCard key={opt.key} type="button" onClick={() => apply(opt)}>
+            <Dot $color={MODULE_COLOR[opt.key]} />
+            <CardText>
+              <CardTitle>
+                {opt.label}
+                {suggestedOptions.includes(opt) && <CardBadge>이 분류에 맞음</CardBadge>}
+              </CardTitle>
+              <CardHint>{MODULE_DESCRIPTION[opt.key]}</CardHint>
+            </CardText>
+            <CardAction aria-hidden>
+              <FiPlus />
+              시작
+            </CardAction>
+          </OptionCard>
+        ))}
+        {deferredOptions.map((opt) => (
+          <OptionCard key={opt.label} type="button" disabled aria-disabled>
+            <Dot $muted />
+            <CardText>
+              <CardTitle>{opt.label}</CardTitle>
+              <CardHint>{opt.reason}</CardHint>
+            </CardText>
+          </OptionCard>
+        ))}
+      </CardList>
+    )
   }
 
   return (
@@ -312,4 +364,96 @@ const Reason = styled.span`
   margin-left: auto;
   font-size: 11.5px;
   color: ${metaText};
+`
+
+/* ── 카드 변형 — 빈 '진영·수치' 탭 ── */
+
+const CardList = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 10px;
+  max-width: 980px;
+`
+
+const OptionCard = styled.button`
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.MD};
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  transition:
+    border-color 0.14s,
+    background 0.14s;
+
+  > ${Dot} {
+    margin-top: 6px;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => theme.colors.text.tertiary};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.text.primary};
+    outline-offset: 2px;
+  }
+  &:disabled {
+    cursor: not-allowed;
+    border-style: dashed;
+    color: ${metaText};
+  }
+`
+
+const CardText = styled.span`
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const CardTitle = styled.span`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+`
+
+const CardBadge = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const CardHint = styled.span`
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${metaText};
+`
+
+const CardAction = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  ${OptionCard}:hover & {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `

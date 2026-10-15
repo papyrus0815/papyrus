@@ -1,3 +1,5 @@
+import { type MouseEvent } from 'react'
+
 import { useQuery } from '@tanstack/react-query'
 import { FiArrowLeft, FiAward } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
@@ -50,6 +52,11 @@ interface DetailHeroProps {
    * 탭 내용이 접힌 아래에서 시작했다. 옮긴 자리에서는 {@link DetailSummary}를 쓴다.
    */
   withSummary?: boolean
+  /**
+   * '외 N명'·'외 N' — 탭 지면에서는 '참여' 탭을 연다. 없으면 예전처럼 #actors 앵커
+   * (탭 지면에서 앵커는 다른 탭의 섹션이라 아무 데도 가지 않았다).
+   */
+  onShowActors?: () => void
 }
 
 /**
@@ -67,6 +74,7 @@ export function DetailHero({
   onPersonClick,
   onCountryClick,
   withSummary = true,
+  onShowActors,
 }: DetailHeroProps) {
   const prefetchEvent = usePrefetchEventDetail()
   const { data: categories = [] } = useQuery({
@@ -208,6 +216,7 @@ export function DetailHero({
         event={event}
         onPersonClick={onPersonClick}
         onCountryClick={onCountryClick}
+        onShowActors={onShowActors}
       />
 
       {withSummary && <DetailSummary event={event} onPatch={onPatch} />}
@@ -386,11 +395,24 @@ function HeroActors({
   event,
   onPersonClick,
   onCountryClick,
+  onShowActors,
 }: {
   event: EventDetail
   onPersonClick: (personId: string) => void
   onCountryClick: (countryId: string) => void
+  onShowActors?: () => void
 }) {
+  /* 넘친 인원·나라 — 탭 지면이면 '참여' 탭으로, 아니면 #actors 앵커로 */
+  const overflowProps = onShowActors
+    ? {
+        href: '?tab=actors',
+        onClick: (clickEvent: MouseEvent<HTMLAnchorElement>) => {
+          if (!shouldInterceptEntityClick(clickEvent)) return
+          clickEvent.preventDefault()
+          onShowActors()
+        },
+      }
+    : { href: '#actors' }
   const allPersons = event.relatedPersons ?? []
   const allModern = event.relatedCountries ?? []
   const allHistorical = event.relatedHistoricalCountries ?? []
@@ -432,6 +454,7 @@ function HeroActors({
                 <span key={p.personId}>
                   <PersonInlineButton
                     type="button"
+                    title={p.role ?? undefined}
                     onClick={() => onPersonClick(p.personId)}
                   >
                     <PersonAvatar $hasImage={Boolean(avatar)}>
@@ -446,14 +469,13 @@ function HeroActors({
                       )}
                     </PersonAvatar>
                     <PersonName>{name}</PersonName>
-                    {p.role && <PersonRole>{p.role}</PersonRole>}
                   </PersonInlineButton>
                   {i < persons.length - 1 && <PersonSep>·</PersonSep>}
                 </span>
               )
             })}
             {personOverflow > 0 && (
-              <Overflow href="#actors">외 {personOverflow}명</Overflow>
+              <Overflow {...overflowProps}>외 {personOverflow}명</Overflow>
             )}
           </PersonInline>
         </Lineup>
@@ -498,7 +520,7 @@ function HeroActors({
               </span>
             ))}
             {countryOverflow > 0 && (
-              <Overflow href="#actors">외 {countryOverflow}</Overflow>
+              <Overflow {...overflowProps}>외 {countryOverflow}</Overflow>
             )}
           </CountryInline>
         </Lineup>
@@ -614,19 +636,6 @@ const PersonName = styled.span`
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
   }
-`
-
-/**
- * 역할 — 이름 옆 보조 잉크. 예전엔 ', 역할'을 따로 된 flex 항목으로 두어 버튼의 gap(7px)이
- * 쉼표 **앞**에 끼었다("요시다 시게루 , 일본 총리"). 쉼표를 걷고 간격·잉크로만 가른다.
- * italic도 걷는다 — 한글엔 italic face가 없어 기울인 가짜 글꼴이 된다(Overflow와 같은 규약).
- */
-const PersonRole = styled.span`
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 12.5px;
-  color: ${metaText};
 `
 
 const PersonSep = styled.span`

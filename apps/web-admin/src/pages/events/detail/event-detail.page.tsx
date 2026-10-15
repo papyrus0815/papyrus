@@ -15,6 +15,7 @@ import { syncEventSides } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { notify } from '@/shared/ui/toast'
+import { FiPlus } from 'react-icons/fi'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -652,6 +653,7 @@ function EventDetailContent({
               onPersonClick={onPersonClick}
               onCountryClick={onCountryClick}
               withSummary={false}
+              onShowActors={() => setActiveTab('actors')}
             />
 
             <S.TabsArea>
@@ -746,7 +748,26 @@ function EventDetailContent({
                 </>
               )}
 
-              {activeTab === 'modules' && (
+              {activeTab === 'modules' && enabledModules.length === 0 && (
+                <S.TabEmpty aria-labelledby="modules-empty-title">
+                  <S.TabEmptyHead>
+                    <S.TabEmptyTitle id="modules-empty-title">아직 붙인 기능이 없습니다</S.TabEmptyTitle>
+                    <S.TabEmptyText>
+                      진영·수치·작전 정보는 사건마다 필요한 것만 켜는 기록입니다. 하나를 시작하면 이 탭에 자리가 생깁니다.
+                    </S.TabEmptyText>
+                  </S.TabEmptyHead>
+                  <ModuleAdd
+                    variant="cards"
+                    event={event}
+                    enabledModules={enabledModules}
+                    onPatch={onPatch}
+                    onStartSides={startSides}
+                    onShowMetrics={() => setMetricsOpened(true)}
+                  />
+                </S.TabEmpty>
+              )}
+
+              {activeTab === 'modules' && enabledModules.length > 0 && (
                 <>
                   <ModuleAdd
                     event={event}
@@ -775,10 +796,29 @@ function EventDetailContent({
               {activeTab === 'media' && isVisible('appendix') && (
                 <DetailAppendix event={event} onPatch={onPatch} />
               )}
+              {activeTab === 'media' && !isVisible('appendix') && (
+                <S.TabEmpty aria-labelledby="media-empty-title">
+                  <S.TabEmptyHead>
+                    <S.TabEmptyTitle id="media-empty-title">아직 자료가 없습니다</S.TabEmptyTitle>
+                    <S.TabEmptyText>
+                      지도·사진·문서 이미지를 캡션과 함께 둘 수 있습니다.
+                    </S.TabEmptyText>
+                  </S.TabEmptyHead>
+                  <S.TabEmptyAction type="button" onClick={() => revealSection('appendix')}>
+                    <FiPlus aria-hidden />
+                    이미지 추가
+                  </S.TabEmptyAction>
+                </S.TabEmpty>
+              )}
 
-              {/* 이 탭에서 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다 */}
+              {/* 이 탭에서 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다
+                  (자료 탭이 통째로 비었으면 위의 빈 탭 머리가 같은 버튼을 이미 든다) */}
               <FillInStrip
-                items={folded.filter((section) => tabOf(section.id) === activeTab)}
+                items={folded.filter(
+                  (section) =>
+                    tabOf(section.id) === activeTab &&
+                    !(activeTab === 'media' && section.id === 'appendix'),
+                )}
                 onReveal={revealSection}
               />
 

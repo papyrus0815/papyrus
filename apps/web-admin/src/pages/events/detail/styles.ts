@@ -187,7 +187,8 @@ export const Body = styled.div`
       'hero aside'
       'tabs aside'
       'main aside';
-    gap: 36px ${COLUMN_GAP}px;
+    /* 행 간격 — 히어로→탭은 붙어야 한 머리로 읽힌다(예전 36 + 히어로 아래 32 = 68px 공백) */
+    gap: 20px ${COLUMN_GAP}px;
   }
 `
 
@@ -344,7 +345,7 @@ export const Hero = styled.section`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding-bottom: 32px;
+  padding-bottom: 8px;
   width: 100%;
 
   /**
@@ -487,12 +488,14 @@ export const HeroActions = styled.div`
  *    RailNavList/RailNavItem이 같은 중단점에서 **가로 한 줄**로 바꾼다(실측 289 → 40px).
  */
 export const Rail = styled.nav`
-  display: flex;
+  /* 한 열에서는 숨긴다 — 장부 아래·탭 위에 끼어 탭을 첫 화면 밖으로 밀었고, 탭 지면에선 탭이 곧 목차다 */
+  display: none;
   flex-direction: column;
   gap: 0;
   padding: 0 0 14px;
 
   @container eventdetail (min-width: 920px) {
+    display: flex;
     gap: 28px;
     padding: 0;
   }
@@ -1049,4 +1052,69 @@ export const EmptyStateIcon = styled.span`
 
 export const EmptyStateLine = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/* ───────────────────────── 빈 탭 ───────────────────────── */
+
+/**
+ * 탭에 아직 아무 기록이 없을 때 — 탭 아래 하얀 지면에 버튼 하나(또는 구분선 하나)만 남던 것을
+ * '무엇을 둘 수 있는 자리인가'를 말하는 머리로 바꾼다.
+ */
+export const TabEmpty = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 4px;
+`
+
+export const TabEmptyHead = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: ${PROSE_WIDTH}px;
+`
+
+export const TabEmptyTitle = styled.h2`
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const TabEmptyText = styled.p`
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: ${metaText};
+`
+
+export const TabEmptyAction = styled.button`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.text.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
 `
