@@ -387,7 +387,12 @@ const SectionBodyHost = styled.div`
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};
-  max-width: 720px;
+  max-width: ${S.PROSE_WIDTH}px;
+
+  /* 표가 든 단락만 풀어 표는 문서 열 전체로 — 글줄은 Main의 규칙이 여전히 720에 묶는다(전체 폭 지면) */
+  &:has(table) {
+    max-width: none;
+  }
 `
 
 /**

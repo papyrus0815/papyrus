@@ -47,14 +47,40 @@ export const BREAKOUT_MAX = 160
 const ASIDE_WIDTH = 312
 const COLUMN_GAP = 48
 
-/** 넓은 블록의 한쪽 여백 — 0~160px. 지면 셸 컨테이너 안에서만 쓴다. */
-export const breakoutGutter = `clamp(0px, (100cqi - ${ASIDE_WIDTH + COLUMN_GAP + PROSE_WIDTH}px) / 2, ${BREAKOUT_MAX}px)`
+/**
+ * 넓은 블록의 한쪽 여백 — **이제 0**(2026-10-15 전체 폭 전환).
+ *
+ * 예전엔 문서 열이 720 산문 + 좌우 여백(최대 160)의 '넓은 트랙'이라 표·행위자·갤러리를 음수 여백으로
+ * 양옆에 튀어나오게 했다. 전체 폭에서는 문서 열 자체가 넓고 산문은 **문단 단위로** 720에 묶이므로
+ * (SectionBody·proseMeasure), 넓은 블록은 그냥 열 전체를 쓰면 된다. 소비처(행위자·갤러리·타임라인)의
+ * breakout은 값이 0이 되어 '열 전체 폭'으로 그대로 동작한다 — 좌측 정렬이라 양옆 대칭 돌출은 쓰면 안 된다.
+ */
+export const breakoutGutter = '0px'
 
 /** 산문 열(720) 안에 놓인 블록을 넓은 트랙 전체로 편다. */
 export const breakout = css`
   width: calc(100% + 2 * ${breakoutGutter});
   max-width: none;
   margin-inline: calc(-1 * ${breakoutGutter});
+`
+
+/**
+ * 산문 가독폭 — 문단·목록·소제목·인용만 720에 묶고 표·그림은 열 전체를 쓴다.
+ * 전체 폭 지면에서 글줄이 1,000px을 넘으면 줄바꿈 추적이 무너진다(한 줄 46자 → 70자 이상).
+ */
+export const proseMeasure = css`
+  p,
+  ul,
+  ol,
+  blockquote,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    max-width: ${PROSE_WIDTH}px;
+  }
 `
 
 /**
@@ -103,16 +129,14 @@ export const PageInner = styled.div`
   container-type: inline-size;
   container-name: eventdetail;
   /*
-   * **폭 고정 + 가운데 정렬**(2026-09-26 사용자 지시: "옆으로 넓게 나오는데 무조건 사이즈 고정,
-   * 가운데로만"). 산문 720 + gap 48 + 장부 312 = 1080, 좌우 패딩 28×2 = 1136에서 멈춘다.
-   * 예전 상한은 넓은 블록의 양옆 여백(breakout 160×2)까지 포함한 1456이라, 넓은 창에서는
-   * 문서와 장부 사이가 200px로 벌어지고 장부가 창 오른쪽 끝으로 밀려났다.
-   * 이 폭에서는 breakoutGutter = (100cqi − 1080)/2 = 0이 되어 표·행위자·갤러리도 산문 폭에
-   * 맞춰진다(breakout 코드는 그대로 두되 여백이 0으로 닫힌다). 상한을 다시 키우지 말 것.
+   * **전체 폭**(2026-10-15 사용자 지시: "사건 상세도 기업 상세처럼 전체 화면을 사용").
+   * 2026-09-26의 '폭 고정 1136 + 가운데 정렬' 지시를 대체한다 — 기업 상세와 같은 지면 문법
+   * (가로 탭)으로 바꾸면서 폭도 맞춘다. 좌우 패딩은 기업 상세와 같은 clamp.
+   * 산문 가독폭(720)은 지면이 아니라 문단 단위로 지킨다(SectionBody·proseMeasure).
    */
-  max-width: ${PROSE_WIDTH + COLUMN_GAP + ASIDE_WIDTH + 56}px;
-  margin: 0 auto;
-  padding: 32px 28px 96px;
+  width: 100%;
+  margin: 0;
+  padding: 32px clamp(24px, 3vw, 56px) 96px;
 
   @media (max-width: 768px) {
     padding: 18px 16px 72px;
@@ -198,7 +222,6 @@ export const TabsArea = styled.div`
   top: 0;
   z-index: 5;
   min-width: 0;
-  max-width: ${PROSE_WIDTH + 2 * BREAKOUT_MAX}px;
   background: ${({ theme }) => ledgerBackground(theme.mode)};
 `
 
@@ -278,8 +301,7 @@ export const Main = styled.main`
    */
   grid-area: main;
   min-width: 0;
-  /* 넓은 트랙 — 산문은 그 가운데 720(아래 > *), 넓은 블록만 breakout으로 트랙 전체. */
-  max-width: ${PROSE_WIDTH + 2 * BREAKOUT_MAX}px;
+  /* 전체 폭 — 섹션은 열 전체를 쓰고 좌측 기준선에서 시작한다. 산문만 문단 단위로 720(SectionBody). */
   width: 100%;
   margin: 0;
   display: flex;
@@ -288,8 +310,25 @@ export const Main = styled.main`
 
   > * {
     width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+  }
+
+  /*
+   * 산문 가독폭 — 리치텍스트 본문은 문단 태그 없이 영역(role=region) 바로 아래 글이 놓이는 경우가 많아
+   * 문단 단위 제한(proseMeasure)만으로는 1,000px 넘게 퍼졌다(실측 1,016px). 편집 호스트째 720에 묶어
+   * 연필 버튼도 글 옆에 붙게 한다. 표가 든 본문만 풀어 표는 열 전체, 나머지 블록은 720.
+   */
+  [data-edit-host],
+  [role='region'] {
     max-width: ${PROSE_WIDTH}px;
-    margin-inline: auto;
+  }
+  [data-edit-host]:has(table),
+  [role='region']:has(table) {
+    max-width: none;
+  }
+  [role='region']:has(table) > :not(table):not(:has(table)) {
+    max-width: ${PROSE_WIDTH}px;
   }
 
   @media (max-width: 768px) {
@@ -330,10 +369,10 @@ export const Hero = styled.section`
    * 히어로는 문서 열과 **같은 격자 칸**(1fr)에 산다 — 상한도 Main과 같은 720이면
    * 제목·요약·본문이 늘 같은 좌측 기준선·같은 폭에서 끝난다(예전의 calc 보정 불필요).
    */
-  /* 문서 열의 산문과 같은 칸 — 넓은 트랙 가운데 720(Main > *와 같은 식). */
-  max-width: ${PROSE_WIDTH}px;
+  /* 문서 열과 같은 칸·같은 좌측 기준선 — 요약 같은 긴 글은 안쪽에서 720으로 묶인다 */
+  max-width: 100%;
   width: 100%;
-  margin-inline: auto;
+  margin-inline: 0;
 `
 
 /**
@@ -773,11 +812,8 @@ export const longFormEditAffordance = css`
 export const proseTableBreakout = css`
   [role='region'] table {
     ${breakout}
-    /*
-     * 읽기 뷰는 인라인 편집 호스트 안에서 ✎ 버튼 칸(32px)만큼 좁다 — 그대로 펴면 오른쪽 끝이
-     * 넓은 트랙(인물 목록·갤러리)보다 32px 모자란다. 여백이 열린 만큼만(최대 32px) 더한다.
-     */
-    width: calc(100% + 2 * ${breakoutGutter} + min(${breakoutGutter}, 32px));
+    /* 전체 폭에서는 표가 문서 열을 그대로 채운다(breakoutGutter 0) */
+    width: 100%;
   }
 
   /*
@@ -818,7 +854,11 @@ export const SectionBody = styled.div`
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};
-  max-width: ${PROSE_WIDTH}px;
+  ${proseMeasure}
+
+  &:has(table) {
+    max-width: none;
+  }
 `
 
 /* ───────────────────────── Module data card ──────────────────────────── */
