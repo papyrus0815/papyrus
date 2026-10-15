@@ -30,7 +30,7 @@ import { emphasisToHtml } from '@/shared/lib/emphasis-markup'
 
 import * as S from '../styles'
 import { InlineRichText, InlineSelect, InlineText } from './inline'
-import { type SectionRow } from './narrative-sections.lib'
+import { type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
 
 export * from './narrative-sections.lib'
 
@@ -90,10 +90,13 @@ export function NarrativeSectionList({
         const titleOpen =
           hasTitle || row.key === autoEditKey || titleOpenKeys.includes(row.key)
         const ordinal = index + 1
+        const { period } = splitTitlePeriod(row.title)
         return (
           <SectionItem key={row.key} id={`${anchorPrefix}-${ordinal}`}>
+            {/* 타임라인 노드 — 선 위의 번호. 시기가 있으면 노드는 그 날짜 줄과 나란히 선다(연혁과 같은 문법) */}
+            <SectionIndex aria-hidden>{ordinal}</SectionIndex>
+            {period && <SectionPeriod>{period}</SectionPeriod>}
             <SectionHead>
-              <SectionIndex aria-hidden>{ordinal}</SectionIndex>
               {titleOpen ? (
                 <SectionTitleHost>
                   <InlineText
@@ -107,6 +110,8 @@ export function NarrativeSectionList({
                     placeholder="단락 제목 — 예: 개전 배경, 전쟁 경과"
                     hint="Enter 저장 · Esc 취소"
                     label={`${labelPrefix} ${ordinal}단락 제목`}
+                    /* 시기는 위 날짜 줄로 올렸다 — 읽을 때만 떼고, 편집은 원문 그대로 */
+                    renderRead={(value) => splitTitlePeriod(value).title}
                     /* 방금 만든 단락·방금 연 제목은 입력이 열린 채로 뜬다. */
                     autoEdit={!hasTitle}
                   />
@@ -196,14 +201,35 @@ function hasBodyText(html: string): boolean {
 
 /* ───────────────────────── 조판 ───────────────────────── */
 
+/**
+ * 타임라인 — 기업 상세 연혁과 같은 문법(2026-10-15 사용자: "연혁처럼 타임라인 느낌").
+ * 좌측 세로선 하나에 단락마다 번호 노드가 꿰이고, 시기가 있으면 노드 옆 날짜 줄이 먼저 온다.
+ * 본문은 선 오른쪽으로 들여 쓴다(TIMELINE_INSET).
+ */
+const TIMELINE_INSET = 38
+const NODE_SIZE = 22
+
 export const SectionStack = styled.div`
+  position: relative;
   display: flex;
   flex-direction: column;
-  /* 단락 경계는 선이 아니라 **공백과 번호**가 만든다. 본문 행간(1.78)보다 확실히 큰 값. */
-  gap: 30px;
+  gap: 32px;
+
+  /* 세로선 — 첫 노드 가운데에서 시작해 마지막 노드 아래로 조금 흘러내린다 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: ${NODE_SIZE / 2 - 1}px;
+    top: ${NODE_SIZE / 2}px;
+    bottom: 0;
+    width: 2px;
+    border-radius: 1px;
+    /* border.default는 이 지면 배경에서 거의 안 보였다(실측) — 장부 hairline(strong)으로 */
+    background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
 
   @media (max-width: 640px) {
-    gap: 24px;
+    gap: 26px;
   }
 `
 
@@ -212,6 +238,11 @@ const SectionItem = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding-left: ${TIMELINE_INSET}px;
+
+  @media (max-width: 640px) {
+    padding-left: ${TIMELINE_INSET - 8}px;
+  }
   /* 단락 하나를 직접 가리키는 앵커(#background-2) — 헤더 아래로 파묻히지 않게. */
   scroll-margin-top: 24px;
 `
@@ -236,18 +267,42 @@ const SectionHead = styled.div`
  */
 const SectionIndex = styled.span`
   ${DIGIT_DISPLAY}
-  flex-shrink: 0;
-  font-size: 16px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: ${NODE_SIZE}px;
+  height: ${NODE_SIZE}px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid ${({ theme }) => theme.colors.text.tertiary};
+  /* 지면색으로 채워 선을 끊는다 + 바깥 후광으로 선과 노드 사이를 띄운다(연혁 노드와 같은 처리) */
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
+  font-size: 11.5px;
   font-weight: 700;
-  line-height: 1.4;
-  /* 한글 규약대로 라틴 트래킹을 줄인다(숫자만 있는 토큰이라 -0.01em으로 족하다). */
+  line-height: 1;
   letter-spacing: -0.01em;
   /* 이 번호가 단락의 유일한 표지일 때가 있다 — text.tertiary는 AA 미달(라이트 2.54:1). */
   color: ${metaText};
   user-select: none;
+`
 
-  @media (max-width: 640px) {
-    font-size: 15px;
+/** 시기 줄 — 연혁의 날짜 줄(TLDate)과 같은 크기·굵기. 노드와 같은 높이에서 시작한다. */
+const SectionPeriod = styled.div`
+  /* '1912년 2월'처럼 한글이 섞여 mono(DIGIT_DISPLAY)는 쓰지 않는다 — 숫자 폭만 맞춘다 */
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  /* 시기가 첫 줄이면 제목은 바로 아래에 붙는다 */
+  & + * {
+    margin-top: -4px;
   }
 `
 

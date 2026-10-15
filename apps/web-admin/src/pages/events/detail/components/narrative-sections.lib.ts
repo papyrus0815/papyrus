@@ -194,3 +194,16 @@ export function mergeSectionPayload(
   ].map((section, index) => ({ ...section, order: index }))
 }
 
+
+/**
+ * 단락 제목 끝의 시기 '(1945-1950)'·'(1870년 12월)'을 떼어 타임라인 날짜 줄로 올린다.
+ * 괄호가 **연도(숫자)로 시작할 때만** — '(First Dymitriad, 1604~1606년)'처럼 이름이 앞선 괄호는
+ * 제목의 일부라 건드리지 않는다. 실측 648개 제목 중 45개가 이 꼴이다. 읽기 표시 전용(저장값 불변).
+ */
+const TITLE_PERIOD = /\s*\(\s*((?:서기|기원전|BC|AD|B\.C\.|A\.D\.)?\s*\d[^()]*)\)\s*$/
+
+export function splitTitlePeriod(title: string): { title: string; period: string | null } {
+  const match = TITLE_PERIOD.exec(title)
+  if (!match || match.index === 0) return { title, period: null }
+  return { title: title.slice(0, match.index), period: match[1].trim() }
+}

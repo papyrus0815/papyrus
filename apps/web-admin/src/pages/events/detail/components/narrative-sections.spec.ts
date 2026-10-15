@@ -13,6 +13,7 @@ import {
   NARRATIVE_TYPE,
   sectionKindOf,
   type SectionRow,
+  splitTitlePeriod,
   syncRowsWithServer,
 } from './narrative-sections.lib'
 
@@ -166,5 +167,27 @@ describe('syncRowsWithServer', () => {
     )
     expect(next).toHaveLength(2)
     expect(next[1].key).toBe('b')
+  })
+})
+
+describe('splitTitlePeriod', () => {
+  it('제목 끝 연도 괄호를 시기로 뗀다', () => {
+    expect(splitTitlePeriod('배경 — 국공내전 4년의 누적 (1945-1949)')).toEqual({
+      title: '배경 — 국공내전 4년의 누적',
+      period: '1945-1949',
+    })
+    expect(splitTitlePeriod('결렬 과정 (1912년 2월 말~3월)').period).toBe('1912년 2월 말~3월')
+    expect(splitTitlePeriod('숙청과 건국 (서기 493년)').period).toBe('서기 493년')
+    expect(splitTitlePeriod('스탈린의 분쟁(1945-08-15~22)')).toEqual({
+      title: '스탈린의 분쟁',
+      period: '1945-08-15~22',
+    })
+  })
+
+  it('이름이 앞선 괄호·괄호뿐인 제목·괄호 없는 제목은 그대로', () => {
+    const named = '제1차 디미트리아드(First Dymitriad, 1604~1606년)'
+    expect(splitTitlePeriod(named)).toEqual({ title: named, period: null })
+    expect(splitTitlePeriod('(1950)')).toEqual({ title: '(1950)', period: null })
+    expect(splitTitlePeriod('개전 배경')).toEqual({ title: '개전 배경', period: null })
   })
 })
