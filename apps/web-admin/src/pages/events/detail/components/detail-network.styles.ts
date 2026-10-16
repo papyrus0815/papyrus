@@ -398,47 +398,77 @@ export const VisuallyHidden = styled.span`
   border: 0;
 `
 
+/**
+ * 같은 상위 안의 이전·다음 사건 — 두 장의 카드. 예전엔 라벨 없는 글자 링크가 열 양 끝에 흩어져
+ * (전체 폭 지면에서 다음 사건이 오른쪽 끝에 홀로) 무엇으로 가는 링크인지 읽히지 않았다.
+ */
 export const SiblingNav = styled.nav`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 2px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 880px;
+  margin-top: 6px;
+
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `
 
 export const SiblingLink = styled(Link)<{ $alignEnd?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 48%;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  grid-column: ${({ $alignEnd }) => ($alignEnd ? '2' : '1')};
+  display: flex;
+  flex-direction: column;
+  align-items: ${({ $alignEnd }) => ($alignEnd ? 'flex-end' : 'flex-start')};
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.MD};
+  text-align: ${({ $alignEnd }) => ($alignEnd ? 'right' : 'left')};
   text-decoration: none;
-  justify-content: ${({ $alignEnd }) => ($alignEnd ? 'flex-end' : 'flex-start')};
-  margin-left: ${({ $alignEnd }) => ($alignEnd ? 'auto' : '0')};
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition:
+    border-color 0.14s,
+    background 0.14s;
 
-  &:hover,
-  &:focus-visible {
-    color: ${({ theme }) => theme.colors.text.primary};
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.text.tertiary};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
 
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: ${RADIUS.FOCUS};
   }
 
+  @media (max-width: 560px) {
+    grid-column: 1;
+  }
+`
+
+/** 카드 머리 — '‹ 이전 사건' / '다음 사건 ›' */
+export const SiblingKicker = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+
   svg {
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
     flex-shrink: 0;
   }
 `
 
 export const SiblingText = styled.span`
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
 `
 
 /** 하위 행 제거 버튼 — 채운 원 대신 투명 hover-reveal(UnifiedEditBtn 규약).

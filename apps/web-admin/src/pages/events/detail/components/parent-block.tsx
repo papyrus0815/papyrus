@@ -389,12 +389,13 @@ export function ParentBlock({
               onFocus={() => prefetchEvent(prevSibling.id)}
               aria-label={`이전 형제 사건: ${prevSibling.title}`}
             >
-              <FiChevronLeft aria-hidden />
+              <NetStyles.SiblingKicker>
+                <FiChevronLeft aria-hidden />
+                이전 사건
+              </NetStyles.SiblingKicker>
               <NetStyles.SiblingText>{prevSibling.title}</NetStyles.SiblingText>
             </NetStyles.SiblingLink>
-          ) : (
-            <span />
-          )}
+          ) : null}
           {nextSibling && (
             <NetStyles.SiblingLink
               to={pathKeys.events.detail(nextSibling.id)}
@@ -404,8 +405,11 @@ export function ParentBlock({
               aria-label={`다음 형제 사건: ${nextSibling.title}`}
               $alignEnd
             >
+              <NetStyles.SiblingKicker>
+                다음 사건
+                <FiChevronRight aria-hidden />
+              </NetStyles.SiblingKicker>
               <NetStyles.SiblingText>{nextSibling.title}</NetStyles.SiblingText>
-              <FiChevronRight aria-hidden />
             </NetStyles.SiblingLink>
           )}
         </NetStyles.SiblingNav>
