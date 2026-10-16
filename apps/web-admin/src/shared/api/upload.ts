@@ -52,6 +52,30 @@ export function getUploadImageUrl(path: string | null | undefined): string {
   return trimmed.startsWith('/') ? `${base}${trimmed}` : `${base}/${trimmed}`
 }
 
+/**
+ * DB에 저장할 업로드 경로 — 우리 서버의 업로드(`/uploads/…`)는 **상대 경로**로 남긴다.
+ * 절대 URL로 저장하면 호스트(localhost·사설 IP)가 데이터에 박혀, 서버 주소가 바뀌면 그 행만 깨진다
+ * (실측: 'http://172.30.1.77:3000/uploads/…'). 현재 API 주소의 절대 URL만 경로로 줄이고, 외부 URL은
+ * 그대로 둔다. 표시할 때는 getUploadImageUrl.
+ */
+export function toUploadStoragePath(url: string | null | undefined): string {
+  if (!url || typeof url !== 'string') return ''
+  const trimmed = url.trim()
+  if (trimmed.startsWith(UPLOADS_PATH_PREFIX)) return trimmed
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed)
+      /* 우리 API 주소일 때만 — 다른 사이트의 '/uploads/…'는 그 사이트의 그림이다 */
+      if (parsed.origin === apiOriginFromConnection() && parsed.pathname.startsWith(UPLOADS_PATH_PREFIX)) {
+        return `${parsed.pathname}${parsed.search}`
+      }
+    } catch {
+      /* keep trimmed */
+    }
+  }
+  return trimmed
+}
+
 export interface UploadImageResponse {
   url: string
   filename: string

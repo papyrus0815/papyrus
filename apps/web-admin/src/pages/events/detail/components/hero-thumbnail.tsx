@@ -18,7 +18,7 @@ import styled from 'styled-components'
 import { ledgerAccent, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
-import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
+import { getUploadImageUrl, toUploadStoragePath, uploadImage } from '@/shared/api/upload'
 import { notify } from '@/shared/ui/toast'
 
 import { type EventDetail } from '../use-event-detail'
@@ -56,11 +56,11 @@ export function HeroThumbnail({ event, onPatch, onOpenMedia }: HeroThumbnailProp
     try {
       const result = await uploadImage(file, 'events')
       /* 상대 경로(/uploads/…)로 저장 — 호스트를 박으면 서버 주소가 바뀔 때 깨진다(표시는 getUploadImageUrl이 맞춘다) */
-      const url = result.url.startsWith('/') ? result.url : getUploadImageUrl(result.url) || result.url
+      const url = toUploadStoragePath(result.url)
       const next = [
         { imageUrl: url, caption: undefined, source: undefined, isPrimary: true },
         ...images
-          .filter((image) => image.imageUrl !== url)
+          .filter((image) => toUploadStoragePath(image.imageUrl) !== url)
           .map((image) => ({
             imageUrl: image.imageUrl,
             caption: image.caption,

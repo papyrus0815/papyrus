@@ -12,7 +12,7 @@ import {
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
-import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
+import { getUploadImageUrl, toUploadStoragePath, uploadImage } from '@/shared/api/upload'
 import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 import { notify } from '@/shared/ui/toast'
@@ -142,13 +142,14 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
     }
 
     // 중복 URL 차단 — 같은 이미지를 두 번 추가하지 않게.
-    if (images.some((img) => img.imageUrl === url)) {
+    if (images.some((img) => toUploadStoragePath(img.imageUrl) === toUploadStoragePath(url))) {
       notify.error('이미 추가된 이미지입니다.')
       return
     }
 
     appendImage({
-      imageUrl: url,
+      /* 우리 서버 주소를 붙여 넣었으면 상대 경로로 — 외부 URL은 그대로 */
+      imageUrl: toUploadStoragePath(url),
       caption: draft.caption.trim() || undefined,
       source: draft.source.trim() || undefined,
     })
@@ -196,9 +197,11 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
       for (const file of list) {
         try {
           const result = await uploadImage(file, 'events')
-          const url = getUploadImageUrl(result.url) || result.url
+          /* 상대 경로(/uploads/…)로 저장 — 표시는 getUploadImageUrl이 현재 서버에 맞춘다 */
+          const url = toUploadStoragePath(result.url)
           // 기존 이미지뿐 아니라 *이번 배치에서 이미 추가된* URL과의 중복도 차단.
-          if (working.some((img) => img.imageUrl === url)) {
+          // 예전 행은 절대 URL로 저장돼 있어 같은 꼴로 맞춰 비교한다.
+          if (working.some((img) => toUploadStoragePath(img.imageUrl) === url)) {
             notify.error(`이미 추가된 이미지입니다: ${file.name}`)
             continue
           }
