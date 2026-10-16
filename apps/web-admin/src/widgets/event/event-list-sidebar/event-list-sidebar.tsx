@@ -19,11 +19,13 @@ import { useNavigate } from 'react-router-dom'
 
 import { useEvents } from '@/entities/event/model'
 import type { HistoricalEvent } from '@/entities/event/model'
+/* 분류 색 단일출처 — 본문 목록(event-list-compact)도 같은 파일을 읽는다 */
+import { CATEGORY_SOFT_COLORS } from '@/pages/events/styles/theme'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import {
   compareByDate,
   formatDateWithPrecision,
-  formatYearLabel,
   parseIsoDateParts,
 } from '@/shared/lib/iso-date'
 import { formatCenturyLabel } from '@/shared/lib/lifespan-text'
@@ -83,33 +85,21 @@ const RECENT_GROUP = '__recent__'
  * 정밀도를 넘어서 지어내지 않는다 — 연 정밀도는 연도까지, 날짜 미상은 아무것도.
  */
 /**
- * 행 **선두 열**에 세우는 날짜 — 인물 목록이 얼굴을 세우는 그 자리다.
+ * 행 둘째 줄의 날짜 — 연도부터 적는다('2026.9.24' · '1453' · 'BC 221').
  *
- * 한 행의 날짜는 **한 토막**이어야 한다. 선두에 '4.1', 메타 줄에 '1683'을 따로 두면 읽는
- * 사람이 둘을 도로 붙여야 한다(고정·최근 그룹에서 실제로 그렇게 보였다).
- *
- * 그래서 **눈금이 이미 말하는 만큼만 덜어낸다**:
- * - 연 소제목 아래 → 월·일만. 연도는 바로 위에 서 있다.
- * - 소제목이 없는 자리(고정·최근·연도 미상) → 연도. 역사 사건에서 먼저 필요한 좌표는
- *   날짜가 아니라 연도다.
- *
- * 어느 쪽이든 열 폭 안에 든다('11.27' 33.3px, 'BC 44' 33px < 36px). 연 정밀도 사건이 연
- * 소제목 아래 오면 빈 값이다 — 월·일을 모르는데 지어낼 수 없고, 열 폭은 그대로 유지된다.
+ * 예전엔 선두 고정폭 열에 월·일만 세우고 연도는 그룹 안 연 소제목이 댔다. 기업 사이드바와
+ * 같은 행 문법(썸네일 + 이름 + 메타 줄)으로 바꾸면서(2026-10-15) 연 소제목을 걷었으므로,
+ * 행 혼자서 언제인지 말해야 한다. 정밀도를 넘어서 지어내지 않는다 — 연 정밀도와
+ * 1월 1일 자리표시는 연도까지만.
  */
-function leadDateToken(
-  event: HistoricalEvent,
-  underYearHeading: boolean,
-): string {
+function metaDateLabel(event: HistoricalEvent): string {
   const parts = parseIsoDateParts(event.startDate)
   if (!parts) return ''
-  if (!underYearHeading) {
-    return parts.year < 0 ? `BC ${-parts.year}` : `${parts.year}`
-  }
+  const year = parts.year < 0 ? `BC ${-parts.year}` : `${parts.year}`
   const precision = event.startDatePrecision
-  if (precision === 'year') return ''
-  if (precision === 'month') return `${parts.month}월`
-  if (isJanuaryFirstSentinel(parts)) return ''
-  return `${parts.month}.${parts.day}`
+  if (precision === 'year' || isJanuaryFirstSentinel(parts)) return year
+  if (precision === 'month') return `${year}.${parts.month}`
+  return `${year}.${parts.month}.${parts.day}`
 }
 
 /**
@@ -243,12 +233,6 @@ function EventListSidebarInner({
     const toRow = (
       event: HistoricalEvent,
       groupId: string,
-      options: {
-        underYearAnchor: boolean
-        leadDivider?: React.ReactNode
-      } = {
-        underYearAnchor: false,
-      },
     ): EntitySidebarItem => {
       const parent = event.parentEventId ? byId.get(event.parentEventId) : null
       const countries = summarizeCountries(event)
@@ -275,33 +259,33 @@ function EventListSidebarInner({
           <HighlightedText text={displayTitle} query={query.trim()} />
         ) : undefined,
         /*
-         * 둘째 줄(메타)은 **검색 중에만** 있다 — 평소 이 목록은 색인이다.
-         *
-         * 예전에는 분류 · 관련국 · 하위 N을 제목 아래 한 줄로 상시 달았다. 그 줄 하나가
-         * 행마다 16px씩, 목록 전체로 3,200px을 썼고(실측 316행) 정작 같은 값을 바로 옆
-         * 본문 목록이 **전용 열**로 이미 말하고 있었다. 행 72.6 → 45.5px이 그 대가다.
-         *
-         * 다만 검색은 제목 밖(분류·관련국·장소·키워드)에서도 걸린다. '오스만'으로 25행이
-         * 뜨는데 그 25행의 제목 어디에도 '오스만'이 없으면 **왜 이 행이 여기 있는지**가
-         * 화면에서 사라진다. 그래서 검색 중에만 근거를 되살린다 — 본문 목록이 검색 중에만
-         * TrailingNote를 그리는 것과 같은 규약이다(설명과 근거는 다른 질문에 답한다).
-         * 색은 입히지 않는다: 이 줄이 답하는 것은 '왜 걸렸나'이지 '무슨 분류인가'가 아니다.
+         * 썸네일 — 기업 사이드바와 같은 행 문법(2026-10-15 사용자 지시 '기업 사이드랑 디자인이
+         * 다르다, 썸네일 나오는 것도 없고'). 이미지가 없는 사건은 **분류 첫 글자** 배지를
+         * 분류 색으로 칠한다(정·경·외·전…) — 제목 첫 글자('2026년…'의 '2')는 아무것도 말하지 않는다.
+         * 예전엔 보유율 13%라 선두를 날짜 열로 썼지만, 배지가 분류를 말하므로 빈 블록이 아니다.
          */
-        meta: searching
-          ? [
-              categoryLabel
-                ? { text: categoryLabel, node: highlight(categoryLabel) }
-                : null,
-              countries
-                ? { text: countries, shrink: true, node: highlight(countries) }
-                : null,
-            ]
-          : undefined,
-        /* 선두 고정폭 열 — 인물 목록의 아바타 자리에 사건은 날짜를 세운다.
-           썸네일을 놓을 수도 있었지만 실측 보유율이 13%(13/100)라, 열의 87%가 빈 블록이
-           되면서 제목 폭만 먹는다. 인물은 40%(151/380)라 얼굴이 그 자리를 벌 만하다. */
-        lead: leadDateToken(event, options.underYearAnchor),
-        leadDivider: options.leadDivider,
+        thumbnailUrl: event.visuals?.thumbnailUrl
+          ? getUploadImageUrl(event.visuals.thumbnailUrl) || event.visuals.thumbnailUrl
+          : null,
+        badgeText: (categoryLabel ?? '미분류').slice(0, 1),
+        accentColor: (
+          CATEGORY_SOFT_COLORS[event.category as keyof typeof CATEGORY_SOFT_COLORS] ??
+          CATEGORY_SOFT_COLORS.other
+        ).text,
+        /*
+         * 둘째 줄 — 날짜 · 관련국 · 분류(기업의 '종목코드 · 국가 · 상태'와 같은 자리).
+         * 검색 중에는 관련국·분류에 매치 강조를 입힌다 — 제목 밖에서 걸린 행이 '왜 여기 있나'를
+         * 스스로 말하게.
+         */
+        meta: [
+          metaDateLabel(event) || '날짜 미상',
+          countries
+            ? { text: countries, shrink: true, node: searching ? highlight(countries) : undefined }
+            : null,
+          categoryLabel
+            ? { text: categoryLabel, node: searching ? highlight(categoryLabel) : undefined }
+            : null,
+        ],
         /*
          * (제거, 2026-10-15) 제목 뒤 꼬리표 — '↳ 상위 사건'·'하위 N'.
          * 제목이 1~2줄로 접히고 꼬리표가 그 뒤에 붙으면서 행 높이가 37·58·79px로 들쭉날쭉했고,
@@ -368,10 +352,7 @@ function EventListSidebarInner({
       })
     }
 
-    /* 2단계 — 남은 행들에 앵커·꼬리표를 붙인다.
-       연 앵커는 '연도가 바뀌는 첫 행'에만(같은 연도가 되풀이되면 축이 소음이 된다). */
-    let anchoredYear: number | null = null
-    let anchoredGroup: string | null = null
+    /* 2단계 — 세기 그룹에 싣는다. (연 소제목은 2026-10-15 제거 — 날짜가 메타 줄에 연도부터 선다) */
 
     for (const { event, groupId, signedYear } of visible) {
       if (!groupMeta.has(groupId)) {
@@ -383,20 +364,7 @@ function EventListSidebarInner({
         })
       }
 
-      let leadDivider: React.ReactNode
-      if (signedYear != null) {
-        if (groupId !== anchoredGroup || signedYear !== anchoredYear) {
-          leadDivider = formatYearLabel(signedYear)
-          anchoredYear = signedYear
-          anchoredGroup = groupId
-        }
-      }
-      rows.push(
-        toRow(event, groupId, {
-          underYearAnchor: signedYear != null,
-          leadDivider,
-        }),
-      )
+      rows.push(toRow(event, groupId))
     }
 
     // 최신 세기 먼저. '연도 미상'은 맨 끝이다(sortKey=+Infinity를 뒤집으면 맨 위로 올라온다).
