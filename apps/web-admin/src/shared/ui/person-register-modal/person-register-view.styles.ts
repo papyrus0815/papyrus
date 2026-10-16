@@ -9,7 +9,6 @@ import {
   FieldHint,
   FieldLabel,
   FieldRow,
-  FormRows,
   FormSectionInner,
   Required,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
@@ -162,8 +161,9 @@ export const PersonFormLayoutWrap = styled.div`
     gap: 8px 24px;
     align-items: start;
     margin: 0;
-    padding: 20px 0;
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    /* 행 사이 hairline 없음 — 선은 장(章) 경계(CoreDivider·OptionalSeam)에만. 사건 등록 폼 묶음과 같은 12px 리듬 */
+    padding: 12px 0;
+    border-bottom: none;
   }
   ${FieldRow} > *,
   ${CoreFieldCell} > * {
@@ -248,8 +248,8 @@ export const PersonFormLayoutWrap = styled.div`
   /* 2차 disclosure(이름의 뜻·군주 호칭) — 행 사이에 끼는 보조 줄이라 필드 열에 맞춰 들인다 */
   ${AdvancedSection} {
     margin: 0;
-    padding: 12px 0 12px calc(${SIDE_LABEL_COLUMN} + 24px);
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    padding: 4px 0 8px calc(${SIDE_LABEL_COLUMN} + 24px);
+    border-bottom: none;
   }
   ${AdvancedBody} ${FieldLabel} {
     padding: 0 0 6px;
@@ -259,21 +259,17 @@ export const PersonFormLayoutWrap = styled.div`
   }
 
   /*
-   * 행 경계는 모든 행의 아래 hairline 하나가 맡는다. 섹션 파일마다 FormRows가 따로라 예전
-   * '묶음 마지막 행은 선 없음'(FormRows 기본값)이 출생지·사망지 같은 파일 경계에서 선을 지웠다.
+   * 장 경계만 선으로 — 예전엔 모든 행 아래 hairline(기본 정보만 7줄)이 경계를 맡아, 장 구분선은
+   * 두 줄이 되지 않게 높이 0이었다. 행 선을 걷었으니 이제 CoreDivider가 실제 선을 긋는다.
    */
-  ${FormRows} > *:last-child {
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
-  ${FormRows} > ${AdvancedSection}:last-child,
-  ${FormRows} > :not(${FieldRow}):not(${AdvancedSection}):last-child {
-    border-bottom: none;
-  }
-  /* 장 구분선은 바로 위 행의 hairline과 겹쳐 두 줄이 된다 — 간격만 남긴다 */
   ${CoreDivider} {
-    height: 0;
-    margin: 0 0 36px;
-    background: none;
+    height: 1px;
+    margin: 20px 0 24px;
+    background: ${({ theme }) => theme.colors.border.light};
+  }
+  /* 장 머리글 바로 아래 첫 행은 행 padding(12px)이 간격을 준다 */
+  ${CoreSectionLabel} {
+    margin-bottom: 4px;
   }
 
   /* 사건 폼과 같은 단계: 좁은 화면은 라벨 열 160, 모바일은 한 열 */
@@ -291,7 +287,7 @@ export const PersonFormLayoutWrap = styled.div`
     ${FieldRow},
     ${CoreFieldCell} {
       grid-template-columns: minmax(0, 1fr);
-      padding: 16px 0;
+      padding: 10px 0;
     }
     ${FieldRow} > *,
     ${CoreFieldCell} > *,

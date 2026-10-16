@@ -68,7 +68,6 @@ import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { type PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
   FieldControl,
-  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
@@ -80,10 +79,13 @@ import {
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 import {
   KitFormLoading,
-  KitUploadArea,
+  KitUploadActions,
   KitUploadButton,
-  KitUploadDeleteButton,
-  KitUploadPreview,
+  KitUploadFilled,
+  KitUploadRemove,
+  KitUploadStrip,
+  KitUploadText,
+  KitUploadThumb,
 } from '@/shared/ui/register-form-kit/register-form-kit'
 import { notify } from '@/shared/ui/toast'
 
@@ -2379,7 +2381,7 @@ export function PersonRegisterView({
                 </CoreFieldPair>
 
                 {/*
-                 * 프로필 사진 — 사건 등록 폼 썸네일 칸과 같은 점선 업로드 칸(register-form-kit).
+                 * 프로필 사진 — 사건 등록 폼 썸네일과 같은 한 줄 업로드 띠(register-form-kit).
                  * 이름이 폼의 첫 칸이 되도록 기본 정보 끝에 둔다(사건 폼도 제목 먼저, 이미지는 뒤).
                  * 고른 파일은 저장 시 업로드 — 드래그·붙여넣기(⌘V)도 그대로 받는다.
                  */}
@@ -2400,53 +2402,71 @@ export function PersonRegisterView({
                     onDrop={handleThumbnailDrop}
                   >
                     {thumbnailObjectUrl || profileImageUrl.trim() ? (
-                      <KitUploadPreview
+                      <KitUploadFilled>
+                        <KitUploadThumb>
+                          <img
+                            src={
+                              thumbnailObjectUrl ||
+                              getUploadImageUrl(profileImageUrl) ||
+                              profileImageUrl
+                            }
+                            alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
+                          />
+                        </KitUploadThumb>
+                        <KitUploadText>
+                          <strong>프로필 사진</strong>
+                          <span id="person-thumbnail-hint">
+                            {pendingThumbnailFile
+                              ? '저장할 때 올라갑니다'
+                              : '끌어 놓거나 붙여넣어(⌘V) 바꿀 수 있습니다'}
+                          </span>
+                        </KitUploadText>
+                        <KitUploadActions>
+                          <KitUploadButton
+                            type="button"
+                            onClick={() =>
+                              document.getElementById('person-thumbnail-upload')?.click()
+                            }
+                            disabled={isSubmitting}
+                          >
+                            바꾸기
+                          </KitUploadButton>
+                          <KitUploadRemove
+                            type="button"
+                            onClick={() => {
+                              handleRemoveThumbnail()
+                              markDirty()
+                            }}
+                            disabled={isSubmitting}
+                            aria-label={
+                              pendingThumbnailFile ? '선택한 이미지 취소' : '프로필 사진 제거'
+                            }
+                          >
+                            <FiX size={15} />
+                          </KitUploadRemove>
+                        </KitUploadActions>
+                      </KitUploadFilled>
+                    ) : (
+                      <KitUploadStrip
+                        type="button"
+                        $dragOver={thumbnailDragOver}
                         onClick={() =>
                           document.getElementById('person-thumbnail-upload')?.click()
                         }
-                        title="눌러서 사진 바꾸기"
+                        disabled={isSubmitting}
                       >
-                        <img
-                          src={
-                            thumbnailObjectUrl ||
-                            getUploadImageUrl(profileImageUrl) ||
-                            profileImageUrl
-                          }
-                          alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
-                        />
-                        <KitUploadDeleteButton
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            handleRemoveThumbnail()
-                            markDirty()
-                          }}
-                          disabled={isSubmitting}
-                          aria-label={
-                            pendingThumbnailFile ? '선택한 이미지 취소' : '프로필 사진 제거'
-                          }
-                        >
-                          <FiX size={16} />
-                        </KitUploadDeleteButton>
-                      </KitUploadPreview>
-                    ) : (
-                      <KitUploadArea $dragOver={thumbnailDragOver}>
-                        <FiImage size={32} aria-hidden="true" />
-                        <p>
-                          {thumbnailDragOver
-                            ? '여기에 놓아 업로드'
-                            : '프로필 사진을 업로드하세요'}
-                        </p>
-                        <KitUploadButton
-                          type="button"
-                          onClick={() =>
-                            document.getElementById('person-thumbnail-upload')?.click()
-                          }
-                          disabled={isSubmitting}
-                        >
-                          이미지 업로드
-                        </KitUploadButton>
-                      </KitUploadArea>
+                        <KitUploadThumb aria-hidden>
+                          <FiImage size={18} />
+                        </KitUploadThumb>
+                        <KitUploadText>
+                          <strong>
+                            {thumbnailDragOver ? '여기에 놓아 올리기' : '프로필 사진 올리기'}
+                          </strong>
+                          <span id="person-thumbnail-hint">
+                            누르거나 끌어 놓기 · 붙여넣기(⌘V)도 됩니다
+                          </span>
+                        </KitUploadText>
+                      </KitUploadStrip>
                     )}
                     <ThumbnailUploadInput
                       id="person-thumbnail-upload"
@@ -2457,10 +2477,6 @@ export function PersonRegisterView({
                       aria-label="프로필 사진 업로드"
                       aria-describedby="person-thumbnail-hint"
                     />
-                    <FieldHint id="person-thumbnail-hint">
-                      드래그하거나 붙여넣기(⌘V)해도 됩니다
-                      {pendingThumbnailFile ? ' · 저장 시 업로드' : ''}
-                    </FieldHint>
                   </FieldControl>
                 </FieldRow>
               </FormRows>
