@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import styled, { type DefaultTheme, useTheme } from 'styled-components'
 import {
   FiAlertCircle,
   FiCalendar,
@@ -11,11 +10,12 @@ import {
   FiPlus,
   FiX,
 } from 'react-icons/fi'
+import styled, { type DefaultTheme, useTheme } from 'styled-components'
 
 import {
   EVENT_COUNTRY_ROLE_OPTIONS,
-  participantKey,
   type EventCountryParticipant,
+  participantKey,
 } from '@/entities/event/model'
 import { extractCategoryKey } from '@/features/event-create/lib'
 import * as S from '@/pages/events/create/event-create.styles'
@@ -26,18 +26,26 @@ import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
+import { uploadImage } from '@/shared/api/upload'
 import {
   describeLifespanMismatch,
   signedYearFromIsoLike,
 } from '@/shared/lib/country-period'
-import { uploadImage } from '@/shared/api/upload'
-import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { isoPeriodEnd } from '@/shared/lib/iso-date'
+import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import {
   DatePickerModal,
   type DatePickerPrecision,
 } from '@/shared/ui/date-picker/date-picker-modal'
 import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
+import {
+  KitUploadActions,
+  KitUploadFilled,
+  KitUploadRemove,
+  KitUploadStrip,
+  KitUploadText,
+  KitUploadThumb,
+} from '@/shared/ui/register-form-kit/register-form-kit'
 import { notify } from '@/shared/ui/toast'
 
 /**
@@ -45,7 +53,10 @@ import { notify } from '@/shared/ui/toast'
  * 네이티브 `new Date()`는 BC(천문학적 연도번호)·고대(타임존)에서 어긋나므로, ISO 문자열의
  * 선행 연도 자릿수와 부호를 직접 파싱한다(date-picker `-YYYY-MM-DD` 표기와 일치).
  */
-function formatEventDateLabel(iso: string, precision: DatePickerPrecision = 'day'): string {
+function formatEventDateLabel(
+  iso: string,
+  precision: DatePickerPrecision = 'day',
+): string {
   const neg = iso.startsWith('-')
   const body = neg ? iso.slice(1) : iso
   const m = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
@@ -53,7 +64,11 @@ function formatEventDateLabel(iso: string, precision: DatePickerPrecision = 'day
     const d = new Date(iso)
     return Number.isNaN(d.getTime())
       ? iso
-      : d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+      : d.toLocaleDateString('ko-KR', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
   }
   const year = parseInt(m[1], 10)
   const month = parseInt(m[2], 10)
@@ -265,10 +280,13 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         const mismatch = describeLifespanMismatch(country, eventSignedYear, {
           recordSupportsBc: true,
         })
-        return mismatch ? { id: historicalId, name: country.name, mismatch } : null
+        return mismatch
+          ? { id: historicalId, name: country.name, mismatch }
+          : null
       })
       .filter(
-        (item): item is { id: string; name: string; mismatch: string } => item != null,
+        (item): item is { id: string; name: string; mismatch: string } =>
+          item != null,
       )
   }, [startDate, relatedCountries, availableHistoricalCountries])
 
@@ -323,151 +341,592 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {/* 사건명 */}
-      <S.FormRow>
-        <S.FormLabel htmlFor="event-form-title">
-          사건명 <S.Required>*</S.Required>
-        </S.FormLabel>
-        <S.FormField>
-          <S.Input
-            ref={titleInputRef}
-            id="event-form-title"
-            type="text"
-            /* 모달이 열리면 닫기(✕)가 아니라 여기로 — 등록의 첫 동작은 이름 쓰기다 */
-            data-autofocus=""
-            placeholder="예: 제2차 세계 대전"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            aria-invalid={Boolean(titleError)}
-            aria-describedby={
-              titleError ? 'event-form-title-error' : 'event-form-title-hint'
-            }
-          />
-          {titleError ? (
-            <S.ErrorMessage id="event-form-title-error" role="alert">
-              {titleError}
-            </S.ErrorMessage>
-          ) : (
-            <S.Hint id="event-form-title-hint">
-              역사적 사건의 정식 명칭을 입력하세요
+      <FormGroup aria-labelledby="event-form-group-basic">
+        <FormGroupTitle id="event-form-group-basic">기본 정보</FormGroupTitle>
+        {/* 사건명 */}
+        <S.FormRow>
+          <S.FormLabel htmlFor="event-form-title">
+            사건명 <S.Required>*</S.Required>
+          </S.FormLabel>
+          <S.FormField>
+            <S.Input
+              ref={titleInputRef}
+              id="event-form-title"
+              type="text"
+              /* 모달이 열리면 닫기(✕)가 아니라 여기로 — 등록의 첫 동작은 이름 쓰기다 */
+              data-autofocus=""
+              placeholder="예: 제2차 세계 대전"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              aria-invalid={Boolean(titleError)}
+              aria-describedby={
+                titleError ? 'event-form-title-error' : undefined
+              }
+            />
+            {titleError && (
+              <S.ErrorMessage id="event-form-title-error" role="alert">
+                {titleError}
+              </S.ErrorMessage>
+            )}
+          </S.FormField>
+        </S.FormRow>
+
+        {/* 기간 */}
+        <S.FormRow>
+          <S.FormLabel>
+            <div>
+              기간 <S.Required>*</S.Required>
+            </div>
+            {/* 일수는 둘 다 일까지 알 때만 — '1950 ~ 1953'에 1,096일은 지어낸 숫자다 */}
+            {startDate &&
+              endDate &&
+              !getDateError() &&
+              showStartTime &&
+              showEndTime && (
+                <S.PeriodBadge>
+                  <FiClock size={12} />
+                  {calculateDaysDifference()}일
+                  {calculateDaysDifference() !== null &&
+                    calculateDaysDifference()! > 365 && (
+                      <span>
+                        {' '}
+                        (약 {Math.floor(calculateDaysDifference()! / 365)}년)
+                      </span>
+                    )}
+                </S.PeriodBadge>
+              )}
+          </S.FormLabel>
+          <S.FormField>
+            <DateRangeGrid>
+              <S.DateRangeColumn>
+                <S.DateRangeLabel>시작</S.DateRangeLabel>
+                {/* 날짜와 시각은 한 줄 — 시각은 쓰는 일이 드물어 날짜 옆 좁은 칸으로 물러난다 */}
+                <DateTimeLine>
+                  <S.DateInputWrapper
+                    ref={startDateTriggerRef}
+                    aria-haspopup="dialog"
+                    {...keyboardTrigger}
+                    aria-expanded={isStartDateModalOpen}
+                    data-open={isStartDateModalOpen || undefined}
+                    onClick={() => {
+                      playClickSound()
+                      setIsStartDateModalOpen(true)
+                    }}
+                  >
+                    <FiCalendar size={14} />
+                    <S.DateInputDisplay>
+                      {startDate
+                        ? formatEventDateLabel(startDate, startDatePrecision)
+                        : '날짜 선택'}
+                    </S.DateInputDisplay>
+                  </S.DateInputWrapper>
+                  {showStartTime && (
+                    <TimeTrigger
+                      ref={startTimeTriggerRef}
+                      aria-haspopup="dialog"
+                      {...keyboardTrigger}
+                      aria-label={`시작 시각${startTime ? ` ${startTime}` : ' (선택)'}`}
+                      aria-expanded={isStartTimeModalOpen}
+                      data-open={isStartTimeModalOpen || undefined}
+                      data-empty={!startTime || undefined}
+                      onClick={() => {
+                        playClickSound()
+                        setIsStartTimeModalOpen(true)
+                      }}
+                    >
+                      <FiClock size={14} />
+                      <S.DateInputDisplay>
+                        {startTime || '시각'}
+                      </S.DateInputDisplay>
+                    </TimeTrigger>
+                  )}
+                </DateTimeLine>
+              </S.DateRangeColumn>
+
+              <S.DateRangeColumn>
+                <S.DateRangeLabel>종료</S.DateRangeLabel>
+                {/* 날짜와 시각은 한 줄 — 시각은 쓰는 일이 드물어 날짜 옆 좁은 칸으로 물러난다 */}
+                <DateTimeLine>
+                  <S.DateInputWrapper
+                    ref={endDateTriggerRef}
+                    aria-haspopup="dialog"
+                    {...keyboardTrigger}
+                    aria-expanded={isEndDateModalOpen}
+                    data-open={isEndDateModalOpen || undefined}
+                    onClick={() => {
+                      playClickSound()
+                      setIsEndDateModalOpen(true)
+                    }}
+                  >
+                    <FiCalendar size={14} />
+                    <S.DateInputDisplay>
+                      {endDate
+                        ? formatEventDateLabel(endDate, endDatePrecision)
+                        : '날짜 선택'}
+                    </S.DateInputDisplay>
+                  </S.DateInputWrapper>
+                  {showEndTime && (
+                    <TimeTrigger
+                      ref={endTimeTriggerRef}
+                      aria-haspopup="dialog"
+                      {...keyboardTrigger}
+                      aria-label={`종료 시각${endTime ? ` ${endTime}` : ' (선택)'}`}
+                      aria-expanded={isEndTimeModalOpen}
+                      data-open={isEndTimeModalOpen || undefined}
+                      data-empty={!endTime || undefined}
+                      onClick={() => {
+                        playClickSound()
+                        setIsEndTimeModalOpen(true)
+                      }}
+                    >
+                      <FiClock size={14} />
+                      <S.DateInputDisplay>
+                        {endTime || '시각'}
+                      </S.DateInputDisplay>
+                    </TimeTrigger>
+                  )}
+                </DateTimeLine>
+              </S.DateRangeColumn>
+            </DateRangeGrid>
+            {(startDateError || endDateError || getDateError()) && (
+              <S.ErrorMessage role="alert">
+                {startDateError ?? endDateError ?? getDateError()}
+              </S.ErrorMessage>
+            )}
+            <S.Hint>
+              {allowPartialDate
+                ? '연도만 알아도 됩니다 — 달력 위 \u2018연도만\u2019·\u2018연·월\u2019. 진행 중이면 종료는 비워 두세요.'
+                : '진행 중인 사건이면 종료는 비워 두세요.'}
             </S.Hint>
-          )}
-        </S.FormField>
-      </S.FormRow>
+          </S.FormField>
+        </S.FormRow>
 
-      {/* 기간 */}
-      <S.FormRow>
-        <S.FormLabel>
-          <div>
-            기간 <S.Required>*</S.Required>
-          </div>
-          {/* 일수는 둘 다 일까지 알 때만 — '1950 ~ 1953'에 1,096일은 지어낸 숫자다 */}
-          {startDate && endDate && !getDateError() && showStartTime && showEndTime && (
-            <S.PeriodBadge>
-              <FiClock size={12} />
-              {calculateDaysDifference()}일
-              {calculateDaysDifference() !== null &&
-                calculateDaysDifference()! > 365 && (
-                  <span>
-                    {' '}
-                    (약 {Math.floor(calculateDaysDifference()! / 365)}년)
-                  </span>
+        {/* 카테고리 */}
+        <S.FormRow>
+          <S.FormLabel>
+            <div>
+              카테고리<OptionalTag>(선택)</OptionalTag>
+            </div>
+          </S.FormLabel>
+          <S.FormField>
+            {dbCategories.length > 0 ? (
+              <S.CategoryGrid>
+                {dbCategories.map((dbCat) => {
+                  const categoryId = dbCat.id
+                  const categoryName = dbCat.name
+                  const categoryKey = extractCategoryKey(categoryId)
+                  const Icon = CATEGORY_ICON_MAP[categoryName] || FiFileText
+                  const isSelected = category === categoryId
+                  /* 목록과 **같은 팔레트** — DB 이름(정치·전쟁/군사…)이 곧 키다. 예전 키 추출
+                     (extractCategoryKey)은 'cat-xxx-n' id를 전제해 UUID에서 전부 회색이었다. */
+                  const tone =
+                    CATEGORY_SOFT_COLORS[
+                      categoryName as keyof typeof CATEGORY_SOFT_COLORS
+                    ] ?? CATEGORY_SOFT_COLORS.other
+
+                  return (
+                    <S.CategoryCard
+                      key={dbCat.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      style={
+                        {
+                          '--cat-rgb': tone.rgb,
+                          '--cat-text': isDark ? tone.textDark : tone.text,
+                        } as React.CSSProperties
+                      }
+                      $selected={isSelected}
+                      $category={categoryKey}
+                      onClick={() => {
+                        playClickSound()
+                        setCategory(isSelected ? '' : categoryId)
+                      }}
+                    >
+                      <S.CategoryIcon
+                        $category={categoryKey}
+                        $selected={isSelected}
+                      >
+                        <Icon size={13} />
+                      </S.CategoryIcon>
+                      <S.CategoryLabel>{categoryName}</S.CategoryLabel>
+                    </S.CategoryCard>
+                  )
+                })}
+              </S.CategoryGrid>
+            ) : (
+              <S.EmptyState>
+                <FiAlertCircle
+                  size={32}
+                  color={isDark ? '#52525b' : '#cbd5e1'}
+                />
+                <p>카테고리를 불러올 수 없습니다.</p>
+                <p
+                  style={{
+                    fontSize: '12px',
+                    color: isDark ? '#71717a' : '#94a3b8',
+                    marginTop: '4px',
+                  }}
+                >
+                  서버와의 연결을 확인해주세요.
+                </p>
+              </S.EmptyState>
+            )}
+          </S.FormField>
+        </S.FormRow>
+      </FormGroup>
+
+      {(onOpenCountryModal || parentEventSlot) && (
+        <FormGroup aria-labelledby="event-form-group-link">
+          <FormGroupTitle id="event-form-group-link">연결</FormGroupTitle>
+          {/* 관련 국가 */}
+          {onOpenCountryModal && (
+            <S.FormRow>
+              <S.FormLabel>
+                참여국<OptionalTag>(선택)</OptionalTag>
+              </S.FormLabel>
+              <S.FormField>
+                {relatedCountries.length > 0 && (
+                  <ParticipantList>
+                    {relatedCountries.map((participant, index) => {
+                      const isHistorical = Boolean(
+                        participant.historicalCountryId,
+                      )
+                      const country = isHistorical
+                        ? availableHistoricalCountries.find(
+                            (candidate) =>
+                              candidate.id === participant.historicalCountryId,
+                          )
+                        : availableCountries.find(
+                            (candidate) =>
+                              candidate.id === participant.countryId,
+                          )
+                      if (!country) return null
+                      const key = participantKey(participant)
+                      const patch = (next: Partial<EventCountryParticipant>) =>
+                        setRelatedCountries(
+                          relatedCountries.map((row, rowIndex) =>
+                            rowIndex === index ? { ...row, ...next } : row,
+                          ),
+                        )
+                      return (
+                        <ParticipantRow key={key}>
+                          <ParticipantName>
+                            {isHistorical
+                              ? `🏛️ ${country.name}`
+                              : `${(country as CountryResponseDto).flagEmoji ?? ''} ${country.name}`}
+                          </ParticipantName>
+                          <RoleSelect
+                            value={participant.role ?? 'PARTICIPANT'}
+                            aria-label={`${country.name} 역할`}
+                            onChange={(changeEvent) =>
+                              patch({
+                                role: changeEvent.target
+                                  .value as EventCountryParticipant['role'],
+                              })
+                            }
+                          >
+                            {EVENT_COUNTRY_ROLE_OPTIONS.filter(
+                              // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
+                              (option) =>
+                                !option.deprecated ||
+                                option.value === participant.role,
+                            ).map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </RoleSelect>
+                          <RoleDescriptionInput
+                            value={participant.roleDescription ?? ''}
+                            aria-label={`${country.name}가 한 일`}
+                            placeholder="이 나라가 한 일 (선택)"
+                            onChange={(changeEvent) =>
+                              patch({
+                                roleDescription: changeEvent.target.value,
+                              })
+                            }
+                          />
+                          <ParticipantRemove
+                            type="button"
+                            aria-label={`${country.name} 제거`}
+                            onClick={() => {
+                              playClickSound()
+                              setRelatedCountries(
+                                relatedCountries.filter(
+                                  (row) => participantKey(row) !== key,
+                                ),
+                              )
+                            }}
+                          >
+                            <FiX size={14} />
+                          </ParticipantRemove>
+                        </ParticipantRow>
+                      )
+                    })}
+                  </ParticipantList>
                 )}
-            </S.PeriodBadge>
+                {/* 추가는 목록 **뒤** — 쌓이는 쪽에서 이어 붙이는 흐름 */}
+                <S.AddButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    onOpenCountryModal()
+                  }}
+                >
+                  <FiPlus size={15} />
+                  {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
+                </S.AddButton>
+                {historicalLifespanWarnings.map((item) => (
+                  <AlertBox
+                    key={item.id}
+                    variant="warning"
+                    icon="⚠️"
+                    style={{ marginTop: 8 }}
+                  >
+                    <strong>{item.name}</strong> {item.mismatch} 국가 소멸 전후
+                    소급·연속 사건 등 정당한 경우라면 그대로 저장하세요.
+                  </AlertBox>
+                ))}
+                <S.Hint>
+                  나라마다 역할과 한 일을 적어 두면 조약처럼 나라별 사정이 다른
+                  사건도 한눈에 읽힙니다. <strong>주도국</strong>은 목록에서
+                  사건의 대표로 섭니다.
+                </S.Hint>
+              </S.FormField>
+            </S.FormRow>
           )}
-        </S.FormLabel>
-        <S.FormField>
-          <S.DateRangeRow>
-            <S.DateRangeColumn>
-              <S.DateRangeLabel>시작</S.DateRangeLabel>
-              <S.DateInputWrapper
-                ref={startDateTriggerRef}
-                aria-haspopup="dialog"
-                {...keyboardTrigger}
-                aria-expanded={isStartDateModalOpen}
-                data-open={isStartDateModalOpen || undefined}
-                onClick={() => {
-                  playClickSound()
-                  setIsStartDateModalOpen(true)
-                }}
-              >
-                <FiCalendar size={14} />
-                <S.DateInputDisplay>
-                  {startDate
-                    ? formatEventDateLabel(startDate, startDatePrecision)
-                    : '날짜 선택'}
-                </S.DateInputDisplay>
-              </S.DateInputWrapper>
-              {showStartTime && (
-              <S.DateInputWrapper
-                ref={startTimeTriggerRef}
-                aria-haspopup="dialog"
-                {...keyboardTrigger}
-                aria-expanded={isStartTimeModalOpen}
-                data-open={isStartTimeModalOpen || undefined}
-                onClick={() => {
-                  playClickSound()
-                  setIsStartTimeModalOpen(true)
-                }}
-                style={{ cursor: 'pointer', marginTop: '6px' }}
-              >
-                <FiClock size={14} />
-                <S.DateInputDisplay>{startTime || '시간'}</S.DateInputDisplay>
-              </S.DateInputWrapper>
-              )}
-            </S.DateRangeColumn>
+          {/* 상위 사건 — 고아 생성 후 수동 연결 대신, 등록 시점에 바로 가지로 붙인다 */}
+          {parentEventSlot && (
+            <S.FormRow>
+              <S.FormLabel>
+                상위 사건<OptionalTag>(선택)</OptionalTag>
+              </S.FormLabel>
+              <S.FormField>
+                {parentEventSlot.parent ? (
+                  <S.SelectedItemsContainer>
+                    <S.SelectedItem>
+                      <span>{parentEventSlot.parent.title}</span>
+                      <S.RemoveButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          parentEventSlot.onClear()
+                        }}
+                        aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
+                      >
+                        <FiX size={14} />
+                      </S.RemoveButton>
+                    </S.SelectedItem>
+                    <S.AddButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        parentEventSlot.onOpenPicker()
+                      }}
+                    >
+                      변경
+                    </S.AddButton>
+                  </S.SelectedItemsContainer>
+                ) : (
+                  <S.AddButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      parentEventSlot.onOpenPicker()
+                    }}
+                  >
+                    <FiPlus size={16} />
+                    상위 사건 선택
+                  </S.AddButton>
+                )}
+                <S.Hint>
+                  고르면 그 사건의 하위로 등록됩니다. 등록 후 상세
+                  &lsquo;연관&rsquo;에서 바꿀 수 있습니다.
+                </S.Hint>
+              </S.FormField>
+            </S.FormRow>
+          )}
+        </FormGroup>
+      )}
 
-            <S.DateRangeColumn>
-              <S.DateRangeLabel>종료</S.DateRangeLabel>
-              <S.DateInputWrapper
-                ref={endDateTriggerRef}
-                aria-haspopup="dialog"
-                {...keyboardTrigger}
-                aria-expanded={isEndDateModalOpen}
-                data-open={isEndDateModalOpen || undefined}
+      <FormGroup aria-labelledby="event-form-group-intro">
+        <FormGroupTitle id="event-form-group-intro">소개</FormGroupTitle>
+        {/* 개요 설명 */}
+        <S.FormRow>
+          <S.FormLabel>
+            개요 설명<OptionalTag>(선택)</OptionalTag>
+          </S.FormLabel>
+          <S.FormField>
+            <S.Textarea
+              placeholder="무슨 일이 왜 일어났는지 두세 문장으로"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+            />
+          </S.FormField>
+        </S.FormRow>
+
+        {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
+        <S.FormRow>
+          <S.FormLabel>
+            키워드<OptionalTag>(선택)</OptionalTag>
+          </S.FormLabel>
+          <S.FormField>
+            <S.Input
+              type="text"
+              placeholder="입력 후 Enter — 쉼표로 여러 개 (최대 20개·각 30자)"
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                if ((e.nativeEvent as KeyboardEvent).isComposing) return
+                e.preventDefault()
+                addKeywordsFromInput()
+              }}
+            />
+            {keywordValidationMsg && (
+              <S.ErrorMessage role="alert">
+                {keywordValidationMsg}
+              </S.ErrorMessage>
+            )}
+            {keywords.length > 0 && (
+              <KeywordChipList>
+                {keywords.map((keyword) => (
+                  <KeywordChip key={keyword}>
+                    {keyword}
+                    <KeywordChipRemove
+                      type="button"
+                      onClick={() =>
+                        setKeywords(keywords.filter((item) => item !== keyword))
+                      }
+                      aria-label={`${keyword} 제거`}
+                    >
+                      <FiX size={12} />
+                    </KeywordChipRemove>
+                  </KeywordChip>
+                ))}
+              </KeywordChipList>
+            )}
+            <S.Hint>
+              같은 사건을 가리키는 대표 낱말(인명·사건명·연도). 다른 사람이
+              등록한 같은 사건과 이어 줄 때 씁니다.
+            </S.Hint>
+          </S.FormField>
+        </S.FormRow>
+
+        {/* 썸네일 이미지 */}
+        <S.FormRow>
+          <S.FormLabel>
+            썸네일 이미지<OptionalTag>(선택)</OptionalTag>
+          </S.FormLabel>
+          <S.FormField>
+            {/*
+             * 선택 항목이라 한 줄 띠(register-form-kit) — 인물 등록 폼 프로필 사진과 같은 부품.
+             */}
+            {thumbnail ? (
+              <KitUploadFilled>
+                <KitUploadThumb>
+                  <img
+                    src={getImageUrl(thumbnail)}
+                    alt="썸네일 미리보기"
+                    onError={() => {
+                      if (thumbnail.startsWith('blob:')) {
+                        URL.revokeObjectURL(thumbnail)
+                      }
+                    }}
+                  />
+                </KitUploadThumb>
+                <KitUploadText>
+                  <strong>
+                    {thumbnail.startsWith('blob:')
+                      ? '올리는 중…'
+                      : '대표 이미지'}
+                  </strong>
+                  <span>목록과 상세 머리에 쓰입니다</span>
+                </KitUploadText>
+                <KitUploadActions>
+                  <S.UploadButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      thumbnailInputRef.current?.click()
+                    }}
+                  >
+                    바꾸기
+                  </S.UploadButton>
+                  <KitUploadRemove
+                    type="button"
+                    aria-label="썸네일 제거"
+                    onClick={() => {
+                      playClickSound()
+                      if (thumbnail.startsWith('blob:')) {
+                        URL.revokeObjectURL(thumbnail)
+                      }
+                      setThumbnail('')
+                      setThumbnailFile(null)
+                      if (thumbnailInputRef.current) {
+                        thumbnailInputRef.current.value = ''
+                      }
+                    }}
+                  >
+                    <FiX size={15} />
+                  </KitUploadRemove>
+                </KitUploadActions>
+              </KitUploadFilled>
+            ) : (
+              <KitUploadStrip
+                type="button"
                 onClick={() => {
                   playClickSound()
-                  setIsEndDateModalOpen(true)
+                  thumbnailInputRef.current?.click()
                 }}
               >
-                <FiCalendar size={14} />
-                <S.DateInputDisplay>
-                  {endDate
-                    ? formatEventDateLabel(endDate, endDatePrecision)
-                    : '날짜 선택'}
-                </S.DateInputDisplay>
-              </S.DateInputWrapper>
-              {showEndTime && (
-              <S.DateInputWrapper
-                ref={endTimeTriggerRef}
-                aria-haspopup="dialog"
-                {...keyboardTrigger}
-                aria-expanded={isEndTimeModalOpen}
-                data-open={isEndTimeModalOpen || undefined}
-                onClick={() => {
-                  playClickSound()
-                  setIsEndTimeModalOpen(true)
-                }}
-                style={{ cursor: 'pointer', marginTop: '6px' }}
-              >
-                <FiClock size={14} />
-                <S.DateInputDisplay>{endTime || '시간'}</S.DateInputDisplay>
-              </S.DateInputWrapper>
-              )}
-            </S.DateRangeColumn>
-          </S.DateRangeRow>
-          {(startDateError || endDateError || getDateError()) && (
-            <S.ErrorMessage role="alert">
-              {startDateError ?? endDateError ?? getDateError()}
-            </S.ErrorMessage>
-          )}
-          <S.Hint>
-            {allowPartialDate
-              ? '연도만·연월만 알아도 됩니다 — 달력 위에서 \u2018연도만\u2019·\u2018연·월\u2019을 고르세요. 진행 중이면 종료는 비워 둡니다.'
-              : '사건의 시작과 종료 날짜/시간을 설정하세요 (진행중이면 종료일 비워두기)'}
-          </S.Hint>
-        </S.FormField>
-      </S.FormRow>
+                <KitUploadThumb aria-hidden>
+                  <FiImage size={18} />
+                </KitUploadThumb>
+                <KitUploadText>
+                  <strong>대표 이미지 올리기</strong>
+                  <span>목록과 상세 머리에 쓰입니다 · 10MB 이하</span>
+                </KitUploadText>
+              </KitUploadStrip>
+            )}
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+
+                if (file.size > 10 * 1024 * 1024) {
+                  notify.error('파일 크기는 10MB를 초과할 수 없습니다.')
+                  return
+                }
+
+                if (thumbnail && thumbnail.startsWith('blob:')) {
+                  URL.revokeObjectURL(thumbnail)
+                }
+
+                const previewUrl = URL.createObjectURL(file)
+                setThumbnail(previewUrl)
+                setThumbnailFile(file)
+
+                try {
+                  const result = await uploadImage(file, 'events')
+                  URL.revokeObjectURL(previewUrl)
+                  setThumbnail(result.url)
+                } catch {
+                  notify.error('썸네일 업로드에 실패했습니다.')
+                  URL.revokeObjectURL(previewUrl)
+                  setThumbnail('')
+                  setThumbnailFile(null)
+                }
+              }}
+            />
+          </S.FormField>
+        </S.FormRow>
+      </FormGroup>
 
       {/* 날짜/시간 선택 모달 */}
       <DatePickerModal
@@ -528,443 +987,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         title="종료 시간 선택"
         anchorEl={endTimeTriggerRef.current}
       />
-
-      {/* 상위 사건 — 고아 생성 후 수동 연결 대신, 등록 시점에 바로 가지로 붙인다 */}
-      {parentEventSlot && (
-        <S.FormRow>
-          <S.FormLabel>
-            상위 사건<OptionalTag>(선택)</OptionalTag>
-          </S.FormLabel>
-          <S.FormField>
-            {parentEventSlot.parent ? (
-              <S.SelectedItemsContainer>
-                <S.SelectedItem>
-                  <span>{parentEventSlot.parent.title}</span>
-                  <S.RemoveButton
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      parentEventSlot.onClear()
-                    }}
-                    aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
-                  >
-                    <FiX size={14} />
-                  </S.RemoveButton>
-                </S.SelectedItem>
-                <S.AddButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    parentEventSlot.onOpenPicker()
-                  }}
-                >
-                  변경
-                </S.AddButton>
-              </S.SelectedItemsContainer>
-            ) : (
-              <S.AddButton
-                type="button"
-                onClick={() => {
-                  playClickSound()
-                  parentEventSlot.onOpenPicker()
-                }}
-              >
-                <FiPlus size={16} />
-                상위 사건 선택
-              </S.AddButton>
-            )}
-            <S.Hint>
-              지정하면 이 사건이 해당 사건의 하위(가지)로 곧바로 등록됩니다.
-              계층은 등록 후 상세의 &lsquo;연관&rsquo;에서 언제든 바꿀 수
-              있습니다.
-            </S.Hint>
-          </S.FormField>
-        </S.FormRow>
-      )}
-
-      {/* 카테고리 */}
-      <S.FormRow>
-        <S.FormLabel>
-          <div>
-            카테고리<OptionalTag>(선택)</OptionalTag>
-          </div>
-        </S.FormLabel>
-        <S.FormField>
-          {dbCategories.length > 0 ? (
-            <S.CategoryGrid>
-              {dbCategories.map((dbCat) => {
-                const categoryId = dbCat.id
-                const categoryName = dbCat.name
-                const categoryKey = extractCategoryKey(categoryId)
-                const Icon = CATEGORY_ICON_MAP[categoryName] || FiFileText
-                const isSelected = category === categoryId
-                /* 목록과 **같은 팔레트** — DB 이름(정치·전쟁/군사…)이 곧 키다. 예전 키 추출
-                   (extractCategoryKey)은 'cat-xxx-n' id를 전제해 UUID에서 전부 회색이었다. */
-                const tone =
-                  CATEGORY_SOFT_COLORS[
-                    categoryName as keyof typeof CATEGORY_SOFT_COLORS
-                  ] ?? CATEGORY_SOFT_COLORS.other
-
-                return (
-                  <S.CategoryCard
-                    key={dbCat.id}
-                    type="button"
-                    aria-pressed={isSelected}
-                    style={
-                      {
-                        '--cat-rgb': tone.rgb,
-                        '--cat-text': isDark ? tone.textDark : tone.text,
-                      } as React.CSSProperties
-                    }
-                    $selected={isSelected}
-                    $category={categoryKey}
-                    onClick={() => {
-                      playClickSound()
-                      setCategory(isSelected ? '' : categoryId)
-                    }}
-                  >
-                    <S.CategoryIcon
-                      $category={categoryKey}
-                      $selected={isSelected}
-                    >
-                      <Icon size={13} />
-                    </S.CategoryIcon>
-                    <S.CategoryLabel>{categoryName}</S.CategoryLabel>
-                  </S.CategoryCard>
-                )
-              })}
-            </S.CategoryGrid>
-          ) : (
-            <S.EmptyState>
-              <FiAlertCircle
-                size={32}
-                color={isDark ? '#52525b' : '#cbd5e1'}
-              />
-              <p>카테고리를 불러올 수 없습니다.</p>
-              <p
-                style={{
-                  fontSize: '12px',
-                  color: isDark ? '#71717a' : '#94a3b8',
-                  marginTop: '4px',
-                }}
-              >
-                서버와의 연결을 확인해주세요.
-              </p>
-            </S.EmptyState>
-          )}
-          <S.Hint>사건의 유형을 선택하세요</S.Hint>
-        </S.FormField>
-      </S.FormRow>
-
-      {/* 개요 설명 */}
-      <S.FormRow>
-        <S.FormLabel>
-          개요 설명<OptionalTag>(선택)</OptionalTag>
-        </S.FormLabel>
-        <S.FormField>
-          <S.Textarea
-            placeholder="사건에 대한 간단한 설명을 입력하세요"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-          />
-          <S.Hint>사건의 핵심 내용을 요약해주세요</S.Hint>
-        </S.FormField>
-      </S.FormRow>
-
-      {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
-      <S.FormRow>
-        <S.FormLabel>
-          키워드<OptionalTag>(선택)</OptionalTag>
-        </S.FormLabel>
-        <S.FormField>
-          <S.Input
-            type="text"
-            placeholder="키워드 입력 후 엔터 (쉼표로 여러 개 가능, 최대 20개·각 30자)"
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return
-              if ((e.nativeEvent as KeyboardEvent).isComposing) return
-              e.preventDefault()
-              addKeywordsFromInput()
-            }}
-          />
-          {keywordValidationMsg && (
-            <p
-              style={{
-                marginTop: 6,
-                fontSize: 12,
-                color: 'var(--error-color, #c53030)',
-              }}
-            >
-              {keywordValidationMsg}
-            </p>
-          )}
-          {keywords.length > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 6,
-                marginTop: 8,
-              }}
-            >
-              {keywords.map((k) => (
-                <span
-                  key={k}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '4px 10px',
-                    background: isDark
-                      ? 'rgba(255,255,255,0.08)'
-                      : '#e5e7eb',
-                    color: isDark ? '#e5e7eb' : '#1f2937',
-                    border: `1px solid ${
-                      isDark ? 'rgba(255,255,255,0.14)' : '#d1d5db'
-                    }`,
-                    borderRadius: 6,
-                    fontSize: 13,
-                    fontWeight: 500,
-                  }}
-                >
-                  {k}
-                  <button
-                    type="button"
-                    onClick={() => setKeywords(keywords.filter((x) => x !== k))}
-                    style={{
-                      padding: 0,
-                      marginLeft: 2,
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      lineHeight: 1,
-                      color: isDark ? '#a1a1aa' : '#6b7280',
-                    }}
-                    aria-label={`${k} 제거`}
-                  >
-                    <FiX size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          <S.Hint>
-            <strong>내가 등록한 사건</strong>과{' '}
-            <strong>타인이 등록한 사건</strong>을 나중에 매칭할 때 사용합니다.
-            같은 역사적 사건을 가리키는 대표 키워드(인명, 사건명, 연도 등)를
-            넣어두면, 추후 검색·매칭으로 서로 연결할 수 있습니다. 입력 후 엔터로
-            추가, ×로 제거.
-          </S.Hint>
-        </S.FormField>
-      </S.FormRow>
-
-      {/* 썸네일 이미지 */}
-      <S.FormRow>
-        <S.FormLabel>
-          썸네일 이미지<OptionalTag>(선택)</OptionalTag>
-        </S.FormLabel>
-        <S.FormField>
-          {thumbnail ? (
-            <S.ThumbnailPreview
-              onClick={() => {
-                playClickSound()
-                thumbnailInputRef.current?.click()
-              }}
-            >
-              <S.ThumbnailImage
-                src={getImageUrl(thumbnail)}
-                alt="썸네일 미리보기"
-                onError={() => {
-                  if (thumbnail.startsWith('blob:')) {
-                    URL.revokeObjectURL(thumbnail)
-                  }
-                }}
-              />
-              <S.ThumbnailDeleteButton
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  playClickSound()
-                  if (thumbnail.startsWith('blob:')) {
-                    URL.revokeObjectURL(thumbnail)
-                  }
-                  setThumbnail('')
-                  setThumbnailFile(null)
-                  if (thumbnailInputRef.current) {
-                    thumbnailInputRef.current.value = ''
-                  }
-                }}
-              >
-                <FiX size={16} />
-              </S.ThumbnailDeleteButton>
-            </S.ThumbnailPreview>
-          ) : (
-            <S.ThumbnailUploadArea>
-              <FiImage size={32} />
-              <p>썸네일 이미지를 업로드하세요</p>
-              <S.UploadButton
-                type="button"
-                onClick={() => {
-                  playClickSound()
-                  thumbnailInputRef.current?.click()
-                }}
-              >
-                이미지 업로드
-              </S.UploadButton>
-            </S.ThumbnailUploadArea>
-          )}
-          <input
-            ref={thumbnailInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={async (e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-
-              if (file.size > 10 * 1024 * 1024) {
-                notify.error('파일 크기는 10MB를 초과할 수 없습니다.')
-                return
-              }
-
-              if (thumbnail && thumbnail.startsWith('blob:')) {
-                URL.revokeObjectURL(thumbnail)
-              }
-
-              const previewUrl = URL.createObjectURL(file)
-              setThumbnail(previewUrl)
-              setThumbnailFile(file)
-
-              try {
-                const result = await uploadImage(file, 'events')
-                URL.revokeObjectURL(previewUrl)
-                setThumbnail(result.url)
-              } catch {
-                notify.error('썸네일 업로드에 실패했습니다.')
-                URL.revokeObjectURL(previewUrl)
-                setThumbnail('')
-                setThumbnailFile(null)
-              }
-            }}
-          />
-          <S.Hint>사건 목록에 표시될 대표 이미지를 등록하세요</S.Hint>
-        </S.FormField>
-      </S.FormRow>
-
-      {/* 관련 국가 */}
-      {onOpenCountryModal && (
-        <S.FormRow>
-          <S.FormLabel>
-            참여국<OptionalTag>(선택)</OptionalTag>
-          </S.FormLabel>
-          <S.FormField>
-            {relatedCountries.length > 0 && (
-              <ParticipantList>
-                {relatedCountries.map((participant, index) => {
-                  const isHistorical = Boolean(participant.historicalCountryId)
-                  const country = isHistorical
-                    ? availableHistoricalCountries.find(
-                        (candidate) =>
-                          candidate.id === participant.historicalCountryId,
-                      )
-                    : availableCountries.find(
-                        (candidate) => candidate.id === participant.countryId,
-                      )
-                  if (!country) return null
-                  const key = participantKey(participant)
-                  const patch = (next: Partial<EventCountryParticipant>) =>
-                    setRelatedCountries(
-                      relatedCountries.map((row, rowIndex) =>
-                        rowIndex === index ? { ...row, ...next } : row,
-                      ),
-                    )
-                  return (
-                    <ParticipantRow key={key}>
-                      <ParticipantName>
-                        {isHistorical
-                          ? `🏛️ ${country.name}`
-                          : `${(country as CountryResponseDto).flagEmoji ?? ''} ${country.name}`}
-                      </ParticipantName>
-                      <RoleSelect
-                        value={participant.role ?? 'PARTICIPANT'}
-                        aria-label={`${country.name} 역할`}
-                        onChange={(changeEvent) =>
-                          patch({
-                            role: changeEvent.target
-                              .value as EventCountryParticipant['role'],
-                          })
-                        }
-                      >
-                        {EVENT_COUNTRY_ROLE_OPTIONS.filter(
-                          // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
-                          (option) => !option.deprecated || option.value === participant.role,
-                        ).map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </RoleSelect>
-                      <RoleDescriptionInput
-                        value={participant.roleDescription ?? ''}
-                        aria-label={`${country.name}가 한 일`}
-                        placeholder="이 나라가 한 일 (선택)"
-                        onChange={(changeEvent) =>
-                          patch({ roleDescription: changeEvent.target.value })
-                        }
-                      />
-                      <ParticipantRemove
-                        type="button"
-                        aria-label={`${country.name} 제거`}
-                        onClick={() => {
-                          playClickSound()
-                          setRelatedCountries(
-                            relatedCountries.filter(
-                              (row) => participantKey(row) !== key,
-                            ),
-                          )
-                        }}
-                      >
-                        <FiX size={14} />
-                      </ParticipantRemove>
-                    </ParticipantRow>
-                  )
-                })}
-              </ParticipantList>
-            )}
-            {/* 추가는 목록 **뒤** — 쌓이는 쪽에서 이어 붙이는 흐름 */}
-            <S.AddButton
-              type="button"
-              onClick={() => {
-                playClickSound()
-                onOpenCountryModal()
-              }}
-            >
-              <FiPlus size={15} />
-              {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
-            </S.AddButton>
-            {historicalLifespanWarnings.map((item) => (
-              <AlertBox
-                key={item.id}
-                variant="warning"
-                icon="⚠️"
-                style={{ marginTop: 8 }}
-              >
-                <strong>{item.name}</strong> {item.mismatch} 국가 소멸 전후 소급·연속 사건 등
-                정당한 경우라면 그대로 저장하세요.
-              </AlertBox>
-            ))}
-            <S.Hint>
-              나라마다 <strong>어떤 자격으로</strong> 관여했는지까지 적어 두면, 조약처럼
-              나라별 사정이 다른 사건도 한눈에 읽힙니다 (예: 주도국·서명국은 주도,
-              불참·거부국은 관찰). 역할을 <strong>주도국</strong>으로 두면 목록·타임라인이
-              그 나라를 사건의 대표로 세웁니다.
-            </S.Hint>
-          </S.FormField>
-        </S.FormRow>
-      )}
     </S.FormSection>
   )
 }
@@ -1033,7 +1055,9 @@ const ParticipantRemove = styled.button`
   background-color: transparent;
   color: ${({ theme }) => S.getC(theme).text.muted};
   cursor: pointer;
-  transition: color 0.14s, background-color 0.14s;
+  transition:
+    color 0.14s,
+    background-color 0.14s;
 
   &:hover,
   &:focus-visible {
@@ -1097,5 +1121,110 @@ const RoleDescriptionInput = styled.input`
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};
+  }
+`
+
+/* ─── 묶음 ───
+ * 행마다 그어 두던 구분선(8개)을 걷고, 성격이 같은 행끼리 묶어 묶음 사이에만 선을 둔다.
+ * 기본 정보(필수 둘 + 카테고리) → 연결(참여국·상위) → 소개(글·키워드·이미지) 순 —
+ * 위에서부터 채울수록 '등록할 만한 사건'이 되는 순서다. */
+const FormGroup = styled.section`
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 8px;
+
+  & + & {
+    padding-top: 20px;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  > ${S.FormRow} {
+    padding: 12px 0;
+    border-bottom: none;
+  }
+`
+
+/** 인물 등록 폼 장 머리글(CoreSectionLabel)과 같은 15/700 — 12px 회색 eyebrow는 필드 라벨보다 약해 경계가 안 읽혔다 */
+const FormGroupTitle = styled.h3`
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/* ─── 기간 ─── */
+const DateRangeGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+`
+
+const DateTimeLine = styled.div`
+  display: flex;
+  gap: 6px;
+
+  > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+`
+
+/** 시각 — 날짜 옆 좁은 칸. 비어 있으면 자리표시 글자만 흐리게 */
+const TimeTrigger = styled(S.DateInputWrapper)`
+  flex: 0 0 104px;
+
+  &[data-empty] ${S.DateInputDisplay} {
+    color: ${({ theme }) => S.getC(theme).text.muted};
+  }
+`
+
+/* ─── 키워드 칩 ─── (인라인 스타일·하드코딩 색 → 폼 토큰) */
+const KeywordChipList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const KeywordChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  border-radius: 999px;
+  background: ${({ theme }) => S.getC(theme).background.section};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13px;
+  font-weight: 500;
+`
+
+const KeywordChipRemove = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => S.getC(theme).background.hover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => S.getC(theme).border.focus};
+    outline-offset: 1px;
   }
 `

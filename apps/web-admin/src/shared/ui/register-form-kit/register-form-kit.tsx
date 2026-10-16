@@ -532,6 +532,128 @@ export const KitUploadButton = styled.button`
   }
 `
 
+// ─── 이미지 업로드 — 한 줄 띠 ───────────────────────────────────────────────
+// 선택 항목인 이미지가 150px 점선 상자로 필수 칸보다 큰 면적을 차지하던 것을 64px 한 줄로.
+// 비었을 때(KitUploadStrip = 누르는 버튼)와 찼을 때(KitUploadFilled = 미리보기·바꾸기·제거)가
+// 같은 높이라 고른 뒤에도 폼이 출렁이지 않는다. 사건·인물 등록 폼이 함께 쓴다.
+
+const uploadStripCss = css`
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 10px 8px 8px;
+  border-radius: 10px;
+  text-align: left;
+  font-family: inherit;
+`
+
+export const KitUploadStrip = styled.button<{ $dragOver?: boolean }>`
+  ${uploadStripCss}
+  border: 1px dashed
+    ${({ $dragOver, theme }) =>
+      $dragOver ? kitC(theme).focus : kitC(theme).borderHover};
+  background: ${({ $dragOver, theme }) =>
+    $dragOver ? kitC(theme).section : kitC(theme).content};
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => kitC(theme).focus};
+    background: ${({ theme }) => kitC(theme).section};
+  }
+  &:focus-visible {
+    outline: none;
+    border-color: ${({ theme }) => kitC(theme).focus};
+    box-shadow: 0 0 0 3px ${({ theme }) => kitC(theme).focusHalo};
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+`
+
+export const KitUploadFilled = styled.div`
+  ${uploadStripCss}
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).content};
+`
+
+/** 띠 왼쪽 72×48 틀 — 빈 띠에선 아이콘 자리, 찬 띠에선 미리보기(cover) */
+export const KitUploadThumb = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 72px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: ${({ theme }) => kitC(theme).section};
+  color: ${({ theme }) => kitC(theme).textMuted};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+
+/** 띠 가운데 두 줄 — 굵은 제목 + 옅은 설명 */
+export const KitUploadText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+
+  strong {
+    font-size: 13px;
+    font-weight: 600;
+    color: ${({ theme }) => kitC(theme).textPrimary};
+  }
+  span {
+    font-size: 12px;
+    color: ${({ theme }) => kitC(theme).textMuted};
+  }
+`
+
+export const KitUploadActions = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+`
+
+/** 제거 — 평소엔 중성색, hover·focus에서만 파괴색(예전 붉은 원 버튼은 행의 가장 강한 잉크였다) */
+export const KitUploadRemove = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: ${({ theme }) => kitC(theme).textMuted};
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.error};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.08)'};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => kitC(theme).focus};
+    outline-offset: 1px;
+  }
+`
+
 // ─── 저장 중 · 불러오는 중 ──────────────────────────────────────────────────
 
 /** 사건 등록 모달 BusyBar — 저장 요청 중 본문 맨 위 한 줄 */

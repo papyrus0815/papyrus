@@ -600,6 +600,8 @@ export const Hint = styled.span`
   color: ${({ theme }) => getC(theme).text.muted};
   line-height: 1.5;
   font-weight: 400;
+  /* 한글이 글자 단위로 끊겨 '두세요'가 '두세 / 요'로 갈라지지 않게 */
+  word-break: keep-all;
 `
 
 export const DateInputWrapper = styled.div`
