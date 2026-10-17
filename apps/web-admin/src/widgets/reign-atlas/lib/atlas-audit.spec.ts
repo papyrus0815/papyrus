@@ -83,16 +83,40 @@ describe('auditAtlasData', () => {
     expect(result.issues.warWithoutFront[0]!.detail).toContain('진영')
   })
 
-  it('참여국 없는 하위 전투는 소음이라 빼고, 최상위는 보고', () => {
+  it('상위 전쟁이 전선을 그리면 하위 전투는 빼고, 상위가 못 그리면 보고', () => {
+    const sided = war({
+      id: 'top',
+      relatedHistoricalCountries: [
+        { id: 'prussia', sideId: 's1' },
+        { id: 'france', sideId: 's2' },
+      ],
+    })
+    const bare = war({ id: 'bare', title: '다른 전쟁' })
     const result = audit({
       events: [
-        war({ id: 'top' }),
-        war({ id: 'child', title: '스당 전투', parentEventId: 'top' }),
+        sided,
+        bare,
+        war({ id: 'covered', title: '스당 전투', parentEventId: 'top' }),
+        war({ id: 'orphan', title: '메스 공방전', parentEventId: 'bare' }),
       ],
     })
     expect(
       result.issues.warWithoutFront.map((issue) => issue.target.id),
-    ).toEqual(['top'])
+    ).toEqual(['bare', 'orphan'])
+  })
+
+  it('충돌이 아닌 군사 사건(함대법·취임·훈련)은 점검하지 않는다', () => {
+    const result = audit({
+      events: [
+        war({ id: 'law', title: '제1차 함대법' }),
+        war({
+          id: 'speech',
+          title: '처칠 해군 예산 연설',
+          relatedHistoricalCountries: [{ id: 'prussia' }, { id: 'france' }],
+        }),
+      ],
+    })
+    expect(result.issues.warWithoutFront).toHaveLength(0)
   })
 
   it('수장이 지도에 못 올라가는 이유 — 좌표 없음·존속 기간 밖·현대국가 미대응·미연결', () => {

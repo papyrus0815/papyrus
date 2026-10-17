@@ -111,17 +111,29 @@ function normalizeTitle(title: string): string {
   return title.replace(/[\s()（）\-–—·,.]/g, '').toLowerCase()
 }
 
+/**
+ * 무력 충돌로 읽히는 제목 — 전쟁/군사 분류에는 함대법·참모총장 취임·기동훈련 같은
+ * '군사 제도' 사건이 섞여 있어(실측 84건 중 약 30건) 분류만 보면 점검이 소음으로 찬다.
+ */
+const CONFLICT_TITLE =
+  /전쟁|전투|해전|공방|포위|봉기|반란|침공|원정|입성|선전포고|war|battle|siege|revolt|invasion/i
+
 function checkWars(events: AtlasEventInput[]): AuditIssue[] {
+  const byId = new Map(events.map((event) => [event.id, event]))
   const issues: AuditIssue[] = []
   for (const event of events) {
     if (!WAR_CATEGORY.test(event.category?.name ?? '')) continue
+    if (!CONFLICT_TITLE.test(event.title)) continue
     if (isFrontLineEvent(event)) continue
+    // 상위 전쟁이 이미 전선을 그리면 하위 전투(스당·세바스토폴…)는 지도에 더할 것이 없다
+    const parent = event.parentEventId
+      ? byId.get(event.parentEventId)
+      : undefined
+    if (parent && isFrontLineEvent(parent)) continue
     const participants = [
       ...(event.relatedHistoricalCountries ?? []),
       ...(event.relatedCountries ?? []),
     ]
-    // 하위 전투 중 참여국을 아예 안 단 것은 상위 전쟁이 대표하므로 소음 — 최상위만 '참여국 없음'을 보고
-    if (participants.length === 0 && event.parentEventId) continue
     const detail =
       participants.length < 2
         ? `참여국 ${participants.length}곳 — 교전선은 두 나라 이상이 필요합니다`
