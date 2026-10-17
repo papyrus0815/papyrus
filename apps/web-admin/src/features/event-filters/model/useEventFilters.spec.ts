@@ -635,6 +635,8 @@ const anchorEvent = (
 ): HistoricalEvent =>
   event(id, {
     parentEventId,
+    // 하위를 거느린 사건은 묶음 — 종류는 저장값이라 자손 수로 파생하지 않는다(event-kind.ts)
+    kind: childIds.length > 0 ? 'COLLECTION' : 'SINGLE',
     hierarchy: {
       id,
       title: id,
@@ -652,7 +654,7 @@ const anchorEvent = (
     },
   } as unknown as Partial<HistoricalEvent>)
 
-describe("useEventFilters — '최상위(앵커) 사건만' 축", () => {
+describe("useEventFilters — '최상위 사건(묶음)만' 축", () => {
   const ww1 = anchorEvent('ww1', ['sarajevo'])
   const sarajevo = anchorEvent('sarajevo', [], 'ww1')
   const solo = anchorEvent('kiel-canal')
@@ -666,7 +668,7 @@ describe("useEventFilters — '최상위(앵커) 사건만' 축", () => {
     ])
   })
 
-  it('앵커만 켜면 자손 0인 단독 루트가 빠진다', () => {
+  it('최상위만 켜면 단일 루트가 빠진다', () => {
     const { result } = renderFilters({ events, anchorsOnly: true })
     expect(result.current.filteredEvents.map((item) => item.id)).toEqual(['ww1'])
   })

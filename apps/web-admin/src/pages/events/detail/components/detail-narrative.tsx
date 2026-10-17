@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styled from 'styled-components'
 
@@ -43,6 +43,13 @@ interface DetailNarrativeProps {
    * 있는 것'으로 접힌다(판정은 section-outline.lib). 미지정이면 셋 다 그린다.
    */
   visible?: { background: boolean; narrative: boolean; aftermath: boolean }
+  /**
+   * 묶음 사건의 전개 자리 — 주어지면 전개 단락 섹션 대신 이것을 배경과 여파 사이에 그린다
+   * (묶음 사건의 전개는 하위 사건이다).
+   */
+  developmentSlot?: ReactNode
+  /** 단일 사건의 '하위 사건으로 나누기' — 전개 머리에 진입점을 단다 */
+  onRequestSplit?: () => void
 }
 
 /**
@@ -61,6 +68,8 @@ export function DetailNarrative({
   onPersonClick,
   onPersonEntityLink,
   visible = ALL_VISIBLE,
+  developmentSlot,
+  onRequestSplit,
 }: DetailNarrativeProps) {
   /* 본문(배경·여파·섹션) 공통 — 인물 링크 삽입 시에만 행위자 등록으로 잇는다. */
   const handleEntityLink = useCallback(
@@ -303,13 +312,24 @@ export function DetailNarrative({
         </S.Section>
       )}
 
+      {/* 묶음 사건 — 전개는 하위 사건(배경과 여파 사이의 같은 자리) */}
+      {developmentSlot}
+
       {/* 전개 — 번호 단락. 비어 있어도 +추가 진입점. */}
-      {visible.narrative && (
+      {!developmentSlot && visible.narrative && (
         <S.Section id="narrative">
           <S.SectionHeader>
             <S.SectionTitle>전개</S.SectionTitle>
             {narrativeRows.length > 0 && (
               <S.SectionSubtitle>{narrativeRows.length}단락</S.SectionSubtitle>
+            )}
+            {onRequestSplit && (
+              <S.SectionActions>
+                {/* 전개가 여러 국면으로 커지면 묶음 사건이 되어 국면마다 하위 사건이 된다 */}
+                <SplitAction type="button" onClick={onRequestSplit}>
+                  하위 사건으로 나누기
+                </SplitAction>
+              </S.SectionActions>
             )}
           </S.SectionHeader>
           {narrativeRows.length === 0 ? (
@@ -415,6 +435,27 @@ const EmptyLead = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 3px;
+    border-radius: 2px;
+  }
+`
+
+/** 전개 머리의 '하위 사건으로 나누기' — 본문 편집을 가리지 않게 낮은 목소리의 글자 버튼 */
+const SplitAction = styled.button`
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
     border-radius: 2px;
   }
 `

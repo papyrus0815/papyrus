@@ -240,6 +240,8 @@ export interface EventLinkCandidate {
   startYear?: number | null
   endEra?: string | null
   endYear?: number | null
+  /** 사건 종류 — 상위로 걸 수 있는 건 묶음뿐(단일은 하위를 가질 수 없다) */
+  kind?: 'SINGLE' | 'COLLECTION'
   /** 현재 상위 사건(주 상위) — 있으면 "이미 X의 하위" 표시·재부모화 확인의 근거 */
   parentEventId?: string | null
   parentEventTitle?: string | null
@@ -362,6 +364,8 @@ export async function getEventLinkCandidates(params?: {
   near?: number | null
   /** near 앞뒤 몇 년까지 (기본 30) */
   window?: number
+  /** 이 종류만 — 상위 후보는 'COLLECTION' */
+  kind?: 'SINGLE' | 'COLLECTION'
 }): Promise<EventLinkCandidate[]> {
   try {
     const connection = getConnection()
@@ -371,6 +375,7 @@ export async function getEventLinkCandidates(params?: {
     if (params?.limit != null) url.searchParams.set('limit', String(params.limit))
     if (params?.near != null) url.searchParams.set('near', String(params.near))
     if (params?.window != null) url.searchParams.set('window', String(params.window))
+    if (params?.kind) url.searchParams.set('kind', params.kind)
 
     const response = await fetch(url.toString(), {
       headers: (connection.headers ?? {}) as HeadersInit,
@@ -566,6 +571,21 @@ export async function updateEvent(
   } catch (error) {
     throw error
   }
+}
+
+export type SplitEventSectionPlan = Parameters<
+  typeof api.events.split.splitIntoChildren
+>[2]['sections'][number]
+
+/**
+ * 단일 사건 → 묶음 사건('하위 사건으로 나누기') — POST /events/:id/split.
+ * 전개 단락 전부의 행선지(하위 사건·배경·여파·버리기)를 한 번에 보낸다. 단락이 없으면 빈 배열.
+ */
+export async function splitEventIntoChildren(
+  id: string,
+  sections: SplitEventSectionPlan[],
+): Promise<{ createdChildIds: string[]; movedToExistingChild: number }> {
+  return api.events.split.splitIntoChildren(getConnection(), id, { sections })
 }
 
 /**

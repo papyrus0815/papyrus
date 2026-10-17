@@ -262,6 +262,11 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
    */
   const loadedImagesRef = useRef<LoadedEventImage[] | null>(null)
 
+  // ===== 사건 종류(신규 등록 전용) =====
+  // 단일(전투·회담·조약 체결) / 묶음(전쟁·위기 — 전개는 하위 사건). 편집 모드의 전환은 상세의
+  // '하위 사건으로 나누기'·'단일 사건으로'가 정본이라 여기서는 고르지 않는다.
+  const [kind, setKind] = useState<'SINGLE' | 'COLLECTION'>('SINGLE')
+
   // ===== 상위 사건(트리 등록) =====
   // 신규 등록 전용 — 편집 모드의 계층 편집은 상세 '연관' 섹션이 정본이라 여기서는
   // 숨긴다(현재 상위를 하이드레이션하지 않으므로, 노출하면 '상위 없음'으로 오독된다).
@@ -284,11 +289,12 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     refetch: refetchParentCandidates,
   } = useQuery({
     // detail-network의 연결 피커와 동일 키 — ['events'] 프리픽스 아래(사건 mutation 시 무효화).
-    queryKey: eventKeys.linkCandidates(debouncedParentTerm),
+    // 상위는 묶음만 — 단일 사건은 하위를 가질 수 없다(서버가 거부)
+    queryKey: eventKeys.linkCandidates(debouncedParentTerm, 'COLLECTION'),
     // 서버 take 100 캡(알려진 제약) — 넘치는 후보는 검색어로 좁힌다. 51건 요청은
     // '50건 초과 → 더 있음' 신호용(detail-network와 동일).
     queryFn: () =>
-      getEventLinkCandidates({ query: debouncedParentTerm, limit: 51 }),
+      getEventLinkCandidates({ query: debouncedParentTerm, limit: 51, kind: 'COLLECTION' }),
     enabled: parentPickerOpen && !isEditMode,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
@@ -439,6 +445,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         // 상위 사건도 기준선에 포함 — initialParent 프리필 상태가 곧 기준선이라
         // '열자마자 dirty' 오판이 없고, 해제/변경만 dirty가 된다.
         parentEvent?.id ?? '',
+        kind,
       ]),
     [
       title,
@@ -454,6 +461,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       keywords,
       relatedCountries,
       parentEvent,
+      kind,
     ],
   )
   const snapshotRef = useRef(snapshot)
@@ -561,9 +569,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         )
         notify.success('사건이 성공적으로 수정되었습니다!')
       } else {
-        saved = await createEvent(
-          eventData satisfies Parameters<typeof createEvent>[0],
-        )
+        saved = await createEvent({
+          ...(eventData satisfies Parameters<typeof createEvent>[0]),
+          kind,
+        })
         targetId = saved.id
         notify.success('사건이 등록되었습니다. 상세에서 내용을 이어서 등록하세요.')
       }
@@ -696,6 +705,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         availableCountries={availableCountries}
         availableHistoricalCountries={availableHistoricalCountries}
         onOpenCountryModal={() => setShowCountryModal(true)}
+        kindSlot={isEditMode ? undefined : { value: kind, onChange: setKind }}
         parentEventSlot={
           isEditMode
             ? undefined

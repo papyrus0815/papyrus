@@ -48,9 +48,9 @@ import {
   SPAN_GRID,
 } from '../../../pages/events/styles/theme'
 import {
-  getAnchorBadgeLabel,
+  getCollectionBadgeLabel,
   getEventDescendantCount,
-} from '@/features/event-hierarchy/model/anchor'
+} from '@/features/event-hierarchy/model/event-kind'
 
 import type {
   EventHierarchyNode,
@@ -526,14 +526,14 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   })()
   const matchReason = buildMatchReason(node, event, searchQuery)
   /**
-   * 앵커(최상위 사건) 표기 — 판정은 `features/event-hierarchy/model/anchor.ts` 단일출처.
+   * 묶음(최상위 사건) 표기 — 판정은 `features/event-hierarchy/model/event-kind.ts` 단일출처.
    *
    * ⚠️ 모수를 `childCount`(직계만)로 바꾸지 말 것. 그러면 손자를 가진 사건의 배지가
    * 실제 서브트리 크기보다 작게 찍혀, 지면마다 다른 것을 세던 원래 문제로 되돌아간다
    * (검토 근인 4). depth로 최상위를 판정하지 않는 이유도 같다 — 필터가 걸리면
    * 자식 행이 depth 0으로 승격된다.
    */
-  const anchorBadgeLabel = getAnchorBadgeLabel(event)
+  const anchorBadgeLabel = getCollectionBadgeLabel(event)
   const anchorDescendantCount = getEventDescendantCount(event)
   const duration = formatDuration(
     startParts,

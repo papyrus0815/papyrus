@@ -31,82 +31,14 @@ const stripeSolid = (mode: 'light' | 'dark') => (mode === 'dark' ? '#1a1a1c' : '
 export const toneColor = (tone: RoleTone, mode: 'light' | 'dark') =>
   mode === 'dark' ? ROLE_TONE_COLOR[tone].dark : ROLE_TONE_COLOR[tone].light
 
+/** 사건 상세의 '조망' 탭 패널 — 여백·바탕은 상세 지면이 쥔다 */
 export const Page = styled.div`
   box-sizing: border-box;
   width: 100%;
-  min-height: 100%;
-  padding: 28px clamp(16px, 2.6vw, 40px) 72px;
   display: flex;
   flex-direction: column;
   gap: 28px;
-  background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.primary};
-
-  /* 브라우저 전체 화면 — 배경이 투명이면 검은 바탕 위에 글자만 뜬다 */
-  &:fullscreen {
-    overflow-y: auto;
-  }
-`
-
-// ─── 머리 ──────────────────────────────────────────────────────────────────
-
-export const Header = styled.header`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px 24px;
-`
-
-export const HeaderText = styled.div`
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-export const Kicker = styled.span`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-`
-
-export const Title = styled.h1`
-  margin: 0;
-  font-size: clamp(26px, 3vw, 38px);
-  letter-spacing: -0.02em;
-  font-weight: 800;
-  line-height: 1.25;
-  word-break: keep-all;
-`
-
-export const HeaderMeta = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 0;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  /* 항목 사이 가운뎃점 — 칸막이 대신 */
-  > * + *::before {
-    content: '·';
-    margin: 0 10px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-`
-
-export const HeaderActions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 `
 
 const buttonBase = css`
@@ -131,10 +63,6 @@ const buttonBase = css`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
-`
-
-export const ActionButton = styled.button`
-  ${buttonBase}
 `
 
 /** [조망 | 문서] — 지금 보는 쪽이 채워진다 */
@@ -175,30 +103,6 @@ const fillColor = (pct: number, mode: 'light' | 'dark') =>
     : pct >= 40
       ? mode === 'dark' ? '#fbbf24' : '#d97706'
       : mode === 'dark' ? '#f87171' : '#dc2626'
-
-// ─── 상위 사건 개요 ─────────────────────────────────────────────────────────
-// 조망에는 원래 상위 자신의 서술이 없었다 — 1차대전이 무엇인지 보려면 [문서]로 가야 했다.
-
-export const RootLead = styled.div`
-  max-width: 78ch;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-`
-
-export const RootLeadText = styled.p<{ $clamped: boolean }>`
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.75;
-  white-space: pre-line;
-  word-break: keep-all;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  ${({ $clamped }) =>
-    $clamped
-      ? `display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;`
-      : ''}
-`
 
 export const TextButton = styled.button`
   padding: 0;
@@ -307,12 +211,10 @@ export const MeterFill = styled.span<{ $pct: number }>`
 // ─── 섹션 내비 ─────────────────────────────────────────────────────────────
 // 지면이 길다(1차대전 기준 화면 3장). 머리 아래에 붙어 따라오는 목차.
 
+/* 상세의 탭 바가 이미 sticky라 이 목차는 흐름에 둔다(둘 다 붙으면 서로 겹친다) */
 export const SectionNav = styled.nav`
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  margin: -12px calc(-1 * clamp(16px, 2.6vw, 40px)) 0;
-  padding: 8px clamp(16px, 2.6vw, 40px);
+  margin: -12px 0 0;
+  padding: 0 0 8px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -912,21 +814,6 @@ export const VisuallyHidden = styled.span`
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
-`
-
-/** 문서 보기 중인 최상위 사건 — 조망으로 돌아가는 길 */
-export const DocumentViewBar = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  margin: 12px clamp(16px, 2.4vw, 32px) 0;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 // ─── 점검 신호 (배치 B) ────────────────────────────────────────────────────

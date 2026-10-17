@@ -49,8 +49,10 @@ const LazyEventRegisterModal = lazy(() =>
 
 interface DetailNetworkProps {
   event: EventDetail
-  /** opts.savedLabel — 저장 토스트 문구 교체(앵커 지정처럼 대상명을 박아야 하는 patch용) */
+  /** opts.savedLabel — 저장 토스트 문구 교체(대상명을 박아야 하는 patch용) */
   onPatch: (patch: UpdateEventDto, opts?: { savedLabel?: string }) => void
+  /** 단일 사건의 '하위 사건으로 나누기' — 단일은 하위를 두지 않으므로 하위 블록 대신 이 진입점을 단다 */
+  onRequestSplit?: () => void
 }
 
 /** 승격 픽커의 '모든 상위 해제' 탈출구 옵션 값 — 사건 id와 충돌하지 않는 sentinel. */
@@ -76,7 +78,9 @@ const NETWORK_BLOCKS: ReadonlyArray<{ id: NetworkBlock; label: string }> = [
   { id: 'keywords', label: '키워드' },
 ]
 
-export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
+export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkProps) {
+  /** 단일 사건은 하위를 가질 수 없다(서버 강제) — 하위 블록·모으기·새로 만들기를 내지 않는다 */
+  const isCollection = event.kind === 'COLLECTION'
   const queryClient = useQueryClient()
   // 섹션 부제의 '관련 N' — RelatedBlock과 같은 캐시를 읽는다(추가 요청 없음)
   const relatedQuery = useEventRelations(event.id)
@@ -614,8 +618,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     parent:
       Boolean(parentEvent) ||
       extraParents.length > 0 ||
-      Boolean(event.parentEventId) ||
-      event.anchorOverride != null,
+      Boolean(event.parentEventId),
     children: children.length > 0 || (event.extraChildren?.length ?? 0) > 0,
     related: relatedCount > 0,
     keywords: keywords.length > 0,
@@ -639,7 +642,9 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   }, [filledKey])
   const isBlockShown = (block: NetworkBlock) =>
     blockFilled[block] || shownBlocks.has(block)
-  const foldedBlocks = NETWORK_BLOCKS.filter((block) => !isBlockShown(block.id))
+  const foldedBlocks = NETWORK_BLOCKS.filter(
+    (block) => !isBlockShown(block.id) && (isCollection || block.id !== 'children'),
+  )
   const relationSummary = [
     parentEvent || extraParents.length > 0
       ? `상위 ${parentEvent ? 1 : 0}${
@@ -678,8 +683,24 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
       />
       )}
 
+      {/* 단일 사건 — 하위 대신 '나누기'. 전개가 국면으로 커지면 묶음이 되어 국면마다 하위 사건이 된다 */}
+      {!isCollection && onRequestSplit && (
+        <NetStyles.HierBlock role="group" aria-labelledby="network-children-label">
+          <NetStyles.BlockLabel id="network-children-label">하위 사건</NetStyles.BlockLabel>
+          <NetStyles.HelperNote>
+            단일 사건은 하위 사건을 두지 않습니다. 여러 국면으로 이뤄진 사건이라면 묶음 사건으로
+            나누세요 — 전개 단락이 하위 사건이 됩니다.
+          </NetStyles.HelperNote>
+          <NetStyles.HierRow>
+            <NetStyles.AddBtn type="button" onClick={onRequestSplit}>
+              하위 사건으로 나누기
+            </NetStyles.AddBtn>
+          </NetStyles.HierRow>
+        </NetStyles.HierBlock>
+      )}
+
       {/* 하위 사건 카드 그리드 + 추가 하위(역방향 엣지) 칩 */}
-      {isBlockShown('children') && (
+      {isCollection && isBlockShown('children') && (
         <ChildrenBlock
           childEvents={children}
           extraChildren={event.extraChildren ?? []}

@@ -33,6 +33,7 @@ import {
 } from '@/shared/lib/country-period'
 import { isoPeriodEnd } from '@/shared/lib/iso-date'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
+import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import {
   DatePickerModal,
   type DatePickerPrecision,
@@ -140,6 +141,14 @@ interface BasicInfoSectionProps {
     onClear: () => void
   }
 
+  /**
+   * 사건 종류(단일/묶음) — 신규 등록에서만. undefined면 행을 그리지 않는다(편집 모달: 전환은 상세 몫).
+   */
+  kindSlot?: {
+    value: 'SINGLE' | 'COLLECTION'
+    onChange: (value: 'SINGLE' | 'COLLECTION') => void
+  }
+
   // UI 상태
   playClickSound: () => void
   getDateError: () => string | null
@@ -182,6 +191,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   availableHistoricalCountries = [],
   onOpenCountryModal,
   parentEventSlot,
+  kindSlot,
   playClickSound,
   getDateError,
   calculateDaysDifference,
@@ -370,6 +380,35 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             )}
           </S.FormField>
         </S.FormRow>
+
+        {/* 종류 — 묶음이면 전개를 하위 사건으로 쌓는다(본문엔 배경·여파만) */}
+        {kindSlot && (
+          <S.FormRow>
+            <S.FormLabel as="span" id="event-form-kind-label">
+              종류
+            </S.FormLabel>
+            <S.FormField>
+              <SegmentControl
+                appearance="chips"
+                ariaLabel="사건 종류"
+                value={kindSlot.value}
+                onChange={(next) => {
+                  playClickSound()
+                  kindSlot.onChange(next)
+                }}
+                options={[
+                  { value: 'SINGLE', label: '단일 사건' },
+                  { value: 'COLLECTION', label: '묶음 사건' },
+                ]}
+              />
+              <S.Hint>
+                {kindSlot.value === 'COLLECTION'
+                  ? '전쟁·위기처럼 여러 국면을 거느린 사건. 전개는 하위 사건으로 등록하고, 본문에는 배경과 여파만 씁니다.'
+                  : '전투·회담·조약 체결처럼 한 덩어리로 서술하는 사건. 나중에 국면이 늘면 상세에서 하위 사건으로 나눌 수 있습니다.'}
+              </S.Hint>
+            </S.FormField>
+          </S.FormRow>
+        )}
 
         {/* 기간 */}
         <S.FormRow>

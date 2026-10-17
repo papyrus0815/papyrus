@@ -1,27 +1,26 @@
 /**
- * 최상위 사건 조망 — 상위가 없고 하위를 거느린 사건의 **전용 지면**.
+ * 묶음 사건 조망 — 묶음 사건 상세의 '조망' 탭.
  *
  * 일반 사건 상세는 한 사건을 읽고 고치는 문서다. 최상위 사건(1차세계대전처럼 하위 18건)은
  * 그 문서로는 하위 사건을 '전부' 볼 수 없었다 — 하위 목록은 제목·날짜뿐이었고, 누가 어디에
  * 끼었는지·무엇이 비었는지는 하위 사건을 하나씩 열어야 알았다. 이 지면은 하위 전부를
  * 한 화면에 펼친다: 전개 간트 · 참여국 매트릭스 · 갈래/시기 분포 · 인물·진영·수치 · 기록 점검.
  *
- * 문서(서술·편집)는 [문서] 전환으로 그대로 간다(`?view=doc`). 판정·전환은 event-page-switch.
+ * 예전엔 별도 지면(`/events/:id`가 판정해 조망/문서로 갈라 보냄)이었다. 묶음 사건이 명시 종류가
+ * 되면서 상세 한 지면으로 합쳤다 — 개요 탭은 배경·전개(=하위 사건)·여파, 이 탭은 하위 전부의 집계.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiMaximize2, FiMinimize2, FiX } from 'react-icons/fi'
+import { FiX } from 'react-icons/fi'
 import { useSearchParams } from 'react-router-dom'
 
-import { durationLabel } from '@/pages/events/detail/components/event-facts.lib'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { updateEvent } from '@/shared/api/events'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { eventKeys } from '@/shared/api/event-query-keys'
-import { eventDateLabel } from '@/shared/lib/event-date-label'
 
 import {
   aggregatePersons,
@@ -57,33 +56,11 @@ const SECTION_IDS = [
   'overview-checklist',
 ]
 
-interface EventOverviewPageProps {
+interface EventOverviewPanelProps {
   eventId: string
-  /** [문서]로 전환 — 기존 사건 상세(서술·편집) */
-  onShowDocument: () => void
 }
 
-/** 브라우저 전체 화면 — 지원하지 않거나 거부되면 조용히 무시(지면은 이미 콘텐츠 폭 전체다) */
-function useFullscreen(target: React.RefObject<HTMLElement | null>) {
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  useEffect(() => {
-    const sync = () => setIsFullscreen(document.fullscreenElement === target.current)
-    document.addEventListener('fullscreenchange', sync)
-    return () => document.removeEventListener('fullscreenchange', sync)
-  }, [target])
-  const toggle = useCallback(() => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined)
-    } else {
-      void target.current?.requestFullscreen?.().catch(() => undefined)
-    }
-  }, [target])
-  return { isFullscreen, toggle, supported: typeof document !== 'undefined' && document.fullscreenEnabled }
-}
-
-export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPageProps) {
-  const pageRef = useRef<HTMLDivElement>(null)
-  const fullscreen = useFullscreen(pageRef)
+export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: eventKeys.overview(eventId),
@@ -142,9 +119,6 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
     }
     return () => observer.disconnect()
   }, [hasData])
-
-  /** 상위 개요 펼침 — 기본은 세 줄 */
-  const [leadOpen, setLeadOpen] = useState(false)
 
   /**
    * 열린 사건 — URL(`?event=`)이 정본. 링크로 공유되고, 뒤로 가기가 모달을 닫는다.
@@ -206,30 +180,20 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
 
   if (isLoading) {
     return (
-      <S.Page ref={pageRef}>
+      <S.Page>
         <S.Empty>하위 사건을 모으는 중…</S.Empty>
       </S.Page>
     )
   }
   if (isError || !data || !derived) {
     return (
-      <S.Page ref={pageRef}>
+      <S.Page>
         <S.Empty>조망을 불러오지 못했습니다.</S.Empty>
-        <S.ActionButton type="button" onClick={onShowDocument}>
-          문서로 보기
-        </S.ActionButton>
       </S.Page>
     )
   }
 
   const { root, descendants } = data
-  const dateRange = eventDateLabel(root)
-  const duration = durationLabel(
-    root.startDate,
-    root.endDate,
-    root.startDatePrecision,
-    root.endDatePrecision,
-  )
   const selectedCountry = derived.matrix.find((country) => country.key === selectedCountryKey)
 
   // 모달 순서 — 거르기가 걸려 있으면 걸린 사건들 안에서 넘긴다(열린 사건이 그 밖이면 전체 순서)
@@ -300,61 +264,7 @@ export function EventOverviewPage({ eventId, onShowDocument }: EventOverviewPage
   ].filter((label): label is string => Boolean(label))
 
   return (
-    <S.Page ref={pageRef}>
-      <S.Header>
-        <S.HeaderText>
-          <S.Kicker>최상위 사건 · 하위 {descendants.length}건 조망</S.Kicker>
-          <S.Title>{root.title}</S.Title>
-          <S.HeaderMeta>
-            {dateRange && <span>{dateRange}</span>}
-            {duration && <span>{duration}</span>}
-            {root.category && <span>{root.category.name}</span>}
-            {root.location && <span>{root.location}</span>}
-          </S.HeaderMeta>
-        </S.HeaderText>
-        <S.HeaderActions>
-          <S.ViewSwitch role="group" aria-label="보기">
-            <S.ViewSwitchItem type="button" $active aria-pressed="true">
-              조망
-            </S.ViewSwitchItem>
-            <S.ViewSwitchItem type="button" $active={false} aria-pressed="false" onClick={onShowDocument}>
-              문서
-            </S.ViewSwitchItem>
-          </S.ViewSwitch>
-          {fullscreen.supported && (
-            <S.ActionButton type="button" onClick={fullscreen.toggle}>
-              {fullscreen.isFullscreen ? (
-                <FiMinimize2 size={14} aria-hidden="true" />
-              ) : (
-                <FiMaximize2 size={14} aria-hidden="true" />
-              )}
-              {fullscreen.isFullscreen ? '전체 화면 끝내기' : '전체 화면'}
-            </S.ActionButton>
-          )}
-        </S.HeaderActions>
-      </S.Header>
-
-      {/* 상위 사건 자신의 개요 — 하위만 펼치던 지면에서 '이것이 무엇인가'가 빠져 있었다 */}
-      <S.RootLead>
-        {root.description?.trim() ? (
-          <>
-            <S.RootLeadText $clamped={!leadOpen}>{root.description}</S.RootLeadText>
-            {root.description.length > 160 && (
-              <S.TextButton type="button" onClick={() => setLeadOpen((open) => !open)} aria-expanded={leadOpen}>
-                {leadOpen ? '접기' : '더 보기'}
-              </S.TextButton>
-            )}
-          </>
-        ) : (
-          <S.RootLeadText $clamped={false}>
-            이 최상위 사건의 개요가 아직 없습니다.{' '}
-            <S.TextButton type="button" onClick={onShowDocument}>
-              문서에서 쓰기
-            </S.TextButton>
-          </S.RootLeadText>
-        )}
-      </S.RootLead>
-
+    <S.Page>
       <S.StatRow>
         <S.Stat>
           <S.StatLabel>하위 사건</S.StatLabel>

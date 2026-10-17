@@ -64,10 +64,16 @@ export function useLinkCandidatePicker({
     refetch: refetchCandidates,
   } = useQuery({
     // ['events'] 프리픽스(eventKeys.lists()) 아래 — 사건 mutation 시 함께 무효화된다.
-    queryKey: eventKeys.linkCandidates(debouncedTerm),
+    // 상위·추가 상위를 고를 땐 묶음만 받는다(단일은 하위를 가질 수 없다 — 서버가 거부).
+    queryKey: eventKeys.linkCandidates(debouncedTerm, childModalOpen ? 'any' : 'COLLECTION'),
     // limit은 표시 상한(50)보다 1 크게 요청 — 정확히 50건일 때 '더 있음' 오탐을 피하고
     // (>50일 때만 절단), 51번째는 표시하지 않고 '더 있음' 신호로만 쓴다.
-    queryFn: () => getEventLinkCandidates({ query: debouncedTerm, limit: 51 }),
+    queryFn: () =>
+      getEventLinkCandidates({
+        query: debouncedTerm,
+        limit: 51,
+        kind: childModalOpen ? undefined : 'COLLECTION',
+      }),
     enabled: parentModalOpen || childModalOpen || extrasModalOpen,
     staleTime: 60_000,
     // 검색어 타이핑 중 이전 결과를 유지 — 목록이 '불러오는 중'으로 깜빡이지 않게.

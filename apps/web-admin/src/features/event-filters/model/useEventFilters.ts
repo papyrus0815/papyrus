@@ -12,8 +12,8 @@ import { CENTURY_UNKNOWN } from '@/entities/event/model/types'
 // useEventHierarchy(react 훅)를 끌고 오고, 이 훅의 spec은 그걸 필요로 하지 않는다.
 import {
   getEventDescendantCount,
-  isAnchorEvent,
-} from '@/features/event-hierarchy/model/anchor'
+  isCollectionEvent,
+} from '@/features/event-hierarchy/model/event-kind'
 import {
   isRenderRoot,
   isTreeRoot,
@@ -409,7 +409,7 @@ export const useEventFilters = (
       : events.filter(isTreeRoot)
     // 앵커 축은 루트 선별 단계 전용 — 자식엔 적용되지 않는다(적용하면 펼쳐도 자식이 없다).
     // 스코프 안에서는 의미가 없으므로(모수가 이미 한 앵커) 적용하지 않는다.
-    const scoped = anchorsOnly && !scopeIds ? roots.filter(isAnchorEvent) : roots
+    const scoped = anchorsOnly && !scopeIds ? roots.filter(isCollectionEvent) : roots
     return scoped.filter(matchesSelfOrDescendant)
   }, [events, childrenByParent, matchesEvent, anchorsOnly, scopeIds])
 

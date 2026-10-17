@@ -42,7 +42,7 @@ import {
 import {
   buildYearBuckets,
   groupYearsByCentury,
-  isAnchorEvent,
+  isCollectionEvent,
   isTreeRoot,
   orderRowsForRender,
   selectMatchedRows,
@@ -1423,7 +1423,7 @@ export const EventsCatalogPage: React.FC = () => {
    * 나머지(rootLoadedCount − anchorRootCount)가 곧 '단독' 사건 수다.
    */
   const anchorRootCount = useMemo(
-    () => events.filter((event) => isTreeRoot(event) && isAnchorEvent(event)).length,
+    () => events.filter((event) => isTreeRoot(event) && isCollectionEvent(event)).length,
     [events],
   )
 

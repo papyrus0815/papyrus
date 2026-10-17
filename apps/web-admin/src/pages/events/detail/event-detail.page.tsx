@@ -1,6 +1,7 @@
 import {
   type KeyboardEvent,
   Suspense,
+  lazy,
   use,
   useCallback,
   useEffect,
@@ -28,6 +29,7 @@ import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 
+import { CollectionDevelopment } from './components/collection-development'
 import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
@@ -58,6 +60,7 @@ import { PersonDetailModal } from './components/person-detail-modal'
 import { ReadingProgress } from './components/reading-progress'
 import { SaveStatus } from './components/save-status'
 import { scrollToAnchor } from './components/scroll-to-anchor'
+import { SplitIntoChildrenModal } from './components/split-into-children-modal'
 import {
   FOLDABLE_SECTIONS,
   type FoldableSectionId,
@@ -77,10 +80,12 @@ import { useUndoablePatch } from './use-undoable-patch'
  * 한 줄로 끝없이 이어지던 문서를 주제별로 나눈다. 우측 사실 장부는 모든 탭에서 그대로 따라온다
  * (기업 상세의 사실 띠 역할). 목차는 긴 글이 있는 '개요'에서만.
  */
-type EventTabId = 'overview' | 'actors' | 'modules' | 'links' | 'media'
+type EventTabId = 'overview' | 'survey' | 'actors' | 'modules' | 'links' | 'media'
 
 const EVENT_TABS: ReadonlyArray<{ id: EventTabId; label: string; hint: string }> = [
   { id: 'overview', label: '개요', hint: '배경 · 전개 · 여파 · 댓글' },
+  /* 묶음 사건만 — 하위 사건 전부를 한 화면에 모은다 */
+  { id: 'survey', label: '조망', hint: '하위 사건 전부 — 전개 간트 · 참여국 · 분포 · 기록 점검' },
   { id: 'actors', label: '참여', hint: '인물·국가 · 성립·소멸 · 권력 교체 · 기업·조직' },
   { id: 'modules', label: '진영·수치', hint: '진영 · 수치 · 작전 정보 · 관련 행정부' },
   { id: 'links', label: '연관', hint: '조약 · 상위·하위·관련 사건' },
@@ -89,6 +94,13 @@ const EVENT_TABS: ReadonlyArray<{ id: EventTabId; label: string; hint: string }>
 
 const isEventTab = (value: string | null): value is EventTabId =>
   EVENT_TABS.some((tab) => tab.id === value)
+
+/** 조망 패널 — 묶음 사건에서 탭을 열 때만 받는다(간트·매트릭스 청크가 커서 상세 초기 번들에 얹지 않는다) */
+const LazyEventOverviewPanel = lazy(() =>
+  import('../overview/event-overview.page').then((module) => ({
+    default: module.EventOverviewPanel,
+  })),
+)
 
 /**
  * 섹션(앵커 id) → 탭. '채우기'·#해시 딥링크·목차가 다른 탭의 섹션을 가리킬 때 먼저 그 탭을 연다.
@@ -373,13 +385,22 @@ function EventDetailContent({
   const showPower = features.expectPower || hasPowerData(event)
   /* 관련 기업·조직 — 연결이 있으면 늘, 경제 사건이면 비어 있어도 보인다 */
   const showOrganizations = features.expectOrganizations || (event.organizations?.length ?? 0) > 0
+  /** 묶음 사건 — 전개 자리는 하위 사건이라 비어 있어도 접지 않는다(빈 상태가 곧 '첫 하위 등록' 안내) */
+  const isCollection = event.kind === 'COLLECTION'
   const isVisible = (id: FoldableSectionId) =>
-    filled[id] || pinned.has(id) || (id === 'treaties' && promoteTreaties)
+    filled[id] ||
+    pinned.has(id) ||
+    (id === 'treaties' && promoteTreaties) ||
+    (id === 'narrative' && isCollection)
   const folded = FOLDABLE_SECTIONS.filter((section) => !isVisible(section.id))
 
   /* 탭 — URL(?tab=)이 정본(replace: 탭을 오가도 '뒤로'가 탭을 되감지 않는다). 개요는 파라미터 없음 */
   const tabParam = searchParams.get('tab')
-  const activeTab: EventTabId = isEventTab(tabParam) ? tabParam : 'overview'
+  const visibleTabs = isCollection ? EVENT_TABS : EVENT_TABS.filter((tab) => tab.id !== 'survey')
+  const activeTab: EventTabId =
+    isEventTab(tabParam) && visibleTabs.some((tab) => tab.id === tabParam) ? tabParam : 'overview'
+  /** '하위 사건으로 나누기'(단일 → 묶음) 모달 */
+  const [splitOpen, setSplitOpen] = useState(false)
   const setActiveTab = useCallback(
     (next: EventTabId) =>
       setSearchParams(
@@ -402,6 +423,7 @@ function EventDetailContent({
   const countOf = (list?: unknown[] | null) => list?.length ?? 0
   const tabCounts: Record<EventTabId, number> = {
     overview: 0,
+    survey: countOf(event.childEvents) + countOf(event.extraChildren),
     actors:
       countOf(event.relatedPersons) +
       countOf(event.relatedCountries) +
@@ -439,8 +461,8 @@ function EventDetailContent({
   const handleTabKeyDown = (keyEvent: KeyboardEvent<HTMLDivElement>) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(keyEvent.key)) return
     keyEvent.preventDefault()
-    const current = EVENT_TABS.findIndex((tab) => tab.id === activeTab)
-    const last = EVENT_TABS.length - 1
+    const current = visibleTabs.findIndex((tab) => tab.id === activeTab)
+    const last = visibleTabs.length - 1
     const nextIndex =
       keyEvent.key === 'Home'
         ? 0
@@ -453,7 +475,7 @@ function EventDetailContent({
             : current === last
               ? 0
               : current + 1
-    const next = EVENT_TABS[nextIndex].id
+    const next = visibleTabs[nextIndex].id
     setActiveTab(next)
     tabsRef.current?.querySelector<HTMLButtonElement>(`#event-tab-${next}`)?.focus()
   }
@@ -665,7 +687,7 @@ function EventDetailContent({
                 aria-label="사건 정보 보기"
                 onKeyDown={handleTabKeyDown}
               >
-                {EVENT_TABS.map((tab) => {
+                {visibleTabs.map((tab) => {
                   const count = tabCounts[tab.id]
                   const selected = activeTab === tab.id
                   return (
@@ -712,10 +734,26 @@ function EventDetailContent({
                       narrative: isVisible('narrative'),
                       aftermath: isVisible('aftermath'),
                     }}
+                    developmentSlot={
+                      isCollection ? (
+                        <CollectionDevelopment
+                          event={event}
+                          onPatch={onPatch}
+                          onGatherExisting={() => setActiveTab('links')}
+                        />
+                      ) : undefined
+                    }
+                    onRequestSplit={isCollection ? undefined : () => setSplitOpen(true)}
                   />
                   {/* 회담/조약 사건은 조약이 그 사건의 결과물이라 개요에 둔다 */}
                   {promoteTreaties && treatiesSection}
                 </>
+              )}
+
+              {activeTab === 'survey' && (
+                <Suspense fallback={<S.HelperText>하위 사건을 모으는 중…</S.HelperText>}>
+                  <LazyEventOverviewPanel eventId={event.id} />
+                </Suspense>
               )}
 
               {activeTab === 'actors' && (
@@ -790,7 +828,13 @@ function EventDetailContent({
                 <>
                   {/* 조약 — 사건과 조약을 잇는 유일한 지점(본문·서명자는 조약이 정본) */}
                   {!promoteTreaties && treatiesSection}
-                  {isVisible('network') && <DetailNetwork event={event} onPatch={onPatch} />}
+                  {isVisible('network') && (
+                    <DetailNetwork
+                      event={event}
+                      onPatch={onPatch}
+                      onRequestSplit={() => setSplitOpen(true)}
+                    />
+                  )}
                 </>
               )}
 
@@ -866,6 +910,7 @@ function EventDetailContent({
         </S.PageInner>
       </S.Page>
 
+      {splitOpen && <SplitIntoChildrenModal event={event} onClose={() => setSplitOpen(false)} />}
       <PersonDetailModal personId={viewingPersonId} onClose={onPersonModalClose} />
       <CountryInfoModal
         event={event}

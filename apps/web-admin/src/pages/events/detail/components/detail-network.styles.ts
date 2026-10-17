@@ -113,28 +113,6 @@ export const StageCommitBtn = styled.button`
   }
 `
 
-export const AnchorBadge = styled.span<{ $declared?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: ${RADIUS.SM};
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  /* 면·글자 모두 액센트 토큰에서 — 여기도 생 블루 tint(37,99,235)였다. */
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-
-  /* 명시 지정(오버라이드)임을 점선 테두리로만 구분 — 색을 하나 더 늘리지 않는다. */
-  ${({ $declared, theme }) =>
-    $declared &&
-    css`
-      border: 1px dashed
-        ${theme.mode === 'dark' ? 'rgba(147,180,252,0.5)' : 'rgba(29,78,216,0.4)'};
-    `}
-`
-
 export const TextBtn = styled.button`
   /* 최소 24×24 터치 타깃(WCAG 2.5.8) — 12.5px 텍스트라도 클릭 영역은 24px 확보. */
   display: inline-flex;

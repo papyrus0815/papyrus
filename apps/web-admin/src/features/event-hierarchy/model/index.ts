@@ -17,19 +17,14 @@ export type { YearBuckets, YearGap } from './list-grouping'
 export { selectMatchedRows } from './matched-rows'
 export type { SelectMatchedRowsOptions } from './matched-rows'
 export {
-  ANCHOR_MIN_DESCENDANTS,
-  getAnchorBadgeLabel,
+  getCollectionBadgeLabel,
   getDescendantCount,
   getEventDescendantCount,
-  isAnchorEvent,
-  isEmptyAnchorEvent,
+  isCollectionEvent,
+  isEmptyCollectionEvent,
   isSoloRootEvent,
-} from './anchor'
-export type {
-  AnchorEventLike,
-  AnchorHierarchyNodeLike,
-  AnchorOverride,
-} from './anchor'
+} from './event-kind'
+export type { EventKind, KindEventLike, KindHierarchyNodeLike } from './event-kind'
 export { isRenderRoot, isTreeRoot } from './root-event'
 export type { RootPredicateEventLike } from './root-event'
 

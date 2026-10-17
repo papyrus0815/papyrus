@@ -296,13 +296,9 @@ export function buildInverse(
       case 'parentEventId':
         inv.parentEventId = event.parentEventId ?? null
         break
-      /**
-       * 앵커 오버라이드 — 3상이라 `?? undefined`로 접으면 안 된다. 원래 미지정(자동)이던
-       * 상태로의 undo는 **null 명시 전송**이어야 컬럼이 비워지고 파생 판정으로 돌아간다
-       * (서버는 undefined를 '변경 없음'으로 읽으므로 undefined면 지정이 그대로 남는다).
-       */
-      case 'anchorOverride':
-        inv.anchorOverride = event.anchorOverride ?? null
+      /** 사건 종류 — 묶음→단일 되돌리기는 하위가 없을 때만 서버가 받아 준다 */
+      case 'kind':
+        inv.kind = event.kind ?? 'SINGLE'
         break
       /**
        * 추가 상위 — 응답엔 extraParents(객체 배열)뿐이라 id 배열로 역직렬화.
