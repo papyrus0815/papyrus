@@ -31,6 +31,9 @@ export interface HistoricalCountryResponseDto {
   stateType: HistoricalStateType
   /** 정치체 성격: 주권 국가 / 정권 / 시대. null이면 과거 주권 국가로 간주 */
   entityKind: HistoricalEntityKind | null
+  /** 대표 좌표(수도·중심지) — 지도 아틀라스 핀 위치. 미입력이면 null */
+  latitude?: number | null
+  longitude?: number | null
   /** 연결된 현대 국가 ID 목록 (상위 현대 국가) */
   parentModernCountryIds?: string[]
   parentHistoricalCountryIds?: string[]

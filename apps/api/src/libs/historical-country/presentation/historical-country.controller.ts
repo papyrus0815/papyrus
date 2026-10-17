@@ -876,6 +876,8 @@ export class HistoricalCountryController {
 
       stateType: country.stateType,
       entityKind: country.entityKind,
+      latitude: country.latitude,
+      longitude: country.longitude,
       parentModernCountryIds,
       parentHistoricalCountryIds,
       transitionEventType: transitionEventType as HistoricalCountryResponseDto['transitionEventType'],

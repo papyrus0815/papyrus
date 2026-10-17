@@ -272,6 +272,9 @@ export class HistoricalCountryPrismaRepository
       endDay: data.endDay,
       stateType: data.stateType,
       entityKind: data.entityKind ?? null,
+      // Prisma Decimal → number (지도 핀 좌표라 소수 7자리 정밀도 손실은 무의미)
+      latitude: data.latitude != null ? Number(data.latitude) : null,
+      longitude: data.longitude != null ? Number(data.longitude) : null,
       parentModernCountryIds: data.modernConnections
         ? (data.modernConnections as Array<{ modernCountryId: string }>).map((c) => c.modernCountryId)
         : undefined,
