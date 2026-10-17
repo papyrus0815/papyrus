@@ -15,6 +15,7 @@ import {
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { PersonService } from '../application/person.service'
+import type { PersonSearchItemDto } from './dto/person-search-item.response'
 import { 
   CreatePersonDto,
   UpdatePersonDto,
@@ -196,7 +197,7 @@ export class PersonController {
     @Request() req: any,
     @Query('q') query?: string,
     @Query('limit') limit?: string,
-  ) {
+  ): Promise<PersonSearchItemDto[]> {
     const accountId = req.user?.id ?? req.user?.sub
     return this.personService.searchByName(query ?? '', accountId, Number(limit) || 20)
   }
