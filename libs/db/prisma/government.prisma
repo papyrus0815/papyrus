@@ -539,6 +539,28 @@ model GovernmentPositionTenure {
   /// 임기 종료일 (퇴위일, 현재 재직 중이면 NULL)
   endDate DateTime? @map("end_date")
 
+  // ── 직위 보유 단일 모델 이행(재위·재임 통합) 1단계 — 추가 칸. 설계 문서 "재위·재임 통합 설계" ──
+  // 구조화 날짜가 정본이 될 칸. 지금은 startDate(DATETIME)에서 파생해 함께 쓴다(서비스가 동기화).
+  // year=크기값(양수), BC/AD는 era. 정밀도는 채워진 칸에서 파생.
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  startDay   Int? @map("start_day")
+  endEra     Era? @map("end_era")
+  endYear    Int? @map("end_year")
+  endMonth   Int? @map("end_month")
+  endDay     Int? @map("end_day")
+  /// 정렬·범위 조회 키 — 부호연도×10000 + 월×100 + 일 (빈 월·일: 시작은 1월 1일, 끝은 12월 31일). 파생값
+  startKey Int? @map("start_key")
+  endKey   Int? @map("end_key")
+
+  /// 대수 — 이 정치체에서 이 직위를 맡은 사람 중 몇 번째. termNumber(재임)·regnalNumber(재위, 대수 의미)를 흡수
+  ordinal Int? @map("ordinal")
+  /// 재직명(왕호·교황명) — 루이 14세, 인노첸시오 3세. 재위 regnalName을 흡수
+  regnalName String? @map("regnal_name") @db.VarChar(100)
+  /// 왕조 내 순번 — 재위 dynastyOrdinal을 흡수
+  dynastyOrdinal Int? @map("dynasty_ordinal")
+
   /// 취임·즉위식 사건(Event 정본) 링크 — 재위 카드의 대관식 배지와 대칭
   accessionEventId String? @map("accession_event_id") @db.Char(36)
   accessionEvent   Event?  @relation("TenureAccessionEvent", fields: [accessionEventId], references: [id], onDelete: SetNull)
@@ -606,6 +628,7 @@ model GovernmentPositionTenure {
   @@index([accountId], name: "idx_gov_tenure_accountId")
   @@index([mandateSource], name: "idx_gov_tenure_mandateSource")
   @@index([accessionEventId], name: "idx_gov_tenure_accessionEventId")
+  @@index([startKey, endKey], name: "idx_gov_tenure_period_key")
   @@map("government_position_tenure")
 }
 
@@ -673,6 +696,9 @@ model RegnalEra {
   /// 연호 영문명 (예: Kangxi, Qianlong)
   eraNameEn String? @map("era_name_en") @db.VarChar(50)
 
+  /// 연호 시작 연도의 시대 — 연도는 크기값(양수). 한 무제 건원(建元)은 BC 140
+  startEra Era @default(AD) @map("start_era")
+
   /// 연호 시작 연도
   startYear Int @map("start_year")
 
@@ -681,6 +707,9 @@ model RegnalEra {
 
   /// 연호 시작 일
   startDay Int? @map("start_day")
+
+  /// 연호 종료 연도의 시대
+  endEra Era? @map("end_era")
 
   /// 연호 종료 연도 (NULL이면 재위 종료까지)
   endYear Int? @map("end_year")

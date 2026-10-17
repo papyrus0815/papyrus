@@ -142,6 +142,7 @@ import {
   PersonAwardResponseDto,
   AllCareersResponseDto,
 } from '../presentation/dto'
+import { tenurePeriodColumns } from '../domain/tenure-period.util'
 
 /** 재임·행정부 등 nested person에 이름 표시 순서용 국가 필드 포함 */
 const PERSON_INCLUDE_COUNTRY_FOR_NAME: Prisma.PersonInclude = {
@@ -2859,8 +2860,17 @@ export class PersonPrismaRepository implements IPersonRepository {
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
     })
+    const startDate = new Date(dto.startDate)
+    const endDate = dto.endDate ? new Date(dto.endDate) : null
     const tenure = await this.prisma.governmentPositionTenure.create({
       data: {
+        // 직위 보유 단일 모델 이행 1단계 — 구조화 기간·정렬 키·대수를 DATETIME 입력에서 파생해 함께 쓴다
+        ...tenurePeriodColumns({
+          startDate,
+          startDatePrecision: dto.startDatePrecision,
+          endDate,
+        }),
+        ordinal: dto.termNumber ?? null,
         personId: dto.personId,
         positionType: dto.positionType as any,
         title: dto.title ?? undefined,
@@ -2874,9 +2884,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         termNumber: dto.termNumber,
         subTermNumber: dto.subTermNumber,
         regnalNumber: dto.regnalNumber,
-        startDate: new Date(dto.startDate),
+        startDate,
         startDatePrecision: dto.startDatePrecision,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        endDate: endDate ?? undefined,
         accessionEventId: dto.accessionEventId ?? undefined,
         appointmentMethod: dto.appointmentMethod as any,
         appointmentDetail: dto.appointmentDetail,
@@ -2936,7 +2946,10 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.historicalCountryId = countryFields.historicalCountryId ?? null
     }
     if (dto.positionDefinitionId !== undefined) updateData.positionDefinitionId = dto.positionDefinitionId
-    if (dto.termNumber !== undefined) updateData.termNumber = dto.termNumber
+    if (dto.termNumber !== undefined) {
+      updateData.termNumber = dto.termNumber
+      updateData.ordinal = dto.termNumber ?? null // 재임의 대수 = termNumber (이행 중 동기화)
+    }
     if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
     if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
     if (dto.startDate) updateData.startDate = new Date(dto.startDate)
@@ -2958,6 +2971,27 @@ export class PersonPrismaRepository implements IPersonRepository {
     const mandateResolved = resolveMandateSourceForUpdate(dto)
     if (mandateResolved !== undefined) {
       updateData.mandateSource = mandateResolved
+    }
+
+    // 기간이 바뀌면 구조화 칸·정렬 키를 다시 파생 — 부분 수정이라 안 보낸 쪽은 저장값으로 채운다
+    const periodTouched =
+      dto.startDate !== undefined || dto.startDatePrecision !== undefined || dto.endDate !== undefined
+    if (periodTouched) {
+      const current = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id },
+        select: { startDate: true, startDatePrecision: true, endDate: true },
+      })
+      if (current) {
+        Object.assign(
+          updateData,
+          tenurePeriodColumns({
+            startDate: updateData.startDate ?? current.startDate,
+            startDatePrecision:
+              dto.startDatePrecision !== undefined ? dto.startDatePrecision : current.startDatePrecision,
+            endDate: dto.endDate !== undefined ? updateData.endDate : current.endDate,
+          }),
+        )
+      }
     }
 
     const tenure = await this.prisma.governmentPositionTenure.update({
