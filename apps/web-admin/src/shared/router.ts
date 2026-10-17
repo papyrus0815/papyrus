@@ -180,6 +180,11 @@ export const pathKeys = {
       ? `/${ROUTES.HEADS_OF_STATE}/?${query}`
       : `/${ROUTES.HEADS_OF_STATE}/`
   },
+  /** 수장 지도 아틀라스 — 연도별 군주 핀 + 전쟁·동맹 선. 연표와 `?year=`를 공유한다 */
+  headsOfStateAtlas: (year?: number | null) =>
+    year != null
+      ? `/${ROUTES.HEADS_OF_STATE}/atlas/?year=${year}`
+      : `/${ROUTES.HEADS_OF_STATE}/atlas/`,
 
   // --- Events Routes ---
   events: {

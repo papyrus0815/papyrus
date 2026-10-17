@@ -52,6 +52,8 @@ export const eventKeys = {
   overview: (eventId: string) => ['events', 'overview', eventId] as const,
   /** 수장 타임라인 사건 오버레이 후보 */
   headsOfStateOverlay: () => ['events', 'heads-of-state-overlay-list'] as const,
+  /** 수장 지도 아틀라스 — 하위 포함 전량(관계선 파생용) */
+  reignAtlas: () => ['events', 'reign-atlas'] as const,
 
   /** 상세 전체의 루트 — 계층 변경처럼 *다른* 사건의 상세가 바뀔 때 */
   detailAll: () => ['event-detail'] as const,
