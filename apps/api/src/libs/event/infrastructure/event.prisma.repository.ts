@@ -84,7 +84,7 @@ export class EventPrismaRepository implements EventRepository {
         background: data.background,
         aftermath: data.aftermath,
         parentEventId: data.parentEventId,
-        anchorOverride: data.anchorOverride ?? undefined,
+        kind: data.kind ?? undefined,
         cityId: data.cityId,
         administrativeDivisionId: data.administrativeDivisionId,
         historicalCountryId: data.historicalCountryId,
@@ -134,10 +134,7 @@ export class EventPrismaRepository implements EventRepository {
         background: data.background,
         aftermath: data.aftermath,
         parentEventId: data.parentEventId,
-        // 3상 보존 — undefined(키 없음)=변경 안 함 / null=파생 자동 판정으로 되돌림 / 값=고정.
-        // `?? undefined`로 접으면 '지정 해제'가 조용한 no-op이 된다.
-        anchorOverride:
-          data.anchorOverride !== undefined ? data.anchorOverride : undefined,
+        kind: data.kind ?? undefined,
         cityId: data.cityId,
         administrativeDivisionId: data.administrativeDivisionId,
         historicalCountryId: data.historicalCountryId,
@@ -191,7 +188,7 @@ export class EventPrismaRepository implements EventRepository {
       background: event.background,
       aftermath: event.aftermath,
       parentEventId: event.parentEventId,
-      anchorOverride: event.anchorOverride,
+      kind: event.kind,
       cityId: event.cityId,
       administrativeDivisionId: event.administrativeDivisionId,
       historicalCountryId: event.historicalCountryId,

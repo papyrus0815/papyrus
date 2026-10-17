@@ -102,20 +102,19 @@ export class UpdateEventDto {
   parentEventId?: string | null
 
   /**
-   * 앵커 오버라이드 — **3상**이다: 키 없음(변경 안 함) / 'ANCHOR' / 'PLAIN' / null(자동으로 되돌림).
-   * null을 계약에 넣어야 '지정 해제'가 타입 안전하게 표현된다.
+   * 사건 종류 전환. 묶음→단일은 하위가 하나도 없을 때만, 단일→묶음은 전개 단락이 없을 때만
+   * (있으면 POST /events/:id/split 로 나눈다). 규칙은 domain/event-kind.ts.
    */
   @ApiProperty({
     description:
-      "'최상위(앵커) 사건' 판정 오버라이드. null을 보내면 파생 자동 판정으로 되돌린다. " +
-      '키를 생략하면 변경하지 않는다.',
+      '사건 종류 — SINGLE(단일: 하위 없음, 본문에 전개까지) / COLLECTION(묶음: 전개=하위 사건, ' +
+      '본문은 배경·여파만). 생략하면 SINGLE. 단일→묶음 전환은 POST /events/:id/split.',
     required: false,
-    nullable: true,
-    enum: ['ANCHOR', 'PLAIN'],
+    enum: ['SINGLE', 'COLLECTION'],
   })
-  @IsIn(['ANCHOR', 'PLAIN', null])
+  @IsIn(['SINGLE', 'COLLECTION'])
   @IsOptional()
-  anchorOverride?: 'ANCHOR' | 'PLAIN' | null
+  kind?: 'SINGLE' | 'COLLECTION'
 
   @ApiProperty({
     description: '이미지 목록',

@@ -22,6 +22,8 @@ import { EventService } from './event.service'
 interface FakeEventRow {
   id: string
   title: string
+  /** 사건 종류 — 계층 매트릭스는 '누구나 상위가 될 수 있는' 묶음 세계를 전제한다 */
+  kind: 'SINGLE' | 'COLLECTION'
   parentEventId: string | null
   createdById: string
   deletedAt: Date | null
@@ -58,6 +60,7 @@ function buildFakePrisma(
   events: FakeEventRow[],
   edges: FakeEdgeRow[],
   reasons: FakeReasonRow[] = [],
+  sections: Array<{ eventId: string; sectionType: string | null }> = [],
 ) {
   const eventById = new Map(events.map((row) => [row.id, row]))
 
@@ -66,6 +69,7 @@ function buildFakePrisma(
       (row) =>
         matchScalarOrOps(row.id, where.id) &&
         matchScalarOrOps(row.parentEventId, where.parentEventId) &&
+        matchScalarOrOps(row.kind, where.kind) &&
         (where.deletedAt === undefined || row.deletedAt === where.deletedAt),
     )
 
@@ -97,6 +101,9 @@ function buildFakePrisma(
         Promise.resolve(filterEvents(where)),
       ),
       updateMany: jest.fn(() => Promise.resolve({ count: 0 })),
+      count: jest.fn(({ where }: { where: Record<string, unknown> }) =>
+        Promise.resolve(filterEvents(where).length),
+      ),
       update: jest.fn(({ where }: { where: { id: string } }) =>
         Promise.resolve(eventById.get(where.id)),
       ),
@@ -127,6 +134,17 @@ function buildFakePrisma(
       deleteMany: jest.fn(() => Promise.resolve({ count: 0 })),
       createMany: jest.fn(() => Promise.resolve({ count: 0 })),
       delete: jest.fn(() => Promise.resolve()),
+      count: jest.fn(({ where }: { where: Record<string, unknown> }) =>
+        Promise.resolve(filterEdges(where).length),
+      ),
+    },
+    eventSection: {
+      findMany: jest.fn(({ where }: { where: { eventId: string } }) =>
+        Promise.resolve(sections.filter((row) => row.eventId === where.eventId)),
+      ),
+      create: jest.fn(() => Promise.resolve()),
+      update: jest.fn(() => Promise.resolve()),
+      deleteMany: jest.fn(() => Promise.resolve({ count: 0 })),
     },
     eventHierarchyReason: {
       findMany: jest.fn(({ where }: { where: Record<string, unknown> }) =>
@@ -179,10 +197,14 @@ function buildFakePrisma(
 function buildService(
   events: FakeEventRow[],
   edges: FakeEdgeRow[],
-  options: { createdId?: string; reasons?: FakeReasonRow[] } = {},
+  options: {
+    createdId?: string
+    reasons?: FakeReasonRow[]
+    sections?: Array<{ eventId: string; sectionType: string | null }>
+  } = {},
 ) {
   const reasons = options.reasons ?? []
-  const fakePrisma = buildFakePrisma(events, edges, reasons)
+  const fakePrisma = buildFakePrisma(events, edges, reasons, options.sections)
   const eventById = new Map(events.map((row) => [row.id, row]))
   const fakeRepo = {
     findById: jest.fn((id: string) => Promise.resolve(eventById.get(id) ?? null)),
@@ -247,13 +269,25 @@ function updateHierarchy(
 const OWNER = 'account-1'
 
 function liveEvent(id: string, parentEventId: string | null = null): FakeEventRow {
-  return { id, title: `사건 ${id}`, parentEventId, createdById: OWNER, deletedAt: null }
+  return {
+    id,
+    title: `사건 ${id}`,
+    kind: 'COLLECTION',
+    parentEventId,
+    createdById: OWNER,
+    deletedAt: null,
+  }
+}
+
+function singleEvent(id: string, parentEventId: string | null = null): FakeEventRow {
+  return { ...liveEvent(id, parentEventId), kind: 'SINGLE' }
 }
 
 function deletedEvent(id: string, parentEventId: string | null = null): FakeEventRow {
   return {
     id,
     title: `사건 ${id}`,
+    kind: 'COLLECTION',
     parentEventId,
     createdById: OWNER,
     deletedAt: new Date('2026-01-01T00:00:00Z'),
@@ -480,7 +514,8 @@ describe('EventService 다중 상위 가드 (W1~W5·BFS)', () => {
     )
     await expect(
       service.createEvent(
-        { title: '새 사건', createdById: OWNER, parentEventId: 'P' } as never,
+        // 하위를 함께 거는 생성은 묶음 사건이어야 한다(단일은 하위를 못 가짐)
+        { title: '새 사건', kind: 'COLLECTION', createdById: OWNER, parentEventId: 'P' } as never,
         { childEventIds: ['C'] },
       ),
     ).rejects.toThrow(ConflictException)
@@ -735,5 +770,86 @@ describe('EventService 연결 사유(EventHierarchyReason)', () => {
     expect(reasons).toEqual([
       { childEventId: 'E', parentEventId: 'P2', reason: '승격돼도 남는 사유' },
     ])
+  })
+})
+
+describe('EventService 사건 종류(단일/묶음)', () => {
+  test('단일 사건 아래로는 주 상위를 걸 수 없다', async () => {
+    const { service } = buildService([singleEvent('E'), singleEvent('S')], [])
+    await expect(updateHierarchy(service, 'E', { parentEventId: 'S' })).rejects.toThrow(
+      /단일 사건이라 하위를 둘 수 없습니다/,
+    )
+  })
+
+  test('단일 사건은 추가 상위로도 걸리지 않는다', async () => {
+    const { service } = buildService(
+      [singleEvent('E', 'P'), liveEvent('P'), singleEvent('S')],
+      [],
+    )
+    await expect(
+      updateHierarchy(service, 'E', { extraParentEventIds: ['S'] }),
+    ).rejects.toBeInstanceOf(BadRequestException)
+  })
+
+  test('단일 사건에 하위 목록을 보내면 거부한다', async () => {
+    const { service } = buildService([singleEvent('S'), singleEvent('C')], [])
+    await expect(
+      updateHierarchy(service, 'S', { childEventIds: ['C'] }),
+    ).rejects.toThrow(/단일 사건은 하위 사건을 가질 수 없습니다/)
+  })
+
+  test('묶음 사건에는 전개 단락을 보낼 수 없다 — 배경·여파는 된다', async () => {
+    const { service } = buildService([liveEvent('W')], [])
+    await expect(
+      service.updateEvent('W', {}, {
+        eventSections: [{ title: '전쟁 경과', content: '…', sectionType: 'narrative' }],
+      }),
+    ).rejects.toThrow(/전개 단락을 쓸 수 없습니다/)
+    await expect(
+      service.updateEvent('W', {}, {
+        eventSections: [
+          { title: '배경', content: '…', sectionType: 'background' },
+          { title: '여파', content: '…', sectionType: 'aftermath' },
+        ],
+      }),
+    ).resolves.toBeDefined()
+  })
+
+  test('하위가 남은 묶음은 단일로 내려갈 수 없다', async () => {
+    const { service } = buildService([liveEvent('W'), singleEvent('B', 'W')], [])
+    await expect(service.updateEvent('W', { kind: 'SINGLE' })).rejects.toBeInstanceOf(
+      ConflictException,
+    )
+  })
+
+  test('하위가 없는 묶음은 단일로 내려간다', async () => {
+    const { service, fakeRepo } = buildService([liveEvent('W')], [])
+    await service.updateEvent('W', { kind: 'SINGLE' })
+    expect(fakeRepo.update).toHaveBeenCalledWith('W', expect.objectContaining({ kind: 'SINGLE' }))
+  })
+
+  test('전개 단락이 있는 단일은 그냥 묶음이 될 수 없다(나누기로 보낸다)', async () => {
+    const { service } = buildService([singleEvent('S')], [], {
+      sections: [
+        { eventId: 'S', sectionType: 'background' },
+        { eventId: 'S', sectionType: 'process' },
+      ],
+    })
+    await expect(service.updateEvent('S', { kind: 'COLLECTION' })).rejects.toThrow(
+      /전개 단락 1개가 있습니다/,
+    )
+  })
+
+  test('생성: 단일 사건에 하위를 함께 만들 수 없고, 상위는 묶음이어야 한다', async () => {
+    const { service } = buildService([singleEvent('S'), singleEvent('C')], [])
+    await expect(
+      service.createEvent(
+        { title: '새 사건', createdById: OWNER } as never,
+        { childEventIds: ['C'] },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException)
+    await expect(
+      service.createEvent({ title: '새 사건', createdById: OWNER, parentEventId: 'S' } as never),
+    ).rejects.toThrow(/단일 사건이라/)
   })
 })

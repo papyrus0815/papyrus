@@ -19,6 +19,16 @@ import {
   EventCountryParticipantService,
 } from './event-country-participant.service'
 import { EventSectionService, type EventSectionInput } from './event-section.service'
+import {
+  type EventKind,
+  type SplitSectionPlan,
+  assertCanBecomeCollection,
+  assertCanBecomeSingle,
+  assertCollectionSections,
+  assertParentsAreCollections,
+  assertSingleHasNoChildren,
+  isDevelopmentSectionType,
+} from '../domain/event-kind'
 
 /**
  * updateEvent 계층 트랜잭션이 소비하는 추가 상위 엣지(EventParentLink) 쓰기 계획.
@@ -193,6 +203,20 @@ export class EventService {
     // 상위·하위·추가 상위 연결 가드 — 존재·소유권 + 불변식(INV-1·2) + 순환.
     // (childEventIds는 상대 사건의 부모 FK를 덮어쓰므로 update와 동일하게 가드.)
     const extraIds = [...new Set(extraParentEventIds ?? [])]
+
+    // 종류 규칙(domain/event-kind.ts) — 단일은 하위를 못 갖고, 묶음은 전개 단락을 못 쓰며,
+    // 상위로 걸 사건은 묶음이어야 한다.
+    const kind: EventKind = data.kind ?? 'SINGLE'
+    assertSingleHasNoChildren(
+      kind,
+      (childEventIds?.length ?? 0) + (data.childEvents?.length ?? 0),
+    )
+    assertCollectionSections(kind, eventSections)
+    await this.assertParentIdsAreCollections([
+      ...(data.parentEventId ? [data.parentEventId] : []),
+      ...extraIds,
+    ])
+
     if (
       data.parentEventId ||
       (childEventIds && childEventIds.length > 0) ||
@@ -511,6 +535,17 @@ export class EventService {
         )
       }
     }
+
+    // 종류 규칙 — 전환 가능 여부·묶음의 전개 단락 금지·단일의 하위 금지·상위는 묶음.
+    await this.assertKindRules(
+      id,
+      (target.kind ?? 'SINGLE') as EventKind,
+      data.kind as EventKind | undefined,
+      eventSections,
+      childEventIds,
+      data.parentEventId,
+      extraParentEventIds,
+    )
 
     // 상위·하위·추가 상위 연결 검증 — 존재·소유권·불변식(INV-1·2·3)·순환.
     // 순환은 단일 부모 체인이 아닌 '주 상위 FK ∪ 추가 상위 엣지' 합집합 그래프의
@@ -1256,6 +1291,212 @@ export class EventService {
    * 순환이 불가능하므로 순환 워크는 생략). childEventIds는 상대 사건의
    * parentEventId를 덮어쓰는 쓰기라 소유권 검증 없이는 타 계정 사건 탈취 통로가 된다.
    */
+  /** 상위로 걸려는 사건이 모두 묶음인가 — 단일 사건 아래로의 연결은 어느 경로로도 막는다 */
+  private async assertParentIdsAreCollections(parentIds: string[]): Promise<void> {
+    if (parentIds.length === 0) return
+    const parents = await this.prisma.event.findMany({
+      where: { id: { in: [...new Set(parentIds)] } },
+      select: { id: true, title: true, kind: true },
+    })
+    assertParentsAreCollections(parents)
+  }
+
+  /** 살아 있는 하위 수 — 주 상위 FK + 추가 상위 엣지 */
+  private async countLiveChildren(id: string): Promise<number> {
+    const [primary, extra] = await Promise.all([
+      this.prisma.event.count({ where: { parentEventId: id, deletedAt: null } }),
+      this.prisma.eventParentLink.count({
+        where: { parentEventId: id, childEvent: { deletedAt: null } },
+      }),
+    ])
+    return primary + extra
+  }
+
+  /**
+   * 수정 요청의 종류 규칙 — 반영 후 종류(nextKind) 기준으로 검사한다.
+   *  - 단일: 하위 목록을 보내면 비어 있어야 하고, 묶음에서 내려오면 남은 하위가 0이어야 한다.
+   *  - 묶음: 보낸 단락에 전개가 없어야 하고, 단일에서 올라오면 기존 전개 단락이 0이어야 한다
+   *    (있으면 POST /events/:id/split 로 나눈다).
+   *  - 새로 거는 주 상위·추가 상위는 묶음이어야 한다.
+   */
+  private async assertKindRules(
+    id: string,
+    currentKind: EventKind,
+    requestedKind: EventKind | undefined,
+    eventSections: EventSectionInput[] | undefined,
+    childEventIds: string[] | undefined,
+    parentEventId: string | null | undefined,
+    extraParentEventIds: string[] | undefined,
+  ): Promise<void> {
+    const nextKind = requestedKind ?? currentKind
+    if (nextKind === 'SINGLE') {
+      if (childEventIds !== undefined) assertSingleHasNoChildren('SINGLE', childEventIds.length)
+      if (currentKind === 'COLLECTION') {
+        assertCanBecomeSingle(
+          childEventIds !== undefined ? childEventIds.length : await this.countLiveChildren(id),
+        )
+      }
+    } else {
+      assertCollectionSections('COLLECTION', eventSections)
+      if (currentKind === 'SINGLE' && eventSections === undefined) {
+        const sections = await this.prisma.eventSection.findMany({
+          where: { eventId: id },
+          select: { sectionType: true },
+        })
+        assertCanBecomeCollection(
+          sections.filter((section) => isDevelopmentSectionType(section.sectionType)).length,
+        )
+      }
+    }
+    await this.assertParentIdsAreCollections([
+      ...(parentEventId ? [parentEventId] : []),
+      ...(extraParentEventIds ?? []),
+    ])
+  }
+
+  /**
+   * 단일 → 묶음 전환('하위 사건으로 나누기') — 한 트랜잭션.
+   *
+   * 전개 단락마다 행선지를 받는다. CHILD는 단락 **행 자체를 옮긴다**(eventId 교체) — 본문·인용이
+   * 그대로 하위 사건의 전개 단락이 된다. 단락이 이미 하위 사건을 가리키면(D2 subjectEventId)
+   * 새로 만들지 않고 그 사건으로 옮긴다. 배경·여파는 유형만 바꾸고, DROP은 지운다.
+   * 새 하위의 등록자·갈래는 상위를 따른다(갈래는 상세에서 바로 고칠 수 있다).
+   */
+  async splitIntoChildren(
+    id: string,
+    plans: SplitSectionPlan[],
+  ): Promise<{ createdChildIds: string[]; movedToExistingChild: number }> {
+    const target = await this.getEventById(id)
+    if (target.kind === 'COLLECTION') {
+      throw new ConflictException('이미 묶음 사건입니다.')
+    }
+    const sections = await this.prisma.eventSection.findMany({
+      where: { eventId: id },
+      orderBy: { order: 'asc' },
+      select: { id: true, title: true, sectionType: true, subjectEventId: true },
+    })
+    const development = sections.filter((section) => isDevelopmentSectionType(section.sectionType))
+    const developmentIds = new Set(development.map((section) => section.id))
+    const planById = new Map<string, SplitSectionPlan>()
+    for (const plan of plans) {
+      if (!developmentIds.has(plan.sectionId)) {
+        throw new BadRequestException(`이 사건의 전개 단락이 아닙니다: ${plan.sectionId}`)
+      }
+      if (planById.has(plan.sectionId)) {
+        throw new BadRequestException('같은 단락이 두 번 지정되었습니다')
+      }
+      planById.set(plan.sectionId, plan)
+    }
+    const unplanned = development.filter((section) => !planById.has(section.id))
+    if (unplanned.length > 0) {
+      throw new BadRequestException(
+        `전개 단락 ${unplanned.length}개의 행선지가 빠졌습니다 — 묶음 사건에는 전개 단락이 남을 수 없습니다.`,
+      )
+    }
+
+    // 단락이 가리키는 기존 하위가 묶음이면 전개 단락을 받을 수 없다(묶음의 전개는 그 아래 하위가 맡는다).
+    const subjectIds = development
+      .filter((section) => planById.get(section.id)!.to === 'CHILD' && section.subjectEventId)
+      .map((section) => section.subjectEventId!)
+    if (subjectIds.length > 0) {
+      const collectionSubject = await this.prisma.event.findFirst({
+        where: { id: { in: subjectIds }, kind: 'COLLECTION' },
+        select: { title: true },
+      })
+      if (collectionSubject) {
+        throw new BadRequestException(
+          `'${collectionSubject.title}'은(는) 묶음 사건이라 전개 단락을 받을 수 없습니다 — 배경·여파로 보내세요.`,
+        )
+      }
+    }
+
+    // 새 하위 사건 제목 — 비지 않아야 하고, 같은 계정 안에서 겹치지 않아야 한다(createEvent와 같은 규칙).
+    const newChildTitles = new Map<string, string>()
+    for (const section of development) {
+      const plan = planById.get(section.id)!
+      if (plan.to !== 'CHILD' || section.subjectEventId) continue
+      const title = (plan.title ?? section.title).trim()
+      if (!title) {
+        throw new BadRequestException('하위 사건이 될 단락에 제목이 없습니다 — 제목을 정해 주세요.')
+      }
+      newChildTitles.set(section.id, title)
+    }
+    const titles = [...newChildTitles.values()]
+    if (new Set(titles).size !== titles.length) {
+      throw new BadRequestException('새 하위 사건 제목이 서로 겹칩니다.')
+    }
+    for (const title of titles) {
+      const existing = await this.events.findByTitle(title, target.createdById ?? undefined)
+      if (existing) throw new ConflictException(`'${title}' 사건이 이미 있습니다 — 다른 제목을 정해 주세요.`)
+    }
+
+    const createdChildIds: string[] = []
+    let movedToExistingChild = 0
+    await this.prisma.$transaction(async (tx) => {
+      for (const section of development) {
+        const plan = planById.get(section.id)!
+        if (plan.to === 'DROP') {
+          await tx.eventSection.delete({ where: { id: section.id } })
+          continue
+        }
+        if (plan.to === 'BACKGROUND' || plan.to === 'AFTERMATH') {
+          await tx.eventSection.update({
+            where: { id: section.id },
+            data: {
+              sectionType: plan.to === 'BACKGROUND' ? 'background' : 'aftermath',
+              subjectEventId: null,
+            },
+          })
+          continue
+        }
+        let childId = section.subjectEventId
+        if (childId) {
+          movedToExistingChild += 1
+        } else {
+          const child = await tx.event.create({
+            data: {
+              title: newChildTitles.get(section.id)!,
+              kind: 'SINGLE',
+              parentEventId: id,
+              categoryId: target.categoryId ?? null,
+              createdById: target.createdById,
+              startDate: plan.start?.date ?? null,
+              startDatePrecision: plan.start ? (plan.startDatePrecision ?? 'day') : null,
+              startEra: plan.start?.era ?? null,
+              startYear: plan.start?.year ?? null,
+              startMonth: plan.start?.month ?? null,
+              startDay: plan.start?.day ?? null,
+              endDate: plan.end?.date ?? null,
+              endDatePrecision: plan.end ? (plan.endDatePrecision ?? 'day') : null,
+              endEra: plan.end?.era ?? null,
+              endYear: plan.end?.year ?? null,
+              endMonth: plan.end?.month ?? null,
+              endDay: plan.end?.day ?? null,
+            },
+            select: { id: true },
+          })
+          childId = child.id
+          createdChildIds.push(child.id)
+        }
+        const last = await tx.eventSection.aggregate({
+          where: { eventId: childId },
+          _max: { order: true },
+        })
+        await tx.eventSection.update({
+          where: { id: section.id },
+          data: {
+            eventId: childId,
+            sectionType: 'narrative',
+            subjectEventId: null,
+            order: (last._max.order ?? -1) + 1,
+          },
+        })
+      }
+      await tx.event.update({ where: { id }, data: { kind: 'COLLECTION' } })
+    })
+    return { createdChildIds, movedToExistingChild }
+  }
+
   private async assertLinkTargetsOwnedBy(
     ownerId: string | null | undefined,
     linkedIds: string[],
@@ -1432,9 +1673,10 @@ export class EventService {
      * 주 상위가 있는 사건에만')가 곧바로 깨지기 때문. 이 정리를 빠뜨린 가드는
      * 가드 자체가 불변식 위반의 원천이 된다.
      */
+    // 상위가 그사이 단일 사건이 됐어도 그 아래로는 못 돌아간다(단일은 하위를 갖지 않는다) — 같은 처리.
     const liveParent = event.parentEventId
       ? await this.prisma.event.findFirst({
-          where: { id: event.parentEventId, deletedAt: null },
+          where: { id: event.parentEventId, deletedAt: null, kind: 'COLLECTION' },
           select: { id: true },
         })
       : null

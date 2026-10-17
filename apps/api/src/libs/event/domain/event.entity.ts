@@ -1,3 +1,5 @@
+import type { EventKind } from './event-kind'
+
 export class Event {
   id!: string
   title!: string
@@ -21,8 +23,8 @@ export class Event {
   background?: string | null
   aftermath?: string | null
   parentEventId?: string | null
-  /** '최상위(앵커) 사건' 판정 오버라이드 — null이면 파생(자손 ≥ 1) 자동 판정 */
-  anchorOverride?: 'ANCHOR' | 'PLAIN' | null
+  /** 사건 종류 — 단일(하위 없음)/묶음(전개=하위 사건). 규칙은 domain/event-kind.ts */
+  kind?: EventKind
   cityId?: string | null
   administrativeDivisionId?: string | null
   historicalCountryId?: string | null

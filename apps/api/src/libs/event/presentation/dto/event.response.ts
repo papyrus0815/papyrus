@@ -65,13 +65,11 @@ export class EventResponseDto {
 
   @ApiProperty({
     description:
-      "'최상위(앵커) 사건' 판정 오버라이드. null(미지정)이면 파생 판정 — 자손이 하나라도 " +
-      "있으면 앵커. ANCHOR = 자손 0이어도 앵커로 취급, PLAIN = 자손이 있어도 앵커에서 제외. " +
-      '루트 판정(parentEventId IS NULL)과 직교한다.',
-    required: false,
-    enum: ['ANCHOR', 'PLAIN'],
+      '사건 종류 — SINGLE(단일: 하위 없음, 본문에 전개까지) / COLLECTION(묶음: 전개=하위 사건, ' +
+      '본문은 배경·여파만). 생략하면 SINGLE. 단일→묶음 전환은 POST /events/:id/split.',
+    enum: ['SINGLE', 'COLLECTION'],
   })
-  anchorOverride?: 'ANCHOR' | 'PLAIN' | null
+  kind!: 'SINGLE' | 'COLLECTION'
 
   @ApiProperty({ description: '상위 사건 정보 (주 상위)', required: false })
   parentEvent?: EventResponseDto
@@ -583,6 +581,9 @@ export class EventLinkCandidateDto {
 
   @ApiProperty({ description: '종료 연도 (구조화)', required: false })
   endYear?: number | null
+
+  @ApiProperty({ description: '사건 종류 — 상위로 걸 수 있는 건 COLLECTION뿐', enum: ['SINGLE', 'COLLECTION'] })
+  kind!: 'SINGLE' | 'COLLECTION'
 
   @ApiProperty({ description: '현재 상위 사건 ID (주 상위 — 없으면 null)', required: false })
   parentEventId?: string | null

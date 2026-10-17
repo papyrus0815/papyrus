@@ -93,14 +93,14 @@ export class CreateEventDto {
 
   @ApiProperty({
     description:
-      "'최상위(앵커) 사건' 판정 오버라이드. 미지정이면 파생 판정(자손 ≥ 1). " +
-      "ANCHOR = 자손 0이어도 앵커, PLAIN = 자손이 있어도 앵커 제외.",
+      '사건 종류 — SINGLE(단일: 하위 없음, 본문에 전개까지) / COLLECTION(묶음: 전개=하위 사건, ' +
+      '본문은 배경·여파만). 생략하면 SINGLE. 단일→묶음 전환은 POST /events/:id/split.',
     required: false,
-    enum: ['ANCHOR', 'PLAIN'],
+    enum: ['SINGLE', 'COLLECTION'],
   })
-  @IsIn(['ANCHOR', 'PLAIN'])
+  @IsIn(['SINGLE', 'COLLECTION'])
   @IsOptional()
-  anchorOverride?: 'ANCHOR' | 'PLAIN'
+  kind?: 'SINGLE' | 'COLLECTION'
 
   @ApiProperty({
     description: '이미지 목록',

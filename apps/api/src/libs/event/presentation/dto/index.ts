@@ -4,3 +4,4 @@ export * from './update-event.dto'
 export * from './event.response'
 export * from './event-relation.dto'
 
+export * from './split-event.dto'

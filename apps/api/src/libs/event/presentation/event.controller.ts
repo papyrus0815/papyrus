@@ -41,6 +41,8 @@ import {
   CreateEventRelationDto,
   UpdateEventRelationDto,
   EventRelationItemDto,
+  SplitEventDto,
+  SplitEventResponseDto,
 } from './dto'
 import { Event } from '../domain/event.entity'
 import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
@@ -475,9 +477,8 @@ export class EventController {
       background: event.background,
       aftermath: event.aftermath,
       parentEventId: event.parentEventId,
-      // 앵커 오버라이드 — 프론트 isAnchorEvent가 파생 판정을 덮어쓸 때 읽는다.
-      // 매핑을 빠뜨리면 서버가 보내도 프론트에서 소멸한다(extraParentCount와 같은 사고).
-      anchorOverride: event.anchorOverride ?? null,
+      // 사건 종류 — 매핑을 빠뜨리면 서버가 보내도 프론트에서 소멸한다(extraParentCount와 같은 사고).
+      kind: event.kind ?? 'SINGLE',
       // 소프트삭제된(유령) 부모는 breadcrumb·상위 링크에 노출하지 않는다 — link-candidates의
       // liveParent 정책과 통일. deletedAt은 include된 parentEvent에 실려온다(select 시엔 undefined라
       // 통과). 재귀 호출이 조상 각 단계에도 같은 게이트를 적용한다.
@@ -1164,6 +1165,7 @@ export class EventController {
    * @param near 이 부호 연도(BC 음수) 근처 사건만 — 가까운 순. 건국·멸망 사건 연결처럼
    *   시점이 정해진 연결에서 '최근 수정순'은 엉뚱한 세기를 보여 줘서 둔다.
    * @param window near 앞뒤 몇 년까지 (기본 30, 최대 500)
+   * @param kind 이 종류만 — 상위 후보는 'COLLECTION'(단일 사건은 하위를 가질 수 없다)
    * @returns 경량 후보 목록 (id·제목·날짜·현재 상위 사건)
    * @tag events
    */
@@ -1174,7 +1176,12 @@ export class EventController {
     @Request() req?: any,
     @Query('near') near?: string,
     @Query('window') windowParam?: string,
+    @Query('kind') kindParam?: string,
   ): Promise<EventLinkCandidateDto[]> {
+    const kindFilter =
+      kindParam === 'SINGLE' || kindParam === 'COLLECTION'
+        ? { kind: kindParam as 'SINGLE' | 'COLLECTION' }
+        : {}
     const userId = req.user?.id || req.user?.sub
     const term = (q ?? '').trim()
     const parsedLimit = limit ? parseInt(limit, 10) : NaN
@@ -1228,6 +1235,7 @@ export class EventController {
         deletedAt: null,
         ...(term && { title: { contains: term } }),
         ...nearWhere,
+        ...kindFilter,
       },
       // 거리순은 받은 뒤 세우므로 창 안은 넉넉히(캡 300) 받는다
       take: nearYear != null ? 300 : take,
@@ -1249,6 +1257,7 @@ export class EventController {
         endEra: true,
         endYear: true,
         parentEventId: true,
+        kind: true,
         parentEvent: { select: { title: true, deletedAt: true } },
         // 추가 상위 — 후보 배지 "(+N)"의 근거. liveParent와 동일 소프트삭제 게이트.
         extraParentLinks: {
@@ -1298,6 +1307,7 @@ export class EventController {
         startYear: event.startYear,
         endEra: event.endEra,
         endYear: event.endYear,
+        kind: event.kind,
         parentEventId: liveParent ? event.parentEventId : null,
         parentEventTitle: liveParent?.title ?? null,
         extraParents: liveExtraParents.length > 0 ? liveExtraParents : undefined,
@@ -2021,7 +2031,7 @@ export class EventController {
         background: dto.background,
         aftermath: dto.aftermath,
         parentEventId: dto.parentEventId,
-        anchorOverride: dto.anchorOverride,
+        kind: dto.kind,
         cityId: dto.cityId,
         administrativeDivisionId: dto.administrativeDivisionId,
         historicalCountryId: dto.historicalCountryId,
@@ -2114,9 +2124,7 @@ export class EventController {
         background: dto.background,
         aftermath: dto.aftermath,
         parentEventId: dto.parentEventId,
-        // 3상 그대로 통과 — undefined(키 없음)=변경 안 함 / null=파생 자동 판정 복귀 / 값=고정.
-        // `?? undefined`를 끼우면 '최상위 지정 해제'가 조용한 no-op이 된다.
-        anchorOverride: dto.anchorOverride,
+        kind: dto.kind,
         cityId: dto.cityId,
         administrativeDivisionId: dto.administrativeDivisionId,
         historicalCountryId: dto.historicalCountryId,
@@ -2175,6 +2183,40 @@ export class EventController {
     const userId = req.user?.id!
     const events = await this.eventService.getDeletedEvents(userId)
     return events.map((event) => this.toResponseDto(event))
+  }
+
+  /**
+   * 단일 사건 → 묶음 사건('하위 사건으로 나누기')
+   *
+   * 전개 단락 전부의 행선지(하위 사건·배경·여파·버리기)를 받아 한 트랜잭션에 나누고 묶음으로
+   * 바꾼다. 전개 단락이 없으면 빈 배열로 바로 묶음이 된다. 규칙은 domain/event-kind.ts.
+   *
+   * @tag events
+   */
+  @Post(':id/split')
+  @HttpCode(HttpStatus.OK)
+  async splitIntoChildren(
+    @Param('id') id: string,
+    @Body() dto: SplitEventDto,
+    @Request() req?: any,
+  ): Promise<SplitEventResponseDto> {
+    const userId = req.user?.id!
+    await assertEventOwnership(this.prisma, id, userId, {
+      action: '수정',
+      deleted: 'conflict',
+    })
+    return this.eventService.splitIntoChildren(
+      id,
+      dto.sections.map((section) => ({
+        sectionId: section.sectionId,
+        to: section.to,
+        title: section.title,
+        start: parseEventDate(section.startDate),
+        startDatePrecision: section.startDatePrecision,
+        end: parseEventDate(section.endDate),
+        endDatePrecision: section.endDatePrecision,
+      })),
+    )
   }
 
   /**
