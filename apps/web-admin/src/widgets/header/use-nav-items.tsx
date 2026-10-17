@@ -1,7 +1,7 @@
 /**
  * 전역 내비게이션 항목 정의 — 상단 헤더와 좌측 레일이 같은 목록을 쓰도록 분리했다.
  *
- * 항목은 12개: 국가·사건·인물·저원·군사·가문·민족·집단·대륙·수장 비교·조약·기업.
+ * 항목은 13개: 국가·사건·인물·저원·군사·가문·민족·집단·대륙·수장 비교·수장 지도·조약·기업.
  * 인물은 대시보드 메뉴에서 오지만 순서상 사건 다음이라 따로 끼워 넣는다.
  */
 import React, { useMemo } from 'react'
@@ -9,6 +9,7 @@ import React, { useMemo } from 'react'
 import {
   FiAward,
   FiBriefcase,
+  FiCompass,
   FiFileText,
   FiGlobe,
   FiLayers,
@@ -94,7 +95,17 @@ export function useNavItems(pathname: string): NavItemSpec[] {
         label: '수장 비교',
         icon: <FiAward size={18} />,
         onClick: go(pathKeys.headsOfState()),
-        active: pathname.startsWith('/heads-of-state'),
+        // 지도(/heads-of-state/atlas)는 별도 메뉴라 여기서는 제외
+        active:
+          pathname.startsWith('/heads-of-state') &&
+          !pathname.startsWith('/heads-of-state/atlas'),
+      },
+      {
+        key: 'heads-of-state-atlas',
+        label: '수장 지도',
+        icon: <FiCompass size={18} />,
+        onClick: go(pathKeys.headsOfStateAtlas()),
+        active: pathname.startsWith('/heads-of-state/atlas'),
       },
       {
         key: 'treaties',
