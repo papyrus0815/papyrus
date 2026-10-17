@@ -11,6 +11,7 @@ import { packRowByBands } from '../lib/pack-row-lanes'
 import { ribbonColorFor } from '../lib/ribbon-color'
 import { CATEGORY_TOKENS } from '../lib/category-tokens'
 import { formatYearRange } from '../lib/format-year'
+import { tenureYearAt } from '../lib/tenure-year'
 import { useHeadsTooltip } from './tooltip'
 
 interface RowProps {
@@ -302,7 +303,7 @@ function SegmentBars({ packed, range, width, highlightYear, onSelectBar }: Segme
         const x1 = yearToX(startYear, range, width)
         const x2 = yearToX(endYear, range, width)
         const left = Math.min(x1, x2)
-        const w = Math.max(2, Math.abs(x2 - x1))
+        const barWidth = Math.max(2, Math.abs(x2 - x1))
         const isInRange = endYear >= range.startYear && startYear <= range.endYear
         if (!isInRange) return null
         const isHighlightedByYear =
@@ -313,13 +314,18 @@ function SegmentBars({ packed, range, width, highlightYear, onSelectBar }: Segme
         const ongoing = bar.endDate == null
         const top = ROW_VPAD_TOP + lane * (BAR_HEIGHT + LANE_GAP)
         const labelText = formatBarLabel(bar)
+        // 가이드 연도에 걸린 막대만 '즉위 N년차' — 좁은 막대는 이름이 먼저라 생략
+        const tenureYear =
+          isHighlightedByYear && highlightYear != null && barWidth >= TENURE_CHIP_MIN_WIDTH
+            ? tenureYearAt(bar, highlightYear)
+            : null
 
         const clickable = onSelectBar != null
         return (
           <BarShell
             key={bar.id}
             data-tenure-bar="1"
-            style={{ left, width: w, top, height: BAR_HEIGHT }}
+            style={{ left, width: barWidth, top, height: BAR_HEIGHT }}
             $category={bar.positionCategory}
             $dimmed={dimmed}
             $highlighted={isHighlightedByYear}
@@ -358,6 +364,7 @@ function SegmentBars({ packed, range, width, highlightYear, onSelectBar }: Segme
           >
             <CategoryGlyph aria-hidden>{categoryGlyph(bar.positionCategory)}</CategoryGlyph>
             <BarLabel>{labelText}</BarLabel>
+            {tenureYear != null && <TenureChip>{tenureYear}년차</TenureChip>}
           </BarShell>
         )
       })}
@@ -741,6 +748,22 @@ const CategoryGlyph = styled.span`
 `
 
 // 카테고리 시각 토큰은 lib/category-tokens.ts 에서 단일화 — 막대 스타일은 styled 변수로 인라인.
+
+/** 막대가 이 폭보다 좁으면 연차 칩을 그리지 않는다 (이름이 잘려 사라지는 쪽이 더 나쁘다) */
+const TENURE_CHIP_MIN_WIDTH = 150
+
+/* 이름 바로 뒤에 붙인다 — 막대 오른쪽 끝에 두면 끝이 화면 밖인 긴 재위에서 칩이 안 보인다 */
+const TenureChip = styled.span`
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+`
 
 const BarLabel = styled.span`
   display: inline-block;

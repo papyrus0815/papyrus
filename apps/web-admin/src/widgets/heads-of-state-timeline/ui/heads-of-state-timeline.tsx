@@ -5,7 +5,7 @@
  * 좌측 핀 패널에서 비교 대상 국가를 직접 고르고, 같은 영토 계승국은 한 행으로 묶어
  * "고려 → 조선 → 대한제국 → 대한민국"처럼 한 줄에 이어 그릴 수 있다.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
@@ -13,19 +13,23 @@ import { useNavigate } from 'react-router'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiDownload,
+  FiGrid,
   FiHelpCircle,
   FiLink,
+  FiMap,
   FiPrinter,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { getAllPersons } from '@/shared/api/persons'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 import { Modal, ModalBody } from '@/shared/ui/modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
+import { YearScrubber, type YearScrubberMilestone } from '@/shared/ui/year-scrubber'
 
 import { Legend } from './legend'
 import { PinSidebar } from './pin-sidebar'
@@ -33,6 +37,7 @@ import { RangeControls } from './range-controls'
 import { TimelineCanvas } from './timeline-canvas'
 import { HeadsTooltipProvider } from './tooltip'
 import { ContemporaryPanel } from './contemporary-panel'
+import { ConcurrentTable } from './concurrent-table'
 import { EventSearchModal } from './event-search-modal'
 import { LeaderQuickView } from './leader-quick-view'
 import { PersonDetailModal } from '@/widgets/person/person-detail-panel/person-detail-modal'
@@ -49,6 +54,10 @@ import { useHeadsOfStateTimelineState } from '../model/use-heads-of-state-timeli
 import { useUserPresets } from '../model/use-user-presets'
 import { useCategoryFilter } from '../model/use-category-filter'
 import { downloadComparisonJson, printComparison } from '../lib/export'
+import { pickContemporary } from '../lib/pick-contemporary'
+import { readJSON, writeJSON } from '../lib/storage'
+
+const TABLE_OPEN_KEY = 'concurrent-table-open:v1'
 
 export function HeadsOfStateTimeline() {
   return <HeadsOfStateTimelineInner />
@@ -77,6 +86,41 @@ function HeadsOfStateTimelineInner() {
     const fromUrl = readCategoriesFromUrl()
     if (fromUrl != null) categoryFilter.setFromList(fromUrl)
   }, [categoryFilter])
+
+  // ── 연도 스크러버 · 동시 재위 비교표 ──
+  const [tableOpen, setTableOpen] = useState<boolean>(() =>
+    readJSON<boolean>(TABLE_OPEN_KEY, true),
+  )
+  useEffect(() => {
+    writeJSON(TABLE_OPEN_KEY, tableOpen)
+  }, [tableOpen])
+  // 비교표는 타임라인 행 아래에 붙어 화면 밖일 수 있다 — 사용자가 열었을 때만 그쪽으로 스크롤
+  const tableAnchorRef = useRef<HTMLDivElement>(null)
+  const scrollTableOnOpenRef = useRef(false)
+  useEffect(() => {
+    if (!tableOpen || !scrollTableOnOpenRef.current) return
+    scrollTableOnOpenRef.current = false
+    tableAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [tableOpen])
+
+  /** 오버레이에 올린 사건 = 스크러버의 분수령 칩 (연도 미상은 제외) */
+  const milestones = useMemo<YearScrubberMilestone[]>(
+    () =>
+      eventOverlay.events.flatMap((event) => {
+        const parts = parseIsoDateParts(event.startDate)
+        return parts ? [{ id: event.id, year: parts.year, label: event.title }] : []
+      }),
+    [eventOverlay.events],
+  )
+
+  const concurrentCount = useMemo(() => {
+    if (state.highlightYear == null) return 0
+    return pickContemporary(state.rows, rowsTenures, state.highlightYear).reduce(
+      (sum, entry) =>
+        sum + entry.bars.filter((bar) => categoryFilter.isEnabled(bar.positionCategory)).length,
+      0,
+    )
+  }, [state.rows, rowsTenures, state.highlightYear, categoryFilter])
 
   // 막대 클릭 → 업적 빠른보기 카드(가벼움). 전체 인물 상세는 카드의 버튼으로 한 번 더.
   const [quickViewBar, setQuickViewBar] = useState<TenureBar | null>(null)
@@ -269,6 +313,14 @@ function HeadsOfStateTimelineInner() {
               )}
             </TitleGroup>
             <HeaderActions>
+              <AtlasLink
+                type="button"
+                onClick={() => navigate(pathKeys.headsOfStateAtlas(state.highlightYear))}
+                title="같은 연도를 지도로 보기 — 군주 위치·전쟁·동맹"
+              >
+                <FiMap size={13} />
+                <span>지도로 보기</span>
+              </AtlasLink>
               <IconButton
                 type="button"
                 onClick={handleCopyUrl}
@@ -353,6 +405,39 @@ function HeadsOfStateTimelineInner() {
           onRemoveUserPreset={userPresets.remove}
         />
 
+        {state.rows.length > 0 && (
+          <ScrubberRow data-print-hide>
+            <YearScrubber
+              value={state.highlightYear}
+              min={state.range.startYear}
+              max={state.range.endYear}
+              onChange={state.setHighlightYear}
+              milestones={milestones}
+              trailing={
+                <>
+                  {state.highlightYear != null && (
+                    <ConcurrentCount>
+                      동시 재위 <strong>{concurrentCount}</strong>명
+                    </ConcurrentCount>
+                  )}
+                  <TableToggle
+                    type="button"
+                    $active={tableOpen}
+                    aria-pressed={tableOpen}
+                    onClick={() => {
+                      scrollTableOnOpenRef.current = !tableOpen
+                      setTableOpen((open) => !open)
+                    }}
+                  >
+                    <FiGrid size={12} />
+                    비교표
+                  </TableToggle>
+                </>
+              }
+            />
+          </ScrubberRow>
+        )}
+
         <LegendRow>
           <Legend
             enabled={categoryFilter.enabled}
@@ -427,6 +512,18 @@ function HeadsOfStateTimelineInner() {
             )}
           </AnimatePresence>
         </Body>
+
+        <div ref={tableAnchorRef} />
+        {tableOpen && state.highlightYear != null && state.rows.length > 0 && (
+          <ConcurrentTable
+            year={state.highlightYear}
+            rows={state.rows}
+            rowsTenures={rowsTenures}
+            isCategoryEnabled={categoryFilter.isEnabled}
+            onSelectBar={openBarQuickView}
+            onClose={() => setTableOpen(false)}
+          />
+        )}
 
         <EventSearchModal
           isOpen={eventModalOpen}
@@ -670,6 +767,62 @@ const Kbd = styled.kbd`
   border-radius: 4px;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) => theme.colors.background.primary};
+`
+
+const ScrubberRow = styled.div`
+  flex-shrink: 0;
+  padding: 8px 32px 0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  @media (max-width: 760px) {
+    padding: 6px 16px 0;
+  }
+`
+
+const ConcurrentCount = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  strong {
+    color: #ef4444;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+`
+
+const TableToggle = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ $active, theme }) => ($active ? theme.colors.primary : theme.colors.border.medium)};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : theme.colors.background.primary};
+  color: ${({ $active, theme }) => ($active ? theme.colors.primary : theme.colors.text.secondary)};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+`
+
+const AtlasLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
 `
 
 const LegendRow = styled.div`

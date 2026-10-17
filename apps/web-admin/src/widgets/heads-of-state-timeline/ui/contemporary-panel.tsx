@@ -17,6 +17,7 @@ import { centuryYearRange, getCentury } from '@/shared/lib/iso-date'
 
 import { sortSegmentsChronologically } from '../lib/sort-segments'
 import type { TenureBar } from '../lib/normalize-tenures'
+import { pickContemporary } from '../lib/pick-contemporary'
 import { CATEGORY_TOKENS } from '../lib/category-tokens'
 import { eventToneFor } from '../lib/event-color'
 import type { PinnedRow } from '../model/types'
@@ -39,39 +40,6 @@ interface Props {
   onSelectPerson?: (personId: string) => void
   /** 사건 클릭 시 사건 상세로 이동 — 페이지가 핸들러 제공 */
   onSelectEvent?: (eventId: string) => void
-}
-
-interface MatchEntry {
-  rowId: string
-  rowLabel: string
-  flagEmoji: string | null
-  bars: TenureBar[]
-}
-
-/** highlightYear 시점에 active한 막대만 골라 행별로 묶는다. 막대가 0개인 행은 노출 X */
-function pickContemporary(
-  rows: PinnedRow[],
-  rowsTenures: RowTenuresResult[],
-  year: number,
-): MatchEntry[] {
-  const tenureMap = new Map(rowsTenures.map((t) => [t.rowId, t]))
-  return rows.map((row) => {
-    const ordered = sortSegmentsChronologically(row.segments)
-    const flag = ordered.find((s) => s.flagEmoji)?.flagEmoji ?? null
-    const label = ordered.map((s) => s.name).join(' → ')
-    const tenures = tenureMap.get(row.rowId)
-    const bars: TenureBar[] = []
-    if (tenures) {
-      for (const seg of tenures.segmentResults) {
-        for (const bar of seg.bars) {
-          const s = bar.startJulian
-          const e = bar.endJulian ?? Infinity
-          if (s <= year && e >= year) bars.push(bar)
-        }
-      }
-    }
-    return { rowId: row.rowId, rowLabel: label, flagEmoji: flag, bars }
-  })
 }
 
 function formatYear(y: number): string {
