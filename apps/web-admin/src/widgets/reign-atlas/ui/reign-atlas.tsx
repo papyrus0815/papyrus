@@ -8,7 +8,7 @@
  */
 import { useCallback, useMemo, useState } from 'react'
 
-import { FiAlertCircle, FiBarChart2 } from 'react-icons/fi'
+import { FiAlertCircle, FiBarChart2, FiHelpCircle } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router'
 import styled, { css, useTheme } from 'styled-components'
 
@@ -44,6 +44,7 @@ import {
 } from '../lib/title-rank'
 import { AtlasAuditModal } from './atlas-audit-modal'
 import { AtlasFocusPanel } from './atlas-focus-panel'
+import { AtlasGuideModal } from './atlas-guide-modal'
 import { AtlasMap } from './atlas-map'
 import { AtlasTable } from './atlas-table'
 import { EraHeadline } from './era-headline'
@@ -80,6 +81,7 @@ export function ReignAtlas() {
   const [rankFilter, setRankFilter] = useState<TitleRank | null>(null)
   const [personId, setPersonId] = useState<string | null>(null)
   // `?check=1`로 들어오면 점검 창을 연 채로 시작 (점검 링크 공유용)
+  const [guideOpen, setGuideOpen] = useState(false)
   const [auditOpen, setAuditOpen] = useState(
     () => searchParams.get('check') === '1',
   )
@@ -288,6 +290,14 @@ export function ReignAtlas() {
               </KindChip>
             ))}
           </KindFilters>
+          <HelpBadge
+            type="button"
+            onClick={() => setGuideOpen(true)}
+            aria-label="수장 지도 안내"
+            title="이 지도는 어떻게 그려지나요?"
+          >
+            <FiHelpCircle size={16} />
+          </HelpBadge>
           <AuditButton
             type="button"
             onClick={() => setAuditOpen(true)}
@@ -426,6 +436,11 @@ export function ReignAtlas() {
       )}
 
       {/* 데이터가 다 온 뒤에 연다 — 처음 탭(문제 있는 갈래)을 빈 점검으로 고르지 않게 */}
+      <AtlasGuideModal
+        isOpen={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        onOpenAudit={() => setAuditOpen(true)}
+      />
       {auditOpen && !sources.isBaseLoading && !sources.isRelationsLoading && (
         <AtlasAuditModal
           isOpen
@@ -535,6 +550,23 @@ const TimelineLink = styled.button`
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const HelpBadge = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
