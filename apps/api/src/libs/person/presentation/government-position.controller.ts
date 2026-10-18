@@ -1,3 +1,4 @@
+import { asReignRecord, reignWhere } from '../infrastructure/office-holding.query'
 import {
   BadRequestException,
   Controller,
@@ -142,8 +143,9 @@ export class GovernmentPositionController {
    */
   @Get('sovereign-reigns')
   async listSovereignReigns(): Promise<any[]> {
-    const reigns = await this.prisma.sovereignReign.findMany({
-      where: { OR: [{ startDate: { not: null } }, { startYear: { not: null } }] },
+    // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+    const reigns = await this.prisma.governmentPositionTenure.findMany({
+      where: reignWhere({ OR: [{ startDate: { not: null } }, { startYear: { not: null } }] }),
       select: {
         id: true,
         personId: true,
@@ -158,7 +160,6 @@ export class GovernmentPositionController {
         startMonth: true,
         startDay: true,
         endDate: true,
-        endDatePrecision: true,
         endEra: true,
         endYear: true,
         endMonth: true,
@@ -184,7 +185,7 @@ export class GovernmentPositionController {
         },
       },
     })
-    return reigns.map(serializeBigInt)
+    return reigns.map((row) => serializeBigInt(asReignRecord(row)))
   }
 
   /**

@@ -8,6 +8,7 @@
  * 후보(추천): 검색어가 없으면 "이 인물의 나라가 관련된, 생애 동안의 사건"을 먼저 보여 준다.
  * 사용자가 대부분 검색 없이 한 번 눌러 연결하도록.
  */
+import { reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
 import {
   BadRequestException,
   ForbiddenException,
@@ -310,7 +311,7 @@ export class PersonEventLinkService {
     await this.assertPersonWritable(personId, accountId)
     const [tenures, reigns, events] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: { personId },
+        where: tenureWhere({ personId }),
         select: {
           id: true,
           countryId: true,
@@ -321,8 +322,9 @@ export class PersonEventLinkService {
           achievements: { select: { eventId: true } },
         },
       }),
-      this.prisma.sovereignReign.findMany({
-        where: { personId },
+      // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere({ personId }),
         select: {
           id: true,
           countryId: true,

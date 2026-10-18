@@ -1,3 +1,4 @@
+import { asReignRecord, reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import {
@@ -135,7 +136,7 @@ export class PersonRecordsService {
           : Promise.resolve([]),
         wants('TENURE')
           ? this.prisma.governmentPositionTenure.findMany({
-              where: { personId: { in: personIds } },
+              where: tenureWhere({ personId: { in: personIds } }),
               include: {
                 positionDefinition: { select: { title: true } },
                 country: { select: { name: true } },
@@ -144,18 +145,21 @@ export class PersonRecordsService {
             })
           : Promise.resolve([]),
         wants('REIGN')
-          ? this.prisma.sovereignReign.findMany({
-              where: { personId: { in: personIds } },
-              include: {
-                positionDefinition: { select: { title: true, positionType: true } },
-                country: { select: { name: true } },
-                historicalCountry: { select: { name: true } },
-              },
-            })
+          ? this.prisma.governmentPositionTenure
+              .findMany({
+                // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+                where: reignWhere({ personId: { in: personIds } }),
+                include: {
+                  positionDefinition: { select: { title: true, positionType: true } },
+                  country: { select: { name: true } },
+                  historicalCountry: { select: { name: true } },
+                },
+              })
+              .then((rows) => rows.map(asReignRecord))
           : Promise.resolve([]),
         wants('ACHIEVEMENT')
           ? this.prisma.tenureAchievement.findMany({
-              where: { tenure: { personId: { in: personIds } } },
+              where: { tenure: tenureWhere({ personId: { in: personIds } }) },
               include: {
                 tenure: {
                   select: {
@@ -170,20 +174,22 @@ export class PersonRecordsService {
             })
           : Promise.resolve([]),
         wants('ACHIEVEMENT')
-          ? this.prisma.sovereignReignAchievement.findMany({
-              where: { sovereignReign: { personId: { in: personIds } } },
-              include: {
-                sovereignReign: {
-                  select: {
-                    personId: true,
-                    startDate: true,
-                    endDate: true,
-                    country: { select: { name: true } },
-                    historicalCountry: { select: { name: true } },
+          ? this.prisma.tenureAchievement
+              .findMany({
+                where: { tenure: reignWhere({ personId: { in: personIds } }) },
+                include: {
+                  tenure: {
+                    select: {
+                      personId: true,
+                      startDate: true,
+                      endDate: true,
+                      country: { select: { name: true } },
+                      historicalCountry: { select: { name: true } },
+                    },
                   },
                 },
-              },
-            })
+              })
+              .then((rows) => rows.map(({ tenure, ...rest }) => ({ ...rest, sovereignReign: tenure })))
           : Promise.resolve([]),
         wants('EVENT')
           ? this.prisma.personEvent.findMany({

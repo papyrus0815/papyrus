@@ -1,3 +1,4 @@
+import { asReignRecord, reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import type { ContemporaryRulerPersonDto } from '../presentation/dto/person-contemporaries.response'
@@ -283,7 +284,7 @@ export class PersonReignAdjacencyService {
     // (axisOfAnchor의 null-title 폴백은 이 게이트 덕에 실질 도달 불가 — 방어용).
     const [anchorTenures, anchorReigns] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: {
+        where: tenureWhere({
           personId,
           OR: [
             { positionType: { in: [...HEAD_POSITION_TYPES] } },
@@ -292,13 +293,16 @@ export class PersonReignAdjacencyService {
               title: { not: null },
             },
           ],
-        },
+        }),
         select: ANCHOR_TENURE_SELECT,
       }),
-      this.prisma.sovereignReign.findMany({
-        where: { personId },
-        select: ANCHOR_REIGN_SELECT,
-      }),
+      // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+      this.prisma.governmentPositionTenure
+        .findMany({
+          where: reignWhere({ personId }),
+          select: { ...ANCHOR_REIGN_SELECT, ordinal: true },
+        })
+        .then((rows) => rows.map(asReignRecord)),
     ])
     const anchors = [
       ...anchorTenures.map((row) => ({ kind: 'TENURE' as const, row })),
@@ -478,21 +482,22 @@ export class PersonReignAdjacencyService {
         : { positionType: axis.kind }
     const [tenureRows, reignRows] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: { AND: [scopeWhere, tenureAxisWhere, dateFilter] },
+        where: tenureWhere({ AND: [scopeWhere, tenureAxisWhere, dateFilter] }),
         select: { ...NEIGHBOR_SELECT, positionType: true, title: true },
         orderBy,
         take: NEIGHBOR_OVERFETCH,
       }),
       axis.kind === 'TITLED'
         ? Promise.resolve([])
-        : this.prisma.sovereignReign.findMany({
-            // 재위도 정의로 거른다 — 총리 정의로 등록된 재위(푸앵카레)는 정부수반 축에,
-            // 쇼군·군주 재위는 국가원수 축에 남는다
-            where: { AND: [scopeWhere, reignAxisWhere(axis), dateFilter] },
-            select: { ...NEIGHBOR_SELECT, regnalName: true },
-            orderBy,
-            take: NEIGHBOR_OVERFETCH,
-          }),
+        : this.prisma.governmentPositionTenure
+            .findMany({
+              // 재위 = 군주직 재임 행. 축은 여전히 정의의 positionType으로 거른다
+              where: reignWhere({ AND: [scopeWhere, reignAxisWhere(axis), dateFilter] }),
+              select: { ...NEIGHBOR_SELECT, ordinal: true, regnalName: true },
+              orderBy,
+              take: NEIGHBOR_OVERFETCH,
+            })
+            .then((rows) => rows.map(asReignRecord)),
     ])
     const candidates: NeighborCandidate[] = []
     for (const row of tenureRows) {

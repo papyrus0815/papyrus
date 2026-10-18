@@ -1,3 +1,4 @@
+import { tenureWhere } from '../../person/infrastructure/office-holding.query'
 import {
   Body,
   Controller,
@@ -204,9 +205,10 @@ export class PoliticalPartyController {
         select: { personId: true, startDate: true, endDate: true },
       }),
       this.prisma.governmentPositionTenure.findMany({
-        where: {
+        // 군주직 재임(이행된 재위)은 정당 수반 후보가 아니다 — 이행 전과 같은 범위
+        where: tenureWhere({
           AND: [jurisdictionWhere, topLeaderPositionFilter],
-        },
+        }),
         include: tenureInclude,
         orderBy: { startDate: 'desc' },
       }),
@@ -246,7 +248,7 @@ export class PoliticalPartyController {
     }
 
     const merged = Array.from(byId.values()).sort(
-      (a, b) => b.startDate.getTime() - a.startDate.getTime(),
+      (a, b) => (b.startDate?.getTime() ?? 0) - (a.startDate?.getTime() ?? 0),
     )
 
     return serializeElectionBigInt(merged)

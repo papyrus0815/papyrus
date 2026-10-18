@@ -772,14 +772,15 @@ export class PersonService {
     accountId?: string,
   ): Promise<void> {
     if (accountId == null) return
-    const row = await this.prisma.sovereignReignAchievement.findUnique({
+    // 재위 업적은 이행 2단계부터 재임 업적 테이블에 있다(부모 = 군주직 재임)
+    const row = await this.prisma.tenureAchievement.findUnique({
       where: { id: achievementId },
-      select: { sovereignReign: { select: { person: { select: { accountId: true } } } } },
+      select: { tenure: { select: { person: { select: { accountId: true } } } } },
     })
     if (!row) {
       throw new NotFoundException('업적을 찾을 수 없습니다.')
     }
-    const ownerAccountId = row.sovereignReign?.person?.accountId
+    const ownerAccountId = row.tenure?.person?.accountId
     if (ownerAccountId != null && ownerAccountId !== accountId) {
       throw new ForbiddenException('본인이 등록한 인물의 항목만 수정·삭제할 수 있습니다.')
     }
@@ -991,7 +992,7 @@ export class PersonService {
     dto: Partial<CreateSovereignReignDto>,
     accountId?: string,
   ): Promise<any> {
-    await this.assertSubResourceOwnershipById(this.prisma.sovereignReign, id, accountId)
+    await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, id, accountId)
     const row = await this.personRepository.updateSovereignReign(id, dto)
     const person = row?.person
     const label = person ? `${personDisplayName(person)} - 재위` : '재위 기록'
@@ -1005,7 +1006,7 @@ export class PersonService {
   }
 
   async deleteSovereignReign(id: string, accountId?: string): Promise<void> {
-    await this.assertSubResourceOwnershipById(this.prisma.sovereignReign, id, accountId)
+    await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, id, accountId)
     const row = await this.personRepository.findSovereignReignById(id)
     if (!row) {
       throw new NotFoundException('재위 기록을 찾을 수 없습니다.')
@@ -1351,7 +1352,7 @@ export class PersonService {
     dto: CreateTenureAchievementDto,
     accountId?: string,
   ): Promise<any> {
-    await this.assertSubResourceOwnershipById(this.prisma.sovereignReign, sovereignReignId, accountId)
+    await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, sovereignReignId, accountId)
     return this.personRepository.createSovereignReignAchievement(sovereignReignId, dto)
   }
 
@@ -1395,7 +1396,7 @@ export class PersonService {
     dto: CreateRegnalEraDto,
     accountId?: string,
   ): Promise<any> {
-    await this.assertSubResourceOwnershipById(this.prisma.sovereignReign, sovereignReignId, accountId)
+    await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, sovereignReignId, accountId)
     try {
       return await this.personRepository.createRegnalEra({ sovereignReignId }, dto)
     } catch (e: any) {

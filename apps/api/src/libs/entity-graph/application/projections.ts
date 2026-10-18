@@ -10,6 +10,7 @@
  *
  * 대칭 관계(배우자·인간관계)는 objects를 비우고 forward에서 양쪽 열을 모두 본다(중복 방지).
  */
+import { reignWhere, tenureWhere } from '../../person/infrastructure/office-holding.query'
 import type { PrismaService } from '@prisma/prisma.service'
 
 import type {
@@ -198,7 +199,7 @@ const tenure: Projection = {
   objects: ['country', 'historicalCountry'],
   async forward(prisma, _ctx, personId) {
     const rows = await prisma.governmentPositionTenure.findMany({
-      where: { personId },
+      where: tenureWhere({ personId }),
       select: {
         title: true,
         startDate: true,
@@ -216,7 +217,7 @@ const tenure: Projection = {
     )
   },
   async reverse(prisma, ctx, kind, id) {
-    const where = polityWhere(kind, id)
+    const where = tenureWhere(polityWhere(kind, id))
     const { rows, total } = await limitedReverse(
       ctx,
       (take) =>
@@ -259,8 +260,9 @@ const reign: Projection = {
   subject: 'person',
   objects: ['historicalCountry', 'country'],
   async forward(prisma, _ctx, personId) {
-    const rows = await prisma.sovereignReign.findMany({
-      where: { personId },
+    // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+    const rows = await prisma.governmentPositionTenure.findMany({
+      where: reignWhere({ personId }),
       select: { regnalName: true, positionDefinition: { select: { title: true } }, ...REIGN_PERIOD_SELECT, ...POLITY_SELECT },
     })
     const base = { relation: this.relation, group: this.group, direction: 'out' as const }
@@ -271,16 +273,16 @@ const reign: Projection = {
     )
   },
   async reverse(prisma, ctx, kind, id) {
-    const where = polityWhere(kind, id)
+    const where = reignWhere(polityWhere(kind, id))
     const { rows, total } = await limitedReverse(
       ctx,
       (take) =>
-        prisma.sovereignReign.findMany({
+        prisma.governmentPositionTenure.findMany({
           where,
           select: { regnalName: true, ...REIGN_PERIOD_SELECT, person: { select: PERSON_TARGET_SELECT } },
           take,
         }),
-      () => prisma.sovereignReign.count({ where }),
+      () => prisma.governmentPositionTenure.count({ where }),
     )
     const base = { relation: this.relation, group: this.group, direction: 'in' as const }
     return result(

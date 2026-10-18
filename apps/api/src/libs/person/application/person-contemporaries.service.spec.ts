@@ -1,3 +1,4 @@
+import { withOfficeHoldingRouter } from '../infrastructure/office-holding.testing'
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 
 import {
@@ -135,7 +136,7 @@ function createService(fixture: {
     },
   }
   return {
-    service: new PersonContemporariesService(prismaFake as any),
+    service: new PersonContemporariesService(withOfficeHoldingRouter(prismaFake as any)),
     prismaFake,
     calls,
   }

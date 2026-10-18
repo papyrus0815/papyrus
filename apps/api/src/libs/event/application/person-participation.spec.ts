@@ -1,3 +1,4 @@
+import { withOfficeHoldingRouter } from '../../person/infrastructure/office-holding.testing'
 import {
   describeExistenceMismatch,
   describeLifespanMismatch,
@@ -16,7 +17,7 @@ function fakeDb(data: {
   reigns?: unknown[]
   tenures?: unknown[]
 }) {
-  return {
+  return withOfficeHoldingRouter({
     event: { findUnique: jest.fn(async () => data.event ?? null) },
     person: { findMany: jest.fn(async () => data.persons ?? []) },
     historicalCountryModernCountry: {
@@ -24,7 +25,7 @@ function fakeDb(data: {
     },
     sovereignReign: { findMany: jest.fn(async () => data.reigns ?? []) },
     governmentPositionTenure: { findMany: jest.fn(async () => data.tenures ?? []) },
-  } as never
+  } as any) as never
 }
 
 describe('inferParticipationCountries — 참여 자격 국가 추론', () => {

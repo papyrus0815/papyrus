@@ -17,6 +17,7 @@ import {
   MarriageRank,
   Prisma,
   TenureMandateSource,
+  GovernmentPositionType,
 } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { serializeBigInt } from '../../shared/serialize.util'
@@ -142,7 +143,16 @@ import {
   PersonAwardResponseDto,
   AllCareersResponseDto,
 } from '../presentation/dto'
-import { tenurePeriodColumns } from '../domain/tenure-period.util'
+import { edgeFromInput, periodColumnsFromEdges, tenurePeriodColumns } from '../domain/tenure-period.util'
+import {
+  MONARCHICAL_TENURE,
+  NON_MONARCHICAL_TENURE,
+  asLegacyReignAchievement,
+  asReignRecord,
+  reignWhere,
+  splitOfficeHoldings,
+  tenureWhere as nonReignWhere,
+} from './office-holding.query'
 
 /** 재임·행정부 등 nested person에 이름 표시 순서용 국가 필드 포함 */
 const PERSON_INCLUDE_COUNTRY_FOR_NAME: Prisma.PersonInclude = {
@@ -244,6 +254,8 @@ const PERSON_CARD_INCLUDE = {
   deathCity: { select: { id: true, name: true } },
   birthAdminDivision: { select: { id: true, name: true } },
   deathAdminDivision: { select: { id: true, name: true } },
+  // 재위·재임이 한 테이블 — 한 번에 읽고 매퍼(splitOfficeHoldings)가 군주직 여부로 가른다.
+  // Prisma는 같은 관계를 두 번 include할 수 없어 where로 나눠 읽을 수 없다.
   GovernmentTenures: {
     select: {
       id: true,
@@ -251,11 +263,13 @@ const PERSON_CARD_INCLUDE = {
       title: true,
       startDate: true,
       endDate: true,
+      notes: true,
       positionDefinition: {
         select: {
           id: true,
           title: true,
           positionType: true,
+          isMonarchical: true,
           category: { select: { id: true, name: true, nameEn: true } },
           organization: { select: { id: true, name: true } },
         },
@@ -263,11 +277,6 @@ const PERSON_CARD_INCLUDE = {
       country: { select: { id: true, name: true } },
       historicalCountry: { select: { id: true, name: true } },
     },
-    orderBy: { startDate: 'desc' as const },
-  },
-  sovereignReigns: {
-    select: { notes: true },
-    take: 1,
     orderBy: { startDate: 'desc' as const },
   },
 } satisfies Prisma.PersonInclude
@@ -298,15 +307,11 @@ const PERSON_INFOGRAPHIC_INCLUDE = {
       startDate: true,
       positionType: true,
       title: true,
+      notes: true,
       positionDefinition: {
-        select: { title: true, positionType: true },
+        select: { title: true, positionType: true, isMonarchical: true },
       },
     },
-    orderBy: { startDate: 'desc' as const },
-  },
-  sovereignReigns: {
-    select: { notes: true },
-    take: 1,
     orderBy: { startDate: 'desc' as const },
   },
 } satisfies Prisma.PersonInclude
@@ -378,6 +383,42 @@ const TENURE_ACHIEVEMENTS_SELECT = {
     },
   },
 }
+
+/** 인물 상세의 재위 목록 select — 재임 테이블 군주직 행에서 읽는다(asReignRecord가 regnalNumber·정밀도 복원) */
+const PERSON_DETAIL_REIGN_SELECT = {
+  id: true,
+  startDate: true,
+  endDate: true,
+  notes: true,
+  regnalName: true,
+  ordinal: true, // 대수 — 예전 재위의 대수 칸
+  subTermNumber: true,
+  dynastyOrdinal: true,
+  appointmentMethod: true,
+  appointmentDetail: true,
+  startDatePrecision: true,
+  // 구조화 재위 기간 — BC·고대·연단위 재위는 startDate/endDate가 NULL이라
+  // 이 축이 유일 진실(사건 목록의 군주 재위 표시가 사용).
+  startEra: true,
+  startYear: true,
+  startMonth: true,
+  startDay: true,
+  endEra: true,
+  endYear: true,
+  endMonth: true,
+  endDay: true,
+  accessionEventId: true,
+  accessionEvent: { select: { id: true, title: true, deletedAt: true } },
+  endReason: true,
+  endReasonDetail: true,
+  positionDefinition: {
+    select: { id: true, title: true },
+  },
+  country: { select: { id: true, name: true } },
+  historicalCountry: { select: { id: true, name: true } },
+  achievements: TENURE_ACHIEVEMENTS_SELECT,
+} satisfies Prisma.GovernmentPositionTenureSelect
+
 
 /** 수반 재임의 연호·시대명 (일본 연호, 유럽식 재위 시대명 등) */
 const REGNAL_ERAS_ORDER = {
@@ -516,7 +557,9 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * Prisma Person을 PersonResponseDto로 변환
    */
-  private mapToPersonResponse(person: any): PersonResponseDto {
+  private mapToPersonResponse(rawPerson: any): PersonResponseDto {
+    // 재위·재임이 한 테이블 — 군주직 여부로 예전 두 목록(governmentTenures / sovereignReigns)으로 가른다
+    const person = splitOfficeHoldings(rawPerson)
     // BigInt와 Date를 안전하게 변환
 
     return {
@@ -629,7 +672,8 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 국가명은 mapToPersonResponse와 동일하게 resolveCountryBlockForName으로 해석(동작 일치),
    * regnalName 폴백(재위 notes에서 왕명 파싱)도 동일 규칙 유지.
    */
-  private mapToPersonInfographicItem(person: any): PersonInfographicItemDto {
+  private mapToPersonInfographicItem(rawPerson: any): PersonInfographicItemDto {
+    const person = splitOfficeHoldings(rawPerson)
     const countryBlock = this.resolveCountryBlockForName(person)
     const regnalName =
       person.regnalName ||
@@ -680,7 +724,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             }
           : null,
       })),
-      sovereignReignCount: person.sovereignReigns?.length ?? 0,
+      // 예전 include가 take:1이라 0/1이었다 — 소비처가 '군주였나' 판정으로 쓴다
+      sovereignReignCount: Math.min(person.sovereignReigns?.length ?? 0, 1),
     }
   }
 
@@ -1046,8 +1091,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         where: { historicalCountryId: { in: ids } },
         select: { personId: true, historicalCountryId: true },
       }),
-      this.prisma.sovereignReign.findMany({
-        where: { historicalCountryId: { in: ids } },
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere({ historicalCountryId: { in: ids } }),
         select: { personId: true, historicalCountryId: true },
       }),
       this.prisma.personCountryAffiliation.findMany({
@@ -1199,8 +1244,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         select: { personId: true },
         distinct: ['personId'],
       }),
-      this.prisma.sovereignReign.findMany({
-        where: tenureWhere,
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere(tenureWhere),
         select: { personId: true },
         distinct: ['personId'],
       }),
@@ -1250,6 +1295,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: accountId != null ? { accountId } : undefined,
       include: {
         GovernmentTenures: {
+          where: NON_MONARCHICAL_TENURE,
           select: {
             id: true,
             termNumber: true,
@@ -1866,6 +1912,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
         GovernmentTenures: {
+          where: NON_MONARCHICAL_TENURE,
           select: {
             id: true,
             termNumber: true,
@@ -1922,44 +1969,6 @@ export class PersonPrismaRepository implements IPersonRepository {
           orderBy: {
             startDate: Prisma.SortOrder.desc,
           },
-        },
-        sovereignReigns: {
-          select: {
-            id: true,
-            startDate: true,
-            endDate: true,
-            notes: true,
-            regnalName: true,
-            regnalNumber: true,
-            termNumber: true,
-            subTermNumber: true,
-            dynastyOrdinal: true,
-            appointmentMethod: true,
-            appointmentDetail: true,
-            startDatePrecision: true,
-            // 구조화 재위 기간 — BC·고대·연단위 재위는 startDate/endDate가 NULL이라
-            // 이 축이 유일 진실(사건 목록의 군주 재위 표시가 사용).
-            startEra: true,
-            startYear: true,
-            startMonth: true,
-            startDay: true,
-            endDatePrecision: true,
-            endEra: true,
-            endYear: true,
-            endMonth: true,
-            endDay: true,
-            accessionEventId: true,
-            accessionEvent: { select: { id: true, title: true, deletedAt: true } },
-            endReason: true,
-            endReasonDetail: true,
-            positionDefinition: {
-              select: { id: true, title: true },
-            },
-            country: { select: { id: true, name: true } },
-            historicalCountry: { select: { id: true, name: true } },
-            achievements: TENURE_ACHIEVEMENTS_SELECT,
-          },
-          orderBy: { startDate: Prisma.SortOrder.desc },
         },
         // 전기(생애 서술) 다중 섹션 — 상세 화면에서 order 순으로 렌더링.
         // 연보(lifeEvents)는 상세 응답이 아니라 별도 엔드포인트(listPersonLifeEvents)로
@@ -2087,9 +2096,17 @@ export class PersonPrismaRepository implements IPersonRepository {
           orderBy: { startDate: Prisma.SortOrder.desc },
         },
     }
-    return accountId != null
-      ? this.prisma.person.findFirst({ where, include })
-      : this.prisma.person.findUnique({ where, include })
+    const person = accountId != null
+      ? await this.prisma.person.findFirst({ where, include })
+      : await this.prisma.person.findUnique({ where, include })
+    if (!person) return person
+    // 재위 = 재임 테이블의 군주직 행 — 따로 읽어 예전 응답 모양(regnalNumber·precision)으로 붙인다
+    const reigns = await this.prisma.governmentPositionTenure.findMany({
+      where: reignWhere({ personId: person.id }),
+      select: PERSON_DETAIL_REIGN_SELECT,
+      orderBy: { startDate: Prisma.SortOrder.desc },
+    })
+    return { ...person, sovereignReigns: reigns.map(asReignRecord) }
   }
 
   /**
@@ -3894,7 +3911,7 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const [tenureRows, sovereignRows] = await Promise.all([
       this.prisma.tenureAchievement.findMany({
-        where: { eventId },
+        where: { eventId, tenure: NON_MONARCHICAL_TENURE },
         include: {
           event: {
             select: { id: true, title: true },
@@ -3905,18 +3922,21 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         orderBy: [{ createdAt: 'asc' }],
       }),
-      this.prisma.sovereignReignAchievement.findMany({
-        where: { eventId },
-        include: {
-          event: {
-            select: { id: true, title: true },
+      // 재위 업적 = 군주직 재임의 업적 (재위 업적 테이블은 이행 때 옮겨졌다)
+      this.prisma.tenureAchievement
+        .findMany({
+          where: { eventId, tenure: MONARCHICAL_TENURE },
+          include: {
+            event: {
+              select: { id: true, title: true },
+            },
+            tenure: {
+              include: sovereignReignInclude,
+            },
           },
-          sovereignReign: {
-            include: sovereignReignInclude,
-          },
-        },
-        orderBy: [{ createdAt: 'asc' }],
-      }),
+          orderBy: [{ createdAt: 'asc' }],
+        })
+        .then((rows) => rows.map(asLegacyReignAchievement)),
     ])
 
     const mappedTenure = tenureRows.map((row) => ({
@@ -3990,7 +4010,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           deletedAt: true,
         },
       },
-      sovereignReign: {
+      tenure: {
         include: {
           person: {
             select: {
@@ -4023,15 +4043,17 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const [tenureList, sovereignList] = await Promise.all([
       this.prisma.tenureAchievement.findMany({
-        where: { showOnEventsPage: true },
+        where: { showOnEventsPage: true, tenure: NON_MONARCHICAL_TENURE },
         include: tenureAchievementInclude,
         orderBy: [{ startDate: 'asc' }, { orderNum: 'asc' }],
       }),
-      this.prisma.sovereignReignAchievement.findMany({
-        where: { showOnEventsPage: true },
-        include: sovereignAchievementInclude,
-        orderBy: [{ startDate: 'asc' }, { orderNum: 'asc' }],
-      }),
+      this.prisma.tenureAchievement
+        .findMany({
+          where: { showOnEventsPage: true, tenure: MONARCHICAL_TENURE },
+          include: sovereignAchievementInclude,
+          orderBy: [{ startDate: 'asc' }, { orderNum: 'asc' }],
+        })
+        .then((rows) => rows.map(asLegacyReignAchievement)),
     ])
 
     const mappedTenure = tenureList.map((row) => ({
@@ -4088,9 +4110,10 @@ export class PersonPrismaRepository implements IPersonRepository {
     sovereignReignId: string,
     dto: CreateTenureAchievementDto,
   ): Promise<any> {
-    const achievement = await this.prisma.sovereignReignAchievement.create({
+    // 재위 업적 = 군주직 재임의 업적 (재위 id = 이행된 재임 id)
+    const achievement = await this.prisma.tenureAchievement.create({
       data: {
-        sovereignReignId,
+        tenureId: sovereignReignId,
         title: dto.title,
         description: dto.description ?? undefined,
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
@@ -4100,7 +4123,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         eventId: dto.eventId ?? undefined,
       },
     })
-    return serializeBigInt(achievement)
+    return serializeBigInt({ ...achievement, sovereignReignId })
   }
 
   async updateSovereignReignAchievement(
@@ -4116,25 +4139,25 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.orderNum !== undefined) data.orderNum = dto.orderNum
     if (dto.showOnEventsPage !== undefined) data.showOnEventsPage = dto.showOnEventsPage
     if (dto.eventId !== undefined) data.eventId = dto.eventId
-    const existing = await this.prisma.sovereignReignAchievement.findFirst({
-      where: { id: achievementId, sovereignReignId },
+    const existing = await this.prisma.tenureAchievement.findFirst({
+      where: { id: achievementId, tenureId: sovereignReignId },
     })
     if (!existing) {
       throw new Error('SovereignReignAchievement not found')
     }
-    const achievement = await this.prisma.sovereignReignAchievement.update({
+    const achievement = await this.prisma.tenureAchievement.update({
       where: { id: achievementId },
       data,
     })
-    return serializeBigInt(achievement)
+    return serializeBigInt({ ...achievement, sovereignReignId })
   }
 
   async deleteSovereignReignAchievement(
     sovereignReignId: string,
     achievementId: string,
   ): Promise<void> {
-    await this.prisma.sovereignReignAchievement.deleteMany({
-      where: { id: achievementId, sovereignReignId },
+    await this.prisma.tenureAchievement.deleteMany({
+      where: { id: achievementId, tenureId: sovereignReignId },
     })
   }
 
@@ -4142,29 +4165,21 @@ export class PersonPrismaRepository implements IPersonRepository {
     parent: { tenureId: string } | { sovereignReignId: string },
     dto: CreateRegnalEraDto,
   ): Promise<any> {
-    const tenureId = 'tenureId' in parent ? parent.tenureId : undefined
+    // 재위가 재임 테이블로 옮겨져 재위 id = 재임 id — 연호는 tenureId 하나로만 단다
     const sovereignReignId = 'sovereignReignId' in parent ? parent.sovereignReignId : undefined
+    const tenureId = 'tenureId' in parent ? parent.tenureId : sovereignReignId
     if (tenureId) {
       const tenure = await this.prisma.governmentPositionTenure.findUnique({
         where: { id: tenureId },
         select: { id: true },
       })
       if (!tenure) {
-        throw new Error('GovernmentPositionTenure not found')
-      }
-    } else if (sovereignReignId) {
-      const sr = await this.prisma.sovereignReign.findUnique({
-        where: { id: sovereignReignId },
-        select: { id: true },
-      })
-      if (!sr) {
-        throw new Error('SovereignReign not found')
+        throw new Error(sovereignReignId ? 'SovereignReign not found' : 'GovernmentPositionTenure not found')
       }
     }
     const row = await this.prisma.regnalEra.create({
       data: {
         tenureId: tenureId ?? null,
-        sovereignReignId: sovereignReignId ?? null,
         eraName: dto.eraName.trim(),
         eraNameEn: dto.eraNameEn?.trim() || null,
         startYear: dto.startYear,
@@ -4330,13 +4345,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
     }
 
-    const [tenureUsage, reignUsage, freeTitles] = await Promise.all([
+    // 재위가 재임 테이블로 옮겨져 재임 집계 하나가 재위·재임 사용을 다 센다
+    const [tenureUsage, freeTitles] = await Promise.all([
       this.prisma.governmentPositionTenure.groupBy({
-        by: ['positionDefinitionId'],
-        where: { positionDefinitionId: { not: null }, OR: scopeOr },
-        _count: { _all: true },
-      }),
-      this.prisma.sovereignReign.groupBy({
         by: ['positionDefinitionId'],
         where: { positionDefinitionId: { not: null }, OR: scopeOr },
         _count: { _all: true },
@@ -4349,7 +4360,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     ])
 
     const usedCountById = new Map<string, number>()
-    for (const row of [...tenureUsage, ...reignUsage]) {
+    for (const row of tenureUsage) {
       const key = row.positionDefinitionId
       if (!key) continue
       usedCountById.set(key, (usedCountById.get(key) ?? 0) + row._count._all)
@@ -4522,8 +4533,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         where: { positionDefinitionId: definitionId },
         select: { countryId: true, historicalCountryId: true },
       }),
-      this.prisma.sovereignReign.findMany({
-        where: { positionDefinitionId: definitionId },
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere({ positionDefinitionId: definitionId }),
         select: { countryId: true, historicalCountryId: true },
       }),
       this.prisma.governmentPositionDefinitionScope.count({
@@ -4661,12 +4672,12 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const [tenures, reigns] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: { personId },
+        where: nonReignWhere({ personId }),
         include: tenureInclude,
         orderBy: { startDate: 'desc' },
       }),
-      this.prisma.sovereignReign.findMany({
-        where: { personId },
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere({ personId }),
         include: {
           positionDefinition: true,
           country: true,
@@ -4680,7 +4691,7 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const merged = [
       ...tenures.map((t) => ({ ...t, recordKind: 'TENURE' })),
-      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(r)),
+      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(asReignRecord(r))),
     ]
     merged.sort((a, b) => {
       const da = a.startDate instanceof Date ? a.startDate.toISOString() : String(a.startDate)
@@ -4863,12 +4874,12 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const [tenures, reigns] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where,
+        where: nonReignWhere(where),
         include: tenureInclude,
         orderBy: { startDate: 'desc' },
       }),
-      this.prisma.sovereignReign.findMany({
-        where,
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere(where),
         include: {
           positionDefinition: true,
           country: true,
@@ -4883,7 +4894,7 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const merged = [
       ...tenures.map((t) => ({ ...t, recordKind: 'TENURE' })),
-      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(r)),
+      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(asReignRecord(r))),
     ]
     merged.sort((a, b) => {
       const da = a.startDate instanceof Date ? a.startDate.toISOString() : String(a.startDate)
@@ -4894,47 +4905,72 @@ export class PersonPrismaRepository implements IPersonRepository {
     return serializeBigInt(merged)
   }
 
+  /**
+   * 재위 쓰기는 재임 테이블로 간다 — 직위 보유 단일 모델 이행 2단계. 재위 = 군주직 재임 행.
+   * 응답은 asReignRecord로 예전 재위 모양(regnalNumber·precision)을 지킨다.
+   */
+  private static readonly REIGN_WRITE_INCLUDE = {
+    positionDefinition: true,
+    country: true,
+    historicalCountry: true,
+    person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+    achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+    regnalEras: REGNAL_ERAS_ORDER,
+  } as const
+
+  /**
+   * 재위의 직위 정의 — 재임 행은 positionType이 필수이고, 군주직 판정은 정의에서 온다.
+   * 정의 없이 온 재위(옛 진입점)는 '국왕' 정의로 둔다 — 비워 두면 군주직이 아니라서 재위 목록에서 사라진다.
+   */
+  private async resolveReignDefinition(
+    positionDefinitionId: string | null | undefined,
+  ): Promise<{ id: string; positionType: GovernmentPositionType }> {
+    const definition = positionDefinitionId
+      ? await this.prisma.governmentPositionDefinition.findUnique({
+          where: { id: positionDefinitionId },
+          select: { id: true, positionType: true },
+        })
+      : await this.prisma.governmentPositionDefinition.findFirst({
+          where: { title: '국왕', isMonarchical: true },
+          select: { id: true, positionType: true },
+        })
+    if (!definition) {
+      throw new BadRequestException(`직위 정의를 찾을 수 없습니다: ${positionDefinitionId ?? '국왕'}`)
+    }
+    return definition
+  }
+
   async addSovereignReign(dto: CreateSovereignReignDto, accountId?: string): Promise<any> {
     const countryFields = await this.resolveTenureCountryFields({
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
     })
-    // 구조화 채널(startDateInfo)이 오면 그것이 진실(BC·고대·연단위) — DateTime은 AD1000+만 병행.
-    // 레거시(startDate ISO만)면 기존 동작 유지(구조화 컬럼은 비움)해 타 진입점 회귀 방지.
-    const start = dto.startDateInfo
-      ? mapStructuredDateInput(dto.startDateInfo, undefined)
-      : null
-    const end = dto.endDateInfo
-      ? mapStructuredDateInput(dto.endDateInfo, undefined)
-      : null
-    const row = await this.prisma.sovereignReign.create({
+    const definition = await this.resolveReignDefinition(dto.positionDefinitionId)
+    // 구조화 채널(startDateInfo)이 오면 그것이 진실(BC·고대·연단위), 없으면 레거시 ISO + 정밀도.
+    // DATETIME은 구조화에서 파생(AD 1000 미만·BC는 NULL)
+    const period = periodColumnsFromEdges(
+      edgeFromInput(dto.startDateInfo, dto.startDate, dto.startDatePrecision),
+      edgeFromInput(dto.endDateInfo, dto.endDate, dto.endDatePrecision),
+    )
+    // 레거시 ISO 채널은 예전처럼 DATETIME을 그대로 둔다(1000년 이전도) — 기존 읽기 경로 호환
+    if (!dto.startDateInfo && dto.startDate) period.startDate = new Date(dto.startDate)
+    if (!dto.endDateInfo && dto.endDate) period.endDate = new Date(dto.endDate)
+    const row = await this.prisma.governmentPositionTenure.create({
       data: {
         personId: dto.personId,
+        positionType: definition.positionType,
+        positionDefinitionId: definition.id,
         ...(countryFields.countryId != null && { countryId: countryFields.countryId }),
         ...(countryFields.historicalCountryId != null && {
           historicalCountryId: countryFields.historicalCountryId,
         }),
-        positionDefinitionId: dto.positionDefinitionId ?? undefined,
-        termNumber: dto.termNumber,
+        // 재위의 regnalNumber는 대수 — 재임 테이블에서는 ordinal (재임 regnalNumber는 '이름 속 서수').
+        // 이행 중에는 재임 의미의 대수 칸(termNumber)도 같은 값으로 둔다
+        ordinal: dto.regnalNumber ?? null,
+        termNumber: dto.regnalNumber ?? null,
         subTermNumber: dto.subTermNumber,
-        regnalNumber: dto.regnalNumber,
         dynastyOrdinal: dto.dynastyOrdinal,
-        startDate: start ? start.date : dto.startDate ? new Date(dto.startDate) : null,
-        startDatePrecision: start ? start.precision : dto.startDatePrecision,
-        ...(start && {
-          startEra: start.era,
-          startYear: start.year,
-          startMonth: start.month,
-          startDay: start.day,
-        }),
-        endDate: end ? end.date : dto.endDate ? new Date(dto.endDate) : undefined,
-        endDatePrecision: end ? end.precision : dto.endDatePrecision,
-        ...(end && {
-          endEra: end.era,
-          endYear: end.year,
-          endMonth: end.month,
-          endDay: end.day,
-        }),
+        ...period,
         accessionEventId: dto.accessionEventId ?? undefined,
         appointmentMethod: dto.appointmentMethod as any,
         appointmentDetail: dto.appointmentDetail,
@@ -4945,16 +4981,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         showPositionInfo: dto.showPositionInfo !== false,
         ...(accountId != null && { accountId }),
       },
-      include: {
-        positionDefinition: true,
-        country: true,
-        historicalCountry: true,
-        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
-        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-        regnalEras: REGNAL_ERAS_ORDER,
-      },
+      include: PersonPrismaRepository.REIGN_WRITE_INCLUDE,
     })
-    return serializeBigInt(row)
+    return serializeBigInt(asReignRecord(row))
   }
 
   async updateSovereignReign(id: string, dto: Partial<CreateSovereignReignDto>): Promise<any> {
@@ -4968,42 +4997,52 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.historicalCountryId = countryFields.historicalCountryId ?? null
     }
     if (dto.personId !== undefined) updateData.personId = dto.personId
-    if (dto.positionDefinitionId !== undefined)
-      updateData.positionDefinitionId = dto.positionDefinitionId || null
-    if (dto.termNumber !== undefined) updateData.termNumber = dto.termNumber
-    if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
-    if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
-    if (dto.dynastyOrdinal !== undefined) updateData.dynastyOrdinal = dto.dynastyOrdinal
-    // 구조화 채널(startDateInfo)이 오면 6컬럼(date/precision/era/year/month/day)을 *한 덩어리*로
-    // 갱신 — 부분 갱신 시 startDate와 startYear가 어긋나는 정합 붕괴를 막는다. 없으면 레거시 경로.
-    if (dto.startDateInfo !== undefined) {
-      const start = dto.startDateInfo
-        ? mapStructuredDateInput(dto.startDateInfo, undefined)
-        : null
-      updateData.startDate = start ? start.date : null
-      updateData.startDatePrecision = start ? start.precision : null
-      updateData.startEra = start ? start.era : null
-      updateData.startYear = start ? start.year : null
-      updateData.startMonth = start ? start.month : null
-      updateData.startDay = start ? start.day : null
-    } else {
-      if (dto.startDate) updateData.startDate = new Date(dto.startDate)
-      if (dto.startDatePrecision !== undefined)
-        updateData.startDatePrecision = dto.startDatePrecision
+    if (dto.positionDefinitionId !== undefined) {
+      const definition = await this.resolveReignDefinition(dto.positionDefinitionId || null)
+      updateData.positionDefinitionId = definition.id
+      updateData.positionType = definition.positionType
     }
-    if (dto.endDateInfo !== undefined) {
-      const end = dto.endDateInfo
-        ? mapStructuredDateInput(dto.endDateInfo, undefined)
-        : null
-      updateData.endDate = end ? end.date : null
-      updateData.endDatePrecision = end ? end.precision : null
-      updateData.endEra = end ? end.era : null
-      updateData.endYear = end ? end.year : null
-      updateData.endMonth = end ? end.month : null
-      updateData.endDay = end ? end.day : null
-    } else {
-      if (dto.endDate !== undefined)
-        updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
+    if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
+    if (dto.regnalNumber !== undefined) {
+      updateData.ordinal = dto.regnalNumber
+      updateData.termNumber = dto.regnalNumber
+    }
+    if (dto.dynastyOrdinal !== undefined) updateData.dynastyOrdinal = dto.dynastyOrdinal
+
+    // 기간: 한쪽 끝만 바뀌어도 키·DATETIME·정밀도를 한 덩어리로 다시 계산 — 안 보낸 끝은 저장값 유지
+    const startTouched =
+      dto.startDateInfo !== undefined || dto.startDate !== undefined || dto.startDatePrecision !== undefined
+    const endTouched =
+      dto.endDateInfo !== undefined || dto.endDate !== undefined || dto.endDatePrecision !== undefined
+    if (startTouched || endTouched) {
+      const current = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id },
+        select: {
+          startEra: true, startYear: true, startMonth: true, startDay: true,
+          endEra: true, endYear: true, endMonth: true, endDay: true,
+        },
+      })
+      const stored = (era: any, year: number | null, month: number | null, day: number | null) =>
+        year == null ? null : { era: era ?? 'AD', year, month, day }
+      const start = startTouched
+        ? edgeFromInput(dto.startDateInfo, dto.startDate ?? null, dto.startDatePrecision)
+        : stored(current?.startEra, current?.startYear ?? null, current?.startMonth ?? null, current?.startDay ?? null)
+      const end = endTouched
+        ? edgeFromInput(dto.endDateInfo, dto.endDate ?? null, dto.endDatePrecision)
+        : stored(current?.endEra, current?.endYear ?? null, current?.endMonth ?? null, current?.endDay ?? null)
+      const period = periodColumnsFromEdges(start, end)
+      // 레거시 ISO 채널은 예전처럼 DATETIME을 그대로 둔다(1000년 이전도) — 기존 읽기 경로 호환
+      if (startTouched && dto.startDateInfo === undefined && dto.startDate) {
+        period.startDate = new Date(dto.startDate)
+      }
+      if (endTouched && dto.endDateInfo === undefined && dto.endDate) {
+        period.endDate = new Date(dto.endDate)
+      }
+      if (!startTouched) {
+        // 시작을 안 건드렸으면 저장된 시작 정밀도(옛 값)를 덮지 않는다
+        delete (period as any).startDatePrecision
+      }
+      Object.assign(updateData, period)
     }
     if (dto.accessionEventId !== undefined) updateData.accessionEventId = dto.accessionEventId || null
     if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
@@ -5014,28 +5053,22 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.regnalName !== undefined) updateData.regnalName = dto.regnalName ?? null
     if (dto.showPositionInfo !== undefined) updateData.showPositionInfo = dto.showPositionInfo
 
-    const row = await this.prisma.sovereignReign.update({
+    const row = await this.prisma.governmentPositionTenure.update({
       where: { id },
       data: updateData,
-      include: {
-        positionDefinition: true,
-        country: true,
-        historicalCountry: true,
-        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
-        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-        regnalEras: REGNAL_ERAS_ORDER,
-      },
+      include: PersonPrismaRepository.REIGN_WRITE_INCLUDE,
     })
-    return serializeBigInt(row)
+    return serializeBigInt(asReignRecord(row))
   }
 
   async deleteSovereignReign(id: string): Promise<void> {
-    await this.prisma.sovereignReign.delete({ where: { id } })
+    // 업적·연호는 재임 FK cascade로 함께 지워진다
+    await this.prisma.governmentPositionTenure.deleteMany({ where: reignWhere({ id }) })
   }
 
   async findSovereignReignById(id: string): Promise<any | null> {
-    const row = await this.prisma.sovereignReign.findUnique({
-      where: { id },
+    const row = await this.prisma.governmentPositionTenure.findFirst({
+      where: reignWhere({ id }),
       include: {
         positionDefinition: true,
         person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
@@ -5043,7 +5076,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
     if (!row) return null
-    return serializeBigInt(row)
+    return serializeBigInt(asReignRecord(row))
   }
 
   // ==================
@@ -5184,7 +5217,7 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const [tenures, reigns] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: globalWhere,
+        where: nonReignWhere(globalWhere),
         include: {
           positionDefinition: true,
           country: true,
@@ -5203,8 +5236,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         orderBy: { startDate: 'desc' },
       }),
-      this.prisma.sovereignReign.findMany({
-        where: globalWhere,
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere(globalWhere),
         include: {
           positionDefinition: true,
           country: true,
@@ -5220,7 +5253,7 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const merged = [
       ...tenures.map((t) => ({ ...t, recordKind: 'TENURE' })),
-      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(r)),
+      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(asReignRecord(r))),
     ]
     merged.sort((a, b) => {
       const da = a.startDate instanceof Date ? a.startDate.toISOString() : String(a.startDate)
@@ -5268,8 +5301,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         select: { personId: true },
         distinct: ['personId'],
       }),
-      this.prisma.sovereignReign.findMany({
-        where: tenureWhere,
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere(tenureWhere),
         select: { personId: true },
         distinct: ['personId'],
       }),
@@ -5302,6 +5335,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         deathCity: { select: { id: true, name: true } },
         birthAdminDivision: { select: { id: true, name: true } },
         deathAdminDivision: { select: { id: true, name: true } },
+        // 재위·재임 한 테이블 — 한 번에 읽고 매퍼(splitOfficeHoldings)가 군주직으로 가른다
         GovernmentTenures: {
           select: {
             id: true,
@@ -5309,26 +5343,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             title: true,
             startDate: true,
             endDate: true,
-            positionDefinition: {
-              select: {
-                id: true,
-                title: true,
-                positionType: true,
-                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
-              },
-            },
-            country: { select: { id: true, name: true } },
-            historicalCountry: { select: { id: true, name: true } },
-          },
-          orderBy: { startDate: 'desc' },
-        },
-        sovereignReigns: {
-          select: {
-            id: true,
-            startDate: true,
-            endDate: true,
-            termNumber: true,
-            regnalNumber: true,
+            ordinal: true,
             dynastyOrdinal: true,
             notes: true,
             showPositionInfo: true,
@@ -5337,6 +5352,7 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 title: true,
                 positionType: true,
+                isMonarchical: true,
                 category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
               },
             },
@@ -5450,10 +5466,11 @@ export class PersonPrismaRepository implements IPersonRepository {
       birthPlaceText: true, deathPlaceText: true,
       birthCity: { select: { id: true, name: true } },
       deathCity: { select: { id: true, name: true } },
-      // 군주 카드 즉위국·재위 번호 (가장 이른 재임 1건)
-      sovereignReigns: {
+      // 군주 카드 즉위국·재위 번호 (가장 이른 재위 1건) — 재위 = 군주직 재임 행
+      GovernmentTenures: {
+        where: MONARCHICAL_TENURE,
         select: {
-          regnalNumber: true,
+          ordinal: true,
           dynastyOrdinal: true,
           country: {
             select: {
@@ -5858,7 +5875,8 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     // ── 결과 구성 ─────────────────────────────────────────────────────
     const nodes = [...nodeMap.values()].map(p => {
-      const reign = (p.sovereignReigns ?? [])[0] as
+      const firstReign = (p.GovernmentTenures ?? [])[0]
+      const reign = (firstReign ? { ...firstReign, regnalNumber: firstReign.ordinal } : undefined) as
         | {
             regnalNumber?: number | null
             country?: {

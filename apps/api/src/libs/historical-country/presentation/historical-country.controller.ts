@@ -1,3 +1,4 @@
+import { asReignRecord, reignWhere } from '../../person/infrastructure/office-holding.query'
 import {
   Controller,
   HttpCode,
@@ -186,13 +187,13 @@ export class HistoricalCountryController {
 
     const firstRulers: FirstRulerDto[] = []
 
-    const reigns = await this.prisma.sovereignReign.findMany({
-      where: { historicalCountryId: id },
+    // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계). 재위의 대수 = ordinal
+    const reignRows = await this.prisma.governmentPositionTenure.findMany({
+      where: reignWhere({ historicalCountryId: id }),
       select: {
         id: true,
         regnalName: true,
-        regnalNumber: true,
-        termNumber: true,
+        ordinal: true,
         startEra: true,
         startYear: true,
         startDate: true,
@@ -203,6 +204,7 @@ export class HistoricalCountryController {
         person: { select: personSelect },
       },
     })
+    const reigns = reignRows.map(asReignRecord)
     const reignStart = (reign: (typeof reigns)[number]) =>
       reign.startYear != null
         ? signed(reign.startEra, reign.startYear)
@@ -277,8 +279,12 @@ export class HistoricalCountryController {
         regnalName: null,
         title: tenure.positionDefinition?.title?.trim() || tenure.title?.trim() || null,
         basis,
-        startEra: 'AD',
-        startYear: tenure.startDate.getUTCFullYear(),
+        // 구조화 시작이 정본(이행 1단계) — 없을 때만 DATETIME
+        startEra: (tenure as { startEra?: 'AD' | 'BC' | null }).startEra ?? 'AD',
+        startYear:
+          (tenure as { startYear?: number | null }).startYear ??
+          tenure.startDate?.getUTCFullYear() ??
+          null,
         endEra: tenure.endDate ? 'AD' : null,
         endYear: tenure.endDate ? tenure.endDate.getUTCFullYear() : null,
         person: tenure.person,

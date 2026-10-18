@@ -1,3 +1,4 @@
+import { asReignRecord, reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import {
@@ -78,7 +79,7 @@ export class PersonContemporariesService {
     // head-level로 직접 좁혀 조회한다 (검토 확정 결함 #2의 방어).
     const [subjectTenures, subjectReigns] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: { personId, positionType: { in: [...HEAD_POSITION_TYPES] } },
+        where: tenureWhere({ personId, positionType: { in: [...HEAD_POSITION_TYPES] } }),
         select: {
           startDate: true,
           endDate: true,
@@ -86,8 +87,9 @@ export class PersonContemporariesService {
           historicalCountryId: true,
         },
       }),
-      this.prisma.sovereignReign.findMany({
-        where: { personId },
+      // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere({ personId }),
         select: {
           startDate: true,
           endDate: true,
@@ -192,22 +194,23 @@ export class PersonContemporariesService {
       positionDefinition: { select: { id: true, title: true } },
     } as const
 
-    const [tenureRows, reignRows] = await Promise.all([
+    const [tenureRows, reignRowsRaw] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: {
+        where: tenureWhere({
           AND: [
             { positionType: { in: [...HEAD_POSITION_TYPES] } },
             ...tenureOverlapAnd,
           ],
-        },
+        }),
         select: { ...recordSelect, positionType: true, title: true },
         orderBy: { startDate: 'desc' },
         take: PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE,
       }),
-      this.prisma.sovereignReign.findMany({
-        where: { AND: reignOverlapAnd },
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere({ AND: reignOverlapAnd }),
         select: {
           ...recordSelect,
+          ordinal: true, // 재위의 대수 — asReignRecord가 regnalNumber로 되돌린다
           regnalName: true,
           startEra: true,
           startYear: true,
@@ -218,6 +221,7 @@ export class PersonContemporariesService {
         take: PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE,
       }),
     ])
+    const reignRows = reignRowsRaw.map(asReignRecord)
     // 한 테이블이라도 상한에 닿으면 후보 스캔이 잘렸을 수 있음 — totalPersons/omittedCount가
     // 과소일 수 있음을 노출한다. (정상 스트립 창에선 발동하지 않는다.)
     const candidatesTruncated =

@@ -26,11 +26,12 @@ export async function buildTenureJurisdictionWhere(
 
 export function membershipOverlapsTenure(
   m: { startDate: Date | null; endDate: Date | null },
-  t: { startDate: Date; endDate: Date | null },
+  t: { startDate: Date | null; endDate: Date | null },
 ): boolean {
   const ms = m.startDate?.getTime() ?? Number.NEGATIVE_INFINITY
   const me = m.endDate?.getTime() ?? Number.POSITIVE_INFINITY
-  const ts = t.startDate.getTime()
+  // 재임 시작 DATETIME은 AD 1000 미만이면 비어 있다(구조화 칸이 정본) — 그럴 땐 아주 이른 것으로 본다
+  const ts = t.startDate?.getTime() ?? Number.NEGATIVE_INFINITY
   const te = t.endDate?.getTime() ?? Number.POSITIVE_INFINITY
   return ms < te && me > ts
 }

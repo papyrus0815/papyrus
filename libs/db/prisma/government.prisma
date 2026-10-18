@@ -531,7 +531,9 @@ model GovernmentPositionTenure {
   regnalNumber Int? @map("regnal_number")
 
   /// 임기 시작일 — 취임일(군주 재위는 법적 즉위일; 대관식일은 별개 사실로 Event 링크가 정본)
-  startDate DateTime @map("start_date")
+  /// 이행 2단계부터 파생값: 구조화 시작(startEra·startYear…)이 정본이고, AD 1000 미만·BC는 NULL
+  /// (재위가 이 테이블로 합쳐지며 BC 재위를 담아야 한다).
+  startDate DateTime? @map("start_date")
 
   /// 취임일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움). NULL=일 단위. SovereignReign과 동형.
   startDatePrecision String? @map("start_date_precision") @db.VarChar(10)

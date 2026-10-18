@@ -1,3 +1,4 @@
+import { reignWhere, tenureWhere } from '../../person/infrastructure/office-holding.query'
 import {
   Controller,
   Get,
@@ -154,6 +155,25 @@ const ACCESSION_TENURE_SELECT = {
   accessionEventId: true,
   person: { select: ACCESSION_PERSON_SELECT },
   positionDefinition: { select: { title: true } },
+  country: { select: { name: true } },
+  historicalCountry: { select: { name: true } },
+} as const
+
+/** 사건 상세 — 재임·재위를 한 관계로 읽는 합집합 select (+군주직 판정) */
+const ACCESSION_UNIFIED_SELECT = {
+  id: true,
+  title: true,
+  positionType: true,
+  regnalName: true,
+  startDate: true,
+  startEra: true,
+  startYear: true,
+  endDate: true,
+  endEra: true,
+  endYear: true,
+  accessionEventId: true,
+  person: { select: ACCESSION_PERSON_SELECT },
+  positionDefinition: { select: { title: true, isMonarchical: true } },
   country: { select: { name: true } },
   historicalCountry: { select: { name: true } },
 } as const
@@ -623,12 +643,14 @@ export class EventController {
         : undefined,
       /** 이 사건으로 시작된 재임·재위 — 상세에서만 include */
       accessions:
-        Array.isArray((event as any).tenureAccessions) || Array.isArray((event as any).sovereignReignAccessions)
+        Array.isArray((event as any).tenureAccessions)
           ? [
-              ...((event as any).tenureAccessions ?? []).map((row: any) => toAccessionDto(row, 'TENURE')),
-              ...((event as any).sovereignReignAccessions ?? []).map((row: any) =>
-                toAccessionDto(row, 'SOVEREIGN_REIGN'),
-              ),
+              ...((event as any).tenureAccessions ?? [])
+                .filter((row: any) => row.positionDefinition?.isMonarchical !== true)
+                .map((row: any) => toAccessionDto(row, 'TENURE')),
+              ...((event as any).tenureAccessions ?? [])
+                .filter((row: any) => row.positionDefinition?.isMonarchical === true)
+                .map((row: any) => toAccessionDto(row, 'SOVEREIGN_REIGN')),
             ]
           : undefined,
       // 참여 인물(PersonEvent) — 인물 시점 role/note(장문) 포함
@@ -1409,11 +1431,12 @@ export class EventController {
 
     const [tenures, reigns] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: { personId: { in: personIds } },
+        where: tenureWhere({ personId: { in: personIds } }),
         select: ACCESSION_TENURE_SELECT,
       }),
-      this.prisma.sovereignReign.findMany({
-        where: { personId: { in: personIds } },
+      // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+      this.prisma.governmentPositionTenure.findMany({
+        where: reignWhere({ personId: { in: personIds } }),
         select: ACCESSION_REIGN_SELECT,
       }),
     ])
@@ -1752,8 +1775,8 @@ export class EventController {
           orderBy: { createdAt: 'asc' },
         },
         // 이 사건으로 시작된 재임·재위(취임·즉위) — 전임자는 프론트가 reign-adjacency로 잇는다.
-        tenureAccessions: { select: ACCESSION_TENURE_SELECT },
-        sovereignReignAccessions: { select: ACCESSION_REIGN_SELECT },
+        // 재위·재임이 한 테이블 — 한 번에 읽고 응답에서 군주직 여부로 가른다(같은 관계 이중 include 불가)
+        tenureAccessions: { select: ACCESSION_UNIFIED_SELECT },
         // 이 사건에 걸린 조약 — 본문·서명자는 Treaty가 정본이라 여기선 요약만 싣는다.
         treatyLinks: {
           include: {

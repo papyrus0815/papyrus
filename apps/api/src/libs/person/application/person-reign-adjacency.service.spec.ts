@@ -1,3 +1,4 @@
+import { withOfficeHoldingRouter } from '../infrastructure/office-holding.testing'
 import { NotFoundException } from '@nestjs/common'
 
 import { PersonReignAdjacencyService } from './person-reign-adjacency.service'
@@ -299,7 +300,7 @@ function createService(fixture: {
     },
   }
   return {
-    service: new PersonReignAdjacencyService(prismaFake as any),
+    service: new PersonReignAdjacencyService(withOfficeHoldingRouter(prismaFake as any)),
     prismaFake,
     calls,
   }

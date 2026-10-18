@@ -10,6 +10,7 @@
  * 2) 사건 당시 직위 — 역할 칸에 '제42대 미국 대통령(1993~2001)'처럼 직위·기간을 손으로 다시
  *    적던 것을, 재임·재위 기록에서 사건 날짜에 맞는 것을 찾아 보여 준다(저장하지 않는 파생).
  */
+import { reignWhere, tenureWhere } from '../../person/infrastructure/office-holding.query'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
 type Db = PrismaClient | Prisma.TransactionClient
@@ -159,8 +160,9 @@ export async function resolveOfficesAtEvent(
   }
 
   const [reigns, tenures] = await Promise.all([
-    db.sovereignReign.findMany({
-      where: { personId: { in: personIds } },
+    // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+    db.governmentPositionTenure.findMany({
+      where: reignWhere({ personId: { in: personIds } }),
       select: {
         personId: true,
         startEra: true,
@@ -180,7 +182,7 @@ export async function resolveOfficesAtEvent(
       },
     }),
     db.governmentPositionTenure.findMany({
-      where: { personId: { in: personIds } },
+      where: tenureWhere({ personId: { in: personIds } }),
       select: {
         personId: true,
         startDate: true,
