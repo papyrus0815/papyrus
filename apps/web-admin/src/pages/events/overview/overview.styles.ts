@@ -35,6 +35,8 @@ export const toneColor = (tone: RoleTone, mode: 'light' | 'dark') =>
 export const Page = styled.div`
   box-sizing: border-box;
   width: 100%;
+  /* 상세의 문서 열 안에 들어오므로 화면 폭이 아니라 이 패널 폭으로 배치를 고른다 */
+  container: overviewpanel / inline-size;
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -129,27 +131,30 @@ export const TextButton = styled.button`
 export const StatRow = styled.dl`
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  /* 기본(좁은 패널)은 2열 — 5칸이 auto-fit로 4+1로 꺾이면 마지막 칸 혼자 둘째 줄에 남았다 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border-top: 1px solid ${({ theme }) => theme.colors.border.default};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   /* 칸 사이 세로선은 부모에서 — 자식의 '& + &'는 props가 다른 형제(흐린 칸)와 매칭이 안 된다 */
-  > * + * {
-    padding-left: 18px;
+  > *:nth-child(even) {
+    padding-left: 16px;
     border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   }
-  /* 좁은 폭은 2열 고정 — auto-fit로 줄이 바뀌면 줄 첫 칸에도 세로선이 붙었다 */
-  @media (max-width: 760px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    > * + * {
+  > *:nth-child(n + 3) {
+    border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+  /* 패널이 600px 이상이면 5칸 한 줄 — 칸 사이 세로선만 */
+  @container overviewpanel (min-width: 600px) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    > *:nth-child(n) {
       padding-left: 0;
       border-left: none;
+      border-top: none;
     }
-    > *:nth-child(even) {
+    /* nth-child — 위 초기화와 우선순위가 같아야 뒤에 오는 이 규칙이 이긴다(* + * 는 약하다) */
+    > *:nth-child(n + 2) {
       padding-left: 16px;
       border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-    }
-    > *:nth-child(n + 3) {
-      border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
     }
   }
 `
