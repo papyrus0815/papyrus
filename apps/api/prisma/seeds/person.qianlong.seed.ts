@@ -15,6 +15,7 @@
 import { AppointmentMethod, TenureEndReason } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 
@@ -112,13 +113,13 @@ export async function seedQianlongEmperor(prisma: PrismaService): Promise<void> 
 
   // 재위 (청나라 황제 6대)
   const REGNAL_NAME = '건륭제'
-  const existingReign = await prisma.sovereignReign.findFirst({
+  const existingReign = await reignRows(prisma).findFirst({
     where: { historicalCountryId: qingHC.id, regnalNumber: 6 },
   })
   if (existingReign) {
     if (existingReign.personId === personId) {
       if (!existingReign.regnalName) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingReign.id },
           data: { regnalName: REGNAL_NAME },
         })
@@ -130,7 +131,7 @@ export async function seedQianlongEmperor(prisma: PrismaService): Promise<void> 
       console.warn(`      ⚠️  재위: 청 황제 6대 — 다른 인물 점유 (skip)`)
     }
   } else {
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId,
         historicalCountryId: qingHC.id,

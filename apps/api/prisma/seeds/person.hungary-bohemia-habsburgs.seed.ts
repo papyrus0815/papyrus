@@ -43,6 +43,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 인물 명세 ──────────────────────────────────────────────────────────────
 type Stats = {
@@ -1307,7 +1308,7 @@ export async function seedHungaryBohemiaHabsburgs(prisma: PrismaService): Promis
 
   for (const r of allReigns) {
     // 동일 (person, HC) 기등록 확인
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: {
         personId: r.personId,
         historicalCountryId: r.historicalCountryId,
@@ -1320,7 +1321,7 @@ export async function seedHungaryBohemiaHabsburgs(prisma: PrismaService): Promis
         existingByPerson.startDate.getTime() !== r.startDate.getTime() ||
         (existingByPerson.endDate?.getTime() ?? null) !== r.endDate.getTime()
       if (needs) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: {
             regnalNumber: r.regnalNumber,
@@ -1345,7 +1346,7 @@ export async function seedHungaryBohemiaHabsburgs(prisma: PrismaService): Promis
       continue
     }
     // 슬롯 충돌
-    const slotConflict = await prisma.sovereignReign.findFirst({
+    const slotConflict = await reignRows(prisma).findFirst({
       where: { historicalCountryId: r.historicalCountryId, regnalNumber: r.regnalNumber },
     })
     if (slotConflict) {
@@ -1354,7 +1355,7 @@ export async function seedHungaryBohemiaHabsburgs(prisma: PrismaService): Promis
       )
       continue
     }
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId: r.personId,
         historicalCountryId: r.historicalCountryId,

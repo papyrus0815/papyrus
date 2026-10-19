@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 async function main() {
   dotenv.config({ path: path.resolve(process.cwd(), 'env.development') })
@@ -30,7 +31,7 @@ async function main() {
       if (!hc) continue
       const id = hc.id
       const [reigns, affs, parentMember, memberMember, predTrans, succTrans] = await Promise.all([
-        prisma.sovereignReign.count({ where: { historicalCountryId: id } }),
+        reignRows(prisma).count({ where: { historicalCountryId: id } }),
         prisma.personCountryAffiliation.count({ where: { historicalCountryId: id } }),
         prisma.historicalCountryMembership.count({ where: { historicalCountryId: id } }),
         prisma.historicalCountryMembership.count({ where: { memberCountryId: id } }),

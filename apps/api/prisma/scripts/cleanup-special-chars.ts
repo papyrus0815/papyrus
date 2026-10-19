@@ -21,6 +21,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 function cleanText(s: string | null | undefined): string | null {
   if (s == null) return null
@@ -92,7 +93,7 @@ async function main() {
 
     // ── SovereignReign ──────────────────────────────────────────────────
     cnt = 0
-    const reigns = await prisma.sovereignReign.findMany({
+    const reigns = await reignRows(prisma).findMany({
       select: { id: true, notes: true, endReasonDetail: true },
     })
     for (const r of reigns) {
@@ -102,7 +103,7 @@ async function main() {
       if (newNotes !== r.notes) data.notes = newNotes
       if (newEnd !== r.endReasonDetail) data.endReasonDetail = newEnd
       if (Object.keys(data).length > 0) {
-        await prisma.sovereignReign.update({ where: { id: r.id }, data })
+        await reignRows(prisma).update({ where: { id: r.id }, data })
         cnt++
       }
     }

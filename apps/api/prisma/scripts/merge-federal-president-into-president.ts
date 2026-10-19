@@ -11,6 +11,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 async function main() {
   const envPath = path.resolve(process.cwd(), 'env.development')
@@ -39,7 +40,7 @@ async function main() {
     const tenureCount = await prisma.governmentPositionTenure.count({
       where: { positionDefinitionId: federal.id },
     })
-    const reignCount = await prisma.sovereignReign.count({
+    const reignCount = await reignRows(prisma).count({
       where: { positionDefinitionId: federal.id },
     })
     console.log(`  재지정 대상 — 재임(Tenure): ${tenureCount}건, 재위(SovereignReign): ${reignCount}건`)
@@ -52,7 +53,7 @@ async function main() {
       console.log(`  🔧 Tenure ${tenureCount}건 재지정 완료`)
     }
     if (reignCount > 0) {
-      await prisma.sovereignReign.updateMany({
+      await reignRows(prisma).updateMany({
         where: { positionDefinitionId: federal.id },
         data: { positionDefinitionId: president.id },
       })

@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 async function main() {
   dotenv.config({ path: path.resolve(process.cwd(), 'env.development') })
@@ -15,7 +16,7 @@ async function main() {
       console.log('러시아 제국 HC 없음')
       return
     }
-    const reigns = await prisma.sovereignReign.findMany({
+    const reigns = await reignRows(prisma).findMany({
       where: { historicalCountryId: hc.id },
       orderBy: [{ startDate: 'asc' }],
       select: {

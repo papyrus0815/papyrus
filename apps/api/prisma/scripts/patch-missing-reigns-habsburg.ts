@@ -14,6 +14,7 @@ import * as path from 'path'
 import { AppointmentMethod, TenureEndReason } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 type Patch = {
   personOriginalName: string
@@ -134,7 +135,7 @@ async function main() {
         console.warn(`  ⚠️  스킵 — person 또는 HC 미존재: ${p.personOriginalName} / ${p.hcName}`)
         continue
       }
-      const existing = await prisma.sovereignReign.findFirst({
+      const existing = await reignRows(prisma).findFirst({
         where: { personId: person.id, historicalCountryId: hc.id },
       })
       if (existing) {
@@ -142,14 +143,14 @@ async function main() {
         skipped++
         continue
       }
-      const slot = await prisma.sovereignReign.findFirst({
+      const slot = await reignRows(prisma).findFirst({
         where: { historicalCountryId: hc.id, regnalNumber: p.regnalNumber },
       })
       if (slot) {
         console.warn(`  ⚠️  슬롯 충돌: ${p.hcName} ${p.regnalNumber}대 — 다른 인물 점유 (skip)`)
         continue
       }
-      await prisma.sovereignReign.create({
+      await reignRows(prisma).create({
         data: {
           personId: person.id,
           historicalCountryId: hc.id,

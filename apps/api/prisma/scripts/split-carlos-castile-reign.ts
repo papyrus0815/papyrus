@@ -16,6 +16,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 async function main() {
   const envPath = path.resolve(process.cwd(), 'env.development')
@@ -44,7 +45,7 @@ async function main() {
     console.log('\n🔧 카를로스 1세 카스티야 reign 분리 시작...\n')
 
     // 1) 기존 14대 reign 조회 (jure matris로 변환할 대상)
-    const existing14 = await prisma.sovereignReign.findFirst({
+    const existing14 = await reignRows(prisma).findFirst({
       where: {
         personId: charlesV.id,
         historicalCountryId: castileHC.id,
@@ -54,7 +55,7 @@ async function main() {
 
     if (existing14) {
       // 14대 slot 비우기 위해 NULL로 변경 + endDate 단축
-      await prisma.sovereignReign.update({
+      await reignRows(prisma).update({
         where: { id: existing14.id },
         data: {
           regnalNumber: null,
@@ -69,7 +70,7 @@ async function main() {
       )
     } else {
       // 이미 jure matris로 처리됐는지 확인
-      const existingNull = await prisma.sovereignReign.findFirst({
+      const existingNull = await reignRows(prisma).findFirst({
         where: {
           personId: charlesV.id,
           historicalCountryId: castileHC.id,
@@ -84,7 +85,7 @@ async function main() {
     }
 
     // 2) 새 14대 단독 reign 생성
-    const slot14Conflict = await prisma.sovereignReign.findFirst({
+    const slot14Conflict = await reignRows(prisma).findFirst({
       where: { historicalCountryId: castileHC.id, regnalNumber: 14 },
     })
     if (slot14Conflict) {
@@ -95,7 +96,7 @@ async function main() {
         console.warn(`  ⚠️  14대 슬롯 충돌 — 다른 인물 점유 (skip)`)
       }
     } else {
-      await prisma.sovereignReign.create({
+      await reignRows(prisma).create({
         data: {
           personId: charlesV.id,
           historicalCountryId: castileHC.id,
@@ -120,7 +121,7 @@ async function main() {
 
     // 결과 확인
     console.log('\n=== 분리 후 카스티야 reign 라인 ===')
-    const reigns = await prisma.sovereignReign.findMany({
+    const reigns = await reignRows(prisma).findMany({
       where: { historicalCountryId: castileHC.id },
       select: {
         regnalNumber: true,

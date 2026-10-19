@@ -29,6 +29,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 트라스타마라 가문 명세 ─────────────────────────────────────────────────
 const TRASTAMARA_DYNASTY = {
@@ -733,7 +734,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
 
   for (const r of philipReigns) {
     // 기존 재임 레코드 조회 — personId + historicalCountryId 기준
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: philipId, historicalCountryId: r.historicalCountryId },
     })
     if (existingByPerson) {
@@ -741,7 +742,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
         existingByPerson.regnalNumber !== r.regnalNumber ||
         existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
         })
@@ -757,7 +758,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       continue
     }
     // 신규 생성 — 동일 regnalNumber 슬롯이 점유돼 있다면 충돌
-    const slotConflict = await prisma.sovereignReign.findFirst({
+    const slotConflict = await reignRows(prisma).findFirst({
       where: {
         historicalCountryId: r.historicalCountryId,
         regnalNumber: r.regnalNumber,
@@ -769,7 +770,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       )
       continue
     }
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId: philipId,
         historicalCountryId: r.historicalCountryId,
@@ -792,7 +793,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
 
   // ── 5d) 후아나 1세 재임 루프 (구조는 펠리페 재임 루프와 동일) ──────────
   for (const r of joannaReigns) {
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: joannaId, historicalCountryId: r.historicalCountryId },
     })
     if (existingByPerson) {
@@ -800,7 +801,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
         existingByPerson.regnalNumber !== r.regnalNumber ||
         existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
         })
@@ -815,7 +816,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       }
       continue
     }
-    const slotConflict = await prisma.sovereignReign.findFirst({
+    const slotConflict = await reignRows(prisma).findFirst({
       where: {
         historicalCountryId: r.historicalCountryId,
         regnalNumber: r.regnalNumber,
@@ -827,7 +828,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       )
       continue
     }
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId: joannaId,
         historicalCountryId: r.historicalCountryId,

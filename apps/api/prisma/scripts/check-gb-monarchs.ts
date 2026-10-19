@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 async function main() {
   dotenv.config({ path: path.resolve(process.cwd(), 'env.development') })
@@ -27,7 +28,7 @@ async function main() {
     console.log(`  연합왕국: ${ukgb ? ukgb.id : 'MISSING'} [${ukgb?.startYear}~${ukgb?.endYear}]`)
 
     if (gbk) {
-      const r = await prisma.sovereignReign.findMany({ where: { historicalCountryId: gbk.id }, orderBy: { startDate: 'asc' }, include: { person: { select: { originalName: true } } } })
+      const r = await reignRows(prisma).findMany({ where: { historicalCountryId: gbk.id }, orderBy: { startDate: 'asc' }, include: { person: { select: { originalName: true } } } })
       console.log(`\n그레이트브리튼 왕국 reigns (${r.length}):`)
       for (const x of r) console.log(`  ${x.regnalNumber ?? '-'}. ${x.regnalName ?? '-'} [${x.startDate.getUTCFullYear()}~${x.endDate?.getUTCFullYear() ?? '?'}] ${x.person.originalName}`)
     }

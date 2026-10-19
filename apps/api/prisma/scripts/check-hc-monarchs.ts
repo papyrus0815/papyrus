@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 async function main() {
   dotenv.config({ path: path.resolve(process.cwd(), 'env.development') })
@@ -39,10 +40,10 @@ async function main() {
     console.log('\n## 재임 0건 HC (= 군주 미등록):')
     for (const hc of withoutReigns) console.log(`  x ${line(hc)}`)
 
-    const nullHcReigns = await prisma.sovereignReign.count({
+    const nullHcReigns = await reignRows(prisma).count({
       where: { historicalCountryId: null },
     })
-    const totalReigns = await prisma.sovereignReign.count()
+    const totalReigns = await reignRows(prisma).count()
     console.log(
       `\n=== SovereignReign 총 ${totalReigns}건, HC 미연결(=null) ${nullHcReigns}건 ===`,
     )

@@ -36,6 +36,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 카를 5세 인물 본문 ─────────────────────────────────────────────────────
 const PERSON = {
@@ -500,7 +501,7 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
   for (const r of REIGNS) {
     // 기존 재위 레코드 조회 — personId + historicalCountryId + regnalNumber 기준
     // (한 인물이 같은 HC에 여러 reign — 예: 카를로스 1세 jure matris NULL slot + 14대 단독 — 가능)
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: r.historicalCountryId,
@@ -510,7 +511,7 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
     if (existingByPerson) {
       const needsUpdate = existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalName: r.regnalName },
         })
@@ -526,7 +527,7 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       continue
     }
     // 신규 생성 — 동일 regnalNumber 슬롯 점유 검사
-    const slotConflict = await prisma.sovereignReign.findFirst({
+    const slotConflict = await reignRows(prisma).findFirst({
       where: {
         historicalCountryId: r.historicalCountryId,
         regnalNumber: r.regnalNumber,
@@ -538,7 +539,7 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       )
       continue
     }
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId,
         historicalCountryId: r.historicalCountryId,

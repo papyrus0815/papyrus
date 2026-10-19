@@ -40,6 +40,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 야기에우오 가문 명세 ───────────────────────────────────────────────────
 const JAGIELLON_DYNASTY = {
@@ -579,7 +580,7 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
   ]
 
   for (const r of REIGNS) {
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: {
         personId: r.personId,
         historicalCountryId: r.historicalCountryId,
@@ -592,7 +593,7 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
       )
       continue
     }
-    const slotConflict = await prisma.sovereignReign.findFirst({
+    const slotConflict = await reignRows(prisma).findFirst({
       where: {
         historicalCountryId: r.historicalCountryId,
         regnalNumber: r.regnalNumber,
@@ -604,7 +605,7 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
       )
       continue
     }
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId: r.personId,
         historicalCountryId: r.historicalCountryId,

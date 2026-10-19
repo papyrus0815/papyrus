@@ -18,6 +18,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 type Adjustment = {
   originalName: string
@@ -75,7 +76,7 @@ async function main() {
         console.warn(`  ⚠️  인물 미존재: ${adj.originalName}`)
         continue
       }
-      const reign = await prisma.sovereignReign.findFirst({
+      const reign = await reignRows(prisma).findFirst({
         where: { personId: person.id, historicalCountryId: castileHC.id },
       })
       if (!reign) {
@@ -91,7 +92,7 @@ async function main() {
         )
         continue
       }
-      await prisma.sovereignReign.update({
+      await reignRows(prisma).update({
         where: { id: reign.id },
         data: {
           regnalNumber: adj.newRegnalNumber,
@@ -106,7 +107,7 @@ async function main() {
 
     // 결과 확인
     console.log('\n=== 정정 후 카스티야 reign 라인 ===')
-    const reigns = await prisma.sovereignReign.findMany({
+    const reigns = await reignRows(prisma).findMany({
       where: { historicalCountryId: castileHC.id },
       select: {
         regnalNumber: true,

@@ -23,6 +23,7 @@
 import { AppointmentMethod, DeathType, TenureEndReason } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 const STUART_DYNASTY = {
   name: '스튜어트 왕가',
@@ -607,21 +608,21 @@ export async function seedGreatBritainMonarchs(prisma: PrismaService): Promise<v
   for (const spec of ALL_BRITISH_MONARCHS) {
     const pid = personIdByOriginalName[spec.originalName]
     if (!pid) continue
-    const existing = await prisma.sovereignReign.findFirst({
+    const existing = await reignRows(prisma).findFirst({
       where: { personId: pid, historicalCountryId: gbkHC.id },
     })
     if (existing) {
       console.log(`  ⏭️  재임 스킵: ${spec.reign.regnalName}`)
       continue
     }
-    const slot = await prisma.sovereignReign.findFirst({
+    const slot = await reignRows(prisma).findFirst({
       where: { historicalCountryId: gbkHC.id, regnalNumber: spec.reign.regnalNumber },
     })
     if (slot) {
       console.warn(`  ⚠️  재임 충돌: 그레이트브리튼 ${spec.reign.regnalNumber}대 (skip)`)
       continue
     }
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId: pid,
         historicalCountryId: gbkHC.id,

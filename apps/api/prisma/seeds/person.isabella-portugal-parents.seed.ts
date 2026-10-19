@@ -37,6 +37,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 마누엘 1세 본문 ────────────────────────────────────────────────────────
 const MANUEL_I = {
@@ -401,7 +402,7 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
       notes:
         '1495년 10월 25일 사촌이자 처남 주앙 2세가 41세에 후사 없이 사망하면서 26세에 즉위. 약 26년 재위 동안 포르투갈 대항해 시대의 정점에 도달했다. 1497~1499 바스쿠 다 가마의 인도 항로 개척, 1500 페드루 알바르스 카브랄의 브라질 발견, 1510~1515 아폰수 데 알부케르키의 인도 고아·말라카·호르무즈 점령을 후원해 사상 최대 해상 식민제국의 기반을 마련했다. 1496년 유대인 추방·강제 개종령은 인권 침해의 흠결이다. 1521년 사망으로 아들 주앙 3세에게 왕위 상속.',
     }
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: r.personId, historicalCountryId: r.historicalCountryId },
     })
     if (existingByPerson) {
@@ -409,7 +410,7 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
         existingByPerson.regnalNumber !== r.regnalNumber ||
         existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
         })
@@ -420,7 +421,7 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
         )
       }
     } else {
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma).findFirst({
         where: {
           historicalCountryId: r.historicalCountryId,
           regnalNumber: r.regnalNumber,
@@ -431,7 +432,7 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
           `  ⚠️  재임 충돌: ${r.historicalCountryName} ${r.regnalNumber}대 — 다른 인물 점유 (skip)`,
         )
       } else {
-        await prisma.sovereignReign.create({
+        await reignRows(prisma).create({
           data: {
             personId: r.personId,
             historicalCountryId: r.historicalCountryId,

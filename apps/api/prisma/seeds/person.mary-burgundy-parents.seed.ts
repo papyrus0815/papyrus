@@ -29,6 +29,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 담대공 샤를 1세 본문 ─────────────────────────────────────────────────
 const CHARLES_BOLD = {
@@ -325,7 +326,7 @@ export async function seedMaryBurgundyParents(prisma: PrismaService): Promise<vo
       notes:
         '1467년 6월 15일 부친 선량공 필리프 3세 사망 후 부르고뉴 공작으로 즉위. 약 9년 6개월 재위. 부르고뉴 국가 영토 통합을 위해 (1)로렌 공국 정복 (2)스위스 동맹 격파 (3)알자스·라인 확장을 시도했다. 1473 트리어 회담에서 외동딸 마리와 합스부르크 막시밀리안의 결혼 약속이 결정적 외교 성과. 1474~1476 부르고뉴 전쟁의 연속 패전(1474 헤리쿠르·1476 그랑송·모라) 후 1477-01-05 낭시 전투에서 전사. 시신은 약 사흘 후 낭시 인근 늪에서 늑대에 부분 훼손된 상태로 발견. 외동딸 마리(20세)가 약 250만 km² 부르고뉴 영지를 단독 상속, 1477-08 합스부르크 막시밀리안과 결혼해 영지 이전.',
     }
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: charlesId, historicalCountryId: burgundyHC.id },
     })
     if (existingByPerson) {
@@ -333,7 +334,7 @@ export async function seedMaryBurgundyParents(prisma: PrismaService): Promise<vo
         existingByPerson.regnalNumber !== r.regnalNumber ||
         existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
         })
@@ -342,13 +343,13 @@ export async function seedMaryBurgundyParents(prisma: PrismaService): Promise<vo
         console.log(`  ⏭️  재임 스킵 (이미 정확): 부르고뉴 공국 ${r.regnalName} ${r.regnalNumber}대`)
       }
     } else {
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma).findFirst({
         where: { historicalCountryId: burgundyHC.id, regnalNumber: r.regnalNumber },
       })
       if (slotConflict) {
         console.warn(`  ⚠️  재임 충돌: 부르고뉴 공국 ${r.regnalNumber}대 — 다른 인물 점유 (skip)`)
       } else {
-        await prisma.sovereignReign.create({
+        await reignRows(prisma).create({
           data: {
             personId: charlesId,
             historicalCountryId: burgundyHC.id,

@@ -27,6 +27,7 @@
 import { AppointmentMethod, DeathType, TenureEndReason } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 const NARIYUKI = {
   name: '나리유키',
@@ -353,7 +354,7 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
       '기이번 재정 정비·와카야마성 보수에 힘썼으나 동시기 평이한 다이묘로 평가. 1846-06-08 재임 ' +
       '중 결핵으로 사망, 약 한 달 후 외동아들 이에모치(=후일 14대 쇼군) 유복자 출생.'
 
-    const existing = await prisma.sovereignReign.findFirst({
+    const existing = await reignRows(prisma).findFirst({
       where: { personId: nariyukiId, historicalCountryId: kiiHan.id },
     })
     if (existing) {
@@ -364,7 +365,7 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
         (existing.endDate?.getTime() ?? null) !== endDate.getTime() ||
         existing.positionDefinitionId !== daimyoPos.id
       if (needs) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existing.id },
           data: {
             regnalNumber,
@@ -383,7 +384,7 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
         console.log(`  ⏭️  재임 스킵 (정확): 기이번 ${regnalNumber}대 ${regnalName}`)
       }
     } else {
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma).findFirst({
         where: { historicalCountryId: kiiHan.id, regnalNumber },
       })
       if (slotConflict) {
@@ -391,7 +392,7 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
           `  ⚠️  재임 충돌: 기이번 ${regnalNumber}대 — 다른 인물 점유 (skip ${regnalName})`,
         )
       } else {
-        await prisma.sovereignReign.create({
+        await reignRows(prisma).create({
           data: {
             personId: nariyukiId,
             historicalCountryId: kiiHan.id,

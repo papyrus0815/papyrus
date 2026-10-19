@@ -7,6 +7,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 
@@ -596,7 +597,7 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
       const positionDefId = await getPositionDefId(prisma, r.positionTitle)
       const startDate = new Date(r.startYear, r.startMonth - 1, r.startDay ?? 1)
       const endDate = r.endYear ? new Date(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1) : undefined
-      const existingReign = await prisma.sovereignReign.findFirst({
+      const existingReign = await reignRows(prisma).findFirst({
         where: { historicalCountryId: reignCountryId, regnalNumber: r.regnalNumber },
       })
       if (existingReign) {
@@ -608,7 +609,7 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
           )
         }
       } else {
-        await prisma.sovereignReign.create({
+        await reignRows(prisma).create({
           data: {
             personId,
             historicalCountryId: reignCountryId,

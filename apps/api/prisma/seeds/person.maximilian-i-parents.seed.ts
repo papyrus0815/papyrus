@@ -33,6 +33,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 프리드리히 3세 본문 ────────────────────────────────────────────────────
 const FRIEDRICH_III = {
@@ -340,7 +341,7 @@ export async function seedMaximilianIParents(prisma: PrismaService): Promise<voi
       notes:
         '1440년 2월 2일 사촌 알브레히트 2세 사망 후 같은 해 6월 17일 프랑크푸르트에서 King of the Romans 만장일치 선출, 1442년 6월 17일 아헨 대성당 대관식. 1452년 3월 19일 로마에서 교황 니콜라오 5세에게 신성로마황제 대관을 받은 마지막 황제(후임 막시밀리안 1세부터는 교황 대관 없는 "선출 황제" 모델). 약 53년 King of the Romans·HRE 통치로 동시기 유럽 군주 중 최장기 재위. 모토 AEIOU(Austriae Est Imperare Orbi Universo). 1473 트리어 회담 부르고뉴 결혼 약속 → 1477 막시밀리안-마리 결혼이 합스부르크 가문 권력 도약의 결정적 토대. 1485 마차시 1세에게 빈 점령 약 5년 추방 후 1490 빈 회복. 1493 사망으로 후계자 막시밀리안 1세(이미 1486년 King of the Romans 선출) 즉위.',
     }
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: friedrichId, historicalCountryId: hreHC.id },
     })
     if (existingByPerson) {
@@ -348,7 +349,7 @@ export async function seedMaximilianIParents(prisma: PrismaService): Promise<voi
         existingByPerson.regnalNumber !== r.regnalNumber ||
         existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
         })
@@ -357,13 +358,13 @@ export async function seedMaximilianIParents(prisma: PrismaService): Promise<voi
         console.log(`  ⏭️  재임 스킵 (이미 정확): 신성로마제국 ${r.regnalName} ${r.regnalNumber}대`)
       }
     } else {
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma).findFirst({
         where: { historicalCountryId: hreHC.id, regnalNumber: r.regnalNumber },
       })
       if (slotConflict) {
         console.warn(`  ⚠️  재임 충돌: 신성로마제국 ${r.regnalNumber}대 — 다른 인물 점유 (skip)`)
       } else {
-        await prisma.sovereignReign.create({
+        await reignRows(prisma).create({
           data: {
             personId: friedrichId,
             historicalCountryId: hreHC.id,

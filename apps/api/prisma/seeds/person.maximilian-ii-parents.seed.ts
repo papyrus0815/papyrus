@@ -40,6 +40,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 페르디난트 1세 본문 ────────────────────────────────────────────────────
 const FERDINAND_I = {
@@ -441,7 +442,7 @@ export async function seedMaximilianIIParents(prisma: PrismaService): Promise<vo
       notes:
         '1531년 형 카를 5세의 권유로 King of the Romans(차기 황제) 선출. 1556년 2월 25일 카를 5세의 분할 양위로 신성로마황제 사실상 즉위. 정식 인정은 1558년 3월 14일 프랑크푸르트 선제후 의회에서 이루어졌다(가톨릭 교회가 아닌 선제후들이 황제를 인정한 첫 사례 중 하나). 약 8년 재위. 종교 정책에서 형 카를 5세보다 관용적이었으며, 1555년 아우크스부르크 종교화의를 직접 협상·체결해 약 60년의 종교 갈등을 일시 봉합했다. 동시에 합스부르크 가문 오스트리아 분지의 시조로서 1521년 형 카를 5세의 영지 분할 상속이 1556년 합스부르크 양가(스페인·오스트리아) 분리의 출발이 되었다. 1564년 사망으로 후계자 막시밀리안 2세 즉위.',
     }
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: ferdinandId, historicalCountryId: hreHC.id },
     })
     if (existingByPerson) {
@@ -449,7 +450,7 @@ export async function seedMaximilianIIParents(prisma: PrismaService): Promise<vo
         existingByPerson.regnalNumber !== r.regnalNumber ||
         existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
         })
@@ -458,13 +459,13 @@ export async function seedMaximilianIIParents(prisma: PrismaService): Promise<vo
         console.log(`  ⏭️  재임 스킵 (이미 정확): 신성로마제국 ${r.regnalName} ${r.regnalNumber}대`)
       }
     } else {
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma).findFirst({
         where: { historicalCountryId: hreHC.id, regnalNumber: r.regnalNumber },
       })
       if (slotConflict) {
         console.warn(`  ⚠️  재임 충돌: 신성로마제국 ${r.regnalNumber}대 — 다른 인물 점유 (skip)`)
       } else {
-        await prisma.sovereignReign.create({
+        await reignRows(prisma).create({
           data: {
             personId: ferdinandId,
             historicalCountryId: hreHC.id,

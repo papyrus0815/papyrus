@@ -39,6 +39,7 @@
 import { AppointmentMethod, DeathType, TenureEndReason } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 인물 명세 ───────────────────────────────────────────────────────────────
 const WILLEM = {
@@ -563,7 +564,7 @@ export async function seedWillemI(prisma: PrismaService): Promise<void> {
      * 유니크 제약이 (historicalCountryId, regnalNumber)라 인물이 달라도 충돌한다 —
      * 제약 키로 조회해 다른 인물이 점유 중이면 경고만 남기고 넘어간다(영국 군주 시드 선례).
      */
-    const existing = await prisma.sovereignReign.findFirst({
+    const existing = await reignRows(prisma).findFirst({
       where: { historicalCountryId: hcId, regnalNumber: r.regnalNumber },
     })
     if (existing) {
@@ -576,7 +577,7 @@ export async function seedWillemI(prisma: PrismaService): Promise<void> {
     }
     const startDate = toDate(r.startYear, r.startMonth, r.startDay)
     const startDatePrecision = r.startDay ? 'day' : r.startMonth ? 'month' : 'year'
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId,
         historicalCountryId: hcId,

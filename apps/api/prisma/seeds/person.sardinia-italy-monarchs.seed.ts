@@ -1,6 +1,7 @@
 import { AppointmentMethod, TenureEndReason } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 
@@ -398,7 +399,7 @@ export async function seedSardiniaItalyMonarchs(
       const positionDefinitionId = await getPositionDefId(prisma, reign.positionTitle)
 
       // 유니크 제약 (historicalCountryId, regnalNumber) — 다른 personId라도 충돌하므로 제약 키로 lookup.
-      const existingReign = await prisma.sovereignReign.findFirst({
+      const existingReign = await reignRows(prisma).findFirst({
         where: {
           historicalCountryId,
           regnalNumber: reign.regnalNumber ?? 1,
@@ -416,7 +417,7 @@ export async function seedSardiniaItalyMonarchs(
         continue
       }
 
-      await prisma.sovereignReign.create({
+      await reignRows(prisma).create({
         data: {
           personId,
           historicalCountryId,

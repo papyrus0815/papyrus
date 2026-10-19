@@ -7,6 +7,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 const MONARCH_KEYWORDS = [
   'King',
@@ -39,7 +40,7 @@ async function main() {
   const prisma = new PrismaService({ useAdapter: true })
   try {
     const reignedIds = new Set(
-      (await prisma.sovereignReign.findMany({ select: { personId: true } })).map((r) => r.personId),
+      (await reignRows(prisma).findMany({ select: { personId: true } })).map((r) => r.personId),
     )
     const persons = await prisma.person.findMany({
       where: {

@@ -10,6 +10,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 const SPECIAL_CHARS = ['①', '②', '③', '④', '⑤', '〈', '〉', '【', '】', '◆', '◇', '★']
 
@@ -80,7 +81,7 @@ async function main() {
     // 3) 군주인데 재임 누락
     // SovereignReign 0건이지만 dynasty 가입된 인물 = 군주일 가능성
     const reignedPersonIds = new Set(
-      (await prisma.sovereignReign.findMany({ select: { personId: true } })).map((r) => r.personId),
+      (await reignRows(prisma).findMany({ select: { personId: true } })).map((r) => r.personId),
     )
     const tenurePersonIds = new Set(
       (await prisma.governmentPositionTenure.findMany({ select: { personId: true } })).map((r) => r.personId),

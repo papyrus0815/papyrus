@@ -37,6 +37,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 보나파르트 가문 ─────────────────────────────────────────────────────────
 const BONAPARTE_DYNASTY = {
@@ -604,19 +605,19 @@ export async function seedNapoleonIII(prisma: PrismaService): Promise<void> {
     select: { id: true },
   })
   {
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: napoleonId, historicalCountryId: secondEmpire.id },
     })
     if (existingByPerson) {
       console.log('  ⏭️  재위 스킵 (이미 존재): 제2제국 황제 나폴레옹 3세')
     } else {
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma).findFirst({
         where: { historicalCountryId: secondEmpire.id, regnalNumber: 1 },
       })
       if (slotConflict) {
         console.warn('  ⚠️  재위 충돌: 제2제국 1대 — 다른 인물 점유 (skip)')
       } else {
-        await prisma.sovereignReign.create({
+        await reignRows(prisma).create({
           data: {
             personId: napoleonId,
             historicalCountryId: secondEmpire.id,

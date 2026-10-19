@@ -30,6 +30,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 
@@ -448,13 +449,13 @@ export async function seedMigrationAgePeoples(prisma: PrismaService): Promise<vo
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       notes: '434~445 형 블레다와 공동 통치, 445년부터 단독 군주. 453년 혼인 첫날밤 급사.',
     }
-    const reign = await prisma.sovereignReign.findFirst({
+    const reign = await reignRows(prisma).findFirst({
       where: { personId: attila.id, historicalCountryId: hunEmpireId },
       select: { id: true },
     })
-    if (reign) await prisma.sovereignReign.update({ where: { id: reign.id }, data: reignData })
+    if (reign) await reignRows(prisma).update({ where: { id: reign.id }, data: reignData })
     else
-      await prisma.sovereignReign.create({
+      await reignRows(prisma).create({
         data: { personId: attila.id, historicalCountryId: hunEmpireId, accountId: ACCOUNT_ID, ...reignData },
       })
     console.log('  ✅ 아틸라 국적·재위')

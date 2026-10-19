@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 /**
  * 관직 정의 유형 재분류 (1회성, 멱등).
@@ -50,7 +51,7 @@ async function main() {
         prisma.governmentPositionTenure.count({
           where: { positionDefinitionId: definition.id },
         }),
-        prisma.sovereignReign.count({ where: { positionDefinitionId: definition.id } }),
+        reignRows(prisma).count({ where: { positionDefinitionId: definition.id } }),
       ])
       if (tenureCount + reignCount > 0) {
         console.log(

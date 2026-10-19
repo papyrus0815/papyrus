@@ -115,6 +115,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 인물 명세 ───────────────────────────────────────────────────────────────
 const KARL_XI = {
@@ -758,7 +759,7 @@ export async function seedKarlXISweden(prisma: PrismaService): Promise<void> {
 
   // ── 2) 재위 ────────────────────────────────────────────────────────────────
   // ⚠️멱등 키는 인물이 아니라 유니크 제약 (historicalCountryId, regnalNumber)이다.
-  const existingReign = await prisma.sovereignReign.findFirst({
+  const existingReign = await reignRows(prisma).findFirst({
     where: { historicalCountryId: swedishEmpire.id, regnalNumber: REIGN.regnalNumber },
   })
   if (existingReign) {
@@ -770,7 +771,7 @@ export async function seedKarlXISweden(prisma: PrismaService): Promise<void> {
       )
     }
   } else {
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId,
         historicalCountryId: swedishEmpire.id,

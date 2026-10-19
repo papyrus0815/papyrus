@@ -32,6 +32,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 결혼 명세 ──────────────────────────────────────────────────────────────
 const MARRIAGE = {
@@ -545,7 +546,7 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
 
   for (const r of REIGNS) {
     // 멱등성: personId + historicalCountryId 기준 우선 조회
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: r.personId, historicalCountryId: r.historicalCountryId },
     })
     if (existingByPerson) {
@@ -553,7 +554,7 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
         existingByPerson.regnalNumber !== r.regnalNumber ||
         existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
         })
@@ -569,7 +570,7 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
     }
     // 신규 — regnalNumber 슬롯 충돌 검사 (NULL은 NULL-distinct로 항상 통과)
     if (r.regnalNumber !== null) {
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma).findFirst({
         where: {
           historicalCountryId: r.historicalCountryId,
           regnalNumber: r.regnalNumber,
@@ -582,7 +583,7 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
         continue
       }
     }
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId: r.personId,
         historicalCountryId: r.historicalCountryId,

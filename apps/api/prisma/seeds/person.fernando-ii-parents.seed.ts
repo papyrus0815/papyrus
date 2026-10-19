@@ -31,6 +31,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 후안 2세 본문 ─────────────────────────────────────────────────────────
 const JUAN_II = {
@@ -451,7 +452,7 @@ export async function seedFernandoIIParents(prisma: PrismaService): Promise<void
         '약 60년 아라곤에 정착시킨 가교 군주이자, 페르난도-이사벨 결혼을 추진해 카스티야-아라곤 ' +
         '동군연합의 토대를 마련한 인물.',
     }
-    const existingByPerson = await prisma.sovereignReign.findFirst({
+    const existingByPerson = await reignRows(prisma).findFirst({
       where: { personId: juanId, historicalCountryId: aragonHC.id },
     })
     if (existingByPerson) {
@@ -459,7 +460,7 @@ export async function seedFernandoIIParents(prisma: PrismaService): Promise<void
         existingByPerson.regnalNumber !== r.regnalNumber ||
         existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma).update({
           where: { id: existingByPerson.id },
           data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
         })
@@ -470,7 +471,7 @@ export async function seedFernandoIIParents(prisma: PrismaService): Promise<void
         )
       }
     } else {
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma).findFirst({
         where: { historicalCountryId: aragonHC.id, regnalNumber: r.regnalNumber },
       })
       if (slotConflict) {
@@ -478,7 +479,7 @@ export async function seedFernandoIIParents(prisma: PrismaService): Promise<void
           `  ⚠️  재임 충돌: 아라곤 왕국 ${r.regnalNumber}대 — 다른 인물 점유 (skip)`,
         )
       } else {
-        await prisma.sovereignReign.create({
+        await reignRows(prisma).create({
           data: {
             personId: juanId,
             historicalCountryId: aragonHC.id,

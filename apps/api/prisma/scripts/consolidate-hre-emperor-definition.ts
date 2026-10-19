@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 /**
  * 직위 정의 '신성로마황제' → '황제' 통합.
@@ -33,7 +34,7 @@ async function main() {
     }
 
     const [reigns, tenures, signatories] = await prisma.$transaction([
-      prisma.sovereignReign.updateMany({
+      reignRows(prisma).updateMany({
         where: { positionDefinitionId: hre.id },
         data: { positionDefinitionId: emperor.id },
       }),

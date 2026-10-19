@@ -16,6 +16,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from '../seeds/lib/reign-rows'
 
 async function main() {
   dotenv.config({ path: path.resolve(process.cwd(), 'env.development') })
@@ -130,7 +131,7 @@ async function main() {
 
     // ── 4) 잔존 확인 + 삭제 ───────────────────────────────────────────────
     const [reigns, affs, mParent, mMember, predLeft, succLeft] = await Promise.all([
-      prisma.sovereignReign.count({ where: { historicalCountryId: space.id } }),
+      reignRows(prisma).count({ where: { historicalCountryId: space.id } }),
       prisma.personCountryAffiliation.count({ where: { historicalCountryId: space.id } }),
       prisma.historicalCountryMembership.count({ where: { historicalCountryId: space.id } }),
       prisma.historicalCountryMembership.count({ where: { memberCountryId: space.id } }),

@@ -32,6 +32,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 // ── 가문 명세 ──────────────────────────────────────────────────────────────
 const DYNASTIES = [
@@ -1924,7 +1925,7 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
 
   for (const r of allReigns) {
     // 같은 (person, HC) 기등록 확인 (Shogunate)
-    const existing = await prisma.sovereignReign.findFirst({
+    const existing = await reignRows(prisma, { alsoDefinitionIds: [positionId] }).findFirst({
       where: { personId: r.personId, historicalCountryId: shogunateHC.id },
     })
     if (existing) {
@@ -1934,7 +1935,7 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
         existing.startDate.getTime() !== r.startDate.getTime() ||
         (existing.endDate?.getTime() ?? null) !== r.endDate.getTime()
       if (needs) {
-        await prisma.sovereignReign.update({
+        await reignRows(prisma, { alsoDefinitionIds: [positionId] }).update({
           where: { id: existing.id },
           data: {
             regnalNumber: r.regnalNumber,
@@ -1955,7 +1956,7 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
       continue
     }
     // 슬롯 충돌 (같은 regnalNumber에 다른 인물이 점유 중인지 확인)
-    const slotConflict = await prisma.sovereignReign.findFirst({
+    const slotConflict = await reignRows(prisma, { alsoDefinitionIds: [positionId] }).findFirst({
       where: { historicalCountryId: shogunateHC.id, regnalNumber: r.regnalNumber },
     })
     if (slotConflict) {
@@ -1964,7 +1965,7 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
       )
       continue
     }
-    await prisma.sovereignReign.create({
+    await reignRows(prisma, { alsoDefinitionIds: [positionId] }).create({
       data: {
         personId: r.personId,
         historicalCountryId: shogunateHC.id,
@@ -2003,7 +2004,7 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
       const startDate = new Date(pr.startYear, pr.startMonth - 1, pr.startDay)
       const endDate = new Date(pr.endYear, pr.endMonth - 1, pr.endDay)
 
-      const existing = await prisma.sovereignReign.findFirst({
+      const existing = await reignRows(prisma, { alsoDefinitionIds: [positionId] }).findFirst({
         where: { personId: pid, historicalCountryId: hcId },
       })
       if (existing) {
@@ -2014,7 +2015,7 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
           (existing.endDate?.getTime() ?? null) !== endDate.getTime() ||
           existing.positionDefinitionId !== daimyoPositionId
         if (needs) {
-          await prisma.sovereignReign.update({
+          await reignRows(prisma, { alsoDefinitionIds: [positionId] }).update({
             where: { id: existing.id },
             data: {
               regnalNumber: pr.regnalNumber,
@@ -2038,7 +2039,7 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
         }
         continue
       }
-      const slotConflict = await prisma.sovereignReign.findFirst({
+      const slotConflict = await reignRows(prisma, { alsoDefinitionIds: [positionId] }).findFirst({
         where: { historicalCountryId: hcId, regnalNumber: pr.regnalNumber },
       })
       if (slotConflict) {
@@ -2048,7 +2049,7 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
         )
         continue
       }
-      await prisma.sovereignReign.create({
+      await reignRows(prisma, { alsoDefinitionIds: [positionId] }).create({
         data: {
           personId: pid,
           historicalCountryId: hcId,

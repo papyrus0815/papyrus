@@ -120,6 +120,7 @@
 import { AppointmentMethod, DeathType, TenureEndReason } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { reignRows } from './lib/reign-rows'
 
 /** 형 에른스트 1세의 **정본** 행. 사본(bc8555db)은 전기 131자짜리 시드 재실행 산물이다. */
 const ERNST_I_CANONICAL_ID = '9a1ab274-796b-433c-b5de-93d81510fa94'
@@ -1109,7 +1110,7 @@ export async function seedLeopoldIBelgium(prisma: PrismaService): Promise<void> 
 
   // ── 5) 재위 ────────────────────────────────────────────────────────────────
   // ⚠️멱등 키는 인물이 아니라 유니크 제약 (historicalCountryId, regnalNumber)이다.
-  const existingReign = await prisma.sovereignReign.findFirst({
+  const existingReign = await reignRows(prisma).findFirst({
     where: { historicalCountryId: belgium.id, regnalNumber: REIGN.regnalNumber },
   })
   if (existingReign) {
@@ -1121,7 +1122,7 @@ export async function seedLeopoldIBelgium(prisma: PrismaService): Promise<void> 
       )
     }
   } else {
-    await prisma.sovereignReign.create({
+    await reignRows(prisma).create({
       data: {
         personId,
         historicalCountryId: belgium.id,
