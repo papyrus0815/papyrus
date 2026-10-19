@@ -8,7 +8,6 @@ describe('invalidateTenureQueries', () => {
     const spy = jest.spyOn(queryClient, 'invalidateQueries')
     invalidateTenureQueries(queryClient, { personId: 'p1' })
     const keys = spy.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey))
-    expect(keys).toContain(JSON.stringify(['sovereign-reign-timeline']))
-    expect(keys).toContain(JSON.stringify(['head-tenure-timeline']))
+    expect(keys).toContain(JSON.stringify(['office-holding-timeline']))
   })
 })

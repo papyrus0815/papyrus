@@ -76,7 +76,7 @@ export function invalidateTenureQueries(
   invalidate(['sovereign-reign-detail'])
 
   // ── 사건 목록의 즉위·취임 말풍선 연표·수장 지도 — 직위 보유 단일 피드(office-holding-timeline). 없으면 5분 staleTime 동안 방금 고친
-  //    재임/재위가 목록에 반영되지 않았다. (키 정의: pages/events/list/hooks/use-reign-markers)
+  //    재임/재위가 목록에 반영되지 않았다. (키 정의: shared/api/sovereign-reigns)
   invalidate(['office-holding-timeline'])
 
   // ── 인물 상세 — 같은 재임/업적이 인물 패널에도 박혀 있어 함께 무효화 ──
