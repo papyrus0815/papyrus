@@ -4,6 +4,7 @@ import {
   initialSplitRows,
   parseDateText,
   rowError,
+  rowWarning,
   summarizeRows,
 } from './split-plan.lib'
 
@@ -51,7 +52,8 @@ describe('행 검증·전송 형태', () => {
     { id: 's1', title: '제1기(1700–1706)' },
     { id: 's2', title: '열강의 반응', subjectEventId: 'child-1' },
     { id: 's3', title: '' },
-  ])
+    // 이 묶음은 '하위 사건' 행의 검증·전송을 본다 — 본문 없는 픽스처라 기본값(버리기)을 덮는다
+  ]).map((row) => ({ ...row, to: 'CHILD' as const }))
 
   it('새 하위는 제목이 있어야 하고, 기존 하위로 옮기는 행은 검사하지 않는다', () => {
     expect(rowError(rows[0])).toBeNull()
@@ -81,5 +83,33 @@ describe('행 검증·전송 형태', () => {
     expect(summarizeRows([rows[0], { ...rows[1], to: 'BACKGROUND' }, { ...rows[2], to: 'DROP' }])).toBe(
       '하위 사건 1 · 배경 1 · 버리기 1',
     )
+  })
+})
+
+describe('기본 행선지 — 본문이 거의 없는 단락은 버리기', () => {
+  const rows = initialSplitRows([
+    { id: 'junk', title: 'ㄴㅇㅁㄴ', content: '<p>ㄴㅇㅁ</p>' },
+    { id: 'real', title: '전쟁 경과', content: '<p>1854년 9월 연합군이 크림 반도에 상륙해 세바스토폴로 진격했다.</p>' },
+    { id: 'linked', title: '짧지만 연결됨', content: '', subjectEventId: 'child-1' },
+  ])
+
+  it("3자짜리 시험 단락은 '버리기'가 기본", () => {
+    expect(rows[0].to).toBe('DROP')
+    expect(rows[0].preview).toBe('ㄴㅇㅁ')
+  })
+
+  it("본문이 있는 단락은 '하위 사건'이 기본, 미리보기는 태그를 뗀다", () => {
+    expect(rows[1].to).toBe('CHILD')
+    expect(rows[1].preview.startsWith('1854년 9월')).toBe(true)
+  })
+
+  it('이미 하위를 가리키는 단락은 본문이 없어도 그 하위로', () => {
+    expect(rows[2].to).toBe('CHILD')
+  })
+
+  it('날짜 없는 새 하위는 막지 않고 알린다', () => {
+    expect(rowWarning(rows[1])).toMatch(/날짜 미상/)
+    expect(rowError(rows[1])).toBeNull()
+    expect(rowWarning({ ...rows[1], start: '1854-09' })).toBeNull()
   })
 })

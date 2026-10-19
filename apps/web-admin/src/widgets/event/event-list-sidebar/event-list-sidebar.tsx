@@ -18,6 +18,10 @@ import { FiClock, FiLayers, FiStar } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
 import { useEvents } from '@/entities/event/model'
+import {
+  getEventDescendantCount,
+  isCollectionEvent,
+} from '@/features/event-hierarchy/model/event-kind'
 import type { HistoricalEvent } from '@/entities/event/model'
 /* 분류 색 단일출처 — 본문 목록(event-list-compact)도 같은 파일을 읽는다 */
 import { CATEGORY_SOFT_COLORS } from '@/pages/events/styles/theme'
@@ -237,6 +241,8 @@ function EventListSidebarInner({
       const parent = event.parentEventId ? byId.get(event.parentEventId) : null
       const countries = summarizeCountries(event)
       const childCount = event.hierarchy?.children?.length ?? 0
+      /* 묶음 사건 — 하위가 평소엔 목록에서 빠지므로(아래 1단계) 몇 건을 거느리는지 오른쪽 숫자로 */
+      const descendantCount = isCollectionEvent(event) ? getEventDescendantCount(event) : 0
       const categoryLabel = event.category ? String(event.category) : null
       /* 화면에 세우는 제목은 **자기 날짜 꼬리를 덜어낸** 것 — 바로 왼쪽 선두 열과 연
          머리글이 같은 날짜를 이미 말한다(shared/lib/title-date.ts).
@@ -306,6 +312,7 @@ function EventListSidebarInner({
         ]
           .filter(Boolean)
           .join(', '),
+        metric: descendantCount > 0 ? descendantCount : undefined,
         searchText: searchTextOf(event, parent ?? null, countries),
         groupId,
       }
@@ -328,6 +335,21 @@ function EventListSidebarInner({
     /* 1단계 — 걸러내기. 분류·검색을 **여기서 모두** 끝낸다. 앵커·꼬리표는 화면에 남는
        행들 사이의 관계라서, 걸러낸 뒤의 목록을 봐야 맞게 붙는다. */
     const loweredQuery = query.trim().toLowerCase()
+    /*
+     * 하위 사건은 평소 목록에서 뺀다 — 묶음 전환으로 하위가 62건 늘며 아편전쟁 하위 16건이
+     * 1840년대에 연달아 서는 식으로 일반 사건과 뒤섞였다. 본문 목록(/events)도 최상위만 세우고
+     * 하위는 펼쳐 보는 것과 같은 규약. 단, 검색·분류 필터 중(찾으러 온 것)과 **지금 보고 있는
+     * 사건과 그 상위들**(선택 표시가 사라지면 안 된다)은 하위라도 남긴다.
+     * 상위가 목록에 없는(삭제된) 하위는 사실상 최상위라 남긴다.
+     */
+    const keepChildIds = new Set<string>()
+    for (
+      let cursor = selectedId ? byId.get(selectedId) : undefined;
+      cursor && !keepChildIds.has(cursor.id);
+      cursor = cursor.parentEventId ? byId.get(cursor.parentEventId) : undefined
+    ) {
+      keepChildIds.add(cursor.id)
+    }
     const visible: {
       event: HistoricalEvent
       groupId: string
@@ -335,6 +357,14 @@ function EventListSidebarInner({
       searchText: string
     }[] = []
     for (const event of sorted) {
+      if (
+        !hasActiveFilter &&
+        event.parentEventId &&
+        byId.has(event.parentEventId) &&
+        !keepChildIds.has(event.id)
+      ) {
+        continue
+      }
       if (categoryFilter && String(event.category) !== categoryFilter) continue
       const parent = event.parentEventId ? byId.get(event.parentEventId) : null
       const searchText = searchTextOf(

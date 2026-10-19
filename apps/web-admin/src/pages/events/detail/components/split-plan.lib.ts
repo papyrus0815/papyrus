@@ -12,6 +12,8 @@ export interface SplitRow {
   sectionId: string
   /** 원래 단락 제목 */
   sectionTitle: string
+  /** 단락 본문 미리보기(태그 제거) — 행선지를 고를 근거. 빈 문자열이면 본문 없음 */
+  preview: string
   /** 단락이 이미 가리키는 하위 사건 — 있으면 새로 만들지 않고 그 사건으로 옮긴다 */
   subjectEventId?: string | null
   to: SplitTarget
@@ -66,19 +68,45 @@ export function draftFromSectionTitle(sectionTitle: string): { title: string; st
   return { title: title.trim(), start: canonical(startText), end: endText ? canonical(endText) : '' }
 }
 
+/** 본문이 이보다 짧으면 기본 행선지를 '버리기'로 — 'ㄴㅇㅁㄴ' 같은 시험 단락이 하위 사건이 되던 사고 */
+export const MIN_CHILD_TEXT = 20
+
+export const plainText = (html: string): string =>
+  html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&[a-z]+;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
 export function initialSplitRows(
-  sections: ReadonlyArray<{ id: string; title?: string | null; subjectEventId?: string | null }>,
+  sections: ReadonlyArray<{
+    id: string
+    title?: string | null
+    content?: string | null
+    subjectEventId?: string | null
+  }>,
 ): SplitRow[] {
   return sections.map((section) => {
     const draft = draftFromSectionTitle(section.title ?? '')
+    const preview = plainText(section.content ?? '')
     return {
       sectionId: section.id,
       sectionTitle: section.title ?? '',
+      preview,
       subjectEventId: section.subjectEventId ?? null,
-      to: 'CHILD',
+      // 이미 하위를 가리키는 단락은 그 하위로, 본문이 거의 없는 단락은 버리기가 기본
+      to: section.subjectEventId || preview.length >= MIN_CHILD_TEXT ? 'CHILD' : 'DROP',
       ...draft,
     }
   })
+}
+
+/** 막지는 않지만 알려 줄 것 — 날짜 없는 하위는 전개 목록 끝 '날짜 미상'에 놓인다 */
+export function rowWarning(row: SplitRow): string | null {
+  if (row.to !== 'CHILD' || row.subjectEventId) return null
+  if (!row.start.trim()) return "시작 날짜가 없으면 전개 목록 맨 끝 '날짜 미상'에 놓입니다"
+  return null
 }
 
 /** 행 하나의 입력 오류 — 없으면 null */

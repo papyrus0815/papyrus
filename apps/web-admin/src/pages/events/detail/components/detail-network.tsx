@@ -25,6 +25,7 @@ import * as NetStyles from './detail-network.styles'
 import { type EventDetail, eventKeys } from '../use-event-detail'
 import { useEventRelations } from '../use-event-relations'
 import { ChildrenBlock } from './children-block'
+import { parseDateTokens } from './collection-development.lib'
 import {
   compareEventStart,
   crossPatchErrorMessage,
@@ -53,6 +54,18 @@ interface DetailNetworkProps {
   onPatch: (patch: UpdateEventDto, opts?: { savedLabel?: string }) => void
   /** 단일 사건의 '하위 사건으로 나누기' — 단일은 하위를 두지 않으므로 하위 블록 대신 이 진입점을 단다 */
   onRequestSplit?: () => void
+}
+
+/**
+ * 사건 기간 → 하위 모으기 후보 창(가운데 연도 ± 반폭 + 여유 5년). 서버 창 상한은 500년.
+ * 시작이 없으면 null(최근 수정순 그대로).
+ */
+function periodNear(event: EventDetail): { year: number; window: number } | null {
+  const start = parseDateTokens(event.startDate)
+  if (!start) return null
+  const end = parseDateTokens(event.endDate) ?? start
+  const half = Math.ceil(Math.abs(end.year - start.year) / 2)
+  return { year: Math.round((start.year + end.year) / 2), window: Math.min(half + 5, 500) }
 }
 
 /** 승격 픽커의 '모든 상위 해제' 탈출구 옵션 값 — 사건 id와 충돌하지 않는 sentinel. */
@@ -243,6 +256,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
     parentModalOpen,
     childModalOpen,
     extrasModalOpen,
+    childNear: periodNear(event),
   })
 
   // 크로스 사건 mutation 진행 가드 — confirm 연쇄·PUT 왕복 동안 재클릭 차단.

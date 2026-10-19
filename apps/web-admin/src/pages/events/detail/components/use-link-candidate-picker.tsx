@@ -27,6 +27,11 @@ interface UseLinkCandidatePickerArgs {
   parentModalOpen: boolean
   childModalOpen: boolean
   extrasModalOpen: boolean
+  /**
+   * 하위 모으기의 기본 목록을 이 시기 근처로 — 묶음 사건의 기간(가운데 연도 ± 반폭).
+   * 검색어가 있으면 쓰지 않는다(이름으로 찾을 땐 시기 밖도 나와야 한다). 없으면 최근 수정순.
+   */
+  childNear?: { year: number; window: number } | null
 }
 
 /**
@@ -47,6 +52,7 @@ export function useLinkCandidatePicker({
   parentModalOpen,
   childModalOpen,
   extrasModalOpen,
+  childNear = null,
 }: UseLinkCandidatePickerArgs) {
   const [searchTerm, setSearchTerm] = useState('')
   // 모달 열림/닫힘 시 debounced를 즉시 현재값으로 스냅 — 닫기 직전 검색어가 250ms
@@ -56,6 +62,8 @@ export function useLinkCandidatePicker({
     250,
     `${parentModalOpen}:${childModalOpen}:${extrasModalOpen}`,
   )
+  /* 하위 모으기 + 검색어 없음 — 묶음 기간 근처 사건부터(최근 수정순은 엉뚱한 세기를 보여 줬다) */
+  const nearForChildren = childModalOpen && !debouncedTerm.trim() ? childNear : null
   const {
     data: candidates = [],
     isLoading: eventsLoading,
@@ -65,7 +73,12 @@ export function useLinkCandidatePicker({
   } = useQuery({
     // ['events'] 프리픽스(eventKeys.lists()) 아래 — 사건 mutation 시 함께 무효화된다.
     // 상위·추가 상위를 고를 땐 묶음만 받는다(단일은 하위를 가질 수 없다 — 서버가 거부).
-    queryKey: eventKeys.linkCandidates(debouncedTerm, childModalOpen ? 'any' : 'COLLECTION'),
+    queryKey: eventKeys.linkCandidates(
+      debouncedTerm,
+      childModalOpen ? 'any' : 'COLLECTION',
+      nearForChildren?.year ?? null,
+      nearForChildren?.window ?? null,
+    ),
     // limit은 표시 상한(50)보다 1 크게 요청 — 정확히 50건일 때 '더 있음' 오탐을 피하고
     // (>50일 때만 절단), 51번째는 표시하지 않고 '더 있음' 신호로만 쓴다.
     queryFn: () =>
@@ -73,6 +86,8 @@ export function useLinkCandidatePicker({
         query: debouncedTerm,
         limit: 51,
         kind: childModalOpen ? undefined : 'COLLECTION',
+        near: nearForChildren?.year,
+        window: nearForChildren?.window,
       }),
     enabled: parentModalOpen || childModalOpen || extrasModalOpen,
     staleTime: 60_000,

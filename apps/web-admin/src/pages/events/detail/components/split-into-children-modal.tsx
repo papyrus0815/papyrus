@@ -25,6 +25,7 @@ import {
   buildSplitPayload,
   initialSplitRows,
   rowError,
+  rowWarning,
   summarizeRows,
 } from './split-plan.lib'
 
@@ -133,6 +134,8 @@ export function SplitIntoChildrenModal({ event, onClose }: SplitIntoChildrenModa
                         <RowIndex aria-hidden>{index + 1}</RowIndex>
                         <RowTitle>{row.sectionTitle || '(제목 없는 단락)'}</RowTitle>
                       </RowHead>
+                      {/* 본문을 보여야 '하위 사건감인지, 지워도 되는 메모인지'를 고를 수 있다 */}
+                      <Preview $empty={!row.preview}>{row.preview || '본문 없음'}</Preview>
                       <Targets role="radiogroup" aria-label={`${index + 1}번 단락의 행선지`}>
                         {TARGETS.map((target) => (
                           <TargetOption key={target.value} $active={row.to === target.value}>
@@ -184,6 +187,7 @@ export function SplitIntoChildrenModal({ event, onClose }: SplitIntoChildrenModa
                           </Fields>
                         ))}
                       {error && <ErrorText role="alert">{error}</ErrorText>}
+                      {!error && rowWarning(row) && <Note>{rowWarning(row)}</Note>}
                     </RowItem>
                   )
                 })}
@@ -261,6 +265,18 @@ const RowTitle = styled.span`
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow-wrap: anywhere;
+`
+
+const Preview = styled.p<{ $empty: boolean }>`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  font-style: ${({ $empty }) => ($empty ? 'italic' : 'normal')};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `
 
 const Targets = styled.div`

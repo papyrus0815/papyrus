@@ -15,13 +15,16 @@ import {
 } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
-import { type UpdateEventDto } from '@/shared/api/events'
+import { type UpdateEventDto, updateEvent } from '@/shared/api/events'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
 import { pathKeys } from '@/shared/router'
+import { InlineText } from '@/shared/ui/inline-edit'
+import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
-import { compareEventStart } from './detail-network.lib'
+import { PHASE_LABEL, groupByPhase } from './collection-development.lib'
+import { compareEventStart, crossPatchErrorMessage } from './detail-network.lib'
 
 const LazyEventRegisterModal = lazy(() =>
   import('@/widgets/event-form/ui/event-register-modal').then((module) => ({
@@ -50,6 +53,8 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   const queryClient = useQueryClient()
   const prefetchEvent = usePrefetchEventDetail()
   const [createOpen, setCreateOpen] = useState(false)
+  /** 요약을 쓰는 중인 하위 — 공용 인라인 칸은 연필 버튼(호버)으로만 열려, 빈 안내문을 눌러도 아무 일이 없었다 */
+  const [writingSummaryId, setWritingSummaryId] = useState<string | null>(null)
 
   const children = useMemo(
     () =>
@@ -81,6 +86,25 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
       ].sort((first, second) => compareEventStart(first.startDate, second.startDate)),
     [event.childEvents, event.extraChildren],
   )
+
+  /** 상위 기간에 비춘 구획 — 하나뿐이면(보통 전부 '기간 중') 구획 머리를 그리지 않는다 */
+  const groups = useMemo(() => groupByPhase(children, event), [children, event])
+  const showPhaseHeads = groups.length > 1
+
+  /**
+   * 하위 사건의 한 줄 요약을 여기서 바로 — 나누기로 만든 하위는 개요가 비어 제목만 남았다(13건).
+   * 하위 사건 자신의 PUT이라 상위 캐시와 그 하위 상세를 함께 무효화한다.
+   */
+  const saveChildDescription = async (childId: string, next: string) => {
+    try {
+      await updateEvent(childId, { description: next })
+      setWritingSummaryId(null)
+      invalidateEventQueries(queryClient, { eventId: event.id })
+      invalidateEventQueries(queryClient, { eventId: childId })
+    } catch (error) {
+      notify.error(`요약을 저장하지 못했습니다 — ${crossPatchErrorMessage(error)}`)
+    }
+  }
 
   const becomeSingle = () =>
     onPatch({ kind: 'SINGLE' } as UpdateEventDto, {
@@ -121,46 +145,79 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
           </EmptyActions>
         </Empty>
       ) : (
-        <Steps>
-          {children.map((child, index) => {
-            const dateLabel = child.startDate
-              ? formatDateRange(
-                  child.startDate,
-                  child.endDate ?? undefined,
-                  child.startDatePrecision,
-                  child.endDatePrecision,
-                )
-              : null
-            const category = resolveCategory(child.categoryName)
-            return (
-              <Step key={child.id}>
-                <StepIndex aria-hidden>{index + 1}</StepIndex>
-                <StepBody>
-                  <StepMeta>
-                    <span>{dateLabel ?? '날짜 미상'}</span>
-                    {child.categoryName && (
-                      <span>
-                        <span aria-hidden>{category.icon} </span>
-                        {child.categoryName}
-                      </span>
-                    )}
-                    {child.isCollection && <KindTag>묶음</KindTag>}
-                    {child.viaExtraLink && <span>추가 상위로 연결</span>}
-                  </StepMeta>
-                  <StepTitle
-                    to={pathKeys.events.detail(child.id)}
-                    viewTransition
-                    onMouseEnter={() => prefetchEvent(child.id)}
-                    onFocus={() => prefetchEvent(child.id)}
-                  >
-                    {child.title}
-                  </StepTitle>
-                  {child.description?.trim() && <StepText>{child.description}</StepText>}
-                </StepBody>
-              </Step>
-            )
-          })}
-        </Steps>
+        <Phases>
+          {groups.map((group) => (
+            <PhaseGroup key={group.phase} aria-label={showPhaseHeads ? PHASE_LABEL[group.phase] : undefined}>
+              {showPhaseHeads && (
+                <PhaseHead>
+                  {PHASE_LABEL[group.phase]}
+                  <PhaseCount>{group.items.length}</PhaseCount>
+                </PhaseHead>
+              )}
+              <Steps>
+                {group.items.map((child) => {
+                  const index = children.indexOf(child)
+                  const dateLabel = child.startDate
+                    ? formatDateRange(
+                        child.startDate,
+                        child.endDate ?? undefined,
+                        child.startDatePrecision,
+                        child.endDatePrecision,
+                      )
+                    : null
+                  const category = resolveCategory(child.categoryName)
+                  return (
+                    <Step key={child.id}>
+                      <StepIndex aria-hidden>{index + 1}</StepIndex>
+                      <StepBody>
+                        <StepMeta>
+                          <span>{dateLabel ?? '날짜 미상'}</span>
+                          {child.categoryName && (
+                            <span>
+                              <span aria-hidden>{category.icon} </span>
+                              {child.categoryName}
+                            </span>
+                          )}
+                          {child.isCollection && <KindTag>묶음</KindTag>}
+                          {child.viaExtraLink && <span>추가 상위로 연결</span>}
+                        </StepMeta>
+                        <StepTitle
+                          to={pathKeys.events.detail(child.id)}
+                          viewTransition
+                          onMouseEnter={() => prefetchEvent(child.id)}
+                          onFocus={() => prefetchEvent(child.id)}
+                        >
+                          {child.title}
+                        </StepTitle>
+                        {/* 있는 요약은 두 줄로 읽기만(고치기는 하위 상세에서) — 비어 있을 때만 여기서 쓴다.
+                            추가 상위로만 이어진 하위는 이 묶음의 소유가 아니라 쓰기를 열지 않는다 */}
+                        {child.description?.trim() ? (
+                          <StepText>{child.description}</StepText>
+                        ) : child.viaExtraLink ? null : writingSummaryId === child.id ? (
+                          <StepSummary>
+                            <InlineText
+                              value=""
+                              autoEdit
+                              onSave={(next) => void saveChildDescription(child.id, next)}
+                              placeholder="한 줄 요약 — 무슨 일이었나"
+                              label={`${child.title} 요약`}
+                              multiline
+                              minRows={2}
+                            />
+                          </StepSummary>
+                        ) : (
+                          <SummaryPrompt type="button" onClick={() => setWritingSummaryId(child.id)}>
+                            + 한 줄 요약 쓰기
+                          </SummaryPrompt>
+                        )}
+                      </StepBody>
+                    </Step>
+                  )
+                })}
+              </Steps>
+            </PhaseGroup>
+          ))}
+        </Phases>
       )}
 
       {createOpen && (
@@ -332,4 +389,63 @@ const StepText = styled.p`
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+`
+
+/** 빈 요약 자리 — 본문 위치에 놓인 '여기에 쓰세요' 한 줄(누르면 바로 입력칸) */
+const SummaryPrompt = styled.button`
+  align-self: flex-start;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-style: italic;
+  color: ${metaText};
+  cursor: text;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+`
+
+const StepSummary = styled.div`
+  font-size: 14px;
+  line-height: 1.65;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const Phases = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: ${S.PROSE_WIDTH}px;
+`
+
+const PhaseGroup = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+/** 구획 머리 — 상위 기간 기준 '시작 이전 · 기간 중 · 끝난 뒤'. 목록 행보다 작고 옅게 */
+const PhaseHead = styled.h3`
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const PhaseCount = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
 `
