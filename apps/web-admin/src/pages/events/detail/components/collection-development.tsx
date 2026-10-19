@@ -449,3 +449,62 @@ const PhaseCount = styled.span`
   font-variant-numeric: tabular-nums;
   color: ${metaText};
 `
+
+/**
+ * 묶음 사건의 '전체 글' 안내 — 배경·여파가 둘 다 비었을 때 개요 탭 머리에 한 줄.
+ *
+ * 묶음 사건은 전개를 하위 사건에 맡기므로, 이 사건 자신의 글은 '전체가 무엇이었고(개요) 왜
+ * 일어나(배경) 어떻게 끝났나(여파)'뿐이다. 1차세계대전은 하위 18건을 거느리면서 이 셋이 모두 0자였다.
+ */
+export function CollectionWholeTextNotice({
+  onWriteBackground,
+  onWriteAftermath,
+}: {
+  onWriteBackground: () => void
+  onWriteAftermath: () => void
+}) {
+  return (
+    <Notice role="note">
+      <NoticeText>
+        <b>전체에 대한 글이 비어 있습니다.</b> 전개는 하위 사건이 맡으니, 이 사건에는 왜 일어났는지(배경)와 어떻게
+        끝났는지(여파)를 씁니다.
+      </NoticeText>
+      <NoticeActions>
+        <TextButton type="button" onClick={onWriteBackground}>
+          배경 쓰기
+        </TextButton>
+        <TextButton type="button" onClick={onWriteAftermath}>
+          여파 쓰기
+        </TextButton>
+      </NoticeActions>
+    </Notice>
+  )
+}
+
+const Notice = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  max-width: ${S.PROSE_WIDTH}px;
+  padding: 10px 14px;
+  border-radius: ${RADIUS.SM};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+`
+
+const NoticeText = styled.p`
+  flex: 1 1 320px;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  b {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const NoticeActions = styled.div`
+  display: flex;
+  gap: 14px;
+`

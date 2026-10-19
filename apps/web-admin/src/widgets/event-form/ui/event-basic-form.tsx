@@ -300,6 +300,26 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     placeholderData: keepPreviousData,
     retry: 1,
   })
+  /*
+   * 상위 사건의 참여국 — 하위를 등록할 때 한 번에 불러오기. 나누기·등록으로 만든 하위가 참여국 없이
+   * 생겨 조망의 참여국 매트릭스에서 빠지던 것을 막는다. 자동으로 채우지는 않는다(1차대전처럼 15개국을
+   * 거느린 상위의 하위가 전부 15개국이 되면 안 된다) — 버튼으로만, 역할은 비워 둔다.
+   */
+  const { data: parentDetail } = useQuery({
+    ...eventDetailQueryOptions(parentEvent?.id ?? ''),
+    enabled: Boolean(parentEvent?.id) && !isEditMode,
+  })
+  const parentCountriesToImport = useMemo(() => {
+    if (!parentDetail) return []
+    const have = new Set(
+      relatedCountries.map((row) => (row.countryId ? `c:${row.countryId}` : `h:${row.historicalCountryId}`)),
+    )
+    return [
+      ...(parentDetail.relatedCountries ?? []).map((country) => ({ countryId: country.id })),
+      ...(parentDetail.relatedHistoricalCountries ?? []).map((country) => ({ historicalCountryId: country.id })),
+    ].filter((row) => !have.has('countryId' in row ? `c:${row.countryId}` : `h:${row.historicalCountryId}`))
+  }, [parentDetail, relatedCountries])
+
   const parentSearchPending =
     parentCandidatesFetching || parentSearchTerm !== debouncedParentTerm
 
@@ -706,6 +726,15 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         availableHistoricalCountries={availableHistoricalCountries}
         onOpenCountryModal={() => setShowCountryModal(true)}
         kindSlot={isEditMode ? undefined : { value: kind, onChange: setKind }}
+        parentCountriesSlot={
+          parentEvent && parentCountriesToImport.length > 0
+            ? {
+                count: parentCountriesToImport.length,
+                parentTitle: parentEvent.title,
+                onImport: () => setRelatedCountries([...relatedCountries, ...parentCountriesToImport]),
+              }
+            : undefined
+        }
         parentEventSlot={
           isEditMode
             ? undefined

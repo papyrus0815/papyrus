@@ -141,6 +141,13 @@ interface BasicInfoSectionProps {
     onClear: () => void
   }
 
+  /** 상위 사건의 참여국 불러오기 — 상위를 골랐고 아직 안 들어온 나라가 있을 때만 */
+  parentCountriesSlot?: {
+    count: number
+    parentTitle: string
+    onImport: () => void
+  }
+
   /**
    * 사건 종류(단일/묶음) — 신규 등록에서만. undefined면 행을 그리지 않는다(편집 모달: 전환은 상세 몫).
    */
@@ -192,6 +199,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   onOpenCountryModal,
   parentEventSlot,
   kindSlot,
+  parentCountriesSlot,
   playClickSound,
   getDateError,
   calculateDaysDifference,
@@ -715,6 +723,19 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   <FiPlus size={15} />
                   {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
                 </S.AddButton>
+                {parentCountriesSlot && (
+                  <S.AddButton
+                    type="button"
+                    title={`'${parentCountriesSlot.parentTitle}'의 참여국 중 아직 없는 나라를 넣습니다(역할은 비워 둠)`}
+                    onClick={() => {
+                      playClickSound()
+                      parentCountriesSlot.onImport()
+                    }}
+                  >
+                    <FiPlus size={15} />
+                    상위 사건 참여국 {parentCountriesSlot.count}개 불러오기
+                  </S.AddButton>
+                )}
                 {historicalLifespanWarnings.map((item) => (
                   <AlertBox
                     key={item.id}

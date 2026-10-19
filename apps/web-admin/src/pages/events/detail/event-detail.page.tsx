@@ -29,7 +29,10 @@ import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 
-import { CollectionDevelopment } from './components/collection-development'
+import {
+  CollectionDevelopment,
+  CollectionWholeTextNotice,
+} from './components/collection-development'
 import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
@@ -724,6 +727,13 @@ function EventDetailContent({
             >
               {activeTab === 'overview' && (
                 <>
+                  {/* 묶음 사건인데 배경·여파가 둘 다 비었으면 — 전체 글을 쓸 자리를 짚는다 */}
+                  {isCollection && !filled.background && !filled.aftermath && (
+                    <CollectionWholeTextNotice
+                      onWriteBackground={() => revealSection('background')}
+                      onWriteAftermath={() => revealSection('aftermath')}
+                    />
+                  )}
                   {/* 요약 — 히어로에서 옮겨 와 개요의 머리글이 된다(히어로는 제목·행위자·국가만) */}
                   <DetailSummary event={event} onPatch={onPatch} />
                   {/* 전개 타임라인(D2) — 하위 사건이 날짜를 가질 때만 */}
