@@ -196,6 +196,83 @@ export class GovernmentPositionController {
    * 군주 직(isMonarchical)은 SovereignReign 연표가 이미 싣으므로 뺀다 — 둘 다 실으면
    * 같은 즉위가 두 번 뜬다. 정의 없이 자유입력된 행만 재임 행의 positionType으로 판정한다.
    */
+  /**
+   * 직위 보유 연표 (경량) — GET /government-positions/office-holding-timeline
+   *
+   * 재위·재임이 한 테이블(직위 보유 단일 모델)이 된 뒤의 단일 피드. 군주직 행 전부 +
+   * 비군주직 국가원수·정부수반 행을 한 번에 싣고, 행마다 `isMonarchical`로 갈래를 알려 준다.
+   * 사건 목록의 즉위·취임 표지와 수장 지도가 sovereign-reigns + head-tenures 두 피드 대신 쓴다.
+   * 축(국가원수/정부수반)은 정의의 positionType이 진실 — 정의 없는 자유입력만 행의 값.
+   */
+  @Get('office-holding-timeline')
+  async listOfficeHoldingTimeline(): Promise<any[]> {
+    const HEAD_TYPES = ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'] as const
+    const rows = await this.prisma.governmentPositionTenure.findMany({
+      where: {
+        OR: [
+          reignWhere({ OR: [{ startDate: { not: null } }, { startYear: { not: null } }] }),
+          {
+            OR: [
+              {
+                positionDefinition: {
+                  is: { positionType: { in: [...HEAD_TYPES] }, isMonarchical: false },
+                },
+              },
+              { positionDefinitionId: null, positionType: { in: [...HEAD_TYPES] } },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        personId: true,
+        countryId: true,
+        historicalCountryId: true,
+        positionType: true,
+        title: true,
+        termNumber: true,
+        ordinal: true,
+        regnalName: true,
+        notes: true,
+        startDate: true,
+        startDatePrecision: true,
+        startEra: true,
+        startYear: true,
+        startMonth: true,
+        startDay: true,
+        endDate: true,
+        endEra: true,
+        endYear: true,
+        endMonth: true,
+        endDay: true,
+        positionDefinition: { select: { title: true, positionType: true, isMonarchical: true } },
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            middleName: true,
+            nameDisplayOrder: true,
+            regnalName: true,
+            templeName: true,
+            profileImageUrl: true,
+            isAlive: true,
+            deathDate: true,
+            deathDatePrecision: true,
+            deathEra: true,
+          },
+        },
+      },
+    })
+    return rows.map((row) => {
+      const isMonarchical = row.positionDefinition?.isMonarchical === true
+      // 군주직 행만 예전 재위 모양(regnalNumber = 대수·precision)으로, 나머지는 재임 행 그대로
+      return serializeBigInt({ ...(isMonarchical ? asReignRecord(row) : row), isMonarchical })
+    })
+  }
+
   @Get('head-tenures')
   async listHeadTenures(): Promise<any[]> {
     const HEAD_TYPES = ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'] as const

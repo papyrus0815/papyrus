@@ -672,8 +672,10 @@ export class CreateGovernmentPositionTenureDto {
   @IsString()
   personId!: string
 
+  /** 직위 종류 — 직위 정의를 주면 생략 가능(정의의 positionType을 쓴다) */
+  @IsOptional()
   @IsString()
-  positionType!: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | 'DEPUTY_HEAD_OF_STATE' | 'HEIR_APPARENT' | 'REGENT' | 'CABINET_MINISTER' | 'VICE_MINISTER' | 'LEGISLATOR' | 'JUDICIARY' | 'LOCAL_GOVERNMENT' | 'SPECIAL_POSITION' | 'DIPLOMATIC_POST' | 'MILITARY_COMMANDER' | 'ROYAL_NOBLE_TITLE' | 'OTHER' // 직위 타입 (Prisma GovernmentPositionType 미러)
+  positionType?: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | 'DEPUTY_HEAD_OF_STATE' | 'HEIR_APPARENT' | 'REGENT' | 'CABINET_MINISTER' | 'VICE_MINISTER' | 'LEGISLATOR' | 'JUDICIARY' | 'LOCAL_GOVERNMENT' | 'SPECIAL_POSITION' | 'DIPLOMATIC_POST' | 'MILITARY_COMMANDER' | 'ROYAL_NOBLE_TITLE' | 'OTHER' // 직위 타입 (Prisma GovernmentPositionType 미러)
 
   /** 직위명 — positionDefinitionId가 있으면 생략(정의에서 표시), 기타 직접 입력 시 필수 */
   @IsOptional()
@@ -713,8 +715,10 @@ export class CreateGovernmentPositionTenureDto {
   @IsNumber()
   regnalNumber?: number | null // 재위번호 (루이 14세의 "14")
 
+  /** 레거시 ISO 시작일. 구조화 startDateInfo가 오면 그쪽이 우선(BC·고대 가능) — 둘 중 하나는 필수 */
+  @IsOptional()
   @IsDateString()
-  startDate!: string // 취임일 (필수) — BC('-' 시작) 불가 (재임 모델에 era 컬럼 없음)
+  startDate?: string // 취임일 (필수) — BC('-' 시작) 불가 (재임 모델에 era 컬럼 없음)
 
   /** 취임일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움). 수정 시 null=해제(일 단위 복귀) */
   @IsOptional()
@@ -774,6 +778,35 @@ export class CreateGovernmentPositionTenureDto {
   @IsOptional()
   @IsIn(['UNKNOWN', 'ELECTION', 'APPOINTMENT', 'SUCCESSION', 'HEREDITARY', 'OTHER'])
   mandateSource?: 'UNKNOWN' | 'ELECTION' | 'APPOINTMENT' | 'SUCCESSION' | 'HEREDITARY' | 'OTHER'
+
+  // ── 직위 보유 단일 모델 이행 3단계 — 재위만 받던 칸을 재임도 받는다(재위 = 군주직 재임) ──
+
+  /** 구조화 시작 — era + 크기값 연/월/일. 있으면 startDate·startDatePrecision보다 우선 */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  startDateInfo?: DateInfoDto | null
+
+  /** 구조화 종료 — 있으면 endDate보다 우선 */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  endDateInfo?: DateInfoDto | null
+
+  /** 레거시 종료일 정밀도 — 생략하면 시작일 정밀도를 따른다 */
+  @IsOptional()
+  @IsIn(['year', 'month', 'day'])
+  endDatePrecision?: string | null
+
+  /** 재직명(왕호·교황명) — 루이 14세, 인노첸시오 3세 */
+  @IsOptional()
+  @IsString()
+  regnalName?: string | null
+
+  /** 왕조 내 순번 */
+  @IsOptional()
+  @IsNumber()
+  dynastyOrdinal?: number | null
 }
 
 /**

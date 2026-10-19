@@ -143,7 +143,7 @@ import {
   PersonAwardResponseDto,
   AllCareersResponseDto,
 } from '../presentation/dto'
-import { edgeFromInput, periodColumnsFromEdges, tenurePeriodColumns } from '../domain/tenure-period.util'
+import { edgeFromInput, periodColumnsFromEdges } from '../domain/tenure-period.util'
 import {
   MONARCHICAL_TENURE,
   NON_MONARCHICAL_TENURE,
@@ -2877,19 +2877,41 @@ export class PersonPrismaRepository implements IPersonRepository {
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
     })
-    const startDate = new Date(dto.startDate)
-    const endDate = dto.endDate ? new Date(dto.endDate) : null
+    // 직위 종류는 직위 정의가 정본 — 정의만 오면 정의의 positionType을 쓴다
+    const positionType =
+      dto.positionType ??
+      (dto.positionDefinitionId
+        ? (
+            await this.prisma.governmentPositionDefinition.findUnique({
+              where: { id: dto.positionDefinitionId },
+              select: { positionType: true },
+            })
+          )?.positionType
+        : undefined)
+    if (!positionType) {
+      throw new BadRequestException('직위 종류(positionType) 또는 직위 정의가 필요합니다')
+    }
+    // 기간 — 구조화(startDateInfo)가 오면 정본(BC·고대 가능), 아니면 레거시 ISO + 정밀도.
+    // 레거시는 예전처럼 DATETIME을 그대로 두고 구조화 칸·키는 파생한다(이행 1~3단계 공통 규칙)
+    const startEdge = edgeFromInput(dto.startDateInfo, dto.startDate, dto.startDatePrecision)
+    if (!startEdge) throw new BadRequestException('시작일(startDate 또는 startDateInfo)이 필요합니다')
+    const period = periodColumnsFromEdges(
+      startEdge,
+      edgeFromInput(dto.endDateInfo, dto.endDate, dto.endDatePrecision ?? dto.startDatePrecision),
+    )
+    if (!dto.startDateInfo && dto.startDate) {
+      period.startDate = new Date(dto.startDate)
+      period.startDatePrecision = (dto.startDatePrecision ?? null) as any
+    }
+    if (!dto.endDateInfo && dto.endDate) period.endDate = new Date(dto.endDate)
     const tenure = await this.prisma.governmentPositionTenure.create({
       data: {
-        // 직위 보유 단일 모델 이행 1단계 — 구조화 기간·정렬 키·대수를 DATETIME 입력에서 파생해 함께 쓴다
-        ...tenurePeriodColumns({
-          startDate,
-          startDatePrecision: dto.startDatePrecision,
-          endDate,
-        }),
+        ...period,
         ordinal: dto.termNumber ?? null,
+        regnalName: dto.regnalName ?? null,
+        dynastyOrdinal: dto.dynastyOrdinal ?? null,
         personId: dto.personId,
-        positionType: dto.positionType as any,
+        positionType: positionType as any,
         title: dto.title ?? undefined,
         titleEn: dto.titleEn ?? undefined,
         showPositionInfo: dto.showPositionInfo !== false, // 기본값 true
@@ -2901,9 +2923,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         termNumber: dto.termNumber,
         subTermNumber: dto.subTermNumber,
         regnalNumber: dto.regnalNumber,
-        startDate,
-        startDatePrecision: dto.startDatePrecision,
-        endDate: endDate ?? undefined,
         accessionEventId: dto.accessionEventId ?? undefined,
         appointmentMethod: dto.appointmentMethod as any,
         appointmentDetail: dto.appointmentDetail,
@@ -2962,16 +2981,25 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.countryId = countryFields.countryId ?? null
       updateData.historicalCountryId = countryFields.historicalCountryId ?? null
     }
-    if (dto.positionDefinitionId !== undefined) updateData.positionDefinitionId = dto.positionDefinitionId
+    if (dto.positionDefinitionId !== undefined) {
+      updateData.positionDefinitionId = dto.positionDefinitionId
+      // 직위 종류는 정의가 정본 — 정의만 바꾸고 종류를 안 보냈으면 정의를 따른다
+      if (!dto.positionType && dto.positionDefinitionId) {
+        const definition = await this.prisma.governmentPositionDefinition.findUnique({
+          where: { id: dto.positionDefinitionId },
+          select: { positionType: true },
+        })
+        if (definition) updateData.positionType = definition.positionType
+      }
+    }
     if (dto.termNumber !== undefined) {
       updateData.termNumber = dto.termNumber
       updateData.ordinal = dto.termNumber ?? null // 재임의 대수 = termNumber (이행 중 동기화)
     }
     if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
     if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
-    if (dto.startDate) updateData.startDate = new Date(dto.startDate)
-    if (dto.startDatePrecision !== undefined) updateData.startDatePrecision = dto.startDatePrecision
-    if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
+    if (dto.regnalName !== undefined) updateData.regnalName = dto.regnalName ?? null
+    if (dto.dynastyOrdinal !== undefined) updateData.dynastyOrdinal = dto.dynastyOrdinal ?? null
     if (dto.accessionEventId !== undefined) updateData.accessionEventId = dto.accessionEventId || null
     if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
     if (dto.appointmentDetail !== undefined) updateData.appointmentDetail = dto.appointmentDetail
@@ -2990,25 +3018,44 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.mandateSource = mandateResolved
     }
 
-    // 기간이 바뀌면 구조화 칸·정렬 키를 다시 파생 — 부분 수정이라 안 보낸 쪽은 저장값으로 채운다
-    const periodTouched =
-      dto.startDate !== undefined || dto.startDatePrecision !== undefined || dto.endDate !== undefined
-    if (periodTouched) {
+    // 기간 — 한쪽 끝만 바뀌어도 키·DATETIME·정밀도를 한 덩어리로 다시 계산(안 보낸 끝은 저장값).
+    // 구조화(…DateInfo)가 정본, 레거시 ISO는 예전처럼 DATETIME을 그대로 둔다
+    const startTouched =
+      dto.startDateInfo !== undefined || dto.startDate !== undefined || dto.startDatePrecision !== undefined
+    const endTouched =
+      dto.endDateInfo !== undefined || dto.endDate !== undefined || dto.endDatePrecision !== undefined
+    if (startTouched || endTouched) {
       const current = await this.prisma.governmentPositionTenure.findUnique({
         where: { id },
-        select: { startDate: true, startDatePrecision: true, endDate: true },
+        select: {
+          startDate: true, startDatePrecision: true,
+          startEra: true, startYear: true, startMonth: true, startDay: true,
+          endEra: true, endYear: true, endMonth: true, endDay: true,
+        },
       })
-      if (current) {
-        Object.assign(
-          updateData,
-          tenurePeriodColumns({
-            startDate: updateData.startDate ?? current.startDate,
-            startDatePrecision:
-              dto.startDatePrecision !== undefined ? dto.startDatePrecision : current.startDatePrecision,
-            endDate: dto.endDate !== undefined ? updateData.endDate : current.endDate,
-          }),
-        )
+      const stored = (era: any, year: number | null, month: number | null, day: number | null) =>
+        year == null ? null : { era: era ?? 'AD', year, month, day }
+      const legacyStartIso = dto.startDate ?? (dto.startDateInfo === undefined && current?.startDate ? current.startDate.toISOString() : null)
+      const startPrecision =
+        dto.startDatePrecision !== undefined ? dto.startDatePrecision : (current?.startDatePrecision ?? null)
+      const start = startTouched
+        ? edgeFromInput(dto.startDateInfo, legacyStartIso, startPrecision)
+        : stored(current?.startEra, current?.startYear ?? null, current?.startMonth ?? null, current?.startDay ?? null)
+      const end = endTouched
+        ? edgeFromInput(dto.endDateInfo, dto.endDate ?? null, dto.endDatePrecision ?? startPrecision)
+        : stored(current?.endEra, current?.endYear ?? null, current?.endMonth ?? null, current?.endDay ?? null)
+      const period: any = periodColumnsFromEdges(start, end)
+      if (startTouched && dto.startDateInfo === undefined) {
+        if (legacyStartIso) period.startDate = new Date(legacyStartIso)
+        period.startDatePrecision = startPrecision
       }
+      if (!startTouched) {
+        delete period.startDate
+        delete period.startDatePrecision
+      }
+      if (endTouched && dto.endDateInfo === undefined && dto.endDate) period.endDate = new Date(dto.endDate)
+      if (!endTouched) delete period.endDate
+      Object.assign(updateData, period)
     }
 
     const tenure = await this.prisma.governmentPositionTenure.update({
