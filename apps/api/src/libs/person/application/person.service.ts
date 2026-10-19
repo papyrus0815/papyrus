@@ -26,7 +26,6 @@ import {
   CreateEducationDto,
   CreatePersonAwardDto,
   CreateGovernmentPositionTenureDto,
-  CreateSovereignReignDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
@@ -765,29 +764,7 @@ export class PersonService {
   }
 
   /**
-   * 재위 업적 행의 소유권 검사 — 행→재위→인물→계정. assertTenureAchievementOwnershipById와 동형.
-   */
-  private async assertReignAchievementOwnershipById(
-    achievementId: string,
-    accountId?: string,
-  ): Promise<void> {
-    if (accountId == null) return
-    // 재위 업적은 이행 2단계부터 재임 업적 테이블에 있다(부모 = 군주직 재임)
-    const row = await this.prisma.tenureAchievement.findUnique({
-      where: { id: achievementId },
-      select: { tenure: { select: { person: { select: { accountId: true } } } } },
-    })
-    if (!row) {
-      throw new NotFoundException('업적을 찾을 수 없습니다.')
-    }
-    const ownerAccountId = row.tenure?.person?.accountId
-    if (ownerAccountId != null && ownerAccountId !== accountId) {
-      throw new ForbiddenException('본인이 등록한 인물의 항목만 수정·삭제할 수 있습니다.')
-    }
-  }
-
-  /**
-   * 연호 행의 소유권 검사 — 연호는 tenureId/sovereignReignId 중 한쪽만 설정되므로 둘 다 조회해 있는 쪽 경유.
+   * 연호 행의 소유권 검사 — 연호는 재임(재위 포함) 행에 매달려 있어 그 인물의 소유 계정을 본다.
    */
   private async assertRegnalEraOwnershipById(regnalEraId: string, accountId?: string): Promise<void> {
     if (accountId == null) return
@@ -795,13 +772,12 @@ export class PersonService {
       where: { id: regnalEraId },
       select: {
         tenure: { select: { person: { select: { accountId: true } } } },
-        sovereignReign: { select: { person: { select: { accountId: true } } } },
       },
     })
     if (!row) {
       throw new NotFoundException('연호·시대 정보를 찾을 수 없습니다.')
     }
-    const ownerAccountId = row.tenure?.person?.accountId ?? row.sovereignReign?.person?.accountId
+    const ownerAccountId = row.tenure?.person?.accountId
     if (ownerAccountId != null && ownerAccountId !== accountId) {
       throw new ForbiddenException('본인이 등록한 인물의 항목만 수정·삭제할 수 있습니다.')
     }
@@ -900,7 +876,7 @@ export class PersonService {
   /**
    * 국가원수/왕위 재임 기록 추가.
    * 정부 수반·국가 원수 재임(HEAD_OF_STATE/HEAD_OF_GOVERNMENT)은 기본적으로 행정부(Cabinet)를 자동 생성.
-   * 군주 재위만 기록할 때는 addSovereignReign을 사용합니다.
+   * 군주 재위도 같은 경로 — 직위 정의가 군주직이면 재위로 읽힌다(직위 보유 단일 모델).
    * @param accountId 로그인 계정 ID — 계정별 행정부·각료 구분용
    */
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto, accountId?: string): Promise<any> {
@@ -916,9 +892,13 @@ export class PersonService {
     const person = tenure?.person
     const label = person ? `${personDisplayName(person)} - ${tenurePositionTitle(tenure, '재임')}` : tenurePositionTitle(tenure, '재임 기록')
     await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenurePreview(tenure))
+    // 행정부는 비군주 수반에게만 — 군주 재위도 이 경로로 들어오므로(직위 보유 단일 모델) 군주직은 뺀다.
+    // 축은 저장된 행 기준(직위 정의에서 파생) — 요청에 positionType이 없어도 판정된다.
+    const savedType = tenure?.positionType ?? dto.positionType
     if (
       tenure &&
-      (dto.positionType === 'HEAD_OF_STATE' || dto.positionType === 'HEAD_OF_GOVERNMENT')
+      tenure.positionDefinition?.isMonarchical !== true &&
+      (savedType === 'HEAD_OF_STATE' || savedType === 'HEAD_OF_GOVERNMENT')
     ) {
       const existing = await this.personRepository.findCabinetByHeadTenureId(tenure.id)
       if (!existing) {
@@ -972,51 +952,6 @@ export class PersonService {
     await this.notificationService.notifyTenure(label, EventMethod.DELETE, tenure?.personId)
   }
 
-  /** 군주·재위 전용 기록 추가 (SovereignReign — 행정부와 별도 테이블) */
-  async addSovereignReign(dto: CreateSovereignReignDto, accountId?: string): Promise<any> {
-    await this.assertPersonOwnership(dto.personId, accountId)
-    const row = await this.personRepository.addSovereignReign(dto, accountId)
-    const person = row?.person
-    const label = person ? `${personDisplayName(person)} - 재위` : '재위 기록'
-    await this.notificationService.notifyTenure(
-      label,
-      EventMethod.CREATE,
-      row?.personId ?? row?.id,
-      tenurePreview(row),
-    )
-    return row
-  }
-
-  async updateSovereignReign(
-    id: string,
-    dto: Partial<CreateSovereignReignDto>,
-    accountId?: string,
-  ): Promise<any> {
-    await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, id, accountId)
-    const row = await this.personRepository.updateSovereignReign(id, dto)
-    const person = row?.person
-    const label = person ? `${personDisplayName(person)} - 재위` : '재위 기록'
-    await this.notificationService.notifyTenure(
-      label,
-      EventMethod.UPDATE,
-      row?.personId ?? row?.id,
-      tenurePreview(row),
-    )
-    return row
-  }
-
-  async deleteSovereignReign(id: string, accountId?: string): Promise<void> {
-    await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, id, accountId)
-    const row = await this.personRepository.findSovereignReignById(id)
-    if (!row) {
-      throw new NotFoundException('재위 기록을 찾을 수 없습니다.')
-    }
-    const person = row?.person
-    const label = person ? `${personDisplayName(person)} - 재위` : '재위 기록'
-    await this.personRepository.deleteSovereignReign(id)
-    await this.notificationService.notifyTenure(label, EventMethod.DELETE, row?.personId)
-  }
-
   /** 재임 1건 + 업적 조회 (없으면 404) */
   async getTenureWithAchievements(id: string): Promise<any> {
     const tenure = await this.personRepository.findTenureById(id)
@@ -1024,15 +959,6 @@ export class PersonService {
       throw new NotFoundException('재임 기록을 찾을 수 없습니다.')
     }
     return tenure
-  }
-
-  /** 재위 1건 + 업적 조회 (없으면 404) */
-  async getSovereignReignWithAchievements(id: string): Promise<any> {
-    const row = await this.personRepository.findSovereignReignById(id)
-    if (!row) {
-      throw new NotFoundException('재위 기록을 찾을 수 없습니다.')
-    }
-    return row
   }
 
   /**
@@ -1347,38 +1273,6 @@ export class PersonService {
     return this.personRepository.deleteTenureAchievement(tenureId, achievementId)
   }
 
-  async createSovereignReignAchievement(
-    sovereignReignId: string,
-    dto: CreateTenureAchievementDto,
-    accountId?: string,
-  ): Promise<any> {
-    await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, sovereignReignId, accountId)
-    return this.personRepository.createSovereignReignAchievement(sovereignReignId, dto)
-  }
-
-  async updateSovereignReignAchievement(
-    sovereignReignId: string,
-    achievementId: string,
-    dto: UpdateTenureAchievementDto,
-    accountId?: string,
-  ): Promise<any> {
-    await this.assertReignAchievementOwnershipById(achievementId, accountId)
-    return this.personRepository.updateSovereignReignAchievement(
-      sovereignReignId,
-      achievementId,
-      dto,
-    )
-  }
-
-  async deleteSovereignReignAchievement(
-    sovereignReignId: string,
-    achievementId: string,
-    accountId?: string,
-  ): Promise<void> {
-    await this.assertReignAchievementOwnershipById(achievementId, accountId)
-    return this.personRepository.deleteSovereignReignAchievement(sovereignReignId, achievementId)
-  }
-
   async createRegnalEra(tenureId: string, dto: CreateRegnalEraDto, accountId?: string): Promise<any> {
     await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, tenureId, accountId)
     try {
@@ -1386,22 +1280,6 @@ export class PersonService {
     } catch (e: any) {
       if (e?.message === 'GovernmentPositionTenure not found') {
         throw new NotFoundException('재임을 찾을 수 없습니다.')
-      }
-      throw e
-    }
-  }
-
-  async createRegnalEraForSovereignReign(
-    sovereignReignId: string,
-    dto: CreateRegnalEraDto,
-    accountId?: string,
-  ): Promise<any> {
-    await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, sovereignReignId, accountId)
-    try {
-      return await this.personRepository.createRegnalEra({ sovereignReignId }, dto)
-    } catch (e: any) {
-      if (e?.message === 'SovereignReign not found') {
-        throw new NotFoundException('재위 기록을 찾을 수 없습니다.')
       }
       throw e
     }

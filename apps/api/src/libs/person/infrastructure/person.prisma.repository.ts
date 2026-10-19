@@ -118,7 +118,6 @@ import {
   CreateEducationDto,
   CreatePersonAwardDto,
   CreateGovernmentPositionTenureDto,
-  CreateSovereignReignDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
@@ -4153,80 +4152,21 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
   }
 
-  async createSovereignReignAchievement(
-    sovereignReignId: string,
-    dto: CreateTenureAchievementDto,
-  ): Promise<any> {
-    // 재위 업적 = 군주직 재임의 업적 (재위 id = 이행된 재임 id)
-    const achievement = await this.prisma.tenureAchievement.create({
-      data: {
-        tenureId: sovereignReignId,
-        title: dto.title,
-        description: dto.description ?? undefined,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
-        orderNum: dto.orderNum ?? 0,
-        showOnEventsPage: dto.showOnEventsPage ?? true,
-        eventId: dto.eventId ?? undefined,
-      },
-    })
-    return serializeBigInt({ ...achievement, sovereignReignId })
-  }
-
-  async updateSovereignReignAchievement(
-    sovereignReignId: string,
-    achievementId: string,
-    dto: UpdateTenureAchievementDto,
-  ): Promise<any> {
-    const data: any = {}
-    if (dto.title !== undefined) data.title = dto.title
-    if (dto.description !== undefined) data.description = dto.description
-    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate) : null
-    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null
-    if (dto.orderNum !== undefined) data.orderNum = dto.orderNum
-    if (dto.showOnEventsPage !== undefined) data.showOnEventsPage = dto.showOnEventsPage
-    if (dto.eventId !== undefined) data.eventId = dto.eventId
-    const existing = await this.prisma.tenureAchievement.findFirst({
-      where: { id: achievementId, tenureId: sovereignReignId },
-    })
-    if (!existing) {
-      throw new Error('SovereignReignAchievement not found')
-    }
-    const achievement = await this.prisma.tenureAchievement.update({
-      where: { id: achievementId },
-      data,
-    })
-    return serializeBigInt({ ...achievement, sovereignReignId })
-  }
-
-  async deleteSovereignReignAchievement(
-    sovereignReignId: string,
-    achievementId: string,
-  ): Promise<void> {
-    await this.prisma.tenureAchievement.deleteMany({
-      where: { id: achievementId, tenureId: sovereignReignId },
-    })
-  }
-
   async createRegnalEra(
-    parent: { tenureId: string } | { sovereignReignId: string },
+    parent: { tenureId: string },
     dto: CreateRegnalEraDto,
   ): Promise<any> {
-    // 재위가 재임 테이블로 옮겨져 재위 id = 재임 id — 연호는 tenureId 하나로만 단다
-    const sovereignReignId = 'sovereignReignId' in parent ? parent.sovereignReignId : undefined
-    const tenureId = 'tenureId' in parent ? parent.tenureId : sovereignReignId
-    if (tenureId) {
-      const tenure = await this.prisma.governmentPositionTenure.findUnique({
-        where: { id: tenureId },
-        select: { id: true },
-      })
-      if (!tenure) {
-        throw new Error(sovereignReignId ? 'SovereignReign not found' : 'GovernmentPositionTenure not found')
-      }
+    const { tenureId } = parent
+    const tenure = await this.prisma.governmentPositionTenure.findUnique({
+      where: { id: tenureId },
+      select: { id: true },
+    })
+    if (!tenure) {
+      throw new Error('GovernmentPositionTenure not found')
     }
     const row = await this.prisma.regnalEra.create({
       data: {
-        tenureId: tenureId ?? null,
+        tenureId,
         eraName: dto.eraName.trim(),
         eraNameEn: dto.eraNameEn?.trim() || null,
         startYear: dto.startYear,
@@ -4950,180 +4890,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
 
     return serializeBigInt(merged)
-  }
-
-  /**
-   * 재위 쓰기는 재임 테이블로 간다 — 직위 보유 단일 모델 이행 2단계. 재위 = 군주직 재임 행.
-   * 응답은 asReignRecord로 예전 재위 모양(regnalNumber·precision)을 지킨다.
-   */
-  private static readonly REIGN_WRITE_INCLUDE = {
-    positionDefinition: true,
-    country: true,
-    historicalCountry: true,
-    person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
-    achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-    regnalEras: REGNAL_ERAS_ORDER,
-  } as const
-
-  /**
-   * 재위의 직위 정의 — 재임 행은 positionType이 필수이고, 군주직 판정은 정의에서 온다.
-   * 정의 없이 온 재위(옛 진입점)는 '국왕' 정의로 둔다 — 비워 두면 군주직이 아니라서 재위 목록에서 사라진다.
-   */
-  private async resolveReignDefinition(
-    positionDefinitionId: string | null | undefined,
-  ): Promise<{ id: string; positionType: GovernmentPositionType }> {
-    const definition = positionDefinitionId
-      ? await this.prisma.governmentPositionDefinition.findUnique({
-          where: { id: positionDefinitionId },
-          select: { id: true, positionType: true },
-        })
-      : await this.prisma.governmentPositionDefinition.findFirst({
-          where: { title: '국왕', isMonarchical: true },
-          select: { id: true, positionType: true },
-        })
-    if (!definition) {
-      throw new BadRequestException(`직위 정의를 찾을 수 없습니다: ${positionDefinitionId ?? '국왕'}`)
-    }
-    return definition
-  }
-
-  async addSovereignReign(dto: CreateSovereignReignDto, accountId?: string): Promise<any> {
-    const countryFields = await this.resolveTenureCountryFields({
-      countryId: dto.countryId,
-      historicalCountryId: dto.historicalCountryId,
-    })
-    const definition = await this.resolveReignDefinition(dto.positionDefinitionId)
-    // 구조화 채널(startDateInfo)이 오면 그것이 진실(BC·고대·연단위), 없으면 레거시 ISO + 정밀도.
-    // DATETIME은 구조화에서 파생(AD 1000 미만·BC는 NULL)
-    const period = periodColumnsFromEdges(
-      edgeFromInput(dto.startDateInfo, dto.startDate, dto.startDatePrecision),
-      edgeFromInput(dto.endDateInfo, dto.endDate, dto.endDatePrecision),
-    )
-    // 레거시 ISO 채널은 예전처럼 DATETIME을 그대로 둔다(1000년 이전도) — 기존 읽기 경로 호환
-    if (!dto.startDateInfo && dto.startDate) period.startDate = new Date(dto.startDate)
-    if (!dto.endDateInfo && dto.endDate) period.endDate = new Date(dto.endDate)
-    const row = await this.prisma.governmentPositionTenure.create({
-      data: {
-        personId: dto.personId,
-        positionType: definition.positionType,
-        positionDefinitionId: definition.id,
-        ...(countryFields.countryId != null && { countryId: countryFields.countryId }),
-        ...(countryFields.historicalCountryId != null && {
-          historicalCountryId: countryFields.historicalCountryId,
-        }),
-        // 재위의 regnalNumber는 대수 — 재임 테이블에서는 ordinal (재임 regnalNumber는 '이름 속 서수').
-        // 이행 중에는 재임 의미의 대수 칸(termNumber)도 같은 값으로 둔다
-        ordinal: dto.regnalNumber ?? null,
-        termNumber: dto.regnalNumber ?? null,
-        subTermNumber: dto.subTermNumber,
-        dynastyOrdinal: dto.dynastyOrdinal,
-        ...period,
-        accessionEventId: dto.accessionEventId ?? undefined,
-        appointmentMethod: dto.appointmentMethod as any,
-        appointmentDetail: dto.appointmentDetail,
-        endReason: dto.endReason as any,
-        endReasonDetail: dto.endReasonDetail,
-        notes: dto.notes,
-        regnalName: dto.regnalName ?? null,
-        showPositionInfo: dto.showPositionInfo !== false,
-        ...(accountId != null && { accountId }),
-      },
-      include: PersonPrismaRepository.REIGN_WRITE_INCLUDE,
-    })
-    return serializeBigInt(asReignRecord(row))
-  }
-
-  async updateSovereignReign(id: string, dto: Partial<CreateSovereignReignDto>): Promise<any> {
-    const updateData: any = {}
-    if (dto.countryId !== undefined || dto.historicalCountryId !== undefined) {
-      const countryFields = await this.resolveTenureCountryFields({
-        countryId: dto.countryId,
-        historicalCountryId: dto.historicalCountryId,
-      })
-      updateData.countryId = countryFields.countryId ?? null
-      updateData.historicalCountryId = countryFields.historicalCountryId ?? null
-    }
-    if (dto.personId !== undefined) updateData.personId = dto.personId
-    if (dto.positionDefinitionId !== undefined) {
-      const definition = await this.resolveReignDefinition(dto.positionDefinitionId || null)
-      updateData.positionDefinitionId = definition.id
-      updateData.positionType = definition.positionType
-    }
-    if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
-    if (dto.regnalNumber !== undefined) {
-      updateData.ordinal = dto.regnalNumber
-      updateData.termNumber = dto.regnalNumber
-    }
-    if (dto.dynastyOrdinal !== undefined) updateData.dynastyOrdinal = dto.dynastyOrdinal
-
-    // 기간: 한쪽 끝만 바뀌어도 키·DATETIME·정밀도를 한 덩어리로 다시 계산 — 안 보낸 끝은 저장값 유지
-    const startTouched =
-      dto.startDateInfo !== undefined || dto.startDate !== undefined || dto.startDatePrecision !== undefined
-    const endTouched =
-      dto.endDateInfo !== undefined || dto.endDate !== undefined || dto.endDatePrecision !== undefined
-    if (startTouched || endTouched) {
-      const current = await this.prisma.governmentPositionTenure.findUnique({
-        where: { id },
-        select: {
-          startEra: true, startYear: true, startMonth: true, startDay: true,
-          endEra: true, endYear: true, endMonth: true, endDay: true,
-        },
-      })
-      const stored = (era: any, year: number | null, month: number | null, day: number | null) =>
-        year == null ? null : { era: era ?? 'AD', year, month, day }
-      const start = startTouched
-        ? edgeFromInput(dto.startDateInfo, dto.startDate ?? null, dto.startDatePrecision)
-        : stored(current?.startEra, current?.startYear ?? null, current?.startMonth ?? null, current?.startDay ?? null)
-      const end = endTouched
-        ? edgeFromInput(dto.endDateInfo, dto.endDate ?? null, dto.endDatePrecision)
-        : stored(current?.endEra, current?.endYear ?? null, current?.endMonth ?? null, current?.endDay ?? null)
-      const period = periodColumnsFromEdges(start, end)
-      // 레거시 ISO 채널은 예전처럼 DATETIME을 그대로 둔다(1000년 이전도) — 기존 읽기 경로 호환
-      if (startTouched && dto.startDateInfo === undefined && dto.startDate) {
-        period.startDate = new Date(dto.startDate)
-      }
-      if (endTouched && dto.endDateInfo === undefined && dto.endDate) {
-        period.endDate = new Date(dto.endDate)
-      }
-      if (!startTouched) {
-        // 시작을 안 건드렸으면 저장된 시작 정밀도(옛 값)를 덮지 않는다
-        delete (period as any).startDatePrecision
-      }
-      Object.assign(updateData, period)
-    }
-    if (dto.accessionEventId !== undefined) updateData.accessionEventId = dto.accessionEventId || null
-    if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
-    if (dto.appointmentDetail !== undefined) updateData.appointmentDetail = dto.appointmentDetail
-    if (dto.endReason !== undefined) updateData.endReason = dto.endReason as any
-    if (dto.endReasonDetail !== undefined) updateData.endReasonDetail = dto.endReasonDetail
-    if (dto.notes !== undefined) updateData.notes = dto.notes
-    if (dto.regnalName !== undefined) updateData.regnalName = dto.regnalName ?? null
-    if (dto.showPositionInfo !== undefined) updateData.showPositionInfo = dto.showPositionInfo
-
-    const row = await this.prisma.governmentPositionTenure.update({
-      where: { id },
-      data: updateData,
-      include: PersonPrismaRepository.REIGN_WRITE_INCLUDE,
-    })
-    return serializeBigInt(asReignRecord(row))
-  }
-
-  async deleteSovereignReign(id: string): Promise<void> {
-    // 업적·연호는 재임 FK cascade로 함께 지워진다
-    await this.prisma.governmentPositionTenure.deleteMany({ where: reignWhere({ id }) })
-  }
-
-  async findSovereignReignById(id: string): Promise<any | null> {
-    const row = await this.prisma.governmentPositionTenure.findFirst({
-      where: reignWhere({ id }),
-      include: {
-        positionDefinition: true,
-        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
-        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-      },
-    })
-    if (!row) return null
-    return serializeBigInt(asReignRecord(row))
   }
 
   // ==================

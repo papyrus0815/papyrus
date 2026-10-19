@@ -19,7 +19,6 @@ import {
   CreatePersonLifeEventDto,
   CreateRegnalEraDto,
   CreateReligiousCareerDto,
-  CreateSovereignReignDto,
   CreateTenureAchievementDto,
   LegalCareerResponseDto,
   MediaCareerResponseDto,
@@ -494,34 +493,11 @@ export interface IPersonRepository {
     tenureId: string,
     achievementId: string,
   ): Promise<void>
-  createSovereignReignAchievement(
-    sovereignReignId: string,
-    dto: CreateTenureAchievementDto,
-  ): Promise<any>
-  updateSovereignReignAchievement(
-    sovereignReignId: string,
-    achievementId: string,
-    dto: UpdateTenureAchievementDto,
-  ): Promise<any>
-  deleteSovereignReignAchievement(
-    sovereignReignId: string,
-    achievementId: string,
-  ): Promise<void>
-  /** 연호·시대명 — 재임(GovernmentPositionTenure) 또는 재위(SovereignReign) 중 하나 */
+  /** 연호·시대명 — 재임(재위 포함) 행에 매단다 */
   createRegnalEra(
-    parent: { tenureId: string } | { sovereignReignId: string },
+    parent: { tenureId: string },
     dto: CreateRegnalEraDto,
   ): Promise<any>
-  addSovereignReign(
-    dto: CreateSovereignReignDto,
-    accountId?: string,
-  ): Promise<any>
-  updateSovereignReign(
-    id: string,
-    dto: Partial<CreateSovereignReignDto>,
-  ): Promise<any>
-  deleteSovereignReign(id: string): Promise<void>
-  findSovereignReignById(id: string): Promise<any | null>
   /**
    * 인물 연보(PersonLifeEvent) — 자유 서술형 시간축 기록
    */

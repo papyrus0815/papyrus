@@ -112,7 +112,6 @@ model Country {
   electoralDistricts      ElectoralDistrict[]              @relation("ElectoralDistrictCountry")
   elections                 Election[]                       @relation("ElectionCountry")
   governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
-  sovereignReigns           SovereignReign[]                 @relation("SovereignReignCountry")
   politicalSystems          PoliticalSystem[]                @relation("CountryPoliticalSystems")
   eventCountryRelations     EventCountryRelation[]
 

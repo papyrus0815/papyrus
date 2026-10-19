@@ -343,7 +343,6 @@ model Person {
   /// 선거 후보 이력
   electionCandidacies ElectionCandidacy[] @relation("ElectionCandidacies")
   GovernmentTenures        GovernmentPositionTenure[] @relation("PersonGovernmentTenure")
-  sovereignReigns          SovereignReign[]           @relation("PersonSovereignReign")
   lifeEvents               PersonLifeEvent[]          @relation("PersonLifeEvents")
   treatySignatories        TreatySignatory[]          @relation("TreatySignatoryPerson")
   /// 전기(생애 서술) 다중 섹션. EventSection 패턴 미러 — 업데이트 시 통째 delete-and-recreate.
@@ -418,7 +417,7 @@ model PersonSection {
 // ========================
 // PersonLifeEvent (인물 연보)
 // ========================
-/// 인물의 연도별 개인사/활동 기록. 재위(SovereignReign)·행정부 재임(GovernmentPositionTenure)·
+/// 인물의 연도별 개인사/활동 기록. 재위·재임(GovernmentPositionTenure)·
 /// 공식 사건(Event) 외의 자유 서술형 기록 — 예: "1820년 파리 유학", "1835년 저서 출간".
 model PersonLifeEvent {
   /// PK

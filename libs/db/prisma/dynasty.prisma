@@ -45,9 +45,9 @@ model Dynasty {
   /// 가문 시작일. AD 1000~9999 완전일자만 채운다 — BC·고대·연단위는 아래 구조화
   /// (startEra/startYear/...)가 진실. DATETIME은 드라이버가 연도<100을 2044로 손상시켜 nullable로 둔다.
   startDate DateTime? @map("start_date")
-  /// 시작일 정밀도 — 'year'면 연도만 앎, 'month'면 연·월, NULL/'day'=일 단위. Event·SovereignReign 선례 동형.
+  /// 시작일 정밀도 — 'year'면 연도만 앎, 'month'면 연·월, NULL/'day'=일 단위. Event·재위(재임) 선례 동형.
   startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
-  /// 구조화 시작일 — BC·고대·연단위 지원(DynastyRule·SovereignReign 선례 동형). year=크기값(양수), era=BC/AD.
+  /// 구조화 시작일 — BC·고대·연단위 지원(DynastyRule·재위(재임) 선례 동형). year=크기값(양수), era=BC/AD.
   /// AD1000+ 완전일자면 startDate(DATETIME)도 병행 채움(정렬·기존코드 호환); 그 밖은 이 Int 축이 유일 진실.
   startEra   Era? @map("start_era")
   startYear  Int? @map("start_year")

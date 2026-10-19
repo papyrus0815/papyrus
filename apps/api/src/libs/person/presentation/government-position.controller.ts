@@ -21,7 +21,6 @@ import { PersonService } from '../application/person.service'
 import { PrismaClient } from '@prisma/client'
 import {
   CreateGovernmentPositionTenureDto,
-  CreateSovereignReignDto,
   CreateGovernmentPositionDefinitionDto,
   CreateGovernmentPositionDefinitionScopeDto,
   CreateTenureAchievementDto,
@@ -45,14 +44,20 @@ const serializeBigInt = (obj: any): any => {
 }
 
 /**
- * 재임·재위 날짜의 BC('-' 시작) 문자열 명시 거부.
- * 생몰일과 달리 재임 모델(GovernmentPositionTenure/SovereignReign)에는 era 컬럼이 없어 BC를 표현할 수 없고,
- * 네이티브 Date 파싱 시 음수 부호가 조용히 무시돼 AD로 둔갑 저장되므로 400으로 막는다.
+ * 재임·재위 날짜의 BC('-' 시작) **ISO 문자열** 명시 거부.
+ * 레거시 문자열 채널은 네이티브 Date 파싱 때 음수 부호가 조용히 사라져 AD로 둔갑 저장되므로 400으로 막는다.
+ * 구조화 채널(startDateInfo/endDateInfo)은 era 칸에 BC를 그대로 담으므로, 그쪽이 오면 같은 끝의 문자열은 보지 않는다.
  */
-function assertNoBcTenureDates(dto: { startDate?: string | null; endDate?: string | null }): void {
-  for (const v of [dto.startDate, dto.endDate]) {
-    if (typeof v === 'string' && v.trim().startsWith('-')) {
-      throw new BadRequestException('재임·재위 날짜는 기원전(BC) 날짜를 지원하지 않습니다.')
+function assertNoBcTenureDates(dto: {
+  startDate?: string | null
+  endDate?: string | null
+  startDateInfo?: unknown
+  endDateInfo?: unknown
+}): void {
+  const legacyStrings = [dto.startDateInfo ? null : dto.startDate, dto.endDateInfo ? null : dto.endDate]
+  for (const value of legacyStrings) {
+    if (typeof value === 'string' && value.trim().startsWith('-')) {
+      throw new BadRequestException('재임·재위 날짜는 기원전(BC)을 문자열로 받지 않습니다 — 구조화 날짜(startDateInfo)로 보내 주세요.')
     }
   }
 }
@@ -135,73 +140,11 @@ export class GovernmentPositionController {
   }
 
   /**
-   * 군주 재위 연표 (경량) — GET /government-positions/sovereign-reigns
-   *
-   * 사건 목록이 연대 흐름 사이에 '즉위' 구분선을 끼워 넣는 데 쓴다. 날짜는 구조화 축
-   * (Era/Year/Month/Day)까지 싣는다 — BC·고대·연단위 재위는 startDate가 NULL이다.
-   * 즉위일을 전혀 모르는 기록은 연표에 놓을 수 없으므로 뺀다.
-   */
-  @Get('sovereign-reigns')
-  async listSovereignReigns(): Promise<any[]> {
-    // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
-    const reigns = await this.prisma.governmentPositionTenure.findMany({
-      where: reignWhere({ OR: [{ startDate: { not: null } }, { startYear: { not: null } }] }),
-      select: {
-        id: true,
-        personId: true,
-        countryId: true,
-        historicalCountryId: true,
-        regnalName: true,
-        notes: true,
-        startDate: true,
-        startDatePrecision: true,
-        startEra: true,
-        startYear: true,
-        startMonth: true,
-        startDay: true,
-        endDate: true,
-        endEra: true,
-        endYear: true,
-        endMonth: true,
-        endDay: true,
-        country: { select: { id: true, name: true } },
-        historicalCountry: { select: { id: true, name: true } },
-        person: {
-          select: {
-            id: true,
-            name: true,
-            surname: true,
-            middleName: true,
-            nameDisplayOrder: true,
-            regnalName: true,
-            templeName: true,
-            // 목록 즉위 말풍선의 초상 — 말풍선이 '누가 말하는지'를 얼굴로 보인다
-            profileImageUrl: true,
-            isAlive: true,
-            deathDate: true,
-            deathDatePrecision: true,
-            deathEra: true,
-          },
-        },
-      },
-    })
-    return reigns.map((row) => serializeBigInt(asReignRecord(row)))
-  }
-
-  /**
-   * 대통령·총리 취임 연표 (경량) — GET /government-positions/head-tenures
-   *
-   * 사건 목록이 군주 '즉위' 말풍선 옆에 공화국 원수·정부 수반의 '취임'을 끼워 넣는 데 쓴다.
-   * 축은 **정의의** positionType이 진실이다(재임 행의 positionType은 어긋난 행이 있다).
-   * 군주 직(isMonarchical)은 SovereignReign 연표가 이미 싣으므로 뺀다 — 둘 다 실으면
-   * 같은 즉위가 두 번 뜬다. 정의 없이 자유입력된 행만 재임 행의 positionType으로 판정한다.
-   */
-  /**
    * 직위 보유 연표 (경량) — GET /government-positions/office-holding-timeline
    *
    * 재위·재임이 한 테이블(직위 보유 단일 모델)이 된 뒤의 단일 피드. 군주직 행 전부 +
    * 비군주직 국가원수·정부수반 행을 한 번에 싣고, 행마다 `isMonarchical`로 갈래를 알려 준다.
-   * 사건 목록의 즉위·취임 표지와 수장 지도가 sovereign-reigns + head-tenures 두 피드 대신 쓴다.
+   * 사건 목록의 즉위·취임 표지와 수장 지도가 쓴다(옛 sovereign-reigns·head-tenures 두 피드를 대체).
    * 축(국가원수/정부수반)은 정의의 positionType이 진실 — 정의 없는 자유입력만 행의 값.
    */
   @Get('office-holding-timeline')
@@ -271,56 +214,6 @@ export class GovernmentPositionController {
       // 군주직 행만 예전 재위 모양(regnalNumber = 대수·precision)으로, 나머지는 재임 행 그대로
       return serializeBigInt({ ...(isMonarchical ? asReignRecord(row) : row), isMonarchical })
     })
-  }
-
-  @Get('head-tenures')
-  async listHeadTenures(): Promise<any[]> {
-    const HEAD_TYPES = ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'] as const
-    const tenures = await this.prisma.governmentPositionTenure.findMany({
-      where: {
-        OR: [
-          {
-            positionDefinition: {
-              positionType: { in: [...HEAD_TYPES] },
-              isMonarchical: false,
-            },
-          },
-          { positionDefinitionId: null, positionType: { in: [...HEAD_TYPES] } },
-        ],
-      },
-      select: {
-        id: true,
-        personId: true,
-        countryId: true,
-        historicalCountryId: true,
-        positionType: true,
-        title: true,
-        termNumber: true,
-        // 재임 행은 구조화 날짜축이 없다(BC 재임은 미계획) — 대통령·총리는 전부 AD라
-        // DATETIME + 정밀도로 충분하다.
-        startDate: true,
-        startDatePrecision: true,
-        endDate: true,
-        positionDefinition: { select: { title: true, positionType: true } },
-        country: { select: { id: true, name: true } },
-        historicalCountry: { select: { id: true, name: true } },
-        person: {
-          select: {
-            id: true,
-            name: true,
-            surname: true,
-            middleName: true,
-            nameDisplayOrder: true,
-            profileImageUrl: true,
-            isAlive: true,
-            deathDate: true,
-            deathDatePrecision: true,
-            deathEra: true,
-          },
-        },
-      },
-    })
-    return tenures.map(serializeBigInt)
   }
 
   /**
@@ -722,85 +615,6 @@ export class GovernmentPositionController {
     return this.personService.getTenureWithAchievements(id)
   }
 
-  /** 군주·재위 전용 기록 추가 (SovereignReign — 행정부와 별도 테이블) */
-  @Post('sovereign-reigns')
-  async addSovereignReign(@Req() req: Request, @Body() dto: CreateSovereignReignDto): Promise<any> {
-    // 구조화 채널(startDateInfo/endDateInfo)은 era 컬럼으로 BC를 안전 저장 → 게이트 면제.
-    // 레거시 ISO 문자열만 여전히 BC 차단(음수 부호가 DATETIME에서 소실되므로).
-    assertNoBcTenureDates({
-      startDate: dto.startDateInfo ? null : dto.startDate,
-      endDate: dto.endDateInfo ? null : dto.endDate,
-    })
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    const result = await this.personService.addSovereignReign(dto, accountId)
-    return serializeBigInt(result)
-  }
-
-  @Put('sovereign-reigns/:id')
-  async updateSovereignReign(
-    @Req() req: Request,
-    @Param('id') id: string,
-    @Body() dto: Partial<CreateSovereignReignDto>,
-  ): Promise<any> {
-    assertNoBcTenureDates({
-      startDate: dto.startDateInfo ? null : dto.startDate,
-      endDate: dto.endDateInfo ? null : dto.endDate,
-    })
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    const result = await this.personService.updateSovereignReign(id, dto, accountId)
-    return serializeBigInt(result)
-  }
-
-  @Delete('sovereign-reigns/:id')
-  async deleteSovereignReign(@Req() req: Request, @Param('id') id: string): Promise<void> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    await this.personService.deleteSovereignReign(id, accountId)
-  }
-
-  /** 재위 1건 + 업적 조회 (수장 비교 등 읽기 팝오버용) */
-  @Get('sovereign-reigns/:id/with-achievements')
-  async getSovereignReignWithAchievements(@Param('id') id: string): Promise<any> {
-    return this.personService.getSovereignReignWithAchievements(id)
-  }
-
-  @Post('sovereign-reigns/:sovereignReignId/achievements')
-  async addSovereignReignAchievement(
-    @Req() req: Request,
-    @Param('sovereignReignId') sovereignReignId: string,
-    @Body() dto: CreateTenureAchievementDto,
-  ): Promise<any> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    const result = await this.personService.createSovereignReignAchievement(sovereignReignId, dto, accountId)
-    return serializeBigInt(result)
-  }
-
-  @Patch('sovereign-reigns/:sovereignReignId/achievements/:achievementId')
-  async updateSovereignReignAchievement(
-    @Req() req: Request,
-    @Param('sovereignReignId') sovereignReignId: string,
-    @Param('achievementId') achievementId: string,
-    @Body() dto: UpdateTenureAchievementDto,
-  ): Promise<any> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    const result = await this.personService.updateSovereignReignAchievement(
-      sovereignReignId,
-      achievementId,
-      dto,
-      accountId,
-    )
-    return serializeBigInt(result)
-  }
-
-  @Delete('sovereign-reigns/:sovereignReignId/achievements/:achievementId')
-  async deleteSovereignReignAchievement(
-    @Req() req: Request,
-    @Param('sovereignReignId') sovereignReignId: string,
-    @Param('achievementId') achievementId: string,
-  ): Promise<void> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    await this.personService.deleteSovereignReignAchievement(sovereignReignId, achievementId, accountId)
-  }
-
   /**
    * 재임 업적·한일 추가 (사건과 별도 개념, 재위 기간 중 한 일)
    */
@@ -879,17 +693,6 @@ export class GovernmentPositionController {
   ): Promise<any> {
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const result = await this.personService.createRegnalEra(tenureId, dto, accountId)
-    return serializeBigInt(result)
-  }
-
-  @Post('sovereign-reigns/:sovereignReignId/regnal-eras')
-  async addSovereignReignRegnalEra(
-    @Req() req: Request,
-    @Param('sovereignReignId') sovereignReignId: string,
-    @Body() dto: CreateRegnalEraDto,
-  ): Promise<any> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    const result = await this.personService.createRegnalEraForSovereignReign(sovereignReignId, dto, accountId)
     return serializeBigInt(result)
   }
 

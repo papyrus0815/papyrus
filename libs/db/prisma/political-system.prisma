@@ -90,7 +90,7 @@ model PoliticalSystem {
   name String? @db.VarChar(120)
 
   //--- 존속 기간 (BC·고대·연단위 지원)
-  /// SovereignReign과 달리 DATETIME 거울 컬럼을 두지 않는다. 정체는 사실상 연 단위로만
+  /// 재임(재위)과 달리 DATETIME 거울 컬럼을 두지 않는다. 정체는 사실상 연 단위로만
   /// 기록되고, 레거시 소비자가 없어 구조화 Int 축 하나만 진실로 두는 편이 안전하다
   /// (드라이버가 연도<100 DATETIME을 손상시키는 함정을 아예 만들지 않는다).
   startEra   Era? @map("start_era")
