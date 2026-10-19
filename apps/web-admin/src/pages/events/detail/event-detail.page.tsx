@@ -43,6 +43,7 @@ import {
 import { DetailNarrative } from './components/detail-narrative'
 import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
+import { EventKindGuideModal } from './components/event-kind-guide-modal'
 import { DetailFacts } from './components/detail-facts'
 import { DetailOrganizations } from './components/detail-organizations'
 import { DetailPower, hasPowerData } from './components/detail-power'
@@ -401,6 +402,8 @@ function EventDetailContent({
     isEventTab(tabParam) && visibleTabs.some((tab) => tab.id === tabParam) ? tabParam : 'overview'
   /** '하위 사건으로 나누기'(단일 → 묶음) 모달 */
   const [splitOpen, setSplitOpen] = useState(false)
+  /** 사건 종류 안내(머리의 '단일 사건 ?'·'최상위 사건 ?') */
+  const [kindGuideOpen, setKindGuideOpen] = useState(false)
   const setActiveTab = useCallback(
     (next: EventTabId) =>
       setSearchParams(
@@ -677,6 +680,7 @@ function EventDetailContent({
               withSummary={false}
               onShowActors={() => setActiveTab('actors')}
               onOpenMedia={() => setActiveTab('media')}
+              onOpenKindGuide={() => setKindGuideOpen(true)}
             />
 
             <S.TabsArea>
@@ -911,6 +915,19 @@ function EventDetailContent({
       </S.Page>
 
       {splitOpen && <SplitIntoChildrenModal event={event} onClose={() => setSplitOpen(false)} />}
+      <EventKindGuideModal
+        event={event}
+        isOpen={kindGuideOpen}
+        onClose={() => setKindGuideOpen(false)}
+        onSplit={() => setSplitOpen(true)}
+        onGoToDevelopment={() => revealSection('narrative')}
+        onGoToLinks={() => revealSection('network')}
+        onBecomeSingle={() =>
+          onPatch({ kind: 'SINGLE' } as UpdateEventDto, {
+            savedLabel: `'${event.title}'을(를) 단일 사건으로 바꿈`,
+          })
+        }
+      />
       <PersonDetailModal personId={viewingPersonId} onClose={onPersonModalClose} />
       <CountryInfoModal
         event={event}

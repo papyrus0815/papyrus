@@ -1,7 +1,7 @@
 import { type MouseEvent } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiArrowLeft, FiAward } from 'react-icons/fi'
+import { FiArrowLeft, FiAward, FiHelpCircle } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -60,6 +60,8 @@ interface DetailHeroProps {
   onShowActors?: () => void
   /** 대표 이미지를 누르면 — 자료 탭. 주면 히어로에 대표 이미지 칸이 선다(탭 지면) */
   onOpenMedia?: () => void
+  /** 종류 표지('단일 사건 ?'·'최상위 사건 ?')를 누르면 — 사건 종류 안내 창. 주면 윗줄 끝에 선다 */
+  onOpenKindGuide?: () => void
 }
 
 /**
@@ -79,6 +81,7 @@ export function DetailHero({
   withSummary = true,
   onShowActors,
   onOpenMedia,
+  onOpenKindGuide,
 }: DetailHeroProps) {
   const prefetchEvent = usePrefetchEventDetail()
   const { data: categories = [] } = useQuery({
@@ -120,6 +123,9 @@ export function DetailHero({
   const categoryOptions: InlineSelectOption[] = categories.map(
     (cat: EventCategoryDto) => ({ value: cat.id, label: cat.name }),
   )
+
+  const kindLabel =
+    event.kind === 'COLLECTION' ? (event.parentEvent ? '묶음 사건' : '최상위 사건') : '단일 사건'
 
   return (
     <S.Hero>
@@ -171,6 +177,19 @@ export function DetailHero({
               </ExtraParentBadge>
             )}
           </S.Breadcrumb>
+        )}
+
+        {/* 종류 표지 + 안내 — '최상위 사건은 어떻게 만드나'를 버튼을 찾아다니지 않고 여기서 */}
+        {onOpenKindGuide && (
+          <KindGuideButton
+            type="button"
+            onClick={onOpenKindGuide}
+            aria-label={`사건 종류 안내 — 지금 ${kindLabel}`}
+            title="단일 사건과 묶음(최상위) 사건 — 어떻게 바꾸나요?"
+          >
+            {kindLabel}
+            <FiHelpCircle aria-hidden />
+          </KindGuideButton>
         )}
       </S.HeroTopRow>
 
@@ -733,6 +752,36 @@ const SummaryHost = styled.div`
   line-height: 1.65;
   color: ${({ theme }) => theme.colors.text.secondary};
   max-width: ${S.PROSE_WIDTH}px;
+`
+
+/** 종류 표지 겸 '?' 안내 버튼 — 윗줄 끝. 상태(무슨 종류)와 길잡이(어떻게 바꾸나)를 한 버튼에 */
+const KindGuideButton = styled.button`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
 `
 
 const BackLink = styled(Link)`
