@@ -12,8 +12,9 @@ import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllEventsExhaustive } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import {
-  getHeadTenureTimeline,
-  getSovereignReignTimeline,
+  getOfficeHoldingTimeline,
+  officeHoldingTimelineKey,
+  splitOfficeHoldingTimeline,
 } from '@/shared/api/sovereign-reigns'
 import { treatyApi } from '@/shared/api/treaty'
 
@@ -48,16 +49,13 @@ export function useAtlasSources() {
     queryFn: getAllHistoricalCountries,
     staleTime: STALE_MS,
   })
-  const reigns = useQuery({
-    queryKey: ['sovereign-reign-timeline'],
-    queryFn: getSovereignReignTimeline,
+  // 재위·재임 단일 피드 — 사건 목록 즉위 표지와 같은 캐시
+  const officeHoldings = useQuery({
+    queryKey: officeHoldingTimelineKey,
+    queryFn: getOfficeHoldingTimeline,
     staleTime: STALE_MS,
   })
-  const heads = useQuery({
-    queryKey: ['head-tenure-timeline'],
-    queryFn: getHeadTenureTimeline,
-    staleTime: STALE_MS,
-  })
+  const split = splitOfficeHoldingTimeline(officeHoldings.data)
   const events = useQuery({
     queryKey: eventKeys.reignAtlas(),
     queryFn: () => getAllEventsExhaustive({ includeSubEvents: true }),
@@ -72,13 +70,13 @@ export function useAtlasSources() {
   return {
     // 역사국가 SDK 타입엔 좌표가 build:nestia 전까지 없을 수 있어 구조 타입으로 읽는다
     countries: (countries.data ?? []) as unknown as AtlasCountryInput[],
-    reigns: (reigns.data ?? []) as AtlasRulerInput[],
-    heads: (heads.data ?? []) as AtlasRulerInput[],
+    reigns: split.reigns as AtlasRulerInput[],
+    heads: split.heads as AtlasRulerInput[],
     events: (events.data ?? []) as unknown as AtlasEventInput[],
     treaties: (treaties.data ?? []) as unknown as AtlasTreatyInput[],
     /** 지도 골격(나라·수장)이 준비됐나 — 관계선은 늦게 와도 된다 */
-    isBaseLoading: countries.isLoading || reigns.isLoading || heads.isLoading,
+    isBaseLoading: countries.isLoading || officeHoldings.isLoading,
     isRelationsLoading: events.isLoading || treaties.isLoading,
-    error: countries.error ?? reigns.error ?? heads.error ?? null,
+    error: countries.error ?? officeHoldings.error ?? null,
   }
 }

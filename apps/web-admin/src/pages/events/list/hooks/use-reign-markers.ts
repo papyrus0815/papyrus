@@ -13,8 +13,9 @@ import type { FlattenedHierarchyItem } from '@/features/event-hierarchy/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
 import { companyApi } from '@/shared/api/company'
 import {
-  getHeadTenureTimeline,
-  getSovereignReignTimeline,
+  getOfficeHoldingTimeline,
+  officeHoldingTimelineKey,
+  splitOfficeHoldingTimeline,
 } from '@/shared/api/sovereign-reigns'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -32,9 +33,6 @@ import {
 } from '@/widgets/event-list-compact/lib/reign-markers'
 
 import type { HistoricalEvent } from '../../create/events.types'
-
-export const sovereignReignTimelineKey = ['sovereign-reign-timeline'] as const
-export const headTenureTimelineKey = ['head-tenure-timeline'] as const
 
 const NO_MARKERS: ReignMarker[] = []
 
@@ -62,17 +60,16 @@ export function useReignMarkers(
   selectedCountry: string,
   historicalCountries: readonly HistoricalCountryTimelineItem[] = [],
 ): ReignMarker[] {
-  const { data: reigns } = useQuery({
-    queryKey: sovereignReignTimelineKey,
-    queryFn: getSovereignReignTimeline,
+  /* 군주 즉위 + 대통령·총리 '취임' — 직위 보유 단일 피드를 군주직 여부로 가른다 */
+  const { data: officeHoldings } = useQuery({
+    queryKey: officeHoldingTimelineKey,
+    queryFn: getOfficeHoldingTimeline,
     staleTime: 5 * 60 * 1000,
   })
-  /* 대통령·총리 — 군주 즉위 말풍선과 같은 자리에 '취임'으로 선다 */
-  const { data: heads } = useQuery({
-    queryKey: headTenureTimelineKey,
-    queryFn: getHeadTenureTimeline,
-    staleTime: 5 * 60 * 1000,
-  })
+  const { reigns, heads } = useMemo(
+    () => splitOfficeHoldingTimeline(officeHoldings),
+    [officeHoldings],
+  )
 
   /* 기업 설립 — 기업 목록·사이드바와 같은 캐시(['companies','all'])를 쓴다 */
   const { data: companies } = useQuery({

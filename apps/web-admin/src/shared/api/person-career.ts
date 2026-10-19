@@ -303,7 +303,27 @@ export type UpdateGovernmentPositionTenureDto = Partial<
   notes?: string | null
 }
 
-/** 군주·재위 전용 (SovereignReign API) — 행정부 재임과 별도 테이블 */
+/**
+ * 재위 입력 → 재임 엔드포인트 본문. 재위는 군주직 재임 행이다(직위 보유 단일 모델 이행 3단계).
+ * - 재위의 대수(regnalNumber) → 재임의 대수 칸(termNumber). 재임의 regnalNumber는 '이름 속 서수'라 보내지 않는다.
+ * - 재위의 termNumber는 뜻이 없던 칸이라 버린다.
+ * - positionType은 보내지 않는다 — 서버가 직위 정의에서 정한다.
+ */
+function reignToTenurePayload(
+  dto: CreateSovereignReignDto | UpdateSovereignReignDto,
+): Record<string, unknown> {
+  const { regnalNumber, termNumber: _unusedReignTermNumber, ...rest } = dto
+  return regnalNumber === undefined ? rest : { ...rest, termNumber: regnalNumber }
+}
+
+/** 재임 응답 → 예전 재위 응답 모양 (대수 = ordinal) */
+function tenureToReignShape<T>(row: T): T {
+  if (!row || typeof row !== 'object') return row
+  const record = row as Record<string, unknown>
+  return { ...record, regnalNumber: record.ordinal ?? record.termNumber ?? null } as T
+}
+
+/** 군주·재위 입력 — 저장은 재임 엔드포인트(재위 = 군주직 재임 행) */
 export interface CreateSovereignReignDto {
   personId: string
   countryId?: string
@@ -830,12 +850,16 @@ export const personCareerApi = {
     await apiClient.delete(`/government-positions/tenures/${id}`)
   },
 
+  /**
+   * 군주 재위 등록 — 재위는 군주직 재임 행이다(직위 보유 단일 모델). 재임 엔드포인트로 쓴다.
+   * 재위의 대수(regnalNumber)는 재임의 대수 칸(termNumber)으로 보낸다.
+   */
   addSovereignReign: async (dto: CreateSovereignReignDto) => {
     const response = await apiClient.post(
-      '/government-positions/sovereign-reigns',
-      dto,
+      '/government-positions/tenures',
+      reignToTenurePayload(dto),
     )
-    return response.data
+    return tenureToReignShape(response.data)
   },
 
   /** 군주 재위 수정 — null 필드는 해제(클리어) 의미 */
@@ -844,15 +868,15 @@ export const personCareerApi = {
     dto: UpdateSovereignReignDto,
   ) => {
     const response = await apiClient.put(
-      `/government-positions/sovereign-reigns/${encodeURIComponent(id)}`,
-      dto,
+      `/government-positions/tenures/${encodeURIComponent(id)}`,
+      reignToTenurePayload(dto),
     )
-    return response.data
+    return tenureToReignShape(response.data)
   },
 
   deleteSovereignReign: async (id: string) => {
     await apiClient.delete(
-      `/government-positions/sovereign-reigns/${encodeURIComponent(id)}`,
+      `/government-positions/tenures/${encodeURIComponent(id)}`,
     )
   },
 
@@ -867,17 +891,18 @@ export const personCareerApi = {
   /** 재위 1건 + 업적 조회 (수장 비교 읽기 팝오버 등 — 지연 로드용) */
   getSovereignReignWithAchievements: async (id: string) => {
     const response = await apiClient.get(
-      `/government-positions/sovereign-reigns/${encodeURIComponent(id)}/with-achievements`,
+      `/government-positions/tenures/${encodeURIComponent(id)}/with-achievements`,
     )
-    return response.data
+    return tenureToReignShape(response.data)
   },
 
   createRegnalEraForSovereignReign: async (
     sovereignReignId: string,
     dto: CreateRegnalEraDto,
   ) => {
+    // 재위 id = 재임 id
     const response = await apiClient.post(
-      `/government-positions/sovereign-reigns/${encodeURIComponent(sovereignReignId)}/regnal-eras`,
+      `/government-positions/tenures/${encodeURIComponent(sovereignReignId)}/regnal-eras`,
       dto,
     )
     return response.data
@@ -979,7 +1004,7 @@ export const personCareerApi = {
     },
   ) => {
     const response = await apiClient.post(
-      `/government-positions/sovereign-reigns/${encodeURIComponent(sovereignReignId)}/achievements`,
+      `/government-positions/tenures/${encodeURIComponent(sovereignReignId)}/achievements`,
       dto,
     )
     return response.data
@@ -999,7 +1024,7 @@ export const personCareerApi = {
     },
   ) => {
     const response = await apiClient.patch(
-      `/government-positions/sovereign-reigns/${encodeURIComponent(sovereignReignId)}/achievements/${encodeURIComponent(achievementId)}`,
+      `/government-positions/tenures/${encodeURIComponent(sovereignReignId)}/achievements/${encodeURIComponent(achievementId)}`,
       dto,
     )
     return response.data
@@ -1010,7 +1035,7 @@ export const personCareerApi = {
     achievementId: string,
   ) => {
     await apiClient.delete(
-      `/government-positions/sovereign-reigns/${encodeURIComponent(sovereignReignId)}/achievements/${encodeURIComponent(achievementId)}`,
+      `/government-positions/tenures/${encodeURIComponent(sovereignReignId)}/achievements/${encodeURIComponent(achievementId)}`,
     )
   },
 

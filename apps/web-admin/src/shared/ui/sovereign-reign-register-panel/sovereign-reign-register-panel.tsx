@@ -577,6 +577,16 @@ export function SovereignReignRegisterPanel({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit || submitting) return
+    // 재위 = 군주직 직위 정의를 가진 재임 행 — 정의가 없으면 군주직으로 판정되지 않아 재위 목록에서
+    // 사라진다. 고르지 않았으면 예전 서버 기본값처럼 '국왕'을 쓴다.
+    const effectiveDefinitionId =
+      positionDefinitionId ||
+      (positionDefinitions as PositionDefinitionLike[]).find((def) => def.title === '국왕')?.id ||
+      null
+    if (!effectiveDefinitionId) {
+      notify.error('직위(국왕·황제 등)를 골라 주세요.')
+      return
+    }
     setSubmitting(true)
     try {
       /** 수정 모드: 비운 값은 명시적 null(해제) 전송 — undefined면 서버가 기존 값을 유지해 silent no-op */
@@ -585,7 +595,7 @@ export function SovereignReignRegisterPanel({
         personId,
         countryId: countryId || undefined,
         historicalCountryId: historicalCountryId || undefined,
-        positionDefinitionId: positionDefinitionId || undefined,
+        positionDefinitionId: effectiveDefinitionId,
         // 구조화 즉위/퇴위일(era·연/월/일) — BC·고대·연단위 지원. 서버가 precision·DATETIME을 파생.
         // 종료 비움=null(현직/해제). 시작은 canSubmit이 유효 DateInfo를 보장.
         startDateInfo: partialPartsToDateInfo(start),
