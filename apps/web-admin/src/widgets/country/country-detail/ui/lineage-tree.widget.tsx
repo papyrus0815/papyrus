@@ -6,7 +6,6 @@ import React, { useMemo } from 'react'
 import { FiUser } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { adminTenureHintFromRow } from './heads-of-state-tenure-dedup'
 
 const TIMELINE_WIDTH = 88
 /** 타임라인 막대와 카드 영역 사이 여백(px) */
@@ -1135,7 +1134,6 @@ export function LineageTree({
                   const parentDisplay =
                     parentRegnal ||
                     (parentTenure ? getPersonName(parentTenure.person) : '')
-                  const linkedHeadHint = adminTenureHintFromRow(t)
 
                   return (
                     <TreeCardYearBased
@@ -1186,9 +1184,6 @@ export function LineageTree({
                       )}
                       {!isCompactCard && titleText && titleText !== '—' && (
                         <TreeCardTitle>{titleText}</TreeCardTitle>
-                      )}
-                      {!isCompactCard && linkedHeadHint && (
-                        <TreeCardAdminHint>{linkedHeadHint}</TreeCardAdminHint>
                       )}
                     </TreeCardYearBased>
                   )
@@ -1286,7 +1281,6 @@ export function LineageTree({
                       const parentDisplay =
                         parentRegnal ||
                         (parentTenure ? getPersonName(parentTenure.person) : '')
-                      const linkedHeadHint = adminTenureHintFromRow(t)
 
                       const isFirstColOfGroup =
                         pos != null && separatorColsSet.has(pos.col)
@@ -1350,11 +1344,6 @@ export function LineageTree({
                             )}
                             {titleText && titleText !== '—' && (
                               <TreeCardTitle>{titleText}</TreeCardTitle>
-                            )}
-                            {linkedHeadHint && (
-                              <TreeCardAdminHint>
-                                {linkedHeadHint}
-                              </TreeCardAdminHint>
                             )}
                           </TreeCard>
                         </TreeCardWrap>
@@ -1927,15 +1916,6 @@ const TreeCardTitle = styled.div`
   border-radius: 6px;
   line-height: 1.4;
   letter-spacing: 0.01em;
-`
-
-const TreeCardAdminHint = styled.div`
-  margin-top: 6px;
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.95)' : '#64748b'};
 `
 
 const TreeCardAvatar = styled.div<{ $hasImage?: boolean }>`

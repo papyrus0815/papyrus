@@ -125,18 +125,6 @@ function ordinalOf(t: RawTenureRecord): number | null {
   return null
 }
 
-/** SovereignReign 같은 시기 TENURE 중복 제거 — country-detail 로직과 동일 기준 */
-function isSamePersonStart(a: RawTenureRecord, b: RawTenureRecord): boolean {
-  const pidA = a.personId ?? a.person?.id
-  const pidB = b.personId ?? b.person?.id
-  if (!pidA || !pidB || pidA !== pidB) return false
-  const dA = a.startDate ? new Date(a.startDate).getTime() : null
-  const dB = b.startDate ? new Date(b.startDate).getTime() : null
-  if (dA == null || dB == null || Number.isNaN(dA) || Number.isNaN(dB)) return false
-  // 같은 날짜로 본다 (시간 무시)
-  return Math.abs(dA - dB) < 24 * 60 * 60 * 1000
-}
-
 /** id·startDate가 있는 레코드만 신뢰 — 그 외(부분 응답·null)는 버린다 */
 function isUsableRecord(r: unknown): r is RawTenureRecord {
   return (
@@ -157,12 +145,8 @@ export function normalizeTenures(rawList: unknown): TenureBar[] {
   )
   const sovereigns = records.filter((r) => r.recordKind === 'SOVEREIGN_REIGN')
 
-  // SovereignReign이 있으면 동일 시기 TENURE 제거
-  const filteredTenures = tenures.filter(
-    (t) => !sovereigns.some((s) => isSamePersonStart(t, s)),
-  )
-
-  const all = [...sovereigns, ...filteredTenures]
+  // 재위·재임은 한 테이블이라(직위 보유 단일 모델) 같은 재직이 두 번 오지 않는다 — 중복 제거 불필요
+  const all = [...sovereigns, ...tenures]
 
   return all
     .map((t) => {

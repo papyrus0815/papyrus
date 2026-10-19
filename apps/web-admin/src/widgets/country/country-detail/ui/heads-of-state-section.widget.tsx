@@ -87,10 +87,6 @@ import {
 } from '@/shared/ui/tenure-register-panel/group-position-options'
 import { notify } from '@/shared/ui/toast'
 
-import {
-  adminTenureHintFromRow,
-  dedupeHeadsOfStateTenuresForDisplay,
-} from './heads-of-state-tenure-dedup'
 import { LineageTree } from './lineage-tree.widget'
 
 const HEADS_POSITION_TYPES = new Set([
@@ -208,7 +204,6 @@ function HeadsTlCard({
   lineColor,
   textColor,
   isDark,
-  adminTenureHint,
 }: {
   thumbUrl: string | null
   personName: string
@@ -223,8 +218,6 @@ function HeadsTlCard({
   lineColor: string
   textColor: string
   isDark: boolean
-  /** 재위 행에만: 동일 기간 행정부 수반 재임이 숨겨졌을 때 안내 */
-  adminTenureHint?: string | null
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -300,19 +293,6 @@ function HeadsTlCard({
         >
           {titleText}
         </div>
-        {adminTenureHint ? (
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 500,
-              color: isDark ? 'rgba(148,163,184,0.95)' : '#64748b',
-              marginTop: 4,
-              lineHeight: 1.35,
-            }}
-          >
-            {adminTenureHint}
-          </div>
-        ) : null}
         <div
           style={{
             marginTop: 5,
@@ -588,22 +568,6 @@ export function HeadsOfStateSection({
     [countryTenures, popeTenures, showGlobalPope],
   )
 
-  /** 목록·계보 표시용: 국왕 재위 + 행정부 수반 재임 이중 행은 재위만 노출 */
-  const tenuresUi = React.useMemo(
-    () => dedupeHeadsOfStateTenuresForDisplay(tenures as any[]),
-    [tenures],
-  )
-
-  const resolveHeadTenureIdForCabinetModal = React.useCallback(
-    (tenureId: string) => {
-      const row =
-        tenuresUi.find((t: any) => t.id === tenureId) ??
-        tenures.find((t: any) => t.id === tenureId)
-      return row?._displayLinkedHeadTenure?.id ?? tenureId
-    },
-    [tenuresUi, tenures],
-  )
-
   // 최소 1초 로딩 표시 후 부드럽게 전환
   useEffect(() => {
     if (isLoading) {
@@ -734,7 +698,7 @@ export function HeadsOfStateSection({
       return '(기타)'
     }
     const map = new Map<string, any[]>()
-    tenuresUi.forEach((t: any) => {
+    tenures.forEach((t: any) => {
       const countryName = getCountryNameForTenure(t)
       const positionLabel = getPositionLabel(t)
       const key =
@@ -768,7 +732,7 @@ export function HeadsOfStateSection({
         if (rankA !== rankB) return rankA - rankB
         return a.label.localeCompare(b.label, 'ko')
       })
-  }, [tenuresUi, positionDefinitions, getCountryNameForTenure])
+  }, [tenures, positionDefinitions, getCountryNameForTenure])
 
   /** UI 표시용 라벨: 구분점(·) 제거 */
   const toDisplayPositionLabel = React.useCallback(
@@ -1428,7 +1392,7 @@ export function HeadsOfStateSection({
       effectivePositionLabel != null
         ? (tenuresByPosition.find((g) => g.label === effectivePositionLabel)
             ?.tenures ?? [])
-        : tenuresUi
+        : tenures
     return [...source].sort((a: any, b: any) => {
       const orderA = a.termNumber ?? a.regnalNumber ?? 0
       const orderB = b.termNumber ?? b.regnalNumber ?? 0
@@ -1437,7 +1401,7 @@ export function HeadsOfStateSection({
       const startB = b.startDate ? new Date(b.startDate).getTime() : 0
       return startA - startB
     })
-  }, [tenuresUi, tenuresByPosition, effectivePositionLabel])
+  }, [tenures, tenuresByPosition, effectivePositionLabel])
 
   /** 계보 표시 가능한 직책 그룹(재임이 하나 이상인 직책. 대수 없어도 표시 가능) */
   const lineageEligibleGroups = React.useMemo(
@@ -2016,20 +1980,20 @@ export function HeadsOfStateSection({
                               ? `${(country as { name: string }).name} 역대 수반 계보`
                               : '역대 수반 계보'
                           : '재임 목록'}
-                        {tenuresUi.length > 0 && (
+                        {tenures.length > 0 && (
                           <span className="count">
                             {selectedPositionFilter != null
                               ? (tenuresByPosition.find(
                                   (g) => g.label === selectedPositionFilter,
                                 )?.tenures.length ?? 0)
-                              : tenuresUi.length}
+                              : tenures.length}
                             건
                           </span>
                         )}
                       </ListTitle>
                     </ListHeadLeft>
                     {/* 목록 검색창 — 목록 뷰일 때만 노출 */}
-                    {listViewMode === 'list' && tenuresUi.length > 0 && (
+                    {listViewMode === 'list' && tenures.length > 0 && (
                       <TenureSearchWrap>
                         <TenureSearchIcon>
                           <FiSearch size={14} />
@@ -2077,7 +2041,7 @@ export function HeadsOfStateSection({
                               pointerEvents: 'none',
                             }}
                           >
-                            {tenuresUi.length}개
+                            {tenures.length}개
                           </span>
                         )}
                       </TenureSearchWrap>
@@ -2125,7 +2089,7 @@ export function HeadsOfStateSection({
                       <FiSettings size={16} />
                     </SettingsButton>
                   </ListHead>
-                  {tenuresUi.length === 0 ? (
+                  {tenures.length === 0 ? (
                     <EmptyState>
                       <EmptyIconWrap>
                         <FiUser size={40} />
@@ -2163,9 +2127,7 @@ export function HeadsOfStateSection({
                           }
                           positionHeaders={mergedLineageAll.positionHeaders}
                           onCardClick={(tenureId) => {
-                            setCabinetModalTenureId(
-                              resolveHeadTenureIdForCabinetModal(tenureId),
-                            )
+                            setCabinetModalTenureId(tenureId)
                           }}
                         />
                       ) : (
@@ -2178,9 +2140,7 @@ export function HeadsOfStateSection({
                           getRegnalNameFromNotes={getRegnalNameFromNotes}
                           getDynastyNameForTenure={getDynastyNameForTenure}
                           onCardClick={(tenureId) => {
-                            setCabinetModalTenureId(
-                              resolveHeadTenureIdForCabinetModal(tenureId),
-                            )
+                            setCabinetModalTenureId(tenureId)
                           }}
                         />
                       )}
@@ -2607,9 +2567,6 @@ export function HeadsOfStateSection({
                                                         lineColor={p.line}
                                                         textColor={p.textColor}
                                                         isDark={isDark}
-                                                        adminTenureHint={adminTenureHintFromRow(
-                                                          t,
-                                                        )}
                                                       />
                                                     </div>
                                                   ) : (
@@ -2762,9 +2719,6 @@ export function HeadsOfStateSection({
                                                         lineColor={p.line}
                                                         textColor={p.textColor}
                                                         isDark={isDark}
-                                                        adminTenureHint={adminTenureHintFromRow(
-                                                          t,
-                                                        )}
                                                       />
                                                     </div>
                                                   ) : (
