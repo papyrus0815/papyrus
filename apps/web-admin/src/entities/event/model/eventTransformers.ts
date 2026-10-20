@@ -103,7 +103,7 @@ export const transformEventsFromApi = (
     return {
       id: evt.id,
       title: evt.title,
-      type: 'battle' as const,
+      type: evt.type ?? 'OTHER',
       category: evtCategoryName as HistoricalEventCategory,
       categoryId: evtCategoryId,
       description: evt.description ?? '',

@@ -48,7 +48,6 @@ export const CATEGORY_LABEL: Partial<Record<string, string>> = {
   외교: '외교',
   회담: '회담',
   종교: '종교',
-  '건국/멸망': '건국/멸망',
   기타: '기타',
 }
 
@@ -77,7 +76,6 @@ export const CATEGORY_ICON_MAP: Partial<Record<string, IconType>> = {
   religious: FiHeart,
   종교: FiHeart,
   statehood: FiFlag,
-  '건국/멸망': FiFlag,
   other: FiMoreHorizontal,
   기타: FiMoreHorizontal,
 }

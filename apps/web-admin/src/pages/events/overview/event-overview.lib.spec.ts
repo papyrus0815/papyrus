@@ -4,7 +4,7 @@ import {
   aggregatePersons,
   buildCountryMatrix,
   buildGantt,
-  categoryBreakdown,
+  typeBreakdown,
   checkNode,
   checkScore,
   coverageGaps,
@@ -28,6 +28,7 @@ const node = (over: Partial<EventOverviewNode> & { id: string }): EventOverviewN
   endDatePrecision: null,
   location: null,
   category: null,
+  type: 'OTHER',
   countries: [],
   persons: [],
   sides: [],
@@ -55,7 +56,8 @@ const sarajevo = node({
   id: 'sarajevo',
   title: '사라예보 암살',
   startDate: '1914-06-28T00:00:00.000Z',
-  category: { id: 'c1', name: '외교' },
+  category: { id: 'c1', name: '정치' },
+  type: 'ATTACK',
   countries: [
     { key: 'h:at', id: 'at', kind: 'historical', name: '오스트리아-헝가리', flagEmoji: null, role: 'TARGET', sideId: null },
     { key: 'h:rs', id: 'rs', kind: 'historical', name: '세르비아', flagEmoji: null, role: 'INITIATOR', sideId: null },
@@ -67,7 +69,8 @@ const marne = node({
   title: '마른 전투',
   startDate: '1914-09-05T00:00:00.000Z',
   endDate: '1914-09-12T00:00:00.000Z',
-  category: { id: 'c2', name: '전쟁/군사' },
+  category: { id: 'c2', name: '군사' },
+  type: 'BATTLE',
   countries: [
     { key: 'h:de', id: 'de', kind: 'historical', name: '독일 제국', flagEmoji: null, role: 'PARTICIPANT', sideId: null },
     { key: 'h:at', id: 'at', kind: 'historical', name: '오스트리아-헝가리', flagEmoji: null, role: 'PARTICIPANT', sideId: null },
@@ -175,11 +178,11 @@ describe('buildCountryMatrix', () => {
 })
 
 describe('분포', () => {
-  it('카테고리는 많은 순, 없으면 미분류', () => {
-    expect(categoryBreakdown(descendants)).toEqual([
-      { label: '미분류', count: 2 },
-      { label: '외교', count: 1 },
-      { label: '전쟁/군사', count: 1 },
+  it('하위 사건의 유형을 많은 순으로(분야가 아니라 형식)', () => {
+    expect(typeBreakdown(descendants)).toEqual([
+      { key: 'OTHER', label: '기타', count: 2 },
+      { key: 'ATTACK', label: '암살·테러·학살', count: 1 },
+      { key: 'BATTLE', label: '전투·작전', count: 1 },
     ])
   })
 
@@ -216,22 +219,25 @@ describe('인물·점검', () => {
   it('열별 빈 칸 수와 충실도', () => {
     expect(emptyCountByColumn(descendants).countries).toBe(2)
     const ratio = coverageRatio([sarajevo])
-    // 외교 사건이라 수치는 해당 없음 — 날짜·개요·참여국 = 3/8
-    expect(ratio).toBeCloseTo(3 / 8)
+    // 암살 유형 — 진영은 해당 없음, 수치(사상자)는 선택 기록이라 칸에 든다 — 날짜·개요·참여국 = 3/9
+    expect(ratio).toBeCloseTo(3 / 9)
   })
 })
 
 describe('배치 B — 점검 신호', () => {
-  it('외교 사건의 수치는 해당 없음, 전쟁 사건은 빈 칸, 값이 있으면 갈래와 무관하게 채움', () => {
-    expect(checkNode(sarajevo).metrics).toBe('na')
+  it('기록 칸은 유형이 다루는지로 — 외교 조치엔 수치·진영 해당 없음, 전투엔 빈 칸, 값이 있으면 유형과 무관하게 채움', () => {
+    const ultimatum = node({ id: 'u', type: 'DIPLOMATIC_ACT' })
+    expect(checkNode(ultimatum).metrics).toBe('na')
+    expect(checkNode(ultimatum).sides).toBe('na')
     expect(checkNode(marne).metrics).toBe('empty')
+    expect(checkNode(marne).sides).toBe('empty')
     const withMetric = node({
       id: 'm',
-      category: { id: 'c1', name: '외교' },
+      type: 'DIPLOMATIC_ACT',
       metrics: [{ metricKey: 'k', metricName: '배상금', unit: null, value: 1, low: null, high: null, approx: false }],
     })
     expect(checkNode(withMetric).metrics).toBe('full')
-    expect(checkScore(checkNode(sarajevo)).applicable).toBe(8)
+    expect(checkScore(checkNode(sarajevo)).applicable).toBe(9)
   })
 
   it('상위 기간 밖 하위 — 개전 전 사라예보는 기간 전', () => {

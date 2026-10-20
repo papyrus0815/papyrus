@@ -226,7 +226,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
           <FooterHint>
             {isEditMode
               ? '기본 정보만 수정합니다. 본문·인물·군사 기록은 상세에서 이어서 편집하세요.'
-              : '기본 정보만 등록합니다. 본문·인물·군사 기록은 상세에서 이어서 채우세요.'}
+              : '유형의 핵심 기록까지 함께 등록합니다. 본문·수치는 상세에서 이어서 채우세요.'}
           </FooterHint>
           <FooterActions>
             <PersonRegisterModalCancelBtn

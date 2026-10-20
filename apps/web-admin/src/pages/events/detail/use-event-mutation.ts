@@ -50,6 +50,8 @@ const OPTIMISTIC_SCALAR_FIELDS = [
    * 눌러도 refetch(최대 30s staleTime) 전까지 화면이 묶음 그대로라 클릭이 먹지 않은 것처럼 보인다.
    */
   'kind',
+  /** 사건 유형 — 바꾸면 추천 기능·빈 섹션 안내가 즉시 따라 바뀌어야 한다 */
+  'type',
 ] as const satisfies ReadonlyArray<keyof UpdateEventDto>
 
 /**

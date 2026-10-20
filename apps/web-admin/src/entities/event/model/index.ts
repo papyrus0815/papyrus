@@ -39,5 +39,21 @@ export {
   CATEGORY_ICON_MAP,
   extractCategoryKey,
 } from './category-constants'
-export { categoryFeatures } from './category-features'
-export type { CategoryFeatures, CategoryModuleKey, MetricSubjectPreference } from './category-features'
+export {
+  EVENT_TYPES,
+  EVENT_TYPE_FAMILIES,
+  FACET_LABEL,
+  eventTypeDef,
+  eventTypeFeatures,
+  facetWeight,
+  isArmedConflictType,
+} from './event-type-registry'
+export type {
+  EventFacetKey,
+  EventTypeDef,
+  EventTypeFamily,
+  EventTypeFamilyKey,
+  EventTypeFeatures,
+  EventTypeKey,
+  TypeModuleKey,
+} from './event-type-registry'

@@ -30,6 +30,11 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
+import {
+  EVENT_TYPES,
+  EVENT_TYPE_FAMILIES,
+} from '@/entities/event/model/event-type-registry'
+
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { HeroThumbnail } from './hero-thumbnail'
@@ -73,6 +78,14 @@ interface DetailHeroProps {
  *
  * 부모 사건 브레드크럼은 편집 대상 X (구조 변경은 별도 흐름).
  */
+/** 유형 고르기 — 계열을 앞에 붙여 26종을 묶어 읽게 한다 */
+const EVENT_TYPE_OPTIONS: InlineSelectOption[] = EVENT_TYPE_FAMILIES.flatMap((family) =>
+  family.types.map((type) => ({
+    value: type,
+    label: family.key === 'other' ? EVENT_TYPES[type].label : `${family.label} · ${EVENT_TYPES[type].label}`,
+  })),
+)
+
 export function DetailHero({
   event,
   onPatch,
@@ -147,6 +160,17 @@ export function DetailHero({
              */
             onSave={(next) => onPatch({ categoryId: next || null } as UpdateEventDto)}
             placeholder={event.category?.name ?? '미분류'}
+          />
+        </S.CategoryChip>
+
+        {/* 유형(형식) — 무엇을 기록할지를 정한다. 바꾸면 추천 기능·빈 섹션 안내가 그 자리에서 따라 바뀐다 */}
+        <S.CategoryChip $color="#475569" $colorDark="#cbd5e1">
+          <InlineSelect
+            value={event.type ?? 'OTHER'}
+            options={EVENT_TYPE_OPTIONS}
+            onSave={(next) => onPatch({ type: next } as UpdateEventDto)}
+            placeholder="유형"
+            label="사건 유형"
           />
         </S.CategoryChip>
 

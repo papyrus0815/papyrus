@@ -29,7 +29,6 @@ export const CATEGORY_LABEL: Partial<Record<string, string>> = {
   외교: '외교',
   회담: '회담',
   종교: '종교',
-  '건국/멸망': '건국/멸망',
   기타: '기타',
 }
 
@@ -40,8 +39,6 @@ export const CATEGORY_LABEL: Partial<Record<string, string>> = {
 export const CATEGORY_ICON_MAP: Partial<Record<string, IconType>> = {
   military: FiShield,
   군사: FiShield,
-  // DB 카테고리 이름 그대로 — 없으면 FiFileText(문서)로 떨어져 전쟁/군사가 문서 아이콘이었다
-  '전쟁/군사': FiShield,
   political: FiUsers,
   정치: FiUsers,
   economic: FiTrendingUp,
@@ -58,11 +55,9 @@ export const CATEGORY_ICON_MAP: Partial<Record<string, IconType>> = {
   외교: FiGlobe,
   conference: FiMessageSquare,
   회담: FiMessageSquare,
-  '회담/조약': FiMessageSquare,
   religious: FiHeart,
   종교: FiHeart,
   statehood: FiFlag,
-  '건국/멸망': FiFlag,
   other: FiMoreHorizontal,
   기타: FiMoreHorizontal,
 }

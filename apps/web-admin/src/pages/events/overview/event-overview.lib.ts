@@ -9,7 +9,11 @@ import {
   formatSpanLabel,
   toAxisSpan,
 } from '@/pages/events/detail/components/development-timeline.lib'
-import { categoryFeatures } from '@/entities/event/model/category-features'
+import {
+  type EventFacetKey,
+  eventTypeDef,
+  facetWeight,
+} from '@/entities/event/model/event-type-registry'
 import { eventCountryRoleLabel } from '@/entities/event/model/country-participant'
 import { effectiveRangePrecision } from '@/shared/lib/iso-date'
 import type {
@@ -407,18 +411,24 @@ export const roleLabel = (role: string | null | undefined) =>
 // ─── 분포 ──────────────────────────────────────────────────────────────────
 
 export interface CountBar {
+  /** 거르기 키 — 사건 유형 */
+  key: string
   label: string
   count: number
 }
 
-export function categoryBreakdown(descendants: EventOverviewNode[]): CountBar[] {
+/**
+ * 하위 사건의 **유형** 분포 — 묶음이 무엇으로 이뤄졌나(전투 8 · 외교 조치 2 · 조약 1).
+ * 예전엔 분야(카테고리)로 셌는데, 전쟁의 하위는 거의 다 '군사'라 막대가 한 색이었다.
+ */
+export function typeBreakdown(descendants: EventOverviewNode[]): CountBar[] {
   const counts = new Map<string, number>()
   for (const node of descendants) {
-    const name = node.category?.name ?? '미분류'
-    counts.set(name, (counts.get(name) ?? 0) + 1)
+    const key = eventTypeDef(node.type).key
+    counts.set(key, (counts.get(key) ?? 0) + 1)
   }
   return [...counts]
-    .map(([label, count]) => ({ label, count }))
+    .map(([key, count]) => ({ key, label: eventTypeDef(key).label, count }))
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
 }
 
@@ -535,6 +545,7 @@ export type CheckKey =
   | 'background'
   | 'aftermath'
   | 'images'
+  | 'sides'
   | 'metrics'
 
 export const CHECK_COLUMNS: ReadonlyArray<{ key: CheckKey; label: string; hint: string }> = [
@@ -546,14 +557,22 @@ export const CHECK_COLUMNS: ReadonlyArray<{ key: CheckKey; label: string; hint: 
   { key: 'background', label: '배경', hint: '배경 요약' },
   { key: 'aftermath', label: '여파', hint: '여파 요약' },
   { key: 'images', label: '이미지', hint: '이미지 1장 이상' },
-  { key: 'metrics', label: '수치', hint: '사상자·병력 등 측정값 1개 이상' },
+  { key: 'sides', label: '진영', hint: '교전 양측 — 무력 충돌 유형에서만' },
+  { key: 'metrics', label: '수치', hint: '유형이 권하는 측정값 1개 이상' },
 ]
 
-/** full=채움, partial=일부(연·월 정밀도 날짜), empty=비어 있음, na=이 갈래엔 해당 없음 */
+/** full=채움, partial=일부(연·월 정밀도 날짜), empty=비어 있음, na=이 유형엔 해당 없음 */
 export type CheckState = 'full' | 'partial' | 'empty' | 'na'
 
 export function checkNode(node: EventOverviewNode): Record<CheckKey, CheckState> {
   const has = (value: boolean): CheckState => (value ? 'full' : 'empty')
+  /**
+   * 기록 칸은 **유형이 그 기록을 다루는지**로 가른다(레지스트리의 핵심·선택 기록). 시장·금융 사건에
+   * '인물 없음', 외교 조치에 '사상자 없음'을 감점하면 충실도가 실제보다 나쁘게 읽혔다.
+   * 다루지 않는 유형이어도 값이 있으면 채움으로 센다.
+   */
+  const byFacet = (facet: EventFacetKey, value: boolean): CheckState =>
+    value ? 'full' : facetWeight(node.type, facet) ? 'empty' : 'na'
   const { startPrecision } = effectiveRangePrecision(
     node.startDate,
     node.endDate,
@@ -568,20 +587,14 @@ export function checkNode(node: EventOverviewNode): Record<CheckKey, CheckState>
   return {
     date: dateState,
     description: has(Boolean(node.description?.trim())),
-    countries: has(node.countries.length > 0),
-    persons: has(node.persons.length > 0),
+    countries: byFacet('participants', node.countries.length > 0),
+    persons: byFacet('persons', node.persons.length > 0),
     sections: has(node.sectionCount > 0),
     background: has(node.hasBackground),
     aftermath: has(node.hasAftermath),
     images: has(node.imageCount > 0),
-    // 수치는 갈래가 권하는 기능일 때만 센다 — 외교·정치 사건에 '사상자·병력이 비었다'고 감점하면
-    // 충실도가 실제보다 나쁘게 읽혔다(1차대전 37%). 갈래와 무관하게 값이 있으면 채움.
-    metrics:
-      node.metrics.length > 0
-        ? 'full'
-        : categoryFeatures(node.category?.name).suggestedModules.includes('metrics')
-          ? 'empty'
-          : 'na',
+    sides: byFacet('sides', node.sides.length > 0),
+    metrics: byFacet('metrics', node.metrics.length > 0),
   }
 }
 

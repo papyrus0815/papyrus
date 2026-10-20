@@ -141,6 +141,13 @@ interface BasicInfoSectionProps {
     onClear: () => void
   }
 
+  /** 사건 유형 칸 — 사건명 바로 아래(무엇을 기록할지를 정하는 두 번째 결정) */
+  typeSlot?: React.ReactNode
+  /** 유형의 핵심 기록 묶음 — '연결' 묶음 뒤 */
+  recordsSlot?: { title: string; content: React.ReactNode }
+  /** 참여국이 고른 유형의 핵심 기록이면 그 유형 이름 — 라벨의 '(선택)'을 대신한다 */
+  participantsCoreOf?: string
+
   /** 상위 사건의 참여국 불러오기 — 상위를 골랐고 아직 안 들어온 나라가 있을 때만 */
   parentCountriesSlot?: {
     count: number
@@ -199,6 +206,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   onOpenCountryModal,
   parentEventSlot,
   kindSlot,
+  typeSlot,
+  recordsSlot,
+  participantsCoreOf,
   parentCountriesSlot,
   playClickSound,
   getDateError,
@@ -389,6 +399,16 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormField>
         </S.FormRow>
 
+        {/* 유형 — 형식이 무엇을 기록할지를 정한다. 고르면 분야·종류 기본값이 따라온다 */}
+        {typeSlot && (
+          <S.FormRow>
+            <S.FormLabel as="span">
+              유형 <S.Required>*</S.Required>
+            </S.FormLabel>
+            <S.FormField>{typeSlot}</S.FormField>
+          </S.FormRow>
+        )}
+
         {/* 종류 — 묶음이면 전개를 하위 사건으로 쌓는다(본문엔 배경·여파만) */}
         {kindSlot && (
           <S.FormRow>
@@ -552,7 +572,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         <S.FormRow>
           <S.FormLabel>
             <div>
-              카테고리<OptionalTag>(선택)</OptionalTag>
+              분야<OptionalTag>(선택)</OptionalTag>
             </div>
           </S.FormLabel>
           <S.FormField>
@@ -629,7 +649,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           {onOpenCountryModal && (
             <S.FormRow>
               <S.FormLabel>
-                참여국<OptionalTag>(선택)</OptionalTag>
+                참여국
+                <OptionalTag>{participantsCoreOf ? `(${participantsCoreOf} 핵심 기록)` : '(선택)'}</OptionalTag>
               </S.FormLabel>
               <S.FormField>
                 {relatedCountries.length > 0 && (
@@ -806,6 +827,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               </S.FormField>
             </S.FormRow>
           )}
+        </FormGroup>
+      )}
+
+      {/* 유형의 핵심 기록 — 참여국(위 '연결') 위에 얹는 진영·성립/소멸, 그리고 조약·조직·인물·선거 */}
+      {recordsSlot && (
+        <FormGroup aria-labelledby="event-form-group-records">
+          <FormGroupTitle id="event-form-group-records">{recordsSlot.title}</FormGroupTitle>
+          {recordsSlot.content}
         </FormGroup>
       )}
 

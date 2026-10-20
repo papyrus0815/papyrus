@@ -32,6 +32,13 @@ import {
   toParticipants,
 } from '@/entities/event/model'
 import { useBasicInfoForm } from '@/features/event-form/model'
+import { EVENT_TYPES, type EventTypeKey } from '@/entities/event/model/event-type-registry'
+import {
+  type RegisterFacetDrafts,
+  commitRegisterFacets,
+  emptyRegisterFacetDrafts,
+  relatedPersonsPayload,
+} from '@/features/event-facets/model/register-facets'
 import type { BasicInfoResetOptions } from '@/features/event-form/model/useBasicInfoForm'
 import {
   type EventDetail,
@@ -56,6 +63,8 @@ import {
 } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
+import { CoreRecordsGroup } from '@/widgets/event-form/ui/core-records-group'
+import { EventTypeField } from '@/widgets/event-form/ui/event-type-field'
 
 /** 편집 로드 시 서버에서 받은 이미지(보존 대상 — 캡션·출처·정렬 포함) */
 interface LoadedEventImage {
@@ -267,6 +276,44 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   // '하위 사건으로 나누기'·'단일 사건으로'가 정본이라 여기서는 고르지 않는다.
   const [kind, setKind] = useState<'SINGLE' | 'COLLECTION'>('SINGLE')
 
+  // ===== 사건 유형(형식) — 무엇을 기록할지를 정한다(entities/event/model/event-type-registry.ts) =====
+  // 고르면 분야·단일/묶음 기본값이 따라오되, 사용자가 직접 고친 값은 덮지 않는다(touched).
+  const [eventType, setEventType] = useState<EventTypeKey | null>(null)
+  const categoryTouchedRef = useRef(false)
+  const kindTouchedRef = useRef(false)
+  /** 유형의 핵심 기록 초안 — 사건이 생긴 뒤 각 정본 API로 잇는다(신규 등록 전용) */
+  const [facetDrafts, setFacetDrafts] = useState<RegisterFacetDrafts>(emptyRegisterFacetDrafts)
+  /** 성립·소멸 칸에서 국가 모달을 열면 고른 나라를 이 역할로 넣는다 */
+  const [pendingCountryRole, setPendingCountryRole] = useState<'FOUNDED' | 'DISSOLVED' | null>(null)
+
+  /** 유형 고르기 — 분야·단일/묶음은 아직 손대지 않았을 때만 유형의 기본값으로 */
+  const selectType = (next: EventTypeKey) => {
+    setEventType(next)
+    const def = EVENT_TYPES[next]
+    if (!categoryTouchedRef.current) {
+      const domain = dbCategories.find((item) => item.name === def.defaultDomain)
+      if (domain) setCategory(domain.id as typeof category)
+    }
+    if (!isEditMode && !kindTouchedRef.current) setKind(def.usuallyCollection ? 'COLLECTION' : 'SINGLE')
+  }
+
+  /** 참여국 줄 → 표시 이름(현대·역사 국가 목록에서) */
+  const participantName = (row: { countryId?: string | null; historicalCountryId?: string | null }) =>
+    (row.historicalCountryId
+      ? availableHistoricalCountries.find((country) => country.id === row.historicalCountryId)?.name
+      : availableCountries.find((country) => country.id === row.countryId)?.name) ?? '이름 모를 나라'
+
+  /** 진영 이름 — 비워 두면 그 편의 첫 나라로 '○○ 측' */
+  const effectiveSideNames = (drafts: RegisterFacetDrafts): [string, string] => {
+    const nameFor = (slot: 'A' | 'B', index: 0 | 1) => {
+      const typed = drafts.sides.names[index].trim()
+      if (typed) return typed
+      const first = relatedCountries.find((row) => drafts.sides.assignment[participantKey(row)] === slot)
+      return first ? `${participantName(first)} 측` : `진영 ${index + 1}`
+    }
+    return [nameFor('A', 0), nameFor('B', 1)]
+  }
+
   // ===== 상위 사건(트리 등록) =====
   // 신규 등록 전용 — 편집 모드의 계층 편집은 상세 '연관' 섹션이 정본이라 여기서는
   // 숨긴다(현재 상위를 하이드레이션하지 않으므로, 노출하면 '상위 없음'으로 오독된다).
@@ -403,6 +450,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         }
 
         if (event.categoryId) setCategory(event.categoryId)
+        /* 편집 — 저장된 유형을 그대로. 분야·종류는 이미 정해진 값이라 유형을 바꿔도 따라 바꾸지 않는다 */
+        setEventType(((event as { type?: EventTypeKey }).type ?? 'OTHER') as EventTypeKey)
+        categoryTouchedRef.current = true
+        kindTouchedRef.current = true
 
         /**
          * 참여국 하이드레이션 — 역할·역할 서술·비고까지 통째로 싣는다. 예전엔 id만
@@ -466,6 +517,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         // '열자마자 dirty' 오판이 없고, 해제/변경만 dirty가 된다.
         parentEvent?.id ?? '',
         kind,
+        eventType,
+        facetDrafts,
       ]),
     [
       title,
@@ -482,6 +535,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       relatedCountries,
       parentEvent,
       kind,
+      eventType,
+      facetDrafts,
     ],
   )
   const snapshotRef = useRef(snapshot)
@@ -517,14 +572,15 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     onDirtyChange?.(isDirty)
   }, [isDirty, onDirtyChange])
 
-  const isValid = isBasicInfoValid()
+  const typeError = eventType ? undefined : '사건 유형을 골라 주세요'
+  const isValid = isBasicInfoValid() && Boolean(eventType)
   useEffect(() => {
     onStateChange?.({
       isEditMode,
       isLoading: isLoadingEvent,
       isSubmitting,
       isValid,
-      firstError: validation.firstError ?? undefined,
+      firstError: validation.firstError ?? typeError ?? undefined,
     })
   }, [
     isEditMode,
@@ -532,6 +588,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     isSubmitting,
     isValid,
     validation.firstError,
+    typeError,
     onStateChange,
   ])
 
@@ -540,6 +597,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setSubmitAttempted(true)
     try {
       if (!validateBasicInfo({ title, startDate })) return
+      if (!eventType) return
 
       setIsSubmitting(true)
       // 상세 페이지 청크를 미리 데워 저장 직후 이동이 매끄럽도록.
@@ -582,18 +640,41 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       let targetId: string | undefined = eventId
       let saved: EventResponseDto | undefined
       if (isEditMode && eventId) {
-        saved = await updateEvent(
-          eventId,
+        saved = await updateEvent(eventId, {
           // satisfies: 빌더 반환이 DTO에서 표류하면 tsc가 잡는다 (as 캐스트는 은폐)
-          eventData satisfies Parameters<typeof updateEvent>[1],
-        )
+          ...(eventData satisfies Parameters<typeof updateEvent>[1]),
+          type: eventType,
+        })
         notify.success('사건이 성공적으로 수정되었습니다!')
       } else {
         saved = await createEvent({
           ...(eventData satisfies Parameters<typeof createEvent>[0]),
           kind,
+          type: eventType,
+          // 참여 인물(유형의 핵심 기록이 인물인 경우) — 생성 요청에 함께 싣는다
+          relatedPersons: relatedPersonsPayload(facetDrafts),
         })
         targetId = saved.id
+        /*
+         * 유형의 핵심 기록을 잇는다 — 진영·조약·조직·취임·선거. 사건은 이미 저장됐으므로 하나가 실패해도
+         * 되돌리지 않고 무엇이 됐고 무엇을 상세에서 마저 할지 알린다. 상세 캐시 시딩(아래)보다 먼저 해야
+         * 상세가 이은 기록까지 담은 채로 열린다.
+         */
+        const committed = await commitRegisterFacets({
+          eventId: saved.id,
+          eventTitle: title.trim(),
+          startDate: eventData.startDate ?? null,
+          location: location || null,
+          description: description.trim() || null,
+          participants: relatedCountries,
+          drafts: {
+            ...facetDrafts,
+            sides: { ...facetDrafts.sides, names: effectiveSideNames(facetDrafts) },
+          },
+        })
+        if (committed.done.length > 0) notify.success(`기록을 이었습니다 — ${committed.done.join(' · ')}`)
+        for (const warning of committed.warnings) notify.error(warning)
+        if (committed.done.length > 0) saved = await getEventById(saved.id)
         notify.success('사건이 등록되었습니다. 상세에서 내용을 이어서 등록하세요.')
       }
 
@@ -672,11 +753,21 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     queryClient,
     markDirty,
     onSaved,
+    eventType,
+    facetDrafts,
+    kind,
   ])
 
   const handleReset = useCallback(
     (options?: BasicInfoResetOptions) => {
       resetFormFields(options)
+      // 유형은 분야를 남기는 '계속 등록'에서 함께 남긴다(같은 형식을 연달아 등록하는 흐름) — 기록 초안은 비운다
+      if (!options?.keepCategory) {
+        setEventType(null)
+        categoryTouchedRef.current = false
+      }
+      kindTouchedRef.current = false
+      setFacetDrafts(emptyRegisterFacetDrafts())
       // parentEvent는 의도적으로 유지 — "계속 등록"의 전형이 같은 상위 밑에 형제
       // 가지를 연달아 등록하는 흐름이다(keepCategory와 같은 근거). 칩이 보이므로
       // 원치 않으면 ✕ 한 번으로 해제된다. 유지된 값은 아래 토큰으로 새 기준선에 편입.
@@ -713,7 +804,50 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         endDatePrecision={endDatePrecision}
         setEndDatePrecision={setEndDatePrecision}
         category={category}
-        setCategory={setCategory}
+        setCategory={(value) => {
+          categoryTouchedRef.current = true
+          setCategory(value)
+        }}
+        typeSlot={
+          <EventTypeField
+            value={eventType}
+            onChange={(next) => {
+              playClickSound()
+              selectType(next)
+            }}
+            error={submitAttempted ? typeError : undefined}
+          />
+        }
+        participantsCoreOf={
+          eventType && EVENT_TYPES[eventType].core.includes('participants') ? EVENT_TYPES[eventType].label : undefined
+        }
+        recordsSlot={
+          eventType &&
+          !isEditMode &&
+          EVENT_TYPES[eventType].core.some((facet) => facet !== 'participants')
+            ? {
+                title: `${EVENT_TYPES[eventType].label} 기록`,
+                content: (
+                  <CoreRecordsGroup
+                    type={eventType}
+                    drafts={facetDrafts}
+                    onDraftsChange={setFacetDrafts}
+                    participants={relatedCountries}
+                    participantName={participantName}
+                    onAddCountryWithRole={(role) => {
+                      setPendingCountryRole(role)
+                      setShowCountryModal(true)
+                    }}
+                    onRemoveParticipant={(key) =>
+                      setRelatedCountries(relatedCountries.filter((row) => participantKey(row) !== key))
+                    }
+                    eventTitle={title}
+                    playClickSound={playClickSound}
+                  />
+                ),
+              }
+            : undefined
+        }
         thumbnail={thumbnail}
         setThumbnail={setThumbnail}
         setThumbnailFile={setThumbnailFile}
@@ -725,7 +859,17 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         availableCountries={availableCountries}
         availableHistoricalCountries={availableHistoricalCountries}
         onOpenCountryModal={() => setShowCountryModal(true)}
-        kindSlot={isEditMode ? undefined : { value: kind, onChange: setKind }}
+        kindSlot={
+          isEditMode
+            ? undefined
+            : {
+                value: kind,
+                onChange: (next) => {
+                  kindTouchedRef.current = true
+                  setKind(next)
+                },
+              }
+        }
         parentCountriesSlot={
           parentEvent && parentCountriesToImport.length > 0
             ? {
@@ -754,13 +898,32 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
 
       <AdvancedCountrySelectModal
         isOpen={showCountryModal}
-        onClose={() => setShowCountryModal(false)}
+        onClose={() => {
+          setShowCountryModal(false)
+          setPendingCountryRole(null)
+        }}
         onSelect={(country) => {
           /* 토글 — 이미 담긴 국가를 다시 고르면 빠진다. 역할은 목록에서 정한다. */
           const key = country.isHistorical ? `h:${country.id}` : `m:${country.id}`
           const already = relatedCountries.some(
             (participant) => participantKey(participant) === key,
           )
+          /* 성립·소멸 칸에서 연 경우 — 이미 있는 나라는 빼지 않고 그 역할로 바꾸고, 없으면 그 역할로 넣는다 */
+          if (pendingCountryRole) {
+            setRelatedCountries(
+              already
+                ? relatedCountries.map((participant) =>
+                    participantKey(participant) === key ? { ...participant, role: pendingCountryRole } : participant,
+                  )
+                : [
+                    ...relatedCountries,
+                    country.isHistorical
+                      ? { historicalCountryId: country.id, role: pendingCountryRole }
+                      : { countryId: country.id, role: pendingCountryRole },
+                  ],
+            )
+            return
+          }
           if (already) {
             setRelatedCountries(
               relatedCountries.filter(
@@ -778,7 +941,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         }}
         modernCountries={availableCountries}
         historicalCountries={availableHistoricalCountries}
-        title="참여국 선택"
+        title={pendingCountryRole === 'FOUNDED' ? '세워진 나라 선택' : pendingCountryRole === 'DISSOLVED' ? '무너진 나라 선택' : '참여국 선택'}
         selectedCountryIds={relatedCountries.map(
           (participant) =>
             participant.countryId ?? participant.historicalCountryId ?? '',

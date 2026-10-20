@@ -171,13 +171,12 @@ export interface HistoricalEvent {
   title: string
   /** 등록 시각(ISO) — '등록순' 정렬(SORT_OPTIONS.CREATED)의 유일한 근거. transformer가 매핑한다. */
   createdAt?: string | null
-  type:
-    | 'total-war'
-    | 'campaign'
-    | 'battle'
-    | 'political-shift'
-    | 'economic-crisis'
-    | 'diplomatic-conflict'
+  /**
+   * 사건 유형(형식) — 기록할 데이터를 정하는 축(전쟁·전투·조약 체결·즉위…). 분야는 category.
+   * 정의·기록 표는 entities/event/model/event-type-registry.ts. (예전 이 자리의 'battle'·'total-war'…는
+   * 변환기가 늘 'battle'을 넣던 죽은 값이었다.)
+   */
+  type: import('@/entities/event/model/event-type-registry').EventTypeKey
   /** 카테고리 한국어 이름 (DB EventCategory.name). resolveCategory의 입력 키. */
   category: HistoricalEventCategory
   /** 카테고리 안정 식별자 (DB EventCategory.id). 칩·필터 매칭의 신뢰원. */

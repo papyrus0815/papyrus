@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiX } from 'react-icons/fi'
 import { useSearchParams } from 'react-router-dom'
 
+import { eventTypeDef } from '@/entities/event/model/event-type-registry'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { updateEvent } from '@/shared/api/events'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
@@ -26,7 +27,7 @@ import {
   aggregatePersons,
   buildCountryMatrix,
   buildGantt,
-  categoryBreakdown,
+  typeBreakdown,
   type GanttFit,
   coverageGaps,
   coverageRatio,
@@ -71,7 +72,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
 
   /**
    * 보기 상태는 URL이 정본 — 열린 사건(`?event=`)만 공유되고 거르기·축·정렬은 새로고침에 사라졌다.
-   * `?country=` 나라 키 · `?cat=` 갈래 · `?fit=parent` 축 · `?order=gaps` 점검표 순서.
+   * `?country=` 나라 키 · `?type=` 유형 · `?fit=parent` 축 · `?order=gaps` 점검표 순서.
    * 값을 바꿀 땐 기록을 쌓지 않는다(뒤로 가기는 모달 닫기·지면 이동에 남겨 둔다).
    */
   const [searchParams, setSearchParams] = useSearchParams()
@@ -90,8 +91,9 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
   )
   const selectedCountryKey = searchParams.get('country')
   const setSelectedCountryKey = (key: string | null) => setParam('country', key)
-  const selectedCategory = searchParams.get('cat')
-  const setSelectedCategory = (name: string | null) => setParam('cat', name)
+  /** 거르기 — 하위 사건 유형(?type=BATTLE). 분포 막대를 누르면 건다 */
+  const selectedType = searchParams.get('type')
+  const setSelectedType = (key: string | null) => setParam('type', key)
   const ganttFit: GanttFit = searchParams.get('fit') === 'parent' ? 'parent' : 'children'
   const setGanttFit = (fit: GanttFit) => setParam('fit', fit === 'parent' ? 'parent' : null)
   const checklistOrder = searchParams.get('order') === 'gaps' ? 'gaps' : 'number'
@@ -151,7 +153,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
       ordered,
       numberById,
       matrix,
-      categories: categoryBreakdown(descendants),
+      types: typeBreakdown(descendants),
       histogram: timeHistogram(gantt),
       persons: aggregatePersons([root, ...descendants]),
       metrics: metricRows([root, ...descendants]),
@@ -165,18 +167,18 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
 
   /** 거르기 — 나라·갈래 둘 다 걸리면 교집합. 없으면 null(아무것도 흐리지 않음) */
   const visibleIds = useMemo(() => {
-    if (!data || (!selectedCountryKey && !selectedCategory)) return null
+    if (!data || (!selectedCountryKey && !selectedType)) return null
     return new Set(
       data.descendants
         .filter(
           (node) =>
             (!selectedCountryKey ||
               node.countries.some((country) => country.key === selectedCountryKey)) &&
-            (!selectedCategory || (node.category?.name ?? '미분류') === selectedCategory),
+            (!selectedType || eventTypeDef(node.type).key === selectedType),
         )
         .map((node) => node.id),
     )
-  }, [data, selectedCountryKey, selectedCategory])
+  }, [data, selectedCountryKey, selectedType])
 
   if (isLoading) {
     return (
@@ -348,7 +350,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
         </S.SectionNavLink>
       </S.SectionNav>
 
-      {(selectedCountry || selectedCategory) && (
+      {(selectedCountry || selectedType) && (
         <S.FilterBar role="status">
           <span>
             {visibleIds?.size ?? 0}/{descendants.length}건만 보는 중
@@ -359,9 +361,9 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
               <FiX size={12} aria-label="거르기 풀기" />
             </S.FilterChip>
           )}
-          {selectedCategory && (
-            <S.FilterChip type="button" onClick={() => setSelectedCategory(null)}>
-              갈래: {selectedCategory}
+          {selectedType && (
+            <S.FilterChip type="button" onClick={() => setSelectedType(null)}>
+              유형: {eventTypeDef(selectedType).label}
               <FiX size={12} aria-label="거르기 풀기" />
             </S.FilterChip>
           )}
@@ -398,10 +400,10 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
           onOpen={openEventById}
         />
         <DistributionPanel
-          categories={derived.categories}
+          types={derived.types}
           bins={derived.histogram}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
+          selectedType={selectedType}
+          onSelectType={setSelectedType}
         />
         {/* 비어 있는 기록은 큰 패널 대신 한 줄로 — 데이터가 생기면 그때 패널이 선다 */}
         {hasPersons && (

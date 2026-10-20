@@ -9,10 +9,11 @@
  *
  * 관계선(전쟁·동맹)은 새 데이터 없이 기존 기록에서 **파생**한다:
  * 1. 사건 진영(sideId) — 진영이 2개 이상이면 진영 간 = 교전, 같은 진영 = 동맹. 가장 정확하다.
- * 2. 사건 역할 — 진영이 없고 분류가 전쟁/군사일 때만. 주도국·동맹국 ↔ 대상국·적대국·피해국.
+ * 2. 사건 역할 — 진영이 없고 유형이 무력 충돌(전쟁·전투·봉기)일 때만. 주도국·동맹국 ↔ 대상국·적대국·피해국.
  *    (분류 게이트가 없으면 조약 체결 사건의 '주도국↔대상국'이 전선으로 그려진다.)
  * 3. 동맹 조약 — 서명~만료(파기) 사이 서명국끼리 동맹.
  */
+import { isArmedConflictType } from '@/entities/event/model/event-type-registry'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import { type TitleRank, titleRankOf } from './title-rank'
@@ -86,6 +87,8 @@ export interface AtlasEventInput {
   startDate?: string | null
   endDate?: string | null
   category?: { name?: string | null } | null
+  /** 사건 유형(형식) — 무력 충돌 판정의 정본(event-type-registry). 분야(category)로 판정하지 않는다 */
+  type?: string | null
   relatedCountries?: AtlasEventParticipantInput[] | null
   relatedHistoricalCountries?: AtlasEventParticipantInput[] | null
 }
@@ -366,7 +369,11 @@ export function buildNodes(
 
 // ── 관계선 ───────────────────────────────────────────────────
 
-const WAR_CATEGORY = /전쟁|군사|전투|war|battle/i
+/**
+ * 무력 충돌 판정 — 사건 **유형**(전쟁·전투·봉기)으로. 예전엔 분류 이름 정규식(/전쟁|군사|전투/)이라
+ * '군사' 분야의 함대법·참모총장 취임·기동훈련까지 걸렸고, 점검은 그 소음을 제목 정규식으로 다시 걸렀다.
+ */
+const isWarEvent = (event: AtlasEventInput): boolean => isArmedConflictType(event.type)
 const ATTACKER_ROLES = new Set(['INITIATOR', 'ALLY'])
 const DEFENDER_ROLES = new Set(['TARGET', 'ADVERSARY', 'VICTIM'])
 
@@ -553,7 +560,7 @@ export function buildEdges(
       continue
     }
 
-    if (!WAR_CATEGORY.test(event.category?.name ?? '')) continue
+    if (!isWarEvent(event)) continue
     const attackers = participants.filter(
       (participant) => participant.role && ATTACKER_ROLES.has(participant.role),
     )
@@ -610,7 +617,7 @@ export function buildEdges(
 
 /**
  * 지도에 전선을 그릴 수 있는 사건인가 — 스크러버 분수령 칩의 후보.
- * buildEdges와 같은 기준(진영 2개 이상, 또는 전쟁 분류 + 공격측·방어측 역할 모두)이라
+ * buildEdges와 같은 기준(진영 2개 이상, 또는 무력 충돌 유형 + 공격측·방어측 역할 모두)이라
  * 칩을 눌렀는데 지도에 선이 하나도 없는 일이 없다. (참여국 수만 보면 진영·역할이 비어
  * 선을 못 긋는 최근 사건들이 칩을 채웠다.)
  */
@@ -624,7 +631,7 @@ export function isFrontLineEvent(event: AtlasEventInput): boolean {
     participants.map((participant) => participant.sideId).filter(Boolean),
   )
   if (sideIds.size >= 2) return true
-  if (!WAR_CATEGORY.test(event.category?.name ?? '')) return false
+  if (!isWarEvent(event)) return false
   const hasAttacker = participants.some(
     (participant) => participant.role && ATTACKER_ROLES.has(participant.role),
   )
@@ -671,7 +678,7 @@ export function pickEraHeadline(
     const years = endYear - span.startYear
     let score = 0
     if (isFrontLineEvent(event)) score += 40
-    if (WAR_CATEGORY.test(event.category?.name ?? '')) score += 20
+    if (isWarEvent(event)) score += 20
     if (years > 0) score += 10 + Math.min(years, 30) / 3
     score += Math.min(participantCount, 10)
     if (span.startYear === year) score += 5

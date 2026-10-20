@@ -23,19 +23,17 @@ export type Mode = 'light' | 'dark'
  */
 /* dark: 어두운 배경(#0e0f12급) 위 텍스트·글리프용 밝은 쌍 — 대비 4.5:1 이상,
  * withAlpha 전제로 전부 6자리 hex 유지. 라이트 값(color)과 같은 색상군에서 승도만 올림. */
+/* 2026-10-19 — 분야(카테고리)와 형식(사건 유형) 분리: '전쟁/군사' → '군사', '회담/조약'·'건국/멸망'은
+ * 형식이라 사건 유형(entities/event/model/event-type-registry.ts)으로 옮기고 분야 팔레트에서 뺐다. */
 export const LEDGER_CATEGORY = {
   정치: { key: 'politics', color: '#6d28d9', dark: '#c4b5fd', icon: '◆' }, // 보라(인디고-퍼플)
   경제: { key: 'economy', color: '#b45309', dark: '#fbbf24', icon: '$' }, // 황갈색
-  '전쟁/군사': { key: 'war', color: '#b91c1c', dark: '#f87171', icon: '⚔' }, // 빨강
+  군사: { key: 'military', color: '#b91c1c', dark: '#f87171', icon: '⚔' }, // 빨강
   사회: { key: 'social', color: '#0d9488', dark: '#2dd4bf', icon: '◉' }, // 짙은 청록
   문화: { key: 'culture', color: '#db2777', dark: '#f472b6', icon: '✦' }, // 마젠타
   과학기술: { key: 'tech', color: '#0e7490', dark: '#22d3ee', icon: '⚙' }, // 시안 (변경: 0369a1→0e7490)
   외교: { key: 'diplomacy', color: '#0ea5e9', dark: '#38bdf8', icon: '☍' }, // 하늘
-  '회담/조약': { key: 'treaty', color: '#1e3a8a', dark: '#93c5fd', icon: '✎' }, // 네이비
   종교: { key: 'religion', color: '#a16207', dark: '#facc15', icon: '✚' }, // 황금
-  // 라임 — 남은 색상군 중 기존 10색과 가장 멀다(라이트 최근접 사회 ΔE 25.0, 다크 최근접 종교 22.9).
-  // 녹색(#15803d)은 사회(청록)와 다크 ΔE 12.7로 식별성 예산 경계라 기각.
-  '건국/멸망': { key: 'statehood', color: '#4d7c0f', dark: '#a3e635', icon: '⚑' },
   기타: { key: 'other', color: '#6b7280', dark: '#9ca3af', icon: '·' }, // 회색
 } as const
 

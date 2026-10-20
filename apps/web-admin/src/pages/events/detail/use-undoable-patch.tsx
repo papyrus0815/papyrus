@@ -300,6 +300,9 @@ export function buildInverse(
       case 'kind':
         inv.kind = event.kind ?? 'SINGLE'
         break
+      case 'type':
+        inv.type = event.type ?? 'OTHER'
+        break
       /**
        * 추가 상위 — 응답엔 extraParents(객체 배열)뿐이라 id 배열로 역직렬화.
        * 승격 swap({parentEventId, extraParentEventIds} 동시 patch)은 buildInverse가

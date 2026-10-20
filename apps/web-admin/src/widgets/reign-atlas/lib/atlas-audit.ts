@@ -6,6 +6,7 @@
  * (isFrontLineEvent·resolveModernToHistorical·isActiveAt)로 해서, 점검을 다 고치면
  * 지도에 실제로 나타나게 한다.
  */
+import { isArmedConflictType } from '@/entities/event/model/event-type-registry'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import {
@@ -20,8 +21,6 @@ import {
   resolveModernToHistorical,
   signedYear,
 } from './atlas-model'
-
-const WAR_CATEGORY = /전쟁|군사|전투|war|battle/i
 
 export type AuditTarget =
   | { kind: 'event'; id: string }
@@ -111,19 +110,13 @@ function normalizeTitle(title: string): string {
   return title.replace(/[\s()（）\-–—·,.]/g, '').toLowerCase()
 }
 
-/**
- * 무력 충돌로 읽히는 제목 — 전쟁/군사 분류에는 함대법·참모총장 취임·기동훈련 같은
- * '군사 제도' 사건이 섞여 있어(실측 84건 중 약 30건) 분류만 보면 점검이 소음으로 찬다.
- */
-const CONFLICT_TITLE =
-  /전쟁|전투|해전|공방|포위|봉기|반란|침공|원정|입성|선전포고|war|battle|siege|revolt|invasion/i
-
 function checkWars(events: AtlasEventInput[]): AuditIssue[] {
   const byId = new Map(events.map((event) => [event.id, event]))
   const issues: AuditIssue[] = []
   for (const event of events) {
-    if (!WAR_CATEGORY.test(event.category?.name ?? '')) continue
-    if (!CONFLICT_TITLE.test(event.title)) continue
+    // 무력 충돌 유형만 — 예전엔 '군사' 분류에 함대법·참모총장 취임·기동훈련이 섞여(84건 중 약 30건)
+    // 제목 정규식으로 다시 걸렀다. 형식이 사건 유형으로 분리돼 그 우회가 필요 없다.
+    if (!isArmedConflictType(event.type)) continue
     if (isFrontLineEvent(event)) continue
     // 상위 전쟁이 이미 전선을 그리면 하위 전투(스당·세바스토폴…)는 지도에 더할 것이 없다
     const parent = event.parentEventId

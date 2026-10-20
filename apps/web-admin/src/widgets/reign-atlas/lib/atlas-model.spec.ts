@@ -269,7 +269,8 @@ describe('buildEdges', () => {
     title: '7년 전쟁',
     startDate: '1756-05-17T00:00:00.000Z',
     endDate: '1763-02-15T00:00:00.000Z',
-    category: { name: '전쟁/군사' },
+    category: { name: '군사' },
+    type: 'WAR',
     relatedHistoricalCountries: [
       { id: 'prussia', role: 'PARTICIPANT', sideId: 'sideA' },
       { id: 'austria', role: 'PARTICIPANT', sideId: 'sideB' },
@@ -321,7 +322,8 @@ describe('buildEdges', () => {
       title: '러시아-튀르크 전쟁',
       startDate: '1768-01-01T00:00:00.000Z',
       endDate: '1774-01-01T00:00:00.000Z',
-      category: { name: '전쟁/군사' },
+      category: { name: '군사' },
+      type: 'WAR',
       relatedHistoricalCountries: [
         { id: 'russia', role: 'INITIATOR' },
         { id: 'austria', role: 'TARGET' },
@@ -330,7 +332,8 @@ describe('buildEdges', () => {
     const treatyEvent: AtlasEventInput = {
       ...roleWar,
       id: 'e3',
-      category: { name: '회담/조약' },
+      category: { name: '외교' },
+      type: 'TREATY',
     }
     expect(buildEdges([roleWar], [], countries, 1770)).toHaveLength(1)
     expect(buildEdges([treatyEvent], [], countries, 1770)).toHaveLength(0)
@@ -445,7 +448,8 @@ describe('isFrontLineEvent', () => {
     id: 'x',
     title: '사건',
     startDate: '1900-01-01T00:00:00.000Z',
-    category: { name: '전쟁/군사' },
+    category: { name: '군사' },
+    type: 'WAR',
   }
 
   it('진영이 둘 이상이면 전선', () => {
@@ -511,7 +515,8 @@ describe('pickEraHeadline', () => {
     title: '7년 전쟁',
     startDate: '1756-05-17T00:00:00.000Z',
     endDate: '1763-02-15T00:00:00.000Z',
-    category: { name: '전쟁/군사' },
+    category: { name: '군사' },
+    type: 'WAR',
     relatedHistoricalCountries: [
       { id: 'prussia', sideId: 'a' },
       { id: 'austria', sideId: 'b' },

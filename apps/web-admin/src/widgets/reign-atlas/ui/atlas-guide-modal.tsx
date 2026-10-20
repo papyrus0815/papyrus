@@ -104,7 +104,7 @@ export function AtlasGuideModal({ isOpen, onClose, onOpenAudit }: Props) {
                 교전선, <b>같은 진영</b>끼리 동맹선을 긋습니다.
               </li>
               <li>
-                진영이 비어 있으면, 분류가 '전쟁/군사'인 사건에 한해
+                진영이 비어 있으면, 유형이 전쟁·전투·봉기인 사건에 한해
                 주도국·동맹국 ↔ 대상국·적대국·피해국 역할로 교전선을 긋습니다.
               </li>
               <li>

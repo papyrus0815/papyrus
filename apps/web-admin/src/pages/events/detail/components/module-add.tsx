@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FiChevronDown, FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { categoryFeatures } from '@/entities/event/model'
+import { eventTypeFeatures } from '@/entities/event/model'
 import {
   ledgerAccentSubtle,
   ledgerHairlineStrong,
@@ -120,7 +120,7 @@ export function ModuleAdd({
    * 오염이 있었다. 빈 객체 `{}`도 enabledModules 판정에서는 truthy라
    * 모듈은 정상적으로 표시되며, 모든 필드는 빈 InlineText로 렌더된다.
    */
-  const features = categoryFeatures(event.category?.name)
+  const features = eventTypeFeatures(event.type)
 
   const allOptions: ModuleOption[] = [
     {

@@ -21,7 +21,8 @@ const event: EventOverviewNode = {
   endDate: '1914-09-12T00:00:00.000Z',
   endDatePrecision: null,
   location: null,
-  category: { id: 'c', name: '전쟁/군사' },
+  category: { id: 'c', name: '군사' },
+  type: 'BATTLE',
   countries: [
     { key: 'h:de', id: 'de', kind: 'historical', name: '독일 제국', flagEmoji: null, role: 'PARTICIPANT', sideId: null },
     { key: 'h:fr', id: 'fr', kind: 'historical', name: '프랑스 제3공화국', flagEmoji: null, role: 'INITIATOR', sideId: null },
