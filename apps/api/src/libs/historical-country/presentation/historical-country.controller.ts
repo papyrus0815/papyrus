@@ -1,4 +1,4 @@
-import { asReignRecord, reignWhere } from '../../person/infrastructure/office-holding.query'
+import { reignWhere } from '../../person/infrastructure/office-holding.query'
 import {
   Controller,
   HttpCode,
@@ -150,7 +150,7 @@ export class HistoricalCountryController {
   /**
    * 건국·멸망 요약 — 개요 탭 '건국'·'멸망' 카드용. 새로 저장하는 값 없이 기존 기록에서 파생한다.
    *
-   * - 초대 군주: 재위 중 제1대(regnalNumber=1 — 국가 통산 대수 규약, 없으면 termNumber=1),
+   * - 초대 군주: 재위 중 제1대(ordinal=1 — 국가 통산 대수),
    *   그런 기록이 없으면 가장 이른 재위(basis='earliest').
    * - 초대 국가원수·정부수반: 재임 중 통산 1대(termNumber=1), 없으면 가장 이른 재임.
    *   군주 직(정의 isMonarchical) 재임은 재위 표와 겹치므로 뺀다.
@@ -187,7 +187,7 @@ export class HistoricalCountryController {
 
     const firstRulers: FirstRulerDto[] = []
 
-    // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계). 재위의 대수 = ordinal
+    // 재위 = 군주직 재임 행. 대수 = ordinal
     const reignRows = await this.prisma.governmentPositionTenure.findMany({
       where: reignWhere({ historicalCountryId: id }),
       select: {
@@ -204,16 +204,14 @@ export class HistoricalCountryController {
         person: { select: personSelect },
       },
     })
-    const reigns = reignRows.map(asReignRecord)
+    const reigns = reignRows
     const reignStart = (reign: (typeof reigns)[number]) =>
       reign.startYear != null
         ? signed(reign.startEra, reign.startYear)
         : reign.startDate
           ? reign.startDate.getUTCFullYear()
           : Number.POSITIVE_INFINITY
-    const numberedReign =
-      reigns.find((reign) => reign.regnalNumber === 1) ??
-      reigns.find((reign) => reign.termNumber === 1)
+    const numberedReign = reigns.find((reign) => reign.ordinal === 1)
     const reignsByStart = [...reigns]
       .filter((reign) => Number.isFinite(reignStart(reign)))
       .sort((left, right) => reignStart(left) - reignStart(right))

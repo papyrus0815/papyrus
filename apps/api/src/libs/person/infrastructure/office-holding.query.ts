@@ -7,8 +7,7 @@
  * - `MONARCHICAL_TENURE` — 예전 재위 API·읽기 모델이 보던 행(군주직).
  * - `NON_MONARCHICAL_TENURE` — 예전 재임 API·읽기 모델이 보던 행. 기존 재임 조회에 이 조건을
  *   더해야 옮겨온 재위가 재임 목록에 한 번 더 나오지 않는다.
- * - `asReignRecord` — 재임 행을 예전 재위 응답 모양(regnalNumber·precision 등)으로 되돌린다.
- *   웹은 3단계 전까지 재위 응답 모양을 그대로 받는다.
+ * - `asOfficeHolding` — 응답 행 모양. 재위·재임이 같은 칸 이름을 쓰고 `isMonarchical`로만 갈린다.
  *
  * ⚠️ 관계 필터는 `is`로 쓴다. 직위 정의가 없는 재임(positionDefinitionId NULL)은 군주직이 아니다 —
  * `positionDefinition: { isMonarchical: false }`만 쓰면 NULL 행이 빠진다(Prisma 관계 필터 함정).
@@ -26,14 +25,14 @@ export const NON_MONARCHICAL_TENURE = {
   ],
 } satisfies Prisma.GovernmentPositionTenureWhereInput
 
-/** 기존 재위 where에 군주직 조건을 덧붙인다 (regnalNumber는 ordinal로 옮겨졌다) */
+/** where에 군주직 조건을 덧붙인다 (재위 = 군주직 재임 행) */
 export function reignWhere(
   where: Prisma.GovernmentPositionTenureWhereInput = {},
 ): Prisma.GovernmentPositionTenureWhereInput {
   return { AND: [where, MONARCHICAL_TENURE] }
 }
 
-/** 기존 재임 where에 비군주직 조건을 덧붙인다 */
+/** where에 비군주직 조건을 덧붙인다 */
 export function tenureWhere(
   where: Prisma.GovernmentPositionTenureWhereInput = {},
 ): Prisma.GovernmentPositionTenureWhereInput {
@@ -55,38 +54,32 @@ export function precisionOf(
 }
 
 /**
- * 재임 테이블 행 → 예전 재위 레코드 모양.
+ * 직위 보유 행 응답 — 재위·재임 모두 같은 모양으로 내보낸다(직위 보유 단일 모델).
  *
- * 재위만 갖던 이름: regnalNumber(= ordinal, 재위에서는 대수), startDatePrecision·endDatePrecision
- * (구조화 칸에서 파생). 재위에는 없던 재임 칸(positionType·title·cabinet…)은 그대로 실려도 무해하다.
+ * - `isMonarchical`: 이 행이 재위(군주직)인가. 직위 정의의 isMonarchical이 진실이고, 군주직 조건으로
+ *   골라 읽은 행처럼 호출부가 이미 아는 경우는 인자로 준다(select에 정의가 없어도 된다).
+ * - `ordinal`: 대수(국가·정체 기준 통산 제N대) — 재위·재임 공통. `regnalNumber`는 '이름 속 서수'
+ *   (루이 14세의 14)라 대수가 아니다.
+ * - `endDatePrecision`: 재임엔 종료 정밀도 칸이 없어 구조화 종료 칸에서 파생한다. 시작 정밀도는 저장값.
+ *   정밀도 규약은 옛 재위와 같다 — NULL = 일 단위.
  */
-export function asReignRecord<T extends Record<string, any>>(row: T): T & {
-  regnalNumber: number | null
-  termNumber: null
-  startDatePrecision: Precision | null
-  endDatePrecision: Precision | null
-} {
-  // 재위의 옛 규약: 정밀도 NULL = 일 단위. 응답이 이행 전과 같도록 'day'는 null로 돌려준다.
-  const legacy = (precision: Precision | null) => (precision === 'day' ? null : precision)
+export function asOfficeHolding<T extends Record<string, any>>(
+  row: T,
+  isMonarchical?: boolean,
+): T & { isMonarchical: boolean; endDatePrecision: Precision | null } {
+  const derived = precisionOf(row.endYear, row.endMonth, row.endDay)
   return {
     ...row,
-    regnalNumber: row.ordinal ?? null,
-    termNumber: null,
-    // 시작 정밀도는 재임에도 칸이 있어 이전 때 그대로 옮겼다 — 저장값 우선
-    startDatePrecision:
-      row.startDatePrecision !== undefined
-        ? (row.startDatePrecision ?? null)
-        : legacy(precisionOf(row.startYear, row.startMonth, row.startDay)),
-    // 종료 정밀도 칸은 재임에 없다 — 구조화 칸에서 파생
-    endDatePrecision:
-      row.endYear !== undefined ? legacy(precisionOf(row.endYear, row.endMonth, row.endDay)) : null,
+    isMonarchical: isMonarchical ?? row.positionDefinition?.isMonarchical === true,
+    endDatePrecision: row.endYear !== undefined ? (derived === 'day' ? null : derived) : null,
   }
 }
 
 /**
- * 인물 include로 한꺼번에 읽은 GovernmentTenures를 예전 두 목록으로 가른다.
- * - `GovernmentTenures` ← 비군주직(예전 재임)
- * - `sovereignReigns`   ← 군주직(예전 재위), 시작일 내림차순 그대로
+ * 인물 include로 한꺼번에 읽은 GovernmentTenures를 화면 구획 둘로 묶는다 — 군주 재위 카드와 관직 재임 목록.
+ * - `GovernmentTenures` ← 비군주직
+ * - `sovereignReigns`   ← 군주직, 시작일 내림차순 그대로
+ * 행 모양은 두 쪽 모두 asOfficeHolding(같은 재임 행 + isMonarchical).
  *
  * 이미 `sovereignReigns`가 붙어 있으면(상세 조회가 따로 읽어 붙인 경우) 손대지 않는다.
  * 군주직 판정에 `positionDefinition.isMonarchical`이 필요하다 — select에 넣어야 한다.
@@ -94,25 +87,10 @@ export function asReignRecord<T extends Record<string, any>>(row: T): T & {
 export function splitOfficeHoldings<T extends Record<string, any>>(person: T): T {
   const all: any[] | undefined = person?.GovernmentTenures
   if (!Array.isArray(all) || person.sovereignReigns !== undefined) return person
-  const isMonarchical = (row: any) => row?.positionDefinition?.isMonarchical === true
+  const rows = all.map((row) => asOfficeHolding(row))
   return {
     ...person,
-    GovernmentTenures: all.filter((row) => !isMonarchical(row)),
-    sovereignReigns: all.filter(isMonarchical).map(asReignRecord),
-  }
-}
-
-/**
- * 재임 업적 행(부모 = 군주직 재임) → 예전 재위 업적 모양.
- * 예전 매퍼(mapSovereignReignAchievementRow)가 `sovereignReignId`·`sovereignReign`을 읽는다.
- */
-export function asLegacyReignAchievement<T extends { tenureId: string; tenure?: any }>(
-  row: T,
-): Omit<T, 'tenure'> & { sovereignReignId: string; sovereignReign: any } {
-  const { tenure, ...rest } = row
-  return {
-    ...rest,
-    sovereignReignId: row.tenureId,
-    sovereignReign: tenure ? asReignRecord(tenure) : tenure,
+    GovernmentTenures: rows.filter((row) => !row.isMonarchical),
+    sovereignReigns: rows.filter((row) => row.isMonarchical),
   }
 }

@@ -1,4 +1,4 @@
-import { asReignRecord, reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
+import { reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import type { ContemporaryRulerPersonDto } from '../presentation/dto/person-contemporaries.response'
@@ -45,7 +45,7 @@ const TITLED_POSITION_TYPES = ['MILITARY_COMMANDER', 'CABINET_MINISTER'] as cons
 
 /**
  * 축 판정은 **직위 정의(positionDefinition.positionType)** 가 진실이다 — record가
- * 어느 테이블에 있느냐(TENURE/SOVEREIGN_REIGN)는 축이 아니다. 실측: sovereign_reign에
+ * 재위냐 재임이냐(군주직 여부)는 축이 아니다. 실측: sovereign_reign에
  * 정의가 HEAD_OF_GOVERNMENT인 행이 17건(도쿠가와 쇼군 15·프랑스 제3공화국 총리 2)이고,
  * 프랑스 제3공화국 총리직은 재임 3행 + 재위 2행으로 **두 테이블에 쪼개져** 있다.
  * 테이블로 축을 가르면 클레망소(재임)→푸앵카레(재위)→푸앵카레(재임) 총리 사슬이 끊긴다.
@@ -86,8 +86,8 @@ const ANCHOR_REIGN_SELECT = {
 const NEIGHBOR_SELECT = {
   id: true,
   appointmentMethod: true,
-  termNumber: true,
-  regnalNumber: true,
+  ordinal: true,
+  regnalName: true,
   startDate: true,
   endDate: true,
   startDatePrecision: true,
@@ -119,11 +119,8 @@ interface AxisSource {
  * 그 외(재임의 다른 positionType, 재위 전체)는 HEAD_OF_GOVERNMENT가 아니면 국가원수(폴백)라,
  * 값이 비어도 `positionType: undefined`(= 필터 소실) 같은 구멍이 이웃 쿼리로 새지 않는다.
  */
-function axisOfAnchor(
-  kind: 'TENURE' | 'SOVEREIGN_REIGN',
-  row: AxisSource,
-): SuccessionAxis {
-  if (kind === 'TENURE' && (TITLED_POSITION_TYPES as readonly string[]).includes(row.positionType ?? '')) {
+function axisOfAnchor(isMonarchical: boolean, row: AxisSource): SuccessionAxis {
+  if (!isMonarchical && (TITLED_POSITION_TYPES as readonly string[]).includes(row.positionType ?? '')) {
     if (row.title) {
       return {
         kind: 'TITLED',
@@ -133,10 +130,9 @@ function axisOfAnchor(
     }
     return { kind: 'HEAD_OF_STATE' }
   }
-  const declared =
-    kind === 'SOVEREIGN_REIGN'
-      ? (row.positionDefinition?.positionType ?? null)
-      : (row.positionType ?? null)
+  const declared = isMonarchical
+    ? (row.positionDefinition?.positionType ?? null)
+    : (row.positionType ?? null)
   return declared === HEAD_OF_GOVERNMENT_TYPE ? { kind: 'HEAD_OF_GOVERNMENT' } : { kind: 'HEAD_OF_STATE' }
 }
 
@@ -191,28 +187,20 @@ function toPersonDto(person: any, accountId?: string): ContemporaryRulerPersonDt
   }
 }
 
-function toRecordDto(
-  row: any,
-  recordKind: 'TENURE' | 'SOVEREIGN_REIGN',
-): AdjacencyRecordDto {
+function toRecordDto(row: any, isMonarchical: boolean): AdjacencyRecordDto {
   return {
     recordId: row.id,
-    recordKind,
+    isMonarchical,
     // 재위는 자기 positionType 컬럼이 없어 직위 정의에서 파생한다. 전량 HEAD_OF_STATE로
     // 굳히면 총리 정의로 등록된 재위(푸앵카레)가 응답에서 국가원수로 둔갑한다.
     // 정의 없는 군주는 국가원수 폴백 — axisOfAnchor와 같은 규칙.
-    positionType:
-      recordKind === 'SOVEREIGN_REIGN'
-        ? (row.positionDefinition?.positionType ?? 'HEAD_OF_STATE')
-        : (row.positionType as string),
-    title:
-      recordKind === 'SOVEREIGN_REIGN'
-        ? (row.positionDefinition?.title ?? null)
-        : (row.title ?? row.positionDefinition?.title ?? null),
+    positionType: isMonarchical
+      ? (row.positionDefinition?.positionType ?? 'HEAD_OF_STATE')
+      : (row.positionType as string),
+    title: row.title ?? row.positionDefinition?.title ?? null,
     appointmentMethod: row.appointmentMethod ?? null,
-    regnalName: recordKind === 'SOVEREIGN_REIGN' ? (row.regnalName ?? null) : null,
-    regnalNumber: row.regnalNumber ?? null,
-    termNumber: row.termNumber ?? null,
+    regnalName: row.regnalName ?? null,
+    ordinal: row.ordinal ?? null,
     startYear: yearOf(row.startDate) as number,
     endYear: yearOf(row.endDate),
     startDate: row.startDate.toISOString(),
@@ -224,7 +212,7 @@ function toRecordDto(
 }
 
 interface NeighborCandidate {
-  recordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+  isMonarchical: boolean
   row: any
   personId: string
   startDate: Date
@@ -296,17 +284,15 @@ export class PersonReignAdjacencyService {
         }),
         select: ANCHOR_TENURE_SELECT,
       }),
-      // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
-      this.prisma.governmentPositionTenure
-        .findMany({
+      // 재위 = 군주직 재임 행
+      this.prisma.governmentPositionTenure.findMany({
           where: reignWhere({ personId }),
           select: { ...ANCHOR_REIGN_SELECT, ordinal: true },
-        })
-        .then((rows) => rows.map(asReignRecord)),
+        }),
     ])
     const anchors = [
-      ...anchorTenures.map((row) => ({ kind: 'TENURE' as const, row })),
-      ...anchorReigns.map((row) => ({ kind: 'SOVEREIGN_REIGN' as const, row })),
+      ...anchorTenures.map((row) => ({ isMonarchical: false, row })),
+      ...anchorReigns.map((row) => ({ isMonarchical: true, row })),
     ]
 
     let bcSkippedCount = 0
@@ -346,7 +332,7 @@ export class PersonReignAdjacencyService {
 
       // 축(국가원수/정부수반)은 앵커가 정한다 — 총리 카드에 군주가, 군주 카드에 총리가
       // 선/후대로 섞여 들어오는 것을 막는다(둘은 병렬 재직이지 승계 관계가 아님).
-      const axis = axisOfAnchor(anchor.kind, anchor.row as AxisSource)
+      const axis = axisOfAnchor(anchor.isMonarchical, anchor.row as AxisSource)
 
       const [predRows, succRows] = await Promise.all([
         this.fetchNeighbors(scopeWhere, anchorStartDate, 'PREDECESSOR', axis),
@@ -357,7 +343,7 @@ export class PersonReignAdjacencyService {
 
       entries.push({
         subjectRecordId: anchor.row.id,
-        subjectRecordKind: anchor.kind,
+        subjectIsMonarchical: anchor.isMonarchical,
         scope: {
           countryId: anchor.row.countryId ?? null,
           historicalCountryId: anchor.row.historicalCountryId ?? null,
@@ -497,28 +483,24 @@ export class PersonReignAdjacencyService {
               orderBy,
               take: NEIGHBOR_OVERFETCH,
             })
-            .then((rows) => rows.map(asReignRecord)),
     ])
     const candidates: NeighborCandidate[] = []
     for (const row of tenureRows) {
-      const candidate = this.toCandidate(row, 'TENURE')
+      const candidate = this.toCandidate(row, false)
       if (candidate) candidates.push(candidate)
     }
     for (const row of reignRows) {
-      const candidate = this.toCandidate(row, 'SOVEREIGN_REIGN')
+      const candidate = this.toCandidate(row, true)
       if (candidate) candidates.push(candidate)
     }
     return candidates
   }
 
-  private toCandidate(
-    row: any,
-    recordKind: 'TENURE' | 'SOVEREIGN_REIGN',
-  ): NeighborCandidate | null {
+  private toCandidate(row: any, isMonarchical: boolean): NeighborCandidate | null {
     const startYear = yearOf(row.startDate)
     if (startYear == null) return null
     return {
-      recordKind,
+      isMonarchical,
       row,
       personId: row.person.id,
       startDate: row.startDate,
@@ -538,15 +520,12 @@ export class PersonReignAdjacencyService {
   ): { neighbors: AdjacencyNeighborDto[]; omitted: number } {
     if (candidates.length === 0) return { neighbors: [], omitted: 0 }
 
-    // dedup: 같은 인물·같은 UTC 날짜의 tenure/reign 이중계상 → REIGN 우선
-    // (contemporaries 규칙과 동일 — 안 하면 대상 tenure가 자기 reign의 이웃으로 등장)
+    // dedup: 같은 인물·같은 UTC 날짜는 한 번만 — 연결된 정체 범위에서 같은 날 두 왕위에 오른
+    // 군주(동군연합)가 선대로 두 번 서지 않게. (재위·재임 이중 입력은 한 테이블이 된 뒤 없다.)
     const byDedup = new Map<string, NeighborCandidate>()
     for (const candidate of candidates) {
       const key = `${candidate.personId}:${isoDay(candidate.startDate)}`
-      const existing = byDedup.get(key)
-      if (!existing || candidate.recordKind === 'SOVEREIGN_REIGN') {
-        byDedup.set(key, candidate)
-      }
+      if (!byDedup.has(key)) byDedup.set(key, candidate)
     }
     const deduped = [...byDedup.values()]
 
@@ -609,7 +588,7 @@ export class PersonReignAdjacencyService {
     return {
       relation,
       person: toPersonDto(candidate.row.person, context.accountId),
-      record: toRecordDto(candidate.row, candidate.recordKind),
+      record: toRecordDto(candidate.row, candidate.isMonarchical),
       overlapsAnchor,
       coBoundary,
       // 대상 본인의 다른 재위 단계(복위·공동→단독) — 프론트는 딥링크 비활성

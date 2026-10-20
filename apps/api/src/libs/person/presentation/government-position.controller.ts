@@ -1,4 +1,4 @@
-import { asReignRecord, reignWhere } from '../infrastructure/office-holding.query'
+import { asOfficeHolding, reignWhere } from '../infrastructure/office-holding.query'
 import {
   BadRequestException,
   Controller,
@@ -209,11 +209,8 @@ export class GovernmentPositionController {
         },
       },
     })
-    return rows.map((row) => {
-      const isMonarchical = row.positionDefinition?.isMonarchical === true
-      // 군주직 행만 예전 재위 모양(regnalNumber = 대수·precision)으로, 나머지는 재임 행 그대로
-      return serializeBigInt({ ...(isMonarchical ? asReignRecord(row) : row), isMonarchical })
-    })
+    // 재위·재임 같은 모양 — 대수는 ordinal, 갈래는 isMonarchical
+    return rows.map((row) => serializeBigInt(asOfficeHolding(row)))
   }
 
   /**

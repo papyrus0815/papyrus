@@ -1,4 +1,4 @@
-import { asReignRecord, reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
+import { reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import {
@@ -184,8 +184,8 @@ export class PersonContemporariesService {
     const recordSelect = {
       id: true,
       appointmentMethod: true,
-      termNumber: true,
-      regnalNumber: true,
+      ordinal: true,
+      regnalName: true,
       startDate: true,
       endDate: true,
       person: { select: RULER_PERSON_SELECT },
@@ -210,8 +210,8 @@ export class PersonContemporariesService {
         where: reignWhere({ AND: reignOverlapAnd }),
         select: {
           ...recordSelect,
-          ordinal: true, // 재위의 대수 — asReignRecord가 regnalNumber로 되돌린다
-          regnalName: true,
+          positionType: true,
+          title: true,
           startEra: true,
           startYear: true,
           endEra: true,
@@ -221,7 +221,7 @@ export class PersonContemporariesService {
         take: PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE,
       }),
     ])
-    const reignRows = reignRowsRaw.map(asReignRecord)
+    const reignRows = reignRowsRaw
     // 한 테이블이라도 상한에 닿으면 후보 스캔이 잘렸을 수 있음 — totalPersons/omittedCount가
     // 과소일 수 있음을 노출한다. (정상 스트립 창에선 발동하지 않는다.)
     const candidatesTruncated =
@@ -234,10 +234,7 @@ export class PersonContemporariesService {
       effectiveEnd: number
     }
 
-    const toCandidate = (
-      row: any,
-      recordKind: ContemporaryRecordDto['recordKind'],
-    ): CandidateRow | null => {
+    const toCandidate = (row: any, isMonarchical: boolean): CandidateRow | null => {
       // 재위는 구조화 축(startEra/startYear)이 진실 — tenure는 구조화 컬럼이 없어 DATETIME 폴백.
       const startYear = signedYearFromStructuredOrDate(
         row.startEra,
@@ -260,19 +257,12 @@ export class PersonContemporariesService {
         effectiveEnd,
         record: {
           recordId: row.id,
-          recordKind,
-          positionType:
-            recordKind === 'SOVEREIGN_REIGN'
-              ? 'HEAD_OF_STATE'
-              : (row.positionType as string),
-          title:
-            recordKind === 'SOVEREIGN_REIGN'
-              ? (row.positionDefinition?.title ?? null)
-              : (row.title ?? row.positionDefinition?.title ?? null),
+          isMonarchical,
+          positionType: row.positionType as string,
+          title: row.title ?? row.positionDefinition?.title ?? null,
           appointmentMethod: row.appointmentMethod ?? null,
-          regnalName: recordKind === 'SOVEREIGN_REIGN' ? (row.regnalName ?? null) : null,
-          regnalNumber: row.regnalNumber ?? null,
-          termNumber: row.termNumber ?? null,
+          regnalName: row.regnalName ?? null,
+          ordinal: row.ordinal ?? null,
           startYear,
           endYear,
           // 구조화 재위(startDate=NULL)는 부호 연도 1월 1일로 합성 — dedup 키·정렬 안정성 유지
@@ -290,30 +280,16 @@ export class PersonContemporariesService {
       }
     }
 
-    // dedup은 **크로스종류만** 적용한다: 같은 취임을 TENURE·SOVEREIGN_REIGN 양쪽에 이중
-    // 입력한 경우 REIGN을 우선(수장비교 normalize-tenures 규칙과 동일 — 두 화면이 다르게 세면 안 됨).
-    // 같은 종류끼리는 흡수하지 않는다 — 같은 시작일의 서로 다른 두 재위(동군연합: 폴란드 국왕 +
-    // 리투아니아 대공 등)나 같은 날 시작한 두 재임이 하나로 붕괴하지 않게. (country를 키에 넣으면
-    // dual-fill 이중입력에서 tenure=현대국가·reign=역사국가로 갈려 크로스종류 dedup이 깨진다.)
-    // 날짜 키는 UTC 날짜 단위(시간 무시) — 저장 경로별 time-of-day 드리프트(00:00 vs 09:00)로
-    // 유령 중복이 생기지 않게(normalize-tenures의 24h 관용과 동일).
-    const personDayKeyOf = (candidate: CandidateRow) =>
-      `${candidate.person.id}:${candidate.record.startDate.slice(0, 10)}`
-
+    // 재위·재임이 한 테이블이라 같은 취임이 두 번 오지 않는다 — 종류 간 중복 제거는 없다.
     const reignCandidates: CandidateRow[] = []
     for (const row of reignRows) {
-      const candidate = toCandidate(row, 'SOVEREIGN_REIGN')
+      const candidate = toCandidate(row, true)
       if (candidate) reignCandidates.push(candidate)
     }
-    const reignPersonDays = new Set(reignCandidates.map(personDayKeyOf))
-
     const tenureCandidates: CandidateRow[] = []
     for (const row of tenureRows) {
-      const candidate = toCandidate(row, 'TENURE')
-      if (!candidate) continue
-      // 같은 인물·같은 날짜에 재위가 있으면 그 재위가 같은 취임의 정본 — tenure 흡수(REIGN 우선)
-      if (reignPersonDays.has(personDayKeyOf(candidate))) continue
-      tenureCandidates.push(candidate)
+      const candidate = toCandidate(row, false)
+      if (candidate) tenureCandidates.push(candidate)
     }
 
     // 인물별 그룹 + 겹침 길이 계산

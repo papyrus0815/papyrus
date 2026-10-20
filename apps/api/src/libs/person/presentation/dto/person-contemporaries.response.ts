@@ -12,25 +12,21 @@
  *   era 컬럼 마이그레이션이 와도 이 계약은 불변 (서버 파생만 교체).
  */
 
-export type ContemporaryRecordKind = 'TENURE' | 'SOVEREIGN_REIGN'
-
 export interface ContemporaryRecordDto {
-  /** 원본 행 PK (recordKind별 테이블) */
+  /** 원본 재임 행 PK (재위도 재임 테이블의 군주직 행) */
   recordId: string
-  recordKind: ContemporaryRecordKind
-  /**
-   * GovernmentPositionType — SOVEREIGN_REIGN은 전량 HEAD_OF_STATE로 간주
-   * (mapSovereignReignToChronologyItem·normalize-tenures와 동일 관례)
-   */
+  /** 재위(군주직)인가 — 직위 정의의 isMonarchical */
+  isMonarchical: boolean
+  /** GovernmentPositionType — 직위 정의에서 파생된 행의 값 */
   positionType: string
-  /** 직위명 — tenure.title ?? positionDefinition.title (재위는 정의 title만) */
+  /** 직위명 — tenure.title ?? positionDefinition.title */
   title: string | null
   /** categorizePosition 입력용 (세습/선거 분기) */
   appointmentMethod: string | null
-  /** 왕호/재위명 (재위 전용) */
+  /** 재직명(왕호·교황명) */
   regnalName: string | null
-  regnalNumber: number | null
-  termNumber: number | null
+  /** 대수 — 국가·정체 기준 통산 제N대 */
+  ordinal: number | null
   /** 부호 연도 (현 스키마상 AD 양수) */
   startYear: number
   /** 종료일 미기록이면 null — 「재위 중」과 「미입력」은 스키마상 구분 불가 (person.isAlive로 판단) */

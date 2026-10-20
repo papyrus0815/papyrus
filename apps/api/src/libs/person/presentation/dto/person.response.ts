@@ -1,13 +1,15 @@
 import { Era, DeathType } from './create-person.dto'
 
 /**
- * 인물 상세 응답의 군주·재위(SovereignReign) 요약.
+ * 인물 상세 응답의 군주 재위 요약 — 재임 테이블의 군주직 행(직위 보유 단일 모델).
  *
  * 이 타입은 `PersonRepository.findByIdWithRelations`의 sovereignReigns select와 1:1이다 —
  * select에 컬럼을 추가하면 여기도 함께 추가할 것(반쪽배선 방지 계약).
  */
 export interface PersonSovereignReignSummaryDto {
   id: string
+  /** 언제나 true — 재위 구획 */
+  isMonarchical: boolean
   /** 재위 시작일 (직렬화된 ISO 문자열) */
   startDate: string
   /** 즉위일 정밀도 — 'year'면 연도만 앎(표시·나이 파생은 완화) */
@@ -33,10 +35,8 @@ export interface PersonSovereignReignSummaryDto {
   notes: string | null
   /** 왕명 (정식 컬럼) */
   regnalName: string | null
-  /** 왕명 서수 (예: 14세의 14) */
-  regnalNumber: number | null
-  /** 통산 대수 — 공식 대수 없으면 null */
-  termNumber: number | null
+  /** 대수 — 국가·정체 기준 통산 제N대 (공식 대수 없으면 null) */
+  ordinal: number | null
   /** 본인 회차 (기) */
   subTermNumber: number | null
   /** 왕조 내 서수 (왕조 n대) */
@@ -205,7 +205,8 @@ export interface FamilyTreeNodeFlagDto {
 export interface FamilyTreeNodeSovereignCountryDto {
   id: string | null
   name: string | null
-  regnalNumber: number | null
+  /** 대수 — 가장 이른 재위의 통산 제N대 */
+  ordinal: number | null
   flagEmoji: string | null
   isoCode: string | null
   thumbnailUrl: string | null

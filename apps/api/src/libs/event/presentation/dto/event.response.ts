@@ -398,7 +398,8 @@ export class EventResponseDto {
   })
   accessions?: Array<{
     recordId: string
-    recordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+    /** 재위(군주직)인가 */
+    isMonarchical: boolean
     personId: string
     personName: string
     title: string | null

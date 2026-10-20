@@ -10,7 +10,7 @@
  * 시간 계약 (contemporaries와 동일):
  * - 연도는 부호 연도(signed year). 현 스키마의 tenure/reign DATETIME은 AD 전용이라
  *   BC 앵커는 계산 생략(meta.bcSkippedCount)이지만, era 마이그가 와도 계약은 불변.
- * - 정렬 진실원은 startDate. regnalNumber는 표시 전용(nullable·복위 시 NULL 강제).
+ * - 정렬 진실원은 startDate. ordinal(대수)은 표시 전용(nullable·복위 시 NULL 강제).
  */
 import type {
   ContemporaryRecordDto,
@@ -55,7 +55,8 @@ export interface ReignAdjacencyScopeDto {
 export interface ReignAdjacencyEntryDto {
   /** 대상 인물의 이 재위 record — 프론트 카드가 이 id로 조인 */
   subjectRecordId: string
-  subjectRecordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+  /** 대상 기록이 재위(군주직)인가 */
+  subjectIsMonarchical: boolean
   scope: ReignAdjacencyScopeDto
   /** 선대 — 가까운 것 먼저(startDate 내림차순). 동률(공동군주)은 배열로 전부 노출 */
   predecessors: AdjacencyNeighborDto[]

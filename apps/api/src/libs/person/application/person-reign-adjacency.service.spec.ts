@@ -357,7 +357,7 @@ describe('PersonReignAdjacencyService', () => {
     )
   })
 
-  it('같은 인물·같은 날짜의 TENURE·REIGN 이중계상은 REIGN 우선으로 dedup (자기-인접 유령 방지)', async () => {
+  it('같은 인물·같은 날짜는 이웃 하나로 dedup (자기-인접 유령 방지)', async () => {
     const person = rulerPerson({ id: 'dup' })
     const { service } = createService({
       subject: { id: 'subject-1' },
@@ -368,7 +368,7 @@ describe('PersonReignAdjacencyService', () => {
     const result = await service.getReignAdjacency(BASE_PARAMS)
     const predecessors = result.entries[0]!.predecessors
     expect(predecessors).toHaveLength(1)
-    expect(predecessors[0]!.record.recordKind).toBe('SOVEREIGN_REIGN')
+    expect(predecessors[0]!.person.id).toBe('dup')
     expect(predecessors[0]!.coBoundary).toBe(false)
   })
 
@@ -898,7 +898,7 @@ describe('PersonReignAdjacencyService', () => {
     const result = await service.getReignAdjacency(BASE_PARAMS)
     const successors = result.entries[0]!.successors
     expect(successors).toHaveLength(1)
-    expect(successors[0]!.record.recordKind).toBe('TENURE')
+    expect(successors[0]!.record.isMonarchical).toBe(false)
     expect(successors[0]!.person.id).toBe('pres-p')
   })
 
@@ -1074,7 +1074,7 @@ describe('PersonReignAdjacencyService', () => {
       const result = await service.getReignAdjacency(SUCCESSION_PARAMS)
       const successors = result.entries[0]!.successors
       expect(successors.map((neighbor) => neighbor.person.id)).toEqual(['pres-p'])
-      expect(successors[0]!.record.recordKind).toBe('TENURE')
+      expect(successors[0]!.record.isMonarchical).toBe(false)
     })
   })
 })

@@ -1,4 +1,4 @@
-import { asReignRecord, reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
+import { reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import {
@@ -112,7 +112,7 @@ export class PersonRecordsService {
     const wants = (kind: PersonRecordKind) => sources.includes(kind)
     const { fromYear, toYear, accountId } = params
 
-    const [persons, lifeEvents, tenures, reigns, tenureAchievements, reignAchievements, personEvents, awards] =
+    const [persons, lifeEvents, tenures, reigns, achievements, personEvents, awards] =
       await Promise.all([
         this.prisma.person.findMany({
           where: { id: { in: personIds } },
@@ -147,7 +147,7 @@ export class PersonRecordsService {
         wants('REIGN')
           ? this.prisma.governmentPositionTenure
               .findMany({
-                // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
+                // 재위 = 군주직 재임 행
                 where: reignWhere({ personId: { in: personIds } }),
                 include: {
                   positionDefinition: { select: { title: true, positionType: true } },
@@ -155,11 +155,11 @@ export class PersonRecordsService {
                   historicalCountry: { select: { name: true } },
                 },
               })
-              .then((rows) => rows.map(asReignRecord))
           : Promise.resolve([]),
         wants('ACHIEVEMENT')
-          ? this.prisma.tenureAchievement.findMany({
-              where: { tenure: tenureWhere({ personId: { in: personIds } }) },
+          ? // 업적은 재위·재임 구분 없이 한 번에 — 부모가 같은 재임 테이블이다
+            this.prisma.tenureAchievement.findMany({
+              where: { tenure: { personId: { in: personIds } } },
               include: {
                 tenure: {
                   select: {
@@ -172,24 +172,6 @@ export class PersonRecordsService {
                 },
               },
             })
-          : Promise.resolve([]),
-        wants('ACHIEVEMENT')
-          ? this.prisma.tenureAchievement
-              .findMany({
-                where: { tenure: reignWhere({ personId: { in: personIds } }) },
-                include: {
-                  tenure: {
-                    select: {
-                      personId: true,
-                      startDate: true,
-                      endDate: true,
-                      country: { select: { name: true } },
-                      historicalCountry: { select: { name: true } },
-                    },
-                  },
-                },
-              })
-              .then((rows) => rows.map(({ tenure, ...rest }) => ({ ...rest, sovereignReign: tenure })))
           : Promise.resolve([]),
         wants('EVENT')
           ? this.prisma.personEvent.findMany({
@@ -299,7 +281,7 @@ export class PersonRecordsService {
     }
 
     // 업적: 자체 날짜가 없으면 부모 재임/재위 기간을 상속(그 재임 중의 일이라는 계약)
-    for (const row of tenureAchievements) {
+    for (const row of achievements) {
       const hasOwnDates = row.startDate != null || row.endDate != null
       const startDate = hasOwnDates ? row.startDate : row.tenure.startDate
       const endDate = hasOwnDates ? row.endDate : row.tenure.endDate
@@ -319,32 +301,6 @@ export class PersonRecordsService {
         linkEventId: row.eventId ?? null,
         countryName:
           row.tenure.country?.name ?? row.tenure.historicalCountry?.name ?? null,
-        role: null,
-      })
-    }
-
-    for (const row of reignAchievements) {
-      const hasOwnDates = row.startDate != null || row.endDate != null
-      const startDate = hasOwnDates ? row.startDate : row.sovereignReign.startDate
-      const endDate = hasOwnDates ? row.endDate : row.sovereignReign.endDate
-      records.push({
-        kind: 'ACHIEVEMENT',
-        sourceId: row.id,
-        personId: row.sovereignReign.personId,
-        title: row.title,
-        summary: toPlainSummary(row.description),
-        category: null,
-        startYear: yearOf(startDate),
-        endYear: yearOf(endDate),
-        ongoing: !hasOwnDates && row.sovereignReign.endDate == null,
-        startDate: isoOf(startDate),
-        endDate: isoOf(endDate),
-        precision: null,
-        linkEventId: row.eventId ?? null,
-        countryName:
-          row.sovereignReign.country?.name ??
-          row.sovereignReign.historicalCountry?.name ??
-          null,
         role: null,
       })
     }

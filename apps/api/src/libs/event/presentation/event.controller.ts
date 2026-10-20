@@ -206,7 +206,8 @@ const signedYearOf = (
 
 export interface EventAccessionDto {
   recordId: string
-  recordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+  /** 재위(군주직)인가 — '즉위'/'취임' 문구 */
+  isMonarchical: boolean
   personId: string
   personName: string
   /** 직함 — 재임 title → 직위 정의 → null */
@@ -219,9 +220,9 @@ export interface EventAccessionDto {
   accessionEventId: string | null
 }
 
-const toAccessionDto = (row: any, recordKind: EventAccessionDto['recordKind']): EventAccessionDto => ({
+const toAccessionDto = (row: any, isMonarchical: boolean): EventAccessionDto => ({
   recordId: row.id,
-  recordKind,
+  isMonarchical,
   personId: row.person.id,
   personName: displayPersonName(row.person),
   title: row.title ?? row.positionDefinition?.title ?? null,
@@ -647,10 +648,10 @@ export class EventController {
           ? [
               ...((event as any).tenureAccessions ?? [])
                 .filter((row: any) => row.positionDefinition?.isMonarchical !== true)
-                .map((row: any) => toAccessionDto(row, 'TENURE')),
+                .map((row: any) => toAccessionDto(row, false)),
               ...((event as any).tenureAccessions ?? [])
                 .filter((row: any) => row.positionDefinition?.isMonarchical === true)
-                .map((row: any) => toAccessionDto(row, 'SOVEREIGN_REIGN')),
+                .map((row: any) => toAccessionDto(row, true)),
             ]
           : undefined,
       // 참여 인물(PersonEvent) — 인물 시점 role/note(장문) 포함
@@ -1441,8 +1442,8 @@ export class EventController {
       }),
     ])
     const rows = [
-      ...tenures.map((row) => toAccessionDto(row, 'TENURE')),
-      ...reigns.map((row) => toAccessionDto(row, 'SOVEREIGN_REIGN')),
+      ...tenures.map((row) => toAccessionDto(row, false)),
+      ...reigns.map((row) => toAccessionDto(row, true)),
     ].filter((row) => row.accessionEventId !== id)
 
     if (eventYear == null) return rows

@@ -389,8 +389,8 @@ describe('PersonContemporariesService', () => {
     ])
   })
 
-  it('같은 인물·같은 시작일의 TENURE·REIGN 중복은 REIGN 우선 (normalize-tenures 규칙)', async () => {
-    const person = rulerPerson({ id: 'dup', deathDate: utc(1450) })
+  it('같은 인물이 같은 날 시작한 재위·재임은 둘 다 남는다 — 한 테이블이라 이중 입력이 아니다', async () => {
+    const person = rulerPerson({ id: 'dual', deathDate: utc(1450) })
     const { service } = createService({
       subject: { id: 'subject-1' },
       candidateTenures: [
@@ -406,33 +406,11 @@ describe('PersonContemporariesService', () => {
       toYear: 1460,
     })
     expect(result.rulers).toHaveLength(1)
-    expect(result.rulers[0]!.records).toHaveLength(1)
-    expect(result.rulers[0]!.records[0]!.recordKind).toBe('SOVEREIGN_REIGN')
-    expect(result.rulers[0]!.records[0]!.positionType).toBe('HEAD_OF_STATE')
-  })
-
-  it('dedup은 시간을 무시하고 UTC 날짜 단위 — 저장 경로별 time-of-day 드리프트에도 유령 중복 없음', async () => {
-    const person = rulerPerson({ id: 'dup-drift', deathDate: utc(1450) })
-    const morning = new Date(Date.UTC(2000, 7, 10, 9, 0, 0))
-    morning.setUTCFullYear(1418)
-    const midnight = new Date(Date.UTC(2000, 7, 10, 0, 0, 0))
-    midnight.setUTCFullYear(1418)
-    const { service } = createService({
-      subject: { id: 'subject-1' },
-      candidateTenures: [
-        tenureRow({ id: 'as-tenure', startDate: midnight, endDate: utc(1450), person }),
-      ],
-      candidateReigns: [
-        reignRow({ id: 'as-reign', startDate: morning, endDate: utc(1450), person }),
-      ],
-    })
-    const result = await service.getContemporaries({
-      ...BASE_PARAMS,
-      fromYear: 1400,
-      toYear: 1460,
-    })
-    expect(result.rulers[0]!.records).toHaveLength(1)
-    expect(result.rulers[0]!.records[0]!.recordKind).toBe('SOVEREIGN_REIGN')
+    const records = result.rulers[0]!.records
+    expect(records.map((record) => [record.recordId, record.isMonarchical]).sort()).toEqual([
+      ['as-reign', true],
+      ['as-tenure', false],
+    ])
   })
 
   it('미래 시작일 오타의 열린 기록도 겹침이 음수가 되지 않는다 (시작 클램프)', async () => {
