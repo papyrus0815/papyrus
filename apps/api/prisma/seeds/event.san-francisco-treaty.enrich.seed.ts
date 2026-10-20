@@ -22,7 +22,7 @@ import { PrismaService } from '../prisma.service'
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_TITLE = '샌프란시스코 강화조약 체결'
 const SECURITY_TREATY_TITLE = '미·일 안전보장조약 체결 (1951)'
-const EVENT_CATEGORY_NAME = '회담/조약'
+const EVENT_CATEGORY_NAME = '외교'
 
 interface PersonStatsInput {
   politics: number

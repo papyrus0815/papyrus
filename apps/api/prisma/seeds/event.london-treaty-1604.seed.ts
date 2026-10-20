@@ -18,7 +18,7 @@ import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
 
-const EVENT_CATEGORY_NAME = '회담/조약'
+const EVENT_CATEGORY_NAME = '외교'
 
 // ── 사건 본문 ─────────────────────────────────────────────────────────────
 const EVENT_BODY = {

@@ -16,7 +16,7 @@
  *  - MilitaryDetailsNorm (CombatType LAND + NAVAL)
  *  - PersonEvent (나폴레옹 3세·비토리오 에마누엘레 2세·카보우르·파머스턴·니콜라이 1세·알렉산드르 2세 — 존재 시)
  *
- * 의존: seedEventCategories('전쟁/군사') + 역사국가(러시아 제국·오스만 제국·프랑스 제2제국·
+ * 의존: seedEventCategories('군사') + 역사국가(러시아 제국·오스만 제국·프랑스 제2제국·
  *       그레이트브리튼 및 아일랜드 연합왕국·사르데냐 왕국).
  */
 import {
@@ -29,7 +29,7 @@ import { PrismaService } from '../prisma.service'
 import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
 import { applyEventSides } from './lib/event-sides'
 
-const EVENT_CATEGORY_NAME = '전쟁/군사'
+const EVENT_CATEGORY_NAME = '군사'
 
 // ── 자식 사건 ────────────────────────────────────────────────────────────────
 interface ChildEventInput {

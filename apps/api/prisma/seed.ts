@@ -143,6 +143,7 @@ import {
   seedTrumpCabinet,
   seedWorldWarOnePersonGroups,
   seedWorldWarOneAppointmentDetails,
+  seedEventTypeBackfill,
 } from './seeds'
 
 const options = {
@@ -854,6 +855,9 @@ async function main() {
 
         // 7. 어드민 계정 시딩
         await seedAdmin(prisma)
+
+        // 8. 사건 유형 — 사건 시드가 다 끝난 뒤 제목→유형 표로 채운다(OTHER인 것만)
+        await seedEventTypeBackfill(prisma)
 
         console.log('='.repeat(60))
         console.log('🎉 모든 시딩 작업이 완료되었습니다!')

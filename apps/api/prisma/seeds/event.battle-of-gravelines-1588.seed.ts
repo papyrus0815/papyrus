@@ -26,7 +26,7 @@ import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
 
-const EVENT_CATEGORY_NAME = '전쟁/군사'
+const EVENT_CATEGORY_NAME = '군사'
 const EVENT_TITLE = '칼레 해전'
 const EVENT_START = '1588-08-07' // 1588-08-07 칼레 정박지 야간 화공선 공격
 const EVENT_END = '1588-08-08' // 1588-08-08 그라블린 본 전투

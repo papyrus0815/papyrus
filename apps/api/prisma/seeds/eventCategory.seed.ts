@@ -5,24 +5,20 @@ export interface EventCategoryData {
   description: string
 }
 
+/**
+ * 사건 **분야** — 무엇에 관한 사건인가(정치·외교·군사·경제…). 형식(전투·조약 체결·건국…)은 사건 유형
+ * (Event.type, EventType)이 맡는다. 예전 '군사'·'외교'·'정치'은 형식이라 유형으로 옮기고
+ * 분야에서는 '군사'만 남겼다(2026-10-19).
+ */
 const EVENT_CATEGORIES: EventCategoryData[] = [
   { name: '정치', description: '정치 관련 사건' },
+  { name: '외교', description: '외교 관련 사건' },
+  { name: '군사', description: '전쟁·전투·군사 조치·군 제도' },
   { name: '경제', description: '경제 관련 사건' },
-  {
-    name: '전쟁/군사',
-    description: '전쟁, 전투, 군사 작전 및 군사 관련 사건',
-  },
   { name: '사회', description: '사회 관련 사건' },
   { name: '문화', description: '문화 관련 사건' },
   { name: '과학기술', description: '과학기술 관련 사건' },
-  { name: '외교', description: '외교 관련 사건' },
-  { name: '회담/조약', description: '국제 회담 및 협상' },
   { name: '종교', description: '종교 관련 사건' },
-  {
-    name: '건국/멸망',
-    description:
-      '국가·왕조·정권의 성립(건국·독립·수립)과 소멸(멸망·병합·해체). 국가별 배역은 참여국 역할 건국/멸망으로 단다',
-  },
   { name: '기타', description: '기타 사건' },
 ]
 

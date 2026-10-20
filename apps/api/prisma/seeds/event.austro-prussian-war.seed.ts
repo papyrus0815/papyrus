@@ -21,7 +21,7 @@ import { PrismaService } from '../prisma.service'
 import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
 import { applyEventSides } from './lib/event-sides'
 
-const EVENT_CATEGORY_NAME = '전쟁/군사'
+const EVENT_CATEGORY_NAME = '군사'
 
 const COUNTRY_RELATION_ROLE_MAP: Record<string, EventCountryRole> = {
   주도국: EventCountryRole.INITIATOR,

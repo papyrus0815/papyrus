@@ -29,7 +29,7 @@ import {
 
 import { PrismaService } from '../prisma.service'
 
-const EVENT_CATEGORY_NAME = '전쟁/군사'
+const EVENT_CATEGORY_NAME = '군사'
 
 // ── 사건 본문 ─────────────────────────────────────────────────────────────
 const EVENT_BODY = {

@@ -43,7 +43,7 @@ import {
 import { PrismaService } from '../prisma.service'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
-const EVENT_CATEGORY_NAME = '건국/멸망'
+const EVENT_CATEGORY_NAME = '정치'
 const ROC_NAME = '중화민국'
 
 interface PersonStatsInput {

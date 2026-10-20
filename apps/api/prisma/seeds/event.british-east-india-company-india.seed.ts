@@ -29,7 +29,7 @@ import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-side
 import { applyEventSides } from './lib/event-sides'
 
 const EVENT_CATEGORY_NAME = '정치'
-const PLASSEY_CATEGORY_NAME = '전쟁/군사'
+const PLASSEY_CATEGORY_NAME = '군사'
 
 // ── 부모 사건 본문 ──────────────────────────────────────────────────────────
 const PARENT_EVENT_BODY = {

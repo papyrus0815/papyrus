@@ -26,7 +26,7 @@ import { PrismaService } from '../prisma.service'
 import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
 import { applyEventSides } from './lib/event-sides'
 
-const EVENT_CATEGORY_NAME = '전쟁/군사'
+const EVENT_CATEGORY_NAME = '군사'
 
 // ── 부모 사건 본문 (재시드 시 매번 최신 서술로 갱신) ─────────────────────────
 const PARENT_EVENT_BODY = {

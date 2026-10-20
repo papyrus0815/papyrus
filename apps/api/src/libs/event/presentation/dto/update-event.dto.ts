@@ -1,3 +1,4 @@
+import { EVENT_TYPE_VALUES, type EventTypeValue } from '../../domain/event-type'
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
@@ -115,6 +116,17 @@ export class UpdateEventDto {
   @IsIn(['SINGLE', 'COLLECTION'])
   @IsOptional()
   kind?: 'SINGLE' | 'COLLECTION'
+
+  @ApiProperty({
+    description:
+      '사건 유형 — 어떤 형식의 사건인가(WAR 전쟁·BATTLE 전투·TREATY 조약 체결·POWER_CHANGE 즉위·취임…). ' +
+      '분야(categoryId)와 별개. 기록할 데이터를 정하는 축(프론트 유형 레지스트리). 생략하면 OTHER.',
+    required: false,
+    enum: EVENT_TYPE_VALUES,
+  })
+  @IsIn(EVENT_TYPE_VALUES)
+  @IsOptional()
+  type?: EventTypeValue
 
   @ApiProperty({
     description: '이미지 목록',

@@ -224,7 +224,7 @@ const EVENTS: EventDef[] = [
     endDate: '2023-10-07',
     startPrecision: 'day',
     endPrecision: 'day',
-    category: '전쟁/군사',
+    category: '군사',
     description:
       '2023년 10월 7일 토요일(유대교 안식일이자 심하트 토라 명절) 새벽 6시 30분경, ' +
       '하마스가 가자 지구에서 이스라엘 남부로 약 5,000발의 로켓을 발사하며 동시에 ' +
@@ -378,7 +378,7 @@ const EVENTS: EventDef[] = [
     endDate: '2024-04-14',
     startPrecision: 'day',
     endPrecision: 'day',
-    category: '전쟁/군사',
+    category: '군사',
     description:
       '2024년 4월 13일 밤부터 14일 새벽에 걸쳐 이란이 약 300발의 탄도미사일·순항미사일· ' +
       '자폭 드론으로 이스라엘 본토를 직접 공격한 사건. 1979년 이슬람 혁명 이후 ' +
@@ -496,7 +496,7 @@ const EVENTS: EventDef[] = [
     endDate: '2024-07-31',
     startPrecision: 'day',
     endPrecision: 'day',
-    category: '전쟁/군사',
+    category: '군사',
     description:
       '2024년 7월 31일 새벽 이란 페제시키안 대통령 취임식 참석을 위해 ' +
       '테헤란을 방문 중이던 하마스 정치국장 이스마일 하니예가 ' +
@@ -577,7 +577,7 @@ const EVENTS: EventDef[] = [
     endDate: '2024-09-18',
     startPrecision: 'day',
     endPrecision: 'day',
-    category: '전쟁/군사',
+    category: '군사',
     description:
       '2024년 9월 17일 오후 3시 30분경(베이루트 시간) 레바논 전역에서 헤즈볼라 대원들이 ' +
       '소지하던 호출기 약 4,000개가 동시에 폭발, 다음 날 18일에는 무전기(walkie-talkie) ' +
@@ -677,7 +677,7 @@ const EVENTS: EventDef[] = [
     endDate: '2024-09-27',
     startPrecision: 'day',
     endPrecision: 'day',
-    category: '전쟁/군사',
+    category: '군사',
     description:
       '2024년 9월 27일 오후 이스라엘 공군이 베이루트 남부 다히예 지구의 헤즈볼라 지하 사령부에 ' +
       '약 80톤의 GBU-31 등 정밀 유도 폭탄을 집중 투하해 ' +
@@ -759,7 +759,7 @@ const EVENTS: EventDef[] = [
     endDate: '2024-10-01',
     startPrecision: 'day',
     endPrecision: 'day',
-    category: '전쟁/군사',
+    category: '군사',
     description:
       '2024년 10월 1일 저녁 이란이 이스라엘 본토에 대해 약 180~200발의 탄도미사일을 ' +
       '약 30분에 걸쳐 일제 발사한 사건. 7월 31일 하니예 암살·9월 17일 호출기 폭발· ' +
@@ -831,7 +831,7 @@ const EVENTS: EventDef[] = [
     endDate: '2024-10-26',
     startPrecision: 'day',
     endPrecision: 'day',
-    category: '전쟁/군사',
+    category: '군사',
     description:
       '2024년 10월 26일 새벽 이스라엘 공군 약 100대가 이란 영공을 통과해 ' +
       '테헤란·이스파한·후제스탄의 군 시설·방공망·미사일 생산 시설을 ' +
@@ -1163,7 +1163,7 @@ const EVENTS: EventDef[] = [
     endDate: '2025-05-31',
     startPrecision: 'day',
     endPrecision: 'day',
-    category: '회담/조약',
+    category: '외교',
     description:
       '2025년 4월 12일부터 5월 31일까지 약 7주에 걸쳐 오만 무스카트·이탈리아 로마에서 ' +
       '5차례 진행된 미국-이란 핵 협상. ' +

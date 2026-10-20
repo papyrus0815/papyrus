@@ -412,7 +412,7 @@ const EVENTS: EventEntry[] = [
     endDate: '1945-09-02',
     endDatePrecision: 'day',
     location: '도쿄 만 미주리함 (USS Missouri, BB-63)',
-    category: '회담/조약',
+    category: '외교',
     historicalCountryName: '일본 제국',
     background:
       '8월 15일 옥음방송 이후 연합국과 일본 정부 간 휴전 절차가 진행되었다. 8월 30일 맥아더가 가나가와 아쓰기 비행장에 도착하여 GHQ 점령 통치를 개시했고, 9월 2일 미주리함에서 공식 항복 문서가 조인되었다.',

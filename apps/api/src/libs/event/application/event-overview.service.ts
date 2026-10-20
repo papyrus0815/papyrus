@@ -1,3 +1,4 @@
+import type { EventTypeValue } from '../domain/event-type'
 import { Injectable } from '@nestjs/common'
 import { ObservationSubjectType, Prisma, PrismaClient } from '@prisma/client'
 
@@ -72,6 +73,8 @@ export interface EventOverviewNode {
   endDatePrecision: string | null
   location: string | null
   category: { id: string; name: string } | null
+  /** 사건 유형(형식) — 점검표가 유형별로 적용 칸을 고른다 */
+  type: EventTypeValue
   countries: EventOverviewCountry[]
   persons: EventOverviewPerson[]
   sides: EventOverviewSide[]
@@ -262,6 +265,7 @@ export class EventOverviewService {
       endDatePrecision: row.endDatePrecision ?? null,
       location: row.location ?? null,
       category: row.category ? { id: row.category.id, name: row.category.name } : null,
+      type: row.type,
       countries,
       persons: row.persons.map((participation) => ({
         personId: participation.personId,

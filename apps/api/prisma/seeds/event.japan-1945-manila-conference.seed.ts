@@ -18,14 +18,14 @@
  *  - Person 신규: 가와베 도라시로(사절단장), 더글러스 맥아더(GHQ 최고사령관)
  *  - PersonEvent: 위 두 명 + 시데하라(외무 라인) — 시데하라는 기존 인물 활용
  *
- * 의존성: 일본 제국 hc(seedJapanMeijiEra), eventCategory '회담/조약', admin
+ * 의존성: 일본 제국 hc(seedJapanMeijiEra), eventCategory '외교', admin
  */
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
-const EVENT_CATEGORY_NAME = '회담/조약'
+const EVENT_CATEGORY_NAME = '외교'
 
 interface PersonStatsInput {
   politics: number

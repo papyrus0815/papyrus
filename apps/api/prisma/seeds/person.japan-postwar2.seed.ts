@@ -422,7 +422,7 @@ const EVENTS: EventEntry[] = [
     endDate: '1951-09-08',
     endDatePrecision: 'day',
     location: '미국 캘리포니아 샌프란시스코 오페라하우스',
-    category: '회담/조약',
+    category: '외교',
     historicalCountryName: '일본국',
     background:
       '한국전쟁 발발(1950-06-25) 이후 미국은 일본의 빠른 주권 회복과 서방 진영 편입을 추진했다. 존 포스터 덜레스 특사가 영국·호주 등과 조정해 "징벌적이지 않은 강화"를 설계했으며, 일본 측은 요시다 총리가 직접 조약에 서명했다. 소련·중국·인도 등은 조약에 반대·불참했고, 한국은 초청되지 않았다.',
@@ -478,7 +478,7 @@ const EVENTS: EventEntry[] = [
     endDate: '1954-07-01',
     endDatePrecision: 'day',
     location: '도쿄 방위청 — 현재 도쿄도 신주쿠구',
-    category: '전쟁/군사',
+    category: '군사',
     historicalCountryName: '일본국',
     background:
       '1950년 6월 한국전쟁 발발로 주일 미군이 한반도로 이동하자 GHQ는 일본의 자체 치안을 위해 7월 8일 경찰예비대 창설을 지령했다. 1952년 4월 주권 회복과 함께 보안대로 개편, 1954년 미·일 MSA 협정 체결로 미국의 군사원조를 받게 되면서 본격적인 군사조직으로 전환되었다.',

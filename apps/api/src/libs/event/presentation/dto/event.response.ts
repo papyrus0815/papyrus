@@ -1,3 +1,4 @@
+import { EVENT_TYPE_VALUES, type EventTypeValue } from '../../domain/event-type'
 import type { EventSideView } from '../../application/event-side.service'
 import type { StructuredPoint as StructuredPointView } from '../../../shared/structured-point'
 import { ApiProperty } from '@nestjs/swagger'
@@ -70,6 +71,9 @@ export class EventResponseDto {
     enum: ['SINGLE', 'COLLECTION'],
   })
   kind!: 'SINGLE' | 'COLLECTION'
+
+  @ApiProperty({ description: '사건 유형(형식) — 분야와 별개', enum: EVENT_TYPE_VALUES })
+  type!: EventTypeValue
 
   @ApiProperty({ description: '상위 사건 정보 (주 상위)', required: false })
   parentEvent?: EventResponseDto

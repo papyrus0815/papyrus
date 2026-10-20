@@ -1,4 +1,5 @@
 import type { EventKind } from './event-kind'
+import type { EventTypeValue } from './event-type'
 
 export class Event {
   id!: string
@@ -25,6 +26,8 @@ export class Event {
   parentEventId?: string | null
   /** 사건 종류 — 단일(하위 없음)/묶음(전개=하위 사건). 규칙은 domain/event-kind.ts */
   kind?: EventKind
+  /** 사건 유형 — 기록할 데이터를 정하는 형식 축(domain/event-type.ts) */
+  type?: EventTypeValue
   cityId?: string | null
   administrativeDivisionId?: string | null
   historicalCountryId?: string | null

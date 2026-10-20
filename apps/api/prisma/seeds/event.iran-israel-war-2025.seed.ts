@@ -24,7 +24,7 @@ import { EventCountryRole } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
-const EVENT_CATEGORY_NAME = '전쟁/군사'
+const EVENT_CATEGORY_NAME = '군사'
 
 // ── 인물 데이터 ───────────────────────────────────────────────────────────
 type PersonInput = {

@@ -35,7 +35,7 @@
  *  - PersonEvent: 위 9명
  *
  * 의존성
- *  - admin 계정, eventCategory '전쟁/군사'
+ *  - admin 계정, eventCategory '군사'
  *  - country '대한민국'·'미국'·'영국'·'중국'·'일본'(seedCountries),
  *  - historicalCountry '소비에트 사회주의 공화국 연방'(러시아 hc 시드)
  *  - person 'Harry S. Truman'·'Douglas MacArthur'(SCAP/마닐라 시드)
@@ -50,7 +50,7 @@ import {
 import { PrismaService } from '../prisma.service'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
-const EVENT_CATEGORY_NAME = '전쟁/군사'
+const EVENT_CATEGORY_NAME = '군사'
 const DPRK_NAME = '조선민주주의인민공화국'
 
 interface PersonStatsInput {

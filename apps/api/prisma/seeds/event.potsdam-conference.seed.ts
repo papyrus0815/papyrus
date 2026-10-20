@@ -24,7 +24,7 @@
  *  - PersonEvent: 위 6명 + 장제스(중국 부재 서명자, 기존 인물 활용 시도)
  *
  * 의존성
- *  - admin 계정, eventCategory '회담/조약'
+ *  - admin 계정, eventCategory '외교'
  *  - country '미국'·'영국'·'중국'·'폴란드'(seedCountries),
  *  - historicalCountry '소비에트 사회주의 공화국 연방'·'나치 독일 (제3제국)'·'일본 제국'
  *  - person 'Harry S. Truman'·'James F. Byrnes'(SCAP 시드)
@@ -35,7 +35,7 @@ import { EventCountryRole } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
-const EVENT_CATEGORY_NAME = '회담/조약'
+const EVENT_CATEGORY_NAME = '외교'
 
 interface PersonStatsInput {
   politics: number

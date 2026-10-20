@@ -97,6 +97,50 @@ enum EventOrganizationRole {
   OTHER
 }
 
+/// 사건 유형 — **어떤 형식의 사건인가**(전투인가, 조약 체결인가, 즉위인가). 기록할 데이터를 정하는 축.
+///
+/// 분야(EventCategory: 정치·외교·군사·경제…)와 별개다. 예전엔 카테고리 한 칸에 형식(전쟁/군사·회담/조약·
+/// 건국/멸망)과 분야(정치·경제)가 섞여, '전쟁/군사' 159건 안에 전투·함대법·참모총장 취임·장관의 휴양이
+/// 함께 들어 있었다. 함대법은 분야로는 군사지만 형식은 법률이라 필요한 데이터가 전혀 다르다.
+///
+/// 유형별로 무엇을 기록하는지(핵심/선택 기록·지표 프리셋·묶음 권장)는 프론트 유형 레지스트리
+/// (features/event-type/model/registry.ts)가 정본이다. 서버는 값만 보관한다 — 기록을 유형으로 막지 않는다
+/// (전쟁은 조약으로 끝나고 봉기에도 진영이 있다).
+enum EventType {
+  // 무력 충돌
+  WAR
+  BATTLE
+  UPRISING
+  ATTACK
+  MILITARY_MEASURE
+  // 외교
+  TREATY
+  SUMMIT
+  DIPLOMATIC_ACT
+  CRISIS
+  // 국가·권력
+  STATEHOOD
+  POWER_CHANGE
+  ELECTION
+  LAW_POLICY
+  INSTITUTION
+  EXPANSION
+  INCIDENT
+  // 경제·산업
+  COMPANY
+  MARKET
+  PRODUCT
+  CONSTRUCTION
+  // 사회·문화
+  DISASTER
+  SCIENCE
+  CULTURE_RELIGION
+  MIGRATION
+  PERSONAL
+  // 기타
+  OTHER
+}
+
 /// 사건의 종류 — 등록할 때 고르고, 명시적 전환 동작으로만 바뀐다.
 ///
 /// - SINGLE     단일 사건(전투·회담·조약 체결·선언). 본문에 배경·전개·여파를 모두 쓴다.
@@ -321,6 +365,9 @@ model Event {
   /// 사건의 종류(EventKind) — 단일/묶음. 계층 규칙의 정본.
   kind EventKind @default(SINGLE)
 
+  /// 사건 유형(EventType) — 기록할 데이터를 정하는 형식 축. 분야는 categoryId.
+  type EventType @default(OTHER)
+
   /// 전쟁 비용 (텍스트)
   warCost String? @map("war_cost") @db.Text
 
@@ -422,6 +469,7 @@ model Event {
 
   @@index([createdById], name: "idx_event_createdBy")
   @@index([deletedAt], name: "idx_event_deletedAt")
+  @@index([type], name: "idx_event_type")
   @@map("event")
 }
 

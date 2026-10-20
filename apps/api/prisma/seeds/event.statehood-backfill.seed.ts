@@ -3,7 +3,7 @@ import { EventCountryRole } from '@prisma/client'
 import { PrismaService } from '../prisma.service'
 
 /**
- * '건국/멸망' 카테고리 신설에 따른 기존 사건 재분류 + 국가 배역(FOUNDED/DISSOLVED) 백필.
+ * '정치' 카테고리 신설에 따른 기존 사건 재분류 + 국가 배역(FOUNDED/DISSOLVED) 백필.
  *
  * 대상은 제목이 곧 한 나라의 성립·소멸인 사건만이다. 제목 키워드('독립'·'병합'·'붕괴')만으로는
  * 고르지 않았다 — '각 성 독립 선언'(1911)·'보스니아 병합 위기'·'아사드 정권 붕괴'처럼
@@ -16,7 +16,6 @@ import { PrismaService } from '../prisma.service'
  * 멱등: 이미 목표 카테고리·배역이면 건드리지 않는다. 사건·국가가 없으면 warn 후 건너뛴다.
  */
 
-const CATEGORY_NAME = '건국/멸망'
 
 interface StatehoodLink {
   /** 역사국가명 — countryName과 배타 */
@@ -92,19 +91,10 @@ const BACKFILL: StatehoodBackfill[] = [
 export async function seedEventStatehoodBackfill(prisma: PrismaService): Promise<void> {
   console.log('\n🏛️  건국/멸망 사건 재분류·배역 백필 시작...')
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${CATEGORY_NAME} (eventCategory.seed 먼저)`)
-    return
-  }
-
   for (const item of BACKFILL) {
     const events = await prisma.event.findMany({
       where: { title: item.title, deletedAt: null },
-      select: { id: true, categoryId: true },
+      select: { id: true, type: true },
     })
     if (events.length === 0) {
       console.warn(`  ⚠️  사건 미존재: ${item.title}`)
@@ -112,10 +102,11 @@ export async function seedEventStatehoodBackfill(prisma: PrismaService): Promise
     }
 
     for (const event of events) {
-      if (event.categoryId !== category.id) {
+      // 건국·멸망은 형식이라 분야가 아니라 사건 유형이 말한다(2026-10-19 분야/유형 분리)
+      if (event.type !== 'STATEHOOD') {
         await prisma.event.update({
           where: { id: event.id },
-          data: { categoryId: category.id },
+          data: { type: 'STATEHOOD' },
         })
         console.log(`  ✅ 재분류: ${item.title}`)
       } else {
