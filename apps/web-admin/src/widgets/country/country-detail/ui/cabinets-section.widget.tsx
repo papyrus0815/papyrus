@@ -106,6 +106,7 @@ import {
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import {
   DateFieldBtn,
   DateFieldsRow,
@@ -181,7 +182,6 @@ import {
 import * as CabS from './cabinets-section.styled'
 import { SubsectionAddBtn } from './country-politics-tab.styles'
 import { RegisterCabinetModal } from './register-cabinet-modal'
-import { RegisterMonarchModal } from './register-monarch-modal'
 import { TenureHistoryHorizTimeline } from './tenure-history-horiz-timeline'
 import { TreatyLinkModal } from './treaty-link-modal'
 import { CabinetEventsSection } from './cabinet-events-section.widget'
@@ -469,8 +469,9 @@ export function CabinetsSection({
   const [newHeadEndReason, setNewHeadEndReason] = useState<string>('')
   const [newHeadEndReasonDetail, setNewHeadEndReasonDetail] = useState('')
   const [newHeadNotes, setNewHeadNotes] = useState('')
-  const [registerMonarchModalOpen, setRegisterMonarchModalOpen] =
-    useState(false)
+  /** 군주 등록 — 인물을 고른 뒤 직위 보유 폼을 재위로 연다 */
+  const [monarchPersonPickerOpen, setMonarchPersonPickerOpen] = useState(false)
+  const [monarchPersonId, setMonarchPersonId] = useState<string | null>(null)
   const [deletingCabinetId, setDeletingCabinetId] = useState<string | null>(
     null,
   )
@@ -948,7 +949,6 @@ export function CabinetsSection({
     enabled:
       (!!countryId || !!historicalCountryId) &&
       (registerCabinetModalOpen ||
-        registerMonarchModalOpen ||
         !!editingCabinet ||
         personSelectOpen ||
         !!addMinisterCabinet),
@@ -957,22 +957,13 @@ export function CabinetsSection({
   const { data: allPersons = [] } = useQuery({
     queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
-    enabled: registerCabinetModalOpen && registerFlow === 'new',
+    enabled: (registerCabinetModalOpen && registerFlow === 'new') || monarchPersonPickerOpen,
   })
 
   const headPositionOptions = useMemo(
     () =>
       (positionDefinitions as any[]).filter(
         (d: any) => d.positionType && HEAD_POSITION_TYPES.has(d.positionType),
-      ),
-    [positionDefinitions],
-  )
-
-  /** 군주 등록 모달 — 직위 유형이 국가 원수(HEAD_OF_STATE)인 정의만 */
-  const headOfStatePositionOptions = useMemo(
-    () =>
-      (positionDefinitions as any[]).filter(
-        (d: any) => d.positionType === 'HEAD_OF_STATE',
       ),
     [positionDefinitions],
   )
@@ -1839,7 +1830,7 @@ export function CabinetsSection({
                     </CabS.CabListRegisterBtn>
                     <CabS.CabListMonarchRegisterBtn
                       type="button"
-                      onClick={() => setRegisterMonarchModalOpen(true)}
+                      onClick={() => setMonarchPersonPickerOpen(true)}
                     >
                       <FiPlus size={14} />
                       군주 등록
@@ -5181,16 +5172,30 @@ export function CabinetsSection({
         />
       )}
 
-      <RegisterMonarchModal
-        isOpen={registerMonarchModalOpen}
-        country={country}
-        isHistorical={isHistorical}
-        countryId={countryId}
-        historicalCountryId={historicalCountryId}
-        headOfStatePositionOptions={headOfStatePositionOptions}
-        onClose={() => setRegisterMonarchModalOpen(false)}
-        onSuccess={invalidateAfterMonarchRegister}
-      />
+      {monarchPersonPickerOpen && (
+        <PersonSelectModal
+          persons={allPersons as any[]}
+          selectedPersonId={monarchPersonId ?? ''}
+          title="군주 등록 — 인물 선택"
+          defaultCountryId={countryId || undefined}
+          onSelect={(personId) => {
+            setMonarchPersonId(personId)
+            setMonarchPersonPickerOpen(false)
+          }}
+          onClose={() => setMonarchPersonPickerOpen(false)}
+        />
+      )}
+      {monarchPersonId && (
+        <TenureRegisterPanel
+          personId={monarchPersonId}
+          defaultMonarchical
+          open={!!monarchPersonId}
+          onClose={() => setMonarchPersonId(null)}
+          onSuccess={invalidateAfterMonarchRegister}
+          initialCountryId={countryId || undefined}
+          initialHistoricalCountryId={historicalCountryId || null}
+        />
+      )}
 
       {editingCabinet && (
         <ModalOverlay

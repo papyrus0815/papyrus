@@ -392,6 +392,10 @@ export interface TenureRegisterPanelProps {
    * 재위 칸(왕호·왕조 내 대수)은 고른 직위가 군주직일 때 펼쳐진다.
    */
   defaultMonarchical?: boolean
+  /** 재위로 열 때 미리 고를 직위 정의 이름 — 기본 '국왕'(전역 수반 지면은 '교황') */
+  defaultDefinitionTitle?: string
+  /** 국가 없이도 저장 — 국가에 속하지 않는 직책(전역 수반) 지면. 재위는 원래 국가 선택 */
+  countryOptional?: boolean
 }
 
 const FORM_ID = 'tenure-register-form'
@@ -407,6 +411,8 @@ export function TenureRegisterPanel({
   initialCabinetId,
   initialAdministrationDepartmentId,
   defaultMonarchical = false,
+  defaultDefinitionTitle = '국왕',
+  countryOptional = false,
 }: TenureRegisterPanelProps) {
   const queryClient = useQueryClient()
   const isEdit = !!tenureId
@@ -611,6 +617,8 @@ export function TenureRegisterPanel({
 
   /** 이 기록이 재위인가 — 고른 직위 정의가 군주직이면. 정의를 아직 안 골랐으면 진입 맥락을 따른다 */
   const isReign = selectedDef ? selectedDef.isMonarchical === true : reignEntry
+  /** 국가가 필수인가 — 재위(교황 등 국가 밖 군주)·전역 지면은 선택 */
+  const countryRequired = !isReign && !countryOptional
 
   /** 수반 계열 직책 — 자신이 행정부의 수장이므로 소속 행정부(cabinetId) 동시 지정 시 백엔드가 400으로 거부 */
   const isHeadPositionType =
@@ -822,7 +830,7 @@ export function TenureRegisterPanel({
     setPersonImageError(false)
   }, [personDetail?.id])
 
-  /** 재위로 열었는데 직위를 아직 안 골랐으면 '국왕'을 미리 고른다 — 한 번만(사용자가 비우면 다시 채우지 않음) */
+  /** 재위로 열었는데 직위를 아직 안 골랐으면 기본 직위('국왕' 등)를 미리 고른다 — 한 번만(사용자가 비우면 다시 채우지 않음) */
   const defaultReignAppliedRef = useRef(false)
   useEffect(() => {
     if (!open) {
@@ -830,17 +838,17 @@ export function TenureRegisterPanel({
       return
     }
     if (isEdit || !defaultMonarchical || defaultReignAppliedRef.current) return
-    const king = (positionDefinitions as PositionDefinitionLike[]).find(
-      (definition) => definition.title === '국왕' && definition.isMonarchical === true,
+    const defaultDefinition = (positionDefinitions as PositionDefinitionLike[]).find(
+      (definition) => definition.title === defaultDefinitionTitle,
     )
-    if (!king) return
+    if (!defaultDefinition) return
     defaultReignAppliedRef.current = true
     if (positionDefinitionId || title.trim()) return
-    setPositionDefinitionId(king.id)
-    setTitle(king.title ?? '')
-    setTitleEn(king.titleEn ?? '')
+    setPositionDefinitionId(defaultDefinition.id)
+    setTitle(defaultDefinition.title ?? '')
+    setTitleEn(defaultDefinition.titleEn ?? '')
     setPresetPositionType(null)
-  }, [open, isEdit, defaultMonarchical, positionDefinitions, positionDefinitionId, title])
+  }, [open, isEdit, defaultMonarchical, defaultDefinitionTitle, positionDefinitions, positionDefinitionId, title])
 
   /** 수반 직책 선택 시 소속 행정부 지정 불가(백엔드 400) — 선택돼 있던 행정부는 자동 해제 */
   useEffect(() => {
@@ -902,7 +910,7 @@ export function TenureRegisterPanel({
     if (!personId) return
     // 역사국가 전용 행(countryId NULL)도 수정 가능해야 함 — 둘 중 하나만 있으면 통과.
     // 재위는 국가 없이도(교황 등 국가 밖 군주) 저장한다 — 옛 재위 패널과 같은 규칙
-    if (!isReign && !countryId && !historicalCountryId) {
+    if (countryRequired && !countryId && !historicalCountryId) {
       notify.error('국가를 선택해 주세요.')
       return
     }
@@ -1018,11 +1026,11 @@ export function TenureRegisterPanel({
     (isEdit && !!tenureId && !editingTenure) ||
     !personId ||
     // 역사국가 전용 행(countryId NULL) 수정 잠금 방지 — 둘 중 하나만 있으면 됨. 재위는 국가 선택
-    (!isReign && !countryId && !historicalCountryId) ||
+    (countryRequired && !countryId && !historicalCountryId) ||
     (!(selectedDef as any)?.title && !title.trim()) ||
     partialPartsToDateInfo(start) == null
 
-  const hasCountry = isReign || !!countryId || !!historicalCountryId
+  const hasCountry = !countryRequired || !!countryId || !!historicalCountryId
   const hasPosition = !!(selectedDef as any)?.title || !!title.trim()
   const hasStartDate = partialPartsToDateInfo(start) != null
   /** 재위 기간 역전 — 저장은 막지 않고 경고만(추존·복위) */
@@ -1110,7 +1118,7 @@ export function TenureRegisterPanel({
               <FieldRow>
                 <FieldLabel>
                   {/* 재위는 국가 없이도 저장된다(교황 등 국가 밖 군주) */}
-                  국가 {isReign ? <OptionalTag>(선택)</OptionalTag> : <Required aria-label="필수" />}
+                  국가 {countryRequired ? <Required aria-label="필수" /> : <OptionalTag>(선택)</OptionalTag>}
                 </FieldLabel>
                 <FieldControl>
                   <SelectTriggerButton
