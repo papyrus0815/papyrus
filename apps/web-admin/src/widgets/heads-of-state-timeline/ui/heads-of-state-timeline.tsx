@@ -26,7 +26,6 @@ import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 import { Modal, ModalBody } from '@/shared/ui/modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
-import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
 import { YearScrubber, type YearScrubberMilestone } from '@/shared/ui/year-scrubber'
@@ -597,8 +596,9 @@ function HeadsOfStateTimelineInner() {
           />
         )}
         {registerPersonId && registerKind === 'reign' && (
-          <SovereignReignRegisterPanel
+          <TenureRegisterPanel
             personId={registerPersonId}
+            defaultMonarchical
             open={panelOpen}
             onClose={closeRegisterFlow}
             initialCountryId={registerCountryId}

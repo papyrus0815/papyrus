@@ -214,7 +214,7 @@ export interface CreateGovernmentPositionTenureDto {
     | 'DIPLOMATIC_POST' // 외교직 — 대사·공사·영사 (서버 DTO와 동기화)
     | 'MILITARY_COMMANDER'
     | 'ROYAL_NOBLE_TITLE'
-    | 'OTHER' // 직위 타입 (필수)
+    | 'OTHER' // 직위 타입 — 직위 정의를 고르면 서버가 정의에서 파생
   /** 직위 정의가 있으면 생략 가능 */
   title?: string // 예: "대통령", "국왕", "황제"
   titleEn?: string // 영문 직위명
@@ -224,8 +224,18 @@ export interface CreateGovernmentPositionTenureDto {
   positionDefinitionId?: string // 직위 정의 ID (선택사항)
   termNumber?: number // 대수
   subTermNumber?: number // 기수 (1기, 2기 — 같은 대수 내 복수 임기 구분)
-  regnalNumber?: number // 재위번호 (서양 군주)
-  startDate: string // 취임일 (필수)
+  regnalNumber?: number // 이름 속 서수 (루이 14세의 14) — 대수 아님
+  /** 재직명(왕호·교황명) — 재위 */
+  regnalName?: string | null
+  /** 왕조 내 대수 — 재위 */
+  dynastyOrdinal?: number | null
+  /**
+   * 구조화 기간(정본) — 기원전·연 단위까지. 오면 레거시 startDate/endDate보다 우선.
+   * 수정 때 endDateInfo: null = 종료 해제(재임 중).
+   */
+  startDateInfo?: { era: 'BC' | 'AD'; year: number; month?: number; day?: number }
+  endDateInfo?: { era: 'BC' | 'AD'; year: number; month?: number; day?: number } | null
+  startDate?: string // 취임일 — 레거시 ISO 채널
   /** 취임일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움) */
   startDatePrecision?: 'year' | 'month' | 'day'
   endDate?: string // 퇴임일

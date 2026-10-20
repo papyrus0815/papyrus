@@ -101,7 +101,6 @@ import { confirm } from '@/shared/ui/confirm-dialog'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
-import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
 import { notify } from '@/shared/ui/toast'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import { AwardRegisterModal } from '@/widgets/person/award-register-modal/award-register-modal'
@@ -2240,8 +2239,10 @@ export function PersonDetailPanel({
                     }}
                     tenureId={editingTenureId ?? undefined}
                   />
-                  <SovereignReignRegisterPanel
+                  {/* 재위 — 같은 직위 보유 폼을 재위로 연다(군주 칭호 우선 피커·'국왕' 기본값) */}
+                  <TenureRegisterPanel
                     personId={person.id}
+                    defaultMonarchical
                     open={sovereignReignModalOpen}
                     onClose={() => {
                       setSovereignReignModalOpen(false)
@@ -2251,10 +2252,10 @@ export function PersonDetailPanel({
                       setSovereignReignModalOpen(false)
                       setEditingReignId(null)
                     }}
-                    reignId={editingReignId}
+                    tenureId={editingReignId ?? undefined}
                   />
                   {/* 재임·재위 단일 진입점 — 어떤 기록을 추가할지 고르는 선택 스텝.
-                      군주면 재위 패널, 관직이면 재임 패널로 라우팅(엔티티는 그대로 분리). */}
+                      폼은 하나(직위 보유)이고, 고른 쪽에 따라 직위 피커 순서와 기본 직위만 다르다. */}
                   <SelectModal
                     isOpen={addKindChooserOpen}
                     onClose={() => setAddKindChooserOpen(false)}

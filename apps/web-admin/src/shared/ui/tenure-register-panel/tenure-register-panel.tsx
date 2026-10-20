@@ -2,9 +2,9 @@
  * 수반(재임) 등록/수정 — 우측 사이드 패널.
  * 역대 수반 섹션과 동일: 국가/직책은 트리거 버튼 → 모달 선택.
  */
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiChevronDown, FiLink, FiUser } from 'react-icons/fi'
+import { FiChevronDown, FiLink, FiUser, FiX } from 'react-icons/fi'
 import { CabinetEventAttachModal } from '@/widgets/country/country-detail/ui/cabinet-event-attach-modal'
 import styled from 'styled-components'
 
@@ -22,7 +22,6 @@ import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import {
   describeLifespanMismatch,
-  signedYearFromIsoLike,
 } from '@/shared/lib/country-period'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { getUploadImageUrl } from '@/shared/api/upload'
@@ -36,12 +35,32 @@ import {
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
-import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
+import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import {
+  EventPickerModal,
+  EventPickerLinkBtn,
+  EventPickerLinkClearBtn,
+  EventPickerLinkedChip,
+  type EventPickerSelection,
+} from '@/shared/ui/event-picker-modal/event-picker-modal'
+import {
+  type PartialDateParts,
+  emptyPartialDateParts,
+  partialDateFromStructured,
+  partialDateFromResponse,
+  partialPartsToDateInfo,
+  buildPartialDateString,
+  parsePartialDateString,
+  isPartialRangeInverted,
+} from '@/shared/lib/partial-date-string'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import {
   buildPositionOptions,
+  buildReignPositionOptions,
   DEFAULT_COLLAPSED_POSITION_GROUPS,
+  DEFAULT_COLLAPSED_REIGN_GROUPS,
   parseRecentTitleValue,
   recentTitleValue,
   type PositionDefinitionLike,
@@ -60,12 +79,9 @@ import {
   FieldLabel,
   FieldControl,
   FieldHint,
-  DateFieldsRow,
   Required,
   Input,
   Textarea,
-  LABELED_ROW_GAP,
-  LABELED_ROW_LABEL_COL,
   LabeledRowsWrap,
   OptionalTag,
   SubFieldPair,
@@ -79,16 +95,33 @@ import {
   objectParticle,
 } from '@/shared/ui/register-form-layout'
 
-/**
- * 폼 행 — 사건 등록 모달과 같은 문법(공용 LabeledRowsWrap) + 이 패널만의 규칙 하나:
- * 날짜 행 바로 뒤에 정밀도 줄이 붙으면 그 사이 선을 걷고 선은 정밀도 줄 아래로.
- * (공용 DateRangeField 행이라 안에 끼워 넣을 수 없어 형제 선택자로 잇는다)
- */
-const SidebarFormWrap = styled(LabeledRowsWrap)`
-  ${FieldRow}:has(+ .tenure-precision-row) {
-    border-bottom: none;
-    padding-bottom: 10px;
-  }
+/** 폼 행 — 사건 등록 모달과 같은 문법(공용 LabeledRowsWrap) */
+const SidebarFormWrap = LabeledRowsWrap
+
+/** 시작/종료 날짜 파츠 입력 2열 — 좁은 폭에선 세로로 랩 */
+const PeriodRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+`
+const PeriodCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+`
+const PeriodLabel = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 즉위·취임 행 안 사건 연결 줄 — 버튼(또는 연결된 사건 칩) 옆에 짧은 설명 */
+const AccessionEventLine = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 `
 
 /** 선택 버튼 — 깔끔한 호버/포커스 */
@@ -180,40 +213,6 @@ function splitLegacyRegnalNote(raw: string): { regnalLine: string; rest: string 
 }
 
 /** 인물 바 — 미니멀 카드 */
-/** 날짜 아래 정밀도 한 줄 — 체크 · 라벨 · 옅은 설명 */
-const PrecisionRow = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  /* 날짜 행 바로 아래, 입력 열에 맞춰(공용 DateRangeField 행 밖이라 들여쓰기로 붙인다) */
-  margin: 0 0 0 ${LABELED_ROW_LABEL_COL + LABELED_ROW_GAP}px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  @media (max-width: 720px) {
-    margin-left: 0;
-  }
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  input {
-    width: 16px;
-    height: 16px;
-    margin: 0;
-    accent-color: #6366f1;
-    cursor: pointer;
-  }
-  label {
-    font-weight: 600;
-    cursor: pointer;
-  }
-`
-
-const PrecisionHint = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
 const PersonPrimaryLabel = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 400;
@@ -387,6 +386,12 @@ export interface TenureRegisterPanelProps {
   initialCabinetId?: string | null
   /** 부처(중앙부처) 지면에서 열 때 — 그 부처 소속으로 저장한다 */
   initialAdministrationDepartmentId?: string | null
+  /**
+   * 재위로 연다 — '재위 추가' 진입점. 직위 피커를 군주 칭호 우선으로 놓고, 아무것도 안 고르면
+   * '국왕' 정의를 미리 고른다. 재위·재임은 한 기록(직위 보유)이라 폼도 하나다 —
+   * 재위 칸(왕호·왕조 내 대수)은 고른 직위가 군주직일 때 펼쳐진다.
+   */
+  defaultMonarchical?: boolean
 }
 
 const FORM_ID = 'tenure-register-form'
@@ -401,6 +406,7 @@ export function TenureRegisterPanel({
   initialHistoricalCountryId,
   initialCabinetId,
   initialAdministrationDepartmentId,
+  defaultMonarchical = false,
 }: TenureRegisterPanelProps) {
   const queryClient = useQueryClient()
   const isEdit = !!tenureId
@@ -425,10 +431,18 @@ export function TenureRegisterPanel({
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
   const [localTitleDraft, setLocalTitleDraft] = useState('')
   const [localTitleSaving, setLocalTitleSaving] = useState(false)
-  const [startDate, setStartDate] = useState('')
-  /** 취임일 정밀도 'year' — 연도만 앎(월일은 01-01 관행 채움) */
-  const [startDateYearOnly, setStartDateYearOnly] = useState(false)
-  const [endDate, setEndDate] = useState('')
+  /** 기간 — 구조화 파츠(기원전·연 단위까지). 월·일을 비우면 그만큼만 안다는 뜻 */
+  const [start, setStart] = useState<PartialDateParts>(emptyPartialDateParts())
+  const [end, setEnd] = useState<PartialDateParts>(emptyPartialDateParts())
+  const patchStart = (patch: Partial<PartialDateParts>) => setStart((prev) => ({ ...prev, ...patch }))
+  const patchEnd = (patch: Partial<PartialDateParts>) => setEnd((prev) => ({ ...prev, ...patch }))
+  /** 달력 보조 모달 대상(시작/종료) — InlineDateField의 달력 버튼이 연다 */
+  const [datePickerSide, setDatePickerSide] = useState<'start' | 'end' | null>(null)
+  /** 재직명(왕호·교황명) — 재위일 때 */
+  const [regnalName, setRegnalName] = useState('')
+  /** 즉위·취임 사건 링크 — id는 저장, title은 칩 표시용 */
+  const [linkedAccessionEvent, setLinkedAccessionEvent] = useState<EventPickerSelection | null>(null)
+  const [accessionEventPickerOpen, setAccessionEventPickerOpen] = useState(false)
   /** 대수 — 재위·재임 공통(국가·정체 기준 통산 제N대) */
   const [ordinalNumber, setOrdinalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
@@ -479,8 +493,7 @@ export function TenureRegisterPanel({
 
   // F33 소프트 경고 — 선택된 역사국가의 존속기간과 취임 연도를 대조.
   // 존속기간은 구조화(startEra/Year)로 100% 채워져 있는 allHistoricalCountries가 진실이라
-  // 여기서 조회한다(scope 목록은 DATETIME startDate라 BC 불신). 재임 startDate는 blockBc라
-  // AD only → recordSupportsBc=false(BC 국가는 비교 불가라 무경고). 저장은 막지 않는다.
+  // 여기서 조회한다. 기간도 구조화 파츠(BC 지원)라 BC 국가·BC 취임도 대조한다. 저장은 막지 않는다.
   const lifespanWarning = useMemo(() => {
     if (!historicalCountryId) return null
     const selected = (allHistoricalCountries as Array<{
@@ -491,8 +504,10 @@ export function TenureRegisterPanel({
       endYear?: number | null
     }>).find((historical) => historical.id === historicalCountryId)
     if (!selected) return null
-    return describeLifespanMismatch(selected, signedYearFromIsoLike(startDate))
-  }, [historicalCountryId, allHistoricalCountries, startDate])
+    const startInfo = partialPartsToDateInfo(start)
+    const signedYear = startInfo ? (startInfo.era === 'BC' ? -startInfo.year : startInfo.year) : null
+    return describeLifespanMismatch(selected, signedYear, { recordSupportsBc: true })
+  }, [historicalCountryId, allHistoricalCountries, start])
 
   /**
    * 직책 피커 데이터 — 정의(적용 범위 하드컷 통과분) + 이 국가에서의 사용 실적 + 자유입력 직책명.
@@ -539,9 +554,9 @@ export function TenureRegisterPanel({
       const personName = head?.person?.name ?? head?.person?.surname ?? '이름 없음'
       const posTitle = head?.positionDefinition?.title ?? head?.title ?? c.name ?? '행정부'
       // 연도는 문자열에서 직접 추출(TZ 안전) — getFullYear()는 UTC 서쪽 타임존에서 1월 1일 시작 임기를 전년도로 보여준다
-      const start = head?.startDate ? parseIsoDateParts(head.startDate)?.year ?? '' : ''
-      const end = head?.endDate ? parseIsoDateParts(head.endDate)?.year ?? '' : '현재'
-      const range = start && end ? ` (${start}~${end})` : ''
+      const headStartYear = head?.startDate ? parseIsoDateParts(head.startDate)?.year ?? '' : ''
+      const headEndYear = head?.endDate ? parseIsoDateParts(head.endDate)?.year ?? '' : '현재'
+      const range = headStartYear && headEndYear ? ` (${headStartYear}~${headEndYear})` : ''
       return {
         value: c.id,
         label: `${personName} - ${posTitle}${range}`,
@@ -568,7 +583,8 @@ export function TenureRegisterPanel({
     ? (personTenures as any[]).find((t: any) => t.id === tenureId)
     : null
 
-  const editingIsSovereign = (editingTenure as any)?.isMonarchical === true
+  /** 재위로 연 경우(재위 추가·재위 수정) — 피커를 군주 칭호 우선으로 */
+  const reignEntry = isEdit ? (editingTenure as any)?.isMonarchical === true : defaultMonarchical
 
   /**
    * 수정 중인 재임이 참조하는 정의 — 서버 목록에서 빠져도(국가 스코프·군주 제외·각료 필터)
@@ -593,6 +609,9 @@ export function TenureRegisterPanel({
   const positionType =
     selectedDef?.positionType ?? presetPositionType ?? editingTenure?.positionType ?? 'OTHER'
 
+  /** 이 기록이 재위인가 — 고른 직위 정의가 군주직이면. 정의를 아직 안 골랐으면 진입 맥락을 따른다 */
+  const isReign = selectedDef ? selectedDef.isMonarchical === true : reignEntry
+
   /** 수반 계열 직책 — 자신이 행정부의 수장이므로 소속 행정부(cabinetId) 동시 지정 시 백엔드가 400으로 거부 */
   const isHeadPositionType =
     positionType === 'HEAD_OF_STATE' || positionType === 'HEAD_OF_GOVERNMENT'
@@ -604,15 +623,24 @@ export function TenureRegisterPanel({
   const isMinisterFlowForFilter = !tenureId && initialCabinetId != null
   const positionTitleOptions: SelectOption<string>[] = useMemo(
     () =>
-      buildPositionOptions({
-        definitions: positionDefinitions as PositionDefinitionLike[],
-        isMinisterFlow: isMinisterFlowForFilter,
-        builtins: BUILTIN_POSITIONS,
-        pinnedDefinition,
-        recentTitles,
-        otherValue: OTHER_POSITION_VALUE,
-      }),
-    [positionDefinitions, isMinisterFlowForFilter, pinnedDefinition, recentTitles],
+      reignEntry
+        ? // 재위 — 군주 칭호·작위를 위로, 그 밖의 직위는 접힌 그룹으로(쇼군처럼 관직 유형 재위도 고를 수 있게)
+          [
+            ...buildReignPositionOptions({
+              definitions: positionDefinitions as PositionDefinitionLike[],
+              pinnedDefinition,
+            }),
+            { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' },
+          ]
+        : buildPositionOptions({
+            definitions: positionDefinitions as PositionDefinitionLike[],
+            isMinisterFlow: isMinisterFlowForFilter,
+            builtins: BUILTIN_POSITIONS,
+            pinnedDefinition,
+            recentTitles,
+            otherValue: OTHER_POSITION_VALUE,
+          }),
+    [reignEntry, positionDefinitions, isMinisterFlowForFilter, pinnedDefinition, recentTitles],
   )
 
   /**
@@ -755,9 +783,11 @@ export function TenureRegisterPanel({
     setPresetPositionType(null)
     setTitle('')
     setTitleEn('')
-    setStartDate('')
-    setStartDateYearOnly(false)
-    setEndDate('')
+    setStart(emptyPartialDateParts())
+    setEnd(emptyPartialDateParts())
+    setDatePickerSide(null)
+    setRegnalName('')
+    setLinkedAccessionEvent(null)
     setOrdinalNumber('')
     setSubTermNumber('')
     setDynastyOrdinal('')
@@ -792,6 +822,26 @@ export function TenureRegisterPanel({
     setPersonImageError(false)
   }, [personDetail?.id])
 
+  /** 재위로 열었는데 직위를 아직 안 골랐으면 '국왕'을 미리 고른다 — 한 번만(사용자가 비우면 다시 채우지 않음) */
+  const defaultReignAppliedRef = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      defaultReignAppliedRef.current = false
+      return
+    }
+    if (isEdit || !defaultMonarchical || defaultReignAppliedRef.current) return
+    const king = (positionDefinitions as PositionDefinitionLike[]).find(
+      (definition) => definition.title === '국왕' && definition.isMonarchical === true,
+    )
+    if (!king) return
+    defaultReignAppliedRef.current = true
+    if (positionDefinitionId || title.trim()) return
+    setPositionDefinitionId(king.id)
+    setTitle(king.title ?? '')
+    setTitleEn(king.titleEn ?? '')
+    setPresetPositionType(null)
+  }, [open, isEdit, defaultMonarchical, positionDefinitions, positionDefinitionId, title])
+
   /** 수반 직책 선택 시 소속 행정부 지정 불가(백엔드 400) — 선택돼 있던 행정부는 자동 해제 */
   useEffect(() => {
     if (isHeadPositionType && cabinetId) setCabinetId(null)
@@ -809,9 +859,27 @@ export function TenureRegisterPanel({
     setPresetPositionType(!hydratedDefId && builtinForType ? builtinForType.positionType : null)
     setTitle(t.title ?? t.positionDefinition?.title ?? '')
     setTitleEn(t.titleEn ?? '')
-    setStartDate(t.startDate ? (typeof t.startDate === 'string' ? t.startDate.split('T')[0] : '') : '')
-    setStartDateYearOnly(t.startDatePrecision === 'year')
-    setEndDate(t.endDate ? (typeof t.endDate === 'string' ? t.endDate.split('T')[0] : '') : '')
+    // 구조화(startEra/startYear/...) 우선, 없으면 DATETIME+정밀도 폴백 → 파츠 복원
+    setStart(
+      parsePartialDateString(
+        partialDateFromStructured(t.startYear, t.startMonth, t.startDay, t.startEra) ||
+          partialDateFromResponse(t.startDate, t.startEra, t.startDatePrecision),
+      ),
+    )
+    setEnd(
+      parsePartialDateString(
+        partialDateFromStructured(t.endYear, t.endMonth, t.endDay, t.endEra) ||
+          partialDateFromResponse(t.endDate, t.endEra, t.endDatePrecision),
+      ),
+    )
+    setRegnalName(t.regnalName ?? '')
+    setLinkedAccessionEvent(
+      t.accessionEvent?.id
+        ? { id: t.accessionEvent.id, title: t.accessionEvent.title ?? '' }
+        : t.accessionEventId
+          ? { id: t.accessionEventId, title: '연결된 사건' }
+          : null,
+    )
     // 대수 — 재위·재임 공통 ordinal(= termNumber). regnalNumber는 '이름 속 서수'라 대수가 아니다
     const num = t.ordinal ?? t.termNumber
     setOrdinalNumber(num != null ? String(num) : '')
@@ -832,8 +900,9 @@ export function TenureRegisterPanel({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!personId) return
-    // 역사국가 전용 행(countryId NULL)도 수정 가능해야 함 — 둘 중 하나만 있으면 통과
-    if (!countryId && !historicalCountryId) {
+    // 역사국가 전용 행(countryId NULL)도 수정 가능해야 함 — 둘 중 하나만 있으면 통과.
+    // 재위는 국가 없이도(교황 등 국가 밖 군주) 저장한다 — 옛 재위 패널과 같은 규칙
+    if (!isReign && !countryId && !historicalCountryId) {
       notify.error('국가를 선택해 주세요.')
       return
     }
@@ -850,12 +919,14 @@ export function TenureRegisterPanel({
       notify.error('직책을 선택하거나 직접 입력해 주세요.')
       return
     }
-    if (!startDate.trim()) {
-      notify.error('취임일을 입력해 주세요.')
+    const startInfo = partialPartsToDateInfo(start)
+    const endInfo = partialPartsToDateInfo(end)
+    if (!startInfo) {
+      notify.error(isReign ? '즉위 연도를 입력해 주세요.' : '취임 연도를 입력해 주세요.')
       return
     }
-    // 기간 역전 차단 — YYYY-MM-DD 문자열 사전순 비교로 충분 (BC는 피커에서 차단됨)
-    if (endDate && endDate < startDate) {
+    // 기간 역전 — 재임은 막고, 재위는 추존·복위 같은 정당한 경우가 있어 경고만(아래 화면 경고)
+    if (!isReign && isPartialRangeInverted(start, end)) {
       notify.error('퇴임일이 취임일보다 빠를 수 없습니다.')
       return
     }
@@ -879,10 +950,14 @@ export function TenureRegisterPanel({
       titleEn: titleEn.trim() || undefined,
       countryId: historicalCountryId ? undefined : (countryId || undefined),
       historicalCountryId: historicalCountryId || undefined,
-      startDate,
-      // 'year'=연도만 앎(월일은 01-01 관행 채움) — 수정 모드 체크 해제는 null(해제)
-      startDatePrecision: startDateYearOnly ? ('year' as const) : emptyAs,
-      endDate: endDate || emptyAs,
+      // 구조화 기간 — 서버가 정렬 키·DATETIME(AD 1000+)·정밀도를 파생한다. 수정 때 종료 비움 = 해제
+      startDateInfo: startInfo,
+      endDateInfo: endInfo ?? emptyAs,
+      // 재위 칸 — 재위가 아니면 건드리지 않는다(undefined = 기존 값 유지)
+      regnalName: isReign ? regnalName.trim() || emptyAs : undefined,
+      dynastyOrdinal: isReign ? parsedDynastyOrdinal : undefined,
+      // 즉위·취임 사건 — 사건 화면에서 건 연결도 수정 폼이 하이드레이트하므로 그대로 왕복된다
+      accessionEventId: linkedAccessionEvent?.id ?? emptyAs,
       // 일반 재임은 termNumber(공식 통산 대수)만 기록 — regnalNumber(군주 재위번호)에 이중 기록하지 않음
       termNumber: parsedOrdinal,
       subTermNumber: parsedSubTerm,
@@ -900,38 +975,15 @@ export function TenureRegisterPanel({
     setSubmitting(true)
     try {
       if (isEdit && tenureId) {
-        if (editingIsSovereign) {
-          await personCareerApi.updateSovereignReign(tenureId, {
-            personId,
-            countryId: historicalCountryId ? undefined : countryId || undefined,
-            historicalCountryId: historicalCountryId || undefined,
-            positionDefinitionId: positionDefinitionId || undefined,
-            startDate,
-            startDatePrecision: startDateYearOnly ? ('year' as const) : null,
-            endDate: endDate || null,
-            // 재위 폼 어휘의 regnalNumber(대수) — 래퍼가 재임의 대수 칸으로 옮긴다
-            regnalNumber: parsedOrdinal ?? null,
-            subTermNumber: parsedSubTerm ?? null,
-            dynastyOrdinal: parsedDynastyOrdinal ?? null,
-            appointmentMethod: (appointmentMethod || null) as any,
-            appointmentDetail: appointmentDetail.trim() || null,
-            endReason: (endReason || null) as any,
-            endReasonDetail: endReasonDetail.trim() || null,
-            notes: combinedNotes || null,
-            showPositionInfo: showOnEvents,
-          })
-          notify.success('재위 기록이 수정되었습니다.')
-        } else {
-          await personCareerApi.updateGovernmentPositionTenure(tenureId, payload)
-          notify.success('재임 기록이 수정되었습니다.')
-        }
+        await personCareerApi.updateGovernmentPositionTenure(tenureId, payload as any)
+        notify.success(isReign ? '재위 기록이 수정되었습니다.' : '재임 기록이 수정되었습니다.')
       } else {
         await personCareerApi.addGovernmentPositionTenure({
           ...payload,
           personId,
           // 생성 모드에서는 emptyAs === undefined 라 null이 실제로 들어가지 않음
         } as CreateGovernmentPositionTenureDto)
-        notify.success('재임 기록이 추가되었습니다.')
+        notify.success(isReign ? '재위 기록이 추가되었습니다.' : '재임 기록이 추가되었습니다.')
       }
       onClose()
       invalidateTenureQueries(queryClient, { personId })
@@ -948,13 +1000,9 @@ export function TenureRegisterPanel({
     setDeleteConfirmOpen(false)
     setSubmitting(true)
     try {
-      if (editingIsSovereign) {
-        await personCareerApi.deleteSovereignReign(tenureId)
-        notify.success('재위 기록이 삭제되었습니다.')
-      } else {
-        await personCareerApi.deleteGovernmentPositionTenure(tenureId)
-        notify.success('재임 기록이 삭제되었습니다.')
-      }
+      // 재위·재임 같은 재임 행 — 엔드포인트 하나
+      await personCareerApi.deleteGovernmentPositionTenure(tenureId)
+      notify.success(isReign ? '재위 기록이 삭제되었습니다.' : '재임 기록이 삭제되었습니다.')
       onClose()
       invalidateTenureQueries(queryClient, { personId })
       onSuccess?.()
@@ -969,36 +1017,39 @@ export function TenureRegisterPanel({
     submitting ||
     (isEdit && !!tenureId && !editingTenure) ||
     !personId ||
-    // 역사국가 전용 행(countryId NULL) 수정 잠금 방지 — 둘 중 하나만 있으면 됨
-    (!countryId && !historicalCountryId) ||
+    // 역사국가 전용 행(countryId NULL) 수정 잠금 방지 — 둘 중 하나만 있으면 됨. 재위는 국가 선택
+    (!isReign && !countryId && !historicalCountryId) ||
     (!(selectedDef as any)?.title && !title.trim()) ||
-    !startDate.trim()
+    partialPartsToDateInfo(start) == null
 
-  const hasCountry = !!countryId || !!historicalCountryId
+  const hasCountry = isReign || !!countryId || !!historicalCountryId
   const hasPosition = !!(selectedDef as any)?.title || !!title.trim()
-  const hasStartDate = !!startDate.trim()
+  const hasStartDate = partialPartsToDateInfo(start) != null
+  /** 재위 기간 역전 — 저장은 막지 않고 경고만(추존·복위) */
+  const periodInverted = isPartialRangeInverted(start, end)
   /** 등록 버튼이 잠긴 이유 — 상단 '필수 항목' 띠 대신 버튼 옆 한 줄로(빨간 점과 중복되던 띠 제거) */
   const missingRequired = [
     !hasCountry && '국가',
     !hasPosition && '직책',
-    !hasStartDate && (editingIsSovereign ? '즉위일' : '취임일'),
+    !hasStartDate && (isReign ? '즉위일' : '취임일'),
   ].filter(Boolean) as string[]
   const missingParticle = objectParticle(missingRequired[missingRequired.length - 1] ?? '')
 
   /** 행정부 탭에서 "각료 추가"로 열렸을 때 → 각료 등록 문구 사용 (수반 아님) */
   const isMinisterFlow = !isEdit && initialCabinetId != null
+  const recordNoun = isReign ? '재위' : '재임'
   const panelTitle = isEdit
     ? isMinisterFlow
       ? '각료 수정'
-      : '재임 수정'
+      : `${recordNoun} 수정`
     : isMinisterFlow
       ? '각료 등록'
-      : '재임 등록'
+      : `${recordNoun} 등록`
   const submitLabelText = isEdit
     ? '수정 완료'
     : isMinisterFlow
       ? '각료 등록'
-      : '재임 등록'
+      : `${recordNoun} 등록`
 
   return (
     <>
@@ -1058,7 +1109,8 @@ export function TenureRegisterPanel({
               )}
               <FieldRow>
                 <FieldLabel>
-                  국가 <Required aria-label="필수" />
+                  {/* 재위는 국가 없이도 저장된다(교황 등 국가 밖 군주) */}
+                  국가 {isReign ? <OptionalTag>(선택)</OptionalTag> : <Required aria-label="필수" />}
                 </FieldLabel>
                 <FieldControl>
                   <SelectTriggerButton
@@ -1279,49 +1331,94 @@ export function TenureRegisterPanel({
                 </FieldRow>
               )}
 
-              <DateRangeField
-                label="취임일 · 퇴임일"
-                required
-                startValue={startDate}
-                endValue={endDate}
-                onStartChange={setStartDate}
-                onEndChange={setEndDate}
-                startPlaceholder="취임일"
-                endPlaceholder="퇴임일 (선택)"
-                blockBc
-                clearableEnd
-              />
-
-              {lifespanWarning && (
-                <AlertBox variant="warning" icon="⚠️" style={{ marginTop: 4 }}>
-                  선택한 역사국가 {lifespanWarning} 소급·추존·망명 등 정당한 경우라면 그대로 저장하세요.
-                </AlertBox>
+              {isReign && (
+                <FieldRow>
+                  <FieldLabel htmlFor="tenure-regnal-name">
+                    왕호<OptionalTag>(선택)</OptionalTag>
+                  </FieldLabel>
+                  <FieldControl>
+                    <Input
+                      id="tenure-regnal-name"
+                      value={regnalName}
+                      onChange={(event) => setRegnalName(event.target.value)}
+                      placeholder="예: 루이 14세, 빅토리아, 인노첸시오 3세"
+                    />
+                  </FieldControl>
+                </FieldRow>
               )}
 
-              {/* 정밀도 — 날짜 바로 아래 한 줄(제목·체크·설명 세 줄로 떨어져 ~100px을 먹었다) */}
-              <PrecisionRow className="tenure-precision-row">
-                <input
-                  type="checkbox"
-                  id="tenure-start-year-only"
-                  checked={startDateYearOnly}
-                  onChange={(event) => setStartDateYearOnly(event.target.checked)}
-                />
-                <label htmlFor="tenure-start-year-only">
-                  {editingIsSovereign ? '즉위 연도만 앎' : '취임 연도만 앎'}
-                </label>
-                <PrecisionHint>날짜는 1월 1일로 입력 — 표시는 연도만</PrecisionHint>
-              </PrecisionRow>
+              {/* 기간 — 구조화 파츠(기원전·연 단위까지). 월·일을 비우면 그만큼만 안다는 뜻 */}
+              <FieldRow>
+                <FieldLabel as="span">
+                  {isReign ? '재위 기간' : '재임 기간'} <Required aria-label="필수" />
+                </FieldLabel>
+                <FieldControl>
+                  <PeriodRow>
+                    <PeriodCol>
+                      <PeriodLabel>{isReign ? '즉위' : '취임'}</PeriodLabel>
+                      <InlineDateField
+                        ariaLabel={isReign ? '즉위일' : '취임일'}
+                        era={start.era}
+                        year={start.year}
+                        month={start.month}
+                        day={start.day}
+                        onEra={(era) => patchStart({ era })}
+                        onYear={(year) => patchStart({ year })}
+                        onMonth={(month) => patchStart({ month })}
+                        onDay={(day) => patchStart({ day })}
+                        onOpenPicker={() => setDatePickerSide('start')}
+                      />
+                    </PeriodCol>
+                    <PeriodCol>
+                      <PeriodLabel>{isReign ? '퇴위 (비워두면 현재)' : '퇴임 (비워두면 재임 중)'}</PeriodLabel>
+                      <InlineDateField
+                        ariaLabel={isReign ? '퇴위일' : '퇴임일'}
+                        era={end.era}
+                        year={end.year}
+                        month={end.month}
+                        day={end.day}
+                        onEra={(era) => patchEnd({ era })}
+                        onYear={(year) => patchEnd({ year })}
+                        onMonth={(month) => patchEnd({ month })}
+                        onDay={(day) => patchEnd({ day })}
+                        onOpenPicker={() => setDatePickerSide('end')}
+                        error={periodInverted}
+                        ariaDescribedBy={periodInverted ? 'tenure-period-error' : undefined}
+                      />
+                    </PeriodCol>
+                  </PeriodRow>
+                  <FieldHint>
+                    연도만 입력해도 됩니다(월·일은 비워도 됨). 기원전은 연도 왼쪽 BC 버튼으로, 정확한 날짜는
+                    달력(📅)으로 고르세요.
+                  </FieldHint>
+                  {periodInverted && (
+                    <div id="tenure-period-error" role="alert">
+                      <AlertBox variant="warning" icon="⚠️" style={{ marginTop: 4 }}>
+                        {isReign
+                          ? '퇴위가 즉위보다 빠릅니다 — 추존·복위 등 정당한 경우가 아니면 확인해 주세요.'
+                          : '퇴임일이 취임일보다 빠릅니다.'}
+                      </AlertBox>
+                    </div>
+                  )}
+                  {lifespanWarning && (
+                    <AlertBox variant="warning" icon="⚠️" style={{ marginTop: 4 }}>
+                      선택한 역사국가 {lifespanWarning} 소급·추존·망명 등 정당한 경우라면 그대로 저장하세요.
+                    </AlertBox>
+                  )}
+                </FieldControl>
+              </FieldRow>
+
               {/* 대수·기수 — 한 행 안에 작은 소제목 둘(사건 모달의 시작일/종료일 문법) */}
               <FieldRow>
                 <FieldLabel as="span">
-                  {editingIsSovereign ? '즉위 순서·기수' : '대수·기수'}
+                  {isReign ? '즉위 순서·기수' : '대수·기수'}
                   <OptionalTag>(선택)</OptionalTag>
                 </FieldLabel>
                 <FieldControl>
                   <SubFieldPair>
                     <SubField>
                       <SubFieldLabel htmlFor="tenure-ordinal">
-                        {editingIsSovereign ? '즉위 순서 (제N대)' : '대수'}
+                        {isReign ? '즉위 순서 (제N대)' : '대수'}
                       </SubFieldLabel>
                       {/* 대수 — 재위·재임 공통 '선택한 국가/정체 기준 통산 제N대' */}
                       <Input
@@ -1330,9 +1427,9 @@ export function TenureRegisterPanel({
                         min={1}
                         value={ordinalNumber}
                         onChange={(e) => setOrdinalNumber(e.target.value)}
-                        placeholder={editingIsSovereign ? '예: 러시아 제국 제1대 → 1' : '예: 제20대 → 20'}
+                        placeholder={isReign ? '예: 러시아 제국 제1대 → 1' : '예: 제20대 → 20'}
                         title={
-                          editingIsSovereign
+                          isReign
                             ? '선택한 국가/정체 기준 통산 즉위 순서 — 루이 14세식 이름별 번호는 재위명(왕명)에'
                             : '공식 통산 대수 — 없으면 비워두기'
                         }
@@ -1355,7 +1452,7 @@ export function TenureRegisterPanel({
                 </FieldControl>
               </FieldRow>
 
-              {editingIsSovereign && (
+              {isReign && (
                 <FieldRow>
                   <FieldLabel>왕조 서수<OptionalTag>(선택)</OptionalTag></FieldLabel>
                   <FieldControl>
@@ -1374,11 +1471,11 @@ export function TenureRegisterPanel({
               {/* 취임 — 방식은 칩(사건 카테고리 문법, 다시 누르면 해제) + 서술 */}
               <FieldRow>
                 <FieldLabel as="span">
-                  {editingIsSovereign ? '즉위' : '취임'}
+                  {isReign ? '즉위' : '취임'}
                   <OptionalTag>(선택)</OptionalTag>
                 </FieldLabel>
                 <FieldControl>
-                  <ChoiceChips role="group" aria-label={editingIsSovereign ? '즉위 방식' : '취임 방식'}>
+                  <ChoiceChips role="group" aria-label={isReign ? '즉위 방식' : '취임 방식'}>
                     {APPOINTMENT_METHOD_OPTIONS.map((option) => (
                       <ChoiceChip
                         key={option.value}
@@ -1396,23 +1493,46 @@ export function TenureRegisterPanel({
                   {/* appointmentMethod의 서사 쌍 — 재위는 '즉위 상세' */}
                   <Textarea
                     id="tenure-appointment-detail"
-                    aria-label={editingIsSovereign ? '즉위 상세' : '취임 상세'}
+                    aria-label={isReign ? '즉위 상세' : '취임 상세'}
                     value={appointmentDetail}
                     onChange={(event) => setAppointmentDetail(event.target.value)}
                     placeholder={
-                      editingIsSovereign
+                      isReign
                         ? '어떻게 즉위했나 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관'
                         : '어떻게 취임했나 — 예: 권한대행 후 정식 취임'
                     }
                     rows={2}
                   />
+                  <AccessionEventLine>
+                    {linkedAccessionEvent ? (
+                      <EventPickerLinkedChip title={linkedAccessionEvent.title}>
+                        <FiLink size={12} />
+                        <span>{linkedAccessionEvent.title}</span>
+                        <EventPickerLinkClearBtn
+                          type="button"
+                          aria-label="사건 연결 해제"
+                          onClick={() => setLinkedAccessionEvent(null)}
+                        >
+                          <FiX size={13} />
+                        </EventPickerLinkClearBtn>
+                      </EventPickerLinkedChip>
+                    ) : (
+                      <EventPickerLinkBtn type="button" onClick={() => setAccessionEventPickerOpen(true)}>
+                        <FiLink size={12} />
+                        사건 연결
+                      </EventPickerLinkBtn>
+                    )}
+                    <FieldHint>
+                      {isReign ? '대관식·즉위식을' : '취임식을'} 사건으로 등록했다면 연결합니다.
+                    </FieldHint>
+                  </AccessionEventLine>
                 </FieldControl>
               </FieldRow>
 
               {/* 퇴임 — 사유 칩 + 서술(실각 경위 등 한 줄로 안 끝나는 서술이 대부분) */}
               <FieldRow>
                 <FieldLabel as="span">
-                  {editingIsSovereign ? '퇴위' : '퇴임'}
+                  {isReign ? '퇴위' : '퇴임'}
                   <OptionalTag>(선택)</OptionalTag>
                 </FieldLabel>
                 <FieldControl>
@@ -1555,7 +1675,7 @@ export function TenureRegisterPanel({
         onClose={() => setPositionModalOpen(false)}
         title="직책명 선택"
         options={positionTitleOptions}
-        collapsedGroups={DEFAULT_COLLAPSED_POSITION_GROUPS}
+        collapsedGroups={reignEntry ? DEFAULT_COLLAPSED_REIGN_GROUPS : DEFAULT_COLLAPSED_POSITION_GROUPS}
         searchPlaceholder="직책명으로 검색..."
         selectedValue={selectedPositionValue}
         onSelect={handlePositionSelect}
@@ -1584,10 +1704,50 @@ export function TenureRegisterPanel({
         />
       )}
 
+      {/* 즉위·취임 사건 선택 */}
+      <EventPickerModal
+        isOpen={accessionEventPickerOpen}
+        onClose={() => setAccessionEventPickerOpen(false)}
+        onSelect={(picked) => {
+          setLinkedAccessionEvent(picked)
+          setAccessionEventPickerOpen(false)
+        }}
+        title={isReign ? '즉위·대관식 사건 연결' : '취임 사건 연결'}
+      />
+
+      {/* 시작/종료 달력 보조 — 파츠 입력과 병행. 완전일자만 초기값으로 넘긴다 */}
+      {datePickerSide &&
+        (() => {
+          const parts = datePickerSide === 'start' ? start : end
+          const initialDate =
+            parts.year && parts.month && parts.day ? buildPartialDateString(parts) : undefined
+          const apply = datePickerSide === 'start' ? patchStart : patchEnd
+          return (
+            <DatePickerModal
+              isOpen
+              initialDate={initialDate}
+              title={
+                datePickerSide === 'start'
+                  ? isReign
+                    ? '즉위일'
+                    : '취임일'
+                  : isReign
+                    ? '퇴위일'
+                    : '퇴임일'
+              }
+              onSelect={(date) => {
+                apply(parsePartialDateString(date))
+                setDatePickerSide(null)
+              }}
+              onClose={() => setDatePickerSide(null)}
+            />
+          )
+        })()}
+
       <ConfirmDialog
         isOpen={deleteConfirmOpen}
-        title={editingIsSovereign ? '재위 기록 삭제' : '재임 기록 삭제'}
-        message={`이 ${editingIsSovereign ? '재위' : '재임'} 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.`}
+        title={isReign ? '재위 기록 삭제' : '재임 기록 삭제'}
+        message={`이 ${isReign ? '재위' : '재임'} 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.`}
         confirmLabel={submitting ? '삭제 중…' : '삭제'}
         danger
         onConfirm={handleDelete}
