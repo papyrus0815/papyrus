@@ -131,7 +131,6 @@ export function TenureAchievements({
   const [submitting, setSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const isReign = hostKind === 'reign'
   const [addingSuggestionId, setAddingSuggestionId] = useState<string | null>(null)
 
   /**
@@ -155,11 +154,8 @@ export function TenureAchievements({
       showOnEventsPage: true,
     }
     try {
-      if (isReign) {
-        await personCareerApi.createSovereignReignAchievement(hostId, dto)
-      } else {
-        await personCareerApi.createTenureAchievement(hostId, dto)
-      }
+      // 재위·재임 업적 모두 재임 업적 — 엔드포인트 하나
+      await personCareerApi.createTenureAchievement(hostId, dto)
       notify.success(`'${suggestion.title}'을(를) 업적으로 추가했습니다.`)
       setExpanded(true)
       onChanged()
@@ -282,23 +278,11 @@ export function TenureAchievements({
       if (editingId) {
         // 수정은 eventId를 항상 실어 보냄 — 선택 없음(null)이 연결 해제 계약(키 없음=유지)
         const dto = { ...baseDto, eventId: linkedEvent?.id ?? null }
-        if (isReign) {
-          await personCareerApi.updateSovereignReignAchievement(
-            hostId,
-            editingId,
-            dto,
-          )
-        } else {
-          await personCareerApi.updateTenureAchievement(hostId, editingId, dto)
-        }
+        await personCareerApi.updateTenureAchievement(hostId, editingId, dto)
         notify.success('업적이 수정되었습니다.')
       } else {
         const dto = { ...baseDto, eventId: linkedEvent?.id }
-        if (isReign) {
-          await personCareerApi.createSovereignReignAchievement(hostId, dto)
-        } else {
-          await personCareerApi.createTenureAchievement(hostId, dto)
-        }
+        await personCareerApi.createTenureAchievement(hostId, dto)
         notify.success('업적·한일이 등록되었습니다.')
       }
       resetForm()
@@ -326,14 +310,7 @@ export function TenureAchievements({
     onPlayClick?.()
     setDeletingId(achievementId)
     try {
-      if (isReign) {
-        await personCareerApi.deleteSovereignReignAchievement(
-          hostId,
-          achievementId,
-        )
-      } else {
-        await personCareerApi.deleteTenureAchievement(hostId, achievementId)
-      }
+      await personCareerApi.deleteTenureAchievement(hostId, achievementId)
       if (editingId === achievementId) resetForm()
       notify.success('업적이 삭제되었습니다.')
       onChanged()

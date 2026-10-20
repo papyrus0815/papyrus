@@ -981,13 +981,9 @@ export function HeadsOfStateSection({
     )
       return
     try {
-      if (isSov) {
-        await personCareerApi.deleteSovereignReign(editingTenureId)
-        notify.success('재위 기록이 삭제되었습니다.')
-      } else {
-        await personCareerApi.deleteGovernmentPositionTenure(editingTenureId)
-        notify.success('재임 기록이 삭제되었습니다.')
-      }
+      // 재위·재임 같은 재임 행 — 엔드포인트 하나
+      await personCareerApi.deleteGovernmentPositionTenure(editingTenureId)
+      notify.success(isSov ? '재위 기록이 삭제되었습니다.' : '재임 기록이 삭제되었습니다.')
       resetForm()
       setView('list')
       refetch()
@@ -1138,8 +1134,6 @@ export function HeadsOfStateSection({
       notify.error('제목을 입력하세요.')
       return
     }
-    const hostRow = tenures.find((t: any) => t.id === tenureId) as any
-    const achievementIsSovereign = hostRow?.isMonarchical === true
     setAchievementSubmitting(true)
     try {
       const dto = {
@@ -1149,24 +1143,10 @@ export function HeadsOfStateSection({
         endDate: achievementEndDate || undefined,
         showOnEventsPage: achievementShowOnEventsPage,
       }
+      // 재위·재임 업적 모두 재임 업적 — 엔드포인트 하나
       if (editingAchievementId) {
-        if (achievementIsSovereign) {
-          await personCareerApi.updateSovereignReignAchievement(
-            tenureId,
-            editingAchievementId,
-            dto,
-          )
-        } else {
-          await personCareerApi.updateTenureAchievement(
-            tenureId,
-            editingAchievementId,
-            dto,
-          )
-        }
+        await personCareerApi.updateTenureAchievement(tenureId, editingAchievementId, dto)
         notify.success('업적이 수정되었습니다.')
-      } else if (achievementIsSovereign) {
-        await personCareerApi.createSovereignReignAchievement(tenureId, dto)
-        notify.success('업적·한일이 등록되었습니다.')
       } else {
         await personCareerApi.createTenureAchievement(tenureId, dto)
         notify.success('업적·한일이 등록되었습니다.')
@@ -1198,17 +1178,8 @@ export function HeadsOfStateSection({
       }))
     )
       return
-    const hostRow = tenures.find((t: any) => t.id === tenureId) as any
-    const achievementHostIsSovereign = hostRow?.isMonarchical === true
     try {
-      if (achievementHostIsSovereign) {
-        await personCareerApi.deleteSovereignReignAchievement(
-          tenureId,
-          achievementId,
-        )
-      } else {
-        await personCareerApi.deleteTenureAchievement(tenureId, achievementId)
-      }
+      await personCareerApi.deleteTenureAchievement(tenureId, achievementId)
       if (editingAchievementId === achievementId) resetAchievementForm()
       notify.success('업적이 삭제되었습니다.')
       invalidateTenureQueries(queryClient)
@@ -1334,15 +1305,8 @@ export function HeadsOfStateSection({
         await personCareerApi.updateRegnalEra(editingRegnalEraId, patch)
         notify.success('연호가 수정되었습니다.')
       } else {
-        const isSovereign = hostRow?.isMonarchical === true
-        if (isSovereign) {
-          await personCareerApi.createRegnalEraForSovereignReign(
-            editingTenureId,
-            base,
-          )
-        } else {
-          await personCareerApi.createRegnalEra(editingTenureId, base)
-        }
+        // 연호는 재위·재임 모두 재임 행에 단다
+        await personCareerApi.createRegnalEra(editingTenureId, base)
         notify.success('연호가 등록되었습니다.')
       }
       resetRegnalEraForm()

@@ -611,10 +611,8 @@ export type GovernmentCabinetTenureItem = {
 /** 수반 재임·재위의 연호·시대명 (동아시아 元号, 일본 연호 등) */
 export type RegnalEraDto = {
   id: string
-  /** 행정부 재임(`GovernmentPositionTenure`)에 붙은 경우 */
+  /** 붙은 재임 행(재위도 재임 테이블의 군주직 행) */
   tenureId?: string | null
-  /** 재위 전용(`SovereignReign`)에 붙은 경우 */
-  sovereignReignId?: string | null
   eraName: string
   eraNameEn?: string | null
   startYear: number
@@ -885,11 +883,6 @@ export const personCareerApi = {
     return tenureToReignShape(response.data)
   },
 
-  deleteSovereignReign: async (id: string) => {
-    await apiClient.delete(
-      `/government-positions/tenures/${encodeURIComponent(id)}`,
-    )
-  },
 
   /** 재임 1건 + 업적 조회 (수장 비교 읽기 팝오버 등 — 지연 로드용) */
   getTenureWithAchievements: async (id: string) => {
@@ -899,25 +892,7 @@ export const personCareerApi = {
     return response.data
   },
 
-  /** 재위 1건 + 업적 조회 (수장 비교 읽기 팝오버 등 — 지연 로드용) */
-  getSovereignReignWithAchievements: async (id: string) => {
-    const response = await apiClient.get(
-      `/government-positions/tenures/${encodeURIComponent(id)}/with-achievements`,
-    )
-    return tenureToReignShape(response.data)
-  },
 
-  createRegnalEraForSovereignReign: async (
-    sovereignReignId: string,
-    dto: CreateRegnalEraDto,
-  ) => {
-    // 재위 id = 재임 id
-    const response = await apiClient.post(
-      `/government-positions/tenures/${encodeURIComponent(sovereignReignId)}/regnal-eras`,
-      dto,
-    )
-    return response.data
-  },
 
   /**
    * 재임 업적·한일 추가 (사건과 별도)
@@ -1002,53 +977,8 @@ export const personCareerApi = {
     )
   },
 
-  createSovereignReignAchievement: async (
-    sovereignReignId: string,
-    dto: {
-      title: string
-      description?: string
-      startDate?: string
-      endDate?: string
-      orderNum?: number
-      showOnEventsPage?: boolean
-      eventId?: string
-    },
-  ) => {
-    const response = await apiClient.post(
-      `/government-positions/tenures/${encodeURIComponent(sovereignReignId)}/achievements`,
-      dto,
-    )
-    return response.data
-  },
 
-  updateSovereignReignAchievement: async (
-    sovereignReignId: string,
-    achievementId: string,
-    dto: {
-      title?: string
-      description?: string
-      startDate?: string
-      endDate?: string
-      orderNum?: number
-      showOnEventsPage?: boolean
-      eventId?: string | null
-    },
-  ) => {
-    const response = await apiClient.patch(
-      `/government-positions/tenures/${encodeURIComponent(sovereignReignId)}/achievements/${encodeURIComponent(achievementId)}`,
-      dto,
-    )
-    return response.data
-  },
 
-  deleteSovereignReignAchievement: async (
-    sovereignReignId: string,
-    achievementId: string,
-  ) => {
-    await apiClient.delete(
-      `/government-positions/tenures/${encodeURIComponent(sovereignReignId)}/achievements/${encodeURIComponent(achievementId)}`,
-    )
-  },
 
   /**
    * 인물의 재임 기록만 조회 (수정 페이지 경력 로딩용)
