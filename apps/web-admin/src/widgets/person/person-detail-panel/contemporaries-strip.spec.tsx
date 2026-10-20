@@ -68,13 +68,12 @@ function ruler(overrides: {
     records: [
       {
         recordId: `rec-${overrides.id}`,
-        recordKind: 'SOVEREIGN_REIGN',
+        isMonarchical: true,
         positionType: 'HEAD_OF_STATE',
         title: '국왕',
         appointmentMethod: null,
         regnalName: null,
-        regnalNumber: null,
-        termNumber: null,
+        ordinal: null,
         startYear: 1418,
         endYear: 1450,
         startDate: '1418-01-01T00:00:00.000Z',

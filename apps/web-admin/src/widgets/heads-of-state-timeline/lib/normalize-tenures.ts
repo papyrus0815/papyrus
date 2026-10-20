@@ -1,9 +1,8 @@
 /**
  * `getTenuresByCountry` 응답을 타임라인 막대(TenureBar)로 변환.
  *
- * 응답에는 두 종류의 행이 섞여 들어온다 — `recordKind: 'TENURE'`(GovernmentPositionTenure)와
- * `'SOVEREIGN_REIGN'`(SovereignReign). 같은 시기·같은 인물의 재임이 두 종류로 중복될 수 있으니
- * `country-detail`의 dedup 로직과 동일한 기준(인물ID + 시작일 같으면 SovereignReign 우선)으로 합친다.
+ * 재위·재임은 한 테이블(직위 보유 단일 모델)이라 행 모양이 같고 `isMonarchical`로만 갈린다.
+ * 재위는 전부, 재임은 국가원수·정부수반만 막대로 올린다.
  */
 
 import { categorizePosition } from '@/entities/government-position/model/categorize'
@@ -18,12 +17,12 @@ export type PositionTypeCategory = PositionCategory
 
 /**
  * `getTenuresByCountry` 가 돌려주는 원시 레코드의 — 이 위젯이 읽는 — 필드만 추린 타입.
- * 응답은 `TENURE`(행정부 재임)와 `SOVEREIGN_REIGN`(재위 전용) 두 종류가 섞여 들어오므로
- * 두 스키마의 합집합을 느슨하게 표현한다(둘 다 optional).
+ * 재위·재임 같은 모양 — 응답마다 실리는 칸이 달라 전부 optional.
  */
 export interface RawTenureRecord {
   id: string
-  recordKind?: 'TENURE' | 'SOVEREIGN_REIGN' | string | null
+  /** 재위(군주직)인가 */
+  isMonarchical?: boolean | null
   personId?: string | null
   person?: {
     id?: string | null
@@ -38,7 +37,8 @@ export interface RawTenureRecord {
   positionDefinition?: { positionType?: string | null; title?: string | null } | null
   title?: string | null
   appointmentMethod?: string | null
-  regnalNumber?: number | null
+  /** 대수 — 재위·재임 공통 */
+  ordinal?: number | null
   termNumber?: number | null
   notes?: string | null
   startDate?: string | null
@@ -46,9 +46,9 @@ export interface RawTenureRecord {
 }
 
 export interface TenureBar {
-  /** TENURE.id 또는 SOVEREIGN_REIGN.id */
+  /** 재임 행 id (재위도 재임 테이블의 군주직 행) */
   id: string
-  recordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+  isMonarchical: boolean
   personId: string | null
   personName: string | null
   /** 왕명·교황명·묘호 등 표시용 */
@@ -107,22 +107,17 @@ function getPersonName(t: RawTenureRecord): string | null {
 /** 직책 분류 — 엔티티 단일 출처(categorizePosition)에 위임 */
 function categorize(tenure: RawTenureRecord): PositionTypeCategory {
   return categorizePosition({
-    kind: tenure.recordKind,
+    isMonarchical: tenure.isMonarchical,
     positionType: getPositionType(tenure),
     positionTitle: getPositionTitle(tenure),
     appointmentMethod: tenure.appointmentMethod,
   })
 }
 
+/** 대수 — 재위·재임 공통 ordinal(= termNumber). regnalNumber는 '이름 속 서수'라 대수가 아니다 */
 function ordinalOf(t: RawTenureRecord): number | null {
-  // 재위=regnalNumber(즉위 순서) 우선, 재임=termNumber(통산 대수) 우선 —
-  // 인물 상세 person-detail-panel의 ordinalOf와 동일 규약(화면 간 서수 불일치 방지)
-  const isReign = t.recordKind === 'SOVEREIGN_REIGN'
-  const primary = isReign ? t.regnalNumber : t.termNumber
-  const secondary = isReign ? t.termNumber : t.regnalNumber
-  if (typeof primary === 'number') return primary
-  if (typeof secondary === 'number') return secondary
-  return null
+  const ordinal = t.ordinal ?? t.termNumber
+  return typeof ordinal === 'number' ? ordinal : null
 }
 
 /** id·startDate가 있는 레코드만 신뢰 — 그 외(부분 응답·null)는 버린다 */
@@ -139,26 +134,18 @@ export function normalizeTenures(rawList: unknown): TenureBar[] {
   if (!Array.isArray(rawList)) return []
 
   const records = rawList.filter(isUsableRecord)
-  // SovereignReign(재위)은 항상, 일반 재임은 국가원수·정부수반만 — 작위·왕세자·섭정·장관 등 제외
-  const tenures = records.filter(
-    (r) => r.recordKind !== 'SOVEREIGN_REIGN' && isHeadPosition(r),
-  )
-  const sovereigns = records.filter((r) => r.recordKind === 'SOVEREIGN_REIGN')
-
-  // 재위·재임은 한 테이블이라(직위 보유 단일 모델) 같은 재직이 두 번 오지 않는다 — 중복 제거 불필요
-  const all = [...sovereigns, ...tenures]
+  // 재위(군주직)는 항상, 재임은 국가원수·정부수반만 — 작위·왕세자·섭정·장관 등 제외
+  const all = records.filter((r) => r.isMonarchical === true || isHeadPosition(r))
 
   return all
     .map((t) => {
-      const recordKind: 'TENURE' | 'SOVEREIGN_REIGN' =
-        t.recordKind === 'SOVEREIGN_REIGN' ? 'SOVEREIGN_REIGN' : 'TENURE'
       const regnalName =
         t.regnalName?.trim() || regnalNameFromNotes(t.notes) || null
       const startDate = t.startDate as string
       const endDate = t.endDate ?? null
       return {
         id: t.id,
-        recordKind,
+        isMonarchical: t.isMonarchical === true,
         personId: t.personId ?? t.person?.id ?? null,
         personName: getPersonName(t),
         regnalName,

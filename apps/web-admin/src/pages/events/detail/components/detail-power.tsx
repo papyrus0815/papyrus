@@ -101,8 +101,8 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
   const setAccessionMutation = useMutation({
     mutationFn: async ({ record, eventId }: { record: EventAccession; eventId: string | null }) => {
       const dto = { accessionEventId: eventId }
-      if (record.recordKind === 'TENURE') await personCareerApi.updateGovernmentPositionTenure(record.recordId, dto)
-      else await personCareerApi.updateSovereignReign(record.recordId, dto)
+      // 재위·재임 모두 재임 행 — 같은 엔드포인트
+      await personCareerApi.updateGovernmentPositionTenure(record.recordId, dto)
       return record
     },
     onSuccess: (record, variables) => {
@@ -115,7 +115,7 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
   })
 
   const accessionOptions = accessionCandidates.map((record) => ({
-    value: `${record.recordKind}:${record.recordId}`,
+    value: record.recordId,
     label: `${record.regnalName ?? record.personName}${record.title ? ` · ${record.title}` : ''}`,
     description: [
       record.countryName,
@@ -205,7 +205,7 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
         <Rows aria-label="취임·즉위">
           {accessions.map((record) => (
             <AccessionRow
-              key={`${record.recordKind}:${record.recordId}`}
+              key={record.recordId}
               record={record}
               onPersonClick={onPersonClick}
               onUnlink={() => void unlinkAccession(record)}
@@ -260,7 +260,7 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
         onSelect={(value) => {
           setAccessionPickerOpen(false)
           const record = accessionCandidates.find(
-            (candidate) => `${candidate.recordKind}:${candidate.recordId}` === value,
+            (candidate) => candidate.recordId === value,
           )
           if (record) setAccessionMutation.mutate({ record, eventId: event.id })
         }}
@@ -346,7 +346,7 @@ function AccessionRow({
       )}
       <Meta>
         {[
-          record.recordKind === 'SOVEREIGN_REIGN' ? '즉위' : '취임',
+          record.isMonarchical ? '즉위' : '취임',
           record.title,
           record.countryName,
           spanLabel(record.startYear, record.endYear),

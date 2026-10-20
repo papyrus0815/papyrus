@@ -10,7 +10,7 @@ import type {
 
 /**
  * 동시대 수장 스트립의 순수 어댑터 — API 응답을 표시 모델로 변환한다.
- * categorizePosition의 kind 계약('SOVEREIGN_REIGN' 정확 일치)과 BC-safe 부호 연도
+ * 직위 분류(categorizePosition)와 BC-safe 부호 연도
  * 포맷을 여기 한 곳에서만 다뤄, 컴포넌트는 표시에만 집중한다.
  */
 
@@ -68,14 +68,10 @@ export function primaryRecordOf(
   return primary
 }
 
-/**
- * categorizePosition 입력 어댑터 — kind는 'SOVEREIGN_REIGN' 정확 일치 계약이므로
- * recordKind를 그대로 넘긴다 (combinedTenures의 lowercase kind('tenure'|'reign')를
- * 넘기면 전원 오분류되는 함정이 검증에서 확인된 바 있음).
- */
+/** categorizePosition 입력 어댑터 — 군주직이면 군주, 아니면 축·임명방식·직함으로 */
 export function categoryOfRecord(record: ContemporaryRecord): PositionCategory {
   return categorizePosition({
-    kind: record.recordKind,
+    isMonarchical: record.isMonarchical,
     positionType: record.positionType,
     positionTitle: record.title,
     appointmentMethod: record.appointmentMethod,

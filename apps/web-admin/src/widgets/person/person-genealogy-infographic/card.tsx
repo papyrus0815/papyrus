@@ -121,7 +121,7 @@ export function NodeNameBlock({
   sovereignCountry,
 }: {
   person: NodePerson
-  sovereignCountry?: { name?: string | null; regnalNumber?: number | null } | null
+  sovereignCountry?: { name?: string | null; ordinal?: number | null } | null
 }) {
   // person.sovereignCountry(BFS 응답) → sovereignCountry prop(직접 전달) 폴백
   const sov = sovereignCountry ?? person.sovereignCountry ?? null
@@ -134,7 +134,7 @@ export function NodeNameBlock({
       {person.regnalName && (
         <NodeRegnalName>
           ♛ {person.regnalName}
-          {sov?.regnalNumber != null && <RegnalNumber>{sov.regnalNumber}대</RegnalNumber>}
+          {sov?.ordinal != null && <RegnalNumber>{sov.ordinal}대</RegnalNumber>}
           {sov?.name && <RegnalCountry>· {sov.name}</RegnalCountry>}
         </NodeRegnalName>
       )}
@@ -421,8 +421,8 @@ export function DescendantNode({
         {person.regnalName && (
           <NodeRegnalName>
             ♛ {person.regnalName}
-            {person.sovereignCountry?.regnalNumber != null && (
-              <RegnalNumber>{person.sovereignCountry.regnalNumber}대</RegnalNumber>
+            {person.sovereignCountry?.ordinal != null && (
+              <RegnalNumber>{person.sovereignCountry.ordinal}대</RegnalNumber>
             )}
             {person.sovereignCountry?.name && (
               <RegnalCountry>· {person.sovereignCountry.name}</RegnalCountry>

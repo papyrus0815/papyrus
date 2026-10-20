@@ -501,9 +501,8 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
   const queryClient = useQueryClient()
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingRecordKind, setEditingRecordKind] = useState<'TENURE' | 'SOVEREIGN_REIGN' | null>(
-    null,
-  )
+  /** 수정 중인 행이 재위(군주직)인가 — 재위는 왕호 칸까지 같이 저장한다 */
+  const [editingIsMonarchical, setEditingIsMonarchical] = useState(false)
   const [personSelectModalOpen, setPersonSelectModalOpen] = useState(false)
   const [positionModalOpen, setPositionModalOpen] = useState(false)
   const [startDateModalOpen, setStartDateModalOpen] = useState(false)
@@ -567,7 +566,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
 
   const resetForm = () => {
     setEditingId(null)
-    setEditingRecordKind(null)
+    setEditingIsMonarchical(false)
     setSelectedPersonId('')
     setSelectedPositionDefId(null)
     setStartDate('')
@@ -609,7 +608,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
 
   const handleEdit = (t: any) => {
     setEditingId(t.id)
-    setEditingRecordKind(t.recordKind === 'SOVEREIGN_REIGN' ? 'SOVEREIGN_REIGN' : 'TENURE')
+    setEditingIsMonarchical(t.isMonarchical === true)
     setSelectedPersonId(t.personId)
     const defId = t.positionDefinitionId ?? t.positionDefinition?.id
     if (defId) {
@@ -623,9 +622,9 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
     }
     setStartDate(t.startDate ? new Date(t.startDate).toISOString().slice(0, 10) : '')
     setEndDate(t.endDate ? new Date(t.endDate).toISOString().slice(0, 10) : '')
-    setRegnalNumber(
-      t.regnalNumber != null ? String(t.regnalNumber) : t.termNumber != null ? String(t.termNumber) : ''
-    )
+    // 대수 — 재위·재임 공통 ordinal(= termNumber)
+    const ordinal = t.ordinal ?? t.termNumber
+    setRegnalNumber(ordinal != null ? String(ordinal) : '')
     setRegnalName(getRegnalNameFromNotes(t.notes))
     setShowOnEventsPage(t.showPositionInfo !== false)
     setView('form')
@@ -682,19 +681,19 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
         positionDefinitionId: isOtherPosition ? undefined : selectedPositionDefId,
         startDate: startDate + 'T00:00:00.000Z',
         endDate: endDate ? endDate + 'T23:59:59.999Z' : undefined,
+        // 대수는 termNumber 하나 — 재임의 regnalNumber는 '이름 속 서수'라 대수를 넣지 않는다
         termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
-        regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
         notes: notesValue,
         showPositionInfo: showOnEventsPage,
       }
       if (editingId) {
-        if (editingRecordKind === 'SOVEREIGN_REIGN') {
+        if (editingIsMonarchical) {
           await personCareerApi.updateSovereignReign(editingId, {
             personId: selectedPersonId,
             positionDefinitionId: isOtherPosition ? undefined : selectedPositionDefId ?? undefined,
             startDate: startDate + 'T00:00:00.000Z',
             endDate: endDate ? endDate + 'T23:59:59.999Z' : undefined,
-            termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
+            // 재위 폼 어휘의 regnalNumber = 대수 — 래퍼가 재임의 대수 칸(termNumber)으로 옮긴다
             regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
             // 수정 계약: null=해제 — 왕명·기존 서술이 모두 비면 notes를 비운다
             notes: composedNotes || null,
@@ -733,11 +732,8 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
     )
       return
     try {
-      if (editingRecordKind === 'SOVEREIGN_REIGN') {
-        await personCareerApi.deleteSovereignReign(editingId)
-      } else {
-        await personCareerApi.deleteGovernmentPositionTenure(editingId)
-      }
+      // 재위·재임 같은 재임 행 — 엔드포인트 하나
+      await personCareerApi.deleteGovernmentPositionTenure(editingId)
       notify.success('삭제되었습니다.')
       queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
       handleBack()
@@ -1076,7 +1072,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
               {tenures.map((t: any) => {
                 const regnalFromNotes = getRegnalNameFromNotes(t.notes)
                 const personDisplay = regnalFromNotes ? `${regnalFromNotes} (${getPersonName(t.person)})` : getPersonName(t.person)
-                const ordNum = t.regnalNumber ?? t.termNumber
+                const ordNum = t.ordinal ?? t.termNumber
                 const dateLabel = `${formatDate(t.startDate)} ~ ${t.endDate ? formatDate(t.endDate) : '재임 중'}${ordNum != null ? ` · ${ordNum}대` : ''}`
                 const countryLabel =
                   t?.country?.name ?? t?.historicalCountry?.name ?? (t as any)?.historical_country?.name ?? '전역'

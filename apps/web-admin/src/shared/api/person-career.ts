@@ -543,11 +543,10 @@ export type TenureAchievementByEventLinkRow = {
   id: string
   title: string
   eventId?: string | null
-  /** API 병합 시 재임 업적 vs 재위 업적 구분 */
-  recordKind?: 'TENURE_ACHIEVEMENT' | 'SOVEREIGN_REIGN_ACHIEVEMENT'
   tenure: {
     id: string
-    recordKind?: 'TENURE' | 'SOVEREIGN_REIGN'
+    /** 부모가 재위(군주직)인가 */
+    isMonarchical?: boolean
     person?: {
       id: string
       name?: string | null
@@ -648,8 +647,10 @@ export type GovernmentHeadTenureInCabinetList = {
   regnalEras?: RegnalEraDto[]
   /** 비고 — 역대 수반 등록 시 `왕명: …` 형태로 저장되는 경우 있음 */
   notes?: string | null
-  /** GET /countries/.../tenures 병합 목록에서만 — 재위 전용 행 */
-  recordKind?: 'TENURE' | 'SOVEREIGN_REIGN'
+  /** 재위(군주직)인가 — 직위 보유 응답 공통 */
+  isMonarchical?: boolean
+  /** 대수 — 재위·재임 공통(termNumber와 같은 값) */
+  ordinal?: number | null
   person?: GovernmentCabinetTenureItem['person']
   positionDefinition?: GovernmentCabinetTenureItem['positionDefinition']
   /** 수반 업적·한일 — GET /government-positions/cabinets 응답에 포함됨 */

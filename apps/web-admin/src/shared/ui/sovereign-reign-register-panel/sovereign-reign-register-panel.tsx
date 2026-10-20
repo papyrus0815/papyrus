@@ -233,7 +233,8 @@ const reignToFormFields = (reign: any) => {
           reign.endDatePrecision,
         ),
     ),
-    regnalNumber: reign.regnalNumber != null ? String(reign.regnalNumber) : '',
+    // 폼 어휘의 regnalNumber = 대수. 응답의 대수는 ordinal(= termNumber) — regnalNumber는 '이름 속 서수'
+    regnalNumber: (reign.ordinal ?? reign.termNumber) != null ? String(reign.ordinal ?? reign.termNumber) : '',
     subTermNumber:
       reign.subTermNumber != null ? String(reign.subTermNumber) : '',
     dynastyOrdinal:
@@ -375,7 +376,7 @@ export function SovereignReignRegisterPanel({
       const tenures = await personCareerApi.getTenuresByPersonId(personId)
       return (
         (tenures as any[]).find(
-          (t: any) => t.id === reignId && t.recordKind === 'SOVEREIGN_REIGN',
+          (t: any) => t.id === reignId && t.isMonarchical === true,
         ) ?? null
       )
     },

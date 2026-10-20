@@ -712,12 +712,12 @@ export function shouldHideCabinetFromExecutiveTimeline(
   return tenureBundleHasCeremonialHeadCabinetHideTitle(head)
 }
 
-/** `government_position_tenure` 줄만 — 군주 테이블(`SOVEREIGN_REIGN`) 행은 제외 */
+/** 비군주 재임 줄만 — 재위(군주직, isMonarchical) 행은 제외 */
 function isLegacyTenureMonarchForCabinetTimeline(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
 ): boolean {
   if (!head) return false
-  if ((head as { recordKind?: string }).recordKind === 'SOVEREIGN_REIGN')
+  if ((head as { isMonarchical?: boolean }).isMonarchical === true)
     return false
   const pt = head.positionType ?? head.positionDefinition?.positionType ?? null
   if (pt === 'HEAD_OF_GOVERNMENT') return false
@@ -740,7 +740,7 @@ export function isSovereignMonarchTenureForCabinetTimeline(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
 ): boolean {
   if (!head) return false
-  if ((head as { recordKind?: string }).recordKind === 'SOVEREIGN_REIGN')
+  if ((head as { isMonarchical?: boolean }).isMonarchical === true)
     return true
   return isLegacyTenureMonarchForCabinetTimeline(head)
 }
@@ -831,7 +831,7 @@ function tenureRangesOverlap(
 
 /**
  * 타임라인·범례·겹침 계산용 군주 후보 목록.
- * - API 병합 행 중 `recordKind === 'SOVEREIGN_REIGN'`(군주 테이블)은 항상 포함.
+ * - 재위(군주직, isMonarchical) 행은 항상 포함.
  * - 같은 사람·기간이 군주 테이블에 있으면, 겹치는 재임(legacy) 군주 줄은 제외(이중 표시 방지).
  */
 export function effectiveMonarchTenuresForCabinetTimeline(
@@ -843,7 +843,7 @@ export function effectiveMonarchTenuresForCabinetTimeline(
   if (!allCountryTenures?.length) return []
   const list = [...allCountryTenures]
   const sovereignRows = list.filter(
-    (t) => (t as { recordKind?: string }).recordKind === 'SOVEREIGN_REIGN',
+    (t) => (t as { isMonarchical?: boolean }).isMonarchical === true,
   )
   const legacyCandidates = list.filter((t) =>
     isLegacyTenureMonarchForCabinetTimeline(t),

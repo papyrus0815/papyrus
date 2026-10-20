@@ -5,11 +5,11 @@
  * 모두 이 함수를 기준으로 삼는다. 원래 `heads-of-state-timeline/lib/normalize-tenures.ts`의
  * 내부 `categorize`였던 로직을 엔티티로 승격해 한 곳에서 관리한다.
  */
-import type { PositionCategory, TenureKind } from './types'
+import type { PositionCategory } from './types'
 
 export interface CategorizePositionInput {
-  /** 재위 전용 기록(SOVEREIGN_REIGN)이면 무조건 군주 */
-  kind?: TenureKind | string | null
+  /** 직위 정의가 군주직(재위)이면 무조건 군주 */
+  isMonarchical?: boolean | null
   positionType?: string | null
   positionTitle?: string | null
   appointmentMethod?: string | null
@@ -38,7 +38,7 @@ const PRESIDENT_METHODS = new Set([
 /**
  * 분류 우선순위:
  *  1) 교황·칼리프 등 비국가 직책 — title 매칭(POPE). 군주 분기 전에 잡는다.
- *  2) SOVEREIGN_REIGN(재위 전용 테이블) → 무조건 MONARCH.
+ *  2) 군주직(isMonarchical — 직위 정의) → 무조건 MONARCH.
  *  3) ROYAL_NOBLE_TITLE → MONARCH (왕세자·대공 등).
  *  4) HEAD_OF_GOVERNMENT → PM (총리·수상).
  *  5) HEAD_OF_STATE → 임명방식 + title로 분기(세습/추대/쿠데타→군주, 선거→대통령, 그 외 title 매칭).
@@ -50,7 +50,7 @@ export function categorizePosition(
   const title = input.positionTitle ?? ''
 
   if (POPE_TITLE_RE.test(title)) return 'POPE'
-  if (input.kind === 'SOVEREIGN_REIGN') return 'MONARCH'
+  if (input.isMonarchical === true) return 'MONARCH'
 
   const positionType = input.positionType ?? null
   if (positionType === 'ROYAL_NOBLE_TITLE') return 'MONARCH'

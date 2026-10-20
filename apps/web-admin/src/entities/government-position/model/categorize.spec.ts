@@ -1,18 +1,18 @@
 import { categorizePosition } from './categorize'
 
 describe('categorizePosition — 직책 분류 단일 출처', () => {
-  it('교황 title은 kind/positionType보다 먼저 POPE로 분류', () => {
+  it('교황 title은 군주직·positionType보다 먼저 POPE로 분류', () => {
     expect(categorizePosition({ positionTitle: '교황' })).toBe('POPE')
     expect(categorizePosition({ positionTitle: 'Pope Francis' })).toBe('POPE')
-    // 교황 체크는 SOVEREIGN_REIGN보다 우선
+    // 교황 체크는 군주직 판정보다 우선
     expect(
-      categorizePosition({ kind: 'SOVEREIGN_REIGN', positionTitle: '교황' }),
+      categorizePosition({ isMonarchical: true, positionTitle: '교황' }),
     ).toBe('POPE')
   })
 
-  it('SOVEREIGN_REIGN(재위) kind는 MONARCH', () => {
+  it('군주직(isMonarchical) 행은 MONARCH', () => {
     expect(
-      categorizePosition({ kind: 'SOVEREIGN_REIGN', positionTitle: '국왕' }),
+      categorizePosition({ isMonarchical: true, positionTitle: '국왕' }),
     ).toBe('MONARCH')
   })
 

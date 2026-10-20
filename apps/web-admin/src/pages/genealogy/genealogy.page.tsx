@@ -527,9 +527,9 @@ function PersonNodeInner({ data }: NodeProps) {
       {person.regnalName && (
         <NodeRegnalName>
           ♛ {person.regnalName}
-          {person.sovereignCountry?.regnalNumber != null && (
+          {person.sovereignCountry?.ordinal != null && (
             <span style={{ marginLeft: 4, opacity: 0.85, fontWeight: 600, fontSize: '0.85em' }}>
-              {person.sovereignCountry.regnalNumber}대
+              {person.sovereignCountry.ordinal}대
             </span>
           )}
           {person.sovereignCountry?.name && (

@@ -328,7 +328,8 @@ export function removeEventOrganization(eventId: string, relationId: string): Pr
 /** 이 사건으로 시작된(또는 시작될 수 있는) 재임·재위 한 줄 — 사건 상세 「권력 교체」 */
 export interface EventAccession {
   recordId: string
-  recordKind: 'TENURE' | 'SOVEREIGN_REIGN'
+  /** 재위(군주직)인가 — '즉위'/'취임' */
+  isMonarchical: boolean
   personId: string
   personName: string
   title: string | null

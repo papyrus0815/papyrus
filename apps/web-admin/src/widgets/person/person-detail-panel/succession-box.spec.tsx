@@ -48,13 +48,12 @@ function neighbor(overrides: {
     },
     record: {
       recordId: `rec-${overrides.id}`,
-      recordKind: 'SOVEREIGN_REIGN',
+      isMonarchical: true,
       positionType: 'HEAD_OF_STATE',
       title: '국왕',
       appointmentMethod: null,
       regnalName: overrides.name,
-      regnalNumber: null,
-      termNumber: null,
+      ordinal: null,
       startYear: overrides.startYear,
       endYear: overrides.endYear,
       startDate: `${overrides.startYear}-01-01T00:00:00.000Z`,
@@ -77,7 +76,7 @@ function neighbor(overrides: {
 function entry(overrides: Partial<ReignAdjacencyEntry> = {}): ReignAdjacencyEntry {
   return {
     subjectRecordId: 'anchor-1',
-    subjectRecordKind: 'SOVEREIGN_REIGN',
+    subjectIsMonarchical: true,
     scope: { countryId: null, historicalCountryId: 'joseon', degradedToStrict: false },
     predecessors: [],
     successors: [],
@@ -198,7 +197,7 @@ describe('SuccessionBox', () => {
     renderWithTheme(
       <SuccessionBox
         entry={entry({
-          subjectRecordKind: 'TENURE',
+          subjectIsMonarchical: false,
           successors: [
             neighbor({ relation: 'SUCCESSOR', id: 'goremykin', name: '고레미킨', startYear: 1906, endYear: 1906 }),
           ],

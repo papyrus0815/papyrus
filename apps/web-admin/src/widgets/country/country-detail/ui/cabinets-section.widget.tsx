@@ -210,13 +210,13 @@ function cabinetHeadCategory(
         positionDefinition?: { positionType?: string | null; title?: string | null } | null
         title?: string | null
         appointmentMethod?: string | null
-        recordKind?: string | null
+        isMonarchical?: boolean | null
       }
     | null
     | undefined,
 ): PositionCategory {
   return categorizePosition({
-    kind: head?.recordKind,
+    isMonarchical: head?.isMonarchical,
     positionType: head?.positionType ?? head?.positionDefinition?.positionType,
     positionTitle: head?.positionDefinition?.title ?? head?.title,
     appointmentMethod: head?.appointmentMethod,
@@ -260,10 +260,7 @@ function cabinetTenureDetailHasContent(
 }
 
 function achievementRowIsSovereign(row: TenureAchievementByEventLinkRow) {
-  return (
-    row.recordKind === 'SOVEREIGN_REIGN_ACHIEVEMENT' ||
-    row.tenure?.recordKind === 'SOVEREIGN_REIGN'
-  )
+  return row.tenure?.isMonarchical === true
 }
 
 /** 국가 · (재위 | 행정부) · 인물 줄의 가운데 구간 */
@@ -1242,7 +1239,7 @@ export function CabinetsSection({
       pt &&
       HEAD_POSITION_TYPES.has(pt) &&
       !headTenureIdsWithCabinet.has(t.id) &&
-      t.recordKind !== 'SOVEREIGN_REIGN'
+      t.isMonarchical !== true
     )
   })
 

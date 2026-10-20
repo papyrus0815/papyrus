@@ -43,7 +43,8 @@ export interface FamilyTreePerson {
   sovereignCountry?: {
     id: string | null
     name: string | null
-    regnalNumber: number | null
+    /** 대수 — 통산 제N대 */
+    ordinal: number | null
     flagEmoji?: string | null
     isoCode?: string | null
     thumbnailUrl?: string | null

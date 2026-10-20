@@ -86,7 +86,9 @@ interface ReignInput {
   startDatePrecision?: string | null
   endDate?: string | null
   notes?: string | null
-  regnalNumber?: number | null
+  /** 대수 — 재위·재임 공통 */
+  ordinal?: number | null
+  termNumber?: number | null
   subTermNumber?: number | null
   appointmentMethod?: string | null
   appointmentDetail?: string | null
@@ -501,8 +503,8 @@ export function PersonLifeTimelineInfographic({
         sortKey: toTs(startsAt),
         title: [country, pos].filter(Boolean).join(' · ') || '재위',
         subtitle:
-          reign.regnalNumber != null
-            ? `${reign.regnalNumber}대${reign.subTermNumber != null ? ` ${reign.subTermNumber}기` : ''}`
+          (reign.ordinal ?? reign.termNumber) != null
+            ? `${reign.ordinal ?? reign.termNumber}대${reign.subTermNumber != null ? ` ${reign.subTermNumber}기` : ''}`
             : null,
         dateLabel: deriveTenurePeriodLabel({
           startDate: reign.startDate,

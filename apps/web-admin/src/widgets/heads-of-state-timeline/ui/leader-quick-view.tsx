@@ -94,13 +94,9 @@ export function LeaderQuickView({
   onOpenPerson: (personId: string) => void
 }) {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['heads-of-state', 'tenure-achievements', bar?.recordKind, bar?.id],
-    queryFn: () => {
-      if (!bar) return null
-      return bar.recordKind === 'SOVEREIGN_REIGN'
-        ? personCareerApi.getSovereignReignWithAchievements(bar.id)
-        : personCareerApi.getTenureWithAchievements(bar.id)
-    },
+    queryKey: ['heads-of-state', 'tenure-achievements', bar?.id],
+    // 재위·재임 같은 재임 행 — 엔드포인트 하나
+    queryFn: () => (bar ? personCareerApi.getTenureWithAchievements(bar.id) : null),
     enabled: !!bar,
     staleTime: 60_000,
   })

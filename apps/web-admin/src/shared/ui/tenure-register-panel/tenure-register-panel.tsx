@@ -429,10 +429,10 @@ export function TenureRegisterPanel({
   /** 취임일 정밀도 'year' — 연도만 앎(월일은 01-01 관행 채움) */
   const [startDateYearOnly, setStartDateYearOnly] = useState(false)
   const [endDate, setEndDate] = useState('')
-  /** 대수(termNumber, 일반 재임) 또는 재위번호(regnalNumber, 군주 재위) — recordKind에 따라 한쪽에만 기록 */
+  /** 대수 — 재위·재임 공통(국가·정체 기준 통산 제N대) */
   const [ordinalNumber, setOrdinalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
-  /** 왕조 내 서수 — 재위(SOVEREIGN_REIGN) 수정 시에만 의미, "부르봉 왕조 N대" */
+  /** 왕조 내 서수 — 재위(군주직) 수정 시에만 의미, "부르봉 왕조 N대" */
   const [dynastyOrdinal, setDynastyOrdinal] = useState('')
   const [appointmentMethod, setAppointmentMethod] = useState('')
   /** 즉위/취임 경위 상세 서사 — appointmentMethod(enum)의 상세 쌍, endReasonDetail의 시작측 대칭 */
@@ -568,7 +568,7 @@ export function TenureRegisterPanel({
     ? (personTenures as any[]).find((t: any) => t.id === tenureId)
     : null
 
-  const editingIsSovereign = (editingTenure as any)?.recordKind === 'SOVEREIGN_REIGN'
+  const editingIsSovereign = (editingTenure as any)?.isMonarchical === true
 
   /**
    * 수정 중인 재임이 참조하는 정의 — 서버 목록에서 빠져도(국가 스코프·군주 제외·각료 필터)
@@ -812,9 +812,8 @@ export function TenureRegisterPanel({
     setStartDate(t.startDate ? (typeof t.startDate === 'string' ? t.startDate.split('T')[0] : '') : '')
     setStartDateYearOnly(t.startDatePrecision === 'year')
     setEndDate(t.endDate ? (typeof t.endDate === 'string' ? t.endDate.split('T')[0] : '') : '')
-    // 대수/재위번호 분리: 재위(SOVEREIGN_REIGN)는 regnalNumber, 일반 재임은 termNumber만 사용
-    // (교차 폴백 금지 — 저장 시 반대편 필드로 값이 옮겨가는 오염 방지)
-    const num = t.recordKind === 'SOVEREIGN_REIGN' ? t.regnalNumber : t.termNumber
+    // 대수 — 재위·재임 공통 ordinal(= termNumber). regnalNumber는 '이름 속 서수'라 대수가 아니다
+    const num = t.ordinal ?? t.termNumber
     setOrdinalNumber(num != null ? String(num) : '')
     setSubTermNumber(t.subTermNumber != null ? String(t.subTermNumber) : '')
     setDynastyOrdinal(t.dynastyOrdinal != null ? String(t.dynastyOrdinal) : '')
@@ -910,7 +909,7 @@ export function TenureRegisterPanel({
             startDate,
             startDatePrecision: startDateYearOnly ? ('year' as const) : null,
             endDate: endDate || null,
-            // 재위(SOVEREIGN_REIGN)는 regnalNumber(재위번호)만 기록 — termNumber(통산 대수)는 보내지 않음
+            // 재위 폼 어휘의 regnalNumber(대수) — 래퍼가 재임의 대수 칸으로 옮긴다
             regnalNumber: parsedOrdinal ?? null,
             subTermNumber: parsedSubTerm ?? null,
             dynastyOrdinal: parsedDynastyOrdinal ?? null,
@@ -1324,7 +1323,7 @@ export function TenureRegisterPanel({
                       <SubFieldLabel htmlFor="tenure-ordinal">
                         {editingIsSovereign ? '즉위 순서 (제N대)' : '대수'}
                       </SubFieldLabel>
-                      {/* 재위(SOVEREIGN_REIGN)는 즉위 순서(regnalNumber), 일반 재임은 대수(termNumber) — 둘 다 '선택한 국가/정체 기준 통산 제N대', 이중 기록 금지 */}
+                      {/* 대수 — 재위·재임 공통 '선택한 국가/정체 기준 통산 제N대' */}
                       <Input
                         id="tenure-ordinal"
                         type="number"

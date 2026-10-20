@@ -19,13 +19,12 @@ import type {
 function record(overrides: Partial<ContemporaryRecord> = {}): ContemporaryRecord {
   return {
     recordId: overrides.recordId ?? 'rec-1',
-    recordKind: 'SOVEREIGN_REIGN',
+    isMonarchical: true,
     positionType: 'HEAD_OF_STATE',
     title: '국왕',
     appointmentMethod: null,
     regnalName: null,
-    regnalNumber: null,
-    termNumber: null,
+    ordinal: null,
     startYear: 1418,
     endYear: 1450,
     startDate: '1418-08-01T00:00:00.000Z',
@@ -71,7 +70,7 @@ describe('categoryOfRecord — categorizePosition kind 계약', () => {
   it('HEAD_OF_GOVERNMENT 재임은 총리', () => {
     expect(
       categoryOfRecord(
-        record({ recordKind: 'TENURE', positionType: 'HEAD_OF_GOVERNMENT', title: '총리' }),
+        record({ isMonarchical: false, positionType: 'HEAD_OF_GOVERNMENT', title: '총리' }),
       ),
     ).toBe('PM')
   })
@@ -80,7 +79,7 @@ describe('categoryOfRecord — categorizePosition kind 계약', () => {
     expect(
       categoryOfRecord(
         record({
-          recordKind: 'TENURE',
+          isMonarchical: false,
           positionType: 'HEAD_OF_STATE',
           title: '대통령',
           appointmentMethod: 'DIRECT_ELECTION',
@@ -90,7 +89,7 @@ describe('categoryOfRecord — categorizePosition kind 계약', () => {
     expect(
       categoryOfRecord(
         record({
-          recordKind: 'TENURE',
+          isMonarchical: false,
           positionType: 'HEAD_OF_STATE',
           title: '국왕',
           appointmentMethod: 'HEREDITARY',
@@ -238,7 +237,7 @@ describe('groupRulersByCountry', () => {
     ])
     const president = ruler({ id: 'kr-president' }, [
       record({
-        recordKind: 'TENURE',
+        isMonarchical: false,
         positionType: 'HEAD_OF_STATE',
         appointmentMethod: 'DIRECT_ELECTION',
         historicalCountry: null,

@@ -47,7 +47,7 @@ export function SuccessionBox({
   const hasAny =
     entry.predecessors.length > 0 || entry.successors.length > 0
   if (!hasAny) return null
-  const vocabulary = successionVocabulary(entry.subjectRecordKind)
+  const vocabulary = successionVocabulary(entry.subjectIsMonarchical)
 
   return (
     <Box aria-label={`${anchorLabel} 승계`}>

@@ -160,7 +160,7 @@ function formatRegnalEraRangeLabel(era: RegnalEraDto): string {
 function tenureRowSupportsRegnalEras(t: unknown): boolean {
   if (!t || typeof t !== 'object') return false
   const row = t as Record<string, unknown>
-  if (row.recordKind === 'SOVEREIGN_REIGN') return true
+  if (row.isMonarchical === true) return true
   const posDef = row.positionDefinition as Record<string, unknown> | undefined
   const pt = row.positionType ?? posDef?.positionType
   return pt === 'HEAD_OF_STATE'
@@ -750,7 +750,7 @@ export function HeadsOfStateSection({
     : null
   const editingIsSovereignReign =
     editingTenure != null &&
-    (editingTenure as any).recordKind === 'SOVEREIGN_REIGN'
+    (editingTenure as any).isMonarchical === true
 
   const editingHostSupportsRegnalEras = React.useMemo(
     () => editingTenure != null && tenureRowSupportsRegnalEras(editingTenure),
@@ -794,7 +794,7 @@ export function HeadsOfStateSection({
     setRegnalName(getRegnalNameFromNotes(t.notes) || '')
     setShowOnEventsPage(t.showPositionInfo !== false)
     setSelectedAffinityHistoricalId(t.historicalCountryId ?? null)
-    setSovereignReignOnlyForm((t as any).recordKind === 'SOVEREIGN_REIGN')
+    setSovereignReignOnlyForm((t as any).isMonarchical === true)
     setEditingRegnalEraId(null)
     setRegnalEraName('')
     setRegnalEraNameEn('')
@@ -826,7 +826,7 @@ export function HeadsOfStateSection({
       const editingRow = editingTenureId
         ? (tenures.find((t: any) => t.id === editingTenureId) as any)
         : null
-      const editAsSovereign = editingRow?.recordKind === 'SOVEREIGN_REIGN'
+      const editAsSovereign = editingRow?.isMonarchical === true
       const regnalNameTrimmed = regnalName.trim()
       // 수정 시 기존 notes의 '왕명:' 줄만 갈아끼우고 나머지 서술은 보존
       const { rest: preservedNoteRest } = splitLegacyRegnalNote(
@@ -969,7 +969,7 @@ export function HeadsOfStateSection({
   const handleDeleteTenure = async () => {
     if (!editingTenureId) return
     const row = tenures.find((t: any) => t.id === editingTenureId) as any
-    const isSov = row?.recordKind === 'SOVEREIGN_REIGN'
+    const isSov = row?.isMonarchical === true
     if (
       !(await confirm({
         title: '삭제 확인',
@@ -1139,7 +1139,7 @@ export function HeadsOfStateSection({
       return
     }
     const hostRow = tenures.find((t: any) => t.id === tenureId) as any
-    const achievementIsSovereign = hostRow?.recordKind === 'SOVEREIGN_REIGN'
+    const achievementIsSovereign = hostRow?.isMonarchical === true
     setAchievementSubmitting(true)
     try {
       const dto = {
@@ -1199,7 +1199,7 @@ export function HeadsOfStateSection({
     )
       return
     const hostRow = tenures.find((t: any) => t.id === tenureId) as any
-    const achievementHostIsSovereign = hostRow?.recordKind === 'SOVEREIGN_REIGN'
+    const achievementHostIsSovereign = hostRow?.isMonarchical === true
     try {
       if (achievementHostIsSovereign) {
         await personCareerApi.deleteSovereignReignAchievement(
@@ -1334,7 +1334,7 @@ export function HeadsOfStateSection({
         await personCareerApi.updateRegnalEra(editingRegnalEraId, patch)
         notify.success('연호가 수정되었습니다.')
       } else {
-        const isSovereign = hostRow?.recordKind === 'SOVEREIGN_REIGN'
+        const isSovereign = hostRow?.isMonarchical === true
         if (isSovereign) {
           await personCareerApi.createRegnalEraForSovereignReign(
             editingTenureId,

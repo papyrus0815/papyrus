@@ -22,19 +22,17 @@ const apiClient = axios.create({
 })
 
 export type AdjacencyRelation = 'PREDECESSOR' | 'SUCCESSOR'
-export type AdjacencyRecordKind = 'TENURE' | 'SOVEREIGN_REIGN'
-
 /** contemporaries record 형태 + adjacency 전용 정밀도 필드 */
 export interface AdjacencyRecord {
   recordId: string
-  recordKind: AdjacencyRecordKind
-  /** SOVEREIGN_REIGN은 전량 HEAD_OF_STATE (서버 관례) */
+  /** 재위(군주직)인가 */
+  isMonarchical: boolean
   positionType: string
   title: string | null
   appointmentMethod: string | null
   regnalName: string | null
-  regnalNumber: number | null
-  termNumber: number | null
+  /** 대수 — 국가·정체 기준 통산 제N대 */
+  ordinal: number | null
   /** 부호 연도 */
   startYear: number
   /** null = 종료일 미기록 (재위 중/미입력은 person.isAlive로 판단) */
@@ -63,7 +61,8 @@ export interface AdjacencyNeighbor {
 export interface ReignAdjacencyEntry {
   /** 대상 인물의 이 재위 record — 카드가 이 id로 조인 */
   subjectRecordId: string
-  subjectRecordKind: AdjacencyRecordKind
+  /** 대상 기록이 재위(군주직)인가 */
+  subjectIsMonarchical: boolean
   scope: {
     countryId: string | null
     historicalCountryId: string | null

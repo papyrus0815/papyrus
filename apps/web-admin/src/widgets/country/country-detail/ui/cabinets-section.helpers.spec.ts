@@ -138,10 +138,10 @@ describe('isSovereignMonarchTenureForCabinetTimeline', () => {
     ).toBe(false)
   })
 
-  it('recordKind SOVEREIGN_REIGN 이면 직함 없어도 군주 후보', () => {
+  it('군주직(isMonarchical) 행이면 직함 없어도 군주 후보', () => {
     expect(
       isSovereignMonarchTenureForCabinetTimeline({
-        recordKind: 'SOVEREIGN_REIGN',
+        isMonarchical: true,
         startDate: '1840-01-01',
       } as any),
     ).toBe(true)
@@ -152,7 +152,7 @@ describe('effectiveMonarchTenuresForCabinetTimeline', () => {
   it('군주 테이블 행과 겹치는 legacy 군주 재임은 한 번만', () => {
     const sovereign = {
       id: 'sr-1',
-      recordKind: 'SOVEREIGN_REIGN',
+      isMonarchical: true,
       personId: 'p1',
       startDate: '1840-06-07',
       endDate: '1861-01-02',
@@ -160,7 +160,7 @@ describe('effectiveMonarchTenuresForCabinetTimeline', () => {
     } as any
     const legacyDup = {
       id: 't-1',
-      recordKind: 'TENURE',
+      isMonarchical: false,
       personId: 'p1',
       startDate: '1840-06-07',
       endDate: '1861-01-02',

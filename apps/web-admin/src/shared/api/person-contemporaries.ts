@@ -20,18 +20,16 @@ const apiClient = axios.create({
   withCredentials: true,
 })
 
-export type ContemporaryRecordKind = 'TENURE' | 'SOVEREIGN_REIGN'
-
 export interface ContemporaryRecord {
   recordId: string
-  recordKind: ContemporaryRecordKind
-  /** SOVEREIGN_REIGN은 전량 HEAD_OF_STATE (서버 관례) */
+  /** 재위(군주직)인가 — 직위 정의의 isMonarchical */
+  isMonarchical: boolean
   positionType: string
   title: string | null
   appointmentMethod: string | null
   regnalName: string | null
-  regnalNumber: number | null
-  termNumber: number | null
+  /** 대수 — 국가·정체 기준 통산 제N대 */
+  ordinal: number | null
   /** 부호 연도 */
   startYear: number
   /** null = 종료일 미기록 (재위 중/미입력은 person.isAlive로 판단) */

@@ -2,24 +2,17 @@ import { categorizePosition } from '@/entities/government-position/model/categor
 import type { PositionCategory } from '@/entities/government-position/model/types'
 import { formatSignedYear } from '@/shared/lib/lifespan-text'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import type {
-  AdjacencyNeighbor,
-  AdjacencyRecord,
-  AdjacencyRecordKind,
-} from '@/shared/api/person-reign-adjacency'
+import type { AdjacencyNeighbor, AdjacencyRecord } from '@/shared/api/person-reign-adjacency'
 
 /**
  * 「같은 국가 전/후 재위(승계)」 박스의 순수 어댑터 — API 이웃을 표시 모델로 변환한다.
- * categorizePosition의 kind 계약('SOVEREIGN_REIGN' 정확 일치)과 BC-safe 부호 연도
- * 포맷을 여기 한 곳에서만 다뤄, 컴포넌트는 표시에만 집중한다
+ * 직위 분류(categorizePosition)와 BC-safe 부호 연도 포맷을 여기 한 곳에서만 다뤄, 컴포넌트는 표시에만 집중한다
  * (contemporaries-strip.lib.ts와 동형 — 두 화면이 다르게 세면 안 됨).
  */
 
 export function neighborCategory(record: AdjacencyRecord): PositionCategory {
   return categorizePosition({
-    // kind는 'SOVEREIGN_REIGN' 정확 일치 계약 — recordKind 대문자 그대로 넘긴다
-    // (lowercase를 넘기면 전원 오분류되는 함정이 검증에서 확인된 바 있음)
-    kind: record.recordKind,
+    isMonarchical: record.isMonarchical,
     positionType: record.positionType,
     positionTitle: record.title,
     appointmentMethod: record.appointmentMethod,
@@ -64,12 +57,10 @@ export interface SuccessionVocabulary {
  * 승계 어휘 — 군주 재위는 「선대/후대」, 재임(대통령·총리)은 「전임/후임」.
  * 서버가 축(국가원수 ⊥ 정부수반)을 분리한 뒤로 정부수반 카드의 빈 칼럼이 흔해졌는데,
  * 거기에 '재위' 어휘가 남으면 총리 카드가 군주 말투로 말한다. 갈림 신호는
- * tenure-reign-list의 즉위/취임 관례와 동일하게 recordKind 하나로 통일한다.
+ * 군주직 여부(isMonarchical) 하나로 가른다.
  */
-export function successionVocabulary(
-  subjectRecordKind: AdjacencyRecordKind,
-): SuccessionVocabulary {
-  return subjectRecordKind === 'SOVEREIGN_REIGN'
+export function successionVocabulary(subjectIsMonarchical: boolean): SuccessionVocabulary {
+  return subjectIsMonarchical
     ? { predecessor: '선대', successor: '후대', recordNoun: '재위' }
     : { predecessor: '전임', successor: '후임', recordNoun: '재임' }
 }
