@@ -198,7 +198,6 @@ export class GovernmentPositionController {
             surname: true,
             middleName: true,
             nameDisplayOrder: true,
-            regnalName: true,
             templeName: true,
             profileImageUrl: true,
             isAlive: true,

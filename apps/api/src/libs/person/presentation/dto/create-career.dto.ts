@@ -736,7 +736,7 @@ export class CreateGovernmentPositionTenureDto {
 
   @IsOptional()
   @IsString()
-  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'CONQUEST' | 'RESTORATION' | 'ELECTIVE_MONARCHY' | 'OTHER' | null
+  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'CONQUEST' | 'RESTORATION' | 'ELECTIVE_MONARCHY' | 'TREATY' | 'OTHER' | null
 
   /** 취임 경위 상세 서사 — appointmentMethod의 상세 쌍(endReasonDetail의 시작측 대칭) */
   @IsOptional()

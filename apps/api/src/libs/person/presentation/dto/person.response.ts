@@ -91,6 +91,7 @@ export interface PersonResponseDto {
   biography: string | null
   profileImageUrl: string | null
   // 왕/군주 관련 필드
+  /** 대표 왕호 — 저장 칸 아님, 가장 최근 재위의 왕호에서 파생 */
   regnalName: string | null
   templeName: string | null
   posthumousName: string | null
@@ -235,6 +236,7 @@ export interface FamilyTreeNodeDto {
   middleName: string | null
   nameDisplayOrder: string | null
   gender: string | null
+  /** 대표 왕호 — 저장 칸 아님, 가장 최근 재위의 왕호에서 파생 */
   regnalName: string | null
   profileImageUrl: string | null
   /** BC/AD — birthYear는 크기값(양수)이라 era 없이는 BC가 AD로 둔갑한다 */

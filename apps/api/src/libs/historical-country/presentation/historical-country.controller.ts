@@ -179,7 +179,6 @@ export class HistoricalCountryController {
       surname: true,
       middleName: true,
       nameDisplayOrder: true,
-      regnalName: true,
       profileImageUrl: true,
     } as const
     const signed = (era: string | null | undefined, year: number | null | undefined) =>
@@ -364,7 +363,6 @@ export class HistoricalCountryController {
             surname: true,
             middleName: true,
             nameDisplayOrder: true,
-            regnalName: true,
             profileImageUrl: true,
           },
         },

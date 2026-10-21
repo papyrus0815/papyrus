@@ -331,7 +331,6 @@ export class PersonContemporariesService {
             : null,
           profileImageUrl: entry.person.profileImageUrl ?? null,
           templeName: entry.person.templeName ?? null,
-          regnalName: entry.person.regnalName ?? null,
           isAlive: entry.person.isAlive === true,
           deathYear: signedYearFromEraDate(entry.person.deathEra, entry.person.deathDate),
           // 타계정 인물은 상세(:id)가 소유자 게이트라 열 수 없음 — 칩 비활성 판단용

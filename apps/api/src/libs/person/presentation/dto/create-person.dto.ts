@@ -217,6 +217,7 @@ export enum NicknameType {
   PEN_NAME = 'PEN_NAME',
   POSTHUMOUS_NAME = 'POSTHUMOUS_NAME',
   TEMPLE_NAME = 'TEMPLE_NAME',
+  COURT_TITLE = 'COURT_TITLE', // 궁호·관명·궁중 호칭
   PSEUDONYM = 'PSEUDONYM',
   OTHER = 'OTHER',
 }
@@ -536,13 +537,6 @@ export class CreatePersonDto {
   showLifespanOnEventList?: boolean
 
   //--- 왕/군주 관련 필드
-  /**
-   * 왕호/재위명 (예: Louis, Henry, 선덕)
-   * @example "Louis"
-   */
-  @IsOptional()
-  @IsString()
-  regnalName?: string
 
   /**
    * 묘호 (동아시아 군주, 예: 세종, 태종, 고종)

@@ -10,7 +10,6 @@ export interface FoundingPersonDto {
   surname: string | null
   middleName: string | null
   nameDisplayOrder: string | null
-  regnalName: string | null
   profileImageUrl: string | null
 }
 

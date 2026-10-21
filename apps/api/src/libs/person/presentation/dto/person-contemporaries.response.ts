@@ -47,7 +47,6 @@ export interface ContemporaryRulerPersonDto {
   country: { defaultNameDisplayOrder: string | null } | null
   profileImageUrl: string | null
   templeName: string | null
-  regnalName: string | null
   isAlive: boolean
   /** 부호 연도 — 종료일 없는 기록의 표시(?–) 판단용 */
   deathYear: number | null

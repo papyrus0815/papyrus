@@ -179,7 +179,6 @@ function toPersonDto(person: any, accountId?: string): ContemporaryRulerPersonDt
       : null,
     profileImageUrl: person.profileImageUrl ?? null,
     templeName: person.templeName ?? null,
-    regnalName: person.regnalName ?? null,
     isAlive: person.isAlive === true,
     deathYear: signedYearFromEraDate(person.deathEra, person.deathDate),
     // 타계정 인물은 상세(:id)가 소유자 게이트라 열 수 없음 — 칩 비활성 판단용

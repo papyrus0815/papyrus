@@ -655,7 +655,6 @@ export class PersonController {
     person.mother?.childrenFromMother?.forEach((s: any) => { if (s.id !== person.id) siblingMap.set(s.id, s) })
     const siblings = serializeBigInt(Array.from(siblingMap.values()).map((s: any) => ({
       id: s.id, name: s.name, surname: s.surname, nameDisplayOrder: s.nameDisplayOrder,
-      regnalName: s.regnalName ?? null,
       gender: s.gender, dynasty: s.dynasty, birthDate: s.birthDate instanceof Date ? s.birthDate.toISOString() : s.birthDate ?? null,
       deathDate: s.deathDate instanceof Date ? s.deathDate.toISOString() : s.deathDate ?? null,
       profileImageUrl: s.profileImageUrl ?? null, profileImages: s.profileImages ?? [],
@@ -721,7 +720,8 @@ export class PersonController {
         sectionType: s.sectionType ?? null,
       })),
       profileImageUrl: person.profileImageUrl,
-      regnalName: person.regnalName ?? null,
+      // 대표 왕호 — 재위 기록에서 파생(가장 최근 재위)
+      regnalName: person.sovereignReigns?.[0]?.regnalName ?? null,
       templeName: person.templeName ?? null,
       posthumousName: person.posthumousName ?? null,
       sovereignReigns: serializeBigInt(person.sovereignReigns ?? []),
@@ -1041,7 +1041,6 @@ export class PersonController {
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
       showLifespanOnEventList: dto.showLifespanOnEventList,
-      regnalName: dto.regnalName,
       templeName: dto.templeName,
       posthumousName: dto.posthumousName,
       dynastyId: dto.dynastyId,
@@ -1197,7 +1196,6 @@ export class PersonController {
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
       showLifespanOnEventList: dto.showLifespanOnEventList,
-      regnalName: dto.regnalName,
       templeName: dto.templeName,
       posthumousName: dto.posthumousName,
       dynastyId: dto.dynastyId,

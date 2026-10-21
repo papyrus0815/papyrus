@@ -262,6 +262,7 @@ const PERSON_CARD_INCLUDE = {
       startDate: true,
       endDate: true,
       notes: true,
+      regnalName: true,
       positionDefinition: {
         select: {
           id: true,
@@ -306,6 +307,7 @@ const PERSON_INFOGRAPHIC_INCLUDE = {
       positionType: true,
       title: true,
       notes: true,
+      regnalName: true,
       positionDefinition: {
         select: { title: true, positionType: true, isMonarchical: true },
       },
@@ -380,6 +382,20 @@ const TENURE_ACHIEVEMENTS_SELECT = {
       },
     },
   },
+}
+
+/**
+ * 인물의 대표 왕호 — 가장 최근 재위(배열 첫 행)의 왕호, 없으면 레거시 비고의 '왕명:' 줄.
+ * 왕호는 사람이 아니라 재위의 속성이라(제임스 6세/1세) 인물에 저장하지 않고 여기서 파생한다.
+ */
+function representativeRegnalName(reigns: any[] | null | undefined): string | null {
+  const first = Array.isArray(reigns) ? reigns[0] : null
+  if (!first) return null
+  const stored = typeof first.regnalName === 'string' ? first.regnalName.trim() : ''
+  if (stored) return stored
+  const notes = typeof first.notes === 'string' ? first.notes : ''
+  const matched = notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i)
+  return matched ? matched[1].trim() : null
 }
 
 /** 업적 응답의 부모 재임 — 재위·재임 같은 include, 군주직 판정용 isMonarchical 포함 */
@@ -641,12 +657,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       biography: person.biography,
       profileImageUrl: person.profileImageUrl,
       // 왕/군주 관련 필드
-      regnalName: person.regnalName || (() => {
-        const notes = (person as any).sovereignReigns?.[0]?.notes as string | null | undefined
-        if (!notes) return null
-        const m = notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || notes.match(/왕명\s*:\s*(.+)/i)
-        return m ? m[1].trim() : null
-      })() || null,
+      // 대표 왕호 — 저장 칸이 아니라 재위 기록에서 파생(왕호는 재위의 속성)
+      regnalName: representativeRegnalName((person as any).sovereignReigns),
       templeName: person.templeName,
       posthumousName: person.posthumousName,
       // 관계
@@ -709,20 +721,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   private mapToPersonInfographicItem(rawPerson: any): PersonInfographicItemDto {
     const person = splitOfficeHoldings(rawPerson)
     const countryBlock = this.resolveCountryBlockForName(person)
-    const regnalName =
-      person.regnalName ||
-      (() => {
-        const notes = person.sovereignReigns?.[0]?.notes as
-          | string
-          | null
-          | undefined
-        if (!notes) return null
-        const m =
-          notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) ||
-          notes.match(/왕명\s*:\s*(.+)/i)
-        return m ? m[1].trim() : null
-      })() ||
-      null
+    const regnalName = representativeRegnalName(person.sovereignReigns)
 
     return {
       id: person.id,
@@ -1447,7 +1446,6 @@ export class PersonPrismaRepository implements IPersonRepository {
             middleName: true,
             nameDisplayOrder: true,
             country: { select: { defaultNameDisplayOrder: true } },
-            regnalName: true,
             gender: true,
             dynasty: { select: { id: true, name: true } },
             birthDate: true,
@@ -1461,7 +1459,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             // 친조부모
             father: {
               select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
                 country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
@@ -1470,7 +1468,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
             mother: {
               select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
                 country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
@@ -1480,7 +1478,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             // 형제자매 (부의 자녀)
             childrenFromFather: {
               select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
                 country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
@@ -1499,7 +1497,6 @@ export class PersonPrismaRepository implements IPersonRepository {
             middleName: true,
             nameDisplayOrder: true,
             country: { select: { defaultNameDisplayOrder: true } },
-            regnalName: true,
             gender: true,
             dynasty: { select: { id: true, name: true } },
             birthDate: true,
@@ -1513,7 +1510,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             // 외조부모
             father: {
               select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
                 country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
@@ -1522,7 +1519,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
             mother: {
               select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
                 country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
@@ -1532,7 +1529,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             // 형제자매 (모의 자녀)
             childrenFromMother: {
               select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
                 country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
@@ -1551,7 +1548,6 @@ export class PersonPrismaRepository implements IPersonRepository {
             middleName: true,
             nameDisplayOrder: true,
             country: { select: { defaultNameDisplayOrder: true } },
-            regnalName: true,
             gender: true,
             dynasty: { select: { id: true, name: true } },
             birthDate: true,
@@ -1576,7 +1572,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                     middleName: true,
                     nameDisplayOrder: true,
                     country: { select: { defaultNameDisplayOrder: true } },
-                    regnalName: true,
                     gender: true,
                     dynasty: { select: { id: true, name: true } },
                     birthDate: true,
@@ -1607,7 +1602,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                     middleName: true,
                     nameDisplayOrder: true,
                     country: { select: { defaultNameDisplayOrder: true } },
-                    regnalName: true,
                     gender: true,
                     dynasty: { select: { id: true, name: true } },
                     birthDate: true,
@@ -1632,7 +1626,6 @@ export class PersonPrismaRepository implements IPersonRepository {
             middleName: true,
             nameDisplayOrder: true,
             country: { select: { defaultNameDisplayOrder: true } },
-            regnalName: true,
             gender: true,
             dynasty: { select: { id: true, name: true } },
             birthDate: true,
@@ -1657,7 +1650,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                     middleName: true,
                     nameDisplayOrder: true,
                     country: { select: { defaultNameDisplayOrder: true } },
-                    regnalName: true,
                     gender: true,
                     dynasty: { select: { id: true, name: true } },
                     birthDate: true,
@@ -1688,7 +1680,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                     middleName: true,
                     nameDisplayOrder: true,
                     country: { select: { defaultNameDisplayOrder: true } },
-                    regnalName: true,
                     gender: true,
                     dynasty: { select: { id: true, name: true } },
                     birthDate: true,
@@ -1730,7 +1721,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                 middleName: true,
                 nameDisplayOrder: true,
                 country: { select: { defaultNameDisplayOrder: true } },
-                regnalName: true,
                 gender: true,
                 dynasty: { select: { id: true, name: true } },
                 birthDate: true,
@@ -1771,7 +1761,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                 middleName: true,
                 nameDisplayOrder: true,
                 country: { select: { defaultNameDisplayOrder: true } },
-                regnalName: true,
                 gender: true,
                 dynasty: { select: { id: true, name: true } },
                 birthDate: true,
@@ -3287,7 +3276,6 @@ export class PersonPrismaRepository implements IPersonRepository {
           surname: true,
           middleName: true,
           nameDisplayOrder: true,
-          regnalName: true,
           profileImageUrl: true,
           country: {
             select: { defaultNameDisplayOrder: true, isoCode: true, flagEmoji: true },
@@ -4604,7 +4592,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       nameDisplayOrder: true,
       profileImageUrl: true,
       templeName: true,
-      regnalName: true,
       posthumousName: true,
       fatherId: true,
       motherId: true,
@@ -4999,7 +4986,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     // 카드 정보 풍부도 (B4·B6·E1)와 결혼 메타(A3·H1)를 위해 확장.
     const PERSON_SELECT = {
       id: true, name: true, surname: true, middleName: true,
-      nameDisplayOrder: true, gender: true, regnalName: true,
+      nameDisplayOrder: true, gender: true,
       profileImageUrl: true, birthDate: true, deathDate: true,
       // BC/AD — birthDate는 크기값(양수) 연도로 저장되므로 era 없이는 BC가 AD로 둔갑한다.
       birthEra: true, deathEra: true,
@@ -5024,6 +5011,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         where: MONARCHICAL_TENURE,
         select: {
           ordinal: true,
+          regnalName: true,
           dynastyOrdinal: true,
           country: {
             select: {
@@ -5491,7 +5479,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         middleName:      (p.middleName     ?? null) as string | null,
         nameDisplayOrder:(p.nameDisplayOrder ?? null) as string | null,
         gender:          (p.gender         ?? null) as string | null,
-        regnalName:      (p.regnalName     ?? null) as string | null,
+        regnalName:      representativeRegnalName(p.GovernmentTenures),
         profileImageUrl: (p.profileImageUrl ?? null) as string | null,
         // birthYear는 크기값(양수). BC/AD 판정은 era로 — 프론트가 'BC n' 표시·연대순 정렬에 사용.
         birthEra:   p.birthEra ?? null,

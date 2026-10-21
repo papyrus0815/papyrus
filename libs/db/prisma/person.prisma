@@ -120,6 +120,7 @@ enum PersonNicknameType {
   PEN_NAME        // 필명
   POSTHUMOUS_NAME // 시호(諡號)
   TEMPLE_NAME     // 묘호(廟號)
+  COURT_TITLE     // 궁호·관명·궁중 호칭 (가즈노미야 내친왕, 고즈케노스케 등)
   PSEUDONYM       // 가명·익명 활동명
   OTHER           // 기타
 }
@@ -234,9 +235,7 @@ model Person {
   parentMarriageId String? @map("parent_marriage_id") @db.Char(36)
 
   //--- 왕/군주 관련 필드 (인물 고유)
-  /// 왕호/재위명 (예: Louis, Henry, 선덕)
-  /// 주의: 재위 번호는 국가마다 다르므로 GovernmentPositionTenure에 저장
-  regnalName String? @map("regnal_name") @db.VarChar(50)
+  /// 왕호는 사람이 아니라 재직(재위)의 속성 — GovernmentPositionTenure.regnalName (제임스 6세/1세처럼 재위마다 다르다)
 
   /// 묘호 (동아시아 군주, 예: 세종, 태종, 고종)
   templeName String? @map("temple_name") @db.VarChar(50)

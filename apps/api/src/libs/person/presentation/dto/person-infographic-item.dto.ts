@@ -23,7 +23,7 @@ export interface PersonInfographicItemDto {
   deathYear: number | null
   isAlive: boolean
   influence: number | null
-  /** 군주명(재위명) — 없으면 재위 기록 notes에서 파싱 폴백 */
+  /** 대표 왕호 — 저장 칸 아님, 가장 최근 재위의 왕호에서 파생 */
   regnalName: string | null
   profileImageUrl: string | null
   biography: string | null

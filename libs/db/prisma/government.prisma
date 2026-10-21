@@ -99,6 +99,8 @@ enum AppointmentMethod {
   RESTORATION
   /// 선거군주제 선출 (신성로마 선제후 선출, 폴란드-리투아니아 자유선거 — 공화정 선거와 구분)
   ELECTIVE_MONARCHY
+  /// 조약으로 즉위 (1720 런던 조약의 사르데냐 왕위, 열강 회의가 정한 그리스·벨기에 왕위 등)
+  TREATY
   /// 기타
   OTHER
 }

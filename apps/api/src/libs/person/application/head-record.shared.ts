@@ -113,7 +113,6 @@ export const RULER_PERSON_SELECT = {
   country: { select: { defaultNameDisplayOrder: true } },
   profileImageUrl: true,
   templeName: true,
-  regnalName: true,
   isAlive: true,
   isDeathDateUnknown: true,
   deathEra: true,

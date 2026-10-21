@@ -75,8 +75,7 @@ export interface CreatePersonData {
   biography?: string
   profileImageUrl?: string
   showLifespanOnEventList?: boolean
-  // 왕/군주 관련 필드
-  regnalName?: string
+  // 왕/군주 관련 필드 (왕호는 재위 기록의 regnalName)
   templeName?: string
   posthumousName?: string
   // 관계
@@ -188,8 +187,7 @@ export interface UpdatePersonData {
   biography?: string
   profileImageUrl?: string | null
   showLifespanOnEventList?: boolean
-  // 왕/군주 관련 필드
-  regnalName?: string
+  // 왕/군주 관련 필드 (왕호는 재위 기록의 regnalName)
   templeName?: string
   posthumousName?: string
   // 관계 — null = 명시적 해제, undefined = 변경 없음
