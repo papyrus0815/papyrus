@@ -7,6 +7,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { MONARCHICAL_TENURE } from '../../src/libs/person/infrastructure/office-holding.query'
 
 const TARGETS = [
   'Charles V, Holy Roman Emperor',
@@ -45,9 +46,11 @@ async function main() {
           originalName: true,
           birthDate: true,
           deathDate: true,
-          sovereignReigns: {
+          // 재위 = 군주직 재임 행
+          GovernmentTenures: {
+            where: MONARCHICAL_TENURE,
             include: { historicalCountry: { select: { name: true } } },
-            orderBy: { startDate: 'asc' },
+            orderBy: { startKey: 'asc' },
           },
         },
       })
@@ -58,14 +61,15 @@ async function main() {
       const by = p.birthDate?.getUTCFullYear() ?? '?'
       const dy = p.deathDate?.getUTCFullYear() ?? '?'
       console.log(`\n● ${p.originalName} [${by}~${dy}]`)
-      if (p.sovereignReigns.length === 0) {
+      if (p.GovernmentTenures.length === 0) {
         console.log('    재임 0건!')
       } else {
-        for (const r of p.sovereignReigns) {
-          const sy = r.startDate.getUTCFullYear()
-          const ey = r.endDate?.getUTCFullYear() ?? '?'
+        for (const r of p.GovernmentTenures) {
+          // 구조화 연도가 정본(BC 재위는 DATETIME이 없다)
+          const sy = r.startYear != null ? `${r.startEra === 'BC' ? '-' : ''}${r.startYear}` : '?'
+          const ey = r.endYear != null ? `${r.endEra === 'BC' ? '-' : ''}${r.endYear}` : '?'
           console.log(
-            `    ${r.regnalNumber ?? '-'}대 ${r.regnalName ?? '-'} @ ${r.historicalCountry?.name ?? '(no HC)'} [${sy}~${ey}]`,
+            `    ${r.ordinal ?? '-'}대 ${r.regnalName ?? '-'} @ ${r.historicalCountry?.name ?? '(no HC)'} [${sy}~${ey}]`,
           )
         }
       }

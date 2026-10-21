@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { MONARCHICAL_TENURE } from '../../src/libs/person/infrastructure/office-holding.query'
 import { reignRows } from '../seeds/lib/reign-rows'
 
 async function main() {
@@ -17,20 +18,21 @@ async function main() {
         startYear: true,
         endEra: true,
         endYear: true,
-        _count: { select: { sovereignReigns: true } },
+        // 재위 = 군주직 재임 행
+        _count: { select: { governmentTenures: { where: MONARCHICAL_TENURE } } },
       },
       orderBy: [{ startYear: 'asc' }, { name: 'asc' }],
     })
 
-    const withReigns = hcs.filter((h) => h._count.sovereignReigns > 0)
-    const withoutReigns = hcs.filter((h) => h._count.sovereignReigns === 0)
+    const withReigns = hcs.filter((h) => h._count.governmentTenures > 0)
+    const withoutReigns = hcs.filter((h) => h._count.governmentTenures === 0)
 
     const fmt = (era: any, y: number | null) =>
       y == null ? '?' : `${era === 'BC' ? '-' : ''}${y}`
     const line = (hc: any) =>
       `${hc.name}${hc.enName ? ` (${hc.enName})` : ''} ` +
       `[${fmt(hc.startEra, hc.startYear)}~${fmt(hc.endEra, hc.endYear)}] ` +
-      `reigns=${hc._count.sovereignReigns}`
+      `reigns=${hc._count.governmentTenures}`
 
     console.log(
       `\n=== HC 총 ${hcs.length}개 — 재임 있음 ${withReigns.length} / 없음 ${withoutReigns.length} ===\n`,

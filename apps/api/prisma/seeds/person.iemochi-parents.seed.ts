@@ -27,13 +27,13 @@
 import { AppointmentMethod, DeathType, TenureEndReason } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { ensureNickname } from './lib/person-nicknames'
 import { reignRows } from './lib/reign-rows'
 
 const NARIYUKI = {
   name: '나리유키',
   surname: '도쿠가와',
   originalName: 'Tokugawa Nariyuki',
-  regnalName: '기이번 11대 번주',
   birthYear: 1801,
   birthMonth: 11,
   birthDay: 11,
@@ -102,7 +102,8 @@ const MATSUMOTO_SADA = {
   name: '사다',
   surname: '마쓰모토',
   originalName: 'Misa Matsumoto (Omisa no Kata)',
-  regnalName: '오미사노카타',
+  /** 궁중 호칭 — 인물 별칭(COURT_TITLE)으로 단다 */
+  courtTitle: '오미사노카타',
   birthYear: 1827,
   birthMonth: 8,
   birthDay: 30,
@@ -210,7 +211,6 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
         name: spec.name,
         surname: spec.surname,
         originalName: spec.originalName,
-        regnalName: spec.regnalName,
         biography: spec.biography,
         birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
         birthEra: 'AD' as any,
@@ -234,6 +234,7 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
 
   const nariyukiId = await createPerson(NARIYUKI, 'MALE', tokugawa.id)
   const sadaId = await createPerson(MATSUMOTO_SADA, 'FEMALE', null)
+  await ensureNickname(prisma, sadaId, MATSUMOTO_SADA.courtTitle, 'COURT_TITLE')
 
   // 능력치
   for (const [pid, spec, label] of [

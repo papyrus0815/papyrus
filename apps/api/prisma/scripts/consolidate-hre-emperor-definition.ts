@@ -2,7 +2,6 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
-import { reignRows } from '../seeds/lib/reign-rows'
 
 /**
  * 직위 정의 '신성로마황제' → '황제' 통합.
@@ -33,11 +32,8 @@ async function main() {
       throw new Error("'황제' 정의를 찾을 수 없음 — governmentPositionDefinition 시드 선행 필요")
     }
 
-    const [reigns, tenures, signatories] = await prisma.$transaction([
-      reignRows(prisma).updateMany({
-        where: { positionDefinitionId: hre.id },
-        data: { positionDefinitionId: emperor.id },
-      }),
+    // 재위도 재임 테이블의 행이라 재임 갱신 한 번이 전부를 덮는다
+    const [tenures, signatories] = await prisma.$transaction([
       prisma.governmentPositionTenure.updateMany({
         where: { positionDefinitionId: hre.id },
         data: { positionDefinitionId: emperor.id },
@@ -48,7 +44,7 @@ async function main() {
       }),
       prisma.governmentPositionDefinition.delete({ where: { id: hre.id } }),
     ])
-    console.log(`✅ repoint — 재위 ${reigns.count}건, 재임 ${tenures.count}건, 조약서명 ${signatories.count}건`)
+    console.log(`✅ repoint — 재위·재임 ${tenures.count}건, 조약서명 ${signatories.count}건`)
     console.log('✅ 신성로마황제 정의 삭제 완료')
   } finally {
     await prisma.$disconnect()

@@ -372,7 +372,6 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
         name: spec.name,
         surname: spec.surname,
         originalName: spec.originalName,
-        regnalName: spec.regnalName,
         biography: spec.biography,
         birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
         birthEra: 'AD' as any,

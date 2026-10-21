@@ -1007,7 +1007,6 @@ export async function seedRussiaTsardom(prisma: PrismaService): Promise<void> {
         name: spec.name,
         surname: spec.surname || undefined,
         originalName: spec.originalName,
-        regnalName: spec.regnalName || undefined,
         biography: spec.biography,
         birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
         birthEra: 'AD' as any,
@@ -1032,12 +1031,11 @@ export async function seedRussiaTsardom(prisma: PrismaService): Promise<void> {
   // ── 2) Ivan V 보강 ────────────────────────────────────────────────────
   const ivanV = await prisma.person.findFirst({
     where: { originalName: 'Ivan V of Russia' },
-    select: { id: true, dynastyId: true, regnalName: true },
+    select: { id: true, dynastyId: true },
   })
   if (ivanV) {
     const patch: any = {}
     if (!ivanV.dynastyId && dynastyIdByName['로마노프 왕조']) patch.dynastyId = dynastyIdByName['로마노프 왕조']
-    if (!ivanV.regnalName || ivanV.regnalName === 'Ivan') patch.regnalName = '5세'
     if (Object.keys(patch).length > 0) {
       await prisma.person.update({ where: { id: ivanV.id }, data: patch })
       console.log(`  🔧 Ivan V 보강: ${Object.keys(patch).join(', ')}`)

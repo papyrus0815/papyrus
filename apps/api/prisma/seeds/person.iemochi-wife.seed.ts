@@ -23,13 +23,15 @@
 import { DeathType } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { ensureNickname } from './lib/person-nicknames'
 
 const KAZUNOMIYA = {
   name: '지카코',
   // 일본 황실은 성씨 없음
   surname: undefined as string | undefined,
   originalName: 'Kazunomiya Chikako (和宮親子内親王)',
-  regnalName: '가즈노미야 내친왕',
+  /** 궁호 — 인물 별칭(COURT_TITLE)으로 단다 */
+  courtTitle: '가즈노미야 내친왕',
   birthYear: 1846,
   birthMonth: 7,
   birthDay: 3,
@@ -154,7 +156,6 @@ export async function seedIemochiWife(prisma: PrismaService): Promise<void> {
         name: KAZUNOMIYA.name,
         surname: KAZUNOMIYA.surname,
         originalName: KAZUNOMIYA.originalName,
-        regnalName: KAZUNOMIYA.regnalName,
         biography: KAZUNOMIYA.biography,
         birthDate: new Date(
           KAZUNOMIYA.birthYear,
@@ -183,6 +184,7 @@ export async function seedIemochiWife(prisma: PrismaService): Promise<void> {
     console.log(`  ✅ 인물 생성: ${KAZUNOMIYA.originalName} (id=${created.id})`)
     kazunomiyaId = created.id
   }
+  await ensureNickname(prisma, kazunomiyaId, KAZUNOMIYA.courtTitle, 'COURT_TITLE')
 
   // ── 2) PersonStats ────────────────────────────────────────────────────
   const statsExists = await prisma.personStats.findFirst({

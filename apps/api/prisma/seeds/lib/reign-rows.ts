@@ -14,7 +14,7 @@
  * - 직위 정의가 없으면 '국왕' 정의로, `positionType`(재임 필수)은 정의에서 온다.
  * - `endDatePrecision`은 재임에 칸이 없다 — 종료 구조화 칸(연·월·일)을 자르는 데만 쓴다.
  *   시작 구조화 칸·정렬 키는 DB 트리거(20261019144753)가 DATETIME에서 채운다.
- * - 결과는 asReignRecord로 옛 재위 모양(regnalNumber = 대수)이라 시드 코드가 그대로 읽는다.
+ * - 결과는 직위 보유 행(asOfficeHolding)에 시드 어휘 regnalNumber(= 대수 ordinal)를 얹어 돌려준다 — 시드 코드가 그대로 읽는다.
  *
  * 범위: 군주직 행. 군주직이 아닌 직위를 '재위 시드'로 쓰는 경우(도쿠가와 쇼군은 정부수반으로
  * 재분류됐다)는 `{ alsoDefinitionIds: [쇼군 정의 id] }`로 그 정의의 행까지 넓힌다 —
@@ -22,7 +22,7 @@
  */
 import type { GovernmentPositionType, Prisma, PrismaClient } from '@prisma/client'
 
-import { MONARCHICAL_TENURE, asReignRecord } from '../../../src/libs/person/infrastructure/office-holding.query'
+import { MONARCHICAL_TENURE, asOfficeHolding } from '../../../src/libs/person/infrastructure/office-holding.query'
 
 type AnyArgs = Record<string, any>
 
@@ -101,7 +101,8 @@ export function reignRows(prisma: PrismaClient, options: ReignRowsOptions = {}) 
     return out
   }
 
-  const asReign = (row: any) => (row ? asReignRecord(row) : row)
+  // 시드 어휘: regnalNumber = 대수. 응답의 regnalNumber 칸(이름 속 서수)은 시드가 쓰지 않는다
+  const asReign = (row: any) => (row ? { ...asOfficeHolding(row, true), regnalNumber: row.ordinal ?? null } : row)
 
   return {
     async findFirst(args: AnyArgs = {}): Promise<any> {

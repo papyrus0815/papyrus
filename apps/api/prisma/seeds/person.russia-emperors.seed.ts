@@ -528,7 +528,6 @@ export async function seedRussiaEmperors(
           name: m.name,
           surname: m.surname,
           originalName: m.originalName,
-          regnalName: m.regnalName,
           biography: m.biography,
           birthDate,
           birthEra: 'AD',

@@ -1813,7 +1813,6 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
         name: spec.name,
         surname: spec.surname || undefined,
         originalName: spec.originalName,
-        regnalName: spec.regnalName || undefined,
         biography: spec.biography,
         birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
         birthEra: 'AD' as any,

@@ -19,7 +19,6 @@ async function main() {
       where: { originalName: 'Ivan V of Russia' },
       select: {
         id: true,
-        regnalName: true,
         dynasty: { select: { name: true } },
       },
     })
@@ -28,7 +27,6 @@ async function main() {
       where: { originalName: 'Peter I of Russia' },
       select: {
         id: true,
-        regnalName: true,
         birthDate: true,
         deathDate: true,
         dynasty: { select: { name: true } },

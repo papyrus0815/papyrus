@@ -25,6 +25,7 @@
 import { DeathType } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { ensureNickname } from './lib/person-nicknames'
 
 const PIAST_DYNASTY = {
   name: '피아스트 가문',
@@ -43,7 +44,8 @@ const ERNEST_THE_IRON = {
   name: '에른스트',
   surname: '합스부르크',
   originalName: 'Ernest the Iron, Duke of Inner Austria',
-  regnalName: '철공',
+  /** 별호 — 인물 별칭(EPITHET)으로 단다 */
+  epithet: '철공',
   birthYear: 1377,
   birthMonth: 7,
   birthDay: 1, // 정확한 일자 미상, 7월로 추정
@@ -117,7 +119,6 @@ const CYMBURGIS = {
   name: '침바르카',
   surname: '피아스트',
   originalName: 'Cymburgis of Masovia',
-  regnalName: '공비',
   birthYear: 1394,
   birthMonth: 1,
   birthDay: 1, // 정확한 출생일 미상
@@ -251,7 +252,6 @@ export async function seedFriedrichIIIParents(prisma: PrismaService): Promise<vo
         name: spec.name,
         surname: spec.surname,
         originalName: spec.originalName,
-        regnalName: spec.regnalName,
         biography: spec.biography,
         birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
         birthEra: 'AD' as any,
@@ -274,6 +274,7 @@ export async function seedFriedrichIIIParents(prisma: PrismaService): Promise<vo
   }
 
   const ernestId = await createPerson(ERNEST_THE_IRON, 'MALE', habsburg.id)
+  await ensureNickname(prisma, ernestId, ERNEST_THE_IRON.epithet, 'EPITHET')
   const cymburgisId = await createPerson(CYMBURGIS, 'FEMALE', piast.id)
 
   // 3) Stats

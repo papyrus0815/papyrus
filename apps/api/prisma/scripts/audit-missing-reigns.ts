@@ -49,7 +49,6 @@ async function main() {
       select: {
         id: true,
         originalName: true,
-        regnalName: true,
         birthDate: true,
         deathDate: true,
         gender: true,

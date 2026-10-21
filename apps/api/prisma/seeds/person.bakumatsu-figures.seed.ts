@@ -29,6 +29,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { ensureNickname } from './lib/person-nicknames'
 
 type AffiliationSpec = {
   type: 'CITIZENSHIP' | 'PRIMARY_RESIDENCE' | 'SERVED' | 'BIRTH_PLACE' | 'EXILE' | 'OTHER'
@@ -58,7 +59,8 @@ interface PersonSpec {
   name: string
   surname?: string
   originalName: string
-  regnalName?: string
+  /** 관명·궁중 호칭 — 인물 별칭(COURT_TITLE)으로 단다 */
+  courtTitle?: string
   gender: 'MALE' | 'FEMALE'
   nameDisplayOrder: 'korean' | 'western'
   birthYear: number; birthMonth: number; birthDay: number
@@ -88,7 +90,7 @@ const OGURI: PersonSpec = {
   name: '다다마사',
   surname: '오구리',
   originalName: 'Oguri Tadamasa (小栗忠順)',
-  regnalName: '코즈케노스케',
+  courtTitle: '코즈케노스케',
   gender: 'MALE',
   nameDisplayOrder: 'korean',
   birthYear: 1827, birthMonth: 7, birthDay: 16,
@@ -679,7 +681,6 @@ export async function seedBakumatsuFigures(prisma: PrismaService): Promise<void>
           name: spec.name,
           surname: spec.surname,
           originalName: spec.originalName,
-          regnalName: spec.regnalName,
           biography: spec.biography,
           birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
           birthEra: 'AD' as any,
@@ -699,6 +700,8 @@ export async function seedBakumatsuFigures(prisma: PrismaService): Promise<void>
       personId = created.id
       console.log(`  ✅ 인물 생성: ${spec.originalName} (id=${created.id})`)
     }
+
+    if (spec.courtTitle) await ensureNickname(prisma, personId, spec.courtTitle, 'COURT_TITLE')
 
     // ── PersonStats ────────────────────────────────────────────────────
     const statsExists = await prisma.personStats.findFirst({

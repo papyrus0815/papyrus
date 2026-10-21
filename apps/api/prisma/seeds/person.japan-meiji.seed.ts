@@ -533,7 +533,6 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
           name: m.name,
           surname: m.surname,
           originalName: m.originalName,
-          regnalName: m.regnalName,
           biography: m.biography,
           birthDate,
           birthEra: 'AD',

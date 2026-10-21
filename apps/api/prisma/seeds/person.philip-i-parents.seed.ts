@@ -449,7 +449,6 @@ export async function seedPhilipIParents(prisma: PrismaService): Promise<void> {
         name: spec.name,
         surname: spec.surname,
         originalName: spec.originalName,
-        regnalName: spec.regnalName,
         biography: spec.biography,
         birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
         birthEra: 'AD' as any,

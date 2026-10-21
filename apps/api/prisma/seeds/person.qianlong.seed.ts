@@ -54,7 +54,6 @@ export async function seedQianlongEmperor(prisma: PrismaService): Promise<void> 
         name: '홍력',
         surname: '아이신줴뤄',
         originalName: ORIGINAL_NAME,
-        regnalName: '건륭',
         biography: BIOGRAPHY,
         birthDate: new Date(1711, 8, 25), // 1711-09-25
         birthEra: 'AD',

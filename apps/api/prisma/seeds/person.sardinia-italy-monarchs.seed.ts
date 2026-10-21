@@ -372,7 +372,6 @@ export async function seedSardiniaItalyMonarchs(
           name: entry.name,
           surname: entry.surname,
           originalName: entry.originalName,
-          regnalName: entry.regnalName,
           biography: entry.biography,
           birthDate: new Date(entry.birthYear, entry.birthMonth - 1, entry.birthDay),
           birthEra: 'AD',

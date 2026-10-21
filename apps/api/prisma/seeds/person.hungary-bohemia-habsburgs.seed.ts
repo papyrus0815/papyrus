@@ -1169,7 +1169,6 @@ export async function seedHungaryBohemiaHabsburgs(prisma: PrismaService): Promis
         name: spec.name,
         surname: spec.surname || undefined,
         originalName: spec.originalName,
-        regnalName: spec.regnalName || undefined,
         biography: spec.biography,
         birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
         birthEra: 'AD' as any,

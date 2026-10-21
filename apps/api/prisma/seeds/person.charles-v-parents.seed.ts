@@ -329,7 +329,6 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
           name: p.name,
           surname: p.surname,
           originalName: p.originalName,
-          regnalName: p.regnalName,
           biography: p.biography,
           birthDate: new Date(p.birthYear, p.birthMonth - 1, p.birthDay),
           birthEra: 'AD' as any,
@@ -589,7 +588,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
     historicalCountryName: string
     positionDefinitionId: string | null
     positionTitle: string
-    regnalNumber: number
+    regnalNumber: number | null
     regnalName: string
     startDate: Date
     endDate: Date

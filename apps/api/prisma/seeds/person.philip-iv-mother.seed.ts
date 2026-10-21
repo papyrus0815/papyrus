@@ -148,7 +148,6 @@ export async function seedPhilipIVMother(prisma: PrismaService): Promise<void> {
         name: MARGARET.name,
         surname: MARGARET.surname,
         originalName: MARGARET.originalName,
-        regnalName: MARGARET.regnalName,
         biography: MARGARET.biography,
         birthDate: new Date(MARGARET.birthYear, MARGARET.birthMonth - 1, MARGARET.birthDay),
         birthEra: 'AD' as any,

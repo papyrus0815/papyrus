@@ -321,7 +321,6 @@ export async function seedFirstOpiumWarFigures(prisma: PrismaService): Promise<v
           name: m.name,
           surname: m.surname,
           originalName: m.originalName,
-          regnalName: m.regnalName,
           biography: m.biography,
           birthDate,
           birthEra: 'AD',

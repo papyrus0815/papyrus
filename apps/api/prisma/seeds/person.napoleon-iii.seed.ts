@@ -386,7 +386,6 @@ async function ensurePerson(
     if (!existing.deathCause && spec.deathCause) patch.deathCause = spec.deathCause
     if (!existing.deathNote && spec.deathNote) patch.deathNote = spec.deathNote
     if (existing.influence == null && spec.influence != null) patch.influence = spec.influence
-    if (!existing.regnalName && spec.regnalName) patch.regnalName = spec.regnalName
     if (Object.keys(patch).length > 0) {
       await prisma.person.update({ where: { id: existing.id }, data: patch })
       console.log(`  🔧 보강: ${spec.originalName} (${Object.keys(patch).join(', ')})`)
@@ -401,7 +400,6 @@ async function ensurePerson(
       name: spec.name,
       surname: spec.surname,
       originalName: spec.originalName,
-      regnalName: spec.regnalName,
       biography: spec.biography,
       birthDate: toDate(spec.birthYear, spec.birthMonth, spec.birthDay),
       birthEra: 'AD' as any,

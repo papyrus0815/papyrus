@@ -2,7 +2,7 @@
  * 국가 미상 인물 진단 스크립트
  *
  * Person.countryId가 NULL이거나 PersonCountryAffiliation이 0건인 인물들을 나열,
- * 추론 가능한 단서(birthPlaceText·dynasty·sovereignReign·tenure 등)와 함께 출력.
+ * 추론 가능한 단서(birthPlaceText·dynasty·재위·재임 등)와 함께 출력.
  *
  * 실행: node -r ./prisma-seed-loader.js ./node_modules/.bin/tsx \
  *   apps/api/prisma/scripts/diagnose-missing-country.ts
@@ -11,6 +11,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { MONARCHICAL_TENURE } from '../../src/libs/person/infrastructure/office-holding.query'
 
 async function main() {
   const envPath = path.resolve(process.cwd(), 'env.development')
@@ -43,7 +44,9 @@ async function main() {
             historicalCountry: { select: { name: true } },
           },
         },
-        sovereignReigns: {
+        // 재위 = 군주직 재임 행
+        GovernmentTenures: {
+          where: MONARCHICAL_TENURE,
           select: {
             historicalCountry: { select: { name: true } },
             country: { select: { isoCode: true, name: true } },
@@ -76,7 +79,7 @@ async function main() {
       const by = p.birthDate?.getUTCFullYear() ?? '?'
       const dy = p.deathDate?.getUTCFullYear() ?? '?'
       const dynastyStr = p.dynasty?.name ?? '-'
-      const reignStr = p.sovereignReigns
+      const reignStr = p.GovernmentTenures
         .map((r) => r.historicalCountry?.name ?? r.country?.name ?? '?')
         .join(', ') || '-'
       const place = (p.birthPlaceText ?? p.deathPlaceText ?? '').slice(0, 40)
