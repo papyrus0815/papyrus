@@ -253,6 +253,7 @@ export interface CreateGovernmentPositionTenureDto {
     | 'CONQUEST'
     | 'RESTORATION'
     | 'ELECTIVE_MONARCHY'
+    | 'TREATY'
     | 'OTHER'
   endReason?:
     | 'TERM_COMPLETED'

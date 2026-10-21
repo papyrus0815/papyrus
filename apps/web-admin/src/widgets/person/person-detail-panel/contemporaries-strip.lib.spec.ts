@@ -49,7 +49,6 @@ function ruler(
       country: null,
       profileImageUrl: null,
       templeName: null,
-      regnalName: null,
       isAlive: false,
       deathYear: 1450,
       isOwned: true,
@@ -121,13 +120,10 @@ describe('chipLabelOf — 묘호·왕호 우선', () => {
     expect(chipLabelOf(westerner, record())).toBe('Franklin Roosevelt')
   })
 
-  it('person.regnalName은 원문 오염 필드라 라벨로 쓰지 않는다 (Nicholas → 표시명)', () => {
-    // 실DB에 'Nicholas'·'Wilhelm'(로마자 원문)·'쇼군'(칭호)·'4세'(맨 서수)가 섞여 있어
-    // 이 폴백이 칩에 원문을 새게 하던 근인 — 표시명으로 대체됨을 못 박는다
+  it('왕호(재위 기록)가 없으면 인물 표시명으로 — 인물에는 왕호 칸이 없다', () => {
     const nicholas = ruler({
       name: '니콜라이',
       surname: '로마노프',
-      regnalName: 'Nicholas',
       country: { defaultNameDisplayOrder: 'western' },
     })
     expect(chipLabelOf(nicholas, record())).toBe('니콜라이 로마노프')

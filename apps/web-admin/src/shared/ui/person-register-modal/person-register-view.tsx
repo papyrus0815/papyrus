@@ -312,7 +312,6 @@ export function PersonRegisterView({
   const [nicknameRows, setNicknameRows] = useState<NicknameRow[]>([])
   // 기타
   const [profileImageUrl, setProfileImageUrl] = useState('')
-  const [regnalName, setRegnalName] = useState('')
   const [templeName, setTempleName] = useState('')
   const [posthumousName, setPosthumousName] = useState('')
 
@@ -714,7 +713,6 @@ export function PersonRegisterView({
     makeFormField('illegitimate', () => illegitimate, setIllegitimate, false),
     makeFormField('spouseRelations', () => spouseRows, setSpouseRows, []),
     makeFormField('profileImageUrl', () => profileImageUrl, setProfileImageUrl, ''),
-    makeFormField('regnalName', () => regnalName, setRegnalName, ''),
     makeFormField('templeName', () => templeName, setTempleName, ''),
     makeFormField('posthumousName', () => posthumousName, setPosthumousName, ''),
   ]
@@ -811,7 +809,6 @@ export function PersonRegisterView({
         )
         setGender(p.gender ?? '')
         setProfileImageUrl(p.profileImageUrl ?? '')
-        setRegnalName(p.regnalName ?? '')
         setTempleName(p.templeName ?? '')
         setPosthumousName(p.posthumousName ?? '')
         // 주 국적: 응답 historicalCountryId(FK)가 있으면 역사국가, 없으면 현대 countryId.
@@ -1020,7 +1017,6 @@ export function PersonRegisterView({
         setNameMeaningsOpen(Boolean(hasNameMeanings))
         // 군주 호칭이 있으면 생애 탭의 collapse 자동 펼침.
         const hasMonarchTitles =
-          (p.regnalName && String(p.regnalName).trim()) ||
           (p.templeName && String(p.templeName).trim()) ||
           (p.posthumousName && String(p.posthumousName).trim())
         setMonarchTitlesOpen(Boolean(hasMonarchTitles))
@@ -1717,7 +1713,6 @@ export function PersonRegisterView({
         profileImageField === null
           ? (null as unknown as CreatePersonInput['profileImageUrl'])
           : profileImageField || null,
-      regnalName: regnalName.trim() || null,
       templeName: templeName.trim() || null,
       posthumousName: posthumousName.trim() || null,
       countryId: countryId || undefined,
@@ -2031,7 +2026,6 @@ export function PersonRegisterView({
           !!deathPlace ||
           !!deathCause ||
           !!deathNote ||
-          !!regnalName ||
           !!templeName ||
           !!posthumousName,
       },
@@ -2063,7 +2057,6 @@ export function PersonRegisterView({
     deathPlace,
     deathCause,
     deathNote,
-    regnalName,
     templeName,
     posthumousName,
     dynastyId,
@@ -2532,10 +2525,8 @@ export function PersonRegisterView({
                 setDeathNote={setDeathNote}
                 monarchTitlesOpen={monarchTitlesOpen}
                 setMonarchTitlesOpen={setMonarchTitlesOpen}
-                regnalName={regnalName}
                 templeName={templeName}
                 posthumousName={posthumousName}
-                setRegnalName={setRegnalName}
                 setTempleName={setTempleName}
                 setPosthumousName={setPosthumousName}
                 lifespanText={lifespanText}
@@ -2604,10 +2595,8 @@ export function PersonRegisterView({
                 setDeathNote={setDeathNote}
                 monarchTitlesOpen={monarchTitlesOpen}
                 setMonarchTitlesOpen={setMonarchTitlesOpen}
-                regnalName={regnalName}
                 templeName={templeName}
                 posthumousName={posthumousName}
-                setRegnalName={setRegnalName}
                 setTempleName={setTempleName}
                 setPosthumousName={setPosthumousName}
                 lifespanText={lifespanText}

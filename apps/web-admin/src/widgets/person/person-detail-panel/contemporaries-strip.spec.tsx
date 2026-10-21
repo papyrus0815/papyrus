@@ -60,7 +60,6 @@ function ruler(overrides: {
       country: null,
       profileImageUrl: null,
       templeName: overrides.label,
-      regnalName: null,
       isAlive: false,
       deathYear: 1450,
       isOwned: overrides.isOwned ?? true,

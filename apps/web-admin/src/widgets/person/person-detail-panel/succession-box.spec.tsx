@@ -41,7 +41,6 @@ function neighbor(overrides: {
       country: null,
       profileImageUrl: null,
       templeName: null,
-      regnalName: null,
       isAlive: false,
       deathYear: overrides.endYear,
       isOwned: overrides.isOwned ?? true,
@@ -112,7 +111,7 @@ describe('SuccessionBox', () => {
     expect(onPersonClick).toHaveBeenCalledWith('alex1')
   })
 
-  it('person.regnalName 원문("Nicholas")은 라벨로 쓰지 않는다 — 표시명 폴백', () => {
+  it('재위 왕호가 없으면 인물 표시명으로 — 인물에는 왕호 칸이 없다', () => {
     const nicholas = neighbor({
       relation: 'PREDECESSOR',
       id: 'nick',
@@ -121,7 +120,6 @@ describe('SuccessionBox', () => {
       endYear: 1917,
     })
     nicholas.record.regnalName = null
-    nicholas.person.regnalName = 'Nicholas'
     renderWithTheme(
       <SuccessionBox
         entry={entry({ predecessors: [nicholas] })}

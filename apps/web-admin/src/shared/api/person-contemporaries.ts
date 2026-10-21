@@ -50,7 +50,6 @@ export interface ContemporaryRulerPerson {
   country: { defaultNameDisplayOrder: string | null } | null
   profileImageUrl: string | null
   templeName: string | null
-  regnalName: string | null
   isAlive: boolean
   deathYear: number | null
   /** 요청 계정 소유 인물인지 — false면 상세(:id)가 소유자 게이트라 열 수 없음(칩 비활성) */

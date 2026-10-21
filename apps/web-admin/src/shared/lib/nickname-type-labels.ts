@@ -17,6 +17,7 @@ export type NicknameTypeToken =
   | 'PEN_NAME'
   | 'POSTHUMOUS_NAME'
   | 'TEMPLE_NAME'
+  | 'COURT_TITLE'
   | 'PSEUDONYM'
   | 'OTHER'
 
@@ -33,6 +34,7 @@ const LABELS: Record<NicknameTypeToken, string> = {
   PEN_NAME: '필명',
   POSTHUMOUS_NAME: '시호',
   TEMPLE_NAME: '묘호',
+  COURT_TITLE: '궁호·관명',
   PSEUDONYM: '가명',
   OTHER: '기타',
 }
@@ -65,6 +67,8 @@ const LEGACY_TYPE_ALIASES: Record<string, NicknameTypeToken> = {
   필명: 'PEN_NAME',
   시호: 'POSTHUMOUS_NAME',
   묘호: 'TEMPLE_NAME',
+  궁호: 'COURT_TITLE',
+  관명: 'COURT_TITLE',
   가명: 'PSEUDONYM',
   기타: 'OTHER',
 }

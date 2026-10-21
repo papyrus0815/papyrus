@@ -99,10 +99,8 @@ export interface LifeSectionProps {
   /** 출생일/사망일 드롭다운 달력이 열려 있는지 — 날짜 칸 포커스 링 유지용 */
   birthPickerOpen?: boolean
   deathPickerOpen?: boolean
-  regnalName: string
   templeName: string
   posthumousName: string
-  setRegnalName: (v: string) => void
   setTempleName: (v: string) => void
   setPosthumousName: (v: string) => void
   // 파생값(부모에서 계산)
@@ -165,10 +163,8 @@ export function LifeSection({
   setDeathNote,
   monarchTitlesOpen,
   setMonarchTitlesOpen,
-  regnalName,
   templeName,
   posthumousName,
-  setRegnalName,
   setTempleName,
   setPosthumousName,
   lifespanText,
@@ -529,26 +525,17 @@ export function LifeSection({
           <AdvancedToggleBody>
             <AdvancedToggleTitle>군주 호칭</AdvancedToggleTitle>
             <AdvancedToggleDesc>
-              군주명·묘호·시호 (루이 14세, 世宗)
+              묘호·시호 (世宗) — 왕호(루이 14세)는 재위 기록에 적습니다
             </AdvancedToggleDesc>
           </AdvancedToggleBody>
         </AdvancedToggle>
         {monarchTitlesOpen && (
           <AdvancedBody>
-            <FieldLabel htmlFor={fid('regnalName')}>
-              군주명 · 묘호 · 시호
+            <FieldLabel htmlFor={fid('templeName')}>
+              묘호 · 시호
             </FieldLabel>
             <FieldControl>
-              <InlineFields $cols={3}>
-                <FormInput
-                  id={fid('regnalName')}
-                  value={regnalName}
-                  onChange={(e) => {
-                    setRegnalName(e.target.value)
-                    markDirty()
-                  }}
-                  placeholder="군주명·재위명"
-                />
+              <InlineFields $cols={2}>
                 <FormInput
                   id={fid('templeName')}
                   value={templeName}

@@ -14,7 +14,6 @@ import {
   groupReignEntries,
   toReignMarkers,
   segmentMarkerOnlyYears,
-  koreanRegnalFromPerson,
   countMarkerKinds,
   isEntityMarker,
   markerGroupTone,
@@ -496,25 +495,6 @@ describe('countMarkerKinds', () => {
       { kind: 'accession', label: '즉위·취임', count: 2 },
       { kind: 'founding', label: '건국', count: 2 },
     ])
-  })
-})
-
-describe('koreanRegnalFromPerson', () => {
-  it('원어 군주명은 한국어 이름 + 서수로 옮긴다', () => {
-    expect(koreanRegnalFromPerson({ name: '움베르토', regnalName: 'Umberto I' })).toBe('움베르토 1세')
-    expect(koreanRegnalFromPerson({ name: '비토리오 에마누엘레', regnalName: 'Vittorio Emanuele II' })).toBe('비토리오 에마누엘레 2세')
-    expect(koreanRegnalFromPerson({ name: '미하일로', regnalName: 'Mihailo III' })).toBe('미하일로 3세')
-    expect(koreanRegnalFromPerson({ name: '카를', regnalName: 'Karl XIV' })).toBe('카를 14세')
-  })
-
-  it('서수가 없으면 한국어 이름만', () => {
-    expect(koreanRegnalFromPerson({ name: '빅토리아', regnalName: 'Victoria' })).toBe('빅토리아')
-    expect(koreanRegnalFromPerson({ name: '카를로 알베르토', regnalName: 'Carlo Alberto' })).toBe('카를로 알베르토')
-  })
-
-  it('한글 군주명은 그대로, 비어 있으면 null', () => {
-    expect(koreanRegnalFromPerson({ name: '이도', regnalName: '세종' })).toBe('세종')
-    expect(koreanRegnalFromPerson({ name: '이도', regnalName: ' ' })).toBeNull()
   })
 })
 

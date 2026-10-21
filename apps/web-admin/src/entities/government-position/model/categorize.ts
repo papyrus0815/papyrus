@@ -28,6 +28,8 @@ const MONARCH_METHODS = new Set([
   'CONQUEST',
   'RESTORATION',
   'ELECTIVE_MONARCHY',
+  // 조약으로 정해진 왕위(사르데냐 1720·그리스 1832·벨기에 1831)
+  'TREATY',
 ])
 const PRESIDENT_METHODS = new Set([
   'DIRECT_ELECTION',

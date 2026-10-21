@@ -39,7 +39,6 @@ export interface SovereignReignTimelineItem {
     surname?: string | null
     middleName?: string | null
     nameDisplayOrder?: string | null
-    regnalName?: string | null
     templeName?: string | null
     profileImageUrl?: string | null
     isAlive?: boolean | null
@@ -241,45 +240,6 @@ const lowerKey = (parts: DateParts) =>
   parts.year * 10000 + (parts.month ?? 1) * 100 + (parts.day ?? 1)
 
 /** 재임 `notes`에 저장된 레거시 `왕명: …` 인코딩 */
-const ROMAN_VALUES = new Map([
-  ['I', 1],
-  ['V', 5],
-  ['X', 10],
-  ['L', 50],
-  ['C', 100],
-  ['D', 500],
-  ['M', 1000],
-])
-
-function romanToInt(roman: string): number {
-  let total = 0
-  for (let index = 0; index < roman.length; index += 1) {
-    const current = ROMAN_VALUES.get(roman[index]) ?? 0
-    const next = ROMAN_VALUES.get(roman[index + 1] ?? '') ?? 0
-    total += current < next ? -current : current
-  }
-  return total
-}
-
-/**
- * 인물의 `regnalName`으로 표지 이름을 만든다 — **원어 표기면 한국어로 되돌린다**.
- *
- * `Person.regnalName`은 오염 필드다. 시드 다수가 원어 군주명('Umberto I', 'Victoria',
- * 'Carlo Alberto')을 넣어, 표지가 한글 이름들 사이에 원어로 섞여 나왔다. 원어면 한국어
- * 이름(person.name)에 로마 숫자 서수만 '1세'로 옮겨 붙인다. 한글이 들어 있으면 그대로 쓴다.
- */
-export function koreanRegnalFromPerson(
-  person: { name?: string | null; regnalName?: string | null } | null | undefined,
-): string | null {
-  const regnal = person?.regnalName?.trim()
-  if (!regnal) return null
-  if (/[가-힣]/.test(regnal)) return regnal
-  const given = person?.name?.trim()
-  if (!given) return regnal
-  const ordinal = regnal.match(/\s([IVXLCDM]+)$/)
-  return ordinal ? `${given} ${romanToInt(ordinal[1])}세` : given
-}
-
 function regnalNameFromNotes(notes: string | null | undefined): string | null {
   const match = notes?.match(/왕명\s*:\s*(.+?)(?:\n|$)/)
   return match ? match[1].trim() || null : null
@@ -343,7 +303,6 @@ export function toReignMarkers(
     const name =
       reign.regnalName?.trim() ||
       regnalNameFromNotes(reign.notes) ||
-      koreanRegnalFromPerson(person) ||
       person?.templeName?.trim() ||
       (person ? personName(person) : '') ||
       '군주'
