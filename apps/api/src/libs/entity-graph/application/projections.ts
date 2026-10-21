@@ -212,7 +212,7 @@ const tenure: Projection = {
     const base = { relation: this.relation, group: this.group, direction: 'out' as const }
     return result(
       rows.map((row) =>
-        edge(base, '재임', polityTarget(row), row.positionDefinition?.title ?? row.title ?? null, periodFromDates(row.startDate, row.endDate)),
+        edge(base, '재임', polityTarget(row), row.title ?? row.positionDefinition?.title ?? null, periodFromDates(row.startDate, row.endDate)),
       ),
     )
   },
@@ -238,7 +238,7 @@ const tenure: Projection = {
     const base = { relation: this.relation, group: this.group, direction: 'in' as const }
     return result(
       rows.map((row) =>
-        edge(base, '재임자', personTarget(row.person, ctx.accountId), row.positionDefinition?.title ?? row.title ?? null, periodFromDates(row.startDate, row.endDate)),
+        edge(base, '재임자', personTarget(row.person, ctx.accountId), row.title ?? row.positionDefinition?.title ?? null, periodFromDates(row.startDate, row.endDate)),
       ),
       total,
     )
@@ -263,12 +263,12 @@ const reign: Projection = {
     // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
     const rows = await prisma.governmentPositionTenure.findMany({
       where: reignWhere({ personId }),
-      select: { regnalName: true, positionDefinition: { select: { title: true } }, ...REIGN_PERIOD_SELECT, ...POLITY_SELECT },
+      select: { regnalName: true, title: true, positionDefinition: { select: { title: true } }, ...REIGN_PERIOD_SELECT, ...POLITY_SELECT },
     })
     const base = { relation: this.relation, group: this.group, direction: 'out' as const }
     return result(
       rows.map((row) =>
-        edge(base, '재위', polityTarget(row), row.regnalName ?? row.positionDefinition?.title ?? null, periodFromStructured(row)),
+        edge(base, '재위', polityTarget(row), row.regnalName ?? row.title ?? row.positionDefinition?.title ?? null, periodFromStructured(row)),
       ),
     )
   },

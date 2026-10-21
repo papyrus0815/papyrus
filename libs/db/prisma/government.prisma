@@ -167,6 +167,10 @@ model GovernmentPositionDefinition {
   /// 공화정 원수는 false(관직 재임 유지). ROYAL_NOBLE_TITLE·각료 등은 false 기본.
   isMonarchical Boolean @default(false) @map("is_monarchical")
 
+  /// 일반 정의 여부 — 유형마다 하나('군 지휘관'·'특별 직위'·'기타 직위' 등). 카탈로그에 맞는 정의가 없는
+  /// 재임이 이것을 가리키고, 구체 직함('제7보병연대 소위')은 재임의 title에 둔다. 모든 재임은 정의를 갖는다.
+  isGeneric Boolean @default(false) @map("is_generic")
+
   /// 중앙부처 카테고리 연결 — 외교부 장관, 국방부 장관 등 일반 직위 (관리자 등록)
   categoryId String? @map("category_id") @db.Char(36)
 
@@ -387,7 +391,8 @@ model GovernmentPositionTenure {
   /// 직위 타입 (필수)
   positionType GovernmentPositionType @map("position_type")
 
-  /// 직위명 — positionDefinitionId가 있으면 정의에서 조회, 없으면(기타) 여기 값 사용
+  /// 구체 직함 — 정의(카탈로그)보다 구체적인 이름일 때만('주러시아 대사', '제7보병연대 소위').
+  /// 정의 이름과 같으면 비운다. 표시는 이 값 → 없으면 정의 이름.
   title String? @db.VarChar(100)
 
   /// 영문 직위명 (기타 직접 입력 시에만 사용)
@@ -402,8 +407,8 @@ model GovernmentPositionTenure {
   /// 소속 국가 (역사적 국가)
   historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
-  /// 직위 정의 ID (선택사항, 공식 직위를 참조하고 싶을 때만)
-  positionDefinitionId String? @map("position_definition_id") @db.Char(36)
+  /// 직위 정의 — 필수. 카탈로그에 맞는 정의가 없으면 그 유형의 일반 정의(isGeneric)
+  positionDefinitionId String @map("position_definition_id") @db.Char(36)
 
   /// 대수/회차 (예: 20 = 제20대, 100 = 제100대)
   /// NULL이면 대수 개념이 없는 직위 (예: 조선시대 관직)
@@ -484,7 +489,7 @@ model GovernmentPositionTenure {
   accountId String? @map("account_id") @db.Char(36)
 
   //--- 관계 필드
-  positionDefinition GovernmentPositionDefinition? @relation(fields: [positionDefinitionId], references: [id], onDelete: SetNull)
+  positionDefinition GovernmentPositionDefinition @relation(fields: [positionDefinitionId], references: [id], onDelete: Restrict)
   country            Country?                      @relation("TenureCountry", fields: [countryId], references: [id], onDelete: SetNull)
   historicalCountry  HistoricalCountry?            @relation("TenureHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
   person             Person                        @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)

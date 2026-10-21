@@ -384,6 +384,12 @@ const TENURE_ACHIEVEMENTS_SELECT = {
   },
 }
 
+/** 재임의 구체 직함 — 비었거나 정의 이름과 같으면 저장하지 않는다(정의 이름이 표시된다) */
+function specificTitle(title: string | null | undefined, definitionTitle: string): string | null {
+  const trimmed = typeof title === 'string' ? title.trim() : ''
+  return trimmed && trimmed !== definitionTitle ? trimmed : null
+}
+
 /**
  * 인물의 대표 왕호 — 가장 최근 재위(배열 첫 행)의 왕호, 없으면 레거시 비고의 '왕명:' 줄.
  * 왕호는 사람이 아니라 재위의 속성이라(제임스 6세/1세) 인물에 저장하지 않고 여기서 파생한다.
@@ -2895,25 +2901,38 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 국가원수/왕위 재임 기록 추가
    */
+  /**
+   * 재임이 가리킬 직위 정의 — 모든 재임은 정의를 갖는다.
+   * 정의 id가 오면 그것, 없으면 직위 종류(없으면 OTHER)의 일반 정의(isGeneric).
+   */
+  private async resolveDefinitionForWrite(
+    positionDefinitionId: string | null | undefined,
+    positionType: string | null | undefined,
+  ): Promise<{ id: string; positionType: GovernmentPositionType; title: string }> {
+    const select = { id: true, positionType: true, title: true } as const
+    const definition = positionDefinitionId
+      ? await this.prisma.governmentPositionDefinition.findUnique({ where: { id: positionDefinitionId }, select })
+      : await this.prisma.governmentPositionDefinition.findFirst({
+          where: { isGeneric: true, positionType: (positionType ?? 'OTHER') as GovernmentPositionType },
+          select,
+        })
+    if (!definition) {
+      throw new BadRequestException(
+        positionDefinitionId
+          ? `직위 정의를 찾을 수 없습니다: ${positionDefinitionId}`
+          : `직위 종류 ${positionType ?? 'OTHER'}의 일반 정의가 없습니다`,
+      )
+    }
+    return definition
+  }
+
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto, accountId?: string): Promise<any> {
     const countryFields = await this.resolveTenureCountryFields({
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
     })
-    // 직위 종류는 직위 정의가 정본 — 정의만 오면 정의의 positionType을 쓴다
-    const positionType =
-      dto.positionType ??
-      (dto.positionDefinitionId
-        ? (
-            await this.prisma.governmentPositionDefinition.findUnique({
-              where: { id: dto.positionDefinitionId },
-              select: { positionType: true },
-            })
-          )?.positionType
-        : undefined)
-    if (!positionType) {
-      throw new BadRequestException('직위 종류(positionType) 또는 직위 정의가 필요합니다')
-    }
+    // 직위 정의는 필수 — 정의 id가 오면 그것, 없으면 직위 종류의 일반 정의. 종류는 정의가 정본
+    const definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, dto.positionType)
     // 기간 — 구조화(startDateInfo)가 오면 정본(BC·고대 가능), 아니면 레거시 ISO + 정밀도.
     // 레거시는 예전처럼 DATETIME을 그대로 두고 구조화 칸·키는 파생한다(이행 1~3단계 공통 규칙)
     const startEdge = edgeFromInput(dto.startDateInfo, dto.startDate, dto.startDatePrecision)
@@ -2934,15 +2953,15 @@ export class PersonPrismaRepository implements IPersonRepository {
         regnalName: dto.regnalName ?? null,
         dynastyOrdinal: dto.dynastyOrdinal ?? null,
         personId: dto.personId,
-        positionType: positionType as any,
-        title: dto.title ?? undefined,
+        positionType: definition.positionType,
+        title: specificTitle(dto.title, definition.title),
         titleEn: dto.titleEn ?? undefined,
         showPositionInfo: dto.showPositionInfo !== false, // 기본값 true
         ...(countryFields.countryId != null && { countryId: countryFields.countryId }),
         ...(countryFields.historicalCountryId != null && {
           historicalCountryId: countryFields.historicalCountryId,
         }),
-        positionDefinitionId: dto.positionDefinitionId ?? undefined,
+        positionDefinitionId: definition.id,
         termNumber: dto.termNumber,
         subTermNumber: dto.subTermNumber,
         regnalNumber: dto.regnalNumber,
@@ -2992,8 +3011,27 @@ export class PersonPrismaRepository implements IPersonRepository {
   async updateGovernmentPositionTenure(id: string, dto: Partial<CreateGovernmentPositionTenureDto>): Promise<any> {
     const updateData: any = {}
 
-    if (dto.positionType) updateData.positionType = dto.positionType as any
-    if (dto.title) updateData.title = dto.title
+    // 직위 정의·종류·직함 — 정의가 정본. 정의를 비우면(null) 또는 종류만 바꾸면 그 종류의 일반 정의로.
+    // 직함은 정의 이름과 같으면 비운다(구체 직함만 저장)
+    if (dto.positionDefinitionId !== undefined || dto.positionType || dto.title !== undefined) {
+      const current = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id },
+        select: { title: true, positionDefinition: { select: { id: true, positionType: true, title: true } } },
+      })
+      if (!current) throw new NotFoundException('재임 기록을 찾을 수 없습니다')
+      let definition = current.positionDefinition
+      if (dto.positionDefinitionId) {
+        definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, undefined)
+      } else if (
+        dto.positionDefinitionId === null ||
+        (dto.positionType && dto.positionType !== definition.positionType)
+      ) {
+        definition = await this.resolveDefinitionForWrite(undefined, dto.positionType ?? definition.positionType)
+      }
+      updateData.positionDefinitionId = definition.id
+      updateData.positionType = definition.positionType
+      updateData.title = specificTitle(dto.title !== undefined ? dto.title : current.title, definition.title)
+    }
     if (dto.titleEn !== undefined) updateData.titleEn = dto.titleEn
     if (dto.showPositionInfo !== undefined) updateData.showPositionInfo = dto.showPositionInfo
     if (dto.countryId !== undefined || dto.historicalCountryId !== undefined) {
@@ -3003,17 +3041,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       })
       updateData.countryId = countryFields.countryId ?? null
       updateData.historicalCountryId = countryFields.historicalCountryId ?? null
-    }
-    if (dto.positionDefinitionId !== undefined) {
-      updateData.positionDefinitionId = dto.positionDefinitionId
-      // 직위 종류는 정의가 정본 — 정의만 바꾸고 종류를 안 보냈으면 정의를 따른다
-      if (!dto.positionType && dto.positionDefinitionId) {
-        const definition = await this.prisma.governmentPositionDefinition.findUnique({
-          where: { id: dto.positionDefinitionId },
-          select: { positionType: true },
-        })
-        if (definition) updateData.positionType = definition.positionType
-      }
     }
     if (dto.termNumber !== undefined) {
       updateData.termNumber = dto.termNumber
@@ -4179,12 +4206,13 @@ export class PersonPrismaRepository implements IPersonRepository {
     const [tenureUsage, freeTitles] = await Promise.all([
       this.prisma.governmentPositionTenure.groupBy({
         by: ['positionDefinitionId'],
-        where: { positionDefinitionId: { not: null }, OR: scopeOr },
+        where: { OR: scopeOr },
         _count: { _all: true },
       }),
+      // 이 국가에서 쓰인 구체 직함 — 일반 정의(카탈로그에 맞는 정의가 없던 재임)에 붙은 직함
       this.prisma.governmentPositionTenure.groupBy({
         by: ['title', 'positionType'],
-        where: { positionDefinitionId: null, title: { not: null }, OR: scopeOr },
+        where: { positionDefinition: { is: { isGeneric: true } }, title: { not: null }, OR: scopeOr },
         _count: { _all: true },
       }),
     ])
@@ -4192,8 +4220,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const usedCountById = new Map<string, number>()
     for (const row of tenureUsage) {
       const key = row.positionDefinitionId
-      if (!key) continue
-      usedCountById.set(key, (usedCountById.get(key) ?? 0) + row._count._all)
+      usedCountById.set(key, (usedCountById.get(key) ?? 0) + (row._count as { _all: number })._all)
     }
 
     return {
@@ -4206,7 +4233,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         .map((row) => ({
           title: row.title as string,
           positionType: row.positionType as string,
-          count: row._count._all,
+          count: (row._count as { _all: number })._all,
         }))
         .sort((left, right) => right.count - left.count || left.title.localeCompare(right.title)),
     }

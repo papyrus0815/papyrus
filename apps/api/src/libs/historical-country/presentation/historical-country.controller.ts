@@ -192,6 +192,7 @@ export class HistoricalCountryController {
       select: {
         id: true,
         regnalName: true,
+        title: true,
         ordinal: true,
         startEra: true,
         startYear: true,
@@ -222,7 +223,7 @@ export class HistoricalCountryController {
       kind: 'monarch',
       recordId: reign.id,
       regnalName: reign.regnalName ?? null,
-      title: reign.positionDefinition?.title ?? null,
+      title: reign.title ?? reign.positionDefinition?.title ?? null,
       basis,
       startEra: (reign.startEra as 'BC' | 'AD' | null) ?? (reign.startDate ? 'AD' : null),
       startYear: reign.startYear ?? reign.startDate?.getUTCFullYear() ?? null,
@@ -274,7 +275,8 @@ export class HistoricalCountryController {
         kind,
         recordId: tenure.id,
         regnalName: null,
-        title: tenure.positionDefinition?.title?.trim() || tenure.title?.trim() || null,
+        // 표시 직함: 구체 직함 → 없으면 정의 이름
+        title: tenure.title?.trim() || tenure.positionDefinition?.title?.trim() || null,
         basis,
         // 구조화 시작이 정본(이행 1단계) — 없을 때만 DATETIME
         startEra: (tenure as { startEra?: 'AD' | 'BC' | null }).startEra ?? 'AD',

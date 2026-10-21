@@ -9,8 +9,7 @@
  *   더해야 옮겨온 재위가 재임 목록에 한 번 더 나오지 않는다.
  * - `asOfficeHolding` — 응답 행 모양. 재위·재임이 같은 칸 이름을 쓰고 `isMonarchical`로만 갈린다.
  *
- * ⚠️ 관계 필터는 `is`로 쓴다. 직위 정의가 없는 재임(positionDefinitionId NULL)은 군주직이 아니다 —
- * `positionDefinition: { isMonarchical: false }`만 쓰면 NULL 행이 빠진다(Prisma 관계 필터 함정).
+ * 모든 재임은 직위 정의를 갖는다(필수, 맞는 카탈로그가 없으면 유형의 일반 정의) — 판정은 정의 하나로 닫힌다.
  */
 import type { Prisma } from '@prisma/client'
 
@@ -19,10 +18,7 @@ export const MONARCHICAL_TENURE = {
 } satisfies Prisma.GovernmentPositionTenureWhereInput
 
 export const NON_MONARCHICAL_TENURE = {
-  OR: [
-    { positionDefinitionId: null },
-    { positionDefinition: { is: { isMonarchical: false } } },
-  ],
+  positionDefinition: { is: { isMonarchical: false } },
 } satisfies Prisma.GovernmentPositionTenureWhereInput
 
 /** where에 군주직 조건을 덧붙인다 (재위 = 군주직 재임 행) */

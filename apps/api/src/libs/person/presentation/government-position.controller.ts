@@ -155,14 +155,9 @@ export class GovernmentPositionController {
         OR: [
           reignWhere({ OR: [{ startDate: { not: null } }, { startYear: { not: null } }] }),
           {
-            OR: [
-              {
-                positionDefinition: {
-                  is: { positionType: { in: [...HEAD_TYPES] }, isMonarchical: false },
-                },
-              },
-              { positionDefinitionId: null, positionType: { in: [...HEAD_TYPES] } },
-            ],
+            positionDefinition: {
+              is: { positionType: { in: [...HEAD_TYPES] }, isMonarchical: false },
+            },
           },
         ],
       },

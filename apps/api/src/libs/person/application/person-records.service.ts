@@ -237,7 +237,7 @@ export class PersonRecordsService {
 
     for (const row of tenures) {
       const baseTitle =
-        row.positionDefinition?.title ?? row.title ?? row.positionType
+        row.title ?? row.positionDefinition?.title ?? row.positionType
       records.push({
         kind: 'TENURE',
         sourceId: row.id,
@@ -258,7 +258,7 @@ export class PersonRecordsService {
     }
 
     for (const row of reigns) {
-      const positionTitle = row.positionDefinition?.title ?? '군주'
+      const positionTitle = row.title ?? row.positionDefinition?.title ?? '군주'
       records.push({
         kind: 'REIGN',
         sourceId: row.id,

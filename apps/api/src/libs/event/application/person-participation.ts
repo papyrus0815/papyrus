@@ -176,6 +176,7 @@ export async function resolveOfficesAtEvent(
         endDay: true,
         endDate: true,
         regnalName: true,
+        title: true,
         positionDefinition: { select: { title: true } },
         country: { select: { name: true } },
         historicalCountry: { select: { name: true } },
@@ -206,7 +207,7 @@ export async function resolveOfficesAtEvent(
     const end = partsOf(reign.endEra, reign.endYear, reign.endMonth, reign.endDay, reign.endDate)
     if (!overlaps(start, end)) continue
     const countryName = reign.historicalCountry?.name ?? reign.country?.name ?? ''
-    const office = reign.positionDefinition?.title ?? '군주'
+    const office = reign.title ?? reign.positionDefinition?.title ?? '군주'
     const name = reign.regnalName ? ` ${reign.regnalName}` : ''
     push(reign.personId, `${countryName} ${office}${name}`.trim())
   }
@@ -215,7 +216,7 @@ export async function resolveOfficesAtEvent(
     const end = partsOf(null, null, null, null, tenure.endDate)
     if (!overlaps(start, end)) continue
     const countryName = tenure.historicalCountry?.name ?? tenure.country?.name ?? ''
-    const office = tenure.positionDefinition?.title ?? tenure.title
+    const office = tenure.title ?? tenure.positionDefinition?.title
     if (!office) continue
     push(tenure.personId, `${countryName} ${office}`.trim())
   }
