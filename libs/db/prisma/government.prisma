@@ -388,7 +388,8 @@ model GovernmentPositionTenure {
   /// 재임자 (인물) ID
   personId String @map("person_id") @db.Char(36)
 
-  /// 직위 타입 (필수)
+  /// 직위 종류 — 직위 정의의 파생 칸(정본은 정의). DB 트리거가 정의에서만 채운다:
+  /// 직접 쓴 값은 무시되고, 정의의 종류가 바뀌면 연쇄 반영된다(20261021041520). 조회·필터 편의용.
   positionType GovernmentPositionType @map("position_type")
 
   /// 구체 직함 — 정의(카탈로그)보다 구체적인 이름일 때만('주러시아 대사', '제7보병연대 소위').
