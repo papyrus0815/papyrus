@@ -315,95 +315,6 @@ export type UpdateGovernmentPositionTenureDto = Partial<
 }
 
 /**
- * 재위 입력 → 재임 엔드포인트 본문. 재위는 군주직 재임 행이다(직위 보유 단일 모델 이행 3단계).
- * - 재위의 대수(regnalNumber) → 재임의 대수 칸(termNumber). 재임의 regnalNumber는 '이름 속 서수'라 보내지 않는다.
- * - 재위의 termNumber는 뜻이 없던 칸이라 버린다.
- * - positionType은 보내지 않는다 — 서버가 직위 정의에서 정한다.
- */
-function reignToTenurePayload(
-  dto: CreateSovereignReignDto | UpdateSovereignReignDto,
-): Record<string, unknown> {
-  const { regnalNumber, termNumber: _unusedReignTermNumber, ...rest } = dto
-  return regnalNumber === undefined ? rest : { ...rest, termNumber: regnalNumber }
-}
-
-/** 재임 응답 → 예전 재위 응답 모양 (대수 = ordinal) */
-function tenureToReignShape<T>(row: T): T {
-  if (!row || typeof row !== 'object') return row
-  const record = row as Record<string, unknown>
-  return { ...record, regnalNumber: record.ordinal ?? record.termNumber ?? null } as T
-}
-
-/** 군주·재위 입력 — 저장은 재임 엔드포인트(재위 = 군주직 재임 행) */
-export interface CreateSovereignReignDto {
-  personId: string
-  countryId?: string
-  historicalCountryId?: string
-  positionDefinitionId?: string
-  termNumber?: number
-  subTermNumber?: number
-  regnalNumber?: number
-  /** 왕조 내 서수 (예: 5 → "부르봉 왕조 5대") */
-  dynastyOrdinal?: number
-  /** 레거시 ISO 즉위일(AD only). 구조화 startDateInfo가 있으면 그쪽 우선. 둘 중 하나 필수. */
-  startDate?: string
-  /** 구조화 즉위일 — BC·고대·연단위(서버 DateInfoDto). 파츠 UI에서 변환해 전송. */
-  startDateInfo?: DateInfoInput | null
-  /** 즉위일 정밀도 — 구조화 입력 시 서버가 재파생하므로 보통 생략 */
-  startDatePrecision?: 'year' | 'month' | 'day'
-  endDate?: string
-  /** 구조화 퇴위일 — 시작측 대칭 */
-  endDateInfo?: DateInfoInput | null
-  /** 퇴위일 정밀도 — 시작측 대칭 */
-  endDatePrecision?: 'year' | 'month' | 'day'
-  /** 즉위·대관식 사건(Event 정본) 링크 */
-  accessionEventId?: string
-  appointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod']
-  /** 즉위 경위 상세 서사 — appointmentMethod의 상세 쌍(승계 경위·대관식 언급·선왕 관계 등) */
-  appointmentDetail?: string
-  endReason?: CreateGovernmentPositionTenureDto['endReason']
-  endReasonDetail?: string
-  notes?: string
-  /** 왕호/재위명 (예: 빅토리아, 루이 14세) */
-  regnalName?: string
-  showPositionInfo?: boolean
-}
-
-/** 재위 수정(PUT) 전용 DTO — 비운 값은 명시적 null(해제), 키 없음은 유지 (재임과 동일 계약) */
-export type UpdateSovereignReignDto = Partial<
-  Omit<
-    CreateSovereignReignDto,
-    | 'endDate'
-    | 'termNumber'
-    | 'subTermNumber'
-    | 'regnalNumber'
-    | 'dynastyOrdinal'
-    | 'appointmentMethod'
-    | 'appointmentDetail'
-    | 'endReason'
-    | 'endReasonDetail'
-    | 'notes'
-    | 'regnalName'
-    | 'startDatePrecision'
-    | 'accessionEventId'
-  >
-> & {
-  endDate?: string | null
-  startDatePrecision?: 'year' | 'month' | 'day' | null
-  accessionEventId?: string | null
-  termNumber?: number | null
-  subTermNumber?: number | null
-  regnalNumber?: number | null
-  dynastyOrdinal?: number | null
-  appointmentMethod?: CreateSovereignReignDto['appointmentMethod'] | null
-  appointmentDetail?: string | null
-  endReason?: CreateSovereignReignDto['endReason'] | null
-  endReasonDetail?: string | null
-  notes?: string | null
-  regnalName?: string | null
-}
-
-/**
  * 관직 정의의 적용 범위 — 행이 0개면 그 정의는 전역(어느 국가에서나 노출)이라는 뜻이다.
  * 별도 플래그가 없는 이유: 플래그를 켜고 범위를 못 붙이면 "어디에도 안 보이는 정의"가 생긴다.
  */
@@ -860,29 +771,7 @@ export const personCareerApi = {
     await apiClient.delete(`/government-positions/tenures/${id}`)
   },
 
-  /**
-   * 군주 재위 등록 — 재위는 군주직 재임 행이다(직위 보유 단일 모델). 재임 엔드포인트로 쓴다.
-   * 재위의 대수(regnalNumber)는 재임의 대수 칸(termNumber)으로 보낸다.
-   */
-  addSovereignReign: async (dto: CreateSovereignReignDto) => {
-    const response = await apiClient.post(
-      '/government-positions/tenures',
-      reignToTenurePayload(dto),
-    )
-    return tenureToReignShape(response.data)
-  },
 
-  /** 군주 재위 수정 — null 필드는 해제(클리어) 의미 */
-  updateSovereignReign: async (
-    id: string,
-    dto: UpdateSovereignReignDto,
-  ) => {
-    const response = await apiClient.put(
-      `/government-positions/tenures/${encodeURIComponent(id)}`,
-      reignToTenurePayload(dto),
-    )
-    return tenureToReignShape(response.data)
-  },
 
 
   /** 재임 1건 + 업적 조회 (수장 비교 읽기 팝오버 등 — 지연 로드용) */

@@ -15,9 +15,7 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiEdit2,
-  FiInfo,
   FiPlus,
-  FiSave,
   FiSearch,
   FiSettings,
   FiTrash2,
@@ -28,7 +26,6 @@ import {
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
 import {
   type CreateRegnalEraDto,
   type RegnalEraDto,
@@ -44,10 +41,7 @@ import {
 } from '@/shared/lib/tenure-person-utils'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
-import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
-import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import {
   ModalBody,
   ModalBox,
@@ -61,16 +55,10 @@ import {
   BackButton,
   DateFieldBtn,
   DateFieldsRow,
-  FieldControl,
   FieldHint,
-  FieldLabel,
-  FieldRow,
   FormCardWrapper,
-  FormRows,
   FormSectionInner,
-  Input,
   Input as RegisterInput,
-  Required,
   SubmitButton,
   TabButton,
   TabNavigation,
@@ -79,25 +67,12 @@ import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import {
   SelectModal,
-  type SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
-import {
-  DEFAULT_COLLAPSED_POSITION_GROUPS,
-  groupHeadsPositionOptions,
-} from '@/shared/ui/tenure-register-panel/group-position-options'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
 
 import { LineageTree } from './lineage-tree.widget'
-
-const HEADS_POSITION_TYPES = new Set([
-  'HEAD_OF_STATE',
-  'HEAD_OF_GOVERNMENT',
-  // 부통령은 정의상 DEPUTY_HEAD_OF_STATE — 이 집합에 없으면 재분류 후 피커에서 통째로 사라진다
-  'DEPUTY_HEAD_OF_STATE',
-  'REGENT',
-  'HEIR_APPARENT',
-  'ROYAL_NOBLE_TITLE',
-])
 
 /** 계보도 열 순서: 국가원수 좌측, 이어서 정부수반·섭정·왕족/귀족 */
 const POSITION_TYPE_ORDER: Record<string, number> = {
@@ -107,29 +82,6 @@ const POSITION_TYPE_ORDER: Record<string, number> = {
   HEIR_APPARENT: 3,
   ROYAL_NOBLE_TITLE: 4,
   OTHER: 5,
-}
-
-const OTHER_POSITION_VALUE = 'OTHER'
-
-/**
- * 레거시 notes 인코딩("왕명: X") 분리 — 저장 시 '왕명:' 줄만 갈아끼우고 다른 지면
- * (재위 등록 패널 '비고')에서 적은 나머지 서술을 보존한다.
- * tenure-register-panel의 splitLegacyRegnalNote와 동일 로직(파일 로컬이라 import 불가).
- */
-const LEGACY_REGNAL_NOTE_RE = /^[ \t]*왕명[ \t]*:[ \t]*\S.*$/m
-
-function splitLegacyRegnalNote(raw: string): {
-  regnalLine: string
-  rest: string
-} {
-  const matched = raw.match(LEGACY_REGNAL_NOTE_RE)
-  if (!matched || matched.index == null) return { regnalLine: '', rest: raw }
-  const rest = (
-    raw.slice(0, matched.index) + raw.slice(matched.index + matched[0].length)
-  )
-    .replace(/\n{2,}/g, '\n')
-    .replace(/^\n+|\n+$/g, '')
-  return { regnalLine: matched[0].trim(), rest }
 }
 
 function formatRegnalEraDatePart(
@@ -411,27 +363,20 @@ export function HeadsOfStateSection({
   const historicalCountryId = isHistorical ? country.id : undefined
 
   const [view, setView] = useState<'list' | 'register'>('list')
+  /**
+   * 수반 등록·기본 정보 수정 — 직위 보유 폼 하나(TenureRegisterPanel).
+   * 등록: 재위/재임 고르기 → 인물 고르기 → 폼(이 나라 미리 채움). 수정: 행의 인물·id로 바로 폼.
+   */
+  const [registerKindOpen, setRegisterKindOpen] = useState(false)
+  const [registerMonarchical, setRegisterMonarchical] = useState(false)
+  const [registerPersonPickerOpen, setRegisterPersonPickerOpen] = useState(false)
+  const [panelTarget, setPanelTarget] = useState<{ personId: string; tenureId?: string } | null>(null)
   /** 목록 내 표시 모드: 목록 | 계보도(대수 기준) */
   const [listViewMode, setListViewMode] = useState<'list' | 'lineage'>(
     'lineage',
   )
   /** 수정 모드: 목록에서 클릭한 재임 ID (설정되면 수정 폼 표시) */
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
-  const [personSelectModalOpen, setPersonSelectModalOpen] = useState(false)
-  const [positionTitleModalOpen, setPositionTitleModalOpen] = useState(false)
-  const [selectedPersonId, setSelectedPersonId] = useState('')
-  /** 직책: DB 관직 정의 ID. null이면 기타(직접 입력) */
-  const [selectedPositionDefinitionId, setSelectedPositionDefinitionId] =
-    useState<string | null>(null)
-  const [title, setTitle] = useState('')
-  const [titleEn, setTitleEn] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [regnalNumber, setRegnalNumber] = useState('') // 대수/재위번호 통합
-  const [regnalName, setRegnalName] = useState('')
-  /** 사건 페이지(역대 수반 토글)에 이 재임을 노출할지 여부 */
-  const [showOnEventsPage, setShowOnEventsPage] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   /** 계보도에서 표시할 직책(직책명). 직책별로 계보를 분리해 표시 */
   const [selectedLineagePositionLabel, setSelectedLineagePositionLabel] =
     useState<string | null>(null)
@@ -441,11 +386,6 @@ export function HeadsOfStateSection({
   >(null)
   /** 목록 검색어 */
   const [tenureSearchQuery, setTenureSearchQuery] = useState('')
-  /** 수반 등록 시 소속 국가: null = 현대 국가(현재), 값 있으면 하위 역사적 국가 ID */
-  const [selectedAffinityHistoricalId, setSelectedAffinityHistoricalId] =
-    useState<string | null>(null)
-  const [affinityCountryModalOpen, setAffinityCountryModalOpen] =
-    useState(false)
   /** 목록에서 "이 행정부 각료" 펼친 재임 ID */
   const [expandedCabinetTenureId, setExpandedCabinetTenureId] = useState<
     string | null
@@ -491,24 +431,10 @@ export function HeadsOfStateSection({
   const [regnalEraEndDay, setRegnalEraEndDay] = useState('')
   const [regnalEraChangeReason, setRegnalEraChangeReason] = useState('')
   const [regnalEraSubmitting, setRegnalEraSubmitting] = useState(false)
-  /** 수정 폼 탭: 기본정보 | 업적 | 연호 */
-  const [tenureFormTab, setTenureFormTab] = useState<
-    'basic' | 'achievement' | 'regnalEra'
-  >('basic')
-  /** 수반 등록 시 이 재임으로 행정부도 함께 만들기 (국가원수·정부수반만 표시) */
-  const [createCabinetWithTenure, setCreateCabinetWithTenure] = useState(false)
-  /** 국가원수(HEAD_OF_STATE)만 — 재위만 기록(군주 등록과 동일, 행정부 수반 후보 제외) */
-  const [sovereignReignOnlyForm, setSovereignReignOnlyForm] = useState(false)
-
-  /** 현대 국가일 때 하위 역사적 국가 목록 (이 현대 국가에 연결된 역사적 국가) */
-  const { data: subordinateHistoricalFromApi = [] } =
-    useHistoricalCountriesByModernCountry(countryId ?? '')
-  const subordinateHistorical =
-    (country as any).historicalCountries?.length > 0
-      ? (country as any).historicalCountries
-      : subordinateHistoricalFromApi
-  const hasSubordinateHistorical =
-    Array.isArray(subordinateHistorical) && subordinateHistorical.length > 0
+  /** 수정 화면 탭: 업적 | 연호 — 기본 정보는 직위 보유 폼(TenureRegisterPanel) */
+  const [tenureFormTab, setTenureFormTab] = useState<'achievement' | 'regnalEra'>(
+    'achievement',
+  )
 
   const { data: countryTenures = [], isLoading } = useQuery({
     queryKey: ['tenures-by-country', countryId, historicalCountryId],
@@ -600,7 +526,7 @@ export function HeadsOfStateSection({
   const { data: allPersonsForModal = [] } = useQuery({
     queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
-    enabled: personSelectModalOpen,
+    enabled: registerPersonPickerOpen,
   })
 
   /** 펼친 수반 재임의 하위 각료 목록 (이 행정부 각료) */
@@ -626,34 +552,15 @@ export function HeadsOfStateSection({
       'position-definitions',
       countryId,
       historicalCountryId,
-      // 수정 중인 정의는 적용 범위 하드컷을 관통시킨다 — 없으면 다른 정체 전용으로 스코프된
-      // 직책을 참조하는 기존 행을 열었을 때 select가 비고, 저장 시 positionType이 OTHER로 덮인다.
-      selectedPositionDefinitionId,
     ],
     queryFn: () =>
       personCareerApi.getPositionDefinitions({
         countryId,
         historicalCountryId,
-        includeId: selectedPositionDefinitionId,
       }),
     enabled: !!countryId || !!historicalCountryId,
     placeholderData: (previous) => previous,
   })
-
-  /**
-   * 직책 선택 옵션: DB 관직 정의(수반 관련 유형) + 기타.
-   * 작위(공작·백작 등)는 수반 집합에 들어 있지만 공직 임기가 아니므로 접히는 별도 그룹으로 내린다
-   * (재임 등록 패널과 같은 규약 — 제외가 아니라 강등이라 기존 작위 기록의 편집 경로는 남는다).
-   */
-  const positionTitleOptions: SelectOption<string>[] = React.useMemo(() => {
-    const defs = (positionDefinitions as any[]).filter((d) =>
-      HEADS_POSITION_TYPES.has(d.positionType),
-    )
-    return [
-      ...groupHeadsPositionOptions(defs, (def) => def.title ?? def.id),
-      { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' },
-    ]
-  }, [positionDefinitions])
 
   const refetch = () => {
     invalidateTenureQueries(queryClient)
@@ -662,12 +569,6 @@ export function HeadsOfStateSection({
       queryKey: ['position-definitions', countryId, historicalCountryId],
     })
   }
-
-  const selectedPositionDefinition = selectedPositionDefinitionId
-    ? (positionDefinitions as any[]).find(
-        (d) => d.id === selectedPositionDefinitionId,
-      )
-    : null
 
   const selectedCabinetModalHead = cabinetModalTenureId
     ? tenures.find((t: any) => t.id === cabinetModalTenureId)
@@ -740,17 +641,10 @@ export function HeadsOfStateSection({
     [],
   )
 
-  const isMonarchPosition =
-    selectedPositionDefinition?.positionType === 'HEAD_OF_STATE' ||
-    selectedPositionDefinitionId === null
-
   /** 목록에서 재임 클릭 시 수정 폼으로 전환 + 데이터 채우기 */
   const editingTenure = editingTenureId
     ? tenures.find((t: any) => t.id === editingTenureId)
     : null
-  const editingIsSovereignReign =
-    editingTenure != null &&
-    (editingTenure as any).isMonarchical === true
 
   const editingHostSupportsRegnalEras = React.useMemo(
     () => editingTenure != null && tenureRowSupportsRegnalEras(editingTenure),
@@ -759,7 +653,7 @@ export function HeadsOfStateSection({
 
   React.useEffect(() => {
     if (!editingTenureId || !editingTenure) return
-    setTenureFormTab('basic')
+    setTenureFormTab('achievement')
     setEditingAchievementId(null)
     setAchievementTitle('')
     setAchievementDescription('')
@@ -769,32 +663,6 @@ export function HeadsOfStateSection({
     const t = editingTenure as any
     setAchievementTenureId(editingTenureId)
     setAchievementPersonName(getPersonName(t?.person))
-    setSelectedPersonId(t.personId || '')
-    const defId = t.positionDefinitionId || t.position?.id
-    const defs = positionDefinitions as any[]
-    const matchedDef = defId && defs.find((d) => d.id === defId)
-    if (matchedDef) {
-      setSelectedPositionDefinitionId(matchedDef.id)
-      setTitle(matchedDef.title || '')
-      setTitleEn(matchedDef.titleEn || '')
-    } else {
-      setSelectedPositionDefinitionId(null)
-      setTitle(t.title || t.position?.title || '')
-      setTitleEn(t.titleEn || t.position?.titleEn || '')
-    }
-    setStartDate(t.startDate || '')
-    setEndDate(t.endDate || '')
-    setRegnalNumber(
-      t.regnalNumber != null
-        ? String(t.regnalNumber)
-        : t.termNumber != null
-          ? String(t.termNumber)
-          : '',
-    )
-    setRegnalName(getRegnalNameFromNotes(t.notes) || '')
-    setShowOnEventsPage(t.showPositionInfo !== false)
-    setSelectedAffinityHistoricalId(t.historicalCountryId ?? null)
-    setSovereignReignOnlyForm((t as any).isMonarchical === true)
     setEditingRegnalEraId(null)
     setRegnalEraName('')
     setRegnalEraNameEn('')
@@ -805,217 +673,7 @@ export function HeadsOfStateSection({
     setRegnalEraEndMonth('')
     setRegnalEraEndDay('')
     setRegnalEraChangeReason('')
-  }, [editingTenureId, editingTenure, positionDefinitions])
-
-  useEffect(() => {
-    if (sovereignReignOnlyForm) setCreateCabinetWithTenure(false)
-  }, [sovereignReignOnlyForm])
-
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const hasDefinition = !!selectedPositionDefinitionId
-    const hasTitle = title.trim() !== ''
-    if (!selectedPersonId || (!hasDefinition && !hasTitle) || !startDate) {
-      notify.error('인물, 직책명(또는 기타 직접 입력), 취임일을 입력해주세요.')
-      return
-    }
-    setIsSubmitting(true)
-    try {
-      const def = selectedPositionDefinition
-      const resolvedPositionType = def ? def.positionType : 'OTHER'
-      const editingRow = editingTenureId
-        ? (tenures.find((t: any) => t.id === editingTenureId) as any)
-        : null
-      const editAsSovereign = editingRow?.isMonarchical === true
-      const regnalNameTrimmed = regnalName.trim()
-      // 수정 시 기존 notes의 '왕명:' 줄만 갈아끼우고 나머지 서술은 보존
-      const { rest: preservedNoteRest } = splitLegacyRegnalNote(
-        typeof editingRow?.notes === 'string' ? editingRow.notes : '',
-      )
-      const composedNotes = [
-        regnalNameTrimmed ? `왕명: ${regnalNameTrimmed}` : null,
-        preservedNoteRest || null,
-      ]
-        .filter(Boolean)
-        .join('\n')
-      const notesValue = composedNotes || undefined
-      const useSovereignPath =
-        resolvedPositionType === 'HEAD_OF_STATE' &&
-        sovereignReignOnlyForm &&
-        !!def?.id
-
-      const sovereignPayload = {
-        personId: selectedPersonId,
-        positionDefinitionId: def?.id,
-        countryId: selectedAffinityHistoricalId
-          ? undefined
-          : (countryId ?? undefined),
-        historicalCountryId:
-          selectedAffinityHistoricalId ?? historicalCountryId ?? undefined,
-        startDate,
-        endDate: endDate || undefined,
-        termNumber:
-          regnalNumber.trim() === ''
-            ? undefined
-            : parseInt(regnalNumber, 10) || undefined,
-        regnalNumber:
-          regnalNumber.trim() === ''
-            ? undefined
-            : parseInt(regnalNumber, 10) || undefined,
-        notes: notesValue,
-        regnalName: regnalNameTrimmed || undefined,
-        showPositionInfo: showOnEventsPage,
-      }
-
-      // 정의 선택 시 직함은 2차 카테고리(Definition)에만 두고 Tenure에는 저장하지 않음
-      const tenurePayload = {
-        personId: selectedPersonId,
-        positionType: resolvedPositionType as any,
-        positionDefinitionId: def?.id || undefined,
-        title: def ? undefined : title.trim() || undefined,
-        titleEn: def ? undefined : titleEn.trim() || undefined,
-        countryId: selectedAffinityHistoricalId
-          ? undefined
-          : (countryId ?? undefined),
-        historicalCountryId:
-          selectedAffinityHistoricalId ?? historicalCountryId ?? undefined,
-        startDate,
-        endDate: endDate || undefined,
-        termNumber:
-          regnalNumber.trim() === ''
-            ? undefined
-            : parseInt(regnalNumber, 10) || undefined,
-        regnalNumber:
-          regnalNumber.trim() === ''
-            ? undefined
-            : parseInt(regnalNumber, 10) || undefined,
-        notes: notesValue,
-        showPositionInfo: showOnEventsPage,
-      }
-
-      if (editingTenureId) {
-        if (editAsSovereign) {
-          await personCareerApi.updateSovereignReign(editingTenureId, {
-            ...sovereignPayload,
-            // 수정 계약: null=해제 — 왕명·기존 서술이 모두 비면 notes를 비운다
-            notes: composedNotes || null,
-            regnalName: regnalNameTrimmed || null,
-          })
-          notify.success('재위 기록이 수정되었습니다.')
-        } else {
-          await personCareerApi.updateGovernmentPositionTenure(
-            editingTenureId,
-            {
-              ...tenurePayload,
-              notes: composedNotes || null,
-            },
-          )
-          notify.success('재임 기록이 수정되었습니다.')
-        }
-      } else if (useSovereignPath) {
-        await personCareerApi.addSovereignReign(sovereignPayload)
-        notify.success('재위 기록이 추가되었습니다.')
-        // 아래 refetch()가 invalidateTenureQueries로 전 surface 무효화
-      } else {
-        const created = (await personCareerApi.addGovernmentPositionTenure(
-          tenurePayload,
-        )) as {
-          id: string
-          countryId?: string | null
-          historicalCountryId?: string | null
-        }
-        const isHeadType =
-          resolvedPositionType === 'HEAD_OF_STATE' ||
-          resolvedPositionType === 'HEAD_OF_GOVERNMENT'
-        if (createCabinetWithTenure && isHeadType && created?.id) {
-          try {
-            await personCareerApi.createCabinet({ headTenureId: created.id })
-            notify.success('재임 기록과 행정부가 등록되었습니다.')
-          } catch (cabinetErr: any) {
-            notify.success('재임 기록이 추가되었습니다.')
-            notify.error(cabinetErr?.message ?? '행정부 생성에 실패했습니다.')
-          }
-        } else {
-          notify.success('재임 기록이 추가되었습니다.')
-        }
-      }
-      resetForm()
-      setEditingTenureId(null)
-      refetch()
-      setView('list')
-    } catch (err: any) {
-      notify.error(err?.message || '저장에 실패했습니다.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const resetForm = () => {
-    setEditingTenureId(null)
-    setSelectedPersonId('')
-    setSelectedPositionDefinitionId(null)
-    setSelectedAffinityHistoricalId(null)
-    setTitle('')
-    setTitleEn('')
-    setStartDate('')
-    setEndDate('')
-    setRegnalNumber('')
-    setRegnalName('')
-    setShowOnEventsPage(true)
-    setCreateCabinetWithTenure(false)
-    setSovereignReignOnlyForm(false)
-  }
-
-  const handleDeleteTenure = async () => {
-    if (!editingTenureId) return
-    const row = tenures.find((t: any) => t.id === editingTenureId) as any
-    const isSov = row?.isMonarchical === true
-    if (
-      !(await confirm({
-        title: '삭제 확인',
-        message: isSov
-          ? '이 재위 기록을 삭제하시겠습니까?'
-          : '이 재임 기록을 삭제하시겠습니까?',
-        danger: true,
-      }))
-    )
-      return
-    try {
-      // 재위·재임 같은 재임 행 — 엔드포인트 하나
-      await personCareerApi.deleteGovernmentPositionTenure(editingTenureId)
-      notify.success(isSov ? '재위 기록이 삭제되었습니다.' : '재임 기록이 삭제되었습니다.')
-      resetForm()
-      setView('list')
-      refetch()
-    } catch (err: any) {
-      notify.error(err?.message || '삭제에 실패했습니다.')
-    }
-  }
-
-  const handlePositionTitleSelect = (value: string) => {
-    setPositionTitleModalOpen(false)
-    if (value === OTHER_POSITION_VALUE) {
-      setSelectedPositionDefinitionId(null)
-      setTitle('')
-      setTitleEn('')
-    } else {
-      const def = (positionDefinitions as any[]).find((d) => d.id === value)
-      if (def) {
-        setSelectedPositionDefinitionId(def.id)
-        setTitle(def.title || '')
-        setTitleEn(def.titleEn || '')
-      }
-    }
-  }
-
-  const positionTitleLabel =
-    selectedPositionDefinitionId === null
-      ? title
-        ? `기타: ${title}`
-        : '기타 (직접 입력)'
-      : selectedPositionDefinition
-        ? selectedPositionDefinition.title
-        : '직책 선택'
+  }, [editingTenureId, editingTenure])
 
   const formatDate = (d: string) => {
     if (!d) return '—'
@@ -1340,11 +998,6 @@ export function HeadsOfStateSection({
       notify.error(err?.message ?? '삭제에 실패했습니다.')
     }
   }
-
-  const selectedPerson =
-    persons.find((p: any) => p.id === selectedPersonId) ??
-    allPersonsForModal.find((p: any) => p.id === selectedPersonId) ??
-    null
 
   /** 상단 직책 선택과 계보 직책 선택 통합: 사용자가 선택한 직책이 있으면 우선 사용 */
   const effectivePositionLabel =
@@ -2037,10 +1690,7 @@ export function HeadsOfStateSection({
                     )}
                     <AddTenureButton
                       type="button"
-                      onClick={() => {
-                        resetForm()
-                        setView('register')
-                      }}
+                      onClick={() => setRegisterKindOpen(true)}
                     >
                       <FiPlus size={20} />
                       수반 등록
@@ -2129,13 +1779,15 @@ export function HeadsOfStateSection({
                                 const name = getPersonName(
                                   t.person,
                                 ).toLowerCase()
-                                const regnal =
-                                  getRegnalNameFromNotes(
-                                    t.notes,
-                                  )?.toLowerCase() ?? ''
+                                // 왕호는 재위 기록의 regnalName, 없으면 레거시 비고의 '왕명:'
+                                const regnal = (
+                                  t.regnalName ||
+                                  getRegnalNameFromNotes(t.notes) ||
+                                  ''
+                                ).toLowerCase()
                                 const title = (
+                                  t.positionDefinition?.title ||
                                   t.title ||
-                                  t.position?.title ||
                                   ''
                                 ).toLowerCase()
                                 const startYear = t.startDate
@@ -2763,36 +2415,26 @@ export function HeadsOfStateSection({
               <FiArrowLeft size={18} />
               목록 보기
             </BackButton>
-            <HeadsFormTitle>
-              {editingTenureId ? '수반 수정' : '수반 등록'}
-            </HeadsFormTitle>
+            <HeadsFormTitle>수반 수정</HeadsFormTitle>
+            {/* 기본 정보(인물·직위·기간·왕호)는 직위 보유 폼 하나에서 — 여기는 업적·연호 */}
             <HeadsSubmitButton
-              type="submit"
-              form="heads-of-state-register-form"
-              disabled={
-                isSubmitting ||
-                !selectedPersonId ||
-                (!title.trim() && !selectedPositionDefinitionId) ||
-                !startDate
-              }
+              type="button"
+              disabled={!editingTenure}
+              onClick={() => {
+                const row = editingTenure as any
+                const personId = row?.personId ?? row?.person?.id
+                if (personId && editingTenureId) setPanelTarget({ personId, tenureId: editingTenureId })
+              }}
             >
-              <FiSave size={16} />
-              {isSubmitting ? '저장 중…' : '저장'}
+              <FiEdit2 size={16} />
+              기본 정보 수정
             </HeadsSubmitButton>
           </HeadsFormHeader>
-          <form id="heads-of-state-register-form" onSubmit={handleAddSubmit}>
+          <div>
             <FormSectionInner>
               {editingTenureId ? (
                 <>
                   <TabNavigation>
-                    <TabButton
-                      type="button"
-                      $active={tenureFormTab === 'basic'}
-                      onClick={() => setTenureFormTab('basic')}
-                    >
-                      <FiInfo size={16} />
-                      기본정보
-                    </TabButton>
                     <TabButton
                       type="button"
                       $active={tenureFormTab === 'achievement'}
@@ -2812,209 +2454,6 @@ export function HeadsOfStateSection({
                       </TabButton>
                     )}
                   </TabNavigation>
-                  {tenureFormTab === 'basic' && (
-                    <TabPanel>
-                      <SubSectionTitle>기본정보</SubSectionTitle>
-                      <SectionHint>
-                        재임 기간·직책·인물 등 기본 정보를 입력합니다.
-                      </SectionHint>
-                      <FormRows>
-                        {!isHistorical && hasSubordinateHistorical && (
-                          <FieldRow>
-                            <FieldLabel>소속 국가</FieldLabel>
-                            <FieldControl>
-                              <SelectTriggerButton
-                                type="button"
-                                onClick={() =>
-                                  setAffinityCountryModalOpen(true)
-                                }
-                                $hasValue
-                              >
-                                <span>
-                                  {selectedAffinityHistoricalId
-                                    ? ((subordinateHistorical as any[]).find(
-                                        (h: any) =>
-                                          h.id === selectedAffinityHistoricalId,
-                                      )?.name ?? '역사적 국가')
-                                    : `현대 국가 (현재: ${country.name})`}
-                                </span>
-                                <FiChevronDown size={20} />
-                              </SelectTriggerButton>
-                              <FieldHint>
-                                현대 국가 또는 연결된 하위 역사적 국가 중 하나를
-                                선택하세요.
-                              </FieldHint>
-                            </FieldControl>
-                          </FieldRow>
-                        )}
-                        <PersonSelectField
-                          label="인물"
-                          required
-                          hint="재임 기록에 연결할 인물을 선택하세요."
-                          value={selectedPersonId}
-                          selectedPerson={selectedPerson}
-                          persons={allPersonsForModal}
-                          isModalOpen={personSelectModalOpen}
-                          onModalOpenChange={setPersonSelectModalOpen}
-                          onSelect={setSelectedPersonId}
-                          placeholder="인물 선택"
-                        />
-                        <FieldRow>
-                          <FieldLabel>
-                            직책명 <Required aria-label="필수" />
-                          </FieldLabel>
-                          <FieldControl>
-                            <SelectTriggerButton
-                              type="button"
-                              onClick={() => setPositionTitleModalOpen(true)}
-                              $hasValue={
-                                selectedPositionDefinitionId != null ||
-                                title.trim() !== ''
-                              }
-                            >
-                              <span>{positionTitleLabel}</span>
-                              <FiChevronDown size={20} />
-                            </SelectTriggerButton>
-                          </FieldControl>
-                        </FieldRow>
-                        {isMonarchPosition && (
-                          <FieldRow>
-                            <FieldLabel>왕명</FieldLabel>
-                            <FieldControl>
-                              <Input
-                                value={regnalName}
-                                onChange={(e) => setRegnalName(e.target.value)}
-                                placeholder="예: 세종, 루이 14세, 강희"
-                              />
-                            </FieldControl>
-                          </FieldRow>
-                        )}
-                        {selectedPositionDefinitionId === null && (
-                          <>
-                            <FieldRow>
-                              <FieldLabel>직책명 (직접 입력)</FieldLabel>
-                              <FieldControl>
-                                <Input
-                                  value={title}
-                                  onChange={(e) => setTitle(e.target.value)}
-                                  placeholder="예: 최고지도자"
-                                />
-                              </FieldControl>
-                            </FieldRow>
-                            <FieldRow>
-                              <FieldLabel>직책명 (영문)</FieldLabel>
-                              <FieldControl>
-                                <Input
-                                  value={titleEn}
-                                  onChange={(e) => setTitleEn(e.target.value)}
-                                  placeholder="예: Supreme Leader"
-                                />
-                              </FieldControl>
-                            </FieldRow>
-                          </>
-                        )}
-                        <DateRangeField
-                          label="취임일 · 퇴임일"
-                          required
-                          startValue={startDate}
-                          endValue={endDate}
-                          onStartChange={setStartDate}
-                          onEndChange={setEndDate}
-                          startPlaceholder="취임일"
-                          endPlaceholder="퇴임일 (선택)"
-                        />
-                        <FieldRow>
-                          <FieldLabel>대수/재위번호</FieldLabel>
-                          <FieldControl>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={regnalNumber}
-                              onChange={(e) => setRegnalNumber(e.target.value)}
-                              placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
-                              title="역대 순번"
-                            />
-                            <FieldHint>
-                              역대 순번. 동아시아(제4대)·서양
-                              군주(14세)·교황(266대) 등 숫자만 입력
-                            </FieldHint>
-                          </FieldControl>
-                        </FieldRow>
-                        <FieldRow>
-                          <FieldLabel>사건 페이지 노출</FieldLabel>
-                          <FieldControl>
-                            <EventsPageCheckWrap>
-                              <CheckboxLabelRow>
-                                <input
-                                  type="checkbox"
-                                  id="heads-show-on-events"
-                                  checked={showOnEventsPage}
-                                  onChange={(e) =>
-                                    setShowOnEventsPage(e.target.checked)
-                                  }
-                                />
-                                <label htmlFor="heads-show-on-events">
-                                  연대표·사건 목록에 표시
-                                </label>
-                              </CheckboxLabelRow>
-                              <FieldHint>
-                                역대 수반 토글 시 목록에 포함됩니다.
-                              </FieldHint>
-                            </EventsPageCheckWrap>
-                          </FieldControl>
-                        </FieldRow>
-                        {selectedPositionDefinition?.positionType ===
-                          'HEAD_OF_STATE' && (
-                          <FieldRow>
-                            <FieldLabel>행정부 연동</FieldLabel>
-                            <FieldControl>
-                              <EventsPageCheckWrap>
-                                <CheckboxLabelRow>
-                                  <input
-                                    type="checkbox"
-                                    id="heads-sovereign-reign-only-edit"
-                                    checked={sovereignReignOnlyForm}
-                                    disabled={editingIsSovereignReign}
-                                    onChange={(e) =>
-                                      setSovereignReignOnlyForm(
-                                        e.target.checked,
-                                      )
-                                    }
-                                  />
-                                  <label htmlFor="heads-sovereign-reign-only-edit">
-                                    재위만 기록 (행정부 수반과 분리)
-                                  </label>
-                                </CheckboxLabelRow>
-                                <FieldHint>
-                                  군주 등록과 동일합니다. 체크 시 내각이 자동
-                                  생성되지 않고, 행정부 등록의 수반 후보에도
-                                  나오지 않습니다.
-                                </FieldHint>
-                              </EventsPageCheckWrap>
-                            </FieldControl>
-                          </FieldRow>
-                        )}
-                      </FormRows>
-                      <FormActions>
-                        {editingTenureId && (
-                          <DeleteButton
-                            type="button"
-                            onClick={handleDeleteTenure}
-                            disabled={isSubmitting}
-                          >
-                            삭제
-                          </DeleteButton>
-                        )}
-                        <ResetButton
-                          type="button"
-                          onClick={resetForm}
-                          disabled={isSubmitting}
-                        >
-                          초기화
-                        </ResetButton>
-                      </FormActions>
-                    </TabPanel>
-                  )}
                   {tenureFormTab === 'achievement' && editingTenureId && (
                     <TabPanel>
                       <AchievementSectionBlock>
@@ -3447,269 +2886,10 @@ export function HeadsOfStateSection({
                       </TabPanel>
                     )}
                 </>
-              ) : (
-                <>
-                  <SubSectionTitle>기본정보</SubSectionTitle>
-                  <SectionHint>
-                    재임 기간·직책·인물 등 기본 정보를 입력합니다.
-                  </SectionHint>
-                  <FormRows>
-                    {!isHistorical && hasSubordinateHistorical && (
-                      <FieldRow>
-                        <FieldLabel>소속 국가</FieldLabel>
-                        <FieldControl>
-                          <SelectTriggerButton
-                            type="button"
-                            onClick={() => setAffinityCountryModalOpen(true)}
-                            $hasValue
-                          >
-                            <span>
-                              {selectedAffinityHistoricalId
-                                ? ((subordinateHistorical as any[]).find(
-                                    (h: any) =>
-                                      h.id === selectedAffinityHistoricalId,
-                                  )?.name ?? '역사적 국가')
-                                : `현대 국가 (현재: ${country.name})`}
-                            </span>
-                            <FiChevronDown size={20} />
-                          </SelectTriggerButton>
-                          <FieldHint>
-                            현대 국가 또는 연결된 하위 역사적 국가 중 하나를
-                            선택하세요.
-                          </FieldHint>
-                        </FieldControl>
-                      </FieldRow>
-                    )}
-                    <PersonSelectField
-                      label="인물"
-                      required
-                      hint="재임 기록에 연결할 인물을 선택하세요."
-                      value={selectedPersonId}
-                      selectedPerson={selectedPerson}
-                      persons={allPersonsForModal}
-                      isModalOpen={personSelectModalOpen}
-                      onModalOpenChange={setPersonSelectModalOpen}
-                      onSelect={setSelectedPersonId}
-                      placeholder="인물 선택"
-                    />
-                    <FieldRow>
-                      <FieldLabel>
-                        직책명 <Required aria-label="필수" />
-                      </FieldLabel>
-                      <FieldControl>
-                        <SelectTriggerButton
-                          type="button"
-                          onClick={() => setPositionTitleModalOpen(true)}
-                          $hasValue={
-                            selectedPositionDefinitionId != null ||
-                            title.trim() !== ''
-                          }
-                        >
-                          <span>{positionTitleLabel}</span>
-                          <FiChevronDown size={20} />
-                        </SelectTriggerButton>
-                      </FieldControl>
-                    </FieldRow>
-                    {isMonarchPosition && (
-                      <FieldRow>
-                        <FieldLabel>왕명</FieldLabel>
-                        <FieldControl>
-                          <Input
-                            value={regnalName}
-                            onChange={(e) => setRegnalName(e.target.value)}
-                            placeholder="예: 세종, 루이 14세, 강희"
-                          />
-                        </FieldControl>
-                      </FieldRow>
-                    )}
-                    {selectedPositionDefinitionId === null && (
-                      <>
-                        <FieldRow>
-                          <FieldLabel>직책명 (직접 입력)</FieldLabel>
-                          <FieldControl>
-                            <Input
-                              value={title}
-                              onChange={(e) => setTitle(e.target.value)}
-                              placeholder="예: 최고지도자"
-                            />
-                          </FieldControl>
-                        </FieldRow>
-                        <FieldRow>
-                          <FieldLabel>직책명 (영문)</FieldLabel>
-                          <FieldControl>
-                            <Input
-                              value={titleEn}
-                              onChange={(e) => setTitleEn(e.target.value)}
-                              placeholder="예: Supreme Leader"
-                            />
-                          </FieldControl>
-                        </FieldRow>
-                      </>
-                    )}
-                    <DateRangeField
-                      label="취임일 · 퇴임일"
-                      required
-                      startValue={startDate}
-                      endValue={endDate}
-                      onStartChange={setStartDate}
-                      onEndChange={setEndDate}
-                      startPlaceholder="취임일"
-                      endPlaceholder="퇴임일 (선택)"
-                    />
-                    <FieldRow>
-                      <FieldLabel>대수/재위번호</FieldLabel>
-                      <FieldControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={regnalNumber}
-                          onChange={(e) => setRegnalNumber(e.target.value)}
-                          placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
-                          title="역대 순번"
-                        />
-                        <FieldHint>
-                          역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대)
-                          등 숫자만 입력
-                        </FieldHint>
-                      </FieldControl>
-                    </FieldRow>
-                    <FieldRow>
-                      <FieldLabel>사건 페이지 노출</FieldLabel>
-                      <FieldControl>
-                        <EventsPageCheckWrap>
-                          <CheckboxLabelRow>
-                            <input
-                              type="checkbox"
-                              id="heads-show-on-events-new"
-                              checked={showOnEventsPage}
-                              onChange={(e) =>
-                                setShowOnEventsPage(e.target.checked)
-                              }
-                            />
-                            <label htmlFor="heads-show-on-events-new">
-                              연대표·사건 목록에 표시
-                            </label>
-                          </CheckboxLabelRow>
-                          <FieldHint>
-                            역대 수반 토글 시 목록에 포함됩니다.
-                          </FieldHint>
-                        </EventsPageCheckWrap>
-                      </FieldControl>
-                    </FieldRow>
-                    {selectedPositionDefinition?.positionType ===
-                      'HEAD_OF_STATE' && (
-                      <FieldRow>
-                        <FieldLabel>행정부 연동</FieldLabel>
-                        <FieldControl>
-                          <EventsPageCheckWrap>
-                            <CheckboxLabelRow>
-                              <input
-                                type="checkbox"
-                                id="heads-sovereign-reign-only-new"
-                                checked={sovereignReignOnlyForm}
-                                onChange={(e) =>
-                                  setSovereignReignOnlyForm(e.target.checked)
-                                }
-                              />
-                              <label htmlFor="heads-sovereign-reign-only-new">
-                                재위만 기록 (행정부 수반과 분리)
-                              </label>
-                            </CheckboxLabelRow>
-                            <FieldHint>
-                              군주 등록과 동일합니다. 체크 시 내각이 자동
-                              생성되지 않고, 행정부 등록의 수반 후보에도 나오지
-                              않습니다.
-                            </FieldHint>
-                          </EventsPageCheckWrap>
-                        </FieldControl>
-                      </FieldRow>
-                    )}
-                    {(selectedPositionDefinition?.positionType ===
-                      'HEAD_OF_STATE' ||
-                      selectedPositionDefinition?.positionType ===
-                        'HEAD_OF_GOVERNMENT') && (
-                      <FieldRow>
-                        <FieldLabel>행정부</FieldLabel>
-                        <FieldControl>
-                          <EventsPageCheckWrap>
-                            <CheckboxLabelRow>
-                              <input
-                                type="checkbox"
-                                id="heads-create-cabinet-with-tenure"
-                                checked={createCabinetWithTenure}
-                                disabled={sovereignReignOnlyForm}
-                                onChange={(e) => {
-                                  const next = e.target.checked
-                                  setCreateCabinetWithTenure(next)
-                                  if (next) setSovereignReignOnlyForm(false)
-                                }}
-                              />
-                              <label htmlFor="heads-create-cabinet-with-tenure">
-                                이 재임으로 행정부도 만들기
-                              </label>
-                            </CheckboxLabelRow>
-                            <FieldHint>
-                              체크하면 행정조직 탭에서 이 수반의 내각에 각료를
-                              바로 추가할 수 있습니다. 재위만 기록과 함께 쓸 수
-                              없습니다.
-                            </FieldHint>
-                          </EventsPageCheckWrap>
-                        </FieldControl>
-                      </FieldRow>
-                    )}
-                  </FormRows>
-                  <FormActions>
-                    <ResetButton
-                      type="button"
-                      onClick={resetForm}
-                      disabled={isSubmitting}
-                    >
-                      초기화
-                    </ResetButton>
-                  </FormActions>
-                </>
-              )}
+              ) : null}
             </FormSectionInner>
-          </form>
+          </div>
         </FormCardWrapper>
-      )}
-
-      <SelectModal
-        isOpen={positionTitleModalOpen}
-        onClose={() => setPositionTitleModalOpen(false)}
-        title="직책명 선택"
-        options={positionTitleOptions}
-        collapsedGroups={DEFAULT_COLLAPSED_POSITION_GROUPS}
-        selectedValue={selectedPositionDefinitionId ?? OTHER_POSITION_VALUE}
-        onSelect={handlePositionTitleSelect}
-      />
-
-      {!isHistorical && hasSubordinateHistorical && (
-        <CountrySearchModal
-          isOpen={affinityCountryModalOpen}
-          onClose={() => setAffinityCountryModalOpen(false)}
-          title="소속 국가 선택"
-          placeholder="국가명으로 검색..."
-          modernCountries={[
-            {
-              id: '',
-              name: `현대 국가 (현재: ${country.name})`,
-              flagEmoji: (country as any).flagEmoji ?? null,
-            },
-          ]}
-          historicalCountries={(subordinateHistorical as any[]).map(
-            (h: any) => ({
-              id: h.id,
-              name: h.name,
-              flagEmoji: (h as any).flagEmoji ?? null,
-              enName: h.enName,
-              startYear: h.startYear,
-              endYear: h.endYear,
-            }),
-          )}
-          selectedCountryId={selectedAffinityHistoricalId ?? ''}
-          onSelect={({ id }) => setSelectedAffinityHistoricalId(id || null)}
-        />
       )}
 
       <DatePickerModal
@@ -3880,6 +3060,50 @@ export function HeadsOfStateSection({
             </ModalBody>
           </ModalBox>
         </ModalOverlay>
+      )}
+      <SelectModal
+        isOpen={registerKindOpen}
+        onClose={() => setRegisterKindOpen(false)}
+        title="어떤 기록을 등록할까요"
+        options={[
+          { value: 'reign', label: '군주 재위', description: '국왕·황제·천황·쇼군 등 군주의 재위' },
+          { value: 'tenure', label: '국가원수·정부수반 재임', description: '대통령·총리 등' },
+        ]}
+        onSelect={(value) => {
+          setRegisterKindOpen(false)
+          setRegisterMonarchical(value === 'reign')
+          setRegisterPersonPickerOpen(true)
+        }}
+      />
+      {registerPersonPickerOpen && (
+        <PersonSelectModal
+          persons={allPersonsForModal as any[]}
+          selectedPersonId=""
+          title={registerMonarchical ? '군주 등록 — 인물 선택' : '수반 등록 — 인물 선택'}
+          defaultCountryId={countryId}
+          onSelect={(personId) => {
+            setRegisterPersonPickerOpen(false)
+            setPanelTarget({ personId })
+          }}
+          onClose={() => setRegisterPersonPickerOpen(false)}
+        />
+      )}
+      {panelTarget && (
+        <TenureRegisterPanel
+          personId={panelTarget.personId}
+          tenureId={panelTarget.tenureId}
+          open={!!panelTarget}
+          defaultMonarchical={panelTarget.tenureId ? undefined : registerMonarchical}
+          initialCountryId={panelTarget.tenureId ? undefined : countryId}
+          initialHistoricalCountryId={panelTarget.tenureId ? undefined : (historicalCountryId ?? null)}
+          onClose={() => setPanelTarget(null)}
+          onSuccess={() => {
+            const deleted = !!panelTarget.tenureId
+            setPanelTarget(null)
+            refetch()
+            if (deleted && !tenures.some((t: any) => t.id === panelTarget.tenureId)) setView('list')
+          }}
+        />
       )}
     </SectionOuter>
   )
@@ -4728,14 +3952,6 @@ const AchievementSectionHint = styled.p`
   line-height: 1.5;
 `
 
-/** 기본정보·업적 탭 공용: 섹션 제목 아래 설명 */
-const SectionHint = styled.p`
-  margin: 0 0 20px;
-  font-size: 13px;
-  color: #64748b;
-  line-height: 1.5;
-`
-
 const AchievementCardList = styled.div`
   display: flex;
   flex-direction: column;
@@ -4968,32 +4184,6 @@ const HeadsFormTitle = styled.h2`
   }
 `
 
-const EventsPageCheckWrap = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const CheckboxLabelRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-
-  input[type='checkbox'] {
-    width: 18px;
-    height: 18px;
-    accent-color: #6366f1;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-  label {
-    font-size: 14px;
-    color: ${TEXT_PRIMARY};
-    cursor: pointer;
-    user-select: none;
-  }
-`
-
 const CheckboxRow = styled.div`
   display: flex;
   align-items: center;
@@ -5024,69 +4214,6 @@ const DatePairRow = styled.div`
   }
 `
 
-/* 행정조직 부처 등록 select 버튼과 동일 */
-const triggerButtonStyles = `
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  font-size: 14px;
-  color: inherit;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  cursor: pointer;
-  text-align: left;
-  outline: none;
-  transition: border-color 0.2s ease;
-
-  &:hover {
-    border-color: #d1d5db;
-  }
-  span {
-    flex: 1;
-  }
-  svg:last-of-type {
-    flex-shrink: 0;
-    opacity: 0.5;
-  }
-`
-
-const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
-  ${triggerButtonStyles}
-  color: ${({ $hasValue }) => ($hasValue ? '#111827' : '#9ca3af')};
-`
-
-const FormActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 28px;
-  padding-top: 24px;
-  border-top: 1px solid #f3f4f6;
-`
-
-const DeleteButton = styled.button`
-  padding: 10px 20px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  background: #ef4444;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-
-  &:hover:not(:disabled) {
-    background: #dc2626;
-  }
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-`
-
 const HeadsSubmitButton = styled.button`
   display: inline-flex;
   align-items: center;
@@ -5105,29 +4232,6 @@ const HeadsSubmitButton = styled.button`
   &:hover:not(:disabled) {
     background: #4f46e5;
     box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-const ResetButton = styled.button`
-  padding: 10px 20px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease;
-
-  &:hover:not(:disabled) {
-    border-color: #4f46e5;
-    color: #4f46e5;
   }
   &:disabled {
     opacity: 0.5;
