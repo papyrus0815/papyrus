@@ -35,6 +35,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 인물 명세 ───────────────────────────────────────────────────────────────
 const BULOW = {
@@ -466,7 +467,7 @@ export async function seedBulow(prisma: PrismaService): Promise<void> {
 
     const startDate = toDate(t.startYear, t.startMonth, t.startDay)
     const startDatePrecision = t.startDay ? 'day' : t.startMonth ? 'month' : 'year'
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: germanEmpire.id,
@@ -478,7 +479,7 @@ export async function seedBulow(prisma: PrismaService): Promise<void> {
     if (existing) {
       tenureId = existing.id
       if (!existing.positionDefinitionId && def?.id) {
-        await prisma.governmentPositionTenure.update({
+        await tenureRows(prisma).update({
           where: { id: existing.id },
           data: { positionDefinitionId: def.id },
         })
@@ -487,7 +488,7 @@ export async function seedBulow(prisma: PrismaService): Promise<void> {
         console.log(`  ⏭️  재임 스킵 (이미 존재): ${t.title} (${t.startYear})`)
       }
     } else {
-      const created = await prisma.governmentPositionTenure.create({
+      const created = await tenureRows(prisma).create({
         data: {
           personId,
           historicalCountryId: germanEmpire.id,

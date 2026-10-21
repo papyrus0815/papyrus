@@ -30,6 +30,7 @@ import {
 
 import { PrismaService } from '../prisma.service'
 import { ensureNickname } from './lib/person-nicknames'
+import { tenureRows } from './lib/tenure-rows'
 
 type AffiliationSpec = {
   type: 'CITIZENSHIP' | 'PRIMARY_RESIDENCE' | 'SERVED' | 'BIRTH_PLACE' | 'EXILE' | 'OTHER'
@@ -775,14 +776,14 @@ export async function seedBakumatsuFigures(prisma: PrismaService): Promise<void>
         ? new Date(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1)
         : undefined
       // 같은 인물 + 같은 직위명 + 같은 시작일 → 중복으로 본다
-      const tenureExists = await prisma.governmentPositionTenure.findFirst({
+      const tenureExists = await tenureRows(prisma).findFirst({
         where: { personId, title: t.title, startDate },
       })
       if (tenureExists) {
         console.log(`    ⏭️  재임 스킵: ${t.title} (${t.startYear})`)
         continue
       }
-      await prisma.governmentPositionTenure.create({
+      await tenureRows(prisma).create({
         data: {
           personId,
           countryId: tenureCountryId ?? null,

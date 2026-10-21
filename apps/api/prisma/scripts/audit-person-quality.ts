@@ -11,6 +11,7 @@ import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
 import { reignRows } from '../seeds/lib/reign-rows'
+import { tenureRows } from '../seeds/lib/tenure-rows'
 
 const SPECIAL_CHARS = ['①', '②', '③', '④', '⑤', '〈', '〉', '【', '】', '◆', '◇', '★']
 
@@ -84,7 +85,7 @@ async function main() {
       (await reignRows(prisma).findMany({ select: { personId: true } })).map((r) => r.personId),
     )
     const tenurePersonIds = new Set(
-      (await prisma.governmentPositionTenure.findMany({ select: { personId: true } })).map((r) => r.personId),
+      (await tenureRows(prisma).findMany({ select: { personId: true } })).map((r) => r.personId),
     )
     const monarchCandidates = await prisma.person.findMany({
       where: { dynastyId: { not: null } },

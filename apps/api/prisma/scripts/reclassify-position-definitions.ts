@@ -3,6 +3,7 @@ import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
 import { reignRows } from '../seeds/lib/reign-rows'
+import { tenureRows } from '../seeds/lib/tenure-rows'
 
 /**
  * 관직 정의 유형 재분류 (1회성, 멱등).
@@ -48,7 +49,7 @@ async function main() {
       }
 
       const [tenureCount, reignCount] = await Promise.all([
-        prisma.governmentPositionTenure.count({
+        tenureRows(prisma).count({
           where: { positionDefinitionId: definition.id },
         }),
         reignRows(prisma).count({ where: { positionDefinitionId: definition.id } }),

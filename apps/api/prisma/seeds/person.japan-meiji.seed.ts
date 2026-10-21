@@ -8,6 +8,7 @@ import {
 
 import { PrismaService } from '../prisma.service'
 import { reignRows } from './lib/reign-rows'
+import { tenureRows } from './lib/tenure-rows'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 
@@ -634,7 +635,7 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
       const startDate = new Date(t.startYear, t.startMonth - 1, t.startDay ?? 1)
       const endDate = t.endYear ? new Date(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1) : undefined
       // 같은 인물 + 같은 국가 + 같은 termNumber 면 중복으로 본다
-      const existingTenure = await prisma.governmentPositionTenure.findFirst({
+      const existingTenure = await tenureRows(prisma).findFirst({
         where: {
           personId,
           historicalCountryId: tenureCountryId,
@@ -647,7 +648,7 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
         tenureId = existingTenure.id
         console.log(`        ⏭️  재임: ${t.positionTitle} ${t.termNumber}대`)
       } else {
-        const createdTenure = await prisma.governmentPositionTenure.create({
+        const createdTenure = await tenureRows(prisma).create({
           data: {
             personId,
             historicalCountryId: tenureCountryId,

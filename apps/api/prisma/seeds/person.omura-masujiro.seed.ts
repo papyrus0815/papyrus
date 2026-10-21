@@ -25,6 +25,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 const HC_TOKUGAWA = '도쿠가와 막부'
 const HC_EMPIRE = '일본 제국'
@@ -575,7 +576,7 @@ export async function seedOmuraMasujiro(prisma: PrismaService): Promise<void> {
     const endDate = tenure.endYear
       ? new Date(tenure.endYear, (tenure.endMonth ?? 1) - 1, tenure.endDay ?? 1)
       : undefined
-    const tenureExists = await prisma.governmentPositionTenure.findFirst({
+    const tenureExists = await tenureRows(prisma).findFirst({
       where: { personId, title: tenure.definitionTitle, startDate },
       select: { id: true },
     })
@@ -583,7 +584,7 @@ export async function seedOmuraMasujiro(prisma: PrismaService): Promise<void> {
       console.log(`    ⏭️  재임 스킵: ${tenure.definitionTitle} (${tenure.startYear})`)
       continue
     }
-    await prisma.governmentPositionTenure.create({
+    await tenureRows(prisma).create({
       data: {
         personId,
         positionDefinitionId: definitionId,

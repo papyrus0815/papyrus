@@ -41,6 +41,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 인물 명세 ───────────────────────────────────────────────────────────────
 const WITTE = {
@@ -710,7 +711,7 @@ export async function seedWitte(prisma: PrismaService): Promise<void> {
     const startDate = toDate(t.startYear, t.startMonth, t.startDay)
     const startDatePrecision = t.startDay ? 'day' : t.startMonth ? 'month' : 'year'
     let tenureId: string
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: russianEmpire.id,
@@ -722,7 +723,7 @@ export async function seedWitte(prisma: PrismaService): Promise<void> {
       tenureId = existing.id
       console.log(`  ⏭️  재임 스킵 (이미 존재): ${t.title} (${t.startYear})`)
     } else {
-      const created = await prisma.governmentPositionTenure.create({
+      const created = await tenureRows(prisma).create({
         data: {
           personId,
           historicalCountryId: russianEmpire.id,

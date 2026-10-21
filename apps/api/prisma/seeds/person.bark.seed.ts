@@ -41,6 +41,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 인물 명세 ───────────────────────────────────────────────────────────────
 const BARK = {
@@ -386,7 +387,7 @@ export async function seedBark(prisma: PrismaService): Promise<void> {
   {
     const t = FINANCE_TENURE
     const startDate = toDate(t.startYear, t.startMonth, t.startDay)
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: russianEmpire.id,
@@ -397,7 +398,7 @@ export async function seedBark(prisma: PrismaService): Promise<void> {
     if (existing) {
       console.log(`  ⏭️  재임 스킵 (이미 존재): ${t.title} (${t.startYear})`)
     } else {
-      await prisma.governmentPositionTenure.create({
+      await tenureRows(prisma).create({
         data: {
           personId,
           historicalCountryId: russianEmpire.id,

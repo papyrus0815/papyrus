@@ -37,6 +37,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 인물 명세 (보강용 — 이미 채워진 필드는 아래서 건드리지 않는다) ────────────
 const AEHRENTHAL = {
@@ -342,7 +343,7 @@ export async function seedAehrenthal(prisma: PrismaService): Promise<void> {
 
     const startDate = toDate(t.startYear, t.startMonth, t.startDay)
     const startDatePrecision = t.startDay ? 'day' : t.startMonth ? 'month' : 'year'
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: austriaHungary.id,
@@ -352,7 +353,7 @@ export async function seedAehrenthal(prisma: PrismaService): Promise<void> {
     })
     if (existing) {
       if (!existing.positionDefinitionId && def?.id) {
-        await prisma.governmentPositionTenure.update({
+        await tenureRows(prisma).update({
           where: { id: existing.id },
           data: { positionDefinitionId: def.id },
         })
@@ -362,7 +363,7 @@ export async function seedAehrenthal(prisma: PrismaService): Promise<void> {
       }
       continue
     }
-    await prisma.governmentPositionTenure.create({
+    await tenureRows(prisma).create({
       data: {
         personId,
         historicalCountryId: austriaHungary.id,

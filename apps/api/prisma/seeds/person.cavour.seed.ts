@@ -35,6 +35,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 인물 명세 ───────────────────────────────────────────────────────────────
 const CAVOUR = {
@@ -352,7 +353,7 @@ export async function seedCavour(prisma: PrismaService): Promise<void> {
     const startDate = toDate(t.startYear, t.startMonth, t.startDay)
     // 한 인물이 같은 국가에서 여러 임기를 가질 수 있으므로 startDate로 식별
     let tenureId: string
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId,
@@ -364,7 +365,7 @@ export async function seedCavour(prisma: PrismaService): Promise<void> {
       tenureId = existing.id
       console.log(`  ⏭️  재임 스킵 (이미 존재): ${t.countryName} 총리 (${t.startYear})`)
     } else {
-      const created = await prisma.governmentPositionTenure.create({
+      const created = await tenureRows(prisma).create({
         data: {
           personId,
           historicalCountryId,

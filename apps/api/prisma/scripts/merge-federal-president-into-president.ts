@@ -12,6 +12,7 @@ import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
 import { reignRows } from '../seeds/lib/reign-rows'
+import { tenureRows } from '../seeds/lib/tenure-rows'
 
 async function main() {
   const envPath = path.resolve(process.cwd(), 'env.development')
@@ -37,7 +38,7 @@ async function main() {
 
     console.log(`  '대통령(연방)' id=${federal.id} → '대통령' id=${president.id} 통합`)
 
-    const tenureCount = await prisma.governmentPositionTenure.count({
+    const tenureCount = await tenureRows(prisma).count({
       where: { positionDefinitionId: federal.id },
     })
     const reignCount = await reignRows(prisma).count({

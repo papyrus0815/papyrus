@@ -26,6 +26,7 @@
  * 의존: 해당 인물 시드들이 먼저 실행돼 있어야 한다.
  */
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 /** 인물 조회 키 — originalName 부분일치(이 9명은 전부 고유) */
 const PERSON_KEYS: Record<string, string> = {
@@ -393,7 +394,7 @@ export async function seedWorldWarOneAppointmentDetails(prisma: PrismaService): 
       continue
     }
     const startDate = new Date(entry.start[0], entry.start[1] - 1, entry.start[2])
-    const tenure = await prisma.governmentPositionTenure.findFirst({
+    const tenure = await tenureRows(prisma).findFirst({
       where: { personId, startDate },
       select: { id: true, title: true, appointmentDetail: true },
     })
@@ -407,7 +408,7 @@ export async function seedWorldWarOneAppointmentDetails(prisma: PrismaService): 
       kept++
       continue
     }
-    await prisma.governmentPositionTenure.update({
+    await tenureRows(prisma).update({
       where: { id: tenure.id },
       data: { appointmentDetail: entry.detail },
     })

@@ -29,6 +29,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 
@@ -709,7 +710,7 @@ export async function seedJapanPostwar(prisma: PrismaService): Promise<void> {
       const startDate = new Date(t.startYear, t.startMonth - 1, t.startDay ?? 1)
       const endDate = t.endYear ? new Date(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1) : undefined
 
-      const existingTenure = await prisma.governmentPositionTenure.findFirst({
+      const existingTenure = await tenureRows(prisma).findFirst({
         where: {
           personId,
           historicalCountryId: tenureCountryId,
@@ -722,7 +723,7 @@ export async function seedJapanPostwar(prisma: PrismaService): Promise<void> {
         tenureId = existingTenure.id
         console.log(`        ⏭️  재임: ${t.positionTitle} ${t.termNumber}대`)
       } else {
-        const createdTenure = await prisma.governmentPositionTenure.create({
+        const createdTenure = await tenureRows(prisma).create({
           data: {
             personId,
             historicalCountryId: tenureCountryId,

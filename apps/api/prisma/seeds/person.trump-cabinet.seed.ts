@@ -34,6 +34,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 interface CabinetPersonSpec {
   key: string
@@ -549,7 +550,7 @@ export async function seedTrumpCabinet(prisma: PrismaService): Promise<void> {
     select: { id: true },
   })
 
-  let presidentTenure = await prisma.governmentPositionTenure.findFirst({
+  let presidentTenure = await tenureRows(prisma).findFirst({
     where: {
       personId: trumpPerson.id,
       countryId: usa.id,
@@ -558,7 +559,7 @@ export async function seedTrumpCabinet(prisma: PrismaService): Promise<void> {
     },
   })
   if (!presidentTenure) {
-    presidentTenure = await prisma.governmentPositionTenure.create({
+    presidentTenure = await tenureRows(prisma).create({
       data: {
         personId: trumpPerson.id,
         countryId: usa.id,
@@ -677,7 +678,7 @@ export async function seedTrumpCabinet(prisma: PrismaService): Promise<void> {
       continue
     }
 
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         countryId: usa.id,
@@ -693,7 +694,7 @@ export async function seedTrumpCabinet(prisma: PrismaService): Promise<void> {
       if (!existing.cabinetId) patch.cabinetId = cabinetId
       if (!existing.administrationDepartmentId && departmentId) patch.administrationDepartmentId = departmentId
       if (Object.keys(patch).length > 0) {
-        await prisma.governmentPositionTenure.update({ where: { id: existing.id }, data: patch })
+        await tenureRows(prisma).update({ where: { id: existing.id }, data: patch })
         console.log(`  🔧 재임 보강: ${t.defTitle} (${t.personKey}) — ${Object.keys(patch).join(', ')}`)
       } else {
         console.log(`  ⏭️  재임 스킵 (이미 존재): ${t.defTitle} (${t.personKey})`)
@@ -701,7 +702,7 @@ export async function seedTrumpCabinet(prisma: PrismaService): Promise<void> {
       continue
     }
 
-    await prisma.governmentPositionTenure.create({
+    await tenureRows(prisma).create({
       data: {
         personId,
         countryId: usa.id,

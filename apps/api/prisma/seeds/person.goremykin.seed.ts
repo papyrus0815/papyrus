@@ -39,6 +39,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 인물 명세 ───────────────────────────────────────────────────────────────
 const GOREMYKIN = {
@@ -402,7 +403,7 @@ export async function seedGoremykin(prisma: PrismaService): Promise<void> {
   {
     const t = INTERIOR_TENURE
     const startDate = toDate(t.startYear, t.startMonth, t.startDay)
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: russianEmpire.id,
@@ -413,7 +414,7 @@ export async function seedGoremykin(prisma: PrismaService): Promise<void> {
     if (existing) {
       console.log(`  ⏭️  재임 스킵 (이미 존재): ${t.title} (${t.startYear})`)
     } else {
-      await prisma.governmentPositionTenure.create({
+      await tenureRows(prisma).create({
         data: {
           personId,
           historicalCountryId: russianEmpire.id,
@@ -438,7 +439,7 @@ export async function seedGoremykin(prisma: PrismaService): Promise<void> {
     const startDate = toDate(t.startYear, t.startMonth, t.startDay)
     // 같은 인물·국가·타입 재임이 2건이므로 startDate로 식별 (카보우르 선례)
     let tenureId: string
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: russianEmpire.id,
@@ -450,7 +451,7 @@ export async function seedGoremykin(prisma: PrismaService): Promise<void> {
       tenureId = existing.id
       console.log(`  ⏭️  재임 스킵 (이미 존재): 대신회의 의장 ${t.subTermNumber}차 (${t.startYear})`)
     } else {
-      const created = await prisma.governmentPositionTenure.create({
+      const created = await tenureRows(prisma).create({
         data: {
           personId,
           historicalCountryId: russianEmpire.id,

@@ -44,6 +44,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 인물 보강 명세 ───────────────────────────────────────────────────────────
 const GALLIENI = {
@@ -565,13 +566,13 @@ export async function seedGallieni(prisma: PrismaService): Promise<void> {
   // ── 2) 재임 10건 ──────────────────────────────────────────────────────────
   for (const t of TENURES) {
     const startDate = toDate(t.startYear, t.startMonth, t.startDay)
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: { personId, historicalCountryId: france.id, positionType: t.positionType, startDate },
       select: { id: true, appointmentDetail: true },
     })
     if (existing) {
       if (!existing.appointmentDetail) {
-        await prisma.governmentPositionTenure.update({
+        await tenureRows(prisma).update({
           where: { id: existing.id },
           data: { appointmentDetail: t.appointmentDetail },
         })
@@ -581,7 +582,7 @@ export async function seedGallieni(prisma: PrismaService): Promise<void> {
       }
       continue
     }
-    await prisma.governmentPositionTenure.create({
+    await tenureRows(prisma).create({
       data: {
         personId,
         historicalCountryId: france.id,

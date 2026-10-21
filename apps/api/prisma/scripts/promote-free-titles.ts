@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from '../seeds/lib/tenure-rows'
 
 /**
  * 자유입력 직책 → 관직 정의 승격 (1회성, 멱등).
@@ -48,7 +49,7 @@ async function main() {
   const prisma = new PrismaService({ useAdapter: true })
 
   try {
-    const rows = await prisma.governmentPositionTenure.findMany({
+    const rows = await tenureRows(prisma).findMany({
       where: { positionDefinitionId: null },
       select: { id: true, title: true, positionType: true },
     })
@@ -86,7 +87,7 @@ async function main() {
           `${row.positionType !== definition.positionType ? ` · 유형 ${row.positionType}→${definition.positionType}` : ''}`,
       )
       if (apply) {
-        await prisma.governmentPositionTenure.update({
+        await tenureRows(prisma).update({
           where: { id: row.id },
           data: {
             positionDefinitionId: definition.id,

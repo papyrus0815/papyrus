@@ -38,6 +38,7 @@ import {
 
 import { PrismaService } from '../prisma.service'
 import { reignRows } from './lib/reign-rows'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 보나파르트 가문 ─────────────────────────────────────────────────────────
 const BONAPARTE_DYNASTY = {
@@ -543,7 +544,7 @@ export async function seedNapoleonIII(prisma: PrismaService): Promise<void> {
   })
   let presidentTenureId: string | null = null
   {
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId: napoleonId,
         historicalCountryId: secondRepublic.id,
@@ -555,7 +556,7 @@ export async function seedNapoleonIII(prisma: PrismaService): Promise<void> {
       presidentTenureId = existing.id
       console.log('  ⏭️  재임 스킵 (이미 존재): 제2공화국 초대 대통령')
     } else {
-      const created = await prisma.governmentPositionTenure.create({
+      const created = await tenureRows(prisma).create({
         data: {
           personId: napoleonId,
           historicalCountryId: secondRepublic.id,

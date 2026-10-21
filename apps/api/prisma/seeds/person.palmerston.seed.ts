@@ -43,6 +43,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { tenureRows } from './lib/tenure-rows'
 
 // ── 인물 명세 ───────────────────────────────────────────────────────────────
 const PALMERSTON = {
@@ -749,7 +750,7 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
   const cabinetIdByTerm = new Map<number, string>()
   for (const t of TENURES) {
     let tenureId: string
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: unitedKingdom.id,
@@ -761,7 +762,7 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
       tenureId = existing.id
       // 선재 행은 create를 타지 않으므로 비어 있는 취임 경위만 따로 백필한다
       if (!existing.appointmentDetail) {
-        await prisma.governmentPositionTenure.update({
+        await tenureRows(prisma).update({
           where: { id: existing.id },
           data: { appointmentDetail: t.appointmentDetail },
         })
@@ -770,7 +771,7 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
         console.log(`  ⏭️  재임 스킵 (이미 존재): 총리 ${t.subTermNumber}기`)
       }
     } else {
-      const created = await prisma.governmentPositionTenure.create({
+      const created = await tenureRows(prisma).create({
         data: {
           personId,
           historicalCountryId: unitedKingdom.id,
@@ -815,7 +816,7 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
       select: { id: true },
     })
     // 같은 직책 복수 재임(외무장관)은 subTermNumber로, 단임은 title로 구분
-    const existing = await prisma.governmentPositionTenure.findFirst({
+    const existing = await tenureRows(prisma).findFirst({
       where: {
         personId,
         historicalCountryId: unitedKingdom.id,
@@ -828,7 +829,7 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
     if (existing) {
       // 선재 행은 create를 타지 않으므로 비어 있는 취임 경위만 따로 백필한다
       if (!existing.appointmentDetail) {
-        await prisma.governmentPositionTenure.update({
+        await tenureRows(prisma).update({
           where: { id: existing.id },
           data: { appointmentDetail: o.appointmentDetail },
         })
@@ -838,7 +839,7 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
       }
       continue
     }
-    await prisma.governmentPositionTenure.create({
+    await tenureRows(prisma).create({
       data: {
         personId,
         historicalCountryId: unitedKingdom.id,
