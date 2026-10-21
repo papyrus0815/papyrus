@@ -24,6 +24,8 @@ export interface PositionDefinitionLike {
   name?: string | null
   positionType?: string | null
   isMonarchical?: boolean | null
+  /** 일반 정의(유형마다 하나) — 고르면 구체 직함을 직접 입력한다 */
+  isGeneric?: boolean | null
   rank?: number | null
   /** 이 국가 컨텍스트의 재임·재위에서 쓰인 횟수 (피커 전용 API가 붙여 준다) */
   usedCount?: number | null
@@ -36,6 +38,9 @@ export interface RecentFreeTitleLike {
   positionType: string
   count?: number
 }
+
+/** 일반 정의 그룹 — 카탈로그에 맞는 직책이 없을 때 종류를 고르고 직함을 직접 입력한다 */
+export const GENERIC_GROUP_LABEL = '직접 입력 (종류별)'
 
 /** 사용 실적 그룹 — 이 국가에서 실제로 쓰인 직책만 위로 올린다 */
 export const USED_GROUP_LABEL = '이 국가에서 쓰인 직책'
@@ -115,6 +120,7 @@ const GROUP_ORDER: RecordFamily[] = ['OFFICE', 'NOBLE_TITLE', 'SOVEREIGN']
 /** 기본으로 접어 둘 그룹 — SelectModal의 collapsedGroups로 그대로 넘긴다. */
 export const DEFAULT_COLLAPSED_POSITION_GROUPS = [
   RECORD_FAMILY_GROUP_LABELS.NOBLE_TITLE,
+  GENERIC_GROUP_LABEL,
 ]
 
 function definitionLabel(def: PositionDefinitionLike): string {
@@ -130,12 +136,25 @@ export function buildPositionOptions({
   otherValue,
   otherLabel = '기타 (직접 입력)',
 }: BuildPositionOptionsInput): PositionOptionItem[] {
-  const filtered = filterPositionDefinitions(definitions, { isMinisterFlow })
+  // 일반 정의는 카탈로그 그룹에 섞지 않고 맨 아래 '직접 입력 (종류별)'로 따로 둔다
+  const generic = definitions.filter((def) => def.isGeneric === true)
+  const filtered = filterPositionDefinitions(
+    definitions.filter((def) => def.isGeneric !== true),
+    { isMinisterFlow },
+  )
 
   // 수정 중인 정의 되살리기 — 필터·그룹 판정보다 먼저. 서버 목록에 이미 있으면 그대로 둔다.
+  // 일반 정의는 아래 일반 그룹이 맡는다 — 여기서 되살리면 같은 옵션이 두 번 나온다
   const visible = [...filtered]
-  if (pinnedDefinition?.id && !visible.some((def) => def.id === pinnedDefinition.id)) {
+  if (
+    pinnedDefinition?.id &&
+    pinnedDefinition.isGeneric !== true &&
+    !visible.some((def) => def.id === pinnedDefinition.id)
+  ) {
     visible.push(pinnedDefinition)
+  }
+  if (pinnedDefinition?.isGeneric === true && !generic.some((def) => def.id === pinnedDefinition.id)) {
+    generic.push(pinnedDefinition)
   }
 
   /**
@@ -209,6 +228,14 @@ export function buildPositionOptions({
     })
   }
 
+  // 일반 정의 — 종류를 고르고 직함을 직접 입력하는 길(군 지휘관·특별 직위·지방 장관…)
+  generic
+    .slice()
+    .sort((left, right) => definitionLabel(left).localeCompare(definitionLabel(right)))
+    .forEach((def) => {
+      options.push({ value: def.id, label: definitionLabel(def), group: GENERIC_GROUP_LABEL })
+    })
+
   // 이스케이프 해치는 항상 마지막, 그룹 없이 — 어떤 필터로도 닫히면 안 되는 길.
   if (otherValue !== undefined) {
     options.push({ value: otherValue, label: otherLabel })
@@ -269,7 +296,8 @@ export function buildReignPositionOptions({
   definitions: PositionDefinitionLike[]
   pinnedDefinition?: PositionDefinitionLike | null
 }): PositionOptionItem[] {
-  const visible = [...definitions]
+  // 일반 정의는 재위 피커에 두지 않는다('기타 (직접 입력)'이 그 길) — 수정 중인 정의만 살린다
+  const visible = definitions.filter((def) => def.isGeneric !== true)
   if (pinnedDefinition?.id && !visible.some((def) => def.id === pinnedDefinition.id)) {
     visible.push(pinnedDefinition)
   }

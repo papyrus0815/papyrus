@@ -501,9 +501,8 @@ export function useCountryDashboardStats(
         profileImageUrl:
           t.person?.profileImageUrl ?? t.person?.profile_image_url ?? null,
         positionTitle:
-          t.positionDefinition?.title ??
-          t.position?.title ??
           t.title ??
+          t.positionDefinition?.title ??
           '직책 미상',
         positionType:
           t.positionType ??

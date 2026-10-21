@@ -218,7 +218,7 @@ function cabinetHeadCategory(
   return categorizePosition({
     isMonarchical: head?.isMonarchical,
     positionType: head?.positionType ?? head?.positionDefinition?.positionType,
-    positionTitle: head?.positionDefinition?.title ?? head?.title,
+    positionTitle: head?.title ?? head?.positionDefinition?.title,
     appointmentMethod: head?.appointmentMethod,
   })
 }
@@ -691,7 +691,7 @@ export function CabinetsSection({
       const head = c.headTenure
       const personName = head?.person ? getPersonName(head.person) : ''
       const posTitle =
-        head?.positionDefinition?.title ?? head?.title ?? c.name ?? ''
+        head?.title ?? head?.positionDefinition?.title ?? c.name ?? ''
       const start = head?.startDate
         ? new Date(head.startDate).getFullYear().toString()
         : ''
@@ -898,7 +898,7 @@ export function CabinetsSection({
     const q = ministerSearchQuery.trim().toLowerCase()
     if (!q) return true
     const personName = getPersonName(t.person)
-    const title = t.positionDefinition?.title ?? t.title ?? ''
+    const title = t.title ?? t.positionDefinition?.title ?? ''
     const start = t.startDate ? formatDate(t.startDate) : ''
     const end = t.endDate ? formatDate(t.endDate) : '현재'
     return [personName, title, start, end].some((v) =>
@@ -3230,7 +3230,7 @@ export function CabinetsSection({
                         ? getPersonName(head.person)
                         : '이름 없음'
                       const posTitle =
-                        head?.positionDefinition?.title ?? head?.title ?? '—'
+                        head?.title ?? head?.positionDefinition?.title ?? '—'
                       const termNum = head?.termNumber ?? head?.regnalNumber
                       const startFull = head?.startDate
                         ? formatDate(head.startDate)

@@ -237,7 +237,7 @@ function OrganizationHeadsSection({ organizationId }: { organizationId: string }
         <HeadsList>
           {(heads as any[]).map((t: any) => (
             <li key={t.id}>
-              <strong>{t.positionDefinition?.title ?? t.title ?? '—'}</strong>
+              <strong>{t.title ?? t.positionDefinition?.title ?? '—'}</strong>
               {' · '}
               {getPersonDisplayName({
                 name: t.person?.name ?? '',

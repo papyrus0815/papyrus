@@ -458,7 +458,6 @@ export function HeadsOfStateSection({
     const titleOf = (t: any) =>
       (
         t?.positionDefinition?.title ??
-        t?.position?.title ??
         t?.title ??
         ''
       ).trim()
@@ -588,10 +587,9 @@ export function HeadsOfStateSection({
       const def =
         defId && defs.length ? defs.find((d: any) => d.id === defId) : null
       if (def?.title) return def.title.trim()
-      // 전역 수반(교황 등): API 응답에 positionDefinition 내장
+      // 전역 수반(교황 등): API 응답에 positionDefinition 내장 — 묶음 키라 정의(카탈로그) 우선
       const embeddedTitle = (
         t.positionDefinition?.title ??
-        t.position?.title ??
         t.title ??
         ''
       ).trim()
@@ -726,7 +724,7 @@ export function HeadsOfStateSection({
     : '—'
   const selectedCabinetHeadTitle = selectedCabinetModalHead
     ? (selectedCabinetModalHead as any).title ||
-      (selectedCabinetModalHead as any).position?.title ||
+      (selectedCabinetModalHead as any).positionDefinition?.title ||
       '수반'
     : '수반'
   const selectedCabinetHeadCountry = selectedCabinetModalHead
@@ -1396,7 +1394,7 @@ export function HeadsOfStateSection({
     return m
   }, [tenuresByPosition])
   const getPositionLabel = (t: any) =>
-    tenureIdToPositionLabel.get(t.id) ?? (t.title || t.position?.title) ?? '—'
+    tenureIdToPositionLabel.get(t.id) ?? (t.title || t.positionDefinition?.title) ?? '—'
 
   /** 계보도 카드용: 재임 인물의 가문명 (tenure.person.dynasty 우선, 없으면 persons 목록에서 조회) */
   const getDynastyNameForTenure = React.useCallback(
@@ -2045,7 +2043,7 @@ export function HeadsOfStateSection({
 
                                             const titleText =
                                               t.title ||
-                                              t.position?.title ||
+                                              t.positionDefinition?.title ||
                                               '—'
                                             const regnalFromNotes =
                                               getRegnalNameFromNotes(t.notes)
@@ -3028,7 +3026,7 @@ export function HeadsOfStateSection({
                     <CabinetMembersItem key={sub.id}>
                       <CabinetMembersItemTop>
                         <strong>
-                          {sub.positionDefinition?.title ?? sub.title ?? '—'}
+                          {sub.title ?? sub.positionDefinition?.title ?? '—'}
                         </strong>
                         <CabinetMembersStatus $active={!sub.endDate}>
                           {sub.endDate ? '퇴임' : '재임 중'}

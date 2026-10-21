@@ -115,7 +115,7 @@ export function RegisterCabinetModal({
     if (!q) return headTenuresForRegister
     return headTenuresForRegister.filter((t: any) => {
       const name = getPersonName(t.person)
-      const title = t.positionDefinition?.title ?? t.title ?? '수반'
+      const title = t.title ?? t.positionDefinition?.title ?? '수반'
       const startStr = formatDate(t.startDate)
       const endStr = t.endDate ? formatDate(t.endDate) : '현재'
       return `${name} ${title} ${startStr} ${endStr}`.toLowerCase().includes(q)
@@ -229,7 +229,7 @@ export function RegisterCabinetModal({
                               : `제${termNum}대 `
                             : ''
                         const positionTitle =
-                          t.positionDefinition?.title ?? t.title ?? '수반'
+                          t.title ?? t.positionDefinition?.title ?? '수반'
                         const roleLabel =
                           t.positionType === 'HEAD_OF_STATE'
                             ? '국가원수'

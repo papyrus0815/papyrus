@@ -1097,7 +1097,7 @@ export function LineageTree({
                   const cardTopPx = Math.round(visual?.topPx ?? posYear.topPx)
                   const cardWidthPx = Math.round(visual?.widthPx ?? CARD_WIDTH)
                   const isCompactCard = !!visual?.isShort
-                  const titleText = t.title || t.position?.title || '—'
+                  const titleText = t.title || t.positionDefinition?.title || '—'
                   const regnalName = getRegnalNameFromNotes(t.notes)
                   const personName = getPersonName(t.person)
                   const mainLabel = regnalName || personName
@@ -1246,7 +1246,7 @@ export function LineageTree({
                         variableCardHeight && tenureIdToCardHeight
                           ? (tenureIdToCardHeight.get(t.id) ?? CARD_HEIGHT)
                           : undefined
-                      const titleText = t.title || t.position?.title || '—'
+                      const titleText = t.title || t.positionDefinition?.title || '—'
                       const regnalName = getRegnalNameFromNotes(t.notes)
                       const personName = getPersonName(t.person)
                       const mainLabel = regnalName || personName

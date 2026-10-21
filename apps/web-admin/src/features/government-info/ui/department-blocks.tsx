@@ -126,7 +126,7 @@ export function DepartmentTenuresBlock({
               )}
             </span>
             <span style={{ color: palette.textMuted }}>
-              {tenure.positionDefinition?.title ?? tenure.title ?? ''}
+              {tenure.title ?? tenure.positionDefinition?.title ?? ''}
             </span>
             <span style={{ color: palette.textMuted, fontSize: 12 }}>
               {formatDate(tenure.startDate)}–{formatDate(tenure.endDate)}

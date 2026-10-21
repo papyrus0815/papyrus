@@ -34,7 +34,7 @@ export function CabinetMinisterCards({
       {ministers.map((tenure) => {
         const mThumb = tenure.person?.profileImageUrl ?? null
         const mName = getPersonName(tenure.person)
-        const mPos = tenure.positionDefinition?.title ?? tenure.title ?? '—'
+        const mPos = tenure.title ?? tenure.positionDefinition?.title ?? '—'
         const mStartFull = tenure.startDate ? formatDate(tenure.startDate) : '—'
         const mEndFull = tenure.endDate ? formatDate(tenure.endDate) : '현재'
         const mDuration = calcTenureDuration(tenure.startDate, tenure.endDate)

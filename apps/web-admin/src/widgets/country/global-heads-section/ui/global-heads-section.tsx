@@ -442,7 +442,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
                   <TenantCard key={t.id} type="button" onClick={() => handleEdit(t)}>
                     <CardPersonName>{personDisplay}</CardPersonName>
                     <CardBadge title="국가">국가: {countryLabel}</CardBadge>
-                    <CardBadge>{t.positionDefinition?.title ?? t.title ?? '전역'}</CardBadge>
+                    <CardBadge>{t.title ?? t.positionDefinition?.title ?? '전역'}</CardBadge>
                     <CardDate>{dateLabel}</CardDate>
                   <FiChevronRight size={18} style={{ flexShrink: 0, opacity: 0.4 }} />
                   </TenantCard>

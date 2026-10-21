@@ -558,7 +558,7 @@ export function TenureRegisterPanel({
     return (cabinets as any[]).map((c: any) => {
       const head = c.headTenure
       const personName = head?.person?.name ?? head?.person?.surname ?? '이름 없음'
-      const posTitle = head?.positionDefinition?.title ?? head?.title ?? c.name ?? '행정부'
+      const posTitle = head?.title ?? head?.positionDefinition?.title ?? c.name ?? '행정부'
       // 연도는 문자열에서 직접 추출(TZ 안전) — getFullYear()는 UTC 서쪽 타임존에서 1월 1일 시작 임기를 전년도로 보여준다
       const headStartYear = head?.startDate ? parseIsoDateParts(head.startDate)?.year ?? '' : ''
       const headEndYear = head?.endDate ? parseIsoDateParts(head.endDate)?.year ?? '' : '현재'
@@ -612,6 +612,8 @@ export function TenureRegisterPanel({
   const selectedDef = positionDefinitionId
     ? definitionPool.find((def) => def.id === positionDefinitionId)
     : null
+  /** 일반 정의(종류만)를 골랐나 — 구체 직함 입력이 필수다 */
+  const selectedIsGeneric = selectedDef?.isGeneric === true
   const positionType =
     selectedDef?.positionType ?? presetPositionType ?? editingTenure?.positionType ?? 'OTHER'
 
@@ -717,7 +719,14 @@ export function TenureRegisterPanel({
       setPresetPositionType(null)
     } else {
       const def = definitionPool.find((definition) => definition.id === value)
-      if (def) {
+      if (def?.isGeneric) {
+        // 일반 정의(군 지휘관·특별 직위…) — 종류만 정하고 구체 직함을 직접 입력한다
+        setPositionDefinitionId(def.id)
+        setTitle('')
+        setTitleEn('')
+        setPresetPositionType(null)
+        setManualEntryOpen(true)
+      } else if (def) {
         setPositionDefinitionId(def.id)
         setTitle(def.title ?? def.name ?? '')
         setTitleEn(def.titleEn ?? '')
@@ -865,7 +874,10 @@ export function TenureRegisterPanel({
     // 정의 없이 내장 직책(부통령 등) 타입으로 저장된 재임이면 preset 복원 → 라벨·선택 표시 유지
     const builtinForType = BUILTIN_POSITIONS.find((b) => b.positionType === t.positionType)
     setPresetPositionType(!hydratedDefId && builtinForType ? builtinForType.positionType : null)
-    setTitle(t.title ?? t.positionDefinition?.title ?? '')
+    // 구체 직함 — 일반 정의면 그 직함만(정의 이름 '군 지휘관'은 직함이 아니다), 카탈로그 정의면 없을 때 정의 이름
+    const hydratedGeneric = t.positionDefinition?.isGeneric === true
+    setTitle(t.title ?? (hydratedGeneric ? '' : t.positionDefinition?.title) ?? '')
+    setManualEntryOpen(hydratedGeneric)
     setTitleEn(t.titleEn ?? '')
     // 구조화(startEra/startYear/...) 우선, 없으면 DATETIME+정밀도 폴백 → 파츠 복원
     setStart(
@@ -916,15 +928,14 @@ export function TenureRegisterPanel({
     }
     const def = selectedDef as any
     /**
-     * 표시명은 정의 표기를 따른다.
-     * web-admin의 표시 지면 20여 곳이 `positionDefinition?.title ?? title` 순서라, 정의를 고른
-     * 재임에 다른 title을 저장하면 그 값은 **어디에도 표시되지 않는다**(저장만 되고 사라짐).
-     * 주재지가 붙는 직함('광저우 영국 영사')은 정의를 고르지 말고 '기타 (직접 입력)'으로 남긴다 —
-     * 피커의 '이 국가에서 쓰인 직책' 그룹이 그 표기를 다음 사람에게 그대로 되살려 준다.
+     * 직함 — 모든 재임은 정의(카탈로그)를 갖고, title은 정의보다 구체적인 이름일 때만 남는다
+     * ('대사' + '주러시아 대사', 일반 정의 '군 지휘관' + '제7보병연대 소위'). 표시는 title → 정의 이름.
+     * 정의 이름과 같은 값은 서버가 비운다.
      */
-    const titleValue = def?.title ?? title.trim()
+    const isGenericChosen = def?.isGeneric === true
+    const titleValue = isGenericChosen ? title.trim() : title.trim() || def?.title || ''
     if (!titleValue) {
-      notify.error('직책을 선택하거나 직접 입력해 주세요.')
+      notify.error(isGenericChosen ? '구체 직함을 입력해 주세요.' : '직책을 선택하거나 직접 입력해 주세요.')
       return
     }
     const startInfo = partialPartsToDateInfo(start)
@@ -953,7 +964,8 @@ export function TenureRegisterPanel({
     const combinedNotes = [legacyRegnalNote, notes.trim()].filter(Boolean).join('\n')
     const payload = {
       positionType: (positionType as any) ?? 'OTHER',
-      positionDefinitionId: positionDefinitionId || undefined,
+      // 정의를 비우면(직접 입력) 수정 때 null — 서버가 그 종류의 일반 정의로 옮긴다
+      positionDefinitionId: positionDefinitionId || emptyAs,
       title: titleValue,
       titleEn: titleEn.trim() || undefined,
       countryId: historicalCountryId ? undefined : (countryId || undefined),
@@ -1027,11 +1039,11 @@ export function TenureRegisterPanel({
     !personId ||
     // 역사국가 전용 행(countryId NULL) 수정 잠금 방지 — 둘 중 하나만 있으면 됨. 재위는 국가 선택
     (countryRequired && !countryId && !historicalCountryId) ||
-    (!(selectedDef as any)?.title && !title.trim()) ||
+    (selectedIsGeneric ? !title.trim() : !(selectedDef as any)?.title && !title.trim()) ||
     partialPartsToDateInfo(start) == null
 
   const hasCountry = !countryRequired || !!countryId || !!historicalCountryId
-  const hasPosition = !!(selectedDef as any)?.title || !!title.trim()
+  const hasPosition = selectedIsGeneric ? !!title.trim() : !!(selectedDef as any)?.title || !!title.trim()
   const hasStartDate = partialPartsToDateInfo(start) != null
   /** 재위 기간 역전 — 저장은 막지 않고 경고만(추존·복위) */
   const periodInverted = isPartialRangeInverted(start, end)
@@ -1264,9 +1276,19 @@ export function TenureRegisterPanel({
                       </FieldHint>
                     </ManualEntryGroup>
                   )}
-                  {/* 정의를 고르지 않은 경우(기타·내장 직책·정의 없음)에만 직접 입력 — 선택 트리거에 종속.
-                      정의를 고른 상태에서 다른 표기를 적어도 표시 지면(정의 우선)에 반영되지 않으므로
-                      입력칸 자체를 열지 않는다. 주재지가 붙는 직함은 '기타'로 남기는 게 정직하다. */}
+                  {/* 카탈로그 정의 + 구체 직함(선택) — '대사'를 고르고 '주러시아 대사'처럼 더 구체적으로.
+                      표시는 구체 직함 → 없으면 정의 이름이라, 여기 적은 값이 그대로 보인다. */}
+                  {selectedDef && !selectedIsGeneric && (
+                    <ManualEntryField style={{ marginTop: 8 }}>
+                      구체 직함 (선택)
+                      <Input
+                        value={title === (selectedDef.title ?? '') ? '' : title}
+                        onChange={(event) => setTitle(event.target.value || (selectedDef.title ?? ''))}
+                        placeholder={`예: 주러시아 ${selectedDef.title ?? ''}`}
+                      />
+                    </ManualEntryField>
+                  )}
+                  {/* 정의를 고르지 않은 경우(기타·내장 직책) 또는 일반 정의를 고른 경우 직접 입력 */}
                   {/* 목록을 고르기 전 첫 화면에선 입력칸 대신 여는 링크만 — 목록에 없을 때의 탈출구 */}
                   {!positionDefinitionId && !manualEntryOpen && !title.trim() && (
                     <FieldHint style={{ marginTop: 6 }}>
@@ -1276,15 +1298,15 @@ export function TenureRegisterPanel({
                       </LocalTitleLink>
                     </FieldHint>
                   )}
-                  {!positionDefinitionId && (manualEntryOpen || !!title.trim()) && (
+                  {(!positionDefinitionId || selectedIsGeneric) && (manualEntryOpen || !!title.trim() || selectedIsGeneric) && (
                     <ManualEntryGroup>
-                      <ManualEntryCaption>직접 입력</ManualEntryCaption>
+                      <ManualEntryCaption>{selectedIsGeneric ? '구체 직함' : '직접 입력'}</ManualEntryCaption>
                       <ManualEntryField>
                         한글 직책명
                         <Input
                           value={title}
                           onChange={(e) => setTitle(e.target.value)}
-                          placeholder="예: 광저우 영국 영사"
+                          placeholder={selectedIsGeneric ? '예: 제7보병연대 소위' : '예: 광저우 영국 영사'}
                         />
                       </ManualEntryField>
                       <ManualEntryField>

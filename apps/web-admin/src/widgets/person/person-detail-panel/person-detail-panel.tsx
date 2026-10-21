@@ -873,7 +873,7 @@ export function PersonDetailPanel({
         title:
           kind === 'reign' && data.regnalName
             ? data.regnalName
-            : data.positionDefinition?.title ?? data.title ?? '직책',
+            : data.title ?? data.positionDefinition?.title ?? '직책',
         startDate: data.startDate,
         endDate: data.endDate,
       })),
@@ -3461,14 +3461,14 @@ export function PersonDetailPanel({
         existingLifeEvents={lifeEvents}
         existingTenures={timelineTenures.map((t: any) => ({
           id: t.id,
-          title: t.positionDefinition?.title ?? t.title ?? null,
+          title: t.title ?? t.positionDefinition?.title ?? null,
           startDate: t.startDate ?? null,
           endDate: t.endDate ?? null,
         }))}
         existingReigns={timelineReigns.map((r: any) => ({
           id: r.id,
           title:
-            r.regnalName ?? r.positionDefinition?.title ?? r.title ?? null,
+            r.regnalName ?? r.title ?? r.positionDefinition?.title ?? null,
           startDate: r.startDate ?? null,
           endDate: r.endDate ?? null,
         }))}

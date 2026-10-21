@@ -317,7 +317,7 @@ export function useHistoricalCountryDashboard(
           regnalNameFromNotes(tenure.notes) ||
           personNameOf(tenure.person),
         profileImageUrl: tenure.person?.profileImageUrl ?? null,
-        title: tenure.positionDefinition?.title ?? tenure.title ?? null,
+        title: tenure.title ?? tenure.positionDefinition?.title ?? null,
         axis,
         ordinal: tenure.regnalNumber ?? tenure.termNumber ?? null,
         startYear,

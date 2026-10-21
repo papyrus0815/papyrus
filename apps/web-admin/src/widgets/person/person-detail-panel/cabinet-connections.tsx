@@ -110,7 +110,7 @@ export function CabinetConnections({
                   const isCurrent =
                     !!currentPersonId && t.person?.id === currentPersonId
                   const posTitle =
-                    t.positionDefinition?.title ?? t.title ?? '직책'
+                    t.title ?? t.positionDefinition?.title ?? '직책'
                   const name = t.person ? getPersonDisplayName(t.person) : '미상'
                   const period = periodLabel(t)
                   return (

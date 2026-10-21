@@ -116,7 +116,7 @@ export function TenureReignList({
     <UnifiedCardList role="list">
       {items.map(({ kind, data: record, ordinalNum, isReappointment }) => {
         const isReign = kind === 'reign'
-        const posTitle = record.positionDefinition?.title ?? record.title ?? '직책'
+        const posTitle = record.title ?? record.positionDefinition?.title ?? '직책'
         /**
          * 작위(공작·백작·자작 등)는 재임 행으로 저장돼 있지만 공직 임기가 아니다 —
          * '취임/퇴임'이 아니라 '승계/상실'이라 눈썹·동사만 바꾼다(서수·국가·기간은 그대로 성립).

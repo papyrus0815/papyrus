@@ -548,7 +548,7 @@ export function PersonLifeTimelineInfographic({
       const startsAt = parseDate(tenure.startDate)
       const endsAt = parseDate(tenure.endDate)
       const country = tenure.historicalCountry?.name ?? tenure.country?.name ?? null
-      const pos = tenure.positionDefinition?.title ?? tenure.title ?? '재임'
+      const pos = tenure.title ?? tenure.positionDefinition?.title ?? '재임'
       result.push({
         key: `tenure-${tenure.id}`,
         kind: 'tenure',

@@ -322,9 +322,8 @@ export function PersonDetailView({
                       <EventItem key={tenure.id}>
                         <EventHeader>
                           <EventName>
-                            {tenure.positionDefinition?.title ??
-                              tenure.position?.title ??
-                              tenure.title ??
+                            {tenure.title ??
+                              tenure.positionDefinition?.title ??
                               '직책'}
                           </EventName>
                           {tenure.startDate && (

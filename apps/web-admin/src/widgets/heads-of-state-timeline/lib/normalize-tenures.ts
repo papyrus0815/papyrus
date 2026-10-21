@@ -87,7 +87,7 @@ function isHeadPosition(t: RawTenureRecord): boolean {
 }
 
 function getPositionTitle(t: RawTenureRecord): string | null {
-  return t.positionDefinition?.title ?? t.title ?? null
+  return t.title ?? t.positionDefinition?.title ?? null
 }
 
 function getPersonName(t: RawTenureRecord): string | null {
