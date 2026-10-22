@@ -1,5 +1,5 @@
 /**
- * 카테고리 선택 모달
+ * 분야 선택 모달
  * FSD: widgets/event-list/ui
  */
 import React, { useRef } from 'react'
@@ -9,22 +9,16 @@ import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
 
-import { extractCategoryKey } from '@/features/event-create/lib'
+import { EVENT_DOMAINS, type EventDomainOption } from '@/entities/event/model/event-domain'
 import { FILTER_ALL } from '@/features/event-list/lib'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 
-import {
-  CATEGORY_ICON_MAP,
-  CATEGORY_LABEL,
-} from '@/pages/events/create/events.constants'
 import * as Modal from '@/pages/events/styles/modal.styles'
-import { CATEGORY_COLORS } from '@/pages/events/styles/theme'
 
 interface CategoryModalProps {
   isOpen: boolean
   onClose: () => void
-  dbCategories: EventCategoryDto[]
+  dbCategories: EventDomainOption[]
   selectedCategory: 'all' | string
   onSelect: (categoryId: 'all' | string) => void
 }
@@ -71,14 +65,14 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         >
           <Modal.ModalHeader>
             <Modal.ModalTitle id="category-modal-title">
-              카테고리 선택
+              분야 선택
             </Modal.ModalTitle>
-            <Modal.ModalClose onClick={onClose} aria-label="카테고리 선택 닫기">
+            <Modal.ModalClose onClick={onClose} aria-label="분야 선택 닫기">
               <FiX size={20} aria-hidden="true" />
             </Modal.ModalClose>
           </Modal.ModalHeader>
           <Modal.ModalContent>
-            {/* 전체 카테고리 */}
+            {/* 전체 분야 */}
             <Modal.ModalOption
               $active={selectedCategory === FILTER_ALL}
               aria-pressed={selectedCategory === FILTER_ALL}
@@ -91,18 +85,14 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 <FiX />
               </Modal.ModalOptionIcon>
               <div>
-                <strong>전체 카테고리</strong>
-                <span>모든 유형의 사건</span>
+                <strong>전체 분야</strong>
+                <span>모든 사건</span>
               </div>
             </Modal.ModalOption>
 
-            {/* DB 카테고리들 */}
+            {/* 분야 9개 — 아이콘·설명은 분야 레지스트리 */}
             {dbCategories.map((dbCat) => {
-              const categoryKey = extractCategoryKey(dbCat.id)
-              const Icon =
-                CATEGORY_ICON_MAP[dbCat.name] ||
-                CATEGORY_ICON_MAP[categoryKey] ||
-                (() => <FiX />)
+              const Icon = EVENT_DOMAINS[dbCat.id].Icon
 
               return (
                 <Modal.ModalOption
@@ -119,11 +109,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                   </Modal.ModalOptionIcon>
                   <div>
                     <strong>{dbCat.name}</strong>
-                    <span>
-                      {CATEGORY_COLORS[categoryKey]?.tagline ||
-                        dbCat.description ||
-                        ''}
-                    </span>
+                    <span>{EVENT_DOMAINS[dbCat.id].tagline}</span>
                   </div>
                 </Modal.ModalOption>
               )

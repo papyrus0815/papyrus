@@ -5,7 +5,7 @@
 import { useCallback, useState } from 'react'
 
 import type { EventCountryParticipant } from '@/entities/event/model'
-import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
+import type { EventDomainKey } from '@/entities/event/model/event-domain'
 import { compareByDate, isoDaySpan, isoPeriodEnd } from '@/shared/lib/iso-date'
 
 type DatePrecision = 'year' | 'month' | 'day'
@@ -23,7 +23,7 @@ export const BASIC_INFO_FORM_INITIAL = {
   endDate: '',
   endTime: '',
   endDatePrecision: 'day' as DatePrecision,
-  category: '' as HistoricalEventCategory | '',
+  category: '' as EventDomainKey | '',
   thumbnail: '',
   thumbnailFile: null as File | null,
   location: '',
@@ -56,7 +56,7 @@ export const useBasicInfoForm = () => {
   const [endDatePrecision, setEndDatePrecision] = useState<DatePrecision>(
     initial.endDatePrecision,
   )
-  const [category, setCategory] = useState<HistoricalEventCategory | ''>(
+  const [category, setCategory] = useState<EventDomainKey | ''>(
     initial.category,
   )
   const [thumbnail, setThumbnail] = useState<string>(initial.thumbnail)

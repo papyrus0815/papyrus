@@ -69,12 +69,6 @@ export interface EventDetailSection {
   subjectEventId?: string | null
 }
 
-export interface EventDetailCategory {
-  id: string
-  name: string
-  description?: string | null
-}
-
 /**
  * 참여국 한 줄. `role`/`roleDescription`은 서버가 늘 내려주던 값인데 이 타입이
  * 받지 않아 화면 직전에 버려지고 있었다(그래서 시드가 채운 역할 10종이 한 번도
@@ -179,8 +173,8 @@ export interface EventDetail {
   endDate?: string | null
   endDatePrecision?: string | null
   location?: string | null
-  categoryId?: string | null
-  category?: EventDetailCategory
+  /** 분야 — 무엇에 관한 일인가(entities/event/model/event-domain.ts) */
+  domain?: import('@/entities/event/model/event-domain').EventDomainKey
   background?: string | null
   aftermath?: string | null
   keywords?: string[] | null

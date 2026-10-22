@@ -37,7 +37,7 @@ import {
 } from './axis-predicates'
 
 export interface FilterOptionCounts {
-  /** categoryId → 건수 */
+  /** 분야 키 → 건수 */
   category: ReadonlyMap<string, number>
   /** 국가 id → 건수. 현대·역사 id가 한 맵에 있고 브리지 합류가 반영돼 있다. */
   country: ReadonlyMap<string, number>
@@ -128,8 +128,8 @@ export function buildFilterOptionCounts(
       if (passes) dropOneOut[axis] += 1
     }
 
-    if (passesWithout.category && event.categoryId) {
-      bump(category, event.categoryId)
+    if (passesWithout.category && event.domain) {
+      bump(category, event.domain)
     }
 
     if (passesWithout.country) {

@@ -753,7 +753,7 @@ export const EventsCatalogPage: React.FC = () => {
       !dbCategories.some((category) => category.id === selectedCategory)
     ) {
       setSelectedCategory(FILTER_ALL)
-      notify.warning('링크의 카테고리 필터를 찾을 수 없어 해제했습니다')
+      notify.warning('링크의 분야 필터를 찾을 수 없어 해제했습니다')
     }
   }, [
     reference.categories.isSuccess,
@@ -1835,7 +1835,6 @@ export const EventsCatalogPage: React.FC = () => {
       // 북마크는 브라우저 로컬이라 공유 링크의 `bookmarks=1`은 받는 쪽에서 항상
       // 0건이 된다 — 그 사실을 빈 상태에서 밝힌다(검토 URL-11).
       showBookmarkStorageHint={bookmarksOnly && bookmarks.size === 0}
-      dbCategories={dbCategories}
       isLoadingMore={isFetchingNextPage}
       loadMoreFailed={loadMoreFailed}
       onRetryLoadMore={fetchMoreEvents}
@@ -2004,7 +2003,6 @@ export const EventsCatalogPage: React.FC = () => {
       selectedNode={selectedNode}
       // 상위 사건 링크 — 평탄화 parentNodeId 기반, 없으면 행 미표시(위 memo 주석 참고).
       parentEventRef={selectedParentRef}
-      dbCategories={dbCategories}
       onSelectEvent={setSelectedEventId}
       onExpandEvent={handleExpandEvent}
       onShowSummary={openSummary}

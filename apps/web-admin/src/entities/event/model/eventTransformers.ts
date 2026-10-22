@@ -13,11 +13,8 @@
  */
 import { getAllEvents } from '@/shared/api/events'
 
-import type {
-  EventHierarchyNode,
-  HistoricalEvent,
-  HistoricalEventCategory,
-} from './types'
+import { isEventDomainKey } from './event-domain'
+import type { EventHierarchyNode, HistoricalEvent } from './types'
 
 type EventResponse = Awaited<ReturnType<typeof getAllEvents>>[0]
 type EventImageResponse = NonNullable<EventResponse['eventImages']>[number]
@@ -85,15 +82,6 @@ export const transformEventsFromApi = (
   }
 
   const convertToHistoricalEvent = (evt: EventResponse): HistoricalEvent => {
-    // category — DB의 한국어 이름을 1차 식별자로(렌더·필터 일관성 ↑).
-    // 안정 매칭 필요한 곳(칩 등)은 categoryId 사용.
-    //
-    // 미지정 사건에 가짜 id('cat-other-001')를 채우지 않는다 — DB의 '기타'
-    // 카테고리는 uuid를 가진 별개 행이라, 가짜 id는 '기타' 필터(정확 일치 비교)에
-    // 절대 걸리지 않으면서 화면에는 '기타'로 보여 분류된 것처럼 위장했다.
-    // 이제 id는 비우고 라벨만 '미분류'로 파생한다(2026-07-28 검토 DATA-13).
-    const evtCategoryId = evt.category?.id ?? ''
-    const evtCategoryName = evt.category?.name ?? '미분류'
     const primaryImage =
       evt.thumbnail ||
       evt.eventImages?.find((img: EventImageResponse) => img.isPrimary)
@@ -104,8 +92,7 @@ export const transformEventsFromApi = (
       id: evt.id,
       title: evt.title,
       type: evt.type ?? null,
-      category: evtCategoryName as HistoricalEventCategory,
-      categoryId: evtCategoryId,
+      domain: isEventDomainKey(evt.domain) ? evt.domain : 'OTHER',
       description: evt.description ?? '',
       startDate: evt.startDate ?? '',
       endDate: evt.endDate ?? undefined,

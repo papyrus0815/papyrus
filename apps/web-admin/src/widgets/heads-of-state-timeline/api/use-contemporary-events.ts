@@ -12,7 +12,8 @@ export interface ContemporaryEvent {
   title: string
   startDate: string
   endDate: string | null
-  categoryName: string | null
+  /** 분야 키(MILITARY…) — 라벨·색은 분야 레지스트리 */
+  domain: string | null
   startYear: number
   endYear: number
 }
@@ -73,7 +74,7 @@ export function useContemporaryEvents(rows: PinnedRow[], year: number | null) {
         title: e.title ?? '(제목 없음)',
         startDate: e.startDate,
         endDate: e.endDate ?? null,
-        categoryName: e?.category?.name ?? e?.eventCategory?.name ?? null,
+        domain: e?.domain ?? null,
         startYear,
         endYear,
       })

@@ -50,7 +50,8 @@ const OPTIMISTIC_SCALAR_FIELDS = [
    * 눌러도 refetch(최대 30s staleTime) 전까지 화면이 묶음 그대로라 클릭이 먹지 않은 것처럼 보인다.
    */
   'kind',
-  /** 사건 유형 — 바꾸면 추천 기능·빈 섹션 안내가 즉시 따라 바뀌어야 한다 */
+  /** 분야·세부 분야 — 바꾸면 색·추천 기능·빈 섹션 안내가 즉시 따라 바뀌어야 한다 */
+  'domain',
   'type',
 ] as const satisfies ReadonlyArray<keyof UpdateEventDto>
 
@@ -215,7 +216,7 @@ export const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
   'endDate',
   'startDatePrecision',
   'endDatePrecision',
-  'categoryId',
+  'domain',
   'location',
   'parentEventId',
   'childEventIds',
@@ -276,7 +277,6 @@ function friendlyErrorMessage(error: unknown): string {
  * 없으면 null(→ 캐시 미변경).
  *
  * - 스칼라: 그대로 덮어쓰기.
- * - categoryId: `['event-categories']` 캐시에서 이름을 찾아 `category`도 갱신.
  * - related 배열: prev의 derived 객체(이름 포함)를 id로 재사용하고, 신규 id는 모달이
  *   열릴 때 적재된 `all` 캐시에서 보강. 하나라도 못 찾으면 *그 필드만* 낙관 생략
  *   (placeholder 깜빡임 방지 — refetch가 채움).
@@ -296,28 +296,6 @@ export function buildOptimisticEvent(
       ;(next as unknown as Record<string, unknown>)[k] = p[k]
       changed = true
     }
-  }
-
-  if ('categoryId' in patch) {
-    const id = patch.categoryId ?? null
-    next.categoryId = id
-    if (!id) {
-      next.category = undefined
-    } else {
-      const cats =
-        qc.getQueryData<Array<{ id: string; name: string; description?: string | null }>>([
-          'event-categories',
-        ])
-      const found = cats?.find((c) => c.id === id)
-      // 캐시에 없으면 prev.category 유지(이름은 refetch로 보정).
-      if (found)
-        next.category = {
-          id: found.id,
-          name: found.name,
-          description: found.description ?? null,
-        }
-    }
-    changed = true
   }
 
   /**

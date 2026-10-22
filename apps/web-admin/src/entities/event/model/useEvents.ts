@@ -69,7 +69,7 @@ const buildQueryKey = (opts: UseEventsOptions) =>
       historicalCountryIds: [...(opts.historicalCountryIds ?? [])]
         .sort()
         .join(','),
-      categoryId: opts.categoryId ?? null,
+      domain: opts.domain ?? null,
       decade: opts.decade ?? null,
       century: opts.century ?? null,
       hasNoDescription: !!opts.hasNoDescription,
@@ -110,7 +110,7 @@ export const useEvents = (options: UseEventsOptions = {}) => {
         countryId: options.countryId ?? undefined,
         countryIds: options.countryIds,
         historicalCountryIds: options.historicalCountryIds,
-        categoryId: options.categoryId,
+        domain: options.domain,
         decade: options.decade,
         century: options.century,
         hasNoDescription: options.hasNoDescription,

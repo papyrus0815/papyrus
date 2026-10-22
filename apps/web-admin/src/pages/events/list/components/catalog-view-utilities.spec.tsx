@@ -139,7 +139,7 @@ describe('CatalogViewUtilities — 표시 설정 메뉴', () => {
 
   it('열 여섯을 switch로 펴고, 끄면 그 열을 토글 핸들러로 올린다', () => {
     openMenu()
-    for (const label of ['종료', '분류', '키워드', '기간', '관련국', '등록']) {
+    for (const label of ['종료', '분야', '키워드', '기간', '관련국', '등록']) {
       expect(screen.getByRole('switch', { name: label })).toBeChecked()
     }
     fireEvent.click(screen.getByRole('switch', { name: '키워드' }))
@@ -150,7 +150,7 @@ describe('CatalogViewUtilities — 표시 설정 메뉴', () => {
     // '전부 표시'는 하나라도 꺼져 있을 때만 — 항상 있으면 누를 일 없는 링크가 상주한다.
     openMenu({ hiddenColumns: ['kw', 'reg'] })
     expect(screen.getByRole('switch', { name: '키워드' })).not.toBeChecked()
-    expect(screen.getByRole('switch', { name: '분류' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: '분야' })).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: '전부 표시' }))
     expect(baseProps.onResetColumns).toHaveBeenCalled()
   })

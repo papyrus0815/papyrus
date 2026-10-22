@@ -65,8 +65,8 @@ export interface GetAllEventsParams {
   countryIds?: string[]
   /** 역사 국가 id 다중 — OR 결합 */
   historicalCountryIds?: string[]
-  /** EventCategory.id 정확 매칭 */
-  categoryId?: string
+  /** 분야 키(MILITARY…) 정확 매칭 */
+  domain?: string
   /** 십년대 시작 연도 (예: 1860) */
   decade?: number
   /** 세기 (예: 19) */
@@ -108,7 +108,7 @@ export async function getAllEvents(
         params.historicalCountryIds.join(','),
       )
     }
-    set('categoryId', params?.categoryId)
+    set('domain', params?.domain)
     set('decade', params?.decade)
     set('century', params?.century)
     if (params?.includeSubEvents) url.searchParams.set('includeSubEvents', 'true')
@@ -144,7 +144,7 @@ export async function getEventsCount(
     | 'countryId'
     | 'countryIds'
     | 'historicalCountryIds'
-    | 'categoryId'
+    | 'domain'
     | 'decade'
     | 'century'
     | 'createdSinceDays'
@@ -171,7 +171,7 @@ export async function getEventsCount(
         params.historicalCountryIds.join(','),
       )
     }
-    set('categoryId', params?.categoryId)
+    set('domain', params?.domain)
     set('decade', params?.decade)
     set('century', params?.century)
     set('createdSinceDays', params?.createdSinceDays)
@@ -443,7 +443,8 @@ export interface StatehoodEvent {
   startYear?: number | null
   startMonth?: number | null
   startDay?: number | null
-  categoryName?: string | null
+  /** 분야 키 */
+  domain?: string | null
   roleDescription?: string | null
 }
 

@@ -23,9 +23,8 @@ import {
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { formatDomainPath } from '@/entities/event/model/event-type-registry'
-import { getCategoryName } from '@/features/event-list/lib'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { titleWithoutOwnDate } from '@/shared/lib/title-date'
@@ -37,7 +36,6 @@ import {
 } from '../../../pages/events/styles/list.styles'
 import {
   BRAND,
-  CATEGORY_SOFT_COLORS,
   LIST_STEPS,
   MOTION,
   focusRingInset,
@@ -89,7 +87,6 @@ interface EventListItemProps {
    */
   isMatch?: boolean
   isActive: boolean
-  dbCategories: EventCategoryDto[]
   isBookmarked?: boolean
   /** 활성 검색어 — Title에서 매칭 부분 노란 배경 */
   searchQuery?: string
@@ -327,7 +324,6 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   parentNodeId = null,
   isMatch = true,
   isActive,
-  dbCategories,
   isBookmarked = false,
   searchQuery,
   groupYear,
@@ -573,7 +569,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     /* 잘린 막대는 이 해에 걸쳐 있다는 것만 말한다 — 실제 폭은 기간 문자열에만 있다. */
     return duration ? `${range} · ${duration}` : range
   })()
-  const categoryName = getCategoryName(event.category, dbCategories)
+  const domain = eventDomainDef(event.domain)
+  const categoryName = domain.label
   /**
    * 관련국 칩 개수 — **폭 예산**으로 정한다. 개수만으로는 안 된다.
    *
@@ -617,9 +614,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   const registeredAt = formatRegisteredAt(event.createdAt)
   // 카테고리 hue는 이제 **칩이 단독으로** 싣는다(행 도트 폐지, 배치 C1).
   // 원색 텍스트는 WCAG AA 미달이라 저채도 soft chip으로.
-  const soft =
-    CATEGORY_SOFT_COLORS[event.category as keyof typeof CATEGORY_SOFT_COLORS] ??
-    CATEGORY_SOFT_COLORS.other
+  const soft = domain.soft
 
   return (
     <Stop
@@ -706,7 +701,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         <CategoryLabel
           $text={soft.text}
           $textDark={soft.textDark}
-          title={formatDomainPath(categoryName, event.type)}
+          title={formatDomainPath(event.domain, event.type)}
         >
           {categoryName}
         </CategoryLabel>
@@ -2335,7 +2330,7 @@ const CategoryLabel = styled.span.attrs(() => ({ 'data-col': 'cat' }) as Record<
    *     AA(4.5:1) **위반**이었다. ↑↓ 내비가 선택과 포커스를 함께 옮기므로 상시 상태다.
    *     fill을 지우면 활성 행 위 최저 4.90:1, 라이트 기본 행은 5.47~10.36:1로 전 색 향상.
    *  ⚠️ 반투명을 유지하면서 ⑵를 해소하는 길은 없다. 색 면이 다시 필요하면
-   *     사전 합성한 **불투명** 헥스 10색을 CATEGORY_SOFT_COLORS에 추가해야 한다.
+   *     사전 합성한 **불투명** 헥스 10색을 분야 레지스트리(event-domain.ts) soft 톤에 추가해야 한다.
    *
    * ⚠️ width:100% / justify-content:center / height는 **유지**한다 — 칩의 좌·우 모서리가
    *    세로 스캔선이라는 계약은 fill이 아니라 트랙 폭이 만든다.

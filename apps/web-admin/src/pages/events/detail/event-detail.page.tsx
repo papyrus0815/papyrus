@@ -20,10 +20,8 @@ import { FiPlus } from 'react-icons/fi'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { eventTypeFeatures, participantKey, toParticipants } from '@/entities/event/model'
-import { resolveCategory,
-  ledgerAccent,
-} from '@/entities/event/ui/ledger-tokens'
+import { eventDomainDef, eventTypeFeatures, participantKey, toParticipants } from '@/entities/event/model'
+import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
 import { CommentSection } from '@/entities/comment'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
@@ -381,7 +379,7 @@ function EventDetailContent({
    * 형식(과 분야)이 정하는 기능 — 조약 체결 사건은 조약 섹션을 본문 바로 뒤로 올리고 비어 있어도 접지 않는다
    * (조약이 그 사건의 결과물이라 '채우기' 띠에 숨기면 핵심 동선이 사라진다).
    */
-  const features = eventTypeFeatures(event.type, event.category?.name)
+  const features = eventTypeFeatures(event.type, event.domain)
   const promoteTreaties = features.promoteTreaties
   /* 국가 성립·소멸 — 역할(건국·멸망)이 있으면 늘, 건국/멸망 사건이면 비어 있어도 보인다 */
   const showStatehood = features.expectStatehood || statehoodEntries(event).length > 0
@@ -666,7 +664,7 @@ function EventDetailContent({
 
   /* Page = 내부 스크롤 컨테이너 — 읽기 진행률 바가 이 ref로 scrollTop을 읽는다. */
   const scrollRef = useRef<HTMLDivElement>(null)
-  const accentColor = resolveCategory(event.category?.name).color
+  const accentColor = eventDomainDef(event.domain).color
 
   return (
     <InlineEditProvider imageCategory="events">

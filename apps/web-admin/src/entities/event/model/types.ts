@@ -129,11 +129,6 @@ export interface EventMapMarker {
   detail: string
 }
 
-/**
- * 카테고리 타입은 서버에서 동적으로 관리됩니다.
- * EventCategoryDto.name을 기반으로 합니다.
- */
-export type HistoricalEventCategory = string
 
 export interface EventVisualAsset {
   id: string
@@ -173,13 +168,11 @@ export interface HistoricalEvent {
   createdAt?: string | null
   /**
    * 세부 분야(선택) — 분야의 2단계이자 붙는 기록을 정한다(전투·조약·법령…). 없으면 null.
-   * 분야(category)와 독립된 축이라 어떤 분야와도 짝지을 수 있다. 정의는 entities/event/model/event-type-registry.ts.
+   * 분야(domain)와 독립된 축이라 어떤 분야와도 짝지을 수 있다. 정의는 entities/event/model/event-type-registry.ts.
    */
   type: import('@/entities/event/model/event-type-registry').EventTypeKey | null
-  /** 카테고리 한국어 이름 (DB EventCategory.name). resolveCategory의 입력 키. */
-  category: HistoricalEventCategory
-  /** 카테고리 안정 식별자 (DB EventCategory.id). 칩·필터 매칭의 신뢰원. */
-  categoryId?: string
+  /** 분야(필수) — 무엇에 관한 일인가. 라벨·색은 entities/event/model/event-domain.ts */
+  domain: import('@/entities/event/model/event-domain').EventDomainKey
   description: string
   startDate: string
   /** year | month | day. 표시 시 년만/년·월/년·월·일 구분 */

@@ -7,8 +7,8 @@ import styled from 'styled-components'
 import {
   RADIUS,
   ledgerAccent,
-  resolveCategory,
 } from '@/entities/event/ui/ledger-tokens'
+import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import {
@@ -278,7 +278,7 @@ export function RelatedBlock({ eventId, eventTitle }: RelatedBlockProps) {
           <NetStyles.ChildList>
             {group.items.map((relation) => {
               const other = relation.event
-              const category = resolveCategory(other.categoryName ?? undefined)
+              const category = eventDomainDef(other.domain)
               const dateLabel = counterpartDateLabel(other)
               const hasDescription = Boolean(relation.description?.trim())
               return (
@@ -290,8 +290,8 @@ export function RelatedBlock({ eventId, eventTitle }: RelatedBlockProps) {
                     onFocus={() => prefetchEvent(other.id)}
                   >
                     <NetStyles.ChildEyebrow $cat={category}>
-                      <span aria-hidden>{category.icon}</span>
-                      {dateLabel || (other.categoryName ?? '기타')}
+                      <span aria-hidden>{category.glyph}</span>
+                      {dateLabel || category.label}
                     </NetStyles.ChildEyebrow>
                     <NetStyles.ChildBody>
                       <NetStyles.ChildTitle>{other.title}</NetStyles.ChildTitle>

@@ -2,10 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import {
-  FiAlertCircle,
   FiCalendar,
   FiClock,
-  FiFileText,
   FiImage,
   FiPlus,
   FiX,
@@ -17,14 +15,10 @@ import {
   type EventCountryParticipant,
   participantKey,
 } from '@/entities/event/model'
-import { extractCategoryKey } from '@/features/event-create/lib'
 import * as S from '@/pages/events/create/event-create.styles'
-import { CATEGORY_ICON_MAP } from '@/pages/events/create/events.constants'
-import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
-import { CATEGORY_SOFT_COLORS } from '@/pages/events/styles/theme'
+import { EVENT_DOMAIN_ORDER, EVENT_DOMAINS, type EventDomainKey } from '@/entities/event/model/event-domain'
 import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import type { CountryResponseDto } from '@/shared/api/countries'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { uploadImage } from '@/shared/api/upload'
 import {
@@ -106,8 +100,9 @@ interface BasicInfoSectionProps {
   setStartDatePrecision?: (value: DatePickerPrecision) => void
   endDatePrecision?: DatePickerPrecision
   setEndDatePrecision?: (value: DatePickerPrecision) => void
-  category: HistoricalEventCategory | ''
-  setCategory: (value: HistoricalEventCategory | '') => void
+  /** 분야 키 — 빈 문자열이면 아직 안 고름(필수라 제출 때 오류) */
+  category: EventDomainKey | ''
+  setCategory: (value: EventDomainKey | '') => void
   thumbnail: string
   setThumbnail: (value: string) => void
   setThumbnailFile: (file: File | null) => void
@@ -115,9 +110,6 @@ interface BasicInfoSectionProps {
   /** 키워드 (동일 사건 매핑용, 선택) */
   keywords?: string[]
   setKeywords?: (value: string[]) => void
-
-  // DB 카테고리
-  dbCategories: EventCategoryDto[]
 
   /**
    * 참여국 (선택) — 현대·역사를 한 배열에. 등록 시점에 역할과 한 줄 서술까지
@@ -200,7 +192,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   setThumbnailFile,
   keywords = [],
   setKeywords = () => {},
-  dbCategories,
   relatedCountries = [],
   setRelatedCountries = () => {},
   availableCountries = [],
@@ -408,68 +399,38 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             분야 <S.Required>*</S.Required>
           </S.FormLabel>
           <S.FormField>
-            {dbCategories.length > 0 ? (
-              <S.CategoryGrid role="group" aria-labelledby="event-form-category-label">
-                {dbCategories.map((dbCat) => {
-                  const categoryId = dbCat.id
-                  const categoryName = dbCat.name
-                  const categoryKey = extractCategoryKey(categoryId)
-                  const Icon = CATEGORY_ICON_MAP[categoryName] || FiFileText
-                  const isSelected = category === categoryId
-                  /* 목록과 **같은 팔레트** — DB 이름(정치·전쟁/군사…)이 곧 키다. 예전 키 추출
-                     (extractCategoryKey)은 'cat-xxx-n' id를 전제해 UUID에서 전부 회색이었다. */
-                  const tone =
-                    CATEGORY_SOFT_COLORS[
-                      categoryName as keyof typeof CATEGORY_SOFT_COLORS
-                    ] ?? CATEGORY_SOFT_COLORS.other
-
-                  return (
-                    <S.CategoryCard
-                      key={dbCat.id}
-                      type="button"
-                      aria-pressed={isSelected}
-                      style={
-                        {
-                          '--cat-rgb': tone.rgb,
-                          '--cat-text': isDark ? tone.textDark : tone.text,
-                        } as React.CSSProperties
-                      }
-                      $selected={isSelected}
-                      $category={categoryKey}
-                      onClick={() => {
-                        playClickSound()
-                        setCategory(isSelected ? '' : categoryId)
-                      }}
-                    >
-                      <S.CategoryIcon
-                        $category={categoryKey}
-                        $selected={isSelected}
-                      >
-                        <Icon size={13} />
-                      </S.CategoryIcon>
-                      <S.CategoryLabel>{categoryName}</S.CategoryLabel>
-                    </S.CategoryCard>
-                  )
-                })}
-              </S.CategoryGrid>
-            ) : (
-              <S.EmptyState>
-                <FiAlertCircle
-                  size={32}
-                  color={isDark ? '#52525b' : '#cbd5e1'}
-                />
-                <p>카테고리를 불러올 수 없습니다.</p>
-                <p
-                  style={{
-                    fontSize: '12px',
-                    color: isDark ? '#71717a' : '#94a3b8',
-                    marginTop: '4px',
-                  }}
-                >
-                  서버와의 연결을 확인해주세요.
-                </p>
-              </S.EmptyState>
-            )}
+            <S.CategoryGrid role="group" aria-labelledby="event-form-category-label">
+              {EVENT_DOMAIN_ORDER.map((key) => {
+                const domain = EVENT_DOMAINS[key]
+                const Icon = domain.Icon
+                const isSelected = category === key
+                /* 목록과 **같은 팔레트**(분야 레지스트리의 soft 톤) — 칩이 CSS 변수로 받는다 */
+                return (
+                  <S.CategoryCard
+                    key={key}
+                    type="button"
+                    aria-pressed={isSelected}
+                    title={domain.tagline}
+                    style={
+                      {
+                        '--cat-rgb': domain.soft.rgb,
+                        '--cat-text': isDark ? domain.soft.textDark : domain.soft.text,
+                      } as React.CSSProperties
+                    }
+                    $selected={isSelected}
+                    onClick={() => {
+                      playClickSound()
+                      setCategory(isSelected ? '' : key)
+                    }}
+                  >
+                    <S.CategoryIcon $selected={isSelected}>
+                      <Icon size={13} />
+                    </S.CategoryIcon>
+                    <S.CategoryLabel>{domain.label}</S.CategoryLabel>
+                  </S.CategoryCard>
+                )
+              })}
+            </S.CategoryGrid>
             {categoryError && (
               <S.ErrorMessage id="event-form-category-error" role="alert">
                 {categoryError}

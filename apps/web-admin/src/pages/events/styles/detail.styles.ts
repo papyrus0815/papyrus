@@ -10,8 +10,7 @@
  */
 import styled, { css } from 'styled-components'
 
-import type { HistoricalEventCategory } from '../create/events.types'
-import { BRAND, CATEGORY_BADGE_COLORS, DANGER, MOTION, SHADOW } from './theme'
+import { BRAND, DANGER, MOTION, SHADOW } from './theme'
 
 /**
  * Detail panel root — `<section>` (이전 `<aside>`는 drawer dialog 안에 들어가면 SR semantics 충돌).
@@ -1053,8 +1052,9 @@ export const SectionMore = styled.li`
  * 카테고리 chip — InfoGrid 안에서 항상 표시 (이전엔 hero image 위 absolute라 이미지 없으면 사라짐).
  * 카테고리 색을 좌측 dot으로 표현 + 텍스트.
  */
+/** 분야 칩 — $color는 분야 레지스트리의 badge 색(흰 지면 위 비텍스트 3:1) */
 export const CategoryChip = styled.span<{
-  $category: HistoricalEventCategory
+  $color: string
 }>`
   display: inline-flex;
   align-items: center;
@@ -1075,8 +1075,7 @@ export const CategoryChip = styled.span<{
     width: 8px;
     height: 8px;
     border-radius: 2px;
-    background: ${({ $category }) =>
-      CATEGORY_BADGE_COLORS[$category] ?? '#6b7280'};
+    background: ${({ $color }) => $color};
     flex-shrink: 0;
   }
 `

@@ -58,7 +58,7 @@ export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]
  */
 export const LIST_COLUMNS = {
   end: '종료',
-  cat: '분류',
+  cat: '분야',
   kw: '키워드',
   dur: '기간',
   flags: '관련국',

@@ -11,8 +11,8 @@ import {
   ledgerAccentSubtle,
   ledgerHairline,
   ledgerHairlineStrong,
-  resolveCategory,
 } from '@/entities/event/ui/ledger-tokens'
+import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { type UpdateEventDto, updateEvent } from '@/shared/api/events'
@@ -67,7 +67,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
           startDatePrecision: child.startDatePrecision ?? null,
           endDate: child.endDate ?? null,
           endDatePrecision: child.endDatePrecision ?? null,
-          categoryName: child.category?.name ?? null,
+          domain: (child.domain as string | undefined) ?? null,
           isCollection: child.kind === 'COLLECTION',
           viaExtraLink: false,
         })),
@@ -79,7 +79,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
           startDatePrecision: child.startDatePrecision ?? null,
           endDate: child.endDate ?? null,
           endDatePrecision: child.endDatePrecision ?? null,
-          categoryName: null,
+          domain: null,
           isCollection: false,
           viaExtraLink: true,
         })),
@@ -165,17 +165,17 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                         child.endDatePrecision,
                       )
                     : null
-                  const category = resolveCategory(child.categoryName)
+                  const domain = child.domain ? eventDomainDef(child.domain) : null
                   return (
                     <Step key={child.id}>
                       <StepIndex aria-hidden>{index + 1}</StepIndex>
                       <StepBody>
                         <StepMeta>
                           <span>{dateLabel ?? '날짜 미상'}</span>
-                          {child.categoryName && (
+                          {domain && (
                             <span>
-                              <span aria-hidden>{category.icon} </span>
-                              {child.categoryName}
+                              <span aria-hidden>{domain.glyph} </span>
+                              {domain.label}
                             </span>
                           )}
                           {child.isCollection && <KindTag>묶음</KindTag>}

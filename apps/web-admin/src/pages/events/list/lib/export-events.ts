@@ -33,8 +33,8 @@ interface ExportedEvent {
   description: string
   /** 세부 분야(EventType) — BATTLE·TREATY·LAW_POLICY…, 없으면 null */
   type: string | null
-  categoryId: string | null
-  categoryName: string
+  /** 분야(EventDomain) — POLITICS·MILITARY… */
+  domain: string
   startDate: string | null
   endDate: string | null
   startDatePrecision: string | null
@@ -75,10 +75,8 @@ const toExported = (
   id: event.id,
   title: event.title,
   description: event.description ?? '',
-  // 미분류 사건은 가짜 id를 만들지 않고 null로 내보낸다.
   type: event.type,
-  categoryId: event.categoryId || null,
-  categoryName: event.category,
+  domain: event.domain,
   startDate: event.startDate || null,
   endDate: event.endDate ?? null,
   startDatePrecision: event.startDatePrecision ?? null,

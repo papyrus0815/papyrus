@@ -51,7 +51,7 @@ describe('buildOptimisticEvent — 하위 사건(childEventIds) 낙관 재구성
   it('유지되는 자식은 prev 객체 재사용, 신규 자식은 후보 캐시로 stub 생성', () => {
     const prev = makeEvent({
       childEvents: [
-        { id: 'A', title: '자식 A', category: { id: 'c1', name: '정치' } },
+        { id: 'A', title: '자식 A', domain: 'POLITICS' },
       ] as EventDetail[],
     })
     const qc = qcWithCandidates([
@@ -63,8 +63,8 @@ describe('buildOptimisticEvent — 하위 사건(childEventIds) 낙관 재구성
     expect(next).not.toBeNull()
     const ids = (next!.childEvents ?? []).map((child) => child.id)
     expect(ids).toEqual(['A', 'B'])
-    // A는 prev의 완전한 객체(카테고리 포함) 재사용
-    expect(next!.childEvents![0].category?.name).toBe('정치')
+    // A는 prev의 완전한 객체(분야 포함) 재사용
+    expect(next!.childEvents![0].domain).toBe('POLITICS')
     // B는 후보에서 제목·날짜 보강한 stub
     expect(next!.childEvents![1].title).toBe('베타 사건')
     expect(next!.childEvents![1].startDate).toBe('0100-03-15')

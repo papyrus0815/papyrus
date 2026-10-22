@@ -40,9 +40,9 @@ const CHILD_PREVIEW_COUNT = 5
 /** 본문 구성(목차) 미리보기 상한 — 실측 사건당 섹션 수 1~14개. */
 const SECTION_PREVIEW_COUNT = 6
 
+import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { formatDomainPath } from '@/entities/event/model/event-type-registry'
 import { personKeys } from '@/entities/person/query-keys'
-import { getCategoryName } from '@/features/event-list/lib'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { formatDateWithPrecision, isoDaySpan } from '@/shared/lib/iso-date'
@@ -55,7 +55,6 @@ import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import * as Modal from '@/pages/events/styles/modal.styles'
 import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import { ICON_SIZE } from '@/pages/events/styles/theme'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { deleteEvent } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
@@ -72,7 +71,6 @@ interface EventDetailPanelProps {
    * null/미전달 = 최상위 사건 → 행 자체를 그리지 않는다.
    */
   parentEventRef?: { id: string; title: string } | null
-  dbCategories: EventCategoryDto[]
   onSelectEvent?: (eventId: string) => void
   onExpandEvent?: (eventId: string) => void
   onShowSummary?: (eventId: string) => void
@@ -109,7 +107,6 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   selectedEvent,
   selectedNode,
   parentEventRef = null,
-  dbCategories,
   onSelectEvent,
   onExpandEvent,
   onShowSummary,
@@ -276,8 +273,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             <span>분류</span>
           </Detail.InfoLabel>
           <Detail.InfoValue>
-            <Detail.CategoryChip $category={selectedEvent.category}>
-              {formatDomainPath(getCategoryName(selectedEvent.category, dbCategories), selectedEvent.type)}
+            <Detail.CategoryChip $color={eventDomainDef(selectedEvent.domain).badge}>
+              {formatDomainPath(selectedEvent.domain, selectedEvent.type)}
             </Detail.CategoryChip>
           </Detail.InfoValue>
 

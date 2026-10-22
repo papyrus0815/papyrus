@@ -17,7 +17,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { getAllCountries, type CountryResponseDto } from '@/shared/api/countries'
 import { dynastyApi, type Dynasty } from '@/shared/api/dynasty'
-import { getAllEventCategories, type EventCategoryDto } from '@/shared/api/event-categories'
 import { getAllEvents, type EventResponseDto } from '@/shared/api/events'
 import { getAllHistoricalCountries, type HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { militaryUnitApi, type MilitaryUnit } from '@/shared/api/military-unit'
@@ -35,7 +34,6 @@ interface EntitiesSnapshot {
   availablePersons: PersonResponseDto[]
   availableCountries: CountryResponseDto[]
   availableHistoricalCountries: HistoricalCountryResponseDto[]
-  dbCategories: EventCategoryDto[]
   availableMilitaryUnits: MilitaryUnit[]
   availableEvents: EventResponseDto[]
   availableDynasties: Dynasty[]
@@ -47,7 +45,6 @@ export type FormEntityKey =
   | 'persons'
   | 'countries'
   | 'historicalCountries'
-  | 'categories'
   | 'militaryUnits'
   | 'events'
   | 'dynasties'
@@ -57,7 +54,6 @@ export const ALL_FORM_ENTITY_KEYS: readonly FormEntityKey[] = [
   'persons',
   'countries',
   'historicalCountries',
-  'categories',
   'militaryUnits',
   'events',
   'dynasties',
@@ -66,7 +62,7 @@ export const ALL_FORM_ENTITY_KEYS: readonly FormEntityKey[] = [
 
 export interface UseFormEntitiesOptions {
   /**
-   * 로드할 엔티티. 미지정이면 8종 전부.
+   * 로드할 엔티티. 미지정이면 7종 전부.
    * 부분 지정 시 나머지는 빈 배열로 남고 네트워크 호출도 하지 않는다.
    */
   only?: readonly FormEntityKey[]
@@ -76,7 +72,6 @@ const emptySnapshot = (): EntitiesSnapshot => ({
   availablePersons: [],
   availableCountries: [],
   availableHistoricalCountries: [],
-  dbCategories: [],
   availableMilitaryUnits: [],
   availableEvents: [],
   availableDynasties: [],
@@ -100,9 +95,6 @@ const LOADERS: {
   },
   historicalCountries: async (snapshot) => {
     snapshot.availableHistoricalCountries = await getAllHistoricalCountries()
-  },
-  categories: async (snapshot) => {
-    snapshot.dbCategories = await getAllEventCategories()
   },
   militaryUnits: async (snapshot) => {
     snapshot.availableMilitaryUnits = await militaryUnitApi.getAll()
@@ -196,7 +188,6 @@ export const useFormEntities = (options?: UseFormEntitiesOptions) => {
     availablePersons: snapshot.availablePersons,
     availableCountries: snapshot.availableCountries,
     availableHistoricalCountries: snapshot.availableHistoricalCountries,
-    dbCategories: snapshot.dbCategories,
     availableMilitaryUnits: snapshot.availableMilitaryUnits,
     availableEvents: snapshot.availableEvents,
     availableDynasties: snapshot.availableDynasties,

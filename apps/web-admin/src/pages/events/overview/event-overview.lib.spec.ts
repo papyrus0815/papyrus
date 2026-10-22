@@ -27,7 +27,7 @@ const node = (over: Partial<EventOverviewNode> & { id: string }): EventOverviewN
   endDate: null,
   endDatePrecision: null,
   location: null,
-  category: null,
+  domain: 'OTHER',
   type: null,
   countries: [],
   persons: [],
@@ -56,7 +56,7 @@ const sarajevo = node({
   id: 'sarajevo',
   title: '사라예보 암살',
   startDate: '1914-06-28T00:00:00.000Z',
-  category: { id: 'c1', name: '정치' },
+  domain: 'POLITICS',
   type: 'ATTACK',
   countries: [
     { key: 'h:at', id: 'at', kind: 'historical', name: '오스트리아-헝가리', flagEmoji: null, role: 'TARGET', sideId: null },
@@ -69,7 +69,7 @@ const marne = node({
   title: '마른 전투',
   startDate: '1914-09-05T00:00:00.000Z',
   endDate: '1914-09-12T00:00:00.000Z',
-  category: { id: 'c2', name: '군사' },
+  domain: 'MILITARY',
   type: 'BATTLE',
   countries: [
     { key: 'h:de', id: 'de', kind: 'historical', name: '독일 제국', flagEmoji: null, role: 'PARTICIPANT', sideId: null },
@@ -180,9 +180,9 @@ describe('buildCountryMatrix', () => {
 describe('분포', () => {
   it('하위 사건의 세부 분야를 많은 순으로 — 색은 그 세부에서 가장 많은 분야', () => {
     expect(typeBreakdown(descendants)).toEqual([
-      { key: 'NONE', label: '세부 없음', count: 2, domain: null },
-      { key: 'ATTACK', label: '암살·테러·학살', count: 1, domain: '정치' },
-      { key: 'BATTLE', label: '전투·작전', count: 1, domain: '군사' },
+      { key: 'NONE', label: '세부 없음', count: 2, domain: 'OTHER' },
+      { key: 'ATTACK', label: '암살·테러·학살', count: 1, domain: 'POLITICS' },
+      { key: 'BATTLE', label: '전투·작전', count: 1, domain: 'MILITARY' },
     ])
   })
 
@@ -226,7 +226,7 @@ describe('인물·점검', () => {
 
 describe('배치 B — 점검 신호', () => {
   it('기록 칸은 세부·분야가 다루는지로 — 최후통첩(외교 › 선언·통첩)엔 수치·진영 해당 없음, 전투엔 빈 칸, 값이 있으면 무관하게 채움', () => {
-    const ultimatum = node({ id: 'u', type: 'DECLARATION', category: { id: 'c3', name: '외교' } })
+    const ultimatum = node({ id: 'u', type: 'DECLARATION', domain: 'DIPLOMACY' })
     expect(checkNode(ultimatum).metrics).toBe('na')
     expect(checkNode(ultimatum).sides).toBe('na')
     expect(checkNode(marne).metrics).toBe('empty')
@@ -239,8 +239,8 @@ describe('배치 B — 점검 신호', () => {
     expect(checkNode(withMetric).metrics).toBe('full')
     expect(checkScore(checkNode(sarajevo)).applicable).toBe(9)
     // 같은 법령이라도 군사 분야(함대법)는 수치를 권한다 — 세부가 수치를 정하지 않으면 분야가 정한다
-    expect(checkNode(node({ id: 'law', type: 'LAW_POLICY', category: { id: 'c2', name: '군사' } })).metrics).toBe('empty')
-    expect(checkNode(node({ id: 'law2', type: 'CREATION', category: { id: 'c4', name: '문화' } })).metrics).toBe('na')
+    expect(checkNode(node({ id: 'law', type: 'LAW_POLICY', domain: 'MILITARY' })).metrics).toBe('empty')
+    expect(checkNode(node({ id: 'law2', type: 'CREATION', domain: 'CULTURE' })).metrics).toBe('na')
   })
 
   it('상위 기간 밖 하위 — 개전 전 사라예보는 기간 전', () => {

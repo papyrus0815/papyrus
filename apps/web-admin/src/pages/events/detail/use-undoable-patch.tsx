@@ -282,8 +282,8 @@ export function buildInverse(
         inv[k as string] = prev ?? ''
         break
       }
-      case 'categoryId':
-        inv.categoryId = event.categoryId ?? null
+      case 'domain':
+        inv.domain = event.domain ?? 'OTHER'
         break
       /**
        * 계층 필드 — 응답엔 childEventIds가 없고 childEvents(객체 배열)뿐이라

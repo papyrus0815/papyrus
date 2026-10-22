@@ -1,12 +1,11 @@
 /**
- * 이벤트 기본 정보 상태 관리 Hook
+ * 사건 본문 단락(편집 폼) 타입
  * FSD: features/event-create/model
+ *
+ * (예전 이 파일의 useEventBasicInfo 훅은 소비처가 없는 채 카테고리 상태·DB 카테고리 목록을 들고 있어
+ *  분야 enum 전환 때 지웠다 — 폼 상태의 정본은 features/event-form/model/useBasicInfoForm.ts.)
  */
-import { useRef, useState } from 'react'
-
-import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
 import type { MentionEntityType } from '@/shared/lib/mention/mention-system'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 export interface EventSection {
   id: string
@@ -27,81 +26,3 @@ export interface EventSection {
     endIndex: number
   }>
 }
-
-export const useEventBasicInfo = () => {
-  // 기본 정보
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [startTime, setStartTime] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [endTime, setEndTime] = useState('')
-  const [category, setCategory] = useState<HistoricalEventCategory | ''>('')
-  const [thumbnail, setThumbnail] = useState<string>('')
-  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
-  const thumbnailInputRef = useRef<HTMLInputElement>(null)
-
-  // DB 카테고리
-  const [dbCategories, setDbCategories] = useState<EventCategoryDto[]>([])
-
-  // 섹션 기반 내용 작성
-  const [sections, setSections] = useState<EventSection[]>([
-    { id: '1', title: 'Part 1', content: '', mentions: [] },
-  ])
-
-  // 위치 정보
-  const [location, setLocation] = useState('')
-  const [latitude, setLatitude] = useState('')
-  const [longitude, setLongitude] = useState('')
-
-  // 태그
-  const [tags, setTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
-
-  return {
-    // 기본 정보
-    title,
-    setTitle,
-    description,
-    setDescription,
-    startDate,
-    setStartDate,
-    startTime,
-    setStartTime,
-    endDate,
-    setEndDate,
-    endTime,
-    setEndTime,
-    category,
-    setCategory,
-    thumbnail,
-    setThumbnail,
-    thumbnailFile,
-    setThumbnailFile,
-    thumbnailInputRef,
-
-    // DB 카테고리
-    dbCategories,
-    setDbCategories,
-
-    // 섹션
-    sections,
-    setSections,
-
-    // 위치
-    location,
-    setLocation,
-    latitude,
-    setLatitude,
-    longitude,
-    setLongitude,
-
-    // 태그
-    tags,
-    setTags,
-    tagInput,
-    setTagInput,
-  }
-}
-
-export type EventBasicInfoState = ReturnType<typeof useEventBasicInfo>

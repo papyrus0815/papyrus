@@ -21,7 +21,6 @@ export type {
   EventImage,
   EventVisuals,
   HistoricalEvent,
-  HistoricalEventCategory,
 } from './types'
 export { CENTURY_UNKNOWN, EVENTS_PAGE_SIZE_ALL } from './types'
 export {
@@ -35,10 +34,21 @@ export type {
   EventCountryRole,
 } from './country-participant'
 export {
-  CATEGORY_LABEL,
-  CATEGORY_ICON_MAP,
-  extractCategoryKey,
-} from './category-constants'
+  EVENT_DOMAIN_OPTIONS,
+  EVENT_DOMAIN_ORDER,
+  EVENT_DOMAINS,
+  domainAccent,
+  domainLabel,
+  eventDomainDef,
+  isEventDomainKey,
+} from './event-domain'
+export type {
+  DomainCardTone,
+  DomainSoftTone,
+  EventDomainDef,
+  EventDomainKey,
+  EventDomainOption,
+} from './event-domain'
 export {
   DOMAIN_SUBTYPES,
   EVENT_TYPE_ORDER,

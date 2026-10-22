@@ -15,7 +15,7 @@ const apiEvent = (over: Record<string, unknown> = {}) =>
     description: '설명',
     startDate: '2023-12-31',
     endDate: null,
-    category: { id: 'cat-uuid-1', name: '정치' },
+    domain: 'POLITICS',
     childEvents: [],
     eventImages: [],
     relatedCountries: [],
@@ -52,20 +52,14 @@ describe('transformEventsFromApi — 날짜 정밀도', () => {
   })
 })
 
-describe('transformEventsFromApi — 카테고리', () => {
-  it('카테고리가 있으면 실제 id와 이름을 쓴다', () => {
+describe('transformEventsFromApi — 분야', () => {
+  it('분야 키를 그대로 싣는다', () => {
     const [event] = transformEventsFromApi([apiEvent()])
-    expect(event.categoryId).toBe('cat-uuid-1')
-    expect(event.category).toBe('정치')
+    expect(event.domain).toBe('POLITICS')
   })
 
-  it('미지정이면 가짜 id를 만들지 않고 라벨만 미분류로 파생한다', () => {
-    const [event] = transformEventsFromApi([apiEvent({ category: null })])
-
-    // 예전엔 'cat-other-001'을 채웠다 — DB의 '기타'(uuid)와 절대 매칭되지 않아
-    // 필터로는 못 잡으면서 화면에는 분류된 것처럼 보였다.
-    expect(event.categoryId).toBe('')
-    expect(event.categoryId).not.toContain('cat-other')
-    expect(event.category).toBe('미분류')
+  it('모르는 값·누락은 기타(OTHER) — 화면이 분야 없는 사건을 따로 다루지 않게', () => {
+    expect(transformEventsFromApi([apiEvent({ domain: undefined })])[0].domain).toBe('OTHER')
+    expect(transformEventsFromApi([apiEvent({ domain: '전쟁/군사' })])[0].domain).toBe('OTHER')
   })
 })

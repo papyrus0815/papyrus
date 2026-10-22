@@ -11,7 +11,7 @@ const event = (patch: Partial<CompanyRelatedEvent>): CompanyRelatedEvent => ({
   startYear: 1989,
   startMonth: 8,
   startDay: 8,
-  categoryName: null,
+  domain: 'ECONOMY',
   ...patch,
 })
 

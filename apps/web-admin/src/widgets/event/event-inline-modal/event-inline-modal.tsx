@@ -28,7 +28,8 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
-import { resolveCategory } from '@/entities/event/ui/ledger-tokens'
+import { eventDomainDef } from '@/entities/event/model/event-domain'
+import { formatDomainPath } from '@/entities/event/model/event-type-registry'
 
 export interface EventInlineModalProps {
   /** 열려 있는 사건 id. null이면 모달 닫힘. */
@@ -68,7 +69,7 @@ export function EventInlineModal({
     enabled: !!eventId,
   })
 
-  const category = resolveCategory(event?.category?.name ?? null)
+  const category = eventDomainDef(event?.domain)
   const dateLabel = event
     ? formatRange(
         event.startDate,
@@ -105,10 +106,10 @@ export function EventInlineModal({
           >
             <ModalHeader>
               <HeaderInner>
-                {event?.category?.name && (
+                {event && (
                   <CategoryChip $color={category.color}>
-                    <span aria-hidden>{category.icon}</span>
-                    {event.category.name}
+                    <span aria-hidden>{category.glyph}</span>
+                    {formatDomainPath(event.domain, event.type)}
                   </CategoryChip>
                 )}
                 <ModalTitle title={event?.title ?? ''}>

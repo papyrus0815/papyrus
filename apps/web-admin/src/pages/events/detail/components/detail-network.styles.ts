@@ -3,7 +3,6 @@ import styled, { css } from 'styled-components'
 
 import {
   MOTION,
-  categoryAccent,
   ledgerAccent,
   ledgerAccentBorder,
   ledgerAccentHover,
@@ -12,9 +11,9 @@ import {
   ledgerHairlineStrong,
   ledgerRowWash,
   withAlpha,
-  type LedgerCategory,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
+import { domainAccent, type EventDomainDef } from '@/entities/event/model/event-domain'
 import { metaText } from '@/pages/events/styles/theme'
 
 /**
@@ -638,9 +637,9 @@ export const ChildCard = styled(Link)`
   }
 `
 
-/** 킥커(eyebrow) — 카테고리 글리프 소프트 디스크 + 날짜(없으면 카테고리명).
+/** 킥커(eyebrow) — 분야 글리프 소프트 디스크 + 날짜(없으면 분야명).
     좌측 색 레일(ChildBar) 대체 — 색맹 안전: 글리프 모양이 색과 독립 신호. */
-export const ChildEyebrow = styled.div<{ $cat: LedgerCategory }>`
+export const ChildEyebrow = styled.div<{ $cat: EventDomainDef }>`
   display: flex;
   align-items: center;
   gap: 6px;
@@ -649,7 +648,7 @@ export const ChildEyebrow = styled.div<{ $cat: LedgerCategory }>`
   font-weight: 700;
   letter-spacing: 0.05em;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme, $cat }) => categoryAccent($cat, theme.mode)};
+  color: ${({ theme, $cat }) => domainAccent($cat.key, theme.mode)};
 
   > span {
     display: inline-flex;
@@ -663,7 +662,7 @@ export const ChildEyebrow = styled.div<{ $cat: LedgerCategory }>`
     flex-shrink: 0;
     background: ${({ theme, $cat }) =>
       withAlpha(
-        categoryAccent($cat, theme.mode),
+        domainAccent($cat.key, theme.mode),
         theme.mode === 'dark' ? 0.18 : 0.1,
       )};
     color: inherit;

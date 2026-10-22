@@ -25,7 +25,7 @@ import {
 } from '@/features/event-list/lib'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
+import type { EventDomainOption } from '@/entities/event/model/event-domain'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { dateSortKey, isoYearSpan } from '@/shared/lib/iso-date'
 
@@ -120,7 +120,7 @@ export interface EventFilterOptions {
  */
 export const useEventFilters = (
   events: HistoricalEvent[],
-  dbCategories: EventCategoryDto[],
+  dbCategories: EventDomainOption[],
   countries: CountryResponseDto[] = [],
   historicalCountries: HistoricalCountryResponseDto[] = [],
   continents: ContinentResponseDto[] = [],

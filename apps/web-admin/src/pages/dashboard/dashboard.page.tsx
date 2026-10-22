@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
+import { formatDomainPath } from '@/entities/event/model'
 import { sessionQueryOptions } from '@/entities/session'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllEvents, getEventsOnThisDay } from '@/shared/api/events'
@@ -64,7 +65,7 @@ const PlayIcon = () => (
 function EventCardItem({ event }: { event: EventResponseDto }) {
   const navigate = useNavigate()
   const era = eraLabel(event.startDate)
-  const category = event.category?.name
+  const category = formatDomainPath(event.domain, event.type)
 
   return (
     <S.EventCard

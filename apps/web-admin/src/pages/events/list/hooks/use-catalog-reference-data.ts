@@ -1,6 +1,6 @@
 /**
  * 카탈로그가 의존하는 참조 데이터 로드:
- * - 사건 카테고리 (DB)
+ * - 사건 분야 — 고정 목록(EVENT_DOMAIN_OPTIONS). 불러오지 않으니 늘 성공 상태다
  * - 현대 국가 / 역사적 국가
  * - 대륙 (사건 필터에서 country.continentId로 매칭)
  *
@@ -22,12 +22,12 @@
  */
 import { useQuery } from '@tanstack/react-query'
 
+import { EVENT_DOMAIN_OPTIONS, type EventDomainOption } from '@/entities/event/model/event-domain'
+
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import { getAllContinents } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
-import { getAllEventCategories } from '@/shared/api/event-categories'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 
@@ -38,10 +38,17 @@ const REF_STALE_TIME = 5 * 60_000 // 5분 — 참조 데이터는 거의 안 바
  * `data ?? []`처럼 렌더마다 새 배열을 만들면 이 값을 deps로 쓰는 하위 useMemo
  * (국가 옵션·브리지 역인덱스 등)가 매 렌더 무효화된다.
  */
-const EMPTY_CATEGORIES: EventCategoryDto[] = []
 const EMPTY_COUNTRIES: CountryResponseDto[] = []
 const EMPTY_HISTORICAL_COUNTRIES: HistoricalCountryResponseDto[] = []
 const EMPTY_CONTINENTS: ContinentResponseDto[] = []
+
+const STATIC_DOMAINS: ReferenceChannel<EventDomainOption> = {
+  data: EVENT_DOMAIN_OPTIONS,
+  isLoading: false,
+  isError: false,
+  isSuccess: true,
+  refetch: () => {},
+}
 
 /** 한 참조 축의 데이터와 상태 */
 export interface ReferenceChannel<T> {
@@ -54,18 +61,14 @@ export interface ReferenceChannel<T> {
 }
 
 export interface CatalogReferenceData {
-  categories: ReferenceChannel<EventCategoryDto>
+  /** 분야 — 고정 목록이라 로드 상태가 없다(늘 성공). 축 모양을 다른 참조 데이터와 맞춰 둔다 */
+  categories: ReferenceChannel<EventDomainOption>
   countries: ReferenceChannel<CountryResponseDto>
   historicalCountries: ReferenceChannel<HistoricalCountryResponseDto>
   continents: ReferenceChannel<ContinentResponseDto>
 }
 
 export function useCatalogReferenceData(): CatalogReferenceData {
-  const categoriesQuery = useQuery({
-    queryKey: ['event-categories'],
-    queryFn: getAllEventCategories,
-    staleTime: REF_STALE_TIME,
-  })
   const countriesQuery = useQuery({
     queryKey: ['countries'],
     queryFn: getAllCountries,
@@ -83,13 +86,7 @@ export function useCatalogReferenceData(): CatalogReferenceData {
   })
 
   return {
-    categories: {
-      data: categoriesQuery.data ?? EMPTY_CATEGORIES,
-      isLoading: categoriesQuery.isLoading,
-      isError: categoriesQuery.isError,
-      isSuccess: categoriesQuery.isSuccess,
-      refetch: categoriesQuery.refetch,
-    },
+    categories: STATIC_DOMAINS,
     countries: {
       data: countriesQuery.data ?? EMPTY_COUNTRIES,
       isLoading: countriesQuery.isLoading,

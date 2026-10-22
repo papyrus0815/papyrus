@@ -1,3 +1,4 @@
+import { domainLabel } from '@/entities/event/model'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
@@ -954,7 +955,7 @@ function EventNode({
       <TLDate>{relatedEventDateLabel(event) ?? '날짜 미상'}</TLDate>
       <EventNodeKicker>
         사건 · <span style={{ color: meta.tone }}>{meta.label}</span>
-        {event.categoryName ? ` · ${event.categoryName}` : ''}
+        {` · ${domainLabel(event.domain)}`}
       </EventNodeKicker>
       <EventNodeTitle
         to={pathKeys.events.detail(event.eventId)}

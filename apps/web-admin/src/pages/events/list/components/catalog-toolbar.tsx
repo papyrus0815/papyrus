@@ -45,7 +45,7 @@ import type { FilterOptionCounts } from '@/features/event-filters/model/option-f
 import type { FilterReferenceState } from '@/features/event-filters/model/reference-label'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
+import type { EventDomainOption } from '@/entities/event/model/event-domain'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useAnchoredPosition } from '@/shared/hooks/use-anchored-position.hook'
 import { useOverlayEscape } from '@/shared/hooks/use-overlay-escape.hook'
@@ -74,7 +74,7 @@ interface Props {
   selectedContinent: string
   selectedCentury: CenturyFilter
   showFlatView: boolean
-  dbCategories: EventCategoryDto[]
+  dbCategories: EventDomainOption[]
   availableCenturies: number[]
   countries: CountryResponseDto[]
   historicalCountries: HistoricalCountryResponseDto[]

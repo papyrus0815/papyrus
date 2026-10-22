@@ -35,7 +35,8 @@ export interface FilterableEvent {
   id: string
   title?: string
   description?: string
-  categoryId?: string | null
+  /** 분야 키(MILITARY…) */
+  domain?: string | null
   location?: string | null
   keywords?: string[] | null
   startDate?: string | null
@@ -117,7 +118,7 @@ export function matchesFilterAxis(
     case 'category':
       return (
         context.selectedCategory === FILTER_ALL ||
-        event.categoryId === context.selectedCategory
+        event.domain === context.selectedCategory
       )
 
     /**

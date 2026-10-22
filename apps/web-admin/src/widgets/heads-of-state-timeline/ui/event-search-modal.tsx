@@ -6,6 +6,7 @@
  * 예전엔 `getAllEvents({ limit: 500 })`였는데 서버가 100으로 자르고 최상위만 줘서,
  * 사건 일부만·하위 사건(개별 전투 등)은 하나도 오버레이에 올릴 수 없었다.
  */
+import { domainLabel } from '@/entities/event/model/event-domain'
 import {
   useEffect,
   useMemo,
@@ -36,7 +37,8 @@ interface EventLite {
   title: string
   startDate: string | null
   endDate: string | null
-  categoryName: string | null
+  /** 분야 키(MILITARY…) */
+  domain: string | null
 }
 
 export function EventSearchModal({ isOpen, onClose, alreadyAddedIds, onAddMany }: Props) {
@@ -80,7 +82,7 @@ export function EventSearchModal({ isOpen, onClose, alreadyAddedIds, onAddMany }
         title: e.title,
         startDate: e.startDate ?? null,
         endDate: e.endDate ?? null,
-        categoryName: e?.category?.name ?? e?.eventCategory?.name ?? null,
+        domain: e?.domain ?? null,
       }))
       .sort((a, b) =>
         (a.startDate ?? '').localeCompare(b.startDate ?? ''),
@@ -89,12 +91,12 @@ export function EventSearchModal({ isOpen, onClose, alreadyAddedIds, onAddMany }
 
   const categories = useMemo(() => {
     const set = new Map<string, number>()
-    list.forEach((e) => {
-      const name = e.categoryName ?? '미분류'
-      set.set(name, (set.get(name) ?? 0) + 1)
+    list.forEach((event) => {
+      const key = event.domain ?? 'OTHER'
+      set.set(key, (set.get(key) ?? 0) + 1)
     })
     return Array.from(set.entries())
-      .map(([name, count]) => ({ name, count }))
+      .map(([key, count]) => ({ key, name: domainLabel(key), count }))
       .sort((a, b) => b.count - a.count)
   }, [list])
 
@@ -102,8 +104,7 @@ export function EventSearchModal({ isOpen, onClose, alreadyAddedIds, onAddMany }
     const q = query.trim().toLowerCase()
     return list.filter((e) => {
       if (categoryFilter !== 'ALL') {
-        const evCat = e.categoryName ?? '미분류'
-        if (evCat !== categoryFilter) return false
+        if ((e.domain ?? 'OTHER') !== categoryFilter) return false
       }
       if (!q) return true
       return e.title.toLowerCase().includes(q) || (e.startDate ?? '').includes(q)
@@ -175,14 +176,14 @@ export function EventSearchModal({ isOpen, onClose, alreadyAddedIds, onAddMany }
             >
               전체 ({list.length})
             </FilterChip>
-            {categories.slice(0, 8).map((c) => (
+            {categories.slice(0, 8).map((domain) => (
               <FilterChip
-                key={c.name}
+                key={domain.key}
                 type="button"
-                $active={categoryFilter === c.name}
-                onClick={() => setCategoryFilter(c.name)}
+                $active={categoryFilter === domain.key}
+                onClick={() => setCategoryFilter(domain.key)}
               >
-                {c.name} ({c.count})
+                {domain.name} ({domain.count})
               </FilterChip>
             ))}
           </FilterRow>
@@ -218,7 +219,7 @@ export function EventSearchModal({ isOpen, onClose, alreadyAddedIds, onAddMany }
                   <RowMain>
                     <RowName>
                       <span>{ev.title}</span>
-                      {ev.categoryName && <CategoryBadge>{ev.categoryName}</CategoryBadge>}
+                      {ev.domain && <CategoryBadge>{domainLabel(ev.domain)}</CategoryBadge>}
                     </RowName>
                     <RowMeta>
                       {already

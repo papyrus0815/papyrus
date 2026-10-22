@@ -13,9 +13,6 @@ jest.mock('@/shared/api/countries', () => ({ getAllCountries: jest.fn() }))
 jest.mock('@/shared/api/historical-countries', () => ({
   getAllHistoricalCountries: jest.fn(),
 }))
-jest.mock('@/shared/api/event-categories', () => ({
-  getAllEventCategories: jest.fn(),
-}))
 jest.mock('@/shared/api/persons', () => ({ getAllPersons: jest.fn() }))
 jest.mock('@/shared/api/events', () => ({ getAllEvents: jest.fn() }))
 jest.mock('@/shared/api/military-unit', () => ({
@@ -31,9 +28,6 @@ const countriesApi = jest.requireMock('@/shared/api/countries') as {
 }
 const historicalApi = jest.requireMock('@/shared/api/historical-countries') as {
   getAllHistoricalCountries: jest.Mock
-}
-const categoriesApi = jest.requireMock('@/shared/api/event-categories') as {
-  getAllEventCategories: jest.Mock
 }
 const personsApi = jest.requireMock('@/shared/api/persons') as {
   getAllPersons: jest.Mock
@@ -55,7 +49,6 @@ const ALL_MOCKS = () => [
   personsApi.getAllPersons,
   countriesApi.getAllCountries,
   historicalApi.getAllHistoricalCountries,
-  categoriesApi.getAllEventCategories,
   militaryApi.militaryUnitApi.getAll,
   eventsApi.getAllEvents,
   dynastyApiMock.dynastyApi.getAll,
@@ -77,14 +70,13 @@ beforeEach(() => {
   personsApi.getAllPersons.mockResolvedValue([{ id: 'p1' }])
   countriesApi.getAllCountries.mockResolvedValue([{ id: 'c1' }])
   historicalApi.getAllHistoricalCountries.mockResolvedValue([{ id: 'h1' }])
-  categoriesApi.getAllEventCategories.mockResolvedValue([{ id: 'cat1' }])
   militaryApi.militaryUnitApi.getAll.mockResolvedValue([{ id: 'm1' }])
   eventsApi.getAllEvents.mockResolvedValue([{ id: 'e1' }])
   dynastyApiMock.dynastyApi.getAll.mockResolvedValue([{ id: 'd1' }])
   partyApi.politicalPartyApi.getAll.mockResolvedValue([{ id: 'pp1' }])
 })
 
-it('인자 없이 부르면 8종을 전부 로드한다 (기존 호출부 호환)', async () => {
+it('인자 없이 부르면 7종을 전부 로드한다 (기존 호출부 호환)', async () => {
   const { result } = renderHook(() => useFormEntities())
 
   await waitFor(() => expect(result.current.isLoading).toBe(false))
@@ -95,14 +87,13 @@ it('인자 없이 부르면 8종을 전부 로드한다 (기존 호출부 호환
 
 it('only를 주면 지정한 것만 부르고 나머지 API는 건드리지 않는다', async () => {
   const { result } = renderHook(() =>
-    useFormEntities({ only: ['countries', 'historicalCountries', 'categories'] }),
+    useFormEntities({ only: ['countries', 'historicalCountries'] }),
   )
 
   await waitFor(() => expect(result.current.isLoading).toBe(false))
 
   expect(countriesApi.getAllCountries).toHaveBeenCalledTimes(1)
   expect(historicalApi.getAllHistoricalCountries).toHaveBeenCalledTimes(1)
-  expect(categoriesApi.getAllEventCategories).toHaveBeenCalledTimes(1)
   // 사건 전량 조회를 포함한 나머지 5개는 호출되지 않아야 한다
   expect(eventsApi.getAllEvents).not.toHaveBeenCalled()
   expect(personsApi.getAllPersons).not.toHaveBeenCalled()
@@ -143,14 +134,14 @@ it('신선한 전체 캐시가 있으면 부분 요청은 네트워크 없이 �
 })
 
 it('개별 API가 실패해도 나머지는 살아남는다 (폼이 통째로 못 열리면 안 된다)', async () => {
-  categoriesApi.getAllEventCategories.mockRejectedValue(new Error('boom'))
+  historicalApi.getAllHistoricalCountries.mockRejectedValue(new Error('boom'))
   const { result } = renderHook(() =>
-    useFormEntities({ only: ['countries', 'categories'] }),
+    useFormEntities({ only: ['countries', 'historicalCountries'] }),
   )
   await waitFor(() => expect(result.current.isLoading).toBe(false))
 
   expect(result.current.availableCountries).toHaveLength(1)
-  expect(result.current.dbCategories).toEqual([])
+  expect(result.current.availableHistoricalCountries).toEqual([])
 })
 
 it('only 배열을 매 렌더 새로 만들어도 재로드하지 않는다 (참조 불안정 → 무한 루프 방지)', async () => {

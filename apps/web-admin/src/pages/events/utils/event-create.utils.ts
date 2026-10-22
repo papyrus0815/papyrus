@@ -3,7 +3,6 @@
  */
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
-import type { HistoricalEventCategory } from '../create/events.types'
 
 export const getApiHost = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL
@@ -31,16 +30,6 @@ export const getImageUrl = (url: string): string => {
     return url
   }
   return `/${url}`
-}
-
-/**
- * 카테고리 이름을 그대로 반환합니다.
- * 서버에서 받은 카테고리 이름을 직접 사용합니다.
- */
-export const mapCategoryNameToType = (
-  categoryName: string,
-): HistoricalEventCategory => {
-  return categoryName
 }
 
 export const formatDateForDisplay = (dateString: string): string => {

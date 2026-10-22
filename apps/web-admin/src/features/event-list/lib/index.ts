@@ -4,4 +4,3 @@
  */
 
 export * from './constants'
-export * from './category-helpers'

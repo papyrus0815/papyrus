@@ -29,7 +29,7 @@ import { FiltersPanel } from './filters-panel'
  *  5) Esc가 닫으면서 포커스를 트리거로 되돌린다 (INT-3/A11Y-5), 검색 중이면 1회차는
  *     검색어만 지운다 (INT-12)
  *  6) 타입어헤드가 활성 옵션을 옮긴다
- *  7) 접근 이름이 시각 텍스트로 구성된다 — '카테고리: 전쟁' (INT-8/A11Y-4)
+ *  7) 접근 이름이 시각 텍스트로 구성된다 — '분야: 군사' (INT-8/A11Y-4)
  *  8) 옵션은 탭 정지점이 아니고, 절단은 `aria-setsize`로 고지된다 (A11Y-8)
  *  9) '전체 보기 →'는 모달을 열기 전에 트리거로 포커스를 되돌린다 (INT-4)
  * 10) 팝오버를 닫는 바깥 클릭이 뒤 요소로 통과하지 않는다 (INT-14)
@@ -40,8 +40,8 @@ import { FiltersPanel } from './filters-panel'
  * 13) 세기 축도 같은 팝오버 규약을 쓴다 — 네이티브 select 아님 (IA-15)
  */
 const CATEGORIES = [
-  { id: 'cat-war', name: '전쟁' },
-  { id: 'cat-treaty', name: '조약' },
+  { id: 'MILITARY', name: '군사' },
+  { id: 'DIPLOMACY', name: '외교' },
 ] as never[]
 
 const baseProps = {
@@ -61,8 +61,8 @@ const baseProps = {
   onShowCountryModal: jest.fn(),
 }
 
-/** 카테고리 트리거 — 접근 이름은 시각 텍스트('카테고리')로 구성된다 */
-const categoryTrigger = () => screen.getByRole('combobox', { name: '카테고리' })
+/** 분야 트리거 — 접근 이름은 시각 텍스트('분야')로 구성된다 */
+const categoryTrigger = () => screen.getByRole('combobox', { name: '분야' })
 
 const openCategoryPopover = () => {
   const trigger = categoryTrigger()
@@ -79,17 +79,17 @@ const popoverOptions = () => within(screen.getByRole('listbox')).getAllByRole('o
 const popoverOption = (name: string) =>
   within(screen.getByRole('listbox')).getByRole('option', { name })
 
-describe('FiltersPanel — 카테고리 인라인 팝오버', () => {
+describe('FiltersPanel — 분야 인라인 팝오버', () => {
   it('트리거를 누르면 옵션이 FilterGroup 밖(포털)에 렌더된다', () => {
     const { container } = renderWithTheme(
       <FiltersPanel {...baseProps} onSelectCategory={jest.fn()} />,
     )
 
-    expect(screen.queryByRole('option', { name: '전쟁' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '군사' })).not.toBeInTheDocument()
 
     openCategoryPopover()
 
-    const option = screen.getByRole('option', { name: '전쟁' })
+    const option = screen.getByRole('option', { name: '군사' })
     expect(option).toBeInTheDocument()
     // 포털됐다면 위젯이 마운트된 컨테이너 서브트리 안에는 없어야 한다.
     // (= FilterGroup의 overflow 클리핑 사정권 밖)
@@ -103,7 +103,7 @@ describe('FiltersPanel — 카테고리 인라인 팝오버', () => {
     )
 
     openCategoryPopover()
-    const option = screen.getByRole('option', { name: '조약' })
+    const option = screen.getByRole('option', { name: '외교' })
 
     // 실제 포인터 순서를 재현 — mousedown이 먼저 온다. 외부클릭 핸들러가 여기서
     // 팝오버를 닫아버리면 아래 click은 사라진 노드에 떨어져 아무 일도 안 일어난다.
@@ -111,26 +111,26 @@ describe('FiltersPanel — 카테고리 인라인 팝오버', () => {
     expect(option).toBeInTheDocument()
 
     fireEvent.click(option)
-    expect(onSelectCategory).toHaveBeenCalledWith('cat-treaty')
+    expect(onSelectCategory).toHaveBeenCalledWith('DIPLOMACY')
   })
 
   it('선택 후 팝오버가 닫힌다', () => {
     renderWithTheme(<FiltersPanel {...baseProps} onSelectCategory={jest.fn()} />)
 
     openCategoryPopover()
-    fireEvent.click(screen.getByRole('option', { name: '전쟁' }))
+    fireEvent.click(screen.getByRole('option', { name: '군사' }))
 
-    expect(screen.queryByRole('option', { name: '전쟁' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '군사' })).not.toBeInTheDocument()
   })
 
   it('바깥을 누르면 닫힌다', () => {
     renderWithTheme(<FiltersPanel {...baseProps} onSelectCategory={jest.fn()} />)
 
     openCategoryPopover()
-    expect(screen.getByRole('option', { name: '전쟁' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '군사' })).toBeInTheDocument()
 
     fireEvent.mouseDown(document.body)
-    expect(screen.queryByRole('option', { name: '전쟁' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: '군사' })).not.toBeInTheDocument()
   })
 })
 
@@ -148,20 +148,20 @@ describe('FiltersPanel — combobox 키보드 조작 (검토 배치 1)', () => {
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     expect(trigger).toHaveAttribute(
       'aria-activedescendant',
-      screen.getByRole('option', { name: '전쟁' }).id,
+      screen.getByRole('option', { name: '군사' }).id,
     )
 
     fireEvent.keyDown(trigger, { key: 'End' })
     expect(trigger).toHaveAttribute(
       'aria-activedescendant',
-      screen.getByRole('option', { name: '조약' }).id,
+      screen.getByRole('option', { name: '외교' }).id,
     )
 
     // 끝에서 감싸지 않는다(clamp)
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     expect(trigger).toHaveAttribute(
       'aria-activedescendant',
-      screen.getByRole('option', { name: '조약' }).id,
+      screen.getByRole('option', { name: '외교' }).id,
     )
   })
 
@@ -175,7 +175,7 @@ describe('FiltersPanel — combobox 키보드 조작 (검토 배치 1)', () => {
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     fireEvent.keyDown(trigger, { key: 'Enter' })
 
-    expect(onSelectCategory).toHaveBeenCalledWith('cat-war')
+    expect(onSelectCategory).toHaveBeenCalledWith('MILITARY')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
   })
@@ -196,11 +196,11 @@ describe('FiltersPanel — combobox 키보드 조작 (검토 배치 1)', () => {
     renderWithTheme(<FiltersPanel {...baseProps} onSelectCategory={jest.fn()} />)
 
     const trigger = openCategoryPopover()
-    fireEvent.keyDown(trigger, { key: '조' })
+    fireEvent.keyDown(trigger, { key: '외' })
 
     expect(trigger).toHaveAttribute(
       'aria-activedescendant',
-      screen.getByRole('option', { name: '조약' }).id,
+      screen.getByRole('option', { name: '외교' }).id,
     )
   })
 
@@ -220,18 +220,18 @@ describe('FiltersPanel — ARIA 계약 (검토 배치 1)', () => {
     renderWithTheme(
       <FiltersPanel
         {...baseProps}
-        selectedCategory="cat-war"
+        selectedCategory="MILITARY"
         onSelectCategory={jest.fn()}
       />,
     )
 
-    // 예전엔 aria-label="카테고리 필터"가 고정으로 붙어 시각 텍스트('전쟁')를 덮었다.
+    // 예전엔 aria-label="카테고리 필터"가 고정으로 붙어 시각 텍스트('군사')를 덮었다.
     // 지금은 축 이름도 **시각 텍스트**라 접근 이름이 둘의 결합이다(검토 VIS-4).
     expect(
-      screen.getByRole('combobox', { name: '카테고리 전쟁' }),
+      screen.getByRole('combobox', { name: '분야 군사' }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('combobox', { name: '카테고리 필터' }),
+      screen.queryByRole('combobox', { name: '분야 필터' }),
     ).not.toBeInTheDocument()
   })
 
@@ -241,7 +241,7 @@ describe('FiltersPanel — ARIA 계약 (검토 배치 1)', () => {
     const trigger = openCategoryPopover()
     expect(trigger).toHaveAttribute('aria-controls', screen.getByRole('listbox').id)
 
-    const option = screen.getByRole('option', { name: '전쟁' })
+    const option = screen.getByRole('option', { name: '군사' })
     expect(option.tagName).toBe('DIV')
     expect(option).not.toHaveAttribute('tabindex')
 
@@ -431,7 +431,7 @@ describe('FiltersPanel — 옵션 모집단 (검토 배치 7)', () => {
 
   it('옵션 우측에 건수가 붙는다 — 로드된 사건이 있을 때만 (IA-13)', () => {
     const optionCounts = {
-      category: new Map([['cat-war', 12]]),
+      category: new Map([['MILITARY', 12]]),
       country: new Map<string, number>(),
       continent: new Map<string, number>(),
       century: new Map<number, number>(),
@@ -453,7 +453,7 @@ describe('FiltersPanel — 옵션 모집단 (검토 배치 7)', () => {
     )
     // 로드 전(사건 0건)에는 숫자를 내지 않는다 — 전부 '0'은 정보가 아니라 거짓 단정이다.
     openCategoryPopover()
-    expect(popoverOption('전쟁')).toBeInTheDocument()
+    expect(popoverOption('군사')).toBeInTheDocument()
     fireEvent.keyDown(categoryTrigger(), { key: 'Escape' })
 
     rerender(
@@ -464,8 +464,8 @@ describe('FiltersPanel — 옵션 모집단 (검토 배치 7)', () => {
       />,
     )
     openCategoryPopover()
-    expect(popoverOption('전쟁 12')).toBeInTheDocument()
-    expect(popoverOption('조약 0')).toBeInTheDocument()
+    expect(popoverOption('군사 12')).toBeInTheDocument()
+    expect(popoverOption('외교 0')).toBeInTheDocument()
   })
 })
 
@@ -665,22 +665,22 @@ describe('FiltersPanel — 트리거 시각 계약 (검토 배치 5)', () => {
     )
 
     // 미적용 — 필드명만.
-    const idle = screen.getByRole('combobox', { name: '카테고리' })
-    expect(idle).toHaveTextContent('카테고리')
+    const idle = screen.getByRole('combobox', { name: '분야' })
+    expect(idle).toHaveTextContent('분야')
     expect(idle).not.toHaveAttribute('data-active')
 
     rerender(
       <FiltersPanel
         {...baseProps}
-        selectedCategory="cat-war"
+        selectedCategory="MILITARY"
         onSelectCategory={jest.fn()}
       />,
     )
 
-    const active = screen.getByRole('combobox', { name: '카테고리 전쟁' })
+    const active = screen.getByRole('combobox', { name: '분야 군사' })
     // 필드명이 남아 있고(치환 아님), 값은 별도 슬롯에 있다.
-    expect(active).toHaveTextContent('카테고리')
-    expect(active).toHaveTextContent('전쟁')
+    expect(active).toHaveTextContent('분야')
+    expect(active).toHaveTextContent('군사')
   })
 
   it('활성 트리거가 data-active를 내보낸다 — 활성 표시 CSS의 유일한 훅 (IA-8/VIS-3)', () => {
@@ -702,7 +702,7 @@ describe('FiltersPanel — 트리거 시각 계약 (검토 배치 5)', () => {
       'data-active',
       'true',
     )
-    expect(screen.getByRole('combobox', { name: '카테고리' })).not.toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: '분야' })).not.toHaveAttribute(
       'data-active',
     )
   })

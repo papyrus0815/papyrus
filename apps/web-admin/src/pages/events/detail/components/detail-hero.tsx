@@ -1,6 +1,5 @@
 import { type MouseEvent } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
 import { FiArrowLeft, FiAward, FiHelpCircle } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
@@ -9,15 +8,10 @@ import {
   ledgerAccent,
   ledgerHairlineStrong,
   ledgerSubtleFill,
-  resolveCategory,
   withAlpha,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
-import { CATEGORY_SOFT_COLORS, metaText } from '@/pages/events/styles/theme'
-import {
-  type EventCategoryDto,
-  getAllEventCategories,
-} from '@/shared/api/event-categories'
+import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import {
@@ -30,6 +24,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
+import { EVENT_DOMAIN_ORDER, EVENT_DOMAINS, eventDomainDef } from '@/entities/event/model/event-domain'
 import { EVENT_TYPES, subtypesForDomain } from '@/entities/event/model/event-type-registry'
 
 import * as S from '../styles'
@@ -75,6 +70,13 @@ interface DetailHeroProps {
  *
  * 부모 사건 브레드크럼은 편집 대상 X (구조 변경은 별도 흐름).
  */
+/** 분야 고르기 — 9개, 설명 한 줄 */
+const DOMAIN_OPTIONS: InlineSelectOption[] = EVENT_DOMAIN_ORDER.map((key) => ({
+  value: key,
+  label: EVENT_DOMAINS[key].label,
+  description: EVENT_DOMAINS[key].tagline,
+}))
+
 /** 세부 고르기 — 그 분야에서 쓰이는 세부를 앞에, 나머지를 뒤에(저장은 독립 축이라 무엇이든 고를 수 있다) */
 const subtypeOptions = (domain?: string | null): InlineSelectOption[] => {
   const { primary, rest } = subtypesForDomain(domain)
@@ -96,21 +98,12 @@ export function DetailHero({
   onOpenKindGuide,
 }: DetailHeroProps) {
   const prefetchEvent = usePrefetchEventDetail()
-  const { data: categories = [] } = useQuery({
-    queryKey: ['event-categories'],
-    queryFn: getAllEventCategories,
-    staleTime: 5 * 60_000,
-  })
-
-  const category = resolveCategory(event.category?.name)
+  const category = eventDomainDef(event.domain)
   /**
-   * 분류 글자색 — 원색(category.color)이 아니라 **AA 대비 shade**를 쓴다.
-   * 목록이 같은 이유로 CATEGORY_SOFT_COLORS로 옮겨 갔다(원색 텍스트는 소형에서 AA 미달).
+   * 분류 글자색 — 원색(category.color)이 아니라 **AA 대비 shade**(soft.text)를 쓴다.
+   * 목록이 같은 이유로 soft 톤으로 옮겨 갔다(원색 텍스트는 소형에서 AA 미달).
    */
-  const categorySoft =
-    CATEGORY_SOFT_COLORS[
-      (event.category?.name ?? '기타') as keyof typeof CATEGORY_SOFT_COLORS
-    ] ?? CATEGORY_SOFT_COLORS.기타
+  const categorySoft = category.soft
 
   // 부모 사건 체인 — 표시 가능한 깊이(최대 3단)까지. 더 깊으면 truncated 플래그.
   const PARENT_CHAIN_CAP = 3
@@ -132,9 +125,6 @@ export function DetailHero({
     .map((extra) => extra.title)
     .join(', ')
 
-  const categoryOptions: InlineSelectOption[] = categories.map(
-    (cat: EventCategoryDto) => ({ value: cat.id, label: cat.name }),
-  )
 
   const kindLabel =
     event.kind === 'COLLECTION' ? (event.parentEvent ? '묶음 사건' : '최상위 사건') : '단일 사건'
@@ -148,23 +138,21 @@ export function DetailHero({
         </BackLink>
         <Sep>·</Sep>
         <S.CategoryChip $color={categorySoft.text} $colorDark={categorySoft.textDark}>
-          <span aria-hidden>{category.icon}</span>
+          <span aria-hidden>{category.glyph}</span>
+          {/* 분야는 필수 — 비우는 줄 없이 9개 중 하나로만 바꾼다 */}
           <InlineSelect
-            value={event.categoryId ?? ''}
-            options={categoryOptions}
-            /**
-             * 빈 선택 = 카테고리 해제. categoryId는 FK라 ''(빈 문자열)이면 제약을
-             * 위반하므로 null을 보내야 컬럼이 비워진다. undefined는 서버가 '변경 안 함'
-             * 으로 무시(Prisma partial update)하므로 해제가 안 됐다.
-             */
-            onSave={(next) => onPatch({ categoryId: next || null } as UpdateEventDto)}
-            placeholder={event.category?.name ?? '미분류'}
+            value={category.key}
+            options={DOMAIN_OPTIONS}
+            onSave={(next) => onPatch({ domain: next } as UpdateEventDto)}
+            placeholder={category.label}
+            label="분야"
+            clearable={false}
           />
           {/* 분야 › 세부 — 한 줄의 2단 분류. 세부는 선택이고 붙는 기록(추천 기능·빈 섹션 안내)을 정한다 */}
           <span aria-hidden>›</span>
           <InlineSelect
             value={event.type ?? ''}
-            options={subtypeOptions(event.category?.name)}
+            options={subtypeOptions(event.domain)}
             onSave={(next) => onPatch({ type: next || null } as UpdateEventDto)}
             placeholder="세부 없음"
             label="세부 분야"

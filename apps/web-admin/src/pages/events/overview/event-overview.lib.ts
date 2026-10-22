@@ -422,7 +422,7 @@ export interface CountBar {
   key: string
   label: string
   count: number
-  /** 이 세부를 가진 하위 사건들에서 가장 많은 분야 — 막대 색(분야 팔레트 한 벌만 쓴다) */
+  /** 이 세부를 가진 하위 사건들에서 가장 많은 분야(키) — 막대 색(분야 팔레트 한 벌만 쓴다) */
   domain: string | null
 }
 
@@ -436,8 +436,7 @@ export function typeBreakdown(descendants: EventOverviewNode[]): CountBar[] {
   for (const node of descendants) {
     const key = subtypeKeyOf(node)
     counts.set(key, (counts.get(key) ?? 0) + 1)
-    const domain = node.category?.name
-    if (!domain) continue
+    const domain = node.domain
     const byDomain = domains.get(key) ?? new Map<string, number>()
     byDomain.set(domain, (byDomain.get(domain) ?? 0) + 1)
     domains.set(key, byDomain)
@@ -589,7 +588,7 @@ export function checkNode(node: EventOverviewNode): Record<CheckKey, CheckState>
    * 다루지 않는 사건이어도 값이 있으면 채움으로 센다.
    */
   const byFacet = (facet: EventFacetKey, value: boolean): CheckState =>
-    value ? 'full' : facetWeight(node.type, facet, node.category?.name) ? 'empty' : 'na'
+    value ? 'full' : facetWeight(node.type, facet, node.domain) ? 'empty' : 'na'
   const { startPrecision } = effectiveRangePrecision(
     node.startDate,
     node.endDate,

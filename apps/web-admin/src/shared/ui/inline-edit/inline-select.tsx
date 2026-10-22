@@ -24,6 +24,8 @@ interface InlineSelectProps {
   label?: string
   /** read 모드 prefix(카테고리 칩 등). */
   prefix?: ReactNode
+  /** 비우기(placeholder 줄) 허용 — 기본 true. 값이 늘 있어야 하는 필드(사건 분야)는 false */
+  clearable?: boolean
   className?: string
 }
 
@@ -42,6 +44,7 @@ export function InlineSelect({
   placeholder = '선택',
   label,
   prefix,
+  clearable = true,
   className,
 }: InlineSelectProps) {
   const [open, setOpen] = useState(false)
@@ -75,16 +78,18 @@ export function InlineSelect({
         size="narrow"
       >
         <OptList role="listbox" aria-label={label ?? '옵션 선택'}>
-          <OptRow
-            type="button"
-            role="option"
-            aria-selected={isEmpty}
-            $active={isEmpty}
-            onClick={() => pick('')}
-          >
-            <OptLabel $muted>{placeholder}</OptLabel>
-            {isEmpty && <FiCheck />}
-          </OptRow>
+          {clearable && (
+            <OptRow
+              type="button"
+              role="option"
+              aria-selected={isEmpty}
+              $active={isEmpty}
+              onClick={() => pick('')}
+            >
+              <OptLabel $muted>{placeholder}</OptLabel>
+              {isEmpty && <FiCheck />}
+            </OptRow>
+          )}
           {options.map((opt) => {
             const selected = opt.value === value
             return (

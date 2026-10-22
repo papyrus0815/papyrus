@@ -21,7 +21,7 @@ const EVENTS: FilterableEvent[] = [
     id: 'e1',
     title: '병자호란',
     description: '',
-    categoryId: 'war',
+    domain: 'MILITARY',
     startDate: '1636-12-01',
     relatedHistoricalCountries: [{ id: 'joseon' }],
   },
@@ -29,7 +29,7 @@ const EVENTS: FilterableEvent[] = [
     id: 'e2',
     title: '한일 국교 정상화',
     description: '',
-    categoryId: 'treaty',
+    domain: 'DIPLOMACY',
     startDate: '1965-06-22',
     relatedCountries: [{ id: 'kr' }, { id: 'jp' }],
   },
@@ -37,7 +37,7 @@ const EVENTS: FilterableEvent[] = [
     id: 'e3',
     title: '연도 미상 사건',
     description: '',
-    categoryId: 'war',
+    domain: 'MILITARY',
     startDate: '',
     relatedCountries: [{ id: 'jp' }],
   },
@@ -75,8 +75,8 @@ describe('buildFilterOptionCounts', () => {
     const counts = buildFilterOptionCounts(EVENTS, makeContext())
 
     expect(counts.unfiltered).toBe(3)
-    expect(counts.category.get('war')).toBe(2)
-    expect(counts.category.get('treaty')).toBe(1)
+    expect(counts.category.get('MILITARY')).toBe(2)
+    expect(counts.category.get('DIPLOMACY')).toBe(1)
     expect(counts.continent.get('asia')).toBe(2)
     expect(counts.century.get(17)).toBe(1)
     expect(counts.century.get(20)).toBe(1)
@@ -97,19 +97,19 @@ describe('buildFilterOptionCounts', () => {
     // 그 조합에서 실제로 나올 결과 수여야 한다(e2 하나뿐).
     const counts = buildFilterOptionCounts(
       EVENTS,
-      makeContext({ selectedCategory: 'treaty' }),
+      makeContext({ selectedCategory: 'DIPLOMACY' }),
     )
     expect(counts.country.get('kr')).toBe(1)
     expect(counts.country.get('joseon')).toBeUndefined()
     // 반대로 카테고리 축 자신은 자기를 뺀 게이트라 전 축 값이 그대로 보인다.
-    expect(counts.category.get('war')).toBe(2)
+    expect(counts.category.get('MILITARY')).toBe(2)
   })
 
   it('dropOneOut은 그 축을 풀었을 때의 건수다 (IA-12)', () => {
     const counts = buildFilterOptionCounts(
       EVENTS,
       makeContext({
-        selectedCategory: 'treaty',
+        selectedCategory: 'DIPLOMACY',
         selectedCentury: CENTURY_UNKNOWN,
       }),
     )
@@ -128,7 +128,7 @@ describe('buildFilterOptionCounts', () => {
       makeContext({ bookmarkGate: new Set(['e2']) }),
     )
     expect(counts.dropOneOut.bookmark).toBe(3)
-    expect(counts.category.get('war')).toBeUndefined()
-    expect(counts.category.get('treaty')).toBe(1)
+    expect(counts.category.get('MILITARY')).toBeUndefined()
+    expect(counts.category.get('DIPLOMACY')).toBe(1)
   })
 })

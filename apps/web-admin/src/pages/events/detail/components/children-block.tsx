@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 
 import { FiPlus, FiX } from 'react-icons/fi'
 
-import { resolveCategory } from '@/entities/event/ui/ledger-tokens'
+import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { pathKeys } from '@/shared/router'
@@ -100,7 +100,7 @@ export function ChildrenBlock({
         {childEvents.length > 0 && (
           <NetStyles.ChildList>
             {visibleChildren.map((child) => {
-              const category = resolveCategory(child.category?.name)
+              const category = eventDomainDef(child.domain)
               const dateLabel =
                 child.startDate &&
                 formatDateRange(
@@ -118,10 +118,10 @@ export function ChildrenBlock({
                     onMouseEnter={() => prefetchEvent(child.id)}
                     onFocus={() => prefetchEvent(child.id)}
                   >
-                    {/* 킥커 — 글리프 소프트 디스크 + 날짜(없으면 카테고리명 폴백). */}
+                    {/* 킥커 — 글리프 소프트 디스크 + 날짜(없으면 분야명 폴백). */}
                     <NetStyles.ChildEyebrow $cat={category}>
-                      <span aria-hidden>{category.icon}</span>
-                      {dateLabel || (child.category?.name ?? '기타')}
+                      <span aria-hidden>{category.glyph}</span>
+                      {dateLabel || category.label}
                     </NetStyles.ChildEyebrow>
                     <NetStyles.ChildBody>
                       <NetStyles.ChildTitle>{child.title}</NetStyles.ChildTitle>

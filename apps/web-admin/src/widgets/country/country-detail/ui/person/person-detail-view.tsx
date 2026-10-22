@@ -1,3 +1,4 @@
+import { formatDomainPath } from '@/entities/event/model'
 import React, { useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
@@ -426,12 +427,9 @@ export function PersonDetailView({
                             </EventDate>
                           )}
                         </EventHeader>
-                        {evt.event.category && (
+                        {evt.event.domain && (
                           <EventDescription>
-                            📂 카테고리:{' '}
-                            {typeof evt.event.category === 'string'
-                              ? evt.event.category
-                              : evt.event.category.name}
+                            📂 분야: {formatDomainPath(evt.event.domain, evt.event.type)}
                           </EventDescription>
                         )}
                         {evt.role && (

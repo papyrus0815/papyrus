@@ -36,12 +36,12 @@ describe('세부 분야 레지스트리', () => {
   })
 
   it('저장은 독립 축 — 앞줄에 없는 세부도 그 분야의 "더 보기"에 있다', () => {
-    const { primary, rest } = subtypesForDomain('경제')
+    const { primary, rest } = subtypesForDomain('ECONOMY')
     expect(primary).toContain('COMPANY')
     expect(rest).toContain('BATTLE')
     expect([...primary, ...rest].sort()).toEqual([...EVENT_TYPE_ORDER].sort())
     // 앞줄이 없는 분야(기타)·미선택은 전부 앞줄
-    expect(subtypesForDomain('기타').rest).toEqual([])
+    expect(subtypesForDomain('OTHER').rest).toEqual([])
     expect(subtypesForDomain(null).primary).toEqual(EVENT_TYPE_ORDER)
   })
 
@@ -52,31 +52,31 @@ describe('세부 분야 레지스트리', () => {
   })
 
   it("한 줄 표기 '분야 › 세부'", () => {
-    expect(formatDomainPath('군사', 'LAW_POLICY')).toBe('군사 › 법령·정책·개혁')
-    expect(formatDomainPath('군사', null)).toBe('군사')
-    expect(formatDomainPath(null, null)).toBe('미분류')
+    expect(formatDomainPath('MILITARY', 'LAW_POLICY')).toBe('군사 › 법령·정책·개혁')
+    expect(formatDomainPath('MILITARY', null)).toBe('군사')
+    expect(formatDomainPath(null, null)).toBe('기타')
   })
 })
 
 describe('기록 — 세부가 정하고 분야가 얹는다', () => {
   it('같은 군사 분야라도 전투엔 교전 양측, 함대법(법령)엔 묻지 않는다', () => {
-    expect(facetWeight('BATTLE', 'sides', '군사')).toBe('core')
-    expect(facetWeight('LAW_POLICY', 'sides', '군사')).toBeNull()
-    expect(facetWeight('TREATY', 'treaty', '경제')).toBe('core')
+    expect(facetWeight('BATTLE', 'sides', 'MILITARY')).toBe('core')
+    expect(facetWeight('LAW_POLICY', 'sides', 'MILITARY')).toBeNull()
+    expect(facetWeight('TREATY', 'treaty', 'ECONOMY')).toBe('core')
     expect(facetWeight('STATEHOOD', 'statehood')).toBe('core')
-    expect(facetWeight('POWER_CHANGE', 'power', '군사')).toBe('core')
+    expect(facetWeight('POWER_CHANGE', 'power', 'MILITARY')).toBe('core')
     expect(facetWeight('INSTITUTION', 'organizations')).toBe('core')
   })
 
   it('분야는 선택 기록을 얹는다 — 군사 분야의 법령엔 작전 정보·수치, 경제엔 기업·수치', () => {
-    expect(typeFacets('LAW_POLICY', '군사').optional).toEqual(expect.arrayContaining(['military', 'metrics']))
-    expect(typeFacets('CONSTRUCTION', '경제').optional).toEqual(expect.arrayContaining(['organizations', 'metrics']))
+    expect(typeFacets('LAW_POLICY', 'MILITARY').optional).toEqual(expect.arrayContaining(['military', 'metrics']))
+    expect(typeFacets('CONSTRUCTION', 'ECONOMY').optional).toEqual(expect.arrayContaining(['organizations', 'metrics']))
     // 핵심에 있는 기록은 선택으로 다시 얹지 않는다
-    expect(typeFacets('COMPANY', '경제').optional).not.toContain('organizations')
+    expect(typeFacets('COMPANY', 'ECONOMY').optional).not.toContain('organizations')
   })
 
   it('세부가 없으면 참여국이 핵심, 인물은 선택', () => {
-    expect(typeFacets(null, '문화')).toEqual({ core: ['participants'], optional: ['persons'] })
+    expect(typeFacets(null, 'CULTURE')).toEqual({ core: ['participants'], optional: ['persons'] })
   })
 
   it('교전선 판정은 세부로 — 군사 분야의 법령·인사·동원은 무력 충돌이 아니다', () => {
@@ -91,28 +91,28 @@ describe('기록 — 세부가 정하고 분야가 얹는다', () => {
 
 describe('수치 성격 — 세부가 정하면 세부, 아니면 분야', () => {
   it('교전·조약·재해는 세부가 정한다(분야와 무관)', () => {
-    expect(metricsFor('BATTLE', '정치').subject).toBe('side')
-    expect(metricsFor('TREATY', '경제').presets).toContain('economy.indemnity')
+    expect(metricsFor('BATTLE', 'POLITICS').subject).toBe('side')
+    expect(metricsFor('TREATY', 'ECONOMY').presets).toContain('economy.indemnity')
     expect(metricsFor('DISASTER', null).presets).toContain('human.deaths_total')
   })
 
   it('법령·건설은 분야를 따른다 — 함대법은 병력·예산, 경제 법령은 경제 지표', () => {
-    expect(metricsFor('LAW_POLICY', '군사').presets).toContain('military.personnel')
-    expect(metricsFor('LAW_POLICY', '경제').presets).toContain('economy.index_close')
-    expect(metricsFor('CREATION', '문화').presets).toEqual([])
+    expect(metricsFor('LAW_POLICY', 'MILITARY').presets).toContain('military.personnel')
+    expect(metricsFor('LAW_POLICY', 'ECONOMY').presets).toContain('economy.index_close')
+    expect(metricsFor('CREATION', 'CULTURE').presets).toEqual([])
   })
 })
 
 describe('eventTypeFeatures — 상세 지면이 읽는 기능', () => {
   it('전쟁: 진영 → 수치 → 작전 정보, 수치는 진영별', () => {
-    const features = eventTypeFeatures('WAR', '군사')
+    const features = eventTypeFeatures('WAR', 'MILITARY')
     expect(features.suggestedModules).toEqual(['sides', 'metrics', 'military-details'])
     expect(features.metricSubject).toBe('side')
     expect(features.promoteTreaties).toBe(false)
   })
 
   it('조약: 조약 섹션을 올리고 배상금 지표를 권한다', () => {
-    const features = eventTypeFeatures('TREATY', '외교')
+    const features = eventTypeFeatures('TREATY', 'DIPLOMACY')
     expect(features.promoteTreaties).toBe(true)
     expect(features.metricPresets).toContain('economy.indemnity')
   })

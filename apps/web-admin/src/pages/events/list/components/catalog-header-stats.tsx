@@ -23,7 +23,7 @@ import React from 'react'
 
 import styled from 'styled-components'
 
-import type { EventCategoryDto } from '@/shared/api/event-categories'
+import type { EventDomainOption } from '@/entities/event/model/event-domain'
 
 import type { HistoricalEvent } from '../../create/events.types'
 import { metaText } from '../../styles/theme'
@@ -31,7 +31,7 @@ import { metaText } from '../../styles/theme'
 interface Props {
   events: HistoricalEvent[]
   /** (미사용) 최다 카테고리 표기를 걷어낸 뒤 남은 prop — 호출부 호환을 위해 둔다 */
-  dbCategories?: EventCategoryDto[]
+  dbCategories?: EventDomainOption[]
   /** 필터를 만족하는 사건 수 — undefined(미필터)면 serverTotal/events.length로 폴백 */
   visibleCount?: number
   /** 서버 권위 총개수(최상위 기준) — 미필터 상태의 "N건" */

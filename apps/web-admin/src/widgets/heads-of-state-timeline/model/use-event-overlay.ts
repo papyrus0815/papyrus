@@ -8,9 +8,9 @@ export interface OverlayEvent {
   startDate: string
   endDate: string | null
   /** EventCategory.name (있으면) — 색 분기에 사용 */
-  categoryName: string | null
+  /** 분야 키(MILITARY…) */
+  domain: string | null
   /** EventCategory.id — 사건 클릭 후 상세 진입 시 옵션 */
-  categoryId: string | null
 }
 
 const STORAGE_KEY = 'heads-of-state-timeline:event-overlay:v1'
@@ -66,8 +66,7 @@ export function useEventOverlay() {
               title: ev.title,
               startDate: ev.startDate ?? null,
               endDate: ev.endDate ?? null,
-              categoryName: ev?.category?.name ?? ev?.eventCategory?.name ?? null,
-              categoryId: ev?.category?.id ?? ev?.eventCategory?.id ?? null,
+              domain: ev?.domain ?? null,
             },
           }
         } catch {

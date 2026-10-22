@@ -26,7 +26,6 @@
  */
 import styled, { type DefaultTheme } from 'styled-components'
 
-import type { HistoricalEventCategory } from './events.types'
 
 // ============================================
 // 폼 필드 max-width 설정 (여기서 한 번에 변경 가능)
@@ -149,7 +148,7 @@ const DARK_COLORS: ColorSet = {
  * `#8b5cf6`인데 그건 앱 테마의 *secondary*라, 사건 등록 폼만 앱에서 유일하게 다른 색을
  * 강조색으로 쓰고 있었다. 나머지(배경·테두리·텍스트·상태색)는 이 파일 값을 그대로 둔다.
  *
- * 카테고리별 색(`getCategoryColors`)은 분류의 정체성이라 브랜드색과 무관 — 건드리지 않는다.
+ * 분야별 색(분야 레지스트리)은 분류의 정체성이라 브랜드색과 무관 — 건드리지 않는다.
  */
 export const getC = (theme: DefaultTheme) => {
   const base = theme.mode === 'dark' ? DARK_COLORS : LIGHT_COLORS
@@ -169,90 +168,6 @@ export const getC = (theme: DefaultTheme) => {
 /** 라이트/다크 분기 단축 헬퍼 */
 export const pickC = (theme: DefaultTheme, light: string, dark: string) =>
   theme.mode === 'dark' ? dark : light
-
-export const getCategoryColor = (category: HistoricalEventCategory | '') => {
-  type ColorKey = HistoricalEventCategory
-  const colors: Record<ColorKey, {
-    border: string; background: string; iconBackground: string; iconColor: string; shadow: string
-  }> = {
-    military: {
-      border: 'rgba(239, 68, 68, 0.4)',
-      background: 'rgba(239, 68, 68, 0.08)',
-      iconBackground: 'rgba(239, 68, 68, 0.15)',
-      iconColor: '#b91c1c',
-      shadow: 'rgba(248, 113, 113, 0.18)',
-    },
-    political: {
-      border: 'rgba(99, 102, 241, 0.4)',
-      background: 'rgba(99, 102, 241, 0.08)',
-      iconBackground: 'rgba(99, 102, 241, 0.18)',
-      iconColor: '#4c1d95',
-      shadow: 'rgba(129, 140, 248, 0.2)',
-    },
-    economic: {
-      border: 'rgba(245, 158, 11, 0.4)',
-      background: 'rgba(245, 158, 11, 0.08)',
-      iconBackground: 'rgba(245, 158, 11, 0.2)',
-      iconColor: '#b45309',
-      shadow: 'rgba(251, 191, 36, 0.2)',
-    },
-    social: {
-      border: 'rgba(6, 182, 212, 0.4)',
-      background: 'rgba(6, 182, 212, 0.08)',
-      iconBackground: 'rgba(6, 182, 212, 0.18)',
-      iconColor: '#0f766e',
-      shadow: 'rgba(34, 211, 238, 0.2)',
-    },
-    technological: {
-      border: 'rgba(14, 165, 233, 0.4)',
-      background: 'rgba(14, 165, 233, 0.08)',
-      iconBackground: 'rgba(14, 165, 233, 0.2)',
-      iconColor: '#0369a1',
-      shadow: 'rgba(14, 165, 233, 0.2)',
-    },
-    cultural: {
-      border: 'rgba(236, 72, 153, 0.4)',
-      background: 'rgba(236, 72, 153, 0.08)',
-      iconBackground: 'rgba(236, 72, 153, 0.2)',
-      iconColor: '#be185d',
-      shadow: 'rgba(244, 114, 182, 0.2)',
-    },
-    diplomatic: {
-      border: 'rgba(139, 92, 246, 0.4)',
-      background: 'rgba(139, 92, 246, 0.08)',
-      iconBackground: 'rgba(139, 92, 246, 0.2)',
-      iconColor: '#6b21a8',
-      shadow: 'rgba(167, 139, 250, 0.2)',
-    },
-    conference: {
-      border: 'rgba(99, 102, 241, 0.4)',
-      background: 'rgba(99, 102, 241, 0.08)',
-      iconBackground: 'rgba(99, 102, 241, 0.2)',
-      iconColor: '#4338ca',
-      shadow: 'rgba(129, 140, 248, 0.2)',
-    },
-    religious: {
-      border: 'rgba(251, 146, 60, 0.4)',
-      background: 'rgba(251, 146, 60, 0.08)',
-      iconBackground: 'rgba(251, 146, 60, 0.2)',
-      iconColor: '#c2410c',
-      shadow: 'rgba(253, 186, 116, 0.2)',
-    },
-    other: {
-      border: 'rgba(107, 114, 128, 0.4)',
-      background: 'rgba(107, 114, 128, 0.08)',
-      iconBackground: 'rgba(107, 114, 128, 0.2)',
-      iconColor: '#374151',
-      shadow: 'rgba(156, 163, 175, 0.2)',
-    },
-  }
-
-  if (!category || !(category in colors)) {
-    return colors.other
-  }
-
-  return colors[category as ColorKey]
-}
 
 /**
  * padding-top이 0인 이유 — CSS sticky의 고정 위치는 스크롤 컨테이너의 **패딩만큼 안쪽으로**
@@ -500,11 +415,10 @@ export const CategoryGrid = styled.div`
 
 export const CategoryCard = styled.button<{
   $selected: boolean
-  $category: HistoricalEventCategory | ''
 }>`
   position: relative;
   /*
-   * 색은 **카테고리 자기 색**(목록과 같은 CATEGORY_SOFT_COLORS) — 칩이 인라인 CSS 변수
+   * 색은 **분야 자기 색**(목록과 같은 분야 레지스트리 soft 톤) — 칩이 인라인 CSS 변수
    * --cat-rgb / --cat-text로 받는다. 예전엔 DB id에서 키를 뽑아 전부 회색('other')이었다.
    */
   border: 1px solid
@@ -544,7 +458,6 @@ export const CategoryCard = styled.button<{
 `
 
 export const CategoryIcon = styled.div<{
-  $category: HistoricalEventCategory | ''
   $selected?: boolean
 }>`
   width: 24px;

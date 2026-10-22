@@ -32,6 +32,7 @@ import {
   toParticipants,
 } from '@/entities/event/model'
 import { useBasicInfoForm } from '@/features/event-form/model'
+import { isEventDomainKey } from '@/entities/event/model/event-domain'
 import { EVENT_TYPES, type EventTypeKey, typeFacets } from '@/entities/event/model/event-type-registry'
 import {
   type RegisterFacetDrafts,
@@ -207,12 +208,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const isEditMode = Boolean(eventId)
 
   // ===== Entity: Form Entities Data =====
-  // BASIC 폼은 국가·역사국가·카테고리 3종만 쓴다 — 나머지 5개(인물·군부대·사건 전량·
-  // 가문·정당)는 호출하지 않는다.
-  const { availableCountries, availableHistoricalCountries, dbCategories } =
-    useFormEntities({
-      only: ['countries', 'historicalCountries', 'categories'],
-    })
+  // BASIC 폼은 국가·역사국가 2종만 불러온다 — 분야는 고정 목록(event-domain.ts)이라 불러올 게 없다.
+  const { availableCountries, availableHistoricalCountries } = useFormEntities({
+    only: ['countries', 'historicalCountries'],
+  })
 
   // ===== Feature: Basic Info Form =====
   const {
@@ -292,8 +291,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       setKind(next && EVENT_TYPES[next].usuallyCollection ? 'COLLECTION' : 'SINGLE')
     }
   }
-  /** 고른 분야의 이름 — 앞에 보일 세부와, 세부와 함께 붙는 기록·수치 성격을 정한다 */
-  const domainName = dbCategories.find((item) => item.id === category)?.name ?? null
+  /** 고른 분야 — 앞에 보일 세부와, 세부와 함께 붙는 기록·수치 성격을 정한다 */
+  const domainName = category || null
   const facets = typeFacets(eventType, domainName)
 
   /** 참여국 줄 → 표시 이름(현대·역사 국가 목록에서) */
@@ -448,7 +447,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           setThumbnail(event.thumbnail)
         }
 
-        if (event.categoryId) setCategory(event.categoryId)
+        if (isEventDomainKey(event.domain)) setCategory(event.domain)
         /* 편집 — 저장된 세부를 그대로. 단일/묶음은 이미 정해진 값이라 세부를 바꿔도 따라 바꾸지 않는다 */
         setEventType((event as { type?: EventTypeKey | null }).type ?? null)
         kindTouchedRef.current = true
@@ -612,7 +611,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         endTime,
         // 종료일이 없으면 정밀도도 보내지 않는다(기본 day가 빈 종료에 붙지 않게)
         endDatePrecision: endDate ? endDatePrecision : undefined,
-        category,
+        domain: category,
         location,
         thumbnail,
         // 신규 등록에서만 유효 — 빈 값('')은 빌더가 undefined(미전송)로 정규화한다
@@ -846,7 +845,6 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         setThumbnailFile={setThumbnailFile}
         keywords={keywords}
         setKeywords={setKeywords}
-        dbCategories={dbCategories}
         relatedCountries={relatedCountries}
         setRelatedCountries={setRelatedCountries}
         availableCountries={availableCountries}

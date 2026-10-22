@@ -101,7 +101,7 @@ export function EventOverlay({
           hasEnd,
           left,
           width,
-          tone: eventToneFor(ev.categoryName, isDark),
+          tone: eventToneFor(ev.domain, isDark),
         }
       })
       .filter((x): x is NonNullable<typeof x> => x != null)

@@ -2,6 +2,7 @@
  * 가이드라인이 꽂혔을 때 그 시점의 행별 재임자를 한 카드 리스트로 보여주는 우측 패널.
  * 페이지 본질 가치(같은 시점에 누가 있었나) 를 한눈에 전달하기 위한 컴포넌트.
  */
+import { domainLabel } from '@/entities/event/model/event-domain'
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
@@ -258,7 +259,7 @@ export function ContemporaryPanel({
         ) : (
           <EventsList>
             {yearEvents.map((ev) => {
-              const tone = eventToneFor(ev.categoryName, isDark)
+              const tone = eventToneFor(ev.domain, isDark)
               const clickable = onSelectEvent != null
               return (
                 <EventItem
@@ -271,11 +272,11 @@ export function ContemporaryPanel({
                 >
                   <EventTitle>{ev.title}</EventTitle>
                   <EventMeta>
-                    {ev.categoryName && (
+                    {ev.domain && (
                       <EventCatBadge
                         style={{ background: tone.background, color: tone.color }}
                       >
-                        {ev.categoryName}
+                        {domainLabel(ev.domain)}
                       </EventCatBadge>
                     )}
                     <EventYear>{formatEventYears(ev)}</EventYear>

@@ -21,7 +21,7 @@ const event: EventOverviewNode = {
   endDate: '1914-09-12T00:00:00.000Z',
   endDatePrecision: null,
   location: null,
-  category: { id: 'c', name: '군사' },
+  domain: 'MILITARY',
   type: 'BATTLE',
   countries: [
     { key: 'h:de', id: 'de', kind: 'historical', name: '독일 제국', flagEmoji: null, role: 'PARTICIPANT', sideId: null },

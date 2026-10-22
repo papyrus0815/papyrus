@@ -52,7 +52,7 @@ import {
 } from '@/features/event-filters/model/reference-label'
 import { FILTER_ALL } from '@/features/event-list/lib'
 import type { ContinentResponseDto } from '@/shared/api/continents'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
+import type { EventDomainOption } from '@/entities/event/model/event-domain'
 import { useAnchoredPosition } from '@/shared/hooks/use-anchored-position.hook'
 import { useOverlayEscape } from '@/shared/hooks/use-overlay-escape.hook'
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -66,7 +66,7 @@ interface FiltersPanelProps {
   selectedContinent: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
 
-  dbCategories: EventCategoryDto[]
+  dbCategories: EventDomainOption[]
   availableCenturies: number[]
   countries?: Array<{
     id: string
@@ -411,7 +411,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
         {/* 카테고리 — 인라인 팝오버 (전체 + 카테고리 N개 + 모달 진입) */}
         <InlineFilterPopover
           icon={<FiGrid size={13} />}
-          axisLabel="카테고리"
+          axisLabel="분야"
           valueLabel={categoryValue}
           isActive={selectedCategory !== FILTER_ALL}
           options={[

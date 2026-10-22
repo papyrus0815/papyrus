@@ -13,12 +13,12 @@ import { Link } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
 import { durationLabel } from '@/pages/events/detail/components/event-facts.lib'
+import { domainAccent, eventDomainDef } from '@/entities/event/model/event-domain'
+import { formatDomainPath } from '@/entities/event/model/event-type-registry'
 import {
-  categoryAccent,
   ledgerAccent,
   ledgerHoverFill,
   ledgerSubtleFill,
-  resolveCategory,
 } from '@/entities/event/ui/ledger-tokens'
 import type { EventOverviewNode } from '@/shared/api/event-overview'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
@@ -107,8 +107,8 @@ export function OverviewEventModal({
 
   if (!event) return null
 
-  const category = resolveCategory(event.category?.name)
-  const accent = categoryAccent(category, theme.mode)
+  const category = eventDomainDef(event.domain)
+  const accent = domainAccent(event.domain, theme.mode)
   const dateLabel = eventDateLabel(event)
   const duration = durationLabel(
     event.startDate,
@@ -164,15 +164,13 @@ export function OverviewEventModal({
                 <FactValue>{duration}</FactValue>
               </Fact>
             )}
-            {event.category && (
-              <Fact>
-                <FactLabel>갈래</FactLabel>
-                <FactValue>
-                  <Dot $color={accent} aria-hidden="true" />
-                  {event.category.name}
-                </FactValue>
-              </Fact>
-            )}
+            <Fact>
+              <FactLabel>갈래</FactLabel>
+              <FactValue>
+                <Dot $color={accent} aria-hidden="true" />
+                {formatDomainPath(category.key, event.type)}
+              </FactValue>
+            </Fact>
             {event.location && (
               <Fact>
                 <FactLabel>장소</FactLabel>

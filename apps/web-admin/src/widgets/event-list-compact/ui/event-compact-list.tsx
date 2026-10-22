@@ -18,7 +18,6 @@ import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import type { ListColumnKey, SortOption } from '@/features/event-list/lib'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { formatYearLabel, getCentury } from '@/shared/lib/iso-date'
@@ -125,7 +124,6 @@ interface EventCompactListProps {
    * 원인을 데이터 쪽에서 찾게 되므로, 저장 위치를 빈 상태에서 한 줄로 밝힌다.
    */
   showBookmarkStorageHint?: boolean
-  dbCategories: EventCategoryDto[]
   isLoadingMore?: boolean
   displayedCount?: number
   /**
@@ -228,7 +226,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   hasActiveFilters,
   activeFilterChips = [],
   showBookmarkStorageHint = false,
-  dbCategories,
   isLoadingMore = false,
   displayedCount = 0,
   displayedRootCount = 0,
@@ -657,7 +654,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     [
       yearBuckets,
       bookmarks,
-      dbCategories,
       eventById,
       events,
       expandedEventIds,
@@ -750,7 +746,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         parentNodeId={parentNodeId}
         isMatch={isMatch}
         isActive={selectedEventId === node.id}
-        dbCategories={dbCategories}
         isBookmarked={bookmarks.has(node.id)}
         searchQuery={searchQuery}
         // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)

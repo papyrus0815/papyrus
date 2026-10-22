@@ -2,6 +2,7 @@
  * 이벤트 데이터 생성 로직
  * FSD: features/event-create/lib
  */
+import type { EventDomainKey } from '@/entities/event/model/event-domain'
 import type { MilitaryEvent } from '@/shared/types/military-event.types'
 import type { EventCountryParticipant } from '@/entities/event/model'
 import type { CreateEventDto } from '@/shared/api/events'
@@ -95,7 +96,8 @@ export const buildEventSubmitData = (params: {
   endDate: string
   endTime: string
   endDatePrecision?: 'year' | 'month' | 'day'
-  category: string
+  /** 분야 키(MILITARY…) — 빈 문자열이면 보내지 않는다 */
+  domain: EventDomainKey | ''
   location: string
   /** 등록된 도시 참조 (PlaceSelect DB 선택) */
   cityId?: string | null
@@ -164,8 +166,7 @@ export const buildEventSubmitData = (params: {
         : `${params.endDate}T00:00:00.000Z`
       : undefined,
     endDatePrecision: params.endDatePrecision ?? undefined,
-    // 🔧 FIX: category는 이미 categoryId (cat-military-001)이므로 직접 전달
-    categoryId: params.category || undefined,
+    domain: params.domain || undefined,
     location: params.location.trim() || undefined,
     cityId: params.cityId || undefined,
     administrativeDivisionId: params.administrativeDivisionId || undefined,

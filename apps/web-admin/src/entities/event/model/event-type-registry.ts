@@ -1,7 +1,7 @@
 /**
  * 사건 세부 분야 레지스트리 — **분야의 2단계(분야 › 세부)이자 "이 사건에는 무엇을 기록하는가"의 단일 정본.**
  *
- *  - 분야(Event.category, 9종·필수): 무엇에 관한 일인가 — 정치·외교·군사·경제… 색·필터의 기준.
+ *  - 분야(Event.domain, 9종·필수): 무엇에 관한 일인가 — 정치·외교·군사·경제… 색·필터의 기준(event-domain.ts).
  *  - 세부(Event.type, 28종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
  *    **붙는 기록을 정한다**(전투 → 교전 양측, 조약 → 맺어진 조약, 즉위 → 재임 기록).
  *
@@ -19,6 +19,8 @@
  * ⚠️ 이 표는 **권하고 묻는 것**만 정한다 — 세부로 기록을 막지 않는다. 전쟁은 조약으로 끝나고
  * 봉기에도 진영이 있다. 서버는 값(EventType enum)만 보관한다 — apps/api/src/libs/event/domain/event-type.ts.
  */
+
+import { domainLabel, type EventDomainKey, isEventDomainKey } from './event-domain'
 
 export type EventTypeKey =
   | 'WAR'
@@ -190,19 +192,21 @@ const TREATY_METRICS: EventTypeMetrics = {
 }
 
 /** 분야가 정하는 수치 — 세부가 수치의 성격을 정하지 않을 때 */
-const METRICS_OF_DOMAIN: Record<string, EventTypeMetrics> = {
-  군사: MILITARY_DOMAIN_METRICS,
-  경제: ECONOMY_METRICS,
-  사회: SOCIETY_METRICS,
+const METRICS_OF_DOMAIN: Partial<Record<EventDomainKey, EventTypeMetrics>> = {
+  MILITARY: MILITARY_DOMAIN_METRICS,
+  ECONOMY: ECONOMY_METRICS,
+  SOCIETY: SOCIETY_METRICS,
 }
 
 /** 분야가 더 권하는 기록 — 세부의 선택 기록에 얹는다(군사 분야의 법령엔 작전 정보·수치, 경제엔 기업·수치) */
-const OPTIONAL_OF_DOMAIN: Record<string, EventFacetKey[]> = {
-  군사: ['military', 'metrics'],
-  경제: ['organizations', 'metrics'],
-  사회: ['metrics'],
-  정치: ['cabinets'],
+const OPTIONAL_OF_DOMAIN: Partial<Record<EventDomainKey, EventFacetKey[]>> = {
+  MILITARY: ['military', 'metrics'],
+  ECONOMY: ['organizations', 'metrics'],
+  SOCIETY: ['metrics'],
+  POLITICS: ['cabinets'],
 }
+
+const domainKey = (domain?: string | null): EventDomainKey | null => (isEventDomainKey(domain) ? domain : null)
 
 export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
   // ── 충돌 ──────────────────────────────────────────────────────────────
@@ -343,22 +347,23 @@ export const EVENT_TYPE_ORDER = Object.keys(EVENT_TYPES) as EventTypeKey[]
 
 /**
  * 분야마다 **앞에 보일 세부** — 실데이터에서 그 분야에 실제로 쓰인 세부 + 자연스러운 것.
- * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 키는 분야 이름(DB EventCategory.name).
+ * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 기타는 앞줄이 없어 전부 보인다.
  */
-export const DOMAIN_SUBTYPES: Record<string, EventTypeKey[]> = {
-  정치: ['STATEHOOD', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'DECLARATION', 'PERSONAL'],
-  외교: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'],
-  군사: ['WAR', 'BATTLE', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
-  경제: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'MOVEMENT'],
-  사회: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'LAW_POLICY', 'CONSTRUCTION'],
-  문화: ['CREATION', 'CONSTRUCTION', 'VISIT'],
-  종교: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'MIGRATION'],
-  과학기술: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION'],
+export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = {
+  POLITICS: ['STATEHOOD', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'DECLARATION', 'PERSONAL'],
+  DIPLOMACY: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'],
+  MILITARY: ['WAR', 'BATTLE', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
+  ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'MOVEMENT'],
+  SOCIETY: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'LAW_POLICY', 'CONSTRUCTION'],
+  CULTURE: ['CREATION', 'CONSTRUCTION', 'VISIT'],
+  RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'MIGRATION'],
+  SCIENCE: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION'],
 }
 
 /** 분야의 앞줄 세부와 나머지 — 분야를 안 골랐거나 앞줄이 없는 분야(기타)는 전부 앞줄 */
 export function subtypesForDomain(domain?: string | null): { primary: EventTypeKey[]; rest: EventTypeKey[] } {
-  const primary = (domain ? DOMAIN_SUBTYPES[domain] : undefined) ?? EVENT_TYPE_ORDER
+  const key = domainKey(domain)
+  const primary = (key ? DOMAIN_SUBTYPES[key] : undefined) ?? EVENT_TYPE_ORDER
   return { primary, rest: EVENT_TYPE_ORDER.filter((type) => !primary.includes(type)) }
 }
 
@@ -376,11 +381,11 @@ export function eventTypeDef(type?: string | null): EventTypeDef | null {
 /** 세부 라벨 — 없으면 null */
 export const eventTypeLabel = (type?: string | null): string | null => eventTypeDef(type)?.label ?? null
 
-/** '군사 › 법령·정책·개혁' — 세부가 없으면 분야만, 분야도 없으면 '미분류' */
+/** '군사 › 법령·정책·개혁' — 세부가 없으면 분야만. domain은 분야 키(MILITARY…) */
 export function formatDomainPath(domain?: string | null, type?: string | null): string {
   const label = eventTypeLabel(type)
-  if (!domain) return label ?? '미분류'
-  return label ? `${domain} › ${label}` : domain
+  const head = domainLabel(domain)
+  return label ? `${head} › ${label}` : head
 }
 
 /** 이 사건의 기록 — 세부의 핵심·선택에 분야가 권하는 선택 기록을 얹는다 */
@@ -389,14 +394,16 @@ export function typeFacets(
   domain?: string | null,
 ): { core: EventFacetKey[]; optional: EventFacetKey[] } {
   const def = eventTypeDef(type) ?? NO_SUBTYPE
-  const extra = (domain ? OPTIONAL_OF_DOMAIN[domain] : undefined) ?? []
+  const key = domainKey(domain)
+  const extra = (key ? OPTIONAL_OF_DOMAIN[key] : undefined) ?? []
   const optional = [...new Set([...def.optional, ...extra])].filter((facet) => !def.core.includes(facet))
   return { core: def.core, optional }
 }
 
 /** 이 사건의 수치 성격 — 세부가 정하면 세부, 아니면 분야 */
 export function metricsFor(type: string | null | undefined, domain?: string | null): EventTypeMetrics {
-  return eventTypeDef(type)?.metrics ?? (domain ? METRICS_OF_DOMAIN[domain] : undefined) ?? GENERIC_METRICS
+  const key = domainKey(domain)
+  return eventTypeDef(type)?.metrics ?? (key ? METRICS_OF_DOMAIN[key] : undefined) ?? GENERIC_METRICS
 }
 
 /** 이 사건에서 기록의 무게 — 핵심·선택·없음 */

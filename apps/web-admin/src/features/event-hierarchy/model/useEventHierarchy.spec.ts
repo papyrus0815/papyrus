@@ -11,11 +11,11 @@ import { useEventHierarchy } from './useEventHierarchy'
  */
 type AnyEvent = Parameters<typeof useEventHierarchy>[0][number]
 
-const child = (id: string, category: string) =>
+const child = (id: string, domain: string) =>
   ({
     id,
     title: id,
-    category,
+    domain,
     parentEventId: 'parent',
     hierarchy: {
       id,
@@ -31,7 +31,7 @@ const parent = (childCategories: Array<[string, string]>) =>
   ({
     id: 'parent',
     title: 'parent',
-    category: '전쟁',
+    domain: 'MILITARY',
     hierarchy: {
       id: 'parent',
       title: 'parent',
@@ -50,11 +50,11 @@ const parent = (childCategories: Array<[string, string]>) =>
   }) as unknown as AnyEvent
 
 const CHILDREN: Array<[string, string]> = [
-  ['child-war', '전쟁'],
-  ['child-diplomacy', '외교'],
+  ['child-war', 'MILITARY'],
+  ['child-diplomacy', 'DIPLOMACY'],
 ]
 const ROOT = parent(CHILDREN)
-const ALL = [ROOT, ...CHILDREN.map(([id, category]) => child(id, category))]
+const ALL = [ROOT, ...CHILDREN.map(([id, domain]) => child(id, domain))]
 
 const renderFlatten = (
   filterOptions?: Parameters<typeof useEventHierarchy>[5],
@@ -78,7 +78,7 @@ describe('useEventHierarchy — 자식에도 필터 적용', () => {
   it('필터가 걸리면 조건 밖 자식은 렌더하지 않는다', () => {
     const { result } = renderFlatten({
       hasNarrowingFilters: true,
-      matchesEvent: (event) => event.category === '전쟁',
+      matchesEvent: (event) => event.domain === 'MILITARY',
     })
     const ids = result.current.flattenedHierarchy.map((item) => item.node.id)
 
@@ -90,7 +90,7 @@ describe('useEventHierarchy — 자식에도 필터 적용', () => {
   it('잘려나간 자식 수를 부모 행에 알린다 — 조용한 누락 방지', () => {
     const { result } = renderFlatten({
       hasNarrowingFilters: true,
-      matchesEvent: (event) => event.category === '전쟁',
+      matchesEvent: (event) => event.domain === 'MILITARY',
     })
     const parentRow = result.current.flattenedHierarchy.find(
       (item) => item.node.id === 'parent',
@@ -120,7 +120,7 @@ describe('useEventHierarchy — 자식에도 필터 적용', () => {
   it('하위 접기는 matchedCount를 바꾸지 않는다', () => {
     const { result } = renderFlatten({
       hasNarrowingFilters: true,
-      matchesEvent: (event) => event.category === '전쟁',
+      matchesEvent: (event) => event.domain === 'MILITARY',
     })
     // 부모(전쟁) + 자식(child-war) = 2
     const before = result.current.matchedCount
@@ -141,7 +141,7 @@ describe('useEventHierarchy — 자식에도 필터 적용', () => {
   it('필터 중에는 접어 두었어도 매칭 행이 드러난다', () => {
     const { result } = renderFlatten({
       hasNarrowingFilters: true,
-      matchesEvent: (event) => event.category === '전쟁',
+      matchesEvent: (event) => event.domain === 'MILITARY',
     })
 
     act(() => {
@@ -178,7 +178,7 @@ describe('useEventHierarchy — 자식에도 필터 적용', () => {
   it('셰브론 배지 수는 필터 통과 자식 수를 센다', () => {
     const { result } = renderFlatten({
       hasNarrowingFilters: true,
-      matchesEvent: (event) => event.category === '전쟁',
+      matchesEvent: (event) => event.domain === 'MILITARY',
     })
 
     const parentRow = result.current.flattenedHierarchy.find(
@@ -199,7 +199,7 @@ describe('useEventHierarchy — 손자까지 펼침 모수에 든다', () => {
   const grandchildTree = {
     id: 'root',
     title: 'root',
-    category: '전쟁',
+    domain: 'MILITARY',
     hierarchy: {
       id: 'root',
       title: 'root',

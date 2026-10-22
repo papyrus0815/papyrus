@@ -17,14 +17,20 @@ import React, { Suspense, lazy, useMemo, useState } from 'react'
 import { FiClock, FiLayers, FiStar } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
-import { eventTypeLabel, formatDomainPath, useEvents } from '@/entities/event/model'
+import {
+  EVENT_DOMAIN_ORDER,
+  domainLabel,
+  eventDomainDef,
+  eventTypeLabel,
+  formatDomainPath,
+  useEvents,
+} from '@/entities/event/model'
 import {
   getEventDescendantCount,
   isCollectionEvent,
 } from '@/features/event-hierarchy/model/event-kind'
 import type { HistoricalEvent } from '@/entities/event/model'
 /* 분류 색 단일출처 — 본문 목록(event-list-compact)도 같은 파일을 읽는다 */
-import { CATEGORY_SOFT_COLORS } from '@/pages/events/styles/theme'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import {
@@ -163,7 +169,7 @@ function searchTextOf(
 ): string {
   return [
     event.title,
-    event.category,
+    formatDomainPath(event.domain, event.type),
     event.location,
     parent?.title,
     countries,
@@ -203,17 +209,15 @@ function EventListSidebarInner({
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
 
-  /** 분류 셀렉트 — 건수를 함께 보여 어느 축이 실제로 채워져 있는지 고르기 전에 알 수 있게 */
+  /** 분야 셀렉트 — 건수를 함께 보여 어느 축이 실제로 채워져 있는지 고르기 전에 알 수 있게(레지스트리 순서) */
   const categoryOptions = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const event of events) {
-      if (!event.category) continue
-      const name = String(event.category)
-      counts.set(name, (counts.get(name) ?? 0) + 1)
-    }
-    return [...counts.entries()]
-      .sort((left, right) => left[0].localeCompare(right[0], 'ko'))
-      .map(([name, count]) => ({ name, count }))
+    for (const event of events) counts.set(event.domain, (counts.get(event.domain) ?? 0) + 1)
+    return EVENT_DOMAIN_ORDER.filter((key) => counts.has(key)).map((key) => ({
+      key,
+      name: domainLabel(key),
+      count: counts.get(key) ?? 0,
+    }))
   }, [events])
 
   /** 세기 그룹 id는 부호 연도 기준 — BC는 음수 세기로 따로 잡힌다 */
@@ -243,12 +247,12 @@ function EventListSidebarInner({
       const childCount = event.hierarchy?.children?.length ?? 0
       /* 묶음 사건 — 하위가 평소엔 목록에서 빠지므로(아래 1단계) 몇 건을 거느리는지 오른쪽 숫자로 */
       const descendantCount = isCollectionEvent(event) ? getEventDescendantCount(event) : 0
-      const categoryLabel = event.category ? String(event.category) : null
+      const categoryLabel = domainLabel(event.domain)
       const thumbnailUrl = event.visuals?.thumbnailUrl
         ? getUploadImageUrl(event.visuals.thumbnailUrl) || event.visuals.thumbnailUrl
         : null
       /* 읽어 주는 분류는 늘 '분야 › 세부' 한 줄 */
-      const pathLabel = categoryLabel || event.type ? formatDomainPath(categoryLabel, event.type) : null
+      const pathLabel = formatDomainPath(event.domain, event.type)
       /*
        * 둘째 줄에 보이는 분류 — 배지(분야 첫 글자·분야 색)가 이미 분야를 말하므로 **세부만**.
        * '분야 › 세부'를 통째로 적으면 240px 행에서 관련국과 함께 둘 다 말줄임돼 아무것도 안 읽혔다(실측).
@@ -282,11 +286,8 @@ function EventListSidebarInner({
          * 예전엔 보유율 13%라 선두를 날짜 열로 썼지만, 배지가 분류를 말하므로 빈 블록이 아니다.
          */
         thumbnailUrl,
-        badgeText: (categoryLabel ?? '미분류').slice(0, 1),
-        accentColor: (
-          CATEGORY_SOFT_COLORS[event.category as keyof typeof CATEGORY_SOFT_COLORS] ??
-          CATEGORY_SOFT_COLORS.other
-        ).text,
+        badgeText: categoryLabel.slice(0, 1),
+        accentColor: eventDomainDef(event.domain).soft.text,
         /*
          * 둘째 줄 — 날짜 · 관련국 · 분류(기업의 '종목코드 · 국가 · 상태'와 같은 자리).
          * 검색 중에는 관련국·분류에 매치 강조를 입힌다 — 제목 밖에서 걸린 행이 '왜 여기 있나'를
@@ -374,7 +375,7 @@ function EventListSidebarInner({
       ) {
         continue
       }
-      if (categoryFilter && String(event.category) !== categoryFilter) continue
+      if (categoryFilter && event.domain !== categoryFilter) continue
       const parent = event.parentEventId ? byId.get(event.parentEventId) : null
       const searchText = searchTextOf(
         event,
@@ -508,13 +509,13 @@ function EventListSidebarInner({
         selects={[
           {
             id: 'category',
-            label: '분류',
+            label: '분야',
             value: categoryFilter,
             onChange: setCategoryFilter,
             options: [
-              { value: '', label: '분류 전체' },
-              ...categoryOptions.map(({ name, count }) => ({
-                value: name,
+              { value: '', label: '분야 전체' },
+              ...categoryOptions.map(({ key, name, count }) => ({
+                value: key,
                 label: `${name} ${count}`,
               })),
             ],

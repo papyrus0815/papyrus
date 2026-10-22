@@ -442,7 +442,8 @@ export type CompanyRelatedEvent = {
   startYear: number | null
   startMonth: number | null
   startDay: number | null
-  categoryName: string | null
+  /** 사건 분야 키(MILITARY…) */
+  domain: string
 }
 
 async function request<T>(

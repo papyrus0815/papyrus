@@ -6,7 +6,7 @@
  */
 import { useTheme } from 'styled-components'
 
-import { categoryAccent, resolveCategory } from '@/entities/event/ui/ledger-tokens'
+import { domainAccent, domainLabel } from '@/entities/event/model/event-domain'
 import type { EventOverviewNode } from '@/shared/api/event-overview'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
@@ -144,7 +144,7 @@ export function GanttPanel({
               const stripe = rowIndex % 2 === 1
               const dim = isDimmed(visibleIds, row.node.id)
               const hot = hotId === row.node.id
-              const color = categoryAccent(resolveCategory(row.node.category?.name), theme.mode)
+              const color = domainAccent(row.node.domain, theme.mode)
               // 라벨이 막대 오른쪽에 붙되, 오른쪽 끝에 가까우면 막대 왼쪽 안쪽으로 들인다
               // 날짜 라벨 자리: 막대 오른쪽 → (오른쪽 끝이면) 왼쪽 → (양쪽 다 없으면) 막대 안.
               // 25년짜리 차관처럼 축 전체를 덮는 막대는 왼쪽에 두면 제목 열 밑으로 잘렸다('14.7.28')
@@ -161,7 +161,7 @@ export function GanttPanel({
                 >
                   <S.GanttLabel $depth={row.node.depth} $dim={dim} $hot={hot} $stripe={stripe}>
                     <S.GanttNumber>{numberById.get(row.node.id)}</S.GanttNumber>
-                    <S.CategoryDot $color={color} title={row.node.category?.name ?? '미분류'} />
+                    <S.CategoryDot $color={color} title={domainLabel(row.node.domain)} />
                     {row.outside && (
                       <S.OutsideTag
                         title={
@@ -430,7 +430,7 @@ export function DistributionPanel({
   const theme = useTheme()
   const total = types.reduce((sum, bar) => sum + bar.count, 0)
   const maxActive = Math.max(1, ...bins.map((bin) => bin.active))
-  const colorOf = (bar: CountBar) => categoryAccent(resolveCategory(bar.domain), theme.mode)
+  const colorOf = (bar: CountBar) => domainAccent(bar.domain, theme.mode)
   return (
     <S.Panel $wide id="overview-distribution" aria-labelledby="overview-distribution-title">
       <S.PanelHead>

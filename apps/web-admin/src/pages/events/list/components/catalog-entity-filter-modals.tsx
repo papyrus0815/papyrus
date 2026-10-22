@@ -9,7 +9,7 @@ import React, { useMemo } from 'react'
 import { FILTER_ALL } from '@/features/event-list/lib'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
+import type { EventDomainOption } from '@/entities/event/model/event-domain'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
 import { CategoryModal } from '@/widgets/event-list/ui/category-modal'
@@ -18,7 +18,7 @@ interface Props {
   // 카테고리
   showCategoryModal: boolean
   setShowCategoryModal: (v: boolean) => void
-  dbCategories: EventCategoryDto[]
+  dbCategories: EventDomainOption[]
   selectedCategory: string
   setSelectedCategory: (v: string) => void
 

@@ -6,10 +6,8 @@ import styled, { css } from 'styled-components'
 
 import { HIDEABLE_COLUMNS } from '@/features/event-list/lib'
 
-import type { HistoricalEventCategory } from '../create/events.types'
 import {
   BRAND,
-  CATEGORY_BADGE_COLORS,
   COLUMN_HEAD_BAND,
   GROUP_BAND,
   GROUP_BAND_HOVER,
