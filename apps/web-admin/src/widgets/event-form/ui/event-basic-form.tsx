@@ -32,7 +32,7 @@ import {
   toParticipants,
 } from '@/entities/event/model'
 import { useBasicInfoForm } from '@/features/event-form/model'
-import { EVENT_TYPES, type EventTypeKey } from '@/entities/event/model/event-type-registry'
+import { EVENT_TYPES, type EventTypeKey, typeFacets } from '@/entities/event/model/event-type-registry'
 import {
   type RegisterFacetDrafts,
   commitRegisterFacets,
@@ -276,26 +276,25 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   // '하위 사건으로 나누기'·'단일 사건으로'가 정본이라 여기서는 고르지 않는다.
   const [kind, setKind] = useState<'SINGLE' | 'COLLECTION'>('SINGLE')
 
-  // ===== 사건 유형(형식) — 무엇을 기록할지를 정한다(entities/event/model/event-type-registry.ts) =====
-  // 고르면 분야·단일/묶음 기본값이 따라오되, 사용자가 직접 고친 값은 덮지 않는다(touched).
+  // ===== 세부 분야(선택) — 분야의 2단계이자 붙는 기록을 정한다(entities/event/model/event-type-registry.ts) =====
   const [eventType, setEventType] = useState<EventTypeKey | null>(null)
-  const categoryTouchedRef = useRef(false)
+  /** 단일/묶음을 사람이 직접 고쳤나 — 고치지 않았으면 세부(전쟁·위기…)가 묶음을 권한다 */
   const kindTouchedRef = useRef(false)
-  /** 유형의 핵심 기록 초안 — 사건이 생긴 뒤 각 정본 API로 잇는다(신규 등록 전용) */
+  /** 세부의 핵심 기록 초안 — 사건이 생긴 뒤 각 정본 API로 잇는다(신규 등록 전용) */
   const [facetDrafts, setFacetDrafts] = useState<RegisterFacetDrafts>(emptyRegisterFacetDrafts)
   /** 성립·소멸 칸에서 국가 모달을 열면 고른 나라를 이 역할로 넣는다 */
   const [pendingCountryRole, setPendingCountryRole] = useState<'FOUNDED' | 'DISSOLVED' | null>(null)
 
-  /** 유형 고르기 — 분야·단일/묶음은 아직 손대지 않았을 때만 유형의 기본값으로 */
-  const selectType = (next: EventTypeKey) => {
+  /** 세부 고르기(null = 해제) — 단일/묶음은 사람이 안 고쳤을 때만 세부의 권장값으로 */
+  const selectType = (next: EventTypeKey | null) => {
     setEventType(next)
-    const def = EVENT_TYPES[next]
-    if (!categoryTouchedRef.current) {
-      const domain = dbCategories.find((item) => item.name === def.defaultDomain)
-      if (domain) setCategory(domain.id as typeof category)
+    if (!isEditMode && !kindTouchedRef.current) {
+      setKind(next && EVENT_TYPES[next].usuallyCollection ? 'COLLECTION' : 'SINGLE')
     }
-    if (!isEditMode && !kindTouchedRef.current) setKind(def.usuallyCollection ? 'COLLECTION' : 'SINGLE')
   }
+  /** 고른 분야의 이름 — 앞에 보일 세부와, 세부와 함께 붙는 기록·수치 성격을 정한다 */
+  const domainName = dbCategories.find((item) => item.id === category)?.name ?? null
+  const facets = typeFacets(eventType, domainName)
 
   /** 참여국 줄 → 표시 이름(현대·역사 국가 목록에서) */
   const participantName = (row: { countryId?: string | null; historicalCountryId?: string | null }) =>
@@ -450,9 +449,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         }
 
         if (event.categoryId) setCategory(event.categoryId)
-        /* 편집 — 저장된 유형을 그대로. 분야·종류는 이미 정해진 값이라 유형을 바꿔도 따라 바꾸지 않는다 */
-        setEventType(((event as { type?: EventTypeKey }).type ?? 'OTHER') as EventTypeKey)
-        categoryTouchedRef.current = true
+        /* 편집 — 저장된 세부를 그대로. 단일/묶음은 이미 정해진 값이라 세부를 바꿔도 따라 바꾸지 않는다 */
+        setEventType((event as { type?: EventTypeKey | null }).type ?? null)
         kindTouchedRef.current = true
 
         /**
@@ -572,15 +570,16 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     onDirtyChange?.(isDirty)
   }, [isDirty, onDirtyChange])
 
-  const typeError = eventType ? undefined : '사건 유형을 골라 주세요'
-  const isValid = isBasicInfoValid() && Boolean(eventType)
+  /* 분야는 필수 — 사건의 분류이자 색·필터의 기준이다. 세부(2단계)는 선택 */
+  const categoryError = category ? undefined : '분야를 골라 주세요'
+  const isValid = isBasicInfoValid() && Boolean(category)
   useEffect(() => {
     onStateChange?.({
       isEditMode,
       isLoading: isLoadingEvent,
       isSubmitting,
       isValid,
-      firstError: validation.firstError ?? typeError ?? undefined,
+      firstError: validation.firstError ?? categoryError ?? undefined,
     })
   }, [
     isEditMode,
@@ -588,7 +587,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     isSubmitting,
     isValid,
     validation.firstError,
-    typeError,
+    categoryError,
     onStateChange,
   ])
 
@@ -597,7 +596,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setSubmitAttempted(true)
     try {
       if (!validateBasicInfo({ title, startDate })) return
-      if (!eventType) return
+      if (!category) return
 
       setIsSubmitting(true)
       // 상세 페이지 청크를 미리 데워 저장 직후 이동이 매끄럽도록.
@@ -650,13 +649,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         saved = await createEvent({
           ...(eventData satisfies Parameters<typeof createEvent>[0]),
           kind,
-          type: eventType,
-          // 참여 인물(유형의 핵심 기록이 인물인 경우) — 생성 요청에 함께 싣는다
+          ...(eventType && { type: eventType }),
+          // 참여 인물(세부의 핵심 기록이 인물인 경우) — 생성 요청에 함께 싣는다
           relatedPersons: relatedPersonsPayload(facetDrafts),
         })
         targetId = saved.id
         /*
-         * 유형의 핵심 기록을 잇는다 — 진영·조약·조직·취임·선거. 사건은 이미 저장됐으므로 하나가 실패해도
+         * 세부의 핵심 기록을 잇는다 — 진영·조약·조직·취임·선거. 사건은 이미 저장됐으므로 하나가 실패해도
          * 되돌리지 않고 무엇이 됐고 무엇을 상세에서 마저 할지 알린다. 상세 캐시 시딩(아래)보다 먼저 해야
          * 상세가 이은 기록까지 담은 채로 열린다.
          */
@@ -761,11 +760,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const handleReset = useCallback(
     (options?: BasicInfoResetOptions) => {
       resetFormFields(options)
-      // 유형은 분야를 남기는 '계속 등록'에서 함께 남긴다(같은 형식을 연달아 등록하는 흐름) — 기록 초안은 비운다
-      if (!options?.keepCategory) {
-        setEventType(null)
-        categoryTouchedRef.current = false
-      }
+      // 세부는 분야를 남기는 '계속 등록'에서 함께 남긴다(같은 꼴을 연달아 등록하는 흐름) — 기록 초안은 비운다
+      if (!options?.keepCategory) setEventType(null)
       kindTouchedRef.current = false
       setFacetDrafts(emptyRegisterFacetDrafts())
       // parentEvent는 의도적으로 유지 — "계속 등록"의 전형이 같은 상위 밑에 형제
@@ -804,32 +800,29 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         endDatePrecision={endDatePrecision}
         setEndDatePrecision={setEndDatePrecision}
         category={category}
-        setCategory={(value) => {
-          categoryTouchedRef.current = true
-          setCategory(value)
-        }}
+        setCategory={setCategory}
+        categoryError={submitAttempted ? categoryError : undefined}
         typeSlot={
           <EventTypeField
+            domain={domainName}
             value={eventType}
             onChange={(next) => {
               playClickSound()
               selectType(next)
             }}
-            error={submitAttempted ? typeError : undefined}
           />
         }
         participantsCoreOf={
-          eventType && EVENT_TYPES[eventType].core.includes('participants') ? EVENT_TYPES[eventType].label : undefined
+          eventType && facets.core.includes('participants') ? EVENT_TYPES[eventType].label : undefined
         }
         recordsSlot={
-          eventType &&
-          !isEditMode &&
-          EVENT_TYPES[eventType].core.some((facet) => facet !== 'participants')
+          eventType && !isEditMode && facets.core.some((facet) => facet !== 'participants')
             ? {
                 title: `${EVENT_TYPES[eventType].label} 기록`,
                 content: (
                   <CoreRecordsGroup
                     type={eventType}
+                    domain={domainName}
                     drafts={facetDrafts}
                     onDraftsChange={setFacetDrafts}
                     participants={relatedCountries}

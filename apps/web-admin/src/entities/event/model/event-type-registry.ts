@@ -1,18 +1,23 @@
 /**
- * 사건 유형 레지스트리 — **"이 사건에는 무엇을 기록하는가"의 단일 정본.**
+ * 사건 세부 분야 레지스트리 — **분야의 2단계(분야 › 세부)이자 "이 사건에는 무엇을 기록하는가"의 단일 정본.**
  *
- * 사건에는 두 축이 있다.
- *  - 유형(형식, Event.type): 전투인가, 조약 체결인가, 즉위인가 — **기록할 데이터를 정한다.**
- *  - 분야(Event.category): 정치·외교·군사·경제… — 무엇에 관한 사건인가. 색과 분류 필터.
- * 예전엔 카테고리 한 칸에 둘이 섞여, '전쟁/군사' 159건 안에 전투·함대법·참모총장 취임·장관의 휴양이
- * 함께 들어 있었다. 함대법은 분야로는 군사지만 형식은 법률이라 진영이 아니라 제정 주체가 필요하다.
+ *  - 분야(Event.category, 9종·필수): 무엇에 관한 일인가 — 정치·외교·군사·경제… 색·필터의 기준.
+ *  - 세부(Event.type, 28종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
+ *    **붙는 기록을 정한다**(전투 → 교전 양측, 조약 → 맺어진 조약, 즉위 → 재임 기록).
  *
- * 등록 모달(핵심 기록 칸)·상세(섹션 순서·빈 섹션 안내·모듈 추천)·조망 점검표·수장 지도(교전선 판정)가
- * 전부 이 표를 읽는다. 지면마다 따로 분기하던 것(category-features·제목 정규식)을 대체한다.
+ * 화면은 '군사 › 법령·정책·개혁' 한 줄의 2단 분류로 보이지만 **저장은 독립된 두 축**이다. 실측 452건에서
+ * (분야, 세부) 조합이 61가지였고 법령·조약·봉기·회의·건설이 3~5개 분야에 걸쳤다 — 트리로 저장하면 잎을
+ * 분야마다 복제하거나 사건의 분야를 트리에 맞춰 바꿔야 한다. 그래서 어떤 분야든 어떤 세부와도 짝지을 수
+ * 있고, 분야마다 **앞에 보일 세부**만 정한다(DOMAIN_SUBTYPES — 나머지는 '더 보기').
  *
- * ⚠️ 이 표는 **권하고 묻는 것**만 정한다 — 유형으로 기록을 막지 않는다. 전쟁은 조약으로 끝나고
- * 봉기에도 진영이 있다. 표에 없는 기록도 상세의 '다른 기능'에서 그대로 쓸 수 있다.
- * 서버는 값(EventType enum)만 보관한다 — apps/api/src/libs/event/domain/event-type.ts.
+ * 세부 이름에는 분야를 넣지 않는다(옛 '외교 조치'·'군사 조치'·'정치 사건'이 분야와 겹쳐 보인 원인).
+ * 수치 프리셋처럼 주제를 따르는 것은 세부가 정하지 않으면 분야에서 온다(metricsFor).
+ *
+ * 등록 모달(세부 칩·기록 칸)·상세(섹션 순서·빈 섹션 안내·모듈 추천)·조망 점검표·수장 지도(교전선 판정)가
+ * 전부 이 표를 읽는다.
+ *
+ * ⚠️ 이 표는 **권하고 묻는 것**만 정한다 — 세부로 기록을 막지 않는다. 전쟁은 조약으로 끝나고
+ * 봉기에도 진영이 있다. 서버는 값(EventType enum)만 보관한다 — apps/api/src/libs/event/domain/event-type.ts.
  */
 
 export type EventTypeKey =
@@ -20,28 +25,30 @@ export type EventTypeKey =
   | 'BATTLE'
   | 'UPRISING'
   | 'ATTACK'
-  | 'MILITARY_MEASURE'
+  | 'MOBILIZATION'
   | 'TREATY'
   | 'SUMMIT'
-  | 'DIPLOMATIC_ACT'
+  | 'DECLARATION'
+  | 'VISIT'
   | 'CRISIS'
+  | 'EXPANSION'
   | 'STATEHOOD'
   | 'POWER_CHANGE'
   | 'ELECTION'
   | 'LAW_POLICY'
   | 'INSTITUTION'
-  | 'EXPANSION'
   | 'INCIDENT'
+  | 'MOVEMENT'
   | 'COMPANY'
   | 'MARKET'
   | 'PRODUCT'
   | 'CONSTRUCTION'
   | 'DISASTER'
-  | 'SCIENCE'
-  | 'CULTURE_RELIGION'
+  | 'DISCOVERY'
+  | 'CREATION'
+  | 'CONVERSION'
   | 'MIGRATION'
   | 'PERSONAL'
-  | 'OTHER'
 
 /**
  * 기록(facet) — 사건에 붙는 데이터 덩어리. 각각 상세의 한 섹션·모듈이고 서버의 한 관계다.
@@ -77,14 +84,6 @@ export const FACET_LABEL: Record<EventFacetKey, string> = {
   cabinets: '관련 행정부',
 }
 
-export type EventTypeFamilyKey = 'conflict' | 'diplomacy' | 'state' | 'economy' | 'society' | 'other'
-
-export interface EventTypeFamily {
-  key: EventTypeFamilyKey
-  label: string
-  types: EventTypeKey[]
-}
-
 export interface EventTypeMetrics {
   /** 모듈 추가 메뉴의 수치 항목 라벨 */
   menuLabel: string
@@ -92,7 +91,7 @@ export interface EventTypeMetrics {
   emptyHint: string
   /** 지표 선택 맨 위 '자주 쓰는 지표' — metric_definition.key (DB에 없는 키는 조용히 건너뜀) */
   presets: string[]
-  /** 수치 입력 시 처음 고를 대상 — 진영별 값이 정본인 유형은 진영 */
+  /** 수치 입력 시 처음 고를 대상 — 진영별 값이 정본인 세부는 진영 */
   subject: 'side' | 'event'
 }
 
@@ -100,18 +99,16 @@ export interface EventTypeDef {
   key: EventTypeKey
   /** 칩·배지 라벨 */
   label: string
-  family: EventTypeFamilyKey
   /** 고를 때 돕는 예 */
   examples: string
-  /** 분야를 아직 안 골랐을 때 채울 기본 분야(DB EventCategory.name) */
-  defaultDomain: string
-  /** 보통 하위 사건을 거느리는 형식 — 등록 때 '묶음 사건'을 기본으로 권한다 */
+  /** 보통 하위 사건을 거느리는 꼴 — 등록 때 '묶음 사건'을 기본으로 권한다 */
   usuallyCollection?: boolean
   /** 핵심 기록 — 등록 모달에서 바로 묻고, 상세에서 비어 있어도 접지 않고 채우기를 권한다 */
   core: EventFacetKey[]
-  /** 선택 기록 — 상세 '이 유형에 맞는 기능'으로 권한다 */
+  /** 선택 기록 — 상세 '이 사건에 맞는 기능'으로 권한다 */
   optional: EventFacetKey[]
-  metrics: EventTypeMetrics
+  /** 세부가 수치의 성격을 정하는 경우(교전·조약·건국·재해·시장…). 없으면 분야를 따른다 */
+  metrics?: EventTypeMetrics
 }
 
 const GENERIC_METRICS: EventTypeMetrics = {
@@ -133,6 +130,14 @@ const WAR_METRICS: EventTypeMetrics = {
     'economy.war_expenditure',
   ],
   subject: 'side',
+}
+
+/** 교전이 아닌 군사 사건(함대법·동원령·군제 개편) — 병력·예산을 사건 단위로 */
+const MILITARY_DOMAIN_METRICS: EventTypeMetrics = {
+  menuLabel: '수치 (병력·함선·예산)',
+  emptyHint: '병력·함선 수·군사 예산 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
+  presets: ['military.personnel', 'economy.war_expenditure'],
+  subject: 'event',
 }
 
 const SOCIETY_METRICS: EventTypeMetrics = {
@@ -184,201 +189,229 @@ const TREATY_METRICS: EventTypeMetrics = {
   subject: 'event',
 }
 
+/** 분야가 정하는 수치 — 세부가 수치의 성격을 정하지 않을 때 */
+const METRICS_OF_DOMAIN: Record<string, EventTypeMetrics> = {
+  군사: MILITARY_DOMAIN_METRICS,
+  경제: ECONOMY_METRICS,
+  사회: SOCIETY_METRICS,
+}
+
+/** 분야가 더 권하는 기록 — 세부의 선택 기록에 얹는다(군사 분야의 법령엔 작전 정보·수치, 경제엔 기업·수치) */
+const OPTIONAL_OF_DOMAIN: Record<string, EventFacetKey[]> = {
+  군사: ['military', 'metrics'],
+  경제: ['organizations', 'metrics'],
+  사회: ['metrics'],
+  정치: ['cabinets'],
+}
+
 export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
-  // ── 무력 충돌 ──────────────────────────────────────────────────────────
+  // ── 충돌 ──────────────────────────────────────────────────────────────
   WAR: {
-    key: 'WAR', label: '전쟁', family: 'conflict', examples: '크림 전쟁 · 30년 전쟁',
-    defaultDomain: '군사', usuallyCollection: true,
+    key: 'WAR', label: '전쟁', examples: '크림 전쟁 · 30년 전쟁', usuallyCollection: true,
     core: ['sides', 'participants'], optional: ['metrics', 'military', 'treaty', 'persons'],
     metrics: WAR_METRICS,
   },
   BATTLE: {
-    key: 'BATTLE', label: '전투·작전', family: 'conflict', examples: '스당 전투 · 인천상륙작전 · 함락·점령 · 전쟁의 한 국면',
-    defaultDomain: '군사',
+    key: 'BATTLE', label: '전투·작전', examples: '스당 전투 · 인천상륙작전 · 함락·점령 · 반란 진압',
     core: ['sides', 'participants'], optional: ['metrics', 'military', 'persons'],
     metrics: WAR_METRICS,
   },
   UPRISING: {
-    key: 'UPRISING', label: '봉기·혁명', family: 'conflict', examples: '우창봉기 · 명예혁명 · 정변 · 저항 운동',
-    defaultDomain: '사회',
+    key: 'UPRISING', label: '봉기·혁명·정변', examples: '우창봉기 · 청년 튀르크 혁명 · 5월정변',
     core: ['sides', 'participants'], optional: ['persons', 'metrics'],
     metrics: SOCIETY_METRICS,
   },
   ATTACK: {
-    key: 'ATTACK', label: '암살·테러·학살', family: 'conflict', examples: '사라예보 암살 · 블랙 홀 사건',
-    defaultDomain: '정치',
+    key: 'ATTACK', label: '암살·테러·학살', examples: '사라예보 암살 · 블랙 홀 사건 · 가스관 폭파',
     core: ['persons', 'participants'], optional: ['metrics'],
     metrics: SOCIETY_METRICS,
   },
-  MILITARY_MEASURE: {
-    key: 'MILITARY_MEASURE', label: '군사 조치', family: 'conflict', examples: '총동원령 · 기동훈련 · 함대 배치 · 작전 지령',
-    defaultDomain: '군사',
+  MOBILIZATION: {
+    key: 'MOBILIZATION', label: '동원·배치·지령', examples: '총동원령 · 기동훈련 · 함대 정박 · 작전 지령',
     core: ['participants'], optional: ['military', 'metrics', 'persons'],
-    metrics: { ...WAR_METRICS, subject: 'event' },
+    metrics: MILITARY_DOMAIN_METRICS,
   },
-  // ── 외교 ───────────────────────────────────────────────────────────────
+  // ── 국가 간 ────────────────────────────────────────────────────────────
   TREATY: {
-    key: 'TREATY', label: '조약·협정', family: 'diplomacy', examples: '난징 조약 체결 · 삼국 동맹 · 휴전협정',
-    defaultDomain: '외교',
+    key: 'TREATY', label: '조약·협정·가입', examples: '난징 조약 · 삼국 동맹 · 철도 차관 협정 · NATO 가입',
     core: ['treaty', 'participants'], optional: ['persons', 'metrics'],
     metrics: TREATY_METRICS,
   },
   SUMMIT: {
-    key: 'SUMMIT', label: '회담·회의', family: 'diplomacy', examples: '베를린 회의 · 포츠담 회담 · 어전회의',
-    defaultDomain: '외교',
+    key: 'SUMMIT', label: '회담·회의·교섭', examples: '베를린 회의 · 어전회의 · 공의회 · 협정안 교섭 · 정상 통화',
     core: ['participants', 'persons'], optional: ['treaty'],
-    metrics: GENERIC_METRICS,
   },
-  DIPLOMATIC_ACT: {
-    key: 'DIPLOMATIC_ACT', label: '외교 조치', family: 'diplomacy', examples: '최후통첩 · 선전포고 · 국빈 방문 · 가입 · 성명',
-    defaultDomain: '외교',
+  DECLARATION: {
+    key: 'DECLARATION', label: '선언·통첩·연설', examples: '선전포고 · 최후통첩 · 중립 선언 · 예산 연설 · 결의',
     core: ['participants'], optional: ['persons', 'treaty'],
-    metrics: GENERIC_METRICS,
+  },
+  VISIT: {
+    key: 'VISIT', label: '방문·사절', examples: '국빈 방문 · 함대 기항 · 사절단 · 흑선 내항',
+    core: ['persons', 'participants'], optional: [],
   },
   CRISIS: {
-    key: 'CRISIS', label: '외교 위기', family: 'diplomacy', examples: '보스니아 위기 · 대동방위기',
-    defaultDomain: '외교', usuallyCollection: true,
+    key: 'CRISIS', label: '위기', examples: '보스니아 위기 · 모로코 위기 · 대동방위기', usuallyCollection: true,
     core: ['participants'], optional: ['sides', 'treaty', 'persons'],
-    metrics: GENERIC_METRICS,
+  },
+  EXPANSION: {
+    key: 'EXPANSION', label: '진출·식민', examples: '동인도회사의 인도 진출 · 3B 정책', usuallyCollection: true,
+    core: ['participants'], optional: ['organizations', 'sides', 'treaty'],
   },
   // ── 국가·권력 ──────────────────────────────────────────────────────────
   STATEHOOD: {
-    key: 'STATEHOOD', label: '건국·멸망', family: 'state', examples: '청나라 건국 · 서로마 제국 멸망 · 병합 · 독립 선언',
-    defaultDomain: '정치',
+    key: 'STATEHOOD', label: '건국·멸망·병합', examples: '청나라 건국 · 서로마 멸망 · 병합 · 독립 선언',
     core: ['statehood'], optional: ['persons', 'power', 'metrics'],
     metrics: TERRITORY_METRICS,
   },
   POWER_CHANGE: {
-    key: 'POWER_CHANGE', label: '즉위·취임', family: 'state', examples: '대통령 취임 · 즉위 · 실각 · 정권 붕괴',
-    defaultDomain: '정치',
+    key: 'POWER_CHANGE', label: '즉위·취임·실각', examples: '즉위 · 대통령 취임 · 참모총장 취임 · 해임',
     core: ['power'], optional: ['persons', 'participants'],
-    metrics: GENERIC_METRICS,
   },
   ELECTION: {
-    key: 'ELECTION', label: '선거', family: 'state', examples: '총선 · 대통령 선거 · 국왕 선출',
-    defaultDomain: '정치',
+    key: 'ELECTION', label: '선거', examples: '총선 · 대통령 선거 · 국왕 선출',
     core: ['election'], optional: ['power', 'participants'],
     metrics: { ...GENERIC_METRICS, presets: ['society.participants'] },
   },
   LAW_POLICY: {
-    key: 'LAW_POLICY', label: '법·정책·개혁', family: 'state', examples: '헌법 공포 · 함대법 · 탄지마트 개혁 · 제도 도입',
-    defaultDomain: '정치',
+    key: 'LAW_POLICY', label: '법령·정책·개혁', examples: '헌법 공포 · 함대법 · 탄지마트 · 토지 국유화',
     core: ['participants'], optional: ['persons', 'cabinets', 'metrics'],
-    metrics: GENERIC_METRICS,
   },
   INSTITUTION: {
-    key: 'INSTITUTION', label: '기관·조직', family: 'state', examples: '참모본부 창설 · 정당 결성 · 국회 해산',
-    defaultDomain: '정치',
-    core: ['participants'], optional: ['organizations', 'persons'],
-    metrics: GENERIC_METRICS,
-  },
-  EXPANSION: {
-    key: 'EXPANSION', label: '진출·식민', family: 'state', examples: '동인도회사의 인도 진출 · 3B 정책',
-    defaultDomain: '정치', usuallyCollection: true,
-    core: ['participants'], optional: ['organizations', 'sides', 'treaty'],
-    metrics: GENERIC_METRICS,
+    key: 'INSTITUTION', label: '기관·조직 설립', examples: '참모본부 창설 · 정당 결성 · 은행 개설 · 국회 해산',
+    core: ['organizations'], optional: ['participants', 'persons'],
   },
   INCIDENT: {
-    key: 'INCIDENT', label: '정치 사건', family: 'state', examples: '탄압 · 스캔들 · 음모 사건',
-    defaultDomain: '정치',
+    key: 'INCIDENT', label: '탄압·음모·스캔들', examples: '화약 음모 · 안세이 대옥 · 의옥 사건',
     core: ['persons'], optional: ['participants'],
-    metrics: GENERIC_METRICS,
+  },
+  MOVEMENT: {
+    key: 'MOVEMENT', label: '운동·캠페인', examples: '불매운동 · 여론 운동 · 국유화 반대 운동',
+    core: ['participants'], optional: ['persons', 'metrics'],
+    metrics: SOCIETY_METRICS,
   },
   // ── 경제·산업 ──────────────────────────────────────────────────────────
   COMPANY: {
-    key: 'COMPANY', label: '기업', family: 'economy', examples: '설립 · 상장 · 실적 발표',
-    defaultDomain: '경제',
+    key: 'COMPANY', label: '기업 활동', examples: '설립 · 상장 · 실적 발표 · 인수',
     core: ['organizations'], optional: ['metrics', 'persons'],
     metrics: ECONOMY_METRICS,
   },
   MARKET: {
-    key: 'MARKET', label: '시장·금융', family: 'economy', examples: '지수 마감 · 금리 · 차관 · 파동·위기',
-    defaultDomain: '경제',
+    key: 'MARKET', label: '시장·지표', examples: '지수 마감 · 금리 · 차관 · 파동',
     core: ['metrics'], optional: ['organizations', 'participants'],
     metrics: ECONOMY_METRICS,
   },
   PRODUCT: {
-    key: 'PRODUCT', label: '제품·기술 발표', family: 'economy', examples: 'ChatGPT 출시 · 칩 아키텍처 공개',
-    defaultDomain: '경제',
+    key: 'PRODUCT', label: '제품·기술 발표', examples: 'ChatGPT 출시 · 칩 아키텍처 공개 · 로켓 퇴역',
     core: ['organizations'], optional: ['metrics', 'persons'],
     metrics: ECONOMY_METRICS,
   },
   CONSTRUCTION: {
-    key: 'CONSTRUCTION', label: '건설·개통', family: 'economy', examples: '철도 개통 · 가스관 가동 · 대교·터널',
-    defaultDomain: '과학기술',
+    key: 'CONSTRUCTION', label: '건설·개통', examples: '철도 개통 · 가스관 가동 · 운하 · 전함 진수',
     core: ['participants'], optional: ['organizations', 'metrics'],
-    metrics: GENERIC_METRICS,
   },
-  // ── 사회·문화 ──────────────────────────────────────────────────────────
+  // ── 자연·학문·문화·사람 ────────────────────────────────────────────────
   DISASTER: {
-    key: 'DISASTER', label: '재해·사고', family: 'society', examples: '지진 · 대화재 · 폭발 사고',
-    defaultDomain: '사회',
+    key: 'DISASTER', label: '재해·사고', examples: '지진 · 대화재 · 폭발 사고 · 역병',
     core: ['metrics'], optional: ['participants'],
     metrics: DISASTER_METRICS,
   },
-  SCIENCE: {
-    key: 'SCIENCE', label: '학술·발견', family: 'society', examples: '법칙 발표 · 노벨상 · 발견',
-    defaultDomain: '과학기술',
+  DISCOVERY: {
+    key: 'DISCOVERY', label: '발견·학술', examples: '법칙 발표 · 노벨상 · 발견',
     core: ['persons'], optional: ['organizations'],
-    metrics: GENERIC_METRICS,
   },
-  CULTURE_RELIGION: {
-    key: 'CULTURE_RELIGION', label: '문화·종교', family: 'society', examples: '문자 창제 · 개종 · 출판',
-    defaultDomain: '문화',
+  CREATION: {
+    key: 'CREATION', label: '창제·저작·작품', examples: '문자 창제 · 책 출간 · 기념물 제작',
+    core: ['persons'], optional: ['participants'],
+  },
+  CONVERSION: {
+    key: 'CONVERSION', label: '개종·세례', examples: '폴란드의 세례 · 기독교 수용',
     core: ['participants'], optional: ['persons'],
-    metrics: GENERIC_METRICS,
   },
   MIGRATION: {
-    key: 'MIGRATION', label: '이주·천도', family: 'society', examples: '민족 대이동 · 천도 · 이민선',
-    defaultDomain: '사회',
+    key: 'MIGRATION', label: '이주·천도', examples: '민족 대이동 · 천도 · 교황청 이전 · 이민선',
     core: ['participants'], optional: ['metrics'],
     metrics: { ...GENERIC_METRICS, presets: ['demography.population'] },
   },
   PERSONAL: {
-    key: 'PERSONAL', label: '인물 행적', family: 'society', examples: '요양·휴가 · 여행 · 건강 이상',
-    defaultDomain: '정치',
-    core: ['persons'], optional: [],
-    metrics: GENERIC_METRICS,
-  },
-  // ── 기타 ───────────────────────────────────────────────────────────────
-  OTHER: {
-    key: 'OTHER', label: '기타', family: 'other', examples: '어디에도 맞지 않을 때',
-    defaultDomain: '기타',
-    core: [], optional: ['participants', 'persons', 'metrics'],
-    metrics: GENERIC_METRICS,
+    key: 'PERSONAL', label: '인물 행적', examples: '요양·휴가 · 여행 · 건강 이상',
+    core: ['persons'], optional: ['participants'],
   },
 }
 
-export const EVENT_TYPE_FAMILIES: EventTypeFamily[] = [
-  { key: 'conflict', label: '무력 충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'MILITARY_MEASURE'] },
-  { key: 'diplomacy', label: '외교', types: ['TREATY', 'SUMMIT', 'DIPLOMATIC_ACT', 'CRISIS'] },
-  {
-    key: 'state',
-    label: '국가·권력',
-    types: ['STATEHOOD', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'EXPANSION', 'INCIDENT'],
-  },
-  { key: 'economy', label: '경제·산업', types: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION'] },
-  { key: 'society', label: '사회·문화', types: ['DISASTER', 'SCIENCE', 'CULTURE_RELIGION', 'MIGRATION', 'PERSONAL'] },
-  { key: 'other', label: '기타', types: ['OTHER'] },
-]
+/** 모든 세부 — '더 보기'와 상세 선택지의 순서(충돌 → 국가 간 → 국가·권력 → 경제 → 자연·문화·사람) */
+export const EVENT_TYPE_ORDER = Object.keys(EVENT_TYPES) as EventTypeKey[]
 
-const isTypeKey = (value: unknown): value is EventTypeKey =>
+/**
+ * 분야마다 **앞에 보일 세부** — 실데이터에서 그 분야에 실제로 쓰인 세부 + 자연스러운 것.
+ * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 키는 분야 이름(DB EventCategory.name).
+ */
+export const DOMAIN_SUBTYPES: Record<string, EventTypeKey[]> = {
+  정치: ['STATEHOOD', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'DECLARATION', 'PERSONAL'],
+  외교: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'],
+  군사: ['WAR', 'BATTLE', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
+  경제: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'MOVEMENT'],
+  사회: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'LAW_POLICY', 'CONSTRUCTION'],
+  문화: ['CREATION', 'CONSTRUCTION', 'VISIT'],
+  종교: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'MIGRATION'],
+  과학기술: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION'],
+}
+
+/** 분야의 앞줄 세부와 나머지 — 분야를 안 골랐거나 앞줄이 없는 분야(기타)는 전부 앞줄 */
+export function subtypesForDomain(domain?: string | null): { primary: EventTypeKey[]; rest: EventTypeKey[] } {
+  const primary = (domain ? DOMAIN_SUBTYPES[domain] : undefined) ?? EVENT_TYPE_ORDER
+  return { primary, rest: EVENT_TYPE_ORDER.filter((type) => !primary.includes(type)) }
+}
+
+/** 세부를 안 고른 사건의 기록 — 참여국이 핵심, 인물은 선택(분야가 선택 기록을 더 얹는다) */
+const NO_SUBTYPE: Pick<EventTypeDef, 'core' | 'optional'> = { core: ['participants'], optional: ['persons'] }
+
+export const isEventTypeKey = (value: unknown): value is EventTypeKey =>
   typeof value === 'string' && value in EVENT_TYPES
 
-/** 유형 정의 — 모르는 값·미지정은 기타 */
-export function eventTypeDef(type?: string | null): EventTypeDef {
-  return isTypeKey(type) ? EVENT_TYPES[type] : EVENT_TYPES.OTHER
+/** 세부 정의 — 모르는 값·미지정은 null(세부 없음) */
+export function eventTypeDef(type?: string | null): EventTypeDef | null {
+  return isEventTypeKey(type) ? EVENT_TYPES[type] : null
 }
 
-/** 이 유형에서 기록의 무게 — 핵심·선택·없음 */
-export function facetWeight(type: string | null | undefined, facet: EventFacetKey): 'core' | 'optional' | null {
-  const def = eventTypeDef(type)
-  if (def.core.includes(facet)) return 'core'
-  if (def.optional.includes(facet)) return 'optional'
+/** 세부 라벨 — 없으면 null */
+export const eventTypeLabel = (type?: string | null): string | null => eventTypeDef(type)?.label ?? null
+
+/** '군사 › 법령·정책·개혁' — 세부가 없으면 분야만, 분야도 없으면 '미분류' */
+export function formatDomainPath(domain?: string | null, type?: string | null): string {
+  const label = eventTypeLabel(type)
+  if (!domain) return label ?? '미분류'
+  return label ? `${domain} › ${label}` : domain
+}
+
+/** 이 사건의 기록 — 세부의 핵심·선택에 분야가 권하는 선택 기록을 얹는다 */
+export function typeFacets(
+  type: string | null | undefined,
+  domain?: string | null,
+): { core: EventFacetKey[]; optional: EventFacetKey[] } {
+  const def = eventTypeDef(type) ?? NO_SUBTYPE
+  const extra = (domain ? OPTIONAL_OF_DOMAIN[domain] : undefined) ?? []
+  const optional = [...new Set([...def.optional, ...extra])].filter((facet) => !def.core.includes(facet))
+  return { core: def.core, optional }
+}
+
+/** 이 사건의 수치 성격 — 세부가 정하면 세부, 아니면 분야 */
+export function metricsFor(type: string | null | undefined, domain?: string | null): EventTypeMetrics {
+  return eventTypeDef(type)?.metrics ?? (domain ? METRICS_OF_DOMAIN[domain] : undefined) ?? GENERIC_METRICS
+}
+
+/** 이 사건에서 기록의 무게 — 핵심·선택·없음 */
+export function facetWeight(
+  type: string | null | undefined,
+  facet: EventFacetKey,
+  domain?: string | null,
+): 'core' | 'optional' | null {
+  const facets = typeFacets(type, domain)
+  if (facets.core.includes(facet)) return 'core'
+  if (facets.optional.includes(facet)) return 'optional'
   return null
 }
 
-/** 무력 충돌인가 — 교전선(수장 지도)·진영 초안의 판정. 제목 정규식으로 추리던 것을 대체한다 */
+/** 무력 충돌인가 — 교전선(수장 지도)·진영 초안의 판정 */
 export const isArmedConflictType = (type?: string | null): boolean =>
   type === 'WAR' || type === 'BATTLE' || type === 'UPRISING'
 
@@ -392,10 +425,10 @@ const MODULE_OF_FACET: Partial<Record<EventFacetKey, TypeModuleKey>> = {
 }
 
 /**
- * 상세 지면이 읽는 유형별 기능 — 레지스트리에서 계산한다(옛 category-features의 자리).
+ * 상세 지면이 읽는 기능 — 세부와 분야로 계산한다.
  *  - suggestedModules: 핵심 → 선택 순의 모듈
- *  - promoteTreaties: 조약이 핵심인 유형은 조약 섹션을 본문 바로 뒤로, 비어도 접지 않음
- *  - expect*: 그 기록이 핵심·선택인 유형은 비어 있어도 섹션을 세워 연결을 권함
+ *  - promoteTreaties: 조약이 핵심인 세부는 조약 섹션을 본문 바로 뒤로, 비어도 접지 않음
+ *  - expect*: 그 기록이 핵심·선택인 사건은 비어 있어도 섹션을 세워 연결을 권함
  */
 export interface EventTypeFeatures {
   suggestedModules: TypeModuleKey[]
@@ -409,19 +442,20 @@ export interface EventTypeFeatures {
   expectOrganizations: boolean
 }
 
-export function eventTypeFeatures(type?: string | null): EventTypeFeatures {
-  const def = eventTypeDef(type)
-  const facets = [...def.core, ...def.optional]
+export function eventTypeFeatures(type?: string | null, domain?: string | null): EventTypeFeatures {
+  const { core, optional } = typeFacets(type, domain)
+  const facets = [...core, ...optional]
+  const metrics = metricsFor(type, domain)
   const modules = facets
     .map((facet) => MODULE_OF_FACET[facet])
     .filter((module): module is TypeModuleKey => Boolean(module))
   return {
     suggestedModules: [...new Set(modules)],
-    metricsMenuLabel: def.metrics.menuLabel,
-    metricsEmptyHint: def.metrics.emptyHint,
-    metricPresets: def.metrics.presets,
-    metricSubject: def.metrics.subject,
-    promoteTreaties: def.core.includes('treaty'),
+    metricsMenuLabel: metrics.menuLabel,
+    metricsEmptyHint: metrics.emptyHint,
+    metricPresets: metrics.presets,
+    metricSubject: metrics.subject,
+    promoteTreaties: core.includes('treaty'),
     expectStatehood: facets.includes('statehood'),
     expectPower: facets.includes('power') || facets.includes('election'),
     expectOrganizations: facets.includes('organizations'),

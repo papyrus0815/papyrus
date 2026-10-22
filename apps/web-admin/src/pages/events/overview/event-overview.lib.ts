@@ -410,25 +410,42 @@ export const roleLabel = (role: string | null | undefined) =>
 
 // ─── 분포 ──────────────────────────────────────────────────────────────────
 
+/** 분포·거르기에서 '세부 없음'의 키 — URL(?type=NONE)에 그대로 실린다 */
+export const NO_SUBTYPE_KEY = 'NONE'
+
+/** 하위 사건의 세부 키 — 없으면 NO_SUBTYPE_KEY */
+export const subtypeKeyOf = (node: Pick<EventOverviewNode, 'type'>): string =>
+  eventTypeDef(node.type)?.key ?? NO_SUBTYPE_KEY
+
 export interface CountBar {
-  /** 거르기 키 — 사건 유형 */
+  /** 거르기 키 — 세부 분야(EventType). 세부 없음은 NO_SUBTYPE_KEY */
   key: string
   label: string
   count: number
+  /** 이 세부를 가진 하위 사건들에서 가장 많은 분야 — 막대 색(분야 팔레트 한 벌만 쓴다) */
+  domain: string | null
 }
 
 /**
- * 하위 사건의 **유형** 분포 — 묶음이 무엇으로 이뤄졌나(전투 8 · 외교 조치 2 · 조약 1).
- * 예전엔 분야(카테고리)로 셌는데, 전쟁의 하위는 거의 다 '군사'라 막대가 한 색이었다.
+ * 하위 사건의 **세부 분야** 분포 — 묶음이 무엇으로 이뤄졌나(전투 8 · 선언·통첩 2 · 조약 1).
+ * 전쟁의 하위는 분야로는 거의 다 '군사'라 한 색이지만 세부로는 전투·회담·조약이 갈린다. 세부 없음은 키 NO_SUBTYPE_KEY.
  */
 export function typeBreakdown(descendants: EventOverviewNode[]): CountBar[] {
   const counts = new Map<string, number>()
+  const domains = new Map<string, Map<string, number>>()
   for (const node of descendants) {
-    const key = eventTypeDef(node.type).key
+    const key = subtypeKeyOf(node)
     counts.set(key, (counts.get(key) ?? 0) + 1)
+    const domain = node.category?.name
+    if (!domain) continue
+    const byDomain = domains.get(key) ?? new Map<string, number>()
+    byDomain.set(domain, (byDomain.get(domain) ?? 0) + 1)
+    domains.set(key, byDomain)
   }
+  const dominant = (key: string) =>
+    [...(domains.get(key) ?? [])].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
   return [...counts]
-    .map(([key, count]) => ({ key, label: eventTypeDef(key).label, count }))
+    .map(([key, count]) => ({ key, label: eventTypeDef(key)?.label ?? '세부 없음', count, domain: dominant(key) }))
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
 }
 
@@ -557,22 +574,22 @@ export const CHECK_COLUMNS: ReadonlyArray<{ key: CheckKey; label: string; hint: 
   { key: 'background', label: '배경', hint: '배경 요약' },
   { key: 'aftermath', label: '여파', hint: '여파 요약' },
   { key: 'images', label: '이미지', hint: '이미지 1장 이상' },
-  { key: 'sides', label: '진영', hint: '교전 양측 — 무력 충돌 유형에서만' },
-  { key: 'metrics', label: '수치', hint: '유형이 권하는 측정값 1개 이상' },
+  { key: 'sides', label: '진영', hint: '교전 양측 — 전쟁·전투·봉기에서만' },
+  { key: 'metrics', label: '수치', hint: '세부·분야가 권하는 측정값 1개 이상' },
 ]
 
-/** full=채움, partial=일부(연·월 정밀도 날짜), empty=비어 있음, na=이 유형엔 해당 없음 */
+/** full=채움, partial=일부(연·월 정밀도 날짜), empty=비어 있음, na=이 사건엔 해당 없음 */
 export type CheckState = 'full' | 'partial' | 'empty' | 'na'
 
 export function checkNode(node: EventOverviewNode): Record<CheckKey, CheckState> {
   const has = (value: boolean): CheckState => (value ? 'full' : 'empty')
   /**
-   * 기록 칸은 **유형이 그 기록을 다루는지**로 가른다(레지스트리의 핵심·선택 기록). 시장·금융 사건에
-   * '인물 없음', 외교 조치에 '사상자 없음'을 감점하면 충실도가 실제보다 나쁘게 읽혔다.
-   * 다루지 않는 유형이어도 값이 있으면 채움으로 센다.
+   * 기록 칸은 **그 사건이 그 기록을 다루는지**로 가른다(레지스트리: 세부의 핵심·선택 + 분야가 권하는 선택).
+   * 지수 마감에 '인물 없음', 최후통첩에 '사상자 없음'을 감점하면 충실도가 실제보다 나쁘게 읽혔다.
+   * 다루지 않는 사건이어도 값이 있으면 채움으로 센다.
    */
   const byFacet = (facet: EventFacetKey, value: boolean): CheckState =>
-    value ? 'full' : facetWeight(node.type, facet) ? 'empty' : 'na'
+    value ? 'full' : facetWeight(node.type, facet, node.category?.name) ? 'empty' : 'na'
   const { startPrecision } = effectiveRangePrecision(
     node.startDate,
     node.endDate,

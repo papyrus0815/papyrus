@@ -30,10 +30,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
-import {
-  EVENT_TYPES,
-  EVENT_TYPE_FAMILIES,
-} from '@/entities/event/model/event-type-registry'
+import { EVENT_TYPES, subtypesForDomain } from '@/entities/event/model/event-type-registry'
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
@@ -78,13 +75,15 @@ interface DetailHeroProps {
  *
  * 부모 사건 브레드크럼은 편집 대상 X (구조 변경은 별도 흐름).
  */
-/** 유형 고르기 — 계열을 앞에 붙여 26종을 묶어 읽게 한다 */
-const EVENT_TYPE_OPTIONS: InlineSelectOption[] = EVENT_TYPE_FAMILIES.flatMap((family) =>
-  family.types.map((type) => ({
+/** 세부 고르기 — 그 분야에서 쓰이는 세부를 앞에, 나머지를 뒤에(저장은 독립 축이라 무엇이든 고를 수 있다) */
+const subtypeOptions = (domain?: string | null): InlineSelectOption[] => {
+  const { primary, rest } = subtypesForDomain(domain)
+  return [...primary, ...rest].map((type) => ({
     value: type,
-    label: family.key === 'other' ? EVENT_TYPES[type].label : `${family.label} · ${EVENT_TYPES[type].label}`,
-  })),
-)
+    label: EVENT_TYPES[type].label,
+    description: EVENT_TYPES[type].examples,
+  }))
+}
 
 export function DetailHero({
   event,
@@ -161,16 +160,14 @@ export function DetailHero({
             onSave={(next) => onPatch({ categoryId: next || null } as UpdateEventDto)}
             placeholder={event.category?.name ?? '미분류'}
           />
-        </S.CategoryChip>
-
-        {/* 유형(형식) — 무엇을 기록할지를 정한다. 바꾸면 추천 기능·빈 섹션 안내가 그 자리에서 따라 바뀐다 */}
-        <S.CategoryChip $color="#475569" $colorDark="#cbd5e1">
+          {/* 분야 › 세부 — 한 줄의 2단 분류. 세부는 선택이고 붙는 기록(추천 기능·빈 섹션 안내)을 정한다 */}
+          <span aria-hidden>›</span>
           <InlineSelect
-            value={event.type ?? 'OTHER'}
-            options={EVENT_TYPE_OPTIONS}
-            onSave={(next) => onPatch({ type: next } as UpdateEventDto)}
-            placeholder="유형"
-            label="사건 유형"
+            value={event.type ?? ''}
+            options={subtypeOptions(event.category?.name)}
+            onSave={(next) => onPatch({ type: next || null } as UpdateEventDto)}
+            placeholder="세부 없음"
+            label="세부 분야"
           />
         </S.CategoryChip>
 

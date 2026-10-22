@@ -23,6 +23,7 @@ import {
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { formatDomainPath } from '@/entities/event/model/event-type-registry'
 import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
@@ -701,9 +702,11 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         >
           {rowEndLabel ?? (startParts ? '—' : null)}
         </EndCell>
+        {/* 열은 분야만(폭이 고정된 스캔선) — 세부는 툴팁·읽기에 '분야 › 세부'로 */}
         <CategoryLabel
           $text={soft.text}
           $textDark={soft.textDark}
+          title={formatDomainPath(categoryName, event.type)}
         >
           {categoryName}
         </CategoryLabel>

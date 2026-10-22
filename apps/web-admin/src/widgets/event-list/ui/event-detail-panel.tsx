@@ -40,6 +40,7 @@ const CHILD_PREVIEW_COUNT = 5
 /** 본문 구성(목차) 미리보기 상한 — 실측 사건당 섹션 수 1~14개. */
 const SECTION_PREVIEW_COUNT = 6
 
+import { formatDomainPath } from '@/entities/event/model/event-type-registry'
 import { personKeys } from '@/entities/person/query-keys'
 import { getCategoryName } from '@/features/event-list/lib'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
@@ -276,7 +277,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
           </Detail.InfoLabel>
           <Detail.InfoValue>
             <Detail.CategoryChip $category={selectedEvent.category}>
-              {getCategoryName(selectedEvent.category, dbCategories)}
+              {formatDomainPath(getCategoryName(selectedEvent.category, dbCategories), selectedEvent.type)}
             </Detail.CategoryChip>
           </Detail.InfoValue>
 

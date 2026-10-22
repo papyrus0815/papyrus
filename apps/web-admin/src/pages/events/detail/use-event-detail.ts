@@ -187,8 +187,8 @@ export interface EventDetail {
   parentEventId?: string | null
   /** 사건 종류 — 단일/묶음. 규칙은 features/event-hierarchy/model/event-kind.ts */
   kind?: 'SINGLE' | 'COLLECTION'
-  /** 사건 유형(형식) — 기록할 데이터를 정하는 축. 정의는 entities/event/model/event-type-registry.ts */
-  type?: import('@/entities/event/model/event-type-registry').EventTypeKey
+  /** 세부 분야(선택) — 분야의 2단계이자 붙는 기록을 정한다. 정의는 entities/event/model/event-type-registry.ts */
+  type?: import('@/entities/event/model/event-type-registry').EventTypeKey | null
   parentEvent?: EventDetail
   /**
    * 주 상위와의 연결 사유(EventHierarchyReason — 쌍 this↔parentEventId). 상세에만 실림.

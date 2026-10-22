@@ -6,7 +6,6 @@
  */
 import { useTheme } from 'styled-components'
 
-import { eventTypeDef } from '@/entities/event/model/event-type-registry'
 import { categoryAccent, resolveCategory } from '@/entities/event/ui/ledger-tokens'
 import type { EventOverviewNode } from '@/shared/api/event-overview'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -414,8 +413,8 @@ export function CountryMatrixPanel({
 // ─── 분포 ──────────────────────────────────────────────────────────────────
 
 /**
- * 유형 + 시기 — 한 패널. 유형은 한 줄 누적 막대(누르면 거르기), 시기는 그 아래 폭 전체.
- * 유형 색은 그 유형의 기본 분야 색 — 무력 충돌은 군사 빨강, 외교는 하늘색 계열로 묶여 읽힌다.
+ * 세부 분야 + 시기 — 한 패널. 세부는 한 줄 누적 막대(누르면 거르기), 시기는 그 아래 폭 전체.
+ * 세부 색은 그 세부를 가진 하위 사건들 중 가장 많은 분야의 색 — 분야 팔레트 한 벌만 쓴다.
  */
 export function DistributionPanel({
   types,
@@ -431,20 +430,19 @@ export function DistributionPanel({
   const theme = useTheme()
   const total = types.reduce((sum, bar) => sum + bar.count, 0)
   const maxActive = Math.max(1, ...bins.map((bin) => bin.active))
-  const colorOf = (key: string) =>
-    categoryAccent(resolveCategory(eventTypeDef(key).defaultDomain), theme.mode)
+  const colorOf = (bar: CountBar) => categoryAccent(resolveCategory(bar.domain), theme.mode)
   return (
     <S.Panel $wide id="overview-distribution" aria-labelledby="overview-distribution-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-distribution-title">분포</S.PanelTitle>
-        <S.PanelNote>유형을 누르면 그 유형만 남는다</S.PanelNote>
+        <S.PanelNote>세부를 누르면 그 세부만 남는다</S.PanelNote>
       </S.PanelHead>
 
       <S.StackBar aria-hidden="true">
         {types.map((bar) => (
           <S.StackSegment
             key={bar.key}
-            $color={colorOf(bar.key)}
+            $color={colorOf(bar)}
             $dim={selectedType !== null && selectedType !== bar.key}
             style={{ flexGrow: bar.count }}
             title={`${bar.label} ${bar.count}건`}
@@ -462,7 +460,7 @@ export function DistributionPanel({
                 aria-pressed={active}
                 onClick={() => onSelectType(active ? null : bar.key)}
               >
-                <S.CategoryDot $color={colorOf(bar.key)} aria-hidden="true" />
+                <S.CategoryDot $color={colorOf(bar)} aria-hidden="true" />
                 {bar.label}
                 <S.SectionNavCount>
                   {bar.count} · {Math.round((bar.count / Math.max(1, total)) * 100)}%

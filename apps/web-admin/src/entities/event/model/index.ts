@@ -40,20 +40,26 @@ export {
   extractCategoryKey,
 } from './category-constants'
 export {
+  DOMAIN_SUBTYPES,
+  EVENT_TYPE_ORDER,
   EVENT_TYPES,
-  EVENT_TYPE_FAMILIES,
   FACET_LABEL,
   eventTypeDef,
   eventTypeFeatures,
+  eventTypeLabel,
   facetWeight,
+  formatDomainPath,
   isArmedConflictType,
+  isEventTypeKey,
+  metricsFor,
+  subtypesForDomain,
+  typeFacets,
 } from './event-type-registry'
 export type {
   EventFacetKey,
   EventTypeDef,
-  EventTypeFamily,
-  EventTypeFamilyKey,
   EventTypeFeatures,
+  EventTypeMetrics,
   EventTypeKey,
   TypeModuleKey,
 } from './event-type-registry'

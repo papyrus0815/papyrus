@@ -10,6 +10,8 @@ import * as S from './inline.styles'
 export interface InlineSelectOption {
   value: string
   label: string
+  /** 옵션 아래 한 줄 설명 — 라벨만으로 무엇을 품는지 안 읽힐 때(예: 사건 세부 분야의 예시) */
+  description?: string
 }
 
 interface InlineSelectProps {
@@ -94,7 +96,10 @@ export function InlineSelect({
                 $active={selected}
                 onClick={() => pick(opt.value)}
               >
-                <OptLabel>{opt.label}</OptLabel>
+                <OptLabel>
+                  {opt.label}
+                  {opt.description && <OptDescription>{opt.description}</OptDescription>}
+                </OptLabel>
                 {selected && <FiCheck />}
               </OptRow>
             )
@@ -213,4 +218,12 @@ const OptLabel = styled.span<{ $muted?: boolean }>`
   min-width: 0;
   color: ${({ theme, $muted }) =>
     $muted ? theme.colors.text.tertiary : 'inherit'};
+`
+
+const OptDescription = styled.span`
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `

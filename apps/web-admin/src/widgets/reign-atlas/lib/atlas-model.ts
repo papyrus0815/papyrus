@@ -87,7 +87,7 @@ export interface AtlasEventInput {
   startDate?: string | null
   endDate?: string | null
   category?: { name?: string | null } | null
-  /** 사건 유형(형식) — 무력 충돌 판정의 정본(event-type-registry). 분야(category)로 판정하지 않는다 */
+  /** 세부 분야 — 무력 충돌(전쟁·전투·봉기) 판정의 정본(event-type-registry). 분야(category)로 판정하지 않는다 */
   type?: string | null
   relatedCountries?: AtlasEventParticipantInput[] | null
   relatedHistoricalCountries?: AtlasEventParticipantInput[] | null
@@ -370,7 +370,7 @@ export function buildNodes(
 // ── 관계선 ───────────────────────────────────────────────────
 
 /**
- * 무력 충돌 판정 — 사건 **유형**(전쟁·전투·봉기)으로. 예전엔 분류 이름 정규식(/전쟁|군사|전투/)이라
+ * 무력 충돌 판정 — 사건 **세부 분야**(전쟁·전투·봉기)로. 예전엔 분류 이름 정규식(/전쟁|군사|전투/)이라
  * '군사' 분야의 함대법·참모총장 취임·기동훈련까지 걸렸고, 점검은 그 소음을 제목 정규식으로 다시 걸렀다.
  */
 const isWarEvent = (event: AtlasEventInput): boolean => isArmedConflictType(event.type)
@@ -617,7 +617,7 @@ export function buildEdges(
 
 /**
  * 지도에 전선을 그릴 수 있는 사건인가 — 스크러버 분수령 칩의 후보.
- * buildEdges와 같은 기준(진영 2개 이상, 또는 무력 충돌 유형 + 공격측·방어측 역할 모두)이라
+ * buildEdges와 같은 기준(진영 2개 이상, 또는 무력 충돌 세부 + 공격측·방어측 역할 모두)이라
  * 칩을 눌렀는데 지도에 선이 하나도 없는 일이 없다. (참여국 수만 보면 진영·역할이 비어
  * 선을 못 긋는 최근 사건들이 칩을 채웠다.)
  */

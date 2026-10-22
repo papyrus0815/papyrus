@@ -378,14 +378,14 @@ function EventDetailContent({
     })
   }, [filled, pinned])
   /*
-   * 카테고리 기능 — 회담/조약 사건은 조약 섹션을 본문 바로 뒤로 올리고 비어 있어도 접지 않는다
+   * 형식(과 분야)이 정하는 기능 — 조약 체결 사건은 조약 섹션을 본문 바로 뒤로 올리고 비어 있어도 접지 않는다
    * (조약이 그 사건의 결과물이라 '채우기' 띠에 숨기면 핵심 동선이 사라진다).
    */
-  const features = eventTypeFeatures(event.type)
+  const features = eventTypeFeatures(event.type, event.category?.name)
   const promoteTreaties = features.promoteTreaties
   /* 국가 성립·소멸 — 역할(건국·멸망)이 있으면 늘, 건국/멸망 사건이면 비어 있어도 보인다 */
   const showStatehood = features.expectStatehood || statehoodEntries(event).length > 0
-  /* 권력 교체·선거 — 취임·즉위·선거가 걸려 있으면 늘, 정치 사건이면 비어 있어도 보인다 */
+  /* 권력 교체·선거 — 취임·즉위·선거가 걸려 있으면 늘, 즉위·취임·선거 형식이면 비어 있어도 보인다 */
   const showPower = features.expectPower || hasPowerData(event)
   /* 관련 기업·조직 — 연결이 있으면 늘, 경제 사건이면 비어 있어도 보인다 */
   const showOrganizations = features.expectOrganizations || (event.organizations?.length ?? 0) > 0

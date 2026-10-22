@@ -120,7 +120,7 @@ export function ModuleAdd({
    * 오염이 있었다. 빈 객체 `{}`도 enabledModules 판정에서는 truthy라
    * 모듈은 정상적으로 표시되며, 모든 필드는 빈 InlineText로 렌더된다.
    */
-  const features = eventTypeFeatures(event.type)
+  const features = eventTypeFeatures(event.type, event.category?.name)
 
   const allOptions: ModuleOption[] = [
     {

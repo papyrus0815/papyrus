@@ -17,7 +17,7 @@ import React, { Suspense, lazy, useMemo, useState } from 'react'
 import { FiClock, FiLayers, FiStar } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
-import { useEvents } from '@/entities/event/model'
+import { eventTypeLabel, formatDomainPath, useEvents } from '@/entities/event/model'
 import {
   getEventDescendantCount,
   isCollectionEvent,
@@ -244,6 +244,17 @@ function EventListSidebarInner({
       /* 묶음 사건 — 하위가 평소엔 목록에서 빠지므로(아래 1단계) 몇 건을 거느리는지 오른쪽 숫자로 */
       const descendantCount = isCollectionEvent(event) ? getEventDescendantCount(event) : 0
       const categoryLabel = event.category ? String(event.category) : null
+      const thumbnailUrl = event.visuals?.thumbnailUrl
+        ? getUploadImageUrl(event.visuals.thumbnailUrl) || event.visuals.thumbnailUrl
+        : null
+      /* 읽어 주는 분류는 늘 '분야 › 세부' 한 줄 */
+      const pathLabel = categoryLabel || event.type ? formatDomainPath(categoryLabel, event.type) : null
+      /*
+       * 둘째 줄에 보이는 분류 — 배지(분야 첫 글자·분야 색)가 이미 분야를 말하므로 **세부만**.
+       * '분야 › 세부'를 통째로 적으면 240px 행에서 관련국과 함께 둘 다 말줄임돼 아무것도 안 읽혔다(실측).
+       * 썸네일 행은 배지가 없으니 분야까지 적는다. 세부가 없으면 분야.
+       */
+      const metaClassLabel = thumbnailUrl ? pathLabel : (eventTypeLabel(event.type) ?? categoryLabel)
       /* 화면에 세우는 제목은 **자기 날짜 꼬리를 덜어낸** 것 — 바로 왼쪽 선두 열과 연
          머리글이 같은 날짜를 이미 말한다(shared/lib/title-date.ts).
          연도 하나뿐인 꼬리('포츠담 회담 (1945)')까지 덜어내는 건 이 지면이 연도를 늘
@@ -270,9 +281,7 @@ function EventListSidebarInner({
          * 분류 색으로 칠한다(정·경·외·전…) — 제목 첫 글자('2026년…'의 '2')는 아무것도 말하지 않는다.
          * 예전엔 보유율 13%라 선두를 날짜 열로 썼지만, 배지가 분류를 말하므로 빈 블록이 아니다.
          */
-        thumbnailUrl: event.visuals?.thumbnailUrl
-          ? getUploadImageUrl(event.visuals.thumbnailUrl) || event.visuals.thumbnailUrl
-          : null,
+        thumbnailUrl,
         badgeText: (categoryLabel ?? '미분류').slice(0, 1),
         accentColor: (
           CATEGORY_SOFT_COLORS[event.category as keyof typeof CATEGORY_SOFT_COLORS] ??
@@ -288,8 +297,8 @@ function EventListSidebarInner({
           countries
             ? { text: countries, shrink: true, node: searching ? highlight(countries) : undefined }
             : null,
-          categoryLabel
-            ? { text: categoryLabel, node: searching ? highlight(categoryLabel) : undefined }
+          metaClassLabel
+            ? { text: metaClassLabel, node: searching ? highlight(metaClassLabel) : undefined }
             : null,
         ],
         /*
@@ -305,7 +314,7 @@ function EventListSidebarInner({
           event.startDate
             ? formatDateWithPrecision(event.startDate, event.startDatePrecision)
             : '날짜 미상',
-          categoryLabel,
+          pathLabel,
           countries,
           parent ? `${shortParentTitle(parent.title)}의 하위 사건` : null,
           childCount > 0 ? `하위 사건 ${childCount}건` : null,

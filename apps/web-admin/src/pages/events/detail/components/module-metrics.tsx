@@ -39,8 +39,8 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
   const [editing, setEditing] = useState<Observation | 'new' | null>(null)
 
   const sides = useMemo(() => event.sides ?? [], [event.sides])
-  /* 지표 추천·첫 대상·빈 안내는 카테고리가 정한다(경제 사건에 '병력·사상자'를 권하지 않게) */
-  const features = eventTypeFeatures(event.type)
+  /* 지표 추천·첫 대상·빈 안내는 형식이, 형식이 정하지 않으면 분야가 정한다(경제 사건에 '병력·사상자'를 권하지 않게) */
+  const features = eventTypeFeatures(event.type, event.category?.name)
 
   /** 측정값 대상 선택지 — 사건 전체 · 진영 · 참여국 줄 */
   const subjects = useMemo<ObservationSubjectOption[]>(() => {

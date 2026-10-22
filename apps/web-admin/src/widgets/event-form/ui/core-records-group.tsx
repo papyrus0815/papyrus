@@ -1,8 +1,8 @@
 /**
- * 등록 모달 — **'기록' 묶음**: 고른 유형의 핵심 기록을 등록하는 자리에서 바로 받는다.
+ * 등록 모달 — **'기록' 묶음**: 고른 세부 분야의 핵심 기록을 등록하는 자리에서 바로 받는다.
  *
- * 무엇을 받을지는 유형 레지스트리의 `core`가 정한다(전투 → 진영·참여국, 조약 체결 → 맺어진 조약,
- * 건국·멸망 → 세워지거나 무너진 나라, 즉위·취임 → 취임한 인물, 기업 → 기업·조직 …). 참여국 자체는
+ * 무엇을 받을지는 세부 레지스트리의 `core`가 정한다(전투 → 진영·참여국, 조약 체결 → 맺어진 조약,
+ * 건국·멸망 → 세워지거나 무너진 나라, 즉위·취임 → 취임한 인물, 기관·기업 설립 → 기관·기업 …). 참여국 자체는
  * 위 '연결' 묶음의 칸을 그대로 쓰고, 여기서는 그 참여국 위에 얹는 기록(진영 소속·성립/소멸 역할)을 단다.
  * 수치·작전 정보처럼 출처와 함께 적어야 하는 것은 등록 뒤 상세에서 — 무엇을 어디서 적는지만 안내한다.
  *
@@ -15,10 +15,11 @@ import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
-  EVENT_TYPES,
   type EventFacetKey,
   type EventTypeKey,
   FACET_LABEL,
+  metricsFor,
+  typeFacets,
 } from '@/entities/event/model/event-type-registry'
 import {
   type EventCountryParticipant,
@@ -59,6 +60,8 @@ type PickerKind = 'persons' | 'power' | 'organizations' | 'treaty' | 'election'
 
 interface CoreRecordsGroupProps {
   type: EventTypeKey
+  /** 고른 분야 이름 — 세부와 함께 수치 성격을 정한다 */
+  domain: string | null
   drafts: RegisterFacetDrafts
   onDraftsChange: (next: RegisterFacetDrafts) => void
   /** 위 '연결'의 참여국 줄 — 진영 소속·성립/소멸이 이 위에 얹힌다 */
@@ -73,6 +76,7 @@ interface CoreRecordsGroupProps {
 
 export function CoreRecordsGroup({
   type,
+  domain,
   drafts,
   onDraftsChange,
   participants,
@@ -82,12 +86,13 @@ export function CoreRecordsGroup({
   eventTitle,
   playClickSound,
 }: CoreRecordsGroupProps) {
-  const def = EVENT_TYPES[type]
+  const facets = typeFacets(type, domain)
+  const metrics = metricsFor(type, domain)
   const [picker, setPicker] = useState<PickerKind | null>(null)
   const update = (patch: Partial<RegisterFacetDrafts>) => onDraftsChange({ ...drafts, ...patch })
 
-  const fieldFacets = def.core.filter((facet) => facet !== 'participants' && !DETAIL_ONLY.includes(facet))
-  const detailFacets = [...def.core, ...def.optional].filter((facet) => DETAIL_ONLY.includes(facet))
+  const fieldFacets = facets.core.filter((facet) => facet !== 'participants' && !DETAIL_ONLY.includes(facet))
+  const detailFacets = [...facets.core, ...facets.optional].filter((facet) => DETAIL_ONLY.includes(facet))
 
   return (
     <>
@@ -220,7 +225,7 @@ export function CoreRecordsGroup({
             <S.Hint>
               {detailFacets
                 .map((facet) =>
-                  facet === 'metrics' && def.metrics.presets.length > 0 ? def.metrics.menuLabel : FACET_LABEL[facet],
+                  facet === 'metrics' && metrics.presets.length > 0 ? metrics.menuLabel : FACET_LABEL[facet],
                 )
                 .join(' · ')}{' '}
               — 출처와 함께 적어야 해서 등록 뒤 상세의 &lsquo;진영·수치&rsquo; 탭에서 기록합니다.

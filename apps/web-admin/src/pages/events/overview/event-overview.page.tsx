@@ -27,6 +27,7 @@ import {
   aggregatePersons,
   buildCountryMatrix,
   buildGantt,
+  subtypeKeyOf,
   typeBreakdown,
   type GanttFit,
   coverageGaps,
@@ -72,7 +73,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
 
   /**
    * 보기 상태는 URL이 정본 — 열린 사건(`?event=`)만 공유되고 거르기·축·정렬은 새로고침에 사라졌다.
-   * `?country=` 나라 키 · `?type=` 유형 · `?fit=parent` 축 · `?order=gaps` 점검표 순서.
+   * `?country=` 나라 키 · `?type=` 세부 분야 · `?fit=parent` 축 · `?order=gaps` 점검표 순서.
    * 값을 바꿀 땐 기록을 쌓지 않는다(뒤로 가기는 모달 닫기·지면 이동에 남겨 둔다).
    */
   const [searchParams, setSearchParams] = useSearchParams()
@@ -91,7 +92,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
   )
   const selectedCountryKey = searchParams.get('country')
   const setSelectedCountryKey = (key: string | null) => setParam('country', key)
-  /** 거르기 — 하위 사건 유형(?type=BATTLE). 분포 막대를 누르면 건다 */
+  /** 거르기 — 하위 사건 세부 분야(?type=BATTLE, 세부 없음은 NONE). 분포 막대를 누르면 건다 */
   const selectedType = searchParams.get('type')
   const setSelectedType = (key: string | null) => setParam('type', key)
   const ganttFit: GanttFit = searchParams.get('fit') === 'parent' ? 'parent' : 'children'
@@ -174,7 +175,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
           (node) =>
             (!selectedCountryKey ||
               node.countries.some((country) => country.key === selectedCountryKey)) &&
-            (!selectedType || eventTypeDef(node.type).key === selectedType),
+            (!selectedType || subtypeKeyOf(node) === selectedType),
         )
         .map((node) => node.id),
     )
@@ -363,7 +364,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
           )}
           {selectedType && (
             <S.FilterChip type="button" onClick={() => setSelectedType(null)}>
-              유형: {eventTypeDef(selectedType).label}
+              세부: {eventTypeDef(selectedType)?.label ?? '세부 없음'}
               <FiX size={12} aria-label="거르기 풀기" />
             </S.FilterChip>
           )}

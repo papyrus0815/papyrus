@@ -115,7 +115,7 @@ function checkWars(events: AtlasEventInput[]): AuditIssue[] {
   const issues: AuditIssue[] = []
   for (const event of events) {
     // 무력 충돌 유형만 — 예전엔 '군사' 분류에 함대법·참모총장 취임·기동훈련이 섞여(84건 중 약 30건)
-    // 제목 정규식으로 다시 걸렀다. 형식이 사건 유형으로 분리돼 그 우회가 필요 없다.
+    // 제목 정규식으로 다시 걸렀다. 세부 분야(전쟁·전투·봉기)가 따로 있어 그 우회가 필요 없다.
     if (!isArmedConflictType(event.type)) continue
     if (isFrontLineEvent(event)) continue
     // 상위 전쟁이 이미 전선을 그리면 하위 전투(스당·세바스토폴…)는 지도에 더할 것이 없다

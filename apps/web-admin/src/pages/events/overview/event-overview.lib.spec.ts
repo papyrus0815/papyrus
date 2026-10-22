@@ -28,7 +28,7 @@ const node = (over: Partial<EventOverviewNode> & { id: string }): EventOverviewN
   endDatePrecision: null,
   location: null,
   category: null,
-  type: 'OTHER',
+  type: null,
   countries: [],
   persons: [],
   sides: [],
@@ -178,11 +178,11 @@ describe('buildCountryMatrix', () => {
 })
 
 describe('분포', () => {
-  it('하위 사건의 유형을 많은 순으로(분야가 아니라 형식)', () => {
+  it('하위 사건의 세부 분야를 많은 순으로 — 색은 그 세부에서 가장 많은 분야', () => {
     expect(typeBreakdown(descendants)).toEqual([
-      { key: 'OTHER', label: '기타', count: 2 },
-      { key: 'ATTACK', label: '암살·테러·학살', count: 1 },
-      { key: 'BATTLE', label: '전투·작전', count: 1 },
+      { key: 'NONE', label: '세부 없음', count: 2, domain: null },
+      { key: 'ATTACK', label: '암살·테러·학살', count: 1, domain: '정치' },
+      { key: 'BATTLE', label: '전투·작전', count: 1, domain: '군사' },
     ])
   })
 
@@ -219,25 +219,28 @@ describe('인물·점검', () => {
   it('열별 빈 칸 수와 충실도', () => {
     expect(emptyCountByColumn(descendants).countries).toBe(2)
     const ratio = coverageRatio([sarajevo])
-    // 암살 유형 — 진영은 해당 없음, 수치(사상자)는 선택 기록이라 칸에 든다 — 날짜·개요·참여국 = 3/9
+    // 암살 — 진영은 해당 없음, 수치(사상자)는 선택 기록이라 칸에 든다 — 날짜·개요·참여국 = 3/9
     expect(ratio).toBeCloseTo(3 / 9)
   })
 })
 
 describe('배치 B — 점검 신호', () => {
-  it('기록 칸은 유형이 다루는지로 — 외교 조치엔 수치·진영 해당 없음, 전투엔 빈 칸, 값이 있으면 유형과 무관하게 채움', () => {
-    const ultimatum = node({ id: 'u', type: 'DIPLOMATIC_ACT' })
+  it('기록 칸은 세부·분야가 다루는지로 — 최후통첩(외교 › 선언·통첩)엔 수치·진영 해당 없음, 전투엔 빈 칸, 값이 있으면 무관하게 채움', () => {
+    const ultimatum = node({ id: 'u', type: 'DECLARATION', category: { id: 'c3', name: '외교' } })
     expect(checkNode(ultimatum).metrics).toBe('na')
     expect(checkNode(ultimatum).sides).toBe('na')
     expect(checkNode(marne).metrics).toBe('empty')
     expect(checkNode(marne).sides).toBe('empty')
     const withMetric = node({
       id: 'm',
-      type: 'DIPLOMATIC_ACT',
+      type: 'DECLARATION',
       metrics: [{ metricKey: 'k', metricName: '배상금', unit: null, value: 1, low: null, high: null, approx: false }],
     })
     expect(checkNode(withMetric).metrics).toBe('full')
     expect(checkScore(checkNode(sarajevo)).applicable).toBe(9)
+    // 같은 법령이라도 군사 분야(함대법)는 수치를 권한다 — 세부가 수치를 정하지 않으면 분야가 정한다
+    expect(checkNode(node({ id: 'law', type: 'LAW_POLICY', category: { id: 'c2', name: '군사' } })).metrics).toBe('empty')
+    expect(checkNode(node({ id: 'law2', type: 'CREATION', category: { id: 'c4', name: '문화' } })).metrics).toBe('na')
   })
 
   it('상위 기간 밖 하위 — 개전 전 사라예보는 기간 전', () => {

@@ -106,14 +106,14 @@ describe('auditAtlasData', () => {
     ).toEqual(['bare', 'orphan'])
   })
 
-  it('충돌이 아닌 군사 분야 사건(함대법·연설)은 점검하지 않는다 — 판정은 분야가 아니라 유형', () => {
+  it('충돌이 아닌 군사 분야 사건(함대법·연설)은 점검하지 않는다 — 판정은 분야가 아니라 세부 분야', () => {
     const result = audit({
       events: [
         war({ id: 'law', title: '제1차 함대법', type: 'LAW_POLICY' }),
         war({
           id: 'speech',
           title: '처칠 해군 예산 연설',
-          type: 'DIPLOMATIC_ACT',
+          type: 'DECLARATION',
           relatedHistoricalCountries: [{ id: 'prussia' }, { id: 'france' }],
         }),
       ],

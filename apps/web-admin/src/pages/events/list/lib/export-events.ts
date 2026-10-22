@@ -8,7 +8,7 @@
  *
  * 예전엔 `HistoricalEvent`를 통째로 `JSON.stringify` 했다. 그런데 이 객체의 상당수
  * 필드는 서버 데이터가 아니라 transformer가 타입을 만족시키려고 박아 넣은
- * **자리표시자**였다 — `type: 'battle'`(모든 사건, 2026-10-19 진짜 사건 유형으로 교체), `stats`의 사상자·참전국 0,
+ * **자리표시자**였다 — `type: 'battle'`(모든 사건, 2026-10 진짜 세부 분야로 교체), `stats`의 사상자·참전국 0,
  * `importance: 'notable'`, tags/timeline/theaters/keyFigures/countries/influence 빈 배열.
  * 그 결과 내보낸 파일은 "모든 사건이 전투이고 사상자가 0명"이라고 주장했다.
  *
@@ -31,8 +31,8 @@ interface ExportedEvent {
   id: string
   title: string
   description: string
-  /** 사건 유형(형식) — WAR·BATTLE·TREATY… */
-  type: string
+  /** 세부 분야(EventType) — BATTLE·TREATY·LAW_POLICY…, 없으면 null */
+  type: string | null
   categoryId: string | null
   categoryName: string
   startDate: string | null

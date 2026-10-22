@@ -141,11 +141,13 @@ interface BasicInfoSectionProps {
     onClear: () => void
   }
 
-  /** 사건 유형 칸 — 사건명 바로 아래(무엇을 기록할지를 정하는 두 번째 결정) */
+  /** 분야를 안 고르고 제출했을 때 */
+  categoryError?: string
+  /** 세부 분야 칸 — 분야 바로 아래, 분야 › 세부의 2단계(붙는 기록을 정한다) */
   typeSlot?: React.ReactNode
-  /** 유형의 핵심 기록 묶음 — '연결' 묶음 뒤 */
+  /** 세부의 핵심 기록 묶음 — '연결' 묶음 뒤 */
   recordsSlot?: { title: string; content: React.ReactNode }
-  /** 참여국이 고른 유형의 핵심 기록이면 그 유형 이름 — 라벨의 '(선택)'을 대신한다 */
+  /** 참여국이 고른 세부의 핵심 기록이면 그 세부 이름 — 라벨의 '(선택)'을 대신한다 */
   participantsCoreOf?: string
 
   /** 상위 사건의 참여국 불러오기 — 상위를 골랐고 아직 안 들어온 나라가 있을 때만 */
@@ -206,6 +208,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   onOpenCountryModal,
   parentEventSlot,
   kindSlot,
+  categoryError,
   typeSlot,
   recordsSlot,
   participantsCoreOf,
@@ -399,11 +402,87 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormField>
         </S.FormRow>
 
-        {/* 유형 — 형식이 무엇을 기록할지를 정한다. 고르면 분야·종류 기본값이 따라온다 */}
+        {/* 분야 — 무엇에 관한 일인가. 사건의 분류이자 색·필터의 기준이라 필수 */}
+        <S.FormRow>
+          <S.FormLabel as="span" id="event-form-category-label">
+            분야 <S.Required>*</S.Required>
+          </S.FormLabel>
+          <S.FormField>
+            {dbCategories.length > 0 ? (
+              <S.CategoryGrid role="group" aria-labelledby="event-form-category-label">
+                {dbCategories.map((dbCat) => {
+                  const categoryId = dbCat.id
+                  const categoryName = dbCat.name
+                  const categoryKey = extractCategoryKey(categoryId)
+                  const Icon = CATEGORY_ICON_MAP[categoryName] || FiFileText
+                  const isSelected = category === categoryId
+                  /* 목록과 **같은 팔레트** — DB 이름(정치·전쟁/군사…)이 곧 키다. 예전 키 추출
+                     (extractCategoryKey)은 'cat-xxx-n' id를 전제해 UUID에서 전부 회색이었다. */
+                  const tone =
+                    CATEGORY_SOFT_COLORS[
+                      categoryName as keyof typeof CATEGORY_SOFT_COLORS
+                    ] ?? CATEGORY_SOFT_COLORS.other
+
+                  return (
+                    <S.CategoryCard
+                      key={dbCat.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      style={
+                        {
+                          '--cat-rgb': tone.rgb,
+                          '--cat-text': isDark ? tone.textDark : tone.text,
+                        } as React.CSSProperties
+                      }
+                      $selected={isSelected}
+                      $category={categoryKey}
+                      onClick={() => {
+                        playClickSound()
+                        setCategory(isSelected ? '' : categoryId)
+                      }}
+                    >
+                      <S.CategoryIcon
+                        $category={categoryKey}
+                        $selected={isSelected}
+                      >
+                        <Icon size={13} />
+                      </S.CategoryIcon>
+                      <S.CategoryLabel>{categoryName}</S.CategoryLabel>
+                    </S.CategoryCard>
+                  )
+                })}
+              </S.CategoryGrid>
+            ) : (
+              <S.EmptyState>
+                <FiAlertCircle
+                  size={32}
+                  color={isDark ? '#52525b' : '#cbd5e1'}
+                />
+                <p>카테고리를 불러올 수 없습니다.</p>
+                <p
+                  style={{
+                    fontSize: '12px',
+                    color: isDark ? '#71717a' : '#94a3b8',
+                    marginTop: '4px',
+                  }}
+                >
+                  서버와의 연결을 확인해주세요.
+                </p>
+              </S.EmptyState>
+            )}
+            {categoryError && (
+              <S.ErrorMessage id="event-form-category-error" role="alert">
+                {categoryError}
+              </S.ErrorMessage>
+            )}
+          </S.FormField>
+        </S.FormRow>
+
+        {/* 세부 분야 — 분야의 2단계(선택). 어떤 꼴의 일인가 — 붙는 기록을 정한다 */}
         {typeSlot && (
           <S.FormRow>
             <S.FormLabel as="span">
-              유형 <S.Required>*</S.Required>
+              세부 분야<OptionalTag>(선택)</OptionalTag>
             </S.FormLabel>
             <S.FormField>{typeSlot}</S.FormField>
           </S.FormRow>
@@ -568,78 +647,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormField>
         </S.FormRow>
 
-        {/* 카테고리 */}
-        <S.FormRow>
-          <S.FormLabel>
-            <div>
-              분야<OptionalTag>(선택)</OptionalTag>
-            </div>
-          </S.FormLabel>
-          <S.FormField>
-            {dbCategories.length > 0 ? (
-              <S.CategoryGrid>
-                {dbCategories.map((dbCat) => {
-                  const categoryId = dbCat.id
-                  const categoryName = dbCat.name
-                  const categoryKey = extractCategoryKey(categoryId)
-                  const Icon = CATEGORY_ICON_MAP[categoryName] || FiFileText
-                  const isSelected = category === categoryId
-                  /* 목록과 **같은 팔레트** — DB 이름(정치·전쟁/군사…)이 곧 키다. 예전 키 추출
-                     (extractCategoryKey)은 'cat-xxx-n' id를 전제해 UUID에서 전부 회색이었다. */
-                  const tone =
-                    CATEGORY_SOFT_COLORS[
-                      categoryName as keyof typeof CATEGORY_SOFT_COLORS
-                    ] ?? CATEGORY_SOFT_COLORS.other
-
-                  return (
-                    <S.CategoryCard
-                      key={dbCat.id}
-                      type="button"
-                      aria-pressed={isSelected}
-                      style={
-                        {
-                          '--cat-rgb': tone.rgb,
-                          '--cat-text': isDark ? tone.textDark : tone.text,
-                        } as React.CSSProperties
-                      }
-                      $selected={isSelected}
-                      $category={categoryKey}
-                      onClick={() => {
-                        playClickSound()
-                        setCategory(isSelected ? '' : categoryId)
-                      }}
-                    >
-                      <S.CategoryIcon
-                        $category={categoryKey}
-                        $selected={isSelected}
-                      >
-                        <Icon size={13} />
-                      </S.CategoryIcon>
-                      <S.CategoryLabel>{categoryName}</S.CategoryLabel>
-                    </S.CategoryCard>
-                  )
-                })}
-              </S.CategoryGrid>
-            ) : (
-              <S.EmptyState>
-                <FiAlertCircle
-                  size={32}
-                  color={isDark ? '#52525b' : '#cbd5e1'}
-                />
-                <p>카테고리를 불러올 수 없습니다.</p>
-                <p
-                  style={{
-                    fontSize: '12px',
-                    color: isDark ? '#71717a' : '#94a3b8',
-                    marginTop: '4px',
-                  }}
-                >
-                  서버와의 연결을 확인해주세요.
-                </p>
-              </S.EmptyState>
-            )}
-          </S.FormField>
-        </S.FormRow>
       </FormGroup>
 
       {(onOpenCountryModal || parentEventSlot) && (
@@ -830,7 +837,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         </FormGroup>
       )}
 
-      {/* 유형의 핵심 기록 — 참여국(위 '연결') 위에 얹는 진영·성립/소멸, 그리고 조약·조직·인물·선거 */}
+      {/* 세부의 핵심 기록 — 참여국(위 '연결') 위에 얹는 진영·성립/소멸, 그리고 조약·조직·인물·선거 */}
       {recordsSlot && (
         <FormGroup aria-labelledby="event-form-group-records">
           <FormGroupTitle id="event-form-group-records">{recordsSlot.title}</FormGroupTitle>
