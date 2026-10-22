@@ -1,3 +1,4 @@
+import { EVENT_DOMAIN_VALUES, type EventDomainValue } from '../../domain/event-domain'
 import { EVENT_TYPE_VALUES, type EventTypeValue } from '../../domain/event-type'
 import type { EventSideView } from '../../application/event-side.service'
 import type { StructuredPoint as StructuredPointView } from '../../../shared/structured-point'
@@ -37,15 +38,8 @@ export class EventResponseDto {
   @ApiProperty({ description: '위치 (자유 텍스트)', required: false })
   location?: string | null
 
-  @ApiProperty({ description: '카테고리 ID', required: false })
-  categoryId?: string | null
-
-  @ApiProperty({ description: '카테고리 정보', required: false })
-  category?: {
-    id: string
-    name: string
-    description?: string | null
-  }
+  @ApiProperty({ description: '분야 — 무엇에 관한 일인가. 2단계는 type(세부 분야)', enum: EVENT_DOMAIN_VALUES })
+  domain!: EventDomainValue
 
   @ApiProperty({ description: '배경', required: false })
   background?: string | null
@@ -640,8 +634,8 @@ export class StatehoodEventDto {
   @ApiProperty({ description: '시작 일 (구조화)', required: false })
   startDay?: number | null
 
-  @ApiProperty({ description: '사건 카테고리명', required: false })
-  categoryName?: string | null
+  @ApiProperty({ description: '사건 분야', required: false, enum: EVENT_DOMAIN_VALUES })
+  domain?: EventDomainValue
 
   @ApiProperty({ description: '이 나라가 이 사건에서 무엇을 했나 (참여국 역할 설명)', required: false })
   roleDescription?: string | null

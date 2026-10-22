@@ -27,6 +27,8 @@ import {
 import { PrismaService } from '../prisma.service'
 import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
 import { applyEventSides } from './lib/event-sides'
+import { domainOf } from './lib/event-domain'
+import type { EventDomain } from '@prisma/client'
 
 const EVENT_CATEGORY_NAME = '정치'
 const PLASSEY_CATEGORY_NAME = '군사'
@@ -481,23 +483,7 @@ export async function seedBritishEastIndiaCompanyIndia(
     return
   }
 
-  const politicsCategory = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!politicsCategory) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
-  const warCategory = await prisma.eventCategory.findFirst({
-    where: { name: PLASSEY_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!warCategory) {
-    console.warn(`  ⚠️  사건 카테고리 '${PLASSEY_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const englandHC = await prisma.historicalCountry.findFirst({
     where: { name: '잉글랜드 왕국' },
@@ -587,7 +573,7 @@ export async function seedBritishEastIndiaCompanyIndia(
         startDatePrecision: 'day',
         endDate: new Date('1757-06-23'),
         endDatePrecision: 'day',
-        categoryId: politicsCategory.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: mughalHC.id,
         createdById: admin.id,
       },
@@ -607,7 +593,7 @@ export async function seedBritishEastIndiaCompanyIndia(
     }
     startDate: string
     endDate: string
-    categoryId: string
+    domain: EventDomain
     historicalCountryId: string
   }
   const children: ChildSpec[] = [
@@ -616,7 +602,7 @@ export async function seedBritishEastIndiaCompanyIndia(
       body: CHILD1_BODY,
       startDate: '1600-12-31',
       endDate: '1600-12-31',
-      categoryId: politicsCategory.id,
+      domain: domainOf(EVENT_CATEGORY_NAME),
       historicalCountryId: englandHC.id,
     },
     {
@@ -624,7 +610,7 @@ export async function seedBritishEastIndiaCompanyIndia(
       body: CHILD2_BODY,
       startDate: '1613-01-11',
       endDate: '1613-01-11',
-      categoryId: politicsCategory.id,
+      domain: domainOf(EVENT_CATEGORY_NAME),
       historicalCountryId: mughalHC.id,
     },
     {
@@ -632,7 +618,7 @@ export async function seedBritishEastIndiaCompanyIndia(
       body: CHILD3_BODY,
       startDate: '1690-08-24',
       endDate: '1690-08-24',
-      categoryId: politicsCategory.id,
+      domain: domainOf(EVENT_CATEGORY_NAME),
       historicalCountryId: mughalHC.id,
     },
     {
@@ -640,7 +626,7 @@ export async function seedBritishEastIndiaCompanyIndia(
       body: CHILD4_BODY,
       startDate: '1746-09-04',
       endDate: '1763-02-10',
-      categoryId: warCategory.id,
+      domain: domainOf(PLASSEY_CATEGORY_NAME),
       historicalCountryId: mughalHC.id,
     },
     {
@@ -648,7 +634,7 @@ export async function seedBritishEastIndiaCompanyIndia(
       body: CHILD5_BODY,
       startDate: '1757-06-23',
       endDate: '1757-06-23',
-      categoryId: warCategory.id,
+      domain: domainOf(PLASSEY_CATEGORY_NAME),
       historicalCountryId: mughalHC.id,
     },
   ]
@@ -675,7 +661,7 @@ export async function seedBritishEastIndiaCompanyIndia(
           startDatePrecision: 'day',
           endDate: new Date(c.endDate),
           endDatePrecision: 'day',
-          categoryId: c.categoryId,
+          domain: c.domain,
           historicalCountryId: c.historicalCountryId,
           parentEventId: parentEvent.id,
           createdById: admin.id,

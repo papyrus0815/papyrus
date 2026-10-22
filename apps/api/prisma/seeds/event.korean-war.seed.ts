@@ -35,7 +35,7 @@
  *  - PersonEvent: 위 9명
  *
  * 의존성
- *  - admin 계정, eventCategory '군사'
+ *  - admin 계정, 분야 '군사'
  *  - country '대한민국'·'미국'·'영국'·'중국'·'일본'(seedCountries),
  *  - historicalCountry '소비에트 사회주의 공화국 연방'(러시아 hc 시드)
  *  - person 'Harry S. Truman'·'Douglas MacArthur'(SCAP/마닐라 시드)
@@ -48,6 +48,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_CATEGORY_NAME = '군사'
@@ -194,14 +195,6 @@ export async function seedKoreanWar(prisma: PrismaService): Promise<void> {
     console.warn('  ⚠️  admin 계정 없음 — 시딩 중단 (admin.seed 먼저)')
     return
   }
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
-    return
-  }
 
   // ── 0.5 DPRK 역사적 국가 등록(없으면) ──────────────────────────────
   let dprk = await prisma.historicalCountry.findFirst({
@@ -305,7 +298,7 @@ export async function seedKoreanWar(prisma: PrismaService): Promise<void> {
         endDatePrecision: 'day',
         location:
           '한반도 전역 — 38도선 ~ 부산 교두보(낙동강 방어선) ~ 압록강(중강진·초산·혜산) ~ 개성·판문점(정전 협상장). 주요 전장: 서울·인천·대전·다부동·낙동강·인천 월미도·서울 수복·평양·청천강·장진호·흥남·1·4 후퇴·홍천·횡성·지평리·서울 재탈환·금성·백마고지·단장의 능선.',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         background:
           '1945-08-15 일본의 무조건 항복 직후 *General Order No.1*(1945-09-02 발효)에 의해 한반도가 38도선을 기준으로 미·소 분담 점령되면서 *3년간의 군정 시기*가 시작되었다. 1948-08-15 대한민국 정부 수립(이승만)·1948-09-09 조선민주주의인민공화국 수립(김일성)으로 양 분단 정부가 출범했고, 1948-12-25 소련군·1949-06-29 미군 *철수 완료*(미군 군사고문단 KMAG 약 500명만 잔류)로 한반도는 사실상 *준비된 화약고*가 되었다. 1949-1950년 사이 *옹진·개성·춘천·강릉* 등 38선 인근에서 *874차례* 무력 충돌이 누적되었고(KIMA 「한국전쟁사」 1권), 김일성은 1949-03-05·1950-04-10 두 차례 모스크바를 방문해 스탈린에 *남침 승인*을 요청했다. 결정적 외부 변수 4가지: (1) 1949-08-29 소련의 첫 핵실험 성공으로 *미국의 핵 독점이 깨짐*, (2) 1949-10-01 중화인민공화국 수립으로 *동북아 사회주의 블록 형성*, (3) 1950-01-12 애치슨 *"극동 방어선"* 연설에서 *한국·대만 제외* 인상, (4) 1950-02-14 중·소 우호동맹 상호원조 조약 체결로 *중국이 동북에서 군사 자원 후방 보장*. 이 4가지가 결합되어 1950-04-10 평양 비공개 회담에서 스탈린이 *"마오와 합의되면 동의"*로 선회했고, 5월 마오 동의 후 6-25 남침이 발동되었다.',
         aftermath:

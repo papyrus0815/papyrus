@@ -23,7 +23,7 @@
  *  - PersonEvent: 위 인물들 + 시데하라 외무 라인
  *
  * 의존성
- *  - admin 계정, eventCategory '외교',
+ *  - admin 계정, 분야 '외교',
  *  - historicalCountry '일본 제국'(seedJapanMeijiEra)
  *  - country '미국'·'영국'·'중국'·'일본'·'호주'(seedCountries),
  *  - historicalCountry '소비에트 사회주의 공화국 연방'(seedRussiaHistoricalCountries)
@@ -34,6 +34,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_CATEGORY_NAME = '외교'
@@ -127,14 +128,6 @@ export async function seedTrumanScapAppointment(
     console.warn('  ⚠️  admin 계정 없음 — 시딩 중단 (admin.seed 먼저)')
     return
   }
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
-    return
-  }
   const empireHc = await prisma.historicalCountry.findFirst({
     where: { name: '일본 제국' },
     select: { id: true },
@@ -219,7 +212,7 @@ export async function seedTrumanScapAppointment(
         endDate: END,
         endDatePrecision: 'day',
         location: '미국 워싱턴 D.C. — 백악관 + 미 합참 본부(펜타곤은 1943 완공 직후, 일부 합참 회의는 구 War Department Building 사용)',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: empireHc.id, // 점령 대상국 기준 — 마닐라 회담 시드와 동일한 분류 정책
         background:
           '1945년 7월 17일~8월 2일 포츠담 회담에서 미·영·중 3국은 *일본의 무조건 항복을 요구하는 포츠담 선언*(7월 26일)을 발표했고, 트루먼은 회담 도중 8월 6일·9일 히로시마·나가사키 원폭 투하를 재가했다. 8월 8일 소련이 대일선전포고를 하고 8월 10일 만주 진공을 개시하자 일본 정부는 같은 날 0시 30분 어전회의에서 포츠담 선언 수락을 결정, 스위스·스웨덴 경유로 미국에 통보했다. 8월 11일 번스 국무장관은 *"천황의 권한은 SCAP에 종속된다(shall be subject to the Supreme Commander for the Allied Powers)"*는 조건부 답신(번스 메모)을 송부했고, 이 답신에서 *SCAP*이라는 직책 명칭이 사상 처음 외교 문서에 등장했다. 8월 13일 SWNCC가 General Order No.1 초안을 마무리하고 8월 14일 일본의 정식 수락 통보가 도달하자, 트루먼은 같은 날 14일 오후 백악관 집무실에서 (1) SCAP 인선, (2) General Order No.1, (3) 항복 절차 일정을 한 자리에서 결재했다.',

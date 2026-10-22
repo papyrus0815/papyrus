@@ -22,6 +22,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '외교'
 
@@ -341,14 +342,6 @@ export async function seedCateauCambresis1559(
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const franceHC = await prisma.historicalCountry.findFirst({
     where: { name: '프랑스 왕국' },
@@ -408,7 +401,7 @@ export async function seedCateauCambresis1559(
         startDatePrecision: 'day',
         endDate: new Date(END_DATE),
         endDatePrecision: 'day',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: franceHC.id,
         createdById: admin.id,
       },

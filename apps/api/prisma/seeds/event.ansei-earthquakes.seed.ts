@@ -18,11 +18,12 @@
  *  이전 시드(parent "안세이 대지진 (1854~1855)" + 3 children)가 이미 실행됐다면
  *  자식의 parentEventId를 null 처리하고, parent 사건/섹션/국가관계를 정리한다.
  *
- * 의존성: seedKurofune(도쿠가와 막부 historicalCountry) · seedEventCategories('사회') · admin
+ * 의존성: seedKurofune(도쿠가와 막부 historicalCountry) · 분야('사회') · admin
  */
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '사회'
 const SHOGUNATE_NAME = '도쿠가와 막부'
@@ -258,14 +259,6 @@ export async function seedAnseiEarthquakes(prisma: PrismaService): Promise<void>
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
-    return
-  }
 
   const bakufu = await prisma.historicalCountry.findFirst({
     where: { name: SHOGUNATE_NAME },
@@ -332,7 +325,7 @@ export async function seedAnseiEarthquakes(prisma: PrismaService): Promise<void>
           endDate: q.startDate,
           endDatePrecision: 'day',
           location: q.location,
-          categoryId: category.id,
+          domain: domainOf(EVENT_CATEGORY_NAME),
           historicalCountryId: bakufu.id,
           parentEventId: null,
           background: q.background,

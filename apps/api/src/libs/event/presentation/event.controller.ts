@@ -51,6 +51,7 @@ import { EventCountryRole, EventOrganizationRole, PrismaClient } from '@prisma/c
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
 import { assertEventOwnership, ensureEventOwnership } from '../domain/event-ownership'
 import { formatEventDate } from '../domain/event-date'
+import { parseEventDomain, type EventDomainValue } from '../domain/event-domain'
 import { parseEventTypes } from '../domain/event-type'
 import { displayPersonName } from '../../shared/person-display-name'
 
@@ -102,7 +103,8 @@ export interface VisitedEventCardDto {
   startEra: string | null
   startYear: number | null
   startDate: string | null
-  categoryName: string | null
+  /** 분야 */
+  domain: EventDomainValue
 }
 
 /**
@@ -490,12 +492,7 @@ export class EventController {
       endDate: formatEventDate(event.endDate, event.endEra, event.endYear, event.endMonth, event.endDay),
       endDatePrecision: event.endDatePrecision ?? null,
       location: event.location,
-      categoryId: event.categoryId,
-      category: event.category ? {
-        id: event.category.id,
-        name: event.category.name,
-        description: event.category.description,
-      } : undefined,
+      domain: event.domain ?? 'OTHER',
       background: event.background,
       aftermath: event.aftermath,
       parentEventId: event.parentEventId,
@@ -749,7 +746,7 @@ export class EventController {
    * @param countryId (legacy) 단일 국가 — 현대/역사적 양쪽 매칭
    * @param countryIds 쉼표 구분 현대 국가 id 목록 — 다중 OR
    * @param historicalCountryIds 쉼표 구분 역사 국가 id 목록 — 다중 OR
-   * @param categoryId EventCategory.id(분야) 정확 매칭
+   * @param domain 분야(EventDomain) 정확 매칭 — 예: MILITARY. 무효 값은 무시
    * @param types 세부 분야 쉼표 목록 — 예: BATTLE,TREATY. 무효 값은 무시
    * @param decade 십년대 시작 연도 (예: "1860") — startDate ∈ [year, year+10)
    * @param century 세기 (예: "19") — startDate ∈ 해당 세기
@@ -771,7 +768,7 @@ export class EventController {
     @Query('countryId') countryId?: string,
     @Query('countryIds') countryIds?: string,
     @Query('historicalCountryIds') historicalCountryIds?: string,
-    @Query('categoryId') categoryId?: string,
+    @Query('domain') domain?: string,
     @Query('types') types?: string,
     @Query('decade') decade?: string,
     @Query('century') century?: string,
@@ -855,7 +852,7 @@ export class EventController {
       `📄 사건 목록 조회: offset=${skip}, limit=${take}, ` +
         `createdSinceDays=${sinceDays ?? 'all'}, ` +
         `countryId=${filterCountryId ?? 'all'}, ` +
-        `category=${categoryId ?? 'all'}, decade=${decade ?? '-'}, century=${century ?? '-'}`,
+        `domain=${domain ?? 'all'}, decade=${decade ?? '-'}, century=${century ?? '-'}`,
     )
 
     // countryRelations 단일 필터 — has-no-countries 우선(country 지정 + 빈 관계는
@@ -908,7 +905,7 @@ export class EventController {
         createdById: userId,
         deletedAt: null,
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
-        ...(categoryId && { categoryId }),
+        ...(parseEventDomain(domain) && { domain: parseEventDomain(domain) }),
         ...(parseEventTypes(types) && { type: { in: parseEventTypes(types) } }),
         ...((dateRange.gte || dateRange.lt) && { startDate: dateRange }),
         ...(countryScopeWhere && { AND: [countryScopeWhere] }),
@@ -937,7 +934,6 @@ export class EventController {
             relatedByEvents: { where: { event: { deletedAt: null } } },
           },
         },
-        category: true,
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
         parentEvent: true,
@@ -963,7 +959,6 @@ export class EventController {
                       relatedByEvents: { where: { event: { deletedAt: null } } },
                     },
                   },
-                  category: true,
                   historicalCountry: { select: { id: true, name: true } },
                   // 목록은 섹션 *제목*만 소비한다(드로어의 '본문 구성' 칩) —
                   // content 제외 근거는 아래 루트 include 주석 참고.
@@ -996,7 +991,6 @@ export class EventController {
                     where: { deletedAt: null },
                     omit: LIST_OMITTED_BODY_FIELDS,
                     include: {
-                      category: true,
                       historicalCountry: { select: { id: true, name: true } },
                       /**
                        * 손자에도 관련국을 실어야 한다 — 자식에만 넣은 수정(TF-7)이 한 계층 앞에서
@@ -1068,7 +1062,7 @@ export class EventController {
     @Query('countryId') countryId?: string,
     @Query('countryIds') countryIds?: string,
     @Query('historicalCountryIds') historicalCountryIds?: string,
-    @Query('categoryId') categoryId?: string,
+    @Query('domain') domain?: string,
     @Query('types') types?: string,
     @Query('decade') decade?: string,
     @Query('century') century?: string,
@@ -1165,7 +1159,7 @@ export class EventController {
         createdById: userId,
         deletedAt: null,
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
-        ...(categoryId && { categoryId }),
+        ...(parseEventDomain(domain) && { domain: parseEventDomain(domain) }),
         ...(parseEventTypes(types) && { type: { in: parseEventTypes(types) } }),
         ...((dateRange.gte || dateRange.lt) && { startDate: dateRange }),
         ...(countryScopeWhere && { AND: [countryScopeWhere] }),
@@ -1506,7 +1500,7 @@ export class EventController {
             startYear: true,
             startMonth: true,
             startDay: true,
-            category: { select: { name: true } },
+            domain: true,
           },
         },
       },
@@ -1530,7 +1524,7 @@ export class EventController {
       startYear: row.event.startYear,
       startMonth: row.event.startMonth,
       startDay: row.event.startDay,
-      categoryName: row.event.category?.name ?? null,
+      domain: row.event.domain,
       roleDescription: row.roleDescription,
     })
 
@@ -1598,7 +1592,6 @@ export class EventController {
       // (getAllEvents 루트와 동일 형상 — DTO 둘 다 optional이라 undefined로 빠져도 계약 유지).
       omit: LIST_OMITTED_BODY_FIELDS,
       include: {
-        category: true,
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
         // parentEvent는 싣지 않는다 — 위 raw SQL이 루트만 추리므로 항상 null(죽은 로드).
@@ -1607,7 +1600,6 @@ export class EventController {
           where: { deletedAt: null },
           omit: LIST_OMITTED_BODY_FIELDS,
           include: {
-            category: true,
             historicalCountry: { select: { id: true, name: true } },
             // 섹션은 제목만 — 유일 소비처(대시보드 EventCardItem)가 섹션을 안 쓰므로
             // MEDIUMTEXT content 전문 적재 금지(getAllEvents와 동일 형상, API-2).
@@ -1678,7 +1670,6 @@ export class EventController {
     const event = await this.prisma.event.findUnique({
       where: { id },
       include: {
-        category: true,
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
         // 위치 복원: 편집 폼 PlaceSelect 뱃지에 표시할 이름 (UUID만으론 부족)
@@ -1756,11 +1747,9 @@ export class EventController {
           // childEventIds 전체 재전송을 만들기 때문에(가드가 삭제 사건을 거부) 필수.
           where: { deletedAt: null },
           include: {
-            // 카드 색띠용 category — 누락 시 resolveCategory(undefined)가 전부 회색 폴백.
-            category: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
             // eventSections·eventImages는 카드가 쓰지 않는데 섹션 content(MEDIUMTEXT)까지
-            // 매 상세 응답에 실려 페이로드가 부풀었다 — 제거(카드는 title·날짜·설명·category만 소비).
+            // 매 상세 응답에 실려 페이로드가 부풀었다 — 제거(카드는 title·날짜·설명·분야(domain 스칼라)만 소비).
           },
           orderBy: { startDate: 'asc' }, // 하위 사건 시간순 정렬
         },
@@ -1984,7 +1973,7 @@ export class EventController {
         startDate: true,
         startEra: true,
         startYear: true,
-        category: { select: { name: true } },
+        domain: true,
       },
     })
     return rows.map((row) => ({
@@ -1993,7 +1982,7 @@ export class EventController {
       startEra: row.startEra ?? null,
       startYear: row.startYear ?? null,
       startDate: row.startDate ? row.startDate.toISOString() : null,
-      categoryName: row.category?.name ?? null,
+      domain: row.domain,
     }))
   }
 
@@ -2028,17 +2017,6 @@ export class EventController {
     
     console.log(`👤 사건 등록 사용자: ${userId}`)
     
-    // categoryName이 제공되면 categoryId로 변환 (우선순위: categoryName > categoryId)
-    let categoryId = dto.categoryId
-    if (dto.categoryName) {
-      const category = await this.prisma.eventCategory.findFirst({
-        where: { name: dto.categoryName },
-      })
-      if (category) {
-        categoryId = category.id
-      }
-    }
-
     const startParts = parseEventDate(dto.startDate)
     const endParts = parseEventDate(dto.endDate)
     const event = await this.eventService.createEvent(
@@ -2058,7 +2036,7 @@ export class EventController {
         endMonth: endParts?.month,
         endDay: endParts?.day,
         location: dto.location,
-        categoryId: categoryId,
+        domain: dto.domain,
         background: dto.background,
         aftermath: dto.aftermath,
         parentEventId: dto.parentEventId,
@@ -2121,17 +2099,6 @@ export class EventController {
       deleted: 'conflict',
     })
 
-    // categoryName이 제공되면 categoryId로 변환 (우선순위: categoryName > categoryId)
-    let categoryId = dto.categoryId
-    if (dto.categoryName) {
-      const category = await this.prisma.eventCategory.findFirst({
-        where: { name: dto.categoryName },
-      })
-      if (category) {
-        categoryId = category.id
-      }
-    }
-
     const startPartsU = parseEventDate(dto.startDate)
     const endPartsU = parseEventDate(dto.endDate)
     const event = await this.eventService.updateEvent(
@@ -2152,7 +2119,7 @@ export class EventController {
         endMonth: endPartsU?.month,
         endDay: endPartsU?.day,
         location: dto.location,
-        categoryId: categoryId,
+        domain: dto.domain,
         background: dto.background,
         aftermath: dto.aftermath,
         parentEventId: dto.parentEventId,

@@ -28,7 +28,7 @@
  *  - PersonEvent: 위 8명
  *
  * 의존성
- *  - admin 계정, eventCategory '정치'
+ *  - admin 계정, 분야 '정치'
  *  - country '중국'·'미국'·'영국'·'일본'(seedCountries),
  *  - historicalCountry '소비에트 사회주의 공화국 연방'(러시아 hc 시드)
  *  - person 'Mao Zedong (毛澤東)'(한국전쟁 시드)
@@ -41,6 +41,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_CATEGORY_NAME = '정치'
@@ -185,14 +186,6 @@ export async function seedPrcFounding(prisma: PrismaService): Promise<void> {
     console.warn('  ⚠️  admin 계정 없음 — 시딩 중단 (admin.seed 먼저)')
     return
   }
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
-    return
-  }
 
   // ── 0.5 중화민국(ROC) 역사적 국가 등록(없으면) ─────────────────────
   let roc = await prisma.historicalCountry.findFirst({
@@ -296,7 +289,7 @@ export async function seedPrcFounding(prisma: PrismaService): Promise<void> {
         endDatePrecision: 'day',
         location:
           '중국 베이징 톈안먼 광장(天安門廣場) — 본 행사장은 톈안먼 성루(城樓), 공식 단상 길이 60m, 마오쩌둥 중앙·6명 부주석 좌우 배치. 광장 인원 약 30만 명(청년·학생·노동자·인민해방군 분열 부대 포함).',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         background:
           '직접 배경은 1945-08-15 일본 항복 직후 시작된 *국공 평화 협상*(1945-08-28 ~ 10-10 충칭 회담, 쌍십협정 체결)이 1946-06-26 *중원 군사 충돌*로 결렬되며 시작된 *제2차 국공내전*. 4년간(1946-1949) 4단계로 진행되었다. (1) 1946-06 ~ 1947-06 *전략적 방어기*(국민당 우세, 옌안 점령 등), (2) 1947-07 ~ 1948-08 *전략적 반격기*(공산당 동북·화북 회복), (3) 1948-09 ~ 1949-01 *3대 전역기*(랴오선·화이하이·핑진 — 약 154만 명 국민당군 격멸·포로), (4) 1949-04 ~ 10 *도강·진군기*(4-21 도강전역·4-23 난징 점령·5-27 상하이 함락·9-25 신장·10-1 베이징 선포). 결정적 변수 5가지: (1) 1948-08 국민당 *금원권 개혁* 실패로 통화 가치 99.99% 폭락·민심 이반, (2) 1948-09 ~ 1949-01 3대 전역에서 *린뱌오·천이·류보청* 3대 야전군의 압도적 승리, (3) 1949-04 *4-21 도강전역*으로 양쯔강 방어선 붕괴, (4) 1949-08-05 미국 국무성 *백서*(*"China White Paper"*, 1,054쪽) 발표로 *국민당 포기* 신호, (5) 1949-09-21 ~ 30 *중국인민정치협상회의(CPPCC) 1차 전체회의* 베이핑(베이징) 개최로 정부 조직·국호·국기·국가·헌법 격 *공동강령(共同綱領)* 60개 조 채택.',
         aftermath:

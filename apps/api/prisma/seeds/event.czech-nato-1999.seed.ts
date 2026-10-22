@@ -20,6 +20,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_CATEGORY_NAME = '외교'
@@ -531,14 +532,6 @@ export async function seedCzechNato1999(
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const czechCountry = await prisma.country.findFirst({
     where: { name: '체코' },
@@ -638,7 +631,7 @@ export async function seedCzechNato1999(
         startDatePrecision: 'day',
         endDate: new Date(END_DATE),
         endDatePrecision: 'day',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         createdById: admin.id,
       },
     })

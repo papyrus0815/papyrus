@@ -18,11 +18,12 @@
  *  - Person 신규: 가와베 도라시로(사절단장), 더글러스 맥아더(GHQ 최고사령관)
  *  - PersonEvent: 위 두 명 + 시데하라(외무 라인) — 시데하라는 기존 인물 활용
  *
- * 의존성: 일본 제국 hc(seedJapanMeijiEra), eventCategory '외교', admin
+ * 의존성: 일본 제국 hc(seedJapanMeijiEra), 분야 '외교', admin
  */
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_CATEGORY_NAME = '외교'
@@ -98,14 +99,6 @@ export async function seedJapan1945ManilaConference(
   const admin = await prisma.account.findUnique({ where: { username: 'admin' } })
   if (!admin) {
     console.warn('  ⚠️  admin 계정 없음 — 시딩 중단 (admin.seed 먼저)')
-    return
-  }
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
     return
   }
   const empireHc = await prisma.historicalCountry.findFirst({
@@ -212,7 +205,7 @@ export async function seedJapan1945ManilaConference(
         endDate: END,
         endDatePrecision: 'day',
         location: '필리핀 마닐라 — AFPAC(Army Forces Pacific) 임시 본부, 시청 인근 시민회관(Manila City Hall 일대)',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: empireHc.id,
         background:
           '1945년 8월 14일 일본 정부가 포츠담 선언 수락을 결정하고, 8월 15일 정오 옥음방송으로 종전이 발표되었다. 같은 날 트루먼 대통령은 더글러스 맥아더를 연합군 최고사령관(SCAP)에 임명, 16일 일본 정부 앞으로 *항복 절차 협의를 위한 사절단 파견을 요구하는 무선 전문*을 송신했다. 8월 17일 히가시쿠니노미야 내각이 발족하여 사절단 인선을 결정 — 단장 가와베 도라시로 참모차장, 외무성 라인 오카자키 가쓰오, 작전 호리바 가즈오 대좌, 해군 데라쿠라 마사오 소장 등 16명이 18일 도쿄 가시와비행장(柏飛行場)에서 출발 준비를 마쳤다. 사절단 항공기 2대(녹색 도장 더글러스 더그글러스 더글러스 G3M "베티" 폭격기 개조)는 19일 새벽 출발하여 오키나와 이에지마(伊江島)를 경유, 같은 날 마닐라에 도착했다.',

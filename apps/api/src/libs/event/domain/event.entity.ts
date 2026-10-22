@@ -1,4 +1,5 @@
 import type { EventKind } from './event-kind'
+import type { EventDomainValue } from './event-domain'
 import type { EventTypeValue } from './event-type'
 
 export class Event {
@@ -20,13 +21,14 @@ export class Event {
   endMonth?: number | null
   endDay?: number | null
   location?: string | null
-  categoryId?: string | null
+  /** 분야 — 무엇에 관한 일인가(domain/event-domain.ts) */
+  domain?: EventDomainValue
   background?: string | null
   aftermath?: string | null
   parentEventId?: string | null
   /** 사건 종류 — 단일(하위 없음)/묶음(전개=하위 사건). 규칙은 domain/event-kind.ts */
   kind?: EventKind
-  /** 세부 분야(선택) — 분야의 2단계이자 붙는 기록을 정한다(domain/event-type.ts). 분야는 categoryId */
+  /** 세부 분야(선택) — 분야의 2단계이자 붙는 기록을 정한다(domain/event-type.ts). 분야는 domain */
   type?: EventTypeValue | null
   cityId?: string | null
   administrativeDivisionId?: string | null

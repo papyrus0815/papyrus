@@ -18,6 +18,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_TITLE = '샌프란시스코 강화조약 체결'
@@ -1228,11 +1229,6 @@ export async function seedSanFranciscoTreatyEnrich(
   }
   console.log(`  📌 대상 사건: ${event.title} (id=${event.id})`)
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) { console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`); return }
 
   // ── 1. 신규 인물 등록 ─────────────────────────────────────────────
   console.log('\n  👤 신규 인물 등록...')
@@ -1391,7 +1387,7 @@ export async function seedSanFranciscoTreatyEnrich(
         endDate: new Date('1951-09-08'),
         endDatePrecision: 'day',
         location: '미국 캘리포니아 샌프란시스코 프레시디오 군기지',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: japan?.id ?? null,
         background:
           '강화조약 협상 과정에서 호주·뉴질랜드가 재무장 일본의 부활에 강한 거부감을 보이자, 덜레스 특사는 1951-09-01 ANZUS 조약(미·호·뉴 3자 안보조약) 별도 체결로 호·뉴를 일본 위협으로부터 분리 보호하는 패키지를 만들었다. 동시에 일본 측 요시다 정부는 주권 회복(전 국민 환영)과 미군 영구 주둔(좌파·중립파 반대)를 정치적으로 분리 처리하기 위해 두 조약을 별도 문서로 만드는 데 동의. 그 결과 강화조약 = 다자(48개국 vs 일본) + 안보조약 = 양자(미·일)의 이중 트랙 구조가 완성되었다.',

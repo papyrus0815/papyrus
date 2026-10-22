@@ -2,7 +2,6 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 
 import { PrismaService } from '../prisma.service'
-import { seedEventCategories } from '../seeds/eventCategory.seed'
 import { seedEventStatehoodBackfill } from '../seeds/event.statehood-backfill.seed'
 
 /**
@@ -16,7 +15,6 @@ async function main() {
   dotenv.config({ path: path.resolve(process.cwd(), 'env.development') })
   const prisma = new PrismaService({ useAdapter: true })
   try {
-    await seedEventCategories(prisma)
     await seedEventStatehoodBackfill(prisma)
   } finally {
     await prisma.$disconnect()

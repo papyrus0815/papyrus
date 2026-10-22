@@ -76,7 +76,7 @@ export class EventRelationService {
       startDate: true,
       startDatePrecision: true,
       deletedAt: true,
-      category: { select: { name: true } },
+      domain: true,
     } as const
 
     const rows = await this.prisma.eventRelation.findMany({
@@ -108,7 +108,7 @@ export class EventRelationService {
             startDay: other.startDay ?? null,
             startDate: other.startDate ? other.startDate.toISOString() : null,
             startDatePrecision: other.startDatePrecision ?? null,
-            categoryName: other.category?.name ?? null,
+            domain: other.domain,
           },
           createdAt: row.createdAt.toISOString(),
         },

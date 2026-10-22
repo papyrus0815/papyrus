@@ -13,11 +13,12 @@
  *  - EventSection: 4섹션 (시대 배경 / 이이 나오스케 大老 등장 / 체포·처형 / 사쿠라다몬 외 변)
  *  - EventCountryRelation: 도쿠가와 막부(INITIATOR) — Timeline 메인 국가 lane 자동 배치
  *
- * 의존성: seedKurofune(도쿠가와 막부 historicalCountry) · seedEventCategories('정치') · admin
+ * 의존성: seedKurofune(도쿠가와 막부 historicalCountry) · 분야('정치') · admin
  */
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '정치'
 const SHOGUNATE_NAME = '도쿠가와 막부'
@@ -157,14 +158,6 @@ export async function seedAnseiPurge(prisma: PrismaService): Promise<void> {
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
-    return
-  }
 
   const bakufu = await prisma.historicalCountry.findFirst({
     where: { name: SHOGUNATE_NAME },
@@ -193,7 +186,7 @@ export async function seedAnseiPurge(prisma: PrismaService): Promise<void> {
         endDate: EVENT_END,
         endDatePrecision: 'day',
         location: '일본 — 에도(현 도쿄)·교토 일대 (대옥 처분 집행) + 사쿠라다몬(에도성 정문, 종결 시점)',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: bakufu.id,
         background:
           '1853년 페리 내항·1854년 가나가와 조약 이래 막부의 외교 권위가 *천황 칙허 + 다이묘 자문* 정치로 분산되고 있던 5년간의 추세를 거꾸로 되돌리려는 후다이 다이묘 진영의 *반동 시도*가 본 사건의 정치적 본질. 1858-04 노중수좌 홋타 마사요시가 통상조약 칙허 획득에 실패·사임한 후 1858-06-04 大老에 취임한 이이 나오스케는 (1) 1858-07~09 5개국 통상조약 단독 체결, (2) 1858-06-25 14대 쇼군 후계자로 도쿠가와 이에모치 결정, (3) 1858-09-08부터 반대파 일제 체포로 일사천리 진행. 1858년 6월부터 9월까지의 *3개월 권력 강행*이 본 사건의 직접 원동력이다.',

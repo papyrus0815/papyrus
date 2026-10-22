@@ -22,6 +22,7 @@ import { EventCountryRole, ConflictType, CombatType, ParticipationType } from '@
 import { PrismaService } from '../prisma.service'
 import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
 import { applyEventSides } from './lib/event-sides'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '군사'
 
@@ -37,14 +38,6 @@ export async function seedFrancoPrussianWar(
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const prussiaHC = await prisma.historicalCountry.findFirst({
     where: { name: '프로이센 왕국' },
@@ -79,7 +72,7 @@ export async function seedFrancoPrussianWar(
         endDate: new Date('1871-05-10'),
         endDatePrecision: 'day',
         location: '알자스·로렌·샹파뉴·파리·루아르 일대 (프랑스 동부 및 북부)',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: prussiaHC.id,
         background:
           '1866년 보오전쟁 승리로 북독일 연방을 결성한 프로이센은 남독일 4국과 비밀 군사 동맹을 맺어 통일 완성을 노렸다. 한편 1868년 스페인 혁명으로 공석이 된 스페인 왕위에 호엔촐레른-지그마링겐 가문의 레오폴트가 후보로 거론되자(1870년 7월), 프랑스는 동·남 양면에서 호엔촐레른 가문에 포위된다며 격렬히 반발했다. 비스마르크는 7월 13일 빌헬름 1세와 프랑스 대사 베네데티의 엠스 회담을 의도적으로 축약·강조한 "엠스 전보"를 공표해 양국 여론을 자극했고, 7월 19일 프랑스가 선전포고하며 개전했다.',
@@ -132,7 +125,7 @@ export async function seedFrancoPrussianWar(
         endDate: new Date('1870-09-02'),
         endDatePrecision: 'day',
         location: '프랑스 아르덴 스당 (Sedan)',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: prussiaHC.id,
         parentEventId: parentEvent.id,
         background:
@@ -178,7 +171,7 @@ export async function seedFrancoPrussianWar(
         endDate: new Date('1871-01-28'),
         endDatePrecision: 'day',
         location: '프랑스 파리 및 일드프랑스',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: prussiaHC.id,
         parentEventId: parentEvent.id,
         background:

@@ -25,6 +25,7 @@ import {
 import { PrismaService } from '../prisma.service'
 import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
 import { applyEventSides } from './lib/event-sides'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '군사'
 
@@ -408,14 +409,6 @@ export async function seedFirstOpiumWar(
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const britainHC = await prisma.historicalCountry.findFirst({
     where: { name: '그레이트브리튼 및 아일랜드 연합왕국' },
@@ -497,7 +490,7 @@ export async function seedFirstOpiumWar(
         startDatePrecision: 'day',
         endDate: new Date('1842-08-29'),
         endDatePrecision: 'day',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: qingHC.id,
         createdById: admin.id,
       },
@@ -527,7 +520,7 @@ export async function seedFirstOpiumWar(
         startDatePrecision: 'day',
         endDate: new Date('1839-11-03'),
         endDatePrecision: 'day',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: qingHC.id,
         parentEventId: parentEvent.id,
         createdById: admin.id,
@@ -558,7 +551,7 @@ export async function seedFirstOpiumWar(
         startDatePrecision: 'day',
         endDate: new Date('1842-07-21'),
         endDatePrecision: 'day',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: qingHC.id,
         parentEventId: parentEvent.id,
         createdById: admin.id,

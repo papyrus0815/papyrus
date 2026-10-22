@@ -15,7 +15,6 @@ import { JobModule } from '../../../libs/job/infrastructure/job.module'
 import { JobCategoryModule } from '../../../libs/job-category/infrastructure/job-category.module'
 import { MilitaryUnitModule } from '../../../libs/military/military-unit/infrastructure/military-unit.module'
 import { EventModule } from '../../../libs/event/infrastructure/event.module'
-import { EventCategoryModule } from '../../../libs/event-category/event-category.module'
 import { CityModule } from '../../../libs/city/city.module'
 import { NotificationModule } from '../../../libs/notification/notification.module'
 import { OrganizationModule } from '../../../libs/organization/infrastructure/organization.module'
@@ -74,7 +73,6 @@ import {
     JobCategoryModule,
     MilitaryUnitModule,
     EventModule,
-    EventCategoryModule,
     CityModule,
     NotificationModule,
     OrganizationModule,

@@ -1,3 +1,4 @@
+import { EVENT_DOMAIN_VALUES, type EventDomainValue } from '../../domain/event-domain'
 import { ApiProperty } from '@nestjs/swagger'
 import {
   IsEnum,
@@ -101,7 +102,7 @@ export class EventRelationCounterpartDto {
     description: "날짜 정밀도('year'|'month'|'day') — 연도만 아는 사건의 월·일(1·1)을 표시하지 않게",
   })
   startDatePrecision!: string | null
-  @ApiProperty({ nullable: true }) categoryName!: string | null
+  @ApiProperty({ enum: EVENT_DOMAIN_VALUES, description: '분야' }) domain!: EventDomainValue
 }
 
 export class EventRelationItemDto {

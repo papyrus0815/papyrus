@@ -19,6 +19,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '경제'
 
@@ -348,14 +349,6 @@ export async function seedVocFounding1602(
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const dutchHC = await prisma.historicalCountry.findFirst({
     where: { name: '네덜란드 공화국' },
@@ -391,7 +384,7 @@ export async function seedVocFounding1602(
         startDatePrecision: 'day',
         endDate: new Date(START_DATE),
         endDatePrecision: 'day',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: dutchHC.id,
         createdById: admin.id,
       },

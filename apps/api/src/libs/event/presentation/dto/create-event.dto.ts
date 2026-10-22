@@ -1,7 +1,9 @@
+import { EVENT_DOMAIN_VALUES, type EventDomainValue } from '../../domain/event-domain'
 import { EVENT_TYPE_VALUES, type EventTypeValue } from '../../domain/event-type'
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
+  ValidateIf,
   IsString,
   IsOptional,
   IsNotEmpty,
@@ -63,15 +65,16 @@ export class CreateEventDto {
   @IsString({ each: true })
   keywords?: string[]
 
-  @ApiProperty({ description: '카테고리 ID', required: false })
-  @IsString()
-  @IsOptional()
-  categoryId?: string
-
-  @ApiProperty({ description: '카테고리 이름 (카테고리 ID 대신 사용 가능)', required: false })
-  @IsString()
-  @IsOptional()
-  categoryName?: string
+  @ApiProperty({
+    description: '분야 — 무엇에 관한 일인가(POLITICS 정치·DIPLOMACY 외교·MILITARY 군사·ECONOMY 경제…). 2단계는 type(세부 분야)',
+    required: false,
+    enum: EVENT_DOMAIN_VALUES,
+  })
+  @IsIn(EVENT_DOMAIN_VALUES)
+  // 분야는 필수 칸이라 null로 비울 수 없다 — 생략(undefined)만 '변경 없음/기본값'. IsOptional은 null도 통과시켜
+  // DB NOT NULL에서 500이 났다.
+  @ValidateIf((_dto, value) => value !== undefined)
+  domain?: EventDomainValue
 
   @ApiProperty({ description: '배경', required: false })
   @IsString()
@@ -105,7 +108,7 @@ export class CreateEventDto {
 
   @ApiProperty({
     description:
-      '세부 분야(선택) — 분야의 2단계(BATTLE 전투·LAW_POLICY 법령·TREATY 조약…). 분야(categoryId)와 독립된 축이라 ' +
+      '세부 분야(선택) — 분야의 2단계(BATTLE 전투·LAW_POLICY 법령·TREATY 조약…). 분야(domain)와 독립된 축이라 ' +
       '어떤 분야와도 짝지을 수 있고, 붙는 기록을 정한다(프론트 레지스트리). null이면 세부 없음.',
     required: false,
     nullable: true,

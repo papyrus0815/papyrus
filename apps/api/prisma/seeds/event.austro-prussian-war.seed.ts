@@ -20,6 +20,7 @@ import { EventCountryRole, ConflictType, CombatType, ParticipationType } from '@
 import { PrismaService } from '../prisma.service'
 import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
 import { applyEventSides } from './lib/event-sides'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '군사'
 
@@ -42,14 +43,6 @@ export async function seedAustroPrussianWar(
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const prussiaHC = await prisma.historicalCountry.findFirst({
     where: { name: '프로이센 왕국' },
@@ -84,7 +77,7 @@ export async function seedAustroPrussianWar(
         endDate: new Date('1866-08-23'),
         endDatePrecision: 'day',
         location: '보헤미아·실레지아·이탈리아 베네토·아드리아해',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: prussiaHC.id,
         background:
           '1864년 프로이센·오스트리아 연합으로 덴마크를 격파(슐레스비히-홀슈타인 전쟁)한 후 양국은 가슈타인 협약(1865)으로 슐레스비히는 프로이센, 홀슈타인은 오스트리아가 통치하기로 합의했다. 그러나 비스마르크는 독일연방 내 프로이센의 주도권을 위해 의도적으로 협약을 흔들었고, 1866년 6월 9일 프로이센이 홀슈타인에 진주하자 오스트리아는 6월 14일 연방의회에서 대(對)프로이센 동원안을 가결시켰다. 비스마르크는 이미 4월 8일 이탈리아 왕국과 비밀 동맹을 체결, 남부 전선을 분산시킬 준비를 마쳐두고 있었다.',
@@ -133,7 +126,7 @@ export async function seedAustroPrussianWar(
         endDate: new Date('1866-07-03'),
         endDatePrecision: 'day',
         location: '보헤미아 쾨니히그레츠 (흐라데츠 크랄로베) 인근',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: prussiaHC.id,
         parentEventId: parentEvent.id,
         background:

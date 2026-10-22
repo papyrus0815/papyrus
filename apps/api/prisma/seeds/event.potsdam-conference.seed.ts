@@ -24,7 +24,7 @@
  *  - PersonEvent: 위 6명 + 장제스(중국 부재 서명자, 기존 인물 활용 시도)
  *
  * 의존성
- *  - admin 계정, eventCategory '외교'
+ *  - admin 계정, 분야 '외교'
  *  - country '미국'·'영국'·'중국'·'폴란드'(seedCountries),
  *  - historicalCountry '소비에트 사회주의 공화국 연방'·'나치 독일 (제3제국)'·'일본 제국'
  *  - person 'Harry S. Truman'·'James F. Byrnes'(SCAP 시드)
@@ -33,6 +33,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_CATEGORY_NAME = '외교'
@@ -130,14 +131,6 @@ export async function seedPotsdamConference(
     console.warn('  ⚠️  admin 계정 없음 — 시딩 중단 (admin.seed 먼저)')
     return
   }
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
-    return
-  }
   const naziGermanyHc = await prisma.historicalCountry.findFirst({
     where: { name: '나치 독일 (제3제국)' },
     select: { id: true },
@@ -222,7 +215,7 @@ export async function seedPotsdamConference(
         endDate: END,
         endDatePrecision: 'day',
         location: '독일 브란덴부르크주 포츠담 체칠리엔호프 궁(Schloss Cecilienhof, Potsdam) — 본회의장은 大홀, 미국 대표단 숙소는 4번가 카이저슈트라세 28번 *"리틀 화이트하우스"*, 영국·소련 숙소는 회담장 인근 호엔촐레른 별저.',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: naziGermanyHc.id,
         background:
           '1945년 2월 4~11일 얄타 회담에서 미·영·소 3국은 (1) 독일 항복 후 4분할 점령(프랑스 추가), (2) 폴란드 임시정부 구성, (3) 소련의 대일 참전(독일 항복 3개월 후), (4) 유엔 창설 일정에 합의했다. 그러나 (1) 1945-04-12 루스벨트 사망으로 트루먼 대통령 승계, (2) 5월 8일 독일 무조건 항복, (3) 폴란드 루블린 정부 수립을 둘러싼 미·영-소 마찰, (4) 6월 26일 샌프란시스코 유엔헌장 서명, (5) 7월 16일 트리니티 핵실험 성공이라는 5개 변수가 회담 직전에 발생했다. 회담 의제는 6월 미·영·소 외교 채널을 통해 *조정안 16개 항목*으로 사전 확정되었고, 핵심은 *독일 처리·폴란드 국경·일본 항복 처리·전범 처벌·소련 대일 참전 시기* 였다. 영국 측에서는 7월 5일 시행된 총선 결과를 7월 25일 발표 예정이라는 정치 일정 때문에, 처칠이 *"승부 결과를 모른 채"* 회담을 시작해야 하는 이례적 상황이 빚어졌다.',

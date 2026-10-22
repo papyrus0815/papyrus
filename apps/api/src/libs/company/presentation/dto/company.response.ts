@@ -1,3 +1,4 @@
+import type { EventDomainValue } from '../../../event/domain/event-domain'
 /** 기업 상태 (DTO 검증 @IsIn 용 단일 출처) */
 export const COMPANY_STATUS_VALUES = [
   'ACTIVE',
@@ -357,5 +358,6 @@ export interface CompanyRelatedEventDto {
   startYear: number | null
   startMonth: number | null
   startDay: number | null
-  categoryName: string | null
+  /** 사건 분야(EventDomain) */
+  domain: EventDomainValue
 }

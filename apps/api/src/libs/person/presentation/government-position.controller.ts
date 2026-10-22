@@ -107,7 +107,7 @@ export class GovernmentPositionController {
     }
     const rows = await this.prisma.cabinetEvent.findMany({
       where: { cabinetId },
-      include: { event: { include: { category: true } } },
+      include: { event: true },
       orderBy: { createdAt: 'asc' },
     })
     return rows.map(serializeBigInt)

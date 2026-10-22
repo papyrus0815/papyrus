@@ -150,7 +150,7 @@ export class CompanyService {
             startMonth: true,
             startDay: true,
             startDate: true,
-            category: { select: { name: true } },
+            domain: true,
           },
         },
       },

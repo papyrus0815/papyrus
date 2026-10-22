@@ -17,6 +17,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '정치'
 
@@ -264,14 +265,6 @@ export async function seedAmboynaMassacre(
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const dutchHC = await prisma.historicalCountry.findFirst({
     where: { name: '네덜란드 공화국' },
@@ -317,7 +310,7 @@ export async function seedAmboynaMassacre(
         startDatePrecision: 'day',
         endDate: new Date('1623-02-27'),
         endDatePrecision: 'day',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: dutchHC.id,
         createdById: admin.id,
       },

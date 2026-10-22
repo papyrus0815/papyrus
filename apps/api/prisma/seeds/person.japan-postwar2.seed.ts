@@ -26,6 +26,7 @@ import {
 
 import { PrismaService } from '../prisma.service'
 import { tenureRows } from './lib/tenure-rows'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 
@@ -800,11 +801,6 @@ export async function seedJapanPostwar2(prisma: PrismaService): Promise<void> {
   // ── 4. 사건 ─────────────────────────────────────────────────────────
   console.log('\n  📜 주요 사건 등록...')
   for (const ev of EVENTS) {
-    const category = await prisma.eventCategory.findFirst({ where: { name: ev.category }, select: { id: true } })
-    if (!category) {
-      console.warn(`    ⚠️  카테고리 미존재: ${ev.category}`)
-      continue
-    }
     const hcId = ev.historicalCountryName ? await getHistoricalCountryId(prisma, ev.historicalCountryName) : null
     const startDate = new Date(ev.startDate)
     const endDate = ev.endDate ? new Date(ev.endDate) : undefined
@@ -824,7 +820,7 @@ export async function seedJapanPostwar2(prisma: PrismaService): Promise<void> {
           endDate,
           endDatePrecision: ev.endDatePrecision ?? 'day',
           location: ev.location,
-          categoryId: category.id,
+          domain: domainOf(ev.category),
           historicalCountryId: hcId,
           background: ev.background,
           aftermath: ev.aftermath,

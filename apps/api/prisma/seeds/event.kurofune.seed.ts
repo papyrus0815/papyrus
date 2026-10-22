@@ -28,7 +28,7 @@
  *  - PersonEvent: 위 6명
  *
  * 의존성
- *  - admin 계정, eventCategory '외교'
+ *  - admin 계정, 분야 '외교'
  *  - country '미국'·'영국'·'프랑스'·'러시아'·'중국'(seedCountries)
  *  - historicalCountry '청나라'(event.first-opium-war 시드에서 인라인 생성)
  */
@@ -39,6 +39,7 @@ import {
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const EVENT_CATEGORY_NAME = '외교'
@@ -184,14 +185,6 @@ export async function seedKurofune(prisma: PrismaService): Promise<void> {
     console.warn('  ⚠️  admin 계정 없음 — 시딩 중단 (admin.seed 먼저)')
     return
   }
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
-    return
-  }
 
   // ── 0.5 도쿠가와 막부(에도 막부) 역사 국가 등록(없으면) ───────────
   let shogunate = await prisma.historicalCountry.findFirst({
@@ -297,7 +290,7 @@ export async function seedKurofune(prisma: PrismaService): Promise<void> {
         endDatePrecision: 'day',
         location:
           '에도 막부 사가미국 우라가(浦賀, 現 가나가와현 요코스카시 우라가) ~ 무사시국 에도만 가나자와(神奈川, 現 요코하마시 가나가와구). 1차 내항 정박지: 우라가 앞바다 약 2km. 2차 내항 정박지: 에도만 가나자와 앞바다(현 요코하마 부근). 친서 전달 장소: 1853-07-14 사가미국 구리하마(久里浜) 응접소(現 요코스카시 구리하마). 조약 체결 장소: 1854-03-31 가나가와 응접소(現 요코하마시 가나가와구).',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: shogunate.id,
         background:
           '직접 배경은 1840-1842년 *제1차 아편전쟁*에서 청이 영국에 패배해 1842-08-29 *난징 조약* 체결로 홍콩 할양·5개항 개항·치외법권을 강요받은 사건. 도쿠가와 막부는 *위원(魏源)의 「海國圖志」*(1842, 한역본 1854)와 청의 한역(漢譯) 보고서를 통해 1843년부터 위기 인식. 1842-07 *천보 신수급여령(天保薪水給与令)* 발령으로 1825 *이국선 타격령(異國船打拂令)*을 실질 폐기, 외국 선박에 식량·연료 지급으로 *온건 대응*으로 전환. 그러나 본격적 *통상 거부 + 쇄국 유지* 정책은 그대로. 미국 측 동기는 (1) 1846 멕시코 전쟁 후 *캘리포니아 획득*(1848-02 과달루페 이달고 조약)으로 *태평양 진출* 가능, (2) 1849 *캘리포니아 골드러시*로 동아시아 무역 폭증, (3) 1850년대 *증기선의 태평양 횡단*에 *연료(석탄)·식수 보급항* 절실, (4) 1846 비드를 *Columbus·Vincennes* 함대 우라가 입항(1차 시도 — 무성과 철수)으로 *외교적 실패의 학습*. 1852-03 필모어 대통령이 페리에 *동인도함대 사령관·일본 원정 전권* 임명, 8개월 셔틀 항해(케이프타운·실론·싱가포르·홍콩·상하이·류큐 우회)를 거쳐 1853-07-02 보닌 제도 도착·1853-07-08 우라가 입항.',

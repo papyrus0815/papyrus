@@ -395,7 +395,7 @@ export class EventService {
             endDate: childData.endDate ? new Date(childData.endDate) : null,
             location: childData.location || null,
             parentEventId: event.id, // 방금 생성한 사건을 상위로 설정
-            categoryId: data.categoryId || null, // 상위 사건의 카테고리 상속
+            domain: data.domain, // 상위 사건의 분야 상속
             background: null,
             aftermath: null,
             cityId: null,
@@ -1458,7 +1458,7 @@ export class EventService {
               title: newChildTitles.get(section.id)!,
               kind: 'SINGLE',
               parentEventId: id,
-              categoryId: target.categoryId ?? null,
+              domain: target.domain,
               createdById: target.createdById,
               startDate: plan.start?.date ?? null,
               startDatePrecision: plan.start ? (plan.startDatePrecision ?? 'day') : null,
@@ -1639,9 +1639,6 @@ export class EventService {
         deletedAt: { not: null },
       },
       orderBy: { deletedAt: 'desc' },
-      include: {
-        category: true,
-      },
     })
     
     return events
@@ -1692,9 +1689,6 @@ export class EventService {
           deletedAt: null,
           deletedById: null,
           ...(restoredAsRoot ? { parentEventId: null } : {}),
-        },
-        include: {
-          category: true,
         },
       })
     })

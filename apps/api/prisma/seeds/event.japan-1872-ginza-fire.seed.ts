@@ -9,11 +9,12 @@
  *  - EventCountryRelation: 일본 제국(피해·재건 주체)
  *  - PersonEvent: 오쿠마 시게노부(재건 총괄·大蔵卿) — 인물이 시드된 경우만 연결
  *
- * 의존성: seedJapanMeijiEra(일본 제국·오쿠마)·seedEventCategories('사회')·admin.
+ * 의존성: seedJapanMeijiEra(일본 제국·오쿠마)·분야('사회')·admin.
  */
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '사회'
 
@@ -27,14 +28,6 @@ export async function seedJapan1872GinzaFire(prisma: PrismaService): Promise<voi
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  카테고리 미존재: ${EVENT_CATEGORY_NAME}`)
-    return
-  }
 
   const empireHc = await prisma.historicalCountry.findFirst({
     where: { name: '일본 제국' },
@@ -66,7 +59,7 @@ export async function seedJapan1872GinzaFire(prisma: PrismaService): Promise<voi
         endDate: new Date('1872-04-04'),
         endDatePrecision: 'day',
         location: '도쿄부 — 황거 와다쿠라몬·긴자·교바시·쓰키지 일대 (현 도쿄도 치요다구·주오구)',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: empireHc.id,
         background:
           '메이지 초기의 도쿄는 에도 시대의 목조 가옥이 그대로 남아 있는 인구 약 80만의 거대한 목조 도시였다. 다이묘 屋敷가 비어 있던 황거 주변 일대는 1869년 도쿄 천도 이후 정부 청사로 전용되었으나 화재 대비책은 빈약했다. 1869년·1871년에도 도쿄에서 대형 화재가 잇따라 발생, 정부는 도시 방재 필요성을 절감하던 차였다. 화재 직전 며칠간 강한 서풍이 계속되어 발화 시 급속한 연소 조건이 갖춰져 있었다.',
@@ -103,7 +96,7 @@ export async function seedJapan1872GinzaFire(prisma: PrismaService): Promise<voi
         endDate: new Date('1877-12-31'),
         endDatePrecision: 'month',
         location: '도쿄부 긴자·교바시 일대 — 현 도쿄도 주오구',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: empireHc.id,
         parentEventId: parent.id,
         background:

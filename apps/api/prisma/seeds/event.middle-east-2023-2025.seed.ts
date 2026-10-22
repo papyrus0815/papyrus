@@ -32,6 +32,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 
@@ -1356,8 +1357,6 @@ export async function seedMiddleEast20232025(
   }
 
   // 카테고리 매핑
-  const categories = await prisma.eventCategory.findMany({ select: { id: true, name: true } })
-  const categoryIdByName = new Map(categories.map((c) => [c.name, c.id]))
 
   // 국가 매핑
   const countries = await prisma.country.findMany({ select: { id: true, name: true } })
@@ -1441,12 +1440,6 @@ export async function seedMiddleEast20232025(
   for (const e of EVENTS) {
     console.log(`\n  📍 ${e.title}`)
 
-    const catId = categoryIdByName.get(e.category)
-    if (!catId) {
-      console.warn(`    ⚠️  카테고리 미존재: ${e.category} — 스킵`)
-      continue
-    }
-
     const existing = await prisma.event.findFirst({
       where: {
         title: e.title,
@@ -1471,7 +1464,7 @@ export async function seedMiddleEast20232025(
           startDatePrecision: e.startPrecision ?? 'day',
           endDate: e.endDate ? new Date(e.endDate) : null,
           endDatePrecision: e.endPrecision ?? 'day',
-          categoryId: catId,
+          domain: domainOf(e.category),
           keywords: e.keywords as any,
           createdById: admin.id,
         },

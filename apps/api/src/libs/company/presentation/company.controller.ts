@@ -82,7 +82,7 @@ export class CompanyController {
             : event.startDate
               ? event.startDate.getUTCDate()
               : null,
-          categoryName: event.category?.name ?? null,
+          domain: event.domain,
         }
       })
       .sort((left, right) => {

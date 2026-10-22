@@ -11,7 +11,6 @@ import {
   seedLanguages,
   seedCountries,
   seedUsaDemographics,
-  seedEventCategories,
   seedGovernmentPositionDefinitions,
   seedGovernmentPositionDefinitionScopes,
   seedGermanyHistoricalCountries,
@@ -587,21 +586,18 @@ async function main() {
         // 12-1. 독일 제국 라이히스탁 선거 시딩 (1898, 1903, 1907)
         await seedGermanyReichstagElections(prisma)
 
-        // 13. 이벤트 카테고리 시딩
-        await seedEventCategories(prisma)
-
-        // 13-1. 보오전쟁(1866) 시딩 — eventCategory + 역사국가들 의존
+        // 13-1. 보오전쟁(1866) 시딩 — 역사국가들 의존
         await seedAustroPrussianWar(prisma)
 
-        // 13-2. 보불전쟁(1870–1871) 시딩 — eventCategory + 역사국가들 + 현대국가(프랑스) 의존
+        // 13-2. 보불전쟁(1870–1871) 시딩 — 역사국가들 + 현대국가(프랑스) 의존
         await seedFrancoPrussianWar(prisma)
 
-        // 13-2-1. 크림 전쟁(1853–1856) 시딩 — eventCategory + 역사국가(러시아 제국·오스만 제국·
+        // 13-2-1. 크림 전쟁(1853–1856) 시딩 — 역사국가(러시아 제국·오스만 제국·
         //   프랑스 제2제국·연합왕국·사르데냐 왕국) + 인물(나폴레옹 3세·카보우르·파머스턴 등) 의존
         //   · 부모 + 자식 4(시노프·알마·발라클라바·세바스토폴) + 진영 2 + 군사상세 + PersonEvent
         await seedCrimeanWar(prisma)
 
-        // 13-3. 1차 아편전쟁(1839–1842) 시딩 — eventCategory + 영국 HC + 청나라 HC(인라인 생성)
+        // 13-3. 1차 아편전쟁(1839–1842) 시딩 — 영국 HC + 청나라 HC(인라인 생성)
         await seedFirstOpiumWar(prisma)
 
         // 13-4. 1차 아편전쟁 핵심 인물 시딩 — 청 황실(애신각라) + 7인 + PersonEvent 연결
@@ -610,49 +606,49 @@ async function main() {
         // 13-4-1. 건륭제(청 6대 황제) 시딩 — 애신각라 가문·청나라 HC 의존
         await seedQianlongEmperor(prisma)
 
-        // 13-4-2. 영국 동인도회사의 인도 진출(1600~1757) 시딩 — eventCategory + 잉글랜드/그레이트브리튼 HC + 무굴 제국 HC(인라인 생성)
+        // 13-4-2. 영국 동인도회사의 인도 진출(1600~1757) 시딩 — 잉글랜드/그레이트브리튼 HC + 무굴 제국 HC(인라인 생성)
         //  · 부모 사건 + 자식 5(EIC 헌장·수라트·캘커타·카르나틱 전쟁·플라시 전투)
         //  · EventSection 3 + EventCountryRelation 3
         //  · 플라시 전투 자식: BelligerentSide 2 + CountryInSide + Casualties + MilitaryDetailsNorm
         await seedBritishEastIndiaCompanyIndia(prisma)
 
-        // 13-4-3. 암보이나 학살(1623-02-27) 시딩 — eventCategory + 네덜란드 공화국·잉글랜드 왕국 HC 의존
+        // 13-4-3. 암보이나 학살(1623-02-27) 시딩 — 네덜란드 공화국·잉글랜드 왕국 HC 의존
         //  · 단독 사건 + 4섹션 + EventCountryRelation 2 (네덜란드 INITIATOR / 잉글랜드 VICTIM)
         await seedAmboynaMassacre(prisma)
 
-        // 13-4-4. 1619 영-네덜란드 방위 조약(1619-07-17) 시딩 — eventCategory(회담/조약) + 잉글랜드/네덜란드 HC
+        // 13-4-4. 1619 영-네덜란드 방위 조약(1619-07-17) 시딩 — 분야(회담/조약) + 잉글랜드/네덜란드 HC
         //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵 (사용자 편집 보호)
         //  · 단독 사건 + 4섹션 + EventCountryRelation 2 (잉글랜드·네덜란드 모두 PARTICIPANT/서명국)
         await seedAngloDutchTreaty1619(prisma)
 
-        // 13-4-5. 1605 화약 음모 사건(1605-11-05) 시딩 — eventCategory(정치) + 잉글랜드 왕국 HC
+        // 13-4-5. 1605 화약 음모 사건(1605-11-05) 시딩 — 분야(정치) + 잉글랜드 왕국 HC
         //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
         //  · 단독 사건 + 4섹션(배경/계획·발각/심문·처형/여파) + EventCountryRelation 1 (잉글랜드 VICTIM)
         await seedGunpowderPlot1605(prisma)
 
-        // 13-4-6. 1600 영국 동인도회사 설립(EIC, 1600-12-31) 시딩 — eventCategory(경제) + 잉글랜드 왕국 HC
+        // 13-4-6. 1600 영국 동인도회사 설립(EIC, 1600-12-31) 시딩 — 분야(경제) + 잉글랜드 왕국 HC
         //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
         //  · 단독 사건 + 4섹션(배경/설립/15년 칙허 의미/항해와 후속) + EventCountryRelation 1 (잉글랜드 INITIATOR)
         //  · 참고: 기존 'EIC의 인도 진출' 부모 사건의 자식 'EIC 헌장 발급'(1600-12-31)과 의미 중첩 — 사용자 요청에 따라 별도 단독 사건으로 등록
         await seedEicFounding1600(prisma)
 
-        // 13-4-7. 1602 네덜란드 동인도회사 설립(VOC, 1602-03-20) 시딩 — eventCategory(경제) + 네덜란드 공화국 HC
+        // 13-4-7. 1602 네덜란드 동인도회사 설립(VOC, 1602-03-20) 시딩 — 분야(경제) + 네덜란드 공화국 HC
         //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
         //  · 단독 사건 + 4섹션(배경/통합·칙허/거버넌스·자본/항해·해체) + EventCountryRelation 1 (네덜란드 INITIATOR)
         await seedVocFounding1602(prisma)
 
-        // 13-4-8. 1453 콘스탄티노플 함락(1453-04-06 ~ 05-29) 시딩 — eventCategory(전쟁/군사)
+        // 13-4-8. 1453 콘스탄티노플 함락(1453-04-06 ~ 05-29) 시딩 — 분야(전쟁/군사)
         //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation/HistoricalCountry는 스킵
         //  · 동로마 제국·오스만 제국 HC 인라인 생성(둘 다 현대 튀르키예 TR 연결)
         //  · 단독 사건 + 4섹션(배경/공방전/함락 당일/여파) + EventCountryRelation 2 (오스만 INITIATOR / 동로마 VICTIM)
         await seedFallOfConstantinople1453(prisma)
 
-        // 13-4-9. 1609 암스테르담 은행 개설(Wisselbank, 1609-01-31) 시딩 — eventCategory(경제) + 네덜란드 공화국 HC
+        // 13-4-9. 1609 암스테르담 은행 개설(Wisselbank, 1609-01-31) 시딩 — 분야(경제) + 네덜란드 공화국 HC
         //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
         //  · 단독 사건 + 4섹션(배경/개설·운영/은행 길더와 금융 혁신/쇠퇴와 유산) + EventCountryRelation 1 (네덜란드 INITIATOR)
         await seedBankOfAmsterdam1609(prisma)
 
-        // 13-4-10. 1581 단념 선언(Plakkaat van Verlatinghe, 1581-07-26) 시딩 — eventCategory(정치)
+        // 13-4-10. 1581 단념 선언(Plakkaat van Verlatinghe, 1581-07-26) 시딩 — 분야(정치)
         //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
         //  · 단독 사건 + 4섹션(배경/선언 과정/논거와 7개 주/여파와 유산) + EventCountryRelation 2 (네덜란드 공화국 INITIATOR / 합스부르크령 네덜란드 TARGET)
         //  · 합스부르크령 네덜란드(endYear=1581) → 네덜란드 공화국(startYear=1581) 전환의 정확한 분기점
@@ -673,7 +669,7 @@ async function main() {
         //  · 필리프 → 카를 5세 부자 / 후아나 → 카를 5세 모자 관계
         await seedCharlesVParents(prisma)
 
-        // 13-6. 일본 전후(1945~1948) 시딩 — 일본 제국·황실 + eventCategory + 현대 일본·미국·영국·중국·소련 hc 의존
+        // 13-6. 일본 전후(1945~1948) 시딩 — 일본 제국·황실 + 현대 일본·미국·영국·중국·소련 hc 의존
         //  · 일본국 historicalCountry + 일본 제국 → 일본국 transition
         //  · 정당(진보·자유·사회) + 43~46대 총리 + 4개 내각 + 정당 멤버십 + CabinetPoliticalParty
         //  · 포츠담선언/항복문서/GHQ점령/일본국헌법 공포·시행 사건
@@ -869,7 +865,6 @@ async function main() {
         await seedContinents(prisma)
         await seedCurrencies(prisma)
         await seedLanguages(prisma)
-        await seedEventCategories(prisma)
         await seedAdministrationDepartmentCategories(prisma)
         await seedAdmin(prisma)
         break

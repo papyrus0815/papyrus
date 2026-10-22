@@ -4,17 +4,15 @@
 /// 이 도메인은 역사적 사건과 이벤트를 시간적 맥락에서 관리합니다.
 /// 
 /// 주요 기능:
-/// - 사건 카테고리(EventCategory): 사건 분류 체계
-///   • 계층적 카테고리 구조
-///   • 정치, 경제, 사회, 문화 등 영역별 분류
-///   • 사건의 성격과 영향 범위 구분
+/// - 사건 분류: 분야(EventDomain, 필수) › 세부 분야(EventType, 선택)
+///   • 분야 9종 — 정치·외교·군사·경제·사회·문화·종교·과학기술·기타. 색·필터의 기준
+///   • 세부 28종 — 전투·조약·법령… 분야와 독립된 축(어떤 분야와도 짝지을 수 있다), 붙는 기록을 정한다
 /// 
 /// - 사건(Event): 구체적 역사적 사건
 ///   • 시작일과 종료일로 기간 관리
 ///   • 발생 장소 (도시, 행정구역, 국가)
 ///   • 배경과 여파 분석
 ///   • 상위-하위 사건 관계: 주 상위 트리(parentEventId) + 추가 상위(EventParentLink, DAG 엣지)
-///     — EventCategory.parentId는 의도적으로 순수 트리 유지(비대칭)
 /// 
 /// - 사건-인물 관계(PersonEvent): 참여자 관리
 ///   • 사건 참여 인물들의 역할
@@ -99,7 +97,7 @@ enum EventOrganizationRole {
 
 /// 사건 세부 분야 — **어떤 꼴의 일인가**(전투인가, 조약 체결인가, 법령인가). 분야의 2단계, 선택.
 ///
-/// 화면에서는 '분야 › 세부'(군사 › 법령·정책) 한 줄의 2단 분류로 보이지만, 저장은 분야(categoryId)와
+/// 화면에서는 '분야 › 세부'(군사 › 법령·정책) 한 줄의 2단 분류로 보이지만, 저장은 분야(domain)와
 /// 독립된 축이다 — 실측 452건에서 (분야, 세부) 조합이 61가지였고 법령·조약·봉기·회의·건설이 3~5개 분야에
 /// 걸쳐 있었다. 트리(분야 밑에 세부를 매다는 구조)로 저장하면 잎을 분야마다 복제하거나 사건의 분야를
 /// 트리에 맞춰 바꿔야 해서, 저장은 두 축·표시는 트리로 한다. 분야마다 앞에 보일 세부 목록은 프론트 레지스트리.
@@ -286,31 +284,24 @@ enum CombatType {
 }
 
 // ========================
-// 사건 카테고리
+// 사건 분야
 // ========================
-model EventCategory {
-  /// PK
-  id String @id @default(uuid()) @db.Char(36)
-
-  /// 카테고리 이름
-  name String @db.VarChar(100)
-
-  /// 카테고리 설명
-  description String?
-
-  /// 상위 분류
-  parentId String? @map("parent_id") @db.Char(36)
-
-  //--- 관계 필드
-  parent   EventCategory?  @relation("EventCategoryHierarchy", fields: [parentId], references: [id])
-  children EventCategory[] @relation("EventCategoryHierarchy")
-  events   Event[]
-
-  //--- 메타데이터 필드
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("event_category")
+/// 사건 분야 — **무엇에 관한 일인가**. 사건의 분류이자 색·필터의 기준(필수).
+///
+/// 예전엔 event_category 표(UUID + 한국어 이름 + 쓰지 않던 parent_id 트리)였다. 조회 API만 있고 시드된
+/// 9행이 전부인 고정 목록인데 색·아이콘·수치 프리셋 로직이 한국어 이름을 키로 잡고 있어, 이름 하나가
+/// 바뀌면 조용히 회색이 됐다 — 고정 목록이니 enum으로 둔다. 라벨·색·아이콘은 프론트 분야 레지스트리
+/// (entities/event/model/event-domain.ts)가 정본이다. 2단계(세부)는 EventType.
+enum EventDomain {
+  POLITICS // 정치
+  DIPLOMACY // 외교
+  MILITARY // 군사
+  ECONOMY // 경제
+  SOCIETY // 사회
+  CULTURE // 문화
+  RELIGION // 종교
+  SCIENCE // 과학기술
+  OTHER // 기타
 }
 
 // ========================
@@ -352,8 +343,8 @@ model Event {
   /// 간단 문자열 위치(자유 텍스트)
   location String? @db.VarChar(255)
 
-  /// 사건 카테고리
-  categoryId String? @map("category_id") @db.Char(36)
+  /// 분야(필수) — 무엇에 관한 일인가. 2단계는 type(세부 분야)
+  domain EventDomain @default(OTHER)
 
   /// 배경, 여파
   background String? @db.Text
@@ -366,7 +357,7 @@ model Event {
   /// 사건의 종류(EventKind) — 단일/묶음. 계층 규칙의 정본.
   kind EventKind @default(SINGLE)
 
-  /// 세부 분야(EventType, 선택) — 분야의 2단계이자 붙는 기록을 정한다. 분야는 categoryId.
+  /// 세부 분야(EventType, 선택) — 분야의 2단계이자 붙는 기록을 정한다. 분야는 domain.
   type EventType?
 
   /// 전쟁 비용 (텍스트)
@@ -376,7 +367,6 @@ model Event {
   keywords Json? @db.Json
 
   //--- 관계 필드
-  category    EventCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   /// onDelete: SetNull은 암묵 기본값과 동일(생성 SQL 무변경) — 명시 이유: 주 상위 하드삭제 시
   /// 자식 FK가 무통보 NULL이 되므로, permanentlyDeleteEvent가 extras 승격을 트랜잭션으로
   /// 선행하지 않으면 EventParentLink 잔존 엣지가 INV-2를 깬다(서비스 §하드삭제 규칙 참조).
@@ -471,6 +461,7 @@ model Event {
   @@index([createdById], name: "idx_event_createdBy")
   @@index([deletedAt], name: "idx_event_deletedAt")
   @@index([type], name: "idx_event_type")
+  @@index([domain], name: "idx_event_domain")
   @@map("event")
 }
 

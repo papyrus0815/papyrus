@@ -1,3 +1,4 @@
+import type { EventDomainValue } from '../domain/event-domain'
 import type { EventTypeValue } from '../domain/event-type'
 import { Injectable } from '@nestjs/common'
 import { ObservationSubjectType, Prisma, PrismaClient } from '@prisma/client'
@@ -72,7 +73,8 @@ export interface EventOverviewNode {
   endDate: string | null
   endDatePrecision: string | null
   location: string | null
-  category: { id: string; name: string } | null
+  /** 분야 — 무엇에 관한 일인가 */
+  domain: EventDomainValue
   /** 세부 분야 — 점검표가 세부(와 분야)로 적용 칸을 고른다 */
   type: EventTypeValue | null
   countries: EventOverviewCountry[]
@@ -95,7 +97,6 @@ export interface EventOverviewResponse {
 }
 
 const NODE_INCLUDE = {
-  category: { select: { id: true, name: true } },
   countryRelations: {
     orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
     include: {
@@ -264,7 +265,7 @@ export class EventOverviewService {
       endDate: formatEventDate(row.endDate, row.endEra, row.endYear, row.endMonth, row.endDay),
       endDatePrecision: row.endDatePrecision ?? null,
       location: row.location ?? null,
-      category: row.category ? { id: row.category.id, name: row.category.name } : null,
+      domain: row.domain,
       type: row.type,
       countries,
       persons: row.persons.map((participation) => ({

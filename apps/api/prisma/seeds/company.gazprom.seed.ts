@@ -18,6 +18,7 @@
  *    + EventOrganizationRelation x7 (FOUNDED / PRINCIPAL / VICTIM)
  */
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 const RUSSIA_COUNTRY_NAME = '러시아'
@@ -460,11 +461,6 @@ export async function seedGazpromCompany(prisma: PrismaService): Promise<void> {
     console.warn('    ⚠️  admin 계정 미존재 — 사건 연결 스킵')
     return
   }
-  const economyCategory = await prisma.eventCategory.findFirst({
-    where: { name: '경제' },
-    select: { id: true },
-  })
-
   type EventSeedInput = {
     title: string
     description: string
@@ -609,7 +605,7 @@ export async function seedGazpromCompany(prisma: PrismaService): Promise<void> {
           background: e.background,
           aftermath: e.aftermath,
           keywords: (e.keywords ?? undefined) as any,
-          categoryId: economyCategory?.id,
+          domain: domainOf('경제'),
           createdById: admin.id,
         },
         select: { id: true },

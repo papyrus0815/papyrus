@@ -16,7 +16,7 @@
  *  - MilitaryDetailsNorm (CombatType LAND + NAVAL)
  *  - PersonEvent (나폴레옹 3세·비토리오 에마누엘레 2세·카보우르·파머스턴·니콜라이 1세·알렉산드르 2세 — 존재 시)
  *
- * 의존: seedEventCategories('군사') + 역사국가(러시아 제국·오스만 제국·프랑스 제2제국·
+ * 의존: 분야('군사') + 역사국가(러시아 제국·오스만 제국·프랑스 제2제국·
  *       그레이트브리튼 및 아일랜드 연합왕국·사르데냐 왕국).
  */
 import {
@@ -28,6 +28,7 @@ import {
 import { PrismaService } from '../prisma.service'
 import { LEGACY_FIVE_WAR_SIDES, LEGACY_FIVE_WAR_SOURCE } from './data/event-sides.legacy-five-wars'
 import { applyEventSides } from './lib/event-sides'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '군사'
 
@@ -146,14 +147,6 @@ export async function seedCrimeanWar(prisma: PrismaService): Promise<void> {
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const russiaHC = await hcId(prisma, '러시아 제국')
   if (!russiaHC) {
@@ -183,7 +176,7 @@ export async function seedCrimeanWar(prisma: PrismaService): Promise<void> {
         endDate: new Date('1856-03-30'),
         endDatePrecision: 'day',
         location: '크림 반도(세바스토폴)·흑해·다뉴브 공국·캅카스·발트해',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: russiaHC,
         background:
           '쇠퇴하는 오스만 제국("유럽의 병자")을 둘러싼 열강의 "동방문제"가 배경이다. 러시아 니콜라이 1세는 ' +
@@ -242,7 +235,7 @@ export async function seedCrimeanWar(prisma: PrismaService): Promise<void> {
         endDate: ce.end ? new Date(ce.end) : null,
         endDatePrecision: ce.end ? (ce.endPrecision ?? 'day') : null,
         location: ce.location,
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: russiaHC,
         parentEventId: parentEvent.id,
         background: ce.background,

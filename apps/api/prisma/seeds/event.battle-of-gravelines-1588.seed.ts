@@ -25,6 +25,7 @@
 import { EventCountryRole } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
+import { domainOf } from './lib/event-domain'
 
 const EVENT_CATEGORY_NAME = '군사'
 const EVENT_TITLE = '칼레 해전'
@@ -404,14 +405,6 @@ export async function seedBattleOfGravelines1588(
     return
   }
 
-  const category = await prisma.eventCategory.findFirst({
-    where: { name: EVENT_CATEGORY_NAME },
-    select: { id: true },
-  })
-  if (!category) {
-    console.warn(`  ⚠️  사건 카테고리 '${EVENT_CATEGORY_NAME}' 미존재 — 시딩 중단`)
-    return
-  }
 
   const englandHC = await prisma.historicalCountry.findFirst({
     where: { name: '잉글랜드 왕국' },
@@ -458,7 +451,7 @@ export async function seedBattleOfGravelines1588(
         startDatePrecision: 'day',
         endDate: new Date(EVENT_END),
         endDatePrecision: 'day',
-        categoryId: category.id,
+        domain: domainOf(EVENT_CATEGORY_NAME),
         historicalCountryId: englandHC.id,
         createdById: admin.id,
       },
