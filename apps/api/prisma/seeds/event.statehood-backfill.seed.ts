@@ -102,7 +102,7 @@ export async function seedEventStatehoodBackfill(prisma: PrismaService): Promise
     }
 
     for (const event of events) {
-      // 건국·멸망은 형식이라 분야가 아니라 사건 유형이 말한다(2026-10-19 분야/유형 분리)
+      // 건국·멸망은 분야(정치)가 아니라 세부 분야가 말한다(분야 › 세부, 2026-10 세부 분야)
       if (event.type !== 'STATEHOOD') {
         await prisma.event.update({
           where: { id: event.id },

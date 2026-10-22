@@ -501,7 +501,7 @@ export class EventController {
       parentEventId: event.parentEventId,
       // 사건 종류 — 매핑을 빠뜨리면 서버가 보내도 프론트에서 소멸한다(extraParentCount와 같은 사고).
       kind: event.kind ?? 'SINGLE',
-      type: event.type ?? 'OTHER',
+      type: event.type ?? null,
       // 소프트삭제된(유령) 부모는 breadcrumb·상위 링크에 노출하지 않는다 — link-candidates의
       // liveParent 정책과 통일. deletedAt은 include된 parentEvent에 실려온다(select 시엔 undefined라
       // 통과). 재귀 호출이 조상 각 단계에도 같은 게이트를 적용한다.
@@ -750,7 +750,7 @@ export class EventController {
    * @param countryIds 쉼표 구분 현대 국가 id 목록 — 다중 OR
    * @param historicalCountryIds 쉼표 구분 역사 국가 id 목록 — 다중 OR
    * @param categoryId EventCategory.id(분야) 정확 매칭
-   * @param types 사건 유형(형식) 쉼표 목록 — 예: WAR,BATTLE. 무효 값은 무시
+   * @param types 세부 분야 쉼표 목록 — 예: BATTLE,TREATY. 무효 값은 무시
    * @param decade 십년대 시작 연도 (예: "1860") — startDate ∈ [year, year+10)
    * @param century 세기 (예: "19") — startDate ∈ 해당 세기
    * @param hasNoDescription "true" 시 description이 null/빈 사건만

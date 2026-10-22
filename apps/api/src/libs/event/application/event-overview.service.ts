@@ -73,8 +73,8 @@ export interface EventOverviewNode {
   endDatePrecision: string | null
   location: string | null
   category: { id: string; name: string } | null
-  /** 사건 유형(형식) — 점검표가 유형별로 적용 칸을 고른다 */
-  type: EventTypeValue
+  /** 세부 분야 — 점검표가 세부(와 분야)로 적용 칸을 고른다 */
+  type: EventTypeValue | null
   countries: EventOverviewCountry[]
   persons: EventOverviewPerson[]
   sides: EventOverviewSide[]

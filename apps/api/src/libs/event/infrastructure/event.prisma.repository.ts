@@ -136,7 +136,8 @@ export class EventPrismaRepository implements EventRepository {
         aftermath: data.aftermath,
         parentEventId: data.parentEventId,
         kind: data.kind ?? undefined,
-        type: data.type ?? undefined,
+        // 세부 분야는 선택 — null이면 비운다(undefined는 '변경 없음')
+        type: data.type,
         cityId: data.cityId,
         administrativeDivisionId: data.administrativeDivisionId,
         historicalCountryId: data.historicalCountryId,

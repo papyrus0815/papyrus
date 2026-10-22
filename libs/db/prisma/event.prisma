@@ -97,48 +97,49 @@ enum EventOrganizationRole {
   OTHER
 }
 
-/// 사건 유형 — **어떤 형식의 사건인가**(전투인가, 조약 체결인가, 즉위인가). 기록할 데이터를 정하는 축.
+/// 사건 세부 분야 — **어떤 꼴의 일인가**(전투인가, 조약 체결인가, 법령인가). 분야의 2단계, 선택.
 ///
-/// 분야(EventCategory: 정치·외교·군사·경제…)와 별개다. 예전엔 카테고리 한 칸에 형식(전쟁/군사·회담/조약·
-/// 건국/멸망)과 분야(정치·경제)가 섞여, '전쟁/군사' 159건 안에 전투·함대법·참모총장 취임·장관의 휴양이
-/// 함께 들어 있었다. 함대법은 분야로는 군사지만 형식은 법률이라 필요한 데이터가 전혀 다르다.
+/// 화면에서는 '분야 › 세부'(군사 › 법령·정책) 한 줄의 2단 분류로 보이지만, 저장은 분야(categoryId)와
+/// 독립된 축이다 — 실측 452건에서 (분야, 세부) 조합이 61가지였고 법령·조약·봉기·회의·건설이 3~5개 분야에
+/// 걸쳐 있었다. 트리(분야 밑에 세부를 매다는 구조)로 저장하면 잎을 분야마다 복제하거나 사건의 분야를
+/// 트리에 맞춰 바꿔야 해서, 저장은 두 축·표시는 트리로 한다. 분야마다 앞에 보일 세부 목록은 프론트 레지스트리.
 ///
-/// 유형별로 무엇을 기록하는지(핵심/선택 기록·지표 프리셋·묶음 권장)는 프론트 유형 레지스트리
-/// (features/event-type/model/registry.ts)가 정본이다. 서버는 값만 보관한다 — 기록을 유형으로 막지 않는다
-/// (전쟁은 조약으로 끝나고 봉기에도 진영이 있다).
+/// 세부는 붙는 기록도 정한다(전투 → 교전 양측, 조약 → 맺어진 조약, 즉위 → 재임 기록 …) —
+/// 정본은 프론트 레지스트리(entities/event/model/event-type-registry.ts). 서버는 값만 보관한다.
 enum EventType {
-  // 무력 충돌
-  WAR
-  BATTLE
-  UPRISING
-  ATTACK
-  MILITARY_MEASURE
-  // 외교
-  TREATY
-  SUMMIT
-  DIPLOMATIC_ACT
-  CRISIS
+  // 충돌
+  WAR // 전쟁
+  BATTLE // 전투·작전
+  UPRISING // 봉기·혁명·정변
+  ATTACK // 암살·테러·학살
+  MOBILIZATION // 동원·배치·작전 지령
+  // 국가 간
+  TREATY // 조약·협정·가입
+  SUMMIT // 회담·회의·교섭
+  DECLARATION // 선언·통첩·연설
+  VISIT // 방문·사절
+  CRISIS // 위기
+  EXPANSION // 진출·식민
   // 국가·권력
-  STATEHOOD
-  POWER_CHANGE
-  ELECTION
-  LAW_POLICY
-  INSTITUTION
-  EXPANSION
-  INCIDENT
+  STATEHOOD // 건국·멸망·병합
+  POWER_CHANGE // 즉위·취임·실각
+  ELECTION // 선거
+  LAW_POLICY // 법령·정책·개혁
+  INSTITUTION // 기관·조직 설립·해산
+  INCIDENT // 탄압·음모·스캔들
+  MOVEMENT // 운동·캠페인
   // 경제·산업
-  COMPANY
-  MARKET
-  PRODUCT
-  CONSTRUCTION
-  // 사회·문화
-  DISASTER
-  SCIENCE
-  CULTURE_RELIGION
-  MIGRATION
-  PERSONAL
-  // 기타
-  OTHER
+  COMPANY // 기업 활동
+  MARKET // 시장·지표
+  PRODUCT // 제품·기술 발표
+  CONSTRUCTION // 건설·개통
+  // 자연·학문·문화·사람
+  DISASTER // 재해·사고
+  DISCOVERY // 발견·학술
+  CREATION // 창제·저작·작품
+  CONVERSION // 개종·세례
+  MIGRATION // 이주·천도
+  PERSONAL // 인물 행적
 }
 
 /// 사건의 종류 — 등록할 때 고르고, 명시적 전환 동작으로만 바뀐다.
@@ -365,8 +366,8 @@ model Event {
   /// 사건의 종류(EventKind) — 단일/묶음. 계층 규칙의 정본.
   kind EventKind @default(SINGLE)
 
-  /// 사건 유형(EventType) — 기록할 데이터를 정하는 형식 축. 분야는 categoryId.
-  type EventType @default(OTHER)
+  /// 세부 분야(EventType, 선택) — 분야의 2단계이자 붙는 기록을 정한다. 분야는 categoryId.
+  type EventType?
 
   /// 전쟁 비용 (텍스트)
   warCost String? @map("war_cost") @db.Text

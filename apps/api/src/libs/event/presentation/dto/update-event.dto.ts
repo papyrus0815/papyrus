@@ -119,14 +119,15 @@ export class UpdateEventDto {
 
   @ApiProperty({
     description:
-      '사건 유형 — 어떤 형식의 사건인가(WAR 전쟁·BATTLE 전투·TREATY 조약 체결·POWER_CHANGE 즉위·취임…). ' +
-      '분야(categoryId)와 별개. 기록할 데이터를 정하는 축(프론트 유형 레지스트리). 생략하면 OTHER.',
+      '세부 분야(선택) — 분야의 2단계(BATTLE 전투·LAW_POLICY 법령·TREATY 조약…). 분야(categoryId)와 독립된 축이라 ' +
+      '어떤 분야와도 짝지을 수 있고, 붙는 기록을 정한다(프론트 레지스트리). null이면 세부 없음.',
     required: false,
+    nullable: true,
     enum: EVENT_TYPE_VALUES,
   })
   @IsIn(EVENT_TYPE_VALUES)
   @IsOptional()
-  type?: EventTypeValue
+  type?: EventTypeValue | null
 
   @ApiProperty({
     description: '이미지 목록',

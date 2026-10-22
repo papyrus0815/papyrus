@@ -26,8 +26,8 @@ export class Event {
   parentEventId?: string | null
   /** 사건 종류 — 단일(하위 없음)/묶음(전개=하위 사건). 규칙은 domain/event-kind.ts */
   kind?: EventKind
-  /** 사건 유형 — 기록할 데이터를 정하는 형식 축(domain/event-type.ts) */
-  type?: EventTypeValue
+  /** 세부 분야(선택) — 분야의 2단계이자 붙는 기록을 정한다(domain/event-type.ts). 분야는 categoryId */
+  type?: EventTypeValue | null
   cityId?: string | null
   administrativeDivisionId?: string | null
   historicalCountryId?: string | null

@@ -72,8 +72,8 @@ export class EventResponseDto {
   })
   kind!: 'SINGLE' | 'COLLECTION'
 
-  @ApiProperty({ description: '사건 유형(형식) — 분야와 별개', enum: EVENT_TYPE_VALUES })
-  type!: EventTypeValue
+  @ApiProperty({ description: '세부 분야 — 분야의 2단계, 붙는 기록을 정한다. 없으면 null', enum: EVENT_TYPE_VALUES, nullable: true })
+  type!: EventTypeValue | null
 
   @ApiProperty({ description: '상위 사건 정보 (주 상위)', required: false })
   parentEvent?: EventResponseDto
