@@ -367,7 +367,7 @@ export const CompactList = styled.div.attrs(
     /* 68px = 'YYYY.M.D'(tabular-nums 12px)의 실폭. 이 아래로 내리면 시작·종료가
        '1018.10.3…'으로 잘린다 — 두 열이 같은 문법을 쓰므로 하한도 하나다. */
     --col-date: 70px;
-    --col-chip: 56px;
+    --col-chip: 68px;
     /*
      * 52px이었다. 이 열은 문자열이 아니라 **한 해를 가로지르는 축**이라 폭이 곧
      * 해상도다 — 52px에서 한 달은 4.3px이고, 그건 이 열을 만들 때 "한 달이 최소
@@ -402,7 +402,7 @@ export const CompactList = styled.div.attrs(
     /* 위와 같은 하한(68px). 이 대역은 step 0이라 종료 열이 없고, 그래서 날짜 열이
        이 행의 시간을 말하는 **유일한 칸**이다 — 여기서 자르면 되살릴 곳이 없다. */
     --col-date: 68px;
-    --col-chip: 52px;
+    --col-chip: 64px;
     /* 위 대역과 같은 근거 — 한 달 7px이 이 축의 하한이다(84 / 12 = 7). */
     --col-dur: 84px;
     /*

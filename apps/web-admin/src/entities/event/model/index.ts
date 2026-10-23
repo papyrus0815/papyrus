@@ -57,6 +57,7 @@ export {
   eventTypeDef,
   eventTypeFeatures,
   eventTypeLabel,
+  eventTypeShort,
   facetWeight,
   formatDomainPath,
   isArmedConflictType,

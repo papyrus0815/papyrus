@@ -24,7 +24,7 @@ import {
 import styled, { css } from 'styled-components'
 
 import { eventDomainDef } from '@/entities/event/model/event-domain'
-import { formatDomainPath } from '@/entities/event/model/event-type-registry'
+import { eventTypeShort, formatDomainPath } from '@/entities/event/model/event-type-registry'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { titleWithoutOwnDate } from '@/shared/lib/title-date'
@@ -571,6 +571,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   })()
   const domain = eventDomainDef(event.domain)
   const categoryName = domain.label
+  const subtypeShort = eventTypeShort(event.type)
   /**
    * 관련국 칩 개수 — **폭 예산**으로 정한다. 개수만으로는 안 된다.
    *
@@ -697,13 +698,14 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         >
           {rowEndLabel ?? (startParts ? '—' : null)}
         </EndCell>
-        {/* 열은 분야만(폭이 고정된 스캔선) — 세부는 툴팁·읽기에 '분야 › 세부'로 */}
+        {/* 분류 칸 = 분야(분야 색) + 세부 두 글자(옅게) — '군사 법령'. 전체 이름은 툴팁·읽기에 */}
         <CategoryLabel
           $text={soft.text}
           $textDark={soft.textDark}
           title={formatDomainPath(event.domain, event.type)}
         >
           {categoryName}
+          {subtypeShort && <SubtypeShort>{subtypeShort}</SubtypeShort>}
         </CategoryLabel>
 
         {/* 제목 셀 = [들여쓰기][디스클로저][텍스트] 3열 서브격자.
@@ -2287,6 +2289,16 @@ const Mark = styled.mark`
 
 /* 저채도 soft chip — 원색 텍스트(AA 미달)를 대신. 배경 tint + 어둡게 조정한 텍스트색으로
  * 대비 확보하고, 칩 형태로 '분류'임을 명확히(중요도=별과 신호 분리). */
+/**
+ * 분류 칸의 세부 두 글자 — 분야(분야 색·500)보다 한 단계 물러선 보조 토큰. 색 hue는 분야 몫이라
+ * 여기엔 싣지 않는다(같은 칸에 hue가 둘이면 분야 스캔이 흐려진다).
+ */
+const SubtypeShort = styled.span`
+  margin-left: 4px;
+  font-weight: 400;
+  color: ${metaText};
+`
+
 const CategoryLabel = styled.span.attrs(() => ({ 'data-col': 'cat' }) as Record<string, string>)<{
   $text: string
   $textDark: string

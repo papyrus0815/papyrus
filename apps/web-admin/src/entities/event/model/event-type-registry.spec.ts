@@ -28,6 +28,12 @@ describe('세부 분야 레지스트리', () => {
     }
   })
 
+  it('두 글자 이름은 세부마다 다르고 정확히 두 글자다 — 목록 분류 칸 폭의 계약', () => {
+    const shorts = Object.values(EVENT_TYPES).map((def) => def.short)
+    expect(new Set(shorts).size).toBe(shorts.length)
+    for (const short of shorts) expect([...short]).toHaveLength(2)
+  })
+
   it('분야 앞줄의 세부는 실제 세부이고 중복이 없다', () => {
     for (const types of Object.values(DOMAIN_SUBTYPES)) {
       expect(new Set(types).size).toBe(types.length)
