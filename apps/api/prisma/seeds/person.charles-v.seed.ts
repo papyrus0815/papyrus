@@ -551,7 +551,6 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
         endReason: r.endReason,
         endReasonDetail: r.endReasonDetail,
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     const fmt = (d: Date) =>

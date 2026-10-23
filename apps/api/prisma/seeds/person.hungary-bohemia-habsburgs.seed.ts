@@ -1367,7 +1367,6 @@ export async function seedHungaryBohemiaHabsburgs(prisma: PrismaService): Promis
         endReason: r.endReason,
         endReasonDetail: r.endReasonDetail,
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     console.log(

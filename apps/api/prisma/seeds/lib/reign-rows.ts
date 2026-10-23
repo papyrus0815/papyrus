@@ -22,6 +22,8 @@ import type { GovernmentPositionType, Prisma, PrismaClient } from '@prisma/clien
 
 import { MONARCHICAL_TENURE, asOfficeHolding } from '../../../src/libs/person/infrastructure/office-holding.query'
 
+import { nearestUtcMidnight, normalizeDateWhere } from './date-only'
+
 type AnyArgs = Record<string, any>
 
 export interface ReignRowsOptions {
@@ -44,7 +46,7 @@ function renameRegnalNumber(value: any): any {
 
 function mapReadArgs(args: AnyArgs = {}, scope: Prisma.GovernmentPositionTenureWhereInput): AnyArgs {
   const mapped: AnyArgs = { ...args }
-  mapped.where = { AND: [renameRegnalNumber(args.where ?? {}), scope] }
+  mapped.where = { AND: [normalizeDateWhere(renameRegnalNumber(args.where ?? {})), scope] }
   if (args.select) mapped.select = renameRegnalNumber(args.select)
   if (args.orderBy) mapped.orderBy = renameRegnalNumber(args.orderBy)
   return mapped
@@ -53,9 +55,8 @@ function mapReadArgs(args: AnyArgs = {}, scope: Prisma.GovernmentPositionTenureW
 /** 종료 구조화 칸 — DATETIME + 종료 정밀도(재임엔 칸이 없어 여기서만 쓴다) */
 function endColumns(endDate: Date | string | null | undefined, endDatePrecision: string | null | undefined) {
   if (endDate == null) return {}
-  const raw = endDate instanceof Date ? endDate : new Date(endDate)
   // 시드는 로컬 자정으로 Date를 만든다 — 가장 가까운 UTC 자정으로 읽어 시간대에 흔들리지 않게(DB 트리거와 같은 규칙)
-  const date = new Date(raw.getTime() + 12 * 60 * 60 * 1000)
+  const date = nearestUtcMidnight(endDate instanceof Date ? endDate : new Date(endDate))
   if (Number.isNaN(date.getTime()) || date.getUTCFullYear() < 1000) return {}
   return {
     endEra: 'AD' as const,
@@ -122,7 +123,7 @@ export function reignRows(prisma: PrismaClient, options: ReignRowsOptions = {}) 
     /** update는 id로 한 행을 고른다 — 범위 밖 행이면 Prisma가 '없음'으로 실패한다 */
     async update(args: AnyArgs): Promise<any> {
       const { data, where, ...rest } = args
-      const target = await table.findFirst({ where: { AND: [renameRegnalNumber(where), scope] }, select: { id: true } })
+      const target = await table.findFirst({ where: { AND: [normalizeDateWhere(renameRegnalNumber(where)), scope] }, select: { id: true } })
       if (!target) throw new Error(`[reignRows] 범위 안의 재위 행 없음: ${JSON.stringify(where)}`)
       return asReign(
         await table.update({ ...renameRegnalNumber(rest), where: { id: target.id }, data: await mapWriteData(data, false) } as any),

@@ -1116,7 +1116,6 @@ export async function seedPortugalAvizBraganza(prisma: PrismaService): Promise<v
         endReason: r.endReason,
         endReasonDetail: r.endReasonDetail,
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     console.log(

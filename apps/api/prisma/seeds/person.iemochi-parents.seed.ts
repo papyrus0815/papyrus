@@ -406,7 +406,6 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
             endReason: TenureEndReason.DEATH_IN_OFFICE,
             endReasonDetail,
             notes: reignNotes,
-            accountId: admin.id,
           },
         })
         console.log(`  ✅ 재임: 기이번 ${regnalNumber}대 ${regnalName} (1832~1846)`)

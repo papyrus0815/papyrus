@@ -50,7 +50,6 @@ model Account {
   /// 다국 행정부 묶음 그룹 (CabinetLinkageGroup)
   cabinetLinkageGroups CabinetLinkageGroup[] @relation("AccountCabinetLinkageGroups")
   /// 이 계정이 등록한 재임/각료(GovernmentPositionTenure)
-  governmentTenures GovernmentPositionTenure[] @relation("AccountGovernmentTenures")
   politicalSystems  PoliticalSystem[]          @relation("AccountPoliticalSystems")
   /// 이 계정이 등록한 인물 연보(PersonLifeEvent)
   personLifeEvents  PersonLifeEvent[]          @relation("AccountPersonLifeEvents")

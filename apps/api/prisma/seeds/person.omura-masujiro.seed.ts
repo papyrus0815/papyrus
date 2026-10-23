@@ -600,7 +600,6 @@ export async function seedOmuraMasujiro(prisma: PrismaService): Promise<void> {
         endReason: tenure.endReason,
         endReasonDetail: tenure.endReasonDetail,
         notes: tenure.notes,
-        accountId: admin.id,
       },
     })
     console.log(

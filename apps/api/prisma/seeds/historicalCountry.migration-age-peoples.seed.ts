@@ -456,7 +456,7 @@ export async function seedMigrationAgePeoples(prisma: PrismaService): Promise<vo
     if (reign) await reignRows(prisma).update({ where: { id: reign.id }, data: reignData })
     else
       await reignRows(prisma).create({
-        data: { personId: attila.id, historicalCountryId: hunEmpireId, accountId: ACCOUNT_ID, ...reignData },
+        data: { personId: attila.id, historicalCountryId: hunEmpireId, ...reignData },
       })
     console.log('  ✅ 아틸라 국적·재위')
   } else {

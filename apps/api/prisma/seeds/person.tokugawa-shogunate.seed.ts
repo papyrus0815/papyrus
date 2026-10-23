@@ -1977,7 +1977,6 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
         endReason: r.endReason,
         endReasonDetail: r.endReasonDetail,
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     console.log(
@@ -2061,7 +2060,6 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
           endReason: pr.endReason,
           endReasonDetail: pr.endReasonDetail,
           notes: pr.notes,
-          accountId: admin.id,
         },
       })
       console.log(

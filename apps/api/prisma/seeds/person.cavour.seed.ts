@@ -379,7 +379,6 @@ export async function seedCavour(prisma: PrismaService): Promise<void> {
           endReason: t.endReason,
           endReasonDetail: t.endReasonDetail,
           notes: t.notes,
-          accountId: admin.id,
         },
       })
       tenureId = created.id

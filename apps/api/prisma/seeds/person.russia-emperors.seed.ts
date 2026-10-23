@@ -588,7 +588,6 @@ export async function seedRussiaEmperors(
             endReason: r.endReason,
             endReasonDetail: r.endReasonDetail,
             notes: r.notes,
-            accountId: ACCOUNT_ID,
           },
         })
         console.log(`    ✅ 재위: ${r.countryName} ${r.positionTitle} (${r.startYear}-${r.endYear ?? '현재'})`)

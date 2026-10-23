@@ -444,7 +444,6 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
             endReason: r.endReason,
             endReasonDetail: r.endReasonDetail,
             notes: r.notes,
-            accountId: admin.id,
           },
         })
         const fmt = (d: Date) =>

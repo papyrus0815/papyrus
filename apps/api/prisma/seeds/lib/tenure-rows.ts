@@ -6,12 +6,15 @@
  * - title은 정의보다 구체적인 이름일 때만 — 정의 이름과 같으면 비운다(표시는 title → 정의 이름)
  * - 대수 칸은 ordinal 하나 — 시드의 옛 어휘 `termNumber`(대수)는 where·select·orderBy·data 모두 ordinal로 옮긴다.
  *   옛 `regnalNumber`(재임의 '이름 속 서수')는 칸이 사라졌다 — 넘기면 실패한다(왕호는 regnalName 문자열에).
+ * - where의 startDate·endDate(시드의 로컬 자정 Date)는 가장 가까운 UTC 자정으로 — DB에 저장된 값과 같은 규칙.
  * - where의 `title: '…'`은 '표시 직함'으로 찾는다 — 구체 직함이 그 이름이거나, 구체 직함 없이 정의 이름이 그 이름인 행.
  *   (title을 정의 이름과 같으면 비우므로, 그대로 찾으면 재실행 때 '이미 있음'을 못 찾아 중복 행을 만든다)
  * 호출 모양은 그대로 두고 받는 쪽만 바꾼다: `prisma.governmentPositionTenure.X(args)` → `tenureRows(prisma).X(args)`.
  * 재위(군주직) 시드는 `reign-rows.ts`가 맡는다.
  */
 import type { GovernmentPositionType, PrismaClient } from '@prisma/client'
+
+import { normalizeDateWhere } from './date-only'
 
 type AnyArgs = Record<string, any>
 
@@ -52,7 +55,7 @@ function displayTitleWhere(where: any): any {
 
 function mapReadArgs(args: AnyArgs = {}): AnyArgs {
   const mapped: AnyArgs = { ...args }
-  if (args.where) mapped.where = displayTitleWhere(renameTermNumber(args.where))
+  if (args.where) mapped.where = normalizeDateWhere(displayTitleWhere(renameTermNumber(args.where)))
   if (args.select) mapped.select = renameTermNumber(args.select)
   if (args.orderBy) mapped.orderBy = renameTermNumber(args.orderBy)
   return mapped

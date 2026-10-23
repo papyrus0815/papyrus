@@ -484,9 +484,6 @@ model GovernmentPositionTenure {
   /// 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 (예: 미국 국무부, 한국 외교부)
   administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
 
-  /// 등록한 계정 (계정별 각료/재임 구분)
-  accountId String? @map("account_id") @db.Char(36)
-
   //--- 관계 필드
   positionDefinition GovernmentPositionDefinition @relation(fields: [positionDefinitionId], references: [id], onDelete: Restrict)
   country            Country?                      @relation("TenureCountry", fields: [countryId], references: [id], onDelete: SetNull)
@@ -494,7 +491,6 @@ model GovernmentPositionTenure {
   person             Person                        @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)
   cabinet            Cabinet?                      @relation("CabinetMembers", fields: [cabinetId], references: [id], onDelete: SetNull)
   headOfCabinet      Cabinet?                      @relation("CabinetHead")
-  account            Account?                      @relation("AccountGovernmentTenures", fields: [accountId], references: [id], onDelete: SetNull)
   regnalEras         RegnalEra[]                   @relation("TenureRegnalEras")
   /// 재임 기간 중 업적·한일 (사건과 별도 개념)
   achievements       TenureAchievement[]           @relation("TenureAchievements")
@@ -519,7 +515,6 @@ model GovernmentPositionTenure {
   @@index([startDate], name: "idx_gov_tenure_startDate")
   @@index([cabinetId], name: "idx_gov_tenure_cabinetId")
   @@index([administrationDepartmentId], name: "idx_gov_tenure_adminDeptId")
-  @@index([accountId], name: "idx_gov_tenure_accountId")
   @@index([mandateSource], name: "idx_gov_tenure_mandateSource")
   @@index([accessionEventId], name: "idx_gov_tenure_accessionEventId")
   @@index([startKey, endKey], name: "idx_gov_tenure_period_key")

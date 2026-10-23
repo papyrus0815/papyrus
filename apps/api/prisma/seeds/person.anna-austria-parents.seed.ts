@@ -420,7 +420,6 @@ export async function seedAnnaAustriaParents(prisma: PrismaService): Promise<voi
             endReason: r.endReason,
             endReasonDetail: r.endReasonDetail,
             notes: r.notes,
-            accountId: admin.id,
           },
         })
         console.log(

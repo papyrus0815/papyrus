@@ -737,7 +737,6 @@ export async function seedJapanPostwar(prisma: PrismaService): Promise<void> {
             appointmentMethod: t.appointmentMethod,
             endReason: t.endReason,
             notes: t.notes,
-            accountId: ACCOUNT_ID,
           },
         })
         tenureId = createdTenure.id

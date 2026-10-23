@@ -430,7 +430,6 @@ export async function seedSardiniaItalyMonarchs(
           endReason: reign.endReason,
           endReasonDetail: reign.endReasonDetail,
           notes: reign.notes,
-          accountId: ACCOUNT_ID,
         },
       })
       console.log(`    ✅ 재위 ${reign.regnalNumber ?? 1}: ${reign.countryName}`)

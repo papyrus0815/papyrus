@@ -634,7 +634,6 @@ export async function seedGreatBritainMonarchs(prisma: PrismaService): Promise<v
         endReason: spec.reign.endReason,
         endReasonDetail: spec.reign.endReasonDetail,
         notes: spec.reign.notes,
-        accountId: admin.id,
       },
     })
     console.log(

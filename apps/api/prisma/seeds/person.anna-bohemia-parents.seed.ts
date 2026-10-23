@@ -617,7 +617,6 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
         endReason: r.endReason,
         endReasonDetail: r.endReasonDetail,
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     const fmt = (d: Date) =>

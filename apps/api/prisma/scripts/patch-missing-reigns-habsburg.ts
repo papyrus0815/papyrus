@@ -163,7 +163,6 @@ async function main() {
           endReason: p.endReason,
           endReasonDetail: p.endReasonDetail,
           notes: p.notes,
-          accountId: admin.id,
         },
       })
       console.log(`  ✅ 추가: ${p.personOriginalName} → ${p.hcName} ${p.regnalNumber}대 ${p.regnalName}`)

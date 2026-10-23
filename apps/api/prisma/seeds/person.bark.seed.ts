@@ -411,7 +411,6 @@ export async function seedBark(prisma: PrismaService): Promise<void> {
           endReason: t.endReason,
           endReasonDetail: t.endReasonDetail,
           notes: t.notes,
-          accountId: admin.id,
         },
       })
       console.log(`  ✅ 재임: ${t.title} (${t.startYear} ~ ${t.endYear}, 혁명으로 종료)`)

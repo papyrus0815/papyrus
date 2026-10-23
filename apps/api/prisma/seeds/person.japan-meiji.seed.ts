@@ -620,7 +620,6 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
             appointmentMethod: r.appointmentMethod,
             endReason: r.endReason,
             notes: r.notes,
-            accountId: ACCOUNT_ID,
           },
         })
         console.log(`        ✅ 재위: ${r.positionTitle} ${r.regnalNumber}대 (${r.startYear}-${r.endYear ?? '현재'})`)
@@ -661,7 +660,6 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
             appointmentMethod: t.appointmentMethod,
             endReason: t.endReason,
             notes: t.notes,
-            accountId: ACCOUNT_ID,
           },
         })
         tenureId = createdTenure.id

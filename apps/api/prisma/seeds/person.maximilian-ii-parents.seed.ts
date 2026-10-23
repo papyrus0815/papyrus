@@ -477,7 +477,6 @@ export async function seedMaximilianIIParents(prisma: PrismaService): Promise<vo
             endReason: r.endReason,
             endReasonDetail: r.endReasonDetail,
             notes: r.notes,
-            accountId: admin.id,
           },
         })
         console.log(

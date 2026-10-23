@@ -142,7 +142,6 @@ export async function seedQianlongEmperor(prisma: PrismaService): Promise<void> 
         appointmentMethod: AppointmentMethod.HEREDITARY,
         endReason: TenureEndReason.ABDICATION,
         notes: '재위 60년에 조부 강희제(61년)의 기록을 넘지 않으려 가경제에게 양위. 다만 사망(1799)까지 태상황으로 실권 행사.',
-        accountId: ACCOUNT_ID,
       },
     })
     console.log(`      ✅ 재위: 청 황제 6대 (1735-1796) — 군주명 ${REGNAL_NAME}`)

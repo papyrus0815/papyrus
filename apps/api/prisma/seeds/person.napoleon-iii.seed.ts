@@ -573,7 +573,6 @@ export async function seedNapoleonIII(prisma: PrismaService): Promise<void> {
           notes:
             '프랑스 제2공화국의 초대·유일 대통령. 1848-12-10 사상 첫 남성 보통선거에서 약 74% 득표로 당선, ' +
             '12-20 취임. 헌법상 4년 단임이라 재선이 막히자 1851 친위 쿠데타로 권력을 연장하고 이듬해 제정으로 전환했다.',
-          accountId: admin.id,
         },
       })
       presidentTenureId = created.id
@@ -634,7 +633,6 @@ export async function seedNapoleonIII(prisma: PrismaService): Promise<void> {
               '1852-12-02 즉위. 재위 약 18년간 파리 대개조·철도·투자은행·자유무역(1860)으로 산업 근대화를 ' +
               '주도했고, 크림 전쟁(1853~56)·이탈리아 통일 개입(1859, 사보이아·니스 병합)으로 외교적 정점에 ' +
               '올랐으나, 멕시코 원정 실패(1862~67)와 보불전쟁 스당 패전(1870)으로 제국이 붕괴했다.',
-            accountId: admin.id,
           },
         })
         console.log('  ✅ 재위: 프랑스 제2제국 황제 나폴레옹 3세 (1852-12-02 ~ 1870-09-04)')

@@ -433,7 +433,6 @@ export async function seedFelipeIII(prisma: PrismaService): Promise<void> {
         endReason: TenureEndReason.DEATH_IN_OFFICE,
         endReasonDetail: '1621년 3월 31일 마드리드 알카사르에서 향년 42세 사망 (단독 또는 류머티즘성 발열).',
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     console.log(

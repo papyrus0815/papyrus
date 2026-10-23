@@ -405,7 +405,6 @@ export async function seedFirstOpiumWarFigures(prisma: PrismaService): Promise<v
             appointmentMethod: r.appointmentMethod,
             endReason: r.endReason,
             notes: r.notes,
-            accountId: ACCOUNT_ID,
           },
         })
         console.log(`        ✅ 재위: ${r.positionTitle} ${r.regnalNumber}대 (${r.startYear}-${r.endYear ?? '현재'})`)

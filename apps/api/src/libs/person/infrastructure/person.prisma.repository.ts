@@ -2980,7 +2980,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         administrationDepartmentId: dto.administrationDepartmentId ?? undefined,
         electionCandidacyId: dto.electionCandidacyId ?? undefined,
         mandateSource: resolveMandateSourceForCreate(dto),
-        ...(accountId != null && { accountId }),
       },
       include: {
         positionDefinition: true,

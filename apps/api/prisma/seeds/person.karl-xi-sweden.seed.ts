@@ -799,7 +799,6 @@ export async function seedKarlXISweden(prisma: PrismaService): Promise<void> {
         endReasonDetail: REIGN.endReasonDetail,
         notes: REIGN.notes,
         showPositionInfo: true,
-        accountId: admin.id,
       },
     })
     console.log(

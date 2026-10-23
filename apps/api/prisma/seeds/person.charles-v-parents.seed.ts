@@ -782,7 +782,6 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
         endReason: r.endReason,
         endReasonDetail: r.endReasonDetail,
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     console.log(
@@ -840,7 +839,6 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
         endReason: r.endReason,
         endReasonDetail: r.endReasonDetail,
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     console.log(

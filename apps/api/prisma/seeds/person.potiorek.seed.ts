@@ -469,7 +469,6 @@ export async function seedPotiorek(prisma: PrismaService): Promise<void> {
         endReason: t.endReason,
         endReasonDetail: t.endReasonDetail,
         notes: t.notes,
-        accountId: admin.id,
       },
     })
     console.log(`  ✅ 재임: ${t.title} (${t.startYear} ~ ${t.endYear})`)

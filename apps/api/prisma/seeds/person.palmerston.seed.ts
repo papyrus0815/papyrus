@@ -786,7 +786,6 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
           endReason: t.endReason,
           endReasonDetail: t.endReasonDetail,
           notes: t.notes,
-          accountId: admin.id,
         },
       })
       tenureId = created.id
@@ -855,7 +854,6 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
         endReason: o.endReason,
         endReasonDetail: o.endReasonDetail,
         notes: o.notes,
-        accountId: admin.id,
       },
     })
     console.log(`  ✅ 재임: ${label}${o.termNumber ? ` (${o.termNumber}대)` : ''} (${o.startYear}~${o.endYear})`)

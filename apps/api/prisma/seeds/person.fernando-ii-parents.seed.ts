@@ -491,7 +491,6 @@ export async function seedFernandoIIParents(prisma: PrismaService): Promise<void
             endReason: r.endReason,
             endReasonDetail: r.endReasonDetail,
             notes: r.notes,
-            accountId: admin.id,
           },
         })
         console.log(

@@ -435,7 +435,6 @@ export async function seedYanushkevich(prisma: PrismaService): Promise<void> {
         endReason: t.endReason,
         endReasonDetail: t.endReasonDetail,
         notes: t.notes,
-        accountId: admin.id,
       },
     })
     console.log(

@@ -591,7 +591,6 @@ export async function seedWillemI(prisma: PrismaService): Promise<void> {
         endReason: r.endReason,
         endReasonDetail: r.endReasonDetail,
         notes: r.notes,
-        accountId: admin.id,
       },
     })
     console.log(`  ✅ 재위: ${r.label} (${r.startYear} ~ ${r.endYear})`)
