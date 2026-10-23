@@ -195,9 +195,9 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       data: {
         name: HABSBURG_DYNASTY.name,
         description: HABSBURG_DYNASTY.description,
-        startDate: new Date(HABSBURG_DYNASTY.startYear, 0, 1),
+        startDate: new Date(Date.UTC(HABSBURG_DYNASTY.startYear, 0, 1)),
         endDate: HABSBURG_DYNASTY.endYear
-          ? new Date(HABSBURG_DYNASTY.endYear, 11, 31)
+          ? new Date(Date.UTC(HABSBURG_DYNASTY.endYear, 11, 31))
           : undefined,
       },
     })
@@ -341,9 +341,9 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
         surname: PERSON.surname,
         originalName: PERSON.originalName,
         biography: PERSON.biography,
-        birthDate: new Date(PERSON.birthYear, PERSON.birthMonth - 1, PERSON.birthDay),
+        birthDate: new Date(Date.UTC(PERSON.birthYear, PERSON.birthMonth - 1, PERSON.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(PERSON.deathYear, PERSON.deathMonth - 1, PERSON.deathDay),
+        deathDate: new Date(Date.UTC(PERSON.deathYear, PERSON.deathMonth - 1, PERSON.deathDay)),
         deathEra: 'AD' as any,
         gender: 'MALE',
         nameDisplayOrder: 'western' as any,
@@ -410,8 +410,8 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       positionTitle: '황제',
       regnalNumber: 20,
       regnalName: '카를 5세',
-      startDate: new Date(1519, 5, 28),
-      endDate: new Date(1556, 1, 25),
+      startDate: new Date(Date.UTC(1519, 5, 28)),
+      endDate: new Date(Date.UTC(1556, 1, 25)),
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.ABDICATION,
       endReasonDetail:
@@ -433,8 +433,8 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       positionTitle: '공작',
       regnalNumber: 2,
       regnalName: '카를 5세',
-      startDate: new Date(1506, 8, 25), // 1506-09-25 부친 펠리페 1세 사망
-      endDate: new Date(1555, 9, 25), // 1555-10-25 브뤼셀 양위 (아들 펠리페 2세에게)
+      startDate: new Date(Date.UTC(1506, 8, 25)), // 1506-09-25 부친 펠리페 1세 사망
+      endDate: new Date(Date.UTC(1555, 9, 25)), // 1555-10-25 브뤼셀 양위 (아들 펠리페 2세에게)
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.ABDICATION,
       endReasonDetail:
@@ -461,8 +461,8 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       positionTitle: '국왕',
       regnalNumber: null,
       regnalName: '카를로스 1세 (후아나 1세 jure matris 공동 군주)',
-      startDate: new Date(1516, 0, 23), // 1516-01-23 외조부 페르난도 2세 사망
-      endDate: new Date(1555, 3, 12), // 1555-04-12 어머니 후아나 1세 사망
+      startDate: new Date(Date.UTC(1516, 0, 23)), // 1516-01-23 외조부 페르난도 2세 사망
+      endDate: new Date(Date.UTC(1555, 3, 12)), // 1555-04-12 어머니 후아나 1세 사망
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.OTHER,
       endReasonDetail:
@@ -481,8 +481,8 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       positionTitle: '국왕',
       regnalNumber: 14,
       regnalName: '카를로스 1세',
-      startDate: new Date(1555, 3, 12), // 1555-04-12 후아나 사망 직후 단독 군주 전환
-      endDate: new Date(1556, 0, 16), // 1556-01-16 아들 펠리페 2세에게 양위
+      startDate: new Date(Date.UTC(1555, 3, 12)), // 1555-04-12 후아나 사망 직후 단독 군주 전환
+      endDate: new Date(Date.UTC(1556, 0, 16)), // 1556-01-16 아들 펠리페 2세에게 양위
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.ABDICATION,
       endReasonDetail:
@@ -554,7 +554,7 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       },
     })
     const fmt = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
     console.log(
       `  ✅ 재임: ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber}대 (${fmt(r.startDate)} ~ ${fmt(r.endDate)})`,
     )

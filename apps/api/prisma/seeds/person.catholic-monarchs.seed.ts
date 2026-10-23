@@ -332,9 +332,9 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -416,8 +416,8 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
   }
 
   // ── 4) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const startDate = new Date(MARRIAGE.startYear, MARRIAGE.startMonth - 1, MARRIAGE.startDay)
-  const endDate = new Date(MARRIAGE.endYear, MARRIAGE.endMonth - 1, MARRIAGE.endDay)
+  const startDate = new Date(Date.UTC(MARRIAGE.startYear, MARRIAGE.startMonth - 1, MARRIAGE.startDay))
+  const endDate = new Date(Date.UTC(MARRIAGE.endYear, MARRIAGE.endMonth - 1, MARRIAGE.endDay))
   for (const [aId, bId, label] of [
     [fernandoId, isabelId, '페르난도 → 이사벨'],
     [isabelId, fernandoId, '이사벨 → 페르난도'],
@@ -488,8 +488,8 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
       historicalCountryName: '카스티야 왕국',
       regnalNumber: 12,
       regnalName: '이사벨 1세',
-      startDate: new Date(1474, 11, 13), // 1474-12-13 즉위 (이복 형 엔리케 4세 사망 12-11)
-      endDate: new Date(1504, 10, 26), // 1504-11-26 사망
+      startDate: new Date(Date.UTC(1474, 11, 13)), // 1474-12-13 즉위 (이복 형 엔리케 4세 사망 12-11)
+      endDate: new Date(Date.UTC(1504, 10, 26)), // 1504-11-26 사망
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1504-11-26 메디나 델 캄포에서 53세 사망 (자궁암·울혈성 심부전 추정).',
@@ -506,8 +506,8 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
       historicalCountryName: '아라곤 왕국',
       regnalNumber: 20,
       regnalName: '페르난도 2세',
-      startDate: new Date(1479, 0, 20), // 1479-01-20 부친 후안 2세 사망(1479-01-19) 다음 날 즉위
-      endDate: new Date(1516, 0, 23), // 1516-01-23 본인 사망
+      startDate: new Date(Date.UTC(1479, 0, 20)), // 1479-01-20 부친 후안 2세 사망(1479-01-19) 다음 날 즉위
+      endDate: new Date(Date.UTC(1516, 0, 23)), // 1516-01-23 본인 사망
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1516-01-23 카스티야 마드리갈레호에서 63세 사망 (울혈성 심부전·통풍 추정).',
@@ -525,8 +525,8 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
       historicalCountryName: '카스티야 왕국',
       regnalNumber: null, // 공동 군주 — 12대 슬롯은 이사벨 1세 점유, NULL로 명시
       regnalName: '페르난도 5세 (이사벨 1세 공동 군주, jure uxoris)',
-      startDate: new Date(1474, 11, 13), // 이사벨 1세 즉위와 동시
-      endDate: new Date(1504, 10, 26), // 이사벨 1세 사망 — jure uxoris 권리 종결
+      startDate: new Date(Date.UTC(1474, 11, 13)), // 이사벨 1세 즉위와 동시
+      endDate: new Date(Date.UTC(1504, 10, 26)), // 이사벨 1세 사망 — jure uxoris 권리 종결
       appointmentMethod: AppointmentMethod.OTHER, // jure uxoris (배우자 권리)
       endReason: TenureEndReason.OTHER,
       endReasonDetail:
@@ -598,7 +598,7 @@ export async function seedCatholicMonarchs(prisma: PrismaService): Promise<void>
       },
     })
     const fmt = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
     console.log(
       `  ✅ 재임: ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber ?? '공동'} ` +
         `(${fmt(r.startDate)} ~ ${fmt(r.endDate)})`,

@@ -227,8 +227,8 @@ export async function seedFriedrichIIIParents(prisma: PrismaService): Promise<vo
       data: {
         name: PIAST_DYNASTY.name,
         description: PIAST_DYNASTY.description,
-        startDate: new Date(PIAST_DYNASTY.startYear, 0, 1),
-        endDate: new Date(PIAST_DYNASTY.endYear, 11, 31),
+        startDate: new Date(Date.UTC(PIAST_DYNASTY.startYear, 0, 1)),
+        endDate: new Date(Date.UTC(PIAST_DYNASTY.endYear, 11, 31)),
       },
     })
     console.log(`  ✅ 가문 생성: ${PIAST_DYNASTY.name}`)
@@ -253,9 +253,9 @@ export async function seedFriedrichIIIParents(prisma: PrismaService): Promise<vo
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -330,8 +330,8 @@ export async function seedFriedrichIIIParents(prisma: PrismaService): Promise<vo
   }
 
   // 5) 결혼 양방향
-  const mStart = new Date(1412, 0, 25)
-  const mEnd = new Date(1424, 5, 10) // 에른스트 사망
+  const mStart = new Date(Date.UTC(1412, 0, 25))
+  const mEnd = new Date(Date.UTC(1424, 5, 10)) // 에른스트 사망
   const mNote =
     '1412년 1월 25일 비너 노이슈타트에서 결혼. 에른스트 35세, 침바르카 18세, 약 17세 차의 결혼이었다. ' +
     '에른스트의 첫 부인 마르가레테 폰 포메른이 1410년 사망한 후 약 2년 만의 재혼이었다. 합스부르크 ' +

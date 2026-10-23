@@ -547,10 +547,10 @@ export async function seedStatueOfLiberty1886(
           originalName: p.originalName,
           biography: p.biography,
           birthEra: 'AD' as any,
-          birthDate: new Date(p.birthYear, p.birthMonth - 1, p.birthDay),
+          birthDate: new Date(Date.UTC(p.birthYear, p.birthMonth - 1, p.birthDay)),
           deathEra: p.deathYear ? ('AD' as any) : undefined,
           deathDate: p.deathYear
-            ? new Date(p.deathYear, (p.deathMonth ?? 1) - 1, p.deathDay ?? 1)
+            ? new Date(Date.UTC(p.deathYear, (p.deathMonth ?? 1) - 1, p.deathDay ?? 1))
             : undefined,
           deathCause: p.deathCause,
           isAlive: p.isAlive,

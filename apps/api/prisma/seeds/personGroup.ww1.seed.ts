@@ -423,8 +423,8 @@ export async function seedWorldWarOnePersonGroups(prisma: PrismaService): Promis
               name: key.name,
               surname: key.surname,
               birthDate: {
-                gte: new Date(key.birthYear, 0, 1),
-                lt: new Date(key.birthYear + 1, 0, 1),
+                gte: new Date(Date.UTC(key.birthYear, 0, 1)),
+                lt: new Date(Date.UTC(key.birthYear + 1, 0, 1)),
               },
             },
             select: { id: true },

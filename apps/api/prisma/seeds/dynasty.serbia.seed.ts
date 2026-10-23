@@ -292,8 +292,8 @@ export async function seedSerbiaDynasty(prisma: PrismaService): Promise<void> {
         name: '오브레노비치 왕조',
         description:
           '1817년 밀로시 오브레노비치가 세르비아 공국을 창건하면서 시작된 왕조. 1882년 세르비아 왕국 선포 이후까지 오브레노비치 가문과 카라조르제비치 가문이 번갈아 권력을 장악했으며, 1903년 알렉산다르 국왕 부부가 암살되면서 오브레노비치 왕조는 단절되었다.',
-        startDate: new Date(1817, 10, 6),
-        endDate: new Date(1903, 5, 11),
+        startDate: new Date(Date.UTC(1817, 10, 6)),
+        endDate: new Date(Date.UTC(1903, 5, 11)),
       },
     })
     console.log('  ✅ 오브레노비치 왕조 생성')
@@ -309,7 +309,7 @@ export async function seedSerbiaDynasty(prisma: PrismaService): Promise<void> {
         name: '카라조르제비치 왕조',
         description:
           '제1차 세르비아 봉기(1804)를 이끈 카라조르제(게오르기예 페트로비치)의 후손이 세운 왕조. 세르비아 공국(1842~1858)을 거쳐 1903년 오브레노비치 왕조 단절 이후 세르비아 왕국의 왕가가 되었으며, 유고슬라비아 왕국(1929~1945)까지 지속되었다.',
-        startDate: new Date(1842, 8, 14),
+        startDate: new Date(Date.UTC(1842, 8, 14)),
       },
     })
     console.log('  ✅ 카라조르제비치 왕조 생성')
@@ -389,10 +389,10 @@ export async function seedSerbiaDynasty(prisma: PrismaService): Promise<void> {
           surname: w.surname,
           originalName: w.originalName,
           biography: w.biography,
-          birthDate: new Date(w.birthYear, (w.birthMonth ?? 1) - 1, w.birthDay ?? 1),
+          birthDate: new Date(Date.UTC(w.birthYear, (w.birthMonth ?? 1) - 1, w.birthDay ?? 1)),
           birthEra: 'AD',
           deathDate: w.deathYear
-            ? new Date(w.deathYear, (w.deathMonth ?? 1) - 1, w.deathDay ?? 1)
+            ? new Date(Date.UTC(w.deathYear, (w.deathMonth ?? 1) - 1, w.deathDay ?? 1))
             : undefined,
           deathEra: w.deathYear ? 'AD' : undefined,
           gender: w.gender as any,
@@ -437,8 +437,8 @@ export async function seedSerbiaDynasty(prisma: PrismaService): Promise<void> {
         data: {
           name: wd.name,
           description: wd.description,
-          startDate: new Date(wd.startYear, 0, 1),
-          endDate: wd.endYear ? new Date(wd.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(wd.startYear, 0, 1)),
+          endDate: wd.endYear ? new Date(Date.UTC(wd.endYear, 11, 31)) : undefined,
         },
       })
       console.log(`    ✅ ${wd.name}`)
@@ -470,8 +470,8 @@ export async function seedSerbiaDynasty(prisma: PrismaService): Promise<void> {
     if (!personA) { console.warn(`    ⚠️  인물 없음: ${m.personA}`); continue }
     if (!personB) { console.warn(`    ⚠️  인물 없음: ${m.personB}`); continue }
 
-    const startDate = new Date(m.startYear, m.startMonth - 1, m.startDay ?? 1)
-    const endDate = m.endYear ? new Date(m.endYear, (m.endMonth ?? 1) - 1, 1) : undefined
+    const startDate = new Date(Date.UTC(m.startYear, m.startMonth - 1, m.startDay ?? 1))
+    const endDate = m.endYear ? new Date(Date.UTC(m.endYear, (m.endMonth ?? 1) - 1, 1)) : undefined
 
     const existingAB = await prisma.personSpouse.findFirst({
       where: { personId: personA.id, spouseId: personB.id },
@@ -541,8 +541,8 @@ export async function seedSerbiaDynasty(prisma: PrismaService): Promise<void> {
           personId: person.id,
           historicalCountryId: hc.id,
           affiliationType: 'CITIZENSHIP',
-          startDate: new Date(aff.startYear, 0, 1),
-          endDate: aff.endYear ? new Date(aff.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(aff.startYear, 0, 1)),
+          endDate: aff.endYear ? new Date(Date.UTC(aff.endYear, 11, 31)) : undefined,
           priority: 0,
         },
       })

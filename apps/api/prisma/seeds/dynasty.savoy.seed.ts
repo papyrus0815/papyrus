@@ -464,8 +464,8 @@ export async function seedSavoyDynasty(prisma: PrismaService): Promise<void> {
         name: '사보이아 왕조',
         description:
           '1003년경 사보이아 백작령에서 시작하여 1946년 이탈리아 공화국 수립으로 막을 내린 유럽에서 가장 오래된 왕가 중 하나. 피에몬테·사르데냐를 기반으로 이탈리아 반도 통일(1861)을 주도하였으며 비토리오 에마누엘레 2세가 초대 이탈리아 국왕이 되었다. 마지막 국왕 움베르토 2세가 1946년 국민투표 결과로 퇴위·망명하면서 군주제가 종식되었다.',
-        startDate: new Date(1720, 7, 2),
-        endDate: new Date(1946, 5, 12),
+        startDate: new Date(Date.UTC(1720, 7, 2)),
+        endDate: new Date(Date.UTC(1946, 5, 12)),
       },
     })
     console.log('  ✅ 사보이아 왕조 생성')
@@ -512,10 +512,10 @@ export async function seedSavoyDynasty(prisma: PrismaService): Promise<void> {
           surname: w.surname,
           originalName: w.originalName,
           biography: w.biography,
-          birthDate: new Date(w.birthYear, (w.birthMonth ?? 1) - 1, w.birthDay ?? 1),
+          birthDate: new Date(Date.UTC(w.birthYear, (w.birthMonth ?? 1) - 1, w.birthDay ?? 1)),
           birthEra: 'AD',
           deathDate: w.deathYear
-            ? new Date(w.deathYear, (w.deathMonth ?? 1) - 1, w.deathDay ?? 1)
+            ? new Date(Date.UTC(w.deathYear, (w.deathMonth ?? 1) - 1, w.deathDay ?? 1))
             : undefined,
           deathEra: w.deathYear ? 'AD' : undefined,
           gender: w.gender as any,
@@ -554,8 +554,8 @@ export async function seedSavoyDynasty(prisma: PrismaService): Promise<void> {
         data: {
           name: wd.name,
           description: wd.description,
-          startDate: new Date(wd.startYear, 0, 1),
-          endDate: wd.endYear ? new Date(wd.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(wd.startYear, 0, 1)),
+          endDate: wd.endYear ? new Date(Date.UTC(wd.endYear, 11, 31)) : undefined,
         },
       })
       console.log(`    ✅ ${wd.name}`)
@@ -587,8 +587,8 @@ export async function seedSavoyDynasty(prisma: PrismaService): Promise<void> {
     if (!personA) { console.warn(`    ⚠️  인물 없음: ${m.personA}`); continue }
     if (!personB) { console.warn(`    ⚠️  인물 없음: ${m.personB}`); continue }
 
-    const startDate = new Date(m.startYear, m.startMonth - 1, m.startDay ?? 1)
-    const endDate = m.endYear ? new Date(m.endYear, (m.endMonth ?? 1) - 1, 1) : undefined
+    const startDate = new Date(Date.UTC(m.startYear, m.startMonth - 1, m.startDay ?? 1))
+    const endDate = m.endYear ? new Date(Date.UTC(m.endYear, (m.endMonth ?? 1) - 1, 1)) : undefined
 
     const existingAB = await prisma.personSpouse.findFirst({
       where: { personId: personA.id, spouseId: personB.id },
@@ -657,8 +657,8 @@ export async function seedSavoyDynasty(prisma: PrismaService): Promise<void> {
           personId: person.id,
           historicalCountryId: hc.id,
           affiliationType: 'CITIZENSHIP',
-          startDate: new Date(aff.startYear, 0, 1),
-          endDate: aff.endYear ? new Date(aff.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(aff.startYear, 0, 1)),
+          endDate: aff.endYear ? new Date(Date.UTC(aff.endYear, 11, 31)) : undefined,
           priority: 0,
         },
       })

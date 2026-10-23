@@ -683,9 +683,9 @@ export async function seedBakumatsuFigures(prisma: PrismaService): Promise<void>
           surname: spec.surname,
           originalName: spec.originalName,
           biography: spec.biography,
-          birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+          birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
           birthEra: 'AD' as any,
-          deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+          deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
           deathEra: 'AD' as any,
           gender: spec.gender,
           nameDisplayOrder: spec.nameDisplayOrder as any,
@@ -751,8 +751,8 @@ export async function seedBakumatsuFigures(prisma: PrismaService): Promise<void>
           countryId: countryId ?? null,
           historicalCountryId: historicalCountryId ?? null,
           affiliationType: aff.type as any,
-          startDate: aff.startYear ? new Date(aff.startYear, 0, 1) : undefined,
-          endDate: aff.endYear ? new Date(aff.endYear, 11, 31) : undefined,
+          startDate: aff.startYear ? new Date(Date.UTC(aff.startYear, 0, 1)) : undefined,
+          endDate: aff.endYear ? new Date(Date.UTC(aff.endYear, 11, 31)) : undefined,
           priority: 0,
         },
       })
@@ -771,9 +771,9 @@ export async function seedBakumatsuFigures(prisma: PrismaService): Promise<void>
         )
         continue
       }
-      const startDate = new Date(t.startYear, t.startMonth - 1, t.startDay ?? 1)
+      const startDate = new Date(Date.UTC(t.startYear, t.startMonth - 1, t.startDay ?? 1))
       const endDate = t.endYear
-        ? new Date(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1)
+        ? new Date(Date.UTC(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1))
         : undefined
       // 같은 인물 + 같은 직위명 + 같은 시작일 → 중복으로 본다
       const tenureExists = await tenureRows(prisma).findFirst({

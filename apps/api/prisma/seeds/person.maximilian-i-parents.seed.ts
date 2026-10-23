@@ -195,9 +195,9 @@ export async function seedMaximilianIParents(prisma: PrismaService): Promise<voi
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -279,8 +279,8 @@ export async function seedMaximilianIParents(prisma: PrismaService): Promise<voi
   }
 
   // ── 4) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const mStart = new Date(1452, 2, 16) // 1452-03-16 로마
-  const mEnd = new Date(1467, 8, 3) // 1467-09-03 엘레오노라 사망
+  const mStart = new Date(Date.UTC(1452, 2, 16)) // 1452-03-16 로마
+  const mEnd = new Date(Date.UTC(1467, 8, 3)) // 1467-09-03 엘레오노라 사망
   const mNote =
     '1452년 3월 16일 로마에서 결혼. 프리드리히 3세 36세, 엘레오노라 17세. 부친 두아르트 1세가 살아있을 때부터 진행된 합스부르크-아비스 동맹의 결과로, 엘레오노라가 1451년 11월 포르투갈에서 출발해 약 4개월 항해 후 1452년 2월 이탈리아 시에나에서 첫 만남이 이루어졌다. 결혼식 사흘 후 3월 19일 같은 도시에서 교황 니콜라오 5세가 프리드리히에게 신성로마황제 대관을 거행했다. 약 15년 결혼 생활 동안 5명의 자녀를 두었으나 막시밀리안 1세와 쿠니군데(바이에른 공작비) 둘만 성인까지 생존했다. 1467년 9월 3일 엘레오노라가 다섯째 임신 중 이질로 32세 사망하면서 결혼 종결. 프리드리히 3세는 약 26년간 미망인 생활을 했고 재혼하지 않았다.'
 
@@ -332,8 +332,8 @@ export async function seedMaximilianIParents(prisma: PrismaService): Promise<voi
     const r = {
       regnalNumber: 18,
       regnalName: '프리드리히 3세',
-      startDate: new Date(1452, 2, 19), // 1452-03-19 로마 황제 대관
-      endDate: new Date(1493, 7, 19), // 1493-08-19 본인 사망
+      startDate: new Date(Date.UTC(1452, 2, 19)), // 1452-03-19 로마 황제 대관
+      endDate: new Date(Date.UTC(1493, 7, 19)), // 1493-08-19 본인 사망
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1493-08-19 린츠에서 향년 77세 사망 (왼쪽 다리 절단 후 합병증).',

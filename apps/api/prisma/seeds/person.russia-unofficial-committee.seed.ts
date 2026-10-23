@@ -262,7 +262,7 @@ export async function seedRussiaUnofficialCommittee(
           name: d.name,
           description: d.description,
           originPlace: d.originPlace,
-          startDate: new Date(d.startYear, 0, 1),
+          startDate: new Date(Date.UTC(d.startYear, 0, 1)),
           motto: d.motto,
         },
       })
@@ -293,9 +293,9 @@ export async function seedRussiaUnofficialCommittee(
         surname: m.surname,
         originalName: m.originalName,
         biography: m.biography,
-        birthDate: new Date(m.birthYear, m.birthMonth - 1, m.birthDay),
+        birthDate: new Date(Date.UTC(m.birthYear, m.birthMonth - 1, m.birthDay)),
         birthEra: 'AD',
-        deathDate: new Date(m.deathYear, m.deathMonth - 1, m.deathDay),
+        deathDate: new Date(Date.UTC(m.deathYear, m.deathMonth - 1, m.deathDay)),
         deathEra: 'AD',
         gender: 'MALE',
         nameDisplayOrder: 'western',
@@ -309,7 +309,7 @@ export async function seedRussiaUnofficialCommittee(
 
   // ── 3. 4인 사이의 협력자 관계 (GENERAL + ALLY/COLLEAGUE) ─────────
   console.log('\n  🤝 4인 협력자 관계 등록...')
-  const committeeStart = new Date(1801, 5, 24) // 1801-06-24 첫 회합
+  const committeeStart = new Date(Date.UTC(1801, 5, 24)) // 1801-06-24 첫 회합
   for (const pair of MEMBER_PAIR_RELATIONS) {
     const fromId = memberIdMap.get(pair.a)
     const toId = memberIdMap.get(pair.b)

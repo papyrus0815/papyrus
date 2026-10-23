@@ -1237,9 +1237,9 @@ export async function seedSanFranciscoTreatyEnrich(
       where: { originalName: p.originalName },
     })
     if (existing) { console.log(`    ⏭️  ${p.originalName}`); continue }
-    const birthDate = new Date(p.birthYear, p.birthMonth - 1, p.birthDay)
+    const birthDate = new Date(Date.UTC(p.birthYear, p.birthMonth - 1, p.birthDay))
     const deathDate = p.deathYear
-      ? new Date(p.deathYear, (p.deathMonth ?? 1) - 1, p.deathDay ?? 1)
+      ? new Date(Date.UTC(p.deathYear, (p.deathMonth ?? 1) - 1, p.deathDay ?? 1))
       : undefined
     const created = await prisma.person.create({
       data: {

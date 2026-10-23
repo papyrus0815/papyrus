@@ -212,9 +212,9 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'korean' as any,
@@ -289,8 +289,8 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
   }
 
   // 결혼 (측실 관계 — PersonSpouse로 모델링, note에 측실 명시)
-  const mStart = new Date(1845, 0, 1) // 정확한 시점 미상, 1845년경
-  const mEnd = new Date(1846, 5, 8) // 나리유키 사망
+  const mStart = new Date(Date.UTC(1845, 0, 1)) // 정확한 시점 미상, 1845년경
+  const mEnd = new Date(Date.UTC(1846, 5, 8)) // 나리유키 사망
   const mNote =
     '약 1845년경 마쓰모토 사다(당시 18세)가 기이번 11대 번주 도쿠가와 나리유키(당시 44세)의 측실로 ' +
     '입실. 약 26세의 큰 나이 차. 나리유키의 정실 가요와 별개의 측실 신분이었으며, 정실이 자녀를 ' +
@@ -342,8 +342,8 @@ export async function seedIemochiParents(prisma: PrismaService): Promise<void> {
         '(seedTokugawaShogunate 먼저 실행 필요)',
     )
   } else {
-    const startDate = new Date(1832, 8, 14)
-    const endDate = new Date(1846, 5, 8)
+    const startDate = new Date(Date.UTC(1832, 8, 14))
+    const endDate = new Date(Date.UTC(1846, 5, 8))
     const regnalNumber = 11
     const regnalName = '도쿠가와 나리유키'
     const endReasonDetail =

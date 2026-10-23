@@ -264,8 +264,8 @@ export async function seedFirstOpiumWarFigures(prisma: PrismaService): Promise<v
       data: {
         name: QING_DYNASTY.name,
         description: QING_DYNASTY.description,
-        startDate: new Date(QING_DYNASTY.startYear, 0, 1),
-        endDate: new Date(QING_DYNASTY.endYear, 11, 31),
+        startDate: new Date(Date.UTC(QING_DYNASTY.startYear, 0, 1)),
+        endDate: new Date(Date.UTC(QING_DYNASTY.endYear, 11, 31)),
         originPlace: QING_DYNASTY.originPlace,
       },
     })
@@ -298,8 +298,8 @@ export async function seedFirstOpiumWarFigures(prisma: PrismaService): Promise<v
     const existing = await prisma.person.findFirst({ where: { originalName: m.originalName } })
     let personId: string
 
-    const birthDate = new Date(m.birthYear, m.birthMonth - 1, m.birthDay)
-    const deathDate = m.deathYear ? new Date(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1) : undefined
+    const birthDate = new Date(Date.UTC(m.birthYear, m.birthMonth - 1, m.birthDay))
+    const deathDate = m.deathYear ? new Date(Date.UTC(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1)) : undefined
     const linkedDynastyId = m.dynastyName ? await getDynastyId(prisma, m.dynastyName) : null
     const linkedCountryId = m.countryName ? await getHistoricalCountryId(prisma, m.countryName) : null
 
@@ -383,8 +383,8 @@ export async function seedFirstOpiumWarFigures(prisma: PrismaService): Promise<v
       const reignCountryId = await getHistoricalCountryId(prisma, r.countryName)
       if (!reignCountryId) { console.warn(`        ⚠️  역사 국가 없음: ${r.countryName}`); continue }
       const positionDefId = await getPositionDefId(prisma, r.positionTitle)
-      const startDate = new Date(r.startYear, r.startMonth - 1, r.startDay ?? 1)
-      const endDate = r.endYear ? new Date(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1) : undefined
+      const startDate = new Date(Date.UTC(r.startYear, r.startMonth - 1, r.startDay ?? 1))
+      const endDate = r.endYear ? new Date(Date.UTC(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1)) : undefined
       const existingReign = await reignRows(prisma).findFirst({
         where: { historicalCountryId: reignCountryId, regnalNumber: r.regnalNumber },
       })

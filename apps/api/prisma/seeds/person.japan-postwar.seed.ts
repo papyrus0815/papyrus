@@ -630,8 +630,8 @@ export async function seedJapanPostwar(prisma: PrismaService): Promise<void> {
     const existing = await prisma.person.findFirst({ where: { originalName: m.originalName } })
     let personId: string
 
-    const birthDate = new Date(m.birthYear, m.birthMonth - 1, m.birthDay)
-    const deathDate = m.deathYear ? new Date(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1) : undefined
+    const birthDate = new Date(Date.UTC(m.birthYear, m.birthMonth - 1, m.birthDay))
+    const deathDate = m.deathYear ? new Date(Date.UTC(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1)) : undefined
     const linkedDynastyId = m.dynastyName ? await getDynastyId(prisma, m.dynastyName) : null
     const linkedCountryId = m.countryName ? await getHistoricalCountryId(prisma, m.countryName) : null
 
@@ -708,8 +708,8 @@ export async function seedJapanPostwar(prisma: PrismaService): Promise<void> {
         continue
       }
       const positionDefId = await getPositionDefId(prisma, t.positionTitle)
-      const startDate = new Date(t.startYear, t.startMonth - 1, t.startDay ?? 1)
-      const endDate = t.endYear ? new Date(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1) : undefined
+      const startDate = new Date(Date.UTC(t.startYear, t.startMonth - 1, t.startDay ?? 1))
+      const endDate = t.endYear ? new Date(Date.UTC(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1)) : undefined
 
       const existingTenure = await tenureRows(prisma).findFirst({
         where: {
@@ -795,8 +795,8 @@ export async function seedJapanPostwar(prisma: PrismaService): Promise<void> {
         console.warn(`        ⚠️  정당 미존재: ${pm.partyName}`)
         continue
       }
-      const startDate = new Date(pm.startYear, (pm.startMonth ?? 1) - 1, pm.startDay ?? 1)
-      const endDate = pm.endYear ? new Date(pm.endYear, (pm.endMonth ?? 1) - 1, pm.endDay ?? 1) : undefined
+      const startDate = new Date(Date.UTC(pm.startYear, (pm.startMonth ?? 1) - 1, pm.startDay ?? 1))
+      const endDate = pm.endYear ? new Date(Date.UTC(pm.endYear, (pm.endMonth ?? 1) - 1, pm.endDay ?? 1)) : undefined
       const exists = await prisma.politicalPartyMembership.findFirst({
         where: { personId, partyId: partyRow.id, startDate },
       })

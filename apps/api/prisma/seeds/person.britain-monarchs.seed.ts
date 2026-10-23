@@ -261,8 +261,8 @@ export async function seedBritainMonarchs(prisma: PrismaService): Promise<void> 
         data: {
           name: d.name,
           description: d.description,
-          startDate: new Date(d.startYear, 0, 1),
-          endDate: d.endYear ? new Date(d.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(d.startYear, 0, 1)),
+          endDate: d.endYear ? new Date(Date.UTC(d.endYear, 11, 31)) : undefined,
         },
       })
       console.log(`    ✅ ${d.name}`)
@@ -292,8 +292,8 @@ export async function seedBritainMonarchs(prisma: PrismaService): Promise<void> 
     const existing = await prisma.person.findFirst({ where: { originalName: m.originalName } })
     let personId: string
 
-    const birthDate = new Date(m.birthYear, m.birthMonth - 1, m.birthDay)
-    const deathDate = m.deathYear ? new Date(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1) : undefined
+    const birthDate = new Date(Date.UTC(m.birthYear, m.birthMonth - 1, m.birthDay))
+    const deathDate = m.deathYear ? new Date(Date.UTC(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1)) : undefined
     const dynastyId = m.dynastyName ? await getDynastyId(prisma, m.dynastyName) : null
     const historicalCountryId = m.countryName ? await getHistoricalCountryId(prisma, m.countryName) : null
 
@@ -343,8 +343,8 @@ export async function seedBritainMonarchs(prisma: PrismaService): Promise<void> 
       const reignCountryId = await getHistoricalCountryId(prisma, r.countryName)
       if (!reignCountryId) { console.warn(`        ⚠️  역사 국가 없음: ${r.countryName}`); continue }
       const positionDefId = await getPositionDefId(prisma, r.positionTitle)
-      const startDate = new Date(r.startYear, r.startMonth - 1, r.startDay ?? 1)
-      const endDate = r.endYear ? new Date(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1) : undefined
+      const startDate = new Date(Date.UTC(r.startYear, r.startMonth - 1, r.startDay ?? 1))
+      const endDate = r.endYear ? new Date(Date.UTC(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1)) : undefined
       // 유니크 제약 (historicalCountryId, regnalNumber) — 다른 personId라도 충돌하므로 제약 키로 lookup.
       const existingReign = await reignRows(prisma).findFirst({
         where: { historicalCountryId: reignCountryId, regnalNumber: r.regnalNumber },
@@ -383,8 +383,8 @@ export async function seedBritainMonarchs(prisma: PrismaService): Promise<void> 
     const pA = await prisma.person.findFirst({ where: { originalName: m.personA } })
     const pB = await prisma.person.findFirst({ where: { originalName: m.personB } })
     if (!pA || !pB) { console.warn(`    ⚠️  인물 없음: ${m.personA} / ${m.personB}`); continue }
-    const startDate = new Date(m.startYear, m.startMonth - 1, m.startDay)
-    const endDate = m.endYear ? new Date(m.endYear, (m.endMonth ?? 1) - 1, m.endDay ?? 1) : undefined
+    const startDate = new Date(Date.UTC(m.startYear, m.startMonth - 1, m.startDay))
+    const endDate = m.endYear ? new Date(Date.UTC(m.endYear, (m.endMonth ?? 1) - 1, m.endDay ?? 1)) : undefined
     const existAB = await prisma.personSpouse.findFirst({ where: { personId: pA.id, spouseId: pB.id } })
     if (!existAB) {
       await prisma.personSpouse.create({ data: { personId: pA.id, spouseId: pB.id, marriageStartDate: startDate, marriageEndDate: endDate, note: m.note } })

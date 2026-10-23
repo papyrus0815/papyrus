@@ -169,9 +169,9 @@ export async function seedManuelIParents(prisma: PrismaService): Promise<void> {
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -253,8 +253,8 @@ export async function seedManuelIParents(prisma: PrismaService): Promise<void> {
   }
 
   // ── 4) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const mStart = new Date(1447, 5, 15) // 1447년 6월 추정 (정확한 일자 미상)
-  const mEnd = new Date(1470, 8, 18) // 1470-09-18 페르난두 사망
+  const mStart = new Date(Date.UTC(1447, 5, 15)) // 1447년 6월 추정 (정확한 일자 미상)
+  const mEnd = new Date(Date.UTC(1470, 8, 18)) // 1470-09-18 페르난두 사망
   const mNote =
     '1447년 6월경 포르투갈에서 결혼. 페르난두 두케 데 비제우 14세, 베아트리스 데 포르투갈 17세. 사촌 결혼으로 아비스 가문 직계(페르난두 — 두아르트 1세 후손)와 분지(베아트리스 — 인판테 주앙 후손)의 통합. 약 23년 결혼 생활 동안 11명의 자녀를 두었고, 그중 7명이 성인까지 생존했다. 후일 비제우 공작 3대 후안, 비제우 공작 4대 디오구(1484 주앙 2세에게 살해), 카스티야 왕비 엘레오노라(주앙 2세 부인), 브라간사 가문 이사벨, 그리고 막내 아들 포르투갈 14대 국왕 마누엘 1세(1469년생) 등이 이 부부의 자녀들이다. 1470년 9월 18일 페르난두 36세 사망으로 결혼 종결. 베아트리스는 약 36년 더 살아 1506년 76세까지 장수, 막내 아들 마누엘 1세의 1495년 즉위와 손녀 이사벨 데 포르투갈의 1503년 출생을 모두 보았다.'
 

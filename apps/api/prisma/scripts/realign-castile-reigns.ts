@@ -120,7 +120,7 @@ async function main() {
     })
     for (const r of reigns) {
       const fmt = (d: Date | null) =>
-        d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '?'
+        d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` : '?'
       console.log(
         `${String(r.regnalNumber ?? '공동').padStart(4)} | ${(r.regnalName ?? '?').padEnd(46)} | ${fmt(r.startDate)} ~ ${fmt(r.endDate)} | ${r.person.originalName}`,
       )

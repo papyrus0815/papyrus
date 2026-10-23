@@ -157,17 +157,17 @@ export async function seedIemochiWife(prisma: PrismaService): Promise<void> {
         surname: KAZUNOMIYA.surname,
         originalName: KAZUNOMIYA.originalName,
         biography: KAZUNOMIYA.biography,
-        birthDate: new Date(
+        birthDate: new Date(Date.UTC(
           KAZUNOMIYA.birthYear,
           KAZUNOMIYA.birthMonth - 1,
           KAZUNOMIYA.birthDay,
-        ),
+        )),
         birthEra: 'AD' as any,
-        deathDate: new Date(
+        deathDate: new Date(Date.UTC(
           KAZUNOMIYA.deathYear,
           KAZUNOMIYA.deathMonth - 1,
           KAZUNOMIYA.deathDay,
-        ),
+        )),
         deathEra: 'AD' as any,
         gender: 'FEMALE',
         nameDisplayOrder: 'korean' as any,
@@ -230,8 +230,8 @@ export async function seedIemochiWife(prisma: PrismaService): Promise<void> {
   }
 
   // ── 4) PersonSpouse (양방향) ────────────────────────────────────────
-  const marriageStart = new Date(1862, 1, 11) // 1862-02-11
-  const marriageEnd = new Date(1866, 7, 29) // 1866-08-29 이에모치 사망
+  const marriageStart = new Date(Date.UTC(1862, 1, 11)) // 1862-02-11
+  const marriageEnd = new Date(Date.UTC(1866, 7, 29)) // 1866-08-29 이에모치 사망
   const marriageNote =
     '1862-02-11(분큐 2년 음력 1월 13일) 에도성에서 만 15세 동갑 부부로 결혼. 막부 말기 ' +
     '"공무합체(公武合体)" 정책의 상징적 사건이자 막부 사상 황녀가 쇼군 정실이 된 유일 사례. ' +

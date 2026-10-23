@@ -1511,7 +1511,7 @@ export class EventController {
       if (event.startYear != null) {
         return event.startEra === 'BC' ? -event.startYear : event.startYear
       }
-      return event.startDate ? event.startDate.getFullYear() : Number.POSITIVE_INFINITY
+      return event.startDate ? event.startDate.getUTCFullYear() : Number.POSITIVE_INFINITY
     }
     const sorted = [...relations].sort((left, right) => signedYear(left.event) - signedYear(right.event))
 

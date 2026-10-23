@@ -308,8 +308,8 @@ export async function seedRomanovDynasty(
         name: '로마노프 왕조',
         description:
           '1613년 미하일 로마노프 즉위부터 1917년 니콜라이 2세 퇴위까지 러시아를 통치한 왕조. 304년에 걸쳐 러시아 차르국과 러시아 제국을 지배했다. 표트르 대제의 서구화 개혁, 예카테리나 대제의 계몽전제주의를 거쳐 유럽 최대 영토 제국으로 성장했으나 1917년 혁명으로 붕괴되었다.',
-        startDate: new Date(1613, 0, 1),
-        endDate: new Date(1917, 2, 15),
+        startDate: new Date(Date.UTC(1613, 0, 1)),
+        endDate: new Date(Date.UTC(1917, 2, 15)),
       },
     })
     console.log('  ✅ 로마노프 왕조 생성')
@@ -359,8 +359,8 @@ export async function seedRomanovDynasty(
         data: {
           name: d.name,
           description: d.description,
-          startDate: new Date(d.startYear, 0, 1),
-          endDate: d.endYear ? new Date(d.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(d.startYear, 0, 1)),
+          endDate: d.endYear ? new Date(Date.UTC(d.endYear, 11, 31)) : undefined,
         },
       })
       console.log(`    ✅ ${d.name}`)
@@ -373,9 +373,9 @@ export async function seedRomanovDynasty(
   // ── 4. 황후 인물 등록 ───────────────────────────────────────────
   console.log('\n  👸 황후 인물 등록...')
   for (const p of ADDITIONAL_PERSONS) {
-    const birthDate = new Date(p.birthYear, p.birthMonth - 1, p.birthDay ?? 1)
+    const birthDate = new Date(Date.UTC(p.birthYear, p.birthMonth - 1, p.birthDay ?? 1))
     const deathDate = p.deathYear
-      ? new Date(p.deathYear, (p.deathMonth ?? 1) - 1, p.deathDay ?? 1)
+      ? new Date(Date.UTC(p.deathYear, (p.deathMonth ?? 1) - 1, p.deathDay ?? 1))
       : undefined
 
     const existing = await prisma.person.findFirst({ where: { originalName: p.originalName } })
@@ -447,9 +447,9 @@ export async function seedRomanovDynasty(
       console.warn(`    ⚠️  인물 없음: ${m.personA} / ${m.personB}`)
       continue
     }
-    const startDate = new Date(m.startYear, m.startMonth - 1, m.startDay ?? 1)
+    const startDate = new Date(Date.UTC(m.startYear, m.startMonth - 1, m.startDay ?? 1))
     const endDate = m.endYear
-      ? new Date(m.endYear, (m.endMonth ?? 1) - 1, 1)
+      ? new Date(Date.UTC(m.endYear, (m.endMonth ?? 1) - 1, 1))
       : undefined
 
     const existAB = await prisma.personSpouse.findFirst({ where: { personId: pA.id, spouseId: pB.id } })
@@ -523,8 +523,8 @@ export async function seedRomanovDynasty(
           historicalCountryId,
           countryId,
           affiliationType: 'CITIZENSHIP',
-          startDate: new Date(a.startYear, 0, 1),
-          endDate: a.endYear ? new Date(a.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(a.startYear, 0, 1)),
+          endDate: a.endYear ? new Date(Date.UTC(a.endYear, 11, 31)) : undefined,
           priority: 0,
         },
       })
@@ -552,8 +552,8 @@ export async function seedRomanovDynasty(
           personId: person.id,
           historicalCountryId: hc.id,
           affiliationType: 'CITIZENSHIP',
-          startDate: new Date(a.startYear, 0, 1),
-          endDate: a.endYear ? new Date(a.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(a.startYear, 0, 1)),
+          endDate: a.endYear ? new Date(Date.UTC(a.endYear, 11, 31)) : undefined,
           priority: 0,
         },
       })

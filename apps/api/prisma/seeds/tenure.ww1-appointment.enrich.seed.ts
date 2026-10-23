@@ -393,7 +393,7 @@ export async function seedWorldWarOneAppointmentDetails(prisma: PrismaService): 
       missing++
       continue
     }
-    const startDate = new Date(entry.start[0], entry.start[1] - 1, entry.start[2])
+    const startDate = new Date(Date.UTC(entry.start[0], entry.start[1] - 1, entry.start[2]))
     const tenure = await tenureRows(prisma).findFirst({
       where: { personId, startDate },
       select: { id: true, title: true, appointmentDetail: true },

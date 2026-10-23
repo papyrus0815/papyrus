@@ -1,7 +1,7 @@
 /**
  * 날짜만 뜻하는 Date를 '가장 가까운 UTC 자정'으로 — 재임 기간 칸과 같은 규칙(DB 트리거 trg_tenure_period_derive_*).
  *
- * 시드는 `new Date(y, m - 1, d)`(로컬 자정)로 날짜를 만든다. 로스앤젤레스면 08:00Z, 서울이면 전날 15:00Z가 된다.
+ * 시드는 `new Date(Date.UTC(y, m - 1, d))`(로컬 자정)로 날짜를 만든다. 로스앤젤레스면 08:00Z, 서울이면 전날 15:00Z가 된다.
  * DB는 이제 UTC 자정만 담으므로, where의 날짜 조건을 그대로 넘기면 '이미 있음'을 못 찾아 재실행마다 중복 행이 생긴다.
  */
 export function nearestUtcMidnight(date: Date): Date {

@@ -347,8 +347,8 @@ export async function seedFelipeII(prisma: PrismaService): Promise<void> {
       data: {
         name: AVIZ_DYNASTY.name,
         description: AVIZ_DYNASTY.description,
-        startDate: new Date(AVIZ_DYNASTY.startYear, 0, 1),
-        endDate: new Date(AVIZ_DYNASTY.endYear, 11, 31),
+        startDate: new Date(Date.UTC(AVIZ_DYNASTY.startYear, 0, 1)),
+        endDate: new Date(Date.UTC(AVIZ_DYNASTY.endYear, 11, 31)),
       },
     })
     console.log(`  ✅ 가문 생성: ${AVIZ_DYNASTY.name} (id=${avizDynasty.id})`)
@@ -474,17 +474,17 @@ export async function seedFelipeII(prisma: PrismaService): Promise<void> {
         surname: ISABEL_OF_PORTUGAL.surname,
         originalName: ISABEL_OF_PORTUGAL.originalName,
         biography: ISABEL_OF_PORTUGAL.biography,
-        birthDate: new Date(
+        birthDate: new Date(Date.UTC(
           ISABEL_OF_PORTUGAL.birthYear,
           ISABEL_OF_PORTUGAL.birthMonth - 1,
           ISABEL_OF_PORTUGAL.birthDay,
-        ),
+        )),
         birthEra: 'AD' as any,
-        deathDate: new Date(
+        deathDate: new Date(Date.UTC(
           ISABEL_OF_PORTUGAL.deathYear,
           ISABEL_OF_PORTUGAL.deathMonth - 1,
           ISABEL_OF_PORTUGAL.deathDay,
-        ),
+        )),
         deathEra: 'AD' as any,
         gender: 'FEMALE',
         nameDisplayOrder: 'western' as any,
@@ -560,9 +560,9 @@ export async function seedFelipeII(prisma: PrismaService): Promise<void> {
         surname: FELIPE_II.surname,
         originalName: FELIPE_II.originalName,
         biography: FELIPE_II.biography,
-        birthDate: new Date(FELIPE_II.birthYear, FELIPE_II.birthMonth - 1, FELIPE_II.birthDay),
+        birthDate: new Date(Date.UTC(FELIPE_II.birthYear, FELIPE_II.birthMonth - 1, FELIPE_II.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(FELIPE_II.deathYear, FELIPE_II.deathMonth - 1, FELIPE_II.deathDay),
+        deathDate: new Date(Date.UTC(FELIPE_II.deathYear, FELIPE_II.deathMonth - 1, FELIPE_II.deathDay)),
         deathEra: 'AD' as any,
         gender: 'MALE',
         nameDisplayOrder: 'western' as any,
@@ -621,8 +621,8 @@ export async function seedFelipeII(prisma: PrismaService): Promise<void> {
       positionTitle: '국왕',
       regnalNumber: 15,
       regnalName: '펠리페 2세',
-      startDate: new Date(1556, 0, 16), // 1556-01-16 부친 카를 5세 양위
-      endDate: new Date(1598, 8, 13), // 1598-09-13 사망
+      startDate: new Date(Date.UTC(1556, 0, 16)), // 1556-01-16 부친 카를 5세 양위
+      endDate: new Date(Date.UTC(1598, 8, 13)), // 1598-09-13 사망
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1598-09-13 엘 에스코리알에서 71세 사망 (전립선암·통풍 합병증).',
@@ -649,8 +649,8 @@ export async function seedFelipeII(prisma: PrismaService): Promise<void> {
       positionTitle: '공작',
       regnalNumber: 3,
       regnalName: '펠리페 2세',
-      startDate: new Date(1555, 9, 25), // 1555-10-25 브뤼셀에서 부친 카를 5세 양위
-      endDate: new Date(1581, 6, 26), // 1581-07-26 단념 선언(Act of Abjuration)
+      startDate: new Date(Date.UTC(1555, 9, 25)), // 1555-10-25 브뤼셀에서 부친 카를 5세 양위
+      endDate: new Date(Date.UTC(1581, 6, 26)), // 1581-07-26 단념 선언(Act of Abjuration)
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.REMOVAL,
       endReasonDetail:
@@ -683,8 +683,8 @@ export async function seedFelipeII(prisma: PrismaService): Promise<void> {
       positionTitle: '국왕',
       regnalNumber: 21,
       regnalName: '필리프 1세',
-      startDate: new Date(1580, 8, 12), // 1580-09-12 토마르 코르테스(Cortes de Tomar)에서 정식 즉위
-      endDate: new Date(1598, 8, 13), // 1598-09-13 사망
+      startDate: new Date(Date.UTC(1580, 8, 12)), // 1580-09-12 토마르 코르테스(Cortes de Tomar)에서 정식 즉위
+      endDate: new Date(Date.UTC(1598, 8, 13)), // 1598-09-13 사망
       appointmentMethod: AppointmentMethod.HEREDITARY, // 모계 — 어머니 이사벨이 마누엘 1세의 장녀
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail:
@@ -757,7 +757,7 @@ export async function seedFelipeII(prisma: PrismaService): Promise<void> {
       },
     })
     const fmt = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
     console.log(
       `  ✅ 재임: ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber}대 (${fmt(r.startDate)} ~ ${fmt(r.endDate)})`,
     )

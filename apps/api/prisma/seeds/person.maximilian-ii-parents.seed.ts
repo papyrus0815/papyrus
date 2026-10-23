@@ -207,9 +207,9 @@ export async function seedMaximilianIIParents(prisma: PrismaService): Promise<vo
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -355,8 +355,8 @@ export async function seedMaximilianIIParents(prisma: PrismaService): Promise<vo
   }
 
   // ── 4) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const mStart = new Date(1521, 4, 25) // 1521-05-25 린츠
-  const mEnd = new Date(1547, 0, 27) // 1547-01-27 안나 산욕열 사망
+  const mStart = new Date(Date.UTC(1521, 4, 25)) // 1521-05-25 린츠
+  const mEnd = new Date(Date.UTC(1547, 0, 27)) // 1547-01-27 안나 산욕열 사망
   const mNote =
     '1521년 5월 25일 신성로마 오스트리아 린츠에서 결혼. 페르디난트 18세, 안나 17세. 1515년 빈 회의에서 합스부르크 가문 막시밀리안 1세와 야기에우오 가문 블라디슬라프 2세 사이의 동맹으로 약속된 정략 결혼이었다. 동시에 안나의 동생 라요시 2세는 페르디난트의 누이 마리아와 결혼해 합스부르크-야기에우오 동맹의 양방향 통합이 이루어졌다. 약 26년 결혼 생활 동안 15명의 자녀를 두었고, 그중 13명이 성인까지 생존했다. 후일 신성로마황제 22대 막시밀리안 2세, 티롤 대공 페르디난트 2세, 인너오스트리아 대공 카를 2세 등이 이 부부의 자녀들이다. 1526년 안나의 동생 라요시 2세가 모하치 전투에서 전사하면서 페르디난트가 부인 권리로 헝가리·보헤미아 왕위를 계승해, 합스부르크 가문이 중앙유럽 다민족 대국의 지배자로 부상하는 결정적 매개자 역할도 했다. 1547년 1월 27일 안나의 15번째 출산 후 산욕열 사망으로 결혼 종결. 페르디난트는 약 17년 더 살았으나 재혼하지 않았다.'
 
@@ -433,8 +433,8 @@ export async function seedMaximilianIIParents(prisma: PrismaService): Promise<vo
     const r = {
       regnalNumber: 21,
       regnalName: '페르디난트 1세',
-      startDate: new Date(1556, 1, 25), // 1556-02-25 카를 5세 양위
-      endDate: new Date(1564, 6, 25), // 1564-07-25 본인 사망
+      startDate: new Date(Date.UTC(1556, 1, 25)), // 1556-02-25 카를 5세 양위
+      endDate: new Date(Date.UTC(1564, 6, 25)), // 1564-07-25 본인 사망
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1564년 7월 25일 빈 호프부르크 궁에서 향년 61세 사망 (뇌졸중·심부전).',

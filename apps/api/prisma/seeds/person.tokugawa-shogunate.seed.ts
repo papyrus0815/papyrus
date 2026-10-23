@@ -1765,9 +1765,9 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
       data: {
         name: d.name,
         description: d.description,
-        startDate: new Date(d.startYear, 0, 1),
+        startDate: new Date(Date.UTC(d.startYear, 0, 1)),
         // 가문 자체는 현존 — endDate null
-        endDate: d.endYear === 9999 ? null : new Date(d.endYear, 11, 31),
+        endDate: d.endYear === 9999 ? null : new Date(Date.UTC(d.endYear, 11, 31)),
       },
     })
     console.log(`  ✅ 가문 생성: ${d.name} (id=${created.id})`)
@@ -1814,9 +1814,9 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
         surname: spec.surname || undefined,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender: spec.gender,
         // 일본 이름은 성-이름 순서 → 'korean' 사용 (person.japan-meiji.seed.ts 패턴 동일)
@@ -1913,8 +1913,8 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
       label: spec.regnalName ? `${spec.name} ${spec.regnalName}` : spec.name,
       regnalNumber: spec.reign.regnalNumber,
       regnalName: spec.reign.regnalName,
-      startDate: new Date(spec.reign.startYear, spec.reign.startMonth - 1, spec.reign.startDay),
-      endDate: new Date(spec.reign.endYear, spec.reign.endMonth - 1, spec.reign.endDay),
+      startDate: new Date(Date.UTC(spec.reign.startYear, spec.reign.startMonth - 1, spec.reign.startDay)),
+      endDate: new Date(Date.UTC(spec.reign.endYear, spec.reign.endMonth - 1, spec.reign.endDay)),
       appointmentMethod: spec.reign.appointmentMethod,
       endReason: spec.reign.endReason,
       endReasonDetail: spec.reign.endReasonDetail,
@@ -1999,8 +1999,8 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
         )
         continue
       }
-      const startDate = new Date(pr.startYear, pr.startMonth - 1, pr.startDay)
-      const endDate = new Date(pr.endYear, pr.endMonth - 1, pr.endDay)
+      const startDate = new Date(Date.UTC(pr.startYear, pr.startMonth - 1, pr.startDay))
+      const endDate = new Date(Date.UTC(pr.endYear, pr.endMonth - 1, pr.endDay))
 
       const existing = await reignRows(prisma, { alsoDefinitionIds: [positionId] }).findFirst({
         where: { personId: pid, historicalCountryId: hcId },

@@ -138,8 +138,8 @@ export async function seedWiveDynasties(prisma: PrismaService): Promise<void> {
         data: {
           name: d.name,
           description: d.description,
-          startDate: new Date(d.startYear, 0, 1),
-          endDate: d.endYear ? new Date(d.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(d.startYear, 0, 1)),
+          endDate: d.endYear ? new Date(Date.UTC(d.endYear, 11, 31)) : undefined,
         },
       })
       console.log(`    ✅ ${d.name}`)
@@ -202,8 +202,8 @@ export async function seedWiveDynasties(prisma: PrismaService): Promise<void> {
           historicalCountryId,
           countryId,
           affiliationType: 'CITIZENSHIP',
-          startDate: new Date(a.startYear, 0, 1),
-          endDate: a.endYear ? new Date(a.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(a.startYear, 0, 1)),
+          endDate: a.endYear ? new Date(Date.UTC(a.endYear, 11, 31)) : undefined,
           priority: 0,
         },
       })
@@ -231,8 +231,8 @@ export async function seedWiveDynasties(prisma: PrismaService): Promise<void> {
           personId: person.id,
           historicalCountryId: hc.id,
           affiliationType: 'CITIZENSHIP',
-          startDate: new Date(a.startYear, 0, 1),
-          endDate: a.endYear ? new Date(a.endYear, 11, 31) : undefined,
+          startDate: new Date(Date.UTC(a.startYear, 0, 1)),
+          endDate: a.endYear ? new Date(Date.UTC(a.endYear, 11, 31)) : undefined,
           priority: 0,
         },
       })

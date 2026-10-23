@@ -278,8 +278,8 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       data: {
         name: TRASTAMARA_DYNASTY.name,
         description: TRASTAMARA_DYNASTY.description,
-        startDate: new Date(TRASTAMARA_DYNASTY.startYear, 0, 1),
-        endDate: new Date(TRASTAMARA_DYNASTY.endYear, 11, 31),
+        startDate: new Date(Date.UTC(TRASTAMARA_DYNASTY.startYear, 0, 1)),
+        endDate: new Date(Date.UTC(TRASTAMARA_DYNASTY.endYear, 11, 31)),
       },
     })
     console.log(`  ✅ 가문 생성: ${TRASTAMARA_DYNASTY.name} (id=${trastamaraDynasty.id})`)
@@ -330,9 +330,9 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
           surname: p.surname,
           originalName: p.originalName,
           biography: p.biography,
-          birthDate: new Date(p.birthYear, p.birthMonth - 1, p.birthDay),
+          birthDate: new Date(Date.UTC(p.birthYear, p.birthMonth - 1, p.birthDay)),
           birthEra: 'AD' as any,
-          deathDate: new Date(p.deathYear, p.deathMonth - 1, p.deathDay),
+          deathDate: new Date(Date.UTC(p.deathYear, p.deathMonth - 1, p.deathDay)),
           deathEra: 'AD' as any,
           gender: p.gender,
           nameDisplayOrder: 'western' as any,
@@ -406,8 +406,8 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
   // ── 4) 결혼 관계 ───────────────────────────────────────────────────────
   const philipId = personIdMap.get('Philip I of Castile')!
   const joannaId = personIdMap.get('Joanna of Castile')!
-  const startDate = new Date(MARRIAGE.startYear, MARRIAGE.startMonth - 1, MARRIAGE.startDay)
-  const endDate = new Date(MARRIAGE.endYear, MARRIAGE.endMonth - 1, MARRIAGE.endDay)
+  const startDate = new Date(Date.UTC(MARRIAGE.startYear, MARRIAGE.startMonth - 1, MARRIAGE.startDay))
+  const endDate = new Date(Date.UTC(MARRIAGE.endYear, MARRIAGE.endMonth - 1, MARRIAGE.endDay))
 
   const existAB = await prisma.personSpouse.findFirst({
     where: { personId: philipId, spouseId: joannaId },
@@ -607,8 +607,8 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       positionTitle: '공작',
       regnalNumber: 1, // 합스부르크령 네덜란드의 첫 군주 (HC startYear=1482 직후 즉위)
       regnalName: '필리프 1세',
-      startDate: new Date(1482, 2, 27), // 1482-03-27 어머니 마리 부르고뉴 사망
-      endDate: new Date(1506, 8, 25), // 1506-09-25 본인 사망
+      startDate: new Date(Date.UTC(1482, 2, 27)), // 1482-03-27 어머니 마리 부르고뉴 사망
+      endDate: new Date(Date.UTC(1506, 8, 25)), // 1506-09-25 본인 사망
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1506-09-25 부르고스에서 28세 급사 (장티푸스 추정).',
@@ -631,8 +631,8 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       // 후아나 1세(13대)가 명목상 사망(1555)까지 카스티야 여왕이며 펠리페는 75일 jure uxoris.
       regnalNumber: null,
       regnalName: '펠리페 1세 (후아나 1세 jure uxoris 공동 군주)',
-      startDate: new Date(1506, 6, 12), // 1506-07-12 비야파필라 합의 후 카스티야 의회(코르테스) 승인
-      endDate: new Date(1506, 8, 25), // 1506-09-25 사망
+      startDate: new Date(Date.UTC(1506, 6, 12)), // 1506-07-12 비야파필라 합의 후 카스티야 의회(코르테스) 승인
+      endDate: new Date(Date.UTC(1506, 8, 25)), // 1506-09-25 사망
       appointmentMethod: AppointmentMethod.OTHER, // jure uxoris (배우자 권리)
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '재위 약 75일 만인 1506-09-25 부르고스에서 급사 (장티푸스 추정).',
@@ -649,7 +649,7 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
   }
 
   const yyyymmdd = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
 
   // ── 5c) 후아나 1세 재임 등록 (카스티야 왕국 13대) ────────────────────────
   // ⚠️ regnalNumber 13 — HC start=1230 페르난도 3세부터 즉위 순서.
@@ -669,8 +669,8 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       positionTitle: '국왕',
       regnalNumber: 13,
       regnalName: '후아나 1세',
-      startDate: new Date(1504, 10, 26), // 1504-11-26 모친 이사벨 1세 사망
-      endDate: new Date(1555, 3, 12), // 1555-04-12 본인 사망 (토르데시야스 유폐 중)
+      startDate: new Date(Date.UTC(1504, 10, 26)), // 1504-11-26 모친 이사벨 1세 사망
+      endDate: new Date(Date.UTC(1555, 3, 12)), // 1555-04-12 본인 사망 (토르데시야스 유폐 중)
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail:
@@ -708,8 +708,8 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       positionTitle: '국왕',
       regnalNumber: 21,
       regnalName: '후아나 1세',
-      startDate: new Date(1516, 0, 23),
-      endDate: new Date(1555, 3, 12),
+      startDate: new Date(Date.UTC(1516, 0, 23)),
+      endDate: new Date(Date.UTC(1555, 3, 12)),
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail:

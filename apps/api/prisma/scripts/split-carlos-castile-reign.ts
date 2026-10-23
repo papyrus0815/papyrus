@@ -60,7 +60,7 @@ async function main() {
         data: {
           regnalNumber: null,
           regnalName: '카를로스 1세 (후아나 1세 jure matris 공동 군주)',
-          endDate: new Date(1555, 3, 12), // 1555-04-12 후아나 사망
+          endDate: new Date(Date.UTC(1555, 3, 12)), // 1555-04-12 후아나 사망
           endReasonDetail:
             '1555-04-12 어머니 후아나 1세 사망으로 jure matris(어머니 권리) 공동 군주 단계 종결, 단독 군주로 전환.',
         },
@@ -103,8 +103,8 @@ async function main() {
           positionDefinitionId: kingPos.id,
           regnalNumber: 14,
           regnalName: '카를로스 1세',
-          startDate: new Date(1555, 3, 12), // 1555-04-12 후아나 사망 직후 단독 군주
-          endDate: new Date(1556, 0, 16), // 1556-01-16 아들 펠리페 2세에게 양위
+          startDate: new Date(Date.UTC(1555, 3, 12)), // 1555-04-12 후아나 사망 직후 단독 군주
+          endDate: new Date(Date.UTC(1556, 0, 16)), // 1556-01-16 아들 펠리페 2세에게 양위
           appointmentMethod: 'HEREDITARY' as any,
           endReason: 'ABDICATION' as any,
           endReasonDetail:
@@ -133,7 +133,7 @@ async function main() {
     })
     for (const r of reigns) {
       const fmt = (d: Date | null) =>
-        d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '?'
+        d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}` : '?'
       console.log(
         `${String(r.regnalNumber ?? '공동').padStart(4)} | ${(r.regnalName ?? '?').padEnd(48)} | ${fmt(r.startDate)} ~ ${fmt(r.endDate)} | ${r.person.originalName}`,
       )

@@ -194,9 +194,9 @@ export async function seedFelipeIII(prisma: PrismaService): Promise<void> {
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -239,9 +239,9 @@ export async function seedFelipeIII(prisma: PrismaService): Promise<void> {
         surname: FELIPE_III.surname,
         originalName: FELIPE_III.originalName,
         biography: FELIPE_III.biography,
-        birthDate: new Date(FELIPE_III.birthYear, FELIPE_III.birthMonth - 1, FELIPE_III.birthDay),
+        birthDate: new Date(Date.UTC(FELIPE_III.birthYear, FELIPE_III.birthMonth - 1, FELIPE_III.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(FELIPE_III.deathYear, FELIPE_III.deathMonth - 1, FELIPE_III.deathDay),
+        deathDate: new Date(Date.UTC(FELIPE_III.deathYear, FELIPE_III.deathMonth - 1, FELIPE_III.deathDay)),
         deathEra: 'AD' as any,
         gender: 'MALE',
         nameDisplayOrder: 'western' as any,
@@ -323,8 +323,8 @@ export async function seedFelipeIII(prisma: PrismaService): Promise<void> {
   }
 
   // ── 4) 결혼 관계 (펠리페 2세 ↔ 안나) ──────────────────────────────────
-  const mStart = new Date(1570, 4, 4) // 1570-05-04 세고비아
-  const mEnd = new Date(1580, 9, 26) // 1580-10-26 안나 사망
+  const mStart = new Date(Date.UTC(1570, 4, 4)) // 1570-05-04 세고비아
+  const mEnd = new Date(Date.UTC(1580, 9, 26)) // 1580-10-26 안나 사망
   const mNote =
     '1570년 5월 4일 세고비아에서 결혼. 펠리페 2세 43세, 안나 21세. 안나는 펠리페 2세의 친누이 마리아 데 에스파냐의 딸이자 신성로마황제 막시밀리안 2세의 장녀로, 두 사람은 외삼촌-조카 관계였다. 가톨릭 교회의 결혼 면제를 받고 진행된 합스부르크 양가 통합 사촌 결혼의 전형. 약 10년 결혼 생활 동안 5명의 자녀를 두었으나 펠리페 3세만 성인까지 생존했다. 1580년 10월 26일 바다호스에서 안나가 인플루엔자와 출산 합병증으로 30세에 사망하면서 결혼 종결. 펠리페 2세에게는 4명의 부인을 모두 떠나보낸 비극의 정점이었다.'
 
@@ -427,8 +427,8 @@ export async function seedFelipeIII(prisma: PrismaService): Promise<void> {
         positionDefinitionId: kingPos.id,
         regnalNumber: r.regnalNumber,
         regnalName: r.regnalName,
-        startDate: new Date(1598, 8, 13), // 1598-09-13 부친 사망
-        endDate: new Date(1621, 2, 31), // 1621-03-31 본인 사망
+        startDate: new Date(Date.UTC(1598, 8, 13)), // 1598-09-13 부친 사망
+        endDate: new Date(Date.UTC(1621, 2, 31)), // 1621-03-31 본인 사망
         appointmentMethod: AppointmentMethod.HEREDITARY,
         endReason: TenureEndReason.DEATH_IN_OFFICE,
         endReasonDetail: '1621년 3월 31일 마드리드 알카사르에서 향년 42세 사망 (단독 또는 류머티즘성 발열).',

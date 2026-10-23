@@ -509,8 +509,8 @@ export async function seedGreatBritainMonarchs(prisma: PrismaService): Promise<v
       data: {
         name: STUART_DYNASTY.name,
         description: STUART_DYNASTY.description,
-        startDate: new Date(STUART_DYNASTY.startYear, 0, 1),
-        endDate: new Date(STUART_DYNASTY.endYear, 11, 31),
+        startDate: new Date(Date.UTC(STUART_DYNASTY.startYear, 0, 1)),
+        endDate: new Date(Date.UTC(STUART_DYNASTY.endYear, 11, 31)),
       },
     })
     console.log(`  ✅ 가문 생성: ${STUART_DYNASTY.name}`)
@@ -536,9 +536,9 @@ export async function seedGreatBritainMonarchs(prisma: PrismaService): Promise<v
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender: spec.gender,
         nameDisplayOrder: 'western' as any,
@@ -628,8 +628,8 @@ export async function seedGreatBritainMonarchs(prisma: PrismaService): Promise<v
         positionDefinitionId: kingPos.id,
         regnalNumber: spec.reign.regnalNumber,
         regnalName: spec.reign.regnalName,
-        startDate: new Date(spec.reign.startYear, spec.reign.startMonth - 1, spec.reign.startDay),
-        endDate: new Date(spec.reign.endYear, spec.reign.endMonth - 1, spec.reign.endDay),
+        startDate: new Date(Date.UTC(spec.reign.startYear, spec.reign.startMonth - 1, spec.reign.startDay)),
+        endDate: new Date(Date.UTC(spec.reign.endYear, spec.reign.endMonth - 1, spec.reign.endDay)),
         appointmentMethod: AppointmentMethod.HEREDITARY,
         endReason: spec.reign.endReason,
         endReasonDetail: spec.reign.endReasonDetail,

@@ -28,7 +28,7 @@ async function main() {
       where: {
         AND: [
           { deathDate: null },
-          { birthDate: { lt: new Date(now.getFullYear() - 110, 0, 1) } }, // 생몰 110년 이전이면 사망 확실
+          { birthDate: { lt: new Date(Date.UTC(now.getFullYear() - 110, 0, 1)) } }, // 생몰 110년 이전이면 사망 확실
         ],
       },
     })

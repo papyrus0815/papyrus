@@ -225,8 +225,8 @@ export async function seedHohenzollernDynasty(
         name: '호엔촐레른 가문',
         description:
           '독일 역사상 가장 영향력 있는 왕가 중 하나. 브란덴부르크 변경백령에서 시작해 프로이센 왕국을 거쳐 독일 제국을 통치했다. 1415년 브란덴부르크 선제후를 맡은 이래 1918년 빌헬름 2세의 퇴위까지 약 500년간 호엔촐레른 왕조가 이어졌다.',
-        startDate: new Date(1415, 0, 1),
-        endDate: new Date(1918, 10, 9),
+        startDate: new Date(Date.UTC(1415, 0, 1)),
+        endDate: new Date(Date.UTC(1918, 10, 9)),
       },
     })
     console.log('  ✅ 호엔촐레른 가문 생성')
@@ -261,9 +261,9 @@ export async function seedHohenzollernDynasty(
   // ── 3. 추가 인물 등록 (부모 + 부인) ─────────────────────────────
   console.log('\n  👤 추가 인물 등록...')
   for (const p of ADDITIONAL_PERSONS) {
-    const birthDate = new Date(p.birthYear, p.birthMonth - 1, p.birthDay ?? 1)
+    const birthDate = new Date(Date.UTC(p.birthYear, p.birthMonth - 1, p.birthDay ?? 1))
     const deathDate = p.deathYear
-      ? new Date(p.deathYear, (p.deathMonth ?? 1) - 1, p.deathDay ?? 1)
+      ? new Date(Date.UTC(p.deathYear, (p.deathMonth ?? 1) - 1, p.deathDay ?? 1))
       : undefined
 
     const existing = await prisma.person.findFirst({ where: { originalName: p.originalName } })
@@ -313,9 +313,9 @@ export async function seedHohenzollernDynasty(
       console.warn(`    ⚠️  인물 없음: ${m.personA} / ${m.personB}`)
       continue
     }
-    const startDate = new Date(m.startYear, m.startMonth - 1, m.startDay ?? 1)
+    const startDate = new Date(Date.UTC(m.startYear, m.startMonth - 1, m.startDay ?? 1))
     const endDate = m.endYear
-      ? new Date(m.endYear, (m.endMonth ?? 1) - 1, 1)
+      ? new Date(Date.UTC(m.endYear, (m.endMonth ?? 1) - 1, 1))
       : undefined
 
     // A→B

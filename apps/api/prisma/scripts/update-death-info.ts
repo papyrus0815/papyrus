@@ -1198,8 +1198,8 @@ async function main() {
           surname: m.surname,
           name: m.name,
           birthDate: {
-            gte: new Date(m.birthYear, 0, 1),
-            lt: new Date(m.birthYear + 1, 0, 1),
+            gte: new Date(Date.UTC(m.birthYear, 0, 1)),
+            lt: new Date(Date.UTC(m.birthYear + 1, 0, 1)),
           },
         },
         select: { id: true },

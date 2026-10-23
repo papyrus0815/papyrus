@@ -229,9 +229,9 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -313,8 +313,8 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
   }
 
   // ── 4) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const startDate = new Date(MARRIAGE.startYear, MARRIAGE.startMonth - 1, MARRIAGE.startDay)
-  const endDate = new Date(MARRIAGE.endYear, MARRIAGE.endMonth - 1, MARRIAGE.endDay)
+  const startDate = new Date(Date.UTC(MARRIAGE.startYear, MARRIAGE.startMonth - 1, MARRIAGE.startDay))
+  const endDate = new Date(Date.UTC(MARRIAGE.endYear, MARRIAGE.endMonth - 1, MARRIAGE.endDay))
   for (const [aId, bId, label] of [
     [manuelId, mariaId, '마누엘 → 마리아'],
     [mariaId, manuelId, '마리아 → 마누엘'],
@@ -393,8 +393,8 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
       historicalCountryName: '포르투갈 왕국',
       regnalNumber: 17,
       regnalName: '마누엘 1세',
-      startDate: new Date(1495, 9, 25), // 1495-10-25 사촌 주앙 2세 사망 후 즉위
-      endDate: new Date(1521, 11, 13), // 1521-12-13 본인 사망
+      startDate: new Date(Date.UTC(1495, 9, 25)), // 1495-10-25 사촌 주앙 2세 사망 후 즉위
+      endDate: new Date(Date.UTC(1521, 11, 13)), // 1521-12-13 본인 사망
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1521년 12월 13일 리스본에서 향년 52세로 사망 (발진티푸스 또는 페스트 추정).',
@@ -447,7 +447,7 @@ export async function seedIsabellaPortugalParents(prisma: PrismaService): Promis
           },
         })
         const fmt = (d: Date) =>
-          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+          `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
         console.log(
           `  ✅ 재임: ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber}대 (${fmt(r.startDate)} ~ ${fmt(r.endDate)})`,
         )

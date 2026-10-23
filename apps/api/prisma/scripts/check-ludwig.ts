@@ -13,7 +13,7 @@ async function main() {
     const ludwig = await prisma.person.findFirst({
       where: {
         name: '루트비히',
-        birthDate: { gte: new Date(1719, 0, 1), lt: new Date(1720, 0, 1) },
+        birthDate: { gte: new Date(Date.UTC(1719, 0, 1)), lt: new Date(Date.UTC(1720, 0, 1)) },
       },
       select: {
         id: true,

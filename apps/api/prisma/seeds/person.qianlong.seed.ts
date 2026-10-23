@@ -55,9 +55,9 @@ export async function seedQianlongEmperor(prisma: PrismaService): Promise<void> 
         surname: '아이신줴뤄',
         originalName: ORIGINAL_NAME,
         biography: BIOGRAPHY,
-        birthDate: new Date(1711, 8, 25), // 1711-09-25
+        birthDate: new Date(Date.UTC(1711, 8, 25)), // 1711-09-25
         birthEra: 'AD',
-        deathDate: new Date(1799, 1, 7), // 1799-02-07
+        deathDate: new Date(Date.UTC(1799, 1, 7)), // 1799-02-07
         deathEra: 'AD',
         gender: 'MALE',
         nameDisplayOrder: 'korean',
@@ -137,8 +137,8 @@ export async function seedQianlongEmperor(prisma: PrismaService): Promise<void> 
         positionDefinitionId: emperorPositionDef?.id,
         regnalNumber: 6,
         regnalName: REGNAL_NAME,
-        startDate: new Date(1735, 9, 18), // 1735-10-18 즉위
-        endDate: new Date(1796, 1, 9), // 1796-02-09 가경제 양위
+        startDate: new Date(Date.UTC(1735, 9, 18)), // 1735-10-18 즉위
+        endDate: new Date(Date.UTC(1796, 1, 9)), // 1796-02-09 가경제 양위
         appointmentMethod: AppointmentMethod.HEREDITARY,
         endReason: TenureEndReason.ABDICATION,
         notes: '재위 60년에 조부 강희제(61년)의 기록을 넘지 않으려 가경제에게 양위. 다만 사망(1799)까지 태상황으로 실권 행사.',

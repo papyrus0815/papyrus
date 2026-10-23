@@ -360,8 +360,8 @@ export async function seedPhilipIParents(prisma: PrismaService): Promise<void> {
       data: {
         name: VALOIS_BURGUNDY_DYNASTY.name,
         description: VALOIS_BURGUNDY_DYNASTY.description,
-        startDate: new Date(VALOIS_BURGUNDY_DYNASTY.startYear, 0, 1),
-        endDate: new Date(VALOIS_BURGUNDY_DYNASTY.endYear, 11, 31),
+        startDate: new Date(Date.UTC(VALOIS_BURGUNDY_DYNASTY.startYear, 0, 1)),
+        endDate: new Date(Date.UTC(VALOIS_BURGUNDY_DYNASTY.endYear, 11, 31)),
       },
     })
     console.log(`  ✅ 가문 생성: ${VALOIS_BURGUNDY_DYNASTY.name} (id=${valoisDynasty.id})`)
@@ -450,9 +450,9 @@ export async function seedPhilipIParents(prisma: PrismaService): Promise<void> {
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -534,8 +534,8 @@ export async function seedPhilipIParents(prisma: PrismaService): Promise<void> {
   }
 
   // ── 8) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const mStart = new Date(1477, 7, 19) // 1477-08-19
-  const mEnd = new Date(1482, 2, 27) // 1482-03-27 마리 사망
+  const mStart = new Date(Date.UTC(1477, 7, 19)) // 1477-08-19
+  const mEnd = new Date(Date.UTC(1482, 2, 27)) // 1482-03-27 마리 사망
   const mNote =
     '1477-08-19 부르고뉴 헨트(Ghent)에서 정식 결혼. 막시밀리안 18세·마리 20세. ' +
     '담대공 샤를 1세의 1477-01-05 낭시 전사 후 마리가 부르고뉴 영지 단독 상속 → ' +
@@ -618,8 +618,8 @@ export async function seedPhilipIParents(prisma: PrismaService): Promise<void> {
       positionDefinitionId: hrePos.id,
       regnalNumber: 19,
       regnalName: '막시밀리안 1세',
-      startDate: new Date(1493, 7, 19), // 1493-08-19 부친 프리드리히 3세 사망
-      endDate: new Date(1519, 0, 12), // 1519-01-12 본인 사망
+      startDate: new Date(Date.UTC(1493, 7, 19)), // 1493-08-19 부친 프리드리히 3세 사망
+      endDate: new Date(Date.UTC(1519, 0, 12)), // 1519-01-12 본인 사망
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1519-01-12 오스트리아 벨스에서 59세 사망 (뇌졸중·통풍 합병증).',
@@ -644,8 +644,8 @@ export async function seedPhilipIParents(prisma: PrismaService): Promise<void> {
       positionDefinitionId: dukePos.id,
       regnalNumber: 5,
       regnalName: '마리 1세',
-      startDate: new Date(1477, 0, 5), // 1477-01-05 부친 샤를 1세 낭시 전사
-      endDate: new Date(1482, 2, 27), // 1482-03-27 본인 낙마 사망
+      startDate: new Date(Date.UTC(1477, 0, 5)), // 1477-01-05 부친 샤를 1세 낭시 전사
+      endDate: new Date(Date.UTC(1482, 2, 27)), // 1482-03-27 본인 낙마 사망
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail:
@@ -717,7 +717,7 @@ export async function seedPhilipIParents(prisma: PrismaService): Promise<void> {
       },
     })
     const fmt = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
     console.log(
       `  ✅ 재임: ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber}대 ` +
         `(${fmt(r.startDate)} ~ ${fmt(r.endDate)})`,

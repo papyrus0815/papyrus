@@ -57,8 +57,8 @@ const DEF_HYOBU_TAIFU: DefinitionSpec = {
     '1869년 직원령(職員令)으로 설치된 병부성(兵部省)의 차관. 장관인 병부경(兵部卿)에 황족이 ' +
     '앉는 것이 관례여서 실무·정책의 최고 책임자는 대보였다. 병부성은 1872년 육군성·해군성으로 ' +
     '분리되며 폐지되었다.',
-  establishedDate: new Date(1869, 7, 15),
-  abolishedDate: new Date(1872, 3, 4),
+  establishedDate: new Date(Date.UTC(1869, 7, 15)),
+  abolishedDate: new Date(Date.UTC(1872, 3, 4)),
   scopeStartYear: 1869,
   scopeEndYear: 1872,
   scopeNote: '병부성 존속기(1869~1872) 한정. 후신은 육군차관·해군차관으로 계보가 갈린다.',
@@ -74,8 +74,8 @@ const DEF_GUNMU_HANJI: DefinitionSpec = {
     '1868년 정체서(政体書) 체제에서 설치된 군무관(軍務官)의 3등관. 지사(知事)·부지사(副知事) ' +
     '아래에서 실무를 총괄했다. 여기서 "판사"는 사법관이 아니라 관(官)의 실무 책임직을 가리키는 ' +
     '당시 관명이다. 1869년 직원령으로 군무관이 병부성으로 개편되며 소멸.',
-  establishedDate: new Date(1868, 5, 11),
-  abolishedDate: new Date(1869, 7, 15),
+  establishedDate: new Date(Date.UTC(1868, 5, 11)),
+  abolishedDate: new Date(Date.UTC(1869, 7, 15)),
   scopeStartYear: 1868,
   scopeEndYear: 1869,
   scopeNote: '정체서 관제(1868~1869) 한정 직명.',
@@ -360,8 +360,8 @@ const STATS = {
 /** 종료일 — 월/일이 없으면 그 해·그 달의 마지막 날로 채운다(Date 월 넘침 방지). */
 function buildEndDate(year: number, month?: number, day?: number): Date {
   const monthIndex = (month ?? 12) - 1
-  const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate()
-  return new Date(year, monthIndex, day ?? lastDayOfMonth)
+  const lastDayOfMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+  return new Date(Date.UTC(year, monthIndex, day ?? lastDayOfMonth))
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -474,7 +474,7 @@ export async function seedOmuraMasujiro(prisma: PrismaService): Promise<void> {
         nameDisplayOrder: 'korean' as any,
         biography: BIOGRAPHY,
         birthEra: 'AD' as any,
-        birthDate: new Date(1824, 4, 30),
+        birthDate: new Date(Date.UTC(1824, 4, 30)),
         birthDatePrecision: 'day',
         birthPlaceText:
           '스오국 요시키군 스젠지촌(周防国吉敷郡鋳銭司村) — 현 야마구치현 야마구치시 스젠지',
@@ -482,7 +482,7 @@ export async function seedOmuraMasujiro(prisma: PrismaService): Promise<void> {
           '촌의(村医) 무라타 다카마사의 아들. 음력 분세이 7년 5월 3일생으로, 무가가 아니라 ' +
           '의가(醫家) 출신이라는 점이 평생의 이력과 평가를 갈랐다.',
         deathEra: 'AD' as any,
-        deathDate: new Date(1869, 11, 7),
+        deathDate: new Date(Date.UTC(1869, 11, 7)),
         deathDatePrecision: 'day',
         deathPlaceText: '오사카 — 오사카부 의학교 병원(현 오사카시 주오구 일대)',
         deathType: DeathType.ASSASSINATION,
@@ -560,8 +560,8 @@ export async function seedOmuraMasujiro(prisma: PrismaService): Promise<void> {
         countryId: countryId ?? null,
         historicalCountryId: historicalCountryId ?? null,
         affiliationType: aff.type as any,
-        startDate: aff.startYear ? new Date(aff.startYear, 0, 1) : undefined,
-        endDate: aff.endYear ? new Date(aff.endYear, 11, 31) : undefined,
+        startDate: aff.startYear ? new Date(Date.UTC(aff.startYear, 0, 1)) : undefined,
+        endDate: aff.endYear ? new Date(Date.UTC(aff.endYear, 11, 31)) : undefined,
         priority: 0,
       },
     })
@@ -572,9 +572,9 @@ export async function seedOmuraMasujiro(prisma: PrismaService): Promise<void> {
   for (const tenure of TENURES) {
     const definitionId = definitionIdByTitle[tenure.definitionTitle]
     const definition = DEFINITIONS.find((def) => def.title === tenure.definitionTitle)!
-    const startDate = new Date(tenure.startYear, tenure.startMonth - 1, tenure.startDay)
+    const startDate = new Date(Date.UTC(tenure.startYear, tenure.startMonth - 1, tenure.startDay))
     const endDate = tenure.endYear
-      ? new Date(tenure.endYear, (tenure.endMonth ?? 1) - 1, tenure.endDay ?? 1)
+      ? new Date(Date.UTC(tenure.endYear, (tenure.endMonth ?? 1) - 1, tenure.endDay ?? 1))
       : undefined
     const tenureExists = await tenureRows(prisma).findFirst({
       where: { personId, title: tenure.definitionTitle, startDate },
@@ -611,11 +611,11 @@ export async function seedOmuraMasujiro(prisma: PrismaService): Promise<void> {
   let sortOrder = 0
   for (const lifeEvent of LIFE_EVENTS) {
     sortOrder += 1
-    const startDate = new Date(
+    const startDate = new Date(Date.UTC(
       lifeEvent.startYear,
       (lifeEvent.startMonth ?? 1) - 1,
       lifeEvent.startDay ?? 1,
-    )
+    ))
     const startDatePrecision = lifeEvent.startDay ? 'day' : lifeEvent.startMonth ? 'month' : 'year'
     const endDate = lifeEvent.endYear
       ? buildEndDate(lifeEvent.endYear, lifeEvent.endMonth, lifeEvent.endDay)

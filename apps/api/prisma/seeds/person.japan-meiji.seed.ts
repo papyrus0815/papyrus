@@ -481,7 +481,7 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
       data: {
         name: DYNASTY.name,
         description: DYNASTY.description,
-        startDate: new Date(DYNASTY.startYear, 0, 1),
+        startDate: new Date(Date.UTC(DYNASTY.startYear, 0, 1)),
         originPlace: DYNASTY.originPlace,
       },
     })
@@ -510,8 +510,8 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
     const existing = await prisma.person.findFirst({ where: { originalName: m.originalName } })
     let personId: string
 
-    const birthDate = new Date(m.birthYear, m.birthMonth - 1, m.birthDay)
-    const deathDate = m.deathYear ? new Date(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1) : undefined
+    const birthDate = new Date(Date.UTC(m.birthYear, m.birthMonth - 1, m.birthDay))
+    const deathDate = m.deathYear ? new Date(Date.UTC(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1)) : undefined
     const linkedDynastyId = m.dynastyName ? await getDynastyId(prisma, m.dynastyName) : null
     const linkedCountryId = m.countryName ? await getHistoricalCountryId(prisma, m.countryName) : null
 
@@ -595,8 +595,8 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
       const reignCountryId = await getHistoricalCountryId(prisma, r.countryName)
       if (!reignCountryId) { console.warn(`        ⚠️  역사 국가 없음: ${r.countryName}`); continue }
       const positionDefId = await getPositionDefId(prisma, r.positionTitle)
-      const startDate = new Date(r.startYear, r.startMonth - 1, r.startDay ?? 1)
-      const endDate = r.endYear ? new Date(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1) : undefined
+      const startDate = new Date(Date.UTC(r.startYear, r.startMonth - 1, r.startDay ?? 1))
+      const endDate = r.endYear ? new Date(Date.UTC(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1)) : undefined
       const existingReign = await reignRows(prisma).findFirst({
         where: { historicalCountryId: reignCountryId, regnalNumber: r.regnalNumber },
       })
@@ -631,8 +631,8 @@ export async function seedJapanMeijiEra(prisma: PrismaService): Promise<void> {
       const tenureCountryId = await getHistoricalCountryId(prisma, t.countryName)
       if (!tenureCountryId) { console.warn(`        ⚠️  역사 국가 없음: ${t.countryName}`); continue }
       const positionDefId = await getPositionDefId(prisma, t.positionTitle)
-      const startDate = new Date(t.startYear, t.startMonth - 1, t.startDay ?? 1)
-      const endDate = t.endYear ? new Date(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1) : undefined
+      const startDate = new Date(Date.UTC(t.startYear, t.startMonth - 1, t.startDay ?? 1))
+      const endDate = t.endYear ? new Date(Date.UTC(t.endYear, (t.endMonth ?? 1) - 1, t.endDay ?? 1)) : undefined
       // 같은 인물 + 같은 국가 + 같은 termNumber 면 중복으로 본다
       const existingTenure = await tenureRows(prisma).findFirst({
         where: {

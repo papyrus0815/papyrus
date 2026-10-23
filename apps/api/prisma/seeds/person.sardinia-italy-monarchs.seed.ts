@@ -373,10 +373,10 @@ export async function seedSardiniaItalyMonarchs(
           surname: entry.surname,
           originalName: entry.originalName,
           biography: entry.biography,
-          birthDate: new Date(entry.birthYear, entry.birthMonth - 1, entry.birthDay),
+          birthDate: new Date(Date.UTC(entry.birthYear, entry.birthMonth - 1, entry.birthDay)),
           birthEra: 'AD',
           deathDate: entry.deathYear
-            ? new Date(entry.deathYear, (entry.deathMonth ?? 1) - 1, entry.deathDay ?? 1)
+            ? new Date(Date.UTC(entry.deathYear, (entry.deathMonth ?? 1) - 1, entry.deathDay ?? 1))
             : undefined,
           deathEra: entry.deathYear ? 'AD' : undefined,
           gender: entry.gender as any,
@@ -422,9 +422,9 @@ export async function seedSardiniaItalyMonarchs(
           historicalCountryId,
           positionDefinitionId: positionDefinitionId ?? undefined,
           regnalNumber: reign.regnalNumber ?? 1,
-          startDate: new Date(reign.startYear, reign.startMonth - 1, reign.startDay ?? 1),
+          startDate: new Date(Date.UTC(reign.startYear, reign.startMonth - 1, reign.startDay ?? 1)),
           endDate: reign.endYear
-            ? new Date(reign.endYear, (reign.endMonth ?? 1) - 1, reign.endDay ?? 1)
+            ? new Date(Date.UTC(reign.endYear, (reign.endMonth ?? 1) - 1, reign.endDay ?? 1))
             : undefined,
           appointmentMethod: reign.appointmentMethod,
           endReason: reign.endReason,

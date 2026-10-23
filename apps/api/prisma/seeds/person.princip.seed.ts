@@ -653,7 +653,7 @@ const PRINCIP_STATS = {
 
 // ── 헬퍼 ────────────────────────────────────────────────────────────────────
 function toDate(y: number, m?: number, d?: number): Date {
-  return new Date(y, (m ?? 1) - 1, d ?? 1)
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1))
 }
 
 // ── 메인 ────────────────────────────────────────────────────────────────────
@@ -877,11 +877,11 @@ export async function seedPrincip(prisma: PrismaService): Promise<void> {
     const startDate = toDate(entry.startYear, entry.startMonth, entry.startDay)
     const startDatePrecision = entry.startDay ? 'day' : entry.startMonth ? 'month' : 'year'
     const endDate = entry.endYear
-      ? new Date(
+      ? new Date(Date.UTC(
           entry.endYear,
           (entry.endMonth ?? 12) - 1,
           entry.endDay ?? (entry.endMonth ? 28 : 31),
-        )
+        ))
       : null
     const endDatePrecision = entry.endYear
       ? entry.endDay

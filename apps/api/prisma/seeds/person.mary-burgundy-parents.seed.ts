@@ -180,9 +180,9 @@ export async function seedMaryBurgundyParents(prisma: PrismaService): Promise<vo
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -264,8 +264,8 @@ export async function seedMaryBurgundyParents(prisma: PrismaService): Promise<vo
   }
 
   // ── 4) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const mStart = new Date(1454, 9, 30) // 1454-10-30 릴
-  const mEnd = new Date(1465, 8, 25) // 1465-09-25 이사벨라 결핵 사망
+  const mStart = new Date(Date.UTC(1454, 9, 30)) // 1454-10-30 릴
+  const mEnd = new Date(Date.UTC(1465, 8, 25)) // 1465-09-25 이사벨라 결핵 사망
   const mNote =
     '1454년 10월 30일 부르고뉴 공국 릴(Lille)에서 결혼. 샤를 21세, 이사벨라 20세. 사촌 결혼으로 (샤를의 부친 선량공 필리프 3세와 이사벨라의 어머니 아녜스 데 부르고뉴는 남매), 부르봉 가문과 발루아-부르고뉴 가문의 양가 통합 정략 결혼이었다. 샤를은 1446년 첫 부인 카트린 데 발루아 사망 이후 두 번째 부인을 모색하던 중이었다. 약 11년 결혼 생활 동안 외동딸 마리(1457-02-13 출생, 후일 부르고뉴 5대 공작·합스부르크령 네덜란드 시조)만 두었다. 1465년 9월 25일 이사벨라가 30세에 결핵으로 사망하면서 결혼 종결. 샤를은 약 3년 후 1468년 잉글랜드 마르가레타 데 요크와 세 번째 결혼했다.'
 
@@ -317,8 +317,8 @@ export async function seedMaryBurgundyParents(prisma: PrismaService): Promise<vo
     const r = {
       regnalNumber: 4,
       regnalName: '샤를 1세 (담대공)',
-      startDate: new Date(1467, 5, 15), // 1467-06-15 부친 선량공 필리프 사망 후 즉위
-      endDate: new Date(1477, 0, 5), // 1477-01-05 낭시 전투 전사
+      startDate: new Date(Date.UTC(1467, 5, 15)), // 1467-06-15 부친 선량공 필리프 사망 후 즉위
+      endDate: new Date(Date.UTC(1477, 0, 5)), // 1477-01-05 낭시 전투 전사
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.WAR_DEFEAT,
       endReasonDetail: '1477-01-05 낭시 전투 전사 (로렌 공작 르네 2세·스위스 동맹 군대에 패배).',

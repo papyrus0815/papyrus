@@ -502,7 +502,7 @@ const PRESIDENT_TENURE = {
 }
 
 function toDate(y: number, m?: number, d?: number): Date {
-  return new Date(y, (m ?? 1) - 1, d ?? 1)
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1))
 }
 
 export async function seedTrumpCabinet(prisma: PrismaService): Promise<void> {

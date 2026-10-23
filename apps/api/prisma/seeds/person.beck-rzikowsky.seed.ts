@@ -335,7 +335,7 @@ const BECK_STATS = {
 
 // ── 헬퍼 ────────────────────────────────────────────────────────────────────
 function toDate(y: number, m?: number, d?: number): Date {
-  return new Date(y, (m ?? 1) - 1, d ?? 1)
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1))
 }
 
 // ── 메인 ────────────────────────────────────────────────────────────────────
@@ -499,7 +499,7 @@ export async function seedBeckRzikowsky(prisma: PrismaService): Promise<void> {
     const startDate = toDate(e.startYear, e.startMonth, e.startDay)
     const startDatePrecision = e.startDay ? 'day' : e.startMonth ? 'month' : 'year'
     const endDate = e.endYear
-      ? new Date(e.endYear, (e.endMonth ?? 12) - 1, e.endDay ?? (e.endMonth ? 28 : 31))
+      ? new Date(Date.UTC(e.endYear, (e.endMonth ?? 12) - 1, e.endDay ?? (e.endMonth ? 28 : 31)))
       : null
     const endDatePrecision = e.endYear ? (e.endDay ? 'day' : e.endMonth ? 'month' : 'year') : null
     await prisma.personLifeEvent.create({

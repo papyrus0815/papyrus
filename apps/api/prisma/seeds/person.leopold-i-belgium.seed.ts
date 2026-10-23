@@ -915,7 +915,7 @@ const LEOPOLD_STATS = {
 
 // ── 헬퍼 ────────────────────────────────────────────────────────────────────
 function toDate(y: number, m?: number, d?: number): Date {
-  return new Date(y, (m ?? 1) - 1, d ?? 1)
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1))
 }
 
 function precisionOf(month?: number, day?: number): string {
@@ -1214,11 +1214,11 @@ export async function seedLeopoldIBelgium(prisma: PrismaService): Promise<void> 
     })
     if (exists) continue
     const endDate = entry.endYear
-      ? new Date(
+      ? new Date(Date.UTC(
           entry.endYear,
           (entry.endMonth ?? 12) - 1,
           entry.endDay ?? (entry.endMonth ? 28 : 31),
-        )
+        ))
       : null
     await prisma.personLifeEvent.create({
       data: {

@@ -908,8 +908,8 @@ export async function seedPortugalAvizBraganza(prisma: PrismaService): Promise<v
       data: {
         name: d.name,
         description: d.description,
-        startDate: new Date(d.startYear, d.startMonth - 1, d.startDay),
-        endDate: new Date(d.endYear, d.endMonth - 1, d.endDay),
+        startDate: new Date(Date.UTC(d.startYear, d.startMonth - 1, d.startDay)),
+        endDate: new Date(Date.UTC(d.endYear, d.endMonth - 1, d.endDay)),
       },
     })
     console.log(`  ✅ 가문 생성: ${d.name} (id=${created.id})`)
@@ -941,9 +941,9 @@ export async function seedPortugalAvizBraganza(prisma: PrismaService): Promise<v
         surname: spec.surname || undefined,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender: spec.gender,
         nameDisplayOrder: 'western' as any,
@@ -1052,8 +1052,8 @@ export async function seedPortugalAvizBraganza(prisma: PrismaService): Promise<v
       label: spec.regnalName ? `${spec.name} ${spec.regnalName}` : spec.name,
       regnalNumber: spec.reign.regnalNumber,
       regnalName: spec.reign.regnalName,
-      startDate: new Date(spec.reign.startYear, spec.reign.startMonth - 1, spec.reign.startDay),
-      endDate: new Date(spec.reign.endYear, spec.reign.endMonth - 1, spec.reign.endDay),
+      startDate: new Date(Date.UTC(spec.reign.startYear, spec.reign.startMonth - 1, spec.reign.startDay)),
+      endDate: new Date(Date.UTC(spec.reign.endYear, spec.reign.endMonth - 1, spec.reign.endDay)),
       appointmentMethod: spec.reign.appointmentMethod,
       endReason: spec.reign.endReason,
       endReasonDetail: spec.reign.endReasonDetail,

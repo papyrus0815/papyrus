@@ -215,7 +215,7 @@ export class EntityLinkSearchController {
         id: p.id,
         name: displayPersonName(p),
         subtitle: p.birthDate
-          ? `${p.birthDate.getFullYear()}년`
+          ? `${p.birthDate.getUTCFullYear()}년`
           : undefined,
         imageUrl: p.profileImageUrl ?? null,
       })
@@ -226,7 +226,7 @@ export class EntityLinkSearchController {
         id: e.id,
         name: e.title,
         subtitle: e.startDate
-          ? `${e.startDate.getFullYear()}년`
+          ? `${e.startDate.getUTCFullYear()}년`
           : undefined,
       })
     }

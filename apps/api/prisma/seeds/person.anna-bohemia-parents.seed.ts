@@ -223,8 +223,8 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
       data: {
         name: JAGIELLON_DYNASTY.name,
         description: JAGIELLON_DYNASTY.description,
-        startDate: new Date(JAGIELLON_DYNASTY.startYear, 0, 1),
-        endDate: new Date(JAGIELLON_DYNASTY.endYear, 11, 31),
+        startDate: new Date(Date.UTC(JAGIELLON_DYNASTY.startYear, 0, 1)),
+        endDate: new Date(Date.UTC(JAGIELLON_DYNASTY.endYear, 11, 31)),
       },
     })
     console.log(`  ✅ 가문 생성: ${JAGIELLON_DYNASTY.name} (id=${jagiellonDynasty.id})`)
@@ -373,9 +373,9 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -456,8 +456,8 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
   }
 
   // ── 7) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const mStart = new Date(1502, 8, 29) // 1502-09-29 부다
-  const mEnd = new Date(1506, 6, 26) // 1506-07-26 앤 산욕열 사망
+  const mStart = new Date(Date.UTC(1502, 8, 29)) // 1502-09-29 부다
+  const mEnd = new Date(Date.UTC(1506, 6, 26)) // 1506-07-26 앤 산욕열 사망
   const mNote =
     '1502년 9월 29일 헝가리 부다 왕궁에서 결혼. 블라디슬라프 2세 46세, 앤 드 푸아 18세. 블라디슬라프의 두 번째 부인 베아트리체와의 결혼이 1500년 무효화된 후, 프랑스 루이 12세가 자신의 친척인 앤을 추천해 성사된 프랑스-야기에우오 동맹의 결과. 약 4년의 짧은 결혼 생활 동안 두 자녀를 두었다. 1503년 안나(우리의 안나 폰 뵈멘 운트 운가른), 1506년 라요시 2세(후일 모하치 전투 전사)가 그 자녀들이다. 1506년 7월 1일 라요시 출산 약 25일 후 7월 26일 앤이 22세에 산욕열로 사망하면서 결혼 종결. 블라디슬라프는 약 10년 더 살았으나 재혼하지 않았다.'
 
@@ -525,8 +525,8 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
       historicalCountryName: '보헤미아 왕국',
       regnalNumber: 16,
       regnalName: '블라디슬라프 2세',
-      startDate: new Date(1471, 7, 22), // 1471-08-22 즉위
-      endDate: new Date(1516, 2, 13), // 1516-03-13 사망
+      startDate: new Date(Date.UTC(1471, 7, 22)), // 1471-08-22 즉위
+      endDate: new Date(Date.UTC(1516, 2, 13)), // 1516-03-13 사망
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1516-03-13 부다 왕궁에서 향년 60세 사망 (뇌졸중).',
@@ -539,8 +539,8 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
       historicalCountryName: '헝가리 왕국',
       regnalNumber: 34,
       regnalName: '울라슬로 2세 (Ulászló II)',
-      startDate: new Date(1490, 8, 18), // 1490-09-18 세케슈페헤르바르 대관
-      endDate: new Date(1516, 2, 13),
+      startDate: new Date(Date.UTC(1490, 8, 18)), // 1490-09-18 세케슈페헤르바르 대관
+      endDate: new Date(Date.UTC(1516, 2, 13)),
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1516-03-13 부다 왕궁에서 향년 60세 사망 (뇌졸중).',
@@ -554,8 +554,8 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
       historicalCountryName: '보헤미아 왕국',
       regnalNumber: 18,
       regnalName: '페르디난트 1세',
-      startDate: new Date(1526, 9, 24), // 1526-10-24 보헤미아 의회 선출
-      endDate: new Date(1564, 6, 25), // 1564-07-25 사망
+      startDate: new Date(Date.UTC(1526, 9, 24)), // 1526-10-24 보헤미아 의회 선출
+      endDate: new Date(Date.UTC(1564, 6, 25)), // 1564-07-25 사망
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1564-07-25 빈 호프부르크 궁에서 향년 61세 사망.',
@@ -568,8 +568,8 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
       historicalCountryName: '헝가리 왕국',
       regnalNumber: 36,
       regnalName: '페르디난트 1세 (Ferdinánd I)',
-      startDate: new Date(1526, 11, 16), // 1526-12-16 헝가리 의회 선출 (포좀 — Pozsony, 현 브라티슬라바)
-      endDate: new Date(1564, 6, 25),
+      startDate: new Date(Date.UTC(1526, 11, 16)), // 1526-12-16 헝가리 의회 선출 (포좀 — Pozsony, 현 브라티슬라바)
+      endDate: new Date(Date.UTC(1564, 6, 25)),
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1564-07-25 사망. 사후 헝가리·보헤미아 왕위 모두 막시밀리안 2세 계승.',
@@ -620,7 +620,7 @@ export async function seedAnnaBohemiaParents(prisma: PrismaService): Promise<voi
       },
     })
     const fmt = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
     console.log(
       `  ✅ 재임: ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber}대 (${fmt(r.startDate)} ~ ${fmt(r.endDate)})`,
     )

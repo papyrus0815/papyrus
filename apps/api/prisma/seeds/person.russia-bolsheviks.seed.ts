@@ -917,11 +917,11 @@ function buildLifeEventDates(e: LifeEventEntry): {
   endDate: Date | null
   endDatePrecision: DatePrecision | null
 } {
-  const startDate = new Date(
+  const startDate = new Date(Date.UTC(
     e.startYear,
     (e.startMonth ?? 1) - 1,
     e.startDay ?? 1,
-  )
+  ))
   const startDatePrecision: DatePrecision = e.startDay
     ? 'day'
     : e.startMonth
@@ -931,11 +931,11 @@ function buildLifeEventDates(e: LifeEventEntry): {
   if (!e.endYear) {
     return { startDate, startDatePrecision, endDate: null, endDatePrecision: null }
   }
-  const endDate = new Date(
+  const endDate = new Date(Date.UTC(
     e.endYear,
     (e.endMonth ?? 12) - 1,
     e.endDay ?? (e.endMonth ? 28 : 31),
-  )
+  ))
   const endDatePrecision: DatePrecision = e.endDay
     ? 'day'
     : e.endMonth
@@ -1007,9 +1007,9 @@ export async function seedRussiaBolsheviks(
         surname: r.surname,
         originalName: r.originalName,
         biography: r.biography,
-        birthDate: new Date(r.birthYear, r.birthMonth - 1, r.birthDay),
+        birthDate: new Date(Date.UTC(r.birthYear, r.birthMonth - 1, r.birthDay)),
         birthEra: 'AD',
-        deathDate: new Date(r.deathYear, r.deathMonth - 1, r.deathDay),
+        deathDate: new Date(Date.UTC(r.deathYear, r.deathMonth - 1, r.deathDay)),
         deathEra: 'AD',
         deathType: r.deathType,
         deathCause: r.deathCause,
@@ -1041,7 +1041,7 @@ export async function seedRussiaBolsheviks(
       pair.affinityLevel,
       pair.trustLevel,
       pair.note,
-      new Date(pair.startYear, pair.startMonth - 1, pair.startDay),
+      new Date(Date.UTC(pair.startYear, pair.startMonth - 1, pair.startDay)),
     )
     if (id) {
       console.log(`    ✅ ${pair.a} ↔ ${pair.b}`)
@@ -1070,8 +1070,8 @@ export async function seedRussiaBolsheviks(
       histCountryCache.set(a.historicalCountryName, countryId)
     }
 
-    const startDate = a.startYear ? new Date(a.startYear, 0, 1) : null
-    const endDate = a.endYear ? new Date(a.endYear, 11, 31) : null
+    const startDate = a.startYear ? new Date(Date.UTC(a.startYear, 0, 1)) : null
+    const endDate = a.endYear ? new Date(Date.UTC(a.endYear, 11, 31)) : null
     const created = await ensureAffiliation(
       prisma,
       personId,

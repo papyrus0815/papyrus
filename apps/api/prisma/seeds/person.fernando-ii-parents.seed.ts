@@ -291,9 +291,9 @@ export async function seedFernandoIIParents(prisma: PrismaService): Promise<void
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -375,8 +375,8 @@ export async function seedFernandoIIParents(prisma: PrismaService): Promise<void
   }
 
   // ── 4) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const mStart = new Date(1444, 6, 1) // 1444-07 (정확한 일자는 동시기 기록 불일치, 7월로 통일)
-  const mEnd = new Date(1468, 1, 13) // 1468-02-13 후아나 사망
+  const mStart = new Date(Date.UTC(1444, 6, 1)) // 1444-07 (정확한 일자는 동시기 기록 불일치, 7월로 통일)
+  const mEnd = new Date(Date.UTC(1468, 1, 13)) // 1468-02-13 후아나 사망
   const mNote =
     '1444년 7월(또는 4월, 동시기 기록 불일치) 후안 46세·후아나 19세, 27세 연하의 정략 결혼이었다. ' +
     '후안의 첫 부인 블랑카 1세 데 나바라(1387~1441) 사망 약 3년 후의 재혼. 후아나의 친정 엔리케스 ' +
@@ -435,8 +435,8 @@ export async function seedFernandoIIParents(prisma: PrismaService): Promise<void
     const r = {
       regnalNumber: 19,
       regnalName: '후안 2세',
-      startDate: new Date(1458, 5, 27), // 1458-06-27 형 알폰소 5세 사망 후 즉위
-      endDate: new Date(1479, 0, 19), // 1479-01-19 사망
+      startDate: new Date(Date.UTC(1458, 5, 27)), // 1458-06-27 형 알폰소 5세 사망 후 즉위
+      endDate: new Date(Date.UTC(1479, 0, 19)), // 1479-01-19 사망
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1479-01-19 바르셀로나에서 향년 80세로 노환 사망.',

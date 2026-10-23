@@ -177,10 +177,10 @@ export async function seedKarolyIParents(prisma: PrismaService): Promise<void> {
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
         isBirthDateApproximate: spec.isBirthDateApproximate,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         isDeathDateApproximate: spec.isDeathDateApproximate,
         gender,
@@ -231,8 +231,8 @@ export async function seedKarolyIParents(prisma: PrismaService): Promise<void> {
   }
 
   // 3) 혼인 양방향 (약 1281 ~ 약 1293 클레멘차 사망)
-  const mStart = new Date(1281, 0, 1)
-  const mEnd = new Date(1293, 0, 1) // 클레멘차 사망(추정)
+  const mStart = new Date(Date.UTC(1281, 0, 1))
+  const mEnd = new Date(Date.UTC(1293, 0, 1)) // 클레멘차 사망(추정)
   const mNote =
     '1281년 합스부르크 가문의 클레멘차(독일 왕 루돌프 1세의 딸)와 나폴리 앙주 가문 카를로 마르텔로' +
     '(명목상 헝가리 왕)의 혼인. 신성 로마 왕 루돌프 1세의 합스부르크 가문과 나폴리 앙주 왕가를 잇는 ' +

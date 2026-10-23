@@ -149,9 +149,9 @@ export async function seedPhilipIVMother(prisma: PrismaService): Promise<void> {
         surname: MARGARET.surname,
         originalName: MARGARET.originalName,
         biography: MARGARET.biography,
-        birthDate: new Date(MARGARET.birthYear, MARGARET.birthMonth - 1, MARGARET.birthDay),
+        birthDate: new Date(Date.UTC(MARGARET.birthYear, MARGARET.birthMonth - 1, MARGARET.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(MARGARET.deathYear, MARGARET.deathMonth - 1, MARGARET.deathDay),
+        deathDate: new Date(Date.UTC(MARGARET.deathYear, MARGARET.deathMonth - 1, MARGARET.deathDay)),
         deathEra: 'AD' as any,
         gender: 'FEMALE',
         nameDisplayOrder: 'western' as any,
@@ -215,8 +215,8 @@ export async function seedPhilipIVMother(prisma: PrismaService): Promise<void> {
   }
 
   // 4) 결혼 (양방향)
-  const mStart = new Date(1599, 3, 18) // 1599-04-18 페라라 대리 결혼
-  const mEnd = new Date(1611, 9, 3) // 1611-10-03 마르가레테 사망
+  const mStart = new Date(Date.UTC(1599, 3, 18)) // 1599-04-18 페라라 대리 결혼
+  const mEnd = new Date(Date.UTC(1611, 9, 3)) // 1611-10-03 마르가레테 사망
   const mNote =
     '1599년 4월 18일 이탈리아 페라라에서 대리 결혼식, 같은 해 11월 18일 스페인 발렌시아에서 정식 ' +
     '결혼식. 마르가레테 14세, 펠리페 3세 20세. 6촌 사촌 관계의 합스부르크 가문 내 정략 결혼으로, ' +

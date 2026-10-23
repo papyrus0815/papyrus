@@ -208,9 +208,9 @@ export async function seedAnnaAustriaParents(prisma: PrismaService): Promise<voi
         surname: spec.surname,
         originalName: spec.originalName,
         biography: spec.biography,
-        birthDate: new Date(spec.birthYear, spec.birthMonth - 1, spec.birthDay),
+        birthDate: new Date(Date.UTC(spec.birthYear, spec.birthMonth - 1, spec.birthDay)),
         birthEra: 'AD' as any,
-        deathDate: new Date(spec.deathYear, spec.deathMonth - 1, spec.deathDay),
+        deathDate: new Date(Date.UTC(spec.deathYear, spec.deathMonth - 1, spec.deathDay)),
         deathEra: 'AD' as any,
         gender,
         nameDisplayOrder: 'western' as any,
@@ -292,8 +292,8 @@ export async function seedAnnaAustriaParents(prisma: PrismaService): Promise<voi
   }
 
   // ── 4) 결혼 관계 (양방향) ─────────────────────────────────────────────
-  const mStart = new Date(1548, 8, 13) // 1548-09-13 바야돌리드
-  const mEnd = new Date(1576, 9, 12) // 1576-10-12 막시밀리안 2세 사망
+  const mStart = new Date(Date.UTC(1548, 8, 13)) // 1548-09-13 바야돌리드
+  const mEnd = new Date(Date.UTC(1576, 9, 12)) // 1576-10-12 막시밀리안 2세 사망
   const mNote =
     '1548년 9월 13일 카스티야 바야돌리드에서 결혼. 막시밀리안 2세 21세, 마리아 20세. 두 사람은 사촌(막시밀리안 부친 페르디난트 1세는 카를 5세의 동생, 마리아의 부친 카를 5세) 관계로, 합스부르크 양가(스페인·오스트리아) 통합 사촌 결혼의 전형이었다. 결혼 직후 부부가 카스티야 섭정으로 임명되어 약 3년간(1548~1551) 통치했고, 1552년부터 1554년까지 두 번째 섭정을 수행했다. 약 28년 결혼 생활 동안 16명의 자녀를 두었으며, 그중 8명이 성인까지 생존했다. 후일 신성로마황제 23대 루돌프 2세, 24대 마티아스, 펠리페 2세의 4번째 부인 안나(우리의 안나 폰 외스터라이히), 합스부르크령 네덜란드 공동 군주 알베르트가 이 부부의 자녀들이다. 1576년 10월 12일 막시밀리안 2세의 레겐스부르크 사망으로 결혼 종결. 마리아는 1581년 마드리드로 귀국해 데스칼사스 레알레스 수녀원에서 약 22년간 신앙 생활.'
 
@@ -373,8 +373,8 @@ export async function seedAnnaAustriaParents(prisma: PrismaService): Promise<voi
       historicalCountryId: hreHC.id,
       regnalNumber: 22,
       regnalName: '막시밀리안 2세',
-      startDate: new Date(1564, 6, 25), // 1564-07-25 부친 페르디난트 1세 사망
-      endDate: new Date(1576, 9, 12), // 1576-10-12 본인 사망
+      startDate: new Date(Date.UTC(1564, 6, 25)), // 1564-07-25 부친 페르디난트 1세 사망
+      endDate: new Date(Date.UTC(1576, 9, 12)), // 1576-10-12 본인 사망
       appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
       endReason: TenureEndReason.DEATH_IN_OFFICE,
       endReasonDetail: '1576년 10월 12일 레겐스부르크에서 제국 의회 회기 중 향년 49세 사망 (심부전·신장병).',

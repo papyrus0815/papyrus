@@ -573,7 +573,7 @@ const PETAIN_STATS = {
 
 // ── 헬퍼 ────────────────────────────────────────────────────────────────────
 function toDate(y: number, m?: number, d?: number): Date {
-  return new Date(y, (m ?? 1) - 1, d ?? 1)
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1))
 }
 
 function precisionOf(month?: number, day?: number): string {
@@ -717,7 +717,7 @@ export async function seedPetain(prisma: PrismaService): Promise<void> {
     const exists = await prisma.personLifeEvent.findFirst({ where: { personId, title: e.title } })
     if (exists) continue
     const endDate = e.endYear
-      ? new Date(e.endYear, (e.endMonth ?? 12) - 1, e.endDay ?? (e.endMonth ? 28 : 31))
+      ? new Date(Date.UTC(e.endYear, (e.endMonth ?? 12) - 1, e.endDay ?? (e.endMonth ? 28 : 31)))
       : null
     await prisma.personLifeEvent.create({
       data: {

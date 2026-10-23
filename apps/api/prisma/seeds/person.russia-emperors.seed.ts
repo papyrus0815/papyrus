@@ -514,9 +514,9 @@ export async function seedRussiaEmperors(
 
     let personId: string
 
-    const birthDate = new Date(m.birthYear, m.birthMonth - 1, m.birthDay)
+    const birthDate = new Date(Date.UTC(m.birthYear, m.birthMonth - 1, m.birthDay))
     const deathDate = m.deathYear
-      ? new Date(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1)
+      ? new Date(Date.UTC(m.deathYear, (m.deathMonth ?? 1) - 1, m.deathDay ?? 1))
       : undefined
 
     if (existing) {
@@ -554,9 +554,9 @@ export async function seedRussiaEmperors(
 
       const positionDefId = await getPositionDefId(prisma, r.positionTitle)
 
-      const startDate = new Date(r.startYear, r.startMonth - 1, r.startDay ?? 1)
+      const startDate = new Date(Date.UTC(r.startYear, r.startMonth - 1, r.startDay ?? 1))
       const endDate = r.endYear
-        ? new Date(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1)
+        ? new Date(Date.UTC(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1))
         : undefined
 
       // 유니크 제약 (historicalCountryId, regnalNumber) — 다른 personId라도 충돌하므로 제약 키로 lookup.
