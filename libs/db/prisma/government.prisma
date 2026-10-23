@@ -407,31 +407,35 @@ model GovernmentPositionTenure {
   /// 소속 국가 (역사적 국가)
   historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
+  /// 정치체 — 파생 칸(DB 트리거가 역사국가 우선 COALESCE(historical, country)로 채운다, 쓰기 무시).
+  /// 유일성 (정치체, 직위 정의, 대수, 기수 키)의 첫 열
+  polityId String? @map("polity_id") @db.Char(36)
+
   /// 직위 정의 — 필수. 카탈로그에 맞는 정의가 없으면 그 유형의 일반 정의(isGeneric)
   positionDefinitionId String @map("position_definition_id") @db.Char(36)
-
-  /// 대수/회차 (예: 20 = 제20대, 100 = 제100대)
-  /// NULL이면 대수 개념이 없는 직위 (예: 조선시대 관직)
 
   /// 기수 (예: 1 → 1기, 2 → 2기)
   /// 같은 대수에서 여러 기(期)가 존재할 때 사용 (예: 클린턴 42대 1기/2기)
   /// NULL이면 기수 구분 없음
   subTermNumber Int? @map("sub_term_number")
 
-  /// 임기 시작일 — 취임일(군주 재위는 법적 즉위일; 대관식일은 별개 사실로 Event 링크가 정본)
-  /// 이행 2단계부터 파생값: 구조화 시작(startEra·startYear…)이 정본이고, AD 1000 미만·BC는 NULL
-  /// (재위가 이 테이블로 합쳐지며 BC 재위를 담아야 한다).
+  /// 파생 — 유일성용 기수 키(NULL → 0, DB 트리거가 채운다). 유니크 인덱스는 NULL끼리 다르다고 보기 때문
+  subTermKey Int @default(0) @map("sub_term_key")
+
+  // ── 기간 — 구조화 칸(era·year·month·day)이 정본. year=크기값(양수), BC/AD는 era, 빈 월·일 = 그 정밀도까지만 앎.
+  // DB 트리거(trg_tenure_period_derive_*)가 아래 파생 칸을 채운다: DATETIME(UTC 자정, AD 1000~9999만)·시작 정밀도·키.
+  // DATETIME만 쓰는 옛 경로는 트리거가 '가장 가까운 자정'으로 읽어 구조화로 옮긴다(시간대 흔들림 흡수).
+  // 시작 = 취임일(군주는 법적 즉위일 — 대관식은 별개 사실로 Event 링크가 정본), 종료 = 퇴임일(재직 중이면 비움).
+
+  /// 파생 — 구조화 시작의 DATETIME (BC·AD 1000 미만은 NULL)
   startDate DateTime? @map("start_date")
 
-  /// 취임일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움). NULL=일 단위.
+  /// 파생 — 시작 정밀도: 'year' | 'month' | NULL(일 단위)
   startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
 
-  /// 임기 종료일 (퇴위일, 현재 재직 중이면 NULL)
+  /// 파생 — 구조화 종료의 DATETIME
   endDate DateTime? @map("end_date")
 
-  // ── 직위 보유 단일 모델 이행(재위·재임 통합) 1단계 — 추가 칸. 설계 문서 "재위·재임 통합 설계" ──
-  // 구조화 날짜가 정본이 될 칸. 지금은 startDate(DATETIME)에서 파생해 함께 쓴다(서비스가 동기화).
-  // year=크기값(양수), BC/AD는 era. 정밀도는 채워진 칸에서 파생.
   startEra   Era? @map("start_era")
   startYear  Int? @map("start_year")
   startMonth Int? @map("start_month")
@@ -440,7 +444,8 @@ model GovernmentPositionTenure {
   endYear    Int? @map("end_year")
   endMonth   Int? @map("end_month")
   endDay     Int? @map("end_day")
-  /// 정렬·범위 조회 키 — 부호연도×10000 + 월×100 + 일 (빈 월·일: 시작은 1월 1일, 끝은 12월 31일). 파생값
+  /// 파생 — 정렬·범위 조회 키: 부호연도×10000 + 월×100 + 일 (빈 월·일: 시작은 1월 1일, 끝은 12월 31일).
+  /// CHECK chk_gov_tenure_period_order: 종료 키 ≥ 시작 키 (Prisma 스키마 밖, 마이그 20261023051000)
   startKey Int? @map("start_key")
   endKey   Int? @map("end_key")
 
@@ -518,6 +523,8 @@ model GovernmentPositionTenure {
   @@index([mandateSource], name: "idx_gov_tenure_mandateSource")
   @@index([accessionEventId], name: "idx_gov_tenure_accessionEventId")
   @@index([startKey, endKey], name: "idx_gov_tenure_period_key")
+  @@index([polityId], name: "idx_gov_tenure_polityId")
+  @@unique([polityId, positionDefinitionId, ordinal, subTermKey], map: "uq_gov_tenure_polity_def_ordinal")
   @@map("government_position_tenure")
 }
 

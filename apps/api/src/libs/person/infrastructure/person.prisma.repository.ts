@@ -142,7 +142,7 @@ import {
   PersonAwardResponseDto,
   AllCareersResponseDto,
 } from '../presentation/dto'
-import { edgeFromInput, periodColumnsFromEdges } from '../domain/tenure-period.util'
+import { edgeFromInput, periodColumnsFromEdges, truncateEdge } from '../domain/tenure-period.util'
 import {
   MONARCHICAL_TENURE,
   NON_MONARCHICAL_TENURE,
@@ -385,6 +385,23 @@ const TENURE_ACHIEVEMENTS_SELECT = {
 }
 
 /** 재임의 구체 직함 — 비었거나 정의 이름과 같으면 저장하지 않는다(정의 이름이 표시된다) */
+/**
+ * 재임 쓰기 실패를 사용자 말로 — DB가 지키는 두 규칙
+ * - 유일성 uq_gov_tenure_polity_def_ordinal: 같은 정치체·직위에 같은 대수·기수는 한 사람
+ * - CHECK chk_gov_tenure_period_order: 종료는 시작보다 앞설 수 없다
+ */
+function translateTenureWriteError(error: unknown): never {
+  const code = (error as { code?: string })?.code
+  const message = String((error as { message?: string })?.message ?? '')
+  if (code === 'P2002' || message.includes('uq_gov_tenure_polity_def_ordinal')) {
+    throw new ConflictException('같은 국가·직위에 같은 대수(기수)의 재임이 이미 있습니다 — 대수나 기수를 확인하세요')
+  }
+  if (message.includes('chk_gov_tenure_period_order')) {
+    throw new BadRequestException('종료일이 시작일보다 앞섭니다')
+  }
+  throw error
+}
+
 function specificTitle(title: string | null | undefined, definitionTitle: string): string | null {
   const trimmed = typeof title === 'string' ? title.trim() : ''
   return trimmed && trimmed !== definitionTitle ? trimmed : null
@@ -2931,19 +2948,14 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
     // 직위 정의는 필수 — 정의 id가 오면 그것, 없으면 직위 종류의 일반 정의. 종류는 정의가 정본
     const definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, dto.positionType)
-    // 기간 — 구조화(startDateInfo)가 오면 정본(BC·고대 가능), 아니면 레거시 ISO + 정밀도.
-    // 레거시는 예전처럼 DATETIME을 그대로 두고 구조화 칸·키는 파생한다(이행 1~3단계 공통 규칙)
+    // 기간 — 구조화(startDateInfo)가 오면 그것, 아니면 레거시 ISO 문자열의 날짜 부분 + 정밀도.
+    // 어느 쪽이든 구조화 칸이 정본이고 DATETIME·키는 그 파생(DB 트리거도 같은 규칙으로 다시 맞춘다)
     const startEdge = edgeFromInput(dto.startDateInfo, dto.startDate, dto.startDatePrecision)
     if (!startEdge) throw new BadRequestException('시작일(startDate 또는 startDateInfo)이 필요합니다')
     const period = periodColumnsFromEdges(
       startEdge,
       edgeFromInput(dto.endDateInfo, dto.endDate, dto.endDatePrecision ?? dto.startDatePrecision),
     )
-    if (!dto.startDateInfo && dto.startDate) {
-      period.startDate = new Date(dto.startDate)
-      period.startDatePrecision = (dto.startDatePrecision ?? null) as any
-    }
-    if (!dto.endDateInfo && dto.endDate) period.endDate = new Date(dto.endDate)
     const tenure = await this.prisma.governmentPositionTenure.create({
       data: {
         ...period,
@@ -2994,7 +3006,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
       },
-    })
+    }).catch(translateTenureWriteError)
     
     // BigInt를 문자열로 변환
     
@@ -3061,7 +3073,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     }
 
     // 기간 — 한쪽 끝만 바뀌어도 키·DATETIME·정밀도를 한 덩어리로 다시 계산(안 보낸 끝은 저장값).
-    // 구조화(…DateInfo)가 정본, 레거시 ISO는 예전처럼 DATETIME을 그대로 둔다
+    // 구조화(…DateInfo)든 레거시 ISO든 구조화 칸으로 옮겨 쓴다 — DATETIME은 파생
     const startTouched =
       dto.startDateInfo !== undefined || dto.startDate !== undefined || dto.startDatePrecision !== undefined
     const endTouched =
@@ -3070,32 +3082,30 @@ export class PersonPrismaRepository implements IPersonRepository {
       const current = await this.prisma.governmentPositionTenure.findUnique({
         where: { id },
         select: {
-          startDate: true, startDatePrecision: true,
+          startDatePrecision: true,
           startEra: true, startYear: true, startMonth: true, startDay: true,
           endEra: true, endYear: true, endMonth: true, endDay: true,
         },
       })
       const stored = (era: any, year: number | null, month: number | null, day: number | null) =>
         year == null ? null : { era: era ?? 'AD', year, month, day }
-      const legacyStartIso = dto.startDate ?? (dto.startDateInfo === undefined && current?.startDate ? current.startDate.toISOString() : null)
       const startPrecision =
         dto.startDatePrecision !== undefined ? dto.startDatePrecision : (current?.startDatePrecision ?? null)
-      const start = startTouched
-        ? edgeFromInput(dto.startDateInfo, legacyStartIso, startPrecision)
-        : stored(current?.startEra, current?.startYear ?? null, current?.startMonth ?? null, current?.startDay ?? null)
+      const storedStart = stored(current?.startEra, current?.startYear ?? null, current?.startMonth ?? null, current?.startDay ?? null)
+      // 정밀도만 바꾸면 저장된 구조화 시작을 그 정밀도로 자른다(DATETIME이 없는 BC·고대 행도 안전)
+      const start = !startTouched
+        ? storedStart
+        : dto.startDateInfo !== undefined || dto.startDate !== undefined
+          ? edgeFromInput(dto.startDateInfo, dto.startDate, startPrecision)
+          : storedStart && truncateEdge(storedStart, startPrecision)
       const end = endTouched
         ? edgeFromInput(dto.endDateInfo, dto.endDate ?? null, dto.endDatePrecision ?? startPrecision)
         : stored(current?.endEra, current?.endYear ?? null, current?.endMonth ?? null, current?.endDay ?? null)
       const period: any = periodColumnsFromEdges(start, end)
-      if (startTouched && dto.startDateInfo === undefined) {
-        if (legacyStartIso) period.startDate = new Date(legacyStartIso)
-        period.startDatePrecision = startPrecision
-      }
       if (!startTouched) {
         delete period.startDate
         delete period.startDatePrecision
       }
-      if (endTouched && dto.endDateInfo === undefined && dto.endDate) period.endDate = new Date(dto.endDate)
       if (!endTouched) delete period.endDate
       Object.assign(updateData, period)
     }
@@ -3123,7 +3133,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
       },
-    })
+    }).catch(translateTenureWriteError)
 
 
     return serializeBigInt(tenure)

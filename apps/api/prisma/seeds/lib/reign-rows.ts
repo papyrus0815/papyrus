@@ -11,7 +11,7 @@
  * - 재위의 `termNumber`는 의미 없는 칸이었다 — 버린다.
  * - 직위 정의가 없으면 '국왕' 정의로, `positionType`(재임 필수)은 정의에서 온다.
  * - `endDatePrecision`은 재임에 칸이 없다 — 종료 구조화 칸(연·월·일)을 자르는 데만 쓴다.
- *   시작 구조화 칸·정렬 키는 DB 트리거(20261019144753)가 DATETIME에서 채운다.
+ *   시작은 DATETIME만 넘기면 DB 트리거가 구조화 칸(정본)으로 옮기고 DATETIME·키를 다시 파생한다(20261023051000).
  * - 결과는 직위 보유 행(asOfficeHolding)에 시드 어휘 regnalNumber(= 대수 ordinal)를 얹어 돌려준다 — 시드 코드가 그대로 읽는다.
  *
  * 범위: 군주직 행. 군주직이 아닌 직위를 '재위 시드'로 쓰는 경우(도쿠가와 쇼군은 정부수반으로
@@ -53,7 +53,9 @@ function mapReadArgs(args: AnyArgs = {}, scope: Prisma.GovernmentPositionTenureW
 /** 종료 구조화 칸 — DATETIME + 종료 정밀도(재임엔 칸이 없어 여기서만 쓴다) */
 function endColumns(endDate: Date | string | null | undefined, endDatePrecision: string | null | undefined) {
   if (endDate == null) return {}
-  const date = endDate instanceof Date ? endDate : new Date(endDate)
+  const raw = endDate instanceof Date ? endDate : new Date(endDate)
+  // 시드는 로컬 자정으로 Date를 만든다 — 가장 가까운 UTC 자정으로 읽어 시간대에 흔들리지 않게(DB 트리거와 같은 규칙)
+  const date = new Date(raw.getTime() + 12 * 60 * 60 * 1000)
   if (Number.isNaN(date.getTime()) || date.getUTCFullYear() < 1000) return {}
   return {
     endEra: 'AD' as const,
