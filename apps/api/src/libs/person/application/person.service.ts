@@ -892,19 +892,7 @@ export class PersonService {
     const person = tenure?.person
     const label = person ? `${personDisplayName(person)} - ${tenurePositionTitle(tenure, '재임')}` : tenurePositionTitle(tenure, '재임 기록')
     await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenurePreview(tenure))
-    // 행정부는 비군주 수반에게만 — 군주 재위도 이 경로로 들어오므로(직위 보유 단일 모델) 군주직은 뺀다.
-    // 축은 저장된 행 기준(직위 정의에서 파생) — 요청에 positionType이 없어도 판정된다.
-    const savedType = tenure?.positionType ?? dto.positionType
-    if (
-      tenure &&
-      tenure.positionDefinition?.isMonarchical !== true &&
-      (savedType === 'HEAD_OF_STATE' || savedType === 'HEAD_OF_GOVERNMENT')
-    ) {
-      const existing = await this.personRepository.findCabinetByHeadTenureId(tenure.id)
-      if (!existing) {
-        await this.personRepository.createCabinet({ headTenureId: tenure.id }, accountId)
-      }
-    }
+    // 행정부는 DB 트리거(trg_tenure_cabinet_ins)가 비군주 수반 재임에 자동으로 만든다 — 시드·스크립트 경로도 같은 규칙
     return tenure
   }
 
@@ -917,12 +905,24 @@ export class PersonService {
     accountId?: string,
   ): Promise<any> {
     await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, id, accountId)
-    // 가드: 행정부의 수반인 임기를 head 계열이 아닌 타입으로 바꾸려 하면 차단 (Cabinet 무결성 보호)
-    if (dto.positionType && dto.positionType !== 'HEAD_OF_STATE' && dto.positionType !== 'HEAD_OF_GOVERNMENT') {
+    // 가드: 행정부의 수반인 임기를 수반이 아닌 직위(또는 군주직)로 바꾸려 하면 차단 (Cabinet 무결성 보호).
+    // 종류는 직위 정의가 정본 — 정의를 바꾸면 그 정의로, 종류만 오면 그 종류의 일반 정의로 판정한다
+    const target = dto.positionDefinitionId
+      ? await this.prisma.governmentPositionDefinition.findUnique({
+          where: { id: dto.positionDefinitionId },
+          select: { positionType: true, isMonarchical: true },
+        })
+      : dto.positionType
+        ? { positionType: dto.positionType, isMonarchical: false }
+        : null
+    if (
+      target &&
+      (target.isMonarchical || (target.positionType !== 'HEAD_OF_STATE' && target.positionType !== 'HEAD_OF_GOVERNMENT'))
+    ) {
       const cabinet = await this.personRepository.findCabinetByHeadTenureId(id)
       if (cabinet) {
         throw new BadRequestException(
-          '이 임기는 행정부의 수반으로 사용 중입니다. 행정부를 먼저 삭제한 뒤 직위 유형을 변경하세요.',
+          '이 임기는 행정부의 수반으로 사용 중입니다. 행정부를 먼저 삭제한 뒤 직위를 변경하세요.',
         )
       }
     }

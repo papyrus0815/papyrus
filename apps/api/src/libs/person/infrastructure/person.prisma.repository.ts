@@ -3444,6 +3444,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return serializeBigInt(existing)
     }
+    // 비군주 수반이면 트리거가 이미 만들었다 — 여기까지 왔다면 군주 재위이거나 수반이 아닌 직위
+    const head = await this.prisma.governmentPositionTenure.findUnique({
+      where: { id: dto.headTenureId },
+      select: { positionDefinition: { select: { isMonarchical: true } } },
+    })
+    if (head?.positionDefinition.isMonarchical) {
+      throw new BadRequestException('군주 재위에는 행정부를 만들 수 없습니다 — 행정부의 수반은 비군주 국가원수·정부수반입니다')
+    }
     const cabinet = await this.prisma.cabinet.create({
       data: {
         headTenureId: dto.headTenureId,
