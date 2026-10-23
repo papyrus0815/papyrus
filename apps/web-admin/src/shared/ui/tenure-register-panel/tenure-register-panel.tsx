@@ -196,22 +196,6 @@ const BUILTIN_POSITIONS = [
   },
 ] as const
 
-/**
- * 레거시 notes 인코딩("왕명: X") 분리 — 역대 수반·계보·행정부 위젯이 이 줄을
- * 정규식으로 파싱해 왕명을 표시하므로(cabinets-section.helpers 등), 비고 자유 편집으로
- * 깨지지 않게 읽기 전용으로 떼어내고 저장 시 재결합한다.
- */
-const LEGACY_REGNAL_NOTE_RE = /^[ \t]*왕명[ \t]*:[ \t]*\S.*$/m
-
-function splitLegacyRegnalNote(raw: string): { regnalLine: string; rest: string } {
-  const m = raw.match(LEGACY_REGNAL_NOTE_RE)
-  if (!m || m.index == null) return { regnalLine: '', rest: raw }
-  const rest = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length))
-    .replace(/\n{2,}/g, '\n')
-    .replace(/^\n+|\n+$/g, '')
-  return { regnalLine: m[0].trim(), rest }
-}
-
 /** 인물 바 — 미니멀 카드 */
 const PersonPrimaryLabel = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -460,8 +444,6 @@ export function TenureRegisterPanel({
   const [endReason, setEndReason] = useState('')
   const [endReasonDetail, setEndReasonDetail] = useState('')
   const [notes, setNotes] = useState('')
-  /** 레거시 notes의 "왕명: X" 줄 — 읽기 전용으로 분리 표시, 저장 시 비고와 재결합 */
-  const [legacyRegnalNote, setLegacyRegnalNote] = useState('')
   const [showOnEvents, setShowOnEvents] = useState(true)
   const [cabinetId, setCabinetId] = useState<string | null>(null)
   const [eventAttachModalOpen, setEventAttachModalOpen] = useState(false)
@@ -813,7 +795,6 @@ export function TenureRegisterPanel({
     setEndReason('')
     setEndReasonDetail('')
     setNotes('')
-    setLegacyRegnalNote('')
     setShowOnEvents(true)
     setCabinetId(null)
   }
@@ -909,10 +890,7 @@ export function TenureRegisterPanel({
     setAppointmentDetail(t.appointmentDetail ?? '')
     setEndReason(t.endReason ?? '')
     setEndReasonDetail(t.endReasonDetail ?? '')
-    // 레거시 "왕명: X" 줄은 비고에서 분리(읽기 전용) — 실수로 지워 위젯 왕명 표시가 깨지는 것 방지
-    const { regnalLine, rest } = splitLegacyRegnalNote(t.notes ?? '')
-    setLegacyRegnalNote(regnalLine)
-    setNotes(rest)
+    setNotes(t.notes ?? '')
     setShowOnEvents(t.showPositionInfo !== false)
     setCabinetId(t.cabinetId ?? t.cabinet?.id ?? null)
   }, [open, editingTenure])
@@ -960,8 +938,6 @@ export function TenureRegisterPanel({
     const parsedDynastyOrdinal = dynastyOrdinal.trim()
       ? parseInt(dynastyOrdinal, 10) || emptyAs
       : emptyAs
-    // 레거시 "왕명: X" 줄은 저장 시 비고 앞에 재결합 — 위젯들의 왕명 파싱 보존
-    const combinedNotes = [legacyRegnalNote, notes.trim()].filter(Boolean).join('\n')
     const payload = {
       positionType: (positionType as any) ?? 'OTHER',
       // 정의를 비우면(직접 입력) 수정 때 null — 서버가 그 종류의 일반 정의로 옮긴다
@@ -984,7 +960,7 @@ export function TenureRegisterPanel({
       appointmentDetail: appointmentDetail.trim() || emptyAs,
       endReason: (endReason || emptyAs) as any,
       endReasonDetail: endReasonDetail.trim() || emptyAs,
-      notes: combinedNotes || emptyAs,
+      notes: notes.trim() || emptyAs,
       showPositionInfo: showOnEvents,
       cabinetId: cabinetId || emptyAs,
       // 부처 지면에서 연 경우에만 실린다. 그 밖에는 undefined라 기존 값이 보존된다.
@@ -1592,12 +1568,6 @@ export function TenureRegisterPanel({
               <FieldRow>
                 <FieldLabel>비고<OptionalTag>(선택)</OptionalTag></FieldLabel>
                 <FieldControl>
-                  {legacyRegnalNote && (
-                    <FieldHint style={{ marginBottom: 6 }}>
-                      <strong>{legacyRegnalNote}</strong> — 왕명 표시용 자동 기록(읽기 전용, 저장 시 유지).
-                      왕명 변경은 군주 등록 화면에서 하세요.
-                    </FieldHint>
-                  )}
                   <Textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}

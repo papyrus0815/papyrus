@@ -747,15 +747,6 @@ export function HeadsOfStateSection({
     return { total, active, ended }
   }, [cabinetModalSubordinateTenures])
 
-  /** notes에서 "왕명: xxx" 추출 */
-  const getRegnalNameFromNotes = (notes: string | null | undefined) => {
-    if (!notes?.trim()) return null
-    const m =
-      notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) ||
-      notes.match(/왕명\s*:\s*(.+)/i)
-    return m ? m[1].trim() : null
-  }
-
   /** 업적 폼 초기화 (추가 모드로) */
   const resetAchievementForm = () => {
     setEditingAchievementId(null)
@@ -1731,7 +1722,6 @@ export function HeadsOfStateSection({
                           yearRange={mergedLineageAll.yearRange}
                           getPersonName={getPersonName}
                           formatDate={formatDate}
-                          getRegnalNameFromNotes={getRegnalNameFromNotes}
                           getPositionLabel={getPositionLabel}
                           getDynastyNameForTenure={getDynastyNameForTenure}
                           separatorBeforeCols={
@@ -1749,7 +1739,6 @@ export function HeadsOfStateSection({
                           parentToChildren={emptyMap}
                           getPersonName={getPersonName}
                           formatDate={formatDate}
-                          getRegnalNameFromNotes={getRegnalNameFromNotes}
                           getDynastyNameForTenure={getDynastyNameForTenure}
                           onCardClick={(tenureId) => {
                             setCabinetModalTenureId(tenureId)
@@ -1777,12 +1766,7 @@ export function HeadsOfStateSection({
                                 const name = getPersonName(
                                   t.person,
                                 ).toLowerCase()
-                                // 왕호는 재위 기록의 regnalName, 없으면 레거시 비고의 '왕명:'
-                                const regnal = (
-                                  t.regnalName ||
-                                  getRegnalNameFromNotes(t.notes) ||
-                                  ''
-                                ).toLowerCase()
+                                const regnal = (t.regnalName || '').toLowerCase()
                                 const title = (
                                   t.positionDefinition?.title ||
                                   t.title ||
@@ -2040,8 +2024,8 @@ export function HeadsOfStateSection({
                                               t.title ||
                                               t.positionDefinition?.title ||
                                               '—'
-                                            const regnalFromNotes =
-                                              getRegnalNameFromNotes(t.notes)
+                                            const storedRegnalName =
+                                              t.regnalName?.trim() || null
                                             const lifespan =
                                               formatPersonLifespan(t.person)
                                             const ageAtStart = calcAgeAtTenure(
@@ -2163,7 +2147,7 @@ export function HeadsOfStateSection({
                                                             : null
                                                         }
                                                         regnalName={
-                                                          regnalFromNotes
+                                                          storedRegnalName
                                                         }
                                                         dynastyName={
                                                           dynastyName
@@ -2315,7 +2299,7 @@ export function HeadsOfStateSection({
                                                             : null
                                                         }
                                                         regnalName={
-                                                          regnalFromNotes
+                                                          storedRegnalName
                                                         }
                                                         dynastyName={
                                                           dynastyName

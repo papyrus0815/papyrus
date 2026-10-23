@@ -96,11 +96,11 @@ describe('buildCabinetTerritoryLegendEntries', () => {
 })
 
 describe('sovereignLegendPersonLabelFromMonarchTenure', () => {
-  it('notes의 왕명이 있으면 인물 본명보다 우선', () => {
+  it('재위 왕호(regnalName)가 있으면 인물 본명보다 우선', () => {
     expect(
       sovereignLegendPersonLabelFromMonarchTenure(
         {
-          notes: '왕명: 비토리오 에마누엘레 2세',
+          regnalName: '비토리오 에마누엘레 2세',
           person: { name: '사보이아', surname: '비토리오 에마누엘레' },
           startDate: '1849-01-01',
         } as any,

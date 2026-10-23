@@ -239,12 +239,6 @@ function resolveParts(
 const lowerKey = (parts: DateParts) =>
   parts.year * 10000 + (parts.month ?? 1) * 100 + (parts.day ?? 1)
 
-/** 재임 `notes`에 저장된 레거시 `왕명: …` 인코딩 */
-function regnalNameFromNotes(notes: string | null | undefined): string | null {
-  const match = notes?.match(/왕명\s*:\s*(.+?)(?:\n|$)/)
-  return match ? match[1].trim() || null : null
-}
-
 /**
  * 재위 기록 → 즉위 구분선. 즉위일을 모르는 기록은 연표에 놓을 수 없어 뺀다.
  *
@@ -302,7 +296,6 @@ export function toReignMarkers(
 
     const name =
       reign.regnalName?.trim() ||
-      regnalNameFromNotes(reign.notes) ||
       person?.templeName?.trim() ||
       (person ? personName(person) : '') ||
       '군주'

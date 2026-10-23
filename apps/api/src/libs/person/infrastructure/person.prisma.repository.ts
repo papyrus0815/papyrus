@@ -408,17 +408,13 @@ function specificTitle(title: string | null | undefined, definitionTitle: string
 }
 
 /**
- * 인물의 대표 왕호 — 가장 최근 재위(배열 첫 행)의 왕호, 없으면 레거시 비고의 '왕명:' 줄.
+ * 인물의 대표 왕호 — 가장 최근 재위(배열 첫 행)의 왕호.
  * 왕호는 사람이 아니라 재위의 속성이라(제임스 6세/1세) 인물에 저장하지 않고 여기서 파생한다.
  */
 function representativeRegnalName(reigns: any[] | null | undefined): string | null {
   const first = Array.isArray(reigns) ? reigns[0] : null
-  if (!first) return null
-  const stored = typeof first.regnalName === 'string' ? first.regnalName.trim() : ''
-  if (stored) return stored
-  const notes = typeof first.notes === 'string' ? first.notes : ''
-  const matched = notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i)
-  return matched ? matched[1].trim() : null
+  const stored = typeof first?.regnalName === 'string' ? first.regnalName.trim() : ''
+  return stored || null
 }
 
 /** 업적 응답의 부모 재임 — 재위·재임 같은 include, 군주직 판정용 isMonarchical 포함 */

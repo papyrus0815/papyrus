@@ -24,7 +24,6 @@ import {
   toSignedYear,
 } from '@/shared/lib/country-period'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { regnalNameFromNotes } from '@/entities/government-position/model/regnal-name'
 
 import type {
   CalendarEventItem,
@@ -313,7 +312,6 @@ export function useHistoricalCountryDashboard(
         /* 재위는 왕명(루이 14세)이 이름이다 — 성까지 붙은 인물명은 같은 왕가끼리 구분이 안 된다 */
         personName:
           tenure.regnalName?.trim() ||
-          regnalNameFromNotes(tenure.notes) ||
           personNameOf(tenure.person),
         profileImageUrl: tenure.person?.profileImageUrl ?? null,
         title: tenure.title ?? tenure.positionDefinition?.title ?? null,

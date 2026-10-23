@@ -331,13 +331,6 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
     if (personId) setPanelTarget({ personId, tenureId: t.id })
   }
 
-  /** notes에서 "왕명: xxx" 추출 — 왕호 칸이 비어 있는 레거시 행용 */
-  const getRegnalNameFromNotes = (notes: string | null | undefined) => {
-    if (!notes?.trim()) return ''
-    const matched = notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || notes.match(/왕명\s*:\s*(.+)/i)
-    return matched ? matched[1].trim() : ''
-  }
-
   const getPersonName = (p: any) =>
     p
       ? getPersonDisplayName({
@@ -430,7 +423,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
           <CardGrid>
             <AnimatePresence initial={false}>
               {tenures.map((t: any) => {
-                const regnal = t.regnalName?.trim() || getRegnalNameFromNotes(t.notes)
+                const regnal = t.regnalName?.trim() || ''
                 const personDisplay = regnal ? `${regnal} (${getPersonName(t.person)})` : getPersonName(t.person)
                 const ordNum = t.ordinal
                 const startLabel = formatEdge(t.startDate, t.startEra, t.startYear)

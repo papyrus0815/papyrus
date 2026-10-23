@@ -60,7 +60,6 @@ interface LineageTreeProps {
   parentToChildren: Map<string, string[]>
   getPersonName: (p: any) => string
   formatDate: (d: string) => string
-  getRegnalNameFromNotes: (notes: string | null | undefined) => string | null
   /** 전체 보기일 때 카드에 직책명 표시. 있으면 카드 상단에 직책 뱃지 노출 */
   getPositionLabel?: (tenure: any) => string
   /** 직책 구간 구분선을 그을 열 인덱스(0 기준). 해당 열 왼쪽에 세로 구분선 표시 */
@@ -82,7 +81,6 @@ export function LineageTree({
   parentToChildren,
   getPersonName,
   formatDate,
-  getRegnalNameFromNotes,
   getPositionLabel,
   separatorBeforeCols = [],
   positionHeaders = [],
@@ -1098,7 +1096,7 @@ export function LineageTree({
                   const cardWidthPx = Math.round(visual?.widthPx ?? CARD_WIDTH)
                   const isCompactCard = !!visual?.isShort
                   const titleText = t.title || t.positionDefinition?.title || '—'
-                  const regnalName = getRegnalNameFromNotes(t.notes)
+                  const regnalName = (t.regnalName?.trim() || null)
                   const personName = getPersonName(t.person)
                   const mainLabel = regnalName || personName
                   const subLabel = regnalName ? personName : null
@@ -1126,7 +1124,7 @@ export function LineageTree({
                       : ''
                     : ''
                   const parentRegnal =
-                    parentTenure && getRegnalNameFromNotes(parentTenure.notes)
+                    parentTenure && (parentTenure.regnalName?.trim() || null)
                   const parentDisplay =
                     parentRegnal ||
                     (parentTenure ? getPersonName(parentTenure.person) : '')
@@ -1243,7 +1241,7 @@ export function LineageTree({
                           ? (tenureIdToCardHeight.get(t.id) ?? CARD_HEIGHT)
                           : undefined
                       const titleText = t.title || t.positionDefinition?.title || '—'
-                      const regnalName = getRegnalNameFromNotes(t.notes)
+                      const regnalName = (t.regnalName?.trim() || null)
                       const personName = getPersonName(t.person)
                       const mainLabel = regnalName || personName
                       const subLabel = regnalName ? personName : null
@@ -1269,7 +1267,7 @@ export function LineageTree({
                         : ''
                       const parentRegnal =
                         parentTenure &&
-                        getRegnalNameFromNotes(parentTenure.notes)
+                        (parentTenure.regnalName?.trim() || null)
                       const parentDisplay =
                         parentRegnal ||
                         (parentTenure ? getPersonName(parentTenure.person) : '')

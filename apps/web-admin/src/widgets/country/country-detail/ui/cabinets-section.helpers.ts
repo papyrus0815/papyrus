@@ -33,29 +33,18 @@ export function getPersonName(
   )
 }
 
-/** 재임 `notes`에 저장된 `왕명: …` (역대 수반·군주 등록과 동일) */
-export function getRegnalNameFromNotes(
-  notes: string | null | undefined,
-): string | null {
-  if (!notes?.trim()) return null
-  const m =
-    notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) ||
-    notes.match(/왕명\s*:\s*(.+)/i)
-  return m ? m[1].trim() : null
-}
-
 /**
  * 군주·국가 원수 재임 표시명 — 등록한 군주명(왕명)이 있으면 그것을, 없으면 인물 표시명.
  */
 export function getRegnalOrPersonDisplayName(
   tenure: {
-    notes?: string | null
+    regnalName?: string | null
     person?: Parameters<typeof getPersonName>[0] | null
   } | null | undefined,
 ): string {
   if (!tenure) return '—'
-  const regnal = getRegnalNameFromNotes(tenure.notes)
-  if (regnal?.trim()) return regnal.trim()
+  const regnal = tenure.regnalName?.trim()
+  if (regnal) return regnal
   if (tenure.person) return getPersonName(tenure.person)
   return '—'
 }
@@ -1010,8 +999,8 @@ export function sovereignLegendPersonLabelFromMonarchTenure(
   pivotIso: string | null | undefined,
 ): string {
   if (!m) return '—'
-  const regnal = getRegnalNameFromNotes(m.notes)
-  if (regnal?.trim()) return regnal.trim()
+  const regnal = m.regnalName?.trim()
+  if (regnal) return regnal
   const nm = getPersonName(m.person)
   if (nm && nm !== '—') return nm
   const iso = (pivotIso ?? m.startDate ?? '').trim()

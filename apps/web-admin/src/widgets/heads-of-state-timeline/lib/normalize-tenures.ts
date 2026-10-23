@@ -6,7 +6,6 @@
  */
 
 import { categorizePosition } from '@/entities/government-position/model/categorize'
-import { regnalNameFromNotes } from '@/entities/government-position/model/regnal-name'
 import type { PositionCategory } from '@/entities/government-position/model/types'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
@@ -139,7 +138,7 @@ export function normalizeTenures(rawList: unknown): TenureBar[] {
   return all
     .map((t) => {
       const regnalName =
-        t.regnalName?.trim() || regnalNameFromNotes(t.notes) || null
+        t.regnalName?.trim() || null
       const startDate = t.startDate as string
       const endDate = t.endDate ?? null
       return {

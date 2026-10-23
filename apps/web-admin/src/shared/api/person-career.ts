@@ -560,7 +560,9 @@ export type GovernmentHeadTenureInCabinetList = {
   subTermNumber?: number | null
   /** 연호·시대 — GET /government-positions/cabinets 등에서 포함 */
   regnalEras?: RegnalEraDto[]
-  /** 비고 — 역대 수반 등록 시 `왕명: …` 형태로 저장되는 경우 있음 */
+  /** 재직명(왕호·교황명) — 재위 */
+  regnalName?: string | null
+  /** 비고(자유 서술) — 왕호는 regnalName */
   notes?: string | null
   /** 재위(군주직)인가 — 직위 보유 응답 공통 */
   isMonarchical?: boolean
