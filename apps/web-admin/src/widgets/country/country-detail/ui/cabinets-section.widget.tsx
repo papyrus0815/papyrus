@@ -693,10 +693,10 @@ export function CabinetsSection({
       const posTitle =
         head?.title ?? head?.positionDefinition?.title ?? c.name ?? ''
       const start = head?.startDate
-        ? new Date(head.startDate).getFullYear().toString()
+        ? new Date(head.startDate).getUTCFullYear().toString()
         : ''
       const end = head?.endDate
-        ? new Date(head.endDate).getFullYear().toString()
+        ? new Date(head.endDate).getUTCFullYear().toString()
         : '현재'
       const territory = getHeadTenureTerritoryLabel(head, country.name)
       const cabName = typeof c.name === 'string' ? c.name : ''
@@ -2147,7 +2147,7 @@ export function CabinetsSection({
                                       const thumbUrl =
                                         head?.person?.profileImageUrl ?? null
                                       const startYear = head?.startDate
-                                        ? new Date(head.startDate).getFullYear()
+                                        ? new Date(head.startDate).getUTCFullYear()
                                         : null
                                       const range = head?.startDate
                                         ? `${formatDate(head.startDate)} – ${head?.endDate ? formatDate(head.endDate) : '현재'}`
@@ -4669,7 +4669,7 @@ export function CabinetsSection({
                                               {treaty.signDate
                                                 ? new Date(
                                                     treaty.signDate,
-                                                  ).getFullYear()
+                                                  ).getUTCFullYear()
                                                 : '—'}
                                             </CabS.CabDetailTreatyYearCell>
                                             <CabS.CabDetailTreatyChevronWrap

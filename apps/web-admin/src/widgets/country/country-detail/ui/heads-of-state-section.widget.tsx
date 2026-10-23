@@ -677,6 +677,7 @@ export function HeadsOfStateSection({
     if (!d) return '—'
     const date = new Date(d)
     return date.toLocaleDateString('ko-KR', {
+      timeZone: 'UTC',
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -694,6 +695,7 @@ export function HeadsOfStateSection({
     const date = new Date(iso)
     if (isNaN(date.getTime())) return iso
     return date.toLocaleDateString('ko-KR', {
+      timeZone: 'UTC',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -1185,7 +1187,7 @@ export function HeadsOfStateSection({
     if (sorted.length === 0) return null
     const getCentury = (t: any) => {
       if (!t?.startDate) return 0
-      const y = new Date(t.startDate).getFullYear()
+      const y = new Date(t.startDate).getUTCFullYear()
       return Math.floor(y / 100) + (y >= 0 ? 1 : 0)
     }
     const getPosition = (t: any) =>
@@ -1813,7 +1815,7 @@ export function HeadsOfStateSection({
                                   const years = filteredTenures.flatMap(
                                     (t: any) => {
                                       const s = t.startDate
-                                        ? new Date(t.startDate).getFullYear()
+                                        ? new Date(t.startDate).getUTCFullYear()
                                         : null
                                       return s ? [s] : []
                                     },
@@ -2035,12 +2037,12 @@ export function HeadsOfStateSection({
                                             const startYear = t.startDate
                                               ? new Date(
                                                   t.startDate,
-                                                ).getFullYear()
+                                                ).getUTCFullYear()
                                               : null
                                             const endYear = t.endDate
                                               ? new Date(
                                                   t.endDate,
-                                                ).getFullYear()
+                                                ).getUTCFullYear()
                                               : null
                                             const range = startYear
                                               ? `${startYear}–${endYear ?? '현재'}`

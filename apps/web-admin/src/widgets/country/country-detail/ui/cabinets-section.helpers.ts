@@ -99,16 +99,16 @@ export function calcAgeAtEndTenure(
   tenureEndDate: string | null | undefined,
 ): number | null {
   if (!person || !tenureEndDate) return null
-  const endYear = new Date(tenureEndDate).getFullYear()
-  const endMonth = new Date(tenureEndDate).getMonth() + 1
-  const endDay = new Date(tenureEndDate).getDate()
+  const endYear = new Date(tenureEndDate).getUTCFullYear()
+  const endMonth = new Date(tenureEndDate).getUTCMonth() + 1
+  const endDay = new Date(tenureEndDate).getUTCDate()
 
   if (person.birthDate) {
     const birth = new Date(person.birthDate)
-    let age = endYear - birth.getFullYear()
+    let age = endYear - birth.getUTCFullYear()
     if (
-      endMonth < birth.getMonth() + 1 ||
-      (endMonth === birth.getMonth() + 1 && endDay < birth.getDate())
+      endMonth < birth.getUTCMonth() + 1 ||
+      (endMonth === birth.getUTCMonth() + 1 && endDay < birth.getUTCDate())
     )
       age -= 1
     return age >= 0 ? age : null
@@ -146,9 +146,9 @@ export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return '—'
   const date = typeof value === 'string' ? new Date(value) : value
   if (Number.isNaN(date.getTime())) return '—'
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
+  const y = date.getUTCFullYear()
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(date.getUTCDate()).padStart(2, '0')
   return `${y}.${m}.${d}`
 }
 
@@ -237,14 +237,14 @@ export function calcTenureDuration(
   const start = new Date(startDate)
   const end = endDate ? new Date(endDate) : new Date()
 
-  let years = end.getFullYear() - start.getFullYear()
-  let months = end.getMonth() - start.getMonth()
-  let days = end.getDate() - start.getDate()
+  let years = end.getUTCFullYear() - start.getUTCFullYear()
+  let months = end.getUTCMonth() - start.getUTCMonth()
+  let days = end.getUTCDate() - start.getUTCDate()
 
   if (days < 0) {
     months -= 1
-    const prevMonth = new Date(end.getFullYear(), end.getMonth(), 0)
-    days += prevMonth.getDate()
+    const prevMonth = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 0))
+    days += prevMonth.getUTCDate()
   }
   if (months < 0) {
     years -= 1
@@ -1128,8 +1128,8 @@ export function monarchReignLegendForCabinetTimeline(
     if (seen.has(m.id)) continue
     seen.add(m.id)
     const cap = monarchCaptionFromTenure(m, m.startDate)
-    const sy = new Date(m.startDate).getFullYear()
-    const ey = m.endDate ? new Date(m.endDate).getFullYear() : nowY
+    const sy = new Date(m.startDate).getUTCFullYear()
+    const ey = m.endDate ? new Date(m.endDate).getUTCFullYear() : nowY
     out.push({
       id: m.id,
       label: `${cap} ${sy}–${ey}`,
@@ -1158,9 +1158,9 @@ export function cabinetTimelineHeaderYearRange(
   for (const c of timelineCabinets) {
     const h = c.headTenure
     if (!h?.startDate) continue
-    const sy = new Date(h.startDate).getFullYear()
+    const sy = new Date(h.startDate).getUTCFullYear()
     if (!Number.isNaN(sy)) years.push(sy)
-    const ey = h.endDate ? new Date(h.endDate).getFullYear() : nowY
+    const ey = h.endDate ? new Date(h.endDate).getUTCFullYear() : nowY
     if (!Number.isNaN(ey)) years.push(ey)
   }
 
@@ -1179,9 +1179,9 @@ export function cabinetTimelineHeaderYearRange(
         const mRange = headTenureDateRangeMs(m)
         if (!mRange) continue
         if (execRange.start <= mRange.end && mRange.start <= execRange.end) {
-          const ms = new Date(m.startDate).getFullYear()
+          const ms = new Date(m.startDate).getUTCFullYear()
           if (!Number.isNaN(ms)) years.push(ms)
-          const me = m.endDate ? new Date(m.endDate).getFullYear() : nowY
+          const me = m.endDate ? new Date(m.endDate).getUTCFullYear() : nowY
           if (!Number.isNaN(me)) years.push(me)
         }
       }

@@ -345,7 +345,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
   /** 기간 한쪽 끝 — DATETIME이 있으면 날짜, 없으면(서기 1000년 이전·기원전) 구조화 연도 */
   const formatEdge = (iso: string | null | undefined, era: string | null | undefined, year: number | null | undefined) => {
     if (iso) {
-      return new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })
+      return new Date(iso).toLocaleDateString('ko-KR', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' })
     }
     if (year != null) return era === 'BC' ? `BC ${year}년` : `${year}년`
     return '—'

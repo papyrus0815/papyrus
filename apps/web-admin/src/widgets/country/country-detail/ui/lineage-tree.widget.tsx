@@ -535,8 +535,8 @@ export function LineageTree({
     const PX_PER_YEAR = 5
     const map = new Map<string, number>()
     rows.flat().forEach((t: any) => {
-      const start = t.startDate ? new Date(t.startDate).getFullYear() : null
-      const end = t.endDate ? new Date(t.endDate).getFullYear() : null
+      const start = t.startDate ? new Date(t.startDate).getUTCFullYear() : null
+      const end = t.endDate ? new Date(t.endDate).getUTCFullYear() : null
       const endYear = end ?? (start != null ? new Date().getFullYear() : null)
       const years =
         start != null && endYear != null ? yearSpan(start, endYear) : 0
@@ -716,7 +716,7 @@ export function LineageTree({
     rows.forEach((row, idx) => {
       const t = row[0]
       if (!t?.startDate) return
-      const yr = new Date(t.startDate).getFullYear()
+      const yr = new Date(t.startDate).getUTCFullYear()
       const century = Math.floor(yr / 100) + (yr >= 0 ? 1 : 0)
       if (current?.century === century) return
       if (current)
@@ -892,8 +892,8 @@ export function LineageTree({
 
   /** 재위 연도·기간 문자열 "YYYY~YYYY, N년" (연도 먼저, 재임 년수는 뒤에) */
   const getReignLabel = (t: any) => {
-    const start = t.startDate ? new Date(t.startDate).getFullYear() : null
-    const end = t.endDate ? new Date(t.endDate).getFullYear() : null
+    const start = t.startDate ? new Date(t.startDate).getUTCFullYear() : null
+    const end = t.endDate ? new Date(t.endDate).getUTCFullYear() : null
     const endYear = end ?? (start != null ? new Date().getFullYear() : null)
     const years =
       start != null && endYear != null ? yearSpan(start, endYear) : null
