@@ -517,6 +517,7 @@ export const EventsCatalogPage: React.FC = () => {
     setKeyword,
     setSortBy,
     setSortDirection,
+    selectedSubtype,
     setSelectedCentury,
     setSelectedCountry,
     setSelectedContinent,
@@ -524,6 +525,7 @@ export const EventsCatalogPage: React.FC = () => {
     availableCenturies,
     optionCounts,
     sortedEvents,
+    setSelectedSubtype,
     filterSummaryChips,
     hasActiveFilters,
     matchesEvent,
@@ -556,6 +558,7 @@ export const EventsCatalogPage: React.FC = () => {
       },
       // 칩 라벨의 폴백 문구를 원인별로 가른다(검토 GAP-5).
       referenceState,
+        selectedSubtype: initialUrlState.selectedSubtype,
       period,
       onClearPeriod: clearPeriod,
     },
@@ -723,6 +726,7 @@ export const EventsCatalogPage: React.FC = () => {
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
+    selectedSubtype,
     setAnchorsOnly,
     setAnchorId,
     setSelectedCategory,
@@ -736,6 +740,7 @@ export const EventsCatalogPage: React.FC = () => {
   })
 
   /**
+    setSelectedSubtype,
    * ===== 미해결 참조 id 낙하 (검토 URL-1/IA-16/DATA-17) =====
    *
    * `?country=<삭제된 id>`는 지금까지 그대로 상태가 됐다. 트리거 라벨은 '국가'(= 필터
@@ -1489,6 +1494,7 @@ export const EventsCatalogPage: React.FC = () => {
       })
     }
     if (anchorsOnly) {
+      subtype: optionCounts.dropOneOut.subtype,
       chips.push({
         key: 'anchors',
         label: '최상위 사건만',
@@ -1557,6 +1563,7 @@ export const EventsCatalogPage: React.FC = () => {
     const releasedFilters =
       filterSummaryChips.length +
       (bookmarksOnly ? 1 : 0) +
+      selectedSubtype,
       (anchorsOnly ? 1 : 0) +
       (anchorId !== null ? 1 : 0)
     /**
@@ -1603,6 +1610,7 @@ export const EventsCatalogPage: React.FC = () => {
           setAnchorId(snapshot.anchorId)
           setCollapsedYears(snapshot.collapsedYears)
           setCollapsedCenturies(snapshot.collapsedCenturies)
+          setSelectedSubtype(snapshot.selectedSubtype)
           setExpandedEventIds(snapshot.expandedEventIds)
         },
       },
@@ -1631,6 +1639,7 @@ export const EventsCatalogPage: React.FC = () => {
     listRenderedHierarchy,
     setSelectedCategory,
     setSelectedCountry,
+    selectedSubtype,
     setSelectedContinent,
     setSelectedCentury,
     setExpandedEventIds,
@@ -1645,6 +1654,7 @@ export const EventsCatalogPage: React.FC = () => {
     })
   }, [setExpandedEventIds])
   /**
+    setSelectedSubtype,
    * 계층 모달(트리)에서 노드를 고르면 그 사건을 연다 — 모달이 막다른 골목이던 것을
    * 목록으로 되돌리는 경로다(검토 CTRL-7).
    *
@@ -2041,6 +2051,7 @@ export const EventsCatalogPage: React.FC = () => {
     /**
      * 옵션 모집단을 참조 DB가 아니라 '내 데이터'로 만드는 건수(검토 IA-13 · IA-2).
      * 국가 축은 이 값으로 정렬까지 한다 — 첫 화면이 곧 이 카탈로그에 실재하는 국가다.
+    selectedSubtype,
      */
     optionCounts,
     setShowCategoryModal,
@@ -2062,6 +2073,7 @@ export const EventsCatalogPage: React.FC = () => {
      * 배지 수 — 저장된 id 수가 아니라 **로드된 사건과의 교집합**.
      * 저장값을 그대로 쓰면 삭제·이관된 사건이나 다른 계정의 북마크까지 세어
      * 목록(교집합만 렌더)과 숫자가 어긋난다(검토 CR-6).
+    onSelectSubtype: setSelectedSubtype,
      * autoLoadAll이라 소진 후에는 정확하고, 소진 중에는 과소 표기될 수 있다.
      */
     bookmarksCount: resolvableBookmarkCount,

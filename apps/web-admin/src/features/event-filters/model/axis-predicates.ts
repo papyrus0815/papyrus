@@ -12,7 +12,7 @@
  * 여기 한 곳에 모으고, `matchesEvent`는 "아무 축도 빼지 않은 호출"이 된다.
  *
  * ## 축 목록
- * 카테고리 · 국가 · 대륙 · 세기 · 키워드 · 북마크 여섯. 북마크는 사후 filter가 아니라
+ * 분야 · 세부 분야 · 국가 · 대륙 · 세기 · 키워드 · 북마크 · 기간. 북마크는 사후 filter가 아니라
  * 다른 축과 같은 레인에 있으므로(검토 IA-7/DATA-10) 여기 포함된다.
  * 정렬·계층 토글은 '표시 옵션'이라 축이 아니다.
  */
@@ -20,6 +20,8 @@ import type { CenturyFilter } from '@/entities/event/model'
 // 값(런타임) import는 배럴이 아니라 types 모듈에서 직접 — 배럴은 useEvents → api.service를
 // 끌고 오고 그 안의 `import.meta`가 jest(ts-jest CJS) 컴파일을 막는다.
 import { CENTURY_UNKNOWN } from '@/entities/event/model/types'
+// 레지스트리는 순수 모듈이라 배럴을 거치지 않고 직접 가져온다
+import { eventTypeLabel } from '@/entities/event/model/event-type-registry'
 import { FILTER_ALL } from '@/features/event-list/lib'
 
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
@@ -37,6 +39,8 @@ export interface FilterableEvent {
   description?: string
   /** 분야 키(MILITARY…) */
   domain?: string | null
+  /** 세부 분야 키(BATTLE…) — 없으면 세부 없음 */
+  type?: string | null
   location?: string | null
   keywords?: string[] | null
   startDate?: string | null
@@ -47,6 +51,7 @@ export interface FilterableEvent {
 
 export type FilterAxisKey =
   | 'category'
+  | 'subtype'
   | 'country'
   | 'continent'
   | 'century'
@@ -57,6 +62,7 @@ export type FilterAxisKey =
 /** 축 열거의 단일 출처 — 새 축을 추가하면 건수·drop-one-out이 자동으로 따라온다. */
 export const FILTER_AXIS_KEYS = [
   'category',
+  'subtype',
   'country',
   'continent',
   'century',
@@ -69,8 +75,19 @@ export const FILTER_AXIS_KEYS = [
  * 술어 평가에 필요한 값 묶음. 전부 `useEventFilters`가 만들어 넣는다 —
  * 이 모듈은 상태를 갖지 않으므로 훅 밖(테스트·건수 계산)에서도 같은 판정을 재현할 수 있다.
  */
+/** 세부 분야 축에서 '세부 없음'을 고르는 값 — URL(`?subtype=NONE`)에도 그대로 실린다 */
+export const SUBTYPE_NONE = 'NONE'
+
+/** 세부 분야 필터 값의 표시 이름 — 칩·트리거가 같은 문자열을 쓴다 */
+export function subtypeFilterLabel(value: string): string {
+  if (value === SUBTYPE_NONE) return '세부 없음'
+  return eventTypeLabel(value) ?? '알 수 없음'
+}
+
 export interface FilterAxisContext {
   selectedCategory: typeof FILTER_ALL | string
+  /** 세부 분야 키 · SUBTYPE_NONE · FILTER_ALL */
+  selectedSubtype: typeof FILTER_ALL | string
   selectedCountry: typeof FILTER_ALL | string
   selectedContinent: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
@@ -119,6 +136,18 @@ export function matchesFilterAxis(
       return (
         context.selectedCategory === FILTER_ALL ||
         event.domain === context.selectedCategory
+      )
+
+    /**
+     * 세부 분야 — 분야와 **독립 축**이다(저장도 독립). 군사 분야 + 조약처럼 어떤 조합이든 걸린다.
+     * '세부 없음'(SUBTYPE_NONE)은 세부를 안 고른 사건만.
+     */
+    case 'subtype':
+      return (
+        context.selectedSubtype === FILTER_ALL ||
+        (context.selectedSubtype === SUBTYPE_NONE
+          ? !event.type
+          : event.type === context.selectedSubtype)
       )
 
     /**

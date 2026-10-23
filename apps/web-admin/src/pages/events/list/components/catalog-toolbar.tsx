@@ -70,6 +70,8 @@ interface Props {
 
   // 필터 상태 / 설정
   selectedCategory: string
+  /** 세부 분야 — 세부 키 · NONE · FILTER_ALL */
+  selectedSubtype: string
   selectedCountry: string
   selectedContinent: string
   selectedCentury: CenturyFilter
@@ -94,6 +96,7 @@ interface Props {
 
   /** 인라인 팝오버에서 직접 선택 — FILTER_ALL 또는 id */
   onSelectCategory?: (id: string) => void
+  onSelectSubtype?: (id: string) => void
   onSelectCountry?: (id: string) => void
   onSelectContinent?: (id: string) => void
 
@@ -153,6 +156,7 @@ export const CatalogToolbar: React.FC<Props> = ({
   setKeywordInput,
   isSearchPending = false,
   selectedCategory,
+  selectedSubtype,
   selectedCountry,
   selectedContinent,
   selectedCentury,
@@ -169,6 +173,7 @@ export const CatalogToolbar: React.FC<Props> = ({
   setShowCountryModal,
   setSelectedCentury,
   onSelectCategory,
+  onSelectSubtype,
   onSelectCountry,
   onSelectContinent,
   bookmarksOnly,
@@ -256,6 +261,7 @@ export const CatalogToolbar: React.FC<Props> = ({
 
         <FiltersPanel
           selectedCategory={selectedCategory}
+          selectedSubtype={selectedSubtype}
           selectedCountry={selectedCountry}
           selectedContinent={selectedContinent}
           selectedCentury={selectedCentury}
@@ -268,6 +274,7 @@ export const CatalogToolbar: React.FC<Props> = ({
           onRetryReference={onRetryReference}
           optionCounts={optionCounts}
           onSelectCategory={onSelectCategory}
+          onSelectSubtype={onSelectSubtype}
           onSelectCountry={onSelectCountry}
           onSelectContinent={onSelectContinent}
           onShowCategoryModal={() => setShowCategoryModal(true)}

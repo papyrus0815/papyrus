@@ -13,6 +13,7 @@ import {
   buildKeywordHaystack,
   type FilterableEvent,
   type FilterAxisContext,
+  SUBTYPE_NONE,
 } from './axis-predicates'
 import { buildFilterOptionCounts } from './option-facets'
 
@@ -22,6 +23,7 @@ const EVENTS: FilterableEvent[] = [
     title: '병자호란',
     description: '',
     domain: 'MILITARY',
+    type: 'WAR',
     startDate: '1636-12-01',
     relatedHistoricalCountries: [{ id: 'joseon' }],
   },
@@ -30,6 +32,7 @@ const EVENTS: FilterableEvent[] = [
     title: '한일 국교 정상화',
     description: '',
     domain: 'DIPLOMACY',
+    type: 'TREATY',
     startDate: '1965-06-22',
     relatedCountries: [{ id: 'kr' }, { id: 'jp' }],
   },
@@ -53,6 +56,7 @@ function makeContext(
 ): FilterAxisContext {
   return {
     selectedCategory: FILTER_ALL,
+    selectedSubtype: FILTER_ALL,
     selectedCountry: FILTER_ALL,
     selectedContinent: FILTER_ALL,
     selectedCentury: FILTER_ALL,
@@ -81,6 +85,17 @@ describe('buildFilterOptionCounts', () => {
     expect(counts.century.get(17)).toBe(1)
     expect(counts.century.get(20)).toBe(1)
     expect(counts.centuryUnknown).toBe(1)
+    // 세부 — 키별, 세부 없는 사건은 '세부 없음'으로
+    expect(counts.subtype.get('WAR')).toBe(1)
+    expect(counts.subtype.get('TREATY')).toBe(1)
+    expect(counts.subtype.get(SUBTYPE_NONE)).toBe(1)
+  })
+
+  it('세부 건수는 분야가 걸려 있어도 세부 축만 빼고 센다 — 이걸 고르면 몇 건', () => {
+    const counts = buildFilterOptionCounts(EVENTS, makeContext({ selectedCategory: 'MILITARY' }))
+    expect(counts.subtype.get('WAR')).toBe(1)
+    expect(counts.subtype.get('TREATY')).toBeUndefined()
+    expect(counts.dropOneOut.subtype).toBe(2)
   })
 
   it('국가 건수에 브리지 합류가 반영된다 (DATA-4/IA-3와 같은 정의)', () => {

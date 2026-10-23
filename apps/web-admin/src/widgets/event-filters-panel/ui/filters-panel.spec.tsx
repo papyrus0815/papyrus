@@ -432,12 +432,14 @@ describe('FiltersPanel — 옵션 모집단 (검토 배치 7)', () => {
   it('옵션 우측에 건수가 붙는다 — 로드된 사건이 있을 때만 (IA-13)', () => {
     const optionCounts = {
       category: new Map([['MILITARY', 12]]),
+      subtype: new Map<string, number>(),
       country: new Map<string, number>(),
       continent: new Map<string, number>(),
       century: new Map<number, number>(),
       centuryUnknown: 0,
       dropOneOut: {
         category: 30,
+        subtype: 30,
         country: 30,
         continent: 30,
         century: 30,
@@ -705,5 +707,37 @@ describe('FiltersPanel — 트리거 시각 계약 (검토 배치 5)', () => {
     expect(screen.getByRole('combobox', { name: '분야' })).not.toHaveAttribute(
       'data-active',
     )
+  })
+})
+
+describe('FiltersPanel — 세부 분야 팝오버', () => {
+  it('selectedSubtype을 주지 않으면 세부 트리거를 그리지 않는다(다른 지면 호환)', () => {
+    renderWithTheme(<FiltersPanel {...baseProps} />)
+    expect(screen.queryByRole('button', { name: '세부' })).not.toBeInTheDocument()
+  })
+
+  it('분야가 걸리면 그 분야에서 쓰는 세부가 위 섹션, 나머지는 아래 — 고르면 onSelectSubtype', () => {
+    const onSelectSubtype = jest.fn()
+    renderWithTheme(
+      <FiltersPanel
+        {...baseProps}
+        selectedCategory="MILITARY"
+        selectedSubtype={FILTER_ALL}
+        onSelectSubtype={onSelectSubtype}
+      />,
+    )
+    // 검색 가능한 팝오버(국가와 같은 변종)라 트리거는 버튼, 검색 입력이 combobox다
+    fireEvent.click(screen.getByRole('button', { name: '세부' }))
+    const listbox = screen.getByRole('listbox')
+    expect(within(listbox).getByRole('group', { name: '군사에서 쓰는 세부' })).toBeInTheDocument()
+    expect(within(listbox).getByRole('group', { name: '다른 세부' })).toBeInTheDocument()
+    // 저장이 독립 축이라 다른 분야의 세부(조약)도 고를 수 있다
+    fireEvent.click(popoverOption('법령·정책·개혁'))
+    expect(onSelectSubtype).toHaveBeenCalledWith('LAW_POLICY')
+  })
+
+  it("값이 걸리면 트리거가 '세부 · 값'으로 읽힌다", () => {
+    renderWithTheme(<FiltersPanel {...baseProps} selectedSubtype="NONE" onSelectSubtype={jest.fn()} />)
+    expect(screen.getByRole('button', { name: '세부 세부 없음' })).toBeInTheDocument()
   })
 })

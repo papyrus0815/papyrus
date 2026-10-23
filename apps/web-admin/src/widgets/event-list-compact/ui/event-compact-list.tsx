@@ -2259,7 +2259,7 @@ const ListColumnHeader: React.FC<{
       종료
     </List.ColumnHeaderCell>
     <List.ColumnHeaderCell $col="cat" $align="right">
-      분류
+      분야
     </List.ColumnHeaderCell>
     {/* '사건' 열에 걸리는 축은 **하위 많은 순**이다 — 이 열이 제목과 하위 펼침을 함께
         싣는 칸이고, 그 정렬이 세우는 것도 '자손을 몇 개 거느린 사건인가'다.

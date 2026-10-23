@@ -35,6 +35,7 @@ import { formatCenturyLabel } from '../../../pages/events/utils/events.utils'
 import {
   buildKeywordHaystack,
   matchesAllFilterAxes,
+  subtypeFilterLabel,
   type FilterAxisContext,
 } from './axis-predicates'
 import { listEventCenturies } from './century-span'
@@ -61,6 +62,8 @@ import {
  */
 export interface EventFilterInitialState {
   selectedCategory?: string
+  /** 세부 분야 키 · SUBTYPE_NONE */
+  selectedSubtype?: string
   selectedCountry?: string
   selectedContinent?: string
   selectedCentury?: CenturyFilter
@@ -157,6 +160,10 @@ export const useEventFilters = (
   const [selectedCategory, setSelectedCategory] = useState<
     typeof FILTER_ALL | string
   >(() => initial?.selectedCategory ?? FILTER_ALL)
+  /** 세부 분야 — 분야와 독립 축(군사 › 조약도 걸린다). 값은 세부 키 · SUBTYPE_NONE · FILTER_ALL */
+  const [selectedSubtype, setSelectedSubtype] = useState<
+    typeof FILTER_ALL | string
+  >(() => initial?.selectedSubtype ?? FILTER_ALL)
   const [keyword, setKeyword] = useState(() => initial?.keyword ?? '')
   const [sortBy, setSortBy] = useState<SortOption>(
     () => initial?.sortBy ?? SORT_OPTIONS.RECENT,
@@ -304,6 +311,7 @@ export const useEventFilters = (
    */
   const hasNarrowingFilters =
     selectedCategory !== FILTER_ALL ||
+    selectedSubtype !== FILTER_ALL ||
     selectedCountry !== FILTER_ALL ||
     selectedContinent !== FILTER_ALL ||
     selectedCentury !== FILTER_ALL ||
@@ -320,6 +328,7 @@ export const useEventFilters = (
   const axisContext = useMemo<FilterAxisContext>(
     () => ({
       selectedCategory,
+      selectedSubtype,
       selectedCountry,
       selectedContinent,
       selectedCentury,
@@ -337,6 +346,7 @@ export const useEventFilters = (
       periodFrom,
       periodTo,
       selectedCategory,
+      selectedSubtype,
       selectedCountry,
       selectedContinent,
       selectedCentury,
@@ -501,8 +511,16 @@ export const useEventFilters = (
       )
       chips.push({
         key: 'category',
-        label: `카테고리 · ${name}`,
+        label: `분야 · ${name}`,
         onClear: () => setSelectedCategory(FILTER_ALL),
+      })
+    }
+
+    if (selectedSubtype !== FILTER_ALL) {
+      chips.push({
+        key: 'subtype',
+        label: `세부 · ${subtypeFilterLabel(selectedSubtype)}`,
+        onClear: () => setSelectedSubtype(FILTER_ALL),
       })
     }
 
@@ -579,6 +597,7 @@ export const useEventFilters = (
     period,
     onClearPeriod,
     selectedCategory,
+    selectedSubtype,
     selectedCountry,
     selectedContinent,
     selectedCentury,
@@ -607,6 +626,7 @@ export const useEventFilters = (
    */
   const handleResetFilters = () => {
     setSelectedCategory(FILTER_ALL)
+    setSelectedSubtype(FILTER_ALL)
     setKeyword('')
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
@@ -616,6 +636,7 @@ export const useEventFilters = (
   return {
     // 상태
     selectedCategory,
+    selectedSubtype,
     keyword,
     sortBy,
     sortDirection,
@@ -626,6 +647,7 @@ export const useEventFilters = (
 
     // 세터
     setSelectedCategory,
+    setSelectedSubtype,
     setKeyword,
     setSortBy,
     setSortDirection,

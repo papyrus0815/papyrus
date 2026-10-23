@@ -24,6 +24,8 @@
  * 직접 한다 — 배럴은 `useEvents → api.service`를 끌고 오고 그 안의 `import.meta`가
  * ts-jest(CJS) 컴파일을 깨뜨려 이 파일을 쓰는 spec이 통째로 실행 불가가 된다.
  */
+import { isEventTypeKey } from '@/entities/event/model/event-type-registry'
+import { SUBTYPE_NONE } from '@/features/event-filters/model/axis-predicates'
 import type { CenturyFilter } from '@/entities/event/model'
 import {
   CENTURY_UNKNOWN,
@@ -77,6 +79,8 @@ export interface CatalogUrlState {
    */
   anchorId: string | null
   selectedCategory: string
+  /** `subtype` — 세부 분야 키 · NONE(세부 없음) */
+  selectedSubtype: string
   selectedCountry: string
   selectedContinent: string
   selectedCentury: CenturyFilter
@@ -102,6 +106,16 @@ const readNonEmpty = (searchParams: URLSearchParams, key: string): string | null
 /** FILTER_ALL 기본을 갖는 id 축(카테고리·국가·대륙) 공통 파싱 */
 const readIdFilter = (searchParams: URLSearchParams, key: string): string =>
   readNonEmpty(searchParams, key) ?? FILTER_ALL
+
+/**
+ * 세부 분야 파라미터 — 세부 키(BATTLE…) 또는 NONE(세부 없음)만 받는다.
+ * 고정 목록이라 그 자리에서 검증할 수 있다 — 오타 값을 그대로 필터로 걸면 결과가 0건이 된다.
+ */
+const parseSubtypeParam = (raw: string | null): string => {
+  const value = raw?.trim()
+  if (!value) return FILTER_ALL
+  return value === SUBTYPE_NONE || isEventTypeKey(value) ? value : FILTER_ALL
+}
 
 /**
  * 세기 파라미터 검증(검토 URL-2/DATA-11).
@@ -167,6 +181,7 @@ export function parseCatalogSearchParams(
     anchorsOnly: searchParams.get('anchors') === '1',
     anchorId: readNonEmpty(searchParams, 'anchor'),
     selectedCategory: readIdFilter(searchParams, 'cat'),
+    selectedSubtype: parseSubtypeParam(searchParams.get('subtype')),
     selectedCountry: readIdFilter(searchParams, 'country'),
     selectedContinent: readIdFilter(searchParams, 'continent'),
     selectedCentury: parseCenturyParam(searchParams.get('century')),

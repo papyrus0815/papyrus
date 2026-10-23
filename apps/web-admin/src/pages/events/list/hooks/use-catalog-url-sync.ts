@@ -53,6 +53,8 @@ interface CatalogUrlSyncArgs {
   /** 앵커 스코프 — `anchor=<id>`. 이 사건과 자손으로 모수를 좁힌다. */
   anchorId: string | null
   selectedCategory: string
+  /** 세부 분야 — `subtype=<키|NONE>` */
+  selectedSubtype: string
   selectedCountry: string
   selectedContinent: string
   selectedCentury: CenturyFilter
@@ -69,6 +71,7 @@ interface CatalogUrlSyncArgs {
   setAnchorsOnly: (value: boolean) => void
   setAnchorId: (value: string | null) => void
   setSelectedCategory: (value: string) => void
+  setSelectedSubtype: (value: string) => void
   setSelectedCountry: (value: string) => void
   setSelectedContinent: (value: string) => void
   setSelectedCentury: (value: CenturyFilter) => void
@@ -89,6 +92,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     anchorsOnly,
     anchorId,
     selectedCategory,
+    selectedSubtype,
     selectedCountry,
     selectedContinent,
     selectedCentury,
@@ -102,6 +106,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setAnchorsOnly,
     setAnchorId,
     setSelectedCategory,
+    setSelectedSubtype,
     setSelectedCountry,
     setSelectedContinent,
     setSelectedCentury,
@@ -149,6 +154,9 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
 
     if (next.selectedCategory !== selectedCategory)
       setSelectedCategory(next.selectedCategory)
+
+    if (next.selectedSubtype !== selectedSubtype)
+      setSelectedSubtype(next.selectedSubtype)
 
     if (next.selectedCountry !== selectedCountry)
       setSelectedCountry(next.selectedCountry)
@@ -200,6 +208,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setOrDel('anchors', anchorsOnly ? '1' : null)
     setOrDel('anchor', anchorId)
     setOrDel('cat', selectedCategory, FILTER_ALL)
+    setOrDel('subtype', selectedSubtype, FILTER_ALL)
     setOrDel('country', selectedCountry, FILTER_ALL)
     setOrDel('continent', selectedContinent, FILTER_ALL)
     setOrDel(
@@ -236,6 +245,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     anchorsOnly,
     anchorId,
     selectedCategory,
+    selectedSubtype,
     selectedCountry,
     selectedContinent,
     selectedCentury,

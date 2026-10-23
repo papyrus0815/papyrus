@@ -30,6 +30,7 @@
 import { listEventCenturies } from './century-span'
 import {
   FILTER_AXIS_KEYS,
+  SUBTYPE_NONE,
   matchesAllFilterAxes,
   type FilterableEvent,
   type FilterAxisContext,
@@ -39,6 +40,8 @@ import {
 export interface FilterOptionCounts {
   /** 분야 키 → 건수 */
   category: ReadonlyMap<string, number>
+  /** 세부 분야 키(세부 없음은 SUBTYPE_NONE) → 건수 */
+  subtype: ReadonlyMap<string, number>
   /** 국가 id → 건수. 현대·역사 id가 한 맵에 있고 브리지 합류가 반영돼 있다. */
   country: ReadonlyMap<string, number>
   /** continentId → 건수 */
@@ -58,12 +61,14 @@ const EMPTY_COUNT_MAP = new Map<never, number>()
 /** 아직 계산할 데이터가 없을 때의 중립값 — 소비처가 옵셔널 체이닝을 하지 않게 한다. */
 export const EMPTY_FILTER_OPTION_COUNTS: FilterOptionCounts = {
   category: EMPTY_COUNT_MAP as ReadonlyMap<string, number>,
+  subtype: EMPTY_COUNT_MAP as ReadonlyMap<string, number>,
   country: EMPTY_COUNT_MAP as ReadonlyMap<string, number>,
   continent: EMPTY_COUNT_MAP as ReadonlyMap<string, number>,
   century: EMPTY_COUNT_MAP as ReadonlyMap<number, number>,
   centuryUnknown: 0,
   dropOneOut: {
     category: 0,
+    subtype: 0,
     country: 0,
     continent: 0,
     century: 0,
@@ -83,12 +88,14 @@ export function buildFilterOptionCounts(
   context: FilterAxisContext,
 ): FilterOptionCounts {
   const category = new Map<string, number>()
+  const subtype = new Map<string, number>()
   const country = new Map<string, number>()
   const continent = new Map<string, number>()
   const century = new Map<number, number>()
   let centuryUnknown = 0
   const dropOneOut: Record<FilterAxisKey, number> = {
     category: 0,
+    subtype: 0,
     country: 0,
     continent: 0,
     century: 0,
@@ -132,6 +139,10 @@ export function buildFilterOptionCounts(
       bump(category, event.domain)
     }
 
+    if (passesWithout.subtype) {
+      bump(subtype, event.type || SUBTYPE_NONE)
+    }
+
     if (passesWithout.country) {
       // 한 사건이 같은 국가를 두 경로(직접 태그 + 브리지)로 가리켜도 1건이다.
       const counted = new Set<string>()
@@ -172,6 +183,7 @@ export function buildFilterOptionCounts(
 
   return {
     category,
+    subtype,
     country,
     continent,
     century,

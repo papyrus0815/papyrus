@@ -28,6 +28,7 @@ import {
   FiChevronDown,
   FiGlobe,
   FiGrid,
+  FiLayers,
   FiMap,
   FiSearch,
   FiX,
@@ -52,7 +53,17 @@ import {
 } from '@/features/event-filters/model/reference-label'
 import { FILTER_ALL } from '@/features/event-list/lib'
 import type { ContinentResponseDto } from '@/shared/api/continents'
-import type { EventDomainOption } from '@/entities/event/model/event-domain'
+import {
+  domainLabel,
+  type EventDomainOption,
+  isEventDomainKey,
+} from '@/entities/event/model/event-domain'
+import {
+  EVENT_TYPES,
+  type EventTypeKey,
+  subtypesForDomain,
+} from '@/entities/event/model/event-type-registry'
+import { SUBTYPE_NONE, subtypeFilterLabel } from '@/features/event-filters/model/axis-predicates'
 import { useAnchoredPosition } from '@/shared/hooks/use-anchored-position.hook'
 import { useOverlayEscape } from '@/shared/hooks/use-overlay-escape.hook'
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -62,6 +73,8 @@ import { BRAND, MOTION, SHADOW } from '../../../pages/events/styles/theme'
 
 interface FiltersPanelProps {
   selectedCategory: typeof FILTER_ALL | string
+  /** 세부 분야 — 세부 키 · SUBTYPE_NONE · FILTER_ALL. 미전달이면 세부 축 트리거를 그리지 않는다 */
+  selectedSubtype?: typeof FILTER_ALL | string
   selectedCountry: typeof FILTER_ALL | string
   selectedContinent: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
@@ -98,6 +111,7 @@ interface FiltersPanelProps {
 
   /** 인라인 선택 핸들러 — 신규 (모달 우회) */
   onSelectCategory?: (id: typeof FILTER_ALL | string) => void
+  onSelectSubtype?: (id: typeof FILTER_ALL | string) => void
   onSelectCountry?: (id: typeof FILTER_ALL | string) => void
   onSelectContinent?: (id: typeof FILTER_ALL | string) => void
 
@@ -135,6 +149,7 @@ const COUNTRY_SEARCH_LIMIT = 100
 
 export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   selectedCategory,
+  selectedSubtype,
   selectedCountry,
   selectedContinent,
   selectedCentury,
@@ -147,6 +162,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   referenceState = READY_REFERENCE_STATE,
   onRetryReference,
   onSelectCategory,
+  onSelectSubtype,
   onSelectCountry,
   onSelectContinent,
   onShowCategoryModal,
@@ -170,6 +186,11 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
             ?.name,
           referenceState.category,
         )
+
+  const subtypeValue =
+    !selectedSubtype || selectedSubtype === FILTER_ALL
+      ? undefined
+      : subtypeFilterLabel(selectedSubtype)
 
   const countryValue =
     selectedCountry === FILTER_ALL
@@ -309,6 +330,40 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
     continentIdByCountryId.get(selectedCountry) !== selectedContinent
 
   /**
+   * 세부 분야 옵션 — 분야가 걸려 있으면 **그 분야에서 쓰는 세부를 위 섹션**에, 나머지를 아래에
+   * 둔다(저장이 독립 축이라 다른 분야의 세부도 고를 수 있어야 한다 — 군사 › 조약). 섹션 안은
+   * 건수 내림차순, 동수는 레지스트리 순서. '세부 없음'은 맨 끝.
+   */
+  const subtypeOptions = useMemo<InlineFilterOption[]>(() => {
+    const domainName = isEventDomainKey(selectedCategory) ? domainLabel(selectedCategory) : null
+    const { primary, rest } = subtypesForDomain(domainName ? selectedCategory : null)
+    const toOption = (type: EventTypeKey, group?: string): InlineFilterOption => ({
+      id: type,
+      name: EVENT_TYPES[type].label,
+      group,
+      count: countOf(optionCounts.subtype.get(type)),
+    })
+    const byCount = (left: InlineFilterOption, right: InlineFilterOption) =>
+      (right.count ?? 0) - (left.count ?? 0)
+    const sections = domainName
+      ? [
+          ...primary.map((type) => toOption(type, `${domainName}에서 쓰는 세부`)).sort(byCount),
+          ...rest.map((type) => toOption(type, '다른 세부')).sort(byCount),
+        ]
+      : primary.map((type) => toOption(type)).sort(byCount)
+    return [
+      { id: FILTER_ALL, name: '전체', count: countOf(optionCounts.dropOneOut.subtype) },
+      ...sections,
+      {
+        id: SUBTYPE_NONE,
+        name: subtypeFilterLabel(SUBTYPE_NONE),
+        group: domainName ? '다른 세부' : undefined,
+        count: countOf(optionCounts.subtype.get(SUBTYPE_NONE)),
+      },
+    ]
+  }, [selectedCategory, optionCounts, countOf])
+
+  /**
    * 국가 옵션 — **2섹션 + 빈도 정렬**(검토 IA-2 · IA-13 · IA-1).
    *
    * - 현대/역사를 별도 섹션으로 나눠 각자 상한을 갖게 한다(한 목록·한 상한이면 역사가 0개).
@@ -435,6 +490,20 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
             onRetryReference ? () => onRetryReference('category') : undefined
           }
         />
+
+        {/* 세부 분야 — 분야의 2단계. 분야와 독립 축이라 분야 없이도, 다른 분야의 세부도 고를 수 있다 */}
+        {selectedSubtype !== undefined && (
+          <InlineFilterPopover
+            icon={<FiLayers size={13} />}
+            axisLabel="세부"
+            valueLabel={subtypeValue}
+            isActive={selectedSubtype !== FILTER_ALL}
+            options={subtypeOptions}
+            selectedId={selectedSubtype}
+            onSelect={(id) => onSelectSubtype?.(id)}
+            searchable
+          />
+        )}
 
         {/* 대륙 — 인라인 팝오버 (대륙 → 국가 순으로 좁혀가는 동선) */}
         <InlineFilterPopover

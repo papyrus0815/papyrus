@@ -162,4 +162,12 @@ describe('parseCatalogSearchParams', () => {
     expect(parse('bookmarks=true').bookmarksOnly).toBe(false)
     expect(parse('bookmarks=0').bookmarksOnly).toBe(false)
   })
+
+  it('subtype은 세부 키·NONE만 받고 나머지는 해제로 낙하한다', () => {
+    expect(parse('subtype=LAW_POLICY').selectedSubtype).toBe('LAW_POLICY')
+    expect(parse('subtype=NONE').selectedSubtype).toBe('NONE')
+    expect(parse('subtype=DIPLOMATIC_ACT').selectedSubtype).toBe(FILTER_ALL)
+    expect(parse('subtype=').selectedSubtype).toBe(FILTER_ALL)
+    expect(parse('').selectedSubtype).toBe(FILTER_ALL)
+  })
 })

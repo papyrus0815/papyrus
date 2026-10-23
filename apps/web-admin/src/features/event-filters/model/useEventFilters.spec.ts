@@ -434,7 +434,7 @@ describe('useEventFilters — 활성 칩', () => {
     })
 
     const labels = result.current.filterSummaryChips.map((chip) => chip.label)
-    expect(labels).toContain('카테고리 · 전쟁')
+    expect(labels).toContain('분야 · 전쟁')
     expect(labels).toContain('대륙 · 아시아')
     expect(labels).toContain('세기 · 19세기')
     expect(labels).toContain('검색어 · 전투')
@@ -586,7 +586,7 @@ describe('useEventFilters — 칩 폴백 라벨(검토 GAP-5)', () => {
     })
 
     expect(labelOf(result.current.filterSummaryChips, 'category')).toBe(
-      '카테고리 · 불러오는 중',
+      '분야 · 불러오는 중',
     )
     expect(labelOf(result.current.filterSummaryChips, 'continent')).toBe(
       '대륙 · 불러오는 중',
@@ -617,7 +617,7 @@ describe('useEventFilters — 칩 폴백 라벨(검토 GAP-5)', () => {
     })
 
     expect(labelOf(result.current.filterSummaryChips, 'category')).toBe(
-      '카테고리 · 알 수 없음',
+      '분야 · 알 수 없음',
     )
   })
 })

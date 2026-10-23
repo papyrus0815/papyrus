@@ -28,4 +28,5 @@ export {
   buildFilterOptionCounts,
 } from './option-facets'
 export type { FilterOptionCounts } from './option-facets'
+export { SUBTYPE_NONE, subtypeFilterLabel } from './axis-predicates'
 export type { FilterAxisKey } from './axis-predicates'
