@@ -459,7 +459,7 @@ export function CabinetsSection({
   >(null)
   const [newHeadStartDate, setNewHeadStartDate] = useState('')
   const [newHeadEndDate, setNewHeadEndDate] = useState('')
-  /** 새 수반 등록 시 대수(제 N대). 빈 값이면 미전송, 숫자면 termNumber로 전송. 중간 등록 가능. */
+  /** 새 수반 등록 시 대수(제 N대). 빈 값이면 미전송, 숫자면 ordinal(대수)로 전송. 중간 등록 가능. */
   const [newHeadTermNumber, setNewHeadTermNumber] = useState('')
   /** 새 수반 등록 시 기수(1기, 2기). 같은 대수 내 복수 임기 구분. */
   const [newHeadSubTermNumber, setNewHeadSubTermNumber] = useState('')
@@ -1191,7 +1191,7 @@ export function CabinetsSection({
         cabinetId: addMinisterCabinet.id,
         startDate: ministerFormStartDate,
         endDate: ministerFormEndDate || undefined,
-        termNumber,
+        ordinal: termNumber,
       })
       notify.success('각료가 등록되었습니다.')
       setPersonSelectOpen(false)
@@ -1318,7 +1318,7 @@ export function CabinetsSection({
         positionDefinitionId: def.id,
         countryId: effectiveCountryId,
         historicalCountryId: effectiveHistoricalCountryId,
-        termNumber,
+        ordinal: termNumber,
         subTermNumber,
         startDate: newHeadStartDate.trim(),
         endDate: newHeadEndDate.trim() || undefined,
@@ -1384,7 +1384,7 @@ export function CabinetsSection({
     setEditingCabinet(c)
     setEditingCabinetName(c.name ?? '')
     setEditingTermNumber(
-      head?.termNumber != null ? String(head.termNumber) : '',
+      head?.ordinal != null ? String(head.ordinal) : '',
     )
     setEditingSubTermNumber(
       head?.subTermNumber != null ? String(head.subTermNumber) : '',
@@ -1511,7 +1511,7 @@ export function CabinetsSection({
             ? historicalCountryId
             : undefined
       await personCareerApi.updateGovernmentPositionTenure(headTenureId, {
-        termNumber,
+        ordinal: termNumber,
         subTermNumber,
         positionDefinitionId: editingPositionDefId || undefined,
         startDate: editingStartDate.trim() || undefined,
@@ -2143,7 +2143,7 @@ export function CabinetsSection({
                                         head?.title ??
                                         '—'
                                       const termNum =
-                                        head?.termNumber ?? head?.regnalNumber
+                                        head?.ordinal
                                       const thumbUrl =
                                         head?.person?.profileImageUrl ?? null
                                       const startYear = head?.startDate
@@ -3231,7 +3231,7 @@ export function CabinetsSection({
                         : '이름 없음'
                       const posTitle =
                         head?.title ?? head?.positionDefinition?.title ?? '—'
-                      const termNum = head?.termNumber ?? head?.regnalNumber
+                      const termNum = head?.ordinal
                       const startFull = head?.startDate
                         ? formatDate(head.startDate)
                         : '—'

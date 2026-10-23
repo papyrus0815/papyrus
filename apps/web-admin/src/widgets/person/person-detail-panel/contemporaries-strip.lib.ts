@@ -118,7 +118,7 @@ export function spanTextOf(ruler: ContemporaryRuler, record: ContemporaryRecord)
  * 칩 상세 — 본명(라벨이 왕호일 때)·겹친 기간(정렬 근거)·복수 재위 스팬. 칩 본문엔
  * 안 들어가는 정보를 aria-label·title로 노출해, 순서 근거 불투명을 보강한다.
  * 직위는 positionText로 칩에 상시 노출되므로 여기서 반복하지 않는다.
- * 서수(regnalNumber) 텍스트화는 이름 표기 관례(서양 'N세' vs 로마숫자)가 갈려 제외.
+ * 이름 속 서수 텍스트화는 이름 표기 관례(서양 'N세' vs 로마숫자)가 갈려 제외.
  */
 export function chipDetailTextOf(
   ruler: ContemporaryRuler,

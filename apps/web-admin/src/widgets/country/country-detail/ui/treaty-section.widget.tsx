@@ -869,7 +869,7 @@ function toDateInputValue(iso: string | null | undefined): string {
 
 function cabinetListLabel(c: CabinetListItemDto): string {
   const head = c?.headTenure
-  const tn = head?.termNumber ?? head?.regnalNumber
+  const tn = head?.ordinal
   const sub = head?.subTermNumber
   const term =
     tn != null ? (sub != null ? `제${tn}대 ${sub}기` : `제${tn}대`) : ''
@@ -1699,7 +1699,7 @@ export const TreatyDetail: React.FC<{
                               ).country,
                             })
                           : ''
-                        const term = ht?.termNumber ?? ht?.subTermNumber
+                        const term = ht?.ordinal ?? ht?.subTermNumber
                         return term
                           ? `제${term}대 ${pName} 행정부`
                           : `${pName} 행정부`

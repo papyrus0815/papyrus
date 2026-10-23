@@ -24,7 +24,7 @@ export type UpdateAdministrationDepartmentInput = Parameters<
 /** Nestia에 아직 없는 `/administration-departments/:id/tenures` 응답용 (컨트롤러 `any[]`) */
 export type AdministrationDepartmentTenureItem = {
   id: string
-  termNumber?: number | null
+  ordinal?: number | null
   startDate: string | null
   endDate: string | null
   title?: string | null

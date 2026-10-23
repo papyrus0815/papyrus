@@ -7,9 +7,7 @@
  * 받는 쪽만 바꾼다: `prisma.sovereignReign.X(args)` → `reignRows(prisma).X(args)`.
  *
  * 번역 규칙
- * - 재위의 `regnalNumber`(국가 통산 대수) ↔ 재임 `ordinal`. where·select·orderBy·data 모두.
- *   재임에도 `regnal_number` 칸이 있지만 그건 '이름 속 서수'(루이 14세의 14) 뜻이라 건드리지 않는다.
- *   `term_number`는 DB 트리거가 ordinal과 맞춘다.
+ * - 재위의 `regnalNumber`(국가 통산 대수) ↔ 재임 `ordinal`(대수 칸은 이것 하나). where·select·orderBy·data 모두.
  * - 재위의 `termNumber`는 의미 없는 칸이었다 — 버린다.
  * - 직위 정의가 없으면 '국왕' 정의로, `positionType`(재임 필수)은 정의에서 온다.
  * - `endDatePrecision`은 재임에 칸이 없다 — 종료 구조화 칸(연·월·일)을 자르는 데만 쓴다.
@@ -101,7 +99,7 @@ export function reignRows(prisma: PrismaClient, options: ReignRowsOptions = {}) 
     return out
   }
 
-  // 시드 어휘: regnalNumber = 대수. 응답의 regnalNumber 칸(이름 속 서수)은 시드가 쓰지 않는다
+  // 시드 어휘: regnalNumber = 대수(ordinal)
   const asReign = (row: any) => (row ? { ...asOfficeHolding(row, true), regnalNumber: row.ordinal ?? null } : row)
 
   return {

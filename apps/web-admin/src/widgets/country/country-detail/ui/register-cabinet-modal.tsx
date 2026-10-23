@@ -221,7 +221,7 @@ export function RegisterCabinetModal({
                       </li>
                     ) : (
                       filteredHeadTenures.map((t: any) => {
-                        const termNum = t.termNumber ?? t.regnalNumber
+                        const termNum = t.ordinal
                         const termLabel =
                           termNum != null
                             ? t.subTermNumber != null

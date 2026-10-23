@@ -188,7 +188,7 @@ export function CabinetDetailChrome({
                   title?: string | null
                   startDate?: string | null
                   endDate?: string | null
-                  termNumber?: number | null
+                  ordinal?: number | null
                   administrationDepartmentId?: string | null
                   positionDefinition?: { id?: string | null } | null
                 }[]
@@ -198,7 +198,7 @@ export function CabinetDetailChrome({
                     title?: string | null
                     startDate?: string | null
                     endDate?: string | null
-                    termNumber?: number | null
+                    ordinal?: number | null
                     administrationDepartmentId?: string | null
                     positionDefinition?: { id?: string | null } | null
                   }
@@ -221,8 +221,8 @@ export function CabinetDetailChrome({
                       minister.endDate ? minister.endDate.slice(0, 10) : '',
                     )
                     setMinisterFormTermNumber(
-                      minister.termNumber != null
-                        ? String(minister.termNumber)
+                      minister.ordinal != null
+                        ? String(minister.ordinal)
                         : '',
                     )
                     setMinisterFormDeptId(

@@ -85,8 +85,7 @@ export function formatCabinetHeadBreadcrumbLabel(
   headTenure:
     | {
         person?: Parameters<typeof getPersonName>[0]
-        termNumber?: number | null
-        regnalNumber?: number | null
+        ordinal?: number | null
         subTermNumber?: number | null
       }
     | null
@@ -94,7 +93,7 @@ export function formatCabinetHeadBreadcrumbLabel(
 ): string {
   if (!headTenure) return '행정부 상세'
   const n = headTenure.person ? getPersonName(headTenure.person) : null
-  const t = headTenure.termNumber ?? headTenure.regnalNumber
+  const t = headTenure.ordinal
   if (!n) return '행정부 상세'
   if (t == null) return n
   const sub =

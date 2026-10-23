@@ -1337,9 +1337,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           where: NON_MONARCHICAL_TENURE,
           select: {
             id: true,
-            termNumber: true,
+            ordinal: true,
             subTermNumber: true,
-            regnalNumber: true,
             startDate: true,
             endDate: true,
             appointmentMethod: true,
@@ -1944,9 +1943,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           where: NON_MONARCHICAL_TENURE,
           select: {
             id: true,
-            termNumber: true,
+            ordinal: true,
             subTermNumber: true,
-            regnalNumber: true,
             positionType: true,
             title: true,
             titleEn: true,
@@ -2949,7 +2947,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const tenure = await this.prisma.governmentPositionTenure.create({
       data: {
         ...period,
-        ordinal: dto.termNumber ?? null,
+        ordinal: dto.ordinal ?? null,
         regnalName: dto.regnalName ?? null,
         dynastyOrdinal: dto.dynastyOrdinal ?? null,
         personId: dto.personId,
@@ -2962,9 +2960,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           historicalCountryId: countryFields.historicalCountryId,
         }),
         positionDefinitionId: definition.id,
-        termNumber: dto.termNumber,
         subTermNumber: dto.subTermNumber,
-        regnalNumber: dto.regnalNumber,
         accessionEventId: dto.accessionEventId ?? undefined,
         appointmentMethod: dto.appointmentMethod as any,
         appointmentDetail: dto.appointmentDetail,
@@ -3042,12 +3038,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.countryId = countryFields.countryId ?? null
       updateData.historicalCountryId = countryFields.historicalCountryId ?? null
     }
-    if (dto.termNumber !== undefined) {
-      updateData.termNumber = dto.termNumber
-      updateData.ordinal = dto.termNumber ?? null // 재임의 대수 = termNumber (이행 중 동기화)
-    }
+    if (dto.ordinal !== undefined) updateData.ordinal = dto.ordinal ?? null
     if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
-    if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
     if (dto.regnalName !== undefined) updateData.regnalName = dto.regnalName ?? null
     if (dto.dynastyOrdinal !== undefined) updateData.dynastyOrdinal = dto.dynastyOrdinal ?? null
     if (dto.accessionEventId !== undefined) updateData.accessionEventId = dto.accessionEventId || null
@@ -3291,9 +3283,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       positionType: true,
       title: true,
       titleEn: true,
-      termNumber: true,
+      ordinal: true,
       subTermNumber: true,
-      regnalNumber: true,
       startDate: true,
       endDate: true,
       person: {

@@ -432,7 +432,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
               {tenures.map((t: any) => {
                 const regnal = t.regnalName?.trim() || getRegnalNameFromNotes(t.notes)
                 const personDisplay = regnal ? `${regnal} (${getPersonName(t.person)})` : getPersonName(t.person)
-                const ordNum = t.ordinal ?? t.termNumber
+                const ordNum = t.ordinal
                 const startLabel = formatEdge(t.startDate, t.startEra, t.startYear)
                 const endLabel = t.endDate || t.endYear ? formatEdge(t.endDate, t.endEra, t.endYear) : '재임 중'
                 const dateLabel = `${startLabel} ~ ${endLabel}${ordNum != null ? ` · ${ordNum}대` : ''}`

@@ -15,7 +15,7 @@ export interface CabinetMember {
   /** 종료일. 있으면 지난 정권이라 '몇 년째'가 아니라 기간으로 적는다 */
   endDate: string | null
   /** 제47대 — 없으면 null */
-  termNumber: number | null
+  ordinal: number | null
   /** 이 정부 임기 중에 앞사람을 이어받았는가 */
   replaced: boolean
   /** 그 자리를 앞서 맡았던 사람 */

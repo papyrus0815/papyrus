@@ -362,7 +362,7 @@ export class AdministrationDepartmentController {
     })
     return list.map((row) => ({
       id: row.id,
-      termNumber: row.termNumber,
+      ordinal: row.ordinal,
       startDate: row.startDate?.toISOString() ?? null,
       endDate: row.endDate?.toISOString() ?? null,
       title: row.title,

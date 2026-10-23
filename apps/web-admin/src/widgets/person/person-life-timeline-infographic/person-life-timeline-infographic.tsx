@@ -88,7 +88,6 @@ interface ReignInput {
   notes?: string | null
   /** 대수 — 재위·재임 공통 */
   ordinal?: number | null
-  termNumber?: number | null
   subTermNumber?: number | null
   appointmentMethod?: string | null
   appointmentDetail?: string | null
@@ -107,7 +106,8 @@ interface TenureInput {
   endDate?: string | null
   title?: string | null
   notes?: string | null
-  termNumber?: number | null
+  /** 대수 — 재위·재임 공통 */
+  ordinal?: number | null
   subTermNumber?: number | null
   appointmentMethod?: string | null
   appointmentDetail?: string | null
@@ -503,8 +503,8 @@ export function PersonLifeTimelineInfographic({
         sortKey: toTs(startsAt),
         title: [country, pos].filter(Boolean).join(' · ') || '재위',
         subtitle:
-          (reign.ordinal ?? reign.termNumber) != null
-            ? `${reign.ordinal ?? reign.termNumber}대${reign.subTermNumber != null ? ` ${reign.subTermNumber}기` : ''}`
+          reign.ordinal != null
+            ? `${reign.ordinal}대${reign.subTermNumber != null ? ` ${reign.subTermNumber}기` : ''}`
             : null,
         dateLabel: deriveTenurePeriodLabel({
           startDate: reign.startDate,
@@ -557,8 +557,8 @@ export function PersonLifeTimelineInfographic({
         sortKey: toTs(startsAt),
         title: [country, pos].filter(Boolean).join(' · ') || '재임',
         subtitle:
-          tenure.termNumber != null
-            ? `제${tenure.termNumber}대${tenure.subTermNumber != null ? ` ${tenure.subTermNumber}기` : ''}`
+          tenure.ordinal != null
+            ? `제${tenure.ordinal}대${tenure.subTermNumber != null ? ` ${tenure.subTermNumber}기` : ''}`
             : null,
         dateLabel: deriveTenurePeriodLabel({
           startDate: tenure.startDate,

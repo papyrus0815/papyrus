@@ -222,9 +222,8 @@ export interface CreateGovernmentPositionTenureDto {
   countryId?: string // 현대 국가 ID
   historicalCountryId?: string // 역사적 국가 ID
   positionDefinitionId?: string // 직위 정의 ID (선택사항)
-  termNumber?: number // 대수
+  ordinal?: number // 대수 (제20대) — 재위·재임 공통, 대수 칸은 이것 하나
   subTermNumber?: number // 기수 (1기, 2기 — 같은 대수 내 복수 임기 구분)
-  regnalNumber?: number // 이름 속 서수 (루이 14세의 14) — 대수 아님
   /** 재직명(왕호·교황명) — 재위 */
   regnalName?: string | null
   /** 왕조 내 대수 — 재위 */
@@ -283,15 +282,14 @@ export interface CreateGovernmentPositionTenureDto {
 /**
  * 재임 수정(PUT) 전용 DTO — 수정 모드에서 *비운 값은 명시적 null(해제)*로 전송한다.
  * 키 없음(undefined)은 기존 값 유지. 서버 repository가 null=해제를 지원
- * (endDate·cabinetId·termNumber·subTermNumber·regnalNumber·notes·appointmentMethod·appointmentDetail·endReason·endReasonDetail).
+ * (endDate·cabinetId·ordinal·subTermNumber·notes·appointmentMethod·appointmentDetail·endReason·endReasonDetail).
  */
 export type UpdateGovernmentPositionTenureDto = Partial<
   Omit<
     CreateGovernmentPositionTenureDto,
     | 'endDate'
-    | 'termNumber'
+    | 'ordinal'
     | 'subTermNumber'
-    | 'regnalNumber'
     | 'appointmentMethod'
     | 'appointmentDetail'
     | 'endReason'
@@ -304,9 +302,8 @@ export type UpdateGovernmentPositionTenureDto = Partial<
   endDate?: string | null
   startDatePrecision?: 'year' | 'month' | 'day' | null
   accessionEventId?: string | null
-  termNumber?: number | null
+  ordinal?: number | null
   subTermNumber?: number | null
-  regnalNumber?: number | null
   appointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod'] | null
   appointmentDetail?: string | null
   endReason?: CreateGovernmentPositionTenureDto['endReason'] | null
@@ -560,8 +557,6 @@ export type GovernmentHeadTenureInCabinetList = {
   titleEn?: string | null
   startDate: string
   endDate?: string | null
-  termNumber?: number | null
-  regnalNumber?: number | null
   subTermNumber?: number | null
   /** 연호·시대 — GET /government-positions/cabinets 등에서 포함 */
   regnalEras?: RegnalEraDto[]
@@ -569,7 +564,7 @@ export type GovernmentHeadTenureInCabinetList = {
   notes?: string | null
   /** 재위(군주직)인가 — 직위 보유 응답 공통 */
   isMonarchical?: boolean
-  /** 대수 — 재위·재임 공통(termNumber와 같은 값) */
+  /** 대수 — 재위·재임 공통 */
   ordinal?: number | null
   person?: GovernmentCabinetTenureItem['person']
   positionDefinition?: GovernmentCabinetTenureItem['positionDefinition']
@@ -620,9 +615,8 @@ export type CabinetOverviewTenure = {
   positionType?: string | null
   title?: string | null
   titleEn?: string | null
-  termNumber?: number | null
+  ordinal?: number | null
   subTermNumber?: number | null
-  regnalNumber?: number | null
   startDate?: string | null
   endDate?: string | null
   person: {

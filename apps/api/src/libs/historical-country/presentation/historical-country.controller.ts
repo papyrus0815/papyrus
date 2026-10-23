@@ -152,7 +152,7 @@ export class HistoricalCountryController {
    *
    * - 초대 군주: 재위 중 제1대(ordinal=1 — 국가 통산 대수),
    *   그런 기록이 없으면 가장 이른 재위(basis='earliest').
-   * - 초대 국가원수·정부수반: 재임 중 통산 1대(termNumber=1), 없으면 가장 이른 재임.
+   * - 초대 국가원수·정부수반: 재임 중 통산 1대(ordinal=1), 없으면 가장 이른 재임.
    *   군주 직(정의 isMonarchical) 재임은 재위 표와 겹치므로 뺀다.
    * - 전신·후신: 계승 관계(transition)의 양쪽.
    *
@@ -249,7 +249,7 @@ export class HistoricalCountryController {
       select: {
         id: true,
         title: true,
-        termNumber: true,
+        ordinal: true,
         positionType: true,
         startDate: true,
         endDate: true,
@@ -265,7 +265,7 @@ export class HistoricalCountryController {
       const ofType = tenures.filter(
         (tenure) => (tenure.positionDefinition?.positionType ?? tenure.positionType) === type,
       )
-      const numbered = ofType.find((tenure) => tenure.termNumber === 1)
+      const numbered = ofType.find((tenure) => tenure.ordinal === 1)
       const first = numbered ?? ofType[0]
       if (!first) continue
       const toTenureRuler = (

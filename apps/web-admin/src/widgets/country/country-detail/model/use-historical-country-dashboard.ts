@@ -113,8 +113,7 @@ interface LooseRecord extends LoosePerson {
   person?: LoosePerson | null
   positionType?: string | null
   positionDefinition?: { positionType?: string | null; title?: string | null } | null
-  regnalNumber?: number | null
-  termNumber?: number | null
+  ordinal?: number | null
   /** 재위 행의 왕명(프리드리히 빌헬름 2세) — 인물 이름보다 앞선다 */
   regnalName?: string | null
   notes?: string | null
@@ -319,7 +318,7 @@ export function useHistoricalCountryDashboard(
         profileImageUrl: tenure.person?.profileImageUrl ?? null,
         title: tenure.title ?? tenure.positionDefinition?.title ?? null,
         axis,
-        ordinal: tenure.regnalNumber ?? tenure.termNumber ?? null,
+        ordinal: tenure.ordinal ?? null,
         startYear,
         endYear,
         isOutOfSpan,

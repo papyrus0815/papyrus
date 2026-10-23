@@ -1009,8 +1009,8 @@ export function HeadsOfStateSection({
             ?.tenures ?? [])
         : tenures
     return [...source].sort((a: any, b: any) => {
-      const orderA = a.termNumber ?? a.regnalNumber ?? 0
-      const orderB = b.termNumber ?? b.regnalNumber ?? 0
+      const orderA = a.ordinal ?? 0
+      const orderB = b.ordinal ?? 0
       if (orderA !== orderB) return orderA - orderB
       const startA = a.startDate ? new Date(a.startDate).getTime() : 0
       const startB = b.startDate ? new Date(b.startDate).getTime() : 0
@@ -1103,7 +1103,7 @@ export function HeadsOfStateSection({
     if (selectedPositionFilter != null) return []
     const orderNum = (t: any) => {
       const n =
-        t?.termNumber ?? t?.term_number ?? t?.regnalNumber ?? t?.regnal_number
+        t?.ordinal
       if (n == null) return 0
       const num = typeof n === 'number' ? n : parseInt(String(n), 10)
       return Number.isNaN(num) ? 0 : num
@@ -1114,7 +1114,7 @@ export function HeadsOfStateSection({
       normId(t?.person?.id ?? (t as any)?.personId)
     return lineageEligibleGroups.map((g) => {
       const withOrder = g.tenures
-        .filter((t: any) => t.termNumber != null || t.regnalNumber != null)
+        .filter((t: any) => t.ordinal != null)
         .sort((a: any, b: any) => orderNum(a) - orderNum(b))
       const byRow = new Map<number, any[]>()
       withOrder.forEach((t: any) => {
@@ -1184,8 +1184,8 @@ export function HeadsOfStateSection({
     }
     const all = lineageEligibleGroups.flatMap((g) => g.tenures)
     const sorted = [...all].sort((a: any, b: any) => {
-      const oa = a.termNumber ?? a.regnalNumber ?? 0
-      const ob = b.termNumber ?? b.regnalNumber ?? 0
+      const oa = a.ordinal ?? 0
+      const ob = b.ordinal ?? 0
       if (oa !== ob) return oa - ob
       const startA = a.startDate ? new Date(a.startDate).getTime() : 0
       const startB = b.startDate ? new Date(b.startDate).getTime() : 0
@@ -1215,8 +1215,8 @@ export function HeadsOfStateSection({
       })
     })
     const sortByOrder = (a: any, b: any) => {
-      const oa = a.termNumber ?? a.regnalNumber ?? 0
-      const ob = b.termNumber ?? b.regnalNumber ?? 0
+      const oa = a.ordinal ?? 0
+      const ob = b.ordinal ?? 0
       if (oa !== ob) return oa - ob
       const startA = a.startDate ? new Date(a.startDate).getTime() : 0
       const startB = b.startDate ? new Date(b.startDate).getTime() : 0
@@ -1245,7 +1245,7 @@ export function HeadsOfStateSection({
       })
       const orderNum = (t: any) => {
         const n =
-          t?.termNumber ?? t?.term_number ?? t?.regnalNumber ?? t?.regnal_number
+          t?.ordinal
         if (n == null) return 0
         const num = typeof n === 'number' ? n : parseInt(String(n), 10)
         return Number.isNaN(num) ? 0 : num
@@ -1419,7 +1419,7 @@ export function HeadsOfStateSection({
     if (lineageTenures.length === 0) return []
     const orderNum = (t: any) => {
       const n =
-        t?.termNumber ?? t?.term_number ?? t?.regnalNumber ?? t?.regnal_number
+        t?.ordinal
       if (n == null) return 0
       const num = typeof n === 'number' ? n : parseInt(String(n), 10)
       return Number.isNaN(num) ? 0 : num
@@ -1470,10 +1470,10 @@ export function HeadsOfStateSection({
       const pid = getPersonId(t)
       if (!pid) return
       const existing = tenureByPersonId.get(pid)
-      const order = t.termNumber ?? t.regnalNumber ?? 0
+      const order = t.ordinal ?? 0
       if (
         !existing ||
-        (existing.termNumber ?? existing.regnalNumber ?? 0) > order
+        (existing.ordinal ?? 0) > order
       )
         tenureByPersonId.set(pid, t)
     })
@@ -1942,14 +1942,9 @@ export function HeadsOfStateSection({
                                     >
                                       {/* 행 레이블 */}
                                       {(() => {
-                                        const firstTerm =
-                                          rowItems[0]?.regnalNumber ??
-                                          rowItems[0]?.termNumber
+                                        const firstTerm = rowItems[0]?.ordinal
                                         const lastTerm =
-                                          rowItems[rowItems.length - 1]
-                                            ?.regnalNumber ??
-                                          rowItems[rowItems.length - 1]
-                                            ?.termNumber
+                                          rowItems[rowItems.length - 1]?.ordinal
                                         const rangeLabel =
                                           firstTerm != null && lastTerm != null
                                             ? firstTerm === lastTerm
@@ -2067,11 +2062,9 @@ export function HeadsOfStateSection({
                                               ? `${startYear}–${endYear ?? '현재'}`
                                               : '—'
                                             const termLabel =
-                                              t.regnalNumber != null
-                                                ? `${t.regnalNumber}세`
-                                                : t.termNumber != null
-                                                  ? `제${t.termNumber}대`
-                                                  : null
+                                              t.ordinal != null
+                                                ? `제${t.ordinal}대`
+                                                : null
                                             const thumbUrl =
                                               t.person?.profileImageUrl ?? null
                                             const personName = getPersonName(

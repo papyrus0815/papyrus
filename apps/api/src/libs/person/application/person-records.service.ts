@@ -242,7 +242,7 @@ export class PersonRecordsService {
         kind: 'TENURE',
         sourceId: row.id,
         personId: row.personId,
-        title: row.termNumber != null ? `제${row.termNumber}대 ${baseTitle}` : baseTitle,
+        title: row.ordinal != null ? `제${row.ordinal}대 ${baseTitle}` : baseTitle,
         summary: toPlainTextSummary(row.appointmentDetail),
         category: row.positionType,
         startYear: yearOf(row.startDate),

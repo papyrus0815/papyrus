@@ -493,7 +493,7 @@ export function TreatyLinkModal({
 
   const cabinetLabel = (c: any) => {
     const head = c?.headTenure
-    const tn = head?.termNumber ?? head?.regnalNumber
+    const tn = head?.ordinal
     const sub = head?.subTermNumber
     const term =
       tn != null ? (sub != null ? `제${tn}대 ${sub}기` : `제${tn}대`) : ''

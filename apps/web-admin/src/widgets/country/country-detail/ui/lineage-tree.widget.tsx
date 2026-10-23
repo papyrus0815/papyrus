@@ -1102,15 +1102,13 @@ export function LineageTree({
                   const personName = getPersonName(t.person)
                   const mainLabel = regnalName || personName
                   const subLabel = regnalName ? personName : null
-                  /** 메인은 몇 대(초대/제N대). termNumber 없을 때만 N세 표시 */
+                  /** 메인은 몇 대(초대/제N대) */
                   const orderLabel =
-                    t.termNumber != null
-                      ? t.termNumber === 1
+                    t.ordinal != null
+                      ? t.ordinal === 1
                         ? '초대'
-                        : `제${t.termNumber}대`
-                      : t.regnalNumber != null
-                        ? `${t.regnalNumber}세`
-                        : '—'
+                        : `제${t.ordinal}대`
+                      : '—'
                   const reignLabel = getReignLabel(t)
                   const reignMetaLabel =
                     orderLabel !== '—'
@@ -1121,13 +1119,11 @@ export function LineageTree({
                   }`
                   const parentTenure = childToParentTenure.get(t.id)
                   const parentOrderLabel = parentTenure
-                    ? parentTenure.termNumber != null
-                      ? parentTenure.termNumber === 1
+                    ? parentTenure.ordinal != null
+                      ? parentTenure.ordinal === 1
                         ? '초대'
-                        : `제${parentTenure.termNumber}대`
-                      : parentTenure.regnalNumber != null
-                        ? `${parentTenure.regnalNumber}세`
-                        : ''
+                        : `제${parentTenure.ordinal}대`
+                      : ''
                     : ''
                   const parentRegnal =
                     parentTenure && getRegnalNameFromNotes(parentTenure.notes)
@@ -1251,15 +1247,13 @@ export function LineageTree({
                       const personName = getPersonName(t.person)
                       const mainLabel = regnalName || personName
                       const subLabel = regnalName ? personName : null
-                      /** 메인은 몇 대(초대/제N대). termNumber 없을 때만 N세 표시 */
+                      /** 메인은 몇 대(초대/제N대) */
                       const orderLabel =
-                        t.termNumber != null
-                          ? t.termNumber === 1
+                        t.ordinal != null
+                          ? t.ordinal === 1
                             ? '초대'
-                            : `제${t.termNumber}대`
-                          : t.regnalNumber != null
-                            ? `${t.regnalNumber}세`
-                            : '—'
+                            : `제${t.ordinal}대`
+                          : '—'
                       const reignLabel = getReignLabel(t)
                       const reignMetaLabel =
                         orderLabel !== '—'
@@ -1267,13 +1261,11 @@ export function LineageTree({
                           : reignLabel
                       const parentTenure = childToParentTenure.get(t.id)
                       const parentOrderLabel = parentTenure
-                        ? parentTenure.termNumber != null
-                          ? parentTenure.termNumber === 1
+                        ? parentTenure.ordinal != null
+                          ? parentTenure.ordinal === 1
                             ? '초대'
-                            : `제${parentTenure.termNumber}대`
-                          : parentTenure.regnalNumber != null
-                            ? `${parentTenure.regnalNumber}세`
-                            : ''
+                            : `제${parentTenure.ordinal}대`
+                          : ''
                         : ''
                       const parentRegnal =
                         parentTenure &&

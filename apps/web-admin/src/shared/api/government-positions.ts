@@ -72,7 +72,7 @@ export interface GovernmentPositionTenure {
   id: string
   positionId: string
   personId: string
-  termNumber?: number
+  ordinal?: number | null
   startDate: string
   endDate?: string
   appointmentMethod?: string
@@ -110,7 +110,7 @@ export interface HeadOfStateDuringEvent {
   }
   position: GovernmentPositionDefinition
   tenure: {
-    termNumber?: number
+    ordinal?: number | null
     startDate: string
     endDate?: string
     showPositionInfo?: boolean
@@ -206,7 +206,7 @@ export function findHeadsOfStateDuringPeriod(
               rank: tenure.priority || 0,
             },
             tenure: {
-              termNumber: tenure.termNumber,
+              ordinal: tenure.ordinal,
               startDate: tenure.startDate,
               endDate: tenure.endDate,
               showPositionInfo: tenure.showPositionInfo,

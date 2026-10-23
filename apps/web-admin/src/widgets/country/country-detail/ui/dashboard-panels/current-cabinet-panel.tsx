@@ -68,7 +68,7 @@ interface TenureRow {
   positionType?: string | null
   positionDefinition?: { positionType?: string | null; title?: string | null } | null
   title?: string | null
-  termNumber?: number | null
+  ordinal?: number | null
   startDate?: string | null
   endDate?: string | null
   person?: {
@@ -629,7 +629,7 @@ export function CurrentCabinetPanel({
       startDate: row.startDate ?? null,
       endDate: row.endDate ?? null,
       isHead,
-      termNumber: typeof row.termNumber === 'number' ? row.termNumber : null,
+      ordinal: typeof row.ordinal === 'number' ? row.ordinal : null,
       replaced,
       predecessor,
     })

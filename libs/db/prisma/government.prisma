@@ -31,8 +31,7 @@
 /// - 영국: 제임스 1세/6세 (잉글랜드 1세, 스코틀랜드 6세)
 /// 
 /// 특징:
-/// - 대수/회차(termNumber)로 역대 순서 관리
-/// - 재위 번호(regnalNumber) 국가별 관리
+/// - 대수(ordinal)·기수(subTermNumber)로 역대 순서 관리 — 이름 속 서수(루이 14세의 14)는 왕호(regnalName) 문자열에
 /// - 현대 국가와 역사적 국가 모두 지원
 /// - 직위별 재임자 목록과 통계 제공
 /// - 중임 및 겸직 처리 가능
@@ -413,17 +412,11 @@ model GovernmentPositionTenure {
 
   /// 대수/회차 (예: 20 = 제20대, 100 = 제100대)
   /// NULL이면 대수 개념이 없는 직위 (예: 조선시대 관직)
-  termNumber Int? @map("term_number")
 
   /// 기수 (예: 1 → 1기, 2 → 2기)
   /// 같은 대수에서 여러 기(期)가 존재할 때 사용 (예: 클린턴 42대 1기/2기)
   /// NULL이면 기수 구분 없음
   subTermNumber Int? @map("sub_term_number")
-
-  /// 재위 번호 (예: 14 → "루이 14세", 1 → "제임스 1세")
-  /// 주의: 같은 인물이라도 국가마다 다를 수 있음 (제임스 1세/6세)
-  /// 서양 군주 전용, 동아시아는 termNumber 사용
-  regnalNumber Int? @map("regnal_number")
 
   /// 임기 시작일 — 취임일(군주 재위는 법적 즉위일; 대관식일은 별개 사실로 Event 링크가 정본)
   /// 이행 2단계부터 파생값: 구조화 시작(startEra·startYear…)이 정본이고, AD 1000 미만·BC는 NULL
@@ -451,7 +444,7 @@ model GovernmentPositionTenure {
   startKey Int? @map("start_key")
   endKey   Int? @map("end_key")
 
-  /// 대수 — 이 정치체에서 이 직위를 맡은 사람 중 몇 번째. termNumber(재임)·regnalNumber(재위, 대수 의미)를 흡수
+  /// 대수 — 이 정치체에서 이 직위를 맡은 사람 중 몇 번째(클린턴 42대·강희제 4대). 대수 칸은 이것 하나뿐
   ordinal Int? @map("ordinal")
   /// 재직명(왕호·교황명) — 루이 14세, 인노첸시오 3세. 재위 regnalName을 흡수
   regnalName String? @map("regnal_name") @db.VarChar(100)
@@ -518,7 +511,6 @@ model GovernmentPositionTenure {
   @@index([countryId], name: "idx_gov_tenure_countryId")
   @@index([historicalCountryId], name: "idx_gov_tenure_histCountryId")
   @@index([positionType], name: "idx_gov_tenure_posType")
-  @@index([termNumber], name: "idx_gov_tenure_termNum")
   @@index([startDate], name: "idx_gov_tenure_startDate")
   @@index([cabinetId], name: "idx_gov_tenure_cabinetId")
   @@index([administrationDepartmentId], name: "idx_gov_tenure_adminDeptId")

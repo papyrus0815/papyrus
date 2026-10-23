@@ -705,15 +705,11 @@ export class CreateGovernmentPositionTenureDto {
   // 아래 선택 필드들은 수정(Partial) 시 null = 명시적 해제, undefined = 변경 없음
   @IsOptional()
   @IsNumber()
-  termNumber?: number | null // 대수 (제20대) — 공식 통산 대수, 없으면 null
+  ordinal?: number | null // 대수 (제20대) — 공식 통산 대수, 없으면 null
 
   @IsOptional()
   @IsNumber()
   subTermNumber?: number | null // 기수 (1기, 2기 — 같은 대수 내 복수 임기 구분)
-
-  @IsOptional()
-  @IsNumber()
-  regnalNumber?: number | null // 재위번호 (루이 14세의 "14")
 
   /** 레거시 ISO 시작일. 구조화 startDateInfo가 오면 그쪽이 우선(BC·고대 가능) — 둘 중 하나는 필수 */
   @IsOptional()

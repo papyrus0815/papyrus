@@ -194,7 +194,7 @@ function tenurePreview(t: any): string | undefined {
   if (!start) return undefined
   const end = fmt(t?.endDate)
   const period = end ? `${start} ~ ${end}` : `${start} ~ 재직 중`
-  const term = t?.termNumber ? `제${t.termNumber}대 · ` : ''
+  const term = t?.ordinal ? `제${t.ordinal}대 · ` : ''
   return `${term}${period}`
 }
 

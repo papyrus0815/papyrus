@@ -89,9 +89,8 @@ export interface TreatySignatoryDto {
     id: string
     name: string | null
     headTenure: {
-      termNumber: number | null
+      ordinal: number | null
       subTermNumber: number | null
-      regnalNumber?: number | null
       person: { id: string; name: string | null; surname: string | null } | null
     } | null
   } | null

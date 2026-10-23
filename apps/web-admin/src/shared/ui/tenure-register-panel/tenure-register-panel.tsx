@@ -900,8 +900,8 @@ export function TenureRegisterPanel({
           ? { id: t.accessionEventId, title: '연결된 사건' }
           : null,
     )
-    // 대수 — 재위·재임 공통 ordinal(= termNumber). regnalNumber는 '이름 속 서수'라 대수가 아니다
-    const num = t.ordinal ?? t.termNumber
+    // 대수 — 재위·재임 공통 ordinal
+    const num = t.ordinal
     setOrdinalNumber(num != null ? String(num) : '')
     setSubTermNumber(t.subTermNumber != null ? String(t.subTermNumber) : '')
     setDynastyOrdinal(t.dynastyOrdinal != null ? String(t.dynastyOrdinal) : '')
@@ -978,8 +978,7 @@ export function TenureRegisterPanel({
       dynastyOrdinal: isReign ? parsedDynastyOrdinal : undefined,
       // 즉위·취임 사건 — 사건 화면에서 건 연결도 수정 폼이 하이드레이트하므로 그대로 왕복된다
       accessionEventId: linkedAccessionEvent?.id ?? emptyAs,
-      // 일반 재임은 termNumber(공식 통산 대수)만 기록 — regnalNumber(군주 재위번호)에 이중 기록하지 않음
-      termNumber: parsedOrdinal,
+      ordinal: parsedOrdinal,
       subTermNumber: parsedSubTerm,
       appointmentMethod: (appointmentMethod || emptyAs) as any,
       appointmentDetail: appointmentDetail.trim() || emptyAs,

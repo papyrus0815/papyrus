@@ -19,13 +19,9 @@ export interface TenureLikeRecord {
   accessionEventId?: string | null
   accessionEvent?: { id: string; title?: string | null; deletedAt?: string | null } | null
   notes?: string | null
-  /** 대수 — 재위·재임 공통(국가·정체 기준 통산 제N대). 재위 응답엔 이 칸만 실린다 */
+  /** 대수 — 재위·재임 공통(국가·정체 기준 통산 제N대) */
   ordinal?: number | null
-  /** 재임 통산 대수 — ordinal과 같은 값 */
-  termNumber?: number | null
   subTermNumber?: number | null
-  /** 이름 속 서수(루이 14세의 14) — 대수 아님 */
-  regnalNumber?: number | null
   /** 왕조 내 서수 (예: 5 → "부르봉 왕조 5대") — 재위 전용 */
   dynastyOrdinal?: number | null
   regnalName?: string | null
@@ -61,7 +57,7 @@ export interface TenureLikeRecord {
 export interface CombinedTenureItem {
   kind: 'tenure' | 'reign'
   data: TenureLikeRecord
-  /** 표시용 대수 — 재위·재임 공통 ordinal(= termNumber) */
+  /** 표시용 대수 — 재위·재임 공통 ordinal */
   ordinalNum: number | null
   /** 연임 여부 — subTermNumber≥2(본인 회차) 또는 같은 대 2건 이상 */
   isReappointment: boolean

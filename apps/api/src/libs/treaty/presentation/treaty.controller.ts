@@ -65,9 +65,8 @@ const TREATY_SIGNATORY_INCLUDE = {
       name: true,
       headTenure: {
         select: {
-          termNumber: true,
+          ordinal: true,
           subTermNumber: true,
-          regnalNumber: true,
           person: {
             select: {
               id: true,

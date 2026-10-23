@@ -168,7 +168,6 @@ export class GovernmentPositionController {
         historicalCountryId: true,
         positionType: true,
         title: true,
-        termNumber: true,
         ordinal: true,
         regnalName: true,
         notes: true,

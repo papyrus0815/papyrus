@@ -170,7 +170,7 @@ export function CabinetMindMap({
             >
               <CenterFace>{renderFace(head, 112)}</CenterFace>
               <CenterRole>
-                {head.termNumber != null && `제${head.termNumber}대 `}
+                {head.ordinal != null && `제${head.ordinal}대 `}
                 {head.title}
                 {!head.endDate && <CenterNow>현직</CenterNow>}
               </CenterRole>

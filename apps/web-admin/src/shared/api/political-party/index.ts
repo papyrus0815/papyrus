@@ -69,7 +69,7 @@ export type PartyTopLeaderTenure = {
   id: string
   positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
   title?: string | null
-  termNumber?: number | null
+  ordinal?: number | null
   subTermNumber?: number | null
   startDate: string
   endDate?: string | null

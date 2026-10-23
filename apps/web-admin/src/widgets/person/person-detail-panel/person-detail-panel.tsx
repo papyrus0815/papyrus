@@ -703,9 +703,9 @@ export function PersonDetailPanel({
       // BC·고대 안전 정렬 (startDate 없는 항목은 맨 뒤로)
       return isoDateSortKey(a.data.startDate) - isoDateSortKey(b.data.startDate)
     })
-    // 표시용 대수 — 재위·재임 공통 ordinal(= termNumber). regnalNumber는 이름 속 서수라 쓰지 않는다
+    // 표시용 대수 — 재위·재임 공통 ordinal
     const ordinalOf = (it: { kind: 'tenure' | 'reign'; data: TenureLikeRecord }) =>
-      it.data.ordinal ?? it.data.termNumber ?? null
+      it.data.ordinal ?? null
     // 같은 종류·같은 대(ordinal)에 2건 이상이면 연임으로 카운트
     const termCounts = new Map<string, number>()
     for (const it of base) {

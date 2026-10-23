@@ -39,7 +39,6 @@ export interface RawTenureRecord {
   appointmentMethod?: string | null
   /** 대수 — 재위·재임 공통 */
   ordinal?: number | null
-  termNumber?: number | null
   notes?: string | null
   startDate?: string | null
   endDate?: string | null
@@ -114,9 +113,9 @@ function categorize(tenure: RawTenureRecord): PositionTypeCategory {
   })
 }
 
-/** 대수 — 재위·재임 공통 ordinal(= termNumber). regnalNumber는 '이름 속 서수'라 대수가 아니다 */
+/** 대수 — 재위·재임 공통 ordinal */
 function ordinalOf(t: RawTenureRecord): number | null {
-  const ordinal = t.ordinal ?? t.termNumber
+  const ordinal = t.ordinal
   return typeof ordinal === 'number' ? ordinal : null
 }
 
