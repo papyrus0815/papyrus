@@ -31,7 +31,7 @@
  *
  * 보강 항목:
  *  - Person 필드 보강(전기·출생지·사망지·사인·영향력) + 주 국적 교정
- *  - GovernmentPositionTenure x10 (식민지 지휘 3·본토 군직 4·각료 1·특별직 2, 경위 전건)
+ *  - GovernmentPositionTenure x9 (식민지 지휘 3·본토 군직 4·각료 1·특별직 1, 경위 전건) — 원수 사후 추서(1921)는 재임이 아니라 연보(AWARD)
  *  - PersonCountryAffiliation +1 (제3공화국) / PersonNickname +2
  *  - PersonLifeEvent x18 / PersonStats x1
  */
@@ -289,22 +289,7 @@ const TENURES: TenureSpec[] = [
       '1915년 아르투아·샹파뉴 공세의 참담한 실패와 알렉상드르 밀랑 장관의 의회 대응 실패로 내각이 무너지자, 아리스티드 브리앙이 10월 29일 새 내각을 구성하며 \'파리를 구한 장군\'의 권위를 빌리기 위해 갈리에니를 육군장관에 기용했다. ' +
       '전임자는 밀랑.',
   },
-  {
-    title: '프랑스 원수 (사후 추서)',
-    positionType: GovernmentPositionType.SPECIAL_POSITION,
-    startYear: 1921, startMonth: 5, startDay: 7,
-    endYear: 1921, endMonth: 5, endDay: 7,
-    endReason: TenureEndReason.OTHER,
-    endReasonDetail:
-      '해당 없음 — 사후 추서된 종신 존호.',
-    notes:
-      '생전에 원수 지팡이를 받지 못한 것은 조프르와의 갈등과 이른 죽음 때문이었다. ' +
-      '추서는 마른에서의 역할과 파리 방어 공로를 국가가 공식 인정한 것이자, 사임의 형태로 물러난 그에 대한 사후 명예 회복의 성격을 띤다. ' +
-      '오늘날 프랑스에서 그가 \'갈리에니 원수\'로 불리는 근거가 이 추서다.',
-    appointmentDetail:
-      '1차대전 원수 서임(조프르 1916, 포슈·페탱 1918)에서 제외된 채 사망한 그를 두고 의회와 여론에서 복권 요구가 이어졌고, 사후 5년 만인 1921년 5월 7일 대통령령으로 프랑스 원수 존호가 추서되었다(Légifrance 관보 원문 기준. ' +
-      '다수 자료는 5월 6일로 표기).',
-  },]
+]
 
 // ── 별명 ────────────────────────────────────────────────────────────────────
 // «파리 구원자»는 이미 등록돼 있어 중복 생성되지 않는다(이름 기준 멱등).
