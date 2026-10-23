@@ -130,16 +130,6 @@ enum TenureEndReason {
   OTHER
 }
 
-/// 공직 재임의 권한 근원(선거 당선·임명·승계 등). UNKNOWN은 기존 데이터·미분류.
-enum TenureMandateSource {
-  UNKNOWN
-  ELECTION
-  APPOINTMENT
-  SUCCESSION
-  HEREDITARY
-  OTHER
-}
-
 // ========================
 // GovernmentPositionDefinition (단일 레벨: 직함 + enum 분류)
 // ========================
@@ -399,7 +389,7 @@ model GovernmentPositionTenure {
   titleEn String? @map("title_en") @db.VarChar(100)
 
   /// 사건 타임라인에 직책 정보 표시 여부 (기본값: true)
-  showPositionInfo Boolean @default(false) @map("show_position_info")
+  showPositionInfo Boolean @default(true) @map("show_position_info")
 
   /// 소속 국가 (현대 국가)
   countryId String? @map("country_id") @db.Char(36)
@@ -496,8 +486,6 @@ model GovernmentPositionTenure {
   achievements       TenureAchievement[]           @relation("TenureAchievements")
   administrationDepartment AdministrationDepartment? @relation("TenureDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
 
-  /// 재임 권한의 근원. ELECTION이면 electionCandidacyId 연결을 권장.
-  mandateSource TenureMandateSource @default(UNKNOWN) @map("mandate_source")
 
   /// 이 공직 임기가 특정 선거의 당선으로 시작된 경우(대통령·국회의원 등). 1:1.
   electionCandidacyId String? @unique @map("election_candidacy_id") @db.Char(36)
@@ -515,7 +503,6 @@ model GovernmentPositionTenure {
   @@index([startDate], name: "idx_gov_tenure_startDate")
   @@index([cabinetId], name: "idx_gov_tenure_cabinetId")
   @@index([administrationDepartmentId], name: "idx_gov_tenure_adminDeptId")
-  @@index([mandateSource], name: "idx_gov_tenure_mandateSource")
   @@index([accessionEventId], name: "idx_gov_tenure_accessionEventId")
   @@index([startKey, endKey], name: "idx_gov_tenure_period_key")
   @@index([polityId], name: "idx_gov_tenure_polityId")

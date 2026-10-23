@@ -16,7 +16,6 @@ import {
   Era,
   MarriageRank,
   Prisma,
-  TenureMandateSource,
   GovernmentPositionType,
 } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
@@ -315,30 +314,6 @@ const PERSON_INFOGRAPHIC_INCLUDE = {
     orderBy: { startDate: 'desc' as const },
   },
 } satisfies Prisma.PersonInclude
-
-function resolveMandateSourceForCreate(
-  dto: CreateGovernmentPositionTenureDto,
-): TenureMandateSource {
-  if (dto.mandateSource != null) {
-    return dto.mandateSource as TenureMandateSource
-  }
-  if (dto.electionCandidacyId) {
-    return TenureMandateSource.ELECTION
-  }
-  return TenureMandateSource.UNKNOWN
-}
-
-function resolveMandateSourceForUpdate(
-  dto: Partial<CreateGovernmentPositionTenureDto>,
-): TenureMandateSource | undefined {
-  if (dto.mandateSource != null) {
-    return dto.mandateSource as TenureMandateSource
-  }
-  if (dto.electionCandidacyId !== undefined) {
-    return dto.electionCandidacyId ? TenureMandateSource.ELECTION : TenureMandateSource.UNKNOWN
-  }
-  return undefined
-}
 
 /** 재임 업적 목록 — 사건(Event) 정본 포함 */
 const TENURE_ACHIEVEMENTS_INCLUDE = {
@@ -2979,7 +2954,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         cabinetId: dto.cabinetId ?? undefined,
         administrationDepartmentId: dto.administrationDepartmentId ?? undefined,
         electionCandidacyId: dto.electionCandidacyId ?? undefined,
-        mandateSource: resolveMandateSourceForCreate(dto),
       },
       include: {
         positionDefinition: true,
@@ -3061,11 +3035,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.administrationDepartmentId = dto.administrationDepartmentId || null
     if (dto.electionCandidacyId !== undefined)
       updateData.electionCandidacyId = dto.electionCandidacyId || null
-
-    const mandateResolved = resolveMandateSourceForUpdate(dto)
-    if (mandateResolved !== undefined) {
-      updateData.mandateSource = mandateResolved
-    }
 
     // 기간 — 한쪽 끝만 바뀌어도 키·DATETIME·정밀도를 한 덩어리로 다시 계산(안 보낸 끝은 저장값).
     // 구조화(…DateInfo)든 레거시 ISO든 구조화 칸으로 옮겨 쓴다 — DATETIME은 파생

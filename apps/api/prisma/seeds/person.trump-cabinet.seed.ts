@@ -30,7 +30,6 @@ import {
   AppointmentMethod,
   GovernmentPositionType,
   TenureEndReason,
-  TenureMandateSource,
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
@@ -571,7 +570,6 @@ export async function seedTrumpCabinet(prisma: PrismaService): Promise<void> {
         appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
         appointmentDetail: PRESIDENT_TENURE.appointmentDetail,
         notes: PRESIDENT_TENURE.notes,
-        mandateSource: TenureMandateSource.ELECTION,
       },
     })
     console.log(`  ✅ 재임: 대통령(제${PRESIDENT_TENURE.termNumber}대) — trump (${PRESIDENT_TENURE.startYear}~현재)`)
@@ -716,7 +714,6 @@ export async function seedTrumpCabinet(prisma: PrismaService): Promise<void> {
         endReason: t.endReason,
         endReasonDetail: t.endReasonDetail,
         notes: t.notes,
-        mandateSource: TenureMandateSource.APPOINTMENT,
         cabinetId,
         administrationDepartmentId: departmentId,
       },

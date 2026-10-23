@@ -9,7 +9,7 @@
 ///
 /// 연결 원칙:
 /// - 인물(Person)은 후보(Candidacy)·당원(Membership)·재임(Tenure)으로 각각 다른 행에 표현
-/// - 당선으로 임기가 생기면 GovernmentPositionTenure.electionCandidacyId로 후보와 1:1 연결(선택); 재임에는 mandateSource(TenureMandateSource, government.prisma)로 근원 기록
+/// - 당선으로 임기가 생기면 GovernmentPositionTenure.electionCandidacyId로 후보와 1:1 연결(선택); 취임 방식은 재임의 appointmentMethod
 /// - 행정부는 Cabinet + Tenure로 유지; 여당/연정은 CabinetPoliticalParty(+ provenance·선거 집계 연결)로 표현
 
 // ========================

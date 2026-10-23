@@ -770,11 +770,6 @@ export class CreateGovernmentPositionTenureDto {
   @IsString()
   electionCandidacyId?: string | null
 
-  /** 재임 권한 근원. 생략 시 electionCandidacyId가 있으면 ELECTION, 없으면 UNKNOWN */
-  @IsOptional()
-  @IsIn(['UNKNOWN', 'ELECTION', 'APPOINTMENT', 'SUCCESSION', 'HEREDITARY', 'OTHER'])
-  mandateSource?: 'UNKNOWN' | 'ELECTION' | 'APPOINTMENT' | 'SUCCESSION' | 'HEREDITARY' | 'OTHER'
-
   // ── 직위 보유 단일 모델 이행 3단계 — 재위만 받던 칸을 재임도 받는다(재위 = 군주직 재임) ──
 
   /** 구조화 시작 — era + 크기값 연/월/일. 있으면 startDate·startDatePrecision보다 우선 */

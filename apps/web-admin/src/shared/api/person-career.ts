@@ -189,14 +189,6 @@ export interface CreateMedicalCareerDto {
 /**
  * 국가원수/왕위 재임 기록 생성 DTO
  */
-export type TenureMandateSourceValue =
-  | 'UNKNOWN'
-  | 'ELECTION'
-  | 'APPOINTMENT'
-  | 'SUCCESSION'
-  | 'HEREDITARY'
-  | 'OTHER'
-
 export interface CreateGovernmentPositionTenureDto {
   personId: string
   positionType:
@@ -273,8 +265,6 @@ export interface CreateGovernmentPositionTenureDto {
   priority?: number
   /** 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 */
   administrationDepartmentId?: string | null
-  /** 재임 권한 근원 */
-  mandateSource?: TenureMandateSourceValue
   /** 당선된 선거 후보와 1:1 연결 */
   electionCandidacyId?: string | null
 }
