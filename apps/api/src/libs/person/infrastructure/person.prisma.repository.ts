@@ -1901,7 +1901,7 @@ export class PersonPrismaRepository implements IPersonRepository {
                 startDate: true,
                 endDate: true,
                 description: true,
-                category: true,
+                domain: true,
                 countryRelations: {
                   select: {
                     id: true,
