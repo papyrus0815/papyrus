@@ -323,7 +323,7 @@ export function PersonPoliticsSection({
     return candidacies.map((candidacy) => ({
       ...candidacy,
       pollLabel: candidacy.election?.pollDate
-        ? new Date(candidacy.election.pollDate).toLocaleDateString('ko-KR')
+        ? new Date(candidacy.election.pollDate).toLocaleDateString('ko-KR', { timeZone: 'UTC' })
         : '—',
     }))
   }, [candidacies])

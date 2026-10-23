@@ -122,8 +122,8 @@ function elapsedText(iso: string | null): string | null {
   if (Number.isNaN(start.getTime())) return null
   const now = new Date()
   const months =
-    (now.getFullYear() - start.getFullYear()) * 12 +
-    (now.getMonth() - start.getMonth())
+    (now.getFullYear() - start.getUTCFullYear()) * 12 +
+    (now.getMonth() - start.getUTCMonth())
   if (months < 1) return '취임'
   const years = Math.floor(months / 12)
   const rest = months % 12

@@ -129,7 +129,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
       const year = Math.abs(parseInt(dateString.split('-')[1]))
       return `기원전 ${year}년`
     }
-    return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`
+    return `${date.getUTCFullYear()}년 ${date.getUTCMonth() + 1}월 ${date.getUTCDate()}일`
   }
 
   return (
@@ -309,12 +309,12 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                             marginBottom: '12px',
                           }}
                         >
-                          {new Date(country.period.start).getFullYear() > 0
-                            ? new Date(country.period.start).getFullYear()
+                          {new Date(country.period.start).getUTCFullYear() > 0
+                            ? new Date(country.period.start).getUTCFullYear()
                             : `기원전 ${Math.abs(parseInt(country.period.start.split('-')[1]))}`}
                           년 ~{' '}
-                          {new Date(country.period.end).getFullYear() > 0
-                            ? new Date(country.period.end).getFullYear()
+                          {new Date(country.period.end).getUTCFullYear() > 0
+                            ? new Date(country.period.end).getUTCFullYear()
                             : `기원전 ${Math.abs(parseInt(country.period.end.split('-')[1]))}`}
                           년
                         </div>
@@ -745,18 +745,18 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                           >
                             {new Date(
                               selectedCountry.period.start,
-                            ).getFullYear() > 0
+                            ).getUTCFullYear() > 0
                               ? new Date(
                                   selectedCountry.period.start,
-                                ).getFullYear()
+                                ).getUTCFullYear()
                               : `기원전 ${Math.abs(parseInt(selectedCountry.period.start.split('-')[1]))}`}
                             년 ~{' '}
                             {new Date(
                               selectedCountry.period.end,
-                            ).getFullYear() > 0
+                            ).getUTCFullYear() > 0
                               ? new Date(
                                   selectedCountry.period.end,
-                                ).getFullYear()
+                                ).getUTCFullYear()
                               : `기원전 ${Math.abs(parseInt(selectedCountry.period.end.split('-')[1]))}`}
                             년
                           </div>
@@ -1411,14 +1411,14 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                     if (dateString.startsWith('-')) {
                       return -parseInt(dateString.split('-')[1])
                     }
-                    return new Date(dateString).getFullYear()
+                    return new Date(dateString).getUTCFullYear()
                   }
                   return getYear(eventA.date.start) - getYear(eventB.date.start)
                 })
                 .map((event, index) => {
                   const year = event.date.start.startsWith('-')
                     ? `기원전 ${Math.abs(parseInt(event.date.start.split('-')[1]))}년`
-                    : `${new Date(event.date.start).getFullYear()}년`
+                    : `${new Date(event.date.start).getUTCFullYear()}년`
 
                   return (
                     <motion.div

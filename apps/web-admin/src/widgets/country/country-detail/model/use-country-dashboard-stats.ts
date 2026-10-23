@@ -585,8 +585,8 @@ export function useCountryDashboardStats(
       const d = new Date(ts)
       if (Number.isNaN(d.getTime())) continue
       const monthIdx =
-        (d.getFullYear() - startMonth.getFullYear()) * 12 +
-        (d.getMonth() - startMonth.getMonth())
+        (d.getUTCFullYear() - startMonth.getFullYear()) * 12 +
+        (d.getUTCMonth() - startMonth.getMonth())
       if (monthIdx >= 0 && monthIdx < 12) buckets[monthIdx]++
     }
     return buckets

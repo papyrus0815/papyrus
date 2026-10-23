@@ -161,7 +161,7 @@ export function CabinetPoliticalPartiesBlock({
                       {link.electionPartyResult.election.pollDate
                         ? ` (${new Date(
                             link.electionPartyResult.election.pollDate,
-                          ).toLocaleDateString('ko-KR')})`
+                          ).toLocaleDateString('ko-KR', { timeZone: 'UTC' })})`
                         : ''}
                     </CabS.CabDetailPartyNotes>
                   ) : null}

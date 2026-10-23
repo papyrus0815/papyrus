@@ -218,6 +218,7 @@ function OrganizationHeadsSection({ organizationId }: { organizationId: string }
   const formatDate = (d: string) => {
     if (!d) return '—'
     return new Date(d).toLocaleDateString('ko-KR', {
+      timeZone: 'UTC',
       year: 'numeric',
       month: 'short',
       day: 'numeric',

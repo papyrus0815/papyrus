@@ -60,6 +60,7 @@ function formatEventDateLabel(
     return Number.isNaN(d.getTime())
       ? iso
       : d.toLocaleDateString('ko-KR', {
+          timeZone: 'UTC',
           year: 'numeric',
           month: 'long',
           day: 'numeric',

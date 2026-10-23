@@ -53,7 +53,7 @@ export function formatStartDate(iso: string | null | undefined): string {
   }
   const parsed = new Date(iso)
   if (Number.isNaN(parsed.getTime())) return iso
-  return `${parsed.getFullYear()}.${parsed.getMonth() + 1}.${parsed.getDate()}`
+  return `${parsed.getUTCFullYear()}.${parsed.getUTCMonth() + 1}.${parsed.getUTCDate()}`
 }
 
 export function formatTenure(iso: string): string {

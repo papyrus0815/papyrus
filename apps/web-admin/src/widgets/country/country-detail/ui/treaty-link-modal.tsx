@@ -1485,7 +1485,7 @@ export function TreatyLinkModal({
                       </div>
                       <span style={{ fontSize: 12, color: '#94a3b8' }}>
                         {treaty.signDate
-                          ? new Date(treaty.signDate).getFullYear()
+                          ? new Date(treaty.signDate).getUTCFullYear()
                           : '—'}
                       </span>
                     </CabS.TreatyListRow>

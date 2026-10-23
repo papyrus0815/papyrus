@@ -7,13 +7,13 @@ export function formatPersonLifespan(p: any): string {
     p.birthYear != null
       ? p.birthYear
       : p.birthDate
-        ? new Date(p.birthDate).getFullYear()
+        ? new Date(p.birthDate).getUTCFullYear()
         : null
   const dy =
     p.deathYear != null
       ? p.deathYear
       : p.deathDate
-        ? new Date(p.deathDate).getFullYear()
+        ? new Date(p.deathDate).getUTCFullYear()
         : null
   if (by != null && dy != null) return `${be}${by} ~ ${de}${dy}`
   if (by != null) return `${be}${by} ~`
@@ -27,15 +27,15 @@ export function calcAgeAtTenure(
   tenureStartDate: string | null | undefined,
 ): number | null {
   if (!person || !tenureStartDate) return null
-  const startYear = new Date(tenureStartDate).getFullYear()
-  const startMonth = new Date(tenureStartDate).getMonth() + 1
-  const startDay = new Date(tenureStartDate).getDate()
+  const startYear = new Date(tenureStartDate).getUTCFullYear()
+  const startMonth = new Date(tenureStartDate).getUTCMonth() + 1
+  const startDay = new Date(tenureStartDate).getUTCDate()
   if (person.birthDate) {
     const bd = new Date(person.birthDate)
-    let age = startYear - bd.getFullYear()
+    let age = startYear - bd.getUTCFullYear()
     if (
-      startMonth < bd.getMonth() + 1 ||
-      (startMonth === bd.getMonth() + 1 && startDay < bd.getDate())
+      startMonth < bd.getUTCMonth() + 1 ||
+      (startMonth === bd.getUTCMonth() + 1 && startDay < bd.getUTCDate())
     )
       age -= 1
     return age >= 0 ? age : null

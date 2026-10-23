@@ -3567,7 +3567,7 @@ function PhaseTimeline({
                   : 'neutral'
           const period =
             p.startDate || p.endDate
-              ? `${p.startDate ? new Date(p.startDate).getFullYear() : '?'}–${p.endDate ? new Date(p.endDate).getFullYear() : '현재'}`
+              ? `${p.startDate ? new Date(p.startDate).getUTCFullYear() : '?'}–${p.endDate ? new Date(p.endDate).getUTCFullYear() : '현재'}`
               : ''
           return (
             <PhasePill

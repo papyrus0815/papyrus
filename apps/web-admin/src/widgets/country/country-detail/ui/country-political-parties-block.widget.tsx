@@ -642,7 +642,7 @@ const POSITION_OPTIONS: { value: PoliticalPosition; label: string }[] = [
 function formatDate(iso?: string | null) {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleDateString('ko-KR')
+    return new Date(iso).toLocaleDateString('ko-KR', { timeZone: 'UTC' })
   } catch {
     return iso
   }
@@ -660,7 +660,7 @@ function formatYmdKo(ymd: string) {
 function formatPickedCalendarDateLabel(raw: string) {
   if (!raw) return ''
   const t = Date.parse(raw)
-  if (!Number.isNaN(t)) return new Date(t).toLocaleDateString('ko-KR')
+  if (!Number.isNaN(t)) return new Date(t).toLocaleDateString('ko-KR', { timeZone: 'UTC' })
   return raw.length >= 10 ? formatYmdKo(raw.slice(0, 10)) : raw
 }
 

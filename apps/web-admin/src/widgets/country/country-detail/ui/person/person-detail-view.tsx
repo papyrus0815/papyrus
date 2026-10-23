@@ -332,13 +332,14 @@ export function PersonDetailView({
                               {new Date(tenure.startDate).toLocaleDateString(
                                 'ko-KR',
                                 {
+                                  timeZone: 'UTC',
                                   year: 'numeric',
                                   month: 'long',
                                   day: 'numeric',
                                 },
                               )}
                               {tenure.endDate &&
-                                ` ~ ${new Date(tenure.endDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}`}
+                                ` ~ ${new Date(tenure.endDate).toLocaleDateString('ko-KR', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' })}`}
                             </EventDate>
                           )}
                         </EventHeader>
@@ -419,6 +420,7 @@ export function PersonDetailView({
                               {new Date(evt.event.startDate).toLocaleDateString(
                                 'ko-KR',
                                 {
+                                  timeZone: 'UTC',
                                   year: 'numeric',
                                   month: 'long',
                                   day: 'numeric',

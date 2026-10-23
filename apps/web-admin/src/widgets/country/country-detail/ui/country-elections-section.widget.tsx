@@ -304,7 +304,7 @@ function labelElectionPartyPosition(value: string | null | undefined) {
 function formatElectionPartyDate(iso?: string | null) {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleDateString('ko-KR')
+    return new Date(iso).toLocaleDateString('ko-KR', { timeZone: 'UTC' })
   } catch {
     return iso
   }
@@ -451,9 +451,9 @@ function toLocalDateYmd(value: string | null | undefined): string {
     try {
       const d = new Date(s)
       if (Number.isNaN(d.getTime())) return s.slice(0, 10)
-      const y = d.getFullYear()
-      const m = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
+      const y = d.getUTCFullYear()
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+      const day = String(d.getUTCDate()).padStart(2, '0')
       return `${y}-${m}-${day}`
     } catch {
       return s.slice(0, 10)
@@ -462,9 +462,9 @@ function toLocalDateYmd(value: string | null | undefined): string {
   try {
     const d = new Date(s)
     if (Number.isNaN(d.getTime())) return ''
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
+    const y = d.getUTCFullYear()
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(d.getUTCDate()).padStart(2, '0')
     return `${y}-${m}-${day}`
   } catch {
     return ''
@@ -602,6 +602,7 @@ function formatPollDate(iso: string) {
   try {
     const d = new Date(iso)
     return d.toLocaleDateString('ko-KR', {
+      timeZone: 'UTC',
       year: 'numeric',
       month: 'short',
       day: 'numeric',

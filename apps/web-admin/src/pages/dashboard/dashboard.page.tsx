@@ -18,7 +18,7 @@ import * as S from './dashboard.styles'
 /** startDate(ISO 문자열)에서 "N세기" / "기원전 N세기" 라벨을 만든다. 불명확하면 null. */
 function eraLabel(startDate?: string | null): string | null {
   if (!startDate) return null
-  const year = new Date(startDate).getFullYear()
+  const year = new Date(startDate).getUTCFullYear()
   if (Number.isNaN(year)) return null
   if (year <= 0) return `기원전 ${Math.floor(Math.abs(year) / 100) + 1}세기`
   return `${Math.floor((year - 1) / 100) + 1}세기`

@@ -376,7 +376,7 @@ function formatPeriod(start?: string | null, end?: string | null): string {
     if (!d) return ''
     const dt = new Date(d)
     if (isNaN(dt.getTime())) return ''
-    return `${dt.getFullYear()}`
+    return `${dt.getUTCFullYear()}`
   }
   const s = fmt(start)
   const e = fmt(end)

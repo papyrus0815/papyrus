@@ -120,7 +120,7 @@ export const MENTION_TYPE_CONFIG: Record<
     getSubtitle: (item: unknown) => {
       const event = item as EventResponseDto
       if (event.startDate) {
-        return `${new Date(event.startDate).getFullYear()}년`
+        return `${new Date(event.startDate).getUTCFullYear()}년`
       }
       return undefined
     },

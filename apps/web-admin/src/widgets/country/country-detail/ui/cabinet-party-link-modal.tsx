@@ -335,7 +335,7 @@ export function CabinetPartyLinkModal({
                           <option key={el.id} value={el.id}>
                             {el.shortName?.trim() || el.name} ·{' '}
                             {labelElectionType(el.electionType)} ·{' '}
-                            {new Date(el.pollDate).toLocaleDateString('ko-KR')}
+                            {new Date(el.pollDate).toLocaleDateString('ko-KR', { timeZone: 'UTC' })}
                           </option>
                         ))}
                       </CabS.CabinetSelectNative>
