@@ -185,7 +185,8 @@ const Frame = styled.div`
   position: relative;
   overflow: hidden;
   aspect-ratio: 16 / 9;
-  max-height: 280px;
+  /* 280px이었다 — 1500×900에서 탭이 549px, 첫 내용이 840px에야 섰다(첫 화면을 그림이 다 썼다). */
+  max-height: 208px;
   width: 100%;
   border-radius: ${RADIUS.MD};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};

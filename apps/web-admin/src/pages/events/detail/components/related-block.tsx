@@ -290,7 +290,7 @@ export function RelatedBlock({ eventId, eventTitle }: RelatedBlockProps) {
                     onFocus={() => prefetchEvent(other.id)}
                   >
                     <NetStyles.ChildEyebrow $cat={category}>
-                      <span aria-hidden>{category.glyph}</span>
+                      <span aria-hidden><category.Icon /></span>
                       {dateLabel || category.label}
                     </NetStyles.ChildEyebrow>
                     <NetStyles.ChildBody>

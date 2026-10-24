@@ -322,6 +322,11 @@ const YearDisplay = styled.div`
   @container eventdetail (min-width: 920px) {
     font-size: 34px;
   }
+
+  /* 한 열에서는 히어로 날짜 줄이 연도를 이미 말한다 */
+  @container eventdetail (max-width: 919px) {
+    display: none;
+  }
 `
 
 const EditableLine = styled.div`
@@ -364,6 +369,11 @@ const LocationLine = styled(EditableLine)`
  */
 const DateLine = styled(EditableLine)`
   font-variant-numeric: tabular-nums;
+
+  /* 한 열 배치에서는 날짜를 히어로(제목 밑)가 든다 — 같은 값이 두 번 서지 않게 */
+  @container eventdetail (max-width: 919px) {
+    display: none;
+  }
 `
 
 const PinIcon = styled.span`

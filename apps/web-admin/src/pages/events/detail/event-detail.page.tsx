@@ -670,6 +670,8 @@ function EventDetailContent({
   const scrollRef = useRef<HTMLDivElement>(null)
   const accentColor = eventDomainDef(event.domain).color
 
+  const overviewOutline = sections.filter((item) => tabOf(item.id) === 'overview')
+
   return (
     <InlineEditProvider imageCategory="events">
       <S.Page ref={scrollRef}>
@@ -924,9 +926,10 @@ function EventDetailContent({
                 onCountryClick={onCountryClick}
                 foldedCount={folded.length}
               />
-              {/* 목차는 긴 글이 있는 개요에서만 — 다른 탭은 탭 자체가 목차다 */}
-              {activeTab === 'overview' && (
-                <DetailRail sections={sections.filter((item) => tabOf(item.id) === 'overview')} />
+              {/* 목차는 긴 글이 있는 개요에서만 — 다른 탭은 탭 자체가 목차다.
+                  두 칸 이하('전개·댓글')면 길을 안내하지 못하고 자리만 차지해 세우지 않는다 */}
+              {activeTab === 'overview' && overviewOutline.length >= 3 && (
+                <DetailRail sections={overviewOutline} />
               )}
             </S.Aside>
           </S.Body>

@@ -15,7 +15,6 @@ import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import {
-  formatDateRange,
   formatYearLabel,
   parseIsoDateParts,
 } from '@/shared/lib/iso-date'
@@ -34,6 +33,7 @@ import {
   InlineSelect,
   InlineText,
   type InlineSelectOption,
+  InlineDateRange,
 } from './inline'
 
 interface DetailHeroProps {
@@ -138,7 +138,7 @@ export function DetailHero({
         </BackLink>
         <Sep>·</Sep>
         <S.CategoryChip $color={categorySoft.text} $colorDark={categorySoft.textDark}>
-          <span aria-hidden>{category.glyph}</span>
+          <category.Icon aria-hidden size={12} />
           {/* 분야는 필수 — 비우는 줄 없이 9개 중 하나로만 바꾼다 */}
           <InlineSelect
             value={category.key}
@@ -238,16 +238,18 @@ export function DetailHero({
           단, 한 열 배치에서는 장부가 히어로(요약 문단까지) **뒤**에 와서 390px에선 '언제'가
           1.3화면 아래로 밀렸다 — 그 폭에서만 날짜 한 줄을 제목 밑에 둔다(읽기 전용,
           편집은 여전히 장부). */}
-      {event.startDate && (
-        <NarrowDateLine>
-          {formatDateRange(
-            event.startDate,
-            event.endDate ?? undefined,
-            event.startDatePrecision,
-            event.endDatePrecision,
-          )}
-        </NarrowDateLine>
-      )}
+      {/* 한 열 배치의 날짜는 여기 **한 곳**(편집 가능) — 장부의 연도·날짜 줄은 그 폭에서 숨는다.
+          예전엔 읽기 전용 줄 + 장부의 '1914년 + 날짜'로 모바일에서 같은 날짜가 두 번 섰다. */}
+      <NarrowDateLine>
+        <InlineDateRange
+          startDate={event.startDate}
+          startDatePrecision={event.startDatePrecision}
+          endDate={event.endDate}
+          endDatePrecision={event.endDatePrecision}
+          allowPartial
+          onSave={(patch) => onPatch(patch)}
+        />
+      </NarrowDateLine>
       <HeroActors
         event={event}
         onPersonClick={onPersonClick}
@@ -289,7 +291,7 @@ export function DetailSummary({
 }
 
 /* 한 열 배치 전용 날짜 줄 — 2열(≥920)에서는 옆 장부가 같은 값을 크게 말하므로 숨긴다. */
-const NarrowDateLine = styled.p`
+const NarrowDateLine = styled.div`
   margin: -4px 0 0;
   font-size: 14px;
   font-weight: 600;

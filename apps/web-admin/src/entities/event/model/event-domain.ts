@@ -60,8 +60,6 @@ export interface EventDomainDef {
   label: string
   /** 한 줄 설명 — 분야 고르기·요약 카드 */
   tagline: string
-  /** 장부 글리프(점·짧은 막대 옆 한 글자) */
-  glyph: string
   /** 아이콘 */
   Icon: IconType
   /** 액센트 — 라이트(점·막대·히어로 띠). 작은 점에서도 변별되는 거리 우선 */
@@ -89,13 +87,13 @@ const card = (rgb: string, iconColor: string, accent: string): DomainCardTone =>
  */
 export const EVENT_DOMAINS: Record<EventDomainKey, EventDomainDef> = {
   POLITICS: {
-    key: 'POLITICS', label: '정치', tagline: '정권·제도·권력의 변화', glyph: '◆', Icon: FiUsers,
+    key: 'POLITICS', label: '정치', tagline: '정권·제도·권력의 변화', Icon: FiUsers,
     color: '#6d28d9', dark: '#c4b5fd', badge: '#6d28d9',
     soft: { rgb: '109, 40, 217', text: '#5b21b6', textDark: '#c4b5fd', sparkEnd: '#a78bfa' },
     card: card('109, 40, 217', '#5b21b6', '#6d28d9'),
   },
   DIPLOMACY: {
-    key: 'DIPLOMACY', label: '외교', tagline: '조약·회담·국가 간 관계', glyph: '☍', Icon: FiGlobe,
+    key: 'DIPLOMACY', label: '외교', tagline: '조약·회담·국가 간 관계', Icon: FiGlobe,
     /* badge·soft.rgb는 #0284c7(sky-600) — #0ea5e9는 흰 지면 대비 2.77:1로 비텍스트 3:1 미달이었고,
        외교가 전 행의 13%라 가장 잦은 표지가 가장 안 보였다(새 값 4.10:1 · 과학기술과 ΔE 12.3). */
     color: '#0ea5e9', dark: '#38bdf8', badge: '#0284c7',
@@ -103,43 +101,43 @@ export const EVENT_DOMAINS: Record<EventDomainKey, EventDomainDef> = {
     card: card('14, 165, 233', '#0369a1', '#0ea5e9'),
   },
   MILITARY: {
-    key: 'MILITARY', label: '군사', tagline: '전쟁·작전·군비', glyph: '⚔', Icon: FiShield,
+    key: 'MILITARY', label: '군사', tagline: '전쟁·작전·군비', Icon: FiShield,
     color: '#b91c1c', dark: '#f87171', badge: '#b91c1c',
     soft: { rgb: '185, 28, 28', text: '#991b1b', textDark: '#fca5a5', sparkEnd: '#f87171' },
     card: card('185, 28, 28', '#991b1b', '#b91c1c'),
   },
   ECONOMY: {
-    key: 'ECONOMY', label: '경제', tagline: '기업·시장·산업·재정', glyph: '$', Icon: FiTrendingUp,
+    key: 'ECONOMY', label: '경제', tagline: '기업·시장·산업·재정', Icon: FiTrendingUp,
     color: '#b45309', dark: '#fbbf24', badge: '#b45309',
     soft: { rgb: '180, 83, 9', text: '#b45309', textDark: '#fdba74', sparkEnd: '#fb923c' },
     card: card('180, 83, 9', '#9a3412', '#b45309'),
   },
   SOCIETY: {
-    key: 'SOCIETY', label: '사회', tagline: '봉기·운동·재해·이주', glyph: '◉', Icon: FiGlobe,
+    key: 'SOCIETY', label: '사회', tagline: '봉기·운동·재해·이주', Icon: FiGlobe,
     color: '#0d9488', dark: '#2dd4bf', badge: '#0d9488',
     soft: { rgb: '13, 148, 136', text: '#0f766e', textDark: '#5eead4', sparkEnd: '#2dd4bf' },
     card: card('13, 148, 136', '#0f766e', '#0d9488'),
   },
   CULTURE: {
-    key: 'CULTURE', label: '문화', tagline: '문자·예술·출판·유산', glyph: '✦', Icon: FiBook,
+    key: 'CULTURE', label: '문화', tagline: '문자·예술·출판·유산', Icon: FiBook,
     color: '#db2777', dark: '#f472b6', badge: '#db2777',
     soft: { rgb: '219, 39, 119', text: '#be185d', textDark: '#f9a8d4', sparkEnd: '#f472b6' },
     card: card('219, 39, 119', '#be185d', '#db2777'),
   },
   RELIGION: {
-    key: 'RELIGION', label: '종교', tagline: '개종·교회·종교 정책', glyph: '✚', Icon: FiHeart,
+    key: 'RELIGION', label: '종교', tagline: '개종·교회·종교 정책', Icon: FiHeart,
     color: '#a16207', dark: '#facc15', badge: '#a16207',
     soft: { rgb: '161, 98, 7', text: '#854d0e', textDark: '#fcd34d', sparkEnd: '#fbbf24' },
     card: card('161, 98, 7', '#854d0e', '#a16207'),
   },
   SCIENCE: {
-    key: 'SCIENCE', label: '과학기술', tagline: '발견·발명·기술·기반시설', glyph: '⚙', Icon: FiCpu,
+    key: 'SCIENCE', label: '과학기술', tagline: '발견·발명·기술·기반시설', Icon: FiCpu,
     color: '#0e7490', dark: '#22d3ee', badge: '#0e7490',
     soft: { rgb: '14, 116, 144', text: '#155e75', textDark: '#67e8f9', sparkEnd: '#22d3ee' },
     card: card('14, 116, 144', '#155e75', '#0e7490'),
   },
   OTHER: {
-    key: 'OTHER', label: '기타', tagline: '어디에도 맞지 않는 사건', glyph: '·', Icon: FiMoreHorizontal,
+    key: 'OTHER', label: '기타', tagline: '어디에도 맞지 않는 사건', Icon: FiMoreHorizontal,
     color: '#6b7280', dark: '#9ca3af', badge: '#6b7280',
     soft: { rgb: '107, 114, 128', text: '#374151', textDark: '#cbd5e1', sparkEnd: '#94a3b8' },
     card: card('107, 114, 128', '#374151', '#6b7280'),

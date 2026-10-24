@@ -184,10 +184,10 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                           <StepMeta>
                             <span>{dateLabel ?? '날짜 미상'}</span>
                             {domain && (
-                              <span>
-                                <span aria-hidden>{domain.glyph} </span>
+                              <DomainMeta>
+                                <domain.Icon aria-hidden />
                                 {domain.label}
-                              </span>
+                              </DomainMeta>
                             )}
                             {child.isCollection && <KindTag>묶음</KindTag>}
                             {child.viaExtraLink && <span>추가 상위로 연결</span>}
@@ -364,6 +364,18 @@ const StepMeta = styled.div`
   color: ${metaText};
 `
 
+/** 분야 — 아이콘 + 이름. 예전 글자 글리프(⚔·✚)는 12px에서 '✕'·'+'로 읽혀 지우기·추가 버튼처럼 보였다 */
+const DomainMeta = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+
+  svg {
+    width: 11px;
+    height: 11px;
+  }
+`
+
 const KindTag = styled.span`
   padding: 0 6px;
   border-radius: ${RADIUS.SM};
@@ -480,8 +492,8 @@ export function CollectionWholeTextNotice({
   return (
     <Notice role="note">
       <NoticeText>
-        <b>전체에 대한 글이 비어 있습니다.</b> 전개는 하위 사건이 맡으니, 이 사건에는{' '}
-        {onWriteSummary ? '무슨 일이었는지(요약)와 ' : ''}왜 일어났는지(배경)와 어떻게 끝났는지(여파)를 씁니다.
+        <b>전체에 대한 글이 비어 있습니다.</b> 전개는 하위 사건이 맡고, 이 사건에는{' '}
+        {onWriteSummary ? '요약·배경·여파' : '배경·여파'}를 씁니다.
       </NoticeText>
       <NoticeActions>
         {onWriteSummary && (
@@ -514,6 +526,8 @@ const Notice = styled.div`
 const NoticeText = styled.p`
   flex: 1 1 320px;
   margin: 0;
+  /* 한국어는 낱말 경계에서 줄을 바꾼다 — 안 그러면 '배 / 경'처럼 낱말이 잘린다 */
+  word-break: keep-all;
   font-size: 13.5px;
   line-height: 1.6;
   color: ${({ theme }) => theme.colors.text.secondary};

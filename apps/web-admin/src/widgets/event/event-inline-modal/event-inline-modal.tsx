@@ -108,7 +108,7 @@ export function EventInlineModal({
               <HeaderInner>
                 {event && (
                   <CategoryChip $color={category.color}>
-                    <span aria-hidden>{category.glyph}</span>
+                    <category.Icon aria-hidden size={12} />
                     {formatDomainPath(event.domain, event.type)}
                   </CategoryChip>
                 )}

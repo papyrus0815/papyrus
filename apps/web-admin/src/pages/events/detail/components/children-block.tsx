@@ -120,7 +120,7 @@ export function ChildrenBlock({
                   >
                     {/* 킥커 — 글리프 소프트 디스크 + 날짜(없으면 분야명 폴백). */}
                     <NetStyles.ChildEyebrow $cat={category}>
-                      <span aria-hidden>{category.glyph}</span>
+                      <span aria-hidden><category.Icon /></span>
                       {dateLabel || category.label}
                     </NetStyles.ChildEyebrow>
                     {/* 요약은 내지 않는다 — 같은 하위 사건을 개요 '전개'가 요약과 함께 읽히고, 여기는
