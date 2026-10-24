@@ -298,6 +298,19 @@ const Panel = styled.section`
   display: flex;
   flex-direction: column;
   gap: 6px;
+
+  /**
+   * 한 열 배치 — 이 패널은 히어로와 탭 사이에 끼어 **첫 화면을 탭 앞에서 막는다**(1280px에서
+   * 탭이 y≈750). 세로 장부를 가로 띠로 눕힌다: 위치·동시대 비교·빈 항목 안내가 한 줄,
+   * 그 아래 사실 띠 한 줄. 2열(옆 칼럼)일 때는 세로 장부 그대로다.
+   */
+  @container eventdetail (max-width: 919px) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 20px;
+    row-gap: 4px;
+  }
 `
 
 /**
@@ -352,6 +365,11 @@ const EditableLine = styled.div`
 const LocationLine = styled(EditableLine)`
   align-items: flex-start;
 
+  /* 한 줄에서 위치는 남는 폭을 다 쓰되, 값이 길면 줄어 말줄임으로 */
+  @container eventdetail (max-width: 919px) {
+    flex: 0 1 auto;
+  }
+
   /* 빈 위치는 '값'이 아니라 **추가 동작**으로 읽혀야 한다 — 기울임 '위치'가 핀 아이콘 옆에 서 있으면
      장소가 '위치'인 것처럼 보였다. 정체·아이콘 모두 한 단 물린다. */
   &:not([data-filled]) {
@@ -405,13 +423,28 @@ const PinIcon = styled.span`
  */
 const Rows = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  column-gap: 28px;
+  grid-template-columns: minmax(0, 1fr);
   margin-top: 12px;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   &:empty {
     display: none;
+  }
+
+  /**
+   * 한 열 배치 = **사실 띠**. 칸마다 라벨 위·값 아래로 세워 왼쪽부터 흘린다 —
+   * 예전엔 표(라벨 64px 열)를 여러 열 격자에 얹었는데, 이름 값(wide)이 줄을 통째로 끊어
+   * 짧은 사실(기간·하위 사건)까지 한 줄에 하나씩 떨어졌다(3행 × 34px, 오른쪽 2/3 공백).
+   */
+  @container eventdetail (max-width: 919px) {
+    order: 10;
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 32px;
+    margin-top: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   }
 `
 
@@ -422,7 +455,18 @@ const Row = styled.div<{ $wide: boolean }>`
   gap: 10px;
   padding: 7px 0;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  grid-column: ${({ $wide }) => ($wide ? '1 / -1' : 'auto')};
+
+  @container eventdetail (max-width: 919px) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0;
+    border-bottom: none;
+    /* 칸은 제 폭만 — 늘리면 뒤 칸이 오른쪽 끝으로 밀려 띠가 끊겨 보인다. 긴 이름 목록은 줄어 줄바꿈. */
+    flex: ${({ $wide }) => ($wide ? '0 1 auto' : '0 0 auto')};
+    min-width: 0;
+    max-width: 100%;
+  }
 `
 
 const RowLabel = styled.span`
@@ -534,6 +578,14 @@ const JumpButton = styled.button`
 const FoldedNote = styled.button`
   align-self: flex-start;
   margin-top: 6px;
+
+  /* 한 줄에서는 위치 줄의 오른쪽 끝 — 띠 아래 한 줄을 따로 먹지 않게 */
+  @container eventdetail (max-width: 919px) {
+    align-self: center;
+    margin-top: 0;
+    margin-left: auto;
+  }
+
   padding: 2px 0;
   border: none;
   background: transparent;
