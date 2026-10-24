@@ -574,6 +574,7 @@ export function DetailActors({
                   ? HistoricalCountryName
                   : CountryLink
                 const hasNote = Boolean(row.note && row.note.trim())
+                const hasRoleDescription = Boolean(row.roleDescription?.trim())
                 return (
                   <CountryRow key={rowKey}>
                     <CountryBody>
@@ -620,7 +621,7 @@ export function DetailActors({
                           />
                         </CountryRolePicker>
                       </CountryNameLine>
-                      <CountryRoleLine>
+                      <CountryRoleLine $hasContent={hasRoleDescription}>
                         <ClampedProse measureKey={row.roleDescription ?? ''}>
                           <InlineText
                             value={row.roleDescription ?? ''}
@@ -1404,13 +1405,40 @@ const CountryList = styled.ol`
   ${twoColumnRows}
 `
 
+/**
+ * '이 나라가 한 일' — 비어 있으면 비고 줄과 같은 규칙으로 접었다가 행에 들어오면(hover·focus) 편다.
+ * 1차세계대전 15개국 전부에 빈 자리표시가 서 있어 참여 탭의 대부분이 회색 기울임 글씨였다.
+ */
+const CountryRoleLine = styled.div<{ $hasContent: boolean }>`
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  [data-empty='true'] {
+    font-style: italic;
+    opacity: 0.55;
+  }
+
+  ${({ $hasContent }) =>
+    !$hasContent &&
+    css`
+      height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.14s;
+    `}
+`
+
 /* 인물 행과 같은 골격 — 아바타 열만 없다(국기 이모지는 이름 옆이 자연스러워 생략). */
 const CountryRow = styled.li`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 16px;
-  padding: 14px 12px;
+  padding: 10px 12px;
   margin: 0 -12px;
   border-radius: ${RADIUS.MD};
   border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
@@ -1420,8 +1448,9 @@ const CountryRow = styled.li`
     border-bottom: none;
   }
 
-  /* 빈 비고 줄은 이 행에 들어왔을 때만 펼친다 */
-  &:hover ${CountryNoteLine}, &:focus-within ${CountryNoteLine} {
+  /* 빈 '한 일'·비고 줄은 이 행에 들어왔을 때만 펼친다 */
+  &:hover ${CountryNoteLine}, &:focus-within ${CountryNoteLine},
+  &:hover ${CountryRoleLine}, &:focus-within ${CountryRoleLine} {
     height: auto;
     opacity: 1;
   }
@@ -1451,19 +1480,6 @@ const CountryNameLine = styled.div`
 `
 
 
-const CountryRoleLine = styled.div`
-  display: flex;
-  flex-direction: column;
-  font-size: 14px;
-  line-height: 1.6;
-  letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  [data-empty='true'] {
-    font-style: italic;
-    opacity: 0.55;
-  }
-`
 
 
 

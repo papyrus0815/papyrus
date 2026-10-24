@@ -152,7 +152,7 @@ export function DetailFacts({
         />
       </DateLine>
 
-      <LocationLine title={event.location ?? ''}>
+      <LocationLine title={event.location ?? ''} data-filled={event.location?.trim() ? 'true' : undefined}>
         <PinIcon aria-hidden>
           <FiMapPin />
         </PinIcon>
@@ -160,7 +160,7 @@ export function DetailFacts({
           value={event.location ?? ''}
           /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
           onSave={(next) => onPatch({ location: next.trim() })}
-          placeholder="위치"
+          placeholder="위치 추가"
           label="위치"
         />
       </LocationLine>
@@ -351,6 +351,16 @@ const EditableLine = styled.div`
  */
 const LocationLine = styled(EditableLine)`
   align-items: flex-start;
+
+  /* 빈 위치는 '값'이 아니라 **추가 동작**으로 읽혀야 한다 — 기울임 '위치'가 핀 아이콘 옆에 서 있으면
+     장소가 '위치'인 것처럼 보였다. 정체·아이콘 모두 한 단 물린다. */
+  &:not([data-filled]) {
+    opacity: 0.7;
+
+    [data-empty='true'] {
+      font-style: normal;
+    }
+  }
 
   [data-edit-host] > span:first-child {
     display: -webkit-box;

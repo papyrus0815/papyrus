@@ -339,7 +339,8 @@ export const Scroll = styled.div`
 
 // ─── 간트 ──────────────────────────────────────────────────────────────────
 
-export const GANTT_LABEL_WIDTH = 'clamp(200px, 30%, 420px)'
+/* 200px(30%) 하한에서 번호·점·표지를 빼면 제목이 6자('사라예보 암살…')만 남아 18줄이 거의 안 읽혔다 */
+export const GANTT_LABEL_WIDTH = 'clamp(240px, 38%, 420px)'
 
 export const GanttGrid = styled.div`
   display: grid;
@@ -388,7 +389,7 @@ export const GanttLabel = styled.div<{ $depth: number; $dim: boolean; $hot: bool
   gap: 8px;
   min-width: 0;
   min-height: 34px;
-  padding: 0 10px 0 ${({ $depth }) => 4 + Math.max(0, $depth - 1) * 18}px;
+  padding: 0 10px 0 ${({ $depth }) => 6 + Math.max(0, $depth - 1) * 18}px;
   font-size: 13.5px;
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   /* 제목 열 고정 — 좁은 화면에서 간트를 가로로 밀면 제목이 함께 사라졌다(매트릭스 나라 열과 같은 규칙).
@@ -855,17 +856,18 @@ export const GapHatch = styled.div`
   );
 `
 
-/** '기간 전'·'기간 후' — 상위 기간 밖 하위 */
+/**
+ * 상위 기간 밖 하위 — 제목 열 **왼쪽 끝의 주황 표지**(3px). 예전 '기간 전' 알약은 줄마다 40px을 먹어
+ * 제목이 6자에서 잘렸다. 전·후 구분과 설명은 표지의 title(툴팁)과 범례가 든다.
+ */
 export const OutsideTag = styled.span`
-  flex-shrink: 0;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
-  white-space: nowrap;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(251,191,36,0.12)' : 'rgba(217,119,6,0.10)'};
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#d97706')};
 `
 
 // ─── 분포 (배치 C) ─────────────────────────────────────────────────────────

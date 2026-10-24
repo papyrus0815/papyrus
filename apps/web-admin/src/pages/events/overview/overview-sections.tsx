@@ -97,7 +97,7 @@ export function GanttPanel({
         <S.PanelNote style={{ flexBasis: '100%' }}>
           회색 띠 = 상위 사건의 기간 · 점선 = 연·월만 아는 날짜(그 기간 어딘가)
           {gantt.undated.length > 0 && ` · 날짜 없음 ${gantt.undated.length}건은 아래 점검표에`}
-          {outsideCount > 0 && ` · 상위 기간 밖 ${outsideCount}건(표지)`}
+          {outsideCount > 0 && ` · 상위 기간 밖 ${outsideCount}건(제목 왼쪽 주황 표지)`}
         </S.PanelNote>
         {gaps.length > 0 && (
           <S.GapNotice role="note">
@@ -164,14 +164,14 @@ export function GanttPanel({
                     <S.CategoryDot $color={color} title={domainLabel(row.node.domain)} />
                     {row.outside && (
                       <S.OutsideTag
+                        role="img"
+                        aria-label={row.outside === 'before' ? '상위 기간 전' : '상위 기간 후'}
                         title={
                           row.outside === 'before'
-                            ? '상위 사건이 시작하기 전에 시작 — 상위 기간을 넓힐지, 전사(前史)인지 확인'
-                            : '상위 사건이 끝난 뒤까지 이어짐 — 상위 기간을 넓힐지 확인'
+                            ? '기간 전 — 상위 사건이 시작하기 전에 시작. 상위 기간을 넓힐지, 전사(前史)인지 확인'
+                            : '기간 후 — 상위 사건이 끝난 뒤까지 이어짐. 상위 기간을 넓힐지 확인'
                         }
-                      >
-                        {row.outside === 'before' ? '기간 전' : '기간 후'}
-                      </S.OutsideTag>
+                      />
                     )}
                     <S.RowTitleButton
                       type="button"
