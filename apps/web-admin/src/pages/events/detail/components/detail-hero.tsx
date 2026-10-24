@@ -265,13 +265,17 @@ export function DetailHero({
 export function DetailSummary({
   event,
   onPatch,
+  autoEdit = false,
 }: {
   event: EventDetail
   onPatch: (patch: UpdateEventDto) => void
+  /** 처음부터 입력칸으로 — 묶음 '전체 글' 안내의 '요약 쓰기'로 열었을 때 */
+  autoEdit?: boolean
 }) {
   return (
     <SummaryHost>
       <InlineText
+        autoEdit={autoEdit}
         value={event.description ?? ''}
         /* 비우면 빈 문자열 전송 → 컬럼 비움(`|| undefined`는 서버가 무시). */
         onSave={(next) => onPatch({ description: next.trim() })}

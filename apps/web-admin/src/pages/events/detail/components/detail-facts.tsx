@@ -189,7 +189,8 @@ export function DetailFacts({
           </FactRow>
         )}
 
-        {roleGroups.map((group) => {
+        {/* 배역이 하나뿐이면(전원 '참여국') 히어로의 나라 줄과 같은 목록이다 — 편이 갈릴 때만 세운다 */}
+        {roleGroups.length > 1 && roleGroups.map((group) => {
           const shown = group.countries.slice(0, COUNTRIES_PER_ROLE)
           const overflow = group.countries.length - shown.length
           return (

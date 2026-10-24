@@ -50,7 +50,6 @@ import { DetailOrganizations } from './components/detail-organizations'
 import { DetailPower, hasPowerData } from './components/detail-power'
 import { DetailRail } from './components/detail-rail'
 import { DetailStatehood, statehoodEntries } from './components/detail-statehood'
-import { DevelopmentTimeline } from './components/development-timeline'
 import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
@@ -364,6 +363,8 @@ function EventDetailContent({
   const [pinned, setPinned] = useState<ReadonlySet<FoldableSectionId>>(
     () => new Set(),
   )
+  /** 묶음 '전체 글' 안내의 '요약 쓰기'로 연 요약 입력칸 — 빈 요약 자리표시는 안내가 대신 든다 */
+  const [summaryOpen, setSummaryOpen] = useState(false)
   useEffect(() => {
     const newlyFilled = FOLDABLE_SECTIONS.filter(
       (section) => filled[section.id] && !pinned.has(section.id),
@@ -395,6 +396,9 @@ function EventDetailContent({
     (id === 'treaties' && promoteTreaties) ||
     (id === 'narrative' && isCollection)
   const folded = FOLDABLE_SECTIONS.filter((section) => !isVisible(section.id))
+  const hasSummary = Boolean(event.description?.trim())
+  /** 묶음의 '전체 글' 안내 — 배경·여파가 둘 다 비어 있고 아직 하나도 펼치지 않았을 때 */
+  const collectionTextNotice = isCollection && !isVisible('background') && !isVisible('aftermath')
 
   /* 탭 — URL(?tab=)이 정본(replace: 탭을 오가도 '뒤로'가 탭을 되감지 않는다). 개요는 파라미터 없음 */
   const tabParam = searchParams.get('tab')
@@ -725,17 +729,22 @@ function EventDetailContent({
             >
               {activeTab === 'overview' && (
                 <>
-                  {/* 묶음 사건인데 배경·여파가 둘 다 비었으면 — 전체 글을 쓸 자리를 짚는다 */}
-                  {isCollection && !filled.background && !filled.aftermath && (
+                  {/* 묶음 사건인데 배경·여파가 둘 다 비었으면 — 전체 글을 쓸 자리를 **한 곳에서** 짚는다
+                      (요약·배경·여파 쓰기가 여기 모이므로 아래 빈 요약 자리표시·'더 채울 수 있는 것'의
+                      배경·여파 칩은 내지 않는다 — 같은 버튼이 화면에 두 번 서 있었다) */}
+                  {collectionTextNotice && (
                     <CollectionWholeTextNotice
+                      onWriteSummary={hasSummary ? undefined : () => setSummaryOpen(true)}
                       onWriteBackground={() => revealSection('background')}
                       onWriteAftermath={() => revealSection('aftermath')}
                     />
                   )}
                   {/* 요약 — 히어로에서 옮겨 와 개요의 머리글이 된다(히어로는 제목·행위자·국가만) */}
-                  <DetailSummary event={event} onPatch={onPatch} />
-                  {/* 전개 타임라인(D2) — 하위 사건이 날짜를 가질 때만 */}
-                  <DevelopmentTimeline event={event} />
+                  {(!collectionTextNotice || hasSummary || summaryOpen) && (
+                    <DetailSummary event={event} onPatch={onPatch} autoEdit={summaryOpen && !hasSummary} />
+                  )}
+                  {/* (제거) 개요의 '전개' 간트 — 같은 하위 사건이 바로 아래 '전개' 목록과 조망 탭 간트에
+                      또 나왔다. 시간축으로 보는 자리는 조망 탭 하나다(하위 사건 기간에 맞춘 축). */}
                   <DetailNarrative
                     event={event}
                     onPatch={onPatch}
@@ -874,7 +883,9 @@ function EventDetailContent({
                 items={folded.filter(
                   (section) =>
                     tabOf(section.id) === activeTab &&
-                    !(activeTab === 'media' && section.id === 'appendix'),
+                    !(activeTab === 'media' && section.id === 'appendix') &&
+                    // 묶음의 '전체 글' 안내가 위에서 배경·여파 쓰기를 이미 든다
+                    !(collectionTextNotice && (section.id === 'background' || section.id === 'aftermath')),
                 )}
                 onReveal={revealSection}
               />

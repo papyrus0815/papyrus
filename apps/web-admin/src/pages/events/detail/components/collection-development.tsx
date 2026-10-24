@@ -170,26 +170,30 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                     <Step key={child.id}>
                       <StepIndex aria-hidden>{index + 1}</StepIndex>
                       <StepBody>
-                        <StepMeta>
-                          <span>{dateLabel ?? '날짜 미상'}</span>
-                          {domain && (
-                            <span>
-                              <span aria-hidden>{domain.glyph} </span>
-                              {domain.label}
-                            </span>
-                          )}
-                          {child.isCollection && <KindTag>묶음</KindTag>}
-                          {child.viaExtraLink && <span>추가 상위로 연결</span>}
-                        </StepMeta>
-                        <StepTitle
-                          to={pathKeys.events.detail(child.id)}
-                          viewTransition
-                          onMouseEnter={() => prefetchEvent(child.id)}
-                          onFocus={() => prefetchEvent(child.id)}
-                        >
-                          {child.title}
-                        </StepTitle>
-                        {/* 있는 요약은 두 줄로 읽기만(고치기는 하위 상세에서) — 비어 있을 때만 여기서 쓴다.
+                        {/* 한 줄 머리 — 제목 뒤에 날짜·분야를 잇는다(예전엔 날짜 줄 → 제목 줄 → 요약 두 줄로
+                            한 항목이 120px, 18건이 화면 2.5장이었다) */}
+                        <StepHead>
+                          <StepTitle
+                            to={pathKeys.events.detail(child.id)}
+                            viewTransition
+                            onMouseEnter={() => prefetchEvent(child.id)}
+                            onFocus={() => prefetchEvent(child.id)}
+                          >
+                            {child.title}
+                          </StepTitle>
+                          <StepMeta>
+                            <span>{dateLabel ?? '날짜 미상'}</span>
+                            {domain && (
+                              <span>
+                                <span aria-hidden>{domain.glyph} </span>
+                                {domain.label}
+                              </span>
+                            )}
+                            {child.isCollection && <KindTag>묶음</KindTag>}
+                            {child.viaExtraLink && <span>추가 상위로 연결</span>}
+                          </StepMeta>
+                        </StepHead>
+                        {/* 있는 요약은 한 줄로 읽기만(전문·고치기는 하위 상세에서) — 비어 있을 때만 여기서 쓴다.
                             추가 상위로만 이어진 하위는 이 묶음의 소유가 아니라 쓰기를 열지 않는다 */}
                         {child.description?.trim() ? (
                           <StepText>{child.description}</StepText>
@@ -318,7 +322,7 @@ const Step = styled.li`
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 12px;
-  padding: 14px 0;
+  padding: 9px 0;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   &:last-child {
@@ -338,8 +342,16 @@ const StepIndex = styled.span`
 const StepBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
+`
+
+/** 제목 + 날짜·분야 한 줄 — 좁으면 날짜가 다음 줄로 내려간다 */
+const StepHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
 `
 
 const StepMeta = styled.div`
@@ -361,8 +373,7 @@ const KindTag = styled.span`
 `
 
 const StepTitle = styled(Link)`
-  align-self: flex-start;
-  font-size: 15.5px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.45;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -382,11 +393,11 @@ const StepTitle = styled(Link)`
 
 const StepText = styled.p`
   margin: 0;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13.5px;
+  line-height: 1.6;
   color: ${({ theme }) => theme.colors.text.secondary};
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 `
@@ -394,7 +405,7 @@ const StepText = styled.p`
 /** 빈 요약 자리 — 본문 위치에 놓인 '여기에 쓰세요' 한 줄(누르면 바로 입력칸) */
 const SummaryPrompt = styled.button`
   align-self: flex-start;
-  padding: 2px 0;
+  padding: 0;
   border: none;
   background: none;
   font: inherit;
@@ -457,19 +468,27 @@ const PhaseCount = styled.span`
  * 일어나(배경) 어떻게 끝났나(여파)'뿐이다. 1차세계대전은 하위 18건을 거느리면서 이 셋이 모두 0자였다.
  */
 export function CollectionWholeTextNotice({
+  onWriteSummary,
   onWriteBackground,
   onWriteAftermath,
 }: {
+  /** 요약도 비었으면 — 빈 요약 자리표시를 따로 세우지 않고 여기서 쓴다 */
+  onWriteSummary?: () => void
   onWriteBackground: () => void
   onWriteAftermath: () => void
 }) {
   return (
     <Notice role="note">
       <NoticeText>
-        <b>전체에 대한 글이 비어 있습니다.</b> 전개는 하위 사건이 맡으니, 이 사건에는 왜 일어났는지(배경)와 어떻게
-        끝났는지(여파)를 씁니다.
+        <b>전체에 대한 글이 비어 있습니다.</b> 전개는 하위 사건이 맡으니, 이 사건에는{' '}
+        {onWriteSummary ? '무슨 일이었는지(요약)와 ' : ''}왜 일어났는지(배경)와 어떻게 끝났는지(여파)를 씁니다.
       </NoticeText>
       <NoticeActions>
+        {onWriteSummary && (
+          <TextButton type="button" onClick={onWriteSummary}>
+            요약 쓰기
+          </TextButton>
+        )}
         <TextButton type="button" onClick={onWriteBackground}>
           배경 쓰기
         </TextButton>

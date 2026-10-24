@@ -123,11 +123,10 @@ export function ChildrenBlock({
                       <span aria-hidden>{category.glyph}</span>
                       {dateLabel || category.label}
                     </NetStyles.ChildEyebrow>
+                    {/* 요약은 내지 않는다 — 같은 하위 사건을 개요 '전개'가 요약과 함께 읽히고, 여기는
+                        연결을 관리하는 자리(사유·해제)다. 같은 글이 두 탭에 두 줄씩 서 있었다. */}
                     <NetStyles.ChildBody>
                       <NetStyles.ChildTitle>{child.title}</NetStyles.ChildTitle>
-                      {child.description && (
-                        <NetStyles.ChildDesc>{child.description}</NetStyles.ChildDesc>
-                      )}
                     </NetStyles.ChildBody>
                   </NetStyles.ChildCard>
                   {/* ✕보다 먼저 — 화면에서 왼쪽에 서므로 Tab 순서도 앞. */}
