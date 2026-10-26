@@ -35,6 +35,9 @@ async function bootstrap() {
 
     console.log('📍 Step 2: Mounting /uploads and creating Nest app...')
     const expressApp = express()
+    // 같은 호스트의 프록시(nginx·vite·데스크톱 로컬 서버)가 붙인 X-Forwarded-For만 믿는다 —
+    // 로그인 시도 제한이 req.ip로 클라이언트를 구분한다. 외부에서 보낸 XFF는 무시된다.
+    expressApp.set('trust proxy', 'loopback')
     const uploadCandidates = getUploadDirCandidates(config.uploadPath)
     expressApp.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
       const raw = (req.originalUrl || req.url || '').split('?')[0]

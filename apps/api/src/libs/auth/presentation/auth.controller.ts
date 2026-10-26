@@ -20,6 +20,10 @@ import type { Request, Response } from 'express'
 import { AppConfigService } from '../../shared/config/config.service'
 import { Public } from '../../shared/auth'
 import { parseDurationMs } from '../domain/duration.util'
+import {
+  LoginAttemptLimiter,
+  TooManyLoginAttemptsException,
+} from '../application/login-attempt-limiter'
 import type { AccountMeResponseDto } from './dto/account-me.response'
 import { ChangePasswordDto } from './dto/change-password.dto'
 import { UpdateDisplayNameDto } from './dto/update-display-name.dto'
@@ -35,6 +39,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly configService: AppConfigService,
+    private readonly loginLimiter: LoginAttemptLimiter,
   ) {}
 
   /**
@@ -48,10 +53,28 @@ export class AuthController {
   @ApiOperation({ summary: '로그인' })
   async login(
     @Body() dto: LoginDto, 
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<LoginResponseDto> {
-    // 로그인 처리
-    const tokens = await this.auth.login(dto)
+    // req.ip는 main.ts의 trust proxy(루프백) 설정으로 nginx 뒤에서도 실제 클라이언트 IP
+    const ip = req.ip ?? 'unknown'
+    try {
+      this.loginLimiter.assertAllowed(ip, dto.account)
+    } catch (error) {
+      if (error instanceof TooManyLoginAttemptsException) {
+        res.setHeader('Retry-After', String(error.retryAfterSeconds))
+      }
+      throw error
+    }
+
+    let tokens: { accessToken: string; refreshToken: string }
+    try {
+      tokens = await this.auth.login(dto)
+    } catch (error) {
+      if (error instanceof UnauthorizedException) this.loginLimiter.recordFailure(ip, dto.account)
+      throw error
+    }
+    this.loginLimiter.recordSuccess(ip, dto.account)
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken)
 
     // 리프레시 토큰은 httpOnly 쿠키로만 준다 — 본문에 실으면 JS(XSS)가 읽을 수 있다
