@@ -5,6 +5,7 @@
  */
 
 import {
+  BadRequestException,
   Controller,
   Post,
   UploadedFile,
@@ -16,10 +17,11 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiTags, ApiConsumes, ApiBody, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { diskStorage } from 'multer'
-import { extname, join } from 'path'
+import { join } from 'path'
 import { existsSync, mkdirSync } from 'fs'
 import { AppConfigService } from '../config'
 import { setUploadDirForMulter, uploadDirForMulter } from './upload-path.util'
+import { resolveImageExtension } from './upload-image-type'
 
 /** 허용되는 이미지 업로드 카테고리 (저장 하위 폴더명) */
 export const UPLOAD_IMAGE_CATEGORIES = [
@@ -91,19 +93,17 @@ export class UploadController {
         filename: (_req, file, cb) => {
           const uniqueSuffix =
             Date.now() + '-' + Math.round(Math.random() * 1e9)
-          const ext = extname(file.originalname)
+          // fileFilter를 통과했으므로 null이 아니다 — 확장자는 원본 이름이 아니라 MIME에서 정한다
+          const ext = resolveImageExtension(file.mimetype, file.originalname) ?? '.bin'
           cb(null, `${uniqueSuffix}${ext}`)
         },
       }),
-      fileFilter: (req, file, cb) => {
-        const mimetypeOk =
-          file.mimetype?.startsWith('image/') ||
-          /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(
-            file.originalname || '',
-          )
-        if (!mimetypeOk) {
+      fileFilter: (_req, file, cb) => {
+        if (!resolveImageExtension(file.mimetype, file.originalname)) {
           return cb(
-            new Error('이미지 파일만 업로드할 수 있습니다.'),
+            new BadRequestException(
+              '이미지 파일(jpg·png·gif·webp·bmp·avif·svg)만 업로드할 수 있습니다.',
+            ),
             false,
           )
         }
@@ -149,7 +149,7 @@ export class UploadController {
     mimetype: string
   }> {
     if (!file) {
-      throw new Error('파일이 업로드되지 않았습니다.')
+      throw new BadRequestException('파일이 업로드되지 않았습니다.')
     }
 
     const subdir = isUploadImageCategory(category) ? category : 'attachments'

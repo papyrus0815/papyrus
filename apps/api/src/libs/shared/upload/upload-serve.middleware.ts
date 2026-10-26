@@ -9,6 +9,7 @@ import {
   getUploadDirCandidates,
   findUploadFilePath,
 } from './upload-path.util'
+import { setUploadServeHeaders } from './upload-image-type'
 
 @Injectable()
 export class UploadServeMiddleware implements NestMiddleware {
@@ -36,6 +37,7 @@ export class UploadServeMiddleware implements NestMiddleware {
       res.status(404).send('Not found')
       return
     }
+    setUploadServeHeaders(res)
     res.sendFile(filePath, (err: Error | null) => {
       if (err && !res.headersSent) res.status(500).send('Error')
     })

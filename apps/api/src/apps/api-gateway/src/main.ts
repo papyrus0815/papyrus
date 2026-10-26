@@ -15,6 +15,7 @@ import {
   getUploadDirCandidates,
   findUploadFilePath,
 } from '../../../libs/shared/upload/upload-path.util'
+import { setUploadServeHeaders } from '../../../libs/shared/upload/upload-image-type'
 import { AppModule } from './app.module'
 
 async function bootstrap() {
@@ -47,6 +48,7 @@ async function bootstrap() {
         res.status(404).send('Not found')
         return
       }
+      setUploadServeHeaders(res)
       res.sendFile(filePath, (err: Error | null) => {
         if (err && !res.headersSent) res.status(500).send('Error')
       })
