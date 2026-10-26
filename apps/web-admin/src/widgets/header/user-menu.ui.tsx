@@ -17,7 +17,7 @@ import {
   gamificationBadgesQueryOptions,
   gamificationSummaryQueryOptions,
 } from '@/entities/gamification'
-import { sessionQueryOptions, useSessionStore } from '@/entities/session'
+import { sessionApi, sessionQueryOptions, useSessionStore } from '@/entities/session'
 import {
   avatarFrameStyle,
   nicknameColor,
@@ -109,10 +109,17 @@ export function UserMenu({
     navigate(path)
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     playClickSound()
-    reset()
     onClose()
+    // 인증 쿠키는 httpOnly라 클라이언트 저장소만 비우면 서버 세션이 그대로 남는다 —
+    // 서버가 리프레시 토큰을 취소하고 쿠키를 지우게 한다. 실패해도 로컬 로그아웃은 진행.
+    try {
+      await sessionApi.logout()
+    } catch {
+      // 네트워크 실패 등 — 아래 로컬 정리는 그대로
+    }
+    reset()
     navigate('/login', { replace: true })
   }
 
@@ -179,7 +186,7 @@ export function UserMenu({
         설정
       </MenuItem>
       <Divider />
-      <MenuItem onClick={handleLogout}>
+      <MenuItem onClick={() => void handleLogout()}>
         <FiLogOut size={14} /> 로그아웃
       </MenuItem>
     </>

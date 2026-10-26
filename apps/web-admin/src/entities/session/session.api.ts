@@ -88,6 +88,10 @@ export const sessionApi = {
     const conn = nestiaApiService.getConnection()
     return api.functional.auth.refresh(conn)
   },
+  async logout() {
+    const conn = nestiaApiService.getConnection()
+    return api.functional.auth.logout(conn)
+  },
   async me() {
     const conn = nestiaApiService.getConnection()
     return api.functional.account.me(conn)
