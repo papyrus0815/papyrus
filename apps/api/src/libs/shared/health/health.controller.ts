@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger'
 import { HealthService } from './health.service'
+import { Public } from '../auth/public.decorator'
 
 export interface HealthCheckResponse {
   status: 'ok' | 'error'
@@ -28,6 +29,7 @@ export interface HealthCheckResponse {
 }
 
 @ApiTags('health')
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}

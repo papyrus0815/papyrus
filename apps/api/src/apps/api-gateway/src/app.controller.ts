@@ -4,6 +4,7 @@ import { join } from 'path'
 import { existsSync, readdirSync } from 'fs'
 import { AppConfigService } from '../../../libs/shared/config/index'
 import { getUploadDirCandidates } from '../../../libs/shared/upload/upload-path.util'
+import { Public } from '../../../libs/shared/auth'
 
 @ApiTags('root')
 @Controller()
@@ -53,6 +54,7 @@ export class AppController {
     }
   }
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'API 루트 엔드포인트' })
   @ApiResponse({

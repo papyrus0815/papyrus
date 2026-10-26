@@ -1,8 +1,9 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common'
-import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
 import { ScheduleModule } from '@nestjs/schedule'
 import { AppController } from './app.controller'
 import { AuthModule } from '../../../libs/auth/infrastructure/auth.module'
+import { JwtAuthGuard } from '../../../libs/shared/auth'
 import { CountryModule } from '../../../libs/country/infrastructure/country.module'
 import { ContinentModule } from '../../../libs/continent/infrastructure/continent.module'
 import { CurrencyModule } from '../../../libs/currency/infrastructure/currency.module'
@@ -94,6 +95,11 @@ import {
   controllers: [AppController],
   providers: [
     UploadServeMiddleware,
+    // 기본은 인증 필요 — 공개 라우트만 @Public()으로 연다 (libs/shared/auth)
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,

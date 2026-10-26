@@ -18,6 +18,7 @@ import { Inject } from '@nestjs/common'
 import { AccountsPrismaRepository } from '../infrastructure/accounts.prisma.repository'
 import type { Response } from 'express'
 import { AppConfigService } from '../../shared/config/config.service'
+import { Public } from '../../shared/auth'
 import type { AccountMeResponseDto } from './dto/account-me.response'
 import { ChangePasswordDto } from './dto/change-password.dto'
 import { UpdateDisplayNameDto } from './dto/update-display-name.dto'
@@ -41,6 +42,7 @@ export class AuthController {
    * @param res - 응답 객체
    * @returns - 로그인 응답 데이터  
    */  
+  @Public()
   @Post('login')
   @ApiOperation({ summary: '로그인' })
   async login(
@@ -54,6 +56,7 @@ export class AuthController {
     return tokens
   }
 
+  @Public()
   @Get('session')
   @ApiOperation({ summary: '세션 디버그: 쿠키 및 토큰 상태' })
   async session(@Req() req: any): Promise<{
@@ -75,6 +78,7 @@ export class AuthController {
     }
   }
 
+  @Public()
   @Post('refresh')
   @ApiOperation({ summary: '리프레시 토큰으로 액세스 토큰 재발급' })
   async refresh(
