@@ -81,9 +81,15 @@ const TREATY_SIGNATORY_INCLUDE = {
       },
     },
   },
-} as const
+} as const satisfies Prisma.TreatySignatoryInclude
 
-/** 조약에 걸린 사건 — 지면에 제목·시기를 바로 그릴 수 있을 만큼만 */
+/**
+ * 조약에 걸린 사건 — 지면에 제목·시기를 바로 그릴 수 있을 만큼만.
+ *
+ * include/select 상수는 `satisfies`로 모델 타입에 묶는다. 상수로 빼면 객체 리터럴의 초과 속성
+ * 검사가 꺼져, 사건 분야가 categoryId → domain(enum)으로 바뀐 뒤에도 여기 남은 categoryId를
+ * tsc가 못 잡았고 GET /treaties가 런타임에 500으로 죽었다.
+ */
 const TREATY_EVENT_LINK_INCLUDE = {
   event: {
     select: {
@@ -92,10 +98,10 @@ const TREATY_EVENT_LINK_INCLUDE = {
       startDate: true,
       startEra: true,
       startYear: true,
-      categoryId: true,
+      domain: true,
     },
   },
-} as const
+} as const satisfies Prisma.TreatyEventLinkInclude
 
 const TREATY_INCLUDE = {
   signingAdministrativeDivision: {
@@ -115,7 +121,7 @@ const TREATY_INCLUDE = {
     include: TREATY_EVENT_LINK_INCLUDE,
     orderBy: { createdAt: 'asc' as const },
   },
-}
+} satisfies Prisma.TreatyInclude
 
 function serializeDates(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj
