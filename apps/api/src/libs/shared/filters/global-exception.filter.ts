@@ -10,6 +10,8 @@ import {
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client'
 import { Request, Response } from 'express'
 
+import { AppConfigService } from '../config/config.service'
+
 
 export interface ApiErrorResponse {
   success: false
@@ -30,6 +32,8 @@ export interface ApiErrorResponse {
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name)
+
+  constructor(private readonly config: AppConfigService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp()
@@ -95,8 +99,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
     }
 
-    // 기본 에러 처리
+    // 기본 에러 처리 — 의도하지 않은 예외라 원문에 내부 정보가 섞인다(Prisma 검증 오류면 호출문·
+    // dist 경로·쿼리 일부). 운영에서는 일반 문구와 requestId만 내려보내고 원문은 로그(logError)에만 둔다.
     const isError = exception instanceof Error
+    const exposeDetail = isError && !this.config.isProduction
     return {
       success: false,
       timestamp,
@@ -104,8 +110,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       method,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       error: {
-        name: isError ? exception.name : 'UnknownError',
-        message: isError ? exception.message : 'Internal server error',
+        name: exposeDetail ? exception.name : 'InternalServerError',
+        message: exposeDetail ? exception.message : 'Internal server error',
       },
       requestId: this.getRequestId(request),
     }
@@ -152,8 +158,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   ): void {
     const { statusCode, error } = errorResponse
     const { method, url, ip, headers } = request
+    // 응답에서는 가렸더라도 로그에는 원문을 남긴다
+    const message = exception instanceof Error ? exception.message : error.message
 
-    const logMessage = `${method} ${url} - ${statusCode} - ${error.message}`
+    const logMessage = `${method} ${url} - ${statusCode} - ${message}`
     const logContext = {
       timestamp: errorResponse.timestamp,
       method,
@@ -162,8 +170,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       userAgent: headers['user-agent'],
       requestId: errorResponse.requestId,
       error: {
-        name: error.name,
-        message: error.message,
+        name: exception instanceof Error ? exception.name : error.name,
+        message,
         details: error.details, // Validation 에러 상세 정보 추가
         stack: exception instanceof Error ? exception.stack : undefined,
       },
