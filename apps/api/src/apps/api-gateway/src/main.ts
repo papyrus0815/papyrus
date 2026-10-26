@@ -86,15 +86,14 @@ async function bootstrap() {
         if (config.nodeEnv === 'development') {
           return cb(null, true)
         }
-        // 프로덕션 환경에서는 허용된 origin만
+        // 프로덕션 환경에서는 허용된 origin만. 목록이 비면 교차 출처를 하나도 열지 않는다 —
+        // 예전엔 '빈 목록 = 전부 허용'이라 credentials와 함께 모든 사이트에 열렸다.
+        // 같은 오리진(nginx 뒤 프론트)은 CORS 대상이 아니라 영향이 없다.
         if (!origin) return cb(null, true)
-        if (
-          config.allowedOrigins.length === 0 ||
-          config.allowedOrigins.includes(origin)
-        ) {
+        if (config.allowedOrigins.includes(origin)) {
           return cb(null, true)
         }
-        return cb(new Error('Not allowed by CORS'), false as any)
+        return cb(null, false)
       },
       credentials: true,
       exposedHeaders: ['set-cookie', 'x-request-id'],

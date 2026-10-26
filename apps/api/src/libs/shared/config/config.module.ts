@@ -22,6 +22,9 @@ const validationSchema = Joi.object({
 
   // Security
   APP_ORIGINS: Joi.string().default(''),
+  // 인증 쿠키 SameSite. 프론트와 API가 같은 사이트(nginx·vite·데스크톱 프록시)면 lax로 충분하고
+  // CSRF를 막아 준다. 다른 사이트에서 API를 직접 부르는 배포만 none(자동으로 Secure)으로 연다.
+  COOKIE_SAMESITE: Joi.string().valid('lax', 'strict', 'none').default('lax'),
   SSL_KEY_PATH: Joi.string().optional(),
   SSL_CRT_PATH: Joi.string().optional(),
 

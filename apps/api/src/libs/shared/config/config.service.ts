@@ -67,14 +67,18 @@ export class AppConfigService {
     const nodeEnv = this.configService.get<string>('NODE_ENV', 'development')
     const isProduction = nodeEnv === 'production'
 
+    const sameSite = this.configService.get<'lax' | 'strict' | 'none'>('COOKIE_SAMESITE', 'lax')
+
     return {
       allowedOrigins: this.app.allowedOrigins,
       useHttps: Boolean(this.app.sslKeyPath && this.app.sslCertPath),
       cookieSettings: {
         httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 1000 * 60 * 60 * 24, // 1 day
+        // SameSite=None은 Secure 없이는 브라우저가 버린다
+        secure: isProduction || sameSite === 'none',
+        // 예전 기본값(운영=none)은 다른 사이트의 폼 POST에도 인증 쿠키를 실어 보내 CSRF가 열렸다
+        sameSite,
+        maxAge: 1000 * 60 * 60 * 24, // 1 day — 토큰 수명을 해석하지 못할 때의 폴백
       },
     }
   }

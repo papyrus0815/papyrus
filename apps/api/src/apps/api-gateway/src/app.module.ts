@@ -48,6 +48,7 @@ import {
   LoggingInterceptor,
   GlobalValidationPipe,
   RequestIdMiddleware,
+  CsrfOriginMiddleware,
   HealthModule,
 } from '../../../libs/shared'
 
@@ -130,5 +131,6 @@ export class AppModule implements NestModule {
     // /uploads 요청은 라우터보다 먼저 처리 (미들웨어에서 경로 체크 후 파일 서빙)
     consumer.apply(UploadServeMiddleware).forRoutes('*')
     consumer.apply(RequestIdMiddleware).forRoutes('*')
+    consumer.apply(CsrfOriginMiddleware).forRoutes('*')
   }
 }
