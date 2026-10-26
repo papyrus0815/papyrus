@@ -121,4 +121,40 @@ export class AccountsPrismaRepository implements AccountRepository {
   async createLog(data: Prisma.ActionLogCreateInput): Promise<ActionLog | null> {
     return this.prisma.actionLog.create({ data });
   }
+
+  async createRefreshToken(data: {
+    accountId: string
+    tokenHash: string
+    expiresAt: Date
+  }): Promise<void> {
+    await this.prisma.refreshToken.create({ data })
+  }
+
+  async findActiveRefreshTokenAccountId(tokenHash: string): Promise<string | null> {
+    const row = await this.prisma.refreshToken.findFirst({
+      where: { tokenHash, revoked: false, expiresAt: { gt: new Date() } },
+      select: { accountId: true },
+    })
+    return row?.accountId ?? null
+  }
+
+  async revokeRefreshToken(tokenHash: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { tokenHash },
+      data: { revoked: true },
+    })
+  }
+
+  async revokeAllRefreshTokens(accountId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { accountId, revoked: false },
+      data: { revoked: true },
+    })
+  }
+
+  async deleteStaleRefreshTokens(accountId: string): Promise<void> {
+    await this.prisma.refreshToken.deleteMany({
+      where: { accountId, OR: [{ revoked: true }, { expiresAt: { lte: new Date() } }] },
+    })
+  }
 }

@@ -16,9 +16,10 @@ import type { LoginResponseDto } from './dto/login.response'
 import { AuthGuard } from '@nestjs/passport'
 import { Inject } from '@nestjs/common'
 import { AccountsPrismaRepository } from '../infrastructure/accounts.prisma.repository'
-import type { Response } from 'express'
+import type { Request, Response } from 'express'
 import { AppConfigService } from '../../shared/config/config.service'
 import { Public } from '../../shared/auth'
+import { parseDurationMs } from '../domain/duration.util'
 import type { AccountMeResponseDto } from './dto/account-me.response'
 import { ChangePasswordDto } from './dto/change-password.dto'
 import { UpdateDisplayNameDto } from './dto/update-display-name.dto'
@@ -52,8 +53,23 @@ export class AuthController {
     // 로그인 처리
     const tokens = await this.auth.login(dto)
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken)
-    
-    return tokens
+
+    // 리프레시 토큰은 httpOnly 쿠키로만 준다 — 본문에 실으면 JS(XSS)가 읽을 수 있다
+    return { accessToken: tokens.accessToken }
+  }
+
+  @Public()
+  @Post('logout')
+  @ApiOperation({ summary: '로그아웃 — 리프레시 토큰 취소 + 인증 쿠키 삭제' })
+  async logout(
+    @Req() req: Request & { cookies?: Record<string, string | undefined> },
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ ok: boolean }> {
+    await this.auth.logout(req.cookies?.refresh_token)
+    const { maxAge: _maxAge, ...settings } = this.configService.security.cookieSettings
+    res.clearCookie('access_token', settings)
+    res.clearCookie('refresh_token', settings)
+    return { ok: true }
   }
 
   @Public()
@@ -91,36 +107,28 @@ export class AuthController {
     const result = await this.auth.refreshToken(refreshToken)
     if (!result) return { ok: false }
     
-    const cookieSettings = this.configService.security.cookieSettings
-    res.cookie('access_token', result.accessToken, {
-      ...cookieSettings,
-      maxAge: 1000 * 60 * 60 * 24 * 30, // 30d
-    })
+    this.setAuthCookies(res, result.accessToken)
 
     return { ok: true }
   }
 
   private setAuthCookies(res: Response, access: string, refresh?: string) {
-    const settings = this.configService.security.cookieSettings;
-    
+    const settings = this.configService.security.cookieSettings
     res.cookie('access_token', access, {
       ...settings,
-      maxAge: this.parseDuration(this.configService.jwt.expiresIn || '1h'), 
-    });
-
-    if (refresh) {
-      res.cookie('refresh_token', refresh, {
-        ...settings,
-        maxAge: this.parseDuration(this.configService.jwt.refreshExpiresIn),
-      });
-    }
+      maxAge: parseDurationMs(this.configService.jwt.expiresIn) ?? settings.maxAge,
+    })
+    if (refresh) setRefreshCookie(this.configService, res, refresh)
   }
+}
 
-  // '30d' 같은 문자열을 ms 숫자로 변환하는 유틸리티 (ms 라이브러리 활용 권장)
-  private parseDuration(d: any): number {
-    // 임시: 하드코딩 대신 config의 단위를 숫자로 변환하는 로직 필요
-    return 1000 * 60 * 60 * 24 * 30; 
-  }
+/** 쿠키 수명 = 토큰 수명. 어긋나면 만료된 토큰을 든 쿠키가 남거나, 살아 있는 토큰을 쿠키가 먼저 버린다. */
+function setRefreshCookie(configService: AppConfigService, res: Response, refresh: string) {
+  const settings = configService.security.cookieSettings
+  res.cookie('refresh_token', refresh, {
+    ...settings,
+    maxAge: parseDurationMs(configService.jwt.refreshExpiresIn) ?? settings.maxAge,
+  })
 }
 
 @ApiTags('account')
@@ -131,6 +139,7 @@ export class AccountController {
   constructor(
     private readonly authService: AuthService,
     private readonly accountRepository: AccountsPrismaRepository,
+    private readonly configService: AppConfigService,
   ) {}
 
   @Get('me')
@@ -160,6 +169,7 @@ export class AccountController {
   async changePassword(
     @Req() req: any,
     @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<{ ok: boolean }> {
     const userId = req.user?.userId;
     if (!userId) throw new UnauthorizedException();
@@ -169,6 +179,9 @@ export class AccountController {
       dto.currentPassword,
       dto.newPassword,
     );
+    // 변경 시 모든 리프레시 토큰이 취소되므로, 지금 이 기기만 새 토큰으로 이어 준다
+    const refreshToken = await this.authService.issueRefreshToken(userId)
+    setRefreshCookie(this.configService, res, refreshToken)
     return { ok: true };
   }
 

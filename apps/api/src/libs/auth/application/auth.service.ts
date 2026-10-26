@@ -4,11 +4,23 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common'
-import { JwtService } from '@nestjs/jwt'
+import { JwtService, type JwtSignOptions } from '@nestjs/jwt'
 import * as bcrypt from 'bcrypt'
+import { createHash, randomUUID } from 'crypto'
 import { AccountRepository } from '../domain/account.repository'
 import { AppConfigService } from '../../shared/config/config.service'
 import {AggregateType, EventMethod } from '@prisma/client'
+import { parseDurationMs } from '../domain/duration.util'
+
+/** 토큰 종류 — JwtStrategy는 'access'(또는 종류 없는 옛 토큰)만, refresh 엔드포인트는 'refresh'만 받는다 */
+export type TokenType = 'access' | 'refresh'
+
+/** 리프레시 토큰은 원문 대신 해시로만 저장한다 — DB가 새도 토큰으로 쓸 수 없게 */
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+const DEFAULT_REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 @Injectable()
 export class AuthService {
   constructor(
@@ -50,14 +62,40 @@ export class AuthService {
       message: `${account.username}님이 로그인하였습니다.`
     })
 
-    // 액세스 토큰 생성
-    const accessToken = await this.jwt.signAsync({ sub: account.id })
-    const refreshToken = await this.jwt.signAsync(
-      { sub: account.id, type: 'refresh' },
-      { expiresIn: this.configService.jwt.refreshExpiresIn as any},
-    )
+    const accessToken = await this.signAccessToken(account.id)
+    const refreshToken = await this.issueRefreshToken(account.id)
 
     return { accessToken, refreshToken }
+  }
+
+  /**
+   * 로그아웃 — 리프레시 토큰을 취소해 더는 액세스 토큰을 재발급받지 못하게 한다.
+   * 이미 발급된 액세스 토큰은 만료(JWT_EXPIRES_IN)까지 유효하다.
+   */
+  async logout(refreshToken: string | undefined): Promise<void> {
+    if (!refreshToken) return
+    await this.accounts.revokeRefreshToken(hashToken(refreshToken))
+  }
+
+  private signAccessToken(accountId: string): Promise<string> {
+    return this.jwt.signAsync({ sub: accountId, type: 'access' satisfies TokenType })
+  }
+
+  /** 리프레시 토큰 서명 + DB 기록. jti가 있어야 같은 초에 두 번 로그인해도 해시가 겹치지 않는다. */
+  async issueRefreshToken(accountId: string): Promise<string> {
+    const expiresIn = this.configService.jwt.refreshExpiresIn
+    const ttlMs = parseDurationMs(expiresIn) ?? DEFAULT_REFRESH_TTL_MS
+    const token = await this.jwt.signAsync(
+      { sub: accountId, type: 'refresh' satisfies TokenType, jti: randomUUID() },
+      { expiresIn: expiresIn as JwtSignOptions['expiresIn'] },
+    )
+    await this.accounts.deleteStaleRefreshTokens(accountId)
+    await this.accounts.createRefreshToken({
+      accountId,
+      tokenHash: hashToken(token),
+      expiresAt: new Date(Date.now() + ttlMs),
+    })
+    return token
   }
 
   /**
@@ -86,6 +124,8 @@ export class AuthService {
 
     const newHash = await bcrypt.hash(newPassword, 10)
     await this.accounts.updatePassword(userId, newHash)
+    // 비밀번호가 바뀌면 다른 기기의 세션도 더는 갱신되지 않게 한다
+    await this.accounts.revokeAllRefreshTokens(userId)
 
     await this.accounts.createLog({
       ownerType: AggregateType.ACCOUNT,
@@ -169,7 +209,11 @@ export class AuthService {
 
       if (payload?.type !== 'refresh') return null
 
-      const accessToken = await this.jwt.signAsync({ sub: payload.sub })
+      // 서명만으로는 로그아웃·비밀번호 변경을 반영할 수 없다 — DB에 살아 있는 토큰이어야 한다
+      const ownerId = await this.accounts.findActiveRefreshTokenAccountId(hashToken(refreshToken))
+      if (!ownerId || ownerId !== payload.sub) return null
+
+      const accessToken = await this.signAccessToken(payload.sub)
       return { accessToken }
     } catch {
       return null
