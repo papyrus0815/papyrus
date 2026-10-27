@@ -27,6 +27,8 @@ const validationSchema = Joi.object({
   COOKIE_SAMESITE: Joi.string().valid('lax', 'strict', 'none').default('lax'),
   SSL_KEY_PATH: Joi.string().optional(),
   SSL_CRT_PATH: Joi.string().optional(),
+  // 운영에서 /api-docs를 열지 여부 (개발은 항상 열림)
+  SWAGGER_ENABLED: Joi.boolean().default(false),
 
   // Uploads (기본: API 앱 내 uploads)
   UPLOAD_PATH: Joi.string().default('./apps/api/uploads'),

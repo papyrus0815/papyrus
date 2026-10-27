@@ -34,6 +34,10 @@ export class AppConfigService {
         .map((origin) => origin.trim())
         .filter(Boolean),
       sslKeyPath: this.configService.get<string>('SSL_KEY_PATH'),
+      // 운영은 SWAGGER_ENABLED=true일 때만 — 문서가 인증 없이 전 엔드포인트 지도를 보여 준다
+      swaggerEnabled:
+        this.configService.get<string>('NODE_ENV', 'development') !== 'production' ||
+        String(this.configService.get('SWAGGER_ENABLED', 'false')) === 'true',
       sslCertPath: this.configService.get<string>('SSL_CRT_PATH'),
       uploadPath: this.configService.get<string>('UPLOAD_PATH', './apps/api/uploads'),
       maxFileSize: this.configService.get<number>(

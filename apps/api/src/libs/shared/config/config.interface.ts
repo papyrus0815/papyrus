@@ -16,6 +16,8 @@ export interface AppConfig {
   allowedOrigins: string[]
   sslKeyPath?: string
   sslCertPath?: string
+  /** /api-docs 노출 여부 — 운영은 기본 꺼짐 */
+  swaggerEnabled: boolean
 
   // Uploads
   uploadPath: string

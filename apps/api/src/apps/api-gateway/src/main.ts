@@ -102,30 +102,32 @@ async function bootstrap() {
       exposedHeaders: ['set-cookie', 'x-request-id'],
     })
 
-    // Swagger 설정
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('Papyrus API')
-      .setDescription(
-        'Historical database management API with advanced features',
-      )
-      .setVersion('2.0.0')
-      .addBearerAuth()
-      .addServer(`http://${config.host}:${config.port}`, 'Development server')
-      .addServer(`https://${config.host}`, 'Production server')
-      .addTag('auth', 'Authentication and authorization')
-      .addTag('account', 'User account management')
-      .addTag('health', 'System health and monitoring')
-      .build()
+    // Swagger 설정 — 컨트롤러가 아니라 전역 가드가 걸리지 않는다. 운영은 SWAGGER_ENABLED=true일 때만.
+    if (config.swaggerEnabled) {
+      const swaggerConfig = new DocumentBuilder()
+        .setTitle('Papyrus API')
+        .setDescription(
+          'Historical database management API with advanced features',
+        )
+        .setVersion('2.0.0')
+        .addBearerAuth()
+        .addServer(`http://${config.host}:${config.port}`, 'Development server')
+        .addServer(`https://${config.host}`, 'Production server')
+        .addTag('auth', 'Authentication and authorization')
+        .addTag('account', 'User account management')
+        .addTag('health', 'System health and monitoring')
+        .build()
 
-    const document = SwaggerModule.createDocument(app, swaggerConfig)
-    SwaggerModule.setup('api-docs', app, document, {
-      swaggerOptions: {
-        persistAuthorization: true,
-        tagsSorter: 'alpha',
-        operationsSorter: 'alpha',
-      },
-      customSiteTitle: 'Papyrus API Documentation',
-    })
+      const document = SwaggerModule.createDocument(app, swaggerConfig)
+      SwaggerModule.setup('api-docs', app, document, {
+        swaggerOptions: {
+          persistAuthorization: true,
+          tagsSorter: 'alpha',
+          operationsSorter: 'alpha',
+        },
+        customSiteTitle: 'Papyrus API Documentation',
+      })
+    }
 
     // 앱 시작
     console.log(`🌐 Starting server on ${config.host}:${config.port}...`)
@@ -135,9 +137,11 @@ async function bootstrap() {
     logger.log(
       `🚀 Application is running on: ${securityConfig.useHttps ? 'https' : 'http'}://${config.host}:${config.port}`,
     )
-    logger.log(
-      `📚 API Documentation: http://${config.host}:${config.port}/api-docs`,
-    )
+    if (config.swaggerEnabled) {
+      logger.log(
+        `📚 API Documentation: http://${config.host}:${config.port}/api-docs`,
+      )
+    }
     logger.log(`❤️  Health Check: http://${config.host}:${config.port}/health`)
     logger.log(`🌍 Environment: ${config.nodeEnv}`)
 
