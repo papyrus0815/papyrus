@@ -1,13 +1,12 @@
 /**
- * CountryPicker 계약 — 피커 3종(CountrySelectModal·CountrySearchModal·AdvancedCountrySelectModal)이
- * 이 한 구현으로 합쳐졌으므로, 세 피커가 각자 지키던 동작을 여기서 함께 못박는다.
+ * CountryPicker 계약 — 예전 피커 4종(CountrySelectModal·CountrySearchModal·
+ * AdvancedCountrySelectModal·HoS 핀 모달)이 이 한 구현으로 합쳐졌으므로, 각자 지키던 동작을
+ * 여기서 함께 못박는다.
  */
 import '@testing-library/jest-dom'
 import { fireEvent, screen } from '@testing-library/react'
 
 import { renderWithTheme } from '@/shared/test/render-with-theme'
-import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 
 import { CountryPicker, type CountryPickerProps } from './country-picker'
 import { sortHistoricalCountries } from './country-picker.lib'
@@ -47,7 +46,9 @@ function renderPicker(props: Partial<CountryPickerProps> & Pick<CountryPickerPro
     historicalCountries: HISTORICAL,
   }
   const modeProps =
-    props.mode === 'batch' ? { mode: 'batch' as const, onCommit } : { mode: props.mode, onSelect }
+    props.mode === 'batch' || props.mode === 'add'
+      ? { mode: props.mode, onCommit }
+      : { mode: props.mode, onSelect }
   renderWithTheme(<CountryPicker {...base} {...props} {...modeProps} />)
   return { onClose, onSelect, onCommit }
 }
@@ -95,6 +96,38 @@ describe('선택 방식', () => {
   })
 })
 
+describe('add 모드 — 추가 전용', () => {
+  it('이미 담긴 국가는 잠기고(추가됨) 새로 고른 것만 넘긴다', () => {
+    const { onCommit, onClose } = renderPicker({ mode: 'add', selectedIds: ['kr'] })
+    const added = screen.getByRole('button', { name: /대한민국/ })
+    expect(added).toBeDisabled()
+    expect(added).toHaveTextContent('추가됨')
+    fireEvent.click(screen.getByRole('button', { name: /일본/ }))
+    fireEvent.click(screen.getByRole('button', { name: '1개 추가' }))
+    expect(onCommit).toHaveBeenCalledWith([{ id: 'jp', name: '일본', isHistorical: false }])
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('새로 고른 게 없으면 추가 버튼이 잠긴다', () => {
+    renderPicker({ mode: 'add', selectedIds: ['kr'] })
+    expect(screen.getByRole('button', { name: '추가' })).toBeDisabled()
+  })
+
+  it('이미 담긴 국가는 목록 아래로 내려간다', () => {
+    renderPicker({ mode: 'add', selectedIds: ['jp'] })
+    const rows = screen.getAllByRole('button', { pressed: true }).concat(
+      screen.getAllByRole('button', { pressed: false }),
+    )
+    const names = screen
+      .getAllByRole('button')
+      .filter((button) => rows.includes(button))
+      .map((button) => button.textContent ?? '')
+    expect(names.findIndex((name) => name.includes('일본'))).toBeGreaterThan(
+      names.findIndex((name) => name.includes('대한민국')),
+    )
+  })
+})
+
 describe('모달 기본기 — 예전 두 피커엔 없던 것', () => {
   it('Esc로 닫힌다', () => {
     const { onClose } = renderPicker({ mode: 'single' })
@@ -119,62 +152,40 @@ describe('모달 기본기 — 예전 두 피커엔 없던 것', () => {
   })
 })
 
-describe('어댑터', () => {
-  it('CountrySelectModal — 단일 선택값에 체크가 걸리고, 역사국가면 역사 탭으로 연다', () => {
-    renderWithTheme(
-      <CountrySelectModal
-        isOpen
-        onClose={jest.fn()}
-        onSelect={jest.fn()}
-        modernCountries={MODERN as never}
-        historicalCountries={HISTORICAL as never}
-        selectedCountryId="joseon"
-      />,
-    )
+describe('여는 상태', () => {
+  it('body로 포털된 aria-modal 다이얼로그로 뜬다', () => {
+    renderPicker({ mode: 'single' })
+    const dialog = screen.getByRole('dialog', { name: '국가 선택' })
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(dialog.parentElement?.parentElement).toBe(document.body)
+  })
+
+  it('닫혀 있으면 아무것도 렌더하지 않는다', () => {
+    renderPicker({ mode: 'single', isOpen: false })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('선택값이 역사국가면 역사 탭으로 열고 그 줄에 체크가 걸린다(F19①)', () => {
+    renderPicker({ mode: 'single', selectedIds: ['joseon'] })
     expect(screen.getByRole('radio', { name: '역사적 국가' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('button', { name: /조선/, pressed: true })).toBeInTheDocument()
   })
 
-  it('CountrySearchModal — id가 빈 sentinel은 목록이 아니라 헤더 버튼이 되고, 누르면 id ""로 넘긴다', () => {
-    const onSelect = jest.fn()
-    const onClose = jest.fn()
-    renderWithTheme(
-      <CountrySearchModal
-        isOpen
-        onClose={onClose}
-        historicalOnly
-        modernCountries={[]}
-        historicalCountries={[{ id: '', name: '선택 안 함' }, ...HISTORICAL]}
-        selectedCountryId="joseon"
-        onSelect={onSelect}
-      />,
-    )
-    // 목록 행으로는 없다
-    expect(screen.queryByRole('button', { name: /선택 안 함/, pressed: false })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '선택 안 함' }))
-    expect(onSelect).toHaveBeenCalledWith({ id: '', name: '선택 안 함', isHistorical: true })
-    expect(onClose).toHaveBeenCalled()
+  it('add 모드는 이미 담긴 게 역사국가여도 현대 탭으로 연다(잠긴 줄은 근거가 아니다)', () => {
+    renderPicker({ mode: 'add', selectedIds: ['joseon'] })
+    expect(screen.getByRole('radio', { name: '현대 국가' })).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('CountrySearchModal — onSelectMultiple이면 batch로 동작한다', () => {
-    const onSelectMultiple = jest.fn()
-    renderWithTheme(
-      <CountrySearchModal
-        isOpen
-        onClose={jest.fn()}
-        modernOnly
-        modernCountries={MODERN}
-        historicalCountries={[]}
-        selectedCountryIds={['kr']}
-        onSelectMultiple={onSelectMultiple}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: /일본/ }))
-    fireEvent.click(screen.getByRole('button', { name: '선택 완료' }))
-    expect(onSelectMultiple).toHaveBeenCalledWith([
-      { id: 'kr', name: '대한민국', isHistorical: false },
-      { id: 'jp', name: '일본', isHistorical: false },
-    ])
+  it('선택 해제 버튼은 고른 값이 있을 때만, 지정한 글자로 뜬다', () => {
+    const onClearSelection = jest.fn()
+    renderPicker({ mode: 'single', selectedIds: ['kr'], onClearSelection, clearSelectionLabel: '선택 안 함' })
+    fireEvent.click(screen.getByRole('button', { name: '선택 안 함' }))
+    expect(onClearSelection).toHaveBeenCalledTimes(1)
+  })
+
+  it('불러오는 중엔 "결과 없음" 대신 로딩을 알린다', () => {
+    renderPicker({ mode: 'add', modernCountries: [], isLoading: true })
+    expect(screen.getByText('국가 목록을 불러오는 중…')).toBeInTheDocument()
   })
 })
 

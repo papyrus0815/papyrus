@@ -114,3 +114,12 @@ export function sortHistoricalCountries<T extends CountryPickerHistoricalOption>
     return direction * (leftYear - rightYear) || byName(left, right)
   })
 }
+
+/** add 모드 — 이미 담긴 항목을 아래로(새로 더할 후보가 위). 각 묶음 안의 순서는 유지한다 */
+export function moveAddedLast<T extends { id: string }>(countries: T[], addedIds: Set<string>): T[] {
+  if (addedIds.size === 0) return countries
+  return [
+    ...countries.filter((country) => !addedIds.has(country.id)),
+    ...countries.filter((country) => addedIds.has(country.id)),
+  ]
+}

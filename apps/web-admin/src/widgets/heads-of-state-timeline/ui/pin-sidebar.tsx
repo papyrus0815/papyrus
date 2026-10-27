@@ -22,7 +22,7 @@ import type { PinnedRow, PinnedSegment } from '../model/types'
 import { sortSegmentsChronologically } from '../lib/sort-segments'
 import { copyShareUrl } from '../model/use-url-sync'
 import { useRowsLineage } from '../api/use-rows-lineage'
-import { CountrySearchModal } from './country-search-modal'
+import { CountryPinPicker } from './country-pin-picker'
 
 interface Props {
   rows: PinnedRow[]
@@ -140,7 +140,7 @@ export function PinSidebar({
           <FiPlus size={14} />
         </CollapsedAdd>
         <CollapsedCount>{rows.length}행</CollapsedCount>
-        <CountrySearchModal
+        <CountryPinPicker
           isOpen={addRowModalOpen}
           onClose={() => setAddRowModalOpen(false)}
           onPickMany={(segments) => onAddManyRows(segments)}
@@ -414,14 +414,14 @@ export function PinSidebar({
         </List>
       )}
 
-      <CountrySearchModal
+      <CountryPinPicker
         isOpen={addRowModalOpen}
         onClose={() => setAddRowModalOpen(false)}
         onPickMany={(segments) => onAddManyRows(segments)}
         title="새 행 — 비교할 국가 추가"
         alreadyPinnedOptionIds={allPinnedOptionIds}
       />
-      <CountrySearchModal
+      <CountryPinPicker
         isOpen={addSegmentRowId !== null}
         onClose={() => setAddSegmentRowId(null)}
         onPickMany={(segments) => {

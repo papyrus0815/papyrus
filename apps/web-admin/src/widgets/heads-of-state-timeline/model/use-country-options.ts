@@ -111,6 +111,9 @@ export function useCountryOptions(enabled: boolean = true) {
 
   return {
     options,
+    /** 원본 목록 — 공용 CountryPicker에 그대로 넘긴다(검색·정렬·존속기간 표기를 피커가 맡음) */
+    modernCountries: modernQuery.data,
+    historicalCountries: historicalQuery.data,
     isLoading: modernQuery.isLoading || historicalQuery.isLoading,
     /**
      * 두 소스가 모두 성공적으로 로드됐는지 — 에러로 끝난 쿼리는 isLoading=false지만

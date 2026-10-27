@@ -3,14 +3,17 @@
  *
  * 예전엔 같은 일(현대/역사 탭·대륙·검색·시대 힌트·역사국가 인라인 등록)을 하는 모달이
  * 세 벌(CountrySelectModal 1,511줄 / CountrySearchModal 828줄 / AdvancedCountrySelectModal
- * 1,085줄) 있었고, 그중 두 벌은 Esc·포커스 트랩·aria-modal이 없었다. 셋은 이제 이 피커의
- * 얇은 어댑터다(호출부 무변경).
+ * 1,085줄)에 국가원수 비교의 핀 추가 모달(606줄)까지 있었고, 그중 두 벌은 Esc·포커스 트랩·
+ * aria-modal이 없었다. 전부 이 피커로 합쳤다.
  *
  * 선택 방식(`mode`) — 피커마다 "다중 선택"의 뜻이 달랐던 것을 이름으로 갈랐다:
  * - `single`: 누르면 고르고 닫힌다.
  * - `toggle`: 누를 때마다 `onSelect`가 불린다(담기·빼기는 호출부가 정한다). 닫지 않는다.
  * - `batch`: 피커 안에서 담았다 뺐다 하다가 '선택 완료'에서 `onCommit`으로 한 번에 넘긴다.
- *   ✕·Esc·바깥 클릭으로 닫으면 아무것도 넘기지 않는다.
+ *   ✕·Esc·바깥 클릭으로 닫으면 아무것도 넘기지 않는다. 넘기는 값은 **최종 선택 전체**다.
+ * - `add`: 추가 전용. `selectedIds`(이미 담긴 것)는 '추가됨'으로 잠기고 아래로 내려가며,
+ *   새로 고른 것만 'N개 추가'에서 `onCommit`으로 넘긴다. 빼기는 피커가 아니라 호출부 행에서 한다 —
+ *   역할·비고 같은 메타데이터가 달린 행을 피커 토글로 지우면 그 정보가 조용히 사라지기 때문이다.
  *
  * **document.body로 포털**한다 — 사건 등록 폼 등 다른 모달 안에서 열리기 때문이다.
  * 부모 모달 DOM 안에 남으면 (1) 부모 셸의 `backdrop-filter`가 containing block을 만들어
@@ -48,6 +51,7 @@ import { useModalBehavior } from '@/shared/ui/modal/use-modal-behavior.hook'
 
 import {
   coerceSortField,
+  moveAddedLast,
   sortHistoricalCountries,
   sortModernCountries,
   type CountryPickerHistoricalOption,
@@ -86,12 +90,14 @@ interface CountryPickerBaseProps {
   initialContinentId?: string
   /** 대륙 이름 목록 — 없으면 공용 대륙 쿼리를 쓴다 */
   continentList?: { id: string; name: string }[]
+  /** 목록을 아직 받는 중 — 빈 목록을 '결과 없음'으로 오인하지 않게 */
+  isLoading?: boolean
 }
 
 export type CountryPickerProps = CountryPickerBaseProps &
   (
     | { mode: 'single' | 'toggle'; onSelect: (country: CountryPickerPick) => void }
-    | { mode: 'batch'; onCommit: (countries: CountryPickerPick[]) => void }
+    | { mode: 'batch' | 'add'; onCommit: (countries: CountryPickerPick[]) => void }
   )
 
 const EMPTY_IDS: string[] = []
@@ -111,7 +117,11 @@ export function CountryPicker(props: CountryPickerProps) {
     clearSelectionLabel = '선택 해제',
     initialContinentId,
     continentList: continentListProp,
+    isLoading = false,
   } = props
+  const mode = props.mode
+  /** batch·add는 피커 안의 초안을 고치다가 한 번에 넘긴다 */
+  const usesDraft = mode === 'batch' || mode === 'add'
   const playClick = useClickSound()
   const { data: continentQueryData } = useContinents()
   const continentList = continentListProp ?? continentQueryData
@@ -127,7 +137,7 @@ export function CountryPicker(props: CountryPickerProps) {
   const [sortBy, setSortBy] = useState<CountryPickerSortField>('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [createOpen, setCreateOpen] = useState(false)
-  /** batch 모드 — 피커 안에서만 담았다 뺐다 하는 초안. '선택 완료' 전엔 호출부가 모른다. */
+  /** batch·add 모드 — 피커 안에서만 담았다 뺐다 하는 초안. '선택 완료' 전엔 호출부가 모른다. */
   const [draftIds, setDraftIds] = useState<string[]>([])
   /** 인라인 등록으로 방금 만든 역사국가 — 목록 refetch 전에도 이름·종류를 잃지 않도록 보관 */
   const [createdCountries, setCreatedCountries] = useState<CountryPickerHistoricalOption[]>([])
@@ -162,15 +172,22 @@ export function CountryPicker(props: CountryPickerProps) {
     }
     if (wasOpenRef.current) return
     wasOpenRef.current = true
-    const selectedInHistorical = historicalCountries.some((country) =>
-      selectedIds.includes(country.id),
-    )
+    // add 모드의 selectedIds는 '이미 담긴 것'이라 여는 탭을 정할 근거가 아니다
+    const selectedInHistorical =
+      mode !== 'add' &&
+      historicalCountries.some((country) => selectedIds.includes(country.id))
     setKind(scope !== 'all' ? scope : selectedInHistorical ? 'historical' : 'modern')
     setContinentId(initialContinentId ?? 'all')
     setSearchTerm('')
-    setDraftIds(selectedIds)
+    setDraftIds(mode === 'add' ? [] : selectedIds)
     setCreatedCountries([])
-  }, [isOpen, scope, selectedIds, historicalCountries, initialContinentId])
+  }, [isOpen, mode, scope, selectedIds, historicalCountries, initialContinentId])
+
+  /** add 모드에서 잠긴(이미 담긴) id — 다른 모드에선 비어 있다 */
+  const addedIdSet = useMemo(
+    () => new Set(mode === 'add' ? selectedIds : []),
+    [mode, selectedIds],
+  )
 
   const effectiveSortBy = coerceSortField(kind, sortBy)
 
@@ -212,8 +229,12 @@ export function CountryPicker(props: CountryPickerProps) {
       continentId === 'all'
         ? searched
         : searched.filter((country) => country.continentId === continentId)
-    return sortModernCountries(narrowed, effectiveSortBy, sortOrder, continentNameById)
+    return moveAddedLast(
+      sortModernCountries(narrowed, effectiveSortBy, sortOrder, continentNameById),
+      addedIdSet,
+    )
   }, [
+    addedIdSet,
     kind,
     modernCountries,
     deferredSearchTerm,
@@ -229,15 +250,14 @@ export function CountryPicker(props: CountryPickerProps) {
     const searched = filterCountriesByQuery(historicalCountries, deferredSearchTerm, getContinentName)
     const sorted = sortHistoricalCountries(searched, effectiveSortBy, sortOrder)
     // 시대 힌트는 역사 탭에서만 — 상단 정렬만, 제외 없음(F42)
-    return boostByHintYearRange(sorted, hintYearRange)
-  }, [kind, historicalCountries, deferredSearchTerm, getContinentName, effectiveSortBy, sortOrder, hintYearRange])
+    return moveAddedLast(boostByHintYearRange(sorted, hintYearRange), addedIdSet)
+  }, [addedIdSet, kind, historicalCountries, deferredSearchTerm, getContinentName, effectiveSortBy, sortOrder, hintYearRange])
 
   const visibleCount = kind === 'modern' ? visibleModern.length : visibleHistorical.length
 
-  const mode = props.mode
   const isMulti = mode !== 'single'
-  /** 체크 표시의 기준 — batch는 초안, 나머지는 호출부 값 */
-  const checkedIds = mode === 'batch' ? draftIds : selectedIds
+  /** 체크 표시의 기준 — batch·add는 초안, 나머지는 호출부 값 */
+  const checkedIds = usesDraft ? draftIds : selectedIds
 
   /** id → 표시용 항목. 목록에 없으면(방금 등록한 국가) 등록분에서 찾는다 */
   const resolvePick = (id: string): (CountryPickerPick & { flag: string | null }) | null => {
@@ -253,8 +273,9 @@ export function CountryPicker(props: CountryPickerProps) {
   }
 
   const pick = (country: CountryPickerPick) => {
+    if (addedIdSet.has(country.id)) return
     playClick()
-    if (props.mode === 'batch') {
+    if (props.mode === 'batch' || props.mode === 'add') {
       setDraftIds((previous) =>
         previous.includes(country.id)
           ? previous.filter((id) => id !== country.id)
@@ -262,17 +283,19 @@ export function CountryPicker(props: CountryPickerProps) {
       )
       return
     }
-    props.onSelect(country)
+    if (props.mode === 'single' || props.mode === 'toggle') props.onSelect(country)
     if (props.mode === 'single') onClose()
   }
 
   const commit = () => {
-    if (props.mode !== 'batch') return
-    playClick()
+    if (props.mode !== 'batch' && props.mode !== 'add') return
     const picks = draftIds
       .map(resolvePick)
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
       .map(({ id, name, isHistorical }) => ({ id, name, isHistorical }))
+    // 추가 전용은 새로 고른 게 없으면 넘길 것도 없다(버튼도 잠겨 있다)
+    if (props.mode === 'add' && picks.length === 0) return
+    playClick()
     props.onCommit(picks)
     onClose()
   }
@@ -280,14 +303,16 @@ export function CountryPicker(props: CountryPickerProps) {
   /** 인라인 등록(F20) — 생성 즉시 선택해 저작 흐름(입력값)을 끊지 않는다 */
   const handleCreated = (created: { id: string; name: string }) => {
     setCreateOpen(false)
-    if (props.mode === 'batch') {
+    if (props.mode === 'batch' || props.mode === 'add') {
       setCreatedCountries((previous) =>
         previous.some((country) => country.id === created.id) ? previous : [...previous, created],
       )
       setDraftIds((previous) => (previous.includes(created.id) ? previous : [...previous, created.id]))
       return
     }
-    props.onSelect({ id: created.id, name: created.name, isHistorical: true })
+    if (props.mode === 'single' || props.mode === 'toggle') {
+      props.onSelect({ id: created.id, name: created.name, isHistorical: true })
+    }
     if (props.mode === 'single') onClose()
   }
 
@@ -312,15 +337,33 @@ export function CountryPicker(props: CountryPickerProps) {
     .map(resolvePick)
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
 
-  const renderRowCheck = (isChecked: boolean) => (
-    /**
-     * 체크는 **단일 선택에도** 붙는다(검토 IA-14) — 지금 걸려 있는 값을 정렬·스크롤 뒤에도
-     * 확인할 수 있어야 한다. 고르지 않은 줄은 마우스를 올렸을 때만 '+'를 띄운다.
-     */
-    <RowCheck $selected={isChecked} aria-hidden="true">
-      {isChecked ? <FiCheck size={13} /> : <FiPlus size={13} />}
-    </RowCheck>
-  )
+  /**
+   * 한 줄 — 모든 모드 공통. 체크는 **단일 선택에도** 붙는다(검토 IA-14) — 지금 걸려 있는 값을
+   * 정렬·스크롤 뒤에도 확인할 수 있어야 한다. 고르지 않은 줄은 마우스를 올렸을 때만 '+'.
+   * add 모드에서 이미 담긴 줄은 잠기고 '추가됨'을 단다(눌러도 아무 일 없던 예전 함정 제거).
+   */
+  const renderRow = (country: CountryPickerPick, leading: React.ReactNode, trailing: React.ReactNode) => {
+    const isAdded = addedIdSet.has(country.id)
+    const isChecked = isAdded || checkedIds.includes(country.id)
+    return (
+      <CountryRow
+        key={country.id}
+        type="button"
+        aria-pressed={isChecked}
+        disabled={isAdded}
+        $selected={isChecked && !isAdded}
+        onClick={() => pick(country)}
+      >
+        {leading}
+        <RowName>{country.name}</RowName>
+        {trailing}
+        {isAdded && <AddedBadge>추가됨</AddedBadge>}
+        <RowCheck $selected={isChecked} aria-hidden="true">
+          {isChecked ? <FiCheck size={13} /> : <FiPlus size={13} />}
+        </RowCheck>
+      </CountryRow>
+    )
+  }
 
   const modal = (
     <ModalOverlay onClick={onClose}>
@@ -475,54 +518,39 @@ export function CountryPicker(props: CountryPickerProps) {
         <CountryList>
           {kind === 'modern' &&
             visibleModern.map((country) => {
-              const isChecked = checkedIds.includes(country.id)
               const meta = [
                 country.isoCode,
                 getContinentName(country),
                 country.capital && `수도 ${country.capital}`,
               ]
-              return (
-                <CountryRow
-                  key={country.id}
-                  type="button"
-                  aria-pressed={isChecked}
-                  $selected={isChecked}
-                  onClick={() => pick({ id: country.id, name: country.name, isHistorical: false })}
-                >
-                  <RowFlag aria-hidden="true">{country.flagEmoji || '🌐'}</RowFlag>
-                  <RowName>{country.name}</RowName>
-                  <RowMeta>{meta.filter(Boolean).join(' · ')}</RowMeta>
-                  {renderRowCheck(isChecked)}
-                </CountryRow>
+              return renderRow(
+                { id: country.id, name: country.name, isHistorical: false },
+                <RowFlag aria-hidden="true">{country.flagEmoji || '🌐'}</RowFlag>,
+                <RowMeta>{meta.filter(Boolean).join(' · ')}</RowMeta>,
               )
             })}
           {kind === 'historical' &&
             visibleHistorical.map((country) => {
-              const isChecked = checkedIds.includes(country.id)
               const meta = [
                 formatCountryPeriod(country),
                 country.stateType ? getStateTypeLabel(country.stateType) : null,
                 country.enName,
               ]
-              return (
-                <CountryRow
-                  key={country.id}
-                  type="button"
-                  aria-pressed={isChecked}
-                  $selected={isChecked}
-                  onClick={() => pick({ id: country.id, name: country.name, isHistorical: true })}
-                >
-                  {/* 국기는 현대 국가만 — 역사국가 행마다 같은 🏛️를 세우면 반복만 된다 */}
-                  <RowName>{country.name}</RowName>
+              // 국기는 현대 국가만 — 역사국가 행마다 같은 🏛️를 세우면 반복만 된다
+              return renderRow(
+                { id: country.id, name: country.name, isHistorical: true },
+                null,
+                <>
                   {hintActive && matchesHintYearRange(country, hintYearRange) && (
                     <HintChip>시대 일치</HintChip>
                   )}
                   <RowMeta>{meta.filter(Boolean).join(' · ')}</RowMeta>
-                  {renderRowCheck(isChecked)}
-                </CountryRow>
+                </>,
               )
             })}
-          {visibleCount === 0 && <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>}
+          {visibleCount === 0 && (
+            <EmptyMessage>{isLoading ? '국가 목록을 불러오는 중…' : '검색 결과가 없습니다.'}</EmptyMessage>
+          )}
           {/* F20: 없으면 폼을 떠나야 했던 흐름 — 여기서 등록하고 자동 선택 */}
           {showCreateCta && (
             <CreateCtaRow>
@@ -547,9 +575,17 @@ export function CountryPicker(props: CountryPickerProps) {
             <FooterSummary>
               {selectedEntries.length > 0
                 ? `${selectedEntries.length}개 국가를 골랐습니다`
-                : '누르면 담기고, 다시 누르면 빠집니다'}
+                : mode === 'add'
+                  ? addedIdSet.size > 0
+                    ? `이미 ${addedIdSet.size}개가 담겨 있습니다 — 새로 더할 국가를 고르세요`
+                    : '누르면 담기고, 다시 누르면 빠집니다'
+                  : '누르면 담기고, 다시 누르면 빠집니다'}
             </FooterSummary>
-            {mode === 'batch' ? (
+            {mode === 'add' ? (
+              <DoneButton type="button" onClick={commit} disabled={selectedEntries.length === 0}>
+                {selectedEntries.length > 0 ? `${selectedEntries.length}개 추가` : '추가'}
+              </DoneButton>
+            ) : mode === 'batch' ? (
               <DoneButton type="button" onClick={commit}>
                 선택 완료
               </DoneButton>
@@ -921,6 +957,14 @@ const CountryRow = styled.button<{ $selected: boolean }>`
   &:hover ${RowCheck}, &:focus-visible ${RowCheck} {
     opacity: 1;
   }
+  /* add 모드의 이미 담긴 줄 — 체크는 보이되 누를 수 없다 */
+  &:disabled {
+    cursor: default;
+    background: transparent;
+  }
+  &:disabled ${RowCheck} {
+    background: ${({ theme }) => theme.colors.text.tertiary};
+  }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: -2px;
@@ -985,13 +1029,24 @@ const DoneButton = styled.button`
   background: ${({ theme }) => theme.colors.primary};
   cursor: pointer;
 
-  &:hover {
+  &:hover:not(:disabled) {
     filter: brightness(1.06);
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: 2px;
   }
+`
+
+const AddedBadge = styled.span`
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const HintNotice = styled.div`
