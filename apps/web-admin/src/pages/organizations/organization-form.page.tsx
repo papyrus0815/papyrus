@@ -22,6 +22,7 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { CountryPicker, CountryPickerField } from '@/shared/ui/country-picker'
 import { notify } from '@/shared/ui/toast'
 
 const ORGANIZATION_TYPES: { value: OrganizationType; label: string }[] = [
@@ -79,6 +80,23 @@ const Form = styled.form`
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
 `
+/** 소속 국가 칸에 보일 값 — 현대·역사 중 채워진 쪽(둘은 상호배타) */
+function describeSelectedCountry(
+  form: Pick<CreateOrganizationBody, 'countryId' | 'historicalCountryId'>,
+  countries: CountryResponseDto[],
+  historicalCountries: HistoricalCountryResponseDto[],
+) {
+  if (form.countryId) {
+    const modern = countries.find((country) => country.id === form.countryId)
+    return modern ? { name: modern.name, flagEmoji: modern.flagEmoji } : null
+  }
+  if (form.historicalCountryId) {
+    const historical = historicalCountries.find((country) => country.id === form.historicalCountryId)
+    return historical ? { name: historical.name, isHistorical: true } : null
+  }
+  return null
+}
+
 const Field = styled.div`
   margin-bottom: 18px;
 `
@@ -266,6 +284,7 @@ export const OrganizationFormPage: React.FC = () => {
   const isEdit = id && id !== 'new'
   const [loading, setLoading] = useState(isEdit)
   const [countries, setCountries] = useState<CountryResponseDto[]>([])
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
   const [historicalCountries, setHistoricalCountries] = useState<
     HistoricalCountryResponseDto[]
   >([])
@@ -401,45 +420,36 @@ export const OrganizationFormPage: React.FC = () => {
               ))}
             </Select>
           </Field>
+          {/*
+           * 소속 국가 — 현대·역사 한 칸. 예전엔 `<select>` 두 개를 상호배타로 두어(한쪽을 고르면 다른 쪽이
+           * 비워짐) 둘이 함께 보이면서 하나만 살아남았다. 피커의 현대/역사 탭이 그 구분을 맡는다.
+           */}
           <Field>
-            <Label>소속 국가 (현대)</Label>
-            <Select
-              value={form.countryId ?? ''}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  countryId: e.target.value || null,
-                  historicalCountryId: e.target.value ? null : f.historicalCountryId,
+            <Label htmlFor="organization-country">소속 국가</Label>
+            <CountryPickerField
+              id="organization-country"
+              value={describeSelectedCountry(form, countries, historicalCountries)}
+              placeholder="선택 안 함"
+              onOpen={() => setCountryPickerOpen(true)}
+              onClear={() => setForm((previous) => ({ ...previous, countryId: null, historicalCountryId: null }))}
+            />
+            <CountryPicker
+              isOpen={countryPickerOpen}
+              onClose={() => setCountryPickerOpen(false)}
+              mode="single"
+              title="소속 국가 선택"
+              modernCountries={countries}
+              historicalCountries={historicalCountries}
+              selectedIds={[form.countryId ?? form.historicalCountryId ?? ''].filter(Boolean)}
+              onSelect={(country) =>
+                // 상호배타 — 고른 축만 채우고 반대편은 비운다
+                setForm((previous) => ({
+                  ...previous,
+                  countryId: country.isHistorical ? null : country.id,
+                  historicalCountryId: country.isHistorical ? country.id : null,
                 }))
               }
-            >
-              <option value="">선택 안 함</option>
-              {countries.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field>
-            <Label>소속 국가 (역사적)</Label>
-            <Select
-              value={form.historicalCountryId ?? ''}
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  historicalCountryId: e.target.value || null,
-                  countryId: e.target.value ? null : f.countryId,
-                }))
-              }
-            >
-              <option value="">선택 안 함</option>
-              {historicalCountries.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
+            />
           </Field>
           <Field>
             <Label>설명</Label>

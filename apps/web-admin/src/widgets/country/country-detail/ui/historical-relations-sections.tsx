@@ -41,6 +41,7 @@ import {
 } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { CountryPicker, CountryPickerField } from '@/shared/ui/country-picker'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
@@ -136,7 +137,11 @@ function SectionHead({
   )
 }
 
-/** 나라 고르기 — 이 나라 자신은 뺀다 */
+/**
+ * 나라 고르기 — 이 나라 자신은 뺀다.
+ * 예전엔 역사국가 전체를 `<select>` 한 줄로 늘어놓아 검색도 존속기간 구별도 없었다 —
+ * 공용 피커(역사국가만, 단일 선택)로 연다. 찾는 나라가 없으면 피커 안에서 바로 등록할 수 있다.
+ */
 function CountrySelect({
   id,
   value,
@@ -148,22 +153,34 @@ function CountrySelect({
   onChange: (next: string) => void
   excludeId: string
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false)
   const { data: countries = [], isLoading } = useQuery({
     queryKey: HISTORICAL_LIST_KEY,
     queryFn: getAllHistoricalCountries,
   })
+  const candidates = countries.filter((country) => country.id !== excludeId)
+  const selected = countries.find((country) => country.id === value)
   return (
-    <Select id={id} value={value} onChange={(changeEvent) => onChange(changeEvent.target.value)}>
-      <option value="">{isLoading ? '불러오는 중…' : '선택'}</option>
-      {countries
-        .filter((country) => country.id !== excludeId)
-        .sort((left, right) => left.name.localeCompare(right.name, 'ko'))
-        .map((country) => (
-          <option key={country.id} value={country.id}>
-            {country.name}
-          </option>
-        ))}
-    </Select>
+    <>
+      <CountryPickerField
+        id={id}
+        value={selected ? { name: selected.name } : null}
+        placeholder={isLoading ? '불러오는 중…' : '국가 선택'}
+        onOpen={() => setPickerOpen(true)}
+        onClear={() => onChange('')}
+      />
+      <CountryPicker
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        mode="single"
+        scope="historical"
+        modernCountries={[]}
+        historicalCountries={candidates}
+        selectedIds={value ? [value] : []}
+        isLoading={isLoading}
+        onSelect={(country) => onChange(country.id)}
+      />
+    </>
   )
 }
 

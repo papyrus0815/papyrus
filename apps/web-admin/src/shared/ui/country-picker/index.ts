@@ -5,3 +5,4 @@ export type {
   CountryPickerModernOption,
   CountryPickerPick,
 } from './country-picker.lib'
+export { CountryPickerField, type CountryPickerFieldProps } from './country-picker-field'
