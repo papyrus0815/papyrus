@@ -43,6 +43,7 @@ import { RichTextReadView } from '@/shared/ui/rich-text-read-view/rich-text-read
 import { notify } from '@/shared/ui/toast'
 
 import { FillChip } from './founding-fill-chip.styles'
+import { FoundingThumb, useResolvedImage } from './founding-media'
 import { HistoricalStatehoodAgents } from './historical-statehood-agents'
 import { type PickerCandidate, StatehoodPickerModal } from './statehood-picker-modal'
 
@@ -145,7 +146,7 @@ export function HistoricalFoundingCards({
         historicalCountryId={historicalCountryId}
         note={summary.foundingNote}
         events={statehood?.founded ?? []}
-        firstRulers={summary.firstRulers}
+        rulers={summary.firstRulers}
         agents={summary.founders ?? []}
         agentLabel={isState ? '건국자' : '세운 쪽'}
         linked={summary.predecessors}
@@ -161,7 +162,7 @@ export function HistoricalFoundingCards({
           historicalCountryId={historicalCountryId}
           note={summary.dissolutionNote}
           events={statehood?.dissolved ?? []}
-          firstRulers={[]}
+          rulers={summary.lastRulers ?? []}
           agents={summary.dissolvers ?? []}
           agentLabel={isState ? '멸망시킨 쪽' : '끝낸 쪽'}
           linked={summary.successors}
@@ -179,7 +180,8 @@ interface FoundingCardProps {
   historicalCountryId: string
   note: string | null
   events: StatehoodEvent[]
-  firstRulers: FirstRuler[]
+  /** 건국 카드는 초대, 멸망 카드는 마지막 통치자 — 종류별 한 명 */
+  rulers: FirstRuler[]
   /** 세운 쪽·멸망시킨 쪽 — 사용자가 지정한 주체 */
   agents: StatehoodAgent[]
   agentLabel: string
@@ -195,7 +197,7 @@ function FoundingCard({
   historicalCountryId,
   note,
   events,
-  firstRulers,
+  rulers,
   agents,
   agentLabel,
   linked,
@@ -297,15 +299,76 @@ function FoundingCard({
 
   const yearLabel = formatCountryYearShort(year)
   const hasNote = Boolean(note && note.replace(/<[^>]*>/g, '').trim())
+  /* 카드 사진 = 연결된 사건 중 대표 이미지가 있는 첫 사건(연대순) — 국가 존속의 끝을 보여 주는 장면 */
+  const heroEvent = events.find((event) => event.imageUrl)
+  const hero = useResolvedImage(heroEvent?.imageUrl)
+  const heroYear = heroEvent ? formatCountryYearShort(statehoodEventYear(heroEvent)) : ''
+  /*
+   * 사건 사진이 없으면 머리글 옆에 인물 초상 — 세운(멸망시킨) 인물 > 초대(마지막) 통치자.
+   * 실DB 2026-10-27: 건국·멸망 사건 중 사진 있는 것 0건, 역사 국가 대표 이미지 0/383,
+   * 인물 사진 222/470 — 사진이 실제로 서는 자리는 인물뿐이다.
+   */
+  const portrait = useMemo(() => {
+    for (const agent of agents) {
+      if (agent.kind === 'person' && agent.person?.profileImageUrl) {
+        return {
+          src: agent.person.profileImageUrl,
+          name: getPersonDisplayName(agent.person, true) || agent.name,
+          caption: agentLabel,
+          to: pathKeys.personsTimelineDetail(agent.person.id),
+        }
+      }
+    }
+    for (const ruler of rulers) {
+      if (ruler.person.profileImageUrl) {
+        return {
+          src: ruler.person.profileImageUrl,
+          name: ruler.regnalName?.trim() || getPersonDisplayName(ruler.person, true),
+          caption: side === 'founding' ? '초대' : '마지막',
+          to: pathKeys.personsTimelineDetail(ruler.person.id),
+        }
+      }
+    }
+    return null
+  }, [agents, rulers, agentLabel, side])
+  const portraitImage = useResolvedImage(portrait?.src)
+
+  const heading = (
+    <CardTitle id={`founding-card-${side}`}>
+      <Kicker $side={side}>{title}</Kicker>
+      {yearLabel ? <CardYear>{yearLabel}</CardYear> : <CardYearEmpty>연도 미상</CardYearEmpty>}
+    </CardTitle>
+  )
 
   return (
-    <Card aria-labelledby={`founding-card-${side}`}>
-      <CardHead>
-        <CardTitle id={`founding-card-${side}`}>
-          {title}
-          {yearLabel && <CardYear>{yearLabel}</CardYear>}
-        </CardTitle>
-      </CardHead>
+    <Card aria-labelledby={`founding-card-${side}`} $side={side}>
+      {heroEvent && hero.src ? (
+        <Hero>
+          <HeroImage src={hero.src} alt="" onError={hero.onError} />
+          <HeroShade aria-hidden />
+          <HeroText>
+            {heading}
+            <HeroCaption to={pathKeys.events.detail(heroEvent.id)}>
+              {heroEvent.title}
+              {heroYear && <span> · {heroYear}</span>}
+            </HeroCaption>
+          </HeroText>
+        </Hero>
+      ) : (
+        <CardHead>
+          {portrait && portraitImage.src && (
+            <Portrait
+              to={portrait.to}
+              aria-label={`${portrait.caption} ${portrait.name}`}
+              title={`${portrait.caption} · ${portrait.name}`}
+            >
+              <img src={portraitImage.src} alt="" onError={portraitImage.onError} />
+            </Portrait>
+          )}
+          {/* 초상 밑에 이름을 또 적지 않는다 — 바로 아래 건국자·초대 줄이 같은 인물을 보인다 */}
+          {heading}
+        </CardHead>
+      )}
 
       <Facts>
         {/*
@@ -398,6 +461,7 @@ function FoundingCard({
                     signedEventYear != null && year != null && signedEventYear !== year
                   return (
                     <Chip key={event.id}>
+                      <FoundingThumb src={event.imageUrl} name={event.title} shape="rect" size={22} />
                       <ChipLink to={pathKeys.events.detail(event.id)}>{event.title}</ChipLink>
                       {eventYear && <Muted>{eventYear}</Muted>}
                       {mismatch && (
@@ -432,25 +496,38 @@ function FoundingCard({
           </>
         )}
 
-        {/* ── 초대(건국 카드만) ── */}
-        {side === 'founding' && (
+        {/* ── 초대(건국) · 마지막(멸망) ── */}
+        {(side === 'founding' || rulers.length > 0) && (
           <>
             {/* 가장 이른 기록이 건국과 멀면 '초대'라 부르지 않는다 — 랑고바르드의 첫 재위 기록이
                 774년 카를 1세(건국 206년 뒤)였다. 그때는 '첫 기록'으로 부르고 거리를 밝힌다. */}
-            <FactLabel>{firstRulers.length > 0 && firstRulers.every((ruler) => isFarFromFounding(ruler, year)) ? '첫 기록' : '초대'}</FactLabel>
+            <FactLabel>
+              {side === 'dissolution'
+                ? '마지막'
+                : rulers.length > 0 && rulers.every((ruler) => isFarFromFounding(ruler, year))
+                  ? '첫 기록'
+                  : '초대'}
+            </FactLabel>
             <FactValue>
-              {firstRulers.length > 0 ? (
+              {rulers.length > 0 ? (
                 <Stack>
-                  {firstRulers.map((ruler) => {
+                  {rulers.map((ruler) => {
                     const span = rulerSpan(ruler)
                     return (
                       <RulerLine key={ruler.recordId}>
+                        <FoundingThumb
+                          src={ruler.person.profileImageUrl}
+                          name={ruler.regnalName?.trim() || getPersonDisplayName(ruler.person, true)}
+                          shape="round"
+                          size={28}
+                        />
                         <Muted>{ruler.title || RULER_FALLBACK_TITLE[ruler.kind]}</Muted>
                         <PersonLink to={pathKeys.personsTimelineDetail(ruler.person.id)}>
                           {ruler.regnalName?.trim() || getPersonDisplayName(ruler.person, true)}
                         </PersonLink>
                         {span && <Muted>{span}</Muted>}
-                        {ruler.basis === 'earliest' &&
+                        {side === 'founding' &&
+                          ruler.basis === 'earliest' &&
                           (isFarFromFounding(ruler, year) ? (
                             <Hint title="제1대로 기록된 재위·재임이 없고, 가장 이른 기록도 건국과 멀어 초대로 보지 않습니다">
                               건국 {gapFromFounding(ruler, year)}년 뒤 · 초대 기록 없음
@@ -486,6 +563,7 @@ function FoundingCard({
               <Inline>
                 {linked.map((country) => (
                   <Chip key={`${country.id}-${country.eventType}`}>
+                    <FoundingThumb src={country.thumbnailUrl} name={country.name} shape="rect" size={22} />
                     <ChipLink to={pathKeys.countryDetail(country.id)}>{country.name}</ChipLink>
                     <Muted>{TRANSITION_LABEL[country.eventType] ?? country.eventType}</Muted>
                   </Chip>
@@ -575,37 +653,156 @@ const Cards = styled.div`
   gap: 16px;
 `
 
-const Card = styled.section`
+/*
+ * 쪽 색 — 사건 목록 레일 표지와 같은 짝(건국 초록·멸망 장미). 카드 테두리 위 3px 띠와
+ * 킥커 글자에만 쓴다: 면을 칠하면 두 카드가 경고/성공 알림처럼 읽힌다.
+ */
+const SIDE_INK = {
+  founding: { light: '#15803d', dark: '#4ade80' },
+  dissolution: { light: '#be123c', dark: '#fb7185' },
+} as const
+
+const sideInk = (side: Side, mode: string) => SIDE_INK[side][mode === 'dark' ? 'dark' : 'light']
+
+const Card = styled.section<{ $side: Side }>`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px;
+  gap: 14px;
+  padding: 0 18px 16px;
+  overflow: hidden;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-top: 3px solid ${({ theme, $side }) => sideInk($side, theme.mode)};
   border-radius: 12px;
   background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff')};
 `
 
+/* 초상(64px) 유무와 상관없이 같은 높이 — 나란한 두 카드의 첫 줄(사건·마지막)이 같은 y에 선다 */
 const CardHead = styled.div`
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  min-height: 80px;
+  padding-top: 16px;
+`
+
+/* 초상 — 얼굴이 위쪽에 있는 사진이 대부분이라 위 25%를 맞춘다 */
+const Portrait = styled(Link)`
+  flex: none;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#eef0f3')};
+  box-shadow: inset 0 0 0 1px
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)')};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 25%;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
 `
 
 const CardTitle = styled.h3`
   margin: 0;
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 15px;
+  flex-direction: column;
+  gap: 2px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+const Kicker = styled.span<{ $side: Side }>`
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: ${({ theme, $side }) => sideInk($side, theme.mode)};
+`
+
 const CardYear = styled.span`
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CardYearEmpty = styled.span`
+  font-size: 15px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/* 사진 — 카드 폭 끝까지(좌우 패딩 상쇄), 아래 그라데이션 위에 킥커·연도·사건명 */
+const Hero = styled.div`
+  position: relative;
+  margin: 0 -18px;
+  aspect-ratio: 16 / 7;
+  max-height: 220px;
+  overflow: hidden;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#e5e7eb')};
+`
+
+const HeroImage = styled.img`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`
+
+const HeroShade = styled.div`
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0) 75%);
+`
+
+/* 사진 위 글자는 테마와 무관하게 흰색 — 킥커도 밝은 쪽 색으로 */
+const HeroText = styled.div`
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #fff;
+
+  ${CardTitle}, ${CardYear} {
+    color: #fff;
+  }
+  ${Kicker} {
+    color: rgba(255, 255, 255, 0.86);
+  }
+  ${CardYearEmpty} {
+    color: rgba(255, 255, 255, 0.7);
+  }
+`
+
+const HeroCaption = styled(Link)`
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+
+  span {
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.72);
+  }
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 `
 
 /** 라벨 열 | 값 열 — 라벨은 글자 폭만(max-content) */
@@ -649,6 +846,7 @@ const Chip = styled.span`
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
+  min-width: 0;
 `
 
 const ChipLink = styled(Link)`

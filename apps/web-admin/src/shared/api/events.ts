@@ -446,6 +446,8 @@ export interface StatehoodEvent {
   /** 분야 키 */
   domain?: string | null
   roleDescription?: string | null
+  /** 대표 이미지(대표 지정 > 첫 순서) — 구버전 서버면 undefined */
+  imageUrl?: string | null
 }
 
 export interface CountryStatehoodEvents {

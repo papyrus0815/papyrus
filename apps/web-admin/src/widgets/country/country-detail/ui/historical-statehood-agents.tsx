@@ -37,6 +37,7 @@ import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
 
 import { FillChip } from './founding-fill-chip.styles'
+import { FoundingThumb } from './founding-media'
 import {
   type PickerCandidate,
   type PickerFilter,
@@ -482,6 +483,12 @@ export function HistoricalStatehoodAgents({
                 : ''
             return (
               <AgentLine key={agent.id}>
+                <FoundingThumb
+                  src={agent.kind === 'person' ? agent.person?.profileImageUrl : agent.thumbnailUrl}
+                  name={label}
+                  shape={agent.kind === 'person' ? 'round' : 'rect'}
+                  size={agent.kind === 'person' ? 28 : 22}
+                />
                 {href ? (
                   <AgentLink to={href}>{label}</AgentLink>
                 ) : (

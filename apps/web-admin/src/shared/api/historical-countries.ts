@@ -530,6 +530,8 @@ export interface FoundingLinkedCountry {
   id: string
   name: string
   eventType: string
+  /** 대표 이미지(국기·문장 등) — 구버전 서버면 undefined */
+  thumbnailUrl?: string | null
   startEra: 'BC' | 'AD' | null
   startYear: number | null
   endEra: 'BC' | 'AD' | null
@@ -547,6 +549,8 @@ export interface StatehoodAgent {
   refId: string | null
   name: string
   person: FoundingPerson | null
+  /** 국가 주체의 대표 이미지 — 인물은 person.profileImageUrl(구버전 서버면 undefined) */
+  thumbnailUrl?: string | null
   startEra: 'BC' | 'AD' | null
   startYear: number | null
   endEra: 'BC' | 'AD' | null
