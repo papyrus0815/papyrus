@@ -86,7 +86,9 @@ it('닫히면 아무것도 렌더하지 않는다 (isOpen=false)', () => {
 
 it('선택된 항목이 역사국가면 역사 탭으로 열린다 (선택분이 안 보여 미선택으로 오인되던 문제)', () => {
   setup({ selectedCountryIds: ['joseon'] })
-  expect(screen.getByText('조선')).toBeInTheDocument()
+  // '조선'은 고른 국가 트레이에도 뜨므로 텍스트가 아니라 탭 상태와 목록 행으로 확인한다
+  expect(screen.getByRole('radio', { name: '역사적 국가' })).toHaveAttribute('aria-checked', 'true')
+  expect(screen.getByRole('button', { name: /조선/, pressed: true })).toBeInTheDocument()
 })
 
 it('다중 선택 모드에서는 고른 뒤에도 닫히지 않는다 (호출부가 닫기를 통제)', () => {
