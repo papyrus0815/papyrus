@@ -11,11 +11,11 @@
  * 새로 저장하는 것은 배경 글 두 칸뿐이다. 초대·전신을 따로 적는 칸을 두면 재위 표·계승 표와
  * 두 곳에서 어긋나기 때문이다(검토 2026-09-27 — 사용자 승인 '초대는 자동').
  */
-import { useMemo, useState } from 'react'
+import { type MouseEvent, useMemo, useState } from 'react'
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiPlus, FiX } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
@@ -41,6 +41,7 @@ import { pathKeys } from '@/shared/router'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view/rich-text-read-view'
 import { notify } from '@/shared/ui/toast'
+import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 
 import { FillChip } from './founding-fill-chip.styles'
 import { FoundingThumb, useResolvedImage } from './founding-media'
@@ -116,6 +117,23 @@ function statehoodEventYear(event: StatehoodEvent): number | null {
   return Number.isNaN(year) ? null : year
 }
 
+/** 수식 키 없는 왼쪽 클릭만 가로챈다 — ⌘/Ctrl/Shift·가운데 클릭은 링크대로 새 탭·상세 이동 */
+function isPlainClick(clickEvent: MouseEvent) {
+  return (
+    clickEvent.button === 0 &&
+    !clickEvent.metaKey &&
+    !clickEvent.ctrlKey &&
+    !clickEvent.shiftKey &&
+    !clickEvent.altKey
+  )
+}
+
+interface EventPreview {
+  eventId: string
+  side: Side
+  roleDescription: string | null
+}
+
 export function HistoricalFoundingCards({
   historicalCountryId,
   entityKind,
@@ -135,10 +153,35 @@ export function HistoricalFoundingCards({
     staleTime: 60_000,
   })
 
+  const navigate = useNavigate()
+  /* 사건을 누르면 먼저 미리보기 모달 — 상세 이동은 모달의 '사건 상세로 이동'으로 */
+  const [preview, setPreview] = useState<EventPreview | null>(null)
+  const openEvent = (eventId: string, side: Side, roleDescription: string | null) =>
+    setPreview({ eventId, side, roleDescription })
+  const sideTitle = (side: Side) =>
+    side === 'founding' ? (isState ? '건국' : '성립') : isState ? '멸망' : '종료'
+
   if (!summary) return null
 
   return (
     <Cards>
+      <EventInlineModal
+        eventId={preview?.eventId ?? null}
+        onClose={() => setPreview(null)}
+        onNavigate={(eventId) => {
+          setPreview(null)
+          navigate(pathKeys.events.detail(eventId))
+        }}
+        personContext={
+          preview
+            ? {
+                label: '이 나라에서',
+                role: sideTitle(preview.side),
+                note: preview.roleDescription,
+              }
+            : null
+        }
+      />
       <FoundingCard
         side="founding"
         title={isState ? '건국' : '성립'}
@@ -152,6 +195,7 @@ export function HistoricalFoundingCards({
         linked={summary.predecessors}
         linkedLabel="전신"
         onGoToHeads={onGoToHeads}
+        onOpenEvent={openEvent}
       />
       {/* 현존·미상인 나라에는 멸망 카드를 세우지 않는다 — 배경을 미리 쓸 자리가 아니다 */}
       {(endYear != null || summary.dissolutionNote || (statehood?.dissolved.length ?? 0) > 0) && (
@@ -167,6 +211,7 @@ export function HistoricalFoundingCards({
           agentLabel={isState ? '멸망시킨 쪽' : '끝낸 쪽'}
           linked={summary.successors}
           linkedLabel="후신"
+          onOpenEvent={openEvent}
         />
       )}
     </Cards>
@@ -188,6 +233,8 @@ interface FoundingCardProps {
   linked: FoundingLinkedCountry[]
   linkedLabel: string
   onGoToHeads?: () => void
+  /** 사건 미리보기 모달 열기 — 카드 둘이 모달 하나를 나눠 쓴다 */
+  onOpenEvent: (eventId: string, side: Side, roleDescription: string | null) => void
 }
 
 function FoundingCard({
@@ -203,6 +250,7 @@ function FoundingCard({
   linked,
   linkedLabel,
   onGoToHeads,
+  onOpenEvent,
 }: FoundingCardProps) {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
@@ -242,9 +290,17 @@ function FoundingCard({
   const roleMutation = useMutation({
     mutationFn: ({ eventId, next }: { eventId: string; next: 'FOUNDED' | 'DISSOLVED' | null }) =>
       setEventStatehoodRole(eventId, historicalCountryId, next),
-    onSuccess: (_result, { next }) => {
-      if (next) setAddedThisSession((count) => count + 1)
-      notify.success(next ? `${title} 사건으로 연결했습니다` : `${title} 사건 연결을 해제했습니다`)
+    onSuccess: (_result, { eventId, next }) => {
+      if (next) {
+        setAddedThisSession((count) => count + 1)
+        notify.success(`${title} 사건으로 연결했습니다`)
+      } else {
+        /* ×는 한 번에 눌려 실수하기 쉽다 — 확인창 대신 되돌리기 */
+        notify.action(`${title} 사건 연결을 해제했습니다`, {
+          label: '되돌리기',
+          onClick: () => roleMutation.mutate({ eventId, next: role }),
+        })
+      }
       invalidate()
       // 사건 쪽 참여국 역할도 바뀌었다 — 목록·상세 캐시
       void queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
@@ -344,11 +400,24 @@ function FoundingCard({
     <Card aria-labelledby={`founding-card-${side}`} $side={side}>
       {heroEvent && hero.src ? (
         <Hero>
-          <HeroImage src={hero.src} alt="" onError={hero.onError} />
+          <HeroButton
+            type="button"
+            aria-label={`'${heroEvent.title}' 사건 미리보기`}
+            onClick={() => onOpenEvent(heroEvent.id, side, heroEvent.roleDescription ?? null)}
+          >
+            <HeroImage src={hero.src} alt="" onError={hero.onError} />
+          </HeroButton>
           <HeroShade aria-hidden />
           <HeroText>
             {heading}
-            <HeroCaption to={pathKeys.events.detail(heroEvent.id)}>
+            <HeroCaption
+              to={pathKeys.events.detail(heroEvent.id)}
+              onClick={(clickEvent) => {
+                if (!isPlainClick(clickEvent)) return
+                clickEvent.preventDefault()
+                onOpenEvent(heroEvent.id, side, heroEvent.roleDescription ?? null)
+              }}
+            >
               {heroEvent.title}
               {heroYear && <span> · {heroYear}</span>}
             </HeroCaption>
@@ -451,7 +520,7 @@ function FoundingCard({
           <>
             <FactLabel>사건</FactLabel>
             <FactValue>
-              <Inline>
+              <EventList>
                 {events.map((event) => {
                   const signedEventYear = statehoodEventYear(event)
                   const eventYear = formatCountryYearShort(signedEventYear)
@@ -459,39 +528,59 @@ function FoundingCard({
                      판단한다(랑고바르드: 이주 568 / 파비아 함락 572처럼 기준 사건이 다를 수 있다). */
                   const mismatch =
                     signedEventYear != null && year != null && signedEventYear !== year
+                  const open = (clickEvent: MouseEvent) => {
+                    if (!isPlainClick(clickEvent)) return
+                    clickEvent.preventDefault()
+                    onOpenEvent(event.id, side, event.roleDescription ?? null)
+                  }
                   return (
-                    <Chip key={event.id}>
-                      <FoundingThumb src={event.imageUrl} name={event.title} shape="rect" size={22} />
-                      <ChipLink to={pathKeys.events.detail(event.id)}>{event.title}</ChipLink>
-                      {eventYear && <Muted>{eventYear}</Muted>}
-                      {mismatch && (
-                        <Warn
-                          title={`사건은 ${eventYear}, 국가 존속 ${side === 'founding' ? '시작' : '끝'}은 ${yearLabel}로 등록돼 있습니다 — 한쪽을 고치거나 그대로 두세요`}
-                        >
-                          등록 연도({yearLabel})와 다름
-                        </Warn>
-                      )}
-                      <ChipX
+                    <EventRow key={event.id}>
+                      {/* 행 전체가 미리보기 — 링크라 ⌘/Ctrl 클릭은 상세를 새 탭으로 */}
+                      <EventOpen to={pathKeys.events.detail(event.id)} onClick={open}>
+                        <FoundingThumb src={event.imageUrl} name={event.title} shape="rect" size={30} />
+                        <EventText>
+                          <EventTitleLine>
+                            <EventTitle>{event.title}</EventTitle>
+                            {eventYear && <Muted>{eventYear}</Muted>}
+                          </EventTitleLine>
+                          {(event.roleDescription || mismatch) && (
+                            <EventSub>
+                              {event.roleDescription && <span>{event.roleDescription}</span>}
+                              {mismatch && (
+                                <Warn
+                                  title={`사건은 ${eventYear}, 국가 존속 ${side === 'founding' ? '시작' : '끝'}은 ${yearLabel}로 등록돼 있습니다 — 한쪽을 고치거나 그대로 두세요`}
+                                >
+                                  등록 연도({yearLabel})와 다름
+                                </Warn>
+                              )}
+                            </EventSub>
+                          )}
+                        </EventText>
+                      </EventOpen>
+                      <RowX
                         type="button"
                         aria-label={`'${event.title}' ${title} 사건 연결 해제`}
                         title="연결 해제(사건의 참여국으로는 남는다)"
+                        disabled={roleMutation.isPending}
                         onClick={() => roleMutation.mutate({ eventId: event.id, next: null })}
                       >
                         <FiX aria-hidden />
-                      </ChipX>
-                    </Chip>
+                      </RowX>
+                    </EventRow>
                   )
                 })}
-                <AddButton
-                  type="button"
-                  onClick={() => {
-                    setAddedThisSession(0)
-                    setPickerOpen(true)
-                  }}
-                >
-                  <FiPlus aria-hidden /> 사건 연결
-                </AddButton>
-              </Inline>
+                <li>
+                  <AddButton
+                    type="button"
+                    onClick={() => {
+                      setAddedThisSession(0)
+                      setPickerOpen(true)
+                    }}
+                  >
+                    <FiPlus aria-hidden /> 사건 연결
+                  </AddButton>
+                </li>
+              </EventList>
             </FactValue>
           </>
         )}
@@ -750,6 +839,20 @@ const Hero = styled.div`
   background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#e5e7eb')};
 `
 
+const HeroButton = styled.button`
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: -4px;
+  }
+`
+
 const HeroImage = styled.img`
   position: absolute;
   inset: 0;
@@ -761,29 +864,8 @@ const HeroImage = styled.img`
 const HeroShade = styled.div`
   position: absolute;
   inset: 0;
+  pointer-events: none;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.28) 45%, rgba(0, 0, 0, 0) 75%);
-`
-
-/* 사진 위 글자는 테마와 무관하게 흰색 — 킥커도 밝은 쪽 색으로 */
-const HeroText = styled.div`
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: #fff;
-
-  ${CardTitle}, ${CardYear} {
-    color: #fff;
-  }
-  ${Kicker} {
-    color: rgba(255, 255, 255, 0.86);
-  }
-  ${CardYearEmpty} {
-    color: rgba(255, 255, 255, 0.7);
-  }
 `
 
 const HeroCaption = styled(Link)`
@@ -804,6 +886,34 @@ const HeroCaption = styled(Link)`
     text-underline-offset: 3px;
   }
 `
+
+/* 사진 위 글자는 테마와 무관하게 흰색 — 킥커도 밝은 쪽 색으로 */
+const HeroText = styled.div`
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #fff;
+  /* 글자 덮개는 클릭을 사진 버튼으로 흘려보내고, 사건명 링크만 받는다 */
+  pointer-events: none;
+
+  ${HeroCaption} {
+    pointer-events: auto;
+  }
+  ${CardTitle}, ${CardYear} {
+    color: #fff;
+  }
+  ${Kicker} {
+    color: rgba(255, 255, 255, 0.86);
+  }
+  ${CardYearEmpty} {
+    color: rgba(255, 255, 255, 0.7);
+  }
+`
+
 
 /** 라벨 열 | 값 열 — 라벨은 글자 폭만(max-content) */
 const Facts = styled.dl`
@@ -862,22 +972,107 @@ const ChipLink = styled(Link)`
 
 const PersonLink = styled(ChipLink)``
 
-const ChipX = styled.button`
-  align-self: center;
+const EventList = styled.ul`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+`
+
+const EventRow = styled.li`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -8px;
+  border-radius: 8px;
+  transition: background 0.12s;
+
+  &:hover,
+  &:focus-within {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f4f5f7')};
+  }
+`
+
+/* 미리보기 열기 — 행 폭 전체가 누를 자리 */
+const EventOpen = styled(Link)`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: -2px;
+  }
+  &:hover strong {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const EventText = styled.span`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`
+
+const EventTitleLine = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+`
+
+const EventTitle = styled.strong`
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EventSub = styled.span`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/* 해제 — 행 끝, 28px 누를 자리(예전 12px 아이콘 버튼은 제목 바로 옆이라 잘못 눌렸다) */
+const RowX = styled.button`
+  flex: none;
   display: inline-flex;
-  padding: 2px;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
 
   &:hover {
     color: ${({ theme }) => theme.colors.alert.danger.fg};
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff')};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   svg {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
   }
 `
 
