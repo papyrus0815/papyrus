@@ -2,8 +2,8 @@
  * 역사 국가의 건국·멸망 주체 — "누가 세웠나 / 누구에게 멸망했나".
  *
  * 건국·멸망 카드 한 줄의 값 칸이다. 주체는 인물·역사 국가·현대 국가·자유 입력 중 하나이고,
- * 한 검색 모달에서 셋을 함께 찾는다(없으면 '직접 입력'). 역할 메모(예: '사비성 함락')는
- * 칩을 눌러 고친다.
+ * 한 검색 모달에서 셋을 함께 찾는다(없으면 '직접 입력'). 줄을 누르면 그 인물·나라의 미리보기
+ * 모달이, 끝의 '메모'를 누르면 역할 메모 모달이 뜬다(예: '사비성 함락' — 빼기도 그 모달에서).
  *
  * 계승 관계(전신·후신)와 다르다 — 후신은 '뒤를 이은 나라', 이쪽은 '무너뜨린 쪽'이다.
  */
@@ -11,9 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { FiPlus, FiX } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
-import styled from 'styled-components'
+import { FiEdit2, FiFlag, FiPlus } from 'react-icons/fi'
 
 import { countryKeys } from '@/entities/country/api'
 import { historicalCountryKeys } from '@/entities/historical-country/api'
@@ -36,8 +34,11 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
 
+import { AgentEditModal, type AgentEditTarget } from './founding-edit-modals'
 import { FillChip } from './founding-fill-chip.styles'
 import { FoundingThumb } from './founding-media'
+import { previewOnClick, useFoundingPreview } from './founding-preview'
+import { FoundingRow, RowAction, RowAddButton, RowList } from './founding-row'
 import {
   type PickerCandidate,
   type PickerFilter,
@@ -84,6 +85,8 @@ interface HistoricalStatehoodAgentsProps {
    * (모달은 이 컴포넌트가 들고 있어서 칩도 여기서 그린다)
    */
   triggerLabel?: string
+  /** '건국자'·'멸망시킨 쪽' — 메모 모달 제목 */
+  roleLabel?: string
   /**
    * 모달 열림 알림 — 칩 모드에서 첫 주체를 추가하면 부모가 칩(=이 컴포넌트)을 내려 모달까지
    * 닫혀 버렸다. 부모는 열려 있는 동안 칩을 유지한다.
@@ -182,6 +185,12 @@ function agentLabel(agent: StatehoodAgent): string {
   return agent.name
 }
 
+function agentSpan(agent: StatehoodAgent): string {
+  return agent.kind === 'historicalCountry'
+    ? spanOf(agent.startEra, agent.startYear, agent.endEra, agent.endYear)
+    : ''
+}
+
 function agentHref(agent: StatehoodAgent): string | null {
   if (!agent.refId) return null
   if (agent.kind === 'person')
@@ -203,14 +212,16 @@ export function HistoricalStatehoodAgents({
   title,
   anchorYear,
   triggerLabel,
+  roleLabel = triggerLabel ?? '주체',
   onPickerOpenChange,
 }: HistoricalStatehoodAgentsProps) {
   const queryClient = useQueryClient()
+  const preview = useFoundingPreview()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [addedThisSession, setAddedThisSession] = useState(0)
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
-  const [noteDraft, setNoteDraft] = useState('')
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null)
+  const editingAgent = agents.find((agent) => agent.id === editingAgentId) ?? null
 
   useEffect(() => {
     onPickerOpenChange?.(pickerOpen)
@@ -272,8 +283,29 @@ export function HistoricalStatehoodAgents({
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (agentId: string) => deleteStatehoodAgent(agentId),
-    onSuccess: () => invalidate(),
+    mutationFn: (agent: StatehoodAgent) => deleteStatehoodAgent(agent.id),
+    onSuccess: (_result, agent) => {
+      setEditingAgentId(null)
+      invalidate()
+      // 되돌리기 = 같은 주체·같은 메모로 다시 만든다(순서는 끝으로)
+      notify.action(`'${agentLabel(agent)}'을(를) ${roleLabel}에서 뺐습니다`, {
+        label: '되돌리기',
+        onClick: () => {
+          void createStatehoodAgent(historicalCountryId, {
+            side,
+            ...(agent.kind === 'person' && agent.refId ? { personId: agent.refId } : {}),
+            ...(agent.kind === 'historicalCountry' && agent.refId
+              ? { agentHistoricalCountryId: agent.refId }
+              : {}),
+            ...(agent.kind === 'country' && agent.refId ? { agentCountryId: agent.refId } : {}),
+            ...(agent.kind === 'name' ? { name: agent.name } : {}),
+            ...(agent.note ? { note: agent.note } : {}),
+          })
+            .then(invalidate)
+            .catch(() => notify.error('되돌리지 못했습니다'))
+        },
+      })
+    },
     onError: () => notify.error('주체를 지우지 못했습니다'),
   })
 
@@ -281,11 +313,36 @@ export function HistoricalStatehoodAgents({
     mutationFn: ({ agentId, note }: { agentId: string; note: string }) =>
       updateStatehoodAgent(agentId, { note: note.trim() || null }),
     onSuccess: () => {
-      setEditingNoteId(null)
+      setEditingAgentId(null)
+      notify.success('역할 메모를 저장했습니다')
       invalidate()
     },
     onError: () => notify.error('역할 메모를 저장하지 못했습니다'),
   })
+
+  /** 줄을 누르면 — 인물·나라는 미리보기, 자유 입력 이름은 볼 것이 없어 메모 모달 */
+  const openAgent = (agent: StatehoodAgent) => {
+    if (agent.kind === 'person' && agent.refId) preview.openPerson(agent.refId)
+    else if (agent.kind === 'historicalCountry' && agent.refId)
+      preview.openCountry({ id: agent.refId, kind: 'historical', name: agent.name })
+    else if (agent.kind === 'country' && agent.refId)
+      preview.openCountry({ id: agent.refId, kind: 'modern', name: agent.name })
+    else setEditingAgentId(agent.id)
+  }
+
+  const editTarget: AgentEditTarget | null = editingAgent
+    ? {
+        id: editingAgent.id,
+        label: agentLabel(editingAgent),
+        kindLabel: KIND_LABEL[editingAgent.kind] || '직접 입력',
+        span: agentSpan(editingAgent),
+        note: editingAgent.note,
+        imageUrl:
+          editingAgent.kind === 'person' ? editingAgent.person?.profileImageUrl : editingAgent.thumbnailUrl,
+        round: editingAgent.kind === 'person',
+        canPreview: editingAgent.kind !== 'name' && !!editingAgent.refId,
+      }
+    : null
 
   const existing = useMemo(
     () =>
@@ -468,103 +525,43 @@ export function HistoricalStatehoodAgents({
           <FiPlus aria-hidden /> {triggerLabel}
         </FillChip>
       ) : (
-        <Stack>
+        <RowList>
           {agents.map((agent) => {
-            const href = agentHref(agent)
             const label = agentLabel(agent)
-            const span =
-              agent.kind === 'historicalCountry'
-                ? spanOf(
-                    agent.startEra,
-                    agent.startYear,
-                    agent.endEra,
-                    agent.endYear,
-                  )
-                : ''
+            const meta = [KIND_LABEL[agent.kind], agentSpan(agent)].filter(Boolean).join(' · ')
             return (
-              <AgentLine key={agent.id}>
-                <FoundingThumb
-                  src={agent.kind === 'person' ? agent.person?.profileImageUrl : agent.thumbnailUrl}
-                  name={label}
-                  shape={agent.kind === 'person' ? 'round' : 'rect'}
-                  size={agent.kind === 'person' ? 28 : 22}
-                />
-                {href ? (
-                  <AgentLink to={href}>{label}</AgentLink>
-                ) : (
-                  <AgentName>{label}</AgentName>
-                )}
-                {KIND_LABEL[agent.kind] && (
-                  <Muted>{KIND_LABEL[agent.kind]}</Muted>
-                )}
-                {span && <Muted>{span}</Muted>}
-                {editingNoteId === agent.id ? (
-                  <NoteForm
-                    onSubmit={(submitEvent) => {
-                      submitEvent.preventDefault()
-                      noteMutation.mutate({
-                        agentId: agent.id,
-                        note: noteDraft,
-                      })
-                    }}
-                  >
-                    <NoteInput
-                      autoFocus
-                      value={noteDraft}
-                      maxLength={255}
-                      placeholder={
-                        side === 'FOUNDING'
-                          ? '예: 위화도 회군 후 즉위'
-                          : '예: 사비성 함락'
-                      }
-                      aria-label={`${label} 역할 메모`}
-                      onChange={(changeEvent) =>
-                        setNoteDraft(changeEvent.target.value)
-                      }
-                      onKeyDown={(keyEvent) => {
-                        if (keyEvent.key === 'Escape') {
-                          keyEvent.stopPropagation()
-                          setEditingNoteId(null)
-                        }
-                      }}
-                    />
-                    <TextButton type="submit" disabled={noteMutation.isPending}>
-                      저장
-                    </TextButton>
-                    <TextButton
-                      type="button"
-                      onClick={() => setEditingNoteId(null)}
-                    >
-                      취소
-                    </TextButton>
-                  </NoteForm>
-                ) : (
-                  <NoteButton
+              <FoundingRow
+                key={agent.id}
+                to={agentHref(agent)}
+                onOpen={previewOnClick(() => openAgent(agent))}
+                openLabel={agent.kind === 'name' ? '역할 메모 편집' : `${label} 미리보기`}
+                thumb={
+                  <FoundingThumb
+                    src={agent.kind === 'person' ? agent.person?.profileImageUrl : agent.thumbnailUrl}
+                    name={label}
+                    shape={agent.kind === 'person' ? 'round' : 'rect'}
+                    size={agent.kind === 'person' ? 32 : 24}
+                    placeholderIcon={agent.kind === 'person' ? undefined : <FiFlag aria-hidden />}
+                  />
+                }
+                title={label}
+                meta={meta || undefined}
+                sub={agent.note || undefined}
+                trailing={
+                  <RowAction
                     type="button"
-                    $empty={!agent.note}
-                    title="역할 메모 수정"
-                    onClick={() => {
-                      setNoteDraft(agent.note ?? '')
-                      setEditingNoteId(agent.id)
-                    }}
+                    onClick={() => setEditingAgentId(agent.id)}
+                    aria-label={`${label} 역할 메모${agent.note ? ' 수정' : ' 추가'}`}
+                    title={agent.note ? '역할 메모 수정·빼기' : '역할 메모 추가·빼기'}
                   >
-                    {agent.note || '역할 메모'}
-                  </NoteButton>
-                )}
-                <RemoveButton
-                  type="button"
-                  aria-label={`'${label}'을(를) ${title} 주체에서 빼기`}
-                  title="빼기"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => deleteMutation.mutate(agent.id)}
-                >
-                  <FiX aria-hidden />
-                </RemoveButton>
-              </AgentLine>
+                    {agent.note ? <FiEdit2 aria-hidden /> : <><FiPlus aria-hidden /> 메모</>}
+                  </RowAction>
+                }
+              />
             )
           })}
-          <div>
-            <AddButton
+          <li>
+            <RowAddButton
               type="button"
               onClick={() => {
                 setAddedThisSession(0)
@@ -572,13 +569,29 @@ export function HistoricalStatehoodAgents({
               }}
             >
               <FiPlus aria-hidden />{' '}
-              {side === 'FOUNDING'
-                ? '세운 인물·나라 추가'
-                : '멸망시킨 인물·나라 추가'}
-            </AddButton>
-          </div>
-        </Stack>
+              {side === 'FOUNDING' ? '세운 인물·나라 추가' : '멸망시킨 인물·나라 추가'}
+            </RowAddButton>
+          </li>
+        </RowList>
       )}
+
+      <AgentEditModal
+        target={editTarget}
+        side={side}
+        roleLabel={roleLabel}
+        saving={noteMutation.isPending}
+        removing={deleteMutation.isPending}
+        onClose={() => setEditingAgentId(null)}
+        onSave={(note) =>
+          editingAgent && noteMutation.mutate({ agentId: editingAgent.id, note })
+        }
+        onRemove={() => editingAgent && deleteMutation.mutate(editingAgent)}
+        onPreview={() => {
+          if (!editingAgent) return
+          setEditingAgentId(null)
+          openAgent(editingAgent)
+        }}
+      />
 
       <StatehoodPickerModal
         isOpen={pickerOpen}
@@ -624,129 +637,3 @@ export function HistoricalStatehoodAgents({
     </>
   )
 }
-
-// ─── Styled ─────────────────────────────────────────────────────────────────
-
-const Stack = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
-
-const AgentLine = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-`
-
-const AgentLink = styled(Link)`
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-`
-
-const AgentName = styled.span`
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const Muted = styled.span`
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const NoteButton = styled.button<{ $empty: boolean }>`
-  padding: 0 4px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  font: inherit;
-  font-size: 12.5px;
-  color: ${({ theme, $empty }) =>
-    $empty ? theme.colors.text.tertiary : theme.colors.text.secondary};
-  font-style: ${({ $empty }) => ($empty ? 'italic' : 'normal')};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => theme.colors.activeLight};
-  }
-`
-
-const NoteForm = styled.form`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-`
-
-const NoteInput = styled.input`
-  width: 200px;
-  max-width: 100%;
-  padding: 2px 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 6px;
-  background: transparent;
-  font: inherit;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const TextButton = styled.button`
-  padding: 2px 6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const RemoveButton = styled.button`
-  align-self: center;
-  display: inline-flex;
-  padding: 2px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.alert.danger.fg};
-  }
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-`
-
-const AddButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  margin-left: -6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.active};
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.activeLight};
-  }
-`

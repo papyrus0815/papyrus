@@ -5,7 +5,7 @@
  * 쌓이는 줄의 이름 시작 x가 들쭉날쭉하지 않게. 국기·사건 사진(rect)은 칩 줄 안에 있어
  * 정렬할 x가 없고, 글자 상자는 배지처럼 읽혀 그림이 없으면 아예 세우지 않는다.
  */
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 
 import styled, { css } from 'styled-components'
 
@@ -20,18 +20,29 @@ interface FoundingThumbProps {
   name: string
   shape: MediaShape
   size?: number
+  /** rect도 그림이 없을 때 글자 자리를 세운다 — 모달 머리처럼 그림 자리가 비면 어색한 곳 */
+  keepPlaceholder?: boolean
+  /** 그림이 없을 때 글자 대신 세울 아이콘(사건=달력·나라=깃발) — 주면 rect도 자리를 지킨다 */
+  placeholderIcon?: ReactNode
 }
 
-export function FoundingThumb({ src, name, shape, size = 28 }: FoundingThumbProps) {
+export function FoundingThumb({
+  src,
+  name,
+  shape,
+  size = 28,
+  keepPlaceholder = false,
+  placeholderIcon,
+}: FoundingThumbProps) {
   const { src: shown, onError } = useResolvedImage(src)
   const initial = name.trim().charAt(0) || '?'
-  if (!shown && shape === 'rect') return null
+  if (!shown && shape === 'rect' && !keepPlaceholder && !placeholderIcon) return null
   return (
     <ThumbFrame $shape={shape} $size={size} aria-hidden>
       {shown ? (
         <img src={shown} alt="" loading="lazy" onError={onError} />
       ) : (
-        <span>{initial}</span>
+        (placeholderIcon ?? <span>{initial}</span>)
       )}
     </ThumbFrame>
   )
@@ -68,6 +79,11 @@ const ThumbFrame = styled.span<{ $shape: MediaShape; $size: number }>`
   /* 위아래 baseline 정렬 줄 안에서도 그림은 가운데 */
   align-self: center;
 
+  svg {
+    width: 50%;
+    height: 50%;
+    opacity: 0.7;
+  }
   img {
     width: 100%;
     height: 100%;
