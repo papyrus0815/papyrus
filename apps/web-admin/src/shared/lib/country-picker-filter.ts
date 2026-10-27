@@ -1,8 +1,8 @@
 /**
  * 국가 피커 공용 검색·시대힌트 유틸 (국가-역사 연결 리뷰 F19②·F42).
  *
- * 피커 3종(CountrySelectModal / CountrySearchModal / AdvancedCountrySelectModal)이
- * 각자 다른 검색 필드를 쓰던 파편화를 없애기 위한 단일 출처.
+ * 예전 피커 3종(지금은 공용 CountryPicker 하나)이 각자 다른 검색 필드를 쓰던
+ * 파편화를 없애기 위한 단일 출처.
  * - CountrySelectModal: name·localName·isoCode·대륙명·enName
  * - CountrySearchModal: name only
  * - AdvancedCountrySelectModal: name only

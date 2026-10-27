@@ -36,7 +36,7 @@ import type {
 } from '@/shared/api/military-unit'
 import { militaryUnitApi } from '@/shared/api/military-unit'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   DateFieldBtn,
@@ -1227,7 +1227,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       </SidePanel>
 
       {/* 국가 선택 모달 */}
-      <CountrySelectModal
+      <CountryPicker
+        mode="single"
         isOpen={countryModalOpen}
         onClose={() => setCountryModalOpen(false)}
         onSelect={(country) => {
@@ -1256,7 +1257,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         }}
         modernCountries={modernCountries}
         historicalCountries={historicalCountries}
-        selectedCountryId={historicalCountryId || countryId || undefined}
+        selectedIds={[historicalCountryId || countryId].filter(Boolean)}
       />
 
       {/* 부대 유형 선택 모달 */}

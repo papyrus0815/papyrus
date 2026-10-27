@@ -54,7 +54,7 @@ import {
   parsePartialDateString,
   isPartialRangeInverted,
 } from '@/shared/lib/partial-date-string'
-import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import {
   buildPositionOptions,
@@ -1628,19 +1628,20 @@ export function TenureRegisterPanel({
         </PersonRegisterModalStickyFooter>
       </RegisterModal>
 
-      <CountrySearchModal
+      <CountryPicker
         isOpen={countryModalOpen}
         onClose={() => setCountryModalOpen(false)}
+        mode="single"
         title="국가 선택"
         placeholder="국가명으로 검색..."
-        modernOnly
+        scope="modern"
         modernCountries={(countries as any[]).map((c: any) => ({
           id: c.id,
           name: c.name ?? c.localName ?? c.id,
           flagEmoji: c.flagEmoji ?? null,
         }))}
         historicalCountries={[]}
-        selectedCountryId={countryId || ''}
+        selectedIds={countryId ? [countryId] : []}
         onSelect={({ id }) => {
           setCountryId(id || '')
           // historicalCountryId는 여기서 무조건 null로 덮지 않음 — 새 국가 소속이
@@ -1650,23 +1651,28 @@ export function TenureRegisterPanel({
         }}
       />
 
-      <CountrySearchModal
+      {/* 해제는 목록 sentinel 행이 아니라 헤더 버튼 — 이름 정렬에 섞여 파묻히지 않게(IA-14) */}
+      <CountryPicker
         isOpen={historicalCountryModalOpen}
         onClose={() => setHistoricalCountryModalOpen(false)}
+        mode="single"
         title="역사적 국가 선택"
         placeholder="국가명으로 검색..."
-        historicalOnly
+        scope="historical"
         modernCountries={[]}
-        historicalCountries={[
-          { id: '', name: countryId ? '현대 국가 기준' : '선택 안 함' },
-          ...historicalCountryOptions,
-        ]}
-        selectedCountryId={historicalCountryId ?? ''}
+        historicalCountries={historicalCountryOptions}
+        selectedIds={historicalCountryId ? [historicalCountryId] : []}
         onSelect={({ id }) => {
-          setHistoricalCountryId(id || null)
+          setHistoricalCountryId(id)
           releasePositionOnCountryChange()
           setHistoricalCountryModalOpen(false)
         }}
+        onClearSelection={() => {
+          setHistoricalCountryId(null)
+          releasePositionOnCountryChange()
+          setHistoricalCountryModalOpen(false)
+        }}
+        clearSelectionLabel={countryId ? '현대 국가 기준으로' : '선택 안 함'}
       />
 
       <SelectModal

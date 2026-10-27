@@ -34,7 +34,7 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { getAllPersons } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -1318,7 +1318,8 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
 
       {/* 국가 선택 모달 */}
       {countryModalOpen && (
-        <CountrySelectModal
+        <CountryPicker
+          mode="single"
           isOpen={countryModalOpen}
           onClose={() => setCountryModalOpen(false)}
           onSelect={(country) => {
@@ -1340,7 +1341,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
           }}
           modernCountries={modernCountries}
           historicalCountries={historicalCountries}
-          selectedCountryId={selectedCountryId || undefined}
+          selectedIds={selectedCountryId ? [selectedCountryId] : []}
         />
       )}
 

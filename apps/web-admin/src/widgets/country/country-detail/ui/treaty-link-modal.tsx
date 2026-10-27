@@ -32,7 +32,7 @@ import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import {
@@ -1531,7 +1531,8 @@ export function TreatyLinkModal({
       ) : null}
 
       {countryPickerRowIndex !== null ? (
-        <CountrySelectModal
+        <CountryPicker
+          mode="single"
           isOpen
           onClose={() => setCountryPickerRowIndex(null)}
           modernCountries={treatyModernCountries as CountryResponseDto[]}
@@ -1553,7 +1554,8 @@ export function TreatyLinkModal({
       ) : null}
 
       {showSigningVenueCountryModal ? (
-        <CountrySelectModal
+        <CountryPicker
+          mode="single"
           isOpen
           onClose={() => setShowSigningVenueCountryModal(false)}
           modernCountries={treatyModernCountries as CountryResponseDto[]}
@@ -1569,7 +1571,7 @@ export function TreatyLinkModal({
             setShowSigningVenueCountryModal(false)
           }}
           title="서명 지역 국가 (행정구역 목록 기준)"
-          selectedCountryId={signingVenueCountryId || undefined}
+          selectedIds={signingVenueCountryId ? [signingVenueCountryId] : []}
         />
       ) : null}
 

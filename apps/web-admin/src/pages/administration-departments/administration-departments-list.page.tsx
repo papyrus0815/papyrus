@@ -42,7 +42,7 @@ import { getAllCountries } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
@@ -1085,7 +1085,8 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
 
       {/* 국가 선택 모달 */}
       {countryModalOpen && (
-        <CountrySelectModal
+        <CountryPicker
+          mode="single"
           isOpen={countryModalOpen}
           onClose={() => setCountryModalOpen(false)}
           onSelect={(country) => {

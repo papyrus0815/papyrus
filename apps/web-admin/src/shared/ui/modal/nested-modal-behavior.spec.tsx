@@ -15,7 +15,7 @@ import '@testing-library/jest-dom'
 import { fireEvent, screen } from '@testing-library/react'
 
 import { renderWithTheme } from '@/shared/test/render-with-theme'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
 
 import { Modal } from './modal'
@@ -56,13 +56,13 @@ function Nested({
         {child === 'time' ? (
           <TimePickerModal isOpen onClose={onChildClose} onSelect={jest.fn()} />
         ) : (
-          <AdvancedCountrySelectModal
+          <CountryPicker
             isOpen
             onClose={onChildClose}
+            mode="toggle"
             onSelect={jest.fn()}
             modernCountries={[{ id: 'c1', name: '대한민국' }]}
             historicalCountries={[]}
-            selectedCountryIds={[]}
             title="관련 국가 선택"
           />
         )}
@@ -73,7 +73,7 @@ function Nested({
 
 describe.each([
   ['TimePickerModal', 'time' as const, '시간 선택'],
-  ['AdvancedCountrySelectModal', 'country' as const, '관련 국가 선택'],
+  ['CountryPicker', 'country' as const, '관련 국가 선택'],
 ])('%s — 부모 모달 안에서', (_name, child, childLabel) => {
   it('document.body로 포털돼 부모 모달 DOM 밖에 있다', () => {
     renderWithTheme(

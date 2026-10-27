@@ -1,7 +1,7 @@
 /**
  * 인물 등록/수정 폼의 "국가 소속(다중)" 입력.
  * - 주 국적(countryId)과 별개로 출생지·복무·망명·이중국적 등 여러 소속을 행 단위로 추가/삭제.
- * - 국가 선택은 부모가 소유한 CountrySelectModal을 onPickCountry(rowKey)로 위임.
+ * - 국가 선택은 부모가 소유한 CountryPicker를 onPickCountry(rowKey)로 위임.
  * - 시작/종료일은 폼 전역과 동일한 공용 DatePickerModal(era 인식)로 통일.
  *   · 서버 DTO가 @IsDateString(ISO, AD)이라 BC 확장연도(`-YYYY-...`)는 저장 불가 →
  *     모달에서 BC를 고르면 차단·안내한다. (BC 지원은 백엔드 date 포맷 완화가 선행돼야 함)
@@ -133,7 +133,7 @@ export interface CountryAffiliationsSectionProps {
   fid: (key: string) => string
   rows: CountryAffiliationRow[]
   setRows: React.Dispatch<React.SetStateAction<CountryAffiliationRow[]>>
-  /** 행의 국가 선택 모달 열기 (부모가 공용 CountrySelectModal 제어) */
+  /** 행의 국가 선택 모달 열기 (부모가 공용 CountryPicker 제어) */
   onPickCountry: (rowKey: string) => void
   /** 시작/종료일 피커 열림 여부 보고 — 부모의 ⌘Enter 제출 가드(anyModalOpen)에 포함용 */
   onDateModalOpenChange?: (open: boolean) => void

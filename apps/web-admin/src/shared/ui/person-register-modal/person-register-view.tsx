@@ -61,7 +61,7 @@ import {
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
@@ -2702,16 +2702,18 @@ export function PersonRegisterView({
         onCancel={handleClosePostSuccess}
       />
 
-      <CountrySelectModal
+      <CountryPicker
+        mode="single"
         isOpen={showCountryModal}
         onClose={() => setShowCountryModal(false)}
         onSelect={handleCountrySelect}
         modernCountries={modernCountries}
         historicalCountries={historicalCountries}
         title="국적 선택"
-        selectedCountryId={primaryCountryId || undefined}
+        selectedIds={primaryCountryId ? [primaryCountryId] : []}
       />
-      <CountrySelectModal
+      <CountryPicker
+        mode="single"
         isOpen={affCountryPickerRow !== null}
         onClose={() => setAffCountryPickerRow(null)}
         onSelect={(c) => {

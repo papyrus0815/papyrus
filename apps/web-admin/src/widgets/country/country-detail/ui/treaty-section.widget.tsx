@@ -47,7 +47,7 @@ import {
 import { uploadImage } from '@/shared/api/upload'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getAllPersons } from '@/shared/api/persons'
@@ -1177,7 +1177,8 @@ const TreatyCreateModal: React.FC<{
           </SubmitBtn>
         </ModalFooter>
       </Modal>
-      <CountrySelectModal
+      <CountryPicker
+        mode="single"
         isOpen={countryPickerOpen}
         onClose={() => setCountryPickerOpen(false)}
         title="참여 국가 선택"
@@ -2282,7 +2283,8 @@ const AddSignatoryModal: React.FC<{
           </SubmitBtn>
         </ModalFooter>
       </Modal>
-      <CountrySelectModal
+      <CountryPicker
+        mode="single"
         isOpen={countryPickerOpen}
         onClose={() => setCountryPickerOpen(false)}
         title="서명국 · 참여국 선택"
@@ -2505,7 +2507,8 @@ const EditSignatoryModal: React.FC<{
           </SubmitBtn>
         </ModalFooter>
       </Modal>
-      <CountrySelectModal
+      <CountryPicker
+        mode="single"
         isOpen={countryPickerOpen}
         onClose={() => setCountryPickerOpen(false)}
         title="서명국 · 참여국 선택"

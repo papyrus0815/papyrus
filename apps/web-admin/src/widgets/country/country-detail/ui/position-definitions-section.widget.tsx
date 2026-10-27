@@ -19,7 +19,7 @@ import {
 } from 'react-icons/fi'
 import { useCountries } from '@/features/country/api'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
-import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { CreateGovernmentPositionDefinitionDto } from '@/shared/api/person-career'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
@@ -929,8 +929,9 @@ export function PositionDefinitionsSection({
       {/* 적용 범위 지정 — 현대 국가·역사적 국가 어느 쪽이든 고를 수 있다.
           역사국가만 지정하면 사용자가 현대 국가만 골랐을 때 그 직책이 사라지므로,
           시드와 마찬가지로 대응 현대 국가도 함께 지정하는 편이 안전하다(dual-fill). */}
-      <CountrySearchModal
+      <CountryPicker
         isOpen={scopeCountryModalOpen}
+        mode="single"
         onClose={() => setScopeCountryModalOpen(false)}
         title="적용 범위 국가 선택"
         placeholder="국가명으로 검색..."

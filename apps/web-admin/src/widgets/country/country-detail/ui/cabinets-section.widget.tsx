@@ -89,7 +89,6 @@ import { Z_INDEX } from '@/shared/styles/z-index'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   EmptyStateFill,

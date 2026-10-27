@@ -14,7 +14,7 @@ import { useHistoricalCountry } from '@/features/historical-country/use-historic
 import { useFormDraft } from '@/shared/lib/use-form-draft'
 import type { TransitionEventType } from '@/shared/api/historical-countries'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
-import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { FormInput, FormTextarea } from '@/shared/ui/form-input/form-input'
 import {
   ChoiceChips,
@@ -1105,22 +1105,24 @@ export function HistoricalCountryForm({
       </S.Form>
 
       {/* 연결된 현대 국가 선택: 공용 모달 (현대 국가만 표시, 다중 선택) */}
-      <CountrySearchModal
+      <CountryPicker
+        mode="batch"
         isOpen={showModernCountryModal}
         onClose={() => setShowModernCountryModal(false)}
         title="연결된 현대 국가 선택 (여러 개 선택 가능)"
         modernCountries={modernCountries.map((c) => ({ id: c.id, name: c.name }))}
         historicalCountries={[]}
-        modernOnly
-        selectedCountryIds={selectedModernCountries}
-        onSelectMultiple={(countries) =>
+        scope="modern"
+        selectedIds={selectedModernCountries}
+        onCommit={(countries) =>
           setSelectedModernCountries(countries.map((c) => c.id))
         }
         placeholder="국가명으로 검색..."
       />
 
       {/* 후임 국가 선택: 공용 모달 (역사적 국가만 표시, 다중 선택) */}
-      <CountrySearchModal
+      <CountryPicker
+        mode="batch"
         isOpen={showParentHistoricalModal}
         onClose={() => setShowParentHistoricalModal(false)}
         title="후임 국가 선택 (이 국가가 이어져 간 나라)"
@@ -1129,9 +1131,9 @@ export function HistoricalCountryForm({
           id: c.id,
           name: c.name,
         }))}
-        historicalOnly
-        selectedCountryIds={selectedParentHistoricalIds}
-        onSelectMultiple={(countries) =>
+        scope="historical"
+        selectedIds={selectedParentHistoricalIds}
+        onCommit={(countries) =>
           setSelectedParentHistoricalIds(countries.map((c) => c.id))
         }
         placeholder="국가명으로 검색..."

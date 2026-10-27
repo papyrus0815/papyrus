@@ -23,7 +23,7 @@ import {
   partialDateFromStructured,
   partialPartsToDateInfo,
 } from '@/shared/lib/partial-date-string'
-import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
 import { notify } from '@/shared/ui/toast'
@@ -101,7 +101,7 @@ export function DynastyRuleForm({
   const { data: modernCountries = [] } = useCountries()
   const { data: historicalCountries = [] } = useHistoricalCountries()
 
-  // CountrySearchModal은 CountryOption[](id/name/startYear/endYear)를 요구.
+  // CountryPicker 옵션(id/name + 존속기간)으로 좁힌다.
   const modernOptions = useMemo(
     () =>
       (modernCountries as Array<{ id: string; name: string }>).map((country) => ({
@@ -308,15 +308,15 @@ export function DynastyRuleForm({
       </FormRoot>
 
       {pickerOpen && (
-        <CountrySearchModal
+        <CountryPicker
           isOpen
           onClose={() => setPickerOpen(false)}
+          mode="single"
           title="통치 국가 선택"
           modernCountries={modernOptions}
           historicalCountries={historicalOptions}
-          modernOnly={kind === 'modern'}
-          historicalOnly={kind === 'historical'}
-          selectedCountryId={countryId}
+          scope={kind}
+          selectedIds={countryId ? [countryId] : []}
           onSelect={(country) => {
             setCountryId(country.id)
             setCountryName(country.name)

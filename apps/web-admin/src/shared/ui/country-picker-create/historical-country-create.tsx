@@ -7,7 +7,7 @@
  * → 피커(빈 상태·목록 하단)에서 등록 모달을 띄우고, 성공하면 그 국가를 즉시 선택한다.
  *
  * 중첩 주의:
- * - 등록 폼(HistoricalCountryForm)은 내부에서 다시 CountrySearchModal(연결 현대국가)을 쓴다.
+ * - 등록 폼(HistoricalCountryForm)은 내부에서 다시 CountryPicker(연결 현대국가)를 쓴다.
  *   정적 import면 shared ↔ widgets 순환이 생기므로 **React.lazy 동적 import**로 끊는다.
  * - 같은 이유로 피커 → 등록 폼 → 피커 무한 중첩이 가능하다. 컨텍스트로 한 단계만 허용한다.
  * - 등록 모달은 피커 오버레이의 **형제**로 렌더해야 한다(포털이라도 React 트리를 타고
