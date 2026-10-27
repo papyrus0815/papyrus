@@ -18,6 +18,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { Request } from 'express'
 import { ApiTags } from '@nestjs/swagger'
 import { PersonService } from '../application/person.service'
+import { requireActorId } from '../../shared/actor-context'
 import { PrismaClient } from '@prisma/client'
 import {
   CreateGovernmentPositionTenureDto,
@@ -102,7 +103,7 @@ export class GovernmentPositionController {
       select: { accountId: true },
     })
     if (!cabinet) throw new NotFoundException('행정부를 찾을 수 없습니다.')
-    if (cabinet.accountId && accountId && cabinet.accountId !== accountId) {
+    if (cabinet.accountId && cabinet.accountId !== requireActorId(accountId)) {
       throw new BadRequestException('이 행정부에 대한 권한이 없습니다.')
     }
     const rows = await this.prisma.cabinetEvent.findMany({

@@ -3380,7 +3380,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   async createCabinet(dto: {
     headTenureId: string
     name?: string | null
-  }, accountId?: string): Promise<any> {
+  }, accountId: string): Promise<any> {
     const cabinetInclude = {
       headTenure: {
         include: {
@@ -3420,7 +3420,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       data: {
         headTenureId: dto.headTenureId,
         name: dto.name ?? null,
-        ...(accountId != null && { accountId }),
+        accountId,
       },
       include: cabinetInclude,
     })
@@ -3430,15 +3430,14 @@ export class PersonPrismaRepository implements IPersonRepository {
   async updateCabinet(
     cabinetId: string,
     dto: { name?: string | null },
-    accountId?: string,
+    accountId: string,
   ): Promise<any> {
     const cabinet = await this.prisma.cabinet.findUnique({
       where: { id: cabinetId },
       select: { accountId: true },
     })
     if (!cabinet) return null
-    if (accountId != null && cabinet.accountId != null && cabinet.accountId !== accountId)
-      return null
+    if (cabinet.accountId != null && cabinet.accountId !== accountId) return null
     const updated = await this.prisma.cabinet.update({
       where: { id: cabinetId },
       data: { ...(dto.name !== undefined && { name: dto.name }) },
@@ -3456,13 +3455,13 @@ export class PersonPrismaRepository implements IPersonRepository {
     return serializeBigInt(updated)
   }
 
-  async deleteCabinet(cabinetId: string, accountId?: string): Promise<void> {
+  async deleteCabinet(cabinetId: string, accountId: string): Promise<void> {
     const cabinet = await this.prisma.cabinet.findUnique({
       where: { id: cabinetId },
       select: { headTenureId: true, accountId: true },
     })
     if (!cabinet) return
-    if (accountId != null && cabinet.accountId != null && cabinet.accountId !== accountId) return
+    if (cabinet.accountId != null && cabinet.accountId !== accountId) return
     await this.prisma.$transaction([
       this.prisma.governmentPositionTenure.deleteMany({ where: { cabinetId } }),
       this.prisma.governmentPositionTenure.delete({ where: { id: cabinet.headTenureId } }),
@@ -4646,7 +4645,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   // ==================
   async addPersonLifeEvent(
     dto: CreatePersonLifeEventDto,
-    accountId?: string,
+    accountId: string,
   ): Promise<any> {
     return this.prisma.personLifeEvent.create({
       data: {
@@ -4660,7 +4659,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         endDatePrecision: dto.endDate ? (dto.endDatePrecision ?? 'day') : null,
         sortOrder: dto.sortOrder ?? 0,
         eventId: dto.eventId ?? null,
-        ...(accountId != null && { accountId }),
+        accountId,
       },
       include: { event: { select: PERSON_LIFE_EVENT_LINKED_EVENT_SELECT } },
     }).then(withSignedDates)

@@ -57,6 +57,7 @@ import {
   type StructuredPoint,
   type StructuredPointInput,
 } from '../../shared/structured-point'
+import { requireActorId } from '../../shared/actor-context'
 
 @ApiTags('historical-countries')
 @Controller('historical-countries')
@@ -449,7 +450,7 @@ export class HistoricalCountryController {
             })
           : { accountId: null }
     if (!referenced) throw new NotFoundException('지정한 주체를 찾을 수 없습니다.')
-    if (referenced.accountId != null && accountId != null && referenced.accountId !== accountId) {
+    if (referenced.accountId != null && referenced.accountId !== requireActorId(accountId)) {
       throw new ForbiddenException('다른 계정 소유 항목은 주체로 지정할 수 없습니다.')
     }
 

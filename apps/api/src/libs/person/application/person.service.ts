@@ -10,6 +10,7 @@ import { NotificationService } from '../../notification/application/notification
 import { PointService } from '../../gamification/application/point.service'
 import { completenessBonus } from '../../gamification/domain/point.policy'
 import { PrismaService } from '@prisma/prisma.service'
+import { requireActorId } from '../../shared/actor-context'
 import { UploadService } from '../../shared/upload/upload.service'
 import { yearRangePreview } from '../../shared/notification-preview.util'
 import { careerItemLabel, educationItemLabel, awardItemLabel } from '../domain/subresource-label.util'
@@ -700,13 +701,14 @@ export class PersonService {
 
   /**
    * 하위 리소스(경력·학력·수상) 추가 대상 인물의 소유권 검사 — 연보(addPersonLifeEvent)와 동일 정책.
-   * accountId 미지정(비인증 내부 호출)이면 통과. 대상 인물이 없으면 404, 타 계정이면 403.
+   * 행위자가 없으면 401(requireActorId — 예전엔 통과). 대상 인물이 없으면 404, 타 계정이면 403.
    */
   private async assertPersonOwnership(
     personId: string | null | undefined,
     accountId?: string,
   ): Promise<void> {
-    if (accountId == null || !personId) return
+    const actorId = requireActorId(accountId)
+    if (!personId) return
     const person = await this.prisma.person.findUnique({
       where: { id: personId },
       select: { accountId: true },
@@ -714,7 +716,7 @@ export class PersonService {
     if (!person) {
       throw new NotFoundException('인물을 찾을 수 없습니다.')
     }
-    if (person.accountId != null && person.accountId !== accountId) {
+    if (person.accountId != null && person.accountId !== actorId) {
       throw new ForbiddenException('본인이 등록한 인물에만 추가할 수 있습니다.')
     }
   }
@@ -728,7 +730,7 @@ export class PersonService {
     id: string,
     accountId?: string,
   ): Promise<void> {
-    if (accountId == null) return
+    const actorId = requireActorId(accountId)
     const row = await model.findUnique({
       where: { id },
       select: { person: { select: { accountId: true } } },
@@ -736,20 +738,20 @@ export class PersonService {
     if (!row) {
       throw new NotFoundException('항목을 찾을 수 없습니다.')
     }
-    if (row.person?.accountId != null && row.person.accountId !== accountId) {
+    if (row.person?.accountId != null && row.person.accountId !== actorId) {
       throw new ForbiddenException('본인이 등록한 인물의 항목만 삭제할 수 있습니다.')
     }
   }
 
   /**
    * 재임 업적 행의 소유권 검사 — 업적은 person 직접 관계가 없어 부모(재임) 경유: 행→재임→인물→계정.
-   * 정책은 assertSubResourceOwnershipById와 동일(계정 미지정 통과·행 없음 404·타 계정 403).
+   * 정책은 assertSubResourceOwnershipById와 동일(행위자 없음 401·행 없음 404·타 계정 403).
    */
   private async assertTenureAchievementOwnershipById(
     achievementId: string,
     accountId?: string,
   ): Promise<void> {
-    if (accountId == null) return
+    const actorId = requireActorId(accountId)
     const row = await this.prisma.tenureAchievement.findUnique({
       where: { id: achievementId },
       select: { tenure: { select: { person: { select: { accountId: true } } } } },
@@ -758,7 +760,7 @@ export class PersonService {
       throw new NotFoundException('업적을 찾을 수 없습니다.')
     }
     const ownerAccountId = row.tenure?.person?.accountId
-    if (ownerAccountId != null && ownerAccountId !== accountId) {
+    if (ownerAccountId != null && ownerAccountId !== actorId) {
       throw new ForbiddenException('본인이 등록한 인물의 항목만 수정·삭제할 수 있습니다.')
     }
   }
@@ -767,7 +769,7 @@ export class PersonService {
    * 연호 행의 소유권 검사 — 연호는 재임(재위 포함) 행에 매달려 있어 그 인물의 소유 계정을 본다.
    */
   private async assertRegnalEraOwnershipById(regnalEraId: string, accountId?: string): Promise<void> {
-    if (accountId == null) return
+    const actorId = requireActorId(accountId)
     const row = await this.prisma.regnalEra.findUnique({
       where: { id: regnalEraId },
       select: {
@@ -778,7 +780,7 @@ export class PersonService {
       throw new NotFoundException('연호·시대 정보를 찾을 수 없습니다.')
     }
     const ownerAccountId = row.tenure?.person?.accountId
-    if (ownerAccountId != null && ownerAccountId !== accountId) {
+    if (ownerAccountId != null && ownerAccountId !== actorId) {
       throw new ForbiddenException('본인이 등록한 인물의 항목만 수정·삭제할 수 있습니다.')
     }
   }
@@ -994,16 +996,12 @@ export class PersonService {
     if (!person) {
       throw new NotFoundException('인물을 찾을 수 없습니다.')
     }
-    if (
-      accountId != null &&
-      person.accountId != null &&
-      person.accountId !== accountId
-    ) {
+    if (person.accountId != null && person.accountId !== requireActorId(accountId)) {
       throw new ForbiddenException('본인이 등록한 인물에만 연보를 추가할 수 있습니다.')
     }
     this.assertLifeEventDateRange(dto.startDate, dto.endDate)
     await this.assertLifeEventLinkableEvent(dto.eventId, accountId)
-    return this.personRepository.addPersonLifeEvent(dto, accountId)
+    return this.personRepository.addPersonLifeEvent(dto, requireActorId(accountId))
   }
 
   /**
@@ -1022,7 +1020,7 @@ export class PersonService {
     if (!event || event.deletedAt) {
       throw new NotFoundException('관련 사건을 찾을 수 없습니다.')
     }
-    if (accountId != null && event.createdById !== accountId) {
+    if (event.createdById !== requireActorId(accountId)) {
       throw new ForbiddenException('본인이 등록한 사건만 연결할 수 있습니다.')
     }
   }
@@ -1036,11 +1034,7 @@ export class PersonService {
     if (!existing) {
       throw new NotFoundException('연보 기록을 찾을 수 없습니다.')
     }
-    if (
-      accountId != null &&
-      existing.accountId != null &&
-      existing.accountId !== accountId
-    ) {
+    if (existing.accountId != null && existing.accountId !== requireActorId(accountId)) {
       throw new ForbiddenException('본인이 등록한 연보만 수정할 수 있습니다.')
     }
     // update는 dto에 둘 중 하나만 올 수 있음 — 없는 값은 DB 값으로 대체해서 검사
@@ -1076,11 +1070,7 @@ export class PersonService {
     if (!existing) {
       throw new NotFoundException('연보 기록을 찾을 수 없습니다.')
     }
-    if (
-      accountId != null &&
-      existing.accountId != null &&
-      existing.accountId !== accountId
-    ) {
+    if (existing.accountId != null && existing.accountId !== requireActorId(accountId)) {
       throw new ForbiddenException('본인이 등록한 연보만 삭제할 수 있습니다.')
     }
     await this.personRepository.deletePersonLifeEvent(id)
@@ -1133,11 +1123,12 @@ export class PersonService {
   }
 
   async findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]> {
-    return this.personRepository.findTenuresByCabinetId(cabinetId, accountId)
+    // 레포지토리는 계정 없이 부르면 범위를 걸지 않는다(내부 하위 재임 조회용) — 요청 경로는 행위자 필수
+    return this.personRepository.findTenuresByCabinetId(cabinetId, requireActorId(accountId))
   }
 
   async findCabinetOverview(cabinetId: string, accountId?: string): Promise<any | null> {
-    return this.personRepository.findCabinetOverview(cabinetId, accountId)
+    return this.personRepository.findCabinetOverview(cabinetId, requireActorId(accountId))
   }
 
   async findCabinets(params: { countryId?: string; historicalCountryId?: string }): Promise<any[]> {
@@ -1157,7 +1148,7 @@ export class PersonService {
     if (headType !== 'HEAD_OF_STATE' && headType !== 'HEAD_OF_GOVERNMENT') {
       throw new BadRequestException('행정부의 수반은 국가원수 또는 정부수반 임기여야 합니다.')
     }
-    return this.personRepository.createCabinet(dto, accountId)
+    return this.personRepository.createCabinet(dto, requireActorId(accountId))
   }
 
   async updateCabinet(
@@ -1165,11 +1156,11 @@ export class PersonService {
     dto: { name?: string | null },
     accountId?: string,
   ): Promise<any> {
-    return this.personRepository.updateCabinet(cabinetId, dto, accountId)
+    return this.personRepository.updateCabinet(cabinetId, dto, requireActorId(accountId))
   }
 
   async deleteCabinet(cabinetId: string, accountId?: string): Promise<void> {
-    return this.personRepository.deleteCabinet(cabinetId, accountId)
+    return this.personRepository.deleteCabinet(cabinetId, requireActorId(accountId))
   }
 
   async linkCabinetWithOther(

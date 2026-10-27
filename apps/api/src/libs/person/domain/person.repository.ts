@@ -426,18 +426,19 @@ export interface IPersonRepository {
     countryId?: string
     historicalCountryId?: string
   }): Promise<any[]>
+  /** accountId 필수 — 소유자 없는 행정부(공유 정본)를 쓰기 경로로 만들지 않게 */
   createCabinet(
     dto: { headTenureId: string; name?: string | null },
-    accountId?: string,
+    accountId: string,
   ): Promise<any>
   /** 행정부 수정 — name 등 */
   updateCabinet(
     cabinetId: string,
     dto: { name?: string | null },
-    accountId?: string,
+    accountId: string,
   ): Promise<any>
   /** 행정부 삭제 — 소속 각료 재임 삭제 후 행정부·수반 재임 삭제 (관련 데이터 모두) */
-  deleteCabinet(cabinetId: string, accountId?: string): Promise<void>
+  deleteCabinet(cabinetId: string, accountId: string): Promise<void>
   /** 두 행정부를 같은 묶음(CabinetLinkageGroup)으로 연결 */
   linkCabinetWithOther(
     cabinetId: string,
@@ -501,7 +502,7 @@ export interface IPersonRepository {
    */
   addPersonLifeEvent(
     dto: CreatePersonLifeEventDto,
-    accountId?: string,
+    accountId: string,
   ): Promise<any>
   updatePersonLifeEvent(
     id: string,
