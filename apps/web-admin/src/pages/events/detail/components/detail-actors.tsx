@@ -30,7 +30,7 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { renderEmphasis } from '@/shared/lib/emphasis-markup'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { CountryPicker, type CountryPickerPick } from '@/shared/ui/country-picker'
 import { InlineSelect } from '@/shared/ui/inline-edit'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
@@ -98,13 +98,13 @@ export function DetailActors({
     enabled: personModalOpen,
     staleTime: 5 * 60_000,
   })
-  const { data: allModern = [] } = useQuery({
+  const { data: allModern = [], isLoading: modernLoading } = useQuery({
     queryKey: ['countries', 'all'],
     queryFn: getAllCountries,
     enabled: countryModalOpen,
     staleTime: 5 * 60_000,
   })
-  const { data: allHistorical = [] } = useQuery({
+  const { data: allHistorical = [], isLoading: historicalLoading } = useQuery({
     queryKey: ['historical-countries', 'all'],
     queryFn: getAllHistoricalCountries,
     enabled: countryModalOpen,
@@ -273,23 +273,39 @@ export function DetailActors({
     patchCountries(next)
   }
 
-  const addCountry = (country: { id: string; isHistorical: boolean }) => {
-    const rowKey = country.isHistorical ? `h:${country.id}` : `m:${country.id}`
-    if (countryRows.some((row) => countryRowKey(row) === rowKey)) return
-    patchCountries([
-      ...countryRows,
+  /**
+   * 피커에서 고른 국가들을 **한 번의 patch**로 더한다(추가 전용 피커).
+   * 예전엔 고를 때마다 patch·토스트가 하나씩 났고, undo는 1단계라 5개를 고르면 마지막 1개만
+   * 되돌릴 수 있었다. 이제 '되돌리기' 한 번이 방금 더한 묶음 전체를 되돌린다.
+   */
+  const addCountries = (picks: CountryPickerPick[]) => {
+    const existingKeys = new Set(countryRows.map(countryRowKey))
+    const fresh = picks.filter(
+      (country) => !existingKeys.has(country.isHistorical ? `h:${country.id}` : `m:${country.id}`),
+    )
+    if (fresh.length === 0) return
+    patchCountries(
+      [
+        ...countryRows,
+        ...fresh.map((country, index) => ({
+          id: country.id,
+          name: '',
+          flagEmoji: null,
+          isHistorical: country.isHistorical,
+          role: null,
+          roleDescription: null,
+          note: null,
+          sortOrder: countryRows.length + index,
+          existenceWarning: null,
+        })),
+      ],
       {
-        id: country.id,
-        name: '',
-        flagEmoji: null,
-        isHistorical: country.isHistorical,
-        role: null,
-        roleDescription: null,
-        note: null,
-        sortOrder: countryRows.length,
-        existenceWarning: null,
+        savedLabel:
+          fresh.length === 1
+            ? `관련국 추가 · ${fresh[0].name}`
+            : `관련국 ${fresh.length}개 추가`,
       },
-    ])
+    )
   }
 
   const selectedCountryIds = useMemo(
@@ -698,14 +714,17 @@ export function DetailActors({
           loading={personsLoading}
         />
       )}
-      <AdvancedCountrySelectModal
+      {/* 추가 전용 — 이미 관련국인 나라는 잠기고, 빼기는 행의 ✕(undo 있음)에서만 */}
+      <CountryPicker
         isOpen={countryModalOpen}
         onClose={() => setCountryModalOpen(false)}
-        onSelect={(country) => addCountry(country)}
+        mode="add"
+        title="관련 국가 추가"
+        onCommit={addCountries}
         modernCountries={allModern}
         historicalCountries={allHistorical}
-        selectedCountryIds={selectedCountryIds}
-        multiSelect
+        selectedIds={selectedCountryIds}
+        isLoading={modernLoading || historicalLoading}
       />
     </>
   )

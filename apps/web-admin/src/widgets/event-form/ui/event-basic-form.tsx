@@ -57,7 +57,7 @@ import {
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { formatDateRange } from '@/shared/lib/iso-date'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import {
   SelectModal,
   type SelectOption,
@@ -283,6 +283,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const [facetDrafts, setFacetDrafts] = useState<RegisterFacetDrafts>(emptyRegisterFacetDrafts)
   /** 성립·소멸 칸에서 국가 모달을 열면 고른 나라를 이 역할로 넣는다 */
   const [pendingCountryRole, setPendingCountryRole] = useState<'FOUNDED' | 'DISSOLVED' | null>(null)
+  const closeCountryPicker = () => {
+    setShowCountryModal(false)
+    setPendingCountryRole(null)
+  }
 
   /** 세부 고르기(null = 해제) — 단일/묶음은 사람이 안 고쳤을 때만 세부의 권장값으로 */
   const selectType = (next: EventTypeKey | null) => {
@@ -887,20 +891,29 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         endDateError={validation.fields.endDate}
       />
 
-      <AdvancedCountrySelectModal
-        isOpen={showCountryModal}
-        onClose={() => {
-          setShowCountryModal(false)
-          setPendingCountryRole(null)
-        }}
-        onSelect={(country) => {
-          /* 토글 — 이미 담긴 국가를 다시 고르면 빠진다. 역할은 목록에서 정한다. */
-          const key = country.isHistorical ? `h:${country.id}` : `m:${country.id}`
-          const already = relatedCountries.some(
-            (participant) => participantKey(participant) === key,
-          )
-          /* 성립·소멸 칸에서 연 경우 — 이미 있는 나라는 빼지 않고 그 역할로 바꾸고, 없으면 그 역할로 넣는다 */
-          if (pendingCountryRole) {
+      {/*
+       * 참여국 피커 — 두 갈래다.
+       * - 목록의 '+ 참여국'에서 연 경우: **추가 전용**. 이미 담긴 나라는 잠기고 'N개 추가'로 한 번에 더한다.
+       *   예전 토글은 다시 누르면 그 나라를 빼면서 목록에서 정한 역할·서술까지 조용히 지웠다 —
+       *   빼기는 역할이 보이는 행의 ✕에서만 한다.
+       * - 성립·소멸 칸에서 연 경우: 한 나라를 골라 그 역할을 준다(고르면 닫힘). 체크는 **그 역할을 가진
+       *   나라**에만 — 예전엔 참여국 전체가 체크돼 '세워진 나라'가 이미 있는 것처럼 보였다.
+       */}
+      {pendingCountryRole ? (
+        <CountryPicker
+          isOpen={showCountryModal}
+          onClose={closeCountryPicker}
+          mode="single"
+          title={pendingCountryRole === 'FOUNDED' ? '세워진 나라 선택' : '무너진 나라 선택'}
+          modernCountries={availableCountries}
+          historicalCountries={availableHistoricalCountries}
+          selectedIds={relatedCountries
+            .filter((participant) => participant.role === pendingCountryRole)
+            .map((participant) => participant.countryId ?? participant.historicalCountryId ?? '')}
+          onSelect={(country) => {
+            /* 이미 있는 나라는 빼지 않고 그 역할로 바꾸고, 없으면 그 역할로 넣는다 */
+            const key = country.isHistorical ? `h:${country.id}` : `m:${country.id}`
+            const already = relatedCountries.some((participant) => participantKey(participant) === key)
             setRelatedCountries(
               already
                 ? relatedCountries.map((participant) =>
@@ -913,32 +926,35 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                       : { countryId: country.id, role: pendingCountryRole },
                   ],
             )
-            return
-          }
-          if (already) {
-            setRelatedCountries(
-              relatedCountries.filter(
-                (participant) => participantKey(participant) !== key,
-              ),
+          }}
+        />
+      ) : (
+        <CountryPicker
+          isOpen={showCountryModal}
+          onClose={closeCountryPicker}
+          mode="add"
+          title="참여국 추가"
+          modernCountries={availableCountries}
+          historicalCountries={availableHistoricalCountries}
+          selectedIds={relatedCountries.map(
+            (participant) => participant.countryId ?? participant.historicalCountryId ?? '',
+          )}
+          onCommit={(picks) => {
+            const existingKeys = new Set(relatedCountries.map(participantKey))
+            const fresh = picks.filter(
+              (country) => !existingKeys.has(country.isHistorical ? `h:${country.id}` : `m:${country.id}`),
             )
-            return
-          }
-          setRelatedCountries([
-            ...relatedCountries,
-            country.isHistorical
-              ? { historicalCountryId: country.id, role: 'PARTICIPANT' }
-              : { countryId: country.id, role: 'PARTICIPANT' },
-          ])
-        }}
-        modernCountries={availableCountries}
-        historicalCountries={availableHistoricalCountries}
-        title={pendingCountryRole === 'FOUNDED' ? '세워진 나라 선택' : pendingCountryRole === 'DISSOLVED' ? '무너진 나라 선택' : '참여국 선택'}
-        selectedCountryIds={relatedCountries.map(
-          (participant) =>
-            participant.countryId ?? participant.historicalCountryId ?? '',
-        )}
-        multiSelect={true}
-      />
+            setRelatedCountries([
+              ...relatedCountries,
+              ...fresh.map((country) =>
+                country.isHistorical
+                  ? { historicalCountryId: country.id, role: 'PARTICIPANT' as const }
+                  : { countryId: country.id, role: 'PARTICIPANT' as const },
+              ),
+            ])
+          }}
+        />
+      )}
 
       {/* 상위 사건 피커 — detail-network의 연결 피커와 동일한 서버검색 SelectModal 패턴 */}
       {!isEditMode && (

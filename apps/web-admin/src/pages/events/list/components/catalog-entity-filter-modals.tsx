@@ -11,7 +11,7 @@ import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventDomainOption } from '@/entities/event/model/event-domain'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { CategoryModal } from '@/widgets/event-list/ui/category-modal'
 
 interface Props {
@@ -111,8 +111,9 @@ export const CatalogEntityFilterModals: React.FC<Props> = ({
        * 어차피 열릴 때 `selectedCountryIds` 기준으로 탭을 다시 정하므로 회귀가 아니다.
        */}
       {showCountryModal && (
-        <AdvancedCountrySelectModal
+        <CountryPicker
           isOpen
+          mode="single"
           onClose={() => setShowCountryModal(false)}
           onSelect={(country) => {
             setSelectedCountry(country.id)
@@ -128,8 +129,7 @@ export const CatalogEntityFilterModals: React.FC<Props> = ({
           modernCountries={modernCountryOptions}
           historicalCountries={historicalCountries}
           title="국가 필터"
-          selectedCountryIds={selectedCountryIds}
-          multiSelect={false}
+          selectedIds={selectedCountryIds}
         />
       )}
     </>

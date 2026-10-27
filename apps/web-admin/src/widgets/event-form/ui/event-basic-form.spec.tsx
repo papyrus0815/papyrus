@@ -45,8 +45,8 @@ jest.mock('@/entities/event-form/model', () => ({
     refetch: jest.fn(),
   }),
 }))
-jest.mock('@/shared/ui/advanced-country-select-modal/advanced-country-select-modal', () => ({
-  AdvancedCountrySelectModal: () => null,
+jest.mock('@/shared/ui/country-picker', () => ({
+  CountryPicker: () => null,
 }))
 // 상세 페이지는 저장 직후 `void import(...)`로 프리워밍만 한다 — 실제 모듈은 무겁다.
 jest.mock('@/pages/events/detail/event-detail.page', () => ({}), { virtual: true })
