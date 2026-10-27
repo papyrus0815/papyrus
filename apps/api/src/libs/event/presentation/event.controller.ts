@@ -1501,6 +1501,12 @@ export class EventController {
             startMonth: true,
             startDay: true,
             domain: true,
+            // 카드 사진 — 대표 지정 > 첫 순서 한 장
+            eventImages: {
+              select: { imageUrl: true },
+              orderBy: [{ isPrimary: 'desc' }, { order: 'asc' }],
+              take: 1,
+            },
           },
         },
       },
@@ -1526,6 +1532,7 @@ export class EventController {
       startDay: row.event.startDay,
       domain: row.event.domain,
       roleDescription: row.roleDescription,
+      imageUrl: row.event.eventImages[0]?.imageUrl ?? null,
     })
 
     return {

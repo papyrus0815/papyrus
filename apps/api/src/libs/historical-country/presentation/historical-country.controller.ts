@@ -298,6 +298,7 @@ export class HistoricalCountryController {
     const countrySelect = {
       id: true,
       name: true,
+      thumbnailUrl: true,
       startEra: true,
       startYear: true,
       endEra: true,
@@ -319,6 +320,7 @@ export class HistoricalCountryController {
       id: linked.id,
       name: linked.name,
       eventType,
+      thumbnailUrl: linked.thumbnailUrl ?? null,
       startEra: (linked.startEra as 'BC' | 'AD' | null) ?? null,
       startYear: linked.startYear ?? null,
       endEra: (linked.endEra as 'BC' | 'AD' | null) ?? null,
@@ -370,9 +372,17 @@ export class HistoricalCountryController {
           },
         },
         agentHistoricalCountry: {
-          select: { id: true, name: true, startEra: true, startYear: true, endEra: true, endYear: true },
+          select: {
+            id: true,
+            name: true,
+            thumbnailUrl: true,
+            startEra: true,
+            startYear: true,
+            endEra: true,
+            endYear: true,
+          },
         },
-        agentCountry: { select: { id: true, name: true } },
+        agentCountry: { select: { id: true, name: true, thumbnailUrl: true } },
       },
     })
     return rows.map((row) => {
@@ -381,6 +391,7 @@ export class HistoricalCountryController {
         id: row.id,
         side: row.side,
         person: null,
+        thumbnailUrl: null,
         startEra: null,
         startYear: null,
         endEra: null,
@@ -397,6 +408,7 @@ export class HistoricalCountryController {
           kind: 'historicalCountry',
           refId: hc.id,
           name: hc.name,
+          thumbnailUrl: hc.thumbnailUrl ?? null,
           startEra: (hc.startEra as 'BC' | 'AD' | null) ?? null,
           startYear: hc.startYear ?? null,
           endEra: (hc.endEra as 'BC' | 'AD' | null) ?? null,
@@ -404,7 +416,13 @@ export class HistoricalCountryController {
         }
       }
       if (row.agentCountry) {
-        return { ...base, kind: 'country', refId: row.agentCountry.id, name: row.agentCountry.name }
+        return {
+          ...base,
+          kind: 'country',
+          refId: row.agentCountry.id,
+          name: row.agentCountry.name,
+          thumbnailUrl: row.agentCountry.thumbnailUrl ?? null,
+        }
       }
       return { ...base, kind: 'name', refId: null, name: row.name ?? '' }
     })

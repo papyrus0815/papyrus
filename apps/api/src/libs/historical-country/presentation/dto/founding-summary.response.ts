@@ -39,6 +39,8 @@ export interface LinkedCountryDto {
   name: string
   /** 계승 관계 유형(FOUNDED·CONQUEST·INDEPENDENCE·SUCCESSION…) */
   eventType: string
+  /** 대표 이미지(국기·문장 등) */
+  thumbnailUrl: string | null
   startEra: 'BC' | 'AD' | null
   startYear: number | null
   endEra: 'BC' | 'AD' | null
@@ -55,6 +57,8 @@ export interface StatehoodAgentDto {
   /** 표시 이름 — 인물은 표시명 조립용 person 필드도 함께 */
   name: string
   person: FoundingPersonDto | null
+  /** 국가 주체의 대표 이미지 — 인물은 person.profileImageUrl */
+  thumbnailUrl: string | null
   /** 역사 국가 주체의 존속 시작·끝 */
   startEra: 'BC' | 'AD' | null
   startYear: number | null

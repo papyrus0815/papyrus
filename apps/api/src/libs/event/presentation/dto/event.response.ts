@@ -639,6 +639,9 @@ export class StatehoodEventDto {
 
   @ApiProperty({ description: '이 나라가 이 사건에서 무엇을 했나 (참여국 역할 설명)', required: false })
   roleDescription?: string | null
+
+  @ApiProperty({ description: '대표 이미지 URL (대표 지정 > 첫 순서)', required: false })
+  imageUrl?: string | null
 }
 
 export class CountryStatehoodEventsDto {
