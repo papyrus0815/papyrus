@@ -102,3 +102,17 @@ export function partsToIso(
     precision,
   }
 }
+
+/**
+ * 시작을 고친 뒤 종료가 시작을 따라 채워져야 하는지.
+ * 이미 따라가는 중이면 계속, 아니면 **비어 있던 시작을 처음 쓸 때 종료도 비었을 때만** 켠다 —
+ * 처음부터 시작이 있던 경우(편집 중인 진행 중 사건)엔 켜지지 않아 일부러 비운 종료가 채워지지 않는다.
+ * 끄는 건 종료 칸을 직접 고치거나 비울 때(호출부).
+ */
+export function shouldEndFollowStart(
+  following: boolean,
+  startBefore: string,
+  endBefore: string,
+): boolean {
+  return following || (!startBefore && !endBefore)
+}

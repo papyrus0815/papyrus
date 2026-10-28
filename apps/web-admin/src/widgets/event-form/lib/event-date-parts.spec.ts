@@ -1,4 +1,4 @@
-import { daysInMonth, partsFromIso, partsToIso } from './event-date-parts'
+import { daysInMonth, partsFromIso, partsToIso, shouldEndFollowStart } from './event-date-parts'
 
 const partial = { allowPartial: true }
 
@@ -85,4 +85,22 @@ describe('partsFromIso — 정밀도 밖의 채움값은 비운다', () => {
 it('daysInMonth — 기원전 1년은 천문학적 0년이라 윤년', () => {
   expect(daysInMonth('BC', 1, 2)).toBe(29)
   expect(daysInMonth('BC', 2, 2)).toBe(28)
+})
+
+describe('shouldEndFollowStart — 종료가 시작을 따라 채워지는 조건', () => {
+  it('새 사건: 빈 시작을 처음 쓰고 종료도 비었으면 따라간다', () => {
+    expect(shouldEndFollowStart(false, '', '')).toBe(true)
+  })
+
+  it('따라가는 중이면 시작을 계속 고쳐도 따라간다', () => {
+    expect(shouldEndFollowStart(true, '1950-01-01', '1950-01-01')).toBe(true)
+  })
+
+  it('편집 중인 진행 중 사건(시작 있음·종료 없음)은 따라가지 않는다', () => {
+    expect(shouldEndFollowStart(false, '1950-06-25', '')).toBe(false)
+  })
+
+  it('종료를 먼저 써 둔 경우 시작을 써도 덮지 않는다', () => {
+    expect(shouldEndFollowStart(false, '', '1953-07-27')).toBe(false)
+  })
 })

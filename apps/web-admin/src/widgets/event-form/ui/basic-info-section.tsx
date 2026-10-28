@@ -39,6 +39,8 @@ import {
 } from '@/shared/ui/register-form-kit/register-form-kit'
 import { notify } from '@/shared/ui/toast'
 
+import { shouldEndFollowStart } from '../lib/event-date-parts'
+
 import { EventDateField } from './event-date-field'
 
 /**
@@ -215,6 +217,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     else setEndInputError(message)
     onDateInputErrorChange?.(which, message)
   }
+  /**
+   * 종료가 시작을 따라 채워지는 중인지. 대부분의 사건은 하루·한 해짜리라 종료를 따로 칠 일이 없다 —
+   * 비어 있던 시작을 처음 쓸 때 종료도 비었으면 켜지고, 종료 칸을 직접 고치거나 비우면 꺼진다.
+   * 처음부터 시작이 있던 경우(편집 중인 진행 중 사건)엔 켜지지 않아 비운 종료가 채워지지 않는다.
+   */
+  const [endFollowsStart, setEndFollowsStart] = useState(false)
   const startDateAnchorId = useId()
   const endDateAnchorId = useId()
   const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
@@ -491,13 +499,23 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       setStartDatePrecision?.(precision)
                       // 일을 모르게 되면 시각도 모른다 — 숨긴 칸에 값이 남아 저장되지 않게
                       if (precision !== 'day') setStartTime('')
+                      // 비어 있던 시작을 처음 쓸 때 종료도 비었으면, 종료가 시작을 따라 채워진다
+                      if (shouldEndFollowStart(endFollowsStart, startDate, endDate)) {
+                        if (!endFollowsStart) setEndFollowsStart(true)
+                        setEndDate(iso)
+                        setEndDatePrecision?.(precision)
+                        if (precision !== 'day') setEndTime('')
+                      }
                     }}
                     onInputErrorChange={(message) => reportDateInputError('start', message)}
                     ariaLabel="시작 날짜"
                     pickerTitle="시작 일자 선택"
                     error={Boolean(startInputError || startDateError)}
-                    /* 연도만 아는 종료(1953-01-01로 저장)면 그해 끝까지 고를 수 있어야 한다 */
-                    maxDate={endDate ? isoPeriodEnd(endDate, endDatePrecision) : undefined}
+                    /* 연도만 아는 종료(1953-01-01로 저장)면 그해 끝까지 고를 수 있어야 한다.
+                       종료가 시작을 따라가는 동안엔 종료가 시작의 그림자라 상한이 아니다 */
+                    maxDate={
+                      endDate && !endFollowsStart ? isoPeriodEnd(endDate, endDatePrecision) : undefined
+                    }
                     onPickedFromCalendar={focusEndDateField}
                   />
                   {showStartTime && (
@@ -533,6 +551,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     precision={endDatePrecision}
                     allowPartial={allowPartialDate}
                     onChange={(iso, precision) => {
+                      // 종료를 직접 고치거나 비우면 더는 시작을 따라가지 않는다(기간·진행 중 사건)
+                      setEndFollowsStart(false)
                       setEndDate(iso)
                       setEndDatePrecision?.(precision)
                       if (precision !== 'day') setEndTime('')
@@ -577,8 +597,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             )}
             <S.Hint>
               {allowPartialDate
-                ? '칸에 바로 입력하거나 달력 아이콘으로 고르세요. 연도만 알면 연도만 — 진행 중이면 종료는 비워 두세요.'
-                : '진행 중인 사건이면 종료는 비워 두세요.'}
+                ? '칸에 바로 입력하거나 달력 아이콘으로 고르세요. 연도만 알면 연도만. 종료는 시작과 같게 채워집니다 — 기간이면 고치고, 진행 중이면 비워 두세요.'
+                : '종료는 시작과 같게 채워집니다 — 기간이면 고치고, 진행 중이면 비워 두세요.'}
             </S.Hint>
           </S.FormField>
         </S.FormRow>
