@@ -252,6 +252,14 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
+  /** 날짜 칸에 직접 친 값이 날짜가 못 되는 동안의 문구 — 빈 값과 구분해 저장을 막는다 */
+  const [dateInputErrors, setDateInputErrors] = useState<{ start: string | null; end: string | null }>({
+    start: null,
+    end: null,
+  })
+  const handleDateInputErrorChange = useCallback((which: 'start' | 'end', message: string | null) => {
+    setDateInputErrors((previous) => (previous[which] === message ? previous : { ...previous, [which]: message }))
+  }, [])
   /**
    * 미저장 변경 여부. ref가 아니라 state인 이유 — 셸(useBlocker·모달 닫기 confirm)이
    * 렌더에 반영해야 하므로 통지가 필요하다. 판정은 ref로 하되 통지는 state로.
@@ -401,8 +409,16 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   }, [])
 
   const validation = useMemo(
-    () => checkBasicInfo({ title, startDate, endDate, endDatePrecision }),
-    [title, startDate, endDate, endDatePrecision],
+    () =>
+      checkBasicInfo({
+        title,
+        startDate,
+        endDate,
+        endDatePrecision,
+        startDateInputError: dateInputErrors.start,
+        endDateInputError: dateInputErrors.end,
+      }),
+    [title, startDate, endDate, endDatePrecision, dateInputErrors],
   )
 
   // 편집 모드: 기본 정보만 로드 (본문·군사·관계 등은 상세에서 편집).
@@ -575,7 +591,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
 
   /* 분야는 필수 — 사건의 분류이자 색·필터의 기준이다. 세부(2단계)는 선택 */
   const categoryError = category ? undefined : '분야를 골라 주세요'
-  const isValid = isBasicInfoValid() && Boolean(category)
+  const isValid = isBasicInfoValid() && validation.ok && Boolean(category)
   useEffect(() => {
     onStateChange?.({
       isEditMode,
@@ -598,7 +614,15 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     if (isSubmitting) return
     setSubmitAttempted(true)
     try {
-      if (!validateBasicInfo({ title, startDate })) return
+      if (
+        !validateBasicInfo({
+          title,
+          startDate,
+          startDateInputError: dateInputErrors.start,
+          endDateInputError: dateInputErrors.end,
+        })
+      )
+        return
       if (!category) return
 
       setIsSubmitting(true)
@@ -889,6 +913,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         titleError={submitAttempted ? validation.fields.title : undefined}
         startDateError={submitAttempted ? validation.fields.startDate : undefined}
         endDateError={validation.fields.endDate}
+        onDateInputErrorChange={handleDateInputErrorChange}
       />
 
       {/*

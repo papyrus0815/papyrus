@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import {
-  FiCalendar,
   FiClock,
   FiImage,
   FiPlus,
@@ -28,10 +27,7 @@ import {
 import { isoPeriodEnd } from '@/shared/lib/iso-date'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
-import {
-  DatePickerModal,
-  type DatePickerPrecision,
-} from '@/shared/ui/date-picker/date-picker-modal'
+import { type DatePickerPrecision } from '@/shared/ui/date-picker/date-picker-modal'
 import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
 import {
   KitUploadActions,
@@ -43,38 +39,7 @@ import {
 } from '@/shared/ui/register-form-kit/register-form-kit'
 import { notify } from '@/shared/ui/toast'
 
-/**
- * 날짜 표시용 포맷 — BC/고대 안전.
- * 네이티브 `new Date()`는 BC(천문학적 연도번호)·고대(타임존)에서 어긋나므로, ISO 문자열의
- * 선행 연도 자릿수와 부호를 직접 파싱한다(date-picker `-YYYY-MM-DD` 표기와 일치).
- */
-function formatEventDateLabel(
-  iso: string,
-  precision: DatePickerPrecision = 'day',
-): string {
-  const neg = iso.startsWith('-')
-  const body = neg ? iso.slice(1) : iso
-  const m = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
-  if (!m) {
-    const d = new Date(iso)
-    return Number.isNaN(d.getTime())
-      ? iso
-      : d.toLocaleDateString('ko-KR', {
-          timeZone: 'UTC',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
-  }
-  const year = parseInt(m[1], 10)
-  const month = parseInt(m[2], 10)
-  const day = parseInt(m[3], 10)
-  const era = neg ? '기원전 ' : ''
-  // 모르는 월·일은 1로 채워져 있다 — 정밀도만큼만 보여 준다('1950년 1월 1일'로 둔갑 방지)
-  if (precision === 'year') return `${era}${year}년`
-  if (precision === 'month') return `${era}${year}년 ${month}월`
-  return `${era}${year}년 ${month}월 ${day}일`
-}
+import { EventDateField } from './event-date-field'
 
 /**
  * 이벤트 기본 정보 입력 섹션
@@ -167,6 +132,8 @@ interface BasicInfoSectionProps {
   startDateError?: string
   // 종료일 < 시작일은 즉시 노출 (제출 시도 전이라도)
   endDateError?: string
+  /** 날짜 칸 직접 입력이 날짜가 못 될 때(2월 30일·연도 없는 월 등) — 폼이 저장을 막는 데 쓴다 */
+  onDateInputErrorChange?: (which: 'start' | 'end', message: string | null) => void
 }
 
 export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
@@ -210,6 +177,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   calculateDaysDifference,
   titleError,
   startDateError,
+  onDateInputErrorChange,
   endDateError,
 }) => {
   const theme = useTheme()
@@ -239,14 +207,18 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   /** 일까지 알 때만 시각이 의미 있다 — 연도만 아는 사건에 '14:00'은 거짓 정밀도 */
   const showStartTime = startDatePrecision === 'day'
   const showEndTime = endDatePrecision === 'day'
-  const [isStartDateModalOpen, setIsStartDateModalOpen] = useState(false)
-  const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
+  /** 날짜 칸에 직접 친 값이 날짜가 못 될 때의 문구 — 폼이 저장을 막도록 위로도 알린다 */
+  const [startInputError, setStartInputError] = useState<string | null>(null)
+  const [endInputError, setEndInputError] = useState<string | null>(null)
+  const reportDateInputError = (which: 'start' | 'end', message: string | null) => {
+    if (which === 'start') setStartInputError(message)
+    else setEndInputError(message)
+    onDateInputErrorChange?.(which, message)
+  }
+  const startDateAnchorId = useId()
+  const endDateAnchorId = useId()
   const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
   const [isEndTimeModalOpen, setIsEndTimeModalOpen] = useState(false)
-  /** 시작일 선택 직후 종료일 필드로 포커스를 옮길지 (피커 닫힘 후 1회) */
-  const pendingEndDateFocusRef = useRef(false)
-  const endDateTriggerRef = useRef<HTMLDivElement>(null)
-  const startDateTriggerRef = useRef<HTMLDivElement>(null)
   const startTimeTriggerRef = useRef<HTMLDivElement>(null)
   const endTimeTriggerRef = useRef<HTMLDivElement>(null)
   /**
@@ -272,19 +244,18 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const KEYWORD_MAX_COUNT = 20
 
   /**
-   * 시작일 피커가 닫힌 **다음 프레임**에 종료일 필드로 포커스를 옮긴다.
-   * 피커는 언마운트 커밋에서 "열기 직전 포커스"를 동기 복원하므로, 그보다 늦게 실행돼야
-   * 우리 포커스가 덮이지 않는다.
+   * 달력으로 시작일을 고른 직후 종료일 칸(연도)으로 포커스를 옮긴다 — 다음 행동을 가리킨다.
+   * 피커는 언마운트 커밋에서 "열기 직전 포커스"를 동기 복원하므로 **다음 프레임**에 옮겨야
+   * 덮이지 않는다. 직접 입력할 때는 사용자가 Tab으로 넘어간다.
    */
-  useEffect(() => {
-    if (isStartDateModalOpen) return
-    if (!pendingEndDateFocusRef.current) return
-    pendingEndDateFocusRef.current = false
-    const frame = window.requestAnimationFrame(() => {
-      endDateTriggerRef.current?.focus({ preventScroll: true })
+  const focusEndDateField = () => {
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(endDateAnchorId)
+        ?.querySelector<HTMLInputElement>('input')
+        ?.focus({ preventScroll: true })
     })
-    return () => window.cancelAnimationFrame(frame)
-  }, [isStartDateModalOpen])
+  }
 
   // F33 소프트 경고 — 사건 시점이 선택한 역사국가 존속기간 밖이면 인라인 경고(저장은 허용).
   // 사건 startDate는 '-YYYY'로 BC도 담을 수 있어 recordSupportsBc=true(부호 전 구간 비교).
@@ -510,24 +481,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 <S.DateRangeLabel>시작</S.DateRangeLabel>
                 {/* 날짜와 시각은 한 줄 — 시각은 쓰는 일이 드물어 날짜 옆 좁은 칸으로 물러난다 */}
                 <DateTimeLine>
-                  <S.DateInputWrapper
-                    ref={startDateTriggerRef}
-                    aria-haspopup="dialog"
-                    {...keyboardTrigger}
-                    aria-expanded={isStartDateModalOpen}
-                    data-open={isStartDateModalOpen || undefined}
-                    onClick={() => {
-                      playClickSound()
-                      setIsStartDateModalOpen(true)
+                  <EventDateField
+                    anchorId={startDateAnchorId}
+                    value={startDate}
+                    precision={startDatePrecision}
+                    allowPartial={allowPartialDate}
+                    onChange={(iso, precision) => {
+                      setStartDate(iso)
+                      setStartDatePrecision?.(precision)
+                      // 일을 모르게 되면 시각도 모른다 — 숨긴 칸에 값이 남아 저장되지 않게
+                      if (precision !== 'day') setStartTime('')
                     }}
-                  >
-                    <FiCalendar size={14} />
-                    <S.DateInputDisplay>
-                      {startDate
-                        ? formatEventDateLabel(startDate, startDatePrecision)
-                        : '날짜 선택'}
-                    </S.DateInputDisplay>
-                  </S.DateInputWrapper>
+                    onInputErrorChange={(message) => reportDateInputError('start', message)}
+                    ariaLabel="시작 날짜"
+                    pickerTitle="시작 일자 선택"
+                    error={Boolean(startInputError || startDateError)}
+                    /* 연도만 아는 종료(1953-01-01로 저장)면 그해 끝까지 고를 수 있어야 한다 */
+                    maxDate={endDate ? isoPeriodEnd(endDate, endDatePrecision) : undefined}
+                    onPickedFromCalendar={focusEndDateField}
+                  />
                   {showStartTime && (
                     <TimeTrigger
                       ref={startTimeTriggerRef}
@@ -555,24 +527,22 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 <S.DateRangeLabel>종료</S.DateRangeLabel>
                 {/* 날짜와 시각은 한 줄 — 시각은 쓰는 일이 드물어 날짜 옆 좁은 칸으로 물러난다 */}
                 <DateTimeLine>
-                  <S.DateInputWrapper
-                    ref={endDateTriggerRef}
-                    aria-haspopup="dialog"
-                    {...keyboardTrigger}
-                    aria-expanded={isEndDateModalOpen}
-                    data-open={isEndDateModalOpen || undefined}
-                    onClick={() => {
-                      playClickSound()
-                      setIsEndDateModalOpen(true)
+                  <EventDateField
+                    anchorId={endDateAnchorId}
+                    value={endDate}
+                    precision={endDatePrecision}
+                    allowPartial={allowPartialDate}
+                    onChange={(iso, precision) => {
+                      setEndDate(iso)
+                      setEndDatePrecision?.(precision)
+                      if (precision !== 'day') setEndTime('')
                     }}
-                  >
-                    <FiCalendar size={14} />
-                    <S.DateInputDisplay>
-                      {endDate
-                        ? formatEventDateLabel(endDate, endDatePrecision)
-                        : '날짜 선택'}
-                    </S.DateInputDisplay>
-                  </S.DateInputWrapper>
+                    onInputErrorChange={(message) => reportDateInputError('end', message)}
+                    ariaLabel="종료 날짜"
+                    pickerTitle="종료 일자 선택"
+                    error={Boolean(endInputError || endDateError || getDateError())}
+                    minDate={startDate || undefined}
+                  />
                   {showEndTime && (
                     <TimeTrigger
                       ref={endTimeTriggerRef}
@@ -596,14 +566,18 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 </DateTimeLine>
               </S.DateRangeColumn>
             </DateRangeGrid>
-            {(startDateError || endDateError || getDateError()) && (
+            {(startInputError || endInputError || startDateError || endDateError || getDateError()) && (
               <S.ErrorMessage role="alert">
-                {startDateError ?? endDateError ?? getDateError()}
+                {startInputError
+                  ? `시작: ${startInputError}`
+                  : endInputError
+                    ? `종료: ${endInputError}`
+                    : (startDateError ?? endDateError ?? getDateError())}
               </S.ErrorMessage>
             )}
             <S.Hint>
               {allowPartialDate
-                ? '연도만 알아도 됩니다 — 달력 위 \u2018연도만\u2019·\u2018연·월\u2019. 진행 중이면 종료는 비워 두세요.'
+                ? '칸에 바로 입력하거나 달력 아이콘으로 고르세요. 연도만 알면 연도만 — 진행 중이면 종료는 비워 두세요.'
                 : '진행 중인 사건이면 종료는 비워 두세요.'}
             </S.Hint>
           </S.FormField>
@@ -987,48 +961,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       </FormGroup>
 
       {/* 날짜/시간 선택 모달 */}
-      <DatePickerModal
-        isOpen={isStartDateModalOpen}
-        onClose={() => setIsStartDateModalOpen(false)}
-        onSelect={(date, precision) => {
-          setStartDate(date)
-          setStartDatePrecision?.(precision)
-          // 일을 모르게 되면 시각도 모른다 — 숨긴 칸에 값이 남아 저장되지 않게
-          if (precision !== 'day') setStartTime('')
-          setIsStartDateModalOpen(false)
-          /**
-           * 예전엔 `setTimeout(() => setIsEndDateModalOpen(true), 200)`으로 종료일
-           * 피커를 **자동으로 이어 열었다**. 피커는 닫힐 때 "열기 직전 포커스"로
-           * 포커스를 되돌리는데, 그 복원과 다음 피커의 열기가 타이머로 엇갈리면
-           * 포커스가 이미 사라진 노드를 향한다(폼이 모달 안에 들어가면 더 잘 깨진다).
-           * 자동 개방 대신 종료일 필드로 포커스만 옮겨 다음 행동을 가리킨다.
-           */
-          pendingEndDateFocusRef.current = true
-        }}
-        initialDate={startDate}
-        allowPartial={allowPartialDate}
-        initialPrecision={startDatePrecision}
-        /* 연도만 아는 종료(1953-01-01로 저장)면 그해 끝까지 고를 수 있어야 한다 */
-        maxDate={endDate ? isoPeriodEnd(endDate, endDatePrecision) : undefined}
-        title="시작 일자 선택"
-        /* 모달 대신 칸 아래 드롭다운 — 폼을 가리지 않고 고른 뒤 바로 이어 쓴다 */
-        anchorEl={startDateTriggerRef.current}
-      />
-      <DatePickerModal
-        isOpen={isEndDateModalOpen}
-        onClose={() => setIsEndDateModalOpen(false)}
-        onSelect={(date, precision) => {
-          setEndDate(date)
-          setEndDatePrecision?.(precision)
-          if (precision !== 'day') setEndTime('')
-        }}
-        initialDate={endDate || startDate}
-        allowPartial={allowPartialDate}
-        initialPrecision={endDate ? endDatePrecision : startDatePrecision}
-        minDate={startDate}
-        title="종료 일자 선택"
-        anchorEl={endDateTriggerRef.current}
-      />
       <TimePickerModal
         isOpen={isStartTimeModalOpen}
         onClose={() => setIsStartTimeModalOpen(false)}

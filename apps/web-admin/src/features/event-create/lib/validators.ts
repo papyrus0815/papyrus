@@ -21,17 +21,29 @@ export const checkBasicInfo = (data: {
   endDate?: string
   /** 종료일 정밀도 — 연·월만 아는 종료는 그 기간의 끝과 비교한다 */
   endDatePrecision?: string | null
+  /**
+   * 날짜 칸에 직접 친 값이 날짜가 못 될 때의 문구(2월 30일·연도 없는 월 등). 이때 칸은 빈 값을
+   * 보내므로 이 문구 없이는 시작은 '선택해주세요'로 오인되고, **종료는 '진행 중'으로 조용히 저장된다**.
+   */
+  startDateInputError?: string | null
+  endDateInputError?: string | null
 }): BasicInfoValidationResult => {
   const fields: BasicInfoValidationResult['fields'] = {}
   if (!data.title.trim()) {
     fields.title = '사건명을 입력해주세요.'
   }
-  if (!data.startDate) {
+  if (data.startDateInputError) {
+    fields.startDate = `시작일: ${data.startDateInputError}`
+  } else if (!data.startDate) {
     fields.startDate = '시작일을 선택해주세요.'
+  }
+  if (data.endDateInputError) {
+    fields.endDate = `종료일: ${data.endDateInputError}`
   }
   // 종료일이 시작일보다 이전이면 inline 에러 — 제출 시점 toast만으론 잡기 어려움.
   // BC/고대 날짜는 네이티브 Date가 NaN이 되므로 iso-date 유틸로 비교.
   if (
+    !fields.endDate &&
     data.startDate &&
     data.endDate &&
     compareByDate(data.startDate, isoPeriodEnd(data.endDate, data.endDatePrecision)) > 0
@@ -52,6 +64,8 @@ export const checkBasicInfo = (data: {
 export const validateBasicInfo = (data: {
   title: string
   startDate: string
+  startDateInputError?: string | null
+  endDateInputError?: string | null
 }): boolean => {
   const result = checkBasicInfo(data)
   if (!result.ok && result.firstError) {
