@@ -57,6 +57,7 @@ import { notify } from '@/shared/ui/toast'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { ENTITY_KIND_LABELS } from '@/entities/historical-country/model/constants'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import {
   useHistoricalCountryDashboard,
   type HistoricalCompletenessField,
@@ -397,6 +398,8 @@ function HistoricalHeaderMeta({
   incomingCategoryLabel?: string | null
 }) {
   const period = formatCountryPeriod(country)
+  const entityKind = country.entityKind
+  const entityKindLabel = entityKind ? ENTITY_KIND_LABELS[entityKind] : null
   return (
     <>
       {country.enName && <CountryStyles.HeroLocalName>{country.enName}</CountryStyles.HeroLocalName>}
@@ -404,6 +407,11 @@ function HistoricalHeaderMeta({
       {period && <span>{period}</span>}
       {country.stateType && (
         <CountryStyles.HeroMetaChip>{getStateTypeLabel(country.stateType)}</CountryStyles.HeroMetaChip>
+      )}
+      {entityKind && entityKind !== 'STATE' && entityKindLabel && (
+        <CountryStyles.HeroMetaChip title="역사적 단위 분류">
+          {entityKindLabel}
+        </CountryStyles.HeroMetaChip>
       )}
       {incomingCategoryLabel && (
         <CountryStyles.HeroMetaChip title="이 나라가 성립한 변천 유형">
@@ -555,14 +563,6 @@ function HistoricalOverviewSection({
     endYear?: number | null
   }
 
-  const entityKind = (country as UnifiedCountry & { entityKind?: unknown }).entityKind as
-    | 'STATE'
-    | 'REGIME'
-    | 'PERIOD'
-    | 'PEOPLE'
-    | null
-    | undefined
-
   const queryClient = useQueryClient()
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   /*
@@ -570,11 +570,30 @@ function HistoricalOverviewSection({
    * historicalToUnified가 undefined). 그대로 쓰면 DB에 개요가 있는데도 '개요가 없습니다'가 떴다
    * (실측: 벨기에 왕국 544자). 없을 때만 상세를 단건 조회해 채운다.
    */
-  const needsFullRecord = country.description === undefined
+  const needsFullRecord =
+    country.description === undefined ||
+    country.nameOrigin === undefined ||
+    country.history === undefined ||
+    country.entityKind === undefined
   const fullRecordQuery = useHistoricalCountry(needsFullRecord ? country.id : '')
-  const resolvedDescription = needsFullRecord
-    ? fullRecordQuery.data?.description
-    : country.description
+  const resolvedDescription =
+    country.description !== undefined
+      ? country.description
+      : fullRecordQuery.data?.description
+  const resolvedNameOrigin =
+    country.nameOrigin !== undefined
+      ? country.nameOrigin
+      : (fullRecordQuery.data as { nameOrigin?: string | null } | undefined)?.nameOrigin
+  const resolvedHistory =
+    country.history !== undefined
+      ? country.history
+      : (fullRecordQuery.data as { history?: string | null } | undefined)?.history
+  const entityKind = (
+    country.entityKind !== undefined
+      ? country.entityKind
+      : (fullRecordQuery.data as { entityKind?: UnifiedCountry['entityKind'] } | undefined)?.entityKind
+  ) as 'STATE' | 'REGIME' | 'PERIOD' | 'PEOPLE' | null | undefined
+
   // 현재 표시할 description. 원문으로 초기화하고 저장 시 직접 교체
   const [savedDescription, setSavedDescription] = useState<string | null | undefined>(
     () => resolvedDescription,
@@ -592,7 +611,6 @@ function HistoricalOverviewSection({
       updateHistoricalCountry(country.id, { description: description || undefined }),
     onSuccess: (_, description) => {
       const saved = description || null
-      console.log('[OverviewSave] onSuccess description =', description, '/ saved =', saved)
       setSavedDescription(saved)
       setIsEditorOpen(false)
       // 단건 캐시도 새 개요로 — 다시 들어왔을 때 옛 값으로 되돌아가지 않게
@@ -611,7 +629,6 @@ function HistoricalOverviewSection({
   }, [savedDescription])
 
   const handleSave = useCallback(() => {
-    console.log('[OverviewSave] editorValueRef.current =', editorValueRef.current)
     updateMutation.mutate(editorValueRef.current)
   }, [updateMutation])
 
@@ -630,8 +647,8 @@ function HistoricalOverviewSection({
   const stats = useHistoricalCountryDashboard(country, savedDescription)
   const span = getCountryYearRange(country)
   const [previewEventId, setPreviewEventId] = useState<string | null>(null)
-  const goPerson = (personId: string) =>
-    navigate(pathKeys.personsTimelineDetail(personId))
+  const [previewPersonId, setPreviewPersonId] = useState<string | null>(null)
+  const goPerson = (personId: string) => setPreviewPersonId(personId)
   const capitalText = country.capital ? String(country.capital).trim() : ''
   /*
    * 역대 수반 수 — 지표 칸과 장 머리 칩이 같은 수를 말하게 한다. 예전엔 지표는 국가원수만
@@ -829,12 +846,26 @@ function HistoricalOverviewSection({
                 </OverviewSaveButton>
               </OverviewActions>
             </OverviewBody>
-          ) : savedDescription ? (
+            ) : savedDescription || resolvedNameOrigin || resolvedHistory ? (
             <OverviewBody>
-              {isLikelyRichTextHtml(savedDescription) ? (
-                <RichTextReadView html={savedDescription} />
-              ) : (
-                <OverviewPlain>{savedDescription}</OverviewPlain>
+              {savedDescription && (
+                isLikelyRichTextHtml(savedDescription) ? (
+                  <RichTextReadView html={savedDescription} />
+                ) : (
+                  <OverviewPlain>{savedDescription}</OverviewPlain>
+                )
+              )}
+              {resolvedNameOrigin && (
+                <NarrativeSubBlock>
+                  <NarrativeSubLabel>국호·명칭 유래</NarrativeSubLabel>
+                  <OverviewPlain>{resolvedNameOrigin}</OverviewPlain>
+                </NarrativeSubBlock>
+              )}
+              {resolvedHistory && (
+                <NarrativeSubBlock>
+                  <NarrativeSubLabel>역사 서술</NarrativeSubLabel>
+                  <OverviewPlain>{resolvedHistory}</OverviewPlain>
+                </NarrativeSubBlock>
               )}
             </OverviewBody>
           ) : (
@@ -898,7 +929,7 @@ function HistoricalOverviewSection({
             <IconCalendar />
           </DashboardStyles.SectionTitleIcon>
           <DashboardStyles.SectionTitleText id="historical-founding-heading">
-            건국·멸망
+            {!entityKind || entityKind === 'STATE' ? '건국·멸망' : '성립·종료'}
           </DashboardStyles.SectionTitleText>
         </DashboardStyles.SectionTitleRow>
         <HistoricalFoundingCards
@@ -1011,7 +1042,7 @@ function HistoricalOverviewSection({
               items={stats.recentActivity.slice(0, RECENT_ACTIVITY_LIMIT)}
               isLoading={stats.loading.persons || stats.loading.events}
               onPersonClick={goPerson}
-              onEventClick={() => onGoToTab('events')}
+              onEventClick={(eventId) => setPreviewEventId(eventId)}
             />
           </DashboardStyles.FeedPanel>
         </DashboardStyles.Section>
@@ -1048,11 +1079,19 @@ function HistoricalOverviewSection({
         )}
       </DashboardStyles.Section>
 
-      {/* 달력에서 누른 사건 미리보기 — 섹션 조건 밖에 두어 열린 모달이 사라지지 않게 */}
+      {/* 달력·활동·수반에서 누른 사건/인물 미리보기 — 섹션 조건 밖에 두어 열린 모달이 사라지지 않게 */}
       <EventInlineModal
         eventId={previewEventId}
         onClose={() => setPreviewEventId(null)}
         onNavigate={(eventId) => navigate(pathKeys.events.detail(eventId))}
+      />
+      <PersonInlineModal
+        personId={previewPersonId}
+        onClose={() => setPreviewPersonId(null)}
+        onOpenDetail={(personId) => {
+          setPreviewPersonId(null)
+          navigate(pathKeys.personsTimelineDetail(personId))
+        }}
       />
     </DashboardRoot>
   )
@@ -1152,6 +1191,22 @@ const OverviewBody = styled.div`
 const OverviewPlain = styled.p`
   margin: 0;
   white-space: pre-wrap;
+`
+
+const NarrativeSubBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const NarrativeSubLabel = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.02em;
 `
 
 const OverviewActions = styled.div`

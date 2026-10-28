@@ -84,7 +84,10 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
   }, [data, query, country.name])
 
   const total = useMemo(
-    () => groups.reduce((sum, group) => sum + group.persons.length, 0),
+    () =>
+      new Set(
+        groups.flatMap((group) => group.persons.map((person) => person.id)),
+      ).size,
     [groups],
   )
 

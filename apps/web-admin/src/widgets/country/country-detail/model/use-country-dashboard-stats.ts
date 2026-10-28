@@ -10,8 +10,9 @@ import { getAllCountries } from '@/shared/api/countries'
 import { getElections } from '@/shared/api/election'
 import { getAllEventsExhaustive } from '@/shared/api/events'
 import { militaryUnitApi } from '@/shared/api/military-unit'
+import { personApi } from '@/shared/api/person'
 import { personCareerApi } from '@/shared/api/person-career'
-import { getPersonsByTenureCountry } from '@/shared/api/persons'
+import type { PersonResponseDto } from '@/shared/api/persons'
 import { treatyApi } from '@/shared/api/treaty'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -133,6 +134,7 @@ export interface CountryDashboardStats {
   administrationCount: number
   cityCount: number
   treatyCount: number
+  electionCount: number
   /** 최근 7일 새로 등록된 카운트 — delta 칩용 */
   deltaCounts: DeltaCounts
   recentPersons: RecentPersonItem[]
@@ -143,8 +145,6 @@ export interface CountryDashboardStats {
     total: number
     missing: CompletenessField[]
   }
-  /** 최근 12개월 사건 등록 분포 (가장 오래된 → 최신, 길이 12) */
-  monthlyEventCounts: number[]
   /**
    * 세기별 사건 수 — 오래된 순. `century`는 부호 세기(20 = 20세기, -1 = 기원전 1세기).
    * 사건이 있는 세기만 담는다(빈 세기는 화면에서 '건너뜀' 표지로 그린다).
@@ -199,7 +199,7 @@ const byCreatedAtDesc = (a: RecentActivityItem, b: RecentActivityItem) =>
  * 41건 있는데도 피드가 각료 10명으로만 채워졌다. 각 종류에서 먼저 몫만큼 뽑고,
  * 남는 자리만 최신순으로 메운다.
  */
-function pickWithKindQuota(
+export function pickWithKindQuota(
   persons: RecentActivityItem[],
   events: RecentActivityItem[],
 ): RecentActivityItem[] {
@@ -251,8 +251,13 @@ export function useCountryDashboardStats(
   ] = useQueries({
     queries: [
       {
-        queryKey: ['persons-by-country', countryId],
-        queryFn: () => getPersonsByTenureCountry({ countryId }),
+        /*
+         * 국가 상세 인물 탭(CountryPersonsSection)과 동일한 3원 합집합 + 연결 과거 국가 묶음을 공유한다.
+         * 기존 getPersonsByTenureCountry는 재임 기록이 있는 관료만 세어 일반 인물(학자·문인·기업인 등)이
+         * 대시보드 카운트·최근 활동에서 빠지고 인물 탭 숫자와 어긋났다.
+         */
+        queryKey: ['persons', 'by-country-grouped', countryId],
+        queryFn: () => personApi.getByCountryIdGrouped(countryId),
         enabled: Boolean(countryId),
         staleTime: 1000 * 60 * 5,
       },
@@ -294,19 +299,19 @@ export function useCountryDashboardStats(
         staleTime: 1000 * 60 * 5,
       },
       {
-        queryKey: ['tenures-by-country', countryId],
+        queryKey: ['tenures-by-country', countryId, undefined],
         queryFn: () => personCareerApi.getTenuresByCountry({ countryId }),
         enabled: Boolean(countryId),
         staleTime: 1000 * 60 * 5,
       },
       {
-        queryKey: ['cabinets-by-country', countryId],
+        queryKey: ['cabinets-by-country', countryId, undefined],
         queryFn: () => personCareerApi.getCabinets({ countryId }),
         enabled: Boolean(countryId),
         staleTime: 1000 * 60 * 5,
       },
       {
-        queryKey: ['elections-by-country', countryId],
+        queryKey: ['elections', 'list', `c:${countryId}`],
         queryFn: () => getElections({ countryId }),
         enabled: Boolean(countryId),
         staleTime: 1000 * 60 * 5,
@@ -350,19 +355,23 @@ export function useCountryDashboardStats(
     return (sorted[0] as { id?: string } | undefined)?.id ?? null
   }, [cabinetsQuery.data])
 
-  const currentCabinetTenuresQuery = useQueries({
-    queries: [
-      {
-        queryKey: ['cabinet-tenures', latestActiveCabinetId],
-        queryFn: () =>
-          personCareerApi.getTenuresByCabinetId(latestActiveCabinetId!),
-        enabled: Boolean(latestActiveCabinetId),
-        staleTime: 1000 * 60 * 5,
-      },
-    ],
-  })[0]
+  // 현대 국가 묶음 + 연결된 과거 국가 묶음의 인물을 id 기준으로 합집합
+  const persons = useMemo<PersonResponseDto[]>(() => {
+    const grouped = personsQuery.data
+    if (!grouped) return []
+    const byId = new Map<string, PersonResponseDto>()
+    for (const p of grouped.modern ?? []) {
+      if (p?.id) byId.set(p.id, p)
+    }
+    for (const group of grouped.historical ?? []) {
+      for (const p of group.persons ?? []) {
+        if (p?.id && !byId.has(p.id)) byId.set(p.id, p)
+      }
+    }
+    return [...byId.values()]
+  }, [personsQuery.data])
 
-  const personCount = personsQuery.data?.length ?? 0
+  const personCount = persons.length
   const militaryCount = Array.isArray(militaryQuery.data)
     ? militaryQuery.data.filter(
         (u) => (u.countryId ?? (u as any).country_id) === countryId,
@@ -376,24 +385,27 @@ export function useCountryDashboardStats(
   const cityCount = Array.isArray(citiesQuery.data)
     ? citiesQuery.data.length
     : 0
+  const electionCount = Array.isArray(electionsQuery.data)
+    ? electionsQuery.data.length
+    : 0
 
   const deltaCounts = useMemo<DeltaCounts>(() => {
     const since = Date.now() - SEVEN_DAYS_MS
     return {
-      person: countSince(personsQuery.data, since),
+      person: countSince(persons, since),
       event: countSince(eventsQuery.data, since),
       administration: countSince(administrationQuery.data, since),
       city: countSince(citiesQuery.data, since),
     }
   }, [
-    personsQuery.data,
+    persons,
     eventsQuery.data,
     administrationQuery.data,
     citiesQuery.data,
   ])
 
   const recentPersons = useMemo((): RecentPersonItem[] => {
-    const list = (personsQuery.data ?? []) as any[]
+    const list = persons as any[]
     // 한 번의 sort + slice — 이전엔 `.map(spread).sort.slice.map` 4단계였음.
     const sorted = [...list].sort((a, b) => {
       const ta = new Date(a.createdAt ?? a.created_at ?? 0).getTime()
@@ -426,7 +438,7 @@ export function useCountryDashboardStats(
         profileImageUrl: p.profileImageUrl ?? p.profile_image_url ?? null,
       }
     })
-  }, [personsQuery.data, country?.defaultNameDisplayOrder])
+  }, [persons, country?.defaultNameDisplayOrder])
 
   const recentActivity = useMemo((): RecentActivityItem[] => {
     const persons = recentPersons.map<RecentActivityItem>((p) => ({
@@ -574,24 +586,6 @@ export function useCountryDashboardStats(
     return rows
   }, [eventsQuery.data])
 
-  const monthlyEventCounts = useMemo<number[]>(() => {
-    const list = Array.isArray(eventsQuery.data) ? (eventsQuery.data as any[]) : []
-    const buckets = new Array(12).fill(0)
-    const now = new Date()
-    const startMonth = new Date(now.getFullYear(), now.getMonth() - 11, 1)
-    for (const e of list) {
-      const ts = e.startDate ?? e.start_date
-      if (!ts) continue
-      const d = new Date(ts)
-      if (Number.isNaN(d.getTime())) continue
-      const monthIdx =
-        (d.getUTCFullYear() - startMonth.getFullYear()) * 12 +
-        (d.getUTCMonth() - startMonth.getMonth())
-      if (monthIdx >= 0 && monthIdx < 12) buckets[monthIdx]++
-    }
-    return buckets
-  }, [eventsQuery.data])
-
   const continentComparison = useMemo<ContinentComparison>(() => {
     const empty: ContinentComparison = {
       sampleSize: 0,
@@ -692,9 +686,24 @@ export function useCountryDashboardStats(
       : []
     const top = list.find((c) => c?.id === latestActiveCabinetId)
     if (!top) return null
-    const ministers = Array.isArray(currentCabinetTenuresQuery.data)
-      ? (currentCabinetTenuresQuery.data as any[])
+    // tenuresQuery에서 이미 국가 전체 재임을 받았으므로 별도 cabinet-tenures 쿼리 없이 재사용
+    const allTenures = Array.isArray(tenuresQuery.data)
+      ? (tenuresQuery.data as any[])
       : []
+    const headTenureId = top.headTenure?.id ?? null
+    const scopeStart = top.headTenure?.startDate?.slice(0, 10) ?? null
+    const scopeEnd = top.headTenure?.endDate?.slice(0, 10) ?? null
+    const ministers = allTenures.filter((t) => {
+      if (headTenureId && t.id === headTenureId) return false
+      if (t.cabinetId) return t.cabinetId === latestActiveCabinetId
+      if (!t.administrationDepartmentId) return false
+      const start = t.startDate?.slice(0, 10) ?? null
+      const end = t.endDate?.slice(0, 10) ?? null
+      if (!start || !scopeStart) return false
+      const startsBeforeScopeEnds = !scopeEnd || start <= scopeEnd
+      const endsAfterScopeStarts = !end || end >= scopeStart
+      return startsBeforeScopeEnds && endsAfterScopeStarts
+    })
     // 정당 분포 — minister.person.partyMemberships 기반(없으면 빈)
     const partyMap = new Map<
       string,
@@ -734,7 +743,7 @@ export function useCountryDashboardStats(
       ministerCount: uniquePersonIds.size,
       partyDistribution,
     }
-  }, [latestActiveCabinetId, cabinetsQuery.data, currentCabinetTenuresQuery.data])
+  }, [latestActiveCabinetId, cabinetsQuery.data, tenuresQuery.data])
 
   const { nextElection, recentElection } = useMemo<{
     nextElection: ElectionSummary | null
@@ -857,7 +866,7 @@ export function useCountryDashboardStats(
   // 라벨이 "갱신"인 만큼 모든 엔티티의 createdAt 중 최신을 사용.
   const lastUpdatedAt = useMemo<string | null>(() => {
     const sources: unknown[][] = [
-      personsQuery.data as unknown[],
+      persons as unknown[],
       eventsQuery.data as unknown[],
       administrationQuery.data as unknown[],
       citiesQuery.data as unknown[],
@@ -876,7 +885,7 @@ export function useCountryDashboardStats(
     }
     return max > 0 ? new Date(max).toISOString() : null
   }, [
-    personsQuery.data,
+    persons,
     eventsQuery.data,
     administrationQuery.data,
     citiesQuery.data,
@@ -890,8 +899,7 @@ export function useCountryDashboardStats(
     cities: citiesQuery.isLoading,
     tenures: tenuresQuery.isLoading,
     activity: personsQuery.isLoading || eventsQuery.isLoading,
-    cabinets:
-      cabinetsQuery.isLoading || currentCabinetTenuresQuery.isLoading,
+    cabinets: cabinetsQuery.isLoading || tenuresQuery.isLoading,
     elections: electionsQuery.isLoading,
     treaties: treatiesQuery.isLoading,
     continent: allCountriesQuery.isLoading,
@@ -913,12 +921,12 @@ export function useCountryDashboardStats(
     administrationCount,
     cityCount,
     treatyCount,
+    electionCount,
     deltaCounts,
     recentPersons,
     recentActivity,
     currentHeads,
     completeness,
-    monthlyEventCounts,
     eventCenturyCounts,
     calendarEvents,
     continentComparison,

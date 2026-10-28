@@ -25,10 +25,11 @@ import {
 } from '@/shared/lib/country-period'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
-import type {
-  CalendarEventItem,
-  CompletenessField,
-  RecentActivityItem,
+import {
+  type CalendarEventItem,
+  type CompletenessField,
+  type RecentActivityItem,
+  pickWithKindQuota,
 } from './use-country-dashboard-stats'
 
 /** 역대 수반 한 줄 — 재위·재임을 한 모양으로 */
@@ -68,7 +69,6 @@ export interface HistoricalCompletenessField extends CompletenessField {
 }
 
 const STALE_MS = 1000 * 60 * 5
-const ACTIVITY_FEED_LIMIT = 10
 
 /** 쿼리 키 — 탭 위젯들이 쓰는 키와 같아야 캐시를 나눠 쓰고 무효화가 함께 먹는다 */
 export const historicalDashboardKeys = {
@@ -366,18 +366,20 @@ export function useHistoricalCountryDashboard(
     return rows
   }, [eventsQuery.data])
 
-  /* 최근 활동 — 이 나라에 걸린 인물·사건을 등록순으로 */
+  /* 최근 활동 — 이 나라에 걸린 인물·사건을 종류별 최소 몫(pickWithKindQuota)으로 배분해 등록순 정렬 */
   const recentActivity = useMemo<RecentActivityItem[]>(() => {
-    const items: RecentActivityItem[] = [
-      ...asArray(personsQuery.data).map<RecentActivityItem>((person) => ({
+    const persons = asArray(personsQuery.data)
+      .map<RecentActivityItem>((person) => ({
         id: `person-${person.id}`,
         kind: 'person',
         refId: person.id ?? '',
         label: personNameOf(person),
         createdAt: person.createdAt ?? '',
         profileImageUrl: person.profileImageUrl ?? null,
-      })),
-      ...asArray(eventsQuery.data).map<RecentActivityItem>((event) => ({
+      }))
+      .filter((item) => item.createdAt)
+    const events = asArray(eventsQuery.data)
+      .map<RecentActivityItem>((event) => ({
         id: `event-${event.id}`,
         kind: 'event',
         refId: event.id ?? '',
@@ -385,14 +387,9 @@ export function useHistoricalCountryDashboard(
         createdAt: event.createdAt ?? '',
         startDate: event.startDate ?? null,
         endDate: event.endDate ?? null,
-      })),
-    ].filter((item) => item.createdAt)
-    return items
-      .sort(
-        (left, right) =>
-          new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-      )
-      .slice(0, ACTIVITY_FEED_LIMIT)
+      }))
+      .filter((item) => item.createdAt)
+    return pickWithKindQuota(persons, events)
   }, [personsQuery.data, eventsQuery.data])
 
   const memberships = asArray(membershipsQuery.data)

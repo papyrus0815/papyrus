@@ -17,11 +17,11 @@ interface YearMonth {
   month: number
 }
 
-/** 'YYYY-MM-DD' → {year, month, day}. BC('-')는 달력에 올리지 않는다 */
+/** 'YYYY-MM-DD' 또는 '-YYYY-MM-DD'(BC) → {year, month, day} */
 function parseDate(
   date: string,
 ): { year: number; month: number; day: number } | null {
-  const matched = /^(\d{1,6})-(\d{2})-(\d{2})$/.exec(date)
+  const matched = /^(-?\d{1,6})-(\d{2})-(\d{2})/.exec(date.trim())
   if (!matched) return null
   return {
     year: Number(matched[1]),
@@ -30,23 +30,37 @@ function parseDate(
   }
 }
 
+function formatCalYear(year: number, withSuffix = true): string {
+  if (year < 0)
+    return withSuffix ? `BC ${Math.abs(year)}년` : `BC ${Math.abs(year)}`
+  return withSuffix ? `${year}년` : String(year)
+}
+
 const keyOf = (year: number, month: number, day: number) =>
   `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
-/** 그 달 1일의 요일(0=일)과 일수 — 100년 미만 연도도 안전하게 */
+/** 그 달 1일의 요일(0=일)과 일수 — 100년 미만·기원전(음수) 연도도 안전하게 */
 function monthShape(year: number, month: number) {
+  // BC 연도(-1 등)에서 12월→다음해 1월이 JS Date 연도 0을 가로질러 어긋나는 것을 막기 위해
+  // 천문 연도(1 BC = 0, 2 BC = -1)로 환산해 요일·일수를 계산한다.
+  const astroYear = year < 0 ? year + 1 : year
   const first = new Date(2000, month - 1, 1)
-  first.setFullYear(year)
+  first.setFullYear(astroYear)
   const next = new Date(2000, month, 1)
-  next.setFullYear(month === 12 ? year + 1 : year)
+  next.setFullYear(month === 12 ? astroYear + 1 : astroYear)
   const daysInMonth = Math.round((next.getTime() - first.getTime()) / 86400000)
   return { startWeekday: first.getDay(), daysInMonth }
 }
 
 function shiftMonth({ year, month }: YearMonth, delta: number): YearMonth {
   const zeroBased = month - 1 + delta
+  const yearDelta = Math.floor(zeroBased / 12)
+  let nextYear = year + yearDelta
+  // 역사 연도 표기에는 0년이 없으므로 BC 1년(-1) ↔ AD 1년(1) 경계를 건너뛴다
+  if (year < 0 && nextYear >= 0) nextYear += 1
+  else if (year > 0 && nextYear <= 0) nextYear -= 1
   return {
-    year: year + Math.floor(zeroBased / 12),
+    year: nextYear,
     month: (((zeroBased % 12) + 12) % 12) + 1,
   }
 }
@@ -175,7 +189,7 @@ export function EventCalendarPanel({
               ‹
             </MonthNav>
             <MonthTitle>
-              {current.year}년 {current.month}월
+              {formatCalYear(current.year)} {current.month}월
             </MonthTitle>
             <MonthNav
               type="button"
@@ -199,7 +213,7 @@ export function EventCalendarPanel({
                     goMonth({ year: olderMonth.year, month: olderMonth.month })
                   }
                 >
-                  ← {olderMonth.year}.{olderMonth.month}
+                  ← {formatCalYear(olderMonth.year, false)}.{olderMonth.month}
                 </Jump>
               )}
               {newerMonth && (
@@ -210,7 +224,7 @@ export function EventCalendarPanel({
                     goMonth({ year: newerMonth.year, month: newerMonth.month })
                   }
                 >
-                  {newerMonth.year}.{newerMonth.month} →
+                  {formatCalYear(newerMonth.year, false)}.{newerMonth.month} →
                 </Jump>
               )}
             </JumpGroup>
@@ -218,7 +232,7 @@ export function EventCalendarPanel({
 
           <Grid
             role="grid"
-            aria-label={`${current.year}년 ${current.month}월 사건 달력`}
+            aria-label={`${formatCalYear(current.year)} ${current.month}월 사건 달력`}
           >
             {WEEKDAYS.map((label, index) => (
               <Weekday key={label} $tone={toneOf(index)}>
@@ -281,7 +295,7 @@ export function EventCalendarPanel({
           <Side>
             <SideBlock>
               <SideTitle>
-                {current.year}년 {current.month}월의 사건
+                {formatCalYear(current.year)} {current.month}월의 사건
               </SideTitle>
               {monthEvents.length > 0 ? (
                 <Agenda>
@@ -310,7 +324,7 @@ export function EventCalendarPanel({
               <YearList>
                 {yearIndex.map(({ year, months }) => (
                   <YearRow key={year}>
-                    <YearLabel>{year}</YearLabel>
+                    <YearLabel>{formatCalYear(year, false)}</YearLabel>
                     <MonthChips>
                       {months.map(({ month, count }) => {
                         const active =
@@ -321,7 +335,7 @@ export function EventCalendarPanel({
                             type="button"
                             $active={active}
                             aria-pressed={active}
-                            aria-label={`${year}년 ${month}월 사건 ${count}건`}
+                            aria-label={`${formatCalYear(year)} ${month}월 사건 ${count}건`}
                             onClick={() => goMonth({ year, month })}
                           >
                             {month}월

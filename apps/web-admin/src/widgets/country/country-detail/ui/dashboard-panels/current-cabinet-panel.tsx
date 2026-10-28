@@ -28,6 +28,7 @@ import {
   inferDepartmentFrameId,
   suggestFrameItems,
 } from '@/shared/lib/ministry-department/department-name-frames'
+import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
@@ -176,15 +177,15 @@ export function CurrentCabinetPanel({
    * 이미 등록된 부처(외무부·국방부…)를 그대로 줄 세우면 그게 곧 할 일 목록이다.
    */
   const departmentsQuery = useQuery({
-    queryKey: ['administration-departments', 'by-country', countryId],
+    queryKey: administrationDepartmentsByCountryQueryKey(countryId),
     queryFn: () => administrationDepartmentApi.getByCountryId(countryId),
     enabled: !!countryId,
     staleTime: 5 * 60_000,
   })
 
-  /** 이 나라의 행정부 목록 — 카드 슬라이더의 모수 */
+  /** 이 나라의 행정부 목록 — 카드 슬라이더의 모수 (대시보드 통계·행정부 탭과 동일 키 공유) */
   const cabinetsQuery = useQuery({
-    queryKey: ['cabinets', 'by-country', countryId],
+    queryKey: ['cabinets-by-country', countryId, undefined],
     queryFn: () => personCareerApi.getCabinets({ countryId }),
     enabled: !!countryId,
     staleTime: 60_000,
@@ -307,7 +308,7 @@ export function CurrentCabinetPanel({
    * 국가(독일 → 독일 제국)의 선거까지 온다.
    */
   const electionsQuery = useQuery({
-    queryKey: ['elections', 'by-country', countryId],
+    queryKey: ['elections', 'list', `c:${countryId}`],
     queryFn: () => getElections({ countryId }),
     enabled: !!countryId,
     staleTime: 5 * 60_000,
@@ -368,7 +369,7 @@ export function CurrentCabinetPanel({
 
   const invalidateDepartments = () =>
     queryClient.invalidateQueries({
-      queryKey: ['administration-departments', 'by-country', countryId],
+      queryKey: administrationDepartmentsByCountryQueryKey(countryId),
     })
 
   const removeDepartment = async (departmentId: string, name: string) => {

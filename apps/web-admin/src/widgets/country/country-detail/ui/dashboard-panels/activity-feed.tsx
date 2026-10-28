@@ -49,7 +49,7 @@ export interface ActivityFeedProps {
   items: RecentActivityItem[]
   isLoading: boolean
   onPersonClick: (personId: string) => void
-  onEventClick: () => void
+  onEventClick: (eventId: string) => void
 }
 
 export function ActivityFeed({
@@ -77,7 +77,7 @@ export function ActivityFeed({
                   item={item}
                   onSelect={() => {
                     if (item.kind === 'person') onPersonClick(item.refId)
-                    else onEventClick()
+                    else onEventClick(item.refId)
                   }}
                 />
               </S.FeedItem>

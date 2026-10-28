@@ -48,11 +48,11 @@ import {
 } from './dashboard-panels/format'
 import { BondYieldSection } from './dashboard-panels/bond-yield-section'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
-import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
 import { CountryCompaniesSection } from './dashboard-panels/country-companies-section'
 import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
 import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PoliticalSystemPanel } from './dashboard-panels/political-system-panel'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
@@ -79,13 +79,6 @@ export function CountryDetailDashboard({
   const stats = useCountryDashboardStats(country)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
-  const totalRegistered =
-    stats.personCount +
-    stats.militaryCount +
-    stats.eventCount +
-    stats.administrationCount +
-    stats.cityCount
-
   const popNum = parsePopulation(country.population)
   const areaNum = country.areaSqKm != null ? Number(country.areaSqKm) : null
   const densityText =
@@ -102,7 +95,6 @@ export function CountryDetailDashboard({
    * (각 섹션이 스스로 빈 자리를 그린다 — 판단이 두 곳에 있으면 어긋난다.)
    */
   const isModern = country.type === 'modern'
-  const [dataManagerOpen, setDataManagerOpen] = useState(false)
 
   const hasAnyFact =
     popNum != null || country.areaSqKm != null || !!densityText || !!capitalText
@@ -175,15 +167,11 @@ export function CountryDetailDashboard({
    * 통째로 날아간다. 깊게 들어갈 사건만 모달 안 '사건 상세로 이동'으로 넘어간다.
    */
   const [previewEventId, setPreviewEventId] = useState<string | null>(null)
+  const [previewPersonId, setPreviewPersonId] = useState<string | null>(null)
   const lineageVisible = lineageExpanded
     ? lineageSorted
     : lineageSorted.slice(-LINEAGE_SUMMARY_LIMIT)
   const lineageHidden = lineageSorted.length - lineageVisible.length
-
-  // 정치 섹션은 데이터 로드 중이거나 셋 중 하나라도 있을 때만 노출.
-  const politicsHasData =
-    !!stats.currentCabinet || !!stats.nextElection || !!stats.recentElection
-  const politicsLoading = stats.loading.cabinets || stats.loading.elections
 
   // 기록 완성도는 여러 쿼리를 모수로 삼는다 — 하나라도 로딩 중이면 "비어 있다"고 말하지 않는다
   const completenessLoading =
@@ -195,7 +183,6 @@ export function CountryDetailDashboard({
     stats.loading.administration ||
     stats.loading.cities ||
     stats.loading.treaties
-  const showPolitics = politicsHasData || politicsLoading
 
   /**
    * 기록 축 정의 — 값이 있는 축은 카드로, 0인 축은 아래 한 줄 칩으로 갈린다.
@@ -243,6 +230,26 @@ export function CountryDetailDashboard({
       onClick: goRegions,
     },
     {
+      key: 'election',
+      label: '선거',
+      unit: '건',
+      value: stats.electionCount,
+      delta: 0,
+      isLoading: stats.loading.elections,
+      icon: <IconVote />,
+      onClick: goElections,
+    },
+    {
+      key: 'historical',
+      label: '과거 국가',
+      unit: '개',
+      value: stats.historicalCountryCount,
+      delta: 0,
+      isLoading: false,
+      icon: <IconHistory />,
+      onClick: goHistorical,
+    },
+    {
       key: 'treaty',
       label: '조약',
       unit: '건',
@@ -264,15 +271,14 @@ export function CountryDetailDashboard({
       badge: '준비 중',
     },
   ]
+  const totalRegistered = recordAxes.reduce((sum, axis) => sum + axis.value, 0)
   /* 행정부 묶음 — 규모 줄과 함께 아래 지면에서 한 번 쓴다 */
   const governmentSection = isModern ? (
     <CurrentCabinetPanel
       countryId={country.id}
       onOpen={goGovernment}
       onOpenElections={goElections}
-      onSelectPerson={(personId) =>
-        navigate(pathKeys.personsTimelineDetail(personId))
-      }
+      onSelectPerson={(personId) => setPreviewPersonId(personId)}
     >
       {/* 위 '이 정권을 낳은 선거'와 같은 선거면 카드를 그리지 않는다 */}
       {(linkedElectionId) => (
@@ -297,9 +303,7 @@ export function CountryDetailDashboard({
         <CurrentHeadsPanel
           isLoading={stats.loading.tenures}
           heads={stats.currentHeads}
-          onSelect={(personId) =>
-            navigate(pathKeys.personsTimelineDetail(personId))
-          }
+          onSelect={(personId) => setPreviewPersonId(personId)}
           onRegister={goGovernment}
         />
       </S.NowRow>
@@ -371,10 +375,8 @@ export function CountryDetailDashboard({
             <ActivityFeed
               items={stats.recentActivity}
               isLoading={stats.loading.activity}
-              onPersonClick={(personId) =>
-                navigate(pathKeys.personsTimelineDetail(personId))
-              }
-              onEventClick={goEvents}
+              onPersonClick={(personId) => setPreviewPersonId(personId)}
+              onEventClick={(eventId) => setPreviewEventId(eventId)}
             />
           </S.FeedPanel>
         </S.Section>
@@ -450,17 +452,24 @@ export function CountryDetailDashboard({
               전체 보기
             </S.SectionLink>
           </S.SectionTitleRow>
-          {lineageHidden > 0 && (
+          {(lineageHidden > 0 ||
+            (lineageExpanded && lineageSorted.length > LINEAGE_SUMMARY_LIMIT)) && (
             <S.LineageMoreRow>
               <S.SectionLink
                 type="button"
-                onClick={() => setLineageExpanded(true)}
+                onClick={() => setLineageExpanded((prev) => !prev)}
               >
-                ← 이전 {lineageHidden}개 펼치기
+                {lineageExpanded
+                  ? '최근만 보기'
+                  : `← 이전 ${lineageHidden}개 펼치기`}
               </S.SectionLink>
             </S.LineageMoreRow>
           )}
-          <LineageFlow historicalCountries={lineageVisible} />
+          <LineageFlow
+            historicalCountries={lineageVisible}
+            maxPerColumn={lineageExpanded ? undefined : 3}
+            onSelect={(id) => navigate(pathKeys.countryDetail(id))}
+          />
         </S.Section>
       )}
 
@@ -594,6 +603,12 @@ export function CountryDetailDashboard({
       )}
 
       {/*
+       * 4-2. 활동과 보완 — 기록·사건 캘린더 바로 아래에 두어, 아직 비어 있는 지표 차트
+       * 다섯 개를 스크롤하지 않고도 최근 활동과 보완할 축을 곧장 확인한다.
+       */}
+      <S.BottomRow>{managementPanels}</S.BottomRow>
+
+      {/*
         5. 기업 — 이 나라에 등록된 기업. 국가별 엔드포인트가 없어 전체 목록을 받아
         countryId로 거른다(실DB 5행). 없으면 아무것도 그리지 않는다.
       */}
@@ -629,29 +644,22 @@ export function CountryDetailDashboard({
           <TradeSection countryId={country.id} countryName={country.name} />
         </>
       )}
-      {country.type === 'modern' && (
-        <CountryDataManagerModal
-          countryId={country.id}
-          countryName={country.name}
-          open={dataManagerOpen}
-          onClose={() => setDataManagerOpen(false)}
-          initialTab="pyramid"
-        />
-      )}
 
-      {/* 캘린더에서 누른 사건 미리보기 — 섹션 조건 밖(루트)에 두어야 사건 수가
-          바뀌어 캘린더가 빈 분기로 넘어가도 열린 모달이 사라지지 않는다 */}
+      {/* 캘린더·활동에서 누른 사건/인물 미리보기 — 섹션 조건 밖(루트)에 두어야
+          하위 섹션이 리렌더되어도 열린 모달이 사라지지 않는다 */}
       <EventInlineModal
         eventId={previewEventId}
         onClose={() => setPreviewEventId(null)}
         onNavigate={(eventId) => navigate(pathKeys.events.detail(eventId))}
       />
-
-      {/*
-       * 6. 활동과 보완 — 기록 관리 축이라 나라 이야기(본문)와 성격이 다르다.
-       * 한때 넓은 화면에서 우측 레일로 뺐지만 레일을 걷어내면서 본문 아래로 되돌렸다.
-       */}
-      <S.BottomRow>{managementPanels}</S.BottomRow>
+      <PersonInlineModal
+        personId={previewPersonId}
+        onClose={() => setPreviewPersonId(null)}
+        onOpenDetail={(personId) => {
+          setPreviewPersonId(null)
+          navigate(pathKeys.personsTimelineDetail(personId))
+        }}
+      />
 
       </S.DashboardRoot>
     </>
