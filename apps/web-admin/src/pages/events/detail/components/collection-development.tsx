@@ -1,7 +1,7 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { FiPlus } from 'react-icons/fi'
+import { FiLink2, FiPlus } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -9,6 +9,7 @@ import {
   RADIUS,
   ledgerAccent,
   ledgerAccentSubtle,
+  ledgerBackground,
   ledgerHairline,
   ledgerHairlineStrong,
 } from '@/entities/event/ui/ledger-tokens'
@@ -118,15 +119,6 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
         <S.SectionSubtitle>
           {children.length > 0 ? `하위 사건 ${children.length}건` : '하위 사건으로 기록'}
         </S.SectionSubtitle>
-        <S.SectionActions>
-          <HeaderButton type="button" onClick={onGatherExisting}>
-            기존 사건 모으기
-          </HeaderButton>
-          <HeaderButton type="button" $primary onClick={() => setCreateOpen(true)}>
-            <FiPlus aria-hidden />
-            하위 사건 추가
-          </HeaderButton>
-        </S.SectionActions>
       </S.SectionHeader>
 
       {children.length === 0 ? (
@@ -139,6 +131,9 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             <S.TabEmptyAction type="button" onClick={() => setCreateOpen(true)}>
               <FiPlus aria-hidden />첫 하위 사건 등록
             </S.TabEmptyAction>
+            <TextButton type="button" onClick={onGatherExisting}>
+              이미 있는 사건을 모으기
+            </TextButton>
             <TextButton type="button" onClick={becomeSingle}>
               하위 없이 쓸 사건이면 단일 사건으로
             </TextButton>
@@ -221,6 +216,26 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
               </Steps>
             </PhaseGroup>
           ))}
+          {/*
+           * 다음 차례 — 추가는 목록 **끝**에 선다. 머리 오른쪽 버튼이던 시절엔 18건을 다 읽고 내려온 자리에서
+           * 다시 위로 올라가야 했고, 새 하위가 어디에 붙는지(차례의 끝)도 말하지 못했다.
+           * 번호 열에 '+' 노드를 세워 목록의 다음 줄처럼 읽히게 한다.
+           */}
+          <NextStep>
+            <AddChildRow type="button" onClick={() => setCreateOpen(true)}>
+              <NextStepNode aria-hidden>
+                <FiPlus />
+              </NextStepNode>
+              <AddChildText>
+                <AddChildTitle>하위 사건 추가</AddChildTitle>
+                <AddChildHint>{children.length + 1}번째 국면 — 전투·회담·조약을 차례 끝에</AddChildHint>
+              </AddChildText>
+            </AddChildRow>
+            <GatherButton type="button" onClick={onGatherExisting}>
+              <FiLink2 aria-hidden />
+              기존 사건 모으기
+            </GatherButton>
+          </NextStep>
         </Phases>
       )}
 
@@ -238,32 +253,148 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   )
 }
 
-const HeaderButton = styled.button<{ $primary?: boolean }>`
+/**
+ * 목록 끝 '다음 차례' 줄 — **비어 있는 다음 행**처럼 생겼다.
+ *
+ * 하위 사건 행(Step)과 같은 격자(번호 28px + 본문)·같은 세로 리듬이라, 번호 자리엔 강조색 '+' 노드,
+ * 제목 자리엔 '하위 사건 추가'와 몇 번째 국면이 될지가 선다. 줄 전체가 누르는 자리(hover 면)이고,
+ * 이미 있는 사건을 끌어오는 '모으기'는 같은 줄 오른쪽 끝의 보조 버튼이다.
+ * 위 머리카락선은 마지막 행의 아래선이 맡고, 이 줄은 점선 아래선으로 '아직 비어 있는 자리'를 말한다.
+ */
+const NextStep = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  max-width: ${S.PROSE_WIDTH}px;
+  /* Phases의 구획 간격(20px)을 되돌려 마지막 행에 붙인다 — 떨어져 있으면 목록 밖의 별도 버튼으로 읽힌다 */
+  margin-top: -20px;
+  border-bottom: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  /* 좁은 지면 — 추가 줄은 한 줄을 다 쓰고, 모으기는 그 아래 제목 열에서 시작(나란히 두면 설명이 낱말 중간에 꺾였다) */
+  @container eventdetail (max-width: 639px) {
+    flex-wrap: wrap;
+  }
+`
+
+const AddChildRow = styled.button`
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  /* 노드는 제목 첫 줄에 — 설명이 둘째 줄로 내려가도 '+'가 가운데로 끌려 내려가지 않게 */
+  align-items: start;
+  gap: 12px;
+  /* 좌우 8px 안쪽 여백만큼 바깥으로 — 번호 열·제목 열이 위 행들과 같은 x에 선다 */
+  margin: 0 0 0 -8px;
+  padding: 10px 8px;
+  border: none;
+  border-radius: ${RADIUS.SM};
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s;
+
+  @container eventdetail (max-width: 639px) {
+    flex-basis: 100%;
+  }
+
+  &:hover {
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
+  }
+`
+
+/** 번호 자리의 '+' — 번호(우측 정렬)와 같은 오른쪽 끝, 강조색 면 원. hover에 채워진다 */
+const NextStepNode = styled.span`
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  /* 제목 줄 상자(15px × 1.45 ≈ 22px)와 같은 높이 — 첫 줄 가운데에 선다 */
+  margin-top: 0;
+  border-radius: 50%;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  transition:
+    background 0.14s,
+    color 0.14s;
+
+  svg {
+    width: 13px;
+    height: 13px;
+    stroke-width: 2.5;
+  }
+
+  ${AddChildRow}:hover & {
+    background: ${({ theme }) => ledgerAccent(theme.mode)};
+    /* 채운 면의 전경은 지면색 — 다크 강조색은 밝은 인디고라 흰 글자가 묻힌다(ledger 규약) */
+    color: ${({ theme }) => ledgerBackground(theme.mode)};
+  }
+`
+
+const AddChildText = styled.span`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+`
+
+/** 행 제목(15px·700)과 같은 단 — 강조색이 '아직 없는 행'임을 말한다 */
+const AddChildTitle = styled.span`
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+/** 행의 날짜·분야 줄과 같은 단(12px·metaText) */
+const AddChildHint = styled.span`
+  font-size: 12px;
+  color: ${metaText};
+  word-break: keep-all;
+`
+
+/** 보조 동작 — 이미 있는 사건을 이 묶음으로(연관 탭의 모으기). 테두리 알약, 줄 오른쪽 끝 */
+const GatherButton = styled.button`
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 5px 11px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid
-    ${({ theme, $primary }) => ($primary ? 'transparent' : ledgerHairlineStrong(theme.mode))};
-  background: ${({ theme, $primary }) => ($primary ? ledgerAccentSubtle(theme.mode) : 'transparent')};
-  color: ${({ theme, $primary }) => ($primary ? ledgerAccent(theme.mode) : theme.colors.text.secondary)};
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
+  transition:
+    color 0.14s,
+    border-color 0.14s;
 
   svg {
     width: 13px;
     height: 13px;
   }
   &:hover {
-    color: ${({ theme, $primary }) => ($primary ? ledgerAccent(theme.mode) : theme.colors.text.primary)};
-    border-color: ${({ theme, $primary }) => ($primary ? ledgerAccent(theme.mode) : theme.colors.text.tertiary)};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.tertiary};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
+  }
+
+  @container eventdetail (max-width: 639px) {
+    margin: -4px 0 10px 40px;
   }
 `
 
