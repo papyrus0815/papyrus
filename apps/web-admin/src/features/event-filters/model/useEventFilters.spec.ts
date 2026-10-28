@@ -478,6 +478,30 @@ describe('useEventFilters — 활성 칩', () => {
     expect(result.current.selectedCategory).toBe(FILTER_ALL)
     expect(result.current.selectedCentury).toBe(19)
   })
+
+  it('검색어 칩 onClear와 handleResetFilters는 onClearKeyword 콜백도 함께 호출한다', () => {
+    const onClearKeyword = jest.fn()
+    const { result } = renderHook(() =>
+      useEventFilters([], [], [], [], [], {
+        initial: { keyword: '전쟁' },
+        onClearKeyword,
+      }),
+    )
+
+    const keywordChip = result.current.filterSummaryChips.find(
+      (chip) => chip.key === 'keyword',
+    )!
+    act(() => keywordChip.onClear())
+
+    expect(result.current.keyword).toBe('')
+    expect(onClearKeyword).toHaveBeenCalledTimes(1)
+
+    act(() => result.current.setKeyword('조약'))
+    act(() => result.current.handleResetFilters())
+
+    expect(result.current.keyword).toBe('')
+    expect(onClearKeyword).toHaveBeenCalledTimes(2)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

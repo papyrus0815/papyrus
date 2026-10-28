@@ -127,6 +127,41 @@ describe('useCatalogUrlSync — 검색어 축(검토 PERF-11)', () => {
     })
     expect(setSearchParams.mock.calls[0][1]).toEqual({ replace: true })
   })
+
+  it('다른 쿼리 파라미터만 바뀌었을 때 디바운스 대기 중인 빈 검색어(지우기)를 구 q로 되돌리지 않는다', () => {
+    const setKeywordInput = jest.fn()
+    const setSearchParams = jest.fn()
+    const { rerender } = renderHook(
+      (props: { search: string; keywordInput: string; debouncedKeyword: string }) =>
+        useCatalogUrlSync(
+          makeArgs(
+            props.search,
+            setSearchParams as unknown as SyncArgs['setSearchParams'],
+            {
+              keywordInput: props.keywordInput,
+              debouncedKeyword: props.debouncedKeyword,
+              setKeywordInput,
+            },
+          ),
+        ),
+      {
+        initialProps: {
+          search: 'q=foo&period=1888_1918',
+          keywordInput: 'foo',
+          debouncedKeyword: 'foo',
+        },
+      },
+    )
+
+    // 사용자가 검색어를 지우고(keywordInput='') 동시에 period가 해제돼 searchParams가 바뀐 순간
+    rerender({
+      search: 'q=foo',
+      keywordInput: '',
+      debouncedKeyword: 'foo',
+    })
+
+    expect(setKeywordInput).not.toHaveBeenCalled()
+  })
 })
 
 /**

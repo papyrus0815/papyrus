@@ -121,7 +121,16 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
    * 시딩이 통일된 뒤로는 이 값과 같을 때 아래 비교를 전부 돌려도 setState가 하나도
    * 발생하지 않지만, 매 write마다 14번 비교를 반복할 이유가 없어 짧게 우회한다.
    */
-  const lastSelfWriteRef = useRef<string | null>(null)
+  const lastSelfWriteRef = useRef<string | null>(searchParams.toString())
+  /**
+   * URL에 마지막으로 실려 있던 `q` — `period`·`eventForm`처럼 이 훅 밖에서
+   * `setSearchParams`를 부른 경우(URL의 `q` 자체는 안 바뀜), 디바운스 대기 중인
+   * `keywordInput`(예: 방금 검색어를 지운 상태)을 아직 URL에 남아 있는 구 `q`로
+   * 되덮어쓰지 않도록 `q`가 실제로 바뀐 외부 내비게이션만 반영한다.
+   */
+  const lastUrlKeywordRef = useRef<string>(
+    parseCatalogSearchParams(searchParams).keyword,
+  )
 
   /**
    * URL → 상태 단방향 동기화 — 외부 진입(뒤로가기·딥링크) 시 끌어와 반영.
@@ -131,16 +140,27 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
    * 다른 필터 변경으로 effect가 재실행되면 직전 state가 그대로 남는 버그가 있었음.
    */
   useEffect(() => {
-    if (lastSelfWriteRef.current === searchParams.toString()) return
+    const currentStr = searchParams.toString()
+    if (lastSelfWriteRef.current === currentStr) return
+    lastSelfWriteRef.current = currentStr
     const next = parseCatalogSearchParams(searchParams)
+    const prevUrlKeyword = lastUrlKeywordRef.current
+    lastUrlKeywordRef.current = next.keyword
 
     /**
      * 검색어는 **trim 기준**으로 비교한다(검토 URL-13). 입력창에는 사용자가 친 공백을
      * 남겨 두되, 공백만 남은 상태는 URL의 '키 없음'과 같은 값으로 본다 — 아니면
      * 공백을 입력하는 순간 URL write가 키를 지우고, 그 변화가 이 effect를 깨워
      * 입력창을 비워 버린다.
+     * 또한 URL의 `q` 자체가 바뀌었을 때만 입력창을 덮어쓴다 — 다른 파라미터 변경으로
+     * 이 effect가 돌 때 디바운스 대기 중인 입력창 비우기가 취소되는 것을 막는다.
      */
-    if (next.keyword !== keywordInput.trim()) setKeywordInput(next.keyword)
+    if (
+      next.keyword !== prevUrlKeyword &&
+      next.keyword !== keywordInput.trim()
+    ) {
+      setKeywordInput(next.keyword)
+    }
 
     if (next.selectedEventId !== selectedEventId)
       setSelectedEventId(next.selectedEventId)
@@ -229,6 +249,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     const nextStr = next.toString()
     if (nextStr !== searchParams.toString()) {
       lastSelfWriteRef.current = nextStr
+      lastUrlKeywordRef.current = parseCatalogSearchParams(next).keyword
       setSearchParams(next, { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

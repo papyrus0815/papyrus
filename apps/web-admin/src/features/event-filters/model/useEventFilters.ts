@@ -104,6 +104,11 @@ export interface EventFilterOptions {
    */
   period?: { from: number; to: number; label: string } | null
   onClearPeriod?: () => void
+  /**
+   * 검색어 입력창이 디바운스로 분리된 호출부(카탈로그 페이지)에서
+   * 검색어 칩·필터 초기화 시 입력창 상태도 함께 비우기 위한 콜백.
+   */
+  onClearKeyword?: () => void
   /** URL에서 읽어 온 초기 필터 값 — 첫 렌더에만 적용 */
   initial?: EventFilterInitialState
   /**
@@ -147,6 +152,7 @@ export const useEventFilters = (
     referenceState = READY_REFERENCE_STATE,
     period = null,
     onClearPeriod,
+    onClearKeyword,
   } = options
   const periodFrom = period?.from ?? null
   const periodTo = period?.to ?? null
@@ -580,7 +586,10 @@ export const useEventFilters = (
       chips.push({
         key: 'keyword',
         label: `검색어 · ${trimmedKeyword}`,
-        onClear: () => setKeyword(''),
+        onClear: () => {
+          setKeyword('')
+          onClearKeyword?.()
+        },
       })
     }
 
@@ -596,6 +605,7 @@ export const useEventFilters = (
   }, [
     period,
     onClearPeriod,
+    onClearKeyword,
     selectedCategory,
     selectedSubtype,
     selectedCountry,
@@ -628,6 +638,7 @@ export const useEventFilters = (
     setSelectedCategory(FILTER_ALL)
     setSelectedSubtype(FILTER_ALL)
     setKeyword('')
+    onClearKeyword?.()
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
     setSelectedContinent(FILTER_ALL)

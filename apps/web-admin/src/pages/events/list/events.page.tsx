@@ -226,6 +226,7 @@ export const EventsCatalogPage: React.FC = () => {
   }, [periodParam, periodOfParam])
   const setPeriodParams = useCallback(
     (value: { period: string; periodOf: string | null } | null) => {
+      if (!value && !periodParam && !periodOfParam) return
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev)
@@ -242,11 +243,13 @@ export const EventsCatalogPage: React.FC = () => {
         { replace: true },
       )
     },
-    [setSearchParams],
+    [periodParam, periodOfParam, setSearchParams],
   )
   const clearPeriod = useCallback(() => setPeriodParams(null), [setPeriodParams])
 
   // ===== 검색 / 페이지 상태 =====
+  const [keywordInput, setKeywordInput] = useState(initialUrlState.keyword)
+  const clearKeywordInput = useCallback(() => setKeywordInput(''), [])
   const [bookmarksOnly, setBookmarksOnly] = useState(
     initialUrlState.bookmarksOnly,
   )
@@ -561,6 +564,7 @@ export const EventsCatalogPage: React.FC = () => {
         selectedSubtype: initialUrlState.selectedSubtype,
       period,
       onClearPeriod: clearPeriod,
+      onClearKeyword: clearKeywordInput,
     },
   )
 
@@ -604,9 +608,14 @@ export const EventsCatalogPage: React.FC = () => {
   }, [selectedEventId])
 
   /** 키워드 디바운스 — 입력 자체는 즉시 반영(체감)하되 useEventFilters에 흘려보내는 값만 250ms로 묶음.
+   * 단, 검색어를 비울 때(✕ 버튼·백스페이스 전체 삭제·초기화)는 디바운스 대기 없이 즉시 비워
+   * URL(`q`)과 필터 상태가 어긋나지 않게 한다.
    * `isSearchPending`은 디바운스 idle 구간을 toolbar의 spinner로 노출 (UX: 적용됐는지 인지) */
-  const [keywordInput, setKeywordInput] = useState(initialUrlState.keyword)
-  const debouncedKeyword = useDebouncedValue(keywordInput, 250)
+  const debouncedKeyword = useDebouncedValue(
+    keywordInput,
+    250,
+    keywordInput.trim() === '',
+  )
   /*
    * 검색 결과를 그리는 일은 **저우선**으로 — 거르기 자체는 2ms인데 결과 행을 새로 그리는 데
    * 수백 ms가 들어, 디바운스가 끝난 순간 그 렌더가 이어지는 키 입력을 막았다. transition은
@@ -2269,16 +2278,30 @@ export const EventsCatalogPage: React.FC = () => {
  * ⚠️ 라우트 loader에서 하면 안 된다(처음엔 그렇게 했다). loader는 **같은 페이지 안의 URL
  * 변경마다** 다시 돌아서, 마지막 남은 필터 하나를 풀어 쿼리가 비는 순간 '방금 들어왔다'로
  * 오판해 저장된 쿼리(= 방금 푼 그 필터)로 되돌렸다 — 마지막 필터를 절대 못 푸는 상태.
- * 이 컴포넌트는 지면에 들어올 때 한 번만 마운트되므로 판정도 그때 한 번뿐이다.
- * 복원은 페이지를 그리기 전의 <Navigate replace>라 기본 목록이 한 번 그려지는 깜빡임이 없다.
+ * 또한 `restoreTo`를 마운트 후에도 계속 들고 있으면, 복원 뒤 사용자가 검색어나 마지막
+ * 필터를 지워 `location.search`가 다시 빈 문자열이 되는 순간 `<Navigate>`가 재발동해
+ * 지운 검색어가 그대로 되살아난다. 첫 복원(또는 페이지 본문 진입) 즉시 소진한다.
  */
 export const EventsCatalogRoute: React.FC = () => {
   const location = useLocation()
-  const [restoreTo] = useState(() =>
+  const [restoreTo, setRestoreTo] = useState(() =>
     location.search ? null : readCatalogQuery(),
   )
-  if (restoreTo && !location.search)
-    return <Navigate to={{ pathname: location.pathname, search: `?${restoreTo}` }} replace />
+  const hasEnteredPageRef = useRef(false)
+  useEffect(() => {
+    if (restoreTo && location.search) {
+      setRestoreTo(null)
+    }
+  }, [restoreTo, location.search])
+  if (restoreTo && !hasEnteredPageRef.current && !location.search) {
+    return (
+      <Navigate
+        to={{ pathname: location.pathname, search: `?${restoreTo}` }}
+        replace
+      />
+    )
+  }
+  hasEnteredPageRef.current = true
   return <EventsCatalogPage />
 }
 
