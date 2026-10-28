@@ -609,30 +609,25 @@ export class EventService {
       await this.prisma.$transaction((tx) => this.sections.sync(tx, id, eventSections))
     }
 
-    // EventImage 업데이트
+    /**
+     * EventImage — 통째 교체를 **한 트랜잭션**으로. 예전엔 트랜잭션 밖에서 deleteMany 후 행마다 create라,
+     * 중간에 하나라도 실패하면(잘못된 URL 길이 등) 지운 이미지가 돌아오지 않고 사건의 사진이 전부 사라졌다.
+     */
     if (eventImages !== undefined) {
-      // 기존 이미지 삭제
-      await this.prisma.eventImage.deleteMany({
-        where: { eventId: id },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.eventImage.deleteMany({ where: { eventId: id } })
+        if (eventImages.length === 0) return
+        await tx.eventImage.createMany({
+          data: eventImages.map((image, index) => ({
+            eventId: id,
+            imageUrl: image.imageUrl,
+            caption: image.caption,
+            source: image.source,
+            order: image.order !== undefined ? image.order : index,
+            isPrimary: image.isPrimary !== undefined ? image.isPrimary : index === 0,
+          })),
+        })
       })
-
-      // 새로운 이미지 생성
-      if (eventImages.length > 0) {
-        await Promise.all(
-          eventImages.map((image, index) =>
-            this.prisma.eventImage.create({
-              data: {
-                eventId: id,
-                imageUrl: image.imageUrl,
-                caption: image.caption,
-                source: image.source,
-                order: image.order !== undefined ? image.order : index,
-                isPrimary: image.isPrimary !== undefined ? image.isPrimary : index === 0,
-              },
-            }),
-          ),
-        )
-      }
     }
 
     /**
