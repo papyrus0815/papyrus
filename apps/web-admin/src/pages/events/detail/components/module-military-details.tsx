@@ -1,3 +1,6 @@
+import { useState } from 'react'
+
+import { FiChevronDown, FiChevronUp } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { RADIUS } from '@/entities/event/ui/ledger-tokens'
@@ -73,6 +76,44 @@ export function ModuleMilitaryDetails({
 
   const warCost = typeof event.warCost === 'string' ? event.warCost : ''
 
+  /**
+   * 분쟁 유형 — 사건 형식(WAR·BATTLE…)과 같은 말이면 줄을 세우지 않는다. 내용 있는 작전 정보 5건이 모두
+   * 형식과 같은 값('전쟁')을 한 번 더 적고 있었다. 형식과 **다를 때만**(전쟁 사건의 공성 국면 등) 보인다.
+   */
+  const typeIsConflict = CONFLICT_TYPES.some((type) => type.value === event.type)
+  const showConflictType = md.conflictType ? md.conflictType !== event.type : !typeIsConflict
+
+  /**
+   * 빈 칸은 접는다 — 내용 없는 작전 정보(이집트 원정)는 '입력'·'선택' 자리표시 13개가 414px을 먹었다.
+   * 채운 줄만 보이고, 빈 줄은 '비어 있는 항목 N개'를 눌러야 열린다. 전부 비었으면 안내 한 줄 + '항목 채우기'.
+   */
+  const filledText = TEXT_FIELDS.filter((field) => String(md[field.key] ?? '').trim())
+  const emptyText = TEXT_FIELDS.filter((field) => !String(md[field.key] ?? '').trim())
+  const hasAnything =
+    filledText.length > 0 || combatTypes.length > 0 || warCost.trim() !== '' || Boolean(md.conflictType)
+  const [showEmpty, setShowEmpty] = useState(false)
+  const emptyCount =
+    emptyText.length +
+    (combatTypes.length === 0 ? 1 : 0) +
+    (warCost.trim() === '' ? 1 : 0) +
+    (showConflictType && !md.conflictType ? 1 : 0)
+  const isShown = (filled: boolean) => filled || showEmpty
+
+  const textRow = (field: (typeof TEXT_FIELDS)[number]) => (
+    <S.DefRow key={field.key}>
+      <S.DefLabel>{field.label}</S.DefLabel>
+      <S.DefValue>
+        <InlineText
+          value={(md[field.key] as string | undefined) ?? ''}
+          onSave={(next) => updateDetails({ [field.key]: next.trim() || undefined })}
+          placeholder="입력"
+          multiline
+          multilineEnter
+        />
+      </S.DefValue>
+    </S.DefRow>
+  )
+
   return (
     <S.Section id="module-military-details">
       <S.SectionHeader>
@@ -94,6 +135,7 @@ export function ModuleMilitaryDetails({
 
       <S.ModuleDataCard $accent={MODULE_COLOR['military-details']}>
         <S.Definitions>
+          {showConflictType && isShown(Boolean(md.conflictType)) && (
           <S.DefRow>
             <S.DefLabel>분쟁 유형</S.DefLabel>
             <S.DefValue>
@@ -107,7 +149,9 @@ export function ModuleMilitaryDetails({
               />
             </S.DefValue>
           </S.DefRow>
+          )}
 
+          {isShown(combatTypes.length > 0) && (
           <S.DefRow>
             <S.DefLabel>전투 유형</S.DefLabel>
             <S.DefValue>
@@ -126,24 +170,12 @@ export function ModuleMilitaryDetails({
               </ChipRow>
             </S.DefValue>
           </S.DefRow>
+          )}
 
-          {TEXT_FIELDS.map((field) => (
-            <S.DefRow key={field.key}>
-              <S.DefLabel>{field.label}</S.DefLabel>
-              <S.DefValue>
-                <InlineText
-                  value={(md[field.key] as string | undefined) ?? ''}
-                  onSave={(next) =>
-                    updateDetails({ [field.key]: next.trim() || undefined })
-                  }
-                  placeholder="입력"
-                  multiline
-                  multilineEnter
-                />
-              </S.DefValue>
-            </S.DefRow>
-          ))}
+          {/* 순서는 고정(목적→…→전략적 영향) — 채운 줄과 빈 줄을 갈라 놓지 않는다 */}
+          {TEXT_FIELDS.filter((field) => isShown(filledText.includes(field))).map(textRow)}
 
+          {isShown(warCost.trim() !== '') && (
           <S.DefRow>
             <S.DefLabel>전쟁 비용</S.DefLabel>
             <S.DefValue>
@@ -154,7 +186,15 @@ export function ModuleMilitaryDetails({
               />
             </S.DefValue>
           </S.DefRow>
+          )}
         </S.Definitions>
+        {!hasAnything && !showEmpty && <EmptyNote>아직 적은 작전 정보가 없습니다.</EmptyNote>}
+        {emptyCount > 0 && (
+          <EmptyToggle type="button" aria-expanded={showEmpty} onClick={() => setShowEmpty((prev) => !prev)}>
+            {showEmpty ? <FiChevronUp aria-hidden /> : <FiChevronDown aria-hidden />}
+            {showEmpty ? '빈 항목 접기' : hasAnything ? `비어 있는 항목 ${emptyCount}개` : `항목 채우기 (${emptyCount})`}
+          </EmptyToggle>
+        )}
       </S.ModuleDataCard>
     </S.Section>
   )
@@ -189,4 +229,35 @@ const ToggleChip = styled.button<{ $active: boolean }>`
     border-color: ${MODULE_COLOR['military-details']};
     color: ${({ theme }) => theme.colors.text.primary};
   }
+`
+
+/** 빈 줄 펼치기 — 카드 안 마지막 줄, 낮은 목소리의 글자 버튼 */
+const EmptyToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+`
+
+const EmptyNote = styled.p`
+  margin: 0;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
