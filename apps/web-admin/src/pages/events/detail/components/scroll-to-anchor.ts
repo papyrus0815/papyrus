@@ -8,6 +8,17 @@
  *    '여파 쓰기'를 누르면 문서가 4,609 → 3,800px로 줄며 여파 머리가 화면 위 -53px에 섰다).
  *    스크롤이 멈춘 뒤 다시 재서 어긋났으면 즉시 한 번 더 맞춘다.
  */
+/**
+ * 앵커가 줄여 둔 영역(긴 배경의 '줄여 보기') 안에 있으면 먼저 펼치라고 알린다.
+ * 버블링 DOM 이벤트라 목차·장부·해시 진입이 줄여 보기의 상태를 몰라도 된다 — 받는 쪽은
+ * 그 자리에서 flushSync로 펼쳐, 이어지는 scrollIntoView가 펼친 뒤의 좌표를 재게 한다.
+ */
+export const REVEAL_ANCHOR_EVENT = 'papyrus:reveal-anchor'
+
+export function revealAnchor(target: HTMLElement) {
+  target.dispatchEvent(new CustomEvent(REVEAL_ANCHOR_EVENT, { bubbles: true }))
+}
+
 export function scrollToAnchor(
   anchorId: string,
   options: { block?: ScrollLogicalPosition; updateHash?: boolean } = {},
@@ -15,6 +26,7 @@ export function scrollToAnchor(
   const { block = 'start', updateHash = true } = options
   const target = document.getElementById(anchorId)
   if (!target) return
+  revealAnchor(target)
   target.scrollIntoView({ behavior: 'smooth', block })
   if (updateHash) window.history.replaceState(null, '', `#${anchorId}`)
 

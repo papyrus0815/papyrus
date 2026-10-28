@@ -8,10 +8,14 @@
 import {
   AFTERMATH_TYPE,
   BACKGROUND_TYPE,
+  backgroundLength,
   isBackgroundSection,
+  LONG_BACKGROUND_CHARS,
   mergeSectionPayload,
   NARRATIVE_TYPE,
+  plainTextLength,
   sectionKindOf,
+  shouldCollapseBackground,
   type SectionRow,
   splitTitlePeriod,
   syncRowsWithServer,
@@ -189,5 +193,37 @@ describe('splitTitlePeriod', () => {
     expect(splitTitlePeriod(named)).toEqual({ title: named, period: null })
     expect(splitTitlePeriod('(1950)')).toEqual({ title: '(1950)', period: null })
     expect(splitTitlePeriod('개전 배경')).toEqual({ title: '개전 배경', period: null })
+  })
+})
+
+describe('긴 배경 줄여 보기', () => {
+  it('글자수는 태그를 걷고 공백을 접어 센다', () => {
+    expect(plainTextLength('<p>가나&nbsp;다</p>\n<p>  라</p>')).toBe(6)
+    expect(plainTextLength(null)).toBe(0)
+    expect(plainTextLength('<p></p>')).toBe(0)
+  })
+
+  it('배경 길이 = 요약 + 단락 제목·본문', () => {
+    expect(
+      backgroundLength('<p>12345</p>', [
+        row({ title: '개전', content: '<p>abc</p>' }),
+        row({ title: '', content: '<p>de</p>' }),
+      ]),
+    ).toBe(5 + 2 + 3 + 2)
+  })
+
+  it('길어도 뒤에 읽을 본문이 없으면 줄이지 않는다(배경이 곧 본문 전부)', () => {
+    expect(
+      shouldCollapseBackground({ length: LONG_BACKGROUND_CHARS * 10, hasFollowingContent: false }),
+    ).toBe(false)
+  })
+
+  it('길고 뒤에 본문이 있을 때만 줄인다', () => {
+    expect(
+      shouldCollapseBackground({ length: LONG_BACKGROUND_CHARS + 1, hasFollowingContent: true }),
+    ).toBe(true)
+    expect(
+      shouldCollapseBackground({ length: LONG_BACKGROUND_CHARS, hasFollowingContent: true }),
+    ).toBe(false)
   })
 })

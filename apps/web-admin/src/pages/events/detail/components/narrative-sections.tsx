@@ -11,9 +11,10 @@
  * - **만들면 바로 쓴다.** '단락 추가'로 생긴 단락은 제목 입력이 열린 채 포커스까지 와 있고,
  *   제목이 빈 단락은 '제목 붙이기' 한 번으로 같은 자리에서 열린다.
  */
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 
-import { FiArrowDown, FiArrowUp, FiPlus, FiTrash2, FiType } from 'react-icons/fi'
+import { FiArrowDown, FiArrowUp, FiChevronDown, FiPlus, FiTrash2, FiType } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -30,7 +31,8 @@ import { emphasisToHtml } from '@/shared/lib/emphasis-markup'
 
 import * as S from '../styles'
 import { InlineRichText, InlineSelect, InlineText } from './inline'
-import { type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
+import { plainTextLength, type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
+import { REVEAL_ANCHOR_EVENT, revealAnchor } from './scroll-to-anchor'
 
 export * from './narrative-sections.lib'
 
@@ -62,6 +64,15 @@ interface NarrativeSectionListProps {
    * 예전엔 선 밖에 따로 놓여, 단락이 없는 사건(대부분)은 배경에 타임라인이 아예 없었다.
    */
   lead?: ReactNode
+  /**
+   * 줄여 보기 — 요약은 몇 줄만, 번호 단락은 **제목 한 줄씩**(목차처럼). 단락 제목을 누르면 **그 단락만**
+   * 제자리에서 열고 닫는다(나머지는 접힌 채). 본문은 `hidden="until-found"`로 숨겨 페이지 찾기(Ctrl+F)에는 걸린다.
+   */
+  collapsed?: boolean
+  /** 줄여 보기에서 요약도 자를지 — 짧은 요약은 그대로 둔다(자르면 마지막 줄만 흐려진다) */
+  clampLead?: boolean
+  /** 잘린 요약으로 편집 포커스가 들어왔다 — 잘린 채로 편집하면 커서가 안 보인다 */
+  onRequestExpand?: () => void
 }
 
 export function NarrativeSectionList({
@@ -77,6 +88,9 @@ export function NarrativeSectionList({
   autoEditKey,
   subjectOptions,
   lead,
+  collapsed = false,
+  clampLead = false,
+  onRequestExpand,
 }: NarrativeSectionListProps) {
   /**
    * '제목 붙이기'로 연 단락들 — 제목이 빈 채로도 입력을 띄워 두려면 이 기억이 필요하다
@@ -89,13 +103,57 @@ export function NarrativeSectionList({
    */
   const [bodyOpenKey, setBodyOpenKey] = useState<string | null>(null)
 
+  /**
+   * 줄여 보기에서 하나씩 연 단락 — 다시 줄이면(collapsed가 참이 되면) 모두 닫힌 데서 시작한다.
+   * 줄여 보기가 아닐 때는 쓰지 않는다(전부 열려 있다).
+   */
+  const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(() => new Set())
+  useEffect(() => {
+    if (collapsed) setOpenKeys(new Set())
+  }, [collapsed])
+  const toggleRow = (key: string) =>
+    setOpenKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  /*
+   * 목차·장부·해시·찾기가 접힌 단락(#background-3)으로 가려 하면 **그 단락만** 연다 — 이벤트를 여기서
+   * 멈춰 섹션 전체 펼치기(DetailNarrative)까지 올라가지 않게 한다. flushSync: 부른 쪽이 곧바로 좌표를 잰다.
+   */
+  const stackRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const node = stackRef.current
+    if (!node || !collapsed) return undefined
+    const onReveal = (revealEvent: Event) => {
+      const item = (revealEvent.target as HTMLElement).closest<HTMLElement>('[data-row-key]')
+      const key = item?.dataset.rowKey
+      if (!key) return
+      revealEvent.stopPropagation()
+      flushSync(() => setOpenKeys((prev) => (prev.has(key) ? prev : new Set(prev).add(key))))
+    }
+    node.addEventListener(REVEAL_ANCHOR_EVENT, onReveal)
+    return () => node.removeEventListener(REVEAL_ANCHOR_EVENT, onReveal)
+  }, [collapsed])
+
   return (
-    <SectionStack>
+    <SectionStack
+      ref={stackRef}
+      $compact={collapsed}
+      onFocusCapture={(focusEvent) => {
+        if (!collapsed || !onRequestExpand) return
+        /* 단락(제목 버튼·하나씩 연 본문)은 제자리에서 다룬다 — 섹션 전체를 펴는 건 잘린 요약을 편집할 때뿐 */
+        if ((focusEvent.target as HTMLElement).closest('[data-row-key]')) return
+        onRequestExpand()
+      }}
+    >
       {lead && (
         <SectionItem>
           <LeadNode aria-hidden />
           <SectionPeriod>요약</SectionPeriod>
-          {lead}
+          {collapsed && clampLead ? <LeadClamp>{lead}</LeadClamp> : lead}
         </SectionItem>
       )}
       {rows.map((row, index) => {
@@ -103,107 +161,185 @@ export function NarrativeSectionList({
         const titleOpen =
           hasTitle || row.key === autoEditKey || titleOpenKeys.includes(row.key)
         const ordinal = index + 1
-        const { period } = splitTitlePeriod(row.title)
+        const { period, title: titleText } = splitTitlePeriod(row.title)
+        const anchorId = `${anchorPrefix}-${ordinal}`
+        const bodyLength = plainTextLength(row.content)
+        const rowOpen = !collapsed || openKeys.has(row.key)
         return (
-          <SectionItem key={row.key} id={`${anchorPrefix}-${ordinal}`}>
+          <SectionItem
+            key={row.key}
+            id={anchorId}
+            data-row-key={row.key}
+            data-open={collapsed && rowOpen ? 'true' : undefined}
+          >
             {/* 타임라인 노드 — 선 위의 번호. 시기가 있으면 노드는 그 날짜 줄과 나란히 선다(연혁과 같은 문법) */}
             <SectionIndex aria-hidden>{ordinal}</SectionIndex>
             {period && <SectionPeriod>{period}</SectionPeriod>}
-            <SectionHead>
-              {titleOpen ? (
-                <SectionTitleHost>
-                  <InlineText
-                    value={row.title}
-                    onSave={(next) => {
-                      onFieldChange(index, { title: next })
-                      if (next.trim() && !hasBodyText(row.content)) {
-                        setBodyOpenKey(row.key)
-                      }
-                    }}
-                    placeholder="단락 제목 — 예: 개전 배경, 전쟁 경과"
-                    hint="Enter 저장 · Esc 취소"
-                    label={`${labelPrefix} ${ordinal}단락 제목`}
-                    /* 시기는 위 날짜 줄로 올렸다 — 읽을 때만 떼고, 편집은 원문 그대로 */
-                    renderRead={(value) => splitTitlePeriod(value).title}
-                    /* 방금 만든 단락·방금 연 제목은 입력이 열린 채로 뜬다. */
-                    autoEdit={!hasTitle}
-                  />
-                </SectionTitleHost>
-              ) : (
-                <AddTitleBtn
-                  type="button"
-                  onClick={() =>
-                    setTitleOpenKeys((keys) => [...keys, row.key])
-                  }
-                >
-                  <FiType aria-hidden />
-                  제목 붙이기
-                </AddTitleBtn>
-              )}
-              {subjectOptions && subjectOptions.length > 0 && (
-                <SubjectPicker data-linked={row.subjectEventId ? 'true' : undefined}>
-                  <InlineSelect
-                    value={row.subjectEventId ?? ''}
-                    options={[{ value: '', label: '연결 안 함' }, ...subjectOptions]}
-                    onSave={(next) => onFieldChange(index, { subjectEventId: next || null })}
-                    placeholder="↳ 하위 사건"
-                    label={`${labelPrefix} ${ordinal}단락이 서술하는 하위 사건`}
-                    prefix={row.subjectEventId ? <span aria-hidden="true">↳ </span> : undefined}
-                  />
-                </SubjectPicker>
-              )}
-              <RowActions>
-                <RowActionBtn
-                  type="button"
-                  onClick={() => onMove(index, -1)}
-                  disabled={index === 0}
-                  aria-label={`${ordinal}단락 위로`}
-                  title="위로"
-                >
-                  <FiArrowUp />
-                </RowActionBtn>
-                <RowActionBtn
-                  type="button"
-                  onClick={() => onMove(index, 1)}
-                  disabled={index === rows.length - 1}
-                  aria-label={`${ordinal}단락 아래로`}
-                  title="아래로"
-                >
-                  <FiArrowDown />
-                </RowActionBtn>
-                <RowActionBtn
-                  type="button"
-                  onClick={() => onRemove(index)}
-                  aria-label={`${ordinal}단락 삭제`}
-                  title="삭제"
-                  $danger
-                >
-                  <FiTrash2 />
-                </RowActionBtn>
-              </RowActions>
-            </SectionHead>
-            <SectionBodyHost>
-              <InlineRichText
-                value={row.content}
-                onSave={(next) => onFieldChange(index, { content: next })}
-                placeholder={bodyPlaceholder}
-                label={`${labelPrefix} ${ordinal}단락 본문`}
-                onPersonClick={onPersonClick}
-                onEntityLink={onEntityLink}
-                transformReadHtml={emphasisToHtml}
-                autoOpen={row.key === bodyOpenKey}
-                /**
-                 * sticky ✎ 금지 — sticky는 '개요'처럼 페이지를 통째로 차지하는 긴 본문
-                 * 하나를 위한 것이다. 단락이 여럿 쌓인 목록에서 켜 두면 각 단락의 버튼이
-                 * 제 블록을 벗어나 **다음 단락 위로 떠다닌다**(InlineRichText 주석 참고).
-                 */
-                stickyEditButton={false}
-              />
-            </SectionBodyHost>
+            {collapsed ? (
+              /* 줄인 단락 — 누르면 이 단락만 제자리에서 열고 닫는다. 펼친 제목과 같은 크기·굵기 */
+              <CollapsedHead
+                type="button"
+                aria-expanded={rowOpen}
+                aria-controls={`${anchorId}-body`}
+                onClick={() => toggleRow(row.key)}
+                aria-label={`${labelPrefix} ${ordinal}단락 — ${hasTitle ? titleText : '제목 없음'}`}
+              >
+                {hasTitle ? (
+                  titleText
+                ) : (
+                  /* 제목 없는 단락은 본문 첫머리로 — '제목 없음'만 늘어서면 무엇인지 모른다 */
+                  <CollapsedPreview>{bodyPreview(row.content) || '빈 단락'}</CollapsedPreview>
+                )}
+                <CollapsedTail aria-hidden>
+                  {bodyLength > 0 && `${bodyLength.toLocaleString('ko-KR')}자`}
+                  <FiChevronDown />
+                </CollapsedTail>
+              </CollapsedHead>
+            ) : (
+              <SectionHead>
+                {titleOpen ? (
+                  <SectionTitleHost>
+                    <InlineText
+                      value={row.title}
+                      onSave={(next) => {
+                        onFieldChange(index, { title: next })
+                        if (next.trim() && !hasBodyText(row.content)) {
+                          setBodyOpenKey(row.key)
+                        }
+                      }}
+                      placeholder="단락 제목 — 예: 개전 배경, 전쟁 경과"
+                      hint="Enter 저장 · Esc 취소"
+                      label={`${labelPrefix} ${ordinal}단락 제목`}
+                      /* 시기는 위 날짜 줄로 올렸다 — 읽을 때만 떼고, 편집은 원문 그대로 */
+                      renderRead={(value) => splitTitlePeriod(value).title}
+                      /* 방금 만든 단락·방금 연 제목은 입력이 열린 채로 뜬다. */
+                      autoEdit={!hasTitle}
+                    />
+                  </SectionTitleHost>
+                ) : (
+                  <AddTitleBtn
+                    type="button"
+                    onClick={() =>
+                      setTitleOpenKeys((keys) => [...keys, row.key])
+                    }
+                  >
+                    <FiType aria-hidden />
+                    제목 붙이기
+                  </AddTitleBtn>
+                )}
+                {subjectOptions && subjectOptions.length > 0 && (
+                  <SubjectPicker data-linked={row.subjectEventId ? 'true' : undefined}>
+                    <InlineSelect
+                      value={row.subjectEventId ?? ''}
+                      options={[{ value: '', label: '연결 안 함' }, ...subjectOptions]}
+                      onSave={(next) => onFieldChange(index, { subjectEventId: next || null })}
+                      placeholder="↳ 하위 사건"
+                      label={`${labelPrefix} ${ordinal}단락이 서술하는 하위 사건`}
+                      prefix={row.subjectEventId ? <span aria-hidden="true">↳ </span> : undefined}
+                    />
+                  </SubjectPicker>
+                )}
+                <RowActions>
+                  <RowActionBtn
+                    type="button"
+                    onClick={() => onMove(index, -1)}
+                    disabled={index === 0}
+                    aria-label={`${ordinal}단락 위로`}
+                    title="위로"
+                  >
+                    <FiArrowUp />
+                  </RowActionBtn>
+                  <RowActionBtn
+                    type="button"
+                    onClick={() => onMove(index, 1)}
+                    disabled={index === rows.length - 1}
+                    aria-label={`${ordinal}단락 아래로`}
+                    title="아래로"
+                  >
+                    <FiArrowDown />
+                  </RowActionBtn>
+                  <RowActionBtn
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    aria-label={`${ordinal}단락 삭제`}
+                    title="삭제"
+                    $danger
+                  >
+                    <FiTrash2 />
+                  </RowActionBtn>
+                </RowActions>
+              </SectionHead>
+            )}
+            {/* 줄여 보기에도 본문은 같은 자리에 둔 채 숨긴다 — 모드가 바뀌어도 이 노드가 살아 있어야
+                찾기(Ctrl+F)가 펼친 뒤에도 그 글자를 가리킨다. 찾기가 닿으면 브라우저가 beforematch를 쏜다 */}
+            <UntilFound id={`${anchorId}-body`} active={!rowOpen} onBeforeMatch={revealAnchor}>
+              <SectionBodyHost>
+                <InlineRichText
+                  value={row.content}
+                  onSave={(next) => onFieldChange(index, { content: next })}
+                  placeholder={bodyPlaceholder}
+                  label={`${labelPrefix} ${ordinal}단락 본문`}
+                  onPersonClick={onPersonClick}
+                  onEntityLink={onEntityLink}
+                  transformReadHtml={emphasisToHtml}
+                  autoOpen={row.key === bodyOpenKey}
+                  /**
+                   * sticky ✎ 금지 — sticky는 '개요'처럼 페이지를 통째로 차지하는 긴 본문
+                   * 하나를 위한 것이다. 단락이 여럿 쌓인 목록에서 켜 두면 각 단락의 버튼이
+                   * 제 블록을 벗어나 **다음 단락 위로 떠다닌다**(InlineRichText 주석 참고).
+                   */
+                  stickyEditButton={false}
+                />
+              </SectionBodyHost>
+            </UntilFound>
           </SectionItem>
         )
       })}
     </SectionStack>
+  )
+}
+
+/** 줄인 단락의 미리보기 — 본문 첫머리 한 줄(제목이 없을 때만) */
+function bodyPreview(html: string): string {
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
+  return text.length > 80 ? `${text.slice(0, 80)}…` : text
+}
+
+/**
+ * `hidden="until-found"` — 화면에선 빠지되 페이지 찾기에는 걸리는 숨김. React 속성으로는 문자열 값을
+ * 보장할 수 없어 DOM에 직접 단다. 찾기가 닿으면 브라우저가 속성을 걷고 beforematch를 쏜다.
+ */
+function UntilFound({
+  id,
+  active,
+  children,
+  onBeforeMatch,
+}: {
+  id?: string
+  active: boolean
+  children: ReactNode
+  onBeforeMatch: (node: HTMLElement) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const onBeforeMatchRef = useRef(onBeforeMatch)
+  onBeforeMatchRef.current = onBeforeMatch
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return undefined
+    if (!active) {
+      node.removeAttribute('hidden')
+      return undefined
+    }
+    /* until-found를 모르는 브라우저는 hidden을 그냥 참으로 읽는다 — 숨김 자체는 어디서나 보장 */
+    node.setAttribute('hidden', 'until-found')
+    const handle = () => onBeforeMatchRef.current(node)
+    node.addEventListener('beforematch', handle)
+    return () => node.removeEventListener('beforematch', handle)
+  }, [active])
+  return (
+    <div id={id} ref={ref}>
+      {children}
+    </div>
   )
 }
 
@@ -222,11 +358,12 @@ function hasBodyText(html: string): boolean {
 const TIMELINE_INSET = 38
 const NODE_SIZE = 22
 
-export const SectionStack = styled.div`
+export const SectionStack = styled.div<{ $compact?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  /* 줄여 보기는 목차처럼 촘촘히 — 단락마다 본문 자리였던 32px을 다 띄우면 줄인 보람이 없다 */
+  gap: ${({ $compact }) => ($compact ? 14 : 32)}px;
 
   /* 세로선 — 첫 노드 가운데에서 시작해 마지막 노드 아래로 조금 흘러내린다 */
   &::before {
@@ -242,7 +379,7 @@ export const SectionStack = styled.div`
   }
 
   @media (max-width: 640px) {
-    gap: 26px;
+    gap: ${({ $compact }) => ($compact ? 12 : 26)}px;
   }
 `
 
@@ -258,6 +395,11 @@ const SectionItem = styled.div`
   }
   /* 단락 하나를 직접 가리키는 앵커(#background-2) — 헤더 아래로 파묻히지 않게. */
   scroll-margin-top: 24px;
+
+  /* 줄여 보기에서 하나만 연 단락 — 다음 제목 줄과 붙지 않게 본문 아래를 띄운다 */
+  &[data-open='true'] {
+    padding-bottom: 12px;
+  }
 `
 
 /** 번호 + 제목(또는 '제목 붙이기') 한 줄. 액션은 이 줄 우측에 겹쳐 뜬다. */
@@ -313,6 +455,78 @@ const LeadNode = styled.span`
   border-radius: 50%;
   background: ${({ theme }) => theme.colors.text.tertiary};
   box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
+`
+
+/**
+ * 줄여 보기의 요약 — 네 줄(15.5px × 1.78)까지 보이고 아래를 흐린다.
+ * 흐림은 mask라 지면색을 몰라도 된다(ClampedBlock과 같은 처리).
+ */
+const LeadClamp = styled.div`
+  max-height: ${Math.round(15.5 * 1.78 * 4)}px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+`
+
+/** 줄인 단락의 머리 — 누르면 펼치고 그 단락으로 간다. 우측 글자수는 '얼마나 긴 단락인가'의 귀띔 */
+const CollapsedHead = styled.button`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 23px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  text-align: left;
+  word-break: keep-all;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  transition: color ${MOTION.fast};
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 3px;
+    border-radius: ${RADIUS.XS};
+  }
+
+  @media (max-width: 640px) {
+    font-size: 15px;
+  }
+`
+
+const CollapsedPreview = styled.span`
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 우측 끝 — 글자수 + 열림 표시(▾, 열리면 뒤집힌다) */
+const CollapsedTail = styled.span`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${metaText};
+
+  svg {
+    width: 14px;
+    height: 14px;
+    transition: transform ${MOTION.fast};
+  }
+  [aria-expanded='true'] > & svg {
+    transform: rotate(180deg);
+  }
 `
 
 /** 시기 줄 — 연혁의 날짜 줄(TLDate)과 같은 크기·굵기. 노드와 같은 높이에서 시작한다. */

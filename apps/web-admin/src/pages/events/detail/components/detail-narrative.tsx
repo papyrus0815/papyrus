@@ -1,5 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 
+import { FiChevronDown, FiChevronUp } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
@@ -15,13 +17,19 @@ import {
   AddSectionButton,
   AFTERMATH_TYPE,
   BACKGROUND_TYPE,
+  backgroundLength,
+  LEAD_CLAMP_CHARS,
+  LONG_BACKGROUND_CHARS,
   mergeSectionPayload,
   NARRATIVE_TYPE,
   NarrativeSectionList,
+  plainTextLength,
   sectionKindOf,
+  shouldCollapseBackground,
   type SectionRow,
   syncRowsWithServer,
 } from './narrative-sections'
+import { REVEAL_ANCHOR_EVENT, scrollToAnchor } from './scroll-to-anchor'
 
 interface DetailNarrativeProps {
   event: EventDetail
@@ -266,17 +274,73 @@ export function DetailNarrative({
    */
   const [autoEditKey, setAutoEditKey] = useState<string | null>(null)
 
+  /**
+   * 긴 배경 줄여 보기 — 요약 몇 줄 + 단락 제목만. 처음 상태는 **연 순간 한 번** 정한다
+   * (길고, 뒤에 읽을 본문이 있을 때만 — 판정은 shouldCollapseBackground). 편집으로 길이가
+   * 바뀌어도 다시 접지 않는다. 다른 사건으로 가면 페이지가 리마운트되어 새로 정한다.
+   */
+  const [backgroundCollapsed, setBackgroundCollapsed] = useState(() =>
+    shouldCollapseBackground({
+      length: backgroundLength(event.background, serverBackground),
+      hasFollowingContent:
+        developmentSlot != null ||
+        serverNarrative.some((section) => plainTextLength(section.content) > 0) ||
+        plainTextLength(event.aftermath) > 0 ||
+        serverAftermath.some((section) => plainTextLength(section.content) > 0),
+    }),
+  )
+  const backgroundChars = backgroundLength(event.background, backgroundRows)
+  /* 지워서 짧아졌으면 줄여 보기도 의미가 없다 — 토글째 거둔다 */
+  const canCollapseBackground = backgroundChars > LONG_BACKGROUND_CHARS
+  const isBackgroundCollapsed = backgroundCollapsed && canCollapseBackground
+
+  /*
+   * 목차·장부·해시가 줄여 둔 배경 안의 단락(#background-2)으로 가려 하면 먼저 펼친다.
+   * flushSync — 부른 쪽이 바로 이어서 scrollIntoView로 좌표를 재므로 그 전에 DOM이 펼쳐져 있어야 한다.
+   * 섹션 머리(#background) 자체로 가는 건 펼치지 않는다.
+   */
+  const backgroundRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const node = backgroundRef.current
+    if (!node) return undefined
+    const onReveal = (revealEvent: Event) => {
+      if (revealEvent.target === node) return
+      flushSync(() => setBackgroundCollapsed(false))
+    }
+    node.addEventListener(REVEAL_ANCHOR_EVENT, onReveal)
+    return () => node.removeEventListener(REVEAL_ANCHOR_EVENT, onReveal)
+  }, [visible.background])
+
+  /** 끝 줄에서 줄이기 — 줄어든 만큼 화면이 엉뚱한 데(전개 중간)로 밀리지 않게 배경 머리로 데려간다 */
+  const collapseBackgroundFromEnd = () => {
+    flushSync(() => setBackgroundCollapsed(true))
+    scrollToAnchor('background', { updateHash: false })
+  }
+
   return (
     <>
       {/* 배경 — 요약 본문 1개 + 번호 단락. */}
       {visible.background && (
-        <S.Section id="background">
+        <S.Section id="background" ref={backgroundRef}>
           <S.SectionHeader>
             <S.SectionTitle>배경</S.SectionTitle>
             {backgroundRows.length > 0 && (
               <S.SectionSubtitle>{backgroundRows.length}단락</S.SectionSubtitle>
             )}
+            {canCollapseBackground && (
+              <S.SectionActions>
+                <HeaderTextAction
+                  type="button"
+                  aria-expanded={!isBackgroundCollapsed}
+                  aria-controls="background-body"
+                  onClick={() => setBackgroundCollapsed((prev) => !prev)}
+                >
+                  {isBackgroundCollapsed ? '전체 보기' : '줄여 보기'}
+                </HeaderTextAction>
+              </S.SectionActions>
+            )}
           </S.SectionHeader>
+          <div id="background-body">
           {/* 요약 본문은 타임라인의 첫 마디 — 번호 단락과 한 선에 꿴다 */}
           <NarrativeSectionList
             rows={backgroundRows}
@@ -289,6 +353,9 @@ export function DetailNarrative({
             bodyPlaceholder="이 배경 단락의 본문"
             anchorPrefix="background"
             autoEditKey={autoEditKey}
+            collapsed={isBackgroundCollapsed}
+            clampLead={plainTextLength(event.background) > LEAD_CLAMP_CHARS}
+            onRequestExpand={() => setBackgroundCollapsed(false)}
             lead={
               <S.SectionBody>
                 <InlineRichText
@@ -305,8 +372,36 @@ export function DetailNarrative({
               </S.SectionBody>
             }
           />
+          </div>
+          {isBackgroundCollapsed && (
+            /* 줄인 배경의 끝 — 얼마나 남았는지 말하고 펼친다(머리의 '전체 보기'는 이미 지나쳐 왔다) */
+            <ExpandBar
+              type="button"
+              aria-expanded={false}
+              aria-controls="background-body"
+              onClick={() => setBackgroundCollapsed(false)}
+            >
+              <FiChevronDown aria-hidden />
+              배경 전체 읽기{' '}
+              <ExpandBarMeta>
+                {backgroundRows.length > 0 ? `${backgroundRows.length}단락 · ` : ''}약{' '}
+                {backgroundChars.toLocaleString('ko-KR')}자
+              </ExpandBarMeta>
+            </ExpandBar>
+          )}
+          {!isBackgroundCollapsed && canCollapseBackground && backgroundRows.length > 1 && (
+            /* 다 읽고 내려온 자리 — 머리까지 올라가지 않고 줄여서 전개로 넘어간다 */
+            <ExpandBar type="button" aria-expanded aria-controls="background-body" onClick={collapseBackgroundFromEnd}>
+              <FiChevronUp aria-hidden />
+              배경 줄여 보기
+            </ExpandBar>
+          )}
           <AddSectionButton
-            onClick={background.add}
+            onClick={() => {
+              /* 새 단락은 제목 입력이 열린 채 뜬다 — 줄인 채로 두면 그 입력이 안 보인다 */
+              setBackgroundCollapsed(false)
+              background.add()
+            }}
             label="배경 단락 추가"
           />
         </S.Section>
@@ -326,9 +421,9 @@ export function DetailNarrative({
             {onRequestSplit && (
               <S.SectionActions>
                 {/* 전개가 여러 국면으로 커지면 묶음 사건이 되어 국면마다 하위 사건이 된다 */}
-                <SplitAction type="button" onClick={onRequestSplit}>
+                <HeaderTextAction type="button" onClick={onRequestSplit}>
                   하위 사건으로 나누기
-                </SplitAction>
+                </HeaderTextAction>
               </S.SectionActions>
             )}
           </S.SectionHeader>
@@ -439,8 +534,8 @@ const EmptyLead = styled.button`
   }
 `
 
-/** 전개 머리의 '하위 사건으로 나누기' — 본문 편집을 가리지 않게 낮은 목소리의 글자 버튼 */
-const SplitAction = styled.button`
+/** 섹션 머리의 글자 버튼('하위 사건으로 나누기'·'줄여 보기') — 본문 편집을 가리지 않게 낮은 목소리로 */
+const HeaderTextAction = styled.button`
   padding: 4px 2px;
   border: none;
   background: none;
@@ -458,4 +553,45 @@ const SplitAction = styled.button`
     outline-offset: 2px;
     border-radius: 2px;
   }
+`
+
+/**
+ * 줄인 배경의 끝 줄 — '배경 전체 읽기 · 6단락 · 약 15,121자'. 카드·점선 상자가 아니라 단락 목록의
+ * 마지막 행처럼 읽히는 글자 버튼(단락 추가 행과 같은 목소리, 색만 한 단 위).
+ */
+const ExpandBar = styled.button`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 6px 12px 6px 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    align-self: center;
+  }
+`
+
+const ExpandBarMeta = styled.span`
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-variant-numeric: tabular-nums;
 `

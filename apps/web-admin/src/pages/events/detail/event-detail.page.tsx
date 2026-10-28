@@ -589,8 +589,11 @@ function EventDetailContent({
     if (!pendingHash) return
     const target = document.getElementById(pendingHash)
     if (!target) return
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setPendingHash(null)
+    /* 줄여 둔 배경 안의 단락(#background-3)이면 펼친 뒤에 잰다 — 펼치기는 flushSync라
+       effect 안(렌더 중)에서는 못 부른다. 다음 프레임에 넘겨 React 바깥에서 부른다. */
+    /* cleanup으로 취소하지 않는다 — 바로 위 setPendingHash(null)이 이 effect를 다시 돌려 취소해 버린다 */
+    window.requestAnimationFrame(() => scrollToAnchor(pendingHash, { updateHash: false }))
   }, [pendingHash, activeTab])
 
   /**

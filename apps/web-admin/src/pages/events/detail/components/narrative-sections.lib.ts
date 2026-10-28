@@ -207,3 +207,50 @@ export function splitTitlePeriod(title: string): { title: string; period: string
   if (!match || match.index === 0) return { title, period: null }
   return { title: title.slice(0, match.index), period: match[1].trim() }
 }
+
+/* ───────────────────────── 긴 배경 줄여 보기 ───────────────────────── */
+
+/**
+ * 이 글자수를 넘는 배경은 '줄여 보기'를 쓸 수 있다(요약 + 단락 제목만).
+ * 실DB 504건 중 배경 있는 161건의 중앙값이 1,184자(본문 880px·15.5px에서 약 600px, 한 화면 남짓) —
+ * 그보다 긴 배경(78건)부터 전개를 화면 아래로 밀어낸다.
+ */
+export const LONG_BACKGROUND_CHARS = 1200
+/** 줄여 보기에서 요약을 몇 줄로 자를지 판정하는 글자수 — 이보다 짧으면 요약은 자르지 않는다 */
+export const LEAD_CLAMP_CHARS = 240
+
+/** 태그·엔티티를 걷어낸 글자수 — 길이 판정용(화면 측정은 content-visibility 추정 높이에 속는다) */
+export function plainTextLength(html?: string | null): number {
+  if (!html) return 0
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/&[a-z]+;|&#\d+;/gi, '_')
+    .replace(/\s+/g, ' ')
+    .trim().length
+}
+
+/** 배경 전체(요약 + 번호 단락 제목·본문)의 글자수 */
+export function backgroundLength(
+  leadHtml: string | null | undefined,
+  rows: ReadonlyArray<{ title?: string | null; content?: string | null }>,
+): number {
+  return rows.reduce(
+    (sum, row) => sum + plainTextLength(row.title) + plainTextLength(row.content),
+    plainTextLength(leadHtml),
+  )
+}
+
+/**
+ * 처음 열었을 때 배경을 줄여 둘까.
+ *
+ * 길기만 해서는 안 된다 — 긴 배경 48건(2,500자↑) 중 13건은 전개·여파가 **둘 다 없어** 배경이 곧
+ * 본문 전부다. 그걸 줄이면 읽을 것을 숨긴다. 뒤에 읽을 본문(전개·여파·하위 사건)이 있을 때만 줄인다 —
+ * 배경이 전개를 화면 아래로 밀어내는 게 줄여 보기가 푸는 문제다.
+ */
+export function shouldCollapseBackground(input: {
+  length: number
+  hasFollowingContent: boolean
+}): boolean {
+  return input.length > LONG_BACKGROUND_CHARS && input.hasFollowingContent
+}
