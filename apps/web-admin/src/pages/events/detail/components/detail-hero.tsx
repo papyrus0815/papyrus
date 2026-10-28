@@ -28,6 +28,7 @@ import { EVENT_TYPES, subtypesForDomain } from '@/entities/event/model/event-typ
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
+import { groupHeroCountries } from './hero-countries.lib'
 import { HeroThumbnail } from './hero-thumbnail'
 import {
   InlineSelect,
@@ -461,19 +462,12 @@ function HeroActors({
   const allHistorical = event.relatedHistoricalCountries ?? []
 
   const persons = allPersons.slice(0, PERSON_CAP)
-  const modern = allModern.slice(0, COUNTRY_CAP)
-  const historical = allHistorical.slice(0, COUNTRY_CAP - modern.length)
+  /* 진영이 있으면 진영별 줄, 없으면 한 줄(현대·역사를 같은 '·'로) — hero-countries.lib */
+  const countryGroups = groupHeroCountries(allModern, allHistorical, event.sides ?? [], COUNTRY_CAP)
 
   const personOverflow = allPersons.length - persons.length
-  const countryOverflow =
-    allModern.length + allHistorical.length - modern.length - historical.length
 
-  if (
-    persons.length === 0 &&
-    modern.length === 0 &&
-    historical.length === 0
-  )
-    return null
+  if (persons.length === 0 && countryGroups.length === 0) return null
 
   return (
     <ActorStrip aria-label="참여 행위자 요약">
@@ -524,47 +518,36 @@ function HeroActors({
         </Lineup>
       )}
 
-      {(modern.length > 0 || historical.length > 0) && (
+      {countryGroups.length > 0 && (
         <Lineup>
           <CountryInline>
-            {modern.map((country, index) => (
-              <span key={country.id}>
-                <CountryName
-                  to={pathKeys.countryDetail(country.id)}
-                  aria-haspopup="dialog"
-                  onClick={(clickEvent) => {
-                    if (!shouldInterceptEntityClick(clickEvent)) return
-                    clickEvent.preventDefault()
-                    onCountryClick(country.id)
-                  }}
-                >
-                  {country.name}
-                </CountryName>
-                {index < modern.length - 1 && <CountrySep>·</CountrySep>}
-              </span>
+            {countryGroups.map((group) => (
+              <CountryLine key={group.sideId ?? group.label ?? 'all'}>
+                {group.label && <SideLabel>{group.label}</SideLabel>}
+                {group.countries.map((country, index) => {
+                  const Name = country.historical ? HistoricalName : CountryName
+                  return (
+                    <span key={`${country.historical ? 'h' : 'm'}-${country.id}`}>
+                      <Name
+                        to={pathKeys.countryDetail(country.id)}
+                        aria-haspopup="dialog"
+                        onClick={(clickEvent) => {
+                          if (!shouldInterceptEntityClick(clickEvent)) return
+                          clickEvent.preventDefault()
+                          onCountryClick(country.id)
+                        }}
+                      >
+                        {country.name}
+                      </Name>
+                      {index < group.countries.length - 1 && <CountrySep>·</CountrySep>}
+                    </span>
+                  )
+                })}
+                {group.overflow > 0 && (
+                  <Overflow {...overflowProps}>외 {group.overflow}</Overflow>
+                )}
+              </CountryLine>
             ))}
-            {modern.length > 0 && historical.length > 0 && (
-              <CountryHardSep>—</CountryHardSep>
-            )}
-            {historical.map((country, index) => (
-              <span key={country.id}>
-                <HistoricalName
-                  to={pathKeys.countryDetail(country.id)}
-                  aria-haspopup="dialog"
-                  onClick={(clickEvent) => {
-                    if (!shouldInterceptEntityClick(clickEvent)) return
-                    clickEvent.preventDefault()
-                    onCountryClick(country.id)
-                  }}
-                >
-                  {country.name}
-                </HistoricalName>
-                {index < historical.length - 1 && <CountrySep>·</CountrySep>}
-              </span>
-            ))}
-            {countryOverflow > 0 && (
-              <Overflow {...overflowProps}>외 {countryOverflow}</Overflow>
-            )}
           </CountryInline>
         </Lineup>
       )}
@@ -693,7 +676,8 @@ const PersonSep = styled.span`
 const CountryInline = styled.div`
   word-break: keep-all;
 
-  > span {
+  /* 나라 이름 하나(+뒤 구분점)는 줄바꿈으로 쪼개지 않는다 — 줄은 CountryLine(div)마다 */
+  > div > span {
     white-space: nowrap;
   }
 
@@ -734,9 +718,21 @@ const CountrySep = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const CountryHardSep = styled.span`
-  margin: 0 10px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+/** 진영 한 줄 — 진영이 없으면 줄이 하나라 예전 모양 그대로다 */
+const CountryLine = styled.div`
+  & + & {
+    margin-top: 4px;
+  }
+`
+
+/** 줄 머리의 진영명 — 나라 이름보다 한 단 낮게, 이름 열이 진영마다 같은 자리에서 시작하도록 최소폭 */
+const SideLabel = styled.span`
+  display: inline-block;
+  min-width: 4.5em;
+  margin-right: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${metaText};
 `
 
 /* italic 제거 — 한글은 italic face가 없어 브라우저가 기울인 가짜 글꼴이 된다.

@@ -38,6 +38,7 @@ import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-mod
 import * as S from '../styles'
 import { type PatchOptions } from '../use-undoable-patch'
 import { type EventDetail } from '../use-event-detail'
+import { groupBySide } from './hero-countries.lib'
 import { InlineText } from './inline'
 
 interface DetailActorsProps {
@@ -221,6 +222,8 @@ export function DetailActors({
         sortOrder: country.sortOrder ?? index,
         // 존속 기간 경고는 역사국가만(현대국은 기간 개념이 없다)
         existenceWarning: null as string | null,
+        /* 진영 — 표시용(묶기)만. 저장 payload엔 싣지 않는다(생략=서버가 소속 유지) */
+        sideId: country.sideId ?? null,
       })),
       ...historicalCountries.map((country, index) => ({
         id: country.id,
@@ -232,6 +235,7 @@ export function DetailActors({
         note: country.note ?? null,
         sortOrder: country.sortOrder ?? index,
         existenceWarning: (country.existenceWarning ?? null) as string | null,
+        sideId: country.sideId ?? null,
       })),
     ]
     rows.sort((left, right) => left.sortOrder - right.sortOrder)
@@ -297,6 +301,7 @@ export function DetailActors({
           note: null,
           sortOrder: countryRows.length + index,
           existenceWarning: null,
+          sideId: null,
         })),
       ],
       {
@@ -367,6 +372,125 @@ export function DetailActors({
   useEffect(() => {
     if (!canManage && manageMode) setManageMode(false)
   }, [canManage, manageMode])
+
+  /* 순서 바꾸기 중에는 평평하게 — 진영으로 나누면 '위로·아래로'가 진영 경계를 넘는 게 보이지 않는다 */
+  const countrySideGroups = manageMode ? null : groupBySide(countryRows, event.sides ?? [])
+
+  /**
+   * 참여국 한 행 — 진영별 묶음과 평평한 목록이 같이 쓴다. index는 **전체 목록 기준**(순서 바꾸기의 끝 판정).
+   */
+  const renderCountryRow = (row: (typeof countryRows)[number], index: number) => {
+    const rowKey = countryRowKey(row)
+    const NameLink = row.isHistorical
+      ? HistoricalCountryName
+      : CountryLink
+    const hasNote = Boolean(row.note && row.note.trim())
+    const hasRoleDescription = Boolean(row.roleDescription?.trim())
+    return (
+      <CountryRow key={rowKey}>
+        <CountryBody>
+          <CountryNameLine>
+            <NameLink
+              to={pathKeys.countryDetail(row.id)}
+              aria-haspopup="dialog"
+              onClick={(clickEvent) => {
+                if (!shouldInterceptEntityClick(clickEvent)) return
+                clickEvent.preventDefault()
+                onCountryClick(row.id)
+              }}
+            >
+              {row.flagEmoji && (
+                <CountryFlag aria-hidden>{row.flagEmoji}</CountryFlag>
+              )}
+              {row.name}
+            </NameLink>
+            {row.existenceWarning && (
+              <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
+                ⚠ {row.existenceWarning}
+              </MismatchNote>
+            )}
+            <CountryRolePicker>
+              <InlineSelect
+                value={row.role ?? ''}
+                options={EVENT_COUNTRY_ROLE_OPTIONS.filter(
+                  // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
+                  (option) => !option.deprecated || option.value === row.role,
+                ).map(
+                  (option) => ({
+                    value: option.value,
+                    label: option.label,
+                    description: option.hint,
+                  }),
+                )}
+                onSave={(next) =>
+                  updateCountry(rowKey, {
+                    role: next as EventCountryRole,
+                  })
+                }
+                placeholder="역할 지정"
+                label={`${row.name} 역할`}
+              />
+            </CountryRolePicker>
+          </CountryNameLine>
+          <CountryRoleLine $hasContent={hasRoleDescription}>
+            <ClampedProse measureKey={row.roleDescription ?? ''}>
+              <InlineText
+                value={row.roleDescription ?? ''}
+                onSave={(next) =>
+                  updateCountry(rowKey, { roleDescription: next })
+                }
+                placeholder="이 나라가 한 일 추가"
+                label={`${row.name}이(가) 한 일`}
+                multiline
+                multilineEnter
+                renderRead={renderEmphasis}
+              />
+            </ClampedProse>
+          </CountryRoleLine>
+          <CountryNoteLine $hasContent={hasNote}>
+            <InlineText
+              value={row.note ?? ''}
+              onSave={(next) => updateCountry(rowKey, { note: next })}
+              placeholder="비고 추가"
+              multiline
+              multilineEnter
+              renderRead={renderEmphasis}
+            />
+          </CountryNoteLine>
+        </CountryBody>
+
+        <RowActions>
+          {manageMode && (
+            <>
+              <ReorderBtn
+                type="button"
+                onClick={() => moveCountry(rowKey, -1)}
+                disabled={index === 0}
+                aria-label={`${row.name} 위로`}
+              >
+                <FiArrowUp />
+              </ReorderBtn>
+              <ReorderBtn
+                type="button"
+                onClick={() => moveCountry(rowKey, 1)}
+                disabled={index === countryRows.length - 1}
+                aria-label={`${row.name} 아래로`}
+              >
+                <FiArrowDown />
+              </ReorderBtn>
+            </>
+          )}
+          <RemoveInline
+            type="button"
+            onClick={() => removeCountry(rowKey)}
+            aria-label={`${row.name} 제거`}
+          >
+            <FiX />
+          </RemoveInline>
+        </RowActions>
+      </CountryRow>
+    )
+  }
 
   return (
     <>
@@ -582,122 +706,23 @@ export function DetailActors({
               국가 추가
             </AddBtn>
           </GroupHead>
-          {countryRows.length > 0 && (
-            <CountryList>
-              {countryRows.map((row, index) => {
-                const rowKey = countryRowKey(row)
-                const NameLink = row.isHistorical
-                  ? HistoricalCountryName
-                  : CountryLink
-                const hasNote = Boolean(row.note && row.note.trim())
-                const hasRoleDescription = Boolean(row.roleDescription?.trim())
-                return (
-                  <CountryRow key={rowKey}>
-                    <CountryBody>
-                      <CountryNameLine>
-                        <NameLink
-                          to={pathKeys.countryDetail(row.id)}
-                          aria-haspopup="dialog"
-                          onClick={(clickEvent) => {
-                            if (!shouldInterceptEntityClick(clickEvent)) return
-                            clickEvent.preventDefault()
-                            onCountryClick(row.id)
-                          }}
-                        >
-                          {row.flagEmoji && (
-                            <CountryFlag aria-hidden>{row.flagEmoji}</CountryFlag>
-                          )}
-                          {row.name}
-                        </NameLink>
-                        {row.existenceWarning && (
-                          <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
-                            ⚠ {row.existenceWarning}
-                          </MismatchNote>
-                        )}
-                        <CountryRolePicker>
-                          <InlineSelect
-                            value={row.role ?? ''}
-                            options={EVENT_COUNTRY_ROLE_OPTIONS.filter(
-                              // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
-                              (option) => !option.deprecated || option.value === row.role,
-                            ).map(
-                              (option) => ({
-                                value: option.value,
-                                label: option.label,
-                                description: option.hint,
-                              }),
-                            )}
-                            onSave={(next) =>
-                              updateCountry(rowKey, {
-                                role: next as EventCountryRole,
-                              })
-                            }
-                            placeholder="역할 지정"
-                            label={`${row.name} 역할`}
-                          />
-                        </CountryRolePicker>
-                      </CountryNameLine>
-                      <CountryRoleLine $hasContent={hasRoleDescription}>
-                        <ClampedProse measureKey={row.roleDescription ?? ''}>
-                          <InlineText
-                            value={row.roleDescription ?? ''}
-                            onSave={(next) =>
-                              updateCountry(rowKey, { roleDescription: next })
-                            }
-                            placeholder="이 나라가 한 일 추가"
-                            label={`${row.name}이(가) 한 일`}
-                            multiline
-                            multilineEnter
-                            renderRead={renderEmphasis}
-                          />
-                        </ClampedProse>
-                      </CountryRoleLine>
-                      <CountryNoteLine $hasContent={hasNote}>
-                        <InlineText
-                          value={row.note ?? ''}
-                          onSave={(next) => updateCountry(rowKey, { note: next })}
-                          placeholder="비고 추가"
-                          multiline
-                          multilineEnter
-                          renderRead={renderEmphasis}
-                        />
-                      </CountryNoteLine>
-                    </CountryBody>
-
-                    <RowActions>
-                      {manageMode && (
-                        <>
-                          <ReorderBtn
-                            type="button"
-                            onClick={() => moveCountry(rowKey, -1)}
-                            disabled={index === 0}
-                            aria-label={`${row.name} 위로`}
-                          >
-                            <FiArrowUp />
-                          </ReorderBtn>
-                          <ReorderBtn
-                            type="button"
-                            onClick={() => moveCountry(rowKey, 1)}
-                            disabled={index === countryRows.length - 1}
-                            aria-label={`${row.name} 아래로`}
-                          >
-                            <FiArrowDown />
-                          </ReorderBtn>
-                        </>
-                      )}
-                      <RemoveInline
-                        type="button"
-                        onClick={() => removeCountry(rowKey)}
-                        aria-label={`${row.name} 제거`}
-                      >
-                        <FiX />
-                      </RemoveInline>
-                    </RowActions>
-                  </CountryRow>
-                )
-              })}
-            </CountryList>
-          )}
+          {countryRows.length > 0 &&
+            (countrySideGroups ? (
+              /* 진영이 있으면 진영별로 — 1차세계대전 15개국이 전부 '참여국'으로만 늘어서 누가 어느 편인지 안 보였다 */
+              countrySideGroups.map((group) => (
+                <SideGroup key={group.sideId ?? 'rest'}>
+                  <SideHead>
+                    {group.label}
+                    <GroupCount>{group.items.length}</GroupCount>
+                  </SideHead>
+                  <CountryList>
+                    {group.items.map((row) => renderCountryRow(row, countryRows.indexOf(row)))}
+                  </CountryList>
+                </SideGroup>
+              ))
+            ) : (
+              <CountryList>{countryRows.map(renderCountryRow)}</CountryList>
+            ))}
         </NationsBlock>
       </S.Section>
 
@@ -1413,6 +1438,24 @@ const CountryRolePicker = styled.span`
   button {
     opacity: 0.4;
   }
+`
+
+/** 진영 한 묶음 — 묶음 사이는 국가 목록의 행 간격보다 넓게 */
+const SideGroup = styled.div`
+  & + & {
+    margin-top: 18px;
+  }
+`
+
+/** 진영 머리 — 국가 묶음 라벨(GroupLabel)보다 한 단 낮은 소제목. 진영색은 쓰지 않는다(색 면 금지 규약) */
+const SideHead = styled.h4`
+  margin: 6px 0 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const CountryList = styled.ol`
