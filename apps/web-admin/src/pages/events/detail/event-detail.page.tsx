@@ -37,9 +37,8 @@ import { DetailAppendix } from './components/detail-appendix'
 import { ContemporaryHeadsLink, DetailHero, DetailSummary } from './components/detail-hero'
 import {
   EventDetailLoading,
+  gateForEntry,
   type LoadingGate,
-  MIN_LOADING_MS,
-  createLoadingGate,
 } from './components/detail-loading'
 import { DetailNarrative } from './components/detail-narrative'
 import { DetailNetwork } from './components/detail-network'
@@ -160,14 +159,17 @@ const EventDetailPage = () => {
  * 만들고, 본문이 데이터를 받은 뒤 그 타이머를 `use()`로 한 번 더 기다린다 — 같은 경계 안에서
  * 두 번 suspend하므로 fallback은 리마운트 없이 이어진다(명언이 중간에 바뀌지 않는다).
  * 데이터 요청은 첫 렌더에서 바로 시작되므로 둘은 병렬이고, 화면은 max(응답, MIN_LOADING_MS)에 열린다.
- * 캐시가 있는 재방문도 같은 시간 동안 로딩을 보여준다.
+ * 단 최소 시간은 **이 탭의 첫 진입만** — 캐시가 있거나 앱 안에서 옮겨 다닐 땐 응답만 기다린다(gateForEntry).
  */
 function EventDetailShell({ eventId }: { eventId: string }) {
-  const [loadingGate] = useState(() => createLoadingGate(MIN_LOADING_MS))
+  const queryClient = useQueryClient()
+  const [{ gate: loadingGate, appearDelayMs }] = useState(() =>
+    gateForEntry(queryClient.getQueryData(eventKeys.detail(eventId)) !== undefined),
+  )
 
   return (
     <SmartErrorBoundary FallbackComponent={EventDetailError}>
-      <Suspense fallback={<EventDetailLoading />}>
+      <Suspense fallback={<EventDetailLoading appearDelayMs={appearDelayMs} />}>
         <EventDetailContent eventId={eventId} loadingGate={loadingGate} />
       </Suspense>
     </SmartErrorBoundary>

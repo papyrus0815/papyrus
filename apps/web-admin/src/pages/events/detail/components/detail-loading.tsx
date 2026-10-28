@@ -27,13 +27,13 @@ import * as S from '../styles'
  * - 스크린리더에는 고정 문구 하나만 읽힌다(명언은 aria-hidden — 매번 낭독되면 로딩 안내가 묻힌다).
  * - prefers-reduced-motion: 바는 정지선, 인물 교체 없음.
  */
-export function EventDetailLoading() {
+export function EventDetailLoading({ appearDelayMs = 0 }: { appearDelayMs?: number }) {
   const quoteIndex = useRotatingQuoteIndex(QUOTES.length, QUOTE_INTERVAL_MS)
   const quote = QUOTES[quoteIndex]
 
   return (
     <S.Page>
-      <Stage role="status" aria-live="polite" aria-busy="true">
+      <Stage role="status" aria-live="polite" aria-busy="true" $delayMs={appearDelayMs}>
         <VisuallyHidden>사건 정보를 불러오는 중…</VisuallyHidden>
 
         <QuoteCard aria-hidden key={quoteIndex}>
@@ -116,6 +116,39 @@ export const createLoadingGate = (ms: number): LoadingGate =>
     window.setTimeout(resolve, ms)
   })
 
+/**
+ * 이미 풀린 게이트 — React `use()`는 status가 'fulfilled'인 thenable을 **멈추지 않고** 읽는다.
+ * 그냥 `Promise.resolve()`를 넘기면 한 번은 suspend해서 로딩 화면이 한 프레임 번쩍인다.
+ */
+const openGate = (): LoadingGate =>
+  Object.assign(Promise.resolve(), { status: 'fulfilled' as const, value: undefined })
+
+/** 앱 안 이동에서 로딩 화면이 뜨기까지 — 이보다 빠른 응답엔 아무것도 안 보인다 */
+const QUICK_APPEAR_DELAY_MS = 400
+
+/** 이 탭에서 로딩 화면(명언)을 한 번이라도 다 보여 줬는가 — 모듈 상태라 앱 안 이동 동안 유지된다 */
+let loaderShownInSession = false
+
+/**
+ * 진입 방식에 따른 게이트 — 명언을 읽힐 시간(MIN_LOADING_MS)은 **이 탭의 첫 진입 한 번**만 쓴다.
+ *
+ * 매 진입 2.4초는 사이드바로 사건을 훑는 흐름에서 실측 2.52~2.59초씩 쌓였다(캐시된 재방문도 2.54초).
+ * 10-07의 최소 시간은 "응답이 수십 ms라 로딩 화면이 안 보인다"는 문제였지, 매번 기다리게 하려던 게 아니다.
+ * - 캐시가 있으면 기다리지 않는다.
+ * - 이 탭에서 이미 한 번 보였으면 응답만 기다린다 — 로딩 화면은 QUICK_APPEAR_DELAY_MS 뒤에야 떠서
+ *   빠른 응답에는 번쩍임이 없다.
+ */
+export function gateForEntry(hasCachedData: boolean): {
+  gate: LoadingGate
+  appearDelayMs: number
+} {
+  if (hasCachedData || loaderShownInSession) {
+    return { gate: openGate(), appearDelayMs: QUICK_APPEAR_DELAY_MS }
+  }
+  loaderShownInSession = true
+  return { gate: createLoadingGate(MIN_LOADING_MS), appearDelayMs: 0 }
+}
+
 /** 진입마다 무작위 시작 — 늘 같은 인물이면 금세 배경이 된다. 움직임 줄이기면 교체하지 않는다. */
 function useRotatingQuoteIndex(length: number, intervalMs: number) {
   const [index, setIndex] = useState(() => Math.floor(Math.random() * length))
@@ -163,7 +196,7 @@ const riseIn = keyframes`
  * 지면(S.Page) 높이 전체를 채우고 그 **정중앙**에 놓는다. Page가 고정 높이의 스크롤 컨테이너라
  * min-height: 100%가 성립한다. 아래 패딩을 조금 더 주어 시각 중심(기하 중심보다 약간 위)에 맞춘다.
  */
-const Stage = styled.div`
+const Stage = styled.div<{ $delayMs: number }>`
   box-sizing: border-box;
   min-height: 100%;
   display: flex;
@@ -172,7 +205,8 @@ const Stage = styled.div`
   justify-content: center;
   gap: 40px;
   padding: 40px 24px 64px;
-  animation: ${fadeIn} 0.25s ease-out both;
+  /* both — 지연 동안에도 첫 키프레임(투명)에 머문다 = 빠른 응답엔 화면에 아무것도 안 뜬다 */
+  animation: ${fadeIn} 0.25s ease-out ${({ $delayMs }) => $delayMs}ms both;
 
   @media (prefers-reduced-motion: reduce) {
     animation-duration: 0.01s;

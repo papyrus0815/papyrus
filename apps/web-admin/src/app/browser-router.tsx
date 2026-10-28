@@ -166,6 +166,9 @@ const appRouterConfig = [
          * (만료된 세션은 다음 API 호출에서 401로 잡혀 자체 처리.)
          */
         shouldRevalidate: () => false,
+        /* 첫 진입에 로더(세션 확인)가 도는 동안 그릴 것 — 비워 두면 라우터가 매 진입 콘솔 경고를 낸다.
+           인증 확인은 수백 ms라 빈 화면으로 충분하다(각 페이지는 자기 로딩 화면을 따로 갖는다). */
+        HydrateFallback: () => null,
         children: [
           // 루트: 홈 (Dashboard)
           dashboardRoute,
