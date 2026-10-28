@@ -41,9 +41,13 @@ export function crossPatchErrorMessage(error: unknown): string {
       : ''
   const pickMessage = (text: string): string | null => {
     try {
-      const parsed = JSON.parse(text) as { message?: unknown }
+      const parsed = JSON.parse(text) as { message?: unknown; error?: { message?: unknown } }
       if (typeof parsed.message === 'string') return parsed.message
       if (Array.isArray(parsed.message)) return parsed.message.join(', ')
+      /* 전역 예외 필터 봉투 — { success:false, error:{ name, message, details } }. 예전엔 이 꼴을 못 읽어
+         JSON 블롭이 토스트에 통째로 떴다(묶음 전환 409) */
+      if (typeof parsed.error?.message === 'string') return parsed.error.message
+      if (Array.isArray(parsed.error?.message)) return (parsed.error.message as unknown[]).join(', ')
     } catch {
       /* JSON 아님 */
     }
