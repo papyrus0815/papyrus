@@ -482,18 +482,33 @@ const PhaseCount = styled.span`
 export function CollectionWholeTextNotice({
   onWriteSummary,
   onWriteBackground,
+  onWriteNarrative,
   onWriteAftermath,
 }: {
   /** 요약도 비었으면 — 빈 요약 자리표시를 따로 세우지 않고 여기서 쓴다 */
   onWriteSummary?: () => void
   onWriteBackground: () => void
+  /**
+   * 단일 사건의 '아직 글이 없다' 안내로 쓸 때 — 단일 사건은 전개도 제 글이라 전개 쓰기가 붙는다.
+   * (글이 하나도 없는 단일 사건 11건은 빈 요약 기울임 한 줄 + 칩 띠 + 그보다 큰 댓글 칸이 전부였다)
+   */
+  onWriteNarrative?: () => void
   onWriteAftermath: () => void
 }) {
+  const single = Boolean(onWriteNarrative)
   return (
     <Notice role="note">
       <NoticeText>
-        <b>전체에 대한 글이 비어 있습니다.</b> 전개는 하위 사건이 맡고, 이 사건에는{' '}
-        {onWriteSummary ? '요약·배경·여파' : '배경·여파'}를 씁니다.
+        {single ? (
+          <>
+            <b>아직 글이 없습니다.</b> 요약 한 문단으로 시작하거나, 배경·전개·여파로 나눠 씁니다.
+          </>
+        ) : (
+          <>
+            <b>전체에 대한 글이 비어 있습니다.</b> 전개는 하위 사건이 맡고, 이 사건에는{' '}
+            {onWriteSummary ? '요약·배경·여파' : '배경·여파'}를 씁니다.
+          </>
+        )}
       </NoticeText>
       <NoticeActions>
         {onWriteSummary && (
@@ -504,6 +519,11 @@ export function CollectionWholeTextNotice({
         <TextButton type="button" onClick={onWriteBackground}>
           배경 쓰기
         </TextButton>
+        {onWriteNarrative && (
+          <TextButton type="button" onClick={onWriteNarrative}>
+            전개 쓰기
+          </TextButton>
+        )}
         <TextButton type="button" onClick={onWriteAftermath}>
           여파 쓰기
         </TextButton>
@@ -539,5 +559,6 @@ const NoticeText = styled.p`
 
 const NoticeActions = styled.div`
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 4px 14px;
 `

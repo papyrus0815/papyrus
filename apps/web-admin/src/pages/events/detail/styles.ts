@@ -1138,6 +1138,13 @@ export const TabEmptyText = styled.p`
   color: ${metaText};
 `
 
+/** 빈 탭의 채우기 버튼 줄 — 둘 이상이면 가로로 잇고 좁으면 접힌다 */
+export const TabEmptyActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
 export const TabEmptyAction = styled.button`
   align-self: flex-start;
   display: inline-flex;

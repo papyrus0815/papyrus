@@ -401,6 +401,17 @@ function EventDetailContent({
   const hasSummary = Boolean(event.description?.trim())
   /** 묶음의 '전체 글' 안내 — 배경·여파가 둘 다 비어 있고 아직 하나도 펼치지 않았을 때 */
   const collectionTextNotice = isCollection && !isVisible('background') && !isVisible('aftermath')
+  /**
+   * 단일 사건의 '아직 글이 없다' 안내 — 요약·배경·전개·여파가 전부 비었고 아직 아무것도 펼치지 않았을 때.
+   * 같은 자리·같은 모양(묶음 안내)으로, 쓰기 버튼을 한 곳에 모은다.
+   */
+  const singleTextNotice =
+    !isCollection &&
+    !hasSummary &&
+    !summaryOpen &&
+    !isVisible('background') &&
+    !isVisible('narrative') &&
+    !isVisible('aftermath')
 
   /* 탭 — URL(?tab=)이 정본(replace: 탭을 오가도 '뒤로'가 탭을 되감지 않는다). 개요는 파라미터 없음 */
   const tabParam = searchParams.get('tab')
@@ -671,6 +682,40 @@ function EventDetailContent({
     />
   ) : null
 
+  /**
+   * 통째로 빈 탭 — 그려지는 섹션이 하나도 없어 '더 채울 수 있는 것' 띠 한 줄만 남는 탭.
+   * 예전엔 연관 탭을 누르면 77px짜리 띠뿐이라 '고장 났나'로 읽혔다. 진영·수치·자료 탭이 쓰는
+   * 빈 탭 머리(TabEmpty)로 같은 버튼을 들고 '무엇을 둘 수 있는 탭인지'를 말한다.
+   */
+  const emptyTab: Partial<Record<EventTabId, { title: string; text: string }>> = {
+    ...(!isVisible('actors') && !showStatehood && !showPower && !showOrganizations
+      ? {
+          actors: {
+            title: '아직 참여한 인물·국가가 없습니다',
+            text: '이 사건에 나선 인물과 나라를 역할·한 일과 함께 기록합니다.',
+          },
+        }
+      : {}),
+    ...((promoteTreaties || !treatiesSection) && !isVisible('network')
+      ? {
+          links: {
+            title: '아직 이어 둔 사건·조약이 없습니다',
+            text: '상위·하위·관련 사건과 이 사건이 낳은 조약을 이어 두면 사건을 맥락 속에서 읽을 수 있습니다.',
+          },
+        }
+      : {}),
+  }
+  const activeEmptyTab = emptyTab[activeTab]
+  const foldedInActiveTab = folded.filter(
+    (section) =>
+      tabOf(section.id) === activeTab &&
+      !(activeTab === 'media' && section.id === 'appendix') &&
+      // 묶음의 '전체 글' 안내가 위에서 배경·여파 쓰기를 이미 든다
+      !(collectionTextNotice && (section.id === 'background' || section.id === 'aftermath')) &&
+      // 단일 사건의 '아직 글이 없다' 안내는 배경·전개·여파 쓰기를 든다
+      !(singleTextNotice && (section.id === 'background' || section.id === 'narrative' || section.id === 'aftermath')),
+  )
+
   /* Page = 내부 스크롤 컨테이너 — 읽기 진행률 바가 이 ref로 scrollTop을 읽는다. */
   const scrollRef = useRef<HTMLDivElement>(null)
   const accentColor = eventDomainDef(event.domain).color
@@ -739,15 +784,16 @@ function EventDetailContent({
                   {/* 묶음 사건인데 배경·여파가 둘 다 비었으면 — 전체 글을 쓸 자리를 **한 곳에서** 짚는다
                       (요약·배경·여파 쓰기가 여기 모이므로 아래 빈 요약 자리표시·'더 채울 수 있는 것'의
                       배경·여파 칩은 내지 않는다 — 같은 버튼이 화면에 두 번 서 있었다) */}
-                  {collectionTextNotice && (
+                  {(collectionTextNotice || singleTextNotice) && (
                     <CollectionWholeTextNotice
                       onWriteSummary={hasSummary ? undefined : () => setSummaryOpen(true)}
                       onWriteBackground={() => revealSection('background')}
+                      onWriteNarrative={singleTextNotice ? () => revealSection('narrative') : undefined}
                       onWriteAftermath={() => revealSection('aftermath')}
                     />
                   )}
                   {/* 요약 — 히어로에서 옮겨 와 개요의 머리글이 된다(히어로는 제목·행위자·국가만) */}
-                  {(!collectionTextNotice || hasSummary || summaryOpen) && (
+                  {((!collectionTextNotice && !singleTextNotice) || hasSummary || summaryOpen) && (
                     <DetailSummary event={event} onPatch={onPatch} autoEdit={summaryOpen && !hasSummary} />
                   )}
                   {/* (제거) 개요의 '전개' 간트 — 같은 하위 사건이 바로 아래 '전개' 목록과 조망 탭 간트에
@@ -884,18 +930,26 @@ function EventDetailContent({
                 </S.TabEmpty>
               )}
 
+              {activeEmptyTab && (
+                <S.TabEmpty aria-labelledby={`${activeTab}-empty-title`}>
+                  <S.TabEmptyHead>
+                    <S.TabEmptyTitle id={`${activeTab}-empty-title`}>{activeEmptyTab.title}</S.TabEmptyTitle>
+                    <S.TabEmptyText>{activeEmptyTab.text}</S.TabEmptyText>
+                  </S.TabEmptyHead>
+                  <S.TabEmptyActions>
+                    {foldedInActiveTab.map((section) => (
+                      <S.TabEmptyAction key={section.id} type="button" onClick={() => revealSection(section.id)}>
+                        <FiPlus aria-hidden />
+                        {section.fillLabel}
+                      </S.TabEmptyAction>
+                    ))}
+                  </S.TabEmptyActions>
+                </S.TabEmpty>
+              )}
+
               {/* 이 탭에서 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다
-                  (자료 탭이 통째로 비었으면 위의 빈 탭 머리가 같은 버튼을 이미 든다) */}
-              <FillInStrip
-                items={folded.filter(
-                  (section) =>
-                    tabOf(section.id) === activeTab &&
-                    !(activeTab === 'media' && section.id === 'appendix') &&
-                    // 묶음의 '전체 글' 안내가 위에서 배경·여파 쓰기를 이미 든다
-                    !(collectionTextNotice && (section.id === 'background' || section.id === 'aftermath')),
-                )}
-                onReveal={revealSection}
-              />
+                  (탭이 통째로 비었으면 위의 빈 탭 머리가 같은 버튼을 이미 든다) */}
+              {!activeEmptyTab && <FillInStrip items={foldedInActiveTab} onReveal={revealSection} />}
 
               {activeTab === 'overview' && (
                 <S.Section id="comments">

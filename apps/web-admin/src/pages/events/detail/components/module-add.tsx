@@ -8,7 +8,8 @@
  * - 수치: 저장할 것이 없으므로 모듈만 펼친다(첫 수치를 기록하면 서버 데이터로 유지된다)
  * - 작전 정보: 빈 작전 정보를 upsert해 활성화
  *
- * 행정부(cabinets)는 cabinet-events API 분리 — 별도 사이클.
+ * 행정부(cabinets)는 cabinet-events API 분리 — 별도 사이클. 아직 붙일 수 없는 기능은 **보이지 않는다**
+ * (예전엔 '관련 행정부 — 별도 API — 후속'이라는 개발 메모가 사용자 화면에 그대로 떴다).
  */
 import { useEffect, useRef, useState } from 'react'
 
@@ -146,17 +147,18 @@ export function ModuleAdd({
     options.filter((opt) => opt.key === key),
   )
   const otherOptions = options.filter((opt) => !features.suggestedModules.some((key) => key === opt.key))
+  /**
+   * 카드 변형에서 펼쳐 둘 것 — 이 분류에 맞는 기능. 맞는 게 없는 분류(회담·과학 등)는 범용 기능(진영·수치)만
+   * 펼치고 작전 정보는 접는다: 정상회담에 '작전명·전장·지휘 체계'가 진영과 같은 무게로 서 있었다.
+   */
+  const primaryOptions =
+    suggestedOptions.length > 0
+      ? suggestedOptions
+      : otherOptions.filter((opt) => opt.key !== 'military-details')
+  const foldedOptions = otherOptions.filter((opt) => !primaryOptions.includes(opt))
+  const [showFolded, setShowFolded] = useState(false)
 
-  /* 후속 작업이라 dropdown에 disabled로 노출 — 사용자가 무엇이 가능할지 알도록. */
-  const deferredOptions: Array<{ label: string; reason: string }> = []
-  if (!enabledModules.includes('cabinets')) {
-    deferredOptions.push({
-      label: '관련 행정부',
-      reason: '별도 API — 후속',
-    })
-  }
-
-  if (options.length === 0 && deferredOptions.length === 0) return null
+  if (options.length === 0) return null
 
   const apply = (opt: ModuleOption) => {
     void opt.run()
@@ -168,7 +170,7 @@ export function ModuleAdd({
   if (variant === 'cards') {
     return (
       <CardList aria-label="붙일 수 있는 기능">
-        {[...suggestedOptions, ...otherOptions].map((opt) => (
+        {[...primaryOptions, ...(showFolded ? foldedOptions : [])].map((opt) => (
           <OptionCard key={opt.key} type="button" onClick={() => apply(opt)}>
             <Dot $color={MODULE_COLOR[opt.key]} />
             <CardText>
@@ -184,15 +186,12 @@ export function ModuleAdd({
             </CardAction>
           </OptionCard>
         ))}
-        {deferredOptions.map((opt) => (
-          <OptionCard key={opt.label} type="button" disabled aria-disabled>
-            <Dot $muted />
-            <CardText>
-              <CardTitle>{opt.label}</CardTitle>
-              <CardHint>{opt.reason}</CardHint>
-            </CardText>
-          </OptionCard>
-        ))}
+        {foldedOptions.length > 0 && !showFolded && (
+          <MoreToggle type="button" onClick={() => setShowFolded(true)}>
+            <FiChevronDown aria-hidden />
+            다른 기능 {foldedOptions.length}개 — {foldedOptions.map((opt) => opt.label).join(' · ')}
+          </MoreToggle>
+        )}
       </CardList>
     )
   }
@@ -228,14 +227,6 @@ export function ModuleAdd({
               ))}
             </MenuGroup>
           )}
-          {deferredOptions.length > 0 && options.length > 0 && <Divider />}
-          {deferredOptions.map((opt) => (
-            <MenuItem key={opt.label} type="button" disabled aria-disabled>
-              <Dot $muted />
-              <span>{opt.label}</span>
-              <Reason>— {opt.reason}</Reason>
-            </MenuItem>
-          ))}
         </Menu>
       )}
     </Host>
@@ -329,13 +320,12 @@ const MenuItem = styled.button`
   }
 `
 
-const Dot = styled.span<{ $color?: string; $muted?: boolean }>`
+const Dot = styled.span<{ $color?: string }>`
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: ${({ $color, $muted, theme }) =>
-    $muted ? theme.colors.text.tertiary : $color ?? theme.colors.text.tertiary};
+  background: ${({ $color, theme }) => $color ?? theme.colors.text.tertiary};
   flex-shrink: 0;
 `
 
@@ -359,14 +349,38 @@ const Divider = styled.div`
   background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
-/* 모듈을 왜 못 켜는지 설명하는 줄 — 읽히지 않으면 비활성 이유가 화면에서 사라진다. */
-const Reason = styled.span`
-  margin-left: auto;
-  font-size: 11.5px;
-  color: ${metaText};
-`
-
 /* ── 카드 변형 — 빈 '진영·수치' 탭 ── */
+
+/** 접어 둔 기능 펼치기 — 카드 격자의 한 줄을 다 쓰는 조용한 글자 버튼 */
+const MoreToggle = styled.button`
+  grid-column: 1 / -1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+`
 
 const CardList = styled.div`
   display: grid;
