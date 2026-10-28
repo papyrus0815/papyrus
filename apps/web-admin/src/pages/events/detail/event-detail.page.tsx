@@ -836,7 +836,10 @@ function EventDetailContent({
               {activeTab === 'survey' && (
                 /* 청크 받기와 데이터 받기(패널 안)가 같은 로딩을 써서 같은 자리에서 이어진다 */
                 <Suspense fallback={<EventPanelLoading label="하위 사건을 모으는 중…" />}>
-                  <LazyEventOverviewPanel eventId={event.id} />
+                  <LazyEventOverviewPanel
+                    eventId={event.id}
+                    onGatherExisting={() => setActiveTab('links')}
+                  />
                 </Suspense>
               )}
 

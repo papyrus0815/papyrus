@@ -56,14 +56,17 @@ const SECTION_IDS = [
   'overview-matrix',
   'overview-distribution',
   'overview-people',
+  'overview-sides',
   'overview-checklist',
 ]
 
 interface EventOverviewPanelProps {
   eventId: string
+  /** 하위 사건이 없을 때 '기존 사건 모으기'로 갈 길 — 상세가 연관 탭을 연다 */
+  onGatherExisting?: () => void
 }
 
-export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
+export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewPanelProps) {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: eventKeys.overview(eventId),
@@ -198,6 +201,25 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
   }
 
   const { root, descendants } = data
+  /**
+   * 하위가 없으면 패널 다섯 개가 각자 '없습니다'를 말하는 대신 탭 하나가 한 번 말한다 —
+   * 조망은 하위 전부를 모으는 탭이라 하위가 없으면 볼 것이 없다.
+   */
+  if (descendants.length === 0) {
+    return (
+      <S.Page>
+        <S.EmptyStrip>
+          <strong>아직 하위 사건이 없습니다</strong> — 조망은 하위 사건 전부를 한 화면에 모아
+          전개·참여국·분포·기록 상태를 봅니다.{' '}
+          {onGatherExisting && (
+            <S.TextButton type="button" onClick={onGatherExisting}>
+              기존 사건을 하위로 모으기
+            </S.TextButton>
+          )}
+        </S.EmptyStrip>
+      </S.Page>
+    )
+  }
   const selectedCountry = derived.matrix.find((country) => country.key === selectedCountryKey)
 
   // 모달 순서 — 거르기가 걸려 있으면 걸린 사건들 안에서 넘긴다(열린 사건이 그 밖이면 전체 순서)
@@ -342,6 +364,16 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
             인물 <S.SectionNavCount>{derived.persons.length}</S.SectionNavCount>
           </S.SectionNavLink>
         )}
+        {hasSidesOrMetrics && (
+          <S.SectionNavLink
+            href="#overview-sides"
+            onClick={jumpTo}
+            $active={activeSection === 'overview-sides'}
+            aria-current={activeSection === 'overview-sides' ? 'location' : undefined}
+          >
+            진영·수치 <S.SectionNavCount>{derived.sideCount + derived.metrics.length}</S.SectionNavCount>
+          </S.SectionNavLink>
+        )}
         <S.SectionNavLink
           href="#overview-checklist"
           onClick={jumpTo}
@@ -397,6 +429,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
           numberById={derived.numberById}
           selectedCountryKey={selectedCountryKey}
           onSelectCountry={setSelectedCountryKey}
+          visibleIds={visibleIds}
           hotId={highlightId}
           onHover={setHotId}
           onOpen={openEventById}
@@ -418,9 +451,14 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
         )}
         {hasSidesOrMetrics && (
           <SidesMetricsPanel
-            nodes={[root, ...descendants]}
+            root={root}
+            descendants={descendants}
             metrics={derived.metrics}
+            numberById={derived.numberById}
             wide={!hasPersons}
+            hotId={highlightId}
+            onHover={setHotId}
+            onOpen={openEventById}
           />
         )}
         {emptyRecords.length > 0 && (

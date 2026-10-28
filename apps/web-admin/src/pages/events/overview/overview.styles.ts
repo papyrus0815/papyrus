@@ -279,12 +279,17 @@ export const FilterChip = styled.button`
 
 // ─── 패널 격자 ─────────────────────────────────────────────────────────────
 
+/*
+ * 2열은 **패널 폭** 기준 — 화면 폭(@media 1100)으로 갈랐더니 좌측 사이드바·우측 장부 사이에 끼어
+ * 실제 폭이 600~700px인데도 2열이 되어 인물·진영 패널이 300px 남짓으로 눌렸다(숫자 줄 02e050f8c와 같은 결함).
+ * Page가 overviewpanel 컨테이너다.
+ */
 export const Grid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 36px 40px;
-  @media (max-width: 1100px) {
-    grid-template-columns: minmax(0, 1fr);
+  @container overviewpanel (min-width: 960px) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 `
 
@@ -526,8 +531,10 @@ export const MatrixTable = styled.table`
   }
 `
 
-export const MatrixHeadCell = styled.th<{ $hot?: boolean }>`
+export const MatrixHeadCell = styled.th<{ $hot?: boolean; $dim?: boolean }>`
   min-width: 30px;
+  /* 거르기 밖의 사건 열 — 간트·점검표와 같은 농도로 흐린다 */
+  opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   button {
     padding: 2px 4px;
     border: none;
@@ -563,7 +570,9 @@ export const MatrixCountryCell = styled.th`
   font-weight: 500;
 `
 
-export const CountryButton = styled.button<{ $active: boolean }>`
+export const CountryButton = styled.button<{ $active: boolean; $dim?: boolean }>`
+  /* 걸린 사건에 한 번도 나오지 않는 나라 */
+  opacity: ${({ $dim }) => ($dim ? 0.45 : 1)};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -609,8 +618,9 @@ export const CountBadge = styled.span<{ $pct?: number }>`
   }
 `
 
-export const MatrixCell = styled.td<{ $hot: boolean }>`
+export const MatrixCell = styled.td<{ $hot: boolean; $dim?: boolean }>`
   text-align: center;
+  opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   cursor: pointer;
   padding: 5px 2px;
   background: ${({ $hot, theme }) => ($hot ? ledgerHoverFill(theme.mode) : 'transparent')};
@@ -772,8 +782,9 @@ export const FillBar = styled.span<{ $pct: number }>`
   }
 `
 
-export const ChecklistRow = styled.tr<{ $hot: boolean }>`
+export const ChecklistRow = styled.tr<{ $hot: boolean; $dim?: boolean }>`
   cursor: pointer;
+  opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   /* 강조는 표의 줄무늬(부모 선택자)보다 이겨야 한다 — 특이도를 올린다 */
   &&& {
     ${({ $hot, theme }) => ($hot ? `background: ${ledgerHoverFill(theme.mode)};` : '')}

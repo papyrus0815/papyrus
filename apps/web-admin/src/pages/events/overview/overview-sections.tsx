@@ -251,10 +251,16 @@ export function CountryMatrixPanel({
   numberById,
   selectedCountryKey,
   onSelectCountry,
+  visibleIds,
   hotId,
   onHover,
   onOpen,
 }: HoverProps & {
+  /**
+   * 거르기 결과 — 간트·점검표처럼 걸리지 않은 열을 흐리고 나라별 건수를 걸린 사건으로만 센다.
+   * 예전엔 이 패널만 거르기를 몰라 '전투만'을 걸어도 18열·원래 건수 그대로였다.
+   */
+  visibleIds: Set<string> | null
   /** 하위에만 나오고 상위엔 안 걸린 나라 */
   missing: MissingRootCountry[]
   attaching: boolean
@@ -267,7 +273,12 @@ export function CountryMatrixPanel({
 }) {
   const theme = useTheme()
   const tones = ['lead', 'target', 'statehood', 'neutral'] as const
-  const maxCount = Math.max(1, ...matrix.map((country) => country.eventCount))
+  /** 걸린 사건 중 이 나라가 나오는 수 — 거르기가 없으면 전체 건수 */
+  const shownCount = (country: MatrixCountry) =>
+    visibleIds
+      ? [...country.roleByEvent.keys()].filter((id) => visibleIds.has(id)).length
+      : country.eventCount
+  const maxCount = Math.max(1, ...matrix.map(shownCount))
   /** 상위 자신에 참여국이 하나도 없으면 '상위' 열은 통째로 빈칸이라 그리지 않는다 */
   const showRootColumn = matrix.some((country) => country.inRoot)
   return (
@@ -276,6 +287,7 @@ export function CountryMatrixPanel({
         <S.PanelTitle id="overview-matrix-title">참여국 × 하위 사건</S.PanelTitle>
         <S.PanelNote>
           열 번호 = 전개의 줄 번호 · 나라를 누르면 그 나라가 낀 사건만 남는다
+          {visibleIds && ' · 건수는 걸린 사건 기준'}
         </S.PanelNote>
       </S.PanelHead>
       {matrix.length === 0 ? (
@@ -328,6 +340,7 @@ export function CountryMatrixPanel({
                       scope="col"
                       title={event.title}
                       $hot={hotId === event.id}
+                      $dim={isDimmed(visibleIds, event.id)}
                       onMouseEnter={() => onHover(event.id)}
                       onMouseLeave={() => onHover(null)}
                     >
@@ -345,23 +358,25 @@ export function CountryMatrixPanel({
               <tbody>
                 {matrix.map((country) => {
                   const active = selectedCountryKey === country.key
+                  const count = shownCount(country)
                   return (
                     <tr key={country.key}>
                       <S.MatrixCountryCell scope="row">
                         <S.CountryButton
                           type="button"
                           $active={active}
+                          $dim={visibleIds !== null && count === 0 && !active}
                           aria-pressed={active}
                           onClick={() => onSelectCountry(active ? null : country.key)}
-                          title={`${country.name}${country.kind === 'historical' ? ' (역사 국가)' : ''} — 눌러서 이 나라가 낀 사건만 보기`}
+                          title={`${country.name}${country.kind === 'historical' ? ' (역사 국가)' : ''}${
+                            visibleIds ? ` — 걸린 사건 중 ${count}건(전체 ${country.eventCount}건)` : ''
+                          } — 눌러서 이 나라가 낀 사건만 보기`}
                         >
                           <span>
                             {country.flagEmoji ? `${country.flagEmoji} ` : ''}
                             {country.name}
                           </span>
-                          <S.CountBadge $pct={(country.eventCount / maxCount) * 100}>
-                            {country.eventCount}
-                          </S.CountBadge>
+                          <S.CountBadge $pct={(count / maxCount) * 100}>{count}</S.CountBadge>
                         </S.CountryButton>
                       </S.MatrixCountryCell>
                       {showRootColumn && (
@@ -382,6 +397,7 @@ export function CountryMatrixPanel({
                           <S.MatrixCell
                             key={event.id}
                             $hot={hotId === event.id}
+                            $dim={isDimmed(visibleIds, event.id)}
                             onMouseEnter={() => onHover(event.id)}
                             onMouseLeave={() => onHover(null)}
                             onClick={() => onOpen(event.id)}
@@ -438,38 +454,44 @@ export function DistributionPanel({
         <S.PanelNote>세부를 누르면 그 세부만 남는다</S.PanelNote>
       </S.PanelHead>
 
-      <S.StackBar aria-hidden="true">
-        {types.map((bar) => (
-          <S.StackSegment
-            key={bar.key}
-            $color={colorOf(bar)}
-            $dim={selectedType !== null && selectedType !== bar.key}
-            style={{ flexGrow: bar.count }}
-            title={`${bar.label} ${bar.count}건`}
-          />
-        ))}
-      </S.StackBar>
-      <S.StackLegend>
-        {types.map((bar) => {
-          const active = selectedType === bar.key
-          return (
-            <li key={bar.key}>
-              <S.LegendButton
-                type="button"
-                $active={active}
-                aria-pressed={active}
-                onClick={() => onSelectType(active ? null : bar.key)}
-              >
-                <S.CategoryDot $color={colorOf(bar)} aria-hidden="true" />
-                {bar.label}
-                <S.SectionNavCount>
-                  {bar.count} · {Math.round((bar.count / Math.max(1, total)) * 100)}%
-                </S.SectionNavCount>
-              </S.LegendButton>
-            </li>
-          )
-        })}
-      </S.StackLegend>
+      {total === 0 ? (
+        <S.Empty>하위 사건이 없어 분포가 아직 없습니다.</S.Empty>
+      ) : (
+        <>
+          <S.StackBar aria-hidden="true">
+            {types.map((bar) => (
+              <S.StackSegment
+                key={bar.key}
+                $color={colorOf(bar)}
+                $dim={selectedType !== null && selectedType !== bar.key}
+                style={{ flexGrow: bar.count }}
+                title={`${bar.label} ${bar.count}건`}
+              />
+            ))}
+          </S.StackBar>
+          <S.StackLegend>
+            {types.map((bar) => {
+              const active = selectedType === bar.key
+              return (
+                <li key={bar.key}>
+                  <S.LegendButton
+                    type="button"
+                    $active={active}
+                    aria-pressed={active}
+                    onClick={() => onSelectType(active ? null : bar.key)}
+                  >
+                    <S.CategoryDot $color={colorOf(bar)} aria-hidden="true" />
+                    {bar.label}
+                    <S.SectionNavCount>
+                      {bar.count} · {Math.round((bar.count / Math.max(1, total)) * 100)}%
+                    </S.SectionNavCount>
+                  </S.LegendButton>
+                </li>
+              )
+            })}
+          </S.StackLegend>
+        </>
+      )}
 
       {bins.length > 0 && (
         <>
@@ -584,59 +606,138 @@ export function PersonsPanel({
   )
 }
 
+/**
+ * 진영 · 수치 — 다른 패널과 **같은 번호**를 달고, 제목을 누르면 사건 모달이 열리며, 마우스를 올리면
+ * 세 패널이 함께 칠해진다. 예전엔 제목 글자뿐이라 이 패널만 번호 체계 밖에 있었다.
+ * 줄 순서도 번호순(상위 사건 자신은 맨 위 '상위').
+ */
 export function SidesMetricsPanel({
-  nodes,
+  root,
+  descendants,
   metrics,
+  numberById,
   wide = false,
-}: {
-  nodes: EventOverviewNode[]
+  hotId,
+  onHover,
+  onOpen,
+}: HoverProps & {
+  root: EventOverviewNode
+  descendants: EventOverviewNode[]
   metrics: MetricRow[]
+  numberById: Map<string, number>
   wide?: boolean
 }) {
-  const withSides = nodes.filter((node) => node.sides.length > 0)
+  /** 상위 = 0, 하위 = 전개 번호, 번호 없는 것(이론상 없음)은 맨 뒤 */
+  const orderOf = (id: string) =>
+    id === root.id ? 0 : (numberById.get(id) ?? Number.MAX_SAFE_INTEGER)
+  const withSides = [root, ...descendants]
+    .filter((node) => node.sides.length > 0)
+    .sort((left, right) => orderOf(left.id) - orderOf(right.id))
+  const sortedMetrics = metrics
+    .map((row, index) => ({ row, index }))
+    .sort(
+      (left, right) =>
+        orderOf(left.row.eventId) - orderOf(right.row.eventId) || left.index - right.index,
+    )
+    .map(({ row }) => row)
+
+  /** 번호 칸 + 제목 칸 — 상위는 모달 대상이 아니라 글자로만 */
+  const renderEventCells = (id: string, title: string) =>
+    id === root.id ? (
+      <>
+        <td>
+          <S.Muted>상위</S.Muted>
+        </td>
+        <td>{title}</td>
+      </>
+    ) : (
+      <>
+        <td>
+          <S.Muted>{numberById.get(id) ?? '—'}</S.Muted>
+        </td>
+        <td>
+          <S.RowTitleButton
+            type="button"
+            style={{ whiteSpace: 'normal' }}
+            onClick={(clickEvent) => {
+              // 줄 클릭과 겹쳐 두 번 열리지 않게
+              clickEvent.stopPropagation()
+              onOpen(id)
+            }}
+          >
+            {title}
+          </S.RowTitleButton>
+        </td>
+      </>
+    )
+  const rowProps = (id: string) =>
+    id === root.id
+      ? { $hot: false, style: { cursor: 'default' } }
+      : {
+          $hot: hotId === id,
+          onMouseEnter: () => onHover(id),
+          onMouseLeave: () => onHover(null),
+          onClick: () => onOpen(id),
+        }
+
   return (
-    <S.Panel $wide={wide} aria-labelledby="overview-sides-title">
+    <S.Panel $wide={wide} id="overview-sides" aria-labelledby="overview-sides-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-sides-title">진영 · 수치</S.PanelTitle>
       </S.PanelHead>
       {withSides.length === 0 ? (
         <S.Empty>진영이 나뉜 사건이 아직 없습니다.</S.Empty>
       ) : (
-        <S.Table>
-          <tbody>
-            {withSides.map((node) => (
-              <tr key={node.id}>
-                <td>{node.title}</td>
-                <td>{node.sides.map((side) => side.name).join(' ↔ ')}</td>
+        <S.Scroll>
+          <S.Table>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">사건</th>
+                <th scope="col">진영</th>
               </tr>
-            ))}
-          </tbody>
-        </S.Table>
+            </thead>
+            <tbody>
+              {withSides.map((node) => (
+                <S.ChecklistRow key={node.id} {...rowProps(node.id)}>
+                  {renderEventCells(node.id, node.title)}
+                  <td>{node.sides.map((side) => side.name).join(' ↔ ')}</td>
+                </S.ChecklistRow>
+              ))}
+            </tbody>
+          </S.Table>
+        </S.Scroll>
       )}
-      {metrics.length === 0 ? (
+      {sortedMetrics.length === 0 ? (
         <S.Empty>사상자·병력 같은 수치가 기록된 사건이 아직 없습니다.</S.Empty>
       ) : (
-        <S.Table>
-          <thead>
-            <tr>
-              <th scope="col">사건</th>
-              <th scope="col">항목</th>
-              <th scope="col">값</th>
-            </tr>
-          </thead>
-          <tbody>
-            {metrics.map((row, index) => (
-              <tr key={`${row.eventId}-${row.metricName}-${index}`}>
-                <td>{row.eventTitle}</td>
-                <td>{row.metricName}</td>
-                <td>
-                  {row.display}
-                  {row.unit && ` ${row.unit}`}
-                </td>
+        <S.Scroll>
+          <S.Table>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">사건</th>
+                <th scope="col">항목</th>
+                <th scope="col">값</th>
               </tr>
-            ))}
-          </tbody>
-        </S.Table>
+            </thead>
+            <tbody>
+              {sortedMetrics.map((row, index) => (
+                <S.ChecklistRow
+                  key={`${row.eventId}-${row.metricName}-${index}`}
+                  {...rowProps(row.eventId)}
+                >
+                  {renderEventCells(row.eventId, row.eventTitle)}
+                  <td>{row.metricName}</td>
+                  <td>
+                    {row.display}
+                    {row.unit && ` ${row.unit}`}
+                  </td>
+                </S.ChecklistRow>
+              ))}
+            </tbody>
+          </S.Table>
+        </S.Scroll>
       )}
     </S.Panel>
   )
