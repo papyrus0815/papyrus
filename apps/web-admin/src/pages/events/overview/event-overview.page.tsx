@@ -16,6 +16,7 @@ import { FiX } from 'react-icons/fi'
 import { useSearchParams } from 'react-router-dom'
 
 import { eventTypeDef } from '@/entities/event/model/event-type-registry'
+import { EventPanelLoading } from '@/entities/event/ui/panel-loading'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { updateEvent } from '@/shared/api/events'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
@@ -184,7 +185,7 @@ export function EventOverviewPanel({ eventId }: EventOverviewPanelProps) {
   if (isLoading) {
     return (
       <S.Page>
-        <S.Empty>하위 사건을 모으는 중…</S.Empty>
+        <EventPanelLoading label="하위 사건을 모으는 중…" />
       </S.Page>
     )
   }
