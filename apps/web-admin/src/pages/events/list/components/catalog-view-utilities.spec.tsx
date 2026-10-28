@@ -175,4 +175,19 @@ describe('CatalogViewUtilities — 표시 설정 메뉴', () => {
       screen.getByRole('button', { name: /현재 정렬 등록순/ }),
     ).toBeInTheDocument()
   })
+
+  it('onToggleLeaderKind가 주어지면 상단 연표 표지 원클릭 토글과 메뉴 내 일괄 토글이 동작한다', () => {
+    const onToggleLeaderKind = jest.fn()
+    renderWithTheme(
+      <CatalogViewUtilities
+        {...baseProps}
+        hiddenLeaderKinds={[]}
+        onToggleLeaderKind={onToggleLeaderKind}
+      />,
+    )
+    const quickToggle = screen.getByRole('button', { name: /연표 표지/ })
+    expect(quickToggle).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(quickToggle)
+    expect(onToggleLeaderKind).toHaveBeenCalledTimes(6)
+  })
 })

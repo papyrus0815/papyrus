@@ -647,6 +647,23 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
 
   const activeSort = SORT_CHOICES.find((choice) => choice.value === sortBy)
   const hiddenCount = hiddenColumns.length
+  const allLeadersHidden =
+    LEADER_TOGGLES.length > 0 &&
+    LEADER_TOGGLES.every(({ kind }) => hiddenLeaderKinds.includes(kind))
+  const visibleLeaderCount = LEADER_TOGGLES.length - hiddenLeaderKinds.length
+
+  const handleToggleAllLeaders = () => {
+    if (!onToggleLeaderKind) return
+    if (allLeadersHidden) {
+      LEADER_TOGGLES.forEach(({ kind }) => {
+        if (hiddenLeaderKinds.includes(kind)) onToggleLeaderKind(kind)
+      })
+    } else {
+      LEADER_TOGGLES.forEach(({ kind }) => {
+        if (!hiddenLeaderKinds.includes(kind)) onToggleLeaderKind(kind)
+      })
+    }
+  }
 
   /**
    * **폭이 모자라 접힌 열** — 사용자가 끈 것과 다른 축이다.
@@ -689,6 +706,7 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
       <ToolbarStyles.ToolbarBtn
         type="button"
         $active={centuriesOnly}
+        $hideOnMobile
         disabled={!canToggleCenturiesOnly}
         title={
           !canToggleCenturiesOnly
@@ -702,6 +720,22 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
       >
         <FiBarChart2 size={ICON_SIZE.base} aria-hidden="true" />
         <span>세기 개관</span>
+      </ToolbarStyles.ToolbarBtn>
+    )}
+    {onToggleLeaderKind && (
+      <ToolbarStyles.ToolbarBtn
+        type="button"
+        $active={!allLeadersHidden}
+        $hideOnMobile
+        title={
+          allLeadersHidden
+            ? '연표 표지(군주 즉위·취임·건국·멸망) 모두 켜기'
+            : `연표 표지 표시 중 (${visibleLeaderCount}/${LEADER_TOGGLES.length}) — 눌러서 모두 숨기기 (세부 선택은 ⋯ 메뉴)`
+        }
+        aria-pressed={!allLeadersHidden}
+        onClick={handleToggleAllLeaders}
+      >
+        <span>연표 표지</span>
       </ToolbarStyles.ToolbarBtn>
     )}
     <UtilityMenuWrap ref={menuWrapRef}>
@@ -869,6 +903,9 @@ export const CatalogViewUtilities: React.FC<ViewUtilitiesProps> = ({
                   <UtilityMenuLabel as="span" id="catalog-leaders-label">
                     연표 표지
                   </UtilityMenuLabel>
+                  <ColumnResetBtn type="button" onClick={handleToggleAllLeaders}>
+                    {allLeadersHidden ? '전부 표시' : '전부 숨기기'}
+                  </ColumnResetBtn>
                 </ColumnSectionHead>
                 <ChoiceColumn role="group" aria-labelledby="catalog-leaders-label">
                   {LEADER_TOGGLES.map(({ kind, label }) => {

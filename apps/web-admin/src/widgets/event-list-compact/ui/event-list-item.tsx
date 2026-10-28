@@ -839,24 +839,28 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 <AnchorChipText>{anchorParent.title}</AnchorChipText>
               </AnchorChip>
             )}
-            {/* 접힌 부모는 '무엇이 몇 건 숨어 있는지'를 **문장으로** 말한다(검토 DISC-5).
-                셰브론 옆 숫자 배지만으로는 그것이 하위 사건 수라는 게 전달되지 않고,
-                좁은 폭에서는 배지가 제목 줄을 떠나 메타 줄로 내려가 더 멀어진다. */}
-            {hasChildren && !isExpanded && childCount > 0 && (
-              <FilteredOutHint
-                as="button"
-                type="button"
-                tabIndex={isRovingTarget ? 0 : -1}
-                aria-label={`하위 사건 ${childCount}건 펼치기`}
-                onClick={(event: React.MouseEvent<HTMLElement>) => {
-                  event.stopPropagation()
-                  onToggleExpansion(node.id)
-                }}
-              >
-                {/* '접힘'은 앞 셰브론(›)이 이미 말한다 — 글자를 줄여 제목 폭을 돌려준다 */}
-                하위 {childCount}건
-              </FilteredOutHint>
-            )}
+            {/* 데스크톱에서는 앞의 셰브론 배지(DiscCount)와 앵커 배지(AnchorBadge)가 이미
+                하위 사건 수를 말하므로, 제목 끝에 또 '하위 N건'을 붙이면 한 행에 같은 숫자가
+                최대 3번 반복된다. 셰브론이 2번째 줄로 내려가고 앵커 배지도 없는 모바일에서만
+                보조 안내를 남긴다. */}
+            {hasChildren &&
+              !isExpanded &&
+              childCount > 0 &&
+              !anchorBadgeLabel &&
+              isNarrow && (
+                <FilteredOutHint
+                  as="button"
+                  type="button"
+                  tabIndex={isRovingTarget ? 0 : -1}
+                  aria-label={`하위 사건 ${childCount}건 펼치기`}
+                  onClick={(event: React.MouseEvent<HTMLElement>) => {
+                    event.stopPropagation()
+                    onToggleExpansion(node.id)
+                  }}
+                >
+                  하위 {childCount}건
+                </FilteredOutHint>
+              )}
             {/* 필터로 잘려나간 자식이 있으면 조용히 사라진 것처럼 보이지 않게 알린다.
                 시각 텍스트가 '조건 밖 N'이던 시절엔 그 N이 **하위 사건** 수라는 사실이
                 title 속성에만 있었다 — 터치·키보드에는 뜨지 않는 자리다(검토 DISC-9).
@@ -2312,13 +2316,10 @@ const CategoryLabel = styled.span.attrs(() => ({ 'data-col': 'cat' }) as Record<
   display: inline-flex;
   align-items: center;
   /*
-   * 우측 정렬 — 색 면(fill)을 지운 뒤로 '칩의 좌·우 모서리가 스캔선'이라는 계약은
-   * 트랙 폭이 아니라 **글자 끝**이 이행한다. 가운데 정렬이면 라벨 길이가 2~5글자로
-   * 흩어지는 만큼 양쪽 끝이 다 흔들려(실측 좌 276~294 · 우 318~336) 세로선이 하나도
-   * 서지 않는다. 오른쪽에 붙이면 날짜(우측 정렬)와 함께 제목 바로 앞에 두 줄기
-   * 세로선이 생기고, '언제·무엇' 두 토큰이 제목으로 이어지는 한 덩어리로 읽힌다.
+   * 좌측 정렬 — 주 분야('정치', '전쟁/군사')가 항상 같은 세로 스캔선에서 시작하고,
+   * 선택적으로 붙는 세부 두 글자(SubtypeShort)가 오른쪽으로 자연스럽게 이어지게 한다.
    */
-  justify-content: flex-end;
+  justify-content: flex-start;
   /* 면(fill)이 없는 칩의 좌우 패딩은 여백이 아니라 **정렬 오차**다 — 6px이 남아 있어
      글자 끝이 트랙(과 열 머리글) 끝에서 6px 안쪽에 섰다(실측 330 vs 336). 칩 사이
      간격은 격자의 column-gap이 이미 만든다. */
@@ -2607,7 +2608,9 @@ const SpanBar = styled.span<{
   $clippedStart: boolean
   $clippedEnd: boolean
 }>`
-  ${spanInk};
+  /* 지속 기간이 있는 막대는 당일 점(SpanPoint, 중립 회색) 및 배경 분기 격자선과
+     즉시 구분되도록 브랜드 블루 톤을 부여한다. */
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#60a5fa' : '#3b82f6')};
   position: absolute;
   top: 50%;
   /* 눈금(::after)보다 위 — 안 그러면 분기 선이 막대를 가로질러 두 동강 내 보인다. */

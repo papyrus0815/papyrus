@@ -1086,6 +1086,11 @@ export const CategoryChip = styled.span<{
  */
 export const DescriptionWrap = styled.div`
   position: relative;
+  padding: 14px 20px 2px;
+
+  @media (max-width: 768px) {
+    padding: 12px 16px 2px;
+  }
 `
 
 export const DescriptionText = styled.p<{ $expanded: boolean }>`

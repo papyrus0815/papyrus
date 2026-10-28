@@ -23,7 +23,6 @@ import {
   FiEdit2,
   FiGitBranch,
   FiGlobe,
-  FiImage,
   FiLayers,
   FiMapPin,
   FiShare2,
@@ -453,8 +452,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               )}
             </OutOfScopeBanner>
           )}
-          {/* sticky 헤더 — 제목·summary·액션 */}
-          <Detail.DetailPanelHeader $expanded={descExpanded}>
+          {/* sticky 헤더 — 제목·액션만 고정해 본문 스크롤 가시 영역을 확보한다 */}
+          <Detail.DetailPanelHeader>
             <Detail.DetailTitleRow>
               <Detail.DetailTitle>{selectedNode.title}</Detail.DetailTitle>
               {onClose && (
@@ -468,22 +467,6 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 </Detail.DetailCloseButton>
               )}
             </Detail.DetailTitleRow>
-            {selectedNode.summary && (
-              <Detail.DescriptionWrap>
-                <Detail.DescriptionText $expanded={descExpanded}>
-                  {selectedNode.summary}
-                </Detail.DescriptionText>
-                {selectedNode.summary.length > 160 && (
-                  <Detail.DescriptionToggle
-                    type="button"
-                    onClick={() => setDescExpanded((v) => !v)}
-                    aria-expanded={descExpanded}
-                  >
-                    {descExpanded ? '접기' : '더 보기'}
-                  </Detail.DescriptionToggle>
-                )}
-              </Detail.DescriptionWrap>
-            )}
 
             <Detail.ActionButtonRow>
               {/* 이전/다음 사건 — 키보드 ↑↓와 동등. 끝/처음에서는 disabled.
@@ -558,8 +541,26 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             </Detail.ActionButtonRow>
           </Detail.DetailPanelHeader>
 
-          {/* hero image — 헤더 아래 (스크롤 시 함께 흘러감) */}
+          {/* hero image — 대표 이미지가 있는 사건에만 표시 */}
           {renderHero()}
+
+          {/* 요약문 — 스티키 헤더 밖 본문 최상단에 배치해 스크롤 시 본문 가시 영역을 넓힌다 */}
+          {selectedNode.summary && (
+            <Detail.DescriptionWrap>
+              <Detail.DescriptionText $expanded={descExpanded}>
+                {selectedNode.summary}
+              </Detail.DescriptionText>
+              {selectedNode.summary.length > 160 && (
+                <Detail.DescriptionToggle
+                  type="button"
+                  onClick={() => setDescExpanded((v) => !v)}
+                  aria-expanded={descExpanded}
+                >
+                  {descExpanded ? '접기' : '더 보기'}
+                </Detail.DescriptionToggle>
+              )}
+            </Detail.DescriptionWrap>
+          )}
 
           {/* 핵심 정보 그리드 */}
           {renderInfo()}

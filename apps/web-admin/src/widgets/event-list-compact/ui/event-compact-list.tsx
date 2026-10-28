@@ -2258,7 +2258,7 @@ const ListColumnHeader: React.FC<{
     >
       종료
     </List.ColumnHeaderCell>
-    <List.ColumnHeaderCell $col="cat" $align="right">
+    <List.ColumnHeaderCell $col="cat">
       분야
     </List.ColumnHeaderCell>
     {/* '사건' 열에 걸리는 축은 **하위 많은 순**이다 — 이 열이 제목과 하위 펼침을 함께
@@ -2485,8 +2485,8 @@ const SkeletonEnd = styled.span`
 
 const SkeletonCategory = styled.span`
   grid-column: cat;
-  /* 실제 분류 글자('정치')도 우측 정렬의 짧은 낱말 */
-  justify-self: end;
+  /* 실제 분류 글자('정치')도 좌측 정렬의 짧은 낱말 */
+  justify-self: start;
   width: 26px;
   height: 11px;
   border-radius: 4px;

@@ -173,10 +173,11 @@ export const FilterTriggerButton = styled.button<{ $inGroup?: boolean }>`
     $inGroup
       ? css`
           /* 껍데기(보더·radius·배경)는 그룹이 그린다 — 여기서는 비운다.
-           * 폭 슬롯 고정(검토 VIS-4): 값이 붙어도 트리거가 요동하지 않게 하한을 준다.
-           * 터치 대역은 그룹이 가로 스크롤이라 하한을 걸면 스크롤만 길어져 제외. */
+           * 비활성 상태에서는 라벨 고유폭에 맞춰 불필요한 빈 여백을 없애고,
+           * 값이 선택되면 TriggerValue(max-width: 12ch)만큼 자연스럽게 확장된다. */
           height: 100%;
-          min-width: 112px;
+          min-width: 0;
+          padding: 7px 12px;
           border: none;
           border-radius: 0;
           background: transparent;
