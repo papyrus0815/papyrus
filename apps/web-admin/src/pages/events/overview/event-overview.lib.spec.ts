@@ -29,6 +29,7 @@ const node = (over: Partial<EventOverviewNode> & { id: string }): EventOverviewN
   location: null,
   domain: 'OTHER',
   type: null,
+  kind: 'SINGLE',
   countries: [],
   persons: [],
   sides: [],

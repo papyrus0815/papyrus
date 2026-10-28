@@ -77,6 +77,8 @@ export interface EventOverviewNode {
   domain: EventDomainValue
   /** 세부 분야 — 점검표가 세부(와 분야)로 적용 칸을 고른다 */
   type: EventTypeValue | null
+  /** 사건 종류 — 묶음 전개 트리가 '하위가 아직 없는 묶음'(끌어다 놓을 수 있는 자리)을 알아보게 */
+  kind: 'SINGLE' | 'COLLECTION'
   countries: EventOverviewCountry[]
   persons: EventOverviewPerson[]
   sides: EventOverviewSide[]
@@ -267,6 +269,7 @@ export class EventOverviewService {
       location: row.location ?? null,
       domain: row.domain,
       type: row.type,
+      kind: row.kind,
       countries,
       persons: row.persons.map((participation) => ({
         personId: participation.personId,

@@ -23,6 +23,7 @@ const event: EventOverviewNode = {
   location: null,
   domain: 'MILITARY',
   type: 'BATTLE',
+  kind: 'SINGLE',
   countries: [
     { key: 'h:de', id: 'de', kind: 'historical', name: '독일 제국', flagEmoji: null, role: 'PARTICIPANT', sideId: null },
     { key: 'h:fr', id: 'fr', kind: 'historical', name: '프랑스 제3공화국', flagEmoji: null, role: 'INITIATOR', sideId: null },
