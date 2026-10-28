@@ -1,29 +1,28 @@
 import { useMemo, useState } from 'react'
 
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { toParticipants, participantKey } from '@/entities/event/model'
-import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { type EventSide, syncEventSides, toSideInputs } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
+import { getAllPersons } from '@/shared/api/persons'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import { type EventDetail, eventKeys } from '../use-event-detail'
 import { InlineSelect, InlineText } from './inline'
 import { MODULE_COLOR } from './module-colors'
+import { SIDE_PALETTE, withSideColors } from './side-colors'
 
 interface ModuleSidesProps {
   event: EventDetail
   onPatch: (patch: UpdateEventDto) => void
 }
-
-/** 새 진영 색 — 첫 두 진영은 대립(파랑·빨강), 그다음은 구별되는 색 */
-const SIDE_PALETTE = ['#1d4ed8', '#b91c1c', '#047857', '#7c3aed', '#b45309']
 
 const PARTICIPATION_LABEL: Record<string, string> = {
   FULL: '전면',
@@ -48,6 +47,8 @@ function formatPoint(point: { era: 'BC' | 'AD'; year: number; month: number | nu
 export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
   const queryClient = useQueryClient()
   const sides = useMemo(() => event.sides ?? [], [event.sides])
+  /* 표시용 색 — 저장된 색이 없으면 순서대로 팔레트(저장값 불변) */
+  const coloredSides = useMemo(() => withSideColors(sides), [sides])
   const [busy, setBusy] = useState(false)
 
   const participants = useMemo(
@@ -70,6 +71,19 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
   }, [event.relatedCountries, event.relatedHistoricalCountries])
 
   const persons = useMemo(() => event.relatedPersons ?? [], [event.relatedPersons])
+
+  /**
+   * 인물 넣기 — 예전엔 **이 사건의 참여 인물** 중에서만 고를 수 있어, 사건에 없는 지휘관은 넣을 길이 없었다
+   * (진영 설명 10개가 전부 '지휘관(인물 연결 대기): …'를 글로 적고 있었고, 진영 소속 인물은 0명).
+   * 전체 인물에서 찾되 이 사건의 참여 인물을 맨 위에 고정하고, 사건에 없던 인물은 참여 인물로 함께 넣는다.
+   */
+  const [personPickerSide, setPersonPickerSide] = useState<EventSide | null>(null)
+  const { data: allPersons = [], isLoading: allPersonsLoading } = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
+    enabled: personPickerSide !== null,
+    staleTime: 5 * 60_000,
+  })
 
   const refresh = async () => {
     await Promise.all([
@@ -140,13 +154,18 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
   }
 
   const assignPerson = (personId: string, sideId: string | null) => {
+    const known = persons.some((person) => person.personId === personId)
     onPatch({
-      relatedPersons: persons.map((person) => ({
-        personId: person.personId,
-        role: person.role ?? undefined,
-        note: person.note ?? undefined,
-        ...(person.personId === personId ? { sideId } : {}),
-      })),
+      relatedPersons: [
+        ...persons.map((person) => ({
+          personId: person.personId,
+          role: person.role ?? undefined,
+          note: person.note ?? undefined,
+          ...(person.personId === personId ? { sideId } : {}),
+        })),
+        /* 사건에 없던 인물 — 참여 인물로 들이면서 바로 이 진영에 */
+        ...(known || !sideId ? [] : [{ personId, sideId }]),
+      ],
     } as UpdateEventDto)
   }
 
@@ -161,7 +180,8 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
           <S.SectionTitleDot $color={MODULE_COLOR.sides} />
           진영
         </S.SectionTitle>
-        {sides.length > 0 && <S.SectionSubtitle>{sides.length}개 진영</S.SectionSubtitle>}
+        {/* 제목이 이미 '진영' — '2개 진영'은 같은 말을 두 번 한다 */}
+        {sides.length > 0 && <S.SectionSubtitle>{sides.length}</S.SectionSubtitle>}
       </S.SectionHeader>
 
       <SideGrid>
@@ -176,14 +196,8 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                 label: elsewhere ? `${info?.name ?? ''} (${elsewhere}에서 옮김)` : (info?.name ?? ''),
               }
             })
-          const personOptions = persons
-            .filter((person) => person.sideId !== side.id)
-            .map((person) => ({
-              value: person.personId,
-              label: person.person ? getPersonDisplayName({ ...person.person, name: person.person.name ?? '' }, true) : person.personId,
-            }))
           return (
-            <SideCard key={side.id} $color={side.color ?? '#64748b'}>
+            <SideCard key={side.id} $color={coloredSides.find((colored) => colored.id === side.id)?.color ?? SIDE_PALETTE[0]}>
               <SideHead>
                 <SideName>
                   <InlineText value={side.name} onSave={(next) => renameSide(side, next)} as="span" />
@@ -250,15 +264,9 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                     label={`${side.name}에 넣을 참여국`}
                   />
                 )}
-                {personOptions.length > 0 && (
-                  <InlineSelect
-                    value=""
-                    options={personOptions}
-                    onSave={(personId) => assignPerson(personId, side.id)}
-                    placeholder="인물 넣기"
-                    label={`${side.name}에 넣을 인물`}
-                  />
-                )}
+                <PersonPickButton type="button" onClick={() => setPersonPickerSide(side)}>
+                  인물 넣기
+                </PersonPickButton>
               </Pickers>
 
               <SideDescription>
@@ -276,18 +284,47 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
       </SideGrid>
 
       {sides.length > 0 && unassignedCountries.length > 0 && (
-        <Unassigned>
-          진영 미지정 참여국:{' '}
-          {unassignedCountries
-            .map((participant) => participantInfo.get(participantKey(participant))?.name)
-            .filter(Boolean)
-            .join(' · ')}
+        /* 진영 밖 참여국 — 예전엔 읽기만 하는 글줄이라, 넣으려면 진영 카드마다 '국가 넣기'를 열어 찾아야 했다.
+           이름을 누르면 그 자리에서 진영을 고른다 */
+        <Unassigned aria-label="진영 미지정 참여국">
+          <UnassignedLabel>진영 미지정</UnassignedLabel>
+          {unassignedCountries.map((participant) => {
+            const key = participantKey(participant)
+            const name = participantInfo.get(key)?.name ?? ''
+            return (
+              <UnassignedChip key={key}>
+                <InlineSelect
+                  value=""
+                  options={sides.map((side) => ({ value: side.id, label: `${side.name}에 넣기` }))}
+                  onSave={(sideId) => assignCountry(key, sideId)}
+                  placeholder={name}
+                  label={`${name}의 진영`}
+                  clearable={false}
+                />
+              </UnassignedChip>
+            )
+          })}
         </Unassigned>
       )}
 
       <AddSideButton type="button" onClick={addSide} disabled={busy}>
         <FiPlus /> 진영 추가
       </AddSideButton>
+
+      {personPickerSide && (
+        <PersonSelectModal
+          persons={allPersons}
+          selectedPersonId=""
+          onSelect={(personId) => assignPerson(personId, personPickerSide.id)}
+          onClose={() => setPersonPickerSide(null)}
+          excludeIds={personPickerSide.persons.map((member) => member.personId)}
+          excludeReason="이미 이 진영"
+          pinnedIds={persons.map((person) => person.personId)}
+          title={`${personPickerSide.name}에 넣을 인물`}
+          searchPlaceholder="이름 또는 생몰년도로 검색 — 이 사건의 참여 인물이 위에"
+          loading={allPersonsLoading}
+        />
+      )}
     </S.Section>
   )
 }
@@ -439,10 +476,35 @@ const SideDescription = styled.div`
   white-space: pre-line;
 `
 
-const Unassigned = styled.p`
+const Unassigned = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
   margin: 12px 0 0;
   font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const UnassignedLabel = styled.span`
+  font-weight: 600;
+  margin-right: 2px;
+`
+
+/** 진영을 고를 수 있는 이름 칩 — 점선 테두리가 '아직 놓이지 않은 것'을 말한다 */
+const UnassignedChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px dashed ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.24)' : 'rgba(15,23,42,0.24)')};
+  border-radius: 999px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  /* 인라인 피커의 빈 값 자리표시(기울임·흐림)를 칩 안에선 평범한 이름처럼 */
+  [data-empty='true'] {
+    font-style: normal;
+    color: inherit;
+  }
 `
 
 const AddSideButton = styled.button`
@@ -472,5 +534,26 @@ const AddSideButton = styled.button`
   svg {
     width: 12px;
     height: 12px;
+  }
+`
+
+/** '인물 넣기' — 옆의 '국가 넣기'(인라인 피커 자리표시)와 같은 목소리의 글자 버튼 */
+const PersonPickButton = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-style: italic;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 `
