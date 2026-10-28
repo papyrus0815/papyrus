@@ -1,7 +1,8 @@
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { type DragEvent, type ReactNode, Suspense, lazy, useMemo, useState } from 'react'
 
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiLayers, FiLink2, FiPlus } from 'react-icons/fi'
+import { MdDragIndicator } from 'react-icons/md'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -17,6 +18,8 @@ import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { type UpdateEventDto, updateEvent } from '@/shared/api/events'
+import { getEventOverview } from '@/shared/api/event-overview'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
 import { pathKeys } from '@/shared/router'
 import { InlineText } from '@/shared/ui/inline-edit'
@@ -25,8 +28,17 @@ import { notify } from '@/shared/ui/toast'
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { PHASE_LABEL, groupByPhase } from './collection-development.lib'
-import { ExpandToggle, KindSwitch, NestedChildren, RegroupBar } from './collection-regroup'
+import { CollectionFooter, ExpandToggle, KindSwitch, RegroupBar, createCollectionWith } from './collection-regroup'
 import { compareEventStart, crossPatchErrorMessage } from './detail-network.lib'
+import {
+  type DropAction,
+  type TreeNode,
+  type TreeSource,
+  buildEventTree,
+  dropActionFor,
+  indexTree,
+  subtreeIds,
+} from './development-tree.lib'
 
 const LazyEventRegisterModal = lazy(() =>
   import('@/widgets/event-form/ui/event-register-modal').then((module) => ({
@@ -57,13 +69,19 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   const [createOpen, setCreateOpen] = useState(false)
   /** 요약을 쓰는 중인 하위 — 공용 인라인 칸은 연필 버튼(호버)으로만 열려, 빈 안내문을 눌러도 아무 일이 없었다 */
   const [writingSummaryId, setWritingSummaryId] = useState<string | null>(null)
-  /** 펼친 묶음 하위 — 그 아래 하위를 이 자리에서 본다 */
-  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set())
+  /** 접은 묶음 — 기본은 전부 펼친다('모든 사건을 본다'). 접은 것만 기억한다 */
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set())
   /** 골라서 묶기 — 켜면 번호 자리가 고르기 칸이 되고 아래에 묶기 막대가 붙는다 */
   const [selecting, setSelecting] = useState(false)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
-  /** 하위 사건 등록 모달의 상위 — 기본은 이 사건, 묶음 하위의 '이 묶음에 하위 추가'면 그 묶음 */
+  /** 하위 사건 등록 모달의 상위 — 기본은 이 사건, 묶음의 '이 묶음에 하위 추가'면 그 묶음 */
   const [createUnder, setCreateUnder] = useState<{ id: string; title: string } | null>(null)
+  /** 끌어다 놓기 — 끄는 중인 사건, 지금 가리키는 자리와 그 결과 */
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dropHint, setDropHint] = useState<{ targetId: string; action: DropAction } | null>(null)
+  /** 개별 위에 놓아 새 묶음을 만들 때 — 이름을 받는 줄이 놓인 사건 아래에 열린다 */
+  const [groupPrompt, setGroupPrompt] = useState<{ draggedId: string; withId: string; parentId: string } | null>(null)
+  const [busy, setBusy] = useState(false)
 
   const toggleIn = (set: ReadonlySet<string>, id: string) => {
     const next = new Set(set)
@@ -76,39 +94,75 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     setSelectedIds(new Set())
   }
 
-  const children = useMemo(
-    () =>
-      [
-        ...(event.childEvents ?? []).map((child) => ({
+  /**
+   * 하위의 하위까지 — 조망 API가 주 상위 계보 전부를 준다(이 사건 상세 응답엔 직계뿐). 받기 전엔 직계로 그린다.
+   * 조망은 ['events'] 아래 키라 하위를 고칠 때마다(invalidateEventQueries) 함께 다시 받는다.
+   */
+  const { data: overview } = useQuery({
+    queryKey: eventKeys.overview(event.id),
+    queryFn: () => getEventOverview(event.id),
+    staleTime: 0,
+  })
+  const kindById = useMemo(
+    () => new Map((event.childEvents ?? []).map((child) => [child.id, child.kind === 'COLLECTION' ? 'COLLECTION' as const : 'SINGLE' as const])),
+    [event.childEvents],
+  )
+  const tree = useMemo<TreeRow[]>(() => {
+    const sources: TreeSource[] = overview
+      ? [overview.root, ...overview.descendants].map((node) => ({
+          id: node.id,
+          title: node.title,
+          description: node.description,
+          parentEventId: node.parentEventId,
+          startDate: node.startDate,
+          startDatePrecision: node.startDatePrecision,
+          endDate: node.endDate,
+          endDatePrecision: node.endDatePrecision,
+          domain: node.domain,
+          /* 조망 노드 kind가 정본 — API가 아직 옛 빌드면 비어 오고, 그땐 lib가 하위 유무로 판별 */
+          kind: node.kind ?? null,
+        }))
+      : (event.childEvents ?? []).map((child) => ({
           id: child.id,
           title: child.title,
           description: child.description ?? null,
+          parentEventId: event.id,
           startDate: child.startDate ?? null,
           startDatePrecision: child.startDatePrecision ?? null,
           endDate: child.endDate ?? null,
           endDatePrecision: child.endDatePrecision ?? null,
           domain: (child.domain as string | undefined) ?? null,
-          isCollection: child.kind === 'COLLECTION',
-          viaExtraLink: false,
-        })),
-        ...(event.extraChildren ?? []).map((child) => ({
-          id: child.id,
-          title: child.title,
-          description: null,
-          startDate: child.startDate ?? null,
-          startDatePrecision: child.startDatePrecision ?? null,
-          endDate: child.endDate ?? null,
-          endDatePrecision: child.endDatePrecision ?? null,
-          domain: null,
-          isCollection: false,
-          viaExtraLink: true,
-        })),
-      ].sort((first, second) => compareEventStart(first.startDate, second.startDate)),
-    [event.childEvents, event.extraChildren],
-  )
+          kind: child.kind === 'COLLECTION' ? 'COLLECTION' : 'SINGLE',
+        }))
+    const owned: TreeRow[] = buildEventTree(event.id, sources, kindById)
+    /* 추가 상위로만 이어진 하위 — 조망(주 상위 계보)에 없다. 이 묶음 소유가 아니라 읽기만 */
+    const extras: TreeRow[] = (event.extraChildren ?? [])
+      .filter((child) => !owned.some((node) => node.id === child.id))
+      .map((child) => ({
+        id: child.id,
+        title: child.title,
+        description: null,
+        parentEventId: null,
+        startDate: child.startDate ?? null,
+        startDatePrecision: child.startDatePrecision ?? null,
+        endDate: child.endDate ?? null,
+        endDatePrecision: child.endDatePrecision ?? null,
+        domain: null,
+        children: [],
+        isCollection: false,
+        depth: 1,
+        viaExtraLink: true,
+      }))
+    return [...owned, ...extras].sort((first, second) => compareEventStart(first.startDate, second.startDate))
+  }, [overview, event.id, event.childEvents, event.extraChildren, kindById])
 
-  /** 상위 기간에 비춘 구획 — 하나뿐이면(보통 전부 '기간 중') 구획 머리를 그리지 않는다 */
-  const groups = useMemo(() => groupByPhase(children, event), [children, event])
+  const index = useMemo(() => indexTree(tree), [tree])
+  const totalCount = index.size
+  const directCount = tree.length
+  const truncated = overview?.truncated ?? false
+
+  /** 상위 기간에 비춘 구획(직계만) — 하나뿐이면(보통 전부 '기간 중') 구획 머리를 그리지 않는다 */
+  const groups = useMemo(() => groupByPhase(tree, event), [tree, event])
   const showPhaseHeads = groups.length > 1
 
   /**
@@ -131,16 +185,272 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
       savedLabel: `'${event.title}'을(를) 단일 사건으로 바꿈`,
     })
 
+  /* ── 끌어다 놓기 ── */
+
+  const titleOf = (id: string) => (id === event.id ? event.title : (index.get(id)?.title ?? '사건'))
+
+  const endDrag = () => {
+    setDraggingId(null)
+    setDropHint(null)
+  }
+
+  const actionAt = (targetId: string | 'root'): DropAction | null => {
+    const dragged = draggingId ? index.get(draggingId) : undefined
+    if (!dragged) return null
+    const target = targetId === 'root' ? 'root' : index.get(targetId)
+    if (!target || (target !== 'root' && (target as TreeRow).viaExtraLink)) return null
+    return dropActionFor(dragged, target, event.id)
+  }
+
+  const moveUnder = async (id: string, parentId: string) => {
+    const previousParent = index.get(id)?.parentEventId ?? null
+    setBusy(true)
+    try {
+      await updateEvent(id, { parentEventId: parentId } as UpdateEventDto)
+      notify.success(`'${titleOf(id)}'을(를) '${titleOf(parentId)}' 밑으로 옮겼습니다`)
+    } catch (error) {
+      notify.error(`옮기지 못했습니다 — ${crossPatchErrorMessage(error)}`)
+    } finally {
+      for (const eventId of new Set([event.id, id, parentId, previousParent].filter(Boolean) as string[])) {
+        invalidateEventQueries(queryClient, { eventId })
+      }
+      setBusy(false)
+    }
+  }
+
+  const dropOn = (targetId: string | 'root') => {
+    const action = actionAt(targetId)
+    const draggedId = draggingId
+    endDrag()
+    if (!action || !draggedId) return
+    if (action.type === 'move') {
+      void moveUnder(draggedId, action.parentId)
+    } else {
+      /* 개별 위 — 둘을 묶을 새 묶음의 이름부터 받는다(놓인 사건 아래에 입력 줄) */
+      setGroupPrompt({ draggedId, withId: action.withId, parentId: action.parentId })
+    }
+  }
+
+  const submitGroup = async (name: string) => {
+    if (!groupPrompt || !name.trim()) return
+    const members = [groupPrompt.withId, groupPrompt.draggedId]
+      .map((id) => index.get(id))
+      .filter((node): node is TreeRow => Boolean(node))
+    const previousParents = members.map((member) => member.parentEventId).filter(Boolean) as string[]
+    setBusy(true)
+    try {
+      const created = await createCollectionWith({
+        parentId: groupPrompt.parentId,
+        title: name.trim(),
+        members,
+        domain: event.domain,
+      })
+      notify.success(`'${members.map((member) => member.title).join("'·'")}'을(를) 새 묶음 '${created.title}'으로 묶었습니다`)
+      setGroupPrompt(null)
+    } catch (error) {
+      notify.error(`묶지 못했습니다 — ${crossPatchErrorMessage(error)}`)
+    } finally {
+      for (const eventId of new Set([event.id, groupPrompt.parentId, ...previousParents, ...members.map((member) => member.id)])) {
+        invalidateEventQueries(queryClient, { eventId })
+      }
+      setBusy(false)
+    }
+  }
+
+  /** 끌어다 놓기 대상 하나 — 행과 루트 띠가 같이 쓴다 */
+  const dropTargetProps = (targetId: string | 'root') => ({
+    onDragOver: (dragEvent: DragEvent<HTMLElement>) => {
+      if (!draggingId) return
+      dragEvent.stopPropagation()
+      const action = actionAt(targetId)
+      if (!action) {
+        dragEvent.dataTransfer.dropEffect = 'none'
+        return
+      }
+      dragEvent.preventDefault()
+      dragEvent.dataTransfer.dropEffect = 'move'
+      if (dropHint?.targetId !== targetId || dropHint.action.type !== action.type) setDropHint({ targetId, action })
+    },
+    onDragLeave: (dragEvent: DragEvent<HTMLElement>) => {
+      /* 자식 요소로 들어간 것은 떠난 게 아니다 */
+      if (dragEvent.currentTarget.contains(dragEvent.relatedTarget as Node | null)) return
+      if (dropHint?.targetId === targetId) setDropHint(null)
+    },
+    onDrop: (dragEvent: DragEvent<HTMLElement>) => {
+      dragEvent.preventDefault()
+      dragEvent.stopPropagation()
+      dropOn(targetId)
+    },
+  })
+
+  const dropLabel = (action: DropAction) =>
+    action.type === 'move'
+      ? `'${titleOf(action.parentId)}' 밑으로 옮기기`
+      : `'${titleOf(action.withId)}'와(과) 새 묶음으로 묶기`
+
+  /* ── 한 행(재귀) ── */
+
+  const renderRow = (node: TreeRow, ordinal: string): ReactNode => {
+    const owned = !node.viaExtraLink
+    const collapsed = collapsedIds.has(node.id)
+    const checked = selectedIds.has(node.id)
+    const hint = dropHint?.targetId === node.id ? dropHint.action : null
+    const dateLabel = node.startDate
+      ? formatDateRange(node.startDate, node.endDate ?? undefined, node.startDatePrecision, node.endDatePrecision)
+      : null
+    const domain = node.domain ? eventDomainDef(node.domain) : null
+    const nested = node.depth > 1
+    return (
+      <Step
+        key={node.id}
+        $nested={nested}
+        data-selected={checked || undefined}
+        data-drop={hint?.type}
+        data-dragging={draggingId === node.id || undefined}
+        {...(owned && draggingId ? dropTargetProps(node.id) : {})}
+      >
+        {selecting && owned ? (
+          <StepCheck>
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => setSelectedIds((prev) => toggleIn(prev, node.id))}
+              aria-label={`${node.title} 고르기`}
+            />
+          </StepCheck>
+        ) : owned ? (
+          /* 번호 자리가 손잡이 — 손이 닿으면 번호가 ⋮⋮로 바뀌고 그걸 끌어 옮긴다 */
+          <StepHandle
+            draggable
+            title="끌어서 다른 묶음 밑으로 옮기거나, 개별 사건 위에 놓아 함께 묶기"
+            aria-label={`${node.title} 끌어 옮기기`}
+            onDragStart={(dragEvent) => {
+              dragEvent.dataTransfer.effectAllowed = 'move'
+              dragEvent.dataTransfer.setData('text/plain', node.id)
+              const row = (dragEvent.currentTarget as HTMLElement).closest('li')
+              if (row) dragEvent.dataTransfer.setDragImage(row, 16, 16)
+              setDraggingId(node.id)
+              setGroupPrompt(null)
+            }}
+            onDragEnd={endDrag}
+          >
+            <StepIndex aria-hidden data-index>{ordinal}</StepIndex>
+            <GripIcon aria-hidden data-grip />
+          </StepHandle>
+        ) : (
+          <StepIndex aria-hidden>{ordinal}</StepIndex>
+        )}
+        <StepBody>
+          <StepHead>
+            <StepTitle
+              to={pathKeys.events.detail(node.id)}
+              viewTransition
+              draggable={false}
+              $nested={nested}
+              onMouseEnter={() => prefetchEvent(node.id)}
+              onFocus={() => prefetchEvent(node.id)}
+            >
+              {node.title}
+            </StepTitle>
+            <StepMeta>
+              <span>{dateLabel ?? '날짜 미상'}</span>
+              {domain && (
+                <DomainMeta>
+                  <domain.Icon aria-hidden />
+                  {domain.label}
+                </DomainMeta>
+              )}
+              {node.isCollection && (
+                <ExpandToggle
+                  expanded={!collapsed}
+                  count={node.children.length}
+                  title={node.title}
+                  onToggle={() => setCollapsedIds((prev) => toggleIn(prev, node.id))}
+                />
+              )}
+              {node.viaExtraLink && <span>추가 상위로 연결</span>}
+            </StepMeta>
+            {owned && !selecting && !draggingId && (
+              <StepTools>
+                <KindSwitch parentId={node.parentEventId ?? event.id} child={node} />
+              </StepTools>
+            )}
+          </StepHead>
+          {hint && <DropLabel role="status">{dropLabel(hint)}</DropLabel>}
+          {/* 있는 요약은 한 줄로 읽기만 — 비어 있을 때만 여기서 쓴다. 추가 상위로만 이어진 하위는 쓰기를 열지 않는다 */}
+          {node.description?.trim() ? (
+            <StepText>{node.description}</StepText>
+          ) : !owned || nested ? null : writingSummaryId === node.id ? (
+            <StepSummary>
+              <InlineText
+                value=""
+                autoEdit
+                onSave={(next) => void saveChildDescription(node.id, next)}
+                placeholder="한 줄 요약 — 무슨 일이었나"
+                label={`${node.title} 요약`}
+                multiline
+                minRows={2}
+              />
+            </StepSummary>
+          ) : (
+            <SummaryPrompt type="button" onClick={() => setWritingSummaryId(node.id)}>
+              + 한 줄 요약 쓰기
+            </SummaryPrompt>
+          )}
+          {groupPrompt?.withId === node.id && (
+            <GroupPromptForm
+              onSubmit={(submitEvent) => {
+                submitEvent.preventDefault()
+                const field = submitEvent.currentTarget.elements.namedItem('group-name') as HTMLInputElement | null
+                void submitGroup(field?.value ?? '')
+              }}
+            >
+              <GroupPromptText>
+                '{titleOf(groupPrompt.draggedId)}'와(과) 함께 묶을 새 묶음 이름
+              </GroupPromptText>
+              <GroupPromptInput name="group-name" autoFocus placeholder="예: 7월 위기" aria-label="새 묶음 이름" disabled={busy} />
+              <GroupPromptSubmit type="submit" disabled={busy}>
+                묶기
+              </GroupPromptSubmit>
+              <GroupPromptCancel type="button" onClick={() => setGroupPrompt(null)} disabled={busy}>
+                취소
+              </GroupPromptCancel>
+            </GroupPromptForm>
+          )}
+          {node.isCollection && !collapsed && (
+            <NestedSteps>
+              {node.children.map((child, childIndex) => renderRow(child, String(childIndex + 1)))}
+              <NestedFooterItem>
+                <CollectionFooter
+                  collection={{ id: node.id, title: node.title, childIds: node.children.map((child) => child.id) }}
+                  liftTo={node.parentEventId ?? event.id}
+                  rootId={event.id}
+                  onAddUnder={() => setCreateUnder({ id: node.id, title: node.title })}
+                />
+              </NestedFooterItem>
+            </NestedSteps>
+          )}
+        </StepBody>
+      </Step>
+    )
+  }
+
+  const allOwned = useMemo(() => [...index.values()].filter((node) => !(node as TreeRow).viaExtraLink), [index])
+
   return (
-    <S.Section id="narrative">
+    <S.Section id="narrative" aria-busy={busy}>
       <S.SectionHeader>
         <S.SectionTitle>전개</S.SectionTitle>
         <S.SectionSubtitle>
-          {children.length > 0 ? `하위 사건 ${children.length}건` : '하위 사건으로 기록'}
+          {directCount === 0
+            ? '하위 사건으로 기록'
+            : totalCount > directCount
+              ? `하위 사건 ${directCount}건 · 그 아래까지 ${totalCount}건`
+              : `하위 사건 ${directCount}건`}
         </S.SectionSubtitle>
       </S.SectionHeader>
 
-      {children.length === 0 ? (
+      {directCount === 0 ? (
         <Empty>
           <EmptyText>
             아직 하위 사건이 없습니다. 묶음 사건의 전개는 전투·회담·조약 같은 국면을 하위 사건으로
@@ -160,6 +470,18 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
         </Empty>
       ) : (
         <Phases>
+          {/* 끄는 동안에만 — 여기 놓으면 이 사건 바로 밑(묶음에서 꺼내기) */}
+          {draggingId && (
+            <RootDrop
+              data-active={dropHint?.targetId === 'root' || undefined}
+              data-disabled={!actionAt('root') || undefined}
+              {...dropTargetProps('root')}
+            >
+              {actionAt('root')
+                ? `여기에 놓으면 '${event.title}' 바로 밑으로`
+                : `이미 '${event.title}' 바로 밑에 있습니다`}
+            </RootDrop>
+          )}
           {groups.map((group) => (
             <PhaseGroup key={group.phase} aria-label={showPhaseHeads ? PHASE_LABEL[group.phase] : undefined}>
               {showPhaseHeads && (
@@ -169,143 +491,60 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 </PhaseHead>
               )}
               <Steps>
-                {group.items.map((child) => {
-                  const index = children.indexOf(child)
-                  const dateLabel = child.startDate
-                    ? formatDateRange(
-                        child.startDate,
-                        child.endDate ?? undefined,
-                        child.startDatePrecision,
-                        child.endDatePrecision,
-                      )
-                    : null
-                  const domain = child.domain ? eventDomainDef(child.domain) : null
-                  /* 추가 상위로만 이어진 하위는 이 묶음의 소유가 아니다 — 고르기·종류 바꾸기를 열지 않는다 */
-                  const owned = !child.viaExtraLink
-                  const expanded = expandedIds.has(child.id)
-                  const checked = selectedIds.has(child.id)
-                  return (
-                    <Step key={child.id} data-selected={checked || undefined}>
-                      {selecting && owned ? (
-                        <StepCheck>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => setSelectedIds((prev) => toggleIn(prev, child.id))}
-                            aria-label={`${child.title} 고르기`}
-                          />
-                        </StepCheck>
-                      ) : (
-                        <StepIndex aria-hidden>{index + 1}</StepIndex>
-                      )}
-                      <StepBody>
-                        {/* 한 줄 머리 — 제목 뒤에 날짜·분야를 잇는다(예전엔 날짜 줄 → 제목 줄 → 요약 두 줄로
-                            한 항목이 120px, 18건이 화면 2.5장이었다) */}
-                        <StepHead>
-                          <StepTitle
-                            to={pathKeys.events.detail(child.id)}
-                            viewTransition
-                            onMouseEnter={() => prefetchEvent(child.id)}
-                            onFocus={() => prefetchEvent(child.id)}
-                          >
-                            {child.title}
-                          </StepTitle>
-                          <StepMeta>
-                            <span>{dateLabel ?? '날짜 미상'}</span>
-                            {domain && (
-                              <DomainMeta>
-                                <domain.Icon aria-hidden />
-                                {domain.label}
-                              </DomainMeta>
-                            )}
-                            {child.isCollection && (
-                              <ExpandToggle
-                                expanded={expanded}
-                                title={child.title}
-                                onToggle={() => setExpandedIds((prev) => toggleIn(prev, child.id))}
-                              />
-                            )}
-                            {child.viaExtraLink && <span>추가 상위로 연결</span>}
-                          </StepMeta>
-                          {owned && !selecting && (
-                            <StepTools>
-                              <KindSwitch parentId={event.id} child={child} />
-                            </StepTools>
-                          )}
-                        </StepHead>
-                        {/* 있는 요약은 한 줄로 읽기만(전문·고치기는 하위 상세에서) — 비어 있을 때만 여기서 쓴다.
-                            추가 상위로만 이어진 하위는 이 묶음의 소유가 아니라 쓰기를 열지 않는다 */}
-                        {child.description?.trim() ? (
-                          <StepText>{child.description}</StepText>
-                        ) : child.viaExtraLink ? null : writingSummaryId === child.id ? (
-                          <StepSummary>
-                            <InlineText
-                              value=""
-                              autoEdit
-                              onSave={(next) => void saveChildDescription(child.id, next)}
-                              placeholder="한 줄 요약 — 무슨 일이었나"
-                              label={`${child.title} 요약`}
-                              multiline
-                              minRows={2}
-                            />
-                          </StepSummary>
-                        ) : (
-                          <SummaryPrompt type="button" onClick={() => setWritingSummaryId(child.id)}>
-                            + 한 줄 요약 쓰기
-                          </SummaryPrompt>
-                        )}
-                        {child.isCollection && expanded && (
-                          <NestedChildren
-                            parentId={event.id}
-                            collectionId={child.id}
-                            collectionTitle={child.title}
-                            onAddUnder={() => setCreateUnder({ id: child.id, title: child.title })}
-                          />
-                        )}
-                      </StepBody>
-                    </Step>
-                  )
+                {group.items.map((node) => {
+                  /* 번호는 구획을 넘어 이어지는 직계 차례(1·2·3…) — 구획마다 다시 1부터면 몇 번째 국면인지 흐려진다 */
+                  return renderRow(node, String(tree.indexOf(node) + 1))
                 })}
               </Steps>
             </PhaseGroup>
           ))}
+          {truncated && <TruncatedNote>하위가 너무 많아 일부만 보입니다 — 묶음 상세에서 나머지를 보세요.</TruncatedNote>}
           {/*
-           * 다음 차례 — 추가는 목록 **끝**에 선다. 머리 오른쪽 버튼이던 시절엔 18건을 다 읽고 내려온 자리에서
-           * 다시 위로 올라가야 했고, 새 하위가 어디에 붙는지(차례의 끝)도 말하지 못했다.
-           * 번호 열에 '+' 노드를 세워 목록의 다음 줄처럼 읽히게 한다.
+           * 다음 차례 — 추가는 목록 **끝**에 선다. 번호 열에 '+' 노드를 세워 목록의 다음 줄처럼 읽히게 한다.
            */}
           {selecting ? (
             <RegroupBar
               parent={{ id: event.id, domain: event.domain }}
-              selected={children.filter((child) => selectedIds.has(child.id))}
-              candidates={children.filter((child) => child.isCollection && !child.viaExtraLink)}
+              selected={allOwned.filter((node) => selectedIds.has(node.id))}
+              candidates={allOwned.filter(
+                (node) =>
+                  node.isCollection &&
+                  /* 고른 것의 하위 묶음으로는 못 옮긴다(순환) */
+                  ![...selectedIds].some((id) => {
+                    const picked = index.get(id)
+                    return picked ? subtreeIds(picked).has(node.id) : false
+                  }),
+              )}
               onDone={stopSelecting}
               onCancel={stopSelecting}
             />
           ) : (
-          <NextStep>
-            <AddChildRow type="button" onClick={() => setCreateOpen(true)}>
-              <NextStepNode aria-hidden>
-                <FiPlus />
-              </NextStepNode>
-              <AddChildText>
-                <AddChildTitle>하위 사건 추가</AddChildTitle>
-                <AddChildHint>{children.length + 1}번째 국면 — 전투·회담·조약을 차례 끝에</AddChildHint>
-              </AddChildText>
-            </AddChildRow>
-            <NextStepTools>
-              {children.some((child) => !child.viaExtraLink) && (
-                <GatherButton type="button" onClick={() => setSelecting(true)}>
-                  <FiLayers aria-hidden />
-                  골라서 묶기
+            <NextStep>
+              <AddChildRow type="button" onClick={() => setCreateOpen(true)}>
+                <NextStepNode aria-hidden>
+                  <FiPlus />
+                </NextStepNode>
+                <AddChildText>
+                  <AddChildTitle>하위 사건 추가</AddChildTitle>
+                  <AddChildHint>{directCount + 1}번째 국면 — 전투·회담·조약을 차례 끝에</AddChildHint>
+                </AddChildText>
+              </AddChildRow>
+              <NextStepTools>
+                {allOwned.length > 0 && (
+                  <GatherButton type="button" onClick={() => setSelecting(true)}>
+                    <FiLayers aria-hidden />
+                    골라서 묶기
+                  </GatherButton>
+                )}
+                <GatherButton type="button" onClick={onGatherExisting}>
+                  <FiLink2 aria-hidden />
+                  기존 사건 모으기
                 </GatherButton>
-              )}
-              <GatherButton type="button" onClick={onGatherExisting}>
-                <FiLink2 aria-hidden />
-                기존 사건 모으기
-              </GatherButton>
-            </NextStepTools>
-          </NextStep>
+              </NextStepTools>
+            </NextStep>
+          )}
+          {!selecting && allOwned.length > 1 && (
+            <DragHint>번호를 끌어 다른 묶음 위에 놓으면 그 밑으로, 개별 사건 위에 놓으면 둘을 새 묶음으로 묶습니다.</DragHint>
           )}
         </Phases>
       )}
@@ -329,6 +568,9 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     </S.Section>
   )
 }
+
+/** 직계·손자 행 — 상세 응답 하위(추가 상위 연결 표지 포함) */
+type TreeRow = TreeNode & { viaExtraLink?: boolean; children: TreeRow[] }
 
 /**
  * 목록 끝 '다음 차례' 줄 — **비어 있는 다음 행**처럼 생겼다.
@@ -533,12 +775,14 @@ const Steps = styled.ol`
   list-style: none;
 `
 
-const Step = styled.li`
+const Step = styled.li<{ $nested?: boolean }>`
   position: relative;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 12px;
-  padding: 9px 0;
+  grid-template-columns: ${({ $nested }) => ($nested ? '22px' : '28px')} minmax(0, 1fr);
+  gap: ${({ $nested }) => ($nested ? 8 : 12)}px;
+  padding: ${({ $nested }) => ($nested ? '6px 0' : '9px 0')};
+  border-radius: ${RADIUS.SM};
+  transition: background 0.12s, box-shadow 0.12s, opacity 0.12s;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   &:last-child {
@@ -549,6 +793,183 @@ const Step = styled.li`
   &[data-selected] {
     background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
+
+  /* 끄는 중인 행 — 흐리게(어디서 왔는지는 남긴다) */
+  &[data-dragging] {
+    opacity: 0.4;
+  }
+
+  /*
+   * 놓을 자리 — 묶음 밑으로(into)는 실선 테두리 + 옅은 면, 새 묶음(group)은 점선 테두리.
+   * 테두리는 inset 그림자라 레이아웃이 밀리지 않는다.
+   */
+  &[data-drop='move'] {
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    box-shadow: inset 0 0 0 2px ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &[data-drop='group'] {
+    box-shadow: inset 0 0 0 2px ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    outline: 2px dashed ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
+  }
+`
+
+/** 번호 자리 = 끌기 손잡이. 손이 닿으면 번호가 ⋮⋮로 바뀐다(끌 수 있음을 그 자리에서 말한다) */
+const StepHandle = styled.span`
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  [data-grip] {
+    display: none;
+  }
+  li:hover:not(:has(li:hover)) > & [data-index],
+  &:focus-visible [data-index] {
+    display: none;
+  }
+  li:hover:not(:has(li:hover)) > & [data-grip],
+  &:focus-visible [data-grip] {
+    display: block;
+  }
+`
+
+const GripIcon = styled(MdDragIndicator)`
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: ${metaText};
+`
+
+/** 놓을 자리의 결과 한 줄 — '‘7월 위기’ 밑으로 옮기기' */
+const DropLabel = styled.span`
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 1px 8px;
+  border-radius: ${RADIUS.PILL};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  color: ${({ theme }) => ledgerBackground(theme.mode)};
+  font-size: 11.5px;
+  font-weight: 700;
+`
+
+/** 손자 목록 — 행 본문 열 안쪽, 왼쪽 세로선 하나로 '이 묶음 밑'임을 말한다 */
+const NestedSteps = styled.ol`
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 2px;
+  padding: 0 0 0 10px;
+  list-style: none;
+  border-left: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  > li + li {
+    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+`
+
+const NestedFooterItem = styled.li`
+  padding: 6px 0 2px;
+`
+
+/** 끄는 동안 목록 위에 뜨는 띠 — 여기 놓으면 이 사건 바로 밑(묶음에서 꺼내기) */
+const RootDrop = styled.div`
+  max-width: ${S.PROSE_WIDTH}px;
+  padding: 10px 14px;
+  border-radius: ${RADIUS.SM};
+  border: 2px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-align: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+
+  &[data-active] {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &[data-disabled] {
+    opacity: 0.5;
+  }
+`
+
+/** 개별 위에 놓아 새 묶음 — 이름을 받는 줄(놓인 사건 아래) */
+const GroupPromptForm = styled.form`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: ${RADIUS.SM};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+`
+
+const GroupPromptText = styled.span`
+  flex-basis: 100%;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const GroupPromptInput = styled.input`
+  flex: 1 1 180px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  font: inherit;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const GroupPromptSubmit = styled.button`
+  padding: 6px 12px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  color: ${({ theme }) => ledgerBackground(theme.mode)};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+`
+
+const GroupPromptCancel = styled.button`
+  padding: 6px 4px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: ${metaText};
+  cursor: pointer;
+`
+
+const TruncatedNote = styled.p`
+  margin: -8px 0 0;
+  font-size: 12.5px;
+  color: ${metaText};
+`
+
+/** 끌기가 된다는 것을 한 번 말하는 줄 — 목록 끝 다음 차례 줄 아래 */
+const DragHint = styled.p`
+  max-width: ${S.PROSE_WIDTH}px;
+  margin: -12px 0 0;
+  font-size: 12px;
+  color: ${metaText};
+  word-break: keep-all;
 `
 
 /** 고르기 칸 — 번호 자리(28px)에 오른쪽 정렬 */
@@ -571,17 +992,32 @@ const StepCheck = styled.label`
  * 지금 묶음인 행은 날짜 줄의 '하위' 펼침 단추가 종류를 늘 말한다.
  */
 const StepTools = styled.span`
-  margin-left: auto;
-  align-self: center;
+  /* 흐름 밖(행 오른쪽 위에 겹침) — 흐름 안이면 숨어 있어도 긴 제목 줄에서 밀려 빈 둘째 줄을 만들었다 */
+  position: absolute;
+  top: 6px;
+  right: 0;
+  z-index: 1;
+  /* 겹쳐 뜨므로 지면색 받침 — 밑의 날짜 글자가 비치지 않게 */
+  padding-left: 8px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.14s;
 
-  ${Step}:hover &,
-  ${Step}:focus-within & {
+  /* 가장 안쪽 행에만 — 손자 행에 손이 닿으면 그 부모 행도 :hover라 도구가 겹겹이 떴다 */
+  li:hover:not(:has(li:hover)) > div > div > &,
+  div:focus-within > & {
     opacity: 1;
+    pointer-events: auto;
   }
+  /* 손이 닿는 순간이 없는 터치 환경 — 상시 보이되 흐름 안으로(겹쳐 두면 글자를 가린다) */
   @media (hover: none) {
+    position: static;
+    margin-left: auto;
+    padding-left: 0;
+    background: none;
     opacity: 1;
+    pointer-events: auto;
   }
 `
 
@@ -632,8 +1068,8 @@ const DomainMeta = styled.span`
 `
 
 
-const StepTitle = styled(Link)`
-  font-size: 15px;
+const StepTitle = styled(Link)<{ $nested?: boolean }>`
+  font-size: ${({ $nested }) => ($nested ? 14 : 15)}px;
   font-weight: 700;
   line-height: 1.45;
   color: ${({ theme }) => theme.colors.text.primary};

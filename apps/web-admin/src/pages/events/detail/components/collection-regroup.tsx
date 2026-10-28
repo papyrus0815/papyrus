@@ -7,9 +7,8 @@
  */
 import { useState } from 'react'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { FiChevronDown, FiChevronRight, FiCornerLeftUp, FiPlus } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
@@ -20,13 +19,10 @@ import {
   ledgerHairlineStrong,
 } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
-import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { type CreateEventDto, type UpdateEventDto, createEvent, updateEvent } from '@/shared/api/events'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
-import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
 
-import { eventDetailQueryOptions } from '../use-event-detail'
 import { type DatedLike, spanOfChildren } from './collection-development.lib'
 import { crossPatchErrorMessage } from './detail-network.lib'
 
@@ -94,96 +90,60 @@ export function KindSwitch({
   )
 }
 
-/* ───────────────────────── 묶음 하위 펼치기 ───────────────────────── */
+/* ───────────────────────── 묶음 끝 동작 ───────────────────────── */
 
 /**
- * 묶음 하위의 하위 — 펼칠 때만 그 사건 상세를 받아 온다(상위 응답엔 손자가 없다).
- * 끝에 '이 묶음에 하위 추가' — 그 묶음 상세로 들어가지 않고 여기서 바로 더한다.
+ * 펼친 묶음의 끝 줄 — '이 묶음에 하위 추가'(그 묶음 상세로 들어가지 않고) · '모두 위로 꺼내기'(묶은 것 되돌리기).
+ * 꺼내기는 그 묶음의 하위를 묶음의 상위 밑으로 올린다. 빈 묶음은 남는다(지우기는 파괴라 여기서 하지 않는다).
  */
-export function NestedChildren({
-  parentId,
-  collectionId,
-  collectionTitle,
+export function CollectionFooter({
+  collection,
+  liftTo,
+  rootId,
   onAddUnder,
 }: {
-  /** 이 묶음의 상위(지금 보고 있는 사건) — '위로 꺼내기'의 행선지 */
-  parentId: string
-  collectionId: string
-  collectionTitle: string
+  collection: { id: string; title: string; childIds: string[] }
+  /** 꺼낸 하위가 갈 곳 — 이 묶음의 상위 */
+  liftTo: string
+  rootId: string
   onAddUnder: () => void
 }) {
   const queryClient = useQueryClient()
-  const { data, isLoading, isError } = useQuery(eventDetailQueryOptions(collectionId))
   const [busy, setBusy] = useState(false)
 
-  /**
-   * 모두 위로 꺼내기 — 묶은 것을 되돌리는 길. 이 묶음 밑의 하위를 지금 사건 바로 밑으로 올린다.
-   * 빈 묶음은 남는다(지우기는 파괴라 여기서 하지 않는다 — 비면 '개별'로 바꾸거나 그 상세에서 지운다).
-   */
-  const liftAll = async (ids: string[]) => {
-    if (busy || ids.length === 0) return
+  const liftAll = async () => {
+    if (busy || collection.childIds.length === 0) return
     setBusy(true)
     let moved = 0
     try {
-      for (const id of ids) {
-        await updateEvent(id, { parentEventId: parentId } as UpdateEventDto)
+      for (const id of collection.childIds) {
+        await updateEvent(id, { parentEventId: liftTo } as UpdateEventDto)
         moved += 1
         invalidateEventQueries(queryClient, { eventId: id })
       }
-      notify.success(`'${collectionTitle}' 밑의 ${moved}건을 위로 꺼냈습니다`)
+      notify.success(`'${collection.title}' 밑의 ${moved}건을 위로 꺼냈습니다`)
     } catch (error) {
       notify.error(`${moved}건 꺼낸 뒤 멈췄습니다 — ${crossPatchErrorMessage(error)}`)
     } finally {
-      invalidateEventQueries(queryClient, { eventId: parentId })
-      invalidateEventQueries(queryClient, { eventId: collectionId })
+      invalidateEventQueries(queryClient, { eventId: rootId })
+      invalidateEventQueries(queryClient, { eventId: liftTo })
+      invalidateEventQueries(queryClient, { eventId: collection.id })
       setBusy(false)
     }
   }
-  const nested = [...(data?.childEvents ?? [])].sort((first, second) =>
-    String(first.startDate ?? '').localeCompare(String(second.startDate ?? '')),
-  )
 
   return (
-    <Nested>
-      {isLoading && <NestedNote>불러오는 중…</NestedNote>}
-      {isError && <NestedNote>하위 사건을 불러오지 못했습니다.</NestedNote>}
-      {!isLoading && !isError && nested.length === 0 && <NestedNote>아직 이 묶음 밑에 하위 사건이 없습니다.</NestedNote>}
-      {nested.length > 0 && (
-        <NestedList>
-          {nested.map((grandchild) => (
-            <li key={grandchild.id}>
-              <NestedTitle to={pathKeys.events.detail(grandchild.id)}>{grandchild.title}</NestedTitle>
-              {grandchild.startDate && (
-                <NestedDate>
-                  {formatDateRange(
-                    grandchild.startDate,
-                    grandchild.endDate ?? undefined,
-                    grandchild.startDatePrecision,
-                    grandchild.endDatePrecision,
-                  )}
-                </NestedDate>
-              )}
-              {grandchild.kind === 'COLLECTION' && <NestedKind>묶음</NestedKind>}
-            </li>
-          ))}
-        </NestedList>
+    <NestedActions>
+      <NestedAdd type="button" onClick={onAddUnder} disabled={busy}>
+        <FiPlus aria-hidden />이 묶음에 하위 추가
+      </NestedAdd>
+      {collection.childIds.length > 0 && (
+        <NestedLift type="button" disabled={busy} onClick={() => void liftAll()}>
+          <FiCornerLeftUp aria-hidden />
+          {busy ? '꺼내는 중…' : `모두 위로 꺼내기 (${collection.childIds.length})`}
+        </NestedLift>
       )}
-      <NestedActions>
-        <NestedAdd type="button" onClick={onAddUnder} disabled={busy}>
-          <FiPlus aria-hidden />이 묶음에 하위 추가
-        </NestedAdd>
-        {nested.length > 0 && (
-          <NestedLift
-            type="button"
-            disabled={busy}
-            onClick={() => void liftAll(nested.map((grandchild) => grandchild.id))}
-          >
-            <FiCornerLeftUp aria-hidden />
-            {busy ? '꺼내는 중…' : `모두 위로 꺼내기 (${nested.length})`}
-          </NestedLift>
-        )}
-      </NestedActions>
-    </Nested>
+    </NestedActions>
   )
 }
 
@@ -192,20 +152,45 @@ export function ExpandToggle({
   expanded,
   onToggle,
   title,
+  count,
 }: {
   expanded: boolean
   onToggle: () => void
   title: string
+  /** 그 묶음 바로 밑 하위 수 — 접혀 있어도 얼마나 있는지 */
+  count: number
 }) {
   return (
     <ExpandButton type="button" aria-expanded={expanded} aria-label={`${title} 하위 사건 ${expanded ? '접기' : '펼치기'}`} onClick={onToggle}>
       {expanded ? <FiChevronDown aria-hidden /> : <FiChevronRight aria-hidden />}
-      하위
+      하위 {count}
     </ExpandButton>
   )
 }
 
 /* ───────────────────────── 골라서 묶기 ───────────────────────── */
+
+/**
+ * 새 묶음 만들기 — 사건 생성 한 번(parentEventId·kind=묶음·childEventIds)이라 하위 이동은 서버가 한 트랜잭션에.
+ * 기간은 묶이는 것들의 처음~끝(spanOfChildren). 골라서 묶기 막대와 끌어다 놓기가 같이 쓴다.
+ */
+export async function createCollectionWith(input: {
+  parentId: string
+  title: string
+  members: ReadonlyArray<DatedLike & { id: string }>
+  domain?: string | null
+}): Promise<{ id: string; title: string }> {
+  const span = spanOfChildren(input.members)
+  const created = await createEvent({
+    title: input.title,
+    kind: 'COLLECTION',
+    parentEventId: input.parentId,
+    ...(input.domain ? { domain: input.domain } : {}),
+    ...(span ?? {}),
+    childEventIds: input.members.map((member) => member.id),
+  } as CreateEventDto)
+  return { id: created.id, title: created.title ?? input.title }
+}
 
 export interface RegroupCandidate extends DatedLike {
   id: string
@@ -248,18 +233,15 @@ export function RegroupBar({
     if (!name || count === 0) return
     setBusy(true)
     try {
-      const span = spanOfChildren(selected)
-      const created = await createEvent({
+      const created = await createCollectionWith({
+        parentId: parent.id,
         title: name,
-        kind: 'COLLECTION',
-        parentEventId: parent.id,
-        ...(parent.domain ? { domain: parent.domain } : {}),
-        ...(span ?? {}),
-        childEventIds: selected.map((item) => item.id),
-      } as CreateEventDto)
+        members: selected,
+        domain: parent.domain,
+      })
       invalidateEventQueries(queryClient, { eventId: parent.id })
       for (const item of selected) invalidateEventQueries(queryClient, { eventId: item.id })
-      notify.success(`${count}건을 새 묶음 '${created.title ?? name}'으로 묶었습니다`)
+      notify.success(`${count}건을 새 묶음 '${created.title}'으로 묶었습니다`)
       onDone()
     } catch (error) {
       notify.error(`묶지 못했습니다 — ${crossPatchErrorMessage(error)}`)
@@ -398,65 +380,6 @@ const ExpandButton = styled.button`
     outline-offset: 2px;
     border-radius: 2px;
   }
-`
-
-/** 손자 목록 — 행 본문 열 안쪽, 왼쪽 세로선 하나로 '이 묶음 밑'임을 말한다 */
-const Nested = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 6px 0 2px;
-  padding: 2px 0 2px 12px;
-  border-left: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-`
-
-const NestedList = styled.ul`
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-
-  li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 10px;
-  }
-`
-
-const NestedTitle = styled(Link)`
-  font-size: 13.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-`
-
-const NestedDate = styled.span`
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: ${metaText};
-`
-
-const NestedKind = styled.span`
-  padding: 0 6px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  font-size: 11px;
-  font-weight: 600;
-  color: ${metaText};
-`
-
-const NestedNote = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  color: ${metaText};
 `
 
 const NestedActions = styled.div`
