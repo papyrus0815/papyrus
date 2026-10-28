@@ -83,6 +83,26 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   /** 개별 위에 놓아 새 묶음을 만들 때 — 이름을 받는 줄이 놓인 사건 아래에 열린다 */
   const [groupPrompt, setGroupPrompt] = useState<{ draggedId: string; withId: string; parentId: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  /**
+   * 끌기 사용법 안내 — 한 번 끌어 놓아 본 사람에겐 다시 보이지 않는다(브라우저에 기억, 실패해도 그냥 보인다).
+   * 늘 서 있으면 목록 끝마다 두 줄이 자리를 먹는다.
+   */
+  const [dragHintSeen, setDragHintSeen] = useState(() => {
+    try {
+      return window.localStorage.getItem(DRAG_HINT_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const markDragHintSeen = () => {
+    if (dragHintSeen) return
+    setDragHintSeen(true)
+    try {
+      window.localStorage.setItem(DRAG_HINT_KEY, '1')
+    } catch {
+      /* 저장 못 해도 이번 방문 동안은 숨긴다 */
+    }
+  }
 
   const toggleIn = (set: ReadonlySet<string>, id: string) => {
     const next = new Set(set)
@@ -104,9 +124,23 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     queryFn: () => getEventOverview(event.id),
     staleTime: 0,
   })
+  /**
+   * 이 화면에서 바꾼 종류 — 조망 응답에 종류가 안 실려 오는 동안(옛 API 빌드) 하위의 하위는 '하위가 있나'로만
+   * 판별돼, 하위 없는 사건을 묶음으로 바꿔도 개별로 남아 보였다. 바꾼 결과를 기억해 판별에 얹는다.
+   * 응답에 종류가 실리면 그것이 정본이라(buildEventTree가 node.kind 우선) 이 기억은 자연히 뒤로 물러난다.
+   */
+  const [kindOverrides, setKindOverrides] = useState<ReadonlyMap<string, 'SINGLE' | 'COLLECTION'>>(() => new Map())
+  const rememberKind = (id: string, kind: 'SINGLE' | 'COLLECTION') =>
+    setKindOverrides((prev) => new Map(prev).set(id, kind))
   const kindById = useMemo(
-    () => new Map((event.childEvents ?? []).map((child) => [child.id, child.kind === 'COLLECTION' ? 'COLLECTION' as const : 'SINGLE' as const])),
-    [event.childEvents],
+    () =>
+      new Map([
+        ...(event.childEvents ?? []).map(
+          (child) => [child.id, child.kind === 'COLLECTION' ? ('COLLECTION' as const) : ('SINGLE' as const)] as const,
+        ),
+        ...kindOverrides,
+      ]),
+    [event.childEvents, kindOverrides],
   )
   const tree = useMemo<TreeRow[]>(() => {
     const sources: TreeSource[] = overview
@@ -266,6 +300,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     const draggedId = draggingId
     endDrag()
     if (!action || !draggedId) return
+    markDragHintSeen()
     if (action.type === 'move') {
       void moveUnder(draggedId, action.parentId)
     } else {
@@ -467,7 +502,11 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             </StepHead>
             {owned && !selecting && !draggingId && (
               <StepTools>
-                <KindSwitch parentId={node.parentEventId ?? event.id} child={node} />
+                <KindSwitch
+                  parentId={node.parentEventId ?? event.id}
+                  child={node}
+                  onChanged={(kind) => rememberKind(node.id, kind)}
+                />
               </StepTools>
             )}
           </Grab>
@@ -625,7 +664,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
               </NextStepTools>
             </NextStep>
           )}
-          {!selecting && allOwned.length > 1 && (
+          {!selecting && !dragHintSeen && allOwned.length > 1 && (
             <DragHint>
               날짜·제목 줄이나 번호를 끌어 묶음 위에 놓으면 그 밑으로, 개별 사건 위에 놓으면 둘을 새 묶음으로 묶습니다.
               접힌 묶음 위에 잠시 머무르면 펼쳐집니다.
@@ -662,6 +701,8 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     </S.Section>
   )
 }
+
+const DRAG_HINT_KEY = 'papyrus:event-development-drag-hint-seen'
 
 /** 직계·손자 행 — 상세 응답 하위(추가 상위 연결 표지 포함) */
 type TreeRow = TreeNode & { viaExtraLink?: boolean; children: TreeRow[] }

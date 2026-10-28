@@ -37,9 +37,12 @@ import { crossPatchErrorMessage } from './detail-network.lib'
 export function KindSwitch({
   parentId,
   child,
+  onChanged,
 }: {
   parentId: string
   child: { id: string; title: string; isCollection: boolean }
+  /** 바뀐 종류를 부모에 알린다 — 응답에 종류가 없는 하위의 하위도 화면이 바로 따라오게 */
+  onChanged?: (kind: 'SINGLE' | 'COLLECTION') => void
 }) {
   const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
@@ -49,6 +52,7 @@ export function KindSwitch({
     setBusy(true)
     try {
       await updateEvent(child.id, { kind: toCollection ? 'COLLECTION' : 'SINGLE' } as UpdateEventDto)
+      onChanged?.(toCollection ? 'COLLECTION' : 'SINGLE')
       invalidateEventQueries(queryClient, { eventId: parentId })
       invalidateEventQueries(queryClient, { eventId: child.id })
       notify.success(`'${child.title}'을(를) ${toCollection ? '묶음' : '개별 사건'}으로 바꿨습니다`)
