@@ -22,6 +22,7 @@ import styled from 'styled-components'
 
 import { eventDomainDef, eventTypeFeatures, participantKey, toParticipants } from '@/entities/event/model'
 import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
+import { EventPanelLoading } from '@/entities/event/ui/panel-loading'
 import { CommentSection } from '@/entities/comment'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
@@ -590,6 +591,14 @@ function EventDetailContent({
   const scrolledHashForEventRef = useRef<string | null>(null)
   /* 해시가 다른 탭의 섹션이면 그 탭을 먼저 열고, 렌더된 다음에 스크롤한다 */
   const [pendingHash, setPendingHash] = useState<string | null>(null)
+  /** 장부의 '바로 가기' — 그 섹션의 탭을 열고, 렌더된 다음 스크롤(해시 진입과 같은 길) */
+  const jumpToSection = useCallback(
+    (anchorId: string) => {
+      setActiveTab(tabOf(anchorId))
+      setPendingHash(anchorId)
+    },
+    [setActiveTab, tabOf],
+  )
   useEffect(() => {
     if (scrolledHashForEventRef.current === event.id) return
     scrolledHashForEventRef.current = event.id
@@ -825,7 +834,8 @@ function EventDetailContent({
               )}
 
               {activeTab === 'survey' && (
-                <Suspense fallback={<S.HelperText>하위 사건을 모으는 중…</S.HelperText>}>
+                /* 청크 받기와 데이터 받기(패널 안)가 같은 로딩을 써서 같은 자리에서 이어진다 */
+                <Suspense fallback={<EventPanelLoading label="하위 사건을 모으는 중…" />}>
                   <LazyEventOverviewPanel eventId={event.id} />
                 </Suspense>
               )}
@@ -984,6 +994,7 @@ function EventDetailContent({
                 contemporaryLink={<ContemporaryHeadsLink event={event} />}
                 onCountryClick={onCountryClick}
                 foldedCount={folded.length}
+                onJump={jumpToSection}
               />
               {/* 목차는 긴 글이 있는 개요에서만 — 다른 탭은 탭 자체가 목차다.
                   두 칸 이하('전개·댓글')면 길을 안내하지 못하고 자리만 차지해 세우지 않는다 */}

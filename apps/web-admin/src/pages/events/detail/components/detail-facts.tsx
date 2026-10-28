@@ -30,6 +30,7 @@ import {
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
+import { commentsQueryOptions } from '@/entities/comment/comment.api'
 import { formatObservationValue } from '@/entities/evidence/lib/format-observation'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
@@ -52,10 +53,12 @@ interface DetailFactsProps {
   onCountryClick: (countryId: string) => void
   /** 내용이 없어 본문에서 접힌 섹션 수 — 0이면 안내 줄을 그리지 않는다. */
   foldedCount: number
+  /**
+   * 섹션으로 가기 — 페이지가 그 섹션의 **탭을 먼저 열고** 스크롤한다. 예전엔 여기서 바로 스크롤만 해서
+   * 개요 탭에서 '인물 4명'(참여 탭)을 누르면 앵커가 없어 아무 일도 없었다. 없으면 같은 탭 안 스크롤만.
+   */
+  onJump?: (anchorId: string) => void
 }
-
-/** 섹션 앵커로 이동 — 레일 내비와 같은 동작(스크롤 + hash 갱신). */
-const jumpTo = (anchorId: string) => scrollToAnchor(anchorId)
 
 /** 배역 한 줄에 세우는 나라 수 — 넘치면 '외 N'(참여 행위자 섹션으로). */
 const COUNTRIES_PER_ROLE = 4
@@ -75,7 +78,17 @@ export function DetailFacts({
   contemporaryLink,
   onCountryClick,
   foldedCount,
+  onJump,
 }: DetailFactsProps) {
+  const jumpTo = (anchorId: string) => (onJump ? onJump(anchorId) : scrollToAnchor(anchorId))
+  /**
+   * 댓글 — 긴 사건에선 개요 맨 끝(일본 최초 철도: 2만 px 아래)이라 있는지조차 안 보였다. 수를 장부에 두고
+   * 누르면 내려간다. 하위 사건은 자체 댓글이 없어(상위 스레드로 이어진다) 줄을 세우지 않는다.
+   * 쿼리 키가 댓글 섹션과 같아 한 번만 받는다.
+   */
+  const hasOwnComments = !event.parentEvent
+  const { data: comments } = useQuery({ ...commentsQueryOptions('EVENT', event.id), enabled: hasOwnComments })
+  const commentCount = comments?.length ?? 0
   const year = parseIsoDateParts(event.startDate ?? null)?.year ?? null
   const duration = durationLabel(
     event.startDate,
@@ -248,6 +261,13 @@ export function DetailFacts({
           <FactRow label="인물">
             <JumpButton type="button" onClick={() => jumpTo('actors')}>
               {personCount}명
+            </JumpButton>
+          </FactRow>
+        )}
+        {hasOwnComments && (
+          <FactRow label="댓글">
+            <JumpButton type="button" onClick={() => jumpTo('comments')}>
+              {commentCount > 0 ? `${commentCount}개` : '남기기'}
             </JumpButton>
           </FactRow>
         )}
