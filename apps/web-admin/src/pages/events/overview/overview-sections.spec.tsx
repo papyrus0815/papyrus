@@ -8,7 +8,7 @@ import type { EventOverviewNode } from '@/shared/api/event-overview'
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 
 import { buildCountryMatrix, metricRows } from './event-overview.lib'
-import { CountryMatrixPanel, DistributionPanel, SidesMetricsPanel } from './overview-sections'
+import { CountryMatrixPanel, DistributionPanel, PersonsPanel, SidesMetricsPanel } from './overview-sections'
 
 const node = (over: Partial<EventOverviewNode> & { id: string }): EventOverviewNode => ({
   title: over.id,
@@ -142,7 +142,7 @@ describe('DistributionPanel', () => {
     { key: 'SUMMIT', label: '회담', count: 3, domain: 'MILITARY' },
   ]
   const bins = [
-    { label: '7.6', started: 2, active: 3, matchedStarted: 1, matchedActive: 1 },
+    { label: '7.6', from: 1914.5, to: 1914.52, started: 2, active: 3, matchedStarted: 1, matchedActive: 1 },
   ]
 
   it('세부마다 한 줄 — 같은 분야 색이라도 줄로 갈리고, 누르면 그 세부로 거른다', () => {
@@ -156,11 +156,38 @@ describe('DistributionPanel', () => {
     expect(onSelectType).toHaveBeenCalledWith('SUMMIT')
   })
 
+  it('시기 막대를 누르면 그 시기로 거르고, 고른 막대를 다시 누르면 푼다', () => {
+    const onSelectPeriod = jest.fn()
+    const { rerender } = renderWithTheme(
+      <DistributionPanel
+        types={types}
+        bins={bins}
+        selectedType={null}
+        onSelectType={jest.fn()}
+        onSelectPeriod={onSelectPeriod}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^7\.6:/ }))
+    expect(onSelectPeriod).toHaveBeenLastCalledWith({ from: 1914.5, to: 1914.52 })
+    rerender(
+      <DistributionPanel
+        types={types}
+        bins={bins}
+        selectedType={null}
+        onSelectType={jest.fn()}
+        selectedPeriod={{ from: 1914.5, to: 1914.52 }}
+        onSelectPeriod={onSelectPeriod}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^7\.6:/, pressed: true }))
+    expect(onSelectPeriod).toHaveBeenLastCalledWith(null)
+  })
+
   it('거르기가 걸리면 시기 막대는 걸린 사건 수를 말한다', () => {
     renderWithTheme(
       <DistributionPanel types={types} bins={bins} selectedType="SUMMIT" onSelectType={jest.fn()} filtered />,
     )
-    expect(screen.getByRole('listitem', { name: /걸린 사건 중 진행 중 1건/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /걸린 사건 중 진행 중 1건/ })).toBeInTheDocument()
     expect(screen.getByText('거르기 전 전체')).toBeInTheDocument()
   })
 })
@@ -170,4 +197,32 @@ it('DistributionPanel — 하위가 없으면 빈 막대 대신 안내', () => {
     <DistributionPanel types={[]} bins={[]} selectedType={null} onSelectType={jest.fn()} />,
   )
   expect(screen.getByText('하위 사건이 없어 분포가 아직 없습니다.')).toBeInTheDocument()
+})
+
+it('PersonsPanel — 이름을 누르면 인물 모달 콜백(없으면 글자뿐)', () => {
+  const onPersonClick = jest.fn()
+  const persons = [
+    {
+      person: {
+        personId: 'p1',
+        name: '헬무트',
+        surname: '몰트케',
+        middleName: null,
+        nameDisplayOrder: null,
+        defaultNameDisplayOrder: null,
+        profileImageUrl: null,
+        role: null,
+        sideId: null,
+      },
+      events: [{ id: 'battle', title: '마른 전투', role: null }],
+    },
+  ]
+  const { unmount } = renderWithTheme(
+    <PersonsPanel persons={persons} numberById={numberById} onOpen={jest.fn()} onPersonClick={onPersonClick} />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: /인물 정보 열기/ }))
+  expect(onPersonClick).toHaveBeenCalledWith('p1')
+  unmount()
+  renderWithTheme(<PersonsPanel persons={persons} numberById={numberById} onOpen={jest.fn()} />)
+  expect(screen.queryByRole('button', { name: /인물 정보 열기/ })).toBeNull()
 })

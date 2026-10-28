@@ -3,8 +3,12 @@ import type { EventOverviewNode } from '@/shared/api/event-overview'
 import {
   aggregatePersons,
   buildCountryMatrix,
+  axisTicks,
   buildGantt,
   chooseLabelPlace,
+  overlapsPeriod,
+  parsePeriodParam,
+  periodParam,
   typeBreakdown,
   checkNode,
   checkScore,
@@ -201,6 +205,43 @@ describe('상위 기간 표시', () => {
       '상위 시작 1914.7.28',
       '상위 끝 1914.8.15',
     ])
+  })
+})
+
+describe('달력 눈금 — 한 달 미만 간격은 1·15일(또는 1·8·15·22일)', () => {
+  it('석 달 축은 반월 눈금, 1월 1일은 연도', () => {
+    const low = 1914 + 5 / 12 // 1914.6.1
+    const high = 1914 + 8 / 12 // 1914.9.1
+    const labels = axisTicks(low, high).map((tick) => tick.label)
+    expect(labels).toEqual(['6.1', '6.15', '7.1', '7.15', '8.1', '8.15', '9.1'])
+    expect(axisTicks(1913.95, 1914.1).map((tick) => tick.label)).toContain('1914')
+  })
+
+  it('양 끝 눈금은 안쪽으로 붙인다(가운데 정렬이면 잘린다)', () => {
+    const gantt = buildGantt(root, descendants)
+    const aligns = gantt.ticks.map((tick) => tick.align)
+    for (const tick of gantt.ticks) {
+      if (tick.pct < 4) expect(tick.align).toBe('start')
+      else if (tick.pct > 96) expect(tick.align).toBe('end')
+      else expect(tick.align).toBe('center')
+    }
+    expect(aligns.length).toBeGreaterThan(0)
+  })
+})
+
+describe('시기 거르기', () => {
+  it('URL 값 왕복과 잘못된 값 거르기', () => {
+    const period = { from: 1914.5, to: 1914.5833 }
+    expect(parsePeriodParam(periodParam(period))).toEqual(period)
+    expect(parsePeriodParam('abc')).toBeNull()
+    expect(parsePeriodParam('2_1')).toBeNull()
+  })
+
+  it('그 시기에 걸쳐 있으면 걸린다 — 끝나는 날 다음 칸에는 안 걸린다', () => {
+    const july = { from: 1914.5, to: 1914 + 7 / 12 }
+    expect(overlapsPeriod({ from: 1914.4, to: 1914.55 }, july)).toBe(true)
+    expect(overlapsPeriod({ from: 1914.4, to: 1914.5 }, july)).toBe(false)
+    expect(overlapsPeriod({ from: 1914.6, to: 1914.7 }, july)).toBe(false)
   })
 })
 

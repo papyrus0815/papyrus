@@ -51,7 +51,8 @@ export interface GanttLayout {
   parentBand: { leftPct: number; widthPct: number } | null
   /** 상위 사건의 시작·끝 중 축 안에 드는 것 — 띠 대신 이 경계가 정보다(개전 7.28 앞의 7월 위기) */
   parentEdges: Array<{ pct: number; side: 'start' | 'end'; label: string }>
-  ticks: Array<{ pct: number; label: string }>
+  /** align — 축 양 끝 눈금은 가운데 정렬이면 반쯤 잘리거나 제목 열 밑에 숨는다. 안쪽으로 붙인다 */
+  ticks: Array<{ pct: number; label: string; align: 'start' | 'center' | 'end' }>
   domain: [number, number]
 }
 
@@ -98,10 +99,34 @@ function tickLabel(value: number, step: number): string {
   return month === 1 ? year : `${month}월`
 }
 
+/**
+ * 한 달 미만 간격은 **달력 날짜**에 맞춘다 — 0년부터 7일씩 자르면 '7.3 · 7.10'처럼 임의 날짜에 섰다.
+ * 1주 간격은 1·8·15·22일, 2주 간격은 1·15일. 축 값은 pointOf와 같은 규칙(연 + (월−1)/12 + (일−1)일).
+ */
+function calendarTicks(low: number, high: number, step: number): Array<{ value: number; label: string }> {
+  const days = step <= WEEK + 1e-9 ? [1, 8, 15, 22] : [1, 15]
+  const ticks: Array<{ value: number; label: string }> = []
+  for (let year = Math.floor(low); year <= Math.floor(high); year += 1) {
+    for (let month = 0; month < 12; month += 1) {
+      for (const day of days) {
+        const value = year + month / 12 + (day - 1) * DAY
+        if (value < low - 1e-9 || value > high + 1e-9) continue
+        ticks.push({
+          value,
+          // 1월 1일은 해가 바뀌는 자리라 연도로
+          label: month === 0 && day === 1 ? tickLabel(value, 1) : `${month + 1}.${day}`,
+        })
+      }
+    }
+  }
+  return ticks
+}
+
 /** 눈금 — 화면에 8개 안팎 */
 export function axisTicks(low: number, high: number): Array<{ value: number; label: string }> {
   const range = high - low
   const step = TICK_STEPS.find((candidate) => range / candidate <= 8) ?? 1000
+  if (step < 1 / 12) return calendarTicks(low, high, step)
   const ticks: Array<{ value: number; label: string }> = []
   for (let value = Math.ceil(low / step) * step; value <= high + 1e-9; value += step) {
     ticks.push({ value, label: tickLabel(value, step) })
@@ -226,7 +251,10 @@ export function buildGantt(
     undated,
     parentBand,
     parentEdges,
-    ticks: axisTicks(low, high).map((tick) => ({ pct: toPct(tick.value), label: tick.label })),
+    ticks: axisTicks(low, high).map((tick) => {
+      const pct = toPct(tick.value)
+      return { pct, label: tick.label, align: pct < 4 ? 'start' : pct > 96 ? 'end' : 'center' }
+    }),
     domain: [low, high],
   }
 }
@@ -501,6 +529,9 @@ export function typeBreakdown(descendants: EventOverviewNode[]): CountBar[] {
 
 export interface TimeBin {
   label: string
+  /** 칸의 축 범위 [from, to) — 막대를 눌러 그 시기로 거를 때 쓴다 */
+  from: number
+  to: number
   /** 이 칸에서 **시작한** 하위 수 */
   started: number
   /** 이 칸에 **진행 중이던** 하위 수(시작 포함) */
@@ -531,6 +562,8 @@ export function timeHistogram(gantt: GanttLayout, visibleIds: Set<string> | null
   const binCount = Math.max(1, Math.floor((to - start) / unit + 1e-9) + 1)
   const bins: TimeBin[] = Array.from({ length: binCount }, (_, index) => ({
     label: binLabel(start + index * unit, unit),
+    from: start + index * unit,
+    to: start + (index + 1) * unit,
     started: 0,
     active: 0,
     matchedStarted: 0,
@@ -550,6 +583,25 @@ export function timeHistogram(gantt: GanttLayout, visibleIds: Set<string> | null
   }
   return bins
 }
+
+/** 시기 거르기 — URL `?when=<from>_<to>`(축 값, 소수 넷째 자리) */
+export interface PeriodFilter {
+  from: number
+  to: number
+}
+
+export const periodParam = (period: PeriodFilter) =>
+  `${period.from.toFixed(4)}_${period.to.toFixed(4)}`
+
+export function parsePeriodParam(raw: string | null): PeriodFilter | null {
+  if (!raw) return null
+  const [from, to] = raw.split('_').map(Number)
+  return Number.isFinite(from) && Number.isFinite(to) && to > from ? { from, to } : null
+}
+
+/** 이 사건이 그 시기에 걸쳐 있었나 — 진행 중 막대와 같은 규칙(끝은 하루 당겨 잡는다) */
+export const overlapsPeriod = (row: Pick<GanttRow, 'from' | 'to'>, period: PeriodFilter) =>
+  row.from < period.to - 1e-9 && Math.max(row.from, row.to - DAY) >= period.from - 1e-9
 
 function binLabel(value: number, unit: number): string {
   const yearFloor = Math.floor(value + 1e-9)

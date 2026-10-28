@@ -21,6 +21,7 @@ import {
   type MatrixCountry,
   type MetricRow,
   type MissingRootCountry,
+  type PeriodFilter,
   type TimeBin,
   type PersonAggregate,
   applicableCountByColumn,
@@ -79,6 +80,10 @@ export function GanttPanel({
   }, [])
   /** 띠가 축을 거의 다 덮어 그리지 않을 때만 경계선으로 말한다(띠가 있으면 띠 가장자리가 곧 경계) */
   const edges = gantt.parentBand ? [] : gantt.parentEdges
+  /** 막대 색 = 분야 — 둘 이상일 때만 범례(하나뿐이면 색이 가르는 게 없다). 많은 순 */
+  const domainCounts = new Map<string, number>()
+  for (const row of gantt.rows) domainCounts.set(row.node.domain, (domainCounts.get(row.node.domain) ?? 0) + 1)
+  const domainsShown = [...domainCounts].sort((left, right) => right[1] - left[1])
   /** 빗금은 지금 축 안에 드는 부분만 — 하위에 맞춘 축이면 대개 화면 밖이라 경고 줄이 대신 말한다 */
   const hatches = gaps
     .map((gap) => ({
@@ -119,6 +124,17 @@ export function GanttPanel({
           {gantt.undated.length > 0 && ` · 날짜 없음 ${gantt.undated.length}건은 아래 점검표에`}
           {outsideCount > 0 && ` · 상위 기간 밖 ${outsideCount}건(제목 왼쪽 주황 표지)`}
         </S.PanelNote>
+        {domainsShown.length > 1 && (
+          <S.DomainLegend aria-label="막대 색 — 분야">
+            {domainsShown.map(([domain, count]) => (
+              <li key={domain}>
+                <S.CategoryDot $color={domainAccent(domain, theme.mode)} aria-hidden="true" />
+                {domainLabel(domain)}
+                <S.Muted> {count}</S.Muted>
+              </li>
+            ))}
+          </S.DomainLegend>
+        )}
         {gaps.length > 0 && (
           <S.GapNotice role="note">
             <span>
@@ -160,7 +176,11 @@ export function GanttPanel({
                 />
               )}
               {gantt.ticks.map((tick) => (
-                <S.GanttTick key={`${tick.pct}-${tick.label}`} style={{ left: `${tick.pct}%` }}>
+                <S.GanttTick
+                  key={`${tick.pct}-${tick.label}`}
+                  $align={tick.align}
+                  style={{ left: `${tick.pct}%` }}
+                >
                   {tick.label}
                 </S.GanttTick>
               ))}
@@ -477,6 +497,8 @@ export function DistributionPanel({
   selectedType,
   onSelectType,
   filtered = false,
+  selectedPeriod = null,
+  onSelectPeriod,
 }: {
   types: CountBar[]
   bins: TimeBin[]
@@ -484,6 +506,10 @@ export function DistributionPanel({
   onSelectType: (key: string | null) => void
   /** 나라·세부 거르기가 걸렸나 — 시기 막대가 걸린 사건만 채운다 */
   filtered?: boolean
+  /** 고른 시기 — 그 막대를 강조하고, 다시 누르면 푼다 */
+  selectedPeriod?: PeriodFilter | null
+  /** 시기 막대 누르기 → 그 시기에 진행 중이던 사건만 남긴다 */
+  onSelectPeriod?: (period: PeriodFilter | null) => void
 }) {
   const theme = useTheme()
   const total = types.reduce((sum, bar) => sum + bar.count, 0)
@@ -494,7 +520,7 @@ export function DistributionPanel({
     <S.Panel $wide id="overview-distribution" aria-labelledby="overview-distribution-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-distribution-title">분포</S.PanelTitle>
-        <S.PanelNote>세부를 누르면 그 세부만 남는다</S.PanelNote>
+        <S.PanelNote>세부·시기 막대를 누르면 그것만 남는다</S.PanelNote>
       </S.PanelHead>
 
       {total === 0 ? (
@@ -545,14 +571,22 @@ export function DistributionPanel({
               </span>
             )}
           </S.ChartLegend>
-          <S.Histogram role="list" aria-label="시기별 하위 사건 — 진행 중과 새로 시작">
+          <S.Histogram role="group" aria-label="시기별 하위 사건 — 진행 중과 새로 시작. 누르면 그 시기로 거른다">
             {bins.map((bin) => {
               const active = filtered ? bin.matchedActive : bin.active
               const started = filtered ? bin.matchedStarted : bin.started
+              const isSelected =
+                selectedPeriod !== null && Math.abs(selectedPeriod.from - bin.from) < 1e-3
               return (
                 <S.HistogramColumn
                   key={bin.label}
-                  role="listitem"
+                  type="button"
+                  $selected={isSelected}
+                  aria-pressed={isSelected}
+                  disabled={!onSelectPeriod || bin.active === 0}
+                  onClick={() =>
+                    onSelectPeriod?.(isSelected ? null : { from: bin.from, to: bin.to })
+                  }
                   aria-label={
                     filtered
                       ? `${bin.label}: 걸린 사건 중 진행 중 ${active}건·새로 시작 ${started}건 (전체 진행 중 ${bin.active}건)`
@@ -607,10 +641,13 @@ export function PersonsPanel({
   numberById,
   wide = false,
   onOpen,
+  onPersonClick,
 }: {
   persons: PersonAggregate[]
   numberById: Map<string, number>
   onOpen: (id: string) => void
+  /** 이름 → 인물 모달. 없으면 이름은 글자로만 */
+  onPersonClick?: (personId: string) => void
   /** 짝(진영·수치)이 접혀 혼자 설 때는 한 줄을 다 쓴다 — 오른쪽 반이 비지 않게 */
   wide?: boolean
 }) {
@@ -632,16 +669,28 @@ export function PersonsPanel({
               </tr>
             </thead>
             <tbody>
-              {persons.map(({ person, events }) => (
+              {persons.map(({ person, events }) => {
+                const displayName = getPersonDisplayName({
+                  name: person.name ?? '',
+                  surname: person.surname,
+                  middleName: person.middleName,
+                  nameDisplayOrder: person.nameDisplayOrder,
+                  country: { defaultNameDisplayOrder: person.defaultNameDisplayOrder },
+                })
+                return (
                 <tr key={person.personId}>
                   <td>
-                    {getPersonDisplayName({
-                      name: person.name ?? '',
-                      surname: person.surname,
-                      middleName: person.middleName,
-                      nameDisplayOrder: person.nameDisplayOrder,
-                      country: { defaultNameDisplayOrder: person.defaultNameDisplayOrder },
-                    })}
+                    {onPersonClick ? (
+                      <S.RowTitleButton
+                        type="button"
+                        onClick={() => onPersonClick(person.personId)}
+                        aria-label={`${displayName} 인물 정보 열기`}
+                      >
+                        {displayName}
+                      </S.RowTitleButton>
+                    ) : (
+                      displayName
+                    )}
                   </td>
                   <td>
                     {events.map((event, index) => (
@@ -660,7 +709,8 @@ export function PersonsPanel({
                     ))}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </S.Table>
         </S.Scroll>

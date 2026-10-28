@@ -8,6 +8,7 @@ import styled, { css } from 'styled-components'
 
 import {
   ledgerAccent,
+  ledgerBackground,
   ledgerHairlineStrong,
   ledgerHoverFill,
   ledgerSubtleFill,
@@ -216,15 +217,22 @@ export const MeterFill = styled.span<{ $pct: number }>`
 // ─── 섹션 내비 ─────────────────────────────────────────────────────────────
 // 지면이 길다(1차대전 기준 화면 3장). 머리 아래에 붙어 따라오는 목차.
 
-/* 상세의 탭 바가 이미 sticky라 이 목차는 흐름에 둔다(둘 다 붙으면 서로 겹친다) */
+/*
+ * 상세 탭 바 **바로 아래**에 붙는다 — 예전엔 둘 다 top 0이면 겹쳐서 흐름에 두었는데, 그러면 화면 세 장짜리
+ * 지면에서 첫 화면 뒤로 목차가 사라져 '지금 읽는 곳' 표시가 소용없었다. 탭 바 높이는 상세가
+ * --event-tabs-height로 재서 준다. 지면색 불투명 필수(아래로 지나가는 패널이 비치면 안 된다).
+ */
 export const SectionNav = styled.nav`
+  position: sticky;
+  top: var(--event-tabs-height, 45px);
+  z-index: 4;
   margin: -12px 0 0;
-  padding: 0 0 8px;
+  padding: 8px 0;
   display: flex;
   align-items: center;
   gap: 4px;
   overflow-x: auto;
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   scrollbar-width: none;
 `
@@ -305,8 +313,8 @@ export const Panel = styled.section<{ $wide?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* 섹션 내비 높이만큼 — 앵커로 뛰면 제목이 내비 밑에 숨지 않게 */
-  scroll-margin-top: 64px;
+  /* 탭 바 + 섹션 목차 높이만큼 — 앵커로 뛰면 제목이 둘 밑에 숨지 않게 */
+  scroll-margin-top: calc(var(--event-tabs-height, 45px) + 56px);
 `
 
 export const PanelHead = styled.div`
@@ -406,10 +414,30 @@ export const ParentEdgeLine = styled.div`
   pointer-events: none;
 `
 
-export const GanttTick = styled.span`
+/** 간트 막대 색(분야) 범례 — 둘 이상의 분야가 섞일 때만 */
+export const DomainLegend = styled.ul`
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+`
+
+export const GanttTick = styled.span<{ $align?: 'start' | 'center' | 'end' }>`
   position: absolute;
   bottom: 4px;
-  transform: translateX(-50%);
+  transform: translateX(
+    ${({ $align = 'center' }) => ($align === 'start' ? '0' : $align === 'end' ? '-100%' : '-50%')}
+  );
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -697,8 +725,10 @@ export const Histogram = styled.div`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
-/** 칸이 셋뿐이어도 막대가 패널을 다 먹지 않게 폭 상한 */
-export const HistogramColumn = styled.div`
+/**
+ * 칸이 셋뿐이어도 막대가 패널을 다 먹지 않게 폭 상한. 칸 전체가 버튼 — 누르면 그 시기로 거른다.
+ */
+export const HistogramColumn = styled.button<{ $selected?: boolean }>`
   flex: 1;
   max-width: 64px;
   min-width: 6px;
@@ -708,6 +738,22 @@ export const HistogramColumn = styled.div`
   align-items: stretch;
   height: 100%;
   position: relative;
+  padding: 0;
+  border: none;
+  border-radius: 4px 4px 0 0;
+  background: ${({ $selected, theme }) => ($selected ? ledgerHoverFill(theme.mode) : 'transparent')};
+  font: inherit;
+  cursor: pointer;
+  &:disabled {
+    cursor: default;
+  }
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 1px;
+  }
 `
 
 export const HistogramCount = styled.span`

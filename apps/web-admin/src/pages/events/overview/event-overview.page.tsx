@@ -37,7 +37,11 @@ import {
   rootCountriesPayload,
   metricRows,
   orderedDescendants,
+  overlapsPeriod,
+  parsePeriodParam,
+  periodParam,
   timeHistogram,
+  type PeriodFilter,
 } from './event-overview.lib'
 import {
   ChecklistPanel,
@@ -64,9 +68,15 @@ interface EventOverviewPanelProps {
   eventId: string
   /** 하위 사건이 없을 때 '기존 사건 모으기'로 갈 길 — 상세가 연관 탭을 연다 */
   onGatherExisting?: () => void
+  /** 인물 이름 → 상세의 인물 모달(?person=) — 참여 탭과 같은 길 */
+  onPersonClick?: (personId: string) => void
 }
 
-export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewPanelProps) {
+export function EventOverviewPanel({
+  eventId,
+  onGatherExisting,
+  onPersonClick,
+}: EventOverviewPanelProps) {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: eventKeys.overview(eventId),
@@ -99,6 +109,10 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
   /** 거르기 — 하위 사건 세부 분야(?type=BATTLE, 세부 없음은 NONE). 분포 막대를 누르면 건다 */
   const selectedType = searchParams.get('type')
   const setSelectedType = (key: string | null) => setParam('type', key)
+  /** 거르기 — 시기(?when=<from>_<to>, 축 값). 시기 막대를 누르면 건다 */
+  const selectedPeriod = parsePeriodParam(searchParams.get('when'))
+  const setSelectedPeriod = (period: PeriodFilter | null) =>
+    setParam('when', period ? periodParam(period) : null)
   const ganttFit: GanttFit = searchParams.get('fit') === 'parent' ? 'parent' : 'children'
   const setGanttFit = (fit: GanttFit) => setParam('fit', fit === 'parent' ? 'parent' : null)
   const checklistOrder = searchParams.get('order') === 'gaps' ? 'gaps' : 'number'
@@ -169,20 +183,27 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
     }
   }, [data, ganttFit])
 
-  /** 거르기 — 나라·갈래 둘 다 걸리면 교집합. 없으면 null(아무것도 흐리지 않음) */
+  /** 거르기 — 나라·세부·시기가 여럿 걸리면 교집합. 없으면 null(아무것도 흐리지 않음) */
+  const periodKey = searchParams.get('when')
   const visibleIds = useMemo(() => {
-    if (!data || (!selectedCountryKey && !selectedType)) return null
+    const period = parsePeriodParam(periodKey)
+    if (!data || !derived || (!selectedCountryKey && !selectedType && !period)) return null
+    const rowById = new Map(derived.gantt.rows.map((row) => [row.node.id, row]))
     return new Set(
       data.descendants
-        .filter(
-          (node) =>
+        .filter((node) => {
+          const row = rowById.get(node.id)
+          return (
             (!selectedCountryKey ||
               node.countries.some((country) => country.key === selectedCountryKey)) &&
-            (!selectedType || subtypeKeyOf(node) === selectedType),
-        )
+            (!selectedType || subtypeKeyOf(node) === selectedType) &&
+            // 날짜 없는 사건은 어느 시기에도 걸리지 않는다
+            (!period || (row !== undefined && overlapsPeriod(row, period)))
+          )
+        })
         .map((node) => node.id),
     )
-  }, [data, selectedCountryKey, selectedType])
+  }, [data, derived, selectedCountryKey, selectedType, periodKey])
 
   /** 시기 분포 — 거르기를 따른다(걸린 사건만 채우고 전체는 윤곽으로) */
   const histogram = useMemo(
@@ -272,6 +293,8 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
     try {
       await updateEvent(id, { description: next })
       invalidateEventQueries(queryClient, { eventId: id })
+      // 모달 안 인라인 편집이라 저장됐는지 알 길이 없었다(실패만 알렸다)
+      notify.success('개요를 저장했습니다')
     } catch {
       notify.error('개요를 저장하지 못했습니다')
     }
@@ -389,7 +412,7 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
         </S.SectionNavLink>
       </S.SectionNav>
 
-      {(selectedCountry || selectedType) && (
+      {(selectedCountry || selectedType || selectedPeriod) && (
         <S.FilterBar role="status">
           <span>
             {visibleIds?.size ?? 0}/{descendants.length}건만 보는 중
@@ -403,6 +426,14 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
           {selectedType && (
             <S.FilterChip type="button" onClick={() => setSelectedType(null)}>
               세부: {eventTypeDef(selectedType)?.label ?? '세부 없음'}
+              <FiX size={12} aria-label="거르기 풀기" />
+            </S.FilterChip>
+          )}
+          {selectedPeriod && (
+            <S.FilterChip type="button" onClick={() => setSelectedPeriod(null)}>
+              시기:{' '}
+              {histogram.find((bin) => Math.abs(bin.from - selectedPeriod.from) < 1e-3)?.label ??
+                '고른 시기'}
               <FiX size={12} aria-label="거르기 풀기" />
             </S.FilterChip>
           )}
@@ -443,6 +474,8 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
           types={derived.types}
           bins={histogram}
           filtered={visibleIds !== null}
+          selectedPeriod={selectedPeriod}
+          onSelectPeriod={setSelectedPeriod}
           selectedType={selectedType}
           onSelectType={setSelectedType}
         />
@@ -452,6 +485,7 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
             persons={derived.persons}
             numberById={derived.numberById}
             onOpen={openEventById}
+            onPersonClick={onPersonClick}
             wide={!hasSidesOrMetrics}
           />
         )}

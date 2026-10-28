@@ -474,6 +474,20 @@ function EventDetailContent({
   /* 탭 바는 sticky라, 길게 내려 읽다 탭을 바꾸면 새 패널 중간이 보인다 — 붙어 있을 때만 패널 머리로 되감는다 */
   const tabsAnchorRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
+  /**
+   * 탭 바 높이를 CSS 변수(--event-tabs-height)로 — 탭 안에서 그 아래에 붙는 것(조망 섹션 목차)이
+   * 탭 바 밑으로 숨지 않게. 탭 바는 sticky라 그 높이만큼 아래가 '화면 위쪽'이다.
+   */
+  useEffect(() => {
+    const bar = tabsRef.current
+    const host = bar?.parentElement?.parentElement
+    if (!bar || !host || typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(() =>
+      host.style.setProperty('--event-tabs-height', `${bar.offsetHeight}px`),
+    )
+    observer.observe(bar)
+    return () => observer.disconnect()
+  }, [])
   const isFirstTabRef = useRef(true)
   useEffect(() => {
     if (isFirstTabRef.current) {
@@ -910,6 +924,7 @@ function EventDetailContent({
                   <LazyEventOverviewPanel
                     eventId={event.id}
                     onGatherExisting={() => setActiveTab('links')}
+                    onPersonClick={onPersonClick}
                   />
                 </Suspense>
               )}
