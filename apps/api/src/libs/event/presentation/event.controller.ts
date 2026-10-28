@@ -2161,15 +2161,18 @@ export class EventController {
   }
 
   /**
-   * 사건 삭제
+   * 사건 삭제 — 휴지통으로(소프트 삭제, 30일 보관 뒤 자동 영구 삭제)
    *
    * @param id 사건 ID
+   * @param withChildren "true"면 하위 사건 전부도 함께 휴지통으로(상위 연결 보존 — 복구하면 함께 돌아온다).
+   *   아니면 살아있는 하위는 추가 상위로 옮기거나 최상위로 올린다(이 사건을 복구해도 돌아오지 않는다).
    * @tag events
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteEvent(
     @Param('id') id: string,
+    @Query('withChildren') withChildren?: string,
     @Request() req?: any,
   ): Promise<void> {
     const userId = req.user?.id! // AuthGuard가 이미 인증 체크함
@@ -2179,7 +2182,7 @@ export class EventController {
     // 권한 체크: 본인이 등록한 사건만 삭제 가능
     await assertEventOwnership(this.prisma, id, userId, { action: '삭제' })
     
-    await this.eventService.deleteEvent(id, userId)
+    await this.eventService.deleteEvent(id, userId, { withChildren: withChildren === 'true' })
   }
 
   /**
@@ -2237,7 +2240,8 @@ export class EventController {
   ): Promise<EventResponseDto> {
     const userId = req.user?.id!
     const event = await this.eventService.restoreEvent(id, userId)
-    return this.toResponseDto(event)
+    // 같이 지운 하위를 함께 되살린 수 — 화면이 '하위 N건도 함께 복구'라고 알린다(toResponseDto는 이 값을 모른다)
+    return { ...this.toResponseDto(event), restoredChildCount: event.restoredChildCount ?? 0 }
   }
 
   /**

@@ -618,6 +618,46 @@ function updateReasons(
   )
 }
 
+describe('EventService 휴지통 — 하위 함께 삭제·복구, 영구 삭제 가드', () => {
+  test('하위도 함께: 하위 전부(손자까지)를 같은 시각으로 지우고, 상위 연결은 옮기지 않는다', async () => {
+    const { service, fakePrisma } = buildService(
+      [liveEvent('A'), liveEvent('C', 'A'), liveEvent('G', 'C'), liveEvent('X')],
+      [],
+    )
+    const result = await service.deleteEvent('A', OWNER, { withChildren: true })
+    expect(result.deletedChildCount).toBe(2)
+    const call = (fakePrisma.event.updateMany as jest.Mock).mock.calls[0][0]
+    expect(call.where).toEqual({ id: { in: ['A', 'C', 'G'] } })
+    expect(call.data.deletedAt).toBeInstanceOf(Date)
+    // 하위를 최상위로 올리는 재배치가 없다
+    expect(fakePrisma.event.updateMany).toHaveBeenCalledTimes(1)
+    expect(fakePrisma.event.update).not.toHaveBeenCalled()
+  })
+
+  test('복구: 같은 시각에 함께 지운 하위만 되살린다(따로 지운 하위는 그대로)', async () => {
+    const batch = new Date('2026-10-01T00:00:00Z')
+    const other = new Date('2026-09-01T00:00:00Z')
+    const rows = [
+      { ...deletedEvent('A'), deletedAt: batch },
+      { ...deletedEvent('C', 'A'), deletedAt: batch },
+      { ...deletedEvent('D', 'A'), deletedAt: other },
+    ]
+    const { service, fakePrisma } = buildService(rows, [])
+    const restored = await service.restoreEvent('A', OWNER)
+    expect(restored.restoredChildCount).toBe(1)
+    expect(fakePrisma.event.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['C'] } },
+      data: { deletedAt: null, deletedById: null },
+    })
+  })
+
+  test('영구 삭제는 휴지통에 있는 사건만 — 살아있는 사건은 409', async () => {
+    const { service, fakeRepo } = buildService([liveEvent('E')], [])
+    await expect(service.permanentlyDeleteEvent('E', OWNER)).rejects.toThrow(ConflictException)
+    expect(fakeRepo.delete).not.toHaveBeenCalled()
+  })
+})
+
 describe('EventService 연결 사유(EventHierarchyReason)', () => {
   test('reason-only: 주 상위 쌍에 업서트 → 행 생성, 계층 쓰기 미실행', async () => {
     const reasons: FakeReasonRow[] = []

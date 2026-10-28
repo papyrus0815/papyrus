@@ -1522,9 +1522,41 @@ export class EventService {
    * @param userId 삭제하는 사용자 ID
    * @throws NotFoundException 사건을 찾을 수 없는 경우
    */
-  async deleteEvent(id: string, userId?: string): Promise<void> {
+  async deleteEvent(
+    id: string,
+    userId?: string,
+    options: { withChildren?: boolean } = {},
+  ): Promise<{ deletedChildCount: number }> {
     // 존재 여부 확인 (라벨용으로 캡처)
     const event = await this.getEventById(id)
+    /** 한 번의 삭제에 같은 시각을 찍는다 — 복구가 '같이 지운 하위'를 이 시각으로 알아본다 */
+    const deletedAt = new Date()
+
+    /**
+     * 하위도 함께 휴지통으로 — 1차세계대전(하위 18건)을 지우면 하위가 전부 최상위로 흩어지고, 묶음을 복구해도
+     * 돌아오지 않았다. 이 경로는 하위를 **옮기지 않고**(상위 연결 보존) 같은 deletedAt으로 함께 지운다.
+     * restoreEvent가 같은 시각에 지워진 하위를 함께 되살린다.
+     */
+    if (options.withChildren) {
+      const descendantIds = await this.collectDescendantIds(id, { deletedAt: null })
+      await this.prisma.$transaction(async (tx) => {
+        await tx.event.updateMany({
+          where: { id: { in: [id, ...descendantIds] } },
+          data: { deletedAt, deletedById: userId || null },
+        })
+      })
+      for (const descendantId of descendantIds) {
+        await this.pointService.revokeForRecord(AggregateType.EVENT, descendantId)
+      }
+      await this.pointService.revokeForRecord(AggregateType.EVENT, id)
+      await this.notificationService.notifyEvent(
+        event.title,
+        EventMethod.DELETE,
+        id,
+        yearPreview(event.startEra, event.startYear),
+      )
+      return { deletedChildCount: descendantIds.length }
+    }
 
     /**
      * 자식 재배치 + 소프트 삭제를 한 트랜잭션으로.
@@ -1606,7 +1638,7 @@ export class EventService {
       await tx.event.update({
         where: { id },
         data: {
-          deletedAt: new Date(),
+          deletedAt,
           deletedById: userId || null,
         },
       })
@@ -1621,7 +1653,38 @@ export class EventService {
       yearPreview(event.startEra, event.startYear),
     )
 
-    console.log(`🗑️ 사건 소프트 삭제: ${id} (3일 후 완전 삭제 예정)`)
+    console.log(`🗑️ 사건 소프트 삭제: ${id} (휴지통 ${EventService.TRASH_RETENTION_DAYS}일 보관)`)
+    return { deletedChildCount: 0 }
+  }
+
+  /** 휴지통 보관 기간 — 지나면 매일 정리 작업(EventTrashCleanupTask)이 영구 삭제한다 */
+  static readonly TRASH_RETENTION_DAYS = 30
+
+  /**
+   * 하위 전부의 id(너비 우선, 깊이 상한 12) — where로 살아있는 것만·특정 시각에 지워진 것만을 고른다.
+   * 순환 데이터가 있어도 방문 표시로 멈춘다.
+   */
+  private async collectDescendantIds(
+    rootId: string,
+    where: { deletedAt: Date | null },
+  ): Promise<string[]> {
+    const seen = new Set<string>([rootId])
+    const result: string[] = []
+    let frontier = [rootId]
+    for (let depth = 0; depth < 12 && frontier.length > 0; depth += 1) {
+      const rows = await this.prisma.event.findMany({
+        where: { parentEventId: { in: frontier }, deletedAt: where.deletedAt },
+        select: { id: true },
+      })
+      frontier = []
+      for (const row of rows) {
+        if (seen.has(row.id)) continue
+        seen.add(row.id)
+        result.push(row.id)
+        frontier.push(row.id)
+      }
+    }
+    return result
   }
 
   /**
@@ -1688,14 +1751,31 @@ export class EventService {
       })
     })
 
+    /**
+     * 같이 지운 하위 — 이 사건과 **같은 시각에** 지워진 하위(하위도 함께 삭제한 경우)를 함께 되살린다.
+     * 상위 연결은 지울 때 보존했으므로 그대로 제자리다. 따로따로 지운 하위(시각이 다름)는 건드리지 않는다.
+     */
+    const batchChildIds = event.deletedAt
+      ? await this.collectDescendantIds(id, { deletedAt: event.deletedAt })
+      : []
+    if (batchChildIds.length > 0) {
+      await this.prisma.event.updateMany({
+        where: { id: { in: batchChildIds } },
+        data: { deletedAt: null, deletedById: null },
+      })
+    }
+
     // 게이미피케이션: 복구 시 회수했던 점수 복원
     await this.pointService.restoreForRecord(AggregateType.EVENT, id)
+    for (const childId of batchChildIds) {
+      await this.pointService.restoreForRecord(AggregateType.EVENT, childId)
+    }
 
     console.log(
       `♻️ 사건 복구: ${id}${restoredAsRoot ? ' (상위가 삭제돼 최상위로 복구)' : ''}`,
     )
     // 호출부(컨트롤러)가 사용자에게 '최상위로 복구됐다'고 알릴 수 있도록 플래그를 얹는다.
-    return { ...restored, restoredAsRoot }
+    return { ...restored, restoredAsRoot, restoredChildCount: batchChildIds.length }
   }
 
   /**
@@ -1713,7 +1793,49 @@ export class EventService {
     if (event.createdById !== userId) {
       throw new ForbiddenException('본인이 삭제한 사건만 완전히 삭제할 수 있습니다.')
     }
+    // 휴지통을 거친 사건만 — API가 살아있는 사건도 바로 지울 수 있었다(되돌릴 길 없는 경로)
+    if (!event.deletedAt) {
+      throw new ConflictException('휴지통에 있는 사건만 영구 삭제할 수 있습니다 — 먼저 삭제하세요.')
+    }
+    await this.hardDeleteWithBatch(id, event.deletedAt)
+  }
 
+  /**
+   * 휴지통 정리 — 보관 기간이 지난 사건을 영구 삭제한다(매일 EventTrashCleanupTask). 같이 지운 하위는
+   * 상위와 함께 사라진다. 하나가 실패해도 나머지는 계속한다.
+   */
+  async purgeExpiredTrash(retentionDays = EventService.TRASH_RETENTION_DAYS): Promise<number> {
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000)
+    const expired = await this.prisma.event.findMany({
+      where: { deletedAt: { lt: cutoff } },
+      orderBy: { deletedAt: 'asc' },
+      select: { id: true, deletedAt: true },
+    })
+    let removed = 0
+    for (const item of expired) {
+      const still = await this.prisma.event.findUnique({ where: { id: item.id }, select: { deletedAt: true } })
+      if (!still?.deletedAt) continue // 앞선 상위와 함께 이미 사라졌거나 그사이 복구됨
+      try {
+        removed += await this.hardDeleteWithBatch(item.id, still.deletedAt)
+      } catch (error) {
+        console.error(`휴지통 정리 실패: ${item.id}`, error)
+      }
+    }
+    return removed
+  }
+
+  /** 영구 삭제 + 같은 시각에 함께 지워진 하위(깊은 것부터). 지운 건수 */
+  private async hardDeleteWithBatch(id: string, deletedAt: Date): Promise<number> {
+    const batchChildIds = await this.collectDescendantIds(id, { deletedAt })
+    for (const childId of [...batchChildIds].reverse()) {
+      await this.hardDeleteEvent(childId)
+    }
+    await this.hardDeleteEvent(id)
+    return batchChildIds.length + 1
+  }
+
+  /** 영구 삭제 본체 — 소유·휴지통 확인은 호출부가 한다 */
+  private async hardDeleteEvent(id: string): Promise<void> {
     // 완전 삭제 — ParentChildEvent FK가 SetNull이라 주-자식의 FK는 앱이 개입 못 하는
     // 지점에서 무통보 NULL이 되는데, 자식의 event_parent_link는 이 사건의 Cascade 대상이
     // 아니라 잔존해 INV-2(추가 상위는 주 상위 필수)가 DB 레벨에서 깨진다.

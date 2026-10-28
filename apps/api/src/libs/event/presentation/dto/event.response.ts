@@ -534,10 +534,13 @@ export class EventResponseDto {
   updatedAt?: string
 
   @ApiProperty({
-    description: '삭제(소프트삭제) 일시 — 삭제 목록(GET /events/deleted/list)에서만 채워진다. 살아 있는 사건은 생략',
+    description: '삭제(소프트삭제) 일시 — 휴지통 목록과 휴지통에 있는 사건의 상세에서 채워진다(상세는 이 값으로 휴지통 띠를 띄운다). 살아 있는 사건은 생략',
     required: false,
   })
   deletedAt?: string
+
+  /** 복구 응답에만 — 이 사건과 같은 시각에 함께 지워져 함께 되살아난 하위 수 */
+  restoredChildCount?: number
 
   @ApiProperty({ description: '진영(D1) — 소속 참여자 포함. 상세 응답에서만', required: false })
   sides?: EventSideView[]

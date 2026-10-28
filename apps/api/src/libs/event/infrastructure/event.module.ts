@@ -9,6 +9,7 @@ import { EventSideController } from '../presentation/event-side.controller'
 import { EventOverviewController } from '../presentation/event-overview.controller'
 import { EventOverviewService } from '../application/event-overview.service'
 import { EventPrismaRepository } from './event.prisma.repository'
+import { EventTrashCleanupTask } from './event-trash-cleanup.task'
 import { EventController } from '../presentation/event.controller'
 import { PrismaModule } from '../../shared/database'
 import { NotificationModule } from '../../notification/notification.module'
@@ -25,6 +26,7 @@ import { NotificationModule } from '../../notification/notification.module'
     EventSectionService,
     EventOverviewService,
     EventPrismaRepository,
+    EventTrashCleanupTask,
     { provide: 'EventRepository', useClass: EventPrismaRepository },
   ],
   exports: [EventService, MilitaryEventService, EventCountryParticipantService, EventSideService],
