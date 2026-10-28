@@ -1,7 +1,7 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { FiLink2, FiPlus } from 'react-icons/fi'
+import { FiLayers, FiLink2, FiPlus } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -25,6 +25,7 @@ import { notify } from '@/shared/ui/toast'
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { PHASE_LABEL, groupByPhase } from './collection-development.lib'
+import { ExpandToggle, KindSwitch, NestedChildren, RegroupBar } from './collection-regroup'
 import { compareEventStart, crossPatchErrorMessage } from './detail-network.lib'
 
 const LazyEventRegisterModal = lazy(() =>
@@ -56,6 +57,24 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   const [createOpen, setCreateOpen] = useState(false)
   /** 요약을 쓰는 중인 하위 — 공용 인라인 칸은 연필 버튼(호버)으로만 열려, 빈 안내문을 눌러도 아무 일이 없었다 */
   const [writingSummaryId, setWritingSummaryId] = useState<string | null>(null)
+  /** 펼친 묶음 하위 — 그 아래 하위를 이 자리에서 본다 */
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set())
+  /** 골라서 묶기 — 켜면 번호 자리가 고르기 칸이 되고 아래에 묶기 막대가 붙는다 */
+  const [selecting, setSelecting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
+  /** 하위 사건 등록 모달의 상위 — 기본은 이 사건, 묶음 하위의 '이 묶음에 하위 추가'면 그 묶음 */
+  const [createUnder, setCreateUnder] = useState<{ id: string; title: string } | null>(null)
+
+  const toggleIn = (set: ReadonlySet<string>, id: string) => {
+    const next = new Set(set)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  }
+  const stopSelecting = () => {
+    setSelecting(false)
+    setSelectedIds(new Set())
+  }
 
   const children = useMemo(
     () =>
@@ -161,9 +180,24 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                       )
                     : null
                   const domain = child.domain ? eventDomainDef(child.domain) : null
+                  /* 추가 상위로만 이어진 하위는 이 묶음의 소유가 아니다 — 고르기·종류 바꾸기를 열지 않는다 */
+                  const owned = !child.viaExtraLink
+                  const expanded = expandedIds.has(child.id)
+                  const checked = selectedIds.has(child.id)
                   return (
-                    <Step key={child.id}>
-                      <StepIndex aria-hidden>{index + 1}</StepIndex>
+                    <Step key={child.id} data-selected={checked || undefined}>
+                      {selecting && owned ? (
+                        <StepCheck>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setSelectedIds((prev) => toggleIn(prev, child.id))}
+                            aria-label={`${child.title} 고르기`}
+                          />
+                        </StepCheck>
+                      ) : (
+                        <StepIndex aria-hidden>{index + 1}</StepIndex>
+                      )}
                       <StepBody>
                         {/* 한 줄 머리 — 제목 뒤에 날짜·분야를 잇는다(예전엔 날짜 줄 → 제목 줄 → 요약 두 줄로
                             한 항목이 120px, 18건이 화면 2.5장이었다) */}
@@ -184,9 +218,20 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                                 {domain.label}
                               </DomainMeta>
                             )}
-                            {child.isCollection && <KindTag>묶음</KindTag>}
+                            {child.isCollection && (
+                              <ExpandToggle
+                                expanded={expanded}
+                                title={child.title}
+                                onToggle={() => setExpandedIds((prev) => toggleIn(prev, child.id))}
+                              />
+                            )}
                             {child.viaExtraLink && <span>추가 상위로 연결</span>}
                           </StepMeta>
+                          {owned && !selecting && (
+                            <StepTools>
+                              <KindSwitch parentId={event.id} child={child} />
+                            </StepTools>
+                          )}
                         </StepHead>
                         {/* 있는 요약은 한 줄로 읽기만(전문·고치기는 하위 상세에서) — 비어 있을 때만 여기서 쓴다.
                             추가 상위로만 이어진 하위는 이 묶음의 소유가 아니라 쓰기를 열지 않는다 */}
@@ -209,6 +254,14 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                             + 한 줄 요약 쓰기
                           </SummaryPrompt>
                         )}
+                        {child.isCollection && expanded && (
+                          <NestedChildren
+                            parentId={event.id}
+                            collectionId={child.id}
+                            collectionTitle={child.title}
+                            onAddUnder={() => setCreateUnder({ id: child.id, title: child.title })}
+                          />
+                        )}
                       </StepBody>
                     </Step>
                   )
@@ -221,6 +274,15 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
            * 다시 위로 올라가야 했고, 새 하위가 어디에 붙는지(차례의 끝)도 말하지 못했다.
            * 번호 열에 '+' 노드를 세워 목록의 다음 줄처럼 읽히게 한다.
            */}
+          {selecting ? (
+            <RegroupBar
+              parent={{ id: event.id, domain: event.domain }}
+              selected={children.filter((child) => selectedIds.has(child.id))}
+              candidates={children.filter((child) => child.isCollection && !child.viaExtraLink)}
+              onDone={stopSelecting}
+              onCancel={stopSelecting}
+            />
+          ) : (
           <NextStep>
             <AddChildRow type="button" onClick={() => setCreateOpen(true)}>
               <NextStepNode aria-hidden>
@@ -231,21 +293,36 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 <AddChildHint>{children.length + 1}번째 국면 — 전투·회담·조약을 차례 끝에</AddChildHint>
               </AddChildText>
             </AddChildRow>
-            <GatherButton type="button" onClick={onGatherExisting}>
-              <FiLink2 aria-hidden />
-              기존 사건 모으기
-            </GatherButton>
+            <NextStepTools>
+              {children.some((child) => !child.viaExtraLink) && (
+                <GatherButton type="button" onClick={() => setSelecting(true)}>
+                  <FiLayers aria-hidden />
+                  골라서 묶기
+                </GatherButton>
+              )}
+              <GatherButton type="button" onClick={onGatherExisting}>
+                <FiLink2 aria-hidden />
+                기존 사건 모으기
+              </GatherButton>
+            </NextStepTools>
           </NextStep>
+          )}
         </Phases>
       )}
 
-      {createOpen && (
+      {(createOpen || createUnder) && (
         <Suspense fallback={null}>
           <LazyEventRegisterModal
             isOpen
-            onClose={() => setCreateOpen(false)}
-            initialParent={{ id: event.id, title: event.title }}
-            onSaved={() => invalidateEventQueries(queryClient, { eventId: event.id })}
+            onClose={() => {
+              setCreateOpen(false)
+              setCreateUnder(null)
+            }}
+            initialParent={createUnder ?? { id: event.id, title: event.title }}
+            onSaved={() => {
+              invalidateEventQueries(queryClient, { eventId: event.id })
+              if (createUnder) invalidateEventQueries(queryClient, { eventId: createUnder.id })
+            }}
           />
         </Suspense>
       )}
@@ -273,6 +350,17 @@ const NextStep = styled.div`
   /* 좁은 지면 — 추가 줄은 한 줄을 다 쓰고, 모으기는 그 아래 제목 열에서 시작(나란히 두면 설명이 낱말 중간에 꺾였다) */
   @container eventdetail (max-width: 639px) {
     flex-wrap: wrap;
+  }
+`
+
+/** 줄 오른쪽 보조 동작 묶음 — 좁은 지면에선 아래 줄 제목 열에서 시작 */
+const NextStepTools = styled.span`
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  @container eventdetail (max-width: 639px) {
+    margin: -4px 0 10px 40px;
   }
 `
 
@@ -392,10 +480,6 @@ const GatherButton = styled.button`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
-
-  @container eventdetail (max-width: 639px) {
-    margin: -4px 0 10px 40px;
-  }
 `
 
 const Empty = styled.div`
@@ -450,6 +534,7 @@ const Steps = styled.ol`
 `
 
 const Step = styled.li`
+  position: relative;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 12px;
@@ -458,6 +543,45 @@ const Step = styled.li`
 
   &:last-child {
     border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+
+  /* 고른 행 — 강조색 옅은 면(고르기 중에만 생긴다) */
+  &[data-selected] {
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  }
+`
+
+/** 고르기 칸 — 번호 자리(28px)에 오른쪽 정렬 */
+const StepCheck = styled.label`
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 3px;
+
+  input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    cursor: pointer;
+  }
+`
+
+/**
+ * 행 도구(개별|묶음) — 머리 줄 오른쪽 끝. 손이 닿을 때만 보인다(18행 모두에 상시면 목록이 도구로 덮인다).
+ * 지금 묶음인 행은 날짜 줄의 '하위' 펼침 단추가 종류를 늘 말한다.
+ */
+const StepTools = styled.span`
+  margin-left: auto;
+  align-self: center;
+  opacity: 0;
+  transition: opacity 0.14s;
+
+  ${Step}:hover &,
+  ${Step}:focus-within & {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    opacity: 1;
   }
 `
 
@@ -507,13 +631,6 @@ const DomainMeta = styled.span`
   }
 `
 
-const KindTag = styled.span`
-  padding: 0 6px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  font-size: 11px;
-  font-weight: 600;
-`
 
 const StepTitle = styled(Link)`
   font-size: 15px;

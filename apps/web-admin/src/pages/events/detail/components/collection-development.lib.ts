@@ -105,3 +105,39 @@ export function groupByPhase<T extends DatedLike>(
     items: buckets.get(phase)!,
   }))
 }
+
+/**
+ * 골라서 묶을 때 새 묶음의 기간 — 고른 하위들의 **가장 이른 시작 ~ 가장 늦은 끝**(끝이 없으면 시작).
+ * 정밀도는 그 값을 낸 하위의 것을 그대로 가져간다('1914년 7월'이 '1914년 7월 1일'로 둔갑하지 않게).
+ * 날짜 있는 하위가 하나도 없으면 null — 기간 없이 만든다.
+ */
+export function spanOfChildren(items: ReadonlyArray<DatedLike>): {
+  startDate: string
+  startDatePrecision: DatePrecision
+  endDate: string
+  endDatePrecision: DatePrecision
+} | null {
+  let start: { raw: string; tokens: Tokens; precision: DatePrecision } | null = null
+  let end: { raw: string; tokens: Tokens; precision: DatePrecision } | null = null
+  for (const item of items) {
+    const startTokens = parseDateTokens(item.startDate)
+    if (!startTokens || !item.startDate) continue
+    const startPrecision = toPrecision(item.startDatePrecision)
+    if (!start || compareAtCoarser(startTokens, 'day', start.tokens, 'day') < 0) {
+      start = { raw: item.startDate, tokens: startTokens, precision: startPrecision }
+    }
+    const endRaw = item.endDate ?? item.startDate
+    const endTokens = parseDateTokens(endRaw)
+    const endPrecision = toPrecision(item.endDate ? item.endDatePrecision : item.startDatePrecision)
+    if (endTokens && (!end || compareAtCoarser(endTokens, 'day', end.tokens, 'day') > 0)) {
+      end = { raw: endRaw, tokens: endTokens, precision: endPrecision }
+    }
+  }
+  if (!start || !end) return null
+  return {
+    startDate: start.raw,
+    startDatePrecision: start.precision,
+    endDate: end.raw,
+    endDatePrecision: end.precision,
+  }
+}

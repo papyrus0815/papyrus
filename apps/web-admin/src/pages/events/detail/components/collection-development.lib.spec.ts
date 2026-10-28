@@ -1,4 +1,4 @@
-import { groupByPhase, phaseOf } from './collection-development.lib'
+import { groupByPhase, phaseOf, spanOfChildren } from './collection-development.lib'
 
 const ww1 = { startDate: '1914-07-28', startDatePrecision: 'day', endDate: '1918-11-11', endDatePrecision: 'day' }
 
@@ -53,5 +53,32 @@ describe('groupByPhase', () => {
       ['during', ['b']],
       ['undated', ['c']],
     ])
+  })
+})
+
+describe('spanOfChildren', () => {
+  it('가장 이른 시작 ~ 가장 늦은 끝, 정밀도는 그 값을 낸 하위의 것', () => {
+    expect(
+      spanOfChildren([
+        { startDate: '1914-07-28', startDatePrecision: 'day', endDate: '1914-08-04', endDatePrecision: 'day' },
+        { startDate: '1914-06', startDatePrecision: 'month' },
+        { startDate: '1914-08-06', startDatePrecision: 'day' },
+      ]),
+    ).toEqual({
+      startDate: '1914-06',
+      startDatePrecision: 'month',
+      endDate: '1914-08-06',
+      endDatePrecision: 'day',
+    })
+  })
+
+  it('끝이 없는 하위는 시작이 끝을 대신하고, 날짜 없는 하위는 건너뛴다', () => {
+    expect(
+      spanOfChildren([{ startDate: null }, { startDate: '1700', startDatePrecision: 'year' }]),
+    ).toEqual({ startDate: '1700', startDatePrecision: 'year', endDate: '1700', endDatePrecision: 'year' })
+  })
+
+  it('날짜 있는 하위가 없으면 null', () => {
+    expect(spanOfChildren([{ startDate: null }, {}])).toBeNull()
   })
 })
