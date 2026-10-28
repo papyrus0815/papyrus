@@ -252,20 +252,32 @@ export class HistoricalCountryController {
         title: true,
         ordinal: true,
         positionType: true,
+        startEra: true,
+        startYear: true,
         startDate: true,
+        endEra: true,
+        endYear: true,
         endDate: true,
         positionDefinition: { select: { title: true, positionType: true } },
         person: { select: personSelect },
       },
       orderBy: { startDate: 'asc' },
     })
+    const tenureStart = (tenure: (typeof tenures)[number]) =>
+      tenure.startYear != null
+        ? signed(tenure.startEra, tenure.startYear)
+        : tenure.startDate
+          ? tenure.startDate.getUTCFullYear()
+          : Number.POSITIVE_INFINITY
     for (const [type, kind] of [
       ['HEAD_OF_STATE', 'headOfState'],
       ['HEAD_OF_GOVERNMENT', 'headOfGovernment'],
     ] as const) {
-      const ofType = tenures.filter(
-        (tenure) => (tenure.positionDefinition?.positionType ?? tenure.positionType) === type,
-      )
+      const ofType = tenures
+        .filter(
+          (tenure) => (tenure.positionDefinition?.positionType ?? tenure.positionType) === type,
+        )
+        .sort((left, right) => tenureStart(left) - tenureStart(right))
       const numbered = ofType.find((tenure) => tenure.ordinal === 1)
       const first = numbered ?? ofType[0]
       if (!first) continue
@@ -280,18 +292,16 @@ export class HistoricalCountryController {
         title: tenure.title?.trim() || tenure.positionDefinition?.title?.trim() || null,
         basis,
         // 구조화 시작이 정본(이행 1단계) — 없을 때만 DATETIME
-        startEra: (tenure as { startEra?: 'AD' | 'BC' | null }).startEra ?? 'AD',
-        startYear:
-          (tenure as { startYear?: number | null }).startYear ??
-          tenure.startDate?.getUTCFullYear() ??
-          null,
-        endEra: tenure.endDate ? 'AD' : null,
-        endYear: tenure.endDate ? tenure.endDate.getUTCFullYear() : null,
+        startEra: (tenure.startEra as 'AD' | 'BC' | null) ?? (tenure.startDate ? 'AD' : null),
+        startYear: tenure.startYear ?? tenure.startDate?.getUTCFullYear() ?? null,
+        endEra: (tenure.endEra as 'AD' | 'BC' | null) ?? (tenure.endDate ? 'AD' : null),
+        endYear: tenure.endYear ?? tenure.endDate?.getUTCFullYear() ?? null,
         person: tenure.person,
       })
       firstRulers.push(toTenureRuler(first, numbered ? 'numbered' : 'earliest'))
-      // startDate 오름차순이라 끝 행이 마지막 재임
-      const last = ofType[ofType.length - 1]
+      // 시작 연도 오름차순(시점 있는 행 중 가장 늦은 행)이 마지막 재임
+      const withStart = ofType.filter((tenure) => Number.isFinite(tenureStart(tenure)))
+      const last = withStart[withStart.length - 1] ?? ofType[ofType.length - 1]
       if (last && last.id !== first.id) lastRulers.push(toTenureRuler(last, 'latest'))
     }
 
@@ -595,17 +605,18 @@ export class HistoricalCountryController {
     const accountId = req.user?.id ?? req.user?.sub
     const country =
       await this.historicalCountryService.getHistoricalCountryById(id, accountId)
-    const [parentModernCountryIds, parentHistoricalCountryIds, transitionEventType] =
+    const [parentModernCountryIds, parentHistoricalCountryIds, transitionMeta] =
       await Promise.all([
         this.historicalCountryService.getModernCountryIdsByHistoricalCountryId(id),
         this.historicalCountryService.getParentHistoricalCountryIdsByMemberId(id),
-        this.historicalCountryService.getTransitionEventTypeByPredecessorId(id),
+        this.historicalCountryService.getTransitionMetaByPredecessorId(id),
       ])
     return this.toResponseDto(
       country,
       parentModernCountryIds,
       parentHistoricalCountryIds,
-      transitionEventType ?? undefined,
+      transitionMeta?.eventType ?? undefined,
+      transitionMeta?.transitionScope ?? undefined,
     )
   }
 
@@ -692,6 +703,8 @@ export class HistoricalCountryController {
         nameOrigin: dto.nameOrigin,
         description: dto.description,
         history: dto.history,
+        foundingNote: dto.foundingNote,
+        dissolutionNote: dto.dissolutionNote,
         thumbnailUrl: dto.thumbnailUrl,
         startEra: dto.startEra,
         startYear: dto.startYear,
@@ -762,8 +775,18 @@ export class HistoricalCountryController {
       rid,
       {
         relationType: dto.relationType,
-        startDate: dto.startDate != null ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate != null ? new Date(dto.endDate) : undefined,
+        startDate:
+          dto.startDate !== undefined
+            ? dto.startDate
+              ? new Date(dto.startDate)
+              : null
+            : undefined,
+        endDate:
+          dto.endDate !== undefined
+            ? dto.endDate
+              ? new Date(dto.endDate)
+              : null
+            : undefined,
       },
       accountId,
     )
@@ -873,6 +896,7 @@ export class HistoricalCountryController {
     parentModernCountryIds?: string[],
     parentHistoricalCountryIds?: string[],
     transitionEventType?: string,
+    transitionScope?: HistoricalCountryResponseDto['transitionScope'],
   ): HistoricalCountryResponseDto {
     return {
       id: country.id,
@@ -904,6 +928,7 @@ export class HistoricalCountryController {
       parentModernCountryIds,
       parentHistoricalCountryIds,
       transitionEventType: transitionEventType as HistoricalCountryResponseDto['transitionEventType'],
+      transitionScope: transitionScope ?? undefined,
       createdAt: country.createdAt.toISOString(),
       updatedAt: country.updatedAt.toISOString(),
     }

@@ -388,8 +388,8 @@ export interface CreateHistoricalCountryRelationDto {
 
 export interface UpdateHistoricalCountryRelationDto {
   relationType?: HistoricalRelationType
-  startDate?: string
-  endDate?: string
+  startDate?: string | null
+  endDate?: string | null
 }
 
 export async function getRelationsByHistoricalCountryId(

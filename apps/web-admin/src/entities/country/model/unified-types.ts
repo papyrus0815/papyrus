@@ -47,8 +47,13 @@ export interface UnifiedCountry {
 
   // 역사적 국가 전용 필드
   enName?: string | null
+  nameOrigin?: string | null
   description?: string | null
+  history?: string | null
+  foundingNote?: string | null
+  dissolutionNote?: string | null
   stateType?: string
+  entityKind?: 'STATE' | 'REGIME' | 'PERIOD' | 'PEOPLE' | null
   startYear?: number | null
   startMonth?: number | null
   startDay?: number | null
@@ -94,10 +99,18 @@ export function historicalToUnified(
     name: country.name,
     type: 'historical',
     enName: country.enName,
+    nameOrigin: 'nameOrigin' in country ? country.nameOrigin : undefined,
     // description은 전체 DTO에만, latitude/longitude는 경량 DTO에만 존재
     description: 'description' in country ? country.description : undefined,
+    history: 'history' in country ? country.history : undefined,
+    foundingNote: 'foundingNote' in country ? country.foundingNote : undefined,
+    dissolutionNote: 'dissolutionNote' in country ? country.dissolutionNote : undefined,
     thumbnailUrl: country.thumbnailUrl,
     stateType: country.stateType,
+    entityKind:
+      'entityKind' in country && country.entityKind !== undefined
+        ? (country.entityKind as UnifiedCountry['entityKind'])
+        : undefined,
     startYear: country.startYear,
     startMonth: country.startMonth,
     startDay: country.startDay,

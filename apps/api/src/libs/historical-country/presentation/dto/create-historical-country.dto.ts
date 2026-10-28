@@ -52,6 +52,20 @@ export class CreateHistoricalCountryDto {
   history?: string
 
   /**
+   * 건국 배경 서술 (누가·어떻게 세웠는지)
+   */
+  @IsOptional()
+  @IsString()
+  foundingNote?: string
+
+  /**
+   * 멸망 배경 서술 (누구에게·어떻게 망했는지)
+   */
+  @IsOptional()
+  @IsString()
+  dissolutionNote?: string
+
+  /**
    * 썸네일 URL
    * @example "https://example.com/joseon.jpg"
    */

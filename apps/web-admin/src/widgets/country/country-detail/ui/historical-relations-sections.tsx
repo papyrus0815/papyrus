@@ -23,10 +23,17 @@ import {
   type CreateHistoricalCountryRelationDto,
   type CreateHistoricalCountryTransitionDto,
   type HistoricalCountryMembershipDto,
+  type HistoricalCountryRelationDto,
+  type HistoricalCountryTransitionDto,
   type HistoricalMembershipRole,
   type HistoricalRelationType,
+  type StructuredPeriodInput,
+  type StructuredPeriodPoint,
   type TransitionEventType,
+  type TransitionScope,
   type UpdateHistoricalCountryMembershipDto,
+  type UpdateHistoricalCountryRelationDto,
+  type UpdateHistoricalCountryTransitionDto,
   createHistoricalCountryMembership,
   createHistoricalCountryRelation,
   createHistoricalCountryTransition,
@@ -38,12 +45,18 @@ import {
   getRelationsByHistoricalCountryId,
   getTransitionsByHistoricalCountryId,
   updateHistoricalCountryMembership,
+  updateHistoricalCountryRelation,
+  updateHistoricalCountryTransition,
 } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountryPicker, CountryPickerField } from '@/shared/ui/country-picker'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
+import {
+  PeriodDateField,
+  type PeriodDateValue,
+} from '@/widgets/historical-country/historical-country-form/ui/period-date-field'
 
 import * as DashboardStyles from './country-detail-dashboard.styles'
 
@@ -82,6 +95,84 @@ const RELATION_TYPE_LABELS: Record<HistoricalRelationType, string> = {
   SUZERAIN_VASSAL: '종주국-속국',
   TRIBUTARY: '조공·책봉',
   PERSONAL_UNION: '동군연합',
+}
+
+const TRANSITION_SCOPE_LABELS: Record<TransitionScope, string> = {
+  STATE_SUCCESSION: '국가 계승',
+  REGIME_CHANGE: '정권 교체',
+}
+
+const EMPTY_PERIOD_DATE: PeriodDateValue = {
+  era: undefined,
+  year: undefined,
+  month: undefined,
+  day: undefined,
+}
+
+function formatStructuredPoint(point: StructuredPeriodPoint | null | undefined): string | null {
+  if (!point || point.year == null) return null
+  const prefix = point.era === 'BC' ? 'BC ' : ''
+  const parts: string[] = [`${prefix}${point.year}년`]
+  if (point.month != null) parts.push(`${point.month}월`)
+  if (point.day != null) parts.push(`${point.day}일`)
+  return parts.join(' ')
+}
+
+function formatMembershipPeriod(
+  start: StructuredPeriodPoint | null | undefined,
+  end: StructuredPeriodPoint | null | undefined,
+): string | null {
+  const s = formatStructuredPoint(start)
+  const e = formatStructuredPoint(end)
+  if (!s && !e) return null
+  if (s && e) return `${s} ~ ${e}`
+  if (s) return `${s} ~`
+  return `~ ${e}`
+}
+
+function toStructuredInput(val: PeriodDateValue): StructuredPeriodInput | null {
+  if (!val.year || val.year <= 0) return null
+  return {
+    era: val.era ?? 'AD',
+    year: val.year,
+    month: val.month ?? null,
+    day: val.day ?? null,
+  }
+}
+
+function fromStructuredPoint(point: StructuredPeriodPoint | null | undefined): PeriodDateValue {
+  if (!point) return { ...EMPTY_PERIOD_DATE }
+  return {
+    era: point.era,
+    year: point.year,
+    month: point.month ?? undefined,
+    day: point.day ?? undefined,
+  }
+}
+
+function formatIsoDate(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!match) return null
+  return `${Number(match[1])}.${Number(match[2])}.${Number(match[3])}`
+}
+
+function formatIsoDateRange(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+): string | null {
+  const s = formatIsoDate(startDate)
+  const e = formatIsoDate(endDate)
+  if (!s && !e) return null
+  if (s && e) return `${s} ~ ${e}`
+  if (s) return `${s} ~`
+  return `~ ${e}`
+}
+
+function toDateInputValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(iso)
+  return match ? match[1] : ''
 }
 
 const HISTORICAL_LIST_KEY = ['historical-countries-list'] as const
@@ -200,9 +291,24 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
   const historicalCountryId = country.id
   const queryKey = ['historical-country-transitions', historicalCountryId]
   const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState<{ successorId: string; eventType: TransitionEventType }>({
-    successorId: '',
+  const [editing, setEditing] = useState<HistoricalCountryTransitionDto | null>(null)
+  const [form, setForm] = useState<{
+    asPredecessor: boolean
+    otherCountryId: string
+    eventType: TransitionEventType
+    transitionScope: TransitionScope | ''
+  }>({
+    asPredecessor: true,
+    otherCountryId: '',
     eventType: 'SUCCESSION',
+    transitionScope: '',
+  })
+  const [editForm, setEditForm] = useState<{
+    eventType: TransitionEventType
+    transitionScope: TransitionScope | ''
+  }>({
+    eventType: 'SUCCESSION',
+    transitionScope: '',
   })
 
   const { data: transitions = [], isLoading } = useQuery({
@@ -210,20 +316,50 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
     queryFn: () => getTransitionsByHistoricalCountryId(historicalCountryId),
   })
 
+  const invalidateSuccession = () => {
+    void queryClient.invalidateQueries({ queryKey })
+    void queryClient.invalidateQueries({
+      queryKey: ['historical-countries', historicalCountryId, 'founding-summary'],
+    })
+    void queryClient.invalidateQueries({
+      queryKey: ['historical-countries', historicalCountryId],
+    })
+  }
+
   const createMutation = useMutation({
     mutationFn: (body: CreateHistoricalCountryTransitionDto) => createHistoricalCountryTransition(body),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey })
+      invalidateSuccession()
       setAddOpen(false)
-      setForm({ successorId: '', eventType: 'SUCCESSION' })
+      setForm({
+        asPredecessor: true,
+        otherCountryId: '',
+        eventType: 'SUCCESSION',
+        transitionScope: '',
+      })
       notify.success('계승 관계를 추가했습니다')
     },
     onError: () => notify.error('계승 관계를 추가하지 못했습니다'),
   })
+  const updateMutation = useMutation({
+    mutationFn: ({
+      transitionId,
+      data,
+    }: {
+      transitionId: string
+      data: UpdateHistoricalCountryTransitionDto
+    }) => updateHistoricalCountryTransition(transitionId, data),
+    onSuccess: () => {
+      invalidateSuccession()
+      setEditing(null)
+      notify.success('계승 관계를 수정했습니다')
+    },
+    onError: () => notify.error('계승 관계를 수정하지 못했습니다'),
+  })
   const deleteMutation = useMutation({
     mutationFn: (transitionId: string) => deleteHistoricalCountryTransition(transitionId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey })
+      invalidateSuccession()
       notify.success('계승 관계를 삭제했습니다')
     },
     onError: () => notify.error('계승 관계를 삭제하지 못했습니다'),
@@ -235,7 +371,7 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
         <SectionHead
           title="계승·변천"
           description="이 나라로 이어진 전신, 이 나라에서 이어진 후신과 그 방식(계승·정복·독립…)"
-          addLabel="후임 국가 추가"
+          addLabel="계승 관계 추가"
           onAdd={() => setAddOpen(true)}
         />
         {isLoading ? (
@@ -265,9 +401,27 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
                   <Tag>
                     {TRANSITION_EVENT_LABELS[transition.eventType] ?? transition.eventType}
                   </Tag>
+                  {transition.transitionScope && (
+                    <AccentTag>
+                      {TRANSITION_SCOPE_LABELS[transition.transitionScope] ??
+                        transition.transitionScope}
+                    </AccentTag>
+                  )}
                   {transition.successorStartDate && <Muted>{transition.successorStartDate}</Muted>}
                 </RowMain>
                 <RowActions>
+                  <TextButton
+                    type="button"
+                    onClick={() => {
+                      setEditing(transition)
+                      setEditForm({
+                        eventType: transition.eventType,
+                        transitionScope: transition.transitionScope ?? '',
+                      })
+                    }}
+                  >
+                    수정
+                  </TextButton>
                   <DangerTextButton
                     type="button"
                     disabled={deleteMutation.isPending}
@@ -284,17 +438,100 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
         )}
       </Section>
 
-      <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="후임 국가 추가" size="narrow">
+      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="계승·변천 수정" size="narrow">
         <ModalBody>
-          <FormNote>
-            전임 <strong>{country.name}</strong> → 후임 국가
-          </FormNote>
+          {editing && (
+            <FormNote>
+              <strong>{editing.predecessorName ?? '(전임)'}</strong> →{' '}
+              <strong>{editing.successorName ?? '(후임)'}</strong>
+            </FormNote>
+          )}
           <Field>
-            <Label htmlFor="succession-successor">후임 국가</Label>
+            <Label htmlFor="succession-edit-type">방식</Label>
+            <Select
+              id="succession-edit-type"
+              value={editForm.eventType}
+              onChange={(changeEvent) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  eventType: changeEvent.target.value as TransitionEventType,
+                }))
+              }
+            >
+              {(Object.keys(TRANSITION_EVENT_LABELS) as TransitionEventType[]).map((key) => (
+                <option key={key} value={key}>
+                  {TRANSITION_EVENT_LABELS[key]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field>
+            <Label htmlFor="succession-edit-scope">전환 성격 (선택)</Label>
+            <Select
+              id="succession-edit-scope"
+              value={editForm.transitionScope}
+              onChange={(changeEvent) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  transitionScope: changeEvent.target.value as TransitionScope | '',
+                }))
+              }
+            >
+              <option value="">미지정 (자동)</option>
+              <option value="STATE_SUCCESSION">국가 계승 (주권 단위 변경)</option>
+              <option value="REGIME_CHANGE">정권 교체 (영토는 그대로)</option>
+            </Select>
+          </Field>
+        </ModalBody>
+        <ModalFooter>
+          <SecondaryButton type="button" onClick={() => setEditing(null)}>
+            취소
+          </SecondaryButton>
+          <PrimaryButton
+            type="button"
+            disabled={updateMutation.isPending}
+            onClick={() =>
+              editing &&
+              updateMutation.mutate({
+                transitionId: editing.id,
+                data: {
+                  eventType: editForm.eventType,
+                  transitionScope: editForm.transitionScope || null,
+                },
+              })
+            }
+          >
+            {updateMutation.isPending ? '저장 중…' : '저장'}
+          </PrimaryButton>
+        </ModalFooter>
+      </Modal>
+
+      <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="계승 관계 추가" size="narrow">
+        <ModalBody>
+          <Field>
+            <Label htmlFor="succession-direction">방향</Label>
+            <Select
+              id="succession-direction"
+              value={form.asPredecessor ? 'successor' : 'predecessor'}
+              onChange={(changeEvent) =>
+                setForm((prev) => ({
+                  ...prev,
+                  asPredecessor: changeEvent.target.value === 'successor',
+                }))
+              }
+            >
+              <option value="successor">후임 추가 — {country.name} → 후임 국가</option>
+              <option value="predecessor">전임 추가 — 전임 국가 → {country.name}</option>
+            </Select>
+          </Field>
+          <Field>
+            <Label htmlFor="succession-other">
+              {form.asPredecessor ? '후임 국가' : '전임 국가'}
+            </Label>
             <CountrySelect
-              id="succession-successor"
-              value={form.successorId}
-              onChange={(successorId) => setForm((prev) => ({ ...prev, successorId }))}
+              id="succession-other"
+              value={form.otherCountryId}
+              onChange={(otherCountryId) => setForm((prev) => ({ ...prev, otherCountryId }))}
               excludeId={historicalCountryId}
             />
           </Field>
@@ -314,6 +551,23 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
               ))}
             </Select>
           </Field>
+          <Field>
+            <Label htmlFor="succession-scope">전환 성격 (선택)</Label>
+            <Select
+              id="succession-scope"
+              value={form.transitionScope}
+              onChange={(changeEvent) =>
+                setForm((prev) => ({
+                  ...prev,
+                  transitionScope: changeEvent.target.value as TransitionScope | '',
+                }))
+              }
+            >
+              <option value="">미지정 (자동)</option>
+              <option value="STATE_SUCCESSION">국가 계승 (주권 단위 변경)</option>
+              <option value="REGIME_CHANGE">정권 교체 (영토는 그대로)</option>
+            </Select>
+          </Field>
           <FormHint>변천 시점은 후임 국가의 존속 시작을 따른다.</FormHint>
         </ModalBody>
         <ModalFooter>
@@ -322,12 +576,13 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
           </SecondaryButton>
           <PrimaryButton
             type="button"
-            disabled={!form.successorId || createMutation.isPending}
+            disabled={!form.otherCountryId || createMutation.isPending}
             onClick={() =>
               createMutation.mutate({
-                predecessorId: historicalCountryId,
-                successorId: form.successorId,
+                predecessorId: form.asPredecessor ? historicalCountryId : form.otherCountryId,
+                successorId: form.asPredecessor ? form.otherCountryId : historicalCountryId,
                 eventType: form.eventType,
+                transitionScope: form.transitionScope || undefined,
               })
             }
           >
@@ -352,10 +607,26 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
     otherCountryId: string
     role: HistoricalMembershipRole
     isLeadingMember: boolean
-  }>({ asParent: true, otherCountryId: '', role: 'VASSAL_STATE', isLeadingMember: false })
-  const [editForm, setEditForm] = useState<{ role: HistoricalMembershipRole; isLeadingMember: boolean }>({
+    start: PeriodDateValue
+    end: PeriodDateValue
+  }>({
+    asParent: true,
+    otherCountryId: '',
     role: 'VASSAL_STATE',
     isLeadingMember: false,
+    start: { ...EMPTY_PERIOD_DATE },
+    end: { ...EMPTY_PERIOD_DATE },
+  })
+  const [editForm, setEditForm] = useState<{
+    role: HistoricalMembershipRole
+    isLeadingMember: boolean
+    start: PeriodDateValue
+    end: PeriodDateValue
+  }>({
+    role: 'VASSAL_STATE',
+    isLeadingMember: false,
+    start: { ...EMPTY_PERIOD_DATE },
+    end: { ...EMPTY_PERIOD_DATE },
   })
 
   const { data: memberships = [], isLoading } = useQuery({
@@ -368,7 +639,14 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey })
       setAddOpen(false)
-      setForm({ asParent: true, otherCountryId: '', role: 'VASSAL_STATE', isLeadingMember: false })
+      setForm({
+        asParent: true,
+        otherCountryId: '',
+        role: 'VASSAL_STATE',
+        isLeadingMember: false,
+        start: { ...EMPTY_PERIOD_DATE },
+        end: { ...EMPTY_PERIOD_DATE },
+      })
       notify.success('소속·구성 관계를 추가했습니다')
     },
     onError: () => notify.error('소속·구성 관계를 추가하지 못했습니다'),
@@ -407,47 +685,56 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
           <Empty>등록된 소속·구성 관계가 없습니다.</Empty>
         ) : (
           <List>
-            {memberships.map((membership) => (
-              <Row key={membership.id}>
-                <RowMain>
-                  <CountryName
-                    countryId={membership.historicalCountryId}
-                    name={membership.parentName}
-                    currentCountryId={country.id}
-                    fallback="(상위)"
-                  />
-                  <Muted aria-hidden>⊃</Muted>
-                  <CountryName
-                    countryId={membership.memberCountryId}
-                    name={membership.memberName}
-                    currentCountryId={country.id}
-                    fallback="(하위)"
-                  />
-                  <Tag>{MEMBERSHIP_ROLE_LABELS[membership.role] ?? membership.role}</Tag>
-                  {membership.isLeadingMember && <AccentTag>주축</AccentTag>}
-                </RowMain>
-                <RowActions>
-                  <TextButton
-                    type="button"
-                    onClick={() => {
-                      setEditing(membership)
-                      setEditForm({ role: membership.role, isLeadingMember: !!membership.isLeadingMember })
-                    }}
-                  >
-                    수정
-                  </TextButton>
-                  <DangerTextButton
-                    type="button"
-                    disabled={deleteMutation.isPending}
-                    onClick={async () => {
-                      if (await confirmRemove('소속·구성 관계')) deleteMutation.mutate(membership.id)
-                    }}
-                  >
-                    삭제
-                  </DangerTextButton>
-                </RowActions>
-              </Row>
-            ))}
+            {memberships.map((membership) => {
+              const periodLabel = formatMembershipPeriod(membership.start, membership.end)
+              return (
+                <Row key={membership.id}>
+                  <RowMain>
+                    <CountryName
+                      countryId={membership.historicalCountryId}
+                      name={membership.parentName}
+                      currentCountryId={country.id}
+                      fallback="(상위)"
+                    />
+                    <Muted aria-hidden>⊃</Muted>
+                    <CountryName
+                      countryId={membership.memberCountryId}
+                      name={membership.memberName}
+                      currentCountryId={country.id}
+                      fallback="(하위)"
+                    />
+                    <Tag>{MEMBERSHIP_ROLE_LABELS[membership.role] ?? membership.role}</Tag>
+                    {membership.isLeadingMember && <AccentTag>주축</AccentTag>}
+                    {periodLabel && <Muted>{periodLabel}</Muted>}
+                  </RowMain>
+                  <RowActions>
+                    <TextButton
+                      type="button"
+                      onClick={() => {
+                        setEditing(membership)
+                        setEditForm({
+                          role: membership.role,
+                          isLeadingMember: !!membership.isLeadingMember,
+                          start: fromStructuredPoint(membership.start),
+                          end: fromStructuredPoint(membership.end),
+                        })
+                      }}
+                    >
+                      수정
+                    </TextButton>
+                    <DangerTextButton
+                      type="button"
+                      disabled={deleteMutation.isPending}
+                      onClick={async () => {
+                        if (await confirmRemove('소속·구성 관계')) deleteMutation.mutate(membership.id)
+                      }}
+                    >
+                      삭제
+                    </DangerTextButton>
+                  </RowActions>
+                </Row>
+              )
+            })}
           </List>
         )}
       </Section>
@@ -487,6 +774,24 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
               주축(주도국)
             </CheckField>
           )}
+          <Field>
+            <Label>소속 시작 시점 (선택)</Label>
+            <PeriodDateField
+              ariaLabel="소속 시작 시점"
+              pickerTitle="소속 시작 시점 선택"
+              {...editForm.start}
+              onChange={(start) => setEditForm((prev) => ({ ...prev, start }))}
+            />
+          </Field>
+          <Field>
+            <Label>소속 종료 시점 (선택)</Label>
+            <PeriodDateField
+              ariaLabel="소속 종료 시점"
+              pickerTitle="소속 종료 시점 선택"
+              {...editForm.end}
+              onChange={(end) => setEditForm((prev) => ({ ...prev, end }))}
+            />
+          </Field>
         </ModalBody>
         <ModalFooter>
           <SecondaryButton type="button" onClick={() => setEditing(null)}>
@@ -502,6 +807,8 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
                 data: {
                   role: editForm.role,
                   isLeadingMember: hasLeaderFlag(editForm.role) ? editForm.isLeadingMember : false,
+                  start: toStructuredInput(editForm.start),
+                  end: toStructuredInput(editForm.end),
                 },
               })
             }
@@ -566,6 +873,24 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
               <FormHint>연방·연합 안에서 주도적 역할을 한 구성원(예: 독일 제국 안의 프로이센)</FormHint>
             </>
           )}
+          <Field>
+            <Label>소속 시작 시점 (선택)</Label>
+            <PeriodDateField
+              ariaLabel="소속 시작 시점"
+              pickerTitle="소속 시작 시점 선택"
+              {...form.start}
+              onChange={(start) => setForm((prev) => ({ ...prev, start }))}
+            />
+          </Field>
+          <Field>
+            <Label>소속 종료 시점 (선택)</Label>
+            <PeriodDateField
+              ariaLabel="소속 종료 시점"
+              pickerTitle="소속 종료 시점 선택"
+              {...form.end}
+              onChange={(end) => setForm((prev) => ({ ...prev, end }))}
+            />
+          </Field>
         </ModalBody>
         <ModalFooter>
           <SecondaryButton type="button" onClick={() => setAddOpen(false)}>
@@ -580,6 +905,8 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
                 memberCountryId: form.asParent ? form.otherCountryId : historicalCountryId,
                 role: form.role,
                 isLeadingMember: hasLeaderFlag(form.role) ? form.isLeadingMember : undefined,
+                start: toStructuredInput(form.start) ?? undefined,
+                end: toStructuredInput(form.end) ?? undefined,
               })
             }
           >
@@ -598,11 +925,29 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
   const historicalCountryId = country.id
   const queryKey = ['historical-country-relations', historicalCountryId]
   const [addOpen, setAddOpen] = useState(false)
+  const [editing, setEditing] = useState<HistoricalCountryRelationDto | null>(null)
   const [form, setForm] = useState<{
     asSubject: boolean
     otherCountryId: string
     relationType: HistoricalRelationType
-  }>({ asSubject: true, otherCountryId: '', relationType: 'TRIBUTARY' })
+    startDate: string
+    endDate: string
+  }>({
+    asSubject: true,
+    otherCountryId: '',
+    relationType: 'TRIBUTARY',
+    startDate: '',
+    endDate: '',
+  })
+  const [editForm, setEditForm] = useState<{
+    relationType: HistoricalRelationType
+    startDate: string
+    endDate: string
+  }>({
+    relationType: 'TRIBUTARY',
+    startDate: '',
+    endDate: '',
+  })
 
   const { data: relations = [], isLoading } = useQuery({
     queryKey,
@@ -614,10 +959,31 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey })
       setAddOpen(false)
-      setForm({ asSubject: true, otherCountryId: '', relationType: 'TRIBUTARY' })
+      setForm({
+        asSubject: true,
+        otherCountryId: '',
+        relationType: 'TRIBUTARY',
+        startDate: '',
+        endDate: '',
+      })
       notify.success('국가 관계를 추가했습니다')
     },
     onError: () => notify.error('국가 관계를 추가하지 못했습니다'),
+  })
+  const updateMutation = useMutation({
+    mutationFn: ({
+      relationId,
+      data,
+    }: {
+      relationId: string
+      data: UpdateHistoricalCountryRelationDto
+    }) => updateHistoricalCountryRelation(relationId, data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey })
+      setEditing(null)
+      notify.success('국가 관계를 수정했습니다')
+    },
+    onError: () => notify.error('국가 관계를 수정하지 못했습니다'),
   })
   const deleteMutation = useMutation({
     mutationFn: (relationId: string) => deleteHistoricalCountryRelation(relationId),
@@ -643,39 +1009,130 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
           <Empty>등록된 국가 관계가 없습니다.</Empty>
         ) : (
           <List>
-            {relations.map((relation) => (
-              <Row key={relation.id}>
-                <RowMain>
-                  <CountryName
-                    countryId={relation.subjectCountryId}
-                    name={relation.subjectCountryName}
-                    currentCountryId={country.id}
-                    fallback="(주체)"
-                  />
-                  <Tag>{RELATION_TYPE_LABELS[relation.relationType] ?? relation.relationType}</Tag>
-                  <CountryName
-                    countryId={relation.objectCountryId}
-                    name={relation.objectCountryName}
-                    currentCountryId={country.id}
-                    fallback="(대상)"
-                  />
-                </RowMain>
-                <RowActions>
-                  <DangerTextButton
-                    type="button"
-                    disabled={deleteMutation.isPending}
-                    onClick={async () => {
-                      if (await confirmRemove('국가 관계')) deleteMutation.mutate(relation.id)
-                    }}
-                  >
-                    삭제
-                  </DangerTextButton>
-                </RowActions>
-              </Row>
-            ))}
+            {relations.map((relation) => {
+              const periodLabel = formatIsoDateRange(relation.startDate, relation.endDate)
+              return (
+                <Row key={relation.id}>
+                  <RowMain>
+                    <CountryName
+                      countryId={relation.subjectCountryId}
+                      name={relation.subjectCountryName}
+                      currentCountryId={country.id}
+                      fallback="(주체)"
+                    />
+                    <Tag>{RELATION_TYPE_LABELS[relation.relationType] ?? relation.relationType}</Tag>
+                    <CountryName
+                      countryId={relation.objectCountryId}
+                      name={relation.objectCountryName}
+                      currentCountryId={country.id}
+                      fallback="(대상)"
+                    />
+                    {periodLabel && <Muted>{periodLabel}</Muted>}
+                  </RowMain>
+                  <RowActions>
+                    <TextButton
+                      type="button"
+                      onClick={() => {
+                        setEditing(relation)
+                        setEditForm({
+                          relationType: relation.relationType,
+                          startDate: toDateInputValue(relation.startDate),
+                          endDate: toDateInputValue(relation.endDate),
+                        })
+                      }}
+                    >
+                      수정
+                    </TextButton>
+                    <DangerTextButton
+                      type="button"
+                      disabled={deleteMutation.isPending}
+                      onClick={async () => {
+                        if (await confirmRemove('국가 관계')) deleteMutation.mutate(relation.id)
+                      }}
+                    >
+                      삭제
+                    </DangerTextButton>
+                  </RowActions>
+                </Row>
+              )
+            })}
           </List>
         )}
       </Section>
+
+      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="국가 관계 수정" size="narrow">
+        <ModalBody>
+          {editing && (
+            <FormNote>
+              <strong>{editing.subjectCountryName ?? '(주체)'}</strong> —{' '}
+              <strong>{editing.objectCountryName ?? '(대상)'}</strong>
+            </FormNote>
+          )}
+          <Field>
+            <Label htmlFor="relation-edit-type">관계 유형</Label>
+            <Select
+              id="relation-edit-type"
+              value={editForm.relationType}
+              onChange={(changeEvent) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  relationType: changeEvent.target.value as HistoricalRelationType,
+                }))
+              }
+            >
+              {(Object.keys(RELATION_TYPE_LABELS) as HistoricalRelationType[]).map((key) => (
+                <option key={key} value={key}>
+                  {RELATION_TYPE_LABELS[key]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field>
+            <Label htmlFor="relation-edit-start">시작일 (선택)</Label>
+            <DateInput
+              id="relation-edit-start"
+              type="date"
+              value={editForm.startDate}
+              onChange={(changeEvent) =>
+                setEditForm((prev) => ({ ...prev, startDate: changeEvent.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <Label htmlFor="relation-edit-end">종료일 (선택)</Label>
+            <DateInput
+              id="relation-edit-end"
+              type="date"
+              value={editForm.endDate}
+              onChange={(changeEvent) =>
+                setEditForm((prev) => ({ ...prev, endDate: changeEvent.target.value }))
+              }
+            />
+          </Field>
+        </ModalBody>
+        <ModalFooter>
+          <SecondaryButton type="button" onClick={() => setEditing(null)}>
+            취소
+          </SecondaryButton>
+          <PrimaryButton
+            type="button"
+            disabled={updateMutation.isPending}
+            onClick={() =>
+              editing &&
+              updateMutation.mutate({
+                relationId: editing.id,
+                data: {
+                  relationType: editForm.relationType,
+                  startDate: editForm.startDate ? new Date(editForm.startDate).toISOString() : null,
+                  endDate: editForm.endDate ? new Date(editForm.endDate).toISOString() : null,
+                },
+              })
+            }
+          >
+            {updateMutation.isPending ? '저장 중…' : '저장'}
+          </PrimaryButton>
+        </ModalFooter>
+      </Modal>
 
       <Modal isOpen={addOpen} onClose={() => setAddOpen(false)} title="국가 관계 추가" size="narrow">
         <ModalBody>
@@ -717,6 +1174,28 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
               ))}
             </Select>
           </Field>
+          <Field>
+            <Label htmlFor="relation-start">시작일 (선택)</Label>
+            <DateInput
+              id="relation-start"
+              type="date"
+              value={form.startDate}
+              onChange={(changeEvent) =>
+                setForm((prev) => ({ ...prev, startDate: changeEvent.target.value }))
+              }
+            />
+          </Field>
+          <Field>
+            <Label htmlFor="relation-end">종료일 (선택)</Label>
+            <DateInput
+              id="relation-end"
+              type="date"
+              value={form.endDate}
+              onChange={(changeEvent) =>
+                setForm((prev) => ({ ...prev, endDate: changeEvent.target.value }))
+              }
+            />
+          </Field>
         </ModalBody>
         <ModalFooter>
           <SecondaryButton type="button" onClick={() => setAddOpen(false)}>
@@ -730,6 +1209,8 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
                 subjectCountryId: form.asSubject ? historicalCountryId : form.otherCountryId,
                 objectCountryId: form.asSubject ? form.otherCountryId : historicalCountryId,
                 relationType: form.relationType,
+                startDate: form.startDate ? new Date(form.startDate).toISOString() : undefined,
+                endDate: form.endDate ? new Date(form.endDate).toISOString() : undefined,
               })
             }
           >
@@ -942,6 +1423,23 @@ const Label = styled.label`
 `
 
 const Select = styled.select`
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff')};
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  }
+`
+
+const DateInput = styled.input`
   width: 100%;
   height: 40px;
   padding: 0 12px;

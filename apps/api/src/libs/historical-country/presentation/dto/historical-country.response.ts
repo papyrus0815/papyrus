@@ -1,4 +1,4 @@
-import { HistoricalStateType, Era, TransitionEventType, HistoricalEntityKind } from '@prisma/client'
+import { HistoricalStateType, Era, TransitionEventType, HistoricalEntityKind, TransitionScope } from '@prisma/client'
 
 /**
  * 역사적 국가 응답 DTO
@@ -39,6 +39,8 @@ export interface HistoricalCountryResponseDto {
   parentHistoricalCountryIds?: string[]
   /** 후임 국가 연결 시 변천 유형 (상세 조회 시 채움) */
   transitionEventType?: TransitionEventType
+  /** 후임 국가 연결 시 전환 성격 (상세 조회 시 채움) */
+  transitionScope?: TransitionScope | null
   createdAt: string
   updatedAt: string
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
-import { TransitionEventType } from '@prisma/client'
+import { TransitionEventType, TransitionScope } from '@prisma/client'
 import {
   IHistoricalCountryRepository,
   CreateHistoricalCountryData,
@@ -103,6 +103,21 @@ export class HistoricalCountryPrismaRepository
     return row?.eventType ?? null
   }
 
+  async findTransitionMetaByPredecessorId(
+    predecessorId: string,
+  ): Promise<{ eventType: TransitionEventType; transitionScope: TransitionScope | null } | null> {
+    const row =
+      await this.prisma.historicalCountryTransition.findFirst({
+        where: { predecessorId },
+        select: { eventType: true, transitionScope: true },
+      })
+    if (!row) return null
+    return {
+      eventType: row.eventType,
+      transitionScope: row.transitionScope ?? null,
+    }
+  }
+
   async create(data: CreateHistoricalCountryData): Promise<HistoricalCountry> {
     const country = await this.prisma.historicalCountry.create({
       data: {
@@ -111,6 +126,8 @@ export class HistoricalCountryPrismaRepository
         nameOrigin: data.nameOrigin,
         description: data.description,
         history: data.history,
+        foundingNote: data.foundingNote,
+        dissolutionNote: data.dissolutionNote,
         thumbnailUrl: data.thumbnailUrl,
         startEra: data.startEra,
         startYear: data.startYear,

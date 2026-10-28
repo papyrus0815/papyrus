@@ -28,6 +28,8 @@ import {
 } from '@/shared/ui/register-form-kit/register-form-kit'
 import { TextareaWithCounterWrap } from '@/shared/ui/textarea-with-counter/textarea-with-counter'
 import { ThumbnailUploader } from '@/shared/ui/thumbnail-uploader/thumbnail-uploader'
+import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view/rich-text-read-view'
 import * as S from '@/widgets/country/country-form/ui/country-form.styles'
 import { PeriodDateField } from './period-date-field'
 
@@ -359,6 +361,8 @@ export function HistoricalCountryForm({
     useState<TransitionEventType>('SUCCESSION')
   /** 후임 설정 시 전환 성격: 국가 교체 vs 정권 교체 */
   const [transitionScope, setTransitionScope] = useState<'STATE_SUCCESSION' | 'REGIME_CHANGE' | ''>('')
+  /** 리치 텍스트로 저장된 description을 일반 텍스트로 강제 편집할지 여부 */
+  const [forcePlainDescriptionEdit, setForcePlainDescriptionEdit] = useState(false)
 
   /** 수정 시 상세 API로 시작/종료 시점 등 전체 필드 확실히 로드 */
   const { data: editingDetail } = useHistoricalCountry(editing?.id)
@@ -454,6 +458,7 @@ export function HistoricalCountryForm({
         setSelectedParentHistoricalIds(parentHistIds)
         setTransitionEventType(raw?.transitionEventType ?? 'SUCCESSION')
         setTransitionScope(raw?.transitionScope ?? '')
+        setForcePlainDescriptionEdit(false)
       } else {
         // 생성 모드: 빈 값으로 초기화 (막부 등록 시 initialPreset으로 국가 형태·정치체 성격 미리 채움)
         reset({
@@ -481,6 +486,7 @@ export function HistoricalCountryForm({
         setSelectedParentHistoricalIds([])
         setTransitionEventType('SUCCESSION')
         setTransitionScope('')
+        setForcePlainDescriptionEdit(false)
       }
     }
     // 의존성은 **정체성**만 — 편집 대상 id(신규는 고정 키)와 수정 모드의 서버 원본.
@@ -1050,19 +1056,55 @@ export function HistoricalCountryForm({
           <S.FormLabel htmlFor="description">
             설명<S.OptionalTag>(선택)</S.OptionalTag>
           </S.FormLabel>
-          <TextareaWithCounterWrap
-            length={(watch('description') ?? '').length}
-            max={1000}
-          >
-            <FormTextarea
-              id="description"
-              rows={4}
-              placeholder="역사적 국가에 대한 설명을 입력해주세요"
-              {...register('description')}
-              $error={!!errors.description}
-              style={{ minHeight: '100px' }}
-            />
-          </TextareaWithCounterWrap>
+          {isLikelyRichTextHtml(watch('description') ?? '') && !forcePlainDescriptionEdit ? (
+            <>
+              <input type="hidden" {...register('description')} />
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(148, 163, 184, 0.28)',
+                  maxHeight: '180px',
+                  overflowY: 'auto',
+                  fontSize: '13.5px',
+                }}
+              >
+                <RichTextReadView html={watch('description') ?? ''} />
+              </div>
+              <S.FormHelp>
+                상세 대시보드 에디터에서 작성된 서식 문서입니다(폼 저장 시 서식이 그대로 유지됩니다).{' '}
+                <button
+                  type="button"
+                  onClick={() => setForcePlainDescriptionEdit(true)}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    padding: 0,
+                    color: 'inherit',
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    fontSize: 'inherit',
+                  }}
+                >
+                  원문 직접 편집
+                </button>
+              </S.FormHelp>
+            </>
+          ) : (
+            <TextareaWithCounterWrap
+              length={(watch('description') ?? '').length}
+              max={1000}
+            >
+              <FormTextarea
+                id="description"
+                rows={4}
+                placeholder="역사적 국가에 대한 설명을 입력해주세요"
+                {...register('description')}
+                $error={!!errors.description}
+                style={{ minHeight: '100px' }}
+              />
+            </TextareaWithCounterWrap>
+          )}
           {errors.description && (
             <S.ErrorMessage>{errors.description.message}</S.ErrorMessage>
           )}

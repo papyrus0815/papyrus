@@ -27,11 +27,11 @@ export class UpdateHistoricalCountryRelationDto {
 
   @IsOptional()
   @IsDateString()
-  startDate?: string
+  startDate?: string | null
 
   @IsOptional()
   @IsDateString()
-  endDate?: string
+  endDate?: string | null
 }
 
 export interface HistoricalCountryRelationResponseDto {

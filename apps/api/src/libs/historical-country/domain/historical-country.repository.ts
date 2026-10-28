@@ -18,6 +18,8 @@ export interface CreateHistoricalCountryData {
   nameOrigin?: string
   description?: string
   history?: string
+  foundingNote?: string
+  dissolutionNote?: string
   thumbnailUrl?: string
   startEra?: Era
   startYear?: number
@@ -100,6 +102,13 @@ export interface IHistoricalCountryRepository {
    * 이 국가(전임)의 변천 이벤트 유형 조회 (후임 transition 1건 기준)
    */
   findTransitionEventTypeByPredecessorId(predecessorId: string): Promise<TransitionEventType | null>
+
+  /**
+   * 이 국가(전임)의 변천 이벤트 유형 및 전환 성격 조회 (후임 transition 1건 기준)
+   */
+  findTransitionMetaByPredecessorId(
+    predecessorId: string,
+  ): Promise<{ eventType: TransitionEventType; transitionScope: TransitionScope | null } | null>
 
   /**
    * 역사적 국가 생성 (data.accountId 또는 별도 accountId 사용)

@@ -1,5 +1,5 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { AggregateType, EventMethod } from '@prisma/client'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { AggregateType, EventMethod, TransitionEventType, TransitionScope } from '@prisma/client'
 import {
   IHistoricalCountryRepository,
   CreateHistoricalCountryData,
@@ -135,6 +135,15 @@ export class HistoricalCountryService {
   }
 
   /**
+   * 이 국가(전임)의 변천 이벤트 유형 및 전환 성격 조회 (후임 transition 1건 기준)
+   */
+  async getTransitionMetaByPredecessorId(
+    predecessorId: string,
+  ): Promise<{ eventType: TransitionEventType; transitionScope: TransitionScope | null } | null> {
+    return this.repository.findTransitionMetaByPredecessorId(predecessorId)
+  }
+
+  /**
    * 역사적 국가 생성 (accountId 있으면 소유자로 저장). entityKind 선택 시 정권/시대 구분 가능.
    */
   async createHistoricalCountry(
@@ -168,6 +177,11 @@ export class HistoricalCountryService {
     data: UpdateHistoricalCountryData,
     accountId?: string,
   ): Promise<HistoricalCountry> {
+    if (data.parentHistoricalCountryIds?.includes(id)) {
+      throw new BadRequestException(
+        '자기 자신을 상위(후임) 역사적 국가로 지정할 수 없습니다.',
+      )
+    }
     const current = await this.repository.findById(id, accountId)
     if (!current) {
       throw await this.buildAccessError(id, accountId, '수정')
@@ -251,6 +265,11 @@ export class HistoricalCountryService {
     data: CreateTransitionData,
     accountId?: string,
   ): Promise<HistoricalCountryTransitionRecord> {
+    if (data.predecessorId === data.successorId) {
+      throw new BadRequestException(
+        '자기 자신을 계승(전임·후임) 관계로 지정할 수 없습니다.',
+      )
+    }
     if (accountId) {
       const [pred, succ] = await Promise.all([
         this.repository.findById(data.predecessorId, accountId),
@@ -353,6 +372,11 @@ export class HistoricalCountryService {
     data: CreateMembershipData,
     accountId?: string,
   ): Promise<HistoricalCountryMembershipRecord> {
+    if (data.historicalCountryId === data.memberCountryId) {
+      throw new BadRequestException(
+        '자기 자신을 소속·구성 관계로 지정할 수 없습니다.',
+      )
+    }
     if (accountId) {
       const [parent, member] = await Promise.all([
         this.repository.findById(data.historicalCountryId, accountId),
@@ -439,6 +463,11 @@ export class HistoricalCountryService {
     data: CreateRelationData,
     accountId?: string,
   ): Promise<HistoricalCountryRelationRecord> {
+    if (data.subjectCountryId === data.objectCountryId) {
+      throw new BadRequestException(
+        '자기 자신과의 국가 관계는 생성할 수 없습니다.',
+      )
+    }
     if (accountId) {
       const [subj, obj] = await Promise.all([
         this.repository.findById(data.subjectCountryId, accountId),
