@@ -175,6 +175,11 @@ export const PageInner = styled.div`
  * 높이에서 시작하고, sticky는 그대로 문서 끝까지 따라온다.
  */
 export const Body = styled.div`
+  /* 휴지통에 있는 사건 — 본문은 inert(잠김)이고 흐리게 */
+  &[data-trashed] {
+    opacity: 0.55;
+  }
+
   display: grid;
   /* 기본은 한 열 — 컨테이너 쿼리 미지원 환경의 폴백이기도 하다. */
   grid-template-columns: minmax(0, 1fr);

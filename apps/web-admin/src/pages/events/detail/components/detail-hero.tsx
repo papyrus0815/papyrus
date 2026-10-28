@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useRef, useState } from 'react'
+import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { FiArrowLeft, FiAward, FiChevronDown, FiChevronUp, FiHelpCircle } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
@@ -60,6 +60,8 @@ interface DetailHeroProps {
   onOpenMedia?: () => void
   /** 종류 표지('단일 사건 ?'·'최상위 사건 ?')를 누르면 — 사건 종류 안내 창. 주면 윗줄 끝에 선다 */
   onOpenKindGuide?: () => void
+  /** 윗줄 맨 끝 — 사건 단위 동작 메뉴(⋯). 휴지통에 있는 사건이면 비운다 */
+  menu?: ReactNode
 }
 
 /**
@@ -97,6 +99,7 @@ export function DetailHero({
   onShowActors,
   onOpenMedia,
   onOpenKindGuide,
+  menu,
 }: DetailHeroProps) {
   const prefetchEvent = usePrefetchEventDetail()
   const category = eventDomainDef(event.domain)
@@ -201,6 +204,7 @@ export function DetailHero({
             <FiHelpCircle aria-hidden />
           </KindGuideButton>
         )}
+        {menu}
       </S.HeroTopRow>
 
       {/* 대표 이미지 — 넓으면 제목 오른쪽, 좁으면 제목 위 배너(S.Hero 격자) */}

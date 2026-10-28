@@ -168,6 +168,8 @@ export interface EventDetail {
   id: string
   title: string
   description?: string | null
+  /** 휴지통에 있으면 지운 시각(ISO) — 상세는 휴지통 띠를 두고 본문을 잠근다 */
+  deletedAt?: string | null
   startDate?: string | null
   startDatePrecision?: string | null
   endDate?: string | null

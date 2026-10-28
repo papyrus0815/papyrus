@@ -5,7 +5,7 @@
  * - sticky 헤더 (제목·summary clamp·액션) + 본문 (정보 그리드·배경·여파·하위)
  * - 데스크톱은 grid column, 모바일은 drawer가 호스트. 위젯은 표시/숨김 비관여.
  * - 자식 사건 선택 시에도 root event의 배경/여파 노출 (이전엔 root==selected만 표시 — 정보 손실).
- * - confirm/reload → ConfirmDialog + onAfterDelete 콜백 (페이지 새로고침 회피).
+ * - 삭제 → 공용 EventDeleteDialog(휴지통·하위 함께/남기기) + onAfterDelete 콜백 (페이지 새로고침 회피).
  * - clipboard 실패 fallback + native share API 우선 시도.
  */
 import React, { useState } from 'react'
@@ -32,7 +32,6 @@ import {
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
-import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
 /** 드로어 하위 사건 목록의 기본 노출 개수 — 나머지는 '더 보기'로 편다. */
@@ -42,9 +41,7 @@ const SECTION_PREVIEW_COUNT = 6
 
 import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { formatDomainPath } from '@/entities/event/model/event-type-registry'
-import { personKeys } from '@/entities/person/query-keys'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
-import { eventKeys } from '@/shared/api/event-query-keys'
 import { formatDateWithPrecision, isoDaySpan } from '@/shared/lib/iso-date'
 import type {
   EventHierarchyNode,
@@ -55,10 +52,9 @@ import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import * as Modal from '@/pages/events/styles/modal.styles'
 import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import { ICON_SIZE } from '@/pages/events/styles/theme'
-import { deleteEvent } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
-import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
+import { EventDeleteDialog, useDeleteEventToTrash } from '@/widgets/event/event-trash/event-trash'
 
 interface EventDetailPanelProps {
   isLoading: boolean
@@ -120,7 +116,6 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   missingEventId = null,
 }) => {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [descExpanded, setDescExpanded] = useState(false)
   /** 하위 사건 미리보기 개수 — 이 수를 넘으면 '더 보기'가 붙는다. */
   const [childrenExpanded, setChildrenExpanded] = useState(false)
@@ -202,51 +197,34 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
     }
   }
 
-  /** 삭제 — ConfirmDialog → 성공 시 onAfterDelete 콜백 (없으면 reload fallback) */
-  const handleConfirmDelete = async () => {
+  /**
+   * 삭제 — 휴지통으로(공용 EventDeleteDialog·useDeleteEventToTrash). 하위가 있으면 '함께/남기기'를 고르고,
+   * 끝나면 '되돌리기' 토스트. 성공 시 onAfterDelete 콜백(없으면 reload fallback).
+   */
+  const deleteToTrash = useDeleteEventToTrash()
+  const [deleting, setDeleting] = useState(false)
+  const handleConfirmDelete = async (withChildren: boolean) => {
     if (!selectedNode) return
+    setDeleting(true)
+    const ok = await deleteToTrash({ id: selectedNode.id, title: selectedNode.title, parentEventId: parentEventRef?.id ?? null }, withChildren)
+    setDeleting(false)
     setConfirmDeleteOpen(false)
-    try {
-      await deleteEvent(selectedNode.id)
-      // 사건은 인물 상세 '사건' 탭·국가 대시보드에도 박혀 있다 — 지운 사건이 거기 남지 않게
-      void queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
-      void queryClient.invalidateQueries({ queryKey: eventKeys.byCountryAll() })
-      // 관리자 UI에 복구 동선이 없으므로 '복구 가능'을 약속하지 않는다.
-      notify.success('사건이 삭제되었습니다.')
-      if (onAfterDelete) {
-        onAfterDelete(selectedNode.id)
-      } else {
-        // 부모가 콜백 안 주면 기존 동작 유지 (호환)
-        window.location.reload()
-      }
-    } catch {
-      notify.error('사건 삭제에 실패했습니다.')
+    if (!ok) return
+    if (onAfterDelete) {
+      onAfterDelete(selectedNode.id)
+    } else {
+      // 부모가 콜백 안 주면 기존 동작 유지 (호환)
+      window.location.reload()
     }
   }
 
   const renderHero = () => {
     if (!selectedNode) return null
     const heroUrl = selectedEvent?.visuals.heroImageUrl
-    if (heroUrl) {
-      return (
-        <Detail.HeroFigure>
-          <Detail.HeroImg src={heroUrl} alt={selectedNode.title} />
-        </Detail.HeroFigure>
-      )
-    }
-    /* placeholder — 이미지 추가는 상세의 이미지 CRUD가 담당한다(대표 지정 포함).
-       실측 대표 이미지 보유율 19/293(6.5%)이라 이쪽이 **기본 경로**다. 200px 상자를
-       예약하지 않고 한 줄 띠로 둔다($empty) — 동선은 남기고 지면은 내용에 돌려준다. */
+    if (!heroUrl) return null
     return (
-      <Detail.HeroFigure $empty>
-        <Detail.HeroPlaceholder
-          type="button"
-          aria-label="대표 이미지 추가 — 상세로 이동"
-          onClick={() => navigate(pathKeys.events.detail(selectedNode.id))}
-        >
-          <FiImage size={ICON_SIZE.base} aria-hidden="true" />
-          <span>대표 이미지 추가</span>
-        </Detail.HeroPlaceholder>
+      <Detail.HeroFigure>
+        <Detail.HeroImg src={heroUrl} alt={selectedNode.title} />
       </Detail.HeroFigure>
     )
   }
@@ -723,33 +701,16 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
         </Detail.DetailPanelEmpty>
       )}
 
-      <ConfirmDialog
-        isOpen={confirmDeleteOpen}
-        title="사건 삭제"
-        message={
-          <>
-            이 사건을 삭제하시겠습니까?
-            <br />
-            삭제 후에는 목록에서 복구할 수 없습니다.
-            {/* 서버가 살아있는 하위 사건을 최상위로 승격시킨다(계층은 복원되지
-                않음) — 삭제 전에 그 결과를 고지한다. */}
-            {selectedNode?.children && selectedNode.children.length > 0 && (
-              <>
-                <br />
-                <br />
-                하위 사건 {selectedNode.children.length}개는 삭제되지 않고{' '}
-                <strong>최상위 사건으로 이동</strong>합니다. 이 상·하위 연결은
-                되돌릴 수 없습니다.
-              </>
-            )}
-          </>
-        }
-        confirmLabel="삭제"
-        cancelLabel="취소"
-        danger
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setConfirmDeleteOpen(false)}
-      />
+      {confirmDeleteOpen && selectedNode && (
+        <EventDeleteDialog
+          isOpen
+          title={selectedNode.title}
+          childCount={selectedNode.children?.length ?? 0}
+          busy={deleting}
+          onCancel={() => setConfirmDeleteOpen(false)}
+          onConfirm={(withChildren) => void handleConfirmDelete(withChildren)}
+        />
+      )}
     </Detail.DetailPanel>
   )
 }

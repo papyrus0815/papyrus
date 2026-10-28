@@ -16,8 +16,15 @@ import { syncEventSides } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { notify } from '@/shared/ui/toast'
+import { permanentlyDeleteEvent } from '@/shared/api/events'
+import {
+  EventDeleteDialog,
+  restoreEventFromTrash,
+  TRASH_RETENTION_DAYS,
+  useDeleteEventToTrash,
+} from '@/widgets/event/event-trash/event-trash'
 import { FiPlus } from 'react-icons/fi'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { eventDomainDef, eventTypeFeatures, participantKey, toParticipants } from '@/entities/event/model'
@@ -42,6 +49,7 @@ import {
   type LoadingGate,
 } from './components/detail-loading'
 import { DetailNarrative } from './components/detail-narrative'
+import { EventActionsMenu } from './components/event-actions-menu'
 import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
 import { EventKindGuideModal } from './components/event-kind-guide-modal'
@@ -731,13 +739,75 @@ function EventDetailContent({
 
   const overviewOutline = sections.filter((item) => tabOf(item.id) === 'overview')
 
+  /**
+   * 삭제(휴지통) — 히어로 ⋯ 메뉴. 지우면 목록으로 나간다(지운 사건의 상세에 머물 이유가 없다).
+   * 휴지통에 있는 사건은 상세가 그냥 열려 편집 버튼이 다 살아 있었다(서버는 수정을 409로 거부) — 위에 띠를 두고
+   * 본문을 inert로 잠근다(읽기만, 클릭·포커스·편집 없음). 띠에서 바로 복구·영구 삭제.
+   */
+  const navigate = useNavigate()
+  const isTrashed = Boolean(event.deletedAt)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [trashBusy, setTrashBusy] = useState(false)
+  const deleteToTrash = useDeleteEventToTrash()
+  const trashTarget = { id: event.id, title: event.title, parentEventId: event.parentEventId ?? null }
+  const confirmDelete = async (withChildren: boolean) => {
+    setTrashBusy(true)
+    const ok = await deleteToTrash(trashTarget, withChildren)
+    setTrashBusy(false)
+    setDeleteOpen(false)
+    if (ok) navigate(pathKeys.events.root())
+  }
+  const restoreFromTrash = async () => {
+    setTrashBusy(true)
+    await restoreEventFromTrash(queryClient, trashTarget)
+    setTrashBusy(false)
+  }
+  const deleteForever = async () => {
+    const ok = await confirm({
+      title: '영구 삭제',
+      message: `'${event.title}'을(를) 영구 삭제할까요? 되돌릴 수 없습니다. 함께 지운 하위 사건도 함께 사라집니다.`,
+      confirmLabel: '영구 삭제',
+      danger: true,
+    })
+    if (!ok) return
+    setTrashBusy(true)
+    try {
+      await permanentlyDeleteEvent(event.id)
+      notify.success(`'${event.title}'을(를) 영구 삭제했습니다`)
+      void queryClient.invalidateQueries({ queryKey: ['events'] })
+      navigate(pathKeys.events.root())
+    } catch {
+      notify.error('영구 삭제하지 못했습니다')
+      setTrashBusy(false)
+    }
+  }
+  const trashDaysLeft = event.deletedAt
+    ? Math.max(0, TRASH_RETENTION_DAYS - Math.floor((Date.now() - new Date(event.deletedAt).getTime()) / 86_400_000))
+    : null
+
   return (
     <InlineEditProvider imageCategory="events">
       <S.Page ref={scrollRef}>
         <ReadingProgress targetRef={scrollRef} color={accentColor} />
         <S.PageInner>
           <SaveStatus isPending={mutation.isPending} lastSavedAt={lastSavedAt} />
-          <S.Body>
+          {isTrashed && (
+            <TrashBanner role="status">
+              <TrashText>
+                <strong>휴지통에 있는 사건입니다.</strong> 읽기만 할 수 있습니다
+                {trashDaysLeft != null && ` · ${trashDaysLeft}일 뒤 자동으로 영구 삭제`}
+              </TrashText>
+              <TrashActions>
+                <TrashButton type="button" $primary onClick={() => void restoreFromTrash()} disabled={trashBusy}>
+                  복구
+                </TrashButton>
+                <TrashButton type="button" onClick={() => void deleteForever()} disabled={trashBusy}>
+                  영구 삭제
+                </TrashButton>
+              </TrashActions>
+            </TrashBanner>
+          )}
+          <S.Body inert={isTrashed} data-trashed={isTrashed || undefined}>
             <DetailHero
               event={event}
               onPatch={onPatch}
@@ -747,6 +817,7 @@ function EventDetailContent({
               onShowActors={() => setActiveTab('actors')}
               onOpenMedia={() => setActiveTab('media')}
               onOpenKindGuide={() => setKindGuideOpen(true)}
+              menu={isTrashed ? undefined : <EventActionsMenu onDelete={() => setDeleteOpen(true)} />}
             />
 
             <S.TabsArea>
@@ -1009,6 +1080,17 @@ function EventDetailContent({
         </S.PageInner>
       </S.Page>
 
+      {deleteOpen && (
+        <EventDeleteDialog
+          isOpen
+          title={event.title}
+          childCount={(event.childEvents?.length ?? 0) + (event.extraChildren?.length ?? 0)}
+          busy={trashBusy}
+          onCancel={() => setDeleteOpen(false)}
+          onConfirm={(withChildren) => void confirmDelete(withChildren)}
+        />
+      )}
+
       {splitOpen && <SplitIntoChildrenModal event={event} onClose={() => setSplitOpen(false)} />}
       <EventKindGuideModal
         event={event}
@@ -1070,3 +1152,52 @@ function EventDetailError({ error }: { error: Error }) {
 }
 
 export default EventDetailPage
+
+/** 휴지통 띠 — 본문 위, 한 줄 설명 + 복구·영구 삭제 */
+const TrashBanner = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.error};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.06)')};
+`
+
+const TrashText = styled.p`
+  flex: 1 1 280px;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  word-break: keep-all;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const TrashActions = styled.div`
+  display: flex;
+  gap: 8px;
+`
+
+const TrashButton = styled.button<{ $primary?: boolean }>`
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme, $primary }) => ($primary ? ledgerAccent(theme.mode) : theme.colors.border.light)};
+  background: ${({ theme, $primary }) => ($primary ? ledgerAccent(theme.mode) : 'transparent')};
+  /* 채운 면의 전경은 지면색 — 다크 강조색은 밝은 인디고라 흰 글자가 묻힌다 */
+  color: ${({ theme, $primary }) => ($primary ? (theme.mode === 'dark' ? '#111827' : '#ffffff') : theme.colors.text.primary)};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+`

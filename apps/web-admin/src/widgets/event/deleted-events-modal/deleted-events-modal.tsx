@@ -20,13 +20,13 @@ import {
   type EventResponseDto,
   getDeletedEvents,
   permanentlyDeleteEvent,
-  restoreEvent,
 } from '@/shared/api/events'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { Modal } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
+import { restoreEventFromTrash, TRASH_RETENTION_DAYS } from '@/widgets/event/event-trash/event-trash'
 
 interface DeletedEventsModalProps {
   isOpen: boolean
@@ -39,6 +39,15 @@ function formatDeletedAt(value?: string | null): string | null {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
   return `${date.getFullYear()}. ${date.getMonth() + 1}. ${date.getDate()}. 삭제`
+}
+
+/** 자동 영구 삭제까지 남은 날 — 사흘 이하면 그렇다고 또렷이 */
+function daysLeftLabel(value?: string | null): string | null {
+  if (!value) return null
+  const deletedAt = new Date(value).getTime()
+  if (Number.isNaN(deletedAt)) return null
+  const left = TRASH_RETENTION_DAYS - Math.floor((Date.now() - deletedAt) / 86_400_000)
+  return left <= 0 ? '오늘 영구 삭제' : `${left}일 뒤 영구 삭제`
 }
 
 export function DeletedEventsModal({ isOpen, onClose }: DeletedEventsModalProps) {
@@ -56,22 +65,22 @@ export function DeletedEventsModal({ isOpen, onClose }: DeletedEventsModalProps)
     enabled: isOpen,
   })
 
+  /** 복구 — 공용 restoreEventFromTrash(최상위 복구·함께 지운 하위 복구를 알린다) */
   const handleRestore = async (event: EventResponseDto) => {
     setPendingId(event.id)
-    try {
-      const restored = await restoreEvent(event.id)
-      invalidateEventQueries(queryClient, { eventId: event.id })
-      if (event.parentEventId && !restored.parentEventId) {
-        notify.info(`'${event.title}'을(를) 복구했습니다 — 상위 사건이 삭제돼 있어 최상위로 되살렸습니다`)
-      } else {
-        notify.success(`'${event.title}'을(를) 복구했습니다`)
-      }
-    } catch {
-      notify.error('복구하지 못했습니다')
-    } finally {
-      setPendingId(null)
-    }
+    await restoreEventFromTrash(queryClient, {
+      id: event.id,
+      title: event.title,
+      parentEventId: event.parentEventId ?? null,
+    })
+    setPendingId(null)
   }
+
+  /** 제목 검색 — 휴지통이 수십 건이면 찾을 길이 스크롤뿐이었다 */
+  const [query, setQuery] = useState('')
+  const visibleEvents = query.trim()
+    ? deletedEvents.filter((event) => event.title.toLowerCase().includes(query.trim().toLowerCase()))
+    : deletedEvents
 
   const handlePermanentDelete = async (event: EventResponseDto) => {
     const ok = await confirm({
@@ -100,11 +109,20 @@ export function DeletedEventsModal({ isOpen, onClose }: DeletedEventsModalProps)
       title="삭제한 사건"
       subtitle={
         deletedEvents.length > 0
-          ? `${deletedEvents.length}건 — 복구하면 목록에 다시 나타납니다`
+          ? `${deletedEvents.length}건 — ${TRASH_RETENTION_DAYS}일 동안 복구할 수 있고, 지나면 자동으로 영구 삭제됩니다`
           : undefined
       }
       size="narrow"
     >
+      {deletedEvents.length > 5 && (
+        <Search
+          type="search"
+          value={query}
+          onChange={(changeEvent) => setQuery(changeEvent.target.value)}
+          placeholder="제목으로 찾기"
+          aria-label="삭제한 사건 제목으로 찾기"
+        />
+      )}
       <List>
         {isLoading ? (
           <Empty>불러오는 중…</Empty>
@@ -112,11 +130,14 @@ export function DeletedEventsModal({ isOpen, onClose }: DeletedEventsModalProps)
           <Empty>삭제한 사건을 불러오지 못했습니다.</Empty>
         ) : deletedEvents.length === 0 ? (
           <Empty>삭제한 사건이 없습니다.</Empty>
+        ) : visibleEvents.length === 0 ? (
+          <Empty>‘{query.trim()}’이(가) 들어간 사건이 없습니다.</Empty>
         ) : (
-          deletedEvents.map((event) => {
+          visibleEvents.map((event) => {
             const meta = [
               eventDateLabel(event),
               formatDeletedAt(event.deletedAt),
+              daysLeftLabel(event.deletedAt),
             ]
               .filter(Boolean)
               .join(' · ')
@@ -155,6 +176,17 @@ export function DeletedEventsModal({ isOpen, onClose }: DeletedEventsModalProps)
     </Modal>
   )
 }
+
+const Search = styled.input`
+  margin: 8px 16px 0;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
 
 const List = styled.ul`
   list-style: none;

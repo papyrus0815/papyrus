@@ -595,9 +595,14 @@ export async function splitEventIntoChildren(
 /**
  * 사건 삭제 (소프트 삭제)
  */
-export async function deleteEvent(id: string): Promise<void> {
+/**
+ * 사건 삭제 — 휴지통으로(30일 보관 뒤 자동 영구 삭제).
+ * withChildren: 하위 사건 전부도 함께 휴지통으로(상위 연결 보존 — 복구하면 함께 돌아온다).
+ * 아니면 살아있는 하위는 추가 상위로 옮기거나 최상위로 올라간다(복구해도 돌아오지 않는다).
+ */
+export async function deleteEvent(id: string, options: { withChildren?: boolean } = {}): Promise<void> {
   try {
-    await api.events.deleteEvent(getConnection(), id)
+    await api.events.deleteEvent(getConnection(), id, options.withChildren ? 'true' : undefined)
   } catch (error) {
     throw new Error(`사건 삭제 실패: ${error}`)
   }
