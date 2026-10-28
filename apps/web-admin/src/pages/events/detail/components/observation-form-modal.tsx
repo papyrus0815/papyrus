@@ -16,6 +16,7 @@ import {
   updateObservation,
 } from '@/shared/api/evidence'
 import { Modal } from '@/shared/ui/modal/modal'
+import { ModalBody, ModalFooter } from '@/shared/ui/modal/modal.styles'
 import { notify } from '@/shared/ui/toast'
 
 import { eventKeys } from '../use-event-detail'
@@ -148,6 +149,12 @@ export function ObservationFormModal({
     staleTime: 30_000,
   })
 
+  /**
+   * 고를 수 있는 출처 — 시드 이관용 '출처 미기재' 묶음(LEGACY_UNVERIFIED)은 뺀다. 그건 출처가 아니라
+   * '출처 없음'의 표지라, 새 수치에 고르면 출처 필수 규칙을 우회해 미검증 값이 계속 쌓였다(72/72 미검증).
+   */
+  const selectableSources = sourceResults.filter((source) => source.kind !== 'LEGACY_UNVERIFIED')
+
   const metric = metrics.find((candidate) => candidate.key === metricKey) ?? null
   /* 추천 지표는 맨 위 묶음으로 빼고, 아래 분야별 묶음에서는 뺀다(같은 값이 두 번 보이지 않게). */
   const suggestedMetrics = useMemo(
@@ -237,197 +244,206 @@ export function ObservationFormModal({
 
   return (
     <Modal isOpen onClose={onClose} title={initial ? '수치 고치기' : '수치 기록'} size="wide">
+      {/* 본문·바닥줄은 공용 ModalBody·ModalFooter — 예전엔 Form을 바로 넣어 입력칸이 모달 가장자리에
+          붙고(여백 0) 저장 버튼이 아래 테두리에 걸쳤다 */}
       <Form
         onSubmit={(formEvent) => {
           formEvent.preventDefault()
           void submit()
         }}
       >
-        <Field>
-          <Label htmlFor="obs-subject">대상</Label>
-          {initial ? (
-            <Static>{subjectLabelOf(initial)}</Static>
-          ) : (
-            <Select id="obs-subject" value={subject} onChange={(change) => setSubject(change.target.value)}>
-              {subjects.map((option) => (
-                <option key={subjectKey(option)} value={subjectKey(option)}>
-                  {option.subjectType === 'EVENT_SIDE' ? `진영 · ${option.label}` : option.label}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-
-        <Field>
-          <Label htmlFor="obs-metric">지표</Label>
-          <Select id="obs-metric" value={metricKey} onChange={(change) => setMetricKey(change.target.value)}>
-            <option value="">고르세요</option>
-            {suggestedMetrics.length > 0 && (
-              <optgroup label="자주 쓰는 지표">
-                {suggestedMetrics.map((candidate) => (
-                  <option key={candidate.key} value={candidate.key}>
-                    {candidate.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {metricsByDomain.map(([domain, group]) => (
-              <optgroup key={domain} label={DOMAIN_LABEL[domain] ?? domain}>
-                {group.map((candidate) => (
-                  <option key={candidate.key} value={candidate.key}>
-                    {candidate.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </Select>
-          {metric?.definition && <Hint>{metric.definition}</Hint>}
-        </Field>
-
-        <Field>
-          <Label as="span">값</Label>
-          <ModeRow role="radiogroup" aria-label="값 형태">
-            {(
-              [
-                ['single', '하나의 값'],
-                ['range', '범위'],
-                ['atLeast', '~이상'],
-              ] as const
-            ).map(([key, label]) => (
-              <ModeOption key={key}>
-                <input type="radio" name="obs-mode" checked={mode === key} onChange={() => setMode(key)} />
-                {label}
-              </ModeOption>
-            ))}
-            <ModeOption>
-              <input type="checkbox" checked={approx} onChange={(change) => setApprox(change.target.checked)} />
-              약(근사)
-            </ModeOption>
-          </ModeRow>
-          <Inline>
-            {mode === 'single' && (
-              <Input inputMode="decimal" placeholder="예: 44700" value={value} onChange={(change) => setValue(change.target.value)} aria-label="값" />
-            )}
-            {mode === 'range' && (
-              <>
-                <Input inputMode="decimal" placeholder="하한" value={low} onChange={(change) => setLow(change.target.value)} aria-label="하한" />
-                <span>~</span>
-                <Input inputMode="decimal" placeholder="상한" value={high} onChange={(change) => setHigh(change.target.value)} aria-label="상한" />
-                <Input inputMode="decimal" placeholder="대표값(선택)" value={value} onChange={(change) => setValue(change.target.value)} aria-label="대표값" />
-              </>
-            )}
-            {mode === 'atLeast' && (
-              <Input inputMode="decimal" placeholder="하한 — 예: 1000" value={low} onChange={(change) => setLow(change.target.value)} aria-label="하한" />
-            )}
-            {metric?.valueKind === 'MONEY' && (
-              <Input placeholder="통화 코드 (GBP · H-TAEL …)" value={currencyCode} onChange={(change) => setCurrencyCode(change.target.value)} aria-label="통화 코드" />
-            )}
-          </Inline>
-        </Field>
-
-        <Field>
-          <Label htmlFor="obs-qualifier">단서</Label>
-          <Input id="obs-qualifier" placeholder="예: 질병 사망 별도 · 보헤미아 전선 기준" value={qualifier} onChange={(change) => setQualifier(change.target.value)} />
-        </Field>
-
-        <Field>
-          <Label as="span">시점 (선택)</Label>
-          <Inline>
-            {([['시작', start, setStart], ['끝', end, setEnd]] as const).map(([label, fields, setFields]) => (
-              <PointGroup key={label}>
-                <span>{label}</span>
-                <Select value={fields.era} onChange={(change) => setFields({ ...fields, era: change.target.value as 'BC' | 'AD' })} aria-label={`${label} 기원`}>
-                  <option value="AD">서기</option>
-                  <option value="BC">기원전</option>
-                </Select>
-                <Input $narrow inputMode="numeric" placeholder="년" value={fields.year} onChange={(change) => setFields({ ...fields, year: change.target.value })} aria-label={`${label} 연도`} />
-                <Input $narrow inputMode="numeric" placeholder="월" value={fields.month} onChange={(change) => setFields({ ...fields, month: change.target.value })} aria-label={`${label} 월`} />
-                <Input $narrow inputMode="numeric" placeholder="일" value={fields.day} onChange={(change) => setFields({ ...fields, day: change.target.value })} aria-label={`${label} 일`} />
-              </PointGroup>
-            ))}
-          </Inline>
-        </Field>
-
-        <Fieldset>
-          <legend>{initial ? '출처 추가 (선택)' : '출처 (필수)'}</legend>
-          {initial && initial.citations.length > 0 && (
-            <ExistingSources>
-              {initial.citations.map((citation) => (
-                <li key={citation.id}>
-                  {citation.source.title}
-                  {citation.locator ? ` · ${citation.locator}` : ''}
-                  {citation.source.kind === 'LEGACY_UNVERIFIED' ? ' (미검증)' : ''}
-                </li>
-              ))}
-            </ExistingSources>
-          )}
-          <ModeRow role="radiogroup" aria-label="출처 입력 방식">
-            <ModeOption>
-              <input type="radio" name="obs-source-mode" checked={sourceMode === 'search'} onChange={() => setSourceMode('search')} />
-              등록된 출처
-            </ModeOption>
-            <ModeOption>
-              <input type="radio" name="obs-source-mode" checked={sourceMode === 'new'} onChange={() => setSourceMode('new')} />
-              새 출처
-            </ModeOption>
-          </ModeRow>
-          {sourceMode === 'search' ? (
-            <>
-              <Input placeholder="제목·저자·ISBN 검색" value={sourceQuery} onChange={(change) => setSourceQuery(change.target.value)} aria-label="출처 검색" />
-              <SourceList role="listbox" aria-label="출처 검색 결과">
-                {sourceResults.map((source) => (
-                  <SourceOption
-                    key={source.id}
-                    role="option"
-                    aria-selected={pickedSourceId === source.id}
-                    $selected={pickedSourceId === source.id}
-                    onClick={() => setPickedSourceId(source.id)}
-                  >
-                    {source.title}
-                    {source.authors ? ` — ${source.authors}` : ''}
-                    {source.publishedYear ? ` (${source.publishedYear})` : ''}
-                  </SourceOption>
-                ))}
-              </SourceList>
-            </>
-          ) : (
-            <Inline>
-              <Select value={newSource.kind} onChange={(change) => setNewSource({ ...newSource, kind: change.target.value as SourceKind })} aria-label="출처 종류">
-                {SOURCE_KIND_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+        <ModalBody>
+          <Field>
+            <Label htmlFor="obs-subject">대상</Label>
+            {initial ? (
+              <Static>{subjectLabelOf(initial)}</Static>
+            ) : (
+              <Select id="obs-subject" value={subject} onChange={(change) => setSubject(change.target.value)}>
+                {subjects.map((option) => (
+                  <option key={subjectKey(option)} value={subjectKey(option)}>
+                    {option.subjectType === 'EVENT_SIDE' ? `진영 · ${option.label}` : option.label}
                   </option>
                 ))}
               </Select>
-              <Input placeholder="제목" value={newSource.title} onChange={(change) => setNewSource({ ...newSource, title: change.target.value })} aria-label="출처 제목" />
-              <Input placeholder="저자·기관" value={newSource.authors} onChange={(change) => setNewSource({ ...newSource, authors: change.target.value })} aria-label="저자" />
-              <Input $narrow inputMode="numeric" placeholder="발행연도" value={newSource.publishedYear} onChange={(change) => setNewSource({ ...newSource, publishedYear: change.target.value })} aria-label="발행연도" />
-              <Input placeholder="URL" value={newSource.url} onChange={(change) => setNewSource({ ...newSource, url: change.target.value })} aria-label="URL" />
-            </Inline>
-          )}
-          <Inline>
-            <Input placeholder="위치 — p. 123, §4" value={locator} onChange={(change) => setLocator(change.target.value)} aria-label="출처 안의 위치" />
-            <Input placeholder="근거 구절(원문 인용)" value={quote} onChange={(change) => setQuote(change.target.value)} aria-label="근거 구절" />
-          </Inline>
-        </Fieldset>
+            )}
+          </Field>
 
-        <Actions>
+          <Field>
+            <Label htmlFor="obs-metric">지표</Label>
+            <Select id="obs-metric" value={metricKey} onChange={(change) => setMetricKey(change.target.value)}>
+              <option value="">고르세요</option>
+              {suggestedMetrics.length > 0 && (
+                <optgroup label="자주 쓰는 지표">
+                  {suggestedMetrics.map((candidate) => (
+                    <option key={candidate.key} value={candidate.key}>
+                      {candidate.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {metricsByDomain.map(([domain, group]) => (
+                <optgroup key={domain} label={DOMAIN_LABEL[domain] ?? domain}>
+                  {group.map((candidate) => (
+                    <option key={candidate.key} value={candidate.key}>
+                      {candidate.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </Select>
+            {metric?.definition && <Hint>{metric.definition}</Hint>}
+          </Field>
+
+          <Field>
+            <Label as="span">값</Label>
+            <ModeRow role="radiogroup" aria-label="값 형태">
+              {(
+                [
+                  ['single', '하나의 값'],
+                  ['range', '범위'],
+                  ['atLeast', '~이상'],
+                ] as const
+              ).map(([key, label]) => (
+                <ModeOption key={key}>
+                  <input type="radio" name="obs-mode" checked={mode === key} onChange={() => setMode(key)} />
+                  {label}
+                </ModeOption>
+              ))}
+              <ModeOption>
+                <input type="checkbox" checked={approx} onChange={(change) => setApprox(change.target.checked)} />
+                약(근사)
+              </ModeOption>
+            </ModeRow>
+            <Inline>
+              {mode === 'single' && (
+                <Input inputMode="decimal" placeholder="예: 44700" value={value} onChange={(change) => setValue(change.target.value)} aria-label="값" />
+              )}
+              {mode === 'range' && (
+                <>
+                  <Input inputMode="decimal" placeholder="하한" value={low} onChange={(change) => setLow(change.target.value)} aria-label="하한" />
+                  <span>~</span>
+                  <Input inputMode="decimal" placeholder="상한" value={high} onChange={(change) => setHigh(change.target.value)} aria-label="상한" />
+                  <Input inputMode="decimal" placeholder="대표값(선택)" value={value} onChange={(change) => setValue(change.target.value)} aria-label="대표값" />
+                </>
+              )}
+              {mode === 'atLeast' && (
+                <Input inputMode="decimal" placeholder="하한 — 예: 1000" value={low} onChange={(change) => setLow(change.target.value)} aria-label="하한" />
+              )}
+              {metric?.valueKind === 'MONEY' && (
+                <Input placeholder="통화 코드 (GBP · H-TAEL …)" value={currencyCode} onChange={(change) => setCurrencyCode(change.target.value)} aria-label="통화 코드" />
+              )}
+            </Inline>
+          </Field>
+
+          <Field>
+            <Label htmlFor="obs-qualifier">단서</Label>
+            <Input id="obs-qualifier" placeholder="예: 질병 사망 별도 · 보헤미아 전선 기준" value={qualifier} onChange={(change) => setQualifier(change.target.value)} />
+          </Field>
+
+          <Field>
+            <Label as="span">시점 (선택)</Label>
+            <Inline>
+              {([['시작', start, setStart], ['끝', end, setEnd]] as const).map(([label, fields, setFields]) => (
+                <PointGroup key={label}>
+                  <span>{label}</span>
+                  <Select value={fields.era} onChange={(change) => setFields({ ...fields, era: change.target.value as 'BC' | 'AD' })} aria-label={`${label} 기원`}>
+                    <option value="AD">서기</option>
+                    <option value="BC">기원전</option>
+                  </Select>
+                  <Input $narrow data-narrow inputMode="numeric" placeholder="년" value={fields.year} onChange={(change) => setFields({ ...fields, year: change.target.value })} aria-label={`${label} 연도`} />
+                  <Input $narrow data-narrow inputMode="numeric" placeholder="월" value={fields.month} onChange={(change) => setFields({ ...fields, month: change.target.value })} aria-label={`${label} 월`} />
+                  <Input $narrow data-narrow inputMode="numeric" placeholder="일" value={fields.day} onChange={(change) => setFields({ ...fields, day: change.target.value })} aria-label={`${label} 일`} />
+                </PointGroup>
+              ))}
+            </Inline>
+          </Field>
+
+          <Fieldset>
+            <legend>{initial ? '출처 추가 (선택)' : '출처 (필수)'}</legend>
+            {initial && initial.citations.length > 0 && (
+              <ExistingSources>
+                {initial.citations.map((citation) => (
+                  <li key={citation.id}>
+                    {citation.source.title}
+                    {citation.locator ? ` · ${citation.locator}` : ''}
+                    {citation.source.kind === 'LEGACY_UNVERIFIED' ? ' (미검증)' : ''}
+                  </li>
+                ))}
+              </ExistingSources>
+            )}
+            <ModeRow role="radiogroup" aria-label="출처 입력 방식">
+              <ModeOption>
+                <input type="radio" name="obs-source-mode" checked={sourceMode === 'search'} onChange={() => setSourceMode('search')} />
+                등록된 출처
+              </ModeOption>
+              <ModeOption>
+                <input type="radio" name="obs-source-mode" checked={sourceMode === 'new'} onChange={() => setSourceMode('new')} />
+                새 출처
+              </ModeOption>
+            </ModeRow>
+            {sourceMode === 'search' ? (
+              <>
+                <Input placeholder="제목·저자·ISBN 검색" value={sourceQuery} onChange={(change) => setSourceQuery(change.target.value)} aria-label="출처 검색" />
+                <SourceList role="listbox" aria-label="출처 검색 결과">
+                  {selectableSources.length === 0 && (
+                    <NoSources>등록된 출처가 없습니다 — ‘새 출처’로 책·기사·웹 문서를 적어 주세요.</NoSources>
+                  )}
+                  {selectableSources.map((source) => (
+                    <SourceOption
+                      key={source.id}
+                      role="option"
+                      aria-selected={pickedSourceId === source.id}
+                      $selected={pickedSourceId === source.id}
+                      onClick={() => setPickedSourceId(source.id)}
+                    >
+                      {source.title}
+                      {source.authors ? ` — ${source.authors}` : ''}
+                      {source.publishedYear ? ` (${source.publishedYear})` : ''}
+                    </SourceOption>
+                  ))}
+                </SourceList>
+              </>
+            ) : (
+              <Inline>
+                <Select value={newSource.kind} onChange={(change) => setNewSource({ ...newSource, kind: change.target.value as SourceKind })} aria-label="출처 종류">
+                  {SOURCE_KIND_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <Input placeholder="제목" value={newSource.title} onChange={(change) => setNewSource({ ...newSource, title: change.target.value })} aria-label="출처 제목" />
+                <Input placeholder="저자·기관" value={newSource.authors} onChange={(change) => setNewSource({ ...newSource, authors: change.target.value })} aria-label="저자" />
+                <Input $narrow data-narrow inputMode="numeric" placeholder="발행연도" value={newSource.publishedYear} onChange={(change) => setNewSource({ ...newSource, publishedYear: change.target.value })} aria-label="발행연도" />
+                <Input placeholder="URL" value={newSource.url} onChange={(change) => setNewSource({ ...newSource, url: change.target.value })} aria-label="URL" />
+              </Inline>
+            )}
+            <Inline>
+              <Input placeholder="위치 — p. 123, §4" value={locator} onChange={(change) => setLocator(change.target.value)} aria-label="출처 안의 위치" />
+              <Input placeholder="근거 구절(원문 인용)" value={quote} onChange={(change) => setQuote(change.target.value)} aria-label="근거 구절" />
+            </Inline>
+          </Fieldset>
+
+        </ModalBody>
+        <ModalFooter>
           <Button type="button" onClick={onClose}>
             취소
           </Button>
           <Button type="submit" $primary disabled={saving}>
             {saving ? '저장 중…' : '저장'}
           </Button>
-        </Actions>
+        </ModalFooter>
       </Form>
     </Modal>
   )
 }
 
+/* 폼이 본문(스크롤)과 바닥줄을 함께 감싼다 — 모달 높이 안에서 본문만 스크롤되도록 min-height 0 */
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  flex: 1;
+  min-height: 0;
 `
 
 const Field = styled.div`
@@ -485,9 +501,13 @@ const Select = styled.select`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+/*
+ * flex는 가로 줄(Inline) 안에서만 — 세로로 쌓이는 Field 안에서 'flex: 1 1 140px'가 **높이 140px**로
+ * 먹어 단서·출처 검색 한 줄 입력이 거대한 상자로 보였다.
+ */
 const Input = styled.input<{ $narrow?: boolean }>`
   ${controlStyle}
-  flex: ${({ $narrow }) => ($narrow ? '0 0 72px' : '1 1 140px')};
+  flex: ${({ $narrow }) => ($narrow ? '0 0 72px' : '0 0 auto')};
   min-width: 0;
   border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.16)')};
@@ -500,6 +520,16 @@ const Inline = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+
+  > ${Input}:not([data-narrow]) {
+    flex: 1 1 140px;
+  }
+`
+
+const NoSources = styled.li`
+  padding: 6px 2px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const PointGroup = styled.div`
@@ -552,12 +582,6 @@ const SourceOption = styled.li<{ $selected: boolean }>`
   &:hover {
     background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
   }
-`
-
-const Actions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 `
 
 const Button = styled.button<{ $primary?: boolean }>`
