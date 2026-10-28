@@ -16,6 +16,7 @@ import {
   plainTextLength,
   sectionKindOf,
   shouldCollapseBackground,
+  shouldCollapseLongSection,
   type SectionRow,
   splitTitlePeriod,
   syncRowsWithServer,
@@ -225,5 +226,14 @@ describe('긴 배경 줄여 보기', () => {
     expect(
       shouldCollapseBackground({ length: LONG_BACKGROUND_CHARS, hasFollowingContent: true }),
     ).toBe(false)
+  })
+})
+
+describe('전개·여파 처음 접힘', () => {
+  it('전개는 5,000자 초과, 여파는 2,500자 초과일 때만', () => {
+    expect(shouldCollapseLongSection('narrative', 5000)).toBe(false)
+    expect(shouldCollapseLongSection('narrative', 5001)).toBe(true)
+    expect(shouldCollapseLongSection('aftermath', 2501)).toBe(true)
+    expect(shouldCollapseLongSection('aftermath', 2000)).toBe(false)
   })
 })

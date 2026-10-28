@@ -254,3 +254,15 @@ export function shouldCollapseBackground(input: {
 }): boolean {
   return input.length > LONG_BACKGROUND_CHARS && input.hasFollowingContent
 }
+
+/**
+ * 전개·여파의 처음 접힘 — 배경과 달리 '뒤에 본문이 있나'를 보지 않는다(전개는 본론, 여파는 끝이라).
+ * 전개는 본론이라 아주 길 때만(5,000자 초과 29건 — 일본 최초 철도 전개 16,267px), 여파는 2,500자 초과(36건).
+ * 그보다 짧아도 1,200자를 넘으면 '줄여 보기' 버튼은 늘 있다.
+ */
+export const LONG_NARRATIVE_CHARS = 5000
+export const LONG_AFTERMATH_CHARS = 2500
+
+export function shouldCollapseLongSection(kind: 'narrative' | 'aftermath', length: number): boolean {
+  return length > (kind === 'narrative' ? LONG_NARRATIVE_CHARS : LONG_AFTERMATH_CHARS)
+}

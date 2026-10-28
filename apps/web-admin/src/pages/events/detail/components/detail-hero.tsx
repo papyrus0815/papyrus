@@ -1,6 +1,6 @@
-import { type MouseEvent } from 'react'
+import { type MouseEvent, useEffect, useRef, useState } from 'react'
 
-import { FiArrowLeft, FiAward, FiHelpCircle } from 'react-icons/fi'
+import { FiArrowLeft, FiAward, FiChevronDown, FiChevronUp, FiHelpCircle } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -275,21 +275,95 @@ export function DetailSummary({
   /** 처음부터 입력칸으로 — 묶음 '전체 글' 안내의 '요약 쓰기'로 열었을 때 */
   autoEdit?: boolean
 }) {
+  /**
+   * 긴 요약은 다섯 줄까지만 — 요약이 600자를 넘는 사건이 44건(최대 1,630자)이고, 일본 최초 철도는 요약만
+   * 5문단(약 770px)이라 배경이 첫 화면 밖으로 밀렸다. 넘칠 때만 '요약 전체 보기'가 생기고, 편집을 시작하면
+   * (포커스 진입) 저절로 펼친다 — 잘린 채 편집하면 커서가 안 보인다.
+   */
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [overflowing, setOverflowing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  useEffect(() => {
+    const node = contentRef.current
+    if (!node) return undefined
+    const measure = () => {
+      if (expanded) return
+      /* 반 줄 미만 넘침은 무시 — 딱 다섯 줄에도 '더 보기'가 붙지 않게 */
+      setOverflowing(node.scrollHeight > node.clientHeight + 12)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [expanded, event.description])
+  const clamped = overflowing && !expanded
+
   return (
     <SummaryHost>
-      <InlineText
-        autoEdit={autoEdit}
-        value={event.description ?? ''}
-        /* 비우면 빈 문자열 전송 → 컬럼 비움(`|| undefined`는 서버가 무시). */
-        onSave={(next) => onPatch({ description: next.trim() })}
-        placeholder="요약 — 한두 단락"
-        multiline
-        multilineEnter
-        renderRead={renderEmphasis}
-      />
+      <SummaryClamp
+        ref={contentRef}
+        $limit={!expanded}
+        $fade={clamped}
+        onFocusCapture={() => setExpanded(true)}
+      >
+        <InlineText
+          autoEdit={autoEdit}
+          value={event.description ?? ''}
+          /* 비우면 빈 문자열 전송 → 컬럼 비움(`|| undefined`는 서버가 무시). */
+          onSave={(next) => onPatch({ description: next.trim() })}
+          placeholder="요약 — 한두 단락"
+          multiline
+          multilineEnter
+          renderRead={renderEmphasis}
+        />
+      </SummaryClamp>
+      {(clamped || (overflowing && expanded)) && (
+        <SummaryToggle type="button" aria-expanded={expanded} onClick={() => setExpanded((prev) => !prev)}>
+          {expanded ? <FiChevronUp aria-hidden /> : <FiChevronDown aria-hidden />}
+          {expanded ? '요약 접기' : '요약 전체 보기'}
+        </SummaryToggle>
+      )}
     </SummaryHost>
   )
 }
+
+/**
+ * 요약 다섯 줄 상자 — 높이 제한($limit)은 넘침을 재기 위해 접힌 동안 늘 걸고, 아래 흐림($fade)은 실제로 넘칠
+ * 때만(짧은 요약의 마지막 줄이 괜히 흐려지지 않게). 흐림은 mask라 지면색을 몰라도 된다.
+ */
+const SummaryClamp = styled.div<{ $limit: boolean; $fade: boolean }>`
+  ${({ $limit }) => ($limit ? 'max-height: calc(1.65em * 5); overflow: hidden;' : '')}
+  ${({ $fade }) => ($fade ? 'mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2em), transparent);' : '')}
+`
+
+const SummaryToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+`
 
 /* 한 열 배치 전용 날짜 줄 — 2열(≥920)에서는 옆 장부가 같은 값을 크게 말하므로 숨긴다. */
 const NarrowDateLine = styled.div`

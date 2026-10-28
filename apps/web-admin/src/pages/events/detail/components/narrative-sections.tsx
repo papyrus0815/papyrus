@@ -14,7 +14,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 
-import { FiArrowDown, FiArrowUp, FiChevronDown, FiPlus, FiTrash2, FiType } from 'react-icons/fi'
+import { FiArrowDown, FiArrowUp, FiChevronDown, FiCornerUpRight, FiPlus, FiTrash2, FiType } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -28,13 +28,20 @@ import {
 import { metaText } from '@/pages/events/styles/theme'
 import { type MentionItem } from '@/shared/lib/mention/mention-system'
 import { emphasisToHtml } from '@/shared/lib/emphasis-markup'
+import { tidyProseHtml } from '@/shared/lib/prose-tidy'
 
 import * as S from '../styles'
 import { InlineRichText, InlineSelect, InlineText } from './inline'
-import { plainTextLength, type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
+import { plainTextLength, type SectionKind, type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
 import { REVEAL_ANCHOR_EVENT, revealAnchor } from './scroll-to-anchor'
 
 export * from './narrative-sections.lib'
+
+/**
+ * 본문 읽기 변환 — 빈 단락·빈 글꼴을 걷고(편집기 찌꺼기가 구분선 앞뒤로 150px 빈칸을 만들었다) `*강조*`를 굵게.
+ * 배경·전개·여파 요약과 단락 본문이 함께 쓴다(저장값은 그대로).
+ */
+export const readProseHtml = (html: string) => emphasisToHtml(tidyProseHtml(html))
 
 interface NarrativeSectionListProps {
   rows: SectionRow[]
@@ -73,6 +80,12 @@ interface NarrativeSectionListProps {
   clampLead?: boolean
   /** 잘린 요약으로 편집 포커스가 들어왔다 — 잘린 채로 편집하면 커서가 안 보인다 */
   onRequestExpand?: () => void
+  /**
+   * 다른 섹션으로 옮기기 — '배경으로'·'여파로'처럼. 전개에 '배경' 단락이 섞인 사건이 9건이었는데,
+   * 옮길 길이 없어 지우고 다시 써야 했다. 주면 단락 도구에 '옮기기'가 생긴다.
+   */
+  moveTargets?: ReadonlyArray<{ kind: SectionKind; label: string }>
+  onMoveToSection?: (index: number, kind: SectionKind) => void
 }
 
 export function NarrativeSectionList({
@@ -91,7 +104,11 @@ export function NarrativeSectionList({
   collapsed = false,
   clampLead = false,
   onRequestExpand,
+  moveTargets,
+  onMoveToSection,
 }: NarrativeSectionListProps) {
+  /** '옮기기' 메뉴가 열린 단락 */
+  const [moveMenuKey, setMoveMenuKey] = useState<string | null>(null)
   /**
    * '제목 붙이기'로 연 단락들 — 제목이 빈 채로도 입력을 띄워 두려면 이 기억이 필요하다
    * (값이 여전히 빈 문자열이라 title만 보고는 "열어 둔 것"과 "없는 것"을 구분 못 한다).
@@ -258,6 +275,44 @@ export function NarrativeSectionList({
                   >
                     <FiArrowDown />
                   </RowActionBtn>
+                  {moveTargets && moveTargets.length > 0 && onMoveToSection && (
+                    <MoveHost
+                      onBlur={(blurEvent) => {
+                        if (!blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) setMoveMenuKey(null)
+                      }}
+                      onKeyDown={(keyEvent) => {
+                        if (keyEvent.key === 'Escape') setMoveMenuKey(null)
+                      }}
+                    >
+                      <RowActionBtn
+                        type="button"
+                        aria-haspopup="menu"
+                        aria-expanded={moveMenuKey === row.key}
+                        onClick={() => setMoveMenuKey((current) => (current === row.key ? null : row.key))}
+                        aria-label={`${ordinal}단락 다른 섹션으로 옮기기`}
+                        title="다른 섹션으로 옮기기"
+                      >
+                        <FiCornerUpRight />
+                      </RowActionBtn>
+                      {moveMenuKey === row.key && (
+                        <MoveMenu role="menu">
+                          {moveTargets.map((target) => (
+                            <MoveMenuItem
+                              key={target.kind}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setMoveMenuKey(null)
+                                onMoveToSection(index, target.kind)
+                              }}
+                            >
+                              {target.label}
+                            </MoveMenuItem>
+                          ))}
+                        </MoveMenu>
+                      )}
+                    </MoveHost>
+                  )}
                   <RowActionBtn
                     type="button"
                     onClick={() => onRemove(index)}
@@ -281,7 +336,7 @@ export function NarrativeSectionList({
                   label={`${labelPrefix} ${ordinal}단락 본문`}
                   onPersonClick={onPersonClick}
                   onEntityLink={onEntityLink}
-                  transformReadHtml={emphasisToHtml}
+                  transformReadHtml={readProseHtml}
                   autoOpen={row.key === bodyOpenKey}
                   /**
                    * sticky ✎ 금지 — sticky는 '개요'처럼 페이지를 통째로 차지하는 긴 본문
@@ -408,7 +463,8 @@ const SectionHead = styled.div`
   align-items: baseline;
   gap: 10px;
   /* 우측 액션이 제목 위로 올라타지 않도록 비워 두는 폭(3 × 24 + 간격). */
-  padding-right: 84px;
+  /* 오른쪽 도구가 제목 위로 올라타지 않도록 비워 두는 폭(4 × 24 + 간격) */
+  padding-right: 112px;
   min-height: 23px;
 `
 
@@ -612,6 +668,47 @@ const AddTitleBtn = styled.button`
  * 단락 하나를 옮기거나 지우는 것뿐이었다. 그 단락에 손이 닿을 때 제자리에 띄운다.
  * absolute라 나타나고 사라져도 글이 밀리지 않는다.
  */
+/** '옮기기' 단추 + 그 아래 작은 메뉴 */
+const MoveHost = styled.span`
+  position: relative;
+  display: inline-flex;
+`
+
+const MoveMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+  padding: 4px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? '0 6px 18px rgba(0, 0, 0, 0.5)' : '0 6px 18px rgba(15, 23, 42, 0.1)'};
+`
+
+const MoveMenuItem = styled.button`
+  padding: 6px 10px;
+  border: none;
+  border-radius: ${RADIUS.XS};
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
+    outline: none;
+  }
+`
+
 const RowActions = styled.div`
   position: absolute;
   top: 0;
