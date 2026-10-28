@@ -434,7 +434,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     return (
       <Step
         key={node.id}
-        $nested={nested}
+        $depth={node.depth}
         data-selected={checked || undefined}
         data-drop={hint?.type}
         data-dragging={draggingId === node.id || undefined}
@@ -455,7 +455,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             data-grab={canDrag || undefined}
             title={canDrag ? '끌어서 다른 묶음 밑으로 옮기거나, 개별 사건 위에 놓아 함께 묶기' : undefined}
           >
-            <Node $collection={node.isCollection} $nested={nested} aria-hidden>
+            <Node $collection={node.isCollection} $depth={node.depth} aria-hidden>
               {ordinal}
             </Node>
           </NodeCol>
@@ -530,9 +530,10 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             </GroupPromptForm>
           )}
           {node.isCollection && !collapsed && (
-            <NestedSteps>
-              {node.children.map((child, childIndex) => renderRow(child, String(childIndex + 1)))}
-              <NestedFooterItem>
+            <NestedSteps $depth={node.depth + 1}>
+              {/* 하위 번호는 상위 번호를 잇는다 — 3의 하위는 3-1·3-2, 그 하위는 3-1-1(몇 번째 국면의 몇 번째인지) */}
+              {node.children.map((child, childIndex) => renderRow(child, `${ordinal}-${childIndex + 1}`))}
+              <NestedFooterItem $depth={node.depth + 1}>
                 <CollectionFooter
                   collection={{ id: node.id, title: node.title, childIds: node.children.map((child) => child.id) }}
                   liftTo={node.parentEventId ?? event.id}
@@ -728,7 +729,7 @@ const NextStep = styled.div`
   &::before {
     content: '';
     position: absolute;
-    left: 11px;
+    left: 13px;
     top: -10px;
     height: 30px;
     border-left: 2px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
@@ -755,11 +756,11 @@ const AddChildRow = styled.button`
   flex: 1;
   min-width: 0;
   display: grid;
-  /* 위 마디들과 같은 노드 열(24px)·간격(14px) — '+' 노드가 세로선 위에 선다 */
-  grid-template-columns: 24px minmax(0, 1fr);
+  /* 위 마디들과 같은 노드 열(28px)·간격(12px) — '+' 노드가 세로선 위에 선다 */
+  grid-template-columns: 28px minmax(0, 1fr);
   /* 노드는 제목 첫 줄에 — 설명이 둘째 줄로 내려가도 '+'가 가운데로 끌려 내려가지 않게 */
   align-items: start;
-  gap: 14px;
+  gap: 12px;
   /* 좌우 8px 안쪽 여백만큼 바깥으로 — 번호 열·제목 열이 위 행들과 같은 x에 선다 */
   margin: 0 0 0 -8px;
   padding: 10px 8px;
@@ -924,6 +925,12 @@ const TextButton = styled.button`
  */
 const NODE = 24
 const NESTED_NODE = 20
+/**
+ * 노드 열 폭 — 깊이마다 번호가 길어진다(3 → 3-1 → 3-1-2). 노드는 번호 길이만큼 늘어나는 알약이라,
+ * 열을 그 길이에 맞춰 넓혀야 세로선(열 가운데)이 노드 가운데를 지난다.
+ */
+const columnOf = (depth: number) => (depth <= 1 ? 28 : depth === 2 ? 40 : 52)
+const nodeSizeOf = (depth: number) => (depth <= 1 ? NODE : NESTED_NODE)
 /** 세로선 x — 노드 가운데(선 2px) */
 const lineLeft = (size: number) => size / 2 - 1
 
@@ -942,7 +949,7 @@ const Steps = styled.ol`
   &::before {
     content: '';
     position: absolute;
-    left: ${lineLeft(NODE)}px;
+    left: ${lineLeft(columnOf(1))}px;
     top: ${NODE / 2}px;
     bottom: 6px;
     width: 2px;
@@ -960,11 +967,11 @@ const Steps = styled.ol`
   }
 `
 
-const Step = styled.li<{ $nested?: boolean }>`
+const Step = styled.li<{ $depth: number }>`
   position: relative;
   display: grid;
-  grid-template-columns: ${({ $nested }) => ($nested ? NESTED_NODE : NODE)}px minmax(0, 1fr);
-  column-gap: ${({ $nested }) => ($nested ? 10 : 14)}px;
+  grid-template-columns: ${({ $depth }) => columnOf($depth)}px minmax(0, 1fr);
+  column-gap: ${({ $depth }) => ($depth > 1 ? 10 : 12)}px;
   border-radius: ${RADIUS.SM};
   transition:
     background 0.12s,
@@ -1013,22 +1020,26 @@ const NodeCol = styled.div`
  * 노드 — 개별은 원, 묶음은 둥근 사각(강조색 테두리·옅은 면). 지면색 후광이 세로선을 끊어 노드가 선 위에 꿰인 것처럼.
  * 손이 닿으면(가장 안쪽 행만) 강조색으로 차서 '잡을 수 있다'를 말한다.
  */
-const Node = styled.span<{ $collection: boolean; $nested: boolean }>`
+const Node = styled.span<{ $collection: boolean; $depth: number }>`
   position: relative;
   z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: ${({ $nested }) => ($nested ? NESTED_NODE : NODE)}px;
-  height: ${({ $nested }) => ($nested ? NESTED_NODE : NODE)}px;
-  border-radius: ${({ $collection }) => ($collection ? '7px' : '50%')};
+  /* 알약 — 한 자리 번호는 원, 3-1처럼 길어지면 옆으로 늘어난다 */
+  min-width: ${({ $depth }) => nodeSizeOf($depth)}px;
+  height: ${({ $depth }) => nodeSizeOf($depth)}px;
+  padding: 0 ${({ $depth }) => ($depth > 1 ? 5 : 4)}px;
+  white-space: nowrap;
+  border-radius: ${({ $collection }) => ($collection ? '7px' : '999px')};
   border: 2px solid
     ${({ theme, $collection }) => ($collection ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode))};
   background: ${({ theme, $collection }) =>
     $collection ? ledgerAccentSubtle(theme.mode) : ledgerBackground(theme.mode)};
   box-shadow: 0 0 0 4px ${({ theme }) => ledgerBackground(theme.mode)};
-  font-size: ${({ $nested }) => ($nested ? 10.5 : 11.5)}px;
+  font-size: ${({ $depth }) => ($depth > 1 ? 10.5 : 11.5)}px;
+  letter-spacing: -0.02em;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -1192,7 +1203,7 @@ const DropLabel = styled.span`
 `
 
 /** 묶음의 하위 — 본문 열 안에서 한 단 작은 타임라인 */
-const NestedSteps = styled.ol`
+const NestedSteps = styled.ol<{ $depth: number }>`
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1204,7 +1215,7 @@ const NestedSteps = styled.ol`
   &::before {
     content: '';
     position: absolute;
-    left: ${lineLeft(NESTED_NODE)}px;
+    left: ${({ $depth }) => lineLeft(columnOf($depth))}px;
     top: ${NESTED_NODE / 2}px;
     bottom: 10px;
     width: 2px;
@@ -1214,8 +1225,8 @@ const NestedSteps = styled.ol`
 `
 
 /** 묶음 끝 줄 — 하위 타임라인의 마지막 마디(노드 열만큼 들여서 제목 열에 맞춘다) */
-const NestedFooterItem = styled.li`
-  padding: 0 0 0 ${NESTED_NODE + 10}px;
+const NestedFooterItem = styled.li<{ $depth: number }>`
+  padding: 0 0 0 ${({ $depth }) => columnOf($depth) + 10}px;
 `
 
 /** 끄는 동안 지면 위쪽에 붙는 띠 — 여기 놓으면 이 사건 바로 밑(묶음에서 꺼내기) */
@@ -1353,31 +1364,54 @@ const Phases = styled.div`
  * 건수)과 위 경계선으로 갈라, 타임라인이 구획마다 끊겼다 다시 시작한다. **기간 밖(이전·이후) 구획은 세로선을
  * 점선으로** — 상위 사건의 기간 바깥이라는 것을 선 모양이 말한다(예전엔 작은 라벨 하나라 구획이 안 갈렸다).
  */
+/**
+ * 구획 — 상위 기간에 비춘 '시작 이전 · 기간 중 · 끝난 뒤 · 날짜 미상'. 구획마다 **면이 있는 머리 띠**로 갈라
+ * (기간 중 = 강조색 옅은 면, 기간 밖 = 점선 테두리), 스크롤하는 동안 탭 아래에 붙어 지금 어느 구획을 읽는지
+ * 늘 보인다. 기간 밖 구획은 세로선도 점선이다. 예전엔 작은 라벨 + 머리카락선뿐이라 구획이 안 갈렸다.
+ */
 const PhaseGroup = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 
   & + & {
-    padding-top: 22px;
-    border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    margin-top: 14px;
   }
 `
 
 const PhaseHead = styled.h3`
+  position: sticky;
+  /* 탭 줄(sticky top 0) 바로 아래 */
+  top: 48px;
+  z-index: 3;
   margin: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 10px;
+  padding: 10px 14px 10px 0;
+  border-radius: 10px;
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  /* 띠 아래로 지나가는 행 글자가 비치지 않게 불투명 — 지면색 위에 옅은 색을 한 겹 */
+  background: ${({ theme }) =>
+    `linear-gradient(${theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.035)'}, ${
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.035)'
+    }), ${ledgerBackground(theme.mode)}`};
+
+  [data-phase='during'] > & {
+    border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) =>
+      `linear-gradient(${ledgerAccentSubtle(theme.mode)}, ${ledgerAccentSubtle(theme.mode)}), ${ledgerBackground(theme.mode)}`};
+  }
 `
 
-/** 구획 표지 — 노드 열 자리. 기간 중은 강조색으로 찬 사각, 기간 밖은 테두리만, 날짜 미상은 회색 */
+/** 구획 표지 — 노드 열 자리(세로선 위). 기간 중은 강조색으로 찬 사각, 기간 밖은 테두리만, 날짜 미상은 회색 */
 const PhaseMark = styled.span`
   display: inline-block;
+  flex-shrink: 0;
   width: 12px;
   height: 12px;
-  margin: 0 ${(NODE - 12) / 2 + 14 - 10}px 0 ${(NODE - 12) / 2}px;
+  margin: 0 0 0 ${(28 - 12) / 2}px;
   border-radius: 3px;
   border: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
   background: transparent;
@@ -1391,7 +1425,8 @@ const PhaseMark = styled.span`
 `
 
 const PhaseLabel = styled.span`
-  font-size: 15px;
+  margin-left: 6px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
