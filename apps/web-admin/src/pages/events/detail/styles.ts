@@ -149,7 +149,8 @@ export const PageInner = styled.div`
   padding: 32px clamp(24px, 3vw, 56px) 96px;
 
   @media (max-width: 768px) {
-    padding: 18px 16px 72px;
+    /* 아래 104px — 좁은 화면엔 좌하단에 떠 있는 메뉴 버튼(전역)이 댓글 입력칸을 덮었다(390px 실측) */
+    padding: 18px 16px 104px;
   }
 `
 
@@ -439,6 +440,11 @@ export const HeroTopRow = styled.div`
   flex-wrap: wrap;
   font-size: 12px;
   color: ${metaText};
+
+  /* 좁은 화면엔 우상단에 전역 아바타(48px)가 떠 있다 — 윗줄 끝의 '단일 사건 ?' 칩이 그 밑에 깔렸다 */
+  @media (max-width: 768px) {
+    padding-right: 56px;
+  }
 `
 
 export const Breadcrumb = styled.nav`

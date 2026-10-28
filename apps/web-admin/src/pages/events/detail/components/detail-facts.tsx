@@ -586,6 +586,11 @@ const FoldedNote = styled.button`
     margin-left: auto;
   }
 
+  /* 휴대폰 폭에선 위치 줄 옆에 안 들어가 한 줄을 따로 먹었다 — 같은 버튼이 개요 끝 '더 채울 수 있는 것'에 있다 */
+  @container eventdetail (max-width: 639px) {
+    display: none;
+  }
+
   padding: 2px 0;
   border: none;
   background: transparent;

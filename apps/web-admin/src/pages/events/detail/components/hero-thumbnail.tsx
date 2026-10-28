@@ -197,6 +197,12 @@ const Frame = styled.div`
     max-height: none;
   }
 
+  /* 휴대폰 폭 — 16:9 배너가 200px을 먹어 탭이 y=610(화면 844의 72%)에야 섰다. 얇은 띠로 */
+  @container eventdetail (max-width: 639px) {
+    aspect-ratio: 21 / 9;
+    max-height: 148px;
+  }
+
   &[data-drag] {
     outline: 2px dashed ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 3px;
@@ -305,9 +311,10 @@ const EmptyDrop = styled.button`
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 64px;
-  padding: 12px 16px;
-  border: 1.5px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  /* 64px이었다 — 글이 하나도 없는 사건에선 제목보다 이 빈 칸이 먼저, 더 크게 보였다 */
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   border-radius: ${RADIUS.MD};
   background: transparent;
   font: inherit;

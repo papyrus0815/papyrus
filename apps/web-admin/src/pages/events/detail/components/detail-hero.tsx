@@ -197,7 +197,7 @@ export function DetailHero({
             aria-label={`사건 종류 안내 — 지금 ${kindLabel}`}
             title="단일 사건과 묶음(최상위) 사건 — 어떻게 바꾸나요?"
           >
-            {kindLabel}
+            <KindLabel>{kindLabel}</KindLabel>
             <FiHelpCircle aria-hidden />
           </KindGuideButton>
         )}
@@ -773,6 +773,10 @@ const KindGuideButton = styled.button`
   gap: 5px;
   padding: 3px 6px 3px 10px;
   border-radius: 999px;
+
+  @container eventdetail (max-width: 639px) {
+    padding: 3px 6px;
+  }
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   font: inherit;
@@ -792,6 +796,13 @@ const KindGuideButton = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
+  }
+`
+
+/** 휴대폰 폭에선 '?'만 — 글자까지 서면 우상단 아바타를 피하느라 윗줄이 두 줄이 됐다(이름은 aria-label이 든다) */
+const KindLabel = styled.span`
+  @container eventdetail (max-width: 639px) {
+    display: none;
   }
 `
 
