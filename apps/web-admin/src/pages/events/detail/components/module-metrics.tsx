@@ -20,6 +20,8 @@ import * as S from '../styles'
 import { type EventDetail, eventKeys, eventObservationsQueryOptions } from '../use-event-detail'
 import { MODULE_COLOR } from './module-colors'
 import { ObservationFormModal, type ObservationSubjectOption } from './observation-form-modal'
+import { withSideColors } from './side-colors'
+import { buildSideMetricRows, formatRate, lossRate } from './side-metrics.lib'
 
 interface ModuleMetricsProps {
   event: EventDetail
@@ -30,15 +32,17 @@ const NEUTRAL = '#64748b'
 /**
  * 수치(D3) — 병력·사상자·비용 같은 측정값. 숫자의 정본이 본문이 아니라 여기 있다.
  *
- * 맨 위는 **진영 비교** — 같은 지표를 두 진영 이상이 가지면 막대로 나란히 그린다(범위는 수염).
- * 아래는 대상(사건 전체·진영·참여국)별 목록. 출처가 검증되지 않은 값은 숨기지 않고 표시한다.
+ * 맨 위는 **진영 비교표** — 진영 값은 '지표 행 × 진영 열' 한 표에, 칸마다 값 + 행 눈금 막대(범위는 수염).
+ * 동원 병력과 손실이 다 있으면 손실률(계산) 줄. 아래는 진영 밖 대상(사건 전체·참여국)별 목록.
+ * 출처가 검증되지 않은 값은 숨기지 않고 막대를 흐리게 그린다.
  */
 export function ModuleMetrics({ event }: ModuleMetricsProps) {
   const queryClient = useQueryClient()
   const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
   const [editing, setEditing] = useState<Observation | 'new' | null>(null)
 
-  const sides = useMemo(() => event.sides ?? [], [event.sides])
+  /* 색 없는 진영은 순서대로 팔레트 — 비교 막대가 둘 다 같은 회색이면 어느 편인지 모른다 */
+  const sides = useMemo(() => withSideColors(event.sides ?? []), [event.sides])
   /* 지표 추천·첫 대상·빈 안내는 형식이, 형식이 정하지 않으면 분야가 정한다(경제 사건에 '병력·사상자'를 권하지 않게) */
   const features = eventTypeFeatures(event.type, event.domain)
 
@@ -67,35 +71,41 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
       (option) => option.subjectType === observation.subjectType && option.subjectId === observation.subjectId,
     )
 
-  /** 진영 비교 — 진영 대상 측정값을 지표별로 묶어, 진영 둘 이상이 가진 지표만 */
-  const comparisons = useMemo(() => {
-    const byMetric = new Map<string, { name: string; rows: Array<{ observation: Observation; side: (typeof sides)[number] }> }>()
-    for (const observation of observations) {
-      if (observation.subjectType !== 'EVENT_SIDE') continue
-      const side = sides.find((candidate) => candidate.id === observation.subjectId)
-      if (!side || !observationExtent(observation)) continue
-      const group = byMetric.get(observation.metric.key) ?? { name: observation.metric.name, rows: [] }
-      group.rows.push({ observation, side })
-      byMetric.set(observation.metric.key, group)
-    }
-    return [...byMetric.entries()]
-      .filter(([, group]) => new Set(group.rows.map((row) => row.side.id)).size >= 2)
-      .map(([key, group]) => ({ key, ...group }))
-  }, [observations, sides])
+  /**
+   * 진영 비교표 — 진영 대상 측정값은 '지표 행 × 진영 열' 표 하나로(side-metrics.lib).
+   * 예전엔 막대 차트와 진영별 목록이 같은 값을 두 번 보였다. 열은 측정값이 하나라도 있는 진영만.
+   */
+  const sideRows = useMemo(() => buildSideMetricRows(observations, sides.map((side) => side.id)), [observations, sides])
+  const tableSides = useMemo(
+    () => sides.filter((side) => sideRows.some((row) => row.cells.has(side.id))),
+    [sides, sideRows],
+  )
+  /* 손실률(파생) — 동원 병력과 손실 지표가 하나씩 있는 진영만. 한 진영이라도 있으면 줄을 세운다 */
+  const lossRates = useMemo(
+    () => new Map(tableSides.map((side) => [side.id, lossRate(sideRows, side.id)] as const)),
+    [tableSides, sideRows],
+  )
+  const hasLossRate = [...lossRates.values()].some(Boolean)
 
-  /** 목록 — 대상 순서(사건 → 진영 → 참여국)대로 */
+  /** 목록 — 비교표에 든 진영 값을 뺀 나머지(사건 전체 → 참여국) */
   const grouped = useMemo(() => {
     const groups = new Map<string, Observation[]>()
     for (const observation of observations) {
+      if (observation.subjectType === 'EVENT_SIDE' && sides.some((side) => side.id === observation.subjectId)) continue
       const key = `${observation.subjectType}:${observation.subjectId}`
       groups.set(key, [...(groups.get(key) ?? []), observation])
     }
     return subjects
       .map((option) => ({ option, rows: groups.get(`${option.subjectType}:${option.subjectId}`) ?? [] }))
       .filter((group) => group.rows.length > 0)
-  }, [observations, subjects])
+  }, [observations, subjects, sides])
 
   const unverifiedCount = observations.filter(isUnverified).length
+  /**
+   * 전부 미검증이면 행마다 '출처 미검증'을 달지 않는다 — 위 경고 한 줄이 이미 말한다(보불전쟁: 경고 1 + 배지 17).
+   * 검증된 값과 섞여 있을 때만 미검증 행에 배지를 단다(그때는 어느 값인지가 정보다).
+   */
+  const allUnverified = observations.length > 0 && unverifiedCount === observations.length
 
   const remove = async (observation: Observation) => {
     const ok = await confirm({
@@ -121,7 +131,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
           <S.SectionTitleDot $color={MODULE_COLOR.metrics} />
           수치
         </S.SectionTitle>
-        {observations.length > 0 && <S.SectionSubtitle>{observations.length}개</S.SectionSubtitle>}
+        {observations.length > 0 && <S.SectionSubtitle>{observations.length}</S.SectionSubtitle>}
         <S.SectionActions>
           <AddButton type="button" onClick={() => setEditing('new')}>
             <FiPlus /> 수치 추가
@@ -132,52 +142,120 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
       {unverifiedCount > 0 && (
         <Warning role="note">
           <FiAlertTriangle aria-hidden="true" />
-          {unverifiedCount}개 수치는 출처가 검증되지 않았습니다 — 기존 시드가 출처 없이 넣은 값입니다.
+          {allUnverified ? '이 사건의 수치는 모두' : `${unverifiedCount}개 수치는`} 출처가 검증되지 않았습니다 — 기존
+          시드가 출처 없이 넣은 값입니다.
         </Warning>
       )}
 
-      {comparisons.length > 0 && (
-        <Comparison aria-label="진영 비교">
-          <ComparisonTitle>진영 비교</ComparisonTitle>
-          {comparisons.map((comparison) => {
-            const max = Math.max(
-              ...comparison.rows.map((row) => observationExtent(row.observation)?.high ?? 0),
-            )
-            return (
-              <ComparisonMetric key={comparison.key}>
-                <ComparisonMetricName>{comparison.name}</ComparisonMetricName>
-                {comparison.rows.map(({ observation, side }) => {
-                  const extent = observationExtent(observation)!
-                  const scale = (value: number) => (max > 0 ? (value / max) * 100 : 0)
-                  return (
-                    <BarRow key={observation.id} title={formatObservationExact(observation)}>
-                      <BarLabel>
-                        {side.name}
-                        {observation.qualifier && <BarQualifier>{observation.qualifier}</BarQualifier>}
-                      </BarLabel>
-                      <BarTrack>
-                        <Bar
-                          style={{ width: `${scale(extent.center)}%`, background: side.color ?? NEUTRAL }}
-                          $unverified={isUnverified(observation)}
-                        />
-                        {extent.high > extent.low && (
-                          <Whisker
-                            style={{
-                              left: `${scale(extent.low)}%`,
-                              width: `${scale(extent.high) - scale(extent.low)}%`,
-                            }}
-                            aria-hidden="true"
-                          />
-                        )}
-                      </BarTrack>
-                      <BarValue>{formatObservationValue(observation)}</BarValue>
-                    </BarRow>
-                  )
-                })}
-              </ComparisonMetric>
-            )
-          })}
-        </Comparison>
+      {sideRows.length > 0 && (
+        <TableScroll>
+          <SideTable aria-label="진영별 수치">
+            <thead>
+              <tr>
+                <th scope="col">지표</th>
+                {tableSides.map((side) => (
+                  <th key={side.id} scope="col">
+                    <SideSwatch style={{ background: side.color }} aria-hidden />
+                    {side.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sideRows.map((row) => {
+                /* 막대 눈금은 행(지표)마다 — 병력과 사상자를 한 자로 재면 작은 쪽이 다 0이 된다 */
+                const max = Math.max(
+                  ...[...row.cells.values()].flat().map((observation) => observationExtent(observation)?.high ?? 0),
+                )
+                return (
+                  <tr key={row.key}>
+                    <th scope="row">{row.name}</th>
+                    {tableSides.map((side) => {
+                      const cell = row.cells.get(side.id) ?? []
+                      if (cell.length === 0) return <EmptyCell key={side.id}>—</EmptyCell>
+                      return (
+                        <td key={side.id}>
+                          {cell.map((observation) => {
+                            const extent = observationExtent(observation)
+                            const scale = (value: number) => (max > 0 ? (value / max) * 100 : 0)
+                            return (
+                              <CellEntry key={observation.id}>
+                                <CellTop>
+                                  <CellValue title={formatObservationExact(observation)}>
+                                    {formatObservationValue(observation)}
+                                  </CellValue>
+                                  <CellActions>
+                                    <IconButton
+                                      type="button"
+                                      onClick={() => setEditing(observation)}
+                                      aria-label={`${side.name} ${row.name} 수정`}
+                                    >
+                                      <FiEdit2 />
+                                    </IconButton>
+                                    <IconButton
+                                      type="button"
+                                      onClick={() => void remove(observation)}
+                                      aria-label={`${side.name} ${row.name} 지우기`}
+                                    >
+                                      <FiTrash2 />
+                                    </IconButton>
+                                  </CellActions>
+                                </CellTop>
+                                {extent && (
+                                  <BarTrack aria-hidden>
+                                    <Bar
+                                      style={{ width: `${scale(extent.center)}%`, background: side.color }}
+                                      $unverified={isUnverified(observation)}
+                                    />
+                                    {extent.high > extent.low && (
+                                      <Whisker
+                                        style={{
+                                          left: `${scale(extent.low)}%`,
+                                          width: `${scale(extent.high) - scale(extent.low)}%`,
+                                        }}
+                                      />
+                                    )}
+                                  </BarTrack>
+                                )}
+                                {(observation.qualifier || (isUnverified(observation) && !allUnverified)) && (
+                                  <CellNote>
+                                    {observation.qualifier}
+                                    {isUnverified(observation) && !allUnverified && (
+                                      <SourceBadge $unverified>출처 미검증</SourceBadge>
+                                    )}
+                                  </CellNote>
+                                )}
+                              </CellEntry>
+                            )
+                          })}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+              {hasLossRate && (
+                <DerivedRow>
+                  <th scope="row" title="손실 지표 ÷ 동원 병력 — 저장된 값이 아니라 위 두 줄로 계산한 값">
+                    손실률
+                    <DerivedHint>계산</DerivedHint>
+                  </th>
+                  {tableSides.map((side) => {
+                    const derived = lossRates.get(side.id)
+                    return derived ? (
+                      <td key={side.id} title={`${derived.lossName} ÷ 동원 병력`}>
+                        <CellValue>{formatRate(derived.rate)}</CellValue>
+                        <CellNote>{derived.lossName} ÷ 동원 병력</CellNote>
+                      </td>
+                    ) : (
+                      <EmptyCell key={side.id}>—</EmptyCell>
+                    )
+                  })}
+                </DerivedRow>
+              )}
+            </tbody>
+          </SideTable>
+        </TableScroll>
       )}
 
       {grouped.map(({ option, rows }) => (
@@ -193,11 +271,13 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                   <RowValue title={formatObservationExact(observation)}>{formatObservationValue(observation)}</RowValue>
                   <RowDetail>
                     {observation.qualifier && <span>{observation.qualifier}</span>}
-                    <SourceBadge $unverified={unverified} title={quote || undefined}>
-                      {unverified
-                        ? '출처 미검증'
-                        : observation.citations.map((citation) => citation.source.title).join(' · ')}
-                    </SourceBadge>
+                    {!(unverified && allUnverified) && (
+                      <SourceBadge $unverified={unverified} title={quote || undefined}>
+                        {unverified
+                          ? '출처 미검증'
+                          : observation.citations.map((citation) => citation.source.title).join(' · ')}
+                      </SourceBadge>
+                    )}
                   </RowDetail>
                   <RowActions>
                     <IconButton type="button" onClick={() => setEditing(observation)} aria-label={`${observation.metric.name} 수정`}>
@@ -272,65 +352,7 @@ const Warning = styled.p`
   }
 `
 
-const Comparison = styled.section`
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin-bottom: 22px;
-  padding: 16px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.10)')};
-`
-
-const ComparisonTitle = styled.h3`
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const ComparisonMetric = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const ComparisonMetricName = styled.div`
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 /* 값 칸은 고정 폭 — auto면 값 글자 길이에 따라 막대 트랙 폭이 달라져 같은 지표 안에서 축이 어긋난다 */
-const BarRow = styled.div`
-  display: grid;
-  grid-template-columns: minmax(80px, 30%) 1fr 108px;
-  align-items: center;
-  gap: 10px;
-
-  @media (max-width: 560px) {
-    grid-template-columns: 1fr auto;
-
-    & > :nth-child(2) {
-      grid-column: 1 / -1;
-      grid-row: 2;
-    }
-  }
-`
-
-const BarLabel = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const BarQualifier = styled.span`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  overflow-wrap: anywhere;
-`
 
 const BarTrack = styled.div`
   position: relative;
@@ -371,15 +393,6 @@ const Whisker = styled.div`
   &::after {
     right: 0;
   }
-`
-
-const BarValue = styled.div`
-  text-align: right;
-  font-size: 12.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SubjectBlock = styled.div`
@@ -489,4 +502,127 @@ const IconButton = styled.button`
     width: 12px;
     height: 12px;
   }
+`
+
+/* ── 진영 비교표 ── */
+
+/** 진영이 많으면 가로로 넘친다 — 표만 따로 스크롤 */
+const TableScroll = styled.div`
+  overflow-x: auto;
+  margin-bottom: 22px;
+`
+
+const SideTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    padding: 8px 12px 8px 0;
+    text-align: left;
+    vertical-align: top;
+    border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)')};
+  }
+
+  thead th {
+    border-top: none;
+    padding-bottom: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    white-space: nowrap;
+  }
+
+  /* 지표 열 — 행 머리. 값 열이 같은 폭으로 나란히 서도록 지표 열만 고정 비율 */
+  tbody th {
+    width: 22%;
+    min-width: 110px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  td {
+    min-width: 150px;
+  }
+`
+
+const SideSwatch = styled.span`
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: 1px;
+`
+
+const EmptyCell = styled.td`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CellEntry = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  & + & {
+    margin-top: 10px;
+  }
+`
+
+const CellTop = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+`
+
+const CellValue = styled.span`
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/** 칸 안 수정·지우기 — 값에 손이 닿을 때만(터치 환경은 상시) */
+const CellActions = styled.span`
+  display: inline-flex;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.14s;
+
+  td:hover &,
+  td:focus-within & {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    opacity: 1;
+  }
+`
+
+const CellNote = styled.span`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  overflow-wrap: anywhere;
+`
+
+/** 파생(계산) 줄 — 저장된 값과 구분되게 위 선을 점선으로 */
+const DerivedRow = styled.tr`
+  th,
+  td {
+    border-top-style: dashed;
+  }
+`
+
+const DerivedHint = styled.span`
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.16)')};
+  font-size: 10.5px;
+  font-weight: 600;
 `
