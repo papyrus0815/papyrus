@@ -44,8 +44,13 @@ export interface GanttLayout {
   rows: GanttRow[]
   /** 날짜가 없어 축에 못 놓은 사건 — 숨기지 않고 따로 센다 */
   undated: EventOverviewNode[]
-  /** 상위 사건 자신의 기간 띠 */
+  /**
+   * 상위 사건 자신의 기간 띠 — 축의 98% 이상을 덮으면 null. 하위에 맞춘 축(기본)에서 상위 기간이
+   * 축보다 넓으면 띠가 모든 줄 배경을 통째로 칠해 정보가 없었다(1차대전: 상위 1914~1918, 하위 1914.6~8).
+   */
   parentBand: { leftPct: number; widthPct: number } | null
+  /** 상위 사건의 시작·끝 중 축 안에 드는 것 — 띠 대신 이 경계가 정보다(개전 7.28 앞의 7월 위기) */
+  parentEdges: Array<{ pct: number; side: 'start' | 'end'; label: string }>
   ticks: Array<{ pct: number; label: string }>
   domain: [number, number]
 }
@@ -193,21 +198,67 @@ export function buildGantt(
       node.depth >= 2 && node.parentEventId ? (titleById.get(node.parentEventId) ?? null) : null,
     outside: outsideOf(span),
   }))
+  // 하위에 맞춘 축에서는 상위 띠가 축 밖으로 나간다 — 보이는 만큼만 자르고, 거의 다 덮으면 그리지 않는다
+  const parentBand = rootSpan
+    ? (() => {
+        const left = Math.max(0, toPct(rootSpan.from))
+        const right = Math.min(100, toPct(rootSpan.to))
+        if (right <= left || right - left >= 98) return null
+        return { leftPct: left, widthPct: right - left }
+      })()
+    : null
+  const [rootStartLabel, rootEndLabel] = formatSpanLabel(withEffectivePrecision(root)).split(' ~ ')
+  const parentEdges: GanttLayout['parentEdges'] = []
+  if (rootSpan) {
+    const startPct = toPct(rootSpan.from)
+    const endPct = toPct(rootSpan.to)
+    if (startPct > 0.5 && startPct < 99.5) {
+      parentEdges.push({ pct: startPct, side: 'start', label: `상위 시작 ${rootStartLabel}` })
+    }
+    // 끝을 모르는(진행 중·하루짜리) 상위는 끝 경계가 없다
+    if (rootEndLabel && endPct > 0.5 && endPct < 99.5) {
+      parentEdges.push({ pct: endPct, side: 'end', label: `상위 끝 ${rootEndLabel}` })
+    }
+  }
   // 날짜 없는 사건도 번호는 이어 매긴다 — 매트릭스·점검표가 같은 번호를 쓴다
   return {
     rows,
     undated,
-    // 하위에 맞춘 축에서는 상위 띠가 축 밖으로 나간다 — 보이는 만큼만 자른다
-    parentBand: rootSpan
-      ? (() => {
-          const left = Math.max(0, toPct(rootSpan.from))
-          const right = Math.min(100, toPct(rootSpan.to))
-          return right > left ? { leftPct: left, widthPct: right - left } : null
-        })()
-      : null,
+    parentBand,
+    parentEdges,
     ticks: axisTicks(low, high).map((tick) => ({ pct: toPct(tick.value), label: tick.label })),
     domain: [low, high],
   }
+}
+
+/**
+ * 막대 날짜 라벨 자리 — 오른쪽 → 왼쪽 → 막대 안 → (어디도 안 들어가면) 여유가 큰 쪽.
+ * 예전엔 '막대 끝이 축의 78% 안이면 오른쪽'으로 % 만 봤다 — 420px 트랙에서 남는 22%는 92px인데
+ * '1914.7.28 ~ 1914.8.4'(약 120px)가 패널 밖으로 넘쳐 가로 스크롤을 만들었다.
+ */
+export function chooseLabelPlace({
+  leftPct,
+  widthPct,
+  trackPx,
+  label,
+  uncertain,
+}: {
+  leftPct: number
+  widthPct: number
+  trackPx: number
+  label: string
+  uncertain: boolean
+}): 'right' | 'left' | 'inside' {
+  /** 11.5px 숫자·기호 글꼴의 대략 폭 + 막대와의 틈 */
+  const labelPx = label.length * 6.6 + 10
+  const rightRoom = ((100 - leftPct - widthPct) / 100) * trackPx
+  const leftRoom = (leftPct / 100) * trackPx
+  const barPx = (widthPct / 100) * trackPx
+  if (rightRoom >= labelPx) return 'right'
+  if (leftRoom >= labelPx) return 'left'
+  // 점선(연·월만 아는) 막대 안은 비어 있어 글자가 떠 보인다 — 안쪽은 채운 막대만
+  if (!uncertain && barPx >= labelPx) return 'inside'
+  return rightRoom >= leftRoom ? 'right' : 'left'
 }
 
 export interface CoverageGap {
@@ -454,6 +505,9 @@ export interface TimeBin {
   started: number
   /** 이 칸에 **진행 중이던** 하위 수(시작 포함) */
   active: number
+  /** 거르기가 걸렸을 때 — 걸린 사건만 센 같은 두 값. 걸리지 않았으면 위와 같다 */
+  matchedStarted: number
+  matchedActive: number
 }
 
 /**
@@ -461,28 +515,38 @@ export interface TimeBin {
  *
  * 시작만 세면 25년짜리 차관 사건(1888~1914)도 1888년 한 칸에 잡혀, 1900년대가 비어 보였다.
  * 칸 단위는 하위가 펼쳐진 전체 범위(가장 이른 시작 ~ 가장 늦은 끝)에 맞춘다
- * (2년 이하 월, 40년 이하 연, 400년 이하 10년, 그 위 100년).
+ * (4개월 이하 주, 2년 이하 월, 40년 이하 연, 400년 이하 10년, 그 위 100년). 주 단위가 없을 땐
+ * 7월 위기처럼 석 달에 몰린 묶음이 막대 3개짜리였다(간트는 주 눈금까지 내려간다).
+ *
+ * `visibleIds`를 주면 걸린 사건만 센 값(matched*)도 함께 — 화면은 전체를 옅은 윤곽으로, 걸린 것을 진하게 겹친다.
  */
-export function timeHistogram(gantt: GanttLayout): TimeBin[] {
+export function timeHistogram(gantt: GanttLayout, visibleIds: Set<string> | null = null): TimeBin[] {
   if (gantt.rows.length === 0) return []
   const from = Math.min(...gantt.rows.map((row) => row.from))
   // 끝은 '마지막 순간'이 아니라 마지막 칸 안에 들도록 하루 당겨 잡는다(월 정밀도 9월 = 10월 1일 0시까지)
   const to = Math.max(...gantt.rows.map((row) => Math.max(row.from, row.to - DAY)))
   const span = to - from
-  const unit = span <= 2 ? 1 / 12 : span <= 40 ? 1 : span <= 400 ? 10 : 100
+  const unit = span <= 1 / 3 ? WEEK : span <= 2 ? 1 / 12 : span <= 40 ? 1 : span <= 400 ? 10 : 100
   const start = Math.floor(from / unit + 1e-9) * unit
   const binCount = Math.max(1, Math.floor((to - start) / unit + 1e-9) + 1)
   const bins: TimeBin[] = Array.from({ length: binCount }, (_, index) => ({
     label: binLabel(start + index * unit, unit),
     started: 0,
     active: 0,
+    matchedStarted: 0,
+    matchedActive: 0,
   }))
   const indexOf = (value: number) =>
     Math.min(binCount - 1, Math.max(0, Math.floor((value - start) / unit + 1e-9)))
   for (const row of gantt.rows) {
+    const matched = !visibleIds || visibleIds.has(row.node.id)
     bins[indexOf(row.from)].started += 1
+    if (matched) bins[indexOf(row.from)].matchedStarted += 1
     const last = indexOf(Math.max(row.from, row.to - DAY))
-    for (let index = indexOf(row.from); index <= last; index += 1) bins[index].active += 1
+    for (let index = indexOf(row.from); index <= last; index += 1) {
+      bins[index].active += 1
+      if (matched) bins[index].matchedActive += 1
+    }
   }
   return bins
 }
@@ -491,6 +555,11 @@ function binLabel(value: number, unit: number): string {
   const yearFloor = Math.floor(value + 1e-9)
   const signed = yearFloor <= 0 ? yearFloor - 1 : yearFloor
   const year = signed < 0 ? `기원전 ${-signed}` : String(signed)
+  if (unit < 1 / 12) {
+    // 주 단위 — 칸이 시작하는 날(월.일). 윤년 오차(하루 안팎)는 라벨에서 무시한다
+    const date = new Date(Date.UTC(2001, 0, 1 + Math.floor((value - yearFloor) * 365.25)))
+    return `${date.getUTCMonth() + 1}.${date.getUTCDate()}`
+  }
   if (unit < 1) return `${year}.${Math.round((value - yearFloor) * 12) + 1}`
   if (unit === 1) return year
   return `${year}~`

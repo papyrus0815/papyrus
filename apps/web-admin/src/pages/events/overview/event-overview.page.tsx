@@ -159,7 +159,6 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
       numberById,
       matrix,
       types: typeBreakdown(descendants),
-      histogram: timeHistogram(gantt),
       persons: aggregatePersons([root, ...descendants]),
       metrics: metricRows([root, ...descendants]),
       coverage: coverageRatio(descendants),
@@ -184,6 +183,12 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
         .map((node) => node.id),
     )
   }, [data, selectedCountryKey, selectedType])
+
+  /** 시기 분포 — 거르기를 따른다(걸린 사건만 채우고 전체는 윤곽으로) */
+  const histogram = useMemo(
+    () => (derived ? timeHistogram(derived.gantt, visibleIds) : []),
+    [derived, visibleIds],
+  )
 
   if (isLoading) {
     return (
@@ -436,7 +441,8 @@ export function EventOverviewPanel({ eventId, onGatherExisting }: EventOverviewP
         />
         <DistributionPanel
           types={derived.types}
-          bins={derived.histogram}
+          bins={histogram}
+          filtered={visibleIds !== null}
           selectedType={selectedType}
           onSelectType={setSelectedType}
         />

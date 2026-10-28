@@ -378,6 +378,34 @@ export const ParentBandMark = styled.span`
   }
 `
 
+/**
+ * 상위 사건의 시작·끝 표지(축) — 띠가 축을 다 덮어 그리지 않을 때 경계를 말한다.
+ * 시작은 선 오른쪽, 끝은 선 왼쪽으로 글자를 뻗어 축 밖으로 나가지 않게.
+ */
+export const ParentEdgeMark = styled.span<{ $side: 'start' | 'end' }>`
+  position: absolute;
+  top: 0;
+  transform: ${({ $side }) => ($side === 'end' ? 'translateX(-100%)' : 'none')};
+  padding: 0 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  border-${({ $side }) => ($side === 'end' ? 'right' : 'left')}: 2px solid
+    ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+/** 상위 사건의 시작·끝 선(줄마다) — 눈금선보다 진하고 점선 */
+export const ParentEdgeLine = styled.div`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1.5px dashed ${({ theme }) => ledgerAccent(theme.mode)};
+  opacity: 0.7;
+  pointer-events: none;
+`
+
 export const GanttTick = styled.span`
   position: absolute;
   bottom: 4px;
@@ -883,52 +911,77 @@ export const OutsideTag = styled.span`
 
 // ─── 분포 (배치 C) ─────────────────────────────────────────────────────────
 
-/** 갈래 누적 막대 — 한 줄로 비율이 읽힌다 */
-export const StackBar = styled.div`
-  display: flex;
-  gap: 2px;
-  height: 14px;
-  border-radius: 999px;
-  overflow: hidden;
-`
-
-export const StackSegment = styled.span<{ $color: string; $dim: boolean }>`
-  flex-basis: 0;
-  min-width: 4px;
-  background: ${({ $color }) => $color};
-  opacity: ${({ $dim }) => ($dim ? 0.25 : 1)};
-  transition: opacity 0.15s;
-`
-
-export const StackLegend = styled.ul`
+/**
+ * 세부 분야 — 정렬된 가로 막대. 한 줄 = [점·이름 | 막대 | 건수·%], 줄 전체가 거르기 버튼.
+ * 같은 분야 색이 여러 세부에 겹쳐도 위치(줄)가 세부를 가르므로 비율이 읽힌다.
+ */
+export const TypeBarList = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 2px;
 `
 
-export const LegendButton = styled.button<{ $active: boolean }>`
-  display: inline-flex;
+export const TypeBarRow = styled.button<{ $active: boolean; $dim: boolean }>`
+  display: grid;
+  grid-template-columns: minmax(96px, 180px) minmax(0, 1fr) 72px;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid ${({ $active, theme }) => ($active ? ledgerAccent(theme.mode) : theme.colors.border.default)};
+  gap: 12px;
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 6px;
   background: ${({ $active, theme }) => ($active ? ledgerHoverFill(theme.mode) : 'transparent')};
   color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
   font-size: 12.5px;
-  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  text-align: left;
   cursor: pointer;
+  opacity: ${({ $dim }) => ($dim ? 0.4 : 1)};
+  transition: opacity 0.15s;
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
+    outline-offset: -2px;
   }
+`
+
+export const TypeBarName = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const TypeBarTrack = styled.span`
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+export const TypeBarFill = styled.span<{ $color: string }>`
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: 999px;
+  background: ${({ $color }) => $color};
+`
+
+export const TypeBarCount = styled.span`
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 `
 
 export const ChartLegend = styled.div`
@@ -944,12 +997,40 @@ export const ChartLegend = styled.div`
   }
 `
 
-export const LegendSwatch = styled.span<{ $tone: 'active' | 'started' }>`
+export const LegendSwatch = styled.span<{ $tone: 'active' | 'started' | 'ghost' }>`
+  box-sizing: border-box;
   width: 10px;
   height: 10px;
   border-radius: 2px;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  opacity: ${({ $tone }) => ($tone === 'active' ? 0.3 : 1)};
+  ${({ $tone, theme }) =>
+    $tone === 'ghost'
+      ? `border: 1px dashed ${theme.colors.text.tertiary};`
+      : `background: ${ledgerAccent(theme.mode)}; opacity: ${$tone === 'active' ? 0.3 : 1};`}
+`
+
+/** 히스토그램 한 칸의 쌓음 — 높이는 전체(거르기 전) 건수, 안쪽 막대들이 그 비율로 바닥부터 찬다 */
+export const HistogramStack = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+`
+
+/** 거르기 전 전체 — 걸린 몫 뒤의 점선 윤곽 */
+export const GhostBar = styled.div`
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 1px dashed ${({ theme }) => theme.colors.text.tertiary};
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  opacity: 0.7;
+`
+
+/** 막대 위 숫자 옆 '+새로 시작' — 툴팁에만 있던 값 */
+export const HistogramStarted = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 /** 진행 중(옅게) 막대 안에 새로 시작(진하게)을 바닥부터 겹친다 */

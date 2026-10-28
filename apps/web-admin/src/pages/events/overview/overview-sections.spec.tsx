@@ -135,6 +135,36 @@ describe('SidesMetricsPanel — 같은 번호와 열기', () => {
   })
 })
 
+describe('DistributionPanel', () => {
+  const types = [
+    { key: 'DECLARATION', label: '선언·통첩', count: 7, domain: 'DIPLOMACY' },
+    { key: 'PERSONAL', label: '개인', count: 6, domain: 'MILITARY' },
+    { key: 'SUMMIT', label: '회담', count: 3, domain: 'MILITARY' },
+  ]
+  const bins = [
+    { label: '7.6', started: 2, active: 3, matchedStarted: 1, matchedActive: 1 },
+  ]
+
+  it('세부마다 한 줄 — 같은 분야 색이라도 줄로 갈리고, 누르면 그 세부로 거른다', () => {
+    const onSelectType = jest.fn()
+    renderWithTheme(
+      <DistributionPanel types={types} bins={bins} selectedType={null} onSelectType={onSelectType} />,
+    )
+    expect(screen.getByRole('button', { name: /개인\s*6/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /회담\s*3/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /회담/ }))
+    expect(onSelectType).toHaveBeenCalledWith('SUMMIT')
+  })
+
+  it('거르기가 걸리면 시기 막대는 걸린 사건 수를 말한다', () => {
+    renderWithTheme(
+      <DistributionPanel types={types} bins={bins} selectedType="SUMMIT" onSelectType={jest.fn()} filtered />,
+    )
+    expect(screen.getByRole('listitem', { name: /걸린 사건 중 진행 중 1건/ })).toBeInTheDocument()
+    expect(screen.getByText('거르기 전 전체')).toBeInTheDocument()
+  })
+})
+
 it('DistributionPanel — 하위가 없으면 빈 막대 대신 안내', () => {
   renderWithTheme(
     <DistributionPanel types={[]} bins={[]} selectedType={null} onSelectType={jest.fn()} />,

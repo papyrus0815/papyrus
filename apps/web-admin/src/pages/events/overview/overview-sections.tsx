@@ -4,6 +4,8 @@
  * 패널끼리 **같은 번호**를 쓴다 — 간트의 줄 번호 = 매트릭스의 열 번호 = 점검표의 줄 번호.
  * 한 패널에서 사건에 마우스를 올리면(`hotId`) 세 패널 모두 그 사건을 칠한다.
  */
+import { useEffect, useRef, useState } from 'react'
+
 import { useTheme } from 'styled-components'
 
 import { domainAccent, domainLabel } from '@/entities/event/model/event-domain'
@@ -23,6 +25,7 @@ import {
   type PersonAggregate,
   applicableCountByColumn,
   checkNode,
+  chooseLabelPlace,
   checkScore,
   emptyCountByColumn,
   roleLabel,
@@ -64,6 +67,18 @@ export function GanttPanel({
 }) {
   const theme = useTheme()
   const [low, high] = gantt.domain
+  /** 트랙 실제 폭 — 날짜 라벨이 들어갈 자리를 픽셀로 판정한다(축 행과 트랙 열의 폭이 같다) */
+  const axisRef = useRef<HTMLDivElement>(null)
+  const [trackPx, setTrackPx] = useState(420)
+  useEffect(() => {
+    const element = axisRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(([entry]) => setTrackPx(entry.contentRect.width))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  /** 띠가 축을 거의 다 덮어 그리지 않을 때만 경계선으로 말한다(띠가 있으면 띠 가장자리가 곧 경계) */
+  const edges = gantt.parentBand ? [] : gantt.parentEdges
   /** 빗금은 지금 축 안에 드는 부분만 — 하위에 맞춘 축이면 대개 화면 밖이라 경고 줄이 대신 말한다 */
   const hatches = gaps
     .map((gap) => ({
@@ -95,7 +110,12 @@ export function GanttPanel({
           </S.ViewSwitchItem>
         </S.ViewSwitch>
         <S.PanelNote style={{ flexBasis: '100%' }}>
-          회색 띠 = 상위 사건의 기간 · 점선 = 연·월만 아는 날짜(그 기간 어딘가)
+          {gantt.parentBand
+            ? '회색 띠 = 상위 사건의 기간'
+            : edges.length > 0
+              ? '세로 선 = 상위 사건의 시작·끝'
+              : '축 전체가 상위 사건의 기간 안'}
+          {' · 점선 막대 = 연·월만 아는 날짜(그 기간 어딘가)'}
           {gantt.undated.length > 0 && ` · 날짜 없음 ${gantt.undated.length}건은 아래 점검표에`}
           {outsideCount > 0 && ` · 상위 기간 밖 ${outsideCount}건(제목 왼쪽 주황 표지)`}
         </S.PanelNote>
@@ -125,7 +145,12 @@ export function GanttPanel({
         <S.Scroll>
           <S.GanttGrid role="list" aria-label="하위 사건 시간축">
             <div aria-hidden="true" />
-            <S.GanttAxis aria-hidden="true">
+            <S.GanttAxis aria-hidden="true" ref={axisRef}>
+              {edges.map((edge) => (
+                <S.ParentEdgeMark key={edge.side} $side={edge.side} style={{ left: `${edge.pct}%` }}>
+                  {edge.label}
+                </S.ParentEdgeMark>
+              ))}
               {gantt.parentBand && (
                 <S.ParentBandMark
                   style={{
@@ -149,8 +174,13 @@ export function GanttPanel({
               // 날짜 라벨 자리: 막대 오른쪽 → (오른쪽 끝이면) 왼쪽 → (양쪽 다 없으면) 막대 안.
               // 25년짜리 차관처럼 축 전체를 덮는 막대는 왼쪽에 두면 제목 열 밑으로 잘렸다('14.7.28')
               const labelLeft = row.leftPct + row.widthPct
-              const labelPlace: 'right' | 'left' | 'inside' =
-                labelLeft <= 78 ? 'right' : row.leftPct >= 22 ? 'left' : 'inside'
+              const labelPlace = chooseLabelPlace({
+                leftPct: row.leftPct,
+                widthPct: row.widthPct,
+                trackPx,
+                label: row.dateLabel,
+                uncertain: row.uncertain,
+              })
               return (
                 <div
                   key={row.node.id}
@@ -210,6 +240,9 @@ export function GanttPanel({
                     ))}
                     {gantt.ticks.map((tick) => (
                       <S.GridLine key={`${tick.pct}-${tick.label}`} style={{ left: `${tick.pct}%` }} />
+                    ))}
+                    {edges.map((edge) => (
+                      <S.ParentEdgeLine key={edge.side} style={{ left: `${edge.pct}%` }} />
                     ))}
                     <S.Bar
                       $color={color}
@@ -429,22 +462,32 @@ export function CountryMatrixPanel({
 // ─── 분포 ──────────────────────────────────────────────────────────────────
 
 /**
- * 세부 분야 + 시기 — 한 패널. 세부는 한 줄 누적 막대(누르면 거르기), 시기는 그 아래 폭 전체.
- * 세부 색은 그 세부를 가진 하위 사건들 중 가장 많은 분야의 색 — 분야 팔레트 한 벌만 쓴다.
+ * 세부 분야 + 시기 — 한 패널.
+ *
+ * 세부는 **정렬된 가로 막대**(세부마다 한 줄, 길이 = 건수, 누르면 거르기). 예전 한 줄 누적 막대는 구간 색을
+ * 그 세부의 최다 분야 색으로 칠해, 1차대전처럼 세부 5개 중 3개가 '군사'면 같은 색 구간이 붙어 2px 틈으로만
+ * 갈렸다 — 비율이 읽히지 않았고, 아래 범례 칩이 이미 같은 숫자를 말하고 있었다.
+ *
+ * 시기는 폭 전체 막대 — '진행 중'(옅게) 안에 '새로 시작'(진하게). 거르기가 걸리면 전체를 옅은 윤곽으로
+ * 남기고 걸린 사건만 채운다(예전엔 거르기를 무시하고 전체만 그렸다).
  */
 export function DistributionPanel({
   types,
   bins,
   selectedType,
   onSelectType,
+  filtered = false,
 }: {
   types: CountBar[]
   bins: TimeBin[]
   selectedType: string | null
   onSelectType: (key: string | null) => void
+  /** 나라·세부 거르기가 걸렸나 — 시기 막대가 걸린 사건만 채운다 */
+  filtered?: boolean
 }) {
   const theme = useTheme()
   const total = types.reduce((sum, bar) => sum + bar.count, 0)
+  const maxType = Math.max(1, ...types.map((bar) => bar.count))
   const maxActive = Math.max(1, ...bins.map((bin) => bin.active))
   const colorOf = (bar: CountBar) => domainAccent(bar.domain, theme.mode)
   return (
@@ -457,40 +500,34 @@ export function DistributionPanel({
       {total === 0 ? (
         <S.Empty>하위 사건이 없어 분포가 아직 없습니다.</S.Empty>
       ) : (
-        <>
-          <S.StackBar aria-hidden="true">
-            {types.map((bar) => (
-              <S.StackSegment
-                key={bar.key}
-                $color={colorOf(bar)}
-                $dim={selectedType !== null && selectedType !== bar.key}
-                style={{ flexGrow: bar.count }}
-                title={`${bar.label} ${bar.count}건`}
-              />
-            ))}
-          </S.StackBar>
-          <S.StackLegend>
-            {types.map((bar) => {
-              const active = selectedType === bar.key
-              return (
-                <li key={bar.key}>
-                  <S.LegendButton
-                    type="button"
-                    $active={active}
-                    aria-pressed={active}
-                    onClick={() => onSelectType(active ? null : bar.key)}
-                  >
+        <S.TypeBarList aria-label="세부 분야별 하위 사건 수">
+          {types.map((bar) => {
+            const active = selectedType === bar.key
+            return (
+              <li key={bar.key}>
+                <S.TypeBarRow
+                  type="button"
+                  $active={active}
+                  $dim={selectedType !== null && !active}
+                  aria-pressed={active}
+                  onClick={() => onSelectType(active ? null : bar.key)}
+                >
+                  <S.TypeBarName>
                     <S.CategoryDot $color={colorOf(bar)} aria-hidden="true" />
                     {bar.label}
-                    <S.SectionNavCount>
-                      {bar.count} · {Math.round((bar.count / Math.max(1, total)) * 100)}%
-                    </S.SectionNavCount>
-                  </S.LegendButton>
-                </li>
-              )
-            })}
-          </S.StackLegend>
-        </>
+                  </S.TypeBarName>
+                  <S.TypeBarTrack aria-hidden="true">
+                    <S.TypeBarFill $color={colorOf(bar)} style={{ width: `${(bar.count / maxType) * 100}%` }} />
+                  </S.TypeBarTrack>
+                  <S.TypeBarCount>
+                    {bar.count}
+                    <S.Muted> · {Math.round((bar.count / Math.max(1, total)) * 100)}%</S.Muted>
+                  </S.TypeBarCount>
+                </S.TypeBarRow>
+              </li>
+            )
+          })}
+        </S.TypeBarList>
       )}
 
       {bins.length > 0 && (
@@ -502,21 +539,47 @@ export function DistributionPanel({
             <span>
               <S.LegendSwatch $tone="started" /> 새로 시작
             </span>
+            {filtered && (
+              <span>
+                <S.LegendSwatch $tone="ghost" /> 거르기 전 전체
+              </span>
+            )}
           </S.ChartLegend>
           <S.Histogram role="list" aria-label="시기별 하위 사건 — 진행 중과 새로 시작">
-            {bins.map((bin) => (
-              <S.HistogramColumn
-                key={bin.label}
-                role="listitem"
-                aria-label={`${bin.label}: 진행 중 ${bin.active}건, 새로 시작 ${bin.started}건`}
-                title={`${bin.label} — 진행 중 ${bin.active} · 새로 시작 ${bin.started}`}
-              >
-                {bin.active > 0 && <S.HistogramCount aria-hidden="true">{bin.active}</S.HistogramCount>}
-                <S.ActiveBar $pct={(bin.active / maxActive) * 82}>
-                  <S.StartedBar $pct={bin.active === 0 ? 0 : (bin.started / bin.active) * 100} />
-                </S.ActiveBar>
-              </S.HistogramColumn>
-            ))}
+            {bins.map((bin) => {
+              const active = filtered ? bin.matchedActive : bin.active
+              const started = filtered ? bin.matchedStarted : bin.started
+              return (
+                <S.HistogramColumn
+                  key={bin.label}
+                  role="listitem"
+                  aria-label={
+                    filtered
+                      ? `${bin.label}: 걸린 사건 중 진행 중 ${active}건·새로 시작 ${started}건 (전체 진행 중 ${bin.active}건)`
+                      : `${bin.label}: 진행 중 ${active}건, 새로 시작 ${started}건`
+                  }
+                  title={
+                    filtered
+                      ? `${bin.label} — 걸린 사건 진행 중 ${active} · 새로 시작 ${started} (전체 ${bin.active})`
+                      : `${bin.label} — 진행 중 ${active} · 새로 시작 ${started}`
+                  }
+                >
+                  {(active > 0 || (filtered && bin.active > 0)) && (
+                    <S.HistogramCount aria-hidden="true">
+                      {active}
+                      {started > 0 && <S.HistogramStarted> +{started}</S.HistogramStarted>}
+                    </S.HistogramCount>
+                  )}
+                  {/* 쌓음 높이 = 전체(거르기 전) — 그 안에서 걸린 몫을 바닥부터 채운다. 숫자는 막대 바로 위 */}
+                  <S.HistogramStack style={{ height: `${(bin.active / maxActive) * 82}%` }}>
+                    {filtered && <S.GhostBar />}
+                    <S.ActiveBar $pct={bin.active === 0 ? 0 : (active / bin.active) * 100}>
+                      <S.StartedBar $pct={active === 0 ? 0 : (started / active) * 100} />
+                    </S.ActiveBar>
+                  </S.HistogramStack>
+                </S.HistogramColumn>
+              )
+            })}
           </S.Histogram>
           {bins.length <= 16 ? (
             <S.HistogramLabels aria-hidden="true">

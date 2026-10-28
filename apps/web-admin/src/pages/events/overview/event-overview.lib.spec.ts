@@ -4,6 +4,7 @@ import {
   aggregatePersons,
   buildCountryMatrix,
   buildGantt,
+  chooseLabelPlace,
   typeBreakdown,
   checkNode,
   checkScore,
@@ -178,6 +179,45 @@ describe('buildCountryMatrix', () => {
   })
 })
 
+describe('상위 기간 표시', () => {
+  it('하위가 모두 상위 기간 안이고 상위가 축보다 넓으면 띠를 그리지 않는다(모든 줄이 회색일 뿐)', () => {
+    const inside = node({ id: 'inside', startDate: '1915-03-01T00:00:00.000Z', endDate: '1915-06-01T00:00:00.000Z' })
+    const gantt = buildGantt(root, [inside])
+    expect(gantt.parentBand).toBeNull()
+    expect(gantt.parentEdges).toEqual([])
+  })
+
+  it('상위 기간 전체 축에서는 띠를 그린다', () => {
+    const inside = node({ id: 'inside', startDate: '1915-03-01T00:00:00.000Z' })
+    expect(buildGantt(root, [inside], 'parent').parentBand).not.toBeNull()
+  })
+
+  it('축 안에 드는 상위 시작은 날짜 표지로 준다', () => {
+    const before = node({ id: 'before', startDate: '1914-06-28T00:00:00.000Z' })
+    const wideRoot = { ...root, endDate: '1914-08-15T00:00:00.000Z' }
+    const after = node({ id: 'after', startDate: '1914-12-01T00:00:00.000Z' })
+    const gantt = buildGantt(wideRoot, [before, after])
+    expect(gantt.parentEdges.map((edge) => edge.label)).toEqual([
+      '상위 시작 1914.7.28',
+      '상위 끝 1914.8.15',
+    ])
+  })
+})
+
+describe('chooseLabelPlace — 날짜 라벨은 픽셀로 판정', () => {
+  const label = '1914.7.28 ~ 1914.8.4'
+  it('오른쪽에 자리가 있으면 오른쪽', () => {
+    expect(chooseLabelPlace({ leftPct: 10, widthPct: 5, trackPx: 600, label, uncertain: false })).toBe('right')
+  })
+  it('78% 안이어도 남은 픽셀이 모자라면 왼쪽 — 예전 % 기준은 여기서 넘쳤다', () => {
+    expect(chooseLabelPlace({ leftPct: 70, widthPct: 8, trackPx: 420, label, uncertain: false })).toBe('left')
+  })
+  it('양쪽이 모자라면 채운 막대 안, 점선 막대는 안에 넣지 않는다', () => {
+    expect(chooseLabelPlace({ leftPct: 2, widthPct: 96, trackPx: 600, label, uncertain: false })).toBe('inside')
+    expect(chooseLabelPlace({ leftPct: 2, widthPct: 96, trackPx: 600, label, uncertain: true })).not.toBe('inside')
+  })
+})
+
 describe('분포', () => {
   it('하위 사건의 세부 분야를 많은 순으로 — 색은 그 세부에서 가장 많은 분야', () => {
     expect(typeBreakdown(descendants)).toEqual([
@@ -187,11 +227,36 @@ describe('분포', () => {
     ])
   })
 
-  it('짧은 기간은 월 단위 칸', () => {
+  it('넉 달 이하는 주 단위 칸 — 월 단위면 석 달에 몰린 묶음이 막대 3개뿐이었다', () => {
     const bins = timeHistogram(buildGantt(root, descendants))
-    expect(bins.map((bin) => bin.label)).toEqual(['1914.6', '1914.7', '1914.8', '1914.9'])
-    expect(bins.map((bin) => bin.started)).toEqual([1, 0, 0, 2])
-    expect(bins.map((bin) => bin.active)).toEqual([1, 0, 0, 2])
+    // 1914.6.28 ~ 9월(월 정밀도) — 주 칸 14개 안팎
+    expect(bins.length).toBeGreaterThanOrEqual(13)
+    expect(bins[0].label).toMatch(/^6\.\d+$/)
+    expect(bins.reduce((sum, bin) => sum + bin.started, 0)).toBe(3)
+    expect(bins[0].started).toBe(1)
+  })
+
+  it('넉 달을 넘으면 월 단위 칸', () => {
+    const december = node({ id: 'dec', startDate: '1914-12-24T00:00:00.000Z' })
+    const bins = timeHistogram(buildGantt(root, [sarajevo, marne, december]))
+    expect(bins.map((bin) => bin.label)).toEqual([
+      '1914.6',
+      '1914.7',
+      '1914.8',
+      '1914.9',
+      '1914.10',
+      '1914.11',
+      '1914.12',
+    ])
+    expect(bins.map((bin) => bin.started)).toEqual([1, 0, 0, 1, 0, 0, 1])
+  })
+
+  it('거르기가 걸리면 걸린 사건만 따로 센다(전체는 그대로)', () => {
+    const december = node({ id: 'dec', startDate: '1914-12-24T00:00:00.000Z' })
+    const bins = timeHistogram(buildGantt(root, [sarajevo, marne, december]), new Set(['marne']))
+    expect(bins.map((bin) => bin.active)).toEqual([1, 0, 0, 1, 0, 0, 1])
+    expect(bins.map((bin) => bin.matchedActive)).toEqual([0, 0, 0, 1, 0, 0, 0])
+    expect(bins.map((bin) => bin.matchedStarted)).toEqual([0, 0, 0, 1, 0, 0, 0])
   })
 
   it('긴 사건은 걸친 칸마다 진행 중으로 센다 — 시작한 칸 하나에만 잡히지 않게', () => {
@@ -199,7 +264,7 @@ describe('분포', () => {
     const visit = node({ id: 'visit', startDate: '1896-10-05T00:00:00.000Z' })
     const bins = timeHistogram(buildGantt(root, [loan, visit]))
     const at1896 = bins.find((bin) => bin.label === '1896')
-    expect(at1896).toEqual({ label: '1896', started: 1, active: 2 })
+    expect(at1896).toMatchObject({ label: '1896', started: 1, active: 2 })
     expect(bins.find((bin) => bin.label === '1910')?.active).toBe(1)
   })
 })
