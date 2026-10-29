@@ -1421,6 +1421,83 @@ export class PersonService {
     return created
   }
 
+  async updateMilitaryCareer(id: string, dto: Partial<CreateMilitaryCareerDto>, accountId?: string): Promise<MilitaryCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.militaryCareer, id, accountId)
+    const updated = await this.personRepository.updateMilitaryCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateBusinessCareer(id: string, dto: Partial<CreateBusinessCareerDto>, accountId?: string): Promise<BusinessCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.businessCareer, id, accountId)
+    const updated = await this.personRepository.updateBusinessCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateAcademicCareer(id: string, dto: Partial<CreateAcademicCareerDto>, accountId?: string): Promise<AcademicCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.academicCareer, id, accountId)
+    const updated = await this.personRepository.updateAcademicCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateAthleteCareer(id: string, dto: Partial<CreateAthleteCareerDto>, accountId?: string): Promise<AthleteCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.athleteCareer, id, accountId)
+    const updated = await this.personRepository.updateAthleteCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateReligiousCareer(id: string, dto: Partial<CreateReligiousCareerDto>, accountId?: string): Promise<ReligiousCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.religiousCareer, id, accountId)
+    const updated = await this.personRepository.updateReligiousCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateArtistCareer(id: string, dto: Partial<CreateArtistCareerDto>, accountId?: string): Promise<ArtistCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.artistCareer, id, accountId)
+    const updated = await this.personRepository.updateArtistCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateMediaCareer(id: string, dto: Partial<CreateMediaCareerDto>, accountId?: string): Promise<MediaCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.mediaCareer, id, accountId)
+    const updated = await this.personRepository.updateMediaCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateLegalCareer(id: string, dto: Partial<CreateLegalCareerDto>, accountId?: string): Promise<LegalCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.legalCareer, id, accountId)
+    const updated = await this.personRepository.updateLegalCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateMedicalCareer(id: string, dto: Partial<CreateMedicalCareerDto>, accountId?: string): Promise<MedicalCareerResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.medicalCareer, id, accountId)
+    const updated = await this.personRepository.updateMedicalCareer(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.CAREER, careerItemLabel(updated))
+    return updated
+  }
+
+  async updateEducation(id: string, dto: Partial<CreateEducationDto>, accountId?: string): Promise<PersonEducationResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.personEducation, id, accountId)
+    const updated = await this.personRepository.updateEducation(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.EDUCATION, educationItemLabel(updated))
+    return updated
+  }
+
+  async updateAward(id: string, dto: Partial<CreatePersonAwardDto>, accountId?: string): Promise<PersonAwardResponseDto> {
+    await this.assertSubResourceOwnershipById(this.prisma.personAward, id, accountId)
+    const updated = await this.personRepository.updateAward(id, dto)
+    await this.notifyPersonSection(updated.personId, NotificationSubResource.AWARD, awardItemLabel(updated))
+    return updated
+  }
+
   async deleteMilitaryCareer(id: string, accountId?: string): Promise<void> {
     await this.assertSubResourceOwnershipById(this.prisma.militaryCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteMilitaryCareer(id)

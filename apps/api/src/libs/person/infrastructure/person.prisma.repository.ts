@@ -2752,15 +2752,29 @@ export class PersonPrismaRepository implements IPersonRepository {
   // ========================
 
   /**
+   * YYYY-MM-DD 또는 ISO 날짜 문자열을 Prisma DateTime(Date)으로 변환.
+   * undefined = 미전송, null/'' = 명시적 해제(null).
+   */
+  private toCareerDate(value?: string | Date | null): Date | null | undefined {
+    if (value === undefined) return undefined
+    if (value === null || value === '') return null
+    if (value instanceof Date) return value
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed
+  }
+
+  /**
    * 군인 경력 추가
    */
   async addMilitaryCareer(dto: CreateMilitaryCareerDto): Promise<MilitaryCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, ...careerData } = dto
     
     const career = await this.prisma.militaryCareer.create({
       data: {
         ...careerData,
-        branch: careerData.branch || '육군', // default value if not provided
+        branch: careerData.branch || '육군',
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2774,15 +2788,17 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 기업인 경력 추가
    */
   async addBusinessCareer(dto: CreateBusinessCareerDto): Promise<BusinessCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, ...careerData } = dto
     
     const career = await this.prisma.businessCareer.create({
       data: {
         ...careerData,
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
     })
     
     return this.mapToBusinessCareerResponse(career)
@@ -2792,15 +2808,17 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 학자 경력 추가
    */
   async addAcademicCareer(dto: CreateAcademicCareerDto): Promise<AcademicCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, ...careerData } = dto
     
     const career = await this.prisma.academicCareer.create({
       data: {
         ...careerData,
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
     })
     
     return this.mapToAcademicCareerResponse(career)
@@ -2810,15 +2828,17 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 운동선수 경력 추가
    */
   async addAthleteCareer(dto: CreateAthleteCareerDto): Promise<AthleteCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, ...careerData } = dto
     
     const career = await this.prisma.athleteCareer.create({
       data: {
         ...careerData,
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
     })
     
     return this.mapToAthleteCareerResponse(career)
@@ -2828,11 +2848,14 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 종교인 경력 추가
    */
   async addReligiousCareer(dto: CreateReligiousCareerDto): Promise<ReligiousCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, religion, denomination, rank, ...careerData } = dto
     
     const career = await this.prisma.religiousCareer.create({
       data: {
         ...careerData,
+        title: careerData.title ?? rank ?? undefined,
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2846,15 +2869,19 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 예술가 경력 추가
    */
   async addArtistCareer(dto: CreateArtistCareerDto): Promise<ArtistCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, artForm, style, ...careerData } = dto
     
     const career = await this.prisma.artistCareer.create({
       data: {
         ...careerData,
+        artField: careerData.artField ?? artForm ?? undefined,
+        genre: careerData.genre ?? style ?? undefined,
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
     })
     
     return this.mapToArtistCareerResponse(career)
@@ -2864,12 +2891,16 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 언론인 경력 추가
    */
   async addMediaCareer(dto: CreateMediaCareerDto): Promise<MediaCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, mediaType, role, ...careerData } = dto
     
     const career = await this.prisma.mediaCareer.create({
       data: {
         ...careerData,
-        organizationId: careerData.organizationId || '', // default if not provided
+        department: careerData.department ?? mediaType ?? undefined,
+        beat: careerData.beat ?? role ?? undefined,
+        organizationId: careerData.organizationId || '',
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2883,15 +2914,21 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 법조인 경력 추가
    */
   async addLegalCareer(dto: CreateLegalCareerDto): Promise<LegalCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, courtLevel, ...careerData } = dto
+    const mergedSpec = [careerData.specialization, courtLevel]
+      .filter((v): v is string => !!v && v.trim().length > 0)
+      .join(' · ')
     
     const career = await this.prisma.legalCareer.create({
       data: {
         ...careerData,
+        specialization: mergedSpec || undefined,
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
     })
     
     return this.mapToLegalCareerResponse(career)
@@ -2901,12 +2938,14 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 의료인 경력 추가
    */
   async addMedicalCareer(dto: CreateMedicalCareerDto): Promise<MedicalCareerResponseDto> {
-    const { images, ...careerData } = dto
+    const { images, startDate, endDate, ...careerData } = dto
     
     const career = await this.prisma.medicalCareer.create({
       data: {
         ...careerData,
-        organizationId: careerData.organizationId || '', // default if not provided
+        organizationId: careerData.organizationId || '',
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -4471,15 +4510,17 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 학력 추가
    */
   async addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto> {
-    const { images, ...educationData } = dto
+    const { images, startDate, endDate, ...educationData } = dto
     
     const education = await this.prisma.personEducation.create({
       data: {
         ...educationData,
+        startDate: this.toCareerDate(startDate) ?? undefined,
+        endDate: this.toCareerDate(endDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
     })
     
     return this.mapToPersonEducationResponse(education)
@@ -4489,18 +4530,171 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 수상/훈장 추가
    */
   async addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto> {
-    const { images, ...awardData } = dto
+    const { images, awardDate, ...awardData } = dto
     
     const award = await this.prisma.personAward.create({
       data: {
         ...awardData,
+        awardDate: this.toCareerDate(awardDate) ?? undefined,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
     })
     
     return this.mapToPersonAwardResponse(award)
+  }
+
+  async updateMilitaryCareer(id: string, dto: Partial<CreateMilitaryCareerDto>): Promise<MilitaryCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const row = await this.prisma.militaryCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToMilitaryCareerResponse(row)
+  }
+
+  async updateBusinessCareer(id: string, dto: Partial<CreateBusinessCareerDto>): Promise<BusinessCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const row = await this.prisma.businessCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToBusinessCareerResponse(row)
+  }
+
+  async updateAcademicCareer(id: string, dto: Partial<CreateAcademicCareerDto>): Promise<AcademicCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const row = await this.prisma.academicCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToAcademicCareerResponse(row)
+  }
+
+  async updateAthleteCareer(id: string, dto: Partial<CreateAthleteCareerDto>): Promise<AthleteCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const row = await this.prisma.athleteCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToAthleteCareerResponse(row)
+  }
+
+  async updateReligiousCareer(id: string, dto: Partial<CreateReligiousCareerDto>): Promise<ReligiousCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, religion: _rel, denomination: _den, rank, ...rest } = dto
+    const row = await this.prisma.religiousCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(rest.title !== undefined || rank !== undefined ? { title: rest.title ?? rank ?? null } : {}),
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToReligiousCareerResponse(row)
+  }
+
+  async updateArtistCareer(id: string, dto: Partial<CreateArtistCareerDto>): Promise<ArtistCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, artForm, style, ...rest } = dto
+    const row = await this.prisma.artistCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(rest.artField !== undefined || artForm !== undefined ? { artField: rest.artField ?? artForm ?? null } : {}),
+        ...(rest.genre !== undefined || style !== undefined ? { genre: rest.genre ?? style ?? null } : {}),
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToArtistCareerResponse(row)
+  }
+
+  async updateMediaCareer(id: string, dto: Partial<CreateMediaCareerDto>): Promise<MediaCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, mediaType, role, ...rest } = dto
+    const row = await this.prisma.mediaCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(rest.department !== undefined || mediaType !== undefined ? { department: rest.department ?? mediaType ?? null } : {}),
+        ...(rest.beat !== undefined || role !== undefined ? { beat: rest.beat ?? role ?? null } : {}),
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToMediaCareerResponse(row)
+  }
+
+  async updateLegalCareer(id: string, dto: Partial<CreateLegalCareerDto>): Promise<LegalCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, courtLevel, ...rest } = dto
+    const specDefined = rest.specialization !== undefined || courtLevel !== undefined
+    const mergedSpec = [rest.specialization, courtLevel]
+      .filter((v): v is string => !!v && v.trim().length > 0)
+      .join(' · ')
+    const row = await this.prisma.legalCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(specDefined ? { specialization: mergedSpec || null } : {}),
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToLegalCareerResponse(row)
+  }
+
+  async updateMedicalCareer(id: string, dto: Partial<CreateMedicalCareerDto>): Promise<MedicalCareerResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const row = await this.prisma.medicalCareer.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToMedicalCareerResponse(row)
+  }
+
+  async updateEducation(id: string, dto: Partial<CreateEducationDto>): Promise<PersonEducationResponseDto> {
+    const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const row = await this.prisma.personEducation.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
+        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+      } as any,
+    })
+    return this.mapToPersonEducationResponse(row)
+  }
+
+  async updateAward(id: string, dto: Partial<CreatePersonAwardDto>): Promise<PersonAwardResponseDto> {
+    const { images: _images, personId: _personId, awardDate, ...rest } = dto
+    const row = await this.prisma.personAward.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(awardDate !== undefined ? { awardDate: this.toCareerDate(awardDate) } : {}),
+      } as any,
+    })
+    return this.mapToPersonAwardResponse(row)
   }
 
   async deleteMilitaryCareer(id: string): Promise<DeletedSubResource> {

@@ -563,6 +563,52 @@ export interface IPersonRepository {
   addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto>
   addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto>
 
+  // Career·Education·Award 단건 수정
+  updateMilitaryCareer(
+    id: string,
+    dto: Partial<CreateMilitaryCareerDto>,
+  ): Promise<MilitaryCareerResponseDto>
+  updateBusinessCareer(
+    id: string,
+    dto: Partial<CreateBusinessCareerDto>,
+  ): Promise<BusinessCareerResponseDto>
+  updateAcademicCareer(
+    id: string,
+    dto: Partial<CreateAcademicCareerDto>,
+  ): Promise<AcademicCareerResponseDto>
+  updateAthleteCareer(
+    id: string,
+    dto: Partial<CreateAthleteCareerDto>,
+  ): Promise<AthleteCareerResponseDto>
+  updateReligiousCareer(
+    id: string,
+    dto: Partial<CreateReligiousCareerDto>,
+  ): Promise<ReligiousCareerResponseDto>
+  updateArtistCareer(
+    id: string,
+    dto: Partial<CreateArtistCareerDto>,
+  ): Promise<ArtistCareerResponseDto>
+  updateMediaCareer(
+    id: string,
+    dto: Partial<CreateMediaCareerDto>,
+  ): Promise<MediaCareerResponseDto>
+  updateLegalCareer(
+    id: string,
+    dto: Partial<CreateLegalCareerDto>,
+  ): Promise<LegalCareerResponseDto>
+  updateMedicalCareer(
+    id: string,
+    dto: Partial<CreateMedicalCareerDto>,
+  ): Promise<MedicalCareerResponseDto>
+  updateEducation(
+    id: string,
+    dto: Partial<CreateEducationDto>,
+  ): Promise<PersonEducationResponseDto>
+  updateAward(
+    id: string,
+    dto: Partial<CreatePersonAwardDto>,
+  ): Promise<PersonAwardResponseDto>
+
   // Career·Education·Award 삭제 — 삭제된 행의 personId·항목 라벨 반환 (하위 섹션 변경 알림용)
   deleteMilitaryCareer(id: string): Promise<DeletedSubResource>
   deleteBusinessCareer(id: string): Promise<DeletedSubResource>

@@ -933,11 +933,27 @@ export class PersonController {
               id: c.id,
               kind,
               rank,
+              rankId: c.rankId ?? rawRank?.id ?? null,
+              positionId:
+                kind === 'military'
+                  ? (c.rankId ?? rawRank?.id ?? null)
+                  : (c.positionId ?? rawRank?.id ?? null),
+              organizationId: c.organizationId ?? c.organization?.id ?? null,
               organization: c.organization ?? null,
               title,
+              rawTitle: c.title ?? null,
+              position: typeof c.position === 'string' ? c.position : null,
+              level: c.level ?? null,
               branch: c.branch ?? null,
               department: c.department ?? null,
+              researchField: c.researchField ?? null,
               termNumber: c.termNumber ?? null,
+              sport: c.sport ?? null,
+              jerseyNumber: c.jerseyNumber ?? null,
+              artField: c.artField ?? null,
+              genre: c.genre ?? null,
+              beat: c.beat ?? null,
+              specialization: c.specialization ?? null,
               startDate: c.startDate ?? null,
               endDate: c.endDate ?? null,
               notes: c.notes ?? null,
@@ -1355,6 +1371,109 @@ export class PersonController {
   @Post('awards')
   async addAward(@Body() dto: CreatePersonAwardDto, @Request() req: any): Promise<PersonAwardResponseDto> {
     return this.personService.addAward(dto, req.user?.id ?? req.user?.sub)
+  }
+
+  // ========================
+  // Career·학력·수상 수정 엔드포인트
+  // ========================
+
+  @Put('careers/military/:id')
+  async updateMilitaryCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateMilitaryCareerDto>,
+    @Request() req: any,
+  ): Promise<MilitaryCareerResponseDto> {
+    return this.personService.updateMilitaryCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('careers/business/:id')
+  async updateBusinessCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateBusinessCareerDto>,
+    @Request() req: any,
+  ): Promise<BusinessCareerResponseDto> {
+    return this.personService.updateBusinessCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('careers/academic/:id')
+  async updateAcademicCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateAcademicCareerDto>,
+    @Request() req: any,
+  ): Promise<AcademicCareerResponseDto> {
+    return this.personService.updateAcademicCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('careers/athlete/:id')
+  async updateAthleteCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateAthleteCareerDto>,
+    @Request() req: any,
+  ): Promise<AthleteCareerResponseDto> {
+    return this.personService.updateAthleteCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('careers/religious/:id')
+  async updateReligiousCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateReligiousCareerDto>,
+    @Request() req: any,
+  ): Promise<ReligiousCareerResponseDto> {
+    return this.personService.updateReligiousCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('careers/artist/:id')
+  async updateArtistCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateArtistCareerDto>,
+    @Request() req: any,
+  ): Promise<ArtistCareerResponseDto> {
+    return this.personService.updateArtistCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('careers/media/:id')
+  async updateMediaCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateMediaCareerDto>,
+    @Request() req: any,
+  ): Promise<MediaCareerResponseDto> {
+    return this.personService.updateMediaCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('careers/legal/:id')
+  async updateLegalCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateLegalCareerDto>,
+    @Request() req: any,
+  ): Promise<LegalCareerResponseDto> {
+    return this.personService.updateLegalCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('careers/medical/:id')
+  async updateMedicalCareer(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateMedicalCareerDto>,
+    @Request() req: any,
+  ): Promise<MedicalCareerResponseDto> {
+    return this.personService.updateMedicalCareer(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('educations/:id')
+  async updateEducation(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateEducationDto>,
+    @Request() req: any,
+  ): Promise<PersonEducationResponseDto> {
+    return this.personService.updateEducation(id, dto, req.user?.id ?? req.user?.sub)
+  }
+
+  @Put('awards/:id')
+  async updateAward(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreatePersonAwardDto>,
+    @Request() req: any,
+  ): Promise<PersonAwardResponseDto> {
+    return this.personService.updateAward(id, dto, req.user?.id ?? req.user?.sub)
   }
 
   // ========================

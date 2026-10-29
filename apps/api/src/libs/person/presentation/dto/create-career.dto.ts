@@ -330,15 +330,27 @@ export class CreateReligiousCareerDto {
 
   @IsOptional()
   @IsString()
-  religion?: string // 종교
+  religionId?: string // 종교 ID
 
   @IsOptional()
   @IsString()
-  denomination?: string // 종파
+  denominationId?: string // 종파 ID
 
   @IsOptional()
   @IsString()
-  rank?: string // 직급/지위
+  title?: string // 구체적 직함
+
+  @IsOptional()
+  @IsString()
+  religion?: string // 종교 (레거시 별칭)
+
+  @IsOptional()
+  @IsString()
+  denomination?: string // 종파 (레거시 별칭)
+
+  @IsOptional()
+  @IsString()
+  rank?: string // 직급/지위 (레거시 별칭)
 
   @IsOptional()
   @IsDateString()
@@ -387,11 +399,19 @@ export class CreateArtistCareerDto {
 
   @IsOptional()
   @IsString()
-  artForm?: string // 예술 분야 (회화, 조각 등)
+  artField?: string // 작품 활동 분야
 
   @IsOptional()
   @IsString()
-  style?: string // 스타일/장르
+  genre?: string // 예술 장르
+
+  @IsOptional()
+  @IsString()
+  artForm?: string // 예술 분야 (호환 별칭 → artField)
+
+  @IsOptional()
+  @IsString()
+  style?: string // 스타일/장르 (호환 별칭 → genre)
 
   @IsOptional()
   @IsDateString()
@@ -440,11 +460,19 @@ export class CreateMediaCareerDto {
 
   @IsOptional()
   @IsString()
-  mediaType?: string // 매체 유형 (신문, 방송 등)
+  department?: string // 부서 (정치부, 경제부 등)
 
   @IsOptional()
   @IsString()
-  role?: string // 역할
+  beat?: string // 담당 분야
+
+  @IsOptional()
+  @IsString()
+  mediaType?: string // 매체 유형 (호환 별칭 → department)
+
+  @IsOptional()
+  @IsString()
+  role?: string // 역할 (호환 별칭 → beat)
 
   @IsOptional()
   @IsDateString()

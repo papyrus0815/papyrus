@@ -1274,10 +1274,38 @@ export const personCareerApi = {
   },
 
   /**
+   * 학력 수정
+   */
+  updateEducation: async (id: string, dto: Partial<CreateEducationDto>) => {
+    const response = await apiClient.put(`/persons/educations/${id}`, dto)
+    return response.data
+  },
+
+  /**
    * 수상/훈장 추가
    */
   addAward: async (dto: CreatePersonAwardDto) => {
     const response = await apiClient.post('/persons/awards', dto)
+    return response.data
+  },
+
+  /**
+   * 수상/훈장 수정
+   */
+  updateAward: async (id: string, dto: Partial<CreatePersonAwardDto>) => {
+    const response = await apiClient.put(`/persons/awards/${id}`, dto)
+    return response.data
+  },
+
+  /**
+   * kind(military/business/academic/...) 문자열로 적절한 경력 수정 엔드포인트로 분기.
+   */
+  updateCareerByKind: async (
+    kind: string,
+    id: string,
+    dto: Record<string, unknown>,
+  ) => {
+    const response = await apiClient.put(`/persons/careers/${kind}/${id}`, dto)
     return response.data
   },
 
