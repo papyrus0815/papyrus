@@ -39,6 +39,7 @@ import * as S from '../styles'
 import { type PatchOptions } from '../use-undoable-patch'
 import { type EventDetail } from '../use-event-detail'
 import { groupBySide } from './hero-countries.lib'
+import { withSideColors } from './side-colors'
 import { InlineText } from './inline'
 
 interface DetailActorsProps {
@@ -375,6 +376,10 @@ export function DetailActors({
 
   /* 순서 바꾸기 중에는 평평하게 — 진영으로 나누면 '위로·아래로'가 진영 경계를 넘는 게 보이지 않는다 */
   const countrySideGroups = manageMode ? null : groupBySide(countryRows, event.sides ?? [])
+  /** 진영 색 — 진영 모듈·조망 진영 칩과 같은 색(저장 색 없으면 순서대로 팔레트) */
+  const sideColorById = new Map(
+    withSideColors(event.sides ?? []).map((side) => [side.id, side.color] as const),
+  )
 
   /**
    * 참여국 한 행 — 진영별 묶음과 평평한 목록이 같이 쓴다. index는 **전체 목록 기준**(순서 바꾸기의 끝 판정).
@@ -409,7 +414,8 @@ export function DetailActors({
                 ⚠ {row.existenceWarning}
               </MismatchNote>
             )}
-            <CountryRolePicker>
+            {/* 평범한 '참여국'(또는 미지정)은 15줄 모두 같은 글자라 소음 — 행에 들어왔을 때만 보인다 */}
+            <CountryRolePicker data-default={!row.role || row.role === 'PARTICIPANT' ? '' : undefined}>
               <InlineSelect
                 value={row.role ?? ''}
                 options={EVENT_COUNTRY_ROLE_OPTIONS.filter(
@@ -536,6 +542,12 @@ export function DetailActors({
             인물 추가
           </AddBtn>
         </GroupHead>
+        {persons.length === 0 && hasAnything && (
+          // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
+          <EmptyGroupLine>
+            아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
+          </EmptyGroupLine>
+        )}
         {persons.length > 0 && (
           <PersonList>
             {(personsCollapsed
@@ -708,18 +720,28 @@ export function DetailActors({
           </GroupHead>
           {countryRows.length > 0 &&
             (countrySideGroups ? (
-              /* 진영이 있으면 진영별로 — 1차세계대전 15개국이 전부 '참여국'으로만 늘어서 누가 어느 편인지 안 보였다 */
-              countrySideGroups.map((group) => (
-                <SideGroup key={group.sideId ?? 'rest'}>
-                  <SideHead>
-                    {group.label}
-                    <GroupCount>{group.items.length}</GroupCount>
-                  </SideHead>
-                  <CountryList>
-                    {group.items.map((row) => renderCountryRow(row, countryRows.indexOf(row)))}
-                  </CountryList>
-                </SideGroup>
-              ))
+              /*
+               * 진영이 있으면 진영별 — 진영 색 머리를 달고 넓으면 나란히(동맹국 | 협상국).
+               * 예전엔 15개국이 한 줄로 900px 내려가 맞선 두 편이 한 화면에 안 들어왔다.
+               * 진영에 안 든 나라('그 밖')는 맨 아래 한 줄을 다 쓴다.
+               */
+              <SideColumns>
+                {countrySideGroups.map((group) => {
+                  const color = group.sideId ? sideColorById.get(group.sideId) : undefined
+                  return (
+                    <SideGroup key={group.sideId ?? 'rest'} $rest={!group.sideId}>
+                      <SideHead $color={color}>
+                        {color && <SideSwatch $color={color} aria-hidden />}
+                        {group.label}
+                        <GroupCount>{group.items.length}</GroupCount>
+                      </SideHead>
+                      <SideCountryList>
+                        {group.items.map((row) => renderCountryRow(row, countryRows.indexOf(row)))}
+                      </SideCountryList>
+                    </SideGroup>
+                  )
+                })}
+              </SideColumns>
             ) : (
               <CountryList>{countryRows.map(renderCountryRow)}</CountryList>
             ))}
@@ -1430,6 +1452,11 @@ const CountryRolePicker = styled.span`
     opacity: 0.6;
   }
 
+  /* 자리도 차지하지 않는다 — 투명하기만 하면 긴 이름 옆에서 다음 줄로 꺾여 행이 두 배가 됐다 */
+  &[data-default] {
+    display: none;
+  }
+
   /*
    * InlineSelect의 ▾는 hover에서만 뜨는데, 배지는 그 자리를 18px 비워 두므로 평소엔
    * 한쪽이 빈 알약처럼 보였다. 약하게 상시 노출해 균형을 맞추고 "고를 수 있다"는
@@ -1441,21 +1468,63 @@ const CountryRolePicker = styled.span`
 `
 
 /** 진영 한 묶음 — 묶음 사이는 국가 목록의 행 간격보다 넓게 */
-const SideGroup = styled.div`
-  & + & {
-    margin-top: 18px;
+/** 진영 묶음들 — 넓으면 나란히, 좁으면 위아래 */
+const SideColumns = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 22px 28px;
+  margin-top: 6px;
+`
+
+const SideGroup = styled.div<{ $rest?: boolean }>`
+  min-width: 0;
+  /* '그 밖'은 진영 칸 아래 한 줄 전체 */
+  ${({ $rest }) => ($rest ? 'grid-column: 1 / -1;' : '')}
+`
+
+/** 진영 안 나라 목록 — 진영 칸이 이미 나란히 서므로 안에서는 한 줄씩 */
+const SideCountryList = styled.ol`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  /* 칸이 나란히 서므로 행이 칸 밖(-12px)으로 나가면 옆 칸 선과 어긋났다 */
+  > li {
+    margin: 0 -6px;
+    padding-inline: 6px;
   }
 `
 
+const SideSwatch = styled.span<{ $color: string }>`
+  flex-shrink: 0;
+  align-self: center;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: ${({ $color }) => $color};
+`
+
+const EmptyGroupLine = styled.p`
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+`
+
 /** 진영 머리 — 국가 묶음 라벨(GroupLabel)보다 한 단 낮은 소제목. 진영색은 쓰지 않는다(색 면 금지 규약) */
-const SideHead = styled.h4`
-  margin: 6px 0 2px;
+/** 진영 머리 — 진영 색 견본·아래 굵은 선(색). 진영 밖('그 밖')은 회색 선 */
+const SideHead = styled.h4<{ $color?: string }>`
+  margin: 0 0 4px;
+  padding-bottom: 6px;
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 800;
   color: ${({ theme }) => theme.colors.text.primary};
+  border-bottom: 2px solid
+    ${({ $color, theme }) => $color ?? softRuleColor(theme.mode)};
 `
 
 const CountryList = styled.ol`
@@ -1500,7 +1569,8 @@ const CountryRow = styled.li`
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 16px;
-  padding: 10px 12px;
+  /* 15개국이 한 화면에 들어오게 — 이름 한 줄 행은 위아래 7px */
+  padding: 7px 12px;
   margin: 0 -12px;
   border-radius: ${RADIUS.MD};
   border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
@@ -1521,6 +1591,10 @@ const CountryRow = styled.li`
   &:focus-within ${CountryRolePicker} button {
     opacity: 1;
   }
+  &:hover ${CountryRolePicker}[data-default],
+  &:focus-within ${CountryRolePicker}[data-default] {
+    display: inline-flex;
+  }
 `
 
 const CountryBody = styled.div`
@@ -1535,7 +1609,7 @@ const CountryNameLine = styled.div`
   align-items: baseline;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
