@@ -21,14 +21,12 @@ import {
   FiBook,
   FiBookOpen,
   FiBriefcase,
-  FiCalendar,
   FiCamera,
   FiEdit2,
   FiExternalLink,
   FiFileText,
   FiFlag,
   FiGitBranch,
-  FiInfo,
   FiLink,
   FiMapPin,
   FiPlus,
@@ -91,10 +89,7 @@ import { BioClamp } from './bio-clamp'
 import { BirthDeathCards } from './birth-death-cards'
 import { CollapsibleSection } from './collapsible-section'
 import { PersonBiographySections } from './person-biography-sections'
-import {
-  SpouseDetailSection,
-  hasVisibleSpouseDetails,
-} from './spouse-detail-section'
+import { SpouseDetailSection } from './spouse-detail-section'
 import { getRecordFamily } from '@/entities/government-position/model/record-family'
 import { TenureReignList } from './tenure-reign-list'
 import { computeLifeTimeline } from './life-timeline.lib'
@@ -237,9 +232,6 @@ import {
   NicknameType,
   NicknameValue,
   OutlineButton,
-  OverviewClusterLabel,
-  OverviewJumpChip,
-  OverviewJumpNav,
   OverviewSectionHeaderRow,
   OverviewSectionHeading,
   OverviewSections,
@@ -347,31 +339,18 @@ function extractApiErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-/** 개요 4클러스터 점프 내비 정의(UX8) — 앵커 id는 각 OverviewClusterLabel과 짝. */
-const OVERVIEW_CLUSTERS = [
-  { id: 'overview-cluster-life', label: '생애·요약' },
-  { id: 'overview-cluster-history', label: '이력·활동' },
-  { id: 'overview-cluster-relations', label: '관계' },
-  { id: 'overview-cluster-context', label: '소속·맥락' },
-  { id: 'overview-cluster-connections', label: '연결' },
-  { id: 'overview-cluster-evaluation', label: '평가' },
-] as const
+/** 인물 상세 6탭 순서 — 키보드 ←/→/Home/End 내비게이션과 탭 렌더 순서 정본 */
+const PERSON_TAB_ORDER: readonly TabType[] = [
+  'overview',
+  'career',
+  'genealogy',
+  'events',
+  'evaluation',
+  'connections',
+]
 
 /** 연결 패널에서 이 화면의 모달로 여는 종류 — 나머지는 상세 경로 */
 const CONNECTION_MODAL_KINDS = ['person', 'event', 'dynasty'] as const
-
-/** 개요 클러스터로 스크롤(UX8) — prefers-reduced-motion 존중(AY5). */
-function scrollToOverviewCluster(anchorId: string) {
-  const el = document.getElementById(anchorId)
-  if (!el) return
-  const reduceMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  el.scrollIntoView({
-    behavior: reduceMotion ? 'auto' : 'smooth',
-    block: 'start',
-  })
-}
 
 export function PersonDetailPanel({
   personId,
@@ -415,8 +394,14 @@ export function PersonDetailPanel({
    */
   const [searchParams, setSearchParams] = useSearchParams()
   const parseTab = useCallback((raw: string | null): TabType => {
-    // 'politics'는 개요로 흡수된 옛 탭 — 북마크·공유된 ?tab=politics는 개요로 받는다
-    return raw === 'overview' || raw === 'genealogy' || raw === 'events'
+    // 옛 'politics' 탭은 '이력·활동'('career')으로 매핑
+    if (raw === 'politics') return 'career'
+    return raw === 'overview' ||
+      raw === 'career' ||
+      raw === 'genealogy' ||
+      raw === 'events' ||
+      raw === 'evaluation' ||
+      raw === 'connections'
       ? raw
       : 'overview'
   }, [])
@@ -431,7 +416,8 @@ export function PersonDetailPanel({
       setSearchParams(
         (prev) => {
           const params = new URLSearchParams(prev)
-          params.set('tab', next)
+          if (next === 'overview') params.delete('tab')
+          else params.set('tab', next)
           return params
         },
         { replace: true },
@@ -448,7 +434,7 @@ export function PersonDetailPanel({
   /** 탭바 화살표 키 내비게이션(AY4) — ←/→ 순환, Home/End. roving tabindex와 함께 완결. */
   const handleTabKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      const order: TabType[] = ['overview', 'genealogy', 'events']
+      const order = PERSON_TAB_ORDER
       const idx = order.indexOf(activeTab)
       let nextIdx = idx
       if (event.key === 'ArrowRight') nextIdx = (idx + 1) % order.length
@@ -775,7 +761,7 @@ export function PersonDetailPanel({
   const reignAdjacencyQuery = useQuery({
     queryKey: personReignAdjacencyKeys.byPerson(personId, { scope: 'succession' }),
     queryFn: () => getPersonReignAdjacency(personId, { scope: 'succession' }),
-    enabled: contemporaryHeadsTarget != null,
+    enabled: contemporaryHeadsTarget != null && activeTab === 'career',
   })
   const adjacencyByRecordId = useMemo(() => {
     const map = new Map<string, ReignAdjacencyEntry>()
@@ -786,13 +772,17 @@ export function PersonDetailPanel({
   }, [reignAdjacencyQuery.data])
 
   /**
-   * 재임·재위별 '이 기간의 사건' 제안 — 업적으로 한 번에 잇는 후보. 인물당 한 번 받아
+   * 재임·재위별 '이 기간의 사건' 제안 — 업적으로 한 번에 잇는 후보. '이력·활동' 탭에서만 받아
    * 카드마다 나눠 준다(모달 임베드는 읽기 전용이라 받지 않음).
    */
   const recordEventSuggestionsQuery = useQuery({
     queryKey: ['person-record-event-suggestions', personId],
     queryFn: () => getRecordEventSuggestions(personId),
-    enabled: !!personId && !embedInModal && combinedTenures.items.length > 0,
+    enabled:
+      !!personId &&
+      !embedInModal &&
+      combinedTenures.items.length > 0 &&
+      activeTab === 'career',
     staleTime: 60_000,
   })
 
@@ -901,7 +891,7 @@ export function PersonDetailPanel({
     })
   }, [person, combinedTenures])
 
-  /** 타임라인 막대 → 개요 탭의 그 카드로. 다른 탭이면 개요로 바꾼 뒤 렌더를 기다려 스크롤한다. */
+  /** 타임라인 막대 → '이력·활동' 탭의 그 카드로. 다른 탭이면 전환한 뒤 렌더를 기다려 스크롤한다. */
   const jumpToRecord = useCallback(
     (key: string) => {
       const scroll = () => {
@@ -913,9 +903,9 @@ export function PersonDetailPanel({
           el.removeAttribute('data-highlighted')
         }, 1600)
       }
-      if (activeTab !== 'overview') {
-        handleTabChange('overview')
-        window.setTimeout(scroll, 60)
+      if (activeTab !== 'career') {
+        handleTabChange('career')
+        window.setTimeout(scroll, 80)
         return
       }
       scroll()
@@ -1351,11 +1341,10 @@ export function PersonDetailPanel({
   const heroRef = useRef<HTMLDivElement>(null)
   /** 전기 '관리' 토글 포털 자리(state — 마운트 뒤 자식이 다시 그려지도록) */
   const [bioToolbarEl, setBioToolbarEl] = useState<HTMLSpanElement | null>(null)
-  /** 개요 '정당·선거' 머리의 추가 버튼 → 섹션 안 등록 모달 */
+  /** '이력·활동' 탭의 '정당·선거' 머리 추가 버튼 → 섹션 안 등록 모달 */
   const politicsActionsRef = useRef<PersonPoliticsSectionActions>(null)
   const stickyNavRef = useRef<HTMLDivElement>(null)
   const [heroOut, setHeroOut] = useState(false)
-  const [activeCluster, setActiveCluster] = useState<string>(OVERVIEW_CLUSTERS[0].id)
   const [stickyHeight, setStickyHeight] = useState(0)
   const personLoaded = !!person
 
@@ -1378,32 +1367,6 @@ export function PersonDetailPanel({
     observer.observe(nav)
     return () => observer.disconnect()
   }, [personLoaded])
-
-  useEffect(() => {
-    if (activeTab !== 'overview' || embedInModal) return undefined
-    let frame = 0
-    const update = () => {
-      frame = 0
-      const navBottom = stickyNavRef.current?.getBoundingClientRect().bottom ?? 0
-      let current: string = OVERVIEW_CLUSTERS[0].id
-      for (const cluster of OVERVIEW_CLUSTERS) {
-        const label = document.getElementById(cluster.id)
-        if (label && label.getBoundingClientRect().top <= navBottom + 24) {
-          current = cluster.id
-        }
-      }
-      setActiveCluster(current)
-    }
-    const onScroll = () => {
-      if (!frame) frame = window.requestAnimationFrame(update)
-    }
-    update()
-    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame)
-      document.removeEventListener('scroll', onScroll, { capture: true })
-    }
-  }, [activeTab, embedInModal, personLoaded])
 
   // 전기 편집·키보드 단축키·인물 링크 클릭은 PersonBiographySections로 이관됨.
   // termTooltip/dynastyTooltip 포털은 그대로 유지 — 자식이 setter로 구동.
@@ -1573,37 +1536,39 @@ export function PersonDetailPanel({
     }`
   })()
 
-  /** 탭 건수 — 누르기 전에 비었는지 알게(가계도: 직계·형제, 정치: 당적·후보·당직, 연보: 재위·재임·경력·사건·생애사건) */
+  /** 탭 건수 — 누르기 전에 어디에 기록이 있는지 한눈에 파악 */
   const genealogyCount =
     (p.father ? 1 : 0) +
     (p.mother ? 1 : 0) +
     (p.spouseRelations?.length ? p.spouseRelations.length : p.spouse ? 1 : 0) +
     (person.children?.length ?? 0) +
     (p.siblings?.length ?? 0)
+  const humanRelationshipsCount =
+    (person as { humanRelationships?: PersonHumanRelationshipItem[] })
+      .humanRelationships?.length ?? 0
+  const relationsTabCount = genealogyCount + humanRelationshipsCount
   const politicsCount =
     ((person as { partyMemberships?: unknown[] }).partyMemberships?.length ?? 0) +
     ((person as { electionCandidacies?: unknown[] }).electionCandidacies?.length ?? 0) +
     (p.partyLeaderships?.length ?? 0)
+  const activitiesCount =
+    (p.books?.length ?? 0) +
+    (p.foundedCompanies?.length ?? 0) +
+    (p.organizationRoles?.length ?? 0) +
+    (p.militaryCommands?.length ?? 0)
+  const careerTabCount =
+    combinedTenures.count +
+    (p.careers?.length ?? 0) +
+    (p.educations?.length ?? 0) +
+    (p.awards?.length ?? 0) +
+    activitiesCount +
+    politicsCount
   const annalsCount =
     timelineReigns.length +
     timelineTenures.length +
     timelineCareers.length +
     timelineEvents.length +
     lifeEvents.length
-  const hasRelationsCluster =
-    !embedInModal ||
-    hasVisibleSpouseDetails(p.spouseRelations) ||
-    ((person as { humanRelationships?: PersonHumanRelationshipItem[] })
-      .humanRelationships?.length ?? 0) > 0
-  const hasContextCluster =
-    !embedInModal ||
-    (p.countryAffiliations?.length ?? 0) > 0 ||
-    (p.foundedDynasties?.length ?? 0) > 0
-  const visibleOverviewClusters = OVERVIEW_CLUSTERS.filter((cluster) => {
-    if (cluster.id === 'overview-cluster-relations') return hasRelationsCluster
-    if (cluster.id === 'overview-cluster-context') return hasContextCluster
-    return true
-  })
 
   const backLabel = closeLabel
 
@@ -2138,7 +2103,7 @@ export function PersonDetailPanel({
             </div>
           </CompactIdentity>
         )}
-        {/* 탭 네비게이션 */}
+        {/* 탭 네비게이션 (6탭: 개요 | 이력·활동 | 가계·관계 | 연보 | 평가 | 연결) */}
         <TabNav
           role="tablist"
           aria-label="인물 상세 구역"
@@ -2162,19 +2127,38 @@ export function PersonDetailPanel({
           <TabBtn
             type="button"
             role="tab"
+            id="person-detail-tab-career"
+            aria-controls="person-detail-panel-career"
+            aria-selected={activeTab === 'career'}
+            tabIndex={activeTab === 'career' ? 0 : -1}
+            $active={activeTab === 'career'}
+            $empty={careerTabCount === 0}
+            onClick={() => {
+              playClickSound()
+              handleTabChange('career')
+            }}
+          >
+            이력·활동
+            {(careerTabCount > 0 || activeTab === 'career') && (
+              <TabCount aria-label={`${careerTabCount}건`}>{careerTabCount}</TabCount>
+            )}
+          </TabBtn>
+          <TabBtn
+            type="button"
+            role="tab"
             id="person-detail-tab-genealogy"
             aria-controls="person-detail-panel-genealogy"
             aria-selected={activeTab === 'genealogy'}
             tabIndex={activeTab === 'genealogy' ? 0 : -1}
             $active={activeTab === 'genealogy'}
-            $empty={genealogyCount === 0}
+            $empty={relationsTabCount === 0}
             onClick={() => {
               playClickSound()
               handleTabChange('genealogy')
             }}
           >
-            가계도
-            <TabCount aria-label={`${genealogyCount}명`}>{genealogyCount}</TabCount>
+            가계·관계
+            <TabCount aria-label={`${relationsTabCount}명`}>{relationsTabCount}</TabCount>
           </TabBtn>
           <TabBtn
             type="button"
@@ -2184,6 +2168,7 @@ export function PersonDetailPanel({
             aria-selected={activeTab === 'events'}
             tabIndex={activeTab === 'events' ? 0 : -1}
             $active={activeTab === 'events'}
+            $empty={annalsCount === 0}
             onClick={() => {
               playClickSound()
               handleTabChange('events')
@@ -2194,24 +2179,42 @@ export function PersonDetailPanel({
               <TabCount aria-label={`${annalsCount}건`}>{annalsCount}</TabCount>
             )}
           </TabBtn>
+          <TabBtn
+            type="button"
+            role="tab"
+            id="person-detail-tab-evaluation"
+            aria-controls="person-detail-panel-evaluation"
+            aria-selected={activeTab === 'evaluation'}
+            tabIndex={activeTab === 'evaluation' ? 0 : -1}
+            $active={activeTab === 'evaluation'}
+            onClick={() => {
+              playClickSound()
+              handleTabChange('evaluation')
+            }}
+          >
+            평가
+            {person.influence != null && (
+              <TabCount aria-label={`영향력 ${optimisticInfluence}점`}>
+                {optimisticInfluence}
+              </TabCount>
+            )}
+          </TabBtn>
+          <TabBtn
+            type="button"
+            role="tab"
+            id="person-detail-tab-connections"
+            aria-controls="person-detail-panel-connections"
+            aria-selected={activeTab === 'connections'}
+            tabIndex={activeTab === 'connections' ? 0 : -1}
+            $active={activeTab === 'connections'}
+            onClick={() => {
+              playClickSound()
+              handleTabChange('connections')
+            }}
+          >
+            연결
+          </TabBtn>
         </TabNav>
-        {/* 개요 점프 내비(UX8) — 바로가기. 고정 내비 안이라 어디까지 내려가도 남고,
-            지금 읽는 묶음이 강조된다. 풀 페이지에서만(임베드는 묶음이 조건부라 앵커 부재 가능). */}
-        {activeTab === 'overview' && !embedInModal && (
-          <OverviewJumpNav aria-label="개요 섹션 바로가기">
-            {visibleOverviewClusters.map((cluster) => (
-              <OverviewJumpChip
-                key={cluster.id}
-                type="button"
-                $active={activeCluster === cluster.id}
-                aria-current={activeCluster === cluster.id ? 'location' : undefined}
-                onClick={() => scrollToOverviewCluster(cluster.id)}
-              >
-                {cluster.label}
-              </OverviewJumpChip>
-            ))}
-          </OverviewJumpNav>
-        )}
         </StickyNavBar>
 
         {/* 탭 컨텐츠 */}
@@ -2230,12 +2233,7 @@ export function PersonDetailPanel({
                 transition={{ duration: 0.2 }}
               >
                 <OverviewSections>
-                  {/* ── 클러스터 ① 생애·요약 ── */}
-                  <OverviewClusterLabel id="overview-cluster-life">
-                    생애·요약
-                  </OverviewClusterLabel>
-
-                  {/* 출생 / 사망 카드 — 기본 사실이라 생애 묶음 맨 앞(예전엔 전기·영향력·능력치 뒤 약 2,700px 지점) */}
+                  {/* 출생 / 사망 카드 */}
                   <BirthDeathCards
                     person={p}
                     birthDateStr={birthDateStr}
@@ -2243,56 +2241,193 @@ export function PersonDetailPanel({
                     ageAtDeath={ageAtDeath}
                   />
 
-                  {/* 1. 전기 — 가장 중요한 서술 정보 */}
+                  {/* 국가 소속·국적 (다중) */}
+                  {p.countryAffiliations && p.countryAffiliations.length > 0 && (() => {
+                    const TYPE_LABELS: Record<string, string> = {
+                      CITIZENSHIP: '국적',
+                      BIRTH_PLACE: '출생',
+                      PRIMARY_RESIDENCE: '거주',
+                      SERVED: '복무',
+                      EXILE: '망명',
+                      OTHER: '기타',
+                    }
+                    const sorted = p.countryAffiliations.slice().sort((a, b) => {
+                      const pa = a.priority ?? 999
+                      const pb = b.priority ?? 999
+                      return pa - pb
+                    })
+                    return (
+                      <section aria-label="국가 소속·국적">
+                        <OverviewSectionHeaderRow>
+                          <OverviewSectionHeading>
+                            <FiFlag size={14} strokeWidth={2.2} />
+                            <span>국가 소속·국적</span>
+                            <CountMuted>{sorted.length}</CountMuted>
+                          </OverviewSectionHeading>
+                        </OverviewSectionHeaderRow>
+                        <CountryAffiliationList>
+                          {sorted.map((aff, affIdx) => {
+                            const c =
+                              aff.historicalCountry ??
+                              aff.country ??
+                              null
+                            const targetCountryId = c?.id ?? null
+                            const interactive = Boolean(targetCountryId)
+                            const typeLabel = aff.affiliationType
+                              ? TYPE_LABELS[aff.affiliationType] ??
+                                aff.affiliationType
+                              : '소속'
+                            const start = formatIsoDateKo(aff.startDate)
+                            const end = formatIsoDateKo(aff.endDate)
+                            const period =
+                              formatPeriod(start, end, isDeceased ? '미상' : '현재')
+                            return (
+                              <CountryAffiliationChip
+                                key={aff.id ?? `aff-${affIdx}`}
+                                as={interactive ? 'button' : 'div'}
+                                {...(interactive
+                                  ? {
+                                      type: 'button' as const,
+                                      onClick: () => {
+                                        playClickSound()
+                                        navigate(pathKeys.countryDetail(targetCountryId!))
+                                      },
+                                    }
+                                  : {})}
+                                $primary={aff.priority === 0}
+                              >
+                                <CountryAffiliationType>{typeLabel}</CountryAffiliationType>
+                                <CountryAffiliationName>
+                                  {c?.name ?? '국가 미상'}
+                                </CountryAffiliationName>
+                                {period && (
+                                  <CountryAffiliationPeriod>{period}</CountryAffiliationPeriod>
+                                )}
+                              </CountryAffiliationChip>
+                            )
+                          })}
+                        </CountryAffiliationList>
+                      </section>
+                    )
+                  })()}
+
+                  {/* 시조로 등록된 가문 */}
+                  {p.foundedDynasties && p.foundedDynasties.length > 0 && (
+                    <section aria-label="시조 가문">
+                      <OverviewSectionHeaderRow>
+                        <OverviewSectionHeading>
+                          <FiGitBranch size={14} strokeWidth={2.2} />
+                          <span>시조 가문</span>
+                          {p.foundedDynasties.length > 1 && (
+                            <CountMuted>{p.foundedDynasties.length}</CountMuted>
+                          )}
+                        </OverviewSectionHeading>
+                      </OverviewSectionHeaderRow>
+                      <FoundedDynastyRow>
+                        {p.foundedDynasties.map((d, dIdx) => (
+                          <FoundedDynastyChip
+                            key={d.id ?? d.name ?? `dynasty-${dIdx}`}
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              if (d.id) {
+                                setDynastyModal({
+                                  id: d.id,
+                                  name: d.name ?? '이름 없음',
+                                })
+                              } else {
+                                navigate(pathKeys.dynasty())
+                              }
+                            }}
+                          >
+                            {d.name ?? '이름 없음'}
+                          </FoundedDynastyChip>
+                        ))}
+                      </FoundedDynastyRow>
+                    </section>
+                  )}
+
+                  {/* 전기 — 개요 탭의 핵심 서술 */}
                   <section aria-label="전기">
                     <OverviewSectionHeaderRow>
                       <OverviewSectionHeading>
                         <FiBookOpen size={14} strokeWidth={2.2} />
                         <span>전기</span>
                       </OverviewSectionHeading>
-                      {/* 전기의 '관리' 토글이 포털로 들어오는 자리 — 버튼 하나가 제 줄을 차지하지 않게 */}
                       <span ref={setBioToolbarEl} />
                     </OverviewSectionHeaderRow>
-                    {/* 긴 전기는 처음 ~10줄만 — 기본 사실(출생·사망·재임)이 1,500px 아래로 밀리지 않게 */}
-                    <BioClamp resetKey={person.id}>
-                    <PersonBiographySections
-                      personId={person.id}
-                      sections={p.biographySections ?? undefined}
-                      legacyBiography={person.biography}
-                      // 임베드(읽기) 모달에서는 편집 어포던스(✎·관리·추가) 숨김(UX2).
-                      readOnly={embedInModal}
-                      toolbarContainer={bioToolbarEl}
-                      lifespanBounds={{
-                        minSigned:
-                          p.birthYear != null
-                            ? p.birthEra === 'BC'
-                              ? -p.birthYear
-                              : p.birthYear
-                            : null,
-                        maxSigned:
-                          p.deathYear != null
-                            ? p.deathEra === 'BC'
-                              ? -p.deathYear
-                              : p.deathYear
-                            : null,
-                      }}
-                      onPersonClick={
-                        embedInModal
-                          ? (id) => onLinkedPersonClick?.(id)
-                          : pushPersonToModalStack
-                      }
-                      setTermTooltip={setTermTooltip}
-                      setDynastyTooltip={setDynastyTooltip}
-                    />
-                    </BioClamp>
+                    {embedInModal ? (
+                      <BioClamp resetKey={person.id}>
+                        <PersonBiographySections
+                          personId={person.id}
+                          sections={p.biographySections ?? undefined}
+                          legacyBiography={person.biography}
+                          readOnly={embedInModal}
+                          toolbarContainer={bioToolbarEl}
+                          lifespanBounds={{
+                            minSigned:
+                              p.birthYear != null
+                                ? p.birthEra === 'BC'
+                                  ? -p.birthYear
+                                  : p.birthYear
+                                : null,
+                            maxSigned:
+                              p.deathYear != null
+                                ? p.deathEra === 'BC'
+                                  ? -p.deathYear
+                                  : p.deathYear
+                                : null,
+                          }}
+                          onPersonClick={(id) => onLinkedPersonClick?.(id)}
+                          setTermTooltip={setTermTooltip}
+                          setDynastyTooltip={setDynastyTooltip}
+                        />
+                      </BioClamp>
+                    ) : (
+                      <PersonBiographySections
+                        personId={person.id}
+                        sections={p.biographySections ?? undefined}
+                        legacyBiography={person.biography}
+                        readOnly={embedInModal}
+                        toolbarContainer={bioToolbarEl}
+                        lifespanBounds={{
+                          minSigned:
+                            p.birthYear != null
+                              ? p.birthEra === 'BC'
+                                ? -p.birthYear
+                                : p.birthYear
+                              : null,
+                          maxSigned:
+                            p.deathYear != null
+                              ? p.deathEra === 'BC'
+                                ? -p.deathYear
+                                : p.deathYear
+                              : null,
+                        }}
+                        onPersonClick={pushPersonToModalStack}
+                        setTermTooltip={setTermTooltip}
+                        setDynastyTooltip={setDynastyTooltip}
+                      />
+                    )}
                   </section>
+                </OverviewSections>
+              </TabContent>
+            )}
 
-                  {/* ── 클러스터 ② 이력·활동 ── */}
-                  <OverviewClusterLabel id="overview-cluster-history">
-                    이력·활동
-                  </OverviewClusterLabel>
-
-                  {/* 3. 재임·재위 통합 */}
+            {activeTab === 'career' && (
+              <TabContent
+                key="career"
+                role="tabpanel"
+                id="person-detail-panel-career"
+                aria-labelledby="person-detail-tab-career"
+                as={motion.div}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <OverviewSections>
+                  {/* 1. 재임·재위 통합 */}
                   <section aria-label="재임·재위">
                     <OverviewSectionHeaderRow>
                       <OverviewSectionHeading>
@@ -2344,16 +2479,12 @@ export function PersonDetailPanel({
                         setSovereignReignModalOpen(true)
                       }}
                       onAchievementChanged={() => {
-                        // 업적은 행정부·수장 비교 화면에도 박혀 있어 함께 무효화
                         invalidateTenureQueries(queryClient, { personId })
-                        // 업적으로 이은 사건은 제안에서 빠져야 한다
                         void queryClient.invalidateQueries({
                           queryKey: ['person-record-event-suggestions', personId],
                         })
                       }}
                     />
-                    {/* 동시대 수장 — 클릭 0회 발견 스트립. 수장비교 딥링크 CTA는
-                        헤더에서 이곳(스트립 헤더)으로 이관 (검토서 §3 2단계) */}
                     <ContemporariesStrip
                       personId={personId}
                       enabled={contemporaryHeadsTarget != null}
@@ -2390,7 +2521,6 @@ export function PersonDetailPanel({
                     }}
                     tenureId={editingTenureId ?? undefined}
                   />
-                  {/* 재위 — 같은 직위 보유 폼을 재위로 연다(군주 칭호 우선 피커·'국왕' 기본값) */}
                   <TenureRegisterPanel
                     personId={person.id}
                     defaultMonarchical
@@ -2405,8 +2535,6 @@ export function PersonDetailPanel({
                     }}
                     tenureId={editingReignId ?? undefined}
                   />
-                  {/* 재임·재위 단일 진입점 — 어떤 기록을 추가할지 고르는 선택 스텝.
-                      폼은 하나(직위 보유)이고, 고른 쪽에 따라 직위 피커 순서와 기본 직위만 다르다. */}
                   <SelectModal
                     isOpen={addKindChooserOpen}
                     onClose={() => setAddKindChooserOpen(false)}
@@ -2438,7 +2566,7 @@ export function PersonDetailPanel({
                     }}
                   />
 
-                  {/* 3.35. 분야별 경력 */}
+                  {/* 2. 분야별 경력 */}
                   {(!embedInModal || (p.careers && p.careers.length > 0)) && (() => {
                     const careers = p.careers ?? []
                     const KIND_LABELS: Record<string, string> = {
@@ -2473,7 +2601,7 @@ export function PersonDetailPanel({
                         icon={<FiBriefcase size={14} strokeWidth={2.2} />}
                         title="분야별 경력"
                         count={careers.length}
-                        defaultOpen={false}
+                        defaultOpen={careers.length > 0}
                         actions={
                           !embedInModal && (
                             <UnifiedActionRow>
@@ -2502,7 +2630,6 @@ export function PersonDetailPanel({
                           {kinds.map((k) => {
                             const list = grouped[k] ?? []
                             const sorted = list.slice().sort((a, b) => {
-                              // BC/고대 안전 정렬(new Date 금지) — 날짜 없으면 맨 뒤.
                               const ta = a.startDate
                                 ? isoDateSortKey(a.startDate)
                                 : Number.NEGATIVE_INFINITY
@@ -2598,7 +2725,7 @@ export function PersonDetailPanel({
                     )
                   })()}
 
-                  {/* 3.3. 학력 */}
+                  {/* 3. 학력 */}
                   {(!embedInModal || (p.educations && p.educations.length > 0)) && (
                     <CollapsibleSection
                       storageKey="education"
@@ -2606,7 +2733,7 @@ export function PersonDetailPanel({
                       icon={<FiBook size={14} strokeWidth={2.2} />}
                       title="학력"
                       count={p.educations?.length ?? 0}
-                      defaultOpen={false}
+                      defaultOpen={(p.educations?.length ?? 0) > 0}
                       actions={
                         !embedInModal && (
                           <UnifiedActionRow>
@@ -2635,7 +2762,6 @@ export function PersonDetailPanel({
                         {p.educations
                           .slice()
                           .sort((a, b) => {
-                            // BC/고대 안전 정렬(new Date 금지, isoDateSortKey) — 날짜 없으면 맨 뒤.
                             const ta = a.startDate
                               ? isoDateSortKey(a.startDate)
                               : Number.NEGATIVE_INFINITY
@@ -2716,7 +2842,7 @@ export function PersonDetailPanel({
                     </CollapsibleSection>
                   )}
 
-                  {/* 3.4. 수상·훈장 */}
+                  {/* 4. 수상·훈장 */}
                   {(!embedInModal || (p.awards && p.awards.length > 0)) && (
                     <CollapsibleSection
                       storageKey="awards"
@@ -2724,7 +2850,7 @@ export function PersonDetailPanel({
                       icon={<FiAward size={14} strokeWidth={2.2} />}
                       title="수상·훈장"
                       count={p.awards?.length ?? 0}
-                      defaultOpen={false}
+                      defaultOpen={(p.awards?.length ?? 0) > 0}
                       actions={
                         !embedInModal && (
                           <UnifiedActionRow>
@@ -2753,7 +2879,6 @@ export function PersonDetailPanel({
                         {p.awards
                           .slice()
                           .sort((a, b) => {
-                            // BC/고대 안전 정렬(new Date 금지) — 날짜 없으면 맨 뒤.
                             const ta = a.awardDate
                               ? isoDateSortKey(a.awardDate)
                               : Number.NEGATIVE_INFINITY
@@ -2821,7 +2946,7 @@ export function PersonDetailPanel({
                     </CollapsibleSection>
                   )}
 
-                  {/* 3.5. 활동·이력 — 저작/창업/조직/군부대 */}
+                  {/* 5. 활동·이력 — 저작/창업/조직/군부대 */}
                   {(() => {
                     const books = p.books ?? []
                     const founded = p.foundedCompanies ?? []
@@ -2840,7 +2965,7 @@ export function PersonDetailPanel({
                         icon={<FiFileText size={14} strokeWidth={2.2} />}
                         title="활동·이력"
                         count={total}
-                        defaultOpen={false}
+                        defaultOpen={total > 0}
                       >
                         <ActivityGroupList>
                           {books.length > 0 && (
@@ -2892,7 +3017,6 @@ export function PersonDetailPanel({
                                 {orgRoles
                                   .slice()
                                   .sort((a, b) => {
-                                    // BC/고대 안전 정렬(new Date 금지) — 날짜 없으면 맨 뒤.
                                     const ta = a.startDate
                                       ? isoDateSortKey(a.startDate)
                                       : Number.NEGATIVE_INFINITY
@@ -2937,7 +3061,6 @@ export function PersonDetailPanel({
                                 {milCmds
                                   .slice()
                                   .sort((a, b) => {
-                                    // BC/고대 안전 정렬(new Date 금지) — 날짜 없으면 맨 뒤.
                                     const ta = a.startDate
                                       ? isoDateSortKey(a.startDate)
                                       : Number.NEGATIVE_INFINITY
@@ -2981,8 +3104,7 @@ export function PersonDetailPanel({
                     )
                   })()}
 
-                  {/* 3.5. 정당·선거 — 옛 '정치·선거' 탭을 이력의 한 갈래로 흡수.
-                      분야별 경력·학력·수상과 동일한 CollapsibleSection으로 묶어 0건일 때 한 줄로 정렬한다. */}
+                  {/* 6. 정당·선거 */}
                   {(!embedInModal || politicsCount > 0) && (
                     <CollapsibleSection
                       storageKey="politics"
@@ -3080,334 +3202,6 @@ export function PersonDetailPanel({
                       />
                     </CollapsibleSection>
                   )}
-
-                  {/* ── 클러스터 ③ 관계 ── */}
-                  {hasRelationsCluster && (
-                    <OverviewClusterLabel id="overview-cluster-relations">
-                      관계
-                    </OverviewClusterLabel>
-                  )}
-
-                  {/* 2.57. 배우자 상세 — 혼인 기간·메모 중 하나라도 있을 때만 표시 */}
-                  <SpouseDetailSection
-                    spouseRelations={p.spouseRelations}
-                    isDeceased={isDeceased}
-                    onPersonClick={handlePersonClick}
-                  />
-
-                  {/* 4. 인간관계 */}
-                  {(!embedInModal ||
-                    ((person as { humanRelationships?: PersonHumanRelationshipItem[] })
-                      .humanRelationships?.length ?? 0) > 0) && (
-                    <PersonHumanRelationshipsSection
-                      personId={person.id}
-                      relationships={
-                        (
-                          person as {
-                            humanRelationships?: PersonHumanRelationshipItem[]
-                          }
-                        ).humanRelationships
-                      }
-                      onPersonClick={
-                        embedInModal ? onLinkedPersonClick : pushPersonToModalStack
-                      }
-                    />
-                  )}
-
-                  {/* ── 클러스터 ④ 소속·맥락 ── */}
-                  {hasContextCluster && (
-                    <OverviewClusterLabel id="overview-cluster-context">
-                      소속·맥락
-                    </OverviewClusterLabel>
-                  )}
-
-                  {/* 3.1. 국가 소속·국적 (다중) */}
-                  {p.countryAffiliations && p.countryAffiliations.length > 0 && (() => {
-                    const TYPE_LABELS: Record<string, string> = {
-                      CITIZENSHIP: '국적',
-                      BIRTH_PLACE: '출생',
-                      PRIMARY_RESIDENCE: '거주',
-                      SERVED: '복무',
-                      EXILE: '망명',
-                      OTHER: '기타',
-                    }
-                    const sorted = p.countryAffiliations.slice().sort((a, b) => {
-                      const pa = a.priority ?? 999
-                      const pb = b.priority ?? 999
-                      return pa - pb
-                    })
-                    return (
-                      <section aria-label="국가 소속·국적">
-                        <OverviewSectionHeaderRow>
-                          <OverviewSectionHeading>
-                            <FiFlag size={14} strokeWidth={2.2} />
-                            <span>국가 소속·국적</span>
-                            <CountMuted>{sorted.length}</CountMuted>
-                          </OverviewSectionHeading>
-                        </OverviewSectionHeaderRow>
-                        <CountryAffiliationList>
-                          {sorted.map((aff, affIdx) => {
-                            const c =
-                              aff.historicalCountry ??
-                              aff.country ??
-                              null
-                            const targetCountryId = c?.id ?? null
-                            const interactive = Boolean(targetCountryId)
-                            const typeLabel = aff.affiliationType
-                              ? TYPE_LABELS[aff.affiliationType] ??
-                                aff.affiliationType
-                              : '소속'
-                            const start = formatIsoDateKo(aff.startDate)
-                            const end = formatIsoDateKo(aff.endDate)
-                            const period =
-                              formatPeriod(start, end, isDeceased ? '미상' : '현재')
-                            return (
-                              <CountryAffiliationChip
-                                key={aff.id ?? `aff-${affIdx}`}
-                                as={interactive ? 'button' : 'div'}
-                                {...(interactive
-                                  ? {
-                                      type: 'button' as const,
-                                      onClick: () => {
-                                        playClickSound()
-                                        navigate(pathKeys.countryDetail(targetCountryId!))
-                                      },
-                                    }
-                                  : {})}
-                                $primary={aff.priority === 0}
-                              >
-                                <CountryAffiliationType>{typeLabel}</CountryAffiliationType>
-                                <CountryAffiliationName>
-                                  {c?.name ?? '국가 미상'}
-                                </CountryAffiliationName>
-                                {period && (
-                                  <CountryAffiliationPeriod>{period}</CountryAffiliationPeriod>
-                                )}
-                              </CountryAffiliationChip>
-                            )
-                          })}
-                        </CountryAffiliationList>
-                      </section>
-                    )
-                  })()}
-
-                  {/* 3.2. 시조로 등록된 가문 */}
-                  {p.foundedDynasties && p.foundedDynasties.length > 0 && (
-                    <section aria-label="시조 가문">
-                      <OverviewSectionHeaderRow>
-                        <OverviewSectionHeading>
-                          <FiGitBranch size={14} strokeWidth={2.2} />
-                          <span>시조 가문</span>
-                          {p.foundedDynasties.length > 1 && (
-                            <CountMuted>{p.foundedDynasties.length}</CountMuted>
-                          )}
-                        </OverviewSectionHeading>
-                      </OverviewSectionHeaderRow>
-                      <FoundedDynastyRow>
-                        {p.foundedDynasties.map((d, dIdx) => (
-                          <FoundedDynastyChip
-                            key={d.id ?? d.name ?? `dynasty-${dIdx}`}
-                            type="button"
-                            onClick={() => {
-                              playClickSound()
-                              if (d.id) {
-                                setDynastyModal({
-                                  id: d.id,
-                                  name: d.name ?? '이름 없음',
-                                })
-                              } else {
-                                navigate(pathKeys.dynasty())
-                              }
-                            }}
-                          >
-                            {d.name ?? '이름 없음'}
-                          </FoundedDynastyChip>
-                        ))}
-                      </FoundedDynastyRow>
-                    </section>
-                  )}
-
-                  {/* 5. 소속 그룹 (세대·계파·동기) */}
-                  <SamePersonGroupSection
-                    currentPersonId={person.id}
-                    currentPersonName={getPersonDisplayName(person, true)}
-                    readOnly={embedInModal}
-                    onPersonClick={
-                      embedInModal ? onLinkedPersonClick : pushPersonToModalStack
-                    }
-                  />
-                  {/* ── 클러스터 ⑤ 연결 ──
-                      이 인물과 이어진 모든 엔티티(국가·직위·가문·가족·관계·사건·조직·조약·군사)를
-                      한 판에. 섹션마다 따로 흩어진 연결을 서버 연결 색인(entity-graph)이 모은다 —
-                      새 도메인은 서버 투영만 추가하면 여기에 저절로 나타난다(docs/entity-graph-design.md). */}
-                  <OverviewClusterLabel id="overview-cluster-connections">
-                    연결
-                  </OverviewClusterLabel>
-                  <ConnectionsPanel
-                    kind="person"
-                    id={person.id}
-                    onOpen={openConnection}
-                    openableKinds={CONNECTION_MODAL_KINDS}
-                  />
-
-                  {/* ── 클러스터 ⑥ 평가 ──
-                      영향력·능력치는 사실이 아니라 **매긴 값**이다. 예전엔 전기와 출생·사망 사이에 끼어
-                      기본 사실을 아래로 밀었다. 영향력 수치는 머리 카드 KPI에 이미 있어, 상세는 맨 끝에 둔다. */}
-                  <OverviewClusterLabel id="overview-cluster-evaluation">
-                    평가
-                  </OverviewClusterLabel>
-                  {/* 2. 역사적 영향력 — 모달 임베드에서 미평가(null)일 때는 빈 제목이 남지 않도록 섹션 전체 생략 */}
-                  {(!embedInModal || person.influence != null) && (
-                  <section aria-label="역사적 영향력">
-                    <OverviewSectionHeaderRow>
-                      <OverviewSectionHeading>
-                        <FiTrendingUp size={14} strokeWidth={2.2} />
-                        <span>역사적 영향력</span>
-                      </OverviewSectionHeading>
-                      {!embedInModal && !editingInfluence && (
-                        <OutlineButton
-                          type="button"
-                          onClick={() => {
-                            setInfluenceDraft(person.influence ?? 0)
-                            setEditingInfluence(true)
-                          }}
-                        >
-                          {person.influence != null ? '수정' : '설정'}
-                        </OutlineButton>
-                      )}
-                      {editingInfluence && (
-                        <InlineActions>
-                          <OutlineButton
-                            type="button"
-                            disabled={savingInfluence}
-                            onClick={() => {
-                              const nextInfluence = influenceDraft
-                              setSavingInfluence(true)
-                              startTransition(async () => {
-                                // 낙관적 반영(트랜지션 내부에서만 허용) — 즉시 새 값 표시
-                                setOptimisticInfluence(nextInfluence)
-                                try {
-                                  await updatePerson(person.id, {
-                                    influence: nextInfluence,
-                                  })
-                                  // 영향력은 목록·인포그래픽·가문 그리드에도 박혀 있어
-                                  // detail만이 아니라 넓게 무효화한다. await로 refetch 착지까지
-                                  // 트랜지션을 pending 유지 → 낙관값이 옛 base로 되돌아가는
-                                  // 깜빡임(새값→옛값→새값) 없이 새 base로 매끄럽게 수렴.
-                                  await invalidatePersonCaches()
-                                  // 성공 시에만 편집 모드 종료 — 실패하면 편집 모드·
-                                  // influenceDraft를 그대로 유지해 즉시 재시도 가능.
-                                  setEditingInfluence(false)
-                                  notify.success('영향력이 저장되었습니다.')
-                                } catch (err) {
-                                  // 편집 모드 유지(닫지 않음). 낙관적 값은 트랜지션
-                                  // 종료 후 base(person.influence)로 자연 수렴.
-                                  notify.error(
-                                    err instanceof Error
-                                      ? err.message
-                                      : '영향력 저장에 실패했습니다.',
-                                  )
-                                } finally {
-                                  setSavingInfluence(false)
-                                }
-                              })
-                            }}
-                          >
-                            {savingInfluence ? '저장 중…' : '저장'}
-                          </OutlineButton>
-                          <OutlineButton
-                            type="button"
-                            disabled={savingInfluence}
-                            onClick={() => setEditingInfluence(false)}
-                          >
-                            취소
-                          </OutlineButton>
-                        </InlineActions>
-                      )}
-                    </OverviewSectionHeaderRow>
-                    {(() => {
-                      // 미평가(null)를 0점으로 둔갑시키지 않는다(UX7) — 편집 중이 아니면
-                      // 빈 상태로. 임베드(읽기)에서는 의미 없는 빈 게이지 대신 숨김.
-                      if (!editingInfluence && person.influence == null) {
-                        if (embedInModal) return null
-                        return (
-                          <InfluenceEmpty>
-                            아직 영향력 평가가 없습니다. ‘설정’을 눌러 기록해 보세요.
-                          </InfluenceEmpty>
-                        )
-                      }
-                      const current = editingInfluence
-                        ? influenceDraft
-                        : optimisticInfluence
-                      const currentTier = getInfluenceTier(current)
-                      return (
-                        <InfluenceBlock>
-                          <InfluenceSliderRow>
-                            {editingInfluence ? (
-                              <InfluenceSliderInput
-                                type="range"
-                                min={0}
-                                max={100}
-                                step={5}
-                                value={influenceDraft}
-                                onChange={(e) =>
-                                  setInfluenceDraft(Number(e.target.value))
-                                }
-                                aria-valuenow={influenceDraft}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-label="역사적 영향력"
-                              />
-                            ) : (
-                              <InfluenceBar>
-                                <InfluenceFill
-                                  $pct={current}
-                                  $tier={currentTier}
-                                />
-                              </InfluenceBar>
-                            )}
-                            <InfluenceValueGroup>
-                              <InfluenceValue $tier={currentTier}>
-                                {current}
-                              </InfluenceValue>
-                              {currentTier && (
-                                <InfluenceTierLabel $tier={currentTier}>
-                                  {getInfluenceTierLabel(currentTier)}
-                                </InfluenceTierLabel>
-                              )}
-                            </InfluenceValueGroup>
-                          </InfluenceSliderRow>
-                          <InfluenceAnchorRow>
-                            {INFLUENCE_ANCHORS.map((a) => (
-                              <InfluenceAnchor
-                                key={a.value}
-                                $active={current >= a.value}
-                                $tier={a.tier}
-                                style={{ left: `${a.value}%` }}
-                                title={
-                                  a.tier
-                                    ? `${a.value} 이상 — ${getInfluenceTierLabel(a.tier)}`
-                                    : '영향력 없음'
-                                }
-                              >
-                                <b>{a.value}</b>
-                                <span>{a.label}</span>
-                              </InfluenceAnchor>
-                            ))}
-                          </InfluenceAnchorRow>
-                        </InfluenceBlock>
-                      )
-                    })()}
-                  </section>
-                  )}
-
-                  {/* 2.5. 능력치 · 성격 — 영향력과 같은 0–100 평가 메트릭 클러스터 */}
-                  <PersonStatsSection
-                    personId={person.id}
-                    personName={fullName}
-                    readOnly={embedInModal}
-                  />
-
                 </OverviewSections>
               </TabContent>
             )}
@@ -3426,7 +3220,6 @@ export function PersonDetailPanel({
               >
                 <section aria-label="가족 관계">
                   <SectionLabel>가족 관계</SectionLabel>
-                  {/* 하향 저작 퀵액션 — ego 기준 가족 추가(기존 인물 검색 또는 새 등록). 읽기 전용 모달 임베드에서는 숨김 */}
                   {!embedInModal && (
                     <FamilyActionRow>
                       <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('child')}>
@@ -3434,8 +3227,6 @@ export function PersonDetailPanel({
                       </FamilyActionBtn>
                       <FamilyActionBtn
                         type="button"
-                        // native disabled 대신 aria-disabled — 포커스 유지(키보드·SR가 사유 인지),
-                        // 이미 지정된 경우 클릭 시 안내 토스트(G33).
                         aria-disabled={person.father ? true : undefined}
                         onClick={() =>
                           person.father
@@ -3487,7 +3278,6 @@ export function PersonDetailPanel({
                       }
                     />
                   )}
-                  {/* 가족 추가 모달 — 기존 인물 검색 또는 "새 인물" 생성 후 ego와 연결. */}
                   {familyModalConfig && (
                     <PersonSelectModal
                       persons={familyAddPool ?? []}
@@ -3498,9 +3288,7 @@ export function PersonDetailPanel({
                       title={familyModalConfig.title}
                       searchPlaceholder="인물 검색…"
                       defaultCountryId={(person as { countryId?: string }).countryId || undefined}
-                      // 국가 미상 인물(고대 등)의 가족 추가에서도 새 인물 등록을 허용.
                       allowCreate
-                      // 즉석 생성 인물을 풀 캐시에 바로 반영 — 이어지는 가족 추가 모달에서 검색됨.
                       onCreatedPerson={(created) =>
                         queryClient.setQueryData(
                           ['persons', 'pool-for-family-add'],
@@ -3511,6 +3299,40 @@ export function PersonDetailPanel({
                     />
                   )}
                 </section>
+
+                {/* 배우자 상세 — 혼인 기간·메모 */}
+                <SpouseDetailSection
+                  spouseRelations={p.spouseRelations}
+                  isDeceased={isDeceased}
+                  onPersonClick={handlePersonClick}
+                />
+
+                {/* 인간관계 */}
+                {(!embedInModal || humanRelationshipsCount > 0) && (
+                  <PersonHumanRelationshipsSection
+                    personId={person.id}
+                    relationships={
+                      (
+                        person as {
+                          humanRelationships?: PersonHumanRelationshipItem[]
+                        }
+                      ).humanRelationships
+                    }
+                    onPersonClick={
+                      embedInModal ? onLinkedPersonClick : pushPersonToModalStack
+                    }
+                  />
+                )}
+
+                {/* 소속 그룹 (세대·계파·동기) */}
+                <SamePersonGroupSection
+                  currentPersonId={person.id}
+                  currentPersonName={getPersonDisplayName(person, true)}
+                  readOnly={embedInModal}
+                  onPersonClick={
+                    embedInModal ? onLinkedPersonClick : pushPersonToModalStack
+                  }
+                />
 
                 {person.dynasty?.id && person.dynasty?.name && (
                   <SameDynastyMembersSection
@@ -3524,6 +3346,186 @@ export function PersonDetailPanel({
                     }
                   />
                 )}
+              </TabContent>
+            )}
+
+            {activeTab === 'evaluation' && (
+              <TabContent
+                key="evaluation"
+                role="tabpanel"
+                id="person-detail-panel-evaluation"
+                aria-labelledby="person-detail-tab-evaluation"
+                as={motion.div}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <OverviewSections>
+                  {/* 1. 역사적 영향력 */}
+                  {(!embedInModal || person.influence != null) && (
+                    <section aria-label="역사적 영향력">
+                      <OverviewSectionHeaderRow>
+                        <OverviewSectionHeading>
+                          <FiTrendingUp size={14} strokeWidth={2.2} />
+                          <span>역사적 영향력</span>
+                        </OverviewSectionHeading>
+                        {!embedInModal && !editingInfluence && (
+                          <OutlineButton
+                            type="button"
+                            onClick={() => {
+                              setInfluenceDraft(person.influence ?? 0)
+                              setEditingInfluence(true)
+                            }}
+                          >
+                            {person.influence != null ? '수정' : '설정'}
+                          </OutlineButton>
+                        )}
+                        {editingInfluence && (
+                          <InlineActions>
+                            <OutlineButton
+                              type="button"
+                              disabled={savingInfluence}
+                              onClick={() => {
+                                const nextInfluence = influenceDraft
+                                setSavingInfluence(true)
+                                startTransition(async () => {
+                                  setOptimisticInfluence(nextInfluence)
+                                  try {
+                                    await updatePerson(person.id, {
+                                      influence: nextInfluence,
+                                    })
+                                    await invalidatePersonCaches()
+                                    setEditingInfluence(false)
+                                    notify.success('영향력이 저장되었습니다.')
+                                  } catch (err) {
+                                    notify.error(
+                                      err instanceof Error
+                                        ? err.message
+                                        : '영향력 저장에 실패했습니다.',
+                                    )
+                                  } finally {
+                                    setSavingInfluence(false)
+                                  }
+                                })
+                              }}
+                            >
+                              {savingInfluence ? '저장 중…' : '저장'}
+                            </OutlineButton>
+                            <OutlineButton
+                              type="button"
+                              disabled={savingInfluence}
+                              onClick={() => setEditingInfluence(false)}
+                            >
+                              취소
+                            </OutlineButton>
+                          </InlineActions>
+                        )}
+                      </OverviewSectionHeaderRow>
+                      {(() => {
+                        if (!editingInfluence && person.influence == null) {
+                          if (embedInModal) return null
+                          return (
+                            <InfluenceEmpty>
+                              아직 영향력 평가가 없습니다. ‘설정’을 눌러 기록해 보세요.
+                            </InfluenceEmpty>
+                          )
+                        }
+                        const current = editingInfluence
+                          ? influenceDraft
+                          : optimisticInfluence
+                        const currentTier = getInfluenceTier(current)
+                        return (
+                          <InfluenceBlock>
+                            <InfluenceSliderRow>
+                              {editingInfluence ? (
+                                <InfluenceSliderInput
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  step={5}
+                                  value={influenceDraft}
+                                  onChange={(e) =>
+                                    setInfluenceDraft(Number(e.target.value))
+                                  }
+                                  aria-valuenow={influenceDraft}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-label="역사적 영향력"
+                                />
+                              ) : (
+                                <InfluenceBar>
+                                  <InfluenceFill
+                                    $pct={current}
+                                    $tier={currentTier}
+                                  />
+                                </InfluenceBar>
+                              )}
+                              <InfluenceValueGroup>
+                                <InfluenceValue $tier={currentTier}>
+                                  {current}
+                                </InfluenceValue>
+                                {currentTier && (
+                                  <InfluenceTierLabel $tier={currentTier}>
+                                    {getInfluenceTierLabel(currentTier)}
+                                  </InfluenceTierLabel>
+                                )}
+                              </InfluenceValueGroup>
+                            </InfluenceSliderRow>
+                            <InfluenceAnchorRow>
+                              {INFLUENCE_ANCHORS.map((a) => (
+                                <InfluenceAnchor
+                                  key={a.value}
+                                  $active={current >= a.value}
+                                  $tier={a.tier}
+                                  style={{ left: `${a.value}%` }}
+                                  title={
+                                    a.tier
+                                      ? `${a.value} 이상 — ${getInfluenceTierLabel(a.tier)}`
+                                      : '영향력 없음'
+                                  }
+                                >
+                                  <b>{a.value}</b>
+                                  <span>{a.label}</span>
+                                </InfluenceAnchor>
+                              ))}
+                            </InfluenceAnchorRow>
+                          </InfluenceBlock>
+                        )
+                      })()}
+                    </section>
+                  )}
+
+                  {/* 2. 능력치 · 성격 */}
+                  <PersonStatsSection
+                    personId={person.id}
+                    personName={fullName}
+                    readOnly={embedInModal}
+                  />
+                </OverviewSections>
+              </TabContent>
+            )}
+
+            {activeTab === 'connections' && (
+              <TabContent
+                key="connections"
+                role="tabpanel"
+                id="person-detail-panel-connections"
+                aria-labelledby="person-detail-tab-connections"
+                as={motion.div}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <OverviewSections>
+                  <ConnectionsPanel
+                    kind="person"
+                    id={person.id}
+                    onOpen={openConnection}
+                    openableKinds={CONNECTION_MODAL_KINDS}
+                  />
+                </OverviewSections>
               </TabContent>
             )}
 
