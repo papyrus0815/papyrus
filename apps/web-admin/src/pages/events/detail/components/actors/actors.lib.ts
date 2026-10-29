@@ -11,6 +11,8 @@ import { type EventDetail } from '../../use-event-detail'
 export const CLAMP_LINES = 2
 /** 인물은 앞 N명만 보이고 '모두 보기'로 펼친다 */
 export const PERSON_PREVIEW_COUNT = 6
+/** 대표단은 나라마다 앞 N명 — 일본 대표단 7명이 화면 한 장을 먹었다 */
+export const DELEGATION_PREVIEW_COUNT = 3
 
 export type EventPersonEntry = NonNullable<EventDetail['relatedPersons']>[number]
 
@@ -143,4 +145,34 @@ export function participationValueOf(person: {
     : person.countryId
       ? `c:${person.countryId}`
       : ''
+}
+
+/** 인물의 참여 국가 키 — 참여국 행 키(`m:`/`h:`)와 같은 모양. 미지정이면 null */
+export function delegationKeyOf(person: {
+  countryId?: string | null
+  historicalCountryId?: string | null
+}): string | null {
+  if (person.historicalCountryId) return `h:${person.historicalCountryId}`
+  if (person.countryId) return `m:${person.countryId}`
+  return null
+}
+
+/**
+ * 대표단 — 참여국 줄마다 그 나라 자격으로 참여한 인물들. 인물 순서는 원래 순서 그대로.
+ * 참여 국가가 없거나 그 나라가 참여국 목록에 없는 인물은 `unassigned`.
+ * (실측: 참여 국가가 있는 160명 전원이 같은 사건의 참여국 줄과 맞았다)
+ */
+export function groupDelegations<Entry extends { countryId?: string | null; historicalCountryId?: string | null }>(
+  rows: ReadonlyArray<{ id: string; isHistorical: boolean }>,
+  persons: ReadonlyArray<Entry>,
+): { byCountry: Map<string, Entry[]>; unassigned: Entry[] } {
+  const rowKeys = new Set(rows.map(countryRowKey))
+  const byCountry = new Map<string, Entry[]>()
+  const unassigned: Entry[] = []
+  for (const person of persons) {
+    const key = delegationKeyOf(person)
+    if (key && rowKeys.has(key)) byCountry.set(key, [...(byCountry.get(key) ?? []), person])
+    else unassigned.push(person)
+  }
+  return { byCountry, unassigned }
 }

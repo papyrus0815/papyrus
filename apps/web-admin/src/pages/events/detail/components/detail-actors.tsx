@@ -13,19 +13,26 @@ import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select
 import * as S from '../styles'
 import { type PatchOptions } from '../use-undoable-patch'
 import { type EventDetail } from '../use-event-detail'
-import { countryRowKey, PERSON_PREVIEW_COUNT } from './actors/actors.lib'
 import {
+  countryRowKey,
+  DELEGATION_PREVIEW_COUNT,
+  groupDelegations,
+  PERSON_PREVIEW_COUNT,
+} from './actors/actors.lib'
+import {
+  ActorsBlock,
   ActorsHeader,
+  ActorsSummary,
   AddBtn,
   CountryList,
+  DelegationList,
+  DelegationMore,
   EmptyGroupLine,
   GroupCount,
   GroupHead,
   GroupLabel,
   ManageToggle,
-  NationsBlock,
   PersonList,
-  PersonsBlock,
   ShowAllToggle,
   SideColumns,
   SideCountryList,
@@ -75,6 +82,8 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
   const [manageMode, setManageMode] = useState(false)
   /** 인물은 앞 PERSON_PREVIEW_COUNT명만 — 순서 변경 중엔 전원이 보여야 옮길 수 있어 강제로 펼친다 */
   const [showAllPersons, setShowAllPersons] = useState(false)
+  /** 대표단을 다 펼친 나라(행 키) */
+  const [openDelegations, setOpenDelegations] = useState<Set<string>>(() => new Set())
 
   const actors = useActorMutations({ event, onPatch })
   const { persons, countryRows } = actors
@@ -109,7 +118,7 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
   const hasAnything = persons.length > 0 || totalCountries > 0
   /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다 */
   const canManage = persons.length > 1 || totalCountries > 1
-  const personsCollapsed = !showAllPersons && !manageMode && persons.length > PERSON_PREVIEW_COUNT
+  const personsCollapsedBase = !showAllPersons && !manageMode
   const showAllToggleRef = useRef<HTMLButtonElement>(null)
 
   /** 참여 자격 국가 선택지 — 이 사건의 참여국 */
@@ -148,8 +157,52 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     withSideColors(event.sides ?? []).map((side) => [side.id, side.color] as const),
   )
 
+  /**
+   * 대표단 보기 — 나라 줄 밑에 그 나라 자격으로 참여한 인물을 매단다(진영 → 나라 → 인물).
+   * 예전엔 인물과 나라가 따로 늘어서 '일본 대표가 누구였나'를 두 목록을 오가며 맞춰야 했다.
+   * 순서 바꾸기 중에는 예전처럼 두 목록(옮기는 단위가 목록이라서).
+   */
+  const delegations = groupDelegations(countryRows, persons)
+  const delegationMode = !manageMode && delegations.byCountry.size > 0
+  /** 아래 '인물' 무리에 남는 사람 — 대표단 보기면 참여 국가가 없는 인물만 */
+  const listedPersons = delegationMode ? delegations.unassigned : persons
+  const personsCollapsed = personsCollapsedBase && listedPersons.length > PERSON_PREVIEW_COUNT
+  const sideCount = (event.sides ?? []).filter((side) => !side.parentSideId).length
+
+  const renderPersonRow = (
+    entry: (typeof persons)[number],
+    position: { isFirst: boolean; isLast: boolean },
+    compact = false,
+  ) => (
+    <ActorPersonRow
+      key={entry.personId}
+      compact={compact}
+      entry={entry}
+      participationOptions={participationOptions}
+      manageMode={manageMode}
+      isFirst={position.isFirst}
+      isLast={position.isLast}
+      onOpen={onPersonClick}
+      onUpdate={actors.updatePerson}
+      onParticipation={actors.setParticipationCountry}
+      onMove={actors.movePerson}
+      onRemove={actors.removePerson}
+    />
+  )
+
   const renderCountryRow = (row: (typeof countryRows)[number]) => {
     const index = countryRows.indexOf(row)
+    const rowKey = countryRowKey(row)
+    const delegates = delegationMode ? (delegations.byCountry.get(rowKey) ?? []) : []
+    const delegationOpen = openDelegations.has(rowKey)
+    const shownDelegates = delegationOpen ? delegates : delegates.slice(0, DELEGATION_PREVIEW_COUNT)
+    const toggleDelegation = () =>
+      setOpenDelegations((previous) => {
+        const next = new Set(previous)
+        if (next.has(rowKey)) next.delete(rowKey)
+        else next.add(rowKey)
+        return next
+      })
     return (
       <ActorCountryRow
         key={countryRowKey(row)}
@@ -161,7 +214,23 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         onUpdate={actors.updateCountry}
         onMove={actors.moveCountry}
         onRemove={actors.removeCountry}
-      />
+      >
+        {delegates.length > 0 && (
+          <DelegationList aria-label={`${row.name} 대표·인물`}>
+            {shownDelegates.map((entry) => {
+              const order = persons.indexOf(entry)
+              return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 }, true)
+            })}
+            {delegates.length > DELEGATION_PREVIEW_COUNT && (
+              <li>
+                <DelegationMore type="button" aria-expanded={delegationOpen} onClick={toggleDelegation}>
+                  {delegationOpen ? '접기' : `+${delegates.length - DELEGATION_PREVIEW_COUNT}명 더 보기`}
+                </DelegationMore>
+              </li>
+            )}
+          </DelegationList>
+        )}
+      </ActorCountryRow>
     )
   }
 
@@ -169,7 +238,21 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     <>
       <S.Section id="actors">
         <ActorsHeader>
-          <S.SectionTitle>참여 행위자</S.SectionTitle>
+          {/* 탭 이름('참여')과 같은 말을 되풀이하던 제목 — 이 사건의 참여 규모를 한 줄로 */}
+          <S.SectionTitle>
+            참여
+            {hasAnything && (
+              <ActorsSummary>
+                {[
+                  totalCountries > 0 && `국가 ${totalCountries}`,
+                  persons.length > 0 && `인물 ${persons.length}`,
+                  sideCount >= 2 && `진영 ${sideCount}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </ActorsSummary>
+            )}
+          </S.SectionTitle>
           {canManage && (
             <S.SectionActions>
               <ManageToggle
@@ -198,49 +281,10 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
           </S.EmptyState>
         )}
 
-        <PersonsBlock>
-          <GroupHead>
-            <GroupLabel>
-              인물
-              {persons.length > 0 && <GroupCount>{persons.length}</GroupCount>}
-            </GroupLabel>
-            <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
-              인물 추가
-            </AddBtn>
-          </GroupHead>
-          {persons.length === 0 && hasAnything && (
-            // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
-            <EmptyGroupLine>
-              아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
-            </EmptyGroupLine>
-          )}
-          {persons.length > 0 && (
-            <PersonList>
-              {(personsCollapsed ? persons.slice(0, PERSON_PREVIEW_COUNT) : persons).map((entry, index) => (
-                <ActorPersonRow
-                  key={entry.personId}
-                  entry={entry}
-                  participationOptions={participationOptions}
-                  manageMode={manageMode}
-                  isFirst={index === 0}
-                  isLast={index === persons.length - 1}
-                  onOpen={onPersonClick}
-                  onUpdate={actors.updatePerson}
-                  onParticipation={actors.setParticipationCountry}
-                  onMove={actors.movePerson}
-                  onRemove={actors.removePerson}
-                />
-              ))}
-            </PersonList>
-          )}
-          {persons.length > PERSON_PREVIEW_COUNT && !manageMode && (
-            <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
-              {showAllPersons ? '접기' : `${persons.length}명 모두 보기 (+${persons.length - PERSON_PREVIEW_COUNT})`}
-            </ShowAllToggle>
-          )}
-        </PersonsBlock>
-
-        <NationsBlock>
+{/* 대표단 보기면 나라(+그 인물)가 먼저, 아니면 예전처럼 인물이 먼저 */}
+        {delegationMode ? (
+          <>
+        <ActorsBlock $divided={!delegationMode}>
           <GroupHead>
             <GroupLabel>
               국가
@@ -274,7 +318,118 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             ) : (
               <CountryList>{countryRows.map(renderCountryRow)}</CountryList>
             ))}
-        </NationsBlock>
+        </ActorsBlock>
+        <ActorsBlock $divided={delegationMode}>
+          <GroupHead>
+            <GroupLabel>
+              {delegationMode ? '참여 국가 미지정 인물' : '인물'}
+              {listedPersons.length > 0 && <GroupCount>{listedPersons.length}</GroupCount>}
+            </GroupLabel>
+            <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
+              인물 추가
+            </AddBtn>
+          </GroupHead>
+          {delegationMode && listedPersons.length === 0 && (
+            <EmptyGroupLine>인물은 모두 위 나라 아래에 있습니다 — 참여 국가가 없는 인물만 여기에 모입니다.</EmptyGroupLine>
+          )}
+          {persons.length === 0 && hasAnything && (
+            // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
+            <EmptyGroupLine>
+              아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
+            </EmptyGroupLine>
+          )}
+          {listedPersons.length > 0 && (
+            <PersonList>
+              {(personsCollapsed ? listedPersons.slice(0, PERSON_PREVIEW_COUNT) : listedPersons).map((entry) => {
+                const order = persons.indexOf(entry)
+                return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 })
+              })}
+            </PersonList>
+          )}
+          {listedPersons.length > PERSON_PREVIEW_COUNT && !manageMode && (
+            <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
+              {showAllPersons
+                ? '접기'
+                : `${listedPersons.length}명 모두 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT})`}
+            </ShowAllToggle>
+          )}
+        </ActorsBlock>
+          </>
+        ) : (
+          <>
+        <ActorsBlock $divided={delegationMode}>
+          <GroupHead>
+            <GroupLabel>
+              {delegationMode ? '참여 국가 미지정 인물' : '인물'}
+              {listedPersons.length > 0 && <GroupCount>{listedPersons.length}</GroupCount>}
+            </GroupLabel>
+            <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
+              인물 추가
+            </AddBtn>
+          </GroupHead>
+          {delegationMode && listedPersons.length === 0 && (
+            <EmptyGroupLine>인물은 모두 위 나라 아래에 있습니다 — 참여 국가가 없는 인물만 여기에 모입니다.</EmptyGroupLine>
+          )}
+          {persons.length === 0 && hasAnything && (
+            // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
+            <EmptyGroupLine>
+              아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
+            </EmptyGroupLine>
+          )}
+          {listedPersons.length > 0 && (
+            <PersonList>
+              {(personsCollapsed ? listedPersons.slice(0, PERSON_PREVIEW_COUNT) : listedPersons).map((entry) => {
+                const order = persons.indexOf(entry)
+                return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 })
+              })}
+            </PersonList>
+          )}
+          {listedPersons.length > PERSON_PREVIEW_COUNT && !manageMode && (
+            <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
+              {showAllPersons
+                ? '접기'
+                : `${listedPersons.length}명 모두 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT})`}
+            </ShowAllToggle>
+          )}
+        </ActorsBlock>
+        <ActorsBlock $divided={!delegationMode}>
+          <GroupHead>
+            <GroupLabel>
+              국가
+              {totalCountries > 0 && <GroupCount>{totalCountries}</GroupCount>}
+            </GroupLabel>
+            <AddBtn type="button" onClick={() => setCountryModalOpen(true)}>
+              국가 추가
+            </AddBtn>
+          </GroupHead>
+          {countryRows.length > 0 &&
+            (countrySideGroups ? (
+              /*
+               * 진영이 있으면 진영별 — 진영 색 머리를 달고 넓으면 나란히(동맹국 | 협상국).
+               * 진영에 안 든 나라('그 밖')는 맨 아래 한 줄을 다 쓴다.
+               */
+              <SideColumns>
+                {countrySideGroups.map((group) => {
+                  const color = group.sideId ? sideColorById.get(group.sideId) : undefined
+                  return (
+                    <SideGroup key={group.sideId ?? 'rest'} $rest={!group.sideId}>
+                      <SideHead $color={color}>
+                        {color && <SideSwatch $color={color} aria-hidden />}
+                        {group.label}
+                        <GroupCount>{group.items.length}</GroupCount>
+                      </SideHead>
+                      <SideCountryList>{group.items.map(renderCountryRow)}</SideCountryList>
+                    </SideGroup>
+                  )
+                })}
+              </SideColumns>
+            ) : (
+              <CountryList>{countryRows.map(renderCountryRow)}</CountryList>
+            ))}
+        </ActorsBlock>
+          </>
+        )}
+
       </S.Section>
 
       {personModalOpen && (

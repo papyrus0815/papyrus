@@ -18,6 +18,7 @@ import {
   PersonBody,
   PersonMetaLine,
   PersonNameBtn,
+  ParticipationPicker,
   PersonNoteLine,
   PersonRoleLine,
   PersonRow,
@@ -33,6 +34,7 @@ import { ClampedProse } from './clamped-prose'
  * 시절엔 join 행 id가 저장마다 바뀌어 인라인 편집 포커스가 끊겼다).
  */
 export function ActorPersonRow({
+  compact = false,
   entry,
   participationOptions,
   manageMode,
@@ -44,6 +46,8 @@ export function ActorPersonRow({
   onMove,
   onRemove,
 }: {
+  /** 대표단 줄 — 나라 줄 밑에 들여 놓는 작은 모양(아바타 28px) */
+  compact?: boolean
   entry: EventPersonEntry
   /** 참여 자격 국가 선택지 — 2개 미만이면 고를 게 없어 줄을 감춘다 */
   participationOptions: Array<{ value: string; label: string }>
@@ -61,11 +65,13 @@ export function ActorPersonRow({
   const hasNote = Boolean(entry.note && entry.note.trim())
   const offices = entry.officesAtEvent ?? []
   const showMeta = participationOptions.length > 1 || offices.length > 0 || Boolean(entry.lifespanWarning)
+  /** 대표단 줄에서 참여 국가 고르기뿐인 메타 줄 — 빈 줄로 서지 않게 행에 들어왔을 때만 */
+  const quietMeta = compact && offices.length === 0 && !entry.lifespanWarning
 
   return (
-    <PersonRow>
+    <PersonRow $compact={compact}>
       <PersonAvatarBtn type="button" onClick={() => onOpen(entry.personId)} aria-label={`${fullName} 상세 보기`}>
-        <PersonAvatar $hasImage={Boolean(avatarUrl)}>
+        <PersonAvatar $hasImage={Boolean(avatarUrl)} $compact={compact}>
           {avatarUrl ? (
             <img src={getUploadImageUrl(avatarUrl) || avatarUrl} alt="" loading="lazy" />
           ) : (
@@ -75,12 +81,14 @@ export function ActorPersonRow({
       </PersonAvatarBtn>
 
       <PersonBody>
-        <PersonNameBtn type="button" onClick={() => onOpen(entry.personId)}>
+        <PersonNameBtn type="button" $compact={compact} onClick={() => onOpen(entry.personId)}>
           {fullName}
         </PersonNameBtn>
         {showMeta && (
-          <PersonMetaLine>
+          <PersonMetaLine data-quiet={quietMeta ? '' : undefined}>
             {participationOptions.length > 1 && (
+              /* 대표단 줄에선 참여 국가가 곧 위의 나라라 같은 말 — 다른 나라로 옮길 때만 쓰니 행에 들어왔을 때만 */
+              <ParticipationPicker data-quiet={compact ? '' : undefined}>
               <InlineSelect
                 value={participationValueOf(entry)}
                 options={participationOptions}
@@ -88,6 +96,7 @@ export function ActorPersonRow({
                 placeholder={entry.participationCountryName ?? '참여 국가 지정'}
                 label={`${fullName}의 참여 국가`}
               />
+              </ParticipationPicker>
             )}
             {offices.length > 0 && (
               <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">

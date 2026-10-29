@@ -156,12 +156,12 @@ export const PersonList = styled.ol`
   ${twoColumnRows}
 `
 
-export const PersonRow = styled.li`
+export const PersonRow = styled.li<{ $compact?: boolean }>`
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-columns: ${({ $compact }) => ($compact ? '28px' : '48px')} minmax(0, 1fr) auto;
   align-items: start;
-  gap: 14px;
-  padding: 14px 12px;
+  gap: ${({ $compact }) => ($compact ? '10px' : '14px')};
+  padding: ${({ $compact }) => ($compact ? '6px 12px' : '14px 12px')};
   margin: 0 -12px;
   border-radius: ${RADIUS.MD};
   border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
@@ -176,11 +176,16 @@ export const PersonRow = styled.li`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
   }
 
-  @media (max-width: 400px) {
-    grid-template-columns: 40px minmax(0, 1fr) auto;
-    gap: 10px;
-    padding: 12px;
-  }
+  /* 좁은 화면 — 큰 행만 아바타를 40px로(대표단 작은 행은 이미 28px) */
+  ${({ $compact }) =>
+    !$compact &&
+    css`
+      @media (max-width: 400px) {
+        grid-template-columns: 40px minmax(0, 1fr) auto;
+        gap: 10px;
+        padding: 12px;
+      }
+    `}
 `
 
 export const PersonAvatarBtn = styled.button`
@@ -196,12 +201,12 @@ export const PersonAvatarBtn = styled.button`
   }
 `
 
-export const PersonAvatar = styled.span<{ $hasImage: boolean }>`
+export const PersonAvatar = styled.span<{ $hasImage: boolean; $compact?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: ${({ $compact }) => ($compact ? '28px' : '48px')};
+  height: ${({ $compact }) => ($compact ? '28px' : '48px')};
   overflow: hidden;
   border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
   background: ${({ theme, $hasImage }) =>
@@ -211,7 +216,7 @@ export const PersonAvatar = styled.span<{ $hasImage: boolean }>`
       ? 'rgba(255, 255, 255, 0.06)'
       : 'rgba(15, 23, 42, 0.05)'};
   color: ${({ theme }) => mutedTextColor(theme.mode)};
-  font-size: 18px;
+  font-size: ${({ $compact }) => ($compact ? '12px' : '18px')};
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1;
@@ -231,11 +236,15 @@ export const PersonAvatar = styled.span<{ $hasImage: boolean }>`
     filter: grayscale(0) contrast(1);
   }
 
-  @media (max-width: 400px) {
-    width: 40px;
-    height: 40px;
-    font-size: 16px;
-  }
+  ${({ $compact }) =>
+    !$compact &&
+    css`
+      @media (max-width: 400px) {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+      }
+    `}
 `
 
 export const PersonBody = styled.div`
@@ -245,14 +254,14 @@ export const PersonBody = styled.div`
   min-width: 0;
 `
 
-export const PersonNameBtn = styled.button`
+export const PersonNameBtn = styled.button<{ $compact?: boolean }>`
   align-self: flex-start;
   padding: 0;
   border: none;
   background: transparent;
   cursor: pointer;
   font-family: inherit;
-  font-size: 16px;
+  font-size: ${({ $compact }) => ($compact ? '14px' : '16px')};
   font-weight: 700;
   letter-spacing: -0.012em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -271,6 +280,13 @@ export const PersonNameBtn = styled.button`
 /* 한글 이탤릭은 기울기만 흉내 내 흐려 보인다 — 역할은 곧은 보조 잉크로 */
 /** 참여 국가 · 당시 직위 한 줄 */
 export const PersonMetaLine = styled.div`
+  &[data-quiet] {
+    display: none;
+  }
+  li:hover > div > &[data-quiet],
+  li:focus-within > div > &[data-quiet] {
+    display: flex;
+  }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -807,5 +823,72 @@ export const AddBtn = styled.button`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 3px;
     border-radius: ${RADIUS.FOCUS};
+  }
+`
+
+/** 대표단 — 나라 줄 밑 그 나라 자격의 인물들. 나라 이름 아래로 한 단 들인다 */
+export const DelegationList = styled.ol`
+  list-style: none;
+  margin: 4px 0 2px;
+  padding: 0 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid ${({ theme }) => softRuleColor(theme.mode)};
+  > li {
+    border-bottom: none;
+  }
+`
+
+/** 섹션 머리 요약 — '국가 14 · 인물 15 · 진영 2' */
+export const ActorsSummary = styled.span`
+  margin-left: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+`
+
+/** 인물·국가 무리 — 넓은 트랙. 두 번째 무리부터 위에 가는 선(어느 쪽이 먼저 오든) */
+export const ActorsBlock = styled.div<{ $divided?: boolean }>`
+  ${S.breakout}
+  display: flex;
+  flex-direction: column;
+  ${({ $divided, theme }) =>
+    $divided ? `padding-top: 18px; border-top: 1px solid ${editorialRuleColor(theme.mode)};` : ''}
+`
+
+/** 참여 국가 고르기 — 대표단 줄(data-quiet)에선 행에 들어왔을 때만 */
+export const ParticipationPicker = styled.span`
+  display: inline-flex;
+  &[data-quiet] {
+    display: none;
+  }
+  li:hover > div > div > &[data-quiet],
+  li:focus-within > div > div > &[data-quiet] {
+    display: inline-flex;
+  }
+`
+
+/** 대표단 '+N명 더' */
+export const DelegationMore = styled.button`
+  align-self: flex-start;
+  margin: 2px 0 0 0;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  cursor: pointer;
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
   }
 `
