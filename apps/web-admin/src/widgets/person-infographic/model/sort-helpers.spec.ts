@@ -131,6 +131,24 @@ describe('makeSortFnWithPinned — 영향력·이름', () => {
       'c',
     ])
   })
+
+  it('reverse=true 시 정렬 방향이 반전되되 미상(null)과 미평가(0)는 항상 맨 뒤', () => {
+    const people = [
+      person({ id: 'unrated', influence: 0, born: null }),
+      person({ id: 'high', influence: 90, born: 1950 }),
+      person({ id: 'low', influence: 20, born: -100 }),
+    ]
+    expect(sortedIds(people, makeSortFnWithPinned(NO_PIN, 'influence', true))).toEqual([
+      'low',
+      'high',
+      'unrated',
+    ])
+    expect(sortedIds(people, makeSortFnWithPinned(NO_PIN, 'year', true))).toEqual([
+      'low',
+      'high',
+      'unrated',
+    ])
+  })
 })
 
 describe('makeSortFnWithPinned — 동점 결정성', () => {

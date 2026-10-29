@@ -296,7 +296,7 @@ export function useFilterUrlSync(): void {
     // sort/order/group/layout은 목록(story) 뷰에서만 URL에 노출 — matrix·stats·records엔
     // inert 파라미터를 남기지 않는다(값은 store·persist에 유지되어 뷰 복귀 시 재노출).
     const sortConsumed = view === 'story'
-    const orderConsumed = view === 'story' && groupBy === 'century'
+    const orderConsumed = view === 'story'
     setOrDel('sort', sortConsumed && sort !== 'influence' ? sort : '')
     setOrDel('order', orderConsumed && eraGroupOrder !== 'desc' ? eraGroupOrder : '')
     setOrDel('era', scopes.era.join(','))

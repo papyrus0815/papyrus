@@ -19,11 +19,14 @@
 import type React from 'react'
 import { memo, useMemo, useState } from 'react'
 
-import { FiBookmark } from 'react-icons/fi'
+import { FiArrowDown, FiArrowUp, FiBookmark } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
+
+import { getUploadImageUrl } from '@/shared/api/upload'
 
 import { formatYear } from '../../model/century'
 import { colorForField } from '../../model/constants'
+import type { EraGroupOrder, PersonSortKey } from '../../model/filter.store'
 import type { AdaptedPerson } from '../../model/types'
 
 import { BRAND, hairline, metaText, MOTION_FAST, surface } from './catalog.styles'
@@ -48,7 +51,10 @@ function PersonCardItemBase({
 }: PersonCardProps) {
   // 깨진 이미지 URL은 공통 빈 초상으로 대체 — 빈 상자가 격자 한가운데 남지 않게.
   const [imageFailed, setImageFailed] = useState(false)
-  const showImage = !!person.profileImageUrl && !imageFailed
+  const resolvedImageUrl = person.profileImageUrl
+    ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
+    : null
+  const showImage = !!resolvedImageUrl && !imageFailed
 
   // bio 정규식 2회는 biography가 안 바뀌면 재실행 불필요 (카드 다수 + 부모 재정렬 리렌더 누적)
   const bioTooltip = useMemo(
@@ -121,7 +127,7 @@ function PersonCardItemBase({
       <Visual>
         {showImage ? (
           <Photo
-            src={person.profileImageUrl ?? undefined}
+            src={resolvedImageUrl ?? undefined}
             alt=""
             loading="lazy"
             onError={() => setImageFailed(true)}
@@ -552,6 +558,79 @@ const Ring = styled.span`
 
 /* ─── 컴팩트 행(리스트) 뷰 ────────────────────────────────────────────── */
 
+export interface PersonRowListHeaderProps {
+  sort: PersonSortKey
+  order: EraGroupOrder
+  onSortSelect: (key: PersonSortKey) => void
+}
+
+export function PersonRowListHeader({
+  sort,
+  order,
+  onSortSelect,
+}: PersonRowListHeaderProps) {
+  const renderSortIndicator = (key: PersonSortKey) => {
+    if (sort !== key) return null
+    // 이름의 기본 방향(desc='정방향')은 가나다 오름차순, 연도·수명·영향력의 기본 방향은 내림차순
+    const isAsc = key === 'name' ? order === 'desc' : order === 'asc'
+    return isAsc ? (
+      <FiArrowUp size={11} aria-hidden />
+    ) : (
+      <FiArrowDown size={11} aria-hidden />
+    )
+  }
+
+  return (
+    <RowHeaderBar role="row" aria-label="목록 열 머리글">
+      <RowHeaderPinCol aria-hidden>
+        <FiBookmark size={11} />
+      </RowHeaderPinCol>
+      <RowHeaderSortBtn
+        type="button"
+        $active={sort === 'name'}
+        onClick={() => onSortSelect('name')}
+        title="이름순 정렬"
+      >
+        인물 · 직함
+        {renderSortIndicator('name')}
+      </RowHeaderSortBtn>
+      <RowHeaderScopeCol>분야 · 소속</RowHeaderScopeCol>
+      <RowHeaderLifespanCol>
+        <RowHeaderSortBtn
+          type="button"
+          $active={sort === 'year'}
+          onClick={() => onSortSelect('year')}
+          title="출생연도순 정렬"
+        >
+          생몰
+          {renderSortIndicator('year')}
+        </RowHeaderSortBtn>
+        <RowHeaderDivider aria-hidden>·</RowHeaderDivider>
+        <RowHeaderSortBtn
+          type="button"
+          $active={sort === 'lifespan'}
+          onClick={() => onSortSelect('lifespan')}
+          title="수명순 정렬"
+        >
+          수명
+          {renderSortIndicator('lifespan')}
+        </RowHeaderSortBtn>
+      </RowHeaderLifespanCol>
+      <RowHeaderScoreCol>
+        <RowHeaderSortBtn
+          type="button"
+          $active={sort === 'influence'}
+          onClick={() => onSortSelect('influence')}
+          title="영향력순 정렬"
+        >
+          영향력
+          {renderSortIndicator('influence')}
+        </RowHeaderSortBtn>
+      </RowHeaderScoreCol>
+    </RowHeaderBar>
+  )
+}
+
 function PersonRowItemBase({
   person,
   query,
@@ -561,7 +640,21 @@ function PersonRowItemBase({
   onOpen,
 }: PersonCardProps) {
   const [imageFailed, setImageFailed] = useState(false)
-  const showImage = !!person.profileImageUrl && !imageFailed
+  const resolvedImageUrl = person.profileImageUrl
+    ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
+    : null
+  const showImage = !!resolvedImageUrl && !imageFailed
+  const bioTooltip = useMemo(
+    () =>
+      person.biography
+        ? person.biography
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 240)
+        : undefined,
+    [person.biography],
+  )
   const role = person.isMonarch ? '군주' : person.isHeadOfState ? '국가원수' : null
   const born = person.born == null ? '?' : formatYear(person.born)
   const died = person.isAlive ? '현재' : person.died == null ? '?' : formatYear(person.died)
@@ -572,17 +665,33 @@ function PersonRowItemBase({
       : null
   const hasCountry = !!person.country && person.country !== '미상'
   const influenceRated = person.influence > 0
-  const subtitle = person.primaryTitle ?? null
+  const subtitle = person.primaryTitle ?? (person.faction || null)
+  const factionInSubtitle = !person.primaryTitle && !!person.faction
+
+  const ariaLabel = [
+    person.name,
+    role,
+    hasCountry ? person.country : null,
+    person.field,
+    bothYearsUnknown
+      ? (activityFallbackLabel ?? '생몰 미상')
+      : `생몰 ${born === '?' ? '미상' : born}–${died === '?' ? '미상' : died}`,
+    influenceRated ? `영향력 ${person.influence}` : '영향력 미평가',
+    '상세 보기',
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <RowCard
       $pinned={pinned}
       $selected={selected}
       aria-current={selected ? 'true' : undefined}
+      title={bioTooltip}
       onClick={() => onOpen(person.id)}
       role="button"
       tabIndex={0}
-      aria-label={`${person.name}, 상세 보기`}
+      aria-label={ariaLabel}
       style={{ ['--field' as string]: colorForField(person.field) }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -605,7 +714,7 @@ function PersonRowItemBase({
       <RowAvatar>
         {showImage ? (
           <img
-            src={person.profileImageUrl ?? undefined}
+            src={resolvedImageUrl ?? undefined}
             alt=""
             loading="lazy"
             onError={() => setImageFailed(true)}
@@ -621,7 +730,9 @@ function PersonRowItemBase({
           {role && <RowRoleBadge $monarch={person.isMonarch}>{role}</RowRoleBadge>}
         </RowNameLine>
         {subtitle && (
-          <RowSubtitle title={subtitle}>{highlight(subtitle, query)}</RowSubtitle>
+          <RowSubtitle title={subtitle} $muted={factionInSubtitle}>
+            {highlight(subtitle, query)}
+          </RowSubtitle>
         )}
       </RowIdentity>
 
@@ -634,7 +745,7 @@ function PersonRowItemBase({
         )}
         <RowCountryText>
           {hasCountry ? highlight(person.country, query) : '국가 미상'}
-          {person.faction && (
+          {person.faction && !factionInSubtitle && (
             <PlaceSub>
               {' · '}
               {highlight(person.faction, query)}
@@ -680,6 +791,7 @@ function PersonRowItemBase({
 export const PersonRowItem = memo(PersonRowItemBase)
 
 export const PersonRowList = styled.div`
+  container: personrowlist / inline-size;
   display: flex;
   flex-direction: column;
   border: 1px solid ${hairline};
@@ -688,11 +800,118 @@ export const PersonRowList = styled.div`
   background: ${surface};
 `
 
-const RowCard = styled.div<{ $pinned?: boolean; $selected?: boolean }>`
+const rowGridColumns = css`
   display: grid;
   grid-template-columns: 28px 34px minmax(180px, 1.4fr) minmax(160px, 1.3fr) minmax(130px, 0.9fr) 64px;
   align-items: center;
   gap: 10px;
+
+  @container personrowlist (max-width: 760px) {
+    grid-template-columns: 26px 32px minmax(140px, 1fr) auto 56px;
+  }
+  @container personrowlist (max-width: 520px) {
+    grid-template-columns: 24px 30px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  @media (max-width: 900px) {
+    grid-template-columns: 26px 32px minmax(140px, 1fr) auto 56px;
+  }
+  @media (max-width: 640px) {
+    grid-template-columns: 24px 30px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+`
+
+const RowHeaderBar = styled.div`
+  ${rowGridColumns}
+  padding: 6px 14px 6px 10px;
+  min-height: 32px;
+  border-bottom: 1px solid ${hairline};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#f8fafc'};
+  font-size: 11px;
+  font-weight: 600;
+  color: ${metaText};
+  user-select: none;
+
+  @container personrowlist (max-width: 520px) {
+    padding: 6px 10px;
+  }
+  @media (max-width: 640px) {
+    padding: 6px 10px;
+  }
+`
+
+const RowHeaderPinCol = styled.span`
+  grid-column: 1 / 3;
+  display: inline-flex;
+  align-items: center;
+  padding-left: 7px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RowHeaderSortBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  color: ${({ $active, theme }) =>
+    $active ? BRAND.primary : theme.colors.text.tertiary};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color ${MOTION_FAST}, background ${MOTION_FAST};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const RowHeaderScopeCol = styled.span`
+  @container personrowlist (max-width: 760px) {
+    display: none;
+  }
+  @media (max-width: 900px) {
+    display: none;
+  }
+`
+
+const RowHeaderLifespanCol = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  @container personrowlist (max-width: 520px) {
+    display: none;
+  }
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const RowHeaderDivider = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.6;
+`
+
+const RowHeaderScoreCol = styled.span`
+  display: flex;
+  justify-content: flex-end;
+`
+
+const RowCard = styled.div<{ $pinned?: boolean; $selected?: boolean }>`
+  ${rowGridColumns}
   padding: 7px 14px 7px 10px;
   min-height: 46px;
   background: ${surface};
@@ -724,12 +943,10 @@ const RowCard = styled.div<{ $pinned?: boolean; $selected?: boolean }>`
       box-shadow: inset 3px 0 0 ${BRAND.primary};
     `}
 
-  @media (max-width: 900px) {
-    grid-template-columns: 26px 32px minmax(140px, 1fr) auto 52px;
+  @container personrowlist (max-width: 520px) {
+    padding: 8px 10px;
   }
   @media (max-width: 640px) {
-    grid-template-columns: 24px 30px minmax(0, 1fr) auto;
-    gap: 8px;
     padding: 8px 10px;
   }
 `
@@ -825,9 +1042,10 @@ const RowRoleBadge = styled.span<{ $monarch: boolean }>`
         : 'rgba(59, 130, 246, 0.1)'};
 `
 
-const RowSubtitle = styled.span`
+const RowSubtitle = styled.span<{ $muted?: boolean }>`
   font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme, $muted }) =>
+    $muted ? metaText({ theme }) : theme.colors.text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -841,6 +1059,9 @@ const RowScope = styled.div`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.secondary};
 
+  @container personrowlist (max-width: 760px) {
+    display: none;
+  }
   @media (max-width: 900px) {
     display: none;
   }
@@ -865,6 +1086,9 @@ const RowLifespan = styled.div`
   gap: 6px;
   white-space: nowrap;
 
+  @container personrowlist (max-width: 520px) {
+    display: none;
+  }
   @media (max-width: 640px) {
     display: none;
   }
