@@ -549,3 +549,328 @@ const Ring = styled.span`
   mask: radial-gradient(circle, transparent 3.5px, #000000 4px);
   -webkit-mask: radial-gradient(circle, transparent 3.5px, #000000 4px);
 `
+
+/* ─── 컴팩트 행(리스트) 뷰 ────────────────────────────────────────────── */
+
+function PersonRowItemBase({
+  person,
+  query,
+  pinned,
+  selected = false,
+  onTogglePin,
+  onOpen,
+}: PersonCardProps) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const showImage = !!person.profileImageUrl && !imageFailed
+  const role = person.isMonarch ? '군주' : person.isHeadOfState ? '국가원수' : null
+  const born = person.born == null ? '?' : formatYear(person.born)
+  const died = person.isAlive ? '현재' : person.died == null ? '?' : formatYear(person.died)
+  const bothYearsUnknown = person.born == null && person.died == null && !person.isAlive
+  const activityFallbackLabel =
+    bothYearsUnknown && person.activityYear != null
+      ? `활동 ${formatYear(Math.round(person.activityYear))}경`
+      : null
+  const hasCountry = !!person.country && person.country !== '미상'
+  const influenceRated = person.influence > 0
+  const subtitle = person.primaryTitle ?? null
+
+  return (
+    <RowCard
+      $pinned={pinned}
+      $selected={selected}
+      aria-current={selected ? 'true' : undefined}
+      onClick={() => onOpen(person.id)}
+      role="button"
+      tabIndex={0}
+      aria-label={`${person.name}, 상세 보기`}
+      style={{ ['--field' as string]: colorForField(person.field) }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen(person.id)
+        }
+      }}
+    >
+      <RowPinBtn
+        $active={pinned}
+        onClick={(event) => onTogglePin(person.id, event)}
+        title={pinned ? '고정 해제' : '상단에 고정'}
+        aria-label={pinned ? '핀 해제' : '핀 고정'}
+        aria-pressed={pinned}
+        type="button"
+      >
+        <FiBookmark size={14} fill={pinned ? 'currentColor' : 'none'} />
+      </RowPinBtn>
+
+      <RowAvatar>
+        {showImage ? (
+          <img
+            src={person.profileImageUrl ?? undefined}
+            alt=""
+            loading="lazy"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <EmptyPortrait />
+        )}
+      </RowAvatar>
+
+      <RowIdentity>
+        <RowNameLine>
+          <RowName title={person.name}>{highlight(person.name, query)}</RowName>
+          {role && <RowRoleBadge $monarch={person.isMonarch}>{role}</RowRoleBadge>}
+        </RowNameLine>
+        {subtitle && (
+          <RowSubtitle title={subtitle}>{highlight(subtitle, query)}</RowSubtitle>
+        )}
+      </RowIdentity>
+
+      <RowScope>
+        {person.field !== '기타' && (
+          <RowFieldTag>
+            <FieldDot aria-hidden />
+            <FieldName>{person.field}</FieldName>
+          </RowFieldTag>
+        )}
+        <RowCountryText>
+          {hasCountry ? highlight(person.country, query) : '국가 미상'}
+          {person.faction && (
+            <PlaceSub>
+              {' · '}
+              {highlight(person.faction, query)}
+            </PlaceSub>
+          )}
+        </RowCountryText>
+      </RowScope>
+
+      <RowLifespan>
+        <Years>
+          {bothYearsUnknown ? (
+            activityFallbackLabel ?? '생몰 미상'
+          ) : (
+            <>
+              {born}
+              <Dash>–</Dash>
+              {died}
+            </>
+          )}
+        </Years>
+        {person.age != null && (
+          <Age>{person.isAlive ? `${person.age}세` : `향년 ${person.age}세`}</Age>
+        )}
+      </RowLifespan>
+
+      <RowScore>
+        {influenceRated ? (
+          <Influence title={`영향력 ${person.influence}`}>
+            <Ring
+              style={{ ['--value' as string]: `${person.influence}` }}
+              aria-hidden
+            />
+            {person.influence}
+          </Influence>
+        ) : (
+          <Unrated title="영향력 미평가">미평가</Unrated>
+        )}
+      </RowScore>
+    </RowCard>
+  )
+}
+
+export const PersonRowItem = memo(PersonRowItemBase)
+
+export const PersonRowList = styled.div`
+  display: flex;
+  flex-direction: column;
+  border: 1px solid ${hairline};
+  border-radius: 10px;
+  overflow: hidden;
+  background: ${surface};
+`
+
+const RowCard = styled.div<{ $pinned?: boolean; $selected?: boolean }>`
+  display: grid;
+  grid-template-columns: 28px 34px minmax(180px, 1.4fr) minmax(160px, 1.3fr) minmax(130px, 0.9fr) 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px 7px 10px;
+  min-height: 46px;
+  background: ${surface};
+  cursor: pointer;
+  transition: background ${MOTION_FAST};
+
+  & + & {
+    border-top: 1px solid ${hairline};
+  }
+  &:hover {
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#f8fafc')};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset ${BRAND.focusRing};
+  }
+  ${({ $pinned, $selected, theme }) =>
+    $pinned &&
+    !$selected &&
+    css`
+      background: ${theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.06)'
+        : 'rgba(245, 158, 11, 0.04)'};
+    `}
+  ${({ $selected, theme }) =>
+    $selected &&
+    css`
+      background: ${theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+      box-shadow: inset 3px 0 0 ${BRAND.primary};
+    `}
+
+  @media (max-width: 900px) {
+    grid-template-columns: 26px 32px minmax(140px, 1fr) auto 52px;
+  }
+  @media (max-width: 640px) {
+    grid-template-columns: 24px 30px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+`
+
+const RowPinBtn = styled.button<{ $active: boolean }>`
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: ${({ $active, theme }) =>
+    $active ? '#f59e0b' : theme.colors.text.tertiary};
+  opacity: ${({ $active }) => ($active ? 1 : 0.45)};
+  transition: opacity ${MOTION_FAST}, color ${MOTION_FAST}, background ${MOTION_FAST};
+
+  ${RowCard}:hover &,
+  &:focus-visible {
+    opacity: 1;
+  }
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ $active, theme }) =>
+      $active ? '#d97706' : theme.colors.text.primary};
+  }
+`
+
+const RowAvatar = styled.div`
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid ${hairline};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1b1f' : '#f4f5f7')};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    display: block;
+  }
+`
+
+const RowIdentity = styled.div`
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+`
+
+const RowNameLine = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const RowName = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const RowRoleBadge = styled.span<{ $monarch: boolean }>`
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? '#fcd34d'
+        : '#b45309'
+      : theme.mode === 'dark'
+        ? '#93c5fd'
+        : '#1d4ed8'};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.16)'
+        : 'rgba(245, 158, 11, 0.12)'
+      : theme.mode === 'dark'
+        ? 'rgba(59, 130, 246, 0.16)'
+        : 'rgba(59, 130, 246, 0.1)'};
+`
+
+const RowSubtitle = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const RowScope = styled.div`
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+`
+
+const RowFieldTag = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+`
+
+const RowCountryText = styled.span`
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const RowLifespan = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const RowScore = styled.div`
+  display: flex;
+  justify-content: flex-end;
+`

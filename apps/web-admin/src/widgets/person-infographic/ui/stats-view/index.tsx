@@ -3,10 +3,9 @@
  *
  * Sub-tab:
  *  - overview : leaderboard + 평가 패턴 + 시대 추이 + 사망유형 + 태그 페어 + 진행률
- *  - matrix   : 두 축 선택 가능한 2D scatter + 사분면 라벨
- *  - group    : 가문/국가 그룹 평균 레이더 overlay
- *  - galaxy   : 6축 PCA 2D 산포도 (톱축 / K-means)
  *  - compare  : 다중 인물 레이더 overlay
+ *  - group    : 가문/국가 그룹 평균 레이더 overlay
+ *  - matrix   : 두 축 선택 가능한 2D scatter + 사분면 라벨
  */
 import { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
@@ -15,7 +14,6 @@ import { usePersonEvaluationIndex } from '@/shared/lib/person-evaluation-index'
 import type { AdaptedPerson } from '../../model/types'
 
 import { ComparePane } from './compare'
-import { GalaxyPane } from './galaxy'
 import { GroupRadarPane } from './group-radar'
 import { MatrixPane } from './matrix'
 import { OverviewPane } from './overview'
@@ -26,14 +24,13 @@ interface Props {
   onPersonClick: (personId: string) => void
 }
 
-type SubTab = 'overview' | 'matrix' | 'group' | 'galaxy' | 'compare'
+type SubTab = 'overview' | 'compare' | 'group' | 'matrix'
 
 const TAB_OPTIONS: Array<{ key: SubTab; label: string }> = [
   { key: 'overview', label: '개요' },
-  { key: 'matrix', label: '매트릭스' },
-  { key: 'group', label: '그룹 레이더' },
-  { key: 'galaxy', label: '갤럭시 (PCA)' },
-  { key: 'compare', label: '비교' },
+  { key: 'compare', label: '인물 비교' },
+  { key: 'group', label: '가문·국가 비교' },
+  { key: 'matrix', label: '2축 분포' },
 ]
 
 export function StatsView({ people, onPersonClick }: Props) {
@@ -87,15 +84,6 @@ export function StatsView({ people, onPersonClick }: Props) {
           onPersonClick={onPersonClick}
         />
       )}
-      {tab === 'matrix' && (
-        <MatrixPane evaluated={evaluatedPeople} evalIndex={evalIndex} onPersonClick={onPersonClick} />
-      )}
-      {tab === 'group' && (
-        <GroupRadarPane evaluated={evaluatedPeople} evalIndex={evalIndex} />
-      )}
-      {tab === 'galaxy' && (
-        <GalaxyPane evaluated={evaluatedPeople} evalIndex={evalIndex} onPersonClick={onPersonClick} />
-      )}
       {tab === 'compare' && (
         <ComparePane
           people={people}
@@ -103,6 +91,12 @@ export function StatsView({ people, onPersonClick }: Props) {
           evalIndex={evalIndex}
           onPersonClick={onPersonClick}
         />
+      )}
+      {tab === 'group' && (
+        <GroupRadarPane evaluated={evaluatedPeople} evalIndex={evalIndex} />
+      )}
+      {tab === 'matrix' && (
+        <MatrixPane evaluated={evaluatedPeople} evalIndex={evalIndex} onPersonClick={onPersonClick} />
       )}
     </Wrap>
   )

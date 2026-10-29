@@ -4,21 +4,30 @@ import { persist } from 'zustand/middleware'
 import { MAX_RECORD_PERSONS } from './records-compare'
 
 export type PersonInfographicView =
-  | 'matrix'
-  | 'galaxy'
   | 'story'
-  | 'dynasty'
+  | 'matrix'
   | 'stats'
   | 'records'
+
+/** 목록 뷰 그룹핑 기준 — 세기별(기본) / 국가별 / 분야별 / 가문별(구 왕조 뷰 통합) / 전체(그룹 없음) */
+export type PersonGroupBy =
+  | 'century'
+  | 'country'
+  | 'field'
+  | 'dynasty'
+  | 'none'
+
+/** 목록 뷰 표시 밀도 — 카드 격자(기본) / 컴팩트 행(리스트) */
+export type PersonListLayout = 'grid' | 'row'
 
 export type AliveFilter = 'all' | 'alive' | 'dead'
 
 export type ScopeKind = 'era' | 'region' | 'field' | 'country'
 
-/** 인물 정렬 기준 — 카드 그리드 뷰(스토리·왕조)의 그룹 내부 인물 순서. */
+/** 인물 정렬 기준 — 목록 뷰(카드/행) 그룹 내부 및 전체 인물 순서. */
 export type PersonSortKey = 'influence' | 'name' | 'year' | 'deathYear'
 
-/** 시대 스토리 세기 그룹의 시간축 방향 — 'desc'=최신 세기 먼저(기본), 'asc'=오래된 세기 먼저. */
+/** 세기 그룹의 시간축 방향 — 'desc'=최신 세기 먼저(기본), 'asc'=오래된 세기 먼저. */
 export type EraGroupOrder = 'asc' | 'desc'
 
 /** 다중 선택 가능한 카테고리별 필터 — 카테고리 안 OR, 카테고리 간 AND */
@@ -41,10 +50,14 @@ interface PersonInfographicFilterState {
   minInfluence: number
   aliveFilter: AliveFilter
   view: PersonInfographicView
+  /** 목록 뷰 그룹핑 기준 — 세기별(기본)/국가별/분야별/가문별/전체 */
+  groupBy: PersonGroupBy
+  /** 목록 뷰 표시 밀도 — 카드 격자(기본)/컴팩트 행 */
+  listLayout: PersonListLayout
   query: string
-  /** 인물 정렬 기준 — 카드 그리드 뷰(스토리·왕조)의 그룹 내부 순서 */
+  /** 인물 정렬 기준 — 목록 뷰의 그룹 내부 및 전체 순서 */
   sort: PersonSortKey
-  /** 시대 스토리 세기 그룹 나열 방향 — 최신순(기본)/오래된순 */
+  /** 세기 그룹 나열 방향 — 최신순(기본)/오래된순 */
   eraGroupOrder: EraGroupOrder
   /** 좋아요 고정 인물 (localStorage로 유지) */
   pinned: string[]
@@ -64,9 +77,12 @@ interface PersonInfographicFilterState {
         | 'minInfluence'
         | 'aliveFilter'
         | 'view'
+        | 'groupBy'
+        | 'listLayout'
         | 'query'
         | 'sort'
         | 'eraGroupOrder'
+        | 'pinned'
         | 'recordPersonIds'
         | 'recordFromYear'
         | 'recordToYear'
@@ -88,6 +104,8 @@ interface PersonInfographicFilterState {
   setMinInfluence: (n: number) => void
   setAliveFilter: (v: AliveFilter) => void
   setView: (v: PersonInfographicView) => void
+  setGroupBy: (groupBy: PersonGroupBy) => void
+  setListLayout: (listLayout: PersonListLayout) => void
   setQuery: (q: string) => void
   setSort: (s: PersonSortKey) => void
   setEraGroupOrder: (order: EraGroupOrder) => void
@@ -101,6 +119,13 @@ interface PersonInfographicFilterState {
   setRecordYearRange: (fromYear: number | null, toYear: number | null) => void
 }
 
+const VALID_VIEWS: ReadonlySet<string> = new Set([
+  'story',
+  'matrix',
+  'stats',
+  'records',
+])
+
 export const usePersonInfographicFilterStore =
   create<PersonInfographicFilterState>()(
     persist(
@@ -109,6 +134,8 @@ export const usePersonInfographicFilterStore =
         minInfluence: 0,
         aliveFilter: 'all',
         view: 'story',
+        groupBy: 'century',
+        listLayout: 'grid',
         query: '',
         sort: 'influence',
         eraGroupOrder: 'desc',
@@ -134,6 +161,8 @@ export const usePersonInfographicFilterStore =
         setMinInfluence: (minInfluence) => set({ minInfluence }),
         setAliveFilter: (aliveFilter) => set({ aliveFilter }),
         setView: (view) => set({ view }),
+        setGroupBy: (groupBy) => set({ groupBy }),
+        setListLayout: (listLayout) => set({ listLayout }),
         setQuery: (query) => set({ query }),
         setSort: (sort) => set({ sort }),
         setEraGroupOrder: (eraGroupOrder) => set({ eraGroupOrder }),
@@ -143,7 +172,7 @@ export const usePersonInfographicFilterStore =
               ? state.pinned.filter((x) => x !== id)
               : [...state.pinned, id],
           })),
-        // 필터(scope·영향력·생존·검색어)만 해제 — sort는 표시 환경설정이라 보존
+        // 필터(scope·영향력·생존·검색어)만 해제 — sort/groupBy/listLayout은 표시 환경설정이라 보존
         // (useHasActiveFilter가 sort를 필터로 세지 않으므로 CTA 의미와 일치)
         resetFilters: () =>
           set({
@@ -174,35 +203,49 @@ export const usePersonInfographicFilterStore =
       }),
       {
         name: 'person-infographic-filter',
-        version: 5,
+        version: 6,
         // v1(scope: Scope) → v2(scopes: MultiScopes): 단일 scope는 버리고 pinned·view만 유지.
         // v3 → v4: 폐기된 '목록'(list) 뷰가 저장돼 있으면 카드로 되돌린다.
         // v4 → v5: '카드' 뷰도 폐기 — list·cards가 저장돼 있으면 세기별(story)로 되돌린다.
+        // v5 → v6: '은하계'(galaxy) 폐기 → story, '왕조'(dynasty) → story + groupBy='dynasty'로 통합.
         migrate: (persisted: unknown, version: number) => {
           const previous =
             (persisted as Partial<
               Pick<
                 PersonInfographicFilterState,
-                'pinned' | 'sort' | 'eraGroupOrder'
+                'pinned' | 'sort' | 'eraGroupOrder' | 'groupBy' | 'listLayout'
               > & { view: string }
             >) ?? {}
-          const view = (
-            previous.view && previous.view !== 'list' && previous.view !== 'cards'
-              ? previous.view
+          const wasDynasty = previous.view === 'dynasty'
+          const view: PersonInfographicView =
+            previous.view && VALID_VIEWS.has(previous.view)
+              ? (previous.view as PersonInfographicView)
               : 'story'
-          ) as PersonInfographicView
+          const groupBy: PersonGroupBy = wasDynasty
+            ? 'dynasty'
+            : (previous.groupBy ?? 'century')
+          const listLayout: PersonListLayout = previous.listLayout ?? 'grid'
           if (version < 2) {
             return {
               pinned: previous.pinned ?? [],
               view,
+              groupBy,
+              listLayout,
             } as Partial<PersonInfographicFilterState>
           }
-          return { ...previous, view } as Partial<PersonInfographicFilterState>
+          return {
+            ...previous,
+            view,
+            groupBy,
+            listLayout,
+          } as Partial<PersonInfographicFilterState>
         },
-        // sort·eraGroupOrder도 표시 환경설정이라 view와 함께 유지(새로고침 시 선택 보존).
+        // sort·eraGroupOrder·groupBy·listLayout도 표시 환경설정이라 view와 함께 유지(새로고침 시 선택 보존).
         partialize: (state) => ({
           pinned: state.pinned,
           view: state.view,
+          groupBy: state.groupBy,
+          listLayout: state.listLayout,
           sort: state.sort,
           eraGroupOrder: state.eraGroupOrder,
         }),

@@ -1,7 +1,9 @@
 /**
  * 인물 목록 페인.
  *
- * 세기별 / 왕조 / 매트릭스 / 은하계 / 능력치 / 기록 비교 6개 뷰.
+ * 목록 / 생몰 연표 / 능력치 / 기록 비교 4개 핵심 뷰.
+ * - 구 '왕조' 뷰는 목록 뷰의 그룹 기준('가문별')으로 통합
+ * - 구 '은하계' 뷰는 실효성이 낮아 폐기
  * 크롬(검색·필터·뷰 전환·결과 요약)은 사건 목록(/events)과 같은 문법으로 짠다.
  * 기록 비교(records)는 필터 스코프와 무관한 별도 데이터(compare API)라
  * InfographicContent 대신 전용 뷰로 분기한다.
@@ -13,10 +15,8 @@ import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 
 import {
   FiActivity,
-  FiAperture,
   FiBookOpen,
   FiLayout,
-  FiShield,
   FiTrendingUp,
 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -40,23 +40,13 @@ const VIEW_OPTIONS: Array<{
 }> = [
   {
     key: 'story',
-    label: '세기별',
+    label: '목록',
     icon: <FiBookOpen size={13} />,
   },
   {
-    key: 'dynasty',
-    label: '왕조',
-    icon: <FiShield size={13} />,
-  },
-  {
     key: 'matrix',
-    label: '매트릭스',
+    label: '생몰 연표',
     icon: <FiLayout size={13} />,
-  },
-  {
-    key: 'galaxy',
-    label: '은하계',
-    icon: <FiAperture size={13} />,
   },
   {
     key: 'stats',

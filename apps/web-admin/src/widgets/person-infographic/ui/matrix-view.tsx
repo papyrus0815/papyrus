@@ -1,6 +1,6 @@
 /**
- * VIEW: 국가 × 연도 매트릭스.
- * 가로 = 생몰 연도, 색 = 시대. 국가별로 lane 패킹.
+ * VIEW: 국가별 생몰 연표 (구 국가 × 연도 매트릭스).
+ * 가로 = 생몰·활동 연도, 색 = 시대. 국가별로 lane 패킹 + 시대 구간 포커스·가로 배율 지원.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -9,7 +9,7 @@ import styled, { useTheme } from 'styled-components'
 import type { AdaptedPerson } from '../model/types'
 import { bornForPlot, diedForPlot } from '../model/adapt'
 import { formatYear } from '../model/century'
-import { ERAS, INFOGRAPHIC_DEFAULTS } from '../model/constants'
+import { ERAS, INFOGRAPHIC_DEFAULTS, type EraKey } from '../model/constants'
 import {
   usePersonInfographicFilterStore,
   useHasActiveFilter,
@@ -40,6 +40,8 @@ const LANE_H = 18
 const GAP_PX = 2
 const BAR_H = LANE_H - 4
 const BAR_TOP_OFFSET = (LANE_H - BAR_H) / 2
+const ZOOM_STEPS = [1, 2, 3] as const
+type ZoomLevel = (typeof ZOOM_STEPS)[number]
 
 export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
   const theme = useTheme()
@@ -57,6 +59,8 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
   const activeSelectedId =
     selectedPersonId !== undefined ? selectedPersonId : selectedId
   const [showAll, setShowAll] = useState(false)
+  const [eraWindow, setEraWindow] = useState<'all' | EraKey>('all')
+  const [zoom, setZoom] = useState<ZoomLevel>(1)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [W, setW] = useState(1100)
 
@@ -70,6 +74,8 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  const canvasW = Math.round(W * zoom)
 
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
   const toggleScope = usePersonInfographicFilterStore((s) => s.toggleScope)
@@ -90,13 +96,22 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     [hasActiveFilter, scopes],
   )
 
-  const plottablePeople = useMemo(
-    () =>
-      people.filter(
-        (p) => p.activityYear != null || p.born != null || p.died != null,
-      ),
-    [people],
+  const focusedEra = useMemo(
+    () => (eraWindow === 'all' ? null : ERAS.find((e) => e.key === eraWindow) ?? null),
+    [eraWindow],
   )
+
+  const plottablePeople = useMemo(() => {
+    const base = people.filter(
+      (p) => p.activityYear != null || p.born != null || p.died != null,
+    )
+    if (!focusedEra) return base
+    return base.filter((p) => {
+      const b = bornForPlot(p)
+      const d = diedForPlot(p)
+      return d >= focusedEra.from && b <= focusedEra.to
+    })
+  }, [people, focusedEra])
 
   const activeCount = useMemo(
     () =>
@@ -106,7 +121,7 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     [hasActiveFilter, plottablePeople, scopes],
   )
 
-  // 국가별 lane 패킹 — plottablePeople·showAll·W 변할 때만 재계산
+  // 국가별 lane 패킹 — plottablePeople·showAll·canvasW·focusedEra 변할 때만 재계산
   const grouped = useMemo(() => {
     const byCountry: Record<string, AdaptedPerson[]> = {}
     for (const p of plottablePeople) {
@@ -124,15 +139,24 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
       if (bornY < minY) minY = bornY
       if (diedY > maxY) maxY = diedY
     }
-    const rng = Math.max(1, maxY - minY)
-    const yearX = (y: number) => ((y - minY) / rng) * W
+    if (focusedEra && Number.isFinite(minY) && Number.isFinite(maxY)) {
+      minY = Math.max(focusedEra.from, minY)
+      maxY = Math.min(focusedEra.to, maxY)
+      if (maxY <= minY) {
+        minY = focusedEra.from
+        maxY = focusedEra.to
+      }
+    }
+    const rng = Math.max(10, maxY - minY)
+    const yearX = (y: number) =>
+      Math.max(0, Math.min(canvasW, ((y - minY) / rng) * canvasW))
 
     const packed = visible.map(([c, arr]) => {
       const sorted = [...arr].sort((a, b) => bornForPlot(a) - bornForPlot(b))
       const lanes: number[] = []
       const placed = sorted.map((p) => {
         const x1 = yearX(bornForPlot(p))
-        const x2 = Math.max(x1 + 3, yearX(diedForPlot(p)))
+        const x2 = Math.max(x1 + 6, yearX(diedForPlot(p)))
         let lane = lanes.findIndex((rightX) => rightX + GAP_PX <= x1)
         if (lane === -1) {
           lanes.push(x2)
@@ -150,9 +174,11 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     })
     const totalRowH = packed.reduce((s, r) => s + r.rowH, 0)
 
-    const startDec = Math.ceil(minY / 50) * 50
+    const tickStep =
+      rng <= 120 ? 10 : rng <= 350 ? 25 : rng <= 1200 ? 50 : 100
+    const startDec = Math.ceil(minY / tickStep) * tickStep
     const ticks: number[] = []
-    for (let y = startDec; y <= maxY; y += 50) ticks.push(y)
+    for (let y = startDec; y <= maxY; y += tickStep) ticks.push(y)
     return {
       all,
       visible,
@@ -164,9 +190,9 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
       ticks,
       hiddenCount: all.length - visible.length,
     }
-  }, [plottablePeople, showAll, W])
+  }, [plottablePeople, showAll, canvasW, focusedEra])
 
-  if (!grouped.all.length) {
+  if (!grouped.all.length && eraWindow === 'all') {
     return (
       <EmptyState
         hasActiveFilter={hasAnyFilter}
@@ -184,8 +210,10 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
   return (
     <ViewPanel>
       <ViewPanelHeader>
-        <ViewPanelTitle>국가 × 연도 매트릭스</ViewPanelTitle>
-        <ViewPanelDesc>가로 = 생몰 · 색 = 시대 · 범례/국가 클릭으로 필터</ViewPanelDesc>
+        <ViewPanelTitle>국가별 생몰 연표</ViewPanelTitle>
+        <ViewPanelDesc>
+          가로 = 생몰·활동 기간 · 색 = 시대 · 시대 구간 포커스 및 배율 조절
+        </ViewPanelDesc>
         {hasActiveFilter && (
           <FilterBadge>
             <span style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -223,227 +251,285 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
           ))}
         </ViewLegend>
       </ViewPanelHeader>
+
+      <ControlBar>
+        <ControlGroup role="group" aria-label="연표 시대 구간 포커스">
+          <ControlLabel>구간 포커스</ControlLabel>
+          <PillBtn
+            type="button"
+            $active={eraWindow === 'all'}
+            onClick={() => setEraWindow('all')}
+          >
+            전체 구간
+          </PillBtn>
+          {ERAS.map((e) => (
+            <PillBtn
+              key={e.key}
+              type="button"
+              $active={eraWindow === e.key}
+              $color={e.color}
+              onClick={() =>
+                setEraWindow((prev) => (prev === e.key ? 'all' : e.key))
+              }
+            >
+              <PillDot style={{ background: e.color }} />
+              {e.lbl}
+            </PillBtn>
+          ))}
+        </ControlGroup>
+
+        <ControlGroup role="group" aria-label="연표 가로 배율">
+          <ControlLabel>가로 배율</ControlLabel>
+          {ZOOM_STEPS.map((step) => (
+            <PillBtn
+              key={step}
+              type="button"
+              $active={zoom === step}
+              onClick={() => setZoom(step)}
+            >
+              {step}x
+            </PillBtn>
+          ))}
+        </ControlGroup>
+      </ControlBar>
+
       <div ref={containerRef}>
-        <Scroll>
-          <div style={{ display: 'grid', gridTemplateColumns: `130px ${W}px` }}>
-            <Labels>
-              <AxisRow>
-                <AxisTxt>국가 / 인물수</AxisTxt>
-              </AxisRow>
-              {packed.map(({ country: c, count, rowH }) => {
-                const isCountryFiltered = scopes.country.includes(c)
-                const labelActive =
-                  !hasActiveFilter ||
-                  scopes.country.length === 0 ||
-                  isCountryFiltered
-                const isHoveredCountry = hoveredBar?.country === c
-                return (
-                  <LabelRow
-                    key={c}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={isCountryFiltered}
-                    title={`${c} 필터 ${isCountryFiltered ? '해제' : '적용'}`}
-                    onClick={() => toggleScope('country', c)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        toggleScope('country', c)
-                      }
-                    }}
-                    style={{
-                      height: rowH,
-                      opacity: labelActive ? 1 : 0.4,
-                      cursor: 'pointer',
-                      background:
-                        isHoveredCountry || isCountryFiltered
-                          ? theme.colors.activeLight
-                          : 'transparent',
-                      transition: 'background 0.12s',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 12,
-                        flex: 1,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        fontWeight:
-                          isHoveredCountry || isCountryFiltered ? 700 : 400,
-                        color:
-                          isHoveredCountry || isCountryFiltered
-                            ? theme.colors.active
-                            : theme.colors.text.primary,
-                      }}
-                    >
-                      {c}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: theme.colors.text.tertiary,
-                      }}
-                    >
-                      {count}
-                    </span>
-                  </LabelRow>
-                )
-              })}
-            </Labels>
-            <div style={{ position: 'relative' }}>
-              <svg
-                width={W}
-                height={30 + totalRowH}
+        {grouped.all.length === 0 ? (
+          <EmptyState
+            title="선택한 시대 구간에 인물이 없습니다"
+            description="다른 시대 구간을 선택하거나 '전체 구간'으로 되돌려 보세요."
+            actionLabel="전체 구간 보기"
+            onAction={() => setEraWindow('all')}
+          />
+        ) : (
+          <>
+            <Scroll>
+              <div
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  pointerEvents: 'none',
+                  display: 'grid',
+                  gridTemplateColumns: `130px ${canvasW}px`,
                 }}
               >
-                {ERAS.map((e) => {
-                  const x1 = Math.max(0, yearX(Math.max(e.from, minY)))
-                  const x2 = Math.min(W, yearX(Math.min(e.to, maxY)))
-                  if (x2 <= x1) return null
-                  const isEraActive = scopes.era.includes(e.key)
-                  const op =
-                    scopes.era.length > 0
-                      ? isEraActive
-                        ? 0.12
-                        : 0.02
-                      : 0.05
-                  return (
-                    <rect
-                      key={e.key}
-                      x={x1}
-                      y={0}
-                      width={x2 - x1}
-                      height={30 + totalRowH}
-                      fill={e.color}
-                      opacity={op}
-                    />
-                  )
-                })}
-                {ticks.map((y) => (
-                  <line
-                    key={y}
-                    x1={yearX(y)}
-                    y1={30}
-                    x2={yearX(y)}
-                    y2={30 + totalRowH}
-                    stroke={tickLine}
-                    strokeWidth={0.5}
-                    strokeDasharray="2 5"
-                  />
-                ))}
-              </svg>
-              <div style={{ height: 30, position: 'relative' }}>
-                {ticks
-                  .filter((_, i) => i % 2 === 0)
-                  .map((y) => (
-                    <div
-                      key={y}
-                      style={{
-                        position: 'absolute',
-                        left: yearX(y),
-                        top: 0,
-                        fontSize: 9,
-                        color: theme.colors.text.tertiary,
-                        transform: 'translateX(-50%)',
-                        paddingTop: 8,
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {y < 0 ? `${-y}BC` : y}
-                    </div>
-                  ))}
-              </div>
-              {packed.map(({ country: c, placed, rowH }) => (
-                <div
-                  key={c}
-                  style={{
-                    height: rowH,
-                    position: 'relative',
-                    borderTop: `1px solid ${gridLine}`,
-                  }}
-                >
-                  {placed.map(({ p, x1, x2, lane }) => {
-                    const yy = lane * LANE_H + BAR_TOP_OFFSET
-                    const era = p.era
-                    const active = isActive(p)
-                    const isHoveredLane =
-                      hoveredBar?.country === c && hoveredBar?.lane === lane
-                    const isHoveredSelf = hoveredBar?.id === p.id
-                    const isOtherInLane = isHoveredLane && !isHoveredSelf
-                    const isSelected = activeSelectedId === p.id
-                    const baseOp = active ? 0.85 : 0.2
-                    const op = isOtherInLane ? Math.min(baseOp, 0.25) : baseOp
+                <Labels>
+                  <AxisRow>
+                    <AxisTxt>국가 / 인물수</AxisTxt>
+                  </AxisRow>
+                  {packed.map(({ country: c, count, rowH }) => {
+                    const isCountryFiltered = scopes.country.includes(c)
+                    const labelActive =
+                      !hasActiveFilter ||
+                      scopes.country.length === 0 ||
+                      isCountryFiltered
+                    const isHoveredCountry = hoveredBar?.country === c
                     return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        aria-label={`${p.name} ${
-                          p.born == null ? '?' : formatYear(p.born)
-                        }–${p.died == null ? '?' : formatYear(p.died)}`}
-                        onClick={() => {
-                          setSelectedId(p.id)
-                          setHover(null)
-                          onOpen(p.id)
+                      <LabelRow
+                        key={c}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isCountryFiltered}
+                        title={`${c} 필터 ${isCountryFiltered ? '해제' : '적용'}`}
+                        onClick={() => toggleScope('country', c)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            toggleScope('country', c)
+                          }
                         }}
                         style={{
-                          position: 'absolute',
-                          left: x1,
-                          top: yy,
-                          width: Math.max(3, x2 - x1),
-                          height: BAR_H,
-                          background: era.color,
-                          borderRadius: 2,
+                          height: rowH,
+                          opacity: labelActive ? 1 : 0.4,
                           cursor: 'pointer',
-                          opacity: isHoveredSelf ? 1 : op,
-                          border: 'none',
-                          padding: 0,
-                          transition: 'opacity 0.12s, box-shadow 0.12s',
-                          boxShadow: isSelected
-                            ? `0 0 0 2px ${theme.colors.background.primary}, 0 0 0 3.5px ${theme.colors.active}`
-                            : 'none',
-                          zIndex: isSelected ? 2 : isHoveredSelf ? 1 : 0,
+                          background:
+                            isHoveredCountry || isCountryFiltered
+                              ? theme.colors.activeLight
+                              : 'transparent',
+                          transition: 'background 0.12s',
                         }}
-                        onMouseEnter={(e) => {
-                          setHoveredBar({ country: c, lane, id: p.id })
-                          setHover({ p, x: e.clientX, y: e.clientY })
-                        }}
-                        onMouseMove={(e) =>
-                          setHover({ p, x: e.clientX, y: e.clientY })
-                        }
-                        onMouseLeave={() => {
-                          setHoveredBar(null)
-                          setHover(null)
-                        }}
-                      />
+                      >
+                        <span
+                          style={{
+                            fontSize: 12,
+                            flex: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            fontWeight:
+                              isHoveredCountry || isCountryFiltered ? 700 : 400,
+                            color:
+                              isHoveredCountry || isCountryFiltered
+                                ? theme.colors.active
+                                : theme.colors.text.primary,
+                          }}
+                        >
+                          {c}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: theme.colors.text.tertiary,
+                          }}
+                        >
+                          {count}
+                        </span>
+                      </LabelRow>
                     )
                   })}
-                  <MatrixLaneLabels
-                    placed={placed}
-                    isActive={isActive}
-                    selectedId={activeSelectedId ?? null}
-                    hoveredId={hoveredBar?.id ?? null}
-                    W={W}
-                    secondaryColor={theme.colors.text.secondary}
-                  />
+                </Labels>
+                <div style={{ position: 'relative' }}>
+                  <svg
+                    width={canvasW}
+                    height={30 + totalRowH}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    {ERAS.map((e) => {
+                      const x1 = Math.max(0, yearX(Math.max(e.from, minY)))
+                      const x2 = Math.min(canvasW, yearX(Math.min(e.to, maxY)))
+                      if (x2 <= x1) return null
+                      const isEraActive = scopes.era.includes(e.key)
+                      const op =
+                        scopes.era.length > 0
+                          ? isEraActive
+                            ? 0.12
+                            : 0.02
+                          : 0.05
+                      return (
+                        <rect
+                          key={e.key}
+                          x={x1}
+                          y={0}
+                          width={x2 - x1}
+                          height={30 + totalRowH}
+                          fill={e.color}
+                          opacity={op}
+                        />
+                      )
+                    })}
+                    {ticks.map((y) => (
+                      <line
+                        key={y}
+                        x1={yearX(y)}
+                        y1={30}
+                        x2={yearX(y)}
+                        y2={30 + totalRowH}
+                        stroke={tickLine}
+                        strokeWidth={0.5}
+                        strokeDasharray="2 5"
+                      />
+                    ))}
+                  </svg>
+                  <div style={{ height: 30, position: 'relative' }}>
+                    {ticks
+                      .filter((_, i) => i % 2 === 0)
+                      .map((y) => (
+                        <div
+                          key={y}
+                          style={{
+                            position: 'absolute',
+                            left: yearX(y),
+                            top: 0,
+                            fontSize: 9,
+                            color: theme.colors.text.tertiary,
+                            transform: 'translateX(-50%)',
+                            paddingTop: 8,
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          {y < 0 ? `${-y}BC` : y}
+                        </div>
+                      ))}
+                  </div>
+                  {packed.map(({ country: c, placed, rowH }) => (
+                    <div
+                      key={c}
+                      style={{
+                        height: rowH,
+                        position: 'relative',
+                        borderTop: `1px solid ${gridLine}`,
+                      }}
+                    >
+                      {placed.map(({ p, x1, x2, lane }) => {
+                        const yy = lane * LANE_H + BAR_TOP_OFFSET
+                        const era = p.era
+                        const active = isActive(p)
+                        const isHoveredLane =
+                          hoveredBar?.country === c && hoveredBar?.lane === lane
+                        const isHoveredSelf = hoveredBar?.id === p.id
+                        const isOtherInLane = isHoveredLane && !isHoveredSelf
+                        const isSelected = activeSelectedId === p.id
+                        const baseOp = active ? 0.85 : 0.2
+                        const op = isOtherInLane ? Math.min(baseOp, 0.25) : baseOp
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            aria-label={`${p.name} ${
+                              p.born == null ? '?' : formatYear(p.born)
+                            }–${p.died == null ? '?' : formatYear(p.died)}`}
+                            onClick={() => {
+                              setSelectedId(p.id)
+                              setHover(null)
+                              onOpen(p.id)
+                            }}
+                            style={{
+                              position: 'absolute',
+                              left: x1,
+                              top: yy,
+                              width: Math.max(6, x2 - x1),
+                              height: BAR_H,
+                              background: era.color,
+                              borderRadius: 2,
+                              cursor: 'pointer',
+                              opacity: isHoveredSelf ? 1 : op,
+                              border: 'none',
+                              padding: 0,
+                              transition: 'opacity 0.12s, box-shadow 0.12s',
+                              boxShadow: isSelected
+                                ? `0 0 0 2px ${theme.colors.background.primary}, 0 0 0 3.5px ${theme.colors.active}`
+                                : 'none',
+                              zIndex: isSelected ? 2 : isHoveredSelf ? 1 : 0,
+                            }}
+                            onMouseEnter={(e) => {
+                              setHoveredBar({ country: c, lane, id: p.id })
+                              setHover({ p, x: e.clientX, y: e.clientY })
+                            }}
+                            onMouseMove={(e) =>
+                              setHover({ p, x: e.clientX, y: e.clientY })
+                            }
+                            onMouseLeave={() => {
+                              setHoveredBar(null)
+                              setHover(null)
+                            }}
+                          />
+                        )
+                      })}
+                      <MatrixLaneLabels
+                        placed={placed}
+                        isActive={isActive}
+                        selectedId={activeSelectedId ?? null}
+                        hoveredId={hoveredBar?.id ?? null}
+                        W={canvasW}
+                        secondaryColor={theme.colors.text.secondary}
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        </Scroll>
-        {hiddenCount > 0 && (
-          <ShowAllRow>
-            <ShowAllBtn type="button" onClick={() => setShowAll((v) => !v)}>
-              {showAll
-                ? `상위 ${INFOGRAPHIC_DEFAULTS.MATRIX_COUNTRY_TOP_N}개만 보기`
-                : `+${hiddenCount}개 국가 더 보기`}
-            </ShowAllBtn>
-          </ShowAllRow>
+              </div>
+            </Scroll>
+            {hiddenCount > 0 && (
+              <ShowAllRow>
+                <ShowAllBtn type="button" onClick={() => setShowAll((v) => !v)}>
+                  {showAll
+                    ? `상위 ${INFOGRAPHIC_DEFAULTS.MATRIX_COUNTRY_TOP_N}개만 보기`
+                    : `+${hiddenCount}개 국가 더 보기`}
+                </ShowAllBtn>
+              </ShowAllRow>
+            )}
+          </>
         )}
       </div>
       {hover && (
@@ -626,6 +712,72 @@ const MatrixLaneLabels = memo(function MatrixLaneLabels({
 const Scroll = styled.div`
   overflow-x: auto;
   ${scrollbarThinMixin}
+`
+
+const ControlBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.015)'
+      : 'rgba(15,23,42,0.015)'};
+`
+
+const ControlGroup = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const ControlLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 4px;
+`
+
+const PillBtn = styled.button<{ $active: boolean; $color?: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  border: 1px solid
+    ${({ $active, $color, theme }) =>
+      $active
+        ? $color ?? theme.colors.active
+        : theme.colors.border.default};
+  background: ${({ $active, $color, theme }) =>
+    $active
+      ? $color
+        ? `${$color}1f`
+        : theme.colors.activeLight
+      : theme.colors.background.primary};
+  color: ${({ $active, $color, theme }) =>
+    $active
+      ? $color ?? theme.colors.active
+      : theme.colors.text.secondary};
+  transition: all 0.12s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const PillDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
 `
 
 const Labels = styled.div`

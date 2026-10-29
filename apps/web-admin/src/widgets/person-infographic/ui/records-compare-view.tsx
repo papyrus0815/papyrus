@@ -51,6 +51,7 @@ import { useAdaptedPersons } from '../model/use-adapted-persons'
 import {
   Actions,
   BRAND,
+  GhostBtn,
   hairline,
   PrimaryBtn,
   TopBar,
@@ -107,23 +108,43 @@ export function RecordsCompareView({
   const removeRecordPersonId = usePersonInfographicFilterStore(
     (state) => state.removeRecordPersonId,
   )
+  const clearRecordPersonIds = usePersonInfographicFilterStore(
+    (state) => state.clearRecordPersonIds,
+  )
   const setRecordYearRange = usePersonInfographicFilterStore(
     (state) => state.setRecordYearRange,
   )
   const setMany = usePersonInfographicFilterStore((state) => state.setMany)
 
-  const quickSuggestedIds = useMemo(() => {
-    const filtered = filterPersons(adaptedPersons, {
-      scopes,
-      minInfluence,
-      aliveFilter,
-      query,
-    })
-    return [...filtered]
-      .sort((a, b) => b.influence - a.influence)
-      .slice(0, 4)
-      .map((p) => p.id)
-  }, [adaptedPersons, scopes, minInfluence, aliveFilter, query])
+  const filteredCandidates = useMemo(
+    () =>
+      filterPersons(adaptedPersons, {
+        scopes,
+        minInfluence,
+        aliveFilter,
+        query,
+      }).sort((a, b) => b.influence - a.influence),
+    [adaptedPersons, scopes, minInfluence, aliveFilter, query],
+  )
+
+  const quickSuggestedIds = useMemo(
+    () => filteredCandidates.slice(0, 4).map((p) => p.id),
+    [filteredCandidates],
+  )
+
+  const monarchSuggestedIds = useMemo(
+    () =>
+      filteredCandidates
+        .filter((p) => p.isMonarch || p.isHeadOfState)
+        .slice(0, 4)
+        .map((p) => p.id),
+    [filteredCandidates],
+  )
+
+  const quickChips = useMemo(
+    () => filteredCandidates.slice(0, 8),
+    [filteredCandidates],
+  )
 
   const validPinnedIds = useMemo(() => {
     const knownIds = new Set(adaptedPersons.map((p) => p.id))
@@ -246,6 +267,16 @@ export function RecordsCompareView({
               <strong>{recordPersonIds.length}</strong> / {MAX_RECORD_PERSONS}명 비교
             </span>
           </ViewMeta>
+          {recordPersonIds.length > 0 && (
+            <GhostBtn
+              type="button"
+              onClick={clearRecordPersonIds}
+              aria-label="비교 인물 모두 비우기"
+            >
+              <FiX size={14} />
+              모두 비우기
+            </GhostBtn>
+          )}
           <AddPersonBtn
             type="button"
             onClick={() => setPickerOpen(true)}
@@ -293,7 +324,9 @@ export function RecordsCompareView({
             actionLabel="인물 추가"
             onAction={() => setPickerOpen(true)}
           />
-          {(validPinnedIds.length > 0 || quickSuggestedIds.length >= 2) && (
+          {(validPinnedIds.length > 0 ||
+            quickSuggestedIds.length >= 2 ||
+            monarchSuggestedIds.length >= 2) && (
             <QuickStartBar>
               {validPinnedIds.length > 0 && (
                 <QuickStartBtn
@@ -315,7 +348,34 @@ export function RecordsCompareView({
                   주요 인물 {quickSuggestedIds.length}명 바로 비교하기
                 </QuickStartBtn>
               )}
+              {monarchSuggestedIds.length >= 2 && (
+                <QuickStartBtn
+                  type="button"
+                  onClick={() =>
+                    setMany({ recordPersonIds: monarchSuggestedIds })
+                  }
+                >
+                  <FiTrendingUp size={13} />
+                  군주·국가원수 {monarchSuggestedIds.length}명 비교하기
+                </QuickStartBtn>
+              )}
             </QuickStartBar>
+          )}
+          {quickChips.length > 0 && (
+            <QuickPersonChips aria-label="빠른 인물 선택">
+              <QuickChipsLabel>빠른 선택</QuickChipsLabel>
+              {quickChips.map((person) => (
+                <QuickPersonChip
+                  key={person.id}
+                  type="button"
+                  onClick={() => addRecordPersonId(person.id)}
+                >
+                  <FiPlus size={12} />
+                  {person.name}
+                  <QuickChipMeta>{person.country}</QuickChipMeta>
+                </QuickPersonChip>
+              ))}
+            </QuickPersonChips>
           )}
         </div>
       ) : compareError ? (
@@ -1003,4 +1063,48 @@ const QuickStartBtn = styled.button`
     background: ${({ theme }) =>
       theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   }
+`
+
+const QuickPersonChips = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 24px;
+`
+
+const QuickChipsLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 4px;
+`
+
+const QuickPersonChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${hairline};
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+
+  &:hover {
+    color: ${BRAND.primary};
+    border-color: ${BRAND.primaryBorder};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+  }
+`
+
+const QuickChipMeta = styled.span`
+  font-size: 10.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `

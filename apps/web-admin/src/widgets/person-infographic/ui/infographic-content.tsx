@@ -26,7 +26,9 @@ import {
   FiClock,
   FiFilter,
   FiGlobe,
+  FiGrid,
   FiLayers,
+  FiList,
   FiPlus,
   FiSearch,
   FiX,
@@ -46,6 +48,7 @@ import {
 import {
   countActiveScopes,
   usePersonInfographicFilterStore,
+  type PersonGroupBy,
   type PersonInfographicView,
   type PersonSortKey,
 } from '../model/filter.store'
@@ -57,7 +60,6 @@ import { SORT_OPTIONS } from '../model/sort-helpers'
 import { usePersonQueryInput } from '../model/use-person-query-input'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
-import { DynastyView } from './dynasty-view'
 import { PersonViewSkeleton } from './_shared/view-skeleton'
 import {
   BRAND,
@@ -84,10 +86,17 @@ import {
 import { EmptyState } from './_shared/empty-state'
 import { ScopeDropdown } from './_shared/scope-dropdown'
 import { EraStoryView } from './era-story-view'
-import { GalaxyView } from './galaxy-view'
 import { HeaderStats, type HeaderStatsVariant } from './header-stats'
 import { MatrixView } from './matrix-view'
 import { StatsView } from './stats-view'
+
+const GROUP_OPTIONS: ReadonlyArray<readonly [PersonGroupBy, string]> = [
+  ['century', '세기별'],
+  ['country', '국가별'],
+  ['field', '분야별'],
+  ['dynasty', '가문별'],
+  ['none', '전체 목록'],
+]
 
 interface InfographicContentProps {
   /** 인물 클릭 — 페이지가 인물 상세 모달을 띄운다(모달의 '상세 페이지'로 상세 진입) */
@@ -128,6 +137,12 @@ export function InfographicContent({
   const setAliveFilter = usePersonInfographicFilterStore((state) => state.setAliveFilter)
   const sort = usePersonInfographicFilterStore((state) => state.sort)
   const setSort = usePersonInfographicFilterStore((state) => state.setSort)
+  const groupBy = usePersonInfographicFilterStore((state) => state.groupBy)
+  const setGroupBy = usePersonInfographicFilterStore((state) => state.setGroupBy)
+  const listLayout = usePersonInfographicFilterStore((state) => state.listLayout)
+  const setListLayout = usePersonInfographicFilterStore(
+    (state) => state.setListLayout,
+  )
   const eraGroupOrder = usePersonInfographicFilterStore((state) => state.eraGroupOrder)
   const setEraGroupOrder = usePersonInfographicFilterStore(
     (state) => state.setEraGroupOrder,
@@ -229,9 +244,9 @@ export function InfographicContent({
   const hasStatsPanel = activeView !== 'stats'
   const statsPanelShown = statsOpen && hasStatsPanel
   const statsVariant: HeaderStatsVariant =
-    activeView === 'dynasty'
+    activeView === 'story' && groupBy === 'dynasty'
       ? 'dynasty'
-      : activeView === 'matrix' || activeView === 'galaxy'
+      : activeView === 'matrix'
         ? 'tiles'
         : 'full'
 
@@ -401,9 +416,21 @@ export function InfographicContent({
           {/* 보기 전환·정렬 — 예전엔 툴바 아래 한 줄을 따로 먹었다(목록이 46px 더 내려갔다) */}
           <ViewControls>
             {viewSwitcher}
-            <DisplayOptions>
-              {/* 정렬은 카드 그리드 뷰(세기별·왕조)에서만 의미 */}
-              {(activeView === 'story' || activeView === 'dynasty') && (
+            {activeView === 'story' && (
+              <DisplayOptions>
+                <Select
+                  value={groupBy}
+                  onChange={(event) =>
+                    setGroupBy(event.target.value as PersonGroupBy)
+                  }
+                  aria-label="인물 그룹 기준"
+                >
+                  {GROUP_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
                 <Select
                   value={sort}
                   onChange={(event) => setSort(event.target.value as PersonSortKey)}
@@ -415,30 +442,51 @@ export function InfographicContent({
                     </option>
                   ))}
                 </Select>
-              )}
-              {/* 세기 나열 방향은 세기 그룹 뷰(스토리) 전용 */}
-              {activeView === 'story' && (
+                {groupBy === 'century' && (
+                  <IconBtn
+                    type="button"
+                    onClick={() =>
+                      setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
+                    }
+                    aria-label={
+                      eraGroupOrder === 'desc'
+                        ? '세기 순서: 최신순 (오래된순으로 바꾸기)'
+                        : '세기 순서: 오래된순 (최신순으로 바꾸기)'
+                    }
+                    title={eraGroupOrder === 'desc' ? '세기: 최신순' : '세기: 오래된순'}
+                  >
+                    <FiArrowDown
+                      size={15}
+                      style={{
+                        transform: eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
+                      }}
+                    />
+                  </IconBtn>
+                )}
                 <IconBtn
                   type="button"
                   onClick={() =>
-                    setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
+                    setListLayout(listLayout === 'grid' ? 'row' : 'grid')
                   }
                   aria-label={
-                    eraGroupOrder === 'desc'
-                      ? '세기 순서: 최신순 (오래된순으로 바꾸기)'
-                      : '세기 순서: 오래된순 (최신순으로 바꾸기)'
+                    listLayout === 'grid'
+                      ? '현재 카드형 보기 (리스트형으로 바꾸기)'
+                      : '현재 리스트형 보기 (카드형으로 바꾸기)'
                   }
-                  title={eraGroupOrder === 'desc' ? '최신순' : '오래된순'}
+                  title={
+                    listLayout === 'grid'
+                      ? '리스트형(컴팩트) 보기'
+                      : '카드형(그리드) 보기'
+                  }
                 >
-                  <FiArrowDown
-                    size={15}
-                    style={{
-                      transform: eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
-                    }}
-                  />
+                  {listLayout === 'grid' ? (
+                    <FiList size={15} />
+                  ) : (
+                    <FiGrid size={15} />
+                  )}
                 </IconBtn>
-              )}
-            </DisplayOptions>
+              </DisplayOptions>
+            )}
           </ViewControls>
 
           <Actions>
@@ -559,25 +607,8 @@ export function InfographicContent({
                   selectedPersonId={selectedPersonId}
                 />
               )}
-              {activeView === 'galaxy' && (
-                <GalaxyView
-                  people={baseFiltered}
-                  onOpen={onPersonClick}
-                  selectedPersonId={selectedPersonId}
-                />
-              )}
               {activeView === 'story' && (
                 <EraStoryView
-                  people={filtered}
-                  onOpen={onPersonClick}
-                  query={dq}
-                  pinned={pinned}
-                  selectedPersonId={selectedPersonId}
-                  togglePin={togglePin}
-                />
-              )}
-              {activeView === 'dynasty' && (
-                <DynastyView
                   people={filtered}
                   onOpen={onPersonClick}
                   query={dq}

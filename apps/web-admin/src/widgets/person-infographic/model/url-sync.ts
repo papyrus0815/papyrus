@@ -20,20 +20,28 @@ import type {
   AliveFilter,
   EraGroupOrder,
   MultiScopes,
+  PersonGroupBy,
   PersonInfographicView,
+  PersonListLayout,
   PersonSortKey,
 } from './filter.store'
 import { usePersonInfographicFilterStore } from './filter.store'
 import { MAX_RECORD_PERSONS } from './records-compare'
 
 const VIEWS: PersonInfographicView[] = [
-  'matrix',
-  'galaxy',
   'story',
-  'dynasty',
+  'matrix',
   'stats',
   'records',
 ]
+const GROUPS: PersonGroupBy[] = [
+  'century',
+  'country',
+  'field',
+  'dynasty',
+  'none',
+]
+const LAYOUTS: PersonListLayout[] = ['grid', 'row']
 const ALIVES: AliveFilter[] = ['all', 'alive', 'dead']
 const SORTS: PersonSortKey[] = ['influence', 'name', 'year', 'deathYear']
 const ORDERS: EraGroupOrder[] = ['asc', 'desc']
@@ -54,6 +62,8 @@ export function useFilterUrlSync(): void {
   const setMany = usePersonInfographicFilterStore((s) => s.setMany)
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
   const view = usePersonInfographicFilterStore((s) => s.view)
+  const groupBy = usePersonInfographicFilterStore((s) => s.groupBy)
+  const listLayout = usePersonInfographicFilterStore((s) => s.listLayout)
   const query = usePersonInfographicFilterStore((s) => s.query)
   const aliveFilter = usePersonInfographicFilterStore((s) => s.aliveFilter)
   const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
@@ -116,10 +126,33 @@ export function useFilterUrlSync(): void {
     const patch: Parameters<typeof setMany>[0] = {}
 
     const v = searchParams.get('view')
-    if (v && (VIEWS as string[]).includes(v)) {
+    if (v === 'dynasty') {
+      if (cur.view !== 'story') patch.view = 'story'
+      if (cur.groupBy !== 'dynasty') patch.groupBy = 'dynasty'
+    } else if (v === 'galaxy') {
+      if (cur.view !== 'story') patch.view = 'story'
+    } else if (v && (VIEWS as string[]).includes(v)) {
       if (v !== cur.view) patch.view = v as PersonInfographicView
     } else if (isExternalNavigation && cur.view !== 'story') {
       patch.view = 'story'
+    }
+
+    const g = searchParams.get('group')
+    if (g && (GROUPS as string[]).includes(g)) {
+      if (g !== cur.groupBy) patch.groupBy = g as PersonGroupBy
+    } else if (
+      v !== 'dynasty' &&
+      isExternalNavigation &&
+      cur.groupBy !== 'century'
+    ) {
+      patch.groupBy = 'century'
+    }
+
+    const l = searchParams.get('layout')
+    if (l && (LAYOUTS as string[]).includes(l)) {
+      if (l !== cur.listLayout) patch.listLayout = l as PersonListLayout
+    } else if (isExternalNavigation && cur.listLayout !== 'grid') {
+      patch.listLayout = 'grid'
     }
 
     const q = searchParams.get('q')
@@ -243,14 +276,21 @@ export function useFilterUrlSync(): void {
       else next.delete(k)
     }
     setOrDel('view', view !== 'story' ? view : '')
+    setOrDel(
+      'group',
+      view === 'story' && groupBy !== 'century' ? groupBy : '',
+    )
+    setOrDel(
+      'layout',
+      view === 'story' && listLayout !== 'grid' ? listLayout : '',
+    )
     setOrDel('q', query)
     setOrDel('alive', aliveFilter !== 'all' ? aliveFilter : '')
     setOrDel('minInf', minInfluence > 0 ? String(minInfluence) : '')
-    // sort/order는 실제로 소비하는 뷰에서만 URL에 노출 — matrix·galaxy·stats·records엔
+    // sort/order/group/layout은 목록(story) 뷰에서만 URL에 노출 — matrix·stats·records엔
     // inert 파라미터를 남기지 않는다(값은 store·persist에 유지되어 뷰 복귀 시 재노출).
-    // sort=세기별/왕조, order(세기 방향)=세기별 전용.
-    const sortConsumed = view === 'story' || view === 'dynasty'
-    const orderConsumed = view === 'story'
+    const sortConsumed = view === 'story'
+    const orderConsumed = view === 'story' && groupBy === 'century'
     setOrDel('sort', sortConsumed && sort !== 'influence' ? sort : '')
     setOrDel('order', orderConsumed && eraGroupOrder !== 'desc' ? eraGroupOrder : '')
     setOrDel('era', scopes.era.join(','))
@@ -268,6 +308,8 @@ export function useFilterUrlSync(): void {
     }
   }, [
     view,
+    groupBy,
+    listLayout,
     query,
     aliveFilter,
     minInfluence,

@@ -9,16 +9,23 @@
 import { useState } from 'react'
 
 import { INFOGRAPHIC_DEFAULTS } from '../../model/constants'
+import type { PersonListLayout } from '../../model/filter.store'
 import type { AdaptedPerson } from '../../model/types'
 
 import { GroupSection, MoreBtn } from './group-section'
-import { EraCardGrid, PersonCardItem } from './person-card'
+import {
+  EraCardGrid,
+  PersonCardItem,
+  PersonRowItem,
+  PersonRowList,
+} from './person-card'
 
 interface Props {
   /** 핀 된 인물 — 이미 활성 정렬 기준으로 정렬된 상태 */
   people: AdaptedPerson[]
   query: string
   selectedPersonId?: string | null
+  layout?: PersonListLayout
   onTogglePin: (id: string, event: React.MouseEvent) => void
   onOpen: (id: string) => void
 }
@@ -28,6 +35,7 @@ export function PinnedPeopleSection({
   people,
   query,
   selectedPersonId,
+  layout = 'grid',
   onTogglePin,
   onOpen,
 }: Props) {
@@ -49,19 +57,35 @@ export function PinnedPeopleSection({
       collapsed={collapsed}
       onToggle={() => setCollapsed((prev) => !prev)}
     >
-      <EraCardGrid>
-        {shown.map((person) => (
-          <PersonCardItem
-            key={person.id}
-            person={person}
-            query={query}
-            pinned
-            selected={selectedPersonId === person.id}
-            onTogglePin={onTogglePin}
-            onOpen={onOpen}
-          />
-        ))}
-      </EraCardGrid>
+      {layout === 'row' ? (
+        <PersonRowList>
+          {shown.map((person) => (
+            <PersonRowItem
+              key={person.id}
+              person={person}
+              query={query}
+              pinned
+              selected={selectedPersonId === person.id}
+              onTogglePin={onTogglePin}
+              onOpen={onOpen}
+            />
+          ))}
+        </PersonRowList>
+      ) : (
+        <EraCardGrid>
+          {shown.map((person) => (
+            <PersonCardItem
+              key={person.id}
+              person={person}
+              query={query}
+              pinned
+              selected={selectedPersonId === person.id}
+              onTogglePin={onTogglePin}
+              onOpen={onOpen}
+            />
+          ))}
+        </EraCardGrid>
+      )}
       {hasMore && (
         <MoreBtn type="button" onClick={() => setExpanded((prev) => !prev)}>
           {expanded

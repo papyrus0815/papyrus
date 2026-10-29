@@ -24,15 +24,13 @@ import { BRAND, hairline, surface } from './catalog.styles'
 import { EraCardGrid } from './person-card'
 import { ViewPanel, ViewPanelHeader } from './view-panel'
 
-export type SkeletonView = 'story' | 'dynasty' | 'matrix' | 'galaxy' | 'stats'
+export type SkeletonView = 'story' | 'matrix' | 'stats'
 
 export function PersonViewSkeleton({ view }: { view: SkeletonView }) {
   return (
     <Reveal aria-hidden role="presentation">
       {view === 'story' && <GroupedSkeleton withCenturyIndex />}
-      {view === 'dynasty' && <GroupedSkeleton withRoleTag />}
       {view === 'matrix' && <MatrixSkeleton />}
-      {view === 'galaxy' && <GalaxySkeleton />}
       {view === 'stats' && <StatsSkeleton />}
     </Reveal>
   )
