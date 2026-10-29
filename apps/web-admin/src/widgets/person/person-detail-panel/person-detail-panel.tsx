@@ -272,8 +272,10 @@ import {
   TenureEmpty,
   TopNavBar,
   TopNavLeft,
+  TopNavSep,
   UnifiedActionRow,
 } from './person-detail-panel.styles'
+import { PersonActionsMenu } from './person-actions-menu'
 import { PersonTopSearchBar } from './person-top-search-bar'
 
 import type {
@@ -1642,7 +1644,7 @@ export function PersonDetailPanel({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
-        {/* 상단 네비바: 목록으로 버튼(좌) + 통합 인물 검색·이동(중) + 등록·수정·삭제 버튼(우) */}
+        {/* 상단 네비바: 평문 복귀 링크(좌) + 통합 인물 검색·이동(중) + 수정·더보기(⋯) 메뉴(우) */}
         {!hideHeaderActions && (
           <TopNavBar>
             <TopNavLeft>
@@ -1653,20 +1655,22 @@ export function PersonDetailPanel({
                   onClose()
                 }}
               >
-                <FiArrowLeft size={14} />
+                <FiArrowLeft size={13} />
                 {backLabel}
               </BackToListButton>
               {!embedInModal && (
-                <OutlineButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    navigate(pathKeys.personsTimeline())
-                  }}
-                >
-                  <FiUsers size={13} />
-                  인물 목록
-                </OutlineButton>
+                <>
+                  <TopNavSep aria-hidden="true">·</TopNavSep>
+                  <BackToListButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      navigate(pathKeys.personsTimeline())
+                    }}
+                  >
+                    인물 목록
+                  </BackToListButton>
+                </>
               )}
             </TopNavLeft>
             {!embedInModal && (
@@ -1683,18 +1687,6 @@ export function PersonDetailPanel({
               />
             )}
             <HeaderActions>
-              {onAdd && !embedInModal && (
-                <OutlineButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    onAdd()
-                  }}
-                >
-                  <FiPlus size={13} />
-                  등록
-                </OutlineButton>
-              )}
               <OutlineButton
                 type="button"
                 onClick={() => {
@@ -1702,19 +1694,16 @@ export function PersonDetailPanel({
                   onEdit(person.id)
                 }}
               >
-                <FiEdit2 size={13} />
+                <FiEdit2 size={12} />
                 수정
               </OutlineButton>
-              <DeleteButton
-                type="button"
-                onClick={() => {
+              <PersonActionsMenu
+                onAdd={!embedInModal ? onAdd : undefined}
+                onDelete={() => {
                   playClickSound()
                   setDeleteConfirmOpen(true)
                 }}
-              >
-                <FiTrash2 size={13} />
-                삭제
-              </DeleteButton>
+              />
             </HeaderActions>
           </TopNavBar>
         )}
@@ -2168,7 +2157,6 @@ export function PersonDetailPanel({
               handleTabChange('overview')
             }}
           >
-            <FiInfo size={14} />
             개요
           </TabBtn>
           <TabBtn
@@ -2185,7 +2173,6 @@ export function PersonDetailPanel({
               handleTabChange('genealogy')
             }}
           >
-            <FiUsers size={14} />
             가계도
             <TabCount aria-label={`${genealogyCount}명`}>{genealogyCount}</TabCount>
           </TabBtn>
@@ -2202,7 +2189,6 @@ export function PersonDetailPanel({
               handleTabChange('events')
             }}
           >
-            <FiCalendar size={14} />
             연보
             {(annalsCount > 0 || activeTab === 'events') && (
               <TabCount aria-label={`${annalsCount}건`}>{annalsCount}</TabCount>
