@@ -540,28 +540,28 @@ export function InfographicContent({
                     }}
                   />
                 </IconBtn>
-                <IconBtn
-                  type="button"
-                  onClick={() =>
-                    setListLayout(listLayout === 'grid' ? 'row' : 'grid')
-                  }
-                  aria-label={
-                    listLayout === 'grid'
-                      ? '현재 카드형 보기 (리스트형으로 바꾸기)'
-                      : '현재 리스트형 보기 (카드형으로 바꾸기)'
-                  }
-                  title={
-                    listLayout === 'grid'
-                      ? '리스트형(컴팩트) 보기'
-                      : '카드형(그리드) 보기'
-                  }
-                >
-                  {listLayout === 'grid' ? (
-                    <FiList size={15} />
-                  ) : (
-                    <FiGrid size={15} />
-                  )}
-                </IconBtn>
+                <LayoutSegmented role="group" aria-label="목록 표시 형식">
+                  <LayoutSegmentBtn
+                    type="button"
+                    $active={listLayout === 'grid'}
+                    aria-pressed={listLayout === 'grid'}
+                    onClick={() => setListLayout('grid')}
+                    title="카드형(그리드) 보기"
+                  >
+                    <FiGrid size={13} aria-hidden />
+                    <span>카드</span>
+                  </LayoutSegmentBtn>
+                  <LayoutSegmentBtn
+                    type="button"
+                    $active={listLayout === 'row'}
+                    aria-pressed={listLayout === 'row'}
+                    onClick={() => setListLayout('row')}
+                    title="리스트형(컴팩트 행) 보기"
+                  >
+                    <FiList size={13} aria-hidden />
+                    <span>리스트</span>
+                  </LayoutSegmentBtn>
+                </LayoutSegmented>
               </DisplayOptions>
             )}
 
@@ -700,8 +700,63 @@ const SubBar = styled.div`
   align-items: center;
   gap: 8px 12px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
   min-height: 34px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)'};
+`
+
+const LayoutSegmented = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: 34px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(15, 23, 42, 0.03)'};
+`
+
+const LayoutSegmentBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : '#ffffff'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? BRAND.primary : theme.colors.text.tertiary};
+  box-shadow: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '0 1px 2px rgba(0,0,0,0.35)'
+        : '0 1px 2px rgba(15,23,42,0.06)'
+      : 'none'};
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: ${({ $active, theme }) =>
+      $active ? BRAND.primary : theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
 `
 
 const ActiveFiltersInline = styled(ActiveFiltersRow)`

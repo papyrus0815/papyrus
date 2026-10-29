@@ -363,14 +363,9 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                         >
                           {c}
                         </span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            color: theme.colors.text.tertiary,
-                          }}
-                        >
+                        <CountryCountPill $active={isHoveredCountry || isCountryFiltered}>
                           {count}
-                        </span>
+                        </CountryCountPill>
                       </LabelRow>
                     )
                   })}
@@ -422,7 +417,13 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                       />
                     ))}
                   </svg>
-                  <div style={{ height: 30, position: 'relative' }}>
+                  <div
+                    style={{
+                      height: 30,
+                      position: 'relative',
+                      borderBottom: `1px solid ${gridLine}`,
+                    }}
+                  >
                     {ticks
                       .filter((_, i) => i % 2 === 0)
                       .map((y) => (
@@ -432,14 +433,16 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                             position: 'absolute',
                             left: yearX(y),
                             top: 0,
-                            fontSize: 9,
+                            fontSize: 10.5,
+                            fontWeight: 600,
                             color: theme.colors.text.tertiary,
                             transform: 'translateX(-50%)',
                             paddingTop: 8,
                             fontVariantNumeric: 'tabular-nums',
+                            whiteSpace: 'nowrap',
                           }}
                         >
-                          {y < 0 ? `${-y}BC` : y}
+                          {y === 0 ? '0' : formatYear(y)}
                         </div>
                       ))}
                   </div>
@@ -482,7 +485,7 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                               width: Math.max(6, x2 - x1),
                               height: BAR_H,
                               background: era.color,
-                              borderRadius: 2,
+                              borderRadius: 4,
                               cursor: 'pointer',
                               opacity: isHoveredSelf ? 1 : op,
                               border: 'none',
@@ -490,7 +493,7 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                               transition: 'opacity 0.12s, box-shadow 0.12s',
                               boxShadow: isSelected
                                 ? `0 0 0 2px ${theme.colors.background.primary}, 0 0 0 3.5px ${theme.colors.active}`
-                                : 'none',
+                                : 'inset 0 0 0 1px rgba(255, 255, 255, 0.22)',
                               zIndex: isSelected ? 2 : isHoveredSelf ? 1 : 0,
                             }}
                             onMouseEnter={(e) => {
@@ -781,11 +784,31 @@ const PillDot = styled.span`
 `
 
 const Labels = styled.div`
+  position: sticky;
+  left: 0;
+  z-index: 6;
   border-right: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#161618' : '#f8fafc')};
+  box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.02)'
-      : theme.colors.background.secondary};
+      ? '4px 0 12px rgba(0, 0, 0, 0.28)'
+      : '4px 0 12px rgba(15, 23, 42, 0.04)'};
+`
+
+const CountryCountPill = styled.span<{ $active?: boolean }>`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.active : theme.colors.text.tertiary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.colors.activeLight
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.05)'};
 `
 
 const AxisRow = styled.div`

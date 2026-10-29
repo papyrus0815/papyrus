@@ -18,6 +18,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
+import { FiCheck } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { bornForPlot, diedForPlot, yearOfEra } from '../model/adapt'
@@ -582,6 +583,29 @@ export function HeaderStats({
             ))}
           </Axis>
 
+          {/* 시대 구간 비례 리본 — X축 연도 비율 그대로 시대 색 띠를 깔아 시간축 비중을 한눈에 보여준다 */}
+          <EraRibbon aria-hidden>
+            {ERAS.map((era) => {
+              const left = Math.max(0, pct(era.from))
+              const right = Math.min(100, pct(era.to))
+              if (right <= left) return null
+              const active = scopes.era.includes(era.key)
+              return (
+                <EraRibbonSeg
+                  key={era.key}
+                  $active={active}
+                  $dim={eraFiltered && !active}
+                  title={`${era.lbl} (${formatYear(era.from)}–${formatYear(era.to)})`}
+                  onClick={() => toggleScope('era', era.key)}
+                  style={{
+                    left: `${left}%`,
+                    width: `${right - left}%`,
+                    background: era.color,
+                  }}
+                />
+              )
+            })}
+          </EraRibbon>
 
           {/* 시대 칩 — 연도 비례가 아니라 같은 폭 규칙으로 나열해, 좁은 근·현대 구간도
               이름과 인원이 항상 글자로 읽힌다(색만으로 시대를 식별하지 않는다). */}
@@ -604,6 +628,7 @@ export function HeaderStats({
                   <EraSwatch style={{ background: era.color }} aria-hidden />
                   <EraName>{era.lbl}</EraName>
                   <EraCount>{count.toLocaleString()}</EraCount>
+                  {active && <FiCheck size={12} strokeWidth={2.6} aria-hidden />}
                 </EraChip>
               )
             })}
@@ -776,7 +801,11 @@ function BarSection({
               onClick={row.onToggle}
             >
               <BarLabel>
-                {ranked ? (
+                {row.active ? (
+                  <ActiveCheckBadge aria-hidden>
+                    <FiCheck size={10} strokeWidth={3} />
+                  </ActiveCheckBadge>
+                ) : ranked ? (
                   <Rank>{index + 1}</Rank>
                 ) : (
                   <Swatch style={{ background: row.swatch }} aria-hidden />
@@ -1143,6 +1172,32 @@ const Axis = styled.div`
   height: 20px;
 `
 
+const EraRibbon = styled.div`
+  position: relative;
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
+`
+
+const EraRibbonSeg = styled.span<{ $active: boolean; $dim: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  cursor: pointer;
+  opacity: ${({ $dim }) => ($dim ? 0.28 : 0.88)};
+  box-shadow: inset -1px 0 0
+    ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#ffffff')};
+  transition: opacity ${MOTION_FAST}, filter ${MOTION_FAST};
+
+  &:hover {
+    opacity: 1;
+    filter: brightness(1.1);
+  }
+`
+
 const Tick = styled.span`
   /* 좁은 화면 — 눈금 글자가 겹치지 않게 격번만 */
   @media (max-width: 640px) {
@@ -1305,6 +1360,18 @@ const Swatch = styled.span`
   height: 8px;
   flex-shrink: 0;
   border-radius: 2px;
+`
+
+const ActiveCheckBadge = styled.span`
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: ${BRAND.primary};
+  color: #ffffff;
 `
 
 const Rank = styled.span`

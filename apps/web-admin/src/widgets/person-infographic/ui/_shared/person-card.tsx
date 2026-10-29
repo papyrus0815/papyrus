@@ -255,13 +255,22 @@ const Card = styled.div<{ $pinned?: boolean; $selected?: boolean }>`
   background: ${surface};
   border: 1px solid ${hairline};
   cursor: pointer;
-  transition: border-color ${MOTION_FAST}, background ${MOTION_FAST}, box-shadow ${MOTION_FAST};
+  transition:
+    border-color ${MOTION_FAST},
+    background ${MOTION_FAST},
+    box-shadow ${MOTION_FAST},
+    transform ${MOTION_FAST};
 
-  /* 사건 목록 행처럼 hover는 면의 옅은 틴트 — 그림자로 띄우지 않는다 */
+  /* hover 시 미세한 부상 + 테두리 대비 강화 */
   &:hover {
+    transform: translateY(-2px);
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.18)' : 'rgba(15, 23, 42, 0.16)'};
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#f8fafc')};
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(15, 23, 42, 0.18)'};
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1e' : '#f8fafc')};
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 6px 16px rgba(0, 0, 0, 0.36)'
+        : '0 6px 16px rgba(15, 23, 42, 0.06)'};
   }
   &:focus-visible {
     outline: none;
@@ -533,12 +542,16 @@ const Influence = styled.span`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-/* 미평가 — 수치 자리에 작은 글자. 링을 비워 두면 '0점'으로 읽힌다 */
+/* 미평가 — 수치 자리에 작은 알약 배지. 링을 비워 두면 '0점'으로 읽힌다 */
 const Unrated = styled.span`
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
   color: ${metaText};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)'};
 `
 
 /** 영향력 링 — conic-gradient 한 요소로 0~100을 호로 그린다 */
@@ -922,7 +935,8 @@ const RowCard = styled.div<{ $pinned?: boolean; $selected?: boolean }>`
     border-top: 1px solid ${hairline};
   }
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#f8fafc')};
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1e' : '#f8fafc')};
+    box-shadow: inset 3px 0 0 var(--field, ${BRAND.primary});
   }
   &:focus-visible {
     outline: none;
