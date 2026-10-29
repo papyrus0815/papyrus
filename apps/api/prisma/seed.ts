@@ -55,6 +55,8 @@ import {
   seedUkraineHistoricalCountryRelations,
   seedSpainHistoricalCountries,
   seedSpainHistoricalCountryRelations,
+  seedEgyptHistoricalCountries,
+  seedEgyptHistoricalCountryRelations,
   seedJoseonHistoricalCountries,
   seedJoseonHistoricalCountryRelations,
   seedNapoleonIII,
@@ -405,6 +407,19 @@ async function main() {
 
         // 7-36. 스페인 역사 국가 계승·소속·동군연합 관계 시딩
         await seedSpainHistoricalCountryRelations(prisma)
+
+        // 7-37. 이집트 관련 역사 국가 시딩 (초기 왕조~이집트 아랍 공화국 26건)
+        //  · 의존: seedCountries(현대 EG·SD·IR·SA·SY·IQ — TN은 미등록이라 파티마 칼리파국 TN 링크는 미래용 표기)
+        //    + seedGreeceHistoricalCountries(마케도니아 왕국 — 아케메네스 정복·프톨레마이오스 분립 대상)
+        //    + seedItalyHistoricalCountries(로마 공화국·로마 제국 — 이미 EG 링크 보유, 여기서 보강하지 않음)
+        //    + seedBritainHistoricalCountries(대영제국 — 이집트 술탄국 보호국 소속 대상)
+        //  · 동로마 제국·오스만 제국은 사건 시드 유래(7-19 불가리아 주석 참조) — 없으면 warn+skip 후 재실행에서 채움
+        //  · 아케메네스·라시둔·우마이야·아바스 칼리파국은 이집트의 정복자/상위국이라 이 시드가 소유한다
+        //    (금장 칸국을 ukraine 시드가 맡은 전례) — 링크는 각 도읍 국가 단독(규범 B)
+        await seedEgyptHistoricalCountries(prisma)
+
+        // 7-38. 이집트 역사 국가 계승·소속 관계 시딩 (로마 제국→동로마 제국 SPLIT 보강 포함)
+        await seedEgyptHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
