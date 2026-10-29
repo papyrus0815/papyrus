@@ -540,7 +540,13 @@ export function HeaderStats({
       {hoverBin && (
         <Tooltip
           role="tooltip"
-          style={{ top: hoverBin.y - 12, left: hoverBin.x }}
+          style={{
+            top: Math.max(72, hoverBin.y - 12),
+            left:
+              typeof window !== 'undefined'
+                ? Math.min(Math.max(72, hoverBin.x), window.innerWidth - 96)
+                : hoverBin.x,
+          }}
         >
           <TooltipValue>{hoverBin.count.toLocaleString()}명</TooltipValue>
           <TooltipRow>

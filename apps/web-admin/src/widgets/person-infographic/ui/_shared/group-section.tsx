@@ -319,8 +319,12 @@ const Bead = styled.span<{ $tone: DotTone; $size: number; $long: boolean }>`
 const Chevron = styled(FiChevronDown)<{ $collapsed: boolean }>`
   flex-shrink: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  transition: transform ${MOTION_FAST};
+  transition: transform ${MOTION_FAST}, color ${MOTION_FAST};
   transform: rotate(${({ $collapsed }) => ($collapsed ? '-90deg' : '0deg')});
+
+  ${Header}:hover & {
+    color: ${BRAND.primary};
+  }
 `
 
 const Label = styled.span`
@@ -331,6 +335,11 @@ const Label = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  transition: color ${MOTION_FAST};
+
+  ${Header}:hover & {
+    color: ${BRAND.primary};
+  }
 `
 
 const Range = styled.span`

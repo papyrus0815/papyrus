@@ -130,7 +130,7 @@ function PersonCardItemBase({
           <EmptyPortrait />
         )}
         {/* 위쪽 칩(역할·고정) 대비용 옅은 그늘 — 글자를 얹지 않으니 아래쪽 어둠은 없다 */}
-        {(role || pinned) && showImage && <Scrim aria-hidden />}
+        {(role || pinned) && <Scrim aria-hidden />}
 
         {role && <RoleTag $monarch={person.isMonarch}>{role}</RoleTag>}
         <PinBtn
@@ -261,18 +261,19 @@ const Card = styled.div<{ $pinned?: boolean; $selected?: boolean }>`
     outline: none;
     box-shadow: ${BRAND.focusRing};
   }
-  ${({ $pinned }) =>
+  ${({ $pinned, $selected }) =>
     $pinned &&
+    !$selected &&
     css`
-      border-color: ${BRAND.primary};
-      box-shadow: 0 0 0 1px ${BRAND.primary};
+      border-color: rgba(245, 158, 11, 0.55);
+      box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.32);
     `}
   ${({ $selected, theme }) =>
     $selected &&
     css`
       border-color: ${BRAND.primary};
       box-shadow: 0 0 0 2px ${BRAND.primary};
-      background: ${theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)'};
+      background: ${theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
     `}
 
   @media (prefers-reduced-motion: reduce) {
@@ -316,9 +317,15 @@ const Empty = styled.div`
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  /* 사진 없음은 데이터 상태 — 사진보다 한 단계 물러선 옅은 중립(예전 짙은 판은 격자를 검게 덮었다) */
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#2a2d33' : '#e3e6eb')};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1b1f' : '#f4f5f7')};
+  /* 사진 없음은 데이터 상태 — 분야 색(--field)을 6% 라디얼로 은은하게 섞어 회색 벽 현상을 완화 */
+  color: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'color-mix(in srgb, var(--field, #64748b) 22%, #2a2d33)'
+      : 'color-mix(in srgb, var(--field, #64748b) 18%, #dfe3ea)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--field, #64748b) 10%, #1a1b1f), #1a1b1f 75%)'
+      : 'radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--field, #64748b) 8%, #f4f5f7), #f4f5f7 75%)'};
   ${zoomOnHover}
 
   /*

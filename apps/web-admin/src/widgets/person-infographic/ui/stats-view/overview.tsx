@@ -32,7 +32,15 @@ import { notify } from '@/shared/ui/toast'
 import { centuryOf } from '../../model/century'
 import type { AdaptedPerson } from '../../model/types'
 
-import { ChartShell, EmptyHint, traitToneBg, traitToneFg } from './shared'
+import { BRAND, hairline, surface } from '../_shared/catalog.styles'
+import {
+  ChartShell,
+  EmptyHint,
+  traitToneBg,
+  traitToneBgDark,
+  traitToneFg,
+  traitToneFgDark,
+} from './shared'
 
 interface Props {
   people: AdaptedPerson[]
@@ -527,8 +535,8 @@ const Card = styled.section<{ $span?: number }>`
       : ''}
   padding: 16px 18px;
   border-radius: 12px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${surface};
+  border: 1px solid ${hairline};
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -572,7 +580,7 @@ const ProgressBig = styled.div`
 const ProgressNum = styled.span`
   font-size: 26px;
   font-weight: 700;
-  color: #6366f1;
+  color: ${BRAND.primary};
   font-variant-numeric: tabular-nums;
 `
 
@@ -592,13 +600,14 @@ const ProgressPct = styled.span`
 const ProgressTrack = styled.div`
   height: 8px;
   border-radius: 999px;
-  background: rgba(99, 102, 241, 0.1);
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoftHover};
   overflow: hidden;
 `
 
 const ProgressFill = styled.div`
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #4f46e5);
+  background: ${BRAND.primary};
   border-radius: 999px;
   transition: width 0.3s ease;
 `
@@ -768,7 +777,8 @@ const TraitFreqRow = styled.div`
 const TraitFreqLabel = styled.span<{ $tone: 'positive' | 'neutral' | 'negative' }>`
   font-size: 11.5px;
   font-weight: 600;
-  color: ${({ $tone }) => traitToneFg[$tone]};
+  color: ${({ $tone, theme }) =>
+    theme.mode === 'dark' ? traitToneFgDark[$tone] : traitToneFg[$tone]};
 `
 
 const TraitFreqBar = styled.div`
@@ -781,8 +791,11 @@ const TraitFreqBar = styled.div`
 
 const TraitFreqFill = styled.div<{ $tone: 'positive' | 'neutral' | 'negative' }>`
   height: 100%;
-  background: ${({ $tone }) => traitToneBg[$tone]};
-  border-bottom: 2px solid ${({ $tone }) => traitToneFg[$tone]};
+  background: ${({ $tone, theme }) =>
+    theme.mode === 'dark' ? traitToneBgDark[$tone] : traitToneBg[$tone]};
+  border-bottom: 2px solid
+    ${({ $tone, theme }) =>
+      theme.mode === 'dark' ? traitToneFgDark[$tone] : traitToneFg[$tone]};
   border-radius: 999px;
   transition: width 0.2s ease;
 `
@@ -817,8 +830,10 @@ const PairChip = styled.span<{ $tone: 'positive' | 'neutral' | 'negative' }>`
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  color: ${({ $tone }) => traitToneFg[$tone]};
-  background: ${({ $tone }) => traitToneBg[$tone]};
+  color: ${({ $tone, theme }) =>
+    theme.mode === 'dark' ? traitToneFgDark[$tone] : traitToneFg[$tone]};
+  background: ${({ $tone, theme }) =>
+    theme.mode === 'dark' ? traitToneBgDark[$tone] : traitToneBg[$tone]};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

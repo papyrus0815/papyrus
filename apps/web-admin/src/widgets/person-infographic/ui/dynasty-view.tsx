@@ -252,9 +252,9 @@ const DynastyIndex = styled.nav`
   z-index: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 4px;
+  gap: 6px;
   margin: 0 0 4px calc(-1 * var(--rail-inset));
-  padding: 10px 0 10px calc(var(--rail-inset) - 8px);
+  padding: 10px 0 12px var(--rail-inset);
   border-bottom: 1px solid ${hairline};
   background: ${surface};
 
@@ -270,22 +270,24 @@ const DynastyIndex = styled.nav`
 
 const DynastyJump = styled.button`
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 5px;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
   flex-shrink: 0;
-  border: none;
-  background: transparent;
-  font-size: 12.5px;
+  border: 1px solid ${hairline};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(15, 23, 42, 0.02)'};
+  font-size: 12px;
   white-space: nowrap;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  transition: color ${MOTION_FAST}, background ${MOTION_FAST};
+  transition: color ${MOTION_FAST}, background ${MOTION_FAST}, border-color ${MOTION_FAST};
 
   &:hover {
     color: ${BRAND.primary};
+    border-color: ${BRAND.primaryBorder};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   }
@@ -297,7 +299,7 @@ const DynastyJump = styled.button`
 
 const DynastyJumpCount = styled.span`
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
 `

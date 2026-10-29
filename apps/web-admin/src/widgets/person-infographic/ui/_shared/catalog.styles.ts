@@ -438,21 +438,16 @@ export const ViewSegment = styled.button<{ $active: boolean }>`
     opacity: ${({ $active }) => ($active ? 1 : 0.75)};
   }
 
-  /* 좁은 폭 — 라벨은 sr-only로 내리고 아이콘만 (사건 뷰 전환과 같은 규칙) */
-  & > span.label {
-    @media (max-width: 1100px) {
-      ${srOnly}
-    }
-  }
-  /* 툴바 한 줄에 들 때 — 고른 탭만 라벨을 남기고 나머지는 아이콘(이름은 sr-only·title로) */
-  @container persontoolbar (max-width: 1640px) {
+  /* 데스크톱·태블릿에서는 6개 뷰 한글 라벨을 항상 노출해 탐색성을 보장하고,
+     매우 좁은 모바일 폭에서만 비활성 탭 라벨을 접는다 */
+  @media (max-width: 560px) {
     &[aria-selected='false'] > span.label {
       ${srOnly}
     }
   }
   @media (max-width: 640px) {
-    height: 36px;
-    padding: 6px 11px;
+    height: 34px;
+    padding: 4px 10px;
   }
 `
 

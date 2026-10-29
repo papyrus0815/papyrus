@@ -38,7 +38,6 @@ import { pathKeys } from '@/shared/router'
 import { CenturyStepper } from '@/shared/ui/century-stepper'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { notify } from '@/shared/ui/toast'
-import { PersonTabSharedTitle } from '@/widgets/country/country-detail/ui/country-detail.styles'
 
 import { filterPersons } from '../model/filter-persons'
 import { usePersonInfographicFilterStore } from '../model/filter.store'
@@ -49,6 +48,14 @@ import {
   buildRecordsGrid,
 } from '../model/records-compare'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
+import {
+  Actions,
+  BRAND,
+  hairline,
+  PrimaryBtn,
+  TopBar,
+  ViewMeta,
+} from './_shared/catalog.styles'
 import { EmptyState } from './_shared/empty-state'
 
 /** 공유 사건 커넥터 전용 액센트 — kind 색과 겹치지 않는 계열(teal) */
@@ -212,36 +219,33 @@ export function RecordsCompareView({
       role="tabpanel"
       aria-labelledby="person-view-tab-records"
     >
-      <Toolbar>
-        <ToolbarLeft>
-          <PersonTabSharedTitle>
-            기록 비교
-            {recordPersonIds.length > 0 && (
-              <TitleMeta>
-                {recordPersonIds.length}명 · {periodText}
-              </TitleMeta>
-            )}
-          </PersonTabSharedTitle>
-          {viewSwitcher}
-        </ToolbarLeft>
-        <ToolbarRight>
-          <PeriodGroup>
-            <CenturyStepper
-              century={century}
-              onChange={(selection) =>
-                setRecordYearRange(selection.fromYear, selection.toYear)
-              }
-            />
-            <PeriodText $active={hasRange}>{periodText}</PeriodText>
-            {hasRange && (
-              <ClearRangeBtn
-                type="button"
-                onClick={() => setRecordYearRange(null, null)}
-              >
-                전 기간 보기
-              </ClearRangeBtn>
-            )}
-          </PeriodGroup>
+      <TopBar>
+        <PeriodGroup>
+          <CenturyStepper
+            century={century}
+            onChange={(selection) =>
+              setRecordYearRange(selection.fromYear, selection.toYear)
+            }
+          />
+          <PeriodText $active={hasRange}>{periodText}</PeriodText>
+          {hasRange && (
+            <ClearRangeBtn
+              type="button"
+              onClick={() => setRecordYearRange(null, null)}
+            >
+              전 기간 보기
+            </ClearRangeBtn>
+          )}
+        </PeriodGroup>
+
+        {viewSwitcher}
+
+        <Actions>
+          <ViewMeta aria-hidden>
+            <span>
+              <strong>{recordPersonIds.length}</strong> / {MAX_RECORD_PERSONS}명 비교
+            </span>
+          </ViewMeta>
           <AddPersonBtn
             type="button"
             onClick={() => setPickerOpen(true)}
@@ -252,11 +256,11 @@ export function RecordsCompareView({
                 : undefined
             }
           >
-            <FiPlus size={14} />
+            <FiPlus size={15} />
             인물 추가
           </AddPersonBtn>
-        </ToolbarRight>
-      </Toolbar>
+        </Actions>
+      </TopBar>
 
       <CaptionRow>
         <Legend aria-hidden>
@@ -569,43 +573,23 @@ function RecordCard({
 }
 
 const PanelWrap = styled.div`
-  padding: 12px 0 60px;
+  padding: 0 0 60px;
 
   @media (max-width: 768px) {
-    padding: 8px 0 40px;
+    padding: 0 0 40px;
   }
 `
 
-const Toolbar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px 16px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
-`
-
-const TitleMeta = styled.span`
-  margin-left: 10px;
-  font-size: 13px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const ToolbarRight = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-left: auto;
-`
-
 const PeriodGroup = styled.div`
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px;
+  min-height: 34px;
+  padding: 2px 10px 2px 6px;
   border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border: 1px solid ${hairline};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
 `
 
 const PeriodText = styled.span<{ $active: boolean }>`
@@ -631,22 +615,7 @@ const ClearRangeBtn = styled.button`
   }
 `
 
-const AddPersonBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  background: ${({ theme }) => theme.colors.active};
-  color: ${({ theme }) => theme.colors.background.primary};
-  transition: opacity 0.14s;
-  &:hover:not(:disabled) {
-    opacity: 0.9;
-  }
+const AddPersonBtn = styled(PrimaryBtn)`
   &:disabled {
     opacity: 0.45;
     cursor: default;
@@ -658,7 +627,7 @@ const CaptionRow = styled.div`
   align-items: center;
   gap: 8px 16px;
   flex-wrap: wrap;
-  margin: 6px 0 14px;
+  margin: 12px 0 14px;
 `
 
 const Legend = styled.div`
@@ -1004,13 +973,6 @@ const AuthorLink = styled(Link)`
   }
 `
 
-const ToolbarLeft = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-`
-
 const QuickStartBar = styled.div`
   display: flex;
   align-items: center;
@@ -1032,12 +994,13 @@ const QuickStartBtn = styled.button`
   cursor: pointer;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) => theme.colors.background.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border: 1px solid ${hairline};
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.active};
-    border-color: ${({ theme }) => theme.colors.active};
-    background: ${({ theme }) => theme.colors.activeLight};
+    color: ${BRAND.primary};
+    border-color: ${BRAND.primaryBorder};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   }
 `

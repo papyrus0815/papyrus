@@ -117,27 +117,48 @@ const Wrap = styled.div`
 
 const SubTabBar = styled.div`
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
   padding: 3px;
-  border-radius: 10px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 9px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.04)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)'};
   width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `
 
 const SubTabBtn = styled.button<{ $active: boolean }>`
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 6px 14px;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
   border: none;
   border-radius: 7px;
   cursor: pointer;
   background: ${({ $active, theme }) =>
-    $active ? theme.colors.background.primary : 'transparent'};
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.13)'
+        : '#ffffff'
+      : 'transparent'};
   color: ${({ $active, theme }) =>
-    $active ? theme.colors.active : theme.colors.text.tertiary};
-  box-shadow: ${({ $active }) => ($active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none')};
-  transition: background 0.12s, color 0.12s;
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+  box-shadow: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '0 1px 2px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.1)'
+        : '0 1px 2px rgba(15,23,42,0.06), inset 0 0 0 1px rgba(15,23,42,0.03)'
+      : 'none'};
+  transition: background 0.15s ease, color 0.15s ease;
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
   }

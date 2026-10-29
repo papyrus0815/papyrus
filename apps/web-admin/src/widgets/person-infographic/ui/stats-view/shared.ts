@@ -114,15 +114,27 @@ export const LegendCount = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-// 트레이트 톤 컬러 — overview·트레이트 페어 분석에서 공유
+// 트레이트 톤 컬러 — overview·트레이트 페어 분석에서 공유 (라이트/다크 대응)
 export const traitToneFg: Record<'positive' | 'neutral' | 'negative', string> = {
   positive: '#0e7490',
   neutral: '#475569',
   negative: '#9f1239',
 }
 
+export const traitToneFgDark: Record<'positive' | 'neutral' | 'negative', string> = {
+  positive: '#67e8f9',
+  neutral: '#cbd5e1',
+  negative: '#fda4af',
+}
+
 export const traitToneBg: Record<'positive' | 'neutral' | 'negative', string> = {
   positive: 'rgba(207, 250, 254, 0.7)',
   neutral: 'rgba(241, 245, 249, 0.85)',
   negative: 'rgba(255, 228, 230, 0.85)',
+}
+
+export const traitToneBgDark: Record<'positive' | 'neutral' | 'negative', string> = {
+  positive: 'rgba(6, 182, 212, 0.18)',
+  neutral: 'rgba(148, 163, 184, 0.16)',
+  negative: 'rgba(244, 63, 94, 0.18)',
 }

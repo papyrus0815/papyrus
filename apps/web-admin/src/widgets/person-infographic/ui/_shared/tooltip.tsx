@@ -16,6 +16,10 @@ interface PersonHoverTooltipProps {
   metaSecondLine?: string
 }
 
+const TOOLTIP_EST_W = 260
+const TOOLTIP_EST_H = 72
+const VIEWPORT_MARGIN = 16
+
 export function PersonHoverTooltip({
   person: p,
   x,
@@ -26,8 +30,26 @@ export function PersonHoverTooltip({
   const fallback = p.faction
     ? `${p.country} · ${p.faction}`
     : `${p.country} · ${p.field}`
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1440
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 900
+  const left =
+    x + 14 + TOOLTIP_EST_W > vw - VIEWPORT_MARGIN
+      ? Math.max(VIEWPORT_MARGIN, x - 14 - TOOLTIP_EST_W)
+      : x + 14
+  const top =
+    y + 14 + TOOLTIP_EST_H > vh - VIEWPORT_MARGIN
+      ? Math.max(VIEWPORT_MARGIN, y - 14 - TOOLTIP_EST_H)
+      : y + 14
+  const lifespanText =
+    p.born == null && p.died == null && !p.isAlive
+      ? p.activityYear != null
+        ? `활동 ${formatYear(Math.round(p.activityYear))}경`
+        : '생몰 미상'
+      : `${p.born == null ? '?' : formatYear(p.born)} – ${
+          p.isAlive ? '현재' : p.died == null ? '?' : formatYear(p.died)
+        }`
   return (
-    <Wrap style={{ top: y + 14, left: x + 14 }}>
+    <Wrap style={{ top, left }}>
       {p.profileImageUrl ? (
         <Img src={p.profileImageUrl} alt={p.name} />
       ) : (
@@ -67,8 +89,8 @@ export function PersonHoverTooltip({
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {p.born == null ? '?' : formatYear(p.born)} –{' '}
-          {p.died == null ? '?' : formatYear(p.died)} · 영향력 {p.influence}
+          {lifespanText}
+          {p.influence > 0 ? ` · 영향력 ${p.influence}` : ''}
         </div>
       </div>
     </Wrap>
