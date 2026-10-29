@@ -368,8 +368,12 @@ export interface TenureRegisterPanelProps {
   initialCountryId?: string
   initialHistoricalCountryId?: string | null
   initialCabinetId?: string | null
+  /** 수반·각료 겸용 진입점에서 현재 보고 있던 행정부를 기본 선택만 해 둘 때(직책 필터는 잠그지 않음) */
+  defaultCabinetId?: string | null
   /** 부처(중앙부처) 지면에서 열 때 — 그 부처 소속으로 저장한다 */
   initialAdministrationDepartmentId?: string | null
+  /** 부처 슬롯에서 열 때 화면에 표시할 부처 이름 */
+  initialAdministrationDepartmentName?: string | null
   /**
    * 재위로 연다 — '재위 추가' 진입점. 직위 피커를 군주 칭호 우선으로 놓고, 아무것도 안 고르면
    * '국왕' 정의를 미리 고른다. 재위·재임은 한 기록(직위 보유)이라 폼도 하나다 —
@@ -393,7 +397,9 @@ export function TenureRegisterPanel({
   initialCountryId,
   initialHistoricalCountryId,
   initialCabinetId,
+  defaultCabinetId,
   initialAdministrationDepartmentId,
+  initialAdministrationDepartmentName,
   defaultMonarchical = false,
   defaultDefinitionTitle = '국왕',
   countryOptional = false,
@@ -809,12 +815,27 @@ export function TenureRegisterPanel({
 
   /** 행정부 탭 등에서 열 때 국가·행정부 미리 채우기 */
   useEffect(() => {
-    if (open && (initialCountryId != null || initialHistoricalCountryId != null || initialCabinetId != null)) {
+    if (
+      open &&
+      (initialCountryId != null ||
+        initialHistoricalCountryId != null ||
+        initialCabinetId != null ||
+        defaultCabinetId != null)
+    ) {
       if (initialCountryId != null) setCountryId(initialCountryId)
-      if (initialHistoricalCountryId !== undefined) setHistoricalCountryId(initialHistoricalCountryId ?? null)
+      if (initialHistoricalCountryId !== undefined)
+        setHistoricalCountryId(initialHistoricalCountryId ?? null)
       if (initialCabinetId !== undefined) setCabinetId(initialCabinetId ?? null)
+      else if (defaultCabinetId !== undefined)
+        setCabinetId(defaultCabinetId ?? null)
     }
-  }, [open, initialCountryId, initialHistoricalCountryId, initialCabinetId])
+  }, [
+    open,
+    initialCountryId,
+    initialHistoricalCountryId,
+    initialCabinetId,
+    defaultCabinetId,
+  ])
 
   useEffect(() => {
     setPersonImageError(false)
@@ -1150,6 +1171,20 @@ export function TenureRegisterPanel({
                   </FieldHint>
                 </FieldControl>
               </FieldRow>
+
+              {initialAdministrationDepartmentId &&
+                initialAdministrationDepartmentName && (
+                  <FieldRow>
+                    <FieldLabel as="span">소속 부처</FieldLabel>
+                    <FieldControl>
+                      <PersonChip>
+                        <span style={{ fontWeight: 600 }}>
+                          {initialAdministrationDepartmentName}
+                        </span>
+                      </PersonChip>
+                    </FieldControl>
+                  </FieldRow>
+                )}
 
               <FieldRow>
                 <FieldLabel>
