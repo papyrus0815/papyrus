@@ -42,6 +42,7 @@ import {
 interface Props {
   people: AdaptedPerson[]
   onOpen: (id: string) => void
+  selectedPersonId?: string | null
 }
 
 const REGION_COLOR_MAP: Record<string, string> = REGIONS.reduce(
@@ -61,7 +62,7 @@ function deterministicJitter(id: string, range: number) {
   return { dx, dy }
 }
 
-export function GalaxyView({ people, onOpen }: Props) {
+export function GalaxyView({ people, onOpen, selectedPersonId }: Props) {
   const theme = useTheme()
   const [hover, setHover] = useState<{
     p: AdaptedPerson
@@ -235,12 +236,13 @@ export function GalaxyView({ people, onOpen }: Props) {
       }
     }
 
-    // 라벨 collision 처리 — 영향력 임계 이상 + 활성만 후보, 위/아래 밴드로 배치
+    // 라벨 collision 처리 — 선택된 인물 최우선 + 영향력 임계 이상 & 활성 후보, 위/아래 밴드로 배치
     const labelCandidates = ordered
       .filter(
         (p) =>
-          p.influence >= INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MIN_INFLUENCE &&
-          isActiveP(p),
+          p.id === selectedPersonId ||
+          (p.influence >= INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MIN_INFLUENCE &&
+            isActiveP(p)),
       )
       .map((p) => {
         const { dx, dy } = deterministicJitter(
@@ -249,7 +251,11 @@ export function GalaxyView({ people, onOpen }: Props) {
         )
         return { p, x: xPos(p.activityYear) + dx, y: yPos(p.influence) + dy }
       })
-      .sort((a, b) => b.p.influence - a.p.influence)
+      .sort((a, b) => {
+        if (a.p.id === selectedPersonId) return -1
+        if (b.p.id === selectedPersonId) return 1
+        return b.p.influence - a.p.influence
+      })
 
     const placedLabels: Array<{
       p: AdaptedPerson
@@ -296,7 +302,7 @@ export function GalaxyView({ people, onOpen }: Props) {
       showDensity,
       BIN_SIZE,
     }
-  }, [plottablePeople, scopes, innerW, innerH])
+  }, [plottablePeople, scopes, innerW, innerH, selectedPersonId])
 
   if (!plottablePeople.length) {
     return (
@@ -554,9 +560,10 @@ export function GalaxyView({ people, onOpen }: Props) {
             const color = REGION_COLOR_MAP[p.region] ?? theme.colors.text.tertiary
             const active = isActive(p)
             const isHovered = hoveredId === p.id
+            const isSelected = selectedPersonId === p.id
             const baseR = 4 + (p.influence / 100) * 6
-            const r = isHovered ? baseR + 1.5 : baseR
-            const op = active ? 0.85 : 0.18
+            const r = isHovered || isSelected ? baseR + 1.5 : baseR
+            const op = isSelected ? 1 : active ? 0.85 : 0.18
             return (
               <g
                 key={p.id}
@@ -579,11 +586,21 @@ export function GalaxyView({ people, onOpen }: Props) {
                 <circle
                   cx={x}
                   cy={y}
-                  r={r + (isHovered ? 6 : 4)}
+                  r={r + (isHovered || isSelected ? 6 : 4)}
                   fill={color}
-                  opacity={op * (isHovered ? 0.32 : 0.2)}
+                  opacity={op * (isHovered || isSelected ? 0.36 : 0.2)}
                 />
-                {active && (
+                {isSelected && (
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={r + 3.5}
+                    fill="none"
+                    stroke={theme.colors.active}
+                    strokeWidth={2}
+                  />
+                )}
+                {(active || isSelected) && (
                   <circle
                     cx={x}
                     cy={y}
@@ -591,7 +608,7 @@ export function GalaxyView({ people, onOpen }: Props) {
                     fill="none"
                     stroke={theme.colors.background.primary}
                     strokeWidth={1.5}
-                    opacity={isHovered ? 1 : 0.85}
+                    opacity={isHovered || isSelected ? 1 : 0.85}
                   />
                 )}
                 <circle

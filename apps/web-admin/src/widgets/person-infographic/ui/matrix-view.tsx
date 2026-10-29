@@ -31,6 +31,7 @@ import {
 interface Props {
   people: AdaptedPerson[]
   onOpen: (id: string) => void
+  selectedPersonId?: string | null
 }
 
 const LABEL_MIN_GAP_PX = 6
@@ -40,7 +41,7 @@ const GAP_PX = 2
 const BAR_H = LANE_H - 4
 const BAR_TOP_OFFSET = (LANE_H - BAR_H) / 2
 
-export function MatrixView({ people, onOpen }: Props) {
+export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
   const theme = useTheme()
   const [hover, setHover] = useState<{
     p: AdaptedPerson
@@ -53,6 +54,8 @@ export function MatrixView({ people, onOpen }: Props) {
     id: string
   } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const activeSelectedId =
+    selectedPersonId !== undefined ? selectedPersonId : selectedId
   const [showAll, setShowAll] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [W, setW] = useState(1100)
@@ -69,6 +72,7 @@ export function MatrixView({ people, onOpen }: Props) {
   }, [])
 
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
+  const toggleScope = usePersonInfographicFilterStore((s) => s.toggleScope)
   const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
   const clearAllScopes = usePersonInfographicFilterStore(
     (s) => s.clearAllScopes,
@@ -92,6 +96,14 @@ export function MatrixView({ people, onOpen }: Props) {
         (p) => p.activityYear != null || p.born != null || p.died != null,
       ),
     [people],
+  )
+
+  const activeCount = useMemo(
+    () =>
+      hasActiveFilter
+        ? plottablePeople.filter((p) => isPersonInScopes(p, scopes)).length
+        : plottablePeople.length,
+    [hasActiveFilter, plottablePeople, scopes],
   )
 
   // 국가별 lane 패킹 — plottablePeople·showAll·W 변할 때만 재계산
@@ -173,7 +185,26 @@ export function MatrixView({ people, onOpen }: Props) {
     <ViewPanel>
       <ViewPanelHeader>
         <ViewPanelTitle>국가 × 연도 매트릭스</ViewPanelTitle>
-        <ViewPanelDesc>가로 = 생몰 · 색 = 시대</ViewPanelDesc>
+        <ViewPanelDesc>가로 = 생몰 · 색 = 시대 · 범례/국가 클릭으로 필터</ViewPanelDesc>
+        {hasActiveFilter && (
+          <FilterBadge>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+              <strong>{activeCount.toLocaleString()}</strong>
+              <span style={{ opacity: 0.6 }}>
+                {' / '}
+                {plottablePeople.length.toLocaleString()}
+              </span>{' '}
+              명 강조
+            </span>
+            <FilterBadgeClear
+              type="button"
+              onClick={clearAllScopes}
+              aria-label="필터 모두 해제"
+            >
+              필터 해제
+            </FilterBadgeClear>
+          </FilterBadge>
+        )}
         {minInfluence > 0 && (
           <FilterBadge>영향력 ≥ {minInfluence}</FilterBadge>
         )}
@@ -183,6 +214,8 @@ export function MatrixView({ people, onOpen }: Props) {
               key={e.key}
               $active={scopes.era.includes(e.key)}
               $color={e.color}
+              onClick={() => toggleScope('era', e.key)}
+              style={{ cursor: 'pointer' }}
             >
               <span style={{ background: e.color }} />
               {e.lbl}
@@ -198,20 +231,34 @@ export function MatrixView({ people, onOpen }: Props) {
                 <AxisTxt>국가 / 인물수</AxisTxt>
               </AxisRow>
               {packed.map(({ country: c, count, rowH }) => {
+                const isCountryFiltered = scopes.country.includes(c)
                 const labelActive =
                   !hasActiveFilter ||
                   scopes.country.length === 0 ||
-                  scopes.country.includes(c)
+                  isCountryFiltered
                 const isHoveredCountry = hoveredBar?.country === c
                 return (
                   <LabelRow
                     key={c}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isCountryFiltered}
+                    title={`${c} 필터 ${isCountryFiltered ? '해제' : '적용'}`}
+                    onClick={() => toggleScope('country', c)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleScope('country', c)
+                      }
+                    }}
                     style={{
                       height: rowH,
                       opacity: labelActive ? 1 : 0.4,
-                      background: isHoveredCountry
-                        ? theme.colors.activeLight
-                        : 'transparent',
+                      cursor: 'pointer',
+                      background:
+                        isHoveredCountry || isCountryFiltered
+                          ? theme.colors.activeLight
+                          : 'transparent',
                       transition: 'background 0.12s',
                     }}
                   >
@@ -222,10 +269,12 @@ export function MatrixView({ people, onOpen }: Props) {
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        fontWeight: isHoveredCountry ? 700 : 400,
-                        color: isHoveredCountry
-                          ? theme.colors.active
-                          : theme.colors.text.primary,
+                        fontWeight:
+                          isHoveredCountry || isCountryFiltered ? 700 : 400,
+                        color:
+                          isHoveredCountry || isCountryFiltered
+                            ? theme.colors.active
+                            : theme.colors.text.primary,
                       }}
                     >
                       {c}
@@ -327,7 +376,7 @@ export function MatrixView({ people, onOpen }: Props) {
                       hoveredBar?.country === c && hoveredBar?.lane === lane
                     const isHoveredSelf = hoveredBar?.id === p.id
                     const isOtherInLane = isHoveredLane && !isHoveredSelf
-                    const isSelected = selectedId === p.id
+                    const isSelected = activeSelectedId === p.id
                     const baseOp = active ? 0.85 : 0.2
                     const op = isOtherInLane ? Math.min(baseOp, 0.25) : baseOp
                     return (
@@ -377,7 +426,7 @@ export function MatrixView({ people, onOpen }: Props) {
                   <MatrixLaneLabels
                     placed={placed}
                     isActive={isActive}
-                    selectedId={selectedId}
+                    selectedId={activeSelectedId ?? null}
                     hoveredId={hoveredBar?.id ?? null}
                     W={W}
                     secondaryColor={theme.colors.text.secondary}
@@ -616,13 +665,27 @@ const LabelRow = styled.div`
 const FilterBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: 6px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.active};
   background: ${({ theme }) => theme.colors.activeLight};
+`
+
+const FilterBadgeClear = styled.button`
+  border: none;
+  background: ${({ theme }) => theme.colors.active};
+  color: ${({ theme }) => theme.colors.background.primary};
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  &:hover {
+    opacity: 0.85;
+  }
 `
 
 const ShowAllRow = styled.div`

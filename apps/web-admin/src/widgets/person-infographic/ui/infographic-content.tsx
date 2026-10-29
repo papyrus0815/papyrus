@@ -49,7 +49,10 @@ import {
   type PersonInfographicView,
   type PersonSortKey,
 } from '../model/filter.store'
-import { filterPersons } from '../model/filter-persons'
+import {
+  computePersonFacetCounts,
+  filterPersons,
+} from '../model/filter-persons'
 import { SORT_OPTIONS } from '../model/sort-helpers'
 import { usePersonQueryInput } from '../model/use-person-query-input'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
@@ -257,37 +260,35 @@ export function InfographicContent({
     aliveFilter !== 'all' ||
     !!dq.trim()
 
-  // 상단 필터 드롭다운 옵션 — 카운트는 전체 모수(필터 전) 기준이라 선택해도 숫자가 흔들리지 않는다.
+  // 상단 필터 드롭다운 옵션 — 상세 필터 시트와 동일한 패싯 카운트(자기 카테고리 외 활성 필터 반영).
   const scopeOptions = useMemo(() => {
-    const eraCount = new Map<string, number>()
-    const regionCount = new Map<string, number>()
-    const fieldCount = new Map<string, number>()
-    for (const person of allPeople) {
-      eraCount.set(person.era.key, (eraCount.get(person.era.key) ?? 0) + 1)
-      regionCount.set(person.region, (regionCount.get(person.region) ?? 0) + 1)
-      fieldCount.set(person.field, (fieldCount.get(person.field) ?? 0) + 1)
-    }
+    const facets = computePersonFacetCounts(allPeople, {
+      scopes,
+      minInfluence,
+      aliveFilter,
+      query: dq,
+    })
     return {
       era: ERAS.map((era) => ({
         value: era.key,
         label: era.lbl,
         color: era.color,
-        count: eraCount.get(era.key) ?? 0,
+        count: facets.era[era.key] ?? 0,
       })),
       region: REGIONS.map((region, index) => ({
         value: region,
         label: region,
         color: REGION_COLORS[index % REGION_COLORS.length],
-        count: regionCount.get(region) ?? 0,
+        count: facets.region[region] ?? 0,
       })),
       field: FIELDS.map((field) => ({
         value: field,
         label: field,
         color: colorForField(field),
-        count: fieldCount.get(field) ?? 0,
+        count: facets.field[field] ?? 0,
       })),
     }
-  }, [allPeople])
+  }, [allPeople, scopes, minInfluence, aliveFilter, dq])
 
   // 활성 필터 칩 — 좌측 레일·상단 드롭다운 어디서 걸었든 한 줄에서 보고 하나씩 해제.
   const activeChips: Array<{ key: string; label: string; onRemove: () => void }> = [
@@ -552,10 +553,18 @@ export function InfographicContent({
           {!isLoading && filtered.length > 0 && (
             <ViewArea>
               {activeView === 'matrix' && (
-                <MatrixView people={baseFiltered} onOpen={onPersonClick} />
+                <MatrixView
+                  people={baseFiltered}
+                  onOpen={onPersonClick}
+                  selectedPersonId={selectedPersonId}
+                />
               )}
               {activeView === 'galaxy' && (
-                <GalaxyView people={baseFiltered} onOpen={onPersonClick} />
+                <GalaxyView
+                  people={baseFiltered}
+                  onOpen={onPersonClick}
+                  selectedPersonId={selectedPersonId}
+                />
               )}
               {activeView === 'story' && (
                 <EraStoryView

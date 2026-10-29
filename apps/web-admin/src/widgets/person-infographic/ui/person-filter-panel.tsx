@@ -7,11 +7,13 @@ import { scrollbarThinMixin } from '@/shared/styles/mixins'
 import { ERAS, FIELDS, REGIONS, REGION_COLORS } from '../model/constants'
 import {
   countActiveScopes,
-  matchesScopes,
   usePersonInfographicFilterStore,
   type ScopeKind,
 } from '../model/filter.store'
-import type { AdaptedPerson } from '../model/types'
+import {
+  computePersonFacetCounts,
+  filterPersons,
+} from '../model/filter-persons'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
 /** accordion 상태 — 그룹별 collapsed 여부 localStorage 유지 */
@@ -62,12 +64,11 @@ export function PersonFilterPanel() {
 
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
   const toggleScope = usePersonInfographicFilterStore((s) => s.toggleScope)
-  const clearScopeKind = usePersonInfographicFilterStore(
-    (s) => s.clearScopeKind,
-  )
   const clearAllScopes = usePersonInfographicFilterStore(
     (s) => s.clearAllScopes,
   )
+  const query = usePersonInfographicFilterStore((s) => s.query)
+  const setQuery = usePersonInfographicFilterStore((s) => s.setQuery)
   const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
   const setMinInfluence = usePersonInfographicFilterStore(
     (s) => s.setMinInfluence,
@@ -81,48 +82,20 @@ export function PersonFilterPanel() {
 
   /**
    * 패싯 카운트 — 각 카테고리 옵션 수는 **자기 카테고리를 제외한** 다른 활성 필터
-   * (다른 스코프 + 영향력 + 생존)를 반영해 계산한다. 그래서 시대를 고르면 지역·분야·국가 수가
+   * (검색어 + 다른 스코프 + 영향력 + 생존)를 반영해 계산한다. 그래서 시대를 고르면 지역·분야·국가 수가
    * 그 시대 안으로 좁혀지고, 자기 카테고리 안에서는 OR이라 수가 유지된다.
    * globalRegion/globalField는 "데이터에 한 번이라도 존재하는가"(렌더 여부 판정)용 — 필터 무관.
    */
-  const counts = useMemo(() => {
-    const passNonScope = (p: AdaptedPerson) =>
-      (minInfluence <= 0 || (p.influence ?? 0) >= minInfluence) &&
-      (aliveFilter === 'all' ||
-        (aliveFilter === 'alive' ? p.isAlive : !p.isAlive))
-
-    const tallyExcluding = (
-      exclude: ScopeKind,
-      keyFn: (p: AdaptedPerson) => string,
-    ): Record<string, number> => {
-      const sc = { ...scopes, [exclude]: [] }
-      const m: Record<string, number> = {}
-      for (const p of all) {
-        if (!passNonScope(p)) continue
-        if (!matchesScopes(p, sc, (x) => x.era.key)) continue
-        const k = keyFn(p)
-        m[k] = (m[k] || 0) + 1
-      }
-      return m
-    }
-
-    const globalRegion: Record<string, number> = {}
-    const globalField: Record<string, number> = {}
-    for (const p of all) {
-      globalRegion[p.region] = (globalRegion[p.region] || 0) + 1
-      globalField[p.field] = (globalField[p.field] || 0) + 1
-    }
-
-    return {
-      era: tallyExcluding('era', (p) => p.era.key),
-      region: tallyExcluding('region', (p) => p.region),
-      field: tallyExcluding('field', (p) => p.field),
-      country: tallyExcluding('country', (p) => p.country),
-      globalRegion,
-      globalField,
-      total: all.length,
-    }
-  }, [all, scopes, minInfluence, aliveFilter])
+  const counts = useMemo(
+    () =>
+      computePersonFacetCounts(all, {
+        scopes,
+        minInfluence,
+        aliveFilter,
+        query,
+      }),
+    [all, scopes, minInfluence, aliveFilter, query],
+  )
 
   // 국가 그룹 — 검색어가 없으면 top 14, 있으면 매칭되는 모든 국가
   const [countryQuery, setCountryQuery] = useState('')
@@ -133,21 +106,25 @@ export function PersonFilterPanel() {
     return sorted.filter(([name]) => name.toLowerCase().includes(q))
   }, [counts.country, countryQuery])
 
-  // 사이드바 필터만 적용한 결과 수. query는 panel 외부에서 관리.
-  const filteredCount = useMemo(() => {
-    let arr = all.filter((p) =>
-      matchesScopes(p, scopes, (x) => x.era.key),
-    )
-    if (minInfluence > 0)
-      arr = arr.filter((p) => (p.influence ?? 0) >= minInfluence)
-    if (aliveFilter === 'alive') arr = arr.filter((p) => p.isAlive)
-    else if (aliveFilter === 'dead') arr = arr.filter((p) => !p.isAlive)
-    return arr.length
-  }, [all, scopes, minInfluence, aliveFilter])
+  // 전체 활성 필터(검색어 포함)를 적용한 매칭 결과 수
+  const filteredCount = useMemo(
+    () =>
+      filterPersons(all, {
+        scopes,
+        minInfluence,
+        aliveFilter,
+        query,
+      }).length,
+    [all, scopes, minInfluence, aliveFilter, query],
+  )
 
   const activeScopeCount = countActiveScopes(scopes)
+  const trimmedQuery = query.trim()
   const hasActiveFilter =
-    activeScopeCount > 0 || minInfluence > 0 || aliveFilter !== 'all'
+    activeScopeCount > 0 ||
+    minInfluence > 0 ||
+    aliveFilter !== 'all' ||
+    trimmedQuery.length > 0
 
   const isAllActive = activeScopeCount === 0
 
@@ -226,6 +203,19 @@ export function PersonFilterPanel() {
       {hasActiveFilter && (
         <ActiveFilterBar>
           <ActiveFilterChips>
+            {trimmedQuery && (
+              <Chip>
+                <ChipKind>검색</ChipKind>
+                <ChipValue>{trimmedQuery}</ChipValue>
+                <ChipClose
+                  type="button"
+                  aria-label="검색어 필터 해제"
+                  onClick={() => setQuery('')}
+                >
+                  ×
+                </ChipClose>
+              </Chip>
+            )}
             {(['era', 'region', 'field', 'country'] as ScopeKind[]).flatMap(
               (kind) =>
                 scopes[kind].map((val) => (

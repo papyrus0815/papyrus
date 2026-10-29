@@ -4,6 +4,8 @@
  */
 import { useMemo, useState } from 'react'
 
+import styled from 'styled-components'
+
 import type { AdaptedPerson } from '../model/types'
 import { bornForPlot, diedForPlot } from '../model/adapt'
 import { formatYear } from '../model/century'
@@ -14,6 +16,7 @@ import {
 } from '../model/filter.store'
 import { makeSortFnWithPinned } from '../model/sort-helpers'
 
+import { BRAND, hairline, metaText, MOTION_FAST, surface } from './_shared/catalog.styles'
 import { EmptyState } from './_shared/empty-state'
 import { GroupPanel, GroupSection, MoreBtn } from './_shared/group-section'
 import { EraCardGrid, PersonCardItem } from './_shared/person-card'
@@ -21,6 +24,18 @@ import { PinnedPeopleSection } from './_shared/pinned-people-section'
 
 /** '소속 없음' 그룹 키 — 실제 왕조명과 겹치지 않는 값 */
 const NO_FACTION_KEY = '__none__'
+
+/** 가문 대표 국가 산출 — '미상'을 제외한 최빈 국가를 우선 반환 */
+function pickRepresentativeCountry(arr: AdaptedPerson[]): string {
+  const counts: Record<string, number> = {}
+  for (const p of arr) {
+    const c = p.country?.trim()
+    if (!c || c === '미상') continue
+    counts[c] = (counts[c] ?? 0) + 1
+  }
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0]
+  return top ?? arr[0]?.country ?? ''
+}
 
 interface Props {
   people: AdaptedPerson[]
@@ -73,7 +88,13 @@ export function DynastyView({
           if (bornY < minYr) minYr = bornY
           if (diedY > maxYr) maxYr = diedY
         }
-        return { faction, arr, minYr, maxYr, countryName: arr[0]?.country ?? '' }
+        return {
+          faction,
+          arr,
+          minYr,
+          maxYr,
+          countryName: pickRepresentativeCountry(arr),
+        }
       })
     return { factions, noFaction: without }
   }, [people, pinned])
@@ -110,6 +131,16 @@ export function DynastyView({
   const toggleCollapsed = (key: string) =>
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))
 
+  const jumpTo = (collapseKey: string, sectionId: string) => {
+    setCollapsed((prev) => ({ ...prev, [collapseKey]: false }))
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`person-group-${sectionId}`)
+        ?.closest('section')
+        ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
+  }
+
   const renderCards = (list: AdaptedPerson[], key: string) => {
     const isExpanded = !!expanded[key]
     const shown = isExpanded
@@ -144,6 +175,7 @@ export function DynastyView({
 
   /* 레일 도트 무게 — 가장 큰 가문 대비 √비율(면적이 아니라 지름이라 제곱근으로 눌러 둔다) */
   const largestFaction = Math.max(1, ...sortedFactions.map(({ arr }) => arr.length))
+  const totalSectionCount = sortedFactions.length + (noFaction.length > 0 ? 1 : 0)
 
   return (
     <GroupPanel>
@@ -154,6 +186,31 @@ export function DynastyView({
         onTogglePin={togglePin}
         onOpen={onOpen}
       />
+      {totalSectionCount >= 3 && (
+        <DynastyIndex aria-label="왕조·가문 바로가기">
+          {sortedFactions.map(({ faction, arr }) => (
+            <DynastyJump
+              key={faction}
+              type="button"
+              onClick={() => jumpTo(faction, `dynasty-${faction}`)}
+              aria-label={`${faction} ${arr.length}명으로 이동`}
+            >
+              {faction}
+              <DynastyJumpCount>{arr.length}</DynastyJumpCount>
+            </DynastyJump>
+          ))}
+          {noFaction.length > 0 && (
+            <DynastyJump
+              type="button"
+              onClick={() => jumpTo(NO_FACTION_KEY, 'dynasty-none')}
+              aria-label={`소속 없음 ${noFaction.length}명으로 이동`}
+            >
+              소속 없음
+              <DynastyJumpCount>{noFaction.length}</DynastyJumpCount>
+            </DynastyJump>
+          )}
+        </DynastyIndex>
+      )}
       {sortedFactions.map(({ faction, arr, minYr, maxYr, countryName, sorted }) => {
         const hasValidSpan = Number.isFinite(minYr) && Number.isFinite(maxYr)
         const rangeText = hasValidSpan
@@ -189,3 +246,58 @@ export function DynastyView({
     </GroupPanel>
   )
 }
+
+const DynastyIndex = styled.nav`
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  margin: 0 0 4px calc(-1 * var(--rail-inset));
+  padding: 10px 0 10px calc(var(--rail-inset) - 8px);
+  border-bottom: 1px solid ${hairline};
+  background: ${surface};
+
+  @media (max-width: 640px) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+`
+
+const DynastyJump = styled.button`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  white-space: nowrap;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition: color ${MOTION_FAST}, background ${MOTION_FAST};
+
+  &:hover {
+    color: ${BRAND.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const DynastyJumpCount = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+`

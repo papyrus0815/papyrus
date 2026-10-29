@@ -21,6 +21,7 @@ import {
   PERSON_STAT_META,
 } from '@/shared/api/person-stats'
 import type { PersonEvaluationSummary } from '@/shared/lib/person-evaluation-index'
+import { usePersonInfographicFilterStore } from '../../model/filter.store'
 import type { AdaptedPerson } from '../../model/types'
 
 import { ChartShell, EmptyHint, useChartTheme } from './shared'
@@ -38,6 +39,8 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
   const chart = useChartTheme()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [inputFocused, setInputFocused] = useState(false)
+  const pinnedList = usePersonInfographicFilterStore((s) => s.pinned)
 
   // C1: 외부에서 비교 추가 이벤트 받음 — 인물 상세 "비교" 버튼이 트리거
   useEffect(() => {
@@ -54,13 +57,32 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
     return () => window.removeEventListener('stats-view:compare-add', handler)
   }, [])
 
+  const sortedEvaluated = useMemo(
+    () =>
+      [...evaluated].sort(
+        (a, b) =>
+          (evalIndex.get(b.id)?.statsAverage ?? 0) -
+          (evalIndex.get(a.id)?.statsAverage ?? 0),
+      ),
+    [evaluated, evalIndex],
+  )
+
+  const pinnedEvaluated = useMemo(() => {
+    const pinnedSet = new Set(pinnedList)
+    return sortedEvaluated.filter((p) => pinnedSet.has(p.id))
+  }, [sortedEvaluated, pinnedList])
+
   const candidates = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     const list = q
-      ? evaluated.filter((p) => p.name.toLowerCase().includes(q))
-      : evaluated
+      ? sortedEvaluated.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.country.toLowerCase().includes(q),
+        )
+      : sortedEvaluated
     return list.filter((p) => !selectedIds.includes(p.id)).slice(0, 30)
-  }, [evaluated, searchQuery, selectedIds])
+  }, [sortedEvaluated, searchQuery, selectedIds])
 
   // 계열 키는 id로 — 동명이인을 추가해도 서로 덮어쓰지 않도록(표시명은 Radar name에).
   const radarData = useMemo(() => {
@@ -95,23 +117,40 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
     setSelectedIds((prev) => prev.filter((x) => x !== id))
   }
 
+  const showDropdown =
+    (inputFocused || searchQuery.trim() !== '') &&
+    candidates.length > 0 &&
+    selectedIds.length < 5
+
   return (
     <Wrap>
       <Controls>
         <SearchBox>
           <SearchInput
             type="search"
-            placeholder="인물 이름 검색…"
+            placeholder="평가된 인물 이름·국가 검색 (클릭하여 목록 보기)…"
             value={searchQuery}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => window.setTimeout(() => setInputFocused(false), 160)}
             onChange={(e) => setSearchQuery(e.target.value)}
             disabled={selectedIds.length >= 5}
           />
           <LimitHint>{selectedIds.length} / 5명 선택</LimitHint>
+          {selectedIds.length > 0 && (
+            <ClearBtn type="button" onClick={() => setSelectedIds([])}>
+              모두 해제
+            </ClearBtn>
+          )}
         </SearchBox>
-        {searchQuery.trim() !== '' && candidates.length > 0 && selectedIds.length < 5 && (
+        {showDropdown && (
           <CandidateList>
             {candidates.map((p) => (
-              <Candidate key={p.id} type="button" onClick={() => addPerson(p.id)}>
+              <Candidate
+                key={p.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => addPerson(p.id)}
+              >
                 <strong>{p.name}</strong>
                 <CandidateMeta>
                   {p.country} · 평균 {evalIndex.get(p.id)?.statsAverage ?? '—'}
@@ -137,7 +176,55 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
       )}
 
       {selectedPersons.length === 0 ? (
-        <EmptyHint>비교할 인물을 검색해 추가하세요. 최대 5명까지 동시 비교 가능합니다.</EmptyHint>
+        <EmptyWrap>
+          <EmptyHint>
+            비교할 인물을 검색하거나 아래 추천 인물에서 바로 선택하세요. (최대 5명 동시 비교)
+          </EmptyHint>
+          {sortedEvaluated.length > 0 && (
+            <>
+              <QuickActions>
+                {sortedEvaluated.length >= 2 && (
+                  <QuickPresetBtn
+                    type="button"
+                    onClick={() =>
+                      setSelectedIds(
+                        sortedEvaluated.slice(0, 3).map((p) => p.id),
+                      )
+                    }
+                  >
+                    상위 평가 인물 {Math.min(3, sortedEvaluated.length)}명 바로 비교
+                  </QuickPresetBtn>
+                )}
+                {pinnedEvaluated.length > 0 && (
+                  <QuickPresetBtn
+                    type="button"
+                    onClick={() =>
+                      setSelectedIds(
+                        pinnedEvaluated.slice(0, 5).map((p) => p.id),
+                      )
+                    }
+                  >
+                    고정한 평가 인물 ({Math.min(5, pinnedEvaluated.length)}명) 비교
+                  </QuickPresetBtn>
+                )}
+              </QuickActions>
+              <QuickChipsRow>
+                {sortedEvaluated.slice(0, 12).map((p) => (
+                  <QuickPersonChip
+                    key={p.id}
+                    type="button"
+                    onClick={() => addPerson(p.id)}
+                  >
+                    + {p.name}
+                    <span>
+                      {p.country} · 평균 {evalIndex.get(p.id)?.statsAverage ?? '—'}
+                    </span>
+                  </QuickPersonChip>
+                ))}
+              </QuickChipsRow>
+            </>
+          )}
+        </EmptyWrap>
       ) : (
         <ChartShell $h={460}>
           <ResponsiveContainer width="100%" height="100%">
@@ -293,5 +380,75 @@ const RemoveBtn = styled.button`
   &:hover {
     opacity: 1;
     background: rgba(0, 0, 0, 0.06);
+  }
+`
+
+const ClearBtn = styled.button`
+  border: none;
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const EmptyWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const QuickActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const QuickPresetBtn = styled.button`
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.active};
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.active};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover {
+    opacity: 0.88;
+  }
+`
+
+const QuickChipsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const QuickPersonChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  > span {
+    font-size: 11px;
+    font-weight: 400;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.active};
+    background: ${({ theme }) => theme.colors.hover};
   }
 `

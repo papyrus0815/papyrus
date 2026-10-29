@@ -29,6 +29,7 @@ import {
 } from '@/shared/api/person-stats'
 import type { PersonEvaluationSummary } from '@/shared/lib/person-evaluation-index'
 import { notify } from '@/shared/ui/toast'
+import { centuryOf } from '../../model/century'
 import type { AdaptedPerson } from '../../model/types'
 
 import { ChartShell, EmptyHint, traitToneBg, traitToneFg } from './shared'
@@ -40,10 +41,11 @@ interface Props {
   onPersonClick: (id: string) => void
 }
 
-/** 출생년 → 세기 키 (음수=BC). 출생년 없으면 null */
-function centuryOf(person: AdaptedPerson): number | null {
-  if (person.born == null) return null
-  return person.born >= 0 ? Math.ceil(person.born / 100) : -Math.ceil(-person.born / 100)
+/** 출생·활동·사망연도 → 세기 sortKey (음수=BC, 양수=AD). 연도 없으면 null */
+function personCenturySortKey(person: AdaptedPerson): number | null {
+  const refYear = person.born ?? person.activityYear ?? person.died
+  if (refYear == null || !Number.isFinite(refYear)) return null
+  return centuryOf(Math.round(refYear)).sortKey
 }
 
 export function OverviewPane({
@@ -213,7 +215,7 @@ export function OverviewPane({
       { sums: Record<PersonStatKey, number>; counts: Record<PersonStatKey, number>; n: number }
     >()
     for (const p of evaluated) {
-      const c = centuryOf(p)
+      const c = personCenturySortKey(p)
       if (c == null) continue
       let b = buckets.get(c)
       if (!b) {

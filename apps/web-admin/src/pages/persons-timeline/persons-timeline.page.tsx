@@ -116,17 +116,31 @@ export default function PersonsTimelinePage() {
   // 목록 지면의 인물 클릭 → 우측 상세 패널(사건 목록과 같은 분할 지면).
   // 패널 헤더의 '상세 페이지'로 전용 상세 진입. 목록 스크롤·필터가 그대로 남는다.
   const [panelPersonId, setPanelPersonId] = useState<string | null>(null)
+  const [activePanelPersonId, setActivePanelPersonId] = useState<string | null>(
+    null,
+  )
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const openFilterSheet = useCallback(() => setFilterSheetOpen(true), [])
   // 패널로 연 인물도 '최근 본 인물'에 올린다 — 사이드바 바로가기가 이 기록을 읽는다
   const openPersonPanel = useCallback(
     (id: string) => {
       setPanelPersonId(id)
+      setActivePanelPersonId(id)
       pushRecentPerson(id)
     },
     [pushRecentPerson],
   )
-  const closePersonPanel = useCallback(() => setPanelPersonId(null), [])
+  const handlePanelPersonShown = useCallback(
+    (id: string) => {
+      setActivePanelPersonId(id)
+      pushRecentPerson(id)
+    },
+    [pushRecentPerson],
+  )
+  const closePersonPanel = useCallback(() => {
+    setPanelPersonId(null)
+    setActivePanelPersonId(null)
+  }, [])
   const openEditModal = useCallback((id: string) => {
     setEditingPersonId(id)
     setEditModalOpen(true)
@@ -164,12 +178,12 @@ export default function PersonsTimelinePage() {
             personId={panelPersonId}
             onClose={closePersonPanel}
             onOpenDetail={openDetail}
-            onPersonShown={pushRecentPerson}
+            onPersonShown={handlePanelPersonShown}
             onEdit={openEditModal}
           >
             <PersonInfographicPane
               onPersonClick={openPersonPanel}
-              selectedPersonId={panelPersonId}
+              selectedPersonId={activePanelPersonId ?? panelPersonId}
               onOpenFilters={openFilterSheet}
             />
           </PersonSplitView>

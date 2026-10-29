@@ -14,7 +14,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiArrowLeft, FiArrowUpRight, FiX } from 'react-icons/fi'
+import { FiArrowLeft, FiArrowUpRight, FiEdit2, FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { getPersonDetailById } from '@/shared/api/persons-detail'
@@ -134,7 +134,15 @@ function PersonSidePanel({
   })
   const titleName = activePerson ? getPersonDisplayName(activePerson) : ''
 
-  const goBack = () => setStack((prev) => prev.slice(0, -1))
+  const goBack = () => {
+    setStack((prev) => {
+      if (prev.length === 0) return prev
+      const next = prev.slice(0, -1)
+      const nextActiveId = next[next.length - 1] ?? personId
+      onPersonShown?.(nextActiveId)
+      return next
+    })
+  }
   const pushPerson = (id: string) => {
     setStack((prev) => [...prev, id])
     onPersonShown?.(id)
@@ -158,12 +166,18 @@ function PersonSidePanel({
       if (event.key !== 'Escape' || event.defaultPrevented) return
       const inside = hostRef.current?.contains(document.activeElement) ?? false
       if (!isDrawer && !inside) return
-      if (stack.length > 0) setStack((prev) => prev.slice(0, -1))
-      else onClose()
+      if (stack.length > 0) {
+        const next = stack.slice(0, -1)
+        const nextActiveId = next[next.length - 1] ?? personId
+        setStack(next)
+        onPersonShown?.(nextActiveId)
+      } else {
+        onClose()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, isDrawer, stack.length, onClose])
+  }, [open, isDrawer, stack, personId, onPersonShown, onClose])
 
   return (
     <>
@@ -182,6 +196,12 @@ function PersonSidePanel({
             </IconButton>
           )}
           <PanelTitle title={titleName}>{titleName || '인물'}</PanelTitle>
+          {onEdit && (
+            <OpenDetailButton type="button" onClick={() => onEdit(activeId)}>
+              <FiEdit2 size={13} aria-hidden />
+              수정
+            </OpenDetailButton>
+          )}
           {onOpenDetail && (
             <OpenDetailButton type="button" onClick={() => onOpenDetail(activeId)}>
               상세 페이지

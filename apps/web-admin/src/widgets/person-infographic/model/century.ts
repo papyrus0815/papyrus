@@ -15,7 +15,7 @@ export interface CenturyMeta {
 export function centuryOf(year: number): CenturyMeta {
   const isBC = year < 0
   const abs = Math.abs(year)
-  const c = Math.floor((abs - 1) / 100) + 1
+  const c = Math.max(1, Math.floor((abs - 1) / 100) + 1)
   const from = isBC ? -(c * 100) : (c - 1) * 100 + 1
   const to = isBC ? -((c - 1) * 100 + 1) : c * 100
   return {
