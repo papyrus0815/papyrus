@@ -1,46 +1,43 @@
-import {
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiArrowDown, FiArrowUp, FiSettings, FiX } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
-import styled, { css } from 'styled-components'
+import { FiSettings } from 'react-icons/fi'
 
-import {
-  ledgerAccent,
-  ledgerHairlineStrong,
-  RADIUS,
-} from '@/entities/event/ui/ledger-tokens'
-
-import {
-  EVENT_COUNTRY_ROLE_OPTIONS,
-  type EventCountryRole,
-} from '@/entities/event/model'
 import { getAllCountries } from '@/shared/api/countries'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { getAllPersons } from '@/shared/api/persons'
-import { getUploadImageUrl } from '@/shared/api/upload'
-import { renderEmphasis } from '@/shared/lib/emphasis-markup'
-import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { pathKeys } from '@/shared/router'
-import { CountryPicker, type CountryPickerPick } from '@/shared/ui/country-picker'
-import { InlineSelect } from '@/shared/ui/inline-edit'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
-import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
 import * as S from '../styles'
 import { type PatchOptions } from '../use-undoable-patch'
 import { type EventDetail } from '../use-event-detail'
+import { countryRowKey, PERSON_PREVIEW_COUNT } from './actors/actors.lib'
+import {
+  ActorsHeader,
+  AddBtn,
+  CountryList,
+  EmptyGroupLine,
+  GroupCount,
+  GroupHead,
+  GroupLabel,
+  ManageToggle,
+  NationsBlock,
+  PersonList,
+  PersonsBlock,
+  ShowAllToggle,
+  SideColumns,
+  SideCountryList,
+  SideGroup,
+  SideHead,
+  SideSwatch,
+} from './actors/actors.styles'
+import { ActorCountryRow } from './actors/country-row'
+import { ActorPersonRow } from './actors/person-row'
+import { useActorMutations } from './actors/use-actor-mutations'
 import { groupBySide } from './hero-countries.lib'
 import { withSideColors } from './side-colors'
-import { InlineText } from './inline'
 
 interface DetailActorsProps {
   event: EventDetail
@@ -71,28 +68,16 @@ interface DetailActorsProps {
  * - 비고·서술은 절반이 150자를 넘어(인물 비고 83/160) 15명짜리 사건에서 섹션이
  *   4,000px을 넘었다. 2줄에서 접고 '더 보기'로 펼친다. 시드가 쓰는 `*강조*`는 굵게 렌더.
  */
-export function DetailActors({
-  event,
-  onPatch,
-  onPersonClick,
-  onCountryClick,
-}: DetailActorsProps) {
+export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: DetailActorsProps) {
   const [personModalOpen, setPersonModalOpen] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
-  /**
-   * 관리 모드 — true일 때만 reorder(↑↓) 버튼이 각 row에 등장한다.
-   * 사용 빈도 낮은 액션을 평소엔 숨겨 read-first 톤을 유지.
-   */
+  /** 관리 모드 — true일 때만 reorder(↑↓) 버튼이 각 행에 등장한다(평소엔 read-first) */
   const [manageMode, setManageMode] = useState(false)
-  /**
-   * 인물은 앞 PERSON_PREVIEW_COUNT명만 보이고 '모두 보기'로 펼친다 — 15명짜리 사건에서
-   * 인물 목록만 2,100px을 넘었다. 순서 변경 중엔 전원이 보여야 옮길 수 있어 강제로 펼친다.
-   */
+  /** 인물은 앞 PERSON_PREVIEW_COUNT명만 — 순서 변경 중엔 전원이 보여야 옮길 수 있어 강제로 펼친다 */
   const [showAllPersons, setShowAllPersons] = useState(false)
 
-  const persons = event.relatedPersons ?? []
-  const modernCountries = event.relatedCountries ?? []
-  const historicalCountries = event.relatedHistoricalCountries ?? []
+  const actors = useActorMutations({ event, onPatch })
+  const { persons, countryRows } = actors
 
   const { data: allPersons = [], isLoading: personsLoading } = useQuery({
     queryKey: ['persons', 'all'],
@@ -113,232 +98,27 @@ export function DetailActors({
     staleTime: 5 * 60_000,
   })
 
-  const patchPersons = (next: PersonPayload[]) =>
-    onPatch({ relatedPersons: next })
-
-  const updatePerson = (
-    personId: string,
-    patch: { role?: string; note?: string },
-  ) => {
-    const next = persons.map((p) => {
-      if (p.personId !== personId) return toPersonPayload(p)
-      return {
-        personId: p.personId,
-        role:
-          patch.role !== undefined
-            ? patch.role.trim() || undefined
-            : p.role ?? undefined,
-        note:
-          patch.note !== undefined
-            ? patch.note.trim() || undefined
-            : p.note ?? undefined,
-      }
-    })
-    patchPersons(next)
-  }
-
-  /**
-   * 참여 자격 국가 — 사건 참여국 중 하나('h:역사국id' | 'c:현대국id') 또는 ''(지정 안 함).
-   * 고른 쪽만 채우고 다른 쪽은 비운다(현대·역사를 둘 다 잡고 있으면 어느 자격인지 흐려진다).
-   */
-  const setParticipationCountry = (personId: string, value: string) => {
-    const [kind, targetId] =
-      value && value !== 'none' ? value.split(':') : ['', '']
-    patchPersons(
-      persons.map((person) =>
-        person.personId !== personId
-          ? toPersonPayload(person)
-          : {
-              ...toPersonPayload(person),
-              countryId: kind === 'c' ? targetId : null,
-              historicalCountryId: kind === 'h' ? targetId : null,
-            },
-      ),
-    )
-  }
-
-  const removePerson = (personId: string) => {
-    const removed = persons.find((person) => person.personId === personId)
-    const removedName = removed?.person
-      ? getPersonDisplayName({
-          name: removed.person.name ?? '',
-          surname: removed.person.surname,
-          middleName: removed.person.middleName,
-          nameDisplayOrder: removed.person.nameDisplayOrder,
-          country: removed.person.country,
-        }) || '인물'
-      : '인물'
-    onPatch(
-      {
-        relatedPersons: persons
-          .filter((person) => person.personId !== personId)
-          .map(toPersonPayload),
-      },
-      { savedLabel: `행위자 제거 · ${removedName}` },
-    )
-  }
-
-  /**
-   * 인물 순서 이동 — 서버는 array 순서를 그대로 보존하므로 array를 재정렬해 PUT.
-   * 경계(맨 위에서 ↑, 맨 아래에서 ↓)에서는 호출 자체가 막혀 patch 발송 X.
-   */
-  const movePerson = (personId: string, dir: -1 | 1) => {
-    const idx = persons.findIndex((p) => p.personId === personId)
-    if (idx < 0) return
-    const target = idx + dir
-    if (target < 0 || target >= persons.length) return
-    const next = persons.slice()
-    const [item] = next.splice(idx, 1)
-    next.splice(target, 0, item)
-    patchPersons(next.map(toPersonPayload))
-  }
-
-  /**
-   * 인물 추가 — 모달은 연속 추가(multiSelect)라 여기서 닫지 않는다.
-   * 중복은 모달이 excludeIds로 이미 거르지만, 안전하게 한 번 더 가드.
-   */
   const addPerson = (personId: string) => {
-    if (persons.some((p) => p.personId === personId)) return
-    patchPersons([...persons.map(toPersonPayload), { personId }])
-    /* 새 인물은 끝에 붙는다 — 접혀 있으면 추가한 사람이 안 보이므로 펼친다. */
+    if (!actors.addPerson(personId)) return
+    /* 새 인물은 끝에 붙는다 — 접혀 있으면 추가한 사람이 안 보이므로 펼친다 */
     if (persons.length >= PERSON_PREVIEW_COUNT) setShowAllPersons(true)
   }
 
-  /**
-   * 참여국 — 현대·역사를 **한 목록**으로 합쳐 다룬다. 서버가 표시 편의로 두 배열을
-   * 내려주지만 순서(sortOrder)는 둘에 걸쳐 하나이므로, 편집은 언제나 합친 목록으로
-   * 한다. 저장은 `relatedCountries` 한 필드 — 서버가 자연키로 머지하므로 보내지 않은
-   * 필드(역할·서술·비고)는 그대로 살아남는다.
-   */
-  const countryRows = useMemo(() => {
-    const rows = [
-      ...modernCountries.map((country, index) => ({
-        id: country.id,
-        name: country.name,
-        flagEmoji: country.flagEmoji ?? null,
-        isHistorical: false,
-        role: country.role ?? null,
-        roleDescription: country.roleDescription ?? null,
-        note: country.note ?? null,
-        sortOrder: country.sortOrder ?? index,
-        // 존속 기간 경고는 역사국가만(현대국은 기간 개념이 없다)
-        existenceWarning: null as string | null,
-        /* 진영 — 표시용(묶기)만. 저장 payload엔 싣지 않는다(생략=서버가 소속 유지) */
-        sideId: country.sideId ?? null,
-      })),
-      ...historicalCountries.map((country, index) => ({
-        id: country.id,
-        name: country.name,
-        flagEmoji: null,
-        isHistorical: true,
-        role: country.role ?? null,
-        roleDescription: country.roleDescription ?? null,
-        note: country.note ?? null,
-        sortOrder: country.sortOrder ?? index,
-        existenceWarning: (country.existenceWarning ?? null) as string | null,
-        sideId: country.sideId ?? null,
-      })),
-    ]
-    rows.sort((left, right) => left.sortOrder - right.sortOrder)
-    return rows
-  }, [modernCountries, historicalCountries])
-
-  const patchCountries = (
-    next: typeof countryRows,
-    options?: { savedLabel?: string },
-  ) => onPatch({ relatedCountries: next.map(toCountryPayload) }, options)
-
-  const updateCountry = (
-    rowKey: string,
-    patch: { role?: EventCountryRole; roleDescription?: string; note?: string },
-  ) => {
-    const next = countryRows.map((row) =>
-      countryRowKey(row) === rowKey ? { ...row, ...patch } : row,
-    )
-    patchCountries(next)
-  }
-
-  const removeCountry = (rowKey: string) => {
-    const removed = countryRows.find((row) => countryRowKey(row) === rowKey)
-    patchCountries(
-      countryRows.filter((row) => countryRowKey(row) !== rowKey),
-      { savedLabel: `관련국 제거 · ${removed?.name ?? '국가'}` },
-    )
-  }
-
-  /** 순서 이동 — 이제 sortOrder로 실제 저장된다(예전엔 저장 자리가 없어 무시됐다). */
-  const moveCountry = (rowKey: string, dir: -1 | 1) => {
-    const index = countryRows.findIndex((row) => countryRowKey(row) === rowKey)
-    if (index < 0) return
-    const target = index + dir
-    if (target < 0 || target >= countryRows.length) return
-    const next = countryRows.slice()
-    const [moved] = next.splice(index, 1)
-    next.splice(target, 0, moved)
-    patchCountries(next)
-  }
-
-  /**
-   * 피커에서 고른 국가들을 **한 번의 patch**로 더한다(추가 전용 피커).
-   * 예전엔 고를 때마다 patch·토스트가 하나씩 났고, undo는 1단계라 5개를 고르면 마지막 1개만
-   * 되돌릴 수 있었다. 이제 '되돌리기' 한 번이 방금 더한 묶음 전체를 되돌린다.
-   */
-  const addCountries = (picks: CountryPickerPick[]) => {
-    const existingKeys = new Set(countryRows.map(countryRowKey))
-    const fresh = picks.filter(
-      (country) => !existingKeys.has(country.isHistorical ? `h:${country.id}` : `m:${country.id}`),
-    )
-    if (fresh.length === 0) return
-    patchCountries(
-      [
-        ...countryRows,
-        ...fresh.map((country, index) => ({
-          id: country.id,
-          name: '',
-          flagEmoji: null,
-          isHistorical: country.isHistorical,
-          role: null,
-          roleDescription: null,
-          note: null,
-          sortOrder: countryRows.length + index,
-          existenceWarning: null,
-          sideId: null,
-        })),
-      ],
-      {
-        savedLabel:
-          fresh.length === 1
-            ? `관련국 추가 · ${fresh[0].name}`
-            : `관련국 ${fresh.length}개 추가`,
-      },
-    )
-  }
-
-  const selectedCountryIds = useMemo(
-    () => countryRows.map((row) => row.id),
-    [countryRows],
-  )
-
+  const selectedCountryIds = useMemo(() => countryRows.map((row) => row.id), [countryRows])
   const totalCountries = countryRows.length
-  const hasAnything =
-    persons.length > 0 || totalCountries > 0
-  /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다. */
+  const hasAnything = persons.length > 0 || totalCountries > 0
+  /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다 */
   const canManage = persons.length > 1 || totalCountries > 1
-  const personsCollapsed =
-    !showAllPersons && !manageMode && persons.length > PERSON_PREVIEW_COUNT
+  const personsCollapsed = !showAllPersons && !manageMode && persons.length > PERSON_PREVIEW_COUNT
   const showAllToggleRef = useRef<HTMLButtonElement>(null)
-  /**
-   * 긴 목록을 접으면 버튼이 수천 px 위로 올라가 화면엔 국가 목록 한가운데가 남는다.
-   * 접은 직후 버튼을 화면에 다시 데려온다.
-   */
-  /** 참여 자격 국가 선택지 — 이 사건의 참여국(역사국 먼저 표시되는 순서 그대로) */
+
+  /** 참여 자격 국가 선택지 — 이 사건의 참여국 */
   const participationOptions = useMemo(
     () =>
       countryRows.length === 0
         ? []
         : [
-            // 비우기는 별도 값 — ''(미지정)과 겹치면 칩이 '지정 안 함'이라는 상태로 읽혀
-            // '참여 국가 지정'(누르라는 안내)이 안 보였다
+            // 비우기는 별도 값 — ''(미지정)과 겹치면 '참여 국가 지정' 안내가 안 보였다
             { value: 'none', label: '지정 안 함' },
             ...countryRows.map((row) => ({
               value: `${row.isHistorical ? 'h' : 'c'}:${row.id}`,
@@ -347,29 +127,16 @@ export function DetailActors({
           ],
     [countryRows],
   )
-  const participationValueOf = (person: {
-    countryId?: string | null
-    historicalCountryId?: string | null
-  }) =>
-    person.historicalCountryId
-      ? `h:${person.historicalCountryId}`
-      : person.countryId
-        ? `c:${person.countryId}`
-        : ''
 
+  /** 긴 목록을 접으면 버튼이 수천 px 위로 올라간다 — 접은 직후 버튼을 화면에 다시 데려온다 */
   const togglePersons = () => {
     const willCollapse = showAllPersons
     setShowAllPersons(!showAllPersons)
     if (willCollapse) {
-      requestAnimationFrame(() =>
-        showAllToggleRef.current?.scrollIntoView({ block: 'center' }),
-      )
+      requestAnimationFrame(() => showAllToggleRef.current?.scrollIntoView({ block: 'center' }))
     }
   }
-  /**
-   * 항목을 1개 이하로 지우면 토글 버튼이 사라지는데, manageMode가 true로 남으면
-   * reorder 액션이 갇힌 채 끌 길이 없다. 토글이 사라지는 시점에 모드도 해제.
-   */
+  /** 항목을 1개 이하로 지우면 토글이 사라진다 — 모드가 갇히지 않게 함께 끈다 */
   useEffect(() => {
     if (!canManage && manageMode) setManageMode(false)
   }, [canManage, manageMode])
@@ -381,120 +148,20 @@ export function DetailActors({
     withSideColors(event.sides ?? []).map((side) => [side.id, side.color] as const),
   )
 
-  /**
-   * 참여국 한 행 — 진영별 묶음과 평평한 목록이 같이 쓴다. index는 **전체 목록 기준**(순서 바꾸기의 끝 판정).
-   */
-  const renderCountryRow = (row: (typeof countryRows)[number], index: number) => {
-    const rowKey = countryRowKey(row)
-    const NameLink = row.isHistorical
-      ? HistoricalCountryName
-      : CountryLink
-    const hasNote = Boolean(row.note && row.note.trim())
-    const hasRoleDescription = Boolean(row.roleDescription?.trim())
+  const renderCountryRow = (row: (typeof countryRows)[number]) => {
+    const index = countryRows.indexOf(row)
     return (
-      <CountryRow key={rowKey}>
-        <CountryBody>
-          <CountryNameLine>
-            <NameLink
-              to={pathKeys.countryDetail(row.id)}
-              aria-haspopup="dialog"
-              onClick={(clickEvent) => {
-                if (!shouldInterceptEntityClick(clickEvent)) return
-                clickEvent.preventDefault()
-                onCountryClick(row.id)
-              }}
-            >
-              {row.flagEmoji && (
-                <CountryFlag aria-hidden>{row.flagEmoji}</CountryFlag>
-              )}
-              {row.name}
-            </NameLink>
-            {row.existenceWarning && (
-              <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
-                ⚠ {row.existenceWarning}
-              </MismatchNote>
-            )}
-            {/* 평범한 '참여국'(또는 미지정)은 15줄 모두 같은 글자라 소음 — 행에 들어왔을 때만 보인다 */}
-            <CountryRolePicker data-default={!row.role || row.role === 'PARTICIPANT' ? '' : undefined}>
-              <InlineSelect
-                value={row.role ?? ''}
-                options={EVENT_COUNTRY_ROLE_OPTIONS.filter(
-                  // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
-                  (option) => !option.deprecated || option.value === row.role,
-                ).map(
-                  (option) => ({
-                    value: option.value,
-                    label: option.label,
-                    description: option.hint,
-                  }),
-                )}
-                onSave={(next) =>
-                  updateCountry(rowKey, {
-                    role: next as EventCountryRole,
-                  })
-                }
-                placeholder="역할 지정"
-                label={`${row.name} 역할`}
-              />
-            </CountryRolePicker>
-          </CountryNameLine>
-          <CountryRoleLine $hasContent={hasRoleDescription}>
-            <ClampedProse measureKey={row.roleDescription ?? ''}>
-              <InlineText
-                value={row.roleDescription ?? ''}
-                onSave={(next) =>
-                  updateCountry(rowKey, { roleDescription: next })
-                }
-                placeholder="이 나라가 한 일 추가"
-                label={`${row.name}이(가) 한 일`}
-                multiline
-                multilineEnter
-                renderRead={renderEmphasis}
-              />
-            </ClampedProse>
-          </CountryRoleLine>
-          <CountryNoteLine $hasContent={hasNote}>
-            <InlineText
-              value={row.note ?? ''}
-              onSave={(next) => updateCountry(rowKey, { note: next })}
-              placeholder="비고 추가"
-              multiline
-              multilineEnter
-              renderRead={renderEmphasis}
-            />
-          </CountryNoteLine>
-        </CountryBody>
-
-        <RowActions>
-          {manageMode && (
-            <>
-              <ReorderBtn
-                type="button"
-                onClick={() => moveCountry(rowKey, -1)}
-                disabled={index === 0}
-                aria-label={`${row.name} 위로`}
-              >
-                <FiArrowUp />
-              </ReorderBtn>
-              <ReorderBtn
-                type="button"
-                onClick={() => moveCountry(rowKey, 1)}
-                disabled={index === countryRows.length - 1}
-                aria-label={`${row.name} 아래로`}
-              >
-                <FiArrowDown />
-              </ReorderBtn>
-            </>
-          )}
-          <RemoveInline
-            type="button"
-            onClick={() => removeCountry(rowKey)}
-            aria-label={`${row.name} 제거`}
-          >
-            <FiX />
-          </RemoveInline>
-        </RowActions>
-      </CountryRow>
+      <ActorCountryRow
+        key={countryRowKey(row)}
+        row={row}
+        manageMode={manageMode}
+        isFirst={index === 0}
+        isLast={index === countryRows.length - 1}
+        onCountryClick={onCountryClick}
+        onUpdate={actors.updateCountry}
+        onMove={actors.moveCountry}
+        onRemove={actors.removeCountry}
+      />
     )
   }
 
@@ -518,7 +185,7 @@ export function DetailActors({
           )}
         </ActorsHeader>
 
-        {/* 비어 있을 때 통일 안내 — persons·countries 모두 없을 때만 */}
+        {/* 비어 있을 때 통일 안내 — 인물·국가 모두 없을 때만 */}
         {!hasAnything && (
           <S.EmptyState>
             <S.EmptyStateHead>
@@ -531,183 +198,48 @@ export function DetailActors({
           </S.EmptyState>
         )}
 
-        {/* 인물 — 세로 리스트, hairline 구분선. 넓은 화면에선 트랙 전체 + 2열. */}
         <PersonsBlock>
-        <GroupHead>
-          <GroupLabel>
-            인물
-            {persons.length > 0 && <GroupCount>{persons.length}</GroupCount>}
-          </GroupLabel>
-          <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
-            인물 추가
-          </AddBtn>
-        </GroupHead>
-        {persons.length === 0 && hasAnything && (
-          // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
-          <EmptyGroupLine>
-            아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
-          </EmptyGroupLine>
-        )}
-        {persons.length > 0 && (
-          <PersonList>
-            {(personsCollapsed
-              ? persons.slice(0, PERSON_PREVIEW_COUNT)
-              : persons
-            ).map((person, idx) => {
-              const fullName = person.person
-                ? getPersonDisplayName({
-                    name: person.person.name ?? '',
-                    surname: person.person.surname,
-                    middleName: person.person.middleName,
-                    nameDisplayOrder: person.person.nameDisplayOrder,
-                    country: person.person.country,
-                  }) || '미상'
-                : '미상'
-              const avatarUrl = person.person?.profileImageUrl ?? undefined
-              const hasNote = Boolean(person.note && person.note.trim())
-              return (
-                /**
-                 * key는 join 행 id(person.id)가 아니라 personId. relatedPersons는 서버가
-                 * delete-and-recreate라 저장할 때마다 person.id가 새 UUID로 재발급된다.
-                 * id로 키잉하면 매 저장 직후 모든 행이 unmount/remount되며 인라인 편집의
-                 * 포커스·IME·커서가 끊긴다. personId는 recreate에도 안정적.
-                 */
-                <PersonRow key={person.personId}>
-                  <PersonAvatarBtn
-                    type="button"
-                    onClick={() => onPersonClick(person.personId)}
-                    aria-label={`${fullName} 상세 보기`}
-                  >
-                    <PersonAvatar $hasImage={Boolean(avatarUrl)}>
-                      {avatarUrl ? (
-                        <img
-                          src={getUploadImageUrl(avatarUrl) || avatarUrl}
-                          alt=""
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span>{fullName.charAt(0)}</span>
-                      )}
-                    </PersonAvatar>
-                  </PersonAvatarBtn>
-
-                  <PersonBody>
-                    <PersonNameBtn
-                      type="button"
-                      onClick={() => onPersonClick(person.personId)}
-                    >
-                      {fullName}
-                    </PersonNameBtn>
-                    {(participationOptions.length > 1 ||
-                      (person.officesAtEvent?.length ?? 0) > 0 ||
-                      !!person.lifespanWarning) && (
-                      <PersonMetaLine>
-                        {participationOptions.length > 1 && (
-                          <InlineSelect
-                            value={participationValueOf(person)}
-                            options={participationOptions}
-                            onSave={(next) =>
-                              setParticipationCountry(person.personId, next)
-                            }
-                            placeholder={
-                              person.participationCountryName ?? '참여 국가 지정'
-                            }
-                            label={`${fullName}의 참여 국가`}
-                          />
-                        )}
-                        {(person.officesAtEvent?.length ?? 0) > 0 && (
-                          <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">
-                            당시 {person.officesAtEvent!.join(' · ')}
-                          </OfficeAtEvent>
-                        )}
-                        {person.lifespanWarning && (
-                          <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
-                            ⚠ {person.lifespanWarning}
-                          </MismatchNote>
-                        )}
-                      </PersonMetaLine>
-                    )}
-                    <PersonRoleLine>
-                      <InlineText
-                        value={person.role ?? ''}
-                        onSave={(next) =>
-                          updatePerson(person.personId, { role: next })
-                        }
-                        placeholder="무엇을 했나 (예: 협상 대표, 지휘관)"
-                        validate={(next) =>
-                          next.length > 100
-                            ? '역할은 100자 이내로 입력하세요'
-                            : null
-                        }
-                      />
-                    </PersonRoleLine>
-                    <PersonNoteLine $hasContent={hasNote}>
-                      <ClampedProse measureKey={person.note ?? ''}>
-                        <InlineText
-                          value={person.note ?? ''}
-                          onSave={(next) =>
-                            updatePerson(person.personId, { note: next })
-                          }
-                          placeholder="비고 추가"
-                          label={`${fullName} 비고`}
-                          multiline
-                          /* 여러 줄 비고 — Enter는 줄바꿈, 저장은 blur로. */
-                          multilineEnter
-                          renderRead={renderEmphasis}
-                        />
-                      </ClampedProse>
-                    </PersonNoteLine>
-                  </PersonBody>
-
-                  <RowActions>
-                    {manageMode && (
-                      <>
-                        <ReorderBtn
-                          type="button"
-                          onClick={() => movePerson(person.personId, -1)}
-                          disabled={idx === 0}
-                          aria-label={`${fullName} 위로`}
-                        >
-                          <FiArrowUp />
-                        </ReorderBtn>
-                        <ReorderBtn
-                          type="button"
-                          onClick={() => movePerson(person.personId, 1)}
-                          disabled={idx === persons.length - 1}
-                          aria-label={`${fullName} 아래로`}
-                        >
-                          <FiArrowDown />
-                        </ReorderBtn>
-                      </>
-                    )}
-                    <RemoveInline
-                      type="button"
-                      onClick={() => removePerson(person.personId)}
-                      aria-label={`${fullName} 제거`}
-                    >
-                      <FiX />
-                    </RemoveInline>
-                  </RowActions>
-                </PersonRow>
-              )
-            })}
-          </PersonList>
-        )}
-        {persons.length > PERSON_PREVIEW_COUNT && !manageMode && (
-          <ShowAllToggle
-            ref={showAllToggleRef}
-            type="button"
-            aria-expanded={showAllPersons}
-            onClick={togglePersons}
-          >
-            {showAllPersons
-              ? '접기'
-              : `${persons.length}명 모두 보기 (+${persons.length - PERSON_PREVIEW_COUNT})`}
-          </ShowAllToggle>
-        )}
+          <GroupHead>
+            <GroupLabel>
+              인물
+              {persons.length > 0 && <GroupCount>{persons.length}</GroupCount>}
+            </GroupLabel>
+            <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
+              인물 추가
+            </AddBtn>
+          </GroupHead>
+          {persons.length === 0 && hasAnything && (
+            // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
+            <EmptyGroupLine>
+              아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
+            </EmptyGroupLine>
+          )}
+          {persons.length > 0 && (
+            <PersonList>
+              {(personsCollapsed ? persons.slice(0, PERSON_PREVIEW_COUNT) : persons).map((entry, index) => (
+                <ActorPersonRow
+                  key={entry.personId}
+                  entry={entry}
+                  participationOptions={participationOptions}
+                  manageMode={manageMode}
+                  isFirst={index === 0}
+                  isLast={index === persons.length - 1}
+                  onOpen={onPersonClick}
+                  onUpdate={actors.updatePerson}
+                  onParticipation={actors.setParticipationCountry}
+                  onMove={actors.movePerson}
+                  onRemove={actors.removePerson}
+                />
+              ))}
+            </PersonList>
+          )}
+          {persons.length > PERSON_PREVIEW_COUNT && !manageMode && (
+            <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
+              {showAllPersons ? '접기' : `${persons.length}명 모두 보기 (+${persons.length - PERSON_PREVIEW_COUNT})`}
+            </ShowAllToggle>
+          )}
         </PersonsBlock>
 
-        {/* 참여국 — 인물 행과 같은 편집 수준(역할·서술·비고) */}
         <NationsBlock>
           <GroupHead>
             <GroupLabel>
@@ -722,7 +254,6 @@ export function DetailActors({
             (countrySideGroups ? (
               /*
                * 진영이 있으면 진영별 — 진영 색 머리를 달고 넓으면 나란히(동맹국 | 협상국).
-               * 예전엔 15개국이 한 줄로 900px 내려가 맞선 두 편이 한 화면에 안 들어왔다.
                * 진영에 안 든 나라('그 밖')는 맨 아래 한 줄을 다 쓴다.
                */
               <SideColumns>
@@ -735,9 +266,7 @@ export function DetailActors({
                         {group.label}
                         <GroupCount>{group.items.length}</GroupCount>
                       </SideHead>
-                      <SideCountryList>
-                        {group.items.map((row) => renderCountryRow(row, countryRows.indexOf(row)))}
-                      </SideCountryList>
+                      <SideCountryList>{group.items.map(renderCountryRow)}</SideCountryList>
                     </SideGroup>
                   )
                 })}
@@ -754,7 +283,7 @@ export function DetailActors({
           selectedPersonId=""
           onSelect={(id) => addPerson(id)}
           onClose={() => setPersonModalOpen(false)}
-          excludeIds={persons.map((p) => p.personId)}
+          excludeIds={persons.map((person) => person.personId)}
           title="참여 인물 추가"
           searchPlaceholder="이름 또는 생몰년도로 검색..."
           multiSelect
@@ -767,7 +296,7 @@ export function DetailActors({
         onClose={() => setCountryModalOpen(false)}
         mode="add"
         title="관련 국가 추가"
-        onCommit={addCountries}
+        onCommit={actors.addCountries}
         modernCountries={allModern}
         historicalCountries={allHistorical}
         selectedIds={selectedCountryIds}
@@ -776,916 +305,3 @@ export function DetailActors({
     </>
   )
 }
-
-/* ───────────────────────── helpers ───────────────────────── */
-
-const CLAMP_LINES = 2
-const PERSON_PREVIEW_COUNT = 6
-
-/**
- * 긴 산문을 2줄에서 접는다. 넘칠 때만 '더 보기'를 단다(짧은 글엔 흔적 없음).
- * 편집 중(focus-within)엔 CSS가 접힘을 풀어 textarea가 잘리지 않게 한다.
- */
-function ClampedProse({
-  children,
-  measureKey,
-}: {
-  children: ReactNode
-  /** 값이 바뀌면 넘침을 다시 잰다 — 접힌 상자는 크기가 그대로라 관찰자가 못 잡는다. */
-  measureKey: string
-}) {
-  const boxRef = useRef<HTMLDivElement>(null)
-  const [expanded, setExpanded] = useState(false)
-  const [overflowing, setOverflowing] = useState(false)
-
-  useLayoutEffect(() => {
-    const box = boxRef.current
-    if (!box || expanded) return
-    /*
-     * 반 줄 미만 넘침은 넘침이 아니다 — 인라인 키트의 inline-flex 호스트가 1~2px를
-     * 더 먹어, 딱 2줄인 글에도 '더 보기'가 붙고 마지막 줄이 흐려졌다(실측 +1.5px).
-     */
-    const measure = () => {
-      const lineHeight = parseFloat(getComputedStyle(box).lineHeight) || 20
-      setOverflowing(box.scrollHeight - box.clientHeight > lineHeight / 2)
-    }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(box)
-    return () => observer.disconnect()
-  }, [expanded, measureKey])
-
-  const collapsed = !expanded
-  return (
-    <>
-      <ProseClamp
-        ref={boxRef}
-        $collapsed={collapsed}
-        $faded={collapsed && overflowing}
-      >
-        {children}
-      </ProseClamp>
-      {(overflowing || expanded) && (
-        <MoreToggle
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? '접기' : '더 보기'}
-        </MoreToggle>
-      )}
-    </>
-  )
-}
-
-/**
- * UpdateEventDto.relatedPersons 항목 직렬화. null/빈 문자열은 undefined로 정규화해
- * 서버 `=== undefined` 가드와 정합. update/add/remove 모두 동일 매핑을 쓰므로
- * 헬퍼로 한 곳에 둔다.
- */
-/** 참여 인물 한 줄 — 참여 자격 국가는 3상(생략=유지 / null=비움 / 값=설정) */
-type PersonPayload = {
-  personId: string
-  role?: string
-  note?: string
-  countryId?: string | null
-  historicalCountryId?: string | null
-}
-
-function toPersonPayload(p: {
-  personId: string
-  role?: string | null
-  note?: string | null
-}): PersonPayload {
-  // 참여 자격 국가는 싣지 않는다(생략=유지) — 역할·순서만 바꾸는 저장이 그 값을 건드리지 않게
-  return {
-    personId: p.personId,
-    role: p.role ?? undefined,
-    note: p.note ?? undefined,
-  }
-}
-
-/** 참여국 행의 신원 — 현대/역사가 같은 uuid를 쓰더라도 섞이지 않는다 */
-function countryRowKey(row: { id: string; isHistorical: boolean }): string {
-  return row.isHistorical ? `h:${row.id}` : `m:${row.id}`
-}
-
-/**
- * 행 → 서버 계약(`relatedCountries`) 한 줄.
- * 빈 문자열은 null로 눕혀 "지움"을 명확히 한다(3상 규약: 생략=유지, null=비움).
- */
-function toCountryPayload(row: {
-  id: string
-  isHistorical: boolean
-  role: string | null
-  roleDescription: string | null
-  note: string | null
-}) {
-  return {
-    ...(row.isHistorical
-      ? { historicalCountryId: row.id }
-      : { countryId: row.id }),
-    role: (row.role ?? undefined) as EventCountryRole | undefined,
-    roleDescription: row.roleDescription?.trim() ? row.roleDescription : null,
-    note: row.note?.trim() ? row.note : null,
-  }
-}
-
-/* ───────────────────────── styles — editorial sans ─────────────── */
-/* NYT 깔끔한 톤(헤어라인 룰 + smallcaps eyebrow + 위계)만 차용. 폰트는 sans 기본. */
-
-/**
- * 섹션 구분 hr 색상 — 본문 흐름 방해 안 하는 hairline.
- * 이전엔 0.78/0.5로 본문 글자보다 진해 시선 분산이 컸음. hairline 톤으로 낮춤.
- */
-const editorialRuleColor = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'
-
-const softRuleColor = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'
-
-const mutedTextColor = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.66)' : 'rgba(15,23,42,0.62)'
-
-/* ─── Section header — '순서 변경' 토글(공용 S.SectionHeader 안에 배치) ─── */
-
-/**
- * 머리글도 넓은 트랙으로 펴되 제목은 여백만큼 안으로 들인다 — 제목은 다른 섹션 제목과 같은
- * x(산문 열)에, '순서 변경'은 아래 목록의 '+ 추가'와 같은 오른쪽 끝에 선다.
- */
-const ActorsHeader = styled(S.SectionHeader)`
-  ${S.breakout}
-  padding-left: ${S.breakoutGutter};
-`
-
-const ManageToggle = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active ? theme.colors.text.tertiary : softRuleColor(theme.mode)};
-  background: transparent;
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : mutedTextColor(theme.mode)};
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 0.14s, border-color 0.14s, background 0.14s;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 1px;
-  }
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-`
-
-const RowActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-`
-
-const ReorderBtn = styled.button`
-  align-self: flex-start;
-  margin-top: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  border-radius: ${RADIUS.XS};
-  background: transparent;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-  cursor: pointer;
-  transition: border-color 0.14s, color 0.14s;
-
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-  }
-
-  &:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  svg {
-    width: 11px;
-    height: 11px;
-  }
-`
-
-
-/* ─── Person list (vertical, hairline separators) ─── */
-
-/**
- * 인물·국가 묶음은 **넓은 트랙**으로 편다(S.breakout) — 산문이 아니라 훑는 목록이다.
- * 트랙이 880px 이상 열리면 2열 격자가 된다: 15명이 8줄로, 6명 미리보기는 3줄로.
- * 1440px 화면(사이드바 포함)에서는 여백이 0이라 지금과 같은 한 열이다.
- */
-const PersonsBlock = styled.div`
-  ${S.breakout}
-  display: flex;
-  flex-direction: column;
-`
-
-/**
- * 2열일 때 행 구분선 — 각 행의 border-bottom을 그대로 쓰되, 마지막 **줄**(홀수 개면 1개,
- * 짝수 개면 2개)의 선을 지운다. 한 열 규칙(&:last-child)만으로는 짝수 개일 때 왼쪽 칸에
- * 선이 하나 남는다.
- */
-const twoColumnRows = css`
-  @container eventdetail ${S.WIDE_TRACK_QUERY} {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 40px;
-
-    > li:nth-last-child(2):nth-child(odd) {
-      border-bottom: none;
-    }
-  }
-`
-
-const PersonList = styled.ol`
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  ${twoColumnRows}
-`
-
-const PersonRow = styled.li`
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 14px;
-  padding: 14px 12px;
-  margin: 0 -12px;
-  border-radius: ${RADIUS.MD};
-  border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  transition: background 0.15s;
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
-  }
-
-  @media (max-width: 400px) {
-    grid-template-columns: 40px minmax(0, 1fr) auto;
-    gap: 10px;
-    padding: 12px;
-  }
-`
-
-const PersonAvatarBtn = styled.button`
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  display: block;
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-  }
-`
-
-const PersonAvatar = styled.span<{ $hasImage: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  overflow: hidden;
-  border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  background: ${({ theme, $hasImage }) =>
-    $hasImage
-      ? 'transparent'
-      : theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(15, 23, 42, 0.05)'};
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1;
-  /* 정사각 — editorial photo */
-  border-radius: 0;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    /* NYT 흑백 톤 */
-    filter: grayscale(0.4) contrast(1.03);
-    transition: filter 0.18s;
-  }
-
-  ${PersonAvatarBtn}:hover & img {
-    filter: grayscale(0) contrast(1);
-  }
-
-  @media (max-width: 400px) {
-    width: 40px;
-    height: 40px;
-    font-size: 16px;
-  }
-`
-
-const PersonBody = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-`
-
-const PersonNameBtn = styled.button`
-  align-self: flex-start;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.012em;
-  color: ${({ theme }) => theme.colors.text.primary};
-  text-align: left;
-  line-height: 1.25;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 4px;
-    outline: none;
-  }
-`
-
-/* 한글 이탤릭은 기울기만 흉내 내 흐려 보인다 — 역할은 곧은 보조 잉크로 */
-/** 참여 국가 · 당시 직위 한 줄 */
-const PersonMetaLine = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-`
-
-const OfficeAtEvent = styled.span`
-  font-weight: 500;
-`
-
-/** 앞뒤 안 맞는 연결 안내 — 막지 않고 알리기만(옅은 호박색) */
-const MismatchNote = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 7px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.alert.warning.fg};
-  background: ${({ theme }) => theme.colors.alert.warning.bg};
-  border-radius: 999px;
-  white-space: nowrap;
-`
-
-const PersonRoleLine = styled.div`
-  font-size: 13.5px;
-  line-height: 1.5;
-  letter-spacing: -0.005em;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-
-  /* InlineText placeholder — empty state는 더 약하게 */
-  [data-empty='true'] {
-    font-style: italic;
-    opacity: 0.55;
-  }
-`
-
-const PersonNoteLine = styled.div<{ $hasContent: boolean }>`
-  font-size: 14px;
-  line-height: 1.62;
-  letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.primary};
-  margin-top: 4px;
-  display: flex;
-  flex-direction: column;
-
-  /**
-   * 빈 상태도 항상 placeholder가 보이도록 유지(과거엔 opacity 0 → hover 시 0.7로
-   * 노출했는데, touch/포인터 환경에서는 hover 진입 자체가 없어 "비고 추가"가
-   * 발견되지 않는 문제가 있었음). role 줄과 일관되게 약하게 항상 노출.
-   */
-  ${({ $hasContent }) =>
-    !$hasContent &&
-    css`
-      [data-empty='true'] {
-        opacity: 0.55;
-        font-style: italic;
-      }
-    `}
-`
-
-const RemoveInline = styled.button`
-  align-self: flex-start;
-  margin-top: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.14s, color 0.14s;
-
-  ${PersonRow}:hover &,
-  ${PersonRow}:focus-within & {
-    opacity: 0.7;
-  }
-
-  &:focus-visible {
-    opacity: 1;
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-  }
-
-  &:hover {
-    opacity: 1;
-    color: ${({ theme }) => theme.colors.error};
-    outline: none;
-  }
-
-  /**
-   * 터치/포인터 hover 미지원 환경은 hover-only 진입이 불가하므로 항상 노출.
-   * 키보드 사용자도 :focus-visible로 1.0까지 올라가지만, 발견성을 위해 매체 쿼리로
-   * 보정해 둔다.
-   */
-  @media (hover: none) {
-    opacity: 0.7;
-  }
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-`
-
-/* ─── Nations paragraph ─── */
-
-const NationsBlock = styled.div`
-  ${S.breakout}
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid ${({ theme }) => editorialRuleColor(theme.mode)};
-  display: flex;
-  flex-direction: column;
-`
-
-/**
- * 무리 머리글 — 인물·국가가 같은 모양으로 연다(라벨 · 수 ······ + 추가).
- * 한글 라벨이라 라틴 스몰캡스 트래킹(0.18em)을 쓰지 않는다 — 낱자로 흩어진다.
- */
-const GroupHead = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 2px;
-`
-
-const GroupLabel = styled.h3`
-  margin: 0;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const GroupCount = styled.span`
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-`
-
-/**
- * 2줄 접힘. 높이는 줄 수 × 1lh(부모 line-height) — 인물 1.62·국가 1.6 어느 쪽이든 맞는다.
- * 편집 중엔 풀어서 textarea가 잘리지 않게 한다.
- */
-const ProseClamp = styled.div<{ $collapsed: boolean; $faded: boolean }>`
-  ${({ $collapsed }) =>
-    $collapsed &&
-    css`
-      /* +4px — 호스트가 더 먹는 1~2px에 마지막 줄 받침이 잘리지 않게 */
-      max-height: calc(${CLAMP_LINES} * 1lh + 4px);
-      overflow: hidden;
-    `}
-  ${({ $faded }) =>
-    $faded &&
-    css`
-      mask-image: linear-gradient(to bottom, #000 calc(100% - 1lh), transparent);
-    `}
-
-  &:focus-within {
-    max-height: none;
-    mask-image: none;
-  }
-
-  /* 산문 속 강조는 굵기로 — 잉크는 본문과 같게 */
-  strong {
-    font-weight: 650;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  /*
-   * 인라인 키트의 점선 밑줄은 한 줄짜리 값의 편집 신호다. 여러 줄 산문 전체에 깔리면
-   * 글보다 선이 먼저 읽힌다 — 산문은 행에 들어왔을 때만 밑줄을 띄운다(✎는 그대로).
-   */
-  [data-edit-host] > span:first-child:not([data-empty='true']) {
-    text-decoration-color: transparent;
-  }
-
-  li:hover & [data-edit-host] > span:first-child:not([data-empty='true']),
-  li:focus-within & [data-edit-host] > span:first-child:not([data-empty='true']) {
-    text-decoration-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  }
-`
-
-/** 인물 목록 '모두 보기' — 목록 폭 전체를 쓰는 얇은 버튼. 행 구분선과 같은 룰을 위에 둔다. */
-const ShowAllToggle = styled.button`
-  display: block;
-  width: 100%;
-  margin-top: 0;
-  padding: 10px 0;
-  border: none;
-  border-top: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  text-align: center;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-  transition: color 0.14s, background 0.14s;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-    border-radius: ${RADIUS.FOCUS};
-  }
-`
-
-const MoreToggle = styled.button`
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  font-style: normal;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-    border-radius: ${RADIUS.FOCUS};
-  }
-`
-
-/**
- * 비고는 대부분 비어 있다(실측 676행 중 0행). 모든 행에 '비고 추가' 유령 줄을 세우면
- * 14국짜리 사건에서 죽은 줄만 14개가 된다. 내용이 있을 때만 상시 노출하고, 없으면
- * 행에 마우스를 올리거나 포커스가 들어왔을 때만 나타나게 한다.
- */
-const CountryNoteLine = styled.div<{ $hasContent: boolean }>`
-  font-size: 13px;
-  line-height: 1.6;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-
-  ${({ $hasContent }) =>
-    !$hasContent &&
-    css`
-      height: 0;
-      overflow: hidden;
-      opacity: 0;
-      transition: opacity 0.14s;
-
-      [data-empty='true'] {
-        opacity: 0.55;
-        font-style: italic;
-      }
-    `}
-`
-
-/**
- * 역할은 이 지면의 새 축이라 스캔이 돼야 하는데, 이름 옆 회색 글씨로 두니
- * "대한민국 피해국"이 한 덩어리로 읽히고 편집 가능한지도 보이지 않았다.
- * 테두리를 둘러 이름에서 떼어내고, 작지만 또렷한 잉크를 준다.
- */
-const CountryRolePicker = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 4px 1px 8px;
-  border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  border-radius: ${RADIUS.PILL};
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  white-space: nowrap;
-
-  [data-empty='true'] {
-    font-style: italic;
-    font-weight: 500;
-    opacity: 0.6;
-  }
-
-  /* 자리도 차지하지 않는다 — 투명하기만 하면 긴 이름 옆에서 다음 줄로 꺾여 행이 두 배가 됐다 */
-  &[data-default] {
-    display: none;
-  }
-
-  /*
-   * InlineSelect의 ▾는 hover에서만 뜨는데, 배지는 그 자리를 18px 비워 두므로 평소엔
-   * 한쪽이 빈 알약처럼 보였다. 약하게 상시 노출해 균형을 맞추고 "고를 수 있다"는
-   * 신호도 남긴다 — 행에 들어오면 또렷해진다.
-   */
-  button {
-    opacity: 0.4;
-  }
-`
-
-/** 진영 한 묶음 — 묶음 사이는 국가 목록의 행 간격보다 넓게 */
-/** 진영 묶음들 — 넓으면 나란히, 좁으면 위아래 */
-const SideColumns = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 22px 28px;
-  margin-top: 6px;
-`
-
-const SideGroup = styled.div<{ $rest?: boolean }>`
-  min-width: 0;
-  /* '그 밖'은 진영 칸 아래 한 줄 전체 */
-  ${({ $rest }) => ($rest ? 'grid-column: 1 / -1;' : '')}
-`
-
-/** 진영 안 나라 목록 — 진영 칸이 이미 나란히 서므로 안에서는 한 줄씩 */
-const SideCountryList = styled.ol`
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  /* 칸이 나란히 서므로 행이 칸 밖(-12px)으로 나가면 옆 칸 선과 어긋났다 */
-  > li {
-    margin: 0 -6px;
-    padding-inline: 6px;
-  }
-`
-
-const SideSwatch = styled.span<{ $color: string }>`
-  flex-shrink: 0;
-  align-self: center;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: ${({ $color }) => $color};
-`
-
-const EmptyGroupLine = styled.p`
-  margin: 2px 0 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-`
-
-/** 진영 머리 — 국가 묶음 라벨(GroupLabel)보다 한 단 낮은 소제목. 진영색은 쓰지 않는다(색 면 금지 규약) */
-/** 진영 머리 — 진영 색 견본·아래 굵은 선(색). 진영 밖('그 밖')은 회색 선 */
-const SideHead = styled.h4<{ $color?: string }>`
-  margin: 0 0 4px;
-  padding-bottom: 6px;
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  font-size: 13.5px;
-  font-weight: 800;
-  color: ${({ theme }) => theme.colors.text.primary};
-  border-bottom: 2px solid
-    ${({ $color, theme }) => $color ?? softRuleColor(theme.mode)};
-`
-
-const CountryList = styled.ol`
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  ${twoColumnRows}
-`
-
-/**
- * '이 나라가 한 일' — 비어 있으면 비고 줄과 같은 규칙으로 접었다가 행에 들어오면(hover·focus) 편다.
- * 1차세계대전 15개국 전부에 빈 자리표시가 서 있어 참여 탭의 대부분이 회색 기울임 글씨였다.
- */
-const CountryRoleLine = styled.div<{ $hasContent: boolean }>`
-  display: flex;
-  flex-direction: column;
-  font-size: 14px;
-  line-height: 1.6;
-  letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  [data-empty='true'] {
-    font-style: italic;
-    opacity: 0.55;
-  }
-
-  ${({ $hasContent }) =>
-    !$hasContent &&
-    css`
-      height: 0;
-      overflow: hidden;
-      opacity: 0;
-      transition: opacity 0.14s;
-    `}
-`
-
-/* 인물 행과 같은 골격 — 아바타 열만 없다(국기 이모지는 이름 옆이 자연스러워 생략). */
-const CountryRow = styled.li`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 16px;
-  /* 15개국이 한 화면에 들어오게 — 이름 한 줄 행은 위아래 7px */
-  padding: 7px 12px;
-  margin: 0 -12px;
-  border-radius: ${RADIUS.MD};
-  border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  transition: background 0.15s;
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  /* 빈 '한 일'·비고 줄은 이 행에 들어왔을 때만 펼친다 */
-  &:hover ${CountryNoteLine}, &:focus-within ${CountryNoteLine},
-  &:hover ${CountryRoleLine}, &:focus-within ${CountryRoleLine} {
-    height: auto;
-    opacity: 1;
-  }
-
-  &:hover ${CountryRolePicker} button,
-  &:focus-within ${CountryRolePicker} button {
-    opacity: 1;
-  }
-  &:hover ${CountryRolePicker}[data-default],
-  &:focus-within ${CountryRolePicker}[data-default] {
-    display: inline-flex;
-  }
-`
-
-const CountryBody = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`
-
-const CountryNameLine = styled.div`
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-
-
-
-
-const CountryFlag = styled.span`
-  margin-right: 6px;
-  font-style: normal;
-`
-
-const CountryLink = styled(Link)`
-  color: inherit;
-  text-decoration: none;
-  font-weight: 500;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-    outline: none;
-  }
-`
-
-/* 역사 국가도 /country/:histId 상세가 실존 — 현대국(CountryLink)과 동일한
- * 링크 어포던스(hover·focus-visible 밑줄)를 상속하고 이탤릭 톤만 덧입힌다. */
-const HistoricalCountryName = styled(CountryLink)`
-  font-style: italic;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.78)'
-      : 'rgba(15,23,42,0.74)'};
-`
-
-
-
-
-/* ─── Add buttons (editorial) ─── */
-
-const AddBtn = styled.button`
-  flex-shrink: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  /* 한글 라벨 — 라틴 스몰캡스(uppercase + 0.16em)를 걷는다. */
-  letter-spacing: 0.04em;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: color 0.14s;
-
-  &::before {
-    content: '+';
-    font-size: 13px;
-    line-height: 1;
-    letter-spacing: 0;
-    margin-right: 2px;
-  }
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:focus-visible {
-    color: ${({ theme }) => theme.colors.text.primary};
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 3px;
-    border-radius: ${RADIUS.FOCUS};
-  }
-`

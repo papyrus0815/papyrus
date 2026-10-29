@@ -19,6 +19,17 @@ describe('renderEmphasis', () => {
   })
 })
 
+describe('renderEmphasis — 평문에 섞인 HTML 강조 태그', () => {
+  it('짝이 맞는 <em>·<strong>도 강조로 — 태그 글자를 드러내지 않는다', () => {
+    expect(renderToStaticMarkup(<p>{renderEmphasis('본토 <em>Treaty of Taipei</em> 별도')}</p>)).toBe(
+      '<p>본토 <strong>Treaty of Taipei</strong> 별도</p>',
+    )
+  })
+  it('짝이 안 맞거나 다른 태그는 그대로', () => {
+    expect(renderEmphasis('a <em>b</strong> c')).toBe('a <em>b</strong> c')
+  })
+})
+
 describe('emphasisToHtml', () => {
   it('텍스트 조각의 *x*만 <strong>으로 바꾼다', () => {
     expect(emphasisToHtml('<p>앞 *강조* 뒤</p>')).toBe(

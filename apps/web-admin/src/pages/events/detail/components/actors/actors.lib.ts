@@ -1,0 +1,146 @@
+/**
+ * 참여 탭 순수 헬퍼 — 저장 payload 직렬화·참여국 합치기·인물 표시 이름.
+ * (detail-actors.tsx에서 옮김. 화면 없이 테스트할 수 있게 React를 쓰지 않는다)
+ */
+import { type EventCountryRole } from '@/entities/event/model'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+
+import { type EventDetail } from '../../use-event-detail'
+
+/** 산문(한 일·비고) 접힘 줄 수 */
+export const CLAMP_LINES = 2
+/** 인물은 앞 N명만 보이고 '모두 보기'로 펼친다 */
+export const PERSON_PREVIEW_COUNT = 6
+
+export type EventPersonEntry = NonNullable<EventDetail['relatedPersons']>[number]
+
+/** 참여 인물 한 줄 — 참여 자격 국가는 3상(생략=유지 / null=비움 / 값=설정) */
+export type PersonPayload = {
+  personId: string
+  role?: string
+  note?: string
+  countryId?: string | null
+  historicalCountryId?: string | null
+}
+
+/**
+ * UpdateEventDto.relatedPersons 항목 직렬화. null/빈 문자열은 undefined로 정규화해
+ * 서버 `=== undefined` 가드와 정합. 참여 자격 국가는 싣지 않는다(생략=유지) —
+ * 역할·순서만 바꾸는 저장이 그 값을 건드리지 않게.
+ */
+export function toPersonPayload(person: {
+  personId: string
+  role?: string | null
+  note?: string | null
+}): PersonPayload {
+  return {
+    personId: person.personId,
+    role: person.role ?? undefined,
+    note: person.note ?? undefined,
+  }
+}
+
+/** 인물 표시 이름 — 이름 순서 규약(개인>국가>동양식)을 따른다 */
+export function personNameOf(entry: Pick<EventPersonEntry, 'person'>): string {
+  const person = entry.person
+  if (!person) return '미상'
+  return (
+    getPersonDisplayName({
+      name: person.name ?? '',
+      surname: person.surname,
+      middleName: person.middleName,
+      nameDisplayOrder: person.nameDisplayOrder,
+      country: person.country,
+    }) || '미상'
+  )
+}
+
+/** 참여국 한 행 — 현대·역사를 한 목록으로 합친 모양 */
+export interface CountryRowData {
+  id: string
+  name: string
+  flagEmoji: string | null
+  isHistorical: boolean
+  role: string | null
+  roleDescription: string | null
+  note: string | null
+  sortOrder: number
+  /** 존속 기간 경고 — 역사국가만(현대국은 기간 개념이 없다) */
+  existenceWarning: string | null
+  /** 진영 — 표시용(묶기)만. 저장 payload엔 싣지 않는다(생략=서버가 소속 유지) */
+  sideId: string | null
+}
+
+/**
+ * 참여국 — 현대·역사를 **한 목록**으로 합친다. 서버가 표시 편의로 두 배열을 내려주지만
+ * 순서(sortOrder)는 둘에 걸쳐 하나이므로, 편집은 언제나 합친 목록으로 한다.
+ */
+export function buildCountryRows(
+  modern: NonNullable<EventDetail['relatedCountries']>,
+  historical: NonNullable<EventDetail['relatedHistoricalCountries']>,
+): CountryRowData[] {
+  const rows: CountryRowData[] = [
+    ...modern.map((country, index) => ({
+      id: country.id,
+      name: country.name,
+      flagEmoji: country.flagEmoji ?? null,
+      isHistorical: false,
+      role: country.role ?? null,
+      roleDescription: country.roleDescription ?? null,
+      note: country.note ?? null,
+      sortOrder: country.sortOrder ?? index,
+      existenceWarning: null,
+      sideId: country.sideId ?? null,
+    })),
+    ...historical.map((country, index) => ({
+      id: country.id,
+      name: country.name,
+      flagEmoji: null,
+      isHistorical: true,
+      role: country.role ?? null,
+      roleDescription: country.roleDescription ?? null,
+      note: country.note ?? null,
+      sortOrder: country.sortOrder ?? index,
+      existenceWarning: (country.existenceWarning ?? null) as string | null,
+      sideId: country.sideId ?? null,
+    })),
+  ]
+  rows.sort((left, right) => left.sortOrder - right.sortOrder)
+  return rows
+}
+
+/** 참여국 행의 신원 — 현대/역사가 같은 uuid를 쓰더라도 섞이지 않는다 */
+export function countryRowKey(row: { id: string; isHistorical: boolean }): string {
+  return row.isHistorical ? `h:${row.id}` : `m:${row.id}`
+}
+
+/**
+ * 행 → 서버 계약(`relatedCountries`) 한 줄.
+ * 빈 문자열은 null로 눕혀 "지움"을 명확히 한다(3상 규약: 생략=유지, null=비움).
+ */
+export function toCountryPayload(row: {
+  id: string
+  isHistorical: boolean
+  role: string | null
+  roleDescription: string | null
+  note: string | null
+}) {
+  return {
+    ...(row.isHistorical ? { historicalCountryId: row.id } : { countryId: row.id }),
+    role: (row.role ?? undefined) as EventCountryRole | undefined,
+    roleDescription: row.roleDescription?.trim() ? row.roleDescription : null,
+    note: row.note?.trim() ? row.note : null,
+  }
+}
+
+/** 참여 자격 값 — 'h:역사국id' | 'c:현대국id' | ''(지정 안 함) */
+export function participationValueOf(person: {
+  countryId?: string | null
+  historicalCountryId?: string | null
+}): string {
+  return person.historicalCountryId
+    ? `h:${person.historicalCountryId}`
+    : person.countryId
+      ? `c:${person.countryId}`
+      : ''
+}

@@ -10,17 +10,21 @@ import { type ReactNode } from 'react'
  * 줄(또는 태그)을 넘는 별표·짝 없는 별표는 그대로 둔다 — 각주 기호('3+*')를 먹지 않게.
  * 편집 진입 시엔 원문(별표 포함) 그대로 편집한다 — 읽기 표시만 바꾼다.
  */
-const PLAIN_EMPHASIS = /\*([^*\n]+)\*/g
+/**
+ * 평문 칸에 섞여 들어온 HTML 강조 태그도 같은 강조로 읽는다 — 시드·붙여넣기가 `<em>Treaty of Taipei</em>`를
+ * 그대로 넣어 참여국 서술에 태그 글자가 노출됐다. 짝이 맞는 한 겹(em·strong·b·i)만, 줄을 넘지 않게.
+ */
+const PLAIN_OR_TAG_EMPHASIS = /\*([^*\n]+)\*|<(em|strong|b|i)>([^<\n]+)<\/\2>/g
 const HTML_TEXT_EMPHASIS = /\*([^*\n<>]+)\*/g
 
 /** 평문 → ReactNode(`*x*` → <strong>x</strong>). 강조가 없으면 원문 문자열 그대로. */
 export function renderEmphasis(text: string): ReactNode {
   const parts: ReactNode[] = []
   let cursor = 0
-  for (const match of text.matchAll(PLAIN_EMPHASIS)) {
+  for (const match of text.matchAll(PLAIN_OR_TAG_EMPHASIS)) {
     const start = match.index ?? 0
     if (start > cursor) parts.push(text.slice(cursor, start))
-    parts.push(<strong key={start}>{match[1]}</strong>)
+    parts.push(<strong key={start}>{match[1] ?? match[3]}</strong>)
     cursor = start + match[0].length
   }
   if (parts.length === 0) return text

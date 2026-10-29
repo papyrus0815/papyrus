@@ -815,7 +815,7 @@ const NEW_RELATIONS: RelInput[] = [
     historicalCountryName: '중화민국',
     role: EventCountryRole.VICTIM,
     roleDescription:
-      '대만 정부(ROC). 1949-10 본토 상실 후 영연방·소련의 반대로 양 중국 모두 미초청. 1952-04-28 타이베이 별도 평화조약(<em>Treaty of Taipei</em>) — 강화조약 발효 7시간 30분 전 체결로 일·대만 외교 관계 정초.',
+      '대만 정부(ROC). 1949-10 본토 상실 후 영연방·소련의 반대로 양 중국 모두 미초청. 1952-04-28 타이베이 별도 평화조약(*Treaty of Taipei*) — 강화조약 발효 7시간 30분 전 체결로 일·대만 외교 관계 정초.',
   },
 ]
 
