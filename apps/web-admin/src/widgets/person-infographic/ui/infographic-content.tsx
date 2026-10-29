@@ -25,6 +25,7 @@ import {
   FiBarChart2,
   FiClock,
   FiFilter,
+  FiFlag,
   FiGlobe,
   FiGrid,
   FiLayers,
@@ -283,6 +284,24 @@ export function InfographicContent({
       aliveFilter,
       query: dq,
     })
+    const countryNames = new Set<string>([
+      ...Object.keys(facets.country),
+      ...scopes.country,
+    ])
+    const countryOptions = Array.from(countryNames)
+      .filter((name) => name && name !== '미상')
+      .map((name) => ({
+        value: name,
+        label: name,
+        count: facets.country[name] ?? 0,
+      }))
+      .sort((a, b) => {
+        const aSelected = scopes.country.includes(a.value) ? 1 : 0
+        const bSelected = scopes.country.includes(b.value) ? 1 : 0
+        if (aSelected !== bSelected) return bSelected - aSelected
+        return b.count - a.count || a.label.localeCompare(b.label, 'ko')
+      })
+
     return {
       era: ERAS.map((era) => ({
         value: era.key,
@@ -302,6 +321,7 @@ export function InfographicContent({
         color: colorForField(field),
         count: facets.field[field] ?? 0,
       })),
+      country: countryOptions,
     }
   }, [allPeople, scopes, minInfluence, aliveFilter, dq])
 
@@ -411,11 +431,58 @@ export function InfographicContent({
               icon={<FiLayers size={14} aria-hidden />}
               options={scopeOptions.field}
             />
+            <ScopeDropdown
+              kind="country"
+              label="국가"
+              icon={<FiFlag size={14} aria-hidden />}
+              options={scopeOptions.country}
+              searchable
+            />
           </FilterGroup>
 
-          {/* 보기 전환·정렬 — 예전엔 툴바 아래 한 줄을 따로 먹었다(목록이 46px 더 내려갔다) */}
-          <ViewControls>
+          {onOpenFilters && (
+            <GhostBtn
+              type="button"
+              onClick={onOpenFilters}
+              aria-haspopup="dialog"
+              aria-label={
+                sheetFilterCount > 0
+                  ? `상세 필터 열기, ${sheetFilterCount}개 적용 중`
+                  : '상세 필터 열기'
+              }
+              title="시대·지역·분야·국가·영향력·생존 필터"
+            >
+              <FiFilter size={14} />
+              필터
+              {sheetFilterCount > 0 && (
+                <FilterCount aria-hidden>{sheetFilterCount}</FilterCount>
+              )}
+            </GhostBtn>
+          )}
+
+          <Actions>
             {viewSwitcher}
+            {/* 능력치 뷰는 자체 '개요'(평가 진행률·축별 평균)를 가져서 통계가 두 겹이 된다 */}
+            {hasStatsPanel && (
+              <GhostBtn
+                type="button"
+                onClick={toggleStats}
+                aria-pressed={statsOpen}
+                title={statsOpen ? '통계 숨기기' : '통계 보기'}
+                $hideOnMobile
+              >
+                <FiBarChart2 size={14} />
+                통계
+              </GhostBtn>
+            )}
+            <PrimaryBtn type="button" onClick={() => setFormOpen(true)}>
+              <FiPlus size={16} />새 인물 등록
+            </PrimaryBtn>
+          </Actions>
+        </TopBar>
+
+        {(activeView === 'story' || activeChips.length > 0 || !isError) && (
+          <SubBar>
             {activeView === 'story' && (
               <DisplayOptions>
                 <Select
@@ -442,27 +509,37 @@ export function InfographicContent({
                     </option>
                   ))}
                 </Select>
-                {groupBy === 'century' && (
-                  <IconBtn
-                    type="button"
-                    onClick={() =>
-                      setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
-                    }
-                    aria-label={
-                      eraGroupOrder === 'desc'
+                <IconBtn
+                  type="button"
+                  onClick={() =>
+                    setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
+                  }
+                  aria-label={
+                    groupBy === 'century'
+                      ? eraGroupOrder === 'desc'
                         ? '세기 순서: 최신순 (오래된순으로 바꾸기)'
                         : '세기 순서: 오래된순 (최신순으로 바꾸기)'
-                    }
-                    title={eraGroupOrder === 'desc' ? '세기: 최신순' : '세기: 오래된순'}
-                  >
-                    <FiArrowDown
-                      size={15}
-                      style={{
-                        transform: eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
-                      }}
-                    />
-                  </IconBtn>
-                )}
+                      : eraGroupOrder === 'desc'
+                        ? '정렬 순서: 기본순 (역순으로 바꾸기)'
+                        : '정렬 순서: 역순 (기본순으로 바꾸기)'
+                  }
+                  title={
+                    groupBy === 'century'
+                      ? eraGroupOrder === 'desc'
+                        ? '세기: 최신순'
+                        : '세기: 오래된순'
+                      : eraGroupOrder === 'desc'
+                        ? '정렬: 기본순 (클릭 시 역순)'
+                        : '정렬: 역순 (클릭 시 기본순)'
+                  }
+                >
+                  <FiArrowDown
+                    size={15}
+                    style={{
+                      transform: eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
+                    }}
+                  />
+                </IconBtn>
                 <IconBtn
                   type="button"
                   onClick={() =>
@@ -487,10 +564,27 @@ export function InfographicContent({
                 </IconBtn>
               </DisplayOptions>
             )}
-          </ViewControls>
 
-          <Actions>
-            {/* 로딩 중에도 자리를 지킨다 — 숫자가 늦게 들어오며 검색창이 40px 줄어드는 튐을 막는다 */}
+            {activeChips.length > 0 && (
+              <ActiveFiltersInline>
+                <ActiveFilterLabel>필터 {activeChips.length}</ActiveFilterLabel>
+                {activeChips.map((chip) => (
+                  <ActiveFilterChip
+                    key={chip.key}
+                    type="button"
+                    onClick={chip.onRemove}
+                    aria-label={`${chip.label} 필터 해제`}
+                  >
+                    {chip.label}
+                    <FiX size={11} aria-hidden />
+                  </ActiveFilterChip>
+                ))}
+                <ActiveFilterClear type="button" onClick={resetFilters}>
+                  모두 해제
+                </ActiveFilterClear>
+              </ActiveFiltersInline>
+            )}
+
             {isLoading && (
               <ViewMeta aria-hidden>
                 <CountPlaceholder />
@@ -498,70 +592,14 @@ export function InfographicContent({
             )}
             {!isLoading && !isError && (
               <ViewMeta aria-hidden>
-                {/* 한 span에 — ViewMeta가 flex gap이라 숫자와 '명'이 벌어졌다 */}
                 <span>
-                  <strong>{filtered.length.toLocaleString()}</strong>명
+                  표시 <strong>{filtered.length.toLocaleString()}</strong>명
                   {filtered.length !== allPeople.length &&
-                    ` / ${allPeople.length.toLocaleString()}`}
+                    ` / 전체 ${allPeople.length.toLocaleString()}명`}
                 </span>
               </ViewMeta>
             )}
-            {onOpenFilters && (
-              <GhostBtn
-                type="button"
-                onClick={onOpenFilters}
-                aria-haspopup="dialog"
-                aria-label={
-                  sheetFilterCount > 0
-                    ? `상세 필터 열기, ${sheetFilterCount}개 적용 중`
-                    : '상세 필터 열기'
-                }
-                title="시대·지역·분야·영향력·생존 필터"
-              >
-                <FiFilter size={14} />
-                필터
-                {sheetFilterCount > 0 && (
-                  <FilterCount aria-hidden>{sheetFilterCount}</FilterCount>
-                )}
-              </GhostBtn>
-            )}
-            {/* 능력치 뷰는 자체 '개요'(평가 진행률·축별 평균)를 가져서 통계가 두 겹이 된다 */}
-            {hasStatsPanel && (
-              <GhostBtn
-                type="button"
-                onClick={toggleStats}
-                aria-pressed={statsOpen}
-                title={statsOpen ? '통계 숨기기' : '통계 보기'}
-                $hideOnMobile
-              >
-                <FiBarChart2 size={14} />
-                통계
-              </GhostBtn>
-            )}
-            <PrimaryBtn type="button" onClick={() => setFormOpen(true)}>
-              <FiPlus size={16} />새 인물 등록
-            </PrimaryBtn>
-          </Actions>
-        </TopBar>
-
-        {activeChips.length > 0 && (
-          <ActiveFiltersRow>
-            <ActiveFilterLabel>필터 {activeChips.length}</ActiveFilterLabel>
-            {activeChips.map((chip) => (
-              <ActiveFilterChip
-                key={chip.key}
-                type="button"
-                onClick={chip.onRemove}
-                aria-label={`${chip.label} 필터 해제`}
-              >
-                {chip.label}
-                <FiX size={11} aria-hidden />
-              </ActiveFilterChip>
-            ))}
-            <ActiveFilterClear type="button" onClick={resetFilters}>
-              모두 해제
-            </ActiveFilterClear>
-          </ActiveFiltersRow>
+          </SubBar>
         )}
 
 
@@ -656,13 +694,18 @@ const FilterCount = styled.span`
     theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
 `
 
-/** 툴바 안 보기 전환 묶음 — 좁아지면 통째로 다음 줄로 */
-const ViewControls = styled.div`
-  display: inline-flex;
+/** 2단 보조 바 — 뷰별 표시 옵션(그룹·정렬·레이아웃) + 활성 필터 칩 + 우측 인원 요약 */
+const SubBar = styled.div`
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8px 12px;
   flex-wrap: wrap;
-  min-width: 0;
+  margin-top: 8px;
+  min-height: 34px;
+`
+
+const ActiveFiltersInline = styled(ActiveFiltersRow)`
+  padding-top: 0;
 `
 
 const Wrap = styled.div`

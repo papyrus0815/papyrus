@@ -4,9 +4,9 @@
  * 사건 목록의 [카테고리|대륙|국가] 필터 그룹과 같은 자리·같은 모양.
  * 상태는 filter.store의 scopes를 직접 읽고 써서 좌측 필터 레일·URL과 양방향 일치한다.
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { FiCheck, FiChevronDown } from 'react-icons/fi'
+import { FiCheck, FiChevronDown, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -14,7 +14,7 @@ import {
   type ScopeKind,
 } from '../../model/filter.store'
 
-import { BRAND, hairline, MOTION_FAST } from './catalog.styles'
+import { BRAND, hairline, metaText, MOTION_FAST } from './catalog.styles'
 
 export interface ScopeOption {
   value: string
@@ -28,21 +28,36 @@ interface ScopeDropdownProps {
   label: string
   icon: ReactNode
   options: ScopeOption[]
+  searchable?: boolean
 }
 
-export function ScopeDropdown({ kind, label, icon, options }: ScopeDropdownProps) {
+export function ScopeDropdown({
+  kind,
+  label,
+  icon,
+  options,
+  searchable = false,
+}: ScopeDropdownProps) {
   const selected = usePersonInfographicFilterStore((state) => state.scopes[kind])
   const toggleScope = usePersonInfographicFilterStore((state) => state.toggleScope)
   const clearScopeKind = usePersonInfographicFilterStore(
     (state) => state.clearScopeKind,
   )
   const [open, setOpen] = useState(false)
+  const [keyword, setKeyword] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const menuId = useId()
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setKeyword('')
+      return
+    }
+    if (searchable) {
+      requestAnimationFrame(() => searchInputRef.current?.focus())
+    }
     const onPointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
     }
@@ -58,7 +73,13 @@ export function ScopeDropdown({ kind, label, icon, options }: ScopeDropdownProps
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open])
+  }, [open, searchable])
+
+  const filteredOptions = useMemo(() => {
+    const q = keyword.trim().toLowerCase()
+    if (!q) return options
+    return options.filter((opt) => opt.label.toLowerCase().includes(q))
+  }, [options, keyword])
 
   const activeCount = selected.length
   const triggerText =
@@ -87,35 +108,69 @@ export function ScopeDropdown({ kind, label, icon, options }: ScopeDropdownProps
         <FiChevronDown size={12} aria-hidden />
       </Trigger>
       {open && (
-        <Menu id={menuId} role="group" aria-label={`${label} 선택`}>
+        <Menu id={menuId} role="group" aria-label={`${label} 선택`} $wide={searchable}>
           <MenuHead>
-            <span>{label}</span>
+            <span>
+              {label}
+              {options.length > 0 && ` (${options.length})`}
+            </span>
             {activeCount > 0 && (
               <MenuClear type="button" onClick={() => clearScopeKind(kind)}>
                 선택 해제
               </MenuClear>
             )}
           </MenuHead>
-          {options.map((option) => {
-            const checked = selected.includes(option.value)
-            return (
-              <Option
-                key={option.value}
-                type="button"
-                aria-pressed={checked}
-                $checked={checked}
-                disabled={option.count === 0 && !checked}
-                onClick={() => toggleScope(kind, option.value)}
-              >
-                <Check $checked={checked} aria-hidden>
-                  {checked && <FiCheck size={11} strokeWidth={3} />}
-                </Check>
-                {option.color && <Swatch style={{ background: option.color }} />}
-                <OptionLabel>{option.label}</OptionLabel>
-                <OptionCount>{option.count.toLocaleString()}</OptionCount>
-              </Option>
-            )
-          })}
+          {searchable && (
+            <MenuSearchWrap>
+              <FiSearch size={12} aria-hidden />
+              <MenuSearchInput
+                ref={searchInputRef}
+                type="text"
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder={`${label} 검색…`}
+                aria-label={`${label} 옵션 검색`}
+              />
+              {keyword && (
+                <MenuSearchClear
+                  type="button"
+                  onClick={() => {
+                    setKeyword('')
+                    searchInputRef.current?.focus()
+                  }}
+                  aria-label="검색어 지우기"
+                >
+                  <FiX size={11} />
+                </MenuSearchClear>
+              )}
+            </MenuSearchWrap>
+          )}
+          <MenuList>
+            {filteredOptions.length === 0 ? (
+              <EmptyHint>일치하는 항목이 없습니다</EmptyHint>
+            ) : (
+              filteredOptions.map((option) => {
+                const checked = selected.includes(option.value)
+                return (
+                  <Option
+                    key={option.value}
+                    type="button"
+                    aria-pressed={checked}
+                    $checked={checked}
+                    disabled={option.count === 0 && !checked}
+                    onClick={() => toggleScope(kind, option.value)}
+                  >
+                    <Check $checked={checked} aria-hidden>
+                      {checked && <FiCheck size={11} strokeWidth={3} />}
+                    </Check>
+                    {option.color && <Swatch style={{ background: option.color }} />}
+                    <OptionLabel>{option.label}</OptionLabel>
+                    <OptionCount>{option.count.toLocaleString()}</OptionCount>
+                  </Option>
+                )
+              })
+            )}
+          </MenuList>
         </Menu>
       )}
     </Root>
@@ -180,22 +235,89 @@ const Trigger = styled.button<{ $active: boolean }>`
   }
 `
 
-const Menu = styled.div`
+const Menu = styled.div<{ $wide?: boolean }>`
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
   z-index: 40;
-  min-width: 200px;
-  max-height: 360px;
-  overflow-y: auto;
+  min-width: ${({ $wide }) => ($wide ? '228px' : '200px')};
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
   padding: 6px;
   border-radius: 10px;
   border: 1px solid ${hairline};
   background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1f' : '#ffffff')};
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
-      ? '0 6px 16px rgba(0, 0, 0, 0.4)'
-      : '0 6px 16px rgba(15, 23, 42, 0.08)'};
+      ? '0 8px 24px rgba(0, 0, 0, 0.48)'
+      : '0 8px 24px rgba(15, 23, 42, 0.1)'};
+`
+
+const MenuList = styled.div`
+  max-height: 290px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+`
+
+const MenuSearchWrap = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  margin: 0 4px 6px;
+  border-radius: 6px;
+  border: 1px solid ${hairline};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  &:focus-within {
+    border-color: ${BRAND.primaryBorderHover};
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const MenuSearchInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const MenuSearchClear = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const EmptyHint = styled.div`
+  padding: 16px 8px;
+  text-align: center;
+  font-size: 12px;
+  color: ${metaText};
 `
 
 const MenuHead = styled.div`

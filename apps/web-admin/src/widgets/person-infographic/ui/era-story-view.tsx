@@ -8,8 +8,9 @@
  * - 가문별(dynasty): 구 왕조 뷰 흡수 — 가문(faction)별 그룹핑 + 대표 국가·존속 범위
  * - 전체(none)     : 그룹 구분 없이 전체 인물을 활성 정렬 기준으로 평탄 탐색
  */
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { FiChevronsDown, FiChevronsUp } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { AdaptedPerson } from '../model/types'
@@ -24,6 +25,7 @@ import { FIELDS, INFOGRAPHIC_DEFAULTS } from '../model/constants'
 import {
   usePersonInfographicFilterStore,
   useHasActiveFilter,
+  type PersonSortKey,
 } from '../model/filter.store'
 import { makeSortFnWithPinned } from '../model/sort-helpers'
 
@@ -40,6 +42,7 @@ import {
   PersonCardItem,
   PersonRowItem,
   PersonRowList,
+  PersonRowListHeader,
 } from './_shared/person-card'
 import { PinnedPeopleSection } from './_shared/pinned-people-section'
 
@@ -88,6 +91,7 @@ const UNKNOWN_CENTURY: CenturyMeta = {
 const NO_FACTION_KEY = '__none__'
 const NO_COUNTRY_KEY = '__country_unknown__'
 const FLAT_PAGE_SIZE = 60
+const INDEX_COLLAPSED_LIMIT = 14
 
 function computeYearSpanText(arr: AdaptedPerson[]): string | undefined {
   let minYr = Infinity
@@ -122,21 +126,43 @@ export function EraStoryView({
   togglePin,
 }: Props) {
   const sort = usePersonInfographicFilterStore((state) => state.sort)
+  const setSort = usePersonInfographicFilterStore((state) => state.setSort)
   const scopes = usePersonInfographicFilterStore((state) => state.scopes)
   const groupBy = usePersonInfographicFilterStore((state) => state.groupBy)
   const listLayout = usePersonInfographicFilterStore((state) => state.listLayout)
   const eraGroupOrder = usePersonInfographicFilterStore(
     (state) => state.eraGroupOrder,
   )
+  const setEraGroupOrder = usePersonInfographicFilterStore(
+    (state) => state.setEraGroupOrder,
+  )
   const resetFilters = usePersonInfographicFilterStore((state) => state.resetFilters)
   const hasFilter = useHasActiveFilter()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [indexExpanded, setIndexExpanded] = useState(false)
   const [flatLimit, setFlatLimit] = useState(FLAT_PAGE_SIZE)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  const reversePersonSort =
+    groupBy === 'century'
+      ? (sort === 'year' || sort === 'deathYear') && eraGroupOrder === 'asc'
+      : eraGroupOrder === 'asc'
 
   const sortFn = useMemo(
-    () => makeSortFnWithPinned(pinned, sort),
-    [pinned, sort],
+    () => makeSortFnWithPinned(pinned, sort, reversePersonSort),
+    [pinned, sort, reversePersonSort],
+  )
+
+  const handleHeaderSortSelect = useCallback(
+    (nextKey: PersonSortKey) => {
+      if (sort === nextKey) {
+        setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
+      } else {
+        setSort(nextKey)
+      }
+    },
+    [sort, eraGroupOrder, setSort, setEraGroupOrder],
   )
 
   // 핀 인물은 그룹과 무관하게 상단 고정 섹션에서만 표시(그룹에서는 제외해 중복 방지).
@@ -306,6 +332,41 @@ export function EraStoryView({
 
   const largestGroup = Math.max(1, ...sortedGroups.map(({ arr }) => arr.length))
 
+  const allGroupsCollapsed =
+    sortedGroups.length > 0 &&
+    sortedGroups.every((g) => !!collapsed[g.stateKey])
+
+  const toggleAllGroupsCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = { ...prev }
+      const target = !allGroupsCollapsed
+      for (const g of sortedGroups) {
+        next[g.stateKey] = target
+      }
+      return next
+    })
+  }, [allGroupsCollapsed, sortedGroups])
+
+  // 전체 목록(groupBy === 'none') 하단 센티넬 자동 무한 스크롤
+  const remainingFlatCount =
+    groupBy === 'none' ? Math.max(0, sortedFlatPeople.length - flatLimit) : 0
+
+  useEffect(() => {
+    if (groupBy !== 'none' || remainingFlatCount <= 0) return
+    const node = sentinelRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setFlatLimit((prev) => prev + FLAT_PAGE_SIZE)
+        }
+      },
+      { rootMargin: '240px 0px' },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [groupBy, remainingFlatCount])
+
   const jumpTo = (stateKey: string, sectionId: string) => {
     setCollapsed((prevState) => ({ ...prevState, [stateKey]: false }))
     requestAnimationFrame(() => {
@@ -316,10 +377,17 @@ export function EraStoryView({
     })
   }
 
-  const renderCollection = (items: AdaptedPerson[]) => {
+  const renderCollection = (items: AdaptedPerson[], showHeader = true) => {
     if (listLayout === 'row') {
       return (
         <PersonRowList>
+          {showHeader && (
+            <PersonRowListHeader
+              sort={sort}
+              order={reversePersonSort ? 'asc' : 'desc'}
+              onSortSelect={handleHeaderSortSelect}
+            />
+          )}
           {items.map((person) => (
             <PersonRowItem
               key={person.id}
@@ -381,14 +449,17 @@ export function EraStoryView({
         )}
         {shownFlat.length > 0 && (
           <div>
-            {renderCollection(shownFlat)}
+            {renderCollection(shownFlat, true)}
             {remaining > 0 && (
-              <MoreBtn
-                type="button"
-                onClick={() => setFlatLimit((prev) => prev + FLAT_PAGE_SIZE)}
-              >
-                + {remaining.toLocaleString()}명 더 보기
-              </MoreBtn>
+              <>
+                <div ref={sentinelRef} aria-hidden style={{ height: 1 }} />
+                <MoreBtn
+                  type="button"
+                  onClick={() => setFlatLimit((prev) => prev + FLAT_PAGE_SIZE)}
+                >
+                  + {remaining.toLocaleString()}명 더 보기
+                </MoreBtn>
+              </>
             )}
           </div>
         )}
@@ -405,6 +476,13 @@ export function EraStoryView({
           ? '분야 바로가기'
           : '왕조·가문 바로가기'
 
+  const canCollapseIndex = sortedGroups.length > INDEX_COLLAPSED_LIMIT + 2
+  const visibleIndexGroups =
+    canCollapseIndex && !indexExpanded
+      ? sortedGroups.slice(0, INDEX_COLLAPSED_LIMIT)
+      : sortedGroups
+  const hiddenIndexCount = sortedGroups.length - visibleIndexGroups.length
+
   return (
     <GroupPanel>
       <PinnedPeopleSection
@@ -415,19 +493,46 @@ export function EraStoryView({
         onTogglePin={togglePin}
         onOpen={onOpen}
       />
-      {sortedGroups.length >= 3 && (
+      {sortedGroups.length >= 2 && (
         <CenturyIndex aria-label={indexAriaLabel}>
-          {sortedGroups.map(({ id, stateKey, label, arr }) => (
-            <CenturyJump
-              key={id}
-              type="button"
-              onClick={() => jumpTo(stateKey, id)}
-              aria-label={`${label} ${arr.length}명으로 이동`}
-            >
-              {label}
-              <CenturyJumpCount>{arr.length}</CenturyJumpCount>
-            </CenturyJump>
-          ))}
+          <CenturyIndexPills>
+            {visibleIndexGroups.map(({ id, stateKey, label, arr }) => (
+              <CenturyJump
+                key={id}
+                type="button"
+                onClick={() => jumpTo(stateKey, id)}
+                aria-label={`${label} ${arr.length}명으로 이동`}
+              >
+                {label}
+                <CenturyJumpCount>{arr.length}</CenturyJumpCount>
+              </CenturyJump>
+            ))}
+            {canCollapseIndex && (
+              <IndexMoreBtn
+                type="button"
+                onClick={() => setIndexExpanded((prev) => !prev)}
+              >
+                {indexExpanded ? '목차 접기' : `+ ${hiddenIndexCount}개 그룹 더보기`}
+              </IndexMoreBtn>
+            )}
+          </CenturyIndexPills>
+          <CollapseAllBtn
+            type="button"
+            onClick={toggleAllGroupsCollapsed}
+            title={allGroupsCollapsed ? '모든 그룹 펼치기' : '모든 그룹 접기'}
+          >
+            {allGroupsCollapsed ? (
+              <>
+                <FiChevronsDown size={13} aria-hidden />
+                모두 펼치기
+              </>
+            ) : (
+              <>
+                <FiChevronsUp size={13} aria-hidden />
+                모두 접기
+              </>
+            )}
+          </CollapseAllBtn>
         </CenturyIndex>
       )}
       {sortedGroups.map((group, index) => {
@@ -509,12 +614,21 @@ const CenturyIndex = styled.nav`
   position: relative;
   z-index: 1;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
   margin: 0 0 4px calc(-1 * var(--rail-inset));
   padding: 10px 0 12px var(--rail-inset);
   border-bottom: 1px solid ${hairline};
   background: ${surface};
+`
+
+const CenturyIndexPills = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 
   /* 좁은 폭에선 줄바꿈 대신 한 줄 가로 스크롤 — 5줄로 불어나 첫 카드를 밀어내지 않게 */
   @media (max-width: 640px) {
@@ -524,6 +638,61 @@ const CenturyIndex = styled.nav`
     &::-webkit-scrollbar {
       display: none;
     }
+  }
+`
+
+const IndexMoreBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  border: 1px dashed ${hairline};
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${BRAND.primary};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background ${MOTION_FAST}, border-color ${MOTION_FAST};
+
+  &:hover {
+    border-color: ${BRAND.primaryBorder};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const CollapseAllBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  border: 1px solid ${hairline};
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color ${MOTION_FAST}, background ${MOTION_FAST}, border-color ${MOTION_FAST};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(15, 23, 42, 0.2)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.03)'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
   }
 `
 
