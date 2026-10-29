@@ -69,6 +69,10 @@ const PRECISION_TABS: { value: DatePickerPrecision; label: string }[] = [
 /** 연도 격자 한 쪽 = 한 십년(5열×2행) — 2017–2028처럼 십년을 가르는 쪽은 역사 연도로 읽기 어렵다 */
 const YEARS_PER_PAGE = 10
 
+/** 주말 글자색 — 다크 바탕에선 밝은 톤(라이트 #2563eb는 다크 면에서 3:1 아래로 떨어진다) */
+const weekendColor = (kind: 'sun' | 'sat', dark: boolean) =>
+  kind === 'sun' ? (dark ? '#f87171' : '#dc2626') : dark ? '#60a5fa' : '#2563eb'
+
 /** 일요일=0, 토요일=6 컬럼 구분 — 한국 달력 관습(일 빨강·토 파랑). */
 function weekendKind(weekday: number): 'sun' | 'sat' | undefined {
   if (weekday === 0) return 'sun'
@@ -142,6 +146,11 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const [dayInputValue, setDayInputValue] = useState('1')
   /** 지금 무엇을 고르는 중인가 — allowPartial이 아니면 항상 'day' */
   const [mode, setMode] = useState<DatePickerPrecision>('day')
+  /**
+   * 사용자가 연·월·일 칸에 직접 친 적이 있는가 — 빈 값으로 열었을 때 달력이 '오늘'을
+   * **선택된 것처럼** 채워 칠하던 것(오늘 링 + 채움 겹침)을 막는다. 친 뒤엔 그 날이 채워진다.
+   */
+  const [typedSelection, setTypedSelection] = useState(false)
   /** 키보드 로빙 포커스 대상 일(day). */
   const [focusedDay, setFocusedDay] = useState(1)
   /** '선택 적용' 시 범위 밖 입력에 대한 필드별 안내. */
@@ -202,6 +211,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       )
       setFocusedDay(date.getDate())
       setInputError(null)
+      setTypedSelection(false)
     }
     // initialDateParsed는 initialDateKey로 정체성을 안정화 — deps에서 제외.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,6 +273,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   const handleYearInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputError(null)
+    setTypedSelection(true)
     const value = e.target.value.replace(/\D/g, '')
     setYearInputValue(value)
     const year = parseInt(value, 10)
@@ -304,6 +315,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   const handleMonthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputError(null)
+    setTypedSelection(true)
     const value = e.target.value.replace(/\D/g, '')
     setMonthInputValue(value)
     // 월을 모르면 일도 모른다 — 월을 비우면 일도 함께 비운다
@@ -330,6 +342,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   const handleDayInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputError(null)
+    setTypedSelection(true)
     const value = e.target.value.replace(/\D/g, '')
     setDayInputValue(value)
     const num = parseInt(value, 10)
@@ -568,7 +581,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   }
 
   const isDateSelected = (day: number | null): boolean => {
-    if (day === null) return false
+    if (day === null || !(hasInitial || typedSelection)) return false
     return (
       selectedDate.getFullYear() === actualYear &&
       selectedDate.getMonth() === viewMonth &&
@@ -657,7 +670,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                 BC
               </EraButton>
             </EraSelector>
-            <InputGroup>
+            <InputGroup $invalid={Boolean(inputError)}>
               <UnitField>
                 <ShortInput
                   type="text"
@@ -670,7 +683,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   aria-label="년도"
                   aria-invalid={inputError?.field === 'year'}
                   $invalid={inputError?.field === 'year'}
-                  style={{ width: 58 }}
+                  style={{ width: 44 }}
                 />
                 <Unit>년</Unit>
               </UnitField>
@@ -688,7 +701,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   aria-invalid={inputError?.field === 'month'}
                   $invalid={inputError?.field === 'month'}
                   maxLength={2}
-                  style={{ width: 36 }}
+                  style={{ width: 22 }}
                 />
                 <Unit>월</Unit>
               </UnitField>
@@ -707,7 +720,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   aria-invalid={inputError?.field === 'day'}
                   $invalid={inputError?.field === 'day'}
                   maxLength={2}
-                  style={{ width: 36 }}
+                  style={{ width: 22 }}
                 />
                 <Unit>일</Unit>
               </UnitField>
@@ -718,16 +731,18 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
           {inputError ? (
             <InputErrorText role="alert">{inputError.message}</InputErrorText>
           ) : (
-            allowPartial && (
+            allowPartial &&
+            mode !== 'day' && (
               <PartialHint>
                 {mode === 'year'
-                  ? '해를 누르거나, 연도를 입력하고 \u2018선택 적용\u2019'
-                  : mode === 'month'
-                    ? '달을 누르거나, 연·월을 입력하고 \u2018선택 적용\u2019'
-                    : '연도만·연월만 알면 위에서 \u2018연도만\u2019·\u2018연·월\u2019을 고르세요'}
+                  ? '해를 누르거나, 연도를 입력하고 \u2018적용\u2019'
+                  : '달을 누르거나, 연·월을 입력하고 \u2018적용\u2019'}
               </PartialHint>
             )
           )}
+
+          {/* 위 = 직접 입력, 아래 = 넘겨 보며 고르기 — 두 길을 선 하나로 가른다 */}
+          <BrowseDivider aria-hidden />
 
           {mode === 'year' && (
             <>
@@ -899,7 +914,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                 applyTypedDate()
               }}
             >
-              선택 적용
+              적용
             </ApplyButton>
           </Footer>
         </Body>
@@ -916,6 +931,7 @@ const PartialHint = styled.p`
   margin: -4px 0 0;
   font-size: 12px;
   line-height: 1.4;
+  word-break: keep-all;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -1032,14 +1048,14 @@ const CloseButton = styled.button`
 const PrecisionTabs = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
+  gap: 2px;
   padding: 3px;
   background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 10px;
+  border-radius: 8px;
 `
 
 const PrecisionTab = styled.button<{ $isSelected: boolean }>`
-  padding: 7px 0;
+  padding: 6px 0;
   font-size: 13px;
   font-weight: ${({ $isSelected }) => ($isSelected ? 700 : 600)};
   color: ${({ $isSelected, theme }) =>
@@ -1051,9 +1067,9 @@ const PrecisionTab = styled.button<{ $isSelected: boolean }>`
         : '#fff'
       : 'transparent'};
   box-shadow: ${({ $isSelected }) =>
-    $isSelected ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'};
+    $isSelected ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'};
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition:
     background 0.18s ease,
@@ -1077,9 +1093,9 @@ const PeriodGrid = styled.div<{ $columns: number }>`
 `
 
 const PeriodCell = styled.button<{ $isSelected: boolean }>`
-  height: 46px;
+  height: 40px;
   border: none;
-  border-radius: 11px;
+  border-radius: 10px;
   font-size: 14px;
   font-weight: ${({ $isSelected }) => ($isSelected ? 700 : 500)};
   font-variant-numeric: tabular-nums;
@@ -1115,32 +1131,34 @@ const PeriodCell = styled.button<{ $isSelected: boolean }>`
 const Body = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px 18px;
+  gap: 12px;
+  padding: 14px 16px 16px;
 `
 
 const TopControls = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 `
 
+/* 기원 — 정밀도 탭과 같은 트레이 세그먼트, 높이는 입력 칸(34px)에 맞춘다 */
 const EraSelector = styled.div`
   display: inline-flex;
-  gap: 3px;
+  gap: 2px;
+  height: 34px;
   padding: 3px;
+  box-sizing: border-box;
   background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 10px;
+  border-radius: 8px;
 `
 
 const EraButton = styled.button<{ $isSelected: boolean }>`
-  padding: 6px 13px;
-  font-size: 13px;
+  padding: 0 11px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ $isSelected, theme }) =>
-    $isSelected ? theme.colors.text.primary : theme.colors.text.secondary};
+    $isSelected ? theme.colors.text.primary : theme.colors.text.tertiary};
   background: ${({ $isSelected, theme }) =>
     $isSelected
       ? theme.mode === 'dark'
@@ -1148,29 +1166,62 @@ const EraButton = styled.button<{ $isSelected: boolean }>`
         : '#fff'
       : 'transparent'};
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition:
     background 0.18s ease,
     color 0.18s ease;
   box-shadow: ${({ $isSelected }) =>
-    $isSelected ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'};
+    $isSelected ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'};
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
   }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
 `
 
-const InputGroup = styled.div`
+/*
+ * 연·월·일 = 테 하나 칸 안의 테 없는 입력 셋('2026 년 10 월 15 일'). 예전엔 테 있는 작은 칸
+ * 세 개가 단위 글자와 번갈아 놓여 기원 세그먼트와 높이·모양이 달랐다. 포커스 링은 칸 전체에.
+ */
+const InputGroup = styled.div<{ $invalid?: boolean }>`
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
+  height: 34px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid
+    ${({ $invalid, theme }) => ($invalid ? theme.colors.error : theme.colors.border.default)};
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+
+  &:focus-within {
+    border-color: ${({ $invalid, theme }) =>
+      $invalid ? theme.colors.error : theme.colors.primary};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.20)' : 'rgba(99, 102, 241, 0.12)'};
+  }
 `
 
 const UnitField = styled.div`
   display: inline-flex;
-  align-items: center;
-  gap: 3px;
+  align-items: baseline;
+  gap: 1px;
+  margin-right: 6px;
+
+  &:last-child {
+    margin-right: 0;
+  }
 `
 
 const Unit = styled.span`
@@ -1180,27 +1231,20 @@ const Unit = styled.span`
 `
 
 const ShortInput = styled.input<{ $invalid?: boolean }>`
-  padding: 8px 6px;
-  font-size: 13.5px;
+  padding: 0;
+  font-size: 14px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  border: 1px solid
-    ${({ $invalid, theme }) =>
-      $invalid ? theme.colors.error : theme.colors.border.default};
-  border-radius: 8px;
-  outline: none;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
-  text-align: center;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-
-  &:focus {
-    border-color: ${({ $invalid, theme }) =>
-      $invalid ? theme.colors.error : theme.colors.primary};
-    box-shadow: ${({ theme }) => theme.colors.focusRing?.primary ?? 'none'};
+  font-variant-numeric: tabular-nums;
+  color: ${({ $invalid, theme }) =>
+    $invalid ? theme.colors.error : theme.colors.text.primary};
+  /* 전역 input:focus 테·링이 칸 안 입력에 먹지 않게 — 링은 InputGroup이 맡는다 */
+  && {
+    border: none;
+    box-shadow: none;
+    outline: none;
+    background: transparent;
   }
+  text-align: right;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1212,6 +1256,13 @@ const InputErrorText = styled.p`
   font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.error};
+`
+
+/** 직접 입력(위)과 넘겨 보며 고르기(아래) 사이 */
+const BrowseDivider = styled.div`
+  height: 1px;
+  margin: 2px -16px 0;
+  background: ${({ theme }) => theme.colors.border.light};
 `
 
 const CalendarHeader = styled.div`
@@ -1276,26 +1327,22 @@ const EraTag = styled.span`
 const CalendarGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
+  gap: 2px;
 `
 
 const DayNameCell = styled.div<{ $weekend?: 'sun' | 'sat' }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
+  height: 24px;
   font-size: 11px;
   font-weight: 700;
   color: ${({ $weekend, theme }) =>
-    $weekend === 'sun'
-      ? '#dc2626'
-      : $weekend === 'sat'
-        ? '#2563eb'
-        : theme.colors.text.tertiary};
+    $weekend ? weekendColor($weekend, theme.mode === 'dark') : theme.colors.text.tertiary};
 `
 
 const EmptyCell = styled.div`
-  height: 40px;
+  height: 36px;
 `
 
 const DayCell = styled.button<{
@@ -1307,10 +1354,11 @@ const DayCell = styled.button<{
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
+  height: 36px;
   border: none;
-  border-radius: 11px;
+  border-radius: 10px;
   font-size: 14px;
+  font-variant-numeric: tabular-nums;
   font-weight: ${({ $isSelected, $isToday }) =>
     $isSelected || $isToday ? '700' : '500'};
   color: ${({ $isDisabled, $isSelected, $isToday, $weekend, theme }) =>
@@ -1320,11 +1368,9 @@ const DayCell = styled.button<{
         ? '#fff'
         : $isToday
           ? theme.colors.primary
-          : $weekend === 'sun'
-            ? '#dc2626'
-            : $weekend === 'sat'
-              ? '#2563eb'
-              : theme.colors.text.primary};
+          : $weekend
+            ? weekendColor($weekend, theme.mode === 'dark')
+            : theme.colors.text.primary};
   background: ${({ $isSelected, theme }) =>
     $isSelected ? theme.colors.primary : 'transparent'};
   /* 오늘 = 채움 대신 *링*(테두리)으로, 선택(채움)과 위계를 분리. */
@@ -1362,17 +1408,19 @@ const Footer = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 2px;
 `
 
+/* 보조 동작 — 테 없는 글 버튼(주 동작 '적용'과 무게를 가른다) */
 const TodayButton = styled.button`
-  padding: 9px 16px;
+  height: 32px;
+  padding: 0 10px;
+  margin-left: -10px;
   font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
   transition:
     background 0.18s ease,
@@ -1382,20 +1430,29 @@ const TodayButton = styled.button`
     background: ${({ theme }) => theme.colors.background.tertiary};
     color: ${({ theme }) => theme.colors.text.primary};
   }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
 `
 
 const ApplyButton = styled.button`
-  padding: 9px 20px;
+  height: 32px;
+  padding: 0 16px;
   font-size: 13px;
   font-weight: 600;
   color: #fff;
   background: ${({ theme }) => theme.colors.primary};
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: opacity 0.18s ease;
 
   &:hover {
     opacity: 0.9;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
   }
 `

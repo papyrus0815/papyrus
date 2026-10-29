@@ -11,7 +11,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
 import styled from 'styled-components'
-import { FiClock, FiX, FiCheck } from 'react-icons/fi'
+import { FiClock, FiX } from 'react-icons/fi'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { useDropdownPosition } from '@/shared/hooks/use-dropdown-position.hook'
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -128,7 +128,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
             </ClockIcon>
             <ModalTitle>{title}</ModalTitle>
           </HeaderLeft>
-          <CloseButton onClick={onClose}>
+          <CloseButton type="button" onClick={onClose} aria-label="닫기">
             <FiX size={20} />
           </CloseButton>
         </ModalHeader>
@@ -150,6 +150,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
               <ScrollContainer>
                 {hours.map((hour) => (
                   <TimeItem
+                    type="button"
                     key={hour}
                     $selected={hour === selectedHour}
                     data-selected={hour === selectedHour}
@@ -166,6 +167,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
               <ScrollContainer>
                 {minutes.map((minute) => (
                   <TimeItem
+                    type="button"
                     key={minute}
                     $selected={minute === selectedMinute}
                     data-selected={minute === selectedMinute}
@@ -178,9 +180,8 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
             </PickerColumn>
           </PickersContainer>
 
-          <QuickSelectSection>
-            <QuickSelectLabel>빠른 선택</QuickSelectLabel>
-            <QuickSelectButtons>
+          {/* 자주 쓰는 시각 — 회색 상자·'빠른 선택' 머리 없이 한 줄 칩(달력 월·연 칸과 같은 면) */}
+          <QuickSelectButtons role="group" aria-label="자주 쓰는 시각">
               {[
                 { label: '00:00', hour: 0, minute: 0 },
                 { label: '06:00', hour: 6, minute: 0 },
@@ -190,6 +191,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                 { label: '현재', hour: new Date().getHours(), minute: new Date().getMinutes() },
               ].map((preset) => (
                 <QuickButton
+                  type="button"
                   key={preset.label}
                   onClick={() => {
                     setSelectedHour(preset.hour)
@@ -199,17 +201,22 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                   {preset.label}
                 </QuickButton>
               ))}
-            </QuickSelectButtons>
-          </QuickSelectSection>
+          </QuickSelectButtons>
         </ModalBody>
 
         <ModalFooter>
-          <ClearButton onClick={handleClear}>시간 제거</ClearButton>
+          {/* 드롭다운은 달력과 같은 문법 — 왼쪽 글 버튼(보조) · 오른쪽 '적용'(주). 닫기는 Esc·바깥 클릭 */}
+          <ClearButton type="button" onClick={handleClear}>
+            시각 지우기
+          </ClearButton>
           <ButtonGroup>
-            <CancelButton onClick={onClose}>취소</CancelButton>
-            <ConfirmButton onClick={handleConfirm}>
-              <FiCheck size={16} />
-              확인
+            {!anchored && (
+              <CancelButton type="button" onClick={onClose}>
+                취소
+              </CancelButton>
+            )}
+            <ConfirmButton type="button" onClick={handleConfirm}>
+              적용
             </ConfirmButton>
           </ButtonGroup>
         </ModalFooter>
@@ -294,8 +301,8 @@ const ModalHeader = styled.div<{ $anchored?: boolean }>`
   display: ${({ $anchored }) => ($anchored ? 'none' : 'flex')};
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
+  padding: 16px 20px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const HeaderLeft = styled.div`
@@ -305,47 +312,48 @@ const HeaderLeft = styled.div`
 `
 
 const ClockIcon = styled.div`
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const CloseButton = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
-  padding: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
 
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
 const ModalBody = styled.div`
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
 
   /* 드롭다운 — 칸 아래 붙어야 하므로 세로를 아낀다 */
   [data-anchored] & {
-    padding: 14px 14px 12px;
+    padding: 14px 16px 12px;
   }
 `
 
@@ -357,37 +365,31 @@ const TimeDisplay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-bottom: 24px;
-  padding: 16px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '#212121'
-      : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'};
+  gap: 6px;
+  padding: 12px;
+  background: ${({ theme }) => theme.colors.background.secondary};
   border-radius: 12px;
-  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
 `
 
 const TimeValue = styled.div`
-  font-size: 48px;
+  min-width: 64px;
+  font-size: 40px;
   font-weight: 700;
-  color: #6366f1;
-  font-family: 'Courier New', monospace;
-  min-width: 80px;
+  font-variant-numeric: tabular-nums;
   text-align: center;
+  color: ${({ theme }) => theme.colors.primary};
 `
 
 const TimeSeparator = styled.div`
-  font-size: 48px;
+  font-size: 40px;
   font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const PickersContainer = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 10px;
 `
 
 const PickerColumn = styled.div`
@@ -396,195 +398,163 @@ const PickerColumn = styled.div`
 `
 
 const PickerLabel = styled.div`
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
   text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
-  margin-bottom: 8px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const ScrollContainer = styled.div`
   height: 200px;
 
   [data-anchored] & {
-    height: 164px;
+    height: 168px;
   }
   overflow-y: auto;
-  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
-  border-radius: 8px;
   padding: 4px;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
-    border-radius: 3px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
-    border-radius: 3px;
-
-    &:hover {
-      background: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
-    }
-  }
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 10px;
+  scrollbar-width: thin;
 `
 
+/* 달력 날짜 칸과 같은 언어 — 앱 글꼴 tabular 숫자, 선택 = primary 단색 채움 */
 const TimeItem = styled.button<{ $selected: boolean }>`
+  display: block;
   width: 100%;
-  padding: 10px;
-  border: none;
-  background: ${(props) =>
-    props.$selected
-      ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
-      : 'transparent'};
-  color: ${(props) =>
-    props.$selected
-      ? 'white'
-      : props.theme.mode === 'dark'
-        ? '#d1d5db'
-        : '#475569'};
-  font-size: 16px;
-  font-weight: ${(props) => (props.$selected ? '600' : '400')};
-  font-family: 'Courier New', monospace;
-  cursor: pointer;
-  border-radius: 6px;
+  height: 34px;
   margin-bottom: 2px;
-  transition: all 0.2s;
+  border: none;
+  border-radius: 8px;
+  background: ${({ $selected, theme }) => ($selected ? theme.colors.primary : 'transparent')};
+  color: ${({ $selected, theme }) => ($selected ? '#fff' : theme.colors.text.primary)};
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s ease;
 
   &:hover {
-    background: ${(props) =>
-      props.$selected
-        ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
-        : props.theme.mode === 'dark'
-          ? '#2a2a2a'
-          : '#f1f5f9'};
+    background: ${({ $selected, theme }) =>
+      $selected ? theme.colors.primary : theme.colors.background.tertiary};
   }
-`
-
-const QuickSelectSection = styled.div`
-  padding: 16px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
-`
-
-const QuickSelectLabel = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
-  margin-bottom: 10px;
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: -2px;
+  }
 `
 
 const QuickSelectButtons = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
 `
 
 const QuickButton = styled.button`
-  padding: 6px 12px;
-  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition: all 0.2s;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 
   &:hover {
-    border-color: #6366f1;
-    color: #6366f1;
-    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : '#f0f1ff')};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
   }
 `
 
 const ModalFooter = styled.div`
-  [data-anchored] & {
-    padding: 12px 14px;
-    gap: 8px;
-  }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
+  gap: 8px;
+  padding: 0 20px 18px;
+
+  [data-anchored] & {
+    padding: 0 16px 16px;
+  }
 `
 
+/* 보조 동작 — 달력 '오늘'과 같은 테 없는 글 버튼 */
 const ClearButton = styled.button`
-  white-space: nowrap;
-  [data-anchored] & {
-    padding: 8px 10px;
-  }
-  padding: 10px 16px;
-  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
+  height: 32px;
+  padding: 0 10px;
+  margin-left: -10px;
+  border: none;
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s;
 
   &:hover {
-    border-color: #ef4444;
-    color: #ef4444;
-    background: #fef2f2;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.error};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
   }
 `
 
 const ButtonGroup = styled.div`
   display: flex;
-  gap: 10px;
+  gap: 8px;
 `
 
 const CancelButton = styled.button`
-  white-space: nowrap;
-  [data-anchored] & {
-    padding: 8px 12px;
-  }
-  padding: 10px 20px;
-  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s;
 
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
+    background: ${({ theme }) => theme.colors.background.tertiary};
   }
 `
 
+/* 달력 '적용'과 같은 단색 primary — 그라데이션·그림자·뜨는 hover 제거 */
 const ConfirmButton = styled.button`
-  white-space: nowrap;
-  [data-anchored] & {
-    padding: 8px 14px;
-  }
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 24px;
+  height: 32px;
+  padding: 0 16px;
   border: none;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   border-radius: 8px;
-  font-size: 14px;
+  background: ${({ theme }) => theme.colors.primary};
+  color: #fff;
+  font-size: 13px;
   font-weight: 600;
-  color: white;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  transition: opacity 0.18s ease;
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+    opacity: 0.9;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
   }
 `
 
