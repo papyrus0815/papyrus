@@ -91,6 +91,8 @@ interface InfographicContentProps {
   onPersonClick: (id: string) => void
   /** 뷰 전환 세그먼트 — 페인이 소유(records 분기와 공유)하고 여기서는 자리만 잡는다 */
   viewSwitcher: ReactNode
+  /** 우측 상세 패널에 현재 열려 있는 인물 ID — 목록 카드 하이라이트용 */
+  selectedPersonId?: string | null
   /**
    * 상세 필터 시트 열기 — 시트는 페이지가 소유한다. 예전엔 좌측 사이드바의 배지·모바일 FAB만
    * 열 수 있었는데 목록 지면에서 사이드바를 걷어 내면서 툴바로 옮겼다. 없으면 버튼을 그리지 않는다.
@@ -100,9 +102,17 @@ interface InfographicContentProps {
 
 const STATS_KEY = 'person-infographic-stats-open'
 
+const EMPTY_SCOPES = {
+  era: [] as string[],
+  region: [] as string[],
+  field: [] as string[],
+  country: [] as string[],
+}
+
 export function InfographicContent({
   onPersonClick,
   viewSwitcher,
+  selectedPersonId,
   onOpenFilters,
 }: InfographicContentProps) {
   // URL ↔ store 동기화는 상위 PersonInfographicPane이 담당 (records 뷰 분기 공유)
@@ -176,6 +186,19 @@ export function InfographicContent({
         query: dq,
       }),
     [allPeople, scopes, dq, minInfluence, aliveFilter],
+  )
+
+  // 매트릭스·은하계 뷰는 전체(검색·영향력·생존만 적용) 배경 위에서 선택된 scope를 밝게 강조하도록
+  // scope 적용 전 후보군(baseFiltered)을 전달한다.
+  const baseFiltered = useMemo(
+    () =>
+      filterPersons(allPeople, {
+        scopes: EMPTY_SCOPES,
+        minInfluence,
+        aliveFilter,
+        query: dq,
+      }),
+    [allPeople, dq, minInfluence, aliveFilter],
   )
 
   // 활성 scope 라벨 — 단일이면 그 값, 다중이면 "필터링됨". 모두 비면 "전체 인물".
@@ -529,10 +552,10 @@ export function InfographicContent({
           {!isLoading && filtered.length > 0 && (
             <ViewArea>
               {activeView === 'matrix' && (
-                <MatrixView people={filtered} onOpen={onPersonClick} />
+                <MatrixView people={baseFiltered} onOpen={onPersonClick} />
               )}
               {activeView === 'galaxy' && (
-                <GalaxyView people={filtered} onOpen={onPersonClick} />
+                <GalaxyView people={baseFiltered} onOpen={onPersonClick} />
               )}
               {activeView === 'story' && (
                 <EraStoryView
@@ -540,6 +563,7 @@ export function InfographicContent({
                   onOpen={onPersonClick}
                   query={dq}
                   pinned={pinned}
+                  selectedPersonId={selectedPersonId}
                   togglePin={togglePin}
                 />
               )}
@@ -549,6 +573,7 @@ export function InfographicContent({
                   onOpen={onPersonClick}
                   query={dq}
                   pinned={pinned}
+                  selectedPersonId={selectedPersonId}
                   togglePin={togglePin}
                 />
               )}

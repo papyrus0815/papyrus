@@ -33,6 +33,7 @@ interface PersonCardProps {
   person: AdaptedPerson
   query: string
   pinned: boolean
+  selected?: boolean
   onTogglePin: (id: string, event: React.MouseEvent) => void
   onOpen: (id: string) => void
 }
@@ -41,6 +42,7 @@ function PersonCardItemBase({
   person,
   query,
   pinned,
+  selected = false,
   onTogglePin,
   onOpen,
 }: PersonCardProps) {
@@ -63,6 +65,11 @@ function PersonCardItemBase({
   const role = person.isMonarch ? '군주' : person.isHeadOfState ? '국가원수' : null
   const born = person.born == null ? '?' : formatYear(person.born)
   const died = person.isAlive ? '현재' : person.died == null ? '?' : formatYear(person.died)
+  const bothYearsUnknown = person.born == null && person.died == null && !person.isAlive
+  const activityFallbackLabel =
+    bothYearsUnknown && person.activityYear != null
+      ? `활동 ${formatYear(Math.round(person.activityYear))}경`
+      : null
   const hasCountry = !!person.country && person.country !== '미상'
   /**
    * 영향력 0 = 아직 평가하지 않음(실데이터 470명 중 139명, 30%). 예전엔 빈 링 + '0'으로 그려
@@ -83,7 +90,9 @@ function PersonCardItemBase({
     role,
     hasCountry ? person.country : null,
     person.field,
-    `생몰 ${born === '?' ? '미상' : born}–${died === '?' ? '미상' : died}`,
+    bothYearsUnknown
+      ? (activityFallbackLabel ?? '생몰 미상')
+      : `생몰 ${born === '?' ? '미상' : born}–${died === '?' ? '미상' : died}`,
     influenceRated ? `영향력 ${person.influence}` : '영향력 미평가',
     '상세 보기',
   ]
@@ -93,6 +102,8 @@ function PersonCardItemBase({
   return (
     <Card
       $pinned={pinned}
+      $selected={selected}
+      aria-current={selected ? 'true' : undefined}
       title={bioTooltip}
       onClick={() => onOpen(person.id)}
       role="button"
@@ -144,9 +155,15 @@ function PersonCardItemBase({
         {/* 직함 유무와 무관하게 메타 두 줄은 카드 바닥에 — 같은 줄 카드끼리 생몰·영향력이 나란히 */}
         <Row $pushDown>
           <Years>
-            {born}
-            <Dash>–</Dash>
-            {died}
+            {bothYearsUnknown ? (
+              activityFallbackLabel ?? '생몰 미상'
+            ) : (
+              <>
+                {born}
+                <Dash>–</Dash>
+                {died}
+              </>
+            )}
           </Years>
           {person.age != null && (
             <Age>{person.isAlive ? `${person.age}세` : `향년 ${person.age}세`}</Age>
@@ -222,7 +239,7 @@ export const EraCardGrid = styled.div`
   }
 `
 
-const Card = styled.div<{ $pinned?: boolean }>`
+const Card = styled.div<{ $pinned?: boolean; $selected?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
@@ -232,7 +249,7 @@ const Card = styled.div<{ $pinned?: boolean }>`
   background: ${surface};
   border: 1px solid ${hairline};
   cursor: pointer;
-  transition: border-color ${MOTION_FAST}, background ${MOTION_FAST};
+  transition: border-color ${MOTION_FAST}, background ${MOTION_FAST}, box-shadow ${MOTION_FAST};
 
   /* 사건 목록 행처럼 hover는 면의 옅은 틴트 — 그림자로 띄우지 않는다 */
   &:hover {
@@ -249,6 +266,13 @@ const Card = styled.div<{ $pinned?: boolean }>`
     css`
       border-color: ${BRAND.primary};
       box-shadow: 0 0 0 1px ${BRAND.primary};
+    `}
+  ${({ $selected, theme }) =>
+    $selected &&
+    css`
+      border-color: ${BRAND.primary};
+      box-shadow: 0 0 0 2px ${BRAND.primary};
+      background: ${theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)'};
     `}
 
   @media (prefers-reduced-motion: reduce) {

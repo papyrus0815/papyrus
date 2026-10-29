@@ -76,9 +76,17 @@ export function DynastySpanChart({ people, onJump }: DynastySpanChartProps) {
       let from = Infinity
       let to = -Infinity
       for (const member of members) {
+        if (
+          member.activityYear == null &&
+          member.born == null &&
+          member.died == null
+        ) {
+          continue
+        }
         from = Math.min(from, bornForPlot(member))
         to = Math.max(to, diedForPlot(member))
       }
+      if (!Number.isFinite(from) || !Number.isFinite(to)) continue
       result.push({
         faction,
         count: members.length,
@@ -86,7 +94,9 @@ export function DynastySpanChart({ people, onJump }: DynastySpanChartProps) {
         from,
         to,
         country: mostCommon(members.map((member) => member.country)),
-        years: members.map((member) => member.activityYear),
+        years: members
+          .map((member) => member.activityYear)
+          .filter((year): year is number => year != null),
       })
     }
     result.sort(

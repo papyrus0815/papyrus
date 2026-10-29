@@ -169,6 +169,7 @@ export default function PersonsTimelinePage() {
           >
             <PersonInfographicPane
               onPersonClick={openPersonPanel}
+              selectedPersonId={panelPersonId}
               onOpenFilters={openFilterSheet}
             />
           </PersonSplitView>

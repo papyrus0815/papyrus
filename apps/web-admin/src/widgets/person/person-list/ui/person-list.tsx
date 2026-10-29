@@ -51,7 +51,11 @@ function lifespanText(person: AdaptedPerson): string {
     : person.died == null
       ? '?'
       : formatYear(person.died)
-  if (bornText === '?' && diedText === '?') return ''
+  if (bornText === '?' && diedText === '?') {
+    return person.activityYear != null
+      ? `${formatYear(Math.round(person.activityYear))}경`
+      : ''
+  }
   return `${bornText}–${diedText}`
 }
 
@@ -173,12 +177,14 @@ function PersonListInner({
     return map
   }, [allPersons])
 
-  // 시대 그룹 — 최신 시대 먼저(당대 → 고대). 빈 시대는 EntityListSidebar가 안 그린다.
+  // 시대 그룹 — 최신 시대 먼저(당대 → 고대), 마지막에 연도 미상. 빈 시대는 EntityListSidebar가 안 그린다.
   const eraGroups = useMemo<EntitySidebarGroup[]>(
-    () =>
-      [...ERAS]
+    () => [
+      ...[...ERAS]
         .reverse()
         .map((era) => ({ id: era.key, name: era.lbl, accent: era.color })),
+      { id: 'unknown', name: '연도 미상', accent: '#64748b' },
+    ],
     [],
   )
 

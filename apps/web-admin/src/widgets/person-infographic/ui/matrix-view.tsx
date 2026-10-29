@@ -86,10 +86,18 @@ export function MatrixView({ people, onOpen }: Props) {
     [hasActiveFilter, scopes],
   )
 
-  // 국가별 lane 패킹 — people·showAll·W 변할 때만 재계산
+  const plottablePeople = useMemo(
+    () =>
+      people.filter(
+        (p) => p.activityYear != null || p.born != null || p.died != null,
+      ),
+    [people],
+  )
+
+  // 국가별 lane 패킹 — plottablePeople·showAll·W 변할 때만 재계산
   const grouped = useMemo(() => {
     const byCountry: Record<string, AdaptedPerson[]> = {}
-    for (const p of people) {
+    for (const p of plottablePeople) {
       ;(byCountry[p.country] = byCountry[p.country] || []).push(p)
     }
     const all = Object.entries(byCountry).sort((a, b) => b[1].length - a[1].length)
@@ -98,7 +106,7 @@ export function MatrixView({ people, onOpen }: Props) {
       : all.slice(0, INFOGRAPHIC_DEFAULTS.MATRIX_COUNTRY_TOP_N)
     let minY = Infinity
     let maxY = -Infinity
-    for (const p of people) {
+    for (const p of plottablePeople) {
       const bornY = bornForPlot(p)
       const diedY = diedForPlot(p)
       if (bornY < minY) minY = bornY
@@ -144,7 +152,7 @@ export function MatrixView({ people, onOpen }: Props) {
       ticks,
       hiddenCount: all.length - visible.length,
     }
-  }, [people, showAll, W])
+  }, [plottablePeople, showAll, W])
 
   if (!grouped.all.length) {
     return (

@@ -14,7 +14,21 @@ export type PersonResponseDto = Awaited<
 /** 인포그래픽 목록(경량) 아이템 — adapt가 쓰는 최소 필드만 */
 export type PersonInfographicItemDto = Awaited<
   ReturnType<typeof personsApi.infographic.getAllForInfographic>
->[number]
+>[number] & {
+  floruitStartYear?: number | null
+  floruitEndYear?: number | null
+  floruitEra?: Era | null
+  jobTitle?: string | null
+  careerHints?: {
+    military: boolean
+    political: boolean
+    academic: boolean
+    religious: boolean
+    artist: boolean
+    science: boolean
+    researchText?: string | null
+  }
+}
 /** SDK 원시 입력 타입 (Primitive<서버 DTO>) — 외부에는 아래 완화 타입을 노출 */
 type SdkCreatePersonDto = Parameters<typeof personsApi.create>[1]
 type SdkUpdatePersonDto = Parameters<typeof personsApi.update>[2]

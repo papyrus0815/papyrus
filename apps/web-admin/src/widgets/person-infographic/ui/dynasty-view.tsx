@@ -27,6 +27,7 @@ interface Props {
   onOpen: (id: string) => void
   query: string
   pinned: Set<string>
+  selectedPersonId?: string | null
   togglePin: (id: string, e: React.MouseEvent) => void
 }
 
@@ -35,6 +36,7 @@ export function DynastyView({
   onOpen,
   query,
   pinned,
+  selectedPersonId,
   togglePin,
 }: Props) {
   const sort = usePersonInfographicFilterStore((s) => s.sort)
@@ -63,6 +65,9 @@ export function DynastyView({
         let minYr = Infinity
         let maxYr = -Infinity
         for (const p of arr) {
+          if (p.activityYear == null && p.born == null && p.died == null) {
+            continue
+          }
           const bornY = bornForPlot(p)
           const diedY = diedForPlot(p)
           if (bornY < minYr) minYr = bornY
@@ -120,6 +125,7 @@ export function DynastyView({
               person={person}
               query={query}
               pinned={pinned.has(person.id)}
+              selected={selectedPersonId === person.id}
               onTogglePin={togglePin}
               onOpen={onOpen}
             />
@@ -144,23 +150,30 @@ export function DynastyView({
       <PinnedPeopleSection
         people={pinnedPeople}
         query={query}
+        selectedPersonId={selectedPersonId}
         onTogglePin={togglePin}
         onOpen={onOpen}
       />
-      {sortedFactions.map(({ faction, arr, minYr, maxYr, countryName, sorted }) => (
-        <GroupSection
-          key={faction}
-          id={`dynasty-${faction}`}
-          label={faction}
-          range={`${countryName ? `${countryName} · ` : ''}${formatYear(minYr)}–${formatYear(maxYr)}`}
-          count={arr.length}
-          weight={Math.sqrt(arr.length / largestFaction)}
-          collapsed={!!collapsed[faction]}
-          onToggle={() => toggleCollapsed(faction)}
-        >
-          {renderCards(sorted, faction)}
-        </GroupSection>
-      ))}
+      {sortedFactions.map(({ faction, arr, minYr, maxYr, countryName, sorted }) => {
+        const hasValidSpan = Number.isFinite(minYr) && Number.isFinite(maxYr)
+        const rangeText = hasValidSpan
+          ? `${countryName ? `${countryName} · ` : ''}${formatYear(Math.round(minYr))}–${formatYear(Math.round(maxYr))}`
+          : countryName || undefined
+        return (
+          <GroupSection
+            key={faction}
+            id={`dynasty-${faction}`}
+            label={faction}
+            range={rangeText}
+            count={arr.length}
+            weight={Math.sqrt(arr.length / largestFaction)}
+            collapsed={!!collapsed[faction]}
+            onToggle={() => toggleCollapsed(faction)}
+          >
+            {renderCards(sorted, faction)}
+          </GroupSection>
+        )
+      })}
       {noFaction.length > 0 && (
         <GroupSection
           id="dynasty-none"

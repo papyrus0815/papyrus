@@ -47,4 +47,20 @@ export interface PersonInfographicItemDto {
   }>
   /** 군주 여부 판정용 재위 기록 수 (존재 여부만 필요 — 0 또는 1) */
   sovereignReignCount: number
+  /** 생몰 미상 인물의 활동시기(floruit) — 시대·세기 폴백 산출용 */
+  floruitStartYear?: number | null
+  floruitEndYear?: number | null
+  floruitEra?: Era | null
+  /** 대표 직업명 (분야 분류 및 검색용) */
+  jobTitle?: string | null
+  /** 분야(정치·군사·사상·과학·예술) 정밀 분류를 위한 경력 유무 요약 */
+  careerHints?: {
+    military: boolean
+    political: boolean
+    academic: boolean
+    religious: boolean
+    artist: boolean
+    science: boolean
+    researchText?: string | null
+  }
 }

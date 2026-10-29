@@ -161,12 +161,21 @@ export function GalaxyView({ people, onOpen }: Props) {
   const innerW = W - PADDING.left - PADDING.right
   const innerH = CHART_H - PADDING.top - PADDING.bottom
 
+  const plottablePeople = useMemo(
+    () =>
+      people.filter(
+        (p): p is AdaptedPerson & { activityYear: number } =>
+          p.activityYear != null && Number.isFinite(p.activityYear),
+      ),
+    [people],
+  )
+
   // 큰 입력에서 매 렌더 수십개 함수가 재계산되는 걸 방지
   const layout = useMemo(() => {
-    if (!people.length) return null
+    if (!plottablePeople.length) return null
     let minYr = Infinity
     let maxYr = -Infinity
-    for (const p of people) {
+    for (const p of plottablePeople) {
       if (p.activityYear < minYr) minYr = p.activityYear
       if (p.activityYear > maxYr) maxYr = p.activityYear
     }
@@ -186,14 +195,14 @@ export function GalaxyView({ people, onOpen }: Props) {
       xTicks.push(y)
 
     // 활성 인물을 위에 그리기 위해 정렬 (비활성 → 활성)
-    const ordered = [...people].sort((a, b) => {
+    const ordered = [...plottablePeople].sort((a, b) => {
       const aA = isPersonInScopes(a, scopes) ? 1 : 0
       const bA = isPersonInScopes(b, scopes) ? 1 : 0
       return aA - bA
     })
 
     const regionCounts: Record<string, number> = {}
-    for (const p of people) {
+    for (const p of plottablePeople) {
       regionCounts[p.region] = (regionCounts[p.region] ?? 0) + 1
     }
     const visibleRegions = REGIONS.filter((r) => (regionCounts[r] ?? 0) > 0)
@@ -205,11 +214,11 @@ export function GalaxyView({ people, onOpen }: Props) {
     // density underlay — 점이 많을 때만 (매 렌더 재계산 방지로 memo 내부에서 1회)
     const BIN_SIZE = INFOGRAPHIC_DEFAULTS.GALAXY_DENSITY_BIN_SIZE
     const showDensity =
-      people.length >= INFOGRAPHIC_DEFAULTS.GALAXY_DENSITY_THRESHOLD
+      plottablePeople.length >= INFOGRAPHIC_DEFAULTS.GALAXY_DENSITY_THRESHOLD
     const densityBins: Array<{ x: number; y: number; intensity: number }> = []
     if (showDensity) {
       const dmap = new Map<string, number>()
-      for (const p of people) {
+      for (const p of plottablePeople) {
         const bx = Math.floor(xPos(p.activityYear) / BIN_SIZE)
         const by = Math.floor(yPos(p.influence) / BIN_SIZE)
         dmap.set(`${bx}:${by}`, (dmap.get(`${bx}:${by}`) ?? 0) + 1)
@@ -269,8 +278,8 @@ export function GalaxyView({ people, onOpen }: Props) {
     }
 
     const activeCount = hasActive
-      ? people.filter((p) => isPersonInScopes(p, scopes)).length
-      : people.length
+      ? plottablePeople.filter((p) => isPersonInScopes(p, scopes)).length
+      : plottablePeople.length
 
     return {
       X_MIN,
@@ -287,9 +296,9 @@ export function GalaxyView({ people, onOpen }: Props) {
       showDensity,
       BIN_SIZE,
     }
-  }, [people, scopes, innerW, innerH])
+  }, [plottablePeople, scopes, innerW, innerH])
 
-  if (!people.length) {
+  if (!plottablePeople.length) {
     return (
       <EmptyState
         hasActiveFilter={hasAnyFilter}
@@ -332,7 +341,7 @@ export function GalaxyView({ people, onOpen }: Props) {
               <strong>{activeCount.toLocaleString()}</strong>
               <span style={{ opacity: 0.6 }}>
                 {' / '}
-                {people.length.toLocaleString()}
+                {plottablePeople.length.toLocaleString()}
               </span>{' '}
               명 강조
             </span>

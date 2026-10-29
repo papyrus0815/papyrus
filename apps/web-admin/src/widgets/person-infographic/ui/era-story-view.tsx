@@ -38,6 +38,7 @@ interface Props {
   onOpen: (id: string) => void
   query: string
   pinned: Set<string>
+  selectedPersonId?: string | null
   togglePin: (id: string, e: React.MouseEvent) => void
 }
 
@@ -71,9 +72,11 @@ export function EraStoryView({
   onOpen,
   query,
   pinned,
+  selectedPersonId,
   togglePin,
 }: Props) {
   const sort = usePersonInfographicFilterStore((state) => state.sort)
+  const scopes = usePersonInfographicFilterStore((state) => state.scopes)
   const eraGroupOrder = usePersonInfographicFilterStore(
     (state) => state.eraGroupOrder,
   )
@@ -95,9 +98,18 @@ export function EraStoryView({
 
   const groups: Group[] = useMemo(() => {
     const map: Record<string, Group> = {}
+    const isEraFiltered = scopes.era.length > 0
     for (const person of people) {
       if (pinned.has(person.id)) continue
-      const meta = person.born == null ? UNKNOWN_CENTURY : centuryOf(person.born)
+      // 시대 필터 활성 시 필터 기준인 activityYear를 우선해 필터와 세기 헤더 간 불일치를 방지하고,
+      // 기본 상태에서는 출생연도(born)를 우선하되 미상이면 활동/사망연도로 폴백해 알려진 시대의 세기에 배치한다.
+      const yearForCentury = isEraFiltered
+        ? (person.activityYear ?? person.born ?? person.died)
+        : (person.born ?? person.activityYear ?? person.died)
+      const meta =
+        yearForCentury == null
+          ? UNKNOWN_CENTURY
+          : centuryOf(Math.round(yearForCentury))
       if (!map[meta.key]) map[meta.key] = { meta, arr: [] }
       map[meta.key].arr.push(person)
     }
@@ -105,7 +117,7 @@ export function EraStoryView({
     return Object.values(map).sort((groupA, groupB) =>
       compareCenturyMeta(groupA.meta, groupB.meta, eraGroupOrder),
     )
-  }, [people, pinned, eraGroupOrder])
+  }, [people, pinned, eraGroupOrder, scopes.era.length])
 
   // 그룹별 정렬은 people/sort/pinned 변할 때만 — expanded(더보기) 토글 등 다른 리렌더에서 재정렬 방지
   const sortedGroups = useMemo(
@@ -145,6 +157,7 @@ export function EraStoryView({
       <PinnedPeopleSection
         people={pinnedPeople}
         query={query}
+        selectedPersonId={selectedPersonId}
         onTogglePin={togglePin}
         onOpen={onOpen}
       />
@@ -210,6 +223,7 @@ export function EraStoryView({
                     person={person}
                     query={query}
                     pinned={pinned.has(person.id)}
+                    selected={selectedPersonId === person.id}
                     onTogglePin={togglePin}
                     onOpen={onOpen}
                   />

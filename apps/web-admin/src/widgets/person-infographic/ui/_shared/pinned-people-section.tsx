@@ -18,6 +18,7 @@ interface Props {
   /** 핀 된 인물 — 이미 활성 정렬 기준으로 정렬된 상태 */
   people: AdaptedPerson[]
   query: string
+  selectedPersonId?: string | null
   onTogglePin: (id: string, event: React.MouseEvent) => void
   onOpen: (id: string) => void
 }
@@ -26,6 +27,7 @@ interface Props {
 export function PinnedPeopleSection({
   people,
   query,
+  selectedPersonId,
   onTogglePin,
   onOpen,
 }: Props) {
@@ -54,6 +56,7 @@ export function PinnedPeopleSection({
             person={person}
             query={query}
             pinned
+            selected={selectedPersonId === person.id}
             onTogglePin={onTogglePin}
             onOpen={onOpen}
           />

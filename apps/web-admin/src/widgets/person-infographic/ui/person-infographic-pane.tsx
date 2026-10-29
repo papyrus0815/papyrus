@@ -26,7 +26,6 @@ import { usePersonInfographicFilterStore } from '../model/filter.store'
 import { useFilterUrlSync } from '../model/url-sync'
 
 import {
-  ViewRow,
   ViewSegment,
   ViewSegmented,
   VisuallyHiddenTitle,
@@ -73,12 +72,15 @@ const VIEW_OPTIONS: Array<{
 
 interface PersonInfographicPaneProps {
   onPersonClick: (id: string) => void
+  /** 우측 상세 패널에 현재 열려 있는 인물 ID — 목록 카드 하이라이트용 */
+  selectedPersonId?: string | null
   /** 상세 필터 시트 열기 — 시트는 페이지가 소유 */
   onOpenFilters?: () => void
 }
 
 export function PersonInfographicPane({
   onPersonClick,
+  selectedPersonId,
   onOpenFilters,
 }: PersonInfographicPaneProps) {
   // URL ↔ store 동기화 — records 뷰에서 InfographicContent가 언마운트돼도
@@ -134,14 +136,15 @@ export function PersonInfographicPane({
     <PaneWrap>
       <VisuallyHiddenTitle>인물</VisuallyHiddenTitle>
       {activeView === 'records' ? (
-        <>
-          <ViewRow>{viewSwitcher}</ViewRow>
-          <RecordsCompareView onPersonClick={onPersonClick} />
-        </>
+        <RecordsCompareView
+          onPersonClick={onPersonClick}
+          viewSwitcher={viewSwitcher}
+        />
       ) : (
         <InfographicContent
           onPersonClick={onPersonClick}
           viewSwitcher={viewSwitcher}
+          selectedPersonId={selectedPersonId}
           onOpenFilters={onOpenFilters}
         />
       )}

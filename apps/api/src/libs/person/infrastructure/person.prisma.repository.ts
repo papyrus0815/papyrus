@@ -300,9 +300,12 @@ const PERSON_INFOGRAPHIC_INCLUDE = {
   },
   ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
   dynasty: { select: { name: true } },
+  job: { select: { title: true } },
   GovernmentTenures: {
     select: {
       startDate: true,
+      startEra: true,
+      startYear: true,
       positionType: true,
       title: true,
       notes: true,
@@ -311,7 +314,19 @@ const PERSON_INFOGRAPHIC_INCLUDE = {
         select: { title: true, positionType: true, isMonarchical: true },
       },
     },
-    orderBy: { startDate: 'desc' as const },
+    orderBy: [{ startKey: 'desc' as const }, { startDate: 'desc' as const }],
+  },
+  militaryCareers: { select: { id: true }, take: 1 },
+  MilitaryUnitCommander: { select: { id: true }, take: 1 },
+  PoliticalPartyLeadership: { select: { id: true }, take: 1 },
+  electionCandidacies: { select: { id: true }, take: 1 },
+  artistCareers: { select: { id: true }, take: 1 },
+  mediaCareers: { select: { id: true }, take: 1 },
+  medicalCareers: { select: { id: true }, take: 1 },
+  religiousCareers: { select: { id: true }, take: 1 },
+  academicCareers: {
+    select: { department: true, researchField: true },
+    take: 3,
   },
 } satisfies Prisma.PersonInclude
 
@@ -717,6 +732,22 @@ export class PersonPrismaRepository implements IPersonRepository {
     const countryBlock = this.resolveCountryBlockForName(person)
     const regnalName = representativeRegnalName(person.sovereignReigns)
 
+    // 군주 재위(sovereignReigns)와 일반 관직 재임(GovernmentTenures)을 함께 담아
+    // 군주 직함(primaryTitle)과 재위 시작연도(activityYear)가 유실되지 않게 한다.
+    const allHoldings = [
+      ...(person.sovereignReigns ?? []),
+      ...(person.GovernmentTenures ?? []),
+    ]
+
+    const academicRows: Array<{
+      department?: string | null
+      researchField?: string | null
+    }> = person.academicCareers ?? []
+    const researchText = academicRows
+      .flatMap((row) => [row.department, row.researchField])
+      .filter((v): v is string => !!v && v.trim().length > 0)
+      .join(' ')
+
     return {
       id: person.id,
       name: person.name,
@@ -740,19 +771,48 @@ export class PersonPrismaRepository implements IPersonRepository {
           }
         : null,
       dynasty: person.dynasty ? { name: person.dynasty.name } : null,
-      governmentTenures: (person.GovernmentTenures ?? []).map((t: any) => ({
-        startDate: t.startDate ? t.startDate.toISOString() : null,
-        positionType: t.positionType ?? null,
-        title: t.title ?? null,
-        positionDefinition: t.positionDefinition
-          ? {
-              title: t.positionDefinition.title ?? null,
-              positionType: t.positionDefinition.positionType ?? null,
-            }
-          : null,
-      })),
+      governmentTenures: allHoldings.map((t: any) => {
+        // BC 또는 AD 1000년 미만 재임/재위는 DB의 startDate(DATETIME)가 NULL이므로
+        // 구조화 연도(startEra·startYear)를 우선 사용해 부호 연도 문자열로 내려준다.
+        const startDate =
+          t.startYear != null && (t.startEra === 'BC' || !t.startDate)
+            ? String(t.startEra === 'BC' ? -t.startYear : t.startYear)
+            : t.startDate
+              ? t.startDate.toISOString()
+              : null
+        return {
+          startDate,
+          positionType: t.positionType ?? null,
+          title: t.title ?? null,
+          positionDefinition: t.positionDefinition
+            ? {
+                title: t.positionDefinition.title ?? null,
+                positionType: t.positionDefinition.positionType ?? null,
+              }
+            : null,
+        }
+      }),
       // 예전 include가 take:1이라 0/1이었다 — 소비처가 '군주였나' 판정으로 쓴다
       sovereignReignCount: Math.min(person.sovereignReigns?.length ?? 0, 1),
+      floruitStartYear: (person as any).floruitStartYear ?? null,
+      floruitEndYear: (person as any).floruitEndYear ?? null,
+      floruitEra: (person as any).floruitEra ?? null,
+      jobTitle: person.job?.title ?? null,
+      careerHints: {
+        military:
+          (person.militaryCareers?.length ?? 0) > 0 ||
+          (person.MilitaryUnitCommander?.length ?? 0) > 0,
+        political:
+          (person.PoliticalPartyLeadership?.length ?? 0) > 0 ||
+          (person.electionCandidacies?.length ?? 0) > 0,
+        academic: academicRows.length > 0,
+        religious: (person.religiousCareers?.length ?? 0) > 0,
+        artist:
+          (person.artistCareers?.length ?? 0) > 0 ||
+          (person.mediaCareers?.length ?? 0) > 0,
+        science: (person.medicalCareers?.length ?? 0) > 0,
+        researchText: researchText || null,
+      },
     }
   }
 

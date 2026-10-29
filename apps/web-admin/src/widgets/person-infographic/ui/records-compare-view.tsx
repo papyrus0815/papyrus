@@ -7,10 +7,16 @@
  *  - 같은 linkEventId 기록은 "공유" 뱃지 + hover 시 전체 하이라이트로 묶는다(표시만, dedup 쓰기 없음)
  *  - 연도는 부호 연도(BC 음수) — iso-date/lifespan-text 헬퍼만 사용, native Date 파싱 금지
  */
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiBookmark, FiPlus, FiTrendingUp, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
@@ -34,6 +40,7 @@ import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select
 import { notify } from '@/shared/ui/toast'
 import { PersonTabSharedTitle } from '@/widgets/country/country-detail/ui/country-detail.styles'
 
+import { filterPersons } from '../model/filter-persons'
 import { usePersonInfographicFilterStore } from '../model/filter.store'
 import {
   MAX_RECORD_PERSONS,
@@ -41,6 +48,7 @@ import {
   bandsAtYear,
   buildRecordsGrid,
 } from '../model/records-compare'
+import { useAdaptedPersons } from '../model/use-adapted-persons'
 import { EmptyState } from './_shared/empty-state'
 
 /** 공유 사건 커넥터 전용 액센트 — kind 색과 겹치지 않는 계열(teal) */
@@ -59,9 +67,24 @@ const KIND_ORDER: PersonRecordKind[] = [
 interface RecordsCompareViewProps {
   /** 칼럼 헤더 이름 클릭 → 인물 상세 이동 */
   onPersonClick: (id: string) => void
+  /** 뷰 전환 세그먼트 */
+  viewSwitcher?: ReactNode
 }
 
-export function RecordsCompareView({ onPersonClick }: RecordsCompareViewProps) {
+export function RecordsCompareView({
+  onPersonClick,
+  viewSwitcher,
+}: RecordsCompareViewProps) {
+  const adaptedPersons = useAdaptedPersons()
+  const scopes = usePersonInfographicFilterStore((state) => state.scopes)
+  const minInfluence = usePersonInfographicFilterStore(
+    (state) => state.minInfluence,
+  )
+  const aliveFilter = usePersonInfographicFilterStore(
+    (state) => state.aliveFilter,
+  )
+  const query = usePersonInfographicFilterStore((state) => state.query)
+  const pinnedIds = usePersonInfographicFilterStore((state) => state.pinned)
   const recordPersonIds = usePersonInfographicFilterStore(
     (state) => state.recordPersonIds,
   )
@@ -80,6 +103,25 @@ export function RecordsCompareView({ onPersonClick }: RecordsCompareViewProps) {
   const setRecordYearRange = usePersonInfographicFilterStore(
     (state) => state.setRecordYearRange,
   )
+  const setMany = usePersonInfographicFilterStore((state) => state.setMany)
+
+  const quickSuggestedIds = useMemo(() => {
+    const filtered = filterPersons(adaptedPersons, {
+      scopes,
+      minInfluence,
+      aliveFilter,
+      query,
+    })
+    return [...filtered]
+      .sort((a, b) => b.influence - a.influence)
+      .slice(0, 4)
+      .map((p) => p.id)
+  }, [adaptedPersons, scopes, minInfluence, aliveFilter, query])
+
+  const validPinnedIds = useMemo(() => {
+    const knownIds = new Set(adaptedPersons.map((p) => p.id))
+    return pinnedIds.filter((id) => knownIds.has(id)).slice(0, MAX_RECORD_PERSONS)
+  }, [adaptedPersons, pinnedIds])
 
   const [pickerOpen, setPickerOpen] = useState(false)
   /** hover 중인 공유 사건 linkEventId — 같은 값 카드 전체 하이라이트 */
@@ -171,14 +213,17 @@ export function RecordsCompareView({ onPersonClick }: RecordsCompareViewProps) {
       aria-labelledby="person-view-tab-records"
     >
       <Toolbar>
-        <PersonTabSharedTitle>
-          기록 비교
-          {recordPersonIds.length > 0 && (
-            <TitleMeta>
-              {recordPersonIds.length}명 · {periodText}
-            </TitleMeta>
-          )}
-        </PersonTabSharedTitle>
+        <ToolbarLeft>
+          <PersonTabSharedTitle>
+            기록 비교
+            {recordPersonIds.length > 0 && (
+              <TitleMeta>
+                {recordPersonIds.length}명 · {periodText}
+              </TitleMeta>
+            )}
+          </PersonTabSharedTitle>
+          {viewSwitcher}
+        </ToolbarLeft>
         <ToolbarRight>
           <PeriodGroup>
             <CenturyStepper
@@ -237,12 +282,38 @@ export function RecordsCompareView({ onPersonClick }: RecordsCompareViewProps) {
       </CaptionRow>
 
       {recordPersonIds.length === 0 ? (
-        <EmptyState
-          title="비교할 인물을 추가하세요"
-          description="공유 연도축 위에서 여러 인물의 연보·재임·업적·사건·수상 기록을 나란히 비교합니다. (최대 12명)"
-          actionLabel="인물 추가"
-          onAction={() => setPickerOpen(true)}
-        />
+        <div>
+          <EmptyState
+            title="비교할 인물을 추가하세요"
+            description="공유 연도축 위에서 여러 인물의 연보·재임·업적·사건·수상 기록을 나란히 비교합니다. (최대 12명)"
+            actionLabel="인물 추가"
+            onAction={() => setPickerOpen(true)}
+          />
+          {(validPinnedIds.length > 0 || quickSuggestedIds.length >= 2) && (
+            <QuickStartBar>
+              {validPinnedIds.length > 0 && (
+                <QuickStartBtn
+                  type="button"
+                  onClick={() => setMany({ recordPersonIds: validPinnedIds })}
+                >
+                  <FiBookmark size={13} />
+                  고정한 인물 {validPinnedIds.length}명 비교하기
+                </QuickStartBtn>
+              )}
+              {quickSuggestedIds.length >= 2 && (
+                <QuickStartBtn
+                  type="button"
+                  onClick={() =>
+                    setMany({ recordPersonIds: quickSuggestedIds })
+                  }
+                >
+                  <FiTrendingUp size={13} />
+                  주요 인물 {quickSuggestedIds.length}명 바로 비교하기
+                </QuickStartBtn>
+              )}
+            </QuickStartBar>
+          )}
+        </div>
       ) : compareError ? (
         <EmptyState
           title="기록을 불러오지 못했어요"
@@ -930,5 +1001,43 @@ const AuthorLink = styled(Link)`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: 1px;
+  }
+`
+
+const ToolbarLeft = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+`
+
+const QuickStartBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -12px;
+  padding-bottom: 24px;
+`
+
+const QuickStartBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.active};
+    border-color: ${({ theme }) => theme.colors.active};
+    background: ${({ theme }) => theme.colors.activeLight};
   }
 `

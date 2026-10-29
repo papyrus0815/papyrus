@@ -53,7 +53,9 @@ const BINS = INFOGRAPHIC_DEFAULTS.ERA_DENSITY_BINS
 function buildDomain(people: AdaptedPerson[]) {
   let earliest = MAX_Y
   for (const person of people) {
-    if (person.activityYear < earliest) earliest = person.activityYear
+    if (person.activityYear != null && person.activityYear < earliest) {
+      earliest = person.activityYear
+    }
   }
   earliest = Math.max(FLOOR_Y, earliest)
   const span = Math.max(100, MAX_Y - earliest)
@@ -134,14 +136,20 @@ export function HeaderStats({
     const factionsByCountry = new Map<string, Set<string>>()
     for (const person of people) {
       if (!person.faction) continue
-      const current = range.get(person.faction)
-      const born = bornForPlot(person)
-      const died = diedForPlot(person)
-      if (current) {
-        current.from = Math.min(current.from, born)
-        current.to = Math.max(current.to, died)
-        current.members++
-      } else range.set(person.faction, { from: born, to: died, members: 1 })
+      if (
+        person.activityYear != null ||
+        person.born != null ||
+        person.died != null
+      ) {
+        const current = range.get(person.faction)
+        const born = bornForPlot(person)
+        const died = diedForPlot(person)
+        if (current) {
+          current.from = Math.min(current.from, born)
+          current.to = Math.max(current.to, died)
+          current.members++
+        } else range.set(person.faction, { from: born, to: died, members: 1 })
+      }
       if (person.country && person.country !== '미상') {
         const set = factionsByCountry.get(person.country) ?? new Set<string>()
         set.add(person.faction)
@@ -176,12 +184,17 @@ export function HeaderStats({
     let alive = 0
     let rulers = 0
     for (const person of people) {
-      const binIndex = Math.min(
-        domain.binCount - 1,
-        Math.max(0, Math.floor((person.activityYear - domain.minYear) / domain.binWidth)),
-      )
-      bins[binIndex]++
-      eraCount[person.era.key] = (eraCount[person.era.key] || 0) + 1
+      if (person.activityYear != null) {
+        const binIndex = Math.min(
+          domain.binCount - 1,
+          Math.max(
+            0,
+            Math.floor((person.activityYear - domain.minYear) / domain.binWidth),
+          ),
+        )
+        bins[binIndex]++
+        eraCount[person.era.key] = (eraCount[person.era.key] || 0) + 1
+      }
       regionCount[person.region] = (regionCount[person.region] || 0) + 1
       fieldCount[person.field] = (fieldCount[person.field] || 0) + 1
       if (person.country && person.country !== '미상')
