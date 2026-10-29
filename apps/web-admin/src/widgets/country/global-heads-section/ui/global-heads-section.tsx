@@ -315,7 +315,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
   })
   const [personPickerOpen, setPersonPickerOpen] = useState(false)
   const { data: allPersons = [] } = useQuery({
-    queryKey: ['persons-for-global-heads'],
+    queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
     enabled: personPickerOpen,
   })

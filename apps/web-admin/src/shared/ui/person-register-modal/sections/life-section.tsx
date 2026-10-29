@@ -101,8 +101,10 @@ export interface LifeSectionProps {
   deathPickerOpen?: boolean
   templeName: string
   posthumousName: string
+  preEnthronementTitle: string
   setTempleName: (v: string) => void
   setPosthumousName: (v: string) => void
+  setPreEnthronementTitle: (v: string) => void
   // 파생값(부모에서 계산)
   /** "향년 N세" 라벨 — 둘 다 정상 입력 시에만 truthy */
   lifespanText: string | null
@@ -165,8 +167,10 @@ export function LifeSection({
   setMonarchTitlesOpen,
   templeName,
   posthumousName,
+  preEnthronementTitle,
   setTempleName,
   setPosthumousName,
+  setPreEnthronementTitle,
   lifespanText,
   mode = 'all',
   errors,
@@ -525,17 +529,17 @@ export function LifeSection({
           <AdvancedToggleBody>
             <AdvancedToggleTitle>군주 호칭</AdvancedToggleTitle>
             <AdvancedToggleDesc>
-              묘호·시호 (世宗) — 왕호(루이 14세)는 재위 기록에 적습니다
+              묘호·시호·즉위 전 작호 (충녕대군·世宗) — 왕호(루이 14세)는 재위 기록에 적습니다
             </AdvancedToggleDesc>
           </AdvancedToggleBody>
         </AdvancedToggle>
         {monarchTitlesOpen && (
           <AdvancedBody>
             <FieldLabel htmlFor={fid('templeName')}>
-              묘호 · 시호
+              묘호 · 시호 · 작호
             </FieldLabel>
             <FieldControl>
-              <InlineFields $cols={2}>
+              <InlineFields $cols={3}>
                 <FormInput
                   id={fid('templeName')}
                   value={templeName}
@@ -543,7 +547,7 @@ export function LifeSection({
                     setTempleName(e.target.value)
                     markDirty()
                   }}
-                  placeholder="묘호"
+                  placeholder="묘호 (예: 세종)"
                 />
                 <FormInput
                   id={fid('posthumousName')}
@@ -552,7 +556,16 @@ export function LifeSection({
                     setPosthumousName(e.target.value)
                     markDirty()
                   }}
-                  placeholder="시호"
+                  placeholder="시호 (예: 장헌)"
+                />
+                <FormInput
+                  id={fid('preEnthronementTitle')}
+                  value={preEnthronementTitle}
+                  onChange={(e) => {
+                    setPreEnthronementTitle(e.target.value)
+                    markDirty()
+                  }}
+                  placeholder="즉위 전 작호 (예: 충녕대군)"
                 />
               </InlineFields>
             </FieldControl>

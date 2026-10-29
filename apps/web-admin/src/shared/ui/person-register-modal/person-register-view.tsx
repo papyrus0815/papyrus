@@ -314,6 +314,7 @@ export function PersonRegisterView({
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [templeName, setTempleName] = useState('')
   const [posthumousName, setPosthumousName] = useState('')
+  const [preEnthronementTitle, setPreEnthronementTitle] = useState('')
 
   const [showCountryModal, setShowCountryModal] = useState(false)
   const [showBirthDateModal, setShowBirthDateModal] = useState(false)
@@ -715,6 +716,7 @@ export function PersonRegisterView({
     makeFormField('profileImageUrl', () => profileImageUrl, setProfileImageUrl, ''),
     makeFormField('templeName', () => templeName, setTempleName, ''),
     makeFormField('posthumousName', () => posthumousName, setPosthumousName, ''),
+    makeFormField('preEnthronementTitle', () => preEnthronementTitle, setPreEnthronementTitle, ''),
   ]
   /** snapshot이 deps 없이도 최신 값을 읽도록 ref로 노출 (필드 추가 시 deps 누락 무관). */
   const formFieldsRef = useRef(formFields)
@@ -811,6 +813,7 @@ export function PersonRegisterView({
         setProfileImageUrl(p.profileImageUrl ?? '')
         setTempleName(p.templeName ?? '')
         setPosthumousName(p.posthumousName ?? '')
+        setPreEnthronementTitle(p.preEnthronementTitle ?? '')
         // 주 국적: 응답 historicalCountryId(FK)가 있으면 역사국가, 없으면 현대 countryId.
         // (countryId는 effective라 역사인물이면 역사PK가 담길 수 있으므로 historicalCountryId로 판별)
         if (p.historicalCountryId) {
@@ -1018,7 +1021,8 @@ export function PersonRegisterView({
         // 군주 호칭이 있으면 생애 탭의 collapse 자동 펼침.
         const hasMonarchTitles =
           (p.templeName && String(p.templeName).trim()) ||
-          (p.posthumousName && String(p.posthumousName).trim())
+          (p.posthumousName && String(p.posthumousName).trim()) ||
+          (p.preEnthronementTitle && String(p.preEnthronementTitle).trim())
         setMonarchTitlesOpen(Boolean(hasMonarchTitles))
         setEditLoadStatus('loaded')
         // 409 '최신 내용 불러오기'로 촉발된 재하이드레이션이면 성공을 알린다(무反응 방지).
@@ -1715,6 +1719,7 @@ export function PersonRegisterView({
           : profileImageField || null,
       templeName: templeName.trim() || null,
       posthumousName: posthumousName.trim() || null,
+      preEnthronementTitle: preEnthronementTitle.trim() || null,
       countryId: countryId || undefined,
       historicalCountryId: historicalCountryId || undefined,
       // 수정 모드: 항상 배열 전송(빈 배열이면 추가 소속 제거). 신규: 채워진 행만.
@@ -2027,7 +2032,8 @@ export function PersonRegisterView({
           !!deathCause ||
           !!deathNote ||
           !!templeName ||
-          !!posthumousName,
+          !!posthumousName ||
+          !!preEnthronementTitle,
       },
       {
         id: 'affiliation',
@@ -2059,6 +2065,7 @@ export function PersonRegisterView({
     deathNote,
     templeName,
     posthumousName,
+    preEnthronementTitle,
     dynastyId,
     religionId,
     countryAffiliations,
@@ -2527,8 +2534,10 @@ export function PersonRegisterView({
                 setMonarchTitlesOpen={setMonarchTitlesOpen}
                 templeName={templeName}
                 posthumousName={posthumousName}
+                preEnthronementTitle={preEnthronementTitle}
                 setTempleName={setTempleName}
                 setPosthumousName={setPosthumousName}
+                setPreEnthronementTitle={setPreEnthronementTitle}
                 lifespanText={lifespanText}
                 errors={errors}
                 markDirty={markDirty}
@@ -2597,8 +2606,10 @@ export function PersonRegisterView({
                 setMonarchTitlesOpen={setMonarchTitlesOpen}
                 templeName={templeName}
                 posthumousName={posthumousName}
+                preEnthronementTitle={preEnthronementTitle}
                 setTempleName={setTempleName}
                 setPosthumousName={setPosthumousName}
+                setPreEnthronementTitle={setPreEnthronementTitle}
                 lifespanText={lifespanText}
                 errors={errors}
                 markDirty={markDirty}

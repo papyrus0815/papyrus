@@ -54,7 +54,7 @@ export function PersonGroupCreateModal({
   const queryClient = useQueryClient()
 
   const allPersonsQuery = useQuery({
-    queryKey: ['all-persons'],
+    queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
   })
 

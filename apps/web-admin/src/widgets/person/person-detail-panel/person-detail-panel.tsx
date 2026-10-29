@@ -1128,13 +1128,49 @@ export function PersonDetailPanel({
           await updatePerson(currentPerson.id, { motherId: targetId })
         } else if (mode === 'spouse') {
           // 기존 배우자 관계 보존 후 추가(update는 통째 교체 → 전체 배열 재전송).
+          // 정실/계비/후궁 서열(marriageRank) 및 기원전·고대·연단위 구조화 날짜(marriageStart/End)도 함께 보존한다.
+          const toDateInfo = (
+            era?: string | null,
+            year?: number | null,
+            month?: number | null,
+            day?: number | null,
+          ) =>
+            year != null
+              ? {
+                  era: (era === 'BC' ? 'BC' : 'AD') as 'BC' | 'AD',
+                  year,
+                  ...(month != null ? { month } : {}),
+                  ...(day != null ? { day } : {}),
+                }
+              : undefined
           const existing = (currentPerson.spouseRelations ?? []).flatMap((rel) =>
             rel.spouse?.id
               ? [
                   {
                     spouseId: rel.spouse.id,
+                    marriageStart: toDateInfo(
+                      rel.marriageStartEra,
+                      rel.marriageStartYear,
+                      rel.marriageStartMonth,
+                      rel.marriageStartDay,
+                    ),
+                    marriageEnd: toDateInfo(
+                      rel.marriageEndEra,
+                      rel.marriageEndYear,
+                      rel.marriageEndMonth,
+                      rel.marriageEndDay,
+                    ),
                     marriageStartDate: rel.marriageStartDate ?? undefined,
                     marriageEndDate: rel.marriageEndDate ?? undefined,
+                    marriageRank:
+                      (rel.marriageRank as
+                        | 'PRIMARY'
+                        | 'SECOND_PRIMARY'
+                        | 'THIRD_PRIMARY'
+                        | 'CONCUBINE'
+                        | 'OTHER'
+                        | null
+                        | undefined) ?? null,
                     note: rel.note ?? null,
                   },
                 ]
@@ -1421,10 +1457,17 @@ export function PersonDetailPanel({
   const p = person as unknown as PersonDetailData
   const fullName = getPersonDisplayName(p)
 
-  // 군주 등록 여부 및 군주명 — SovereignReign.regnalName 정식 필드 우선
+  // 군주 등록 여부 및 군주명 — SovereignReign.regnalName 정식 필드 우선, 스칼라 비었을 때 별칭(TEMPLE_NAME/POSTHUMOUS_NAME/COURT_TITLE) 폴백
   const firstReign = p.sovereignReigns?.[0]
+  const findNicknameValue = (type: string) =>
+    p.nicknames?.find((n) => n.type === type && n.nickname?.trim())?.nickname?.trim() || null
+  const effectiveTempleName = p.templeName?.trim() || findNicknameValue('TEMPLE_NAME')
+  const effectivePosthumousName =
+    p.posthumousName?.trim() || findNicknameValue('POSTHUMOUS_NAME')
+  const effectivePreEnthronementTitle =
+    p.preEnthronementTitle?.trim() || findNicknameValue('COURT_TITLE')
   const monarchName =
-    p.templeName ||
+    effectiveTempleName ||
     p.regnalName ||
     firstReign?.regnalName ||
     null
@@ -1523,7 +1566,7 @@ export function PersonDetailPanel({
   const genealogyCount =
     (p.father ? 1 : 0) +
     (p.mother ? 1 : 0) +
-    (p.spouseRelations?.length ?? 0) +
+    (p.spouseRelations?.length ? p.spouseRelations.length : p.spouse ? 1 : 0) +
     (person.children?.length ?? 0) +
     (p.siblings?.length ?? 0)
   const politicsCount =
@@ -1735,8 +1778,8 @@ export function PersonDetailPanel({
                 const has =
                   p.originalName ||
                   meaningParts.length > 0 ||
-                  p.preEnthronementTitle ||
-                  p.posthumousName
+                  effectivePreEnthronementTitle ||
+                  effectivePosthumousName
                 if (!has) return null
                 return (
                   <NameMetaBlock>
@@ -1754,23 +1797,38 @@ export function PersonDetailPanel({
                         </NameMetaValue>
                       </NameMetaRow>
                     )}
-                    {p.preEnthronementTitle && (
+                    {effectivePreEnthronementTitle && (
                       <NameMetaRow>
                         <NameMetaLabel>작호</NameMetaLabel>
-                        <NameMetaValue>{p.preEnthronementTitle}</NameMetaValue>
+                        <NameMetaValue>{effectivePreEnthronementTitle}</NameMetaValue>
                       </NameMetaRow>
                     )}
-                    {p.posthumousName && (
+                    {effectivePosthumousName && (
                       <NameMetaRow>
                         <NameMetaLabel>시호</NameMetaLabel>
-                        <NameMetaValue>{p.posthumousName}</NameMetaValue>
+                        <NameMetaValue>{effectivePosthumousName}</NameMetaValue>
                       </NameMetaRow>
                     )}
                   </NameMetaBlock>
                 )
               })()}
               {p.nicknames && p.nicknames.length > 0 && (() => {
-                const sorted = [...p.nicknames].sort(
+                // 상단 왕관 배지(monarchName) 및 작호·시호 메타행과 동일한 텍스트는 별칭 칩에서 중복 노출하지 않는다.
+                const deduped = p.nicknames.filter((nick) => {
+                  const val = nick.nickname?.trim()
+                  if (!val) return false
+                  if (nick.type === 'TEMPLE_NAME' && val === effectiveTempleName) return false
+                  if (nick.type === 'POSTHUMOUS_NAME' && val === effectivePosthumousName)
+                    return false
+                  if (
+                    nick.type === 'COURT_TITLE' &&
+                    val === effectivePreEnthronementTitle
+                  )
+                    return false
+                  return true
+                })
+                if (deduped.length === 0) return null
+                const sorted = [...deduped].sort(
                   (a, b) => (a.priority ?? 999) - (b.priority ?? 999),
                 )
                 return (
@@ -2241,6 +2299,7 @@ export function PersonDetailPanel({
                       achievementSuggestionsByRecordId={
                         recordEventSuggestionsQuery.data?.byRecordId
                       }
+                      onEventClick={(eventId) => setViewingEventId(eventId)}
                       onPlayClick={playClickSound}
                       onEditTenure={(id) => {
                         setEditingTenureId(id)
@@ -2901,8 +2960,12 @@ export function PersonDetailPanel({
                                 {p.partyLeaderships
                                   .slice()
                                   .sort((a, b) => {
-                                    const ta = a.startDate ? new Date(a.startDate).getTime() : 0
-                                    const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                                    const ta = a.startDate
+                                      ? isoDateSortKey(a.startDate)
+                                      : Number.NEGATIVE_INFINITY
+                                    const tb = b.startDate
+                                      ? isoDateSortKey(b.startDate)
+                                      : Number.NEGATIVE_INFINITY
                                     return tb - ta
                                   })
                                   .map((l, partyIdx) => {
@@ -3284,46 +3347,45 @@ export function PersonDetailPanel({
               >
                 <section aria-label="가족 관계">
                   <SectionLabel>가족 관계</SectionLabel>
-                  {/* 하향 저작 퀵액션 — ego 기준 가족 추가(기존 인물 검색 또는 새 등록). */}
-                  <FamilyActionRow>
-                    <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('child')}>
-                      + 자녀 추가
-                    </FamilyActionBtn>
-                    <FamilyActionBtn
-                      type="button"
-                      // native disabled 대신 aria-disabled — 포커스 유지(키보드·SR가 사유 인지),
-                      // 이미 지정된 경우 클릭 시 안내 토스트(G33).
-                      aria-disabled={person.father ? true : undefined}
-                      onClick={() =>
-                        person.father
-                          ? notify.error('이미 아버지가 지정되어 있습니다. 변경은 수정 모달에서 하세요.')
-                          : setFamilyAddMode('father')
-                      }
-                      title={person.father ? '이미 아버지가 지정되어 있습니다' : undefined}
-                    >
-                      + 아버지 추가
-                    </FamilyActionBtn>
-                    <FamilyActionBtn
-                      type="button"
-                      aria-disabled={person.mother ? true : undefined}
-                      onClick={() =>
-                        person.mother
-                          ? notify.error('이미 어머니가 지정되어 있습니다. 변경은 수정 모달에서 하세요.')
-                          : setFamilyAddMode('mother')
-                      }
-                      title={person.mother ? '이미 어머니가 지정되어 있습니다' : undefined}
-                    >
-                      + 어머니 추가
-                    </FamilyActionBtn>
-                    <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('spouse')}>
-                      + 배우자 추가
-                    </FamilyActionBtn>
-                  </FamilyActionRow>
-                  {!person.father &&
-                  !person.mother &&
-                  !person.spouse &&
-                  (!person.spouseRelations || person.spouseRelations.length === 0) &&
-                  (!person.children || person.children.length === 0) ? (
+                  {/* 하향 저작 퀵액션 — ego 기준 가족 추가(기존 인물 검색 또는 새 등록). 읽기 전용 모달 임베드에서는 숨김 */}
+                  {!embedInModal && (
+                    <FamilyActionRow>
+                      <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('child')}>
+                        + 자녀 추가
+                      </FamilyActionBtn>
+                      <FamilyActionBtn
+                        type="button"
+                        // native disabled 대신 aria-disabled — 포커스 유지(키보드·SR가 사유 인지),
+                        // 이미 지정된 경우 클릭 시 안내 토스트(G33).
+                        aria-disabled={person.father ? true : undefined}
+                        onClick={() =>
+                          person.father
+                            ? notify.error('이미 아버지가 지정되어 있습니다. 변경은 수정 모달에서 하세요.')
+                            : setFamilyAddMode('father')
+                        }
+                        title={person.father ? '이미 아버지가 지정되어 있습니다' : undefined}
+                      >
+                        + 아버지 추가
+                      </FamilyActionBtn>
+                      <FamilyActionBtn
+                        type="button"
+                        aria-disabled={person.mother ? true : undefined}
+                        onClick={() =>
+                          person.mother
+                            ? notify.error('이미 어머니가 지정되어 있습니다. 변경은 수정 모달에서 하세요.')
+                            : setFamilyAddMode('mother')
+                        }
+                        title={person.mother ? '이미 어머니가 지정되어 있습니다' : undefined}
+                      >
+                        + 어머니 추가
+                      </FamilyActionBtn>
+                      <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('spouse')}>
+                        + 배우자 추가
+                      </FamilyActionBtn>
+                    </FamilyActionRow>
+                  )}
+                  {genealogyCount === 0 &&
+                  (!familyTreeData || familyTreeData.nodes.length <= 1) ? (
                     <EmptyState>가족 정보가 없습니다</EmptyState>
                   ) : (
                     <PersonGenealogyInfographic

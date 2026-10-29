@@ -419,11 +419,20 @@ export function CabinetsSection({
   )
 
   /** 선택한 정권 — 위에 행정부처(중앙부처) 그리드로 해당 정권의 부처별 각료 표시 */
+  const cabinetIdFromUrl = searchParams.get('cabinetId')
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(
-    null,
+    () => cabinetIdFromUrl ?? null,
   )
   /** 뷰 전환: list(행정부 그리드) / detail(행정부 상세) */
-  const [cabinetView, setCabinetView] = useState<'list' | 'detail'>('list')
+  const [cabinetView, setCabinetView] = useState<'list' | 'detail'>(() =>
+    cabinetIdFromUrl ? 'detail' : 'list',
+  )
+  useEffect(() => {
+    if (cabinetIdFromUrl) {
+      setSelectedCabinetId(cabinetIdFromUrl)
+      setCabinetView('detail')
+    }
+  }, [cabinetIdFromUrl])
   const [addMinisterCabinet, setAddMinisterCabinet] = useState<any | null>(null)
   const [personSelectOpen, setPersonSelectOpen] = useState(false)
   const [ministerFormPositionDefId, setMinisterFormPositionDefId] = useState<
@@ -907,7 +916,7 @@ export function CabinetsSection({
 
   /** 각료 선택 모달: 인물 테이블 전체에서 선택 (재임 여부 무관) */
   const { data: personsForMinisterSelect = [] } = useQuery({
-    queryKey: ['persons', 'all-for-minister'],
+    queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
     enabled: personSelectOpen,
   })

@@ -93,7 +93,7 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
     queryFn: () => listPersonGroups(),
   })
   const allPersonsQuery = useQuery({
-    queryKey: ['all-persons'],
+    queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
   })
 

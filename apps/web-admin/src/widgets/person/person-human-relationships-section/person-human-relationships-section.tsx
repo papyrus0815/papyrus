@@ -168,7 +168,7 @@ export function PersonHumanRelationshipsSection({
     isError: personsError,
   } = useQuery({
     // 동일 키로 통일해 다른 화면과 React Query 캐시 공유 (5분 fresh)
-    queryKey: ['all-persons'],
+    queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
     staleTime: 5 * 60 * 1000,
     // 폼(추가/수정)이 열려 인물 선택이 필요할 때만 페칭 — 초기 마운트 시 대량 로드 방지
@@ -316,7 +316,7 @@ export function PersonHumanRelationshipsSection({
 
   const invalidateDetail = () => {
     queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
-    queryClient.invalidateQueries({ queryKey: ['all-persons'] })
+    queryClient.invalidateQueries({ queryKey: ['persons', 'all'] })
   }
 
   const resetNewForm = useCallback(() => {

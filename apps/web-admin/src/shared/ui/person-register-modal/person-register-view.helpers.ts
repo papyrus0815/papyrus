@@ -250,4 +250,5 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   profileImageUrl: string
   templeName: string
   posthumousName: string
+  preEnthronementTitle: string
 }

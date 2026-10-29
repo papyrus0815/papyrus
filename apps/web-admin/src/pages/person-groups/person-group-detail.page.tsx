@@ -93,7 +93,7 @@ export default function PersonGroupDetailPage() {
     enabled: editing,
   })
   const allPersonsQuery = useQuery({
-    queryKey: ['all-persons'],
+    queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
     enabled: Boolean(picker),
   })
