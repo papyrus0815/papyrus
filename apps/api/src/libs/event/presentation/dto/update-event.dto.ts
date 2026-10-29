@@ -18,6 +18,7 @@ import {
   HierarchyReasonEntryDto,
 } from './hierarchy-reason.dto'
 import { EventCountryParticipantDto } from './event-country-participant.dto'
+import { RelatedPersonRowPatchDto } from './related-person-row-patch.dto'
 
 export class UpdateEventDto {
   @ApiProperty({ description: '사건명', required: false })
@@ -218,6 +219,30 @@ export class UpdateEventDto {
   @ValidateNested({ each: true })
   @Type(() => EventCountryParticipantDto)
   relatedCountries?: EventCountryParticipantDto[]
+
+  @ApiProperty({
+    description:
+      '참여국 **행 단위 머지** — 나열된 줄(국가 키)의 보낸 필드만 고친다(3상). 목록·순서 무변경, 없는 줄이면 409. ' +
+      '한 나라만 고칠 때 전체 목록을 보내면 다른 곳에서 그새 고친 값을 덮는다 — 이 길을 쓴다.',
+    required: false,
+    type: () => [EventCountryParticipantDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => EventCountryParticipantDto)
+  relatedCountriesPatch?: EventCountryParticipantDto[]
+
+  @ApiProperty({
+    description: '참여 인물 **행 단위 머지** — 나열된 인물의 보낸 필드만(3상). 목록·순서 무변경, 없는 인물이면 409.',
+    required: false,
+    type: () => [RelatedPersonRowPatchDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RelatedPersonRowPatchDto)
+  relatedPersonsPatch?: RelatedPersonRowPatchDto[]
 
   @ApiProperty({
     description: '섹션 목록',

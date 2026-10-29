@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common'
 import {
   EventCountryRole,
   ObservationSubjectType,
@@ -131,6 +131,56 @@ export class EventCountryParticipantService {
       if (participant.sortOrder !== current.sortOrder) {
         patch.sortOrder = participant.sortOrder
       }
+      Object.assign(patch, membershipPatch(participant, current))
+      if (Object.keys(patch).length > 0) {
+        await tx.eventCountryRelation.update({ where: { id: current.id }, data: patch })
+      }
+    }
+  }
+
+  /**
+   * **행 단위 머지** — 나열된 참여국 줄의, 보낸 필드만 고친다(3상). 목록·순서는 건드리지 않는다.
+   *
+   * 화면이 한 나라의 '한 일'을 고칠 때 참여국 전체 배열을 보내면, 다른 탭·세션이 그새 고친 다른 나라의
+   * 값을 화면에 남아 있던 옛값으로 덮었다(마지막 저장이 이김). 이 길은 고친 줄·고친 필드만 실어 보낸다.
+   * 줄이 이미 빠졌으면(다른 곳에서 제거) 되살리지 않고 409 — 화면이 다시 읽게 한다.
+   */
+  async patchRows(
+    tx: Prisma.TransactionClient,
+    eventId: string,
+    rows: EventCountryParticipantInput[],
+  ): Promise<void> {
+    if (rows.length === 0) return
+    const desired = rows.map((row, index) => normalizeParticipant(row, index))
+    assertNoDuplicateParty(desired)
+    await assertSidesBelongToEvent(tx, eventId, desired)
+    const existing = await tx.eventCountryRelation.findMany({
+      where: { eventId },
+      select: {
+        id: true,
+        countryId: true,
+        historicalCountryId: true,
+        role: true,
+        roleDescription: true,
+        note: true,
+        sideId: true,
+        participation: true,
+        joinReason: true,
+        withdrawReason: true,
+      },
+    })
+    const existingByKey = new Map(existing.map((row) => [partyKeyOf(row), row]))
+    for (const participant of desired) {
+      const current = existingByKey.get(participant.key)
+      if (!current) {
+        throw new ConflictException('이미 참여국에서 빠진 나라입니다. 화면을 새로 고친 뒤 다시 시도하세요.')
+      }
+      const patch: Prisma.EventCountryRelationUncheckedUpdateInput = {}
+      if (participant.role !== undefined && participant.role !== current.role) patch.role = participant.role
+      if (participant.roleDescription !== undefined && participant.roleDescription !== current.roleDescription) {
+        patch.roleDescription = participant.roleDescription
+      }
+      if (participant.note !== undefined && participant.note !== current.note) patch.note = participant.note
       Object.assign(patch, membershipPatch(participant, current))
       if (Object.keys(patch).length > 0) {
         await tx.eventCountryRelation.update({ where: { id: current.id }, data: patch })

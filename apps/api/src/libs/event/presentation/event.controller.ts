@@ -2144,6 +2144,9 @@ export class EventController {
         eventImages: dto.eventImages,
         childEventIds: dto.childEventIds, // 기존 사건을 하위로 연결
         relatedPersons: dto.relatedPersons,
+        // 행 단위 머지 — 한 줄만 고칠 때(다른 곳에서 고친 다른 줄을 옛값으로 덮지 않게)
+        relatedPersonsPatch: dto.relatedPersonsPatch,
+        relatedCountriesPatch: dto.relatedCountriesPatch,
         extraParentEventIds: dto.extraParentEventIds, // 전체목록 — undefined=변경 없음
         parentLinkReasons: dto.parentLinkReasons, // 연결 사유(이 사건=자식) 부분 업서트
         childLinkReasons: dto.childLinkReasons, // 연결 사유(이 사건=부모) 부분 업서트

@@ -56,6 +56,16 @@ export interface RelatedPersonInput {
   sideId?: string | null
 }
 
+/** 참여 인물 한 줄 고치기 — personId만 필수, 나머지는 3상(생략=유지 / null·빈 값=비움 / 값=설정) */
+export interface RelatedPersonRowPatch {
+  personId: string
+  role?: string | null
+  note?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  sideId?: string | null
+}
+
 export interface CreateEventOptions {
   relatedPersons?: RelatedPersonInput[]
   /**
@@ -97,6 +107,13 @@ export interface UpdateEventOptions
    * 자연키(personId) 머지 — 배열 순서가 표시 순서(sortOrder).
    */
   relatedPersons?: RelatedPersonInput[]
+  /**
+   * 참여 인물 **행 단위 머지** — 나열된 인물 줄의 보낸 필드만(3상). 목록·순서는 손대지 않는다.
+   * relatedPersons(전체 목록)와 함께 오면 전체 목록을 먼저 적용한다.
+   */
+  relatedPersonsPatch?: RelatedPersonRowPatch[]
+  /** 참여국 행 단위 머지 — 3상, 목록·순서 무변경. 없는 줄이면 409 */
+  relatedCountriesPatch?: EventCountryParticipantInput[]
   /**
    * 계층 연결 사유 — *부분 업서트* 규약(전체목록 아님): undefined=변경 없음, 나열된
    * 쌍만 터치. reason 문자열=업서트, null(또는 공백)=행 삭제. 인접(멤버십) 채널과
@@ -511,6 +528,8 @@ export class EventService {
   ): Promise<Event> {
     const {
       relatedCountries,
+      relatedCountriesPatch,
+      relatedPersonsPatch,
       eventSections,
       eventImages,
       childEventIds,
@@ -601,6 +620,11 @@ export class EventService {
     if (relatedCountries !== undefined) {
       await this.prisma.$transaction((tx) =>
         this.countryParticipants.sync(tx, id, relatedCountries),
+      )
+    }
+    if (relatedCountriesPatch !== undefined && relatedCountriesPatch.length > 0) {
+      await this.prisma.$transaction((tx) =>
+        this.countryParticipants.patchRows(tx, id, relatedCountriesPatch),
       )
     }
 
@@ -705,6 +729,39 @@ export class EventService {
             },
           })
           index += 1
+        }
+      })
+    }
+
+    /**
+     * 참여 인물 행 단위 머지 — 고친 인물·고친 필드만. 전체 배열을 보내던 예전 길은 다른 탭이 그새 고친
+     * 인물의 역할·비고를 화면의 옛값으로 덮었다. 이미 빠진 인물이면 되살리지 않고 409.
+     */
+    if (relatedPersonsPatch !== undefined && relatedPersonsPatch.length > 0) {
+      await this.prisma.$transaction(async (tx) => {
+        const sideIds = [
+          ...new Set(relatedPersonsPatch.map((row) => row.sideId).filter((sideId): sideId is string => !!sideId)),
+        ]
+        if (sideIds.length > 0) {
+          const found = await tx.eventSide.count({ where: { id: { in: sideIds }, eventId: id } })
+          if (found !== sideIds.length) {
+            throw new BadRequestException('이 사건의 진영이 아닌 sideId가 들어 있습니다.')
+          }
+        }
+        for (const row of relatedPersonsPatch) {
+          const data: Prisma.PersonEventUncheckedUpdateInput = {}
+          if (row.role !== undefined) data.role = row.role?.trim() || null
+          if (row.note !== undefined) data.note = row.note?.trim() || null
+          if (row.countryId !== undefined) data.countryId = row.countryId || null
+          if (row.historicalCountryId !== undefined) data.historicalCountryId = row.historicalCountryId || null
+          if (row.sideId !== undefined) data.sideId = row.sideId || null
+          const updated = await tx.personEvent.updateMany({
+            where: { eventId: id, personId: row.personId },
+            data,
+          })
+          if (updated.count === 0) {
+            throw new ConflictException('이미 참여 인물에서 빠진 인물입니다. 화면을 새로 고친 뒤 다시 시도하세요.')
+          }
         }
       })
     }

@@ -1,8 +1,12 @@
 /**
  * 참여 탭 쓰기 — 인물·국가의 추가·수정·삭제·순서를 한 곳에서.
  *
- * 화면(행 컴포넌트)은 '무엇을 바꿨나'만 말하고 저장 방식은 모른다. 저장 방식(배열 통째 PATCH
- * → 행 단위 요청)을 바꿀 때 이 훅만 고치면 된다.
+ * 화면(행 컴포넌트)은 '무엇을 바꿨나'만 말하고 저장 방식은 모른다.
+ *
+ * - **줄 고치기**(역할·서술·비고·참여 국가)는 행 단위 머지(`relatedPersonsPatch`·`relatedCountriesPatch`) —
+ *   고친 줄·고친 필드만 보낸다. 예전엔 한 줄을 고쳐도 목록 전체를 보내, 다른 탭·세션이 그새 고친
+ *   다른 줄을 화면의 옛값으로 덮었다.
+ * - **목록 바꾸기**(추가·제거·순서)는 여전히 전체 목록 — 무엇이 남는지가 곧 요청 내용이라서.
  */
 import { useMemo } from 'react'
 
@@ -41,17 +45,17 @@ export function useActorMutations({
   const patchPersons = (next: PersonPayload[], options?: PatchOptions) =>
     onPatch({ relatedPersons: next }, options)
 
+  /** 한 인물의 역할·비고 — 빈 값은 null(비움) */
   const updatePerson = (personId: string, patch: { role?: string; note?: string }) =>
-    patchPersons(
-      persons.map((person) => {
-        if (person.personId !== personId) return toPersonPayload(person)
-        return {
-          personId: person.personId,
-          role: patch.role !== undefined ? patch.role.trim() || undefined : (person.role ?? undefined),
-          note: patch.note !== undefined ? patch.note.trim() || undefined : (person.note ?? undefined),
-        }
-      }),
-    )
+    onPatch({
+      relatedPersonsPatch: [
+        {
+          personId,
+          ...(patch.role !== undefined && { role: patch.role.trim() || null }),
+          ...(patch.note !== undefined && { note: patch.note.trim() || null }),
+        },
+      ],
+    })
 
   /**
    * 참여 자격 국가 — 사건 참여국 중 하나('h:역사국id' | 'c:현대국id') 또는 'none'(비우기).
@@ -59,17 +63,15 @@ export function useActorMutations({
    */
   const setParticipationCountry = (personId: string, value: string) => {
     const [kind, targetId] = value && value !== 'none' ? value.split(':') : ['', '']
-    patchPersons(
-      persons.map((person) =>
-        person.personId !== personId
-          ? toPersonPayload(person)
-          : {
-              ...toPersonPayload(person),
-              countryId: kind === 'c' ? targetId : null,
-              historicalCountryId: kind === 'h' ? targetId : null,
-            },
-      ),
-    )
+    onPatch({
+      relatedPersonsPatch: [
+        {
+          personId,
+          countryId: kind === 'c' ? targetId : null,
+          historicalCountryId: kind === 'h' ? targetId : null,
+        },
+      ],
+    })
   }
 
   const removePerson = (personId: string) => {
@@ -103,10 +105,21 @@ export function useActorMutations({
   const patchCountries = (next: CountryRowData[], options?: PatchOptions) =>
     onPatch({ relatedCountries: next.map(toCountryPayload) }, options)
 
-  const updateCountry = (rowKey: string, patch: CountryPatch) =>
-    patchCountries(
-      countryRows.map((row) => (countryRowKey(row) === rowKey ? { ...row, ...patch } : row)),
-    )
+  /** 한 나라의 역할·한 일·비고 — 빈 글은 null(비움) */
+  const updateCountry = (rowKey: string, patch: CountryPatch) => {
+    const row = countryRows.find((candidate) => countryRowKey(candidate) === rowKey)
+    if (!row) return
+    onPatch({
+      relatedCountriesPatch: [
+        {
+          ...(row.isHistorical ? { historicalCountryId: row.id } : { countryId: row.id }),
+          ...(patch.role !== undefined && { role: patch.role }),
+          ...(patch.roleDescription !== undefined && { roleDescription: patch.roleDescription.trim() || null }),
+          ...(patch.note !== undefined && { note: patch.note.trim() || null }),
+        },
+      ],
+    })
+  }
 
   const removeCountry = (rowKey: string) => {
     const removed = countryRows.find((row) => countryRowKey(row) === rowKey)

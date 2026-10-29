@@ -245,6 +245,41 @@ export function buildInverse(
         }))
         break
       /**
+       * 행 단위 머지(참여 인물) — patch가 나열한 인물의, patch가 보낸 필드만 지금 값으로 되돌린다.
+       * 비어 있던 값은 null 명시(3상: 생략은 '유지'라 되돌아가지 않는다). 참여 국가도 여기서 복원된다
+       * (전체 목록 inverse는 참여 국가를 싣지 않아 그 변경은 되돌릴 수 없었다).
+       */
+      case 'relatedPersonsPatch':
+        inv.relatedPersonsPatch = (patch.relatedPersonsPatch ?? []).map((row) => {
+          const current = (event.relatedPersons ?? []).find((person) => person.personId === row.personId)
+          const back: Record<string, unknown> = { personId: row.personId }
+          if ('role' in row) back.role = current?.role ?? null
+          if ('note' in row) back.note = current?.note ?? null
+          if ('countryId' in row || 'historicalCountryId' in row) {
+            back.countryId = current?.countryId ?? null
+            back.historicalCountryId = current?.historicalCountryId ?? null
+          }
+          if ('sideId' in row) back.sideId = current?.sideId ?? null
+          return back
+        })
+        break
+      /** 행 단위 머지(참여국) — 같은 규칙. 줄은 국가 키(현대/역사 id)로 찾는다 */
+      case 'relatedCountriesPatch':
+        inv.relatedCountriesPatch = (patch.relatedCountriesPatch ?? []).map((row) => {
+          const current = row.countryId
+            ? (event.relatedCountries ?? []).find((country) => country.id === row.countryId)
+            : (event.relatedHistoricalCountries ?? []).find((country) => country.id === row.historicalCountryId)
+          const back: Record<string, unknown> = row.countryId
+            ? { countryId: row.countryId }
+            : { historicalCountryId: row.historicalCountryId }
+          if ('role' in row && row.role !== undefined) back.role = current?.role ?? 'PARTICIPANT'
+          if ('roleDescription' in row) back.roleDescription = current?.roleDescription ?? null
+          if ('note' in row) back.note = current?.note ?? null
+          if ('sideId' in row) back.sideId = current?.sideId ?? null
+          return back
+        })
+        break
+      /**
        * 참여국 되돌리기 — 역할·서술·비고까지 통째로 복원해야 진짜 undo다.
        * id만 되돌리던 예전 코드는 역할 편집을 undo해도 역할이 돌아오지 않았다.
        */

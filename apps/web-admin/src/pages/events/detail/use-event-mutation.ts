@@ -139,10 +139,11 @@ export function useEventMutation(eventId: string) {
        * 비어 보였다). 커밋 뒤에 한 번 더 읽어 마지막 응답이 항상 커밋 이후가 되게 한다.
        */
       const touchesSides =
-        'relatedCountries' in patch &&
-        (patch.relatedCountries ?? []).some(
-          (participant) => 'sideId' in participant && participant.sideId !== undefined,
-        )
+        ('relatedCountries' in patch &&
+          (patch.relatedCountries ?? []).some(
+            (participant) => 'sideId' in participant && participant.sideId !== undefined,
+          )) ||
+        (patch.relatedCountriesPatch ?? []).some((row) => row.sideId !== undefined)
       if (touchesSides) queryClient.invalidateQueries({ queryKey: detailKey })
 
       /**
@@ -171,10 +172,10 @@ export function useEventMutation(eventId: string) {
        * (반대 방향 invalidatePersonCaches는 이미 event-detail을 갱신한다). 마운트된 쿼리만
        * 다시 받으므로 prefix 무효화의 비용은 작다.
        */
-      if ('relatedPersons' in patch) {
+      if ('relatedPersons' in patch || 'relatedPersonsPatch' in patch) {
         queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
       }
-      if ('relatedCountries' in patch || 'historicalCountryId' in patch) {
+      if ('relatedCountries' in patch || 'relatedCountriesPatch' in patch || 'historicalCountryId' in patch) {
         queryClient.invalidateQueries({ queryKey: eventKeys.byCountryAll() })
       }
       /**
@@ -373,6 +374,50 @@ export function buildOptimisticEvent(
       })
       changed = true
     }
+  }
+
+  /**
+   * 행 단위 머지 — 고친 줄의 고친 필드만 그 자리에서 바꾼다(목록·순서 그대로). 참여 국가 이름 같은
+   * 파생값은 응답이 채운다.
+   */
+  if (patch.relatedPersonsPatch && patch.relatedPersonsPatch.length > 0 && prev.relatedPersons) {
+    const rows = new Map(patch.relatedPersonsPatch.map((row) => [row.personId, row]))
+    next.relatedPersons = prev.relatedPersons.map((person) => {
+      const row = rows.get(person.personId)
+      if (!row) return person
+      return {
+        ...person,
+        ...(row.role !== undefined && { role: row.role?.trim() || null }),
+        ...(row.note !== undefined && { note: row.note?.trim() || null }),
+        ...(row.countryId !== undefined && { countryId: row.countryId || null }),
+        ...(row.historicalCountryId !== undefined && { historicalCountryId: row.historicalCountryId || null }),
+        ...(row.sideId !== undefined && { sideId: row.sideId || null }),
+      }
+    })
+    changed = true
+  }
+  if (patch.relatedCountriesPatch && patch.relatedCountriesPatch.length > 0) {
+    const mergeRow = <T extends { id: string }>(country: T, row: (typeof patch.relatedCountriesPatch)[number] | undefined): T =>
+      !row
+        ? country
+        : {
+            ...country,
+            ...(row.role !== undefined && { role: row.role }),
+            ...(row.roleDescription !== undefined && { roleDescription: row.roleDescription?.trim() || null }),
+            ...(row.note !== undefined && { note: row.note?.trim() || null }),
+            ...(row.sideId !== undefined && { sideId: row.sideId || null }),
+          }
+    const modernRows = new Map(patch.relatedCountriesPatch.filter((row) => row.countryId).map((row) => [row.countryId!, row]))
+    const historicalRows = new Map(
+      patch.relatedCountriesPatch.filter((row) => row.historicalCountryId).map((row) => [row.historicalCountryId!, row]),
+    )
+    if (prev.relatedCountries) next.relatedCountries = prev.relatedCountries.map((country) => mergeRow(country, modernRows.get(country.id)))
+    if (prev.relatedHistoricalCountries) {
+      next.relatedHistoricalCountries = prev.relatedHistoricalCountries.map((country) =>
+        mergeRow(country, historicalRows.get(country.id)),
+      )
+    }
+    changed = true
   }
 
   if ('relatedPersons' in patch) {
