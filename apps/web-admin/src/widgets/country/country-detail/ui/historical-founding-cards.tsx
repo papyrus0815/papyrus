@@ -538,11 +538,14 @@ function FoundingCard({
               {rulers.map((ruler) => {
                 const span = rulerSpan(ruler)
                 const name = ruler.regnalName?.trim() || getPersonDisplayName(ruler.person, true)
+                const gap = gapFromFounding(ruler, year)
                 const hint =
                   side === 'founding' && ruler.basis === 'earliest'
                     ? isFarFromFounding(ruler, year)
-                      ? `건국 ${gapFromFounding(ruler, year)}년 뒤 · 초대 기록 없음`
-                      : '제1대 기록이 없어 가장 이른 기록'
+                      ? `건국 ${gap}년 뒤 · 초대 기록 없음`
+                      : gap != null && gap <= 1
+                        ? undefined
+                        : '제1대 기록이 없어 가장 이른 기록'
                     : undefined
                 return (
                   <FoundingRow
@@ -631,7 +634,11 @@ function FoundingCard({
             />
           )}
           {!hasNote && (
-            <FillChip type="button" onClick={() => setNoteModalOpen(true)}>
+            <FillChip
+              id={`founding-note-trigger-${side}`}
+              type="button"
+              onClick={() => setNoteModalOpen(true)}
+            >
               <FiPlus aria-hidden /> {title} 배경
             </FillChip>
           )}

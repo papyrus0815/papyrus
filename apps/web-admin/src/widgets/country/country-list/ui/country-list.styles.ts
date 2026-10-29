@@ -505,26 +505,30 @@ export const HasChildrenChevron = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  gap: 1px;
+  min-width: 28px;
+  height: 22px;
   border: none;
-  background: transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.03)'};
   color: ${({ theme }) => theme.colors.text.tertiary};
   border-radius: 6px;
   cursor: pointer;
-  padding: 0;
+  padding: 0 4px 0 6px;
   flex-shrink: 0;
   margin-left: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
   transition: background 0.12s ease, opacity 0.12s ease, color 0.12s ease;
 
-  /* 평소엔 감춘다 — 자식 있는 행마다 상시로 떠 있으면 목록 우측이 화살표 열이 된다.
-     핀 버튼과 같은 규약: 행 hover/포커스, 또는 펼친 상태에서만 보인다. */
-  opacity: 0;
+  opacity: 0.75;
   box-shadow: inset 0 0 0 1px ${({ theme }) => theme.colors.border.light};
 
   ${ListRow}:hover &,
   ${ListRow}:focus-within & {
-    opacity: 0.85;
+    opacity: 1;
   }
 
   &:hover {
@@ -542,8 +546,8 @@ export const HasChildrenChevron = styled.button`
   }
 
   > svg {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
   }
 `
 

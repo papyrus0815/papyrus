@@ -84,7 +84,7 @@ export function CompletenessPanel({
               </S.CompletenessLine>
               {missing.length > 0 && (
                 <S.MissingChips>
-                  {missing.slice(0, 6).map((field) =>
+                  {missing.map((field) =>
                     onFillMissing ? (
                       <S.MissingChipButton
                         key={field.key}
@@ -97,9 +97,6 @@ export function CompletenessPanel({
                     ) : (
                       <S.MissingChip key={field.key}>{field.label}</S.MissingChip>
                     ),
-                  )}
-                  {missing.length > 6 && (
-                    <S.MissingChip>+{missing.length - 6}</S.MissingChip>
                   )}
                 </S.MissingChips>
               )}

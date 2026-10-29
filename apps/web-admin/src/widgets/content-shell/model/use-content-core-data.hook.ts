@@ -131,19 +131,26 @@ export function useContentCoreData(options?: {
   }, [apiContinents])
 
   // 모든 국가 ID → UnifiedCountry 인덱스 (현대, raw 역사, 현대의 하위 역사 모두 포함)
+  // apiHistoricalCountries(전체 필드: entityKind·description·nameOrigin·history 포함)를 먼저 넣고,
+  // 현대 국가 중첩 historicalCountries에만 있는 브리지 메타(linkKind)를 보강한다.
   const countriesById = useMemo<Map<string, UnifiedCountry>>(() => {
     const map = new Map<string, UnifiedCountry>()
+    if (apiHistoricalCountries) {
+      for (const hc of apiHistoricalCountries) {
+        map.set(hc.id, historicalToUnified(hc))
+      }
+    }
     for (const country of unifiedCountries) {
       map.set(country.id, country)
       if (country.type === 'modern' && country.historicalCountries) {
         for (const hc of country.historicalCountries) {
-          if (!map.has(hc.id)) map.set(hc.id, historicalToUnified(hc))
+          const existing = map.get(hc.id)
+          if (!existing) {
+            map.set(hc.id, historicalToUnified(hc))
+          } else if (hc.linkKind && !existing.linkKind) {
+            map.set(hc.id, { ...existing, linkKind: hc.linkKind })
+          }
         }
-      }
-    }
-    if (apiHistoricalCountries) {
-      for (const hc of apiHistoricalCountries) {
-        if (!map.has(hc.id)) map.set(hc.id, historicalToUnified(hc))
       }
     }
     return map

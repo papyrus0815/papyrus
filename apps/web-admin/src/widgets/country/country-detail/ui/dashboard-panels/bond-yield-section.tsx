@@ -183,13 +183,15 @@ export function BondYieldSection({
         </S.SectionTitleIcon>
         <S.SectionTitleText>국채 금리</S.SectionTitleText>
         {model != null && (
-          <S.SectionCountChip>
-            {model.years.length}개 연도 · 만기 {model.maturityCount}종
-          </S.SectionCountChip>
+          <>
+            <S.SectionCountChip>
+              {model.years.length}개 연도 · 만기 {model.maturityCount}종
+            </S.SectionCountChip>
+            <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
+              데이터 관리
+            </S.SectionAction>
+          </>
         )}
-        <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
-          데이터 관리
-        </S.SectionAction>
       </S.SectionTitleRow>
 
       {manager}

@@ -25,7 +25,6 @@ import {
   GOVERNMENT_FORM_LABEL,
   headOfGovernmentTitleOf,
   headOfStateTitleOf,
-  houseText,
   LEGISLATURE_TYPE_LABEL,
   PARTY_SYSTEM_LABEL,
   primaryHouseLabel,
@@ -60,23 +59,34 @@ interface Fact {
   note?: string
 }
 
+function stripDuplicateHouseLabel(label: string, name?: string | null): string | null {
+  const trimmed = name?.trim() ?? ''
+  if (!trimmed || trimmed === label) return null
+  if (trimmed.startsWith(`${label} `)) {
+    return trimmed.slice(label.length + 1).trim() || null
+  }
+  return trimmed
+}
+
 function buildFacts(system: PoliticalSystem): Fact[] {
   const facts: Fact[] = []
 
   /* lowerHouse*는 양원제면 하원, 단원제면 유일 원이다 — 라벨은 반드시 헬퍼를 거친다 */
   if (system.lowerHouseName || system.lowerHouseSeats != null) {
     const label = primaryHouseLabel(system.legislatureType ?? null)
+    const distinctName = stripDuplicateHouseLabel(label, system.lowerHouseName)
     facts.push({
       key: 'lower',
       label,
-      value: [
-        system.lowerHouseName ? houseText(label, system.lowerHouseName) : label,
-        system.lowerHouseSeats != null
-          ? `${system.lowerHouseSeats.toLocaleString()}석`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' · '),
+      value:
+        [
+          distinctName,
+          system.lowerHouseSeats != null
+            ? `${system.lowerHouseSeats.toLocaleString()}석`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || label,
     })
   }
   /* 상원은 양원제일 때만 뜻이 있다 — 단원제 기록에 남은 값은 보여주지 않는다 */
@@ -84,17 +94,20 @@ function buildFacts(system: PoliticalSystem): Fact[] {
     system.legislatureType === 'BICAMERAL' &&
     (system.upperHouseName || system.upperHouseSeats != null)
   ) {
+    const label = '상원'
+    const distinctName = stripDuplicateHouseLabel(label, system.upperHouseName)
     facts.push({
       key: 'upper',
-      label: '상원',
-      value: [
-        system.upperHouseName ? houseText('상원', system.upperHouseName) : '상원',
-        system.upperHouseSeats != null
-          ? `${system.upperHouseSeats.toLocaleString()}석`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' · '),
+      label,
+      value:
+        [
+          distinctName,
+          system.upperHouseSeats != null
+            ? `${system.upperHouseSeats.toLocaleString()}석`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || label,
     })
   }
   /* 직함은 관직 정의 카탈로그가 정본 — 자유입력 칸은 카탈로그에 없는 칭호일 때만 찬다 */

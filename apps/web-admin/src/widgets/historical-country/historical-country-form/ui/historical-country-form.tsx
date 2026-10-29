@@ -574,15 +574,19 @@ export function HistoricalCountryForm({
       payload.transitionScope = transitionScope || undefined
     }
 
-    // 저장 및 폼 초기화
-    await onSave(payload)
-    clearDraft()
-    reset()
-    setThumbnailPreview('')
-    setSelectedModernCountries([])
-    setSelectedParentHistoricalIds([])
-    setTransitionEventType('SUCCESSION')
-    onClose()
+    // 저장 및 폼 초기화 (성공 시에만 초안 삭제·폼 리셋·모달 닫기)
+    try {
+      await onSave(payload)
+      clearDraft()
+      reset()
+      setThumbnailPreview('')
+      setSelectedModernCountries([])
+      setSelectedParentHistoricalIds([])
+      setTransitionEventType('SUCCESSION')
+      onClose()
+    } catch {
+      // 저장 실패 시 입력값과 초안(localStorage)을 유지한 채 모달을 열어 둔다
+    }
   }
 
   /**

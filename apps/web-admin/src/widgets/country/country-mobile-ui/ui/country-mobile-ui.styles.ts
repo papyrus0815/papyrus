@@ -205,24 +205,28 @@ export const MobileTabBadge = styled.span`
 `
 
 export const MobileActionRow = styled.div`
+  display: flex;
+  gap: 8px;
   padding: 12px 0 0 0;
 `
 
 export const MobileAddButton = styled.button`
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border: 2px dashed ${({ theme }) => theme.colors.border.medium};
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1.5px dashed ${({ theme }) => theme.colors.border.medium};
   border-radius: 12px;
   background: ${({ theme }) => theme.colors.activeLight};
   color: ${({ theme }) => theme.colors.primary};
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
@@ -256,10 +260,16 @@ export const MobileViewSwitcher = styled.div`
 
   @media (max-width: 1024px) {
     display: flex;
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    z-index: ${Z_INDEX.HEADER};
     gap: 4px;
     padding: 4px;
     background: ${({ theme }) => theme.colors.background.secondary};
-    border-radius: 10px;
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
+    border-radius: 12px;
+    box-shadow: 0 4px 16px ${({ theme }) => theme.colors.shadow.md};
   }
 `
 

@@ -130,7 +130,12 @@ export function CountryListStateProvider({
     unifiedCountries.forEach((country) => {
       if (country.type !== 'modern' || !country.historicalCountries) return
       country.historicalCountries.forEach((hc) => {
-        if (!byId.has(hc.id)) byId.set(hc.id, historicalToUnified(hc))
+        const existing = byId.get(hc.id)
+        if (!existing) {
+          byId.set(hc.id, historicalToUnified(hc))
+        } else if (hc.linkKind && !existing.linkKind) {
+          byId.set(hc.id, { ...existing, linkKind: hc.linkKind })
+        }
       })
     })
     return Array.from(byId.values())

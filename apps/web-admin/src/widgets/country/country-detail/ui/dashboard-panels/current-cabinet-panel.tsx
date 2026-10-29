@@ -15,7 +15,6 @@ import { Modal, ModalBody } from '@/shared/ui/modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
-import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import type {
@@ -34,8 +33,6 @@ import { notify } from '@/shared/ui/toast'
 
 import {
   FiCheck,
-  FiChevronLeft,
-  FiChevronRight,
   FiEdit2,
   FiPlus,
   FiX,
@@ -48,10 +45,10 @@ import { CabinetMindMap } from './cabinet-mind-map'
 
 interface Props {
   countryId: string
-  onOpen: () => void
+  onOpen: (cabinetId?: string | null, isFallbackHead?: boolean) => void
   /** 선거 지면으로 — 모달의 '자세히'에서 쓴다 */
   onOpenElections: () => void
-  /** 모달의 '전체 보기'에서 인물 지면으로 나갈 때 */
+  /** 인물 미리보기 모달(상위 대시보드 단일 인스턴스) 열기 */
   onSelectPerson: (personId: string) => void
   /**
    * 같은 묶음에 함께 놓을 것(선거 카드 등). 연결된 선거 id를 넘겨 주므로 자식이
@@ -70,9 +67,23 @@ interface TenureRow {
   positionDefinition?: { positionType?: string | null; title?: string | null } | null
   title?: string | null
   ordinal?: number | null
+  isMonarchical?: boolean | null
   startDate?: string | null
   endDate?: string | null
+  historicalCountryId?: string | null
+  historicalCountry?: { id?: string; name?: string | null } | null
+  electionCandidacy?: {
+    id: string
+    result?: { voteSharePercent?: string | number | null; elected?: boolean } | null
+    election?: {
+      id: string
+      name: string
+      pollDate?: string | null
+      electionType?: string | null
+    } | null
+  } | null
   person?: {
+    id?: string
     name: string
     surname?: string | null
     middleName?: string | null
@@ -149,13 +160,6 @@ export function CurrentCabinetPanel({
   children,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
-  /* 빈 국가에서 부처 프리셋 칩은 접어 둔다 — 펼침은 이 자리에서만 쓴다 */
-  /*
-   * 이름을 누르면 인물 지면으로 나가 버리면 지금 보던 정부 명단을 잃는다. 대시보드는
-   * 훑는 지면이라 자리를 지킨 채 확인할 수 있어야 한다 — 사건 상세·행정부 상세가 쓰는
-   * 공용 PersonInlineModal 그대로.
-   */
-  const [modalPersonId, setModalPersonId] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   /*
@@ -168,8 +172,15 @@ export function CurrentCabinetPanel({
   /** 어느 부처의 우두머리를 등록하는가. null이면 부처 없이(수반 등) */
   const [registerTarget, setRegisterTarget] = useState<{
     departmentId: string | null
+    departmentName: string | null
     label: string
-  }>({ departmentId: null, label: '수반·각료' })
+    mode: 'head' | 'minister' | 'any'
+  }>({
+    departmentId: null,
+    departmentName: null,
+    label: '수반·각료',
+    mode: 'any',
+  })
 
   /*
    * 빈 상태에서 부처 목록을 받아 **부처마다 등록 슬롯**을 세운다. 골격만 그려 두면
@@ -216,19 +227,6 @@ export function CurrentCabinetPanel({
             cabinets[0]).id,
     )
   }, [cabinets])
-
-  const selectedIndex = cabinets.findIndex(
-    (cabinet) => cabinet.id === selectedCabinetId,
-  )
-  /*
-   * 카드는 최신이 왼쪽이다. 그래서 **오른쪽이 과거**다 — '이전 정부'는 index+1.
-   * 화살표 라벨·툴팁에 대상 정권 이름을 그대로 실어 방향 혼동을 없앤다.
-   */
-  const newerCabinet = selectedIndex > 0 ? cabinets[selectedIndex - 1] : null
-  const olderCabinet =
-    selectedIndex >= 0 && selectedIndex < cabinets.length - 1
-      ? cabinets[selectedIndex + 1]
-      : null
 
   const selectCabinet = (cabinetId: string) => {
     setSelectedCabinetId(cabinetId)
@@ -517,11 +515,21 @@ export function CurrentCabinetPanel({
   const closeRegister = () => {
     setRegisterPersonId(null)
     setPickerOpen(false)
-    setRegisterTarget({ departmentId: null, label: '수반·각료' })
+    setRegisterTarget({
+      departmentId: null,
+      departmentName: null,
+      label: '수반·각료',
+      mode: 'any',
+    })
   }
 
-  const openRegister = (departmentId: string | null, label: string) => {
-    setRegisterTarget({ departmentId, label })
+  const openRegister = (
+    departmentId: string | null,
+    label: string,
+    mode: 'head' | 'minister' | 'any' = 'any',
+    departmentName: string | null = null,
+  ) => {
+    setRegisterTarget({ departmentId, departmentName, label, mode })
     setPickerOpen(true)
   }
 
@@ -532,6 +540,53 @@ export function CurrentCabinetPanel({
     enabled: !!countryId,
     staleTime: 60_000,
   })
+
+  /*
+   * 군주직(isMonarchical)은 서버에서 Cabinet 행을 만들지 않도록 막혀 있어,
+   * 군주만 등록된 국가(스페인·네덜란드·스웨덴 등 14개국)에서는 cabinets가 0건이다.
+   * 이때 국가 재임 목록에 있는 HEAD_OF_STATE / HEAD_OF_GOVERNMENT를 폴백 수반으로 세워
+   * '아직 등록되지 않음' 대신 실제 등록된 수반·군주를 그린다.
+   */
+  const fallbackHeadTenures = useMemo(() => {
+    if (cabinets.length > 0) return [] as TenureRow[]
+    const rows = (query.data ?? []) as TenureRow[]
+    return rows
+      .filter((row) => {
+        const type =
+          row.positionType ?? row.positionDefinition?.positionType ?? ''
+        return HEAD_TYPES.has(type)
+      })
+      .sort((left, right) =>
+        (right.startDate ?? '').localeCompare(left.startDate ?? ''),
+      )
+  }, [cabinets.length, query.data])
+
+  const [selectedFallbackHeadId, setSelectedFallbackHeadId] = useState<
+    string | null
+  >(null)
+
+  useEffect(() => {
+    if (fallbackHeadTenures.length === 0) {
+      setSelectedFallbackHeadId(null)
+      return
+    }
+    setSelectedFallbackHeadId((prev) =>
+      prev && fallbackHeadTenures.some((row) => row.id === prev)
+        ? prev
+        : (
+            fallbackHeadTenures.find((row) => !row.endDate) ??
+            fallbackHeadTenures[0]
+          ).id,
+    )
+  }, [fallbackHeadTenures])
+
+  const activeFallbackHead = useMemo(
+    () =>
+      fallbackHeadTenures.find((row) => row.id === selectedFallbackHeadId) ??
+      fallbackHeadTenures[0] ??
+      null,
+    [fallbackHeadTenures, selectedFallbackHeadId],
+  )
 
   /*
    * 부처에 등록된 재임 — 슬롯이 '아직 없음'만 말하던 자리를 실제 사람으로 채운다.
@@ -569,12 +624,15 @@ export function CurrentCabinetPanel({
     const scopeCabinet = cabinets.find(
       (cabinet) => cabinet.id === selectedCabinetId,
     )
-    const scopeStart = scopeCabinet?.headTenure?.startDate?.slice(0, 10) ?? null
-    const scopeEnd = scopeCabinet?.headTenure?.endDate?.slice(0, 10) ?? null
-    const rows = !scopeCabinet
+    const scopeTenure = scopeCabinet?.headTenure ?? activeFallbackHead
+    const scopeStart = scopeTenure?.startDate?.slice(0, 10) ?? null
+    const scopeEnd = scopeTenure?.endDate?.slice(0, 10) ?? null
+    const rows = !scopeTenure
       ? allRows
       : allRows.filter((row) => {
-          if (row.cabinetId) return row.cabinetId === scopeCabinet.id
+          if (scopeCabinet && row.cabinetId) {
+            return row.cabinetId === scopeCabinet.id
+          }
           const start = row.startDate?.slice(0, 10) ?? null
           const end = row.endDate?.slice(0, 10) ?? null
           if (!start || !scopeStart) return false
@@ -610,10 +668,52 @@ export function CurrentCabinetPanel({
       })
     }
     return byDepartment
-  }, [query.data, cabinets, selectedCabinetId])
+  }, [query.data, cabinets, selectedCabinetId, activeFallbackHead])
 
   const { members, heads } = useMemo(() => {
-    if (!overview) return { members: [] as Member[], heads: [] as Member[] }
+    if (!overview) {
+      if (activeFallbackHead) {
+        const personName = activeFallbackHead.person
+          ? getPersonDisplayName({
+              name: activeFallbackHead.person.name,
+              surname: activeFallbackHead.person.surname ?? null,
+              middleName: activeFallbackHead.person.middleName ?? null,
+              nameDisplayOrder:
+                activeFallbackHead.person.nameDisplayOrder ?? null,
+              country: activeFallbackHead.person.country ?? null,
+            })
+          : '이름 미상'
+        return {
+          members: [] as Member[],
+          heads: [
+            {
+              id: String(activeFallbackHead.id),
+              personId:
+                activeFallbackHead.person?.id ??
+                activeFallbackHead.personId ??
+                null,
+              name: personName,
+              imageUrl: activeFallbackHead.person?.profileImageUrl ?? null,
+              title: (
+                activeFallbackHead.title ??
+                activeFallbackHead.positionDefinition?.title ??
+                '국가원수'
+              ).trim(),
+              startDate: activeFallbackHead.startDate ?? null,
+              endDate: activeFallbackHead.endDate ?? null,
+              isHead: true,
+              ordinal:
+                typeof activeFallbackHead.ordinal === 'number'
+                  ? activeFallbackHead.ordinal
+                  : null,
+              replaced: false,
+              predecessor: null,
+            },
+          ],
+        }
+      }
+      return { members: [] as Member[], heads: [] as Member[] }
+    }
 
     type OverviewTenure = NonNullable<typeof overview.headTenure>
     const toMember = (
@@ -687,7 +787,7 @@ export function CurrentCabinetPanel({
         ? [toMember(overview.headTenure, true, false, null)]
         : [],
     }
-  }, [overview])
+  }, [overview, activeFallbackHead])
 
   const selectedCabinet =
     cabinets.find((cabinet) => cabinet.id === selectedCabinetId) ?? null
@@ -730,6 +830,39 @@ export function CurrentCabinetPanel({
       : '현재'
     return from ? `${from}–${to}` : ''
   }
+  const fallbackHeadLabel = (row: TenureRow) => {
+    const full = row.person?.name
+      ? getPersonDisplayName({
+          name: row.person.name,
+          surname: row.person.surname ?? null,
+          middleName: row.person.middleName ?? null,
+          nameDisplayOrder: row.person.nameDisplayOrder ?? null,
+          country: row.person.country ?? null,
+        })
+      : '이름 미상'
+    const role = (
+      row.title ??
+      row.positionDefinition?.title ??
+      '국가원수'
+    ).trim()
+    return `${full} · ${role}`
+  }
+  const fallbackHeadPeriod = (row: TenureRow) => {
+    const from = (row.startDate ?? '').slice(0, 4)
+    const to = row.endDate ? row.endDate.slice(0, 4) : '현재'
+    return from ? `${from}–${to}` : ''
+  }
+
+  /** 역사국가 브리지로 넘어온 정권/재위의 소속 국가명 (예: 소련, 비시 프랑스, 일본 제국) */
+  const activePolityLabel =
+    selectedCabinet?.headTenure?.historicalCountry?.name ??
+    activeFallbackHead?.historicalCountry?.name ??
+    null
+  const activeHistoricalCountryId =
+    selectedCabinet?.headTenure?.historicalCountryId ??
+    activeFallbackHead?.historicalCountryId ??
+    null
+
   /** 이 정권을 낳은 선거 — 수반 임기의 후보 기록을 거쳐 온다 */
   const linkedElection =
     overview?.headTenure?.electionCandidacy?.election ?? null
@@ -746,6 +879,7 @@ export function CurrentCabinetPanel({
 
   const countryNameOrder =
     overview?.headTenure?.person?.country?.defaultNameDisplayOrder ??
+    activeFallbackHead?.person?.country?.defaultNameDisplayOrder ??
     null
   const elections = electionsQuery.data ?? []
 
@@ -771,10 +905,20 @@ export function CurrentCabinetPanel({
       warn?: boolean
     }> = []
     if (head.startDate) {
-      rows.push({ key: 'start', label: '취임', value: shortDate(head.startDate) })
+      rows.push({
+        key: 'start',
+        label: activeFallbackHead?.isMonarchical ? '즉위' : '취임',
+        value: shortDate(head.startDate),
+      })
       rows.push({
         key: 'span',
-        label: head.endDate ? '퇴임' : '재임',
+        label: head.endDate
+          ? activeFallbackHead?.isMonarchical
+            ? '퇴위'
+            : '퇴임'
+          : activeFallbackHead?.isMonarchical
+            ? '재위'
+            : '재임',
         value: head.endDate
           ? shortDate(head.endDate)
           : (elapsedText(head.startDate) ?? '—'),
@@ -797,7 +941,7 @@ export function CurrentCabinetPanel({
       })
     }
     return rows
-  }, [heads, members.length, replacedCount, voteShare])
+  }, [heads, members.length, replacedCount, voteShare, activeFallbackHead?.isMonarchical])
 
   /*
    * 이 정권을 낳은 선거. 스키마엔 재임→후보→선거 경로가 처음부터 있었는데 화면이
@@ -817,186 +961,212 @@ export function CurrentCabinetPanel({
     return 100 - sum
   }, [electionDetailQuery.data])
 
-  const electionSlot =
-    heads.length > 0 ? (
-      <ElectionPanel>
-        <ElectionHead>
-          <ElectionLabel>이 정권을 낳은 선거</ElectionLabel>
-          {linkedElection ? (
-            <>
-              <ElectionName>{linkedElection.name}</ElectionName>
-              {electionDetailQuery.data && (
-                <ElectionMeta>
-                  {[
-                    ELECTION_TYPE_LABEL[
-                      electionDetailQuery.data.electionType
-                    ] ?? electionDetailQuery.data.electionType,
-                    ELECTION_STATUS_LABEL[
-                      electionDetailQuery.data.status ?? ''
-                    ],
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </ElectionMeta>
-              )}
-              <ElectionUnlink type="button" onClick={() => void unlinkElection()}>
-                연결 해제
-              </ElectionUnlink>
-            </>
-          ) : elections.length > 0 ? (
+  const showElectionSlot =
+    heads.length > 0 &&
+    (cabinets.length > 0 || !activeFallbackHead?.isMonarchical)
+
+  const electionSlot = showElectionSlot ? (
+    <ElectionPanel>
+      <ElectionHead>
+        <ElectionLabel>이 정권을 낳은 선거</ElectionLabel>
+        {linkedElection ? (
+          <>
+            <ElectionName>{linkedElection.name}</ElectionName>
+            {electionDetailQuery.data && (
+              <ElectionMeta>
+                {[
+                  ELECTION_TYPE_LABEL[
+                    electionDetailQuery.data.electionType
+                  ] ?? electionDetailQuery.data.electionType,
+                  ELECTION_STATUS_LABEL[
+                    electionDetailQuery.data.status ?? ''
+                  ],
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </ElectionMeta>
+            )}
+            <ElectionUnlink type="button" onClick={() => void unlinkElection()}>
+              연결 해제
+            </ElectionUnlink>
+          </>
+        ) : elections.length > 0 ? (
+          <>
             <ElectionLink
               type="button"
               onClick={() => setElectionPickerOpen(true)}
             >
-              + 선거 연결
+              + 선거 연결 ({elections.length}건)
             </ElectionLink>
-          ) : (
+            <ElectionUnlink type="button" onClick={onOpenElections}>
+              선거 탭에서 보기
+            </ElectionUnlink>
+          </>
+        ) : (
+          <>
             <ElectionMuted>등록된 선거가 없습니다</ElectionMuted>
-          )}
-        </ElectionHead>
+            <ElectionLink type="button" onClick={onOpenElections}>
+              + 선거 등록
+            </ElectionLink>
+          </>
+        )}
+      </ElectionHead>
 
-        {/*
-          * 선거 내용을 지면에 그대로 편다. 모달로 감춰 두던 시절엔 정권을 골라도
-          * 선거는 이름 한 줄이라, 한 번 더 눌러야 '얼마로 이겼나'가 나왔다.
-          */}
-        {linkedElection && electionDetailQuery.data && (
-          <ElectionBody>
-            <ElectionFacts>
+      {/*
+        * 선거 내용을 지면에 그대로 편다. 모달로 감춰 두던 시절엔 정권을 골라도
+        * 선거는 이름 한 줄이라, 한 번 더 눌러야 '얼마로 이겼나'가 나왔다.
+        */}
+      {linkedElection && electionDetailQuery.data && (
+        <ElectionBody>
+          <ElectionFacts>
+            <ElectionFact>
+              <DetailKey>투표일</DetailKey>
+              <DetailValue>
+                {shortDate(electionDetailQuery.data.pollDate)}
+              </DetailValue>
+            </ElectionFact>
+            {electionDetailQuery.data.voterTurnoutPercent != null && (
               <ElectionFact>
-                <DetailKey>투표일</DetailKey>
+                <DetailKey>투표율</DetailKey>
                 <DetailValue>
-                  {shortDate(electionDetailQuery.data.pollDate)}
+                  {electionDetailQuery.data.voterTurnoutPercent}%
                 </DetailValue>
               </ElectionFact>
-              {electionDetailQuery.data.voterTurnoutPercent != null && (
-                <ElectionFact>
-                  <DetailKey>투표율</DetailKey>
-                  <DetailValue>
-                    {electionDetailQuery.data.voterTurnoutPercent}%
-                  </DetailValue>
-                </ElectionFact>
-              )}
-              {electionDetailQuery.data.totalSeats != null && (
-                <ElectionFact>
-                  <DetailKey>총 의석</DetailKey>
-                  <DetailValue>
-                    {electionDetailQuery.data.totalSeats.toLocaleString()}석
-                  </DetailValue>
-                </ElectionFact>
-              )}
-              <ElectionMore type="button" onClick={onOpenElections}>
-                선거 탭에서 자세히
-              </ElectionMore>
-            </ElectionFacts>
-
-            {(electionDetailQuery.data.candidacies ?? []).length > 0 && (
-              <CandidacyList>
-                {[...electionDetailQuery.data.candidacies]
-                  .sort(
-                    (left, right) =>
-                      Number(right.result?.voteSharePercent ?? -1) -
-                      Number(left.result?.voteSharePercent ?? -1),
-                  )
-                  .map((candidacy) => {
-                    const share = candidacy.result?.voteSharePercent
-                      ? Number(candidacy.result.voteSharePercent)
-                      : null
-                    return (
-                      <CandidacyRow
-                        key={candidacy.id}
-                        type="button"
-                        onClick={() =>
-                          candidacy.person?.id &&
-                          setModalPersonId(candidacy.person.id)
-                        }
-                      >
-                        <CandidacyTop>
-                          {/*
-                            * 이 정권을 낳은 그 사람은 지도 한가운데의 얼굴과 같은 얼굴을 쓴다 —
-                            * 선거 결과와 정권이 한 사람으로 이어진다. (선거 상세 응답의 후보에는
-                            * 프로필 이미지가 없어 수반과 같은 인물일 때만 그릴 수 있다)
-                            */}
-                          {heads[0]?.personId &&
-                            candidacy.person?.id === heads[0].personId && (
-                              <CandidacyFace>
-                                <Face member={heads[0]} size={30} />
-                              </CandidacyFace>
-                            )}
-                          <CandidacyName>
-                            {candidacy.person
-                              ? getPersonDisplayName(
-                                  {
-                                    name: candidacy.person.name,
-                                    surname: candidacy.person.surname ?? null,
-                                  },
-                                  {
-                                    countryDefaultNameDisplayOrder:
-                                      countryNameOrder,
-                                  },
-                                )
-                              : '후보 미상'}
-                          </CandidacyName>
-                          {candidacy.party?.name ? (
-                            <CandidacyParty>
-                              {candidacy.party.name}
-                            </CandidacyParty>
-                          ) : (
-                            /* 정당을 조용히 비워 두면 '무소속'으로 읽힌다 — 모른다고 적는다 */
-                            <CandidacyParty $muted>정당 미등록</CandidacyParty>
-                          )}
-                          {candidacy.result?.elected && <WonChip>당선</WonChip>}
-                          {share != null && (
-                            <CandidacyShare>
-                              {share.toFixed(1)}%
-                            </CandidacyShare>
-                          )}
-                        </CandidacyTop>
-                        {share != null && (
-                          <ShareTrack>
-                            <ShareFill
-                              style={{
-                                width: `${Math.min(100, Math.max(0, share))}%`,
-                                background: candidacy.result?.elected
-                                  ? '#15803d'
-                                  : '#94a3b8',
-                              }}
-                            />
-                          </ShareTrack>
-                        )}
-                        {candidacy.result?.votes && (
-                          <CandidacyVotes>
-                            {Number(candidacy.result.votes).toLocaleString()}표
-                          </CandidacyVotes>
-                        )}
-                      </CandidacyRow>
-                    )
-                  })}
-              </CandidacyList>
             )}
+            {electionDetailQuery.data.totalSeats != null && (
+              <ElectionFact>
+                <DetailKey>총 의석</DetailKey>
+                <DetailValue>
+                  {electionDetailQuery.data.totalSeats.toLocaleString()}석
+                </DetailValue>
+              </ElectionFact>
+            )}
+            <ElectionMore type="button" onClick={onOpenElections}>
+              선거 탭에서 자세히
+            </ElectionMore>
+          </ElectionFacts>
 
-            {/*
-              * 후보가 한 명뿐이면 "상대가 없었다"가 아니라 "상대를 아직 안 넣었다"인
-              * 경우가 대부분이다. 조용히 한 줄만 그리면 전자로 읽힌다 — 빠진 몫을 적는다.
-              */}
-            {electionDetailQuery.data &&
-              (electionDetailQuery.data.candidacies?.length ?? 0) < 2 && (
-                <CandidacyGap>
-                  <span>
-                    등록된 후보 {electionDetailQuery.data.candidacies?.length ?? 0}명
-                    {unregisteredShare != null &&
-                      ` · 나머지 ${unregisteredShare.toFixed(1)}% 미등록`}
-                  </span>
-                  <ElectionLink type="button" onClick={onOpenElections}>
-                    상대 후보 추가
-                  </ElectionLink>
-                </CandidacyGap>
-              )}
-          </ElectionBody>
-        )}
-      </ElectionPanel>
-    ) : null
+          {(electionDetailQuery.data.candidacies ?? []).length > 0 && (
+            <CandidacyList>
+              {[...electionDetailQuery.data.candidacies]
+                .sort(
+                  (left, right) =>
+                    Number(right.result?.voteSharePercent ?? -1) -
+                    Number(left.result?.voteSharePercent ?? -1),
+                )
+                .map((candidacy) => {
+                  const share = candidacy.result?.voteSharePercent
+                    ? Number(candidacy.result.voteSharePercent)
+                    : null
+                  return (
+                    <CandidacyRow
+                      key={candidacy.id}
+                      type="button"
+                      onClick={() =>
+                        candidacy.person?.id &&
+                        onSelectPerson(candidacy.person.id)
+                      }
+                    >
+                      <CandidacyTop>
+                        {/*
+                          * 이 정권을 낳은 그 사람은 지도 한가운데의 얼굴과 같은 얼굴을 쓴다 —
+                          * 선거 결과와 정권이 한 사람으로 이어진다. (선거 상세 응답의 후보에는
+                          * 프로필 이미지가 없어 수반과 같은 인물일 때만 그릴 수 있다)
+                          */}
+                        {heads[0]?.personId &&
+                          candidacy.person?.id === heads[0].personId && (
+                            <CandidacyFace>
+                              <Face member={heads[0]} size={30} />
+                            </CandidacyFace>
+                          )}
+                        <CandidacyName>
+                          {candidacy.person
+                            ? getPersonDisplayName(
+                                {
+                                  name: candidacy.person.name,
+                                  surname: candidacy.person.surname ?? null,
+                                },
+                                {
+                                  countryDefaultNameDisplayOrder:
+                                    countryNameOrder,
+                                },
+                              )
+                            : '후보 미상'}
+                        </CandidacyName>
+                        {candidacy.party?.name ? (
+                          <CandidacyParty>
+                            {candidacy.party.name}
+                          </CandidacyParty>
+                        ) : (
+                          /* 정당을 조용히 비워 두면 '무소속'으로 읽힌다 — 모른다고 적는다 */
+                          <CandidacyParty $muted>정당 미등록</CandidacyParty>
+                        )}
+                        {candidacy.result?.elected && <WonChip>당선</WonChip>}
+                        {share != null && (
+                          <CandidacyShare>
+                            {share.toFixed(1)}%
+                          </CandidacyShare>
+                        )}
+                      </CandidacyTop>
+                      {share != null && (
+                        <ShareTrack>
+                          <ShareFill
+                            style={{
+                              width: `${Math.min(100, Math.max(0, share))}%`,
+                              background: candidacy.result?.elected
+                                ? '#15803d'
+                                : '#94a3b8',
+                            }}
+                          />
+                        </ShareTrack>
+                      )}
+                      {candidacy.result?.votes && (
+                        <CandidacyVotes>
+                          {Number(candidacy.result.votes).toLocaleString()}표
+                        </CandidacyVotes>
+                      )}
+                    </CandidacyRow>
+                  )
+                })}
+            </CandidacyList>
+          )}
+
+          {/*
+            * 후보가 한 명뿐이면 "상대가 없었다"가 아니라 "상대를 아직 안 넣었다"인
+            * 경우가 대부분이다. 조용히 한 줄만 그리면 전자로 읽힌다 — 빠진 몫을 적는다.
+            */}
+          {electionDetailQuery.data &&
+            (electionDetailQuery.data.candidacies?.length ?? 0) < 2 && (
+              <CandidacyGap>
+                <span>
+                  등록된 후보 {electionDetailQuery.data.candidacies?.length ?? 0}명
+                  {unregisteredShare != null &&
+                    ` · 나머지 ${unregisteredShare.toFixed(1)}% 미등록`}
+                </span>
+                <ElectionLink type="button" onClick={onOpenElections}>
+                  상대 후보 추가
+                </ElectionLink>
+              </CandidacyGap>
+            )}
+        </ElectionBody>
+      )}
+    </ElectionPanel>
+  ) : null
 
   const isEmpty = heads.length === 0 && members.length === 0
+
+  /** 각료가 이미 있는 정권에서도 아직 마인드맵에 나타나지 않은 부처 슬롯은 아래에 이어 그린다 */
+  const unmatchedDepartments = useMemo(() => {
+    if (members.length === 0) return departments
+    return departments.filter((department) => {
+      const stem = department.name
+        .replace(/(부|성|처|청|원|국|실|조)$/, '')
+        .trim()
+      const inMembers =
+        stem.length > 0 && members.some((member) => member.title.includes(stem))
+      return !inMembers && !departmentOccupants.has(department.id)
+    })
+  }, [departments, members, departmentOccupants])
 
   /*
    * 각료가 없을 때의 칸 격자 — 채워진 각료 격자와 **같은 규격**(232px 칸·54px 높이).
@@ -1012,8 +1182,15 @@ export function CurrentCabinetPanel({
                 key={department.id}
                 name={department.name}
                 occupant={departmentOccupants.get(department.id) ?? null}
-                onOpenPerson={(personId) => setModalPersonId(personId)}
-                onRegister={() => openRegister(department.id, department.name)}
+                onOpenPerson={onSelectPerson}
+                onRegister={() =>
+                  openRegister(
+                    department.id,
+                    department.name,
+                    'minister',
+                    department.name,
+                  )
+                }
                 onDelete={() =>
                   void removeDepartment(department.id, department.name)
                 }
@@ -1082,6 +1259,53 @@ export function CurrentCabinetPanel({
     </>
   )
 
+  const activeRosterSlot =
+    members.length === 0 ? (
+      emptyRoster
+    ) : (
+      <>
+        {unmatchedDepartments.length > 0 && (
+          <SlotGrid>
+            {unmatchedDepartments.map((department) => (
+              <DepartmentSlot
+                key={department.id}
+                name={department.name}
+                occupant={departmentOccupants.get(department.id) ?? null}
+                onOpenPerson={onSelectPerson}
+                onRegister={() =>
+                  openRegister(
+                    department.id,
+                    department.name,
+                    'minister',
+                    department.name,
+                  )
+                }
+                onDelete={() =>
+                  void removeDepartment(department.id, department.name)
+                }
+                editing={renamingId === department.id}
+                renameValue={renameValue}
+                renaming={renaming}
+                onRenameStart={() => startRename(department.id, department.name)}
+                onRenameChange={setRenameValue}
+                onRenameCommit={() =>
+                  void commitRename(department.id, department.name)
+                }
+                onRenameCancel={cancelRename}
+              />
+            ))}
+          </SlotGrid>
+        )}
+        <RosterFooter>
+          <RosterFooterLink type="button" onClick={() => setSetupOpen(true)}>
+            {departments.length > 0
+              ? '부처 더 담기 · 이름 정리'
+              : '+ 각료 · 부처 관리'}
+          </RosterFooterLink>
+        </RosterFooter>
+      </>
+    )
+
   return (
     <S.Section>
       <S.SectionTitleRow>
@@ -1094,17 +1318,32 @@ export function CurrentCabinetPanel({
           * 이름을 크게 들고 선택 표시까지 한다.
           */}
         <S.SectionTitleText>행정부</S.SectionTitleText>
-        {cabinets.length > 1 && (
+        {cabinets.length > 1 ? (
           <S.SectionCountChip>{cabinets.length}대</S.SectionCountChip>
+        ) : (
+          cabinets.length === 0 &&
+          fallbackHeadTenures.length > 0 && (
+            <S.SectionCountChip>
+              역대 수반 {fallbackHeadTenures.length}명
+            </S.SectionCountChip>
+          )
         )}
         <HeaderActions>
           <S.SectionAction
             type="button"
-            onClick={() => openRegister(null, '수반·각료')}
+            onClick={() => openRegister(null, '수반·각료', 'any')}
           >
             + 수반·각료 등록
           </S.SectionAction>
-          <S.SectionAction type="button" onClick={onOpen}>
+          <S.SectionAction
+            type="button"
+            onClick={() =>
+              onOpen(
+                selectedCabinetId,
+                cabinets.length === 0 && fallbackHeadTenures.length > 0,
+              )
+            }
+          >
             행정부 관리
           </S.SectionAction>
         </HeaderActions>
@@ -1129,6 +1368,7 @@ export function CurrentCabinetPanel({
         >
           {cabinets.map((cabinet) => {
             const active = cabinet.id === selectedCabinetId
+            const polity = cabinet.headTenure?.historicalCountry?.name ?? null
             return (
               <CabinetTab
                 key={cabinet.id}
@@ -1139,8 +1379,37 @@ export function CurrentCabinetPanel({
                 $active={active}
                 onClick={() => selectCabinet(cabinet.id)}
               >
+                {polity && <CabinetTabPolity>{polity}</CabinetTabPolity>}
                 <CabinetTabName>{cabinetLabel(cabinet)}</CabinetTabName>
                 <CabinetTabPeriod>{cabinetPeriod(cabinet)}</CabinetTabPeriod>
+              </CabinetTab>
+            )
+          })}
+        </CabinetStrip>
+      )}
+
+      {cabinets.length === 0 && fallbackHeadTenures.length > 1 && (
+        <CabinetStrip
+          ref={stripRef}
+          role="tablist"
+          aria-label="역대 수반 고르기"
+        >
+          {fallbackHeadTenures.map((row) => {
+            const active = row.id === activeFallbackHead?.id
+            const polity = row.historicalCountry?.name ?? null
+            return (
+              <CabinetTab
+                key={row.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-active={active || undefined}
+                $active={active}
+                onClick={() => setSelectedFallbackHeadId(row.id)}
+              >
+                {polity && <CabinetTabPolity>{polity}</CabinetTabPolity>}
+                <CabinetTabName>{fallbackHeadLabel(row)}</CabinetTabName>
+                <CabinetTabPeriod>{fallbackHeadPeriod(row)}</CabinetTabPeriod>
               </CabinetTab>
             )
           })}
@@ -1159,7 +1428,7 @@ export function CurrentCabinetPanel({
           */}
           <EmptyHeadCard
             type="button"
-            onClick={() => openRegister(null, '정부 수반')}
+            onClick={() => openRegister(null, '정부 수반', 'head')}
           >
             <EmptyFace aria-hidden>
               <FiPlus size={30} />
@@ -1197,53 +1466,35 @@ export function CurrentCabinetPanel({
         */}
       {(heads.length > 0 || members.length > 0) && (
         <CabinetMindMap
-          showPosition={cabinets.length <= 1}
+          showPosition={
+            cabinets.length <= 1 && fallbackHeadTenures.length <= 1
+          }
           head={heads[0] ?? null}
           members={members}
-          cabinetLabel={selectedCabinet ? cabinetLabel(selectedCabinet) : null}
+          cabinetLabel={
+            selectedCabinet
+              ? cabinetLabel(selectedCabinet)
+              : activeFallbackHead
+                ? fallbackHeadLabel(activeFallbackHead)
+                : null
+          }
+          polityLabel={activePolityLabel}
           stats={mindMapStats}
           renderFace={(member, size) => (
             <Face member={member} size={size} muted={size <= 34} />
           )}
-          onSelectPerson={(personId) => setModalPersonId(personId)}
+          onSelectPerson={onSelectPerson}
           expanded={expanded}
           onToggleExpand={() => setExpanded((prev) => !prev)}
+          rosterSlot={activeRosterSlot}
           electionSlot={electionSlot}
-          nav={
-            cabinets.length > 0
-              ? {
-                  onNewer: newerCabinet
-                    ? () => selectCabinet(newerCabinet.id)
-                    : null,
-                  onOlder: olderCabinet
-                    ? () => selectCabinet(olderCabinet.id)
-                    : null,
-                  newerLabel: newerCabinet
-                    ? `${cabinetLabel(newerCabinet)} (${cabinetPeriod(newerCabinet)})`
-                    : null,
-                  olderLabel: olderCabinet
-                    ? `${cabinetLabel(olderCabinet)} (${cabinetPeriod(olderCabinet)})`
-                    : null,
-                  index: Math.max(0, selectedIndex),
-                  total: cabinets.length,
-                  slideKey: selectedCabinetId,
-                }
-              : undefined
-          }
         />
       )}
-
-
-      {/*
-        수반은 있는데 각료가 0명인 정권(독일 베트만홀베크 내각 등) — 각료 격자 자리에
-        같은 규격의 빈 칸을 깐다.
-      */}
-      {members.length === 0 ? emptyRoster : null}
         </>
       )}
       </SwitchFade>
 
-      {children && (
+      {heads.length === 0 && children && (
         <Extra>
           {typeof children === 'function'
             ? children(linkedElection?.id ?? null)
@@ -1274,7 +1525,7 @@ export function CurrentCabinetPanel({
               type="button"
               onClick={() => {
                 setSetupOpen(false)
-                openRegister(null, '각료')
+                openRegister(null, '각료', 'minister')
               }}
             >
               + 인물 선택해서 등록
@@ -1443,20 +1694,34 @@ export function CurrentCabinetPanel({
           personId={registerPersonId}
           open
           onClose={closeRegister}
-          onSuccess={closeRegister}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({
+              queryKey: ['cabinets-by-country', countryId],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ['cabinet-overview', selectedCabinetId],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ['tenures-by-country', countryId],
+            })
+            closeRegister()
+          }}
           initialCountryId={countryId}
+          initialHistoricalCountryId={activeHistoricalCountryId}
+          initialCabinetId={
+            registerTarget.mode === 'minister'
+              ? (selectedCabinetId ?? undefined)
+              : undefined
+          }
+          defaultCabinetId={
+            registerTarget.mode === 'any'
+              ? (selectedCabinetId ?? undefined)
+              : undefined
+          }
           initialAdministrationDepartmentId={registerTarget.departmentId}
+          initialAdministrationDepartmentName={registerTarget.departmentName}
         />
       )}
-
-      <PersonInlineModal
-        personId={modalPersonId}
-        onClose={() => setModalPersonId(null)}
-        onEdit={(personId) => {
-          setModalPersonId(null)
-          onSelectPerson(personId)
-        }}
-      />
     </S.Section>
   )
 }
@@ -2725,25 +2990,6 @@ const SlotEmptyName = styled.span`
 `
 
 
-const EmptyActions = styled.div`
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-`
-
-const EmptyActionsText = styled.p`
-  margin: 0 0 12px;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const EmptyActionsRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-`
-
 const NewDeptForm = styled.form`
   display: flex;
   align-items: center;
@@ -2787,30 +3033,6 @@ const NewDeptSubmit = styled.button`
   }
 `
 
-const GhostCaption = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 10px;
-  padding: 7px 12px;
-  border-radius: 9px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-`
-
-const CabinetName = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 const HeaderActions = styled.div`
   display: flex;
   align-items: center;
@@ -2834,9 +3056,6 @@ const HeaderAction = styled.button`
 `
 
 /** 관리(지면 이동)는 보조 — 주 동작은 바로 등록이다 */
-
-
-
 
 const faceBase = `
   border-radius: 50%;
@@ -2865,24 +3084,6 @@ const FallbackFace = styled.span<{ $muted?: boolean }>`
   background: ${({ theme }) => theme.colors.hover};
   color: ${({ theme }) => theme.colors.text.tertiary};
   border: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const HeadName = styled.span`
-  display: block;
-  margin-top: 2px;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const HeadMeta = styled.span`
-  display: block;
-  margin-top: 5px;
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /* 카드가 하나(선거)뿐일 때 전폭으로 늘어나지 않게 — 빈 줄이면 자연폭으로 접힌다 */
@@ -2923,7 +3124,7 @@ const CabinetTab = styled.button<{ $active: boolean }>`
   appearance: none;
   flex-shrink: 0;
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
@@ -2950,6 +3151,17 @@ const CabinetTab = styled.button<{ $active: boolean }>`
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: 1px;
   }
+`
+
+const CabinetTabPolity = styled.span`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const CabinetTabName = styled.span`

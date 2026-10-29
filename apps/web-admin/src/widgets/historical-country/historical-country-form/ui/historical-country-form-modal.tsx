@@ -60,8 +60,9 @@ export function HistoricalCountryFormModal({
       await onSave(data)
       onSuccess?.()
       onClose()
-    } catch {
-      // 외부에서 토스트 처리
+    } catch (error) {
+      // 외부에서 토스트 처리 — 하위 폼이 reset/clearDraft/onClose를 실행하지 않도록 재전파
+      throw error
     } finally {
       setSubmitting(false)
     }

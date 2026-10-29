@@ -158,8 +158,10 @@ function CompositionCell({ node, surface, isDark }: CellProps) {
    * 칸 안에 글자를 넣는 건 **들어갈 때만**. 넘치면 자르지 않고 아예 뺀다 —
    * 잘린 이름은 없는 이름보다 나쁘고, 작은 칸의 정체는 아래 범례가 맡는다.
    */
-  const showName = innerWidth >= 66 && innerHeight >= 34
+  const minWidthForName = name.length <= 5 ? 48 : 64
+  const showName = innerWidth >= minWidthForName && innerHeight >= 32
   const showValue = innerWidth >= 34 && innerHeight >= 16
+  const nameFontSize = innerWidth < 64 ? 11.5 : 13
   const centerX = x + width / 2
   const centerY = y + height / 2
 
@@ -180,7 +182,7 @@ function CompositionCell({ node, surface, isDark }: CellProps) {
           y={centerY - 7}
           textAnchor="middle"
           fill={ink}
-          fontSize={13}
+          fontSize={nameFontSize}
           fontWeight={700}
         >
           {name}

@@ -80,6 +80,7 @@ export function HistoricalRulerTimeline({
   onSelectPerson,
 }: HistoricalRulerTimelineProps) {
   const [expanded, setExpanded] = useState(false)
+  const [axisFilter, setAxisFilter] = useState<'ALL' | HistoricalRulerItem['axis']>('ALL')
 
   const dated = rulers.filter(
     (ruler) => ruler.startYear != null && !ruler.isOutOfSpan,
@@ -96,6 +97,9 @@ export function HistoricalRulerTimeline({
   const axes = (['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'] as const).filter(
     (axis) => dated.some((ruler) => ruler.axis === axis),
   )
+  const hasMultipleAxes =
+    rulers.some((r) => r.axis === 'HEAD_OF_STATE') &&
+    rulers.some((r) => r.axis === 'HEAD_OF_GOVERNMENT')
 
   /* 치세가 덮은 비율 — 빈 구간이 '없던 시대'가 아니라 '아직 안 적은 재위'임을 말해 준다 */
   const coveragePercent = canDrawBand
@@ -106,8 +110,12 @@ export function HistoricalRulerTimeline({
       )
     : null
 
-  const visible = expanded ? rulers : rulers.slice(0, COLLAPSED_LIMIT)
-  const hiddenCount = rulers.length - visible.length
+  const filteredRulers =
+    !hasMultipleAxes || axisFilter === 'ALL'
+      ? rulers
+      : rulers.filter((ruler) => ruler.axis === axisFilter)
+  const visible = expanded ? filteredRulers : filteredRulers.slice(0, COLLAPSED_LIMIT)
+  const hiddenCount = filteredRulers.length - visible.length
 
   return (
     <Wrap>
@@ -115,7 +123,9 @@ export function HistoricalRulerTimeline({
         <Band aria-label="재위 띠">
           {axes.map((axis) => (
             <Lane key={axis}>
-              {axes.length > 1 && <LaneLabel>{AXIS_LABELS[axis]}</LaneLabel>}
+              {axes.length > 1 && (
+                <LaneLabel $axis={axis}>{AXIS_LABELS[axis]}</LaneLabel>
+              )}
               <Track>
                 {dated
                   .filter((ruler) => ruler.axis === axis)
@@ -135,6 +145,7 @@ export function HistoricalRulerTimeline({
                         title={label}
                         aria-label={label}
                         $tone={index % 2}
+                        $axis={axis}
                         style={{ left: `${left}%`, width: `max(${width}%, 3px)` }}
                         onClick={() =>
                           ruler.personId && onSelectPerson(ruler.personId)
@@ -158,6 +169,40 @@ export function HistoricalRulerTimeline({
         </Band>
       )}
 
+      {hasMultipleAxes && (
+        <AxisFilterRow role="tablist" aria-label="역대 수반 축 필터">
+          {(
+            [
+              { key: 'ALL', label: '전체', count: rulers.length },
+              {
+                key: 'HEAD_OF_STATE',
+                label: '국가원수',
+                count: rulers.filter((r) => r.axis === 'HEAD_OF_STATE').length,
+              },
+              {
+                key: 'HEAD_OF_GOVERNMENT',
+                label: '정부수반',
+                count: rulers.filter((r) => r.axis === 'HEAD_OF_GOVERNMENT').length,
+              },
+            ] as const
+          ).map((item) => {
+            const active = axisFilter === item.key
+            return (
+              <AxisFilterChip
+                key={item.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                $active={active}
+                onClick={() => setAxisFilter(item.key)}
+              >
+                {item.label} <AxisFilterCount>{item.count}</AxisFilterCount>
+              </AxisFilterChip>
+            )
+          })}
+        </AxisFilterRow>
+      )}
+
       <Cards>
         {visible.map((ruler) => {
           const length = reignLength(ruler)
@@ -177,7 +222,9 @@ export function HistoricalRulerTimeline({
               </Avatar>
               <CardMain>
                 <CardTop>
-                  {ruler.ordinal != null && <Ordinal>제{ruler.ordinal}대</Ordinal>}
+                  {ruler.ordinal != null && (
+                    <Ordinal $axis={ruler.axis}>제{ruler.ordinal}대</Ordinal>
+                  )}
                   <CardName>{ruler.personName}</CardName>
                 </CardTop>
                 <CardMeta>
@@ -195,7 +242,7 @@ export function HistoricalRulerTimeline({
           )
         })}
       </Cards>
-      {rulers.length > COLLAPSED_LIMIT && (
+      {filteredRulers.length > COLLAPSED_LIMIT && (
         <MoreButton type="button" onClick={() => setExpanded((open) => !open)}>
           {expanded ? '접기' : `${hiddenCount}명 더 보기`}
         </MoreButton>
@@ -222,11 +269,16 @@ const Lane = styled.div`
   gap: 10px;
 `
 
-const LaneLabel = styled.span`
+const LaneLabel = styled.span<{ $axis?: HistoricalRulerItem['axis'] }>`
   flex: 0 0 56px;
   font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 700;
+  color: ${({ $axis, theme }) =>
+    $axis === 'HEAD_OF_GOVERNMENT'
+      ? theme.mode === 'dark'
+        ? '#2dd4bf'
+        : '#0f766e'
+      : theme.colors.primary};
 `
 
 const Track = styled.div`
@@ -239,7 +291,7 @@ const Track = styled.div`
   overflow: hidden;
 `
 
-const Segment = styled.button<{ $tone: number }>`
+const Segment = styled.button<{ $tone: number; $axis?: HistoricalRulerItem['axis'] }>`
   position: absolute;
   top: 0;
   bottom: 0;
@@ -247,7 +299,12 @@ const Segment = styled.button<{ $tone: number }>`
   border: none;
   border-right: 1px solid
     ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#ffffff')};
-  background: ${({ theme }) => theme.colors.primary};
+  background: ${({ $axis, theme }) =>
+    $axis === 'HEAD_OF_GOVERNMENT'
+      ? theme.mode === 'dark'
+        ? '#14b8a6'
+        : '#0d9488'
+      : theme.colors.primary};
   opacity: ${({ $tone }) => ($tone === 0 ? 0.85 : 0.55)};
   cursor: pointer;
   transition: opacity 0.12s ease;
@@ -282,6 +339,43 @@ const Scale = styled.div<{ $offset: boolean }>`
 const Coverage = styled.span`
   font-weight: 500;
   text-align: center;
+`
+
+const AxisFilterRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const AxisFilterChip = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const AxisFilterCount = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.78;
 `
 
 const Cards = styled.div`
@@ -357,12 +451,17 @@ const CardTop = styled.span`
   max-width: 100%;
 `
 
-const Ordinal = styled.span`
+const Ordinal = styled.span<{ $axis?: HistoricalRulerItem['axis'] }>`
   flex: none;
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ $axis, theme }) =>
+    $axis === 'HEAD_OF_GOVERNMENT'
+      ? theme.mode === 'dark'
+        ? '#2dd4bf'
+        : '#0f766e'
+      : theme.colors.primary};
 `
 
 const CardName = styled.span`

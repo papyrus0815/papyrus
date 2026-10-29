@@ -27,18 +27,18 @@ import { pathKeys } from '@/shared/router'
 import { useRecentCountriesStore } from '@/widgets/command-palette'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 import { CountryFormModal } from '@/widgets/country/country-form/ui/country-form-modal'
+import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui/ui/country-mobile-ui'
 import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/ui/historical-country-form-modal'
-import { useContentCoreData } from '@/widgets/content-shell'
 
 import { useCountryDetailRouting } from './use-country-detail-routing.hook'
 import { useCountryFormHandlers } from './use-country-form-handlers.hook'
 import { useContentLocation } from './use-content-location.hook'
 import type { CountryDetailTabKey } from '@/widgets/country/country-detail/ui/country-detail.widget'
 
-/** 페이지 마운트 동안 전역 흰색 배경 + 배경 이미지 숨김 — DOM 직접 조작 대신 styled GlobalStyle. */
+/** 페이지 마운트 동안 전역 배경색 동기화 + 배경 이미지 숨김 — DOM 직접 조작 대신 styled GlobalStyle. */
 const CountryDetailPageGlobalStyle = createGlobalStyle`
-  body { background-color: #ffffff; }
+  body { background-color: ${({ theme }) => theme.colors.background.primary}; }
   #global-bg { display: none; }
 `
 
@@ -54,6 +54,8 @@ export interface CountryDetailShellContext {
   /** 상세 폼 모달 진입 — country.type에 따라 분기 */
   onEdit: (country: UnifiedCountry) => void
   onDelete: (id: string) => Promise<void>
+  /** 모바일/태블릿(≤1024px)에서 국가 목록 시트 열기 */
+  onOpenMobileList: () => void
 }
 
 /** 자식 라우트가 셸 args를 받는 hook. */
@@ -72,7 +74,7 @@ export function CountryDetailShell() {
     continents,
     apiHistoricalCountries,
     isLoading: isCoreDataLoading,
-  } = useContentCoreData()
+  } = useCountryListState()
 
   const selectedId = params.countryId ?? null
 
@@ -100,9 +102,10 @@ export function CountryDetailShell() {
   // 다른 페이지로 떠날 때 이전 국가명이 잠깐 남아 있는 잔상 방지.
   // (Layout route 덕분에 sub-route 전환 시에는 이 effect가 재실행되지 않음 — 깜빡임 없음.)
   useEffect(() => {
-    if (!selectedCountry) return
     const prev = document.title
-    document.title = `${selectedCountry.name} · Papyrus`
+    document.title = selectedCountry
+      ? `${selectedCountry.name} · Papyrus`
+      : '국가 목록 · Papyrus'
     return () => {
       document.title = prev
     }
@@ -149,6 +152,11 @@ export function CountryDetailShell() {
     historicalForm.editing?.id,
   ])
 
+  const openMobileList = useMemo(
+    () => () => setIsMobileListOpen(true),
+    [],
+  )
+
   // 자식이 effect deps로 context 객체 자체를 참조해도 안정적이도록 useMemo.
   const context = useMemo<CountryDetailShellContext>(
     () => ({
@@ -161,6 +169,7 @@ export function CountryDetailShell() {
       handleDetailTabChange,
       onEdit: editFromDetail,
       onDelete: deleteFromDetail,
+      onOpenMobileList: openMobileList,
     }),
     [
       selectedId,
@@ -172,6 +181,7 @@ export function CountryDetailShell() {
       handleDetailTabChange,
       editFromDetail,
       deleteFromDetail,
+      openMobileList,
     ],
   )
 
@@ -196,12 +206,13 @@ export function CountryDetailShell() {
       </SmartErrorBoundary>
 
       <CountryMobileUI
-          isMobileListOpen={isMobileListOpen}
-          onMobileListOpenChange={setIsMobileListOpen}
-          selectedId={selectedId}
-          onSelectCountry={handleSelectCountry}
-          onAddCountry={countryForm.openCreate}
-        />
+        isMobileListOpen={isMobileListOpen}
+        onMobileListOpenChange={setIsMobileListOpen}
+        selectedId={selectedId}
+        onSelectCountry={handleSelectCountry}
+        onAddCountry={countryForm.openCreate}
+        onAddHistoricalCountry={historicalForm.openCreate}
+      />
 
         <CountryFormModal
           isOpen={countryForm.isOpen}

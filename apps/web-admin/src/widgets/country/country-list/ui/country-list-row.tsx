@@ -88,6 +88,7 @@ interface CountryListRowProps {
   onShowChildren?: (country: UnifiedCountry, anchorEl: HTMLElement) => void
   onSelect: (id: string) => void
   onTogglePin: (id: string) => void
+  onEditCountry?: (country: UnifiedCountry) => void
   onEditHistorical?: (country: UnifiedCountry) => void
   /** 우클릭 → 컨텍스트 메뉴 호출 */
   onContextMenu?: (country: UnifiedCountry, e: React.MouseEvent) => void
@@ -105,6 +106,7 @@ export function CountryListRow({
   onShowChildren,
   onSelect,
   onTogglePin,
+  onEditCountry,
   onEditHistorical,
   onContextMenu,
 }: CountryListRowProps) {
@@ -148,8 +150,10 @@ export function CountryListRow({
         onClick={() => onSelect(country.id)}
         onContextMenu={(e) => onContextMenu?.(country, e)}
         onDoubleClick={() => {
-          if (country.type === 'historical' && onEditHistorical) {
-            onEditHistorical(country)
+          if (country.type === 'historical') {
+            onEditHistorical?.(country)
+          } else {
+            onEditCountry?.(country)
           }
         }}
       >
@@ -240,14 +244,15 @@ export function CountryListRow({
             {hasChildren && (
               <S.HasChildrenChevron
                 type="button"
-                aria-label="역사 국가 보기"
-                title="역사 국가 보기"
+                aria-label={`역사 국가 ${country.historicalCountries!.length}개 보기`}
+                title={`역사 국가 ${country.historicalCountries!.length}개 보기`}
                 aria-expanded={childrenPopoverOpenForId === country.id}
                 onClick={(e) => {
                   e.stopPropagation()
                   onShowChildren?.(country, e.currentTarget as HTMLButtonElement)
                 }}
               >
+                <span>{country.historicalCountries!.length}</span>
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"

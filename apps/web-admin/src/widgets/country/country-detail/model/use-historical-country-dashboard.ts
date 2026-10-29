@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { politicalSystemKeys } from '@/entities/political-system/api'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllEventsExhaustive } from '@/shared/api/events'
 import {
@@ -17,6 +18,7 @@ import {
 } from '@/shared/api/historical-countries'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonsByHistoricalCountryUnion } from '@/shared/api/persons'
+import { listPoliticalSystems } from '@/shared/api/political-system'
 import { treatyApi } from '@/shared/api/treaty'
 import {
   getCountryYearRange,
@@ -60,6 +62,7 @@ export type HistoricalFillTarget =
   | 'events'
   | 'figures'
   | 'heads'
+  | 'government'
   | 'succession'
   | 'treaty'
   | 'relation'
@@ -169,6 +172,7 @@ export function useHistoricalCountryDashboard(
     treatiesQuery,
     foundingQuery,
     allCountriesQuery,
+    politicalSystemsQuery,
   ] = useQueries({
     queries: [
       {
@@ -219,6 +223,11 @@ export function useHistoricalCountryDashboard(
         queryKey: historicalDashboardKeys.allCountries,
         queryFn: getAllHistoricalCountries,
         staleTime: 1000 * 60 * 30,
+      },
+      {
+        queryKey: politicalSystemKeys.list({ historicalCountryId: id }),
+        queryFn: () => listPoliticalSystems({ historicalCountryId: id }),
+        staleTime: 1000 * 60,
       },
     ],
   })
@@ -394,6 +403,7 @@ export function useHistoricalCountryDashboard(
 
   const memberships = asArray(membershipsQuery.data)
   const relations = asArray(relationsQuery.data)
+  const politicalSystems = asArray(politicalSystemsQuery.data)
   const treatyCount =
     (treatiesQuery.data as { total?: number } | undefined)?.total ?? 0
   const founding = foundingQuery.data
@@ -426,6 +436,13 @@ export function useHistoricalCountryDashboard(
       filled: (founding?.firstRulers?.length ?? 0) > 0,
       target: 'historical',
       historicalTarget: 'heads',
+    },
+    {
+      key: 'politicalSystem',
+      label: '정체',
+      filled: politicalSystems.length > 0,
+      target: 'government',
+      historicalTarget: 'government',
     },
     {
       key: 'lineage',

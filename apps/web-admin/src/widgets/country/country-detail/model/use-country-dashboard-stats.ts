@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useQueries } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { politicalSystemKeys } from '@/entities/political-system/api'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { cityApi } from '@/shared/api/city'
@@ -13,6 +14,7 @@ import { militaryUnitApi } from '@/shared/api/military-unit'
 import { personApi } from '@/shared/api/person'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { PersonResponseDto } from '@/shared/api/persons'
+import { listPoliticalSystems } from '@/shared/api/political-system'
 import { treatyApi } from '@/shared/api/treaty'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -75,6 +77,8 @@ export interface CompletenessField {
   label: string
   filled: boolean
   target: CompletenessTarget
+  /** target === 'government'일 때 행정조직 내부 하위 탭 딥링크 */
+  governmentSubTab?: 'heads' | 'cabinets' | 'ministries' | 'system'
 }
 
 export interface DeltaCounts {
@@ -248,6 +252,7 @@ export function useCountryDashboardStats(
     electionsQuery,
     treatiesQuery,
     allCountriesQuery,
+    politicalSystemsQuery,
   ] = useQueries({
     queries: [
       {
@@ -328,12 +333,17 @@ export function useCountryDashboardStats(
         enabled: Boolean(countryId && country?.continentId),
         staleTime: 1000 * 60 * 30,
       },
+      {
+        queryKey: politicalSystemKeys.list({ countryId }),
+        queryFn: () => listPoliticalSystems({ countryId }),
+        enabled: Boolean(countryId),
+        staleTime: 1000 * 60,
+      },
     ],
   })
 
-  // 활성 cabinet 중 가장 최신(headTenure.startDate desc)을 명시적으로 선택.
-  // API 응답 순서를 가정하지 않고 정렬 후 첫 항목을 사용 — 정렬 보장 없으면 잘못된 cabinet이
-  // "현 정부"로 표시될 위험.
+  // 활성 cabinet 중 가장 최신(headTenure.startDate desc)을 우선 선택하고,
+  // 모든 내각이 종료된 국가(프랑스·일본·독일 등 과거 내각만 등록된 경우)에서는 가장 최근 내각으로 폴백한다.
   const latestActiveCabinetId = useMemo<string | null>(() => {
     const list = Array.isArray(cabinetsQuery.data)
       ? (cabinetsQuery.data as any[])
@@ -346,8 +356,8 @@ export function useCountryDashboardStats(
       const t = new Date(end).getTime()
       return !Number.isFinite(t) || t >= now
     })
-    if (active.length === 0) return null
-    const sorted = [...active].sort((a, b) => {
+    const candidates = active.length > 0 ? active : list
+    const sorted = [...candidates].sort((a, b) => {
       const da = new Date(a.headTenure?.startDate ?? 0).getTime()
       const db = new Date(b.headTenure?.startDate ?? 0).getTime()
       return db - da
@@ -379,9 +389,60 @@ export function useCountryDashboardStats(
     : 0
   const eventCount = Array.isArray(eventsQuery.data) ? eventsQuery.data.length : 0
   const historicalCountryCount = country?.historicalCountries?.length ?? 0
-  const administrationCount = Array.isArray(administrationQuery.data)
+  const departmentCount = Array.isArray(administrationQuery.data)
     ? administrationQuery.data.length
     : 0
+  const politicalSystemCount = Array.isArray(politicalSystemsQuery.data)
+    ? politicalSystemsQuery.data.length
+    : 0
+  const cabinetList = Array.isArray(cabinetsQuery.data)
+    ? (cabinetsQuery.data as any[])
+    : []
+  const allTenureRows = Array.isArray(tenuresQuery.data)
+    ? (tenuresQuery.data as any[])
+    : []
+  const hasAnyHeadRecord = useMemo(() => {
+    if (cabinetList.some((c) => c?.headTenure != null)) return true
+    return allTenureRows.some((t) => {
+      const pt =
+        t?.positionType ??
+        t?.positionDefinition?.positionType ??
+        t?.position?.positionType
+      return HEAD_TYPES.has(pt)
+    })
+  }, [cabinetList, allTenureRows])
+  const hasAnyMinisterRecord = useMemo(() => {
+    if (
+      cabinetList.some(
+        (c) => (c?.ministerCount ?? c?._count?.tenures ?? 0) > 0,
+      )
+    ) {
+      return true
+    }
+    return allTenureRows.some((t) => {
+      const pt =
+        t?.positionType ??
+        t?.positionDefinition?.positionType ??
+        t?.position?.positionType
+      return pt === 'MINISTER'
+    })
+  }, [cabinetList, allTenureRows])
+  const executiveHeadTenureCount = useMemo(
+    () =>
+      allTenureRows.filter((t) => {
+        const pt =
+          t?.positionType ??
+          t?.positionDefinition?.positionType ??
+          t?.position?.positionType
+        return HEAD_TYPES.has(pt)
+      }).length,
+    [allTenureRows],
+  )
+  // 기록 원장의 '행정조직' 축: 중앙부처 + 등록된 내각 + 정체(없으면 수반 재임 기록)을 합산해
+  // 내각·정체·역대 수반이 등록된 국가(프랑스·스페인 등)에서 행정조직이 0건으로 빠지지 않게 한다.
+  const administrationCount =
+    departmentCount + cabinetList.length + politicalSystemCount ||
+    executiveHeadTenureCount
   const cityCount = Array.isArray(citiesQuery.data)
     ? citiesQuery.data.length
     : 0
@@ -785,28 +846,40 @@ export function useCountryDashboardStats(
     const fields: CompletenessField[] = country
       ? [
           {
+            key: 'politicalSystem',
+            label: '정체',
+            filled: politicalSystemCount > 0,
+            target: 'government',
+            governmentSubTab: 'system',
+          },
+          {
             key: 'head',
             label: '수반',
-            filled: currentHeads.length > 0,
+            filled: currentHeads.length > 0 || hasAnyHeadRecord,
             target: 'government',
+            governmentSubTab: 'heads',
           },
           {
             key: 'cabinet',
             label: '행정부',
-            filled: currentCabinet != null,
+            filled: currentCabinet != null || cabinetList.length > 0,
             target: 'government',
+            governmentSubTab: 'cabinets',
           },
           {
             key: 'ministers',
             label: '각료',
-            filled: (currentCabinet?.ministerCount ?? 0) > 0,
+            filled:
+              (currentCabinet?.ministerCount ?? 0) > 0 || hasAnyMinisterRecord,
             target: 'government',
+            governmentSubTab: 'cabinets',
           },
           {
             key: 'departments',
             label: '중앙부처',
-            filled: administrationCount > 0,
+            filled: departmentCount > 0,
             target: 'government',
+            governmentSubTab: 'ministries',
           },
           {
             key: 'persons',
@@ -851,9 +924,13 @@ export function useCountryDashboardStats(
     return { filled, total: fields.length, missing }
   }, [
     country,
+    politicalSystemCount,
     currentHeads,
+    hasAnyHeadRecord,
     currentCabinet,
-    administrationCount,
+    cabinetList.length,
+    hasAnyMinisterRecord,
+    departmentCount,
     personCount,
     eventCount,
     nextElection,

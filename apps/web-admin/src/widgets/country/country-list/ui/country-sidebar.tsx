@@ -55,11 +55,19 @@ export function CountrySidebar({
       if (savedMode === 'create') navigate(pathKeys.countryDetail(id))
     },
   })
-  const historicalForm = useHistoricalCountryFormModal()
+  const historicalForm = useHistoricalCountryFormModal({
+    onSaved: (id, savedMode) => {
+      if (savedMode === 'create') navigate(pathKeys.countryDetail(id))
+    },
+  })
 
   const editHistoricalFromList = (country: UnifiedCountry) => {
     const full = apiHistoricalCountries?.find((item) => item.id === country.id)
     if (full) historicalForm.openEdit(full as HistoricalCountry)
+  }
+
+  const editModernFromList = (country: UnifiedCountry) => {
+    countryForm.openEdit(country as Country)
   }
 
   // 역사 폼 모달의 후보 목록 — 모달이 닫혀 있으면 계산 회피
@@ -88,6 +96,7 @@ export function CountrySidebar({
         onSelect={(id) => navigate(pathKeys.countryDetail(id))}
         onAdd={countryForm.openCreate}
         onAddHistorical={historicalForm.openCreate}
+        onEditCountry={editModernFromList}
         onEditHistorical={editHistoricalFromList}
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}

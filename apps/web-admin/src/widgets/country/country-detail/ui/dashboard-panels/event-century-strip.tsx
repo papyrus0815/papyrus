@@ -88,6 +88,8 @@ const Root = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 `
 
 const Head = styled.div`
@@ -112,15 +114,19 @@ const Total = styled.span`
 const Bars = styled.div`
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  scrollbar-width: thin;
   padding-bottom: 2px;
 `
 
 const Column = styled.div`
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: 3px;
+  flex-shrink: 0;
 `
 
 /** 사건이 없는 구간 — 칸을 만들지 않고 표지 하나로 접는다 */
@@ -129,7 +135,7 @@ const Skip = styled.span`
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 0 6px 18px;
+  padding: 0 2px 18px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -145,12 +151,12 @@ const SkipText = styled.span`
 `
 
 /**
- * 막대는 24px — 칸 폭(46px)을 다 채우면 두꺼운 벽돌이 된다. 남는 폭은 누르는 자리로만
+ * 막대는 18px — 칸 폭(32px)을 다 채우면 두꺼운 벽돌이 된다. 남는 폭은 누르는 자리로만
  * 쓴다. 위쪽 끝만 둥글고 바닥은 각지게 — 바닥선에서 자라는 막대로 읽히게 한다.
  */
 const BarFill = styled.span`
   display: block;
-  width: 24px;
+  width: 18px;
   border-radius: 4px 4px 0 0;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.8)' : 'rgba(217, 119, 6, 0.75)'};
@@ -188,20 +194,20 @@ const BarTrack = styled.span`
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  width: 46px;
+  width: 32px;
   height: 64px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.medium};
 `
 
 const BarCount = styled.span`
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const BarLabel = styled.span`
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};

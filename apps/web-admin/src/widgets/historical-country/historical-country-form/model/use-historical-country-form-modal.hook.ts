@@ -5,7 +5,7 @@
  * - 서버 상세(useHistoricalCountry) 자동 조회
  * - create·update·delete 뮤테이션 일원화
  */
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 import type { HistoricalCountry } from '@/entities/historical-country/api'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -34,13 +34,22 @@ export type HistoricalCountrySavePayload = Omit<
   transitionScope?: 'STATE_SUCCESSION' | 'REGIME_CHANGE' | null
 }
 
-export function useHistoricalCountryFormModal() {
+interface UseHistoricalCountryFormModalOptions {
+  /** 저장 성공 후 호출. id는 저장된 역사 국가의 id, mode는 동작 종류. */
+  onSaved?: (id: string, mode: 'create' | 'edit') => void
+}
+
+export function useHistoricalCountryFormModal(
+  opts: UseHistoricalCountryFormModalOptions = {},
+) {
   const createMutation = useCreateHistoricalCountry()
   const updateMutation = useUpdateHistoricalCountry()
   const deleteMutation = useDeleteHistoricalCountry()
 
   const [editing, setEditing] = useState<HistoricalCountry | null>(null)
   const [preset, setPreset] = useState<HistoricalCountryFormPreset>(undefined)
+  const onSavedRef = useRef(opts.onSaved)
+  onSavedRef.current = opts.onSaved
 
   // 수정 모드에서만 서버 상세를 가져온다 (parentModernCountryIds 등 전체 데이터)
   const { data: editingDetail } = useHistoricalCountry(editing?.id)
@@ -92,12 +101,14 @@ export function useHistoricalCountryFormModal() {
           transitionEventType: data.transitionEventType,
           transitionScope: data.transitionScope ?? null,
         }
+        let savedId: string | undefined
         if (data.id) {
-          await updateMutation.mutateAsync({ id: data.id, data: shared })
+          const res = await updateMutation.mutateAsync({ id: data.id, data: shared })
+          savedId = res?.id ?? data.id
           notify.success('수정되었습니다', { id: loadingToast })
         } else {
           // CreateHistoricalCountryDto는 일부 필드 null 미허용 — undefined로 생략
-          await createMutation.mutateAsync({
+          const res = await createMutation.mutateAsync({
             ...shared,
             enName: shared.enName ?? undefined,
             nameOrigin: shared.nameOrigin ?? undefined,
@@ -113,14 +124,19 @@ export function useHistoricalCountryFormModal() {
             endMonth: shared.endMonth ?? undefined,
             endDay: shared.endDay ?? undefined,
           })
+          savedId = res?.id
           notify.success('등록되었습니다', { id: loadingToast })
         }
         close()
+        if (savedId) {
+          onSavedRef.current?.(savedId, data.id ? 'edit' : 'create')
+        }
       } catch (error) {
         notify.error(
           (data.id ? '수정 실패: ' : '등록 실패: ') + (error as Error).message,
           { id: loadingToast },
         )
+        throw error
       }
     },
     [createMutation, updateMutation, close],

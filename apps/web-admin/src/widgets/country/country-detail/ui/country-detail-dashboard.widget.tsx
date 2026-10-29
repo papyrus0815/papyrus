@@ -36,7 +36,6 @@ import {
 import { CompareLine } from './dashboard-panels/compare-line'
 import { CompletenessPanel } from './dashboard-panels/completeness-panel'
 import { CurrentCabinetPanel } from './dashboard-panels/current-cabinet-panel'
-import { CurrentHeadsPanel } from './dashboard-panels/current-heads-panel'
 import { ChartEmpty } from './dashboard-panels/chart-empty'
 import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { SectionEmpty } from './dashboard-panels/section-empty'
@@ -105,8 +104,16 @@ export function CountryDetailDashboard({
     navigate(pathKeys.countryEvents(country.id, undefined, century))
   const goEventsCreate = () =>
     navigate(pathKeys.countryEvents(country.id, 'create'))
-  const goGovernment = () =>
-    navigate(pathKeys.countryGovernment(country.id))
+  const goGovernment = (
+    subTab?: 'heads' | 'cabinets' | 'ministries' | 'system',
+    cabinetId?: string | null,
+  ) => {
+    const params = new URLSearchParams()
+    if (typeof subTab === 'string' && subTab) params.set('sub', subTab)
+    if (typeof cabinetId === 'string' && cabinetId) params.set('cabinetId', cabinetId)
+    const qs = params.toString()
+    navigate(`${pathKeys.countryGovernment(country.id)}${qs ? `?${qs}` : ''}`)
+  }
   const goRegions = () => navigate(pathKeys.countryRegions(country.id))
   // 인물은 이제 국가 지면 안에 탭이 있다 — 대시보드에서 밖으로 내보내지 않는다
   const goPersons = () => navigate(pathKeys.countryPersons(country.id))
@@ -121,7 +128,7 @@ export function CountryDetailDashboard({
   const goFillTarget = (field: CompletenessField) => {
     switch (field.target) {
       case 'government':
-        return goGovernment()
+        return goGovernment(field.governmentSubTab)
       case 'persons':
         return goPersons()
       case 'events':
@@ -212,12 +219,12 @@ export function CountryDetailDashboard({
     {
       key: 'administration',
       label: '행정조직',
-      unit: '개',
+      unit: '건',
       value: stats.administrationCount,
       delta: stats.deltaCounts.administration,
       isLoading: stats.loading.administration,
       icon: <IconLandmark />,
-      onClick: goGovernment,
+      onClick: () => goGovernment(),
     },
     {
       key: 'city',
@@ -273,10 +280,12 @@ export function CountryDetailDashboard({
   ]
   const totalRegistered = recordAxes.reduce((sum, axis) => sum + axis.value, 0)
   /* 행정부 묶음 — 규모 줄과 함께 아래 지면에서 한 번 쓴다 */
-  const governmentSection = isModern ? (
+  const governmentSection = (
     <CurrentCabinetPanel
       countryId={country.id}
-      onOpen={goGovernment}
+      onOpen={(cabinetId, isFallbackHead) =>
+        goGovernment(isFallbackHead ? 'heads' : 'cabinets', cabinetId)
+      }
       onOpenElections={goElections}
       onSelectPerson={(personId) => setPreviewPersonId(personId)}
     >
@@ -291,23 +300,6 @@ export function CountryDetailDashboard({
         />
       )}
     </CurrentCabinetPanel>
-  ) : (
-    <S.Section>
-      <S.SectionTitleRow>
-        <S.SectionTitleIcon>
-          <IconVote />
-        </S.SectionTitleIcon>
-        <S.SectionTitleText>지금</S.SectionTitleText>
-      </S.SectionTitleRow>
-      <S.NowRow>
-        <CurrentHeadsPanel
-          isLoading={stats.loading.tenures}
-          heads={stats.currentHeads}
-          onSelect={(personId) => setPreviewPersonId(personId)}
-          onRegister={goGovernment}
-        />
-      </S.NowRow>
-    </S.Section>
   )
 
   /* 규모 줄은 빈 지면과 채워진 지면이 함께 쓴다 — 같은 JSX를 두 벌 두지 않는다 */
@@ -655,6 +647,10 @@ export function CountryDetailDashboard({
       <PersonInlineModal
         personId={previewPersonId}
         onClose={() => setPreviewPersonId(null)}
+        onEdit={(personId) => {
+          setPreviewPersonId(null)
+          navigate(pathKeys.personsTimelineDetail(personId))
+        }}
         onOpenDetail={(personId) => {
           setPreviewPersonId(null)
           navigate(pathKeys.personsTimelineDetail(personId))

@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { type ContinentOption } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { pathKeys } from '@/shared/router'
+import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 
 import { CountryDetailDashboard } from './country-detail-dashboard.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
@@ -45,6 +46,8 @@ export interface CountryDetailProps {
   notFound?: boolean
   onEdit?: (country: UnifiedCountry) => void
   onDelete?: (id: string) => void
+  /** 모바일/태블릿(≤1024px)에서 국가 목록 시트 열기 */
+  onOpenMobileList?: () => void
   /** URL 연동: 역대 수반·대시보드·역사적 국가·행정구역·행정조직 등 특정 탭으로 진입 시 */
   initialDetailTab?: CountryDetailTabKey
   /**
@@ -75,6 +78,7 @@ function CountryDetailInner({
   notFound = false,
   onEdit,
   onDelete,
+  onOpenMobileList,
   initialDetailTab,
   onDetailTabChange,
 }: CountryDetailProps) {
@@ -133,10 +137,10 @@ function CountryDetailInner({
     )
   }
   if (notFound) {
-    return <NotFoundState />
+    return <NotFoundState onOpenMobileList={onOpenMobileList} />
   }
   if (!country) {
-    return <EmptyState />
+    return <EmptyState onOpenMobileList={onOpenMobileList} />
   }
 
   // 역사적 국가는 별도 UI로 렌더링.
@@ -288,11 +292,14 @@ function CountryDetailInner({
                       country={country}
                       countryId={country.id}
                       initialContentTab={
-                        initialDetailTab === 'heads'
+                        (searchParams.get('sub') as
+                          | import('./government-info-section.widget').GovernmentContentTab
+                          | null) ??
+                        (initialDetailTab === 'heads'
                           ? 'heads'
                           : initialDetailTab === 'political-system'
                             ? 'system'
-                            : undefined
+                            : undefined)
                       }
                     />
                   </S.TabContentPane>
@@ -339,7 +346,11 @@ function CountryDetailInner({
   )
 }
 
-function NotFoundState() {
+function NotFoundState({
+  onOpenMobileList,
+}: {
+  onOpenMobileList?: () => void
+}) {
   return (
     <S.EmptyStateContainer
       as={motion.div}
@@ -387,12 +398,24 @@ function NotFoundState() {
         <S.EmptyStateHint>
           ← 목록에서 다시 선택
         </S.EmptyStateHint>
+        {onOpenMobileList && (
+          <S.EmptyStateMobileButton type="button" onClick={onOpenMobileList}>
+            목록에서 국가 선택하기
+          </S.EmptyStateMobileButton>
+        )}
       </S.EmptyStateCard>
     </S.EmptyStateContainer>
   )
 }
 
-function EmptyState() {
+function EmptyState({
+  onOpenMobileList,
+}: {
+  onOpenMobileList?: () => void
+}) {
+  const { unifiedCountries, historicalCount } = useCountryListState()
+  const hasCounts = unifiedCountries.length > 0 || historicalCount > 0
+
   return (
     <S.EmptyStateContainer
       as={motion.div}
@@ -446,9 +469,21 @@ function EmptyState() {
         <S.EmptyStateDescription>
           왼쪽 목록에서 국가를 선택하면 상세 정보를 볼 수 있습니다
         </S.EmptyStateDescription>
+        {hasCounts && (
+          <S.EmptyStateCorpusBadge>
+            <span>현대 국가 {unifiedCountries.length}개</span>
+            <span>·</span>
+            <span>과거 국가 {historicalCount}개</span>
+          </S.EmptyStateCorpusBadge>
+        )}
         <S.EmptyStateHint>
           ← 목록에서 선택
         </S.EmptyStateHint>
+        {onOpenMobileList && (
+          <S.EmptyStateMobileButton type="button" onClick={onOpenMobileList}>
+            목록에서 국가 선택하기
+          </S.EmptyStateMobileButton>
+        )}
       </S.EmptyStateCard>
     </S.EmptyStateContainer>
   )

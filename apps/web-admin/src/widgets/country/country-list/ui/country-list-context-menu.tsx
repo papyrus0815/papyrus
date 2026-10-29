@@ -97,6 +97,7 @@ export function CountryListContextMenu({
     <Menu
       ref={menuRef}
       role="menu"
+      data-country-context-menu="true"
       style={{ left, top }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -127,7 +128,7 @@ const Menu = styled.div`
   border-radius: 10px;
   box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
   padding: 4px;
-  z-index: ${Z_INDEX.DROPDOWN};
+  z-index: ${Z_INDEX.DROPDOWN + 10};
 `
 
 const MenuTitle = styled.div`

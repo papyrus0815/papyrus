@@ -299,20 +299,7 @@ export const SectionCountChip = styled.span`
       : 'rgba(15, 23, 42, 0.05)'};
 `
 
-export const SectionTitleSpacer = styled.div`
-  flex: 1;
-`
-
-/* ─── Top row: completeness + heads ───────────────────────────────────── */
-
-export const TwoColRow = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: ${space.xl}px;
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-`
+/* ─── 보조 카드 (기록 완성도·선거 등) ────────────────────────────────── */
 
 /**
  * 보조 카드(기록 완성도·선거 등). 예전엔 왼쪽에 제 색 줄(남색·장미·보라·초록)을 세웠다 —
@@ -1614,9 +1601,13 @@ export const RecordGridBody = styled.div`
   gap: 16px;
   align-items: start;
 
-  @container (min-width: 960px) {
-    grid-template-columns: minmax(0, 1fr) max-content;
-    gap: 28px;
+  @container (min-width: 860px) {
+    /*
+     * 원장(RecordLedger)에 최소 340px을 보장하고, 사건 연표(EventTimelineBlock)는
+     * 내용 폭(max-content)만큼 자리를 잡되 남는 폭을 넘지 않게 한다.
+     */
+    grid-template-columns: minmax(340px, 1fr) minmax(0, auto);
+    gap: 24px;
   }
 `
 
@@ -1626,8 +1617,10 @@ export const EventTimelineBlock = styled.div`
   flex-direction: column;
   gap: 8px;
   width: max-content;
+  min-width: 0;
   max-width: 100%;
-  padding: 14px 18px;
+  box-sizing: border-box;
+  padding: 14px 16px;
   border-radius: 12px;
   ${surfaceStatic}
 `
@@ -1769,30 +1762,7 @@ export const TradeItemPartner = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-/* ─── 교역 분류 구성 막대 (2026-09) ──────────────────────────────────── */
-
-/**
- * 품목을 분류로 묶어 한 줄 막대로 보여준다.
- * 칩 목록은 "무엇을"에는 답해도 "무엇 위주의 나라인가"에는 답하지 못한다 — 원유·석탄이
- * 따로 놓이면 '에너지 60%'라는 한눈이 사라진다. 이 막대가 그 층위를 맡는다.
- */
-export const TradeCompositionBar = styled.div`
-  display: flex;
-  /* 조각 사이는 테두리가 아니라 **바탕색 틈**이 가른다 — 선을 그으면 데이터가 아닌
-     잉크가 늘고, 색이 붙은 이웃(운송↔화학)은 그래도 안 갈라진다 */
-  gap: 2px;
-  width: 100%;
-  height: 16px;
-  border-radius: ${radius.pill}px;
-  overflow: hidden;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)'};
-`
-
-export const TradeCompositionSlice = styled.div<{ $color: string }>`
-  flex: 0 0 auto;
-  background: ${({ $color }) => $color};
-`
+/* ─── 교역 분류 구성 범례 ────────────────────────────────────────────── */
 
 export const TradeCompositionLegend = styled.div`
   display: flex;
@@ -1810,146 +1780,11 @@ export const TradeCompositionLegendItem = styled.span`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-/**
- * 값은 이름보다 한 톤 죽인다 — 범례가 '이름 + 숫자'로 읽히지, 숫자 나열로 읽히지
- * 않게. 색이 15개 대분류를 끝까지 못 가르므로 **식별은 이 이름표가 맡는다**
- * (막대 조각과 같은 순서로 놓아 왼쪽부터 짝지어 읽힌다).
- */
-export const TradeCompositionPct = styled.span`
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 export const TradeCompositionDot = styled.span<{ $color: string }>`
   width: 10px;
   height: 10px;
   border-radius: 3px;
   background: ${({ $color }) => $color};
-`
-
-/* ─── 교역 규모·방향 (2026-09 개선) ─────────────────────────────────── */
-
-/**
- * 연도 선택 — 등록된 해가 여럿인데 늘 최신만 보여주면 나머지는 없는 자료가 된다.
- * (사실 막대에 "2022–2024년 3개"라고 적어두고 다른 해로는 갈 수 없었다.)
- */
-export const TradeYearTabs = styled.div`
-  display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-`
-
-export const TradeYearTab = styled.button<{ $active: boolean }>`
-  flex-shrink: 0;
-  padding: 3px 10px;
-  border-radius: ${radius.pill}px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active ? 'transparent' : theme.colors.border.default};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : 'transparent'};
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.background.primary : theme.colors.text.secondary};
-  font-size: 12.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme, $active }) =>
-      $active ? 'transparent' : theme.colors.border.medium};
-  }
-`
-
-/**
- * 규모 — 수출·수입을 **같은 축의 두 막대**로 놓는다.
- *
- * 숫자만 나란히 적으면(옛 FactBar) 2,065와 3,296.6의 차이가 읽는 사람 머릿속 계산으로
- * 남는다. 같은 축에 눕히면 "수입이 1.6배"가 눈으로 먼저 온다 — 무역수지가 이 섹션의
- * 본론인데 그림이 하나도 없던 게 문제였다.
- */
-export const TradeScaleBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
-`
-
-export const TradeScaleRow = styled.div`
-  display: grid;
-  /* 라벨 칸을 고정폭으로 두면 글자가 커졌을 때 '수/출'로 쪼개진다 — 내용에 맡긴다 */
-  grid-template-columns: auto minmax(104px, auto) 1fr;
-  align-items: center;
-  gap: 10px;
-`
-
-export const TradeScaleLabel = styled.span<{ $color: string }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  &::before {
-    content: '';
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
-    background: ${({ $color }) => $color};
-  }
-`
-
-export const TradeScaleValue = styled.span`
-  font-size: 19px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-export const TradeScaleTrack = styled.div`
-  height: 14px;
-  border-radius: ${radius.pill}px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)'};
-`
-
-export const TradeScaleFill = styled.div<{ $color: string }>`
-  height: 100%;
-  border-radius: ${radius.pill}px;
-  background: ${({ $color }) => $color};
-`
-
-export const TradeBalanceLine = styled.p<{ $surplus: boolean }>`
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  strong {
-    font-weight: 800;
-    color: ${({ $surplus, theme }) =>
-      $surplus
-        ? theme.mode === 'dark'
-          ? '#4ade80'
-          : '#15803d'
-        : theme.mode === 'dark'
-          ? '#f87171'
-          : '#b91c1c'};
-  }
-`
-
-/** 값마다 'USD 십억'을 붙이면 같은 말이 두 번 나온다 — 블록에 한 번만 적는다 */
-export const TradeScaleUnit = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /** 수출 블록과 수입 블록이 어디서 갈리는지 — 라벨만으로는 안 갈렸다 */
@@ -2011,71 +1846,6 @@ export const TradeSourceLine = styled.p`
   font-size: 12px;
   line-height: 1.6;
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-/* ─── 기업 (2026-09) ──────────────────────────────────────────────────── */
-
-export const CompanyRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-`
-
-export const CompanyChip = styled.button<{ $accent?: AccentKey }>`
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 8px;
-  border-radius: 10px;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  ${surfaceInteractive}
-`
-
-export const CompanyLogo = styled.span`
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-`
-
-export const CompanyText = styled.span`
-  display: inline-flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-`
-
-export const CompanyName = styled.span`
-  font-size: 13.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
-`
-
-export const CompanyMeta = styled.span`
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 `
 
 /** 섹션 제목 줄 우측 텍스트 링크 (‘전체 보기’) */

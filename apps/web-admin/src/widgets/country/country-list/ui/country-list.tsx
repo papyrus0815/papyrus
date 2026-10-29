@@ -39,6 +39,7 @@ interface CountryListProps {
     stateType: 'SHOGUNATE'
     entityKind: 'REGIME'
   }) => void
+  onEditCountry?: (country: UnifiedCountry) => void
   onEditHistorical?: (country: UnifiedCountry) => void
   /** 좌측 패널 접기 상태 */
   collapsed?: boolean
@@ -51,6 +52,7 @@ function CountryListInner({
   onSelect,
   onAdd,
   onAddHistorical,
+  onEditCountry,
   onEditHistorical,
   collapsed = false,
   onToggleCollapse,
@@ -652,6 +654,7 @@ function CountryListInner({
                                             onShowChildren={handleShowChildren}
                                             onSelect={onSelect}
                                             onTogglePin={togglePinned}
+                                            onEditCountry={onEditCountry}
                                             onEditHistorical={
                                               onEditHistorical
                                             }
@@ -709,9 +712,9 @@ function CountryListInner({
           onClose={() => setContextMenu(null)}
           onTogglePin={togglePinned}
           onEdit={
-            contextMenu.country.type === 'historical' && onEditHistorical
+            contextMenu.country.type === 'historical'
               ? onEditHistorical
-              : undefined
+              : onEditCountry
           }
         />
       )}

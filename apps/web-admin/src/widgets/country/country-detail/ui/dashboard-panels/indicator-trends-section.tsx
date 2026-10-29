@@ -73,9 +73,11 @@ export function IndicatorTrendsSection({
           <IconChart />
         </S.SectionTitleIcon>
         <S.SectionTitleText>지표 추이</S.SectionTitleText>
-        <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
-          데이터 관리
-        </S.SectionAction>
+        {hasAny && (
+          <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
+            데이터 관리
+          </S.SectionAction>
+        )}
       </S.SectionTitleRow>
 
       {!isLoading && !hasAny && (

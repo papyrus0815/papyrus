@@ -9,6 +9,11 @@ import {
 import { formatCountryPeriod } from '@/shared/lib/country-period'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 import { CountryListEmpty } from '@/widgets/country/country-list/ui/country-list-empty'
+import {
+  CountryListError,
+  HistoricalPartialErrorBanner,
+} from '@/widgets/country/country-list/ui/country-list-error'
+import { CountryListSkeleton } from '@/widgets/country/country-list/ui/country-list-skeleton'
 
 import * as PageS from './country-mobile-ui.styles'
 import * as ListS from '@/widgets/country/country-list/ui/country-list.styles'
@@ -19,6 +24,7 @@ interface CountryMobileUIProps {
   selectedId: string | null
   onSelectCountry: (id: string) => void
   onAddCountry: () => void
+  onAddHistoricalCountry?: () => void
 }
 
 export function CountryMobileUI({
@@ -27,9 +33,11 @@ export function CountryMobileUI({
   selectedId,
   onSelectCountry,
   onAddCountry,
+  onAddHistoricalCountry,
 }: CountryMobileUIProps) {
   // 검색·필터·정렬 등 리스트 상태는 모두 컨텍스트에서 — 데스크톱 리스트와 단일 진실의 원천 공유.
   const {
+    unifiedCountries,
     filtered,
     continents,
     query,
@@ -40,10 +48,23 @@ export function CountryMobileUI({
     setCountryTypeFilter: onCountryTypeFilterChange,
     sortBy,
     setSortBy: onSortByChange,
+    isLoadingCountries,
+    isLoadingHistorical,
+    isLoadingContinents,
+    isError,
+    isErrorHistorical,
+    refetchAll,
   } = useCountryListState()
   // 데스크톱과 동일한 필터 활성 판정 — 유형까지 포함해 트랩(historical 잔존) 해제 가능(F10)
   const hasFilterActive =
     !!query || !!continentFilter || countryTypeFilter !== 'all'
+  const isInitialLoading =
+    countryTypeFilter === 'historical'
+      ? isLoadingHistorical && filtered.length === 0
+      : (isLoadingCountries && unifiedCountries.length === 0) ||
+        (isLoadingContinents &&
+          continents.length === 0 &&
+          unifiedCountries.length > 0)
   const handleClearFilters = () => {
     onQueryChange('')
     onContinentFilterChange('')
@@ -109,9 +130,20 @@ export function CountryMobileUI({
                       onMobileListOpenChange(false)
                     }}
                   >
-                    <FiPlus size={18} />
+                    <FiPlus size={16} />
                     새 국가 등록
                   </PageS.MobileAddButton>
+                  {onAddHistoricalCountry && (
+                    <PageS.MobileAddButton
+                      onClick={() => {
+                        onAddHistoricalCountry()
+                        onMobileListOpenChange(false)
+                      }}
+                    >
+                      <FaLandmark size={14} />
+                      새 역사 국가 등록
+                    </PageS.MobileAddButton>
+                  )}
                 </PageS.MobileActionRow>
                 <PageS.MobileListSearchRow>
                   <PageS.MobileSearchWrapper>
@@ -202,7 +234,11 @@ export function CountryMobileUI({
               )}
               <ListS.ListContainer>
                 <ListS.VirtualList>
-                  {filtered.length === 0 ? (
+                  {isInitialLoading ? (
+                    <CountryListSkeleton />
+                  ) : isError && filtered.length === 0 ? (
+                    <CountryListError onRetry={refetchAll} />
+                  ) : filtered.length === 0 ? (
                     // 데스크톱과 동일한 빈 상태 컴포넌트 재사용 — 유형별 카피·사본 제거(F10)
                     <CountryListEmpty
                       query={query}
@@ -211,70 +247,80 @@ export function CountryMobileUI({
                       onAdd={onAddCountry}
                     />
                   ) : (
-                    filtered.map((country) => {
-                      // 역사 국가는 현대 전용 렌더(flagEmoji·수도·인구)로는 깨지므로 유형 분기(F10)
-                      const isHistorical = country.type === 'historical'
-                      const periodText = isHistorical
-                        ? formatCountryPeriod(country, { variant: 'short' })
-                        : ''
-                      return (
-                        <ListS.ListRow
-                          key={country.id}
-                          $active={country.id === selectedId}
-                          onClick={() => {
-                            onSelectCountry(country.id)
-                            onMobileListOpenChange(false)
-                          }}
-                        >
-                          <ListS.RowTop>
-                            <ListS.RowLeft>
-                              <ListS.FlagBadge>
+                    <>
+                      {isErrorHistorical && countryTypeFilter !== 'modern' && (
+                        <HistoricalPartialErrorBanner onRetry={refetchAll} />
+                      )}
+                      {filtered.map((country) => {
+                        // 역사 국가는 현대 전용 렌더(flagEmoji·수도·인구)로는 깨지므로 유형 분기(F10)
+                        const isHistorical = country.type === 'historical'
+                        const periodText = isHistorical
+                          ? formatCountryPeriod(country, { variant: 'short' })
+                          : ''
+                        const modernSubtext = country.capital
+                          ? `${country.isoCode || '-'} · ${country.capital}`
+                          : country.localName
+                            ? `${country.isoCode || '-'} · ${country.localName}`
+                            : country.isoCode || '-'
+                        return (
+                          <ListS.ListRow
+                            key={country.id}
+                            $active={country.id === selectedId}
+                            onClick={() => {
+                              onSelectCountry(country.id)
+                              onMobileListOpenChange(false)
+                            }}
+                          >
+                            <ListS.RowTop>
+                              <ListS.RowLeft>
+                                <ListS.FlagBadge>
+                                  {isHistorical ? (
+                                    <FaLandmark size={16} />
+                                  ) : (
+                                    country.flagEmoji || '🏳️'
+                                  )}
+                                </ListS.FlagBadge>
+                                <ListS.TextCol>
+                                  <ListS.CodeText $unread={false}>
+                                    {country.name}
+                                  </ListS.CodeText>
+                                  <ListS.NameText>
+                                    {isHistorical
+                                      ? country.enName || periodText || '과거 국가'
+                                      : modernSubtext}
+                                  </ListS.NameText>
+                                </ListS.TextCol>
+                              </ListS.RowLeft>
+                            </ListS.RowTop>
+                            <ListS.RowBottom>
+                              <ListS.Meta>
                                 {isHistorical ? (
-                                  <FaLandmark size={16} />
+                                  periodText && <span>{periodText}</span>
                                 ) : (
-                                  country.flagEmoji || '🏳️'
+                                  <>
+                                    {country.population != null && (
+                                      <span>
+                                        인구{' '}
+                                        {Number(
+                                          country.population,
+                                        ).toLocaleString()}
+                                      </span>
+                                    )}
+                                    {country.population != null &&
+                                      country.areaSqKm != null && <ListS.Dot />}
+                                    {country.areaSqKm != null && (
+                                      <span>
+                                        면적 {country.areaSqKm.toLocaleString()}km²
+                                      </span>
+                                    )}
+                                  </>
                                 )}
-                              </ListS.FlagBadge>
-                              <ListS.TextCol>
-                                <ListS.CodeText $unread={false}>
-                                  {country.name}
-                                </ListS.CodeText>
-                                <ListS.NameText>
-                                  {isHistorical
-                                    ? country.enName || periodText || '과거 국가'
-                                    : `${country.isoCode || '-'} · ${country.capital || '수도 미상'}`}
-                                </ListS.NameText>
-                              </ListS.TextCol>
-                            </ListS.RowLeft>
-                          </ListS.RowTop>
-                          <ListS.RowBottom>
-                            <ListS.Meta>
-                              {isHistorical ? (
-                                periodText && <span>{periodText}</span>
-                              ) : (
-                                <>
-                                  {country.population != null && (
-                                    <span>
-                                      인구{' '}
-                                      {Number(
-                                        country.population,
-                                      ).toLocaleString()}
-                                    </span>
-                                  )}
-                                  {country.population != null &&
-                                    country.areaSqKm != null && <ListS.Dot />}
-                                  {country.areaSqKm != null && (
-                                    <span>
-                                      면적 {country.areaSqKm.toLocaleString()}km²
-                                    </span>
-                                  )}
-                                </>
-                              )}
-                            </ListS.Meta>
-                          </ListS.RowBottom>
-                        </ListS.ListRow>
-                      )
-                    })
+                              </ListS.Meta>
+                            </ListS.RowBottom>
+                          </ListS.ListRow>
+                        )
+                      })}
+                    </>
                   )}
                 </ListS.VirtualList>
               </ListS.ListContainer>

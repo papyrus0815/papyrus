@@ -11,6 +11,8 @@ export interface CabinetMindMapProps {
   members: CabinetMember[]
   /** 정권 이름 (예: 트럼프 2기 행정부) */
   cabinetLabel: string | null
+  /** 하위 역사국가 소속 정권일 때 표시할 정치체 이름 (예: 독일 제국, 비시 프랑스) */
+  polityLabel?: string | null
   /**
    * 몇 번째 정권인지(카드 안 '1 / 3대', 좁은 화면의 아래 넘기기 줄)를 지도가 직접 그릴지.
    * 패널이 위에 정권 띠를 깔면 같은 정보가 두 번 나오므로 끈다. 기본 true.
@@ -25,6 +27,11 @@ export interface CabinetMindMapProps {
   collapsedLimit?: number
   expanded: boolean
   onToggleExpand: () => void
+  /**
+   * 공석 부처 슬롯·부처 관리 줄 — 수반/각료 직하단, 선거 카드 위에 놓여
+   * '수반 → 각료·부처 → 선거' 위계를 유지한다.
+   */
+  rosterSlot?: ReactNode
   /**
    * 이 정권을 낳은 선거. 지도 아래 줄기로 내려 단다 — 선거가 정권을 낳았으니
    * 별도 패널로 떼어 두면 둘이 남남으로 읽힌다.
@@ -62,20 +69,15 @@ export interface CabinetMindMapProps {
 const NODE_HEIGHT = 54
 const NODE_GAP = 12
 /**
- * 가운데 카드와 가지 사이. 곡선이 이 폭 안에서 휜다 — 넓을수록 완만하다.
- * 64px는 지도가 좁을 때 정한 값이라 폭을 되찾은 지금은 곡선이 급하게 꺾였다.
+ * 가운데 카드와 가지 사이. 곡선이 이 폭 안에서 휜다 — 1440px 표준 데스크톱 본문(960px)에서도
+ * 좌·우 가지 + 중앙 카드 3열 마인드맵이 넉넉히 서도록 48px로 잡는다.
  */
-const GUTTER = 88
+const GUTTER = 48
 /**
  * 가지 칸 폭 — 최소·최대만 잡고 남는 폭은 흡수한다.
- *
- * 처음엔 248px로 고정했다. "곡선 끝점을 알아야 한다"고 봤기 때문인데, 실제로는 곡선
- * SVG가 **거터 안에만** 있고 그 끝점은 언제나 노드 묶음의 모서리(로컬 좌표 0 또는
- * GUTTER)다 — 가지 폭이 변해도 경로는 어긋나지 않는다. 고정했더니 2,162px 본문에서
- * 좌우로 600px씩 비었다.
  */
 const BRANCH_MIN = 200
-const BRANCH_MAX = 560
+const BRANCH_MAX = 520
 
 const nodeCenterY = (index: number) =>
   index * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
@@ -105,18 +107,21 @@ export function CabinetMindMap({
   head,
   members,
   cabinetLabel,
+  polityLabel,
   stats,
   renderFace,
   onSelectPerson,
   collapsedLimit = 16,
   expanded,
   onToggleExpand,
+  rosterSlot,
   electionSlot,
   nav,
   showPosition = true,
 }: CabinetMindMapProps) {
   const visible = expanded ? members : members.slice(0, collapsedLimit)
   const hidden = members.length - visible.length
+  const hasBranches = visible.length > 0
 
   /*
    * 좌우로 반씩 가른다. 섞지 않고 앞쪽 절반을 왼쪽에 두어, 좁은 화면에서 한 줄로 접혔을 때
@@ -131,7 +136,7 @@ export function CabinetMindMap({
       <MapRoot
         key={nav?.slideKey ?? 'map'}
         $nav={!!nav}
-        $branches={visible.length > 0}
+        $branches={hasBranches}
       >
         {nav && (
           <NavButton
@@ -147,43 +152,53 @@ export function CabinetMindMap({
             ‹
           </NavButton>
         )}
-        <MapSide $side="left">
-          <SideGroup side="left" nodes={leftNodes}>
-            {leftNodes.map((member) => (
-              <BranchNode
-                key={member.id}
-                member={member}
-                side="left"
-                renderFace={renderFace}
-                onSelectPerson={onSelectPerson}
-              />
-            ))}
-          </SideGroup>
-        </MapSide>
+        {hasBranches && (
+          <MapSide $side="left">
+            <SideGroup side="left" nodes={leftNodes}>
+              {leftNodes.map((member) => (
+                <BranchNode
+                  key={member.id}
+                  member={member}
+                  side="left"
+                  renderFace={renderFace}
+                  onSelectPerson={onSelectPerson}
+                />
+              ))}
+            </SideGroup>
+          </MapSide>
+        )}
 
-        <MapCenter>
+        <MapCenter $branches={hasBranches}>
           {head ? (
             <CenterCard
               type="button"
+              $branches={hasBranches}
               onClick={() => head.personId && onSelectPerson(head.personId)}
               aria-label={`${head.name} 상세`}
             >
-              <CenterFace>{renderFace(head, 112)}</CenterFace>
-              <CenterRole>
+              <CenterFace $branches={hasBranches}>
+                {renderFace(head, 112)}
+              </CenterFace>
+              <CenterRole $branches={hasBranches}>
                 {head.ordinal != null && `제${head.ordinal}대 `}
                 {head.title}
                 {!head.endDate && <CenterNow>현직</CenterNow>}
+                {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
               </CenterRole>
-              <CenterName>{head.name}</CenterName>
-              {cabinetLabel && <CenterCabinet>{cabinetLabel}</CenterCabinet>}
+              <CenterName $branches={hasBranches}>{head.name}</CenterName>
+              {cabinetLabel && (
+                <CenterCabinet $branches={hasBranches}>
+                  {cabinetLabel}
+                </CenterCabinet>
+              )}
               {showPosition && nav && nav.total > 1 && (
                 /* 목록을 걷은 대신 위치를 여기 적는다 — 줄기 위에 두면 선을 끊는다 */
-                <CenterOrdinal>
+                <CenterOrdinal $branches={hasBranches}>
                   {nav.index + 1} / {nav.total}대
                 </CenterOrdinal>
               )}
               {stats.length > 0 && (
-                <CenterStats>
+                <CenterStats $branches={hasBranches}>
                   {stats.map((stat) => (
                     <CenterStat key={stat.key}>
                       <CenterStatKey>{stat.label}</CenterStatKey>
@@ -196,26 +211,30 @@ export function CabinetMindMap({
               )}
             </CenterCard>
           ) : (
-            <CenterCardStatic>
-              <CenterName>{cabinetLabel ?? '행정부'}</CenterName>
-              <CenterCabinet>수반 미등록</CenterCabinet>
+            <CenterCardStatic $branches={hasBranches}>
+              <CenterName $branches={hasBranches}>
+                {cabinetLabel ?? '행정부'}
+              </CenterName>
+              <CenterCabinet $branches={hasBranches}>수반 미등록</CenterCabinet>
             </CenterCardStatic>
           )}
         </MapCenter>
 
-        <MapSide $side="right">
-          <SideGroup side="right" nodes={rightNodes}>
-            {rightNodes.map((member) => (
-              <BranchNode
-                key={member.id}
-                member={member}
-                side="right"
-                renderFace={renderFace}
-                onSelectPerson={onSelectPerson}
-              />
-            ))}
-          </SideGroup>
-        </MapSide>
+        {hasBranches && (
+          <MapSide $side="right">
+            <SideGroup side="right" nodes={rightNodes}>
+              {rightNodes.map((member) => (
+                <BranchNode
+                  key={member.id}
+                  member={member}
+                  side="right"
+                  renderFace={renderFace}
+                  onSelectPerson={onSelectPerson}
+                />
+              ))}
+            </SideGroup>
+          </MapSide>
+        )}
         {nav && (
           <NavButton
             type="button"
@@ -268,10 +287,12 @@ export function CabinetMindMap({
         </ExpandRow>
       )}
 
+      {rosterSlot && <RosterSlotWrap>{rosterSlot}</RosterSlotWrap>}
+
       {electionSlot && (
         <>
-          <Stem aria-hidden />
-          <ElectionBranch $nav={!!nav} $branches={visible.length > 0}>
+          {hasBranches && <Stem aria-hidden />}
+          <ElectionBranch $nav={!!nav} $branches={hasBranches}>
             {electionSlot}
           </ElectionBranch>
         </>
@@ -395,20 +416,21 @@ const MapWrap = styled.div`
 const MapRoot = styled.div<{ $nav?: boolean; $branches?: boolean }>`
   display: grid;
   /*
-   * 가지가 없는 정권(각료 0명)에서도 가지 칸을 폭대로 잡으면 넘기기 버튼이 카드에서
-   * 250px 떨어져 허공에 뜬다 — 가지가 있을 때만 그 칸을 세운다.
+   * 가지가 없는 정권(각료 0명)에서는 아래 부처 슬롯 격자와 같은 폭을 쓰도록 1열 전폭으로 편다.
+   * 가지가 있을 때는 3열(또는 nav 포함 5열) 마인드맵 격자를 세운다.
    */
   grid-template-columns: ${({ $nav, $branches }) => {
-    const branch = $branches
-      ? `minmax(${BRANCH_MIN}px, ${BRANCH_MAX}px)`
-      : '0'
+    if (!$branches) {
+      return $nav ? '44px minmax(0, 1fr) 44px' : 'minmax(0, 1fr)'
+    }
+    const branch = `minmax(${BRANCH_MIN}px, ${BRANCH_MAX}px)`
     return $nav
       ? `44px ${branch} auto ${branch} 44px`
       : `${branch} auto ${branch}`
   }};
   gap: ${({ $branches }) => ($branches ? GUTTER : 20)}px;
   align-items: center;
-  justify-content: center;
+  justify-content: ${({ $branches }) => ($branches ? 'center' : 'stretch')};
 
   /* 정권을 넘길 때 지도가 한 장씩 갈리는 느낌 — key가 바뀌면 다시 재생된다 */
   animation: cabinetSlideIn 0.24s cubic-bezier(0.22, 1, 0.36, 1);
@@ -430,14 +452,8 @@ const MapRoot = styled.div<{ $nav?: boolean; $branches?: boolean }>`
 
   /*
    * 좁은 칼럼 — 수반 카드를 맨 위 한 줄에 눕히고 각료는 여러 열 격자로 깐다.
-   *
-   * 예전엔 한 줄 목록으로 접었다. 그러면 각료 14명이 칼럼 폭을 통째로 먹는 행이 되어
-   * (1,120px 행 안에 이름 한 줄) 세로 900px를 쓰고, 왼쪽 가지 절반은 오른쪽 정렬이
-   * 남아 이름이 행의 반대편 끝에 붙었다. 1,600px 화면의 본문이 딱 이 폭이라 대부분의
-   * 사용자가 보는 모양이 이것이었다. 가지 칸과 묶음을 display: contents로 풀어
-   * 좌·우 가지가 한 격자에 순서대로 흘러든다(왼쪽 절반이 앞이라 순서가 유지된다).
    */
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
     gap: 10px;
     justify-content: stretch;
@@ -486,7 +502,7 @@ const NavButton = styled.button<{ $side: 'left' | 'right' }>`
   }
 
   /* 좁은 화면에서는 아래 한 줄(NavRow)이 대신한다 */
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     display: none;
   }
 `
@@ -500,7 +516,7 @@ const NavRow = styled.div`
   gap: 10px;
   margin-top: 10px;
 
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     display: flex;
   }
 `
@@ -533,7 +549,7 @@ const NavCompact = styled.button`
     cursor: default;
   }
 
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     display: inline-flex;
   }
 `
@@ -543,7 +559,7 @@ const MapSide = styled.div<{ $side: 'left' | 'right' }>`
   justify-content: ${({ $side }) =>
     $side === 'left' ? 'flex-end' : 'flex-start'};
 
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     display: contents;
   }
 `
@@ -556,7 +572,7 @@ const GroupBox = styled.div<{ $side: 'left' | 'right' }>`
   width: 100%;
 
   /* 좁은 화면에서는 묶음을 풀어 각료가 지도 격자에 바로 앉는다 */
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     display: contents;
   }
 `
@@ -575,18 +591,18 @@ const BranchSvg = styled.svg<{ $side: 'left' | 'right' }>`
     stroke-width: 1.25;
   }
 
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     display: none;
   }
 `
 
-const MapCenter = styled.div`
+const MapCenter = styled.div<{ $branches?: boolean }>`
   display: flex;
-  justify-content: center;
+  justify-content: ${({ $branches }) => ($branches ? 'center' : 'stretch')};
   min-width: 0;
 
   /* 격자에선 DOM 순서(왼쪽 가지 → 가운데 → 오른쪽 가지)대로면 수반이 각료 사이에 낀다 */
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     grid-column: 1 / -1;
     order: -1;
     justify-content: stretch;
@@ -594,18 +610,29 @@ const MapCenter = styled.div`
   }
 `
 
-const centerSurface = css`
+const horizontalCenterLayout = css`
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 22px;
+  row-gap: 2px;
+  align-content: center;
+  align-items: center;
+  justify-items: start;
+  text-align: left;
+  padding: 18px 22px;
+`
+
+const centerSurface = css<{ $branches?: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  width: 340px;
-  padding: 22px 24px 18px;
+  width: 288px;
+  padding: 20px 20px 16px;
   border-radius: 20px;
   text-align: center;
   /*
-   * 예전엔 카드 전체를 장미색으로 물들이고 같은 색 그림자를 깔았다. 지면에서 가장
-   * 큰 면이 붉게 칠해져 '경고'처럼 읽혔고, 정작 강조하려던 얼굴·직함이 바탕에 묻혔다.
    * 면은 무채색으로 두고 장미색은 직함·현직 표시·얼굴 테두리에만 남긴다.
    */
   border: 1px solid ${({ theme }) => theme.colors.border.medium};
@@ -618,22 +645,15 @@ const centerSurface = css`
       ? '0 8px 24px rgba(0,0,0,0.3)'
       : '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06)'};
 
+  ${({ $branches }) => !$branches && horizontalCenterLayout}
+
   /* 좁은 칼럼 — 가로로 눕힌다: 얼굴 | 직함·이름·정권 | 요약 */
-  @container (max-width: 1120px) {
-    width: 100%;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    column-gap: 22px;
-    row-gap: 2px;
-    align-content: center;
-    align-items: center;
-    justify-items: start;
-    text-align: left;
-    padding: 18px 22px;
+  @container (max-width: 820px) {
+    ${horizontalCenterLayout}
   }
 `
 
-const CenterCard = styled.button`
+const CenterCard = styled.button<{ $branches?: boolean }>`
   ${centerSurface}
   appearance: none;
   font-family: inherit;
@@ -653,12 +673,12 @@ const CenterCard = styled.button`
   }
 `
 
-const CenterCardStatic = styled.div`
+const CenterCardStatic = styled.div<{ $branches?: boolean }>`
   ${centerSurface}
 `
 
 /** 얼굴 둘레 링 — 가운데가 중심이라는 걸 색이 아니라 형태로 말한다 */
-const CenterFace = styled.span`
+const CenterFace = styled.span<{ $branches?: boolean }>`
   display: inline-flex;
   padding: 4px;
   margin-bottom: 12px;
@@ -670,23 +690,39 @@ const CenterFace = styled.span`
     border-radius: 999px;
   }
 
-  @container (max-width: 1120px) {
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 1;
+      grid-row: 1 / span 4;
+      margin-bottom: 0;
+    `}
+
+  @container (max-width: 820px) {
     grid-column: 1;
     grid-row: 1 / span 4;
     margin-bottom: 0;
   }
 `
 
-const CenterRole = styled.span`
+const CenterRole = styled.span<{ $branches?: boolean }>`
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: ${({ $branches }) => ($branches ? 'center' : 'flex-start')};
   gap: 6px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: ${CENTER_ACCENT};
-  @container (max-width: 1120px) {
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+    `}
+  @container (max-width: 820px) {
     grid-column: 2;
+    justify-content: flex-start;
   }
 `
 
@@ -699,18 +735,33 @@ const CenterNow = styled.span`
   background: ${CENTER_ACCENT};
 `
 
-const CenterName = styled.span`
+const CenterPolity = styled.span`
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+`
+
+const CenterName = styled.span<{ $branches?: boolean }>`
   font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.25;
   color: ${({ theme }) => theme.colors.text.primary};
-  @container (max-width: 1120px) {
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+    `}
+  @container (max-width: 820px) {
     grid-column: 2;
   }
 `
 
-const CenterOrdinal = styled.span`
+const CenterOrdinal = styled.span<{ $branches?: boolean }>`
   margin-top: 4px;
   padding: 1px 8px;
   border-radius: 999px;
@@ -721,16 +772,26 @@ const CenterOrdinal = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
-  @container (max-width: 1120px) {
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+    `}
+  @container (max-width: 820px) {
     grid-column: 2;
   }
 `
 
-const CenterCabinet = styled.span`
+const CenterCabinet = styled.span<{ $branches?: boolean }>`
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
-  @container (max-width: 1120px) {
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+    `}
+  @container (max-width: 820px) {
     grid-column: 2;
   }
 `
@@ -739,11 +800,7 @@ const CenterCabinet = styled.span`
  * 요약은 카드 **안**에 둔다. 밖에 두면 가운데 칸이 카드보다 커져 곡선이 카드 모서리가
  * 아니라 허공에서 끝난다 — 실제로 그렇게 보였다.
  */
-const CenterStats = styled.dl`
-  /*
-   * 격자(auto-fit)로 두면 마지막 줄이 칸 수를 그대로 물려받아 두 칸이 세 칸 폭에
-   * 늘어붙는다 — 첫 줄과 어긋나 보였다. 줄바꿈된 나머지가 가운데로 모이도록 flex.
-   */
+const CenterStats = styled.dl<{ $branches?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -753,8 +810,23 @@ const CenterStats = styled.dl`
   padding-top: 12px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 
+  ${({ $branches, theme }) =>
+    !$branches &&
+    css`
+      grid-column: 3;
+      grid-row: 1 / span 4;
+      align-self: center;
+      width: auto;
+      max-width: 520px;
+      justify-content: flex-end;
+      margin: 0;
+      padding: 0 0 0 22px;
+      border-top: none;
+      border-left: 1px solid ${theme.colors.border.light};
+    `}
+
   /* 눕힌 카드에선 오른쪽 칸 — 세로 구분선으로 이름 칸과 가른다 */
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     grid-column: 3;
     grid-row: 1 / span 4;
     align-self: center;
@@ -807,11 +879,12 @@ const CenterStatValue = styled.dd<{ $warn?: boolean }>`
     $warn ? '#b45309' : theme.colors.text.primary};
 `
 
+const RosterSlotWrap = styled.div`
+  margin-top: 16px;
+`
+
 /**
  * 가운데 카드에서 선거로 내려가는 줄기.
- *
- * 좌우 가지는 곡선이지만 이건 곧은 선이다 — 곡선은 '여럿으로 갈라짐'을, 직선은
- * '하나에서 하나로'를 뜻한다. 선거는 이 정권 하나를 낳았다.
  */
 const Stem = styled.div`
   width: 1px;
@@ -819,25 +892,15 @@ const Stem = styled.div`
   margin: 0 auto;
   background: ${lineColor};
 
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     display: none;
   }
 `
 
 /**
  * 선거 카드 폭.
- *
- * 640px로 두었더니 1,900px짜리 지도 아래에 손바닥만 한 카드가 매달려 균형이 깨졌다.
- * 지도의 **가지 바깥 모서리**까지 맞춘다 — 같은 격자를 깔고 넘기기 버튼 칸만 비운다.
  */
 const ElectionBranch = styled.div<{ $nav?: boolean; $branches?: boolean }>`
-  /*
-   * 가지가 있으면 지도와 같은 격자를 깔아 가지 바깥 모서리까지 맞춘다.
-   *
-   * 가지가 없을 때 그 격자를 그대로 쓰면 가지 칸이 0이 되고, 남은 auto 칸이 폭 100%인
-   * 자식과 서로를 참조해 **세로 한 줄로 찌그러진다**(실제로 독일에서 그렇게 됐다).
-   * 그때는 격자를 걷고 가운데 정렬한다.
-   */
   ${({ $nav, $branches }) =>
     $branches
       ? css`
@@ -854,17 +917,17 @@ const ElectionBranch = styled.div<{ $nav?: boolean; $branches?: boolean }>`
           }
         `
       : css`
-          display: flex;
-          justify-content: center;
+          display: block;
+          margin-top: 16px;
 
           > * {
             width: 100%;
-            max-width: 720px;
+            max-width: none;
           }
         `}
 
-  /* 좁은 칼럼 — 위 각료 격자와 같은 폭으로 맞춘다. 640px로 가운데 두면 격자 아래 섬처럼 떴다 */
-  @container (max-width: 1120px) {
+  /* 좁은 칼럼 — 위 각료 격자와 같은 폭으로 맞춘다 */
+  @container (max-width: 820px) {
     display: block;
     margin-top: 16px;
 
@@ -914,7 +977,6 @@ const Node = styled.button<{ $side: 'left' | 'right'; $replaced: boolean }>`
   border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.primary};
-  text-align: left;
   cursor: pointer;
   transition:
     border-color 0.15s ease,
@@ -941,7 +1003,7 @@ const Node = styled.button<{ $side: 'left' | 'right'; $replaced: boolean }>`
     `}
 
   /* 격자 칸에서는 좌·우 가지 구분이 없다 — 모두 얼굴이 왼쪽 */
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     flex-direction: row;
     text-align: left;
 
@@ -964,7 +1026,7 @@ const NodeText = styled.span<{ $side: 'left' | 'right' }>`
   flex: 1;
   gap: 1px;
 
-  @container (max-width: 1120px) {
+  @container (max-width: 820px) {
     align-items: flex-start;
   }
 `
@@ -978,7 +1040,7 @@ const NodeDate = styled.span`
   letter-spacing: 0.01em;
   color: ${({ theme }) => theme.colors.text.tertiary};
 
-  @container (max-width: 1280px) {
+  @container (max-width: 1120px) {
     display: none;
   }
 `

@@ -302,15 +302,16 @@ export default function App() {
 }
 
 /**
- * 개발용 React Query 도구 — 좁은 화면(≤640)에서는 좌하단이 메뉴(서랍) 버튼 자리라
- * 우상단으로 비켜 준다. 운영 빌드에는 이 도구가 없다.
+ * 개발용 React Query 도구 — 데스크톱 좌하단은 AccountPanel(유저 카드) 자리이고,
+ * 좁은 화면(≤640) 좌하단은 메뉴(서랍) 버튼·우하단은 모바일 뷰 스위처 자리이므로
+ * 데스크톱은 bottom-right, 모바일은 top-right로 배치해 UI 가림을 방지한다.
  */
 function DevtoolsLauncher() {
   const isNarrow = useMediaQuery('(max-width: 640px)')
   return (
     <ReactQueryDevtools
       initialIsOpen={false}
-      buttonPosition={isNarrow ? 'top-right' : 'bottom-left'}
+      buttonPosition={isNarrow ? 'top-right' : 'bottom-right'}
     />
   )
 }

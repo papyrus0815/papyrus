@@ -748,6 +748,10 @@ function HistoricalOverviewSection({
       document
         .getElementById('historical-founding-heading')
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const trigger = document.getElementById(
+        'founding-note-trigger-founding',
+      ) as HTMLButtonElement | null
+      trigger?.click()
       return
     }
     onGoToTab(target)

@@ -320,8 +320,12 @@ export function CountryForm({
   })
 
   const onSubmit = async (data: CountryFormData) => {
-    await onSave({ ...data, id: editing?.id })
-    clearDraft()
+    try {
+      await onSave({ ...data, id: editing?.id })
+      clearDraft()
+    } catch {
+      // 저장 실패 시 초안(draft)과 입력 상태를 그대로 유지
+    }
   }
 
   const handleCurrencySelect = (currencyId: string) => {

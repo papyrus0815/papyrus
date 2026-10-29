@@ -18,6 +18,7 @@ export default function CountryDetailPage() {
     handleDetailTabChange,
     onEdit,
     onDelete,
+    onOpenMobileList,
   } = useCountryDetailShellContext()
 
   return (
@@ -28,6 +29,7 @@ export default function CountryDetailPage() {
       notFound={notFound}
       onEdit={onEdit}
       onDelete={onDelete}
+      onOpenMobileList={onOpenMobileList}
       initialDetailTab={initialDetailTab}
       onDetailTabChange={handleDetailTabChange}
     />

@@ -48,8 +48,9 @@ export function CountryFormModal({
       await onSave(data)
       onSuccess?.()
       onClose()
-    } catch {
-      // 에러 토스트는 useCountryFormModal에서 표시. 모달은 열린 상태 유지.
+    } catch (error) {
+      // 에러 토스트는 useCountryFormModal에서 표시. 모달과 초안(clearDraft) 유지를 위해 재전파.
+      throw error
     } finally {
       setSubmitting(false)
     }

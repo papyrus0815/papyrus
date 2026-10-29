@@ -159,6 +159,10 @@ export function CountryListChildrenPopover({
       if (popRef.current && !popRef.current.contains(e.target as Node)) {
         // anchor 자체 클릭은 toggle로 처리되므로 popover에서 닫지 않음
         if (anchorEl && anchorEl.contains(e.target as Node)) return
+        // 우클릭 컨텍스트 메뉴 내부 클릭은 메뉴 액션이 먼저 실행되도록 닫지 않음
+        if ((e.target as HTMLElement | null)?.closest?.('[data-country-context-menu]')) {
+          return
+        }
         onClose()
       }
     }

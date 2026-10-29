@@ -44,7 +44,13 @@ export function useCountryFormHandlers({
     },
   })
 
-  const historicalForm = useHistoricalCountryFormModal()
+  const historicalForm = useHistoricalCountryFormModal({
+    onSaved: (id, savedMode) => {
+      if (savedMode === 'create') {
+        navigate(pathKeys.countryDetail(id))
+      }
+    },
+  })
 
   const editHistoricalFromList = useCallback(
     (country: UnifiedCountry) => {
@@ -81,6 +87,7 @@ export function useCountryFormHandlers({
         if (ok) {
           removePinned(id)
           removeRecent(id)
+          navigate(pathKeys.country())
         }
       }
     },

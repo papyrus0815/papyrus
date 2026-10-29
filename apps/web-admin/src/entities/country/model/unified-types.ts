@@ -54,6 +54,7 @@ export interface UnifiedCountry {
   dissolutionNote?: string | null
   stateType?: string
   entityKind?: 'STATE' | 'REGIME' | 'PERIOD' | 'PEOPLE' | null
+  linkKind?: 'PREDECESSOR' | 'SUCCESSOR' | 'OVERLAP' | string | null
   startYear?: number | null
   startMonth?: number | null
   startDay?: number | null
@@ -110,6 +111,10 @@ export function historicalToUnified(
     entityKind:
       'entityKind' in country && country.entityKind !== undefined
         ? (country.entityKind as UnifiedCountry['entityKind'])
+        : undefined,
+    linkKind:
+      'linkKind' in country && country.linkKind !== undefined
+        ? country.linkKind
         : undefined,
     startYear: country.startYear,
     startMonth: country.startMonth,

@@ -265,7 +265,7 @@ export function EventCalendarPanel({
                       title={event.title}
                       onClick={() => onSelectEvent(event.id)}
                     >
-                      {event.title}
+                      <DayEventText>{event.title}</DayEventText>
                     </DayEvent>
                   ))}
                   {dayEvents.length > shown.length && (
@@ -544,7 +544,7 @@ const DayEvent = styled.button`
   appearance: none;
   display: block;
   width: 100%;
-  padding: 3px 6px 3px 7px;
+  padding: 4px 6px 4px 7px;
   border: none;
   border-left: 2px solid #f59e0b;
   border-radius: 4px;
@@ -556,12 +556,6 @@ const DayEvent = styled.button`
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  word-break: keep-all;
 
   &:hover {
     background: rgba(245, 158, 11, 0.26);
@@ -570,6 +564,20 @@ const DayEvent = styled.button`
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: 1px;
   }
+`
+
+/*
+ * line-clamp + overflow: hidden을 padding이 있는 버튼 자신에게 걸면
+ * 하단 padding 영역(3px)에 3번째 줄의 머리 부분이 잘린 채 비친다(체코공화국 NATO 가입 등).
+ * 안쪽 텍스트 스팬에서 줄바꿈을 자른다.
+ */
+const DayEventText = styled.span`
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: keep-all;
 `
 
 const DayMore = styled.span`

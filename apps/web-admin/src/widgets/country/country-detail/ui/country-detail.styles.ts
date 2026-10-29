@@ -840,6 +840,51 @@ export const EmptyStateHint = styled.span`
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   letter-spacing: -0.01em;
+
+  @media (max-width: 1024px) {
+    display: none;
+  }
+`
+
+export const EmptyStateMobileButton = styled.button`
+  display: none;
+
+  @media (max-width: 1024px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
+    background: ${({ theme }) => theme.colors.background.secondary};
+    color: ${({ theme }) => theme.colors.primary};
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: ${({ theme }) => theme.colors.activeLight};
+      border-color: ${({ theme }) => theme.colors.primary};
+    }
+  }
+`
+
+export const EmptyStateCorpusBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 // Hero Section

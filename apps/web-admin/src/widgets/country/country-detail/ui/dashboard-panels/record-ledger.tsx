@@ -108,12 +108,15 @@ const Root = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  width: 100%;
 `
 
 const List = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 `
 
 const Row = styled.div<{ $interactive: boolean }>`
@@ -122,12 +125,14 @@ const Row = styled.div<{ $interactive: boolean }>`
    * 막대에 상한을 둔다. 폭을 다 쓰게 두면 '20명'이 제 이름표에서 1,100px 떨어져
    * 서로를 못 찾는다 — 선거 카드에서 겪은 것과 같은 문제다. 남는 폭은 오른쪽 여백으로.
    */
-  grid-template-columns: 26px minmax(72px, max-content) minmax(0, 760px) max-content auto auto;
+  grid-template-columns: 26px minmax(68px, max-content) minmax(60px, 760px) max-content auto auto;
   justify-content: start;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  padding: 9px 12px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 10px;
   border: none;
   border-radius: 10px;
   background: none;

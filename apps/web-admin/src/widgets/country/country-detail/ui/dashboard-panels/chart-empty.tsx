@@ -57,7 +57,11 @@ const Skeleton = styled.div`
    * 골격은 '이 자리에 이런 모양이 선다'만 말하면 된다. 너무 흐리면 빈칸으로, 너무
    * 진하면 자료가 있는 그래프로 읽힌다 — 무채색으로 누르고 가장자리를 녹여, 안내
    * 카드가 주인공이 되게 한다.
+   * 빈 그래프 네 개(인구 피라미드·지표 추이·국채 금리·교역)가 연달아 올 때
+   * 원본 차트 높이(350~430px)를 그대로 쓰면 빈 섹션만 1,500px을 차지하므로 상한을 둔다.
    */
+  max-height: 188px;
+  overflow: hidden;
   opacity: ${({ theme }) => (theme.mode === 'dark' ? 0.5 : 0.6)};
   filter: grayscale(1);
   pointer-events: none;

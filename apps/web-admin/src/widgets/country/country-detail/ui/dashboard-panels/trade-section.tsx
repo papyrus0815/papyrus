@@ -379,7 +379,7 @@ function TradeDirectionView({
             {view.slices.map((slice) => (
               <S.TradeCompositionLegendItem key={slice.key}>
                 <S.TradeCompositionDot $color={slice.color} />
-                {slice.name}
+                {slice.name} {slice.pct.toFixed(1)}%
               </S.TradeCompositionLegendItem>
             ))}
           </S.TradeCompositionLegend>
