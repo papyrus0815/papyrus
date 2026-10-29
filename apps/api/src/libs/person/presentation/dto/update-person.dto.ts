@@ -252,18 +252,31 @@ export class UpdatePersonDto {
   //--- 왕/군주 관련 필드
 
   /**
-   * 묘호 (동아시아 군주)
+   * 묘호 (동아시아 군주). null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  templeName?: string
+  @MaxLength(50)
+  templeName?: string | null
 
   /**
-   * 시호
+   * 시호. null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  posthumousName?: string
+  @MaxLength(100)
+  posthumousName?: string | null
+
+  /**
+   * 즉위 전 작호/봉호 (예: 수양대군, 충녕대군). null이면 해제
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(100)
+  preEnthronementTitle?: string | null
 
   /**
    * 가문 ID (선택). null이면 해제

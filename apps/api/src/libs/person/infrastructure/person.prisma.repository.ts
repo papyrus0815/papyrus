@@ -670,6 +670,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       regnalName: representativeRegnalName((person as any).sovereignReigns),
       templeName: person.templeName,
       posthumousName: person.posthumousName,
+      preEnthronementTitle: (person as any).preEnthronementTitle ?? null,
       // 관계
       dynastyId: person.dynastyId,
       dynasty:
@@ -2333,6 +2334,11 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
     }
 
+    // 주 국적 상호배타 불변식(역사>현대): historicalCountryId가 지정되면 현대 countryId는 저장하지 않는다.
+    if ((sanitized as any).historicalCountryId) {
+      delete sanitized.countryId
+    }
+
     // dual-write(F1=A): 역사 주국적이면 first-class FK(person.historicalCountryId, sanitized로 person.create에 기록)에
     // 더해 CITIZENSHIP priority=0 슬롯도 미러 — findPersonsByAffiliationInCountry 발견 인덱스·도출 폴백(F6)을 유지.
     const mainHistoricalId = (sanitized as any).historicalCountryId as string | undefined
@@ -2346,89 +2352,95 @@ export class PersonPrismaRepository implements IPersonRepository {
     const sections = (sanitized as CreatePersonData).sections
     delete (sanitized as Record<string, unknown>).sections
 
-    const person = await this.prisma.person.create({
-      data: sanitized as Parameters<PrismaService['person']['create']>[0]['data'],
+    // 본체 생성과 하위 컬렉션(전기 섹션·배우자·별칭·국가 소속)을 단일 트랜잭션으로 묶어
+    // 하위 FK 오류 시 불완전한 고아 Person 행이 남는 현상을 차단한다.
+    const person = await this.prisma.$transaction(async (tx) => {
+      const createdPerson = await tx.person.create({
+        data: sanitized as Parameters<PrismaService['person']['create']>[0]['data'],
+      })
+
+      // 전기 섹션 — DTO에 있어도 create에서 무성 드롭되던 것을 update와 대칭으로 저장(BE5).
+      if (sections?.length) {
+        await tx.personSection.createMany({
+          data: sections.map((s, idx) => ({
+            personId: createdPerson.id,
+            title: s.title,
+            content: s.content,
+            order: s.order ?? idx,
+            sectionType: s.sectionType ?? null,
+          })),
+        })
+      }
+
+      if (spouseRelations?.length) {
+        const rows = this.buildCanonicalSpouseRows(createdPerson.id, spouseRelations)
+        if (rows.length) {
+          await tx.personSpouse.createMany({ data: rows, skipDuplicates: true })
+        }
+      }
+
+      // 별칭(아명·출생명 등) 일괄 생성
+      if (nicknames?.length) {
+        const rows = nicknames
+          .filter((nick) => nick.nickname?.trim())
+          .map((nick) => ({
+            personId: createdPerson.id,
+            nickname: nick.nickname.trim(),
+            // DTO @IsEnum(NicknameType)이 토큰을 보증 — 도메인 계약은 string이라 여기서 좁힘
+            type: (nick.type as PersonNicknameType | undefined) || null,
+            priority: nick.priority ?? 0,
+            reason: nick.reason?.trim() || null,
+          }))
+        if (rows.length) {
+          await tx.personNickname.createMany({ data: rows })
+        }
+      }
+
+      // 주 국적 슬롯(CITIZENSHIP priority=0)은 인물당 1행 계약(F26).
+      // 배열에 슬롯 자리 행이 섞여 오면 부가 소속으로 따로 만들지 않고 슬롯 쓰기로 흡수한다 —
+      // 그러지 않으면 FK 미러와 배열이 각각 create해 같은 내용의 슬롯이 둘 생긴다.
+      const primaryCitizenshipRows = (countryAffiliations ?? []).filter((affiliation) =>
+        this.isPrimaryCitizenshipRow(affiliation),
+      )
+      const extraAffiliations = (countryAffiliations ?? []).filter(
+        (affiliation) => !this.isPrimaryCitizenshipRow(affiliation),
+      )
+
+      // 역사 국가인 경우 CITIZENSHIP priority=0 소속 생성(FK 미러가 정본)
+      if (mainHistoricalId) {
+        await this.syncPrimaryCitizenshipSlot(tx, createdPerson.id, {
+          historicalCountryId: mainHistoricalId,
+        })
+      } else if (primaryCitizenshipRows.length) {
+        // FK 미러가 없을 때만 배열 행이 슬롯을 채운다. 2행 이상 와도 첫 행만 — 슬롯은 1개 계약.
+        const primary = primaryCitizenshipRows[0]
+        await this.syncPrimaryCitizenshipSlot(tx, createdPerson.id, {
+          countryId: primary.countryId || null,
+          historicalCountryId: primary.historicalCountryId || null,
+          startDate: primary.startDate || null,
+          endDate: primary.endDate || null,
+          note: primary.note || null,
+        })
+      }
+
+      // 추가 국가 소속(다중) 일괄 생성 — 주 국적(countryId)과 별개
+      if (extraAffiliations.length) {
+        await tx.personCountryAffiliation.createMany({
+          data: extraAffiliations.map((a) => ({
+            personId: createdPerson.id,
+            affiliationType: a.affiliationType as any,
+            countryId: a.countryId || null,
+            historicalCountryId: a.historicalCountryId || null,
+            ...structuredDateColumns('start', a.startDate),
+            ...structuredDateColumns('end', a.endDate),
+            priority: a.priority ?? 1,
+            note: a.note || null,
+          })),
+        })
+      }
+
+      return createdPerson
     })
-
-    // 전기 섹션 — DTO에 있어도 create에서 무성 드롭되던 것을 update와 대칭으로 저장(BE5).
-    if (sections?.length) {
-      await this.prisma.personSection.createMany({
-        data: sections.map((s, idx) => ({
-          personId: person.id,
-          title: s.title,
-          content: s.content,
-          order: s.order ?? idx,
-          sectionType: s.sectionType ?? null,
-        })),
-      })
-    }
-
-    if (spouseRelations?.length) {
-      const rows = this.buildCanonicalSpouseRows(person.id, spouseRelations)
-      if (rows.length) {
-        await this.prisma.personSpouse.createMany({ data: rows, skipDuplicates: true })
-      }
-    }
-
-    // 별칭(아명·출생명 등) 일괄 생성
-    if (nicknames?.length) {
-      const rows = nicknames
-        .filter((nick) => nick.nickname?.trim())
-        .map((nick) => ({
-          personId: person.id,
-          nickname: nick.nickname.trim(),
-          // DTO @IsEnum(NicknameType)이 토큰을 보증 — 도메인 계약은 string이라 여기서 좁힘
-          type: (nick.type as PersonNicknameType | undefined) || null,
-          priority: nick.priority ?? 0,
-          reason: nick.reason?.trim() || null,
-        }))
-      if (rows.length) {
-        await this.prisma.personNickname.createMany({ data: rows })
-      }
-    }
-
-    // 주 국적 슬롯(CITIZENSHIP priority=0)은 인물당 1행 계약(F26).
-    // 배열에 슬롯 자리 행이 섞여 오면 부가 소속으로 따로 만들지 않고 슬롯 쓰기로 흡수한다 —
-    // 그러지 않으면 FK 미러와 배열이 각각 create해 같은 내용의 슬롯이 둘 생긴다.
-    const primaryCitizenshipRows = (countryAffiliations ?? []).filter((affiliation) =>
-      this.isPrimaryCitizenshipRow(affiliation),
-    )
-    const extraAffiliations = (countryAffiliations ?? []).filter(
-      (affiliation) => !this.isPrimaryCitizenshipRow(affiliation),
-    )
-
-    // 역사 국가인 경우 CITIZENSHIP priority=0 소속 생성(FK 미러가 정본)
-    if (mainHistoricalId) {
-      await this.syncPrimaryCitizenshipSlot(this.prisma, person.id, {
-        historicalCountryId: mainHistoricalId,
-      })
-    } else if (primaryCitizenshipRows.length) {
-      // FK 미러가 없을 때만 배열 행이 슬롯을 채운다. 2행 이상 와도 첫 행만 — 슬롯은 1개 계약.
-      const primary = primaryCitizenshipRows[0]
-      await this.syncPrimaryCitizenshipSlot(this.prisma, person.id, {
-        countryId: primary.countryId || null,
-        historicalCountryId: primary.historicalCountryId || null,
-        startDate: primary.startDate || null,
-        endDate: primary.endDate || null,
-        note: primary.note || null,
-      })
-    }
-
-    // 추가 국가 소속(다중) 일괄 생성 — 주 국적(countryId)과 별개
-    if (extraAffiliations.length) {
-      await this.prisma.personCountryAffiliation.createMany({
-        data: extraAffiliations.map((a) => ({
-          personId: person.id,
-          affiliationType: a.affiliationType as any,
-          countryId: a.countryId || null,
-          historicalCountryId: a.historicalCountryId || null,
-          ...structuredDateColumns('start', a.startDate),
-          ...structuredDateColumns('end', a.endDate),
-          priority: a.priority ?? 1,
-          note: a.note || null,
-        })),
-      })
-    }
 
     // 응답에 effective countryId(역사적 국가 포함)를 넣기 위해 countryAffiliations 포함해 재조회
     const created = await this.prisma.person.findUnique({
@@ -2475,7 +2487,15 @@ export class PersonPrismaRepository implements IPersonRepository {
         })
         if (inHistorical) (sanitized as any).historicalCountryId = sanitized.countryId
         ;(sanitized as any).countryId = null
+      } else if ((sanitized as any).historicalCountryId === undefined) {
+        // 현대 주국적으로 전환 시 기존 역사 주국적 FK 및 슬롯도 함께 해제(상호배타 불변식)
+        ;(sanitized as any).historicalCountryId = null
       }
+    }
+
+    // 역사 주국적이 지정된 경우 현대 countryId는 null로 비워 두 FK가 동시에 남지 않게 보장
+    if (typeof (sanitized as any).historicalCountryId === 'string' && (sanitized as any).historicalCountryId) {
+      ;(sanitized as any).countryId = null
     }
 
     // dual-write(F1=A) 슬롯 동기화 키. sanitize가 ''·undefined를 제거하므로

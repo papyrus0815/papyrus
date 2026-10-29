@@ -543,16 +543,30 @@ export class CreatePersonDto {
    * @example "세종"
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  templeName?: string
+  @MaxLength(50)
+  templeName?: string | null
 
   /**
    * 시호 (예: 문종, 무열왕, 효종)
    * @example "세종장헌영문예무인성명효대왕"
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  posthumousName?: string
+  @MaxLength(100)
+  posthumousName?: string | null
+
+  /**
+   * 즉위 전 작호/봉호 (예: 수양대군, 충녕대군, 양녕대군)
+   * @example "충녕대군"
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(100)
+  preEnthronementTitle?: string | null
 
   /**
    * 가문 ID (선택)
