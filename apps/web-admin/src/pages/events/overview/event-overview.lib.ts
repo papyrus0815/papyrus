@@ -54,6 +54,62 @@ export interface GanttLayout {
   /** align — 축 양 끝 눈금은 가운데 정렬이면 반쯤 잘리거나 제목 열 밑에 숨는다. 안쪽으로 붙인다 */
   ticks: Array<{ pct: number; label: string; align: 'start' | 'center' | 'end' }>
   domain: [number, number]
+  /**
+   * 접은 빈 구간 — 하위가 하나도 없는 구간이 축의 30% 이상이면 좁은 틈(BREAK_PCT)으로 접는다.
+   * 동인도회사는 1690~1746이 비어 축 절반이 공백이고 나머지 막대가 양 끝에 눌려 있었다.
+   * 하위에 맞춘 축에서만 — '상위 기간 전체'는 공백을 보이려고 고르는 보기라 접지 않는다.
+   */
+  breaks: Array<{ pct: number; from: number; to: number; label: string }>
+  /** 축 값 → 트랙 % (접은 구간을 반영한 조각 선형) — 빗금 등 화면이 따로 그리는 것도 이걸로 */
+  toPct: (value: number) => number
+}
+
+/** 접은 구간 하나가 차지하는 트랙 폭(%) */
+export const BREAK_PCT = 4
+/** 빈 구간이 축의 이 비율 이상이면 접는다 */
+const BREAK_MIN_SHARE = 0.3
+
+/**
+ * 조각 선형 축 — 빈 구간(`gaps`, 오름차순·겹치지 않음)을 BREAK_PCT 폭으로 접고 나머지가 폭을 나눠 쓴다.
+ * 접은 구간 안의 값은 그 틈 안에서 비례로 놓는다(눈금은 따로 걸러 낸다).
+ */
+export function brokenAxis(
+  low: number,
+  high: number,
+  gaps: Array<{ from: number; to: number }>,
+): (value: number) => number {
+  const keptLength = high - low - gaps.reduce((sum, gap) => sum + (gap.to - gap.from), 0)
+  const keptPct = 100 - BREAK_PCT * gaps.length
+  if (gaps.length === 0 || keptLength <= 0) return (value) => ((value - low) / (high - low)) * 100
+  return (value) => {
+    let pct = 0
+    let cursor = low
+    for (const gap of gaps) {
+      if (value <= gap.from) return pct + ((value - cursor) / keptLength) * keptPct
+      pct += ((gap.from - cursor) / keptLength) * keptPct
+      if (value < gap.to) return pct + ((value - gap.from) / (gap.to - gap.from)) * BREAK_PCT
+      pct += BREAK_PCT
+      cursor = gap.to
+    }
+    return pct + ((value - cursor) / keptLength) * keptPct
+  }
+}
+
+/** 하위 막대들의 합집합 사이 빈 구간 중 축의 `minShare` 이상인 것 */
+export function emptyStretches(
+  spans: AxisSpan[],
+  low: number,
+  high: number,
+  minShare = BREAK_MIN_SHARE,
+): Array<{ from: number; to: number }> {
+  const sorted = [...spans].sort((left, right) => left.from - right.from)
+  const stretches: Array<{ from: number; to: number }> = []
+  let cursor = sorted.length > 0 ? sorted[0].to : low
+  for (const span of sorted.slice(1)) {
+    if (span.from - cursor >= (high - low) * minShare) stretches.push({ from: cursor, to: span.from })
+    cursor = Math.max(cursor, span.to)
+  }
+  return stretches
 }
 
 const DAY = 1 / 365.25
@@ -123,9 +179,13 @@ function calendarTicks(low: number, high: number, step: number): Array<{ value: 
 }
 
 /** 눈금 — 화면에 8개 안팎 */
-export function axisTicks(low: number, high: number): Array<{ value: number; label: string }> {
+export function axisTicks(
+  low: number,
+  high: number,
+  maxTicks = 8,
+): Array<{ value: number; label: string }> {
   const range = high - low
-  const step = TICK_STEPS.find((candidate) => range / candidate <= 8) ?? 1000
+  const step = TICK_STEPS.find((candidate) => range / candidate <= maxTicks) ?? 1000
   if (step < 1 / 12) return calendarTicks(low, high, step)
   const ticks: Array<{ value: number; label: string }> = []
   for (let value = Math.ceil(low / step) * step; value <= high + 1e-9; value += step) {
@@ -210,7 +270,10 @@ export function buildGantt(
   const padding = (high - low) * 0.02
   low -= padding
   high += padding
-  const toPct = (value: number) => ((value - low) / (high - low)) * 100
+  // 빈 구간은 막대 사이에서만 찾는다 — 축 양 끝(여백·상위 기간)은 접지 않는다
+  const stretches =
+    fit === 'children' ? emptyStretches(placed.map((entry) => entry.span), low, high) : []
+  const toPct = brokenAxis(low, high, stretches)
 
   const rows: GanttRow[] = placed.map(({ node, span }, index) => ({
     ...span,
@@ -251,16 +314,51 @@ export function buildGantt(
     undated,
     parentBand,
     parentEdges,
-    ticks: axisTicks(low, high).map((tick) => {
-      const pct = toPct(tick.value)
-      return { pct, label: tick.label, align: pct < 4 ? 'start' : pct > 96 ? 'end' : 'center' }
-    }),
+    ticks: brokenTicks(low, high, stretches)
+      .map((tick) => {
+        const pct = toPct(tick.value)
+        return { pct, label: tick.label, align: pct < 4 ? 'start' : pct > 96 ? 'end' : 'center' } as const
+      })
+      // 접힌 틈 표지와 겹치는 눈금은 뺀다
+      .filter((tick) =>
+        stretches.every((stretch) => Math.abs(tick.pct - (toPct(stretch.from) + BREAK_PCT / 2)) >= BREAK_PCT),
+      ),
     domain: [low, high],
+    breaks: stretches.map((stretch) => ({
+      ...stretch,
+      pct: toPct(stretch.from) + BREAK_PCT / 2,
+      label: `${monthLabel(stretch.from)} ~ ${monthLabel(stretch.to)} 하위 없음`,
+    })),
+    toPct,
   }
 }
 
 /**
- * 막대 날짜 라벨 자리 — 오른쪽 → 왼쪽 → 막대 안 → (어디도 안 들어가면) 여유가 큰 쪽.
+ * 접은 축의 눈금 — 남은 조각마다 따로 매기고(조각 길이에 비례한 개수), 접힌 틈 안 눈금은 버린다.
+ * 한 벌로 매기면 56년 공백에 눈금이 몰리고 막대가 있는 조각엔 하나도 안 남았다.
+ */
+function brokenTicks(
+  low: number,
+  high: number,
+  stretches: Array<{ from: number; to: number }>,
+): Array<{ value: number; label: string }> {
+  if (stretches.length === 0) return axisTicks(low, high)
+  const pieces: Array<{ from: number; to: number }> = []
+  let cursor = low
+  for (const stretch of stretches) {
+    pieces.push({ from: cursor, to: stretch.from })
+    cursor = stretch.to
+  }
+  pieces.push({ from: cursor, to: high })
+  const keptLength = pieces.reduce((sum, piece) => sum + (piece.to - piece.from), 0)
+  return pieces.flatMap((piece) =>
+    axisTicks(piece.from, piece.to, Math.max(2, Math.round((8 * (piece.to - piece.from)) / keptLength))),
+  )
+}
+
+/**
+ * 막대 날짜 라벨 자리 — 오른쪽 → 왼쪽 → 막대 안 → (어디도 안 들어가면) 트랙 오른쪽 끝에 붙인 칩('pinned').
+ * 예전 마지막 수는 '여유가 큰 쪽'이라 그쪽도 모자라면 트랙 밖으로 잘렸다(1차대전 18줄 중 9줄).
  * 예전엔 '막대 끝이 축의 78% 안이면 오른쪽'으로 % 만 봤다 — 420px 트랙에서 남는 22%는 92px인데
  * '1914.7.28 ~ 1914.8.4'(약 120px)가 패널 밖으로 넘쳐 가로 스크롤을 만들었다.
  */
@@ -276,7 +374,7 @@ export function chooseLabelPlace({
   trackPx: number
   label: string
   uncertain: boolean
-}): 'right' | 'left' | 'inside' {
+}): 'right' | 'left' | 'inside' | 'pinned' {
   /** 11.5px 숫자·기호 글꼴의 대략 폭 + 막대와의 틈 */
   const labelPx = label.length * 6.6 + 10
   const rightRoom = ((100 - leftPct - widthPct) / 100) * trackPx
@@ -286,7 +384,8 @@ export function chooseLabelPlace({
   if (leftRoom >= labelPx) return 'left'
   // 점선(연·월만 아는) 막대 안은 비어 있어 글자가 떠 보인다 — 안쪽은 채운 막대만
   if (!uncertain && barPx >= labelPx) return 'inside'
-  return rightRoom >= leftRoom ? 'right' : 'left'
+  // 막대 위에 겹치더라도 글자가 다 보이는 편이 낫다 — 칩 바탕이 막대를 가린다
+  return 'pinned'
 }
 
 export interface CoverageGap {
@@ -343,9 +442,146 @@ export function coverageGaps(
   return gaps
 }
 
+/**
+ * 개요 번호 — 직계는 1·2·3, 그 아래는 3-1·3-2, 더 아래는 3-1-1. 상세 '전개'와 같은 규칙이다.
+ * 예전엔 1~20 일련번호라 '9번'이 어느 묶음 아래인지 번호만으론 알 수 없었다.
+ * 형제 순서는 `ordered`(간트 순 → 날짜 없는 것) 그대로.
+ */
+export function outlineNumbers(ordered: EventOverviewNode[], rootId: string): Map<string, string> {
+  const ids = new Set(ordered.map((node) => node.id))
+  const childrenOf = new Map<string, EventOverviewNode[]>()
+  for (const node of ordered) {
+    // 상위가 목록에 없으면(고아) 직계로 센다
+    const parentKey = node.parentEventId && ids.has(node.parentEventId) ? node.parentEventId : rootId
+    childrenOf.set(parentKey, [...(childrenOf.get(parentKey) ?? []), node])
+  }
+  const numbers = new Map<string, string>()
+  const visit = (parentId: string, prefix: string) => {
+    ;(childrenOf.get(parentId) ?? []).forEach((child, index) => {
+      const label = prefix ? `${prefix}-${index + 1}` : String(index + 1)
+      numbers.set(child.id, label)
+      visit(child.id, label)
+    })
+  }
+  visit(rootId, '')
+  return numbers
+}
+
+/** 개요 번호 비교 — '3' < '3-1' < '3-2' < '10' */
+export const compareOutline = (left: string, right: string) =>
+  left.localeCompare(right, undefined, { numeric: true })
+
 /** 화면 전체가 쓰는 하위 사건 순서 — 간트 순(날짜 있는 것) 뒤에 날짜 없는 것 */
 export function orderedDescendants(gantt: GanttLayout): EventOverviewNode[] {
   return [...gantt.rows.map((row) => row.node), ...gantt.undated]
+}
+
+// ─── 묶음 ──────────────────────────────────────────────────────────────────
+
+/** 직계 하위 중 묶음(아래에 사건이 있거나 묶음 종류) 하나 — 그 묶음과 그 아래 전부 */
+export interface OverviewGroup {
+  /** 묶음 사건 자신의 id */
+  id: string
+  title: string
+  /** 묶음 순번(0부터) — 색을 고른다 */
+  index: number
+  /** 묶음 아래 사건 id(묶음 자신 제외, 손자 이하 포함) */
+  memberIds: string[]
+  /** 묶음 자신과 아래 전부가 덮는 축 범위 — 날짜가 하나도 없으면 null */
+  span: { from: number; to: number } | null
+  /** '1876.6 ~ 1877.2' */
+  spanLabel: string | null
+}
+
+export interface OverviewGrouping {
+  groups: OverviewGroup[]
+  /** 사건 id → 속한 묶음 id(묶음 자신도 자기 묶음). 개별 사건은 없음 */
+  groupIdOf: Map<string, string>
+  /** 묶음에 안 든 직계 개별 사건 id */
+  singleIds: string[]
+}
+
+/** 묶음 거르기 값 — 묶음 id, 또는 묶음에 안 든 개별 사건 */
+export const SINGLES_GROUP_KEY = 'singles'
+
+/**
+ * 묶음별로 가른다 — 조망은 하위 전부를 한 판에 펼쳐서 '어느 묶음의 사건인가'가 들여쓰기·↳ 표기로만
+ * 보였다(대동방위기: 20건 중 9건이 '제1차 세르비아-튀르크 전쟁' 아래). 직계 하위 중 아래에 사건이 있거나
+ * 묶음 종류인 것을 묶음으로, 나머지 직계는 개별로 센다. 순서는 간트 순(트리 순)이다.
+ */
+export function collectionGroups(
+  ordered: EventOverviewNode[],
+  gantt: GanttLayout,
+): OverviewGrouping {
+  const byParent = new Map<string, EventOverviewNode[]>()
+  for (const node of ordered) {
+    if (!node.parentEventId) continue
+    byParent.set(node.parentEventId, [...(byParent.get(node.parentEventId) ?? []), node])
+  }
+  const rowById = new Map(gantt.rows.map((row) => [row.node.id, row]))
+  const subtree = (id: string): string[] =>
+    (byParent.get(id) ?? []).flatMap((child) => [child.id, ...subtree(child.id)])
+  const groups: OverviewGroup[] = []
+  const groupIdOf = new Map<string, string>()
+  const singleIds: string[] = []
+  for (const node of ordered) {
+    if (node.depth !== 1) continue
+    const memberIds = subtree(node.id)
+    if (memberIds.length === 0 && node.kind !== 'COLLECTION') {
+      singleIds.push(node.id)
+      continue
+    }
+    const spans = [node.id, ...memberIds]
+      .map((id) => rowById.get(id))
+      .filter((row): row is GanttRow => row !== undefined)
+    const span =
+      spans.length > 0
+        ? { from: Math.min(...spans.map((row) => row.from)), to: Math.max(...spans.map((row) => row.to)) }
+        : null
+    groups.push({
+      id: node.id,
+      title: node.title,
+      index: groups.length,
+      memberIds,
+      span,
+      spanLabel: span ? spanMonthsLabel(span.from, span.to) : null,
+    })
+    groupIdOf.set(node.id, node.id)
+    for (const id of memberIds) groupIdOf.set(id, node.id)
+  }
+  return { groups, groupIdOf, singleIds }
+}
+
+/** '1876.6 ~ 1877.2' — 같은 달이면 한 번 */
+function spanMonthsLabel(from: number, to: number): string {
+  const start = monthLabel(from)
+  // 끝은 마지막 순간이라 하루 당겨 그 달로 읽는다
+  const end = monthLabel(Math.max(from, to - DAY))
+  return start === end ? start : `${start} ~ ${end}`
+}
+
+/** 묶음 거르기에 걸리는 사건인가 */
+export function inGroupFilter(grouping: OverviewGrouping, id: string, groupKey: string): boolean {
+  const groupId = grouping.groupIdOf.get(id)
+  return groupKey === SINGLES_GROUP_KEY ? groupId === undefined : groupId === groupKey
+}
+
+/**
+ * 연속한 같은 묶음 구간 — 매트릭스 머리 줄·점검표 묶음 머리가 쓴다.
+ * 날짜 없는 사건은 순서 끝에 모여 같은 묶음이 두 번 나올 수 있다(그대로 두 구간).
+ */
+export function groupRuns(
+  ids: string[],
+  grouping: OverviewGrouping,
+): Array<{ groupId: string | null; start: number; length: number }> {
+  const runs: Array<{ groupId: string | null; start: number; length: number }> = []
+  ids.forEach((id, index) => {
+    const groupId = grouping.groupIdOf.get(id) ?? null
+    const last = runs[runs.length - 1]
+    if (last && last.groupId === groupId) last.length += 1
+    else runs.push({ groupId, start: index, length: 1 })
+  })
+  return runs
 }
 
 // ─── 참여국 ────────────────────────────────────────────────────────────────
@@ -546,7 +782,7 @@ export interface TimeBin {
  *
  * 시작만 세면 25년짜리 차관 사건(1888~1914)도 1888년 한 칸에 잡혀, 1900년대가 비어 보였다.
  * 칸 단위는 하위가 펼쳐진 전체 범위(가장 이른 시작 ~ 가장 늦은 끝)에 맞춘다
- * (4개월 이하 주, 2년 이하 월, 40년 이하 연, 400년 이하 10년, 그 위 100년). 주 단위가 없을 땐
+ * (4개월 이하 주, 2년 이하 월, 6년 이하 분기, 40년 이하 연, 400년 이하 10년, 그 위 100년). 주 단위가 없을 땐
  * 7월 위기처럼 석 달에 몰린 묶음이 막대 3개짜리였다(간트는 주 눈금까지 내려간다).
  *
  * `visibleIds`를 주면 걸린 사건만 센 값(matched*)도 함께 — 화면은 전체를 옅은 윤곽으로, 걸린 것을 진하게 겹친다.
@@ -557,7 +793,9 @@ export function timeHistogram(gantt: GanttLayout, visibleIds: Set<string> | null
   // 끝은 '마지막 순간'이 아니라 마지막 칸 안에 들도록 하루 당겨 잡는다(월 정밀도 9월 = 10월 1일 0시까지)
   const to = Math.max(...gantt.rows.map((row) => Math.max(row.from, row.to - DAY)))
   const span = to - from
-  const unit = span <= 1 / 3 ? WEEK : span <= 2 ? 1 / 12 : span <= 40 ? 1 : span <= 400 ? 10 : 100
+  // 2~6년은 분기 — 연 단위면 3년짜리 대동방위기가 막대 4개뿐이라 1876년 여름의 몰림이 한 칸에 뭉갰다
+  const unit =
+    span <= 1 / 3 ? WEEK : span <= 2 ? 1 / 12 : span <= 6 ? 1 / 4 : span <= 40 ? 1 : span <= 400 ? 10 : 100
   const start = Math.floor(from / unit + 1e-9) * unit
   const binCount = Math.max(1, Math.floor((to - start) / unit + 1e-9) + 1)
   const bins: TimeBin[] = Array.from({ length: binCount }, (_, index) => ({
@@ -612,6 +850,7 @@ function binLabel(value: number, unit: number): string {
     const date = new Date(Date.UTC(2001, 0, 1 + Math.floor((value - yearFloor) * 365.25)))
     return `${date.getUTCMonth() + 1}.${date.getUTCDate()}`
   }
+  if (unit === 1 / 4) return `${year}년 ${Math.round((value - yearFloor) * 4) + 1}분기`
   if (unit < 1) return `${year}.${Math.round((value - yearFloor) * 12) + 1}`
   if (unit === 1) return year
   return `${year}~`
@@ -697,6 +936,28 @@ export const CHECK_COLUMNS: ReadonlyArray<{ key: CheckKey; label: string; hint: 
   { key: 'sides', label: '진영', hint: '교전 양측 — 전쟁·전투·봉기에서만' },
   { key: 'metrics', label: '수치', hint: '세부·분야가 권하는 측정값 1개 이상' },
 ]
+
+/**
+ * 빈 칸을 채우러 갈 자리 — 사건 문서의 섹션 앵커(상세가 #해시로 그 탭을 열고 스크롤한다).
+ * '' = 문서 맨 위(날짜·개요는 머리에서 고친다). 진영·수치는 모듈이 켜져 있어야 섹션이 있다 —
+ * 없으면 모듈 탭이 열리고 거기서 켠다.
+ */
+export const CHECK_FILL_ANCHOR: Record<CheckKey, string> = {
+  date: '',
+  description: '',
+  countries: 'actors',
+  persons: 'actors',
+  sections: 'narrative',
+  background: 'background',
+  aftermath: 'aftermath',
+  images: 'appendix',
+  sides: 'module-sides',
+  metrics: 'module-metrics',
+}
+
+/** 채우러 가는 주소 — `/events/<id>/#background` */
+export const checkFillHref = (detailPath: string, key: CheckKey) =>
+  CHECK_FILL_ANCHOR[key] ? `${detailPath}#${CHECK_FILL_ANCHOR[key]}` : detailPath
 
 /** full=채움, partial=일부(연·월 정밀도 날짜), empty=비어 있음, na=이 사건엔 해당 없음 */
 export type CheckState = 'full' | 'partial' | 'empty' | 'na'

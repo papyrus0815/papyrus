@@ -40,14 +40,14 @@ const event: EventOverviewNode = {
 function setup(over: Partial<React.ComponentProps<typeof OverviewEventModal>> = {}) {
   const props = {
     event,
-    number: 2,
+    number: '2',
     position: 2,
     total: 18,
     filtered: false,
     rootTitle: '1차세계대전',
     parentTitle: null,
     children: [],
-    numberById: new Map([['marne', 2]]),
+    numberById: new Map([['marne', '2']]),
     onClose: jest.fn(),
     onPrev: jest.fn(),
     onNext: jest.fn(),
@@ -68,7 +68,7 @@ it('위치·제목·배역을 보여 주고, 평범한 참여는 배역 글씨�
   expect(screen.getByRole('dialog')).toBeInTheDocument()
   // 첫 포커스는 제목 — 공용 모달 훅이 다음 프레임에 옮긴다
   await waitFor(() => expect(screen.getByRole('heading', { name: '마른 전투' })).toHaveFocus())
-  expect(screen.getByText('2 / 18')).toBeInTheDocument()
+  expect(screen.getByText('2 · 2번째 / 18건')).toBeInTheDocument()
   expect(screen.getByText('주도국')).toBeInTheDocument()
   // '독일 제국'(참여) 칩에는 배역 글씨가 없다 — 블록 제목과 같은 말이라
   expect(screen.getByText('독일 제국').parentElement).toHaveTextContent(/^독일 제국$/)
@@ -88,6 +88,6 @@ it('사건 문서 열기는 링크 — 새 탭으로도 열린다', () => {
 })
 
 it('걸러 둔 상태에선 표 번호와 걸린 집합 안 순서를 함께 말한다', () => {
-  setup({ number: 7, position: 2, total: 5, filtered: true })
+  setup({ number: '7', position: 2, total: 5, filtered: true })
   expect(screen.getByText('7번 · 걸린 5건 중 2')).toBeInTheDocument()
 })

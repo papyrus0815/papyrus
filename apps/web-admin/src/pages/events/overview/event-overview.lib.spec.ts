@@ -4,7 +4,15 @@ import {
   aggregatePersons,
   buildCountryMatrix,
   axisTicks,
+  BREAK_PCT,
+  brokenAxis,
   buildGantt,
+  collectionGroups,
+  compareOutline,
+  outlineNumbers,
+  groupRuns,
+  inGroupFilter,
+  SINGLES_GROUP_KEY,
   chooseLabelPlace,
   overlapsPeriod,
   parsePeriodParam,
@@ -257,6 +265,10 @@ describe('chooseLabelPlace — 날짜 라벨은 픽셀로 판정', () => {
     expect(chooseLabelPlace({ leftPct: 2, widthPct: 96, trackPx: 600, label, uncertain: false })).toBe('inside')
     expect(chooseLabelPlace({ leftPct: 2, widthPct: 96, trackPx: 600, label, uncertain: true })).not.toBe('inside')
   })
+  it('어디에도 안 들어가면 트랙 끝에 붙인 칩 — 여유 큰 쪽으로 보내 트랙 밖으로 잘리지 않는다', () => {
+    expect(chooseLabelPlace({ leftPct: 30, widthPct: 40, trackPx: 300, label, uncertain: true })).toBe('pinned')
+    expect(chooseLabelPlace({ leftPct: 40, widthPct: 20, trackPx: 300, label, uncertain: false })).toBe('pinned')
+  })
 })
 
 describe('분포', () => {
@@ -400,4 +412,103 @@ describe('배치 D — 상위에 하위 참여국 걸기', () => {
       { historicalCountryId: 'rs', role: 'PARTICIPANT' },
     ])
   })
+})
+
+describe('접은 축 — 빈 구간이 축의 30% 이상이면 좁은 틈으로', () => {
+  const early = node({ id: 'early', startDate: '1690-01-01T00:00:00.000Z', endDate: '1692-01-01T00:00:00.000Z' })
+  const late = node({ id: 'late', startDate: '1746-01-01T00:00:00.000Z', endDate: '1748-01-01T00:00:00.000Z' })
+  const company = node({ id: 'company', parentEventId: null, depth: 0, startDate: '1600-12-31T00:00:00.000Z' })
+
+  it('동인도회사처럼 56년이 비면 틈 하나로 접고, 막대가 축을 나눠 쓴다', () => {
+    const gantt = buildGantt(company, [early, late])
+    expect(gantt.breaks).toHaveLength(1)
+    expect(gantt.breaks[0].label).toContain('하위 없음')
+    const [first, second] = gantt.rows
+    // 접지 않으면 각 막대가 3%대 — 접으면 남은 폭을 둘이 나눠 40% 넘게
+    expect(first.widthPct).toBeGreaterThan(30)
+    expect(second.leftPct + second.widthPct).toBeLessThanOrEqual(100.001)
+    expect(second.leftPct - (first.leftPct + first.widthPct)).toBeCloseTo(BREAK_PCT, 0)
+  })
+
+  it('접힌 틈 안에는 눈금을 매기지 않는다', () => {
+    const gantt = buildGantt(company, [early, late])
+    const breakPct = gantt.breaks[0].pct
+    expect(gantt.ticks.every((tick) => Math.abs(tick.pct - breakPct) >= BREAK_PCT)).toBe(true)
+    expect(gantt.ticks.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("'상위 기간 전체'는 공백을 보려고 고르는 보기라 접지 않는다", () => {
+    expect(buildGantt(company, [early, late], 'parent').breaks).toEqual([])
+  })
+
+  it('조각 선형 — 양 끝은 0·100, 틈 앞뒤로 단조 증가', () => {
+    const toPct = brokenAxis(0, 100, [{ from: 20, to: 80 }])
+    expect(toPct(0)).toBeCloseTo(0)
+    expect(toPct(100)).toBeCloseTo(100)
+    expect(toPct(80) - toPct(20)).toBeCloseTo(BREAK_PCT)
+    expect(toPct(10)).toBeLessThan(toPct(20))
+    expect(toPct(90)).toBeGreaterThan(toPct(80))
+  })
+})
+
+describe('묶음별 — 직계 중 아래가 있거나 묶음 종류면 묶음', () => {
+  const war = node({ id: 'war', title: '세르비아 전쟁', kind: 'COLLECTION', startDate: '1876-06-30T00:00:00.000Z' })
+  const battle = node({ id: 'battle', parentEventId: 'war', depth: 2, startDate: '1876-07-01T00:00:00.000Z' })
+  const peace = node({ id: 'peace', parentEventId: 'war', depth: 2, startDate: '1877-02-28T00:00:00.000Z' })
+  const lone = node({ id: 'lone', startDate: '1875-07-09T00:00:00.000Z' })
+  const emptyCollection = node({ id: 'empty', kind: 'COLLECTION' })
+  const all = [lone, war, battle, peace, emptyCollection]
+  const gantt = buildGantt(root, all)
+  const ordered = orderedDescendants(gantt)
+  const grouping = collectionGroups(ordered, gantt)
+
+  it('묶음과 그 아래, 개별 직계를 가른다 — 아래가 빈 묶음 종류도 묶음', () => {
+    expect(grouping.groups.map((group) => group.id)).toEqual(['war', 'empty'])
+    expect(grouping.groups[0].memberIds).toEqual(['battle', 'peace'])
+    expect(grouping.singleIds).toEqual(['lone'])
+    expect(grouping.groupIdOf.get('battle')).toBe('war')
+    expect(grouping.groupIdOf.get('war')).toBe('war')
+  })
+
+  it('묶음 기간은 묶음과 아래 전부 — 날짜가 없으면 null', () => {
+    expect(grouping.groups[0].spanLabel).toBe('1876.6 ~ 1877.2')
+    expect(grouping.groups[1].span).toBeNull()
+  })
+
+  it('거르기: 묶음 id는 그 묶음 전부, singles는 묶음 밖 직계', () => {
+    expect(inGroupFilter(grouping, 'peace', 'war')).toBe(true)
+    expect(inGroupFilter(grouping, 'lone', 'war')).toBe(false)
+    expect(inGroupFilter(grouping, 'lone', SINGLES_GROUP_KEY)).toBe(true)
+    expect(inGroupFilter(grouping, 'battle', SINGLES_GROUP_KEY)).toBe(false)
+  })
+
+  it('연속 구간 — 같은 묶음이 이어지면 한 구간', () => {
+    expect(groupRuns(['lone', 'war', 'battle', 'peace'], grouping)).toEqual([
+      { groupId: null, start: 0, length: 1 },
+      { groupId: 'war', start: 1, length: 3 },
+    ])
+  })
+})
+
+describe('개요 번호 — 1 아래는 1-1', () => {
+  it('직계는 1·2, 그 아래는 부모 번호-순번, 더 아래는 한 마디 더', () => {
+    const war = node({ id: 'war' })
+    const battle = node({ id: 'battle', parentEventId: 'war', depth: 2 })
+    const day = node({ id: 'day', parentEventId: 'battle', depth: 3 })
+    const peace = node({ id: 'peace', parentEventId: 'war', depth: 2 })
+    const lone = node({ id: 'lone' })
+    const numbers = outlineNumbers([war, battle, day, peace, lone], 'root')
+    expect([...numbers.values()]).toEqual(['1', '1-1', '1-1-1', '1-2', '2'])
+  })
+  it('정렬은 마디마다 숫자로 — 3 < 3-1 < 3-2 < 10', () => {
+    expect(['10', '3-2', '3', '3-1'].sort(compareOutline)).toEqual(['3', '3-1', '3-2', '10'])
+  })
+})
+
+it('2~6년 하위는 분기 칸 — 연 단위면 3년이 막대 4개뿐이었다', () => {
+  const early = node({ id: 'early', startDate: '1875-07-09T00:00:00.000Z' })
+  const late = node({ id: 'late', startDate: '1878-06-13T00:00:00.000Z' })
+  const bins = timeHistogram(buildGantt(root, [early, late]))
+  expect(bins.length).toBeGreaterThan(10)
+  expect(bins[0].label).toBe('1875년 3분기')
 })

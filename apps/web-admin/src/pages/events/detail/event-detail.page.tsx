@@ -626,9 +626,15 @@ function EventDetailContent({
     scrolledHashForEventRef.current = event.id
     const hash = window.location.hash.slice(1)
     if (!hash) return
+    // 비어서 접힌 섹션(#background 등)은 그 자리가 아예 없다 — 조망 점검표의 '채우러 가기'가
+    // 여기로 온다. 채우기 칩을 누른 것처럼 펼친 다음 스크롤한다
+    if (FOLDABLE_SECTIONS.some((section) => section.id === hash)) {
+      revealSection(hash as FoldableSectionId)
+      return
+    }
     setActiveTab(tabOf(hash))
     setPendingHash(hash)
-  }, [event.id, setActiveTab, tabOf])
+  }, [event.id, setActiveTab, tabOf, revealSection])
   useEffect(() => {
     if (!pendingHash) return
     const target = document.getElementById(pendingHash)
@@ -821,7 +827,12 @@ function EventDetailContent({
               </TrashActions>
             </TrashBanner>
           )}
-          <S.Body inert={isTrashed} data-trashed={isTrashed || undefined}>
+          <S.Body
+            inert={isTrashed}
+            data-trashed={isTrashed || undefined}
+            /* 조망은 대시보드라 본문이 장부 칸까지 넓게 쓴다(S.Body data-wide) */
+            data-wide={activeTab === 'survey' || undefined}
+          >
             <DetailHero
               event={event}
               onPatch={onPatch}

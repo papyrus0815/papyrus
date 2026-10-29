@@ -10,6 +10,9 @@ import { renderWithTheme } from '@/shared/test/render-with-theme'
 import { buildCountryMatrix, metricRows } from './event-overview.lib'
 import { CountryMatrixPanel, DistributionPanel, PersonsPanel, SidesMetricsPanel } from './overview-sections'
 
+// 간트 '묶음 만들기'가 끌어오는 API 모듈은 jest가 import.meta를 못 읽는다 — 여기 패널들은 쓰지 않는다
+jest.mock('../detail/components/collection-regroup', () => ({ RegroupBar: () => null }))
+
 const node = (over: Partial<EventOverviewNode> & { id: string }): EventOverviewNode => ({
   title: over.id,
   description: null,
@@ -48,8 +51,8 @@ const root = node({ id: 'root', title: '1차세계대전', parentEventId: null, 
 const battle = node({ id: 'battle', title: '마른 전투', countries: [country('c:fr', '프랑스'), country('c:de', '독일')] })
 const treaty = node({ id: 'treaty', title: '런던 조약', countries: [country('c:gb', '영국')] })
 const numberById = new Map([
-  ['battle', 1],
-  ['treaty', 2],
+  ['battle', '1'],
+  ['treaty', '2'],
 ])
 const hover = { hotId: null, onHover: jest.fn(), onOpen: jest.fn() }
 
@@ -57,6 +60,7 @@ describe('CountryMatrixPanel — 거르기', () => {
   const renderMatrix = (visibleIds: Set<string> | null) =>
     renderWithTheme(
       <CountryMatrixPanel
+        grouping={{ groups: [], groupIdOf: new Map(), singleIds: [] }}
         {...hover}
         missing={[]}
         attaching={false}
@@ -148,7 +152,7 @@ describe('DistributionPanel', () => {
   it('세부마다 한 줄 — 같은 분야 색이라도 줄로 갈리고, 누르면 그 세부로 거른다', () => {
     const onSelectType = jest.fn()
     renderWithTheme(
-      <DistributionPanel types={types} bins={bins} selectedType={null} onSelectType={onSelectType} />,
+      <DistributionPanel part="types" types={types} bins={bins} selectedType={null} onSelectType={onSelectType} />,
     )
     expect(screen.getByRole('button', { name: /개인\s*6/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /회담\s*3/ })).toBeInTheDocument()
@@ -160,6 +164,7 @@ describe('DistributionPanel', () => {
     const onSelectPeriod = jest.fn()
     const { rerender } = renderWithTheme(
       <DistributionPanel
+        part="period"
         types={types}
         bins={bins}
         selectedType={null}
@@ -171,6 +176,7 @@ describe('DistributionPanel', () => {
     expect(onSelectPeriod).toHaveBeenLastCalledWith({ from: 1914.5, to: 1914.52 })
     rerender(
       <DistributionPanel
+        part="period"
         types={types}
         bins={bins}
         selectedType={null}
@@ -185,7 +191,7 @@ describe('DistributionPanel', () => {
 
   it('거르기가 걸리면 시기 막대는 걸린 사건 수를 말한다', () => {
     renderWithTheme(
-      <DistributionPanel types={types} bins={bins} selectedType="SUMMIT" onSelectType={jest.fn()} filtered />,
+      <DistributionPanel part="period" types={types} bins={bins} selectedType="SUMMIT" onSelectType={jest.fn()} filtered />,
     )
     expect(screen.getByRole('button', { name: /걸린 사건 중 진행 중 1건/ })).toBeInTheDocument()
     expect(screen.getByText('거르기 전 전체')).toBeInTheDocument()
@@ -194,7 +200,7 @@ describe('DistributionPanel', () => {
 
 it('DistributionPanel — 하위가 없으면 빈 막대 대신 안내', () => {
   renderWithTheme(
-    <DistributionPanel types={[]} bins={[]} selectedType={null} onSelectType={jest.fn()} />,
+    <DistributionPanel part="types" types={[]} bins={[]} selectedType={null} onSelectType={jest.fn()} />,
   )
   expect(screen.getByText('하위 사건이 없어 분포가 아직 없습니다.')).toBeInTheDocument()
 })

@@ -30,6 +30,7 @@ import { ModalBody, ModalCloseButton, ModalFooter } from '@/shared/ui/modal/moda
 
 import {
   CHECK_COLUMNS,
+  checkFillHref,
   checkNode,
   checkScore,
   metricRows,
@@ -42,7 +43,8 @@ interface OverviewEventModalProps {
   /** 열린 사건 — null이면 닫힘 */
   event: EventOverviewNode | null
   /** 전개·점검표와 같은 번호(전체 순서) */
-  number: number
+  /** 개요 번호 '3-1' */
+  number: string
   /** 지금 넘기는 순서(거르기 반영) 안의 위치 */
   position: number
   total: number
@@ -54,7 +56,7 @@ interface OverviewEventModalProps {
   parentTitle: string | null
   /** 이 사건 바로 아래 하위(조망 범위 안) */
   children: EventOverviewNode[]
-  numberById: Map<string, number>
+  numberById: Map<string, string>
   onClose: () => void
   onPrev: (() => void) | null
   onNext: (() => void) | null
@@ -133,7 +135,8 @@ export function OverviewEventModal({
           <HeadTop>
             {/* 걸러 둔 상태에선 표의 번호와 넘기는 순서가 다르다 — 둘 다 말한다 */}
             <Position title={filtered ? '전개·점검표의 번호 · 걸린 사건 중 순서' : undefined}>
-              {filtered ? `${number}번 · 걸린 ${total}건 중 ${position}` : `${number} / ${total}`}
+              {/* 번호는 개요 번호(3-2)라 '/ 20'을 붙이면 '20 중 3-2'로 읽혔다 — 몇 번째인지는 따로 */}
+              {filtered ? `${number}번 · 걸린 ${total}건 중 ${position}` : `${number} · ${position}번째 / ${total}건`}
             </Position>
             <Trail>
               {rootTitle}
@@ -231,13 +234,29 @@ export function OverviewEventModal({
               {/* 해당 없는 칸(외교 사건의 수치 등)은 목록에서 뺀다 — 비었다고 읽히지 않게 */}
               {CHECK_COLUMNS.filter((column) => checks[column.key] !== 'na').map((column) => {
                 const state = checks[column.key]
-                return (
-                  <CheckItem key={column.key} $state={state} title={column.hint}>
+                const body = (
+                  <>
                     <CheckGlyph $state={state} aria-hidden="true" />
                     {column.label}
                     <S.VisuallyHidden>
                       {state === 'full' ? ' 채움' : state === 'partial' ? ' 일부' : ' 비어 있음'}
                     </S.VisuallyHidden>
+                  </>
+                )
+                return (
+                  <CheckItem key={column.key} $state={state} title={column.hint}>
+                    {/* 빈 칸은 채우러 가는 길 — 그 사건 문서의 해당 섹션으로 */}
+                    {state === 'full' ? (
+                      body
+                    ) : (
+                      <CheckFillLink
+                        to={checkFillHref(pathKeys.events.detail(event.id), column.key)}
+                        title={`${column.label} 채우러 가기 — ${column.hint}`}
+                      >
+                        {body}
+                        <span aria-hidden="true" className="go">→</span>
+                      </CheckFillLink>
+                    )}
                   </CheckItem>
                 )
               })}
@@ -605,6 +624,32 @@ const CheckItem = styled.li<{ $state: 'full' | 'partial' | 'empty' | 'na' }>`
   font-weight: 600;
   color: ${({ $state, theme }) =>
     $state === 'empty' ? theme.colors.text.tertiary : theme.colors.text.primary};
+`
+
+/** 빈 칸 — 누르면 사건 문서의 그 자리로. 화살표는 마우스를 올렸을 때만 */
+const CheckFillLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+  .go {
+    opacity: 0;
+    font-size: 11px;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.background.quaternary};
+  }
+  &:hover .go,
+  &:focus-visible .go {
+    opacity: 1;
+  }
 `
 
 /** 채움=꽉 찬 원 · 일부=반원 · 빈 칸=테두리만 */

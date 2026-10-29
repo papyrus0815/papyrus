@@ -206,6 +206,20 @@ export const Body = styled.div`
     /* 행 간격 — 히어로→탭은 붙어야 한 머리로 읽힌다(예전 36 + 히어로 아래 32 = 68px 공백) */
     gap: 20px ${COLUMN_GAP}px;
   }
+
+  /*
+   * 넓은 탭(조망) — 장부는 히어로·탭 옆에 두고 그 아래 본문이 두 칸을 다 쓴다. 조망은 간트·표·막대 같은 대시보드라
+   * 문서 열 594px(1440 화면)로는 간트 축이 300px 남짓이었고 날짜 라벨 절반이 잘렸다. 지표 카드가 장부를 대신한다.
+   */
+  &[data-wide] {
+    @container eventdetail (min-width: 920px) {
+      /* 탭 줄도 두 칸 — 왼쪽 칸에만 걸면 스크롤할 때 오른쪽 빈 자리로 아래 간트가 비쳐 올라왔다 */
+      grid-template-areas:
+        'hero aside'
+        'tabs tabs'
+        'main main';
+    }
+  }
 `
 
 /**
@@ -222,6 +236,13 @@ export const Aside = styled.aside`
   @container eventdetail (min-width: 920px) {
     position: sticky;
     top: 24px;
+
+    /* 넓은 탭에선 히어로 옆에 머문다(아래 본문이 두 칸을 쓰므로 따라 내려오면 본문을 덮는다) */
+    [data-wide] > & {
+      position: static;
+      max-height: none;
+    }
+
     gap: 24px;
     max-height: calc(100vh - var(--header-height, 64px) - 60px);
     overflow-y: auto;
