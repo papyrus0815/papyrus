@@ -30,11 +30,15 @@ import {
   ControlsRow,
   CountHint,
   EmptyHint,
+  getTooltipStyle,
   Legend,
   LegendCount,
   LegendDot,
   LegendItem,
   LegendName,
+  SplitLayout,
+  SurfaceCard,
+  ToolbarCard,
   useChartTheme,
 } from './shared'
 
@@ -132,71 +136,78 @@ export function GroupRadarPane({ evaluated, evalIndex }: Props) {
   }, [groups])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <ControlsRow>
-        <ControlGroup>
-          <ControlLabel>그룹 기준</ControlLabel>
-          <ControlSelect value={groupKey} onChange={(e) => setGroupKey(e.target.value as GroupKey)}>
-            {GROUP_OPTIONS.map((o) => (
-              <option key={o.key} value={o.key}>{o.label}</option>
-            ))}
-          </ControlSelect>
-        </ControlGroup>
-        <ControlGroup>
-          <ControlLabel>최소 인원</ControlLabel>
-          <ControlSelect value={String(minCount)} onChange={(e) => setMinCount(Number(e.target.value))}>
-            <option value="1">1명 이상</option>
-            <option value="2">2명 이상</option>
-            <option value="3">3명 이상</option>
-          </ControlSelect>
-        </ControlGroup>
-        <ControlGroup>
-          <ControlLabel>상위</ControlLabel>
-          <ControlSelect value={String(topN)} onChange={(e) => setTopN(Number(e.target.value))}>
-            {[3, 5, 8].map((n) => (
-              <option key={n} value={n}>{n}개</option>
-            ))}
-          </ControlSelect>
-        </ControlGroup>
-        <CountHint>{groups.length}개 그룹</CountHint>
-      </ControlsRow>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <ToolbarCard>
+        <ControlsRow>
+          <ControlGroup>
+            <ControlLabel>그룹 기준</ControlLabel>
+            <ControlSelect value={groupKey} onChange={(e) => setGroupKey(e.target.value as GroupKey)}>
+              {GROUP_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>{o.label}</option>
+              ))}
+            </ControlSelect>
+          </ControlGroup>
+          <ControlGroup>
+            <ControlLabel>최소 인원</ControlLabel>
+            <ControlSelect value={String(minCount)} onChange={(e) => setMinCount(Number(e.target.value))}>
+              <option value="1">1명 이상</option>
+              <option value="2">2명 이상</option>
+              <option value="3">3명 이상</option>
+            </ControlSelect>
+          </ControlGroup>
+          <ControlGroup>
+            <ControlLabel>상위</ControlLabel>
+            <ControlSelect value={String(topN)} onChange={(e) => setTopN(Number(e.target.value))}>
+              {[3, 5, 8].map((n) => (
+                <option key={n} value={n}>{n}개</option>
+              ))}
+            </ControlSelect>
+          </ControlGroup>
+          <CountHint>{groups.length}개 그룹</CountHint>
+        </ControlsRow>
+      </ToolbarCard>
 
       {groups.length === 0 ? (
-        <EmptyHint>
-          조건에 맞는 평가 그룹이 없습니다. 최소 인원을 1명 이상으로 낮추거나 다른 그룹 기준을 선택해 보세요.
-        </EmptyHint>
+        <SurfaceCard>
+          <EmptyHint>
+            조건에 맞는 평가 그룹이 없습니다. 최소 인원을 1명 이상으로 낮추거나 다른 그룹 기준을 선택해 보세요.
+          </EmptyHint>
+        </SurfaceCard>
       ) : (
-        <>
-          <ChartShell $h={420}>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData} outerRadius="80%">
-                <PolarGrid stroke="rgba(148,163,184,0.4)" />
-                <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: chart.axisLabel, fontWeight: 600 }} />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: `1px solid ${chart.border}` }} />
-                {groups.map((g, i) => (
-                  <Radar
-                    key={g.name}
-                    name={`${g.name} (n=${g.n})`}
-                    dataKey={g.name}
-                    stroke={PALETTE[i % PALETTE.length]}
-                    fill={PALETTE[i % PALETTE.length]}
-                    fillOpacity={0.18}
-                    strokeWidth={2}
-                  />
-                ))}
-              </RadarChart>
-            </ResponsiveContainer>
-          </ChartShell>
-          <Legend>
-            {groups.map((g, i) => (
-              <LegendItem key={g.name}>
-                <LegendDot style={{ background: PALETTE[i % PALETTE.length] }} />
-                <LegendName>{g.name}</LegendName>
-                <LegendCount>{g.n}명 · 평균 {g.overall}</LegendCount>
-              </LegendItem>
-            ))}
-          </Legend>
+        <SplitLayout>
+          <SurfaceCard>
+            <ChartShell $h={380}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData} outerRadius="78%">
+                  <PolarGrid stroke="rgba(148,163,184,0.4)" />
+                  <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: chart.axisLabel, fontWeight: 600 }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Tooltip contentStyle={getTooltipStyle(chart)} />
+                  {groups.map((g, i) => (
+                    <Radar
+                      key={g.name}
+                      name={`${g.name} (n=${g.n})`}
+                      dataKey={g.name}
+                      stroke={PALETTE[i % PALETTE.length]}
+                      fill={PALETTE[i % PALETTE.length]}
+                      fillOpacity={0.18}
+                      strokeWidth={2}
+                    />
+                  ))}
+                </RadarChart>
+              </ResponsiveContainer>
+            </ChartShell>
+            <Legend>
+              {groups.map((g, i) => (
+                <LegendItem key={g.name}>
+                  <LegendDot style={{ background: PALETTE[i % PALETTE.length] }} />
+                  <LegendName>{g.name}</LegendName>
+                  <LegendCount>{g.n}명 · 평균 {g.overall}</LegendCount>
+                </LegendItem>
+              ))}
+            </Legend>
+          </SurfaceCard>
+
           <GroupTableWrap>
             <GroupTable>
               <thead>
@@ -256,7 +267,7 @@ export function GroupRadarPane({ evaluated, evalIndex }: Props) {
               </tbody>
             </GroupTable>
           </GroupTableWrap>
-        </>
+        </SplitLayout>
       )}
     </div>
   )

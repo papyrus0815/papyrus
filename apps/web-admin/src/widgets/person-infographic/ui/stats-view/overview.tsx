@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import styled, { css, useTheme } from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import {
   type PersonStatKey,
@@ -36,10 +36,12 @@ import { BRAND, hairline, surface } from '../_shared/catalog.styles'
 import {
   ChartShell,
   EmptyHint,
+  getTooltipStyle,
   traitToneBg,
   traitToneBgDark,
   traitToneFg,
   traitToneFgDark,
+  useChartTheme,
 } from './shared'
 
 interface Props {
@@ -62,10 +64,8 @@ export function OverviewPane({
   evalIndex,
   onPersonClick,
 }: Props) {
-  const theme = useTheme()
-  // recharts 축/툴팁 색은 테마 토큰으로 — 다크모드에서 하드코딩 회색·연한 보더가 안 보이던 문제 보정
-  const axisTickColor = theme.colors.text.tertiary
-  const tooltipBorder = `1px solid ${theme.colors.border.default}`
+  const chart = useChartTheme()
+  const axisTickColor = chart.tick
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [importing, setImporting] = useState(false)
@@ -317,9 +317,38 @@ export function OverviewPane({
 
   return (
     <Grid>
-      {/* G. 진행률 */}
+      {/* G. 진행률 + D1. 평가 데이터 내보내기/가져오기 통합 */}
       <Card $span={2}>
-        <CardTitle>평가 진행률</CardTitle>
+        <CardHeaderRow>
+          <div>
+            <CardTitle>평가 진행률</CardTitle>
+            <CardHint>현재 필터 범위 내 평가 완료율 · JSON 백업/복원</CardHint>
+          </div>
+          <DataActionsRow>
+            <DataActionBtn type="button" onClick={() => exportEvaluations()}>
+              <FiDownload size={13} /> 내보내기
+            </DataActionBtn>
+            <DataActionBtn
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+            >
+              <FiUpload size={13} /> {importing ? '가져오는 중…' : '가져오기'}
+            </DataActionBtn>
+            <HiddenFileInput
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) importEvaluations(file)
+              }}
+            />
+          </DataActionsRow>
+        </CardHeaderRow>
+        {importStatus && <ImportStatusText>{importStatus}</ImportStatusText>}
+
         <ProgressRow>
           <ProgressBig>
             <ProgressNum>{evaluatedCount}</ProgressNum>
@@ -337,7 +366,7 @@ export function OverviewPane({
             <RecommendList>
               {unevaluatedTop.map((p) => (
                 <RecommendItem key={p.id} type="button" onClick={() => onPersonClick(p.id)}>
-                  <RecommendName>{p.name}</RecommendName>
+                  <RecommendName title={p.name}>{p.name}</RecommendName>
                   <RecommendCountry>{p.country}</RecommendCountry>
                   <RecommendInfluence>★ {p.influence ?? 0}</RecommendInfluence>
                 </RecommendItem>
@@ -360,7 +389,7 @@ export function OverviewPane({
                   <XAxis dataKey="axis" tick={{ fontSize: 11, fill: axisTickColor }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: axisTickColor }} width={28} />
                   <Tooltip
-                    contentStyle={{ borderRadius: 8, fontSize: 12, border: tooltipBorder }}
+                    contentStyle={getTooltipStyle(chart)}
                     formatter={(v: number) => [`${v}점`, '평균']}
                   />
                   <Bar dataKey="avg" radius={[6, 6, 0, 0]}>
@@ -394,7 +423,7 @@ export function OverviewPane({
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
                     <XAxis dataKey="century" tick={{ fontSize: 11, fill: axisTickColor }} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: axisTickColor }} width={28} />
-                    <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: tooltipBorder }} />
+                    <Tooltip contentStyle={getTooltipStyle(chart)} />
                     {PERSON_STAT_KEYS.map((key) => (
                       <Line
                         key={key}
@@ -434,9 +463,19 @@ export function OverviewPane({
                       >
                         <LeaderRank $rank={rank}>{rank}</LeaderRank>
                         <LeaderName $rank={rank}>{row.person.name}</LeaderName>
-                        <LeaderValue $rank={rank} style={{ color: BRAND.primary }}>
-                          {row.value}
-                        </LeaderValue>
+                        <LeaderScoreWrap>
+                          <LeaderValue $rank={rank} style={{ color: BRAND.primary }}>
+                            {row.value}
+                          </LeaderValue>
+                          <LeaderScoreTrack aria-hidden>
+                            <LeaderScoreFill
+                              style={{
+                                width: `${Math.min(100, row.value)}%`,
+                                background: BRAND.primary,
+                              }}
+                            />
+                          </LeaderScoreTrack>
+                        </LeaderScoreWrap>
                       </LeaderRow>
                     )
                   })
@@ -465,9 +504,19 @@ export function OverviewPane({
                           >
                             <LeaderRank $rank={rank}>{rank}</LeaderRank>
                             <LeaderName $rank={rank}>{row.person.name}</LeaderName>
-                            <LeaderValue $rank={rank} style={{ color: meta.color }}>
-                              {row.value}
-                            </LeaderValue>
+                            <LeaderScoreWrap>
+                              <LeaderValue $rank={rank} style={{ color: meta.color }}>
+                                {row.value}
+                              </LeaderValue>
+                              <LeaderScoreTrack aria-hidden>
+                                <LeaderScoreFill
+                                  style={{
+                                    width: `${Math.min(100, row.value)}%`,
+                                    background: meta.color,
+                                  }}
+                                />
+                              </LeaderScoreTrack>
+                            </LeaderScoreWrap>
                           </LeaderRow>
                         )
                       })
@@ -566,36 +615,6 @@ export function OverviewPane({
           </Card>
         </>
       )}
-
-      {/* D1. 평가 export/import */}
-      <Card>
-        <CardTitle>평가 데이터</CardTitle>
-        <CardHint>JSON으로 백업·복원. 파일에는 stats + traits 전부 포함</CardHint>
-        <DataActionsRow>
-          <DataActionBtn type="button" onClick={() => exportEvaluations()}>
-            <FiDownload size={13} /> 내보내기
-          </DataActionBtn>
-          <DataActionBtn
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-          >
-            <FiUpload size={13} /> {importing ? '가져오는 중…' : '가져오기'}
-          </DataActionBtn>
-          <HiddenFileInput
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              e.target.value = ''
-              if (file) importEvaluations(file)
-            }}
-          />
-        </DataActionsRow>
-        {importStatus && <ImportStatusText>{importStatus}</ImportStatusText>}
-      </Card>
-
     </Grid>
   )
 }
@@ -619,7 +638,7 @@ const Card = styled.section<{ $span?: number }>`
         `
       : ''}
   padding: 16px 18px;
-  border-radius: 12px;
+  border-radius: 14px;
   background: ${surface};
   border: 1px solid ${hairline};
   display: flex;
@@ -627,9 +646,17 @@ const Card = styled.section<{ $span?: number }>`
   gap: 10px;
 `
 
+const CardHeaderRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+`
+
 const CardTitle = styled.h3`
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.01em;
@@ -645,7 +672,7 @@ const CardSubTitle = styled.h4`
 `
 
 const CardHint = styled.p`
-  margin: 0;
+  margin: 2px 0 0;
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -698,31 +725,37 @@ const ProgressFill = styled.div`
 `
 
 const RecommendList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
 `
 
 const RecommendItem = styled.button`
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
   align-items: center;
   padding: 6px 10px;
   font-size: 12px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
+  border-radius: 8px;
+  border: 1px solid ${hairline};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.015)'};
   color: ${({ theme }) => theme.colors.text.primary};
   cursor: pointer;
   text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
   &:hover {
+    border-color: ${BRAND.primaryBorder};
     background: ${({ theme }) => theme.colors.hover};
   }
 `
 
 const RecommendName = styled.span`
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const RecommendCountry = styled.span`
@@ -777,7 +810,7 @@ const LeaderColumn = styled.div<{ $highlight?: boolean }>`
     css`
       padding: 8px 10px;
       margin: -8px -4px;
-      border-radius: 8px;
+      border-radius: 10px;
       background: ${theme.mode === 'dark'
         ? BRAND.primarySoftDark
         : BRAND.primarySoft};
@@ -814,12 +847,12 @@ const MEDAL_COLORS = ['#f59e0b', '#9ca3af', '#b45309'] as const
 
 const LeaderRow = styled.button`
   display: grid;
-  grid-template-columns: 18px 1fr auto;
+  grid-template-columns: 18px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   cursor: pointer;
   text-align: left;
@@ -851,10 +884,33 @@ const LeaderName = styled.span<{ $rank: number }>`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+const LeaderScoreWrap = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+`
+
 const LeaderValue = styled.span<{ $rank: number }>`
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   font-weight: ${({ $rank }) => ($rank === 1 ? 800 : 700)};
   font-size: ${({ $rank }) => ($rank === 1 ? '13px' : '11.5px')};
+`
+
+const LeaderScoreTrack = styled.span`
+  width: 36px;
+  height: 2.5px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  overflow: hidden;
+`
+
+const LeaderScoreFill = styled.span`
+  display: block;
+  height: 100%;
+  border-radius: 999px;
 `
 
 const TraitFreqList = styled.div`

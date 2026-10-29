@@ -29,6 +29,10 @@ import { BRAND, hairline, surface } from '../_shared/catalog.styles'
 import {
   ChartShell,
   EmptyHint,
+  getTooltipStyle,
+  SplitLayout,
+  SurfaceCard,
+  ToolbarCard,
   traitToneBg,
   traitToneBgDark,
   traitToneFg,
@@ -134,59 +138,61 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
 
   return (
     <Wrap>
-      <Controls>
-        <SearchBox>
-          <SearchInput
-            type="search"
-            placeholder="평가된 인물 이름·국가 검색 (클릭하여 목록 보기)…"
-            value={searchQuery}
-            onFocus={() => setInputFocused(true)}
-            onBlur={() => window.setTimeout(() => setInputFocused(false), 160)}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            disabled={selectedIds.length >= 5}
-          />
-          <LimitHint>{selectedIds.length} / 5명 선택</LimitHint>
-          {selectedIds.length > 0 && (
-            <ClearBtn type="button" onClick={() => setSelectedIds([])}>
-              모두 해제
-            </ClearBtn>
+      <ToolbarCard>
+        <Controls>
+          <SearchBox>
+            <SearchInput
+              type="search"
+              placeholder="평가된 인물 이름·국가 검색 (클릭하여 목록 보기)…"
+              value={searchQuery}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => window.setTimeout(() => setInputFocused(false), 160)}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              disabled={selectedIds.length >= 5}
+            />
+            <LimitHint>{selectedIds.length} / 5명 선택</LimitHint>
+            {selectedIds.length > 0 && (
+              <ClearBtn type="button" onClick={() => setSelectedIds([])}>
+                모두 해제
+              </ClearBtn>
+            )}
+          </SearchBox>
+          {showDropdown && (
+            <CandidateList>
+              {candidates.map((p) => (
+                <Candidate
+                  key={p.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addPerson(p.id)}
+                >
+                  <strong>{p.name}</strong>
+                  <CandidateMeta>
+                    {p.country} · 평균 {evalIndex.get(p.id)?.statsAverage ?? '—'}
+                  </CandidateMeta>
+                </Candidate>
+              ))}
+            </CandidateList>
           )}
-        </SearchBox>
-        {showDropdown && (
-          <CandidateList>
-            {candidates.map((p) => (
-              <Candidate
-                key={p.id}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => addPerson(p.id)}
-              >
-                <strong>{p.name}</strong>
-                <CandidateMeta>
-                  {p.country} · 평균 {evalIndex.get(p.id)?.statsAverage ?? '—'}
-                </CandidateMeta>
-              </Candidate>
-            ))}
-          </CandidateList>
-        )}
-      </Controls>
+        </Controls>
 
-      {selectedPersons.length > 0 && (
-        <SelectedRow>
-          {selectedPersons.map((p, i) => (
-            <SelectedChip key={p.id} $color={PALETTE[i % PALETTE.length]!}>
-              <SelectedDot style={{ background: PALETTE[i % PALETTE.length] }} />
-              <SelectedName onClick={() => onPersonClick(p.id)}>{p.name}</SelectedName>
-              <RemoveBtn type="button" onClick={() => removePerson(p.id)} aria-label={`${p.name} 비교에서 제외`}>
-                ×
-              </RemoveBtn>
-            </SelectedChip>
-          ))}
-        </SelectedRow>
-      )}
+        {selectedPersons.length > 0 && (
+          <SelectedRow>
+            {selectedPersons.map((p, i) => (
+              <SelectedChip key={p.id} $color={PALETTE[i % PALETTE.length]!}>
+                <SelectedDot style={{ background: PALETTE[i % PALETTE.length] }} />
+                <SelectedName onClick={() => onPersonClick(p.id)}>{p.name}</SelectedName>
+                <RemoveBtn type="button" onClick={() => removePerson(p.id)} aria-label={`${p.name} 비교에서 제외`}>
+                  ×
+                </RemoveBtn>
+              </SelectedChip>
+            ))}
+          </SelectedRow>
+        )}
+      </ToolbarCard>
 
       {selectedPersons.length === 0 ? (
-        <EmptyWrap>
+        <SurfaceCard>
           <EmptyHint>
             비교할 인물을 검색하거나 아래 추천 인물에서 바로 선택하세요. (최대 5명 동시 비교)
           </EmptyHint>
@@ -234,30 +240,32 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
               </QuickChipsRow>
             </>
           )}
-        </EmptyWrap>
+        </SurfaceCard>
       ) : (
-        <>
-          <ChartShell $h={420}>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData} outerRadius="80%">
-                <PolarGrid stroke="rgba(148,163,184,0.4)" />
-                <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: chart.axisLabel, fontWeight: 600 }} />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: `1px solid ${chart.border}` }} />
-                {selectedPersons.map((p, i) => (
-                  <Radar
-                    key={p.id}
-                    name={p.name}
-                    dataKey={p.id}
-                    stroke={PALETTE[i % PALETTE.length]}
-                    fill={PALETTE[i % PALETTE.length]}
-                    fillOpacity={0.16}
-                    strokeWidth={2}
-                  />
-                ))}
-              </RadarChart>
-            </ResponsiveContainer>
-          </ChartShell>
+        <SplitLayout>
+          <SurfaceCard>
+            <ChartShell $h={380}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData} outerRadius="78%">
+                  <PolarGrid stroke="rgba(148,163,184,0.4)" />
+                  <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: chart.axisLabel, fontWeight: 600 }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Tooltip contentStyle={getTooltipStyle(chart)} />
+                  {selectedPersons.map((p, i) => (
+                    <Radar
+                      key={p.id}
+                      name={p.name}
+                      dataKey={p.id}
+                      stroke={PALETTE[i % PALETTE.length]}
+                      fill={PALETTE[i % PALETTE.length]}
+                      fillOpacity={0.16}
+                      strokeWidth={2}
+                    />
+                  ))}
+                </RadarChart>
+              </ResponsiveContainer>
+            </ChartShell>
+          </SurfaceCard>
 
           <TableWrap>
             <CompareTable>
@@ -356,7 +364,7 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
               </tbody>
             </CompareTable>
           </TableWrap>
-        </>
+        </SplitLayout>
       )}
     </Wrap>
   )
@@ -365,7 +373,7 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
 const Wrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 `
 
 const Controls = styled.div`
@@ -373,6 +381,8 @@ const Controls = styled.div`
   flex-direction: column;
   gap: 6px;
   position: relative;
+  flex: 1;
+  min-width: 260px;
 `
 
 const SearchBox = styled.div`
@@ -409,16 +419,22 @@ const LimitHint = styled.span`
 `
 
 const CandidateList = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: 100%;
+  max-width: 380px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 4px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
+  border-radius: 10px;
+  border: 1px solid ${hairline};
+  background: ${surface};
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
   max-height: 240px;
   overflow-y: auto;
-  max-width: 380px;
 `
 
 const Candidate = styled.button`
@@ -506,12 +522,6 @@ const ClearBtn = styled.button`
     background: ${({ theme }) => theme.colors.hover};
     color: ${({ theme }) => theme.colors.text.primary};
   }
-`
-
-const EmptyWrap = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 `
 
 const QuickActions = styled.div`

@@ -342,14 +342,18 @@ export function HeaderStats({
     <Panel aria-label="인물 통계">
       <Tiles>
         <Tile>
-          <TileLabel>인물</TileLabel>
+          <TileHead>
+            <TileLabel>인물</TileLabel>
+          </TileHead>
           <TileValue>
             {total.toLocaleString()}
             <TileUnit>명</TileUnit>
           </TileValue>
-          <TileNote>
-            {stats.eraPresent}개 시대 · {stats.filteredCountryCount.toLocaleString()}개국
-          </TileNote>
+          <TileFooter>
+            <TileNote>
+              {stats.eraPresent}개 시대 · {stats.filteredCountryCount.toLocaleString()}개국
+            </TileNote>
+          </TileFooter>
         </Tile>
         <Tile
           as="button"
@@ -363,18 +367,26 @@ export function HeaderStats({
               : '클릭하여 수명순으로 인물 정렬'
           }
         >
-          <TileLabel>
-            평균 수명 {sort === 'lifespan' && <TileBadge>수명순 정렬 중</TileBadge>}
-          </TileLabel>
+          <TileHead>
+            <TileLabel>평균 수명</TileLabel>
+            <TileBadge $active={sort === 'lifespan'}>
+              {sort === 'lifespan' ? '수명순 정렬 중' : '수명순 정렬 ↕'}
+            </TileBadge>
+          </TileHead>
           <TileValue>
             {stats.avgAge ?? '—'}
             {stats.avgAge != null && <TileUnit>년</TileUnit>}
           </TileValue>
-          <TileNote>
-            {stats.oldestPerson
-              ? `최장수 ${stats.oldestPerson.name}(${stats.oldestPerson.age}세) · ${stats.ageKnown.toLocaleString()}명 기준`
-              : `생몰 확인 ${stats.ageKnown.toLocaleString()}명 기준`}
-          </TileNote>
+          <TileFooter>
+            <TileMeter aria-hidden>
+              <TileMeterFill style={{ width: `${share(stats.ageKnown)}%` }} />
+            </TileMeter>
+            <TileNote>
+              {stats.oldestPerson
+                ? `최장수 ${stats.oldestPerson.name}(${stats.oldestPerson.age}세) · ${stats.ageKnown.toLocaleString()}명 기준`
+                : `생몰 확인 ${stats.ageKnown.toLocaleString()}명 기준`}
+            </TileNote>
+          </TileFooter>
         </Tile>
         <Tile
           as="button"
@@ -391,30 +403,39 @@ export function HeaderStats({
               : '생존 인물만 필터링'
           }
         >
-          <TileLabel>
-            생존 {aliveFilter === 'alive' && <TileBadge>필터 적용 중</TileBadge>}
-          </TileLabel>
+          <TileHead>
+            <TileLabel>생존</TileLabel>
+            <TileBadge $active={aliveFilter === 'alive'}>
+              {aliveFilter === 'alive' ? '필터 적용 중' : '생존 필터'}
+            </TileBadge>
+          </TileHead>
           <TileValue>
             {stats.alive.toLocaleString()}
             <TileUnit>명</TileUnit>
           </TileValue>
-          <TileMeter aria-hidden>
-            <TileMeterFill style={{ width: `${share(stats.alive)}%` }} />
-          </TileMeter>
-          <TileNote>전체의 {share(stats.alive)}% · 클릭하여 필터</TileNote>
+          <TileFooter>
+            <TileMeter aria-hidden>
+              <TileMeterFill style={{ width: `${share(stats.alive)}%` }} />
+            </TileMeter>
+            <TileNote>전체의 {share(stats.alive)}% · 클릭하여 필터</TileNote>
+          </TileFooter>
         </Tile>
         <Tile>
-          <TileLabel>군주·국가원수</TileLabel>
+          <TileHead>
+            <TileLabel>군주·국가원수</TileLabel>
+          </TileHead>
           <TileValue>
             {stats.rulers.toLocaleString()}
             <TileUnit>명</TileUnit>
           </TileValue>
-          <TileMeter aria-hidden>
-            <TileMeterFill style={{ width: `${share(stats.rulers)}%` }} />
-          </TileMeter>
-          <TileNote>
-            전체의 {share(stats.rulers)}% · 평균 영향력 {stats.avgInfluence}점
-          </TileNote>
+          <TileFooter>
+            <TileMeter aria-hidden>
+              <TileMeterFill style={{ width: `${share(stats.rulers)}%` }} />
+            </TileMeter>
+            <TileNote>
+              전체의 {share(stats.rulers)}% · 평균 영향력 {stats.avgInfluence}점
+            </TileNote>
+          </TileFooter>
         </Tile>
       </Tiles>
 
@@ -545,6 +566,7 @@ export function HeaderStats({
                     $peak={index === peakIndex}
                     style={{
                       height: count ? `${Math.max(3, (count / stats.maxBin) * 100)}%` : 0,
+                      ['--era-color' as string]: era.color,
                     }}
                   />
                 </Column>
@@ -596,36 +618,33 @@ export function HeaderStats({
       )}
 
       {variant === 'full' && (
-      <Lists $cols={2}>
-        {/* 분야는 3~4줄뿐이라 독립 열이면 아래가 비었다 — 지역 아래에 쌓아 두 열 높이를 맞춘다 */}
-        <ListColumn>
-          <BarSection
-            title="지역"
-            rows={stats.regions.map(([region, count]) => ({
-              key: region,
-              label: region,
-              count,
-              swatch: colorForRegion(region),
-              active: scopes.region.includes(region),
-              onToggle: () => toggleScope('region', region),
-            }))}
-            total={stats.regionTotal || total}
-            anyActive={scopes.region.length > 0}
-          />
-          <BarSection
-            title="분야"
-            rows={stats.fields.map(([field, count]) => ({
-              key: field,
-              label: field,
-              count,
-              swatch: colorForField(field),
-              active: scopes.field.includes(field),
-              onToggle: () => toggleScope('field', field),
-            }))}
-            total={stats.fieldTotal || total}
-            anyActive={scopes.field.length > 0}
-          />
-        </ListColumn>
+      <Lists $cols={3}>
+        <BarSection
+          title="지역"
+          rows={stats.regions.map(([region, count]) => ({
+            key: region,
+            label: region,
+            count,
+            swatch: colorForRegion(region),
+            active: scopes.region.includes(region),
+            onToggle: () => toggleScope('region', region),
+          }))}
+          total={stats.regionTotal || total}
+          anyActive={scopes.region.length > 0}
+        />
+        <BarSection
+          title="분야"
+          rows={stats.fields.map(([field, count]) => ({
+            key: field,
+            label: field,
+            count,
+            swatch: colorForField(field),
+            active: scopes.field.includes(field),
+            onToggle: () => toggleScope('field', field),
+          }))}
+          total={stats.fieldTotal || total}
+          anyActive={scopes.field.length > 0}
+        />
         <BarSection
           title="상위 국가"
           ranked
@@ -819,8 +838,8 @@ const Tiles = styled.div`
 const Tile = styled.div<{ $interactive?: boolean; $active?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 16px 20px;
+  gap: 6px;
+  padding: 14px 20px;
   min-width: 0;
   border: none;
   background: ${({ $active, theme }) =>
@@ -835,7 +854,7 @@ const Tile = styled.div<{ $interactive?: boolean; $active?: boolean }>`
     $interactive &&
     css`
       cursor: pointer;
-      transition: background ${MOTION_FAST};
+      transition: background ${MOTION_FAST}, box-shadow ${MOTION_FAST};
       &:hover {
         background: ${theme.mode === 'dark'
           ? 'rgba(255,255,255,0.04)'
@@ -860,6 +879,14 @@ const Tile = styled.div<{ $interactive?: boolean; $active?: boolean }>`
   }
 `
 
+const TileHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+`
+
 const TileLabel = styled.span`
   display: inline-flex;
   align-items: center;
@@ -869,14 +896,37 @@ const TileLabel = styled.span`
   color: ${metaText};
 `
 
-const TileBadge = styled.span`
-  padding: 1px 6px;
+const TileBadge = styled.span<{ $active?: boolean }>`
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
-  color: ${BRAND.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
+  white-space: nowrap;
+  color: ${({ $active, theme }) =>
+    $active ? BRAND.primary : theme.colors.text.tertiary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? BRAND.primaryFillDark
+        : BRAND.primaryFill
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.05)'};
+  transition: color ${MOTION_FAST}, background ${MOTION_FAST};
+
+  ${Tile}:hover & {
+    color: ${BRAND.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
+  }
+`
+
+const TileFooter = styled.div`
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 `
 
 const UnknownEraChip = styled.span`
@@ -892,7 +942,7 @@ const UnknownEraChip = styled.span`
 `
 
 const TileValue = styled.span`
-  font-size: 26px;
+  font-size: 25px;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.15;
@@ -906,11 +956,10 @@ const TileUnit = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-/** 전체 대비 비율 막대 — 생존·군주 타일의 %를 눈으로 읽게 */
+/** 전체 대비 비율 막대 — 생존·군주·수명 타일의 %를 눈으로 읽게 */
 const TileMeter = styled.span`
   display: block;
   height: 4px;
-  margin: 2px 0 1px;
   border-radius: 2px;
   overflow: hidden;
   background: ${({ theme }) =>
@@ -933,7 +982,7 @@ const TileNote = styled.span`
 `
 
 const Section = styled.div`
-  padding: 16px 20px 18px;
+  padding: 14px 20px 16px;
   border-bottom: 1px solid ${hairline};
 `
 
@@ -941,7 +990,7 @@ const SectionHead = styled.div`
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   min-width: 0;
 `
 
@@ -977,7 +1026,7 @@ const SectionMeta = styled.span`
 const Chart = styled.div`
   position: relative;
   /* 시대 띠 이름 줄(차트 위) 자리 — 막대가 이름을 가리지 않게 차트 밖에 둔다 */
-  padding-top: 20px;
+  padding-top: 18px;
 `
 
 const Plot = styled.div`
@@ -985,7 +1034,7 @@ const Plot = styled.div`
   display: flex;
   align-items: stretch;
   gap: 2px;
-  height: 168px;
+  height: 124px;
   border-bottom: 1px solid
     ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.18)')};
 `
@@ -1041,21 +1090,19 @@ const Column = styled.button<{ $hovered: boolean }>`
 const ColumnBar = styled.span<{ $dim: boolean; $peak?: boolean }>`
   width: 100%;
   border-radius: 4px 4px 0 0;
-  /* 최고치만 진한 단색, 나머지는 한 단계 옅게 — 봉우리가 먼저 읽힌다 */
+  /* 각 세기가 속한 시대 색(--era-color)을 연동하되, 최다 봉우리는 100% 채도로 강조 */
   background: ${({ $dim, $peak, theme }) =>
     $dim
       ? theme.mode === 'dark'
         ? 'rgba(255,255,255,0.14)'
         : '#d5dbe4'
       : $peak
-        ? BRAND.primary
-        : theme.mode === 'dark'
-          ? '#3b6fd8'
-          : '#5b8def'};
-  transition: height 0.25s ease, background ${MOTION_FAST};
+        ? `var(--era-color, ${BRAND.primary})`
+        : `color-mix(in srgb, var(--era-color, #5b8def) ${theme.mode === 'dark' ? '78%' : '82%'}, transparent)`};
+  transition: height 0.25s ease, background ${MOTION_FAST}, filter ${MOTION_FAST};
 
   ${Column}:hover & {
-    background: ${({ $dim }) => ($dim ? undefined : BRAND.primaryHover)};
+    filter: ${({ $dim }) => ($dim ? 'none' : 'brightness(1.08)')};
   }
   @media (prefers-reduced-motion: reduce) {
     transition: none;
@@ -1067,9 +1114,9 @@ const EraBand = styled.span<{ $dim: boolean }>`
   top: 0;
   bottom: 0;
   z-index: 0;
-  background: color-mix(in srgb, var(--band) ${({ theme }) => (theme.mode === 'dark' ? '13%' : '8%')}, transparent);
+  background: color-mix(in srgb, var(--band) ${({ theme }) => (theme.mode === 'dark' ? '9%' : '6%')}, transparent);
   /* 시대 경계 — 띠 왼쪽 가장자리를 그 시대 색으로 한 줄 */
-  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--band) 35%, transparent);
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--band) 32%, transparent);
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   transition: opacity ${MOTION_FAST};
   pointer-events: none;
@@ -1184,29 +1231,12 @@ const Lists = styled.div<{ $cols?: 2 | 3 }>`
   }
 `
 
-/** 한 열에 목록 둘을 쌓는 칸(지역 위 · 분야 아래) — 열 사이 세로선은 칸이 진다 */
-const ListColumn = styled.div`
-  min-width: 0;
-
-  @media (max-width: 640px) {
-    & + * {
-      border-top: 1px solid ${hairline};
-    }
-  }
-`
-
 const ListSection = styled.div`
-  padding: 16px 16px 14px 20px;
+  padding: 14px 16px 14px 20px;
   min-width: 0;
 
-  & + &,
-  ${ListColumn} + & {
+  & + & {
     border-left: 1px solid ${hairline};
-  }
-  /* 칸 안에서 쌓인 두 목록은 세로선이 아니라 가로선으로 가른다 */
-  ${ListColumn} > & + & {
-    border-left: none;
-    border-top: 1px solid ${hairline};
   }
   @media (max-width: 1100px) {
     &:nth-child(3) {
@@ -1216,8 +1246,7 @@ const ListSection = styled.div`
     }
   }
   @media (max-width: 640px) {
-    & + &,
-    ${ListColumn} + & {
+    & + & {
       border-left: none;
       border-top: 1px solid ${hairline};
     }
