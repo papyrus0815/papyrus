@@ -44,9 +44,27 @@ const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = {
 /** 교육기관성 조직 타입을 목록 앞에 정렬 (필터링은 하지 않음 — 경력 모달과 동일 정책) */
 const ORG_TYPE_PRIORITY: OrganizationType[] = ['EDUCATION', 'MILITARY_ACADEMY']
 
+export interface PersonEducationEditTarget {
+  id: string
+  organizationId?: string | null
+  organization?: { id: string; name?: string | null } | null
+  degree?: string | null
+  major?: string | null
+  department?: string | null
+  status?: string | null
+  educationType?: string | null
+  classNumber?: number | null
+  studentNumber?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  notes?: string | null
+}
+
 export interface EducationRegisterModalProps {
   open: boolean
   personId: string
+  /** 수정 모드일 때 전달 — 있으면 PUT 수정, 없으면 POST 등록 */
+  initialEducation?: PersonEducationEditTarget | null
   onClose: () => void
   /** 저장 성공 시 호출 (모달은 onClose로 상위에서 닫음) */
   onSuccess?: () => void
@@ -55,6 +73,7 @@ export interface EducationRegisterModalProps {
 export function EducationRegisterModal({
   open,
   personId,
+  initialEducation,
   onClose,
   onSuccess,
 }: EducationRegisterModalProps) {
@@ -71,6 +90,7 @@ export function EducationRegisterModal({
   const [endDate, setEndDate] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const isEditMode = Boolean(initialEducation?.id)
 
   const { data: organizations = [], isLoading: orgsLoading } = useQuery({
     queryKey: ['organizations'],
@@ -108,12 +128,35 @@ export function EducationRegisterModal({
     setNotes('')
   }, [])
 
-  /** 모달 열릴 때마다 초기화 */
+  /** 모달 열릴 때마다 초기화 또는 수정 대상 하이드레이션 */
   useEffect(() => {
     if (!open) return
+    if (initialEducation) {
+      setOrganizationId(
+        initialEducation.organizationId ?? initialEducation.organization?.id ?? '',
+      )
+      setDegree(initialEducation.degree ?? '')
+      setMajor(initialEducation.major ?? '')
+      setDepartment(initialEducation.department ?? '')
+      setStatus(initialEducation.status ?? '')
+      setEducationType(initialEducation.educationType ?? '')
+      setClassNumber(
+        initialEducation.classNumber != null ? String(initialEducation.classNumber) : '',
+      )
+      setStudentNumber(initialEducation.studentNumber ?? '')
+      setStartDate(
+        initialEducation.startDate ? String(initialEducation.startDate).slice(0, 10) : '',
+      )
+      setEndDate(
+        initialEducation.endDate ? String(initialEducation.endDate).slice(0, 10) : '',
+      )
+      setNotes(initialEducation.notes ?? '')
+      setSubmitting(false)
+      return
+    }
     resetFields()
     setSubmitting(false)
-  }, [open, resetFields])
+  }, [open, initialEducation, resetFields])
 
   const dateRangeInvalid =
     startDate.length > 0 && endDate.length > 0 && endDate < startDate
@@ -126,6 +169,28 @@ export function EducationRegisterModal({
     setSubmitting(true)
     try {
       const classNumberValue = classNumber.trim()
+      if (isEditMode && initialEducation?.id) {
+        await personCareerApi.updateEducation(initialEducation.id, {
+          organizationId,
+          degree: degree.trim() || (null as unknown as undefined),
+          major: major.trim() || (null as unknown as undefined),
+          department: department.trim() || (null as unknown as undefined),
+          status: status.trim() || (null as unknown as undefined),
+          educationType: educationType.trim() || (null as unknown as undefined),
+          classNumber: classNumberValue
+            ? Number(classNumberValue)
+            : (null as unknown as undefined),
+          studentNumber: studentNumber.trim() || (null as unknown as undefined),
+          startDate: startDate || (null as unknown as undefined),
+          endDate: endDate || (null as unknown as undefined),
+          notes: notes.trim() || (null as unknown as undefined),
+        })
+        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        notify.success('학력이 수정되었습니다.')
+        onSuccess?.()
+        onClose()
+        return
+      }
       await personCareerApi.addEducation({
         personId,
         organizationId,
@@ -169,7 +234,7 @@ export function EducationRegisterModal({
     <Modal
       isOpen={open}
       onClose={onClose}
-      title="학력 등록"
+      title={isEditMode ? '학력 수정' : '학력 등록'}
       subtitle="학교·교육기관을 선택하세요. 기관이 목록에 없으면 조직 관리에서 먼저 등록해야 합니다."
       maxWidth="600px"
     >
@@ -308,15 +373,17 @@ export function EducationRegisterModal({
           <CancelBtn type="button" onClick={onClose} disabled={submitting}>
             취소
           </CancelBtn>
-          <ContinueBtn
-            type="button"
-            onClick={() => void submitEducation(true)}
-            disabled={!canSubmit}
-          >
-            등록 후 계속
-          </ContinueBtn>
+          {!isEditMode && (
+            <ContinueBtn
+              type="button"
+              onClick={() => void submitEducation(true)}
+              disabled={!canSubmit}
+            >
+              등록 후 계속
+            </ContinueBtn>
+          )}
           <SaveBtn type="submit" disabled={!canSubmit}>
-            {submitting ? '저장 중…' : '등록'}
+            {submitting ? '저장 중…' : isEditMode ? '저장' : '등록'}
           </SaveBtn>
         </ModalFooter>
       </form>

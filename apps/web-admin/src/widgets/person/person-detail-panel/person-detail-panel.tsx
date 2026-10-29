@@ -255,6 +255,7 @@ import {
   SectionLabelRow,
   SimpleEntryDeleteBtn,
   SimpleEntryDescription,
+  SimpleEntryEditBtn,
   SimpleEntryHeader,
   SimpleEntryItem,
   SimpleEntryList,
@@ -270,8 +271,10 @@ import {
   TenureAddButton,
   TenureEmpty,
   TopNavBar,
+  TopNavLeft,
   UnifiedActionRow,
 } from './person-detail-panel.styles'
+import { PersonTopSearchBar } from './person-top-search-bar'
 
 import type {
   CombinedTenureItem,
@@ -301,6 +304,8 @@ interface PersonDetailPanelProps {
   personId: string
   onClose: () => void
   onEdit: (id: string) => void
+  /** 새 인물 등록 모달 열기 (상단 네비바 우측에 노출) */
+  onAdd?: () => void
   /** 닫기/뒤로가기 버튼 문구 (예: "목록으로", "닫기") */
   closeLabel?: string
   /** true면 헤더의 수정·닫기 버튼 숨김 (모달 등 외부에서 닫기 제공 시) */
@@ -370,6 +375,7 @@ export function PersonDetailPanel({
   personId,
   onClose,
   onEdit,
+  onAdd,
   closeLabel = '닫기',
   hideHeaderActions = false,
   embedInModal = false,
@@ -472,8 +478,11 @@ export function PersonDetailPanel({
   /** 국가 배지 국기 이미지(업로드 썸네일·flagcdn) 로드 실패 → flagEmoji 폴백(MD4). */
   const [countryFlagBroken, setCountryFlagBroken] = useState(false)
   const [awardModalOpen, setAwardModalOpen] = useState(false)
+  const [editingAward, setEditingAward] = useState<any | null>(null)
   const [careerModalOpen, setCareerModalOpen] = useState(false)
+  const [editingCareer, setEditingCareer] = useState<any | null>(null)
   const [educationModalOpen, setEducationModalOpen] = useState(false)
+  const [editingEducation, setEditingEducation] = useState<any | null>(null)
   /** 연보의 사건 카드 클릭 시 띄울 사건 인라인 모달 — null이면 닫힘 */
   const [viewingEventId, setViewingEventId] = useState<string | null>(null)
   /** 저장 직후 하이라이트·스크롤 대상 id (타임라인 인포그래픽에 전달). 0.8초 뒤 자동 해제 */
@@ -1633,20 +1642,59 @@ export function PersonDetailPanel({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
-        {/* 상단 네비바: 목록으로 버튼(좌) + 수정 버튼(우) */}
+        {/* 상단 네비바: 목록으로 버튼(좌) + 통합 인물 검색·이동(중) + 등록·수정·삭제 버튼(우) */}
         {!hideHeaderActions && (
           <TopNavBar>
-            <BackToListButton
-              type="button"
-              onClick={() => {
-                playClickSound()
-                onClose()
-              }}
-            >
-              <FiArrowLeft size={14} />
-              {backLabel}
-            </BackToListButton>
+            <TopNavLeft>
+              <BackToListButton
+                type="button"
+                onClick={() => {
+                  playClickSound()
+                  onClose()
+                }}
+              >
+                <FiArrowLeft size={14} />
+                {backLabel}
+              </BackToListButton>
+              {!embedInModal && (
+                <OutlineButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    navigate(pathKeys.personsTimeline())
+                  }}
+                >
+                  <FiUsers size={13} />
+                  인물 목록
+                </OutlineButton>
+              )}
+            </TopNavLeft>
+            {!embedInModal && (
+              <PersonTopSearchBar
+                currentPersonId={person.id}
+                onSelectPerson={(targetId) => {
+                  playClickSound()
+                  if (onLinkedPersonClick) {
+                    onLinkedPersonClick(targetId)
+                  } else {
+                    navigate(buildDetailUrlFor(targetId))
+                  }
+                }}
+              />
+            )}
             <HeaderActions>
+              {onAdd && !embedInModal && (
+                <OutlineButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    onAdd()
+                  }}
+                >
+                  <FiPlus size={13} />
+                  등록
+                </OutlineButton>
+              )}
               <OutlineButton
                 type="button"
                 onClick={() => {
@@ -2447,6 +2495,7 @@ export function PersonDetailPanel({
                                 type="button"
                                 onClick={() => {
                                   playClickSound()
+                                  setEditingCareer(null)
                                   setCareerModalOpen(true)
                                 }}
                               >
@@ -2502,22 +2551,36 @@ export function PersonDetailPanel({
                                     return (
                                       <SimpleEntryItem key={c.id ?? `career-${k}-${cIdx}`}>
                                         {!embedInModal && c.id && (
-                                          <SimpleEntryDeleteBtn
-                                            type="button"
-                                            data-role="entry-delete"
-                                            aria-label="삭제"
-                                            disabled={isEntryDeleting}
-                                            onClick={() =>
-                                              setEntryDeleteTarget({
-                                                kind: 'career',
-                                                id: c.id!,
-                                                careerKind: c.kind,
-                                                label: titleBits[0] ?? '경력',
-                                              })
-                                            }
-                                          >
-                                            <FiTrash2 size={13} />
-                                          </SimpleEntryDeleteBtn>
+                                          <>
+                                            <SimpleEntryEditBtn
+                                              type="button"
+                                              data-role="entry-edit"
+                                              aria-label="수정"
+                                              onClick={() => {
+                                                playClickSound()
+                                                setEditingCareer(c)
+                                                setCareerModalOpen(true)
+                                              }}
+                                            >
+                                              <FiEdit2 size={12} />
+                                            </SimpleEntryEditBtn>
+                                            <SimpleEntryDeleteBtn
+                                              type="button"
+                                              data-role="entry-delete"
+                                              aria-label="삭제"
+                                              disabled={isEntryDeleting}
+                                              onClick={() =>
+                                                setEntryDeleteTarget({
+                                                  kind: 'career',
+                                                  id: c.id!,
+                                                  careerKind: c.kind,
+                                                  label: titleBits[0] ?? '경력',
+                                                })
+                                              }
+                                            >
+                                              <FiTrash2 size={13} />
+                                            </SimpleEntryDeleteBtn>
+                                          </>
                                         )}
                                         <SimpleEntryHeader>
                                           <SimpleEntryTitle>
@@ -2565,6 +2628,7 @@ export function PersonDetailPanel({
                               type="button"
                               onClick={() => {
                                 playClickSound()
+                                setEditingEducation(null)
                                 setEducationModalOpen(true)
                               }}
                             >
@@ -2608,22 +2672,36 @@ export function PersonDetailPanel({
                             return (
                               <SimpleEntryItem key={e.id ?? `edu-${eduIdx}`}>
                                 {!embedInModal && e.id && (
-                                  <SimpleEntryDeleteBtn
-                                    type="button"
-                                    data-role="entry-delete"
-                                    aria-label="삭제"
-                                    disabled={isEntryDeleting}
-                                    onClick={() =>
-                                      setEntryDeleteTarget({
-                                        kind: 'education',
-                                        id: e.id!,
-                                        label:
-                                          e.organization?.name ?? '학교 미상',
-                                      })
-                                    }
-                                  >
-                                    <FiTrash2 size={13} />
-                                  </SimpleEntryDeleteBtn>
+                                  <>
+                                    <SimpleEntryEditBtn
+                                      type="button"
+                                      data-role="entry-edit"
+                                      aria-label="수정"
+                                      onClick={() => {
+                                        playClickSound()
+                                        setEditingEducation(e)
+                                        setEducationModalOpen(true)
+                                      }}
+                                    >
+                                      <FiEdit2 size={12} />
+                                    </SimpleEntryEditBtn>
+                                    <SimpleEntryDeleteBtn
+                                      type="button"
+                                      data-role="entry-delete"
+                                      aria-label="삭제"
+                                      disabled={isEntryDeleting}
+                                      onClick={() =>
+                                        setEntryDeleteTarget({
+                                          kind: 'education',
+                                          id: e.id!,
+                                          label:
+                                            e.organization?.name ?? '학교 미상',
+                                        })
+                                      }
+                                    >
+                                      <FiTrash2 size={13} />
+                                    </SimpleEntryDeleteBtn>
+                                  </>
                                 )}
                                 <SimpleEntryHeader>
                                   <SimpleEntryTitle>
@@ -2668,6 +2746,7 @@ export function PersonDetailPanel({
                               type="button"
                               onClick={() => {
                                 playClickSound()
+                                setEditingAward(null)
                                 setAwardModalOpen(true)
                               }}
                             >
@@ -2700,21 +2779,35 @@ export function PersonDetailPanel({
                           .map((a, awardIdx) => (
                             <SimpleEntryItem key={a.id ?? `award-${awardIdx}`}>
                               {!embedInModal && a.id && (
-                                <SimpleEntryDeleteBtn
-                                  type="button"
-                                  data-role="entry-delete"
-                                  aria-label="삭제"
-                                  disabled={isEntryDeleting}
-                                  onClick={() =>
-                                    setEntryDeleteTarget({
-                                      kind: 'award',
-                                      id: a.id!,
-                                      label: a.awardName ?? '수상·훈장',
-                                    })
-                                  }
-                                >
-                                  <FiTrash2 size={13} />
-                                </SimpleEntryDeleteBtn>
+                                <>
+                                  <SimpleEntryEditBtn
+                                    type="button"
+                                    data-role="entry-edit"
+                                    aria-label="수정"
+                                    onClick={() => {
+                                      playClickSound()
+                                      setEditingAward(a)
+                                      setAwardModalOpen(true)
+                                    }}
+                                  >
+                                    <FiEdit2 size={12} />
+                                  </SimpleEntryEditBtn>
+                                  <SimpleEntryDeleteBtn
+                                    type="button"
+                                    data-role="entry-delete"
+                                    aria-label="삭제"
+                                    disabled={isEntryDeleting}
+                                    onClick={() =>
+                                      setEntryDeleteTarget({
+                                        kind: 'award',
+                                        id: a.id!,
+                                        label: a.awardName ?? '수상·훈장',
+                                      })
+                                    }
+                                  >
+                                    <FiTrash2 size={13} />
+                                  </SimpleEntryDeleteBtn>
+                                </>
                               )}
                               <SimpleEntryHeader>
                                 <SimpleEntryTitle>{a.awardName ?? '이름 없음'}</SimpleEntryTitle>
@@ -3625,19 +3718,31 @@ export function PersonDetailPanel({
       <AwardRegisterModal
         open={awardModalOpen}
         personId={person.id}
-        onClose={() => setAwardModalOpen(false)}
+        initialAward={editingAward}
+        onClose={() => {
+          setAwardModalOpen(false)
+          setEditingAward(null)
+        }}
       />
 
       <CareerRegisterModal
         open={careerModalOpen}
         personId={person.id}
-        onClose={() => setCareerModalOpen(false)}
+        initialCareer={editingCareer}
+        onClose={() => {
+          setCareerModalOpen(false)
+          setEditingCareer(null)
+        }}
       />
 
       <EducationRegisterModal
         open={educationModalOpen}
         personId={person.id}
-        onClose={() => setEducationModalOpen(false)}
+        initialEducation={editingEducation}
+        onClose={() => {
+          setEducationModalOpen(false)
+          setEditingEducation(null)
+        }}
       />
 
       <EventInlineModal

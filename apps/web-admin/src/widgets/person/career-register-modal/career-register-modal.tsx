@@ -114,9 +114,7 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     orgLabel: '종교 조직',
     orgRequired: false,
     extras: [
-      { key: 'religion', label: '종교', placeholder: '예: 천주교' },
-      { key: 'denomination', label: '종파', placeholder: '예: 예수회' },
-      { key: 'rank', label: '지위', placeholder: '예: 추기경' },
+      { key: 'title', label: '지위·직함', placeholder: '예: 추기경, 대주교' },
     ],
     submit: (dto) => personCareerApi.addReligiousCareer(dto as never),
   },
@@ -127,8 +125,8 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     orgLabel: '소속 조직',
     orgRequired: false,
     extras: [
-      { key: 'artForm', label: '예술 분야', placeholder: '예: 회화, 조각' },
-      { key: 'style', label: '스타일·장르', placeholder: '예: 인상주의' },
+      { key: 'artField', label: '예술 분야', placeholder: '예: 회화, 조각' },
+      { key: 'genre', label: '스타일·장르', placeholder: '예: 인상주의' },
     ],
     submit: (dto) => personCareerApi.addArtistCareer(dto as never),
   },
@@ -157,8 +155,8 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     orgLabel: '언론사',
     orgRequired: false,
     extras: [
-      { key: 'mediaType', label: '매체 유형', placeholder: '예: 신문, 방송' },
-      { key: 'role', label: '역할', placeholder: '예: 편집국장' },
+      { key: 'department', label: '부서·매체', placeholder: '예: 정치부, 방송' },
+      { key: 'beat', label: '담당·역할', placeholder: '예: 편집국장' },
     ],
     submit: (dto) => personCareerApi.addMediaCareer(dto as never),
   },
@@ -169,8 +167,7 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     orgLabel: '법원·검찰청·로펌',
     orgRequired: false,
     extras: [
-      { key: 'specialization', label: '전문 분야', placeholder: '예: 형사' },
-      { key: 'courtLevel', label: '법원 등급', placeholder: '예: 대법원' },
+      { key: 'specialization', label: '전문 분야 · 심급', placeholder: '예: 형사 · 대법원' },
     ],
     submit: (dto) => personCareerApi.addLegalCareer(dto as never),
   },
@@ -242,9 +239,38 @@ const JOB_CATEGORY_KEYWORDS: Record<CareerKind, string[]> = {
   medical: ['의료', '의학'],
 }
 
+export interface PersonCareerEditTarget {
+  id: string
+  kind: CareerKind | string
+  organizationId?: string | null
+  organization?: { id: string; name?: string | null } | null
+  positionId?: string | null
+  rankId?: string | null
+  rank?: { id: string; name?: string | null } | null
+  rawTitle?: string | null
+  title?: string | null
+  position?: string | null
+  level?: string | null
+  branch?: string | null
+  department?: string | null
+  researchField?: string | null
+  termNumber?: number | null
+  sport?: string | null
+  jerseyNumber?: number | null
+  artField?: string | null
+  genre?: string | null
+  beat?: string | null
+  specialization?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  notes?: string | null
+}
+
 export interface CareerRegisterModalProps {
   open: boolean
   personId: string
+  /** 수정 모드일 때 전달 — 있으면 PUT 수정, 없으면 POST 등록 */
+  initialCareer?: PersonCareerEditTarget | null
   onClose: () => void
   /** 저장 성공 시 호출 (모달은 onClose로 상위에서 닫음) */
   onSuccess?: () => void
@@ -253,6 +279,7 @@ export interface CareerRegisterModalProps {
 export function CareerRegisterModal({
   open,
   personId,
+  initialCareer,
   onClose,
   onSuccess,
 }: CareerRegisterModalProps) {
@@ -265,6 +292,7 @@ export function CareerRegisterModal({
   const [endDate, setEndDate] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const isEditMode = Boolean(initialCareer?.id)
 
   const cfg = KIND_CONFIG[kind]
 
@@ -314,9 +342,60 @@ export function CareerRegisterModal({
       }))
   }, [jobs, kind])
 
-  /** 모달 열릴 때마다 초기화 */
+  /** 모달 열릴 때마다 초기화 또는 수정 대상 하이드레이션 */
   useEffect(() => {
     if (!open) return
+    if (initialCareer) {
+      const nextKind = (
+        KIND_ORDER.includes(initialCareer.kind as CareerKind)
+          ? initialCareer.kind
+          : 'business'
+      ) as CareerKind
+      setKind(nextKind)
+      setOrganizationId(
+        initialCareer.organizationId ?? initialCareer.organization?.id ?? '',
+      )
+      setPositionId(
+        nextKind === 'military'
+          ? (initialCareer.rankId ??
+              initialCareer.positionId ??
+              initialCareer.rank?.id ??
+              '')
+          : (initialCareer.positionId ?? initialCareer.rank?.id ?? ''),
+      )
+      const nextExtras: Record<string, string> = {}
+      const rawMap: Record<string, unknown> = {
+        title: initialCareer.rawTitle ?? initialCareer.title,
+        level: initialCareer.level,
+        branch: initialCareer.branch,
+        position: initialCareer.position,
+        termNumber: initialCareer.termNumber,
+        department: initialCareer.department,
+        researchField: initialCareer.researchField,
+        artField: initialCareer.artField,
+        genre: initialCareer.genre,
+        sport: initialCareer.sport,
+        jerseyNumber: initialCareer.jerseyNumber,
+        beat: initialCareer.beat,
+        specialization: initialCareer.specialization,
+      }
+      for (const field of KIND_CONFIG[nextKind].extras) {
+        const val = rawMap[field.key]
+        if (val != null && String(val).trim() !== '') {
+          nextExtras[field.key] = String(val)
+        }
+      }
+      setExtras(nextExtras)
+      setStartDate(
+        initialCareer.startDate ? String(initialCareer.startDate).slice(0, 10) : '',
+      )
+      setEndDate(
+        initialCareer.endDate ? String(initialCareer.endDate).slice(0, 10) : '',
+      )
+      setNotes(initialCareer.notes ?? '')
+      setSubmitting(false)
+      return
+    }
     setKind('business')
     setOrganizationId('')
     setPositionId('')
@@ -325,7 +404,7 @@ export function CareerRegisterModal({
     setEndDate('')
     setNotes('')
     setSubmitting(false)
-  }, [open])
+  }, [open, initialCareer])
 
   const dateRangeInvalid =
     startDate.length > 0 && endDate.length > 0 && endDate < startDate
@@ -337,6 +416,7 @@ export function CareerRegisterModal({
     !dateRangeInvalid
 
   const handleKindChange = (next: CareerKind) => {
+    if (isEditMode) return
     setKind(next)
     setExtras({})
   }
@@ -347,18 +427,34 @@ export function CareerRegisterModal({
     try {
       const payload: Record<string, unknown> = {
         personId,
-        organizationId: organizationId || undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        notes: notes.trim() || undefined,
+        organizationId:
+          organizationId || (isEditMode ? null : undefined),
+        startDate: startDate || (isEditMode ? null : undefined),
+        endDate: endDate || (isEditMode ? null : undefined),
+        notes: notes.trim() || (isEditMode ? null : undefined),
       }
       // 군사만 Job FK 필드명이 rankId — 나머지는 positionId
       if (kind === 'military') payload.rankId = positionId
       else payload.positionId = positionId
       for (const field of cfg.extras) {
         const raw = (extras[field.key] ?? '').trim()
-        if (!raw) continue
+        if (!raw) {
+          if (isEditMode) payload[field.key] = null
+          continue
+        }
         payload[field.key] = field.type === 'number' ? Number(raw) : raw
+      }
+      if (isEditMode && initialCareer?.id) {
+        await personCareerApi.updateCareerByKind(
+          kind,
+          initialCareer.id,
+          payload,
+        )
+        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        notify.success('경력이 수정되었습니다.')
+        onSuccess?.()
+        onClose()
+        return
       }
       await cfg.submit(payload)
       queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
@@ -395,7 +491,7 @@ export function CareerRegisterModal({
     <Modal
       isOpen={open}
       onClose={onClose}
-      title="경력 등록"
+      title={isEditMode ? '경력 수정' : '경력 등록'}
       subtitle="분야를 고르고 조직·직급을 선택하세요. 조직이 목록에 없으면 조직 관리에서 먼저 등록해야 합니다."
       maxWidth="600px"
     >
@@ -413,6 +509,7 @@ export function CareerRegisterModal({
                   role="radio"
                   aria-checked={kind === kindValue}
                   $active={kind === kindValue}
+                  disabled={isEditMode && kind !== kindValue}
                   onClick={() => handleKindChange(kindValue)}
                 >
                   {KIND_CONFIG[kindValue].label}
@@ -510,15 +607,17 @@ export function CareerRegisterModal({
           <CancelBtn type="button" onClick={onClose} disabled={submitting}>
             취소
           </CancelBtn>
-          <ContinueBtn
-            type="button"
-            onClick={() => void submitCareer(true)}
-            disabled={!canSubmit}
-          >
-            등록 후 계속
-          </ContinueBtn>
+          {!isEditMode && (
+            <ContinueBtn
+              type="button"
+              onClick={() => void submitCareer(true)}
+              disabled={!canSubmit}
+            >
+              등록 후 계속
+            </ContinueBtn>
+          )}
           <SaveBtn type="submit" disabled={!canSubmit}>
-            {submitting ? '저장 중…' : '등록'}
+            {submitting ? '저장 중…' : isEditMode ? '저장' : '등록'}
           </SaveBtn>
         </ModalFooter>
       </form>

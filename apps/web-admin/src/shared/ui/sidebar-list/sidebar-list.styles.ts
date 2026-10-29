@@ -353,6 +353,33 @@ export const ClearButton = styled.button`
   }
 `
 
+export const SearchShortcutKbd = styled.kbd`
+  position: absolute;
+  right: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => sidebarLine(theme)};
+  background: ${({ theme }) => sidebarSurface(theme)};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.75;
+  transition: opacity 0.12s ease;
+
+  ${SearchInput}:focus ~ & {
+    opacity: 0;
+  }
+`
+
 export const ClearAllFiltersButton = styled.button`
   display: inline-flex;
   align-items: center;

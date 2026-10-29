@@ -221,7 +221,10 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
   const biography =
     typeof bioRaw === 'string' && bioRaw.trim() ? bioRaw.trim() : null
 
-  // 검색 대상 결합 — 표시명과 다를 수 있는 원본 이름/성/별호/직업명까지 포함해 누락 방지.
+  const region = getRegion(countryName, p.country?.isoCode)
+  const field = getField(p)
+
+  // 검색 대상 결합 — 표시명과 다를 수 있는 원본 이름/성/별호/직업명/왕조/분야/지역까지 포함해 누락 방지.
   const searchText = [
     name,
     p.name,
@@ -232,6 +235,8 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
     p.dynasty?.name,
     primaryTitle,
     p.jobTitle,
+    field,
+    region,
   ]
     .filter(Boolean)
     .join(' ')
@@ -245,9 +250,9 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
     activityYear,
     era,
     age,
-    region: getRegion(countryName, p.country?.isoCode),
+    region,
     country: countryName || '미상',
-    field: getField(p),
+    field,
     faction: p.dynasty?.name ?? '',
     influence,
     profileImageUrl: p.profileImageUrl ?? null,

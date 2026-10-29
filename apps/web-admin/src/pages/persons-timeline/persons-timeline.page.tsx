@@ -6,8 +6,9 @@
  * 인물 상세는 같은 페이지에서 PersonDetailPanel로 렌더.
  * 목록에서 인물을 누르면 우측 상세 패널(PersonSplitView)이 열린다 — 사건 목록과 같은 분할.
  *
- * 좌측 인물 목록은 **상세 지면에서만** 레이아웃이 그린다(ContentAreaShell → PersonSidebar).
- * 목록 지면은 사이드바가 없어 상세 필터 시트를 이 페이지가 소유하고 툴바 '필터'로 연다.
+ * 목록·상세 모두 좌측 사이드바 없이 전체 폭으로 그리며, 상세 지면의 인물 간 빠른 이동과 검색은
+ * 상단 네비바의 PersonTopSearchBar가 담당한다.
+ * 목록 지면의 상세 필터 시트는 이 페이지가 소유하고 툴바 '필터'로 연다.
  * (구 단독 상세 `/persons/:id`는 이 지면으로 통합 — app/legacy-redirects.tsx가 흡수)
  *
  * URL 쿼리(useFilterUrlSync 가 store와 양방향 동기화):
@@ -160,6 +161,10 @@ export default function PersonsTimelinePage() {
             onClose={() => goBackOr(navigate, pathKeys.personsTimeline())}
             onEdit={(id) => {
               setEditingPersonId(id)
+              setEditModalOpen(true)
+            }}
+            onAdd={() => {
+              setEditingPersonId(null)
               setEditModalOpen(true)
             }}
             onLinkedPersonClick={openDetail}

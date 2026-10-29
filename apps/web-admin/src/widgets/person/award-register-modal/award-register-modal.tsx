@@ -18,9 +18,20 @@ import { personCareerApi } from '@/shared/api/person-career'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
+export interface PersonAwardEditTarget {
+  id: string
+  awardName?: string | null
+  category?: string | null
+  awardingBody?: string | null
+  awardDate?: string | null
+  description?: string | null
+}
+
 export interface AwardRegisterModalProps {
   open: boolean
   personId: string
+  /** 수정 모드일 때 전달 — 있으면 PUT 수정, 없으면 POST 등록 */
+  initialAward?: PersonAwardEditTarget | null
   onClose: () => void
   /** 저장 성공 시 호출 (모달은 자체적으로 닫지 않음 — 상위에서 onClose 처리) */
   onSuccess?: () => void
@@ -29,6 +40,7 @@ export interface AwardRegisterModalProps {
 export function AwardRegisterModal({
   open,
   personId,
+  initialAward,
   onClose,
   onSuccess,
 }: AwardRegisterModalProps) {
@@ -39,17 +51,28 @@ export function AwardRegisterModal({
   const [awardDate, setAwardDate] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const isEditMode = Boolean(initialAward?.id)
 
-  /** 모달 열릴 때마다 초기화 */
+  /** 모달 열릴 때마다 초기화 또는 수정 대상 하이드레이션 */
   useEffect(() => {
     if (!open) return
-    setAwardName('')
-    setCategory('')
-    setAwardingBody('')
-    setAwardDate('')
-    setDescription('')
+    if (initialAward) {
+      setAwardName(initialAward.awardName ?? '')
+      setCategory(initialAward.category ?? '')
+      setAwardingBody(initialAward.awardingBody ?? '')
+      setAwardDate(
+        initialAward.awardDate ? String(initialAward.awardDate).slice(0, 10) : '',
+      )
+      setDescription(initialAward.description ?? '')
+    } else {
+      setAwardName('')
+      setCategory('')
+      setAwardingBody('')
+      setAwardDate('')
+      setDescription('')
+    }
     setSubmitting(false)
-  }, [open])
+  }, [open, initialAward])
 
   const canSubmit = awardName.trim().length > 0 && !submitting
 
@@ -58,6 +81,20 @@ export function AwardRegisterModal({
     if (!canSubmit) return
     setSubmitting(true)
     try {
+      if (isEditMode && initialAward?.id) {
+        await personCareerApi.updateAward(initialAward.id, {
+          awardName: awardName.trim(),
+          category: category.trim() || (null as unknown as undefined),
+          awardingBody: awardingBody.trim() || (null as unknown as undefined),
+          awardDate: awardDate || (null as unknown as undefined),
+          description: description.trim() || (null as unknown as undefined),
+        })
+        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        notify.success('수상·훈장이 수정되었습니다.')
+        onSuccess?.()
+        onClose()
+        return
+      }
       await personCareerApi.addAward({
         personId,
         awardName: awardName.trim(),
@@ -85,7 +122,7 @@ export function AwardRegisterModal({
     <Modal
       isOpen={open}
       onClose={onClose}
-      title="수상·훈장 등록"
+      title={isEditMode ? '수상·훈장 수정' : '수상·훈장 등록'}
       subtitle="받은 상·훈장을 기록하세요."
     >
       <form onSubmit={handleSubmit}>
@@ -153,7 +190,7 @@ export function AwardRegisterModal({
             취소
           </CancelBtn>
           <SaveBtn type="submit" disabled={!canSubmit}>
-            {submitting ? '저장 중…' : '등록'}
+            {submitting ? '저장 중…' : isEditMode ? '저장' : '등록'}
           </SaveBtn>
         </ModalFooter>
       </form>

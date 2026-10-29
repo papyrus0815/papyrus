@@ -5,7 +5,7 @@
  */
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 import '@testing-library/jest-dom'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { ThemeProvider } from 'styled-components'
 
 import { getTheme } from '@/shared/styles/theme'
@@ -343,5 +343,43 @@ describe('TenureReignList', () => {
     expect(
       screen.getByRole('heading', { level: 4, name: '루이 14세 · 국왕' }),
     ).toBeInTheDocument()
+  })
+
+  it('onEventClick이 전달되면 즉위식 사건과 업적 연결 사건 배지를 클릭해 미리보기를 열 수 있고, 소수(1~3건) 업적은 기본 펼쳐진다', () => {
+    const onEventClick = jest.fn()
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        onEventClick={onEventClick}
+        items={[
+          makeItem({
+            kind: 'reign',
+            record: {
+              id: 'r1',
+              title: '국왕',
+              accessionEvent: { id: 'ev-coronation', title: '랭스 대관식' },
+              achievements: [
+                {
+                  id: 'ach-1',
+                  title: '베르사유 궁전 천도',
+                  eventId: 'ev-versailles',
+                  event: { id: 'ev-versailles', title: '베르사유 천도' },
+                },
+              ],
+            },
+          }),
+        ]}
+      />,
+    )
+
+    const accessionBtn = screen.getByRole('button', { name: '랭스 대관식' })
+    fireEvent.click(accessionBtn)
+    expect(onEventClick).toHaveBeenCalledWith('ev-coronation')
+
+    // 업적 1건이므로 별도 토글 클릭 없이 기본 펼쳐져 있음
+    expect(screen.getByText('베르사유 궁전 천도')).toBeInTheDocument()
+    const achEventBtn = screen.getByRole('button', { name: '베르사유 천도' })
+    fireEvent.click(achEventBtn)
+    expect(onEventClick).toHaveBeenCalledWith('ev-versailles')
   })
 })

@@ -5,7 +5,7 @@
  * 줄 수는 **내용이 정한다**: 칩이 하나뿐이고 유도 줄도 없으면(조약·기업) 칩을 검색칸과 같은
  * 줄에 앉혀 한 줄을 통째로 회수한다. 칩이 둘 이상이면 나란히 두기엔 폭이 모자라 제 줄을 준다.
  */
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 
 import * as S from '@/shared/ui/sidebar-list'
 
@@ -35,11 +35,47 @@ export function EntitySidebarFilters({
   onClearFilters,
   discovery,
 }: EntitySidebarFiltersProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
   const hasClear = hasActiveFilter && !!onClearFilters
   const hasChips = selects.length > 0 || hasClear
   /* 줄 수는 **구조**가 정한다 — 필터가 켜졌는지 같은 순간 상태를 섞으면 값을 고를 때마다
      줄 수가 출렁인다. 칩이 둘 이상이거나 유도 줄이 있으면 폭이 모자라 제 줄을 준다. */
   const inlineChips = selects.length <= 1 && !discovery
+
+  // 본문을 읽다가 '/' 키를 누르면 좌측 사이드바 검색창으로 즉시 포커스
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== '/' ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.defaultPrevented
+      ) {
+        return
+      }
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+      if (document.querySelector('[role="dialog"], [aria-modal="true"]')) {
+        return
+      }
+      const input = inputRef.current
+      if (!input || input.closest('[aria-hidden="true"]')) return
+      event.preventDefault()
+      input.focus()
+      input.select()
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [])
 
   const search = (
     <S.SearchWrapper>
@@ -57,14 +93,27 @@ export function EntitySidebarFilters({
         </svg>
       </S.SearchIcon>
       <S.SearchInput
+        ref={inputRef}
         type="search"
         aria-label={searchLabel}
         placeholder={searchPlaceholder}
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
-        onKeyDown={onSearchKeyDown}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            if (query) {
+              onQueryChange('')
+            } else {
+              event.currentTarget.blur()
+            }
+            return
+          }
+          onSearchKeyDown?.(event)
+        }}
       />
-      {query && (
+      {query ? (
         <S.ClearButton onClick={() => onQueryChange('')} aria-label="지우기">
           <svg
             width="12"
@@ -78,6 +127,10 @@ export function EntitySidebarFilters({
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
         </S.ClearButton>
+      ) : (
+        <S.SearchShortcutKbd aria-hidden title="단축키 / 로 검색">
+          /
+        </S.SearchShortcutKbd>
       )}
     </S.SearchWrapper>
   )

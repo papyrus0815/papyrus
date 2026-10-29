@@ -28,3 +28,105 @@ export const BadgeCount = S.DiscoveryBadgeCount
 export const ActiveAdvancedHint = styled(S.DiscoveryHint).attrs({
   $tone: 'accent' as const,
 })``
+
+/** 현재 보고 있는 인물 기준 1클릭 문맥 필터 토글 칩 (같은 국가 · 같은 왕조) */
+export const ContextFilterChip = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 148px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.45)'
+          : '#a5b4fc'
+        : S.sidebarLine(theme)};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.18)'
+        : '#eef2ff'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4338ca'
+      : theme.colors.text.tertiary};
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? '#c7d2fe'
+          : '#3730a3'
+        : theme.colors.primary};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.24)'
+          : '#e0e7ff'
+        : S.sidebarFill(theme)};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 1px;
+  }
+`
+
+/** 상세 필터로 걸린 개별 조건 해제 칩 (예: 프랑스 ×, 군사 ×) */
+export const ActiveFilterChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 132px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.35)' : '#c7d2fe'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.14)' : '#eef2ff'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#3730a3')};
+  transition: background 0.14s ease, border-color 0.14s ease;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.24)' : '#e0e7ff'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 1px;
+  }
+`

@@ -93,6 +93,8 @@ interface TenureAchievementsProps {
   suggestions?: RecordEventSuggestion[]
   /** 읽기 전용 모드(모달 임베드) — 추가·수정·삭제 컨트롤 숨김 */
   readOnly?: boolean
+  /** 연결 사건 배지 클릭 → 사건 미리보기 모달 */
+  onEventClick?: (eventId: string) => void
   /** 변경 후 부모가 상세 쿼리를 무효화하도록 알림 */
   onChanged: () => void
   onPlayClick?: () => void
@@ -113,12 +115,15 @@ export function TenureAchievements({
   achievements,
   suggestions = [],
   readOnly = false,
+  onEventClick,
   onChanged,
   onPlayClick,
 }: TenureAchievementsProps) {
   const list = [...(achievements ?? [])].sort(compareTenureAchievementsByOrder)
 
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(
+    () => list.length > 0 && list.length <= 3,
+  )
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -407,7 +412,19 @@ export function TenureAchievements({
                               </AchievementDateChip>
                             )}
                             {a.event && !eventDeleted && (
-                              <AchievementEventBadge title={a.event.title ?? ''}>
+                              <AchievementEventBadge
+                                as={onEventClick && a.event.id ? 'button' : 'span'}
+                                {...(onEventClick && a.event.id
+                                  ? {
+                                      type: 'button' as const,
+                                      onClick: () => {
+                                        onPlayClick?.()
+                                        onEventClick(a.event!.id)
+                                      },
+                                    }
+                                  : {})}
+                                title={a.event.title ?? ''}
+                              >
                                 <FiLink size={9} />
                                 <span>{a.event.title ?? '연결된 사건'}</span>
                               </AchievementEventBadge>

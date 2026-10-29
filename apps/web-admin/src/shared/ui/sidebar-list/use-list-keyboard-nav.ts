@@ -106,15 +106,23 @@ export function useListKeyboardNav({
     ],
   )
 
-  /** 검색 인풋에서 ↓ 누르면 첫 행으로 진입 */
+  /** 검색 인풋에서 ↓ 누르면 첫 행으로 진입, Enter 누르면 첫 번째 검색 결과로 즉시 이동 */
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'ArrowDown' && rowIds.length > 0) {
         e.preventDefault()
         focusRow(0)
+      } else if (
+        e.key === 'Enter' &&
+        !e.nativeEvent.isComposing &&
+        rowIds.length > 0
+      ) {
+        e.preventDefault()
+        const firstId = rowIds[0]
+        if (firstId) onSelect(firstId)
       }
     },
-    [focusRow, rowIds.length],
+    [focusRow, onSelect, rowIds],
   )
 
   return {

@@ -7,11 +7,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiUsers } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { personApi, type Person } from '@/shared/api/person'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { pathKeys } from '@/shared/router'
 import { DynastyMembersInfographicModal } from '@/widgets/dynasty/dynasty-members-infographic-modal'
 
 const isDark = (mode: 'light' | 'dark') => mode === 'dark'
@@ -53,6 +55,7 @@ export function SameDynastyMembersSection({
   currentPersonId,
   onPersonClick,
 }: Props) {
+  const navigate = useNavigate()
   const [showInfographic, setShowInfographic] = useState(false)
   const stripRef = useRef<HTMLDivElement>(null)
   const currentCardRef = useRef<HTMLButtonElement>(null)
@@ -102,7 +105,7 @@ export function SameDynastyMembersSection({
           같은 가문 구성원
           <DynastyBadge>{dynastyName}</DynastyBadge>
         </HeaderTitle>
-        {persons.length > 0 && (
+        {others.length > 0 && (
           <InfographicBtn
             type="button"
             onClick={() => setShowInfographic(true)}
@@ -144,7 +147,7 @@ export function SameDynastyMembersSection({
                 onClick={() => {
                   if (isCurrent) return
                   if (onPersonClick) onPersonClick(p.id)
-                  else window.open(`/persons-timeline/${p.id}/`, '_blank')
+                  else navigate(pathKeys.personDetail(p.id))
                 }}
                 aria-current={isCurrent ? 'true' : undefined}
                 aria-label={

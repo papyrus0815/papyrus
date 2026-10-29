@@ -351,13 +351,21 @@ export const TopNavBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px 14px;
   margin-bottom: 16px;
 
   /* 좁은 폭에선 앱 공통 프로필 버블(우상단 고정, 약 48px)이 '삭제' 버튼을 덮었다 — 그만큼 비켜 선다 */
   @media (max-width: 640px) {
     padding-right: 56px;
   }
+`
+
+export const TopNavLeft = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 `
 
 /**
@@ -1682,6 +1690,34 @@ export const UnifiedDetailValue = styled.dd<{
   ${({ $prewrap }) => $prewrap && 'white-space: pre-wrap;'}
 `
 
+/** 즉위식·취임식·서임식 사건 인라인 미리보기 트리거 버튼 */
+export const AccessionEventLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#99f6e4' : '#0d9488')};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #14b8a6;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+`
+
 /** 퇴임/퇴위 사유 분류 토큰 — 같은 라벨 아래 첫 값. 뒤따르는 서사(13px)보다 작고 무겁게. */
 export const UnifiedDetailTag = styled.dd`
   grid-column: 2;
@@ -2401,8 +2437,48 @@ export const SimpleEntryItem = styled.li`
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#e2e8f0'};
 
-  &:hover button[data-role='entry-delete'] {
+  &:hover button[data-role='entry-delete'],
+  &:hover button[data-role='entry-edit'] {
     opacity: 1;
+  }
+`
+
+/** 학력·경력·수상 항목 우상단 인라인 수정 버튼 (호버 시 또렷해짐) */
+export const SimpleEntryEditBtn = styled.button`
+  position: absolute;
+  top: 6px;
+  right: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.16)'
+        : 'rgba(99, 102, 241, 0.1)'};
+  }
+
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
   }
 `
 
@@ -2450,7 +2526,7 @@ export const SimpleEntryHeader = styled.div`
   flex-wrap: wrap;
   align-items: baseline;
   gap: 10px;
-  padding-right: 28px;
+  padding-right: 56px;
 `
 
 export const SimpleEntryTitle = styled.span`
@@ -3563,10 +3639,12 @@ export const AchievementEventBadge = styled.span`
   align-items: center;
   gap: 4px;
   max-width: 180px;
+  font-family: inherit;
   font-size: 10.5px;
   font-weight: 600;
   padding: 1.5px 8px;
   border-radius: 999px;
+  border: 1px solid transparent;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(20,184,166,0.16)' : 'rgba(20,184,166,0.1)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
@@ -3574,6 +3652,21 @@ export const AchievementEventBadge = styled.span`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &:is(button) {
+    cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease;
+    &:hover {
+      background: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(20,184,166,0.26)' : 'rgba(20,184,166,0.18)'};
+      border-color: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(94,234,212,0.4)' : 'rgba(13,148,136,0.3)'};
+    }
+    &:focus-visible {
+      outline: 2px solid #14b8a6;
+      outline-offset: 1px;
+    }
   }
 `
 

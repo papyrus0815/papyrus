@@ -14,6 +14,8 @@ import { FaChessKing, FaStar } from 'react-icons/fa'
 import { FiClock, FiStar, FiUsers } from 'react-icons/fi'
 
 import { usePersonsInfographic } from '@/entities/person/api'
+import { getUploadImageUrl } from '@/shared/api/upload'
+import { HighlightedText } from '@/shared/ui/highlighted-text'
 import {
   EntityListSidebar,
   type EntitySidebarGroup,
@@ -21,6 +23,7 @@ import {
   type EntitySidebarSelect,
 } from '@/widgets/entity-list-sidebar'
 import {
+  computePersonFacetCounts,
   countActiveScopes,
   ERAS,
   filterPersons,
@@ -62,16 +65,62 @@ function lifespanText(person: AdaptedPerson): string {
 function toSidebarItem(
   person: AdaptedPerson,
   groupId: string,
+  trimmedQuery = '',
 ): EntitySidebarItem {
+  const searching = trimmedQuery.length > 0
+  const loweredQuery = trimmedQuery.toLowerCase()
+  const highlight = (text: string) => (
+    <HighlightedText text={text} query={trimmedQuery} />
+  )
+  const country =
+    person.country && person.country !== '미상' ? person.country : null
+  const faction = person.faction?.trim() || null
+  const showFaction =
+    !!faction &&
+    (!person.primaryTitle ||
+      (searching && faction.toLowerCase().includes(loweredQuery)))
+  const showField =
+    searching &&
+    !!person.field &&
+    person.field.toLowerCase().includes(loweredQuery)
+
   return {
     id: person.id,
     name: person.name,
+    nameNode: searching ? highlight(person.name) : undefined,
     meta: [
-      person.country && person.country !== '미상' ? person.country : null,
+      country
+        ? {
+            text: country,
+            shrink: true,
+            node: searching ? highlight(country) : undefined,
+          }
+        : null,
       lifespanText(person),
-      person.primaryTitle,
+      person.primaryTitle
+        ? {
+            text: person.primaryTitle,
+            shrink: true,
+            node: searching ? highlight(person.primaryTitle) : undefined,
+          }
+        : null,
+      showFaction && faction
+        ? {
+            text: faction,
+            shrink: true,
+            node: searching ? highlight(faction) : undefined,
+          }
+        : null,
+      showField
+        ? {
+            text: person.field,
+            node: highlight(person.field),
+          }
+        : null,
     ],
-    thumbnailUrl: person.profileImageUrl,
+    thumbnailUrl: person.profileImageUrl
+      ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
+      : null,
     // 영향력 0은 미상이라 배지를 그리지 않는다 — 대부분의 행에 0이 붙어 읽을 값이 있는
     // 행을 오히려 가렸다 (EntitySidebarRow가 0을 비표시로 처리)
     metric: person.influence,
@@ -116,11 +165,20 @@ function PersonListInner({
   const setScopeValues = usePersonInfographicFilterStore(
     (state) => state.setScopeValues,
   )
+  const toggleScope = usePersonInfographicFilterStore(
+    (state) => state.toggleScope,
+  )
   const minInfluence = usePersonInfographicFilterStore(
     (state) => state.minInfluence,
   )
+  const setMinInfluence = usePersonInfographicFilterStore(
+    (state) => state.setMinInfluence,
+  )
   const aliveFilter = usePersonInfographicFilterStore(
     (state) => state.aliveFilter,
+  )
+  const setAliveFilter = usePersonInfographicFilterStore(
+    (state) => state.setAliveFilter,
   )
   const sort = usePersonInfographicFilterStore((state) => state.sort)
   const setSort = usePersonInfographicFilterStore((state) => state.setSort)
@@ -139,6 +197,7 @@ function PersonListInner({
     query: committedQuery,
   } = usePersonQueryInput()
 
+  const trimmedQuery = committedQuery.trim()
   const pinnedSet = useMemo(() => new Set(pinnedList), [pinnedList])
 
   // 필터 술어 정본은 filterPersons — 우측 인포그래픽과 같은 집합을 보장한다.
@@ -153,11 +212,22 @@ function PersonListInner({
     [allPersons, scopes, minInfluence, aliveFilter, committedQuery],
   )
 
+  const facetCounts = useMemo(
+    () =>
+      computePersonFacetCounts(allPersons, {
+        scopes,
+        minInfluence,
+        aliveFilter,
+        query: committedQuery,
+      }),
+    [allPersons, scopes, minInfluence, aliveFilter, committedQuery],
+  )
+
   const hasActiveFilter =
     countActiveScopes(scopes) > 0 ||
     minInfluence > 0 ||
     aliveFilter !== 'all' ||
-    !!committedQuery.trim()
+    !!trimmedQuery
 
   // 셀렉트(시대·지역)로 드러나지 않는 필터 — '상세 필터' 배지 카운트
   const advancedActiveCount =
@@ -177,18 +247,30 @@ function PersonListInner({
     return map
   }, [allPersons])
 
+  const selectedPerson = useMemo(
+    () => (selectedId ? (personsById.get(selectedId) ?? null) : null),
+    [selectedId, personsById],
+  )
+
   // 시대 그룹 — 최신 시대 먼저(당대 → 고대), 마지막에 연도 미상. 빈 시대는 EntityListSidebar가 안 그린다.
+  // 첫 번째 시대 그룹(당대)은 기본 펼침(alwaysExpanded)으로 두어 첫 진입 시 빈 벽처럼 보이지 않게 한다.
   const eraGroups = useMemo<EntitySidebarGroup[]>(
     () => [
       ...[...ERAS]
         .reverse()
-        .map((era) => ({ id: era.key, name: era.lbl, accent: era.color })),
+        .map((era, index) => ({
+          id: era.key,
+          name: era.lbl,
+          accent: era.color,
+          alwaysExpanded: index === 0,
+        })),
       { id: 'unknown', name: '연도 미상', accent: '#64748b' },
     ],
     [],
   )
 
   // 핀·최근은 필터/검색 활성 시 숨긴다 (국가 목록과 같은 규약)
+  // 현재 보고 있는 인물(selectedId)은 '최근'에서 제외해 상단 중복 표시와 하이라이트 분산을 막는다.
   const quickAccessGroups = useMemo<EntitySidebarGroup[]>(() => {
     if (hasActiveFilter) return []
     const extra: EntitySidebarGroup[] = []
@@ -201,7 +283,12 @@ function PersonListInner({
         isQuickAccess: true,
       })
     }
-    if (recentIds.some((id) => !pinnedSet.has(id) && personsById.has(id))) {
+    if (
+      recentIds.some(
+        (id) =>
+          id !== selectedId && !pinnedSet.has(id) && personsById.has(id),
+      )
+    ) {
       extra.push({
         id: RECENT_GROUP,
         name: '최근',
@@ -211,7 +298,7 @@ function PersonListInner({
       })
     }
     return extra
-  }, [hasActiveFilter, pinnedList, recentIds, pinnedSet, personsById])
+  }, [hasActiveFilter, pinnedList, recentIds, selectedId, pinnedSet, personsById])
 
   const groups = useMemo(
     () => [...quickAccessGroups, ...eraGroups],
@@ -223,29 +310,31 @@ function PersonListInner({
     if (!hasActiveFilter) {
       for (const id of pinnedList) {
         const person = personsById.get(id)
-        if (person) rows.push(toSidebarItem(person, PINNED_GROUP))
+        if (person) rows.push(toSidebarItem(person, PINNED_GROUP, trimmedQuery))
       }
       const recents = recentIds
-        .filter((id) => !pinnedSet.has(id))
+        .filter((id) => id !== selectedId && !pinnedSet.has(id))
         .map((id) => personsById.get(id))
         .filter((person): person is AdaptedPerson => !!person)
         .slice(0, 5)
       for (const person of recents) {
-        rows.push(toSidebarItem(person, RECENT_GROUP))
+        rows.push(toSidebarItem(person, RECENT_GROUP, trimmedQuery))
       }
     }
     for (const person of [...filtered].sort(sortFn)) {
-      rows.push(toSidebarItem(person, person.era.key))
+      rows.push(toSidebarItem(person, person.era.key, trimmedQuery))
     }
     return rows
   }, [
     hasActiveFilter,
     pinnedList,
     recentIds,
+    selectedId,
     pinnedSet,
     personsById,
     filtered,
     sortFn,
+    trimmedQuery,
   ])
 
   // 지역 셀렉트 옵션 — 데이터에 실제로 존재하는 지역만, REGIONS 상수 순서로.
@@ -291,12 +380,18 @@ function PersonListInner({
       scopeSelect(
         'era',
         '시대',
-        ERAS.map((era) => ({ value: era.key, label: era.lbl })),
+        ERAS.map((era) => ({
+          value: era.key,
+          label: `${era.lbl} (${facetCounts.era[era.key] ?? 0})`,
+        })),
       ),
       scopeSelect(
         'region',
         '지역',
-        regionOptions.map((region) => ({ value: region, label: region })),
+        regionOptions.map((region) => ({
+          value: region,
+          label: `${region} (${facetCounts.region[region] ?? 0})`,
+        })),
       ),
       {
         id: 'sort',
@@ -310,7 +405,7 @@ function PersonListInner({
         onChange: (next) => setSort(next as PersonSortKey),
       },
     ],
-    [scopeSelect, regionOptions, sort, setSort],
+    [scopeSelect, regionOptions, facetCounts, sort, setSort],
   )
 
   const handleClearFilters = useCallback(() => {
@@ -318,10 +413,25 @@ function PersonListInner({
     resetFilters()
   }, [resetFilters, setSearchInput])
 
+  const selectedCountry =
+    selectedPerson?.country && selectedPerson.country !== '미상'
+      ? selectedPerson.country
+      : null
+  const isSameCountryActive =
+    !!selectedCountry &&
+    scopes.country.length === 1 &&
+    scopes.country[0] === selectedCountry
+
+  const selectedFaction = selectedPerson?.faction ?? null
+  const isSameFactionActive =
+    !!selectedFaction &&
+    trimmedQuery.toLowerCase() === selectedFaction.toLowerCase()
+
   return (
     <EntityListSidebar
       title="인물 목록"
       noun="인물"
+      countUnit="명"
       domainKey="person"
       items={items}
       totalCount={allPersons.length}
@@ -330,6 +440,7 @@ function PersonListInner({
       onSelect={onSelect}
       query={searchInput}
       onQueryChange={setSearchInput}
+      searchPlaceholder="이름·국가·왕조·직함 검색..."
       selects={selects}
       hasActiveFilter={hasActiveFilter}
       onClearFilters={handleClearFilters}
@@ -347,10 +458,77 @@ function PersonListInner({
               </PersonStyles.BadgeCount>
             )}
           </PersonStyles.AdvancedFilterBadge>
-          {advancedActiveCount > 0 && (
-            <PersonStyles.ActiveAdvancedHint title="셀렉트에 드러나지 않는 필터가 적용 중입니다">
-              적용 중 {advancedActiveCount}
-            </PersonStyles.ActiveAdvancedHint>
+          {selectedCountry && (
+            <PersonStyles.ContextFilterChip
+              type="button"
+              $active={isSameCountryActive}
+              aria-pressed={isSameCountryActive}
+              onClick={() =>
+                setScopeValues(
+                  'country',
+                  isSameCountryActive ? [] : [selectedCountry],
+                )
+              }
+              title={`현재 인물과 같은 국가(${selectedCountry})만 보기`}
+            >
+              같은 국가: {selectedCountry}
+            </PersonStyles.ContextFilterChip>
+          )}
+          {selectedFaction && (
+            <PersonStyles.ContextFilterChip
+              type="button"
+              $active={isSameFactionActive}
+              aria-pressed={isSameFactionActive}
+              onClick={() =>
+                setSearchInput(isSameFactionActive ? '' : selectedFaction)
+              }
+              title={`현재 인물과 같은 왕조·계보(${selectedFaction}) 검색`}
+            >
+              같은 왕조: {selectedFaction}
+            </PersonStyles.ContextFilterChip>
+          )}
+          {scopes.country
+            .filter(
+              (country) => !(isSameCountryActive && country === selectedCountry),
+            )
+            .map((country) => (
+              <PersonStyles.ActiveFilterChip
+                key={`country-${country}`}
+                type="button"
+                onClick={() => toggleScope('country', country)}
+                title={`국가 필터 '${country}' 해제`}
+              >
+                {country} <span aria-hidden>×</span>
+              </PersonStyles.ActiveFilterChip>
+            ))}
+          {scopes.field.map((field) => (
+            <PersonStyles.ActiveFilterChip
+              key={`field-${field}`}
+              type="button"
+              onClick={() => toggleScope('field', field)}
+              title={`분야 필터 '${field}' 해제`}
+            >
+              {field} <span aria-hidden>×</span>
+            </PersonStyles.ActiveFilterChip>
+          ))}
+          {minInfluence > 0 && (
+            <PersonStyles.ActiveFilterChip
+              type="button"
+              onClick={() => setMinInfluence(0)}
+              title="최소 영향력 필터 해제"
+            >
+              영향력 {minInfluence}+ <span aria-hidden>×</span>
+            </PersonStyles.ActiveFilterChip>
+          )}
+          {aliveFilter !== 'all' && (
+            <PersonStyles.ActiveFilterChip
+              type="button"
+              onClick={() => setAliveFilter('all')}
+              title="생존 여부 필터 해제"
+            >
+              {aliveFilter === 'alive' ? '생존' : '사망'}{' '}
+              <span aria-hidden>×</span>
+            </PersonStyles.ActiveFilterChip>
           )}
         </PersonStyles.DiscoveryRow>
       }

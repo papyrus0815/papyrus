@@ -26,6 +26,7 @@ import {
   getAgeAtDate,
 } from './helpers'
 import {
+  AccessionEventLink,
   TenureEmpty,
   UnifiedCard,
   UnifiedCardList,
@@ -70,6 +71,8 @@ interface TenureReignListProps {
   adjacencyByRecordId?: Map<string, ReignAdjacencyEntry>
   /** 재임·재위 recordId → '이 기간의 사건' 제안(업적으로 한 번에 잇기) */
   achievementSuggestionsByRecordId?: Record<string, RecordEventSuggestion[]>
+  /** 즉위·취임식 사건 또는 업적 연결 사건 클릭 → 인라인 사건 미리보기 */
+  onEventClick?: (eventId: string) => void
   onEditTenure: (id: string) => void
   onEditReign: (id: string) => void
   onPlayClick: () => void
@@ -90,6 +93,7 @@ export function TenureReignList({
   onPersonClick,
   adjacencyByRecordId,
   achievementSuggestionsByRecordId,
+  onEventClick,
   onEditTenure,
   onEditReign,
   onPlayClick,
@@ -338,7 +342,19 @@ export function TenureReignList({
                         {isReign ? '즉위식' : isNobleTitle ? '서임식' : '취임식'}
                       </UnifiedDetailLabel>
                       <UnifiedDetailValue $token>
-                        {accessionEvent.title ?? '(제목 없음)'}
+                        {onEventClick && accessionEvent.id ? (
+                          <AccessionEventLink
+                            type="button"
+                            onClick={() => {
+                              onPlayClick()
+                              onEventClick(accessionEvent.id)
+                            }}
+                          >
+                            {accessionEvent.title ?? '(제목 없음)'}
+                          </AccessionEventLink>
+                        ) : (
+                          accessionEvent.title ?? '(제목 없음)'
+                        )}
                       </UnifiedDetailValue>
                     </>
                   )}
@@ -350,6 +366,7 @@ export function TenureReignList({
                 achievements={record.achievements ?? []}
                 suggestions={achievementSuggestionsByRecordId?.[record.id]}
                 readOnly={embedInModal}
+                onEventClick={onEventClick}
                 onPlayClick={onPlayClick}
                 onChanged={onAchievementChanged}
               />
