@@ -38,20 +38,18 @@ interface DisplaySection {
 }
 
 function lifespanText(person: AdaptedPerson): string {
-  const birth = person.birthYear != null ? formatYear(person.birthYear) : null
+  const birth = person.born != null ? formatYear(person.born) : null
   const death =
-    person.deathYear != null
-      ? formatYear(person.deathYear)
+    person.died != null
+      ? formatYear(person.died)
       : person.isAlive
         ? '현재'
         : null
   if (birth && death) return `${birth}~${death}`
   if (birth) return `${birth}~`
   if (death) return `~${death}`
-  if (person.reignStartYear != null) {
-    const end =
-      person.reignEndYear != null ? formatYear(person.reignEndYear) : ''
-    return `재위 ${formatYear(person.reignStartYear)}~${end}`
+  if (person.activityYear != null) {
+    return `활동 ${formatYear(Math.round(person.activityYear))}`
   }
   return '연도 미상'
 }
@@ -99,14 +97,22 @@ export function PersonTopSearchBar({
     if (!currentPerson?.faction) return []
     return allPersons
       .filter((p) => p.faction === currentPerson.faction)
-      .sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999))
+      .sort(
+        (a, b) =>
+          (a.born ?? a.activityYear ?? 9999) -
+          (b.born ?? b.activityYear ?? 9999),
+      )
   }, [allPersons, currentPerson])
 
   const countryPeers = useMemo(() => {
     if (!currentPerson?.country || currentPerson.country === '미상') return []
     return allPersons
       .filter((p) => p.country === currentPerson.country)
-      .sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999))
+      .sort(
+        (a, b) =>
+          (a.born ?? a.activityYear ?? 9999) -
+          (b.born ?? b.activityYear ?? 9999),
+      )
   }, [allPersons, currentPerson])
 
   const eraPeers = useMemo(() => {
@@ -243,7 +249,10 @@ export function PersonTopSearchBar({
         if (aStarts !== bStarts) return bStarts - aStarts
       }
       if (contextFilter === 'faction' || contextFilter === 'country') {
-        return (a.year ?? 9999) - (b.year ?? 9999)
+        return (
+          (a.born ?? a.activityYear ?? 9999) -
+          (b.born ?? b.activityYear ?? 9999)
+        )
       }
       return (b.influence ?? 0) - (a.influence ?? 0)
     })

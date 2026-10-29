@@ -355,16 +355,16 @@ export function HeaderStats({
           as="button"
           type="button"
           $interactive
-          $active={sort === 'age'}
-          onClick={() => setSort(sort === 'age' ? 'influence' : 'age')}
+          $active={sort === 'lifespan'}
+          onClick={() => setSort(sort === 'lifespan' ? 'influence' : 'lifespan')}
           title={
-            sort === 'age'
+            sort === 'lifespan'
               ? '현재 수명순 정렬 중 (클릭하여 영향력순으로 되돌리기)'
               : '클릭하여 수명순으로 인물 정렬'
           }
         >
           <TileLabel>
-            평균 수명 {sort === 'age' && <TileBadge>수명순 정렬 중</TileBadge>}
+            평균 수명 {sort === 'lifespan' && <TileBadge>수명순 정렬 중</TileBadge>}
           </TileLabel>
           <TileValue>
             {stats.avgAge ?? '—'}

@@ -7,6 +7,7 @@ export const SORT_OPTIONS: Array<[PersonSortKey, string]> = [
   ['name', '이름'],
   ['year', '출생연도'],
   ['deathYear', '사망연도'],
+  ['lifespan', '수명'],
 ]
 
 /** 연도 미상(null)은 방향과 무관하게 항상 뒤로 보낸다. */
@@ -26,13 +27,15 @@ function compareBy(
   personA: AdaptedPerson,
   personB: AdaptedPerson,
 ) {
-  // 연도 키는 방향 통일 — 출생·사망 모두 '최신순'(desc). (이전엔 출생 asc·사망 desc 비대칭)
+  // 연도 키는 방향 통일 — 출생·사망·수명 모두 내림차순(desc). 미상(null)은 맨 뒤.
   let primary: number
   if (sort === 'name') primary = personA.name.localeCompare(personB.name, 'ko')
   else if (sort === 'year')
     primary = cmpYear(personA.born, personB.born, 'desc')
   else if (sort === 'deathYear')
     primary = cmpYear(personA.died, personB.died, 'desc')
+  else if (sort === 'lifespan')
+    primary = cmpYear(personA.age, personB.age, 'desc')
   else primary = personB.influence - personA.influence
   if (primary !== 0) return primary
   // 동점 2차 기준 — 순서 결정성 확보(영향력 미상=0 대량 동점·동일 연도 방어).

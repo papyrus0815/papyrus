@@ -25,7 +25,12 @@ export type AliveFilter = 'all' | 'alive' | 'dead'
 export type ScopeKind = 'era' | 'region' | 'field' | 'country'
 
 /** 인물 정렬 기준 — 목록 뷰(카드/행) 그룹 내부 및 전체 인물 순서. */
-export type PersonSortKey = 'influence' | 'name' | 'year' | 'deathYear'
+export type PersonSortKey =
+  | 'influence'
+  | 'name'
+  | 'year'
+  | 'deathYear'
+  | 'lifespan'
 
 /** 세기 그룹의 시간축 방향 — 'desc'=최신 세기 먼저(기본), 'asc'=오래된 세기 먼저. */
 export type EraGroupOrder = 'asc' | 'desc'

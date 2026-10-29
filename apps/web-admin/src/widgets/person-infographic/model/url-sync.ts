@@ -43,7 +43,13 @@ const GROUPS: PersonGroupBy[] = [
 ]
 const LAYOUTS: PersonListLayout[] = ['grid', 'row']
 const ALIVES: AliveFilter[] = ['all', 'alive', 'dead']
-const SORTS: PersonSortKey[] = ['influence', 'name', 'year', 'deathYear']
+const SORTS: PersonSortKey[] = [
+  'influence',
+  'name',
+  'year',
+  'deathYear',
+  'lifespan',
+]
 const ORDERS: EraGroupOrder[] = ['asc', 'desc']
 
 function parseList(v: string | null): string[] {

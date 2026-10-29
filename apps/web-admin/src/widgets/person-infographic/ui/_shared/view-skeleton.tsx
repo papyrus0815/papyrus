@@ -204,40 +204,13 @@ function MatrixSkeleton() {
   )
 }
 
-/* ───────────────────────── 은하계 — 헤더·범례 + 산점도 판 ───────────────────────── */
-
-function GalaxySkeleton() {
-  return (
-    <FadingViewPanel>
-      <PanelHeaderSkeleton titleWidth={80} descWidth={220} legendCount={6} />
-      <LegendRowSkeleton>
-        <Bar style={{ width: 22, height: 9 }} />
-        {Array.from({ length: 6 }).map((_unused, index) => (
-          <LegendDot key={index}>
-            <Dot />
-            <Bar style={{ width: 30, height: 9 }} />
-          </LegendDot>
-        ))}
-      </LegendRowSkeleton>
-      <GalaxyPlot>
-        <GalaxyAxis>
-          {[0, 1, 2, 3].map((index) => (
-            <Bar key={index} style={{ width: 18, height: 9 }} />
-          ))}
-        </GalaxyAxis>
-        <GalaxyField />
-      </GalaxyPlot>
-    </FadingViewPanel>
-  )
-}
-
 /* ───────────────────────── 능력치 — 하위 탭 + 진행률 카드 + 차트 두 장 ───────────────────────── */
 
 function StatsSkeleton() {
   return (
     <StatsWrap>
       <StatsTabs>
-        {[36, 52, 64, 76, 30].map((width, index) => (
+        {[36, 56, 76, 52].map((width, index) => (
           <Bar key={index} style={{ width, height: 12 }} />
         ))}
       </StatsTabs>
@@ -613,35 +586,6 @@ const MatrixTrack = styled.div`
   gap: 6px;
   padding: 10px 24px 10px 0;
   border-bottom: 1px solid ${hairline};
-`
-
-const LegendRowSkeleton = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 16px;
-  border-bottom: 1px solid ${hairline};
-`
-
-const GalaxyPlot = styled.div`
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  height: 720px;
-  padding: 20px 24px 20px 0;
-`
-
-const GalaxyAxis = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0 120px;
-`
-
-/* 산점도 판 — 점 하나하나를 흉내 내면 소음이라 옅은 면 하나로 '여기에 그림이 온다'만 */
-const GalaxyField = styled.div`
-  border-radius: 8px;
-  ${shimmer}
 `
 
 const StatsWrap = styled.div`
