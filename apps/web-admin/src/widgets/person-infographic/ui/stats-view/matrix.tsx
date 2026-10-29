@@ -60,18 +60,32 @@ function quadrantLabels(xAxis: string, yAxis: string): {
   }
 }
 
+const AXIS_PRESETS: ReadonlyArray<{
+  label: string
+  x: PersonStatKey
+  y: PersonStatKey
+}> = [
+  { label: '정치 × 군사', x: 'politics', y: 'military' },
+  { label: '지성 × 행정', x: 'intellect', y: 'administration' },
+  { label: '외교 × 카리스마', x: 'diplomacy', y: 'charisma' },
+  { label: '정치 × 카리스마', x: 'politics', y: 'charisma' },
+]
+
 export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
   const chart = useChartTheme()
   const [xKey, setXKey] = useState<PersonStatKey>('politics')
   const [yKey, setYKey] = useState<PersonStatKey>('military')
+  const [showLabels, setShowLabels] = useState(true)
 
   const data = useMemo(() => {
-    const points: Array<{
+    const raw: Array<{
       x: number
       y: number
       name: string
       id: string
       influence: number
+      color: string
+      eraLbl: string
     }> = []
     for (const p of evaluated) {
       const stats = evalIndex.get(p.id)?.stats
@@ -79,15 +93,31 @@ export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
       const xv = stats[xKey]
       const yv = stats[yKey]
       if (xv == null || yv == null) continue
-      points.push({
+      raw.push({
         x: xv as number,
         y: yv as number,
         name: p.name,
         id: p.id,
         influence: p.influence ?? 50,
+        color: p.era.color,
+        eraLbl: p.era.lbl,
       })
     }
-    return points
+    // 상위 20명(영향력 + 두 축 거리 합산)만 라벨 표시해 겹침 최소화
+    const rankedIds = new Set(
+      [...raw]
+        .sort(
+          (a, b) =>
+            b.influence + Math.hypot(b.x - 50, b.y - 50) -
+            (a.influence + Math.hypot(a.x - 50, a.y - 50)),
+        )
+        .slice(0, 20)
+        .map((d) => d.id),
+    )
+    return raw.map((d) => ({
+      ...d,
+      labeled: raw.length <= 24 || rankedIds.has(d.id),
+    }))
   }, [evaluated, evalIndex, xKey, yKey])
 
   const xMeta = PERSON_STAT_META[xKey]
@@ -123,7 +153,32 @@ export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
             ))}
           </ControlSelect>
         </ControlGroup>
-        <CountHint>{data.length}명 plotting</CountHint>
+        <PresetGroup role="group" aria-label="축 조합 프리셋">
+          {AXIS_PRESETS.map((preset) => {
+            const active = xKey === preset.x && yKey === preset.y
+            return (
+              <PresetChip
+                key={preset.label}
+                type="button"
+                $active={active}
+                onClick={() => {
+                  setXKey(preset.x)
+                  setYKey(preset.y)
+                }}
+              >
+                {preset.label}
+              </PresetChip>
+            )
+          })}
+        </PresetGroup>
+        <PresetChip
+          type="button"
+          $active={showLabels}
+          onClick={() => setShowLabels((v) => !v)}
+        >
+          이름 라벨 {showLabels ? '켜짐' : '꺼짐'}
+        </PresetChip>
+        <CountHint>{data.length}명</CountHint>
       </ControlsRow>
 
       {data.length === 0 ? (
@@ -165,23 +220,55 @@ export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
                   return [value, name]
                 }}
                 labelFormatter={(_, payload: any) =>
-                  payload && payload[0] ? payload[0].payload.name : ''
+                  payload && payload[0]
+                    ? `${payload[0].payload.name} (${payload[0].payload.eraLbl})`
+                    : ''
                 }
               />
               <Scatter
                 data={data}
                 fill="#6366f1"
-                fillOpacity={0.55}
-                stroke="#4f46e5"
-                strokeWidth={1}
-                onClick={(e: any) => e?.id && onPersonClick(e.id)}
+                shape={(props: any) => {
+                  const { cx, cy, payload } = props
+                  if (cx == null || cy == null || !payload) return <g />
+                  const r = Math.max(4.5, Math.min(9, (payload.influence ?? 50) / 11))
+                  return (
+                    <g
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => payload.id && onPersonClick(payload.id)}
+                    >
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={r}
+                        fill={payload.color || '#6366f1'}
+                        fillOpacity={0.75}
+                        stroke={payload.color || '#4f46e5'}
+                        strokeWidth={1.2}
+                      />
+                      {showLabels && payload.labeled && (
+                        <text
+                          x={cx}
+                          y={cy - r - 4}
+                          textAnchor="middle"
+                          fontSize={10.5}
+                          fontWeight={600}
+                          fill={chart.axisLabel}
+                          style={{ pointerEvents: 'none' }}
+                        >
+                          {payload.name}
+                        </text>
+                      )}
+                    </g>
+                  )
+                }}
               />
             </ScatterChart>
           </ResponsiveContainer>
         </ChartShell>
       )}
       <ChartHint>
-        점 크기 = 영향력. 50점선 기준 사분면 라벨 표시. 점 클릭 시 인물 상세로 이동.
+        점 색 = 시대 · 점 크기 = 영향력 · 50점선 기준 사분면 라벨 표시 · 점 클릭 시 인물 상세로 이동.
       </ChartHint>
     </Wrap>
   )
@@ -191,4 +278,31 @@ const Wrap = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
+`
+
+const PresetGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const PresetChip = styled.button<{ $active: boolean }>`
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.active : theme.colors.border.default};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : theme.colors.background.primary};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
+  transition: all 0.12s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `

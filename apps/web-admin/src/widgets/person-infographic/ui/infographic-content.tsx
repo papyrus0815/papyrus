@@ -565,9 +565,13 @@ export function InfographicContent({
         )}
 
 
-        {!isLoading && filtered.length > 0 && statsPanelShown && (
+        {!isLoading && (filtered.length > 0 || baseFiltered.length > 0) && statsPanelShown && (
           <StatsArea>
-            <HeaderStats people={filtered} variant={statsVariant} />
+            <HeaderStats
+              people={filtered}
+              basePeople={baseFiltered}
+              variant={statsVariant}
+            />
           </StatsArea>
         )}
 

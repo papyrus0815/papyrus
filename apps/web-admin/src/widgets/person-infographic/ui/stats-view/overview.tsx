@@ -70,6 +70,7 @@ export function OverviewPane({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [importing, setImporting] = useState(false)
   const [importStatus, setImportStatus] = useState<string | null>(null)
+  const [selectedTrait, setSelectedTrait] = useState<PersonTrait | null>(null)
 
   const exportEvaluations = async () => {
     try {
@@ -178,6 +179,17 @@ export function OverviewPane({
     [people, evalIndex],
   )
 
+  // A0. 종합 평균(6축 평균) leaderboard
+  const overallLeaderboard = useMemo(() => {
+    const rows: Array<{ person: AdaptedPerson; value: number }> = []
+    for (const p of evaluated) {
+      const avg = evalIndex.get(p.id)?.statsAverage
+      if (avg != null) rows.push({ person: p, value: Math.round(avg) })
+    }
+    rows.sort((a, b) => b.value - a.value)
+    return rows.slice(0, 10)
+  }, [evaluated, evalIndex])
+
   // A. 6축 leaderboard
   const leaderboardByAxis = useMemo(() => {
     const result: Record<PersonStatKey, Array<{ person: AdaptedPerson; value: number }>> = {
@@ -259,19 +271,24 @@ export function OverviewPane({
     })
   }, [evaluated, evalIndex])
 
-  // A. 트레이트 빈도 (top 12)
-  const traitFrequency = useMemo(() => {
+  // A. 트레이트 빈도 (top 12) + 각 트레이트 보유 인물 목록
+  const { traitFrequency, peopleByTrait } = useMemo(() => {
     const counts = new Map<PersonTrait, number>()
+    const byTrait = new Map<PersonTrait, AdaptedPerson[]>()
     for (const p of evaluated) {
       const traits = evalIndex.get(p.id)?.traits ?? []
       for (const t of traits) {
         counts.set(t.trait, (counts.get(t.trait) ?? 0) + 1)
+        const list = byTrait.get(t.trait) ?? []
+        list.push(p)
+        byTrait.set(t.trait, list)
       }
     }
-    return Array.from(counts.entries())
+    const freq = Array.from(counts.entries())
       .map(([trait, count]) => ({ trait, count, meta: PERSON_TRAIT_META[trait] }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 12)
+    return { traitFrequency: freq, peopleByTrait: byTrait }
   }, [evaluated, evalIndex])
 
   // D4. 트레이트 페어 — 같은 인물에 자주 함께 부여된 태그 쌍 (top 10)
@@ -330,86 +347,84 @@ export function OverviewPane({
         )}
       </Card>
 
-      {/* B. 평가 패턴 */}
-      <Card>
-        <CardTitle>나의 평가 패턴</CardTitle>
-        <CardHint>축별 평균 점수 (필터 범위 내)</CardHint>
-        <ChartShell $h={220}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={axisAverages} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-              <XAxis dataKey="axis" tick={{ fontSize: 11, fill: axisTickColor }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: axisTickColor }} width={28} />
-              <Tooltip
-                contentStyle={{ borderRadius: 8, fontSize: 12, border: tooltipBorder }}
-                formatter={(v: number) => [`${v}점`, '평균']}
-              />
-              <Bar dataKey="avg" radius={[6, 6, 0, 0]}>
-                {axisAverages.map((d, i) => (
-                  <Cell key={i} fill={PERSON_STAT_META[d.key].color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartShell>
-        <AxisLegend>
-          {axisAverages.map((d) => (
-            <AxisLegendItem key={d.key}>
-              <AxisLegendDot style={{ background: PERSON_STAT_META[d.key].color }} />
-              {d.axis} <strong>{d.avg}</strong>
-            </AxisLegendItem>
-          ))}
-        </AxisLegend>
-      </Card>
-
-      {/* B2. 시대 추이 */}
-      <Card>
-        <CardTitle>시대별 능력치 추이</CardTitle>
-        <CardHint>세기 순 평균 점수 (평가된 인물 기준)</CardHint>
-        {eraTrend.length < 2 ? (
-          <EmptyHint>최소 2개 세기에 평가된 인물이 필요합니다.</EmptyHint>
-        ) : (
-          <ChartShell $h={220}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={eraTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                <XAxis dataKey="century" tick={{ fontSize: 11, fill: axisTickColor }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: axisTickColor }} width={28} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: tooltipBorder }} />
-                {PERSON_STAT_KEYS.map((key) => (
-                  <Line
-                    key={key}
-                    type="monotone"
-                    dataKey={PERSON_STAT_META[key].label}
-                    stroke={PERSON_STAT_META[key].color}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5 }}
+      {evaluatedCount > 0 && (
+        <>
+          {/* B. 평가 패턴 */}
+          <Card>
+            <CardTitle>나의 평가 패턴</CardTitle>
+            <CardHint>축별 평균 점수 (필터 범위 내)</CardHint>
+            <ChartShell $h={220}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={axisAverages} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                  <XAxis dataKey="axis" tick={{ fontSize: 11, fill: axisTickColor }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: axisTickColor }} width={28} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, fontSize: 12, border: tooltipBorder }}
+                    formatter={(v: number) => [`${v}점`, '평균']}
                   />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartShell>
-        )}
-      </Card>
+                  <Bar dataKey="avg" radius={[6, 6, 0, 0]}>
+                    {axisAverages.map((d, i) => (
+                      <Cell key={i} fill={PERSON_STAT_META[d.key].color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartShell>
+            <AxisLegend>
+              {axisAverages.map((d) => (
+                <AxisLegendItem key={d.key}>
+                  <AxisLegendDot style={{ background: PERSON_STAT_META[d.key].color }} />
+                  {d.axis} <strong>{d.avg}</strong>
+                </AxisLegendItem>
+              ))}
+            </AxisLegend>
+          </Card>
 
-      {/* A. Leaderboard */}
-      <Card $span={2}>
-        <CardTitle>축별 톱 10</CardTitle>
-        <LeaderGrid>
-          {PERSON_STAT_KEYS.map((key) => {
-            const meta = PERSON_STAT_META[key]
-            const list = leaderboardByAxis[key]
-            return (
-              <LeaderColumn key={key}>
+          {/* B2. 시대 추이 */}
+          <Card>
+            <CardTitle>시대별 능력치 추이</CardTitle>
+            <CardHint>세기 순 평균 점수 (평가된 인물 기준)</CardHint>
+            {eraTrend.length < 2 ? (
+              <EmptyHint>최소 2개 세기에 평가된 인물이 필요합니다.</EmptyHint>
+            ) : (
+              <ChartShell $h={220}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={eraTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                    <XAxis dataKey="century" tick={{ fontSize: 11, fill: axisTickColor }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: axisTickColor }} width={28} />
+                    <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: tooltipBorder }} />
+                    {PERSON_STAT_KEYS.map((key) => (
+                      <Line
+                        key={key}
+                        type="monotone"
+                        dataKey={PERSON_STAT_META[key].label}
+                        stroke={PERSON_STAT_META[key].color}
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartShell>
+            )}
+          </Card>
+
+          {/* A. Leaderboard */}
+          <Card $span={2}>
+            <CardTitle>종합 & 축별 톱 10</CardTitle>
+            <LeaderGrid>
+              <LeaderColumn $highlight>
                 <LeaderColTitle>
-                  <LeaderColDot style={{ background: meta.color }} />
-                  {meta.label}
+                  <LeaderColDot style={{ background: BRAND.primary }} />
+                  종합 평균
                 </LeaderColTitle>
-                {list.length === 0 ? (
+                {overallLeaderboard.length === 0 ? (
                   <LeaderEmpty>—</LeaderEmpty>
                 ) : (
-                  list.map((row, i) => {
+                  overallLeaderboard.map((row, i) => {
                     const rank = i + 1
                     return (
                       <LeaderRow
@@ -419,7 +434,7 @@ export function OverviewPane({
                       >
                         <LeaderRank $rank={rank}>{rank}</LeaderRank>
                         <LeaderName $rank={rank}>{row.person.name}</LeaderName>
-                        <LeaderValue $rank={rank} style={{ color: meta.color }}>
+                        <LeaderValue $rank={rank} style={{ color: BRAND.primary }}>
                           {row.value}
                         </LeaderValue>
                       </LeaderRow>
@@ -427,60 +442,130 @@ export function OverviewPane({
                   })
                 )}
               </LeaderColumn>
-            )
-          })}
-        </LeaderGrid>
-      </Card>
 
-      {/* A. 트레이트 빈도 */}
-      <Card>
-        <CardTitle>자주 부여한 성격</CardTitle>
-        <CardHint>상위 12개 (필터 범위 내)</CardHint>
-        {traitFrequency.length === 0 ? (
-          <EmptyHint>부여한 태그가 없습니다.</EmptyHint>
-        ) : (
-          <TraitFreqList>
-            {traitFrequency.map(({ trait, count, meta }) => (
-              <TraitFreqRow key={trait}>
-                <TraitFreqLabel $tone={meta.tone}>{meta.label}</TraitFreqLabel>
-                <TraitFreqBar>
-                  <TraitFreqFill
-                    $tone={meta.tone}
-                    style={{
-                      width: `${(count / Math.max(1, traitFrequency[0]!.count)) * 100}%`,
-                    }}
-                  />
-                </TraitFreqBar>
-                <TraitFreqCount>{count}</TraitFreqCount>
-              </TraitFreqRow>
-            ))}
-          </TraitFreqList>
-        )}
-      </Card>
+              {PERSON_STAT_KEYS.map((key) => {
+                const meta = PERSON_STAT_META[key]
+                const list = leaderboardByAxis[key]
+                return (
+                  <LeaderColumn key={key}>
+                    <LeaderColTitle>
+                      <LeaderColDot style={{ background: meta.color }} />
+                      {meta.label}
+                    </LeaderColTitle>
+                    {list.length === 0 ? (
+                      <LeaderEmpty>—</LeaderEmpty>
+                    ) : (
+                      list.map((row, i) => {
+                        const rank = i + 1
+                        return (
+                          <LeaderRow
+                            key={row.person.id}
+                            type="button"
+                            onClick={() => onPersonClick(row.person.id)}
+                          >
+                            <LeaderRank $rank={rank}>{rank}</LeaderRank>
+                            <LeaderName $rank={rank}>{row.person.name}</LeaderName>
+                            <LeaderValue $rank={rank} style={{ color: meta.color }}>
+                              {row.value}
+                            </LeaderValue>
+                          </LeaderRow>
+                        )
+                      })
+                    )}
+                  </LeaderColumn>
+                )
+              })}
+            </LeaderGrid>
+          </Card>
 
-      {/* D4. 트레이트 페어 — 같은 인물에 자주 함께 부여된 태그 쌍 */}
-      <Card>
-        <CardTitle>자주 함께 부여된 태그</CardTitle>
-        <CardHint>같은 인물에 동시에 부여된 태그 쌍 (2회 이상)</CardHint>
-        {traitPairs.length === 0 ? (
-          <EmptyHint>2회 이상 동시 부여된 태그 쌍이 없습니다.</EmptyHint>
-        ) : (
-          <PairList>
-            {traitPairs.map(({ a, b, count }) => {
-              const aMeta = PERSON_TRAIT_META[a]
-              const bMeta = PERSON_TRAIT_META[b]
-              return (
-                <PairRow key={`${a}|${b}`}>
-                  <PairChip $tone={aMeta.tone}>{aMeta.label}</PairChip>
-                  <PairConn>+</PairConn>
-                  <PairChip $tone={bMeta.tone}>{bMeta.label}</PairChip>
-                  <PairCount>{count}회</PairCount>
-                </PairRow>
-              )
-            })}
-          </PairList>
-        )}
-      </Card>
+          {/* A. 트레이트 빈도 */}
+          <Card>
+            <CardTitle>자주 부여한 성격</CardTitle>
+            <CardHint>상위 12개 · 태그를 클릭하면 해당 인물 목록을 봅니다</CardHint>
+            {traitFrequency.length === 0 ? (
+              <EmptyHint>부여한 태그가 없습니다.</EmptyHint>
+            ) : (
+              <>
+                <TraitFreqList>
+                  {traitFrequency.map(({ trait, count, meta }) => {
+                    const active = selectedTrait === trait
+                    return (
+                      <TraitFreqRow
+                        key={trait}
+                        type="button"
+                        $active={active}
+                        onClick={() =>
+                          setSelectedTrait((prev) => (prev === trait ? null : trait))
+                        }
+                      >
+                        <TraitFreqLabel $tone={meta.tone}>{meta.label}</TraitFreqLabel>
+                        <TraitFreqBar>
+                          <TraitFreqFill
+                            $tone={meta.tone}
+                            style={{
+                              width: `${(count / Math.max(1, traitFrequency[0]!.count)) * 100}%`,
+                            }}
+                          />
+                        </TraitFreqBar>
+                        <TraitFreqCount>{count}</TraitFreqCount>
+                      </TraitFreqRow>
+                    )
+                  })}
+                </TraitFreqList>
+                {selectedTrait && (peopleByTrait.get(selectedTrait)?.length ?? 0) > 0 && (
+                  <TraitPeopleBox>
+                    <TraitPeopleHeader>
+                      <span>
+                        <strong>{PERSON_TRAIT_META[selectedTrait].label}</strong> 보유 인물 (
+                        {peopleByTrait.get(selectedTrait)!.length}명)
+                      </span>
+                      <TraitCloseBtn type="button" onClick={() => setSelectedTrait(null)}>
+                        닫기
+                      </TraitCloseBtn>
+                    </TraitPeopleHeader>
+                    <TraitPeopleChips>
+                      {peopleByTrait.get(selectedTrait)!.map((p) => (
+                        <TraitPersonChip
+                          key={p.id}
+                          type="button"
+                          onClick={() => onPersonClick(p.id)}
+                        >
+                          {p.name}
+                          <span>{p.country}</span>
+                        </TraitPersonChip>
+                      ))}
+                    </TraitPeopleChips>
+                  </TraitPeopleBox>
+                )}
+              </>
+            )}
+          </Card>
+
+          {/* D4. 트레이트 페어 — 같은 인물에 자주 함께 부여된 태그 쌍 */}
+          <Card>
+            <CardTitle>자주 함께 부여된 태그</CardTitle>
+            <CardHint>같은 인물에 동시에 부여된 태그 쌍 (2회 이상)</CardHint>
+            {traitPairs.length === 0 ? (
+              <EmptyHint>2회 이상 동시 부여된 태그 쌍이 없습니다.</EmptyHint>
+            ) : (
+              <PairList>
+                {traitPairs.map(({ a, b, count }) => {
+                  const aMeta = PERSON_TRAIT_META[a]
+                  const bMeta = PERSON_TRAIT_META[b]
+                  return (
+                    <PairRow key={`${a}|${b}`}>
+                      <PairChip $tone={aMeta.tone}>{aMeta.label}</PairChip>
+                      <PairConn>+</PairConn>
+                      <PairChip $tone={bMeta.tone}>{bMeta.label}</PairChip>
+                      <PairCount>{count}회</PairCount>
+                    </PairRow>
+                  )
+                })}
+              </PairList>
+            )}
+          </Card>
+        </>
+      )}
 
       {/* D1. 평가 export/import */}
       <Card>
@@ -683,10 +768,21 @@ const LeaderGrid = styled.div`
   gap: 14px;
 `
 
-const LeaderColumn = styled.div`
+const LeaderColumn = styled.div<{ $highlight?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 2px;
+  ${({ $highlight, theme }) =>
+    $highlight &&
+    css`
+      padding: 8px 10px;
+      margin: -8px -4px;
+      border-radius: 8px;
+      background: ${theme.mode === 'dark'
+        ? BRAND.primarySoftDark
+        : BRAND.primarySoft};
+      border: 1px solid ${BRAND.primaryBorder};
+    `}
 `
 
 const LeaderColTitle = styled.h4`
@@ -767,11 +863,87 @@ const TraitFreqList = styled.div`
   gap: 4px;
 `
 
-const TraitFreqRow = styled.div`
+const TraitFreqRow = styled.button<{ $active?: boolean }>`
   display: grid;
   grid-template-columns: 90px 1fr 30px;
   align-items: center;
   gap: 8px;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: ${({ $active, theme }) =>
+      $active ? theme.colors.activeLight : theme.colors.hover};
+  }
+`
+
+const TraitPeopleBox = styled.div`
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid ${hairline};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const TraitPeopleHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TraitCloseBtn = styled.button`
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const TraitPeopleChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const TraitPersonChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid ${hairline};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  > span {
+    font-size: 10.5px;
+    font-weight: 400;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:hover {
+    border-color: ${BRAND.primaryBorder};
+    color: ${BRAND.primary};
+  }
 `
 
 const TraitFreqLabel = styled.span<{ $tone: 'positive' | 'neutral' | 'negative' }>`

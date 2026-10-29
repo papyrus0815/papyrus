@@ -19,12 +19,22 @@ import styled from 'styled-components'
 import {
   PERSON_STAT_KEYS,
   PERSON_STAT_META,
+  PERSON_TRAIT_META,
 } from '@/shared/api/person-stats'
 import type { PersonEvaluationSummary } from '@/shared/lib/person-evaluation-index'
 import { usePersonInfographicFilterStore } from '../../model/filter.store'
 import type { AdaptedPerson } from '../../model/types'
 
-import { ChartShell, EmptyHint, useChartTheme } from './shared'
+import { BRAND, hairline, surface } from '../_shared/catalog.styles'
+import {
+  ChartShell,
+  EmptyHint,
+  traitToneBg,
+  traitToneBgDark,
+  traitToneFg,
+  traitToneFgDark,
+  useChartTheme,
+} from './shared'
 
 const PALETTE = ['#6366f1', '#dc2626', '#0891b2', '#7c3aed', '#f59e0b']
 
@@ -226,27 +236,127 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
           )}
         </EmptyWrap>
       ) : (
-        <ChartShell $h={460}>
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={radarData} outerRadius="80%">
-              <PolarGrid stroke="rgba(148,163,184,0.4)" />
-              <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: chart.axisLabel, fontWeight: 600 }} />
-              <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: `1px solid ${chart.border}` }} />
-              {selectedPersons.map((p, i) => (
-                <Radar
-                  key={p.id}
-                  name={p.name}
-                  dataKey={p.id}
-                  stroke={PALETTE[i % PALETTE.length]}
-                  fill={PALETTE[i % PALETTE.length]}
-                  fillOpacity={0.16}
-                  strokeWidth={2}
-                />
-              ))}
-            </RadarChart>
-          </ResponsiveContainer>
-        </ChartShell>
+        <>
+          <ChartShell $h={420}>
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart data={radarData} outerRadius="80%">
+                <PolarGrid stroke="rgba(148,163,184,0.4)" />
+                <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: chart.axisLabel, fontWeight: 600 }} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
+                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: `1px solid ${chart.border}` }} />
+                {selectedPersons.map((p, i) => (
+                  <Radar
+                    key={p.id}
+                    name={p.name}
+                    dataKey={p.id}
+                    stroke={PALETTE[i % PALETTE.length]}
+                    fill={PALETTE[i % PALETTE.length]}
+                    fillOpacity={0.16}
+                    strokeWidth={2}
+                  />
+                ))}
+              </RadarChart>
+            </ResponsiveContainer>
+          </ChartShell>
+
+          <TableWrap>
+            <CompareTable>
+              <thead>
+                <tr>
+                  <th>항목</th>
+                  {selectedPersons.map((p, i) => (
+                    <th key={p.id}>
+                      <PersonHeadBtn
+                        type="button"
+                        onClick={() => onPersonClick(p.id)}
+                      >
+                        <SelectedDot
+                          style={{ background: PALETTE[i % PALETTE.length] }}
+                        />
+                        {p.name}
+                      </PersonHeadBtn>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <AvgRow>
+                  <td>종합 평균</td>
+                  {(() => {
+                    const values = selectedPersons.map((p) => {
+                      const avg = evalIndex.get(p.id)?.statsAverage
+                      return avg != null ? Math.round(avg) : null
+                    })
+                    const valid = values.filter((v): v is number => v != null)
+                    const max = valid.length >= 2 ? Math.max(...valid) : null
+                    return selectedPersons.map((p, idx) => {
+                      const val = values[idx]
+                      const isBest = val != null && max != null && val === max
+                      return (
+                        <td key={p.id} data-best={isBest || undefined}>
+                          {val ?? '—'}
+                        </td>
+                      )
+                    })
+                  })()}
+                </AvgRow>
+                {PERSON_STAT_KEYS.map((key) => {
+                  const meta = PERSON_STAT_META[key]
+                  const values = selectedPersons.map((p) => {
+                    const v = evalIndex.get(p.id)?.stats?.[key]
+                    return typeof v === 'number' ? v : null
+                  })
+                  const valid = values.filter((v): v is number => v != null)
+                  const max = valid.length >= 2 ? Math.max(...valid) : null
+                  return (
+                    <tr key={key}>
+                      <td>
+                        <AxisCellLabel>
+                          <SelectedDot style={{ background: meta.color }} />
+                          {meta.label}
+                        </AxisCellLabel>
+                      </td>
+                      {selectedPersons.map((p, idx) => {
+                        const val = values[idx]
+                        const isBest = val != null && max != null && val === max
+                        return (
+                          <td key={p.id} data-best={isBest || undefined}>
+                            {val ?? '—'}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+                <tr>
+                  <td>성격 태그</td>
+                  {selectedPersons.map((p) => {
+                    const traits = evalIndex.get(p.id)?.traits ?? []
+                    return (
+                      <td key={p.id}>
+                        {traits.length === 0 ? (
+                          <MutedDash>—</MutedDash>
+                        ) : (
+                          <TraitBadges>
+                            {traits.map((t) => {
+                              const meta = PERSON_TRAIT_META[t.trait]
+                              if (!meta) return null
+                              return (
+                                <TraitBadge key={t.trait} $tone={meta.tone}>
+                                  {meta.label}
+                                </TraitBadge>
+                              )
+                            })}
+                          </TraitBadges>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </CompareTable>
+          </TableWrap>
+        </>
       )}
     </Wrap>
   )
@@ -451,4 +561,93 @@ const QuickPersonChip = styled.button`
     border-color: ${({ theme }) => theme.colors.active};
     background: ${({ theme }) => theme.colors.hover};
   }
+`
+
+const TableWrap = styled.div`
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid ${hairline};
+  background: ${surface};
+`
+
+const CompareTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+
+  th,
+  td {
+    padding: 9px 14px;
+    text-align: left;
+    border-bottom: 1px solid ${hairline};
+  }
+
+  th {
+    font-size: 12px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.02)'};
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  td[data-best='true'] {
+    font-weight: 800;
+    color: ${BRAND.primary};
+  }
+`
+
+const AvgRow = styled.tr`
+  font-weight: 700;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.015)' : 'rgba(15,23,42,0.015)'};
+`
+
+const PersonHeadBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const AxisCellLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const MutedDash = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const TraitBadges = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const TraitBadge = styled.span<{ $tone: 'positive' | 'neutral' | 'negative' }>`
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ $tone, theme }) =>
+    theme.mode === 'dark' ? traitToneFgDark[$tone] : traitToneFg[$tone]};
+  background: ${({ $tone, theme }) =>
+    theme.mode === 'dark' ? traitToneBgDark[$tone] : traitToneBg[$tone]};
 `

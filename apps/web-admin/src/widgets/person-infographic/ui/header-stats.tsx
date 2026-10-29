@@ -30,7 +30,10 @@ import {
   REGION_COLORS,
   REGIONS,
 } from '../model/constants'
-import { usePersonInfographicFilterStore } from '../model/filter.store'
+import {
+  matchesScopes,
+  usePersonInfographicFilterStore,
+} from '../model/filter.store'
 import { pickTickStep } from '../model/tick-step'
 import type { AdaptedPerson } from '../model/types'
 
@@ -109,25 +112,37 @@ export type HeaderStatsVariant = 'full' | 'dynasty' | 'tiles'
 
 const TOP_DYNASTY_DEFAULT = 6
 
-/** 왕조 뷰 가문 그룹 머리로 스크롤 (dynasty-view의 GroupSection id 규약: dynasty-<가문>) */
+/** 왕조 뷰 가문 그룹 머리로 스크롤 (era-story-view의 GroupSection id 규약: dynasty-<가문>) */
 function jumpToDynasty(faction: string) {
-  document
-    .getElementById(`person-group-dynasty-${faction}`)
-    ?.closest('section')
-    ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  const el =
+    document.getElementById(`dynasty-${faction}`) ??
+    document.getElementById(`person-group-dynasty-${faction}`)
+  ;(el?.closest('section') ?? el)?.scrollIntoView({
+    block: 'start',
+    behavior: 'smooth',
+  })
 }
 
 export function HeaderStats({
   people,
+  basePeople,
   variant = 'full',
 }: {
   people: AdaptedPerson[]
+  /** 스코프(시대·지역·분야·국가) 필터 적용 전 후보군 — 막대 클릭 시 다른 막대가 증발하지 않고 $dim 처리되도록 교차 패싯 집계에 사용 */
+  basePeople?: AdaptedPerson[]
   variant?: HeaderStatsVariant
 }) {
   const scopes = usePersonInfographicFilterStore((state) => state.scopes)
   const toggleScope = usePersonInfographicFilterStore((state) => state.toggleScope)
+  const aliveFilter = usePersonInfographicFilterStore((state) => state.aliveFilter)
+  const setAliveFilter = usePersonInfographicFilterStore((state) => state.setAliveFilter)
+  const sort = usePersonInfographicFilterStore((state) => state.sort)
+  const setSort = usePersonInfographicFilterStore((state) => state.setSort)
   const [hoverBin, setHoverBin] = useState<HoverBin | null>(null)
   const [countriesExpanded, setCountriesExpanded] = useState(false)
+
+  const facetSource = basePeople ?? people
 
   // 가문 축 집계 — 왕조 뷰에서만 쓴다(소속 없음은 순위에서 빼고 따로 센다)
   const dynastyStats = useMemo(() => {
@@ -170,7 +185,16 @@ export function HeaderStats({
     }
   }, [people, variant])
 
-  const domain = useMemo(() => buildDomain(people), [people])
+  // 시대 분포 축은 자기(era) 스코프를 제외한 후보군 기준으로 고정 — 시대 칩을 눌러도 X축이 요동치지 않는다.
+  const eraFacetPeople = useMemo(() => {
+    const sc = { ...scopes, era: [] as string[] }
+    return facetSource.filter((p) => matchesScopes(p, sc, (x) => x.era.key))
+  }, [facetSource, scopes])
+
+  const domain = useMemo(
+    () => buildDomain(eraFacetPeople.length > 0 ? eraFacetPeople : facetSource),
+    [eraFacetPeople, facetSource],
+  )
   const { pct } = domain
 
   const stats = useMemo(() => {
@@ -179,33 +203,74 @@ export function HeaderStats({
     const regionCount: Record<string, number> = {}
     const fieldCount: Record<string, number> = {}
     const countryCount: Record<string, number> = {}
+    const filteredCountries = new Set<string>()
+    const filteredEras = new Set<string>()
+    let unknownEraCount = 0
     let ageSum = 0
     let ageN = 0
     let alive = 0
     let rulers = 0
+    let influenceSum = 0
+    let oldestPerson: { name: string; age: number } | null = null
+
+    // 1. 요약 타일 4칸: 현재 필터된 결과(people) 기준 집계
     for (const person of people) {
       if (person.activityYear != null) {
-        const binIndex = Math.min(
-          domain.binCount - 1,
-          Math.max(
-            0,
-            Math.floor((person.activityYear - domain.minYear) / domain.binWidth),
-          ),
-        )
-        bins[binIndex]++
-        eraCount[person.era.key] = (eraCount[person.era.key] || 0) + 1
+        filteredEras.add(person.era.key)
       }
-      regionCount[person.region] = (regionCount[person.region] || 0) + 1
-      fieldCount[person.field] = (fieldCount[person.field] || 0) + 1
-      if (person.country && person.country !== '미상')
-        countryCount[person.country] = (countryCount[person.country] || 0) + 1
+      if (person.country && person.country !== '미상') {
+        filteredCountries.add(person.country)
+      }
       if (person.age != null && !person.isAlive) {
         ageSum += person.age
         ageN++
+        if (!oldestPerson || person.age > oldestPerson.age) {
+          oldestPerson = { name: person.name, age: person.age }
+        }
       }
       if (person.isAlive) alive++
       if (person.isMonarch || person.isHeadOfState) rulers++
+      influenceSum += person.influence ?? 0
     }
+
+    // 2. 분포 막대(시대·지역·분야·국가): 자기 카테고리 스코프를 제외한 교차 패싯 집계
+    //    → 막대 클릭 시 다른 막대가 0명이 되어 증발하지 않고 $dim 스타일로 남아 비교·다중선택 가능
+    const scWithoutEra = { ...scopes, era: [] as string[] }
+    const scWithoutRegion = { ...scopes, region: [] as string[] }
+    const scWithoutField = { ...scopes, field: [] as string[] }
+    const scWithoutCountry = { ...scopes, country: [] as string[] }
+
+    for (const person of facetSource) {
+      if (matchesScopes(person, scWithoutEra, (x) => x.era.key)) {
+        if (person.activityYear != null) {
+          const binIndex = Math.min(
+            domain.binCount - 1,
+            Math.max(
+              0,
+              Math.floor((person.activityYear - domain.minYear) / domain.binWidth),
+            ),
+          )
+          bins[binIndex]++
+          eraCount[person.era.key] = (eraCount[person.era.key] || 0) + 1
+        } else {
+          unknownEraCount++
+        }
+      }
+      if (matchesScopes(person, scWithoutRegion, (x) => x.era.key)) {
+        regionCount[person.region] = (regionCount[person.region] || 0) + 1
+      }
+      if (matchesScopes(person, scWithoutField, (x) => x.era.key)) {
+        fieldCount[person.field] = (fieldCount[person.field] || 0) + 1
+      }
+      if (
+        person.country &&
+        person.country !== '미상' &&
+        matchesScopes(person, scWithoutCountry, (x) => x.era.key)
+      ) {
+        countryCount[person.country] = (countryCount[person.country] || 0) + 1
+      }
+    }
+
     const maxBin = Math.max(1, ...bins)
     const regions = REGIONS.filter((region) => regionCount[region])
       .map((region) => [region, regionCount[region]] as const)
@@ -216,20 +281,30 @@ export function HeaderStats({
     const countries = Object.entries(countryCount).sort(
       (left, right) => right[1] - left[1],
     )
+    const regionTotal = regions.reduce((s, [, c]) => s + c, 0)
+    const fieldTotal = fields.reduce((s, [, c]) => s + c, 0)
+    const countryTotal = countries.reduce((s, [, c]) => s + c, 0)
     return {
       bins,
       maxBin,
       eraCount,
+      unknownEraCount,
       regions,
       fields,
       countries,
+      regionTotal,
+      fieldTotal,
+      countryTotal,
       avgAge: ageN ? Math.round(ageSum / ageN) : null,
       ageKnown: ageN,
-      eraPresent: Object.keys(eraCount).length,
+      oldestPerson,
+      eraPresent: filteredEras.size,
+      filteredCountryCount: filteredCountries.size,
       alive,
       rulers,
+      avgInfluence: people.length ? Math.round(influenceSum / people.length) : 0,
     }
-  }, [people, domain])
+  }, [people, facetSource, scopes, domain])
 
   const total = people.length
   const countryList = stats.countries.slice(
@@ -273,19 +348,52 @@ export function HeaderStats({
             <TileUnit>명</TileUnit>
           </TileValue>
           <TileNote>
-            {stats.eraPresent}개 시대 · {stats.countries.length.toLocaleString()}개국
+            {stats.eraPresent}개 시대 · {stats.filteredCountryCount.toLocaleString()}개국
           </TileNote>
         </Tile>
-        <Tile>
-          <TileLabel>평균 수명</TileLabel>
+        <Tile
+          as="button"
+          type="button"
+          $interactive
+          $active={sort === 'age'}
+          onClick={() => setSort(sort === 'age' ? 'influence' : 'age')}
+          title={
+            sort === 'age'
+              ? '현재 수명순 정렬 중 (클릭하여 영향력순으로 되돌리기)'
+              : '클릭하여 수명순으로 인물 정렬'
+          }
+        >
+          <TileLabel>
+            평균 수명 {sort === 'age' && <TileBadge>수명순 정렬 중</TileBadge>}
+          </TileLabel>
           <TileValue>
             {stats.avgAge ?? '—'}
             {stats.avgAge != null && <TileUnit>년</TileUnit>}
           </TileValue>
-          <TileNote>생몰 확인 {stats.ageKnown.toLocaleString()}명 기준</TileNote>
+          <TileNote>
+            {stats.oldestPerson
+              ? `최장수 ${stats.oldestPerson.name}(${stats.oldestPerson.age}세) · ${stats.ageKnown.toLocaleString()}명 기준`
+              : `생몰 확인 ${stats.ageKnown.toLocaleString()}명 기준`}
+          </TileNote>
         </Tile>
-        <Tile>
-          <TileLabel>생존</TileLabel>
+        <Tile
+          as="button"
+          type="button"
+          $interactive
+          $active={aliveFilter === 'alive'}
+          aria-pressed={aliveFilter === 'alive'}
+          onClick={() =>
+            setAliveFilter(aliveFilter === 'alive' ? 'all' : 'alive')
+          }
+          title={
+            aliveFilter === 'alive'
+              ? '생존 인물 필터 해제'
+              : '생존 인물만 필터링'
+          }
+        >
+          <TileLabel>
+            생존 {aliveFilter === 'alive' && <TileBadge>필터 적용 중</TileBadge>}
+          </TileLabel>
           <TileValue>
             {stats.alive.toLocaleString()}
             <TileUnit>명</TileUnit>
@@ -293,7 +401,7 @@ export function HeaderStats({
           <TileMeter aria-hidden>
             <TileMeterFill style={{ width: `${share(stats.alive)}%` }} />
           </TileMeter>
-          <TileNote>전체의 {share(stats.alive)}%</TileNote>
+          <TileNote>전체의 {share(stats.alive)}% · 클릭하여 필터</TileNote>
         </Tile>
         <Tile>
           <TileLabel>군주·국가원수</TileLabel>
@@ -304,7 +412,9 @@ export function HeaderStats({
           <TileMeter aria-hidden>
             <TileMeterFill style={{ width: `${share(stats.rulers)}%` }} />
           </TileMeter>
-          <TileNote>전체의 {share(stats.rulers)}%</TileNote>
+          <TileNote>
+            전체의 {share(stats.rulers)}% · 평균 영향력 {stats.avgInfluence}점
+          </TileNote>
         </Tile>
       </Tiles>
 
@@ -475,6 +585,11 @@ export function HeaderStats({
                 </EraChip>
               )
             })}
+            {stats.unknownEraCount > 0 && (
+              <UnknownEraChip title="생몰·활동연도가 모두 미상이어서 시대 분포 차트에서 제외된 인물 수">
+                연도 미상 {stats.unknownEraCount.toLocaleString()}명
+              </UnknownEraChip>
+            )}
           </EraChips>
         </Chart>
       </Section>
@@ -494,7 +609,7 @@ export function HeaderStats({
               active: scopes.region.includes(region),
               onToggle: () => toggleScope('region', region),
             }))}
-            total={total}
+            total={stats.regionTotal || total}
             anyActive={scopes.region.length > 0}
           />
           <BarSection
@@ -507,13 +622,14 @@ export function HeaderStats({
               active: scopes.field.includes(field),
               onToggle: () => toggleScope('field', field),
             }))}
-            total={total}
+            total={stats.fieldTotal || total}
             anyActive={scopes.field.length > 0}
           />
         </ListColumn>
         <BarSection
           title="상위 국가"
           ranked
+          metaText={`${stats.countries.length}개국`}
           rows={countryList.map(([country, count]) => ({
             key: country,
             label: country,
@@ -521,7 +637,7 @@ export function HeaderStats({
             active: scopes.country.includes(country),
             onToggle: () => toggleScope('country', country),
           }))}
-          total={total}
+          total={stats.countryTotal || total}
           anyActive={scopes.country.length > 0}
           footer={
             hiddenCountries > 0 && (
@@ -700,12 +816,36 @@ const Tiles = styled.div`
   }
 `
 
-const Tile = styled.div`
+const Tile = styled.div<{ $interactive?: boolean; $active?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 16px 20px;
   min-width: 0;
+  border: none;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? BRAND.primarySoftDark
+        : BRAND.primarySoft
+      : 'transparent'};
+  text-align: left;
+
+  ${({ $interactive, theme }) =>
+    $interactive &&
+    css`
+      cursor: pointer;
+      transition: background ${MOTION_FAST};
+      &:hover {
+        background: ${theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.04)'
+          : 'rgba(15,23,42,0.025)'};
+      }
+      &:focus-visible {
+        outline: none;
+        box-shadow: inset ${BRAND.focusRing};
+      }
+    `}
 
   & + & {
     border-left: 1px solid ${hairline};
@@ -721,9 +861,34 @@ const Tile = styled.div`
 `
 
 const TileLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   color: ${metaText};
+`
+
+const TileBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: ${BRAND.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
+`
+
+const UnknownEraChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px dashed ${hairline};
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const TileValue = styled.span`
