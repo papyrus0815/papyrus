@@ -92,7 +92,8 @@ const endYearOf = (company: Company) => parseIsoDateParts(company.dissolvedAt)?.
 /** 눈금 간격 후보 — 축이 4~6칸이 되는 가장 촘촘한 값을 고른다 */
 const TICK_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000]
 
-type Axis = { from: number; to: number; ticks: number[] }
+/** ticks=라벨 달린 큰 눈금 · minorTicks=그 사이 옅은 보조 눈금(라벨 없음) */
+type Axis = { from: number; to: number; ticks: number[]; minorTicks: number[] }
 
 /**
  * 공통 연도 축 — 가장 오래된 설립 연도(조금 앞)부터 올해까지.
@@ -109,7 +110,14 @@ const buildAxis = (companies: Company[], currentYear: number): Axis | null => {
   const ticks: number[] = []
   // '현재' 라벨과 겹치지 않게 마지막 눈금은 올해에서 반 칸 이상 떨어진 것까지만
   for (let tick = from; tick <= currentYear - step * 0.5; tick += step) ticks.push(tick)
-  return { from, to: currentYear, ticks }
+  // 큰 눈금 2~3개만으론 자(尺)로 안 읽혔다 — 사이를 2칸(25 같은 홀수 간격은 5칸)으로 쪼갠 보조선
+  const minorStep = step % 2 === 0 ? step / 2 : step / 5
+  const minorTicks: number[] = []
+  if (Number.isInteger(minorStep) && minorStep > 0) {
+    for (let tick = from + minorStep; tick < currentYear; tick += minorStep)
+      if ((tick - from) % step !== 0) minorTicks.push(tick)
+  }
+  return { from, to: currentYear, ticks, minorTicks }
 }
 
 const axisPercent = (axis: Axis, year: number) =>
@@ -704,6 +712,9 @@ export const CompaniesListPage: React.FC = () => {
           <TrackCell role="cell" aria-hidden>
             {axis && (
               <>
+                {axis.minorTicks.map((tick) => (
+                  <GridLine key={`m${tick}`} $minor style={{ left: `${axisPercent(axis, tick)}%` }} />
+                ))}
                 {/* 0% 선은 칸 경계와 겹쳐 열 구분선처럼 보인다 — 그리지 않는다 */}
                 {axis.ticks
                   .filter((tick) => axisPercent(axis, tick) > 0.5)
@@ -943,15 +954,30 @@ export const CompaniesListPage: React.FC = () => {
                   <AxisHead key="axis" role="columnheader" aria-label="존속 타임라인">
                     {axis && (
                       <>
-                        {axis.ticks.map((tick) => (
-                          <AxisLabel
-                            key={tick}
+                        {/* 머리글 아래 변에 눈금 — 아래 행들의 격자선이 여기서 시작하는 것처럼 */}
+                        {axis.minorTicks.map((tick) => (
+                          <AxisTick
+                            key={`m${tick}`}
                             aria-hidden
+                            $minor
                             style={{ left: `${axisPercent(axis, tick)}%` }}
-                          >
-                            {axisYearLabel(tick)}
-                          </AxisLabel>
+                          />
                         ))}
+                        {axis.ticks.map((tick, index) => (
+                          <React.Fragment key={tick}>
+                            {axisPercent(axis, tick) > 0.5 && (
+                              <AxisTick aria-hidden style={{ left: `${axisPercent(axis, tick)}%` }} />
+                            )}
+                            <AxisLabel
+                              aria-hidden
+                              $edge={index === 0}
+                              style={{ left: `${axisPercent(axis, tick)}%` }}
+                            >
+                              {axisYearLabel(tick)}
+                            </AxisLabel>
+                          </React.Fragment>
+                        ))}
+                        <AxisTick aria-hidden $now style={{ right: 0 }} />
                         <AxisNow aria-hidden>현재</AxisNow>
                       </>
                     )}
@@ -1557,15 +1583,21 @@ const axisLabelBase = css`
   line-height: 1;
 `
 
-const AxisLabel = styled.span`
+const AxisLabel = styled.span<{ $edge?: boolean }>`
   ${axisLabelBase}
-  transform: translateX(-50%);
-  color: ${metaText};
-
   /* 왼끝 눈금은 칸 밖으로 반쯤 나가지 않게 시작선 정렬 */
-  &:first-child {
-    transform: none;
-  }
+  transform: ${({ $edge }) => ($edge ? 'none' : 'translateX(-50%)')};
+  color: ${metaText};
+`
+
+/* 머리글 아래 변의 눈금 — 큰 눈금 5px, 보조 3px, '현재'는 브랜드색 */
+const AxisTick = styled.span<{ $minor?: boolean; $now?: boolean }>`
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: ${({ $minor }) => ($minor ? '3px' : '5px')};
+  background: ${({ $now, theme }) =>
+    $now ? BRAND : theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.28)' : 'rgba(15, 23, 42, 0.22)'};
 `
 
 const AxisNow = styled.span`
@@ -1837,12 +1869,14 @@ const TrackCell = styled.div`
   ${hideNarrow}
 `
 
-const GridLine = styled.span`
+const GridLine = styled.span<{ $minor?: boolean }>`
   position: absolute;
   top: 0;
   bottom: 0;
   width: 1px;
   background: ${gridLineColor};
+  /* 보조선은 큰 눈금선의 절반 농도 — 자의 잔눈금처럼 */
+  opacity: ${({ $minor }) => ($minor ? 0.5 : 1)};
 `
 
 const NowLine = styled.span`
@@ -1862,10 +1896,11 @@ const NowLine = styled.span`
 const Bar = styled.span<{ $tone: string; $kind: 'ongoing' | 'ended' | 'unknown' }>`
   position: absolute;
   top: 50%;
-  height: 6px;
+  /* 6px는 넓은 화면(축 칸 600px+)·56px 행에서 실오라기처럼 보였다 */
+  height: 8px;
   min-width: 2px;
-  margin-top: -3px;
-  border-radius: 3px;
+  margin-top: -4px;
+  border-radius: 4px;
   background: ${({ $tone, $kind }) =>
     $kind === 'unknown'
       ? `repeating-linear-gradient(90deg, ${$tone} 0 3px, transparent 3px 6px)`
@@ -1877,14 +1912,14 @@ const Bar = styled.span<{ $tone: string; $kind: 'ongoing' | 'ended' | 'unknown' 
   &::before {
     content: '';
     position: absolute;
-    left: -4px;
+    left: -5px;
     top: 50%;
-    width: 8px;
-    height: 8px;
-    margin-top: -4px;
+    width: 10px;
+    height: 10px;
+    margin-top: -5px;
     border-radius: 50%;
     background: ${surface};
-    box-shadow: inset 0 0 0 2px ${({ $tone }) => $tone};
+    box-shadow: inset 0 0 0 2.5px ${({ $tone }) => $tone};
   }
 
   ${({ $kind, $tone }) =>
@@ -1896,7 +1931,7 @@ const Bar = styled.span<{ $tone: string; $kind: 'ongoing' | 'ended' | 'unknown' 
         right: 0;
         top: -3px;
         width: 2px;
-        height: 12px;
+        height: 14px;
         border-radius: 1px;
         background: ${$tone};
       }
@@ -1910,7 +1945,7 @@ const Bar = styled.span<{ $tone: string; $kind: 'ongoing' | 'ended' | 'unknown' 
 /* 막대 끝 연도 — 설립 점 위·끝 눈금 위. 평소엔 숨기고 행 hover·포커스 때 띄운다 */
 const BarLabel = styled.span<{ $tone: string; $end?: boolean }>`
   position: absolute;
-  bottom: 9px;
+  bottom: 11px;
   ${({ $end }) =>
     $end
       ? css`
