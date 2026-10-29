@@ -18,7 +18,7 @@ import {
 } from 'recharts'
 import { useNavigate } from 'react-router-dom'
 import { FiEdit2, FiGitMerge, FiPlus, FiTarget } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 import { sectionActionButtonCss, sectionHeadingCss } from '@/widgets/person/person-detail-panel/person-detail-panel.styles'
 
 import {
@@ -39,9 +39,15 @@ import { PersonStatsEditModal } from './person-stats-edit-modal'
 type Props = {
   personId: string
   personName?: string
+  /** 읽기 전용(모달·분할 패널 임베드) — 편집/비교 액션 숨김 및 미평가 시 생략 */
+  readOnly?: boolean
 }
 
-export function PersonStatsSection({ personId, personName }: Props) {
+export function PersonStatsSection({
+  personId,
+  personName,
+  readOnly = false,
+}: Props) {
   const navigate = useNavigate()
   const setStatsView = usePersonInfographicFilterStore((s) => s.setView)
   // 리스트에서 미리 캐시된 bulk 인덱스가 있으면 첫 진입이 즉시 표시됨 (캐시 히트)
@@ -74,6 +80,10 @@ export function PersonStatsSection({ personId, personName }: Props) {
 
   const isLoading = statsLoading || traitsLoading
 
+  if (readOnly && !isLoading && !hasEvaluation) {
+    return null
+  }
+
   return (
     <Root aria-label="능력치 · 성격">
       <HeaderRow>
@@ -82,33 +92,35 @@ export function PersonStatsSection({ personId, personName }: Props) {
           <span>능력치 · 성격</span>
           <ScopeBadge>내 평가</ScopeBadge>
         </SectionHeading>
-        <HeaderActions>
-          {hasEvaluation && (
-            <CompareBtn
-              type="button"
-              onClick={() => {
-                // C1: stats view의 비교 sub-tab으로 점프 + 자동 추가
-                sessionStorage.setItem('person-stats:pending-compare', personId)
-                setStatsView('stats')
-                navigate(pathKeys.personsTimeline())
-              }}
-              title="능력치 인포그래픽의 비교 view로 이동해 다른 인물과 비교"
-            >
-              <FiGitMerge size={12} /> 비교
-            </CompareBtn>
-          )}
-          {/* 평가가 없을 땐 아래 빈 상태 줄의 '평가 시작'이 유일한 진입점 — 머리에도 같은 버튼을
-              두면 한 화면에 같은 CTA가 두 개 선다(실측: 머리 오른쪽 + 빈 상태 오른쪽). */}
-          {hasEvaluation && (
-            <PrimaryHeaderBtn
-              type="button"
-              onClick={() => setModalOpen(true)}
-              disabled={isLoading}
-            >
-              <FiEdit2 size={13} /> 수정
-            </PrimaryHeaderBtn>
-          )}
-        </HeaderActions>
+        {!readOnly && (
+          <HeaderActions>
+            {hasEvaluation && (
+              <CompareBtn
+                type="button"
+                onClick={() => {
+                  // C1: stats view의 비교 sub-tab으로 점프 + 자동 추가
+                  sessionStorage.setItem('person-stats:pending-compare', personId)
+                  setStatsView('stats')
+                  navigate(pathKeys.personsTimeline())
+                }}
+                title="능력치 인포그래픽의 비교 view로 이동해 다른 인물과 비교"
+              >
+                <FiGitMerge size={12} /> 비교
+              </CompareBtn>
+            )}
+            {/* 평가가 없을 땐 아래 빈 상태 줄의 '평가 시작'이 유일한 진입점 — 머리에도 같은 버튼을
+                두면 한 화면에 같은 CTA가 두 개 선다(실측: 머리 오른쪽 + 빈 상태 오른쪽). */}
+            {hasEvaluation && (
+              <PrimaryHeaderBtn
+                type="button"
+                onClick={() => setModalOpen(true)}
+                disabled={isLoading}
+              >
+                <FiEdit2 size={13} /> 수정
+              </PrimaryHeaderBtn>
+            )}
+          </HeaderActions>
+        )}
       </HeaderRow>
 
       {hasEvaluation ? (
@@ -169,21 +181,25 @@ export function PersonStatsSection({ personId, personName }: Props) {
           <EmptyText>
             아직 이 인물에 대한 내 평가가 없습니다.
           </EmptyText>
-          <EmptyCtaBtn type="button" onClick={() => setModalOpen(true)} disabled={isLoading}>
-            <FiPlus size={13} /> 평가 시작
-          </EmptyCtaBtn>
+          {!readOnly && (
+            <EmptyCtaBtn type="button" onClick={() => setModalOpen(true)} disabled={isLoading}>
+              <FiPlus size={13} /> 평가 시작
+            </EmptyCtaBtn>
+          )}
         </EmptyCompact>
       )}
 
-      <PersonStatsEditModal
-        open={modalOpen}
-        personId={personId}
-        personName={personName}
-        initialStats={stats}
-        initialTraits={traits}
-        canDelete={!!stats || traits.length > 0}
-        onClose={() => setModalOpen(false)}
-      />
+      {!readOnly && (
+        <PersonStatsEditModal
+          open={modalOpen}
+          personId={personId}
+          personName={personName}
+          initialStats={stats}
+          initialTraits={traits}
+          canDelete={!!stats || traits.length > 0}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
     </Root>
   )
 }
@@ -194,6 +210,10 @@ function RadarChartView({
 }: {
   stats: PersonStatsBody | PersonStats | null | undefined
 }) {
+  const theme = useTheme()
+  const isDark = theme?.mode === 'dark'
+  const gridStroke = isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1'
+  const axisTickColor = isDark ? '#cbd5e1' : '#64748b'
   const data = PERSON_STAT_KEYS.map((key) => ({
     axis: PERSON_STAT_META[key].label,
     value: (stats as Record<string, unknown> | null | undefined)?.[key] as
@@ -206,10 +226,10 @@ function RadarChartView({
     <ChartShell>
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data}>
-          <PolarGrid stroke="#cbd5e1" />
+          <PolarGrid stroke={gridStroke} />
           <PolarAngleAxis
             dataKey="axis"
-            tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }}
+            tick={{ fill: axisTickColor, fontSize: 12, fontWeight: 600 }}
           />
           <PolarRadiusAxis
             angle={90}

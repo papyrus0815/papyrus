@@ -17,12 +17,24 @@ import styled, { css } from 'styled-components'
 const COLLAPSED_HEIGHT = 420
 const COLLAPSE_SLACK = 160
 
-export function BioClamp({ children }: { children: ReactNode }) {
+export function BioClamp({
+  children,
+  resetKey,
+}: {
+  children: ReactNode
+  /** 인물 전환 시 펼침 상태(expanded)를 리셋할 식별 키 */
+  resetKey?: string
+}) {
   /* 잴 대상은 접히는 상자(Inner)가 아니라 그 안의 내용 — 접힌 상자는 크기가 고정이라
      안에서 글이 늘어도 ResizeObserver가 울리지 않는다 */
+  const wrapRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [contentHeight, setContentHeight] = useState(0)
   const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    setExpanded(false)
+  }, [resetKey])
 
   useEffect(() => {
     const content = contentRef.current
@@ -35,8 +47,24 @@ export function BioClamp({ children }: { children: ReactNode }) {
   const clampable = contentHeight > COLLAPSED_HEIGHT + COLLAPSE_SLACK
   const clamped = clampable && !expanded
 
+  const handleToggle = () => {
+    setExpanded((wasOpen) => {
+      const next = !wasOpen
+      if (!next && wrapRef.current) {
+        // 긴 전기를 끝까지 읽고 접을 때 상단이 뷰포트 위로 멀리 벗어나 있으면 전기 시작점으로 복귀
+        const rect = wrapRef.current.getBoundingClientRect()
+        if (rect.top < 80) {
+          window.requestAnimationFrame(() => {
+            wrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          })
+        }
+      }
+      return next
+    })
+  }
+
   return (
-    <Wrap>
+    <Wrap ref={wrapRef}>
       <Inner
         $clamped={clamped}
         // 접힌 부분 안으로 키보드·편집 포커스가 들어오면 펼친다
@@ -50,7 +78,7 @@ export function BioClamp({ children }: { children: ReactNode }) {
         <Toggle
           type="button"
           aria-expanded={expanded}
-          onClick={() => setExpanded((open) => !open)}
+          onClick={handleToggle}
         >
           <FiChevronDown
             size={14}
@@ -67,6 +95,7 @@ export function BioClamp({ children }: { children: ReactNode }) {
 const Wrap = styled.div`
   display: flex;
   flex-direction: column;
+  scroll-margin-top: var(--person-sticky-offset, 24px);
 `
 
 const Inner = styled.div<{ $clamped: boolean }>`

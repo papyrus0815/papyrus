@@ -91,7 +91,10 @@ import { BioClamp } from './bio-clamp'
 import { BirthDeathCards } from './birth-death-cards'
 import { CollapsibleSection } from './collapsible-section'
 import { PersonBiographySections } from './person-biography-sections'
-import { SpouseDetailSection } from './spouse-detail-section'
+import {
+  SpouseDetailSection,
+  hasVisibleSpouseDetails,
+} from './spouse-detail-section'
 import { getRecordFamily } from '@/entities/government-position/model/record-family'
 import { TenureReignList } from './tenure-reign-list'
 import { computeLifeTimeline } from './life-timeline.lib'
@@ -890,10 +893,15 @@ export function PersonDetailPanel({
   /** 타임라인 막대 → 개요 탭의 그 카드로. 다른 탭이면 개요로 바꾼 뒤 렌더를 기다려 스크롤한다. */
   const jumpToRecord = useCallback(
     (key: string) => {
-      const scroll = () =>
-        document
-          .getElementById(`person-record-${key}`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const scroll = () => {
+        const el = document.getElementById(`person-record-${key}`)
+        if (!el) return
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        el.setAttribute('data-highlighted', 'true')
+        window.setTimeout(() => {
+          el.removeAttribute('data-highlighted')
+        }, 1600)
+      }
       if (activeTab !== 'overview') {
         handleTabChange('overview')
         window.setTimeout(scroll, 60)
@@ -1511,7 +1519,7 @@ export function PersonDetailPanel({
     }`
   })()
 
-  /** 탭 건수 — 누르기 전에 비었는지 알게(가계도: 직계·형제, 정치: 당적·후보·당직) */
+  /** 탭 건수 — 누르기 전에 비었는지 알게(가계도: 직계·형제, 정치: 당적·후보·당직, 연보: 재위·재임·경력·사건·생애사건) */
   const genealogyCount =
     (p.father ? 1 : 0) +
     (p.mother ? 1 : 0) +
@@ -1522,6 +1530,26 @@ export function PersonDetailPanel({
     ((person as { partyMemberships?: unknown[] }).partyMemberships?.length ?? 0) +
     ((person as { electionCandidacies?: unknown[] }).electionCandidacies?.length ?? 0) +
     (p.partyLeaderships?.length ?? 0)
+  const annalsCount =
+    timelineReigns.length +
+    timelineTenures.length +
+    timelineCareers.length +
+    timelineEvents.length +
+    lifeEvents.length
+  const hasRelationsCluster =
+    !embedInModal ||
+    hasVisibleSpouseDetails(p.spouseRelations) ||
+    ((person as { humanRelationships?: PersonHumanRelationshipItem[] })
+      .humanRelationships?.length ?? 0) > 0
+  const hasContextCluster =
+    !embedInModal ||
+    (p.countryAffiliations?.length ?? 0) > 0 ||
+    (p.foundedDynasties?.length ?? 0) > 0
+  const visibleOverviewClusters = OVERVIEW_CLUSTERS.filter((cluster) => {
+    if (cluster.id === 'overview-cluster-relations') return hasRelationsCluster
+    if (cluster.id === 'overview-cluster-context') return hasContextCluster
+    return true
+  })
 
   const backLabel = closeLabel
 
@@ -1770,8 +1798,23 @@ export function PersonDetailPanel({
                 <RegisteredByline>등록 {registeredAtLabel}</RegisteredByline>
               )}
               {(() => {
-                // 가족 구성 요약 뱃지 (부/모/배우자/자녀 수)
-                const badges: Array<{ key: string; label: string; personId?: string; title?: string }> = []
+                // 가족 구성 요약 뱃지 (부/모/배우자/자녀/형제 수)
+                const jumpToGenealogy = () => {
+                  playClickSound()
+                  handleTabChange('genealogy')
+                  window.requestAnimationFrame(() => {
+                    document
+                      .getElementById('person-detail-tab-genealogy')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                  })
+                }
+                const badges: Array<{
+                  key: string
+                  label: string
+                  personId?: string
+                  onClick?: () => void
+                  title?: string
+                }> = []
                 if (p.father)
                   badges.push({
                     key: 'father',
@@ -1789,6 +1832,8 @@ export function PersonDetailPanel({
                   badges.push({
                     key: 'spouses',
                     label: `배우자 ${spouseCount}`,
+                    onClick: jumpToGenealogy,
+                    title: '가계도 탭에서 배우자 보기',
                   })
                 const childrenCount =
                   (person.children ?? []).length ?? 0
@@ -1796,6 +1841,8 @@ export function PersonDetailPanel({
                   badges.push({
                     key: 'children',
                     label: `자녀 ${childrenCount}`,
+                    onClick: jumpToGenealogy,
+                    title: '가계도 탭에서 자녀 보기',
                   })
                 const siblingCount = (p.siblings ?? []).length
                 if (siblingCount > 0) {
@@ -1821,21 +1868,29 @@ export function PersonDetailPanel({
                   badges.push({
                     key: 'siblings',
                     label: `형제 ${siblingCount}`,
-                    title: hasFkData && parts.length > 0 ? parts.join(' · ') : undefined,
+                    onClick: jumpToGenealogy,
+                    title: hasFkData && parts.length > 0 ? parts.join(' · ') : '가계도 탭에서 형제 보기',
                   })
                 }
                 if (badges.length === 0) return null
                 return (
                   <FamilyBadgeRow>
-                    {badges.map((badgeItem) =>
-                      badgeItem.personId ? (
+                    {badges.map((badgeItem) => {
+                      const handleClick = badgeItem.personId
+                        ? () => handlePersonClick(badgeItem.personId!)
+                        : badgeItem.onClick
+                      return handleClick ? (
                         <FamilyBadge
                           key={badgeItem.key}
                           as="button"
                           type="button"
-                          style={{ cursor: 'pointer' }}
                           title={badgeItem.title}
-                          onClick={() => handlePersonClick(badgeItem.personId!)}
+                          aria-label={
+                            badgeItem.title
+                              ? `${badgeItem.label} — ${badgeItem.title}`
+                              : undefined
+                          }
+                          onClick={handleClick}
                         >
                           {badgeItem.label}
                         </FamilyBadge>
@@ -1848,8 +1903,8 @@ export function PersonDetailPanel({
                         >
                           {badgeItem.label}
                         </FamilyBadge>
-                      ),
-                    )}
+                      )
+                    })}
                   </FamilyBadgeRow>
                 )
               })()}
@@ -2043,13 +2098,16 @@ export function PersonDetailPanel({
           >
             <FiCalendar size={14} />
             연보
+            {(annalsCount > 0 || activeTab === 'events') && (
+              <TabCount aria-label={`${annalsCount}건`}>{annalsCount}</TabCount>
+            )}
           </TabBtn>
         </TabNav>
-        {/* 개요 점프 내비(UX8) — 4묶음 바로가기. 고정 내비 안이라 어디까지 내려가도 남고,
+        {/* 개요 점프 내비(UX8) — 바로가기. 고정 내비 안이라 어디까지 내려가도 남고,
             지금 읽는 묶음이 강조된다. 풀 페이지에서만(임베드는 묶음이 조건부라 앵커 부재 가능). */}
         {activeTab === 'overview' && !embedInModal && (
           <OverviewJumpNav aria-label="개요 섹션 바로가기">
-            {OVERVIEW_CLUSTERS.map((cluster) => (
+            {visibleOverviewClusters.map((cluster) => (
               <OverviewJumpChip
                 key={cluster.id}
                 type="button"
@@ -2104,7 +2162,7 @@ export function PersonDetailPanel({
                       <span ref={setBioToolbarEl} />
                     </OverviewSectionHeaderRow>
                     {/* 긴 전기는 처음 ~10줄만 — 기본 사실(출생·사망·재임)이 1,500px 아래로 밀리지 않게 */}
-                    <BioClamp>
+                    <BioClamp resetKey={person.id}>
                     <PersonBiographySections
                       personId={person.id}
                       sections={p.biographySections ?? undefined}
@@ -2321,7 +2379,7 @@ export function PersonDetailPanel({
                         ariaLabel="분야별 경력"
                         icon={<FiBriefcase size={14} strokeWidth={2.2} />}
                         title="분야별 경력"
-                        count={careers.length > 0 ? careers.length : undefined}
+                        count={careers.length}
                         defaultOpen={false}
                         actions={
                           !embedInModal && (
@@ -2439,11 +2497,7 @@ export function PersonDetailPanel({
                       ariaLabel="학력"
                       icon={<FiBook size={14} strokeWidth={2.2} />}
                       title="학력"
-                      count={
-                        p.educations && p.educations.length > 0
-                          ? p.educations.length
-                          : undefined
-                      }
+                      count={p.educations?.length ?? 0}
                       defaultOpen={false}
                       actions={
                         !embedInModal && (
@@ -2546,9 +2600,7 @@ export function PersonDetailPanel({
                       ariaLabel="수상·훈장"
                       icon={<FiAward size={14} strokeWidth={2.2} />}
                       title="수상·훈장"
-                      count={
-                        p.awards && p.awards.length > 0 ? p.awards.length : undefined
-                      }
+                      count={p.awards?.length ?? 0}
                       defaultOpen={false}
                       actions={
                         !embedInModal && (
@@ -2792,17 +2844,18 @@ export function PersonDetailPanel({
                   })()}
 
                   {/* 3.5. 정당·선거 — 옛 '정치·선거' 탭을 이력의 한 갈래로 흡수.
-                      당원·후보 기록은 일부 인물에게만 있어 최상위 탭(4개 중 1개)을 차지할 이유가 없었고,
-                      대부분의 인물에서 '눌러 보면 빈 탭'이었다. 비어 있으면 한 줄만 선다. */}
+                      분야별 경력·학력·수상과 동일한 CollapsibleSection으로 묶어 0건일 때 한 줄로 정렬한다. */}
                   {(!embedInModal || politicsCount > 0) && (
-                    <section aria-label="정당·선거" id="person-politics">
-                      <OverviewSectionHeaderRow>
-                        <OverviewSectionHeading>
-                          <FiFlag size={14} strokeWidth={2.2} />
-                          <span>정당·선거</span>
-                          {politicsCount > 0 && <CountMuted>{politicsCount}</CountMuted>}
-                        </OverviewSectionHeading>
-                        {!embedInModal && (
+                    <CollapsibleSection
+                      storageKey="politics"
+                      ariaLabel="정당·선거"
+                      icon={<FiFlag size={14} strokeWidth={2.2} />}
+                      title="정당·선거"
+                      count={politicsCount}
+                      defaultOpen={politicsCount > 0}
+                      keepChildrenMountedWhenEmpty
+                      actions={
+                        !embedInModal && (
                           <UnifiedActionRow>
                             <TenureAddButton
                               type="button"
@@ -2815,8 +2868,9 @@ export function PersonDetailPanel({
                               당원 소속
                             </TenureAddButton>
                           </UnifiedActionRow>
-                        )}
-                      </OverviewSectionHeaderRow>
+                        )
+                      }
+                    >
                       <PersonPoliticsSection
                         personId={person.id}
                         countryId={person.countryId ?? null}
@@ -2882,14 +2936,11 @@ export function PersonDetailPanel({
                           ) : null
                         }
                       />
-                    </section>
+                    </CollapsibleSection>
                   )}
 
                   {/* ── 클러스터 ③ 관계 ── */}
-                  {(!embedInModal ||
-                    (p.spouseRelations?.length ?? 0) > 0 ||
-                    ((person as { humanRelationships?: PersonHumanRelationshipItem[] })
-                      .humanRelationships?.length ?? 0) > 0) && (
+                  {hasRelationsCluster && (
                     <OverviewClusterLabel id="overview-cluster-relations">
                       관계
                     </OverviewClusterLabel>
@@ -2899,27 +2950,30 @@ export function PersonDetailPanel({
                   <SpouseDetailSection
                     spouseRelations={p.spouseRelations}
                     isDeceased={isDeceased}
+                    onPersonClick={handlePersonClick}
                   />
 
                   {/* 4. 인간관계 */}
-                  <PersonHumanRelationshipsSection
-                    personId={person.id}
-                    relationships={
-                      (
-                        person as {
-                          humanRelationships?: PersonHumanRelationshipItem[]
-                        }
-                      ).humanRelationships
-                    }
-                    onPersonClick={
-                      embedInModal ? onLinkedPersonClick : pushPersonToModalStack
-                    }
-                  />
+                  {(!embedInModal ||
+                    ((person as { humanRelationships?: PersonHumanRelationshipItem[] })
+                      .humanRelationships?.length ?? 0) > 0) && (
+                    <PersonHumanRelationshipsSection
+                      personId={person.id}
+                      relationships={
+                        (
+                          person as {
+                            humanRelationships?: PersonHumanRelationshipItem[]
+                          }
+                        ).humanRelationships
+                      }
+                      onPersonClick={
+                        embedInModal ? onLinkedPersonClick : pushPersonToModalStack
+                      }
+                    />
+                  )}
 
                   {/* ── 클러스터 ④ 소속·맥락 ── */}
-                  {(!embedInModal ||
-                    (p.countryAffiliations?.length ?? 0) > 0 ||
-                    (p.foundedDynasties?.length ?? 0) > 0) && (
+                  {hasContextCluster && (
                     <OverviewClusterLabel id="overview-cluster-context">
                       소속·맥락
                     </OverviewClusterLabel>
@@ -2955,6 +3009,8 @@ export function PersonDetailPanel({
                               aff.historicalCountry ??
                               aff.country ??
                               null
+                            const targetCountryId = c?.id ?? null
+                            const interactive = Boolean(targetCountryId)
                             const typeLabel = aff.affiliationType
                               ? TYPE_LABELS[aff.affiliationType] ??
                                 aff.affiliationType
@@ -2966,6 +3022,16 @@ export function PersonDetailPanel({
                             return (
                               <CountryAffiliationChip
                                 key={aff.id ?? `aff-${affIdx}`}
+                                as={interactive ? 'button' : 'div'}
+                                {...(interactive
+                                  ? {
+                                      type: 'button' as const,
+                                      onClick: () => {
+                                        playClickSound()
+                                        navigate(pathKeys.countryDetail(targetCountryId!))
+                                      },
+                                    }
+                                  : {})}
                                 $primary={aff.priority === 0}
                               >
                                 <CountryAffiliationType>{typeLabel}</CountryAffiliationType>
@@ -3023,6 +3089,7 @@ export function PersonDetailPanel({
                   <SamePersonGroupSection
                     currentPersonId={person.id}
                     currentPersonName={getPersonDisplayName(person, true)}
+                    readOnly={embedInModal}
                     onPersonClick={
                       embedInModal ? onLinkedPersonClick : pushPersonToModalStack
                     }
@@ -3047,7 +3114,8 @@ export function PersonDetailPanel({
                   <OverviewClusterLabel id="overview-cluster-evaluation">
                     평가
                   </OverviewClusterLabel>
-                  {/* 2. 역사적 영향력 */}
+                  {/* 2. 역사적 영향력 — 모달 임베드에서 미평가(null)일 때는 빈 제목이 남지 않도록 섹션 전체 생략 */}
+                  {(!embedInModal || person.influence != null) && (
                   <section aria-label="역사적 영향력">
                     <OverviewSectionHeaderRow>
                       <OverviewSectionHeading>
@@ -3189,9 +3257,14 @@ export function PersonDetailPanel({
                       )
                     })()}
                   </section>
+                  )}
 
                   {/* 2.5. 능력치 · 성격 — 영향력과 같은 0–100 평가 메트릭 클러스터 */}
-                  <PersonStatsSection personId={person.id} personName={fullName} />
+                  <PersonStatsSection
+                    personId={person.id}
+                    personName={fullName}
+                    readOnly={embedInModal}
+                  />
 
                 </OverviewSections>
               </TabContent>
@@ -3647,6 +3720,18 @@ export function PersonDetailPanel({
                 >
                   {modalTopPersonName || '인물'}
                 </BioMentionModalTitle>
+                <BioMentionModalBack
+                  type="button"
+                  onClick={() => {
+                    const targetId = modalTopId
+                    setPersonLinkStack([])
+                    onEdit(targetId)
+                  }}
+                  aria-label="인물 수정"
+                >
+                  <FiEdit2 size={14} strokeWidth={2.2} />
+                  수정
+                </BioMentionModalBack>
                 {/*
                   인물 상세 페이지로 이동 — 현재 URL 컨텍스트(대시보드/단독 페이지 등) 유지.
                   buildDetailUrlFor가 현재 경로의 personId 세그먼트만 교체.
@@ -3691,7 +3776,10 @@ export function PersonDetailPanel({
                 <PersonDetailPanel
                   personId={modalTopId}
                   onClose={() => setPersonLinkStack([])}
-                  onEdit={() => setPersonLinkStack([])}
+                  onEdit={(id) => {
+                    setPersonLinkStack([])
+                    onEdit(id)
+                  }}
                   hideHeaderActions
                   embedInModal
                   onLinkedPersonClick={pushPersonToModalStack}

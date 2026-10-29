@@ -30,11 +30,34 @@ interface SpouseDetailSectionProps {
   spouseRelations: PersonDetailData['spouseRelations']
   /** 사망자면 진행형 기간의 끝을 '현재' 대신 '미상'으로 폴백(재임·재위 규약과 통일) */
   isDeceased?: boolean
+  /** 배우자 이름 클릭 시 인물 모달/상세로 이동 */
+  onPersonClick?: (personId: string) => void
+}
+
+export function filterVisibleSpouseRelations(
+  spouseRelations: PersonDetailData['spouseRelations'],
+) {
+  return (spouseRelations ?? []).filter(
+    (rel) =>
+      rel.note ||
+      rel.marriageRank ||
+      rel.marriageStartDate ||
+      rel.marriageEndDate ||
+      rel.marriageStartYear != null ||
+      rel.marriageEndYear != null,
+  )
+}
+
+export function hasVisibleSpouseDetails(
+  spouseRelations: PersonDetailData['spouseRelations'],
+): boolean {
+  return filterVisibleSpouseRelations(spouseRelations).length > 0
 }
 
 export function SpouseDetailSection({
   spouseRelations,
   isDeceased,
+  onPersonClick,
 }: SpouseDetailSectionProps) {
   // 구조화 연/월/일 우선(BC·고대는 DateTime null), 레거시 행은 ISO+era+precision 폴백 —
   // 정밀도만큼만 표기해 01-01 채움이 '1월 1일'로 둔갑하지 않게 한다.
@@ -55,15 +78,7 @@ export function SpouseDetailSection({
           rel[`marriage${side}Precision`],
         ),
     )
-  const rels = (spouseRelations ?? []).filter(
-    (rel) =>
-      rel.note ||
-      rel.marriageRank ||
-      rel.marriageStartDate ||
-      rel.marriageEndDate ||
-      rel.marriageStartYear != null ||
-      rel.marriageEndYear != null,
-  )
+  const rels = filterVisibleSpouseRelations(spouseRelations)
   if (rels.length === 0) return null
 
   return (
@@ -78,6 +93,7 @@ export function SpouseDetailSection({
       <SpouseDetailList>
         {rels.map((rel, idx) => {
           const sp = rel.spouse ?? null
+          const spouseId = sp?.id ?? null
           const name = sp ? getPersonDisplayName(sp, true) : '이름 없음'
           const start = marriageDateLabel(rel, 'Start')
           const end = marriageDateLabel(rel, 'End')
@@ -87,10 +103,19 @@ export function SpouseDetailSection({
           const rankLabel = rel.marriageRank
             ? MARRIAGE_RANK_LABELS[rel.marriageRank] ?? rel.marriageRank
             : null
+          const interactive = Boolean(spouseId && onPersonClick)
           return (
             <SpouseDetailItem key={rel.id ?? `spouse-${idx}`}>
               <SpouseDetailHeader>
-                <SpouseDetailName>
+                <SpouseDetailName
+                  as={interactive ? 'button' : 'span'}
+                  {...(interactive
+                    ? {
+                        type: 'button' as const,
+                        onClick: () => onPersonClick?.(spouseId!),
+                      }
+                    : {})}
+                >
                   {name}
                   {rankLabel ? ` (${rankLabel})` : ''}
                 </SpouseDetailName>

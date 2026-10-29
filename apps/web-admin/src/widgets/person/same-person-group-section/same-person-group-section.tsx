@@ -27,6 +27,8 @@ const isDark = (mode: 'light' | 'dark') => mode === 'dark'
 interface Props {
   currentPersonId: string
   currentPersonName?: string
+  /** 읽기 전용(모달·분할 패널 임베드) — 관리 버튼 숨김 및 0건 시 섹션 생략 */
+  readOnly?: boolean
   /** 다른 인물 카드 클릭 시 핸들러 (모달 스택 푸시 등). */
   onPersonClick?: (personId: string) => void
 }
@@ -79,6 +81,7 @@ function sortMembers(group: PersonGroup) {
 export function SamePersonGroupSection({
   currentPersonId,
   currentPersonName,
+  readOnly = false,
   onPersonClick,
 }: Props) {
   const [showManage, setShowManage] = useState(false)
@@ -106,6 +109,10 @@ export function SamePersonGroupSection({
     [groups],
   )
 
+  if (readOnly && !isLoading && !isError && sortedGroups.length === 0) {
+    return null
+  }
+
   return (
     <Wrap>
       <HeaderRow>
@@ -114,14 +121,16 @@ export function SamePersonGroupSection({
           소속 그룹
           <Hint>같은 세대·계파·동기</Hint>
         </HeaderTitle>
-        <ManageBtn
-          type="button"
-          onClick={() => setShowManage(true)}
-          aria-label="소속 그룹 관리"
-        >
-          <FiSettings size={13} />
-          그룹 관리
-        </ManageBtn>
+        {!readOnly && (
+          <ManageBtn
+            type="button"
+            onClick={() => setShowManage(true)}
+            aria-label="소속 그룹 관리"
+          >
+            <FiSettings size={13} />
+            그룹 관리
+          </ManageBtn>
+        )}
       </HeaderRow>
 
       {isLoading ? (

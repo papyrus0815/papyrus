@@ -582,9 +582,9 @@ export function PersonPoliticsSection({
         />
       </PoliticalPartyRegisterViewModal>
 
-      {variant === 'overview' && memberships.length === 0 && candidacySummary.length === 0 ? (
-        <Empty $muted>등록된 당원 소속·선거 후보가 없습니다.</Empty>
-      ) : (
+      {variant === 'overview' &&
+      memberships.length === 0 &&
+      candidacySummary.length === 0 ? null : (
       <>
       {(variant !== 'overview' || memberships.length > 0) && (
       <>
@@ -592,6 +592,7 @@ export function PersonPoliticsSection({
       {memberships.length === 0 ? (
         <Empty>등록된 당원 소속이 없습니다.</Empty>
       ) : (
+        <TableScrollWrap>
         <Table>
           <thead>
             <tr>
@@ -648,6 +649,7 @@ export function PersonPoliticsSection({
             ))}
           </tbody>
         </Table>
+        </TableScrollWrap>
       )}
       </>
       )}
@@ -913,8 +915,15 @@ const Empty = styled.p<{ $muted?: boolean }>`
     $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
 `
 
+const TableScrollWrap = styled.div`
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+`
+
 const Table = styled.table`
   width: 100%;
+  min-width: 480px;
   border-collapse: collapse;
   font-size: 13px;
   th,
@@ -933,7 +942,12 @@ const Table = styled.table`
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    white-space: nowrap;
     color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  td:last-child {
+    white-space: nowrap;
+    text-align: right;
   }
 `
 
@@ -989,6 +1003,7 @@ const ElectedBadge = styled.span`
   font-weight: 800;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(13, 148, 136, 0.15);
-  color: #0f766e;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(20, 184, 166, 0.22)' : 'rgba(13, 148, 136, 0.15)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
 `

@@ -70,21 +70,29 @@ export function BirthDeathCards({
     !birthDateStr && !deathDateStr
       ? formatFloruit(floruitStartSigned, floruitEndSigned)
       : ''
-  const hasBirth =
-    !!birthDateStr ||
+  // 히어로 부제(PageSubtitle)에 이미 생몰 일자·향년·활동시기가 표시되므로,
+  // 출생지·출생국·서출·출생비고·사망지·사망유형·사망원인·사망비고 중 추가 상세가 하나라도 있을 때만 카드를 노출한다.
+  const hasBirthExtra =
     !!birthPlace ||
     !!birthCountry ||
-    !!p.isBirthDateUnknown ||
     !!p.illegitimate ||
-    !!p.birthNote ||
-    !!floruitLabel
-  const hasDeath =
-    !!deathDateStr ||
+    !!p.birthNote
+  const hasDeathExtra =
     !!deathPlace ||
-    !!p.isDeathDateUnknown ||
     !!p.deathType ||
     !!p.deathCause ||
     !!p.deathNote
+  if (!hasBirthExtra && !hasDeathExtra) return null
+
+  const hasBirth =
+    !!birthDateStr ||
+    hasBirthExtra ||
+    !!p.isBirthDateUnknown ||
+    !!floruitLabel
+  const hasDeath =
+    !!deathDateStr ||
+    hasDeathExtra ||
+    !!p.isDeathDateUnknown
   if (!hasBirth && !hasDeath) return null
 
   return (

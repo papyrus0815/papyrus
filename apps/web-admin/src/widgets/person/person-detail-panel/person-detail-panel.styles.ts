@@ -499,9 +499,6 @@ export const PageTitleRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  @media (max-width: 640px) {
-    justify-content: center;
-  }
   gap: 8px;
   flex-wrap: wrap;
 `
@@ -588,7 +585,8 @@ export const PageTitle = styled.h1`
 export const MonarchTitleRow = styled.div`
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 4px;
 `
@@ -754,15 +752,16 @@ export const NicknameReason = styled.span`
 export const BackToListButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
   font-size: 13px;
-  font-weight: 700;
-  border-radius: 12px;
+  font-weight: 600;
+  border-radius: 9px;
   cursor: pointer;
   flex-shrink: 0;
   color: #6366f1;
-  transition: all 0.2s ease;
+  transition: all 0.16s ease;
 
   ${({ theme }) =>
     theme.mode === 'dark'
@@ -771,7 +770,6 @@ export const BackToListButton = styled.button`
           border: 1px solid rgba(99, 102, 241, 0.3);
           &:hover {
             background: rgba(99, 102, 241, 0.12);
-            transform: translateY(-1px);
           }
         `
       : css`
@@ -780,7 +778,6 @@ export const BackToListButton = styled.button`
           &:hover {
             background: rgba(99, 102, 241, 0.06);
             border-color: rgba(99, 102, 241, 0.35);
-            transform: translateY(-1px);
             box-shadow: none;
           }
         `}
@@ -794,33 +791,33 @@ export const DeleteButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px;
+  height: 36px;
+  padding: 0 13px;
   font-size: 13px;
-  font-weight: 700;
-  border-radius: 12px;
+  font-weight: 600;
+  border-radius: 9px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.16s ease;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          color: rgba(252, 165, 165, 0.9);
-          background: rgba(239, 68, 68, 0.08);
-          border: 1px solid rgba(239, 68, 68, 0.25);
+          color: rgba(248, 113, 113, 0.85);
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(239, 68, 68, 0.22);
           &:hover {
-            background: rgba(239, 68, 68, 0.16);
-            border-color: rgba(239, 68, 68, 0.45);
-            transform: translateY(-1px);
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.14);
+            border-color: rgba(239, 68, 68, 0.42);
           }
         `
       : css`
           color: #dc2626;
-          background: rgba(239, 68, 68, 0.06);
-          border: 1px solid rgba(239, 68, 68, 0.2);
+          background: #ffffff;
+          border: 1px solid rgba(239, 68, 68, 0.22);
           &:hover {
-            background: rgba(239, 68, 68, 0.1);
-            border-color: rgba(239, 68, 68, 0.35);
-            transform: translateY(-1px);
+            background: rgba(239, 68, 68, 0.07);
+            border-color: rgba(239, 68, 68, 0.38);
           }
         `}
 `
@@ -1087,15 +1084,36 @@ export const FamilyBadgeRow = styled.div`
 export const FamilyBadge = styled.span`
   display: inline-flex;
   align-items: center;
+  font-family: inherit;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: -0.005em;
   padding: 3px 10px;
   border-radius: 999px;
+  border: 1px solid transparent;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
   color: ${({ theme }) =>
     theme.mode === 'dark' ? theme.colors.text.secondary : '#475569'};
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+
+  &:is(button) {
+    cursor: pointer;
+    &:hover {
+      border-color: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(165,180,252,0.45)' : 'rgba(99,102,241,0.32)'};
+      background: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(99,102,241,0.14)' : 'rgba(99,102,241,0.08)'};
+      color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+    }
+    &:focus-visible {
+      outline: 2px solid #6366f1;
+      outline-offset: 2px;
+    }
+  }
 `
 
 /** 개요 탭 섹션 래퍼 — 섹션 간 일관된 수직 리듬 (divider 대체) */
@@ -1443,7 +1461,8 @@ export const UnifiedCard = styled.li<{ $kind: 'tenure' | 'reign' }>`
   &:hover::before {
     opacity: 1;
   }
-  &:focus-within::before {
+  &:focus-within::before,
+  &[data-highlighted='true']::before {
     opacity: 1;
     box-shadow: 0 0 0 2px var(--entry-ring);
   }
@@ -2319,9 +2338,29 @@ export const SpouseDetailHeader = styled.div`
 `
 
 export const SpouseDetailName = styled.span`
+  font-family: inherit;
   font-size: 14px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
+  padding: 0;
+  border: none;
+  background: none;
+
+  &:is(button) {
+    cursor: pointer;
+    text-align: left;
+    transition: color 0.14s ease;
+    &:hover {
+      color: #6366f1;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    &:focus-visible {
+      outline: 2px solid #6366f1;
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+  }
 `
 
 export const SpouseDetailPeriod = styled.span`
@@ -2411,6 +2450,7 @@ export const SimpleEntryHeader = styled.div`
   flex-wrap: wrap;
   align-items: baseline;
   gap: 10px;
+  padding-right: 28px;
 `
 
 export const SimpleEntryTitle = styled.span`
@@ -2482,6 +2522,7 @@ export const CountryAffiliationChip = styled.div<{ $primary: boolean }>`
   gap: 6px;
   padding: 6px 10px;
   border-radius: 999px;
+  font-family: inherit;
   font-size: 12.5px;
   background: ${({ theme, $primary }) =>
     $primary
@@ -2500,6 +2541,27 @@ export const CountryAffiliationChip = styled.div<{ $primary: boolean }>`
         : theme.mode === 'dark'
           ? 'rgba(255, 255, 255, 0.08)'
           : '#e2e8f0'};
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease;
+
+  &:is(button) {
+    cursor: pointer;
+    &:hover {
+      border-color: ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(165, 180, 252, 0.5)'
+          : 'rgba(99, 102, 241, 0.38)'};
+      background: ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.24)'
+          : 'rgba(99, 102, 241, 0.14)'};
+    }
+    &:focus-visible {
+      outline: 2px solid #6366f1;
+      outline-offset: 2px;
+    }
+  }
 `
 
 export const CountryAffiliationType = styled.span`
@@ -2765,6 +2827,26 @@ export const HeaderActions = styled.div`
   gap: 8px;
   align-items: center;
   flex-shrink: 0;
+
+  ${OutlineButton} {
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(99, 102, 241, 0.28)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(99, 102, 241, 0.05)'};
+
+    &:hover:not(:disabled) {
+      background: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.18)' : 'rgba(99, 102, 241, 0.1)'};
+      border-color: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(165, 180, 252, 0.55)' : 'rgba(79, 70, 229, 0.45)'};
+    }
+  }
 `
 
 /**

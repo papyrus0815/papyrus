@@ -36,6 +36,8 @@ interface CollapsibleSectionProps {
   defaultOpen?: boolean
   /** 헤더 우측 액션(추가 버튼 등) — 토글 버튼과 분리되어 클릭이 토글로 전파되지 않음 */
   actions?: ReactNode
+  /** count=0일 때도 내부 모달 ref 유지를 위해 자식을 마운트해 둘지 여부 */
+  keepChildrenMountedWhenEmpty?: boolean
   children: ReactNode
 }
 
@@ -47,6 +49,7 @@ export function CollapsibleSection({
   count,
   defaultOpen = true,
   actions,
+  keepChildrenMountedWhenEmpty = false,
   children,
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(() => readStored(storageKey, defaultOpen))
@@ -63,39 +66,55 @@ export function CollapsibleSection({
     })
   }, [storageKey])
 
+  const isEmpty = count === 0
+  const effectiveOpen = isEmpty ? false : open
   const bodyId = `overview-collapsible-${storageKey}`
 
   return (
-    <section aria-label={ariaLabel} data-collapsible>
-      <HeaderRow $open={open}>
-        <ToggleButton
-          type="button"
-          onClick={toggle}
-          aria-expanded={open}
-          aria-controls={bodyId}
-        >
-          <Chevron $open={open}>
-            <FiChevronRight size={14} strokeWidth={2.4} />
-          </Chevron>
-          {icon}
-          <TitleText>{title}</TitleText>
-          {count != null && <CountMuted>{count}</CountMuted>}
-        </ToggleButton>
+    <section aria-label={ariaLabel} data-collapsible data-empty={isEmpty || undefined}>
+      <HeaderRow $open={effectiveOpen}>
+        {isEmpty ? (
+          <StaticHeading>
+            {icon}
+            <TitleText>{title}</TitleText>
+            <CountMuted>0</CountMuted>
+          </StaticHeading>
+        ) : (
+          <ToggleButton
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-controls={bodyId}
+          >
+            <Chevron $open={open}>
+              <FiChevronRight size={14} strokeWidth={2.4} />
+            </Chevron>
+            {icon}
+            <TitleText>{title}</TitleText>
+            {count != null && <CountMuted>{count}</CountMuted>}
+          </ToggleButton>
+        )}
         {actions}
       </HeaderRow>
-      <AnimatePresence initial={false}>
-        {open && (
-          <Body
-            id={bodyId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <BodyInner>{children}</BodyInner>
-          </Body>
-        )}
-      </AnimatePresence>
+      {isEmpty ? (
+        keepChildrenMountedWhenEmpty ? (
+          children
+        ) : null
+      ) : (
+        <AnimatePresence initial={false}>
+          {open && (
+            <Body
+              id={bodyId}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            >
+              <BodyInner>{children}</BodyInner>
+            </Body>
+          )}
+        </AnimatePresence>
+      )}
     </section>
   )
 }
@@ -107,6 +126,13 @@ const HeaderRow = styled.div<{ $open: boolean }>`
   gap: 12px;
   /* 접혀 있으면 아래에 아무것도 없으므로 여백도 두지 않는다 */
   margin-bottom: ${({ $open }) => ($open ? '14px' : '0')};
+`
+
+const StaticHeading = styled.h3`
+  ${sectionHeadingCss}
+  flex: 1 1 auto;
+  min-width: 0;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const ToggleButton = styled.button`
