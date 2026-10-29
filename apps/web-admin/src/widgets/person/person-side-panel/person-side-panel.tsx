@@ -14,7 +14,14 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiArrowLeft, FiArrowUpRight, FiEdit2, FiX } from 'react-icons/fi'
+import {
+  FiArrowLeft,
+  FiArrowUpRight,
+  FiChevronLeft,
+  FiChevronRight,
+  FiEdit2,
+  FiX,
+} from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { getPersonDetailById } from '@/shared/api/persons-detail'
@@ -38,6 +45,10 @@ export interface PersonSplitViewProps {
   onPersonShown?: (id: string) => void
   /** 패널 안 ✎ 편집 — id는 지금 보이는 인물 */
   onEdit?: (id: string) => void
+  /** 현재 필터·정렬된 목록 인물 ID 순서 — 제공 시 헤더에 이전/다음 스테퍼 표시 */
+  orderedPersonIds?: string[]
+  /** 스테퍼(이전/다음)로 목록 내 다른 인물 선택 시 호출 */
+  onSelectPerson?: (id: string) => void
   /** 목록 지면 */
   children: ReactNode
 }
@@ -48,6 +59,8 @@ export function PersonSplitView({
   onOpenDetail,
   onPersonShown,
   onEdit,
+  orderedPersonIds,
+  onSelectPerson,
   children,
 }: PersonSplitViewProps) {
   const open = personId != null
@@ -76,6 +89,8 @@ export function PersonSplitView({
           onOpenDetail={onOpenDetail}
           onPersonShown={onPersonShown}
           onEdit={onEdit}
+          orderedPersonIds={orderedPersonIds}
+          onSelectPerson={onSelectPerson}
         />
       )}
     </SplitGrid>
@@ -89,6 +104,8 @@ interface PersonSidePanelProps {
   onOpenDetail?: (id: string) => void
   onPersonShown?: (id: string) => void
   onEdit?: (id: string) => void
+  orderedPersonIds?: string[]
+  onSelectPerson?: (id: string) => void
 }
 
 function PersonSidePanel({
@@ -98,6 +115,8 @@ function PersonSidePanel({
   onOpenDetail,
   onPersonShown,
   onEdit,
+  orderedPersonIds,
+  onSelectPerson,
 }: PersonSidePanelProps) {
   // 첫 프레임은 닫힌 모양으로 그리고 다음 프레임에 연다 — 그래야 여는 전환이 재생된다
   const [entered, setEntered] = useState(false)
@@ -159,11 +178,47 @@ function PersonSidePanel({
     scrollRef.current?.scrollTo({ top: 0 })
   }, [activeId])
 
-  // Esc — drawer에선 항상, 데스크톱 열에선 포커스가 패널 안에 있을 때만(목록 키보드 조작을 가로채지 않게)
+  const currentIndex =
+    orderedPersonIds && activeId ? orderedPersonIds.indexOf(activeId) : -1
+  const hasStepper =
+    currentIndex >= 0 &&
+    !!orderedPersonIds &&
+    orderedPersonIds.length > 1 &&
+    !!onSelectPerson
+  const prevPersonId =
+    hasStepper && currentIndex > 0 ? orderedPersonIds![currentIndex - 1] : null
+  const nextPersonId =
+    hasStepper && currentIndex < orderedPersonIds!.length - 1
+      ? orderedPersonIds![currentIndex + 1]
+      : null
+
+  // Esc 및 [ / ] 이전·다음 인물 단축키
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+      const target = event.target as HTMLElement | null
+      const isTyping =
+        target != null &&
+        (target.isContentEditable ||
+          ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+
+      if (!isTyping && onSelectPerson) {
+        if (event.key === '[' && prevPersonId) {
+          event.preventDefault()
+          onSelectPerson(prevPersonId)
+          return
+        }
+        if (event.key === ']' && nextPersonId) {
+          event.preventDefault()
+          onSelectPerson(nextPersonId)
+          return
+        }
+      }
+
+      if (event.key !== 'Escape') return
       const inside = hostRef.current?.contains(document.activeElement) ?? false
       if (!isDrawer && !inside) return
       if (stack.length > 0) {
@@ -177,7 +232,17 @@ function PersonSidePanel({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, isDrawer, stack, personId, onPersonShown, onClose])
+  }, [
+    open,
+    isDrawer,
+    stack,
+    personId,
+    prevPersonId,
+    nextPersonId,
+    onSelectPerson,
+    onPersonShown,
+    onClose,
+  ])
 
   return (
     <>
@@ -196,6 +261,31 @@ function PersonSidePanel({
             </IconButton>
           )}
           <PanelTitle title={titleName}>{titleName || '인물'}</PanelTitle>
+          {hasStepper && onSelectPerson && (
+            <NavStepper role="group" aria-label="목록 내 인물 이동">
+              <StepButton
+                type="button"
+                disabled={!prevPersonId}
+                onClick={() => prevPersonId && onSelectPerson(prevPersonId)}
+                aria-label="이전 인물"
+                title="이전 인물 (단축키 [)"
+              >
+                <FiChevronLeft size={15} aria-hidden />
+              </StepButton>
+              <StepCounter aria-live="polite">
+                {currentIndex + 1} / {orderedPersonIds!.length}
+              </StepCounter>
+              <StepButton
+                type="button"
+                disabled={!nextPersonId}
+                onClick={() => nextPersonId && onSelectPerson(nextPersonId)}
+                aria-label="다음 인물"
+                title="다음 인물 (단축키 ])"
+              >
+                <FiChevronRight size={15} aria-hidden />
+              </StepButton>
+            </NavStepper>
+          )}
           {onEdit && (
             <OpenDetailButton type="button" onClick={() => onEdit(activeId)}>
               <FiEdit2 size={13} aria-hidden />
@@ -333,6 +423,55 @@ const PanelTitle = styled.h2`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+`
+
+const NavStepper = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 3px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+`
+
+const StepButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.background.secondary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 1px;
+  }
+`
+
+const StepCounter = styled.span`
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  user-select: none;
 `
 
 const IconButton = styled.button`

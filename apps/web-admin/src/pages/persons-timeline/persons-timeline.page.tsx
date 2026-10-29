@@ -18,7 +18,7 @@
  * 국가 상세 → "이 나라 인물 보기"는 ?countries=<id>로 진입 → 일반 필터 스코프로 적용됨
  * (별도 카드 전용 모드 없음 — 인포그래픽 + 필터로 통일).
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -30,9 +30,28 @@ import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/perso
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { useRecentPersonsStore } from '@/widgets/person/person-list'
 import { PersonSplitView } from '@/widgets/person/person-side-panel/person-side-panel'
-import { PersonFilterPanel, PersonInfographicPane } from '@/widgets/person-infographic'
+import {
+  filterPersons,
+  makeSortFnWithPinned,
+  PersonFilterPanel,
+  PersonInfographicPane,
+  useAdaptedPersons,
+  usePersonInfographicFilterStore,
+} from '@/widgets/person-infographic'
 
 const SCROLL_KEY = 'person-list-scroll'
+const SELECTED_PERSON_KEY = 'person-list-selected-id'
+
+function readInitialSelectedPerson(): string | null {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get('selected')
+    if (fromUrl && fromUrl.trim()) return fromUrl.trim()
+    const fromSession = sessionStorage.getItem(SELECTED_PERSON_KEY)
+    return fromSession && fromSession.trim() ? fromSession.trim() : null
+  } catch {
+    return null
+  }
+}
 
 /** 가장 가까운 스크롤 가능 조상(overflow-y auto/scroll) — 실제 스크롤은 window가 아니라 레이아웃 Content. */
 function findScrollParent(el: HTMLElement | null): HTMLElement | null {
@@ -115,19 +134,74 @@ export default function PersonsTimelinePage() {
   )
 
   // 목록 지면의 인물 클릭 → 우측 상세 패널(사건 목록과 같은 분할 지면).
-  // 패널 헤더의 '상세 페이지'로 전용 상세 진입. 목록 스크롤·필터가 그대로 남는다.
-  const [panelPersonId, setPanelPersonId] = useState<string | null>(null)
+  // 패널 헤더의 '상세 페이지'로 전용 상세 진입. 목록 스크롤·필터·선택 상태가 그대로 남는다.
+  const [panelPersonId, setPanelPersonId] = useState<string | null>(() =>
+    readInitialSelectedPerson(),
+  )
   const [activePanelPersonId, setActivePanelPersonId] = useState<string | null>(
-    null,
+    () => readInitialSelectedPerson(),
   )
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const openFilterSheet = useCallback(() => setFilterSheetOpen(true), [])
-  // 패널로 연 인물도 '최근 본 인물'에 올린다 — 사이드바 바로가기가 이 기록을 읽는다
+
+  const allPeople = useAdaptedPersons()
+  const scopes = usePersonInfographicFilterStore((state) => state.scopes)
+  const minInfluence = usePersonInfographicFilterStore(
+    (state) => state.minInfluence,
+  )
+  const aliveFilter = usePersonInfographicFilterStore(
+    (state) => state.aliveFilter,
+  )
+  const query = usePersonInfographicFilterStore((state) => state.query)
+  const sort = usePersonInfographicFilterStore((state) => state.sort)
+  const groupBy = usePersonInfographicFilterStore((state) => state.groupBy)
+  const eraGroupOrder = usePersonInfographicFilterStore(
+    (state) => state.eraGroupOrder,
+  )
+  const pinnedList = usePersonInfographicFilterStore((state) => state.pinned)
+
+  const orderedPersonIds = useMemo(() => {
+    if (personId) return []
+    const filtered = filterPersons(allPeople, {
+      scopes,
+      minInfluence,
+      aliveFilter,
+      query,
+    })
+    const pinnedSet = new Set(pinnedList)
+    const reverse =
+      groupBy === 'century'
+        ? (sort === 'year' || sort === 'deathYear') && eraGroupOrder === 'asc'
+        : eraGroupOrder === 'asc'
+    const sortFn = makeSortFnWithPinned(pinnedSet, sort, reverse)
+    return filtered
+      .slice()
+      .sort(sortFn)
+      .map((person) => person.id)
+  }, [
+    personId,
+    allPeople,
+    scopes,
+    minInfluence,
+    aliveFilter,
+    query,
+    pinnedList,
+    groupBy,
+    sort,
+    eraGroupOrder,
+  ])
+
+  // 패널로 연 인물도 '최근 본 인물' 및 세션에 기록 — 새로고침·상세 복귀 시 유지
   const openPersonPanel = useCallback(
     (id: string) => {
       setPanelPersonId(id)
       setActivePanelPersonId(id)
       pushRecentPerson(id)
+      try {
+        sessionStorage.setItem(SELECTED_PERSON_KEY, id)
+      } catch {
+        /* ignore */
+      }
     },
     [pushRecentPerson],
   )
@@ -135,12 +209,22 @@ export default function PersonsTimelinePage() {
     (id: string) => {
       setActivePanelPersonId(id)
       pushRecentPerson(id)
+      try {
+        sessionStorage.setItem(SELECTED_PERSON_KEY, id)
+      } catch {
+        /* ignore */
+      }
     },
     [pushRecentPerson],
   )
   const closePersonPanel = useCallback(() => {
     setPanelPersonId(null)
     setActivePanelPersonId(null)
+    try {
+      sessionStorage.removeItem(SELECTED_PERSON_KEY)
+    } catch {
+      /* ignore */
+    }
   }, [])
   const openEditModal = useCallback((id: string) => {
     setEditingPersonId(id)
@@ -185,6 +269,8 @@ export default function PersonsTimelinePage() {
             onOpenDetail={openDetail}
             onPersonShown={handlePanelPersonShown}
             onEdit={openEditModal}
+            orderedPersonIds={orderedPersonIds}
+            onSelectPerson={openPersonPanel}
           >
             <PersonInfographicPane
               onPersonClick={openPersonPanel}
