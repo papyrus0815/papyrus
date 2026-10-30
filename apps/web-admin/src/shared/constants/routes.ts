@@ -25,6 +25,8 @@ export const ROUTES = {
   MILITARY: 'military',
   EVENTS: 'events',
   TREATIES: 'treaties',
+  /** 출처 서고 — 수치·인용이 기대는 책·사료 */
+  SOURCES: 'sources',
 
   // Genealogy (standalone full-screen)
   GENEALOGY: 'genealogy',
@@ -56,6 +58,7 @@ export const CONTENT_AREA_PREFIXES = [
   `/${ROUTES.LEGISLATURE}`,
   `/${ROUTES.MILITARY}`,
   `/${ROUTES.TREATIES}`,
+  `/${ROUTES.SOURCES}`,
 ] as const
 
 /**

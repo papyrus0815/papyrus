@@ -49,6 +49,10 @@ export const pathKeys = {
       `/${ROUTES.TREATIES}/${encodeURIComponent(treatyId)}`,
   },
 
+  /** 출처 서고 — sourceId를 주면 그 출처를 펼친 채로 */
+  sources: (sourceId?: string) =>
+    `/${ROUTES.SOURCES}/${sourceId ? `?id=${encodeURIComponent(sourceId)}` : ''}`,
+
   // --- Country (구 /history/country/*) ---
   country: () => `/${ROUTES.COUNTRY}/`,
   /** 국가 상세 고유 URL (경로 기반) */
