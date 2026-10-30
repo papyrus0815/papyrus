@@ -228,6 +228,17 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     cursorX != null && Number.isFinite(minY)
       ? Math.round(minY + (cursorX / Math.max(1, canvasW)) * rng)
       : null
+  const coevalCount = useMemo(() => {
+    if (cursorYear == null) return 0
+    let count = 0
+    for (const p of plottablePeople) {
+      if (!isActive(p)) continue
+      if (cursorYear >= bornForPlot(p) && cursorYear <= diedForPlot(p)) {
+        count++
+      }
+    }
+    return count
+  }, [cursorYear, plottablePeople, isActive])
 
   const gridLine = theme.colors.border.light
   const tickLine = theme.colors.border.default
@@ -516,10 +527,15 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                     {cursorX != null && cursorYear != null && (
                       <CrosshairYearBadge
                         style={{
-                          left: Math.max(28, Math.min(canvasW - 28, cursorX)),
+                          left: Math.max(54, Math.min(canvasW - 54, cursorX)),
                         }}
                       >
                         {cursorYear === 0 ? '0' : formatYear(cursorYear)}
+                        {coevalCount > 0 && (
+                          <CrosshairCoevalSpan>
+                            · 동시대 {coevalCount}명
+                          </CrosshairCoevalSpan>
+                        )}
                       </CrosshairYearBadge>
                     )}
                   </div>
@@ -543,8 +559,18 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                         const isSelected = activeSelectedId === p.id
                         const isEstimatedSpan =
                           p.born == null || (p.died == null && !p.isAlive)
+                        const isCoevalWithCursor =
+                          cursorYear != null &&
+                          hoveredBar == null &&
+                          active &&
+                          cursorYear >= bornForPlot(p) &&
+                          cursorYear <= diedForPlot(p)
                         const baseOp = active ? 0.85 : 0.2
-                        const op = isOtherInLane ? Math.min(baseOp, 0.25) : baseOp
+                        const op = isOtherInLane
+                          ? Math.min(baseOp, 0.25)
+                          : isCoevalWithCursor
+                            ? 1
+                            : baseOp
                         const lifespanAria = describePersonLifespan(p).ariaText
                         return (
                           <button
@@ -575,9 +601,11 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                               transition: 'opacity 0.12s, box-shadow 0.12s',
                               boxShadow: isSelected
                                 ? `0 0 0 2px ${theme.colors.background.primary}, 0 0 0 3.5px ${theme.colors.active}`
-                                : isEstimatedSpan
-                                  ? 'none'
-                                  : 'inset 0 0 0 1px rgba(255, 255, 255, 0.22)',
+                                : isCoevalWithCursor
+                                  ? 'inset 0 0 0 1.5px rgba(255, 255, 255, 0.85)'
+                                  : isEstimatedSpan
+                                    ? 'none'
+                                    : 'inset 0 0 0 1px rgba(255, 255, 255, 0.22)',
                               zIndex: isSelected ? 2 : isHoveredSelf ? 1 : 0,
                             }}
                             onMouseEnter={(e) => {
@@ -834,6 +862,9 @@ const CrosshairYearBadge = styled.div`
   top: 4px;
   transform: translateX(-50%);
   z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 2px 7px;
   border-radius: 999px;
   font-size: 10px;
@@ -844,6 +875,11 @@ const CrosshairYearBadge = styled.div`
   color: ${({ theme }) => theme.colors.background.primary};
   background: ${({ theme }) => theme.colors.active};
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+`
+
+const CrosshairCoevalSpan = styled.span`
+  font-weight: 600;
+  opacity: 0.88;
 `
 
 const ControlLabel = styled.span`

@@ -149,7 +149,11 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
   const deathApproximate = !!p.isDeathDateApproximate
   const floruitStart = toYear(p.floruitStartYear, p.floruitEra)
   const floruitEnd = toYear(p.floruitEndYear, p.floruitEra)
-  const isAliveFlag = !!p.isAlive
+  // 몰년 기록이 없어도 출생 후 120년이 넘었으면 생존 단정 대신 몰년 미상 고인으로 처리 (상세 패널과 동일 규칙)
+  const isAliveFlag =
+    !!p.isAlive &&
+    died == null &&
+    (born == null || CURRENT_YEAR - born <= 120)
 
   // 잘못된 입력(NaN/Infinity) 방어 — 시각화가 깨지지 않도록 폐기
   if (born != null && !Number.isFinite(born)) return null
@@ -217,12 +221,17 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
 
   const era = activityYear != null ? yearOfEra(activityYear) : UNKNOWN_ERA
 
-  // 수명: 생몰 둘 다 알 때만 정확(역전된 오입력 died < born은 제외). 출생만 알고 생존 중이면 현재 나이.
+  // 수명: 생몰 둘 다 알 때만 정확(역전된 오입력 died < born은 제외).
+  // BC(음수)에서 AD(양수)로 넘어갈 때는 서기 0년이 없으므로 1년을 뺀다(천문 연도 보정).
+  const rawSpan =
+    born != null && died != null && died >= born
+      ? born < 0 && died > 0
+        ? died - born - 1
+        : died - born
+      : null
   const age =
-    born != null && died != null
-      ? died >= born
-        ? died - born
-        : null
+    rawSpan != null
+      ? Math.max(0, rawSpan)
       : born != null && isAliveFlag
         ? Math.max(0, CURRENT_YEAR - born)
         : null
@@ -295,9 +304,11 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
   }
 }
 
-/** 타임라인 배치용 시작연도 — 출생 미상이면 활동·재위 시작연도(또는 활동연도)로 대체. */
+/** 타임라인 배치용 시작연도 — 출생 미상이면 활동·재위 시작연도(또는 활동/사망연도)로 대체. */
 export function bornForPlot(p: AdaptedPerson): number {
-  return p.born ?? p.activityStart ?? p.activityYear ?? 0
+  if (p.born != null) return p.born
+  const fallback = p.activityStart ?? p.activityYear ?? p.died ?? 0
+  return p.died != null ? Math.min(fallback, p.died) : fallback
 }
 
 /** 타임라인 배치용 종료연도 — 사망 미상이면 생존자는 현재, 그 외엔 활동·재위 종료연도(또는 활동연도). */

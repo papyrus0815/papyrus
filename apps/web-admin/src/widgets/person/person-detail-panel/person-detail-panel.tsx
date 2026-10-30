@@ -1507,20 +1507,56 @@ export function PersonDetailPanel({
             : null,
         )
       : ''
+  const tenureFallbackLabel = (() => {
+    if (
+      birthLabel ||
+      deathLabel ||
+      floruitLabel ||
+      combinedTenures.items.length === 0
+    ) {
+      return ''
+    }
+    const hasReign = combinedTenures.items.some((it) => it.kind === 'reign')
+    const prefix = hasReign ? '재위' : '재임'
+    const formatSignedYr = (signed: number) =>
+      signed < 0 ? `기원전 ${-signed}년` : `${signed}년`
+    const signedYears: number[] = []
+    for (const it of combinedTenures.items) {
+      const sp = parseIsoDateParts(it.data.startDate)
+      if (sp) signedYears.push(sp.era === 'BC' ? -sp.year : sp.year)
+      const ep = parseIsoDateParts(it.data.endDate)
+      if (ep) signedYears.push(ep.era === 'BC' ? -ep.year : ep.year)
+    }
+    if (signedYears.length === 0) return ''
+    const minY = Math.min(...signedYears)
+    const maxY = Math.max(...signedYears)
+    return minY === maxY
+      ? `${prefix} ${formatSignedYr(minY)}경`
+      : `${prefix} ${formatSignedYr(minY)} ~ ${formatSignedYr(maxY)}`
+  })()
   const subtitleLifespan = (() => {
     if (isDeceased) {
-      if (birthLabel && deathLabel)
-        return `${birthLabel} ~ ${deathLabel}${ageAtDeath != null ? ` (향년 ${ageAtDeath}세)` : ''}`
+      if (birthLabel && deathLabel) {
+        const ageText =
+          ageAtDeath != null
+            ? ` (향년 ${isApproxLifespan ? '약 ' : ''}${ageAtDeath}세)`
+            : ''
+        return `${birthLabel} ~ ${deathLabel}${ageText}`
+      }
       if (birthLabel) return `${birthLabel} ~ 몰년 미상`
       if (deathLabel) return `출생 미상 ~ ${deathLabel}`
-      return floruitLabel || '생몰년 미상'
+      return floruitLabel || tenureFallbackLabel || '생몰년 미상'
     }
     if (birthLabel) {
       // 몰년 기록이 없어도 currentAge가 비상식적(>120)이면 생존 단정 대신 몰년 미상.
       if (currentAge != null && currentAge > 120) return `${birthLabel} ~ 몰년 미상`
-      return `${birthLabel} ~ 생존${currentAge != null ? ` (${currentAge}세)` : ''}`
+      const liveAgeText =
+        currentAge != null
+          ? ` (${p.isBirthDateApproximate ? '약 ' : ''}${currentAge}세)`
+          : ''
+      return `${birthLabel} ~ 생존${liveAgeText}`
     }
-    return floruitLabel || '생존'
+    return floruitLabel || tenureFallbackLabel || '생존'
   })()
 
   const genderLabel =
@@ -1528,11 +1564,22 @@ export function PersonDetailPanel({
 
   /** 축약 머리의 생몰 — '1852–1931'(BC는 '기원전 N'). 머리 카드의 긴 부제를 한 토막으로. */
   const compactLifespan = (() => {
-    const yearText = (year?: number | null, era?: string | null) =>
-      year == null ? '?' : era === 'BC' ? `기원전 ${year}` : `${year}`
-    if (p.birthYear == null && p.deathYear == null) return ''
-    return `${yearText(p.birthYear, p.birthEra)}–${
-      isDeceased ? yearText(p.deathYear, p.deathEra) : ''
+    const yearText = (
+      year?: number | null,
+      era?: string | null,
+      approx?: boolean | null,
+    ) => {
+      if (year == null) return '미상'
+      const base = era === 'BC' ? `기원전 ${year}` : `${year}`
+      return approx ? `${base}경` : base
+    }
+    if (p.birthYear == null && p.deathYear == null) {
+      return floruitLabel || tenureFallbackLabel
+    }
+    return `${yearText(p.birthYear, p.birthEra, p.isBirthDateApproximate)}–${
+      isDeceased
+        ? yearText(p.deathYear, p.deathEra, p.isDeathDateApproximate)
+        : '현재'
     }`
   })()
 

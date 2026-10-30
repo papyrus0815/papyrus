@@ -148,7 +148,15 @@ export function BirthDeathCards({
               <FiSunset size={14} strokeWidth={2.2} />
             </LifeCardIconWrap>
             <LifeCardTitle>사망</LifeCardTitle>
-            {ageAtDeath != null && <LifeCardAge>향년 {ageAtDeath}세</LifeCardAge>}
+            {ageAtDeath != null && (
+              <LifeCardAge>
+                향년{' '}
+                {p.isBirthDateApproximate || p.isDeathDateApproximate
+                  ? '약 '
+                  : ''}
+                {ageAtDeath}세
+              </LifeCardAge>
+            )}
           </LifeCardHeader>
           {deathDateStr ? (
             <LifeCardRow>

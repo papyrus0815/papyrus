@@ -627,8 +627,18 @@ export function PersonRowListHeader({
           onClick={() => onSortSelect('year')}
           title="출생연도순 정렬"
         >
-          생몰
+          출생
           {renderSortIndicator('year')}
+        </RowHeaderSortBtn>
+        <RowHeaderDivider aria-hidden>·</RowHeaderDivider>
+        <RowHeaderSortBtn
+          type="button"
+          $active={sort === 'deathYear'}
+          onClick={() => onSortSelect('deathYear')}
+          title="사망연도순 정렬"
+        >
+          사망
+          {renderSortIndicator('deathYear')}
         </RowHeaderSortBtn>
         <RowHeaderDivider aria-hidden>·</RowHeaderDivider>
         <RowHeaderSortBtn

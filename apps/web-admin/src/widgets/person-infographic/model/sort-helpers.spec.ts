@@ -3,7 +3,7 @@
  * - makeSortFnWithPinned: 연도 방향 통일(출생·사망 모두 최신순)·미상 항상 뒤·동점 결정성·핀 우선
  * - compareCenturyMeta: 세기 그룹 최신/오래된순 방향 + '연도 미상' 항상 끝
  */
-import { bornForPlot, diedForPlot } from './adapt'
+import { adapt, bornForPlot, diedForPlot } from './adapt'
 import {
   centuryOf,
   compareCenturyMeta,
@@ -324,5 +324,52 @@ describe('describePersonLifespan & bornForPlot / diedForPlot — 생몰·활동 
     expect(d.fallbackLabel).toBe('재위 37BC–19BC')
     expect(bornForPlot(monarch)).toBe(-37)
     expect(diedForPlot(monarch)).toBe(-19)
+  })
+
+  it('BC→AD 경계를 넘는 인물의 수명은 서기 0년이 없음을 보정하고, 출생 후 120년 초과 인물은 몰년 미입력이어도 생존에서 제외한다', () => {
+    const augustus = adapt({
+      id: 'augustus',
+      name: '아우구스투스',
+      surname: null,
+      middleName: null,
+      nameDisplayOrder: null,
+      birthEra: 'BC' as any,
+      birthYear: 63,
+      deathEra: 'AD' as any,
+      deathYear: 14,
+      isAlive: false,
+      influence: 95,
+      regnalName: null,
+      profileImageUrl: null,
+      biography: null,
+      country: { name: '로마 제국', isoCode: 'IT', defaultNameDisplayOrder: null },
+      dynasty: null,
+      governmentTenures: [],
+      sovereignReignCount: 1,
+    })
+    expect(augustus?.age).toBe(76)
+
+    const staleAlive = adapt({
+      id: 'ancient-no-death',
+      name: '고대 인물',
+      surname: null,
+      middleName: null,
+      nameDisplayOrder: null,
+      birthEra: 'AD' as any,
+      birthYear: 1500,
+      deathEra: null,
+      deathYear: null,
+      isAlive: true,
+      influence: 50,
+      regnalName: null,
+      profileImageUrl: null,
+      biography: null,
+      country: null,
+      dynasty: null,
+      governmentTenures: [],
+      sovereignReignCount: 0,
+    })
+    expect(staleAlive?.isAlive).toBe(false)
+    expect(staleAlive?.age).toBeNull()
   })
 })

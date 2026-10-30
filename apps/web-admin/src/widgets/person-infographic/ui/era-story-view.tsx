@@ -127,7 +127,6 @@ export function EraStoryView({
 }: Props) {
   const sort = usePersonInfographicFilterStore((state) => state.sort)
   const setSort = usePersonInfographicFilterStore((state) => state.setSort)
-  const scopes = usePersonInfographicFilterStore((state) => state.scopes)
   const groupBy = usePersonInfographicFilterStore((state) => state.groupBy)
   const listLayout = usePersonInfographicFilterStore((state) => state.listLayout)
   const eraGroupOrder = usePersonInfographicFilterStore(
@@ -186,11 +185,10 @@ export function EraStoryView({
 
     if (groupBy === 'century') {
       const map: Record<string, { meta: CenturyMeta; arr: AdaptedPerson[] }> = {}
-      const isEraFiltered = scopes.era.length > 0
       for (const person of unpinnedPeople) {
-        const yearForCentury = isEraFiltered
-          ? (person.activityYear ?? person.born ?? person.died)
-          : (person.born ?? person.activityYear ?? person.died)
+        // 출생연도가 세기 말(예: 세종 1397년생, 김유신 595년생)이어도 실제 활약 세기(15세기·7세기)에
+        // 배치되고, 상단 시대 필터 토글 전후로 소속 세기가 점프하지 않도록 활동연도를 우선 사용한다.
+        const yearForCentury = person.activityYear ?? person.born ?? person.died
         const meta =
           yearForCentury == null
             ? UNKNOWN_CENTURY
@@ -328,7 +326,7 @@ export function EraStoryView({
         arr: arr.slice().sort(sortFn),
       }
     })
-  }, [groupBy, unpinnedPeople, scopes.era.length, eraGroupOrder, sortFn])
+  }, [groupBy, unpinnedPeople, eraGroupOrder, sortFn])
 
   const largestGroup = Math.max(1, ...sortedGroups.map(({ arr }) => arr.length))
 
