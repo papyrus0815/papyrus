@@ -113,7 +113,7 @@ export const CoreSectionLabel = styled.h3`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-/** 성·이름·중간이름 한 칸 — 칸마다 자기 라벨을 위에 둔다(필수 별표는 '이름' 칸에만). */
+/** 성·이름·중간이름·국적·성별 등 인라인 서브 셀 — 칸마다 자기 라벨을 위에 둔다. */
 export const NameCell = styled.div`
   display: flex;
   flex-direction: column;
@@ -121,13 +121,40 @@ export const NameCell = styled.div`
   min-width: 0;
 `
 
+/** 표시 순서 우측에 조합된 전체 성명을 실시간으로 보여주는 배지 */
+export const NamePreviewBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: ${RADIUS.pill};
+  font-size: ${FONT.meta};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f3f4f6'};
+
+  strong {
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+/** 접힌 상세 토글 안에 이미 입력된 값이 있을 때 표시하는 보조 배지 */
+export const AdvancedToggleBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: ${RADIUS.pill};
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.active};
+  background: ${({ theme }) => theme.colors.activeLight};
+`
+
 // ─── Layout wrapper — 사건 등록 폼과 같은 옆 라벨 행 ─────────────────────────
-// 라벨 열 200px(14/600 primary) | 간격 24 | 필드 열(상한 680px), 행 padding 20px 0 + 행 아래
-// hairline. 치수는 사건 등록 폼(event-create.styles FormRow·FormLabel·FormField)과 같다.
-// 예전 위 라벨(13/500 회색) 배치는 같은 등록 모달 셸 안에서 사건 폼과 딴 제품처럼 보였다.
-//
+// 라벨 열 200px(14/600 primary) | 간격 24 | 필드 열(상한 680px).
 // 격자 규칙 — 라벨(또는 라벨을 품은 머리 줄)은 1열 1행에 못박고, 나머지 자식은 전부 2열.
-// 라벨을 `grid-row: 1 / span N`으로 늘리면 빈 암묵 행마다 row-gap이 쌓여 행이 부푼다.
 
 const SIDE_LABEL_COLUMN = '200px'
 const FIELD_MAX_WIDTH = '680px'
@@ -161,8 +188,8 @@ export const PersonFormLayoutWrap = styled.div`
     gap: 8px 24px;
     align-items: start;
     margin: 0;
-    /* 행 사이 hairline 없음 — 선은 장(章) 경계(CoreDivider·OptionalSeam)에만. 사건 등록 폼 묶음과 같은 12px 리듬 */
-    padding: 12px 0;
+    /* 행 사이 hairline 없음 — 선은 장(章) 경계(CoreDivider)에만. */
+    padding: 10px 0;
     border-bottom: none;
   }
   ${FieldRow} > *,
@@ -195,26 +222,12 @@ export const PersonFormLayoutWrap = styled.div`
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
-  /*
-   * 선택 항목 꼬리표 — 사건 등록 폼처럼 필수(*) 아닌 행 라벨마다 '(선택)'. 라벨이 섹션 파일
-   * 8곳에 흩어져 있어 한 규칙으로 붙인다. 안에 필수 칸을 품은 묶음 라벨('성명')은 data-no-optional로 뺀다.
-   */
-  ${FieldRow} > ${FieldLabel}:not(:has(${Required})):not([data-no-optional])::after,
-  ${CoreFieldCell} > ${FieldLabel}:not(:has(${Required}))::after,
-  ${FieldRow} > :has(> ${FieldLabel}) > ${FieldLabel}:not(:has(${Required}))::after {
-    content: '(선택)';
-    margin-left: 6px;
-    font-size: 12px;
-    font-weight: 400;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-
-  /* 두 칸 묶음(성별·국적 / 출생지·사망지)은 행 문법에선 각자 한 행 */
+  /* 두 칸 묶음 호환 */
   ${CoreFieldPair} {
     display: contents;
   }
 
-  /* 성·이름·중간이름 칸 머리 — 사건 폼 기간 행 '시작일·종료일'(DateRangeLabel)과 같은 11/700 */
+  /* 성·이름·중간이름·국적·성별 서브 셀 머리 — 사건 폼 기간 행 '시작일·종료일'(DateRangeLabel)과 같은 11/700 */
   ${NameCell} ${Required} {
     font-size: 11px;
     font-weight: 700;
@@ -245,29 +258,27 @@ export const PersonFormLayoutWrap = styled.div`
     max-width: none;
   }
 
-  /* 2차 disclosure(이름의 뜻·군주 호칭) — 행 사이에 끼는 보조 줄이라 필드 열에 맞춰 들인다 */
+  /* 2차 disclosure(이름 상세·생애 상세·추가 소속·가족) — 토글 버튼만 컨트롤 열에 맞춰 들이고,
+     펼쳐진 본문(AdvancedBody) 안의 FieldRow는 기본 2열(라벨 200px + 컨트롤 680px) 격자를 그대로 유지 */
   ${AdvancedSection} {
     margin: 0;
-    padding: 4px 0 8px calc(${SIDE_LABEL_COLUMN} + 24px);
+    padding: 2px 0 4px;
     border-bottom: none;
   }
-  ${AdvancedBody} ${FieldLabel} {
-    padding: 0 0 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.secondary};
+  ${AdvancedSection} > button {
+    margin-left: calc(${SIDE_LABEL_COLUMN} + 24px);
+  }
+  ${AdvancedBody} {
+    padding: 4px 0 2px;
   }
 
-  /*
-   * 장 경계만 선으로 — 예전엔 모든 행 아래 hairline(기본 정보만 7줄)이 경계를 맡아, 장 구분선은
-   * 두 줄이 되지 않게 높이 0이었다. 행 선을 걷었으니 이제 CoreDivider가 실제 선을 긋는다.
-   */
+  /* 장 경계선 */
   ${CoreDivider} {
     height: 1px;
-    margin: 20px 0 24px;
+    margin: 16px 0 18px;
     background: ${({ theme }) => theme.colors.border.light};
   }
-  /* 장 머리글 바로 아래 첫 행은 행 padding(12px)이 간격을 준다 */
+  /* 장 머리글 바로 아래 첫 행은 행 padding(10px)이 간격을 준다 */
   ${CoreSectionLabel} {
     margin-bottom: 4px;
   }
@@ -279,8 +290,8 @@ export const PersonFormLayoutWrap = styled.div`
       grid-template-columns: 160px minmax(0, 1fr);
       column-gap: 16px;
     }
-    ${AdvancedSection} {
-      padding-left: 176px;
+    ${AdvancedSection} > button {
+      margin-left: 176px;
     }
   }
   @media (max-width: 768px) {
@@ -300,8 +311,8 @@ export const PersonFormLayoutWrap = styled.div`
     ${FieldLabel} {
       padding-top: 0;
     }
-    ${AdvancedSection} {
-      padding-left: 0;
+    ${AdvancedSection} > button {
+      margin-left: 0;
     }
   }
 `

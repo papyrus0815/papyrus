@@ -8,7 +8,6 @@ import React from 'react'
 
 import {
   FiAlertCircle,
-  FiChevronRight,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -16,6 +15,7 @@ import type { Era } from '@/shared/api/persons'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import {
   FieldControl,
+  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
@@ -23,13 +23,6 @@ import {
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
 import {
-  AdvancedBody,
-  AdvancedSection,
-  AdvancedToggle,
-  AdvancedToggleBody,
-  AdvancedToggleDesc,
-  AdvancedToggleIcon,
-  AdvancedToggleTitle,
   FONT,
   FieldError,
   InlineFields,
@@ -514,64 +507,45 @@ export function LifeSection({
         </FieldRow>
       )}
 
-      {/* 군주 호칭 — 군주에게만 적용. 카드형 disclosure로 옵셔널 표시. (details) */}
+      {/* 군주 호칭 — 생애 상세 disclosure 안에서 바로 입력 */}
       {showDetails && (
-      <AdvancedSection>
-        <AdvancedToggle
-          type="button"
-          $open={monarchTitlesOpen}
-          onClick={() => setMonarchTitlesOpen((v) => !v)}
-          aria-expanded={monarchTitlesOpen}
-        >
-          <AdvancedToggleIcon $open={monarchTitlesOpen}>
-            <FiChevronRight size={14} />
-          </AdvancedToggleIcon>
-          <AdvancedToggleBody>
-            <AdvancedToggleTitle>군주 호칭</AdvancedToggleTitle>
-            <AdvancedToggleDesc>
-              묘호·시호·즉위 전 작호 (충녕대군·世宗) — 왕호(루이 14세)는 재위 기록에 적습니다
-            </AdvancedToggleDesc>
-          </AdvancedToggleBody>
-        </AdvancedToggle>
-        {monarchTitlesOpen && (
-          <AdvancedBody>
-            <FieldLabel htmlFor={fid('templeName')}>
-              묘호 · 시호 · 작호
-            </FieldLabel>
-            <FieldControl>
-              <InlineFields $cols={3}>
-                <FormInput
-                  id={fid('templeName')}
-                  value={templeName}
-                  onChange={(e) => {
-                    setTempleName(e.target.value)
-                    markDirty()
-                  }}
-                  placeholder="묘호 (예: 세종)"
-                />
-                <FormInput
-                  id={fid('posthumousName')}
-                  value={posthumousName}
-                  onChange={(e) => {
-                    setPosthumousName(e.target.value)
-                    markDirty()
-                  }}
-                  placeholder="시호 (예: 장헌)"
-                />
-                <FormInput
-                  id={fid('preEnthronementTitle')}
-                  value={preEnthronementTitle}
-                  onChange={(e) => {
-                    setPreEnthronementTitle(e.target.value)
-                    markDirty()
-                  }}
-                  placeholder="즉위 전 작호 (예: 충녕대군)"
-                />
-              </InlineFields>
-            </FieldControl>
-          </AdvancedBody>
-        )}
-      </AdvancedSection>
+        <FieldRow>
+          <FieldLabel htmlFor={fid('templeName')}>군주 호칭</FieldLabel>
+          <FieldControl>
+            <InlineFields $cols={3}>
+              <FormInput
+                id={fid('templeName')}
+                value={templeName}
+                onChange={(e) => {
+                  setTempleName(e.target.value)
+                  markDirty()
+                }}
+                placeholder="묘호 (예: 세종)"
+              />
+              <FormInput
+                id={fid('posthumousName')}
+                value={posthumousName}
+                onChange={(e) => {
+                  setPosthumousName(e.target.value)
+                  markDirty()
+                }}
+                placeholder="시호 (예: 장헌)"
+              />
+              <FormInput
+                id={fid('preEnthronementTitle')}
+                value={preEnthronementTitle}
+                onChange={(e) => {
+                  setPreEnthronementTitle(e.target.value)
+                  markDirty()
+                }}
+                placeholder="즉위 전 작호 (예: 충녕대군)"
+              />
+            </InlineFields>
+            <FieldHint>
+              왕호(루이 14세 등)는 재위 기록에 적습니다
+            </FieldHint>
+          </FieldControl>
+        </FieldRow>
       )}
     </FormRows>
   )

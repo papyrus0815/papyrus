@@ -663,6 +663,9 @@ export function InfographicContent({
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
         onSuccess={() => setFormOpen(false)}
+        initialCountryId={
+          scopes.country.length === 1 ? scopes.country[0] : undefined
+        }
         // 등록 후 '상세 보기'는 모달 기본값(/persons-timeline/:id)으로 바로 상세 진입
       />
 

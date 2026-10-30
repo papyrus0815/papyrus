@@ -15,7 +15,10 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { pathKeys } from '@/shared/router'
 import { SidebarSheet } from '@/widgets/content-shell'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
-import { PersonFilterPanel } from '@/widgets/person-infographic'
+import {
+  PersonFilterPanel,
+  usePersonInfographicFilterStore,
+} from '@/widgets/person-infographic'
 
 import { PersonList } from './person-list'
 
@@ -40,6 +43,9 @@ export function PersonSidebar({
 
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const countryScope = usePersonInfographicFilterStore(
+    (state) => state.scopes.country,
+  )
 
   const openAdvanced = useCallback(() => setAdvancedFilterOpen(true), [])
 
@@ -76,6 +82,9 @@ export function PersonSidebar({
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
         editPersonId={null}
+        initialCountryId={
+          countryScope.length === 1 ? countryScope[0] : undefined
+        }
         onSuccess={() => setCreateOpen(false)}
       />
     </>

@@ -120,14 +120,13 @@ import {
   AdvancedBody,
   AdvancedSection,
   AdvancedToggle,
+  AdvancedToggleBadge,
   AdvancedToggleBody,
   AdvancedToggleDesc,
   AdvancedToggleIcon,
   AdvancedToggleTitle,
   ConflictReloadBtn,
-  CoreFieldCell,
   CoreDivider,
-  CoreFieldPair,
   CoreSectionLabel,
   DraftBanner,
   DraftBannerActions,
@@ -139,11 +138,11 @@ import {
   InlineFields,
   LoadingHost,
   NameCell,
+  NamePreviewBadge,
   NotFoundDesc,
   NotFoundIcon,
   NotFoundPanel,
   NotFoundTitle,
-  OptionalSeam,
   OriginalNameInputWrap,
   PersonFormLayoutWrap,
   ThumbnailUploadInput,
@@ -322,9 +321,15 @@ export function PersonRegisterView({
   const [showFatherModal, setShowFatherModal] = useState(false)
   const [showMotherModal, setShowMotherModal] = useState(false)
   const [showSpouseModal, setShowSpouseModal] = useState(false)
-  /** 기본 탭의 "이름의 뜻" 접기 영역 */
+  /** 기본 섹션의 "원어 · 이름의 뜻 · 별칭" 접기 영역 */
   const [nameMeaningsOpen, setNameMeaningsOpen] = useState(false)
-  /** 생애 탭의 "군주명·묘호·시호" 접기 영역 — 군주가 아닌 인물에겐 영구 무관 */
+  /** 생애 섹션의 "출생/사망지 · 메모 · 군주 호칭" 접기 영역 */
+  const [lifeDetailsOpen, setLifeDetailsOpen] = useState(false)
+  /** 소속 섹션의 "추가 국가 소속" 접기 영역 */
+  const [extraAffiliationsOpen, setExtraAffiliationsOpen] = useState(false)
+  /** 가족 섹션의 "부모 · 배우자" 접기 영역 */
+  const [familyOpen, setFamilyOpen] = useState(false)
+  /** 하위 LifeSection 호환용 상태 */
   const [monarchTitlesOpen, setMonarchTitlesOpen] = useState(false)
   /**
    * 등록 성공 직후 노출하는 다이얼로그 — "다른 인물 이어서 등록할까요?".
@@ -733,6 +738,9 @@ export function PersonRegisterView({
       setEditLoadStatus('idle')
       // 등록 모드 전환 시 폼 초기화
       setNameMeaningsOpen(false)
+      setLifeDetailsOpen(false)
+      setExtraAffiliationsOpen(false)
+      setFamilyOpen(false)
       setMonarchTitlesOpen(false)
       // "또 등록" 흐름에서 직전 등록 주 국적(현대/역사 둘 다) 보존(`preserveCountryIdRef`).
       // 일반 reset에서는 initialCountryId(부모가 흘린 현대국가)으로 폴백.
@@ -1012,18 +1020,52 @@ export function PersonRegisterView({
         setFloruitStartYear((p as any).floruitStartYear != null ? String((p as any).floruitStartYear) : '')
         setFloruitEndYear((p as any).floruitEndYear != null ? String((p as any).floruitEndYear) : '')
         setFloruitEra(((p as any).floruitEra as Era) ?? 'AD')
-        // 이름의 뜻이 있으면 기본 탭의 collapse 자동 펼침.
-        const hasNameMeanings =
+        // 수정 모드: 값이 존재하는 부가 섹션은 자동으로 펼쳐 둔다.
+        const hasNameDetails =
+          (p.originalName && String(p.originalName).trim()) ||
           (p.surnameMeaning && String(p.surnameMeaning).trim()) ||
           (p.nameMeaning && String(p.nameMeaning).trim()) ||
-          (p.middleNameMeaning && String(p.middleNameMeaning).trim())
-        setNameMeaningsOpen(Boolean(hasNameMeanings))
-        // 군주 호칭이 있으면 생애 탭의 collapse 자동 펼침.
+          (p.middleNameMeaning && String(p.middleNameMeaning).trim()) ||
+          ((p as any).nicknames && (p as any).nicknames.length > 0)
+        setNameMeaningsOpen(Boolean(hasNameDetails))
         const hasMonarchTitles =
           (p.templeName && String(p.templeName).trim()) ||
           (p.posthumousName && String(p.posthumousName).trim()) ||
           (p.preEnthronementTitle && String(p.preEnthronementTitle).trim())
         setMonarchTitlesOpen(Boolean(hasMonarchTitles))
+        const hasLifeDetails =
+          Boolean(
+            p.birthCityId ||
+              p.deathCityId ||
+              (p as any).birthCity?.name ||
+              (p as any).deathCity?.name ||
+              (p as any).birthAdminDivision?.name ||
+              (p as any).deathAdminDivision?.name ||
+              (p as any).birthPlaceText ||
+              (p as any).deathPlaceText ||
+              ((p as any).birthNote && String((p as any).birthNote).trim()) ||
+              ((p as any).deathCause && String((p as any).deathCause).trim()) ||
+              ((p as any).deathNote && String((p as any).deathNote).trim()) ||
+              hasMonarchTitles,
+          )
+        setLifeDetailsOpen(hasLifeDetails)
+        const extraAffs = ((p as any).countryAffiliations ?? []).filter(
+          (a: any) =>
+            !(
+              a.affiliationType === 'CITIZENSHIP' &&
+              (a.priority ?? 1) === 0
+            ),
+        )
+        setExtraAffiliationsOpen(extraAffs.length > 0)
+        const hasFamily = Boolean(
+          p.fatherId ||
+            p.father?.id ||
+            p.motherId ||
+            p.mother?.id ||
+            (p as any).illegitimate ||
+            spouseRels.length > 0,
+        )
+        setFamilyOpen(hasFamily)
         setEditLoadStatus('loaded')
         // 409 '최신 내용 불러오기'로 촉발된 재하이드레이션이면 성공을 알린다(무反응 방지).
         if (reloadAfterConflictPendingRef.current) {
@@ -1053,13 +1095,34 @@ export function PersonRegisterView({
     if (!primaryCountryId || (!modernCountries.length && !historicalCountries.length))
       return
     if (countryId) {
-      const modern = modernCountries.find((country) => country.id === countryId)
-      if (modern) setCountryName(modern.name)
+      const modern = modernCountries.find(
+        (country) => country.id === countryId || country.name === countryId,
+      )
+      if (modern) {
+        if (countryId !== modern.id) setCountryId(modern.id)
+        setCountryName(modern.name)
+        return
+      }
+      const historical = historicalCountries.find(
+        (country) => country.id === countryId || country.name === countryId,
+      )
+      if (historical) {
+        setCountryId('')
+        setHistoricalCountryId(historical.id)
+        setCountryName(historical.name ?? '')
+        return
+      }
     } else if (historicalCountryId) {
       const historical = historicalCountries.find(
-        (country) => country.id === historicalCountryId,
+        (country) =>
+          country.id === historicalCountryId ||
+          country.name === historicalCountryId,
       )
-      if (historical) setCountryName(historical.name ?? '')
+      if (historical) {
+        if (historicalCountryId !== historical.id)
+          setHistoricalCountryId(historical.id)
+        setCountryName(historical.name ?? '')
+      }
     }
   }, [countryId, historicalCountryId, primaryCountryId, modernCountries, historicalCountries])
 
@@ -1112,6 +1175,44 @@ export function PersonRegisterView({
     formFieldsRef.current.forEach((field) =>
       field.restore((d as Record<string, unknown>)[field.key]),
     )
+    const raw = d as Record<string, any>
+    if (
+      raw.originalName ||
+      raw.surnameMeaning ||
+      raw.nameMeaning ||
+      raw.middleNameMeaning ||
+      (Array.isArray(raw.nicknameRows) && raw.nicknameRows.length > 0)
+    ) {
+      setNameMeaningsOpen(true)
+    }
+    if (
+      raw.birthCityId ||
+      raw.deathCityId ||
+      raw.birthPlace ||
+      raw.deathPlace ||
+      raw.birthNote ||
+      raw.deathCause ||
+      raw.deathNote ||
+      raw.templeName ||
+      raw.posthumousName ||
+      raw.preEnthronementTitle
+    ) {
+      setLifeDetailsOpen(true)
+    }
+    if (
+      Array.isArray(raw.countryAffiliations) &&
+      raw.countryAffiliations.length > 0
+    ) {
+      setExtraAffiliationsOpen(true)
+    }
+    if (
+      raw.fatherId ||
+      raw.motherId ||
+      raw.illegitimate ||
+      (Array.isArray(raw.spouseRelations) && raw.spouseRelations.length > 0)
+    ) {
+      setFamilyOpen(true)
+    }
     setPendingDraftSavedAt(null)
     requestAnimationFrame(() => {
       dirtyTrackingEnabledRef.current = true
@@ -1609,6 +1710,7 @@ export function PersonRegisterView({
     // 국가 소속 행의 기간 역전(종료<시작)은 서버로 잘못 전송되므로 제출 차단.
     // 소속 행이 상시 노출이라 파생 aria-invalid로 handleSubmit 첫-오류 스크롤이 곧바로 착지한다.
     if (hasAffiliationDateError(countryAffiliations)) {
+      setExtraAffiliationsOpen(true)
       e._form = '국가 소속의 기간을 확인해주세요. 종료일이 시작일보다 빠른 행이 있습니다.'
     }
     // 배우자 미선택 행에 혼인일·서열·메모만 입력하면 저장 시 조용히 폐기되므로 제출 차단.
@@ -1635,6 +1737,7 @@ export function PersonRegisterView({
       return false
     })
     if (orphanSpouseMeta || badSpouseDate || duplicateSpouse) {
+      setFamilyOpen(true)
       const parts: string[] = []
       if (orphanSpouseMeta)
         parts.push('배우자가 선택되지 않은 행에 혼인일·서열·메모가 입력되어 있습니다. 배우자를 선택하거나 행을 비워주세요.')
@@ -2142,139 +2245,319 @@ export function PersonRegisterView({
             aria-busy={isLoadingEdit}
             style={isLoadingEdit ? { display: 'none' } : undefined}
           >
-            {/*
-             * 4개 챕터(기본 정보 · 생애 · 가문/종교/국가 · 가족)를 늘 펼쳐 두되,
-             * 필수(이름·성별·국적)를 앞에 모으고 OptionalSeam으로 '여기까지면 등록 끝'을 표식.
-             * 세부(이름 원어/뜻·사망 상세·군주 호칭)는 필드 단위 disclosure로만 접어 첫인상 부담을 관리.
-             */}
             <FormRows data-form-section="basic">
-                <CoreSectionLabel>기본 정보</CoreSectionLabel>
-                {/* 성명 — 사건 등록 폼 '기간' 행처럼 왼쪽 라벨 하나, 오른쪽 성·이름·중간이름 칸(칸별 작은 머리) */}
-                  <FieldRow>
-                    <FieldLabel htmlFor={fid('surname')} data-no-optional>
-                      성명
-                    </FieldLabel>
-                    {/* 칸마다 자기 라벨 — 한 줄 라벨 '성 · 이름* · 중간이름'은 별표가 가운데 끼어
-                        오탈자처럼 보였고 '(이름만 필수)' 해설이 따로 필요했다. 필수 표식은 '이름' 칸에만
-                        (성·중간이름은 선택 — 외자·성 미상 인물). */}
-                    <FieldControl>
-                      <InlineFields $template="minmax(90px, 0.8fr) minmax(140px, 1.4fr) minmax(110px, 1fr)">
-                        <NameCell>
-                          <FieldLabel htmlFor={fid('surname')}>성</FieldLabel>
-                          <FormInput
-                            id={fid('surname')}
-                            value={surname}
-                            onChange={(e) => setSurname(e.target.value)}
-                            placeholder="홍"
-                          />
-                        </NameCell>
-                        <NameCell>
-                          <FieldLabel htmlFor={fid('name')}>
-                            이름<Required>*</Required>
-                          </FieldLabel>
-                          <FormInput
-                            id={fid('name')}
-                            value={name}
-                            onChange={(e) => {
-                              setName(e.target.value)
-                              clearFieldError('name')
-                            }}
-                            onBlur={() => handleRequiredTextBlur('name', name)}
-                            placeholder="길동"
-                            data-jump-target="name"
-                            aria-required
-                            $error={!!errors.name}
-                            aria-invalid={!!errors.name}
-                            aria-describedby={
-                              errors.name ? fid('name-err') : undefined
-                            }
-                          />
-                        </NameCell>
-                        <NameCell>
-                          <FieldLabel htmlFor={fid('middleName')}>중간이름</FieldLabel>
-                          <FormInput
-                            id={fid('middleName')}
-                            value={middleName}
-                            onChange={(e) => setMiddleName(e.target.value)}
-                            placeholder="없으면 비움"
-                          />
-                        </NameCell>
-                      </InlineFields>
-                      {/* namePreview는 상단 hero에 표시. 성·중간이름은 선택, 이름만 필수. */}
-                      {errors.name && (
-                        <FieldError id={fid('name-err')} role="alert">
+              <CoreSectionLabel>기본 정보</CoreSectionLabel>
+              {/* 성명 — 왼쪽 라벨 하나, 오른쪽 성·이름·중간이름 칸 */}
+              <FieldRow>
+                <FieldLabel htmlFor={fid('surname')} data-no-optional>
+                  성명
+                </FieldLabel>
+                <FieldControl>
+                  <InlineFields $template="minmax(90px, 0.8fr) minmax(140px, 1.4fr) minmax(110px, 1fr)">
+                    <NameCell>
+                      <FieldLabel htmlFor={fid('surname')}>성</FieldLabel>
+                      <FormInput
+                        id={fid('surname')}
+                        value={surname}
+                        onChange={(e) => setSurname(e.target.value)}
+                        placeholder="홍"
+                      />
+                    </NameCell>
+                    <NameCell>
+                      <FieldLabel htmlFor={fid('name')}>
+                        이름<Required>*</Required>
+                      </FieldLabel>
+                      <FormInput
+                        id={fid('name')}
+                        value={name}
+                        onChange={(e) => {
+                          setName(e.target.value)
+                          clearFieldError('name')
+                        }}
+                        onBlur={() => handleRequiredTextBlur('name', name)}
+                        placeholder="길동"
+                        data-jump-target="name"
+                        aria-required
+                        $error={!!errors.name}
+                        aria-invalid={!!errors.name}
+                        aria-describedby={
+                          errors.name ? fid('name-err') : undefined
+                        }
+                      />
+                    </NameCell>
+                    <NameCell>
+                      <FieldLabel htmlFor={fid('middleName')}>중간이름</FieldLabel>
+                      <FormInput
+                        id={fid('middleName')}
+                        value={middleName}
+                        onChange={(e) => setMiddleName(e.target.value)}
+                        placeholder="없으면 비움"
+                      />
+                    </NameCell>
+                  </InlineFields>
+                  {errors.name && (
+                    <FieldError id={fid('name-err')} role="alert">
+                      <FiAlertCircle size={13} />
+                      {errors.name}
+                    </FieldError>
+                  )}
+                  {/* 성 또는 중간이름이 입력되었거나 표시 순서가 수동 지정된 경우에만 표시 순서 + 실시간 조합명 노출 */}
+                  {Boolean(
+                    surname.trim() || middleName.trim() || nameFormat !== 'auto',
+                  ) && (
+                    <NameOrderControl>
+                      <NameOrderLabel htmlFor={fid('nameFormat')}>
+                        표시 순서
+                      </NameOrderLabel>
+                      <SegmentControl
+                        appearance="chips"
+                        value={nameFormat}
+                        onChange={(v) => {
+                          setNameFormat(v as 'auto' | 'korean' | 'western')
+                          markDirty()
+                        }}
+                        options={[
+                          {
+                            value: 'auto',
+                            label: `국가 기본 (${
+                              (countryNameOrderById.get(primaryCountryId) ??
+                                'korean') === 'western'
+                                ? '이름·성'
+                                : '성·이름'
+                            })`,
+                          },
+                          { value: 'korean', label: '성·이름' },
+                          { value: 'western', label: '이름·성' },
+                        ]}
+                        ariaLabel="이름 표시 순서"
+                      />
+                      {namePreview && (
+                        <NamePreviewBadge aria-live="polite">
+                          표시명 <strong>{namePreview}</strong>
+                        </NamePreviewBadge>
+                      )}
+                    </NameOrderControl>
+                  )}
+                </FieldControl>
+              </FieldRow>
+
+              {/* 국적·성별 — 필수 2항목을 성명 바로 아래 한 행의 좌우 2열로 배치해 시선·탭 동선 단축 */}
+              <FieldRow>
+                <FieldLabel htmlFor={fid('countryId')} data-no-optional>
+                  국적 · 성별
+                </FieldLabel>
+                <FieldControl>
+                  <InlineFields $template="minmax(220px, 1.4fr) auto">
+                    <NameCell>
+                      <FieldLabel htmlFor={fid('countryId')}>
+                        국적<Required>*</Required>
+                      </FieldLabel>
+                      <SelectBtn
+                        id={fid('countryId')}
+                        data-jump-target="countryId"
+                        type="button"
+                        $hasValue={!!countryName}
+                        $error={!!errors.countryId}
+                        aria-invalid={!!errors.countryId}
+                        aria-describedby={
+                          errors.countryId ? fid('countryId-err') : undefined
+                        }
+                        onClick={() => setShowCountryModal(true)}
+                      >
+                        <span>{countryName || '국가 선택 (현대·역사)'}</span>
+                        <FiChevronDown size={18} />
+                      </SelectBtn>
+                      {errors.countryId && (
+                        <FieldError id={fid('countryId-err')} role="alert">
                           <FiAlertCircle size={13} />
-                          {errors.name}
+                          {errors.countryId}
                         </FieldError>
                       )}
-                      {/* 표시 순서 — 기본은 국가 설정 따름, 필요 시 개인 단위로 오버라이드 */}
-                      <NameOrderControl>
-                        <NameOrderLabel htmlFor={fid('nameFormat')}>
-                          표시 순서
-                        </NameOrderLabel>
+                    </NameCell>
+
+                    <NameCell>
+                      <FieldLabel htmlFor={fid('gender')}>
+                        성별<Required>*</Required>
+                      </FieldLabel>
+                      <div
+                        data-jump-target="gender"
+                        data-field-error={errors.gender ? 'true' : undefined}
+                        tabIndex={-1}
+                      >
                         <SegmentControl
                           appearance="chips"
-                          value={nameFormat}
+                          value={gender || undefined}
                           onChange={(v) => {
-                            setNameFormat(v as 'auto' | 'korean' | 'western')
+                            setGender(v)
+                            clearFieldError('gender')
                             markDirty()
                           }}
-                          options={[
-                            {
-                              value: 'auto',
-                              label: `국가 기본 (${
-                                (countryNameOrderById.get(primaryCountryId) ??
-                                  'korean') === 'western'
-                                  ? '이름·성'
-                                  : '성·이름'
-                              })`,
-                            },
-                            { value: 'korean', label: '성·이름' },
-                            { value: 'western', label: '이름·성' },
-                          ]}
-                          ariaLabel="이름 표시 순서"
+                          options={GENDER_OPTIONS.map((opt) => ({
+                            value: opt.value,
+                            label: opt.label,
+                          }))}
+                          error={!!errors.gender}
+                          ariaLabel="성별"
+                          ariaDescribedBy={
+                            errors.gender ? fid('gender-err') : undefined
+                          }
                         />
-                      </NameOrderControl>
-                    </FieldControl>
-                  </FieldRow>
+                      </div>
+                      {errors.gender && (
+                        <FieldError id={fid('gender-err')} role="alert">
+                          <FiAlertCircle size={13} />
+                          {errors.gender}
+                        </FieldError>
+                      )}
+                    </NameCell>
+                  </InlineFields>
+                </FieldControl>
+              </FieldRow>
 
-                {/* 이름 원어 — 성·이름 클러스터에 인접(구 '이름 상세' 섹션에서 이관) */}
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('originalName')}>이름 원어</FieldLabel>
-                  <FieldControl>
-                    <OriginalNameInputWrap>
-                      <FormInput
-                        id={fid('originalName')}
-                        value={originalName}
-                        onChange={(e) => setOriginalName(e.target.value)}
-                        placeholder="Franklin D. Roosevelt"
-                      />
-                    </OriginalNameInputWrap>
-                  </FieldControl>
-                </FieldRow>
+              {/* 프로필 사진 — 한 줄 업로드 띠 */}
+              <FieldRow>
+                <FieldLabel htmlFor="person-thumbnail-upload">
+                  프로필 사진
+                </FieldLabel>
+                <FieldControl
+                  onDragEnter={(e) => {
+                    e.preventDefault()
+                    setThumbnailDragOver(true)
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    setThumbnailDragOver(true)
+                  }}
+                  onDragLeave={() => setThumbnailDragOver(false)}
+                  onDrop={handleThumbnailDrop}
+                >
+                  {thumbnailObjectUrl || profileImageUrl.trim() ? (
+                    <KitUploadFilled>
+                      <KitUploadThumb>
+                        <img
+                          src={
+                            thumbnailObjectUrl ||
+                            getUploadImageUrl(profileImageUrl) ||
+                            profileImageUrl
+                          }
+                          alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
+                        />
+                      </KitUploadThumb>
+                      <KitUploadText>
+                        <strong>프로필 사진</strong>
+                        <span id="person-thumbnail-hint">
+                          {pendingThumbnailFile
+                            ? '저장할 때 올라갑니다'
+                            : '끌어 놓거나 붙여넣어(⌘V) 바꿀 수 있습니다'}
+                        </span>
+                      </KitUploadText>
+                      <KitUploadActions>
+                        <KitUploadButton
+                          type="button"
+                          onClick={() =>
+                            document.getElementById('person-thumbnail-upload')?.click()
+                          }
+                          disabled={isSubmitting}
+                        >
+                          바꾸기
+                        </KitUploadButton>
+                        <KitUploadRemove
+                          type="button"
+                          onClick={() => {
+                            handleRemoveThumbnail()
+                            markDirty()
+                          }}
+                          disabled={isSubmitting}
+                          aria-label={
+                            pendingThumbnailFile ? '선택한 이미지 취소' : '프로필 사진 제거'
+                          }
+                        >
+                          <FiX size={15} />
+                        </KitUploadRemove>
+                      </KitUploadActions>
+                    </KitUploadFilled>
+                  ) : (
+                    <KitUploadStrip
+                      type="button"
+                      $dragOver={thumbnailDragOver}
+                      onClick={() =>
+                        document.getElementById('person-thumbnail-upload')?.click()
+                      }
+                      disabled={isSubmitting}
+                    >
+                      <KitUploadThumb aria-hidden>
+                        <FiImage size={18} />
+                      </KitUploadThumb>
+                      <KitUploadText>
+                        <strong>
+                          {thumbnailDragOver ? '여기에 놓아 올리기' : '프로필 사진 올리기'}
+                        </strong>
+                        <span id="person-thumbnail-hint">
+                          누르거나 끌어 놓기 · 붙여넣기(⌘V)도 됩니다
+                        </span>
+                      </KitUploadText>
+                    </KitUploadStrip>
+                  )}
+                  <ThumbnailUploadInput
+                    id="person-thumbnail-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleThumbnailChange}
+                    disabled={isSubmitting}
+                    aria-label="프로필 사진 업로드"
+                    aria-describedby="person-thumbnail-hint"
+                  />
+                </FieldControl>
+              </FieldRow>
 
-                {/* 이름의 뜻 — 성·이름·중간이름의 한자/뜻 (옵셔널 disclosure) */}
-                <AdvancedSection>
-                  <AdvancedToggle
-                    type="button"
-                    $open={nameMeaningsOpen}
-                    onClick={() => setNameMeaningsOpen((v) => !v)}
-                    aria-expanded={nameMeaningsOpen}
-                  >
-                    <AdvancedToggleIcon $open={nameMeaningsOpen}>
-                      <FiChevronRight size={14} />
-                    </AdvancedToggleIcon>
-                    <AdvancedToggleBody>
-                      <AdvancedToggleTitle>이름의 뜻</AdvancedToggleTitle>
-                      <AdvancedToggleDesc>
-                        한자·뜻
-                      </AdvancedToggleDesc>
-                    </AdvancedToggleBody>
-                  </AdvancedToggle>
-                  {nameMeaningsOpen && (
-                    <AdvancedBody>
+              {/* 이름 상세 (원어 · 이름의 뜻 · 별칭) — 기본 접힘, 값 존재 시 자동 펼침 */}
+              <AdvancedSection>
+                <AdvancedToggle
+                  type="button"
+                  $open={nameMeaningsOpen}
+                  onClick={() => setNameMeaningsOpen((v) => !v)}
+                  aria-expanded={nameMeaningsOpen}
+                >
+                  <AdvancedToggleIcon $open={nameMeaningsOpen}>
+                    <FiChevronRight size={14} />
+                  </AdvancedToggleIcon>
+                  <AdvancedToggleBody>
+                    <AdvancedToggleTitle>
+                      원어 · 이름의 뜻 · 별칭
+                    </AdvancedToggleTitle>
+                    <AdvancedToggleDesc>
+                      원어 표기, 한자·뜻, 아명·자·필명
+                    </AdvancedToggleDesc>
+                    {!nameMeaningsOpen &&
+                      Boolean(
+                        originalName.trim() ||
+                          surnameMeaning.trim() ||
+                          nameMeaning.trim() ||
+                          middleNameMeaning.trim() ||
+                          nicknameRows.some((r) => r.nickname.trim()),
+                      ) && <AdvancedToggleBadge>입력됨</AdvancedToggleBadge>}
+                  </AdvancedToggleBody>
+                </AdvancedToggle>
+                {nameMeaningsOpen && (
+                  <AdvancedBody>
+                    <FieldRow>
+                      <FieldLabel htmlFor={fid('originalName')}>
+                        이름 원어
+                      </FieldLabel>
+                      <FieldControl>
+                        <OriginalNameInputWrap>
+                          <FormInput
+                            id={fid('originalName')}
+                            value={originalName}
+                            onChange={(e) => setOriginalName(e.target.value)}
+                            placeholder="Franklin D. Roosevelt"
+                          />
+                        </OriginalNameInputWrap>
+                      </FieldControl>
+                    </FieldRow>
+                    <FieldRow>
                       <FieldLabel htmlFor={fid('surnameMeaning')}>
-                        성·이름·중간이름의 뜻
+                        이름의 뜻
                       </FieldLabel>
                       <FieldControl>
                         <InlineFields $cols={3}>
@@ -2293,198 +2576,28 @@ export function PersonRegisterView({
                           <FormInput
                             id={fid('middleNameMeaning')}
                             value={middleNameMeaning}
-                            onChange={(e) => setMiddleNameMeaning(e.target.value)}
+                            onChange={(e) =>
+                              setMiddleNameMeaning(e.target.value)
+                            }
                             placeholder="중간이름의 뜻"
                           />
                         </InlineFields>
                       </FieldControl>
-                    </AdvancedBody>
-                  )}
-                </AdvancedSection>
-
-                {/* 별칭(아명·출생명·자·필명 등) — 이름 클러스터에 인접. 개명 인물의 출생명 등. */}
-                <NicknameSection
-                  rows={nicknameRows}
-                  setRows={setNicknameRows}
-                  markDirty={markDirty}
-                />
-
-                {/* 성별·국적 — 짧은 코어 컨트롤이라 가로 2열로 묶음 */}
-                <CoreFieldPair>
-                  <CoreFieldCell>
-                    <FieldLabel htmlFor={fid('gender')}>
-                      성별<Required>*</Required>
-                    </FieldLabel>
-                    {/* SegmentControl은 aria-invalid를 렌더하지 않음 — 제출 실패 시 첫 오류
-                        스크롤 셀렉터가 잡을 수 있게 래퍼에 data-field-error를 단다.
-                        푸터 진척칩 '미완으로 이동'(data-jump-target) 착지점이자, tabIndex를 상시
-                        -1로 둬 스크롤 후 프로그램 포커스가 안착하게 한다(SegmentControl은 div라 기본 비포커스). */}
-                    <div
-                      data-jump-target="gender"
-                      data-field-error={errors.gender ? 'true' : undefined}
-                      tabIndex={-1}
-                    >
-                      <SegmentControl
-                        appearance="chips"
-                        value={gender || undefined}
-                        onChange={(v) => {
-                          setGender(v)
-                          clearFieldError('gender')
-                          markDirty()
-                        }}
-                        options={GENDER_OPTIONS.map((opt) => ({
-                          value: opt.value,
-                          label: opt.label,
-                        }))}
-                        error={!!errors.gender}
-                        ariaLabel="성별"
-                        ariaDescribedBy={
-                          errors.gender ? fid('gender-err') : undefined
-                        }
-                      />
-                    </div>
-                    {errors.gender && (
-                      <FieldError id={fid('gender-err')} role="alert">
-                        <FiAlertCircle size={13} />
-                        {errors.gender}
-                      </FieldError>
-                    )}
-                  </CoreFieldCell>
-
-                  {/* 국적(필수) — 소속 섹션에서 코어로 이관 */}
-                  <CoreFieldCell>
-                    <FieldLabel htmlFor={fid('countryId')}>
-                      국적<Required>*</Required>
-                    </FieldLabel>
-                    <SelectBtn
-                      id={fid('countryId')}
-                      data-jump-target="countryId"
-                      type="button"
-                      $hasValue={!!countryName}
-                      $error={!!errors.countryId}
-                      aria-invalid={!!errors.countryId}
-                      aria-describedby={
-                        errors.countryId ? fid('countryId-err') : undefined
-                      }
-                      onClick={() => setShowCountryModal(true)}
-                    >
-                      <span>{countryName || '국가 선택 (현대·역사)'}</span>
-                      <FiChevronDown size={18} />
-                    </SelectBtn>
-                    {errors.countryId && (
-                      <FieldError id={fid('countryId-err')} role="alert">
-                        <FiAlertCircle size={13} />
-                        {errors.countryId}
-                      </FieldError>
-                    )}
-                  </CoreFieldCell>
-                </CoreFieldPair>
-
-                {/*
-                 * 프로필 사진 — 사건 등록 폼 썸네일과 같은 한 줄 업로드 띠(register-form-kit).
-                 * 이름이 폼의 첫 칸이 되도록 기본 정보 끝에 둔다(사건 폼도 제목 먼저, 이미지는 뒤).
-                 * 고른 파일은 저장 시 업로드 — 드래그·붙여넣기(⌘V)도 그대로 받는다.
-                 */}
-                <FieldRow>
-                  <FieldLabel htmlFor="person-thumbnail-upload">
-                    프로필 사진
-                  </FieldLabel>
-                  <FieldControl
-                    onDragEnter={(e) => {
-                      e.preventDefault()
-                      setThumbnailDragOver(true)
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      setThumbnailDragOver(true)
-                    }}
-                    onDragLeave={() => setThumbnailDragOver(false)}
-                    onDrop={handleThumbnailDrop}
-                  >
-                    {thumbnailObjectUrl || profileImageUrl.trim() ? (
-                      <KitUploadFilled>
-                        <KitUploadThumb>
-                          <img
-                            src={
-                              thumbnailObjectUrl ||
-                              getUploadImageUrl(profileImageUrl) ||
-                              profileImageUrl
-                            }
-                            alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
-                          />
-                        </KitUploadThumb>
-                        <KitUploadText>
-                          <strong>프로필 사진</strong>
-                          <span id="person-thumbnail-hint">
-                            {pendingThumbnailFile
-                              ? '저장할 때 올라갑니다'
-                              : '끌어 놓거나 붙여넣어(⌘V) 바꿀 수 있습니다'}
-                          </span>
-                        </KitUploadText>
-                        <KitUploadActions>
-                          <KitUploadButton
-                            type="button"
-                            onClick={() =>
-                              document.getElementById('person-thumbnail-upload')?.click()
-                            }
-                            disabled={isSubmitting}
-                          >
-                            바꾸기
-                          </KitUploadButton>
-                          <KitUploadRemove
-                            type="button"
-                            onClick={() => {
-                              handleRemoveThumbnail()
-                              markDirty()
-                            }}
-                            disabled={isSubmitting}
-                            aria-label={
-                              pendingThumbnailFile ? '선택한 이미지 취소' : '프로필 사진 제거'
-                            }
-                          >
-                            <FiX size={15} />
-                          </KitUploadRemove>
-                        </KitUploadActions>
-                      </KitUploadFilled>
-                    ) : (
-                      <KitUploadStrip
-                        type="button"
-                        $dragOver={thumbnailDragOver}
-                        onClick={() =>
-                          document.getElementById('person-thumbnail-upload')?.click()
-                        }
-                        disabled={isSubmitting}
-                      >
-                        <KitUploadThumb aria-hidden>
-                          <FiImage size={18} />
-                        </KitUploadThumb>
-                        <KitUploadText>
-                          <strong>
-                            {thumbnailDragOver ? '여기에 놓아 올리기' : '프로필 사진 올리기'}
-                          </strong>
-                          <span id="person-thumbnail-hint">
-                            누르거나 끌어 놓기 · 붙여넣기(⌘V)도 됩니다
-                          </span>
-                        </KitUploadText>
-                      </KitUploadStrip>
-                    )}
-                    <ThumbnailUploadInput
-                      id="person-thumbnail-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleThumbnailChange}
-                      disabled={isSubmitting}
-                      aria-label="프로필 사진 업로드"
-                      aria-describedby="person-thumbnail-hint"
+                    </FieldRow>
+                    <NicknameSection
+                      rows={nicknameRows}
+                      setRows={setNicknameRows}
+                      markDirty={markDirty}
                     />
-                  </FieldControl>
-                </FieldRow>
-              </FormRows>
+                  </AdvancedBody>
+                )}
+              </AdvancedSection>
+            </FormRows>
 
-              <CoreDivider />
+            <CoreDivider />
 
-              {/* 생몰 요약 — 출생~사망·생존 여부 (essentials, 늘 노출) */}
-              <div data-form-section="life">
+            {/* 생몰 요약 — 출생~사망·생존 여부 (essentials, 늘 노출) + 상세 접기 */}
+            <div data-form-section="life">
               <CoreSectionLabel>생애</CoreSectionLabel>
               <LifeSection
                 mode="essentials"
@@ -2545,139 +2658,221 @@ export function PersonRegisterView({
                 deathPickerOpen={showDeathDateModal}
               />
 
-              {/* 생애 상세 — 출생지·사망지 + 사망 유형·원인·메모 + 군주 호칭 (생몰과 한 챕터로 인접 배치) */}
-              {/* 출생지·사망지 — 생몰 날짜와 한 흐름에 두어 발견성 회복 */}
-              <PlaceFields
-                countryId={primaryCountryId}
-                birthPlace={birthPlace}
-                deathPlace={deathPlace}
-                setBirthPlace={setBirthPlace}
-                setDeathPlace={setDeathPlace}
-                setBirthCityId={setBirthCityId}
-                setDeathCityId={setDeathCityId}
-                onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
+              {/* 생애 상세 — 출생지/사망지 · 메모 · 군주 호칭 (기본 접힘, 값 존재 시 자동 펼침) */}
+              <AdvancedSection>
+                <AdvancedToggle
+                  type="button"
+                  $open={lifeDetailsOpen}
+                  onClick={() => setLifeDetailsOpen((v) => !v)}
+                  aria-expanded={lifeDetailsOpen}
+                >
+                  <AdvancedToggleIcon $open={lifeDetailsOpen}>
+                    <FiChevronRight size={14} />
+                  </AdvancedToggleIcon>
+                  <AdvancedToggleBody>
+                    <AdvancedToggleTitle>
+                      출생/사망지 · 메모 · 군주 호칭
+                    </AdvancedToggleTitle>
+                    <AdvancedToggleDesc>
+                      장소, 출생·사망 메모, 묘호·시호·작호
+                    </AdvancedToggleDesc>
+                    {!lifeDetailsOpen &&
+                      Boolean(
+                        birthPlace ||
+                          deathPlace ||
+                          birthNote.trim() ||
+                          deathCause.trim() ||
+                          deathNote.trim() ||
+                          templeName.trim() ||
+                          posthumousName.trim() ||
+                          preEnthronementTitle.trim(),
+                      ) && <AdvancedToggleBadge>입력됨</AdvancedToggleBadge>}
+                  </AdvancedToggleBody>
+                </AdvancedToggle>
+                {lifeDetailsOpen && (
+                  <AdvancedBody>
+                    <PlaceFields
+                      countryId={primaryCountryId}
+                      birthPlace={birthPlace}
+                      deathPlace={deathPlace}
+                      setBirthPlace={setBirthPlace}
+                      setDeathPlace={setDeathPlace}
+                      setBirthCityId={setBirthCityId}
+                      setDeathCityId={setDeathCityId}
+                      onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
+                      markDirty={markDirty}
+                    />
+                    <LifeSection
+                      mode="details"
+                      fid={fid}
+                      birthEra={birthEra}
+                      birthYear={birthYear}
+                      birthMonth={birthMonth}
+                      birthDay={birthDay}
+                      isBirthDateUnknown={isBirthDateUnknown}
+                      setIsBirthDateUnknown={setIsBirthDateUnknown}
+                      isBirthDateApproximate={isBirthDateApproximate}
+                      setIsBirthDateApproximate={setIsBirthDateApproximate}
+                      isDeathDateApproximate={isDeathDateApproximate}
+                      setIsDeathDateApproximate={setIsDeathDateApproximate}
+                      setShowBirthDateModal={setShowBirthDateModal}
+                      setBirthEra={setBirthEra}
+                      setBirthYear={setBirthYear}
+                      setBirthMonth={setBirthMonth}
+                      setBirthDay={setBirthDay}
+                      deathEra={deathEra}
+                      deathYear={deathYear}
+                      deathMonth={deathMonth}
+                      deathDay={deathDay}
+                      isAlive={isAlive}
+                      isDeathDateUnknown={isDeathDateUnknown}
+                      setShowDeathDateModal={setShowDeathDateModal}
+                      setDeathEra={setDeathEra}
+                      setDeathYear={setDeathYear}
+                      setDeathMonth={setDeathMonth}
+                      setDeathDay={setDeathDay}
+                      setDeathStatus={setDeathStatus}
+                      floruitStartYear={floruitStartYear}
+                      floruitEndYear={floruitEndYear}
+                      floruitEra={floruitEra}
+                      setFloruitStartYear={setFloruitStartYear}
+                      setFloruitEndYear={setFloruitEndYear}
+                      setFloruitEra={setFloruitEra}
+                      deathType={deathType}
+                      deathCause={deathCause}
+                      birthNote={birthNote}
+                      setBirthNote={setBirthNote}
+                      deathNote={deathNote}
+                      setDeathType={setDeathType}
+                      setDeathCause={setDeathCause}
+                      setDeathNote={setDeathNote}
+                      monarchTitlesOpen={monarchTitlesOpen}
+                      setMonarchTitlesOpen={setMonarchTitlesOpen}
+                      templeName={templeName}
+                      posthumousName={posthumousName}
+                      preEnthronementTitle={preEnthronementTitle}
+                      setTempleName={setTempleName}
+                      setPosthumousName={setPosthumousName}
+                      setPreEnthronementTitle={setPreEnthronementTitle}
+                      lifespanText={lifespanText}
+                      errors={errors}
+                      markDirty={markDirty}
+                    />
+                  </AdvancedBody>
+                )}
+              </AdvancedSection>
+            </div>
+
+            <CoreDivider />
+
+            {/* 소속 · 가족 — 가문·종교(코어 1행) + 추가 국가 소속·가족 관계(접힘 토글) */}
+            <div data-form-section="affiliation">
+              <CoreSectionLabel>소속 · 가족</CoreSectionLabel>
+              <AffiliationSection
+                dynastyOptions={dynastySelectOptions}
+                religionOptions={religionSelectOptions}
+                dynastyValue={dynastyId}
+                religionValue={religionId}
+                onDynastyChange={setDynastyId}
+                onReligionChange={setReligionId}
                 markDirty={markDirty}
               />
-              <LifeSection
-                mode="details"
-                fid={fid}
-                birthEra={birthEra}
-                birthYear={birthYear}
-                birthMonth={birthMonth}
-                birthDay={birthDay}
-                isBirthDateUnknown={isBirthDateUnknown}
-                setIsBirthDateUnknown={setIsBirthDateUnknown}
-                isBirthDateApproximate={isBirthDateApproximate}
-                setIsBirthDateApproximate={setIsBirthDateApproximate}
-                isDeathDateApproximate={isDeathDateApproximate}
-                setIsDeathDateApproximate={setIsDeathDateApproximate}
-                setShowBirthDateModal={setShowBirthDateModal}
-                setBirthEra={setBirthEra}
-                setBirthYear={setBirthYear}
-                setBirthMonth={setBirthMonth}
-                setBirthDay={setBirthDay}
-                deathEra={deathEra}
-                deathYear={deathYear}
-                deathMonth={deathMonth}
-                deathDay={deathDay}
-                isAlive={isAlive}
-                isDeathDateUnknown={isDeathDateUnknown}
-                setShowDeathDateModal={setShowDeathDateModal}
-                setDeathEra={setDeathEra}
-                setDeathYear={setDeathYear}
-                setDeathMonth={setDeathMonth}
-                setDeathDay={setDeathDay}
-                setDeathStatus={setDeathStatus}
-                floruitStartYear={floruitStartYear}
-                floruitEndYear={floruitEndYear}
-                floruitEra={floruitEra}
-                setFloruitStartYear={setFloruitStartYear}
-                setFloruitEndYear={setFloruitEndYear}
-                setFloruitEra={setFloruitEra}
-                deathType={deathType}
-                deathCause={deathCause}
-                birthNote={birthNote}
-                setBirthNote={setBirthNote}
-                deathNote={deathNote}
-                setDeathType={setDeathType}
-                setDeathCause={setDeathCause}
-                setDeathNote={setDeathNote}
-                monarchTitlesOpen={monarchTitlesOpen}
-                setMonarchTitlesOpen={setMonarchTitlesOpen}
-                templeName={templeName}
-                posthumousName={posthumousName}
-                preEnthronementTitle={preEnthronementTitle}
-                setTempleName={setTempleName}
-                setPosthumousName={setPosthumousName}
-                setPreEnthronementTitle={setPreEnthronementTitle}
-                lifespanText={lifespanText}
-                errors={errors}
-                markDirty={markDirty}
-              />
-              </div>
 
-              {/* 필수/선택 경계 — 접기(MoreToggle)가 겸하던 '여기까지면 등록 끝' 표식을 seam으로 복원 */}
-              <OptionalSeam>
-                여기부터는 선택 — 지금 등록해도 돼요
-              </OptionalSeam>
+              <AdvancedSection>
+                <AdvancedToggle
+                  type="button"
+                  $open={extraAffiliationsOpen}
+                  onClick={() => setExtraAffiliationsOpen((v) => !v)}
+                  aria-expanded={extraAffiliationsOpen}
+                >
+                  <AdvancedToggleIcon $open={extraAffiliationsOpen}>
+                    <FiChevronRight size={14} />
+                  </AdvancedToggleIcon>
+                  <AdvancedToggleBody>
+                    <AdvancedToggleTitle>추가 국가 소속</AdvancedToggleTitle>
+                    <AdvancedToggleDesc>
+                      주 국적 외 출생 국가·복무·망명 등
+                    </AdvancedToggleDesc>
+                    {!extraAffiliationsOpen && countryAffiliations.length > 0 && (
+                      <AdvancedToggleBadge>
+                        {countryAffiliations.length}개
+                      </AdvancedToggleBadge>
+                    )}
+                  </AdvancedToggleBody>
+                </AdvancedToggle>
+                {extraAffiliationsOpen && (
+                  <AdvancedBody>
+                    <CountryAffiliationsSection
+                      fid={fid}
+                      rows={countryAffiliations}
+                      setRows={setCountryAffiliations}
+                      onPickCountry={(rowKey) => setAffCountryPickerRow(rowKey)}
+                      onDateModalOpenChange={setAffDateModalOpen}
+                      markDirty={markDirty}
+                    />
+                  </AdvancedBody>
+                )}
+              </AdvancedSection>
+            </div>
 
-              <>
-                {/* 가문 · 종교 · 국가 — 가문·종교 + 다중 국가 소속 */}
-                <div data-form-section="affiliation">
-                <CoreSectionLabel>소속</CoreSectionLabel>
-                <AffiliationSection
-                  dynastyOptions={dynastySelectOptions}
-                  religionOptions={religionSelectOptions}
-                  dynastyValue={dynastyId}
-                  religionValue={religionId}
-                  onDynastyChange={setDynastyId}
-                  onReligionChange={setReligionId}
-                  markDirty={markDirty}
-                />
-
-                {/* 국가 소속(다중) — 주 국적 외 출생지·복무·망명 등 */}
-                <CountryAffiliationsSection
-                  fid={fid}
-                  rows={countryAffiliations}
-                  setRows={setCountryAffiliations}
-                  onPickCountry={(rowKey) => setAffCountryPickerRow(rowKey)}
-                  onDateModalOpenChange={setAffDateModalOpen}
-                  markDirty={markDirty}
-                />
-
-                </div>
-
-                {/* 가족 — 부·모·배우자 */}
-                <CoreDivider />
-                <div data-form-section="family">
-                <CoreSectionLabel>가족</CoreSectionLabel>
-                <FamilySection
-                  fid={fid}
-                  fatherId={fatherId}
-                  motherId={motherId}
-                  illegitimate={illegitimate}
-                  spouseRows={spouseRows}
-                  setFatherId={setFatherId}
-                  setMotherId={setMotherId}
-                  setIllegitimate={setIllegitimate}
-                  setSpouseRows={setSpouseRows}
-                  showFatherModal={showFatherModal}
-                  showMotherModal={showMotherModal}
-                  showSpouseModal={showSpouseModal}
-                  setShowFatherModal={setShowFatherModal}
-                  setShowMotherModal={setShowMotherModal}
-                  setShowSpouseModal={setShowSpouseModal}
-                  knownPersons={knownPersons}
-                  persons={persons}
-                  setPersons={setPersons}
-                  recentCandidates={recentCandidates}
-                  editPersonId={editPersonId}
-                  countryId={countryId}
-                  markDirty={markDirty}
-                  onDateModalOpenChange={setSpouseDateModalOpen}
-                />
-                </div>
-              </>
+            <div data-form-section="family">
+              <AdvancedSection>
+                <AdvancedToggle
+                  type="button"
+                  $open={familyOpen || recentCandidates.length > 0}
+                  onClick={() => setFamilyOpen((v) => !v)}
+                  aria-expanded={familyOpen || recentCandidates.length > 0}
+                >
+                  <AdvancedToggleIcon
+                    $open={familyOpen || recentCandidates.length > 0}
+                  >
+                    <FiChevronRight size={14} />
+                  </AdvancedToggleIcon>
+                  <AdvancedToggleBody>
+                    <AdvancedToggleTitle>부모 · 배우자</AdvancedToggleTitle>
+                    <AdvancedToggleDesc>
+                      아버지·어머니·사생아 여부 및 배우자·혼인 기간
+                    </AdvancedToggleDesc>
+                    {!(familyOpen || recentCandidates.length > 0) &&
+                      Boolean(
+                        fatherId ||
+                          motherId ||
+                          illegitimate ||
+                          spouseRows.length > 0,
+                      ) && <AdvancedToggleBadge>입력됨</AdvancedToggleBadge>}
+                  </AdvancedToggleBody>
+                </AdvancedToggle>
+                {(familyOpen || recentCandidates.length > 0) && (
+                  <AdvancedBody>
+                    <FamilySection
+                      fid={fid}
+                      fatherId={fatherId}
+                      motherId={motherId}
+                      illegitimate={illegitimate}
+                      spouseRows={spouseRows}
+                      setFatherId={setFatherId}
+                      setMotherId={setMotherId}
+                      setIllegitimate={setIllegitimate}
+                      setSpouseRows={setSpouseRows}
+                      showFatherModal={showFatherModal}
+                      showMotherModal={showMotherModal}
+                      showSpouseModal={showSpouseModal}
+                      setShowFatherModal={setShowFatherModal}
+                      setShowMotherModal={setShowMotherModal}
+                      setShowSpouseModal={setShowSpouseModal}
+                      knownPersons={knownPersons}
+                      persons={persons}
+                      setPersons={setPersons}
+                      recentCandidates={recentCandidates}
+                      editPersonId={editPersonId}
+                      countryId={countryId}
+                      markDirty={markDirty}
+                      onDateModalOpenChange={setSpouseDateModalOpen}
+                    />
+                  </AdvancedBody>
+                )}
+              </AdvancedSection>
+            </div>
           </FormSectionInner>
         </LoadingHost>
       </form>
