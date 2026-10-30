@@ -31,11 +31,9 @@ import {
   getAllHistoricalCountries,
   type HistoricalCountryResponseDto,
 } from '@/shared/api/historical-countries'
-import { type PersonSearchItem, searchPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { dateSortKey } from '@/shared/lib/iso-date'
 import { plainTextToRichTextHtml } from '@/shared/lib/rich-text-read-view'
-import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { ConfirmDialog, confirm } from '@/shared/ui/confirm-dialog'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
@@ -45,6 +43,7 @@ import {
   PersonRegisterModalPrimaryBtn,
   PersonRegisterModalStickyFooter,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
+import { PersonPickerButton } from '@/shared/ui/person-picker'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import { notify } from '@/shared/ui/toast'
 
@@ -111,16 +110,6 @@ type FormErrors = {
   dateRange?: string
   websiteUrl?: string
   logoUrl?: string
-}
-
-function personLabel(person: PersonSearchItem): string {
-  return getPersonDisplayName({
-    name: person.name ?? '',
-    surname: person.surname ?? '',
-    middleName: person.middleName ?? '',
-    nameDisplayOrder: person.nameDisplayOrder ?? null,
-    country: person.country ?? null,
-  })
 }
 
 function hydrateForm(company: Company): FormState {
@@ -193,6 +182,10 @@ export interface CompanyRegisterModalProps {
   onClose: () => void
   /** 수정 대상. 없으면 신규 등록. */
   companyId?: string
+  /** 국가 상세에서 열었을 때 기본 선택될 현대 국가 ID */
+  defaultCountryId?: string
+  /** 역사 국가 상세에서 열었을 때 기본 선택될 과거 국가 ID */
+  defaultHistoricalCountryId?: string
   /** 저장 성공 통지 — 캐시 무효화는 이미 했으므로 호출부 추가 처리용 */
   onSaved?: (company: Company) => void
 }
@@ -201,6 +194,8 @@ export const CompanyRegisterModal: React.FC<CompanyRegisterModalProps> = ({
   isOpen,
   onClose,
   companyId,
+  defaultCountryId,
+  defaultHistoricalCountryId,
   onSaved,
 }) => {
   const navigate = useNavigate()
@@ -262,6 +257,8 @@ export const CompanyRegisterModal: React.FC<CompanyRegisterModalProps> = ({
         <CompanyFormBody
           key={formGeneration}
           companyId={companyId}
+          defaultCountryId={defaultCountryId}
+          defaultHistoricalCountryId={defaultHistoricalCountryId}
           submitting={submitting}
           onSubmittingChange={setSubmitting}
           onDirtyChange={handleDirtyChange}
@@ -304,6 +301,8 @@ export default CompanyRegisterModal
 
 interface CompanyFormBodyProps {
   companyId?: string
+  defaultCountryId?: string
+  defaultHistoricalCountryId?: string
   submitting: boolean
   onSubmittingChange: (submitting: boolean) => void
   onDirtyChange: (dirty: boolean) => void
@@ -313,6 +312,8 @@ interface CompanyFormBodyProps {
 
 const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
   companyId,
+  defaultCountryId,
+  defaultHistoricalCountryId,
   submitting,
   onSubmittingChange,
   onDirtyChange,
@@ -320,9 +321,15 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
   onSaved,
 }) => {
   const isEdit = Boolean(companyId)
+  const initialForm: FormState = {
+    ...EMPTY,
+    countryId: !isEdit && defaultCountryId ? defaultCountryId : '',
+    historicalCountryId:
+      !isEdit && defaultHistoricalCountryId ? defaultHistoricalCountryId : '',
+  }
   const [loading, setLoading] = useState(isEdit)
   const [loadFailed, setLoadFailed] = useState(false)
-  const [form, setForm] = useState<FormState>(EMPTY)
+  const [form, setForm] = useState<FormState>(initialForm)
   const [errors, setErrors] = useState<FormErrors>({})
   const [founderLabel, setFounderLabel] = useState('')
   const [cityLabel, setCityLabel] = useState('')
@@ -331,8 +338,8 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
   const [historicalCountries, setHistoricalCountries] = useState<
     HistoricalCountryResponseDto[]
   >([])
-  /** 더티 비교 기준 — 신규는 EMPTY, 수정은 hydrate 직후 캡처 */
-  const baselineRef = useRef(JSON.stringify(EMPTY))
+  /** 더티 비교 기준 — 신규는 initialForm, 수정은 hydrate 직후 캡처 */
+  const baselineRef = useRef(JSON.stringify(initialForm))
   const nameInputRef = useRef<HTMLInputElement>(null)
   const websiteInputRef = useRef<HTMLInputElement>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -377,17 +384,6 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
       alive = false
     }
   }, [companyId])
-
-  // 서버 이름 검색 — 예전엔 인물 전량(수백 명)을 받아 클라이언트에서 걸렀다(검토 F14)
-  const fetchFounderOptions = useCallback(
-    async (query: string): Promise<PickerOption[]> =>
-      (await searchPersons(query, 30)).map((person) => ({
-        id: person.id,
-        label: personLabel(person),
-        sub: person.originalName ?? undefined,
-      })),
-    [],
-  )
 
   const fetchCityOptions = useCallback(
     async (query: string): Promise<PickerOption[]> => {
@@ -579,12 +575,13 @@ const CompanyFormBody: React.FC<CompanyFormBodyProps> = ({
               </Field>
               <Field as="div">
                 <FieldCaption>창립자</FieldCaption>
-                <SearchPicker
+                {/* 인물은 공용 인물 고르기로 — 드롭다운엔 이름(과 원어 이름)뿐이라 동명이인을 못 갈랐다 */}
+                <PersonPickerButton
                   value={form.founderId}
                   selectedLabel={founderLabel}
-                  placeholder="인물 이름으로 검색..."
+                  placeholder="창립자 고르기"
+                  title="창립자 선택"
                   label="창립자"
-                  fetchOptions={fetchFounderOptions}
                   onChange={(founderId, label) => {
                     patch('founderId', founderId)
                     setFounderLabel(label)

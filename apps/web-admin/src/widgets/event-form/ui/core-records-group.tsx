@@ -37,11 +37,9 @@ import * as S from '@/pages/events/create/event-create.styles'
 import { getElections } from '@/shared/api/election'
 import type { EventOrganizationRole } from '@/shared/api/events'
 import { getOrganizations } from '@/shared/api/organizations'
-import { searchPersons } from '@/shared/api/persons'
 import { treatyApi } from '@/shared/api/treaty'
 import { nestiaApiService } from '@/shared/api/api.service'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
-import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   KitAddButton,
   KitChipGroup,
@@ -51,6 +49,7 @@ import {
   KitSelectedItem,
   KitSelectedItems,
 } from '@/shared/ui/register-form-kit/register-form-kit'
+import { PersonPickerModal } from '@/shared/ui/person-picker'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 
 /** 등록 뒤 상세에서 적는 기록 — 출처·진영별 값이 필요해 등록 칸으로는 받지 않는다 */
@@ -566,16 +565,12 @@ function RecordPickers({
   const [term, setTerm] = useState('')
   const debounced = useDebouncedValue(term, 250, kind ?? '')
   const query = useQuery({
-    queryKey: ['register-record-candidates', kind, kind === 'persons' || kind === 'power' || kind === 'treaty' ? debounced : ''],
-    enabled: Boolean(kind),
+    queryKey: ['register-record-candidates', kind, kind === 'treaty' ? debounced : ''],
+    // 인물(참여·권력)은 공용 인물 고르기가 스스로 받는다
+    enabled: Boolean(kind) && kind !== 'persons' && kind !== 'power',
     placeholderData: keepPreviousData,
     staleTime: 60_000,
     queryFn: async (): Promise<SelectOption[]> => {
-      if (kind === 'persons' || kind === 'power') {
-        if (!debounced.trim()) return []
-        const people = await searchPersons(debounced.trim(), 30)
-        return people.map((person) => ({ value: person.id, label: getPersonDisplayName(person) }))
-      }
       if (kind === 'treaty') {
         const list = await treatyApi.getAll({ search: debounced.trim() || undefined, take: 50 })
         return list.items.map((treaty) => ({ value: treaty.id, label: treaty.name, description: treaty.signDate?.slice(0, 10) }))
@@ -610,26 +605,31 @@ function RecordPickers({
     setTerm('')
     onClose()
   }
+  /*
+   * 인물은 프로젝트 공용 인물 고르기로 — 예전엔 범용 SelectModal에 이름만 30명씩 떠서 동명이인을
+   * 가를 수 없었다(생몰·나라·직위가 없었다). 이미 고른 인물은 빼고, 고를 때마다 끝에 붙인다.
+   */
+  if (kind === 'persons' || kind === 'power') {
+    const list = kind === 'persons' ? drafts.persons : drafts.power
+    return (
+      <PersonPickerModal
+        title={PICKER_TITLE[kind]}
+        multiSelect
+        excludeIds={list.map((person) => person.personId)}
+        excludeReason="이미 고른 인물은 목록에서 뺐습니다."
+        onSelect={(personId, name) => {
+          const next = [...list, { personId, name }]
+          update(kind === 'persons' ? { persons: next } : { power: next })
+        }}
+        onClose={close}
+      />
+    )
+  }
   const labelOf = (value: string) => String(options.find((option) => option.value === value)?.label ?? '')
-  const multiple = kind === 'persons' || kind === 'power' || kind === 'organizations'
-  const selectedValues =
-    kind === 'persons'
-      ? drafts.persons.map((person) => person.personId)
-      : kind === 'power'
-        ? drafts.power.map((person) => person.personId)
-        : kind === 'organizations'
-          ? drafts.organizations.map((organization) => organization.id)
-          : []
+  const multiple = kind === 'organizations'
+  const selectedValues = kind === 'organizations' ? drafts.organizations.map((organization) => organization.id) : []
 
   const onSelect = (value: string) => {
-    if (kind === 'persons' || kind === 'power') {
-      const list = kind === 'persons' ? drafts.persons : drafts.power
-      const next = list.some((person) => person.personId === value)
-        ? list.filter((person) => person.personId !== value)
-        : [...list, { personId: value, name: labelOf(value) }]
-      update(kind === 'persons' ? { persons: next } : { power: next })
-      return
-    }
     if (kind === 'organizations') {
       const next = drafts.organizations.some((organization) => organization.id === value)
         ? drafts.organizations.filter((organization) => organization.id !== value)
@@ -652,7 +652,7 @@ function RecordPickers({
       selectedValues={multiple ? selectedValues : undefined}
       onSelect={onSelect}
       searchable
-      searchPlaceholder={kind === 'persons' || kind === 'power' ? '인물 이름으로 검색' : '이름으로 검색'}
+      searchPlaceholder="이름으로 검색"
       onQueryChange={setTerm}
       isLoading={query.isLoading}
       isSearching={query.isFetching || term !== debounced}
