@@ -28,7 +28,7 @@ import { EVENT_TYPES, subtypesForDomain } from '@/entities/event/model/event-typ
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
-import { groupHeroCountries } from './hero-countries.lib'
+import { HeroCountryCards } from './hero-country-cards'
 import { HeroThumbnail } from './hero-thumbnail'
 import {
   InlineSelect,
@@ -521,7 +521,6 @@ const ContemporaryLink = styled(Link)`
  * - 국가는 한 단락 — 현대(roman) · 역사(italic)로 weight/style만 구분, flag 미사용
  */
 const PERSON_CAP = 4
-const COUNTRY_CAP = 8
 
 function HeroActors({
   event,
@@ -550,12 +549,10 @@ function HeroActors({
   const allHistorical = event.relatedHistoricalCountries ?? []
 
   const persons = allPersons.slice(0, PERSON_CAP)
-  /* 진영이 있으면 진영별 줄, 없으면 한 줄(현대·역사를 같은 '·'로) — hero-countries.lib */
-  const countryGroups = groupHeroCountries(allModern, allHistorical, event.sides ?? [], COUNTRY_CAP)
 
   const personOverflow = allPersons.length - persons.length
 
-  if (persons.length === 0 && countryGroups.length === 0) return null
+  if (persons.length === 0 && allModern.length + allHistorical.length === 0) return null
 
   return (
     <ActorStrip aria-label="참여 행위자 요약">
@@ -606,39 +603,8 @@ function HeroActors({
         </Lineup>
       )}
 
-      {countryGroups.length > 0 && (
-        <Lineup>
-          <CountryInline>
-            {countryGroups.map((group) => (
-              <CountryLine key={group.sideId ?? group.label ?? 'all'}>
-                {group.label && <SideLabel>{group.label}</SideLabel>}
-                {group.countries.map((country, index) => {
-                  const Name = country.historical ? HistoricalName : CountryName
-                  return (
-                    <span key={`${country.historical ? 'h' : 'm'}-${country.id}`}>
-                      <Name
-                        to={pathKeys.countryDetail(country.id)}
-                        aria-haspopup="dialog"
-                        onClick={(clickEvent) => {
-                          if (!shouldInterceptEntityClick(clickEvent)) return
-                          clickEvent.preventDefault()
-                          onCountryClick(country.id)
-                        }}
-                      >
-                        {country.name}
-                      </Name>
-                      {index < group.countries.length - 1 && <CountrySep>·</CountrySep>}
-                    </span>
-                  )
-                })}
-                {group.overflow > 0 && (
-                  <Overflow {...overflowProps}>외 {group.overflow}</Overflow>
-                )}
-              </CountryLine>
-            ))}
-          </CountryInline>
-        </Lineup>
-      )}
+      {/* 참여국 — 이름 나열 대신 진영별 국가 카드(역할·참여 형태·대표 수치) */}
+      <HeroCountryCards event={event} onCountryClick={onCountryClick} onShowActors={onShowActors} />
     </ActorStrip>
   )
 }
@@ -651,13 +617,12 @@ function HeroActors({
  * Hero 하단 ActorStrip 구분선 — 로컬 알파(editorialRule) 대신 페이지 공용
  * hairline 토큰으로 통일(이전 0.78/0.5는 본문보다 진해 시선 분산이 컸음).
  */
+/* 위 구분선(border-top)은 뺐다 — 참여국 카드의 면이 제목·요약과 이미 갈라 준다 */
 const ActorStrip = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 8px;
-  padding-top: 14px;
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  margin-top: 14px;
 `
 
 const Lineup = styled.div`
@@ -759,69 +724,6 @@ const PersonSep = styled.span`
 `
 
 /* ── 국가 인라인 — 현대(roman) · 역사(italic) — flag 미사용 ── */
-
-/* 나라 이름은 글자 중간에서 끊지 않는다('네덜란/드') — 이름 하나 = 한 덩어리. */
-const CountryInline = styled.div`
-  word-break: keep-all;
-
-  /* 나라 이름 하나(+뒤 구분점)는 줄바꿈으로 쪼개지 않는다 — 줄은 CountryLine(div)마다 */
-  > div > span {
-    white-space: nowrap;
-  }
-
-  font-size: 14px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.005em;
-`
-
-const CountryName = styled(Link)`
-  color: inherit;
-  text-decoration: none;
-  font-weight: 500;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-    border-radius: ${RADIUS.FOCUS};
-  }
-`
-
-/* 역사 국가도 /country/:histId 상세가 실존 — 현대국(CountryName)과 동일한
- * 링크 어포던스(hover·focus-visible 밑줄)를 상속하고 이탤릭 톤만 덧입힌다. */
-const HistoricalName = styled(CountryName)`
-  font-style: italic;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const CountrySep = styled.span`
-  margin: 0 7px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-/** 진영 한 줄 — 진영이 없으면 줄이 하나라 예전 모양 그대로다 */
-const CountryLine = styled.div`
-  & + & {
-    margin-top: 4px;
-  }
-`
-
-/** 줄 머리의 진영명 — 나라 이름보다 한 단 낮게, 이름 열이 진영마다 같은 자리에서 시작하도록 최소폭 */
-const SideLabel = styled.span`
-  display: inline-block;
-  min-width: 4.5em;
-  margin-right: 10px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${metaText};
-`
 
 /* italic 제거 — 한글은 italic face가 없어 브라우저가 기울인 가짜 글꼴이 된다.
    이 레포는 italic을 placeholder 같은 '보조 메타'에만 쓰기로 이미 정리해 두었다. */
