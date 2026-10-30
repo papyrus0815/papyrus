@@ -283,6 +283,10 @@ export interface EventOrganizationDto {
 
 const decimalToString = (value: unknown): string | null => (value == null ? null : String(value))
 
+/** 선택 텍스트 칸 — 생략(undefined)=유지, 빈 문자열·null=비움, 나머지는 앞뒤 공백 정리 */
+const emptyToNull = (value: string | null | undefined): string | null | undefined =>
+  value === undefined ? undefined : value?.trim() || null
+
 const toEventOrganizationDto = (row: any): EventOrganizationDto => {
   const stock = row.organization.company?.stockPoints?.[0] ?? null
   return {
@@ -491,6 +495,11 @@ export class EventController {
       isDayKnown: event.startDay != null || event.startDate != null,
       endDate: formatEventDate(event.endDate, event.endEra, event.endYear, event.endMonth, event.endDay),
       endDatePrecision: event.endDatePrecision ?? null,
+      originalTitle: event.originalTitle ?? null,
+      startCalendar: event.startCalendar ?? null,
+      startDateOriginal: event.startDateOriginal ?? null,
+      endCalendar: event.endCalendar ?? null,
+      endDateOriginal: event.endDateOriginal ?? null,
       location: event.location,
       domain: event.domain ?? 'OTHER',
       background: event.background,
@@ -2042,6 +2051,11 @@ export class EventController {
         endYear: endParts?.year,
         endMonth: endParts?.month,
         endDay: endParts?.day,
+        originalTitle: emptyToNull(dto.originalTitle),
+        startCalendar: dto.startCalendar,
+        startDateOriginal: emptyToNull(dto.startDateOriginal),
+        endCalendar: dto.endCalendar,
+        endDateOriginal: emptyToNull(dto.endDateOriginal),
         location: dto.location,
         domain: dto.domain,
         background: dto.background,
@@ -2125,6 +2139,11 @@ export class EventController {
         endYear: endPartsU?.year,
         endMonth: endPartsU?.month,
         endDay: endPartsU?.day,
+        originalTitle: emptyToNull(dto.originalTitle),
+        startCalendar: dto.startCalendar,
+        startDateOriginal: emptyToNull(dto.startDateOriginal),
+        endCalendar: dto.endCalendar,
+        endDateOriginal: emptyToNull(dto.endDateOriginal),
         location: dto.location,
         domain: dto.domain,
         background: dto.background,

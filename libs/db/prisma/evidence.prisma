@@ -16,6 +16,38 @@
 // - 시점은 구조화 날짜만 둔다(DATETIME 없음) — BC·연 정밀도를 손상 없이 담는다.
 
 /// 출처 종류
+/// 사료 층위
+enum SourceTier {
+  /// 1차 — 당대 기록·공문서·일기·전투 보고
+  PRIMARY
+  /// 2차 — 1차 사료에 기댄 연구서·논문
+  SECONDARY
+  /// 3차 — 사전·개설서·데이터셋 요약
+  TERTIARY
+}
+
+/// 추정치의 자리 — 같은 대상·지표에 값이 여럿일 때(학설·집계가 엇갈린다)
+enum EstimateRole {
+  /// 채택 — 이 사이트가 대표값으로 쓰는 값(표·해설·장부가 이 값을 쓴다)
+  PREFERRED
+  /// 대안 — 다른 집계·학설의 값
+  ALTERNATIVE
+  /// 논쟁 — 근거가 다투어지는 값(과장 의심 등)
+  DISPUTED
+}
+
+/// 이 수가 어떻게 나왔나
+enum EstimateMethod {
+  /// 집계 — 명부·보고를 센 값
+  COUNTED
+  /// 추정 — 연구자가 추산한 값
+  ESTIMATED
+  /// 외삽 — 일부 자료로 전체를 미루어 본 값
+  EXTRAPOLATED
+  /// 공식 발표 — 당사국·기관이 발표한 값(선전 가능성)
+  OFFICIAL_CLAIM
+}
+
 enum SourceKind {
   /// 단행본
   BOOK
@@ -114,6 +146,17 @@ model Source {
   /// 웹 출처 열람일 (YYYY-MM-DD)
   accessedOn    String? @map("accessed_on") @db.VarChar(10)
   note          String? @db.Text
+
+  /// 사료 층위 — 1차(당대 기록·문서)·2차(연구서)·3차(사전·개설). 사료 비판의 첫 질문
+  tier SourceTier?
+  /// 쓰인 해(천문 연도 — 기원전은 음수). 당대 기록인지·후대 서술인지 가른다
+  writtenYear Int? @map("written_year")
+  /// 관점 — 누구의 입장에서 쓰였나(예: '프로이센 참모본부 공식 전사', '중립국 관찰자')
+  perspective String? @db.VarChar(200)
+  /// 언어(ISO 639 — ko, en, de, la, zh-Hant…)
+  language String? @db.VarChar(20)
+  /// 원제(원어 제목) — title이 번역 제목일 때
+  originalTitle String? @map("original_title") @db.VarChar(500)
 
   /// 등록 계정 (NULL = 시스템/공유)
   createdById String? @map("created_by_id") @db.Char(36)
@@ -226,6 +269,11 @@ model Observation {
   endMonth     Int?    @map("end_month")
   endDay       Int?    @map("end_day")
   endPrecision String? @map("end_precision") @db.VarChar(10)
+
+  /// 추정치의 자리(채택·대안·논쟁) — null = 하나뿐이라 가릴 필요 없음
+  estimateRole EstimateRole? @map("estimate_role")
+  /// 산출 방식(집계·추정·외삽·공식 발표)
+  method EstimateMethod?
 
   note      String? @db.Text
   sortOrder Int     @default(0) @map("sort_order")

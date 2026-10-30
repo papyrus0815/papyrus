@@ -1,0 +1,22 @@
+-- AlterTable
+ALTER TABLE `event` ADD COLUMN `end_calendar` ENUM('GREGORIAN', 'JULIAN', 'KOREAN_LUNAR', 'CHINESE_LUNAR', 'JAPANESE_LUNAR', 'ISLAMIC', 'OTHER') NULL,
+    ADD COLUMN `end_date_original` VARCHAR(100) NULL,
+    ADD COLUMN `original_title` VARCHAR(300) NULL,
+    ADD COLUMN `start_calendar` ENUM('GREGORIAN', 'JULIAN', 'KOREAN_LUNAR', 'CHINESE_LUNAR', 'JAPANESE_LUNAR', 'ISLAMIC', 'OTHER') NULL,
+    ADD COLUMN `start_date_original` VARCHAR(100) NULL;
+
+-- AlterTable
+ALTER TABLE `event_side` ADD COLUMN `outcome` ENUM('VICTORY', 'DEFEAT', 'DRAW', 'WITHDRAWAL', 'INCONCLUSIVE') NULL,
+    ADD COLUMN `outcome_note` TEXT NULL;
+
+-- AlterTable
+ALTER TABLE `observation` ADD COLUMN `estimate_role` ENUM('PREFERRED', 'ALTERNATIVE', 'DISPUTED') NULL,
+    ADD COLUMN `method` ENUM('COUNTED', 'ESTIMATED', 'EXTRAPOLATED', 'OFFICIAL_CLAIM') NULL;
+
+-- AlterTable
+ALTER TABLE `source` ADD COLUMN `language` VARCHAR(20) NULL,
+    ADD COLUMN `original_title` VARCHAR(500) NULL,
+    ADD COLUMN `perspective` VARCHAR(200) NULL,
+    ADD COLUMN `tier` ENUM('PRIMARY', 'SECONDARY', 'TERTIARY') NULL,
+    ADD COLUMN `written_year` INTEGER NULL;
+

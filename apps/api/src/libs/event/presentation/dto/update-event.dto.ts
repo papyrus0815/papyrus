@@ -1,3 +1,4 @@
+import type { CalendarSystemValue } from '../../domain/event.entity'
 import { EVENT_DOMAIN_VALUES, type EventDomainValue } from '../../domain/event-domain'
 import { EVENT_TYPE_VALUES, type EventTypeValue } from '../../domain/event-type'
 import { ApiProperty } from '@nestjs/swagger'
@@ -11,6 +12,7 @@ import {
   ValidateNested,
   IsArray,
   IsIn,
+  MaxLength,
 } from 'class-validator'
 import { MilitaryEventDto } from './military-event.dto'
 import {
@@ -25,6 +27,39 @@ export class UpdateEventDto {
   @IsString()
   @IsOptional()
   title?: string
+
+  @ApiProperty({ description: '원어 사건명 — 당대·현지 이름(Siebenjähriger Krieg · 壬辰倭亂). null·빈 문자열=비움', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(300)
+  originalTitle?: string | null
+
+  @ApiProperty({ description: '시작일 원 역법 — 구조화 날짜는 그레고리력 환산값', required: false, nullable: true, enum: ['GREGORIAN', 'JULIAN', 'KOREAN_LUNAR', 'CHINESE_LUNAR', 'JAPANESE_LUNAR', 'ISLAMIC', 'OTHER'] })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsIn(['GREGORIAN', 'JULIAN', 'KOREAN_LUNAR', 'CHINESE_LUNAR', 'JAPANESE_LUNAR', 'ISLAMIC', 'OTHER'])
+  startCalendar?: CalendarSystemValue | null
+
+  @ApiProperty({ description: "시작일 원문 표기 — '선조 25년 4월 13일'", required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(100)
+  startDateOriginal?: string | null
+
+  @ApiProperty({ description: '종료일 원 역법', required: false, nullable: true, enum: ['GREGORIAN', 'JULIAN', 'KOREAN_LUNAR', 'CHINESE_LUNAR', 'JAPANESE_LUNAR', 'ISLAMIC', 'OTHER'] })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsIn(['GREGORIAN', 'JULIAN', 'KOREAN_LUNAR', 'CHINESE_LUNAR', 'JAPANESE_LUNAR', 'ISLAMIC', 'OTHER'])
+  endCalendar?: CalendarSystemValue | null
+
+  @ApiProperty({ description: '종료일 원문 표기', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(100)
+  endDateOriginal?: string | null
 
   @ApiProperty({ description: '개요 설명', required: false })
   @IsString()

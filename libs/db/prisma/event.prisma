@@ -314,6 +314,9 @@ model Event {
   /// 사건명
   title String @db.VarChar(100)
 
+  /// 원어 사건명 — 그 사건을 부르는 당대·현지 이름(Siebenjähriger Krieg · 壬辰倭亂). 사학사 관점마다 이름이 다르다
+  originalTitle String? @map("original_title") @db.VarChar(300)
+
   /// 개요
   description String? @db.Text
 
@@ -339,6 +342,15 @@ model Event {
   endYear  Int? @map("end_year")
   endMonth Int? @map("end_month")
   endDay   Int? @map("end_day")
+
+  /// 원 사료의 역법 — 날짜 필드(start·end 계열)는 늘 **그레고리력 환산값**이고, 사료가 다른 역법으로 적었으면
+  /// 그 역법과 원문 표기를 함께 둔다(임진왜란 4월 13일(음) = 양력 5월 23일 · 10월 혁명 10월 25일(율) = 11월 7일).
+  /// null = 그레고리력(또는 미상)
+  startCalendar     CalendarSystem? @map("start_calendar")
+  /// 원 역법의 시작일 표기 그대로(예: '선조 25년 4월 13일', '1917년 10월 25일')
+  startDateOriginal String?         @map("start_date_original") @db.VarChar(100)
+  endCalendar       CalendarSystem? @map("end_calendar")
+  endDateOriginal   String?         @map("end_date_original") @db.VarChar(100)
 
   /// 간단 문자열 위치(자유 텍스트)
   location String? @db.VarChar(255)
@@ -864,4 +876,22 @@ model EventHierarchyReason {
   @@unique([childEventId, parentEventId], name: "uniq_event_hierarchy_reason_pair")
   @@index([parentEventId], name: "idx_event_hierarchy_reason_parentId")
   @@map("event_hierarchy_reason")
+}
+
+/// 역법 — 원 사료가 날짜를 적은 달력. 저장 날짜는 늘 그레고리력 환산값이고 이건 '원래 어떻게 적혔나'다.
+enum CalendarSystem {
+  /// 그레고리력(양력)
+  GREGORIAN
+  /// 율리우스력 — 러시아 1918년 이전·영국 1752년 이전 등
+  JULIAN
+  /// 한국 음력(태음태양력) — 조선왕조실록 등
+  KOREAN_LUNAR
+  /// 중국 음력(농력)
+  CHINESE_LUNAR
+  /// 일본 음력(구력)
+  JAPANESE_LUNAR
+  /// 이슬람력(히즈라력)
+  ISLAMIC
+  /// 그 밖(로마 집정관력·올림피아드 등) — 원문 표기에 적는다
+  OTHER
 }

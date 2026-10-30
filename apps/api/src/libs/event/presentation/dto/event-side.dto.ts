@@ -48,6 +48,24 @@ export class EventSideInputDto {
   @ValidateIf((_, value) => value !== null)
   @IsString()
   parentSideId?: string | null
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    enum: ['VICTORY', 'DEFEAT', 'DRAW', 'WITHDRAWAL', 'INCONCLUSIVE'],
+    description: '이 진영에게의 결과',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsIn(['VICTORY', 'DEFEAT', 'DRAW', 'WITHDRAWAL', 'INCONCLUSIVE'])
+  outcome?: 'VICTORY' | 'DEFEAT' | 'DRAW' | 'WITHDRAWAL' | 'INCONCLUSIVE' | null
+
+  @ApiProperty({ required: false, nullable: true, description: "결과 단서 — '전략적 승리, 전술적 패배'" })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(1000)
+  outcomeNote?: string | null
 }
 
 /** 진영 목록 동기화 — 배열 순서가 표시 순서. 빠진 진영은 지워지고 소속만 풀린다 */

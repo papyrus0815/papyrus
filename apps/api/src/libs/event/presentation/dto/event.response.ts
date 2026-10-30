@@ -1,6 +1,7 @@
 import { EVENT_DOMAIN_VALUES, type EventDomainValue } from '../../domain/event-domain'
 import { EVENT_TYPE_VALUES, type EventTypeValue } from '../../domain/event-type'
 import type { EventSideView } from '../../application/event-side.service'
+import type { CalendarSystemValue } from '../../domain/event.entity'
 import type { StructuredPoint as StructuredPointView } from '../../../shared/structured-point'
 import { ApiProperty } from '@nestjs/swagger'
 
@@ -10,6 +11,21 @@ export class EventResponseDto {
 
   @ApiProperty({ description: '사건명' })
   title!: string
+
+  @ApiProperty({ description: '원어 사건명', required: false, nullable: true })
+  originalTitle?: string | null
+
+  @ApiProperty({ description: '시작일 원 역법', required: false, nullable: true })
+  startCalendar?: CalendarSystemValue | null
+
+  @ApiProperty({ description: "시작일 원문 표기 — '선조 25년 4월 13일'", required: false, nullable: true })
+  startDateOriginal?: string | null
+
+  @ApiProperty({ description: '종료일 원 역법', required: false, nullable: true })
+  endCalendar?: CalendarSystemValue | null
+
+  @ApiProperty({ description: '종료일 원문 표기', required: false, nullable: true })
+  endDateOriginal?: string | null
 
   @ApiProperty({ description: '개요 설명', required: false })
   description?: string | null

@@ -2,7 +2,7 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common'
-import { ObservationSubjectType, PrismaClient, SideLevel } from '@prisma/client'
+import { ObservationSubjectType, PrismaClient, SideLevel, SideOutcome } from '@prisma/client'
 
 import { assertEventOwnership } from '../domain/event-ownership'
 
@@ -17,6 +17,8 @@ export interface EventSideInput {
   color?: string | null
   description?: string | null
   parentSideId?: string | null
+  outcome?: SideOutcome | null
+  outcomeNote?: string | null
 }
 
 export interface EventSideMemberCountry {
@@ -40,6 +42,10 @@ export interface EventSideView {
   description: string | null
   parentSideId: string | null
   sortOrder: number
+  /** 이 진영에게 사건이 어떻게 끝났나 — 승리·패배·무승부·철수·결론 없음 */
+  outcome: SideOutcome | null
+  /** 결과 한 줄 — '전략적 승리, 전술적 패배' 같은 단서 */
+  outcomeNote: string | null
   participants: EventSideMemberCountry[]
   persons: Array<{ personEventId: string; personId: string; name: string; surname: string | null; role: string | null }>
   organizations: Array<{ relationId: string; organizationId: string; name: string; role: string }>
@@ -86,6 +92,8 @@ export class EventSideService {
       description: side.description,
       parentSideId: side.parentSideId,
       sortOrder: side.sortOrder,
+      outcome: side.outcome,
+      outcomeNote: side.outcomeNote,
       participants: side.participants.map((row) => ({
         participantId: row.id,
         countryId: row.countryId,
@@ -167,6 +175,8 @@ export class EventSideService {
           ...(input.color !== undefined && { color: input.color }),
           ...(input.description !== undefined && { description: input.description?.trim() || null }),
           ...(input.parentSideId !== undefined && { parentSideId: input.parentSideId }),
+          ...(input.outcome !== undefined && { outcome: input.outcome }),
+          ...(input.outcomeNote !== undefined && { outcomeNote: input.outcomeNote?.trim() || null }),
           sortOrder: index,
         }
         if (input.id) await tx.eventSide.update({ where: { id: input.id }, data })

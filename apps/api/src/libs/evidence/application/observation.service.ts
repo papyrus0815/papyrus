@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import {
   CitationTargetType,
+  EstimateMethod,
+  EstimateRole,
   MetricAggregation,
   MetricValueKind,
   ObservationSubjectType,
@@ -47,6 +49,10 @@ export interface ObservationView {
   end: StructuredPoint | null
   note: string | null
   sortOrder: number
+  /** 경합 추정치 중 지위 — 채택(PREFERRED)·대안·논쟁. null=단일 값 */
+  estimateRole: EstimateRole | null
+  /** 값을 얻은 방식 */
+  method: EstimateMethod | null
   citations: CitationView[]
 }
 
@@ -149,6 +155,8 @@ export class ObservationService {
           ...prefixColumns('end', pointToColumns(end)),
           note: dto.note ?? null,
           sortOrder,
+          estimateRole: (dto.estimateRole as EstimateRole | null | undefined) ?? null,
+          method: (dto.method as EstimateMethod | null | undefined) ?? null,
           createdById: actorId,
         },
         select: { id: true },
@@ -229,6 +237,8 @@ export class ObservationService {
     if (dto.qualifier !== undefined) patch.qualifier = dto.qualifier?.trim() || null
     if (dto.note !== undefined) patch.note = dto.note
     if (dto.sortOrder !== undefined) patch.sortOrder = dto.sortOrder
+    if (dto.estimateRole !== undefined) patch.estimateRole = dto.estimateRole as EstimateRole | null
+    if (dto.method !== undefined) patch.method = dto.method as EstimateMethod | null
 
     await this.prisma.$transaction(async (tx) => {
       if (Object.keys(patch).length > 0) {
@@ -293,6 +303,8 @@ export class ObservationService {
       end: columnsToPoint(columnsOf(row, 'end')),
       note: row.note,
       sortOrder: row.sortOrder,
+      estimateRole: row.estimateRole,
+      method: row.method,
       citations: citationsById.get(row.id) ?? [],
     }))
   }

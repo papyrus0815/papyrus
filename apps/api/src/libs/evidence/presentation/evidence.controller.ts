@@ -23,7 +23,7 @@ import {
   ObservationService,
   type ObservationView,
 } from '../application/observation.service'
-import { SourceService } from '../application/source.service'
+import { type SourceLibraryEntry, SourceService, type SourceUsage } from '../application/source.service'
 import {
   CreateObservationDto,
   CreateSourceDto,
@@ -102,6 +102,23 @@ export class EvidenceController {
     @Query('limit') limit?: string,
   ): Promise<SourceView[]> {
     return this.sources.search(query, limit ? Number(limit) || 20 : 20)
+  }
+
+  /** 출처 서고 — GET /sources/library?q=…&tier=PRIMARY|NONE&kind=BOOK */
+  @Get('sources/library')
+  async sourceLibrary(
+    @Req() req: AuthedRequest,
+    @Query('q') query?: string,
+    @Query('tier') tier?: string,
+    @Query('kind') kind?: string,
+  ): Promise<SourceLibraryEntry[]> {
+    return this.sources.library(this.actorId(req), { query, tier, kind })
+  }
+
+  /** 출처가 쓰인 곳 — GET /sources/:id/usages */
+  @Get('sources/:id/usages')
+  async sourceUsages(@Param('id') id: string): Promise<SourceUsage[]> {
+    return this.sources.usages(id)
   }
 
   @Post('sources')

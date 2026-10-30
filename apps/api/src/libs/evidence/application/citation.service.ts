@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { CitationTargetType, Prisma, SourceKind } from '@prisma/client'
+import { CitationTargetType, Prisma, SourceKind, SourceTier } from '@prisma/client'
 
 import type { CitationInputDto, CreateSourceDto } from '../presentation/dto/evidence.dto'
 
@@ -14,6 +14,13 @@ export interface SourceView {
   identifier: string | null
   accessedOn: string | null
   note: string | null
+  /** 1차·2차·3차 — 비면 미분류 */
+  tier: SourceTier | null
+  /** 저술 시점(음수=BC) */
+  writtenYear: number | null
+  perspective: string | null
+  language: string | null
+  originalTitle: string | null
 }
 
 export interface CitationView {
@@ -36,6 +43,11 @@ export const SOURCE_VIEW_SELECT = {
   identifier: true,
   accessedOn: true,
   note: true,
+  tier: true,
+  writtenYear: true,
+  perspective: true,
+  language: true,
+  originalTitle: true,
 } as const
 
 /** 인용의 자연키 — 같은 출처의 같은 위치는 한 줄 */
@@ -203,6 +215,11 @@ export async function findOrCreateSource(
       identifier,
       accessedOn: input.accessedOn ?? null,
       note: input.note ?? null,
+      tier: (input.tier as SourceTier | null | undefined) ?? null,
+      writtenYear: input.writtenYear ?? null,
+      perspective: input.perspective?.trim() || null,
+      language: input.language?.trim() || null,
+      originalTitle: input.originalTitle?.trim() || null,
       createdById: actorId,
     },
     select: { id: true },

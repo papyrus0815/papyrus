@@ -35,6 +35,11 @@ model EventSide {
   /// 진영 설명
   description String? @db.Text
 
+  /// 결과 — 이 진영에게 이 사건은 어떻게 끝났나(승리·패배…). null = 미기록
+  outcome SideOutcome?
+  /// 결과 한마디 — '결정적 승리', '전술적 패배·전략적 승리' 같은 단서
+  outcomeNote String? @map("outcome_note") @db.Text
+
   /// 상위 진영 FK (하위 사건인 경우 상위 사건의 진영 참조)
   parentSideId String?    @map("parent_side_id") @db.Char(36)
   parentSide   EventSide? @relation("SideHierarchy", fields: [parentSideId], references: [id], onDelete: SetNull)
@@ -487,3 +492,17 @@ model SideWeapon {
   @@map("side_weapon")
 }
 
+
+/// 진영 결과 — 교전만이 아니라 협상·선거의 편에도 쓴다
+enum SideOutcome {
+  /// 승리
+  VICTORY
+  /// 패배
+  DEFEAT
+  /// 무승부·교착
+  DRAW
+  /// 철수·이탈(끝나기 전에 빠짐)
+  WITHDRAWAL
+  /// 결론 없음·논쟁 중
+  INCONCLUSIVE
+}
