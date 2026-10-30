@@ -20,8 +20,16 @@ export interface AdaptedPerson {
   born: number | null
   /** 사망연도(BC 음수). 미상이면 null — 생존/미상 구분, 배치는 diedForPlot 사용. */
   died: number | null
+  /** 출생연도 추정(경, circa) 여부 */
+  birthApproximate?: boolean
+  /** 사망연도 추정(경, circa) 여부 */
+  deathApproximate?: boolean
   /** 활동연도(재임 → 생몰 중점 → 활동시기 floruit). 전면 미상이면 null. */
   activityYear: number | null
+  /** 재위·재임 또는 활동시기(floruit) 시작연도. 생몰 미상 시 범위 표기·연표 구간에 사용. */
+  activityStart?: number | null
+  /** 재위·재임 또는 활동시기(floruit) 종료연도. 생몰 미상 시 범위 표기·연표 구간에 사용. */
+  activityEnd?: number | null
   /** activityYear로 분류한 시대 — adapt에서 1회 산출(yearOfEra 반복 호출 제거). */
   era: Era
   age: number | null

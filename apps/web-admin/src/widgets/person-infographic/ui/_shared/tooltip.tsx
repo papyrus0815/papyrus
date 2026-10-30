@@ -4,8 +4,10 @@
  */
 import styled, { css, useTheme } from 'styled-components'
 
+import { getUploadImageUrl } from '@/shared/api/upload'
+
+import { describePersonLifespan } from '../../model/century'
 import type { AdaptedPerson } from '../../model/types'
-import { formatYear } from '../../model/century'
 
 interface PersonHoverTooltipProps {
   person: AdaptedPerson
@@ -40,18 +42,17 @@ export function PersonHoverTooltip({
     y + 14 + TOOLTIP_EST_H > vh - VIEWPORT_MARGIN
       ? Math.max(VIEWPORT_MARGIN, y - 14 - TOOLTIP_EST_H)
       : y + 14
-  const lifespanText =
-    p.born == null && p.died == null && !p.isAlive
-      ? p.activityYear != null
-        ? `활동 ${formatYear(Math.round(p.activityYear))}경`
-        : '생몰 미상'
-      : `${p.born == null ? '?' : formatYear(p.born)} – ${
-          p.isAlive ? '현재' : p.died == null ? '?' : formatYear(p.died)
-        }`
+  const lifespan = describePersonLifespan(p)
+  const lifespanText = lifespan.ageLabel
+    ? `${lifespan.summaryText} (${lifespan.ageLabel})`
+    : lifespan.summaryText
+  const resolvedImageUrl = p.profileImageUrl
+    ? getUploadImageUrl(p.profileImageUrl) || p.profileImageUrl
+    : null
   return (
     <Wrap style={{ top, left }}>
-      {p.profileImageUrl ? (
-        <Img src={p.profileImageUrl} alt={p.name} />
+      {resolvedImageUrl ? (
+        <Img src={resolvedImageUrl} alt={p.name} />
       ) : (
         <ImgPh $color={p.era.color}>
           <svg viewBox="0 0 24 24" fill="currentColor" width={22} height={22}>

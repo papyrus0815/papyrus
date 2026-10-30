@@ -145,6 +145,8 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
   // 생몰연도는 미상이면 null (양수/음수 부호로 BC/AD 구분). 0 매직값 폐기.
   const born = toYear(p.birthYear, p.birthEra)
   const died = toYear(p.deathYear, p.deathEra)
+  const birthApproximate = !!p.isBirthDateApproximate
+  const deathApproximate = !!p.isDeathDateApproximate
   const floruitStart = toYear(p.floruitStartYear, p.floruitEra)
   const floruitEnd = toYear(p.floruitEndYear, p.floruitEra)
   const isAliveFlag = !!p.isAlive
@@ -173,9 +175,28 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
 
   // 시대 분류용 활동연도: 재임/재위 시작연도 평균 → 생몰 중점/단일값 → 활동시기(floruit) → 전면 미상이면 null.
   // 생몰 미상 인물도 폐기하지 않고 목록·검색·왕조·연도 미상 세기에서 누락되지 않게 보존한다.
-  const tenureYears = tenures
+  const tenureStartYears = tenures
     .map((t) => (t.startDate ? parseInt(t.startDate, 10) : null))
     .filter((y): y is number => y !== null && Number.isFinite(y))
+  const tenureEndYears = tenures
+    .map((t) => (t.endDate ? parseInt(t.endDate, 10) : null))
+    .filter((y): y is number => y !== null && Number.isFinite(y))
+  const allTenureYears = [...tenureStartYears, ...tenureEndYears]
+
+  const rawActStart = allTenureYears.length
+    ? Math.min(...allTenureYears)
+    : (floruitStart ?? floruitEnd ?? null)
+  const rawActEnd = allTenureYears.length
+    ? Math.max(...allTenureYears)
+    : (floruitEnd ?? floruitStart ?? null)
+  const activityStart =
+    rawActStart != null && rawActEnd != null
+      ? Math.min(rawActStart, rawActEnd)
+      : rawActStart
+  const activityEnd =
+    rawActStart != null && rawActEnd != null
+      ? Math.max(rawActStart, rawActEnd)
+      : rawActEnd
 
   const floruitMidpoint =
     floruitStart != null && floruitEnd != null
@@ -187,16 +208,21 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
       ? (born + died) / 2
       : (born ?? died ?? floruitMidpoint)
 
-  const activityYear: number | null = tenureYears.length
-    ? tenureYears.reduce((a, b) => a + b, 0) / tenureYears.length
+  const primaryTenureYears = tenureStartYears.length
+    ? tenureStartYears
+    : tenureEndYears
+  const activityYear: number | null = primaryTenureYears.length
+    ? primaryTenureYears.reduce((a, b) => a + b, 0) / primaryTenureYears.length
     : lifeMidpoint
 
   const era = activityYear != null ? yearOfEra(activityYear) : UNKNOWN_ERA
 
-  // 수명: 생몰 둘 다 알 때만 정확. 출생만 알고 생존 중이면 현재 나이. 그 외(미상)는 null.
+  // 수명: 생몰 둘 다 알 때만 정확(역전된 오입력 died < born은 제외). 출생만 알고 생존 중이면 현재 나이.
   const age =
     born != null && died != null
-      ? Math.max(0, Math.abs(died - born))
+      ? died >= born
+        ? died - born
+        : null
       : born != null && isAliveFlag
         ? Math.max(0, CURRENT_YEAR - born)
         : null
@@ -247,7 +273,11 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
     name,
     born,
     died,
+    birthApproximate,
+    deathApproximate,
     activityYear,
+    activityStart,
+    activityEnd,
     era,
     age,
     region,
@@ -265,12 +295,16 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
   }
 }
 
-/** 타임라인 배치용 시작연도 — 출생 미상이면 활동연도로 대체. */
+/** 타임라인 배치용 시작연도 — 출생 미상이면 활동·재위 시작연도(또는 활동연도)로 대체. */
 export function bornForPlot(p: AdaptedPerson): number {
-  return p.born ?? p.activityYear ?? 0
+  return p.born ?? p.activityStart ?? p.activityYear ?? 0
 }
 
-/** 타임라인 배치용 종료연도 — 사망 미상이면 생존자는 현재, 그 외엔 활동연도. */
+/** 타임라인 배치용 종료연도 — 사망 미상이면 생존자는 현재, 그 외엔 활동·재위 종료연도(또는 활동연도). */
 export function diedForPlot(p: AdaptedPerson): number {
-  return p.died ?? (p.isAlive ? CURRENT_YEAR : (p.activityYear ?? 0))
+  const start = bornForPlot(p)
+  const rawEnd =
+    p.died ??
+    (p.isAlive ? CURRENT_YEAR : (p.activityEnd ?? p.activityYear ?? start))
+  return Math.max(start, rawEnd)
 }

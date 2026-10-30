@@ -3,7 +3,13 @@
  * - makeSortFnWithPinned: 연도 방향 통일(출생·사망 모두 최신순)·미상 항상 뒤·동점 결정성·핀 우선
  * - compareCenturyMeta: 세기 그룹 최신/오래된순 방향 + '연도 미상' 항상 끝
  */
-import { centuryOf, compareCenturyMeta, type CenturyMeta } from './century'
+import { bornForPlot, diedForPlot } from './adapt'
+import {
+  centuryOf,
+  compareCenturyMeta,
+  describePersonLifespan,
+  type CenturyMeta,
+} from './century'
 import type { MultiScopes } from './filter.store'
 import {
   hasAnyActiveScope,
@@ -275,5 +281,48 @@ describe('isPersonInScopes / hasAnyActiveScope (matchesScopes 위임)', () => {
 
   it('scope 값이 있으면 활성', () => {
     expect(hasAnyActiveScope({ ...EMPTY_SCOPES, country: ['프랑스'] })).toBe(true)
+  })
+})
+
+describe('describePersonLifespan & bornForPlot / diedForPlot — 생몰·활동 표기', () => {
+  it('추정 연도(birthApproximate/deathApproximate)는 경 접미사와 약 나이로 표기한다', () => {
+    const p = person({
+      id: 'approx',
+      born: 1500,
+      died: 1558,
+      birthApproximate: true,
+      age: 58,
+    })
+    const d = describePersonLifespan(p)
+    expect(d.kind).toBe('lifespan')
+    expect(d.bornText).toBe('1500경')
+    expect(d.diedText).toBe('1558')
+    expect(d.ageLabel).toBe('향년 약 58세')
+  })
+
+  it('한쪽 연도만 미상이면 ? 대신 미상으로 표기한다', () => {
+    const p = person({ id: 'partial', born: null, died: 654 })
+    const d = describePersonLifespan(p)
+    expect(d.kind).toBe('lifespan')
+    expect(d.bornUnknown).toBe(true)
+    expect(d.bornText).toBe('미상')
+    expect(d.diedText).toBe('654')
+  })
+
+  it('생몰 모두 미상이지만 재위 시작~종료 구간이 있으면 재위 A–B로 표기하고 연표 구간에 반영한다', () => {
+    const monarch = person({
+      id: 'jumong',
+      born: null,
+      died: null,
+      isMonarch: true,
+      activityYear: -28,
+      activityStart: -37,
+      activityEnd: -19,
+    })
+    const d = describePersonLifespan(monarch)
+    expect(d.kind).toBe('activity-range')
+    expect(d.fallbackLabel).toBe('재위 37BC–19BC')
+    expect(bornForPlot(monarch)).toBe(-37)
+    expect(diedForPlot(monarch)).toBe(-19)
   })
 })

@@ -24,7 +24,7 @@ import styled, { css } from 'styled-components'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
 
-import { formatYear } from '../../model/century'
+import { describePersonLifespan } from '../../model/century'
 import { colorForField } from '../../model/constants'
 import type { EraGroupOrder, PersonSortKey } from '../../model/filter.store'
 import type { AdaptedPerson } from '../../model/types'
@@ -69,13 +69,7 @@ function PersonCardItemBase({
     [person.biography],
   )
   const role = person.isMonarch ? '군주' : person.isHeadOfState ? '국가원수' : null
-  const born = person.born == null ? '?' : formatYear(person.born)
-  const died = person.isAlive ? '현재' : person.died == null ? '?' : formatYear(person.died)
-  const bothYearsUnknown = person.born == null && person.died == null && !person.isAlive
-  const activityFallbackLabel =
-    bothYearsUnknown && person.activityYear != null
-      ? `활동 ${formatYear(Math.round(person.activityYear))}경`
-      : null
+  const lifespan = describePersonLifespan(person)
   const hasCountry = !!person.country && person.country !== '미상'
   /**
    * 영향력 0 = 아직 평가하지 않음(실데이터 470명 중 139명, 30%). 예전엔 빈 링 + '0'으로 그려
@@ -96,9 +90,7 @@ function PersonCardItemBase({
     role,
     hasCountry ? person.country : null,
     person.field,
-    bothYearsUnknown
-      ? (activityFallbackLabel ?? '생몰 미상')
-      : `생몰 ${born === '?' ? '미상' : born}–${died === '?' ? '미상' : died}`,
+    lifespan.ariaText,
     influenceRated ? `영향력 ${person.influence}` : '영향력 미평가',
     '상세 보기',
   ]
@@ -161,19 +153,23 @@ function PersonCardItemBase({
         {/* 직함 유무와 무관하게 메타 두 줄은 카드 바닥에 — 같은 줄 카드끼리 생몰·영향력이 나란히 */}
         <Row $pushDown>
           <Years>
-            {bothYearsUnknown ? (
-              activityFallbackLabel ?? '생몰 미상'
-            ) : (
+            {lifespan.kind === 'lifespan' ? (
               <>
-                {born}
+                <YearPart $unknown={lifespan.bornUnknown}>
+                  {lifespan.bornText}
+                </YearPart>
                 <Dash>–</Dash>
-                {died}
+                <YearPart $unknown={lifespan.diedUnknown}>
+                  {lifespan.diedText}
+                </YearPart>
               </>
+            ) : lifespan.kind === 'unknown' ? (
+              <YearPart $unknown>{lifespan.fallbackLabel}</YearPart>
+            ) : (
+              <ActivitySpan>{lifespan.fallbackLabel}</ActivitySpan>
             )}
           </Years>
-          {person.age != null && (
-            <Age>{person.isAlive ? `${person.age}세` : `향년 ${person.age}세`}</Age>
-          )}
+          {lifespan.ageLabel && <Age>{lifespan.ageLabel}</Age>}
         </Row>
         <Row>
           <Place>
@@ -483,6 +479,22 @@ const Years = styled.span`
   text-overflow: ellipsis;
 `
 
+const YearPart = styled.span<{ $unknown?: boolean }>`
+  ${({ $unknown, theme }) =>
+    $unknown &&
+    css`
+      font-size: 11.5px;
+      font-weight: 500;
+      color: ${metaText({ theme })};
+    `}
+`
+
+const ActivitySpan = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
 const Dash = styled.span`
   margin: 0 4px;
   font-weight: 500;
@@ -669,13 +681,7 @@ function PersonRowItemBase({
     [person.biography],
   )
   const role = person.isMonarch ? '군주' : person.isHeadOfState ? '국가원수' : null
-  const born = person.born == null ? '?' : formatYear(person.born)
-  const died = person.isAlive ? '현재' : person.died == null ? '?' : formatYear(person.died)
-  const bothYearsUnknown = person.born == null && person.died == null && !person.isAlive
-  const activityFallbackLabel =
-    bothYearsUnknown && person.activityYear != null
-      ? `활동 ${formatYear(Math.round(person.activityYear))}경`
-      : null
+  const lifespan = describePersonLifespan(person)
   const hasCountry = !!person.country && person.country !== '미상'
   const influenceRated = person.influence > 0
   const subtitle = person.primaryTitle ?? (person.faction || null)
@@ -686,9 +692,7 @@ function PersonRowItemBase({
     role,
     hasCountry ? person.country : null,
     person.field,
-    bothYearsUnknown
-      ? (activityFallbackLabel ?? '생몰 미상')
-      : `생몰 ${born === '?' ? '미상' : born}–${died === '?' ? '미상' : died}`,
+    lifespan.ariaText,
     influenceRated ? `영향력 ${person.influence}` : '영향력 미평가',
     '상세 보기',
   ]
@@ -769,19 +773,23 @@ function PersonRowItemBase({
 
       <RowLifespan>
         <Years>
-          {bothYearsUnknown ? (
-            activityFallbackLabel ?? '생몰 미상'
-          ) : (
+          {lifespan.kind === 'lifespan' ? (
             <>
-              {born}
+              <YearPart $unknown={lifespan.bornUnknown}>
+                {lifespan.bornText}
+              </YearPart>
               <Dash>–</Dash>
-              {died}
+              <YearPart $unknown={lifespan.diedUnknown}>
+                {lifespan.diedText}
+              </YearPart>
             </>
+          ) : lifespan.kind === 'unknown' ? (
+            <YearPart $unknown>{lifespan.fallbackLabel}</YearPart>
+          ) : (
+            <ActivitySpan>{lifespan.fallbackLabel}</ActivitySpan>
           )}
         </Years>
-        {person.age != null && (
-          <Age>{person.isAlive ? `${person.age}세` : `향년 ${person.age}세`}</Age>
-        )}
+        {lifespan.ageLabel && <Age>{lifespan.ageLabel}</Age>}
       </RowLifespan>
 
       <RowScore>

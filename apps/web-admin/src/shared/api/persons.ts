@@ -11,10 +11,22 @@ import { getApiConnection } from './client'
 export type PersonResponseDto = Awaited<
   ReturnType<typeof personsApi.getAll>
 >[number]
-/** 인포그래픽 목록(경량) 아이템 — adapt가 쓰는 최소 필드만 */
-export type PersonInfographicItemDto = Awaited<
+type SdkInfographicItem = Awaited<
   ReturnType<typeof personsApi.infographic.getAllForInfographic>
->[number] & {
+>[number]
+
+/** 인포그래픽 목록(경량) 아이템 — adapt가 쓰는 최소 필드만 */
+export type PersonInfographicItemDto = Omit<
+  SdkInfographicItem,
+  'governmentTenures'
+> & {
+  isBirthDateApproximate?: boolean
+  isDeathDateApproximate?: boolean
+  governmentTenures: Array<
+    SdkInfographicItem['governmentTenures'][number] & {
+      endDate?: string | null
+    }
+  >
   floruitStartYear?: number | null
   floruitEndYear?: number | null
   floruitEra?: Era | null

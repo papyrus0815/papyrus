@@ -8,7 +8,7 @@ import styled, { useTheme } from 'styled-components'
 
 import type { AdaptedPerson } from '../model/types'
 import { bornForPlot, diedForPlot } from '../model/adapt'
-import { formatYear } from '../model/century'
+import { describePersonLifespan, formatYear } from '../model/century'
 import { ERAS, INFOGRAPHIC_DEFAULTS, type EraKey } from '../model/constants'
 import {
   usePersonInfographicFilterStore,
@@ -61,6 +61,10 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
   const [showAll, setShowAll] = useState(false)
   const [eraWindow, setEraWindow] = useState<'all' | EraKey>('all')
   const [zoom, setZoom] = useState<ZoomLevel>(1)
+  const [countryOrder, setCountryOrder] = useState<'count' | 'chronological'>(
+    'count',
+  )
+  const [cursorX, setCursorX] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [W, setW] = useState(1100)
 
@@ -121,13 +125,28 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     [hasActiveFilter, plottablePeople, scopes],
   )
 
-  // 국가별 lane 패킹 — plottablePeople·showAll·canvasW·focusedEra 변할 때만 재계산
+  // 국가별 lane 패킹 — plottablePeople·showAll·canvasW·focusedEra·countryOrder 변할 때만 재계산
   const grouped = useMemo(() => {
     const byCountry: Record<string, AdaptedPerson[]> = {}
+    const earliestByCountry: Record<string, number> = {}
     for (const p of plottablePeople) {
       ;(byCountry[p.country] = byCountry[p.country] || []).push(p)
+      const b = bornForPlot(p)
+      if (
+        earliestByCountry[p.country] === undefined ||
+        b < earliestByCountry[p.country]
+      ) {
+        earliestByCountry[p.country] = b
+      }
     }
-    const all = Object.entries(byCountry).sort((a, b) => b[1].length - a[1].length)
+    const all = Object.entries(byCountry).sort((a, b) => {
+      if (countryOrder === 'chronological') {
+        const diff =
+          (earliestByCountry[a[0]] ?? 0) - (earliestByCountry[b[0]] ?? 0)
+        if (diff !== 0) return diff
+      }
+      return b[1].length - a[1].length
+    })
     const visible = showAll
       ? all
       : all.slice(0, INFOGRAPHIC_DEFAULTS.MATRIX_COUNTRY_TOP_N)
@@ -186,11 +205,12 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
       totalRowH,
       minY,
       maxY,
+      rng,
       yearX,
       ticks,
       hiddenCount: all.length - visible.length,
     }
-  }, [plottablePeople, showAll, canvasW, focusedEra])
+  }, [plottablePeople, showAll, canvasW, focusedEra, countryOrder])
 
   if (!grouped.all.length && eraWindow === 'all') {
     return (
@@ -202,7 +222,12 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     )
   }
 
-  const { packed, totalRowH, minY, maxY, yearX, ticks, hiddenCount } = grouped
+  const { packed, totalRowH, minY, maxY, rng, yearX, ticks, hiddenCount } =
+    grouped
+  const cursorYear =
+    cursorX != null && Number.isFinite(minY)
+      ? Math.round(minY + (cursorX / Math.max(1, canvasW)) * rng)
+      : null
 
   const gridLine = theme.colors.border.light
   const tickLine = theme.colors.border.default
@@ -212,7 +237,7 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
       <ViewPanelHeader>
         <ViewPanelTitle>국가별 생몰 연표</ViewPanelTitle>
         <ViewPanelDesc>
-          가로 = 생몰·활동 기간 · 색 = 시대 · 시대 구간 포커스 및 배율 조절
+          가로 = 생몰·활동 기간 · 색 = 시대 · 실선 = 생몰 확인 / 점선 = 활동·재위 추정
         </ViewPanelDesc>
         {hasActiveFilter && (
           <FilterBadge>
@@ -278,19 +303,39 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
           ))}
         </ControlGroup>
 
-        <ControlGroup role="group" aria-label="연표 가로 배율">
-          <ControlLabel>가로 배율</ControlLabel>
-          {ZOOM_STEPS.map((step) => (
+        <ControlRightGroup>
+          <ControlGroup role="group" aria-label="국가 행 정렬 기준">
+            <ControlLabel>국가 정렬</ControlLabel>
             <PillBtn
-              key={step}
               type="button"
-              $active={zoom === step}
-              onClick={() => setZoom(step)}
+              $active={countryOrder === 'count'}
+              onClick={() => setCountryOrder('count')}
             >
-              {step}x
+              인원순
             </PillBtn>
-          ))}
-        </ControlGroup>
+            <PillBtn
+              type="button"
+              $active={countryOrder === 'chronological'}
+              onClick={() => setCountryOrder('chronological')}
+            >
+              시대순
+            </PillBtn>
+          </ControlGroup>
+
+          <ControlGroup role="group" aria-label="연표 가로 배율">
+            <ControlLabel>가로 배율</ControlLabel>
+            {ZOOM_STEPS.map((step) => (
+              <PillBtn
+                key={step}
+                type="button"
+                $active={zoom === step}
+                onClick={() => setZoom(step)}
+              >
+                {step}x
+              </PillBtn>
+            ))}
+          </ControlGroup>
+        </ControlRightGroup>
       </ControlBar>
 
       <div ref={containerRef}>
@@ -370,7 +415,18 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                     )
                   })}
                 </Labels>
-                <div style={{ position: 'relative' }}>
+                <div
+                  style={{ position: 'relative' }}
+                  onMouseMove={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const x = Math.max(
+                      0,
+                      Math.min(canvasW, Math.round(e.clientX - rect.left)),
+                    )
+                    setCursorX(x)
+                  }}
+                  onMouseLeave={() => setCursorX(null)}
+                >
                   <svg
                     width={canvasW}
                     height={30 + totalRowH}
@@ -416,6 +472,18 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                         strokeDasharray="2 5"
                       />
                     ))}
+                    {cursorX != null && (
+                      <line
+                        x1={cursorX}
+                        y1={24}
+                        x2={cursorX}
+                        y2={30 + totalRowH}
+                        stroke={theme.colors.active}
+                        strokeWidth={1}
+                        strokeDasharray="3 3"
+                        opacity={0.55}
+                      />
+                    )}
                   </svg>
                   <div
                     style={{
@@ -445,6 +513,15 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                           {y === 0 ? '0' : formatYear(y)}
                         </div>
                       ))}
+                    {cursorX != null && cursorYear != null && (
+                      <CrosshairYearBadge
+                        style={{
+                          left: Math.max(28, Math.min(canvasW - 28, cursorX)),
+                        }}
+                      >
+                        {cursorYear === 0 ? '0' : formatYear(cursorYear)}
+                      </CrosshairYearBadge>
+                    )}
                   </div>
                   {packed.map(({ country: c, placed, rowH }) => (
                     <div
@@ -464,15 +541,16 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                         const isHoveredSelf = hoveredBar?.id === p.id
                         const isOtherInLane = isHoveredLane && !isHoveredSelf
                         const isSelected = activeSelectedId === p.id
+                        const isEstimatedSpan =
+                          p.born == null || (p.died == null && !p.isAlive)
                         const baseOp = active ? 0.85 : 0.2
                         const op = isOtherInLane ? Math.min(baseOp, 0.25) : baseOp
+                        const lifespanAria = describePersonLifespan(p).ariaText
                         return (
                           <button
                             key={p.id}
                             type="button"
-                            aria-label={`${p.name} ${
-                              p.born == null ? '?' : formatYear(p.born)
-                            }–${p.died == null ? '?' : formatYear(p.died)}`}
+                            aria-label={`${p.name} (${lifespanAria})`}
                             onClick={() => {
                               setSelectedId(p.id)
                               setHover(null)
@@ -484,16 +562,22 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                               top: yy,
                               width: Math.max(6, x2 - x1),
                               height: BAR_H,
-                              background: era.color,
+                              background: isEstimatedSpan
+                                ? `repeating-linear-gradient(135deg, rgba(255,255,255,0.22) 0 2px, transparent 2px 5px), ${era.color}`
+                                : era.color,
                               borderRadius: 4,
                               cursor: 'pointer',
                               opacity: isHoveredSelf ? 1 : op,
-                              border: 'none',
+                              border: isEstimatedSpan
+                                ? '1px dashed rgba(255, 255, 255, 0.7)'
+                                : 'none',
                               padding: 0,
                               transition: 'opacity 0.12s, box-shadow 0.12s',
                               boxShadow: isSelected
                                 ? `0 0 0 2px ${theme.colors.background.primary}, 0 0 0 3.5px ${theme.colors.active}`
-                                : 'inset 0 0 0 1px rgba(255, 255, 255, 0.22)',
+                                : isEstimatedSpan
+                                  ? 'none'
+                                  : 'inset 0 0 0 1px rgba(255, 255, 255, 0.22)',
                               zIndex: isSelected ? 2 : isHoveredSelf ? 1 : 0,
                             }}
                             onMouseEnter={(e) => {
@@ -736,6 +820,30 @@ const ControlGroup = styled.div`
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
+`
+
+const ControlRightGroup = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+`
+
+const CrosshairYearBadge = styled.div`
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  color: ${({ theme }) => theme.colors.background.primary};
+  background: ${({ theme }) => theme.colors.active};
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
 `
 
 const ControlLabel = styled.span`

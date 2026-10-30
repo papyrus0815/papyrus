@@ -306,6 +306,9 @@ const PERSON_INFOGRAPHIC_INCLUDE = {
       startDate: true,
       startEra: true,
       startYear: true,
+      endDate: true,
+      endEra: true,
+      endYear: true,
       positionType: true,
       title: true,
       notes: true,
@@ -757,8 +760,10 @@ export class PersonPrismaRepository implements IPersonRepository {
       nameDisplayOrder: person.nameDisplayOrder ?? null,
       birthEra: person.birthEra as any,
       birthYear: person.birthDate ? person.birthDate.getUTCFullYear() : null,
+      isBirthDateApproximate: (person as any).isBirthDateApproximate ?? false,
       deathEra: person.deathEra as any,
       deathYear: person.deathDate ? person.deathDate.getUTCFullYear() : null,
+      isDeathDateApproximate: (person as any).isDeathDateApproximate ?? false,
       isAlive: person.isAlive ?? false,
       influence: (person as any).influence ?? null,
       regnalName,
@@ -773,16 +778,23 @@ export class PersonPrismaRepository implements IPersonRepository {
         : null,
       dynasty: person.dynasty ? { name: person.dynasty.name } : null,
       governmentTenures: allHoldings.map((t: any) => {
-        // BC 또는 AD 1000년 미만 재임/재위는 DB의 startDate(DATETIME)가 NULL이므로
-        // 구조화 연도(startEra·startYear)를 우선 사용해 부호 연도 문자열로 내려준다.
+        // BC 또는 AD 1000년 미만 재임/재위는 DB의 startDate/endDate(DATETIME)가 NULL이므로
+        // 구조화 연도(startEra·startYear / endEra·endYear)를 우선 사용해 부호 연도 문자열로 내려준다.
         const startDate =
           t.startYear != null && (t.startEra === 'BC' || !t.startDate)
             ? String(t.startEra === 'BC' ? -t.startYear : t.startYear)
             : t.startDate
               ? t.startDate.toISOString()
               : null
+        const endDate =
+          t.endYear != null && (t.endEra === 'BC' || !t.endDate)
+            ? String(t.endEra === 'BC' ? -t.endYear : t.endYear)
+            : t.endDate
+              ? t.endDate.toISOString()
+              : null
         return {
           startDate,
+          endDate,
           positionType: t.positionType ?? null,
           title: t.title ?? null,
           positionDefinition: t.positionDefinition

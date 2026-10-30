@@ -19,8 +19,10 @@ export interface PersonInfographicItemDto {
   nameDisplayOrder: string | null
   birthEra: Era | null
   birthYear: number | null
+  isBirthDateApproximate?: boolean
   deathEra: Era | null
   deathYear: number | null
+  isDeathDateApproximate?: boolean
   isAlive: boolean
   influence: number | null
   /** 대표 왕호 — 저장 칸 아님, 가장 최근 재위의 왕호에서 파생 */
@@ -38,6 +40,7 @@ export interface PersonInfographicItemDto {
   /** 분야·활동연도 분류용 재임 기록 (최소 필드) */
   governmentTenures: Array<{
     startDate: string | null
+    endDate?: string | null
     positionType: string | null
     title: string | null
     positionDefinition: {

@@ -37,8 +37,22 @@ function compareBy(
     primary = reverse ? -cmp : cmp
   } else if (sort === 'year') {
     primary = cmpYear(personA.born, personB.born, yearDir)
+    if (primary === 0 && personA.born == null && personB.born == null) {
+      primary = cmpYear(
+        personA.activityStart ?? personA.activityYear,
+        personB.activityStart ?? personB.activityYear,
+        yearDir,
+      )
+    }
   } else if (sort === 'deathYear') {
     primary = cmpYear(personA.died, personB.died, yearDir)
+    if (primary === 0 && personA.died == null && personB.died == null) {
+      primary = cmpYear(
+        personA.activityEnd ?? personA.activityYear,
+        personB.activityEnd ?? personB.activityYear,
+        yearDir,
+      )
+    }
   } else if (sort === 'lifespan') {
     primary = cmpYear(personA.age, personB.age, yearDir)
   } else {
