@@ -1,7 +1,16 @@
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiAlertCircle, FiBookOpen, FiCheck, FiCheckCircle, FiHash, FiSearch, FiTarget } from 'react-icons/fi'
+import {
+  FiAlertCircle,
+  FiBookOpen,
+  FiCheck,
+  FiCheckCircle,
+  FiChevronDown,
+  FiHash,
+  FiSearch,
+  FiTarget,
+} from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import {
@@ -205,6 +214,15 @@ export function ObservationFormModal({
   const [locator, setLocator] = useState('')
   const [quote, setQuote] = useState('')
   const [saving, setSaving] = useState(false)
+  /**
+   * 선택 칸 접기 — 필수(값·출처)만 펼쳐 두고 단서·추정의 성격·시점·설명, 위치·근거 구절은 접는다.
+   * 이미 채운 게 있으면(고치기) 펼친 채로 연다 — 숨은 값을 모르고 지나치지 않게.
+   */
+  const [valueMoreOpen, setValueMoreOpen] = useState(
+    () =>
+      Boolean(initial?.qualifier || initial?.note || initial?.estimateRole || initial?.method || initial?.start || initial?.end),
+  )
+  const [citationMoreOpen, setCitationMoreOpen] = useState(false)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(sourceQuery.trim()), 250)
@@ -355,6 +373,14 @@ export function ObservationFormModal({
   }
 
   const subjectName = initial ? subjectLabelOf(initial) : (currentSubject?.label ?? '')
+  /** 접힌 '더 적기'의 요약 — 무엇을 채웠나 */
+  const valueExtras = [
+    qualifier.trim() ? '단서' : '',
+    estimateRole ? ESTIMATE_ROLE_LABEL[estimateRole] : '',
+    method ? ESTIMATE_METHOD_LABEL[method] : '',
+    start.year.trim() || end.year.trim() ? '시점' : '',
+    note.trim() ? '설명' : '',
+  ].filter(Boolean)
   const summary = [subjectName, metric?.name, preview].filter(Boolean).join(' · ')
   /** 미리보기의 출처 — 이번에 다는 것, 없으면 이미 달린 첫 출처 */
   const pickedSource = selectableSources.find((source) => source.id === pickedSourceId) ?? null
@@ -515,7 +541,7 @@ export function ObservationFormModal({
               id="obs-step-value"
               icon={<FiHash />}
               title="값"
-              caption="숫자와 그 숫자의 성격"
+              caption="숫자 하나, 범위, 또는 ~이상"
               done={stepDone.value}
             />
 
@@ -541,7 +567,7 @@ export function ObservationFormModal({
 
             <ValueInputs>
               {mode === 'single' && (
-                <NumberField label="값" unit={unit} value={value} onChange={setValue} placeholder="예: 44,700" inputRef={valueInputRef} />
+                <NumberField label="" unit={unit} value={value} onChange={setValue} placeholder="예: 44,700" inputRef={valueInputRef} />
               )}
               {mode === 'range' && (
                 <>
@@ -566,95 +592,102 @@ export function ObservationFormModal({
               )}
             </ValueInputs>
 
-            <TextField>
-              <span>단서</span>
-              <input
-                value={qualifier}
-                onChange={(change) => setQualifier(change.target.value)}
-                placeholder="예: 질병 사망 별도 · 보헤미아 전선 기준"
-              />
-            </TextField>
+            <Disclosure
+              label="더 적기"
+              hint="단서 · 추정의 성격 · 시점 · 설명"
+              summary={valueExtras}
+              open={valueMoreOpen}
+              onToggle={() => setValueMoreOpen((current) => !current)}
+            >
+              <TextField>
+                <span>단서</span>
+                <input
+                  value={qualifier}
+                  onChange={(change) => setQualifier(change.target.value)}
+                  placeholder="예: 질병 사망 별도 · 보헤미아 전선 기준"
+                />
+              </TextField>
 
-            <SubBlock>
-              <SubHead>추정의 성격</SubHead>
-              <ChoiceRow>
-                <ChoiceLabel>지위</ChoiceLabel>
-                <ChipWrap role="radiogroup" aria-label="추정치 지위">
-                  <Chip $active={estimateRole === ''} $quiet>
-                    <input type="radio" name="obs-role" checked={estimateRole === ''} onChange={() => setEstimateRole('')} />
-                    값이 하나뿐
-                  </Chip>
-                  {(Object.keys(ESTIMATE_ROLE_LABEL) as EstimateRole[]).map((key) => (
-                    <Chip key={key} $active={estimateRole === key} title={ESTIMATE_ROLE_HINT[key]}>
-                      <input type="radio" name="obs-role" checked={estimateRole === key} onChange={() => setEstimateRole(key)} />
-                      {ESTIMATE_ROLE_LABEL[key]}
+              <SubBlock>
+                <SubHead>
+                  추정의 성격 <Optional>학설마다 값이 다르면 기준 하나를 ‘채택’으로</Optional>
+                </SubHead>
+                <ChoiceRow>
+                  <ChoiceLabel>지위</ChoiceLabel>
+                  <ChipWrap role="radiogroup" aria-label="추정치 지위">
+                    <Chip $active={estimateRole === ''} $quiet>
+                      <input type="radio" name="obs-role" checked={estimateRole === ''} onChange={() => setEstimateRole('')} />
+                      값이 하나뿐
                     </Chip>
-                  ))}
-                </ChipWrap>
-              </ChoiceRow>
-              <ChoiceRow>
-                <ChoiceLabel>방식</ChoiceLabel>
-                <ChipWrap role="radiogroup" aria-label="산정 방식">
-                  <Chip $active={method === ''} $quiet>
-                    <input type="radio" name="obs-method" checked={method === ''} onChange={() => setMethod('')} />
-                    모름
-                  </Chip>
-                  {(Object.keys(ESTIMATE_METHOD_LABEL) as EstimateMethod[]).map((key) => (
-                    <Chip key={key} $active={method === key} title={ESTIMATE_METHOD_HINT[key]}>
-                      <input type="radio" name="obs-method" checked={method === key} onChange={() => setMethod(key)} />
-                      {ESTIMATE_METHOD_LABEL[key]}
+                    {(Object.keys(ESTIMATE_ROLE_LABEL) as EstimateRole[]).map((key) => (
+                      <Chip key={key} $active={estimateRole === key} title={ESTIMATE_ROLE_HINT[key]}>
+                        <input type="radio" name="obs-role" checked={estimateRole === key} onChange={() => setEstimateRole(key)} />
+                        {ESTIMATE_ROLE_LABEL[key]}
+                      </Chip>
+                    ))}
+                  </ChipWrap>
+                </ChoiceRow>
+                <ChoiceRow>
+                  <ChoiceLabel>방식</ChoiceLabel>
+                  <ChipWrap role="radiogroup" aria-label="산정 방식">
+                    <Chip $active={method === ''} $quiet>
+                      <input type="radio" name="obs-method" checked={method === ''} onChange={() => setMethod('')} />
+                      모름
                     </Chip>
+                    {(Object.keys(ESTIMATE_METHOD_LABEL) as EstimateMethod[]).map((key) => (
+                      <Chip key={key} $active={method === key} title={ESTIMATE_METHOD_HINT[key]}>
+                        <input type="radio" name="obs-method" checked={method === key} onChange={() => setMethod(key)} />
+                        {ESTIMATE_METHOD_LABEL[key]}
+                      </Chip>
+                    ))}
+                  </ChipWrap>
+                </ChoiceRow>
+                {(estimateRole || method) && (
+                  <Hint>
+                    {estimateRole ? ESTIMATE_ROLE_HINT[estimateRole] : ''}
+                    {estimateRole && method ? ' · ' : ''}
+                    {method ? `${ESTIMATE_METHOD_LABEL[method]}: ${ESTIMATE_METHOD_HINT[method]}` : ''}
+                  </Hint>
+                )}
+              </SubBlock>
+
+              <SubBlock>
+                <SubHead>시점</SubHead>
+                <PointRow>
+                  {([['시작', start, setStart], ['끝', end, setEnd]] as const).map(([label, fields, setFields]) => (
+                    <PointGroup key={label} role="group" aria-label={`${label} 시점`}>
+                      <span className="label">{label}</span>
+                      <MiniSegmented role="radiogroup" aria-label={`${label} 기원`}>
+                        {(['AD', 'BC'] as const).map((era) => (
+                          <Segment key={era} $active={fields.era === era} $small>
+                            <input
+                              type="radio"
+                              name={`obs-era-${label}`}
+                              checked={fields.era === era}
+                              onChange={() => setFields({ ...fields, era })}
+                            />
+                            {era === 'AD' ? '서기' : '기원전'}
+                          </Segment>
+                        ))}
+                      </MiniSegmented>
+                      <DatePart inputMode="numeric" placeholder="년" value={fields.year} onChange={(change) => setFields({ ...fields, year: change.target.value })} aria-label={`${label} 연도`} $wide />
+                      <DatePart inputMode="numeric" placeholder="월" value={fields.month} onChange={(change) => setFields({ ...fields, month: change.target.value })} aria-label={`${label} 월`} />
+                      <DatePart inputMode="numeric" placeholder="일" value={fields.day} onChange={(change) => setFields({ ...fields, day: change.target.value })} aria-label={`${label} 일`} />
+                    </PointGroup>
                   ))}
-                </ChipWrap>
-              </ChoiceRow>
-              <Hint>
-                {estimateRole
-                  ? ESTIMATE_ROLE_HINT[estimateRole]
-                  : '학설마다 값이 다르면 모두 적고 기준 하나를 ‘채택’으로 — 비교·해설은 채택값으로 계산합니다.'}
-                {method ? ` ${ESTIMATE_METHOD_LABEL[method]}: ${ESTIMATE_METHOD_HINT[method]}` : ''}
-              </Hint>
-            </SubBlock>
+                </PointRow>
+              </SubBlock>
 
-            <SubBlock>
-              <SubHead>
-                시점 <Optional>선택</Optional>
-              </SubHead>
-              <PointRow>
-                {([['시작', start, setStart], ['끝', end, setEnd]] as const).map(([label, fields, setFields]) => (
-                  <PointGroup key={label} role="group" aria-label={`${label} 시점`}>
-                    <span className="label">{label}</span>
-                    <MiniSegmented role="radiogroup" aria-label={`${label} 기원`}>
-                      {(['AD', 'BC'] as const).map((era) => (
-                        <Segment key={era} $active={fields.era === era} $small>
-                          <input
-                            type="radio"
-                            name={`obs-era-${label}`}
-                            checked={fields.era === era}
-                            onChange={() => setFields({ ...fields, era })}
-                          />
-                          {era === 'AD' ? '서기' : '기원전'}
-                        </Segment>
-                      ))}
-                    </MiniSegmented>
-                    <DatePart inputMode="numeric" placeholder="년" value={fields.year} onChange={(change) => setFields({ ...fields, year: change.target.value })} aria-label={`${label} 연도`} $wide />
-                    <DatePart inputMode="numeric" placeholder="월" value={fields.month} onChange={(change) => setFields({ ...fields, month: change.target.value })} aria-label={`${label} 월`} />
-                    <DatePart inputMode="numeric" placeholder="일" value={fields.day} onChange={(change) => setFields({ ...fields, day: change.target.value })} aria-label={`${label} 일`} />
-                  </PointGroup>
-                ))}
-              </PointRow>
-            </SubBlock>
-
-            <TextField>
-              <span>
-                설명 <Optional>선택</Optional>
-              </span>
-              <textarea
-                rows={3}
-                placeholder="이 숫자를 어떻게 읽어야 하나 — 예: 프로이센 공식 전사(戰史) 기준. 오스트리아 측 집계는 포로를 포함해 더 크다."
-                value={note}
-                onChange={(change) => setNote(change.target.value)}
-              />
-            </TextField>
+              <TextField>
+                <span>설명</span>
+                <textarea
+                  rows={3}
+                  placeholder="이 숫자를 어떻게 읽어야 하나 — 예: 프로이센 공식 전사(戰史) 기준. 오스트리아 측 집계는 포로를 포함해 더 크다."
+                  value={note}
+                  onChange={(change) => setNote(change.target.value)}
+                />
+              </TextField>
+            </Disclosure>
           </Step>
 
           {/* ── 3 근거 ── */}
@@ -795,20 +828,24 @@ export function ObservationFormModal({
               </NewSourceGrid>
             )}
 
-            <CitationDetail>
-              <TextField $narrow>
-                <span>
-                  위치 <Optional>선택</Optional>
-                </span>
-                <input value={locator} onChange={(change) => setLocator(change.target.value)} placeholder="p. 123 · §4" />
-              </TextField>
-              <TextField>
-                <span>
-                  근거 구절 <Optional>선택</Optional>
-                </span>
-                <input value={quote} onChange={(change) => setQuote(change.target.value)} placeholder="출처의 원문 그대로" />
-              </TextField>
-            </CitationDetail>
+            <Disclosure
+              label="위치·근거 구절"
+              hint="쪽수와 원문 인용"
+              summary={[locator.trim(), quote.trim() ? '근거 구절' : ''].filter(Boolean)}
+              open={citationMoreOpen}
+              onToggle={() => setCitationMoreOpen((current) => !current)}
+            >
+              <CitationDetail>
+                <TextField $narrow>
+                  <span>위치</span>
+                  <input value={locator} onChange={(change) => setLocator(change.target.value)} placeholder="p. 123 · §4" />
+                </TextField>
+                <TextField>
+                  <span>근거 구절</span>
+                  <input value={quote} onChange={(change) => setQuote(change.target.value)} placeholder="출처의 원문 그대로" />
+                </TextField>
+              </CitationDetail>
+            </Disclosure>
           </Step>
           </Steps>
 
@@ -867,20 +904,6 @@ export function ObservationFormModal({
               </span>
             </PreviewCard>
 
-            <Checklist aria-label="진행">
-              {(
-                [
-                  ['what', '대상·지표'],
-                  ['value', '값'],
-                  ['source', '출처'],
-                ] as const
-              ).map(([key, label]) => (
-                <li key={key} data-done={stepDone[key] || undefined}>
-                  {stepDone[key] ? <FiCheckCircle aria-hidden /> : <span className="dot" aria-hidden />}
-                  {label}
-                </li>
-              ))}
-            </Checklist>
           </Aside>
         </Body>
 
@@ -930,6 +953,42 @@ function StepHeader({
   )
 }
 
+/** 선택 칸 묶음 — 접혀 있으면 한 줄(이름·안내·채운 것 요약), 누르면 펼친다 */
+function Disclosure({
+  label,
+  hint,
+  summary,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string
+  hint: string
+  summary: string[]
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
+}) {
+  return (
+    <DisclosureBox $open={open}>
+      <DisclosureButton type="button" aria-expanded={open} onClick={onToggle}>
+        <FiChevronDown aria-hidden className="chevron" />
+        <span className="label">{label}</span>
+        {!open && summary.length > 0 ? (
+          <span className="summary">
+            {summary.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </span>
+        ) : (
+          <span className="hint">{hint}</span>
+        )}
+      </DisclosureButton>
+      {open && <DisclosureBody>{children}</DisclosureBody>}
+    </DisclosureBox>
+  )
+}
+
 /** 숫자 입력 — 큰 글씨 + 단위 꼬리표('명'). 쉼표를 써도 된다 */
 function NumberField({
   label,
@@ -951,7 +1010,7 @@ function NumberField({
   const invalid = !isNumeric(cleanNumber(value))
   return (
     <NumberBox $invalid={invalid}>
-      <span className="label">{label}</span>
+      {label && <span className="label">{label}</span>}
       <span className="control">
         <input
           inputMode="decimal"
@@ -959,6 +1018,7 @@ function NumberField({
           onChange={(change) => onChange(change.target.value)}
           placeholder={placeholder}
           aria-invalid={invalid || undefined}
+          aria-label={label || '값'}
           ref={inputRef}
         />
         {(unit || suffix) && <span className="unit">{[unit, suffix].filter(Boolean).join(' ')}</span>}
@@ -1831,42 +1891,6 @@ const PreviewCard = styled.div`
   }
 `
 
-/** 진행 — 세 단계가 어디까지 됐나 */
-const Checklist = styled.ul`
-  margin: 0;
-  padding: 4px 6px;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 13px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-  li[data-done] {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  svg {
-    width: 16px;
-    height: 16px;
-    color: #16a34a;
-  }
-  .dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: ${({ theme }) => fill(theme.mode, 0.1, 0.14)};
-  }
-
-  @media (max-width: 920px) {
-    display: none;
-  }
-`
 
 /** 견줄 값 — 이름 · 막대 · 값 한 줄씩. 지금 적는 값은 굵게 */
 const Compare = styled.div`
@@ -1915,4 +1939,79 @@ const CompareRow = styled.div<{ $color: string; $current?: boolean }>`
     font-variant-numeric: tabular-nums;
     color: ${({ theme }) => theme.colors.text.primary};
   }
+`
+
+/* ── 접기 ── */
+
+const DisclosureBox = styled.div<{ $open: boolean }>`
+  margin: 0 -8px;
+  border-radius: 10px;
+  background: ${({ theme, $open }) => ($open ? fill(theme.mode, 0.025, 0.03) : 'transparent')};
+`
+
+const DisclosureButton = styled.button`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => fill(theme.mode, 0.035, 0.05)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+  }
+
+  .chevron {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    transform: rotate(-90deg);
+    transition: transform 0.15s;
+  }
+  &[aria-expanded='true'] .chevron {
+    transform: none;
+  }
+  .label {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 650;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .hint {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  .summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .summary > span {
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.primary};
+    background: color-mix(in srgb, ${({ theme }) => theme.colors.primary} 12%, transparent);
+  }
+`
+
+const DisclosureBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 6px 8px 12px;
 `
