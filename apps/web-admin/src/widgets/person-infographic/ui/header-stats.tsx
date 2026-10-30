@@ -500,28 +500,6 @@ export function HeaderStats({
 
         <Chart>
           <Plot ref={plotRef} onMouseLeave={() => setHoverBin(null)}>
-            {/* 시대 띠 — 막대 뒤에 시대 구간을 옅게 깔아 '어느 시대의 봉우리인가'를 차트 안에서 읽게 한다 */}
-            {ERAS.map((era) => {
-              const left = Math.max(0, pct(era.from))
-              const right = Math.min(100, pct(era.to))
-              if (right <= left) return null
-              return (
-                <EraBand
-                  key={era.key}
-                  aria-hidden
-                  $dim={eraFiltered && !scopes.era.includes(era.key)}
-                  style={{
-                    left: `${left}%`,
-                    width: `${right - left}%`,
-                    ['--band' as string]: era.color,
-                  }}
-                >
-                  {plotWidth > 0 && ((right - left) / 100) * plotWidth >= BAND_LABEL_PX && (
-                    <EraBandLabel>{era.lbl}</EraBandLabel>
-                  )}
-                </EraBand>
-              )
-            })}
             <GridLine style={{ bottom: '100%' }} aria-hidden />
             <GridLine style={{ bottom: '50%' }} aria-hidden />
             {/* 세로축 눈금 — 격자선에 값을 붙여 막대 높이를 숫자로 읽게 한다 */}
@@ -719,7 +697,7 @@ function BarSection({
   metaText: metaOverride,
   actionHint = '필터 토글',
   unit = '명',
-  showShare = true,
+  showShare = false,
   valueSuffix,
 }: {
   title: string
@@ -1030,8 +1008,7 @@ const SectionMeta = styled.span`
 
 const Chart = styled.div`
   position: relative;
-  /* 시대 띠 이름 줄(차트 위) 자리 — 막대가 이름을 가리지 않게 차트 밖에 둔다 */
-  padding-top: 18px;
+  padding-top: 4px;
 `
 
 const Plot = styled.div`
@@ -1292,10 +1269,10 @@ const BarList = styled.div`
 
 const BarRow = styled.button<{ $active: boolean; $dim: boolean }>`
   display: grid;
-  grid-template-columns: minmax(64px, 104px) minmax(0, 1fr) 64px;
+  grid-template-columns: minmax(64px, 104px) minmax(0, 1fr) 48px;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   margin: 0 -8px;
   width: calc(100% + 16px);
   border: none;
@@ -1371,8 +1348,8 @@ const BarName = styled.span`
 `
 
 const BarTrack = styled.span`
-  height: 10px;
-  border-radius: 5px;
+  height: 6px;
+  border-radius: 999px;
   overflow: hidden;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
@@ -1381,7 +1358,7 @@ const BarTrack = styled.span`
 const BarFill = styled.span<{ $residual?: boolean; $tone?: 'lead' | 'rest' }>`
   display: block;
   height: 100%;
-  border-radius: 0 5px 5px 0;
+  border-radius: 999px;
   /* 순위 목록은 1위만 진한 단색, 나머지 한 단계 옅게 — 시대 분포의 최다 막대와 같은 문법 */
   background: ${({ $residual, $tone, theme }) =>
     $residual
@@ -1404,9 +1381,9 @@ const BarFill = styled.span<{ $residual?: boolean; $tone?: 'lead' | 'rest' }>`
 const Composition = styled.div`
   display: flex;
   gap: 2px;
-  height: 12px;
-  margin: 0 0 14px;
-  border-radius: 6px;
+  height: 6px;
+  margin: 0 0 12px;
+  border-radius: 999px;
   overflow: hidden;
 `
 

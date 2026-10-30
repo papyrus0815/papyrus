@@ -245,33 +245,6 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
 
   return (
     <ViewPanel>
-      <ViewPanelHeader>
-        <ViewPanelTitle>국가별 생몰 연표</ViewPanelTitle>
-        <ViewPanelDesc>국가별 인물 생몰·활동 기간</ViewPanelDesc>
-        {hasActiveFilter && (
-          <FilterBadge>
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-              <strong>{activeCount.toLocaleString()}</strong>
-              <span style={{ opacity: 0.6 }}>
-                {' / '}
-                {plottablePeople.length.toLocaleString()}
-              </span>{' '}
-              명 강조
-            </span>
-            <FilterBadgeClear
-              type="button"
-              onClick={clearAllScopes}
-              aria-label="필터 모두 해제"
-            >
-              필터 해제
-            </FilterBadgeClear>
-          </FilterBadge>
-        )}
-        {minInfluence > 0 && (
-          <FilterBadge>영향력 ≥ {minInfluence}</FilterBadge>
-        )}
-      </ViewPanelHeader>
-
       <ControlBar>
         <ControlGroup role="group" aria-label="연표 시대 구간 포커스">
           <ControlLabel>구간 포커스</ControlLabel>
@@ -299,6 +272,29 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
         </ControlGroup>
 
         <ControlRightGroup>
+          {hasActiveFilter && (
+            <FilterBadge>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                <strong>{activeCount.toLocaleString()}</strong>
+                <span style={{ opacity: 0.6 }}>
+                  {' / '}
+                  {plottablePeople.length.toLocaleString()}
+                </span>{' '}
+                명 강조
+              </span>
+              <FilterBadgeClear
+                type="button"
+                onClick={clearAllScopes}
+                aria-label="필터 모두 해제"
+              >
+                필터 해제
+              </FilterBadgeClear>
+            </FilterBadge>
+          )}
+          {minInfluence > 0 && (
+            <FilterBadge>영향력 ≥ {minInfluence}</FilterBadge>
+          )}
+
           <ControlGroup role="group" aria-label="국가 행 정렬 기준">
             <ControlLabel>국가 정렬</ControlLabel>
             <PillBtn

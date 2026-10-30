@@ -144,13 +144,20 @@ function PersonCardItemBase({
       </Visual>
 
       <Body>
-        <Name title={person.name}>{highlight(person.name, query)}</Name>
+        <NameRow>
+          <Name title={person.name}>{highlight(person.name, query)}</Name>
+          {influenceRated && (
+            <Influence title={`영향력 ${person.influence}`}>
+              {person.influence}
+            </Influence>
+          )}
+        </NameRow>
         {subtitle && (
           <Title title={subtitle} $muted={factionInSubtitle}>
             {highlight(subtitle, query)}
           </Title>
         )}
-        {/* 직함 유무와 무관하게 메타 두 줄은 카드 바닥에 — 같은 줄 카드끼리 생몰·영향력이 나란히 */}
+        {/* 직함 유무와 무관하게 하단 메타 한 줄은 카드 바닥에 고정 */}
         <Row $pushDown>
           <Years>
             {lifespan.kind === 'lifespan' ? (
@@ -169,8 +176,6 @@ function PersonCardItemBase({
               <ActivitySpan>{lifespan.fallbackLabel}</ActivitySpan>
             )}
           </Years>
-        </Row>
-        <Row>
           <Place>
             {person.field !== '기타' && (
               <>
@@ -181,11 +186,6 @@ function PersonCardItemBase({
             )}
             {hasCountry ? highlight(person.country, query) : '국가 미상'}
           </Place>
-          {influenceRated && (
-            <Influence title={`영향력 ${person.influence}`}>
-              {person.influence}
-            </Influence>
-          )}
         </Row>
       </Body>
     </Card>
@@ -313,24 +313,23 @@ const Empty = styled.div`
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  /* 사진 없음은 데이터 상태 — 분야 색(--field)을 6% 라디얼로 은은하게 섞어 회색 벽 현상을 완화 */
+  /* 사진 없음은 데이터 상태 — 분야 색(--field)을 은은하게 섞어 회색 벽 현상을 완화 */
   color: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'color-mix(in srgb, var(--field, #64748b) 22%, #2a2d33)'
-      : 'color-mix(in srgb, var(--field, #64748b) 18%, #dfe3ea)'};
+      ? 'color-mix(in srgb, var(--field, #64748b) 16%, #24262b)'
+      : 'color-mix(in srgb, var(--field, #64748b) 14%, #e5e8ef)'};
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--field, #64748b) 10%, #1a1b1f), #1a1b1f 75%)'
-      : 'radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--field, #64748b) 8%, #f4f5f7), #f4f5f7 75%)'};
+      ? 'radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--field, #64748b) 8%, #1a1b1f), #1a1b1f 75%)'
+      : 'radial-gradient(circle at 75% 20%, color-mix(in srgb, var(--field, #64748b) 6%, #f4f5f7), #f4f5f7 75%)'};
   ${zoomOnHover}
 
   /*
-   * 실루엣은 판의 38%로 — 48%일 땐 사진 없는 카드(470명 중 250명, 53%)마다 큰 회색 사람이
-   * 서서, 격자의 시선이 '있는 사진'이 아니라 '없는 사진'으로 갔다. 자리만 말하고 물러선다.
+   * 실루엣은 판의 28%로 — 사진 없는 카드마다 큰 회색 사람이 서서 시선을 빼앗지 않도록 자리만 암시.
    */
   svg {
     display: block;
-    width: 38%;
+    width: 28%;
     height: auto;
   }
 `
@@ -404,7 +403,16 @@ const PinBtn = styled.button<{ $active: boolean }>`
   }
 `
 
+const NameRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+`
+
 const Name = styled.div`
+  min-width: 0;
   font-size: 14.5px;
   font-weight: 700;
   line-height: 1.3;

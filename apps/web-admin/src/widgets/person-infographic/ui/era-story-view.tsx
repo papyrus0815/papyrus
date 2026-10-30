@@ -491,7 +491,7 @@ export function EraStoryView({
         onTogglePin={togglePin}
         onOpen={onOpen}
       />
-      {sortedGroups.length >= 2 && (
+      {sortedGroups.length >= 4 && (
         <CenturyIndex aria-label={indexAriaLabel}>
           <CenturyIndexPills>
             {visibleIndexGroups.map(({ id, stateKey, label, arr }) => (
@@ -690,22 +690,20 @@ const CenturyJump = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
-  border-radius: 999px;
+  padding: 4px 8px;
+  border-radius: 6px;
   flex-shrink: 0;
-  border: 1px solid ${hairline};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(15, 23, 42, 0.02)'};
+  border: none;
+  background: transparent;
   font-size: 12px;
   white-space: nowrap;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  transition: color ${MOTION_FAST}, background ${MOTION_FAST}, border-color ${MOTION_FAST};
+  transition: color ${MOTION_FAST}, background ${MOTION_FAST};
 
   &:hover {
     color: ${BRAND.primary};
-    border-color: ${BRAND.primaryBorder};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   }

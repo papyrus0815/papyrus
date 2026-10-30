@@ -17,16 +17,13 @@ import styled, { css } from 'styled-components'
 
 import { BRAND, hairline, metaText, MOTION_FAST, srOnly, surface } from './catalog.styles'
 
-/** 그룹 전체를 감싸는 판 */
+/** 그룹 전체를 감싸는 판 — 외곽 박스 테두리 없이 전체 폭을 활용 */
 export const GroupPanel = styled.div`
   position: relative;
-  padding: 12px 20px 20px;
-  border-radius: 12px;
-  border: 1px solid ${hairline};
-  background: ${surface};
+  padding: 4px 0 20px;
 
   @media (max-width: 640px) {
-    padding: 10px 12px 16px;
+    padding: 4px 0 16px;
   }
 `
 
@@ -154,9 +151,9 @@ const Chevron = styled(FiChevronDown)<{ $collapsed: boolean }>`
 `
 
 const Label = styled.span`
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -182,10 +179,14 @@ const Range = styled.span`
 
 const Count = styled.span`
   flex-shrink: 0;
-  font-size: 12px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
 `
 
 const Rule = styled.span`
