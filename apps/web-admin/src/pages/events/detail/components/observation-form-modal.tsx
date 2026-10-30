@@ -268,6 +268,19 @@ export function ObservationFormModal({
     return [...groups.entries()]
   }, [subjects])
   const currentSubject = subjects.find((option) => subjectKey(option) === subject) ?? null
+  /**
+   * 대상 층 — 사건 전체 · 진영 · 참여국 중 먼저 층을 고르고 그 층의 칩만 보인다.
+   * 예전엔 세 묶음 칩 12개가 한꺼번에 펼쳐져 1단계가 화면 절반을 먹었다.
+   */
+  const [subjectLevel, setSubjectLevel] = useState<ObservationSubjectType>(
+    () => currentSubject?.subjectType ?? subjects[0]?.subjectType ?? 'EVENT',
+  )
+  const levelOptions = subjectGroups.find(([type]) => type === subjectLevel)?.[1] ?? []
+  const switchLevel = (type: ObservationSubjectType) => {
+    setSubjectLevel(type)
+    const options = subjectGroups.find(([candidate]) => candidate === type)?.[1] ?? []
+    if (!options.some((option) => subjectKey(option) === subject) && options[0]) setSubject(subjectKey(options[0]))
+  }
 
   /* ── 값 미리보기 — 표에 찍힐 표기를 입력하는 자리에서 ── */
   const numbers = {
@@ -470,66 +483,78 @@ export function ObservationFormModal({
                   {subjectName}
                 </ChipStatic>
               ) : (
-                <SubjectGroups>
-                  {subjectGroups.map(([type, options]) => (
-                    <SubjectGroup key={type} role="radiogroup" aria-label={SUBJECT_GROUP_LABEL[type] ?? '대상'}>
-                      {subjectGroups.length > 1 && <GroupName>{SUBJECT_GROUP_LABEL[type] ?? type}</GroupName>}
-                      <ChipWrap>
-                        {options.map((option) => (
-                          <Chip key={subjectKey(option)} $active={subject === subjectKey(option)} $tint={option.color}>
-                            <input
-                              type="radio"
-                              name="obs-subject"
-                              checked={subject === subjectKey(option)}
-                              onChange={() => setSubject(subjectKey(option))}
-                              ref={subject === subjectKey(option) ? subjectInputRef : undefined}
-                            />
-                            {option.color && <Swatch style={{ background: option.color }} aria-hidden />}
-                            {option.label}
-                          </Chip>
-                        ))}
-                      </ChipWrap>
-                    </SubjectGroup>
-                  ))}
-                </SubjectGroups>
+                <SubjectPicker>
+                  {subjectGroups.length > 1 && (
+                    <Segmented role="radiogroup" aria-label="대상 층">
+                      {subjectGroups.map(([type, options]) => (
+                        <Segment key={type} $active={subjectLevel === type}>
+                          <input
+                            type="radio"
+                            name="obs-subject-level"
+                            checked={subjectLevel === type}
+                            onChange={() => switchLevel(type)}
+                          />
+                          {type === 'EVENT' ? '사건 전체' : (SUBJECT_GROUP_LABEL[type] ?? type)}
+                          {type !== 'EVENT' && <SegmentCount>{options.length}</SegmentCount>}
+                        </Segment>
+                      ))}
+                    </Segmented>
+                  )}
+                  {subjectLevel !== 'EVENT' && (
+                    <ChipWrap role="radiogroup" aria-label={SUBJECT_GROUP_LABEL[subjectLevel] ?? '대상'}>
+                      {levelOptions.map((option) => (
+                        <Chip key={subjectKey(option)} $active={subject === subjectKey(option)} $tint={option.color}>
+                          <input
+                            type="radio"
+                            name="obs-subject"
+                            checked={subject === subjectKey(option)}
+                            onChange={() => setSubject(subjectKey(option))}
+                            ref={subject === subjectKey(option) ? subjectInputRef : undefined}
+                          />
+                          {option.color && <Swatch style={{ background: option.color }} aria-hidden />}
+                          {option.label}
+                        </Chip>
+                      ))}
+                    </ChipWrap>
+                  )}
+                </SubjectPicker>
               )}
             </Row>
 
             <Row>
               <RowLabel as="span">지표</RowLabel>
               <div>
-                {suggestedMetrics.length > 0 && (
-                  <ChipWrap role="radiogroup" aria-label="자주 쓰는 지표">
-                    {suggestedMetrics.map((candidate) => (
-                      <Chip key={candidate.key} $active={metricKey === candidate.key}>
-                        <input
-                          type="radio"
-                          name="obs-metric"
-                          checked={metricKey === candidate.key}
-                          onChange={() => setMetricKey(candidate.key)}
-                        />
-                        {candidate.name}
-                      </Chip>
-                    ))}
-                  </ChipWrap>
-                )}
-                <MetricSelect
-                  value={metricInChips ? '' : metricKey}
-                  $active={Boolean(metricKey) && !metricInChips}
-                  onChange={(change) => setMetricKey(change.target.value)}
-                  aria-label="다른 지표"
-                >
-                  <option value="">{suggestedMetrics.length > 0 ? '다른 지표…' : '지표 고르기…'}</option>
-                  {metricsByDomain.map(([domain, group]) => (
-                    <optgroup key={domain} label={DOMAIN_LABEL[domain] ?? domain}>
-                      {group.map((candidate) => (
-                        <option key={candidate.key} value={candidate.key}>
-                          {candidate.name}
-                        </option>
-                      ))}
-                    </optgroup>
+                <ChipWrap role="radiogroup" aria-label="지표">
+                  {suggestedMetrics.map((candidate) => (
+                    <Chip key={candidate.key} $active={metricKey === candidate.key}>
+                      <input
+                        type="radio"
+                        name="obs-metric"
+                        checked={metricKey === candidate.key}
+                        onChange={() => setMetricKey(candidate.key)}
+                      />
+                      {candidate.name}
+                    </Chip>
                   ))}
-                </MetricSelect>
+                  {/* 추천에 없는 지표 — 칩 줄 끝의 칩 모양 상자. 고르면 그 이름이 칩처럼 강조된다 */}
+                  <MetricSelect
+                    value={metricInChips ? '' : metricKey}
+                    $active={Boolean(metricKey) && !metricInChips}
+                    onChange={(change) => setMetricKey(change.target.value)}
+                    aria-label="다른 지표"
+                  >
+                    <option value="">{suggestedMetrics.length > 0 ? '다른 지표 ▾' : '지표 고르기 ▾'}</option>
+                    {metricsByDomain.map(([domain, group]) => (
+                      <optgroup key={domain} label={DOMAIN_LABEL[domain] ?? domain}>
+                        {group.map((candidate) => (
+                          <option key={candidate.key} value={candidate.key}>
+                            {candidate.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </MetricSelect>
+                </ChipWrap>
                 {metric?.definition && <Hint>{metric.definition}</Hint>}
               </div>
             </Row>
@@ -805,7 +830,7 @@ export function ObservationFormModal({
                     ))}
                   </select>
                 </TextField>
-                <TextField>
+                <TextField $span>
                   <span>URL</span>
                   <input value={newSource.url} onChange={(change) => setNewSource({ ...newSource, url: change.target.value })} />
                 </TextField>
@@ -1181,21 +1206,19 @@ const RowLabel = styled.label`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const SubjectGroups = styled.div`
+const SubjectPicker = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
 `
 
-const SubjectGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
-
-const GroupName = styled.span`
+const SegmentCount = styled.span`
+  margin-left: 5px;
   font-size: 11px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -1265,16 +1288,38 @@ const Swatch = styled.span`
   flex-shrink: 0;
 `
 
+/** 다른 지표 — 칩과 같은 모양(알약)의 상자. 고른 상태면 칩처럼 강조색 */
 const MetricSelect = styled.select<{ $active: boolean }>`
-  ${controlSurface}
-  margin-top: 8px;
-  min-height: 32px;
-  padding: 0 10px;
-  font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? 650 : 400)};
-  color: ${({ theme, $active }) => ($active ? theme.colors.text.primary : theme.colors.text.secondary)};
-  background: ${({ theme, $active }) => ($active ? fill(theme.mode, 0.12, 0.16) : fill(theme.mode, 0.05, 0.07))};
+  appearance: none;
+  /* 상자 폭을 고른 글자에 맞춘다 — 기본은 가장 긴 지표 이름 폭이라 '다른 지표'가 한 줄을 다 먹었다 */
+  field-sizing: content;
+  min-height: 30px;
   max-width: 100%;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 650 : 500)};
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? theme.colors.text.primary
+        : `color-mix(in srgb, ${theme.colors.primary} 78%, #0f172a)`
+      : theme.colors.text.secondary};
+  background: ${({ theme, $active }) =>
+    $active
+      ? `color-mix(in srgb, ${theme.colors.primary} ${theme.mode === 'dark' ? 30 : 13}%, transparent)`
+      : fill(theme.mode, 0.045, 0.06)};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
 `
 
 const Hint = styled.p`
@@ -1488,9 +1533,10 @@ const PointGroup = styled.div`
 
 const DatePart = styled.input<{ $wide?: boolean }>`
   ${controlSurface}
-  width: ${({ $wide }) => ($wide ? '64px' : '44px')};
-  height: 32px;
-  padding: 0 8px;
+  background: ${({ theme }) => fill(theme.mode, 0.035, 0.05)};
+  width: ${({ $wide }) => ($wide ? '60px' : '40px')};
+  height: 30px;
+  padding: 0 6px;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -1663,10 +1709,15 @@ const TextButton = styled.button`
   cursor: pointer;
 `
 
+/** 새 출처 — 제목 / 저자·발행연도·종류 / URL / 등급 */
 const NewSourceGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  grid-template-columns: minmax(0, 1fr) 110px 170px;
   gap: 10px 12px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `
 
 const CitationDetail = styled.div`
