@@ -27,6 +27,8 @@ const observation = (overrides: Partial<Observation>): Observation => ({
   value: null,
   low: null,
   high: null,
+  estimateRole: null,
+  method: null,
   approx: false,
   atLeast: false,
   qualifier: null,
@@ -109,6 +111,11 @@ describe('isUnverified', () => {
       identifier: null,
       accessedOn: null,
       note: null,
+      tier: null,
+      writtenYear: null,
+      perspective: null,
+      language: null,
+      originalTitle: null,
     },
   })
   it('미검증 출처뿐이면 true', () => {

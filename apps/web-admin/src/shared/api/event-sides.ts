@@ -9,6 +9,9 @@ import type { StructuredPoint } from './evidence'
 
 export type SideLevel = 'COALITION' | 'COUNTRY' | 'FORCE'
 
+/** 이 진영에게 사건이 어떻게 끝났나 */
+export type SideOutcome = 'VICTORY' | 'DEFEAT' | 'DRAW' | 'WITHDRAWAL' | 'INCONCLUSIVE'
+
 export interface EventSideMemberCountry {
   participantId: string
   countryId: string | null
@@ -30,6 +33,9 @@ export interface EventSide {
   description: string | null
   parentSideId: string | null
   sortOrder: number
+  outcome: SideOutcome | null
+  /** 결과 단서 — '전략적 승리, 전술적 패배' */
+  outcomeNote: string | null
   participants: EventSideMemberCountry[]
   persons: Array<{ personEventId: string; personId: string; name: string; surname: string | null; role: string | null }>
   organizations: Array<{ relationId: string; organizationId: string; name: string; role: string }>
@@ -42,6 +48,8 @@ export interface EventSideInput {
   color?: string | null
   description?: string | null
   parentSideId?: string | null
+  outcome?: SideOutcome | null
+  outcomeNote?: string | null
 }
 
 /** 진영 목록 동기화 — 배열 순서 = 표시 순서. 빠진 진영은 지워지고(그 진영의 측정값도) 소속만 풀린다 */
@@ -78,5 +86,7 @@ export function toSideInputs(sides: ReadonlyArray<EventSide>): EventSideInput[] 
     color: side.color,
     description: side.description,
     parentSideId: side.parentSideId,
+    outcome: side.outcome,
+    outcomeNote: side.outcomeNote,
   }))
 }

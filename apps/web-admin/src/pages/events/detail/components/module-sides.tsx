@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { toParticipants, participantKey } from '@/entities/event/model'
 import { RADIUS } from '@/entities/event/ui/ledger-tokens'
-import { type EventSide, syncEventSides, toSideInputs } from '@/shared/api/event-sides'
+import { type EventSide, type SideOutcome, syncEventSides, toSideInputs } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
-import { getAllPersons } from '@/shared/api/persons'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { PersonPickerModal } from '@/shared/ui/person-picker'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
@@ -18,6 +17,7 @@ import { type EventDetail, eventKeys } from '../use-event-detail'
 import { InlineSelect, InlineText } from './inline'
 import { MODULE_COLOR } from './module-colors'
 import { SIDE_PALETTE, withSideColors } from './side-colors'
+import { SIDE_OUTCOME_OPTIONS } from './side-outcome'
 
 interface ModuleSidesProps {
   event: EventDetail
@@ -78,12 +78,6 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
    * 전체 인물에서 찾되 이 사건의 참여 인물을 맨 위에 고정하고, 사건에 없던 인물은 참여 인물로 함께 넣는다.
    */
   const [personPickerSide, setPersonPickerSide] = useState<EventSide | null>(null)
-  const { data: allPersons = [], isLoading: allPersonsLoading } = useQuery({
-    queryKey: ['persons', 'all'],
-    queryFn: getAllPersons,
-    enabled: personPickerSide !== null,
-    staleTime: 5 * 60_000,
-  })
 
   const refresh = async () => {
     await Promise.all([
@@ -123,6 +117,17 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
     void saveSides(
       toSideInputs(sides).map((input) =>
         input.id === side.id ? { ...input, description: description.trim() || null } : input,
+      ),
+    )
+  }
+
+  /** 결과·결과 단서 — 결과를 비우면 단서도 함께 비운다(무엇에 대한 단서인지 잃는다) */
+  const setOutcome = (side: EventSide, patch: { outcome?: SideOutcome | null; outcomeNote?: string | null }) => {
+    void saveSides(
+      toSideInputs(sides).map((input) =>
+        input.id === side.id
+          ? { ...input, ...patch, ...(patch.outcome === null ? { outcomeNote: null } : {}) }
+          : input,
       ),
     )
   }
@@ -197,8 +202,8 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
               }
             })
           return (
-            <SideCard key={side.id} $color={coloredSides.find((colored) => colored.id === side.id)?.color ?? SIDE_PALETTE[0]}>
-              <SideHead>
+            <SideCard key={side.id}>
+              <SideHead $color={coloredSides.find((colored) => colored.id === side.id)?.color ?? SIDE_PALETTE[0]}>
                 <SideName>
                   <InlineText value={side.name} onSave={(next) => renameSide(side, next)} as="span" />
                 </SideName>
@@ -206,6 +211,27 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                   <FiX />
                 </RemoveButton>
               </SideHead>
+
+              <OutcomeRow aria-label={`${side.name}의 결과`}>
+                <OutcomeLabel>결과</OutcomeLabel>
+                <InlineSelect
+                  value={side.outcome ?? ''}
+                  options={SIDE_OUTCOME_OPTIONS}
+                  onSave={(next) => setOutcome(side, { outcome: (next || null) as SideOutcome | null })}
+                  placeholder="미정"
+                  label={`${side.name} 결과`}
+                />
+                {side.outcome && (
+                  <OutcomeNote>
+                    <InlineText
+                      value={side.outcomeNote ?? ''}
+                      onSave={(next) => setOutcome(side, { outcomeNote: next.trim() || null })}
+                      placeholder="단서 — 예: 전략적 승리, 전술적 패배"
+                      as="span"
+                    />
+                  </OutcomeNote>
+                )}
+              </OutcomeRow>
 
               <MemberList aria-label={`${side.name} 소속 국가`}>
                 {side.participants.map((member) => {
@@ -312,17 +338,14 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
       </AddSideButton>
 
       {personPickerSide && (
-        <PersonSelectModal
-          persons={allPersons}
-          selectedPersonId=""
+        /* 인물 목록은 고르기 모달이 스스로 받는다(앱 전역 캐시 공유) */
+        <PersonPickerModal
           onSelect={(personId) => assignPerson(personId, personPickerSide.id)}
           onClose={() => setPersonPickerSide(null)}
           excludeIds={personPickerSide.persons.map((member) => member.personId)}
           excludeReason="이미 이 진영"
           pinnedIds={persons.map((person) => person.personId)}
           title={`${personPickerSide.name}에 넣을 인물`}
-          searchPlaceholder="이름 또는 생몰년도로 검색 — 이 사건의 참여 인물이 위에"
-          loading={allPersonsLoading}
         />
       )}
     </S.Section>
@@ -335,23 +358,39 @@ const SideGrid = styled.div`
   gap: 16px;
 `
 
-const SideCard = styled.section<{ $color: string }>`
+/**
+ * 진영 카드 — 선 없이 면으로(참여 탭과 같은 문법). 진영 색은 위 테두리가 아니라 머리 띠의 옅은 바탕으로.
+ */
+const SideCard = styled.section`
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 16px 12px;
+  padding: 0 16px 14px;
   border-radius: ${RADIUS.MD};
-  border: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.10)')};
-  border-top: 3px solid ${({ $color }) => $color};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(15,23,42,0.03)')};
+  overflow: hidden;
   min-width: 0;
 `
 
-const SideHead = styled.div`
+const SideHead = styled.div<{ $color: string }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin: 0 -16px;
+  padding: 10px 12px 10px 16px;
+  background: ${({ $color, theme }) => `color-mix(in srgb, ${$color} ${theme.mode === 'dark' ? 18 : 10}%, transparent)`};
+  &::before {
+    content: '';
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: ${({ $color }) => $color};
+  }
+  > :first-child {
+    flex: 1;
+  }
 `
 
 const SideName = styled.div`
@@ -382,6 +421,31 @@ const RemoveButton = styled.button`
     width: 13px;
     height: 13px;
   }
+`
+
+/** 결과 줄 — 머리 띠 바로 아래. 진영의 '끝'을 이름 다음으로 읽게 */
+const OutcomeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const OutcomeLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const OutcomeNote = styled.span`
+  flex: 1 1 140px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const MemberList = styled.ul`
@@ -415,7 +479,7 @@ const MemberTag = styled.span`
   font-size: 11px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.16)')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)')};
 `
 
 const MemberMeta = styled.span`
@@ -491,13 +555,13 @@ const UnassignedLabel = styled.span`
   margin-right: 2px;
 `
 
-/** 진영을 고를 수 있는 이름 칩 — 점선 테두리가 '아직 놓이지 않은 것'을 말한다 */
+/** 진영을 고를 수 있는 이름 칩 — 무채 면(아직 어느 진영 색도 아니다) */
 const UnassignedChip = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border: 1px dashed ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.24)' : 'rgba(15,23,42,0.24)')};
+  padding: 2px 10px;
   border-radius: 999px;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)')};
   color: ${({ theme }) => theme.colors.text.primary};
 
   /* 인라인 피커의 빈 값 자리표시(기울임·흐림)를 칩 안에선 평범한 이름처럼 */
@@ -515,8 +579,8 @@ const AddSideButton = styled.button`
   gap: 6px;
   padding: 6px 14px;
   border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(15,23,42,0.2)')};
-  background: transparent;
+  border: none;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 12.5px;
   font-weight: 600;

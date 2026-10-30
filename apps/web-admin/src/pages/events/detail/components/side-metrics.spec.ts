@@ -1,4 +1,13 @@
-import { buildSideMetricRows, formatRate, lossRate } from './side-metrics.lib'
+import {
+  buildMemberCells,
+  buildSideMetricRows,
+  formatRate,
+  lossRate,
+  memberSum,
+  alternativesOf,
+  representativeOf,
+  sumMismatch,
+} from './side-metrics.lib'
 
 const obs = (id: string, side: string, key: string, value: string | null, extra: Partial<{ low: string; high: string; atLeast: boolean; subjectType: string }> = {}) => ({
   id,
@@ -77,5 +86,71 @@ describe('lossRate', () => {
       ['A'],
     )
     expect(lossRate(atLeast, 'A')).toBeNull()
+  })
+})
+
+describe('진영 칸 아래 나라 몫', () => {
+  const entry = (sideId: string, participant: string, value: string, atLeast = false) => ({
+    id: `${participant}-${value}`,
+    subjectType: 'EVENT_PARTICIPANT',
+    subjectId: participant,
+    metric: { key: 'military.personnel', name: '동원 병력' },
+    value,
+    low: null,
+    high: null,
+    atLeast,
+    sideId,
+  })
+  const participants = new Map([
+    ['p-prussia', { sideId: 'prussia', name: '프로이센 왕국' }],
+    ['p-italy', { sideId: 'prussia', name: '이탈리아 왕국' }],
+    ['p-saxony', { sideId: 'austria', name: '작센 왕국' }],
+  ])
+  it('지표 → 진영 → 나라로 묶고, 진영 밖 나라는 뺀다', () => {
+    const cells = buildMemberCells(
+      [entry('prussia', 'p-prussia', '437000'), entry('prussia', 'p-italy', '200000'), entry('x', 'p-unknown', '1')],
+      participants,
+    )
+    expect(cells.get('military.personnel')?.get('prussia')?.map((member) => member.name)).toEqual([
+      '프로이센 왕국',
+      '이탈리아 왕국',
+    ])
+    expect(cells.get('military.personnel')?.has('x')).toBe(false)
+  })
+  it("합은 나라마다 하나씩·'이상' 없을 때만, 5% 넘게 어긋나면 차이", () => {
+    const members = buildMemberCells([entry('prussia', 'p-prussia', '437000'), entry('prussia', 'p-italy', '200000')], participants)
+      .get('military.personnel')!
+      .get('prussia')!
+    expect(memberSum(members)).toBe(637000)
+    expect(sumMismatch(637000, 637000)).toBeNull()
+    expect(sumMismatch(600000, 535000)).toBe(65000)
+    const withFloor = buildMemberCells([entry('austria', 'p-saxony', '24000', true)], participants)
+      .get('military.personnel')!
+      .get('austria')!
+    expect(memberSum(withFloor)).toBeNull()
+  })
+})
+
+describe('representativeOf — 경합 추정치', () => {
+  const role = (id: string, estimateRole: string | null) => ({ ...obs(id, 'A', 'military.personnel', '1'), estimateRole })
+
+  it('하나면 그것, 여럿이면 채택이 정확히 하나일 때만', () => {
+    expect(representativeOf([role('1', null)])?.id).toBe('1')
+    expect(representativeOf([role('1', 'ALTERNATIVE'), role('2', 'PREFERRED')])?.id).toBe('2')
+    expect(representativeOf([role('1', null), role('2', null)])).toBeNull()
+    expect(representativeOf([role('1', 'PREFERRED'), role('2', 'PREFERRED')])).toBeNull()
+  })
+
+  it('대안 목록은 대표가 정해졌을 때만 — 아니면 전부 나란히', () => {
+    expect(alternativesOf([role('1', 'ALTERNATIVE'), role('2', 'PREFERRED')]).map((item) => item.id)).toEqual(['1'])
+    expect(alternativesOf([role('1', null), role('2', null)])).toEqual([])
+  })
+
+  it('나라 합도 채택 추정치로 낸다', () => {
+    const member = (name: string, value: string, estimateRole: string | null) => ({
+      name,
+      observation: { ...obs(name + value, 'P', 'military.personnel', value), estimateRole },
+    })
+    expect(memberSum([member('작센', '100', 'PREFERRED'), member('작센', '300', 'ALTERNATIVE'), member('바이에른', '50', null)])).toBe(150)
   })
 })

@@ -167,6 +167,13 @@ export interface EventDetailCabinetEvent {
 export interface EventDetail {
   id: string
   title: string
+  /** 원어 사건명 — Siebenjähriger Krieg · 壬辰倭亂 */
+  originalTitle?: string | null
+  /** 원 사료 역법·원문 날짜 — 구조화 날짜(startDate)는 그레고리력 환산값 */
+  startCalendar?: import('@/entities/event/model/calendar-system').CalendarSystem | null
+  startDateOriginal?: string | null
+  endCalendar?: import('@/entities/event/model/calendar-system').CalendarSystem | null
+  endDateOriginal?: string | null
   description?: string | null
   /** 휴지통에 있으면 지운 시각(ISO) — 상세는 휴지통 띠를 두고 본문을 잠근다 */
   deletedAt?: string | null
@@ -306,7 +313,8 @@ export function useEventDetail(eventId: string): UseEventDetailResult {
   const enabledModules = useMemo<EventDetailModuleKey[]>(() => {
     const keys: EventDetailModuleKey[] = []
     if (sideCount) keys.push('sides')
-    if (observationCount) keys.push('metrics')
+    // 진영이 있으면 값이 없어도 수치를 세운다 — 빈 비교표가 '어느 진영에 무엇을 적을지'를 바로 보인다
+    if (observationCount || sideCount) keys.push('metrics')
     if (hasMilitaryDetails) keys.push('military-details')
     if (cabinetCount) keys.push('cabinets')
     return keys

@@ -42,6 +42,9 @@ import {
   type RoleCountry,
 } from './event-facts.lib'
 import { InlineDateRange, InlineText } from './inline'
+import { OriginalDateLine } from './original-date-line'
+import { SIDE_OUTCOME_LABEL } from './side-outcome'
+import { representativeOf } from './side-metrics.lib'
 import { scrollToAnchor } from './scroll-to-anchor'
 
 interface DetailFactsProps {
@@ -100,7 +103,10 @@ export function DetailFacts({
   const military = event.militaryEvent
   const outcome = military?.militaryDetails?.outcome?.trim() || null
   const sides = event.sides ?? []
-  const sideNames = sides.map((side) => side.name.trim()).filter(Boolean)
+  /* 진영 — 결과가 있으면 이름 뒤에: '프로이센 측(승리) 대 오스트리아 측(패배)' */
+  const sideNames = sides
+    .filter((side) => side.name.trim())
+    .map((side) => (side.outcome ? `${side.name.trim()}(${SIDE_OUTCOME_LABEL[side.outcome]})` : side.name.trim()))
   /*
    * 사상자 — 측정값(D3)에서 진영마다 한 줄. 정의가 다른 지표를 섞지 않도록 우선순위대로 하나만 고른다.
    * (군 손실 합계 → 총사망 → 전투 사망 → 전사 → 정의 미상 사망)
@@ -112,7 +118,9 @@ export function DetailFacts({
         (observation) => observation.subjectType === 'EVENT_SIDE' && observation.subjectId === side.id,
       )
       for (const key of CASUALTY_METRIC_PRIORITY) {
-        const hit = own.find((observation) => observation.metric.key === key)
+        /* 같은 지표에 추정치가 여럿이면 채택값 — 없으면 첫 값 */
+        const candidates = own.filter((observation) => observation.metric.key === key)
+        const hit = representativeOf(candidates) ?? candidates[0]
         if (hit) return `${side.name} — ${hit.metric.name} ${formatObservationValue(hit)}`
       }
       return null
@@ -164,6 +172,9 @@ export function DetailFacts({
           onSave={(patch) => onPatch(patch)}
         />
       </DateLine>
+      <OriginalDateSlot>
+        <OriginalDateLine event={event} onPatch={onPatch} />
+      </OriginalDateSlot>
 
       <LocationLine title={event.location ?? ''} data-filled={event.location?.trim() ? 'true' : undefined}>
         <PinIcon aria-hidden>
@@ -415,6 +426,15 @@ const LocationLine = styled(EditableLine)`
  * '년·월·일'이 mono 스택에서 폴백되며 앞뒤 간격이 벌어졌다(실측 확인). 자릿수 정렬이라는
  * 목적은 tabular-nums 하나로 달성되고, 글꼴은 본문과 같아야 한 줄로 읽힌다.
  */
+/** 원 사료 날짜 — 날짜 줄과 함께 한 열 배치에선 숨는다(그 폭의 날짜는 히어로가 든다) */
+const OriginalDateSlot = styled.div`
+  display: flex;
+  flex-direction: column;
+  @container eventdetail (max-width: 919px) {
+    display: none;
+  }
+`
+
 const DateLine = styled(EditableLine)`
   font-variant-numeric: tabular-nums;
 

@@ -229,6 +229,16 @@ export function DetailHero({
           hint="Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소"
         />
       </TitleHost>
+      {/* 원어 사건명 — 제목 바로 밑 한 줄. 비어 있으면 자리만(편집 진입점, 흐리게) */}
+      <OriginalTitleHost data-filled={event.originalTitle?.trim() ? 'true' : undefined}>
+        <InlineText
+          value={event.originalTitle ?? ''}
+          onSave={(next) => onPatch({ originalTitle: next.trim() } as UpdateEventDto)}
+          placeholder="원어 사건명"
+          label="원어 사건명"
+          as="span"
+        />
+      </OriginalTitleHost>
 
       {/* 카테고리 톤 밴드 — 제목과 메타 사이 시각 앵커. 카테고리 색이 옅게
           좌→우로 흩어지며 페이지 정체성을 한 줄로 표시(밑줄 X, 별도 룰). */}
@@ -946,5 +956,26 @@ const ExtraParentBadge = styled.a`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
     border-radius: ${RADIUS.FOCUS};
+  }
+`
+
+/**
+ * 원어 사건명 — 제목 밑 한 줄(기울임 없는 보조 글씨). 비어 있으면 흐린 '원어 사건명' 자리만 남아
+ * 편집 진입점이 된다 — 값이 생기면 진하게.
+ */
+const OriginalTitleHost = styled.p`
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  &:not([data-filled]) {
+    opacity: 0.6;
+    font-size: 13px;
+
+    [data-empty='true'] {
+      font-style: normal;
+    }
   }
 `

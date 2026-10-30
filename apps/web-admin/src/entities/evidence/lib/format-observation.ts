@@ -49,6 +49,11 @@ function unitOf(observation: Pick<Observation, 'metric' | 'currency'>): { prefix
   return { prefix: '', suffix: UNIT_SUFFIX[unit] ?? (unit ? ` ${unit}` : '') }
 }
 
+/** 값 뒤 단위 글자 — 입력칸 꼬리표용('명'·'척'·' 파운드'). 단위 없는 지표는 '' */
+export function unitSuffixOf(observation: Pick<Observation, 'metric' | 'currency'>): string {
+  return unitOf(observation).suffix.trim()
+}
+
 type Formattable = Pick<Observation, 'value' | 'low' | 'high' | 'approx' | 'atLeast' | 'metric' | 'currency'>
 
 function build(observation: Formattable, render: (raw: string) => string): string {

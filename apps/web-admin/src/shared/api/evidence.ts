@@ -53,6 +53,15 @@ export type SourceKind =
   | 'LEGACY_UNVERIFIED'
   | 'OTHER'
 
+/** 출처 등급 — 1차(당대 기록)·2차(연구서)·3차(개설·사전) */
+export type SourceTier = 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+
+/** 경합 추정치 중 지위 — 채택·대안·논쟁. null=단일 값이라 따질 것 없음 */
+export type EstimateRole = 'PREFERRED' | 'ALTERNATIVE' | 'DISPUTED'
+
+/** 값을 얻은 방식 */
+export type EstimateMethod = 'COUNTED' | 'ESTIMATED' | 'EXTRAPOLATED' | 'OFFICIAL_CLAIM'
+
 export interface Source {
   id: string
   kind: SourceKind
@@ -64,6 +73,14 @@ export interface Source {
   identifier: string | null
   accessedOn: string | null
   note: string | null
+  tier: SourceTier | null
+  /** 저술 시점(음수=BC) — 발행연도는 판본 */
+  writtenYear: number | null
+  /** 관점·입장 한 줄 */
+  perspective: string | null
+  /** 원문 언어(BCP 47) */
+  language: string | null
+  originalTitle: string | null
 }
 
 export interface Citation {
@@ -91,6 +108,8 @@ export interface Observation {
   end: StructuredPoint | null
   note: string | null
   sortOrder: number
+  estimateRole: EstimateRole | null
+  method: EstimateMethod | null
   citations: Citation[]
 }
 
@@ -104,6 +123,34 @@ export interface CreateSourceInput {
   identifier?: string | null
   accessedOn?: string | null
   note?: string | null
+  tier?: SourceTier | null
+  writtenYear?: number | null
+  perspective?: string | null
+  language?: string | null
+  originalTitle?: string | null
+}
+
+export type UpdateSourceInput = Partial<CreateSourceInput>
+
+/** 출처 서고 한 줄 */
+export interface SourceLibraryEntry extends Source {
+  citationCount: number
+  eventCount: number
+  /** 내가 등록한 출처만 수정 가능 — 시스템 출처는 잠김 */
+  editable: boolean
+}
+
+/** 출처가 쓰인 곳 — 측정값 한 줄 */
+export interface SourceUsage {
+  citationId: string
+  locator: string | null
+  observationId: string
+  metricName: string
+  value: string | null
+  eventId: string | null
+  eventTitle: string | null
+  subjectType: ObservationSubjectType
+  subjectLabel: string | null
 }
 
 export interface CitationInput {
@@ -128,6 +175,8 @@ export interface CreateObservationInput {
   start?: StructuredPointInput | null
   end?: StructuredPointInput | null
   note?: string | null
+  estimateRole?: EstimateRole | null
+  method?: EstimateMethod | null
   citations: CitationInput[]
 }
 
@@ -183,3 +232,21 @@ export const deleteObservation = (id: string) =>
 
 export const searchSources = (query: string) =>
   request<Source[]>('GET', `/sources?q=${encodeURIComponent(query)}&limit=20`)
+
+/** 출처 서고 — tier는 등급 또는 'NONE'(미분류) */
+export const listSourceLibrary = (filters: { query?: string; tier?: SourceTier | 'NONE'; kind?: SourceKind } = {}) => {
+  const params = new URLSearchParams()
+  if (filters.query?.trim()) params.set('q', filters.query.trim())
+  if (filters.tier) params.set('tier', filters.tier)
+  if (filters.kind) params.set('kind', filters.kind)
+  const suffix = params.toString()
+  return request<SourceLibraryEntry[]>('GET', `/sources/library${suffix ? `?${suffix}` : ''}`)
+}
+
+export const listSourceUsages = (sourceId: string) =>
+  request<SourceUsage[]>('GET', `/sources/${encodeURIComponent(sourceId)}/usages`)
+
+export const createSource = (input: CreateSourceInput) => request<Source>('POST', '/sources', input)
+
+export const updateSource = (id: string, input: UpdateSourceInput) =>
+  request<Source>('PATCH', `/sources/${encodeURIComponent(id)}`, input)
