@@ -499,11 +499,15 @@ export const IconBtn = styled.button`
   border: 1px solid ${hairline};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
-  color: ${BRAND.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
+  transition: color ${MOTION_FAST}, background ${MOTION_FAST}, border-color ${MOTION_FAST};
   &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.16)'};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.03)'};
   }
   &:focus-visible {
     outline: none;

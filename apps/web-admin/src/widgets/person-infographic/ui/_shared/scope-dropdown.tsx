@@ -215,7 +215,9 @@ const Trigger = styled.button<{ $active: boolean }>`
   }
 
   & > svg:first-child {
-    color: ${BRAND.primary};
+    color: ${({ $active, theme }) =>
+      $active ? BRAND.primary : theme.colors.text.tertiary};
+    transition: color ${MOTION_FAST};
   }
   & > span {
     max-width: 120px;

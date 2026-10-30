@@ -428,29 +428,24 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                       pointerEvents: 'none',
                     }}
                   >
-                    {ERAS.map((e) => {
-                      const x1 = Math.max(0, yearX(Math.max(e.from, minY)))
-                      const x2 = Math.min(canvasW, yearX(Math.min(e.to, maxY)))
-                      if (x2 <= x1) return null
-                      const isEraActive = scopes.era.includes(e.key)
-                      const op =
-                        scopes.era.length > 0
-                          ? isEraActive
-                            ? 0.12
-                            : 0.02
-                          : 0.05
-                      return (
-                        <rect
-                          key={e.key}
-                          x={x1}
-                          y={0}
-                          width={x2 - x1}
-                          height={30 + totalRowH}
-                          fill={e.color}
-                          opacity={op}
-                        />
-                      )
-                    })}
+                    {scopes.era.length > 0 &&
+                      ERAS.map((e) => {
+                        if (!scopes.era.includes(e.key)) return null
+                        const x1 = Math.max(0, yearX(Math.max(e.from, minY)))
+                        const x2 = Math.min(canvasW, yearX(Math.min(e.to, maxY)))
+                        if (x2 <= x1) return null
+                        return (
+                          <rect
+                            key={e.key}
+                            x={x1}
+                            y={0}
+                            width={x2 - x1}
+                            height={30 + totalRowH}
+                            fill={e.color}
+                            opacity={0.08}
+                          />
+                        )
+                      })}
                     {ticks.map((y) => (
                       <line
                         key={y}
@@ -674,7 +669,8 @@ const MatrixLaneLabels = memo(function MatrixLaneLabels({
       const entries: Ent[] = []
       for (const item of group) {
         const { p, x1, x2 } = item
-        const inline = x2 - x1 >= 10
+        const nameW = p.name.length * LABEL_CHAR_PX
+        const inline = x2 - x1 >= nameW + 10
         const priSelect = selectedId === p.id ? 1000 : 0
         const priHover = hoveredId === p.id ? 500 : 0
         const prio = priSelect + priHover + (p.influence ?? 0)

@@ -602,10 +602,7 @@ const PinnedWrap = styled(GroupPanel)`
 
 const GroupRowHeaderWrap = styled.div`
   container: personrowlist / inline-size;
-  margin-bottom: 4px;
-  border: 1px solid ${hairline};
-  border-radius: 8px;
-  overflow: hidden;
+  margin-bottom: 2px;
 `
 
 const CenturyIndex = styled.nav`

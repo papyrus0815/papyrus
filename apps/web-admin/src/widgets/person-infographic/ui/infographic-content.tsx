@@ -551,21 +551,21 @@ export function InfographicContent({
                   type="button"
                   $active={listLayout === 'grid'}
                   aria-pressed={listLayout === 'grid'}
+                  aria-label="카드형 보기"
                   onClick={() => setListLayout('grid')}
                   title="카드형 보기"
                 >
-                  <FiGrid size={13} aria-hidden />
-                  <span>카드</span>
+                  <FiGrid size={14} aria-hidden />
                 </LayoutSegmentBtn>
                 <LayoutSegmentBtn
                   type="button"
                   $active={listLayout === 'row'}
                   aria-pressed={listLayout === 'row'}
+                  aria-label="리스트형 보기"
                   onClick={() => setListLayout('row')}
                   title="리스트형 보기"
                 >
-                  <FiList size={13} aria-hidden />
-                  <span>리스트</span>
+                  <FiList size={14} aria-hidden />
                 </LayoutSegmentBtn>
               </LayoutSegmented>
             </DisplayOptions>
@@ -722,22 +722,21 @@ const LayoutSegmented = styled.div`
 const LayoutSegmentBtn = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  width: 28px;
   height: 28px;
-  padding: 0 9px;
+  padding: 0;
   border: none;
   border-radius: 6px;
-  font-size: 12px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
   cursor: pointer;
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
+        ? 'rgba(255, 255, 255, 0.13)'
         : '#ffffff'
       : 'transparent'};
   color: ${({ $active, theme }) =>
-    $active ? BRAND.primary : theme.colors.text.tertiary};
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
   box-shadow: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
@@ -747,8 +746,7 @@ const LayoutSegmentBtn = styled.button<{ $active: boolean }>`
   transition: background 0.15s ease, color 0.15s ease;
 
   &:hover {
-    color: ${({ $active, theme }) =>
-      $active ? BRAND.primary : theme.colors.text.primary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
     outline: none;

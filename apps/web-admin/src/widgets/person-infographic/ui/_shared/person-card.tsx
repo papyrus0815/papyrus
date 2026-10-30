@@ -177,14 +177,12 @@ function PersonCardItemBase({
             )}
           </Years>
           <Place>
-            {person.field !== '기타' && (
-              <>
-                <FieldDot aria-hidden />
-                <FieldName>{person.field}</FieldName>
-                <PlaceSub>{' · '}</PlaceSub>
-              </>
-            )}
-            {hasCountry ? highlight(person.country, query) : '국가 미상'}
+            {person.field !== '기타' && <FieldDot aria-hidden title={person.field} />}
+            {hasCountry
+              ? highlight(person.country, query)
+              : person.field !== '기타'
+                ? person.field
+                : '국가 미상'}
           </Place>
         </Row>
       </Body>
@@ -462,11 +460,11 @@ const Row = styled.div<{ $pushDown?: boolean }>`
 `
 
 const Years = styled.span`
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -476,21 +474,21 @@ const YearPart = styled.span<{ $unknown?: boolean }>`
   ${({ $unknown, theme }) =>
     $unknown &&
     css`
-      font-size: 11.5px;
-      font-weight: 500;
+      font-size: 11px;
+      font-weight: 400;
       color: ${metaText({ theme })};
     `}
 `
 
 const ActivitySpan = styled.span`
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const Dash = styled.span`
-  margin: 0 4px;
-  font-weight: 500;
+  margin: 0 3px;
+  font-weight: 400;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -508,9 +506,9 @@ const Age = styled.span`
 
 const Place = styled.span`
   min-width: 0;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -518,8 +516,8 @@ const Place = styled.span`
 
 const FieldDot = styled.span`
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   margin: 0 5px 1px 0;
   border-radius: 50%;
   vertical-align: middle;
@@ -527,12 +525,12 @@ const FieldDot = styled.span`
 `
 
 const FieldName = styled.span`
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const PlaceSub = styled.span`
-  font-weight: 500;
+  font-weight: 400;
   color: ${metaText};
 `
 
@@ -540,11 +538,10 @@ const Influence = styled.span`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const UnratedDash = styled.span`
@@ -773,9 +770,8 @@ export const PersonRowList = styled.div`
   container: personrowlist / inline-size;
   display: flex;
   flex-direction: column;
-  border: 1px solid ${hairline};
-  border-radius: 10px;
-  overflow: hidden;
+  border-top: 1px solid ${hairline};
+  border-bottom: 1px solid ${hairline};
   background: ${surface};
 `
 

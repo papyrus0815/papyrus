@@ -379,9 +379,6 @@ export function HeaderStats({
             {stats.avgAge != null && <TileUnit>년</TileUnit>}
           </TileValue>
           <TileFooter>
-            <TileMeter aria-hidden>
-              <TileMeterFill style={{ width: `${share(stats.ageKnown)}%` }} />
-            </TileMeter>
             <TileNote>
               {stats.oldestPerson
                 ? `최장수 ${stats.oldestPerson.name}(${stats.oldestPerson.age}세) · ${stats.ageKnown.toLocaleString()}명 기준`
@@ -415,10 +412,7 @@ export function HeaderStats({
             <TileUnit>명</TileUnit>
           </TileValue>
           <TileFooter>
-            <TileMeter aria-hidden>
-              <TileMeterFill style={{ width: `${share(stats.alive)}%` }} />
-            </TileMeter>
-            <TileNote>전체의 {share(stats.alive)}% · 클릭하여 필터</TileNote>
+            <TileNote>전체의 {share(stats.alive)}%</TileNote>
           </TileFooter>
         </Tile>
         <Tile>
@@ -430,9 +424,6 @@ export function HeaderStats({
             <TileUnit>명</TileUnit>
           </TileValue>
           <TileFooter>
-            <TileMeter aria-hidden>
-              <TileMeterFill style={{ width: `${share(stats.rulers)}%` }} />
-            </TileMeter>
             <TileNote>
               전체의 {share(stats.rulers)}% · 평균 영향력 {stats.avgInfluence}점
             </TileNote>
@@ -885,6 +876,7 @@ const TileBadge = styled.span<{ $active?: boolean }>`
   font-size: 10.5px;
   font-weight: 700;
   white-space: nowrap;
+  opacity: ${({ $active }) => ($active ? 1 : 0)};
   color: ${({ $active, theme }) =>
     $active ? BRAND.primary : theme.colors.text.tertiary};
   background: ${({ $active, theme }) =>
@@ -895,9 +887,11 @@ const TileBadge = styled.span<{ $active?: boolean }>`
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.06)'
         : 'rgba(15,23,42,0.05)'};
-  transition: color ${MOTION_FAST}, background ${MOTION_FAST};
+  transition: opacity ${MOTION_FAST}, color ${MOTION_FAST}, background ${MOTION_FAST};
 
-  ${Tile}:hover & {
+  ${Tile}:hover &,
+  ${Tile}:focus-visible & {
+    opacity: 1;
     color: ${BRAND.primary};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
