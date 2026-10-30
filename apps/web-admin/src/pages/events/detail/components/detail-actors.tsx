@@ -6,13 +6,12 @@ import { FiSettings } from 'react-icons/fi'
 import { getAllCountries } from '@/shared/api/countries'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
-import { getAllPersons } from '@/shared/api/persons'
 import { CountryPicker } from '@/shared/ui/country-picker'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { PersonPickerModal } from '@/shared/ui/person-picker'
 
 import * as S from '../styles'
 import { type PatchOptions } from '../use-undoable-patch'
-import { type EventDetail } from '../use-event-detail'
+import { type EventDetail, eventObservationsQueryOptions } from '../use-event-detail'
 import {
   countryRowKey,
   DELEGATION_PREVIEW_COUNT,
@@ -38,13 +37,16 @@ import {
   SideCountryList,
   SideGroup,
   SideHead,
+  SideOutcomeTag,
   SideSwatch,
 } from './actors/actors.styles'
 import { ActorCountryRow } from './actors/country-row'
 import { ActorPersonRow } from './actors/person-row'
 import { useActorMutations } from './actors/use-actor-mutations'
 import { groupBySide } from './hero-countries.lib'
+import { toAxisSpan } from './development-timeline.lib'
 import { withSideColors } from './side-colors'
+import { SIDE_OUTCOME_LABEL } from './side-outcome'
 
 interface DetailActorsProps {
   event: EventDetail
@@ -87,13 +89,20 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
 
   const actors = useActorMutations({ event, onPatch })
   const { persons, countryRows } = actors
+  /**
+   * 나라 몫의 측정값(병력·사상자…) — 수치 모듈과 같은 캐시. 참여국 줄 id(participantId)에 붙은 값만.
+   * 예전엔 진영·수치 모듈에만 있어 참여 탭에서는 나라가 이름뿐이었다.
+   */
+  const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
+  const figuresByParticipant = useMemo(() => {
+    const byParticipant = new Map<string, typeof observations>()
+    for (const observation of observations) {
+      if (observation.subjectType !== 'EVENT_PARTICIPANT') continue
+      byParticipant.set(observation.subjectId, [...(byParticipant.get(observation.subjectId) ?? []), observation])
+    }
+    return byParticipant
+  }, [observations])
 
-  const { data: allPersons = [], isLoading: personsLoading } = useQuery({
-    queryKey: ['persons', 'all'],
-    queryFn: getAllPersons,
-    enabled: personModalOpen,
-    staleTime: 5 * 60_000,
-  })
   const { data: allModern = [], isLoading: modernLoading } = useQuery({
     queryKey: ['countries', 'all'],
     queryFn: getAllCountries,
@@ -114,6 +123,16 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
   }
 
   const selectedCountryIds = useMemo(() => countryRows.map((row) => row.id), [countryRows])
+  /** 인물 고르기 맥락 — 사건 기간(앞뒤 여유는 고르기 쪽이 생몰 겹침으로 판단)·참여국 */
+  const personContext = useMemo(() => {
+    const span = toAxisSpan(event)
+    return {
+      fromYear: span ? Math.floor(span.from) : null,
+      toYear: span ? Math.floor(span.to) : null,
+      countryIds: countryRows.map((row) => row.id),
+      label: '이 사건 무렵 · 참여국 인물',
+    }
+  }, [event, countryRows])
   const totalCountries = countryRows.length
   const hasAnything = persons.length > 0 || totalCountries > 0
   /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다 */
@@ -153,8 +172,12 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
   /* 순서 바꾸기 중에는 평평하게 — 진영으로 나누면 '위로·아래로'가 진영 경계를 넘는 게 보이지 않는다 */
   const countrySideGroups = manageMode ? null : groupBySide(countryRows, event.sides ?? [])
   /** 진영 색 — 진영 모듈·조망 진영 칩과 같은 색(저장 색 없으면 순서대로 팔레트) */
-  const sideColorById = new Map(
-    withSideColors(event.sides ?? []).map((side) => [side.id, side.color] as const),
+  const coloredSides = withSideColors(event.sides ?? [])
+  const sideColorById = new Map(coloredSides.map((side) => [side.id, side.color] as const))
+  const sideById = new Map(
+    coloredSides.map(
+      (side) => [side.id, { name: side.name, color: side.color, outcome: side.outcome, outcomeNote: side.outcomeNote }] as const,
+    ),
   )
 
   /**
@@ -207,6 +230,13 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
       <ActorCountryRow
         key={countryRowKey(row)}
         row={row}
+        figures={row.participantId ? figuresByParticipant.get(row.participantId) : undefined}
+        /* 진영 칸 밖(평평한 목록·순서 바꾸기)에서만 진영을 행에 적는다 */
+        side={
+          !countrySideGroups && row.sideId && sideById.get(row.sideId)
+            ? sideById.get(row.sideId)
+            : null
+        }
         manageMode={manageMode}
         isFirst={index === 0}
         isLast={index === countryRows.length - 1}
@@ -233,6 +263,88 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
       </ActorCountryRow>
     )
   }
+
+  /** 국가 무리(진영별·대표단 포함) */
+  const nationsBlock = (
+      <ActorsBlock $divided={!delegationMode}>
+        <GroupHead>
+          <GroupLabel>
+            국가
+            {totalCountries > 0 && <GroupCount>{totalCountries}</GroupCount>}
+          </GroupLabel>
+          <AddBtn type="button" onClick={() => setCountryModalOpen(true)}>
+            국가 추가
+          </AddBtn>
+        </GroupHead>
+        {countryRows.length > 0 &&
+          (countrySideGroups ? (
+            /*
+             * 진영이 있으면 진영별 — 진영 색 머리를 달고 넓으면 나란히(동맹국 | 협상국).
+             * 진영에 안 든 나라('그 밖')는 맨 아래 한 줄을 다 쓴다.
+             */
+            <SideColumns $stack={delegationMode}>
+              {countrySideGroups.map((group) => {
+                const color = group.sideId ? sideColorById.get(group.sideId) : undefined
+                return (
+                  <SideGroup key={group.sideId ?? 'rest'} $rest={!group.sideId}>
+                    <SideHead $color={color}>
+                      {color && <SideSwatch $color={color} aria-hidden />}
+                      {group.label}
+                      <GroupCount>{group.items.length}</GroupCount>
+                      {group.sideId && sideById.get(group.sideId)?.outcome && (
+                        <SideOutcomeTag title={sideById.get(group.sideId)?.outcomeNote ?? undefined}>
+                          {SIDE_OUTCOME_LABEL[sideById.get(group.sideId)!.outcome!]}
+                        </SideOutcomeTag>
+                      )}
+                    </SideHead>
+                    <SideCountryList>{group.items.map(renderCountryRow)}</SideCountryList>
+                  </SideGroup>
+                )
+              })}
+            </SideColumns>
+          ) : (
+            <CountryList>{countryRows.map(renderCountryRow)}</CountryList>
+          ))}
+      </ActorsBlock>
+  )
+  /** 인물 무리 — 대표단 보기면 참여 국가가 없는 인물만 */
+  const personsBlock = (
+      <ActorsBlock $divided={delegationMode}>
+        <GroupHead>
+          <GroupLabel>
+            {delegationMode ? '참여 국가 미지정 인물' : '인물'}
+            {listedPersons.length > 0 && <GroupCount>{listedPersons.length}</GroupCount>}
+          </GroupLabel>
+          <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
+            인물 추가
+          </AddBtn>
+        </GroupHead>
+        {delegationMode && listedPersons.length === 0 && (
+          <EmptyGroupLine>인물은 모두 위 나라 아래에 있습니다 — 참여 국가가 없는 인물만 여기에 모입니다.</EmptyGroupLine>
+        )}
+        {persons.length === 0 && hasAnything && (
+          // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
+          <EmptyGroupLine>
+            아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
+          </EmptyGroupLine>
+        )}
+        {listedPersons.length > 0 && (
+          <PersonList>
+            {(personsCollapsed ? listedPersons.slice(0, PERSON_PREVIEW_COUNT) : listedPersons).map((entry) => {
+              const order = persons.indexOf(entry)
+              return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 })
+            })}
+          </PersonList>
+        )}
+        {listedPersons.length > PERSON_PREVIEW_COUNT && !manageMode && (
+          <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
+            {showAllPersons
+              ? '접기'
+              : `${listedPersons.length}명 모두 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT})`}
+          </ShowAllToggle>
+        )}
+      </ActorsBlock>
+  )
 
   return (
     <>
@@ -281,168 +393,31 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
           </S.EmptyState>
         )}
 
-{/* 대표단 보기면 나라(+그 인물)가 먼저, 아니면 예전처럼 인물이 먼저 */}
+        {/* 대표단 보기면 나라(+그 인물)가 먼저, 아니면 예전처럼 인물이 먼저 */}
         {delegationMode ? (
           <>
-        <ActorsBlock $divided={!delegationMode}>
-          <GroupHead>
-            <GroupLabel>
-              국가
-              {totalCountries > 0 && <GroupCount>{totalCountries}</GroupCount>}
-            </GroupLabel>
-            <AddBtn type="button" onClick={() => setCountryModalOpen(true)}>
-              국가 추가
-            </AddBtn>
-          </GroupHead>
-          {countryRows.length > 0 &&
-            (countrySideGroups ? (
-              /*
-               * 진영이 있으면 진영별 — 진영 색 머리를 달고 넓으면 나란히(동맹국 | 협상국).
-               * 진영에 안 든 나라('그 밖')는 맨 아래 한 줄을 다 쓴다.
-               */
-              <SideColumns>
-                {countrySideGroups.map((group) => {
-                  const color = group.sideId ? sideColorById.get(group.sideId) : undefined
-                  return (
-                    <SideGroup key={group.sideId ?? 'rest'} $rest={!group.sideId}>
-                      <SideHead $color={color}>
-                        {color && <SideSwatch $color={color} aria-hidden />}
-                        {group.label}
-                        <GroupCount>{group.items.length}</GroupCount>
-                      </SideHead>
-                      <SideCountryList>{group.items.map(renderCountryRow)}</SideCountryList>
-                    </SideGroup>
-                  )
-                })}
-              </SideColumns>
-            ) : (
-              <CountryList>{countryRows.map(renderCountryRow)}</CountryList>
-            ))}
-        </ActorsBlock>
-        <ActorsBlock $divided={delegationMode}>
-          <GroupHead>
-            <GroupLabel>
-              {delegationMode ? '참여 국가 미지정 인물' : '인물'}
-              {listedPersons.length > 0 && <GroupCount>{listedPersons.length}</GroupCount>}
-            </GroupLabel>
-            <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
-              인물 추가
-            </AddBtn>
-          </GroupHead>
-          {delegationMode && listedPersons.length === 0 && (
-            <EmptyGroupLine>인물은 모두 위 나라 아래에 있습니다 — 참여 국가가 없는 인물만 여기에 모입니다.</EmptyGroupLine>
-          )}
-          {persons.length === 0 && hasAnything && (
-            // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
-            <EmptyGroupLine>
-              아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
-            </EmptyGroupLine>
-          )}
-          {listedPersons.length > 0 && (
-            <PersonList>
-              {(personsCollapsed ? listedPersons.slice(0, PERSON_PREVIEW_COUNT) : listedPersons).map((entry) => {
-                const order = persons.indexOf(entry)
-                return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 })
-              })}
-            </PersonList>
-          )}
-          {listedPersons.length > PERSON_PREVIEW_COUNT && !manageMode && (
-            <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
-              {showAllPersons
-                ? '접기'
-                : `${listedPersons.length}명 모두 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT})`}
-            </ShowAllToggle>
-          )}
-        </ActorsBlock>
+            {nationsBlock}
+            {personsBlock}
           </>
         ) : (
           <>
-        <ActorsBlock $divided={delegationMode}>
-          <GroupHead>
-            <GroupLabel>
-              {delegationMode ? '참여 국가 미지정 인물' : '인물'}
-              {listedPersons.length > 0 && <GroupCount>{listedPersons.length}</GroupCount>}
-            </GroupLabel>
-            <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
-              인물 추가
-            </AddBtn>
-          </GroupHead>
-          {delegationMode && listedPersons.length === 0 && (
-            <EmptyGroupLine>인물은 모두 위 나라 아래에 있습니다 — 참여 국가가 없는 인물만 여기에 모입니다.</EmptyGroupLine>
-          )}
-          {persons.length === 0 && hasAnything && (
-            // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
-            <EmptyGroupLine>
-              아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
-            </EmptyGroupLine>
-          )}
-          {listedPersons.length > 0 && (
-            <PersonList>
-              {(personsCollapsed ? listedPersons.slice(0, PERSON_PREVIEW_COUNT) : listedPersons).map((entry) => {
-                const order = persons.indexOf(entry)
-                return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 })
-              })}
-            </PersonList>
-          )}
-          {listedPersons.length > PERSON_PREVIEW_COUNT && !manageMode && (
-            <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
-              {showAllPersons
-                ? '접기'
-                : `${listedPersons.length}명 모두 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT})`}
-            </ShowAllToggle>
-          )}
-        </ActorsBlock>
-        <ActorsBlock $divided={!delegationMode}>
-          <GroupHead>
-            <GroupLabel>
-              국가
-              {totalCountries > 0 && <GroupCount>{totalCountries}</GroupCount>}
-            </GroupLabel>
-            <AddBtn type="button" onClick={() => setCountryModalOpen(true)}>
-              국가 추가
-            </AddBtn>
-          </GroupHead>
-          {countryRows.length > 0 &&
-            (countrySideGroups ? (
-              /*
-               * 진영이 있으면 진영별 — 진영 색 머리를 달고 넓으면 나란히(동맹국 | 협상국).
-               * 진영에 안 든 나라('그 밖')는 맨 아래 한 줄을 다 쓴다.
-               */
-              <SideColumns>
-                {countrySideGroups.map((group) => {
-                  const color = group.sideId ? sideColorById.get(group.sideId) : undefined
-                  return (
-                    <SideGroup key={group.sideId ?? 'rest'} $rest={!group.sideId}>
-                      <SideHead $color={color}>
-                        {color && <SideSwatch $color={color} aria-hidden />}
-                        {group.label}
-                        <GroupCount>{group.items.length}</GroupCount>
-                      </SideHead>
-                      <SideCountryList>{group.items.map(renderCountryRow)}</SideCountryList>
-                    </SideGroup>
-                  )
-                })}
-              </SideColumns>
-            ) : (
-              <CountryList>{countryRows.map(renderCountryRow)}</CountryList>
-            ))}
-        </ActorsBlock>
+            {personsBlock}
+            {nationsBlock}
           </>
         )}
 
       </S.Section>
 
       {personModalOpen && (
-        <PersonSelectModal
-          persons={allPersons}
-          selectedPersonId=""
+        /* 인물 목록은 고르기 모달이 스스로 받는다(앱 전역 캐시 공유) */
+        <PersonPickerModal
           onSelect={(id) => addPerson(id)}
           onClose={() => setPersonModalOpen(false)}
           excludeIds={persons.map((person) => person.personId)}
+          /* 이 사건 무렵·참여국 인물을 위로 — 470명 이름순 맨 앞은 대개 이 사건과 무관했다 */
+          context={personContext}
           title="참여 인물 추가"
-          searchPlaceholder="이름 또는 생몰년도로 검색..."
           multiSelect
-          loading={personsLoading}
         />
       )}
       {/* 추가 전용 — 이미 관련국인 나라는 잠기고, 빼기는 행의 ✕(undo 있음)에서만 */}

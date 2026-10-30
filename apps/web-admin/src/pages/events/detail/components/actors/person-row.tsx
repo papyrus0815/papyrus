@@ -1,4 +1,6 @@
-import { FiArrowDown, FiArrowUp, FiX } from 'react-icons/fi'
+import { useState } from 'react'
+
+import { FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { renderEmphasis } from '@/shared/lib/emphasis-markup'
@@ -18,7 +20,7 @@ import {
   PersonBody,
   PersonMetaLine,
   PersonNameBtn,
-  ParticipationPicker,
+  EditToggle,
   PersonNoteLine,
   PersonRoleLine,
   PersonRow,
@@ -64,9 +66,12 @@ export function ActorPersonRow({
   const avatarUrl = entry.person?.profileImageUrl ?? undefined
   const hasNote = Boolean(entry.note && entry.note.trim())
   const offices = entry.officesAtEvent ?? []
-  const showMeta = participationOptions.length > 1 || offices.length > 0 || Boolean(entry.lifespanWarning)
-  /** 대표단 줄에서 참여 국가 고르기뿐인 메타 줄 — 빈 줄로 서지 않게 행에 들어왔을 때만 */
-  const quietMeta = compact && offices.length === 0 && !entry.lifespanWarning
+  /** 빈 칸(역할·비고·대표단 줄의 참여 국가) 편집 — ✎로 연다. hover로 펼치면 행이 덜컹거렸다 */
+  const [editing, setEditing] = useState(false)
+  const hasRole = Boolean(entry.role && entry.role.trim())
+  /* 대표단 줄에선 참여 국가가 곧 위의 나라 — 다른 나라로 옮길 때(편집 중)만 고르기를 보인다 */
+  const showParticipation = participationOptions.length > 1 && (!compact || editing)
+  const showMeta = showParticipation || offices.length > 0 || Boolean(entry.lifespanWarning)
 
   return (
     <PersonRow $compact={compact}>
@@ -85,10 +90,8 @@ export function ActorPersonRow({
           {fullName}
         </PersonNameBtn>
         {showMeta && (
-          <PersonMetaLine data-quiet={quietMeta ? '' : undefined}>
-            {participationOptions.length > 1 && (
-              /* 대표단 줄에선 참여 국가가 곧 위의 나라라 같은 말 — 다른 나라로 옮길 때만 쓰니 행에 들어왔을 때만 */
-              <ParticipationPicker data-quiet={compact ? '' : undefined}>
+          <PersonMetaLine>
+            {showParticipation && (
               <InlineSelect
                 value={participationValueOf(entry)}
                 options={participationOptions}
@@ -96,7 +99,6 @@ export function ActorPersonRow({
                 placeholder={entry.participationCountryName ?? '참여 국가 지정'}
                 label={`${fullName}의 참여 국가`}
               />
-              </ParticipationPicker>
             )}
             {offices.length > 0 && (
               <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">
@@ -110,6 +112,7 @@ export function ActorPersonRow({
             )}
           </PersonMetaLine>
         )}
+        {(hasRole || editing || !compact) && (
         <PersonRoleLine>
           <InlineText
             value={entry.role ?? ''}
@@ -118,6 +121,8 @@ export function ActorPersonRow({
             validate={(next) => (next.length > 100 ? '역할은 100자 이내로 입력하세요' : null)}
           />
         </PersonRoleLine>
+        )}
+        {(hasNote || editing) && (
         <PersonNoteLine $hasContent={hasNote}>
           <ClampedProse measureKey={entry.note ?? ''}>
             <InlineText
@@ -132,9 +137,20 @@ export function ActorPersonRow({
             />
           </ClampedProse>
         </PersonNoteLine>
+        )}
       </PersonBody>
 
       <RowActions>
+        <EditToggle
+          type="button"
+          $active={editing}
+          aria-pressed={editing}
+          onClick={() => setEditing((open) => !open)}
+          aria-label={editing ? `${fullName} 편집 끝` : `${fullName} 빈 칸 채우기(역할·비고·참여 국가)`}
+          title={editing ? '편집 끝' : '역할·비고 채우기'}
+        >
+          {editing ? '완료' : <FiEdit2 aria-hidden />}
+        </EditToggle>
         {manageMode && (
           <>
             <ReorderBtn

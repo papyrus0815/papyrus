@@ -162,6 +162,12 @@ export function useActorMutations({
           sortOrder: countryRows.length + index,
           existenceWarning: null,
           sideId: null,
+          participantId: null,
+          participation: null,
+          join: null,
+          joinReason: null,
+          withdraw: null,
+          withdrawReason: null,
         })),
       ],
       {

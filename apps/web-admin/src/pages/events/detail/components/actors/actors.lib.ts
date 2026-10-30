@@ -5,6 +5,8 @@
 import { type EventCountryRole } from '@/entities/event/model'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
+import { type StructuredPoint } from '@/shared/api/evidence'
+
 import { type EventDetail } from '../../use-event-detail'
 
 /** 산문(한 일·비고) 접힘 줄 수 */
@@ -71,6 +73,14 @@ export interface CountryRowData {
   existenceWarning: string | null
   /** 진영 — 표시용(묶기)만. 저장 payload엔 싣지 않는다(생략=서버가 소속 유지) */
   sideId: string | null
+  /** 참여국 줄 id — 이 나라 몫의 측정값(병력·사상자)이 여기에 붙는다 */
+  participantId: string | null
+  /** 참여 형태·가담·이탈 — 진영 모듈에서 적는 값을 여기서도 읽는다 */
+  participation: 'FULL' | 'LIMITED' | 'INDIRECT' | 'NON_COMBATANT' | null
+  join: StructuredPoint | null
+  joinReason: string | null
+  withdraw: StructuredPoint | null
+  withdrawReason: string | null
 }
 
 /**
@@ -93,6 +103,7 @@ export function buildCountryRows(
       sortOrder: country.sortOrder ?? index,
       existenceWarning: null,
       sideId: country.sideId ?? null,
+      ...membershipOf(country),
     })),
     ...historical.map((country, index) => ({
       id: country.id,
@@ -105,6 +116,7 @@ export function buildCountryRows(
       sortOrder: country.sortOrder ?? index,
       existenceWarning: (country.existenceWarning ?? null) as string | null,
       sideId: country.sideId ?? null,
+      ...membershipOf(country),
     })),
   ]
   rows.sort((left, right) => left.sortOrder - right.sortOrder)
@@ -175,4 +187,47 @@ export function groupDelegations<Entry extends { countryId?: string | null; hist
     else unassigned.push(person)
   }
   return { byCountry, unassigned }
+}
+
+function membershipOf(country: {
+  participantId?: string | null
+  participation?: CountryRowData['participation']
+  join?: StructuredPoint | null
+  joinReason?: string | null
+  withdraw?: StructuredPoint | null
+  withdrawReason?: string | null
+}) {
+  return {
+    participantId: country.participantId ?? null,
+    participation: country.participation ?? null,
+    join: country.join ?? null,
+    joinReason: country.joinReason ?? null,
+    withdraw: country.withdraw ?? null,
+    withdrawReason: country.withdrawReason ?? null,
+  }
+}
+
+/** 참여 형태 — 전면은 기본이라 표시하지 않는다 */
+export const PARTICIPATION_LABEL: Record<string, string> = {
+  FULL: '전면',
+  LIMITED: '제한 참전',
+  INDIRECT: '간접 지원',
+  NON_COMBATANT: '비전투',
+}
+
+/** 시점 한 토막 — '1914.8' · '기원전 44' */
+export function formatPointShort(
+  point: { era: 'BC' | 'AD'; year: number; month?: number | null } | null | undefined,
+): string | null {
+  if (!point) return null
+  const year = point.era === 'BC' ? `기원전 ${point.year}` : String(point.year)
+  return point.month ? `${year}.${point.month}` : year
+}
+
+/** 가담·이탈 한 줄 — '1914.8 가담 · 1918.11 이탈'. 둘 다 없으면 null */
+export function membershipPeriodLabel(row: Pick<CountryRowData, 'join' | 'withdraw'>): string | null {
+  const join = formatPointShort(row.join)
+  const withdraw = formatPointShort(row.withdraw)
+  if (!join && !withdraw) return null
+  return [join && `${join} 가담`, withdraw && `${withdraw} 이탈`].filter(Boolean).join(' · ')
 }

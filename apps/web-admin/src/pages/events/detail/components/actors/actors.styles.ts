@@ -14,14 +14,15 @@ import { CLAMP_LINES } from './actors.lib'
 /* NYT 깔끔한 톤(헤어라인 룰 + smallcaps eyebrow + 위계)만 차용. 폰트는 sans 기본. */
 
 /**
- * 섹션 구분 hr 색상 — 본문 흐름 방해 안 하는 hairline.
- * 이전엔 0.78/0.5로 본문 글자보다 진해 시선 분산이 컸음. hairline 톤으로 낮춤.
+ * 면(surface) — 이 탭은 **선을 쓰지 않는다**(테두리·구분선·색 밑줄 금지). 묶음은 옅은 면과 간격으로 가른다.
+ * card = 나라·인물 한 장, nested = 나라 카드 안의 대표단 칸, chip = 칩·단추 바탕.
  */
-export const editorialRuleColor = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'
-
-export const softRuleColor = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'
+export const surface = {
+  card: (mode: 'light' | 'dark') => (mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(15,23,42,0.03)'),
+  cardHover: (mode: 'light' | 'dark') => (mode === 'dark' ? 'rgba(255,255,255,0.055)' : 'rgba(15,23,42,0.045)'),
+  nested: (mode: 'light' | 'dark') => (mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.9)'),
+  chip: (mode: 'light' | 'dark') => (mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)'),
+}
 
 export const mutedTextColor = (mode: 'light' | 'dark') =>
   mode === 'dark' ? 'rgba(255,255,255,0.66)' : 'rgba(15,23,42,0.62)'
@@ -43,23 +44,19 @@ export const ManageToggle = styled.button<{ $active: boolean }>`
   gap: 5px;
   padding: 4px 10px;
   border-radius: ${RADIUS.SM};
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active ? theme.colors.text.tertiary : softRuleColor(theme.mode)};
-  background: transparent;
+  border: none;
+  background: ${({ theme, $active }) => ($active ? surface.chip(theme.mode) : 'transparent')};
   color: ${({ theme, $active }) =>
     $active ? theme.colors.text.primary : mutedTextColor(theme.mode)};
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.14s, border-color 0.14s, background 0.14s;
+  transition: color 0.14s, background 0.14s;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+    background: ${({ theme }) => surface.chip(theme.mode)};
   }
 
   &:focus-visible {
@@ -73,10 +70,27 @@ export const ManageToggle = styled.button<{ $active: boolean }>`
   }
 `
 
+/**
+ * 행 오른쪽 위 단추(✎·✕·↑↓) — 행 위에 떠 있다. 칸(열)을 차지하면 보이지 않을 때도 글 폭을 56px씩
+ * 먹어, 나란한 진영 칸 안 대표단 줄이 몇 글자마다 꺾였다.
+ */
 export const RowActions = styled.div`
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  border-radius: ${RADIUS.SM};
+  li:hover > &,
+  li:focus-within > & {
+    background: ${({ theme }) => theme.colors.background.primary};
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+  }
+  > button {
+    margin-top: 0;
+  }
 `
 
 export const ReorderBtn = styled.button`
@@ -88,16 +102,15 @@ export const ReorderBtn = styled.button`
   width: 22px;
   height: 22px;
   padding: 0;
-  border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  border: none;
   border-radius: ${RADIUS.XS};
-  background: transparent;
+  background: ${({ theme }) => surface.chip(theme.mode)};
   color: ${({ theme }) => mutedTextColor(theme.mode)};
   cursor: pointer;
-  transition: border-color 0.14s, color 0.14s;
+  transition: background 0.14s, color 0.14s;
 
   &:hover:not(:disabled) {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   &:focus-visible {
@@ -124,16 +137,9 @@ export const ReorderBtn = styled.button`
  * 트랙이 880px 이상 열리면 2열 격자가 된다: 15명이 8줄로, 6명 미리보기는 3줄로.
  * 1440px 화면(사이드바 포함)에서는 여백이 0이라 지금과 같은 한 열이다.
  */
-export const PersonsBlock = styled.div`
-  ${S.breakout}
-  display: flex;
-  flex-direction: column;
-`
 
 /**
- * 2열일 때 행 구분선 — 각 행의 border-bottom을 그대로 쓰되, 마지막 **줄**(홀수 개면 1개,
- * 짝수 개면 2개)의 선을 지운다. 한 열 규칙(&:last-child)만으로는 짝수 개일 때 왼쪽 칸에
- * 선이 하나 남는다.
+ * 넓은 트랙(880px+)에선 카드를 두 열로 — 15명이 8줄로.
  */
 export const twoColumnRows = css`
   @container eventdetail ${S.WIDE_TRACK_QUERY} {
@@ -141,9 +147,6 @@ export const twoColumnRows = css`
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 40px;
 
-    > li:nth-last-child(2):nth-child(odd) {
-      border-bottom: none;
-    }
   }
 `
 
@@ -153,27 +156,26 @@ export const PersonList = styled.ol`
   padding: 0;
   display: flex;
   flex-direction: column;
+  /* 카드 사이는 선 대신 틈 */
+  gap: 8px;
+  row-gap: 8px;
   ${twoColumnRows}
 `
 
 export const PersonRow = styled.li<{ $compact?: boolean }>`
+  position: relative;
   display: grid;
-  grid-template-columns: ${({ $compact }) => ($compact ? '28px' : '48px')} minmax(0, 1fr) auto;
+  grid-template-columns: ${({ $compact }) => ($compact ? '28px' : '48px')} minmax(0, 1fr);
   align-items: start;
   gap: ${({ $compact }) => ($compact ? '10px' : '14px')};
-  padding: ${({ $compact }) => ($compact ? '6px 12px' : '14px 12px')};
-  margin: 0 -12px;
+  /* 한 사람 = 한 장. 선 대신 면 — 대표단 칸(나라 카드 안)에선 한 단 밝은 면 */
+  padding: ${({ $compact }) => ($compact ? '8px 10px' : '14px 14px')};
   border-radius: ${RADIUS.MD};
-  border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  background: ${({ theme, $compact }) => ($compact ? surface.nested(theme.mode) : surface.card(theme.mode))};
   transition: background 0.15s;
 
-  &:last-child {
-    border-bottom: none;
-  }
-
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+    background: ${({ theme, $compact }) => ($compact ? surface.nested(theme.mode) : surface.cardHover(theme.mode))};
   }
 
   /* 좁은 화면 — 큰 행만 아바타를 40px로(대표단 작은 행은 이미 28px) */
@@ -181,7 +183,7 @@ export const PersonRow = styled.li<{ $compact?: boolean }>`
     !$compact &&
     css`
       @media (max-width: 400px) {
-        grid-template-columns: 40px minmax(0, 1fr) auto;
+        grid-template-columns: 40px minmax(0, 1fr);
         gap: 10px;
         padding: 12px;
       }
@@ -208,7 +210,7 @@ export const PersonAvatar = styled.span<{ $hasImage: boolean; $compact?: boolean
   width: ${({ $compact }) => ($compact ? '28px' : '48px')};
   height: ${({ $compact }) => ($compact ? '28px' : '48px')};
   overflow: hidden;
-  border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  border-radius: 8px;
   background: ${({ theme, $hasImage }) =>
     $hasImage
       ? 'transparent'
@@ -220,8 +222,6 @@ export const PersonAvatar = styled.span<{ $hasImage: boolean; $compact?: boolean
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1;
-  /* 정사각 — editorial photo */
-  border-radius: 0;
 
   img {
     width: 100%;
@@ -280,13 +280,6 @@ export const PersonNameBtn = styled.button<{ $compact?: boolean }>`
 /* 한글 이탤릭은 기울기만 흉내 내 흐려 보인다 — 역할은 곧은 보조 잉크로 */
 /** 참여 국가 · 당시 직위 한 줄 */
 export const PersonMetaLine = styled.div`
-  &[data-quiet] {
-    display: none;
-  }
-  li:hover > div > &[data-quiet],
-  li:focus-within > div > &[data-quiet] {
-    display: flex;
-  }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -401,15 +394,6 @@ export const RemoveInline = styled.button`
 
 /* ─── Nations paragraph ─── */
 
-export const NationsBlock = styled.div`
-  ${S.breakout}
-  /* 섹션 flex 틈(18px)이 이미 있다 — 20px을 더 얹어 인물 목록 아래가 60px 넘게 비었다 */
-  margin-top: 0;
-  padding-top: 18px;
-  border-top: 1px solid ${({ theme }) => editorialRuleColor(theme.mode)};
-  display: flex;
-  flex-direction: column;
-`
 
 /**
  * 무리 머리글 — 인물·국가가 같은 모양으로 연다(라벨 · 수 ······ + 추가).
@@ -488,10 +472,11 @@ export const ShowAllToggle = styled.button`
   display: block;
   width: 100%;
   margin-top: 0;
+  margin-top: 8px;
   padding: 10px 0;
   border: none;
-  border-top: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
-  background: transparent;
+  border-radius: ${RADIUS.MD};
+  background: ${({ theme }) => surface.card(theme.mode)};
   cursor: pointer;
   font-family: inherit;
   font-size: 12.5px;
@@ -549,19 +534,10 @@ export const CountryNoteLine = styled.div<{ $hasContent: boolean }>`
   line-height: 1.6;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
 
-  ${({ $hasContent }) =>
-    !$hasContent &&
-    css`
-      height: 0;
-      overflow: hidden;
-      opacity: 0;
-      transition: opacity 0.14s;
-
-      [data-empty='true'] {
-        opacity: 0.55;
-        font-style: italic;
-      }
-    `}
+  [data-empty='true'] {
+    opacity: 0.55;
+    font-style: italic;
+  }
 `
 
 /**
@@ -573,8 +549,8 @@ export const CountryRolePicker = styled.span`
   display: inline-flex;
   align-items: center;
   padding: 1px 4px 1px 8px;
-  border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
   border-radius: ${RADIUS.PILL};
+  background: ${({ theme }) => surface.chip(theme.mode)};
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -588,11 +564,6 @@ export const CountryRolePicker = styled.span`
     opacity: 0.6;
   }
 
-  /* 자리도 차지하지 않는다 — 투명하기만 하면 긴 이름 옆에서 다음 줄로 꺾여 행이 두 배가 됐다 */
-  &[data-default] {
-    display: none;
-  }
-
   /*
    * InlineSelect의 ▾는 hover에서만 뜨는데, 배지는 그 자리를 18px 비워 두므로 평소엔
    * 한쪽이 빈 알약처럼 보였다. 약하게 상시 노출해 균형을 맞추고 "고를 수 있다"는
@@ -604,10 +575,13 @@ export const CountryRolePicker = styled.span`
 `
 
 /** 진영 한 묶음 — 묶음 사이는 국가 목록의 행 간격보다 넓게 */
-/** 진영 묶음들 — 넓으면 나란히, 좁으면 위아래 */
-export const SideColumns = styled.div`
+/**
+ * 진영 묶음들 — 넓으면 나란히, 좁으면 위아래. 나라 밑에 대표단이 달리면($stack) 한 칸 폭이 모자라
+ * (290px 칸에 아바타·들여쓰기·글) 위아래로 쌓는다.
+ */
+export const SideColumns = styled.div<{ $stack?: boolean }>`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: ${({ $stack }) => ($stack ? 'minmax(0, 1fr)' : 'repeat(auto-fit, minmax(240px, 1fr))')};
   gap: 22px 28px;
   margin-top: 6px;
 `
@@ -625,11 +599,7 @@ export const SideCountryList = styled.ol`
   padding: 0;
   display: flex;
   flex-direction: column;
-  /* 칸이 나란히 서므로 행이 칸 밖(-12px)으로 나가면 옆 칸 선과 어긋났다 */
-  > li {
-    margin: 0 -6px;
-    padding-inline: 6px;
-  }
+  gap: 8px;
 `
 
 export const SideSwatch = styled.span<{ $color: string }>`
@@ -648,19 +618,32 @@ export const EmptyGroupLine = styled.p`
   color: ${({ theme }) => mutedTextColor(theme.mode)};
 `
 
-/** 진영 머리 — 국가 묶음 라벨(GroupLabel)보다 한 단 낮은 소제목. 진영색은 쓰지 않는다(색 면 금지 규약) */
-/** 진영 머리 — 진영 색 견본·아래 굵은 선(색). 진영 밖('그 밖')은 회색 선 */
+/** 진영 머리 — 진영 색 견본 + 진영색 옅은 바탕(선 없음). 진영 밖('그 밖')은 무채색 면 */
 export const SideHead = styled.h4<{ $color?: string }>`
-  margin: 0 0 4px;
-  padding-bottom: 6px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
   display: flex;
   align-items: baseline;
   gap: 7px;
+  border-radius: ${RADIUS.MD};
+  /* 진영 색은 선이 아니라 옅은 바탕으로 — 진영 밖('그 밖')은 무채색 */
+  background: ${({ $color, theme }) =>
+    $color ? `color-mix(in srgb, ${$color} ${theme.mode === 'dark' ? 16 : 9}%, transparent)` : surface.card(theme.mode)};
   font-size: 13.5px;
   font-weight: 800;
   color: ${({ theme }) => theme.colors.text.primary};
-  border-bottom: 2px solid
-    ${({ $color, theme }) => $color ?? softRuleColor(theme.mode)};
+`
+
+/** 진영 결과(승리·패배…) — 머리 오른쪽 끝, 채운 칩 */
+export const SideOutcomeTag = styled.span`
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: ${RADIUS.PILL};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.75)')};
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: ${({ title }) => (title ? 'help' : 'default')};
 `
 
 export const CountryList = styled.ol`
@@ -669,6 +652,8 @@ export const CountryList = styled.ol`
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  row-gap: 8px;
   ${twoColumnRows}
 `
 
@@ -689,47 +674,38 @@ export const CountryRoleLine = styled.div<{ $hasContent: boolean }>`
     opacity: 0.55;
   }
 
-  ${({ $hasContent }) =>
-    !$hasContent &&
-    css`
-      height: 0;
-      overflow: hidden;
-      opacity: 0;
-      transition: opacity 0.14s;
-    `}
 `
 
 /* 인물 행과 같은 골격 — 아바타 열만 없다(국기 이모지는 이름 옆이 자연스러워 생략). */
 export const CountryRow = styled.li`
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 16px;
   /* 15개국이 한 화면에 들어오게 — 이름 한 줄 행은 위아래 7px */
-  padding: 7px 12px;
-  margin: 0 -12px;
+  /* 한 나라 = 한 장 — 선 대신 면 */
+  padding: 10px 14px;
   border-radius: ${RADIUS.MD};
-  border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  background: ${({ theme }) => surface.card(theme.mode)};
   transition: background 0.15s;
-
-  &:last-child {
-    border-bottom: none;
+  &:hover {
+    background: ${({ theme }) => surface.cardHover(theme.mode)};
   }
 
-  /* 빈 '한 일'·비고 줄은 이 행에 들어왔을 때만 펼친다 */
-  &:hover ${CountryNoteLine}, &:focus-within ${CountryNoteLine},
-  &:hover ${CountryRoleLine}, &:focus-within ${CountryRoleLine} {
-    height: auto;
-    opacity: 1;
-  }
-
+  /*
+   * 행에 들어와도 **높이·줄바꿈은 그대로** — 예전엔 빈 '한 일'·비고 줄이 hover에 펼쳐지고 기본 역할 칩이
+   * 나타나며 행이 덜컹거렸다(마우스를 내리면 아래 행들이 줄줄이 밀렸다). 이제 hover는 오른쪽 ✎·✕의
+   * 투명도만 바꾸고, 빈 칸 편집은 ✎를 눌러 연다.
+   */
   &:hover ${CountryRolePicker} button,
   &:focus-within ${CountryRolePicker} button {
     opacity: 1;
   }
-  &:hover ${CountryRolePicker}[data-default],
-  &:focus-within ${CountryRolePicker}[data-default] {
-    display: inline-flex;
+  /* 자기 단추만 — 자손 전체로 걸면 안에 매단 대표단 인물 행의 ✕까지 켜졌다 */
+  &:hover > ${RowActions} ${RemoveInline},
+  &:focus-within > ${RowActions} ${RemoveInline} {
+    opacity: 0.7;
   }
 `
 
@@ -829,14 +805,11 @@ export const AddBtn = styled.button`
 /** 대표단 — 나라 줄 밑 그 나라 자격의 인물들. 나라 이름 아래로 한 단 들인다 */
 export const DelegationList = styled.ol`
   list-style: none;
-  margin: 4px 0 2px;
-  padding: 0 0 0 10px;
+  margin: 8px 0 2px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  border-left: 2px solid ${({ theme }) => softRuleColor(theme.mode)};
-  > li {
-    border-bottom: none;
-  }
+  gap: 4px;
 `
 
 /** 섹션 머리 요약 — '국가 14 · 인물 15 · 진영 2' */
@@ -855,19 +828,7 @@ export const ActorsBlock = styled.div<{ $divided?: boolean }>`
   display: flex;
   flex-direction: column;
   ${({ $divided, theme }) =>
-    $divided ? `padding-top: 18px; border-top: 1px solid ${editorialRuleColor(theme.mode)};` : ''}
-`
-
-/** 참여 국가 고르기 — 대표단 줄(data-quiet)에선 행에 들어왔을 때만 */
-export const ParticipationPicker = styled.span`
-  display: inline-flex;
-  &[data-quiet] {
-    display: none;
-  }
-  li:hover > div > div > &[data-quiet],
-  li:focus-within > div > div > &[data-quiet] {
-    display: inline-flex;
-  }
+    $divided ? 'padding-top: 14px;' : ''}
 `
 
 /** 대표단 '+N명 더' */
@@ -890,5 +851,104 @@ export const DelegationMore = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
+  }
+`
+
+/**
+ * ✎ 편집 — 빈 칸(역할·한 일·비고·참여 국가)을 여는 단추. ✕와 같은 규칙으로 행에 들어왔을 때만 진해진다
+ * (자리는 늘 잡혀 있어 hover가 레이아웃을 흔들지 않는다). 편집 중엔 '완료'로 늘 보인다.
+ */
+export const EditToggle = styled.button<{ $active?: boolean }>`
+  align-self: flex-start;
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 6px;
+  border: none;
+  background: ${({ $active, theme }) => ($active ? `color-mix(in srgb, ${ledgerAccent(theme.mode)} 14%, transparent)` : 'transparent')};
+  border-radius: ${RADIUS.SM};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ $active, theme }) => ($active ? ledgerAccent(theme.mode) : mutedTextColor(theme.mode))};
+  cursor: pointer;
+  opacity: ${({ $active }) => ($active ? 1 : 0)};
+  transition: opacity 0.14s, color 0.14s;
+  li:hover > div > &,
+  li:focus-within > div > & {
+    opacity: 0.8;
+  }
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+  @media (hover: none) {
+    opacity: 0.7;
+  }
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+`
+
+/** 참여국 사실 줄 — 참여 형태·가담/이탈·진영(평평한 목록일 때) */
+export const CountryFacts = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+`
+
+export const FactTag = styled.span<{ $color?: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 19px;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
+  ${({ $color }) =>
+    $color
+      ? `&::before { content: ''; width: 7px; height: 7px; border-radius: 2px; background: ${$color}; }`
+      : ''}
+`
+
+/** 이 나라 몫의 측정값 — '병력 120만' 같은 숫자 칩. 숫자는 고정폭 */
+export const FigureChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+`
+
+export const FigureChip = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: ${RADIUS.SM};
+  background: ${({ theme }) => surface.nested(theme.mode)};
+  font-size: 12px;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  strong {
+    font-size: 13px;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
