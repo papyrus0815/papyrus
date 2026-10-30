@@ -241,32 +241,16 @@ export function RecordsCompareView({
       aria-labelledby="person-view-tab-records"
     >
       <TopBar>
-        <PeriodGroup>
-          <CenturyStepper
-            century={century}
-            onChange={(selection) =>
-              setRecordYearRange(selection.fromYear, selection.toYear)
-            }
-          />
-          <PeriodText $active={hasRange}>{periodText}</PeriodText>
-          {hasRange && (
-            <ClearRangeBtn
-              type="button"
-              onClick={() => setRecordYearRange(null, null)}
-            >
-              전 기간 보기
-            </ClearRangeBtn>
-          )}
-        </PeriodGroup>
-
-        {viewSwitcher}
-
-        <Actions>
+        <HeaderLeft>
+          {viewSwitcher}
           <ViewMeta aria-hidden>
             <span>
               <strong>{recordPersonIds.length}</strong> / {MAX_RECORD_PERSONS}명 비교
             </span>
           </ViewMeta>
+        </HeaderLeft>
+
+        <Actions>
           {recordPersonIds.length > 0 && (
             <GhostBtn
               type="button"
@@ -294,6 +278,24 @@ export function RecordsCompareView({
       </TopBar>
 
       <CaptionRow>
+        <PeriodGroup>
+          <CenturyStepper
+            century={century}
+            onChange={(selection) =>
+              setRecordYearRange(selection.fromYear, selection.toYear)
+            }
+          />
+          <PeriodText $active={hasRange}>{periodText}</PeriodText>
+          {hasRange && (
+            <ClearRangeBtn
+              type="button"
+              onClick={() => setRecordYearRange(null, null)}
+            >
+              전 기간 보기
+            </ClearRangeBtn>
+          )}
+        </PeriodGroup>
+
         <Legend aria-hidden>
           {KIND_ORDER.map((kind) => (
             <LegendItem key={kind}>
@@ -308,7 +310,6 @@ export function RecordsCompareView({
             같은 사건에 함께 등장
           </LegendItem>
         </Legend>
-        <Caption>연보(LIFE_EVENT)는 내 계정 기록만 표시됩니다.</Caption>
         {missingCount > 0 && (
           <CaptionWarn role="status">
             찾을 수 없는 인물 {missingCount}명은 비교에서 제외되었습니다.
@@ -682,12 +683,20 @@ const AddPersonBtn = styled(PrimaryBtn)`
   }
 `
 
+const HeaderLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+`
+
 const CaptionRow = styled.div`
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px 16px;
   flex-wrap: wrap;
-  margin: 12px 0 14px;
+  margin: 8px 0 12px;
 `
 
 const Legend = styled.div`

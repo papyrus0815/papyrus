@@ -83,9 +83,9 @@ function GroupedSkeleton({
       )}
       <GroupHead>
         <HeadChevron />
-        <Bar style={{ width: 92, height: 18 }} />
-        <Bar style={{ width: 76, height: 10 }} />
-        <Bar style={{ width: 30, height: 11 }} />
+        <Bar style={{ width: 84, height: 15 }} />
+        <Bar style={{ width: 68, height: 10 }} />
+        <Bar style={{ width: 28, height: 14, borderRadius: 999 }} />
         <HeadRule />
       </GroupHead>
       <GroupBody>
@@ -109,8 +109,8 @@ function GroupedSkeleton({
 const NAME_WIDTHS = ['62%', '48%', '70%', '56%', '66%', '52%']
 
 /**
- * 카드 한 장 — person-card의 줄 구성(이름 · 직함 · [바닥] 생몰|나이 · 국가|영향력 링)을
- * 같은 줄 높이로 쌓는다. 막대는 글자 크기보다 조금 낮게 — 줄 높이 안에서 가운데.
+ * 카드 한 장 — person-card의 3줄 구성(이름+영향력 · 직함 · [바닥] 생몰|국가)을
+ * 같은 줄 높이로 쌓는다.
  */
 function CardSkeleton({
   order,
@@ -133,24 +133,18 @@ function CardSkeleton({
         {withRoleTag && <RoleTag />}
       </Visual>
       <Body>
-        <Line $height={19}>
+        <MetaRow>
           <Bar style={{ width: nameWidth, height: 12 }} />
-        </Line>
+          <Bar style={{ width: 16, height: 9 }} />
+        </MetaRow>
         {withTitle && (
           <Line $height={17}>
-            <Bar style={{ width: '38%', height: 9 }} />
+            <Bar style={{ width: '44%', height: 9 }} />
           </Line>
         )}
         <MetaRow $pushDown>
-          <Bar style={{ width: '50%', height: 10 }} />
-          <Bar style={{ width: 40, height: 9 }} />
-        </MetaRow>
-        <MetaRow>
-          <Bar style={{ width: '58%', height: 9 }} />
-          <InfluenceStub>
-            <RingStub />
-            <Bar style={{ width: 16, height: 10 }} />
-          </InfluenceStub>
+          <Bar style={{ width: '48%', height: 9 }} />
+          <Bar style={{ width: 36, height: 9 }} />
         </MetaRow>
       </Body>
     </Card>
@@ -169,7 +163,7 @@ const MATRIX_ROWS = [
 function MatrixSkeleton() {
   return (
     <FadingViewPanel>
-      <PanelHeaderSkeleton titleWidth={128} descWidth={110} legendCount={6} />
+      <PanelHeaderSkeleton titleWidth={96} descWidth={80} legendCount={5} />
       <MatrixGrid>
         <MatrixAxisLabel>
           <Bar style={{ width: 56, height: 9 }} />
@@ -342,17 +336,15 @@ const FadingViewPanel = styled(ViewPanel)`
 
 /* 세기 바로가기 줄 — era-story-view의 CenturyIndex와 같은 여백·헤어라인 */
 const IndexRow = styled.div`
-  /* 판의 레일이 첫 세기 도트에서 시작하도록 이 줄이 레일 자리까지 지면색으로 덮는다(실제와 같음) */
   position: relative;
   z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px 22px;
+  gap: 10px 14px;
   background: ${surface};
-  margin: 0 0 4px calc(-1 * var(--rail-inset));
-  /* 실측으로 맞춘 값 — 실제 바로가기 줄(글 버튼 27px + 위아래 10px)과 같은 45px */
-  padding: 16px 0 16px var(--rail-inset);
+  margin: 0 0 6px;
+  padding: 4px 0 10px;
   border-bottom: 1px solid ${hairline};
 
   @media (max-width: 640px) {
@@ -361,34 +353,14 @@ const IndexRow = styled.div`
   }
 `
 
-/* 그룹 머리글 — group-section의 Header와 같은 높이(52)·레일 도트 위치 */
+/* 그룹 머리글 — group-section의 Header와 같은 높이(44) */
 const GroupHead = styled.div`
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  margin-left: calc(-1 * var(--rail-inset));
-  padding: 10px 0 10px var(--rail-inset);
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: calc(var(--rail-inset) / 2 + 0.5px);
-    top: 50%;
-    /* 실제 숫자 구슬(22~28px)과 같은 자리·크기 — 숫자만 아직 없는 빈 구슬 */
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    /*
-     * 빈 고리 — 실제 도트(채운 원)의 '아직 안 채워진' 상태. 반투명 채움은 레일 선이 도트를
-     * 뚫고 비쳤다. 지면색으로 채우고 옅은 브랜드색 테두리만 둔다.
-     */
-    background: ${surface};
-    border: 2px solid ${BRAND.primaryBorder};
-    box-shadow: 0 0 0 3px ${surface};
-  }
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 0;
 `
 
 const IndexItem = styled.span`
@@ -454,7 +426,7 @@ const Visual = styled.div`
 /* 사진 없는 카드의 실루엣과 같은 모양 — '여기에 초상이 온다'를 회색 판보다 분명히 */
 const Silhouette = styled.svg`
   display: block;
-  width: 38%;
+  width: 28%;
   height: auto;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.05)'};

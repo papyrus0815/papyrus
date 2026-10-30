@@ -51,12 +51,14 @@ interface Props {
   onPersonClick: (id: string) => void
 }
 
-/** 출생·활동·사망연도 → 세기 sortKey (음수=BC, 양수=AD). 연도 없으면 null */
+/** 활동·출생·사망연도 → 세기 sortKey (음수=BC, 양수=AD). 연도 없으면 null */
 function personCenturySortKey(person: AdaptedPerson): number | null {
-  const refYear = person.born ?? person.activityYear ?? person.died
+  const refYear = person.activityYear ?? person.born ?? person.died
   if (refYear == null || !Number.isFinite(refYear)) return null
   return centuryOf(Math.round(refYear)).sortKey
 }
+
+const LEADER_PREVIEW_COUNT = 5
 
 export function OverviewPane({
   people,
@@ -71,6 +73,7 @@ export function OverviewPane({
   const [importing, setImporting] = useState(false)
   const [importStatus, setImportStatus] = useState<string | null>(null)
   const [selectedTrait, setSelectedTrait] = useState<PersonTrait | null>(null)
+  const [leaderExpanded, setLeaderExpanded] = useState(false)
 
   const exportEvaluations = async () => {
     try {
@@ -368,7 +371,7 @@ export function OverviewPane({
                 <RecommendItem key={p.id} type="button" onClick={() => onPersonClick(p.id)}>
                   <RecommendName title={p.name}>{p.name}</RecommendName>
                   <RecommendCountry>{p.country}</RecommendCountry>
-                  <RecommendInfluence>★ {p.influence ?? 0}</RecommendInfluence>
+                  <RecommendInfluence>{p.influence ?? 0}</RecommendInfluence>
                 </RecommendItem>
               ))}
             </RecommendList>
@@ -400,14 +403,6 @@ export function OverviewPane({
                 </BarChart>
               </ResponsiveContainer>
             </ChartShell>
-            <AxisLegend>
-              {axisAverages.map((d) => (
-                <AxisLegendItem key={d.key}>
-                  <AxisLegendDot style={{ background: PERSON_STAT_META[d.key].color }} />
-                  {d.axis} <strong>{d.avg}</strong>
-                </AxisLegendItem>
-              ))}
-            </AxisLegend>
           </Card>
 
           {/* B2. 시대 추이 */}
@@ -443,7 +438,17 @@ export function OverviewPane({
 
           {/* A. Leaderboard */}
           <Card $span={2}>
-            <CardTitle>종합 & 축별 톱 10</CardTitle>
+            <CardHeaderRow>
+              <CardTitle>종합 & 축별 순위</CardTitle>
+              {overallLeaderboard.length > LEADER_PREVIEW_COUNT && (
+                <DataActionBtn
+                  type="button"
+                  onClick={() => setLeaderExpanded((prev) => !prev)}
+                >
+                  {leaderExpanded ? '상위 5명만 보기' : '10위까지 더보기'}
+                </DataActionBtn>
+              )}
+            </CardHeaderRow>
             <LeaderGrid>
               <LeaderColumn $highlight>
                 <LeaderColTitle>
@@ -453,38 +458,33 @@ export function OverviewPane({
                 {overallLeaderboard.length === 0 ? (
                   <LeaderEmpty>—</LeaderEmpty>
                 ) : (
-                  overallLeaderboard.map((row, i) => {
-                    const rank = i + 1
-                    return (
-                      <LeaderRow
-                        key={row.person.id}
-                        type="button"
-                        onClick={() => onPersonClick(row.person.id)}
-                      >
-                        <LeaderRank $rank={rank}>{rank}</LeaderRank>
-                        <LeaderName $rank={rank}>{row.person.name}</LeaderName>
-                        <LeaderScoreWrap>
+                  overallLeaderboard
+                    .slice(0, leaderExpanded ? 10 : LEADER_PREVIEW_COUNT)
+                    .map((row, i) => {
+                      const rank = i + 1
+                      return (
+                        <LeaderRow
+                          key={row.person.id}
+                          type="button"
+                          onClick={() => onPersonClick(row.person.id)}
+                        >
+                          <LeaderRank $rank={rank}>{rank}</LeaderRank>
+                          <LeaderName $rank={rank}>{row.person.name}</LeaderName>
                           <LeaderValue $rank={rank} style={{ color: BRAND.primary }}>
                             {row.value}
                           </LeaderValue>
-                          <LeaderScoreTrack aria-hidden>
-                            <LeaderScoreFill
-                              style={{
-                                width: `${Math.min(100, row.value)}%`,
-                                background: BRAND.primary,
-                              }}
-                            />
-                          </LeaderScoreTrack>
-                        </LeaderScoreWrap>
-                      </LeaderRow>
-                    )
-                  })
+                        </LeaderRow>
+                      )
+                    })
                 )}
               </LeaderColumn>
 
               {PERSON_STAT_KEYS.map((key) => {
                 const meta = PERSON_STAT_META[key]
-                const list = leaderboardByAxis[key]
+                const list = leaderboardByAxis[key].slice(
+                  0,
+                  leaderExpanded ? 10 : LEADER_PREVIEW_COUNT,
+                )
                 return (
                   <LeaderColumn key={key}>
                     <LeaderColTitle>
@@ -504,19 +504,9 @@ export function OverviewPane({
                           >
                             <LeaderRank $rank={rank}>{rank}</LeaderRank>
                             <LeaderName $rank={rank}>{row.person.name}</LeaderName>
-                            <LeaderScoreWrap>
-                              <LeaderValue $rank={rank} style={{ color: meta.color }}>
-                                {row.value}
-                              </LeaderValue>
-                              <LeaderScoreTrack aria-hidden>
-                                <LeaderScoreFill
-                                  style={{
-                                    width: `${Math.min(100, row.value)}%`,
-                                    background: meta.color,
-                                  }}
-                                />
-                              </LeaderScoreTrack>
-                            </LeaderScoreWrap>
+                            <LeaderValue $rank={rank} style={{ color: meta.color }}>
+                              {row.value}
+                            </LeaderValue>
                           </LeaderRow>
                         )
                       })
@@ -765,8 +755,8 @@ const RecommendCountry = styled.span`
 
 const RecommendInfluence = styled.span`
   font-size: 11px;
-  font-weight: 700;
-  color: #f59e0b;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
 `
 
@@ -894,6 +884,7 @@ const LeaderScoreWrap = styled.span`
 const LeaderValue = styled.span<{ $rank: number }>`
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  text-align: right;
   font-weight: ${({ $rank }) => ($rank === 1 ? 800 : 700)};
   font-size: ${({ $rank }) => ($rank === 1 ? '13px' : '11.5px')};
 `

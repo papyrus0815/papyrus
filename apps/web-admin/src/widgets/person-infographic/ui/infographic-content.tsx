@@ -474,25 +474,27 @@ export function InfographicContent({
               options={scopeOptions.country}
               searchable
             />
-            {onOpenFilters && (
-              <GhostBtn
-                type="button"
-                onClick={onOpenFilters}
-                aria-haspopup="dialog"
-                aria-label={
-                  sheetFilterCount > 0
-                    ? `상세 필터 열기, ${sheetFilterCount}개 적용 중`
-                    : '상세 필터 열기'
-                }
-                title="영향력·생존 등 상세 필터"
-              >
-                <FiFilter size={14} />
-                {sheetFilterCount > 0 && (
-                  <FilterCount aria-hidden>{sheetFilterCount}</FilterCount>
-                )}
-              </GhostBtn>
-            )}
           </FilterGroup>
+          {onOpenFilters && (
+            <FilterSheetBtn
+              type="button"
+              onClick={onOpenFilters}
+              $active={sheetFilterCount > 0}
+              aria-haspopup="dialog"
+              aria-label={
+                sheetFilterCount > 0
+                  ? `상세 필터 열기, ${sheetFilterCount}개 적용 중`
+                  : '상세 필터 열기'
+              }
+              title="영향력·생존 등 상세 필터"
+            >
+              <FiFilter size={13} aria-hidden />
+              <span>상세</span>
+              {sheetFilterCount > 0 && (
+                <FilterCount aria-hidden>{sheetFilterCount}</FilterCount>
+              )}
+            </FilterSheetBtn>
+          )}
 
           {activeView === 'story' && (
             <DisplayOptions>
@@ -682,6 +684,53 @@ const FilterCount = styled.span`
   color: ${BRAND.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
+`
+
+const FilterSheetBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? BRAND.primaryBorder
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.08)'
+          : 'rgba(15, 23, 42, 0.08)'};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? BRAND.primarySoftDark
+        : BRAND.primarySoft
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.02)'
+        : '#ffffff'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? BRAND.primaryTextOnDark
+        : BRAND.primaryHover
+      : theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(15, 23, 42, 0.16)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.03)'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
 `
 
 const HeaderLeft = styled.div`
