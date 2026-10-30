@@ -169,12 +169,9 @@ function PersonCardItemBase({
               <ActivitySpan>{lifespan.fallbackLabel}</ActivitySpan>
             )}
           </Years>
-          {lifespan.ageLabel && <Age>{lifespan.ageLabel}</Age>}
         </Row>
         <Row>
           <Place>
-            {/* 분야는 점 하나의 색으로 — 사건 목록의 분류처럼 색은 이 한 곳에만 쓴다 */}
-            {/* '기타'는 분류 잔여라 새 정보가 아니다 — 대부분의 카드에 반복되던 소음 */}
             {person.field !== '기타' && (
               <>
                 <FieldDot aria-hidden />
@@ -183,23 +180,11 @@ function PersonCardItemBase({
               </>
             )}
             {hasCountry ? highlight(person.country, query) : '국가 미상'}
-            {person.faction && !factionInSubtitle && (
-              <PlaceSub>
-                {' · '}
-                {highlight(person.faction, query)}
-              </PlaceSub>
-            )}
           </Place>
-          {influenceRated ? (
+          {influenceRated && (
             <Influence title={`영향력 ${person.influence}`}>
-              <Ring
-                style={{ ['--value' as string]: `${person.influence}` }}
-                aria-hidden
-              />
               {person.influence}
             </Influence>
-          ) : (
-            <Unrated title="영향력 미평가">미평가</Unrated>
           )}
         </Row>
       </Body>
@@ -554,31 +539,9 @@ const Influence = styled.span`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-/* 미평가 — 수치 자리에 작은 알약 배지. 링을 비워 두면 '0점'으로 읽힌다 */
-const Unrated = styled.span`
-  flex-shrink: 0;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 600;
+const UnratedDash = styled.span`
+  font-size: 12px;
   color: ${metaText};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.04)'};
-`
-
-/** 영향력 링 — conic-gradient 한 요소로 0~100을 호로 그린다 */
-const Ring = styled.span`
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: conic-gradient(
-    ${BRAND.primary} calc(var(--value) * 1%),
-    ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.14)' : 'rgba(15, 23, 42, 0.1)'}
-      0
-  );
-  mask: radial-gradient(circle, transparent 3.5px, #000000 4px);
-  -webkit-mask: radial-gradient(circle, transparent 3.5px, #000000 4px);
 `
 
 /* ─── 컴팩트 행(리스트) 뷰 ────────────────────────────────────────────── */
@@ -623,32 +586,14 @@ export function PersonRowListHeader({
       <RowHeaderLifespanCol>
         <RowHeaderSortBtn
           type="button"
-          $active={sort === 'year'}
+          $active={sort === 'year' || sort === 'deathYear' || sort === 'lifespan'}
           onClick={() => onSortSelect('year')}
-          title="출생연도순 정렬"
+          title="생몰(출생연도)순 정렬"
         >
-          출생
-          {renderSortIndicator('year')}
-        </RowHeaderSortBtn>
-        <RowHeaderDivider aria-hidden>·</RowHeaderDivider>
-        <RowHeaderSortBtn
-          type="button"
-          $active={sort === 'deathYear'}
-          onClick={() => onSortSelect('deathYear')}
-          title="사망연도순 정렬"
-        >
-          사망
-          {renderSortIndicator('deathYear')}
-        </RowHeaderSortBtn>
-        <RowHeaderDivider aria-hidden>·</RowHeaderDivider>
-        <RowHeaderSortBtn
-          type="button"
-          $active={sort === 'lifespan'}
-          onClick={() => onSortSelect('lifespan')}
-          title="수명순 정렬"
-        >
-          수명
-          {renderSortIndicator('lifespan')}
+          생몰
+          {renderSortIndicator(
+            sort === 'deathYear' || sort === 'lifespan' ? sort : 'year',
+          )}
         </RowHeaderSortBtn>
       </RowHeaderLifespanCol>
       <RowHeaderScoreCol>
@@ -799,20 +744,15 @@ function PersonRowItemBase({
             <ActivitySpan>{lifespan.fallbackLabel}</ActivitySpan>
           )}
         </Years>
-        {lifespan.ageLabel && <Age>{lifespan.ageLabel}</Age>}
       </RowLifespan>
 
       <RowScore>
         {influenceRated ? (
           <Influence title={`영향력 ${person.influence}`}>
-            <Ring
-              style={{ ['--value' as string]: `${person.influence}` }}
-              aria-hidden
-            />
             {person.influence}
           </Influence>
         ) : (
-          <Unrated title="영향력 미평가">미평가</Unrated>
+          <UnratedDash aria-hidden>—</UnratedDash>
         )}
       </RowScore>
     </RowCard>

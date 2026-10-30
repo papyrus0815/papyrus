@@ -583,30 +583,6 @@ export function HeaderStats({
             ))}
           </Axis>
 
-          {/* 시대 구간 비례 리본 — X축 연도 비율 그대로 시대 색 띠를 깔아 시간축 비중을 한눈에 보여준다 */}
-          <EraRibbon aria-hidden>
-            {ERAS.map((era) => {
-              const left = Math.max(0, pct(era.from))
-              const right = Math.min(100, pct(era.to))
-              if (right <= left) return null
-              const active = scopes.era.includes(era.key)
-              return (
-                <EraRibbonSeg
-                  key={era.key}
-                  $active={active}
-                  $dim={eraFiltered && !active}
-                  title={`${era.lbl} (${formatYear(era.from)}–${formatYear(era.to)})`}
-                  onClick={() => toggleScope('era', era.key)}
-                  style={{
-                    left: `${left}%`,
-                    width: `${right - left}%`,
-                    background: era.color,
-                  }}
-                />
-              )
-            })}
-          </EraRibbon>
-
           {/* 시대 칩 — 연도 비례가 아니라 같은 폭 규칙으로 나열해, 좁은 근·현대 구간도
               이름과 인원이 항상 글자로 읽힌다(색만으로 시대를 식별하지 않는다). */}
           <EraChips>

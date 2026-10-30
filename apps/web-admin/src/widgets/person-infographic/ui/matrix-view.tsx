@@ -247,9 +247,7 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     <ViewPanel>
       <ViewPanelHeader>
         <ViewPanelTitle>국가별 생몰 연표</ViewPanelTitle>
-        <ViewPanelDesc>
-          가로 = 생몰·활동 기간 · 색 = 시대 · 실선 = 생몰 확인 / 점선 = 활동·재위 추정
-        </ViewPanelDesc>
+        <ViewPanelDesc>국가별 인물 생몰·활동 기간</ViewPanelDesc>
         {hasActiveFilter && (
           <FilterBadge>
             <span style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -272,20 +270,6 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
         {minInfluence > 0 && (
           <FilterBadge>영향력 ≥ {minInfluence}</FilterBadge>
         )}
-        <ViewLegend>
-          {ERAS.map((e) => (
-            <ViewLegendItem
-              key={e.key}
-              $active={scopes.era.includes(e.key)}
-              $color={e.color}
-              onClick={() => toggleScope('era', e.key)}
-              style={{ cursor: 'pointer' }}
-            >
-              <span style={{ background: e.color }} />
-              {e.lbl}
-            </ViewLegendItem>
-          ))}
-        </ViewLegend>
       </ViewPanelHeader>
 
       <ControlBar>
@@ -527,15 +511,10 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                     {cursorX != null && cursorYear != null && (
                       <CrosshairYearBadge
                         style={{
-                          left: Math.max(54, Math.min(canvasW - 54, cursorX)),
+                          left: Math.max(28, Math.min(canvasW - 28, cursorX)),
                         }}
                       >
                         {cursorYear === 0 ? '0' : formatYear(cursorYear)}
-                        {coevalCount > 0 && (
-                          <CrosshairCoevalSpan>
-                            · 동시대 {coevalCount}명
-                          </CrosshairCoevalSpan>
-                        )}
                       </CrosshairYearBadge>
                     )}
                   </div>
@@ -559,18 +538,12 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                         const isSelected = activeSelectedId === p.id
                         const isEstimatedSpan =
                           p.born == null || (p.died == null && !p.isAlive)
-                        const isCoevalWithCursor =
-                          cursorYear != null &&
-                          hoveredBar == null &&
-                          active &&
-                          cursorYear >= bornForPlot(p) &&
-                          cursorYear <= diedForPlot(p)
-                        const baseOp = active ? 0.85 : 0.2
-                        const op = isOtherInLane
-                          ? Math.min(baseOp, 0.25)
-                          : isCoevalWithCursor
-                            ? 1
-                            : baseOp
+                        const baseOp = active
+                          ? isEstimatedSpan
+                            ? 0.55
+                            : 0.88
+                          : 0.18
+                        const op = isOtherInLane ? Math.min(baseOp, 0.25) : baseOp
                         const lifespanAria = describePersonLifespan(p).ariaText
                         return (
                           <button
@@ -588,24 +561,16 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                               top: yy,
                               width: Math.max(6, x2 - x1),
                               height: BAR_H,
-                              background: isEstimatedSpan
-                                ? `repeating-linear-gradient(135deg, rgba(255,255,255,0.22) 0 2px, transparent 2px 5px), ${era.color}`
-                                : era.color,
+                              background: era.color,
                               borderRadius: 4,
                               cursor: 'pointer',
                               opacity: isHoveredSelf ? 1 : op,
-                              border: isEstimatedSpan
-                                ? '1px dashed rgba(255, 255, 255, 0.7)'
-                                : 'none',
+                              border: 'none',
                               padding: 0,
                               transition: 'opacity 0.12s, box-shadow 0.12s',
                               boxShadow: isSelected
                                 ? `0 0 0 2px ${theme.colors.background.primary}, 0 0 0 3.5px ${theme.colors.active}`
-                                : isCoevalWithCursor
-                                  ? 'inset 0 0 0 1.5px rgba(255, 255, 255, 0.85)'
-                                  : isEstimatedSpan
-                                    ? 'none'
-                                    : 'inset 0 0 0 1px rgba(255, 255, 255, 0.22)',
+                                : 'none',
                               zIndex: isSelected ? 2 : isHoveredSelf ? 1 : 0,
                             }}
                             onMouseEnter={(e) => {

@@ -533,37 +533,30 @@ export function EraStoryView({
           </CollapseAllBtn>
         </CenturyIndex>
       )}
-      {sortedGroups.map((group, index) => {
-        const { id, stateKey, label, range, marker, tone, centuryMeta, arr } = group
+      {listLayout === 'row' && sortedGroups.length > 0 && (
+        <GroupRowHeaderWrap>
+          <PersonRowListHeader
+            sort={sort}
+            order={reversePersonSort ? 'asc' : 'desc'}
+            onSortSelect={handleHeaderSortSelect}
+          />
+        </GroupRowHeaderWrap>
+      )}
+      {sortedGroups.map((group) => {
+        const { id, stateKey, label, range, tone, arr } = group
         const isExpanded = !!expanded[stateKey]
         const shown = isExpanded
           ? arr
           : arr.slice(0, INFOGRAPHIC_DEFAULTS.GROUP_TOP_N)
         const hasMore = arr.length > INFOGRAPHIC_DEFAULTS.GROUP_TOP_N
 
-        // 세기별 모드에서만 직전 세기와의 공백(세기 수) 표지 표시
-        const prevMeta = sortedGroups[index - 1]?.centuryMeta
-        const gap =
-          groupBy === 'century' &&
-          centuryMeta &&
-          prevMeta &&
-          prevMeta.key !== 'unknown' &&
-          centuryMeta.key !== 'unknown'
-            ? Math.abs(centuryIndex(centuryMeta) - centuryIndex(prevMeta)) - 1
-            : 0
-
         return (
           <Fragment key={id}>
-            {gap > 0 && <GapMarker>{gap}개 세기 기록 없음</GapMarker>}
             <GroupSection
               id={id}
               label={label}
               range={range}
               count={arr.length}
-              weight={
-                tone === 'muted' ? undefined : Math.sqrt(arr.length / largestGroup)
-              }
-              marker={marker}
               tone={tone ?? 'primary'}
               collapsed={!!collapsed[stateKey]}
               onToggle={() =>
@@ -573,7 +566,7 @@ export function EraStoryView({
                 }))
               }
             >
-              {renderCollection(shown)}
+              {renderCollection(shown, false)}
               {hasMore && (
                 <MoreBtn
                   type="button"
@@ -607,35 +600,34 @@ const PinnedWrap = styled(GroupPanel)`
   padding-bottom: 12px;
 `
 
+const GroupRowHeaderWrap = styled.div`
+  container: personrowlist / inline-size;
+  margin-bottom: 4px;
+  border: 1px solid ${hairline};
+  border-radius: 8px;
+  overflow: hidden;
+`
+
 const CenturyIndex = styled.nav`
-  /* 판의 좌측 시간 레일이 첫 세기 머리부터 시작하도록 레일 자리까지 지면색으로 덮는다 */
-  position: relative;
-  z-index: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 0 0 4px calc(-1 * var(--rail-inset));
-  padding: 10px 0 12px var(--rail-inset);
+  margin-bottom: 6px;
+  padding: 4px 0 10px;
   border-bottom: 1px solid ${hairline};
-  background: ${surface};
 `
 
 const CenturyIndexPills = styled.div`
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 6px;
-
-  /* 좁은 폭에선 줄바꿈 대신 한 줄 가로 스크롤 — 5줄로 불어나 첫 카드를 밀어내지 않게 */
-  @media (max-width: 640px) {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 `
 

@@ -378,6 +378,42 @@ export function InfographicContent({
         </SrStatus>
 
         <TopBar>
+          <HeaderLeft>
+            {viewSwitcher}
+            {!isLoading && !isError && (
+              <ViewMeta aria-hidden>
+                <strong>{filtered.length.toLocaleString()}</strong>명
+                {filtered.length !== allPeople.length &&
+                  ` / ${allPeople.length.toLocaleString()}명`}
+              </ViewMeta>
+            )}
+            {isLoading && (
+              <ViewMeta aria-hidden>
+                <CountPlaceholder />
+              </ViewMeta>
+            )}
+          </HeaderLeft>
+
+          <Actions>
+            {hasStatsPanel && (
+              <GhostBtn
+                type="button"
+                onClick={toggleStats}
+                aria-pressed={statsOpen}
+                title={statsOpen ? '통계 숨기기' : '통계 보기'}
+                $hideOnMobile
+              >
+                <FiBarChart2 size={14} />
+                통계
+              </GhostBtn>
+            )}
+            <PrimaryBtn type="button" onClick={() => setFormOpen(true)}>
+              <FiPlus size={16} />새 인물 등록
+            </PrimaryBtn>
+          </Actions>
+        </TopBar>
+
+        <SubBar>
           <Search>
             <SearchIcon>
               <FiSearch size={16} />
@@ -438,168 +474,122 @@ export function InfographicContent({
               options={scopeOptions.country}
               searchable
             />
-          </FilterGroup>
-
-          {onOpenFilters && (
-            <GhostBtn
-              type="button"
-              onClick={onOpenFilters}
-              aria-haspopup="dialog"
-              aria-label={
-                sheetFilterCount > 0
-                  ? `상세 필터 열기, ${sheetFilterCount}개 적용 중`
-                  : '상세 필터 열기'
-              }
-              title="시대·지역·분야·국가·영향력·생존 필터"
-            >
-              <FiFilter size={14} />
-              필터
-              {sheetFilterCount > 0 && (
-                <FilterCount aria-hidden>{sheetFilterCount}</FilterCount>
-              )}
-            </GhostBtn>
-          )}
-
-          <Actions>
-            {viewSwitcher}
-            {/* 능력치 뷰는 자체 '개요'(평가 진행률·축별 평균)를 가져서 통계가 두 겹이 된다 */}
-            {hasStatsPanel && (
+            {onOpenFilters && (
               <GhostBtn
                 type="button"
-                onClick={toggleStats}
-                aria-pressed={statsOpen}
-                title={statsOpen ? '통계 숨기기' : '통계 보기'}
-                $hideOnMobile
+                onClick={onOpenFilters}
+                aria-haspopup="dialog"
+                aria-label={
+                  sheetFilterCount > 0
+                    ? `상세 필터 열기, ${sheetFilterCount}개 적용 중`
+                    : '상세 필터 열기'
+                }
+                title="영향력·생존 등 상세 필터"
               >
-                <FiBarChart2 size={14} />
-                통계
+                <FiFilter size={14} />
+                {sheetFilterCount > 0 && (
+                  <FilterCount aria-hidden>{sheetFilterCount}</FilterCount>
+                )}
               </GhostBtn>
             )}
-            <PrimaryBtn type="button" onClick={() => setFormOpen(true)}>
-              <FiPlus size={16} />새 인물 등록
-            </PrimaryBtn>
-          </Actions>
-        </TopBar>
+          </FilterGroup>
 
-        {(activeView === 'story' || activeChips.length > 0 || !isError) && (
-          <SubBar>
-            {activeView === 'story' && (
-              <DisplayOptions>
-                <Select
-                  value={groupBy}
-                  onChange={(event) =>
-                    setGroupBy(event.target.value as PersonGroupBy)
-                  }
-                  aria-label="인물 그룹 기준"
-                >
-                  {GROUP_OPTIONS.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </Select>
-                <Select
-                  value={sort}
-                  onChange={(event) => setSort(event.target.value as PersonSortKey)}
-                  aria-label="인물 정렬 기준"
-                >
-                  {SORT_OPTIONS.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}순
-                    </option>
-                  ))}
-                </Select>
-                <IconBtn
-                  type="button"
-                  onClick={() =>
-                    setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
-                  }
-                  aria-label={
-                    groupBy === 'century'
-                      ? eraGroupOrder === 'desc'
-                        ? '세기 순서: 최신순 (오래된순으로 바꾸기)'
-                        : '세기 순서: 오래된순 (최신순으로 바꾸기)'
-                      : eraGroupOrder === 'desc'
-                        ? '정렬 순서: 기본순 (역순으로 바꾸기)'
-                        : '정렬 순서: 역순 (기본순으로 바꾸기)'
-                  }
-                  title={
-                    groupBy === 'century'
-                      ? eraGroupOrder === 'desc'
-                        ? '세기: 최신순'
-                        : '세기: 오래된순'
-                      : eraGroupOrder === 'desc'
-                        ? '정렬: 기본순 (클릭 시 역순)'
-                        : '정렬: 역순 (클릭 시 기본순)'
-                  }
-                >
-                  <FiArrowDown
-                    size={15}
-                    style={{
-                      transform: eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
-                    }}
-                  />
-                </IconBtn>
-                <LayoutSegmented role="group" aria-label="목록 표시 형식">
-                  <LayoutSegmentBtn
-                    type="button"
-                    $active={listLayout === 'grid'}
-                    aria-pressed={listLayout === 'grid'}
-                    onClick={() => setListLayout('grid')}
-                    title="카드형(그리드) 보기"
-                  >
-                    <FiGrid size={13} aria-hidden />
-                    <span>카드</span>
-                  </LayoutSegmentBtn>
-                  <LayoutSegmentBtn
-                    type="button"
-                    $active={listLayout === 'row'}
-                    aria-pressed={listLayout === 'row'}
-                    onClick={() => setListLayout('row')}
-                    title="리스트형(컴팩트 행) 보기"
-                  >
-                    <FiList size={13} aria-hidden />
-                    <span>리스트</span>
-                  </LayoutSegmentBtn>
-                </LayoutSegmented>
-              </DisplayOptions>
-            )}
-
-            {activeChips.length > 0 && (
-              <ActiveFiltersInline>
-                <ActiveFilterLabel>필터 {activeChips.length}</ActiveFilterLabel>
-                {activeChips.map((chip) => (
-                  <ActiveFilterChip
-                    key={chip.key}
-                    type="button"
-                    onClick={chip.onRemove}
-                    aria-label={`${chip.label} 필터 해제`}
-                  >
-                    {chip.label}
-                    <FiX size={11} aria-hidden />
-                  </ActiveFilterChip>
+          {activeView === 'story' && (
+            <DisplayOptions>
+              <Select
+                value={groupBy}
+                onChange={(event) =>
+                  setGroupBy(event.target.value as PersonGroupBy)
+                }
+                aria-label="인물 그룹 기준"
+              >
+                {GROUP_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
-                <ActiveFilterClear type="button" onClick={resetFilters}>
-                  모두 해제
-                </ActiveFilterClear>
-              </ActiveFiltersInline>
-            )}
+              </Select>
+              <Select
+                value={sort}
+                onChange={(event) =>
+                  setSort(event.target.value as PersonSortKey)
+                }
+                aria-label="인물 정렬 기준"
+              >
+                {SORT_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}순
+                  </option>
+                ))}
+              </Select>
+              <IconBtn
+                type="button"
+                onClick={() =>
+                  setEraGroupOrder(eraGroupOrder === 'desc' ? 'asc' : 'desc')
+                }
+                aria-label={
+                  eraGroupOrder === 'desc'
+                    ? '정렬 순서: 기본순 (역순으로 바꾸기)'
+                    : '정렬 순서: 역순 (기본순으로 바꾸기)'
+                }
+                title={
+                  eraGroupOrder === 'desc'
+                    ? '정렬: 기본순 (클릭 시 역순)'
+                    : '정렬: 역순 (클릭 시 기본순)'
+                }
+              >
+                <FiArrowDown
+                  size={15}
+                  style={{
+                    transform:
+                      eraGroupOrder === 'desc' ? 'none' : 'rotate(180deg)',
+                  }}
+                />
+              </IconBtn>
+              <LayoutSegmented role="group" aria-label="목록 표시 형식">
+                <LayoutSegmentBtn
+                  type="button"
+                  $active={listLayout === 'grid'}
+                  aria-pressed={listLayout === 'grid'}
+                  onClick={() => setListLayout('grid')}
+                  title="카드형 보기"
+                >
+                  <FiGrid size={13} aria-hidden />
+                  <span>카드</span>
+                </LayoutSegmentBtn>
+                <LayoutSegmentBtn
+                  type="button"
+                  $active={listLayout === 'row'}
+                  aria-pressed={listLayout === 'row'}
+                  onClick={() => setListLayout('row')}
+                  title="리스트형 보기"
+                >
+                  <FiList size={13} aria-hidden />
+                  <span>리스트</span>
+                </LayoutSegmentBtn>
+              </LayoutSegmented>
+            </DisplayOptions>
+          )}
+        </SubBar>
 
-            {isLoading && (
-              <ViewMeta aria-hidden>
-                <CountPlaceholder />
-              </ViewMeta>
-            )}
-            {!isLoading && !isError && (
-              <ViewMeta aria-hidden>
-                <span>
-                  표시 <strong>{filtered.length.toLocaleString()}</strong>명
-                  {filtered.length !== allPeople.length &&
-                    ` / 전체 ${allPeople.length.toLocaleString()}명`}
-                </span>
-              </ViewMeta>
-            )}
-          </SubBar>
+        {activeChips.length > 0 && (
+          <ActiveFiltersInline>
+            <ActiveFilterLabel>필터 {activeChips.length}</ActiveFilterLabel>
+            {activeChips.map((chip) => (
+              <ActiveFilterChip
+                key={chip.key}
+                type="button"
+                onClick={chip.onRemove}
+                aria-label={`${chip.label} 필터 해제`}
+              >
+                {chip.label}
+                <FiX size={11} aria-hidden />
+              </ActiveFilterChip>
+            ))}
+            <ActiveFilterClear type="button" onClick={resetFilters}>
+              모두 해제
+            </ActiveFilterClear>
+          </ActiveFiltersInline>
         )}
 
 
@@ -694,18 +684,25 @@ const FilterCount = styled.span`
     theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
 `
 
-/** 2단 보조 바 — 뷰별 표시 옵션(그룹·정렬·레이아웃) + 활성 필터 칩 + 우측 인원 요약 */
+const HeaderLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+`
+
+/** 2단 컨트롤 바 — 검색 + 빠른 필터 + 우측 표시 옵션(그룹·정렬·카드/리스트) */
 const SubBar = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px 12px;
+  gap: 8px 10px;
   flex-wrap: wrap;
-  margin-top: 10px;
-  padding-top: 10px;
-  min-height: 34px;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.06)'};
+  margin-top: 8px;
+  min-height: 36px;
+
+  & > ${DisplayOptions} {
+    margin-left: auto;
+  }
 `
 
 const LayoutSegmented = styled.div`
