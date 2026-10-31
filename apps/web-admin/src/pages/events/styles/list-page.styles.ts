@@ -1,33 +1,11 @@
 /**
  * List Page Shell Styled Components
- * 페이지 헤더 · 탭 · 메인/상세 패널 레이아웃 · 빈 상태 · 삭제 패널 · 단축키 도움말
+ * 메인/상세 패널 레이아웃 · 단축키 도움말 · 에러 배너
  */
 import styled from 'styled-components'
 
 import { BRAND, MOTION } from './theme'
 
-/*
- * (제거) LazyViewFallback · LazyViewSpinner — lazy 뷰 chunk를 기다리는 동안의 빈 박스였다.
- * 지연 로드하던 뷰 여섯(지도·격자·통계·트리·갤러리·시대)이 사라져 기다릴 chunk가 없다.
- */
-
-
-/** 대시보드 등에 임베드 시 페이지 외곽 컨테이너 — 부모가 헤더/패딩을 제공한다고 가정 */
-export const EmbedWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0 16px;
-`
-
-/* 페이지 헤더 — Embed와 시각 시그너처 통일을 위해 좌측에 indigo accent bar.
- * Title 글꼴 크기로 위계는 유지(19px vs Embed 13px).
- *
- * v2: 통계 chip을 ViewMeta 자리로 옮기면서 헤더는 Title만 — 실제 align 컨텍스트가
- * 단순해져 padding 축소. */
 /**
  * 시각적으로만 숨긴 페이지 제목.
  *
@@ -47,45 +25,10 @@ export const VisuallyHiddenPageTitle = styled.h1`
   border: 0;
 `
 
-export const PageHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 2px 4px 2px 12px;
-  flex-wrap: wrap;
-  position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 4px;
-    bottom: 4px;
-    width: 3px;
-    border-radius: 2px;
-    background: ${BRAND.primary};
-  }
-
-  @media (max-width: 640px) {
-    padding: 2px 2px 2px 14px;
-  }
-`
-
-/* 제목은 admin 도구의 *시각 1순위*가 아니다 — 데이터가 1순위.
- * Embed(13px) ↔ 풀 페이지(19px)로 위계 명확히. */
-/* 임베드 헤더 — 페이지 헤더(19px)보다 한 톤 작게(13px)로 위계 분명히. */
 /**
- * 뷰 본문 래퍼 — 뷰 전환 세그먼트 + 활성 뷰 슬롯.
+ * 뷰 본문 래퍼 — 활성 뷰 슬롯.
  *
  * ⚠️ **폭 상한은 레포 어디에도 없다**(2026-08-02 전폭 전환). 여기에도 두지 말 것.
- *
- * 이력: 예전엔 이 래퍼가 1120px 캡을 들고 있었는데, 정작 가장 넓은 검색·필터 바
- * (CatalogToolbar)는 CatalogSplit 바깥이라 캡을 안 받아 **우측 끝이 2종**으로 갈렸다 —
- * 그게 "우측만 비었다"의 직접 원인이었다. 그래서 캡을 셸(PageWrapper)로 올렸는데,
- * 그러자 이번엔 셸 자체가 뷰포트보다 좁아 좌우로 폭이 죽었다. 캡이 있는 한 넓은 화면에서는
- * 어딘가가 반드시 빈다는 게 결론이고, 그래서 캡 대신 **흡수하는 열**을 세웠다
- * (`list.styles.ts`의 `rowGridTemplate`, `theme.ts`의 LIST_STEPS).
  */
 export const ActiveContent = styled.div`
   display: flex;
@@ -94,204 +37,6 @@ export const ActiveContent = styled.div`
   min-height: 0;
   min-width: 0;
   flex: 1;
-`
-
-export const TabBar = styled.div`
-  display: flex;
-  gap: 4px;
-  padding: 0 4px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e5e7eb'};
-  background: transparent;
-`
-
-export const TabButton = styled.button<{ $active: boolean; $tone: 'primary' | 'danger' }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border: none;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  position: relative;
-  transition:
-    color 0.18s ease,
-    background 0.18s ease;
-  color: ${({ theme, $active, $tone }) =>
-    $active
-      ? $tone === 'danger'
-        ? '#ef4444'
-        : '#2563eb'
-      : theme.colors.text.tertiary};
-  border-radius: 8px 8px 0 0;
-
-  /* 활성 탭의 underline은 ::after로 — 1px border와 겹쳐 매끈하게 */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    bottom: -1px;
-    height: 2px;
-    border-radius: 2px 2px 0 0;
-    background: ${({ $active, $tone }) =>
-      $active
-        ? $tone === 'danger'
-          ? 'linear-gradient(90deg, #ef4444, #f97316)'
-          : 'linear-gradient(90deg, #2563eb, #2563eb)'
-        : 'transparent'};
-    transition: background 0.18s ease;
-  }
-
-  &:hover:not([aria-selected='true']) {
-    color: ${({ theme }) => theme.colors.text.secondary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : 'rgba(15,23,42,0.03)'};
-  }
-`
-
-/* 빈 상태 박스 — 어드민 톤에 맞춰 콤팩트.
- * padding 96 → 56, radius 18 → 12, 원형 아이콘 56 → 40px.
- * 장식 ⌕ 글리프는 SR에서 의미 없는 문자로 읽히지 않도록 배경 SVG로 대체. */
-export const EmptyResults = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 56px 32px;
-  text-align: center;
-
-  @media (max-width: 640px) {
-    padding: 36px 16px;
-  }
-  margin: 12px;
-  border-radius: 12px;
-  border: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.012)'
-      : 'rgba(15,23,42,0.008)'};
-
-  &::before {
-    content: '';
-    display: inline-block;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background-color: ${({ theme }) =>
-      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="%2393c5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>');
-    background-repeat: no-repeat;
-    background-position: center;
-    margin-bottom: 4px;
-  }
-`
-
-export const EmptyResultsTitle = styled.div`
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-export const EmptyResultsHint = styled.div`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.6;
-  max-width: 360px;
-`
-
-export const DeletedEventsPanel = styled.div`
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  padding: 18px;
-`
-
-export const DeletedEventsList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-export const DeletedEventRow = styled.button`
-  position: relative;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 14px 16px 14px 18px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
-  border-radius: 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'};
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s,
-    transform 0.15s,
-    box-shadow 0.15s;
-
-  /* 좌측 빨강 악센트 + 미세 반투명 — 휴지통/아카이브 인상 */
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 14px;
-    bottom: 14px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: rgba(239, 68, 68, 0.55);
-    opacity: 0.7;
-    transition: opacity 0.15s;
-  }
-
-  &:hover {
-    border-color: rgba(239, 68, 68, 0.45);
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(239,68,68,0.08)'
-        : 'rgba(239,68,68,0.03)'};
-    transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.08);
-  }
-  &:hover::before {
-    opacity: 1;
-  }
-`
-
-export const DeletedEventTitle = styled.div`
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  color: ${({ theme }) => theme.colors.text.primary};
-  /* 삭제 항목 — 살짝 줄긋기 인상으로 시각 단서 */
-  text-decoration: line-through;
-  text-decoration-color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(239,68,68,0.5)'
-      : 'rgba(239,68,68,0.35)'};
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 2px;
-`
-
-export const DeletedEventMeta = styled.div`
-  font-size: 11.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
 `
 
 /**
@@ -378,41 +123,6 @@ export const DetailPanelSwap = styled.div`
   }
 `
 
-/** drawer 상단 sticky 띠 — 좌측에 선택된 사건 제목, 우측에 닫기 버튼.
- * 컨텐츠 자체가 헤더를 가져도 시각적으로 *drawer 자체의 헤더*가 분명히 분리됨. */
-export const DetailDrawerHeader = styled.div`
-  display: none;
-
-  @media (max-width: 1200px) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 12px 10px 16px;
-    border-bottom: 1px solid
-      ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? '#171717' : '#ffffff'};
-    position: sticky;
-    top: 0;
-    z-index: 1;
-  }
-`
-
-/** drawer header 좌측 제목 — 선택된 사건 제목. 길면 ellipsis. */
-export const DetailDrawerHeaderTitle = styled.div`
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`
-
 export const DetailDrawerBackdrop = styled.div<{ $open: boolean }>`
   display: none;
 
@@ -430,40 +140,6 @@ export const DetailDrawerBackdrop = styled.div<{ $open: boolean }>`
   }
 
   @media (max-width: 1200px) and (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-`
-
-/** drawer header 안쪽에 위치하는 닫기 버튼 — 컨텐츠와 겹치지 않음. */
-export const DetailDrawerClose = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition: background ${MOTION.fast}, color ${MOTION.fast},
-    border-color ${MOTION.fast};
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${BRAND.focusRing};
-  }
-
-  @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
 `
@@ -551,10 +227,6 @@ export const ShortcutBox = styled.div`
   }
 `
 
-export const ShortcutOverlayInner = styled.div`
-  display: contents;
-`
-
 export const ShortcutHeader = styled.div`
   display: flex;
   align-items: center;
@@ -586,20 +258,6 @@ export const ShortcutClose = styled.button`
     background: ${({ theme }) => theme.colors.background.tertiary};
     color: ${({ theme }) => theme.colors.text.primary};
   }
-`
-
-/** 단축키 도움말의 섹션 구분 — "타임라인 보기" 등 그룹별 헤더 */
-export const ShortcutSectionTitle = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin: 14px 10px 6px;
-  padding-bottom: 6px;
-  border-bottom: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
 `
 
 export const ShortcutList = styled.ul`

@@ -88,7 +88,12 @@ interface FiltersPanelProps {
     /** 대륙 축과의 계층 관계에 쓴다(검토 IA-1) */
     continentId?: string | null
   }>
-  historicalCountries?: Array<{ id: string; name: string }>
+  historicalCountries?: Array<{
+    id: string
+    name: string
+    /** 연결된 현대 국가 id — 대륙 필터와 역사국가 연동에 쓴다 */
+    parentModernCountryIds?: string[] | null
+  }>
   continents?: ContinentResponseDto[]
 
   /**
@@ -310,6 +315,22 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
     return map
   }, [countries])
 
+  /** historicalCountry.id → 연결된 현대 국가들의 continentId 집합 */
+  const continentIdsByHistoricalId = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const country of historicalCountries) {
+      const parentIds = country.parentModernCountryIds ?? []
+      if (parentIds.length === 0) continue
+      const continentSet = new Set<string>()
+      for (const modernId of parentIds) {
+        const continentId = continentIdByCountryId.get(modernId)
+        if (continentId) continentSet.add(continentId)
+      }
+      if (continentSet.size > 0) map.set(country.id, continentSet)
+    }
+    return map
+  }, [historicalCountries, continentIdByCountryId])
+
   const selectedContinentName =
     selectedContinent === FILTER_ALL
       ? undefined
@@ -323,11 +344,24 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
    * 사용자가 그 조합을 의도해서 만드는 경우는 사실상 없다. 그래서 막는 대신
    * 팝오버 안에서 원인을 밝히고 한 번에 풀 수 있게 한다.
    */
-  const countryContinentConflict =
-    selectedContinent !== FILTER_ALL &&
-    selectedCountry !== FILTER_ALL &&
-    continentIdByCountryId.has(selectedCountry) &&
-    continentIdByCountryId.get(selectedCountry) !== selectedContinent
+  const countryContinentConflict = useMemo(() => {
+    if (selectedContinent === FILTER_ALL || selectedCountry === FILTER_ALL) {
+      return false
+    }
+    if (continentIdByCountryId.has(selectedCountry)) {
+      return continentIdByCountryId.get(selectedCountry) !== selectedContinent
+    }
+    const historicalContinents = continentIdsByHistoricalId.get(selectedCountry)
+    if (historicalContinents && historicalContinents.size > 0) {
+      return !historicalContinents.has(selectedContinent)
+    }
+    return false
+  }, [
+    selectedContinent,
+    selectedCountry,
+    continentIdByCountryId,
+    continentIdsByHistoricalId,
+  ])
 
   /**
    * 세부 분야 옵션 — 분야가 걸려 있으면 **그 분야에서 쓰는 세부를 위 섹션**에, 나머지를 아래에
@@ -385,7 +419,10 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
     const modernGroupLabel = selectedContinentName
       ? `${MODERN_COUNTRY_GROUP} · ${selectedContinentName}`
       : MODERN_COUNTRY_GROUP
-    const historicalGroupLabel = narrowByContinent
+    const matchedHistoricalGroupLabel = selectedContinentName
+      ? `${HISTORICAL_COUNTRY_GROUP} · ${selectedContinentName}`
+      : HISTORICAL_COUNTRY_GROUP
+    const unknownHistoricalGroupLabel = narrowByContinent
       ? `${HISTORICAL_COUNTRY_GROUP} (대륙 미상)`
       : HISTORICAL_COUNTRY_GROUP
 
@@ -408,13 +445,30 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
       .sort(byCountEntry)
 
     const historical = historicalCountries
-      .map<InlineFilterOption>((country) => ({
-        id: country.id,
-        name: country.name,
-        prefix: '🏛️',
-        group: historicalGroupLabel,
-        count: countOf(optionCounts.country.get(country.id)),
-      }))
+      .filter((country) => {
+        if (!narrowByContinent || country.id === selectedCountry) return true
+        const linkedContinents = continentIdsByHistoricalId.get(country.id)
+        // 현대 국가 연결이 없어 대륙을 알 수 없는 역사국가는 누락 방지를 위해 존치하고,
+        // 다른 대륙으로 명시 연결된 역사국가만 걸러낸다.
+        if (!linkedContinents || linkedContinents.size === 0) return true
+        return linkedContinents.has(selectedContinent)
+      })
+      .map<InlineFilterOption>((country) => {
+        const linkedContinents = continentIdsByHistoricalId.get(country.id)
+        const matchesContinent =
+          narrowByContinent &&
+          linkedContinents != null &&
+          linkedContinents.has(selectedContinent)
+        return {
+          id: country.id,
+          name: country.name,
+          prefix: '🏛️',
+          group: matchesContinent
+            ? matchedHistoricalGroupLabel
+            : unknownHistoricalGroupLabel,
+          count: countOf(optionCounts.country.get(country.id)),
+        }
+      })
       .sort(byCountEntry)
 
     return [
@@ -431,6 +485,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
     countries,
     historicalCountries,
     continentIdByCountryId,
+    continentIdsByHistoricalId,
     selectedContinent,
     selectedContinentName,
     selectedCountry,

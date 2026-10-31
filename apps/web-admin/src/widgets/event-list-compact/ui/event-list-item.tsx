@@ -27,6 +27,7 @@ import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { eventTypeShort, formatDomainPath } from '@/entities/event/model/event-type-registry'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
+import { richTextToPlainText } from '@/shared/lib/rich-text-plain'
 import { titleWithoutOwnDate } from '@/shared/lib/title-date'
 
 import { yearSpanGeometry } from '../lib/year-span'
@@ -249,18 +250,22 @@ function buildMatchReason(
   node: EventHierarchyNode,
   event: HistoricalEvent,
   query: string | undefined,
-): { kind: '설명' | '키워드'; text: string } | null {
+): { kind: '설명' | '장소' | '키워드'; text: string } | null {
   const term = query?.trim().toLowerCase()
   if (!term) return null
   if (node.title.toLowerCase().includes(term)) return null // 제목에 이미 보인다
 
-  const summary = node.summary || event.description || ''
+  const summary = richTextToPlainText(node.summary || event.description || '')
   const at = summary.toLowerCase().indexOf(term)
   if (at >= 0) {
     const from = Math.max(0, at - 20)
     const to = Math.min(summary.length, at + term.length + 20)
     const snippet = `${from > 0 ? '…' : ''}${summary.slice(from, to).trim()}${to < summary.length ? '…' : ''}`
     return { kind: '설명', text: snippet }
+  }
+
+  if (event.location && event.location.toLowerCase().includes(term)) {
+    return { kind: '장소', text: event.location }
   }
 
   const hitKeyword = (event.keywords ?? []).find((keyword) =>
@@ -809,14 +814,6 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
               하나씩 남긴다. 설명이 제목 뒤를 잇는 조판이 되면서 그 자리는 실제 내용이 쓴다.
               양성 신호(앵커 배지·디스클로저 셰브론)만으로 두 층은 이미 갈린다.
             */}
-            {matchReason && (
-              <MatchReason
-                title={`${matchReason.kind} 일치: ${matchReason.text}`}
-              >
-                <MatchReasonKind>{matchReason.kind}</MatchReasonKind>
-                {highlightMatches(matchReason.text, searchQuery)}
-              </MatchReason>
-            )}
             {/* 부모가 다른 밴드로 갈라져 나가 화면에서 인접하지 않을 때만 계보를 밝힌다.
                 부모가 바로 위 행이면 칩은 순수한 중복이고, 1914년처럼 자식 18행이
                 이어지는 구간에서 매 행에 붙으면 밀도만 잡아먹는다(검토 IDX-7). */}
@@ -884,23 +881,20 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 {isMatch ? '하위' : '문맥 · 하위'} {hiddenChildCount}건 조건 밖
               </FilteredOutHint>
             )}
-        {/**
-             * 요약 — 넓은 카드 전용 신축 열. 좁은 카드·모바일에서는 박스를 만들지 않는다.
-             * aria-hidden이 아닌 이유: 스크린리더에도 실제로 값이 있는 텍스트다.
-             *
-             * 검색 중이면 설명 앞머리가 아니라 **매칭 근거**를 싣는다. 둘 다 설명에서 오지만
-             * 답하는 질문이 다르다 — 앞머리는 "무슨 사건인가", 근거는 "왜 이 행이 결과에
-             * 있는가"다. 검색 결과의 76%가 제목에 검색어가 없는 행이라, 검색 중에 근거를
-             * 앞머리로 덮으면 CR-3이 고쳤던 '왜 걸렸는지 알 수 없는 목록'으로 되돌아간다.
-             */}
+            {/**
+              * 검색 매칭 근거 — 제목에 검색어가 없을 때 "왜 이 행이 결과에 있는가"를 밝힌다.
+              * 과거에는 좁은 카드용(MatchReason)과 넓은 카드용(TrailingNote) 두 노드를 동시에
+              * 마운트하고 컨테이너 쿼리로 한쪽을 숨겼으나, 스크린리더/접근성 트리에서 같은 근거가
+              * 2번 읽히고 DOM 노드가 2배로 생성되므로 단일 노드로 통합한다.
+              */}
             {matchReason && (
-              <TrailingNote
+              <MatchReason
                 data-row-summary=""
                 title={`${matchReason.kind} 일치: ${matchReason.text}`}
               >
                 <MatchReasonKind>{matchReason.kind}</MatchReasonKind>{' '}
                 {highlightMatches(matchReason.text, searchQuery)}
-              </TrailingNote>
+              </MatchReason>
             )}
           </TitleText>
         </TitleCell>
@@ -911,7 +905,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           <KeywordCell aria-hidden="true">
             {visibleKeywords.map((keyword) => (
               <KeywordChip key={keyword} title={keyword}>
-                {keyword}
+                {highlightMatches(keyword, searchQuery)}
               </KeywordChip>
             ))}
             {hiddenKeywordCount > 0 && (
@@ -2361,7 +2355,8 @@ const CategoryLabel = styled.span.attrs(() => ({ 'data-col': 'cat' }) as Record<
   }
 `
 
-/* 검색 매칭 근거 — 제목에 검색어가 없을 때만 나타난다. 제목을 밀어내지 않게 축소·말줄임. */
+/* 검색 매칭 근거 — 제목에 검색어가 없을 때만 나타난다. 제목을 밀어내지 않게 축소·말줄임.
+ * 단일 노드로 마운트하고 컨테이너 폭에 따라 flex 동작만 전환한다. */
 const MatchReason = styled.span`
   display: inline-flex;
   align-items: center;
@@ -2377,60 +2372,17 @@ const MatchReason = styled.span`
   text-overflow: ellipsis;
 
   /* 좁은 폭에서도 **넓은 절반(481~640px)에서는 되살린다.**
-   * 검색 결과의 76%가 제목에 검색어가 없는 행인데(매칭 술어는 제목·설명·키워드 3필드),
+   * 검색 결과의 76%가 제목에 검색어가 없는 행인데(매칭 술어는 제목·설명·키워드·장소 4필드),
    * 근거를 통째로 지우면 모바일 검색은 '왜 걸렸는지 알 수 없는 목록'이 된다.
    * 480px 이하에서만 포기한다 — 거기서는 제목 자체의 폭이 먼저 위협받는다. */
   @media (max-width: 480px) {
     display: none;
   }
 
-  /* 요약 열이 켜지면 매칭 근거는 그 안으로 흡수된다 — 같은 필드(설명)를 두 지점에서
-     말하게 두면 제목 뒤에 붙은 근거가 제목 트랙을 다시 밀어낸다. */
-  @container eventcard (min-width: ${LIST_STEPS.summary}px) {
-    display: none;
-  }
-`
-
-/**
- * 요약 셀 — 넓은 카드에서 죽은 폭을 잉크로 되돌리는 유일한 흡수체.
- *
- * 기본이 `display: none`이고 컨테이너 게이트에서만 켜진다. 좁은 카드에서 켜지면 제목이
- * 0폭으로 붕괴하던 과거 회귀를 다시 여는 셈이라, **모바일은 이중으로 차단**한다
- * (컨테이너 게이트를 통과할 수 없는 폭이지만 규약을 코드로 못박아 둔다).
- */
-/**
- * 설명 — **열이 아니라 제목 뒤를 잇는 글**이다.
- *
- * 고정 폭 열이던 시절엔 제목 트랙(520~760px)이 가장 긴 제목에 맞춰져 있어 제목 잉크 끝과
- * 이 글 사이가 중앙값 270px 벌어졌다. 이제 같은 셀 안에서 제목 바로 뒤를 잇고 남는 폭을
- * 전부 먹는다 — 보이는 글자 수가 340px 고정에서 배 이상 늘고, 건너뛸 빈 구간이 사라진다.
- */
-/**
- * 제목 뒤에 붙는 **검색 근거** 한 줄 — 예전의 설명 자리다.
- *
- * 설명을 걷어낸 뒤 이 자리에 남는 것은 "왜 이 행이 결과에 있는가"뿐이다. 검색 결과의
- * 76%가 제목에 검색어가 없는 행이라, 이 줄이 없으면 목록이 '왜 걸렸는지 알 수 없는
- * 행 묶음'이 된다. 검색 중이 아니면 아예 렌더되지 않으므로 평소 행은 제목 하나다.
- */
-const TrailingNote = styled.span`
-  display: none;
-
+  /* 넓은 카드에서는 제목이 자기 잉크만큼 쓰고 남는 폭을 신축적으로 받는다. */
   @container eventcard (min-width: ${LIST_STEPS.summary}px) {
     display: block;
-    /* 제목이 자기 잉크만큼 쓰고 남는 폭을 받는다 — 제목보다 먼저 줄어든다. */
     flex: 1 1 0;
-    min-width: 0;
-    font-size: var(--row-meta);
-    font-weight: 500;
-    letter-spacing: 0;
-    color: ${metaText};
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  @media (max-width: 640px) {
-    display: none;
   }
 `
 

@@ -436,12 +436,38 @@ export const useEventFilters = (
    * 통일**하는 값이다 — 예전엔 세기만 로드된 사건에서 파생되고 나머지 3축은 참조 DB를
    * 통째로 뱉어, 한 필터 바 안에서 축마다 다른 규약이 돌고 있었다.
    *
-   * 비용은 사건당 축 6벌 판정이라 오늘 규모(261건)에서 왕복 한 번보다 훨씬 싸고,
-   * deps가 `axisContext`(=필터 축 전체)라 필터를 만질 때만 다시 돈다.
+   * `scopeIds`(`?anchor=`) 또는 `anchorsOnly`(`?anchors=1`)가 켜져 있으면,
+   * 실제 목록 모수와 동일하게 범위 내 사건(또는 최상위 묶음 사건과 그 자손)으로 먼저 제한한 뒤
+   * 옵션 건수를 집계한다.
    */
+  const scopedEventsForCounts = useMemo(() => {
+    if (scopeIds) {
+      return events.filter((event) => scopeIds.has(event.id))
+    }
+    if (!anchorsOnly) {
+      return events
+    }
+    const anchorSubtreeIds = new Set<string>()
+    const stack: string[] = []
+    for (const event of events) {
+      if (isTreeRoot(event) && isCollectionEvent(event)) {
+        stack.push(event.id)
+      }
+    }
+    while (stack.length > 0) {
+      const currentId = stack.pop() as string
+      if (anchorSubtreeIds.has(currentId)) continue
+      anchorSubtreeIds.add(currentId)
+      for (const child of childrenByParent.get(currentId) ?? []) {
+        stack.push(child.id)
+      }
+    }
+    return events.filter((event) => anchorSubtreeIds.has(event.id))
+  }, [events, scopeIds, anchorsOnly, childrenByParent])
+
   const optionCounts = useMemo<FilterOptionCounts>(
-    () => buildFilterOptionCounts(events, axisContext),
-    [events, axisContext],
+    () => buildFilterOptionCounts(scopedEventsForCounts, axisContext),
+    [scopedEventsForCounts, axisContext],
   )
 
   // ===== 이벤트 정렬 =====

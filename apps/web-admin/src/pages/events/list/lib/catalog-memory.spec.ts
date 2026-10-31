@@ -11,8 +11,10 @@ import {
 describe('catalog-memory', () => {
   beforeEach(() => window.localStorage.clear())
 
-  it('열린 사건(event)은 빼고 쿼리를 기억한다', () => {
-    const params = new URLSearchParams('century=19&event=abc&sort=duration')
+  it('열린 사건(event)과 등록 모달(eventForm)은 빼고 쿼리를 기억한다', () => {
+    const params = new URLSearchParams(
+      'century=19&event=abc&eventForm=new&sort=duration',
+    )
     expect(toRememberedQuery(params)).toBe('century=19&sort=duration')
     saveCatalogQuery(params)
     expect(readCatalogQuery()).toBe('century=19&sort=duration')

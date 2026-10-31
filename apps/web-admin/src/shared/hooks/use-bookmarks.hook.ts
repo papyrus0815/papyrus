@@ -3,7 +3,8 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 
-const STORAGE_KEY = 'papyrus_event_bookmarks'
+export const EVENT_BOOKMARKS_STORAGE_KEY = 'papyrus_event_bookmarks'
+const STORAGE_KEY = EVENT_BOOKMARKS_STORAGE_KEY
 
 export const useBookmarks = () => {
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set())

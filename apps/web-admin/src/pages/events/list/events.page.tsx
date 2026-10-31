@@ -420,7 +420,7 @@ export const EventsCatalogPage: React.FC = () => {
     },
     [bookmarks, toggleBookmark],
   )
-  const { recentEvents, addRecentEvent } = useRecentEvents()
+  const { recentEvents, addRecentEvent, removeRecentEvent } = useRecentEvents()
 
   // ===== Entity: 사건 데이터 =====
   // useEvents는 React Query 무한 스크롤로 전환됨(a1b5b6f85).
@@ -681,7 +681,10 @@ export const EventsCatalogPage: React.FC = () => {
     anyOverlayOpen,
     closeTopOverlay,
   } = useCatalogModals(
-    createModalOpen || modalPersonId !== null || modalCountry !== null,
+    createModalOpen ||
+      deletedEventsOpen ||
+      modalPersonId !== null ||
+      modalCountry !== null,
   )
 
   // ===== 사건 선택 시 최근 본 목록에 추가 =====
@@ -845,6 +848,18 @@ export const EventsCatalogPage: React.FC = () => {
     !hasMore &&
     !isError &&
     !loadMoreFailed
+
+  useEffect(() => {
+    if (
+      eventsSettled &&
+      anchorId !== null &&
+      !eventByIdMap.has(anchorId) &&
+      !nodeIndexMap.has(anchorId)
+    ) {
+      setAnchorId(null)
+      notify.warning('링크의 상위 사건 조망 대상을 찾을 수 없어 해제했습니다')
+    }
+  }, [eventsSettled, anchorId, eventByIdMap, nodeIndexMap, setAnchorId])
   /**
    * 딥링크/새로고침 복원 — lazy 레지스트리는 세션 state라 리로드 후 비어 있다.
    * TREE에서 lazy 사건을 선택한 URL(?event=)을 새로고침·공유하면 목록 인덱스
@@ -1001,11 +1016,19 @@ export const EventsCatalogPage: React.FC = () => {
   )
 
   /** 군주 즉위 구분선 — 목록에 나온 사건들의 관련국 군주만(국가 필터가 있으면 그 나라만) */
+  const hasScopeNarrowing =
+    selectedCategory !== FILTER_ALL ||
+    selectedSubtype !== FILTER_ALL ||
+    selectedContinent !== FILTER_ALL ||
+    bookmarksOnly ||
+    anchorsOnly ||
+    Boolean(anchorId)
   const allReignMarkers = useReignMarkers(
     listRenderedHierarchy,
     eventByIdMap,
     selectedCountry,
     historicalCountries,
+    hasScopeNarrowing,
   )
   /**
    * 검색 중에는 연표 표지를 싣지 않는다(2026-10-15). 표지는 연대 흐름의 **맥락**인데, 검색은
@@ -1122,22 +1145,18 @@ export const EventsCatalogPage: React.FC = () => {
         // 평면 보기에는 계층이 없다 — 부모 귀속을 끄지 않으면 정렬 방향 토글 한 번에
         // 67행이 다른 밴드로 옮겨 간다(검토 IDX-8).
         hierarchy: !showFlatView,
-        // 헤더리스·공백 판정의 모수는 **하위 접힘 이전**이어야 한다(검토 IDX-6·IDX-9).
-        baselineItems: visibleFlattenedHierarchy,
         // 군주 즉위 연도는 사건이 없어도 연 그룹을 세운다 — 표지가 그 해 머리글 아래에 선다.
-        // 연 그룹이 꺼지는 '등록순'에서는 싣지 않는다(위젯도 그때는 표지를 그리지 않는다).
-        extraYears:
-          sortBy !== 'created'
-            ? (range) => reignAccessionYears(reignMarkers, range)
-            : undefined,
+        // 연 그룹이 꺼지는 비그룹 정렬('등록순'·'하위 많은 순')에서는 싣지 않는다.
+        extraYears: listGrouped
+          ? (range) => reignAccessionYears(reignMarkers, range)
+          : undefined,
       }),
     [
       listRenderedHierarchy,
-      visibleFlattenedHierarchy,
       sortDirection,
       hasNarrowingFilters,
       showFlatView,
-      sortBy,
+      listGrouped,
       reignMarkers,
     ],
   )
@@ -1151,6 +1170,7 @@ export const EventsCatalogPage: React.FC = () => {
     [yearBuckets.allYears],
   )
   const centuriesOnly =
+    listGrouped &&
     !showFlatView &&
     presentCenturies.length > 0 &&
     presentCenturies.every((century) => collapsedCenturies.has(century))
@@ -1509,8 +1529,17 @@ export const EventsCatalogPage: React.FC = () => {
       century: optionCounts.dropOneOut.century,
       keyword: optionCounts.dropOneOut.keyword,
       bookmarks: optionCounts.dropOneOut.bookmark,
+      period: optionCounts.dropOneOut.period,
     }
-    const chips: FilterChip[] = [...filterSummaryChips]
+    if (anchorId || anchorsOnly) {
+      const globalMatchCount = events.filter(matchesEvent).length
+      if (anchorId) releaseCountByChipKey.anchor = globalMatchCount
+      if (anchorsOnly) releaseCountByChipKey.anchors = globalMatchCount
+    }
+    const chips: FilterChip[] = [
+      ...(anchorScopeChip ? [anchorScopeChip] : []),
+      ...filterSummaryChips,
+    ]
     if (bookmarksOnly) {
       chips.push({
         key: 'bookmarks',
@@ -1530,10 +1559,15 @@ export const EventsCatalogPage: React.FC = () => {
       releaseCount: releaseCountByChipKey[chip.key],
     }))
   }, [
-    filterSummaryChips,
-    bookmarksOnly,
+    anchorId,
+    anchorScopeChip,
     anchorsOnly,
+    bookmarksOnly,
+    events,
+    filterSummaryChips,
+    matchesEvent,
     optionCounts,
+    setAnchorsOnly,
     setBookmarksOnly,
   ])
   /**
@@ -1762,18 +1796,19 @@ export const EventsCatalogPage: React.FC = () => {
     }))
     // 현재 화면은 로드·필터된 일부만 → 전체보다 적으면 부분 내보내기임을 확인.
     // serverTotal은 *최상위(parentEventId=null)* 개수이므로, 부분 여부 판정은
-    // 로드된 *최상위* 수(depth 0)로 비교해야 한다. exportedCount(하위 포함)로 비교하면
-    // 자식이 많을 때 exportedCount>serverTotal이 되어 부분 경고가 조용히 억제됐다.
+    // 평면 보기(showFlatView)에서도 왜곡되지 않게 isTreeRoot 기준으로 비교한다.
     const exportedCount = exported.filter((entry) => entry.event).length
-    const loadedRootCount = visibleFlattenedHierarchy.filter(
-      (item) => item.depth === 0,
+    const loadedRootCount = exported.filter(
+      (entry) => entry.event && isTreeRoot(entry.event),
     ).length
     if (
       typeof serverTotal === 'number' &&
       loadedRootCount < serverTotal &&
       !(await confirm({
         title: '확인',
-        message: `등록된 최상위 사건 ${serverTotal.toLocaleString()}건 중 현재 로드·필터된 ${loadedRootCount.toLocaleString()}건(하위 사건 포함 ${exportedCount.toLocaleString()}건)만 내보냅니다. 계속할까요?`,
+        message: hasMore
+          ? `등록된 최상위 사건 ${serverTotal.toLocaleString()}건 중 아직 다 불러오지 않아 현재 로드·필터된 ${loadedRootCount.toLocaleString()}건(하위 사건 포함 ${exportedCount.toLocaleString()}건)만 내보냅니다. 계속할까요?`
+          : `전체 최상위 사건 ${serverTotal.toLocaleString()}건 중 현재 필터 조건에 맞는 ${loadedRootCount.toLocaleString()}건(하위 사건 포함 ${exportedCount.toLocaleString()}건)만 내보냅니다. 계속할까요?`,
       }))
     ) {
       return
@@ -1791,6 +1826,7 @@ export const EventsCatalogPage: React.FC = () => {
     eventByIdMap,
     nodeIndexMap,
     serverTotal,
+    hasMore,
     barFilterChips,
     bookmarksOnly,
     anchorsOnly,
@@ -1876,7 +1912,10 @@ export const EventsCatalogPage: React.FC = () => {
       // 라이브 영역 고지(A11Y-12)와 하단 '표시 N행'이 화면과 어긋난다.
       displayedCount={navigableItems.length}
       displayedRootCount={
-        navigableItems.filter((item) => item.depth === 0).length
+        navigableItems.filter((item) => {
+          const event = eventByIdMap.get(item.node.id) ?? item.parentEvent
+          return event ? isTreeRoot(event) : item.depth === 0
+        }).length
       }
       hasMoreData={hasMore}
       bookmarks={bookmarks}
@@ -1895,7 +1934,6 @@ export const EventsCatalogPage: React.FC = () => {
       headerStats={
         <CatalogHeaderStats
           events={statsEvents}
-          dbCategories={dbCategories}
           visibleCount={filtersOrSearchActive ? matchedCount : undefined}
           serverTotal={serverTotal}
           authoritativeTotal={serverTotal ?? rootLoadedCount}
@@ -1923,8 +1961,11 @@ export const EventsCatalogPage: React.FC = () => {
   const handleAfterDelete = useCallback(
     (deletedId: string) => {
       if (selectedEventId === deletedId) setSelectedEventId(null)
-      // 지운 사건의 북마크도 함께 정리 — 안 하면 배지 숫자와 '북마크만' 결과가 어긋난다.
+      if (anchorId === deletedId) setAnchorId(null)
+      // 지운 사건의 북마크·최근 본 사건도 함께 정리 — 안 하면 배지 숫자와 '북마크만' 결과,
+      // 또는 사이드바/빈 상태 추천의 최근 본 사건 목록이 어긋난다.
       removeBookmark(deletedId)
+      removeRecentEvent(deletedId)
       // lazy 레지스트리에서도 제거 — 남겨두면 존재 판정·드로어 폴백이 삭제된 사건의
       // stale 스냅샷을 계속 '실재'로 신뢰한다(뒤로가기로 ?event가 복원되는 경로).
       // 세션 내 수정 stale은 byParent refetch가 같은 키를 덮어써 해소되므로 별도 조치 불요.
@@ -1958,7 +1999,14 @@ export const EventsCatalogPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
       queryClient.invalidateQueries({ queryKey: eventKeys.count() })
     },
-    [selectedEventId, queryClient, removeBookmark],
+    [
+      selectedEventId,
+      anchorId,
+      setAnchorId,
+      queryClient,
+      removeBookmark,
+      removeRecentEvent,
+    ],
   )
 
   /**
@@ -2049,6 +2097,10 @@ export const EventsCatalogPage: React.FC = () => {
       isOutOfScope={selectedEventId !== null && selectedIndex === -1}
       onResetFilters={handleResetAll}
       onClose={clearSelectedEvent}
+      isBookmarked={selectedEventId ? bookmarks.has(selectedEventId) : false}
+      onToggleBookmark={handleToggleBookmark}
+      onEnterAnchorScope={enterAnchorScope}
+      onOpenCountryModal={setModalCountry}
     />
   )
 
@@ -2104,7 +2156,9 @@ export const EventsCatalogPage: React.FC = () => {
     // 하위 사건 일괄 접기/펼치기(검토 CR-5) — 판정은 위 실측값이 한다.
     childrenCollapsed,
     hasCollapsibleChildren,
-    collapsedBandCount: collapsedYears.size + collapsedCenturies.size,
+    collapsedBandCount: listGrouped
+      ? collapsedYears.size + collapsedCenturies.size
+      : 0,
     onExpandAllBands: handleExpandAllBands,
     onCollapseAllChildren: collapseAllChildren,
     onExpandAllChildren: expandAllChildren,
@@ -2128,7 +2182,9 @@ export const EventsCatalogPage: React.FC = () => {
         onCollapseAllChildren={collapseAllChildren}
         onExpandAllChildren={expandAllChildren}
         centuriesOnly={centuriesOnly}
-        canToggleCenturiesOnly={!showFlatView && presentCenturies.length > 0}
+        canToggleCenturiesOnly={
+          listGrouped && !showFlatView && presentCenturies.length > 0
+        }
         onToggleCenturiesOnly={toggleCenturiesOnly}
         onExportJson={handleExportJson}
         onOpenShortcutHelp={openShortcutHelp}
@@ -2282,6 +2338,10 @@ export const EventsCatalogPage: React.FC = () => {
       <DeletedEventsModal
         isOpen={deletedEventsOpen}
         onClose={() => setDeletedEventsOpen(false)}
+        onPermanentDelete={(deletedId) => {
+          removeBookmark(deletedId)
+          removeRecentEvent(deletedId)
+        }}
       />
     </>
   )

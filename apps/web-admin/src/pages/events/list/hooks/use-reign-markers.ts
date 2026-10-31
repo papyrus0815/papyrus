@@ -59,6 +59,7 @@ export function useReignMarkers(
   eventById: Map<string, HistoricalEvent>,
   selectedCountry: string,
   historicalCountries: readonly HistoricalCountryTimelineItem[] = [],
+  hasNarrowingScope = false,
 ): ReignMarker[] {
   /* 군주 즉위 + 대통령·총리 '취임' — 직위 보유 단일 피드를 군주직 여부로 가른다 */
   const { data: officeHoldings } = useQuery({
@@ -79,7 +80,17 @@ export function useReignMarkers(
   })
 
   const countryIds = useMemo(() => {
-    if (selectedCountry !== FILTER_ALL) return new Set([selectedCountry])
+    if (selectedCountry !== FILTER_ALL) {
+      const ids = new Set<string>([selectedCountry])
+      // 현대 국가로 필터를 걸었을 때 그 현대 국가에 연결된 역사국가(조선, 프로이센 등)의
+      // 군주 즉위·지도자 재임·기업 설립 표지도 함께 포함되도록 연결 ID를 합친다.
+      for (const country of historicalCountries) {
+        if ((country.parentModernCountryIds ?? []).includes(selectedCountry)) {
+          ids.add(country.id)
+        }
+      }
+      return ids
+    }
     const ids = new Set<string>()
     for (const item of items) {
       const event = eventById.get(item.node.id) ?? item.parentEvent
@@ -89,7 +100,7 @@ export function useReignMarkers(
       )
     }
     return ids
-  }, [items, eventById, selectedCountry])
+  }, [items, eventById, selectedCountry, historicalCountries])
 
   /**
    * 목록에 **이미 사건으로** 있는 건국·멸망 — 역할(FOUNDED/DISSOLVED)로 이어진 것,
@@ -125,10 +136,13 @@ export function useReignMarkers(
 
   const statehoodMarkers = useMemo(() => {
     if (historicalCountries.length === 0) return NO_MARKERS
+    const restrictToScope = selectedCountry !== FILTER_ALL || hasNarrowingScope
     const inScope = (country: HistoricalCountryTimelineItem) =>
-      selectedCountry !== FILTER_ALL
-        ? country.id === selectedCountry ||
-          (country.parentModernCountryIds ?? []).includes(selectedCountry)
+      restrictToScope
+        ? countryIds.has(country.id) ||
+          (country.parentModernCountryIds ?? []).some((id) =>
+            countryIds.has(id),
+          )
         : true
     return toStatehoodMarkers(
       historicalCountries as HistoricalCountryTimelineItem[],
@@ -147,18 +161,26 @@ export function useReignMarkers(
         )
       },
     )
-  }, [historicalCountries, selectedCountry, statehoodEvents])
+  }, [
+    historicalCountries,
+    selectedCountry,
+    hasNarrowingScope,
+    countryIds,
+    statehoodEvents,
+  ])
 
   /**
-   * 기업 설립 표지 — 역사 국가 건국과 같은 범위 규약: 국가 필터가 있으면 그 나라(현대·역사)
+   * 기업 설립 표지 — 역사 국가 건국과 같은 범위 규약: 국가·범위 필터가 있으면 해당 범위의
    * 기업만, 없으면 **등록된 기업 전부**. 연도 범위는 목록 사건의 범위를 따른다.
    */
   const companyMarkers = useMemo(() => {
     if (!companies?.length) return NO_MARKERS
+    const restrictToScope = selectedCountry !== FILTER_ALL || hasNarrowingScope
     const inScope = (company: CompanyTimelineItem) =>
-      selectedCountry === FILTER_ALL ||
-      company.countryId === selectedCountry ||
-      company.historicalCountryId === selectedCountry
+      !restrictToScope ||
+      (company.countryId != null && countryIds.has(company.countryId)) ||
+      (company.historicalCountryId != null &&
+        countryIds.has(company.historicalCountryId))
     return toCompanyFoundingMarkers(companies, inScope, (company, year) => {
       // 'SpaceX 설립' 사건과 기업명 '스페이스x'처럼 대소문자·띄어쓰기만 다른 표기를 같은 이름으로 본다
       const name = normalizeName(company.name)
@@ -167,7 +189,13 @@ export function useReignMarkers(
           normalizeName(title).includes(name) && COMPANY_FOUNDING_WORDS.test(title),
       )
     })
-  }, [companies, selectedCountry, statehoodEvents])
+  }, [
+    companies,
+    selectedCountry,
+    hasNarrowingScope,
+    countryIds,
+    statehoodEvents,
+  ])
 
   const leaderMarkers = useMemo(() => {
     if (!reigns?.length && !heads?.length) return NO_MARKERS

@@ -286,20 +286,27 @@ describe('useEventFilters — 대륙 술어', () => {
     expect(result.current.matchesEvent(asian)).toBe(false)
   })
 
-  it('역사국가로만 태그된 사건은 대륙 축에서 빠진다 (v1 규약 — 회귀 가드)', () => {
+  it('역사국가로만 태그된 사건도 브리지 현대 국가를 통해 대륙 축에 합류한다', () => {
     const historicalOnly = event('h', {
       relatedHistoricalCountries: [{ id: 'joseon', name: '조선' }],
     })
+    const unbridgedHistorical = event('unbridged', {
+      relatedHistoricalCountries: [{ id: 'atlantis', name: '아틀란티스' }],
+    })
     const { result } = renderFilters({
-      events: [historicalOnly],
+      events: [historicalOnly, unbridgedHistorical],
       countries: COUNTRIES,
       continents: CONTINENTS,
       historicalCountries: [
         { id: 'joseon', name: '조선', parentModernCountryIds: ['kr'] },
+        { id: 'atlantis', name: '아틀란티스', parentModernCountryIds: [] },
       ],
     })
 
     act(() => result.current.setSelectedContinent('asia'))
+    expect(result.current.matchesEvent(historicalOnly)).toBe(true)
+    expect(result.current.matchesEvent(unbridgedHistorical)).toBe(false)
+    act(() => result.current.setSelectedContinent('europe'))
     expect(result.current.matchesEvent(historicalOnly)).toBe(false)
   })
 })
@@ -743,5 +750,11 @@ describe('useEventFilters — 앵커 스코프(?anchor=)는 모수를 좁힌다'
   it('존재하지 않는 anchor id는 0행 — 조용히 전역 모수로 되돌아가지 않는다', () => {
     const { result } = renderFilters({ events, scopeAnchorId: 'ghost' })
     expect(result.current.filteredEvents).toHaveLength(0)
+  })
+
+  it('앵커 스코프 안에서는 optionCounts도 스코프 내 사건만 집계한다', () => {
+    const { result } = renderFilters({ events, scopeAnchorId: 'loan' })
+    // loan + loan-1888 = 2건 (alliance, unrelated는 스코프 밖)
+    expect(result.current.optionCounts.unfiltered).toBe(2)
   })
 })

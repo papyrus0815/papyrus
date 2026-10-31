@@ -21,6 +21,7 @@ interface Props {
   dbCategories: EventDomainOption[]
   selectedCategory: string
   setSelectedCategory: (v: string) => void
+  categoryCounts?: ReadonlyMap<string, number>
 
   // 국가
   showCountryModal: boolean
@@ -44,6 +45,7 @@ export const CatalogEntityFilterModals: React.FC<Props> = ({
   dbCategories,
   selectedCategory,
   setSelectedCategory,
+  categoryCounts,
   showCountryModal,
   setShowCountryModal,
   countries,
@@ -95,6 +97,7 @@ export const CatalogEntityFilterModals: React.FC<Props> = ({
         dbCategories={dbCategories}
         selectedCategory={selectedCategory}
         onSelect={setSelectedCategory}
+        categoryCounts={categoryCounts}
       />
 
       {/**

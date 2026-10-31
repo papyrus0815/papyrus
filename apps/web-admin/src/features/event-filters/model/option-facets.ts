@@ -172,6 +172,14 @@ export function buildFilterOptionCounts(
         counted.add(continentId)
         bump(continent, continentId)
       }
+      for (const related of event.relatedHistoricalCountries ?? []) {
+        for (const modernId of modernIdsByHistoricalId.get(related.id) ?? []) {
+          const continentId = context.countryContinentMap.get(modernId)
+          if (!continentId || counted.has(continentId)) continue
+          counted.add(continentId)
+          bump(continent, continentId)
+        }
+      }
     }
 
     if (passesWithout.century) {

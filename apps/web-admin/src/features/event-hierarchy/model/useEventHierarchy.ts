@@ -10,6 +10,7 @@ import type {
   EventHierarchyNode,
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
+import { getDescendantCount } from './event-kind'
 
 /**
  * flattenedHierarchy 단일 항목 — useEventHierarchy의 출력 계약.
@@ -68,22 +69,39 @@ export interface FlattenedHierarchyItem {
 }
 
 /**
- * 노드 기간(period) 정렬 비교자 — 네이티브 Date 대신 정수 키/연 단위 기간을 써
+ * 노드 정렬 비교자 — 네이티브 Date 대신 정수 키/연 단위 기간을 써
  * BC(음수 연도)·미상 날짜를 안정 정렬한다. 미상은 NEGATIVE_INFINITY로 한쪽 끝에 모음.
+ * `created`·`descendants` 정렬 축도 루트 정렬(useEventFilters)과 동일한 규약으로 지원한다.
  */
 const compareNodes = (
-  aStart: string,
-  aEnd: string | undefined,
-  bStart: string,
-  bEnd: string | undefined,
+  aNode: EventHierarchyNode,
+  bNode: EventHierarchyNode,
   sortBy: string,
+  eventById: ReadonlyMap<string, HistoricalEvent>,
 ): number => {
   if (sortBy === 'duration') {
-    return isoYearSpan(aStart, aEnd) - isoYearSpan(bStart, bEnd)
+    return (
+      isoYearSpan(aNode.period.start, aNode.period.end) -
+      isoYearSpan(bNode.period.start, bNode.period.end)
+    )
+  }
+  if (sortBy === 'created') {
+    const createdKey = (node: EventHierarchyNode) => {
+      const raw = (eventById.get(node.id) as { createdAt?: string | null } | undefined)
+        ?.createdAt
+      const time = raw ? Date.parse(raw) : NaN
+      return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
+    }
+    const diff = createdKey(aNode) - createdKey(bNode)
+    if (diff !== 0) return diff
+  }
+  if (sortBy === 'descendants') {
+    const diff = getDescendantCount(aNode) - getDescendantCount(bNode)
+    if (diff !== 0) return diff
   }
   return (
-    (dateSortKey(aStart) ?? Number.NEGATIVE_INFINITY) -
-    (dateSortKey(bStart) ?? Number.NEGATIVE_INFINITY)
+    (dateSortKey(aNode.period.start) ?? Number.NEGATIVE_INFINITY) -
+    (dateSortKey(bNode.period.start) ?? Number.NEGATIVE_INFINITY)
   )
 }
 
@@ -236,15 +254,9 @@ export const useEventHierarchy = (
         addAllEventsFlat(event.hierarchy, event, null)
       })
 
-      // 평면 모드에서는 정렬 기준에 따라 재정렬 (BC·미상 안전)
+      // 평면 모드에서는 정렬 기준에 따라 재정렬 (BC·미상·등록순·하위 많은 순 안전)
       result.sort((a, b) => {
-        const comparison = compareNodes(
-          a.node.period.start,
-          a.node.period.end,
-          b.node.period.start,
-          b.node.period.end,
-          sortBy,
-        )
+        const comparison = compareNodes(a.node, b.node, sortBy, eventById)
         return sortDirection === 'asc' ? comparison : -comparison
       })
     } else {
@@ -276,13 +288,7 @@ export const useEventHierarchy = (
         const sortedChildren = (node.children ?? [])
           .filter(keepsNode)
           .sort((left, right) => {
-            const comparison = compareNodes(
-              left.period.start,
-              left.period.end,
-              right.period.start,
-              right.period.end,
-              sortBy,
-            )
+            const comparison = compareNodes(left, right, sortBy, eventById)
             return sortDirection === 'asc' ? comparison : -comparison
           })
 

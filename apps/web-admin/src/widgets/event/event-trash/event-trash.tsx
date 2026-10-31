@@ -62,13 +62,18 @@ export function useDeleteEventToTrash() {
   return async (
     target: { id: string; title: string; parentEventId?: string | null },
     withChildren: boolean,
+    onUndo?: () => void,
   ): Promise<boolean> => {
     try {
       await deleteEvent(target.id, { withChildren })
       refreshEverywhere(queryClient, target.id)
       notify.action(`'${target.title}'을(를) 휴지통으로 옮겼습니다`, {
         label: '되돌리기',
-        onClick: () => void restoreEventFromTrash(queryClient, target),
+        onClick: () => {
+          void restoreEventFromTrash(queryClient, target).then((restored) => {
+            if (restored) onUndo?.()
+          })
+        },
       })
       return true
     } catch {

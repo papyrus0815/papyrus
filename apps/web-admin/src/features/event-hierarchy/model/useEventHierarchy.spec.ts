@@ -270,3 +270,71 @@ describe('useEventHierarchy — 손자까지 펼침 모수에 든다', () => {
     ).toHaveLength(3)
   })
 })
+
+describe('useEventHierarchy — 평면 보기(showFlatView)에서 created·descendants 정렬 보존', () => {
+  const eOldButNewCreated = {
+    id: 'e-old-date',
+    title: 'e-old-date',
+    domain: 'MILITARY',
+    createdAt: '2026-10-20T00:00:00.000Z',
+    hierarchy: {
+      id: 'e-old-date',
+      title: 'e-old-date',
+      summary: '',
+      period: { start: '1500-01-01' },
+      importance: 'notable',
+      children: [
+        {
+          id: 'c1',
+          title: 'c1',
+          summary: '',
+          period: { start: '1501-01-01' },
+          importance: 'notable',
+          children: [],
+        },
+        {
+          id: 'c2',
+          title: 'c2',
+          summary: '',
+          period: { start: '1502-01-01' },
+          importance: 'notable',
+          children: [],
+        },
+      ],
+    },
+  } as unknown as AnyEvent
+
+  const eRecentDateButOldCreated = {
+    id: 'e-recent-date',
+    title: 'e-recent-date',
+    domain: 'MILITARY',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    hierarchy: {
+      id: 'e-recent-date',
+      title: 'e-recent-date',
+      summary: '',
+      period: { start: '2020-01-01' },
+      importance: 'notable',
+      children: [],
+    },
+  } as unknown as AnyEvent
+
+  it('평면 보기 + 등록순(created, desc)이면 시작 연도가 아니라 createdAt 내림차순으로 정렬한다', () => {
+    const all = [eOldButNewCreated, eRecentDateButOldCreated]
+    const { result } = renderHook(() =>
+      useEventHierarchy(all, all, true, 'created', 'desc'),
+    )
+    const ids = result.current.flattenedHierarchy.map((item) => item.node.id)
+    expect(ids[0]).toBe('e-old-date')
+    expect(ids[1]).toBe('e-recent-date')
+  })
+
+  it('평면 보기 + 하위 많은 순(descendants, desc)이면 자손 수 내림차순으로 정렬한다', () => {
+    const all = [eRecentDateButOldCreated, eOldButNewCreated]
+    const { result } = renderHook(() =>
+      useEventHierarchy(all, all, true, 'descendants', 'desc'),
+    )
+    const ids = result.current.flattenedHierarchy.map((item) => item.node.id)
+    expect(ids[0]).toBe('e-old-date')
+  })
+})

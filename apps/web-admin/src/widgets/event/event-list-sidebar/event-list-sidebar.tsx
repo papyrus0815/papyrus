@@ -42,6 +42,8 @@ import { formatCenturyLabel } from '@/shared/lib/lifespan-text'
 import { titleWithoutOwnDate } from '@/shared/lib/title-date'
 import { pathKeys } from '@/shared/router'
 import { HighlightedText } from '@/shared/ui/highlighted-text'
+import { EVENT_BOOKMARKS_STORAGE_KEY } from '@/shared/hooks/use-bookmarks.hook'
+import { RECENT_EVENTS_STORAGE_KEY } from '@/shared/hooks/use-recent-events.hook'
 import {
   EntityListSidebar,
   type EntitySidebarGroup,
@@ -203,8 +205,8 @@ function EventListSidebarInner({
   const { events, isLoading, isError, refetch } = useEvents({
     autoLoadAll: true,
   })
-  const { pinnedIds, togglePin } = useSidebarPins('event-sidebar-pins')
-  const recentIds = useSidebarRecents('event-sidebar-recents', selectedId)
+  const { pinnedIds, togglePin } = useSidebarPins(EVENT_BOOKMARKS_STORAGE_KEY)
+  const recentIds = useSidebarRecents(RECENT_EVENTS_STORAGE_KEY, selectedId)
 
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')

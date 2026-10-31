@@ -75,9 +75,20 @@ it('영구 삭제는 확인을 거절하면 부르지 않는다', async () => {
   expect(permanentlyDeleteEvent).not.toHaveBeenCalled()
 })
 
-it('영구 삭제는 확인하면 부른다', async () => {
+it('영구 삭제는 확인하면 부르고 onPermanentDelete 콜백으로 상태를 정리한다', async () => {
   ;(confirm as jest.Mock).mockResolvedValue(true)
-  setup()
+  const onPermanentDelete = jest.fn()
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  renderWithTheme(
+    <QueryClientProvider client={queryClient}>
+      <DeletedEventsModal
+        isOpen
+        onClose={jest.fn()}
+        onPermanentDelete={onPermanentDelete}
+      />
+    </QueryClientProvider>,
+  )
   fireEvent.click(await screen.findByRole('button', { name: "'보오 전쟁' 영구 삭제" }))
   await waitFor(() => expect(permanentlyDeleteEvent).toHaveBeenCalledWith('ev-root'))
+  expect(onPermanentDelete).toHaveBeenCalledWith('ev-root')
 })

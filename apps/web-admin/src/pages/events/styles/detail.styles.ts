@@ -831,7 +831,10 @@ export const ActionDivider = styled.span`
 
 type ActionVariant = 'ghost' | 'ghost-danger' | 'primary'
 
-export const ActionButton = styled.button<{ $variant: ActionVariant }>`
+export const ActionButton = styled.button<{
+  $variant: ActionVariant
+  $active?: boolean
+}>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -854,7 +857,7 @@ export const ActionButton = styled.button<{ $variant: ActionVariant }>`
     pointer-events: none;
   }
 
-  ${({ $variant, theme }) => {
+  ${({ $variant, $active, theme }) => {
     if ($variant === 'primary') {
       // CreateEventButton과 동일한 filled primary
       return css`
@@ -895,14 +898,31 @@ export const ActionButton = styled.button<{ $variant: ActionVariant }>`
       width: 32px;
       height: 32px;
       padding: 0;
-      background: transparent;
-      border: 1px solid transparent;
-      color: ${theme.colors.text.secondary};
+      background: ${$active
+        ? theme.mode === 'dark'
+          ? 'rgba(245, 158, 11, 0.14)'
+          : 'rgba(245, 158, 11, 0.10)'
+        : 'transparent'};
+      border: 1px solid
+        ${$active ? 'rgba(245, 158, 11, 0.35)' : 'transparent'};
+      color: ${$active
+        ? theme.mode === 'dark'
+          ? '#fbbf24'
+          : '#d97706'
+        : theme.colors.text.secondary};
       &:hover {
-        background: ${theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.06)'
-          : 'rgba(15, 23, 42, 0.04)'};
-        color: ${theme.colors.text.primary};
+        background: ${$active
+          ? theme.mode === 'dark'
+            ? 'rgba(245, 158, 11, 0.22)'
+            : 'rgba(245, 158, 11, 0.16)'
+          : theme.mode === 'dark'
+            ? 'rgba(255, 255, 255, 0.06)'
+            : 'rgba(15, 23, 42, 0.04)'};
+        color: ${$active
+          ? theme.mode === 'dark'
+            ? '#fcd34d'
+            : '#b45309'
+          : theme.colors.text.primary};
       }
     `
   }}
@@ -969,32 +989,44 @@ export const ChipRow = styled.div`
  * Country chip — 평면 톤 통일 (이전 gradient 제거).
  * filter.styles.FilterChip / list-toolbar.ActiveFilterChip와 family.
  */
-export const CountryChip = styled.span`
+export const CountryChip = styled.span<{ $interactive?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-family: inherit;
   font-size: 12px;
   padding: 2px 7px;
+  border: none;
   border-radius: 6px;
   font-weight: 500;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : BRAND.primaryHover)};
-  /*
-   * 테두리 없음 — 이 칩은 **누를 수 없다**. 채움 + 1px 외곽선 + 600 굵기는 이 패널에서
-   * 유일하게 실제 버튼인 '상세 보기'와 같은 옷이라, 5개가 두 줄로 깔리면 정보가 아니라
-   * 버튼 밭으로 읽혔다(필터 칩 가족을 그대로 빌려 온 자리 — 거긴 누르는 칩이다).
-   * 면 tint만 남겨 '분류가 있는 값'이라는 사실만 싣는다.
-   */
+  cursor: ${({ $interactive }) => ($interactive ? 'pointer' : 'default')};
+  transition: filter 0.15s ease;
+
+  ${({ $interactive }) =>
+    $interactive &&
+    css`
+      &:hover {
+        filter: brightness(0.95);
+      }
+      &:focus-visible {
+        outline: none;
+        box-shadow: ${BRAND.focusRing};
+      }
+    `}
 `
 
 /* 역사적 국가 — amber 톤. 페이지 안에서 오직 이 chip만 amber라 색 분리 의도 보존. */
-export const HistoricalCountryChip = styled.span`
+export const HistoricalCountryChip = styled.span<{ $interactive?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-family: inherit;
   font-size: 12px;
   padding: 2px 7px;
+  border: none;
   border-radius: 6px;
   font-weight: 500;
   background: ${({ theme }) =>
@@ -1002,7 +1034,20 @@ export const HistoricalCountryChip = styled.span`
       ? 'rgba(245, 158, 11, 0.18)'
       : 'rgba(245, 158, 11, 0.10)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#92400e')};
-  /* 테두리 없음 — CountryChip과 같은 이유. 현대/역사 구분은 hue가 계속 맡는다. */
+  cursor: ${({ $interactive }) => ($interactive ? 'pointer' : 'default')};
+  transition: filter 0.15s ease;
+
+  ${({ $interactive }) =>
+    $interactive &&
+    css`
+      &:hover {
+        filter: brightness(0.95);
+      }
+      &:focus-visible {
+        outline: none;
+        box-shadow: ${BRAND.focusRing};
+      }
+    `}
 `
 
 /**

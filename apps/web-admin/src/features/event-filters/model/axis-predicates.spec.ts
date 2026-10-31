@@ -75,3 +75,25 @@ describe('세부 분야 축 — 분야와 독립', () => {
     expect(subtypeFilterLabel(SUBTYPE_NONE)).toBe('세부 없음')
   })
 })
+
+describe('대륙 축 — 역사 국가도 브리지 현대 국가를 통해 매칭', () => {
+  const joseonEvent: FilterableEvent = {
+    id: 'joseon-war',
+    relatedHistoricalCountries: [{ id: 'joseon' }],
+  }
+
+  it('역사 국가만 태그된 사건도 연결된 현대 국가의 대륙으로 매칭된다', () => {
+    const asiaCtx: FilterAxisContext = {
+      ...context(null),
+      selectedContinent: 'asia',
+      countryContinentMap: new Map([['kr', 'asia']]),
+      linkedHistoricalIdsByModernId: new Map([['kr', new Set(['joseon'])]]),
+    }
+    const europeCtx: FilterAxisContext = {
+      ...asiaCtx,
+      selectedContinent: 'europe',
+    }
+    expect(matchesFilterAxis(joseonEvent, 'continent', asiaCtx)).toBe(true)
+    expect(matchesFilterAxis(joseonEvent, 'continent', europeCtx)).toBe(false)
+  })
+})

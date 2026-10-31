@@ -14,14 +14,12 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { FaBuilding, FaCrown, FaFlag, FaLandmark } from 'react-icons/fa'
-import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import type { ListColumnKey, SortOption } from '@/features/event-list/lib'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { formatYearLabel, getCentury } from '@/shared/lib/iso-date'
-import { pathKeys } from '@/shared/router'
 
 import type {
   EventHierarchyNode,
@@ -256,7 +254,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   rovingTargetId = null,
   grouped = true,
 }) => {
-  const navigate = useNavigate()
   /**
    * 좁은 폭 판정을 **목록에서 한 번만** 한다. 행마다 useMediaQuery를 부르면 렌더된 행 수
    * (수백 개)만큼 matchMedia 리스너가 생긴다. 임계값은 행 스타일의 미디어쿼리와 동일하게 640px.

@@ -334,6 +334,36 @@ describe('EventListItem', () => {
       )
       expect(document.querySelector('[data-row-summary]')).toBeNull()
     })
+
+    it('장소(location)로 매칭된 경우 장소 근거를 표시한다', () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          searchQuery="베르사유"
+          event={{ ...(baseEvent as object), location: '프랑스 베르사유 궁전' } as never}
+        />,
+      )
+      expect(summaryText()).toContain('장소')
+      expect(summaryText()).toContain('프랑스 베르사유 궁전')
+    })
+
+    it('매칭 근거는 DOM에 한 번만 마운트되며 키워드 열 칩에도 검색어 하이라이트가 적용된다', () => {
+      const { container } = renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          searchQuery="핵협상"
+          event={
+            {
+              ...(baseEvent as object),
+              keywords: ['외교', '핵협상 타결'],
+            } as never
+          }
+        />,
+      )
+      expect(container.querySelectorAll('[data-row-summary]')).toHaveLength(1)
+      const keywordHighlight = container.querySelector('[data-col="kw"] mark')
+      expect(keywordHighlight).toHaveTextContent('핵협상')
+    })
   })
 
   it('조건 밖 하위 사건 고지는 버튼이며 되돌릴 수단을 준다', () => {

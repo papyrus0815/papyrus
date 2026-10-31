@@ -429,6 +429,43 @@ describe('FiltersPanel — 옵션 모집단 (검토 배치 7)', () => {
     expect(onSelectContinent).toHaveBeenCalledWith('all')
   })
 
+  it('현대 국가에 연결된 역사국가는 대륙 필터에 맞춰 필터링되고 다른 대륙 역사국가 선택 시 충돌 경고를 띄운다', () => {
+    renderWithTheme(
+      <FiltersPanel
+        {...baseProps}
+        countries={[
+          { id: 'de', name: '독일', continentId: 'continent-eu' },
+          { id: 'kr', name: '대한민국', continentId: 'continent-as' },
+        ] as never[]}
+        historicalCountries={[
+          { id: 'hc-prussia', name: '프로이센 왕국', parentModernCountryIds: ['de'] },
+          { id: 'hc-joseon', name: '조선', parentModernCountryIds: ['kr'] },
+        ] as never[]}
+        continents={[
+          { id: 'continent-eu', name: '유럽' },
+          { id: 'continent-as', name: '아시아' },
+        ] as never[]}
+        selectedContinent="continent-eu"
+        selectedCountry="hc-joseon"
+        onSelectContinent={jest.fn()}
+        onSelectCountry={jest.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '국가 조선' }))
+
+    // 유럽에 속하지 않는 역사국가(조선)가 선택되어 있으므로 대륙 불일치 경고가 뜬다
+    expect(
+      screen.getByText('선택한 국가는 유럽에 속하지 않습니다'),
+    ).toBeInTheDocument()
+
+    // 프로이센 왕국은 '역사 국가 · 유럽' 그룹에 속한다
+    const listbox = screen.getByRole('listbox')
+    expect(
+      within(listbox).getByRole('group', { name: '역사 국가 · 유럽' }),
+    ).toBeInTheDocument()
+  })
+
   it('옵션 우측에 건수가 붙는다 — 로드된 사건이 있을 때만 (IA-13)', () => {
     const optionCounts = {
       category: new Map([['MILITARY', 12]]),

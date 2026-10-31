@@ -60,7 +60,7 @@ export interface UseEventsOptions
 }
 
 /** 안정 queryKey — 옵션 변경 시 새 쿼리로 캐시 분리. 배열은 정렬 후 join. */
-const buildQueryKey = (opts: UseEventsOptions) =>
+const buildQueryKey = (opts: UseEventsOptions, effectivePageSize: number) =>
   [
     'events',
     {
@@ -76,7 +76,7 @@ const buildQueryKey = (opts: UseEventsOptions) =>
       hasNoCountries: !!opts.hasNoCountries,
       hasNoKeywords: !!opts.hasNoKeywords,
       createdSinceDays: opts.createdSinceDays ?? null,
-      pageSize: opts.pageSize ?? DEFAULT_PAGE_SIZE,
+      pageSize: effectivePageSize,
     },
   ] as const
 
@@ -99,7 +99,10 @@ export const useEvents = (options: UseEventsOptions = {}) => {
   const enabled = options.enabled ?? true
 
   const query = useInfiniteQuery({
-    queryKey: buildQueryKey(options),
+    queryKey: buildQueryKey(
+      options,
+      fetchAll ? EVENTS_PAGE_SIZE_ALL : requestedPageSize,
+    ),
     enabled,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {

@@ -205,20 +205,46 @@ export function matchesFilterAxis(
     }
 
     /**
-     * 대륙 필터 — relatedCountries(현대)만 고려. 역사적 국가는 직접
-     * continentId가 없어 v1에서는 제외(향후 HistoricalCountryModernCountry
-     * 조인으로 보강 가능).
+     * 대륙 필터 — 현대 국가(`relatedCountries`) 직접 소속뿐 아니라,
+     * 역사적 국가(`relatedHistoricalCountries`)도 브리지(`linkedHistoricalIdsByModernId`)로
+     * 연결된 현대 국가의 `continentId`를 통해 대륙 판정에 합류한다.
      */
-    case 'continent':
-      return (
-        context.selectedContinent === FILTER_ALL ||
-        (event.relatedCountries?.some(
+    case 'continent': {
+      if (context.selectedContinent === FILTER_ALL) return true
+      if (
+        event.relatedCountries?.some(
           (related) =>
             context.countryContinentMap.get(related.id) ===
             context.selectedContinent,
-        ) ??
-          false)
-      )
+        )
+      ) {
+        return true
+      }
+      if (
+        event.relatedHistoricalCountries &&
+        event.relatedHistoricalCountries.length > 0
+      ) {
+        for (const [
+          modernId,
+          historicalIds,
+        ] of context.linkedHistoricalIdsByModernId) {
+          if (
+            context.countryContinentMap.get(modernId) !==
+            context.selectedContinent
+          ) {
+            continue
+          }
+          if (
+            event.relatedHistoricalCountries.some((related) =>
+              historicalIds.has(related.id),
+            )
+          ) {
+            return true
+          }
+        }
+      }
+      return false
+    }
 
     /** 북마크 — 다른 축과 동등한 술어. gate가 null이면 이 축은 꺼져 있다. */
     case 'bookmark':

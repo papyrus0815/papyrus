@@ -31,6 +31,8 @@ import { restoreEventFromTrash, TRASH_RETENTION_DAYS } from '@/widgets/event/eve
 interface DeletedEventsModalProps {
   isOpen: boolean
   onClose: () => void
+  /** 영구 삭제 완료 후 북마크·최근 본 사건 등 클라이언트 상태 정리 콜백 */
+  onPermanentDelete?: (eventId: string) => void
 }
 
 /** 삭제 시각 — 며칠 전인지가 먼저 읽히도록 날짜만 */
@@ -50,7 +52,11 @@ function daysLeftLabel(value?: string | null): string | null {
   return left <= 0 ? '오늘 영구 삭제' : `${left}일 뒤 영구 삭제`
 }
 
-export function DeletedEventsModal({ isOpen, onClose }: DeletedEventsModalProps) {
+export function DeletedEventsModal({
+  isOpen,
+  onClose,
+  onPermanentDelete,
+}: DeletedEventsModalProps) {
   const queryClient = useQueryClient()
   /** 처리 중인 행 — 같은 행을 두 번 누르지 못하게, 다른 행은 계속 쓸 수 있게 */
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -93,6 +99,7 @@ export function DeletedEventsModal({ isOpen, onClose }: DeletedEventsModalProps)
     setPendingId(event.id)
     try {
       await permanentlyDeleteEvent(event.id)
+      onPermanentDelete?.(event.id)
       invalidateEventQueries(queryClient, { eventId: event.id })
       notify.success(`'${event.title}'을(를) 영구 삭제했습니다`)
     } catch {

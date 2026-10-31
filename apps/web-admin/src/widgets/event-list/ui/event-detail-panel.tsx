@@ -15,6 +15,7 @@ import styled from 'styled-components'
 import {
   FiAlertCircle,
   FiArrowRight,
+  FiBookmark,
   FiBookOpen,
   FiCalendar,
   FiChevronLeft,
@@ -48,7 +49,6 @@ import type {
 } from '@/pages/events/create/events.types'
 import * as Detail from '@/pages/events/styles/detail.styles'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
-import * as Modal from '@/pages/events/styles/modal.styles'
 import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import { ICON_SIZE } from '@/pages/events/styles/theme'
 import { pathKeys } from '@/shared/router'
@@ -69,8 +69,11 @@ interface EventDetailPanelProps {
   onSelectEvent?: (eventId: string) => void
   onExpandEvent?: (eventId: string) => void
   onShowSummary?: (eventId: string) => void
-  /** 삭제 후 부모가 캐시 invalidate 하도록 — 미전달 시 fallback으로 reload (기존 동작 유지) */
-  onAfterDelete?: (eventId: string) => void
+  /** 삭제 후 부모가 캐시 invalidate 하도록 — 미전달 시 fallback으로 reload (기존 동작 유지). 되돌리기 시 실행할 복원 함수를 반환할 수 있다. */
+  onAfterDelete?: (
+    eventId: string,
+    withChildren: boolean,
+  ) => (() => void) | void
   /** 이전/다음 사건으로 이동 — 키보드(↑↓)와 동등하나 마우스 사용자용. 더 이상 없으면 undefined. */
   onPrev?: () => void
   onNext?: () => void
@@ -95,6 +98,17 @@ interface EventDetailPanelProps {
   notFound?: boolean
   /** 못 찾은 사건 id — 무엇이 사라졌는지 밝히는 데만 쓴다 */
   missingEventId?: string | null
+  /** 현재 사건의 북마크 여부 */
+  isBookmarked?: boolean
+  /** 북마크 토글 */
+  onToggleBookmark?: (eventId: string) => void
+  /** 이 사건 아래만 보기(앵커 스코프 진입) */
+  onEnterAnchorScope?: (eventId: string) => void
+  /** 관련 국가/역사 국가 칩 클릭 시 국가 요약 모달 열기 */
+  onOpenCountryModal?: (target: {
+    kind: 'modern' | 'historical'
+    id: string
+  }) => void
 }
 
 export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
@@ -113,6 +127,10 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   onClose,
   notFound = false,
   missingEventId = null,
+  isBookmarked = false,
+  onToggleBookmark,
+  onEnterAnchorScope,
+  onOpenCountryModal,
 }) => {
   const navigate = useNavigate()
   const [descExpanded, setDescExpanded] = useState(false)
@@ -120,9 +138,10 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   const [childrenExpanded, setChildrenExpanded] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
-  // 새 사건 선택될 때마다 description clamp 초기화
+  // 새 사건 선택될 때마다 description clamp 및 하위 사건 펼침 초기화
   React.useEffect(() => {
     setDescExpanded(false)
+    setChildrenExpanded(false)
   }, [selectedNode?.id])
 
   /**
@@ -205,12 +224,21 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   const handleConfirmDelete = async (withChildren: boolean) => {
     if (!selectedNode) return
     setDeleting(true)
-    const ok = await deleteToTrash({ id: selectedNode.id, title: selectedNode.title, parentEventId: parentEventRef?.id ?? null }, withChildren)
+    let undoCleanup: (() => void) | undefined
+    const ok = await deleteToTrash(
+      {
+        id: selectedNode.id,
+        title: selectedNode.title,
+        parentEventId: parentEventRef?.id ?? null,
+      },
+      withChildren,
+      () => undoCleanup?.(),
+    )
     setDeleting(false)
     setConfirmDeleteOpen(false)
     if (!ok) return
     if (onAfterDelete) {
-      onAfterDelete(selectedNode.id)
+      undoCleanup = onAfterDelete(selectedNode.id, withChildren) ?? undefined
     } else {
       // 부모가 콜백 안 주면 기존 동작 유지 (호환)
       window.location.reload()
@@ -327,12 +355,50 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               </Detail.InfoLabel>
               <Detail.ChipRow>
                 {relatedCountries.map((country) => (
-                  <Detail.CountryChip key={country.id}>
+                  <Detail.CountryChip
+                    key={country.id}
+                    as={onOpenCountryModal ? 'button' : 'span'}
+                    type={onOpenCountryModal ? 'button' : undefined}
+                    $interactive={Boolean(onOpenCountryModal)}
+                    title={
+                      onOpenCountryModal
+                        ? `${country.name} 국가 정보 보기`
+                        : undefined
+                    }
+                    onClick={
+                      onOpenCountryModal
+                        ? () =>
+                            onOpenCountryModal({
+                              kind: 'modern',
+                              id: country.id,
+                            })
+                        : undefined
+                    }
+                  >
                     {country.flagEmoji} {country.name}
                   </Detail.CountryChip>
                 ))}
                 {relatedHistorical.map((country) => (
-                  <Detail.HistoricalCountryChip key={country.id}>
+                  <Detail.HistoricalCountryChip
+                    key={country.id}
+                    as={onOpenCountryModal ? 'button' : 'span'}
+                    type={onOpenCountryModal ? 'button' : undefined}
+                    $interactive={Boolean(onOpenCountryModal)}
+                    title={
+                      onOpenCountryModal
+                        ? `${country.name} 역사 국가 정보 보기`
+                        : undefined
+                    }
+                    onClick={
+                      onOpenCountryModal
+                        ? () =>
+                            onOpenCountryModal({
+                              kind: 'historical',
+                              id: country.id,
+                            })
+                        : undefined
+                    }
+                  >
                     🏛️ {country.name}
                   </Detail.HistoricalCountryChip>
                 ))}
@@ -501,6 +567,33 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               </Detail.ActionGroup>
               {/* 이 사건에 대한 조작 — 삭제는 되돌릴 수 없어 구분선 뒤로 뗀다. */}
               <Detail.ActionGroup>
+                {onToggleBookmark && (
+                  <Detail.ActionButton
+                    $variant="ghost"
+                    $active={isBookmarked}
+                    title={isBookmarked ? '북마크 해제' : '북마크 추가'}
+                    aria-label={isBookmarked ? '북마크 해제' : '북마크 추가'}
+                    aria-pressed={isBookmarked}
+                    onClick={() => onToggleBookmark(selectedNode.id)}
+                  >
+                    <FiBookmark
+                      size={ICON_SIZE.base}
+                      fill={isBookmarked ? 'currentColor' : 'none'}
+                      aria-hidden="true"
+                    />
+                  </Detail.ActionButton>
+                )}
+                {onEnterAnchorScope &&
+                  (selectedNode.children?.length ?? 0) > 0 && (
+                    <Detail.ActionButton
+                      $variant="ghost"
+                      title="이 사건 아래만 보기"
+                      aria-label="이 사건 아래만 보기"
+                      onClick={() => onEnterAnchorScope(selectedNode.id)}
+                    >
+                      <FiLayers size={ICON_SIZE.base} aria-hidden="true" />
+                    </Detail.ActionButton>
+                  )}
                 <Detail.ActionButton
                   $variant="ghost"
                   title="공유"
@@ -626,13 +719,13 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                       예전에는 정보 행의 'N개' 링크가 그 자리를 대신하고 있었는데, 그 행이
                       중복이라 없어졌으므로 여기가 정본이다. */}
                   {onShowSummary && (
-                    <Modal.ViewAllHierarchyButton
+                    <Detail.ViewAllHierarchyButton
                       type="button"
                       onClick={() => onShowSummary(selectedNode.id)}
                     >
                       <FiGitBranch size={ICON_SIZE.base} aria-hidden="true" />
                       전체 계층 구조 보기
-                    </Modal.ViewAllHierarchyButton>
+                    </Detail.ViewAllHierarchyButton>
                   )}
                 </Detail.DetailChildrenMoreRow>
               )}

@@ -81,7 +81,7 @@ describe('buildFilterOptionCounts', () => {
     expect(counts.unfiltered).toBe(3)
     expect(counts.category.get('MILITARY')).toBe(2)
     expect(counts.category.get('DIPLOMACY')).toBe(1)
-    expect(counts.continent.get('asia')).toBe(2)
+    expect(counts.continent.get('asia')).toBe(3)
     expect(counts.century.get(17)).toBe(1)
     expect(counts.century.get(20)).toBe(1)
     expect(counts.centuryUnknown).toBe(1)

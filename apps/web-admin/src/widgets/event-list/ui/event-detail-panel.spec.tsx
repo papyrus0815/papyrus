@@ -108,4 +108,41 @@ describe('EventDetailPanel — 상위 사건 링크', () => {
     renderWithTheme(withQueryClient(<EventDetailPanel {...baseProps} />))
     expect(screen.queryByText('상위 사건')).not.toBeInTheDocument()
   })
+
+  it('북마크 토글 및 관련 국가 모달 클릭 콜백이 동작한다', () => {
+    const onToggleBookmark = jest.fn()
+    const onOpenCountryModal = jest.fn()
+    const eventWithCountries = {
+      ...event,
+      relatedCountries: [{ id: 'kr', name: '대한민국', flagEmoji: '🇰🇷' }],
+      relatedHistoricalCountries: [{ id: 'joseon', name: '조선' }],
+    } as unknown as HistoricalEvent
+
+    renderWithTheme(
+      withQueryClient(
+        <EventDetailPanel
+          {...baseProps}
+          selectedEvent={eventWithCountries}
+          isBookmarked={false}
+          onToggleBookmark={onToggleBookmark}
+          onOpenCountryModal={onOpenCountryModal}
+        />,
+      ),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '북마크 추가' }))
+    expect(onToggleBookmark).toHaveBeenCalledWith('c1')
+
+    fireEvent.click(screen.getByRole('button', { name: /대한민국/ }))
+    expect(onOpenCountryModal).toHaveBeenCalledWith({
+      kind: 'modern',
+      id: 'kr',
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /조선/ }))
+    expect(onOpenCountryModal).toHaveBeenCalledWith({
+      kind: 'historical',
+      id: 'joseon',
+    })
+  })
 })

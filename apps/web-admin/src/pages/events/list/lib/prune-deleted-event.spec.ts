@@ -31,13 +31,60 @@ describe('pruneEventFromPage', () => {
     expect(next[0].childEvents?.[0].childEvents).toEqual([])
   })
 
-  it('부모를 지우면 그 하위 트리도 함께 빠진다 — 재배치는 서버 몫이라 무효화가 맞춘다', () => {
+  it('부모를 지우면 기본(keepChildren=false)으로 그 하위 트리도 함께 빠진다', () => {
     const page = [
       { id: 'parent', childEvents: [{ id: 'child' }] },
       { id: 'other' },
     ]
     expect(pruneEventFromPage(page, 'parent').map((event) => event.id)).toEqual([
       'other',
+    ])
+  })
+
+  it('keepChildren=true이면 삭제된 부모의 직계 하위를 최상위(parentEventId: null)로 승격해 남긴다', () => {
+    const page = [
+      {
+        id: 'parent',
+        childEvents: [
+          {
+            id: 'child1',
+            parentEventId: 'parent',
+            childEvents: [{ id: 'grand1', parentEventId: 'child1' }],
+          },
+          { id: 'child2', parentEventId: 'parent' },
+        ],
+      },
+      { id: 'other' },
+    ]
+    const next = pruneEventFromPage(page, 'parent', { keepChildren: true })
+    expect(next).toEqual([
+      {
+        id: 'child1',
+        parentEventId: null,
+        childEvents: [{ id: 'grand1', parentEventId: 'child1' }],
+      },
+      { id: 'child2', parentEventId: null },
+      { id: 'other' },
+    ])
+  })
+
+  it('keepChildren=true일 때 중첩된 자식이 삭제되면 그 손자를 최상위로 승격한다', () => {
+    const page = [
+      {
+        id: 'root',
+        childEvents: [
+          {
+            id: 'child',
+            parentEventId: 'root',
+            childEvents: [{ id: 'grand', parentEventId: 'child' }],
+          },
+        ],
+      },
+    ]
+    const next = pruneEventFromPage(page, 'child', { keepChildren: true })
+    expect(next).toEqual([
+      { id: 'root', childEvents: [] },
+      { id: 'grand', parentEventId: null },
     ])
   })
 

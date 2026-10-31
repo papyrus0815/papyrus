@@ -18,8 +18,8 @@
 export const CATALOG_QUERY_KEY = 'papyrus.events.lastQuery'
 export const CATALOG_COLLAPSED_KEY = 'papyrus.events.collapsed'
 
-/** 기억하지 않는 파라미터 */
-const TRANSIENT_PARAMS = ['event']
+/** 기억하지 않는 파라미터 — 열린 사건 드로어(event) 및 사건 등록 모달(eventForm) */
+const TRANSIENT_PARAMS = ['event', 'eventForm']
 
 export function toRememberedQuery(searchParams: URLSearchParams): string {
   const next = new URLSearchParams(searchParams)

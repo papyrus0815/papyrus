@@ -12,6 +12,8 @@
  * 방문 id 집합을 내려 이미 방문한 노드는 자식을 비운다.
  */
 import { getAllEvents } from '@/shared/api/events'
+import { compareByDate } from '@/shared/lib/iso-date'
+import { richTextToPlainText } from '@/shared/lib/rich-text-plain'
 
 import { isEventDomainKey } from './event-domain'
 import type { EventHierarchyNode, HistoricalEvent } from './types'
@@ -55,12 +57,18 @@ export const transformEventsFromApi = (
     evt: EventResponse,
     seen: Set<string>,
   ): EventHierarchyNode => {
-    const kids = seen.has(evt.id) ? [] : childMap.get(evt.id) ?? []
+    const kids = seen.has(evt.id)
+      ? []
+      : [...(childMap.get(evt.id) ?? [])].sort((a, b) =>
+          compareByDate(a.startDate, b.startDate, 'asc'),
+        )
     const nextSeen = new Set(seen).add(evt.id)
     return {
       id: evt.id,
       title: evt.title,
-      summary: evt.description ?? '',
+      // 상세 패널 요약·하위 프리뷰·계층 모달(TreeView)이 평문으로 읽으므로
+      // 에디터 리치텍스트 HTML 태그(<p>, <strong> 등)를 제거해 정규화한다.
+      summary: richTextToPlainText(evt.description),
       period: {
         start: evt.startDate ?? '',
         end: evt.endDate ?? undefined,
