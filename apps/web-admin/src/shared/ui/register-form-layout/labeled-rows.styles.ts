@@ -18,6 +18,12 @@
 import styled from 'styled-components'
 
 import {
+  KitChipGroup,
+  KitChoiceChip,
+  KitOptionalTag,
+} from '@/shared/ui/register-form-kit/register-form-kit'
+
+import {
   DateFieldsRow,
   FieldControl,
   FieldHint,
@@ -26,10 +32,38 @@ import {
   Required,
 } from './register-form-layout.styles'
 
-/** 라벨 열 폭 — 사건 등록 모달(200px)보다 조금 좁게: 이 폼들의 라벨은 짧다 */
-export const LABELED_ROW_LABEL_COL = 168
-/** 라벨 열과 입력 열 사이 */
+/** 라벨 열 폭 — 사건 등록 폼(FormRow)·인물 등록 폼(PersonFormLayoutWrap)과 동일한 200px */
+export const LABELED_ROW_LABEL_COL = 200
+/** 라벨 열과 입력 열 사이 — 사건 등록 폼과 동일한 24px */
 export const LABELED_ROW_GAP = 24
+
+/**
+ * 섹션 묶음 — 사건 등록 폼(BasicInfoSection FormGroup)과 동일한 규격.
+ * 개별 행(FieldRow)마다 그어 두던 구분선을 걷고, 성격이 같은 행끼리 묶어 그룹 경계에만 선을 둔다.
+ */
+export const FormGroup = styled.section`
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 4px;
+
+  & + & {
+    padding-top: 14px;
+  }
+
+  > ${FieldRow} {
+    padding: 8px 0;
+    border-bottom: none;
+  }
+`
+
+/** 섹션 묶음 머리글 — 사건·인물 등록 폼 장 머리글(15px/700)과 동일 */
+export const FormGroupTitle = styled.h3`
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
 
 export const LabeledRowsWrap = styled.div`
   width: 100%;
@@ -38,23 +72,28 @@ export const LabeledRowsWrap = styled.div`
   ${FieldRow} {
     display: grid;
     grid-template-columns: ${LABELED_ROW_LABEL_COL}px minmax(0, 1fr);
-    gap: ${LABELED_ROW_GAP}px;
+    gap: 8px ${LABELED_ROW_GAP}px;
     align-items: start;
-    padding: 18px 0;
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    padding: 12px 0;
+    border-bottom: none;
 
-    @media (max-width: 720px) {
+    @media (max-width: 1024px) {
+      grid-template-columns: 160px minmax(0, 1fr);
+      column-gap: 16px;
+    }
+
+    @media (max-width: 768px) {
       grid-template-columns: 1fr;
       gap: 8px;
-      padding: 14px 0;
+      padding: 10px 0;
     }
   }
-  /* 첫 행 위 여백은 스크롤 영역이 이미 준다(사건 모달과 같은 처리) · 마지막 행은 선 없음 */
   ${FieldRow}:first-child {
     padding-top: 4px;
   }
   ${FieldRow}:last-child {
     border-bottom: none;
+    padding-bottom: 4px;
   }
   ${FieldLabel} {
     display: block;
@@ -63,9 +102,8 @@ export const LabeledRowsWrap = styled.div`
     font-weight: 600;
     line-height: 1.4;
     color: ${({ theme }) => theme.colors.text.primary};
-    letter-spacing: -0.01em;
 
-    @media (max-width: 720px) {
+    @media (max-width: 768px) {
       padding-top: 0;
     }
   }
@@ -73,47 +111,50 @@ export const LabeledRowsWrap = styled.div`
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-width: 640px;
+    max-width: 680px;
     width: 100%;
+    min-width: 0;
   }
   ${FieldControl} ${FieldHint} {
     margin-top: 0;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
+    word-break: keep-all;
   }
   ${DateFieldsRow} {
     max-width: none;
   }
   /* 필수 표시 — 점 대신 사건 모달과 같은 빨간 * (스크린리더 텍스트는 그대로) */
   ${Required} {
+    display: inline;
     width: auto;
     height: auto;
     margin-left: 4px;
+    border-radius: 0;
     background: none;
     vertical-align: baseline;
     overflow: visible;
     &::after {
       content: '*';
       font-size: 14px;
+      font-weight: 400;
       color: #ef4444;
     }
   }
 `
 
-/** 선택(비필수) 라벨 옆 표기 — 사건 등록 모달의 OptionalTag와 같은 모양 */
-export const OptionalTag = styled.span`
-  margin-left: 6px;
-  font-size: 12px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
+/** 선택(비필수) 라벨 옆 표기 — 사건 등록 모달의 KitOptionalTag 정본 사용 */
+export const OptionalTag = KitOptionalTag
 
-/** 한 행 안의 두 소항목(대수·기수 등) — 사건 모달의 시작일/종료일 소제목 문법 */
-export const SubFieldPair = styled.div`
+/** 한 행 안의 2~4열 소항목(국가·기간·대수·기수·왕조 서수 등) — 사건 폼 DateRangeGrid(gap 16px) 규격 */
+export const SubFieldPair = styled.div<{ $cols?: 2 | 3 | 4 }>`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(${({ $cols = 2 }) => $cols}, minmax(0, 1fr));
+  gap: 16px;
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 `
 export const SubField = styled.div`
@@ -122,71 +163,43 @@ export const SubField = styled.div`
   gap: 6px;
   min-width: 0;
 `
+/** 소항목 라벨 — 사건 폼 DateRangeLabel(KitGroupLabel: 11px/700)과 동일 */
 export const SubFieldLabel = styled.label`
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
 `
 
-/** 방식·사유 칩 — 사건 카테고리 칩 문법(10~11개라 드롭다운보다 한눈에). 다시 누르면 해제 */
-export const ChoiceChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-export const ChoiceChip = styled.button<{ $selected: boolean }>`
+/** 방식·사유 칩 — 사건 등록 폼 KitChipGroup / KitChoiceChip(36px 알약 + 안쪽 링) 정본 사용 */
+export const ChoiceChips = KitChipGroup
+export const ChoiceChip = KitChoiceChip
+
+/** 인물 행 — 원형 사진 + 이름 (배경 없는 플랫 칩) */
+export const PersonChip = styled.div`
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ $selected, theme }) => ($selected ? '#6366f1' : theme.colors.border.default)};
-  background: ${({ $selected, theme }) =>
-    $selected
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.22)'
-        : 'rgba(99, 102, 241, 0.1)'
-      : 'transparent'};
-  color: ${({ $selected, theme }) =>
-    $selected ? (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca') : theme.colors.text.secondary};
-  font-size: 13px;
-  font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-
-  &:hover {
-    border-color: ${({ $selected, theme }) => ($selected ? '#6366f1' : theme.colors.text.tertiary)};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px #6366f1;
-  }
-`
-
-/** 인물 행 — 원형 사진 + 이름 한 알 */
-export const PersonChip = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  gap: 9px;
   width: fit-content;
-  padding: 6px 14px 6px 6px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 999px;
+  padding: 0;
+  background: transparent;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 export const PersonChipThumb = styled.div`
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   flex-shrink: 0;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
 
   img {

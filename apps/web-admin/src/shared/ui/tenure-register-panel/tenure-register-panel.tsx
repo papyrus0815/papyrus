@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiChevronDown, FiLink, FiUser, FiX } from 'react-icons/fi'
+import { FiCheck, FiChevronDown, FiClock, FiPlus, FiSearch, FiUser, FiX } from 'react-icons/fi'
 import { CabinetEventAttachModal } from '@/widgets/country/country-detail/ui/cabinet-event-attach-modal'
 import styled from 'styled-components'
 
@@ -22,6 +22,8 @@ import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import {
   describeLifespanMismatch,
+  formatCountryPeriod,
+  toSignedYear,
 } from '@/shared/lib/country-period'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { getUploadImageUrl } from '@/shared/api/upload'
@@ -39,11 +41,18 @@ import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inli
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   EventPickerModal,
-  EventPickerLinkBtn,
-  EventPickerLinkClearBtn,
-  EventPickerLinkedChip,
   type EventPickerSelection,
 } from '@/shared/ui/event-picker-modal/event-picker-modal'
+import {
+  KitAddButton,
+  KitBusyBar,
+  KitFormLoading,
+  KitRemoveButton,
+  KitSelectedItem,
+  KitSelectedItems,
+  kitC,
+  kitSelectTriggerCss,
+} from '@/shared/ui/register-form-kit/register-form-kit'
 import {
   type PartialDateParts,
   emptyPartialDateParts,
@@ -55,7 +64,7 @@ import {
   isPartialRangeInverted,
 } from '@/shared/lib/partial-date-string'
 import { CountryPicker } from '@/shared/ui/country-picker'
-import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
+import { type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import {
   buildPositionOptions,
   buildReignPositionOptions,
@@ -73,81 +82,181 @@ import {
   APPOINTMENT_METHOD_OPTIONS,
   TENURE_END_REASON_OPTIONS,
 } from '@/shared/lib/tenure-labels'
+import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import {
-  FormRows,
   FieldRow,
   FieldLabel,
   FieldControl,
   FieldHint,
-  Required,
-  Input,
-  Textarea,
+  FormGroup,
+  FormGroupTitle,
   LabeledRowsWrap,
+  Required,
+  Input as BaseInput,
+  Textarea as BaseTextarea,
   OptionalTag,
   SubFieldPair,
   SubField,
   SubFieldLabel,
-  ChoiceChips,
-  ChoiceChip,
   PersonChip,
   PersonChipThumb,
   FooterMissingHint,
   objectParticle,
 } from '@/shared/ui/register-form-layout'
 
-/** 폼 행 — 사건 등록 모달과 같은 문법(공용 LabeledRowsWrap) */
-const SidebarFormWrap = LabeledRowsWrap
+const Input = styled(BaseInput)`
+  height: 41px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).content};
+  color: ${({ theme }) => kitC(theme).textPrimary};
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
-/** 시작/종료 날짜 파츠 입력 2열 — 좁은 폭에선 세로로 랩 */
-const PeriodRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-`
-const PeriodCol = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-`
-const PeriodLabel = styled.span`
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-/** 즉위·취임 행 안 사건 연결 줄 — 버튼(또는 연결된 사건 칩) 옆에 짧은 설명 */
-const AccessionEventLine = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 10px;
+  &::placeholder {
+    color: ${({ theme }) => kitC(theme).textMuted};
+  }
+  &:hover:not(:focus) {
+    border-color: ${({ theme }) => kitC(theme).borderHover};
+  }
+  &:focus {
+    border-color: ${({ theme }) => kitC(theme).focus};
+    box-shadow: 0 0 0 3px ${({ theme }) => kitC(theme).focusHalo};
+  }
 `
 
-/** 선택 버튼 — 깔끔한 호버/포커스 */
-const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
+const Textarea = styled(BaseTextarea)`
+  min-height: 88px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).content};
+  color: ${({ theme }) => kitC(theme).textPrimary};
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &::placeholder {
+    color: ${({ theme }) => kitC(theme).textMuted};
+  }
+  &:hover:not(:focus) {
+    border-color: ${({ theme }) => kitC(theme).borderHover};
+  }
+  &:focus {
+    border-color: ${({ theme }) => kitC(theme).focus};
+    box-shadow: 0 0 0 3px ${({ theme }) => kitC(theme).focusHalo};
+  }
+`
+
+/** 사건 등록 모달 FormReveal과 동일한 페이드인 */
+const FormReveal = styled.div`
+  @media (prefers-reduced-motion: no-preference) {
+    animation: tenureFormReveal 0.2s ease;
+  }
+  @keyframes tenureFormReveal {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+`
+
+const PersonContextCard = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 12px;
   border-radius: 10px;
-  /* 다른 입력칸(Input·네이티브 select)과 같은 높이 — 48px이던 선택 버튼만 도드라졌다 */
-  padding: 9px 12px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+`
+
+const PersonMetaRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const PersonLifespanBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: ${({ theme }) => kitC(theme).content};
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => kitC(theme).textSecondary};
+`
+
+const DepartmentBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => kitC(theme).textSecondary};
+`
+
+/** 사건 등록 폼 PeriodBadge(event-create.styles.ts)와 동일한 좌측 라벨 하단 기간 요약 배지 */
+const PeriodBadge = styled.div`
+  width: fit-content;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9')};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa'};
+    theme.mode === 'dark' ? 'rgba(167, 139, 250, 0.14)' : '#f3effe'};
+  border-radius: 6px;
+  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  span {
+    color: ${({ theme }) => kitC(theme).textMuted};
+    font-size: 10px;
+  }
+`
+
+/** 선택 트리거 + 인라인 해제(×) 버튼 래퍼 */
+const TriggerWrap = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+`
+
+/** 선택 버튼 — 사건·인물·국가 폼 kitSelectTriggerCss(41px·r8·kitC)와 동일 규격 */
+const SelectTriggerButton = styled.button<{ $hasValue?: boolean; $clearable?: boolean }>`
+  ${kitSelectTriggerCss}
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding-right: ${({ $clearable }) => ($clearable ? '34px' : '12px')};
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).content};
   color: ${({ $hasValue, theme }) =>
-    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
-  font-size: 14px;
-  line-height: 1.45;
+    $hasValue ? kitC(theme).textPrimary : kitC(theme).textMuted};
   font-weight: 500;
   text-align: left;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
-  span {
+  > span:first-of-type {
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -156,26 +265,49 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   }
   svg {
     flex-shrink: 0;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    transition: color 0.2s, transform 0.2s;
+    color: ${({ theme }) => kitC(theme).textMuted};
+    transition: color 0.15s ease;
   }
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f4f4f5'};
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    border-color: ${({ theme }) => kitC(theme).borderHover};
     svg {
-      color: ${({ theme }) => theme.colors.text.secondary};
-      transform: translateY(1px);
+      color: ${({ theme }) => kitC(theme).textSecondary};
     }
   }
-  &:focus {
-    background: ${({ theme }) => theme.colors.background.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: 0 0 0 3px
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(99, 106, 242, 0.22)'
-          : 'rgba(99, 102, 241, 0.12)'};
+  &:focus,
+  &:focus-visible {
+    border-color: ${({ theme }) => kitC(theme).focus};
+    box-shadow: 0 0 0 3px ${({ theme }) => kitC(theme).focusHalo};
+  }
+`
+
+const TriggerClearBtn = styled.button`
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => kitC(theme).textMuted};
+  cursor: pointer;
+  transition: color 0.14s, background 0.14s;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.error};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => kitC(theme).focus};
+    outline-offset: 1px;
   }
 `
 
@@ -202,22 +334,58 @@ const PersonPrimaryLabel = styled.span`
   font-weight: 400;
 `
 
-const EventAttachButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.16)' : '#eff6ff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.4)' : '#bfdbfe'};
-  border-radius: 6px;
-  color: ${({ theme }) => theme.colors.primary};
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-`
+/** 사건 등록 폼 PeriodBadge 계산 — 일 단위 정밀도면 일수(+약 N년), 연/월 단위면 약 N년/개월 */
+function computeTenurePeriodBadge(
+  start: PartialDateParts,
+  end: PartialDateParts,
+  inverted: boolean,
+): { text: string; sub?: string } | null {
+  if (inverted) return null
+  const sY = Number(start.year)
+  const eY = Number(end.year)
+  if (!Number.isFinite(sY) || sY <= 0 || !Number.isFinite(eY) || eY <= 0) return null
+
+  const sM = Number(start.month)
+  const sD = Number(start.day)
+  const eM = Number(end.month)
+  const eD = Number(end.day)
+  if (
+    start.era === 'AD' &&
+    end.era === 'AD' &&
+    sM >= 1 &&
+    sM <= 12 &&
+    sD >= 1 &&
+    sD <= 31 &&
+    eM >= 1 &&
+    eM <= 12 &&
+    eD >= 1 &&
+    eD <= 31
+  ) {
+    const startUtc = new Date(Date.UTC(2000, sM - 1, sD))
+    startUtc.setUTCFullYear(sY)
+    const endUtc = new Date(Date.UTC(2000, eM - 1, eD))
+    endUtc.setUTCFullYear(eY)
+    const diffDays = Math.round((endUtc.getTime() - startUtc.getTime()) / 86_400_000)
+    if (diffDays >= 0) {
+      return {
+        text: `${diffDays.toLocaleString()}일`,
+        sub: diffDays > 365 ? `(약 ${Math.floor(diffDays / 365)}년)` : undefined,
+      }
+    }
+  }
+
+  const signedStart = start.era === 'BC' ? -sY : sY
+  const signedEnd = end.era === 'BC' ? -eY : eY
+  const yearDiff =
+    start.era !== end.era ? Math.abs(signedEnd - signedStart) - 1 : signedEnd - signedStart
+  if (yearDiff > 0) {
+    return { text: `약 ${yearDiff}년` }
+  }
+  if (yearDiff === 0 && sM >= 1 && eM >= 1 && eM > sM) {
+    return { text: `약 ${eM - sM}개월` }
+  }
+  return null
+}
 
 /** 직책 "직접 입력" — 선택 트리거에 시각적으로 종속되는 중첩 그룹 */
 const ManualEntryGroup = styled.div`
@@ -225,10 +393,9 @@ const ManualEntryGroup = styled.div`
   flex-direction: column;
   gap: 12px;
   margin-top: 10px;
-  padding: 12px 14px;
+  padding: 4px 0 4px 14px;
   border-left: 2px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 0 10px 10px 0;
+  background: transparent;
 `
 const ManualEntryCaption = styled.div`
   font-size: 12px;
@@ -299,21 +466,24 @@ const LocalTitleCancel = styled.button`
 `
 
 const CheckboxLabelRow = styled.div`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 0;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 2px 0;
+  user-select: none;
   input[type='checkbox'] {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     accent-color: #6366f1;
     cursor: pointer;
   }
   label {
-    font-size: 14px;
-    color: ${({ theme }) => theme.colors.text.primary};
-    cursor: pointer;
+    font-size: 13px;
+    color: ${({ theme }) => theme.colors.text.secondary};
     font-weight: 500;
+    cursor: pointer;
   }
 `
 
@@ -357,6 +527,560 @@ const InlineMessage = styled.div<{ $variant?: 'loading' | 'error' }>`
   color: ${({ $variant, theme }) =>
     $variant === 'error' ? theme.colors.error : theme.colors.text.secondary};
 `
+
+/** 단일 국가 트리거·참여국 카드에 현대/역사 구분을 표시하는 미니 태그 (이모지 없이 타이포·톤으로 구분) */
+const TriggerKindTag = styled.em<{ $historical?: boolean }>`
+  font-style: normal;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: ${({ $historical, theme }) =>
+    $historical
+      ? theme.mode === 'dark'
+        ? '#c4b5fd'
+        : '#5b21b6'
+      : kitC(theme).textSecondary};
+  background: ${({ $historical, theme }) =>
+    $historical
+      ? theme.mode === 'dark'
+        ? 'rgba(139, 92, 246, 0.16)'
+        : '#f5f3ff'
+      : kitC(theme).content};
+  border: 1px solid
+    ${({ $historical, theme }) =>
+      $historical
+        ? theme.mode === 'dark'
+          ? 'rgba(167, 139, 250, 0.32)'
+          : '#ddd6fe'
+        : kitC(theme).border};
+`
+
+/**
+ * 사건 등록 모달 '참여국(ParticipantRow)'과 동일한 국가 정보 카드 (이모지 제거, 깔끔한 타이포 중심).
+ * 한 장의 카드 안에서 [국가명 + 존속기간 | 현대/역사 배지 · 부가정보 | 변경 · 삭제]를 한눈에 보여준다.
+ */
+const CountryParticipantCard = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  border-radius: 10px;
+  background: ${({ theme }) => kitC(theme).section};
+  transition: border-color 0.14s ease, background 0.14s ease;
+
+  &:hover,
+  &:focus-within {
+    border-color: ${({ theme }) => kitC(theme).borderHover};
+  }
+`
+
+const CountryCardMain = styled.button`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: ${({ theme }) => kitC(theme).textPrimary};
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => kitC(theme).focus};
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+`
+
+const CountryCardName = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => kitC(theme).textPrimary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const CountryCardMeta = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => kitC(theme).textSecondary};
+`
+
+const CountryCardSubText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => kitC(theme).textMuted};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+`
+
+const CountryCardActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+`
+
+const CountryCardChangeBtn = styled.button`
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).content};
+  color: ${({ theme }) => kitC(theme).textSecondary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => kitC(theme).borderHover};
+    color: ${({ theme }) => kitC(theme).textPrimary};
+  }
+`
+
+const CountryCardRemoveBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: ${({ theme }) => kitC(theme).textMuted};
+  cursor: pointer;
+  transition: color 0.14s ease, background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.error};
+    background-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+  }
+`
+
+/** 인물 소속 국가 빠른 선택 미니 카드 띠 */
+const AffiliatedPolityBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const AffiliatedPolityLabel = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => kitC(theme).textMuted};
+  margin-right: 2px;
+`
+
+const AffiliatedPolityChip = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ $active, theme }) => ($active ? kitC(theme).focus : kitC(theme).border)};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(139, 92, 246, 0.16)'
+        : '#f5f3ff'
+      : kitC(theme).section};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#c4b5fd'
+        : '#5b21b6'
+      : kitC(theme).textPrimary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+
+  &:hover {
+    border-color: ${({ $active, theme }) =>
+      $active ? kitC(theme).focus : kitC(theme).borderHover};
+  }
+`
+
+/** 직책 검색형 Selectbox (트리거 아래 인라인 드롭다운) */
+const PositionSelectWrap = styled.div`
+  position: relative;
+  width: 100%;
+`
+
+const PositionSelectDropdown = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => kitC(theme).borderHover};
+  background: ${({ theme }) => kitC(theme).content};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 14px 34px rgba(0, 0, 0, 0.55)'
+      : '0 12px 28px rgba(15, 23, 42, 0.14)'};
+  overflow: hidden;
+`
+
+const PositionSearchHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+
+  svg {
+    flex-shrink: 0;
+    color: ${({ theme }) => kitC(theme).textMuted};
+  }
+`
+
+const PositionSearchInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => kitC(theme).textPrimary};
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+
+  &::placeholder {
+    color: ${({ theme }) => kitC(theme).textMuted};
+  }
+`
+
+const PositionOptionList = styled.div`
+  max-height: 256px;
+  overflow-y: auto;
+  padding: 4px;
+`
+
+const PositionGroupHeader = styled.button`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-top: 2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => kitC(theme).textMuted};
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => kitC(theme).section};
+    color: ${({ theme }) => kitC(theme).textSecondary};
+  }
+`
+
+const PositionGroupCount = styled.span`
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => kitC(theme).textMuted};
+`
+
+const PositionOptionItemBtn = styled.button<{ $active?: boolean }>`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(139, 92, 246, 0.18)'
+        : '#f5f3ff'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#ddd6fe'
+        : '#5b21b6'
+      : kitC(theme).textPrimary};
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(139, 92, 246, 0.24)'
+          : '#ede9fe'
+        : kitC(theme).section};
+  }
+`
+
+const PositionOptionBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const PositionOptionDesc = styled.span`
+  font-size: 11px;
+  font-weight: 400;
+  color: ${({ theme }) => kitC(theme).textMuted};
+`
+
+const PositionEmptyBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: ${({ theme }) => kitC(theme).textMuted};
+`
+
+/** 검색 비교용 정규화 — 소문자 + NFKD 분해 후 결합 분음부호 제거 */
+function foldForPositionSearch(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+const POSITION_TYPE_SHORT_LABELS: Record<string, string> = {
+  MONARCH: '군주',
+  HEAD_OF_STATE: '국가원수',
+  DEPUTY_HEAD_OF_STATE: '부통령·부원수',
+  HEAD_OF_GOVERNMENT: '정부수반',
+  CABINET_MINISTER: '각료·장관',
+  VICE_MINISTER: '차관',
+  LEGISLATOR: '의원·입법',
+  GOVERNOR: '지방장관',
+  MILITARY_COMMANDER: '군 지휘관',
+  DIPLOMAT: '외교관',
+  NOBLE: '작위·칭호',
+}
+
+interface CustomDropboxOption {
+  value: string
+  label: string
+  description?: string
+}
+
+interface CustomDropboxProps {
+  id?: string
+  ariaLabel: string
+  value: string
+  placeholder: string
+  options: ReadonlyArray<CustomDropboxOption>
+  onChange: (value: string) => void
+  clearLabel?: string
+  searchable?: boolean
+  searchPlaceholder?: string
+}
+
+/**
+ * 네이티브 HTML <select>를 대체하는 커스텀 Dropbox 컴포넌트.
+ * 직책명 드롭다운과 동일한 디자인 토큰(SelectTriggerButton + PositionSelectDropdown)을 사용한다.
+ */
+function CustomDropbox({
+  id,
+  ariaLabel,
+  value,
+  placeholder,
+  options,
+  onChange,
+  clearLabel,
+  searchable,
+  searchPlaceholder = '검색...',
+}: CustomDropboxProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const showSearch = searchable ?? options.length >= 10
+
+  useEffect(() => {
+    if (!open) {
+      setQuery('')
+      return
+    }
+    if (showSearch) {
+      const timer = window.setTimeout(() => {
+        searchInputRef.current?.focus({ preventScroll: true })
+      }, 0)
+      return () => window.clearTimeout(timer)
+    }
+  }, [open, showSearch])
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointerDown = (event: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  const selectedOption = useMemo(
+    () => options.find((opt) => opt.value === value) ?? null,
+    [options, value],
+  )
+
+  const filteredOptions = useMemo(() => {
+    if (!query.trim()) return options
+    const folded = foldForPositionSearch(query.trim())
+    return options.filter(
+      (opt) =>
+        foldForPositionSearch(opt.label).includes(folded) ||
+        (opt.description ? foldForPositionSearch(opt.description).includes(folded) : false),
+    )
+  }, [options, query])
+
+  return (
+    <PositionSelectWrap ref={wrapRef}>
+      <TriggerWrap>
+        <SelectTriggerButton
+          id={id}
+          type="button"
+          aria-label={ariaLabel}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          data-value={value}
+          $hasValue={!!selectedOption}
+          $clearable={!!selectedOption}
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          <span>{selectedOption ? selectedOption.label : placeholder}</span>
+          {!selectedOption && (
+            <FiChevronDown
+              size={18}
+              style={{
+                transform: open ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.15s ease',
+              }}
+            />
+          )}
+        </SelectTriggerButton>
+        {selectedOption && (
+          <TriggerClearBtn
+            type="button"
+            aria-label={clearLabel ?? `${ariaLabel} 선택 해제`}
+            title={clearLabel ?? `${ariaLabel} 선택 해제`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onChange('')
+              setOpen(false)
+            }}
+          >
+            <FiX size={14} />
+          </TriggerClearBtn>
+        )}
+      </TriggerWrap>
+
+      {open && (
+        <PositionSelectDropdown role="listbox" aria-label={`${ariaLabel} 목록`}>
+          {showSearch && (
+            <PositionSearchHeader>
+              <FiSearch size={14} />
+              <PositionSearchInput
+                ref={searchInputRef}
+                type="text"
+                aria-label={`${ariaLabel} 검색`}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={searchPlaceholder}
+              />
+              {query && (
+                <CountryCardRemoveBtn
+                  type="button"
+                  aria-label="검색어 지우기"
+                  onClick={() => setQuery('')}
+                  style={{ width: 22, height: 22 }}
+                >
+                  <FiX size={13} />
+                </CountryCardRemoveBtn>
+              )}
+            </PositionSearchHeader>
+          )}
+          <PositionOptionList>
+            {filteredOptions.length === 0 ? (
+              <PositionEmptyBox>일치하는 항목이 없습니다.</PositionEmptyBox>
+            ) : (
+              filteredOptions.map((option) => {
+                const active = option.value === value
+                return (
+                  <PositionOptionItemBtn
+                    key={option.value}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    $active={active}
+                    onClick={() => {
+                      onChange(active ? '' : option.value)
+                      setOpen(false)
+                    }}
+                  >
+                    <PositionOptionBody>
+                      <span>{option.label}</span>
+                      {option.description && (
+                        <PositionOptionDesc>{option.description}</PositionOptionDesc>
+                      )}
+                    </PositionOptionBody>
+                    {active && <FiCheck size={15} />}
+                  </PositionOptionItemBtn>
+                )
+              })
+            )}
+          </PositionOptionList>
+        </PositionSelectDropdown>
+      )}
+    </PositionSelectWrap>
+  )
+}
 
 export interface TenureRegisterPanelProps {
   personId: string
@@ -407,6 +1131,7 @@ export function TenureRegisterPanel({
   const queryClient = useQueryClient()
   const isEdit = !!tenureId
 
+  const [monarchicalMode, setMonarchicalMode] = useState(defaultMonarchical)
   const [countryId, setCountryId] = useState('')
   const [historicalCountryId, setHistoricalCountryId] = useState<string | null>(null)
   const [positionDefinitionId, setPositionDefinitionId] = useState<string | null>(null)
@@ -425,6 +1150,7 @@ export function TenureRegisterPanel({
    * (예전엔 '정의 미선택'이면 열려서 아무것도 고르지 않은 첫 화면부터 한글·영문 입력칸이 늘 펼쳐져 있었다)
    */
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
+  const [specificTitleOpen, setSpecificTitleOpen] = useState(false)
   const [localTitleDraft, setLocalTitleDraft] = useState('')
   const [localTitleSaving, setLocalTitleSaving] = useState(false)
   /** 기간 — 구조화 파츠(기원전·연 단위까지). 월·일을 비우면 그만큼만 안다는 뜻 */
@@ -456,10 +1182,36 @@ export function TenureRegisterPanel({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
-  const [historicalCountryModalOpen, setHistoricalCountryModalOpen] = useState(false)
   const [positionModalOpen, setPositionModalOpen] = useState(false)
-  const [cabinetModalOpen, setCabinetModalOpen] = useState(false)
+  const [positionQuery, setPositionQuery] = useState('')
+  const [positionGroupToggles, setPositionGroupToggles] = useState<Record<string, boolean>>({})
+  const positionDropdownRef = useRef<HTMLDivElement>(null)
+  const positionSearchInputRef = useRef<HTMLInputElement>(null)
   const [personImageError, setPersonImageError] = useState(false)
+
+  useEffect(() => {
+    if (!positionModalOpen) {
+      setPositionQuery('')
+      setPositionGroupToggles({})
+      return
+    }
+    const timer = window.setTimeout(() => {
+      positionSearchInputRef.current?.focus({ preventScroll: true })
+    }, 0)
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        positionDropdownRef.current &&
+        !positionDropdownRef.current.contains(event.target as Node)
+      ) {
+        setPositionModalOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('mousedown', handlePointerDown)
+    }
+  }, [positionModalOpen])
 
   const { data: countries = [] } = useCountries()
   // 현대 국가 소속 역사국가 목록 + 보수적 해제 정책(재위 패널과 동일 정책, 공용 훅)
@@ -470,20 +1222,55 @@ export function TenureRegisterPanel({
     onClearHistoricalCountry: () => setHistoricalCountryId(null),
   })
   // 현대 국가를 선택하지 않아도 역사적 국가를 직접 고를 수 있도록 전체 목록도 확보한다.
-  // 교황령·신성로마제국처럼 특정 현대 국가에 매이지 않는 정치체(교황·황제 등)를
-  // "이탈리아를 먼저 골라야 교황령이 뜨는" 우회 없이 등록하기 위함.
   const { data: allHistoricalCountries = [] } = useHistoricalCountries()
-  // 현대 국가를 골랐으면 그 소속 역사 국가로 좁히고, 안 골랐으면 전체 역사 국가에서 직접 선택.
-  const historicalCountryOptions: Array<{ id: string; name: string; flagEmoji: string | null }> = (
-    (countryId ? historicalCountries : allHistoricalCountries) as Array<{
-      id: string
-      name?: string | null
-    }>
-  ).map((historical) => ({
-    id: historical.id,
-    name: historical.name ?? historical.id,
-    flagEmoji: null,
-  }))
+
+  const allHistoricalById = useMemo(() => {
+    const map = new Map<string, any>()
+    for (const item of allHistoricalCountries as any[]) {
+      if (item?.id) map.set(item.id, item)
+    }
+    return map
+  }, [allHistoricalCountries])
+
+  const modernCountryOptions = useMemo(
+    () =>
+      (countries as any[]).map((c: any) => ({
+        id: c.id,
+        name: c.name ?? c.localName ?? c.id,
+        enName: c.enName ?? null,
+        localName: c.localName ?? null,
+        isoCode: c.isoCode ?? null,
+        continentId: c.continentId ?? null,
+        flagEmoji: c.flagEmoji ?? null,
+        capital: c.capital ?? null,
+        population: c.population != null ? String(c.population) : null,
+        areaSqKm: c.areaSqKm ?? null,
+      })),
+    [countries],
+  )
+
+  // 통합 CountryPicker의 '역사적 국가' 탭에 넘길 전체 역사국가 옵션.
+  const historicalCountryOptions = useMemo(() => {
+    const source =
+      (allHistoricalCountries as any[]).length > 0
+        ? (allHistoricalCountries as any[])
+        : (historicalCountries as any[])
+    return source.map((historical: any) => {
+      const full = allHistoricalById.get(historical.id) ?? historical
+      return {
+        id: historical.id,
+        name: historical.name ?? full?.name ?? historical.id,
+        enName: full?.enName ?? historical.enName ?? null,
+        localName: full?.localName ?? historical.localName ?? null,
+        continentId: full?.continentId ?? historical.continentId ?? null,
+        startEra: full?.startEra ?? historical.startEra ?? null,
+        startYear: full?.startYear ?? historical.startYear ?? null,
+        endEra: full?.endEra ?? historical.endEra ?? null,
+        endYear: full?.endYear ?? historical.endYear ?? null,
+        stateType: full?.stateType ?? historical.stateType ?? null,
+      }
+    })
+  }, [allHistoricalCountries, historicalCountries, allHistoricalById])
 
   // F33 소프트 경고 — 선택된 역사국가의 존속기간과 취임 연도를 대조.
   // 존속기간은 구조화(startEra/Year)로 100% 채워져 있는 allHistoricalCountries가 진실이라
@@ -578,7 +1365,7 @@ export function TenureRegisterPanel({
     : null
 
   /** 재위로 연 경우(재위 추가·재위 수정) — 피커를 군주 칭호 우선으로 */
-  const reignEntry = isEdit ? (editingTenure as any)?.isMonarchical === true : defaultMonarchical
+  const reignEntry = isEdit ? (editingTenure as any)?.isMonarchical === true : monarchicalMode
 
   /**
    * 수정 중인 재임이 참조하는 정의 — 서버 목록에서 빠져도(국가 스코프·군주 제외·각료 필터)
@@ -675,6 +1462,46 @@ export function TenureRegisterPanel({
           : '직책 선택'
       : (selectedDef?.title ?? selectedDef?.name ?? (title || '직책 선택'))
 
+  const collapsedPositionGroups = reignEntry
+    ? DEFAULT_COLLAPSED_REIGN_GROUPS
+    : DEFAULT_COLLAPSED_POSITION_GROUPS
+
+  const filteredPositionOptions = useMemo(() => {
+    if (!positionQuery.trim()) return positionTitleOptions
+    const folded = foldForPositionSearch(positionQuery.trim())
+    return positionTitleOptions.filter(
+      (opt) =>
+        foldForPositionSearch(opt.label).includes(folded) ||
+        (opt.description ? foldForPositionSearch(opt.description).includes(folded) : false),
+    )
+  }, [positionTitleOptions, positionQuery])
+
+  const positionGroupCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    filteredPositionOptions.forEach((opt) => {
+      if (opt.group) counts.set(opt.group, (counts.get(opt.group) ?? 0) + 1)
+    })
+    return counts
+  }, [filteredPositionOptions])
+
+  const positionGroupsWithSelection = useMemo(() => {
+    const found = new Set<string>()
+    positionTitleOptions.forEach((opt) => {
+      if (opt.group && opt.value === selectedPositionValue) found.add(opt.group)
+    })
+    return found
+  }, [positionTitleOptions, selectedPositionValue])
+
+  const isPositionGroupExpandedByState = (group: string): boolean => {
+    const toggled = positionGroupToggles[group]
+    if (toggled !== undefined) return toggled
+    if (positionGroupsWithSelection.has(group)) return true
+    return !(collapsedPositionGroups ?? []).includes(group)
+  }
+
+  const isPositionGroupExpanded = (group: string): boolean =>
+    positionQuery.trim() ? true : isPositionGroupExpandedByState(group)
+
   const handlePositionSelect = (value: string) => {
     setPositionModalOpen(false)
     // 정의를 고르면 직접 입력은 닫고, '기타'를 고르면 연다(아래 분기)
@@ -716,7 +1543,7 @@ export function TenureRegisterPanel({
         setManualEntryOpen(true)
       } else if (def) {
         setPositionDefinitionId(def.id)
-        setTitle(def.title ?? def.name ?? '')
+        setTitle('')
         setTitleEn(def.titleEn ?? '')
         setPresetPositionType(null)
       }
@@ -744,7 +1571,7 @@ export function TenureRegisterPanel({
       })
       await queryClient.invalidateQueries({ queryKey: ['position-definitions'] })
       setPositionDefinitionId(result.id)
-      setTitle(result.title)
+      setTitle('')
       setPresetPositionType(null)
       setLocalTitleOpen(false)
       setLocalTitleDraft('')
@@ -781,7 +1608,9 @@ export function TenureRegisterPanel({
   }
 
   const resetForm = () => {
+    setMonarchicalMode(defaultMonarchical)
     setManualEntryOpen(false)
+    setSpecificTitleOpen(false)
     setCountryId('')
     setHistoricalCountryId(null)
     setPositionDefinitionId(null)
@@ -810,13 +1639,16 @@ export function TenureRegisterPanel({
       resetForm()
       setPersonImageError(false)
       setDeleteConfirmOpen(false)
+    } else if (!isEdit) {
+      setMonarchicalMode(defaultMonarchical)
     }
-  }, [open])
+  }, [open, isEdit, defaultMonarchical])
 
-  /** 행정부 탭 등에서 열 때 국가·행정부 미리 채우기 */
+  /** 행정부 탭 등에서 열 때 국가·행정부 미리 채우기 (추가 모드 전용) */
   useEffect(() => {
     if (
       open &&
+      !isEdit &&
       (initialCountryId != null ||
         initialHistoricalCountryId != null ||
         initialCabinetId != null ||
@@ -831,6 +1663,7 @@ export function TenureRegisterPanel({
     }
   }, [
     open,
+    isEdit,
     initialCountryId,
     initialHistoricalCountryId,
     initialCabinetId,
@@ -848,7 +1681,7 @@ export function TenureRegisterPanel({
       defaultReignAppliedRef.current = false
       return
     }
-    if (isEdit || !defaultMonarchical || defaultReignAppliedRef.current) return
+    if (isEdit || !monarchicalMode || defaultReignAppliedRef.current) return
     const defaultDefinition = (positionDefinitions as PositionDefinitionLike[]).find(
       (definition) => definition.title === defaultDefinitionTitle,
     )
@@ -856,10 +1689,10 @@ export function TenureRegisterPanel({
     defaultReignAppliedRef.current = true
     if (positionDefinitionId || title.trim()) return
     setPositionDefinitionId(defaultDefinition.id)
-    setTitle(defaultDefinition.title ?? '')
+    setTitle('')
     setTitleEn(defaultDefinition.titleEn ?? '')
     setPresetPositionType(null)
-  }, [open, isEdit, defaultMonarchical, defaultDefinitionTitle, positionDefinitions, positionDefinitionId, title])
+  }, [open, isEdit, monarchicalMode, defaultDefinitionTitle, positionDefinitions, positionDefinitionId, title])
 
   /** 수반 직책 선택 시 소속 행정부 지정 불가(백엔드 400) — 선택돼 있던 행정부는 자동 해제 */
   useEffect(() => {
@@ -869,6 +1702,7 @@ export function TenureRegisterPanel({
   useEffect(() => {
     if (!open || !editingTenure) return
     const t = editingTenure as any
+    setMonarchicalMode(t.isMonarchical === true)
     setCountryId(t.countryId ?? t.country?.id ?? '')
     setHistoricalCountryId(t.historicalCountryId ?? t.historicalCountry?.id ?? null)
     const hydratedDefId = t.positionDefinitionId ?? t.positionDefinition?.id ?? null
@@ -876,9 +1710,17 @@ export function TenureRegisterPanel({
     // 정의 없이 내장 직책(부통령 등) 타입으로 저장된 재임이면 preset 복원 → 라벨·선택 표시 유지
     const builtinForType = BUILTIN_POSITIONS.find((b) => b.positionType === t.positionType)
     setPresetPositionType(!hydratedDefId && builtinForType ? builtinForType.positionType : null)
-    // 구체 직함 — 일반 정의면 그 직함만(정의 이름 '군 지휘관'은 직함이 아니다), 카탈로그 정의면 없을 때 정의 이름
+    // 구체 직함 — 일반 정의·정의 미선택이면 그 직함, 카탈로그 정의면 정의 이름과 다를 때만 구체 직함으로 복원
     const hydratedGeneric = t.positionDefinition?.isGeneric === true
-    setTitle(t.title ?? (hydratedGeneric ? '' : t.positionDefinition?.title) ?? '')
+    const defTitle = t.positionDefinition?.title ?? ''
+    const specificTitle =
+      !hydratedDefId || hydratedGeneric
+        ? t.title ?? ''
+        : t.title && t.title !== defTitle
+          ? t.title
+          : ''
+    setTitle(specificTitle)
+    setSpecificTitleOpen(Boolean(hydratedDefId && !hydratedGeneric && specificTitle))
     setManualEntryOpen(hydratedGeneric)
     setTitleEn(t.titleEn ?? '')
     // 구조화(startEra/startYear/...) 우선, 없으면 DATETIME+정밀도 폴백 → 파츠 복원
@@ -964,15 +1806,15 @@ export function TenureRegisterPanel({
       // 정의를 비우면(직접 입력) 수정 때 null — 서버가 그 종류의 일반 정의로 옮긴다
       positionDefinitionId: positionDefinitionId || emptyAs,
       title: titleValue,
-      titleEn: titleEn.trim() || undefined,
-      countryId: historicalCountryId ? undefined : (countryId || undefined),
-      historicalCountryId: historicalCountryId || undefined,
+      titleEn: titleEn.trim() || emptyAs,
+      countryId: historicalCountryId ? emptyAs : (countryId || emptyAs),
+      historicalCountryId: historicalCountryId || emptyAs,
       // 구조화 기간 — 서버가 정렬 키·DATETIME(AD 1000+)·정밀도를 파생한다. 수정 때 종료 비움 = 해제
       startDateInfo: startInfo,
       endDateInfo: endInfo ?? emptyAs,
-      // 재위 칸 — 재위가 아니면 건드리지 않는다(undefined = 기존 값 유지)
-      regnalName: isReign ? regnalName.trim() || emptyAs : undefined,
-      dynastyOrdinal: isReign ? parsedDynastyOrdinal : undefined,
+      // 재위 칸 — 재위에서 관직으로 바꿨거나 값을 비우면 수정 시 null(해제) 전송
+      regnalName: isReign ? regnalName.trim() || emptyAs : emptyAs,
+      dynastyOrdinal: isReign ? parsedDynastyOrdinal : emptyAs,
       // 즉위·취임 사건 — 사건 화면에서 건 연결도 수정 폼이 하이드레이트하므로 그대로 왕복된다
       accessionEventId: linkedAccessionEvent?.id ?? emptyAs,
       ordinal: parsedOrdinal,
@@ -1043,6 +1885,198 @@ export function TenureRegisterPanel({
   const hasStartDate = partialPartsToDateInfo(start) != null
   /** 재위 기간 역전 — 저장은 막지 않고 경고만(추존·복위) */
   const periodInverted = isPartialRangeInverted(start, end)
+  const periodBadge = useMemo(
+    () => computeTenurePeriodBadge(start, end, periodInverted),
+    [start, end, periodInverted],
+  )
+
+  const selectedModernCountry = useMemo(
+    () =>
+      countryId
+        ? modernCountryOptions.find((country) => country.id === countryId) ?? null
+        : null,
+    [countryId, modernCountryOptions],
+  )
+
+  const selectedHistoricalCountry = useMemo(() => {
+    if (!historicalCountryId) return null
+    return (
+      historicalCountryOptions.find((option) => option.id === historicalCountryId) ??
+      allHistoricalById.get(historicalCountryId) ??
+      ((editingTenure as { historicalCountry?: { id?: string; name?: string } } | null)
+        ?.historicalCountry
+        ? {
+            id: historicalCountryId,
+            name:
+              (editingTenure as { historicalCountry?: { name?: string } })?.historicalCountry
+                ?.name ?? '역사적 국가',
+          }
+        : null)
+    )
+  }, [historicalCountryId, historicalCountryOptions, allHistoricalById, editingTenure])
+
+  const selectedHistoricalPeriodLabel = useMemo(() => {
+    if (!selectedHistoricalCountry) return ''
+    return formatCountryPeriod(selectedHistoricalCountry as any, { variant: 'short' })
+  }, [selectedHistoricalCountry])
+
+  /**
+   * 역사적 국가 피커 시대 힌트 — 입력된 취임/퇴임 연도가 있으면 우선 사용하고,
+   * 아직 입력 전이면 인물의 생몰년(birthYear/deathYear)으로 그 시대의 국가를 상단에 띄운다.
+   */
+  const hintYearRange = useMemo(() => {
+    const startInfo = partialPartsToDateInfo(start)
+    const endInfo = partialPartsToDateInfo(end)
+    if (startInfo || endInfo) {
+      return {
+        startYear: startInfo ? toSignedYear(startInfo.era, startInfo.year) : null,
+        endYear: endInfo ? toSignedYear(endInfo.era, endInfo.year) : null,
+      }
+    }
+    const p = personDetail as
+      | {
+          birthYear?: number | null
+          birthEra?: string | null
+          deathYear?: number | null
+          deathEra?: string | null
+        }
+      | undefined
+    if (p?.birthYear != null || p?.deathYear != null) {
+      return {
+        startYear: toSignedYear(p.birthEra, p.birthYear),
+        endYear: toSignedYear(p.deathEra, p.deathYear),
+      }
+    }
+    return undefined
+  }, [start, end, personDetail])
+
+  /** 인물에 등록된 소속 국가(현대·역사) 인라인 바로 선택 목록 */
+  const personAffiliatedPolities = useMemo(() => {
+    const p = personDetail as
+      | {
+          countryId?: string | null
+          country?: { id?: string; name?: string | null; flagEmoji?: string | null } | null
+          historicalCountryId?: string | null
+          historicalCountry?: { id?: string; name?: string | null } | null
+          countryAffiliations?: Array<{
+            countryId?: string | null
+            historicalCountryId?: string | null
+            country?: { id?: string; name?: string | null; flagEmoji?: string | null } | null
+            historicalCountry?: { id?: string; name?: string | null } | null
+          }> | null
+        }
+      | undefined
+    if (!p) return []
+    const items: Array<{
+      key: string
+      id: string
+      name: string
+      isHistorical: boolean
+      flagEmoji?: string | null
+      periodText?: string
+    }> = []
+    const seen = new Set<string>()
+    const addModern = (id?: string | null, name?: string | null, flagEmoji?: string | null) => {
+      if (!id) return
+      const key = `m:${id}`
+      if (seen.has(key)) return
+      const found = modernCountryOptions.find((c) => c.id === id)
+      const resolvedName = name ?? found?.name
+      if (!resolvedName) return
+      seen.add(key)
+      items.push({
+        key,
+        id,
+        name: resolvedName,
+        isHistorical: false,
+        flagEmoji: flagEmoji ?? found?.flagEmoji ?? null,
+      })
+    }
+    const addHistorical = (id?: string | null, name?: string | null) => {
+      if (!id) return
+      const key = `h:${id}`
+      if (seen.has(key)) return
+      const found = allHistoricalById.get(id)
+      const resolvedName = name ?? found?.name
+      if (!resolvedName) return
+      seen.add(key)
+      const periodText = found ? formatCountryPeriod(found, { variant: 'short' }) : ''
+      items.push({
+        key,
+        id,
+        name: resolvedName,
+        isHistorical: true,
+        periodText: periodText || undefined,
+      })
+    }
+
+    for (const aff of p.countryAffiliations ?? []) {
+      if (aff.historicalCountryId || aff.historicalCountry?.id) {
+        addHistorical(
+          aff.historicalCountryId ?? aff.historicalCountry?.id,
+          aff.historicalCountry?.name,
+        )
+      }
+      if (aff.countryId || aff.country?.id) {
+        addModern(
+          aff.countryId ?? aff.country?.id,
+          aff.country?.name,
+          aff.country?.flagEmoji,
+        )
+      }
+    }
+    addHistorical(p.historicalCountryId ?? p.historicalCountry?.id, p.historicalCountry?.name)
+    addModern(p.countryId ?? p.country?.id, p.country?.name, p.country?.flagEmoji)
+    return items
+  }, [personDetail, modernCountryOptions, allHistoricalById])
+
+  /** 인물 생몰년 참고 및 사망일 원클릭 채우기 데이터 */
+  const personLifespanRef = useMemo(() => {
+    const p = personDetail as
+      | {
+          birthEra?: string | null
+          birthYear?: number | null
+          birthMonth?: number | null
+          birthDay?: number | null
+          deathEra?: string | null
+          deathYear?: number | null
+          deathMonth?: number | null
+          deathDay?: number | null
+        }
+      | undefined
+    if (!p || (p.birthYear == null && p.deathYear == null)) return null
+    const formatPart = (
+      era?: string | null,
+      year?: number | null,
+      month?: number | null,
+      day?: number | null,
+    ) => {
+      if (year == null) return null
+      const prefix = era === 'BC' ? 'BC ' : ''
+      const m = month ? `.${String(month).padStart(2, '0')}` : ''
+      const d = month && day ? `.${String(day).padStart(2, '0')}` : ''
+      return `${prefix}${year}${m}${d}`
+    }
+    const birthLabel = formatPart(p.birthEra, p.birthYear, p.birthMonth, p.birthDay)
+    const deathLabel = formatPart(p.deathEra, p.deathYear, p.deathMonth, p.deathDay)
+    const deathParts: PartialDateParts | null =
+      p.deathYear != null
+        ? {
+            era: p.deathEra === 'BC' ? 'BC' : 'AD',
+            year: String(p.deathYear),
+            month: p.deathMonth != null ? String(p.deathMonth) : '',
+            day: p.deathDay != null ? String(p.deathDay) : '',
+          }
+        : null
+    return {
+      summary: `${birthLabel ? `${birthLabel} 출생` : '출생 미상'} ~ ${
+        deathLabel ? `${deathLabel} 사망` : '생존·미상'
+      }`,
+      deathLabel,
+      deathParts,
+    }
+  }, [personDetail])
+
   /** 등록 버튼이 잠긴 이유 — 상단 '필수 항목' 띠 대신 버튼 옆 한 줄로(빨간 점과 중복되던 띠 제거) */
   const missingRequired = [
     !hasCountry && '국가',
@@ -1066,6 +2100,11 @@ export function TenureRegisterPanel({
     : isMinisterFlow
       ? '각료 등록'
       : `${recordNoun} 등록`
+  const isLoadingEdit = Boolean(isEdit && tenureId && !editingTenure && loadingTenures)
+
+  const showCabinetField =
+    (!isHeadPositionType && (countryId || historicalCountryId) && cabinetOptions.length > 0) ||
+    Boolean(cabinetId || initialCabinetId)
 
   return (
     <>
@@ -1073,563 +2112,948 @@ export function TenureRegisterPanel({
         isOpen={open}
         onClose={onClose}
         title={panelTitle}
-        maxWidth="min(900px, 94vw)"
-        minHeight="auto"
+        maxWidth="min(1040px, 96vw)"
+        minHeight="min(680px, 86vh)"
+        fullBleedOnMobile
+        closeOnEsc={!submitting}
+        closeOnOverlayClick={!submitting}
       >
         <PersonRegisterModalFormScroll>
-          <S.Form id={FORM_ID} onSubmit={handleSubmit}>
-
-        {isEdit && tenureId && !editingTenure && loadingTenures && (
-          <InlineMessage $variant="loading">불러오는 중…</InlineMessage>
-        )}
-        {isEdit && tenureId && !editingTenure && !loadingTenures && (
-          <InlineMessage $variant="error">재임 기록을 찾을 수 없습니다.</InlineMessage>
-        )}
-
-        {/* 사건 등록 모달과 같은 문법 — 섹션 머리 없이 [라벨 | 입력] 행을 가는 선으로 가른다 */}
-        {isMinisterFlow && (
-          <FieldHint style={{ margin: '0 0 8px' }}>
-            해당 행정부에서의 직위와 취임·퇴임일을 입력하세요. 국가·행정부는 이미 선택된 상태입니다.
-          </FieldHint>
-        )}
-          <SidebarFormWrap>
-            <FormRows>
-              {personDetail && (
-                <FieldRow>
-                  <FieldLabel as="span">인물</FieldLabel>
-                  <FieldControl>
-                    <PersonChip>
-            <PersonChipThumb aria-hidden>
-              {(personDetail as { profileImageUrl?: string | null }).profileImageUrl && !personImageError ? (
-                <img
-                  src={
-                    getUploadImageUrl((personDetail as { profileImageUrl?: string }).profileImageUrl) ||
-                    (personDetail as { profileImageUrl?: string }).profileImageUrl
-                  }
-                  alt=""
-                  onError={() => setPersonImageError(true)}
-                />
-              ) : (
-                <FiUser size={20} />
+          {submitting && (
+            <KitBusyBar role="status" aria-live="polite">
+              {isEdit
+                ? '수정 사항을 저장하는 중...'
+                : `${recordNoun} 기록을 등록하는 중...`}
+            </KitBusyBar>
+          )}
+          {isLoadingEdit && (
+            <KitFormLoading label={`${recordNoun} 기록을 불러오는 중`} />
+          )}
+          <FormReveal hidden={isLoadingEdit}>
+            <S.Form id={FORM_ID} onSubmit={handleSubmit}>
+              {isEdit && tenureId && !editingTenure && !loadingTenures && (
+                <InlineMessage $variant="error">재임 기록을 찾을 수 없습니다.</InlineMessage>
               )}
-            </PersonChipThumb>
-            <span style={{ fontWeight: 500 }}>
-              {getPersonDisplayName(personDetail)}
-              {personDetail.primaryLabel && (
-                <PersonPrimaryLabel> · {personDetail.primaryLabel}</PersonPrimaryLabel>
-              )}
-            </span>
-                    </PersonChip>
-                  </FieldControl>
-                </FieldRow>
-              )}
-              <FieldRow>
-                <FieldLabel>
-                  {/* 재위는 국가 없이도 저장된다(교황 등 국가 밖 군주) */}
-                  국가 {countryRequired ? <Required aria-label="필수" /> : <OptionalTag>(선택)</OptionalTag>}
-                </FieldLabel>
-                <FieldControl>
-                  <SelectTriggerButton
-                    type="button"
-                    onClick={() => setCountryModalOpen(true)}
-                    $hasValue={!!countryId}
-                  >
-                    <span>
-                      {countryId
-                        ? (countries as any[]).find((c: any) => c.id === countryId)?.name ??
-                          (countries as any[]).find((c: any) => c.id === countryId)?.localName ??
-                          '선택됨'
-                        : '국가 선택'}
-                    </span>
-                    <FiChevronDown size={20} />
-                  </SelectTriggerButton>
-                </FieldControl>
-              </FieldRow>
 
-              {/* 현대 국가에 매이지 않는 정치체(교황령·신성로마제국 등)도 직접 고를 수 있도록 항상 렌더 */}
-              <FieldRow>
-                <FieldLabel>역사적 국가<OptionalTag>(선택)</OptionalTag></FieldLabel>
-                <FieldControl>
-                  <SelectTriggerButton
-                    type="button"
-                    onClick={() => setHistoricalCountryModalOpen(true)}
-                    $hasValue={!!historicalCountryId}
-                  >
-                    <span>
-                      {historicalCountryId
-                        ? historicalCountryOptions.find((option) => option.id === historicalCountryId)?.name ??
-                          (editingTenure as { historicalCountry?: { name?: string } })?.historicalCountry?.name ??
-                          '역사적 국가'
-                        : countryId
-                          ? '현대 국가 기준'
-                          : '역사적 국가 선택'}
-                    </span>
-                    <FiChevronDown size={20} />
-                  </SelectTriggerButton>
-                  <FieldHint style={{ marginTop: 6 }}>
-                    교황령·신성로마제국처럼 현대 국가에 속하지 않는 정치체도 직접 선택할 수 있습니다.
-                  </FieldHint>
-                </FieldControl>
-              </FieldRow>
+              <LabeledRowsWrap>
+                {/* ─── 묶음 1: 기본 정보 (사건 등록 모달 BasicInfoSection '기본 정보'와 동일 구조) ─── */}
+                <FormGroup aria-labelledby="tenure-form-group-basic">
+                  <FormGroupTitle id="tenure-form-group-basic">기본 정보</FormGroupTitle>
 
-              {initialAdministrationDepartmentId &&
-                initialAdministrationDepartmentName && (
-                  <FieldRow>
-                    <FieldLabel as="span">소속 부처</FieldLabel>
-                    <FieldControl>
-                      <PersonChip>
-                        <span style={{ fontWeight: 600 }}>
-                          {initialAdministrationDepartmentName}
-                        </span>
-                      </PersonChip>
-                    </FieldControl>
-                  </FieldRow>
-                )}
+                  {/* 인물 — 국가 카드와 동일한 톤의 요약 카드 */}
+                  {(personDetail ||
+                    (initialAdministrationDepartmentId &&
+                      initialAdministrationDepartmentName)) && (
+                    <FieldRow>
+                      <FieldLabel as="span">인물</FieldLabel>
+                      <FieldControl>
+                        <PersonContextCard>
+                          {personDetail && (
+                            <PersonChip>
+                              <PersonChipThumb aria-hidden>
+                                {(personDetail as { profileImageUrl?: string | null })
+                                  .profileImageUrl && !personImageError ? (
+                                  <img
+                                    src={
+                                      getUploadImageUrl(
+                                        (personDetail as { profileImageUrl?: string })
+                                          .profileImageUrl,
+                                      ) ||
+                                      (personDetail as { profileImageUrl?: string })
+                                        .profileImageUrl
+                                    }
+                                    alt=""
+                                    onError={() => setPersonImageError(true)}
+                                  />
+                                ) : (
+                                  <FiUser size={16} />
+                                )}
+                              </PersonChipThumb>
+                              <span style={{ fontWeight: 600 }}>
+                                {getPersonDisplayName(personDetail)}
+                                {personDetail.primaryLabel && (
+                                  <PersonPrimaryLabel>
+                                    {' '}
+                                    · {personDetail.primaryLabel}
+                                  </PersonPrimaryLabel>
+                                )}
+                              </span>
+                            </PersonChip>
+                          )}
+                          <PersonMetaRight>
+                            {personLifespanRef && (
+                              <PersonLifespanBadge>
+                                {personLifespanRef.summary}
+                              </PersonLifespanBadge>
+                            )}
+                            {initialAdministrationDepartmentId &&
+                              initialAdministrationDepartmentName && (
+                                <DepartmentBadge title="소속 부처">
+                                  {initialAdministrationDepartmentName}
+                                </DepartmentBadge>
+                              )}
+                          </PersonMetaRight>
+                        </PersonContextCard>
+                      </FieldControl>
+                    </FieldRow>
+                  )}
 
-              <FieldRow>
-                <FieldLabel>
-                  직책명 <Required aria-label="필수" />
-                </FieldLabel>
-                <FieldControl>
-                  <SelectTriggerButton
-                    type="button"
-                    onClick={() => setPositionModalOpen(true)}
-                    $hasValue={!!positionDefinitionId || !!title.trim()}
-                  >
-                    <span>{positionTitleLabel}</span>
-                    <FiChevronDown size={20} />
-                  </SelectTriggerButton>
-                  {(cabinetId || initialCabinetId) && (
-                    <FieldHint style={{ marginTop: 6 }}>
-                      부처를 미리 등록하지 않아도 <strong>기타 (직접 입력)</strong>으로 직위명(예: 국방장관, 외무대신)을 넣을 수 있습니다.
-                    </FieldHint>
-                  )}
-                  {/* 국가 미선택이면 전 카탈로그가 보인다는 사실을 숨기지 않고 알려 준다.
-                      조용히 좁히는 대신 사용자가 좁힐 방법을 안내(보이지 않는 필터 금지). */}
-                  {!countryId && !historicalCountryId && (
-                    <FieldHint style={{ marginTop: 6 }}>
-                      국가를 먼저 고르면 그 나라의 직책만 추려서 보여줍니다.
-                    </FieldHint>
-                  )}
-                  {/*
-                    카탈로그에 외무장관은 있는데 외무대신은 없다 — 고른 정의 위에 표기만
-                    덧씌우면 표시 지면(정의 우선)에 안 나오므로, 원본은 그대로 두고 이 나라
-                    전용 정의를 새로 담는다.
-                  */}
-                  {positionDefinitionId && !localTitleOpen && (
-                    <FieldHint style={{ marginTop: 6 }}>
-                      {countryId || historicalCountryId ? (
-                        <>
-                          이 나라에서 다르게 부르나요? (예: 외무장관 → 외무대신){' '}
-                          <LocalTitleLink
-                            type="button"
-                            onClick={() => {
-                              setLocalTitleDraft(
-                                selectedDef?.title ??
-                                  (selectedDef as { name?: string } | null)?.name ??
-                                  title,
-                              )
-                              setLocalTitleOpen(true)
-                            }}
-                          >
-                            명칭 바꾸기
-                          </LocalTitleLink>
-                        </>
-                      ) : (
-                        '국가를 고르면 그 나라에서 부르는 이름(예: 외무대신)으로 바꿀 수 있습니다.'
-                      )}
-                    </FieldHint>
-                  )}
-                  {positionDefinitionId && localTitleOpen && (
-                    <ManualEntryGroup>
-                      <ManualEntryCaption>이 나라에서 부르는 이름</ManualEntryCaption>
-                      <ManualEntryField>
-                        <Input
-                          autoFocus
-                          value={localTitleDraft}
-                          onChange={(event) =>
-                            setLocalTitleDraft(event.target.value)
-                          }
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              void applyLocalTitle()
-                            }
-                            if (event.key === 'Escape') {
-                              event.preventDefault()
-                              setLocalTitleOpen(false)
+                  {/* 구분 — 사건 등록 모달 '종류(단일/묶음)' 행과 동일한 SegmentControl chips */}
+                  {!isMinisterFlow && !isEdit && (
+                    <FieldRow>
+                      <FieldLabel as="span">구분</FieldLabel>
+                      <FieldControl>
+                        <SegmentControl
+                          appearance="chips"
+                          ariaLabel="기록 구분"
+                          value={monarchicalMode ? 'reign' : 'tenure'}
+                          onChange={(next) => {
+                            if (next === 'reign') {
+                              defaultReignAppliedRef.current = false
+                              setMonarchicalMode(true)
+                              if (selectedDef && !selectedDef.isMonarchical) {
+                                setPositionDefinitionId(null)
+                                setTitle('')
+                                setTitleEn('')
+                              }
+                            } else {
+                              setMonarchicalMode(false)
+                              if (selectedDef?.isMonarchical) {
+                                setPositionDefinitionId(null)
+                                setTitle('')
+                                setTitleEn('')
+                              }
                             }
                           }}
-                          placeholder="예: 외무대신"
+                          options={[
+                            { value: 'tenure', label: '관직 재임' },
+                            { value: 'reign', label: '군주 재위' },
+                          ]}
                         />
-                      </ManualEntryField>
-                      <LocalTitleActions>
-                        <LocalTitleSubmit
+                        <FieldHint>
+                          {monarchicalMode
+                            ? '국왕·황제·교황 등 군주의 재위 기간과 왕호·즉위 순서를 기록합니다.'
+                            : '대통령·총리·장관·영의정 등 공직 임기와 대수를 기록합니다.'}
+                        </FieldHint>
+                      </FieldControl>
+                    </FieldRow>
+                  )}
+
+                  {/* 국가·정체 — 사건 등록 모달 '참여국' 카드 형태(이모지 없이 깔끔한 정보 카드) + 소속 국가 빠른 선택 */}
+                  <FieldRow>
+                    <FieldLabel as="span">
+                      국가·정체
+                      {countryRequired ? (
+                        <Required aria-label="필수" />
+                      ) : (
+                        <OptionalTag>(선택)</OptionalTag>
+                      )}
+                    </FieldLabel>
+                    <FieldControl>
+                      {selectedHistoricalCountry || selectedModernCountry ? (
+                        <CountryParticipantCard>
+                          <CountryCardMain
+                            type="button"
+                            onClick={() => setCountryModalOpen(true)}
+                            title="클릭하여 국가 변경"
+                          >
+                            <CountryCardName>
+                              {selectedHistoricalCountry
+                                ? `${selectedHistoricalCountry.name}${
+                                    selectedHistoricalPeriodLabel
+                                      ? ` (${selectedHistoricalPeriodLabel})`
+                                      : ''
+                                  }`
+                                : (selectedModernCountry?.name ?? '')}
+                            </CountryCardName>
+                            <CountryCardMeta>
+                              <TriggerKindTag $historical={!!selectedHistoricalCountry}>
+                                {selectedHistoricalCountry ? '역사적 국가' : '현대 국가'}
+                              </TriggerKindTag>
+                              {selectedHistoricalCountry?.enName && (
+                                <CountryCardSubText>
+                                  {selectedHistoricalCountry.enName}
+                                </CountryCardSubText>
+                              )}
+                              {!selectedHistoricalCountry && selectedModernCountry && (
+                                <CountryCardSubText>
+                                  {[
+                                    selectedModernCountry.isoCode,
+                                    selectedModernCountry.enName,
+                                    selectedModernCountry.capital,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </CountryCardSubText>
+                              )}
+                            </CountryCardMeta>
+                          </CountryCardMain>
+                          <CountryCardActions>
+                            <CountryCardChangeBtn
+                              type="button"
+                              onClick={() => setCountryModalOpen(true)}
+                            >
+                              변경
+                            </CountryCardChangeBtn>
+                            <CountryCardRemoveBtn
+                              type="button"
+                              aria-label="국가 선택 해제"
+                              title="국가 선택 해제"
+                              onClick={() => {
+                                setCountryId('')
+                                setHistoricalCountryId(null)
+                                setCabinetId(null)
+                              }}
+                            >
+                              <FiX size={14} />
+                            </CountryCardRemoveBtn>
+                          </CountryCardActions>
+                        </CountryParticipantCard>
+                      ) : (
+                        <SelectTriggerButton
                           type="button"
-                          disabled={localTitleSaving || !localTitleDraft.trim()}
-                          onClick={() => void applyLocalTitle()}
+                          onClick={() => setCountryModalOpen(true)}
+                          $hasValue={false}
                         >
-                          {localTitleSaving ? '담는 중…' : '이 나라 직책으로 담기'}
-                        </LocalTitleSubmit>
-                        <LocalTitleCancel
-                          type="button"
-                          disabled={localTitleSaving}
-                          onClick={() => setLocalTitleOpen(false)}
-                        >
-                          취소
-                        </LocalTitleCancel>
-                      </LocalTitleActions>
+                          <span>국가 선택 (현대 국가 · 역사적 국가)</span>
+                          <FiChevronDown size={18} />
+                        </SelectTriggerButton>
+                      )}
+
+                      {personAffiliatedPolities.length > 0 && (
+                        <AffiliatedPolityBar>
+                          <AffiliatedPolityLabel>인물 소속 국가:</AffiliatedPolityLabel>
+                          {personAffiliatedPolities.map((polity) => {
+                            const isActive = polity.isHistorical
+                              ? historicalCountryId === polity.id && !countryId
+                              : countryId === polity.id && !historicalCountryId
+                            return (
+                              <AffiliatedPolityChip
+                                key={polity.key}
+                                type="button"
+                                aria-label={polity.name}
+                                $active={isActive}
+                                onClick={() => {
+                                  if (polity.isHistorical) {
+                                    if (historicalCountryId !== polity.id || countryId) {
+                                      setCountryId('')
+                                      setHistoricalCountryId(polity.id)
+                                      releasePositionOnCountryChange()
+                                    }
+                                  } else {
+                                    if (countryId !== polity.id || historicalCountryId) {
+                                      setCountryId(polity.id)
+                                      setHistoricalCountryId(null)
+                                      releasePositionOnCountryChange()
+                                    }
+                                  }
+                                }}
+                              >
+                                <span>{polity.name}</span>
+                                {polity.periodText && (
+                                  <CountryCardSubText style={{ fontSize: 11 }}>
+                                    {polity.periodText}
+                                  </CountryCardSubText>
+                                )}
+                              </AffiliatedPolityChip>
+                            )
+                          })}
+                        </AffiliatedPolityBar>
+                      )}
+                    </FieldControl>
+                  </FieldRow>
+
+                  {/* 직책명 — 클릭 시 바로 아래에 검색 가능한 Selectbox 드롭다운 노출 */}
+                  <FieldRow>
+                    <FieldLabel as="span">
+                      {isReign ? '직위·칭호' : '직책명'} <Required aria-label="필수" />
+                    </FieldLabel>
+                    <FieldControl>
+                      <PositionSelectWrap ref={positionDropdownRef}>
+                        <TriggerWrap>
+                          <SelectTriggerButton
+                            type="button"
+                            aria-haspopup="listbox"
+                            aria-expanded={positionModalOpen}
+                            onClick={() => setPositionModalOpen((prev) => !prev)}
+                            $hasValue={!!positionDefinitionId || !!title.trim()}
+                            $clearable={!!positionDefinitionId || !!title.trim()}
+                          >
+                            <span>{positionTitleLabel}</span>
+                            {(positionDefinitionId || title.trim()) &&
+                              POSITION_TYPE_SHORT_LABELS[positionType] && (
+                                <TriggerKindTag>
+                                  {POSITION_TYPE_SHORT_LABELS[positionType]}
+                                </TriggerKindTag>
+                              )}
+                            {!(positionDefinitionId || title.trim()) && (
+                              <FiChevronDown
+                                size={18}
+                                style={{
+                                  transform: positionModalOpen ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.15s ease',
+                                }}
+                              />
+                            )}
+                          </SelectTriggerButton>
+                          {(positionDefinitionId || title.trim()) && (
+                            <TriggerClearBtn
+                              type="button"
+                              aria-label="직책 선택 해제"
+                              title="직책 선택 해제"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setPositionDefinitionId(null)
+                                setPresetPositionType(null)
+                                setTitle('')
+                                setTitleEn('')
+                                setManualEntryOpen(false)
+                                setSpecificTitleOpen(false)
+                                setPositionModalOpen(false)
+                              }}
+                            >
+                              <FiX size={14} />
+                            </TriggerClearBtn>
+                          )}
+                        </TriggerWrap>
+
+                        {positionModalOpen && (
+                          <PositionSelectDropdown role="listbox" aria-label="직책명 목록">
+                            <PositionSearchHeader>
+                              <FiSearch size={14} />
+                              <PositionSearchInput
+                                ref={positionSearchInputRef}
+                                type="text"
+                                aria-label="직책명 검색"
+                                value={positionQuery}
+                                onChange={(e) => setPositionQuery(e.target.value)}
+                                placeholder={
+                                  isReign
+                                    ? '직위·칭호 검색 (예: 국왕, 황제, 교황...)'
+                                    : '직책명 검색 (예: 대통령, 영의정, 장관...)'
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault()
+                                    setPositionModalOpen(false)
+                                  } else if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    if (filteredPositionOptions.length > 0) {
+                                      handlePositionSelect(filteredPositionOptions[0].value)
+                                    } else if (positionQuery.trim()) {
+                                      setPositionDefinitionId(null)
+                                      setPresetPositionType(null)
+                                      setTitle(positionQuery.trim())
+                                      setManualEntryOpen(true)
+                                      setPositionModalOpen(false)
+                                    }
+                                  }
+                                }}
+                              />
+                              {positionQuery && (
+                                <CountryCardRemoveBtn
+                                  type="button"
+                                  aria-label="검색어 지우기"
+                                  onClick={() => setPositionQuery('')}
+                                  style={{ width: 22, height: 22 }}
+                                >
+                                  <FiX size={13} />
+                                </CountryCardRemoveBtn>
+                              )}
+                            </PositionSearchHeader>
+
+                            <PositionOptionList>
+                              {filteredPositionOptions.length === 0 ? (
+                                <PositionEmptyBox>
+                                  <span>일치하는 직책이 없습니다.</span>
+                                  {positionQuery.trim() && (
+                                    <CountryCardChangeBtn
+                                      type="button"
+                                      onClick={() => {
+                                        setPositionDefinitionId(null)
+                                        setPresetPositionType(null)
+                                        setTitle(positionQuery.trim())
+                                        setManualEntryOpen(true)
+                                        setPositionModalOpen(false)
+                                      }}
+                                    >
+                                      &lsquo;{positionQuery.trim()}&rsquo; 직접 입력하기
+                                    </CountryCardChangeBtn>
+                                  )}
+                                </PositionEmptyBox>
+                              ) : (
+                                (() => {
+                                  const rows: React.ReactNode[] = []
+                                  let currentGroup: string | undefined
+                                  let boundaryPassed = false
+
+                                  filteredPositionOptions.forEach((option) => {
+                                    if (!boundaryPassed || option.group !== currentGroup) {
+                                      currentGroup = option.group
+                                      boundaryPassed = true
+                                      if (option.group) {
+                                        const group = option.group
+                                        const expanded = isPositionGroupExpanded(group)
+                                        rows.push(
+                                          <PositionGroupHeader
+                                            key={`group-${group}`}
+                                            type="button"
+                                            aria-expanded={expanded}
+                                            onClick={() =>
+                                              setPositionGroupToggles((prev) => ({
+                                                ...prev,
+                                                [group]: !isPositionGroupExpandedByState(group),
+                                              }))
+                                            }
+                                          >
+                                            <span>{expanded ? '▾' : '▸'}</span>
+                                            <span>{group}</span>
+                                            <PositionGroupCount>
+                                              {positionGroupCounts.get(group) ?? 0}
+                                            </PositionGroupCount>
+                                          </PositionGroupHeader>,
+                                        )
+                                      }
+                                    }
+                                    if (option.group && !isPositionGroupExpanded(option.group)) {
+                                      return
+                                    }
+                                    const active = selectedPositionValue === option.value
+                                    rows.push(
+                                      <PositionOptionItemBtn
+                                        key={String(option.value)}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={active}
+                                        $active={active}
+                                        onClick={() => handlePositionSelect(option.value)}
+                                      >
+                                        <PositionOptionBody>
+                                          <span>{option.label}</span>
+                                          {option.description && (
+                                            <PositionOptionDesc>
+                                              {option.description}
+                                            </PositionOptionDesc>
+                                          )}
+                                        </PositionOptionBody>
+                                        {active && <FiCheck size={15} />}
+                                      </PositionOptionItemBtn>,
+                                    )
+                                  })
+                                  return rows
+                                })()
+                              )}
+                            </PositionOptionList>
+                          </PositionSelectDropdown>
+                        )}
+                      </PositionSelectWrap>
+
+                      {(positionDefinitionId &&
+                        !localTitleOpen &&
+                        (countryId || historicalCountryId)) ||
+                      (selectedDef &&
+                        !selectedIsGeneric &&
+                        !specificTitleOpen &&
+                        !title.trim()) ||
+                      (!positionDefinitionId && !manualEntryOpen && !title.trim()) ? (
+                        <FieldHint>
+                          {positionDefinitionId &&
+                            !localTitleOpen &&
+                            (countryId || historicalCountryId) && (
+                              <>
+                                이 나라에서 다른 명칭으로 부른다면{' '}
+                                <LocalTitleLink
+                                  type="button"
+                                  onClick={() => {
+                                    setLocalTitleDraft(
+                                      selectedDef?.title ??
+                                        (selectedDef as { name?: string } | null)?.name ??
+                                        title,
+                                    )
+                                    setLocalTitleOpen(true)
+                                  }}
+                                >
+                                  명칭 바꾸기
+                                </LocalTitleLink>
+                              </>
+                            )}
+                          {selectedDef &&
+                            !selectedIsGeneric &&
+                            !specificTitleOpen &&
+                            !title.trim() && (
+                              <>
+                                {positionDefinitionId &&
+                                  !localTitleOpen &&
+                                  (countryId || historicalCountryId) &&
+                                  ' · '}
+                                대사·장관 등 부임지나 보직을 덧붙이려면{' '}
+                                <LocalTitleLink
+                                  type="button"
+                                  onClick={() => setSpecificTitleOpen(true)}
+                                >
+                                  구체 직함 추가
+                                </LocalTitleLink>
+                              </>
+                            )}
+                          {!positionDefinitionId && !manualEntryOpen && !title.trim() && (
+                            <>
+                              목록에 찾는 직책이 없으면{' '}
+                              <LocalTitleLink
+                                type="button"
+                                onClick={() => setManualEntryOpen(true)}
+                              >
+                                직접 입력
+                              </LocalTitleLink>
+                            </>
+                          )}
+                        </FieldHint>
+                      ) : null}
+
+                      {positionDefinitionId && localTitleOpen && (
+                        <ManualEntryGroup>
+                          <ManualEntryCaption>이 나라에서 부르는 이름</ManualEntryCaption>
+                          <ManualEntryField>
+                            <Input
+                              autoFocus
+                              value={localTitleDraft}
+                              onChange={(event) => setLocalTitleDraft(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  void applyLocalTitle()
+                                }
+                                if (event.key === 'Escape') {
+                                  event.preventDefault()
+                                  setLocalTitleOpen(false)
+                                }
+                              }}
+                              placeholder="예: 외무대신"
+                            />
+                          </ManualEntryField>
+                          <LocalTitleActions>
+                            <LocalTitleSubmit
+                              type="button"
+                              disabled={localTitleSaving || !localTitleDraft.trim()}
+                              onClick={() => void applyLocalTitle()}
+                            >
+                              {localTitleSaving ? '담는 중…' : '이 나라 직책으로 담기'}
+                            </LocalTitleSubmit>
+                            <LocalTitleCancel
+                              type="button"
+                              disabled={localTitleSaving}
+                              onClick={() => setLocalTitleOpen(false)}
+                            >
+                              취소
+                            </LocalTitleCancel>
+                          </LocalTitleActions>
+                        </ManualEntryGroup>
+                      )}
+
+                      {selectedDef &&
+                        !selectedIsGeneric &&
+                        (specificTitleOpen || !!title.trim()) && (
+                          <ManualEntryGroup>
+                            <ManualEntryCaption>
+                              구체 직함{' '}
+                              <LocalTitleLink
+                                type="button"
+                                style={{ marginLeft: 8 }}
+                                onClick={() => {
+                                  setTitle('')
+                                  setSpecificTitleOpen(false)
+                                }}
+                              >
+                                닫기
+                              </LocalTitleLink>
+                            </ManualEntryCaption>
+                            <Input
+                              value={title}
+                              onChange={(event) => setTitle(event.target.value)}
+                              placeholder={`예: 주러시아 ${selectedDef.title ?? ''}`}
+                            />
+                          </ManualEntryGroup>
+                        )}
+
+                      {(!positionDefinitionId || selectedIsGeneric) &&
+                        (manualEntryOpen || !!title.trim() || selectedIsGeneric) && (
+                          <ManualEntryGroup>
+                            <ManualEntryCaption>
+                              {selectedIsGeneric ? '구체 직함' : '직접 입력'}
+                            </ManualEntryCaption>
+                            <SubFieldPair>
+                              <ManualEntryField>
+                                한글 직책명
+                                <Input
+                                  value={title}
+                                  onChange={(e) => setTitle(e.target.value)}
+                                  placeholder={
+                                    selectedIsGeneric
+                                      ? '예: 제7보병연대 소위'
+                                      : '예: 광저우 영국 영사'
+                                  }
+                                />
+                              </ManualEntryField>
+                              <ManualEntryField>
+                                영문 직책명 (선택)
+                                <Input
+                                  value={titleEn}
+                                  onChange={(e) => setTitleEn(e.target.value)}
+                                  placeholder="예: Consul at Canton"
+                                />
+                              </ManualEntryField>
+                            </SubFieldPair>
+                          </ManualEntryGroup>
+                        )}
+                    </FieldControl>
+                  </FieldRow>
+
+                  {/* 기간 — 사건 등록 모달 '기간 *' 행(라벨 아래 PeriodBadge + 우측 2열 DateRangeGrid + 하단 Hint)과 100% 동일 */}
+                  <FieldRow>
+                    <FieldLabel as="div">
+                      <div>
+                        기간 <Required aria-label="필수" />
+                      </div>
+                      {periodBadge && (
+                        <PeriodBadge>
+                          <FiClock size={12} />
+                          {periodBadge.text}
+                          {periodBadge.sub && <span> {periodBadge.sub}</span>}
+                        </PeriodBadge>
+                      )}
+                    </FieldLabel>
+                    <FieldControl>
+                      <SubFieldPair>
+                        <SubField>
+                          <SubFieldLabel>{isReign ? '즉위일' : '취임일'}</SubFieldLabel>
+                          <InlineDateField
+                            appearance="field"
+                            ariaLabel={isReign ? '즉위일' : '취임일'}
+                            era={start.era}
+                            year={start.year}
+                            month={start.month}
+                            day={start.day}
+                            onEra={(era) => patchStart({ era })}
+                            onYear={(year) => patchStart({ year })}
+                            onMonth={(month) => patchStart({ month })}
+                            onDay={(day) => patchStart({ day })}
+                            onOpenPicker={() => setDatePickerSide('start')}
+                          />
+                        </SubField>
+
+                        <SubField>
+                          <SubFieldLabel>
+                            {isReign ? '퇴위일 (비우면 현재)' : '퇴임일 (비우면 재임 중)'}
+                          </SubFieldLabel>
+                          <InlineDateField
+                            appearance="field"
+                            ariaLabel={isReign ? '퇴위일' : '퇴임일'}
+                            era={end.era}
+                            year={end.year}
+                            month={end.month}
+                            day={end.day}
+                            onEra={(era) => patchEnd({ era })}
+                            onYear={(year) => patchEnd({ year })}
+                            onMonth={(month) => patchEnd({ month })}
+                            onDay={(day) => patchEnd({ day })}
+                            onOpenPicker={() => setDatePickerSide('end')}
+                            error={periodInverted}
+                            ariaDescribedBy={periodInverted ? 'tenure-period-error' : undefined}
+                          />
+                        </SubField>
+                      </SubFieldPair>
+
+                      {periodInverted && (
+                        <div id="tenure-period-error" role="alert">
+                          <AlertBox variant="warning" icon="⚠️">
+                            {isReign
+                              ? '퇴위가 즉위보다 빠릅니다 — 추존·복위 등 정당한 경우가 아니면 확인해 주세요.'
+                              : '퇴임일이 취임일보다 빠릅니다.'}
+                          </AlertBox>
+                        </div>
+                      )}
+                      {lifespanWarning && (
+                        <AlertBox variant="warning" icon="⚠️">
+                          선택한 역사국가 {lifespanWarning} 소급·추존·망명 등 정당한 경우라면 그대로 저장하세요.
+                        </AlertBox>
+                      )}
+
                       <FieldHint>
-                        「{selectedDef?.title ?? title}」은 그대로 두고 이 나라 전용 직책을
-                        새로 만듭니다. 다른 나라 재임에는 영향이 없고, 다음부터 이 나라
-                        직책 목록에 바로 나옵니다.
+                        연도만 알면 연도만 입력해도 됩니다.
+                        {personLifespanRef?.deathParts && !end.year.trim() && (
+                          <>
+                            {' · '}
+                            <LocalTitleLink
+                              type="button"
+                              onClick={() => {
+                                if (!personLifespanRef.deathParts) return
+                                setEnd(personLifespanRef.deathParts)
+                                if (!endReason) setEndReason('DEATH_IN_OFFICE')
+                              }}
+                            >
+                              사망일({personLifespanRef.deathLabel})을{' '}
+                              {isReign ? '퇴위일' : '퇴임일'}로 채우기
+                            </LocalTitleLink>
+                          </>
+                        )}
                       </FieldHint>
-                    </ManualEntryGroup>
-                  )}
-                  {/* 카탈로그 정의 + 구체 직함(선택) — '대사'를 고르고 '주러시아 대사'처럼 더 구체적으로.
-                      표시는 구체 직함 → 없으면 정의 이름이라, 여기 적은 값이 그대로 보인다. */}
-                  {selectedDef && !selectedIsGeneric && (
-                    <ManualEntryField style={{ marginTop: 8 }}>
-                      구체 직함 (선택)
-                      <Input
-                        value={title === (selectedDef.title ?? '') ? '' : title}
-                        onChange={(event) => setTitle(event.target.value || (selectedDef.title ?? ''))}
-                        placeholder={`예: 주러시아 ${selectedDef.title ?? ''}`}
+                    </FieldControl>
+                  </FieldRow>
+
+                  {/* 대수·기수 (재위 시 왕호·즉위 순서·왕조 서수·기수) */}
+                  <FieldRow>
+                    <FieldLabel as="span">
+                      {isReign ? '왕호 · 서수' : '대수 · 기수'}
+                      <OptionalTag>(선택)</OptionalTag>
+                    </FieldLabel>
+                    <FieldControl>
+                      {isReign ? (
+                        <SubFieldPair $cols={4}>
+                          <SubField>
+                            <SubFieldLabel htmlFor="tenure-regnal-name">왕호</SubFieldLabel>
+                            <Input
+                              id="tenure-regnal-name"
+                              value={regnalName}
+                              onChange={(event) => setRegnalName(event.target.value)}
+                              placeholder="예: 세종, 루이 14세"
+                            />
+                          </SubField>
+                          <SubField>
+                            <SubFieldLabel htmlFor="tenure-ordinal">
+                              즉위 순서 (제N대)
+                            </SubFieldLabel>
+                            <Input
+                              id="tenure-ordinal"
+                              type="number"
+                              min={1}
+                              value={ordinalNumber}
+                              onChange={(e) => setOrdinalNumber(e.target.value)}
+                              placeholder="예: 4"
+                            />
+                          </SubField>
+                          <SubField>
+                            <SubFieldLabel htmlFor="tenure-dynasty-ordinal">
+                              왕조 서수
+                            </SubFieldLabel>
+                            <Input
+                              id="tenure-dynasty-ordinal"
+                              type="number"
+                              min={1}
+                              value={dynastyOrdinal}
+                              onChange={(event) => setDynastyOrdinal(event.target.value)}
+                              placeholder="예: 4"
+                            />
+                          </SubField>
+                          <SubField>
+                            <SubFieldLabel htmlFor="tenure-subterm">기수</SubFieldLabel>
+                            <Input
+                              id="tenure-subterm"
+                              type="number"
+                              min={1}
+                              value={subTermNumber}
+                              onChange={(e) => setSubTermNumber(e.target.value)}
+                              placeholder="예: 1"
+                            />
+                          </SubField>
+                        </SubFieldPair>
+                      ) : (
+                        <SubFieldPair>
+                          <SubField>
+                            <SubFieldLabel htmlFor="tenure-ordinal">대수</SubFieldLabel>
+                            <Input
+                              id="tenure-ordinal"
+                              type="number"
+                              min={1}
+                              value={ordinalNumber}
+                              onChange={(e) => setOrdinalNumber(e.target.value)}
+                              placeholder="예: 제20대 → 20"
+                            />
+                          </SubField>
+                          <SubField>
+                            <SubFieldLabel htmlFor="tenure-subterm">기수</SubFieldLabel>
+                            <Input
+                              id="tenure-subterm"
+                              type="number"
+                              min={1}
+                              value={subTermNumber}
+                              onChange={(e) => setSubTermNumber(e.target.value)}
+                              placeholder="예: 1기 → 1"
+                            />
+                          </SubField>
+                        </SubFieldPair>
+                      )}
+                    </FieldControl>
+                  </FieldRow>
+                </FormGroup>
+
+                {/* ─── 묶음 2: 경위 및 연결 (사건 등록 모달 '연결' 묶음과 동일 구조) ─── */}
+                <FormGroup aria-labelledby="tenure-form-group-link">
+                  <FormGroupTitle id="tenure-form-group-link">경위 및 연결</FormGroupTitle>
+
+                  {/* 즉위·취임 경위 — 커스텀 Dropbox + 넉넉한 서술형 Textarea */}
+                  <FieldRow>
+                    <FieldLabel as="span">
+                      {isReign ? '즉위 경위' : '취임 경위'}
+                      <OptionalTag>(선택)</OptionalTag>
+                    </FieldLabel>
+                    <FieldControl>
+                      <CustomDropbox
+                        id="tenure-appointment-method"
+                        ariaLabel={isReign ? '즉위 방식' : '취임 방식'}
+                        value={appointmentMethod}
+                        placeholder={isReign ? '즉위 방식 선택' : '취임 방식 선택'}
+                        options={APPOINTMENT_METHOD_OPTIONS}
+                        onChange={setAppointmentMethod}
                       />
-                    </ManualEntryField>
-                  )}
-                  {/* 정의를 고르지 않은 경우(기타·내장 직책) 또는 일반 정의를 고른 경우 직접 입력 */}
-                  {/* 목록을 고르기 전 첫 화면에선 입력칸 대신 여는 링크만 — 목록에 없을 때의 탈출구 */}
-                  {!positionDefinitionId && !manualEntryOpen && !title.trim() && (
-                    <FieldHint style={{ marginTop: 6 }}>
-                      목록에 없는 직책인가요?{' '}
-                      <LocalTitleLink type="button" onClick={() => setManualEntryOpen(true)}>
-                        직접 입력
-                      </LocalTitleLink>
-                    </FieldHint>
-                  )}
-                  {(!positionDefinitionId || selectedIsGeneric) && (manualEntryOpen || !!title.trim() || selectedIsGeneric) && (
-                    <ManualEntryGroup>
-                      <ManualEntryCaption>{selectedIsGeneric ? '구체 직함' : '직접 입력'}</ManualEntryCaption>
-                      <ManualEntryField>
-                        한글 직책명
-                        <Input
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          placeholder={selectedIsGeneric ? '예: 제7보병연대 소위' : '예: 광저우 영국 영사'}
-                        />
-                      </ManualEntryField>
-                      <ManualEntryField>
-                        영문 직책명 (선택)
-                        <Input
-                          value={titleEn}
-                          onChange={(e) => setTitleEn(e.target.value)}
-                          placeholder="예: Consul at Canton"
-                        />
-                      </ManualEntryField>
-                    </ManualEntryGroup>
-                  )}
-                </FieldControl>
-              </FieldRow>
-
-              {/* 수반 직책은 cabinetId 동시 지정 시 백엔드 400 — 필드 자체를 숨겨 사전 차단 */}
-              {!isHeadPositionType && (countryId || historicalCountryId) && cabinetOptions.length > 0 && (
-                <FieldRow>
-                  <FieldLabel>소속 행정부<OptionalTag>(선택)</OptionalTag></FieldLabel>
-                  <FieldControl>
-                    <SelectTriggerButton
-                      type="button"
-                      onClick={() => setCabinetModalOpen(true)}
-                      $hasValue={!!cabinetId}
-                    >
-                      <span>
-                        {cabinetId
-                          ? cabinetOptions.find((o) => o.value === cabinetId)?.label ?? '선택됨'
-                          : '행정부 선택 (각료인 경우)'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </SelectTriggerButton>
-                  </FieldControl>
-                </FieldRow>
-              )}
-
-              {(cabinetId || initialCabinetId) && (
-                <FieldRow>
-                  <FieldLabel>관련 사건</FieldLabel>
-                  <FieldControl>
-                    <EventAttachButton
-                      type="button"
-                      onClick={() => setEventAttachModalOpen(true)}
-                    >
-                      <FiLink size={13} />
-                      이 행정부에 사건 등록·연결
-                    </EventAttachButton>
-                    <FieldHint style={{ marginTop: 6 }}>
-                      재임 중 일어난 사건을 새로 만들거나 기존 사건을 이 행정부와 연결합니다. 같은 사건을 다른 행정부에서도 다시 연결할 수 있습니다.
-                    </FieldHint>
-                  </FieldControl>
-                </FieldRow>
-              )}
-
-              {isReign && (
-                <FieldRow>
-                  <FieldLabel htmlFor="tenure-regnal-name">
-                    왕호<OptionalTag>(선택)</OptionalTag>
-                  </FieldLabel>
-                  <FieldControl>
-                    <Input
-                      id="tenure-regnal-name"
-                      value={regnalName}
-                      onChange={(event) => setRegnalName(event.target.value)}
-                      placeholder="예: 루이 14세, 빅토리아, 인노첸시오 3세"
-                    />
-                  </FieldControl>
-                </FieldRow>
-              )}
-
-              {/* 기간 — 구조화 파츠(기원전·연 단위까지). 월·일을 비우면 그만큼만 안다는 뜻 */}
-              <FieldRow>
-                <FieldLabel as="span">
-                  {isReign ? '재위 기간' : '재임 기간'} <Required aria-label="필수" />
-                </FieldLabel>
-                <FieldControl>
-                  <PeriodRow>
-                    <PeriodCol>
-                      <PeriodLabel>{isReign ? '즉위' : '취임'}</PeriodLabel>
-                      <InlineDateField
-                        ariaLabel={isReign ? '즉위일' : '취임일'}
-                        era={start.era}
-                        year={start.year}
-                        month={start.month}
-                        day={start.day}
-                        onEra={(era) => patchStart({ era })}
-                        onYear={(year) => patchStart({ year })}
-                        onMonth={(month) => patchStart({ month })}
-                        onDay={(day) => patchStart({ day })}
-                        onOpenPicker={() => setDatePickerSide('start')}
-                      />
-                    </PeriodCol>
-                    <PeriodCol>
-                      <PeriodLabel>{isReign ? '퇴위 (비워두면 현재)' : '퇴임 (비워두면 재임 중)'}</PeriodLabel>
-                      <InlineDateField
-                        ariaLabel={isReign ? '퇴위일' : '퇴임일'}
-                        era={end.era}
-                        year={end.year}
-                        month={end.month}
-                        day={end.day}
-                        onEra={(era) => patchEnd({ era })}
-                        onYear={(year) => patchEnd({ year })}
-                        onMonth={(month) => patchEnd({ month })}
-                        onDay={(day) => patchEnd({ day })}
-                        onOpenPicker={() => setDatePickerSide('end')}
-                        error={periodInverted}
-                        ariaDescribedBy={periodInverted ? 'tenure-period-error' : undefined}
-                      />
-                    </PeriodCol>
-                  </PeriodRow>
-                  <FieldHint>
-                    연도만 입력해도 됩니다(월·일은 비워도 됨). 기원전은 연도 왼쪽 BC 버튼으로, 정확한 날짜는
-                    달력(📅)으로 고르세요.
-                  </FieldHint>
-                  {periodInverted && (
-                    <div id="tenure-period-error" role="alert">
-                      <AlertBox variant="warning" icon="⚠️" style={{ marginTop: 4 }}>
-                        {isReign
-                          ? '퇴위가 즉위보다 빠릅니다 — 추존·복위 등 정당한 경우가 아니면 확인해 주세요.'
-                          : '퇴임일이 취임일보다 빠릅니다.'}
-                      </AlertBox>
-                    </div>
-                  )}
-                  {lifespanWarning && (
-                    <AlertBox variant="warning" icon="⚠️" style={{ marginTop: 4 }}>
-                      선택한 역사국가 {lifespanWarning} 소급·추존·망명 등 정당한 경우라면 그대로 저장하세요.
-                    </AlertBox>
-                  )}
-                </FieldControl>
-              </FieldRow>
-
-              {/* 대수·기수 — 한 행 안에 작은 소제목 둘(사건 모달의 시작일/종료일 문법) */}
-              <FieldRow>
-                <FieldLabel as="span">
-                  {isReign ? '즉위 순서·기수' : '대수·기수'}
-                  <OptionalTag>(선택)</OptionalTag>
-                </FieldLabel>
-                <FieldControl>
-                  <SubFieldPair>
-                    <SubField>
-                      <SubFieldLabel htmlFor="tenure-ordinal">
-                        {isReign ? '즉위 순서 (제N대)' : '대수'}
-                      </SubFieldLabel>
-                      {/* 대수 — 재위·재임 공통 '선택한 국가/정체 기준 통산 제N대' */}
-                      <Input
-                        id="tenure-ordinal"
-                        type="number"
-                        min={1}
-                        value={ordinalNumber}
-                        onChange={(e) => setOrdinalNumber(e.target.value)}
-                        placeholder={isReign ? '예: 러시아 제국 제1대 → 1' : '예: 제20대 → 20'}
-                        title={
+                      <Textarea
+                        id="tenure-appointment-detail"
+                        aria-label={isReign ? '즉위 상세' : '취임 상세'}
+                        value={appointmentDetail}
+                        onChange={(event) => setAppointmentDetail(event.target.value)}
+                        rows={3}
+                        placeholder={
                           isReign
-                            ? '선택한 국가/정체 기준 통산 즉위 순서 — 루이 14세식 이름별 번호는 재위명(왕명)에'
-                            : '공식 통산 대수 — 없으면 비워두기'
+                            ? '어떻게 즉위했는지 서술 (예: 선왕 서거 후 왕세자로서 즉위, 반정으로 추대 등)'
+                            : '어떻게 취임했는지 서술 (예: 대선 승리, 의회 선출, 권한대행 후 정식 취임 등)'
                         }
                       />
-                    </SubField>
-                    <SubField>
-                      <SubFieldLabel htmlFor="tenure-subterm">기수</SubFieldLabel>
-                      <Input
-                        id="tenure-subterm"
-                        type="number"
-                        min={1}
-                        value={subTermNumber}
-                        onChange={(e) => setSubTermNumber(e.target.value)}
-                        placeholder="예: 1기 → 1, 2기 → 2"
-                        title="같은 대수 내 복수 임기 구분 (예: 클린턴 42대 1기/2기)"
+                    </FieldControl>
+                  </FieldRow>
+
+                  {/* 퇴위·퇴임 경위 — 커스텀 Dropbox + 넉넉한 서술형 Textarea */}
+                  <FieldRow>
+                    <FieldLabel as="span">
+                      {isReign ? '퇴위 경위' : '퇴임 경위'}
+                      <OptionalTag>(선택)</OptionalTag>
+                    </FieldLabel>
+                    <FieldControl>
+                      <CustomDropbox
+                        id="tenure-end-reason"
+                        ariaLabel="퇴임 사유"
+                        value={endReason}
+                        placeholder={isReign ? '퇴위 사유 선택' : '퇴임 사유 선택'}
+                        options={TENURE_END_REASON_OPTIONS}
+                        onChange={setEndReason}
                       />
-                    </SubField>
-                  </SubFieldPair>
-                  <FieldHint>공식 통산 대수가 없으면 비워 두세요. 기수는 같은 대수 안의 연임 구분입니다.</FieldHint>
-                </FieldControl>
-              </FieldRow>
-
-              {isReign && (
-                <FieldRow>
-                  <FieldLabel>왕조 서수<OptionalTag>(선택)</OptionalTag></FieldLabel>
-                  <FieldControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={dynastyOrdinal}
-                      onChange={(event) => setDynastyOrdinal(event.target.value)}
-                      placeholder="선택 (예: 부르봉 왕조 5대 → 5)"
-                      title="소속 왕조 내 계승 순번 — 재위번호·통산 대수와 별개 축"
-                    />
-                  </FieldControl>
-                </FieldRow>
-              )}
-
-              {/* 취임 — 방식은 칩(사건 카테고리 문법, 다시 누르면 해제) + 서술 */}
-              <FieldRow>
-                <FieldLabel as="span">
-                  {isReign ? '즉위' : '취임'}
-                  <OptionalTag>(선택)</OptionalTag>
-                </FieldLabel>
-                <FieldControl>
-                  <ChoiceChips role="group" aria-label={isReign ? '즉위 방식' : '취임 방식'}>
-                    {APPOINTMENT_METHOD_OPTIONS.map((option) => (
-                      <ChoiceChip
-                        key={option.value}
-                        type="button"
-                        aria-pressed={appointmentMethod === option.value}
-                        $selected={appointmentMethod === option.value}
-                        onClick={() =>
-                          setAppointmentMethod(appointmentMethod === option.value ? '' : option.value)
+                      <Textarea
+                        id="tenure-end-reason-detail"
+                        aria-label="퇴임 사유 상세"
+                        value={endReasonDetail}
+                        onChange={(event) => setEndReasonDetail(event.target.value)}
+                        rows={3}
+                        placeholder={
+                          isReign
+                            ? '어떻게 물러났는지 서술 (예: 재위 중 승하, 양위, 폐위 등)'
+                            : '어떻게 물러났는지 서술 (예: 임기 만료 퇴임, 건강 악화로 사임, 전사·순직 등)'
                         }
-                      >
-                        {option.label}
-                      </ChoiceChip>
-                    ))}
-                  </ChoiceChips>
-                  {/* appointmentMethod의 서사 쌍 — 재위는 '즉위 상세' */}
-                  <Textarea
-                    id="tenure-appointment-detail"
-                    aria-label={isReign ? '즉위 상세' : '취임 상세'}
-                    value={appointmentDetail}
-                    onChange={(event) => setAppointmentDetail(event.target.value)}
-                    placeholder={
-                      isReign
-                        ? '어떻게 즉위했나 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관'
-                        : '어떻게 취임했나 — 예: 권한대행 후 정식 취임'
-                    }
-                    rows={2}
-                  />
-                  <AccessionEventLine>
-                    {linkedAccessionEvent ? (
-                      <EventPickerLinkedChip title={linkedAccessionEvent.title}>
-                        <FiLink size={12} />
-                        <span>{linkedAccessionEvent.title}</span>
-                        <EventPickerLinkClearBtn
+                      />
+                    </FieldControl>
+                  </FieldRow>
+
+                  {/* 취임식·대관식 사건 — 사건 등록 모달 '상위 사건(선택)' 행과 동일 */}
+                  <FieldRow>
+                    <FieldLabel as="span">
+                      {isReign ? '대관식·즉위식 사건' : '취임식 사건'}
+                      <OptionalTag>(선택)</OptionalTag>
+                    </FieldLabel>
+                    <FieldControl>
+                      {linkedAccessionEvent ? (
+                        <KitSelectedItems>
+                          <KitSelectedItem title={linkedAccessionEvent.title}>
+                            <span>{linkedAccessionEvent.title}</span>
+                            <KitRemoveButton
+                              type="button"
+                              aria-label="사건 연결 해제"
+                              onClick={() => setLinkedAccessionEvent(null)}
+                            >
+                              <FiX size={14} />
+                            </KitRemoveButton>
+                          </KitSelectedItem>
+                          <KitAddButton
+                            type="button"
+                            onClick={() => setAccessionEventPickerOpen(true)}
+                          >
+                            변경
+                          </KitAddButton>
+                        </KitSelectedItems>
+                      ) : (
+                        <KitAddButton
                           type="button"
-                          aria-label="사건 연결 해제"
-                          onClick={() => setLinkedAccessionEvent(null)}
+                          onClick={() => setAccessionEventPickerOpen(true)}
                         >
-                          <FiX size={13} />
-                        </EventPickerLinkClearBtn>
-                      </EventPickerLinkedChip>
-                    ) : (
-                      <EventPickerLinkBtn type="button" onClick={() => setAccessionEventPickerOpen(true)}>
-                        <FiLink size={12} />
-                        사건 연결
-                      </EventPickerLinkBtn>
-                    )}
-                    <FieldHint>
-                      {isReign ? '대관식·즉위식을' : '취임식을'} 사건으로 등록했다면 연결합니다.
-                    </FieldHint>
-                  </AccessionEventLine>
-                </FieldControl>
-              </FieldRow>
+                          <FiPlus size={15} />
+                          {isReign ? '대관식·즉위식 사건 선택' : '취임식 사건 선택'}
+                        </KitAddButton>
+                      )}
+                      <FieldHint>
+                        {isReign
+                          ? '즉위·대관과 맞물린 사건을 연결하면 사건 상세에서도 함께 표시됩니다.'
+                          : '취임·임명과 맞물린 사건을 연결하면 사건 상세에서도 함께 표시됩니다.'}
+                      </FieldHint>
+                    </FieldControl>
+                  </FieldRow>
 
-              {/* 퇴임 — 사유 칩 + 서술(실각 경위 등 한 줄로 안 끝나는 서술이 대부분) */}
-              <FieldRow>
-                <FieldLabel as="span">
-                  {isReign ? '퇴위' : '퇴임'}
-                  <OptionalTag>(선택)</OptionalTag>
-                </FieldLabel>
-                <FieldControl>
-                  <ChoiceChips role="group" aria-label="퇴임 사유">
-                    {TENURE_END_REASON_OPTIONS.map((option) => (
-                      <ChoiceChip
-                        key={option.value}
-                        type="button"
-                        aria-pressed={endReason === option.value}
-                        $selected={endReason === option.value}
-                        onClick={() => setEndReason(endReason === option.value ? '' : option.value)}
-                      >
-                        {option.label}
-                      </ChoiceChip>
-                    ))}
-                  </ChoiceChips>
-                  <Textarea
-                    id="tenure-end-reason-detail"
-                    aria-label="퇴임 사유 상세"
-                    value={endReasonDetail}
-                    onChange={(event) => setEndReasonDetail(event.target.value)}
-                    placeholder="왜 물러났나 — 예: 12·12 군사반란으로 실각, 임기 만료 후 정계 은퇴"
-                    rows={2}
-                  />
-                </FieldControl>
-              </FieldRow>
+                  {/* 소속 행정부 — 커스텀 Dropbox */}
+                  {showCabinetField && (
+                    <FieldRow>
+                      <FieldLabel as="span">
+                        소속 행정부<OptionalTag>(선택)</OptionalTag>
+                      </FieldLabel>
+                      <FieldControl>
+                        {!isHeadPositionType &&
+                          (countryId || historicalCountryId) &&
+                          cabinetOptions.length > 0 && (
+                            <CustomDropbox
+                              ariaLabel="소속 행정부"
+                              value={cabinetId ?? ''}
+                              placeholder="행정부 선택 (각료인 경우)"
+                              options={cabinetOptions}
+                              onChange={(next) => setCabinetId(next || null)}
+                              searchable={cabinetOptions.length >= 6}
+                              searchPlaceholder="행정부 검색..."
+                            />
+                          )}
+                        {(cabinetId || initialCabinetId) && (
+                          <KitAddButton
+                            type="button"
+                            onClick={() => setEventAttachModalOpen(true)}
+                          >
+                            <FiPlus size={15} />
+                            이 행정부에 사건 등록·연결
+                          </KitAddButton>
+                        )}
+                      </FieldControl>
+                    </FieldRow>
+                  )}
 
-              <FieldRow>
-                <FieldLabel>비고<OptionalTag>(선택)</OptionalTag></FieldLabel>
-                <FieldControl>
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="재임 관련 특이사항"
-                    rows={2}
-                  />
-                </FieldControl>
-              </FieldRow>
-
-              <FieldRow>
-                <FieldLabel>연대표에 표시<OptionalTag>(선택)</OptionalTag></FieldLabel>
-                <FieldControl>
-                  <CheckboxLabelRow>
-                    <input
-                      type="checkbox"
-                      id="tenure-show-on-events"
-                      checked={showOnEvents}
-                      onChange={(e) => setShowOnEvents(e.target.checked)}
-                    />
-                    <label htmlFor="tenure-show-on-events">사건 목록에 포함</label>
-                  </CheckboxLabelRow>
-                </FieldControl>
-              </FieldRow>
-            </FormRows>
-          </SidebarFormWrap>
-
-          </S.Form>
+                  {/* 비고 */}
+                  <FieldRow>
+                    <FieldLabel as="span">
+                      비고<OptionalTag>(선택)</OptionalTag>
+                    </FieldLabel>
+                    <FieldControl>
+                      <Textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="재임 관련 특이사항을 두세 문장으로 (선택)"
+                        rows={2}
+                      />
+                      <CheckboxLabelRow>
+                        <input
+                          type="checkbox"
+                          id="tenure-show-on-events"
+                          checked={showOnEvents}
+                          onChange={(e) => setShowOnEvents(e.target.checked)}
+                        />
+                        <label htmlFor="tenure-show-on-events">
+                          사건 목록(연대표)에 이 직함 포함
+                        </label>
+                      </CheckboxLabelRow>
+                    </FieldControl>
+                  </FieldRow>
+                </FormGroup>
+              </LabeledRowsWrap>
+            </S.Form>
+          </FormReveal>
         </PersonRegisterModalFormScroll>
         <PersonRegisterModalStickyFooter>
           {isEdit && (
@@ -1667,70 +3091,40 @@ export function TenureRegisterPanel({
         isOpen={countryModalOpen}
         onClose={() => setCountryModalOpen(false)}
         mode="single"
-        title="국가 선택"
-        placeholder="국가명으로 검색..."
-        scope="modern"
-        modernCountries={(countries as any[]).map((c: any) => ({
-          id: c.id,
-          name: c.name ?? c.localName ?? c.id,
-          flagEmoji: c.flagEmoji ?? null,
-        }))}
-        historicalCountries={[]}
-        selectedIds={countryId ? [countryId] : []}
-        onSelect={({ id }) => {
-          setCountryId(id || '')
-          // historicalCountryId는 여기서 무조건 null로 덮지 않음 — 새 국가 소속이
-          // 아닐 때만 useHistoricalCountryScope가 해제 (역사국가 연결의 조용한 파괴 방지)
+        title="국가·정체 선택"
+        placeholder="국가명·왕조명·영문명으로 검색..."
+        modernCountries={modernCountryOptions}
+        historicalCountries={historicalCountryOptions}
+        selectedIds={
+          historicalCountryId
+            ? [historicalCountryId]
+            : countryId
+              ? [countryId]
+              : []
+        }
+        hintYearRange={hintYearRange}
+        onSelect={(picked) => {
+          if (picked.isHistorical) {
+            setCountryId('')
+            setHistoricalCountryId(picked.id)
+          } else {
+            setCountryId(picked.id || '')
+            setHistoricalCountryId(null)
+          }
           releasePositionOnCountryChange()
           setCountryModalOpen(false)
         }}
-      />
-
-      {/* 해제는 목록 sentinel 행이 아니라 헤더 버튼 — 이름 정렬에 섞여 파묻히지 않게(IA-14) */}
-      <CountryPicker
-        isOpen={historicalCountryModalOpen}
-        onClose={() => setHistoricalCountryModalOpen(false)}
-        mode="single"
-        title="역사적 국가 선택"
-        placeholder="국가명으로 검색..."
-        scope="historical"
-        modernCountries={[]}
-        historicalCountries={historicalCountryOptions}
-        selectedIds={historicalCountryId ? [historicalCountryId] : []}
-        onSelect={({ id }) => {
-          setHistoricalCountryId(id)
-          releasePositionOnCountryChange()
-          setHistoricalCountryModalOpen(false)
-        }}
-        onClearSelection={() => {
-          setHistoricalCountryId(null)
-          releasePositionOnCountryChange()
-          setHistoricalCountryModalOpen(false)
-        }}
-        clearSelectionLabel={countryId ? '현대 국가 기준으로' : '선택 안 함'}
-      />
-
-      <SelectModal
-        isOpen={positionModalOpen}
-        onClose={() => setPositionModalOpen(false)}
-        title="직책명 선택"
-        options={positionTitleOptions}
-        collapsedGroups={reignEntry ? DEFAULT_COLLAPSED_REIGN_GROUPS : DEFAULT_COLLAPSED_POSITION_GROUPS}
-        searchPlaceholder="직책명으로 검색..."
-        selectedValue={selectedPositionValue}
-        onSelect={handlePositionSelect}
-      />
-
-      <SelectModal
-        isOpen={cabinetModalOpen}
-        onClose={() => setCabinetModalOpen(false)}
-        title="소속 행정부"
-        options={[{ value: '', label: '없음' }, ...cabinetOptions]}
-        selectedValue={cabinetId ?? ''}
-        onSelect={(value) => {
-          setCabinetModalOpen(false)
-          setCabinetId(value || null)
-        }}
+        onClearSelection={
+          countryId || historicalCountryId
+            ? () => {
+                setCountryId('')
+                setHistoricalCountryId(null)
+                releasePositionOnCountryChange()
+                setCountryModalOpen(false)
+              }
+            : undefined
+        }
+        clearSelectionLabel="선택 안 함"
       />
 
       {eventAttachModalOpen && (cabinetId || initialCabinetId) && (

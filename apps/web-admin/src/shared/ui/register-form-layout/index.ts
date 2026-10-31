@@ -31,6 +31,8 @@ export {
 export {
   LABELED_ROW_LABEL_COL,
   LABELED_ROW_GAP,
+  FormGroup,
+  FormGroupTitle,
   LabeledRowsWrap,
   OptionalTag,
   SubFieldPair,

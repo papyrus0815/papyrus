@@ -15,9 +15,14 @@ import { FONT, RADIUS } from '../_form-primitives'
 export interface SearchOption {
   value: string
   label: string
+  /** 우측 보조 텍스트/배지 (예: '현대', '역사 · 1392–1897') */
+  meta?: string
+  /** 추가 검색 키워드 (ISO 코드·영문명·수도 등) */
+  keywords?: string
 }
 
 interface InlineSearchSelectProps {
+  id?: string
   options: SearchOption[]
   value: string
   onChange: (value: string) => void
@@ -28,9 +33,17 @@ interface InlineSearchSelectProps {
   /** 지정 시 드롭다운 하단에 "+ 새로 만들기" 액션 노출 — 목록에 없으면 생성 분기. */
   onCreateNew?: () => void
   createLabel?: string
+  /** 필수/검증 에러 상태 */
+  error?: boolean
+  ariaInvalid?: boolean
+  ariaDescribedBy?: string
+  dataJumpTarget?: string
+  /** 선택 해제(×) 버튼 노출 여부 (기본 true) */
+  clearable?: boolean
 }
 
 export function InlineSearchSelect({
+  id,
   options,
   value,
   onChange,
@@ -39,6 +52,11 @@ export function InlineSearchSelect({
   limit,
   onCreateNew,
   createLabel = '새로 만들기',
+  error,
+  ariaInvalid,
+  ariaDescribedBy,
+  dataJumpTarget,
+  clearable = true,
 }: InlineSearchSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -46,6 +64,7 @@ export function InlineSearchSelect({
   // 실수로 선택하지 않도록). onCreateNew가 있으면 filtered.length가 '새로 만들기' 행 인덱스.
   const [active, setActive] = useState(-1)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
 
   const selectedLabel = useMemo(
@@ -59,7 +78,12 @@ export function InlineSearchSelect({
     const list = options.filter((option) => option.value)
     const text = query.trim().toLowerCase()
     const matched = text
-      ? list.filter((option) => option.label.toLowerCase().includes(text))
+      ? list.filter(
+          (option) =>
+            option.label.toLowerCase().includes(text) ||
+            (option.meta && option.meta.toLowerCase().includes(text)) ||
+            (option.keywords && option.keywords.toLowerCase().includes(text)),
+        )
       : list
     return limit ? matched.slice(0, limit) : matched
   }, [options, query, limit])
@@ -147,12 +171,27 @@ export function InlineSearchSelect({
 
   return (
     <Wrap ref={wrapRef}>
-      <InputBox $open={open}>
+      <InputBox
+        $open={open}
+        $error={error}
+        onClick={() => {
+          inputRef.current?.focus()
+          if (!open) {
+            setOpen(true)
+            setActive(-1)
+          }
+        }}
+      >
         <Input
+          ref={inputRef}
+          id={id}
           type="text"
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
+          data-jump-target={dataJumpTarget}
           aria-autocomplete="list"
           aria-controls={open ? listId : undefined}
           aria-activedescendant={
@@ -160,7 +199,7 @@ export function InlineSearchSelect({
               ? `${listId}-opt-${active}`
               : undefined
           }
-          placeholder={placeholder}
+          placeholder={open && selectedLabel ? selectedLabel : placeholder}
           value={open ? query : selectedLabel}
           onFocus={() => {
             setOpen(true)
@@ -175,16 +214,37 @@ export function InlineSearchSelect({
           }}
           onKeyDown={onKeyDown}
         />
-        {value && !open ? (
+        {clearable && value && !open ? (
           <IconBtn
             type="button"
             aria-label="선택 해제"
-            onClick={() => choose('')}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.stopPropagation()
+              choose('')
+            }}
           >
             <FiX size={15} />
           </IconBtn>
         ) : (
-          <IconChevron $open={open} aria-hidden="true">
+          <IconChevron
+            type="button"
+            tabIndex={-1}
+            $open={open}
+            aria-hidden="true"
+            onMouseDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              if (open) {
+                setOpen(false)
+                setQuery('')
+              } else {
+                inputRef.current?.focus()
+                setOpen(true)
+                setActive(-1)
+              }
+            }}
+          >
             <FiChevronDown size={16} />
           </IconChevron>
         )}
@@ -203,10 +263,12 @@ export function InlineSearchSelect({
               aria-selected={option.value === value}
               $active={index === active}
               $selected={option.value === value}
+              onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setActive(index)}
               onClick={() => choose(option.value)}
             >
-              {option.label}
+              <OptionLabel>{option.label}</OptionLabel>
+              {option.meta && <OptionMeta>{option.meta}</OptionMeta>}
             </Option>
           ))}
           {onCreateNew && (
@@ -233,17 +295,22 @@ const Wrap = styled.div`
   width: 100%;
 `
 
-const InputBox = styled.div<{ $open?: boolean }>`
+const InputBox = styled.div<{ $open?: boolean; $error?: boolean }>`
   display: flex;
   align-items: center;
   /* 텍스트 입력(FormInput)과 같은 41px 칸 — 사건 등록 폼 입력 칸 높이 */
   box-sizing: border-box;
   min-height: 41px;
+  cursor: text;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid
-    ${({ $open, theme }) =>
-      $open ? theme.colors.primary : theme.colors.border.default};
+    ${({ $open, $error, theme }) =>
+      $error
+        ? theme.colors.alert.danger.fg
+        : $open
+          ? theme.colors.primary
+          : theme.colors.border.default};
   border-radius: ${RADIUS.control};
   box-shadow: ${({ $open, theme }) =>
     $open ? theme.colors.focusRing.primary : 'none'};
@@ -270,10 +337,15 @@ const Input = styled.input`
   }
 `
 
-const IconChevron = styled.span<{ $open?: boolean }>`
+const IconChevron = styled.button<{ $open?: boolean }>`
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 0 10px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
   color: ${({ theme }) => theme.colors.text.tertiary};
   transition: transform 0.15s ease;
   transform: rotate(${({ $open }) => ($open ? '180deg' : '0deg')});
@@ -311,7 +383,10 @@ const Dropdown = styled.div`
 `
 
 const Option = styled.button<{ $active?: boolean; $selected?: boolean }>`
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 8px 10px;
@@ -328,6 +403,20 @@ const Option = styled.button<{ $active?: boolean; $selected?: boolean }>`
   border: none;
   border-radius: 6px;
   cursor: pointer;
+`
+
+const OptionLabel = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const OptionMeta = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Empty = styled.div`
