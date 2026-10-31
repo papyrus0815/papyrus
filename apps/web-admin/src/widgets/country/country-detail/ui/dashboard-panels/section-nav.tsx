@@ -103,27 +103,38 @@ export function SectionNav({ rootRef }: SectionNavProps) {
       frame = requestAnimationFrame(() => {
         const navBottom = navRef.current?.getBoundingClientRect().bottom ?? 0
         const line = navBottom + ACTIVE_OFFSET_PX
-        const tops = entries.map(
-          (entry) => entry.element.getBoundingClientRect().top,
-        )
+        const rects = entries.map((entry) => entry.element.getBoundingClientRect())
+        const tops = rects.map((rect) => rect.top)
         let currentTop = tops[0]
         for (const top of tops) {
           if (top <= line) currentTop = top
         }
         /* 끝까지 내렸으면 마지막 줄 — 짧은 끝 장은 선까지 올라오지 못해 영영 안 켜진다 */
         const scroller = findScrollParent(navRef.current)
-        if (
-          scroller &&
+        const atBottom =
+          scroller != null &&
           scroller.scrollTop > 0 &&
           scroller.scrollTop + scroller.clientHeight >=
             scroller.scrollHeight - 2
-        ) {
+        if (atBottom) {
           currentTop = tops[tops.length - 1]
         }
-        /* 같은 높이에서 시작하는 장은 좌우로 나란한 한 줄이다 — 함께 켠다 */
-        const next = tops.flatMap((top, index) =>
-          Math.abs(top - currentTop) < 2 ? [index] : [],
-        )
+        /*
+         * 2열 비대칭 그리드(DashboardPair 등)에서는 왼쪽 긴 섹션 옆에 오른쪽 짧은 섹션 둘이
+         * 세로로 쌓인다. 기준선(line)이 관통하는 섹션(top <= line && bottom > line)을 모두
+         * 켜고, 섹션 사이 여백에 걸렸을 때는 currentTop과 같은 줄의 섹션을 켠다.
+         */
+        const spanning = atBottom
+          ? []
+          : rects.flatMap((rect, index) =>
+              rect.top <= line && rect.bottom > line + 8 ? [index] : [],
+            )
+        const next =
+          spanning.length > 0
+            ? spanning
+            : tops.flatMap((top, index) =>
+                Math.abs(top - currentTop) < 2 ? [index] : [],
+              )
         setActiveIndices((previous) =>
           previous.join() === next.join() ? previous : next,
         )
@@ -200,9 +211,9 @@ export function SectionNav({ rootRef }: SectionNavProps) {
  */
 const Bar = styled.nav`
   position: sticky;
-  top: 0;
+  top: 41px;
   z-index: 5;
-  margin: 0 -40px;
+  margin: -12px -40px 0;
   padding: 10px 40px;
   background: ${({ theme }) =>
     theme.mode === 'dark'
@@ -213,15 +224,15 @@ const Bar = styled.nav`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @media (max-width: 1024px) {
-    margin: 0 -28px;
+    margin: -10px -28px 0;
     padding: 10px 28px;
   }
   @media (max-width: 768px) {
-    margin: 0 -20px;
+    margin: -8px -20px 0;
     padding: 8px 20px;
   }
   @media (max-width: 480px) {
-    margin: 0 -16px;
+    margin: -8px -16px 0;
     padding: 8px 16px;
   }
 `

@@ -27,6 +27,7 @@ import { MinistryFormModal } from './ministry-form-modal.widget'
 export type MinistriesTabSectionProps = {
   contentTab: GovernmentContentTab
   effectiveCountryId: string | undefined
+  isHistorical?: boolean
   isDark: boolean
   cabinetOpenMinistryIntent: { categoryId: string } | null
   onConsumedCabinetOpenMinistryIntent: () => void
@@ -40,6 +41,7 @@ export type MinistriesTabSectionProps = {
 export function MinistriesTabSection({
   contentTab,
   effectiveCountryId,
+  isHistorical = false,
   isDark,
   cabinetOpenMinistryIntent,
   onConsumedCabinetOpenMinistryIntent,
@@ -50,6 +52,7 @@ export function MinistriesTabSection({
 }: MinistriesTabSectionProps) {
   const ministriesTab = useMinistriesTab({
     effectiveCountryId,
+    isHistorical,
     contentTab,
     cabinetOpenMinistryIntent,
     onConsumedCabinetOpenMinistryIntent,
@@ -330,7 +333,15 @@ export function MinistriesTabSection({
                       <DepartmentTenuresBlock
                         departmentId={ministryBrowseResolved.id}
                         // 부처가 이미 정해진 자리라 국가·부처명을 등록 폼에 그대로 넘긴다
-                        countryId={effectiveCountryId}
+                        countryId={
+                          isHistorical ? undefined : effectiveCountryId
+                        }
+                        historicalCountryId={
+                          isHistorical
+                            ? effectiveCountryId
+                            : (ministryBrowseResolved.historicalCountryId ??
+                              null)
+                        }
                         departmentName={ministryBrowseResolved.name}
                       />
                     }

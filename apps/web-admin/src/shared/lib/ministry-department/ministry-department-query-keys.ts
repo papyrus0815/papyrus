@@ -10,6 +10,19 @@ export function administrationDepartmentsByCountryQueryKey(
   return ['administration-departments-by-country', countryId] as const
 }
 
+/**
+ * React Query 키 — 역사적 국가별 중앙부처 목록
+ * @see administrationDepartmentApi.getByHistoricalCountryId
+ */
+export function administrationDepartmentsByHistoricalCountryQueryKey(
+  historicalCountryId: string | undefined,
+) {
+  return [
+    'administration-departments-by-historical-country',
+    historicalCountryId,
+  ] as const
+}
+
 /** 전체 행정부처 목록 — 관리자 목록 페이지 등 */
 export function administrationDepartmentsAllQueryKey() {
   return ['administration-departments', 'all'] as const
@@ -23,6 +36,11 @@ export function invalidateAdministrationDepartmentQueries(
     queryClient.invalidateQueries({
       queryKey: ['administration-departments-by-country'],
     }),
-    queryClient.invalidateQueries({ queryKey: ['administration-departments'] }),
+    queryClient.invalidateQueries({
+      queryKey: ['administration-departments-by-historical-country'],
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ['administration-departments'],
+    }),
   ])
 }

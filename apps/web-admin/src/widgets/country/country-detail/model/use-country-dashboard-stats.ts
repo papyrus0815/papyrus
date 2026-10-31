@@ -8,9 +8,9 @@ import { eventKeys } from '@/shared/api/event-query-keys'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { cityApi } from '@/shared/api/city'
 import { getAllCountries } from '@/shared/api/countries'
-import { getElections } from '@/shared/api/election'
+import { getElections, getLaws } from '@/shared/api/election'
+import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getAllEventsExhaustive } from '@/shared/api/events'
-import { militaryUnitApi } from '@/shared/api/military-unit'
 import { personApi } from '@/shared/api/person'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { PersonResponseDto } from '@/shared/api/persons'
@@ -68,6 +68,8 @@ export type CompletenessTarget =
   | 'persons'
   | 'events'
   | 'elections'
+  | 'laws'
+  | 'ethnicity'
   | 'historical'
   | 'regions'
   | 'treaty'
@@ -139,6 +141,8 @@ export interface CountryDashboardStats {
   cityCount: number
   treatyCount: number
   electionCount: number
+  lawCount: number
+  ethnicityCount: number
   /** 최근 7일 새로 등록된 카운트 — delta 칩용 */
   deltaCounts: DeltaCounts
   recentPersons: RecentPersonItem[]
@@ -179,6 +183,8 @@ export interface CountryDashboardStats {
     activity: boolean
     cabinets: boolean
     elections: boolean
+    laws: boolean
+    ethnicity: boolean
     treaties: boolean
     continent: boolean
   }
@@ -243,13 +249,14 @@ export function useCountryDashboardStats(
 
   const [
     personsQuery,
-    militaryQuery,
     eventsQuery,
     administrationQuery,
     citiesQuery,
     tenuresQuery,
     cabinetsQuery,
     electionsQuery,
+    lawsQuery,
+    ethnicityQuery,
     treatiesQuery,
     allCountriesQuery,
     politicalSystemsQuery,
@@ -263,14 +270,6 @@ export function useCountryDashboardStats(
          */
         queryKey: ['persons', 'by-country-grouped', countryId],
         queryFn: () => personApi.getByCountryIdGrouped(countryId),
-        enabled: Boolean(countryId),
-        staleTime: 1000 * 60 * 5,
-      },
-      {
-        // 백엔드에 국가별 군대 endpoint가 없어 전체 fetch + 클라 필터.
-        // staleTime을 길게 두어 다른 국가 진입 시 글로벌 캐시 재사용.
-        queryKey: ['military-units'],
-        queryFn: () => militaryUnitApi.getAll(),
         enabled: Boolean(countryId),
         staleTime: 1000 * 60 * 5,
       },
@@ -318,6 +317,18 @@ export function useCountryDashboardStats(
       {
         queryKey: ['elections', 'list', `c:${countryId}`],
         queryFn: () => getElections({ countryId }),
+        enabled: Boolean(countryId),
+        staleTime: 1000 * 60 * 5,
+      },
+      {
+        queryKey: ['laws', `c:${countryId}`],
+        queryFn: () => getLaws({ countryId }),
+        enabled: Boolean(countryId),
+        staleTime: 1000 * 60 * 5,
+      },
+      {
+        queryKey: ['ethnicities', 'by-country', countryId],
+        queryFn: () => ethnicityApi.getAll({ countryId }),
         enabled: Boolean(countryId),
         staleTime: 1000 * 60 * 5,
       },
@@ -382,11 +393,7 @@ export function useCountryDashboardStats(
   }, [personsQuery.data])
 
   const personCount = persons.length
-  const militaryCount = Array.isArray(militaryQuery.data)
-    ? militaryQuery.data.filter(
-        (u) => (u.countryId ?? (u as any).country_id) === countryId,
-      ).length
-    : 0
+  const militaryCount = 0
   const eventCount = Array.isArray(eventsQuery.data) ? eventsQuery.data.length : 0
   const historicalCountryCount = country?.historicalCountries?.length ?? 0
   const departmentCount = Array.isArray(administrationQuery.data)
@@ -449,19 +456,33 @@ export function useCountryDashboardStats(
   const electionCount = Array.isArray(electionsQuery.data)
     ? electionsQuery.data.length
     : 0
+  const lawCount = Array.isArray(lawsQuery.data)
+    ? lawsQuery.data.length
+    : 0
+  const ethnicityCount = Array.isArray(ethnicityQuery.data)
+    ? ethnicityQuery.data.length
+    : 0
 
   const deltaCounts = useMemo<DeltaCounts>(() => {
     const since = Date.now() - SEVEN_DAYS_MS
+    const adminBaseDelta =
+      countSince(administrationQuery.data, since) +
+      countSince(cabinetsQuery.data, since) +
+      countSince(politicalSystemsQuery.data, since)
     return {
       person: countSince(persons, since),
       event: countSince(eventsQuery.data, since),
-      administration: countSince(administrationQuery.data, since),
+      administration:
+        adminBaseDelta || countSince(tenuresQuery.data, since),
       city: countSince(citiesQuery.data, since),
     }
   }, [
     persons,
     eventsQuery.data,
     administrationQuery.data,
+    cabinetsQuery.data,
+    politicalSystemsQuery.data,
+    tenuresQuery.data,
     citiesQuery.data,
   ])
 
@@ -896,8 +917,20 @@ export function useCountryDashboardStats(
           {
             key: 'elections',
             label: '선거',
-            filled: nextElection != null || recentElection != null,
+            filled: nextElection != null || recentElection != null || electionCount > 0,
             target: 'elections',
+          },
+          {
+            key: 'laws',
+            label: '법령',
+            filled: lawCount > 0,
+            target: 'laws',
+          },
+          {
+            key: 'ethnicity',
+            label: '민족',
+            filled: ethnicityCount > 0,
+            target: 'ethnicity',
           },
           {
             key: 'historical',
@@ -935,26 +968,44 @@ export function useCountryDashboardStats(
     eventCount,
     nextElection,
     recentElection,
+    electionCount,
+    lawCount,
+    ethnicityCount,
     historicalCountryCount,
     cityCount,
     treatyCount,
   ])
 
-  // 라벨이 "갱신"인 만큼 모든 엔티티의 createdAt 중 최신을 사용.
+  // 라벨이 "갱신"인 만큼 모든 엔티티의 updatedAt / createdAt 중 최신을 사용.
   const lastUpdatedAt = useMemo<string | null>(() => {
+    const treatyRows = Array.isArray(treatiesQuery.data)
+      ? treatiesQuery.data
+      : ((treatiesQuery.data as { data?: unknown[] } | undefined)?.data ?? [])
     const sources: unknown[][] = [
       persons as unknown[],
       eventsQuery.data as unknown[],
       administrationQuery.data as unknown[],
+      cabinetsQuery.data as unknown[],
+      politicalSystemsQuery.data as unknown[],
+      tenuresQuery.data as unknown[],
+      electionsQuery.data as unknown[],
+      lawsQuery.data as unknown[],
+      ethnicityQuery.data as unknown[],
+      treatyRows as unknown[],
       citiesQuery.data as unknown[],
     ]
     let max = 0
     for (const list of sources) {
       if (!Array.isArray(list)) continue
       for (const item of list) {
+        const rec = item as {
+          updatedAt?: string
+          updated_at?: string
+          createdAt?: string
+          created_at?: string
+        } | null
         const ts =
-          (item as { createdAt?: string; created_at?: string })?.createdAt ??
-          (item as { created_at?: string })?.created_at
+          rec?.updatedAt ?? rec?.updated_at ?? rec?.createdAt ?? rec?.created_at
         if (!ts) continue
         const t = new Date(ts).getTime()
         if (Number.isFinite(t) && t > max) max = t
@@ -965,26 +1016,37 @@ export function useCountryDashboardStats(
     persons,
     eventsQuery.data,
     administrationQuery.data,
+    cabinetsQuery.data,
+    politicalSystemsQuery.data,
+    tenuresQuery.data,
+    electionsQuery.data,
+    lawsQuery.data,
+    ethnicityQuery.data,
+    treatiesQuery.data,
     citiesQuery.data,
   ])
 
   const loading = {
     persons: personsQuery.isLoading,
-    military: militaryQuery.isLoading,
+    military: false,
     events: eventsQuery.isLoading,
-    administration: administrationQuery.isLoading,
+    administration:
+      administrationQuery.isLoading ||
+      cabinetsQuery.isLoading ||
+      politicalSystemsQuery.isLoading,
     cities: citiesQuery.isLoading,
     tenures: tenuresQuery.isLoading,
     activity: personsQuery.isLoading || eventsQuery.isLoading,
     cabinets: cabinetsQuery.isLoading || tenuresQuery.isLoading,
     elections: electionsQuery.isLoading,
+    laws: lawsQuery.isLoading,
+    ethnicity: ethnicityQuery.isLoading,
     treaties: treatiesQuery.isLoading,
     continent: allCountriesQuery.isLoading,
   }
 
   const isLoading =
     loading.persons ||
-    loading.military ||
     loading.events ||
     loading.administration ||
     loading.cities ||
@@ -999,6 +1061,8 @@ export function useCountryDashboardStats(
     cityCount,
     treatyCount,
     electionCount,
+    lawCount,
+    ethnicityCount,
     deltaCounts,
     recentPersons,
     recentActivity,

@@ -21,31 +21,31 @@ interface YearedNode {
  * (단방향 표기는 표시 컴포넌트가 별도 렌더로 처리)
  */
 export function getCountryYearRange(
-  h: YearedNode,
+  node: YearedNode,
 ): { startYear: number; endYear: number } | null {
-  const toNum = (v: number | null | undefined): number | null => {
-    if (v == null) return null
-    const n = typeof v === 'number' ? v : Number(v)
-    return Number.isFinite(n) ? n : null
+  const toNum = (val: number | null | undefined): number | null => {
+    if (val == null) return null
+    const num = typeof val === 'number' ? val : Number(val)
+    return Number.isFinite(num) ? num : null
   }
-  const startYear = toNum(h.startYear)
-  const endYear = toNum(h.endYear)
+  const startYear = toNum(node.startYear)
+  const endYear = toNum(node.endYear)
   const sy =
     startYear != null
-      ? h.startEra === 'BC'
+      ? node.startEra === 'BC'
         ? -Math.abs(startYear)
         : Math.abs(startYear)
       : null
   const ey =
     endYear != null
-      ? h.endEra === 'BC'
+      ? node.endEra === 'BC'
         ? -Math.abs(endYear)
         : Math.abs(endYear)
       : null
   if (sy == null && ey == null) return null
-  const s = sy ?? ey!
-  const e = ey ?? sy!
-  return { startYear: s, endYear: e }
+  const resolvedStart = sy ?? ey!
+  const resolvedEnd = ey ?? sy!
+  return { startYear: resolvedStart, endYear: resolvedEnd }
 }
 
 /**
@@ -64,18 +64,19 @@ export function topologicalOrder(
   })
   edges.forEach(({ predecessorId, successorId }) => {
     if (!idSet.has(predecessorId) || !idSet.has(successorId)) return
+    if (predecessorId === successorId) return
     inDeg.set(successorId, (inDeg.get(successorId) ?? 0) + 1)
     outEdges.get(predecessorId)!.push(successorId)
   })
   const queue = nodeIds.filter((id) => inDeg.get(id) === 0)
   const order: string[] = []
   while (queue.length > 0) {
-    const u = queue.shift()!
-    order.push(u)
-    for (const v of outEdges.get(u) ?? []) {
-      const d = (inDeg.get(v) ?? 0) - 1
-      inDeg.set(v, d)
-      if (d === 0) queue.push(v)
+    const currentId = queue.shift()!
+    order.push(currentId)
+    for (const nextId of outEdges.get(currentId) ?? []) {
+      const nextDeg = (inDeg.get(nextId) ?? 0) - 1
+      inDeg.set(nextId, nextDeg)
+      if (nextDeg === 0) queue.push(nextId)
     }
   }
   if (order.length !== nodeIds.length) {
@@ -103,6 +104,7 @@ export function getChains(
   nodeIds.forEach((id) => adj.set(id, []))
   edges.forEach(({ predecessorId, successorId }) => {
     if (!idSet.has(predecessorId) || !idSet.has(successorId)) return
+    if (predecessorId === successorId) return
     adj.get(predecessorId)!.push(successorId)
     adj.get(successorId)!.push(predecessorId)
   })
@@ -113,20 +115,20 @@ export function getChains(
     const stack = [id]
     const comp: string[] = []
     while (stack.length > 0) {
-      const u = stack.pop()!
-      if (visited.has(u)) continue
-      visited.add(u)
-      comp.push(u)
-      for (const v of adj.get(u) ?? []) stack.push(v)
+      const currentId = stack.pop()!
+      if (visited.has(currentId)) continue
+      visited.add(currentId)
+      comp.push(currentId)
+      for (const neighborId of adj.get(currentId) ?? []) stack.push(neighborId)
     }
     if (comp.length > 0) {
       const compSet = new Set(comp)
       const edgeSubset = edges.filter(
-        (e) =>
-          idSet.has(e.predecessorId) &&
-          idSet.has(e.successorId) &&
-          compSet.has(e.predecessorId) &&
-          compSet.has(e.successorId),
+        (edge) =>
+          idSet.has(edge.predecessorId) &&
+          idSet.has(edge.successorId) &&
+          compSet.has(edge.predecessorId) &&
+          compSet.has(edge.successorId),
       )
       components.push(topologicalOrder(comp, edgeSubset))
     }
@@ -146,29 +148,42 @@ export function getMainPathAndBranchRows(
   transitionByEdge?: Map<string, HistoricalCountryTransitionDto>,
   getNodeEndYear?: (id: string) => number | null,
 ): string[][] {
+  if (chain.length === 0) return []
   const idSet = new Set(chain)
   const inChain = edges.filter(
-    (e) => idSet.has(e.predecessorId) && idSet.has(e.successorId),
+    (edge) =>
+      edge.predecessorId !== edge.successorId &&
+      idSet.has(edge.predecessorId) &&
+      idSet.has(edge.successorId),
   )
   // 메인 행: 계승(SUCCESSION) 변천만. 없으면 전체 edge 사용
   const inChainForMain = transitionByEdge
-    ? inChain.filter((e) => {
-        const t = transitionByEdge.get(`${e.predecessorId}\t${e.successorId}`)
-        return t?.eventType === 'SUCCESSION'
+    ? inChain.filter((edge) => {
+        const transition = transitionByEdge.get(
+          `${edge.predecessorId}\t${edge.successorId}`,
+        )
+        return transition?.eventType === 'SUCCESSION'
       })
     : inChain
 
   const successors = new Map<string, string[]>()
   chain.forEach((id) => successors.set(id, []))
   inChainForMain.forEach(({ predecessorId, successorId }) => {
-    successors.get(predecessorId)!.push(successorId)
+    const list = successors.get(predecessorId)!
+    if (!list.includes(successorId)) list.push(successorId)
   })
-  const roots = chain.filter(
-    (id) => !inChainForMain.some((e) => e.successorId === id),
+  const rootCandidates = chain.filter(
+    (id) => !inChainForMain.some((edge) => edge.successorId === id),
   )
+  // 순환 때문에 진입 차수 0인 루트가 하나도 없으면 체인 첫 노드를 후보로 삼는다
+  const roots = rootCandidates.length > 0 ? rootCandidates : [chain[0]!]
+
   // onStack: 현재 경로에 있는 노드. 잘못 등록된 순환 SUCCESSION 데이터에서
   // 무한 재귀(스택 오버플로)로 섹션 전체가 크래시하는 것을 막는다.
-  function longestPathFrom(id: string, onStack: Set<string> = new Set()): string[] {
+  function longestPathFrom(
+    id: string,
+    onStack: Set<string> = new Set(),
+  ): string[] {
     const succs = successors.get(id) ?? []
     if (succs.length === 0) return [id]
     onStack.add(id)
@@ -182,8 +197,8 @@ export function getMainPathAndBranchRows(
     return best
   }
   let mainPath: string[] = []
-  for (const r of roots) {
-    const path = longestPathFrom(r)
+  for (const rootId of roots) {
+    const path = longestPathFrom(rootId)
     if (path.length > mainPath.length) {
       mainPath = path
     } else if (
@@ -192,7 +207,8 @@ export function getMainPathAndBranchRows(
       getNodeEndYear
     ) {
       const pathEnd = getNodeEndYear(path[path.length - 1]!) ?? -Infinity
-      const mainEnd = getNodeEndYear(mainPath[mainPath.length - 1]!) ?? -Infinity
+      const mainEnd =
+        getNodeEndYear(mainPath[mainPath.length - 1]!) ?? -Infinity
       if (pathEnd > mainEnd) mainPath = path
     }
   }
@@ -202,21 +218,41 @@ export function getMainPathAndBranchRows(
 
   const branchSet = new Set(branches)
   const branchSuccessor = new Map<string, string>()
-  inChain.forEach((e) => {
-    if (branchSet.has(e.predecessorId) && branchSet.has(e.successorId))
-      branchSuccessor.set(e.predecessorId, e.successorId)
+  inChain.forEach((edge) => {
+    if (branchSet.has(edge.predecessorId) && branchSet.has(edge.successorId)) {
+      branchSuccessor.set(edge.predecessorId, edge.successorId)
+    }
   })
   const hasPredecessorInBranches = new Set(branchSuccessor.values())
-  const branchRoots = branches.filter((b) => !hasPredecessorInBranches.has(b))
+  const branchRoots = branches.filter(
+    (branchId) => !hasPredecessorInBranches.has(branchId),
+  )
+  const visitedInBranches = new Set<string>()
   const branchRows: string[][] = []
-  for (const root of branchRoots) {
+
+  const buildBranchRow = (startId: string) => {
     const row: string[] = []
-    let id: string | undefined = root
-    while (id) {
-      row.push(id)
-      id = branchSuccessor.get(id)
+    let currentId: string | undefined = startId
+    // 사이클이 있는 브랜치(A → B → C → B 등)에서 while 루프가 무한히 돌아
+    // RangeError: Invalid array length 를 일으키는 것을 막는다.
+    while (currentId && !visitedInBranches.has(currentId)) {
+      visitedInBranches.add(currentId)
+      row.push(currentId)
+      currentId = branchSuccessor.get(currentId)
     }
-    branchRows.push(row)
+    if (row.length > 0) {
+      branchRows.push(row)
+    }
+  }
+
+  for (const rootId of branchRoots) {
+    buildBranchRow(rootId)
+  }
+  // 순수 사이클로만 이루어진 브랜치(진입 차수 0인 branchRoot가 없는 경우)도 누락 없이 수거
+  for (const branchId of branches) {
+    if (!visitedInBranches.has(branchId)) {
+      buildBranchRow(branchId)
+    }
   }
   return [mainPath, ...branchRows]
 }

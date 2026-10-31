@@ -47,9 +47,18 @@ export const TabSwapMotion = styled.div`
   }
 `
 
-/** 상단 OverviewSubTabs를 감싸 sticky 영역에서 압축되지 않도록 하는 래퍼. */
+/** 상단 OverviewSubTabs를 감싸 스크롤 중에도 탭 전환이 가능하도록 상단에 고정하는 래퍼. */
 export const StickyTopBar = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 12;
   flex-shrink: 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(20, 20, 20, 0.92)'
+      : 'rgba(255, 255, 255, 0.94)'};
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
 `
 
 export const AnalyticsDashboard = styled.div`

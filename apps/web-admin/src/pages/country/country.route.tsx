@@ -50,6 +50,9 @@ const countryDetailChildSegments = [
   'laws',
   'ethnicity',
   'treaty',
+  'trade',
+  'companies',
+  'statistics',
 ] as const
 
 /** `/country/:id/heads-of-state` → `/country/:id/government` (역대 수반 탭이 행정조직 탭에 통합됨) */

@@ -17,7 +17,10 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
-import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
+import {
+  administrationDepartmentsByCountryQueryKey,
+  administrationDepartmentsByHistoricalCountryQueryKey,
+} from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import {
   buildDepartmentDescription,
   countDescendantsInDepartmentTree,
@@ -33,6 +36,7 @@ import type { MinistryFormFields } from './ministry-form-fields'
 
 export type UseMinistriesTabOptions = {
   effectiveCountryId: string | undefined
+  isHistorical?: boolean
   contentTab: GovernmentContentTab
   /** 행정부 탭에서「부처 등록」으로 넘어올 때 */
   cabinetOpenMinistryIntent: { categoryId: string } | null
@@ -41,14 +45,20 @@ export type UseMinistriesTabOptions = {
 
 export function useMinistriesTab({
   effectiveCountryId,
+  isHistorical = false,
   contentTab,
   cabinetOpenMinistryIntent,
   onConsumedCabinetOpenMinistryIntent,
 }: UseMinistriesTabOptions) {
   const queryClient = useQueryClient()
   const departmentsQueryKey = useMemo(
-    () => administrationDepartmentsByCountryQueryKey(effectiveCountryId),
-    [effectiveCountryId],
+    () =>
+      isHistorical
+        ? administrationDepartmentsByHistoricalCountryQueryKey(
+            effectiveCountryId,
+          )
+        : administrationDepartmentsByCountryQueryKey(effectiveCountryId),
+    [effectiveCountryId, isHistorical],
   )
 
   const {
@@ -57,7 +67,11 @@ export function useMinistriesTab({
   } = useQuery({
     queryKey: departmentsQueryKey,
     queryFn: () =>
-      administrationDepartmentApi.getByCountryId(effectiveCountryId!),
+      isHistorical
+        ? administrationDepartmentApi.getByHistoricalCountryId(
+            effectiveCountryId!,
+          )
+        : administrationDepartmentApi.getByCountryId(effectiveCountryId!),
     enabled: !!effectiveCountryId && contentTab === 'ministries',
   })
   const [ministryFormModalOpen, setMinistryFormModalOpen] = useState(false)
@@ -181,7 +195,9 @@ export function useMinistriesTab({
       administrationDepartmentApi
         .create({
           ...payload,
-          countryId: effectiveCountryId,
+          ...(isHistorical
+            ? { historicalCountryId: effectiveCountryId }
+            : { countryId: effectiveCountryId }),
         })
         .then(() => {
           closeMinistryFormModal()
@@ -193,6 +209,7 @@ export function useMinistriesTab({
     }
   }, [
     effectiveCountryId,
+    isHistorical,
     ministryForm,
     editingMinistry,
     categoriesList,

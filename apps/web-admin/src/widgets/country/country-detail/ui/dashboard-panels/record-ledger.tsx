@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 
 import styled, { css } from 'styled-components'
 
+import type { CompletenessField } from '../../model/use-country-dashboard-stats'
+
 export interface RecordLedgerRow {
   key: string
   label: string
@@ -17,8 +19,18 @@ export interface RecordLedgerRow {
   badge?: string
 }
 
+export interface RecordLedgerCompleteness {
+  filled: number
+  total: number
+  missing: CompletenessField[]
+  isLoading?: boolean
+}
+
 export interface RecordLedgerProps {
   rows: RecordLedgerRow[]
+  /** 기록 완성도 요약 및 미등록 축 안내를 한 카드 안에 통합 표시 */
+  completeness?: RecordLedgerCompleteness
+  onFillMissing?: ((field: CompletenessField) => void) | null
 }
 
 /**
@@ -31,13 +43,48 @@ export interface RecordLedgerProps {
  * 한 줄에 하나씩, 막대 길이로 견준다 — 폭을 자연스럽게 다 쓰고 순위가 즉시 읽힌다.
  * 값이 0인 축은 막대를 그리지 않고 아래 한 줄로 접는다(0을 크게 그리면 그게 주인공이 된다).
  */
-export function RecordLedger({ rows }: RecordLedgerProps) {
+export function RecordLedger({
+  rows,
+  completeness,
+  onFillMissing,
+}: RecordLedgerProps) {
   const filled = rows.filter((row) => row.isLoading || row.value > 0)
   const empty = rows.filter((row) => !row.isLoading && row.value === 0)
   const max = filled.reduce((acc, row) => Math.max(acc, row.value), 0) || 1
 
+  const percent =
+    completeness && completeness.total > 0
+      ? Math.round((completeness.filled / completeness.total) * 100)
+      : null
+
+  const hasMissing =
+    completeness && !completeness.isLoading
+      ? completeness.missing.length > 0
+      : empty.length > 0
+
   return (
     <Root>
+      {completeness && !completeness.isLoading && percent != null && (
+        <CompletenessBar>
+          <CompletenessLeft>
+            <CompletenessLabel>기록 완성도</CompletenessLabel>
+            <CompletenessTrack aria-hidden>
+              <CompletenessFill
+                $full={completeness.filled === completeness.total}
+                style={{ width: `${percent}%` }}
+              />
+            </CompletenessTrack>
+            <CompletenessStat>
+              <strong>{percent}%</strong> ({completeness.filled}/
+              {completeness.total} 축)
+            </CompletenessStat>
+          </CompletenessLeft>
+          {completeness.missing.length === 0 && (
+            <FullBadge>✓ 모든 기록 축 등록 완료</FullBadge>
+          )}
+        </CompletenessBar>
+      )}
+
       {filled.length > 0 && (
         <List>
           {filled.map((row) => {
@@ -78,26 +125,41 @@ export function RecordLedger({ rows }: RecordLedgerProps) {
         </List>
       )}
 
-      {empty.length > 0 && (
-        <EmptyRow>
-          <EmptyLabel>아직 없는 기록</EmptyLabel>
-          {empty.map((row) =>
-            row.onClick ? (
-              <EmptyChip
-                key={row.key}
-                type="button"
-                onClick={row.onClick}
-                aria-label={`${row.label} 기록하러 가기`}
-              >
-                {row.label}
-              </EmptyChip>
-            ) : (
-              <EmptyChipStatic key={row.key}>
-                {row.label}
-                {row.badge ? ` · ${row.badge}` : ''}
-              </EmptyChipStatic>
-            ),
-          )}
+      {hasMissing && (
+        <EmptyRow $withDivider={filled.length > 0}>
+          <EmptyLabel>미등록 기록 바로가기</EmptyLabel>
+          {completeness && !completeness.isLoading
+            ? completeness.missing.map((field) =>
+                onFillMissing ? (
+                  <EmptyChip
+                    key={field.key}
+                    type="button"
+                    onClick={() => onFillMissing(field)}
+                    aria-label={`${field.label} 기록하러 가기`}
+                  >
+                    + {field.label}
+                  </EmptyChip>
+                ) : (
+                  <EmptyChipStatic key={field.key}>{field.label}</EmptyChipStatic>
+                ),
+              )
+            : empty.map((row) =>
+                row.onClick ? (
+                  <EmptyChip
+                    key={row.key}
+                    type="button"
+                    onClick={row.onClick}
+                    aria-label={`${row.label} 기록하러 가기`}
+                  >
+                    + {row.label}
+                  </EmptyChip>
+                ) : (
+                  <EmptyChipStatic key={row.key}>
+                    {row.label}
+                    {row.badge ? ` · ${row.badge}` : ''}
+                  </EmptyChipStatic>
+                ),
+              )}
         </EmptyRow>
       )}
     </Root>
@@ -229,12 +291,79 @@ const RowChevron = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const EmptyRow = styled.div`
+const CompletenessBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 6px 10px 10px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const CompletenessLeft = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+`
+
+const CompletenessLabel = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CompletenessTrack = styled.span`
+  display: inline-block;
+  width: 96px;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+`
+
+const CompletenessFill = styled.span<{ $full: boolean }>`
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: ${({ $full }) =>
+    $full
+      ? '#10b981'
+      : 'linear-gradient(90deg, rgba(99, 102, 241, 0.9), rgba(139, 92, 246, 0.9))'};
+  transition: width 0.35s ease;
+`
+
+const CompletenessStat = styled.span`
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  strong {
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const FullBadge = styled.span`
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+`
+
+const EmptyRow = styled.div<{ $withDivider?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 2px 12px 0;
+  padding: ${({ $withDivider }) =>
+    $withDivider ? '12px 10px 2px' : '2px 10px 0'};
+  border-top: ${({ theme, $withDivider }) =>
+    $withDivider ? `1px dashed ${theme.colors.border.light}` : 'none'};
 `
 
 const EmptyLabel = styled.span`

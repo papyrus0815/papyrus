@@ -39,6 +39,7 @@ export type CabinetDetailChromeProps = {
   setMinisterFormEndDate: (endDate: string) => void
   setMinisterFormTermNumber: (termNumber: string) => void
   setMinisterFormDeptId: (id: string | null) => void
+  setSelectedPersonIdForAdd: (id: string | null) => void
   setAddMinisterCabinet: (cab: unknown) => void
   setPersonSelectOpen: (open: boolean) => void
   handleDeleteCabinet: (cabinetId: string, e: React.MouseEvent) => void
@@ -68,6 +69,7 @@ export function CabinetDetailChrome({
   setMinisterFormEndDate,
   setMinisterFormTermNumber,
   setMinisterFormDeptId,
+  setSelectedPersonIdForAdd,
   setAddMinisterCabinet,
   setPersonSelectOpen,
   handleDeleteCabinet,
@@ -185,21 +187,27 @@ export function CabinetDetailChrome({
               const minister = (
                 sortedVisibleMinisters as {
                   id: string
+                  personId?: string | null
+                  person?: { id?: string | null } | null
                   title?: string | null
                   startDate?: string | null
                   endDate?: string | null
                   ordinal?: number | null
                   administrationDepartmentId?: string | null
+                  positionDefinitionId?: string | null
                   positionDefinition?: { id?: string | null } | null
                 }[]
               ).find((row) => row.id === selectedMinisterId) as
                 | {
                     id: string
+                    personId?: string | null
+                    person?: { id?: string | null } | null
                     title?: string | null
                     startDate?: string | null
                     endDate?: string | null
                     ordinal?: number | null
                     administrationDepartmentId?: string | null
+                    positionDefinitionId?: string | null
                     positionDefinition?: { id?: string | null } | null
                   }
                 | undefined
@@ -210,10 +218,17 @@ export function CabinetDetailChrome({
                   aria-label="각료 수정"
                   title="각료 수정"
                   onClick={() => {
-                    setMinisterFormPositionDefId(
-                      minister.positionDefinition?.id ?? null,
+                    const defId =
+                      minister.positionDefinition?.id ??
+                      minister.positionDefinitionId ??
+                      null
+                    setSelectedPersonIdForAdd(
+                      minister.personId ?? minister.person?.id ?? null,
                     )
-                    setMinisterFormTitle(minister.title ?? '')
+                    setMinisterFormPositionDefId(
+                      defId ?? (minister.title ? '__OTHER__' : null),
+                    )
+                    setMinisterFormTitle(defId ? '' : (minister.title ?? ''))
                     setMinisterFormStartDate(
                       minister.startDate ? minister.startDate.slice(0, 10) : '',
                     )

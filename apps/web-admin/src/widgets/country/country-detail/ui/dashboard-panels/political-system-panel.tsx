@@ -39,6 +39,7 @@ import { IconLandmark } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import { ChartSkeleton } from './chart-skeleton'
 import { SectionEmpty } from './section-empty'
+import { SectionHelpPopover } from './section-help-popover'
 
 interface Props {
   /** 현대 국가 ID — 주면 브리지로 연결된 과거 국가의 정체까지 함께 온다 */
@@ -191,21 +192,34 @@ export function PoliticalSystemPanel({
           <IconLandmark />
         </S.SectionTitleIcon>
         <S.SectionTitleText>정체</S.SectionTitleText>
+        <SectionHelpPopover sectionKey="politicalSystem" />
         {systems.length > 0 && (
           <S.SectionCountChip>{systems.length}개</S.SectionCountChip>
         )}
-        {current && (
-          <S.SectionAction type="button" onClick={() => {
-            setEditing(current)
-            setFormOpen(true)
-          }}>
-            수정
-          </S.SectionAction>
-        )}
-        {systems.length > 0 && (
-          <S.SectionLink type="button" onClick={onOpenAll}>
-            시대별 전체 보기
-          </S.SectionLink>
+        {(current || systems.length > 0) && (
+          <S.SectionHeaderActions>
+            {current && (
+              <>
+                <S.SectionAction
+                  type="button"
+                  onClick={() => {
+                    setEditing(current)
+                    setFormOpen(true)
+                  }}
+                >
+                  수정
+                </S.SectionAction>
+                <S.SectionAction type="button" onClick={openCreate}>
+                  + 추가
+                </S.SectionAction>
+              </>
+            )}
+            {systems.length > 0 && (
+              <S.SectionLink type="button" onClick={onOpenAll}>
+                시대별 전체 보기
+              </S.SectionLink>
+            )}
+          </S.SectionHeaderActions>
         )}
       </S.SectionTitleRow>
 
@@ -214,6 +228,7 @@ export function PoliticalSystemPanel({
       ) : !current ? (
         <SectionEmpty
           text="이 국가가 대통령제인지 의원내각제인지, 단원제인지 양원제인지가 아직 없습니다. 헌법 체제를 기간과 함께 남기면 여기 요약이 서고, 바뀔 때마다 한 줄씩 쌓입니다."
+          hint="헌법 체제와 시행 기간을 입력하면 국가원수·정부수반 직함과 의회 구조가 요약됩니다"
           actionLabel="정체 등록"
           onAction={openCreate}
         />
@@ -312,8 +327,8 @@ export function PoliticalSystemPanel({
 const Card = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 10px;
+  padding: 13px 16px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 12px;
   background: ${({ theme }) => theme.colors.background.primary};
@@ -323,7 +338,7 @@ const Head = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px 14px;
+  gap: 6px 12px;
 `
 
 /* 체제 이름이 이 카드의 주인공이다 — 기간·별칭보다 확실히 크게 */
@@ -332,7 +347,7 @@ const Headline = styled.p`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  font-size: 21px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -389,8 +404,8 @@ const PastChip = styled.span`
 const Facts = styled.dl`
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px 18px;
 `
 
 const FactItem = styled.div`

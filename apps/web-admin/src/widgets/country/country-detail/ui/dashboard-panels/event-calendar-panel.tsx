@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import styled, { css } from 'styled-components'
 
@@ -122,6 +122,18 @@ export function EventCalendarPanel({
 
   /* 오늘이 아니라 **사건이 있는 가장 최근 달**에서 연다 — 빈 격자로 시작하지 않는다 */
   const [cursor, setCursor] = useState<YearMonth | null>(null)
+
+  /* 국가 전환 등으로 사건 목록이 바뀌면 이전 국가에서 고른 달 커서를 초기화한다 */
+  useEffect(() => {
+    setCursor((prev) => {
+      if (!prev) return null
+      const exists = monthsWithEvents.some(
+        (entry) => entry.year === prev.year && entry.month === prev.month,
+      )
+      return exists ? prev : null
+    })
+  }, [monthsWithEvents])
+
   const current: YearMonth =
     cursor ??
     (monthsWithEvents[0]
@@ -502,13 +514,13 @@ const Weekday = styled.span<{ $tone: DayTone }>`
  * 칸 높이 — 제목 두 줄(line-clamp 2)과 날짜가 들어가는 만큼만.
  * 96px일 땐 사건 한 건짜리 달도 격자가 600px를 먹어 캘린더 한 장이 한 화면이었다.
  */
-const CELL_MIN_HEIGHT = 68
+const CELL_MIN_HEIGHT = 56
 /**
  * 사건이 없는 칸 — 날짜 숫자만 들어갈 높이. 주(행) 높이는 그 주에서 가장 큰 칸이 정하므로,
  * 사건이 하나도 없는 주만 얇아진다. 68px 고정일 땐 사건 2건짜리 달(1914년 8월)도 다섯 주가
  * 모두 68px라 격자의 80%가 빈 칸이었다.
  */
-const EMPTY_CELL_MIN_HEIGHT = 34
+const EMPTY_CELL_MIN_HEIGHT = 28
 
 const cellBase = css`
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
@@ -680,7 +692,7 @@ const YearList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 300px;
+  max-height: 240px;
   overflow-y: auto;
   padding-right: 4px;
 `

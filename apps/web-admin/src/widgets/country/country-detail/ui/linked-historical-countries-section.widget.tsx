@@ -587,6 +587,9 @@ type HistoricalCountryItem = NonNullable<
 >
 
 
+const FLOW_ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4] as const
+const DEFAULT_FLOW_ZOOM_INDEX = 2 // 1.0 (100%)
+
 export function LinkedHistoricalCountriesSection({
   country,
 }: LinkedHistoricalCountriesSectionProps) {
@@ -597,6 +600,18 @@ export function LinkedHistoricalCountriesSection({
   const count = list.length
   const [viewMode, setViewMode] = useState<'list' | 'flow'>('list')
   const [flowFullViewOpen, setFlowFullViewOpen] = useState(false)
+  const [flowZoomIndex, setFlowZoomIndex] = useState<number>(
+    DEFAULT_FLOW_ZOOM_INDEX,
+  )
+  const flowZoomScale = FLOW_ZOOM_STEPS[flowZoomIndex] ?? 1
+  const flowZoomPercent = Math.round(flowZoomScale * 100)
+  const canFlowZoomOut = flowZoomIndex > 0
+  const canFlowZoomIn = flowZoomIndex < FLOW_ZOOM_STEPS.length - 1
+  const handleFlowZoomOut = () =>
+    setFlowZoomIndex((prev) => Math.max(0, prev - 1))
+  const handleFlowZoomIn = () =>
+    setFlowZoomIndex((prev) => Math.min(FLOW_ZOOM_STEPS.length - 1, prev + 1))
+  const handleFlowZoomReset = () => setFlowZoomIndex(DEFAULT_FLOW_ZOOM_INDEX)
 
   // 전체 보기 모달 — ESC로 닫기 (키보드 사용자가 갇히지 않도록)
   useEffect(() => {
@@ -1068,9 +1083,11 @@ export function LinkedHistoricalCountriesSection({
     totalFlowRows * FLOW_ROW_HEIGHT +
     Math.max(0, totalFlowRows - 1) * FLOW_ROW_GAP
 
-  const flowMinWidth = Math.max(
-    FLOW_TIMELINE_BASE_MIN_WIDTH,
-    (flowYearRange.maxYear - flowYearRange.minYear) * FLOW_PX_PER_YEAR,
+  const flowMinWidth = Math.round(
+    Math.max(
+      FLOW_TIMELINE_BASE_MIN_WIDTH,
+      (flowYearRange.maxYear - flowYearRange.minYear) * FLOW_PX_PER_YEAR,
+    ) * flowZoomScale,
   )
 
   return (
@@ -1259,22 +1276,114 @@ export function LinkedHistoricalCountriesSection({
           >
             <SectionLabel>국가 계보 흐름도</SectionLabel>
             {count > 0 && (
-              <button
-                type="button"
-                onClick={() => setFlowFullViewOpen(true)}
+              <div
                 style={{
-                  padding: '8px 16px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#4f46e5',
-                  background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
-                  border: '1px solid #c7d2fe',
-                  borderRadius: 10,
-                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexWrap: 'wrap',
                 }}
               >
-                전체 보기
-              </button>
+                <div
+                  role="group"
+                  aria-label="흐름도 배율 조절"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: 2,
+                    borderRadius: 10,
+                    background: isDark ? '#2a2a2a' : '#f1f5f9',
+                    border: `1px solid ${isDark ? '#3f3f46' : '#e2e8f0'}`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleFlowZoomOut}
+                    disabled={!canFlowZoomOut}
+                    aria-label="축소"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      border: 'none',
+                      borderRadius: 7,
+                      background: 'transparent',
+                      color: isDark ? '#e4e4e7' : '#334155',
+                      fontWeight: 700,
+                      fontSize: 15,
+                      cursor: canFlowZoomOut ? 'pointer' : 'default',
+                      opacity: canFlowZoomOut ? 1 : 0.35,
+                    }}
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFlowZoomReset}
+                    title="클릭하여 100%로 초기화"
+                    style={{
+                      minWidth: 52,
+                      height: 28,
+                      padding: '0 8px',
+                      border: 'none',
+                      borderRadius: 7,
+                      background:
+                        flowZoomIndex !== DEFAULT_FLOW_ZOOM_INDEX
+                          ? isDark
+                            ? '#18181b'
+                            : '#ffffff'
+                          : 'transparent',
+                      color:
+                        flowZoomIndex !== DEFAULT_FLOW_ZOOM_INDEX
+                          ? '#4f46e5'
+                          : isDark
+                            ? '#a1a1aa'
+                            : '#475569',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      fontVariantNumeric: 'tabular-nums',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {flowZoomPercent}%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFlowZoomIn}
+                    disabled={!canFlowZoomIn}
+                    aria-label="확대"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      border: 'none',
+                      borderRadius: 7,
+                      background: 'transparent',
+                      color: isDark ? '#e4e4e7' : '#334155',
+                      fontWeight: 700,
+                      fontSize: 15,
+                      cursor: canFlowZoomIn ? 'pointer' : 'default',
+                      opacity: canFlowZoomIn ? 1 : 0.35,
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFlowFullViewOpen(true)}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#4f46e5',
+                    background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
+                    border: '1px solid #c7d2fe',
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  전체 보기
+                </button>
+              </div>
             )}
           </div>
           {count === 0 ? (
@@ -1747,14 +1856,106 @@ export function LinkedHistoricalCountriesSection({
               <FlowFullViewTitle id="flow-fullview-title">
                 국가 계보 흐름도 — 전체 보기
               </FlowFullViewTitle>
-              <FlowFullViewCloseBtn
-                type="button"
-                onClick={() => setFlowFullViewOpen(false)}
-                aria-label="전체 보기 닫기 (ESC)"
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  flexWrap: 'wrap',
+                }}
               >
-                <FiX size={16} />
-                닫기
-              </FlowFullViewCloseBtn>
+                <div
+                  role="group"
+                  aria-label="전체 보기 배율 조절"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: 2,
+                    borderRadius: 10,
+                    background: isDark ? '#2a2a2a' : '#f1f5f9',
+                    border: `1px solid ${isDark ? '#3f3f46' : '#e2e8f0'}`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleFlowZoomOut}
+                    disabled={!canFlowZoomOut}
+                    aria-label="축소"
+                    style={{
+                      width: 30,
+                      height: 30,
+                      border: 'none',
+                      borderRadius: 8,
+                      background: 'transparent',
+                      color: isDark ? '#e4e4e7' : '#334155',
+                      fontWeight: 700,
+                      fontSize: 16,
+                      cursor: canFlowZoomOut ? 'pointer' : 'default',
+                      opacity: canFlowZoomOut ? 1 : 0.35,
+                    }}
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFlowZoomReset}
+                    title="클릭하여 100%로 초기화"
+                    style={{
+                      minWidth: 56,
+                      height: 30,
+                      padding: '0 8px',
+                      border: 'none',
+                      borderRadius: 8,
+                      background:
+                        flowZoomIndex !== DEFAULT_FLOW_ZOOM_INDEX
+                          ? isDark
+                            ? '#18181b'
+                            : '#ffffff'
+                          : 'transparent',
+                      color:
+                        flowZoomIndex !== DEFAULT_FLOW_ZOOM_INDEX
+                          ? '#4f46e5'
+                          : isDark
+                            ? '#a1a1aa'
+                            : '#475569',
+                      fontWeight: 700,
+                      fontSize: 12.5,
+                      fontVariantNumeric: 'tabular-nums',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {flowZoomPercent}%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFlowZoomIn}
+                    disabled={!canFlowZoomIn}
+                    aria-label="확대"
+                    style={{
+                      width: 30,
+                      height: 30,
+                      border: 'none',
+                      borderRadius: 8,
+                      background: 'transparent',
+                      color: isDark ? '#e4e4e7' : '#334155',
+                      fontWeight: 700,
+                      fontSize: 16,
+                      cursor: canFlowZoomIn ? 'pointer' : 'default',
+                      opacity: canFlowZoomIn ? 1 : 0.35,
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+                <FlowFullViewCloseBtn
+                  type="button"
+                  onClick={() => setFlowFullViewOpen(false)}
+                  aria-label="전체 보기 닫기 (ESC)"
+                >
+                  <FiX size={16} />
+                  닫기
+                </FlowFullViewCloseBtn>
+              </div>
             </FlowFullViewHeader>
             <FlowFullViewBody>
               <div

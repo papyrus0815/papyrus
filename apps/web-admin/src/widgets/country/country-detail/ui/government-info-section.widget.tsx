@@ -15,6 +15,7 @@ import {
   GOV_TAB_META,
   type GovernmentContentTab,
 } from '@/features/government-info/model/government-content-tab'
+import { GovernmentMilitaryTab } from '@/features/government-info/ui/government-military-tab.widget'
 import { GovernmentOrganizationsTab } from '@/features/government-info/ui/government-organizations-tab.widget'
 import { PoliticalSystemTab } from '@/features/government-info/ui/political-system-tab.widget'
 import { GovernmentStatisticsTab } from '@/features/government-info/ui/government-statistics-tab.widget'
@@ -172,6 +173,7 @@ export function GovernmentInfoSection({
             <MinistriesTabSection
               contentTab={contentTab}
               effectiveCountryId={effectiveCountryId}
+              isHistorical={country?.type === 'historical'}
               isDark={isDark}
               cabinetOpenMinistryIntent={cabinetMinistryIntent}
               onConsumedCabinetOpenMinistryIntent={() =>
@@ -195,7 +197,7 @@ export function GovernmentInfoSection({
 
         {contentTab === 'positions' && (
           <section aria-label="직위 정의">
-            <PositionDefinitionsSection />
+            <PositionDefinitionsSection country={country} />
           </section>
         )}
 
@@ -236,6 +238,25 @@ export function GovernmentInfoSection({
             />
           </div>
         )}
+
+        {contentTab === 'military' && (
+          <section aria-label="군사 조직">
+            <GovernmentMilitaryTab
+              country={country}
+              effectiveCountryId={effectiveCountryId}
+              onCreateUnit={() => {
+                setMilitaryUnitEditingId(null)
+                setMilitaryDeptDefaultId(null)
+                setMilitaryUnitModalOpen(true)
+              }}
+              onEditUnit={(unitId) => {
+                setMilitaryUnitEditingId(unitId)
+                setMilitaryDeptDefaultId(null)
+                setMilitaryUnitModalOpen(true)
+              }}
+            />
+          </section>
+        )}
       </motion.div>
 
       <GovernmentCategoryModal
@@ -254,6 +275,9 @@ export function GovernmentInfoSection({
           void queryClient.invalidateQueries({
             queryKey:
               administrationDepartmentsByCountryQueryKey(effectiveCountryId),
+          })
+          void queryClient.invalidateQueries({
+            queryKey: ['military-units'],
           })
         }}
         defaultCountryId={effectiveCountryId ?? null}

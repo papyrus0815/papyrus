@@ -4,6 +4,9 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { politicalSystemKeys } from '@/entities/political-system/api'
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import { getLaws } from '@/shared/api/election'
+import { ethnicityApi } from '@/shared/api/ethnicity'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllEventsExhaustive } from '@/shared/api/events'
 import {
@@ -20,6 +23,7 @@ import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonsByHistoricalCountryUnion } from '@/shared/api/persons'
 import { listPoliticalSystems } from '@/shared/api/political-system'
 import { treatyApi } from '@/shared/api/treaty'
+import { administrationDepartmentsByHistoricalCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import {
   getCountryYearRange,
   signedYearFromIsoLike,
@@ -63,6 +67,8 @@ export type HistoricalFillTarget =
   | 'figures'
   | 'heads'
   | 'government'
+  | 'laws'
+  | 'ethnicity'
   | 'succession'
   | 'treaty'
   | 'relation'
@@ -173,6 +179,9 @@ export function useHistoricalCountryDashboard(
     foundingQuery,
     allCountriesQuery,
     politicalSystemsQuery,
+    departmentsQuery,
+    lawsQuery,
+    ethnicityQuery,
   ] = useQueries({
     queries: [
       {
@@ -228,6 +237,21 @@ export function useHistoricalCountryDashboard(
         queryKey: politicalSystemKeys.list({ historicalCountryId: id }),
         queryFn: () => listPoliticalSystems({ historicalCountryId: id }),
         staleTime: 1000 * 60,
+      },
+      {
+        queryKey: administrationDepartmentsByHistoricalCountryQueryKey(id),
+        queryFn: () => administrationDepartmentApi.getByHistoricalCountryId(id),
+        staleTime: STALE_MS,
+      },
+      {
+        queryKey: ['laws', `h:${id}`],
+        queryFn: () => getLaws({ historicalCountryId: id }),
+        staleTime: STALE_MS,
+      },
+      {
+        queryKey: ['ethnicities', 'by-historical-country', id],
+        queryFn: () => ethnicityApi.getAll({ historicalCountryId: id }),
+        staleTime: STALE_MS,
       },
     ],
   })
@@ -404,6 +428,12 @@ export function useHistoricalCountryDashboard(
   const memberships = asArray(membershipsQuery.data)
   const relations = asArray(relationsQuery.data)
   const politicalSystems = asArray(politicalSystemsQuery.data)
+  const departments = asArray(departmentsQuery.data)
+  const laws = asArray(lawsQuery.data)
+  const ethnicities = asArray(ethnicityQuery.data)
+  const administrationCount = departments.length + politicalSystems.length
+  const lawCount = laws.length
+  const ethnicityCount = ethnicities.length
   const treatyCount =
     (treatiesQuery.data as { total?: number } | undefined)?.total ?? 0
   const founding = foundingQuery.data
@@ -486,6 +516,20 @@ export function useHistoricalCountryDashboard(
       target: 'treaty',
       historicalTarget: 'treaty',
     },
+    {
+      key: 'laws',
+      label: '법령',
+      filled: lawCount > 0,
+      target: 'laws',
+      historicalTarget: 'laws',
+    },
+    {
+      key: 'ethnicity',
+      label: '구성 민족',
+      filled: ethnicityCount > 0,
+      target: 'ethnicity',
+      historicalTarget: 'ethnicity',
+    },
   ]
   const filledCount = completenessFields.filter((field) => field.filled).length
 
@@ -493,6 +537,10 @@ export function useHistoricalCountryDashboard(
     persons: personsQuery.isLoading,
     events: eventsQuery.isLoading,
     tenures: tenuresQuery.isLoading,
+    administration:
+      departmentsQuery.isLoading || politicalSystemsQuery.isLoading,
+    laws: lawsQuery.isLoading,
+    ethnicity: ethnicityQuery.isLoading,
     lineage:
       transitionsQuery.isLoading ||
       allCountriesQuery.isLoading ||
@@ -511,6 +559,9 @@ export function useHistoricalCountryDashboard(
     transitionCount: transitions.length,
     membershipCount: memberships.length,
     relationCount: relations.length,
+    administrationCount,
+    lawCount,
+    ethnicityCount,
     treatyCount,
     eventCenturyCounts,
     calendarEvents,

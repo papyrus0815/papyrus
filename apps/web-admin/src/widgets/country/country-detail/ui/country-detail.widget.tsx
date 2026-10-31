@@ -1,18 +1,31 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { type ContinentOption } from '@/entities/country/api'
+import {
+  useBondYields,
+  useDemographicIndicators,
+  useEconomicIndicators,
+} from '@/entities/country/api.indicators'
+import { useExportImports } from '@/entities/country/api.trade'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { companyApi } from '@/shared/api/company'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 
+import { useCountryDashboardStats } from '../model/use-country-dashboard-stats'
+import { CountryCompaniesTabSection } from './country-companies-tab-section.widget'
 import { CountryDetailDashboard } from './country-detail-dashboard.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
 import * as S from './country-detail.styles'
 import { CountryElectionsSection } from './country-elections-section.widget'
 import { CountryLawsSection } from './country-laws-section.widget'
+import { CountryStatisticsSection } from './country-statistics-section.widget'
+import { CountryTradeSection } from './country-trade-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
@@ -25,6 +38,7 @@ import {
   panelId,
   tabId,
 } from './overview-sub-tabs'
+import * as TabStyles from './overview-sub-tabs.styles'
 import { CountryPersonsSection } from './country-persons-section.widget'
 import { EventsTimelineSection } from './events-timeline-section.widget'
 import { TreatySectionWidget } from './treaty-section.widget'
@@ -114,6 +128,7 @@ function CountryDetailInner({
     const modernOnly: ReadonlySet<CountryDetailTabKey> = new Set([
       'dashboard',
       'linked-historical',
+      'statistics',
     ])
     if (modernOnly.has(initialDetailTab)) {
       onDetailTabChange?.(null)
@@ -127,6 +142,72 @@ function CountryDetailInner({
     },
     [onDetailTabChange],
   )
+
+  const modernCountry = country?.type === 'modern' ? country : null
+  const dashboardStats = useCountryDashboardStats(modernCountry)
+  const { data: economicRows = [] } = useEconomicIndicators(modernCountry?.id)
+  const { data: demographicRows = [] } = useDemographicIndicators(modernCountry?.id)
+  const { data: bondRows = [] } = useBondYields(modernCountry?.id)
+  const { data: tradeRows = [] } = useExportImports(modernCountry?.id)
+  const { data: allCompanies = [] } = useQuery({
+    queryKey: ['companies', 'all'],
+    queryFn: () => companyApi.getAll(),
+    staleTime: 60_000,
+    enabled: Boolean(modernCountry?.id),
+  })
+
+  const tabCounts = useMemo<
+    Partial<Record<OverviewSubTab, number>> | undefined
+  >(() => {
+    if (!modernCountry) return undefined
+    const companyCount = allCompanies.filter(
+      (company) => company.countryId === modernCountry.id,
+    ).length
+    const statYearCount = new Set([
+      ...economicRows.map((row) => row.year),
+      ...demographicRows.map((row) => row.year),
+      ...bondRows.map((row) => row.year),
+    ]).size
+
+    return {
+      persons: dashboardStats.loading.persons
+        ? undefined
+        : dashboardStats.personCount,
+      events: dashboardStats.loading.events
+        ? undefined
+        : dashboardStats.eventCount,
+      'linked-historical': dashboardStats.historicalCountryCount,
+      regions: dashboardStats.loading.cities
+        ? undefined
+        : dashboardStats.cityCount,
+      government: dashboardStats.loading.administration
+        ? undefined
+        : dashboardStats.administrationCount +
+          dashboardStats.currentHeads.length +
+          dashboardStats.militaryCount,
+      ethnicity: dashboardStats.loading.ethnicity
+        ? undefined
+        : dashboardStats.ethnicityCount,
+      elections: dashboardStats.loading.elections
+        ? undefined
+        : dashboardStats.electionCount,
+      laws: dashboardStats.loading.laws ? undefined : dashboardStats.lawCount,
+      treaty: dashboardStats.loading.treaties
+        ? undefined
+        : dashboardStats.treatyCount,
+      trade: tradeRows.length,
+      companies: companyCount,
+      statistics: statYearCount,
+    }
+  }, [
+    modernCountry,
+    allCompanies,
+    economicRows,
+    demographicRows,
+    bondRows,
+    tradeRows.length,
+    dashboardStats,
+  ])
 
   // 우선순위: loading > notFound > empty(미선택). 셋을 명확히 분리해야 사용자가 자신의 상태를 안다.
   if (isLoading && !country) {
@@ -157,7 +238,9 @@ function CountryDetailInner({
             initialDetailTab === 'elections' ||
             initialDetailTab === 'laws' ||
             initialDetailTab === 'ethnicity' ||
-            initialDetailTab === 'treaty'
+            initialDetailTab === 'treaty' ||
+            initialDetailTab === 'trade' ||
+            initialDetailTab === 'companies'
           ? initialDetailTab
           : undefined
     return (
@@ -206,6 +289,57 @@ function CountryDetailInner({
               <OverviewSubTabs
                 activeSubTab={activeSubTab}
                 onSubTabChange={handleOverviewSubTabChange}
+                counts={tabCounts}
+                contextBar={
+                  activeSubTab !== 'dashboard' ? (
+                    <TabStyles.CompactContextBar>
+                      <TabStyles.CompactCountryBtn
+                        type="button"
+                        onClick={() => handleOverviewSubTabChange('dashboard')}
+                        title="클릭하여 대시보드로 돌아가기"
+                      >
+                        <TabStyles.CompactFlag aria-hidden>
+                          {country.thumbnailUrl ? (
+                            <img
+                              src={getUploadImageUrl(country.thumbnailUrl)}
+                              alt=""
+                            />
+                          ) : (
+                            country.flagEmoji || country.name.slice(0, 1)
+                          )}
+                        </TabStyles.CompactFlag>
+                        <TabStyles.CompactName>
+                          {country.name}
+                        </TabStyles.CompactName>
+                        {(continent?.name || country.isoCode) && (
+                          <TabStyles.CompactMeta>
+                            {[continent?.name, country.isoCode]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </TabStyles.CompactMeta>
+                        )}
+                      </TabStyles.CompactCountryBtn>
+                      <TabStyles.CompactActions>
+                        <TabStyles.CompactActionBtn
+                          type="button"
+                          onClick={() =>
+                            handleOverviewSubTabChange('dashboard')
+                          }
+                        >
+                          ← 대시보드
+                        </TabStyles.CompactActionBtn>
+                        {onEdit && (
+                          <TabStyles.CompactActionBtn
+                            type="button"
+                            onClick={() => onEdit(country)}
+                          >
+                            기본 정보 수정
+                          </TabStyles.CompactActionBtn>
+                        )}
+                      </TabStyles.CompactActions>
+                    </TabStyles.CompactContextBar>
+                  ) : undefined
+                }
               />
             </S.StickyTopBar>
 
@@ -232,6 +366,7 @@ function CountryDetailInner({
                 {activeSubTab === 'dashboard' && (
                   <CountryDetailDashboard
                     country={country}
+                    onEdit={onEdit ? () => onEdit(country) : undefined}
                     /*
                       히어로는 대시보드 셸 좌측 칼럼 안에서 렌더한다. 바깥 형제로 두면
                       우측 관리 레일이 히어로 아래에서 시작하고 히어로만 레일 밑으로
@@ -322,9 +457,9 @@ function CountryDetailInner({
                     <CountryElectionsSection
                       countryId={country.id}
                       linkedHistoricalCountries={
-                        country.historicalCountries?.map((h) => ({
-                          id: h.id,
-                          name: h.name,
+                        country.historicalCountries?.map((hist) => ({
+                          id: hist.id,
+                          name: hist.name,
                         })) ?? []
                       }
                     />
@@ -334,6 +469,30 @@ function CountryDetailInner({
                 {activeSubTab === 'laws' && (
                   <S.TabContentPane>
                     <CountryLawsSection countryId={country.id} />
+                  </S.TabContentPane>
+                )}
+
+                {activeSubTab === 'trade' && (
+                  <S.TabContentPane>
+                    <CountryTradeSection
+                      countryId={country.id}
+                      countryName={country.name}
+                    />
+                  </S.TabContentPane>
+                )}
+
+                {activeSubTab === 'companies' && (
+                  <S.TabContentPane>
+                    <CountryCompaniesTabSection country={country} />
+                  </S.TabContentPane>
+                )}
+
+                {activeSubTab === 'statistics' && (
+                  <S.TabContentPane>
+                    <CountryStatisticsSection
+                      countryId={country.id}
+                      countryName={country.name}
+                    />
                   </S.TabContentPane>
                 )}
 

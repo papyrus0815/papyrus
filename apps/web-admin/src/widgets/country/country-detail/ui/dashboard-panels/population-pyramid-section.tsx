@@ -25,6 +25,7 @@ import type { DemographicIndicator } from '@/shared/api/country-indicators'
 import { CountryDataManagerModal } from '../country-data-manager/country-data-manager-modal'
 import { ChartEmpty } from './chart-empty'
 import { ChartSkeleton } from './chart-skeleton'
+import { SectionHelpPopover } from './section-help-popover'
 import {
   IconChart,
   IconUsers,
@@ -43,6 +44,10 @@ import { PopulationYearScrubber } from './population-year-scrubber'
 interface Props {
   countryId: string
   countryName: string
+  /** 경제·통계 상세 탭으로 이동하는 콜백 */
+  onOpenDetailTab?: () => void
+  /** 상세 탭 내부에 임베드된 경우 */
+  embeddedInTab?: boolean
 }
 
 /**
@@ -169,6 +174,8 @@ function PyramidBar({
 export function PopulationPyramidSection({
   countryId,
   countryName,
+  onOpenDetailTab,
+  embeddedInTab = false,
 }: Props) {
   const [managerOpen, setManagerOpen] = useState(false)
   const theme = useTheme()
@@ -267,31 +274,35 @@ export function PopulationPyramidSection({
   if (query.isLoading) {
     return (
       <S.Section>
-        <Title onRegister={null} />
+        <Title onRegister={null} onOpenDetailTab={onOpenDetailTab} />
         <ChartSkeleton variant="pyramid" />
       </S.Section>
     )
   }
   if (years.length === 0) {
+    if (embeddedInTab) {
+      return null
+    }
     /*
      * 자료가 없어도 **피라미드 골격**은 그대로 둔다. 연령대 라벨은 카탈로그라 이미
      * 아는 값이고, 축 눈금 숫자는 지어낼 수 없으니 눈금선만 남긴다.
      */
     return (
       <S.Section>
-        <Title onRegister={null} />
+        <Title onRegister={null} onOpenDetailTab={onOpenDetailTab} />
         <ChartEmpty
           text="연도별 남·여 인구를 연령대로 넣으면 여기에 피라미드가 그려집니다."
+          hint="2개 연도 이상 등록하면 가장 이른 기준 연도의 윤곽선이 함께 겹쳐져 고령화 추이를 비교합니다"
           actionLabel="연령·성별 인구 등록"
           onAction={() => setManagerOpen(true)}
         >
           <ChartBox>
             <ResponsiveContainer
               width="100%"
-              height={AGE_BRACKETS.length * ROW_HEIGHT + 44}
+              height={5 * ROW_HEIGHT + 16}
             >
               <BarChart
-                data={[...AGE_BRACKETS].reverse().map((bracket) => ({
+                data={[...AGE_BRACKETS.slice(0, 5)].reverse().map((bracket) => ({
                   bracket: bracket.label,
                   value: 0,
                 }))}
@@ -342,8 +353,11 @@ export function PopulationPyramidSection({
   const ghostHalo = isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.9)'
 
   return (
-    <S.Section>
-      <Title onRegister={() => setManagerOpen(true)} />
+    <S.Section $wide>
+      <Title
+        onRegister={embeddedInTab ? null : () => setManagerOpen(true)}
+        onOpenDetailTab={onOpenDetailTab}
+      />
       {manager}
 
       {years.length > 1 && (
@@ -585,9 +599,11 @@ function PyramidTooltip({
 
 function Title({
   onRegister,
+  onOpenDetailTab,
 }: {
   /** null이면 버튼을 내지 않는다 — 빈 자리 CTA와 라벨이 글자까지 같아 두 번 나온다 */
   onRegister: (() => void) | null
+  onOpenDetailTab?: () => void
 }) {
   return (
     <S.SectionTitleRow>
@@ -595,11 +611,17 @@ function Title({
         <IconChart />
       </S.SectionTitleIcon>
       <S.SectionTitleText>인구 피라미드</S.SectionTitleText>
+      <SectionHelpPopover sectionKey="pyramid" />
       {/* 이 자리에 버튼이 없으면 등록 진입점이 '지표 추이'의 작은 버튼 하나뿐이다 */}
       {onRegister && (
         <S.SectionAction type="button" onClick={onRegister}>
           연령·성별 인구 등록
         </S.SectionAction>
+      )}
+      {onOpenDetailTab && (
+        <S.SectionLink type="button" onClick={onOpenDetailTab}>
+          상세·원장 보기
+        </S.SectionLink>
       )}
     </S.SectionTitleRow>
   )

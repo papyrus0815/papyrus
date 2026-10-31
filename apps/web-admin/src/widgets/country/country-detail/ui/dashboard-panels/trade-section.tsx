@@ -6,16 +6,17 @@ import {
   useExportImports,
   type ExportImportItem,
 } from '@/entities/country/api.trade'
+import { useTradeRecords } from '@/entities/trade/api'
 import {
   CHANNEL_LABEL,
   directionColor,
   formatTradeValue,
   formatTradeYear,
-  VALUE_SCALE_LABEL,
 } from '@/entities/trade/vocab'
 
 import { ChartEmpty } from './chart-empty'
 import { ChartSkeleton } from './chart-skeleton'
+import { SectionHelpPopover } from './section-help-popover'
 import { TradeCompositionTreemap } from './trade-composition-treemap'
 import { TradeYearBars } from './trade-year-bars'
 import {
@@ -25,13 +26,18 @@ import {
 } from './trade-composition'
 
 import { CountryDataManagerModal } from '../country-data-manager/country-data-manager-modal'
-import { IconChart } from '../country-detail-dashboard.icons'
+import { IconTrade } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import { CommodityFlowsModal } from './commodity-flows-modal'
 
 interface TradeSectionProps {
-  countryId: string
+  countryId?: string
+  historicalCountryId?: string
   countryName: string
+  /** 대시보드에서 '상세·원장 보기' 클릭 시 교역 탭으로 이동 */
+  onOpenDetailTab?: () => void
+  /** 교역 전용 탭 내부에 임베드될 때 — 아래에 편집 원장이 함께 있으므로 모달 버튼을 숨긴다 */
+  embeddedInTab?: boolean
 }
 
 type Direction = 'EXPORT' | 'IMPORT'
@@ -72,7 +78,10 @@ interface DirectionView {
  */
 export function TradeSection({
   countryId,
+  historicalCountryId,
   countryName,
+  onOpenDetailTab,
+  embeddedInTab = false,
 }: TradeSectionProps) {
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
@@ -87,10 +96,17 @@ export function TradeSection({
    * 옛 id가 자연히 안 맞아 최신으로 돌아온다 — 초기화 effect가 따로 필요 없다.
    */
   const [pickedYearId, setPickedYearId] = useState<string | null>(null)
-  const query = useExportImports(countryId)
+  const modernQuery = useExportImports(countryId)
+  const historicalQuery = useTradeRecords(
+    historicalCountryId ? { historicalCountryId } : {},
+  )
+  const isLoading = countryId
+    ? modernQuery.isLoading
+    : historicalQuery.isLoading
+  const rawRecords = countryId ? modernQuery.data : historicalQuery.data
 
   const years = useMemo(() => {
-    return (query.data ?? [])
+    return (rawRecords ?? [])
       .map((row) => ({
         id: row.id,
         era: row.era,
@@ -113,7 +129,7 @@ export function TradeSection({
             row.items.length > 0),
       )
       .sort((left, right) => left.signedYear - right.signedYear)
-  }, [query.data])
+  }, [rawRecords])
 
   const current =
     years.find((row) => row.id === pickedYearId) ?? years[years.length - 1]
@@ -159,12 +175,12 @@ export function TradeSection({
    * 빈 트랙과 눈금선만 남긴다 — 값이 들어오면 같은 자리에 막대가 찬다.
    */
   /* 로딩 중을 '자료 없음'으로 말하지 않는다 — 예전엔 불러오는 동안 등록 안내가 떴다 */
-  if (query.isLoading) {
+  if (isLoading) {
     return (
       <S.Section>
         <S.SectionTitleRow>
           <S.SectionTitleIcon>
-            <IconChart />
+            <IconTrade />
           </S.SectionTitleIcon>
           <S.SectionTitleText>교역</S.SectionTitleText>
         </S.SectionTitleRow>
@@ -174,18 +190,31 @@ export function TradeSection({
   }
 
   if (years.length === 0 || !current) {
+    if (embeddedInTab) {
+      return null
+    }
     return (
       <S.Section>
         <S.SectionTitleRow>
           <S.SectionTitleIcon>
-            <IconChart />
+            <IconTrade />
           </S.SectionTitleIcon>
           <S.SectionTitleText>교역</S.SectionTitleText>
+          <SectionHelpPopover sectionKey="trade" />
+          {onOpenDetailTab && (
+            <S.SectionLink type="button" onClick={onOpenDetailTab}>
+              교역 탭 열기
+            </S.SectionLink>
+          )}
         </S.SectionTitleRow>
         <ChartEmpty
           text="연도별 수출·수입액을 넣으면 여기에 규모와 무역수지가 그려집니다."
+          hint="수출·수입 총액 또는 품목·상대국 명세를 입력하면 무역수지와 품목 트리맵이 생성됩니다"
           actionLabel="교역 자료 등록"
-          onAction={() => setManagerOpen(true)}
+          onAction={() => {
+            if (countryId) setManagerOpen(true)
+            else onOpenDetailTab?.()
+          }}
         >
           <EmptyBars>
             {[0, 1, 2].map((row) => (
@@ -198,29 +227,18 @@ export function TradeSection({
             ))}
           </EmptyBars>
         </ChartEmpty>
-        <CountryDataManagerModal
-          countryId={countryId}
-          countryName={countryName}
-          open={managerOpen}
-          onClose={() => setManagerOpen(false)}
-          initialTab="trade"
-        />
+        {countryId && (
+          <CountryDataManagerModal
+            countryId={countryId}
+            countryName={countryName}
+            open={managerOpen}
+            onClose={() => setManagerOpen(false)}
+            initialTab="trade"
+          />
+        )}
       </S.Section>
     )
   }
-
-  const balance =
-    current.exportValue != null && current.importValue != null
-      ? current.exportValue - current.importValue
-      : null
-  const scaleMax = Math.max(current.exportValue ?? 0, current.importValue ?? 0)
-
-  const unitLabel = [
-    current.currencyCode,
-    current.valueScale !== 'ONE' ? VALUE_SCALE_LABEL[current.valueScale] : null,
-  ]
-    .filter(Boolean)
-    .join(' ')
 
   const yearLabel = formatTradeYear(
     current.era,
@@ -237,16 +255,33 @@ export function TradeSection({
   )
 
   return (
-    <S.Section>
+    <S.Section $wide>
       <S.SectionTitleRow>
         <S.SectionTitleIcon>
-          <IconChart />
+          <IconTrade />
         </S.SectionTitleIcon>
-        <S.SectionTitleText>교역</S.SectionTitleText>
+        <S.SectionTitleText>
+          {embeddedInTab ? '연도별 교역 추이 · 품목 구성' : '교역'}
+        </S.SectionTitleText>
+        <SectionHelpPopover sectionKey="trade" />
         <S.SectionCountChip>{yearLabel} 기준</S.SectionCountChip>
-        <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
-          데이터 관리
-        </S.SectionAction>
+        {!embeddedInTab && (
+          <S.SectionHeaderActions>
+            {countryId && (
+              <S.SectionAction
+                type="button"
+                onClick={() => setManagerOpen(true)}
+              >
+                데이터 관리
+              </S.SectionAction>
+            )}
+            {onOpenDetailTab && (
+              <S.SectionLink type="button" onClick={onOpenDetailTab}>
+                상세·원장 보기
+              </S.SectionLink>
+            )}
+          </S.SectionHeaderActions>
+        )}
       </S.SectionTitleRow>
 
       {/* 규모·추이·연도 선택을 한 그림이 맡는다 — 자세한 이유는 TradeYearBars 주석 */}
@@ -293,30 +328,17 @@ export function TradeSection({
         onClose={() => setPickedCommodity(null)}
       />
 
-      <CountryDataManagerModal
-        countryId={countryId}
-        countryName={countryName}
-        open={managerOpen}
-        onClose={() => setManagerOpen(false)}
-        initialTab="trade"
-      />
+      {countryId && !embeddedInTab && (
+        <CountryDataManagerModal
+          countryId={countryId}
+          countryName={countryName}
+          open={managerOpen}
+          onClose={() => setManagerOpen(false)}
+          initialTab="trade"
+        />
+      )}
     </S.Section>
   )
-}
-
-/** "수입이 수출의 1.6배" — 배수는 두 막대의 길이 차를 말로 한 번 더 못박는다 */
-function balanceRatioText(
-  exportValue: number | null,
-  importValue: number | null,
-): string {
-  if (exportValue == null || importValue == null) return ''
-  if (exportValue <= 0 || importValue <= 0) return ''
-  const bigger = exportValue >= importValue ? '수출' : '수입'
-  const smaller = exportValue >= importValue ? '수입' : '수출'
-  const ratio =
-    Math.max(exportValue, importValue) / Math.min(exportValue, importValue)
-  if (ratio < 1.05) return ' · 두 쪽이 거의 같다'
-  return ` · ${bigger}이 ${smaller}의 ${ratio.toFixed(2)}배`
 }
 
 interface TradeDirectionViewProps {

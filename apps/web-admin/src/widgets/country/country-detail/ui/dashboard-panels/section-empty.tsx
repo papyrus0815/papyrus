@@ -8,6 +8,8 @@ interface Props {
   /** 부차 진입(전체 목록으로 가기 등) */
   secondaryLabel?: string
   onSecondary?: () => void
+  /** 차트/시각화 활성화 요건이나 작성 팁 (예: '최소 2개 연도 입력 시 추이선 생성') */
+  hint?: string
 }
 
 /**
@@ -28,10 +30,19 @@ export function SectionEmpty({
   onAction,
   secondaryLabel,
   onSecondary,
+  hint,
 }: Props) {
   return (
     <Box>
-      <Text>{text}</Text>
+      <TextColumn>
+        <Text>{text}</Text>
+        {hint && (
+          <HintRow>
+            <HintBadge>TIP</HintBadge>
+            <HintText>{hint}</HintText>
+          </HintRow>
+        )}
+      </TextColumn>
       <Actions>
         <Primary type="button" onClick={onAction}>
           + {actionLabel}
@@ -51,22 +62,56 @@ const Box = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 20px;
-  padding: 16px 18px;
-  /* 파선 테두리 = '아직 비어 있는 자리' — 채워지면 실선 카드들로 바뀐다 */
+  gap: 12px 20px;
+  min-height: 72px;
+  box-sizing: border-box;
+  padding: 16px 20px;
   border: 1px dashed ${({ theme }) => theme.colors.border.medium};
   border-radius: 12px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
 `
 
+const TextColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 240px;
+  min-width: 0;
+`
+
 const Text = styled.p`
   margin: 0;
-  flex: 1 1 320px;
   min-width: 0;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.55;
+  word-break: keep-all;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HintRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HintBadge = styled.span`
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.10)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+`
+
+const HintText = styled.span`
+  word-break: keep-all;
 `
 
 const Actions = styled.div`
@@ -81,18 +126,21 @@ const Primary = styled.button`
   border-radius: 8px;
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,106,242,0.45)' : 'rgba(56,130,246,0.35)'};
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.45)' : 'rgba(99,102,241,0.32)'};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,106,242,0.18)' : 'rgba(56,130,246,0.09)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#2563eb')};
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.10)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   font-size: 12.5px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 
   &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,106,242,0.28)' : 'rgba(56,130,246,0.17)'};
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.28)' : 'rgba(99,102,241,0.18)'};
   }
 `
 

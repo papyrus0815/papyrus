@@ -44,6 +44,7 @@ import { RichTextReadView } from '@/shared/ui/rich-text-read-view/rich-text-read
 import { notify } from '@/shared/ui/toast'
 
 import { BackgroundEditModal } from './founding-edit-modals'
+import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { FillChip } from './founding-fill-chip.styles'
 import { FoundingThumb, useResolvedImage } from './founding-media'
 import { FoundingPreviewProvider, previewOnClick, useFoundingPreview } from './founding-preview'
@@ -136,7 +137,7 @@ function FoundingCardsInner({
   onGoToHeads,
 }: HistoricalFoundingCardsProps) {
   const isState = !entityKind || entityKind === 'STATE'
-  const { data: summary } = useQuery({
+  const { data: summary, isLoading: isSummaryLoading } = useQuery({
     queryKey: foundingSummaryKey(historicalCountryId),
     queryFn: () => getHistoricalCountryFoundingSummary(historicalCountryId),
     staleTime: 60_000,
@@ -147,6 +148,9 @@ function FoundingCardsInner({
     staleTime: 60_000,
   })
 
+  if (isSummaryLoading) {
+    return <ChartSkeleton variant="bars" rows={3} />
+  }
   if (!summary) return null
 
   return (

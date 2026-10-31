@@ -19,11 +19,16 @@ import { BondYieldCurve, type CurveSeries } from './bond-yield-curve'
 import { ChartEmpty } from './chart-empty'
 import { ChartSkeleton } from './chart-skeleton'
 import { IndicatorTrendChart, type TrendPoint } from './indicator-trend-chart'
+import { SectionHelpPopover } from './section-help-popover'
 
 interface BondYieldSectionProps {
   /** 모던 국가 ID — 국채 금리는 현대 국가에만 붙는다(역사 국가는 지표 축이 없다) */
   countryId: string
   countryName: string
+  /** 경제·통계 상세 탭으로 이동하는 콜백 */
+  onOpenDetailTab?: () => void
+  /** 상세 탭 내부에 임베드된 경우 */
+  embeddedInTab?: boolean
 }
 
 /** 장단기 스프레드를 재는 짧은 쪽 후보 — 앞에서부터 있는 것을 쓴다 */
@@ -41,6 +46,8 @@ const SHORT_LEG_CANDIDATES: BondMaturity[] = ['Y2', 'Y1', 'M6', 'M3', 'Y3']
 export function BondYieldSection({
   countryId,
   countryName,
+  onOpenDetailTab,
+  embeddedInTab = false,
 }: BondYieldSectionProps) {
   const [managerOpen, setManagerOpen] = useState(false)
   const [pickedYear, setPickedYear] = useState<number | null>(null)
@@ -175,22 +182,32 @@ export function BondYieldSection({
     ? bondMaturityLabel(model.benchmark)
     : '10년'
 
+  if (!bondQuery.isLoading && model == null && embeddedInTab) {
+    return null
+  }
+
   return (
-    <S.Section>
+    <S.Section $wide={model != null}>
       <S.SectionTitleRow>
         <S.SectionTitleIcon>
           <IconPercent />
         </S.SectionTitleIcon>
         <S.SectionTitleText>국채 금리</S.SectionTitleText>
+        <SectionHelpPopover sectionKey="bonds" />
         {model != null && (
-          <>
-            <S.SectionCountChip>
-              {model.years.length}개 연도 · 만기 {model.maturityCount}종
-            </S.SectionCountChip>
-            <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
-              데이터 관리
-            </S.SectionAction>
-          </>
+          <S.SectionCountChip>
+            {model.years.length}개 연도 · 만기 {model.maturityCount}종
+          </S.SectionCountChip>
+        )}
+        {model != null && !embeddedInTab && (
+          <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
+            데이터 관리
+          </S.SectionAction>
+        )}
+        {onOpenDetailTab && (
+          <S.SectionLink type="button" onClick={onOpenDetailTab}>
+            상세·원장 보기
+          </S.SectionLink>
         )}
       </S.SectionTitleRow>
 
@@ -201,6 +218,7 @@ export function BondYieldSection({
       ) : model == null ? (
         <ChartEmpty
           text="연도·만기별 국채 금리를 넣으면 그 해의 수익률 곡선과 10년물 추이가 여기에 그려집니다."
+          hint="동일 연도에 단기(2년물)와 장기(10년물) 금리를 함께 입력하면 장단기 금리차(스프레드)가 자동 계산됩니다"
           actionLabel="국채 금리 등록"
           onAction={() => setManagerOpen(true)}
         >

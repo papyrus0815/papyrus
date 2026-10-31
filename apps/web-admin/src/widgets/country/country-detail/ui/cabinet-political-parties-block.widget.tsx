@@ -82,41 +82,32 @@ export function CabinetPoliticalPartiesBlock({
             disabled={!countryQueryEnabled || loading}
           >
             <FiPlus size={14} strokeWidth={2.25} />
-            연결
+            정당 연결
           </SubsectionAddBtn>
         </CabS.CabDetailMinistersSectionHeader>
 
         {loading ? (
-          <CabS.CabDetailPartyLoading>불러오는 중…</CabS.CabDetailPartyLoading>
+          <CabS.CabMinistersLoadingBox aria-busy="true" aria-live="polite">
+            정당 불러오는 중…
+          </CabS.CabMinistersLoadingBox>
         ) : !countryQueryEnabled ? (
-          <CabS.CabDetailPartyEmpty>
+          <CabS.CabDetailEmptyStack $padding="20px 0 24px">
             <CabS.CabDetailPartyEmptyHint>
               국가 정보가 없어 정당 목록을 불러올 수 없습니다.
             </CabS.CabDetailPartyEmptyHint>
-          </CabS.CabDetailPartyEmpty>
+          </CabS.CabDetailEmptyStack>
         ) : links.length === 0 ? (
-          <CabS.CabDetailPartyEmpty>
+          <CabS.CabDetailEmptyStack $padding="24px 0 28px">
             <CabS.CabDetailPartyEmptyIconWrap aria-hidden>
-              <FiUsers size={20} strokeWidth={1.5} />
+              <FiUsers size={26} strokeWidth={1.5} />
             </CabS.CabDetailPartyEmptyIconWrap>
-            <CabS.CabDetailEmptyText
-              $fontSize="12px"
-              style={{ fontStyle: 'normal' }}
-            >
-              연결된 정당 없음
+            <CabS.CabDetailEmptyText>
+              연결된 정당이 없습니다.
             </CabS.CabDetailEmptyText>
             <CabS.CabDetailPartyEmptyHint>
               선거·투표 탭에서 정당을 등록한 뒤 연결할 수 있습니다.
             </CabS.CabDetailPartyEmptyHint>
-            <SubsectionAddBtn
-              type="button"
-              onClick={() => setPartyLinkModalOpen(true)}
-              disabled={loading}
-            >
-              <FiPlus size={14} strokeWidth={2.25} />
-              연결
-            </SubsectionAddBtn>
-          </CabS.CabDetailPartyEmpty>
+          </CabS.CabDetailEmptyStack>
         ) : (
           <CabS.CabDetailPartyList>
             {links.map((link) => {

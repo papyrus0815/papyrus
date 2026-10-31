@@ -33,10 +33,46 @@ interface Props {
 /** 관측점을 찍는 상한 — 이보다 촘촘하면 점이 선을 덮어 오히려 안 읽힌다 */
 const SPARSE_POINT_LIMIT = 24
 
-/** 1.66 → '1.66%', 0.5 → '0.5%' (뒤따르는 0은 잡음) */
-function formatRate(value: number, unit: string): string {
-  const text = Number(value.toFixed(2)).toLocaleString('ko-KR')
-  return `${text}${unit}`
+/** 단위별 수치 포맷 — %, $, 명, 세, ‰, t, 무단위(HDI·지니계수 등)를 모두 자연스럽게 읽히도록 */
+export function formatMetricValue(
+  value: number,
+  unit: string,
+  compact = false,
+): string {
+  const abs = Math.abs(value)
+  if (unit === '$') {
+    const sign = value < 0 ? '-' : ''
+    if (compact) {
+      if (abs >= 1e12) return `${sign}$${Number((abs / 1e12).toFixed(1))}T`
+      if (abs >= 1e9) return `${sign}$${Number((abs / 1e9).toFixed(1))}B`
+      if (abs >= 1e6) return `${sign}$${Number((abs / 1e6).toFixed(1))}M`
+      if (abs >= 1e3) return `${sign}$${Number((abs / 1e3).toFixed(0))}K`
+    }
+    if (abs >= 1e12) {
+      return `${sign}$${Number((abs / 1e12).toFixed(2)).toLocaleString('ko-KR')}조`
+    }
+    if (abs >= 1e8) {
+      return `${sign}$${Number((abs / 1e8).toFixed(1)).toLocaleString('ko-KR')}억`
+    }
+    const digits = abs >= 100 ? 0 : 2
+    return `${sign}$${Number(abs.toFixed(digits)).toLocaleString('ko-KR')}`
+  }
+  if (unit === '명') {
+    if (compact) {
+      if (abs >= 1e8) return `${Number((value / 1e8).toFixed(1))}억`
+      if (abs >= 1e4) return `${Number((value / 1e4).toFixed(0))}만`
+    }
+    if (abs >= 1e8) {
+      return `${Number((value / 1e8).toFixed(2)).toLocaleString('ko-KR')}억 명`
+    }
+    if (abs >= 1e4) {
+      return `${Math.round(value / 1e4).toLocaleString('ko-KR')}만 명`
+    }
+    return `${Math.round(value).toLocaleString('ko-KR')}명`
+  }
+  const decimals = unit === '' && abs <= 1 ? 3 : 2
+  const text = Number(value.toFixed(decimals)).toLocaleString('ko-KR')
+  return unit ? `${text}${unit}` : text
 }
 
 /**
@@ -175,19 +211,19 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
       <Summary>
         <SummaryItem>
           <SummaryLabel>{chart.last.year}년</SummaryLabel>
-          <SummaryValue>{formatRate(chart.last.value, unit)}</SummaryValue>
+          <SummaryValue>{formatMetricValue(chart.last.value, unit)}</SummaryValue>
         </SummaryItem>
         <SummaryItem>
           <SummaryLabel>기간 평균</SummaryLabel>
-          <SummaryValue>{formatRate(chart.average, unit)}</SummaryValue>
+          <SummaryValue>{formatMetricValue(chart.average, unit)}</SummaryValue>
         </SummaryItem>
         <SummaryItem>
           <SummaryLabel>최고 {chart.peak.year}</SummaryLabel>
-          <SummaryValue>{formatRate(chart.peak.value, unit)}</SummaryValue>
+          <SummaryValue>{formatMetricValue(chart.peak.value, unit)}</SummaryValue>
         </SummaryItem>
         <SummaryItem>
           <SummaryLabel>최저 {chart.trough.year}</SummaryLabel>
-          <SummaryValue>{formatRate(chart.trough.value, unit)}</SummaryValue>
+          <SummaryValue>{formatMetricValue(chart.trough.value, unit)}</SummaryValue>
         </SummaryItem>
       </Summary>
 
@@ -212,11 +248,11 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
             <YAxis
               domain={chart.domain}
               ticks={chart.ticks}
-              tickFormatter={(value: number) => formatRate(value, unit)}
+              tickFormatter={(value: number) => formatMetricValue(value, unit, true)}
               tick={{ fontSize: 12, fill: axisInk }}
               tickLine={false}
               axisLine={false}
-              width={52}
+              width={56}
             />
             {/* 0은 '인구가 그대로'인 지점 — 격자보다 진하게 둔다 */}
             {chart.hasNegative && (
@@ -252,7 +288,7 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
                 color: theme.colors.text.primary,
               }}
               labelFormatter={(year: number) => `${year}년`}
-              formatter={(value: number) => [formatRate(value, unit), title]}
+              formatter={(value: number) => [formatMetricValue(value, unit), title]}
             />
             {/*
               곧은 선으로 잇는다. monotone 곡선은 5년 간격 자료(인구 증가율 1990·1995…)
@@ -293,7 +329,7 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
                 stroke={surface}
                 strokeWidth={2}
                 label={{
-                  value: formatRate(mark.point.value, unit),
+                  value: formatMetricValue(mark.point.value, unit, true),
                   position: mark.place,
                   offset: 8,
                   fill: theme.colors.text.primary,

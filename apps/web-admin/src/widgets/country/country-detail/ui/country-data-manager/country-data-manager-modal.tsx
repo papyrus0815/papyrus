@@ -56,6 +56,8 @@ export function CountryDataManagerModal({
   }, [open, initialTab])
   const [indicatorType, setIndicatorType] = useState<IndicatorType>('economic')
 
+  if (!open) return null
+
   return (
     <Modal
       isOpen={open}

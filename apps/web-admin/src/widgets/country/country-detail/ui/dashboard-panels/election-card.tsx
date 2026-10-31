@@ -40,13 +40,7 @@ export function ElectionCard({
    * 정작 옆의 현 정부 명단보다 커져, 없는 것이 있는 것보다 눈에 띄는 지면이 된다.
    */
   if (!next && !recent) {
-    return (
-      <EmptyLine type="button" onClick={onOpen}>
-        <IconVote />
-        <span>선거 기록 없음</span>
-        <EmptyLineCta>등록하기</EmptyLineCta>
-      </EmptyLine>
-    )
+    return null
   }
   const shown = next ?? recent
   if (!shown) return null
@@ -133,31 +127,4 @@ const CardDate = styled.span`
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EmptyLine = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 9px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  background: none;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 12.5px;
-  cursor: pointer;
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const EmptyLineCta = styled.span`
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `

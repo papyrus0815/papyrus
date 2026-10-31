@@ -182,14 +182,21 @@ export const DashboardRoot = styled.div`
  * 쓰지 않는다 — 이 지면은 이미 안쪽에 카드가 많아, 밖에 또 상자를 두르면 상자 안
  * 상자가 된다.
  */
-export const Section = styled.section`
+export const Section = styled.section<{ $wide?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: ${space.lg}px;
   padding-top: 30px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
-  /* 목차에서 건너올 때 장 머리가 붙어 있는 목차 밑에 깔리지 않게 */
-  scroll-margin-top: 64px;
+  /* 목차에서 건너올 때 장 머리가 붙어 있는 탭바+목차 밑에 깔리지 않게 */
+  scroll-margin-top: 112px;
+  min-width: 0;
+
+  ${({ $wide }) =>
+    $wide &&
+    css`
+      grid-column: 1 / -1;
+    `}
 
   /* 첫 장 위에는 선을 긋지 않는다 — 위가 이미 히어로·요약이다 */
   &:first-of-type {
@@ -279,6 +286,18 @@ export const SectionAction = styled.button`
 
   /* 머리에 버튼이 둘이면 둘째부터는 자동 여백을 물린다 */
   & + & {
+    margin-left: 0;
+  }
+`
+
+export const SectionHeaderActions = styled.div`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+
+  > button {
     margin-left: 0;
   }
 `
@@ -518,519 +537,6 @@ export const MissingChipButton = styled.button`
   }
 `
 
-/* ─── Current heads — featured + 보조 ─────────────────────────────────── */
-
-export const HeadsLayout = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${space.md}px;
-`
-
-export const FeaturedHeadCard = styled.button`
-  appearance: none;
-  text-align: left;
-  width: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: ${space.lg}px;
-  padding: ${space.lg}px;
-  border-radius: 10px;
-  border: 1px solid ${PRIMARY_SOFT_BORDER};
-  background: linear-gradient(
-    135deg,
-    ${PRIMARY_SOFT_BG} 0%,
-    rgba(139, 92, 246, 0.08) 100%
-  );
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
-  &:hover {
-    transform: translateY(-1px);
-    border-color: ${PRIMARY};
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.12);
-  }
-  &:focus-visible {
-    outline: 2px solid ${PRIMARY};
-    outline-offset: 2px;
-  }
-  &:disabled {
-    cursor: default;
-    transform: none;
-    box-shadow: none;
-  }
-`
-
-export const FeaturedAvatar = styled.div`
-  width: 64px;
-  height: 64px;
-  border-radius: ${radius.pill}px;
-  flex-shrink: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  background: #ffffff;
-  border: 2px solid #ffffff;
-  color: ${PRIMARY};
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-`
-
-export const FeaturedMain = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`
-
-export const PositionBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #ffffff;
-  background: linear-gradient(135deg, ${PRIMARY}, #8b5cf6);
-`
-
-export const FeaturedName = styled.span`
-  font-size: 17px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-export const FeaturedMetaRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: ${space.sm}px;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-export const FeaturedMetaSep = styled.span`
-  opacity: 0.4;
-`
-
-export const HeadList = styled.ul`
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: ${space.xs}px;
-`
-
-export const HeadRow = styled.button`
-  appearance: none;
-  text-align: left;
-  width: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: ${space.md}px;
-  padding: ${space.sm}px ${space.md}px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-  &:hover {
-    background: ${PRIMARY_SOFT_BG};
-    border-color: ${PRIMARY_SOFT_BORDER};
-  }
-  &:focus-visible {
-    outline: 2px solid ${PRIMARY};
-    outline-offset: 2px;
-  }
-  &:disabled {
-    cursor: default;
-    &:hover {
-      background: transparent;
-      border-color: transparent;
-    }
-  }
-`
-
-export const HeadAvatar = styled.div`
-  width: 36px;
-  height: 36px;
-  border-radius: ${radius.pill}px;
-  flex-shrink: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  background: ${PRIMARY_SOFT_BG};
-  color: ${PRIMARY};
-  border: 1px solid ${PRIMARY_SOFT_BORDER};
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-`
-
-export const HeadMain = styled.div`
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-export const HeadName = styled.span`
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-export const HeadMeta = styled.span`
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-/* ─── 국가 정보 (highlight) ──────────────────────────────────────────── */
-
-export const HighlightInfoGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: ${space.lg}px;
-  @media (max-width: 700px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-/* 카테고리별 액센트 좌측 바 */
-export const HighlightCard = styled.div<{ $accent?: AccentKey }>`
-  position: relative;
-  border-radius: 10px;
-  padding: ${space.xxl}px;
-  ${surfaceStatic}
-  display: flex;
-  flex-direction: column;
-  gap: ${space.sm}px;
-  overflow: hidden;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 3px;
-    background: ${({ $accent }) => accent($accent, 'base')};
-  }
-`
-
-export const HighlightIconBox = styled.div<{ $accent?: AccentKey }>`
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: ${({ $accent }) => accent($accent, 'soft')};
-  color: ${({ $accent }) => accent($accent, 'ink')};
-  border: 1px solid ${({ $accent }) => accent($accent, 'border')};
-  z-index: 1;
-
-  svg {
-    width: 18px;
-    height: 18px;
-  }
-`
-
-export const HighlightLabel = styled.div`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  z-index: 1;
-`
-
-export const HighlightValue = styled.div`
-  font-size: 32px;
-  font-weight: 800;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  z-index: 1;
-  @media (max-width: 480px) {
-    font-size: 26px;
-  }
-`
-
-export const HighlightUnit = styled.span`
-  margin-left: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-export const MetaInline = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${space.lg}px ${space.xxl}px;
-  padding: 0 ${space.xs}px;
-`
-
-export const MetaInlineItem = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-export const MetaInlineLabel = styled.span`
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-export const MetaInlineValue = styled.span`
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-variant-numeric: tabular-nums;
-`
-
-/* ─── 등록 현황 stat cards ──────────────────────────────────────────── */
-
-/**
- * 기록 카드 격자 — `repeat(3, 1fr)` 고정이었다.
- *
- * 본문에 폭 상한이 없어(2,992px 화면에서 본문 2,202px) 카드 한 장이 **710×178px**가 됐고,
- * 그 안에 담기는 값은 `0` 한 글자였다. 열 수를 고정하는 대신 카드 폭을 240~380px로 묶고
- * 남는 폭은 **열 수로 흡수**한다 — 넓은 화면에서 6장이 한 줄에 서고 지면이 그만큼 짧아진다.
- */
-export const StatsGrid = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${space.lg}px;
-
-  > * {
-    flex: 1 1 240px;
-    max-width: 380px;
-    min-width: 0;
-  }
-
-  @media (max-width: 480px) {
-    > * {
-      max-width: none;
-    }
-  }
-`
-
-const emptyAxisChipBase = css`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: ${radius.pill}px;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.04)'
-      : 'rgba(15, 23, 42, 0.035)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.07)'
-        : 'rgba(15, 23, 42, 0.06)'};
-`
-
-export const StatCard = styled.div<{
-  $interactive: boolean
-  $dim?: boolean
-  $accent?: AccentKey
-}>`
-  position: relative;
-  border-radius: 10px;
-  padding: ${space.xl}px ${space.xxl}px;
-  display: flex;
-  flex-direction: column;
-  gap: ${space.md}px;
-  overflow: hidden;
-  ${({ $interactive }) => ($interactive ? surfaceInteractive : surfaceStatic)}
-  ${({ $dim }) =>
-    $dim &&
-    css`
-      opacity: 0.6;
-    `}
-
-  /* 호버 시에만 카테고리 색 워터마크 등장 */
-  &::after {
-    content: '';
-    position: absolute;
-    top: -40%;
-    right: -30%;
-    width: 70%;
-    height: 140%;
-    background: radial-gradient(
-      circle,
-      ${({ $accent }) => accent($accent, 'watermark')} 0%,
-      transparent 65%
-    );
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  }
-  ${({ $interactive }) =>
-    $interactive &&
-    css`
-      &:hover::after {
-        opacity: 1;
-      }
-    `}
-`
-
-export const StatHeader = styled.div`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: ${space.sm}px;
-  position: relative;
-  z-index: 1;
-`
-
-export const StatLabelRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${space.md}px;
-`
-
-export const StatIcon = styled.div<{ $accent?: AccentKey }>`
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: linear-gradient(
-    135deg,
-    ${({ $accent }) => accent($accent, 'soft')},
-    ${({ $accent }) => accent($accent, 'border')}
-  );
-  color: ${({ $accent }) => accent($accent, 'ink')};
-
-  svg {
-    width: 22px;
-    height: 22px;
-  }
-`
-
-export const StatLabel = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  letter-spacing: -0.005em;
-`
-
-export const StatValueRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: ${space.md}px;
-  position: relative;
-  z-index: 1;
-`
-
-export const StatValue = styled.div`
-  font-size: 30px;
-  font-weight: 800;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-  font-variant-numeric: tabular-nums;
-`
-
-export const StatUnit = styled.span`
-  margin-left: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-/* 추세 칩 — 카테고리 색 동기화 */
-export const DeltaChip = styled.span<{ $accent?: AccentKey }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  background: ${({ $accent }) => accent($accent, 'soft')};
-  color: ${({ $accent }) => accent($accent, 'ink')};
-  border: 1px solid ${({ $accent }) => accent($accent, 'border')};
-  font-variant-numeric: tabular-nums;
-`
-
-export const StatBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.05)'
-      : 'rgba(15, 23, 42, 0.04)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.08)'
-        : 'rgba(15, 23, 42, 0.06)'};
-`
-
-export const StatCardButton = styled.button`
-  appearance: none;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  text-align: left;
-  width: 100%;
-  cursor: pointer;
-  &:focus-visible {
-    outline: 2px solid ${PRIMARY};
-    outline-offset: 2px;
-    border-radius: 10px;
-  }
-`
-
 export const EmptyHint = styled.p`
   margin: 0;
   padding: ${space.lg}px ${space.xl}px;
@@ -1224,57 +730,6 @@ export const EmptyWithCta = styled.div`
   }
 `
 
-/* ─── Quick Actions bar ──────────────────────────────────────────────── */
-
-export const QuickActionsBar = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: ${space.sm}px;
-`
-
-export const QuickActionButton = styled.button<{ $accent?: AccentKey }>`
-  appearance: none;
-  cursor: pointer;
-  font-family: inherit;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ $accent }) => accent($accent, 'ink')};
-  background: ${({ $accent }) => accent($accent, 'soft')};
-  border: 1px solid ${({ $accent }) => accent($accent, 'border')};
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-  svg {
-    width: 13px;
-    height: 13px;
-  }
-  &:hover {
-    background: ${({ $accent }) => accent($accent, 'border')};
-    color: ${({ $accent }) => accent($accent, 'ink')};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ $accent }) => accent($accent, 'base')};
-    outline-offset: 2px;
-  }
-`
-
-/* ─── Sparkline ─────────────────────────────────────────────────────── */
-
-export const SparkSvg = styled.svg`
-  display: block;
-  width: 100%;
-  height: 32px;
-  margin-top: ${space.xs}px;
-  overflow: visible;
-`
-
 export const VisuallyHidden = styled.span`
   position: absolute;
   width: 1px;
@@ -1322,86 +777,7 @@ export const ComparePill = styled.span`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-/* ─── 정치 카드 (정부/선거) ─────────────────────────────────────────── */
-
-export const PoliticsRow = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: ${space.xl}px;
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-export const GovHeadingBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-export const GovStartDate = styled.span`
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-export const PartyRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${space.md}px;
-  font-size: 12.5px;
-`
-
-export const PartySwatch = styled.span<{ $color?: string | null }>`
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  flex-shrink: 0;
-  background: ${({ $color }) => $color ?? '#8b5cf6'};
-  border: 1px solid rgba(15, 23, 42, 0.12);
-`
-
-export const PartyName = styled.span`
-  flex: 1;
-  min-width: 0;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-export const PartyShare = styled.span`
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-export const PartyBarTrack = styled.div`
-  position: relative;
-  height: 8px;
-  border-radius: ${radius.pill}px;
-  overflow: hidden;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.06)'
-      : 'rgba(15, 23, 42, 0.05)'};
-  display: flex;
-`
-
-export const PartyBarSeg = styled.div<{ $color?: string | null }>`
-  height: 100%;
-  background: ${({ $color }) => $color ?? '#8b5cf6'};
-`
-
-export const PartyList = styled.ul`
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
+/* ─── 정치 카드 (선거) ──────────────────────────────────────────────── */
 
 /* 선거 카드 — 큰 D-N 표기 */
 export const ElectionDay = styled.div<{ $past?: boolean }>`
@@ -1543,12 +919,58 @@ export const FactUnit = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-/** '지금' — 현임 수반 · 현 내각 · 선거 3매를 한 행에 */
-export const NowRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
-  align-items: stretch;
+export const FactSubNote = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+export const FactEmptyRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  width: 100%;
+  box-sizing: border-box;
+`
+
+export const FactEmptyText = styled.span`
+  flex: 1 1 260px;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const FactEmptyActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+`
+
+export const FactEmptyAction = styled.button`
+  appearance: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
 `
 
 /** 하단 보조 — 최근 활동과 완성도를 나란히 */
@@ -1571,18 +993,44 @@ export const BottomRow = styled.div`
 
   @media (max-width: 1100px) {
     grid-template-columns: minmax(0, 1fr);
+
+    > section + section {
+      padding-top: 30px;
+      border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+    }
+  }
+`
+
+/**
+ * 기업·거시·경제 지표 묶음 그릇.
+ *
+ * 자료가 있는 섹션($wide)은 전체 폭(1 / -1)을 다 써서 두 장짜리 차트·피라미드·교역도를
+ * 넉넉하게 펼치고, 아직 비어 있는 섹션들은 2열 격자로 나란히 앉혀 빈 안내 상자 다섯 개가
+ * 세로로 1,400px 넘게 이어지는 스크롤 피로를 줄인다.
+ */
+export const IndicatorsGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: ${space.xxxl}px 24px;
+  align-items: start;
+
+  /* 이 그릇의 첫 섹션도 앞선 섹션(BottomRow)과 같은 구분선을 갖도록 보장 */
+  > section:first-of-type {
+    padding-top: 30px;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  }
+
+  @media (min-width: 1100px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    /* 홀수 개 섹션이 모두 1칸일 때 마지막 섹션이 왼쪽 반만 차지해 우측이 비는 현상 방지 */
+    > section:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
   }
 `
 
 /* ─── 사건 연표 (2026-09) ─────────────────────────────────────────────── */
-
-/** 연표와 달력을 나란히 — 좁아지면 아래로 접힌다 */
-export const EventTimelineRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 16px;
-`
 
 /**
  * 기록 원장 + 사건 연표 한 줄.
@@ -1630,6 +1078,63 @@ export const EventTimelineLabel = styled.span`
   font-weight: 700;
   letter-spacing: 0.02em;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/* ─── 국가 메모 기록 (country_record) ────────────────────────────────── */
+
+export const CountryNotesBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  ${surfaceStatic}
+`
+
+export const CountryNotesHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+export const CountryNotesList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+export const CountryNoteItem = styled.li`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-top: 0;
+    border-top: none;
+  }
+`
+
+export const CountryNoteDate = styled.span`
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const CountryNoteText = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 `
 
 /* ─── 교역 품목 (2026-09) ─────────────────────────────────────────────── */
@@ -1876,9 +1381,113 @@ export const SectionLink = styled.button`
 /** 계보 요약 위 '이전 N개' 줄 — 좌측 정렬(SectionLink의 margin-left:auto 무효화) */
 export const LineageMoreRow = styled.div`
   display: flex;
-  margin-bottom: 6px;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 
   > button {
     margin-left: 0;
   }
 `
+
+export const LineageFilterGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+export const LineageFilterPill = styled.button<{ $active: boolean }>`
+  padding: 3px 9px;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.tertiary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+  box-shadow: ${({ $active }) =>
+    $active ? '0 1px 2px rgba(15, 23, 42, 0.08)' : 'none'};
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.text.primary};
+  }
+`
+
+/** 5대 지표(기업·인구 피라미드·지표 추이·국채 금리·교역) 모두 미등록 시 단일 통합 카드 */
+export const UnifiedIndicatorsCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+`
+
+export const UnifiedIndicatorsTextCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+export const UnifiedIndicatorsDesc = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: keep-all;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const UnifiedIndicatorsHint = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const UnifiedIndicatorsActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+`
+
+export const UnifiedIndicatorBtn = styled.button`
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.42)' : 'rgba(99,102,241,0.28)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.26)'
+        : 'rgba(99,102,241,0.16)'};
+  }
+`
+

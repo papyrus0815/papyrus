@@ -11,6 +11,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import {
   ModalCloseButton,
   ModalHeader,
@@ -30,6 +31,7 @@ import {
   TabButton,
   TabNavigation,
 } from '@/shared/ui/register-form-layout'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { formatDate, getPersonName } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
 
@@ -498,25 +500,39 @@ export function RegisterCabinetModal({
                 <FieldRow>
                   <FieldLabel>퇴임 사유 상세</FieldLabel>
                   <FieldControl>
-                    <CabS.EditingTextarea
-                      placeholder="퇴임 배경, 상세 사유 등을 자유롭게 기술하세요."
-                      value={newHeadEndReasonDetail}
-                      onChange={(e) =>
-                        setNewHeadEndReasonDetail(e.target.value)
-                      }
-                      rows={4}
-                    />
+                    <CabS.HeadTenureInfoEditorWrap>
+                      <RichTextEditor
+                        value={newHeadEndReasonDetail}
+                        onChange={setNewHeadEndReasonDetail}
+                        showTitle={false}
+                        placeholder="퇴임 배경, 상세 사유 등을 자유롭게 기술하세요."
+                        onImageUpload={async (file) => {
+                          const result = await uploadImage(file, 'persons')
+                          return (
+                            getUploadImageUrl(result.url) || (result.url ?? '')
+                          )
+                        }}
+                      />
+                    </CabS.HeadTenureInfoEditorWrap>
                   </FieldControl>
                 </FieldRow>
                 <FieldRow>
                   <FieldLabel>취임 배경 / 비고</FieldLabel>
                   <FieldControl>
-                    <CabS.EditingTextarea
-                      placeholder="취임 배경, 임명 경위 등 특이사항을 기술하세요."
-                      value={newHeadNotes}
-                      onChange={(e) => setNewHeadNotes(e.target.value)}
-                      rows={3}
-                    />
+                    <CabS.HeadTenureInfoEditorWrap>
+                      <RichTextEditor
+                        value={newHeadNotes}
+                        onChange={setNewHeadNotes}
+                        showTitle={false}
+                        placeholder="취임 배경, 임명 경위 등 특이사항을 기술하세요."
+                        onImageUpload={async (file) => {
+                          const result = await uploadImage(file, 'persons')
+                          return (
+                            getUploadImageUrl(result.url) || (result.url ?? '')
+                          )
+                        }}
+                      />
+                    </CabS.HeadTenureInfoEditorWrap>
                   </FieldControl>
                 </FieldRow>
               </FormRows>

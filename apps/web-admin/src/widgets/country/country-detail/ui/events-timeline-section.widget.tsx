@@ -9,7 +9,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
 import { useEvents } from '@/entities/event/model'
@@ -21,6 +21,10 @@ import {
 } from '@/shared/lib/lifespan-text'
 import { pathKeys } from '@/shared/router'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
+
+import type { CalendarEventItem } from '../model/use-country-dashboard-stats'
+import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
+import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
 
 const MAIN = '#6366f1'
 
@@ -294,6 +298,20 @@ const CountryChip = styled.span<{ $past?: boolean }>`
       : theme.colors.background.secondary};
 `
 
+const CenturyBarCard = styled.div`
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const CalendarCard = styled.div`
+  padding: 20px 22px;
+  border-radius: 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
 export interface EventsTimelineSectionProps {
   /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 */
   countryId?: string | null
@@ -327,12 +345,25 @@ export function EventsTimelineSection({
   onNavigateToForm,
 }: EventsTimelineSectionProps) {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const [pageSize] = useState(50)
   const [isCreateOpen, setIsCreateOpen] = useState(
     Boolean(initialFormFromSearchParams),
   )
+  const viewMode: 'list' | 'calendar' =
+    searchParams.get('view') === 'calendar' ? 'calendar' : 'list'
+
+  const setViewMode = (mode: 'list' | 'calendar') => {
+    const nextParams = new URLSearchParams(searchParams)
+    if (mode === 'calendar') {
+      nextParams.set('view', 'calendar')
+    } else {
+      nextParams.delete('view')
+    }
+    setSearchParams(nextParams, { replace: true })
+  }
   // autoLoadAll: 타임라인은 사건을 서버 순서(start_date DESC)로 카드 나열하는데, 1000년 이전
   // 사건은 start_date NULL이라 서버 정렬상 맨 뒤(마지막 페이지)로 밀린다. 전체 페이지를 자동
   // 소진해 옛 세기 사건도 '더 보기' 클릭 없이 바로 나오게 한다(수동 페이지네이션 대체).
@@ -379,6 +410,56 @@ export function EventsTimelineSection({
    * 연도 미상은 방향과 무관하게 항상 맨 끝의 '연도 미상' 묶음으로 보낸다.
    */
   const [order, setOrder] = useState<'asc' | 'desc'>('asc')
+
+  const eventCenturyCounts = useMemo<
+    Array<{ century: number; count: number }>
+  >(() => {
+    const byCentury = new Map<number, number>()
+    for (const eventItem of list) {
+      const signedYear = signedYearFromIsoLike(eventItem.startDate)
+      if (signedYear == null || signedYear === 0) continue
+      const century =
+        signedYear < 0
+          ? -Math.ceil(Math.abs(signedYear) / 100)
+          : Math.ceil(signedYear / 100)
+      byCentury.set(century, (byCentury.get(century) ?? 0) + 1)
+    }
+    return [...byCentury.entries()]
+      .map(([century, count]) => ({ century, count }))
+      .sort((left, right) => left.century - right.century)
+  }, [list])
+
+  const calendarEvents = useMemo<CalendarEventItem[]>(() => {
+    const rows: CalendarEventItem[] = []
+    for (const eventItem of list) {
+      const rawStart = eventItem.startDate
+      if (!eventItem.id || typeof rawStart !== 'string') continue
+      const matched = /^(-?\d{1,6}-\d{2}-\d{2})/.exec(rawStart)
+      if (!matched) continue
+      const withDayKnown = eventItem as { isDayKnown?: boolean }
+      rows.push({
+        id: eventItem.id,
+        title: eventItem.title?.trim() || '제목 없음',
+        date: matched[1],
+        isDayKnown: withDayKnown.isDayKnown !== false,
+      })
+    }
+    return rows
+  }, [list])
+
+  const jumpToCentury = (century: number) => {
+    const targetKey = `c${century > 0 ? 1 : -1}-${Math.abs(century)}`
+    const target = document.querySelector<HTMLElement>(
+      `[data-century-key="${targetKey}"]`,
+    )
+    if (!target) return
+    target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    target.setAttribute('data-century-focus', 'true')
+    window.setTimeout(
+      () => target.removeAttribute('data-century-focus'),
+      1600,
+    )
+  }
 
   const centuryGroups = useMemo(() => {
     type Entry = {
@@ -546,24 +627,46 @@ export function EventsTimelineSection({
         </HeaderText>
         <HeaderActions>
           {list.length > 0 && (
-            <OrderToggle role="group" aria-label="정렬 방향">
-              <OrderButton
-                type="button"
-                $active={order === 'asc'}
-                aria-pressed={order === 'asc'}
-                onClick={() => setOrder('asc')}
-              >
-                오래된순
-              </OrderButton>
-              <OrderButton
-                type="button"
-                $active={order === 'desc'}
-                aria-pressed={order === 'desc'}
-                onClick={() => setOrder('desc')}
-              >
-                최신순
-              </OrderButton>
-            </OrderToggle>
+            <>
+              <OrderToggle role="group" aria-label="보기 방식">
+                <OrderButton
+                  type="button"
+                  $active={viewMode === 'list'}
+                  aria-pressed={viewMode === 'list'}
+                  onClick={() => setViewMode('list')}
+                >
+                  연표 목록
+                </OrderButton>
+                <OrderButton
+                  type="button"
+                  $active={viewMode === 'calendar'}
+                  aria-pressed={viewMode === 'calendar'}
+                  onClick={() => setViewMode('calendar')}
+                >
+                  캘린더
+                </OrderButton>
+              </OrderToggle>
+              {viewMode === 'list' && (
+                <OrderToggle role="group" aria-label="정렬 방향">
+                  <OrderButton
+                    type="button"
+                    $active={order === 'asc'}
+                    aria-pressed={order === 'asc'}
+                    onClick={() => setOrder('asc')}
+                  >
+                    오래된순
+                  </OrderButton>
+                  <OrderButton
+                    type="button"
+                    $active={order === 'desc'}
+                    aria-pressed={order === 'desc'}
+                    onClick={() => setOrder('desc')}
+                  >
+                    최신순
+                  </OrderButton>
+                </OrderToggle>
+              )}
+            </>
           )}
           <CreateButton
             type="button"
@@ -697,50 +800,69 @@ export function EventsTimelineSection({
               </p>
             </div>
           </motion.div>
+        ) : viewMode === 'calendar' ? (
+          <CalendarCard>
+            <EventCalendarPanel
+              events={calendarEvents}
+              onSelectEvent={(eventId) =>
+                navigate(pathKeys.events.detail(eventId))
+              }
+            />
+          </CalendarCard>
         ) : (
-          <Chronology>
-            {centuryGroups.map((group) => (
-              <CenturySection key={group.key} data-century-key={group.key}>
-                <CenturyHead>
-                  <CenturyLabel>{group.label}</CenturyLabel>
-                  <CenturyCount>{group.events.length}건</CenturyCount>
-                </CenturyHead>
-                {group.events.map((entry) => (
-                  <EventRow
-                    key={entry.event.id}
-                    type="button"
-                    onClick={() =>
-                      navigate(pathKeys.events.detail(entry.event.id))
-                    }
-                  >
-                    <RowYear>{entry.yearLabel}</RowYear>
-                    <RowBody>
-                      <RowTitle>{entry.event.title || '제목 없음'}</RowTitle>
-                      {entry.rangeLabel && (
-                        <RowRange>{entry.rangeLabel}</RowRange>
+          <>
+            {eventCenturyCounts.length > 1 && (
+              <CenturyBarCard style={{ marginBottom: 20 }}>
+                <EventCenturyStrip
+                  counts={eventCenturyCounts}
+                  onOpen={jumpToCentury}
+                />
+              </CenturyBarCard>
+            )}
+            <Chronology>
+              {centuryGroups.map((group) => (
+                <CenturySection key={group.key} data-century-key={group.key}>
+                  <CenturyHead>
+                    <CenturyLabel>{group.label}</CenturyLabel>
+                    <CenturyCount>{group.events.length}건</CenturyCount>
+                  </CenturyHead>
+                  {group.events.map((entry) => (
+                    <EventRow
+                      key={entry.event.id}
+                      type="button"
+                      onClick={() =>
+                        navigate(pathKeys.events.detail(entry.event.id))
+                      }
+                    >
+                      <RowYear>{entry.yearLabel}</RowYear>
+                      <RowBody>
+                        <RowTitle>{entry.event.title || '제목 없음'}</RowTitle>
+                        {entry.rangeLabel && (
+                          <RowRange>{entry.rangeLabel}</RowRange>
+                        )}
+                      </RowBody>
+                      {(entry.historical.length > 0 ||
+                        entry.modern.length > 0) && (
+                        <CountryChipRow>
+                          {entry.historical.map((item) => (
+                            <CountryChip key={`h-${item.id}`} $past>
+                              {item.name}
+                            </CountryChip>
+                          ))}
+                          {entry.modern.map((item) => (
+                            <CountryChip key={`m-${item.id}`}>
+                              {item.flagEmoji ? `${item.flagEmoji} ` : ''}
+                              {item.name}
+                            </CountryChip>
+                          ))}
+                        </CountryChipRow>
                       )}
-                    </RowBody>
-                    {(entry.historical.length > 0 ||
-                      entry.modern.length > 0) && (
-                      <CountryChipRow>
-                        {entry.historical.map((item) => (
-                          <CountryChip key={`h-${item.id}`} $past>
-                            {item.name}
-                          </CountryChip>
-                        ))}
-                        {entry.modern.map((item) => (
-                          <CountryChip key={`m-${item.id}`}>
-                            {item.flagEmoji ? `${item.flagEmoji} ` : ''}
-                            {item.name}
-                          </CountryChip>
-                        ))}
-                      </CountryChipRow>
-                    )}
-                  </EventRow>
-                ))}
-              </CenturySection>
-            ))}
-          </Chronology>
+                    </EventRow>
+                  ))}
+                </CenturySection>
+              ))}
+            </Chronology>
+          </>
         )}
 
         {/* 자동 소진 중 일부 페이지 로드 실패 — 재시도로 이어받기(옛 세기 누락 방지) */}

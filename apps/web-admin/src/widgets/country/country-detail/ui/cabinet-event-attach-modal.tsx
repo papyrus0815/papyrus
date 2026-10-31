@@ -32,64 +32,167 @@ import { useEventSearch } from '@/shared/hooks/use-event-search'
 import { eventDateLabel } from '@/shared/lib/event-date-label'
 import { notify } from '@/shared/ui/toast'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import {
+  CABINET_SECTION_MAIN as MAIN,
+  CABINET_SECTION_MAIN_HOVER as MAIN_HOVER,
+} from './cabinets-section.constants'
 
 const ROLE_OPTIONS: CabinetEventRole[] = ['ORIGIN', 'PARTY', 'MEDIATOR', 'AFFECTED']
 
-const Tabs = styled.div`display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};`
+const Tabs = styled.div`
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+`
 const Tab = styled.button<{ $active?: boolean }>`
-  padding: 8px 14px; background: transparent; border: none;
-  border-bottom: 2px solid ${(p) => (p.$active ? '#2563eb' : 'transparent')};
-  color: ${({ $active, theme }) => ($active ? '#2563eb' : theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
-  font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid ${(p) => (p.$active ? MAIN : 'transparent')};
+  color: ${({ $active, theme }) =>
+    $active ? MAIN : theme.colors.text.secondary};
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
 `
 const Input = styled.input`
-  width: 100%; padding: 9px 12px; border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')}; border-radius: 6px;
-  font-size: 13px; box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus {
+    border-color: ${MAIN};
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
 `
 const ResultList = styled.ul`
-  list-style: none; padding: 0; margin: 12px 0 0; max-height: 240px; overflow-y: auto;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')}; border-radius: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
 `
 const ResultItem = styled.li<{ $selected?: boolean }>`
-  padding: 10px 12px; font-size: 12px; cursor: pointer;
-  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f3f4f6')};
+  padding: 10px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ $selected, theme }) =>
-    $selected ? (theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eff6ff') : 'transparent'};
-  &:hover { background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f9fafb')}; }
+    $selected
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.16)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : 'transparent'};
+  &:last-child {
+    border-bottom: none;
+  }
+  &:hover {
+    background: ${({ $selected, theme }) =>
+      $selected
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.2)'
+          : 'rgba(99, 102, 241, 0.12)'
+        : theme.colors.background.secondary};
+  }
 `
 const Empty = styled.div`
-  padding: 24px; text-align: center; color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9ca3af')}; font-size: 13px;
-  border: 1px dashed ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')}; border-radius: 8px; margin-top: 12px;
+  padding: 24px;
+  text-align: center;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 13px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  margin-top: 12px;
 `
 const FieldLabel = styled.label`
-  display: block; font-size: 12px; font-weight: 600; color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin: 14px 0 6px;
 `
-const Row = styled.div`display: flex; gap: 8px;`
+const Row = styled.div`
+  display: flex;
+  gap: 8px;
+`
 const Select = styled.select`
-  width: 100%; padding: 9px 10px; font-size: 13px;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')}; border-radius: 6px; background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  width: 100%;
+  padding: 9px 10px;
+  font-size: 13px;
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  outline: none;
+  cursor: pointer;
+
+  &:focus {
+    border-color: ${MAIN};
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
 `
 const PrimaryBtn = styled.button`
-  padding: 8px 14px; background: #2563eb; color: #fff; border: none;
-  border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
-  &:disabled { background: #9ca3af; cursor: not-allowed; }
+  padding: 8px 16px;
+  background: ${MAIN};
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  &:hover:not(:disabled) {
+    background: ${MAIN_HOVER};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `
 /** 날짜 피커를 여는 버튼 — native date input을 대체(BC 지원) */
 const DateTrigger = styled.button`
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 9px 12px; border-radius: 6px; cursor: pointer;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 13px; text-align: left;
+  font-size: 13px;
+  text-align: left;
 
-  &:hover { border-color: ${({ theme }) => theme.colors.border.medium}; }
+  &:hover {
+    border-color: ${MAIN};
+  }
 `
 
 const GhostBtn = styled.button`
-  padding: 8px 14px; background: transparent; border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
-  border-radius: 6px; color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')}; font-size: 13px; cursor: pointer;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+  }
 `
 
 export interface CabinetEventAttachModalProps {

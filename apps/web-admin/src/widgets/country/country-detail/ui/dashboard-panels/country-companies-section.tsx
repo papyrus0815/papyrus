@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -7,13 +7,21 @@ import styled from 'styled-components'
 import { companyApi } from '@/shared/api/company'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
+import { CompanyRegisterModal } from '@/widgets/company-form'
 
-import { IconLandmark } from '../country-detail-dashboard.icons'
+import { IconBriefcase } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
+import { ChartSkeleton } from './chart-skeleton'
 import { SectionEmpty } from './section-empty'
+import { SectionHelpPopover } from './section-help-popover'
+
+const DASHBOARD_COMPANY_LIMIT = 8
 
 interface CountryCompaniesSectionProps {
-  countryId: string
+  countryId?: string
+  historicalCountryId?: string
+  /** 국가 상세 내부 '기업' 탭으로 이동 */
+  onOpenTab?: () => void
 }
 
 /** 창립·해산 연도만 뽑는다 — 카드에 전체 날짜를 넣으면 이름보다 길어진다 */
@@ -38,9 +46,12 @@ function year(iso: string | null): string | null {
  */
 export function CountryCompaniesSection({
   countryId,
+  historicalCountryId,
+  onOpenTab,
 }: CountryCompaniesSectionProps) {
   const navigate = useNavigate()
-  const { data } = useQuery({
+  const [registerOpen, setRegisterOpen] = useState(false)
+  const { data, isLoading } = useQuery({
     queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
     staleTime: 60_000,
@@ -49,7 +60,16 @@ export function CountryCompaniesSection({
   const companies = useMemo(() => {
     /* 설립순 — 역사 기록이니 오래된 것이 위다. 연도 미상은 끝으로. */
     return (data ?? [])
-      .filter((company) => company.countryId === countryId)
+      .filter((company) => {
+        if (countryId && company.countryId === countryId) return true
+        if (
+          historicalCountryId &&
+          company.historicalCountryId === historicalCountryId
+        ) {
+          return true
+        }
+        return false
+      })
       .sort((left, right) => {
         const leftYear = year(left.foundedAt)
         const rightYear = year(right.foundedAt)
@@ -58,7 +78,43 @@ export function CountryCompaniesSection({
         if (rightYear) return 1
         return left.name.localeCompare(right.name, 'ko-KR')
       })
-  }, [data, countryId])
+  }, [data, countryId, historicalCountryId])
+
+  const targetId = countryId ?? historicalCountryId ?? ''
+  const handleOpenAll = () => {
+    if (onOpenTab) {
+      onOpenTab()
+      return
+    }
+    if (targetId) {
+      navigate(pathKeys.countryCompanies(targetId))
+      return
+    }
+    navigate(pathKeys.companies.root())
+  }
+
+  const registerModal = registerOpen ? (
+    <CompanyRegisterModal
+      isOpen={registerOpen}
+      onClose={() => setRegisterOpen(false)}
+      defaultCountryId={countryId}
+      defaultHistoricalCountryId={historicalCountryId}
+    />
+  ) : null
+
+  if (isLoading) {
+    return (
+      <S.Section>
+        <S.SectionTitleRow>
+          <S.SectionTitleIcon>
+            <IconBriefcase />
+          </S.SectionTitleIcon>
+          <S.SectionTitleText>기업</S.SectionTitleText>
+        </S.SectionTitleRow>
+        <ChartSkeleton variant="bars" rows={2} />
+      </S.Section>
+    )
+  }
 
   /* 자료가 없어도 자리는 지킨다 — 감추면 이 국가에 기업 축이 없는 것처럼 읽힌다 */
   if (companies.length === 0) {
@@ -66,39 +122,52 @@ export function CountryCompaniesSection({
       <S.Section>
         <S.SectionTitleRow>
           <S.SectionTitleIcon>
-            <IconLandmark />
+            <IconBriefcase />
           </S.SectionTitleIcon>
           <S.SectionTitleText>기업</S.SectionTitleText>
+          <SectionHelpPopover sectionKey="companies" />
+          <S.SectionLink type="button" onClick={handleOpenAll}>
+            기업 탭 열기
+          </S.SectionLink>
         </S.SectionTitleRow>
         <SectionEmpty
-          text="이 국가에 등록된 기업이 아직 없습니다. 기업을 등록하고 국가를 지정하면 설립·본사·창업자가 여기 이어 붙습니다."
+          text="이 국가에 등록된 기업이 아직 없습니다. 기업을 등록하면 설립·본사·창업자가 여기 이어 붙습니다."
+          hint="본사 소재 기업을 등록하면 산업 분야 분포와 설립 연도순 요약이 생성됩니다"
           actionLabel="기업 등록"
-          onAction={() => navigate(pathKeys.companies.root())}
-          secondaryLabel="기업 전체 보기"
-          onSecondary={() => navigate(pathKeys.companies.root())}
+          onAction={() => setRegisterOpen(true)}
         />
+        {registerModal}
       </S.Section>
     )
   }
 
+  const visibleCompanies = companies.slice(0, DASHBOARD_COMPANY_LIMIT)
+  const hiddenCount = companies.length - visibleCompanies.length
+
   return (
-    <S.Section>
+    <S.Section $wide>
       <S.SectionTitleRow>
         <S.SectionTitleIcon>
-          <IconLandmark />
+          <IconBriefcase />
         </S.SectionTitleIcon>
         <S.SectionTitleText>기업</S.SectionTitleText>
+        <SectionHelpPopover sectionKey="companies" />
         <S.SectionCountChip>{companies.length}개</S.SectionCountChip>
-        <S.SectionLink
-          type="button"
-          onClick={() => navigate(pathKeys.companies.root())}
-        >
-          전체 보기
-        </S.SectionLink>
+        <S.SectionHeaderActions>
+          <S.SectionAction
+            type="button"
+            onClick={() => setRegisterOpen(true)}
+          >
+            + 기업 등록
+          </S.SectionAction>
+          <S.SectionLink type="button" onClick={handleOpenAll}>
+            {hiddenCount > 0 ? `전체 보기 (+${hiddenCount})` : '전체 보기'}
+          </S.SectionLink>
+        </S.SectionHeaderActions>
       </S.SectionTitleRow>
 
       <List>
-        {companies.map((company) => {
+        {visibleCompanies.map((company) => {
           const founded = year(company.foundedAt)
           const dissolved = year(company.dissolvedAt)
           /* 있는 사실만 잇는다 — 빈 칸을 만들면 '모른다'가 지면의 절반이 된다 */
@@ -143,6 +212,7 @@ export function CountryCompaniesSection({
           )
         })}
       </List>
+      {registerModal}
     </S.Section>
   )
 }

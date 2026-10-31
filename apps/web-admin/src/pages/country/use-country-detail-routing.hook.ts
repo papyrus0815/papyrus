@@ -43,6 +43,12 @@ function urlTabToWidgetTab(
       return 'ethnicity'
     case 'treaty':
       return 'treaty'
+    case 'trade':
+      return 'trade'
+    case 'companies':
+      return 'companies'
+    case 'statistics':
+      return 'statistics'
     default:
       return undefined
   }
@@ -76,6 +82,12 @@ function tabToPath(countryId: string, tab: CountryDetailTabKey | null): string {
       return pathKeys.countryEthnicity(countryId)
     case 'treaty':
       return pathKeys.countryTreaty(countryId)
+    case 'trade':
+      return pathKeys.countryTrade(countryId)
+    case 'companies':
+      return pathKeys.countryCompanies(countryId)
+    case 'statistics':
+      return pathKeys.countryStatistics(countryId)
     case 'dashboard':
       return pathKeys.countryDashboard(countryId)
     default:

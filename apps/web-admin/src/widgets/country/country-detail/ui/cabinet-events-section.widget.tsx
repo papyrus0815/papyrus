@@ -16,59 +16,19 @@ import {
   unlinkCabinetFromEvent,
   updateCabinetEventLink,
 } from '@/shared/api/cabinet-events'
+import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { CabinetEventAttachModal } from './cabinet-event-attach-modal'
+import { CABINET_SECTION_MAIN as MAIN } from './cabinets-section.constants'
+import * as CabS from './cabinets-section.styled'
+import { SubsectionAddBtn } from './country-politics-tab.styles'
 
 const ROLE_OPTIONS: CabinetEventRole[] = ['ORIGIN', 'PARTY', 'MEDIATOR', 'AFFECTED']
 
 // ────────────────────────────────────────────────────────────────────────────
 // styles
 // ────────────────────────────────────────────────────────────────────────────
-const Section = styled.section`
-  margin-top: 24px;
-  padding: 0 4px;
-`
-const Header = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-`
-const Title = styled.h3`
-  font-size: 14px;
-  font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
-  margin: 0;
-`
-const Count = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
-`
-const AddBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f3f4f6')};
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  border-radius: 6px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#e5e7eb')};
-  }
-`
-const Empty = styled.div`
-  padding: 24px;
-  text-align: center;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9ca3af')};
-  font-size: 13px;
-  border: 1px dashed ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  border-radius: 8px;
-`
 const List = styled.ul`
   list-style: none;
   padding: 0;
@@ -79,160 +39,55 @@ const List = styled.ul`
 `
 const Card = styled.li`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  border-radius: 8px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  padding: 11px 14px;
+  border: 1.5px solid
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyRowBg};
+  transition: border-color 0.15s ease;
 `
 const CardBody = styled.div`
   flex: 1;
   min-width: 0;
 `
 const CardTitle = styled.div`
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
-  margin-bottom: 4px;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyTitleText};
+  margin-bottom: 3px;
   word-break: keep-all;
 `
 const CardMeta = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
+  font-size: 11.5px;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 `
 const RoleSelect = styled.select`
-  padding: 4px 6px;
-  font-size: 11px;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
-  border-radius: 4px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
-`
-const IconBtn = styled.button`
-  padding: 6px;
-  background: transparent;
-  border: none;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9ca3af')};
-  cursor: pointer;
-  border-radius: 4px;
-  &:hover {
-    color: #ef4444;
-    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(239,68,68,0.12)' : '#fef2f2')};
-  }
-`
-
-// modal
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-`
-const Modal = styled.div`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
-  border-radius: 12px;
-  width: min(560px, 92vw);
-  max-height: 84vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-`
-const ModalHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px;
-  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-`
-const ModalTitle = styled.h4`
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
-`
-const CloseBtn = styled.button`
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
-  padding: 4px;
-`
-const ModalBody = styled.div`
-  padding: 14px 18px;
-  overflow-y: auto;
-`
-const ModalFooter = styled.div`
-  padding: 12px 18px;
-  border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-`
-const SearchInput = styled.input`
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
-  border-radius: 6px;
-  font-size: 13px;
-  margin-bottom: 12px;
-`
-const ResultList = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-height: 240px;
-  overflow-y: auto;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  border-radius: 6px;
-`
-const ResultItem = styled.li<{ $selected?: boolean }>`
-  padding: 10px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f3f4f6')};
-  background: ${({ $selected, theme }) =>
-    $selected ? (theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eff6ff') : 'transparent'};
-  &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f9fafb')};
-  }
-`
-const FieldLabel = styled.label`
-  display: block;
-  font-size: 12px;
+  padding: 5px 8px;
+  font-size: 11.5px;
   font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
-  margin: 12px 0 6px;
-`
-const PrimaryBtn = styled.button`
-  padding: 8px 14px;
-  background: #2563eb;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
+  border: 1px solid
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
+  border-radius: 7px;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').inputBg};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').text};
   cursor: pointer;
-  &:disabled {
-    background: #9ca3af;
-    cursor: not-allowed;
+  outline: none;
+  &:focus {
+    border-color: ${MAIN};
   }
-`
-const GhostBtn = styled.button`
-  padding: 8px 14px;
-  background: transparent;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
-  border-radius: 6px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
-  font-size: 13px;
-  cursor: pointer;
 `
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -295,22 +150,40 @@ export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
   }
 
   return (
-    <Section id="cab-detail-events">
-      <Header>
-        <FiCalendar size={15} strokeWidth={2} />
-        <Title>관련 사건</Title>
-        <Count>{links.length}건</Count>
+    <CabS.CabDetailSubSection id="cab-detail-events">
+      <CabS.CabDetailMinistersSectionHeader>
+        <FiCalendar
+          size={15}
+          strokeWidth={2}
+          aria-hidden
+          style={{ color: MAIN, flexShrink: 0 }}
+        />
+        <CabS.CabDetailMinistersSectionTitle>
+          관련 사건
+        </CabS.CabDetailMinistersSectionTitle>
+        <CabS.CabResultCount style={{ marginLeft: 4 }}>
+          {links.length}건
+        </CabS.CabResultCount>
         <div style={{ flex: 1 }} />
-        <AddBtn type="button" onClick={() => setShowModal(true)}>
-          <FiLink size={13} strokeWidth={2.25} />
+        <SubsectionAddBtn type="button" onClick={() => setShowModal(true)}>
+          <FiLink size={14} strokeWidth={2.25} />
           사건 연결
-        </AddBtn>
-      </Header>
+        </SubsectionAddBtn>
+      </CabS.CabDetailMinistersSectionHeader>
 
       {loading ? (
-        <Empty>불러오는 중…</Empty>
+        <CabS.CabMinistersLoadingBox aria-busy="true" aria-live="polite">
+          사건 불러오는 중…
+        </CabS.CabMinistersLoadingBox>
       ) : links.length === 0 ? (
-        <Empty>연결된 사건이 없습니다.</Empty>
+        <CabS.CabDetailEmptyStack $padding="24px 0 28px">
+          <CabS.CabDetailPartyEmptyIconWrap aria-hidden>
+            <FiCalendar size={26} strokeWidth={1.5} />
+          </CabS.CabDetailPartyEmptyIconWrap>
+          <CabS.CabDetailEmptyText>
+            연결된 사건이 없습니다.
+          </CabS.CabDetailEmptyText>
+        </CabS.CabDetailEmptyStack>
       ) : (
         <List>
           {links.map((link) => {
@@ -339,14 +212,14 @@ export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
                     </option>
                   ))}
                 </RoleSelect>
-                <IconBtn
+                <CabS.CabDetailPartyRemoveBtn
                   type="button"
                   onClick={() => onUnlink(link)}
                   aria-label="연결 해제"
                   title="연결 해제"
                 >
                   <FiTrash2 size={14} />
-                </IconBtn>
+                </CabS.CabDetailPartyRemoveBtn>
               </Card>
             )
           })}
@@ -364,7 +237,7 @@ export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
           }}
         />
       )}
-    </Section>
+    </CabS.CabDetailSubSection>
   )
 }
 

@@ -4,7 +4,7 @@
  * - organizationId: 행정기구 페이지에서 고정 주입
  * - 둘 다 없으면 전체 목록 + 직접 선택
  */
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 import {
@@ -15,8 +15,10 @@ import {
   FiChevronDown,
   FiLayers,
   FiAward,
+  FiSearch,
   FiX,
 } from 'react-icons/fi'
+import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useCountries } from '@/features/country/api'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
 import { CountryPicker } from '@/shared/ui/country-picker'
@@ -81,6 +83,8 @@ const POSITION_TYPE_COLOR: Record<string, { bg: string; text: string; border: st
 }
 
 export interface PositionDefinitionsSectionProps {
+  /** 현재 보고 있는 국가(현대/역사) — 있으면 해당 국가 스코프 필터와 전용 직위 우선 정렬 제공 */
+  country?: UnifiedCountry
   /** 중앙부처 카테고리 페이지에서 고정 주입 — 이 카테고리 소속 직위만 표시·등록 */
   fixedCategoryId?: string
   fixedCategoryName?: string
@@ -88,6 +92,8 @@ export interface PositionDefinitionsSectionProps {
   fixedOrganizationId?: string
   fixedOrganizationName?: string
 }
+
+type ScopeFilterMode = 'applicable' | 'country_only' | 'global_only' | 'all'
 
 /* ─── 스타일 ─── */
 const Section = styled.section`
@@ -101,8 +107,77 @@ const SectionHead = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
+`
+
+const FilterBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+`
+
+const FilterTabGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+`
+
+const FilterTab = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.5)'
+          : '#a5b4fc'
+        : theme.colors.border.default};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.2)'
+        : '#eef2ff'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'
+      : theme.colors.text.secondary};
+`
+
+const SearchInputWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  min-width: 220px;
+
+  input {
+    border: none;
+    background: transparent;
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    width: 100%;
+  }
 `
 
 const SectionTitleBlock = styled.div``
@@ -459,6 +534,7 @@ function describeScopes(def: GovernmentPositionDefinition): string[] {
 }
 
 export function PositionDefinitionsSection({
+  country,
   fixedCategoryId,
   fixedCategoryName,
   fixedOrganizationId,
@@ -468,6 +544,10 @@ export function PositionDefinitionsSection({
 
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilterMode>('applicable')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [scopeToCurrentCountryOnCreate, setScopeToCurrentCountryOnCreate] =
+    useState<boolean>(false)
   const [positionTypeModalOpen, setPositionTypeModalOpen] = useState(false)
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
   const [scopeCountryModalOpen, setScopeCountryModalOpen] = useState(false)
@@ -475,18 +555,110 @@ export function PositionDefinitionsSection({
     emptyForm(fixedCategoryId, fixedOrganizationId),
   )
 
-  /* 전체 직위 목록 조회 — categoryId / organizationId 로 클라이언트 필터 */
+  /* 전체 직위 목록 조회 — categoryId / organizationId / 국가 스코프로 클라이언트 필터 */
   const { data: allDefinitions = [], isLoading } = useQuery({
     // ['position-definitions', …] 프리픽스 통일 — 정의를 만들면 재임·재위 피커도 함께 갱신된다
     queryKey: ['position-definitions', 'all'],
     queryFn: () => personCareerApi.getPositionDefinitions({}),
   })
 
-  const definitions = (allDefinitions as GovernmentPositionDefinition[]).filter((d) => {
-    if (fixedCategoryId) return d.categoryId === fixedCategoryId
-    if (fixedOrganizationId) return d.organizationId === fixedOrganizationId
-    return true
-  })
+  /** 현재 국가(현대 + 연결된 과거 국가, 또는 해당 역사국가)와 매칭되는 스코프 ID 집합 */
+  const matchingCountryIds = useMemo(() => {
+    const modernIds = new Set<string>()
+    const historicalIds = new Set<string>()
+    if (!country) return { modernIds, historicalIds }
+    if (country.type === 'historical') {
+      historicalIds.add(country.id)
+    } else {
+      modernIds.add(country.id)
+      for (const hc of country.historicalCountries ?? []) {
+        if (hc.id) historicalIds.add(hc.id)
+      }
+    }
+    return { modernIds, historicalIds }
+  }, [country])
+
+  const isScopedToCurrentCountry = (def: GovernmentPositionDefinition) => {
+    const scopes = def.scopes ?? []
+    if (scopes.length === 0) return false
+    return scopes.some(
+      (s) =>
+        (s.countryId && matchingCountryIds.modernIds.has(s.countryId)) ||
+        (s.historicalCountryId &&
+          matchingCountryIds.historicalIds.has(s.historicalCountryId)),
+    )
+  }
+
+  const baseDefinitions = useMemo(
+    () =>
+      (allDefinitions as GovernmentPositionDefinition[]).filter((d) => {
+        if (fixedCategoryId) return d.categoryId === fixedCategoryId
+        if (fixedOrganizationId) return d.organizationId === fixedOrganizationId
+        return true
+      }),
+    [allDefinitions, fixedCategoryId, fixedOrganizationId],
+  )
+
+  const scopeCounts = useMemo(() => {
+    let countryOnly = 0
+    let globalOnly = 0
+    for (const d of baseDefinitions) {
+      const scopes = d.scopes ?? []
+      if (scopes.length === 0) {
+        globalOnly += 1
+      } else if (isScopedToCurrentCountry(d)) {
+        countryOnly += 1
+      }
+    }
+    return {
+      applicable: countryOnly + globalOnly,
+      countryOnly,
+      globalOnly,
+      all: baseDefinitions.length,
+    }
+  }, [baseDefinitions, matchingCountryIds])
+
+  const definitions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    const filtered = baseDefinitions.filter((d) => {
+      if (country) {
+        const scopes = d.scopes ?? []
+        const isGlobal = scopes.length === 0
+        const isCurrent = isScopedToCurrentCountry(d)
+        if (scopeFilter === 'applicable' && !isGlobal && !isCurrent) {
+          return false
+        }
+        if (scopeFilter === 'country_only' && !isCurrent) {
+          return false
+        }
+        if (scopeFilter === 'global_only' && !isGlobal) {
+          return false
+        }
+      }
+      if (q) {
+        const hay = [
+          d.title,
+          d.titleEn ?? '',
+          d.titleLocal ?? '',
+          d.category?.name ?? '',
+          d.organization?.name ?? '',
+        ]
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+
+    if (!country) return filtered
+    // 현재 국가 전용 직위를 전역 직위보다 먼저 배치해 국가별 직위 파악을 돕는다
+    return [...filtered].sort((a, b) => {
+      const aCurrent = isScopedToCurrentCountry(a) ? 0 : 1
+      const bCurrent = isScopedToCurrentCountry(b) ? 0 : 1
+      if (aCurrent !== bCurrent) return aCurrent - bCurrent
+      return (a.rank ?? 999) - (b.rank ?? 999)
+    })
+  }, [baseDefinitions, country, scopeFilter, searchQuery, matchingCountryIds])
 
   /* 카테고리 목록 (고정 카테고리가 없을 때 선택용) */
   const { data: categories = [] } = useQuery({
@@ -559,6 +731,12 @@ export function PositionDefinitionsSection({
     } else {
       setEditingId(null)
       setForm(emptyForm(fixedCategoryId, fixedOrganizationId))
+      setScopeToCurrentCountryOnCreate(
+        Boolean(
+          country &&
+            (scopeFilter === 'country_only' || country.type === 'historical'),
+        ),
+      )
     }
     setView('form')
   }
@@ -574,7 +752,17 @@ export function PositionDefinitionsSection({
         await personCareerApi.updatePositionDefinition(editingId, form)
         notify.success('수정되었습니다.')
       } else {
-        await personCareerApi.createPositionDefinition(form)
+        const created = (await personCareerApi.createPositionDefinition(
+          form,
+        )) as { id?: string } | undefined
+        if (scopeToCurrentCountryOnCreate && country && created?.id) {
+          await personCareerApi.addPositionDefinitionScope(
+            created.id,
+            country.type === 'historical'
+              ? { historicalCountryId: country.id }
+              : { countryId: country.id },
+          )
+        }
         notify.success('등록되었습니다.')
       }
       refetch()
@@ -637,12 +825,69 @@ export function PositionDefinitionsSection({
 
       {view === 'list' ? (
         <>
+          <FilterBar>
+            {country ? (
+              <FilterTabGroup role="tablist" aria-label="직위 적용 범위 필터">
+                <FilterTab
+                  type="button"
+                  role="tab"
+                  aria-selected={scopeFilter === 'applicable'}
+                  $active={scopeFilter === 'applicable'}
+                  onClick={() => setScopeFilter('applicable')}
+                >
+                  {country.name} 적용 ({scopeCounts.applicable})
+                </FilterTab>
+                <FilterTab
+                  type="button"
+                  role="tab"
+                  aria-selected={scopeFilter === 'country_only'}
+                  $active={scopeFilter === 'country_only'}
+                  onClick={() => setScopeFilter('country_only')}
+                >
+                  {country.name} 전용만 ({scopeCounts.countryOnly})
+                </FilterTab>
+                <FilterTab
+                  type="button"
+                  role="tab"
+                  aria-selected={scopeFilter === 'global_only'}
+                  $active={scopeFilter === 'global_only'}
+                  onClick={() => setScopeFilter('global_only')}
+                >
+                  전역 직위만 ({scopeCounts.globalOnly})
+                </FilterTab>
+                <FilterTab
+                  type="button"
+                  role="tab"
+                  aria-selected={scopeFilter === 'all'}
+                  $active={scopeFilter === 'all'}
+                  onClick={() => setScopeFilter('all')}
+                >
+                  전체 카탈로그 ({scopeCounts.all})
+                </FilterTab>
+              </FilterTabGroup>
+            ) : (
+              <div />
+            )}
+            <SearchInputWrap>
+              <FiSearch size={14} color="#94a3b8" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="직위명·영문명·부처 검색..."
+                aria-label="직위 정의 검색"
+              />
+            </SearchInputWrap>
+          </FilterBar>
+
           {isLoading ? (
             <EmptyState><FiLayers size={28} />불러오는 중...</EmptyState>
           ) : definitions.length === 0 ? (
             <EmptyState>
               <FiAward size={32} color="#c7d2fe" />
-              등록된 직위가 없습니다.
+              {country && scopeFilter === 'country_only'
+                ? `${country.name} 전용으로 지정된 직위가 없습니다.`
+                : '등록된 직위가 없습니다.'}
             </EmptyState>
           ) : (
             <List>
@@ -800,8 +1045,38 @@ export function PositionDefinitionsSection({
                     </FieldControl>
                   </FieldRow>
 
-                  {/* 적용 범위 — 수정 모드에서만. 신규 생성 시엔 아직 정의 id가 없어 스코프를 붙일 수 없다
-                      (등록 후 다시 열어 지정). 비어 있으면 전역이라는 규칙을 문구로 명시한다. */}
+                  {!editingId && country && (
+                    <FieldRow>
+                      <FieldLabel>적용 범위</FieldLabel>
+                      <FieldControl>
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={scopeToCurrentCountryOnCreate}
+                            onChange={(event) =>
+                              setScopeToCurrentCountryOnCreate(
+                                event.target.checked,
+                              )
+                            }
+                          />
+                          <span>
+                            <strong>{country.name}</strong> 전용 직위로 설정
+                            (체크 해제 시 모든 국가에서 쓸 수 있는 전역 직위로 등록)
+                          </span>
+                        </label>
+                      </FieldControl>
+                    </FieldRow>
+                  )}
+
+                  {/* 적용 범위 — 수정 모드에서는 여러 국가를 자유롭게 추가/제거 */}
                   {editingId && (
                     <FieldRow>
                       <FieldLabel>적용 범위</FieldLabel>

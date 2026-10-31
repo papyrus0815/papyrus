@@ -20,4 +20,20 @@ export interface CabinetMember {
   replaced: boolean
   /** 그 자리를 앞서 맡았던 사람 */
   predecessor: string | null
+  /** 연결된 중앙부처 ID */
+  administrationDepartmentId?: string | null
+  /** 연결된 중앙부처 요약 */
+  administrationDepartment?: {
+    id: string
+    name?: string | null
+    categoryId?: string | null
+  } | null
+  /** 연결된 직위 정의 요약 */
+  positionDefinition?: {
+    id?: string
+    title?: string | null
+    titleEn?: string | null
+    categoryId?: string | null
+    administrationDepartmentId?: string | null
+  } | null
 }

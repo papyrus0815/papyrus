@@ -38,6 +38,9 @@ export type CountryDetailTab =
   | 'events'
   | 'ethnicity'
   | 'treaty'
+  | 'trade'
+  | 'companies'
+  | 'statistics'
   | null
 
 interface ContentLocation {
@@ -97,6 +100,9 @@ const DETAIL_TAB_PATTERNS: Array<{
   { tab: 'events', match: /^\/country\/[^/]+\/events\/?$/ },
   { tab: 'ethnicity', match: /^\/country\/[^/]+\/ethnicity\/?$/ },
   { tab: 'treaty', match: /^\/country\/[^/]+\/treaty\/?$/ },
+  { tab: 'trade', match: /^\/country\/[^/]+\/trade\/?$/ },
+  { tab: 'companies', match: /^\/country\/[^/]+\/companies\/?$/ },
+  { tab: 'statistics', match: /^\/country\/[^/]+\/statistics\/?$/ },
 ]
 
 export function useContentLocation(): ContentLocation {

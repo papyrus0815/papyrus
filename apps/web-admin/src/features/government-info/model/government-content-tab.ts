@@ -8,6 +8,7 @@ export type GovernmentContentTab =
   | 'ministries'
   | 'cabinets'
   | 'organizations'
+  | 'military'
   | 'positions'
 
 export type GovernmentTabMeta = { label: string; hint: string }
@@ -33,6 +34,10 @@ export const GOV_TAB_META: Record<GovernmentContentTab, GovernmentTabMeta> = {
     label: '행정기구',
     hint: '행정기구·조직을 검색하고 국가별로 관리합니다.',
   },
+  military: {
+    label: '군사 조직',
+    hint: '육·해·공군 등 군부대와 군사 편제를 부처 구분 없이 한눈에 검색·등록·관리합니다.',
+  },
   positions: {
     label: '직위 정의',
     hint: '관직·직위를 정의하고 관리합니다.',
@@ -51,6 +56,7 @@ export const GOVERNMENT_TAB_ORDER: readonly GovernmentContentTab[] = [
   'cabinets',
   'ministries',
   'organizations',
+  'military',
   'positions',
   'statistics',
 ] as const

@@ -994,8 +994,8 @@ export const CabListSearchCount = styled.span`
   pointer-events: none;
   letter-spacing: -0.02em;
 `
-/** 정렬 표시 — SectionTabHeader `AddButton`(카테고리 설정)과 동일 톤 */
-export const CabListSortBadge = styled.div`
+/** 정렬 표시 및 토글 버튼 — SectionTabHeader `AddButton`과 동일 톤 */
+export const CabListSortBadge = styled.button.attrs({ type: 'button' })`
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1012,7 +1012,22 @@ export const CabListSortBadge = styled.div`
       : theme.colors.background.primary};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   flex-shrink: 0;
+  cursor: pointer;
   user-select: none;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.12)'
+        : theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
 `
 
 /** 행정부 등록 — 동일 반경, 채움형 CTA */
@@ -1276,15 +1291,21 @@ export const CabCard = styled.div<{ $selected?: boolean; $deleting?: boolean }>`
   }
 `
 
-/* ── 상세 패널 내 각료·조약 (박스 없음, 위쪽은 재임 블록 border-bottom과 맞닿음) ── */
+/* ── 상세 패널 내 각료·조약·하위 섹션 공통 규격 ── */
 export const CabDetailMinistersSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding: 52px 0 56px;
+  gap: 18px;
+  padding: 32px 0 36px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#eceff3'};
   scroll-margin-top: 12px;
+  &:last-child {
+    border-bottom: none;
+  }
 `
-/** 조약 — 각료와 동일 리듬 (위·아래 패딩으로 블록 간격 확보) */
+/** 조약·사건 등 — 각료와 동일 리듬 */
 export const CabDetailSubSection = styled(CabDetailMinistersSection)`
   scroll-margin-top: 12px;
 `
@@ -1426,8 +1447,8 @@ export const CabinetListSkeletonBar = styled.div<{ $w?: string; $h?: string }>`
 export const CabDetailScrollSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 44px;
-  padding: 48px 0 56px;
+  gap: 0;
+  padding: 0;
   scroll-margin-top: 12px;
 `
 
@@ -1609,8 +1630,8 @@ export const HeadProfileBlock = styled.div`
   text-align: center;
   gap: 0;
   /* 위로 반원이 나가므로 바깥 여백 + 테두리선에 원 중심이 오도록 패딩 */
-  margin-top: 25px;
-  margin-bottom: 48px;
+  margin-top: ${HEAD_PROFILE_AVATAR_RADIUS + 8}px;
+  margin-bottom: 16px;
   padding: ${HEAD_PROFILE_AVATAR_RADIUS + 24}px 24px 32px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
@@ -1849,10 +1870,10 @@ export const CabDetailEmptyStack = styled.div<{ $padding?: string }>`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  min-height: 160px;
+  gap: 10px;
+  min-height: 112px;
   box-sizing: border-box;
-  padding: ${(p) => p.$padding ?? '32px 0 36px'};
+  padding: ${(p) => p.$padding ?? '24px 0 28px'};
 `
 
 export const CabDetailEmptyText = styled.p<{
@@ -1861,7 +1882,7 @@ export const CabDetailEmptyText = styled.p<{
 }>`
   margin: 0;
   font-size: ${(p) => p.$fontSize ?? '13px'};
-  font-style: italic;
+  font-style: normal;
   color: ${({ theme, $muted }) =>
     $muted
       ? getCabinetsSectionPalette(theme.mode === 'dark').textMuted
@@ -1886,23 +1907,26 @@ export const CabMinistersLoadingBox = styled.div`
 export const CabDetailPartySubSection = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 36px 0 52px;
+  gap: 18px;
+  padding: 32px 0 36px;
   margin-top: 0;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#eceff3'};
   scroll-margin-top: 12px;
 `
 
 export const CabDetailPartySectionTitle = styled.h4`
   margin: 0;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   color: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').sectionHeading};
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 `
 
 export const CabDetailPartyCount = styled.span`
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').textFaint};

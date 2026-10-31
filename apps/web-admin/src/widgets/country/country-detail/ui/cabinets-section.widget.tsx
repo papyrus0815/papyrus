@@ -77,7 +77,17 @@ import {
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
-import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
+import {
+  administrationDepartmentsByCountryQueryKey,
+  administrationDepartmentsByHistoricalCountryQueryKey,
+} from '@/shared/lib/ministry-department/ministry-department-query-keys'
+import {
+  filterDepartmentsForCabinet,
+  findActivePoliticalSystemForCabinet,
+  findDepartmentForMember,
+  GOVERNMENT_FORM_META,
+} from '@/shared/lib/ministry-department/department-cabinet-matcher'
+import { listPoliticalSystems } from '@/shared/api/political-system'
 import {
   calcAgeAtTenure,
   formatPersonLifespan,
@@ -568,6 +578,10 @@ export function CabinetsSection({
   const [cabinetCategoryFilter, setCabinetCategoryFilter] = useState<
     PositionCategory | ''
   >('')
+  /** 행정부 타임라인 정렬 순서: 'asc' = 과거순(기본), 'desc' = 최신순 */
+  const [cabinetSortOrder, setCabinetSortOrder] = useState<'asc' | 'desc'>(
+    'asc',
+  )
   const [ministerSearchQuery, setMinisterSearchQuery] = useState('')
   const [selectedMinisterId, setSelectedMinisterId] = useState<string | null>(
     null,
@@ -757,6 +771,7 @@ export function CabinetsSection({
 
   /** 타임라인·범례: 내각(행정부)만 — 군주는 칸으로 넣지 않음 */
   const timelineCabinetsMerged = useMemo(() => {
+    const dir = cabinetSortOrder === 'asc' ? 1 : -1
     return [...filteredCabinets].sort((a, b) => {
       const dateA = a.headTenure?.startDate
         ? new Date(a.headTenure.startDate).getTime()
@@ -764,9 +779,9 @@ export function CabinetsSection({
       const dateB = b.headTenure?.startDate
         ? new Date(b.headTenure.startDate).getTime()
         : 0
-      return dateA - dateB
+      return (dateA - dateB) * dir
     })
-  }, [filteredCabinets])
+  }, [filteredCabinets, cabinetSortOrder])
 
   const reignEraLineByCabinetId = useMemo(() => {
     const m = new Map<string, string>()
@@ -924,6 +939,8 @@ export function CabinetsSection({
   /** 선택한 정권의 각료 — 부처 그리드에 채우기 위함 */
   const effectiveCountryIdForDept =
     country.type === 'historical' ? undefined : country.id
+  const effectiveHistoricalCountryIdForDept =
+    country.type === 'historical' ? country.id : undefined
   const {
     data: selectedCabinetMinisters = [],
     isPending: loadingCabinetMinisters,
@@ -936,16 +953,52 @@ export function CabinetsSection({
     enabled: !!selectedCabinetId,
   })
   /** 카테고리·부처는 탭 진입 시 미리 로드 — 정권 클릭 시 곧바로 중앙부처 그리드 표시 */
-  const { data: ministriesForCabinet = [] } = useQuery({
-    queryKey: administrationDepartmentsByCountryQueryKey(
-      effectiveCountryIdForDept,
-    ),
+  const { data: allMinistriesForCabinet = [] } = useQuery({
+    queryKey: effectiveHistoricalCountryIdForDept
+      ? administrationDepartmentsByHistoricalCountryQueryKey(
+          effectiveHistoricalCountryIdForDept,
+        )
+      : administrationDepartmentsByCountryQueryKey(effectiveCountryIdForDept),
     queryFn: () =>
-      effectiveCountryIdForDept
-        ? administrationDepartmentApi.getByCountryId(effectiveCountryIdForDept)
-        : Promise.resolve([]),
-    enabled: !!effectiveCountryIdForDept,
+      effectiveHistoricalCountryIdForDept
+        ? administrationDepartmentApi.getByHistoricalCountryId(
+            effectiveHistoricalCountryIdForDept,
+          )
+        : effectiveCountryIdForDept
+          ? administrationDepartmentApi.getByCountryId(effectiveCountryIdForDept)
+          : Promise.resolve([]),
+    enabled: Boolean(
+      effectiveCountryIdForDept || effectiveHistoricalCountryIdForDept,
+    ),
   })
+
+  const { data: politicalSystems = [] } = useQuery({
+    queryKey: ['political-systems', countryId || null, historicalCountryId || null],
+    queryFn: () =>
+      listPoliticalSystems({
+        countryId: countryId || undefined,
+        historicalCountryId: historicalCountryId || undefined,
+      }),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 5 * 60_000,
+  })
+
+  /** 선택된 행정부 또는 각료 추가 대상 행정부의 시대/역사국가에 맞춰 필터링된 부처 목록 */
+  const ministriesForCabinet = useMemo(() => {
+    const targetCabinet =
+      addMinisterCabinet ??
+      (cabinets as any[]).find((c: any) => c.id === selectedCabinetId) ??
+      null
+    if (!targetCabinet) return allMinistriesForCabinet
+    return filterDepartmentsForCabinet(allMinistriesForCabinet as any[], {
+      startDate: targetCabinet.headTenure?.startDate ?? null,
+      endDate: targetCabinet.headTenure?.endDate ?? null,
+      historicalCountryId:
+        targetCabinet.historicalCountryId ??
+        targetCabinet.headTenure?.historicalCountryId ??
+        null,
+    })
+  }, [allMinistriesForCabinet, addMinisterCabinet, cabinets, selectedCabinetId])
 
   const { data: positionDefinitions = [] } = useQuery({
     queryKey: ['position-definitions-cabinet', countryId, historicalCountryId],
@@ -1185,29 +1238,49 @@ export function CabinetsSection({
           ? termNumParsed
           : undefined
 
-      await personCareerApi.addGovernmentPositionTenure({
-        personId: selectedPersonIdForAdd,
-        positionType: (def as any)?.positionType ?? 'OTHER',
-        positionDefinitionId:
-          def?.id && ministerFormPositionDefId !== '__OTHER__'
-            ? (ministerFormPositionDefId ?? undefined)
-            : undefined,
-        title: titleValue,
-        countryId: addMinisterCabinet.countryId ?? undefined,
-        historicalCountryId:
-          addMinisterCabinet.historicalCountryId ?? undefined,
-        cabinetId: addMinisterCabinet.id,
-        startDate: ministerFormStartDate,
-        endDate: ministerFormEndDate || undefined,
-        ordinal: termNumber,
-      })
-      notify.success('각료가 등록되었습니다.')
+      const editingTenureId = (
+        addMinisterCabinet as { _editingTenureId?: string } | null
+      )?._editingTenureId
+      const resolvedPositionDefId =
+        def?.id && ministerFormPositionDefId !== '__OTHER__'
+          ? (ministerFormPositionDefId ?? undefined)
+          : undefined
+
+      if (editingTenureId) {
+        await personCareerApi.updateGovernmentPositionTenure(editingTenureId, {
+          personId: selectedPersonIdForAdd,
+          positionType: (def as any)?.positionType ?? 'OTHER',
+          positionDefinitionId: resolvedPositionDefId,
+          administrationDepartmentId: ministerFormDeptId || undefined,
+          title: titleValue,
+          startDate: ministerFormStartDate,
+          endDate: ministerFormEndDate || undefined,
+          ordinal: termNumber,
+        } as any)
+        notify.success('각료 정보가 수정되었습니다.')
+      } else {
+        await personCareerApi.addGovernmentPositionTenure({
+          personId: selectedPersonIdForAdd,
+          positionType: (def as any)?.positionType ?? 'OTHER',
+          positionDefinitionId: resolvedPositionDefId,
+          administrationDepartmentId: ministerFormDeptId || undefined,
+          title: titleValue,
+          countryId: addMinisterCabinet.countryId ?? undefined,
+          historicalCountryId:
+            addMinisterCabinet.historicalCountryId ?? undefined,
+          cabinetId: addMinisterCabinet.id,
+          startDate: ministerFormStartDate,
+          endDate: ministerFormEndDate || undefined,
+          ordinal: termNumber,
+        })
+        notify.success('각료가 등록되었습니다.')
+      }
       setPersonSelectOpen(false)
       setAddMinisterCabinet(null)
       invalidateTenureQueries(queryClient)
     } catch (e: any) {
       notify.error(
-        e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.',
+        e?.response?.data?.message ?? e?.message ?? '처리에 실패했습니다.',
       )
     } finally {
       setMinisterFormSubmitting(false)
@@ -1332,8 +1405,8 @@ export function CabinetsSection({
         endDate: newHeadEndDate.trim() || undefined,
         appointmentMethod: (newHeadAppointmentMethod || undefined) as any,
         endReason: (newHeadEndReason || undefined) as any,
-        endReasonDetail: newHeadEndReasonDetail.trim() || undefined,
-        notes: newHeadNotes.trim() || undefined,
+        endReasonDetail: optionalCabinetTenureRichText(newHeadEndReasonDetail),
+        notes: optionalCabinetTenureRichText(newHeadNotes),
       })
       const created = tenure as { id: string }
       await personCareerApi.createCabinet({
@@ -1526,8 +1599,8 @@ export function CabinetsSection({
         endDate: editingEndDate.trim() || undefined,
         appointmentMethod: (editingAppointmentMethod || undefined) as any,
         endReason: (editingEndReason || undefined) as any,
-        endReasonDetail: editingEndReasonDetail.trim() || undefined,
-        notes: editingNotes.trim() || undefined,
+        endReasonDetail: optionalCabinetTenureRichText(editingEndReasonDetail),
+        notes: optionalCabinetTenureRichText(editingNotes),
         countryId: newCountryId ?? undefined,
         historicalCountryId: newHistoricalCountryId ?? undefined,
       })
@@ -1659,10 +1732,22 @@ export function CabinetsSection({
   )
 
   const getMinisterDepartmentName = (t: GovernmentCabinetTenureItem) => {
-    const depId = t?.positionDefinition?.administrationDepartmentId
-    if (!depId) return '미연결'
-    const dep = (ministriesForCabinet as any[]).find((d: any) => d.id === depId)
-    return dep?.name ?? '미연결'
+    if (t?.administrationDepartment?.name) {
+      return t.administrationDepartment.name
+    }
+    const matched = findDepartmentForMember(
+      {
+        title: t?.title ?? t?.positionDefinition?.title ?? null,
+        administrationDepartmentId:
+          t?.administrationDepartmentId ??
+          t?.positionDefinition?.administrationDepartmentId ??
+          null,
+        administrationDepartment: t?.administrationDepartment ?? null,
+        positionDefinition: t?.positionDefinition ?? null,
+      },
+      allMinistriesForCabinet as any[],
+    )
+    return matched?.name ?? '미연결'
   }
   if (loadingCabinets) {
     return (
@@ -1821,9 +1906,17 @@ export function CabinetsSection({
                       )}
                     </CabS.CabListSearchBox>
 
-                    <CabS.CabListSortBadge>
+                    <CabS.CabListSortBadge
+                      onClick={() =>
+                        setCabinetSortOrder((prev) =>
+                          prev === 'asc' ? 'desc' : 'asc',
+                        )
+                      }
+                      title="정렬 순서 전환 (과거순 ↔ 최신순)"
+                      aria-label={`정렬 순서: ${cabinetSortOrder === 'asc' ? '과거순' : '최신순'} (클릭하여 전환)`}
+                    >
                       <FiClock size={13} aria-hidden />
-                      최신순
+                      {cabinetSortOrder === 'asc' ? '과거순' : '최신순'}
                     </CabS.CabListSortBadge>
 
                     <CabS.CabListRegisterBtn
@@ -1941,7 +2034,9 @@ export function CabinetsSection({
                                   fontWeight: 500,
                                 }}
                               >
-                                (과거 ← · → 현재)
+                                {cabinetSortOrder === 'asc'
+                                  ? '(과거 ← · → 현재)'
+                                  : '(현재 ← · → 과거)'}
                               </span>
                             </div>
                           </>
@@ -2669,6 +2764,7 @@ export function CabinetsSection({
                   setMinisterFormEndDate={setMinisterFormEndDate}
                   setMinisterFormTermNumber={setMinisterFormTermNumber}
                   setMinisterFormDeptId={setMinisterFormDeptId}
+                  setSelectedPersonIdForAdd={setSelectedPersonIdForAdd}
                   setAddMinisterCabinet={setAddMinisterCabinet}
                   setPersonSelectOpen={setPersonSelectOpen}
                   handleDeleteCabinet={handleDeleteCabinet}
@@ -2786,18 +2882,9 @@ export function CabinetsSection({
                                 </CabS.MinisterProfileStats>
                                 {minister.person && (
                                   <CabS.MinisterProfileLifespan>
-                                    <span
-                                      style={{
-                                        fontWeight: 700,
-                                        color: C.slate400,
-                                        marginRight: 4,
-                                        fontSize: 10,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.04em',
-                                      }}
-                                    >
+                                    <CabS.HeadMetaKicker>
                                       생몰년
-                                    </span>
+                                    </CabS.HeadMetaKicker>
                                     {formatPersonLifespan(minister.person)}
                                   </CabS.MinisterProfileLifespan>
                                 )}
@@ -2807,18 +2894,9 @@ export function CabinetsSection({
                                   )
                                   return birthPlace ? (
                                     <CabS.MinisterProfileLifespan>
-                                      <span
-                                        style={{
-                                          fontWeight: 700,
-                                          color: C.slate400,
-                                          marginRight: 4,
-                                          fontSize: 10,
-                                          textTransform: 'uppercase',
-                                          letterSpacing: '0.04em',
-                                        }}
-                                      >
+                                      <CabS.HeadMetaKicker>
                                         출신
-                                      </span>
+                                      </CabS.HeadMetaKicker>
                                       {birthPlace}
                                     </CabS.MinisterProfileLifespan>
                                   ) : null
@@ -3173,44 +3251,49 @@ export function CabinetsSection({
                               )
                             })()
                           ) : (
-                            <CabS.ProfileSection id="cab-detail-minister-achievements">
-                              <CabS.ProfileSectionLabel>
-                                재임 기록
-                                {achievementCount > 0 && (
-                                  <CabS.ProfileSectionCount>
-                                    {achievementCount}
-                                  </CabS.ProfileSectionCount>
+                            <CabS.HeadTenureInfoSection
+                              id="cab-detail-minister-achievements"
+                              $omitBottomRule
+                            >
+                              <CabS.CabDetailMinistersSectionHeader>
+                                <FiLayers
+                                  size={15}
+                                  strokeWidth={2}
+                                  aria-hidden
+                                  style={{ color: MAIN, flexShrink: 0 }}
+                                />
+                                <CabS.CabDetailMinistersSectionTitle>
+                                  재임 기록
+                                </CabS.CabDetailMinistersSectionTitle>
+                                <CabS.CabResultCount style={{ marginLeft: 4 }}>
+                                  {achievementCount}건
+                                </CabS.CabResultCount>
+                                <div style={{ flex: 1 }} />
+                                {showCabinetHeadTenureHistoryActions && (
+                                  <SubsectionAddBtn
+                                    type="button"
+                                    onClick={(e) =>
+                                      openMinisterHistoryModal(minister, e)
+                                    }
+                                  >
+                                    <FiPlus size={14} strokeWidth={2.25} />
+                                    기록 추가
+                                  </SubsectionAddBtn>
                                 )}
-                              </CabS.ProfileSectionLabel>
+                              </CabS.CabDetailMinistersSectionHeader>
                               {achievementCount === 0 ? (
-                                <CabS.ProfileEmptyNote>
-                                  등록된 히스토리가 없습니다.
-                                  {showCabinetHeadTenureHistoryActions && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) =>
-                                        openMinisterHistoryModal(minister, e)
-                                      }
-                                      style={{
-                                        marginLeft: 10,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        padding: '4px 10px',
-                                        fontSize: 11.5,
-                                        fontWeight: 600,
-                                        color: C.chipActionColor,
-                                        background: C.chipActionBg,
-                                        border: `1px solid ${C.chipActionBorder}`,
-                                        borderRadius: 7,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      <FiPlus size={11} />
-                                      등록
-                                    </button>
-                                  )}
-                                </CabS.ProfileEmptyNote>
+                                <CabS.CabDetailEmptyStack $padding="24px 0 28px">
+                                  <CabS.CabDetailPartyEmptyIconWrap aria-hidden>
+                                    <FiLayers
+                                      size={26}
+                                      strokeWidth={1.5}
+                                      style={{ color: C.placeholderText }}
+                                    />
+                                  </CabS.CabDetailPartyEmptyIconWrap>
+                                  <CabS.CabDetailEmptyText>
+                                    등록된 재임 기록이 없습니다.
+                                  </CabS.CabDetailEmptyText>
+                                </CabS.CabDetailEmptyStack>
                               ) : (
                                 <TenureHistoryHorizTimeline
                                   achievements={minister.achievements ?? []}
@@ -3225,7 +3308,7 @@ export function CabinetsSection({
                                   }
                                 />
                               )}
-                            </CabS.ProfileSection>
+                            </CabS.HeadTenureInfoSection>
                           )}
                         </>
                       )
@@ -3261,6 +3344,21 @@ export function CabinetsSection({
                         termNum,
                         head?.subTermNumber ?? null,
                       )
+                      const activePolSys = findActivePoliticalSystemForCabinet(
+                        politicalSystems,
+                        {
+                          startDate: head?.startDate ?? null,
+                          endDate: head?.endDate ?? null,
+                          historicalCountryId:
+                            selectedCabinet.historicalCountryId ??
+                            head?.historicalCountryId ??
+                            null,
+                        },
+                      )
+                      const regimeBadgeLabel = activePolSys?.governmentForm
+                        ? (GOVERNMENT_FORM_META[activePolSys.governmentForm]
+                            ?.label ?? null)
+                        : null
                       return (
                         <>
                           {/* 수반 프로필 — 재임 기록 상세일 때는 숨김 */}
@@ -3315,6 +3413,11 @@ export function CabinetsSection({
                                   {termBadge && (
                                     <CabS.HeadProfileDetailChipTerm>
                                       {termBadge}
+                                    </CabS.HeadProfileDetailChipTerm>
+                                  )}
+                                  {regimeBadgeLabel && (
+                                    <CabS.HeadProfileDetailChipTerm>
+                                      {regimeBadgeLabel}
                                     </CabS.HeadProfileDetailChipTerm>
                                   )}
                                   <CabS.HeadProfileDetailChipPosition>
@@ -3374,48 +3477,36 @@ export function CabinetsSection({
                               <CabS.CabDetailScrollSection id="cab-detail-tenure">
                                 {/* ── 취임 정보 ── */}
                                 <CabS.HeadTenureInfoSection $accent="mint">
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      marginBottom:
-                                        !!editingTenureInfo &&
-                                        editingTenureInfo.cabinetId ===
-                                          selectedCabinet.id &&
-                                        editingTenureInfo.mode === 'appointment'
-                                          ? 10
-                                          : 0,
-                                    }}
-                                  >
+                                  <CabS.CabDetailMinistersSectionHeader>
                                     <span
+                                      aria-hidden
                                       style={{
-                                        fontSize: 12,
-                                        fontWeight: 700,
-                                        color: C.sectionLabelTint,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 5,
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        background: '#6ee7b7',
+                                        flexShrink: 0,
+                                        display: 'inline-block',
                                       }}
-                                    >
-                                      <span
-                                        style={{
-                                          width: 6,
-                                          height: 6,
-                                          borderRadius: '50%',
-                                          background: '#6ee7b7',
-                                          flexShrink: 0,
-                                          display: 'inline-block',
-                                        }}
-                                      />
+                                    />
+                                    <CabS.CabDetailMinistersSectionTitle>
                                       취임 정보
-                                    </span>
+                                    </CabS.CabDetailMinistersSectionTitle>
+                                    <div style={{ flex: 1 }} />
                                     {!!editingTenureInfo &&
                                     editingTenureInfo.cabinetId ===
                                       selectedCabinet.id &&
                                     editingTenureInfo.mode === 'appointment' ? (
                                       <div style={{ display: 'flex', gap: 6 }}>
-                                        <button
+                                        <CabS.HistoryArticleCancelBtn
+                                          type="button"
+                                          onClick={() =>
+                                            setEditingTenureInfo(null)
+                                          }
+                                        >
+                                          취소
+                                        </CabS.HistoryArticleCancelBtn>
+                                        <CabS.HistoryArticleSaveBtn
                                           type="button"
                                           disabled={tenureInfoSubmitting}
                                           onClick={() =>
@@ -3424,45 +3515,15 @@ export function CabinetsSection({
                                               head.id,
                                             )
                                           }
-                                          style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 4,
-                                            padding: '4px 12px',
-                                            fontSize: 11.5,
-                                            fontWeight: 700,
-                                            color: '#fff',
-                                            background: '#6366f1',
-                                            border: 'none',
-                                            borderRadius: 7,
-                                            cursor: 'pointer',
-                                          }}
+                                          $isRegister={false}
                                         >
                                           {tenureInfoSubmitting
                                             ? '저장 중…'
                                             : '저장'}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setEditingTenureInfo(null)
-                                          }
-                                          style={{
-                                            padding: '4px 10px',
-                                            fontSize: 11.5,
-                                            fontWeight: 600,
-                                            color: C.slate400,
-                                            background: 'transparent',
-                                            border: `1px solid ${C.borderHairline12}`,
-                                            borderRadius: 7,
-                                            cursor: 'pointer',
-                                          }}
-                                        >
-                                          취소
-                                        </button>
+                                        </CabS.HistoryArticleSaveBtn>
                                       </div>
                                     ) : (
-                                      <button
+                                      <SubsectionAddBtn
                                         type="button"
                                         onClick={() => {
                                           setEditingAppointmentMethod(
@@ -3474,30 +3535,30 @@ export function CabinetsSection({
                                             mode: 'appointment',
                                           })
                                         }}
-                                        style={{
-                                          fontSize: 12,
-                                          fontWeight: 600,
-                                          color: C.chipActionColor,
-                                          background: 'transparent',
-                                          border: 'none',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: 4,
-                                          padding: '4px 8px',
-                                          borderRadius: 6,
-                                        }}
                                       >
-                                        <FiPlus size={12} />
                                         {head?.appointmentMethod ||
                                         cabinetTenureDetailHasContent(
                                           head?.notes,
-                                        )
-                                          ? '수정'
-                                          : '등록'}
-                                      </button>
+                                        ) ? (
+                                          <>
+                                            <FiEdit2
+                                              size={13}
+                                              strokeWidth={2.25}
+                                            />
+                                            수정
+                                          </>
+                                        ) : (
+                                          <>
+                                            <FiPlus
+                                              size={14}
+                                              strokeWidth={2.25}
+                                            />
+                                            등록
+                                          </>
+                                        )}
+                                      </SubsectionAddBtn>
                                     )}
-                                  </div>
+                                  </CabS.CabDetailMinistersSectionHeader>
                                   {!!editingTenureInfo &&
                                   editingTenureInfo.cabinetId ===
                                     selectedCabinet.id &&
@@ -3506,41 +3567,21 @@ export function CabinetsSection({
                                       style={{
                                         display: 'flex',
                                         flexDirection: 'column',
-                                        gap: 10,
+                                        gap: 12,
                                       }}
                                     >
                                       <div>
-                                        <label
-                                          style={{
-                                            display: 'block',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            color: C.slate400,
-                                            marginBottom: 4,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em',
-                                          }}
-                                        >
+                                        <CabS.HeadTenureInfoLabel>
                                           임명 방식
-                                        </label>
-                                        <select
+                                        </CabS.HeadTenureInfoLabel>
+                                        <CabS.CabinetSelectNative
                                           value={editingAppointmentMethod}
                                           onChange={(e) =>
                                             setEditingAppointmentMethod(
                                               e.target.value,
                                             )
                                           }
-                                          style={{
-                                            maxWidth: 280,
-                                            width: '100%',
-                                            padding: '8px 10px',
-                                            fontSize: 13,
-                                            border: `1.5px solid ${C.badgeBorder}`,
-                                            borderRadius: 8,
-                                            background: C.inputBg,
-                                            color: C.text,
-                                            outline: 'none',
-                                          }}
+                                          style={{ maxWidth: 280 }}
                                         >
                                           <option value="">선택 안 함</option>
                                           {Object.entries(
@@ -3550,22 +3591,12 @@ export function CabinetsSection({
                                               {v}
                                             </option>
                                           ))}
-                                        </select>
+                                        </CabS.CabinetSelectNative>
                                       </div>
                                       <div>
-                                        <label
-                                          style={{
-                                            display: 'block',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            color: C.slate400,
-                                            marginBottom: 4,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em',
-                                          }}
-                                        >
+                                        <CabS.HeadTenureInfoLabel>
                                           취임 배경 / 비고
-                                        </label>
+                                        </CabS.HeadTenureInfoLabel>
                                         <CabS.HeadTenureInfoEditorWrap>
                                           <RichTextEditor
                                             value={editingNotes}
@@ -3593,17 +3624,19 @@ export function CabinetsSection({
                                       head?.notes,
                                     ) ? (
                                     <>
-                                      <CabS.HeadTenureInfoBadge
-                                        $type="appointment"
-                                        style={{ width: 'fit-content' }}
-                                      >
-                                        <CabS.HeadTenureInfoBadgeLabel>
-                                          임명
-                                        </CabS.HeadTenureInfoBadgeLabel>
-                                        {APPOINTMENT_METHOD_LABEL[
-                                          head.appointmentMethod
-                                        ] ?? head.appointmentMethod}
-                                      </CabS.HeadTenureInfoBadge>
+                                      {head?.appointmentMethod && (
+                                        <CabS.HeadTenureInfoBadge
+                                          $type="appointment"
+                                          style={{ width: 'fit-content' }}
+                                        >
+                                          <CabS.HeadTenureInfoBadgeLabel>
+                                            임명
+                                          </CabS.HeadTenureInfoBadgeLabel>
+                                          {APPOINTMENT_METHOD_LABEL[
+                                            head.appointmentMethod
+                                          ] ?? head.appointmentMethod}
+                                        </CabS.HeadTenureInfoBadge>
+                                      )}
                                       {cabinetTenureDetailHasContent(
                                         head.notes,
                                       ) && (
@@ -3631,64 +3664,44 @@ export function CabinetsSection({
                                       )}
                                     </>
                                   ) : (
-                                    <p
-                                      style={{
-                                        margin: '2px 0 0',
-                                        fontSize: 12,
-                                        color: C.textFaint,
-                                      }}
-                                    >
-                                      — 등록된 정보 없음
-                                    </p>
+                                    <CabS.CabDetailEmptyText>
+                                      등록된 취임 정보가 없습니다.
+                                    </CabS.CabDetailEmptyText>
                                   )}
                                 </CabS.HeadTenureInfoSection>
 
-                                {/* 구분선 */}
-
                                 {/* ── 퇴임 정보 ── */}
                                 <CabS.HeadTenureInfoSection $accent="rose">
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'space-between',
-                                      marginBottom:
-                                        !!editingTenureInfo &&
-                                        editingTenureInfo.cabinetId ===
-                                          selectedCabinet.id &&
-                                        editingTenureInfo.mode === 'end'
-                                          ? 10
-                                          : 0,
-                                    }}
-                                  >
+                                  <CabS.CabDetailMinistersSectionHeader>
                                     <span
+                                      aria-hidden
                                       style={{
-                                        fontSize: 12,
-                                        fontWeight: 700,
-                                        color: C.sectionLabelTint,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 5,
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        background: '#fca5a5',
+                                        flexShrink: 0,
+                                        display: 'inline-block',
                                       }}
-                                    >
-                                      <span
-                                        style={{
-                                          width: 6,
-                                          height: 6,
-                                          borderRadius: '50%',
-                                          background: '#fca5a5',
-                                          flexShrink: 0,
-                                          display: 'inline-block',
-                                        }}
-                                      />
+                                    />
+                                    <CabS.CabDetailMinistersSectionTitle>
                                       퇴임 정보
-                                    </span>
+                                    </CabS.CabDetailMinistersSectionTitle>
+                                    <div style={{ flex: 1 }} />
                                     {!!editingTenureInfo &&
                                     editingTenureInfo.cabinetId ===
                                       selectedCabinet.id &&
                                     editingTenureInfo.mode === 'end' ? (
                                       <div style={{ display: 'flex', gap: 6 }}>
-                                        <button
+                                        <CabS.HistoryArticleCancelBtn
+                                          type="button"
+                                          onClick={() =>
+                                            setEditingTenureInfo(null)
+                                          }
+                                        >
+                                          취소
+                                        </CabS.HistoryArticleCancelBtn>
+                                        <CabS.HistoryArticleSaveBtn
                                           type="button"
                                           disabled={tenureInfoSubmitting}
                                           onClick={() =>
@@ -3697,45 +3710,15 @@ export function CabinetsSection({
                                               head.id,
                                             )
                                           }
-                                          style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 4,
-                                            padding: '4px 12px',
-                                            fontSize: 11.5,
-                                            fontWeight: 700,
-                                            color: '#fff',
-                                            background: '#6366f1',
-                                            border: 'none',
-                                            borderRadius: 7,
-                                            cursor: 'pointer',
-                                          }}
+                                          $isRegister={false}
                                         >
                                           {tenureInfoSubmitting
                                             ? '저장 중…'
                                             : '저장'}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setEditingTenureInfo(null)
-                                          }
-                                          style={{
-                                            padding: '4px 10px',
-                                            fontSize: 11.5,
-                                            fontWeight: 600,
-                                            color: C.slate400,
-                                            background: 'transparent',
-                                            border: `1px solid ${C.borderHairline12}`,
-                                            borderRadius: 7,
-                                            cursor: 'pointer',
-                                          }}
-                                        >
-                                          취소
-                                        </button>
+                                        </CabS.HistoryArticleSaveBtn>
                                       </div>
                                     ) : (
-                                      <button
+                                      <SubsectionAddBtn
                                         type="button"
                                         onClick={() => {
                                           setEditingEndReason(
@@ -3749,30 +3732,30 @@ export function CabinetsSection({
                                             mode: 'end',
                                           })
                                         }}
-                                        style={{
-                                          fontSize: 12,
-                                          fontWeight: 600,
-                                          color: C.chipActionColor,
-                                          background: 'transparent',
-                                          border: 'none',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: 4,
-                                          padding: '4px 8px',
-                                          borderRadius: 6,
-                                        }}
                                       >
-                                        <FiPlus size={12} />
                                         {head?.endReason ||
                                         cabinetTenureDetailHasContent(
                                           head?.endReasonDetail,
-                                        )
-                                          ? '수정'
-                                          : '등록'}
-                                      </button>
+                                        ) ? (
+                                          <>
+                                            <FiEdit2
+                                              size={13}
+                                              strokeWidth={2.25}
+                                            />
+                                            수정
+                                          </>
+                                        ) : (
+                                          <>
+                                            <FiPlus
+                                              size={14}
+                                              strokeWidth={2.25}
+                                            />
+                                            등록
+                                          </>
+                                        )}
+                                      </SubsectionAddBtn>
                                     )}
-                                  </div>
+                                  </CabS.CabDetailMinistersSectionHeader>
                                   {!!editingTenureInfo &&
                                   editingTenureInfo.cabinetId ===
                                     selectedCabinet.id &&
@@ -3781,39 +3764,19 @@ export function CabinetsSection({
                                       style={{
                                         display: 'flex',
                                         flexDirection: 'column',
-                                        gap: 10,
+                                        gap: 12,
                                       }}
                                     >
                                       <div>
-                                        <label
-                                          style={{
-                                            display: 'block',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            color: C.slate400,
-                                            marginBottom: 4,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em',
-                                          }}
-                                        >
+                                        <CabS.HeadTenureInfoLabel>
                                           퇴임 사유
-                                        </label>
-                                        <select
+                                        </CabS.HeadTenureInfoLabel>
+                                        <CabS.CabinetSelectNative
                                           value={editingEndReason}
                                           onChange={(e) =>
                                             setEditingEndReason(e.target.value)
                                           }
-                                          style={{
-                                            maxWidth: 280,
-                                            width: '100%',
-                                            padding: '8px 10px',
-                                            fontSize: 13,
-                                            border: `1.5px solid ${C.badgeBorder}`,
-                                            borderRadius: 8,
-                                            background: C.inputBg,
-                                            color: C.text,
-                                            outline: 'none',
-                                          }}
+                                          style={{ maxWidth: 280 }}
                                         >
                                           <option value="">선택 안 함</option>
                                           {Object.entries(END_REASON_LABEL).map(
@@ -3823,22 +3786,12 @@ export function CabinetsSection({
                                               </option>
                                             ),
                                           )}
-                                        </select>
+                                        </CabS.CabinetSelectNative>
                                       </div>
                                       <div>
-                                        <label
-                                          style={{
-                                            display: 'block',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            color: C.slate400,
-                                            marginBottom: 4,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em',
-                                          }}
-                                        >
+                                        <CabS.HeadTenureInfoLabel>
                                           퇴임 상세
-                                        </label>
+                                        </CabS.HeadTenureInfoLabel>
                                         <CabS.HeadTenureInfoEditorWrap>
                                           <RichTextEditor
                                             value={editingEndReasonDetail}
@@ -3866,16 +3819,18 @@ export function CabinetsSection({
                                       head?.endReasonDetail,
                                     ) ? (
                                     <>
-                                      <CabS.HeadTenureInfoBadge
-                                        $type="end"
-                                        style={{ width: 'fit-content' }}
-                                      >
-                                        <CabS.HeadTenureInfoBadgeLabel>
-                                          퇴임
-                                        </CabS.HeadTenureInfoBadgeLabel>
-                                        {END_REASON_LABEL[head.endReason] ??
-                                          head.endReason}
-                                      </CabS.HeadTenureInfoBadge>
+                                      {head?.endReason && (
+                                        <CabS.HeadTenureInfoBadge
+                                          $type="end"
+                                          style={{ width: 'fit-content' }}
+                                        >
+                                          <CabS.HeadTenureInfoBadgeLabel>
+                                            퇴임
+                                          </CabS.HeadTenureInfoBadgeLabel>
+                                          {END_REASON_LABEL[head.endReason] ??
+                                            head.endReason}
+                                        </CabS.HeadTenureInfoBadge>
+                                      )}
                                       {cabinetTenureDetailHasContent(
                                         head.endReasonDetail,
                                       ) && (
@@ -3907,15 +3862,9 @@ export function CabinetsSection({
                                       )}
                                     </>
                                   ) : (
-                                    <p
-                                      style={{
-                                        margin: '2px 0 0',
-                                        fontSize: 12,
-                                        color: C.textFaint,
-                                      }}
-                                    >
-                                      — 등록된 정보 없음
-                                    </p>
+                                    <CabS.CabDetailEmptyText>
+                                      등록된 퇴임 정보가 없습니다.
+                                    </CabS.CabDetailEmptyText>
                                   )}
                                 </CabS.HeadTenureInfoSection>
                               </CabS.CabDetailScrollSection>
@@ -4333,62 +4282,32 @@ export function CabinetsSection({
                               })()
                             ) : (
                               <>
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: 12,
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 8,
-                                      fontSize: 13,
-                                      fontWeight: 700,
-                                      color: C.sectionHeading,
-                                    }}
-                                  >
-                                    <FiLayers
-                                      size={15}
-                                      strokeWidth={2}
-                                      aria-hidden
-                                      style={{ color: MAIN, flexShrink: 0 }}
-                                    />
+                                <CabS.CabDetailMinistersSectionHeader>
+                                  <FiLayers
+                                    size={15}
+                                    strokeWidth={2}
+                                    aria-hidden
+                                    style={{ color: MAIN, flexShrink: 0 }}
+                                  />
+                                  <CabS.CabDetailMinistersSectionTitle>
                                     재임 기록
-                                    {Array.isArray(head?.achievements) &&
-                                    head.achievements.length > 0
-                                      ? ` (${head.achievements.length})`
-                                      : ''}
-                                  </span>
-                                  {Array.isArray(head?.achievements) &&
-                                    head.achievements.length > 0 && (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          openMinisterHistoryModal(head)
-                                        }
-                                        style={{
-                                          fontSize: 12,
-                                          fontWeight: 600,
-                                          color: C.chipActionColor,
-                                          background: 'transparent',
-                                          border: 'none',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: 4,
-                                          padding: '4px 8px',
-                                          borderRadius: 6,
-                                        }}
-                                      >
-                                        <FiPlus size={12} />
-                                        추가
-                                      </button>
-                                    )}
-                                </div>
+                                  </CabS.CabDetailMinistersSectionTitle>
+                                  <CabS.CabResultCount style={{ marginLeft: 4 }}>
+                                    {Array.isArray(head?.achievements)
+                                      ? `${head.achievements.length}건`
+                                      : '0건'}
+                                  </CabS.CabResultCount>
+                                  <div style={{ flex: 1 }} />
+                                  <SubsectionAddBtn
+                                    type="button"
+                                    onClick={() =>
+                                      openMinisterHistoryModal(head)
+                                    }
+                                  >
+                                    <FiPlus size={14} strokeWidth={2.25} />
+                                    기록 추가
+                                  </SubsectionAddBtn>
+                                </CabS.CabDetailMinistersSectionHeader>
                                 {Array.isArray(head?.achievements) &&
                                 head.achievements.length > 0 ? (
                                   <TenureHistoryHorizTimeline
@@ -4406,7 +4325,7 @@ export function CabinetsSection({
                                     }
                                   />
                                 ) : (
-                                  <CabS.CabDetailEmptyStack $padding="28px 0 32px">
+                                  <CabS.CabDetailEmptyStack $padding="24px 0 28px">
                                     <CabS.CabDetailPartyEmptyIconWrap
                                       aria-hidden
                                     >
@@ -4416,34 +4335,9 @@ export function CabinetsSection({
                                         style={{ color: C.placeholderText }}
                                       />
                                     </CabS.CabDetailPartyEmptyIconWrap>
-                                    <CabS.CabDetailEmptyText
-                                      $fontSize="12px"
-                                      $muted
-                                    >
+                                    <CabS.CabDetailEmptyText>
                                       등록된 재임 기록이 없습니다.
                                     </CabS.CabDetailEmptyText>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        openMinisterHistoryModal(head)
-                                      }
-                                      style={{
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        color: C.chipActionColor,
-                                        background: C.chipActionBg,
-                                        border: `1px solid ${C.chipActionBorder}`,
-                                        borderRadius: 8,
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        padding: '6px 14px',
-                                      }}
-                                    >
-                                      <FiPlus size={12} />
-                                      등록
-                                    </button>
                                   </CabS.CabDetailEmptyStack>
                                 )}
                               </>
@@ -4465,7 +4359,7 @@ export function CabinetsSection({
                                     각료
                                   </CabS.CabDetailMinistersSectionTitle>
                                   <CabS.CabResultCount
-                                    style={{ marginLeft: 6 }}
+                                    style={{ marginLeft: 4 }}
                                   >
                                     {loadingCabinetMinisters
                                       ? '…'
@@ -4504,18 +4398,17 @@ export function CabinetsSection({
                                       )}
                                     </CabS.CabSearchWrap>
                                   )}
-                                  {!loadingCabinetMinisters &&
-                                    sortedVisibleMinisters.length > 0 && (
-                                      <SubsectionAddBtn
-                                        type="button"
-                                        onClick={() =>
-                                          handleAddMinister(selectedCabinet)
-                                        }
-                                      >
-                                        <FiPlus size={14} strokeWidth={2.25} />
-                                        각료 추가
-                                      </SubsectionAddBtn>
-                                    )}
+                                  {!loadingCabinetMinisters && (
+                                    <SubsectionAddBtn
+                                      type="button"
+                                      onClick={() =>
+                                        handleAddMinister(selectedCabinet)
+                                      }
+                                    >
+                                      <FiPlus size={14} strokeWidth={2.25} />
+                                      각료 추가
+                                    </SubsectionAddBtn>
+                                  )}
                                 </CabS.CabDetailMinistersSectionHeader>
 
                                 {loadingCabinetMinisters ? (
@@ -4527,7 +4420,7 @@ export function CabinetsSection({
                                   </CabS.CabMinistersLoadingBox>
                                 ) : sortedVisibleMinisters.length === 0 ? (
                                   ministerSearchQuery.trim() ? (
-                                    <CabS.CabDetailEmptyStack $padding="28px 0 32px">
+                                    <CabS.CabDetailEmptyStack $padding="24px 0 28px">
                                       <CabS.CabDetailPartyEmptyIconWrap
                                         aria-hidden
                                       >
@@ -4542,12 +4435,12 @@ export function CabinetsSection({
                                       </CabS.CabDetailEmptyText>
                                     </CabS.CabDetailEmptyStack>
                                   ) : (
-                                    <CabS.CabDetailEmptyStack $padding="36px 0 40px">
+                                    <CabS.CabDetailEmptyStack $padding="24px 0 28px">
                                       <CabS.CabDetailPartyEmptyIconWrap
                                         aria-hidden
                                       >
                                         <FiUsers
-                                          size={28}
+                                          size={26}
                                           strokeWidth={1.5}
                                           style={{ color: C.placeholderText }}
                                         />
@@ -4555,15 +4448,6 @@ export function CabinetsSection({
                                       <CabS.CabDetailEmptyText>
                                         등록된 각료가 없습니다.
                                       </CabS.CabDetailEmptyText>
-                                      <SubsectionAddBtn
-                                        type="button"
-                                        onClick={() =>
-                                          handleAddMinister(selectedCabinet)
-                                        }
-                                      >
-                                        <FiPlus size={14} strokeWidth={2.25} />
-                                        각료 추가
-                                      </SubsectionAddBtn>
                                     </CabS.CabDetailEmptyStack>
                                   )
                                 ) : (
@@ -4592,7 +4476,7 @@ export function CabinetsSection({
                                     체결 조약
                                   </CabS.CabDetailMinistersSectionTitle>
                                   <CabS.CabResultCount
-                                    style={{ marginLeft: 6 }}
+                                    style={{ marginLeft: 4 }}
                                   >
                                     {cabinetTreaties.length}건
                                   </CabS.CabResultCount>
@@ -4607,16 +4491,19 @@ export function CabinetsSection({
                                 </CabS.CabDetailMinistersSectionHeader>
 
                                 {loadingCabinetTreaties ? (
-                                  <CabS.EmptyStateBox>
-                                    불러오는 중…
-                                  </CabS.EmptyStateBox>
+                                  <CabS.CabMinistersLoadingBox
+                                    aria-busy="true"
+                                    aria-live="polite"
+                                  >
+                                    조약 불러오는 중…
+                                  </CabS.CabMinistersLoadingBox>
                                 ) : cabinetTreaties.length === 0 ? (
-                                  <CabS.CabDetailEmptyStack $padding="36px 0 40px">
+                                  <CabS.CabDetailEmptyStack $padding="24px 0 28px">
                                     <CabS.CabDetailPartyEmptyIconWrap
                                       aria-hidden
                                     >
                                       <FiFileText
-                                        size={28}
+                                        size={26}
                                         strokeWidth={1.5}
                                         style={{ color: C.placeholderText }}
                                       />
@@ -4624,15 +4511,6 @@ export function CabinetsSection({
                                     <CabS.CabDetailEmptyText>
                                       연결된 조약이 없습니다.
                                     </CabS.CabDetailEmptyText>
-                                    <SubsectionAddBtn
-                                      type="button"
-                                      onClick={() =>
-                                        setShowTreatyLinkModal(true)
-                                      }
-                                    >
-                                      <FiLink size={14} strokeWidth={2.25} />
-                                      조약 연결
-                                    </SubsectionAddBtn>
                                   </CabS.CabDetailEmptyStack>
                                 ) : (
                                   <CabS.CabDetailTreatyList>
@@ -5454,25 +5332,39 @@ export function CabinetsSection({
                 <FieldRow>
                   <FieldLabel>퇴임 사유 상세</FieldLabel>
                   <FieldControl>
-                    <CabS.EditingTextarea
-                      placeholder="퇴임 배경, 상세 사유 등을 자유롭게 기술하세요."
-                      value={editingEndReasonDetail}
-                      onChange={(e) =>
-                        setEditingEndReasonDetail(e.target.value)
-                      }
-                      rows={4}
-                    />
+                    <CabS.HeadTenureInfoEditorWrap>
+                      <RichTextEditor
+                        value={editingEndReasonDetail}
+                        onChange={setEditingEndReasonDetail}
+                        showTitle={false}
+                        placeholder="퇴임 배경, 상세 사유 등을 자유롭게 기술하세요."
+                        onImageUpload={async (file) => {
+                          const result = await uploadImage(file, 'persons')
+                          return (
+                            getUploadImageUrl(result.url) || (result.url ?? '')
+                          )
+                        }}
+                      />
+                    </CabS.HeadTenureInfoEditorWrap>
                   </FieldControl>
                 </FieldRow>
                 <FieldRow>
                   <FieldLabel>취임 배경 / 비고</FieldLabel>
                   <FieldControl>
-                    <CabS.EditingTextarea
-                      placeholder="취임 배경, 임명 경위 등 특이사항을 기술하세요."
-                      value={editingNotes}
-                      onChange={(e) => setEditingNotes(e.target.value)}
-                      rows={3}
-                    />
+                    <CabS.HeadTenureInfoEditorWrap>
+                      <RichTextEditor
+                        value={editingNotes}
+                        onChange={setEditingNotes}
+                        showTitle={false}
+                        placeholder="취임 배경, 임명 경위 등 특이사항을 기술하세요."
+                        onImageUpload={async (file) => {
+                          const result = await uploadImage(file, 'persons')
+                          return (
+                            getUploadImageUrl(result.url) || (result.url ?? '')
+                          )
+                        }}
+                      />
+                    </CabS.HeadTenureInfoEditorWrap>
                   </FieldControl>
                 </FieldRow>
               </FormRows>
@@ -5532,7 +5424,12 @@ export function CabinetsSection({
           >
             <CabS.MinisterSelectModalBox onClick={(e) => e.stopPropagation()}>
               <ModalHeader>
-                <ModalTitle id="minister-select-title">각료 등록</ModalTitle>
+                <ModalTitle id="minister-select-title">
+                  {(addMinisterCabinet as { _editingTenureId?: string } | null)
+                    ?._editingTenureId
+                    ? '각료 수정'
+                    : '각료 등록'}
+                </ModalTitle>
                 <ModalCloseButton
                   type="button"
                   onClick={handleCloseMinisterModal}
@@ -5616,22 +5513,13 @@ export function CabinetsSection({
                   <FieldRow>
                     <FieldLabel>부처 · 행정기구 (선택)</FieldLabel>
                     <FieldControl>
-                      <select
+                      <CabS.CabinetSelectNative
                         value={ministerFormDeptId ?? ''}
                         onChange={(e) => {
                           const v = e.target.value
                           setMinisterFormDeptId(v === '' ? null : v)
                           setMinisterFormPositionDefId(null)
                           setMinisterFormTitle('')
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '10px 12px',
-                          fontSize: 14,
-                          border: `1px solid ${C.borderMid}`,
-                          borderRadius: 10,
-                          background: C.inputBg,
-                          color: C.text,
                         }}
                       >
                         <option value="">전체 (부처 미지정)</option>
@@ -5640,7 +5528,7 @@ export function CabinetsSection({
                             {dept.name}
                           </option>
                         ))}
-                      </select>
+                      </CabS.CabinetSelectNative>
                       <p
                         style={{
                           margin: '6px 0 0',
@@ -5657,7 +5545,7 @@ export function CabinetsSection({
                       직위 <Required aria-label="필수" />
                     </FieldLabel>
                     <FieldControl>
-                      <select
+                      <CabS.CabinetSelectNative
                         value={ministerFormPositionDefId ?? ''}
                         onChange={(e) => {
                           const v = e.target.value
@@ -5671,15 +5559,6 @@ export function CabinetsSection({
                             if (d) setMinisterFormTitle('')
                           }
                         }}
-                        style={{
-                          width: '100%',
-                          padding: '10px 12px',
-                          fontSize: 14,
-                          border: `1px solid ${C.borderMid}`,
-                          borderRadius: 10,
-                          background: C.inputBg,
-                          color: C.text,
-                        }}
                       >
                         <option value="">직위 선택</option>
                         {filteredMinisterPositionOptions.map((d: any) => (
@@ -5688,7 +5567,7 @@ export function CabinetsSection({
                           </option>
                         ))}
                         <option value="__OTHER__">기타 (직접 입력)</option>
-                      </select>
+                      </CabS.CabinetSelectNative>
                       {ministerFormPositionDefId === '__OTHER__' && (
                         <RegisterInput
                           type="text"
@@ -5759,7 +5638,15 @@ export function CabinetsSection({
                     }
                     onClick={handleSubmitMinister}
                   >
-                    {ministerFormSubmitting ? '처리 중…' : '각료 등록'}
+                    {ministerFormSubmitting
+                      ? '처리 중…'
+                      : (
+                            addMinisterCabinet as {
+                              _editingTenureId?: string
+                            } | null
+                          )?._editingTenureId
+                        ? '저장'
+                        : '각료 등록'}
                   </SubmitButton>
                 </CabS.MinisterSelectActions>
               </CabS.MinisterSelectModalBody>

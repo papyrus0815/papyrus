@@ -35,8 +35,8 @@ export const pathKeys = {
     const qs = new URLSearchParams()
     if (params?.type) qs.set('type', params.type)
     if (params?.countryId) qs.set('countryId', params.countryId)
-    const s = qs.toString()
-    return `/${ROUTES.PERSON_GROUPS}/${s ? `?${s}` : ''}`
+    const queryString = qs.toString()
+    return `/${ROUTES.PERSON_GROUPS}/${queryString ? `?${queryString}` : ''}`
   },
   /** 인물 묶음 상세 */
   personGroupDetail: (groupId: string) =>
@@ -94,6 +94,20 @@ export const pathKeys = {
   /** 국가 상세 내 조약 탭 고유 URL */
   countryTreaty: (countryId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/treaty`,
+  /** 국가 상세 내 교역 탭 고유 URL */
+  countryTrade: (countryId: string) =>
+    `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/trade`,
+  /** 국가 상세 내 기업 탭 고유 URL */
+  countryCompanies: (countryId: string) =>
+    `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/companies`,
+  /** 국가 상세 내 경제·통계 탭 고유 URL */
+  countryStatistics: (
+    countryId: string,
+    sub?: 'indicators' | 'pyramid' | 'bonds' | 'records',
+  ) => {
+    const base = `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/statistics`
+    return sub ? `${base}?sub=${sub}` : base
+  },
   /** 선거·투표 탭 내 정당 상세 (목록에서 정당 행 클릭) */
   countryElectionPartyDetail: (countryId: string, partyId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/elections/party/${encodeURIComponent(partyId)}`,

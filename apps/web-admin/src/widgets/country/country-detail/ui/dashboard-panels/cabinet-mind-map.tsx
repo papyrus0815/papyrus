@@ -7,6 +7,13 @@ import type { CabinetMember } from './cabinet-member.types'
 export interface CabinetMindMapProps {
   /** 가운데 노드가 될 수반. 없으면 정권 이름만으로 중심을 세운다 */
   head: CabinetMember | null
+  /**
+   * 이원집정부제·의원내각제·입헌군주제 등에서 동시대 대응 수반
+   * (예: 내각 수반이 총리일 때 당시 군주·대통령, 또는 대통령 행정부일 때 당시 총리)
+   */
+  counterpartHead?: CabinetMember | null
+  /** 해당 정권 시기의 정체(정부형태) 라벨 (예: 대통령제, 의원내각제, 입헌군주제) */
+  regimeLabel?: string | null
   /** 가지가 될 각료들 */
   members: CabinetMember[]
   /** 정권 이름 (예: 트럼프 2기 행정부) */
@@ -105,6 +112,8 @@ const groupHeightOf = (count: number) =>
  */
 export function CabinetMindMap({
   head,
+  counterpartHead,
+  regimeLabel,
   members,
   cabinetLabel,
   polityLabel,
@@ -184,12 +193,46 @@ export function CabinetMindMap({
                 {head.title}
                 {!head.endDate && <CenterNow>현직</CenterNow>}
                 {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
+                {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
               </CenterRole>
               <CenterName $branches={hasBranches}>{head.name}</CenterName>
               {cabinetLabel && (
                 <CenterCabinet $branches={hasBranches}>
                   {cabinetLabel}
                 </CenterCabinet>
+              )}
+              {counterpartHead && (
+                <CenterCounterpart
+                  $branches={hasBranches}
+                  role="link"
+                  tabIndex={0}
+                  onClick={(event) => {
+                    if (counterpartHead.personId) {
+                      event.stopPropagation()
+                      onSelectPerson(counterpartHead.personId)
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      (event.key === 'Enter' || event.key === ' ') &&
+                      counterpartHead.personId
+                    ) {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      onSelectPerson(counterpartHead.personId)
+                    }
+                  }}
+                  title={`${counterpartHead.title} ${counterpartHead.name} 인물 보기`}
+                >
+                  <CenterCounterpartRole>
+                    {counterpartHead.ordinal != null &&
+                      `제${counterpartHead.ordinal}대 `}
+                    {counterpartHead.title}
+                  </CenterCounterpartRole>
+                  <CenterCounterpartName>
+                    {counterpartHead.name}
+                  </CenterCounterpartName>
+                </CenterCounterpart>
               )}
               {showPosition && nav && nav.total > 1 && (
                 /* 목록을 걷은 대신 위치를 여기 적는다 — 줄기 위에 두면 선을 끊는다 */
@@ -392,7 +435,7 @@ function BranchNode({
 
 /* ─── 스타일 ──────────────────────────────────────────────────────────── */
 
-const CENTER_ACCENT = '#be123c'
+const CENTER_ACCENT = '#6366f1'
 
 const lineColor = css`
   ${({ theme }) =>
@@ -489,7 +532,7 @@ const NavButton = styled.button<{ $side: 'left' | 'right' }>`
 
   &:hover:not(:disabled) {
     background: ${({ theme }) => theme.colors.hover};
-    border-color: rgba(190, 18, 60, 0.45);
+    border-color: rgba(99, 102, 241, 0.45);
     color: ${CENTER_ACCENT};
   }
   &:focus-visible {
@@ -665,7 +708,7 @@ const CenterCard = styled.button<{ $branches?: boolean }>`
 
   &:hover {
     transform: translateY(-2px);
-    border-color: rgba(190, 18, 60, 0.45);
+    border-color: rgba(99, 102, 241, 0.45);
   }
   &:focus-visible {
     outline: 2px solid ${CENTER_ACCENT};
@@ -683,7 +726,7 @@ const CenterFace = styled.span<{ $branches?: boolean }>`
   padding: 4px;
   margin-bottom: 12px;
   border-radius: 999px;
-  border: 2px solid rgba(190, 18, 60, 0.55);
+  border: 2px solid rgba(99, 102, 241, 0.55);
 
   img,
   span {
@@ -743,6 +786,59 @@ const CenterPolity = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+`
+
+const CenterRegime = styled.span`
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : '#eef2ff'};
+`
+
+const CenterCounterpart = styled.span<{ $branches?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.45);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.10)' : '#f1f5f9'};
+  }
+
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+      justify-self: start;
+    `}
+  @container (max-width: 820px) {
+    grid-column: 2;
+    justify-self: start;
+  }
+`
+
+const CenterCounterpartRole = styled.span`
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CenterCounterpartName = styled.span`
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const CenterName = styled.span<{ $branches?: boolean }>`
