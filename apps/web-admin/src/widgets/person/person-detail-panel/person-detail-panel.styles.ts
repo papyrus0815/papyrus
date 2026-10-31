@@ -1105,13 +1105,13 @@ export const FamilyBadge = styled.span`
 export const OverviewSections = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 28px;
   /* 묶음(장) 번호 — OverviewClusterLabel이 01·02…를 매긴다. 조건부 묶음이 빠져도 번호가 이어진다 */
   counter-reset: person-chapter;
 
-  /* 접이식 섹션(분야별 경력·학력·수상…)이 연달아 오면 한 목록처럼 촘촘히 — 비어 접힌 줄마다 ~80px이었다 */
-  & > [data-collapsible] + [data-collapsible] {
-    margin-top: -18px;
+  /* 접힌(닫힌) 접이식 섹션이 연달아 올 때만 간격을 당긴다 — 열린 섹션끼리는 정상 간격(28px) 유지 */
+  & > [data-collapsible][data-open='false'] + [data-collapsible] {
+    margin-top: -14px;
   }
 `
 
@@ -1441,7 +1441,27 @@ export const UnifiedCard = styled.li<{ $kind: 'tenure' | 'reign' }>`
 
   position: relative;
   display: block;
-  padding: 16px 12px;
+  padding: 16px 12px 16px 16px;
+
+  /* 좌측 액센트 스파인 — 재임(인디고) / 재위(틸) 위계를 한눈에 구분하는 3px 세로 인디케이터 */
+  &::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 16px;
+    bottom: 16px;
+    width: 3px;
+    border-radius: 999px;
+    background: var(--entry-accent);
+    opacity: 0.42;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+    z-index: 1;
+  }
+  &:hover::after,
+  &:focus-within::after {
+    opacity: 0.9;
+  }
 
   /* 형제 행 사이 헤어라인 — 카드 박스 대신 리스트 구분선. 첫 행은 무선.
      15행 리스트에서 유일한 랜드마크라 내부 점선 seam(0.09/0.08)보다 진해야 한다. */
@@ -1453,22 +1473,17 @@ export const UnifiedCard = styled.li<{ $kind: 'tenure' | 'reign' }>`
           : 'rgba(15,23,42,0.12)'};
   }
 
-  /* 행 하이라이트 — 지속 서피스가 아니라 hover/focus 시에만 뜨는 라운드 워시.
-     상하 6·좌우 4px 인셋이라 구분선과 겹치지 않고, z-index:0으로 내용 뒤에 깔린다
-     (Linear/Notion 행 패턴). 컨테이너가 아니라 인터랙션 하이라이트. */
+  /* 포커스·하이라이트 링 — 배경 워시 없이 윤곽 링만 표시 (no-box 원칙) */
   &::before {
     content: '';
     position: absolute;
     inset: 6px 4px;
     border-radius: 10px;
-    background: var(--entry-wash);
+    background: transparent;
     opacity: 0;
     transition: opacity 0.15s ease;
     pointer-events: none;
     z-index: 0;
-  }
-  &:hover::before {
-    opacity: 1;
   }
   &:focus-within::before,
   &[data-highlighted='true']::before {
@@ -1503,7 +1518,7 @@ export const UnifiedEyebrow = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-right: 32px; /* absolute 수정 버튼 자리 */
+  padding-right: 60px; /* absolute 수정·삭제 버튼 자리 */
   margin-bottom: 4px;
   font-size: 11px;
   font-weight: 700;
@@ -1512,10 +1527,6 @@ export const UnifiedEyebrow = styled.div`
   color: var(--entry-accent);
   svg {
     flex-shrink: 0;
-    box-sizing: content-box;
-    padding: 3px;
-    border-radius: 6px;
-    background: var(--entry-soft);
     color: var(--entry-accent);
   }
 `
@@ -1537,6 +1548,24 @@ export const UnifiedCardTitle = styled.h4`
   @media (max-width: 560px) {
     font-size: 16px;
   }
+`
+
+export const UnifiedCardSubtitle = styled.span`
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const UnifiedHiddenStamp = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /** $period — 기간. 이 리스트에서 가장 먼저 찾는 값이라 팩트라인 선두에서 한 단계 크게.
@@ -1566,11 +1595,17 @@ export const UnifiedFact = styled.span<{ $accent?: boolean; $period?: boolean }>
 /** 팩트 값 앞의 마이크로 라벨 — 현재 소비처는 '기간' 하나.
     나머지 팩트는 값 자체가 자기서술적('32세에 취임')이라 라벨을 달지 않는다. */
 export const UnifiedFactKey = styled.span`
+  display: inline-flex;
+  align-items: center;
   margin-right: 6px;
+  padding: 0;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  letter-spacing: 0.03em;
+  line-height: 1.35;
+  vertical-align: baseline;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /**
@@ -1634,10 +1669,16 @@ export const UnifiedReappointBadge = styled.span`
  */
 export const UnifiedDetailGrid = styled.dl`
   display: grid;
-  grid-template-columns: minmax(32px, max-content) 1fr;
-  column-gap: 10px;
-  row-gap: 10px;
-  margin: 24px 0 0;
+  grid-template-columns: minmax(36px, max-content) 1fr;
+  column-gap: 12px;
+  row-gap: 8px;
+  margin: 14px 0 0;
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(15, 23, 42, 0.1)'};
 `
 
 export const UnifiedDetailLabel = styled.dt`
@@ -1730,31 +1771,33 @@ export const UnifiedDetailTag = styled.dd`
     theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
 `
 
-export const UnifiedEditBtn = styled.button`
+export const UnifiedCardActions = styled.div`
   position: absolute;
   top: 12px;
-  right: 12px;
-  z-index: 2; /* ::before 워시(z-index:0) 위에서 클릭 가능하게 */
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+`
+
+export const UnifiedEditBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  /* 상시 반투명 — hover-reveal은 터치에서 발견성 0이고, opacity 0.55×tertiary는
-     실효 대비 1.6:1로 WCAG 1.4.11(비텍스트 3:1) 미달이었다. */
   opacity: 0.75;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transition: opacity 0.15s, color 0.15s;
   ${UnifiedCard}:hover & {
     opacity: 1;
   }
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)'};
     color: ${({ theme }) =>
       theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
   }
@@ -1765,6 +1808,15 @@ export const UnifiedEditBtn = styled.button`
   }
   @media (hover: none) {
     opacity: 0.9;
+  }
+`
+
+export const UnifiedDeleteBtn = styled(UnifiedEditBtn)`
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.error};
   }
 `
 
@@ -2416,39 +2468,173 @@ export const SpouseDetailNote = styled.p`
   max-width: 68ch;
 `
 
+/** 이력·활동 상단 구성 요약 · 빠른 점프 바 */
+export const CareerSummaryStrip = styled.nav`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 0 0 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.08)'};
+`
+
+export const CareerSummaryLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 2px;
+`
+
+export const CareerSummaryChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+`
+
+export const CareerSummaryChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease,
+    background 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.14)'
+        : 'rgba(15, 23, 42, 0.14)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : 'rgba(15, 23, 42, 0.03)'};
+  }
+`
+
+export const CareerSummaryDot = styled.span<{ $color: string }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+export const CareerSummaryCount = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 export const SimpleEntryList = styled.ul`
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 `
 
+/**
+ * 2단 에디토리얼 도시에(Dossier) 행:
+ * - 좌측 열(156px): 기간·연도 타임라인 스파인 (tabular-nums)
+ * - 우측 열(1fr): 기관·학교·상훈명 + 직책/학위/분류 배지 + 세부 메타 + 설명
+ * - 좁은 화면(≤560px)에서는 자동으로 1단 스택으로 전환
+ */
 export const SimpleEntryItem = styled.li`
   position: relative;
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  gap: 4px 18px;
+  align-items: baseline;
+  padding: 12px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  transition: background 0.14s ease;
+
+  & + & {
+    border-top: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.07)'
+          : 'rgba(15, 23, 42, 0.075)'};
+    border-radius: 0;
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.025)'
+        : 'rgba(15, 23, 42, 0.02)'};
+  }
+
+  &:hover button[data-role='entry-delete'],
+  &:hover button[data-role='entry-edit'],
+  &:focus-within button[data-role='entry-delete'],
+  &:focus-within button[data-role='entry-edit'] {
+    opacity: 1;
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+    gap: 3px;
+    padding: 11px 8px;
+  }
+`
+
+export const SimpleEntryDateCol = styled.div<{
+  $ongoing?: boolean
+  $muted?: boolean
+}>`
+  font-size: 12.5px;
+  font-weight: ${({ $ongoing, $muted }) =>
+    $ongoing ? 700 : $muted ? 500 : 600};
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+  word-break: keep-all;
+  color: ${({ theme, $ongoing, $muted }) =>
+    $ongoing
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4338ca'
+      : $muted
+        ? theme.colors.text.tertiary
+        : theme.colors.text.secondary};
+`
+
+export const SimpleEntryMainCol = styled.div`
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#e2e8f0'};
-
-  &:hover button[data-role='entry-delete'],
-  &:hover button[data-role='entry-edit'] {
-    opacity: 1;
-  }
+  min-width: 0;
 `
 
 /** 학력·경력·수상 항목 우상단 인라인 수정 버튼 (호버 시 또렷해짐) */
 export const SimpleEntryEditBtn = styled.button`
   position: absolute;
-  top: 6px;
+  top: 10px;
   right: 32px;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2456,19 +2642,19 @@ export const SimpleEntryEditBtn = styled.button`
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  opacity: 0.4;
+  opacity: 0.35;
   transition: opacity 0.15s, background 0.15s, color 0.15s;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.16)'
-        : 'rgba(99, 102, 241, 0.1)'};
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.06)'};
   }
 
   &:focus-visible {
@@ -2486,8 +2672,9 @@ export const SimpleEntryEditBtn = styled.button`
 /** 학력·경력·수상 항목 우상단 인라인 삭제 버튼 (호버 시 또렷해짐) */
 export const SimpleEntryDeleteBtn = styled.button`
   position: absolute;
-  top: 6px;
+  top: 10px;
   right: 6px;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2495,11 +2682,11 @@ export const SimpleEntryDeleteBtn = styled.button`
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  opacity: 0.4;
+  opacity: 0.35;
   transition: opacity 0.15s, background 0.15s, color 0.15s;
 
   &:hover {
@@ -2525,14 +2712,16 @@ export const SimpleEntryDeleteBtn = styled.button`
 export const SimpleEntryHeader = styled.div`
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 6px 8px;
   padding-right: 56px;
 `
 
 export const SimpleEntryTitle = styled.span`
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -2542,26 +2731,76 @@ export const SimpleEntrySub = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-export const SimpleEntryRole = styled.span`
-  font-size: 12px;
+export const SimpleEntryRole = styled.span<{
+  $tone?: 'neutral' | 'accent' | 'amber' | 'teal'
+}>`
+  font-size: 11.5px;
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.08)'};
-  color: #6366f1;
+  padding: 2px 7px;
+  border-radius: 5px;
+  line-height: 1.3;
+  ${({ theme, $tone = 'neutral' }) => {
+    if ($tone === 'amber') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(245, 158, 11, 0.15)'
+          : 'rgba(245, 158, 11, 0.1)'};
+        color: ${theme.mode === 'dark' ? '#fcd34d' : '#b45309'};
+        border: 1px solid
+          ${theme.mode === 'dark'
+            ? 'rgba(245, 158, 11, 0.28)'
+            : 'rgba(245, 158, 11, 0.22)'};
+      `
+    }
+    if ($tone === 'teal') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(20, 184, 166, 0.15)'
+          : 'rgba(13, 148, 136, 0.09)'};
+        color: ${theme.mode === 'dark' ? '#5eead4' : '#0f766e'};
+        border: 1px solid
+          ${theme.mode === 'dark'
+            ? 'rgba(20, 184, 166, 0.28)'
+            : 'rgba(13, 148, 136, 0.2)'};
+      `
+    }
+    if ($tone === 'accent') {
+      return css`
+        background: ${theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.16)'
+          : 'rgba(99, 102, 241, 0.08)'};
+        color: ${theme.mode === 'dark' ? '#c7d2fe' : '#4338ca'};
+        border: 1px solid
+          ${theme.mode === 'dark'
+            ? 'rgba(99, 102, 241, 0.28)'
+            : 'rgba(99, 102, 241, 0.18)'};
+      `
+    }
+    return css`
+      background: ${theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.05)'};
+      color: ${theme.colors.text.secondary};
+      border: 1px solid
+        ${theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.08)'
+          : 'rgba(15, 23, 42, 0.07)'};
+    `
+  }}
 `
 
-export const SimpleEntryPeriod = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  letter-spacing: 0.01em;
+export const SimpleEntryPeriod = styled.div`
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.45;
 `
 
 export const SimpleEntryDescription = styled.p`
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  line-height: 1.6;
+  margin: 2px 0 0;
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.65;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: pre-wrap;
 `
@@ -2569,22 +2808,107 @@ export const SimpleEntryDescription = styled.p`
 export const ActivityGroupList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 `
 
 export const ActivityGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 `
 
 export const ActivityGroupTitle = styled.h4`
-  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 4px 0 2px;
+  padding: 2px 0 2px 9px;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border-left: 2.5px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
+`
+
+export const ActivityGroupCount = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 사건 상세 FillInStrip과 동일한 '더 채울 수 있는 이력' 하단 점선 칩 스트립 */
+export const CareerFillInStrip = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.08)'};
+
+  &:first-child {
+    padding-top: 4px;
+    border-top: none;
+  }
+`
+
+export const CareerFillInTitle = styled.h3`
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const CareerFillInChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+export const CareerFillInChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.16)'
+        : 'rgba(15, 23, 42, 0.16)'};
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : 'rgba(15, 23, 42, 0.03)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
 `
 
 export const CountryAffiliationList = styled.div`
@@ -3500,11 +3824,8 @@ export const AchievementCount = styled.span`
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  min-width: 17px;
-  text-align: center;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--ach-soft);
+  padding: 0 2px;
+  background: transparent;
   color: var(--ach-text);
 `
 
@@ -3522,13 +3843,11 @@ export const AchievementAddBtn = styled.button`
   border: 1px dashed
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(15, 23, 42, 0.16)'};
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  transition: color 0.14s ease, border-color 0.14s ease;
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.28)' : 'rgba(15, 23, 42, 0.28)'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.03)'};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.button.primary};
@@ -3551,25 +3870,18 @@ export const AchievementNode = styled.li`
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: flex-start;
-  padding: 7px 8px 7px 16px;
-  border-radius: 8px;
-  transition: background 0.15s;
+  padding: 6px 4px 6px 16px;
 
   /* 작은 불릿 (연결선 없음) */
   &::before {
     content: '';
     position: absolute;
     left: 3px;
-    top: 13px;
+    top: 12px;
     width: 5px;
     height: 5px;
     border-radius: 50%;
     background: var(--ach-base);
-  }
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
   }
 `
 
@@ -3595,7 +3907,7 @@ export const AchievementRowMeta = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   font-variant-numeric: tabular-nums;
 `
 
@@ -3603,11 +3915,10 @@ export const AchievementDateChip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 1.5px 8px;
-  border-radius: 999px;
-  background: var(--ach-soft);
+  padding: 0;
+  background: transparent;
   color: var(--ach-text);
   svg {
     opacity: 0.8;
@@ -3618,15 +3929,13 @@ export const AchievementEventBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  max-width: 180px;
+  max-width: 220px;
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 1.5px 8px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(20,184,166,0.16)' : 'rgba(20,184,166,0.1)'};
+  padding: 0;
+  border: none;
+  background: transparent;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
   span {
     overflow: hidden;
@@ -3636,16 +3945,16 @@ export const AchievementEventBadge = styled.span`
 
   &:is(button) {
     cursor: pointer;
-    transition: background 0.14s ease, border-color 0.14s ease;
+    transition: color 0.14s ease;
     &:hover {
-      background: ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(20,184,166,0.26)' : 'rgba(20,184,166,0.18)'};
-      border-color: ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(94,234,212,0.4)' : 'rgba(13,148,136,0.3)'};
+      color: ${({ theme }) => (theme.mode === 'dark' ? '#99f6e4' : '#0d9488')};
+      text-decoration: underline;
+      text-underline-offset: 3px;
     }
     &:focus-visible {
       outline: 2px solid #14b8a6;
       outline-offset: 1px;
+      border-radius: 3px;
     }
   }
 `
@@ -3654,12 +3963,10 @@ export const AchievementHiddenBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 1.5px 8px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+  padding: 0;
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -3734,8 +4041,7 @@ export const AchievementInput = styled.input`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(0,0,0,0.2)' : '#ffffff'};
+  background: transparent;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -3766,8 +4072,7 @@ export const AchievementTextarea = styled.textarea`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(0,0,0,0.2)' : '#ffffff'};
+  background: transparent;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -3806,8 +4111,7 @@ export const AchievementDateField = styled.label`
     border: 1px solid
       ${({ theme }) =>
         theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(0,0,0,0.2)' : '#ffffff'};
+    background: transparent;
     color: ${({ theme }) =>
       theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
     color-scheme: ${({ theme }) => (theme.mode === 'dark' ? 'dark' : 'light')};
@@ -3877,12 +4181,12 @@ export const AchievementLinkedChip = styled.span`
   align-items: center;
   gap: 5px;
   max-width: 240px;
-  padding: 3px 6px 3px 10px;
+  padding: 2px 6px 2px 9px;
   font-size: 11.5px;
   font-weight: 600;
   border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(20,184,166,0.16)' : 'rgba(20,184,166,0.1)'};
+  border: 1px solid currentColor;
+  background: transparent;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
   span {
     overflow: hidden;

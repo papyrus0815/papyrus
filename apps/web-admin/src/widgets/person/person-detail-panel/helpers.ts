@@ -279,6 +279,8 @@ export interface TenurePeriodInput {
   /** 'year'면 시작을 연 단위로만 표기(월·일 관행 채움값 숨김) */
   startDatePrecision?: string | null
   endDate?: string | null
+  /** 종료일 정밀도 — 'year'면 연도만, 'month'면 연·월만 표시 */
+  endDatePrecision?: string | null
   /** 종료 사유 enum — 있으면 종료일 미상이어도 '미상'(진행 중 아님)으로 확정 */
   endReason?: string | null
   /** 고인 여부 — 종료일·종료사유 없어도 '현재'로 둔갑하지 않게 '미상' */
@@ -329,12 +331,27 @@ export function deriveTenurePeriodLabel(
    * '1885년 1월 – 1888년 1월 1일'처럼 시작보다 끝이 더 정밀한 거짓 표기가 된다 — 사건 목록·
    * 사이드바·사건 상세(formatDateRange)와 같은 판정. 진짜 1월 1일 퇴임은 덜 말할 뿐 틀리진 않는다.
    */
+  const endPrecision = input.endDatePrecision
   const endParts = parseIsoDateParts(input.endDate)
-  const endStr = !input.endDate
-    ? ''
-    : endParts && endParts.month === 1 && endParts.day === 1
-      ? `${endParts.era === 'BC' ? '기원전 ' : ''}${endParts.year}년`
-      : formatIsoDateKo(input.endDate)
+  let endStr: string
+  if (!input.endDate) {
+    endStr = ''
+  } else if (endParts && (endPrecision === 'year' || endPrecision === 'month')) {
+    const bc = endParts.era === 'BC' ? '기원전 ' : ''
+    endStr =
+      endPrecision === 'year'
+        ? `${bc}${endParts.year}년`
+        : `${bc}${endParts.year}년 ${endParts.month}월`
+  } else if (
+    endParts &&
+    !endPrecision &&
+    endParts.month === 1 &&
+    endParts.day === 1
+  ) {
+    endStr = `${endParts.era === 'BC' ? '기원전 ' : ''}${endParts.year}년`
+  } else {
+    endStr = formatIsoDateKo(input.endDate)
+  }
   const endLabel =
     endStr ||
     (input.endReason === 'DEATH_IN_OFFICE' && input.deathDateStr

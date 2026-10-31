@@ -68,7 +68,7 @@ export function SuccessionBox({
         )}
       </Column>
       <Divider aria-hidden />
-      <Column $end>
+      <Column>
         <ColumnHead aria-hidden>{vocabulary.successor} →</ColumnHead>
         {entry.successors.length > 0 ? (
           entry.successors.map((neighbor) => (
@@ -192,37 +192,49 @@ function ChipAvatarOrGlyph({
 }
 
 /* 인셋 박스가 아니라 점선 seam — 항목 행 안의 소섹션(승계)을 AchievementSection과
-   동일한 방언으로 구분한다(컨테이너 중첩 금지). 가운데 Divider는 규칙선이라 유지. */
+   동일한 방언으로 구분한다(컨테이너 배경·보더 중첩 금지). 양쪽 열은 모두 좌측 정렬로 맞춘다. */
 const Box = styled.nav`
   ${({ theme }) => subSectionSeam(theme)}
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: start;
-  gap: 12px;
+  gap: 16px;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 `
 
-const Column = styled.div<{ $end?: boolean }>`
+const Column = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  align-items: ${({ $end }) => ($end ? 'flex-end' : 'flex-start')};
+  align-items: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
 `
 
 const ColumnHead = styled.div`
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Divider = styled.div`
   align-self: stretch;
   width: 1px;
-  ${({ theme }) =>
+  background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'background: #2a2a2a;'
-      : `background: ${theme.colors.border.default};`}
+      ? 'rgba(255, 255, 255, 0.08)'
+      : 'rgba(15, 23, 42, 0.08)'};
+
+  @media (max-width: 520px) {
+    display: none;
+  }
 `
 
 /* 보더·배경을 걷어낸 무박스 칩 — 항목 서피스 → (박스 없음) → 아바타+텍스트 행.
@@ -230,15 +242,15 @@ const Divider = styled.div`
 const chipSurfaceCss = css`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   max-width: 100%;
-  padding: 4px 6px;
+  padding: 4px 7px 4px 4px;
   border-radius: 8px;
   text-align: left;
   border: none;
   background: transparent;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#d1d5db' : theme.colors.text.primary};
+    theme.mode === 'dark' ? '#e2e8f0' : theme.colors.text.primary};
 `
 
 const ChipButton = styled.button`
@@ -247,7 +259,9 @@ const ChipButton = styled.button`
   transition: background 0.15s ease;
   &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : 'rgba(15, 23, 42, 0.04)'};
   }
   &:focus-visible {
     outline: 2px solid #6366f1;
@@ -263,17 +277,32 @@ const ChipStatic = styled.span`
 `
 
 const ChipAvatar = styled.img`
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   object-fit: cover;
   flex: 0 0 auto;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(15, 23, 42, 0.08)'};
 `
 
 const ChipGlyph = styled.span<{ $category: PositionCategory }>`
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   font-size: 12px;
   line-height: 1;
+  background: ${({ theme, $category }) =>
+    theme.mode === 'dark'
+      ? CATEGORY_TOKENS[$category].chip.dark.bg
+      : CATEGORY_TOKENS[$category].chip.light.bg};
   color: ${({ theme, $category }) =>
     theme.mode === 'dark'
       ? CATEGORY_TOKENS[$category].chip.dark.color

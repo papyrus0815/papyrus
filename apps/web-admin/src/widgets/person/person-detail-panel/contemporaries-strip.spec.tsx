@@ -226,3 +226,39 @@ it('절단 안내: onOpenCompare 있으면 딥링크 버튼, 없으면(모달) �
   fireEvent.click(linkBtn)
   expect(onOpenCompare).toHaveBeenCalled()
 })
+
+it('국가 그룹이 4개를 초과하면 기본 4개국만 표시하고 더 보기 토글로 펼칠 수 있다', async () => {
+  const countries = [
+    { id: 'c1', name: '조선', rulerId: 'r1', label: '세종' },
+    { id: 'c2', name: '명', rulerId: 'r2', label: '영락제' },
+    { id: 'c3', name: '잉글랜드', rulerId: 'r3', label: '헨리 5세' },
+    { id: 'c4', name: '프랑스', rulerId: 'r4', label: '샤를 7세' },
+    { id: 'c5', name: '오스만', rulerId: 'r5', label: '무라드 2세' },
+  ]
+  mockGet.mockResolvedValue(
+    response(
+      countries.map((c) => ({
+        ...ruler({ id: c.rulerId, label: c.label }),
+        records: [
+          {
+            ...ruler({ id: c.rulerId, label: c.label }).records[0]!,
+            historicalCountry: { id: c.id, name: c.name },
+          },
+        ],
+      })),
+    ),
+  )
+
+  renderStrip(
+    <ContemporariesStrip personId="p1" enabled onPersonClick={jest.fn()} />,
+  )
+
+  await screen.findByRole('button', { name: /세종/ })
+  expect(screen.queryByRole('button', { name: /무라드 2세/ })).toBeNull()
+
+  const expandBtn = screen.getByRole('button', { name: /1개국 \(1명\) 더 보기/ })
+  fireEvent.click(expandBtn)
+
+  expect(screen.getByRole('button', { name: /무라드 2세/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /국가 목록 접기/ })).toBeInTheDocument()
+})

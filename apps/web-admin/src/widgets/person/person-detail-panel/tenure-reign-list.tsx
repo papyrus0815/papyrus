@@ -12,7 +12,7 @@
  * 토큰(취임 방식은 88%가 '임명' 상수)이 격자 첫 줄을 차지하면 읽을거리가 뒤로 밀린다.
  * 항목별 카드 박스는 없다 — 형제는 실선 헤어라인, 내부 소섹션은 점선 seam으로 구분.
  */
-import { FiAward, FiBriefcase, FiEdit2, FiShield } from 'react-icons/fi'
+import { FiAward, FiBriefcase, FiEdit2, FiEyeOff, FiShield, FiTrash2 } from 'react-icons/fi'
 
 import { getRecordFamily } from '@/entities/government-position/model/record-family'
 import { VisuallyHidden } from '@/shared/ui/visually-hidden'
@@ -29,9 +29,12 @@ import {
   AccessionEventLink,
   TenureEmpty,
   UnifiedCard,
+  UnifiedCardActions,
   UnifiedCardList,
   UnifiedCardMain,
+  UnifiedCardSubtitle,
   UnifiedCardTitle,
+  UnifiedDeleteBtn,
   UnifiedDetailGrid,
   UnifiedDetailLabel,
   UnifiedDetailTag,
@@ -41,6 +44,7 @@ import {
   UnifiedFact,
   UnifiedFactKey,
   UnifiedFactLine,
+  UnifiedHiddenStamp,
   UnifiedReappointBadge,
 } from './person-detail-panel.styles'
 import { CabinetConnections } from './cabinet-connections'
@@ -75,6 +79,8 @@ interface TenureReignListProps {
   onEventClick?: (eventId: string) => void
   onEditTenure: (id: string) => void
   onEditReign: (id: string) => void
+  onDeleteTenure?: (id: string, label: string) => void
+  onDeleteReign?: (id: string, label: string) => void
   onPlayClick: () => void
   onAchievementChanged: () => void
 }
@@ -96,6 +102,8 @@ export function TenureReignList({
   onEventClick,
   onEditTenure,
   onEditReign,
+  onDeleteTenure,
+  onDeleteReign,
   onPlayClick,
   onAchievementChanged,
 }: TenureReignListProps) {
@@ -151,6 +159,7 @@ export function TenureReignList({
             startDate: record.startDate,
             startDatePrecision: record.startDatePrecision,
             endDate: record.endDate,
+            endDatePrecision: record.endDatePrecision,
             endReason: record.endReason,
             isDeceased,
             deathDateStr,
@@ -201,8 +210,22 @@ export function TenureReignList({
           isReign && record.regnalName
             ? `${record.regnalName} · ${posTitle}`
             : posTitle
+        const baseCatalogTitle =
+          record.positionDefinition?.title &&
+          !record.positionDefinition.isGeneric &&
+          record.title &&
+          record.title !== record.positionDefinition.title
+            ? record.positionDefinition.title
+            : null
+        const orgName =
+          record.positionDefinition?.organization?.name &&
+          record.positionDefinition.organization.name !== countryName
+            ? record.positionDefinition.organization.name
+            : null
+        const electionName = record.electionCandidacy?.election?.name ?? null
         const hasFacts =
           !!countryName ||
+          !!orgName ||
           (isReign && record.dynastyOrdinal != null) ||
           !!rangeLabel ||
           !!durationLabel ||
@@ -226,6 +249,7 @@ export function TenureReignList({
                   <FiBriefcase size={11} />
                 )}
                 <span>{isReign ? '재위' : isNobleTitle ? '작위' : '재임'}</span>
+                {baseCatalogTitle && <span>· {baseCatalogTitle}</span>}
                 {ordinalNum != null && (
                   <span>
                     ·{' '}
@@ -240,8 +264,17 @@ export function TenureReignList({
                 {isReappointment && (
                   <UnifiedReappointBadge>연임</UnifiedReappointBadge>
                 )}
+                {!embedInModal && record.showPositionInfo === false && (
+                  <UnifiedHiddenStamp title="사건 목록(연대표)에서 이 직함이 숨겨져 있습니다">
+                    <FiEyeOff size={10} />
+                    연대표 비표시
+                  </UnifiedHiddenStamp>
+                )}
               </UnifiedEyebrow>
               <UnifiedCardTitle>{mainTitle}</UnifiedCardTitle>
+              {record.titleEn && (
+                <UnifiedCardSubtitle>{record.titleEn}</UnifiedCardSubtitle>
+              )}
               {hasFacts && (
                 <UnifiedFactLine>
                   {/* 기간이 선두 — 이 리스트에서 가장 먼저 찾는 값이다.
@@ -267,6 +300,12 @@ export function TenureReignList({
                       {countryName}
                     </UnifiedFact>
                   )}
+                  {orgName && (
+                    <UnifiedFact>
+                      <VisuallyHidden>소속 기관 </VisuallyHidden>
+                      {orgName}
+                    </UnifiedFact>
+                  )}
                   {isReign && record.dynastyOrdinal != null && (
                     <UnifiedFact>
                       <VisuallyHidden>왕조 서수 </VisuallyHidden>
@@ -289,6 +328,7 @@ export function TenureReignList({
               {(record.appointmentMethod ||
                 record.appointmentDetail ||
                 accessionEvent ||
+                electionName ||
                 endEnumLabel ||
                 record.endReasonDetail ||
                 record.notes) && (
@@ -326,13 +366,21 @@ export function TenureReignList({
                       </UnifiedDetailValue>
                     </>
                   )}
-                  {/* ── 분류 토큰 2행: 2~6자짜리라 서사에 격자를 먼저 내준다 ── */}
+                  {/* ── 분류 토큰 행: 2~6자짜리라 서사에 격자를 먼저 내준다 ── */}
                   {record.appointmentMethod && (
                     <>
                       <UnifiedDetailLabel>{startVerb}</UnifiedDetailLabel>
                       <UnifiedDetailValue $token>
                         {APPOINTMENT_METHOD_LABELS[record.appointmentMethod] ??
                           record.appointmentMethod}
+                      </UnifiedDetailValue>
+                    </>
+                  )}
+                  {electionName && (
+                    <>
+                      <UnifiedDetailLabel>선거</UnifiedDetailLabel>
+                      <UnifiedDetailValue $token>
+                        {electionName}
                       </UnifiedDetailValue>
                     </>
                   )}
@@ -397,19 +445,33 @@ export function TenureReignList({
                 )}
             </UnifiedCardMain>
             {!embedInModal && (
-              <UnifiedEditBtn
-                type="button"
-                data-hover-reveal
-                /* 15행이 전부 '수정'이면 버튼 목록에서 어느 행인지 구분이 안 된다 */
-                aria-label={`${mainTitle} 수정`}
-                onClick={() => {
-                  onPlayClick()
-                  if (isReign) onEditReign(record.id)
-                  else onEditTenure(record.id)
-                }}
-              >
-                <FiEdit2 size={12} />
-              </UnifiedEditBtn>
+              <UnifiedCardActions data-hover-reveal>
+                <UnifiedEditBtn
+                  type="button"
+                  /* 15행이 전부 '수정'이면 버튼 목록에서 어느 행인지 구분이 안 된다 */
+                  aria-label={`${mainTitle} 수정`}
+                  onClick={() => {
+                    onPlayClick()
+                    if (isReign) onEditReign(record.id)
+                    else onEditTenure(record.id)
+                  }}
+                >
+                  <FiEdit2 size={12} />
+                </UnifiedEditBtn>
+                {(isReign ? onDeleteReign : onDeleteTenure) && (
+                  <UnifiedDeleteBtn
+                    type="button"
+                    aria-label={`${mainTitle} 삭제`}
+                    onClick={() => {
+                      onPlayClick()
+                      if (isReign) onDeleteReign?.(record.id, mainTitle)
+                      else onDeleteTenure?.(record.id, mainTitle)
+                    }}
+                  >
+                    <FiTrash2 size={12} />
+                  </UnifiedDeleteBtn>
+                )}
+              </UnifiedCardActions>
             )}
           </UnifiedCard>
         )

@@ -38,6 +38,26 @@ describe('deriveTenurePeriodLabel', () => {
     expect(result.endLabel).toBe('1908년 5월 1일')
   })
 
+  it('종료일 정밀도가 month/year이면 패딩된 01일을 일자로 오표기하지 않는다', () => {
+    const monthEnd = deriveTenurePeriodLabel({
+      startDate: '1907-03-01',
+      startDatePrecision: 'month',
+      endDate: '1908-05-01',
+      endDatePrecision: 'month',
+    })
+    expect(monthEnd.endLabel).toBe('1908년 5월')
+    expect(monthEnd.rangeLabel).toBe('1907년 3월 – 1908년 5월')
+
+    const bcYearEnd = deriveTenurePeriodLabel({
+      startDate: '-0221-01-01',
+      startDatePrecision: 'year',
+      endDate: '-0210-07-01',
+      endDatePrecision: 'year',
+    })
+    expect(bcYearEnd.endLabel).toBe('기원전 210년')
+    expect(bcYearEnd.rangeLabel).toBe('기원전 221년 – 기원전 210년')
+  })
+
   it('연 정밀도 시작 → "N년" + startYearOnly=true(‘경’ 배지 게이트)', () => {
     const result = deriveTenurePeriodLabel({
       startDate: '1643-01-01',

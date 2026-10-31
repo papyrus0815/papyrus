@@ -123,6 +123,7 @@ import {
 
 import {
   ActivityGroup,
+  ActivityGroupCount,
   ActivityGroupList,
   ActivityGroupTitle,
   AvatarButton,
@@ -149,6 +150,16 @@ import {
   BioSectionLabel,
   BioSectionLabelRow,
   BioText,
+  CareerFillInChip,
+  CareerFillInChips,
+  CareerFillInStrip,
+  CareerFillInTitle,
+  CareerSummaryChip,
+  CareerSummaryChips,
+  CareerSummaryCount,
+  CareerSummaryDot,
+  CareerSummaryLabel,
+  CareerSummaryStrip,
   CloseBtn,
   CountMuted,
   CountryAffiliationChip,
@@ -245,12 +256,14 @@ import {
   SectionCardBio,
   SectionLabel,
   SectionLabelRow,
+  SimpleEntryDateCol,
   SimpleEntryDeleteBtn,
   SimpleEntryDescription,
   SimpleEntryEditBtn,
   SimpleEntryHeader,
   SimpleEntryItem,
   SimpleEntryList,
+  SimpleEntryMainCol,
   SimpleEntryPeriod,
   SimpleEntryRole,
   SimpleEntrySub,
@@ -497,9 +510,9 @@ export function PersonDetailPanel({
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deletingPerson, setDeletingPerson] = useState(false)
-  /** 학력·경력·수상 단건 삭제 대상 (null이면 다이얼로그 닫힘) */
+  /** 학력·경력·수상·재임·재위 단건 삭제 대상 (null이면 다이얼로그 닫힘) */
   const [entryDeleteTarget, setEntryDeleteTarget] = useState<{
-    kind: 'education' | 'award' | 'career'
+    kind: 'education' | 'award' | 'career' | 'tenure' | 'reign'
     id: string
     careerKind?: string
     label: string
@@ -706,22 +719,31 @@ export function PersonDetailPanel({
     // 표시용 대수 — 재위·재임 공통 ordinal
     const ordinalOf = (it: { kind: 'tenure' | 'reign'; data: TenureLikeRecord }) =>
       it.data.ordinal ?? null
-    // 같은 종류·같은 대(ordinal)에 2건 이상이면 연임으로 카운트
+    // 같은 종류·같은 국가(정체)·같은 직위·같은 대(ordinal)에 2건 이상이면 연임으로 카운트
+    const termKeyOf = (
+      it: { kind: 'tenure' | 'reign'; data: TenureLikeRecord },
+      ord: number,
+    ) => {
+      const polityKey =
+        it.data.historicalCountry?.id ?? it.data.country?.id ?? ''
+      const posKey = it.data.positionDefinition?.id ?? it.data.title ?? ''
+      return `${it.kind}:${polityKey}:${posKey}:${ord}`
+    }
     const termCounts = new Map<string, number>()
     for (const it of base) {
       const ord = ordinalOf(it)
       if (ord == null) continue
-      const key = `${it.kind}:${ord}`
+      const key = termKeyOf(it, ord)
       termCounts.set(key, (termCounts.get(key) ?? 0) + 1)
     }
     const items: CombinedTenureItem[] = base.map((it) => {
       const ord = ordinalOf(it)
       const sub = it.data.subTermNumber
-      // 연임 신호: 본인 회차(subTermNumber)가 2 이상이거나, 같은 대가 2건 이상.
+      // 연임 신호: 본인 회차(subTermNumber)가 2 이상이거나, 같은 직위·같은 대가 2건 이상.
       // subTermNumber 를 함께 보므로 ordinal 이 없어도 연임을 잡아낸다.
       const isReappointment =
         (sub != null && sub >= 2) ||
-        (ord != null && (termCounts.get(`${it.kind}:${ord}`) ?? 0) >= 2)
+        (ord != null && (termCounts.get(termKeyOf(it, ord)) ?? 0) >= 2)
       return { kind: it.kind, data: it.data, ordinalNum: ord, isReappointment }
     })
     return { items, count: items.length }
@@ -1302,12 +1324,23 @@ export function PersonDetailPanel({
     }
   }, [personId, invalidatePersonCaches, onClose])
 
-  /** 학력·경력·수상 단건 삭제 확정 */
+  /** 학력·경력·수상·재임·재위 단건 삭제 확정 */
   const handleEntryDeleteConfirm = useCallback(async () => {
     if (!entryDeleteTarget) return
     setIsEntryDeleting(true)
     try {
-      if (entryDeleteTarget.kind === 'education') {
+      if (
+        entryDeleteTarget.kind === 'tenure' ||
+        entryDeleteTarget.kind === 'reign'
+      ) {
+        await personCareerApi.deleteGovernmentPositionTenure(
+          entryDeleteTarget.id,
+        )
+        invalidateTenureQueries(queryClient, { personId })
+        void queryClient.invalidateQueries({
+          queryKey: ['person-record-event-suggestions', personId],
+        })
+      } else if (entryDeleteTarget.kind === 'education') {
         await personCareerApi.deleteEducation(entryDeleteTarget.id)
       } else if (entryDeleteTarget.kind === 'award') {
         await personCareerApi.deleteAward(entryDeleteTarget.id)
@@ -1491,7 +1524,10 @@ export function PersonDetailPanel({
   const deathLabel = deathDateStr
     ? `${deathDateStr}${p.isDeathDateApproximate ? '경' : ''}`
     : ''
-  // 생몰 전면 미상 폴백 — 활동시기(floruit)가 있으면 그것으로.
+  const isApproxLifespan = !!(
+    p.isBirthDateApproximate || p.isDeathDateApproximate
+  )
+  // 생몰 전면 미상 폴백 — 활동시기(floruit)가 있으면 그것으로, 없으면 재위·재임 기간으로 폴백.
   const floruitLabel =
     !birthLabel && !deathLabel
       ? formatFloruit(
@@ -2474,147 +2510,180 @@ export function PersonDetailPanel({
                 transition={{ duration: 0.2 }}
               >
                 <OverviewSections>
-                  {/* 1. 재임·재위 통합 */}
-                  <section aria-label="재임·재위">
-                    <OverviewSectionHeaderRow>
-                      <OverviewSectionHeading>
-                        <FiAward size={14} strokeWidth={2.2} />
-                        <span>재임·재위</span>
-                        {combinedTenures.count > 0 && (
+                  {/* 0. 이력·활동 상단 구성 요약 · 빠른 점프 바 (활성 섹션이 2개 이상일 때) */}
+                  {(() => {
+                    const activitiesCount =
+                      (p.books?.length ?? 0) +
+                      (p.foundedCompanies?.length ?? 0) +
+                      (p.organizationRoles?.length ?? 0) +
+                      (p.militaryCommands?.length ?? 0)
+                    const activeCareerSections = [
+                      {
+                        id: 'career-section-tenures',
+                        label: '재임·재위',
+                        count: combinedTenures.count,
+                        color: '#6366f1',
+                      },
+                      {
+                        id: 'career-section-careers',
+                        label: '분야별 경력',
+                        count: p.careers?.length ?? 0,
+                        color: '#3b82f6',
+                      },
+                      {
+                        id: 'career-section-education',
+                        label: '학력',
+                        count: p.educations?.length ?? 0,
+                        color: '#14b8a6',
+                      },
+                      {
+                        id: 'career-section-awards',
+                        label: '수상·훈장',
+                        count: p.awards?.length ?? 0,
+                        color: '#f59e0b',
+                      },
+                      {
+                        id: 'career-section-activities',
+                        label: '활동·이력',
+                        count: activitiesCount,
+                        color: '#8b5cf6',
+                      },
+                      {
+                        id: 'career-section-politics',
+                        label: '정당·선거',
+                        count: politicsCount,
+                        color: '#ec4899',
+                      },
+                    ].filter((s) => s.count > 0)
+                    if (activeCareerSections.length < 2) return null
+                    return (
+                      <CareerSummaryStrip aria-label="이력·활동 구성 요약">
+                        <CareerSummaryLabel>구성 요약</CareerSummaryLabel>
+                        <CareerSummaryChips>
+                          {activeCareerSections.map((sec) => (
+                            <CareerSummaryChip
+                              key={sec.id}
+                              type="button"
+                              onClick={() => {
+                                playClickSound()
+                                const el = document.getElementById(sec.id)
+                                el?.scrollIntoView({
+                                  behavior: 'smooth',
+                                  block: 'start',
+                                })
+                              }}
+                            >
+                              <CareerSummaryDot $color={sec.color} />
+                              <span>{sec.label}</span>
+                              <CareerSummaryCount>{sec.count}</CareerSummaryCount>
+                            </CareerSummaryChip>
+                          ))}
+                        </CareerSummaryChips>
+                      </CareerSummaryStrip>
+                    )
+                  })()}
+
+                  {/* 1. 재임·재위 통합 (데이터 있을 때만 본문에 노출) */}
+                  {combinedTenures.count > 0 && (
+                    <section
+                      id="career-section-tenures"
+                      aria-label="재임·재위"
+                      style={{
+                        scrollMarginTop: 'var(--person-sticky-offset, 24px)',
+                      }}
+                    >
+                      <OverviewSectionHeaderRow
+                        style={{
+                          paddingBottom: 10,
+                          marginBottom: 8,
+                          borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
+                        }}
+                      >
+                        <OverviewSectionHeading>
+                          <FiAward size={14} strokeWidth={2.2} />
+                          <span>재임·재위</span>
                           <CountMuted>{combinedTenures.count}</CountMuted>
+                        </OverviewSectionHeading>
+                        {!embedInModal && (
+                          <UnifiedActionRow>
+                            <TenureAddButton
+                              type="button"
+                              onClick={() => {
+                                playClickSound()
+                                setAddKindChooserOpen(true)
+                              }}
+                            >
+                              <FiPlus size={12} />
+                              재임·재위 추가
+                            </TenureAddButton>
+                          </UnifiedActionRow>
                         )}
-                      </OverviewSectionHeading>
-                      {!embedInModal && (
-                        <UnifiedActionRow>
-                          <TenureAddButton
-                            type="button"
-                            onClick={() => {
-                              playClickSound()
-                              setAddKindChooserOpen(true)
-                            }}
-                          >
-                            <FiPlus size={12} />
-                            재임·재위 추가
-                          </TenureAddButton>
-                        </UnifiedActionRow>
-                      )}
-                    </OverviewSectionHeaderRow>
-                    <TenureReignList
-                      items={combinedTenures.items}
-                      birthYear={person.birthYear}
-                      birthMonth={person.birthMonth}
-                      birthDay={person.birthDay}
-                      birthEra={person.birthEra ?? null}
-                      deathDateStr={deathDateStr}
-                      isDeceased={isDeceased}
-                      embedInModal={embedInModal}
-                      dynastyName={person.dynasty?.name ?? null}
-                      currentPersonId={personId}
-                      onPersonClick={handlePersonClick}
-                      adjacencyByRecordId={adjacencyByRecordId}
-                      achievementSuggestionsByRecordId={
-                        recordEventSuggestionsQuery.data?.byRecordId
-                      }
-                      onEventClick={(eventId) => setViewingEventId(eventId)}
-                      onPlayClick={playClickSound}
-                      onEditTenure={(id) => {
-                        setEditingTenureId(id)
-                        setTenureModalOpen(true)
-                      }}
-                      onEditReign={(id) => {
-                        setEditingReignId(id)
-                        setSovereignReignModalOpen(true)
-                      }}
-                      onAchievementChanged={() => {
-                        invalidateTenureQueries(queryClient, { personId })
-                        void queryClient.invalidateQueries({
-                          queryKey: ['person-record-event-suggestions', personId],
-                        })
-                      }}
-                    />
-                    <ContemporariesStrip
-                      personId={personId}
-                      enabled={contemporaryHeadsTarget != null}
-                      onPersonClick={handlePersonClick}
-                      onOpenCompare={
-                        !embedInModal && contemporaryHeadsTarget
-                          ? () => {
-                              playClickSound()
-                              navigate(
-                                pathKeys.headsOfState(
-                                  contemporaryHeadsTarget.year,
-                                  {
-                                    range: contemporaryHeadsTarget.range,
-                                    pins: contemporaryHeadsTarget.pins,
-                                  },
-                                ),
-                              )
-                            }
-                          : undefined
-                      }
-                    />
-                  </section>
+                      </OverviewSectionHeaderRow>
+                      <TenureReignList
+                        items={combinedTenures.items}
+                        birthYear={person.birthYear}
+                        birthMonth={person.birthMonth}
+                        birthDay={person.birthDay}
+                        birthEra={person.birthEra ?? null}
+                        deathDateStr={deathDateStr}
+                        isDeceased={isDeceased}
+                        embedInModal={embedInModal}
+                        dynastyName={person.dynasty?.name ?? null}
+                        currentPersonId={personId}
+                        onPersonClick={handlePersonClick}
+                        adjacencyByRecordId={adjacencyByRecordId}
+                        achievementSuggestionsByRecordId={
+                          recordEventSuggestionsQuery.data?.byRecordId
+                        }
+                        onEventClick={(eventId) => setViewingEventId(eventId)}
+                        onPlayClick={playClickSound}
+                        onEditTenure={(id) => {
+                          setEditingTenureId(id)
+                          setTenureModalOpen(true)
+                        }}
+                        onEditReign={(id) => {
+                          setEditingReignId(id)
+                          setSovereignReignModalOpen(true)
+                        }}
+                        onDeleteTenure={(id, label) => {
+                          setEntryDeleteTarget({ kind: 'tenure', id, label })
+                        }}
+                        onDeleteReign={(id, label) => {
+                          setEntryDeleteTarget({ kind: 'reign', id, label })
+                        }}
+                        onAchievementChanged={() => {
+                          invalidateTenureQueries(queryClient, { personId })
+                          void queryClient.invalidateQueries({
+                            queryKey: ['person-record-event-suggestions', personId],
+                          })
+                        }}
+                      />
+                      <ContemporariesStrip
+                        personId={personId}
+                        enabled={contemporaryHeadsTarget != null}
+                        onPersonClick={handlePersonClick}
+                        onOpenCompare={
+                          !embedInModal && contemporaryHeadsTarget
+                            ? () => {
+                                playClickSound()
+                                navigate(
+                                  pathKeys.headsOfState(
+                                    contemporaryHeadsTarget.year,
+                                    {
+                                      range: contemporaryHeadsTarget.range,
+                                      pins: contemporaryHeadsTarget.pins,
+                                    },
+                                  ),
+                                )
+                              }
+                            : undefined
+                        }
+                      />
+                    </section>
+                  )}
 
-                  <TenureRegisterPanel
-                    personId={person.id}
-                    open={tenureModalOpen}
-                    onClose={() => {
-                      setTenureModalOpen(false)
-                      setEditingTenureId(null)
-                    }}
-                    onSuccess={() => {
-                      setTenureModalOpen(false)
-                      setEditingTenureId(null)
-                    }}
-                    tenureId={editingTenureId ?? undefined}
-                  />
-                  <TenureRegisterPanel
-                    personId={person.id}
-                    defaultMonarchical
-                    open={sovereignReignModalOpen}
-                    onClose={() => {
-                      setSovereignReignModalOpen(false)
-                      setEditingReignId(null)
-                    }}
-                    onSuccess={() => {
-                      setSovereignReignModalOpen(false)
-                      setEditingReignId(null)
-                    }}
-                    tenureId={editingReignId ?? undefined}
-                  />
-                  <SelectModal
-                    isOpen={addKindChooserOpen}
-                    onClose={() => setAddKindChooserOpen(false)}
-                    title="추가할 기록 선택"
-                    options={[
-                      {
-                        value: 'reign',
-                        icon: '👑',
-                        label: '군주 재위',
-                        description: '국왕·황제·천황·쇼군 등 군주의 재위',
-                      },
-                      {
-                        value: 'tenure',
-                        icon: '🏛️',
-                        label: '관직 재임',
-                        description: '대통령·총리·장관·외교관 등 공직 임기',
-                      },
-                    ]}
-                    onSelect={(kind) => {
-                      setAddKindChooserOpen(false)
-                      playClickSound()
-                      if (kind === 'reign') {
-                        setEditingReignId(null)
-                        setSovereignReignModalOpen(true)
-                      } else {
-                        setEditingTenureId(null)
-                        setTenureModalOpen(true)
-                      }
-                    }}
-                  />
-
-                  {/* 2. 분야별 경력 */}
-                  {(!embedInModal || (p.careers && p.careers.length > 0)) && (() => {
+                  {/* 2. 분야별 경력 (데이터 있을 때만 본문에 노출) */}
+                  {(p.careers?.length ?? 0) > 0 && (() => {
                     const careers = p.careers ?? []
                     const KIND_LABELS: Record<string, string> = {
                       military: '군사',
@@ -2643,12 +2712,13 @@ export function PersonDetailPanel({
                     )
                     return (
                       <CollapsibleSection
+                        id="career-section-careers"
                         storageKey="careers"
                         ariaLabel="분야별 경력"
                         icon={<FiBriefcase size={14} strokeWidth={2.2} />}
                         title="분야별 경력"
                         count={careers.length}
-                        defaultOpen={careers.length > 0}
+                        defaultOpen
                         actions={
                           !embedInModal && (
                             <UnifiedActionRow>
@@ -2667,28 +2737,23 @@ export function PersonDetailPanel({
                           )
                         }
                       >
-                        {careers.length === 0 ? (
-                          <TenureEmpty>
-                            등록된 경력이 없습니다. 위 <strong>경력 버튼</strong>으로
-                            추가하세요.
-                          </TenureEmpty>
-                        ) : (
                         <ActivityGroupList>
                           {kinds.map((k) => {
                             const list = grouped[k] ?? []
                             const sorted = list.slice().sort((a, b) => {
                               const ta = a.startDate
                                 ? isoDateSortKey(a.startDate)
-                                : Number.NEGATIVE_INFINITY
+                                : Number.POSITIVE_INFINITY
                               const tb = b.startDate
                                 ? isoDateSortKey(b.startDate)
-                                : Number.NEGATIVE_INFINITY
-                              return tb - ta
+                                : Number.POSITIVE_INFINITY
+                              return ta - tb
                             })
                             return (
                               <ActivityGroup key={k}>
                                 <ActivityGroupTitle>
-                                  {KIND_LABELS[k] ?? k} {list.length}
+                                  <span>{KIND_LABELS[k] ?? k}</span>
+                                  <ActivityGroupCount>{list.length}</ActivityGroupCount>
                                 </ActivityGroupTitle>
                                 <SimpleEntryList>
                                   {sorted.map((c, cIdx) => {
@@ -2696,6 +2761,8 @@ export function PersonDetailPanel({
                                     const end = formatIsoDateKo(c.endDate)
                                     const period =
                                       formatPeriod(start, end, isDeceased ? '미상' : '현재')
+                                    const isOngoing =
+                                      !!c.startDate && !c.endDate && !isDeceased
                                     const titleBits = [
                                       c.organization?.name,
                                       c.rank?.name,
@@ -2742,23 +2809,37 @@ export function PersonDetailPanel({
                                             </SimpleEntryDeleteBtn>
                                           </>
                                         )}
-                                        <SimpleEntryHeader>
-                                          <SimpleEntryTitle>
-                                            {titleBits[0] ?? '미상'}
-                                          </SimpleEntryTitle>
-                                          {titleBits.slice(1).map((t, i) => (
-                                            <SimpleEntryRole key={`role-${i}`}>{t}</SimpleEntryRole>
-                                          ))}
-                                        </SimpleEntryHeader>
-                                        {subBits.length > 0 && (
-                                          <SimpleEntryPeriod>{subBits.join(' · ')}</SimpleEntryPeriod>
-                                        )}
-                                        {period && (
-                                          <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
-                                        )}
-                                        {c.notes && (
-                                          <SimpleEntryDescription>{c.notes}</SimpleEntryDescription>
-                                        )}
+                                        <SimpleEntryDateCol
+                                          $ongoing={isOngoing}
+                                          $muted={!period}
+                                        >
+                                          {period || '연도 미상'}
+                                        </SimpleEntryDateCol>
+                                        <SimpleEntryMainCol>
+                                          <SimpleEntryHeader>
+                                            <SimpleEntryTitle>
+                                              {titleBits[0] ?? '미상'}
+                                            </SimpleEntryTitle>
+                                            {titleBits.slice(1).map((t, i) => (
+                                              <SimpleEntryRole
+                                                key={`role-${i}`}
+                                                $tone={i === 0 ? 'accent' : 'neutral'}
+                                              >
+                                                {t}
+                                              </SimpleEntryRole>
+                                            ))}
+                                          </SimpleEntryHeader>
+                                          {subBits.length > 0 && (
+                                            <SimpleEntryPeriod>
+                                              {subBits.join(' · ')}
+                                            </SimpleEntryPeriod>
+                                          )}
+                                          {c.notes && (
+                                            <SimpleEntryDescription>
+                                              {c.notes}
+                                            </SimpleEntryDescription>
+                                          )}
+                                        </SimpleEntryMainCol>
                                       </SimpleEntryItem>
                                     )
                                   })}
@@ -2767,20 +2848,20 @@ export function PersonDetailPanel({
                             )
                           })}
                         </ActivityGroupList>
-                        )}
                       </CollapsibleSection>
                     )
                   })()}
 
-                  {/* 3. 학력 */}
-                  {(!embedInModal || (p.educations && p.educations.length > 0)) && (
+                  {/* 3. 학력 (데이터 있을 때만 본문에 노출) */}
+                  {(p.educations?.length ?? 0) > 0 && (
                     <CollapsibleSection
+                      id="career-section-education"
                       storageKey="education"
                       ariaLabel="학력"
                       icon={<FiBook size={14} strokeWidth={2.2} />}
                       title="학력"
                       count={p.educations?.length ?? 0}
-                      defaultOpen={(p.educations?.length ?? 0) > 0}
+                      defaultOpen
                       actions={
                         !embedInModal && (
                           <UnifiedActionRow>
@@ -2799,34 +2880,29 @@ export function PersonDetailPanel({
                         )
                       }
                     >
-                      {!p.educations || p.educations.length === 0 ? (
-                        <TenureEmpty>
-                          등록된 학력이 없습니다. 위{' '}
-                          <strong>학력 버튼</strong>으로 추가하세요.
-                        </TenureEmpty>
-                      ) : (
                       <SimpleEntryList>
-                        {p.educations
+                        {(p.educations ?? [])
                           .slice()
                           .sort((a, b) => {
                             const ta = a.startDate
                               ? isoDateSortKey(a.startDate)
-                              : Number.NEGATIVE_INFINITY
+                              : Number.POSITIVE_INFINITY
                             const tb = b.startDate
                               ? isoDateSortKey(b.startDate)
-                              : Number.NEGATIVE_INFINITY
-                            return tb - ta
+                              : Number.POSITIVE_INFINITY
+                            return ta - tb
                           })
                           .map((e, eduIdx) => {
                             const start = formatIsoDateKo(e.startDate)
                             const end = formatIsoDateKo(e.endDate)
                             const period =
                               formatPeriod(start, end, isDeceased ? '미상' : '재학중')
+                            const isOngoing =
+                              !!e.startDate && !e.endDate && !isDeceased
                             const subParts = [
                               e.major,
                               e.department,
                               e.classNumber != null ? `${e.classNumber}기` : null,
-                              e.degree,
                             ].filter(Boolean) as string[]
                             return (
                               <SimpleEntryItem key={e.id ?? `edu-${eduIdx}`}>
@@ -2862,42 +2938,60 @@ export function PersonDetailPanel({
                                     </SimpleEntryDeleteBtn>
                                   </>
                                 )}
-                                <SimpleEntryHeader>
-                                  <SimpleEntryTitle>
-                                    {e.organization?.name ?? '학교 미상'}
-                                  </SimpleEntryTitle>
-                                  {e.status && (
-                                    <SimpleEntryRole>{e.status}</SimpleEntryRole>
+                                <SimpleEntryDateCol
+                                  $ongoing={isOngoing}
+                                  $muted={!period}
+                                >
+                                  {period || '연도 미상'}
+                                </SimpleEntryDateCol>
+                                <SimpleEntryMainCol>
+                                  <SimpleEntryHeader>
+                                    <SimpleEntryTitle>
+                                      {e.organization?.name ?? '학교 미상'}
+                                    </SimpleEntryTitle>
+                                    {e.status && (
+                                      <SimpleEntryRole
+                                        $tone={
+                                          e.status === '졸업' ? 'teal' : 'neutral'
+                                        }
+                                      >
+                                        {e.status}
+                                      </SimpleEntryRole>
+                                    )}
+                                    {e.degree && (
+                                      <SimpleEntryRole $tone="accent">
+                                        {e.degree}
+                                      </SimpleEntryRole>
+                                    )}
+                                  </SimpleEntryHeader>
+                                  {subParts.length > 0 && (
+                                    <SimpleEntryPeriod>
+                                      {subParts.join(' · ')}
+                                    </SimpleEntryPeriod>
                                   )}
-                                </SimpleEntryHeader>
-                                {subParts.length > 0 && (
-                                  <SimpleEntryPeriod>
-                                    {subParts.join(' · ')}
-                                  </SimpleEntryPeriod>
-                                )}
-                                {period && (
-                                  <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
-                                )}
-                                {e.notes && (
-                                  <SimpleEntryDescription>{e.notes}</SimpleEntryDescription>
-                                )}
+                                  {e.notes && (
+                                    <SimpleEntryDescription>
+                                      {e.notes}
+                                    </SimpleEntryDescription>
+                                  )}
+                                </SimpleEntryMainCol>
                               </SimpleEntryItem>
                             )
                           })}
                       </SimpleEntryList>
-                      )}
                     </CollapsibleSection>
                   )}
 
-                  {/* 4. 수상·훈장 */}
-                  {(!embedInModal || (p.awards && p.awards.length > 0)) && (
+                  {/* 4. 수상·훈장 (데이터 있을 때만 본문에 노출) */}
+                  {(p.awards?.length ?? 0) > 0 && (
                     <CollapsibleSection
+                      id="career-section-awards"
                       storageKey="awards"
                       ariaLabel="수상·훈장"
                       icon={<FiAward size={14} strokeWidth={2.2} />}
                       title="수상·훈장"
                       count={p.awards?.length ?? 0}
-                      defaultOpen={(p.awards?.length ?? 0) > 0}
+                      defaultOpen
                       actions={
                         !embedInModal && (
                           <UnifiedActionRow>
@@ -2916,80 +3010,82 @@ export function PersonDetailPanel({
                         )
                       }
                     >
-                      {!p.awards || p.awards.length === 0 ? (
-                        <TenureEmpty>
-                          등록된 수상·훈장이 없습니다. 위{' '}
-                          <strong>수상 버튼</strong>으로 추가하세요.
-                        </TenureEmpty>
-                      ) : (
                       <SimpleEntryList>
-                        {p.awards
+                        {(p.awards ?? [])
                           .slice()
                           .sort((a, b) => {
                             const ta = a.awardDate
                               ? isoDateSortKey(a.awardDate)
-                              : Number.NEGATIVE_INFINITY
+                              : Number.POSITIVE_INFINITY
                             const tb = b.awardDate
                               ? isoDateSortKey(b.awardDate)
-                              : Number.NEGATIVE_INFINITY
-                            return tb - ta
+                              : Number.POSITIVE_INFINITY
+                            return ta - tb
                           })
-                          .map((a, awardIdx) => (
-                            <SimpleEntryItem key={a.id ?? `award-${awardIdx}`}>
-                              {!embedInModal && a.id && (
-                                <>
-                                  <SimpleEntryEditBtn
-                                    type="button"
-                                    data-role="entry-edit"
-                                    aria-label="수정"
-                                    onClick={() => {
-                                      playClickSound()
-                                      setEditingAward(a)
-                                      setAwardModalOpen(true)
-                                    }}
-                                  >
-                                    <FiEdit2 size={12} />
-                                  </SimpleEntryEditBtn>
-                                  <SimpleEntryDeleteBtn
-                                    type="button"
-                                    data-role="entry-delete"
-                                    aria-label="삭제"
-                                    disabled={isEntryDeleting}
-                                    onClick={() =>
-                                      setEntryDeleteTarget({
-                                        kind: 'award',
-                                        id: a.id!,
-                                        label: a.awardName ?? '수상·훈장',
-                                      })
-                                    }
-                                  >
-                                    <FiTrash2 size={13} />
-                                  </SimpleEntryDeleteBtn>
-                                </>
-                              )}
-                              <SimpleEntryHeader>
-                                <SimpleEntryTitle>{a.awardName ?? '이름 없음'}</SimpleEntryTitle>
-                                {a.category && (
-                                  <SimpleEntryRole>{a.category}</SimpleEntryRole>
+                          .map((a, awardIdx) => {
+                            const awardDateStr = formatIsoDateKo(a.awardDate)
+                            return (
+                              <SimpleEntryItem key={a.id ?? `award-${awardIdx}`}>
+                                {!embedInModal && a.id && (
+                                  <>
+                                    <SimpleEntryEditBtn
+                                      type="button"
+                                      data-role="entry-edit"
+                                      aria-label="수정"
+                                      onClick={() => {
+                                        playClickSound()
+                                        setEditingAward(a)
+                                        setAwardModalOpen(true)
+                                      }}
+                                    >
+                                      <FiEdit2 size={12} />
+                                    </SimpleEntryEditBtn>
+                                    <SimpleEntryDeleteBtn
+                                      type="button"
+                                      data-role="entry-delete"
+                                      aria-label="삭제"
+                                      disabled={isEntryDeleting}
+                                      onClick={() =>
+                                        setEntryDeleteTarget({
+                                          kind: 'award',
+                                          id: a.id!,
+                                          label: a.awardName ?? '수상·훈장',
+                                        })
+                                      }
+                                    >
+                                      <FiTrash2 size={13} />
+                                    </SimpleEntryDeleteBtn>
+                                  </>
                                 )}
-                              </SimpleEntryHeader>
-                              {(a.awardingBody || a.awardDate) && (
-                                <SimpleEntryPeriod>
-                                  {[
-                                    a.awardingBody,
-                                    formatIsoDateKo(a.awardDate),
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                </SimpleEntryPeriod>
-                              )}
-                              {a.description && (
-                                <SimpleEntryDescription>{a.description}</SimpleEntryDescription>
-                              )}
-                            </SimpleEntryItem>
-                          ))}
+                                <SimpleEntryDateCol $muted={!awardDateStr}>
+                                  {awardDateStr || '일자 미상'}
+                                </SimpleEntryDateCol>
+                                <SimpleEntryMainCol>
+                                  <SimpleEntryHeader>
+                                    <SimpleEntryTitle>
+                                      {a.awardName ?? '이름 없음'}
+                                    </SimpleEntryTitle>
+                                    {a.category && (
+                                      <SimpleEntryRole $tone="amber">
+                                        {a.category}
+                                      </SimpleEntryRole>
+                                    )}
+                                  </SimpleEntryHeader>
+                                  {a.awardingBody && (
+                                    <SimpleEntryPeriod>
+                                      {a.awardingBody}
+                                    </SimpleEntryPeriod>
+                                  )}
+                                  {a.description && (
+                                    <SimpleEntryDescription>
+                                      {a.description}
+                                    </SimpleEntryDescription>
+                                  )}
+                                </SimpleEntryMainCol>
+                              </SimpleEntryItem>
+                            )
+                          })}
                       </SimpleEntryList>
-                      )}
                     </CollapsibleSection>
                   )}
 
@@ -3007,6 +3103,7 @@ export function PersonDetailPanel({
                     if (total === 0) return null
                     return (
                       <CollapsibleSection
+                        id="career-section-activities"
                         storageKey="activities"
                         ariaLabel="활동·이력"
                         icon={<FiFileText size={14} strokeWidth={2.2} />}
@@ -3017,19 +3114,30 @@ export function PersonDetailPanel({
                         <ActivityGroupList>
                           {books.length > 0 && (
                             <ActivityGroup>
-                              <ActivityGroupTitle>저작 {books.length}</ActivityGroupTitle>
+                              <ActivityGroupTitle>
+                                <span>저작</span>
+                                <ActivityGroupCount>{books.length}</ActivityGroupCount>
+                              </ActivityGroupTitle>
                               <SimpleEntryList>
                                 {books.map((b, bookIdx) => (
                                   <SimpleEntryItem key={b.id ?? `book-${bookIdx}`}>
-                                    <SimpleEntryHeader>
-                                      <SimpleEntryTitle>{b.title ?? '제목 없음'}</SimpleEntryTitle>
-                                      {b.publishedYear && (
-                                        <SimpleEntrySub>{b.publishedYear}년</SimpleEntrySub>
+                                    <SimpleEntryDateCol $muted={!b.publishedYear}>
+                                      {b.publishedYear
+                                        ? `${b.publishedYear}년`
+                                        : '연도 미상'}
+                                    </SimpleEntryDateCol>
+                                    <SimpleEntryMainCol>
+                                      <SimpleEntryHeader>
+                                        <SimpleEntryTitle>
+                                          {b.title ?? '제목 없음'}
+                                        </SimpleEntryTitle>
+                                      </SimpleEntryHeader>
+                                      {b.summary && (
+                                        <SimpleEntryDescription>
+                                          {b.summary}
+                                        </SimpleEntryDescription>
                                       )}
-                                    </SimpleEntryHeader>
-                                    {b.summary && (
-                                      <SimpleEntryDescription>{b.summary}</SimpleEntryDescription>
-                                    )}
+                                    </SimpleEntryMainCol>
                                   </SimpleEntryItem>
                                 ))}
                               </SimpleEntryList>
@@ -3037,64 +3145,92 @@ export function PersonDetailPanel({
                           )}
                           {founded.length > 0 && (
                             <ActivityGroup>
-                              <ActivityGroupTitle>창업 기업 {founded.length}</ActivityGroupTitle>
+                              <ActivityGroupTitle>
+                                <span>창업 기업</span>
+                                <ActivityGroupCount>{founded.length}</ActivityGroupCount>
+                              </ActivityGroupTitle>
                               <SimpleEntryList>
-                                {founded.map((c, foundedIdx) => (
-                                  <SimpleEntryItem key={c.id ?? `founded-${foundedIdx}`}>
-                                    <SimpleEntryHeader>
-                                      <SimpleEntryTitle>{c.name ?? '이름 없음'}</SimpleEntryTitle>
-                                      {c.foundedAt && (
-                                        <SimpleEntrySub>
-                                          {formatIsoDateKo(c.foundedAt)}
-                                        </SimpleEntrySub>
-                                      )}
-                                    </SimpleEntryHeader>
-                                    {c.description && (
-                                      <SimpleEntryDescription>{c.description}</SimpleEntryDescription>
-                                    )}
-                                  </SimpleEntryItem>
-                                ))}
+                                {founded.map((c, foundedIdx) => {
+                                  const foundedDateStr = formatIsoDateKo(
+                                    c.foundedAt,
+                                  )
+                                  return (
+                                    <SimpleEntryItem
+                                      key={c.id ?? `founded-${foundedIdx}`}
+                                    >
+                                      <SimpleEntryDateCol
+                                        $muted={!foundedDateStr}
+                                      >
+                                        {foundedDateStr || '연도 미상'}
+                                      </SimpleEntryDateCol>
+                                      <SimpleEntryMainCol>
+                                        <SimpleEntryHeader>
+                                          <SimpleEntryTitle>
+                                            {c.name ?? '이름 없음'}
+                                          </SimpleEntryTitle>
+                                        </SimpleEntryHeader>
+                                        {c.description && (
+                                          <SimpleEntryDescription>
+                                            {c.description}
+                                          </SimpleEntryDescription>
+                                        )}
+                                      </SimpleEntryMainCol>
+                                    </SimpleEntryItem>
+                                  )
+                                })}
                               </SimpleEntryList>
                             </ActivityGroup>
                           )}
                           {orgRoles.length > 0 && (
                             <ActivityGroup>
-                              <ActivityGroupTitle>조직 역할 {orgRoles.length}</ActivityGroupTitle>
+                              <ActivityGroupTitle>
+                                <span>조직 역할</span>
+                                <ActivityGroupCount>{orgRoles.length}</ActivityGroupCount>
+                              </ActivityGroupTitle>
                               <SimpleEntryList>
                                 {orgRoles
                                   .slice()
                                   .sort((a, b) => {
                                     const ta = a.startDate
                                       ? isoDateSortKey(a.startDate)
-                                      : Number.NEGATIVE_INFINITY
+                                      : Number.POSITIVE_INFINITY
                                     const tb = b.startDate
                                       ? isoDateSortKey(b.startDate)
-                                      : Number.NEGATIVE_INFINITY
-                                    return tb - ta
+                                      : Number.POSITIVE_INFINITY
+                                    return ta - tb
                                   })
                                   .map((o, orgIdx) => {
                                     const start = formatIsoDateKo(o.startDate)
                                     const end = formatIsoDateKo(o.endDate)
                                     const period =
                                       formatPeriod(start, end, isDeceased ? '미상' : '현재')
+                                    const isOngoing =
+                                      !!o.startDate && !o.endDate && !isDeceased
                                     return (
                                       <SimpleEntryItem key={o.id ?? `org-${orgIdx}`}>
-                                        <SimpleEntryHeader>
-                                          <SimpleEntryTitle>
-                                            {o.organization?.name ?? '조직 미상'}
-                                            {o.organization?.shortName && (
-                                              <SimpleEntrySub>
-                                                {' '}({o.organization.shortName})
-                                              </SimpleEntrySub>
+                                        <SimpleEntryDateCol
+                                          $ongoing={isOngoing}
+                                          $muted={!period}
+                                        >
+                                          {period || '연도 미상'}
+                                        </SimpleEntryDateCol>
+                                        <SimpleEntryMainCol>
+                                          <SimpleEntryHeader>
+                                            <SimpleEntryTitle>
+                                              {o.organization?.name ?? '조직 미상'}
+                                              {o.organization?.shortName && (
+                                                <SimpleEntrySub>
+                                                  {' '}({o.organization.shortName})
+                                                </SimpleEntrySub>
+                                              )}
+                                            </SimpleEntryTitle>
+                                            {o.roleTitle && (
+                                              <SimpleEntryRole $tone="accent">
+                                                {o.roleTitle}
+                                              </SimpleEntryRole>
                                             )}
-                                          </SimpleEntryTitle>
-                                          {o.roleTitle && (
-                                            <SimpleEntryRole>{o.roleTitle}</SimpleEntryRole>
-                                          )}
-                                        </SimpleEntryHeader>
-                                        {period && (
-                                          <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
-                                        )}
+                                          </SimpleEntryHeader>
+                                        </SimpleEntryMainCol>
                                       </SimpleEntryItem>
                                     )
                                   })}
@@ -3103,43 +3239,55 @@ export function PersonDetailPanel({
                           )}
                           {milCmds.length > 0 && (
                             <ActivityGroup>
-                              <ActivityGroupTitle>군부대 지휘 {milCmds.length}</ActivityGroupTitle>
+                              <ActivityGroupTitle>
+                                <span>군부대 지휘</span>
+                                <ActivityGroupCount>{milCmds.length}</ActivityGroupCount>
+                              </ActivityGroupTitle>
                               <SimpleEntryList>
                                 {milCmds
                                   .slice()
                                   .sort((a, b) => {
                                     const ta = a.startDate
                                       ? isoDateSortKey(a.startDate)
-                                      : Number.NEGATIVE_INFINITY
+                                      : Number.POSITIVE_INFINITY
                                     const tb = b.startDate
                                       ? isoDateSortKey(b.startDate)
-                                      : Number.NEGATIVE_INFINITY
-                                    return tb - ta
+                                      : Number.POSITIVE_INFINITY
+                                    return ta - tb
                                   })
                                   .map((m, milIdx) => {
                                     const start = formatIsoDateKo(m.startDate)
                                     const end = formatIsoDateKo(m.endDate)
                                     const period =
                                       formatPeriod(start, end, isDeceased ? '미상' : '현재')
+                                    const isOngoing =
+                                      !!m.startDate && !m.endDate && !isDeceased
                                     const titleParts = [m.rank, m.role].filter(Boolean) as string[]
                                     return (
                                       <SimpleEntryItem key={m.id ?? `mil-${milIdx}`}>
-                                        <SimpleEntryHeader>
-                                          <SimpleEntryTitle>
-                                            {m.unit?.name ?? '부대 미상'}
-                                            {m.unit?.unitType && (
-                                              <SimpleEntrySub>
-                                                {' '}({m.unit.unitType})
-                                              </SimpleEntrySub>
+                                        <SimpleEntryDateCol
+                                          $ongoing={isOngoing}
+                                          $muted={!period}
+                                        >
+                                          {period || '연도 미상'}
+                                        </SimpleEntryDateCol>
+                                        <SimpleEntryMainCol>
+                                          <SimpleEntryHeader>
+                                            <SimpleEntryTitle>
+                                              {m.unit?.name ?? '부대 미상'}
+                                              {m.unit?.unitType && (
+                                                <SimpleEntrySub>
+                                                  {' '}({m.unit.unitType})
+                                                </SimpleEntrySub>
+                                              )}
+                                            </SimpleEntryTitle>
+                                            {titleParts.length > 0 && (
+                                              <SimpleEntryRole $tone="accent">
+                                                {titleParts.join(' · ')}
+                                              </SimpleEntryRole>
                                             )}
-                                          </SimpleEntryTitle>
-                                          {titleParts.length > 0 && (
-                                            <SimpleEntryRole>{titleParts.join(' · ')}</SimpleEntryRole>
-                                          )}
-                                        </SimpleEntryHeader>
-                                        {period && (
-                                          <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
-                                        )}
+                                          </SimpleEntryHeader>
+                                        </SimpleEntryMainCol>
                                       </SimpleEntryItem>
                                     )
                                   })}
@@ -3151,15 +3299,16 @@ export function PersonDetailPanel({
                     )
                   })()}
 
-                  {/* 6. 정당·선거 */}
-                  {(!embedInModal || politicsCount > 0) && (
+                  {/* 6. 정당·선거 (데이터 있을 때는 섹션, 없을 때는 모달 호스트만 마운트) */}
+                  {politicsCount > 0 ? (
                     <CollapsibleSection
+                      id="career-section-politics"
                       storageKey="politics"
                       ariaLabel="정당·선거"
                       icon={<FiFlag size={14} strokeWidth={2.2} />}
                       title="정당·선거"
                       count={politicsCount}
-                      defaultOpen={politicsCount > 0}
+                      defaultOpen
                       keepChildrenMountedWhenEmpty
                       actions={
                         !embedInModal && (
@@ -3200,45 +3349,56 @@ export function PersonDetailPanel({
                         footer={
                           p.partyLeaderships && p.partyLeaderships.length > 0 ? (
                             <section aria-label="당 지도부 이력">
-                              <SectionLabelRow>
-                                <SectionLabel>당 지도부 이력</SectionLabel>
-                                <CountMuted>{p.partyLeaderships.length}</CountMuted>
-                              </SectionLabelRow>
+                              <ActivityGroupTitle style={{ marginTop: 18 }}>
+                                <span>당 지도부 이력</span>
+                                <ActivityGroupCount>
+                                  {p.partyLeaderships.length}
+                                </ActivityGroupCount>
+                              </ActivityGroupTitle>
                               <SimpleEntryList>
                                 {p.partyLeaderships
                                   .slice()
                                   .sort((a, b) => {
                                     const ta = a.startDate
                                       ? isoDateSortKey(a.startDate)
-                                      : Number.NEGATIVE_INFINITY
+                                      : Number.POSITIVE_INFINITY
                                     const tb = b.startDate
                                       ? isoDateSortKey(b.startDate)
-                                      : Number.NEGATIVE_INFINITY
-                                    return tb - ta
+                                      : Number.POSITIVE_INFINITY
+                                    return ta - tb
                                   })
                                   .map((l, partyIdx) => {
                                     const start = formatIsoDateKo(l.startDate)
                                     const end = formatIsoDateKo(l.endDate)
                                     const period =
                                       formatPeriod(start, end, isDeceased ? '미상' : '현재')
+                                    const isOngoing =
+                                      !!l.startDate && !l.endDate && !isDeceased
                                     return (
                                       <SimpleEntryItem key={l.id ?? `party-${partyIdx}`}>
-                                        <SimpleEntryHeader>
-                                          <SimpleEntryTitle>
-                                            {l.party?.name ?? '정당 미상'}
-                                            {l.party?.shortName && (
-                                              <SimpleEntrySub>
-                                                {' '}({l.party.shortName})
-                                              </SimpleEntrySub>
+                                        <SimpleEntryDateCol
+                                          $ongoing={isOngoing}
+                                          $muted={!period}
+                                        >
+                                          {period || '연도 미상'}
+                                        </SimpleEntryDateCol>
+                                        <SimpleEntryMainCol>
+                                          <SimpleEntryHeader>
+                                            <SimpleEntryTitle>
+                                              {l.party?.name ?? '정당 미상'}
+                                              {l.party?.shortName && (
+                                                <SimpleEntrySub>
+                                                  {' '}({l.party.shortName})
+                                                </SimpleEntrySub>
+                                              )}
+                                            </SimpleEntryTitle>
+                                            {l.roleTitle && (
+                                              <SimpleEntryRole $tone="accent">
+                                                {l.roleTitle}
+                                              </SimpleEntryRole>
                                             )}
-                                          </SimpleEntryTitle>
-                                          {l.roleTitle && (
-                                            <SimpleEntryRole>{l.roleTitle}</SimpleEntryRole>
-                                          )}
-                                        </SimpleEntryHeader>
-                                        {period && (
-                                          <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
-                                        )}
+                                          </SimpleEntryHeader>
+                                        </SimpleEntryMainCol>
                                       </SimpleEntryItem>
                                     )
                                   })}
@@ -3248,7 +3408,106 @@ export function PersonDetailPanel({
                         }
                       />
                     </CollapsibleSection>
+                  ) : !embedInModal ? (
+                    <PersonPoliticsSection
+                      personId={person.id}
+                      countryId={person.countryId ?? null}
+                      variant="overview"
+                      actionsRef={politicsActionsRef}
+                      partyMemberships={[]}
+                      electionCandidacies={[]}
+                    />
+                  ) : null}
+
+                  {/* 빈 섹션 통합 추가 스트립 (하단 더 채울 수 있는 이력) */}
+                  {embedInModal && careerTabCount === 0 && (
+                    <TenureEmpty>등록된 이력·활동 기록이 없습니다.</TenureEmpty>
                   )}
+                  {!embedInModal && (() => {
+                    const missingCareerAdds: Array<{
+                      key: string
+                      label: string
+                      onClick: () => void
+                    }> = []
+                    if (combinedTenures.count === 0) {
+                      missingCareerAdds.push({
+                        key: 'tenure',
+                        label: '재임·재위 추가',
+                        onClick: () => {
+                          playClickSound()
+                          setAddKindChooserOpen(true)
+                        },
+                      })
+                    }
+                    if ((p.careers?.length ?? 0) === 0) {
+                      missingCareerAdds.push({
+                        key: 'careers',
+                        label: '분야별 경력',
+                        onClick: () => {
+                          playClickSound()
+                          setEditingCareer(null)
+                          setCareerModalOpen(true)
+                        },
+                      })
+                    }
+                    if ((p.educations?.length ?? 0) === 0) {
+                      missingCareerAdds.push({
+                        key: 'education',
+                        label: '학력',
+                        onClick: () => {
+                          playClickSound()
+                          setEditingEducation(null)
+                          setEducationModalOpen(true)
+                        },
+                      })
+                    }
+                    if ((p.awards?.length ?? 0) === 0) {
+                      missingCareerAdds.push({
+                        key: 'awards',
+                        label: '수상·훈장',
+                        onClick: () => {
+                          playClickSound()
+                          setEditingAward(null)
+                          setAwardModalOpen(true)
+                        },
+                      })
+                    }
+                    if (politicsCount === 0) {
+                      missingCareerAdds.push({
+                        key: 'politics',
+                        label: '당원 소속',
+                        onClick: () => {
+                          playClickSound()
+                          politicsActionsRef.current?.openCreate()
+                        },
+                      })
+                    }
+                    if (missingCareerAdds.length === 0) return null
+                    return (
+                      <CareerFillInStrip
+                        $isFirst={careerTabCount === 0}
+                        aria-label="더 채울 수 있는 이력"
+                      >
+                        <CareerFillInTitle>
+                          {careerTabCount === 0
+                            ? '등록된 이력·활동이 없습니다 · 첫 이력을 추가해보세요'
+                            : '더 채울 수 있는 이력'}
+                        </CareerFillInTitle>
+                        <CareerFillInChips>
+                          {missingCareerAdds.map((item) => (
+                            <CareerFillInChip
+                              key={item.key}
+                              type="button"
+                              onClick={item.onClick}
+                            >
+                              <FiPlus size={12} />
+                              {item.label}
+                            </CareerFillInChip>
+                          ))}
+                        </CareerFillInChips>
+                      </CareerFillInStrip>
+                    )
+                  })()}
                 </OverviewSections>
               </TabContent>
             )}
@@ -3777,6 +4036,75 @@ export function PersonDetailPanel({
         onClose={() => {
           setEducationModalOpen(false)
           setEditingEducation(null)
+        }}
+      />
+
+      <TenureRegisterPanel
+        personId={person.id}
+        defaultMonarchical={sovereignReignModalOpen}
+        open={tenureModalOpen || sovereignReignModalOpen}
+        onClose={() => {
+          setTenureModalOpen(false)
+          setEditingTenureId(null)
+          setSovereignReignModalOpen(false)
+          setEditingReignId(null)
+        }}
+        onSuccess={() => {
+          setTenureModalOpen(false)
+          setEditingTenureId(null)
+          setSovereignReignModalOpen(false)
+          setEditingReignId(null)
+        }}
+        tenureId={(editingTenureId ?? editingReignId) ?? undefined}
+        initialCountryId={
+          !(editingTenureId ?? editingReignId)
+            ? (person as { countryId?: string }).countryId ||
+              person.country?.id ||
+              person.countryAffiliations?.[0]?.countryId ||
+              person.countryAffiliations?.[0]?.country?.id ||
+              undefined
+            : undefined
+        }
+        initialHistoricalCountryId={
+          !(editingTenureId ?? editingReignId)
+            ? (person as { historicalCountryId?: string | null })
+                .historicalCountryId ??
+              person.historicalCountry?.id ??
+              person.countryAffiliations?.[0]?.historicalCountryId ??
+              person.countryAffiliations?.[0]?.historicalCountry?.id ??
+              undefined
+            : undefined
+        }
+      />
+
+      <SelectModal
+        isOpen={addKindChooserOpen}
+        onClose={() => setAddKindChooserOpen(false)}
+        title="추가할 기록 선택"
+        options={[
+          {
+            value: 'reign',
+            icon: '👑',
+            label: '군주 재위',
+            description: '국왕·황제·천황·쇼군 등 군주의 재위',
+          },
+          {
+            value: 'tenure',
+            icon: '🏛️',
+            label: '관직 재임',
+            description: '대통령·총리·장관·외교관 등 공직 임기',
+          },
+        ]}
+        onSelect={(kind) => {
+          setAddKindChooserOpen(false)
+          playClickSound()
+          if (kind === 'reign') {
+            setEditingReignId(null)
+            setSovereignReignModalOpen(true)
+          } else {
+            setEditingTenureId(null)
+            setTenureModalOpen(true)
+          }
         }}
       />
 

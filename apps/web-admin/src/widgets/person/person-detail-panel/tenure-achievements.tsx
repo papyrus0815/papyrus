@@ -271,11 +271,12 @@ export function TenureAchievements({
       notify.error('제목을 입력하세요.')
       return
     }
+    const emptyAs = editingId ? null : undefined
     const baseDto = {
       title: title.trim(),
-      description: description.trim() || undefined,
-      startDate: startDate || undefined,
-      endDate: endDate || undefined,
+      description: description.trim() || emptyAs,
+      startDate: startDate || emptyAs,
+      endDate: endDate || emptyAs,
       showOnEventsPage,
     }
     setSubmitting(true)
@@ -648,7 +649,6 @@ const AchievementSuggestionRow = styled.button`
   &:hover:not(:disabled) {
     color: ${({ theme }) => theme.colors.text.primary};
     border-color: ${({ theme }) => theme.colors.primary};
-    background: rgba(99, 102, 241, 0.06);
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
@@ -682,6 +682,7 @@ const AchievementSuggestionBadge = styled.span`
   font-size: 11px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.alert.success.fg};
-  background: ${({ theme }) => theme.colors.alert.success.bg};
+  background: transparent;
+  border: 1px solid currentColor;
   border-radius: 999px;
 `

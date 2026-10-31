@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { FiChevronDown, FiChevronUp, FiGlobe } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { CATEGORY_TOKENS } from '@/entities/government-position/model/category-tokens'
@@ -18,6 +19,8 @@ import {
 
 type ContemporariesScope = 'all' | 'sameCountry'
 
+const INITIAL_VISIBLE_GROUPS = 4
+
 interface ContemporariesStripProps {
   personId: string
   /** 수장급(재임·재위) 기록이 있을 때만 true — CTA 딥링크와 동일 게이트 */
@@ -29,7 +32,7 @@ interface ContemporariesStripProps {
 }
 
 /**
- * 「동시대 수장」 인라인 스트립 — 개요 탭 재임·재위 카드 아래에 클릭 0회로 노출.
+ * 「동시대 수장」 인라인 스트립 — 개요/이력 탭 재임·재위 카드 아래에 클릭 0회로 노출.
  * 발견은 GET /persons/:id/contemporaries(창은 서버가 재위 구간에서 유도),
  * 탐색 확장은 수장비교 딥링크로 위임한다 (검토서 §3 2단계).
  */
@@ -42,6 +45,11 @@ export function ContemporariesStrip({
   // 서버는 scope=all|sameCountry를 이미 지원 — 유도 창은 그대로 두고 후보만 대상 국가로 좁힌다.
   // (창을 안 넘기므로 meta.window는 scope와 무관하게 동일 = "같은 시기, 같은 나라로 필터".)
   const [scope, setScope] = useState<ContemporariesScope>('all')
+  const [showAllGroups, setShowAllGroups] = useState(false)
+
+  useEffect(() => {
+    setShowAllGroups(false)
+  }, [personId, scope])
 
   const contemporariesQuery = useQuery({
     queryKey: personContemporariesKeys.byPerson(personId, { scope }),
@@ -55,19 +63,41 @@ export function ContemporariesStrip({
 
   const data = contemporariesQuery.data
   const groups = data ? groupRulersByCountry(data.rulers, data.meta.window) : []
+  const hasCollapsibleGroups = groups.length > INITIAL_VISIBLE_GROUPS
+  const visibleGroups =
+    hasCollapsibleGroups && !showAllGroups
+      ? groups.slice(0, INITIAL_VISIBLE_GROUPS)
+      : groups
+  const hiddenGroups = hasCollapsibleGroups
+    ? groups.slice(INITIAL_VISIBLE_GROUPS)
+    : []
+  const hiddenRulerCount = hiddenGroups.reduce(
+    (sum, g) => sum + g.chips.length,
+    0,
+  )
 
   return (
     <StripSection aria-label="동시대 수장">
       <StripHeaderRow>
-        <StripTitle>
-          동시대 수장
-          {data && (
-            <StripWindowCaption>
-              {windowCaptionOf(data.meta.window)}
-              {data.rulers.length > 1 && ' · 겹친 기간 긴 순'}
-            </StripWindowCaption>
-          )}
-        </StripTitle>
+        <StripTitleGroup>
+          <StripIconTile aria-hidden>
+            <FiGlobe size={13} strokeWidth={2.2} />
+          </StripIconTile>
+          <StripTitle>
+            <span>동시대 수장</span>
+            {data && data.rulers.length > 0 && (
+              <StripCountBadge>{data.rulers.length}</StripCountBadge>
+            )}
+            {data && (
+              <StripWindowCaption>
+                <StripWindowBadge>
+                  {windowCaptionOf(data.meta.window)}
+                </StripWindowBadge>
+                {data.rulers.length > 1 && ' · 겹친 기간 긴 순'}
+              </StripWindowCaption>
+            )}
+          </StripTitle>
+        </StripTitleGroup>
         <StripControls>
           <ScopeToggleWrap>
             <SegmentControl<ContemporariesScope>
@@ -107,82 +137,124 @@ export function ContemporariesStrip({
       )}
 
       {data && data.rulers.length > 0 && (
-        // 국가별 구획을 표 행(라벨 열 | 칩 열)으로 — 행 사이 헤어라인 + 라벨 열 세로
-        // 괘선으로 어느 나라 구획인지 정확히 떨어지게 한다. 가로 스크롤(대부분
-        // 오프스크린 은닉)은 폐기, 전원 상시 노출.
-        <GroupTable role="group" aria-label="동시대 수장 목록">
-          {groups.map((group) => (
-            /* role=group + aria-label — 칩만 탭으로 만나도 어느 나라 수장인지 전달 */
-            <GroupRow key={group.key} role="group" aria-label={group.label}>
-              <GroupLabelCell aria-hidden>
-                {group.flagEmoji ? `${group.flagEmoji} ` : ''}
-                {group.label}
-              </GroupLabelCell>
-              <ChipRow>
-                {group.chips.map((chip) => {
-                  const chipBody = (
-                    <>
-                      <ChipAvatarOrGlyph
-                        profileImageUrl={chip.profileImageUrl}
-                        category={chip.category}
-                      />
-                      <ChipName>{chip.label}</ChipName>
-                      <ChipRole $category={chip.category}>
-                        {chip.positionText}
-                      </ChipRole>
-                      <ChipSpan>{chip.spanText}</ChipSpan>
-                    </>
-                  )
-                  // 정보밀도 보강 — 칩 본문에 안 담기는 본명·겹침 기간·복수 재위
-                  // 스팬을 aria-label(키보드/SR)·title(hover)에 실어 노출한다.
-                  const chipAria = `${chip.label} — ${group.label} ${chip.positionText} ${chip.spanText} · ${chip.detailText}`
-                  // 타계정 소유 인물은 상세(:id)가 소유자 게이트라 열 수 없음 —
-                  // 클릭 데드엔드 대신 비활성 칩 (가계도 비소유 노드 선례)
-                  if (!chip.isOwned) {
-                    // span은 암묵 generic 역할이라 aria-label로 이름을 못 붙인다 —
-                    // role="img"로 named leaf를 만들어 카테고리·'다른 계정 소유'가 SR에 낭독되게.
-                    // (button 칩과 정보 대칭. title은 hover 전용이라 키보드/SR 미접근이었음)
+        <>
+          <GroupTable role="group" aria-label="동시대 수장 목록">
+            {visibleGroups.map((group) => (
+              /* role=group + aria-label — 칩만 탭으로 만나도 어느 나라 수장인지 전달 */
+              <GroupRow key={group.key} role="group" aria-label={group.label}>
+                <GroupLabelCell aria-hidden>
+                  <GroupCountryName>
+                    {group.flagEmoji ? `${group.flagEmoji} ` : ''}
+                    {group.label}
+                  </GroupCountryName>
+                  <GroupCountryCount>{group.chips.length}</GroupCountryCount>
+                </GroupLabelCell>
+                <ChipRow>
+                  {group.chips.map((chip) => {
+                    const chipBody = (
+                      <>
+                        <ChipAvatarOrGlyph
+                          profileImageUrl={chip.profileImageUrl}
+                          category={chip.category}
+                        />
+                        <ChipBodyCol>
+                          <ChipTopLine>
+                            <ChipName>{chip.label}</ChipName>
+                            {chip.realName && (
+                              <ChipRealName>({chip.realName})</ChipRealName>
+                            )}
+                            <ChipRole $category={chip.category}>
+                              {chip.positionText}
+                            </ChipRole>
+                          </ChipTopLine>
+                          <ChipBottomLine>
+                            <ChipSpan>{chip.spanText}</ChipSpan>
+                            {chip.overlapYears > 0 && (
+                              <ChipOverlap>
+                                · {chip.overlapYears}년 겹침
+                              </ChipOverlap>
+                            )}
+                          </ChipBottomLine>
+                          <ChipOverlapTrack aria-hidden>
+                            <ChipOverlapFill
+                              $category={chip.category}
+                              $start={chip.overlapStartPct}
+                              $width={chip.overlapWidthPct}
+                            />
+                          </ChipOverlapTrack>
+                        </ChipBodyCol>
+                      </>
+                    )
+                    // 정보밀도 보강 — 칩 본문에 안 담기는 본명·겹침 기간·복수 재위
+                    // 스팬을 aria-label(키보드/SR)·title(hover)에 실어 노출한다.
+                    const chipAria = `${chip.label} — ${group.label} ${chip.positionText} ${chip.spanText} · ${chip.detailText}`
+                    // 타계정 소유 인물은 상세(:id)가 소유자 게이트라 열 수 없음 —
+                    // 클릭 데드엔드 대신 비활성 칩 (가계도 비소유 노드 선례)
+                    if (!chip.isOwned) {
+                      return (
+                        <RulerChipStatic
+                          key={chip.personId}
+                          role="img"
+                          title={`${chip.detailText} · 다른 계정 소유 인물 — 상세를 열 수 없습니다`}
+                          aria-label={`${chipAria} (다른 계정 소유 — 상세를 열 수 없음)`}
+                        >
+                          {chipBody}
+                        </RulerChipStatic>
+                      )
+                    }
                     return (
-                      <RulerChipStatic
+                      <RulerChip
                         key={chip.personId}
-                        role="img"
-                        title={`${chip.detailText} · 다른 계정 소유 인물 — 상세를 열 수 없습니다`}
-                        aria-label={`${chipAria} (다른 계정 소유 — 상세를 열 수 없음)`}
+                        type="button"
+                        title={chip.detailText}
+                        aria-label={chipAria}
+                        onClick={() => onPersonClick(chip.personId)}
                       >
                         {chipBody}
-                      </RulerChipStatic>
+                      </RulerChip>
                     )
-                  }
-                  return (
-                    <RulerChip
-                      key={chip.personId}
-                      type="button"
-                      title={chip.detailText}
-                      aria-label={chipAria}
-                      onClick={() => onPersonClick(chip.personId)}
-                    >
-                      {chipBody}
-                    </RulerChip>
-                  )
-                })}
-              </ChipRow>
-            </GroupRow>
-          ))}
-        </GroupTable>
+                  })}
+                </ChipRow>
+              </GroupRow>
+            ))}
+          </GroupTable>
+
+          {hasCollapsibleGroups && (
+            <ExpandGroupsButton
+              type="button"
+              onClick={() => setShowAllGroups((prev) => !prev)}
+              aria-expanded={showAllGroups}
+            >
+              {showAllGroups ? (
+                <>
+                  <FiChevronUp size={13} />
+                  국가 목록 접기
+                </>
+              ) : (
+                <>
+                  <FiChevronDown size={13} />+ {hiddenGroups.length}개국 (
+                  {hiddenRulerCount}명) 더 보기
+                </>
+              )}
+            </ExpandGroupsButton>
+          )}
+        </>
       )}
 
       {/* 절단 안내는 스크롤 밖(항상 노출). 모달 임베드(onOpenCompare 없음)에선 수장비교로
           갈 경로가 없으므로 죽은 포인터 대신 중립 문구로 분기한다. */}
       {data && data.rulers.length > 0 && data.meta.omittedCount > 0 && (
-        onOpenCompare ? (
-          <OmittedLinkButton type="button" onClick={onOpenCompare}>
-            외 {data.meta.omittedCount}명 더 — 수장 비교에서 보기 →
-          </OmittedLinkButton>
-        ) : (
-          <OmittedCaption>
-            외 {data.meta.omittedCount}명 더 있음 (겹친 기간 긴 순 상위만 표시)
-          </OmittedCaption>
-        )
+        <FooterMetaRow>
+          {onOpenCompare ? (
+            <OmittedLinkButton type="button" onClick={onOpenCompare}>
+              외 {data.meta.omittedCount}명 더 — 수장 비교에서 보기 →
+            </OmittedLinkButton>
+          ) : (
+            <OmittedCaption>
+              외 {data.meta.omittedCount}명 더 있음 (겹친 기간 긴 순 상위만 표시)
+            </OmittedCaption>
+          )}
+        </FooterMetaRow>
       )}
 
       {/* 후보 스캔이 안전 상한에 걸린 경우 — 결과가 불완전할 수 있음을 알린다(무성 절단 금지) */}
@@ -233,7 +305,15 @@ function ChipAvatarOrGlyph({
 }
 
 const StripSection = styled.section`
-  margin-top: 14px;
+  margin-top: 20px;
+  padding: 18px 0 4px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.09)'
+        : 'rgba(15, 23, 42, 0.1)'};
 `
 
 const StripHeaderRow = styled.div`
@@ -241,55 +321,116 @@ const StripHeaderRow = styled.div`
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 6px 12px;
-  margin-bottom: 8px;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+`
+
+const StripTitleGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+`
+
+const StripIconTile = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(20, 184, 166, 0.16)'
+      : 'rgba(13, 148, 136, 0.1)'};
 `
 
 const StripControls = styled.div`
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 8px;
 `
 
 /** 컴팩트 스트립 톤에 맞춰 canon 세그먼트를 살짝 축소(패딩·폰트만) */
 const ScopeToggleWrap = styled.div`
   button {
-    padding: 3px 9px;
-    font-size: 11px;
+    padding: 4px 10px;
+    font-size: 11.5px;
   }
 `
 
 const StripTitle = styled.h4`
   display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
   margin: 0;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const StripCountBadge = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : 'rgba(15, 23, 42, 0.06)'};
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const StripWindowCaption = styled.span`
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
   font-weight: 500;
   letter-spacing: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+const StripWindowBadge = styled.span`
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
 const CompareLinkButton = styled.button`
-  border: none;
-  background: none;
-  padding: 2px 4px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
   cursor: pointer;
-  border-radius: 6px;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+
   &:hover {
-    text-decoration: underline;
+    background: transparent;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.16)'
+        : 'rgba(15, 23, 42, 0.16)'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#3730a3')};
   }
   &:focus-visible {
     outline: none;
@@ -302,77 +443,101 @@ const GroupTable = styled.div`
   flex-direction: column;
 `
 
-/* 국가 구획 한 행 — 라벨 열(고정폭)과 칩 열. 셀은 grid 기본(stretch)으로 늘려
-   라벨 열 세로 괘선이 행 전체 높이를 긋게 한다 */
+/* 국가 구획 한 행 — 2단 에디토리얼 도시에 행(좌측 국가 열 144px | 우측 수장 그리드) */
 const GroupRow = styled.div`
   display: grid;
-  grid-template-columns: 128px minmax(0, 1fr);
-  column-gap: 12px;
-  padding: 7px 0;
+  grid-template-columns: 144px minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 6px;
+  align-items: start;
+  padding: 9px 0;
+
   & + & {
     border-top: 1px solid
       ${({ theme }) =>
-        theme.mode === 'dark' ? '#2a2a2a' : theme.colors.border.default};
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.06)'
+          : 'rgba(15, 23, 42, 0.07)'};
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+    padding: 8px 0;
   }
 `
 
 const GroupLabelCell = styled.div`
-  padding: 6px 12px 2px 0;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.45;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 6px 4px 4px 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.4;
   color: ${({ theme }) => theme.colors.text.secondary};
-  /* 장문 국가명('그레이트브리튼 및 아일랜드 연합왕국')은 어절 단위로 줄바꿈 */
   word-break: keep-all;
-  border-right: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? '#2a2a2a' : theme.colors.border.default};
+
+  @media (max-width: 560px) {
+    padding: 0 0 2px;
+  }
+`
+
+const GroupCountryName = styled.span`
+  min-width: 0;
+`
+
+const GroupCountryCount = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const ChipRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  column-gap: 12px;
+  row-gap: 4px;
+  align-items: stretch;
 `
 
 const SkeletonRow = styled.div`
-  display: flex;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+  padding: 6px 0;
 `
 
+/* 무박스(no-box) 에디토리얼 미니 프로필 — 평상시 배경·테두리를 비워 컨테이너 중첩을 없애고,
+   hover/focus 시에만 부드러운 워시를 띄운다(UnifiedCard·SuccessionBox와 동일 방언). */
 const chipSurfaceCss = css`
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
   font-size: 12px;
+  text-align: left;
   white-space: nowrap;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? `
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid #2a2a2a;
-        color: #d1d5db;
-      `
-      : `
-        background: rgba(0, 0, 0, 0.02);
-        border: 1px solid ${theme.colors.border.default};
-        color: ${theme.colors.text.primary};
-      `}
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#e2e8f0' : theme.colors.text.primary};
 `
 
 const RulerChip = styled.button`
   ${chipSurfaceCss}
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? `&:hover { background: rgba(255, 255, 255, 0.08); border-color: #3f3f46; }`
-      : `&:hover { background: rgba(0, 0, 0, 0.05); }`}
+  transition: background 0.14s ease;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : 'rgba(15, 23, 42, 0.04)'};
+  }
   &:focus-visible {
     outline: none;
     box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
@@ -383,28 +548,68 @@ const RulerChip = styled.button`
 const RulerChipStatic = styled.span`
   ${chipSurfaceCss}
   cursor: default;
-  opacity: 0.72;
+  opacity: 0.68;
 `
 
 const ChipAvatar = styled.img`
-  width: 18px;
-  height: 18px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   object-fit: cover;
   flex: 0 0 auto;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(15, 23, 42, 0.08)'};
 `
 
 const ChipGlyph = styled.span<{ $category: PositionCategory }>`
-  font-size: 11px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 12px;
   line-height: 1;
+  background: ${({ theme, $category }) =>
+    theme.mode === 'dark'
+      ? CATEGORY_TOKENS[$category].chip.dark.bg
+      : CATEGORY_TOKENS[$category].chip.light.bg};
   color: ${({ theme, $category }) =>
     theme.mode === 'dark'
       ? CATEGORY_TOKENS[$category].chip.dark.color
       : CATEGORY_TOKENS[$category].chip.light.color};
 `
 
+const ChipBodyCol = styled.span`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+`
+
+const ChipTopLine = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+`
+
+const ChipBottomLine = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+`
+
 const ChipName = styled.span`
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   /* 장문 왕호('카를로스 1세 (후아나 1세 jure matris 공동 군주)') 괴물 칩 방지 —
      전문은 title(hover)·aria-label에 이미 실려 있다 */
   max-width: 176px;
@@ -412,10 +617,28 @@ const ChipName = styled.span`
   text-overflow: ellipsis;
 `
 
-/** 어떤 재임인지 상시 노출 — 카테고리 글리프와 같은 색으로 종류 신호를 잇는다 */
-const ChipRole = styled.span<{ $category: PositionCategory }>`
+const ChipRealName = styled.span`
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  max-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+/** 어떤 재임인지 상시 노출 — 카테고리 배지 톤으로 종류 신호를 잇는다 */
+const ChipRole = styled.span<{ $category: PositionCategory }>`
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.3;
+  background: ${({ theme, $category }) =>
+    theme.mode === 'dark'
+      ? CATEGORY_TOKENS[$category].chip.dark.bg
+      : CATEGORY_TOKENS[$category].chip.light.bg};
   color: ${({ theme, $category }) =>
     theme.mode === 'dark'
       ? CATEGORY_TOKENS[$category].chip.dark.color
@@ -424,38 +647,115 @@ const ChipRole = styled.span<{ $category: PositionCategory }>`
 
 const ChipSpan = styled.span`
   font-size: 11px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ChipOverlap = styled.span`
+  font-size: 10.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ChipOverlapTrack = styled.span`
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 176px;
+  height: 2.5px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.08)'
+      : 'rgba(15, 23, 42, 0.07)'};
+  overflow: hidden;
+`
+
+const ChipOverlapFill = styled.span<{
+  $category: PositionCategory
+  $start: number
+  $width: number
+}>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: ${({ $start }) => $start}%;
+  width: ${({ $width }) => $width}%;
+  border-radius: 999px;
+  background: ${({ theme, $category }) =>
+    theme.mode === 'dark'
+      ? CATEGORY_TOKENS[$category].chip.dark.color
+      : CATEGORY_TOKENS[$category].chip.light.color};
+  opacity: 0.78;
+`
+
+const ExpandGroupsButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
+  cursor: pointer;
+  transition: color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#3730a3')};
+  }
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+`
+
+const FooterMetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(15, 23, 42, 0.08)'};
 `
 
 const SkeletonChip = styled.span`
   display: inline-block;
-  width: 132px;
-  height: 28px;
-  border-radius: 999px;
+  width: 156px;
+  height: 42px;
+  border-radius: 10px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'};
 `
 
 const MutedNote = styled.p`
-  margin: 0;
-  font-size: 12px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const OmittedCaption = styled.p`
-  margin: 6px 0 0;
-  font-size: 11px;
+  margin: 0;
+  font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const OmittedLinkButton = styled.button`
-  margin-top: 6px;
   border: none;
   background: none;
   padding: 2px 4px;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   cursor: pointer;
   border-radius: 6px;
   &:hover {

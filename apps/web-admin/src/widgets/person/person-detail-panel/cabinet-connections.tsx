@@ -187,9 +187,13 @@ const ToggleBtn = styled.button`
 
 /* 두 번째 border-left + 인디고 틴트 박스를 제거 — 토글 아래 6px 들여쓴 평평한 흐름.
    자식 간격(CabinetName·MemberList·PartyRow)은 그대로라 리플로우 없음. */
+/* 컨테이너 배경·테두리를 두지 않는 평평한 에디토리얼 흐름 —
+   각료가 많을 때도 2단 그리드로 정돈하되 박스 중첩은 없다. */
 const Body = styled.div`
   margin-top: 8px;
   padding: 0 0 0 6px;
+  background: transparent;
+  border: none;
 `
 
 const Muted = styled.div`
@@ -198,16 +202,17 @@ const Muted = styled.div`
 `
 
 const CabinetName = styled.div`
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 6px;
 `
 
 const MemberList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  column-gap: 18px;
+  row-gap: 5px;
 `
 
 const MemberRow = styled.div<{ $head?: boolean }>`
@@ -215,6 +220,9 @@ const MemberRow = styled.div<{ $head?: boolean }>`
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  padding: 2px 0;
+  background: transparent;
+  border: none;
   ${({ $head }) => $head && 'font-weight: 600;'}
 `
 

@@ -18,11 +18,19 @@ export interface ContemporaryChip {
   personId: string
   /** 왕호·묘호 우선, 없으면 표시명 규칙(getPersonDisplayName) */
   label: string
+  /** 라벨이 왕호·묘호일 때 본명(표시명) — 라벨과 같으면 null */
+  realName: string | null
   category: PositionCategory
   /** "1567–1608" / "2022–"(생존 현직) / "1418–?"(종료 미상) */
   spanText: string
   /** 어떤 재임인지 상시 노출 — record.title('황제'·'내각총리대신') 우선, 없으면 카테고리 라벨 */
   positionText: string
+  /** 겹친 연수 (0 이상으로 클램프) */
+  overlapYears: number
+  /** 기준 창(window) 안에서 겹침이 시작되는 상대 위치 (0~94%) */
+  overlapStartPct: number
+  /** 기준 창(window) 안에서 겹침이 차지하는 상대 폭 (6~100%) */
+  overlapWidthPct: number
   profileImageUrl: string | null
   /** false면 타계정 소유 — 상세를 열 수 없어 비클릭 렌더 (가계도 isOwned 선례) */
   isOwned: boolean
@@ -139,6 +147,33 @@ export function chipDetailTextOf(
 }
 
 /**
+ * 기준 창(fromYear ~ toYear, toYear는 배타) 안에서 이 수장 기록이 겹치는 상대 구간(%)을 계산.
+ * 미니 프로필 카드 하단의 마이크로 타임라인 바에서 초반·중반·후반·전기간 겹침을 한눈에 보여준다.
+ */
+export function overlapRangePctOf(
+  record: ContemporaryRecord,
+  window: { fromYear: number; toYear: number },
+): { startPct: number; widthPct: number } {
+  const totalSpan = Math.max(1, window.toYear - window.fromYear)
+  const recordEndExclusive = (record.endYear ?? window.toYear - 1) + 1
+  const clampedStart = Math.max(
+    window.fromYear,
+    Math.min(window.toYear, record.startYear),
+  )
+  const clampedEnd = Math.max(
+    clampedStart,
+    Math.min(window.toYear, recordEndExclusive),
+  )
+  const rawStart = Math.round(
+    ((clampedStart - window.fromYear) / totalSpan) * 100,
+  )
+  const startPct = Math.max(0, Math.min(94, rawStart))
+  const rawWidth = Math.round(((clampedEnd - clampedStart) / totalSpan) * 100)
+  const widthPct = Math.max(6, Math.min(100 - startPct, rawWidth))
+  return { startPct, widthPct }
+}
+
+/**
  * 국가별 그룹핑 — 그룹·칩 순서는 서버 정렬(겹침 길이 내림차순)의 첫 등장 순서를 보존.
  * 국가 정보가 없는 기록(교황 등)은 '기타' 그룹.
  */
@@ -169,12 +204,20 @@ export function groupRulersByCountry(
       }
       groups.set(key, group)
     }
+    const label = chipLabelOf(ruler, record)
+    const displayName = displayNameOf(ruler)
+    const realName = displayName && displayName !== label ? displayName : null
+    const { startPct, widthPct } = overlapRangePctOf(record, window)
     group.chips.push({
       personId: ruler.person.id,
-      label: chipLabelOf(ruler, record),
+      label,
+      realName,
       category,
       spanText: spanTextOf(ruler, record),
       positionText: record.title?.trim() || CATEGORY_TOKENS[category].label,
+      overlapYears: Math.max(0, ruler.overlapYears),
+      overlapStartPct: startPct,
+      overlapWidthPct: widthPct,
       profileImageUrl: ruler.person.profileImageUrl,
       isOwned: ruler.person.isOwned,
       detailText: chipDetailTextOf(ruler, record),

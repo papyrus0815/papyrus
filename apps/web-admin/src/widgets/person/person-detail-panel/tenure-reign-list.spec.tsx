@@ -382,4 +382,82 @@ describe('TenureReignList', () => {
     fireEvent.click(achEventBtn)
     expect(onEventClick).toHaveBeenCalledWith('ev-versailles')
   })
+
+  it('인라인 삭제 콜백(onDeleteTenure·onDeleteReign)이 전달되면 삭제 버튼이 노출되고 클릭 시(id, mainTitle)이 전달된다', () => {
+    const onDeleteReign = jest.fn()
+    const onDeleteTenure = jest.fn()
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        onDeleteReign={onDeleteReign}
+        onDeleteTenure={onDeleteTenure}
+        items={[
+          makeItem({
+            kind: 'reign',
+            record: {
+              id: 'r-del',
+              title: '국왕',
+              regnalName: '루이 14세',
+            },
+          }),
+          makeItem({
+            kind: 'tenure',
+            record: {
+              id: 't-del',
+              title: '총리',
+              startDate: '1908-01-15T00:00:00.000Z',
+              endDate: '1908-05-01T00:00:00.000Z',
+              endDatePrecision: 'month',
+            },
+          }),
+        ]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '루이 14세 · 국왕 삭제' }))
+    expect(onDeleteReign).toHaveBeenCalledWith('r-del', '루이 14세 · 국왕')
+
+    fireEvent.click(screen.getByRole('button', { name: '총리 삭제' }))
+    expect(onDeleteTenure).toHaveBeenCalledWith('t-del', '총리')
+
+    // endDatePrecision='month'가 deriveTenurePeriodLabel로 전달되어 '1908년 5월 1일' 대신 '1908년 5월'로 표시됨
+    expect(screen.getByText(/^1908년 1월 15일 – 1908년 5월$/)).toBeInTheDocument()
+  })
+
+  it('카탈로그 기본 직책·영문 직책명·소속 기관·당선 선거·연대표 비표시 상태를 표시한다', () => {
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        items={[
+          makeItem({
+            kind: 'tenure',
+            record: {
+              id: 't-meta',
+              title: '주러시아 대사',
+              titleEn: 'Ambassador to Russia',
+              showPositionInfo: false,
+              positionDefinition: {
+                id: 'def-amb',
+                title: '대사',
+                isGeneric: false,
+                organization: { id: 'org-1', name: '외무성' },
+              },
+              electionCandidacy: {
+                id: 'cand-1',
+                election: { id: 'el-1', name: '제20대 대통령 선거' },
+              },
+            },
+          }),
+        ]}
+      />,
+    )
+
+    expect(screen.getByText('· 대사')).toBeInTheDocument()
+    expect(screen.getByText('주러시아 대사')).toBeInTheDocument()
+    expect(screen.getByText('Ambassador to Russia')).toBeInTheDocument()
+    expect(screen.getByText('외무성')).toBeInTheDocument()
+    expect(screen.getByText('선거')).toBeInTheDocument()
+    expect(screen.getByText('제20대 대통령 선거')).toBeInTheDocument()
+    expect(screen.getByText('연대표 비표시')).toBeInTheDocument()
+  })
 })

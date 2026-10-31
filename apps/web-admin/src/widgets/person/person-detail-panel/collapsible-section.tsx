@@ -12,7 +12,7 @@ import styled from 'styled-components'
 
 import { CountMuted, sectionHeadingCss } from './person-detail-panel.styles'
 
-const STORAGE_PREFIX = 'papyrus.person-overview.collapse.'
+const STORAGE_PREFIX = 'papyrus.person-career.collapse.'
 
 function readStored(storageKey: string, defaultOpen: boolean): boolean {
   try {
@@ -26,6 +26,8 @@ function readStored(storageKey: string, defaultOpen: boolean): boolean {
 }
 
 interface CollapsibleSectionProps {
+  /** 섹션 DOM id (앵커 스크롤용) */
+  id?: string
   /** 접힘 상태 보존 키 (섹션별 고유) */
   storageKey: string
   ariaLabel: string
@@ -42,6 +44,7 @@ interface CollapsibleSectionProps {
 }
 
 export function CollapsibleSection({
+  id,
   storageKey,
   ariaLabel,
   icon,
@@ -71,7 +74,13 @@ export function CollapsibleSection({
   const bodyId = `overview-collapsible-${storageKey}`
 
   return (
-    <section aria-label={ariaLabel} data-collapsible data-empty={isEmpty || undefined}>
+    <SectionRoot
+      id={id}
+      aria-label={ariaLabel}
+      data-collapsible
+      data-open={effectiveOpen ? 'true' : 'false'}
+      data-empty={isEmpty || undefined}
+    >
       <HeaderRow $open={effectiveOpen}>
         {isEmpty ? (
           <StaticHeading>
@@ -86,12 +95,12 @@ export function CollapsibleSection({
             aria-expanded={open}
             aria-controls={bodyId}
           >
-            <Chevron $open={open}>
-              <FiChevronRight size={14} strokeWidth={2.4} />
-            </Chevron>
             {icon}
             <TitleText>{title}</TitleText>
             {count != null && <CountMuted>{count}</CountMuted>}
+            <Chevron $open={open}>
+              <FiChevronRight size={14} strokeWidth={2.4} />
+            </Chevron>
           </ToggleButton>
         )}
         {actions}
@@ -115,17 +124,30 @@ export function CollapsibleSection({
           )}
         </AnimatePresence>
       )}
-    </section>
+    </SectionRoot>
   )
 }
+
+const SectionRoot = styled.section`
+  scroll-margin-top: var(--person-sticky-offset, 24px);
+`
 
 const HeaderRow = styled.div<{ $open: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-bottom: ${({ $open }) => ($open ? '10px' : '0')};
   /* 접혀 있으면 아래에 아무것도 없으므로 여백도 두지 않는다 */
-  margin-bottom: ${({ $open }) => ($open ? '14px' : '0')};
+  margin-bottom: ${({ $open }) => ($open ? '8px' : '0')};
+  border-bottom: ${({ $open, theme }) =>
+    $open
+      ? `1px solid ${
+          theme.mode === 'dark'
+            ? 'rgba(255, 255, 255, 0.08)'
+            : 'rgba(15, 23, 42, 0.09)'
+        }`
+      : 'none'};
 `
 
 const StaticHeading = styled.h3`
@@ -153,7 +175,9 @@ const ToggleButton = styled.button`
 const Chevron = styled.span<{ $open: boolean }>`
   display: inline-flex;
   align-items: center;
-  transition: transform 0.2s ease;
+  margin-left: -2px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: transform 0.2s ease, color 0.15s ease;
   transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
 `
 

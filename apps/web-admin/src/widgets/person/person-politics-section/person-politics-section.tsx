@@ -211,7 +211,16 @@ export function PersonPoliticsSection({
     enabled: isMembershipModalOpen,
   })
 
-  const memberships = membershipsProp ?? []
+  const memberships = useMemo(() => {
+    const raw = membershipsProp ?? []
+    return raw.slice().sort((a, b) => {
+      const ta = a.startDate ? Date.parse(a.startDate) : Number.POSITIVE_INFINITY
+      const tb = b.startDate ? Date.parse(b.startDate) : Number.POSITIVE_INFINITY
+      const sa = Number.isFinite(ta) ? ta : Number.POSITIVE_INFINITY
+      const sb = Number.isFinite(tb) ? tb : Number.POSITIVE_INFINITY
+      return sa - sb
+    })
+  }, [membershipsProp])
 
   const invalidatePerson = () => {
     queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
@@ -320,12 +329,25 @@ export function PersonPoliticsSection({
   const candidacies = candidaciesProp ?? []
 
   const candidacySummary = useMemo(() => {
-    return candidacies.map((candidacy) => ({
-      ...candidacy,
-      pollLabel: candidacy.election?.pollDate
-        ? new Date(candidacy.election.pollDate).toLocaleDateString('ko-KR', { timeZone: 'UTC' })
-        : '—',
-    }))
+    return candidacies
+      .slice()
+      .sort((a, b) => {
+        const ta = a.election?.pollDate
+          ? Date.parse(a.election.pollDate)
+          : Number.POSITIVE_INFINITY
+        const tb = b.election?.pollDate
+          ? Date.parse(b.election.pollDate)
+          : Number.POSITIVE_INFINITY
+        const sa = Number.isFinite(ta) ? ta : Number.POSITIVE_INFINITY
+        const sb = Number.isFinite(tb) ? tb : Number.POSITIVE_INFINITY
+        return sa - sb
+      })
+      .map((candidacy) => ({
+        ...candidacy,
+        pollLabel: candidacy.election?.pollDate
+          ? new Date(candidacy.election.pollDate).toLocaleDateString('ko-KR', { timeZone: 'UTC' })
+          : '—',
+      }))
   }, [candidacies])
 
   return (
@@ -588,9 +610,80 @@ export function PersonPoliticsSection({
       <>
       {(variant !== 'overview' || memberships.length > 0) && (
       <>
-      <SubTitle>당원·소속 이력</SubTitle>
+      {variant === 'overview' ? (
+        <OverviewSubTitle>
+          <span>당원·소속 이력</span>
+          <OverviewSubCount>{memberships.length}</OverviewSubCount>
+        </OverviewSubTitle>
+      ) : (
+        <SubTitle>당원·소속 이력</SubTitle>
+      )}
       {memberships.length === 0 ? (
         <Empty>등록된 당원 소속이 없습니다.</Empty>
+      ) : variant === 'overview' ? (
+        <OverviewList>
+          {memberships.map((membershipRow) => {
+            const roleCatLabel = labelPartyMembershipRoleCategory(
+              membershipRow.roleCategory as PartyMembershipRoleCategory | null,
+            )
+            const tierLabel =
+              membershipRow.roleCategory === 'LEADERSHIP' &&
+              membershipRow.leadershipTier &&
+              membershipRow.leadershipTier !== 'UNSPECIFIED'
+                ? labelPartyMembershipLeadershipTier(
+                    membershipRow.leadershipTier as PartyMembershipLeadershipTier,
+                  )
+                : null
+            const startYmd = membershipDateToYmd(membershipRow.startDate)
+            const endDisplay = membershipEndDisplay(membershipRow.endDate)
+            const periodLabel = `${startYmd || '미상'} ~ ${endDisplay}`
+            const isOngoing = !membershipRow.endDate && !!startYmd
+            return (
+              <OverviewItem key={membershipRow.id}>
+                <OverviewActionGroup>
+                  <OverviewActionBtn
+                    type="button"
+                    aria-label="수정"
+                    onClick={() => startEdit(membershipRow)}
+                  >
+                    <FiEdit2 size={12} />
+                  </OverviewActionBtn>
+                  <OverviewActionBtn
+                    type="button"
+                    $danger
+                    aria-label="삭제"
+                    disabled={deleteMut.isPending}
+                    onClick={() => setDeleteTarget(membershipRow)}
+                  >
+                    <FiTrash2 size={13} />
+                  </OverviewActionBtn>
+                </OverviewActionGroup>
+                <OverviewDateCol $ongoing={isOngoing} $muted={!startYmd}>
+                  {periodLabel}
+                </OverviewDateCol>
+                <OverviewMainCol>
+                  <OverviewHeader>
+                    <OverviewTitle>
+                      {membershipRow.party?.name ?? membershipRow.partyId}
+                    </OverviewTitle>
+                    {membershipRow.roleTitle && (
+                      <OverviewRoleBadge $accent>
+                        {membershipRow.roleTitle}
+                      </OverviewRoleBadge>
+                    )}
+                    <OverviewRoleBadge>{roleCatLabel}</OverviewRoleBadge>
+                    {tierLabel && (
+                      <OverviewRoleBadge>{tierLabel}</OverviewRoleBadge>
+                    )}
+                  </OverviewHeader>
+                  {membershipRow.notes && (
+                    <OverviewNotes>{membershipRow.notes}</OverviewNotes>
+                  )}
+                </OverviewMainCol>
+              </OverviewItem>
+            )
+          })}
+        </OverviewList>
       ) : (
         <TableScrollWrap>
         <Table>
@@ -655,18 +748,64 @@ export function PersonPoliticsSection({
       )}
       {(variant !== 'overview' || candidacySummary.length > 0) && (
       <>
-      <SubTitle
-        style={{
-          marginTop: variant === 'overview' && memberships.length === 0 ? 0 : 22,
-        }}
-      >
-        선거 후보 이력
-      </SubTitle>
+      {variant === 'overview' ? (
+        <OverviewSubTitle
+          style={{
+            marginTop: memberships.length === 0 ? 4 : 18,
+          }}
+        >
+          <span>선거 후보 이력</span>
+          <OverviewSubCount>{candidacySummary.length}</OverviewSubCount>
+        </OverviewSubTitle>
+      ) : (
+        <SubTitle
+          style={{
+            marginTop: variant === 'overview' && memberships.length === 0 ? 0 : 22,
+          }}
+        >
+          선거 후보 이력
+        </SubTitle>
+      )}
       {candidacySummary.length === 0 ? (
         <Empty>
           후보로 등록된 선거가 없습니다. 선거(선거관리)에서 후보를 추가하면
           표시됩니다.
         </Empty>
+      ) : variant === 'overview' ? (
+        <OverviewList>
+          {candidacySummary.map((candidacyRow) => {
+            const metaBits = [
+              candidacyRow.party?.name ?? null,
+              candidacyRow.electoralDistrict?.name
+                ? `선거구: ${candidacyRow.electoralDistrict.name}`
+                : null,
+              candidacyRow.result?.voteSharePercent != null
+                ? `득표율 ${String(candidacyRow.result.voteSharePercent)}%`
+                : null,
+            ].filter(Boolean) as string[]
+            const hasPollDate = candidacyRow.pollLabel !== '—'
+            return (
+              <OverviewItem key={candidacyRow.id}>
+                <OverviewDateCol $muted={!hasPollDate}>
+                  {hasPollDate ? candidacyRow.pollLabel : '일자 미상'}
+                </OverviewDateCol>
+                <OverviewMainCol>
+                  <OverviewHeader>
+                    <OverviewTitle>
+                      {candidacyRow.election?.name ?? '선거'}
+                    </OverviewTitle>
+                    {candidacyRow.result?.elected && (
+                      <ElectedBadge>당선</ElectedBadge>
+                    )}
+                  </OverviewHeader>
+                  {metaBits.length > 0 && (
+                    <OverviewMeta>{metaBits.join(' · ')}</OverviewMeta>
+                  )}
+                </OverviewMainCol>
+              </OverviewItem>
+            )
+          })}
+        </OverviewList>
       ) : (
         <CandidacyList>
           {candidacySummary.map((candidacyRow) => (
@@ -1006,4 +1145,200 @@ const ElectedBadge = styled.span`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(20, 184, 166, 0.22)' : 'rgba(13, 148, 136, 0.15)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
+`
+
+const OverviewSubTitle = styled.h4`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 4px 0 2px;
+  padding: 2px 0 2px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border-left: 2.5px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
+`
+
+const OverviewSubCount = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const OverviewList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+`
+
+const OverviewActionGroup = styled.div`
+  position: absolute;
+  top: 10px;
+  right: 6px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+  @media (hover: none) {
+    opacity: 0.85;
+  }
+`
+
+const OverviewItem = styled.div`
+  position: relative;
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  gap: 4px 18px;
+  align-items: baseline;
+  padding: 12px 10px;
+  border-radius: 8px;
+  background: transparent;
+  transition: background-color 0.14s ease;
+
+  & + & {
+    border-top: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.07)'
+          : 'rgba(15, 23, 42, 0.075)'};
+    border-radius: 0;
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.025)'
+        : 'rgba(15, 23, 42, 0.02)'};
+  }
+  &:hover ${OverviewActionGroup},
+  &:focus-within ${OverviewActionGroup} {
+    opacity: 1;
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+    gap: 3px;
+    padding: 11px 8px;
+  }
+`
+
+const OverviewDateCol = styled.div<{
+  $ongoing?: boolean
+  $muted?: boolean
+}>`
+  font-size: 12.5px;
+  font-weight: ${({ $ongoing, $muted }) =>
+    $ongoing ? 700 : $muted ? 500 : 600};
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+  word-break: keep-all;
+  color: ${({ theme, $ongoing, $muted }) =>
+    $ongoing
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4338ca'
+      : $muted
+        ? theme.colors.text.tertiary
+        : theme.colors.text.secondary};
+`
+
+const OverviewMainCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+const OverviewActionBtn = styled.button<{ $danger?: boolean }>`
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+  &:hover:not(:disabled) {
+    color: ${({ $danger }) => ($danger ? '#e11d48' : '#4f46e5')};
+    background: ${({ $danger }) =>
+      $danger ? 'rgba(244, 63, 94, 0.1)' : 'rgba(99, 102, 241, 0.1)'};
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+`
+
+const OverviewHeader = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding-right: 56px;
+`
+
+const OverviewTitle = styled.span`
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  line-height: 1.35;
+`
+
+const OverviewRoleBadge = styled.span<{ $accent?: boolean }>`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme, $accent }) =>
+    $accent
+      ? theme.mode === 'dark'
+        ? '#c7d2fe'
+        : '#4338ca'
+      : theme.colors.text.secondary};
+  padding: 2px 7px;
+  border-radius: 5px;
+  line-height: 1.3;
+  background: ${({ theme, $accent }) =>
+    $accent
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.16)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15, 23, 42, 0.05)'};
+  border: 1px solid
+    ${({ theme, $accent }) =>
+      $accent
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.28)'
+          : 'rgba(99, 102, 241, 0.18)'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : 'rgba(15, 23, 42, 0.07)'};
+`
+
+const OverviewMeta = styled.div`
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+`
+
+const OverviewNotes = styled.p`
+  margin: 2px 0 0;
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.65;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: pre-wrap;
 `

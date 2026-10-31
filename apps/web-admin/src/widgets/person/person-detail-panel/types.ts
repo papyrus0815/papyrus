@@ -21,6 +21,8 @@ export interface TenureLikeRecord {
   /** 시작일 정밀도 — 'year'면 연도만 앎(표시는 'YYYY년', 나이는 'N세경') */
   startDatePrecision?: string | null
   endDate?: string | null
+  /** 종료일 정밀도 — 'year'/'month'/null(일 단위) */
+  endDatePrecision?: string | null
   /** 즉위·대관식 사건(Event 정본) 링크 */
   accessionEventId?: string | null
   accessionEvent?: { id: string; title?: string | null; deletedAt?: string | null } | null
@@ -37,17 +39,26 @@ export interface TenureLikeRecord {
   endReason?: string | null
   endReasonDetail?: string | null
   title?: string | null
+  titleEn?: string | null
+  /** 사건 목록(연대표)에 직함 표시 여부 (기본 true, false면 비표시) */
+  showPositionInfo?: boolean | null
   /** 직위 유형(GovernmentPositionType — HEAD_OF_STATE 등). 재임에만 존재, 재위는 없음. */
   positionType?: string | null
   /** 직책 정의 — positionType·isMonarchical은 기록 가족(관직/작위/군주) 판정에 쓴다 */
   positionDefinition?: {
     id?: string
     title?: string | null
+    isGeneric?: boolean | null
     positionType?: string | null
     isMonarchical?: boolean | null
+    organization?: { id?: string; name?: string | null } | null
   } | null
   country?: { id?: string; name?: string | null } | null
   historicalCountry?: { id?: string; name?: string | null } | null
+  electionCandidacy?: {
+    id?: string
+    election?: { id?: string; name?: string | null; pollDate?: string | null } | null
+  } | null
   achievements?: TenureAchievementItem[] | null
   /** 각료로 소속된 행정부(같은 행정부 동료 표시용). 재임에만 존재. */
   cabinetId?: string | null

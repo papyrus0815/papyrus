@@ -175,4 +175,26 @@ describe('CollapsibleSection', () => {
     ).not.toBeInTheDocument()
     expect(screen.getByTestId('mounted-modal-host')).toBeInTheDocument()
   })
+
+  it('이전 개요 탭 시절 localStorage 키(papyrus.person-overview.collapse.*)가 0이어도 defaultOpen이 true면 열린 상태로 시작한다', () => {
+    window.localStorage.setItem('papyrus.person-overview.collapse.education', '0')
+    window.localStorage.removeItem('papyrus.person-career.collapse.education')
+
+    renderWithTheme(
+      <CollapsibleSection
+        storageKey="education"
+        ariaLabel="학력"
+        icon={<span data-testid="icon" />}
+        title="학력"
+        count={1}
+        defaultOpen
+      >
+        <div>성균관 입학</div>
+      </CollapsibleSection>,
+    )
+
+    const toggleBtn = screen.getByRole('button', { name: /학력/ })
+    expect(toggleBtn).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('성균관 입학')).toBeInTheDocument()
+  })
 })

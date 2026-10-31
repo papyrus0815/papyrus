@@ -7,6 +7,7 @@ import {
   chipDetailTextOf,
   chipLabelOf,
   groupRulersByCountry,
+  overlapRangePctOf,
   primaryRecordOf,
   spanTextOf,
   windowCaptionOf,
@@ -273,6 +274,41 @@ describe('groupRulersByCountry', () => {
       '황제',
       '군주·왕족',
     ])
+  })
+
+  it('라벨이 묘호·왕호일 때 realName에 본명을 담고, 본명 그대로면 null을 담는다', () => {
+    const sejong = ruler({ id: 'sejong', templeName: '세종', name: '이도' })
+    const plain = ruler({ id: 'plain', templeName: null, name: '이도' })
+    const groups = groupRulersByCountry([sejong, plain], WINDOW)
+    expect(groups[0]!.chips[0]!.realName).toBe('이도')
+    expect(groups[0]!.chips[1]!.realName).toBeNull()
+  })
+})
+
+describe('overlapRangePctOf — 기준 창 대비 겹침 시작·폭(%) 계산', () => {
+  it('전 구간 겹침은 0% 시작 · 100% 폭을 반환한다', () => {
+    expect(
+      overlapRangePctOf(
+        record({ startYear: 1418, endYear: 1450 }),
+        { fromYear: 1418, toYear: 1451 },
+      ),
+    ).toEqual({ startPct: 0, widthPct: 100 })
+  })
+
+  it('초반·후반 일부 겹침의 시작 위치와 폭을 창 비율로 계산한다', () => {
+    const early = overlapRangePctOf(
+      record({ startYear: 1402, endYear: 1424 }),
+      { fromYear: 1418, toYear: 1451 },
+    )
+    expect(early.startPct).toBe(0)
+    expect(early.widthPct).toBe(21)
+
+    const late = overlapRangePctOf(
+      record({ startYear: 1435, endYear: 1449 }),
+      { fromYear: 1418, toYear: 1451 },
+    )
+    expect(late.startPct).toBe(52)
+    expect(late.widthPct).toBe(45)
   })
 })
 
