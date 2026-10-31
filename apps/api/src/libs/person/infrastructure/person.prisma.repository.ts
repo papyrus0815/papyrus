@@ -259,7 +259,16 @@ const PERSON_CARD_INCLUDE = {
       positionType: true,
       title: true,
       startDate: true,
+      startDatePrecision: true,
+      startEra: true,
+      startYear: true,
+      startMonth: true,
+      startDay: true,
       endDate: true,
+      endEra: true,
+      endYear: true,
+      endMonth: true,
+      endDay: true,
       notes: true,
       regnalName: true,
       positionDefinition: {
@@ -275,7 +284,7 @@ const PERSON_CARD_INCLUDE = {
       country: { select: { id: true, name: true } },
       historicalCountry: { select: { id: true, name: true } },
     },
-    orderBy: { startDate: 'desc' as const },
+    orderBy: [{ startKey: 'desc' as const }, { startDate: 'desc' as const }],
   },
 } satisfies Prisma.PersonInclude
 
@@ -449,6 +458,10 @@ function asChronologyRow<T extends Record<string, any>>(row: T) {
 /** 인물 상세의 재위 목록 select — 재임 테이블 군주직 행 (대수 = ordinal) */
 const PERSON_DETAIL_REIGN_SELECT = {
   id: true,
+  positionType: true,
+  title: true,
+  titleEn: true,
+  showPositionInfo: true,
   startDate: true,
   endDate: true,
   notes: true,
@@ -474,7 +487,7 @@ const PERSON_DETAIL_REIGN_SELECT = {
   endReason: true,
   endReasonDetail: true,
   positionDefinition: {
-    select: { id: true, title: true },
+    select: { id: true, title: true, isGeneric: true },
   },
   country: { select: { id: true, name: true } },
   historicalCountry: { select: { id: true, name: true } },
@@ -2015,6 +2028,14 @@ export class PersonPrismaRepository implements IPersonRepository {
             appointmentMethod: true,
             appointmentDetail: true,
             startDatePrecision: true,
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            endEra: true,
+            endYear: true,
+            endMonth: true,
+            endDay: true,
             accessionEventId: true,
             accessionEvent: { select: { id: true, title: true, deletedAt: true } },
             endReason: true,
@@ -2025,6 +2046,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               select: {
                 id: true,
                 title: true,
+                isGeneric: true,
                 rank: true,
                 description: true,
                 category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
@@ -2054,9 +2076,10 @@ export class PersonPrismaRepository implements IPersonRepository {
             headOfCabinet: { select: { id: true, name: true } },
             achievements: TENURE_ACHIEVEMENTS_SELECT,
           },
-          orderBy: {
-            startDate: Prisma.SortOrder.desc,
-          },
+          orderBy: [
+            { startKey: Prisma.SortOrder.desc },
+            { startDate: Prisma.SortOrder.desc },
+          ],
         },
         // 전기(생애 서술) 다중 섹션 — 상세 화면에서 order 순으로 렌더링.
         // 연보(lifeEvents)는 상세 응답이 아니라 별도 엔드포인트(listPersonLifeEvents)로
@@ -2192,7 +2215,10 @@ export class PersonPrismaRepository implements IPersonRepository {
     const reigns = await this.prisma.governmentPositionTenure.findMany({
       where: reignWhere({ personId: person.id }),
       select: PERSON_DETAIL_REIGN_SELECT,
-      orderBy: { startDate: Prisma.SortOrder.desc },
+      orderBy: [
+        { startKey: Prisma.SortOrder.desc },
+        { startDate: Prisma.SortOrder.desc },
+      ],
     })
     return { ...person, sovereignReigns: reigns.map((reign) => asOfficeHolding(reign, true)) }
   }
@@ -3369,6 +3395,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
         positionDefinition: true,
+        administrationDepartment: {
+          select: { id: true, name: true, categoryId: true },
+        },
         country: true,
         historicalCountry: true,
         achievements: TENURE_ACHIEVEMENTS_INCLUDE,
@@ -3392,6 +3421,10 @@ export class PersonPrismaRepository implements IPersonRepository {
       subTermNumber: true,
       startDate: true,
       endDate: true,
+      administrationDepartmentId: true,
+      administrationDepartment: {
+        select: { id: true, name: true, categoryId: true },
+      },
       person: {
         select: {
           id: true,
@@ -3405,7 +3438,15 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
       },
-      positionDefinition: { select: { id: true, title: true, rank: true } },
+      positionDefinition: {
+        select: {
+          id: true,
+          title: true,
+          rank: true,
+          categoryId: true,
+          administrationDepartmentId: true,
+        },
+      },
       /*
        * 이 임기를 낳은 선거. 행정부 지면이 "이 정권은 어느 선거로 섰나"를 보여주려면
        * 후보(candidacy)를 거쳐 선거까지 따라가야 한다 — 스키마에 이미 있던 경로인데

@@ -49,6 +49,11 @@ export interface PersonSovereignReignSummaryDto {
   endReason: string | null
   /** 퇴위 사유 상세 서술 */
   endReasonDetail: string | null
+  /** 구체 직함 (정의보다 구체적인 이름일 때만 저장됨) */
+  title?: string | null
+  titleEn?: string | null
+  positionType?: string | null
+  showPositionInfo?: boolean
   /** 직위 정의 (군주위) */
   positionDefinition: { id: string; title: string | null } | null
   /** 현대 국가 */

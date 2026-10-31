@@ -17,20 +17,23 @@ export class UpdateTenureAchievementDto {
   @IsString()
   title?: string
 
-  @ApiProperty({ description: '설명', required: false })
+  @ApiProperty({ description: '설명 (null이면 비움)', required: false, nullable: true })
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsString()
-  description?: string
+  description?: string | null
 
-  @ApiProperty({ description: '시작일 (ISO)', required: false })
+  @ApiProperty({ description: '시작일 (ISO, null이면 비움)', required: false, nullable: true })
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsDateString()
-  startDate?: string
+  startDate?: string | null
 
-  @ApiProperty({ description: '종료일 (ISO)', required: false })
+  @ApiProperty({ description: '종료일 (ISO, null이면 비움)', required: false, nullable: true })
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsDateString()
-  endDate?: string
+  endDate?: string | null
 
   @ApiProperty({ description: '표시 순서', required: false })
   @IsOptional()

@@ -478,6 +478,12 @@ export type GovernmentCabinetTenureItem = {
   title?: string | null
   startDate?: string | null
   endDate?: string | null
+  administrationDepartmentId?: string | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    categoryId?: string | null
+  } | null
   person?: {
     id: string
     name?: string | null
@@ -501,6 +507,7 @@ export type GovernmentCabinetTenureItem = {
     title: string
     titleEn?: string | null
     titleLocal?: string | null
+    categoryId?: string | null
     administrationDepartmentId?: string | null
     positionType?: string | null
   } | null
@@ -611,6 +618,12 @@ export type CabinetOverviewTenure = {
   subTermNumber?: number | null
   startDate?: string | null
   endDate?: string | null
+  administrationDepartmentId?: string | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    categoryId?: string | null
+  } | null
   person: {
     id: string
     name: string
@@ -625,7 +638,13 @@ export type CabinetOverviewTenure = {
       flagEmoji?: string | null
     } | null
   }
-  positionDefinition?: { id: string; title?: string | null; rank?: number | null } | null
+  positionDefinition?: {
+    id: string
+    title?: string | null
+    rank?: number | null
+    categoryId?: string | null
+    administrationDepartmentId?: string | null
+  } | null
 }
 
 /** 행정부를 지지한 정당(여당·연정) 1건 */
@@ -802,9 +821,9 @@ export const personCareerApi = {
     achievementId: string,
     dto: {
       title?: string
-      description?: string
-      startDate?: string
-      endDate?: string
+      description?: string | null
+      startDate?: string | null
+      endDate?: string | null
       orderNum?: number
       showOnEventsPage?: boolean
       /** null이면 사건 연결 해제 */

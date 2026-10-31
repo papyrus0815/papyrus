@@ -288,13 +288,30 @@ export class AdministrationDepartmentController {
 
   /**
    * 국가별 행정부처 목록 조회
+   * 현대국가 조회 시 연결된 하위 역사국가(historicalCountryModernCountry) 소속 부처도 함께 반환해
+   * 시대별 정권·내각 화면에서 과거 부처(6조·대장성·육군성 등)까지 매칭·필터링할 수 있게 한다.
    */
   @Get('country/:countryId')
   async getByCountryId(
     @Param('countryId') countryId: string,
   ): Promise<AdministrationDepartmentResponseDto[]> {
+    const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+      .findMany({
+        where: { modernCountryId: countryId },
+        select: { historicalCountryId: true },
+      })
+      .then((rows) => rows.map((r) => r.historicalCountryId))
+
     const list = await this.prisma.administrationDepartment.findMany({
-      where: { countryId },
+      where:
+        linkedHistoricalIds.length > 0
+          ? {
+              OR: [
+                { countryId },
+                { historicalCountryId: { in: linkedHistoricalIds } },
+              ],
+            }
+          : { countryId },
       orderBy: { name: 'asc' },
       include: this.departmentInclude,
     })
