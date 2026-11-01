@@ -245,6 +245,7 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   fatherId: string
   motherId: string
   illegitimate: boolean
+  birthOrder?: string
   /** 배우자 파츠 행 — 구형 스냅샷(부분 정밀 문자열/ISO)은 normalizeSpouseRow가 승격 */
   spouseRelations: SpouseFormRow[]
   profileImageUrl: string

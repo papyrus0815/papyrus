@@ -8,6 +8,11 @@
  *  - ftResolveParentIds는 노드 FK 스칼라를 1차로 직독(gender·삽입순서 휴리스틱은 구 응답 폴백).
  */
 import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
+
+jest.mock('@/shared/api/upload', () => ({
+  getUploadImageUrl: (url: string) => url,
+}))
+
 import {
   classifySiblingKinship,
   ftResolveParentIds,
@@ -16,6 +21,12 @@ import {
   siblingKinshipNote,
   withSiblingKinshipMeta,
 } from './family-tree-derive'
+import {
+  buildPersonTooltipLines,
+  compareSiblings,
+  isDeceasedOf,
+  lifeSpan,
+} from './utils'
 
 const F1 = 'father-1'
 const F2 = 'father-2'
@@ -275,5 +286,74 @@ describe('ftResolveParentIds — 노드 FK 스칼라 직독 승격', () => {
       fatherId: F1,
       motherId: undefined,
     })
+  })
+})
+
+describe('compareSiblings / lifeSpan / isDeceasedOf / buildPersonTooltipLines', () => {
+  it('compareSiblings: birthOrder 1순위 → 부호 출생연도 2순위 → id 3순위', () => {
+    const list = [
+      { id: 'c', birthYear: 1400, birthOrder: 3 },
+      { id: 'a', birthYear: 1400, birthOrder: 1 },
+      { id: 'b', birthYear: 1395, birthOrder: 2 },
+      { id: 'd', birthYear: 1410, birthOrder: null },
+    ]
+    const sorted = [...list].sort(compareSiblings)
+    expect(sorted.map((x) => x.id)).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('lifeSpan & isDeceasedOf: 사망연도 미상이어도 isAlive=false이면 1210–? 표기 및 사망자 판정', () => {
+    const historicalDeceased = {
+      id: 'p1',
+      name: 'p1',
+      birthYear: 1210,
+      deathYear: null,
+      isAlive: false,
+    }
+    expect(lifeSpan(historicalDeceased)).toBe('1210–?')
+    expect(isDeceasedOf(historicalDeceased)).toBe(true)
+
+    const living = {
+      id: 'p2',
+      name: 'p2',
+      birthYear: 1990,
+      deathYear: null,
+      isAlive: true,
+    }
+    expect(lifeSpan(living)).toBe('1990–')
+    expect(isDeceasedOf(living)).toBe(false)
+  })
+
+  it('lifeSpan: 생몰년 전면 미상 시 floruit(활동시기) 폴백', () => {
+    const ancient = {
+      id: 'p3',
+      name: 'p3',
+      birthYear: null,
+      deathYear: null,
+      isAlive: false,
+      floruitStartYear: 350,
+      floruitEndYear: 300,
+      floruitEra: 'BC' as const,
+    }
+    expect(lifeSpan(ancient)).toBe('fl. BC 350–BC 300')
+    expect(isDeceasedOf(ancient)).toBe(true)
+  })
+
+  it('buildPersonTooltipLines: 출생 서열·혼인 형태·혼인 기간·혼인 비고 포함', () => {
+    const lines = buildPersonTooltipLines({
+      posthumousName: '소헌왕후',
+      birthOrder: 1,
+      marriageRank: 'PRIMARY',
+      marriageStartYear: 1408,
+      marriageEndYear: 1446,
+      marriageNote: '정실 왕비',
+    })
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        { label: '서열', value: '1번째' },
+        { label: '혼인 형태', value: '정실' },
+        { label: '혼인 기간', value: '1408–1446' },
+        { label: '혼인 비고', value: '정실 왕비' },
+      ]),
+    )
   })
 })

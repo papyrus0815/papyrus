@@ -68,11 +68,18 @@ export interface FamilyMember {
   id?: string
   name: string
   birthDate?: string | null
+  birthEra?: string | null
+  birthDatePrecision?: string | null
   deathDate?: string | null
+  deathEra?: string | null
+  deathDatePrecision?: string | null
 }
 
 export interface SpouseRelationInput extends FamilyMember {
   marriageStartDate?: string | null
+  marriageStartYear?: number | null
+  marriageStartMonth?: number | null
+  marriageStartDay?: number | null
   /** 혼인 시작 기원 — 'BC'면 타임라인(AD 축)에서 혼인 노드 제외(크기값 연도 둔갑 방지) */
   marriageStartEra?: string | null
   /** 혼인 시작 정밀도('year'|'month'|'day') — 01-01 채움을 '1월 1일'로 둔갑시키지 않게 라벨 게이트 */
@@ -85,6 +92,7 @@ interface ReignInput {
   /** 'year'=연도만 앎(월일 01-01은 관행 채움) — dateLabel 시작쪽만 연도 표기 */
   startDatePrecision?: string | null
   endDate?: string | null
+  endDatePrecision?: string | null
   notes?: string | null
   /** 대수 — 재위·재임 공통 */
   ordinal?: number | null
@@ -104,6 +112,7 @@ interface TenureInput {
   /** 'year'=연도만 앎(월일 01-01은 관행 채움) — dateLabel 시작쪽만 연도 표기 */
   startDatePrecision?: string | null
   endDate?: string | null
+  endDatePrecision?: string | null
   title?: string | null
   notes?: string | null
   /** 대수 — 재위·재임 공통 */
@@ -692,6 +701,8 @@ export function PersonLifeTimelineInfographic({
       m: FamilyMember,
       idx = 0,
     ) => {
+      // BC 가족 출생일은 DATETIME 크기값 저장이라 AD 축 타임라인에 올리면 연도가 둔갑 — 제외.
+      if (m.birthEra === 'BC') return
       const d = parseDate(m.birthDate)
       if (!d) return
       if (hasLifeOverlap(d)) return
@@ -702,7 +713,7 @@ export function PersonLifeTimelineInfographic({
         end: null,
         sortKey: toTs(d),
         title: `${m.name} 출생`,
-        dateLabel: formatWithPrecision(d, 'day'),
+        dateLabel: formatWithPrecision(d, m.birthDatePrecision ?? 'day'),
         familyRelation: rel,
         familyPersonId: m.id,
       })
@@ -712,17 +723,21 @@ export function PersonLifeTimelineInfographic({
       m: FamilyMember,
       idx = 0,
     ) => {
+      if (m.deathEra === 'BC') return
       const d = parseDate(m.deathDate)
       if (!d) return
       if (hasLifeOverlap(d)) return
       // 향년 계산 — 출생연도 있으면 사망 시 만 나이 (BC era는 미상으로 처리)
-      const birth = parseDate(m.birthDate)
+      const birth = m.birthEra === 'BC' ? null : parseDate(m.birthDate)
+      const yearOnly = m.birthDatePrecision === 'year' || m.deathDatePrecision === 'year'
       const ageAtDeath =
         birth && birth.getFullYear() <= d.getFullYear()
           ? (() => {
               let age = d.getFullYear() - birth.getFullYear()
-              const md = d.getMonth() - birth.getMonth()
-              if (md < 0 || (md === 0 && d.getDate() < birth.getDate())) age--
+              if (!yearOnly) {
+                const md = d.getMonth() - birth.getMonth()
+                if (md < 0 || (md === 0 && d.getDate() < birth.getDate())) age--
+              }
               return age >= 0 ? age : null
             })()
           : null
@@ -734,7 +749,7 @@ export function PersonLifeTimelineInfographic({
         sortKey: toTs(d),
         title: `${m.name} 사망`,
         subtitle: ageAtDeath != null ? `향년 ${ageAtDeath}세` : null,
-        dateLabel: formatWithPrecision(d, 'day'),
+        dateLabel: formatWithPrecision(d, m.deathDatePrecision ?? 'day'),
         familyRelation: rel,
         familyPersonId: m.id,
       })
@@ -762,7 +777,24 @@ export function PersonLifeTimelineInfographic({
       pushFamilyDeath('spouse', sp, i)
 
       // BC 혼인일은 DATETIME 크기값 저장이라 AD 축 타임라인에 올리면 연도가 둔갑 — 제외.
-      const mStart = sp.marriageStartEra === 'BC' ? null : parseDate(sp.marriageStartDate)
+      // AD 1000년 미만이나 연/월 정밀 혼인은 marriageStartDate가 null이고 구조화 연/월/일만 있으므로 폴백.
+      const structuredMarriageIso =
+        sp.marriageStartYear != null
+          ? `${String(sp.marriageStartYear).padStart(4, '0')}-${String(sp.marriageStartMonth ?? 1).padStart(2, '0')}-${String(sp.marriageStartDay ?? 1).padStart(2, '0')}`
+          : null
+      const mStart =
+        sp.marriageStartEra === 'BC'
+          ? null
+          : parseDate(sp.marriageStartDate ?? structuredMarriageIso)
+      const effectivePrecision =
+        sp.marriageStartPrecision ??
+        (sp.marriageStartDate == null && sp.marriageStartYear != null
+          ? sp.marriageStartMonth == null
+            ? 'year'
+            : sp.marriageStartDay == null
+              ? 'month'
+              : 'day'
+          : 'day')
       if (mStart && !hasLifeOverlap(mStart)) {
         result.push({
           key: `marriage-start-${sp.id ?? i}`,
@@ -772,7 +804,7 @@ export function PersonLifeTimelineInfographic({
           sortKey: toTs(mStart),
           title: `${sp.name}과 혼인`,
           // 연/월 정밀 혼인일의 01-01 채움이 '1월 1일'로 둔갑하지 않게 정밀도만큼만 표기
-          dateLabel: formatWithPrecision(mStart, sp.marriageStartPrecision ?? 'day'),
+          dateLabel: formatWithPrecision(mStart, effectivePrecision),
           familyRelation: 'spouse',
           familyPersonId: sp.id,
         })

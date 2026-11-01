@@ -1,5 +1,6 @@
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { formatLifespan as formatLifespanText } from '@/shared/lib/lifespan-text'
+import { MARRIAGE_RANK_LABELS } from '@/shared/lib/marriage-rank-labels'
 import {
   type PersonNameFields,
   getPersonDisplayName,
@@ -58,21 +59,47 @@ export function formatYear(signed: number | null): string | null {
   return signed < 0 ? `BC ${-signed}` : String(signed)
 }
 
+/**
+ * 형제·자녀·후손 공통 정렬 — 출생 서열(birthOrder) 1차, 부호 출생연도(birthYearOf) 2차, id 3차.
+ * 사서 인물은 생년 미상이 흔해 birthOrder 없이는 정렬이 깨진다.
+ */
+export function compareSiblings(
+  a: YearParts & { id?: string; birthOrder?: number | null },
+  b: YearParts & { id?: string; birthOrder?: number | null },
+): number {
+  const ao = a.birthOrder ?? Number.POSITIVE_INFINITY
+  const bo = b.birthOrder ?? Number.POSITIVE_INFINITY
+  if (ao !== bo) return ao - bo
+  const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
+  const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
+  if (ay !== by) return ay - by
+  return String(a.id ?? '').localeCompare(String(b.id ?? ''))
+}
+
 export function isDeceasedOf(p: NodePerson): boolean {
-  return Boolean(p.deathDate) || p.deathYear != null
+  if (Boolean(p.deathDate) || p.deathYear != null) return true
+  if (
+    p.isAlive === false &&
+    (birthYearOf(p) != null || p.floruitStartYear != null || p.floruitEndYear != null)
+  ) {
+    return true
+  }
+  return false
 }
 
 export function lifeSpan(person: NodePerson): string | null {
   const birth = birthYearOf(person)
   const death = deathYearOf(person)
-  if (birth == null && death == null) return null
-  // 정본 formatLifespan에 위임(부호연도). NodePerson에 isAlive가 없어 생존/미상 구분 불가 →
-  // 사망 미상은 현행대로 'b–'로 표기(정밀한 isAlive 배선은 후속, 검토서 §R2).
+  const floruitStart = signedYearFromParts(person.floruitStartYear ?? null, person.floruitEra)
+  const floruitEnd = signedYearFromParts(person.floruitEndYear ?? null, person.floruitEra)
+  if (birth == null && death == null && floruitStart == null && floruitEnd == null) return null
   return (
     formatLifespanText({
       birthYear: birth,
       deathYear: death,
-      isAlive: death == null,
+      isAlive: person.isAlive != null ? Boolean(person.isAlive) : death == null,
+      floruitStartYear: floruitStart,
+      floruitEndYear: floruitEnd,
     }) || null
   )
 }
@@ -110,8 +137,18 @@ export function buildPersonTooltipLines(person: PersonMetaSource): PersonTooltip
   if (person.preEnthronementTitle) lines.push({ label: '작호', value: person.preEnthronementTitle })
   if (person.templeName) lines.push({ label: '묘호', value: person.templeName })
   if (person.posthumousName) lines.push({ label: '시호', value: person.posthumousName })
+  if (person.birthOrder != null) lines.push({ label: '서열', value: `${person.birthOrder}번째` })
   if (person.birthPlace) lines.push({ label: '출생', value: person.birthPlace })
   if (person.deathPlace) lines.push({ label: '사망', value: person.deathPlace })
+  if (person.marriageRank && MARRIAGE_RANK_LABELS[person.marriageRank]) {
+    lines.push({ label: '혼인 형태', value: MARRIAGE_RANK_LABELS[person.marriageRank] })
+  }
+  if (person.marriageStartYear != null || person.marriageEndYear != null) {
+    const startLabel = formatYear(person.marriageStartYear ?? null) ?? '?'
+    const endLabel = formatYear(person.marriageEndYear ?? null) ?? ''
+    lines.push({ label: '혼인 기간', value: `${startLabel}–${endLabel}` })
+  }
+  if (person.marriageNote) lines.push({ label: '혼인 비고', value: person.marriageNote })
   // 형제 카드 전용 — withSiblingKinshipMeta가 주입 (소생 구분 열람 + 판별불가 사유 고지)
   if (person.fatherName) lines.push({ label: '아버지', value: person.fatherName })
   if (person.motherName) lines.push({ label: '어머니', value: person.motherName })

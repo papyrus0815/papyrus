@@ -1511,6 +1511,34 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async findByIdWithRelations(id: string, accountId?: string) {
     const where = accountId != null ? { id, accountId } : { id }
+    const FAMILY_MEMBER_BASE_SELECT = {
+      id: true,
+      name: true,
+      surname: true,
+      middleName: true,
+      nameDisplayOrder: true,
+      country: { select: { defaultNameDisplayOrder: true } },
+      gender: true,
+      dynasty: { select: { id: true, name: true } },
+      birthDate: true,
+      birthEra: true,
+      birthDatePrecision: true,
+      deathDate: true,
+      deathEra: true,
+      deathDatePrecision: true,
+      birthOrder: true,
+      isAlive: true,
+      illegitimate: true,
+      fatherId: true,
+      motherId: true,
+      profileImageUrl: true,
+      profileImages: {
+        select: { url: true, priority: true },
+        orderBy: [{ priority: Prisma.SortOrder.asc }],
+        take: 1,
+      },
+    } satisfies Prisma.PersonSelect
+
     const include = {
         country: true,
         ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
@@ -1519,150 +1547,39 @@ export class PersonPrismaRepository implements IPersonRepository {
         denomination: true,
         father: {
           select: {
-            id: true,
-            name: true,
-            surname: true,
-            middleName: true,
-            nameDisplayOrder: true,
-            country: { select: { defaultNameDisplayOrder: true } },
-            gender: true,
-            dynasty: { select: { id: true, name: true } },
-            birthDate: true,
-            deathDate: true,
-            profileImageUrl: true,
-            profileImages: {
-              select: { url: true, priority: true },
-              orderBy: [{ priority: Prisma.SortOrder.asc }],
-              take: 1,
-            },
+            ...FAMILY_MEMBER_BASE_SELECT,
             // 친조부모
-            father: {
-              select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
-                country: { select: { defaultNameDisplayOrder: true } },
-                gender: true, dynasty: { select: { id: true, name: true } },
-                birthDate: true, deathDate: true, profileImageUrl: true,
-                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
-              },
-            },
-            mother: {
-              select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
-                country: { select: { defaultNameDisplayOrder: true } },
-                gender: true, dynasty: { select: { id: true, name: true } },
-                birthDate: true, deathDate: true, profileImageUrl: true,
-                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
-              },
-            },
+            father: { select: FAMILY_MEMBER_BASE_SELECT },
+            mother: { select: FAMILY_MEMBER_BASE_SELECT },
             // 형제자매 (부의 자녀)
-            childrenFromFather: {
-              select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
-                country: { select: { defaultNameDisplayOrder: true } },
-                gender: true, dynasty: { select: { id: true, name: true } },
-                birthDate: true, deathDate: true, profileImageUrl: true,
-                // 친/이복/이부 판별용 부모 FK + 사생아 마커 (형제 투영에 노출)
-                fatherId: true, motherId: true, illegitimate: true,
-                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
-              },
-            },
+            childrenFromFather: { select: FAMILY_MEMBER_BASE_SELECT },
           },
         },
         mother: {
           select: {
-            id: true,
-            name: true,
-            surname: true,
-            middleName: true,
-            nameDisplayOrder: true,
-            country: { select: { defaultNameDisplayOrder: true } },
-            gender: true,
-            dynasty: { select: { id: true, name: true } },
-            birthDate: true,
-            deathDate: true,
-            profileImageUrl: true,
-            profileImages: {
-              select: { url: true, priority: true },
-              orderBy: [{ priority: Prisma.SortOrder.asc }],
-              take: 1,
-            },
+            ...FAMILY_MEMBER_BASE_SELECT,
             // 외조부모
-            father: {
-              select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
-                country: { select: { defaultNameDisplayOrder: true } },
-                gender: true, dynasty: { select: { id: true, name: true } },
-                birthDate: true, deathDate: true, profileImageUrl: true,
-                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
-              },
-            },
-            mother: {
-              select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
-                country: { select: { defaultNameDisplayOrder: true } },
-                gender: true, dynasty: { select: { id: true, name: true } },
-                birthDate: true, deathDate: true, profileImageUrl: true,
-                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
-              },
-            },
+            father: { select: FAMILY_MEMBER_BASE_SELECT },
+            mother: { select: FAMILY_MEMBER_BASE_SELECT },
             // 형제자매 (모의 자녀)
-            childrenFromMother: {
-              select: {
-                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true,
-                country: { select: { defaultNameDisplayOrder: true } },
-                gender: true, dynasty: { select: { id: true, name: true } },
-                birthDate: true, deathDate: true, profileImageUrl: true,
-                // 친/이복/이부 판별용 부모 FK + 사생아 마커 (형제 투영에 노출)
-                fatherId: true, motherId: true, illegitimate: true,
-                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
-              },
-            },
+            childrenFromMother: { select: FAMILY_MEMBER_BASE_SELECT },
           },
         },
         childrenFromFather: {
           select: {
-            id: true,
-            name: true,
-            surname: true,
-            middleName: true,
-            nameDisplayOrder: true,
-            country: { select: { defaultNameDisplayOrder: true } },
-            gender: true,
-            dynasty: { select: { id: true, name: true } },
-            birthDate: true,
-            deathDate: true,
-            profileImageUrl: true,
-            profileImages: {
-              select: { url: true, priority: true },
-              orderBy: [{ priority: Prisma.SortOrder.asc }],
-              take: 1,
-            },
+            ...FAMILY_MEMBER_BASE_SELECT,
             // 자녀의 배우자 (가계도에 표시) — 정방향
             spouseRelationsAsPerson: {
               select: {
                 id: true,
                 marriageStartDate: true,
+                marriageStartEra: true,
+                marriageStartYear: true,
                 marriageEndDate: true,
-                spouse: {
-                  select: {
-                    id: true,
-                    name: true,
-                    surname: true,
-                    middleName: true,
-                    nameDisplayOrder: true,
-                    country: { select: { defaultNameDisplayOrder: true } },
-                    gender: true,
-                    dynasty: { select: { id: true, name: true } },
-                    birthDate: true,
-                    deathDate: true,
-                    profileImageUrl: true,
-                    profileImages: {
-                      select: { url: true, priority: true },
-                      orderBy: [{ priority: Prisma.SortOrder.asc }],
-                      take: 1,
-                    },
-                  },
-                },
+                marriageEndEra: true,
+                marriageEndYear: true,
+                marriageRank: true,
+                spouse: { select: FAMILY_MEMBER_BASE_SELECT },
               },
             },
             // 자녀의 배우자 (가계도에 표시) — 역방향.
@@ -1672,105 +1589,46 @@ export class PersonPrismaRepository implements IPersonRepository {
               select: {
                 id: true,
                 marriageStartDate: true,
+                marriageStartEra: true,
+                marriageStartYear: true,
                 marriageEndDate: true,
-                person: {
-                  select: {
-                    id: true,
-                    name: true,
-                    surname: true,
-                    middleName: true,
-                    nameDisplayOrder: true,
-                    country: { select: { defaultNameDisplayOrder: true } },
-                    gender: true,
-                    dynasty: { select: { id: true, name: true } },
-                    birthDate: true,
-                    deathDate: true,
-                    profileImageUrl: true,
-                    profileImages: {
-                      select: { url: true, priority: true },
-                      orderBy: [{ priority: Prisma.SortOrder.asc }],
-                      take: 1,
-                    },
-                  },
-                },
+                marriageEndEra: true,
+                marriageEndYear: true,
+                marriageRank: true,
+                person: { select: FAMILY_MEMBER_BASE_SELECT },
               },
             },
           },
         },
         childrenFromMother: {
           select: {
-            id: true,
-            name: true,
-            surname: true,
-            middleName: true,
-            nameDisplayOrder: true,
-            country: { select: { defaultNameDisplayOrder: true } },
-            gender: true,
-            dynasty: { select: { id: true, name: true } },
-            birthDate: true,
-            deathDate: true,
-            profileImageUrl: true,
-            profileImages: {
-              select: { url: true, priority: true },
-              orderBy: [{ priority: Prisma.SortOrder.asc }],
-              take: 1,
-            },
+            ...FAMILY_MEMBER_BASE_SELECT,
             // 자녀의 배우자 (가계도에 표시) — 정방향
             spouseRelationsAsPerson: {
               select: {
                 id: true,
                 marriageStartDate: true,
+                marriageStartEra: true,
+                marriageStartYear: true,
                 marriageEndDate: true,
-                spouse: {
-                  select: {
-                    id: true,
-                    name: true,
-                    surname: true,
-                    middleName: true,
-                    nameDisplayOrder: true,
-                    country: { select: { defaultNameDisplayOrder: true } },
-                    gender: true,
-                    dynasty: { select: { id: true, name: true } },
-                    birthDate: true,
-                    deathDate: true,
-                    profileImageUrl: true,
-                    profileImages: {
-                      select: { url: true, priority: true },
-                      orderBy: [{ priority: Prisma.SortOrder.asc }],
-                      take: 1,
-                    },
-                  },
-                },
+                marriageEndEra: true,
+                marriageEndYear: true,
+                marriageRank: true,
+                spouse: { select: FAMILY_MEMBER_BASE_SELECT },
               },
             },
             // 자녀의 배우자 (가계도에 표시) — 역방향.
-            // canonical(min,max) 쓰기로 자녀 id > 배우자 id면 결혼 행이 이쪽에 저장되므로
-            // 이걸 함께 조회하지 않으면 자녀 배우자가 절반가량 누락된다.
             spouseRelationsAsSpouse: {
               select: {
                 id: true,
                 marriageStartDate: true,
+                marriageStartEra: true,
+                marriageStartYear: true,
                 marriageEndDate: true,
-                person: {
-                  select: {
-                    id: true,
-                    name: true,
-                    surname: true,
-                    middleName: true,
-                    nameDisplayOrder: true,
-                    country: { select: { defaultNameDisplayOrder: true } },
-                    gender: true,
-                    dynasty: { select: { id: true, name: true } },
-                    birthDate: true,
-                    deathDate: true,
-                    profileImageUrl: true,
-                    profileImages: {
-                      select: { url: true, priority: true },
-                      orderBy: [{ priority: Prisma.SortOrder.asc }],
-                      take: 1,
-                    },
-                  },
-                },
+                marriageEndEra: true,
+                marriageEndYear: true,
+                marriageRank: true,
+                person: { select: FAMILY_MEMBER_BASE_SELECT },
               },
             },
           },
@@ -1792,26 +1650,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             marriageEndPrecision: true,
             marriageRank: true,
             note: true,
-            spouse: {
-              select: {
-                id: true,
-                name: true,
-                surname: true,
-                middleName: true,
-                nameDisplayOrder: true,
-                country: { select: { defaultNameDisplayOrder: true } },
-                gender: true,
-                dynasty: { select: { id: true, name: true } },
-                birthDate: true,
-                deathDate: true,
-                profileImageUrl: true,
-                profileImages: {
-                  select: { url: true, priority: true },
-                  orderBy: [{ priority: Prisma.SortOrder.asc }],
-                  take: 1,
-                },
-              },
-            },
+            spouse: { select: FAMILY_MEMBER_BASE_SELECT },
           },
         },
         // 역방향 배우자 관계 (현재 인물이 spouseId 쪽에 등록된 경우)
@@ -1832,26 +1671,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             marriageEndPrecision: true,
             marriageRank: true,
             note: true,
-            person: {
-              select: {
-                id: true,
-                name: true,
-                surname: true,
-                middleName: true,
-                nameDisplayOrder: true,
-                country: { select: { defaultNameDisplayOrder: true } },
-                gender: true,
-                dynasty: { select: { id: true, name: true } },
-                birthDate: true,
-                deathDate: true,
-                profileImageUrl: true,
-                profileImages: {
-                  select: { url: true, priority: true },
-                  orderBy: [{ priority: Prisma.SortOrder.asc }],
-                  take: 1,
-                },
-              },
-            },
+            person: { select: FAMILY_MEMBER_BASE_SELECT },
           },
         },
         nicknames: true,
@@ -5316,6 +5136,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       profileImageUrl: true, birthDate: true, deathDate: true,
       // BC/AD — birthDate는 크기값(양수) 연도로 저장되므로 era 없이는 BC가 AD로 둔갑한다.
       birthEra: true, deathEra: true,
+      birthOrder: true, isAlive: true,
+      floruitStartYear: true, floruitEndYear: true, floruitEra: true,
       fatherId: true, motherId: true,
       // 소유권 — 노드 isOwned(상세 열람 가능 여부) 계산에 사용
       accountId: true,
@@ -5812,6 +5634,11 @@ export class PersonPrismaRepository implements IPersonRepository {
         deathEra:   p.deathEra ?? null,
         birthYear:  yearOfDate(p.birthDate),
         deathYear:  yearOfDate(p.deathDate),
+        birthOrder: (p.birthOrder ?? null) as number | null,
+        isAlive:    Boolean(p.isAlive),
+        floruitStartYear: (p.floruitStartYear ?? null) as number | null,
+        floruitEndYear:   (p.floruitEndYear ?? null) as number | null,
+        floruitEra:       (p.floruitEra ?? null) as any,
         dynasty: p.dynasty ? { id: p.dynasty.id as string, name: p.dynasty.name as string } : null,
         // 사생아·서출 + 어머니별 분기용 결혼 FK
         illegitimate: Boolean(p.illegitimate),

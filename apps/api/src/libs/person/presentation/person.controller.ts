@@ -610,6 +610,35 @@ export class PersonController {
       this.personService.findHumanRelationshipsForDetail(id),
     ])
 
+    // 출생 서열(birthOrder) 1차 → 부호 있는 출생연도(BC 음수) 2차 정렬 유틸
+    const signedBirthYearOf = (p: any): number => {
+      if (!p?.birthDate) return Number.POSITIVE_INFINITY
+      const d = p.birthDate instanceof Date ? p.birthDate : new Date(p.birthDate)
+      const y = d.getUTCFullYear()
+      if (Number.isNaN(y)) return Number.POSITIVE_INFINITY
+      return p.birthEra === 'BC' ? -Math.abs(y) : y
+    }
+    const compareFamilySiblings = (a: any, b: any): number => {
+      const ao = a?.birthOrder ?? Number.POSITIVE_INFINITY
+      const bo = b?.birthOrder ?? Number.POSITIVE_INFINITY
+      if (ao !== bo) return ao - bo
+      const ay = signedBirthYearOf(a)
+      const by = signedBirthYearOf(b)
+      if (ay !== by) return ay - by
+      return String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
+    }
+    const rankOrderOf = (rank?: string | null): number => {
+      switch (rank) {
+        case 'PRIMARY': return 0
+        case 'SECONDARY': return 1
+        case 'CONCUBINE': return 2
+        case 'MORGANATIC': return 3
+        case 'COMMON_LAW': return 4
+        case 'OTHER': return 5
+        default: return 99
+      }
+    }
+
     // 부모와 자녀 중복 제거
     const childrenMap = new Map()
     person.childrenFromFather?.forEach((child: any) =>
@@ -618,16 +647,76 @@ export class PersonController {
     person.childrenFromMother?.forEach((child: any) =>
       childrenMap.set(child.id, child),
     )
-    // 각 자녀에 첫 배우자(spouse) 평탄화 — 가계도 렌더용.
+    // 각 자녀에 주 배우자(spouse) 평탄화 — 가계도 렌더용.
     // canonical(min,max) 쓰기로 자녀 id가 배우자 id보다 크면 결혼 행이 역방향
-    // (spouseRelationsAsSpouse)에 저장되므로 양방향을 모두 봐야 자녀 배우자가 누락되지 않는다.
-    const children = Array.from(childrenMap.values()).map((child: any) => ({
-      ...child,
-      spouse:
-        child.spouseRelationsAsPerson?.[0]?.spouse ??
-        child.spouseRelationsAsSpouse?.[0]?.person ??
-        null,
-    }))
+    // (spouseRelationsAsSpouse)에 저장되므로 양방향을 모두 합쳐 서열·혼인연도 순으로 정렬한다.
+    const children = Array.from(childrenMap.values())
+      .sort(compareFamilySiblings)
+      .map((child: any) => {
+        const spouseCandidates = [
+          ...(child.spouseRelationsAsPerson ?? []).map((r: any) => ({
+            node: r.spouse,
+            marriageRank: r.marriageRank ?? null,
+            marriageStartYear:
+              r.marriageStartYear != null
+                ? r.marriageStartEra === 'BC' ? -r.marriageStartYear : r.marriageStartYear
+                : r.marriageStartDate instanceof Date
+                  ? r.marriageStartDate.getUTCFullYear()
+                  : null,
+            marriageEndYear:
+              r.marriageEndYear != null
+                ? r.marriageEndEra === 'BC' ? -r.marriageEndYear : r.marriageEndYear
+                : r.marriageEndDate instanceof Date
+                  ? r.marriageEndDate.getUTCFullYear()
+                  : null,
+          })),
+          ...(child.spouseRelationsAsSpouse ?? []).map((r: any) => ({
+            node: r.person,
+            marriageRank: r.marriageRank ?? null,
+            marriageStartYear:
+              r.marriageStartYear != null
+                ? r.marriageStartEra === 'BC' ? -r.marriageStartYear : r.marriageStartYear
+                : r.marriageStartDate instanceof Date
+                  ? r.marriageStartDate.getUTCFullYear()
+                  : null,
+            marriageEndYear:
+              r.marriageEndYear != null
+                ? r.marriageEndEra === 'BC' ? -r.marriageEndYear : r.marriageEndYear
+                : r.marriageEndDate instanceof Date
+                  ? r.marriageEndDate.getUTCFullYear()
+                  : null,
+          })),
+        ]
+          .filter((c) => Boolean(c.node))
+          .sort((a, b) => {
+            const rd = rankOrderOf(a.marriageRank) - rankOrderOf(b.marriageRank)
+            if (rd !== 0) return rd
+            const ay = a.marriageStartYear ?? Number.POSITIVE_INFINITY
+            const by = b.marriageStartYear ?? Number.POSITIVE_INFINITY
+            return ay - by
+          })
+        // 배우자 ID 중복 제거
+        const uniqueSpouses: typeof spouseCandidates = []
+        const seenSpouseIds = new Set<string>()
+        for (const cand of spouseCandidates) {
+          if (cand.node?.id && seenSpouseIds.has(cand.node.id)) continue
+          if (cand.node?.id) seenSpouseIds.add(cand.node.id)
+          uniqueSpouses.push(cand)
+        }
+        const primary = uniqueSpouses[0] ?? null
+        return {
+          ...child,
+          spouse: primary
+            ? {
+                ...primary.node,
+                marriageRank: primary.marriageRank,
+                marriageStartYear: primary.marriageStartYear,
+                marriageEndYear: primary.marriageEndYear,
+              }
+            : null,
+          extraSpouseCount: Math.max(0, uniqueSpouses.length - 1),
+        }
+      })
 
     // BigInt → 문자열, Date → ISO (그대로 두면 Date가 `{}`로 직렬화되어 클라이언트에서 날짜가 사라짐)
     const serializeBigInt = (obj: any): any => {
@@ -653,16 +742,35 @@ export class PersonController {
     const siblingMap = new Map<string, any>()
     person.father?.childrenFromFather?.forEach((s: any) => { if (s.id !== person.id) siblingMap.set(s.id, s) })
     person.mother?.childrenFromMother?.forEach((s: any) => { if (s.id !== person.id) siblingMap.set(s.id, s) })
-    const siblings = serializeBigInt(Array.from(siblingMap.values()).map((s: any) => ({
-      id: s.id, name: s.name, surname: s.surname, nameDisplayOrder: s.nameDisplayOrder,
-      gender: s.gender, dynasty: s.dynasty, birthDate: s.birthDate instanceof Date ? s.birthDate.toISOString() : s.birthDate ?? null,
-      deathDate: s.deathDate instanceof Date ? s.deathDate.toISOString() : s.deathDate ?? null,
-      profileImageUrl: s.profileImageUrl ?? null, profileImages: s.profileImages ?? [],
-      // 친/이복/이부 판별용 부모 FK + 사생아 마커 — BFS 도착 전 폴백 렌더에서도
-      // classifySiblingKinship과 '*' 마커가 동작하도록 가계도 노드와 필드 정합.
-      fatherId: s.fatherId ?? null, motherId: s.motherId ?? null,
-      illegitimate: Boolean(s.illegitimate),
-    })))
+    const siblings = serializeBigInt(
+      Array.from(siblingMap.values())
+        .sort(compareFamilySiblings)
+        .map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          surname: s.surname,
+          middleName: s.middleName ?? null,
+          nameDisplayOrder: s.nameDisplayOrder,
+          country: s.country ?? null,
+          gender: s.gender,
+          dynasty: s.dynasty,
+          birthDate: s.birthDate instanceof Date ? s.birthDate.toISOString() : s.birthDate ?? null,
+          birthEra: s.birthEra ?? null,
+          birthDatePrecision: s.birthDatePrecision ?? null,
+          deathDate: s.deathDate instanceof Date ? s.deathDate.toISOString() : s.deathDate ?? null,
+          deathEra: s.deathEra ?? null,
+          deathDatePrecision: s.deathDatePrecision ?? null,
+          birthOrder: s.birthOrder ?? null,
+          isAlive: Boolean(s.isAlive),
+          profileImageUrl: s.profileImageUrl ?? null,
+          profileImages: s.profileImages ?? [],
+          // 친/이복/이부 판별용 부모 FK + 사생아 마커 — BFS 도착 전 폴백 렌더에서도
+          // classifySiblingKinship과 '*' 마커가 동작하도록 가계도 노드와 필드 정합.
+          fatherId: s.fatherId ?? null,
+          motherId: s.motherId ?? null,
+          illegitimate: Boolean(s.illegitimate),
+        })),
+    )
 
     return {
       id: person.id,

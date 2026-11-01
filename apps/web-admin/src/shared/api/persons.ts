@@ -110,6 +110,8 @@ interface RelaxedPersonInputFields {
   deathType?: string | null
   birthEra?: Era
   deathEra?: Era
+  /** 출생 서열 (1-base, 성별 통합). null = 해제 */
+  birthOrder?: number | null
   /** 활동시기(floruit) 기원 — 폼 Era 리터럴로 완화. null = 해제(floruit 연도 없음) */
   floruitEra?: Era | null
   /** 수정 시 null = 출생일·기원(birthDate·birthEra) 해제 */
@@ -210,7 +212,10 @@ export async function getInfographicPersons(): Promise<
   const data = await personsApi.infographic.getAllForInfographic(
     getApiConnection(),
   )
-  return Array.isArray(data) ? data : []
+  // SDK 응답의 Era는 서버 enum, 프론트 Era는 같은 값의 문자열 리터럴이라 구조만 다르다.
+  return Array.isArray(data)
+    ? (data as unknown as PersonInfographicItemDto[])
+    : []
 }
 
 /**

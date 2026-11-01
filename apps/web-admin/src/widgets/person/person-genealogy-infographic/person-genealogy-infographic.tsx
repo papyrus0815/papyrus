@@ -15,12 +15,12 @@
  *
  * 본 파일은 메인 컴포넌트와 ego 행/자녀 행/조상 fallback 등 오케스트레이션만 담당.
  */
-import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { FiHeart, FiUsers } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import type { FamilyTreeData, FamilyTreePerson } from '@/shared/api/persons-family-tree'
-import { marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
+import { MARRIAGE_RANK_LABELS, marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { AncestorColumn } from './ancestor-column'
@@ -74,6 +74,7 @@ import {
   ancestorColumnWidth,
   birthYearOf,
   childrenCenterShift,
+  compareSiblings,
   computeChildLayouts,
   isChildOnLeftInPair,
   isLeft,
@@ -103,13 +104,37 @@ export interface PersonGenealogyInfographicProps {
   showHeader?: boolean
 }
 
-/** spouse 엣지에서 뽑은 배우자 노드 + provenance 메타 (inferred·혼인연도·서열) */
+/** spouse 엣지에서 뽑은 배우자 노드 + provenance 메타 (inferred·혼인연도·서열·비고) */
 type SpouseEdgeEntry = {
   node: FamilyTreePerson
   inferred: boolean
   marriageStartYear: number | null
   marriageEndYear: number | null
   marriageRank: string | null
+  note: string | null
+}
+
+function compareSpouseEntries(entryA: SpouseEdgeEntry, entryB: SpouseEdgeEntry): number {
+  const rankDiff =
+    marriageRankOrder(entryA.marriageRank) - marriageRankOrder(entryB.marriageRank)
+  if (rankDiff !== 0) return rankDiff
+  const yearA = entryA.marriageStartYear ?? Number.POSITIVE_INFINITY
+  const yearB = entryB.marriageStartYear ?? Number.POSITIVE_INFINITY
+  return yearA - yearB
+}
+
+function formatSpouseBadge(
+  sp: NodePerson,
+  opts?: { index?: number; totalCount?: number; extraSpouseCount?: number },
+): string {
+  const totalCount = opts?.totalCount ?? 1
+  const index = opts?.index
+  const extraCount = opts?.extraSpouseCount ?? 0
+  const base = totalCount > 1 && index != null ? `배우자 ${index + 1}` : '배우자'
+  const rankLabel = sp.marriageRank ? MARRIAGE_RANK_LABELS[sp.marriageRank] : null
+  const withRank = rankLabel ? `${base} · ${rankLabel}` : base
+  const withInferred = sp.inferred ? `${withRank} (추정)` : withRank
+  return extraCount > 0 ? `${withInferred} (+${extraCount})` : withInferred
 }
 
 /**
@@ -210,11 +235,7 @@ export function PersonGenealogyInfographic({
       const siblingNodes = [...siblingIds]
         .map((sid) => ftNodeMap.get(sid))
         .filter((n): n is FamilyTreePerson => Boolean(n))
-        .sort((a, b) => {
-          const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
-          const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
-          return ay - by
-        })
+        .sort(compareSiblings)
       if (siblingNodes.length > 0) out.set(node.id, siblingNodes)
     }
     return out
@@ -247,6 +268,7 @@ export function PersonGenealogyInfographic({
         marriageStartYear: e.marriageStartYear ?? null,
         marriageEndYear: e.marriageEndYear ?? null,
         marriageRank: e.marriageRank ?? null,
+        note: e.note ?? null,
       }
       const a = ftNodeMap.get(e.source)
       const b = ftNodeMap.get(e.target)
@@ -264,43 +286,60 @@ export function PersonGenealogyInfographic({
     const toSpouseNode = (entry: SpouseEdgeEntry): NodePerson => ({
       ...ftPersonToNodePerson(entry.node),
       inferred: entry.inferred,
+      marriageRank: entry.marriageRank,
       marriageStartYear: entry.marriageStartYear,
       marriageEndYear: entry.marriageEndYear,
+      marriageNote: entry.note,
     })
     // '배우자 N' 번호가 엣지 발견 순서(UUID·BFS 순)로 흔들리지 않게
     // 서열(정실 우선) → 혼인 시작 부호연도(미상 뒤) 로 안정 정렬.
     const egoSpouseEntries = [...(spouseEdgesByPersonId.get(egoId) ?? [])].sort(
-      (entryA, entryB) => {
-        const rankDiff =
-          marriageRankOrder(entryA.marriageRank) - marriageRankOrder(entryB.marriageRank)
-        if (rankDiff !== 0) return rankDiff
-        const yearA = entryA.marriageStartYear ?? Number.POSITIVE_INFINITY
-        const yearB = entryB.marriageStartYear ?? Number.POSITIVE_INFINITY
-        return yearA - yearB
-      },
+      compareSpouseEntries,
     )
-    for (const entry of egoSpouseEntries) {
+    const egoSpouseOrderMap = new Map<string, number>()
+    egoSpouseEntries.forEach((entry, idx) => {
+      egoSpouseOrderMap.set(entry.node.id, idx)
       sps.push(toSpouseNode(entry))
-    }
+    })
 
     // 자녀 — ftChildrenOf[ego.id], 각 자녀의 spouse를 spouse 엣지에서 찾아 join.
     // 툴팁에 반대편 부모 이름 주입(ego 본인 라인은 자명하므로 생략) — 다중 혼인에서
     // 어느 배우자 소생인지 hover로 확인 가능(칩은 반대편 부모가 갈릴 때만).
+    const otherParentRankOf = (c: FamilyTreePerson): number => {
+      const otherId =
+        c.fatherId && c.fatherId !== egoId
+          ? c.fatherId
+          : c.motherId && c.motherId !== egoId
+            ? c.motherId
+            : null
+      if (!otherId) return 999
+      return egoSpouseOrderMap.get(otherId) ?? 998
+    }
     const childIds = ftChildrenOf.get(egoId) ?? []
     const childs: ChildPerson[] = childIds
       .map((cid) => ftNodeMap.get(cid))
       .filter((c): c is FamilyTreePerson => Boolean(c))
       .sort((a, b) => {
+        const ao = a.birthOrder ?? Number.POSITIVE_INFINITY
+        const bo = b.birthOrder ?? Number.POSITIVE_INFINITY
+        if (ao !== bo) return ao - bo
         const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
         const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
-        return ay - by
+        if (ay !== by) return ay - by
+        const ar = otherParentRankOf(a)
+        const br = otherParentRankOf(b)
+        if (ar !== br) return ar - br
+        return a.id.localeCompare(b.id)
       })
       .map((c) => {
-        const spouseCandidates = spouseEdgesByPersonId.get(c.id) ?? []
+        const spouseCandidates = [...(spouseEdgesByPersonId.get(c.id) ?? [])].sort(
+          compareSpouseEntries,
+        )
         const sp = spouseCandidates[0] ?? null
         return {
           ...withParentNames(ftPersonToNodePerson(c), ftNodeMap, { omitParentId: egoId }),
           spouse: sp ? toSpouseNode(sp) : null,
+          extraSpouseCount: Math.max(0, spouseCandidates.length - 1),
         }
       })
 
@@ -333,7 +372,7 @@ export function PersonGenealogyInfographic({
     const childIds = new Set(childList.map((c) => c.id).filter(Boolean) as string[])
     const excludeIds = new Set<string>([ego.id, ...childIds].filter(Boolean) as string[])
 
-    // Phase 1: 후손별 첫 부모 결정 (BFS 출생연도 정렬 순)
+    // Phase 1: 후손별 첫 부모 결정 (BFS 출생 서열·연도 정렬 순)
     const primaryParent = new Map<string, string>()
     const queue: string[] = [...childIds]
     const seen = new Set<string>(childIds)
@@ -344,11 +383,7 @@ export function PersonGenealogyInfographic({
         .map((cid) => ftNodeMap.get(cid))
         .filter((n): n is FamilyTreePerson => Boolean(n))
         .filter((n) => !excludeIds.has(n.id))
-        .sort((a, b) => {
-          const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
-          const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
-          return ay - by
-        })
+        .sort(compareSiblings)
       for (const cn of childNodes) {
         if (!primaryParent.has(cn.id)) {
           primaryParent.set(cn.id, pid)
@@ -369,11 +404,7 @@ export function PersonGenealogyInfographic({
       out.set(primaryPid, list)
     }
     for (const list of out.values()) {
-      list.sort((a, b) => {
-        const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
-        const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
-        return ay - by
-      })
+      list.sort(compareSiblings)
     }
 
     // Phase 3: 내부 결혼 마커 — 다중 in-tree 결혼은 모두 누적
@@ -405,14 +436,7 @@ export function PersonGenealogyInfographic({
       (ftDerivedEgoFamily?.siblings ?? siblings ?? [])
         .filter(Boolean)
         .slice()
-        .sort((a, b) => {
-          const ay = birthYearOf(a)
-          const by = birthYearOf(b)
-          if (ay == null && by == null) return 0
-          if (ay == null) return 1
-          if (by == null) return -1
-          return ay - by
-        }),
+        .sort(compareSiblings),
     [ftDerivedEgoFamily, siblings],
   )
   const spouseList: NodePerson[] = useMemo(
@@ -496,19 +520,12 @@ export function PersonGenealogyInfographic({
     if (siblingList.length <= SIBLINGS_DEFAULT_LIMIT) return siblingList
     const egoY = birthYearOf(ego)
     if (egoY == null) return siblingList.slice(0, SIBLINGS_DEFAULT_LIMIT)
-    // ego와 출생연도 차이 절대값 기준으로 상위 N명을 출생순으로 다시 정렬
+    // ego와 출생연도 차이 절대값 기준으로 상위 N명을 출생 서열·연도 순으로 다시 정렬
     return siblingList
       .map((s, idx) => ({ s, idx, dy: Math.abs((birthYearOf(s) ?? Number.POSITIVE_INFINITY) - egoY) }))
-      .sort((a, b) => a.dy - b.dy)
+      .sort((a, b) => a.dy - b.dy || a.idx - b.idx)
       .slice(0, SIBLINGS_DEFAULT_LIMIT)
-      .sort((a, b) => {
-        const ay = birthYearOf(a.s)
-        const by = birthYearOf(b.s)
-        if (ay == null && by == null) return 0
-        if (ay == null) return 1
-        if (by == null) return -1
-        return ay - by
-      })
+      .sort((a, b) => compareSiblings(a.s, b.s))
       .map((x) => x.s)
   }, [siblingList, ego])
   const hiddenSiblingCount = siblingList.length - visibleSiblings.length
@@ -629,6 +646,30 @@ export function PersonGenealogyInfographic({
     return labels
   }, [familyTreeData])
 
+  const treeCanvasRef = useRef<HTMLDivElement | null>(null)
+  const egoSlotRef = useRef<HTMLDivElement | null>(null)
+
+  // 비대칭·대형 가계도에서 초기 스크롤이 좌측 끝(0)에 고정되어 본인(Ego) 카드가
+  // 화면 밖으로 밀리는 문제를 막기 위해 마운트·인물 전환·BFS 도착 시 본인 카드를 가로 중앙 정렬.
+  useEffect(() => {
+    const canvas = treeCanvasRef.current
+    const egoEl = egoSlotRef.current
+    if (!canvas || !egoEl) return
+    if (canvas.scrollWidth <= canvas.clientWidth) return
+    const canvasRect = canvas.getBoundingClientRect()
+    const egoRect = egoEl.getBoundingClientRect()
+    const targetLeft =
+      canvas.scrollLeft +
+      (egoRect.left - canvasRect.left) -
+      canvasRect.width / 2 +
+      egoRect.width / 2
+    if (typeof canvas.scrollTo === 'function') {
+      canvas.scrollTo({ left: Math.max(0, targetLeft), behavior: 'auto' })
+    } else {
+      canvas.scrollLeft = Math.max(0, targetLeft)
+    }
+  }, [ego.id, Boolean(familyTreeData)])
+
   // 모든 훅을 지난 뒤 빈 트리 반환 (위 isEmptyTree 주석 참고 — Rules of Hooks).
   if (isEmptyTree) return null
 
@@ -678,7 +719,8 @@ export function PersonGenealogyInfographic({
         </LegendDetails>
 
         <TreeCanvas
-          role="tree"
+          ref={treeCanvasRef}
+          role="region"
           aria-label={`${getPersonDisplayName(ego, true)} 가계도`}
         >
           <GenerationsInner>
@@ -873,7 +915,9 @@ export function PersonGenealogyInfographic({
                         <GeoNode key={sp.id ?? `sp-${i}`} $role="spouse" {...clickableProps(sp.id)}>
                           <GeoThumbnail person={sp} role="spouse" />
                           <NodeNameBlock person={sp} />
-                          <NodeBadge $role="spouse">{(spouseList.length > 1 ? `배우자 ${i + 1}` : '배우자') + (sp.inferred ? ' (추정)' : '')}</NodeBadge>
+                          <NodeBadge $role="spouse">
+                            {formatSpouseBadge(sp, { index: i, totalCount: spouseList.length })}
+                          </NodeBadge>
                           <CardHoverInfo person={sp} />
                         </GeoNode>
                       ))}
@@ -884,7 +928,7 @@ export function PersonGenealogyInfographic({
                     </SpouseJoin>
                   </SpouseSlot>
                 ) : null}
-                <EgoSlot>
+                <EgoSlot ref={egoSlotRef}>
                   <GeoNode $role="ego" $emphasis>
                     <GeoThumbnail person={ego} role="ego" />
                     <NodeNameBlock person={ego} />
@@ -904,7 +948,9 @@ export function PersonGenealogyInfographic({
                         <GeoNode key={sp.id ?? `sp-${i}`} $role="spouse" {...clickableProps(sp.id)}>
                           <GeoThumbnail person={sp} role="spouse" />
                           <NodeNameBlock person={sp} />
-                          <NodeBadge $role="spouse">{(spouseList.length > 1 ? `배우자 ${i + 1}` : '배우자') + (sp.inferred ? ' (추정)' : '')}</NodeBadge>
+                          <NodeBadge $role="spouse">
+                            {formatSpouseBadge(sp, { index: i, totalCount: spouseList.length })}
+                          </NodeBadge>
                           <CardHoverInfo person={sp} />
                         </GeoNode>
                       ))}
@@ -934,7 +980,9 @@ export function PersonGenealogyInfographic({
                         <NodePersonCompactCard
                           person={child.spouse}
                           role="spouse"
-                          badge="배우자"
+                          badge={formatSpouseBadge(child.spouse, {
+                            extraSpouseCount: child.extraSpouseCount,
+                          })}
                           onPersonClick={onPersonClick}
                         />
                       )
@@ -977,7 +1025,9 @@ export function PersonGenealogyInfographic({
                         <NodePersonCompactCard
                           person={child.spouse}
                           role="spouse"
-                          badge="배우자"
+                          badge={formatSpouseBadge(child.spouse, {
+                            extraSpouseCount: child.extraSpouseCount,
+                          })}
                           onPersonClick={onPersonClick}
                         />
                       )
@@ -1043,7 +1093,9 @@ export function PersonGenealogyInfographic({
                           key={`${pairKey}-sp-${child.spouse.id ?? 'u'}`}
                           person={child.spouse}
                           role="spouse"
-                          badge={child.spouse.inferred ? '배우자(추정)' : '배우자'}
+                          badge={formatSpouseBadge(child.spouse, {
+                            extraSpouseCount: child.extraSpouseCount,
+                          })}
                           onPersonClick={onPersonClick}
                         />
                       )

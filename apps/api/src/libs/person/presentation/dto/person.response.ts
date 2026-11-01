@@ -250,6 +250,14 @@ export interface FamilyTreeNodeDto {
   deathEra: Era | null
   birthYear: number | null
   deathYear: number | null
+  /** 출생 서열 (1-base, 형제·자녀 정렬 1차 키) */
+  birthOrder: number | null
+  /** 생존 여부 — 몰년 미상 역사 인물(false)과 현대 생존 인물(true) 구분 */
+  isAlive: boolean
+  /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대 폴백 */
+  floruitStartYear: number | null
+  floruitEndYear: number | null
+  floruitEra: Era | null
   dynasty: { id: string; name: string } | null
   /** 사생아·서출 — UI 별표(*) 마커 */
   illegitimate: boolean

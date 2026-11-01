@@ -18,7 +18,7 @@ import { ftPersonToNodePerson, ftResolveParentIds, getAncestorBadgeLabel } from 
 import { ForkFromOneParent, ForkFromTwoParentsMeasured } from './forks'
 import { ancestorColumnWidth } from './geometry'
 import type { AvatarRole } from './types'
-import { buildPersonTooltip } from './utils'
+import { buildPersonTooltip, displayInitial } from './utils'
 
 // 군주 즉위국 깃발 우선순위 보존을 위해 useNodePersonFlag 대신 familyTreePersonFlag를 직접 호출하므로
 // 카드 본문도 GeoThumbnail 대신 NodeAvatar+CountryFlag를 인라인으로 그린다.
@@ -107,7 +107,7 @@ export function AncestorColumn({
   const tooltip = buildPersonTooltip(person)
   const siblings = siblingsByPersonId?.get(person.id) ?? []
   const displayName = getPersonDisplayName(person, true)
-  const initial = [...displayName.trim()][0] ?? '?'
+  const initial = displayInitial(person)
   const src = person.profileImageUrl
     ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
     : null

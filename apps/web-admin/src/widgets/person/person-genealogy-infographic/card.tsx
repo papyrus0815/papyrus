@@ -12,7 +12,6 @@ import type { AvatarRole, FlagSource, NodePerson, PersonMetaSource } from './typ
 import {
   buildPersonTooltip,
   buildPersonTooltipLines,
-  deathYearOf,
   displayInitial,
   formatYear,
   isDeceasedOf,
@@ -138,7 +137,7 @@ export function NodeNameBlock({
           {sov?.name && <RegnalCountry>· {sov.name}</RegnalCountry>}
         </NodeRegnalName>
       )}
-      <NodeName>
+      <NodeName title={displayName}>
         {displayName}
         {person.illegitimate && <IllegitimateMark aria-label="사생아·서출">*</IllegitimateMark>}
         {isDeceased && <DeceasedMark aria-label="사망"> †</DeceasedMark>}
@@ -210,20 +209,24 @@ export function CountryFlag({
 }
 
 /**
- * NodePerson에서 카드 국기 source 도출 (legacy 주 국적만 사용 가능 — sovereignCountry는
- * FamilyTreePerson에만 있음). FamilyTreeLookupContext으로 BFS 응답 폴백.
+ * NodePerson에서 카드 국기 source 도출 (sovereignCountry > country 우선 —
+ * FamilyTreeLookupContext의 통합 flag 또는 sovereignCountry를 먼저 확인해
+ * 조상·후손 카드와 군주 국기 우선순위를 일치시킨다).
  */
 export function useNodePersonFlag(p: NodePerson): {
   flag: FlagSource
   countryName?: string | null
 } {
   const lookup = useContext(FamilyTreeLookupContext)
-  if (p.country) {
-    return { flag: p.country, countryName: p.country.name ?? null }
-  }
   if (p.id) {
     const fallback = lookup.get(p.id)
     if (fallback) return familyTreePersonFlag(fallback)
+  }
+  if (p.sovereignCountry) {
+    return { flag: p.sovereignCountry, countryName: p.sovereignCountry.name ?? null }
+  }
+  if (p.country) {
+    return { flag: p.country, countryName: p.country.name ?? null }
   }
   return { flag: null, countryName: null }
 }
@@ -366,7 +369,6 @@ export function DescendantNode({
   inMarriagesWith?: FamilyTreePerson[]
   onPersonClick?: (id: string) => void
 }) {
-  const death = deathYearOf(person)
   // 생몰 한 줄 — 정본 formatLifespan에 위임하는 lifeSpan util 재사용(BC-safe·표기 통일).
   const lifespan = lifeSpan(person)
   const src = person.profileImageUrl
@@ -374,12 +376,12 @@ export function DescendantNode({
     : null
   const baseName = getPersonDisplayName(person, true)
   const displayName = baseName
-  const initial = [...baseName.trim()][0] ?? '?'
+  const initial = displayInitial(person)
   const openable = useNodeOpenable(person.id)
   const clickable = Boolean(onPersonClick && person.id) && openable
   const handle = () => person.id && onPersonClick?.(person.id)
   const tooltip = buildPersonTooltip(person)
-  const isDeceased = death != null
+  const isDeceased = isDeceasedOf(person)
   // G29 배지 색상 언어 정리 — 조상 형제 모달의 형제 계열 카드는 amber(sibling),
   // 손자녀 등 후손 카드는 sky(descendant). 'ancestor' 회색 재사용으로 증조부와
   // 같은 색이 되던 붕괴 해소(배지·아바타·카드 프레임을 같은 role로 통일).
@@ -429,7 +431,7 @@ export function DescendantNode({
             )}
           </NodeRegnalName>
         )}
-        <NodeName>
+        <NodeName title={displayName}>
           {displayName}
           {person.illegitimate && <IllegitimateMark aria-label="사생아·서출">*</IllegitimateMark>}
           {isDeceased && <DeceasedMark aria-label="사망"> †</DeceasedMark>}
@@ -861,7 +863,7 @@ export const ConsortMark = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none;
+  cursor: help;
 `
 
 const InMarriageMark = styled.span`
@@ -891,5 +893,5 @@ const InMarriageMark = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none;
+  cursor: help;
 `

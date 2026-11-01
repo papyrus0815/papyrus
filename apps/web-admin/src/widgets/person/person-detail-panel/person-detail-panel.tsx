@@ -299,6 +299,7 @@ import {
   pickGovernmentTenures,
 } from './helpers'
 import { formatFloruit } from '@/shared/lib/lifespan-text'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { deriveContemporaryHeadsTarget } from './contemporary-heads-target'
 import { ContemporariesStrip } from './contemporaries-strip'
 import {
@@ -594,24 +595,32 @@ export function PersonDetailPanel({
 
   // ── 타임라인 인포그래픽용 파생 데이터 (참조 안정) ──
   const timelineFather = useMemo(() => {
-    const f = person?.father
+    const f = person?.father as any
     if (!f) return null
     return {
       id: f.id,
       name: getPersonDisplayName(f, true),
       birthDate: f.birthDate ? String(f.birthDate) : null,
+      birthEra: f.birthEra ?? null,
+      birthDatePrecision: f.birthDatePrecision ?? null,
       deathDate: f.deathDate ? String(f.deathDate) : null,
+      deathEra: f.deathEra ?? null,
+      deathDatePrecision: f.deathDatePrecision ?? null,
     }
   }, [person])
 
   const timelineMother = useMemo(() => {
-    const m = person?.mother
+    const m = person?.mother as any
     if (!m) return null
     return {
       id: m.id,
       name: getPersonDisplayName(m, true),
       birthDate: m.birthDate ? String(m.birthDate) : null,
+      birthEra: m.birthEra ?? null,
+      birthDatePrecision: m.birthDatePrecision ?? null,
       deathDate: m.deathDate ? String(m.deathDate) : null,
+      deathEra: m.deathEra ?? null,
+      deathDatePrecision: m.deathDatePrecision ?? null,
     }
   }, [person])
 
@@ -621,7 +630,11 @@ export function PersonDetailPanel({
       id: c.id,
       name: getPersonDisplayName(c, true),
       birthDate: c.birthDate ? String(c.birthDate) : null,
+      birthEra: c.birthEra ?? null,
+      birthDatePrecision: c.birthDatePrecision ?? null,
       deathDate: c.deathDate ? String(c.deathDate) : null,
+      deathEra: c.deathEra ?? null,
+      deathDatePrecision: c.deathDatePrecision ?? null,
     }))
   }, [person])
 
@@ -633,8 +646,15 @@ export function PersonDetailPanel({
         id: sp.id,
         name: getPersonDisplayName(sp, true),
         birthDate: sp.birthDate ? String(sp.birthDate) : null,
+        birthEra: sp.birthEra ?? null,
+        birthDatePrecision: sp.birthDatePrecision ?? null,
         deathDate: sp.deathDate ? String(sp.deathDate) : null,
+        deathEra: sp.deathEra ?? null,
+        deathDatePrecision: sp.deathDatePrecision ?? null,
         marriageStartDate: rel.marriageStartDate ?? null,
+        marriageStartYear: rel.marriageStartYear ?? null,
+        marriageStartMonth: rel.marriageStartMonth ?? null,
+        marriageStartDay: rel.marriageStartDay ?? null,
         // BC 혼인은 타임라인(AD 축)에 올리면 둔갑 — era로 게이트
         marriageStartEra: rel.marriageStartEra ?? null,
         marriageStartPrecision: rel.marriageStartPrecision ?? null,
@@ -648,7 +668,11 @@ export function PersonDetailPanel({
       id: s.id,
       name: getPersonDisplayName(s, true),
       birthDate: s.birthDate ? String(s.birthDate) : null,
+      birthEra: s.birthEra ?? null,
+      birthDatePrecision: s.birthDatePrecision ?? null,
       deathDate: s.deathDate ? String(s.deathDate) : null,
+      deathEra: s.deathEra ?? null,
+      deathDatePrecision: s.deathDatePrecision ?? null,
     }))
   }, [person])
 
@@ -1047,9 +1071,9 @@ export function PersonDetailPanel({
     [personId, queryClient],
   )
 
-  // ─── 가계도 하향 저작 — ego 기준 자녀/부모/배우자 추가·기존 인물 연결 ──────────
+  // ─── 가계도 하향 저작 — ego 기준 자녀/부모/형제/배우자 추가·기존 인물 연결 ──────────
   const [familyAddMode, setFamilyAddMode] = useState<
-    'child' | 'father' | 'mother' | 'spouse' | null
+    'child' | 'father' | 'mother' | 'sibling' | 'spouse' | null
   >(null)
   /**
    * 자녀 링크 직후 반대편 부모 지정 프롬프트 — '자녀 추가'가 ego 쪽 슬롯만 기록해
@@ -1146,9 +1170,63 @@ export function PersonDetailPanel({
             })
           }
         } else if (mode === 'father') {
+          if (currentPerson.father?.id && currentPerson.father.id !== targetId) {
+            const ok = await confirm({
+              title: '아버지 교체',
+              message: '이미 아버지가 지정되어 있습니다. 선택한 인물로 교체할까요?',
+              confirmLabel: '교체',
+              danger: true,
+            })
+            if (!ok) {
+              setFamilyAddMode(null)
+              return
+            }
+          }
           await updatePerson(currentPerson.id, { fatherId: targetId })
         } else if (mode === 'mother') {
+          if (currentPerson.mother?.id && currentPerson.mother.id !== targetId) {
+            const ok = await confirm({
+              title: '어머니 교체',
+              message: '이미 어머니가 지정되어 있습니다. 선택한 인물로 교체할까요?',
+              confirmLabel: '교체',
+              danger: true,
+            })
+            if (!ok) {
+              setFamilyAddMode(null)
+              return
+            }
+          }
           await updatePerson(currentPerson.id, { motherId: targetId })
+        } else if (mode === 'sibling') {
+          const egoFatherId = currentPerson.father?.id ?? currentPerson.fatherId ?? null
+          const egoMotherId = currentPerson.mother?.id ?? currentPerson.motherId ?? null
+          if (!egoFatherId && !egoMotherId) {
+            notify.error('형제를 추가하려면 먼저 아버지 또는 어머니를 지정해 주세요.')
+            setFamilyAddMode(null)
+            return
+          }
+          const target = familyAddPool?.find((candidate) => candidate.id === targetId)
+          const conflictFather =
+            egoFatherId && target?.fatherId && target.fatherId !== egoFatherId
+          const conflictMother =
+            egoMotherId && target?.motherId && target.motherId !== egoMotherId
+          if (conflictFather || conflictMother) {
+            const ok = await confirm({
+              title: '부모 정보 덮어쓰기',
+              message:
+                '선택한 인물에게 이미 다른 부모가 등록되어 있습니다. 현재 인물의 부모로 덮어써서 형제로 연결할까요?',
+              confirmLabel: '연결',
+              danger: true,
+            })
+            if (!ok) {
+              setFamilyAddMode(null)
+              return
+            }
+          }
+          await updatePerson(targetId, {
+            ...(egoFatherId ? { fatherId: egoFatherId } : {}),
+            ...(egoMotherId ? { motherId: egoMotherId } : {}),
+          })
         } else if (mode === 'spouse') {
           // 기존 배우자 관계 보존 후 추가(update는 통째 교체 → 전체 배열 재전송).
           // 정실/계비/후궁 서열(marriageRank) 및 기원전·고대·연단위 구조화 날짜(marriageStart/End)도 함께 보존한다.
@@ -1271,10 +1349,17 @@ export function PersonDetailPanel({
           const childIds = (person.children ?? [])
             .map((child) => child.id)
             .filter(Boolean) as string[]
+          const siblingIds = (person.siblings ?? [])
+            .map((sib) => sib.id)
+            .filter(Boolean) as string[]
           const byMode = {
             child: { title: '자녀로 추가할 인물', exclude: [selfId] },
             father: { title: '아버지로 지정할 인물', exclude: [selfId, motherId, ...spouseIds] },
             mother: { title: '어머니로 지정할 인물', exclude: [selfId, fatherId, ...spouseIds] },
+            sibling: {
+              title: '형제자매로 추가할 인물',
+              exclude: [selfId, fatherId, motherId, ...spouseIds, ...childIds, ...siblingIds],
+            },
             spouse: {
               title: '배우자로 추가할 인물',
               exclude: [selfId, fatherId, motherId, ...spouseIds, ...childIds],
@@ -1559,9 +1644,9 @@ export function PersonDetailPanel({
     const signedYears: number[] = []
     for (const it of combinedTenures.items) {
       const sp = parseIsoDateParts(it.data.startDate)
-      if (sp) signedYears.push(sp.era === 'BC' ? -sp.year : sp.year)
+      if (sp) signedYears.push(sp.year)
       const ep = parseIsoDateParts(it.data.endDate)
-      if (ep) signedYears.push(ep.era === 'BC' ? -ep.year : ep.year)
+      if (ep) signedYears.push(ep.year)
     }
     if (signedYears.length === 0) return ''
     const minY = Math.min(...signedYears)
@@ -1623,6 +1708,10 @@ export function PersonDetailPanel({
   const genealogyCount =
     (p.father ? 1 : 0) +
     (p.mother ? 1 : 0) +
+    (p.father?.father ? 1 : 0) +
+    (p.father?.mother ? 1 : 0) +
+    (p.mother?.father ? 1 : 0) +
+    (p.mother?.mother ? 1 : 0) +
     (p.spouseRelations?.length ? p.spouseRelations.length : p.spouse ? 1 : 0) +
     (person.children?.length ?? 0) +
     (p.siblings?.length ?? 0)
@@ -3533,31 +3622,49 @@ export function PersonDetailPanel({
                       </FamilyActionBtn>
                       <FamilyActionBtn
                         type="button"
-                        aria-disabled={person.father ? true : undefined}
-                        onClick={() =>
+                        onClick={() => setFamilyAddMode('father')}
+                        title={
                           person.father
-                            ? notify.error('이미 아버지가 지정되어 있습니다. 변경은 수정 모달에서 하세요.')
-                            : setFamilyAddMode('father')
+                            ? `현재 아버지(${person.father.nameKo || person.father.nameEn})를 다른 인물로 교체합니다`
+                            : undefined
                         }
-                        title={person.father ? '이미 아버지가 지정되어 있습니다' : undefined}
                       >
-                        + 아버지 추가
+                        {person.father ? '아버지 변경' : '+ 아버지 추가'}
                       </FamilyActionBtn>
                       <FamilyActionBtn
                         type="button"
-                        aria-disabled={person.mother ? true : undefined}
-                        onClick={() =>
+                        onClick={() => setFamilyAddMode('mother')}
+                        title={
                           person.mother
-                            ? notify.error('이미 어머니가 지정되어 있습니다. 변경은 수정 모달에서 하세요.')
-                            : setFamilyAddMode('mother')
+                            ? `현재 어머니(${person.mother.nameKo || person.mother.nameEn})를 다른 인물로 교체합니다`
+                            : undefined
                         }
-                        title={person.mother ? '이미 어머니가 지정되어 있습니다' : undefined}
                       >
-                        + 어머니 추가
+                        {person.mother ? '어머니 변경' : '+ 어머니 추가'}
                       </FamilyActionBtn>
+                      {(person.father || person.mother) && (
+                        <FamilyActionBtn
+                          type="button"
+                          onClick={() => setFamilyAddMode('sibling')}
+                          title="현재 부모를 공유하는 형제·자매를 연결합니다"
+                        >
+                          + 형제 추가
+                        </FamilyActionBtn>
+                      )}
                       <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('spouse')}>
                         + 배우자 추가
                       </FamilyActionBtn>
+                      {(genealogyCount > 0 ||
+                        (familyTreeData && familyTreeData.nodes.length > 1)) && (
+                        <FamilyActionBtn
+                          type="button"
+                          onClick={() => navigate(`/genealogy/${person.id}`)}
+                          title="다세대 전체 가계도 페이지 열기"
+                        >
+                          <FiGitBranch size={12} style={{ marginRight: 4, verticalAlign: '-1px' }} />
+                          전체 가계도
+                        </FamilyActionBtn>
+                      )}
                     </FamilyActionRow>
                   )}
                   {genealogyCount === 0 &&
@@ -3573,7 +3680,19 @@ export function PersonDetailPanel({
                       paternalGrandmother={person.father?.mother}
                       maternalGrandfather={person.mother?.father}
                       maternalGrandmother={person.mother?.mother}
-                      spouses={(person.spouseRelations ?? []).map((r: any) => r.spouse).filter(Boolean)}
+                      spouses={(person.spouseRelations ?? [])
+                        .map((r: any) =>
+                          r.spouse
+                            ? {
+                                ...r.spouse,
+                                marriageRank: r.marriageRank ?? null,
+                                marriageStartYear: r.marriageStartYear ?? null,
+                                marriageEndYear: r.marriageEndYear ?? null,
+                                marriageNote: r.note ?? null,
+                              }
+                            : null,
+                        )
+                        .filter(Boolean)}
                       siblings={person.siblings}
                       children={person.children}
                       familyTreeData={familyTreeData}

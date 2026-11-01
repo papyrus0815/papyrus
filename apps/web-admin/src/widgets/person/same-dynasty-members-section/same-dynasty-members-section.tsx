@@ -67,19 +67,28 @@ export function SameDynastyMembersSection({
     staleTime: 60_000,
   })
 
-  // 출생순 정렬 + 재위 N대 계산
+  // 출생순 정렬 + 실제 재위 대수(dynastyOrdinal > ordinal) 매핑.
+  // 임의의 출생순 배열 인덱스(i+1)로 대수를 합성하면 미등재 군주·형제 역전 계승·추존왕에서
+  // 상단 가계도의 실제 대수(sovereignCountry.ordinal)와 모순되므로 정본 재위 대수만 사용한다.
   const { sorted, regnalIndex } = useMemo(() => {
     const list = [...persons].sort((a, b) => {
       const ya = a.birthYear != null ? signedYear(a.birthEra ?? null, a.birthYear) : Number.POSITIVE_INFINITY
       const yb = b.birthYear != null ? signedYear(b.birthEra ?? null, b.birthYear) : Number.POSITIVE_INFINITY
-      return ya - yb
+      if (ya !== yb) return ya - yb
+      const oa = a.birthOrder ?? Number.POSITIVE_INFINITY
+      const ob = b.birthOrder ?? Number.POSITIVE_INFINITY
+      return oa - ob
     })
-    // 재위(regnalName 있는) 인물만 골라 출생순으로 N대 매핑
-    const ruling = list.filter((p) => p.regnalName?.trim())
     const idx: Record<string, number> = {}
-    ruling.forEach((p, i) => {
-      idx[p.id] = i + 1
-    })
+    for (const p of list) {
+      const reigns = (p.sovereignReigns ?? []) as Array<{
+        dynastyOrdinal?: number | null
+        ordinal?: number | null
+      }>
+      const matched = reigns.find((r) => r.dynastyOrdinal != null || r.ordinal != null)
+      const ord = matched?.dynastyOrdinal ?? matched?.ordinal ?? null
+      if (ord != null) idx[p.id] = ord
+    }
     return { sorted: list, regnalIndex: idx }
   }, [persons])
 
@@ -130,13 +139,12 @@ export function SameDynastyMembersSection({
         <Strip ref={stripRef}>
           {sorted.map((p) => {
             const isCurrent = p.id === currentPersonId
-            const ruling = !!p.regnalName?.trim()
-            const generation = ruling ? regnalIndex[p.id] : null
+            const generation = regnalIndex[p.id] ?? null
             const displayName = getPersonDisplayName(p, true)
             const src = p.profileImageUrl?.trim()
               ? getUploadImageUrl(p.profileImageUrl) || p.profileImageUrl
               : ''
-            const initial = [...displayName][0] ?? '?'
+            const initial = [...(p.name?.trim() || displayName)][0] ?? '?'
 
             return (
               <Card
@@ -147,7 +155,7 @@ export function SameDynastyMembersSection({
                 onClick={() => {
                   if (isCurrent) return
                   if (onPersonClick) onPersonClick(p.id)
-                  else navigate(pathKeys.personDetail(p.id))
+                  else navigate(pathKeys.personsTimelineDetail(p.id))
                 }}
                 aria-current={isCurrent ? 'true' : undefined}
                 aria-label={

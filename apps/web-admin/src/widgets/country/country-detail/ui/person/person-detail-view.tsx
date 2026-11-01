@@ -1,10 +1,12 @@
 import { formatDomainPath } from '@/entities/event/model'
 import React, { useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { FiEdit2, FiPlus } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { getPersonFamilyTree } from '@/shared/api/persons-family-tree'
 import { formatLifespan } from '@/shared/lib/lifespan-text'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
@@ -25,6 +27,13 @@ export function PersonDetailView({
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [tenureModalOpen, setTenureModalOpen] = useState(false)
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
+
+  const { data: familyTreeData } = useQuery({
+    queryKey: ['person-family-tree', person?.id],
+    queryFn: () => getPersonFamilyTree(person.id),
+    enabled: Boolean(person?.id) && activeTab === 'genealogy',
+    staleTime: 5 * 60 * 1000,
+  })
 
   // 데이터 검증
   if (!person) {
@@ -229,7 +238,10 @@ export function PersonDetailView({
             {!person.father &&
             !person.mother &&
             !person.spouse &&
-            (!person.children || person.children.length === 0) ? (
+            (!person.spouseRelations || person.spouseRelations.length === 0) &&
+            (!person.siblings || person.siblings.length === 0) &&
+            (!person.children || person.children.length === 0) &&
+            (!familyTreeData || familyTreeData.nodes.length <= 1) ? (
               <EmptyState>가족 정보가 없습니다</EmptyState>
             ) : (
               <PersonGenealogyInfographic
@@ -240,9 +252,22 @@ export function PersonDetailView({
                 paternalGrandmother={person.father?.mother}
                 maternalGrandfather={person.mother?.father}
                 maternalGrandmother={person.mother?.mother}
-                spouses={(person.spouseRelations ?? []).map((r: any) => r.spouse).filter(Boolean)}
+                spouses={(person.spouseRelations ?? [])
+                  .map((r: any) =>
+                    r.spouse
+                      ? {
+                          ...r.spouse,
+                          marriageRank: r.marriageRank ?? null,
+                          marriageStartYear: r.marriageStartYear ?? null,
+                          marriageEndYear: r.marriageEndYear ?? null,
+                          marriageNote: r.note ?? null,
+                        }
+                      : null,
+                  )
+                  .filter(Boolean)}
                 siblings={person.siblings}
                 children={person.children}
+                familyTreeData={familyTreeData}
               />
             )}
           </TabContent>

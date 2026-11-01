@@ -90,11 +90,14 @@ export interface FamilySectionProps {
   motherId: string
   /** 사생아·서출 — 가계도 카드 별표(*) 마커 */
   illegitimate: boolean
+  /** 출생 서열 (1-base 숫자 문자열, 빈 문자열 = 미지정) */
+  birthOrder: string
   /** 배우자 관계 반복 행 (배우자 + 혼인 시작/종료일·서열 + 메모) */
   spouseRows: SpouseFormRow[]
   setFatherId: (id: string) => void
   setMotherId: (id: string) => void
   setIllegitimate: (value: boolean) => void
+  setBirthOrder: (value: string) => void
   setSpouseRows: React.Dispatch<React.SetStateAction<SpouseFormRow[]>>
   // PersonSelectModal 표시 상태(= "+ 새 인물" 생성 분기)
   showFatherModal: boolean
@@ -127,10 +130,12 @@ export function FamilySection({
   fatherId,
   motherId,
   illegitimate,
+  birthOrder,
   spouseRows,
   setFatherId,
   setMotherId,
   setIllegitimate,
+  setBirthOrder,
   setSpouseRows,
   showFatherModal,
   showMotherModal,
@@ -395,6 +400,26 @@ export function FamilySection({
         >
           사생아·서출
         </IllegitimateLabel>
+        <BirthOrderGroup title="형제·자매 중 출생 순서(1 이상 정수). 동년생·출생연도 미상 형제의 가계도 정렬에 사용됩니다">
+          <BirthOrderLabel htmlFor={fid('birth-order')}>
+            출생 서열
+          </BirthOrderLabel>
+          <BirthOrderInput
+            id={fid('birth-order')}
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            placeholder="예: 1"
+            value={birthOrder}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9]/g, '')
+              setBirthOrder(raw)
+              markDirty()
+            }}
+          />
+          <BirthOrderUnit>번째</BirthOrderUnit>
+        </BirthOrderGroup>
       </IllegitimateRow>
       </FieldControl>
       </FieldRow>
@@ -694,9 +719,43 @@ const FamilySlot = styled.div`
 /** 사생아·서출 체크박스 행 — 부모 슬롯 아래. */
 const IllegitimateRow = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding-top: 12px;
+`
+
+const BirthOrderGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid ${({ theme }) => theme.colors.border};
+`
+
+const BirthOrderLabel = styled.label`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const BirthOrderInput = styled.input`
+  width: 64px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: ${FONT.xs};
+  border-radius: ${RADIUS.sm};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.surface};
+  color: ${({ theme }) => theme.colors.text.primary};
+  ${mobileInputFontMixin}
+  ${inputFocusMixin}
+`
+
+const BirthOrderUnit = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const IllegitimateCheckbox = styled.input`

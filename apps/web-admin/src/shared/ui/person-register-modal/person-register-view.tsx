@@ -302,6 +302,8 @@ export function PersonRegisterView({
   const [motherId, setMotherId] = useState('')
   // 사생아·서출 — 가계도 카드 별표(*) 마커
   const [illegitimate, setIllegitimate] = useState(false)
+  // 출생 서열 (1-base 숫자 문자열, 빈 문자열 = 미지정)
+  const [birthOrder, setBirthOrder] = useState('')
   /**
    * 배우자 관계 목록(반복 행) — 각 행: 배우자 + 혼인 시작/종료일 + 메모.
    * 다중 배우자(정실/후궁·순차 재혼)와 결혼일을 폼에서 직접 편집·추가/삭제한다.
@@ -717,6 +719,7 @@ export function PersonRegisterView({
     makeFormField('fatherId', () => fatherId, setFatherId, ''),
     makeFormField('motherId', () => motherId, setMotherId, ''),
     makeFormField('illegitimate', () => illegitimate, setIllegitimate, false),
+    makeFormField('birthOrder', () => birthOrder, setBirthOrder, ''),
     makeFormField('spouseRelations', () => spouseRows, setSpouseRows, []),
     makeFormField('profileImageUrl', () => profileImageUrl, setProfileImageUrl, ''),
     makeFormField('templeName', () => templeName, setTempleName, ''),
@@ -918,6 +921,7 @@ export function PersonRegisterView({
         setFatherId(p.fatherId ?? p.father?.id ?? '')
         setMotherId(p.motherId ?? p.mother?.id ?? '')
         setIllegitimate(Boolean((p as any).illegitimate))
+        setBirthOrder((p as any).birthOrder != null ? String((p as any).birthOrder) : '')
         // 배우자 관계 전체(결혼 시작/종료일·서열·다중 배우자 포함)를 반복 행으로 로드.
         // 날짜는 era+precision을 반영한 부분 정밀 부호 문자열('1526'·'-0044-03-15')로 복원 —
         // DATETIME의 01-01 채움·BC 크기값 저장을 폼에 노출하지 않는다.
@@ -1063,6 +1067,7 @@ export function PersonRegisterView({
             p.motherId ||
             p.mother?.id ||
             (p as any).illegitimate ||
+            (p as any).birthOrder != null ||
             spouseRels.length > 0,
         )
         setFamilyOpen(hasFamily)
@@ -1209,6 +1214,7 @@ export function PersonRegisterView({
       raw.fatherId ||
       raw.motherId ||
       raw.illegitimate ||
+      raw.birthOrder ||
       (Array.isArray(raw.spouseRelations) && raw.spouseRelations.length > 0)
     ) {
       setFamilyOpen(true)
@@ -1865,6 +1871,10 @@ export function PersonRegisterView({
       fatherId: fatherId || undefined,
       motherId: motherId || undefined,
       illegitimate,
+      birthOrder: (() => {
+        const parsed = parseInt(birthOrder.trim(), 10)
+        return birthOrder.trim() && !isNaN(parsed) && parsed >= 1 ? parsed : null
+      })(),
       // 신규: 첫 배우자만 / 수정: 보존된 전체 관계를 왕복(첫 관계만 교체, 비우면 첫 관계 제거).
       spouseRelations: buildSpouseRelations(),
       isBirthDateUnknown,
@@ -2838,6 +2848,7 @@ export function PersonRegisterView({
                         fatherId ||
                           motherId ||
                           illegitimate ||
+                          birthOrder.trim() ||
                           spouseRows.length > 0,
                       ) && <AdvancedToggleBadge>입력됨</AdvancedToggleBadge>}
                   </AdvancedToggleBody>
@@ -2849,10 +2860,12 @@ export function PersonRegisterView({
                       fatherId={fatherId}
                       motherId={motherId}
                       illegitimate={illegitimate}
+                      birthOrder={birthOrder}
                       spouseRows={spouseRows}
                       setFatherId={setFatherId}
                       setMotherId={setMotherId}
                       setIllegitimate={setIllegitimate}
+                      setBirthOrder={setBirthOrder}
                       setSpouseRows={setSpouseRows}
                       showFatherModal={showFatherModal}
                       showMotherModal={showMotherModal}
