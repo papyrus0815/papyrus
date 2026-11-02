@@ -405,7 +405,7 @@ export function CabinetMindMap({
                 onClick={() => onRegisterCabinetHead?.()}
                 aria-label="국가원수·정부수반 등록"
               >
-                <CenterFace $branches={hasBranches} aria-hidden>
+                <CenterFace $branches={hasBranches} $empty aria-hidden>
                   <CenterEmptyInnerFace>+</CenterEmptyInnerFace>
                 </CenterFace>
                 <CenterRole $branches={hasBranches}>
@@ -413,23 +413,27 @@ export function CabinetMindMap({
                   {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
                   {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
                 </CenterRole>
-                <CenterName $branches={hasBranches}>+ 수반 등록</CenterName>
+                <CenterName $branches={hasBranches} $empty>
+                  아직 등록된 수반이 없습니다
+                </CenterName>
                 <CenterCabinet $branches={hasBranches}>
-                  {cabinetLabel ?? '황제 · 국왕 · 대통령 · 총리 · 재상'}
+                  {cabinetLabel ??
+                    '황제 · 국왕 · 대통령 · 총리 등 수반을 먼저 등록하면 정권별 각료 마인드맵이 열립니다'}
                 </CenterCabinet>
                 <CenterStats $branches={hasBranches}>
                   <CenterStat>
                     <CenterStatKey>취임</CenterStatKey>
-                    <CenterStatValue>—</CenterStatValue>
+                    <CenterStatValue $muted>—</CenterStatValue>
                   </CenterStat>
                   <CenterStat>
                     <CenterStatKey>재임</CenterStatKey>
-                    <CenterStatValue>—</CenterStatValue>
+                    <CenterStatValue $muted>—</CenterStatValue>
                   </CenterStat>
                   <CenterStat>
                     <CenterStatKey>각료</CenterStatKey>
-                    <CenterStatValue>{members.length}명</CenterStatValue>
+                    <CenterStatValue $muted>—</CenterStatValue>
                   </CenterStat>
+                  <CenterEmptyAction>+ 수반 등록</CenterEmptyAction>
                 </CenterStats>
               </CenterCard>
             )}
@@ -913,7 +917,7 @@ const BranchSvg = styled.svg<{ $side: 'left' | 'right' }>`
 
 const MapCenter = styled.div<{ $branches?: boolean }>`
   display: flex;
-  justify-content: center;
+  justify-content: ${({ $branches }) => ($branches ? 'center' : 'stretch')};
   min-width: 0;
 
   /* 격자에선 DOM 순서(왼쪽 가지 → 가운데 → 오른쪽 가지)대로면 수반이 각료 사이에 낀다 */
@@ -928,8 +932,8 @@ const MapCenter = styled.div<{ $branches?: boolean }>`
 const CenterStack = styled.div<{ $branches?: boolean }>`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: auto;
+  align-items: ${({ $branches }) => ($branches ? 'center' : 'stretch')};
+  width: ${({ $branches }) => ($branches ? 'auto' : '100%')};
   min-width: 0;
 
   @container (max-width: 820px) {
@@ -942,7 +946,7 @@ const CounterpartDeck = styled.div<{ $branches?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 288px;
+  width: ${({ $branches }) => ($branches ? '288px' : '100%')};
 
   @container (max-width: 820px) {
     width: 100%;
@@ -1186,6 +1190,9 @@ const centerSurface = css<{ $branches?: boolean; $monarch?: boolean }>`
       ? '0 8px 24px rgba(0,0,0,0.3)'
       : '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06)'};
 
+  /* 가지가 없을 때는 아래 부처 격자 폭에 맞춰 가로로 눕힌다 */
+  ${({ $branches }) => !$branches && horizontalCenterLayout}
+
   /* 좁은 칼럼 — 가로로 눕힌다: 얼굴 | 직함·이름·정권 | 요약 */
   @container (max-width: 820px) {
     ${horizontalCenterLayout}
@@ -1220,27 +1227,46 @@ const CenterEmptyInnerFace = styled.span`
   width: 112px;
   height: 112px;
   border-radius: 50%;
-  font-size: 36px;
-  font-weight: 700;
-  background: ${({ theme }) => theme.colors.hover};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.10)'
+      : 'rgba(99, 102, 241, 0.05)'};
+  color: rgba(99, 102, 241, 0.72);
 `
 
 /** 얼굴 둘레 링 — 가운데가 중심이라는 걸 색이 아니라 형태로 말한다 */
-const CenterFace = styled.span<{ $branches?: boolean; $monarch?: boolean }>`
+const CenterFace = styled.span<{
+  $branches?: boolean
+  $monarch?: boolean
+  $empty?: boolean
+}>`
   display: inline-flex;
   padding: 4px;
   margin-bottom: 12px;
   border-radius: 999px;
-  border: 2px solid
-    ${({ $monarch }) =>
-      $monarch ? 'rgba(217, 119, 6, 0.65)' : 'rgba(99, 102, 241, 0.55)'};
+  border: 2px ${({ $empty }) => ($empty ? 'dashed' : 'solid')}
+    ${({ $monarch, $empty }) =>
+      $empty
+        ? 'rgba(99, 102, 241, 0.42)'
+        : $monarch
+          ? 'rgba(217, 119, 6, 0.65)'
+          : 'rgba(99, 102, 241, 0.55)'};
 
   img,
   span {
     border-radius: 999px;
   }
+
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 1;
+      grid-row: 1 / span 4;
+      margin-bottom: 0;
+    `}
 
   @container (max-width: 820px) {
     grid-column: 1;
@@ -1264,6 +1290,12 @@ const CenterRole = styled.span<{ $branches?: boolean; $monarch?: boolean }>`
         ? '#fbbf24'
         : '#b45309'
       : CENTER_ACCENT};
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+      justify-content: flex-start;
+    `}
   @container (max-width: 820px) {
     grid-column: 2;
     justify-content: flex-start;
@@ -1319,7 +1351,7 @@ const ReignCabinetsDeck = styled.div<{ $branches?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 288px;
+  width: ${({ $branches }) => ($branches ? '288px' : '100%')};
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
@@ -1583,12 +1615,18 @@ const RegisterMinisterBtn = styled.button`
   }
 `
 
-const CenterName = styled.span<{ $branches?: boolean }>`
+const CenterName = styled.span<{ $branches?: boolean; $empty?: boolean }>`
   font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.25;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ $empty, theme }) =>
+    $empty ? theme.colors.text.secondary : theme.colors.text.primary};
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+    `}
   @container (max-width: 820px) {
     grid-column: 2;
   }
@@ -1605,6 +1643,11 @@ const CenterOrdinal = styled.span<{ $branches?: boolean }>`
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+    `}
   @container (max-width: 820px) {
     grid-column: 2;
   }
@@ -1614,6 +1657,11 @@ const CenterCabinet = styled.span<{ $branches?: boolean }>`
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 2;
+    `}
   @container (max-width: 820px) {
     grid-column: 2;
   }
@@ -1626,12 +1674,28 @@ const CenterCabinet = styled.span<{ $branches?: boolean }>`
 const CenterStats = styled.dl<{ $branches?: boolean }>`
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: 10px 18px;
   width: 100%;
   margin: 14px 0 0;
   padding-top: 12px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  ${({ $branches }) =>
+    !$branches &&
+    css`
+      grid-column: 3;
+      grid-row: 1 / span 4;
+      align-self: center;
+      width: auto;
+      max-width: 520px;
+      justify-content: flex-end;
+      margin: 0;
+      padding: 0 0 0 22px;
+      border-top: none;
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    `}
 
   /* 눕힌 카드에선 오른쪽 칸 — 세로 구분선으로 이름 칸과 가른다 */
   @container (max-width: 820px) {
@@ -1676,15 +1740,35 @@ const CenterStatKey = styled.dt`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const CenterStatValue = styled.dd<{ $warn?: boolean }>`
+const CenterStatValue = styled.dd<{ $warn?: boolean; $muted?: boolean }>`
   margin: 0;
   font-size: 12.5px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   white-space: nowrap;
-  color: ${({ $warn, theme }) =>
-    $warn ? '#b45309' : theme.colors.text.primary};
+  color: ${({ $warn, $muted, theme }) =>
+    $warn
+      ? '#b45309'
+      : $muted
+        ? theme.colors.text.tertiary
+        : theme.colors.text.primary};
+`
+
+const CenterEmptyAction = styled.span`
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  background: ${CENTER_ACCENT};
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+
+  @container (max-width: 760px) {
+    margin-left: auto;
+  }
 `
 
 const RosterSlotWrap = styled.div`
