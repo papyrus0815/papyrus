@@ -166,7 +166,7 @@ function buildSpecs(system: PoliticalSystem): SpecItem[] {
   return specs
 }
 
-const SUMMARY_ROW_LIMIT = 4
+const PAST_ROW_LIMIT = 3
 
 export function PoliticalSystemPanel({
   countryId,
@@ -189,17 +189,18 @@ export function PoliticalSystemPanel({
     [query.data],
   )
   const current = useMemo(() => resolveCurrentSystem(systems), [systems])
-  /** 현행을 맨 위에 두고 나머지는 최신순으로 */
-  const orderedSystems = useMemo(() => {
-    const rev = [...systems].reverse()
-    if (!current) return rev
-    return [current, ...rev.filter((item) => item.id !== current.id)]
-  }, [systems, current])
+  const pastSystems = useMemo(
+    () =>
+      [...systems]
+        .filter((item) => item.id !== current?.id)
+        .reverse(),
+    [systems, current],
+  )
 
-  const visibleSystems = expanded
-    ? orderedSystems
-    : orderedSystems.slice(0, SUMMARY_ROW_LIMIT)
-  const hiddenCount = Math.max(0, orderedSystems.length - SUMMARY_ROW_LIMIT)
+  const visiblePast = expanded
+    ? pastSystems
+    : pastSystems.slice(0, PAST_ROW_LIMIT)
+  const hiddenPastCount = Math.max(0, pastSystems.length - PAST_ROW_LIMIT)
 
   const openCreate = (preset: GovernmentForm | null = null) => {
     setEditing(null)
@@ -213,6 +214,15 @@ export function PoliticalSystemPanel({
     setFormOpen(true)
   }
 
+  const currentHeadline = current
+    ? [
+        current.governmentForm && GOVERNMENT_FORM_LABEL[current.governmentForm],
+        current.legislatureType &&
+          LEGISLATURE_TYPE_LABEL[current.legislatureType],
+      ].filter(Boolean)
+    : []
+  const currentSpecs = current ? buildSpecs(current) : []
+
   return (
     <S.Section>
       <S.SectionTitleRow>
@@ -225,6 +235,11 @@ export function PoliticalSystemPanel({
           <S.SectionCountChip>{systems.length}개</S.SectionCountChip>
         )}
         <S.SectionHeaderActions>
+          {current && (
+            <S.SectionAction type="button" onClick={() => openEdit(current)}>
+              수정
+            </S.SectionAction>
+          )}
           <S.SectionAction type="button" onClick={() => openCreate(null)}>
             {systems.length > 0 ? '+ 추가' : '+ 정체 등록'}
           </S.SectionAction>
@@ -238,106 +253,149 @@ export function PoliticalSystemPanel({
 
       {query.isLoading ? (
         <ChartSkeleton variant="text" lines={2} />
-      ) : orderedSystems.length === 0 ? (
-        <TimelineRow $empty>
-          <PeriodCol>
-            <EmptyPeriodLabel>미등록</EmptyPeriodLabel>
-          </PeriodCol>
-          <BodyCol>
-            <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
-              {QUICK_POLITY_PRESETS.map((formKey) => (
-                <EmptyPresetChip
-                  key={formKey}
-                  type="button"
-                  onClick={() => openCreate(formKey)}
-                >
-                  {GOVERNMENT_FORM_LABEL[formKey]}
-                </EmptyPresetChip>
-              ))}
-            </EmptyPresetRow>
-          </BodyCol>
-        </TimelineRow>
-      ) : (
-        <TimelineList>
-          {visibleSystems.map((system, rowIdx) => {
-            const isPrimary = rowIdx === 0
-            const headline = [
-              system.governmentForm &&
-                GOVERNMENT_FORM_LABEL[system.governmentForm],
-              system.legislatureType &&
-                LEGISLATURE_TYPE_LABEL[system.legislatureType],
-            ].filter(Boolean)
-            const specs = buildSpecs(system)
-
-            return (
-              <TimelineRow key={system.id}>
-                <PeriodCol>
-                  <Period $primary={isPrimary}>{formatPeriod(system)}</Period>
-                  {system.isCurrent && <NowChip>현행</NowChip>}
-                </PeriodCol>
-
-                <BodyCol>
-                  <TitleLine>
-                    <Headline $primary={isPrimary}>
-                      {headline.length > 0 ? (
-                        headline.map((text, index) => (
-                          <HeadlinePart key={text}>
-                            {index > 0 && (
-                              <HeadlineDot aria-hidden>·</HeadlineDot>
-                            )}
-                            {text}
-                          </HeadlinePart>
-                        ))
-                      ) : (
-                        <HeadlinePart>{summarize(system)}</HeadlinePart>
-                      )}
-                    </Headline>
-                    {system.name && <SystemName>{system.name}</SystemName>}
-                    {historicalCountryId == null &&
-                      system.historicalCountryId != null && (
-                        <PastChip>
-                          {system.historicalCountry?.name ?? '과거 국가'}
-                        </PastChip>
-                      )}
-                  </TitleLine>
-
-                  {specs.length > 0 && (
-                    <SpecsRow>
-                      {specs.map((spec) => (
-                        <SpecCell key={spec.key}>
-                          <SpecKey>{spec.label}</SpecKey>
-                          <SpecValue>
-                            {spec.value}
-                            {spec.note && <SpecNote>({spec.note})</SpecNote>}
-                          </SpecValue>
-                        </SpecCell>
-                      ))}
-                    </SpecsRow>
-                  )}
-
-                  {system.notes && <NotesRow>{system.notes}</NotesRow>}
-                </BodyCol>
-
-                <ActionCol>
-                  <RowEditBtn type="button" onClick={() => openEdit(system)}>
-                    수정
-                  </RowEditBtn>
-                </ActionCol>
-              </TimelineRow>
-            )
-          })}
-
-          {orderedSystems.length > SUMMARY_ROW_LIMIT && (
-            <MoreRow>
-              <MoreBtn
+      ) : !current ? (
+        <EmptyStrip>
+          <EmptyLead>
+            <AccentBar $muted aria-hidden />
+            <EmptyLabel>헌법 · 통치 체제 미등록</EmptyLabel>
+          </EmptyLead>
+          <EmptyDivider aria-hidden />
+          <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
+            {QUICK_POLITY_PRESETS.map((formKey) => (
+              <EmptyPresetChip
+                key={formKey}
                 type="button"
-                onClick={() => setExpanded((prev) => !prev)}
+                onClick={() => openCreate(formKey)}
               >
-                {expanded ? '접기' : `이전 정체 ${hiddenCount}개 더 보기`}
-              </MoreBtn>
-            </MoreRow>
+                {GOVERNMENT_FORM_LABEL[formKey]}
+              </EmptyPresetChip>
+            ))}
+          </EmptyPresetRow>
+        </EmptyStrip>
+      ) : (
+        <PolityStack>
+          <PrimaryBlock>
+            <PrimaryHeadRow>
+              <AccentBar aria-hidden />
+              <PrimaryHeadline>
+                {currentHeadline.length > 0 ? (
+                  currentHeadline.map((text, index) => (
+                    <HeadlinePart key={text}>
+                      {index > 0 && <HeadlineDot aria-hidden>·</HeadlineDot>}
+                      {text}
+                    </HeadlinePart>
+                  ))
+                ) : (
+                  <HeadlinePart>{summarize(current)}</HeadlinePart>
+                )}
+              </PrimaryHeadline>
+              {current.name && <SystemName>{current.name}</SystemName>}
+              <Period $primary>{formatPeriod(current)}</Period>
+              {current.isCurrent && <NowChip>현행</NowChip>}
+              {historicalCountryId == null &&
+                current.historicalCountryId != null && (
+                  <PastChip>
+                    {current.historicalCountry?.name ?? '과거 국가'}
+                  </PastChip>
+                )}
+            </PrimaryHeadRow>
+
+            {currentSpecs.length > 0 && (
+              <PrimarySpecStrip>
+                {currentSpecs.map((spec) => (
+                  <SpecColumn key={spec.key}>
+                    <SpecColumnKey>{spec.label}</SpecColumnKey>
+                    <SpecColumnValue>
+                      <span>{spec.value}</span>
+                      {spec.note && (
+                        <PowerTag $symbolic={spec.note === '상징'}>
+                          {spec.note}
+                        </PowerTag>
+                      )}
+                    </SpecColumnValue>
+                  </SpecColumn>
+                ))}
+              </PrimarySpecStrip>
+            )}
+
+            {current.notes && <NotesRow>{current.notes}</NotesRow>}
+          </PrimaryBlock>
+
+          {pastSystems.length > 0 && (
+            <PastTimeline>
+              {visiblePast.map((system) => {
+                const pastHeadline = [
+                  system.governmentForm &&
+                    GOVERNMENT_FORM_LABEL[system.governmentForm],
+                  system.legislatureType &&
+                    LEGISLATURE_TYPE_LABEL[system.legislatureType],
+                ].filter(Boolean)
+                const pastSpecs = buildSpecs(system)
+
+                return (
+                  <PastRow key={system.id}>
+                    <PastDot aria-hidden />
+                    <PastPeriodCol>
+                      <Period>{formatPeriod(system)}</Period>
+                    </PastPeriodCol>
+                    <PastBodyCol>
+                      <PastTitleLine>
+                        <PastHeadline>
+                          {pastHeadline.length > 0
+                            ? pastHeadline.join(' · ')
+                            : summarize(system)}
+                        </PastHeadline>
+                        {system.name && (
+                          <PastSystemName>{system.name}</PastSystemName>
+                        )}
+                        {historicalCountryId == null &&
+                          system.historicalCountryId != null && (
+                            <PastChip>
+                              {system.historicalCountry?.name ?? '과거 국가'}
+                            </PastChip>
+                          )}
+                      </PastTitleLine>
+                      {pastSpecs.length > 0 && (
+                        <InlineSpecs>
+                          {pastSpecs.map((spec) => (
+                            <InlineSpecItem key={spec.key}>
+                              <InlineSpecKey>{spec.label}</InlineSpecKey>
+                              <InlineSpecVal>
+                                {spec.value}
+                                {spec.note && (
+                                  <InlineSpecNote>({spec.note})</InlineSpecNote>
+                                )}
+                              </InlineSpecVal>
+                            </InlineSpecItem>
+                          ))}
+                        </InlineSpecs>
+                      )}
+                    </PastBodyCol>
+                    <RowEditBtn
+                      type="button"
+                      onClick={() => openEdit(system)}
+                    >
+                      수정
+                    </RowEditBtn>
+                  </PastRow>
+                )
+              })}
+
+              {pastSystems.length > PAST_ROW_LIMIT && (
+                <MoreRow>
+                  <MoreBtn
+                    type="button"
+                    onClick={() => setExpanded((prev) => !prev)}
+                  >
+                    {expanded
+                      ? '이전 정체 접기'
+                      : `이전 정체 ${hiddenPastCount}개 더 보기`}
+                  </MoreBtn>
+                </MoreRow>
+              )}
+            </PastTimeline>
           )}
-        </TimelineList>
+        </PolityStack>
       )}
 
       <PoliticalSystemFormModal
@@ -368,78 +426,179 @@ export function PoliticalSystemPanel({
   )
 }
 
-const TimelineList = styled.div`
+const PolityStack = styled.div`
   display: flex;
   flex-direction: column;
-`
-
-const TimelineRow = styled.div<{ $empty?: boolean }>`
-  display: grid;
-  grid-template-columns: ${({ $empty }) =>
-    $empty ? '136px minmax(0, 1fr)' : '136px minmax(0, 1fr) auto'};
   gap: 16px;
-  align-items: baseline;
-  padding: 12px 0;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  &:first-child {
-    padding-top: 2px;
-    border-top: none;
-  }
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr auto;
-  }
 `
 
-const PeriodCol = styled.div`
-  display: inline-flex;
-  align-items: center;
+const PrimaryBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`
+
+const PrimaryHeadRow = styled.div`
+  display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 8px 10px;
   min-width: 0;
 `
 
-const EmptyPeriodLabel = styled.span`
-  font-size: 13px;
+const AccentBar = styled.span<{ $muted?: boolean }>`
+  width: 3.5px;
+  height: 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: ${({ $muted, theme }) =>
+    $muted ? theme.colors.border.medium : '#6366f1'};
+`
+
+const PrimaryHeadline = styled.p`
+  margin: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const HeadlinePart = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+`
+
+const HeadlineDot = styled.span`
+  margin: 0 7px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SystemName = styled.span`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const Period = styled.span<{ $primary?: boolean }>`
+  font-size: ${({ $primary }) => ($primary ? '13.5px' : '12.5px')};
+  font-weight: ${({ $primary }) => ($primary ? 700 : 600)};
+  font-variant-numeric: tabular-nums;
+  color: ${({ $primary, theme }) =>
+    $primary ? theme.colors.text.secondary : theme.colors.text.tertiary};
+`
+
+const NowChip = styled.span`
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
+  background: rgba(16, 185, 129, 0.15);
+`
+
+const PastChip = styled.span`
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  background: rgba(245, 158, 11, 0.15);
+`
+
+/**
+ * 상자 테두리 없이 세로 헤어라인(1px)으로만 가른 2단 타이포그래피 스펙 열.
+ */
+const PrimarySpecStrip = styled.dl`
+  margin: 0;
+  padding-left: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  row-gap: 12px;
+`
+
+const SpecColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 24px;
+  margin-right: 24px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:last-child {
+    padding-right: 0;
+    margin-right: 0;
+    border-right: none;
+  }
+`
+
+const SpecColumnKey = styled.dt`
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SpecColumnValue = styled.dd`
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const PowerTag = styled.span<{ $symbolic?: boolean }>`
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ $symbolic, theme }) =>
+    $symbolic
+      ? theme.colors.text.tertiary
+      : theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4338ca'};
+  background: ${({ $symbolic, theme }) =>
+    $symbolic
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.05)'
+      : 'rgba(99, 102, 241, 0.12)'};
+`
+
+const EmptyStrip = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+`
+
+const EmptyLead = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+`
+
+const EmptyLabel = styled.span`
+  font-size: 13.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const BodyCol = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+const EmptyDivider = styled.span`
+  width: 1px;
+  height: 16px;
+  background: ${({ theme }) => theme.colors.border.light};
 
   @media (max-width: 640px) {
-    grid-column: 1 / -1;
-  }
-`
-
-const ActionCol = styled.div`
-  display: inline-flex;
-  align-items: center;
-  justify-self: end;
-`
-
-const RowEditBtn = styled.button`
-  padding: 4px 10px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: transparent;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-    color: ${({ theme }) => theme.colors.text.primary};
+    display: none;
   }
 `
 
@@ -472,123 +631,152 @@ const EmptyPresetChip = styled.button`
   }
 `
 
-const TitleLine = styled.div`
+/**
+ * 과거 정체 연대표 — 좌측 세로 타임라인 축 + 오픈 행.
+ */
+const PastTimeline = styled.div`
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 10px;
-  min-width: 0;
-`
+  flex-direction: column;
+  padding-top: 12px;
+  padding-left: 18px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 
-const Headline = styled.p<{ $primary?: boolean }>`
-  margin: 0;
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  font-size: ${({ $primary }) => ($primary ? '16.5px' : '14.5px')};
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const HeadlinePart = styled.span`
-  display: inline-flex;
-  align-items: baseline;
-`
-
-const HeadlineDot = styled.span`
-  margin: 0 7px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const SystemName = styled.span`
-  font-size: 13.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const Period = styled.span<{ $primary?: boolean }>`
-  font-size: 13px;
-  font-weight: ${({ $primary }) => ($primary ? 700 : 600)};
-  font-variant-numeric: tabular-nums;
-  color: ${({ $primary, theme }) =>
-    $primary ? theme.colors.text.primary : theme.colors.text.secondary};
-`
-
-const NowChip = styled.span`
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
-  background: rgba(16, 185, 129, 0.16);
-`
-
-const PastChip = styled.span`
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
-  background: rgba(245, 158, 11, 0.16);
-`
-
-const SpecsRow = styled.dl`
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  row-gap: 4px;
-`
-
-const SpecCell = styled.div`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding-right: 14px;
-  margin-right: 14px;
-  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  &:last-child {
-    padding-right: 0;
-    margin-right: 0;
-    border-right: none;
+  &::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 22px;
+    bottom: 14px;
+    width: 1.5px;
+    background: ${({ theme }) => theme.colors.border.light};
   }
 `
 
-const SpecKey = styled.dt`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+const PastRow = styled.div`
+  position: relative;
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 7px 0;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr auto;
+  }
 `
 
-const SpecValue = styled.dd`
-  margin: 0;
-  display: inline-flex;
+const PastDot = styled.span`
+  position: absolute;
+  left: -17px;
+  top: 13px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 1.5px solid ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) => theme.colors.background.primary};
+`
+
+const PastPeriodCol = styled.div`
+  min-width: 0;
+`
+
+const PastBodyCol = styled.div`
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 600;
+  gap: 4px 14px;
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    grid-column: 1 / -1;
+  }
+`
+
+const PastTitleLine = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+`
+
+const PastHeadline = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const SpecNote = styled.span`
+const PastSystemName = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const InlineSpecs = styled.dl`
+  margin: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+`
+
+const InlineSpecItem = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+`
+
+const InlineSpecKey = styled.dt`
   font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const InlineSpecVal = styled.dd`
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const InlineSpecNote = styled.span`
+  margin-left: 3px;
+  font-size: 11px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+const RowEditBtn = styled.button`
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
 const NotesRow = styled.p`
   margin: 0;
-  font-size: 12px;
+  padding-left: 13px;
+  font-size: 12.5px;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const MoreRow = styled.div`
-  padding-top: 8px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding-top: 6px;
 `
 
 const MoreBtn = styled.button`
