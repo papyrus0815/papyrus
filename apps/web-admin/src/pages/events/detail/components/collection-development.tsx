@@ -723,11 +723,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
               setCreateOpen(false)
               setCreateUnder(null)
             }}
-            initialParent={
-              createUnder
-                ? { ...createUnder, domain: event.domain }
-                : { id: event.id, title: event.title, domain: event.domain }
-            }
+            initialParent={createUnder ?? { id: event.id, title: event.title }}
             onSaved={() => {
               invalidateEventQueries(queryClient, { eventId: event.id })
               if (createUnder) invalidateEventQueries(queryClient, { eventId: createUnder.id })
