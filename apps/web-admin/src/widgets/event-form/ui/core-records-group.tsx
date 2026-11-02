@@ -66,6 +66,8 @@ interface CoreRecordsGroupProps {
   /** 위 '연결'의 참여국 줄 — 진영 소속·성립/소멸이 이 위에 얹힌다 */
   participants: EventCountryParticipant[]
   participantName: (row: EventCountryParticipant) => string
+  /** 참여국 피커 열기 — 진영 칸에서 아직 참여국이 없을 때 바로 추가할 수 있게 한다 */
+  onOpenCountryModal?: () => void
   /** 나라를 이 역할로 넣는다 — 성립·소멸 칸(국가 선택 모달을 역할을 정한 채로 연다) */
   onAddCountryWithRole: (role: 'FOUNDED' | 'DISSOLVED') => void
   onRemoveParticipant: (key: string) => void
@@ -80,6 +82,7 @@ export function CoreRecordsGroup({
   onDraftsChange,
   participants,
   participantName,
+  onOpenCountryModal,
   onAddCountryWithRole,
   onRemoveParticipant,
   eventTitle,
@@ -101,6 +104,7 @@ export function CoreRecordsGroup({
           update={update}
           participants={participants}
           participantName={participantName}
+          onOpenCountryModal={onOpenCountryModal}
           playClickSound={playClickSound}
         />
       )}
@@ -250,12 +254,14 @@ function SidesField({
   update,
   participants,
   participantName,
+  onOpenCountryModal,
   playClickSound,
 }: {
   drafts: RegisterFacetDrafts
   update: (patch: Partial<RegisterFacetDrafts>) => void
   participants: EventCountryParticipant[]
   participantName: (row: EventCountryParticipant) => string
+  onOpenCountryModal?: () => void
   playClickSound: () => void
 }) {
   const { names, assignment } = drafts.sides
@@ -277,7 +283,21 @@ function SidesField({
       <S.FormLabel as="span">진영</S.FormLabel>
       <S.FormField>
         {participants.length === 0 ? (
-          <S.Hint>위 &lsquo;연결&rsquo;의 참여국에 나라를 넣으면 여기서 편을 가릅니다.</S.Hint>
+          <>
+            {onOpenCountryModal && (
+              <KitAddButton
+                type="button"
+                onClick={() => {
+                  playClickSound()
+                  onOpenCountryModal()
+                }}
+              >
+                <FiPlus size={15} />
+                참여국 추가
+              </KitAddButton>
+            )}
+            <S.Hint>참여국에 나라를 넣으면 여기서 편을 가릅니다.</S.Hint>
+          </>
         ) : (
           <>
             <SideNames>

@@ -32,8 +32,14 @@ import {
   toParticipants,
 } from '@/entities/event/model'
 import { useBasicInfoForm } from '@/features/event-form/model'
-import { isEventDomainKey } from '@/entities/event/model/event-domain'
-import { EVENT_TYPES, type EventTypeKey, typeFacets } from '@/entities/event/model/event-type-registry'
+import { type EventDomainKey, isEventDomainKey } from '@/entities/event/model/event-domain'
+import {
+  EVENT_TYPES,
+  type EventTypeKey,
+  defaultDomainForType,
+  subtypesForDomain,
+  typeFacets,
+} from '@/entities/event/model/event-type-registry'
 import {
   type RegisterFacetDrafts,
   commitRegisterFacets,
@@ -83,6 +89,8 @@ interface LoadedEventImage {
 export interface EventParentPreset {
   id: string
   title: string
+  /** 상위 사건의 분야(선택) — 주어지면 초기 분야로 바로 채워진다(없으면 parentDetail 조회 시 반영) */
+  domain?: EventDomainKey | string | null
 }
 
 /** 셸이 본체에 명령하는 통로 — 저장 버튼이 셸에 있으므로 필요 */
@@ -245,7 +253,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     getDateError,
     calculateDaysDifference,
     reset: resetFormFields,
-  } = useBasicInfoForm()
+  } = useBasicInfoForm({
+    category: !isEditMode && isEventDomainKey(initialParent?.domain) ? initialParent.domain : '',
+  })
 
   // ===== Form State =====
   const [isLoadingEvent, setIsLoadingEvent] = useState(false)
@@ -287,6 +297,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const [eventType, setEventType] = useState<EventTypeKey | null>(null)
   /** 단일/묶음을 사람이 직접 고쳤나 — 고치지 않았으면 세부(전쟁·위기…)가 묶음을 권한다 */
   const kindTouchedRef = useRef(false)
+  /** 분야를 사람이 직접 고쳤나 — 고치지 않았으면 상위 사건의 분야를 따라 채운다 */
+  const categoryTouchedRef = useRef(false)
   /** 세부의 핵심 기록 초안 — 사건이 생긴 뒤 각 정본 API로 잇는다(신규 등록 전용) */
   const [facetDrafts, setFacetDrafts] = useState<RegisterFacetDrafts>(emptyRegisterFacetDrafts)
   /** 성립·소멸 칸에서 국가 모달을 열면 고른 나라를 이 역할로 넣는다 */
@@ -296,13 +308,34 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setPendingCountryRole(null)
   }
 
-  /** 세부 고르기(null = 해제) — 단일/묶음은 사람이 안 고쳤을 때만 세부의 권장값으로 */
+  /** 세부 고르기(null = 해제) — 분야가 비어 있으면 세부의 기본 분야를 함께 채우고, 단일/묶음은 세부의 권장값으로 */
   const selectType = (next: EventTypeKey | null) => {
     setEventType(next)
+    if (next && !category) {
+      const inferredDomain = defaultDomainForType(next)
+      if (inferredDomain) {
+        categoryTouchedRef.current = true
+        setCategory(inferredDomain)
+      }
+    }
     if (!isEditMode && !kindTouchedRef.current) {
       setKind(next && EVENT_TYPES[next].usuallyCollection ? 'COLLECTION' : 'SINGLE')
     }
   }
+
+  /** 분야 고르기 — 해제하면 세부도 비우고, 다른 분야로 바꿀 때 그 분야 앞줄에 없는 세부는 정리한다 */
+  const handleCategoryChange = (next: EventDomainKey | '') => {
+    categoryTouchedRef.current = true
+    setCategory(next)
+    if (!next) {
+      if (eventType !== null) selectType(null)
+      return
+    }
+    if (eventType && !subtypesForDomain(next).primary.includes(eventType)) {
+      selectType(null)
+    }
+  }
+
   /** 고른 분야 — 앞에 보일 세부와, 세부와 함께 붙는 기록·수치 성격을 정한다 */
   const domainName = category || null
   const facets = typeFacets(eventType, domainName)
@@ -366,6 +399,24 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     ...eventDetailQueryOptions(parentEvent?.id ?? ''),
     enabled: Boolean(parentEvent?.id) && !isEditMode,
   })
+  /*
+   * 상위 사건의 분야를 기본값으로 — 하위를 등록할 때 매번 같은 분야를 다시 고르지 않게 한다.
+   * 사람이 이미 분야를 골랐으면 덮어쓰지 않고, initialParent로 열린 직후(미수정) 채워진 값은
+   * 기준선에 포함해 '열자마자 dirty' 오판이 생기지 않게 한다.
+   */
+  useEffect(() => {
+    if (isEditMode || categoryTouchedRef.current || category) return
+    if (parentDetail && isEventDomainKey(parentDetail.domain)) {
+      const isInitialClean =
+        Boolean(initialParent?.id) &&
+        parentEvent?.id === initialParent?.id &&
+        !isDirtyRef.current
+      setCategory(parentDetail.domain)
+      if (isInitialClean) {
+        setHydrationToken((token) => token + 1)
+      }
+    }
+  }, [isEditMode, category, parentDetail, initialParent?.id, parentEvent?.id, setCategory])
   const parentCountriesToImport = useMemo(() => {
     if (!parentDetail) return []
     const have = new Set(
@@ -788,8 +839,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     (options?: BasicInfoResetOptions) => {
       resetFormFields(options)
       // 세부는 분야를 남기는 '계속 등록'에서 함께 남긴다(같은 꼴을 연달아 등록하는 흐름) — 기록 초안은 비운다
-      if (!options?.keepCategory) setEventType(null)
+      const nextEventType = options?.keepCategory ? eventType : null
+      if (!options?.keepCategory) {
+        setEventType(null)
+        categoryTouchedRef.current = false
+      }
       kindTouchedRef.current = false
+      setKind(nextEventType && EVENT_TYPES[nextEventType].usuallyCollection ? 'COLLECTION' : 'SINGLE')
       setFacetDrafts(emptyRegisterFacetDrafts())
       // parentEvent는 의도적으로 유지 — "계속 등록"의 전형이 같은 상위 밑에 형제
       // 가지를 연달아 등록하는 흐름이다(keepCategory와 같은 근거). 칩이 보이므로
@@ -798,7 +854,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       // 비운 결과가 새 기준선 — 토큰을 올리면 기준선 effect가 다시 잡는다.
       setHydrationToken((token) => token + 1)
     },
-    [resetFormFields],
+    [resetFormFields, eventType],
   )
 
   useImperativeHandle(
@@ -827,12 +883,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         endDatePrecision={endDatePrecision}
         setEndDatePrecision={setEndDatePrecision}
         category={category}
-        setCategory={setCategory}
+        setCategory={handleCategoryChange}
         categoryError={submitAttempted ? categoryError : undefined}
         typeSlot={
           <EventTypeField
             domain={domainName}
             value={eventType}
+            isEditMode={isEditMode}
             onChange={(next) => {
               playClickSound()
               selectType(next)
@@ -854,6 +911,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                     onDraftsChange={setFacetDrafts}
                     participants={relatedCountries}
                     participantName={participantName}
+                    onOpenCountryModal={() => setShowCountryModal(true)}
                     onAddCountryWithRole={(role) => {
                       setPendingCountryRole(role)
                       setShowCountryModal(true)

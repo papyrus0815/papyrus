@@ -14,6 +14,9 @@ import { type ReactNode } from 'react'
 import '@testing-library/jest-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { ThemeProvider } from 'styled-components'
+
+import { getTheme } from '@/shared/styles/theme'
 
 import {
   EventBasicForm,
@@ -21,6 +24,10 @@ import {
 } from './event-basic-form'
 
 // ── 외부 경계 모킹 ──────────────────────────────────────────────
+jest.mock('@/shared/api/client', () => ({
+  getApiConnection: jest.fn(() => ({ host: 'http://localhost:3000' })),
+  apiConnection: { host: 'http://localhost:3000' },
+}))
 jest.mock('@/shared/api/events', () => ({
   getEventById: jest.fn(),
   createEvent: jest.fn(),
@@ -47,6 +54,25 @@ jest.mock('@/entities/event-form/model', () => ({
 }))
 jest.mock('@/shared/ui/country-picker', () => ({
   CountryPicker: () => null,
+}))
+jest.mock('@/features/event-facets/model/register-facets', () => ({
+  emptyRegisterFacetDrafts: () => ({
+    persons: [],
+    power: [],
+    sides: { names: ['', ''], assignment: {} },
+    treaty: { mode: 'none' },
+    organizations: [],
+    election: null,
+  }),
+  relatedPersonsPayload: () => [],
+  commitRegisterFacets: jest.fn().mockResolvedValue({ done: [], warnings: [] }),
+}))
+jest.mock('@/widgets/event-form/ui/core-records-group', () => ({
+  CoreRecordsGroup: (props: { type: string; domain: string | null }) => (
+    <div data-testid="core-records-group">
+      {props.domain}:{props.type}
+    </div>
+  ),
 }))
 // 상세 페이지는 저장 직후 `void import(...)`로 프리워밍만 한다 — 실제 모듈은 무겁다.
 jest.mock('@/pages/events/detail/event-detail.page', () => ({}), { virtual: true })
@@ -87,6 +113,15 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
     startDate: string
     setStartDate: (next: string) => void
     endDate: string
+    category: string
+    setCategory: (next: string) => void
+    typeSlot?: ReactNode
+    recordsSlot?: { title: string; content: ReactNode }
+    participantsCoreOf?: string
+    kindSlot?: {
+      value: 'SINGLE' | 'COLLECTION'
+      onChange: (next: 'SINGLE' | 'COLLECTION') => void
+    }
     thumbnail: string
     keywords: string[]
     relatedCountries: Array<{
@@ -112,6 +147,29 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
         value={props.startDate}
         onChange={(event) => props.setStartDate(event.target.value)}
       />
+      <input
+        aria-label="분야"
+        value={props.category}
+        onChange={(event) => props.setCategory(event.target.value)}
+      />
+      <output data-testid="category">{props.category}</output>
+      <output data-testid="participantsCoreOf">{props.participantsCoreOf ?? ''}</output>
+      <output data-testid="recordsTitle">{props.recordsSlot?.title ?? ''}</output>
+      <output data-testid="kind">{props.kindSlot?.value ?? ''}</output>
+      {props.kindSlot && (
+        <button
+          type="button"
+          onClick={() =>
+            props.kindSlot?.onChange(
+              props.kindSlot.value === 'SINGLE' ? 'COLLECTION' : 'SINGLE',
+            )
+          }
+        >
+          _toggleKind
+        </button>
+      )}
+      {props.typeSlot}
+      {props.recordsSlot?.content}
       <output data-testid="startDate">{props.startDate}</output>
       <output data-testid="endDate">{props.endDate}</output>
       <output data-testid="thumbnail">{props.thumbnail}</output>
@@ -159,7 +217,9 @@ function makeClient() {
 
 function wrap(client: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <ThemeProvider theme={getTheme('light')}>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </ThemeProvider>
   )
 }
 
@@ -324,6 +384,9 @@ describe('EventBasicForm — 저장', () => {
     fireEvent.change(screen.getByLabelText('시작일'), {
       target: { value: '1815-06-18' },
     })
+    fireEvent.change(screen.getByLabelText('분야'), {
+      target: { value: 'MILITARY' },
+    })
 
     await act(async () => {
       await formRef.current?.submit()
@@ -355,6 +418,7 @@ describe('EventBasicForm — 저장', () => {
     })
     fireEvent.change(screen.getByLabelText('사건명'), { target: { value: '새 사건' } })
     fireEvent.change(screen.getByLabelText('시작일'), { target: { value: '1815-06-18' } })
+    fireEvent.change(screen.getByLabelText('분야'), { target: { value: 'MILITARY' } })
     await act(async () => {
       await formRef.current?.submit()
     })
@@ -396,6 +460,7 @@ describe('EventBasicForm — 저장', () => {
     eventsApi.getEventById.mockResolvedValue({
       id: 'evt-1',
       title: '빈 회의',
+      domain: 'DIPLOMACY',
       startDate: '1814-09-18T00:00:00.000Z',
       keywords: [],
     })
@@ -502,13 +567,16 @@ describe('EventBasicForm — dirty 통지', () => {
 
 // ────────────────────────────────────────────────────────────────
 describe('EventBasicForm — 상위 사건(트리 등록)', () => {
-  /** 필수값(사건명·시작일)을 채워 submit 가능 상태로 만든다 */
+  /** 필수값(사건명·시작일·분야)을 채워 submit 가능 상태로 만든다 */
   function fillRequired() {
     fireEvent.change(screen.getByLabelText('사건명'), {
       target: { value: '하위 전투' },
     })
     fireEvent.change(screen.getByLabelText('시작일'), {
       target: { value: '1914-08-04' },
+    })
+    fireEvent.change(screen.getByLabelText('분야'), {
+      target: { value: 'MILITARY' },
     })
   }
 
@@ -649,5 +717,88 @@ describe('EventBasicForm — 상위 사건(트리 등록)', () => {
       expect(screen.getByLabelText('사건명')).toHaveValue('빈 회의'),
     )
     expect(screen.getByTestId('hasParentSlot')).toHaveTextContent('false')
+  })
+})
+
+// ────────────────────────────────────────────────────────────────
+describe('EventBasicForm — 분야 · 세부 분야 상호작용', () => {
+  it('분야를 고르기 전에 세부부터 고르면 어울리는 기본 분야가 함께 채워지고, 전쟁은 묶음 사건이 된다', () => {
+    const client = makeClient()
+    render(<EventBasicForm />, { wrapper: wrap(client) })
+
+    expect(screen.getByTestId('category')).toHaveTextContent('')
+    expect(screen.getByTestId('kind')).toHaveTextContent('SINGLE')
+
+    fireEvent.click(screen.getByRole('radio', { name: '전쟁' }))
+
+    expect(screen.getByTestId('category')).toHaveTextContent('MILITARY')
+    expect(screen.getByTestId('kind')).toHaveTextContent('COLLECTION')
+    expect(screen.getByTestId('recordsTitle')).toHaveTextContent('전쟁 기록')
+    expect(screen.getByTestId('participantsCoreOf')).toHaveTextContent('전쟁')
+  })
+
+  it('분야를 해제하거나 그 세부가 앞줄에 없는 다른 분야로 바꾸면 고아 세부·기록 섹션을 함께 비운다', () => {
+    const client = makeClient()
+    render(<EventBasicForm />, { wrapper: wrap(client) })
+
+    fireEvent.change(screen.getByLabelText('분야'), { target: { value: 'MILITARY' } })
+    fireEvent.click(screen.getByRole('radio', { name: '전투·작전' }))
+    expect(screen.getByTestId('recordsTitle')).toHaveTextContent('전투·작전 기록')
+
+    // 전투·작전이 앞줄에 없는 문화(CULTURE)로 바꾸면 세부가 정리된다
+    fireEvent.change(screen.getByLabelText('분야'), { target: { value: 'CULTURE' } })
+    expect(screen.getByTestId('recordsTitle')).toHaveTextContent('')
+    expect(screen.getByTestId('participantsCoreOf')).toHaveTextContent('')
+
+    // 반대로 양쪽 앞줄에 모두 있는 세부(법령·정책·개혁: 군사 ↔ 경제)는 분야를 바꿔도 유지된다
+    fireEvent.change(screen.getByLabelText('분야'), { target: { value: 'MILITARY' } })
+    fireEvent.click(screen.getByRole('radio', { name: '법령·정책·개혁' }))
+    expect(screen.getByTestId('participantsCoreOf')).toHaveTextContent('법령·정책·개혁')
+
+    fireEvent.change(screen.getByLabelText('분야'), { target: { value: 'ECONOMY' } })
+    expect(screen.getByTestId('participantsCoreOf')).toHaveTextContent('법령·정책·개혁')
+
+    // 분야를 해제('')하면 세부도 함께 비운다
+    fireEvent.change(screen.getByLabelText('분야'), { target: { value: '' } })
+    expect(screen.getByTestId('participantsCoreOf')).toHaveTextContent('')
+  })
+
+  it('initialParent에 domain이 있으면 초기 분야로 채워지고 dirty가 되지 않는다', () => {
+    const onDirtyChange = jest.fn()
+    const client = makeClient()
+    render(
+      <EventBasicForm
+        initialParent={{ id: 'evt-parent', title: '제1차 세계 대전', domain: 'MILITARY' }}
+        onDirtyChange={onDirtyChange}
+      />,
+      { wrapper: wrap(client) },
+    )
+
+    expect(screen.getByTestId('category')).toHaveTextContent('MILITARY')
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true)
+  })
+
+  it('reset({ keepCategory: true })는 분야·세부를 남기되 수동으로 바꾼 종류(kind)는 세부의 기본값으로 되돌린다', () => {
+    const client = makeClient()
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    render(<EventBasicForm formRef={formRef} />, { wrapper: wrap(client) })
+
+    fireEvent.change(screen.getByLabelText('분야'), { target: { value: 'MILITARY' } })
+    fireEvent.click(screen.getByRole('radio', { name: '전투·작전' }))
+    expect(screen.getByTestId('kind')).toHaveTextContent('SINGLE')
+
+    // 사용자가 수동으로 묶음 사건으로 변경
+    fireEvent.click(screen.getByText('_toggleKind'))
+    expect(screen.getByTestId('kind')).toHaveTextContent('COLLECTION')
+
+    act(() => {
+      formRef.current?.reset({ keepCategory: true })
+    })
+
+    expect(screen.getByTestId('category')).toHaveTextContent('MILITARY')
+    expect(screen.getByTestId('participantsCoreOf')).toHaveTextContent('전투·작전')
+    expect(screen.getByTestId('kind')).toHaveTextContent('SINGLE')
   })
 })

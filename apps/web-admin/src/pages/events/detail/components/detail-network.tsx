@@ -855,7 +855,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
           <LazyEventRegisterModal
             isOpen
             onClose={() => setCreateChildOpen(false)}
-            initialParent={{ id: event.id, title: event.title }}
+            initialParent={{ id: event.id, title: event.title, domain: event.domain }}
             onSaved={handleChildCreated}
             // 뒤로가기 미저장 보호(위 useBlocker)의 dirty 신호원.
             onDirtyChange={handleCreateChildDirtyChange}

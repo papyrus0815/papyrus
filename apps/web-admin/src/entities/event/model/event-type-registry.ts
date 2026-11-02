@@ -108,6 +108,8 @@ export interface EventTypeDef {
   short: string
   /** 고를 때 돕는 예 */
   examples: string
+  /** 분야를 안 고른 채 세부부터 골랐을 때 함께 채울 기본 분야 */
+  defaultDomain: EventDomainKey
   /** 보통 하위 사건을 거느리는 꼴 — 등록 때 '묶음 사건'을 기본으로 권한다 */
   usuallyCollection?: boolean
   /** 핵심 기록 — 등록 모달에서 바로 묻고, 상세에서 비어 있어도 접지 않고 채우기를 권한다 */
@@ -216,133 +218,133 @@ const domainKey = (domain?: string | null): EventDomainKey | null => (isEventDom
 export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
   // ── 충돌 ──────────────────────────────────────────────────────────────
   WAR: {
-    key: 'WAR', short: '전쟁', label: '전쟁', examples: '크림 전쟁 · 30년 전쟁', usuallyCollection: true,
+    key: 'WAR', short: '전쟁', label: '전쟁', examples: '크림 전쟁 · 30년 전쟁', defaultDomain: 'MILITARY', usuallyCollection: true,
     core: ['sides', 'participants'], optional: ['metrics', 'military', 'treaty', 'persons'],
     metrics: WAR_METRICS,
   },
   BATTLE: {
-    key: 'BATTLE', short: '전투', label: '전투·작전', examples: '스당 전투 · 인천상륙작전 · 함락·점령 · 반란 진압',
+    key: 'BATTLE', short: '전투', label: '전투·작전', examples: '스당 전투 · 인천상륙작전 · 함락·점령 · 반란 진압', defaultDomain: 'MILITARY',
     core: ['sides', 'participants'], optional: ['metrics', 'military', 'persons'],
     metrics: WAR_METRICS,
   },
   UPRISING: {
-    key: 'UPRISING', short: '봉기', label: '봉기·혁명·정변', examples: '우창봉기 · 청년 튀르크 혁명 · 5월정변',
+    key: 'UPRISING', short: '봉기', label: '봉기·혁명·정변', examples: '우창봉기 · 청년 튀르크 혁명 · 5월정변', defaultDomain: 'POLITICS',
     core: ['sides', 'participants'], optional: ['persons', 'metrics'],
     metrics: SOCIETY_METRICS,
   },
   ATTACK: {
-    key: 'ATTACK', short: '암살', label: '암살·테러·학살', examples: '사라예보 암살 · 블랙 홀 사건 · 가스관 폭파',
+    key: 'ATTACK', short: '암살', label: '암살·테러·학살', examples: '사라예보 암살 · 블랙 홀 사건 · 가스관 폭파', defaultDomain: 'POLITICS',
     core: ['persons', 'participants'], optional: ['metrics'],
     metrics: SOCIETY_METRICS,
   },
   MOBILIZATION: {
-    key: 'MOBILIZATION', short: '동원', label: '동원·배치·지령', examples: '총동원령 · 기동훈련 · 함대 정박 · 작전 지령',
+    key: 'MOBILIZATION', short: '동원', label: '동원·배치·지령', examples: '총동원령 · 기동훈련 · 함대 정박 · 작전 지령', defaultDomain: 'MILITARY',
     core: ['participants'], optional: ['military', 'metrics', 'persons'],
     metrics: MILITARY_DOMAIN_METRICS,
   },
   // ── 국가 간 ────────────────────────────────────────────────────────────
   TREATY: {
-    key: 'TREATY', short: '조약', label: '조약·협정·가입', examples: '난징 조약 · 삼국 동맹 · 철도 차관 협정 · NATO 가입',
+    key: 'TREATY', short: '조약', label: '조약·협정·가입', examples: '난징 조약 · 삼국 동맹 · 철도 차관 협정 · NATO 가입', defaultDomain: 'DIPLOMACY',
     core: ['treaty', 'participants'], optional: ['persons', 'metrics'],
     metrics: TREATY_METRICS,
   },
   SUMMIT: {
-    key: 'SUMMIT', short: '회담', label: '회담·회의·교섭', examples: '베를린 회의 · 어전회의 · 공의회 · 협정안 교섭 · 정상 통화',
+    key: 'SUMMIT', short: '회담', label: '회담·회의·교섭', examples: '베를린 회의 · 어전회의 · 공의회 · 협정안 교섭 · 정상 통화', defaultDomain: 'DIPLOMACY',
     core: ['participants', 'persons'], optional: ['treaty'],
   },
   DECLARATION: {
-    key: 'DECLARATION', short: '선언', label: '선언·통첩·연설', examples: '선전포고 · 최후통첩 · 중립 선언 · 예산 연설 · 결의',
+    key: 'DECLARATION', short: '선언', label: '선언·통첩·연설', examples: '선전포고 · 최후통첩 · 중립 선언 · 예산 연설 · 결의', defaultDomain: 'DIPLOMACY',
     core: ['participants'], optional: ['persons', 'treaty'],
   },
   VISIT: {
-    key: 'VISIT', short: '방문', label: '방문·사절', examples: '국빈 방문 · 함대 기항 · 사절단 · 흑선 내항',
+    key: 'VISIT', short: '방문', label: '방문·사절', examples: '국빈 방문 · 함대 기항 · 사절단 · 흑선 내항', defaultDomain: 'DIPLOMACY',
     core: ['persons', 'participants'], optional: [],
   },
   CRISIS: {
-    key: 'CRISIS', short: '위기', label: '위기', examples: '보스니아 위기 · 모로코 위기 · 대동방위기', usuallyCollection: true,
+    key: 'CRISIS', short: '위기', label: '위기', examples: '보스니아 위기 · 모로코 위기 · 대동방위기', defaultDomain: 'DIPLOMACY', usuallyCollection: true,
     core: ['participants'], optional: ['sides', 'treaty', 'persons'],
   },
   EXPANSION: {
-    key: 'EXPANSION', short: '진출', label: '진출·식민', examples: '동인도회사의 인도 진출 · 3B 정책', usuallyCollection: true,
+    key: 'EXPANSION', short: '진출', label: '진출·식민', examples: '동인도회사의 인도 진출 · 3B 정책', defaultDomain: 'DIPLOMACY', usuallyCollection: true,
     core: ['participants'], optional: ['organizations', 'sides', 'treaty'],
   },
   // ── 국가·권력 ──────────────────────────────────────────────────────────
   STATEHOOD: {
-    key: 'STATEHOOD', short: '흥망', label: '건국·멸망·병합', examples: '청나라 건국 · 서로마 멸망 · 병합 · 독립 선언',
+    key: 'STATEHOOD', short: '흥망', label: '건국·멸망·병합', examples: '청나라 건국 · 서로마 멸망 · 병합 · 독립 선언', defaultDomain: 'POLITICS',
     core: ['statehood'], optional: ['persons', 'power', 'metrics'],
     metrics: TERRITORY_METRICS,
   },
   POWER_CHANGE: {
-    key: 'POWER_CHANGE', short: '권력', label: '즉위·취임·실각', examples: '즉위 · 대통령 취임 · 참모총장 취임 · 해임',
+    key: 'POWER_CHANGE', short: '권력', label: '즉위·취임·실각', examples: '즉위 · 대통령 취임 · 참모총장 취임 · 해임', defaultDomain: 'POLITICS',
     core: ['power'], optional: ['persons', 'participants'],
   },
   ELECTION: {
-    key: 'ELECTION', short: '선거', label: '선거', examples: '총선 · 대통령 선거 · 국왕 선출',
+    key: 'ELECTION', short: '선거', label: '선거', examples: '총선 · 대통령 선거 · 국왕 선출', defaultDomain: 'POLITICS',
     core: ['election'], optional: ['power', 'participants'],
     metrics: { ...GENERIC_METRICS, presets: ['society.participants'] },
   },
   LAW_POLICY: {
-    key: 'LAW_POLICY', short: '법령', label: '법령·정책·개혁', examples: '헌법 공포 · 함대법 · 탄지마트 · 토지 국유화',
+    key: 'LAW_POLICY', short: '법령', label: '법령·정책·개혁', examples: '헌법 공포 · 함대법 · 탄지마트 · 토지 국유화', defaultDomain: 'POLITICS',
     core: ['participants'], optional: ['persons', 'cabinets', 'metrics'],
   },
   INSTITUTION: {
-    key: 'INSTITUTION', short: '설립', label: '기관·조직 설립', examples: '참모본부 창설 · 정당 결성 · 은행 개설 · 국회 해산',
+    key: 'INSTITUTION', short: '설립', label: '기관·조직 설립', examples: '참모본부 창설 · 정당 결성 · 은행 개설 · 국회 해산', defaultDomain: 'POLITICS',
     core: ['organizations'], optional: ['participants', 'persons'],
   },
   INCIDENT: {
-    key: 'INCIDENT', short: '탄압', label: '탄압·음모·스캔들', examples: '화약 음모 · 안세이 대옥 · 의옥 사건',
+    key: 'INCIDENT', short: '탄압', label: '탄압·음모·스캔들', examples: '화약 음모 · 안세이 대옥 · 의옥 사건', defaultDomain: 'POLITICS',
     core: ['persons'], optional: ['participants'],
   },
   MOVEMENT: {
-    key: 'MOVEMENT', short: '운동', label: '운동·캠페인', examples: '불매운동 · 여론 운동 · 국유화 반대 운동',
+    key: 'MOVEMENT', short: '운동', label: '운동·캠페인', examples: '불매운동 · 여론 운동 · 국유화 반대 운동', defaultDomain: 'SOCIETY',
     core: ['participants'], optional: ['persons', 'metrics'],
     metrics: SOCIETY_METRICS,
   },
   // ── 경제·산업 ──────────────────────────────────────────────────────────
   COMPANY: {
-    key: 'COMPANY', short: '기업', label: '기업 활동', examples: '설립 · 상장 · 실적 발표 · 인수',
+    key: 'COMPANY', short: '기업', label: '기업 활동', examples: '설립 · 상장 · 실적 발표 · 인수', defaultDomain: 'ECONOMY',
     core: ['organizations'], optional: ['metrics', 'persons'],
     metrics: ECONOMY_METRICS,
   },
   MARKET: {
-    key: 'MARKET', short: '시장', label: '시장·지표', examples: '지수 마감 · 금리 · 차관 · 파동',
+    key: 'MARKET', short: '시장', label: '시장·지표', examples: '지수 마감 · 금리 · 차관 · 파동', defaultDomain: 'ECONOMY',
     core: ['metrics'], optional: ['organizations', 'participants'],
     metrics: ECONOMY_METRICS,
   },
   PRODUCT: {
-    key: 'PRODUCT', short: '제품', label: '제품·기술 발표', examples: 'ChatGPT 출시 · 칩 아키텍처 공개 · 로켓 퇴역',
+    key: 'PRODUCT', short: '제품', label: '제품·기술 발표', examples: 'ChatGPT 출시 · 칩 아키텍처 공개 · 로켓 퇴역', defaultDomain: 'ECONOMY',
     core: ['organizations'], optional: ['metrics', 'persons'],
     metrics: ECONOMY_METRICS,
   },
   CONSTRUCTION: {
-    key: 'CONSTRUCTION', short: '건설', label: '건설·개통', examples: '철도 개통 · 가스관 가동 · 운하 · 전함 진수',
+    key: 'CONSTRUCTION', short: '건설', label: '건설·개통', examples: '철도 개통 · 가스관 가동 · 운하 · 전함 진수', defaultDomain: 'ECONOMY',
     core: ['participants'], optional: ['organizations', 'metrics'],
   },
   // ── 자연·학문·문화·사람 ────────────────────────────────────────────────
   DISASTER: {
-    key: 'DISASTER', short: '재해', label: '재해·사고', examples: '지진 · 대화재 · 폭발 사고 · 역병',
+    key: 'DISASTER', short: '재해', label: '재해·사고', examples: '지진 · 대화재 · 폭발 사고 · 역병', defaultDomain: 'SOCIETY',
     core: ['metrics'], optional: ['participants'],
     metrics: DISASTER_METRICS,
   },
   DISCOVERY: {
-    key: 'DISCOVERY', short: '발견', label: '발견·학술', examples: '법칙 발표 · 노벨상 · 발견',
+    key: 'DISCOVERY', short: '발견', label: '발견·학술', examples: '법칙 발표 · 노벨상 · 발견', defaultDomain: 'SCIENCE',
     core: ['persons'], optional: ['organizations'],
   },
   CREATION: {
-    key: 'CREATION', short: '창작', label: '창제·저작·작품', examples: '문자 창제 · 책 출간 · 기념물 제작',
+    key: 'CREATION', short: '창작', label: '창제·저작·작품', examples: '문자 창제 · 책 출간 · 기념물 제작', defaultDomain: 'CULTURE',
     core: ['persons'], optional: ['participants'],
   },
   CONVERSION: {
-    key: 'CONVERSION', short: '개종', label: '개종·세례', examples: '폴란드의 세례 · 기독교 수용',
+    key: 'CONVERSION', short: '개종', label: '개종·세례', examples: '폴란드의 세례 · 기독교 수용', defaultDomain: 'RELIGION',
     core: ['participants'], optional: ['persons'],
   },
   MIGRATION: {
-    key: 'MIGRATION', short: '이주', label: '이주·천도', examples: '민족 대이동 · 천도 · 교황청 이전 · 이민선',
+    key: 'MIGRATION', short: '이주', label: '이주·천도', examples: '민족 대이동 · 천도 · 교황청 이전 · 이민선', defaultDomain: 'SOCIETY',
     core: ['participants'], optional: ['metrics'],
     metrics: { ...GENERIC_METRICS, presets: ['demography.population'] },
   },
   PERSONAL: {
-    key: 'PERSONAL', short: '행적', label: '인물 행적', examples: '요양·휴가 · 여행 · 건강 이상',
+    key: 'PERSONAL', short: '행적', label: '인물 행적', examples: '요양·휴가 · 여행 · 건강 이상', defaultDomain: 'POLITICS',
     core: ['persons'], optional: ['participants'],
   },
 }
@@ -350,19 +352,56 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
 /** 모든 세부 — '더 보기'와 상세 선택지의 순서(충돌 → 국가 간 → 국가·권력 → 경제 → 자연·문화·사람) */
 export const EVENT_TYPE_ORDER = Object.keys(EVENT_TYPES) as EventTypeKey[]
 
+export interface EventTypeGroup {
+  label: string
+  types: EventTypeKey[]
+}
+
+/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 28종을 훑기 쉽게 묶는다 */
+export const EVENT_TYPE_GROUPS: ReadonlyArray<EventTypeGroup> = [
+  { label: '충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'MOBILIZATION'] },
+  { label: '국가 간', types: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'] },
+  { label: '국가·권력', types: ['STATEHOOD', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'INCIDENT', 'MOVEMENT'] },
+  { label: '경제·산업', types: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION'] },
+  { label: '자연·문화·사람', types: ['DISASTER', 'DISCOVERY', 'CREATION', 'CONVERSION', 'MIGRATION', 'PERSONAL'] },
+]
+
+/** 분야를 고르기 전에 앞줄로 보여 줄 대표 세부 — 고르면 defaultDomain이 함께 채워진다 */
+export const FREQUENT_EVENT_TYPES: EventTypeKey[] = [
+  'WAR',
+  'BATTLE',
+  'TREATY',
+  'SUMMIT',
+  'STATEHOOD',
+  'POWER_CHANGE',
+  'LAW_POLICY',
+  'UPRISING',
+  'COMPANY',
+  'DISASTER',
+]
+
+/** 주어진 세부 목록을 의미군별로 묶는다(비어 있는 묶음은 뺀다) */
+export function groupSubtypes(types: ReadonlyArray<EventTypeKey>): EventTypeGroup[] {
+  const allowed = new Set(types)
+  return EVENT_TYPE_GROUPS.map((group) => ({
+    label: group.label,
+    types: group.types.filter((type) => allowed.has(type)),
+  })).filter((group) => group.types.length > 0)
+}
+
 /**
  * 분야마다 **앞에 보일 세부** — 실데이터에서 그 분야에 실제로 쓰인 세부 + 자연스러운 것.
  * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 기타는 앞줄이 없어 전부 보인다.
  */
 export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = {
   POLITICS: ['STATEHOOD', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'DECLARATION', 'PERSONAL'],
-  DIPLOMACY: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'],
+  DIPLOMACY: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
   MILITARY: ['WAR', 'BATTLE', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
   ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'MOVEMENT'],
-  SOCIETY: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'LAW_POLICY', 'CONSTRUCTION'],
-  CULTURE: ['CREATION', 'CONSTRUCTION', 'VISIT'],
-  RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'MIGRATION'],
-  SCIENCE: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION'],
+  SOCIETY: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
+  CULTURE: ['CREATION', 'CONSTRUCTION', 'INSTITUTION', 'DISCOVERY', 'MOVEMENT', 'VISIT'],
+  RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'INSTITUTION', 'MOVEMENT', 'INCIDENT', 'CREATION', 'CONSTRUCTION', 'MIGRATION'],
+  SCIENCE: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION', 'INSTITUTION', 'LAW_POLICY', 'DISASTER'],
 }
 
 /** 분야의 앞줄 세부와 나머지 — 분야를 안 골랐거나 앞줄이 없는 분야(기타)는 전부 앞줄 */
@@ -370,6 +409,11 @@ export function subtypesForDomain(domain?: string | null): { primary: EventTypeK
   const key = domainKey(domain)
   const primary = (key ? DOMAIN_SUBTYPES[key] : undefined) ?? EVENT_TYPE_ORDER
   return { primary, rest: EVENT_TYPE_ORDER.filter((type) => !primary.includes(type)) }
+}
+
+/** 세부의 기본 분야 — 분야를 고르기 전에 세부부터 골랐을 때 함께 채울 분야 */
+export function defaultDomainForType(type?: string | null): EventDomainKey | null {
+  return eventTypeDef(type)?.defaultDomain ?? null
 }
 
 /** 세부를 안 고른 사건의 기록 — 참여국이 핵심, 인물은 선택(분야가 선택 기록을 더 얹는다) */

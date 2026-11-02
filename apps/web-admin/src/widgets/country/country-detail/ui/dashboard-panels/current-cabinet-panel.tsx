@@ -1820,13 +1820,15 @@ export function CurrentCabinetPanel({
 
   /*
    * 마인드맵 좌·우 각료 가지(branchSlots):
-   * - 등록된 각료(members)가 8명 미만인 정권·치세에서도 트럼프 2기 행정부처럼
-   *   좌·우 3열 마인드맵 곡선(BranchSvg)과 주요 각료 자리가 항상 펼쳐지도록 한다.
+   * - 수반·군주(heads)가 아직 없을 때는 각료 가지를 먼저 노출하지 않고 중앙의 수반·군주 등록 카드만 노출한다.
+   * - 수반·군주가 등록된 뒤(heads.length > 0), 등록된 각료(members)가 8명 미만인 정권·치세에서도
+   *   트럼프 2기 행정부처럼 좌·우 3열 마인드맵 곡선(BranchSvg)과 주요 각료 자리가 항상 펼쳐지도록 한다.
    * - 빈 가지 칸은 '부처 만들기(AdministrationDepartment 생성)'가 아니라,
    *   해당 국가·시대 틀에 맞는 각료 직위명(예: 국무장관, 외무장관, 외무대신, 이조판서)을 표시하고
    *   클릭 시 즉시 인물 선택 → 각료 재임 등록 모달(해당 직책 자동 선택)을 연다.
    */
   const mindMapBranchSlots: CabinetBranchSlot[] = useMemo(() => {
+    if (heads.length === 0) return []
     const remaining = Math.max(0, MIN_MINDMAP_BRANCHES - members.length)
     if (remaining === 0) return []
 
@@ -1945,6 +1947,7 @@ export function CurrentCabinetPanel({
 
     return [...deptSlots, ...presetSlots]
   }, [
+    heads.length,
     members,
     departments,
     frame,
@@ -1983,9 +1986,17 @@ export function CurrentCabinetPanel({
         <HeaderActions>
           <S.SectionAction
             type="button"
-            onClick={() => openRegister(null, '수반·각료', 'any')}
+            onClick={() =>
+              heads.length === 0
+                ? openRegister(
+                    null,
+                    activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반',
+                    'head',
+                  )
+                : openRegister(null, '수반·각료', 'any')
+            }
           >
-            + 수반·각료 등록
+            {heads.length === 0 ? '+ 수반·군주 등록' : '+ 수반·각료 등록'}
           </S.SectionAction>
           <S.SectionAction
             type="button"
@@ -2161,7 +2172,11 @@ export function CurrentCabinetPanel({
               ? () => openRegister(null, '군주·국가원수', 'head')
               : undefined
           }
-          onRegisterMinister={() => openRegister(null, '각료', 'minister')}
+          onRegisterMinister={
+            heads.length > 0
+              ? () => openRegister(null, '각료', 'minister')
+              : undefined
+          }
           emptyHeadRoleLabel={
             activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반'
           }

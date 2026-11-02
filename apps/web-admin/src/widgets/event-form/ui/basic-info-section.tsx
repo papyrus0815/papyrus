@@ -186,6 +186,22 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const isDark = theme.mode === 'dark'
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const categoryButtonsRef = useRef<Array<HTMLButtonElement | null>>([])
+  const selectedCategoryIndex = category ? EVENT_DOMAIN_ORDER.indexOf(category) : -1
+  const categoryTabStop = selectedCategoryIndex >= 0 ? selectedCategoryIndex : 0
+
+  const handleCategoryKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const current = categoryButtonsRef.current.findIndex((button) => button === document.activeElement)
+    if (current < 0) return
+    const count = EVENT_DOMAIN_ORDER.length
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      event.preventDefault()
+      categoryButtonsRef.current[(current + 1) % count]?.focus()
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      categoryButtonsRef.current[(current - 1 + count) % count]?.focus()
+    }
+  }
 
   /**
    * 모달 안이면 열리자마자 사건명에 포커스. 폼 본문이 모달의 첫 프레임 포커스 처리보다
@@ -379,8 +395,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             분야 <S.Required>*</S.Required>
           </S.FormLabel>
           <S.FormField>
-            <S.CategoryGrid role="group" aria-labelledby="event-form-category-label">
-              {EVENT_DOMAIN_ORDER.map((key) => {
+            <S.CategoryGrid
+              role="radiogroup"
+              aria-labelledby="event-form-category-label"
+              onKeyDown={handleCategoryKeyDown}
+            >
+              {EVENT_DOMAIN_ORDER.map((key, index) => {
                 const domain = EVENT_DOMAINS[key]
                 const Icon = domain.Icon
                 const isSelected = category === key
@@ -388,8 +408,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 return (
                   <S.CategoryCard
                     key={key}
+                    ref={(element) => {
+                      categoryButtonsRef.current[index] = element
+                    }}
                     type="button"
+                    role="radio"
+                    aria-checked={isSelected}
                     aria-pressed={isSelected}
+                    tabIndex={index === categoryTabStop ? 0 : -1}
                     title={domain.tagline}
                     style={
                       {

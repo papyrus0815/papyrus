@@ -1,11 +1,15 @@
 import {
   DOMAIN_SUBTYPES,
+  EVENT_TYPE_GROUPS,
   EVENT_TYPE_ORDER,
   EVENT_TYPES,
+  FREQUENT_EVENT_TYPES,
+  defaultDomainForType,
   eventTypeDef,
   eventTypeFeatures,
   facetWeight,
   formatDomainPath,
+  groupSubtypes,
   isArmedConflictType,
   metricsFor,
   subtypesForDomain,
@@ -61,6 +65,27 @@ describe('세부 분야 레지스트리', () => {
     expect(formatDomainPath('MILITARY', 'LAW_POLICY')).toBe('군사 › 법령·정책·개혁')
     expect(formatDomainPath('MILITARY', null)).toBe('군사')
     expect(formatDomainPath(null, null)).toBe('기타')
+  })
+
+  it('의미군 묶음(EVENT_TYPE_GROUPS)은 28종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
+    const flattened = EVENT_TYPE_GROUPS.flatMap((group) => group.types)
+    expect(flattened).toEqual(EVENT_TYPE_ORDER)
+    expect(groupSubtypes(['BATTLE', 'TREATY'])).toEqual([
+      { label: '충돌', types: ['BATTLE'] },
+      { label: '국가 간', types: ['TREATY'] },
+    ])
+  })
+
+  it('세부의 기본 분야(defaultDomain)는 그 세부를 앞줄(primary)에 가진 분야다', () => {
+    for (const def of Object.values(EVENT_TYPES)) {
+      const domain = defaultDomainForType(def.key)
+      expect(domain).toBe(def.defaultDomain)
+      expect(DOMAIN_SUBTYPES[def.defaultDomain]).toContain(def.key)
+    }
+    expect(defaultDomainForType(null)).toBeNull()
+    for (const type of FREQUENT_EVENT_TYPES) {
+      expect(EVENT_TYPES[type]).toBeDefined()
+    }
   })
 })
 

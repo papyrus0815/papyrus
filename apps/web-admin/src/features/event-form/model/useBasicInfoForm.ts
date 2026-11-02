@@ -42,7 +42,11 @@ export interface BasicInfoResetOptions {
   keepRelatedCountries?: boolean
 }
 
-export const useBasicInfoForm = () => {
+export interface BasicInfoInitialOverrides {
+  category?: EventDomainKey | ''
+}
+
+export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
   const initial = BASIC_INFO_FORM_INITIAL
   const [title, setTitle] = useState<string>(initial.title)
   const [description, setDescription] = useState<string>(initial.description)
@@ -57,7 +61,7 @@ export const useBasicInfoForm = () => {
     initial.endDatePrecision,
   )
   const [category, setCategory] = useState<EventDomainKey | ''>(
-    initial.category,
+    overrides?.category ?? initial.category,
   )
   const [thumbnail, setThumbnail] = useState<string>(initial.thumbnail)
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(
