@@ -31,6 +31,7 @@ import {
   resolveCurrentSystem,
   STATE_STRUCTURE_LABEL,
   summarize,
+  type GovernmentForm,
 } from '@/entities/political-system/model/political-system'
 import { PoliticalSystemFormModal } from '@/features/government-info/ui/political-system-form.modal'
 import { notify } from '@/shared/ui/toast'
@@ -38,8 +39,16 @@ import { notify } from '@/shared/ui/toast'
 import { IconLandmark } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import { ChartSkeleton } from './chart-skeleton'
-import { SectionEmpty } from './section-empty'
 import { SectionHelpPopover } from './section-help-popover'
+
+const QUICK_POLITY_PRESETS: GovernmentForm[] = [
+  'PRESIDENTIAL',
+  'PARLIAMENTARY',
+  'SEMI_PRESIDENTIAL',
+  'CONSTITUTIONAL_MONARCHY',
+  'ABSOLUTE_MONARCHY',
+  'ONE_PARTY',
+]
 
 interface Props {
   /** 현대 국가 ID — 주면 브리지로 연결된 과거 국가의 정체까지 함께 온다 */
@@ -51,15 +60,6 @@ interface Props {
   onOpenAll: () => void
 }
 
-/** 요약 카드에 올릴 부가 항목 — 값이 있는 것만 줄이 된다 */
-interface Fact {
-  key: string
-  label: string
-  value: string
-  /** 실권 없음 같은 단서 */
-  note?: string
-}
-
 function stripDuplicateHouseLabel(label: string, name?: string | null): string | null {
   const trimmed = name?.trim() ?? ''
   if (!trimmed || trimmed === label) return null
@@ -69,82 +69,46 @@ function stripDuplicateHouseLabel(label: string, name?: string | null): string |
   return trimmed
 }
 
-function buildFacts(system: PoliticalSystem): Fact[] {
-  const facts: Fact[] = []
+function buildLegislatureSummary(system: PoliticalSystem): string | null {
+  if (system.legislatureType === 'NONE') return '의회 없음'
+  const houses: string[] = []
 
-  /* lowerHouse*는 양원제면 하원, 단원제면 유일 원이다 — 라벨은 반드시 헬퍼를 거친다 */
   if (system.lowerHouseName || system.lowerHouseSeats != null) {
     const label = primaryHouseLabel(system.legislatureType ?? null)
     const distinctName = stripDuplicateHouseLabel(label, system.lowerHouseName)
-    facts.push({
-      key: 'lower',
-      label,
-      value:
-        [
-          distinctName,
-          system.lowerHouseSeats != null
-            ? `${system.lowerHouseSeats.toLocaleString()}석`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' · ') || label,
-    })
+    const text = [
+      distinctName ?? label,
+      system.lowerHouseSeats != null
+        ? `${system.lowerHouseSeats.toLocaleString()}석`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' ')
+    if (text) houses.push(text)
   }
-  /* 상원은 양원제일 때만 뜻이 있다 — 단원제 기록에 남은 값은 보여주지 않는다 */
+
   if (
     system.legislatureType === 'BICAMERAL' &&
     (system.upperHouseName || system.upperHouseSeats != null)
   ) {
     const label = '상원'
     const distinctName = stripDuplicateHouseLabel(label, system.upperHouseName)
-    facts.push({
-      key: 'upper',
-      label,
-      value:
-        [
-          distinctName,
-          system.upperHouseSeats != null
-            ? `${system.upperHouseSeats.toLocaleString()}석`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' · ') || label,
-    })
+    const text = [
+      distinctName ?? label,
+      system.upperHouseSeats != null
+        ? `${system.upperHouseSeats.toLocaleString()}석`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' ')
+    if (text) houses.push(text)
   }
-  /* 직함은 관직 정의 카탈로그가 정본 — 자유입력 칸은 카탈로그에 없는 칭호일 때만 찬다 */
-  const headOfState = headOfStateTitleOf(system)
-  if (headOfState) {
-    facts.push({
-      key: 'hos',
-      label: '국가원수',
-      value: headOfState,
-      note: system.headOfStateHasPower === false ? '상징' : undefined,
-    })
+
+  if (houses.length > 0) return houses.join(' · ')
+  if (system.legislatureType) {
+    return LEGISLATURE_TYPE_LABEL[system.legislatureType]
   }
-  const headOfGovernment = headOfGovernmentTitleOf(system)
-  if (headOfGovernment) {
-    facts.push({
-      key: 'hog',
-      label: '정부수반',
-      value: headOfGovernment,
-      note: system.headOfGovernmentHasPower === false ? '상징' : undefined,
-    })
-  }
-  if (system.stateStructure) {
-    facts.push({
-      key: 'structure',
-      label: '국가 구조',
-      value: STATE_STRUCTURE_LABEL[system.stateStructure],
-    })
-  }
-  if (system.partySystem) {
-    facts.push({
-      key: 'party',
-      label: '정당제',
-      value: PARTY_SYSTEM_LABEL[system.partySystem],
-    })
-  }
-  return facts
+  return null
 }
 
 export function PoliticalSystemPanel({
@@ -159,31 +123,50 @@ export function PoliticalSystemPanel({
   const updateMutation = useUpdatePoliticalSystem()
 
   const [editing, setEditing] = useState<PoliticalSystem | null>(null)
+  const [presetForm, setPresetForm] = useState<GovernmentForm | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null)
 
   const systems = useMemo(
     () => [...(query.data ?? [])].sort(comparePoliticalSystems),
     [query.data],
   )
   const current = useMemo(() => resolveCurrentSystem(systems), [systems])
-  /* 지금 것 말고 남은 줄 — 최근 것부터. 대시보드에서는 몇 개만 스치듯 보여준다 */
-  const past = useMemo(
-    () => systems.filter((system) => system.id !== current?.id).reverse(),
-    [systems, current],
+  const reverseChronological = useMemo(
+    () => [...systems].reverse(),
+    [systems],
   )
+  const activeSystem = useMemo(() => {
+    if (!current) return null
+    if (!selectedSystemId) return current
+    return systems.find((item) => item.id === selectedSystemId) ?? current
+  }, [systems, current, selectedSystemId])
 
-  const openCreate = () => {
+  const openCreate = (preset: GovernmentForm | null = null) => {
     setEditing(null)
+    setPresetForm(preset)
     setFormOpen(true)
   }
 
-  const headline = current
+  const headline = activeSystem
     ? [
-        current.governmentForm && GOVERNMENT_FORM_LABEL[current.governmentForm],
-        current.legislatureType &&
-          LEGISLATURE_TYPE_LABEL[current.legislatureType],
+        activeSystem.governmentForm &&
+          GOVERNMENT_FORM_LABEL[activeSystem.governmentForm],
+        activeSystem.legislatureType &&
+          LEGISLATURE_TYPE_LABEL[activeSystem.legislatureType],
       ].filter(Boolean)
     : []
+
+  const headOfState = activeSystem ? headOfStateTitleOf(activeSystem) : null
+  const headOfGovernment = activeSystem
+    ? headOfGovernmentTitleOf(activeSystem)
+    : null
+  const isUnifiedExecutive =
+    activeSystem?.governmentForm === 'PRESIDENTIAL' ||
+    activeSystem?.governmentForm === 'ABSOLUTE_MONARCHY'
+  const legislatureSummary = activeSystem
+    ? buildLegislatureSummary(activeSystem)
+    : null
 
   return (
     <S.Section>
@@ -196,104 +179,217 @@ export function PoliticalSystemPanel({
         {systems.length > 0 && (
           <S.SectionCountChip>{systems.length}개</S.SectionCountChip>
         )}
-        {(current || systems.length > 0) && (
-          <S.SectionHeaderActions>
-            {current && (
-              <>
-                <S.SectionAction
-                  type="button"
-                  onClick={() => {
-                    setEditing(current)
-                    setFormOpen(true)
-                  }}
-                >
-                  수정
-                </S.SectionAction>
-                <S.SectionAction type="button" onClick={openCreate}>
-                  + 추가
-                </S.SectionAction>
-              </>
-            )}
-            {systems.length > 0 && (
-              <S.SectionLink type="button" onClick={onOpenAll}>
-                시대별 전체 보기
-              </S.SectionLink>
-            )}
-          </S.SectionHeaderActions>
-        )}
+        <S.SectionHeaderActions>
+          {activeSystem && (
+            <S.SectionAction
+              type="button"
+              onClick={() => {
+                setEditing(activeSystem)
+                setPresetForm(null)
+                setFormOpen(true)
+              }}
+            >
+              수정
+            </S.SectionAction>
+          )}
+          <S.SectionAction type="button" onClick={() => openCreate(null)}>
+            {systems.length > 0 ? '+ 추가' : '+ 정체 등록'}
+          </S.SectionAction>
+          {systems.length > 0 && (
+            <S.SectionLink type="button" onClick={onOpenAll}>
+              시대별 전체 보기
+            </S.SectionLink>
+          )}
+        </S.SectionHeaderActions>
       </S.SectionTitleRow>
 
       {query.isLoading ? (
         <ChartSkeleton variant="text" lines={2} />
-      ) : !current ? (
-        <SectionEmpty
-          text="이 국가가 대통령제인지 의원내각제인지, 단원제인지 양원제인지가 아직 없습니다. 헌법 체제를 기간과 함께 남기면 여기 요약이 서고, 바뀔 때마다 한 줄씩 쌓입니다."
-          hint="헌법 체제와 시행 기간을 입력하면 국가원수·정부수반 직함과 의회 구조가 요약됩니다"
-          actionLabel="정체 등록"
-          onAction={openCreate}
-        />
+      ) : !activeSystem ? (
+        <EmptyPolityCard>
+          <EmptyPolityTop>
+            <EmptyPolityHeaderText>
+              <EmptyPolityBadge>헌법 · 통치 체제</EmptyPolityBadge>
+              <EmptyPolityTitle>아직 등록된 정체가 없습니다</EmptyPolityTitle>
+              <EmptyPresetRow role="group" aria-label="정체 빠른 선택">
+                <EmptyPresetHint>빠른 등록</EmptyPresetHint>
+                {QUICK_POLITY_PRESETS.map((formKey) => (
+                  <EmptyPresetChip
+                    key={formKey}
+                    type="button"
+                    onClick={() => openCreate(formKey)}
+                  >
+                    + {GOVERNMENT_FORM_LABEL[formKey]}
+                  </EmptyPresetChip>
+                ))}
+              </EmptyPresetRow>
+            </EmptyPolityHeaderText>
+            <EmptyPolityAction type="button" onClick={() => openCreate(null)}>
+              + 정체 등록
+            </EmptyPolityAction>
+          </EmptyPolityTop>
+
+          <PillarGrid>
+            <PillarCard $empty>
+              <PillarHeader>
+                <PillarLabel>👑 국가원수</PillarLabel>
+                <PillarBadge $muted>미지정</PillarBadge>
+              </PillarHeader>
+              <PillarValue $muted>대통령 · 국왕 · 황제 등</PillarValue>
+            </PillarCard>
+            <PillarCard $empty>
+              <PillarHeader>
+                <PillarLabel>🏛️ 정부수반</PillarLabel>
+                <PillarBadge $muted>미지정</PillarBadge>
+              </PillarHeader>
+              <PillarValue $muted>총리 · 수상 · 국가원수 겸임</PillarValue>
+            </PillarCard>
+            <PillarCard $empty>
+              <PillarHeader>
+                <PillarLabel>⚖️ 입법부 · 의회</PillarLabel>
+                <PillarBadge $muted>미지정</PillarBadge>
+              </PillarHeader>
+              <PillarValue $muted>단원제 · 양원제 · 의석수</PillarValue>
+            </PillarCard>
+          </PillarGrid>
+        </EmptyPolityCard>
       ) : (
         <Card>
+          {reverseChronological.length > 1 && (
+            <EraTabsRow role="tablist" aria-label="시대별 정체 선택">
+              {reverseChronological.map((system) => {
+                const isSelected = system.id === activeSystem.id
+                return (
+                  <EraTabPill
+                    key={system.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    $active={isSelected}
+                    onClick={() => setSelectedSystemId(system.id)}
+                  >
+                    <EraTabPeriod>{formatPeriod(system)}</EraTabPeriod>
+                    <EraTabName>{system.name || summarize(system)}</EraTabName>
+                    {system.isCurrent && <EraTabNow>현행</EraTabNow>}
+                  </EraTabPill>
+                )
+              })}
+            </EraTabsRow>
+          )}
+
           <Head>
-            <Headline>
-              {headline.length > 0 ? (
-                headline.map((text, index) => (
-                  <HeadlinePart key={text}>
-                    {index > 0 && <HeadlineDot aria-hidden>·</HeadlineDot>}
-                    {text}
-                  </HeadlinePart>
-                ))
-              ) : (
-                <HeadlinePart>{summarize(current)}</HeadlinePart>
-              )}
-            </Headline>
-            <Meta>
-              {current.name && <SystemName>{current.name}</SystemName>}
-              <Period>{formatPeriod(current)}</Period>
-              {current.isCurrent && <NowChip>현행</NowChip>}
-              {/* 현대 국가 지면에는 브리지로 과거 국가 정체도 섞여 온다 */}
-              {historicalCountryId == null &&
-                current.historicalCountryId != null && (
-                  <PastChip>
-                    {current.historicalCountry?.name ?? '과거 국가'}
-                  </PastChip>
+            <HeadLeft>
+              <Headline>
+                {headline.length > 0 ? (
+                  headline.map((text, index) => (
+                    <HeadlinePart key={text}>
+                      {index > 0 && <HeadlineDot aria-hidden>·</HeadlineDot>}
+                      {text}
+                    </HeadlinePart>
+                  ))
+                ) : (
+                  <HeadlinePart>{summarize(activeSystem)}</HeadlinePart>
                 )}
-            </Meta>
+              </Headline>
+              <Meta>
+                {activeSystem.name && (
+                  <SystemName>{activeSystem.name}</SystemName>
+                )}
+                <Period>{formatPeriod(activeSystem)}</Period>
+                {activeSystem.isCurrent && <NowChip>현행</NowChip>}
+                {historicalCountryId == null &&
+                  activeSystem.historicalCountryId != null && (
+                    <PastChip>
+                      {activeSystem.historicalCountry?.name ?? '과거 국가'}
+                    </PastChip>
+                  )}
+              </Meta>
+            </HeadLeft>
+
+            {(activeSystem.stateStructure || activeSystem.partySystem) && (
+              <StructureTags>
+                {activeSystem.stateStructure && (
+                  <StructureTag>
+                    {STATE_STRUCTURE_LABEL[activeSystem.stateStructure]}
+                  </StructureTag>
+                )}
+                {activeSystem.partySystem && (
+                  <StructureTag>
+                    {PARTY_SYSTEM_LABEL[activeSystem.partySystem]}
+                  </StructureTag>
+                )}
+              </StructureTags>
+            )}
           </Head>
 
-          {(() => {
-            const facts = buildFacts(current)
-            return facts.length > 0 ? (
-              <Facts>
-                {facts.map((fact) => (
-                  <FactItem key={fact.key}>
-                    <FactKey>{fact.label}</FactKey>
-                    <FactValue>
-                      {fact.value}
-                      {fact.note && <Muted> ({fact.note})</Muted>}
-                    </FactValue>
-                  </FactItem>
-                ))}
-              </Facts>
-            ) : null
-          })()}
+          <PillarGrid>
+            <PillarCard>
+              <PillarHeader>
+                <PillarLabel>👑 국가원수</PillarLabel>
+                {headOfState && (
+                  <PillarBadge
+                    $tone={
+                      activeSystem.headOfStateHasPower === false
+                        ? 'symbolic'
+                        : 'power'
+                    }
+                  >
+                    {activeSystem.headOfStateHasPower === false
+                      ? '상징'
+                      : '실권'}
+                  </PillarBadge>
+                )}
+              </PillarHeader>
+              <PillarValue $muted={!headOfState}>
+                {headOfState ?? '미지정'}
+              </PillarValue>
+            </PillarCard>
 
-          {past.length > 0 && (
-            <PastRow>
-              <PastLabel>이전 정체</PastLabel>
-              {past.slice(0, 4).map((system) => (
-                <PastItem key={system.id} type="button" onClick={onOpenAll}>
-                  <PastPeriod>{formatPeriod(system)}</PastPeriod>
-                  <PastName>{system.name || summarize(system)}</PastName>
-                </PastItem>
-              ))}
-              {past.length > 4 && (
-                <PastMore type="button" onClick={onOpenAll}>
-                  +{past.length - 4}
-                </PastMore>
-              )}
-            </PastRow>
-          )}
+            <PillarCard>
+              <PillarHeader>
+                <PillarLabel>🏛️ 정부수반</PillarLabel>
+                {headOfGovernment ? (
+                  <PillarBadge
+                    $tone={
+                      activeSystem.headOfGovernmentHasPower === false
+                        ? 'symbolic'
+                        : 'power'
+                    }
+                  >
+                    {activeSystem.headOfGovernmentHasPower === false
+                      ? '상징'
+                      : '실권'}
+                  </PillarBadge>
+                ) : isUnifiedExecutive && headOfState ? (
+                  <PillarBadge $tone="power">일원집정</PillarBadge>
+                ) : null}
+              </PillarHeader>
+              <PillarValue
+                $muted={!headOfGovernment && !(isUnifiedExecutive && headOfState)}
+              >
+                {headOfGovernment ??
+                  (isUnifiedExecutive && headOfState
+                    ? `${headOfState} 겸임`
+                    : '미지정')}
+              </PillarValue>
+            </PillarCard>
+
+            <PillarCard>
+              <PillarHeader>
+                <PillarLabel>⚖️ 입법부 · 의회</PillarLabel>
+                {activeSystem.legislatureType && (
+                  <PillarBadge $tone="legislature">
+                    {LEGISLATURE_TYPE_LABEL[activeSystem.legislatureType]}
+                  </PillarBadge>
+                )}
+              </PillarHeader>
+              <PillarValue $muted={!legislatureSummary}>
+                {legislatureSummary ?? '미지정'}
+              </PillarValue>
+            </PillarCard>
+          </PillarGrid>
+
+          {activeSystem.notes && <NotesRow>{activeSystem.notes}</NotesRow>}
         </Card>
       )}
 
@@ -301,6 +397,8 @@ export function PoliticalSystemPanel({
         open={formOpen}
         onClose={() => setFormOpen(false)}
         editing={editing}
+        initialGovernmentForm={presetForm}
+        defaultIsCurrent={systems.length === 0}
         countryId={countryId}
         historicalCountryId={historicalCountryId}
         countryName={countryName}
@@ -327,18 +425,201 @@ export function PoliticalSystemPanel({
 const Card = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 13px 16px;
+  gap: 12px;
+  padding: 15px 18px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 12px;
+  border-radius: 14px;
   background: ${({ theme }) => theme.colors.background.primary};
+`
+
+const EmptyPolityCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  border-radius: 14px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(248, 250, 252, 0.7)'};
+`
+
+const EmptyPolityTop = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+`
+
+const EmptyPolityHeaderText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+`
+
+const EmptyPolityBadge = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #6366f1;
+`
+
+const EmptyPolityTitle = styled.span`
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const EmptyPresetRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+`
+
+const EmptyPresetHint = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 2px;
+`
+
+const EmptyPresetChip = styled.button`
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: inherit;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.48);
+    background: rgba(99, 102, 241, 0.07);
+    color: #4f46e5;
+  }
+`
+
+const EmptyPolityAction = styled.button`
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  background: #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 0.92;
+  }
+`
+
+const EraTabsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const EraTabPill = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? 'rgba(99, 102, 241, 0.5)' : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.18)'
+        : '#eef2ff'
+      : 'transparent'};
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.22)'
+          : '#e0e7ff'
+        : theme.colors.hover};
+  }
+`
+
+const EraTabPeriod = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EraTabName = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EraTabNow = styled.span`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
+  background: rgba(16, 185, 129, 0.16);
 `
 
 const Head = styled.div`
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+`
+
+const HeadLeft = styled.div`
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 6px 12px;
+  min-width: 0;
+`
+
+const StructureTags = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const StructureTag = styled.span`
+  padding: 3px 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
 `
 
 /* 체제 이름이 이 카드의 주인공이다 — 기간·별칭보다 확실히 크게 */
@@ -401,87 +682,85 @@ const PastChip = styled.span`
   background: rgba(245, 158, 11, 0.16);
 `
 
-const Facts = styled.dl`
-  margin: 0;
+const PillarGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 6px 18px;
-`
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 
-const FactItem = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-`
-
-const FactKey = styled.dt`
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const FactValue = styled.dd`
-  margin: 0;
-  min-width: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  overflow-wrap: anywhere;
-`
-
-const Muted = styled.span`
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const PastRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
-`
-
-const PastLabel = styled.span`
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const PastItem = styled.button`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: none;
-  font-family: inherit;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
+  @media (max-width: 780px) {
+    grid-template-columns: 1fr;
   }
 `
 
-const PastPeriod = styled.span`
+const PillarCard = styled.div<{ $empty?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  border: 1px ${({ $empty }) => ($empty ? 'dashed' : 'solid')}
+    ${({ theme }) => theme.colors.border.light};
+  background: ${({ $empty, theme }) =>
+    $empty
+      ? theme.colors.background.primary
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.03)'
+        : 'rgba(248, 250, 252, 0.85)'};
+`
+
+const PillarHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+`
+
+const PillarLabel = styled.span`
   font-size: 11.5px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const PastName = styled.span`
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+const PillarBadge = styled.span<{
+  $tone?: 'power' | 'symbolic' | 'legislature'
+  $muted?: boolean
+}>`
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ $tone, $muted, theme }) => {
+    if ($muted || $tone === 'symbolic') return theme.colors.text.tertiary
+    if ($tone === 'legislature') {
+      return theme.mode === 'dark' ? '#7dd3fc' : '#0369a1'
+    }
+    return theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'
+  }};
+  background: ${({ $tone, $muted, theme }) => {
+    if ($muted || $tone === 'symbolic') {
+      return theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.06)'
+    }
+    if ($tone === 'legislature') return 'rgba(14, 165, 233, 0.14)'
+    return 'rgba(99, 102, 241, 0.14)'
+  }};
 `
 
-const PastMore = styled(PastItem)`
-  font-size: 12px;
-  font-weight: 700;
+const PillarValue = styled.div<{ $muted?: boolean }>`
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: ${({ $muted, theme }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
+  overflow-wrap: anywhere;
+`
+
+const NotesRow = styled.p`
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
+  font-size: 12.5px;
+  line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.secondary};
 `

@@ -17,6 +17,7 @@ import {
   primaryHouseLabel,
   STATE_STRUCTURE_LABEL,
   STATE_STRUCTURE_ORDER,
+  type GovernmentForm,
   type LegislatureType,
 } from '@/entities/political-system/model/political-system'
 import { personCareerApi } from '@/shared/api/person-career'
@@ -28,6 +29,10 @@ interface Props {
   onClose: () => void
   /** null이면 새로 만들기 */
   editing: PoliticalSystem | null
+  /** 프리셋 칩으로 열 때 초기 정부 형태 */
+  initialGovernmentForm?: GovernmentForm | null
+  /** 첫 정체 등록 시 기본 현행 체크 여부 */
+  defaultIsCurrent?: boolean
   countryId?: string
   historicalCountryId?: string
   countryName?: string
@@ -151,6 +156,48 @@ const numberOrNull = (raw: string) => {
 const textOrNull = (raw: string) => (raw.trim() === '' ? null : raw.trim())
 
 /**
+ * 정부 형태 선택 시 통치 구조 기본값(실권 여부·입법부·정당제)을 맞춰준다.
+ */
+function applyGovernmentFormDefaults(
+  nextForm: string,
+  prev: FormState,
+): FormState {
+  const next: FormState = { ...prev, governmentForm: nextForm }
+  switch (nextForm as GovernmentForm) {
+    case 'PRESIDENTIAL':
+      next.headOfStateHasPower = true
+      next.headOfGovernmentChoice = ''
+      next.headOfGovernmentTitle = ''
+      break
+    case 'PARLIAMENTARY':
+    case 'CONSTITUTIONAL_MONARCHY':
+      next.headOfStateHasPower = false
+      next.headOfGovernmentHasPower = true
+      break
+    case 'SEMI_PRESIDENTIAL':
+      next.headOfStateHasPower = true
+      next.headOfGovernmentHasPower = true
+      break
+    case 'ABSOLUTE_MONARCHY':
+      next.headOfStateHasPower = true
+      next.headOfGovernmentHasPower = true
+      if (!next.legislatureType) next.legislatureType = 'NONE'
+      break
+    case 'ONE_PARTY':
+      next.headOfStateHasPower = true
+      if (!next.partySystem) next.partySystem = 'ONE_PARTY'
+      break
+    case 'MILITARY':
+    case 'THEOCRACY':
+      next.headOfStateHasPower = true
+      break
+    default:
+      break
+  }
+  return next
+}
+
+/**
  * 국가원수·정부수반 한 축을 DTO 조각으로 옮긴다.
  * 지정 안 함이면 세 칸 모두 null — 감춘 값이 뒤에 남아 되살아나지 않게.
  */
@@ -195,6 +242,8 @@ export function PoliticalSystemFormModal({
   open,
   onClose,
   editing,
+  initialGovernmentForm,
+  defaultIsCurrent = false,
   countryId,
   historicalCountryId,
   countryName,
@@ -249,8 +298,20 @@ export function PoliticalSystemFormModal({
   // 열릴 때마다 대상에 맞춰 채운다 — 직전에 열었던 값이 남지 않도록
   useEffect(() => {
     if (!open) return
-    setForm(editing ? hydrate(editing) : EMPTY)
-  }, [open, editing])
+    if (editing) {
+      setForm(hydrate(editing))
+      return
+    }
+    const base: FormState = {
+      ...EMPTY,
+      isCurrent: defaultIsCurrent,
+    }
+    setForm(
+      initialGovernmentForm
+        ? applyGovernmentFormDefaults(initialGovernmentForm, base)
+        : base,
+    )
+  }, [open, editing, initialGovernmentForm, defaultIsCurrent])
 
   const set = <Key extends keyof FormState>(key: Key, value: FormState[Key]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -402,7 +463,11 @@ export function PoliticalSystemFormModal({
             정부 형태
             <Select
               value={form.governmentForm}
-              onChange={(event) => set('governmentForm', event.target.value)}
+              onChange={(event) =>
+                setForm((prev) =>
+                  applyGovernmentFormDefaults(event.target.value, prev),
+                )
+              }
             >
               <option value="">선택 안 함</option>
               {GOVERNMENT_FORM_ORDER.map((key) => (
