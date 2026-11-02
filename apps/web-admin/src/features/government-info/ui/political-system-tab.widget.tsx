@@ -13,19 +13,25 @@ import {
   comparePoliticalSystems,
   formatPeriod,
   GOVERNMENT_FORM_LABEL,
-  GOVERNMENT_FORM_ORDER,
   headOfGovernmentTitleOf,
   headOfStateTitleOf,
   LEGISLATURE_TYPE_LABEL,
   PARTY_SYSTEM_LABEL,
   primaryHouseLabel,
   STATE_STRUCTURE_LABEL,
-  type GovernmentForm,
 } from '@/entities/political-system/model/political-system'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
 import { PoliticalSystemFormModal } from './political-system-form.modal'
+
+const EMPTY_FACT_LABELS = [
+  '국가원수',
+  '정부수반',
+  '입법부 · 의회',
+  '국가 구조',
+  '정당제',
+] as const
 
 interface Props {
   /** 현대 국가 ID — 주면 연결된 과거 국가의 정체까지 함께 온다 */
@@ -54,7 +60,6 @@ export function PoliticalSystemTab({
   const deleteMutation = useDeletePoliticalSystem()
 
   const [editing, setEditing] = useState<PoliticalSystem | null>(null)
-  const [presetForm, setPresetForm] = useState<GovernmentForm | null>(null)
   const [formOpen, setFormOpen] = useState(false)
 
   const systems = useMemo(
@@ -62,15 +67,13 @@ export function PoliticalSystemTab({
     [query.data],
   )
 
-  const openCreate = (preset: GovernmentForm | null = null) => {
+  const openCreate = () => {
     setEditing(null)
-    setPresetForm(preset)
     setFormOpen(true)
   }
 
   const openEdit = (system: PoliticalSystem) => {
     setEditing(system)
-    setPresetForm(null)
     setFormOpen(true)
   }
 
@@ -98,7 +101,7 @@ export function PoliticalSystemTab({
         <HeaderText>
           정체는 바뀝니다. 헌법이 바뀔 때마다 한 줄씩 남기면 “언제 무엇이었나”가 됩니다.
         </HeaderText>
-        <AddButton type="button" onClick={() => openCreate(null)}>
+        <AddButton type="button" onClick={openCreate}>
           + 정체 추가
         </AddButton>
       </HeaderRow>
@@ -106,18 +109,29 @@ export function PoliticalSystemTab({
       {query.isLoading ? (
         <Hint>불러오는 중…</Hint>
       ) : systems.length === 0 ? (
-        <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
-          <EmptyTitle>미등록</EmptyTitle>
-          {GOVERNMENT_FORM_ORDER.slice(0, 6).map((formKey) => (
-            <EmptyPresetBtn
-              key={formKey}
-              type="button"
-              onClick={() => openCreate(formKey)}
-            >
-              {GOVERNMENT_FORM_LABEL[formKey]}
-            </EmptyPresetBtn>
-          ))}
-        </EmptyPresetRow>
+        <List>
+          <Row>
+            <Period $muted>—</Period>
+            <Body>
+              <TitleLine>
+                <EmptyHeadline>아직 등록된 정체가 없습니다</EmptyHeadline>
+              </TitleLine>
+              <Facts>
+                {EMPTY_FACT_LABELS.map((label) => (
+                  <Fact key={label}>
+                    <FactKey>{label}</FactKey>
+                    <FactValue $muted>—</FactValue>
+                  </Fact>
+                ))}
+              </Facts>
+            </Body>
+            <RowActions>
+              <IconBtn type="button" onClick={openCreate}>
+                + 등록
+              </IconBtn>
+            </RowActions>
+          </Row>
+        </List>
       ) : (
         <List>
           {systems.map((system) => (
@@ -229,7 +243,6 @@ export function PoliticalSystemTab({
         open={formOpen}
         onClose={() => setFormOpen(false)}
         editing={editing}
-        initialGovernmentForm={presetForm}
         defaultIsCurrent={systems.length === 0}
         countryId={countryId}
         historicalCountryId={historicalCountryId}
@@ -292,41 +305,10 @@ const Hint = styled.p`
   padding: 36px 0;
 `
 
-const EmptyTitle = styled.span`
-  font-size: 12px;
+const EmptyHeadline = styled.span`
+  font-size: 14px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-right: 4px;
-`
-
-const EmptyPresetRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-`
-
-const EmptyPresetBtn = styled.button`
-  padding: 5px 12px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  font-size: 12px;
-  font-weight: 700;
-  font-family: inherit;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    color 0.15s ease;
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.5);
-    background: rgba(99, 102, 241, 0.08);
-    color: #4f46e5;
-  }
 `
 
 const List = styled.div`
@@ -348,11 +330,12 @@ const Row = styled.div`
   }
 `
 
-const Period = styled.div`
+const Period = styled.div<{ $muted?: boolean }>`
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ $muted, theme }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
   padding-top: 1px;
 `
 
@@ -439,10 +422,11 @@ const FactKey = styled.dt`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const FactValue = styled.dd`
+const FactValue = styled.dd<{ $muted?: boolean }>`
   margin: 0;
   font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ $muted, theme }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
 `
 
 const Muted = styled.span`

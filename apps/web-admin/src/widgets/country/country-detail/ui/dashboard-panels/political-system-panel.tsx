@@ -31,7 +31,6 @@ import {
   resolveCurrentSystem,
   STATE_STRUCTURE_LABEL,
   summarize,
-  type GovernmentForm,
 } from '@/entities/political-system/model/political-system'
 import { PoliticalSystemFormModal } from '@/features/government-info/ui/political-system-form.modal'
 import { notify } from '@/shared/ui/toast'
@@ -41,14 +40,13 @@ import * as S from '../country-detail-dashboard.styles'
 import { ChartSkeleton } from './chart-skeleton'
 import { SectionHelpPopover } from './section-help-popover'
 
-const QUICK_POLITY_PRESETS: GovernmentForm[] = [
-  'PRESIDENTIAL',
-  'PARLIAMENTARY',
-  'SEMI_PRESIDENTIAL',
-  'CONSTITUTIONAL_MONARCHY',
-  'ABSOLUTE_MONARCHY',
-  'ONE_PARTY',
-]
+const EMPTY_SPEC_LABELS = [
+  '국가원수',
+  '정부수반',
+  '입법부 · 의회',
+  '국가 구조',
+  '정당제',
+] as const
 
 interface Props {
   /** 현대 국가 ID — 주면 브리지로 연결된 과거 국가의 정체까지 함께 온다 */
@@ -180,7 +178,6 @@ export function PoliticalSystemPanel({
   const updateMutation = useUpdatePoliticalSystem()
 
   const [editing, setEditing] = useState<PoliticalSystem | null>(null)
-  const [presetForm, setPresetForm] = useState<GovernmentForm | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
@@ -202,15 +199,13 @@ export function PoliticalSystemPanel({
     : pastSystems.slice(0, PAST_ROW_LIMIT)
   const hiddenPastCount = Math.max(0, pastSystems.length - PAST_ROW_LIMIT)
 
-  const openCreate = (preset: GovernmentForm | null = null) => {
+  const openCreate = () => {
     setEditing(null)
-    setPresetForm(preset)
     setFormOpen(true)
   }
 
   const openEdit = (system: PoliticalSystem) => {
     setEditing(system)
-    setPresetForm(null)
     setFormOpen(true)
   }
 
@@ -240,7 +235,7 @@ export function PoliticalSystemPanel({
               수정
             </S.SectionAction>
           )}
-          <S.SectionAction type="button" onClick={() => openCreate(null)}>
+          <S.SectionAction type="button" onClick={openCreate}>
             {systems.length > 0 ? '+ 추가' : '+ 정체 등록'}
           </S.SectionAction>
           {systems.length > 0 && (
@@ -254,24 +249,25 @@ export function PoliticalSystemPanel({
       {query.isLoading ? (
         <ChartSkeleton variant="text" lines={2} />
       ) : !current ? (
-        <EmptyStrip>
-          <EmptyLead>
+        <EmptyBlockButton
+          type="button"
+          onClick={openCreate}
+          aria-label="정체 등록"
+        >
+          <PrimaryHeadRow>
             <AccentBar $muted aria-hidden />
-            <EmptyLabel>헌법 · 통치 체제 미등록</EmptyLabel>
-          </EmptyLead>
-          <EmptyDivider aria-hidden />
-          <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
-            {QUICK_POLITY_PRESETS.map((formKey) => (
-              <EmptyPresetChip
-                key={formKey}
-                type="button"
-                onClick={() => openCreate(formKey)}
-              >
-                {GOVERNMENT_FORM_LABEL[formKey]}
-              </EmptyPresetChip>
+            <PrimaryHeadline $muted>아직 등록된 정체가 없습니다</PrimaryHeadline>
+            <Period>헌법 체제 · 통치 기간 미입력</Period>
+          </PrimaryHeadRow>
+          <PrimarySpecStrip>
+            {EMPTY_SPEC_LABELS.map((label) => (
+              <SpecColumn key={label}>
+                <SpecColumnKey>{label}</SpecColumnKey>
+                <SpecColumnValue $muted>—</SpecColumnValue>
+              </SpecColumn>
             ))}
-          </EmptyPresetRow>
-        </EmptyStrip>
+          </PrimarySpecStrip>
+        </EmptyBlockButton>
       ) : (
         <PolityStack>
           <PrimaryBlock>
@@ -402,7 +398,6 @@ export function PoliticalSystemPanel({
         open={formOpen}
         onClose={() => setFormOpen(false)}
         editing={editing}
-        initialGovernmentForm={presetForm}
         defaultIsCurrent={systems.length === 0}
         countryId={countryId}
         historicalCountryId={historicalCountryId}
@@ -455,15 +450,16 @@ const AccentBar = styled.span<{ $muted?: boolean }>`
     $muted ? theme.colors.border.medium : '#6366f1'};
 `
 
-const PrimaryHeadline = styled.p`
+const PrimaryHeadline = styled.p<{ $muted?: boolean }>`
   margin: 0;
   display: inline-flex;
   flex-wrap: wrap;
   align-items: baseline;
-  font-size: 19px;
-  font-weight: 800;
+  font-size: ${({ $muted }) => ($muted ? '16px' : '19px')};
+  font-weight: ${({ $muted }) => ($muted ? 700 : 800)};
   letter-spacing: -0.025em;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ $muted, theme }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
 `
 
 const HeadlinePart = styled.span`
@@ -543,15 +539,16 @@ const SpecColumnKey = styled.dt`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const SpecColumnValue = styled.dd`
+const SpecColumnValue = styled.dd<{ $muted?: boolean }>`
   margin: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 14.5px;
-  font-weight: 800;
+  font-weight: ${({ $muted }) => ($muted ? 700 : 800)};
   letter-spacing: -0.015em;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ $muted, theme }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
 `
 
 const PowerTag = styled.span<{ $symbolic?: boolean }>`
@@ -573,61 +570,20 @@ const PowerTag = styled.span<{ $symbolic?: boolean }>`
       : 'rgba(99, 102, 241, 0.12)'};
 `
 
-const EmptyStrip = styled.div`
+const EmptyBlockButton = styled.button`
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-`
-
-const EmptyLead = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-`
-
-const EmptyLabel = styled.span`
-  font-size: 13.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EmptyDivider = styled.span`
-  width: 1px;
-  height: 16px;
-  background: ${({ theme }) => theme.colors.border.light};
-
-  @media (max-width: 640px) {
-    display: none;
-  }
-`
-
-const EmptyPresetRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-`
-
-const EmptyPresetChip = styled.button`
-  padding: 4px 11px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  font-size: 12px;
-  font-weight: 600;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
   font-family: inherit;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  text-align: left;
   cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    color 0.15s ease;
 
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.48);
-    background: rgba(99, 102, 241, 0.07);
-    color: #4f46e5;
+  &:hover ${PrimaryHeadline} {
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
