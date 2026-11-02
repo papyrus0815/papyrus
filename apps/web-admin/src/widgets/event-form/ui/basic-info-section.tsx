@@ -103,6 +103,11 @@ interface BasicInfoSectionProps {
 
   /** 분야를 안 고르고 제출했을 때 */
   categoryError?: string
+  /** 사건명 입력 시 바로 아래에 띄우는 추천 분류 원클릭 칩 */
+  titleSuggestionSlot?: {
+    label: string
+    onApply: () => void
+  }
   /** 세부 분야 칸 — 분야 바로 아래, 분야 › 세부의 2단계(붙는 기록을 정한다) */
   typeSlot?: React.ReactNode
   /** 세부의 핵심 기록 묶음 — '연결' 묶음 뒤 */
@@ -170,6 +175,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   parentEventSlot,
   kindSlot,
   categoryError,
+  titleSuggestionSlot,
   typeSlot,
   recordsSlot,
   participantsCoreOf,
@@ -385,6 +391,19 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <S.ErrorMessage id="event-form-title-error" role="alert">
                 {titleError}
               </S.ErrorMessage>
+            )}
+            {titleSuggestionSlot && (
+              <TitleSuggestionRow>
+                <TitleSuggestionButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    titleSuggestionSlot.onApply()
+                  }}
+                >
+                  추천 분류 적용: {titleSuggestionSlot.label}
+                </TitleSuggestionButton>
+              </TitleSuggestionRow>
             )}
           </S.FormField>
         </S.FormRow>
@@ -1262,5 +1281,35 @@ const KeywordChipRemove = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => S.getC(theme).border.focus};
     outline-offset: 1px;
+  }
+`
+
+const TitleSuggestionRow = styled.div`
+  display: flex;
+  align-items: center;
+  margin-top: 2px;
+`
+
+const TitleSuggestionButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.primary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
   }
 `

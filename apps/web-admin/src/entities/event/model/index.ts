@@ -67,11 +67,15 @@ export {
   isArmedConflictType,
   isEventTypeKey,
   metricsFor,
+  readRecentClassifications,
+  recordRecentClassification,
+  searchClassifications,
   subtypesForDomain,
   suggestClassificationFromTitle,
   typeFacets,
 } from './event-type-registry'
 export type {
+  ClassificationSearchMatch,
   EventClassificationSuggestion,
   EventFacetKey,
   EventTypeDef,
@@ -79,5 +83,6 @@ export type {
   EventTypeGroup,
   EventTypeMetrics,
   EventTypeKey,
+  RecentClassificationCombo,
   TypeModuleKey,
 } from './event-type-registry'

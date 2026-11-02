@@ -38,8 +38,11 @@ import {
   EVENT_TYPES,
   type EventTypeKey,
   defaultDomainForType,
+  formatDomainPath,
   isEventTypeKey,
+  recordRecentClassification,
   subtypesForDomain,
+  suggestClassificationFromTitle,
   typeFacets,
 } from '@/entities/event/model/event-type-registry'
 import {
@@ -359,12 +362,27 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     }
   }
 
-  /** 사건명 추천 배지 클릭 — 분야와 세부를 한 번에 채운다 */
-  const handleApplySuggestion = (suggestion: { domain: EventDomainKey; type: EventTypeKey }) => {
+  /** 사건명 추천·최근 분류·빠른 검색 배지 클릭 — 분야와 세부를 한 번에 채운다 */
+  const handleApplySuggestion = (suggestion: { domain: EventDomainKey; type: EventTypeKey | null }) => {
     categoryTouchedRef.current = true
     setCategory(suggestion.domain)
     selectType(suggestion.type, suggestion.domain)
   }
+
+  const titleSuggestion = useMemo(() => {
+    if (eventType !== null) return null
+    const raw = suggestClassificationFromTitle(title)
+    if (!raw) return null
+    const effectiveDomain =
+      category && subtypesForDomain(category).primary.includes(raw.type)
+        ? category
+        : raw.domain
+    return {
+      domain: effectiveDomain,
+      type: raw.type,
+      label: formatDomainPath(effectiveDomain, raw.type),
+    }
+  }, [eventType, title, category])
 
   /** 분야 고르기 — 해제하면 세부도 비우고, 다른 분야로 바꿀 때 그 분야 앞줄에 없는 세부는 정리한다 */
   const handleCategoryChange = (next: EventDomainKey | '') => {
@@ -805,6 +823,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       // 저장된 값이 새 기준선 — 이후 수정분만 다시 dirty가 된다.
       baselineRef.current = snapshotRef.current
       markDirty(false)
+      recordRecentClassification({ domain: category, type: eventType })
 
       /**
        * `refetchType: 'none'` — **표시만 하고 지금 다시 받지는 않는다.**
@@ -935,12 +954,25 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         category={category}
         setCategory={handleCategoryChange}
         categoryError={submitAttempted ? categoryError : undefined}
+        titleSuggestionSlot={
+          titleSuggestion
+            ? {
+                label: titleSuggestion.label,
+                onApply: () =>
+                  handleApplySuggestion({
+                    domain: titleSuggestion.domain,
+                    type: titleSuggestion.type,
+                  }),
+              }
+            : undefined
+        }
         typeSlot={
           <EventTypeField
             domain={domainName}
             value={eventType}
             isEditMode={isEditMode}
             eventTitle={title}
+            hasParent={Boolean(parentEvent)}
             onApplySuggestion={(suggestion) => {
               playClickSound()
               handleApplySuggestion(suggestion)

@@ -404,11 +404,24 @@ export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = 
   SCIENCE: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION', 'INSTITUTION', 'LAW_POLICY', 'DISASTER'],
 }
 
-/** 분야의 앞줄 세부와 나머지 — 분야를 안 골랐거나 앞줄이 없는 분야(기타)는 전부 앞줄 */
-export function subtypesForDomain(domain?: string | null): { primary: EventTypeKey[]; rest: EventTypeKey[] } {
+/**
+ * 분야의 앞줄 세부와 나머지 — 분야를 안 골랐거나 앞줄이 없는 분야(기타)는 전부 앞줄.
+ * 상위 사건(hasParent)이 정해진 하위 사건 등록에서는 전쟁·위기 같은 묶음 세부를 뒤로 물려
+ * 전투·작전 같은 단일 국면 세부가 맨 앞에 오게 한다.
+ */
+export function subtypesForDomain(
+  domain?: string | null,
+  options?: { hasParent?: boolean },
+): { primary: EventTypeKey[]; rest: EventTypeKey[] } {
   const key = domainKey(domain)
-  const primary = (key ? DOMAIN_SUBTYPES[key] : undefined) ?? EVENT_TYPE_ORDER
-  return { primary, rest: EVENT_TYPE_ORDER.filter((type) => !primary.includes(type)) }
+  const rawPrimary = (key ? DOMAIN_SUBTYPES[key] : undefined) ?? EVENT_TYPE_ORDER
+  const primary = options?.hasParent
+    ? [
+        ...rawPrimary.filter((type) => !EVENT_TYPES[type].usuallyCollection),
+        ...rawPrimary.filter((type) => EVENT_TYPES[type].usuallyCollection),
+      ]
+    : rawPrimary
+  return { primary, rest: EVENT_TYPE_ORDER.filter((type) => !rawPrimary.includes(type)) }
 }
 
 /** 세부의 기본 분야 — 분야를 고르기 전에 세부부터 골랐을 때 함께 채울 분야 */
@@ -644,4 +657,147 @@ export function suggestClassificationFromTitle(
   }
   return null
 }
+
+/** 세부별 추가 검색 키워드(동의어·연관어) — 빠른 분류 검색에서 예시에 없는 표현도 잡는다 */
+const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
+  WAR: '대전 내전 전역 사변 침공 원정 정벌 정복',
+  BATTLE: '해전 회전 공방전 포위전 상륙작전 공습 폭격 함락 점령 진압 교전',
+  UPRISING: '쿠데타 반란 민란 항쟁 의거 폭동 난 봉기 혁명 정변',
+  ATTACK: '암살 테러 학살 저격 폭탄 투척 습격',
+  MOBILIZATION: '총동원령 동원령 기동훈련 작전지령 계엄령 배치 파병',
+  TREATY: '강화조약 화약 의정서 휴전협정 체결 조인 비준 동맹 가입',
+  SUMMIT: '정상회담 강화회의 평화회의 어전회의 공의회 교섭 회동',
+  DECLARATION: '선전포고 최후통첩 중립선언 담화 성명 통첩 결의 연설',
+  VISIT: '국빈방문 사절단 내항 기항 예방 순방',
+  CRISIS: '외교위기 사태 분쟁 대치',
+  EXPANSION: '식민지 개척 진출 원정대',
+  STATEHOOD: '건국 멸망 병합 합병 독립선언 독립 패망 붕괴 해체 왕조',
+  POWER_CHANGE: '즉위식 대관식 취임식 퇴위 선위 폐위 하야 탄핵 해임 실각 계승',
+  ELECTION: '총선 대선 대통령선거 보궐선거 국민투표 투표',
+  LAW_POLICY: '헌법 법률 법령 법안 칙령 조례 개혁 신법 공포 제정 시행 폐지 함대법 징병령',
+  INSTITUTION: '창설 결성 개설 해산 설립 정당 의회 국회 관청',
+  INCIDENT: '탄압 음모 스캔들 숙청 옥사 사화 환국 대옥 비리',
+  MOVEMENT: '불매운동 사회운동 계몽운동 노동운동 민권운동 독립운동 시위 총파업 파업 캠페인',
+  COMPANY: '창업 창립 상장 IPO 인수 합병 파산 실적발표 법인',
+  MARKET: '대공황 금융위기 외환위기 주가지수 금리 차관 모라토리엄 디폴트 공황 폭락',
+  PRODUCT: '출시 공개 발매 신제품 발명품',
+  CONSTRUCTION: '착공 준공 개통 완공 진수 철도 운하 다리 교량 댐',
+  DISASTER: '대지진 지진 대화재 화재 홍수 태풍 해일 쓰나미 대기근 기근 역병 전염병 페스트 콜레라 참사 침몰 폭발',
+  DISCOVERY: '발견 발명 노벨상 법칙 학설 논문 관측 탐험',
+  CREATION: '창제 편찬 간행 출간 초연 저술 작품 건축 예술',
+  CONVERSION: '개종 세례 국교 공인 기독교 불교 이슬람 종교',
+  MIGRATION: '천도 대이동 이주 이민 망명 유배 피난',
+  PERSONAL: '요양 휴가 여행 탄생 사망 별세 서거 유학',
+}
+
+export interface ClassificationSearchMatch {
+  domain: EventDomainKey
+  type: EventTypeKey
+  examples: string
+}
+
+/**
+ * 빠른 분류 검색 — 세부 라벨·두 글자 이름·예시·동의어·분야 이름에서 검색어와 맞는
+ * '분야 › 세부' 후보를 추린다. 이미 고른 분야의 앞줄에 속한 세부를 먼저 보여 준다.
+ */
+export function searchClassifications(
+  rawQuery: string,
+  currentDomain?: string | null,
+): ClassificationSearchMatch[] {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) return []
+  const activeDomain = domainKey(currentDomain)
+  const activePrimary = activeDomain ? (DOMAIN_SUBTYPES[activeDomain] ?? []) : []
+
+  const matches: ClassificationSearchMatch[] = []
+  for (const type of EVENT_TYPE_ORDER) {
+    const def = EVENT_TYPES[type]
+    const targetDomain =
+      activeDomain && activePrimary.includes(type) ? activeDomain : def.defaultDomain
+    const haystack = [
+      def.label,
+      def.short,
+      def.examples,
+      SEARCH_KEYWORDS[type] ?? '',
+      domainLabel(targetDomain),
+      domainLabel(def.defaultDomain),
+    ]
+      .join(' ')
+      .toLowerCase()
+    if (haystack.includes(query)) {
+      matches.push({
+        domain: targetDomain,
+        type,
+        examples: def.examples,
+      })
+    }
+  }
+
+  return matches.sort((left, right) => {
+    const leftExact = EVENT_TYPES[left.type].label.toLowerCase().includes(query) ? 0 : 1
+    const rightExact = EVENT_TYPES[right.type].label.toLowerCase().includes(query) ? 0 : 1
+    if (leftExact !== rightExact) return leftExact - rightExact
+    const leftInDomain = activePrimary.includes(left.type) ? 0 : 1
+    const rightInDomain = activePrimary.includes(right.type) ? 0 : 1
+    return leftInDomain - rightInDomain
+  })
+}
+
+const RECENT_CLASSIFICATIONS_STORAGE_KEY = 'papyrus.eventForm.recentClassifications'
+const MAX_RECENT_CLASSIFICATIONS = 4
+
+export interface RecentClassificationCombo {
+  domain: EventDomainKey
+  type: EventTypeKey | null
+}
+
+/** 최근에 저장한 사건의 '분야 › 세부' 조합(최대 4개)을 읽는다 */
+export function readRecentClassifications(): RecentClassificationCombo[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(RECENT_CLASSIFICATIONS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const valid: RecentClassificationCombo[] = []
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue
+      const candidate = item as { domain?: unknown; type?: unknown }
+      if (!isEventDomainKey(candidate.domain)) continue
+      const type =
+        candidate.type === null || candidate.type === undefined
+          ? null
+          : isEventTypeKey(candidate.type)
+            ? candidate.type
+            : undefined
+      if (type === undefined) continue
+      valid.push({ domain: candidate.domain, type })
+      if (valid.length >= MAX_RECENT_CLASSIFICATIONS) break
+    }
+    return valid
+  } catch {
+    return []
+  }
+}
+
+/** 저장 성공 시 사용한 '분야 › 세부' 조합을 최근 목록 맨 앞에 기록한다 */
+export function recordRecentClassification(
+  combo: RecentClassificationCombo,
+): RecentClassificationCombo[] {
+  const current = readRecentClassifications()
+  const keyOf = (entry: RecentClassificationCombo) => `${entry.domain}:${entry.type ?? ''}`
+  const next = [
+    combo,
+    ...current.filter((entry) => keyOf(entry) !== keyOf(combo)),
+  ].slice(0, MAX_RECENT_CLASSIFICATIONS)
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(RECENT_CLASSIFICATIONS_STORAGE_KEY, JSON.stringify(next))
+    } catch {
+      /* storage 비활성·용량 초과 시 무시 */
+    }
+  }
+  return next
+}
+
 

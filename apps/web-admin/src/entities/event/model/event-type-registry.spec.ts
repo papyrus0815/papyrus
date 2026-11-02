@@ -12,6 +12,9 @@ import {
   groupSubtypes,
   isArmedConflictType,
   metricsFor,
+  readRecentClassifications,
+  recordRecentClassification,
+  searchClassifications,
   subtypesForDomain,
   suggestClassificationFromTitle,
   typeFacets,
@@ -215,4 +218,49 @@ describe('suggestClassificationFromTitle — 사건명 기반 분야·세부 추
     expect(suggestClassificationFromTitle('알 수 없는 일')).toBeNull()
   })
 })
+
+describe('subtypesForDomain hasParent 정렬 · searchClassifications · 최근 분류 기록', () => {
+  it('상위 사건이 있을 때(hasParent: true) 단일 하위 사건용 세부를 묶음(전쟁·위기)보다 앞에 둔다', () => {
+    const normal = subtypesForDomain('MILITARY')
+    expect(normal.primary[0]).toBe('WAR')
+
+    const withParent = subtypesForDomain('MILITARY', { hasParent: true })
+    expect(withParent.primary[0]).toBe('BATTLE')
+    expect(withParent.primary[withParent.primary.length - 1]).toBe('WAR')
+  })
+
+  it('searchClassifications — 세부 이름·예시·동의어로 28종 전체에서 검색하고 현재 분야를 우선한다', () => {
+    const landing = searchClassifications('상륙작전', null)
+    expect(landing[0]).toMatchObject({ type: 'BATTLE', domain: 'MILITARY' })
+
+    const impeach = searchClassifications('탄핵', null)
+    expect(impeach[0]).toMatchObject({ type: 'POWER_CHANGE', domain: 'POLITICS' })
+
+    // 법령은 여러 분야의 앞줄에 있으므로 현재 고른 분야(MILITARY)를 유지해 돌려준다
+    const lawInMilitary = searchClassifications('함대법', 'MILITARY')
+    expect(lawInMilitary[0]).toMatchObject({ type: 'LAW_POLICY', domain: 'MILITARY' })
+
+    expect(searchClassifications('   ', null)).toEqual([])
+  })
+
+  it('recordRecentClassification / readRecentClassifications — 중복을 제거하고 최근 순 최대 4개를 유지한다', () => {
+    window.localStorage.clear()
+    expect(readRecentClassifications()).toEqual([])
+
+    recordRecentClassification({ domain: 'MILITARY', type: 'BATTLE' })
+    recordRecentClassification({ domain: 'DIPLOMACY', type: 'TREATY' })
+    recordRecentClassification({ domain: 'MILITARY', type: 'BATTLE' }) // 중복 → 맨 앞으로
+    expect(readRecentClassifications()).toEqual([
+      { domain: 'MILITARY', type: 'BATTLE' },
+      { domain: 'DIPLOMACY', type: 'TREATY' },
+    ])
+
+    recordRecentClassification({ domain: 'POLITICS', type: 'LAW_POLICY' })
+    recordRecentClassification({ domain: 'ECONOMY', type: 'CRISIS' })
+    recordRecentClassification({ domain: 'SCIENCE', type: 'DISCOVERY' })
+    expect(readRecentClassifications()).toHaveLength(4)
+    expect(readRecentClassifications()[0]).toEqual({ domain: 'SCIENCE', type: 'DISCOVERY' })
+  })
+})
+
 

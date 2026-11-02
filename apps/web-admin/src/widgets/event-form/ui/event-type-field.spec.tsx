@@ -144,4 +144,67 @@ describe('EventTypeField', () => {
       type: 'BATTLE',
     })
   })
+
+  it('빠른 검색창에 예시·동의어를 입력하면 숨은 세부까지 찾아 보여 주고 Enter 또는 클릭으로 바로 적용한다', () => {
+    const onApplySuggestion = jest.fn()
+    renderWithTheme(
+      <EventTypeField
+        domain={null}
+        value={null}
+        onApplySuggestion={onApplySuggestion}
+        onChange={jest.fn()}
+      />,
+    )
+
+    const searchInput = screen.getByRole('searchbox', { name: '세부 분야 빠른 검색' })
+    fireEvent.change(searchInput, { target: { value: '탄핵' } })
+
+    expect(screen.getByText('정치 › 즉위·취임·실각')).toBeInTheDocument()
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+
+    expect(onApplySuggestion).toHaveBeenCalledWith({
+      domain: 'POLITICS',
+      type: 'POWER_CHANGE',
+    })
+    expect(searchInput).toHaveValue('')
+  })
+
+  it('최근 사용한 분류(recentCombos)가 있으면 원클릭 칩으로 노출하고 클릭 시 적용한다', () => {
+    const onApplySuggestion = jest.fn()
+    renderWithTheme(
+      <EventTypeField
+        domain={null}
+        value={null}
+        recentCombos={[
+          { domain: 'MILITARY', type: 'BATTLE' },
+          { domain: 'DIPLOMACY', type: 'TREATY' },
+        ]}
+        onApplySuggestion={onApplySuggestion}
+        onChange={jest.fn()}
+      />,
+    )
+
+    const recentBtn = screen.getByRole('button', { name: '군사 › 전투·작전' })
+    fireEvent.click(recentBtn)
+    expect(onApplySuggestion).toHaveBeenCalledWith({
+      domain: 'MILITARY',
+      type: 'BATTLE',
+    })
+  })
+
+  it('상위 사건이 있을 때(hasParent) 하위 사건용 세부(전투·작전)를 묶음(전쟁)보다 첫 번째 탭 정지점에 둔다', () => {
+    renderWithTheme(
+      <EventTypeField
+        domain="MILITARY"
+        value={null}
+        hasParent
+        onChange={jest.fn()}
+      />,
+    )
+
+    const radios = screen.getAllByRole('radio')
+    expect(radios[0]).toHaveAccessibleName('전투·작전')
+    expect(radios[0]).toHaveAttribute('tabindex', '0')
+    expect(screen.getByText(/전쟁·작전·군비/)).toBeInTheDocument()
+  })
 })
