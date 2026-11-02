@@ -125,6 +125,7 @@ export function CommentSection({ ownerType, recordId }: CommentSectionProps) {
           value={text}
           onChange={(changeEvent) => setText(changeEvent.target.value)}
           placeholder={isError ? '댓글을 사용할 수 없습니다' : '댓글을 입력하세요'}
+          aria-label="댓글 입력"
           maxLength={1000}
           rows={2}
           disabled={isError}

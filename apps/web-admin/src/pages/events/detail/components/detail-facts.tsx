@@ -61,6 +61,8 @@ interface DetailFactsProps {
    * 개요 탭에서 '인물 4명'(참여 탭)을 누르면 앵커가 없어 아무 일도 없었다. 없으면 같은 탭 안 스크롤만.
    */
   onJump?: (anchorId: string) => void
+  /** 원어 사건명이 비었을 때의 진입점 — 주면 위치 줄 아래 '+ 원어 사건명'이 선다 */
+  onAddOriginalTitle?: () => void
 }
 
 /** 배역 한 줄에 세우는 나라 수 — 넘치면 '외 N'(참여 행위자 섹션으로). */
@@ -82,6 +84,7 @@ export function DetailFacts({
   onCountryClick,
   foldedCount,
   onJump,
+  onAddOriginalTitle,
 }: DetailFactsProps) {
   const jumpTo = (anchorId: string) => (onJump ? onJump(anchorId) : scrollToAnchor(anchorId))
   /**
@@ -188,6 +191,12 @@ export function DetailFacts({
           label="위치"
         />
       </LocationLine>
+
+      {onAddOriginalTitle && !event.originalTitle?.trim() && (
+        <AddLine type="button" onClick={onAddOriginalTitle}>
+          + 원어 사건명
+        </AddLine>
+      )}
 
       {contemporaryLink}
 
@@ -615,6 +624,31 @@ const JumpButton = styled.button`
  * 빈 섹션 안내 — 예전 장부의 '—' 다섯 칸이 하던 일('여기는 아직 비었다')을 한 줄로.
  * 사실 행보다 한 단 흐리게, 누르면 본문 끝 '더 채울 수 있는 것'으로.
  */
+/** 비어 있는 값의 추가 동작 — 위치 줄의 빈 상태('위치 추가')와 같은 무게 */
+const AddLine = styled.button`
+  align-self: flex-start;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: ${metaText};
+  opacity: 0.85;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+`
+
 const FoldedNote = styled.button`
   align-self: flex-start;
   margin-top: 6px;

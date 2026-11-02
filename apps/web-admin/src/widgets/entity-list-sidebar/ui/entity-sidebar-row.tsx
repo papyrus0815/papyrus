@@ -76,6 +76,15 @@ function EntitySidebarRowBase({
       $active={item.id === selectedId}
       $accentColor={accentColor}
       onClick={() => onSelect(item.id)}
+      aria-keyshortcuts={onTogglePin && !item.noPin ? 'P' : undefined}
+      onKeyDown={(keyEvent) => {
+        /* 고정 버튼은 Tab 순서에서 뺐다(행마다 한 번씩 멈춰 본문까지 148번) — 행에서 P로 고정 */
+        if (!onTogglePin || item.noPin || keyEvent.target !== keyEvent.currentTarget) return
+        if (keyEvent.key !== 'p' && keyEvent.key !== 'P' && keyEvent.key !== 'ㅔ') return
+        if (keyEvent.metaKey || keyEvent.ctrlKey || keyEvent.altKey) return
+        keyEvent.preventDefault()
+        onTogglePin(item.id)
+      }}
     >
       <S.RowTop>
         <S.RowLeft>
@@ -129,6 +138,7 @@ function EntitySidebarRowBase({
             <S.PinButton
               type="button"
               $pinned={pinned}
+              tabIndex={-1}
               aria-label={pinned ? '고정 해제' : '고정'}
               title={pinned ? '고정 해제' : '고정'}
               onClick={(event) => {

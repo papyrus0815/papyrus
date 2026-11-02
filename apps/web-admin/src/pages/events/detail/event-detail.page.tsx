@@ -77,6 +77,8 @@ import {
   filledSections,
   paragraphOutline,
 } from './components/section-outline.lib'
+import { groupByPhase } from './components/collection-development.lib'
+import { compareEventStart } from './components/detail-network.lib'
 import * as S from './styles'
 import { type EventDetail, eventKeys, useEventDetail } from './use-event-detail'
 import { useEventMutation } from './use-event-mutation'
@@ -376,6 +378,10 @@ function EventDetailContent({
   )
   /** 묶음 '전체 글' 안내의 '요약 쓰기'로 연 요약 입력칸 — 빈 요약 자리표시는 안내가 대신 든다 */
   const [summaryOpen, setSummaryOpen] = useState(false)
+  /** 장부 '+ 원어 사건명'으로 연 히어로 입력 */
+  const [originalTitleOpen, setOriginalTitleOpen] = useState(false)
+  /** 휴지통 사건 — 읽기만 한다. 쓰기 안내·댓글은 세우지 않는다(댓글 API는 지운 사건에 404) */
+  const trashedView = Boolean(event.deletedAt)
   useEffect(() => {
     const newlyFilled = FOLDABLE_SECTIONS.filter(
       (section) => filled[section.id] && !pinned.has(section.id),
@@ -409,12 +415,14 @@ function EventDetailContent({
   const folded = FOLDABLE_SECTIONS.filter((section) => !isVisible(section.id))
   const hasSummary = Boolean(event.description?.trim())
   /** 묶음의 '전체 글' 안내 — 배경·여파가 둘 다 비어 있고 아직 하나도 펼치지 않았을 때 */
-  const collectionTextNotice = isCollection && !isVisible('background') && !isVisible('aftermath')
+  const collectionTextNotice =
+    !trashedView && isCollection && !isVisible('background') && !isVisible('aftermath')
   /**
    * 단일 사건의 '아직 글이 없다' 안내 — 요약·배경·전개·여파가 전부 비었고 아직 아무것도 펼치지 않았을 때.
    * 같은 자리·같은 모양(묶음 안내)으로, 쓰기 버튼을 한 곳에 모은다.
    */
   const singleTextNotice =
+    !trashedView &&
     !isCollection &&
     !hasSummary &&
     !summaryOpen &&
@@ -431,18 +439,25 @@ function EventDetailContent({
   const [splitOpen, setSplitOpen] = useState(false)
   /** 사건 종류 안내(머리의 '단일 사건 ?'·'최상위 사건 ?') */
   const [kindGuideOpen, setKindGuideOpen] = useState(false)
+  const navigateTab = useNavigate()
+  /**
+   * 탭 바꾸기 — `setSearchParams`는 #해시를 버린다. 그래서 '#background'로 들어와도 탭을 맞추는 순간 주소에서
+   * 위치가 사라져 새로고침·공유가 개요 맨 위로 갔다. 해시가 가리키는 섹션이 그 탭에 있으면 해시를 남긴다.
+   */
   const setActiveTab = useCallback(
-    (next: EventTabId) =>
-      setSearchParams(
-        (prev) => {
-          const params = new URLSearchParams(prev)
-          if (next === 'overview') params.delete('tab')
-          else params.set('tab', next)
-          return params
-        },
+    (next: EventTabId) => {
+      const params = new URLSearchParams(window.location.search)
+      if (next === 'overview') params.delete('tab')
+      else params.set('tab', next)
+      const hash = window.location.hash.slice(1)
+      const keepHash = hash && tabOfSection(decodeURIComponent(hash), promoteTreaties) === next
+      const search = params.toString()
+      navigateTab(
+        { search: search ? `?${search}` : '', hash: keepHash ? `#${hash}` : '' },
         { replace: true },
-      ),
-    [setSearchParams],
+      )
+    },
+    [navigateTab, promoteTreaties],
   )
   const tabOf = useCallback(
     (sectionId: string) => tabOfSection(sectionId, promoteTreaties),
@@ -555,7 +570,18 @@ function EventDetailContent({
       visibleKey[FOLDABLE_SECTIONS.findIndex((section) => section.id === id)] ===
       '1'
     const withParagraphs = (kind: 'background' | 'narrative' | 'aftermath') => {
-      const children = paragraphOutline(event, kind)
+      /* 묶음의 전개는 하위 사건이 맡는다 — 목차도 화면과 같은 차례로 하위를 가리킨다 */
+      const children =
+        kind === 'narrative' && event.kind === 'COLLECTION'
+          ? groupByPhase(
+              [...(event.childEvents ?? []), ...(event.extraChildren ?? [])].sort((first, second) =>
+                compareEventStart(first.startDate, second.startDate),
+              ),
+              event,
+            ).flatMap((group) =>
+              group.items.map((child) => ({ id: `narrative-${child.id}`, label: child.title })),
+            )
+          : paragraphOutline(event, kind)
       return children.length >= 2 ? children : undefined
     }
 
@@ -598,13 +624,13 @@ function EventDetailContent({
     // 댓글 — 최상위 사건은 댓글 스레드, 하위 사건은 상위 댓글로 유도하는 안내(둘 다 #comments
     // 앵커를 렌더하므로 rail 항목은 항상 노출). 백엔드가 하위 사건엔 댓글을 노출/허용하지
     // 않아(스코프 불일치) 하위에선 스레드 대신 안내만 보여준다.
-    items.push({ id: 'comments', label: '댓글' })
+    if (!event.deletedAt) items.push({ id: 'comments', label: '댓글' })
 
     return items
     // 섹션 구성은 보임 여부·단락 제목·모듈에만 의존한다 — event 전체를 deps에 두면
     // 인라인 patch refetch마다 재계산된다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleKey, event.eventSections, enabledModules, promoteTreaties, showStatehood, showPower, showOrganizations])
+  }, [visibleKey, event, enabledModules, promoteTreaties, showStatehood, showPower, showOrganizations])
 
   /**
    * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
@@ -840,9 +866,14 @@ function EventDetailContent({
               onCountryClick={onCountryClick}
               withSummary={false}
               onShowActors={() => setActiveTab('actors')}
-              onOpenMedia={() => setActiveTab('media')}
+              /* 휴지통 사건은 사진이 없으면 '대표 이미지 추가' 칸을 세우지 않는다 */
+              onOpenMedia={
+                isTrashed && (event.eventImages?.length ?? 0) === 0 ? undefined : () => setActiveTab('media')
+              }
               onOpenKindGuide={() => setKindGuideOpen(true)}
               menu={isTrashed ? undefined : <EventActionsMenu onDelete={() => setDeleteOpen(true)} />}
+              originalTitleOpen={originalTitleOpen}
+              onOriginalTitleClose={() => setOriginalTitleOpen(false)}
             />
 
             <S.TabsArea>
@@ -1059,9 +1090,11 @@ function EventDetailContent({
 
               {/* 이 탭에서 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다
                   (탭이 통째로 비었으면 위의 빈 탭 머리가 같은 버튼을 이미 든다) */}
-              {!activeEmptyTab && <FillInStrip items={foldedInActiveTab} onReveal={revealSection} />}
+              {!activeEmptyTab && !trashedView && (
+                <FillInStrip items={foldedInActiveTab} onReveal={revealSection} />
+              )}
 
-              {activeTab === 'overview' && (
+              {activeTab === 'overview' && !trashedView && (
                 <S.Section id="comments">
                   <S.SectionHeader>
                     <S.SectionTitle>댓글</S.SectionTitle>
@@ -1093,12 +1126,13 @@ function EventDetailContent({
                 onPatch={onPatch}
                 contemporaryLink={<ContemporaryHeadsLink event={event} />}
                 onCountryClick={onCountryClick}
-                foldedCount={folded.length}
+                foldedCount={trashedView ? 0 : folded.length}
                 onJump={jumpToSection}
+                onAddOriginalTitle={trashedView ? undefined : () => setOriginalTitleOpen(true)}
               />
               {/* 목차는 긴 글이 있는 개요에서만 — 다른 탭은 탭 자체가 목차다.
                   두 칸 이하('전개·댓글')면 길을 안내하지 못하고 자리만 차지해 세우지 않는다 */}
-              {activeTab === 'overview' && overviewOutline.length >= 3 && (
+              {activeTab === 'overview' && (overviewOutline.length >= 3 || overviewOutline.some((item) => item.children?.length)) && (
                 <DetailRail sections={overviewOutline} />
               )}
             </S.Aside>

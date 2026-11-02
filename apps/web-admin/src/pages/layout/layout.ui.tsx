@@ -68,6 +68,11 @@ export default function Layout() {
       {/* lazy 라우트 청크를 받는 동안 옛 화면에 멈춰 있는 구간의 표시 */}
       <RouteProgressBar />
 
+      {/* 키보드 첫 정지점 — 레일·목록 사이드바(사건 257행)를 건너 본문으로. 포커스될 때만 보인다 */}
+      <SkipLink href="#main-content" onClick={skipToContent}>
+        본문으로 건너뛰기
+      </SkipLink>
+
       {/* 전역 내비게이션 — 상단 바가 아니라 좌측 레일(디스코드식) */}
       {isAuthenticated && <NavRail />}
 
@@ -75,7 +80,7 @@ export default function Layout() {
         {/* Suspense: Outlet의 페이지들이 lazy-loading 될 때 로딩 UI를 보여줌 */}
         <Suspense fallback={getSkeleton()}>
           {/* 레일이 fixed라 본문을 그 폭만큼 밀어준다. 로그인 전에는 레일이 없어 0. */}
-          <ContentArea $railed={isAuthenticated}>
+          <ContentArea id="app-content" tabIndex={-1} $railed={isAuthenticated}>
             <Outlet />
           </ContentArea>
         </Suspense>
@@ -120,4 +125,34 @@ function BgmPlaylistHost() {
 const ContentArea = styled.div<{ $railed: boolean }>`
   padding-left: ${({ $railed }) => ($railed ? 'var(--nav-rail-width, 72px)' : '0')};
   min-height: 100vh;
+  outline: none;
+`
+
+/** 목록 사이드바가 있는 지면은 상세 칸으로, 없으면 콘텐츠 영역 전체로 포커스를 옮긴다 */
+function skipToContent(clickEvent: React.MouseEvent<HTMLAnchorElement>) {
+  clickEvent.preventDefault()
+  const target = document.getElementById('main-content') ?? document.getElementById('app-content')
+  target?.focus({ preventScroll: false })
+}
+
+const SkipLink = styled.a`
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 10000;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  transform: translateY(-160%);
+  transition: transform 0.12s;
+
+  &:focus-visible {
+    transform: none;
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
 `

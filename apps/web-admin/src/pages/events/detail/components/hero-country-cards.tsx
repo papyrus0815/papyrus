@@ -23,6 +23,7 @@ import {
 } from '@/entities/evidence/lib/format-observation'
 import { eventCountryRoleLabel } from '@/entities/event/model/country-participant'
 import { type Observation } from '@/shared/api/evidence'
+import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
@@ -75,6 +76,13 @@ export function HeroCountryCards({
   onShowActors?: () => void
 }) {
   const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
+  /**
+   * 휴대폰 폭 — 진영마다 카드가 한 줄씩 쌓여 1차대전은 진영 카드만 한 화면이었고 탭이 1,058px까지 밀렸다.
+   * 진영을 나란히 두 열로 세우고 진영당 2장(나머지는 '+N개국')으로 줄인다.
+   */
+  const narrow = useMediaQuery('(max-width: 639px)')
+  const perSide = narrow ? 2 : CARDS_PER_SIDE
+  const flatCount = narrow ? 4 : CARDS_FLAT
 
   const countries = useMemo<CardCountry[]>(
     () => [
@@ -201,7 +209,7 @@ export function HeroCountryCards({
   )
 
   if (!groups) {
-    const shown = countries.slice(0, CARDS_FLAT)
+    const shown = countries.slice(0, flatCount)
     return (
       <Wrap aria-label="참여국">
         {leadMetric && <Legend>카드 수치 · {leadMetric.name}</Legend>}
@@ -220,7 +228,7 @@ export function HeroCountryCards({
       <Columns>
         {groups.map((group) => {
           const side = group.sideId ? sideById.get(group.sideId) : null
-          const shown = group.items.slice(0, CARDS_PER_SIDE)
+          const shown = group.items.slice(0, perSide)
           return (
             <Column key={group.sideId ?? 'rest'} $rest={!side}>
               <ColumnHead $color={side?.color ?? null}>
@@ -283,6 +291,12 @@ const Columns = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 12px;
+
+  /* 휴대폰 폭 — 진영을 나란히(한 열씩 쌓으면 진영 카드만 한 화면) */
+  @media (max-width: 639px) {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+  }
 `
 
 const Column = styled.div<{ $rest: boolean }>`
@@ -351,6 +365,10 @@ const FlatGrid = styled.div`
   align-items: start;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
   gap: 8px;
+
+  @media (max-width: 639px) {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
 `
 
 /** 국가 카드 — 누르면 국가 정보 모달(새 탭 열기는 링크 그대로) */

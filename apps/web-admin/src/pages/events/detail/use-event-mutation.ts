@@ -89,6 +89,11 @@ export function useEventMutation(eventId: string) {
 
   return useMutation({
     mutationKey,
+    /**
+     * 같은 사건의 저장은 한 줄로 — 동시에 보내면 늦게 도착한 이전 요청이 단락 순서·내용을 되돌리고,
+     * 그사이 추가한 단락을 지울 수 있다(단락·참여국은 보낸 목록 기준으로 맞춘다).
+     */
+    scope: { id: `event-detail-save-${eventId}` },
     mutationFn: async (patch: UpdateEventDto) => {
       return updateEvent(eventId, patch)
     },

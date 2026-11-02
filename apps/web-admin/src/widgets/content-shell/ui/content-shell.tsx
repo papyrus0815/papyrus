@@ -116,7 +116,10 @@ export function ContentShell({
             $listCollapsed={collapsed}
             $sidebarExtraWidth={sidebarExtraWidth}
           >
-            <S.DetailPaneScrollBody>{resolvedRight}</S.DetailPaneScrollBody>
+            {/* '본문으로 건너뛰기'(레이아웃)가 포커스를 옮기는 자리 */}
+            <S.DetailPaneScrollBody id="main-content" tabIndex={-1} style={{ outline: 'none' }}>
+              {resolvedRight}
+            </S.DetailPaneScrollBody>
           </S.DetailPane>
         </S.MainGrid>
       )}

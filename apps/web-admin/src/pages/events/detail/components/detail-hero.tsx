@@ -62,6 +62,9 @@ interface DetailHeroProps {
   onOpenKindGuide?: () => void
   /** 윗줄 맨 끝 — 사건 단위 동작 메뉴(⋯). 휴지통에 있는 사건이면 비운다 */
   menu?: ReactNode
+  /** 원어 사건명 입력을 연다(장부의 '+ 원어 사건명') — 비어 있으면 평소엔 자리를 두지 않는다 */
+  originalTitleOpen?: boolean
+  onOriginalTitleClose?: () => void
 }
 
 /**
@@ -100,6 +103,8 @@ export function DetailHero({
   onOpenMedia,
   onOpenKindGuide,
   menu,
+  originalTitleOpen = false,
+  onOriginalTitleClose,
 }: DetailHeroProps) {
   const prefetchEvent = usePrefetchEventDetail()
   const category = eventDomainDef(event.domain)
@@ -229,16 +234,29 @@ export function DetailHero({
           hint="Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소"
         />
       </TitleHost>
-      {/* 원어 사건명 — 제목 바로 밑 한 줄. 비어 있으면 자리만(편집 진입점, 흐리게) */}
-      <OriginalTitleHost data-filled={event.originalTitle?.trim() ? 'true' : undefined}>
-        <InlineText
-          value={event.originalTitle ?? ''}
-          onSave={(next) => onPatch({ originalTitle: next.trim() } as UpdateEventDto)}
-          placeholder="원어 사건명"
-          label="원어 사건명"
-          as="span"
-        />
-      </OriginalTitleHost>
+      {/* 원어 사건명 — 제목 바로 밑 한 줄. 채운 사건이 없어(0/506) 빈 자리를 늘 세우면 모든 사건에
+          흐린 '원어 사건명'이 서 있었다 — 비어 있으면 장부의 '+ 원어 사건명'으로 연다 */}
+      {(event.originalTitle?.trim() || originalTitleOpen) && (
+        <OriginalTitleHost
+          data-filled={event.originalTitle?.trim() ? 'true' : undefined}
+          onBlur={(blurEvent) => {
+            if (blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) return
+            onOriginalTitleClose?.()
+          }}
+        >
+          <InlineText
+            value={event.originalTitle ?? ''}
+            onSave={(next) => {
+              onPatch({ originalTitle: next.trim() } as UpdateEventDto)
+              onOriginalTitleClose?.()
+            }}
+            placeholder="원어 사건명"
+            label="원어 사건명"
+            as="span"
+            autoEdit={originalTitleOpen && !event.originalTitle?.trim()}
+          />
+        </OriginalTitleHost>
+      )}
 
       {/* 카테고리 톤 밴드 — 제목과 메타 사이 시각 앵커. 카테고리 색이 옅게
           좌→우로 흩어지며 페이지 정체성을 한 줄로 표시(밑줄 X, 별도 룰). */}
