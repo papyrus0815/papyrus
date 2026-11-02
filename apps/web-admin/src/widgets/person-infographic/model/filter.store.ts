@@ -120,6 +120,7 @@ interface PersonInfographicFilterState {
   /** 기록 비교 — 인물 추가(중복·정원 초과는 무시) */
   addRecordPersonId: (id: string) => void
   removeRecordPersonId: (id: string) => void
+  clearRecordPersonIds: () => void
   /** 기록 비교 기간 설정 — 둘 다 null이면 전 기간 */
   setRecordYearRange: (fromYear: number | null, toYear: number | null) => void
 }
@@ -203,6 +204,7 @@ export const usePersonInfographicFilterStore =
               (personId) => personId !== id,
             ),
           })),
+        clearRecordPersonIds: () => set({ recordPersonIds: [] }),
         setRecordYearRange: (fromYear, toYear) =>
           set({ recordFromYear: fromYear, recordToYear: toYear }),
       }),

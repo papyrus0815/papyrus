@@ -11,11 +11,20 @@ import {
 } from './cabinets-section.helpers'
 
 describe('territoryKeyFromHead', () => {
-  it('역사국가 ID가 있으면 h: 접두어', () => {
+  it('현대국가와 역사국가가 모두 있으면 현대국가를 우선한다', () => {
     expect(
       territoryKeyFromHead({
         historicalCountryId: 'abc-1',
         countryId: 'modern',
+      }),
+    ).toBe('c:modern')
+  })
+
+  it('역사국가만 있으면 h: 접두어', () => {
+    expect(
+      territoryKeyFromHead({
+        historicalCountryId: 'abc-1',
+        countryId: null,
       }),
     ).toBe('h:abc-1')
   })
@@ -31,7 +40,7 @@ describe('territoryKeyFromHead', () => {
 })
 
 describe('territoryKeyFromCabinet', () => {
-  it('행정부명이 있으면 base에 덧붙인다', () => {
+  it('행정부명이 달라도 같은 국가면 같은 키다', () => {
     expect(
       territoryKeyFromCabinet({
         name: ' 제1기 ',
@@ -40,7 +49,7 @@ describe('territoryKeyFromCabinet', () => {
           historicalCountryId: null,
         },
       }),
-    ).toBe('c:c1|name:제1기')
+    ).toBe('c:c1')
   })
 })
 

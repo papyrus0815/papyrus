@@ -271,23 +271,30 @@ export function TenureAchievements({
       notify.error('제목을 입력하세요.')
       return
     }
-    const emptyAs = editingId ? null : undefined
-    const baseDto = {
-      title: title.trim(),
-      description: description.trim() || emptyAs,
-      startDate: startDate || emptyAs,
-      endDate: endDate || emptyAs,
-      showOnEventsPage,
-    }
+    const baseDto = { title: title.trim(), showOnEventsPage }
+    const trimmedDescription = description.trim()
     setSubmitting(true)
     try {
       if (editingId) {
         // 수정은 eventId를 항상 실어 보냄 — 선택 없음(null)이 연결 해제 계약(키 없음=유지)
-        const dto = { ...baseDto, eventId: linkedEvent?.id ?? null }
+        // 빈 칸은 null로 보내 기존 값을 비운다(키 없음=유지)
+        const dto = {
+          ...baseDto,
+          description: trimmedDescription || null,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          eventId: linkedEvent?.id ?? null,
+        }
         await personCareerApi.updateTenureAchievement(hostId, editingId, dto)
         notify.success('업적이 수정되었습니다.')
       } else {
-        const dto = { ...baseDto, eventId: linkedEvent?.id }
+        const dto = {
+          ...baseDto,
+          description: trimmedDescription || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          eventId: linkedEvent?.id,
+        }
         await personCareerApi.createTenureAchievement(hostId, dto)
         notify.success('업적·한일이 등록되었습니다.')
       }

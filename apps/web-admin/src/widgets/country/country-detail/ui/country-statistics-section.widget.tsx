@@ -109,8 +109,9 @@ export function CountryStatisticsSection({
   return (
     <Wrap>
       <SectionTabHeader
+        variant="plain"
         title="경제·통계"
-        subtitle={`${countryName} · ${activeMeta.desc}`}
+        description={`${countryName} · ${activeMeta.desc}`}
       />
 
       <UnderlineTabNav aria-label="경제·통계 하위 탭">

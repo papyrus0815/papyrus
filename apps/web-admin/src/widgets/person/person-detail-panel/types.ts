@@ -224,6 +224,7 @@ export interface PersonDetailData {
     modernCountryId?: string | null
   } | null
   historicalCountryId?: string | null
+  historicalCountry?: { id: string; name: string | null } | null
   dynasty?: { id: string; name: string } | null
   /** 부모 FK 스칼라 — 형제 친/이복/이부 판별(classifySiblingKinship)의 anchor 입력 */
   fatherId?: string | null

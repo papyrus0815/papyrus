@@ -202,7 +202,7 @@ describe('TenureRegisterPanel 사건등록 모달(EventRegisterModal) 레이아�
 
     // 사망일 원클릭 채우기 클릭 → 퇴임일 채움 및 퇴임 사유 셀렉트에 DEATH_IN_OFFICE 자동 선택
     fireEvent.click(screen.getByRole('button', { name: /사망일\(1598\.12\.16\)을 퇴임일로 채우기/ }))
-    expect(screen.getByLabelText('퇴임 사유')).toHaveValue('DEATH_IN_OFFICE')
+    expect(screen.getByLabelText('퇴임 사유')).toHaveAttribute('data-value', 'DEATH_IN_OFFICE')
   })
 
   it('직책 선택 버튼을 누르면 바로 아래에 검색 가능한 드롭다운이 열리고 검색어로 직책을 고를 수 있다', async () => {

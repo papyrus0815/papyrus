@@ -2840,7 +2840,7 @@ export const ActivityGroupCount = styled.span`
 `
 
 /** 사건 상세 FillInStrip과 동일한 '더 채울 수 있는 이력' 하단 점선 칩 스트립 */
-export const CareerFillInStrip = styled.section`
+export const CareerFillInStrip = styled.section<{ $isFirst?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2850,6 +2850,7 @@ export const CareerFillInStrip = styled.section`
       theme.mode === 'dark'
         ? 'rgba(255, 255, 255, 0.08)'
         : 'rgba(15, 23, 42, 0.08)'};
+  ${({ $isFirst }) => $isFirst && 'padding-top: 4px; border-top: none;'}
 
   &:first-child {
     padding-top: 4px;

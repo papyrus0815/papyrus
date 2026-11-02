@@ -312,8 +312,8 @@ function hashStringFnv1a(s: string): number {
 }
 
 /**
- * 행정부 1건 기준 키 — 수반 재임 소속 + (있으면) 행정부 명칭.
- * 역사국가 ID가 비어 있고 현대국가만 같을 때도, 행정부 이름이 다르면 색이 갈라짐.
+ * 행정부 1건 기준 키 — 수반 재임 소속만 본다.
+ * 같은 국가의 행정부는 이름이 달라도 같은 색이다.
  */
 export function territoryKeyFromCabinet(
   cabinet:

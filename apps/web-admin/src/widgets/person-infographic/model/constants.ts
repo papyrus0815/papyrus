@@ -7,6 +7,8 @@ export const ERAS = [
   { key: 'contemp', lbl: '당대', from: 2000, to: 2100, color: '#8b5cf6' },
 ] as const
 
+export type EraKey = (typeof ERAS)[number]['key']
+
 /** 생몰·활동시기·재임연도가 모두 미상인 인물의 시대 폴백 */
 export const UNKNOWN_ERA = {
   key: 'unknown',

@@ -132,7 +132,7 @@ export function CountryDetailDashboard({
 
   const latestDemographicPop = useMemo(() => {
     const sorted = [...demographicIndicators]
-      .filter((row) => row.population != null && Number.isFinite(row.population))
+      .filter((row) => parsePopulation(row.population) != null)
       .sort((first, second) => second.year - first.year)
     return sorted[0] ?? null
   }, [demographicIndicators])
@@ -154,7 +154,7 @@ export function CountryDetailDashboard({
   }, [economicIndicators])
 
   const directPopNum = parsePopulation(country.population)
-  const popNum = directPopNum ?? latestDemographicPop?.population ?? null
+  const popNum = directPopNum ?? parsePopulation(latestDemographicPop?.population)
   const popYearNote =
     directPopNum == null && latestDemographicPop
       ? `${latestDemographicPop.year}년 지표`

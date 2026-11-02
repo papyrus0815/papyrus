@@ -7,6 +7,7 @@ import {
   getEntityKindLabel,
   getStateTypeLabel,
 } from '@/entities/historical-country/lib/utils'
+import type { HistoricalEntityKind } from '@/entities/historical-country/model/constants'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import {
   type CountryPeriodShape,
@@ -196,7 +197,7 @@ function resolveStateBadgeLabel(node: LineageNode): string | null {
     if (label && label !== '미분류') return label
   }
   if (node.entityKind && node.entityKind !== 'STATE') {
-    return getEntityKindLabel(node.entityKind)
+    return getEntityKindLabel(node.entityKind as HistoricalEntityKind)
   }
   return null
 }

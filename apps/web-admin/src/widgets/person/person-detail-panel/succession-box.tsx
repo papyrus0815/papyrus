@@ -301,8 +301,8 @@ const ChipGlyph = styled.span<{ $category: PositionCategory }>`
   line-height: 1;
   background: ${({ theme, $category }) =>
     theme.mode === 'dark'
-      ? CATEGORY_TOKENS[$category].chip.dark.bg
-      : CATEGORY_TOKENS[$category].chip.light.bg};
+      ? CATEGORY_TOKENS[$category].chip.dark.background
+      : CATEGORY_TOKENS[$category].chip.light.background};
   color: ${({ theme, $category }) =>
     theme.mode === 'dark'
       ? CATEGORY_TOKENS[$category].chip.dark.color

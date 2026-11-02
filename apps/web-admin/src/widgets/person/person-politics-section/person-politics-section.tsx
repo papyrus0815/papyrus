@@ -214,8 +214,8 @@ export function PersonPoliticsSection({
   const memberships = useMemo(() => {
     const raw = membershipsProp ?? []
     return raw.slice().sort((a, b) => {
-      const ta = a.startDate ? Date.parse(a.startDate) : Number.POSITIVE_INFINITY
-      const tb = b.startDate ? Date.parse(b.startDate) : Number.POSITIVE_INFINITY
+      const ta = a.startDate ? new Date(a.startDate).getTime() : Number.POSITIVE_INFINITY
+      const tb = b.startDate ? new Date(b.startDate).getTime() : Number.POSITIVE_INFINITY
       const sa = Number.isFinite(ta) ? ta : Number.POSITIVE_INFINITY
       const sb = Number.isFinite(tb) ? tb : Number.POSITIVE_INFINITY
       return sa - sb
@@ -758,11 +758,7 @@ export function PersonPoliticsSection({
           <OverviewSubCount>{candidacySummary.length}</OverviewSubCount>
         </OverviewSubTitle>
       ) : (
-        <SubTitle
-          style={{
-            marginTop: variant === 'overview' && memberships.length === 0 ? 0 : 22,
-          }}
-        >
+        <SubTitle style={{ marginTop: 22 }}>
           선거 후보 이력
         </SubTitle>
       )}
