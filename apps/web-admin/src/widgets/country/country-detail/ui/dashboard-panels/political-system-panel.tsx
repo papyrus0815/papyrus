@@ -69,22 +69,61 @@ function stripDuplicateHouseLabel(label: string, name?: string | null): string |
   return trimmed
 }
 
-function buildLegislatureSummary(system: PoliticalSystem): string | null {
-  if (system.legislatureType === 'NONE') return '의회 없음'
-  const houses: string[] = []
+interface SpecItem {
+  key: string
+  label: string
+  value: string
+  note?: string
+}
+
+function buildSpecs(system: PoliticalSystem): SpecItem[] {
+  const specs: SpecItem[] = []
+
+  const headOfState = headOfStateTitleOf(system)
+  if (headOfState) {
+    specs.push({
+      key: 'hos',
+      label: '국가원수',
+      value: headOfState,
+      note: system.headOfStateHasPower === false ? '상징' : '실권',
+    })
+  }
+
+  const headOfGovernment = headOfGovernmentTitleOf(system)
+  const isUnifiedExecutive =
+    system.governmentForm === 'PRESIDENTIAL' ||
+    system.governmentForm === 'ABSOLUTE_MONARCHY'
+  if (headOfGovernment) {
+    specs.push({
+      key: 'hog',
+      label: '정부수반',
+      value: headOfGovernment,
+      note: system.headOfGovernmentHasPower === false ? '상징' : '실권',
+    })
+  } else if (isUnifiedExecutive && headOfState) {
+    specs.push({
+      key: 'hog',
+      label: '정부수반',
+      value: `${headOfState} 겸임`,
+    })
+  }
 
   if (system.lowerHouseName || system.lowerHouseSeats != null) {
     const label = primaryHouseLabel(system.legislatureType ?? null)
     const distinctName = stripDuplicateHouseLabel(label, system.lowerHouseName)
-    const text = [
-      distinctName ?? label,
-      system.lowerHouseSeats != null
-        ? `${system.lowerHouseSeats.toLocaleString()}석`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(' ')
-    if (text) houses.push(text)
+    specs.push({
+      key: 'lower',
+      label,
+      value:
+        [
+          distinctName,
+          system.lowerHouseSeats != null
+            ? `${system.lowerHouseSeats.toLocaleString()}석`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || label,
+    })
   }
 
   if (
@@ -93,22 +132,38 @@ function buildLegislatureSummary(system: PoliticalSystem): string | null {
   ) {
     const label = '상원'
     const distinctName = stripDuplicateHouseLabel(label, system.upperHouseName)
-    const text = [
-      distinctName ?? label,
-      system.upperHouseSeats != null
-        ? `${system.upperHouseSeats.toLocaleString()}석`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(' ')
-    if (text) houses.push(text)
+    specs.push({
+      key: 'upper',
+      label,
+      value:
+        [
+          distinctName,
+          system.upperHouseSeats != null
+            ? `${system.upperHouseSeats.toLocaleString()}석`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || label,
+    })
   }
 
-  if (houses.length > 0) return houses.join(' · ')
-  if (system.legislatureType) {
-    return LEGISLATURE_TYPE_LABEL[system.legislatureType]
+  if (system.stateStructure) {
+    specs.push({
+      key: 'structure',
+      label: '국가 구조',
+      value: STATE_STRUCTURE_LABEL[system.stateStructure],
+    })
   }
-  return null
+
+  if (system.partySystem) {
+    specs.push({
+      key: 'party',
+      label: '정당제',
+      value: PARTY_SYSTEM_LABEL[system.partySystem],
+    })
+  }
+
+  return specs
 }
 
 export function PoliticalSystemPanel({
@@ -157,16 +212,7 @@ export function PoliticalSystemPanel({
       ].filter(Boolean)
     : []
 
-  const headOfState = activeSystem ? headOfStateTitleOf(activeSystem) : null
-  const headOfGovernment = activeSystem
-    ? headOfGovernmentTitleOf(activeSystem)
-    : null
-  const isUnifiedExecutive =
-    activeSystem?.governmentForm === 'PRESIDENTIAL' ||
-    activeSystem?.governmentForm === 'ABSOLUTE_MONARCHY'
-  const legislatureSummary = activeSystem
-    ? buildLegislatureSummary(activeSystem)
-    : null
+  const specs = activeSystem ? buildSpecs(activeSystem) : []
 
   return (
     <S.Section>
@@ -206,77 +252,20 @@ export function PoliticalSystemPanel({
       {query.isLoading ? (
         <ChartSkeleton variant="text" lines={2} />
       ) : !activeSystem ? (
-        <EmptyPolityCard>
-          <EmptyPolityTop>
-            <EmptyPolityHeaderText>
-              <EmptyPolityBadge>헌법 · 통치 체제</EmptyPolityBadge>
-              <EmptyPolityTitle>아직 등록된 정체가 없습니다</EmptyPolityTitle>
-              <EmptyPresetRow role="group" aria-label="정체 빠른 선택">
-                <EmptyPresetHint>빠른 등록</EmptyPresetHint>
-                {QUICK_POLITY_PRESETS.map((formKey) => (
-                  <EmptyPresetChip
-                    key={formKey}
-                    type="button"
-                    onClick={() => openCreate(formKey)}
-                  >
-                    + {GOVERNMENT_FORM_LABEL[formKey]}
-                  </EmptyPresetChip>
-                ))}
-              </EmptyPresetRow>
-            </EmptyPolityHeaderText>
-            <EmptyPolityAction type="button" onClick={() => openCreate(null)}>
-              + 정체 등록
-            </EmptyPolityAction>
-          </EmptyPolityTop>
-
-          <PillarGrid>
-            <PillarCard $empty>
-              <PillarHeader>
-                <PillarLabel>👑 국가원수</PillarLabel>
-                <PillarBadge $muted>미지정</PillarBadge>
-              </PillarHeader>
-              <PillarValue $muted>대통령 · 국왕 · 황제 등</PillarValue>
-            </PillarCard>
-            <PillarCard $empty>
-              <PillarHeader>
-                <PillarLabel>🏛️ 정부수반</PillarLabel>
-                <PillarBadge $muted>미지정</PillarBadge>
-              </PillarHeader>
-              <PillarValue $muted>총리 · 수상 · 국가원수 겸임</PillarValue>
-            </PillarCard>
-            <PillarCard $empty>
-              <PillarHeader>
-                <PillarLabel>⚖️ 입법부 · 의회</PillarLabel>
-                <PillarBadge $muted>미지정</PillarBadge>
-              </PillarHeader>
-              <PillarValue $muted>단원제 · 양원제 · 의석수</PillarValue>
-            </PillarCard>
-          </PillarGrid>
-        </EmptyPolityCard>
+        <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
+          <EmptyPresetHint>체제 선택</EmptyPresetHint>
+          {QUICK_POLITY_PRESETS.map((formKey) => (
+            <EmptyPresetChip
+              key={formKey}
+              type="button"
+              onClick={() => openCreate(formKey)}
+            >
+              + {GOVERNMENT_FORM_LABEL[formKey]}
+            </EmptyPresetChip>
+          ))}
+        </EmptyPresetRow>
       ) : (
-        <Card>
-          {reverseChronological.length > 1 && (
-            <EraTabsRow role="tablist" aria-label="시대별 정체 선택">
-              {reverseChronological.map((system) => {
-                const isSelected = system.id === activeSystem.id
-                return (
-                  <EraTabPill
-                    key={system.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isSelected}
-                    $active={isSelected}
-                    onClick={() => setSelectedSystemId(system.id)}
-                  >
-                    <EraTabPeriod>{formatPeriod(system)}</EraTabPeriod>
-                    <EraTabName>{system.name || summarize(system)}</EraTabName>
-                    {system.isCurrent && <EraTabNow>현행</EraTabNow>}
-                  </EraTabPill>
-                )
-              })}
-            </EraTabsRow>
-          )}
-
+        <OpenBody>
           <Head>
             <HeadLeft>
               <Headline>
@@ -306,91 +295,47 @@ export function PoliticalSystemPanel({
               </Meta>
             </HeadLeft>
 
-            {(activeSystem.stateStructure || activeSystem.partySystem) && (
-              <StructureTags>
-                {activeSystem.stateStructure && (
-                  <StructureTag>
-                    {STATE_STRUCTURE_LABEL[activeSystem.stateStructure]}
-                  </StructureTag>
-                )}
-                {activeSystem.partySystem && (
-                  <StructureTag>
-                    {PARTY_SYSTEM_LABEL[activeSystem.partySystem]}
-                  </StructureTag>
-                )}
-              </StructureTags>
+            {reverseChronological.length > 1 && (
+              <EraTabsRow role="tablist" aria-label="시대별 정체 선택">
+                {reverseChronological.map((system) => {
+                  const isSelected = system.id === activeSystem.id
+                  return (
+                    <EraTabPill
+                      key={system.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      $active={isSelected}
+                      onClick={() => setSelectedSystemId(system.id)}
+                    >
+                      <EraTabPeriod>{formatPeriod(system)}</EraTabPeriod>
+                      <EraTabName>
+                        {system.name || summarize(system)}
+                      </EraTabName>
+                      {system.isCurrent && <EraTabNow>현행</EraTabNow>}
+                    </EraTabPill>
+                  )
+                })}
+              </EraTabsRow>
             )}
           </Head>
 
-          <PillarGrid>
-            <PillarCard>
-              <PillarHeader>
-                <PillarLabel>👑 국가원수</PillarLabel>
-                {headOfState && (
-                  <PillarBadge
-                    $tone={
-                      activeSystem.headOfStateHasPower === false
-                        ? 'symbolic'
-                        : 'power'
-                    }
-                  >
-                    {activeSystem.headOfStateHasPower === false
-                      ? '상징'
-                      : '실권'}
-                  </PillarBadge>
-                )}
-              </PillarHeader>
-              <PillarValue $muted={!headOfState}>
-                {headOfState ?? '미지정'}
-              </PillarValue>
-            </PillarCard>
-
-            <PillarCard>
-              <PillarHeader>
-                <PillarLabel>🏛️ 정부수반</PillarLabel>
-                {headOfGovernment ? (
-                  <PillarBadge
-                    $tone={
-                      activeSystem.headOfGovernmentHasPower === false
-                        ? 'symbolic'
-                        : 'power'
-                    }
-                  >
-                    {activeSystem.headOfGovernmentHasPower === false
-                      ? '상징'
-                      : '실권'}
-                  </PillarBadge>
-                ) : isUnifiedExecutive && headOfState ? (
-                  <PillarBadge $tone="power">일원집정</PillarBadge>
-                ) : null}
-              </PillarHeader>
-              <PillarValue
-                $muted={!headOfGovernment && !(isUnifiedExecutive && headOfState)}
-              >
-                {headOfGovernment ??
-                  (isUnifiedExecutive && headOfState
-                    ? `${headOfState} 겸임`
-                    : '미지정')}
-              </PillarValue>
-            </PillarCard>
-
-            <PillarCard>
-              <PillarHeader>
-                <PillarLabel>⚖️ 입법부 · 의회</PillarLabel>
-                {activeSystem.legislatureType && (
-                  <PillarBadge $tone="legislature">
-                    {LEGISLATURE_TYPE_LABEL[activeSystem.legislatureType]}
-                  </PillarBadge>
-                )}
-              </PillarHeader>
-              <PillarValue $muted={!legislatureSummary}>
-                {legislatureSummary ?? '미지정'}
-              </PillarValue>
-            </PillarCard>
-          </PillarGrid>
+          {specs.length > 0 && (
+            <SpecsRow>
+              {specs.map((spec) => (
+                <SpecCell key={spec.key}>
+                  <SpecKey>{spec.label}</SpecKey>
+                  <SpecValue>
+                    {spec.value}
+                    {spec.note && <SpecNote>{spec.note}</SpecNote>}
+                  </SpecValue>
+                </SpecCell>
+              ))}
+            </SpecsRow>
+          )}
 
           {activeSystem.notes && <NotesRow>{activeSystem.notes}</NotesRow>}
-        </Card>
+        </OpenBody>
       )}
 
       <PoliticalSystemFormModal
@@ -421,77 +366,32 @@ export function PoliticalSystemPanel({
   )
 }
 
-
-const Card = styled.div`
+const OpenBody = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 15px 18px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 14px;
-  background: ${({ theme }) => theme.colors.background.primary};
-`
-
-const EmptyPolityCard = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
-  border-radius: 14px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(248, 250, 252, 0.7)'};
-`
-
-const EmptyPolityTop = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-`
-
-const EmptyPolityHeaderText = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-`
-
-const EmptyPolityBadge = styled.span`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #6366f1;
-`
-
-const EmptyPolityTitle = styled.span`
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const EmptyPresetRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 3px;
+  gap: 8px;
 `
 
 const EmptyPresetHint = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-right: 2px;
+  margin-right: 4px;
 `
 
 const EmptyPresetChip = styled.button`
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
-  font-size: 11.5px;
+  background: transparent;
+  font-size: 12px;
   font-weight: 700;
   font-family: inherit;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -508,39 +408,18 @@ const EmptyPresetChip = styled.button`
   }
 `
 
-const EmptyPolityAction = styled.button`
-  flex-shrink: 0;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: none;
-  font-size: 12.5px;
-  font-weight: 700;
-  font-family: inherit;
-  color: #fff;
-  background: #6366f1;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-
-  &:hover {
-    opacity: 0.92;
-  }
-`
-
 const EraTabsRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const EraTabPill = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 11px;
+  padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid
     ${({ $active, theme }) =>
@@ -594,7 +473,7 @@ const Head = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 14px;
+  gap: 8px 16px;
 `
 
 const HeadLeft = styled.div`
@@ -605,24 +484,7 @@ const HeadLeft = styled.div`
   min-width: 0;
 `
 
-const StructureTags = styled.div`
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-`
-
-const StructureTag = styled.span`
-  padding: 3px 9px;
-  border-radius: 8px;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
-`
-
-/* 체제 이름이 이 카드의 주인공이다 — 기간·별칭보다 확실히 크게 */
+/* 체제 이름이 주인공이다 — 기간·별칭보다 확실히 크게 */
 const Headline = styled.p`
   margin: 0;
   display: flex;
@@ -682,84 +544,53 @@ const PastChip = styled.span`
   background: rgba(245, 158, 11, 0.16);
 `
 
-const PillarGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+const SpecsRow = styled.dl`
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 6px;
+`
 
-  @media (max-width: 780px) {
-    grid-template-columns: 1fr;
+const SpecCell = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding-right: 16px;
+  margin-right: 16px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:last-child {
+    padding-right: 0;
+    margin-right: 0;
+    border-right: none;
   }
 `
 
-const PillarCard = styled.div<{ $empty?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 11px 13px;
-  border-radius: 11px;
-  border: 1px ${({ $empty }) => ($empty ? 'dashed' : 'solid')}
-    ${({ theme }) => theme.colors.border.light};
-  background: ${({ $empty, theme }) =>
-    $empty
-      ? theme.colors.background.primary
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.03)'
-        : 'rgba(248, 250, 252, 0.85)'};
-`
-
-const PillarHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-`
-
-const PillarLabel = styled.span`
-  font-size: 11.5px;
+const SpecKey = styled.dt`
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const PillarBadge = styled.span<{
-  $tone?: 'power' | 'symbolic' | 'legislature'
-  $muted?: boolean
-}>`
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 10.5px;
+const SpecValue = styled.dd`
+  margin: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: ${({ $tone, $muted, theme }) => {
-    if ($muted || $tone === 'symbolic') return theme.colors.text.tertiary
-    if ($tone === 'legislature') {
-      return theme.mode === 'dark' ? '#7dd3fc' : '#0369a1'
-    }
-    return theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'
-  }};
-  background: ${({ $tone, $muted, theme }) => {
-    if ($muted || $tone === 'symbolic') {
-      return theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(15, 23, 42, 0.06)'
-    }
-    if ($tone === 'legislature') return 'rgba(14, 165, 233, 0.14)'
-    return 'rgba(99, 102, 241, 0.14)'
-  }};
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const PillarValue = styled.div<{ $muted?: boolean }>`
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: ${({ $muted, theme }) =>
-    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
-  overflow-wrap: anywhere;
+const SpecNote = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const NotesRow = styled.p`
   margin: 0;
-  padding-top: 10px;
-  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
   font-size: 12.5px;
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.secondary};

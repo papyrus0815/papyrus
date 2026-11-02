@@ -220,8 +220,8 @@ export function HistoricalRulerTimeline({
           const counterpartSummary =
             counterparts.length > 0
               ? ruler.axis === 'HEAD_OF_GOVERNMENT'
-                ? `👑 ${counterparts.map((c) => c.personName).join(' · ')} 재위기`
-                : `🏛️ 정부수반 ${counterparts.slice(0, 2).map((c) => c.personName).join('·')}${counterparts.length > 2 ? ` 외 ${counterparts.length - 2}명` : ''}`
+                ? `${counterparts.map((c) => c.personName).join(' · ')} 재위기`
+                : `정부수반 ${counterparts.slice(0, 2).map((c) => c.personName).join('·')}${counterparts.length > 2 ? ` 외 ${counterparts.length - 2}명` : ''}`
               : null
 
           return (

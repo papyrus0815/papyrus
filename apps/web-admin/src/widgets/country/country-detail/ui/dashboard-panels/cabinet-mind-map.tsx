@@ -293,7 +293,7 @@ export function CabinetMindMap({
                             <SovereignPairBadge
                               $monarch={Boolean(cp.isMonarchical)}
                             >
-                              {cp.isMonarchical ? '👑 재위 군주' : '국가원수·수반'}
+                              {cp.isMonarchical ? '재위 군주' : '국가원수·수반'}
                             </SovereignPairBadge>
                             <SovereignPairRole>
                               {cp.ordinal != null && `제${cp.ordinal}대 `}
@@ -339,7 +339,7 @@ export function CabinetMindMap({
                       onClick={() => onRegisterCounterpartHead?.()}
                     >
                       <SovereignPairBadge $monarch>
-                        👑 재위 군주·원수
+                        재위 군주·원수
                       </SovereignPairBadge>
                       <SovereignEmptyLabel>
                         + 동시대 군주·국가원수 등록
@@ -363,7 +363,6 @@ export function CabinetMindMap({
                   {renderFace(head, 112)}
                 </CenterFace>
                 <CenterRole $branches={hasBranches} $monarch={isMonarchCenter}>
-                  {isMonarchCenter && <MonarchCrown aria-hidden>👑</MonarchCrown>}
                   {head.ordinal != null && `제${head.ordinal}대 `}
                   {head.title}
                   {!head.endDate && <CenterNow>현직</CenterNow>}
@@ -444,7 +443,7 @@ export function CabinetMindMap({
                 <ReignCabinetsDeck $branches={hasBranches}>
                   <ReignCabinetsHeader>
                     <ReignCabinetsTitle>
-                      🏛️ 재위 중 행정부 · 내각
+                      재위 중 행정부 · 내각
                     </ReignCabinetsTitle>
                     <ReignCabinetsHeaderRight>
                       <ReignCabinetsCount>
@@ -1302,11 +1301,6 @@ const CenterRole = styled.span<{ $branches?: boolean; $monarch?: boolean }>`
   }
 `
 
-const MonarchCrown = styled.span`
-  font-size: 13px;
-  line-height: 1;
-`
-
 const CenterEraTag = styled.span`
   padding: 1px 7px;
   border-radius: 6px;
@@ -1352,13 +1346,7 @@ const ReignCabinetsDeck = styled.div<{ $branches?: boolean }>`
   flex-direction: column;
   gap: 8px;
   width: ${({ $branches }) => ($branches ? '288px' : '100%')};
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.025)'
-      : 'rgba(248, 250, 252, 0.9)'};
+  padding-top: 6px;
 
   @container (max-width: 820px) {
     width: 100%;

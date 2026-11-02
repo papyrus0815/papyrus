@@ -2026,7 +2026,7 @@ export function CurrentCabinetPanel({
           {fallbackHeadTenures.length > 0 && (
             <TrackRow>
               <TrackBadge $monarch>
-                👑 군주·원수 {fallbackHeadTenures.length}
+                군주·원수 {fallbackHeadTenures.length}
               </TrackBadge>
               <CabinetStrip
                 ref={fallbackStripRef}
@@ -2052,7 +2052,6 @@ export function CurrentCabinetPanel({
                       $monarch={monarchical}
                       onClick={() => selectFallbackHead(row.id)}
                     >
-                      {monarchical && <TabCrown aria-hidden>👑</TabCrown>}
                       {coActive && <CoActiveTag>재위</CoActiveTag>}
                       {polity && (
                         <CabinetTabPolity>{polity}</CabinetTabPolity>
@@ -2072,7 +2071,7 @@ export function CurrentCabinetPanel({
 
           {cabinets.length > 0 && (
             <TrackRow>
-              <TrackBadge>🏛️ 내각 {cabinets.length}</TrackBadge>
+              <TrackBadge>내각 {cabinets.length}</TrackBadge>
               <CabinetStrip
                 ref={stripRef}
                 role="tablist"
@@ -4103,11 +4102,6 @@ const CabinetTab = styled.button<{
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: 1px;
   }
-`
-
-const TabCrown = styled.span`
-  font-size: 11.5px;
-  line-height: 1;
 `
 
 const CoActiveTag = styled.span<{ $cabinet?: boolean }>`

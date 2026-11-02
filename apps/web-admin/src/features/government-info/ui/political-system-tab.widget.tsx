@@ -106,20 +106,18 @@ export function PoliticalSystemTab({
       {query.isLoading ? (
         <Hint>불러오는 중…</Hint>
       ) : systems.length === 0 ? (
-        <EmptyBox>
-          <EmptyTitle>아직 등록된 정체가 없습니다</EmptyTitle>
-          <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
-            {GOVERNMENT_FORM_ORDER.slice(0, 6).map((formKey) => (
-              <EmptyPresetBtn
-                key={formKey}
-                type="button"
-                onClick={() => openCreate(formKey)}
-              >
-                + {GOVERNMENT_FORM_LABEL[formKey]}
-              </EmptyPresetBtn>
-            ))}
-          </EmptyPresetRow>
-        </EmptyBox>
+        <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
+          <EmptyTitle>체제 선택</EmptyTitle>
+          {GOVERNMENT_FORM_ORDER.slice(0, 6).map((formKey) => (
+            <EmptyPresetBtn
+              key={formKey}
+              type="button"
+              onClick={() => openCreate(formKey)}
+            >
+              + {GOVERNMENT_FORM_LABEL[formKey]}
+            </EmptyPresetBtn>
+          ))}
+        </EmptyPresetRow>
       ) : (
         <List>
           {systems.map((system) => (
@@ -294,36 +292,26 @@ const Hint = styled.p`
   padding: 36px 0;
 `
 
-const EmptyBox = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 28px 20px;
-  border-radius: 14px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(248,250,252,0.75)'};
-`
-
 const EmptyTitle = styled.span`
-  font-size: 15px;
-  font-weight: 800;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 4px;
 `
 
 const EmptyPresetRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  align-items: center;
   gap: 8px;
+  padding: 6px 0;
 `
 
 const EmptyPresetBtn = styled.button`
-  padding: 6px 12px;
+  padding: 5px 12px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: transparent;
   font-size: 12px;
   font-weight: 700;
   font-family: inherit;
