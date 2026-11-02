@@ -303,12 +303,13 @@ function SidesField({
   const canSuggest = participants.some((row) =>
     ['INITIATOR', 'ALLY', 'TARGET', 'ADVERSARY', 'VICTIM'].includes(row.role ?? ''),
   )
+  const unassigned = participants.filter((row) => !assignment[participantKey(row)])
   return (
     <S.FormRow>
       <S.FormLabel as="span">진영</S.FormLabel>
       <S.FormField>
         {participants.length === 0 ? (
-          <>
+          <SidesFooterRow>
             {onOpenCountryModal && (
               <KitAddButton
                 type="button"
@@ -322,74 +323,124 @@ function SidesField({
               </KitAddButton>
             )}
             <S.Hint>참여국에 나라를 넣으면 여기서 편을 가릅니다.</S.Hint>
-          </>
+          </SidesFooterRow>
         ) : (
           <>
-            <SideNames>
-              {(['A', 'B'] as const).map((slot, index) => (
-                <SideNameInput
-                  key={slot}
-                  aria-label={`${index + 1}번 진영 이름`}
-                  placeholder={placeholderOf(slot)}
-                  value={names[index]}
-                  onChange={(change) => {
-                    const next: [string, string] = [...names]
-                    next[index] = change.target.value
-                    update({ sides: { names: next, assignment } })
-                  }}
-                />
-              ))}
-            </SideNames>
-            <RowList>
-              {participants.map((row) => {
-                const key = participantKey(row)
-                const slot = assignment[key] ?? null
+            <SideBoardGrid>
+              {(['A', 'B'] as const).map((slot, index) => {
+                const members = participants.filter((row) => assignment[participantKey(row)] === slot)
+                const otherSlot: SideSlot = slot === 'A' ? 'B' : 'A'
+                const otherNumber = slot === 'A' ? 2 : 1
                 return (
-                  <Row key={key}>
-                    <RowName>{participantName(row)}</RowName>
-                    <KitChipGroup role="radiogroup" aria-label={`${participantName(row)}의 진영`}>
-                      {(['A', 'B', null] as const).map((value) => (
-                        <SmallChip
-                          key={value ?? 'none'}
-                          type="button"
-                          role="radio"
-                          aria-checked={slot === value}
-                          $selected={slot === value}
-                          onClick={() => {
-                            playClickSound()
-                            setSlot(key, value)
-                          }}
-                        >
-                          {value === 'A' ? names[0] || placeholderOf('A') : value === 'B' ? names[1] || placeholderOf('B') : '어느 편도 아님'}
-                        </SmallChip>
-                      ))}
-                    </KitChipGroup>
-                  </Row>
+                  <SideCard key={slot}>
+                    <SideNameInput
+                      aria-label={`${index + 1}번 진영 이름`}
+                      placeholder={placeholderOf(slot)}
+                      value={names[index]}
+                      onChange={(change) => {
+                        const next: [string, string] = [...names]
+                        next[index] = change.target.value
+                        update({ sides: { names: next, assignment } })
+                      }}
+                    />
+                    <SideMemberWrap aria-label={`${index + 1}번 진영 소속 국가`}>
+                      {members.length === 0 ? (
+                        <SideEmptyHint>아래 국가에서 +{index + 1}편 선택</SideEmptyHint>
+                      ) : (
+                        members.map((row) => {
+                          const key = participantKey(row)
+                          const name = participantName(row)
+                          return (
+                            <SideMemberChip key={key}>
+                              <SideMemberName>{name}</SideMemberName>
+                              <SideMemberSwitch
+                                type="button"
+                                title={`${otherNumber}번 진영으로 이동`}
+                                aria-label={`${name} ${otherNumber}번 진영으로 이동`}
+                                onClick={() => {
+                                  playClickSound()
+                                  setSlot(key, otherSlot)
+                                }}
+                              >
+                                {slot === 'A' ? '→2편' : '1편←'}
+                              </SideMemberSwitch>
+                              <KitRemoveButton
+                                type="button"
+                                aria-label={`${name} 진영 배정 해제`}
+                                onClick={() => {
+                                  playClickSound()
+                                  setSlot(key, null)
+                                }}
+                              >
+                                <FiX size={13} />
+                              </KitRemoveButton>
+                            </SideMemberChip>
+                          )
+                        })
+                      )}
+                    </SideMemberWrap>
+                  </SideCard>
                 )
               })}
-            </RowList>
-            {onOpenCountryModal && (
-              <KitAddButton
-                type="button"
-                onClick={() => {
-                  playClickSound()
-                  onOpenCountryModal()
-                }}
-              >
-                <FiPlus size={15} />
-                참여국 더 추가
-              </KitAddButton>
+            </SideBoardGrid>
+            {unassigned.length > 0 && (
+              <UnassignedBar role="group" aria-label="미배정 참여국">
+                <UnassignedLabel>미배정 ({unassigned.length})</UnassignedLabel>
+                {unassigned.map((row) => {
+                  const key = participantKey(row)
+                  const name = participantName(row)
+                  return (
+                    <UnassignedChip key={key}>
+                      <UnassignedName>{name}</UnassignedName>
+                      <UnassignedAssignButton
+                        type="button"
+                        aria-label={`${name} 1번 진영 배정`}
+                        onClick={() => {
+                          playClickSound()
+                          setSlot(key, 'A')
+                        }}
+                      >
+                        +1편
+                      </UnassignedAssignButton>
+                      <UnassignedAssignButton
+                        type="button"
+                        aria-label={`${name} 2번 진영 배정`}
+                        onClick={() => {
+                          playClickSound()
+                          setSlot(key, 'B')
+                        }}
+                      >
+                        +2편
+                      </UnassignedAssignButton>
+                    </UnassignedChip>
+                  )
+                })}
+              </UnassignedBar>
             )}
-            {canSuggest && (
-              <TextButton
-                type="button"
-                onClick={() =>
-                  update({ sides: { names, assignment: suggestSideAssignment(participants, assignment) } })
-                }
-              >
-                참여국 역할로 나누기 (주도·동맹 / 대상·적대·피해)
-              </TextButton>
-            )}
+            <SidesFooterRow>
+              {onOpenCountryModal && (
+                <KitAddButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    onOpenCountryModal()
+                  }}
+                >
+                  <FiPlus size={15} />
+                  참여국 더 추가
+                </KitAddButton>
+              )}
+              {canSuggest && (
+                <TextButton
+                  type="button"
+                  onClick={() =>
+                    update({ sides: { names, assignment: suggestSideAssignment(participants, assignment) } })
+                  }
+                >
+                  참여국 역할로 나누기 (주도·동맹 / 대상·적대·피해)
+                </TextButton>
+              )}
+            </SidesFooterRow>
           </>
         )}
       </S.FormField>
@@ -458,39 +509,38 @@ function StatehoodField({
           })}
         </StatehoodGrid>
         {onAssignRole && unassigned.length > 0 && (
-          <RowList>
+          <UnassignedBar role="group" aria-label="성립·소멸 미지정 참여국">
+            <UnassignedLabel>참여국에서 지정</UnassignedLabel>
             {unassigned.map((row) => {
               const key = participantKey(row)
               const name = participantName(row)
               return (
-                <Row key={key}>
-                  <RowName>{name}</RowName>
-                  <KitChipGroup role="group" aria-label={`${name} 성립·소멸 지정`}>
-                    <SmallChip
-                      type="button"
-                      $selected={false}
-                      onClick={() => {
-                        playClickSound()
-                        onAssignRole(key, 'FOUNDED')
-                      }}
-                    >
-                      + 세워진 나라
-                    </SmallChip>
-                    <SmallChip
-                      type="button"
-                      $selected={false}
-                      onClick={() => {
-                        playClickSound()
-                        onAssignRole(key, 'DISSOLVED')
-                      }}
-                    >
-                      + 무너진 나라
-                    </SmallChip>
-                  </KitChipGroup>
-                </Row>
+                <UnassignedChip key={key}>
+                  <UnassignedName>{name}</UnassignedName>
+                  <UnassignedAssignButton
+                    type="button"
+                    aria-label={`${name} 세워진 나라로 지정`}
+                    onClick={() => {
+                      playClickSound()
+                      onAssignRole(key, 'FOUNDED')
+                    }}
+                  >
+                    +세워진
+                  </UnassignedAssignButton>
+                  <UnassignedAssignButton
+                    type="button"
+                    aria-label={`${name} 무너진 나라로 지정`}
+                    onClick={() => {
+                      playClickSound()
+                      onAssignRole(key, 'DISSOLVED')
+                    }}
+                  >
+                    +무너진
+                  </UnassignedAssignButton>
+                </UnassignedChip>
               )
             })}
-          </RowList>
+          </UnassignedBar>
         )}
         <S.Hint>병합이면 무너진 나라(병합된 쪽)와 그대로 남는 나라를 함께 넣습니다. 고른 나라는 참여국에도 들어갑니다.</S.Hint>
       </S.FormField>
@@ -834,25 +884,31 @@ const RowSelect = styled.select`
   }
 `
 
-const SmallChip = styled(KitChoiceChip)`
-  min-height: 30px;
-  padding: 0 11px;
-  font-size: 12.5px;
-`
-
-const SideNames = styled.div`
+const SideBoardGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 8px;
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
   }
 `
 
+const SideCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  border-radius: 10px;
+  background: ${({ theme }) => S.getC(theme).background.section};
+`
+
 const SideNameInput = styled.input`
-  ${rowControl}
+  height: 30px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 13px;
   padding: 0 10px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.content};
@@ -866,14 +922,116 @@ const SideNameInput = styled.input`
   }
 `
 
+const SideMemberWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+`
+
+const SideEmptyHint = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SideMemberChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.content};
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SideMemberName = styled.span`
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const SideMemberSwitch = styled.button`
+  padding: 1px 5px;
+  border: none;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const UnassignedBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+`
+
+const UnassignedLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const UnassignedChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.section};
+  font-size: 12px;
+`
+
+const UnassignedName = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const UnassignedAssignButton = styled.button`
+  padding: 2px 7px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  border-radius: 999px;
+  background: ${({ theme }) => S.getC(theme).background.content};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const SidesFooterRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 4px;
+`
+
 const TextButton = styled.button`
-  align-self: flex-start;
-  margin-top: 2px;
   padding: 2px 0;
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   text-decoration: underline;

@@ -305,6 +305,39 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   }
 
   const [countryQuickQuery, setCountryQuickQuery] = useState('')
+  const [showAllParticipants, setShowAllParticipants] = useState(false)
+  const hasIntroContent = Boolean(
+    description.trim() || keywords.length > 0 || thumbnail,
+  )
+  const [isIntroExpanded, setIsIntroExpanded] = useState<boolean>(
+    () => hasIntroContent,
+  )
+  useEffect(() => {
+    if (hasIntroContent) setIsIntroExpanded(true)
+  }, [hasIntroContent])
+
+  const introSummaryText = useMemo(() => {
+    const parts: string[] = []
+    if (description.trim()) parts.push('개요 입력됨')
+    if (keywords.length > 0) parts.push(`키워드 ${keywords.length}개`)
+    if (thumbnail) parts.push('대표 이미지 있음')
+    return parts.length > 0
+      ? parts.join(' · ')
+      : '개요 설명 · 키워드 · 대표 이미지 (선택)'
+  }, [description, keywords.length, thumbnail])
+
+  const PARTICIPANT_COLLAPSE_THRESHOLD = 4
+  const visibleParticipants = useMemo(
+    () =>
+      showAllParticipants
+        ? relatedCountries
+        : relatedCountries.slice(0, PARTICIPANT_COLLAPSE_THRESHOLD),
+    [relatedCountries, showAllParticipants],
+  )
+  const hiddenParticipantCount = Math.max(
+    0,
+    relatedCountries.length - PARTICIPANT_COLLAPSE_THRESHOLD,
+  )
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
   )
@@ -528,7 +561,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 {titleError}
               </S.ErrorMessage>
             )}
-            {titleSuggestionSlot && (
+            {titleSuggestionSlot && !typeSlot && (
               <TitleSuggestionRow>
                 <TitleSuggestionButton
                   type="button"
@@ -617,24 +650,26 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               종류
             </S.FormLabel>
             <S.FormField>
-              <SegmentControl
-                appearance="chips"
-                ariaLabel="사건 종류"
-                value={kindSlot.value}
-                onChange={(next) => {
-                  playClickSound()
-                  kindSlot.onChange(next)
-                }}
-                options={[
-                  { value: 'SINGLE', label: '단일 사건' },
-                  { value: 'COLLECTION', label: '묶음 사건' },
-                ]}
-              />
-              <S.Hint>
-                {kindSlot.value === 'COLLECTION'
-                  ? '전쟁·위기처럼 여러 국면을 거느린 사건. 전개는 하위 사건으로 등록하고, 본문에는 배경과 여파만 씁니다.'
-                  : '전투·회담·조약 체결처럼 한 덩어리로 서술하는 사건. 나중에 국면이 늘면 상세에서 하위 사건으로 나눌 수 있습니다.'}
-              </S.Hint>
+              <InlineControlRow>
+                <SegmentControl
+                  appearance="chips"
+                  ariaLabel="사건 종류"
+                  value={kindSlot.value}
+                  onChange={(next) => {
+                    playClickSound()
+                    kindSlot.onChange(next)
+                  }}
+                  options={[
+                    { value: 'SINGLE', label: '단일 사건' },
+                    { value: 'COLLECTION', label: '묶음 사건' },
+                  ]}
+                />
+                <S.Hint>
+                  {kindSlot.value === 'COLLECTION'
+                    ? '전쟁·위기 등 여러 국면을 거느린 사건 (전개는 하위 사건으로 등록)'
+                    : '전투·회담·조약처럼 한 덩어리로 서술하는 사건'}
+                </S.Hint>
+              </InlineControlRow>
             </S.FormField>
           </S.FormRow>
         )}
@@ -776,11 +811,13 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     : (startDateError ?? endDateError ?? getDateError())}
               </S.ErrorMessage>
             )}
-            <S.Hint>
-              {allowPartialDate
-                ? '칸에 바로 입력하거나 달력 아이콘으로 고르세요. 연도만 알면 연도만. 종료는 시작과 같게 채워집니다 — 기간이면 고치고, 진행 중이면 비워 두세요.'
-                : '종료는 시작과 같게 채워집니다 — 기간이면 고치고, 진행 중이면 비워 두세요.'}
-            </S.Hint>
+            {(!startDate || !endDate) && (
+              <S.Hint>
+                {allowPartialDate
+                  ? '직접 입력하거나 달력으로 선택 (연도만 알면 연도만 입력 · 진행 중이면 종료일 비움)'
+                  : '종료일은 시작일과 같게 채워집니다 (기간이면 수정, 진행 중이면 비움)'}
+              </S.Hint>
+            )}
           </S.FormField>
         </S.FormRow>
 
@@ -798,186 +835,228 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               </S.FormLabel>
               <S.FormField>
                 {relatedCountries.length > 0 && (
-                  <ParticipantList>
-                    {relatedCountries.map((participant, index) => {
-                      const isHistorical = Boolean(
-                        participant.historicalCountryId,
-                      )
-                      const country = isHistorical
-                        ? availableHistoricalCountries.find(
-                            (candidate) =>
-                              candidate.id === participant.historicalCountryId,
-                          )
-                        : availableCountries.find(
-                            (candidate) =>
-                              candidate.id === participant.countryId,
-                          )
-                      if (!country) return null
-                      const key = participantKey(participant)
-                      const patch = (next: Partial<EventCountryParticipant>) =>
-                        setRelatedCountries(
-                          relatedCountries.map((row, rowIndex) =>
-                            rowIndex === index ? { ...row, ...next } : row,
-                          ),
+                  <>
+                    <ParticipantList
+                      $scrollable={
+                        showAllParticipants &&
+                        relatedCountries.length > PARTICIPANT_COLLAPSE_THRESHOLD
+                      }
+                    >
+                      {visibleParticipants.map((participant, index) => {
+                        const isHistorical = Boolean(
+                          participant.historicalCountryId,
                         )
-                      return (
-                        <ParticipantRow key={key}>
-                          <ParticipantName>
-                            {isHistorical
-                              ? `🏛️ ${country.name}`
-                              : `${(country as CountryResponseDto).flagEmoji ?? ''} ${country.name}`}
-                          </ParticipantName>
-                          <RoleSelect
-                            value={participant.role ?? 'PARTICIPANT'}
-                            aria-label={`${country.name} 역할`}
-                            title={
-                              eventCountryRoleHint(
-                                participant.role ?? 'PARTICIPANT',
-                              ) ?? undefined
-                            }
-                            onChange={(changeEvent) =>
-                              patch({
-                                role: changeEvent.target
-                                  .value as EventCountryParticipant['role'],
-                              })
-                            }
-                          >
-                            {EVENT_COUNTRY_ROLE_OPTIONS.filter(
-                              // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
-                              (option) =>
-                                !option.deprecated ||
-                                option.value === participant.role,
-                            ).map((option) => (
-                              <option
-                                key={option.value}
-                                value={option.value}
-                                title={option.hint}
-                              >
-                                {option.label}
-                              </option>
-                            ))}
-                          </RoleSelect>
-                          <RoleDescriptionInput
-                            value={participant.roleDescription ?? ''}
-                            aria-label={`${country.name}가 한 일`}
-                            placeholder={roleDescriptionPlaceholder}
-                            onChange={(changeEvent) =>
-                              patch({
-                                roleDescription: changeEvent.target.value,
-                              })
-                            }
-                          />
-                          <ParticipantActions>
-                            {relatedCountries.length > 1 && (
-                              <>
-                                <ParticipantMoveButton
-                                  type="button"
-                                  disabled={index === 0}
-                                  aria-label={`${country.name} 위로 이동`}
-                                  title="위로 이동"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setRelatedCountries(
-                                      moveParticipant(
-                                        relatedCountries,
-                                        index,
-                                        'up',
-                                      ),
-                                    )
-                                  }}
-                                >
-                                  <FiArrowUp size={13} />
-                                </ParticipantMoveButton>
-                                <ParticipantMoveButton
-                                  type="button"
-                                  disabled={
-                                    index === relatedCountries.length - 1
-                                  }
-                                  aria-label={`${country.name} 아래로 이동`}
-                                  title="아래로 이동"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setRelatedCountries(
-                                      moveParticipant(
-                                        relatedCountries,
-                                        index,
-                                        'down',
-                                      ),
-                                    )
-                                  }}
-                                >
-                                  <FiArrowDown size={13} />
-                                </ParticipantMoveButton>
-                              </>
-                            )}
-                            <ParticipantRemove
-                              type="button"
-                              aria-label={`${country.name} 제거`}
-                              onClick={() => {
-                                playClickSound()
-                                setRelatedCountries(
-                                  relatedCountries.filter(
-                                    (row) => participantKey(row) !== key,
-                                  ),
-                                )
-                              }}
+                        const country = isHistorical
+                          ? availableHistoricalCountries.find(
+                              (candidate) =>
+                                candidate.id ===
+                                participant.historicalCountryId,
+                            )
+                          : availableCountries.find(
+                              (candidate) =>
+                                candidate.id === participant.countryId,
+                            )
+                        if (!country) return null
+                        const key = participantKey(participant)
+                        const patch = (
+                          next: Partial<EventCountryParticipant>,
+                        ) =>
+                          setRelatedCountries(
+                            relatedCountries.map((row, rowIndex) =>
+                              rowIndex === index ? { ...row, ...next } : row,
+                            ),
+                          )
+                        return (
+                          <ParticipantRow key={key}>
+                            <ParticipantName>
+                              {isHistorical
+                                ? `🏛️ ${country.name}`
+                                : `${(country as CountryResponseDto).flagEmoji ?? ''} ${country.name}`}
+                            </ParticipantName>
+                            <RoleSelect
+                              value={participant.role ?? 'PARTICIPANT'}
+                              aria-label={`${country.name} 역할`}
+                              title={
+                                eventCountryRoleHint(
+                                  participant.role ?? 'PARTICIPANT',
+                                ) ?? undefined
+                              }
+                              onChange={(changeEvent) =>
+                                patch({
+                                  role: changeEvent.target
+                                    .value as EventCountryParticipant['role'],
+                                })
+                              }
                             >
-                              <FiX size={14} />
-                            </ParticipantRemove>
-                          </ParticipantActions>
-                        </ParticipantRow>
-                      )
-                    })}
-                  </ParticipantList>
-                )}
-                {recentParticipantSuggestions.length > 0 && (
-                  <RecentParticipantBar aria-label="최근 사용한 참여국">
-                    <RecentParticipantLabel>최근</RecentParticipantLabel>
-                    {recentParticipantSuggestions.map((entry) => (
-                      <RecentParticipantChip
-                        key={entry.key}
+                              {EVENT_COUNTRY_ROLE_OPTIONS.filter(
+                                // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
+                                (option) =>
+                                  !option.deprecated ||
+                                  option.value === participant.role,
+                              ).map((option) => (
+                                <option
+                                  key={option.value}
+                                  value={option.value}
+                                  title={option.hint}
+                                >
+                                  {option.label}
+                                </option>
+                              ))}
+                            </RoleSelect>
+                            <RoleDescriptionInput
+                              value={participant.roleDescription ?? ''}
+                              aria-label={`${country.name}가 한 일`}
+                              placeholder={roleDescriptionPlaceholder}
+                              onChange={(changeEvent) =>
+                                patch({
+                                  roleDescription: changeEvent.target.value,
+                                })
+                              }
+                            />
+                            <ParticipantActions>
+                              {relatedCountries.length > 1 && (
+                                <>
+                                  <ParticipantMoveButton
+                                    type="button"
+                                    disabled={index === 0}
+                                    aria-label={`${country.name} 위로 이동`}
+                                    title="위로 이동"
+                                    onClick={() => {
+                                      playClickSound()
+                                      setRelatedCountries(
+                                        moveParticipant(
+                                          relatedCountries,
+                                          index,
+                                          'up',
+                                        ),
+                                      )
+                                    }}
+                                  >
+                                    <FiArrowUp size={13} />
+                                  </ParticipantMoveButton>
+                                  <ParticipantMoveButton
+                                    type="button"
+                                    disabled={
+                                      index === relatedCountries.length - 1
+                                    }
+                                    aria-label={`${country.name} 아래로 이동`}
+                                    title="아래로 이동"
+                                    onClick={() => {
+                                      playClickSound()
+                                      setRelatedCountries(
+                                        moveParticipant(
+                                          relatedCountries,
+                                          index,
+                                          'down',
+                                        ),
+                                      )
+                                    }}
+                                  >
+                                    <FiArrowDown size={13} />
+                                  </ParticipantMoveButton>
+                                </>
+                              )}
+                              <ParticipantRemove
+                                type="button"
+                                aria-label={`${country.name} 제거`}
+                                onClick={() => {
+                                  playClickSound()
+                                  setRelatedCountries(
+                                    relatedCountries.filter(
+                                      (row) => participantKey(row) !== key,
+                                    ),
+                                  )
+                                }}
+                              >
+                                <FiX size={14} />
+                              </ParticipantRemove>
+                            </ParticipantActions>
+                          </ParticipantRow>
+                        )
+                      })}
+                    </ParticipantList>
+                    {hiddenParticipantCount > 0 && (
+                      <ParticipantCollapseToggle
                         type="button"
+                        aria-expanded={showAllParticipants}
                         onClick={() =>
-                          addQuickParticipant({
-                            countryId: entry.countryId,
-                            historicalCountryId: entry.historicalCountryId,
-                          })
+                          setShowAllParticipants((previous) => !previous)
                         }
                       >
-                        + {entry.label}
-                      </RecentParticipantChip>
-                    ))}
-                  </RecentParticipantBar>
+                        {showAllParticipants
+                          ? `참여국 목록 접기 (상위 ${PARTICIPANT_COLLAPSE_THRESHOLD}개만 표시)`
+                          : `+ 외 ${hiddenParticipantCount}개국 더보기 (총 ${relatedCountries.length}개국)`}
+                      </ParticipantCollapseToggle>
+                    )}
+                  </>
                 )}
                 <CountryQuickSearchRow>
-                  <CountryQuickSearchInput
-                    type="search"
-                    aria-label="참여국 빠른 검색"
-                    placeholder="국가 이름으로 바로 추가 (예: 프랑스, 프로이센, 청나라…)"
-                    value={countryQuickQuery}
-                    onChange={(changeEvent) =>
-                      setCountryQuickQuery(changeEvent.target.value)
-                    }
-                    onKeyDown={(keyEvent) => {
-                      if (
-                        keyEvent.key === 'Enter' &&
-                        quickCountryMatches.length > 0
-                      ) {
-                        keyEvent.preventDefault()
-                        const first = quickCountryMatches[0]
-                        addQuickParticipant({
-                          countryId: first.countryId,
-                          historicalCountryId: first.historicalCountryId,
-                        })
-                      } else if (
-                        keyEvent.key === 'Escape' &&
-                        countryQuickQuery
-                      ) {
-                        keyEvent.preventDefault()
-                        setCountryQuickQuery('')
+                  <CountryQuickSearchAnchor>
+                    <CountryQuickSearchInput
+                      type="search"
+                      aria-label="참여국 빠른 검색"
+                      placeholder="국가 이름으로 바로 추가 (프랑스, 프로이센, 청나라…)"
+                      value={countryQuickQuery}
+                      onChange={(changeEvent) =>
+                        setCountryQuickQuery(changeEvent.target.value)
                       }
-                    }}
-                  />
+                      onKeyDown={(keyEvent) => {
+                        if (
+                          keyEvent.key === 'Enter' &&
+                          quickCountryMatches.length > 0
+                        ) {
+                          keyEvent.preventDefault()
+                          const first = quickCountryMatches[0]
+                          addQuickParticipant({
+                            countryId: first.countryId,
+                            historicalCountryId: first.historicalCountryId,
+                          })
+                        } else if (
+                          keyEvent.key === 'Escape' &&
+                          countryQuickQuery
+                        ) {
+                          keyEvent.preventDefault()
+                          setCountryQuickQuery('')
+                        }
+                      }}
+                    />
+                    {countryQuickQuery.trim() && (
+                      <CountryQuickResultBox
+                        role="region"
+                        aria-label="참여국 빠른 검색 결과"
+                      >
+                        {quickCountryMatches.length > 0 ? (
+                          quickCountryMatches.map((match) => (
+                            <CountryQuickResultButton
+                              key={match.key}
+                              type="button"
+                              onClick={() =>
+                                addQuickParticipant({
+                                  countryId: match.countryId,
+                                  historicalCountryId: match.historicalCountryId,
+                                })
+                              }
+                            >
+                              <CountryQuickResultName>
+                                + {match.label}
+                              </CountryQuickResultName>
+                              <CountryQuickResultMeta>
+                                {match.eraMatched && (
+                                  <CountryEraBadge>시대 일치</CountryEraBadge>
+                                )}
+                                {match.meta && <span>{match.meta}</span>}
+                              </CountryQuickResultMeta>
+                            </CountryQuickResultButton>
+                          ))
+                        ) : (
+                          <CountryQuickEmpty>
+                            &lsquo;{countryQuickQuery.trim()}&rsquo;에 맞는
+                            국가가 없습니다.
+                          </CountryQuickEmpty>
+                        )}
+                      </CountryQuickResultBox>
+                    )}
+                  </CountryQuickSearchAnchor>
                   {/* 추가는 목록 **뒤** — 쌓이는 쪽에서 이어 붙이는 흐름 */}
                   <S.AddButton
                     type="button"
@@ -989,72 +1068,56 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     <FiPlus size={15} />
                     {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
                   </S.AddButton>
-                </CountryQuickSearchRow>
-                {countryQuickQuery.trim() && (
-                  <CountryQuickResultBox
-                    role="region"
-                    aria-label="참여국 빠른 검색 결과"
-                  >
-                    {quickCountryMatches.length > 0 ? (
-                      quickCountryMatches.map((match) => (
-                        <CountryQuickResultButton
-                          key={match.key}
+                  {parentCountriesSlot && (
+                    <S.AddButton
+                      type="button"
+                      title={`'${parentCountriesSlot.parentTitle}'의 참여국 중 아직 없는 나라를 넣습니다(역할은 비워 둠)`}
+                      onClick={() => {
+                        playClickSound()
+                        parentCountriesSlot.onImport()
+                      }}
+                    >
+                      <FiPlus size={15} />
+                      상위 사건 참여국 {parentCountriesSlot.count}개 불러오기
+                    </S.AddButton>
+                  )}
+                  {recentParticipantSuggestions.length > 0 && (
+                    <RecentParticipantBar aria-label="최근 사용한 참여국">
+                      <RecentParticipantLabel>최근</RecentParticipantLabel>
+                      {recentParticipantSuggestions.map((entry) => (
+                        <RecentParticipantChip
+                          key={entry.key}
                           type="button"
                           onClick={() =>
                             addQuickParticipant({
-                              countryId: match.countryId,
-                              historicalCountryId: match.historicalCountryId,
+                              countryId: entry.countryId,
+                              historicalCountryId: entry.historicalCountryId,
                             })
                           }
                         >
-                          <CountryQuickResultName>
-                            + {match.label}
-                          </CountryQuickResultName>
-                          <CountryQuickResultMeta>
-                            {match.eraMatched && (
-                              <CountryEraBadge>시대 일치</CountryEraBadge>
-                            )}
-                            {match.meta && <span>{match.meta}</span>}
-                          </CountryQuickResultMeta>
-                        </CountryQuickResultButton>
-                      ))
-                    ) : (
-                      <CountryQuickEmpty>
-                        &lsquo;{countryQuickQuery.trim()}&rsquo;에 맞는 국가가
-                        없습니다.
-                      </CountryQuickEmpty>
-                    )}
-                  </CountryQuickResultBox>
-                )}
-                {parentCountriesSlot && (
-                  <S.AddButton
-                    type="button"
-                    title={`'${parentCountriesSlot.parentTitle}'의 참여국 중 아직 없는 나라를 넣습니다(역할은 비워 둠)`}
-                    onClick={() => {
-                      playClickSound()
-                      parentCountriesSlot.onImport()
-                    }}
-                  >
-                    <FiPlus size={15} />
-                    상위 사건 참여국 {parentCountriesSlot.count}개 불러오기
-                  </S.AddButton>
-                )}
+                          + {entry.label}
+                        </RecentParticipantChip>
+                      ))}
+                    </RecentParticipantBar>
+                  )}
+                </CountryQuickSearchRow>
                 {historicalLifespanWarnings.map((item) => (
                   <AlertBox
                     key={item.id}
                     variant="warning"
                     icon="⚠️"
-                    style={{ marginTop: 8 }}
+                    style={{ marginTop: 6 }}
                   >
                     <strong>{item.name}</strong> {item.mismatch} 국가 소멸 전후
                     소급·연속 사건 등 정당한 경우라면 그대로 저장하세요.
                   </AlertBox>
                 ))}
-                <S.Hint>
-                  나라마다 역할과 한 일을 적어 두면 조약처럼 나라별 사정이 다른
-                  사건도 한눈에 읽힙니다. <strong>주도국</strong>은 목록에서
-                  사건의 대표로 섭니다.
-                </S.Hint>
+                {relatedCountries.length === 0 && (
+                  <S.Hint>
+                    나라를 추가하면 역할(<strong>주도국</strong>=대표 등)과 한
+                    일을 함께 적을 수 있습니다.
+                  </S.Hint>
+                )}
               </S.FormField>
             </S.FormRow>
           )}
@@ -1065,21 +1128,33 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 상위 사건<OptionalTag>(선택)</OptionalTag>
               </S.FormLabel>
               <S.FormField>
-                {parentEventSlot.parent ? (
-                  <S.SelectedItemsContainer>
-                    <S.SelectedItem>
-                      <span>{parentEventSlot.parent.title}</span>
-                      <S.RemoveButton
+                <InlineControlRow>
+                  {parentEventSlot.parent ? (
+                    <S.SelectedItemsContainer>
+                      <S.SelectedItem>
+                        <span>{parentEventSlot.parent.title}</span>
+                        <S.RemoveButton
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            parentEventSlot.onClear()
+                          }}
+                          aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
+                        >
+                          <FiX size={14} />
+                        </S.RemoveButton>
+                      </S.SelectedItem>
+                      <S.AddButton
                         type="button"
                         onClick={() => {
                           playClickSound()
-                          parentEventSlot.onClear()
+                          parentEventSlot.onOpenPicker()
                         }}
-                        aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
                       >
-                        <FiX size={14} />
-                      </S.RemoveButton>
-                    </S.SelectedItem>
+                        변경
+                      </S.AddButton>
+                    </S.SelectedItemsContainer>
+                  ) : (
                     <S.AddButton
                       type="button"
                       onClick={() => {
@@ -1087,25 +1162,15 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         parentEventSlot.onOpenPicker()
                       }}
                     >
-                      변경
+                      <FiPlus size={16} />
+                      상위 사건 선택
                     </S.AddButton>
-                  </S.SelectedItemsContainer>
-                ) : (
-                  <S.AddButton
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      parentEventSlot.onOpenPicker()
-                    }}
-                  >
-                    <FiPlus size={16} />
-                    상위 사건 선택
-                  </S.AddButton>
-                )}
-                <S.Hint>
-                  고르면 그 사건의 하위로 등록됩니다. 등록 후 상세
-                  &lsquo;연관&rsquo;에서 바꿀 수 있습니다.
-                </S.Hint>
+                  )}
+                  <S.Hint>
+                    고르면 그 사건의 하위로 등록됩니다 (등록 후 상세
+                    &lsquo;연관&rsquo;에서 변경 가능)
+                  </S.Hint>
+                </InlineControlRow>
               </S.FormField>
             </S.FormRow>
           )}
@@ -1121,182 +1186,198 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       )}
 
       <FormGroup aria-labelledby="event-form-group-intro">
-        <FormGroupTitle id="event-form-group-intro">소개</FormGroupTitle>
-        {/* 개요 설명 */}
-        <S.FormRow>
-          <S.FormLabel>
-            개요 설명<OptionalTag>(선택)</OptionalTag>
-          </S.FormLabel>
-          <S.FormField>
-            <S.Textarea
-              placeholder="무슨 일이 왜 일어났는지 두세 문장으로"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-            />
-          </S.FormField>
-        </S.FormRow>
+        <IntroGroupHeader>
+          <IntroTitleWrap>
+            <FormGroupTitle id="event-form-group-intro">소개</FormGroupTitle>
+            <IntroSummaryBadge>{introSummaryText}</IntroSummaryBadge>
+          </IntroTitleWrap>
+          <IntroToggleButton
+            type="button"
+            aria-expanded={isIntroExpanded}
+            aria-label={isIntroExpanded ? '소개 접기' : '소개 펼치기'}
+            onClick={() => setIsIntroExpanded((previous) => !previous)}
+          >
+            {isIntroExpanded ? '접기 ▲' : '펼치기 ▼'}
+          </IntroToggleButton>
+        </IntroGroupHeader>
 
-        {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
-        <S.FormRow>
-          <S.FormLabel>
-            키워드<OptionalTag>(선택)</OptionalTag>
-          </S.FormLabel>
-          <S.FormField>
-            <S.Input
-              type="text"
-              placeholder="입력 후 Enter — 쉼표로 여러 개 (최대 20개·각 30자)"
-              value={keywordInput}
-              onChange={(e) => setKeywordInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return
-                if ((e.nativeEvent as KeyboardEvent).isComposing) return
-                e.preventDefault()
-                addKeywordsFromInput()
-              }}
-            />
-            {keywordValidationMsg && (
-              <S.ErrorMessage role="alert">
-                {keywordValidationMsg}
-              </S.ErrorMessage>
-            )}
-            {keywords.length > 0 && (
-              <KeywordChipList>
-                {keywords.map((keyword) => (
-                  <KeywordChip key={keyword}>
-                    {keyword}
-                    <KeywordChipRemove
-                      type="button"
-                      onClick={() =>
-                        setKeywords(keywords.filter((item) => item !== keyword))
-                      }
-                      aria-label={`${keyword} 제거`}
-                    >
-                      <FiX size={12} />
-                    </KeywordChipRemove>
-                  </KeywordChip>
-                ))}
-              </KeywordChipList>
-            )}
-            <S.Hint>
-              같은 사건을 가리키는 대표 낱말(인명·사건명·연도). 다른 사람이
-              등록한 같은 사건과 이어 줄 때 씁니다.
-            </S.Hint>
-          </S.FormField>
-        </S.FormRow>
+        {isIntroExpanded && (
+          <>
+            {/* 개요 설명 */}
+            <S.FormRow>
+              <S.FormLabel>
+                개요 설명<OptionalTag>(선택)</OptionalTag>
+              </S.FormLabel>
+              <S.FormField>
+                <S.Textarea
+                  placeholder="무슨 일이 왜 일어났는지 두세 문장으로"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                />
+              </S.FormField>
+            </S.FormRow>
 
-        {/* 썸네일 이미지 */}
-        <S.FormRow>
-          <S.FormLabel>
-            썸네일 이미지<OptionalTag>(선택)</OptionalTag>
-          </S.FormLabel>
-          <S.FormField>
-            {/*
-             * 선택 항목이라 한 줄 띠(register-form-kit) — 인물 등록 폼 프로필 사진과 같은 부품.
-             */}
-            {thumbnail ? (
-              <KitUploadFilled>
-                <KitUploadThumb>
-                  <img
-                    src={getImageUrl(thumbnail)}
-                    alt="썸네일 미리보기"
-                    onError={() => {
-                      if (thumbnail.startsWith('blob:')) {
-                        URL.revokeObjectURL(thumbnail)
-                      }
-                    }}
-                  />
-                </KitUploadThumb>
-                <KitUploadText>
-                  <strong>
-                    {thumbnail.startsWith('blob:')
-                      ? '올리는 중…'
-                      : '대표 이미지'}
-                  </strong>
-                  <span>목록과 상세 머리에 쓰입니다</span>
-                </KitUploadText>
-                <KitUploadActions>
-                  <S.UploadButton
+            {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
+            <S.FormRow>
+              <S.FormLabel>
+                키워드<OptionalTag>(선택)</OptionalTag>
+              </S.FormLabel>
+              <S.FormField>
+                <S.Input
+                  type="text"
+                  placeholder="같은 사건 매칭용 대표 낱말 입력 후 Enter — 쉼표로 구분 (최대 20개·각 30자)"
+                  value={keywordInput}
+                  onChange={(e) => setKeywordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    if ((e.nativeEvent as KeyboardEvent).isComposing) return
+                    e.preventDefault()
+                    addKeywordsFromInput()
+                  }}
+                />
+                {keywordValidationMsg && (
+                  <S.ErrorMessage role="alert">
+                    {keywordValidationMsg}
+                  </S.ErrorMessage>
+                )}
+                {keywords.length > 0 && (
+                  <KeywordChipList>
+                    {keywords.map((keyword) => (
+                      <KeywordChip key={keyword}>
+                        {keyword}
+                        <KeywordChipRemove
+                          type="button"
+                          onClick={() =>
+                            setKeywords(
+                              keywords.filter((item) => item !== keyword),
+                            )
+                          }
+                          aria-label={`${keyword} 제거`}
+                        >
+                          <FiX size={12} />
+                        </KeywordChipRemove>
+                      </KeywordChip>
+                    ))}
+                  </KeywordChipList>
+                )}
+              </S.FormField>
+            </S.FormRow>
+
+            {/* 썸네일 이미지 */}
+            <S.FormRow>
+              <S.FormLabel>
+                썸네일 이미지<OptionalTag>(선택)</OptionalTag>
+              </S.FormLabel>
+              <S.FormField>
+                {/*
+                 * 선택 항목이라 한 줄 띠(register-form-kit) — 인물 등록 폼 프로필 사진과 같은 부품.
+                 */}
+                {thumbnail ? (
+                  <KitUploadFilled>
+                    <KitUploadThumb>
+                      <img
+                        src={getImageUrl(thumbnail)}
+                        alt="썸네일 미리보기"
+                        onError={() => {
+                          if (thumbnail.startsWith('blob:')) {
+                            URL.revokeObjectURL(thumbnail)
+                          }
+                        }}
+                      />
+                    </KitUploadThumb>
+                    <KitUploadText>
+                      <strong>
+                        {thumbnail.startsWith('blob:')
+                          ? '올리는 중…'
+                          : '대표 이미지'}
+                      </strong>
+                      <span>목록과 상세 머리에 쓰입니다</span>
+                    </KitUploadText>
+                    <KitUploadActions>
+                      <S.UploadButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          thumbnailInputRef.current?.click()
+                        }}
+                      >
+                        바꾸기
+                      </S.UploadButton>
+                      <KitUploadRemove
+                        type="button"
+                        aria-label="썸네일 제거"
+                        onClick={() => {
+                          playClickSound()
+                          if (thumbnail.startsWith('blob:')) {
+                            URL.revokeObjectURL(thumbnail)
+                          }
+                          setThumbnail('')
+                          setThumbnailFile(null)
+                          if (thumbnailInputRef.current) {
+                            thumbnailInputRef.current.value = ''
+                          }
+                        }}
+                      >
+                        <FiX size={15} />
+                      </KitUploadRemove>
+                    </KitUploadActions>
+                  </KitUploadFilled>
+                ) : (
+                  <KitUploadStrip
                     type="button"
                     onClick={() => {
                       playClickSound()
                       thumbnailInputRef.current?.click()
                     }}
                   >
-                    바꾸기
-                  </S.UploadButton>
-                  <KitUploadRemove
-                    type="button"
-                    aria-label="썸네일 제거"
-                    onClick={() => {
-                      playClickSound()
-                      if (thumbnail.startsWith('blob:')) {
-                        URL.revokeObjectURL(thumbnail)
-                      }
+                    <KitUploadThumb aria-hidden>
+                      <FiImage size={18} />
+                    </KitUploadThumb>
+                    <KitUploadText>
+                      <strong>대표 이미지 올리기</strong>
+                      <span>목록과 상세 머리에 쓰입니다 · 10MB 이하</span>
+                    </KitUploadText>
+                  </KitUploadStrip>
+                )}
+                <input
+                  ref={thumbnailInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+
+                    if (file.size > 10 * 1024 * 1024) {
+                      notify.error('파일 크기는 10MB를 초과할 수 없습니다.')
+                      return
+                    }
+
+                    if (thumbnail && thumbnail.startsWith('blob:')) {
+                      URL.revokeObjectURL(thumbnail)
+                    }
+
+                    const previewUrl = URL.createObjectURL(file)
+                    setThumbnail(previewUrl)
+                    setThumbnailFile(file)
+
+                    try {
+                      const result = await uploadImage(file, 'events')
+                      URL.revokeObjectURL(previewUrl)
+                      setThumbnail(result.url)
+                    } catch {
+                      notify.error('썸네일 업로드에 실패했습니다.')
+                      URL.revokeObjectURL(previewUrl)
                       setThumbnail('')
                       setThumbnailFile(null)
-                      if (thumbnailInputRef.current) {
-                        thumbnailInputRef.current.value = ''
-                      }
-                    }}
-                  >
-                    <FiX size={15} />
-                  </KitUploadRemove>
-                </KitUploadActions>
-              </KitUploadFilled>
-            ) : (
-              <KitUploadStrip
-                type="button"
-                onClick={() => {
-                  playClickSound()
-                  thumbnailInputRef.current?.click()
-                }}
-              >
-                <KitUploadThumb aria-hidden>
-                  <FiImage size={18} />
-                </KitUploadThumb>
-                <KitUploadText>
-                  <strong>대표 이미지 올리기</strong>
-                  <span>목록과 상세 머리에 쓰입니다 · 10MB 이하</span>
-                </KitUploadText>
-              </KitUploadStrip>
-            )}
-            <input
-              ref={thumbnailInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-
-                if (file.size > 10 * 1024 * 1024) {
-                  notify.error('파일 크기는 10MB를 초과할 수 없습니다.')
-                  return
-                }
-
-                if (thumbnail && thumbnail.startsWith('blob:')) {
-                  URL.revokeObjectURL(thumbnail)
-                }
-
-                const previewUrl = URL.createObjectURL(file)
-                setThumbnail(previewUrl)
-                setThumbnailFile(file)
-
-                try {
-                  const result = await uploadImage(file, 'events')
-                  URL.revokeObjectURL(previewUrl)
-                  setThumbnail(result.url)
-                } catch {
-                  notify.error('썸네일 업로드에 실패했습니다.')
-                  URL.revokeObjectURL(previewUrl)
-                  setThumbnail('')
-                  setThumbnailFile(null)
-                }
-              }}
-            />
-          </S.FormField>
-        </S.FormRow>
+                    }
+                  }}
+                />
+              </S.FormField>
+            </S.FormRow>
+          </>
+        )}
       </FormGroup>
 
       {/* 날짜/시간 선택 모달 */}
@@ -1338,22 +1419,49 @@ const OptionalTag = styled.span`
  * 브라우저 기본 테(진한 1.5px)와 네이티브 화살표로 그려져 폼의 다른 입력칸과 딴판이었다.
  * 폼 토큰(S.getC)으로 맞춘다.
  */
-const ParticipantList = styled.div`
+const ParticipantList = styled.div<{ $scrollable?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   margin-bottom: 4px;
+  ${({ $scrollable }) =>
+    $scrollable
+      ? `
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+  `
+      : ''}
+`
+
+const ParticipantCollapseToggle = styled.button`
+  align-self: flex-start;
+  margin-bottom: 4px;
+  padding: 3px 10px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.light};
+  border-radius: 999px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.default};
+  }
 `
 
 const ParticipantRow = styled.div`
   display: grid;
   /* 국가명이 주인공 — 이름 열을 역할 열보다 넓게 잡아 긴 국호도 잘리지 않게 한다. */
-  grid-template-columns: minmax(132px, 1fr) 118px minmax(0, 1.7fr) auto;
+  grid-template-columns: minmax(124px, 1fr) 114px minmax(0, 1.7fr) auto;
   align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 12px;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  border-radius: 10px;
+  border-radius: 9px;
   background: ${({ theme }) => S.getC(theme).background.section};
   transition: border-color 0.14s ease;
 
@@ -1379,7 +1487,7 @@ const ParticipantMoveButton = styled.button`
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 28px;
+  height: 26px;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -1400,11 +1508,10 @@ const ParticipantMoveButton = styled.button`
 `
 
 const RecentParticipantBar = styled.div`
-  display: flex;
+  display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 5px;
   font-size: 12px;
 `
 
@@ -1414,7 +1521,7 @@ const RecentParticipantLabel = styled.span`
 `
 
 const RecentParticipantChip = styled.button`
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
@@ -1439,21 +1546,27 @@ const CountryQuickSearchRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px 8px;
+`
+
+const CountryQuickSearchAnchor = styled.div`
+  position: relative;
+  flex: 1 1 210px;
+  min-width: 0;
+  max-width: 320px;
 `
 
 const CountryQuickSearchInput = styled.input`
-  flex: 1 1 220px;
+  width: 100%;
   min-width: 0;
-  max-width: 360px;
-  height: 34px;
+  height: 30px;
   padding: 0 10px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 8px;
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1466,14 +1579,23 @@ const CountryQuickSearchInput = styled.input`
 `
 
 const CountryQuickResultBox = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 2px;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(400px, 85vw);
+  max-height: 200px;
+  overflow-y: auto;
   padding: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   background: ${({ theme }) => theme.colors.background.secondary};
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
 `
 
 const CountryQuickResultButton = styled.button`
@@ -1568,13 +1690,13 @@ const ParticipantName = styled.span`
 
 /* 행 안 입력칸 공통 — 폼의 다른 입력칸과 같은 테·모서리·포커스 헤일로 */
 const participantControl = ({ theme }: { theme: DefaultTheme }) => `
-  height: 34px;
+  height: 30px;
   border: 1px solid ${S.getC(theme).border.default};
-  border-radius: 8px;
+  border-radius: 7px;
   background-color: ${S.getC(theme).background.content};
   color: ${theme.colors.text.primary};
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &:hover {
@@ -1617,26 +1739,74 @@ const RoleDescriptionInput = styled.input`
 const FormGroup = styled.section`
   display: flex;
   flex-direction: column;
-  padding: 0 0 8px;
+  padding: 0 0 4px;
 
   & + & {
-    padding-top: 20px;
+    padding-top: 14px;
     border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   }
 
   > ${S.FormRow} {
-    padding: 12px 0;
+    padding: 8px 0;
     border-bottom: none;
   }
 `
 
 /** 인물 등록 폼 장 머리글(CoreSectionLabel)과 같은 15/700 — 12px 회색 eyebrow는 필드 라벨보다 약해 경계가 안 읽혔다 */
 const FormGroupTitle = styled.h3`
-  margin: 0 0 4px;
-  font-size: 15px;
+  margin: 0 0 2px;
+  font-size: 14.5px;
   font-weight: 700;
   line-height: 1.3;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const InlineControlRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+`
+
+const IntroGroupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0;
+`
+
+const IntroTitleWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  > ${FormGroupTitle} {
+    margin: 0;
+  }
+`
+
+const IntroSummaryBadge = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const IntroToggleButton = styled.button`
+  padding: 3px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.default};
+  }
 `
 
 /* ─── 기간 ─── */
