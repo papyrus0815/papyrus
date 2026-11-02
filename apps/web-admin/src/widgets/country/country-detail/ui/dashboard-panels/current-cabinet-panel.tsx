@@ -1890,8 +1890,9 @@ export function CurrentCabinetPanel({
             <SlotCircle aria-hidden>+</SlotCircle>
             <SlotText>
               <SlotTitle>{positionLabel}</SlotTitle>
-              <SlotEmptyName>미등록 · + 각료 등록</SlotEmptyName>
+              <SlotSubLabel>{dept.name} · 공석</SlotSubLabel>
             </SlotText>
+            <SlotActionPill>+ 등록</SlotActionPill>
           </GhostSlot>
         ),
       })
@@ -1938,8 +1939,9 @@ export function CurrentCabinetPanel({
             <SlotCircle aria-hidden>+</SlotCircle>
             <SlotText>
               <SlotTitle>{positionLabel}</SlotTitle>
-              <SlotEmptyName>미등록 · + 각료 등록</SlotEmptyName>
+              <SlotSubLabel>{item.name} · 공석</SlotSubLabel>
             </SlotText>
+            <SlotActionPill>+ 등록</SlotActionPill>
           </GhostSlot>
         ),
       })
@@ -2131,12 +2133,59 @@ export function CurrentCabinetPanel({
       <SwitchFade $switching={overviewSwitching} aria-busy={overviewSwitching}>
       {isLoading ? (
         <GovernmentSkeleton />
+      ) : heads.length === 0 ? (
+        <DualEmptyGrid>
+          <DualEmptyCard
+            type="button"
+            $monarch
+            onClick={() => openRegister(null, '군주·국가원수', 'head')}
+          >
+            <DualEmptyAvatar $monarch aria-hidden>
+              👑
+            </DualEmptyAvatar>
+            <DualEmptyBody>
+              <DualEmptyBadgeRow>
+                <DualEmptyBadge $monarch>군주 · 국가원수</DualEmptyBadge>
+                {activePolityLabel && (
+                  <DualEmptyMetaChip>{activePolityLabel}</DualEmptyMetaChip>
+                )}
+              </DualEmptyBadgeRow>
+              <DualEmptyTitle>국왕 · 황제 · 국가원수</DualEmptyTitle>
+            </DualEmptyBody>
+            <DualEmptyCta $monarch>+ 등록</DualEmptyCta>
+          </DualEmptyCard>
+
+          <DualEmptyCard
+            type="button"
+            onClick={() =>
+              openRegister(
+                null,
+                activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반',
+                'head',
+              )
+            }
+          >
+            <DualEmptyAvatar aria-hidden>🏛️</DualEmptyAvatar>
+            <DualEmptyBody>
+              <DualEmptyBadgeRow>
+                <DualEmptyBadge>행정부 · 내각 수반</DualEmptyBadge>
+                {activeRegimeMeta && (
+                  <DualEmptyMetaChip>
+                    {activeRegimeMeta.label}
+                  </DualEmptyMetaChip>
+                )}
+              </DualEmptyBadgeRow>
+              <DualEmptyTitle>
+                {selectedCabinet
+                  ? cabinetLabel(selectedCabinet)
+                  : (activeRegimeMeta?.defaultHeadRoleLabel ??
+                    '대통령 · 총리 · 재상')}
+              </DualEmptyTitle>
+            </DualEmptyBody>
+            <DualEmptyCta>+ 등록</DualEmptyCta>
+          </DualEmptyCard>
+        </DualEmptyGrid>
       ) : (
-        /*
-         * 행정부 마인드맵 — 데이터가 아직 없는 국가에서도 텍스트 안내문(SectionEmpty) 대신
-         * 가운데 2단 이원 스택(👑 군주·국가원수 + 🏛️ 행정부·수반)과 좌·우 8개 각료 가지
-         * 블루프린트 슬롯을 상시 렌더링해 클릭 한 번으로 바로 등록할 수 있게 한다.
-         */
         <CabinetMindMap
           showPosition={
             cabinets.length <= 1 && fallbackHeadTenures.length <= 1
@@ -2902,25 +2951,30 @@ const SlotMain = styled.button<{ $filled?: boolean }>`
   }
 `
 
-/** 틀에서 권하는 아직 없는 부처 — 흐린 점선 칸. 누르면 부처가 만들어진다 */
+/** 마인드맵 좌·우 빈 각료 슬롯 — 채워진 각료 노드(BranchNode)와 같은 54px 규격·3단 정렬 */
 const GhostSlot = styled.button`
   ${slotBase}
-  gap: 9px;
+  gap: 10px;
   height: 54px;
-  padding: 0 12px;
+  padding: 0 14px;
   border-radius: 12px;
-  /* light 테두리는 다크 바탕에서 사라졌다 — 칸으로 읽힐 만큼은 남긴다 */
   border-color: ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.02)'
+      : 'rgba(15, 23, 42, 0.012)'};
   font-family: inherit;
-  opacity: 0.8;
+  opacity: 0.88;
   transition:
     opacity 0.15s ease,
     border-color 0.15s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    transform 0.15s ease;
 
   &:hover:not(:disabled) {
     opacity: 1;
-    border-color: rgba(99, 102, 241, 0.45);
+    transform: translateY(-1px);
+    border-color: rgba(99, 102, 241, 0.48);
     background: ${({ theme }) => theme.colors.hover};
   }
   &:disabled {
@@ -2931,6 +2985,187 @@ const GhostSlot = styled.button`
     outline-offset: 2px;
     opacity: 1;
   }
+`
+
+const SlotSubLabel = styled.span`
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const SlotActionPill = styled.span`
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.16)'
+      : 'rgba(99, 102, 241, 0.09)'};
+`
+
+const DualEmptyGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  width: 100%;
+`
+
+const DualEmptyCard = styled.button<{ $monarch?: boolean }>`
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px dashed
+    ${({ $monarch, theme }) =>
+      $monarch
+        ? theme.mode === 'dark'
+          ? 'rgba(251, 191, 36, 0.38)'
+          : 'rgba(217, 119, 6, 0.36)'
+        : theme.colors.border.medium};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.07), rgba(255, 255, 255, 0.02))'
+        : 'linear-gradient(135deg, rgba(255, 251, 235, 0.8), #ffffff)'
+      : theme.mode === 'dark'
+        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.07), rgba(255, 255, 255, 0.02))'
+        : 'linear-gradient(135deg, rgba(238, 242, 255, 0.65), #ffffff)'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-style: solid;
+    border-color: ${({ $monarch }) =>
+      $monarch ? 'rgba(217, 119, 6, 0.58)' : 'rgba(99, 102, 241, 0.52)'};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
+`
+
+const DualEmptyAvatar = styled.span<{ $monarch?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  font-size: 22px;
+  line-height: 1;
+  border: 1.5px dashed
+    ${({ $monarch }) =>
+      $monarch ? 'rgba(217, 119, 6, 0.5)' : 'rgba(99, 102, 241, 0.45)'};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.14)'
+        : '#fef3c7'
+      : theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : '#e0e7ff'};
+`
+
+const DualEmptyBody = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+`
+
+const DualEmptyBadgeRow = styled.span`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const DualEmptyBadge = styled.span<{ $monarch?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? '#fde68a'
+        : '#92400e'
+      : theme.mode === 'dark'
+        ? '#c7d2fe'
+        : '#3730a3'};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.22)'
+        : '#fef3c7'
+      : theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.2)'
+        : '#e0e7ff'};
+`
+
+const DualEmptyMetaChip = styled.span`
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)'};
+`
+
+const DualEmptyTitle = styled.span`
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const DualEmptyCta = styled.span<{ $monarch?: boolean }>`
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? '#fde68a'
+        : '#92400e'
+      : theme.mode === 'dark'
+        ? '#c7d2fe'
+        : '#4338ca'};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.2)'
+        : '#fde68a'
+      : theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.22)'
+        : '#e0e7ff'};
 `
 
 /* 얼굴 자리 — 채워진 칸의 36px 얼굴과 같은 지름 */
