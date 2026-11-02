@@ -6,9 +6,9 @@ import { EVENT_COUNTRY_ROLE_OPTIONS } from '@/entities/event/model/country-parti
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
 /** 기원전에는 0년이 없다 — 기원전 1년 다음이 1년이라 차를 구하려면 천문 연도로 옮긴다. */
-const astronomicalYear = (year: number) => (year < 0 ? year + 1 : year)
+export const astronomicalYear = (year: number) => (year < 0 ? year + 1 : year)
 
-const isDayPrecise = (iso: string, precision?: string | null) => {
+export const isDayPrecise = (iso: string, precision?: string | null) => {
   if (precision === 'year' || precision === 'month') return false
   if (precision === 'day') return true
   // 정밀도 NULL인 1월 1일은 '연도만 안다'는 자리 표시다(formatDateRange와 같은 판정).
@@ -27,7 +27,7 @@ const daysInMonth = (year: number, month: number) =>
   new Date(Date.UTC(year + YEAR_SHIFT, month, 0)).getUTCDate()
 
 /** 천문 연도 기준 일련 일수 — 두 날짜의 차를 구하는 데만 쓴다. */
-const dayNumber = (year: number, month: number, day: number) =>
+export const dayNumber = (year: number, month: number, day: number) =>
   Math.round(Date.UTC(year + YEAR_SHIFT, month - 1, day) / 86_400_000)
 
 /**

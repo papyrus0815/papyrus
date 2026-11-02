@@ -28,6 +28,7 @@ import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inlin
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { PHASE_LABEL, groupByPhase } from './collection-development.lib'
+import { type GapInfo, siblingGaps, spanText } from './development-gap.lib'
 import { HeaderTextAction } from './section-collapse'
 import { CollectionFooter, ExpandToggle, KindSwitch, RegroupBar, createCollectionWith } from './collection-regroup'
 import { compareEventStart, crossPatchErrorMessage } from './detail-network.lib'
@@ -206,6 +207,23 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     () => new Map(groups.flatMap((group) => group.items).map((node, position) => [node.id, position + 1])),
     [groups],
   )
+  /**
+   * 앞 사건 시작 며칠 뒤인지 — 같은 상위 아래 화면 차례에서 앞에 나온 형제 중 가장 늦게 시작한 사건과 견준다(직계는 구획을 넘어 이어지는 차례,
+   * 하위 묶음 안은 그 안에서). 첫 행은 비운다 — 상위 시작과의 관계는 구획(시작 이전·기간 중)이 이미 말한다.
+   */
+  const gapById = useMemo(() => {
+    const map = new Map<string, GapInfo>()
+    const visit = (siblings: TreeRow[]) => {
+      const gaps = siblingGaps(siblings)
+      siblings.forEach((node, position) => {
+        const gap = gaps[position]
+        if (gap) map.set(node.id, gap)
+        visit(node.children)
+      })
+    }
+    visit(groups.flatMap((group) => group.items))
+    return map
+  }, [groups])
 
   /**
    * 구획의 기준 시점 — '시작 이전'은 무엇의 이전인지(상위 시작일)를 함께 말해야 구획이 읽힌다.
@@ -436,6 +454,9 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
       ? formatDateRange(node.startDate, node.endDate ?? undefined, node.startDatePrecision, node.endDatePrecision)
       : null
     const domain = node.domain ? eventDomainDef(node.domain) : null
+    /** 진행 기간·앞 사건과의 간격 — 날짜 줄에 붙인다(행 높이를 늘리지 않게) */
+    const span = spanText(node)
+    const gap = gapById.get(node.id) ?? null
     const nested = node.depth > 1
     const canDrag = owned && !selecting && !busy
     return (
@@ -473,6 +494,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             {/* 날짜가 먼저 — 타임라인은 '언제'로 읽힌다(연혁·단락 타임라인과 같은 문법) */}
             <StepPeriod>
               <span>{dateLabel ?? '날짜 미상'}</span>
+              {span && <StepSpan>{span}</StepSpan>}
               {domain && (
                 <DomainMeta>
                   <domain.Icon aria-hidden />
@@ -480,6 +502,17 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 </DomainMeta>
               )}
               {node.viaExtraLink && <span>추가 상위로 연결</span>}
+              {gap && (
+                <StepGap title={gap.title}>
+                  {gap.text}
+                  {gap.ongoing && (
+                    <span className="ongoing">
+                      {' '}
+                      · <span className="wide">앞 사건 </span>진행 중
+                    </span>
+                  )}
+                </StepGap>
+              )}
             </StepPeriod>
             <StepHead>
               <StepTitle
@@ -1151,6 +1184,29 @@ const StepPeriod = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/** 진행 기간 — 날짜 바로 뒤, 한 단 흐리게 */
+const StepSpan = styled.span`
+  font-weight: 500;
+  color: ${metaText};
+`
+
+/** 앞 사건과의 간격 — 날짜 줄 오른쪽 끝. 진행 중이던 앞 사건은 덧붙여 말한다 */
+const StepGap = styled.span`
+  margin-left: auto;
+  font-weight: 600;
+  color: ${metaText};
+  white-space: nowrap;
+
+  .ongoing {
+    font-weight: 500;
+  }
+  @container eventdetail (max-width: 639px) {
+    .wide {
+      display: none;
+    }
+  }
+`
+
 /** 제목 + 하위 펼침 — 좁으면 펼침 단추가 다음 줄로 */
 const StepHead = styled.div`
   display: flex;
@@ -1166,6 +1222,11 @@ const DomainMeta = styled.span`
   gap: 3px;
   font-weight: 500;
   color: ${metaText};
+
+  /* 휴대폰 폭 — 분야까지 서면 간격(+9일)이 둘째 줄로 밀린다. 분야는 제목·목록에서도 읽힌다 */
+  @container eventdetail (max-width: 639px) {
+    display: none;
+  }
 
   svg {
     width: 11px;
