@@ -1238,6 +1238,130 @@ export function PersonDetailPanel({
   )
 
   /**
+   * D1: 기등록 배우자의 혼인 서열(정실·계비·후궁 등) 1-Click 변경.
+   */
+  const handleChangeSpouseRank = useCallback(
+    async (spouseId: string, rank: MarriageRankToken | null) => {
+      const currentPerson = person
+      if (!currentPerson || !spouseId) return
+      try {
+        const existing = serializeExistingSpouseRelations(currentPerson)
+        const updated = existing.map((rel) =>
+          rel.spouseId === spouseId ? { ...rel, marriageRank: rank } : rel,
+        )
+        await updatePerson(currentPerson.id, { spouseRelations: updated })
+        await invalidatePersonCaches(true)
+        notify.success('혼인 서열을 변경했습니다.')
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '혼인 서열 변경에 실패했습니다.'))
+      }
+    },
+    [person, serializeExistingSpouseRelations, invalidatePersonCaches],
+  )
+
+  /**
+   * D1: 추정 배우자(자녀 기록 기반)를 1-Click으로 정식 배우자(PersonSpouse)로 승격 등록.
+   */
+  const handlePromoteInferredSpouse = useCallback(
+    async (spouseId: string, rank: MarriageRankToken | null) => {
+      const currentPerson = person
+      if (!currentPerson || !spouseId) return
+      try {
+        const existing = serializeExistingSpouseRelations(currentPerson)
+        if (existing.some((rel) => rel.spouseId === spouseId)) return
+        await updatePerson(currentPerson.id, {
+          spouseRelations: [
+            ...existing,
+            {
+              spouseId,
+              ...(rank ? { marriageRank: rank } : {}),
+            },
+          ],
+        })
+        await invalidatePersonCaches(true)
+        notify.success('정식 배우자로 등록했습니다.')
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '배우자 등록에 실패했습니다.'))
+      }
+    },
+    [person, serializeExistingSpouseRelations, invalidatePersonCaches],
+  )
+
+  /**
+   * D2: 기등록 자녀의 출생 서열(birthOrder) 또는 반대편 부모(생모·생부) 인라인 빠른 수정.
+   */
+  const handleQuickUpdateChild = useCallback(
+    async (
+      childId: string,
+      patch: { birthOrder?: number | null; otherParentId?: string | null },
+    ) => {
+      const currentPerson = person
+      if (!currentPerson || !childId) return
+      try {
+        const updatePayload: {
+          birthOrder?: number | null
+          fatherId?: string | null
+          motherId?: string | null
+        } = {}
+        if ('birthOrder' in patch) {
+          updatePayload.birthOrder = patch.birthOrder ?? null
+        }
+        if ('otherParentId' in patch) {
+          const g = (currentPerson.gender ?? '').toUpperCase()
+          const otherSlot: 'fatherId' | 'motherId' =
+            g === 'FEMALE' ? 'fatherId' : 'motherId'
+          updatePayload[otherSlot] = patch.otherParentId ?? null
+        }
+        await updatePerson(childId, updatePayload)
+        await invalidatePersonCaches(true)
+        notify.success('자녀 정보를 수정했습니다.')
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '자녀 정보 수정에 실패했습니다.'))
+      }
+    },
+    [person, invalidatePersonCaches],
+  )
+
+  /** BFS 가계도에서 자녀의 반대편 부모로 추론된 추정 배우자 목록 */
+  const inferredSpousesFromTree = useMemo(() => {
+    if (!familyTreeData || !person?.id) return []
+    const egoId = person.id
+    const explicitSet = new Set(
+      (person.spouseRelations ?? [])
+        .map((r) => r.spouse?.id)
+        .filter(Boolean) as string[],
+    )
+    const nodeById = new Map(familyTreeData.nodes.map((n) => [n.id, n]))
+    const out: Array<{
+      id: string
+      name: string
+      surname?: string | null
+      middleName?: string | null
+      nameDisplayOrder?: string | null
+      country?: { defaultNameDisplayOrder?: string | null } | null
+    }> = []
+    const seen = new Set<string>()
+    for (const e of familyTreeData.edges) {
+      if (e.type !== 'spouse' || !e.inferred) continue
+      const partnerId =
+        e.source === egoId ? e.target : e.target === egoId ? e.source : null
+      if (!partnerId || explicitSet.has(partnerId) || seen.has(partnerId)) continue
+      const partnerNode = nodeById.get(partnerId)
+      if (!partnerNode) continue
+      seen.add(partnerId)
+      out.push({
+        id: partnerNode.id,
+        name: partnerNode.name,
+        surname: partnerNode.surname ?? null,
+        middleName: partnerNode.middleName ?? null,
+        nameDisplayOrder: partnerNode.nameDisplayOrder ?? null,
+        country: partnerNode.country ?? null,
+      })
+    }
+    return out
+  }, [familyTreeData, person?.id, person?.spouseRelations])
+
+  /**
    * 선택/생성한 인물을 ego와 연결하는 FK write.
    * - child : 대상 인물의 fatherId/motherId(ego 성별) = ego
    * - father/mother : ego의 fatherId/motherId = 대상 인물
@@ -4003,10 +4127,12 @@ export function PersonDetailPanel({
                   )}
                 </section>
 
-                {/* 배우자 상세 — 혼인 기간·메모·소생 자녀 */}
+                {/* 배우자 상세 — 혼인 기간·메모·소생 자녀·추정 배우자 승격·자녀 서열/소생 빠른 정리 */}
                 <SpouseDetailSection
                   spouseRelations={p.spouseRelations}
                   childrenList={person.children}
+                  inferredSpouses={inferredSpousesFromTree}
+                  egoId={person.id}
                   isDeceased={isDeceased}
                   onPersonClick={handlePersonClick}
                   onUnlinkSpouse={
@@ -4019,6 +4145,11 @@ export function PersonDetailPanel({
                           })
                       : undefined
                   }
+                  onChangeSpouseRank={!embedInModal ? handleChangeSpouseRank : undefined}
+                  onPromoteInferredSpouse={
+                    !embedInModal ? handlePromoteInferredSpouse : undefined
+                  }
+                  onQuickUpdateChild={!embedInModal ? handleQuickUpdateChild : undefined}
                 />
 
                 {/* 인간관계 */}

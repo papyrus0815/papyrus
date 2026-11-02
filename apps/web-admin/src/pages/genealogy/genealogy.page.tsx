@@ -520,6 +520,64 @@ function computeLayout(
     })
   }
 
+  // ── F2. Cousins & collateral nodes at gen >= 0 whose ancestor parents were placed in F ─
+  for (const g of [0, 1, 2]) {
+    const newlyPlacedIds: string[] = []
+    const unplacedAtG = nodes
+      .filter((n) => genMap.get(n.id) === g && !xMap.has(n.id))
+      .sort(compareSiblings)
+    for (const n of unplacedAtG) {
+      const placedParents = (parentsOf.get(n.id) ?? []).filter((pid) => xMap.has(pid))
+      if (placedParents.length > 0) {
+        const px =
+          placedParents.reduce((s, pid) => s + xMap.get(pid)!, 0) / placedParents.length
+        xMap.set(n.id, px)
+        newlyPlacedIds.push(n.id)
+        // Also place spouse of cousin if at same generation
+        const spIds = (spousesOf.get(n.id) ?? []).filter(
+          (sid) => genMap.get(sid) === g && !xMap.has(sid),
+        )
+        spIds.forEach((sid, idx) => {
+          xMap.set(sid, px + (idx + 1) * STEP)
+          newlyPlacedIds.push(sid)
+        })
+      }
+    }
+    if (newlyPlacedIds.length > 0) {
+      // Resolve horizontal collisions at generation g while keeping ego anchored at 0
+      const placedAtG = nodes
+        .filter((n) => genMap.get(n.id) === g && xMap.has(n.id))
+        .sort((a, b) => (xMap.get(a.id) ?? 0) - (xMap.get(b.id) ?? 0))
+      const egoIdx = placedAtG.findIndex((n) => n.id === egoId)
+      if (egoIdx >= 0) {
+        // Push nodes right of ego rightward on collision
+        for (let i = egoIdx + 1; i < placedAtG.length; i++) {
+          const prevX = xMap.get(placedAtG[i - 1].id)!
+          const currX = xMap.get(placedAtG[i].id)!
+          if (currX < prevX + STEP) {
+            xMap.set(placedAtG[i].id, prevX + STEP)
+          }
+        }
+        // Push nodes left of ego leftward on collision
+        for (let i = egoIdx - 1; i >= 0; i--) {
+          const nextX = xMap.get(placedAtG[i + 1].id)!
+          const currX = xMap.get(placedAtG[i].id)!
+          if (currX > nextX - STEP) {
+            xMap.set(placedAtG[i].id, nextX - STEP)
+          }
+        }
+      } else {
+        for (let i = 1; i < placedAtG.length; i++) {
+          const prevX = xMap.get(placedAtG[i - 1].id)!
+          const currX = xMap.get(placedAtG[i].id)!
+          if (currX < prevX + STEP) {
+            xMap.set(placedAtG[i].id, prevX + STEP)
+          }
+        }
+      }
+    }
+  }
+
   // ── G. Fallback: anything still unplaced ─────────────────────────
   let fb = maxX() + COUPLE_STEP
   for (const n of nodes) {
@@ -545,7 +603,7 @@ function computeLayout(
 function buildGraph(
   data: FamilyTreeData,
   sizes: LayoutSizes,
-): { rfNodes: Node[]; rfEdges: Edge[] } {
+): { rfNodes: Node[]; rfEdges: Edge[]; kinshipMap: Map<string, KinshipInfo> } {
   const positions = computeLayout(data, sizes)
   const kinshipMap = computeKinshipMap(data, data.egoId)
 
@@ -639,7 +697,7 @@ function buildGraph(
     }
   })
 
-  return { rfNodes, rfEdges }
+  return { rfNodes, rfEdges, kinshipMap }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -688,6 +746,9 @@ function buildPersonTooltip(
   const lines: string[] = [`${displayName} — 클릭: 상세 / Shift+클릭: 중심 변경`]
   if (kinship && kinship.chon !== 0) {
     lines.push(`기준 관계 — ${kinship.summary}`)
+    if (kinship.pathSummary) {
+      lines.push(`계보 경로 — ${kinship.pathSummary}`)
+    }
   }
   if (p.originalName) lines.push(`원어 — ${p.originalName}`)
   if (p.preEnthronementTitle) lines.push(`작호 — ${p.preEnthronementTitle}`)
@@ -701,10 +762,11 @@ function buildPersonTooltip(
 
 // ─── Person Node component ─────────────────────────────────────────
 function PersonNodeInner({ data }: NodeProps) {
-  const { person, isEgo, kinship, sizes } = data as {
+  const { person, isEgo, kinship, onPath, sizes } = data as {
     person: FamilyTreePerson
     isEgo: boolean
     kinship?: KinshipInfo | null
+    onPath?: boolean
     sizes: LayoutSizes
   }
   const navigate = useNavigate()
@@ -752,6 +814,8 @@ function PersonNodeInner({ data }: NodeProps) {
   return (
     <NodeWrap
       $isEgo={isEgo}
+      $isMonarch={Boolean(person.regnalName)}
+      $onPath={Boolean(onPath)}
       $deceased={isDeceased}
       $dimmed={!openable}
       $w={sizes.NODE_W}
@@ -860,6 +924,7 @@ function GenealogyFlow({ personId }: { personId: string }) {
   const [search, setSearch] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
   const [exporting, setExporting] = useState(false)
+  const [hoveredPersonId, setHoveredPersonId] = useState<string | null>(null)
   const isCompact = useIsCompactLayout()
   const sizes = isCompact ? COMPACT_SIZES : DESKTOP_SIZES
 
@@ -871,10 +936,55 @@ function GenealogyFlow({ personId }: { personId: string }) {
     staleTime: 5 * 60 * 1000,
   })
 
-  const { rfNodes, rfEdges } = useMemo(() => {
-    if (!data || data.nodes.length === 0) return { rfNodes: [], rfEdges: [] }
+  const { rfNodes: baseNodes, rfEdges: baseEdges, kinshipMap } = useMemo(() => {
+    if (!data || data.nodes.length === 0) {
+      return {
+        rfNodes: [] as Node[],
+        rfEdges: [] as Edge[],
+        kinshipMap: new Map<string, KinshipInfo>(),
+      }
+    }
     return buildGraph(data, sizes)
   }, [data, sizes])
+
+  const hoveredKinship = useMemo(() => {
+    if (!hoveredPersonId || hoveredPersonId === data?.egoId) return null
+    return kinshipMap.get(hoveredPersonId) ?? null
+  }, [hoveredPersonId, data?.egoId, kinshipMap])
+
+  const { rfNodes, rfEdges } = useMemo(() => {
+    const pathIds = hoveredKinship?.pathNodeIds
+    if (!pathIds || pathIds.length < 2) {
+      return { rfNodes: baseNodes, rfEdges: baseEdges }
+    }
+    const pathNodeSet = new Set(pathIds)
+    const pathPairSet = new Set<string>()
+    for (let i = 0; i < pathIds.length - 1; i++) {
+      const a = pathIds[i]
+      const b = pathIds[i + 1]
+      pathPairSet.add(`${a}__${b}`)
+      pathPairSet.add(`${b}__${a}`)
+    }
+    const nextNodes = baseNodes.map((n) =>
+      pathNodeSet.has(n.id)
+        ? { ...n, data: { ...n.data, onPath: true } }
+        : n,
+    )
+    const nextEdges = baseEdges.map((e) => {
+      if (!pathPairSet.has(`${e.source}__${e.target}`)) return e
+      return {
+        ...e,
+        zIndex: 10,
+        style: {
+          ...e.style,
+          stroke: '#6366f1',
+          strokeWidth: 2.75,
+          opacity: 1,
+        },
+      }
+    })
+    return { rfNodes: nextNodes, rfEdges: nextEdges }
+  }, [baseNodes, baseEdges, hoveredKinship])
 
   const onInit = useCallback(() => {
     setTimeout(() => fitView({ padding: 0.15 }), 100)
@@ -1038,6 +1148,8 @@ function GenealogyFlow({ personId }: { personId: string }) {
           edges={rfEdges}
           nodeTypes={nodeTypes}
           onInit={onInit}
+          onNodeMouseEnter={(_, node) => setHoveredPersonId(node.id)}
+          onNodeMouseLeave={() => setHoveredPersonId(null)}
           fitView
           minZoom={0.05}
           maxZoom={2}
@@ -1063,6 +1175,15 @@ function GenealogyFlow({ personId }: { personId: string }) {
             position="bottom-left"
           />
         </ReactFlow>
+
+        {/* 호버 인물 계보 경로 배너 (B2) */}
+        {hoveredKinship && hoveredKinship.pathSummary && (
+          <PathHighlightBanner role="status">
+            <strong>{hoveredKinship.summary}</strong>
+            <span>·</span>
+            <span>{hoveredKinship.pathSummary}</span>
+          </PathHighlightBanner>
+        )}
 
         {/* 세대 라벨 sticky 오버레이 (D1) — 좌측 가장자리 고정 */}
         <GenerationGuides aria-hidden>
@@ -1311,6 +1432,8 @@ const ErrorOverlay = styled.div`
 // 라이트/다크 모드 모두 지원하기 위해 CSS 변수와 prefers-color-scheme 사용
 const NodeWrap = styled.div<{
   $isEgo: boolean
+  $isMonarch?: boolean
+  $onPath?: boolean
   $deceased?: boolean
   $w?: number
   $h?: number
@@ -1328,12 +1451,24 @@ const NodeWrap = styled.div<{
   border-radius: 16px;
   box-sizing: border-box;
   cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.15s;
+  transition: box-shadow 0.2s, transform 0.15s, border-color 0.15s;
   background: ${({ $isEgo }) => $isEgo
     ? 'linear-gradient(145deg, #6366f1 0%, #818cf8 100%)'
     : 'var(--node-bg, #fff)'};
-  border: ${({ $isEgo }) => $isEgo ? '2px solid #4f46e5' : '1.5px solid var(--node-border, #e2e8f0)'};
-  box-shadow: ${({ $isEgo }) => $isEgo ? '0 4px 24px rgba(99,102,241,0.35)' : '0 2px 8px rgba(0,0,0,0.06)'};
+  border: ${({ $isEgo, $onPath, $isMonarch }) =>
+    $isEgo
+      ? '2px solid #4f46e5'
+      : $onPath
+        ? '2px solid #6366f1'
+        : $isMonarch
+          ? '1.5px solid rgba(217, 119, 6, 0.55)'
+          : '1.5px solid var(--node-border, #e2e8f0)'};
+  box-shadow: ${({ $isEgo, $onPath }) =>
+    $isEgo
+      ? '0 4px 24px rgba(99,102,241,0.35)'
+      : $onPath
+        ? '0 0 0 3px rgba(99,102,241,0.22), 0 6px 20px rgba(99,102,241,0.18)'
+        : '0 2px 8px rgba(0,0,0,0.06)'};
   &:hover, &:focus-within, &:active {
     transform: translateY(-2px);
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
@@ -1456,6 +1591,37 @@ const GenerationGuideLine = styled.div`
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.85)' : 'rgba(248, 250, 252, 0.85)'};
     border-radius: 4px;
+  }
+`
+
+const PathHighlightBanner = styled.div`
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 86%;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#e0e7ff' : '#312e81')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 27, 75, 0.92)' : 'rgba(238, 242, 255, 0.95)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.5)' : 'rgba(99, 102, 241, 0.35)'};
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   }
 `
 

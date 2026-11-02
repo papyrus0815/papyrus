@@ -103,6 +103,38 @@ describe('SpouseDetailSection', () => {
     fireEvent.click(spouseBtn)
     expect(onPersonClick).toHaveBeenCalledWith('spouse-42')
   })
+
+  it('추정 배우자(inferredSpouses) 승격 버튼과 자녀 서열·소생 인라인 편집기가 동작한다', () => {
+    const onPromoteInferredSpouse = jest.fn()
+    const onQuickUpdateChild = jest.fn()
+    renderWithTheme(
+      <SpouseDetailSection
+        spouseRelations={[]}
+        inferredSpouses={[{ id: 'inf-sp-1', name: '신빈 김씨' }]}
+        childrenList={[
+          {
+            id: 'child-1',
+            name: '계양군',
+            birthOrder: 2,
+            fatherId: 'ego-1',
+            motherId: 'inf-sp-1',
+          } as any,
+        ]}
+        egoId="ego-1"
+        onPromoteInferredSpouse={onPromoteInferredSpouse}
+        onQuickUpdateChild={onQuickUpdateChild}
+      />,
+    )
+
+    expect(screen.getByText('추정 (자녀 기록 기반)')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /후궁 등록/ }))
+    expect(onPromoteInferredSpouse).toHaveBeenCalledWith('inf-sp-1', 'CONCUBINE')
+
+    const orderInput = screen.getByLabelText('계양군 출생 서열')
+    fireEvent.change(orderInput, { target: { value: '3' } })
+    fireEvent.blur(orderInput)
+    expect(onQuickUpdateChild).toHaveBeenCalledWith('child-1', { birthOrder: 3 })
+  })
 })
 
 describe('CollapsibleSection', () => {

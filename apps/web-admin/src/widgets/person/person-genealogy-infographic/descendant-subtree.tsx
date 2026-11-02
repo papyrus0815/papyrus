@@ -1,11 +1,14 @@
+import { useContext } from 'react'
 import styled from 'styled-components'
 
 import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
 
 import { DescendantNode } from './card'
 import { DESCENDANT_GAP } from './constants'
+import { KinshipLookupContext } from './context'
 import { ForkFromOneParent, ForkToCompactChildren } from './forks'
 import { descendantSlotWidths, nextGenOf } from './geometry'
+import { formatDescendantRoleBadge } from './kinship'
 
 const DESCENDANT_BADGES = ['손자녀', '증손자녀', '고손자녀', '후손']
 
@@ -35,6 +38,7 @@ export function DescendantSubtree({
   inMarriageByPersonId?: Map<string, FamilyTreePerson[]>
   onPersonClick?: (id: string) => void
 }) {
+  const kinshipMap = useContext(KinshipLookupContext)
   if (descendants.length === 0) return null
   const badge = DESCENDANT_BADGES[depth] ?? '후손'
   // 각 후손 페어의 실제 렌더 폭 = max(NODE_W, 그 아래 서브트리 폭). geometry 단일 출처를
@@ -55,11 +59,13 @@ export function DescendantSubtree({
           const nextVisited = new Set(visited)
           if (g.id) nextVisited.add(g.id)
           const inMarriagesWith = g.id ? inMarriageByPersonId?.get(g.id) ?? [] : []
+          const gKin = g.id ? kinshipMap.get(g.id) : undefined
+          const resolvedBadge = formatDescendantRoleBadge(g, badge, gKin)
           return (
             <GrandchildPair key={g.id}>
               <DescendantNode
                 person={g}
-                badge={badge}
+                badge={resolvedBadge}
                 inMarriagesWith={inMarriagesWith}
                 onPersonClick={onPersonClick}
               />

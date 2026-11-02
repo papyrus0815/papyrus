@@ -15,8 +15,16 @@
  *
  * 본 파일은 메인 컴포넌트와 ego 행/자녀 행/조상 fallback 등 오케스트레이션만 담당.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { FiHeart, FiUsers } from 'react-icons/fi'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
+import { FiCrosshair, FiHeart, FiUsers } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import type { FamilyTreeData, FamilyTreePerson } from '@/shared/api/persons-family-tree'
@@ -52,10 +60,11 @@ import {
 import {
   FamilyTreeLookupContext,
   KinshipLookupContext,
+  SpouseNamesLookupContext,
   type UnlinkRelationHandler,
 } from './context'
 import { DescendantSubtree } from './descendant-subtree'
-import { computeKinshipMap } from './kinship'
+import { computeKinshipMap, formatChildRoleBadge } from './kinship'
 import {
   classifySiblingKinship,
   ftPersonToNodePerson,
@@ -151,7 +160,11 @@ function formatSpouseBadge(
  * 화면에 없는 그룹의 "일부만 표시" 유령 배너를 막는다.
  * 'sibling-other-parents'는 형제 툴팁의 부모 이름 해소용 보조 페치 — 카드 그룹이 아니다.
  */
-const EMBED_UNRENDERED_SCOPES = new Set<string>(['spouse-children', 'sibling-other-parents'])
+const EMBED_UNRENDERED_SCOPES = new Set<string>([
+  'spouse-children',
+  'sibling-other-parents',
+  'cousins',
+])
 
 export function PersonGenealogyInfographic({
   ego,
@@ -179,6 +192,28 @@ export function PersonGenealogyInfographic({
     () => computeKinshipMap(familyTreeData, ego.id),
     [familyTreeData, ego.id],
   )
+
+  const spouseNamesByPersonId = useMemo(() => {
+    const m = new Map<string, string[]>()
+    if (!familyTreeData) return m
+    const addName = (pid: string, partnerId: string, rank?: string | null) => {
+      if (pid === ego.id) return
+      const partner = ftNodeMap.get(partnerId)
+      if (!partner) return
+      const base = getPersonDisplayName(partner, true)
+      const rankLabel = rank ? MARRIAGE_RANK_LABELS[rank] : null
+      const formatted = rankLabel ? `${base} (${rankLabel})` : base
+      const list = m.get(pid) ?? []
+      if (!list.includes(formatted)) list.push(formatted)
+      m.set(pid, list)
+    }
+    for (const e of familyTreeData.edges) {
+      if (e.type !== 'spouse') continue
+      addName(e.source, e.target, e.marriageRank)
+      addName(e.target, e.source, e.marriageRank)
+    }
+    return m
+  }, [familyTreeData, ftNodeMap, ego.id])
 
   const ftParentsOf = useMemo(() => {
     if (!familyTreeData) return new Map<string, string[]>()
@@ -624,9 +659,57 @@ export function PersonGenealogyInfographic({
    * 자녀 페어별 렌더 기하(폭·자녀 중심 오프셋) — 손자녀 서브트리로 팽창한 실측값.
    * fork SVG·ChildPair::before·center-shift가 이 단일 출처를 공유해 선 어긋남을 방지.
    */
+  const [collapsedDescendantChildIds, setCollapsedDescendantChildIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  useEffect(() => {
+    setCollapsedDescendantChildIds(new Set())
+  }, [ego.id])
+
+  const toggleChildDescendants = useCallback((childId: string) => {
+    setCollapsedDescendantChildIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(childId)) next.delete(childId)
+      else next.add(childId)
+      return next
+    })
+  }, [])
+
+  /** 각 자녀의 총 후손 수(손자·증손·고손 포함) 계산 — 접기/펼치기 칩 카운트용 */
+  const totalDescendantCountByChildId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const child of childList) {
+      if (!child.id) continue
+      const visited = new Set<string>([ego.id, child.id].filter(Boolean) as string[])
+      const queue = [...(descendantsByParentId.get(child.id) ?? [])]
+      let count = 0
+      while (queue.length > 0) {
+        const curr = queue.shift()!
+        if (!curr.id || visited.has(curr.id)) continue
+        visited.add(curr.id)
+        count += 1
+        for (const nxt of descendantsByParentId.get(curr.id) ?? []) {
+          if (nxt.id && !visited.has(nxt.id)) queue.push(nxt)
+        }
+      }
+      if (count > 0) counts.set(child.id, count)
+    }
+    return counts
+  }, [childList, descendantsByParentId, ego.id])
+
+  /** 접힌 자녀는 후손 서브트리를 숨겨 computeChildLayouts에서도 단일 카드 폭으로 축소 */
+  const visibleDescendantsByParentId = useMemo(() => {
+    if (collapsedDescendantChildIds.size === 0) return descendantsByParentId
+    const filtered = new Map(descendantsByParentId)
+    for (const cid of collapsedDescendantChildIds) {
+      filtered.delete(cid)
+    }
+    return filtered
+  }, [descendantsByParentId, collapsedDescendantChildIds])
+
   const childLayouts = useMemo(
-    () => computeChildLayouts(childList, descendantsByParentId, ego.id),
-    [childList, descendantsByParentId, ego.id],
+    () => computeChildLayouts(childList, visibleDescendantsByParentId, ego.id),
+    [childList, visibleDescendantsByParentId, ego.id],
   )
   const childrenShift = useMemo(() => childrenCenterShift(childLayouts), [childLayouts])
   // shift를 transform이 아닌 래퍼 padding으로 반영 — 레이아웃에 참여해야 GenerationsInner
@@ -665,10 +748,14 @@ export function PersonGenealogyInfographic({
 
   const treeCanvasRef = useRef<HTMLDivElement | null>(null)
   const egoSlotRef = useRef<HTMLDivElement | null>(null)
+  const [isPanning, setIsPanning] = useState(false)
+  const panStateRef = useRef<{ active: boolean; startX: number; scrollLeft: number }>({
+    active: false,
+    startX: 0,
+    scrollLeft: 0,
+  })
 
-  // 비대칭·대형 가계도에서 초기 스크롤이 좌측 끝(0)에 고정되어 본인(Ego) 카드가
-  // 화면 밖으로 밀리는 문제를 막기 위해 마운트·인물 전환·BFS 도착 시 본인 카드를 가로 중앙 정렬.
-  useEffect(() => {
+  const recenterToEgo = useCallback((smooth = false) => {
     const canvas = treeCanvasRef.current
     const egoEl = egoSlotRef.current
     if (!canvas || !egoEl) return
@@ -681,11 +768,48 @@ export function PersonGenealogyInfographic({
       canvasRect.width / 2 +
       egoRect.width / 2
     if (typeof canvas.scrollTo === 'function') {
-      canvas.scrollTo({ left: Math.max(0, targetLeft), behavior: 'auto' })
+      canvas.scrollTo({
+        left: Math.max(0, targetLeft),
+        behavior: smooth ? 'smooth' : 'auto',
+      })
     } else {
       canvas.scrollLeft = Math.max(0, targetLeft)
     }
-  }, [ego.id, Boolean(familyTreeData)])
+  }, [])
+
+  // 비대칭·대형 가계도에서 초기 스크롤이 좌측 끝(0)에 고정되어 본인(Ego) 카드가
+  // 화면 밖으로 밀리는 문제를 막기 위해 마운트·인물 전환·BFS 도착 시 본인 카드를 가로 중앙 정렬.
+  useEffect(() => {
+    recenterToEgo(false)
+  }, [ego.id, Boolean(familyTreeData), recenterToEgo])
+
+  const handleCanvasMouseDown = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement | null
+    if (target?.closest('button, a, [role="button"], summary')) return
+    const canvas = treeCanvasRef.current
+    if (!canvas || canvas.scrollWidth <= canvas.clientWidth) return
+    panStateRef.current = {
+      active: true,
+      startX: e.clientX,
+      scrollLeft: canvas.scrollLeft,
+    }
+    setIsPanning(true)
+  }, [])
+
+  const handleCanvasMouseMove = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!panStateRef.current.active) return
+    const canvas = treeCanvasRef.current
+    if (!canvas) return
+    const dx = e.clientX - panStateRef.current.startX
+    canvas.scrollLeft = panStateRef.current.scrollLeft - dx
+  }, [])
+
+  const stopCanvasPan = useCallback(() => {
+    if (!panStateRef.current.active) return
+    panStateRef.current.active = false
+    setIsPanning(false)
+  }, [])
 
   // 모든 훅을 지난 뒤 빈 트리 반환 (위 isEmptyTree 주석 참고 — Rules of Hooks).
   if (isEmptyTree) return null
@@ -693,6 +817,7 @@ export function PersonGenealogyInfographic({
   return (
     <FamilyTreeLookupContext.Provider value={ftNodeMap}>
       <KinshipLookupContext.Provider value={kinshipMap}>
+        <SpouseNamesLookupContext.Provider value={spouseNamesByPersonId}>
       <Root>
         {showHeader && (
           <InfographicHeader>
@@ -723,21 +848,36 @@ export function PersonGenealogyInfographic({
           </TruncationBanner>
         )}
 
-        {/* 접이식 표기 범례 — 이복/이부 배지·서출 마커·추정 배우자 정의 (닫힘 기본) */}
-        <LegendDetails>
-          <LegendSummary>표기 안내</LegendSummary>
-          <LegendBody>
-            <LegendTerm>이복형제</LegendTerm> 아버지 같고 어머니 다름 ·{' '}
-            <LegendTerm>이부형제</LegendTerm> 어머니 같고 아버지 다름 ·{' '}
-            <LegendTerm>형제</LegendTerm>(무표기) 친형제 또는 부모 기록 미상 — 카드에 마우스를
-            올리면 사유가 표시됩니다 · <LegendTerm>*</LegendTerm> 서출(이복 여부와 별개) ·{' '}
-            <LegendTerm>(추정)</LegendTerm> 자녀 관계로 추정된 배우자 ·{' '}
-            <LegendTerm>○○○ 소생</LegendTerm> 다중 혼인에서 자녀의 반대편 부모(생모·생부)
-          </LegendBody>
-        </LegendDetails>
+        {/* 접이식 표기 범례 + 본인 위치 중앙 정렬 퀵 액션 */}
+        <TopControlRow>
+          <LegendDetails>
+            <LegendSummary>표기 안내</LegendSummary>
+            <LegendBody>
+              <LegendTerm>이복형제</LegendTerm> 아버지 같고 어머니 다름 ·{' '}
+              <LegendTerm>이부형제</LegendTerm> 어머니 같고 아버지 다름 ·{' '}
+              <LegendTerm>형제</LegendTerm>(무표기) 친형제 또는 부모 기록 미상 — 카드에 마우스를
+              올리면 사유가 표시됩니다 · <LegendTerm>*</LegendTerm> 서출(이복 여부와 별개) ·{' '}
+              <LegendTerm>(추정)</LegendTerm> 자녀 관계로 추정된 배우자 ·{' '}
+              <LegendTerm>○○○ 소생</LegendTerm> 다중 혼인에서 자녀의 반대편 부모(생모·생부)
+            </LegendBody>
+          </LegendDetails>
+          <RecenterCanvasBtn
+            type="button"
+            onClick={() => recenterToEgo(true)}
+            title="본인 카드로 화면 중앙 이동"
+          >
+            <FiCrosshair size={12} />
+            <span>본인 위치로</span>
+          </RecenterCanvasBtn>
+        </TopControlRow>
 
         <TreeCanvas
           ref={treeCanvasRef}
+          $panning={isPanning}
+          onMouseDown={handleCanvasMouseDown}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseUp={stopCanvasPan}
+          onMouseLeave={stopCanvasPan}
           role="region"
           aria-label={`${getPersonDisplayName(ego, true)} 가계도`}
         >
@@ -1098,7 +1238,11 @@ export function PersonGenealogyInfographic({
                     })()}
                     {/* col 2 (auto) — 자녀 카드 + 손자녀 서브트리 */}
                     <ChildNodeColumn>
-                      <GeoNode $role="child" {...clickableProps(childList[0].id)}>
+                      <GeoNode
+                        $role="child"
+                        $monarch={Boolean(childList[0].regnalName)}
+                        {...clickableProps(childList[0].id)}
+                      >
                         {onUnlinkRelation && childList[0].id && (
                           <CardUnlinkButton
                             label="자녀 연결 해제"
@@ -1113,21 +1257,43 @@ export function PersonGenealogyInfographic({
                         )}
                         <GeoThumbnail person={childList[0]} role="child" />
                         <NodeNameBlock person={childList[0]} />
-                        <NodeBadge $role="child">자녀</NodeBadge>
+                        <NodeBadge $role="child">{formatChildRoleBadge(childList[0])}</NodeBadge>
                         <CardHoverInfo person={childList[0]} />
                         {consortMarkFor(childList[0])}
+                        {childList[0].id &&
+                          (totalDescendantCountByChildId.get(childList[0].id) ?? 0) > 0 && (
+                            <DescendantCollapseChip
+                              type="button"
+                              onClick={(ev) => {
+                                ev.stopPropagation()
+                                toggleChildDescendants(childList[0].id!)
+                              }}
+                              onKeyDown={(ev) => {
+                                if (ev.key === 'Enter' || ev.key === ' ') ev.stopPropagation()
+                              }}
+                              title={
+                                collapsedDescendantChildIds.has(childList[0].id)
+                                  ? '후손 펼치기'
+                                  : '후손 접기'
+                              }
+                            >
+                              후손 {totalDescendantCountByChildId.get(childList[0].id)}명{' '}
+                              {collapsedDescendantChildIds.has(childList[0].id) ? '▸' : '▾'}
+                            </DescendantCollapseChip>
+                          )}
                       </GeoNode>
-                      {childList[0].id && descendantsByParentId.has(childList[0].id) && (
-                        <DescendantSubtree
-                          descendants={descendantsByParentId.get(childList[0].id) ?? []}
-                          childrenOf={descendantsByParentId}
-                          depth={0}
-                          maxDepth={DESCENDANT_MAX_DEPTH}
-                          visited={new Set([ego.id, childList[0].id].filter(Boolean) as string[])}
-                          inMarriageByPersonId={inMarriageByPersonId}
-                          onPersonClick={onPersonClick}
-                        />
-                      )}
+                      {childList[0].id &&
+                        visibleDescendantsByParentId.has(childList[0].id) && (
+                          <DescendantSubtree
+                            descendants={visibleDescendantsByParentId.get(childList[0].id) ?? []}
+                            childrenOf={visibleDescendantsByParentId}
+                            depth={0}
+                            maxDepth={DESCENDANT_MAX_DEPTH}
+                            visited={new Set([ego.id, childList[0].id].filter(Boolean) as string[])}
+                            inMarriageByPersonId={inMarriageByPersonId}
+                            onPersonClick={onPersonClick}
+                          />
+                        )}
                     </ChildNodeColumn>
                     {/* col 3 (1fr) — 오른쪽 배우자 or 빈 균형 공간 */}
                     {(() => {
@@ -1168,12 +1334,18 @@ export function PersonGenealogyInfographic({
                     {childList.map((child, idx) => {
                       const pairKey = child.id ?? `child-${idx}`
                       const grands = child.id
-                        ? descendantsByParentId.get(child.id)
+                        ? visibleDescendantsByParentId.get(child.id)
                         : undefined
+                      const totalDescCount = child.id
+                        ? totalDescendantCountByChildId.get(child.id) ?? 0
+                        : 0
+                      const isCollapsed = Boolean(
+                        child.id && collapsedDescendantChildIds.has(child.id),
+                      )
                       const grandSubtree = grands && grands.length > 0 ? (
                         <DescendantSubtree
                           descendants={grands}
-                          childrenOf={descendantsByParentId}
+                          childrenOf={visibleDescendantsByParentId}
                           depth={0}
                           maxDepth={DESCENDANT_MAX_DEPTH}
                           visited={new Set([ego.id, child.id].filter(Boolean) as string[])}
@@ -1182,7 +1354,12 @@ export function PersonGenealogyInfographic({
                         />
                       ) : null
                       const childNode = (
-                        <GeoNode key={`${pairKey}-self`} $role="child" {...clickableProps(child.id)}>
+                        <GeoNode
+                          key={`${pairKey}-self`}
+                          $role="child"
+                          $monarch={Boolean(child.regnalName)}
+                          {...clickableProps(child.id)}
+                        >
                           {onUnlinkRelation && child.id && (
                             <CardUnlinkButton
                               label="자녀 연결 해제"
@@ -1197,9 +1374,24 @@ export function PersonGenealogyInfographic({
                           )}
                           <GeoThumbnail person={child} role="child" />
                           <NodeNameBlock person={child} />
-                          <NodeBadge $role="child">자녀</NodeBadge>
+                          <NodeBadge $role="child">{formatChildRoleBadge(child)}</NodeBadge>
                           <CardHoverInfo person={child} />
                           {consortMarkFor(child)}
+                          {child.id && totalDescCount > 0 && (
+                            <DescendantCollapseChip
+                              type="button"
+                              onClick={(ev) => {
+                                ev.stopPropagation()
+                                toggleChildDescendants(child.id!)
+                              }}
+                              onKeyDown={(ev) => {
+                                if (ev.key === 'Enter' || ev.key === ' ') ev.stopPropagation()
+                              }}
+                              title={isCollapsed ? '후손 펼치기' : '후손 접기'}
+                            >
+                              후손 {totalDescCount}명 {isCollapsed ? '▸' : '▾'}
+                            </DescendantCollapseChip>
+                          )}
                         </GeoNode>
                       )
                       if (!child.spouse) {
@@ -1267,6 +1459,18 @@ export function PersonGenealogyInfographic({
             truncated={siblingsTruncated}
             onClose={() => setSiblingsModalOpen(false)}
             onPersonClick={onPersonClick}
+            onUnlinkSibling={
+              onUnlinkRelation
+                ? (sib) => {
+                    if (!sib.id) return
+                    onUnlinkRelation({
+                      kind: 'sibling',
+                      targetId: sib.id,
+                      targetName: getPersonDisplayName(sib, true),
+                    })
+                  }
+                : undefined
+            }
           />
         )}
         {ancestorSiblingsOf && (
@@ -1279,12 +1483,69 @@ export function PersonGenealogyInfographic({
           />
         )}
       </Root>
+        </SpouseNamesLookupContext.Provider>
       </KinshipLookupContext.Provider>
     </FamilyTreeLookupContext.Provider>
   )
 }
 
 // ─── 메인 컴포넌트 전용 styled (헤더·캔버스·레이아웃) ─────────────────
+const TopControlRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+`
+
+const RecenterCanvasBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  transition: all 0.15s ease;
+  &:hover {
+    color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.4);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.14)' : 'rgba(99, 102, 241, 0.06)'};
+  }
+`
+
+const DescendantCollapseChip = styled.button`
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  padding: 2px 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  cursor: pointer;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(14, 165, 233, 0.2)' : 'rgba(14, 165, 233, 0.1)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#38bdf8' : '#0284c7')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(56, 189, 248, 0.4)' : 'rgba(2, 132, 199, 0.28)'};
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: background 0.15s ease;
+  white-space: nowrap;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(14, 165, 233, 0.32)' : 'rgba(14, 165, 233, 0.18)'};
+  }
+`
+
 const LegendDetails = styled.details`
   align-self: flex-start;
   max-width: 100%;
@@ -1407,7 +1668,7 @@ const TruncationBannerScope = styled.span`
   font-weight: 700;
 `
 
-const TreeCanvas = styled.div`
+const TreeCanvas = styled.div<{ $panning?: boolean }>`
   /*
    * 외곽 스크롤 컨테이너. 내부 GenerationsInner 가 자연 너비(max-content)를 가지므로
    * 패널 폭이 좁아져도 카드끼리 겹치지 않고 가로 스크롤로만 처리됨.
@@ -1426,6 +1687,8 @@ const TreeCanvas = styled.div`
   overflow-y: clip;
   overflow-clip-margin: 220px;
   padding: 8px 4px 12px;
+  cursor: ${({ $panning }) => ($panning ? 'grabbing' : 'grab')};
+  ${({ $panning }) => ($panning ? 'user-select: none;' : '')}
 `
 
 /**

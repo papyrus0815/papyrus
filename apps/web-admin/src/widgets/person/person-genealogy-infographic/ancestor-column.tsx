@@ -160,6 +160,7 @@ export function AncestorColumn({
       )}
       <GeoNode
         $role={role}
+        $monarch={Boolean(person.regnalName)}
         $clickable={clickable}
         $dimmed={!openable}
         title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
@@ -259,12 +260,12 @@ const AncForkTrack = styled.div`
 `
 
 const AncestorSiblingChip = styled.button`
-  /* 칩은 GeoNode 자식이라 위치 기준이 GeoNode. position:absolute로 카드 우측 상단에 부착.
+  /* 칩은 GeoNode 자식이라 위치 기준이 GeoNode. position:absolute로 카드 좌측 상단에 부착(우측 상단은 연결 해제 버튼 슬롯).
      z-index는 GeoNode 내부 스택에서 NodeBadge·NodeName 등 카드 콘텐츠 위에 오면 충분.
      HoverInfoBubble(z:50)은 시각적으로 카드 하단 외부에 떨어져 칩(상단)과 겹치지 않음. */
   position: absolute;
   top: 6px;
-  right: 6px;
+  left: 6px;
   z-index: 5;
   padding: 2px 6px;
   font-size: 9.5px;

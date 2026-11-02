@@ -1,18 +1,24 @@
 /**
- * 배우자 상세 섹션 — 개요 탭. 혼인 기간·메모 중 하나라도 있는 배우자만 표시.
- * (기존 person-detail-panel.tsx 인라인 IIFE에서 추출 — 순수 표시 컴포넌트)
+ * 배우자 상세 섹션 — 개요 탭.
+ * - 혼인 기간·메모·서열·다배우자 소생 자녀 표시
+ * - 추정 배우자(자녀 FK 기반) 노출 및 1-Click 정식 배우자 승격 (D1)
+ * - 기등록 자녀의 출생 서열(birthOrder) 및 반대편 부모(생모·생부) 인라인 빠른 정리 (D2)
  */
-import { FiUsers, FiX } from 'react-icons/fi'
+import { FiCheck, FiUsers, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { MARRIAGE_RANK_LABELS, marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
+import {
+  MARRIAGE_RANK_LABELS,
+  MARRIAGE_RANK_OPTIONS,
+  marriageRankOrder,
+  type MarriageRankToken,
+} from '@/shared/lib/marriage-rank-labels'
 import {
   formatPartialDateKo,
   partialDateFromResponse,
   partialDateFromStructured,
 } from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { compareSiblings } from '@/widgets/person/person-genealogy-infographic/utils'
 
 import { formatPeriod } from './helpers'
 import {
@@ -28,16 +34,55 @@ import {
 } from './person-detail-panel.styles'
 import type { PersonDetailData } from './types'
 
+export interface InferredSpouseSummary {
+  id: string
+  name: string
+  surname?: string | null
+  middleName?: string | null
+  nameDisplayOrder?: string | null
+  country?: { defaultNameDisplayOrder?: string | null } | null
+}
+
 interface SpouseDetailSectionProps {
   spouseRelations: PersonDetailData['spouseRelations']
   /** 본인의 자녀 목록 — 배우자별 소생 자녀 표시 및 다중 배우자 필터링에 사용 */
   childrenList?: PersonDetailData['children']
+  /** BFS 가계도에서 자녀의 반대편 부모로 발견된 추정 배우자 목록 */
+  inferredSpouses?: InferredSpouseSummary[]
+  /** 본인 ID (자녀의 반대편 부모 판별용) */
+  egoId?: string
   /** 사망자면 진행형 기간의 끝을 '현재' 대신 '미상'으로 폴백(재임·재위 규약과 통일) */
   isDeceased?: boolean
   /** 배우자·소생 자녀 이름 클릭 시 인물 모달/상세로 이동 */
   onPersonClick?: (personId: string) => void
   /** 배우자 연결 해제 핸들러(편집 권한 있을 때) */
   onUnlinkSpouse?: (spouseId: string, spouseName: string) => void
+  /** 기등록 배우자의 혼인 서열 1-Click 변경 핸들러 */
+  onChangeSpouseRank?: (spouseId: string, rank: MarriageRankToken | null) => void
+  /** 추정 배우자를 정식 배우자(PersonSpouse)로 1-Click 승격 등록하는 핸들러 */
+  onPromoteInferredSpouse?: (spouseId: string, rank: MarriageRankToken | null) => void
+  /** 자녀의 출생 서열(birthOrder) 또는 반대편 부모(생모·생부) 인라인 빠른 수정 핸들러 */
+  onQuickUpdateChild?: (
+    childId: string,
+    patch: { birthOrder?: number | null; otherParentId?: string | null },
+  ) => void
+}
+
+function compareChildOrder(a: any, b: any): number {
+  const ao = a?.birthOrder ?? Number.POSITIVE_INFINITY
+  const bo = b?.birthOrder ?? Number.POSITIVE_INFINITY
+  if (ao !== bo) return ao - bo
+  const signedBirthYear = (p: any): number => {
+    const rawYear =
+      p?.birthYear ??
+      (p?.birthDate ? new Date(p.birthDate).getUTCFullYear() : null)
+    if (rawYear == null || Number.isNaN(rawYear)) return Number.POSITIVE_INFINITY
+    return p?.birthEra === 'BC' ? -Math.abs(rawYear) : rawYear
+  }
+  const ay = signedBirthYear(a)
+  const by = signedBirthYear(b)
+  if (ay !== by) return ay - by
+  return String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
 }
 
 function getSharedChildrenForSpouse(
@@ -52,7 +97,7 @@ function getSharedChildrenForSpouse(
       return fId === spouseId || mId === spouseId
     })
     .slice()
-    .sort(compareSiblings)
+    .sort(compareChildOrder)
 }
 
 function signedMarriageStartYear(
@@ -114,9 +159,14 @@ export function hasVisibleSpouseDetails(
 export function SpouseDetailSection({
   spouseRelations,
   childrenList,
+  inferredSpouses,
+  egoId,
   isDeceased,
   onPersonClick,
   onUnlinkSpouse,
+  onChangeSpouseRank,
+  onPromoteInferredSpouse,
+  onQuickUpdateChild,
 }: SpouseDetailSectionProps) {
   // 구조화 연/월/일 우선(BC·고대는 DateTime null), 레거시 행은 ISO+era+precision 폴백 —
   // 정밀도만큼만 표기해 01-01 채움이 '1월 1일'로 둔갑하지 않게 한다.
@@ -137,101 +187,364 @@ export function SpouseDetailSection({
           rel[`marriage${side}Precision`],
         ),
     )
+
+  const explicitIds = new Set(
+    (spouseRelations ?? []).map((r) => r.spouse?.id).filter(Boolean) as string[],
+  )
+  const pendingInferred = (inferredSpouses ?? []).filter(
+    (sp) => sp.id && !explicitIds.has(sp.id),
+  )
+
   const rels = filterVisibleSpouseRelations(spouseRelations, childrenList)
-  if (rels.length === 0) return null
+  const sortedChildren = (childrenList ?? []).slice().sort(compareChildOrder)
+  const showQuickChildEditor = Boolean(onQuickUpdateChild && sortedChildren.length > 0)
+
+  if (rels.length === 0 && pendingInferred.length === 0 && !showQuickChildEditor) {
+    return null
+  }
+
+  // 자녀의 반대편 부모 후보 옵션 (명시 배우자 + 추정 배우자)
+  const allSpouseOptions: Array<{ id: string; label: string }> = []
+  const seenOptionIds = new Set<string>()
+  for (const rel of spouseRelations ?? []) {
+    const sp = rel.spouse
+    if (!sp?.id || seenOptionIds.has(sp.id)) continue
+    seenOptionIds.add(sp.id)
+    const nm = getPersonDisplayName(sp, true)
+    const rk = rel.marriageRank ? MARRIAGE_RANK_LABELS[rel.marriageRank] : null
+    allSpouseOptions.push({ id: sp.id, label: rk ? `${nm} (${rk})` : nm })
+  }
+  for (const inf of pendingInferred) {
+    if (!inf.id || seenOptionIds.has(inf.id)) continue
+    seenOptionIds.add(inf.id)
+    const nm = getPersonDisplayName(inf, true)
+    allSpouseOptions.push({ id: inf.id, label: `${nm} (추정)` })
+  }
+
+  const totalSpouseDisplayCount = rels.length + pendingInferred.length
 
   return (
     <section aria-label="배우자 상세">
-      <OverviewSectionHeaderRow>
-        <OverviewSectionHeading>
-          <FiUsers size={14} strokeWidth={2.2} />
-          <span>배우자 상세</span>
-          {rels.length > 1 && <CountMuted>{rels.length}</CountMuted>}
-        </OverviewSectionHeading>
-      </OverviewSectionHeaderRow>
-      <SpouseDetailList>
-        {rels.map((rel, idx) => {
-          const sp = rel.spouse ?? null
-          const spouseId = sp?.id ?? null
-          const name = sp ? getPersonDisplayName(sp, true) : '이름 없음'
-          const start = marriageDateLabel(rel, 'Start')
-          const end = marriageDateLabel(rel, 'End')
-          // 종료일만 있는 관계가 단독 날짜로 보이면 혼인일로 오독됨 —
-          // formatPeriod가 '~ 종료일' 접두·진행형 폴백을 일괄 처리.
-          const period = formatPeriod(start, end, isDeceased ? '미상' : '현재')
-          const rankLabel = rel.marriageRank
-            ? MARRIAGE_RANK_LABELS[rel.marriageRank] ?? rel.marriageRank
-            : null
-          const interactive = Boolean(spouseId && onPersonClick)
-          const sharedChildren = getSharedChildrenForSpouse(spouseId, childrenList)
-          return (
-            <SpouseDetailItem key={rel.id ?? `spouse-${idx}`}>
-              <SpouseDetailHeader>
-                <SpouseDetailName
-                  as={interactive ? 'button' : 'span'}
-                  {...(interactive
-                    ? {
-                        type: 'button' as const,
-                        onClick: () => onPersonClick?.(spouseId!),
-                      }
-                    : {})}
-                >
-                  {name}
-                  {rankLabel ? ` (${rankLabel})` : ''}
-                </SpouseDetailName>
-                <SpouseHeaderRight>
-                  {period && <SpouseDetailPeriod>{period}</SpouseDetailPeriod>}
-                  {onUnlinkSpouse && spouseId && (
-                    <SpouseUnlinkBtn
-                      type="button"
-                      title={`${name} 배우자 연결 해제`}
-                      aria-label={`${name} 배우자 연결 해제`}
-                      onClick={() => onUnlinkSpouse(spouseId, name)}
-                    >
-                      <FiX size={12} strokeWidth={2.2} />
-                      <span>해제</span>
-                    </SpouseUnlinkBtn>
-                  )}
-                </SpouseHeaderRight>
-              </SpouseDetailHeader>
-              {rel.note && <SpouseDetailNote>{rel.note}</SpouseDetailNote>}
-              {sharedChildren.length > 0 && (
-                <SpouseChildrenRow>
-                  <SpouseChildrenLabel>
-                    소생 자녀 ({sharedChildren.length}명)
-                  </SpouseChildrenLabel>
-                  <SpouseChildrenChips>
-                    {sharedChildren.map((child: any, cIdx: number) => {
-                      const cId = child.id as string | undefined
-                      const cName = getPersonDisplayName(child, true)
-                      const cClickable = Boolean(cId && onPersonClick)
-                      return (
-                        <SpouseChildChip
-                          key={cId ?? `sc-${cIdx}`}
-                          type="button"
-                          disabled={!cClickable}
-                          onClick={() => cId && onPersonClick?.(cId)}
-                        >
-                          {cName}
-                        </SpouseChildChip>
-                      )
-                    })}
-                  </SpouseChildrenChips>
-                </SpouseChildrenRow>
+      {totalSpouseDisplayCount > 0 && (
+        <>
+          <OverviewSectionHeaderRow>
+            <OverviewSectionHeading>
+              <FiUsers size={14} strokeWidth={2.2} />
+              <span>배우자 상세</span>
+              {totalSpouseDisplayCount > 1 && (
+                <CountMuted>{totalSpouseDisplayCount}</CountMuted>
               )}
-            </SpouseDetailItem>
-          )
-        })}
-      </SpouseDetailList>
+            </OverviewSectionHeading>
+          </OverviewSectionHeaderRow>
+          <SpouseDetailList>
+            {rels.map((rel, idx) => {
+              const sp = rel.spouse ?? null
+              const spouseId = sp?.id ?? null
+              const name = sp ? getPersonDisplayName(sp, true) : '이름 없음'
+              const start = marriageDateLabel(rel, 'Start')
+              const end = marriageDateLabel(rel, 'End')
+              const period = formatPeriod(start, end, isDeceased ? '미상' : '현재')
+              const rankLabel = rel.marriageRank
+                ? MARRIAGE_RANK_LABELS[rel.marriageRank] ?? rel.marriageRank
+                : null
+              const interactive = Boolean(spouseId && onPersonClick)
+              const sharedChildren = getSharedChildrenForSpouse(spouseId, childrenList)
+              return (
+                <SpouseDetailItem key={rel.id ?? `spouse-${idx}`}>
+                  <SpouseDetailHeader>
+                    <SpouseDetailName
+                      as={interactive ? 'button' : 'span'}
+                      {...(interactive
+                        ? {
+                            type: 'button' as const,
+                            onClick: () => onPersonClick?.(spouseId!),
+                          }
+                        : {})}
+                    >
+                      {name}
+                      {rankLabel ? ` (${rankLabel})` : ''}
+                    </SpouseDetailName>
+                    <SpouseHeaderRight>
+                      {period && <SpouseDetailPeriod>{period}</SpouseDetailPeriod>}
+                      {onChangeSpouseRank && spouseId && (
+                        <SpouseRankSelect
+                          aria-label={`${name} 혼인 서열 변경`}
+                          value={rel.marriageRank ?? ''}
+                          onChange={(e) => {
+                            const val = (e.target.value || null) as MarriageRankToken | null
+                            onChangeSpouseRank(spouseId, val)
+                          }}
+                        >
+                          <option value="">서열 미지정</option>
+                          {MARRIAGE_RANK_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </SpouseRankSelect>
+                      )}
+                      {onUnlinkSpouse && spouseId && (
+                        <SpouseUnlinkBtn
+                          type="button"
+                          title={`${name} 배우자 연결 해제`}
+                          aria-label={`${name} 배우자 연결 해제`}
+                          onClick={() => onUnlinkSpouse(spouseId, name)}
+                        >
+                          <FiX size={12} strokeWidth={2.2} />
+                          <span>해제</span>
+                        </SpouseUnlinkBtn>
+                      )}
+                    </SpouseHeaderRight>
+                  </SpouseDetailHeader>
+                  {rel.note && <SpouseDetailNote>{rel.note}</SpouseDetailNote>}
+                  {sharedChildren.length > 0 && (
+                    <SpouseChildrenRow>
+                      <SpouseChildrenLabel>
+                        소생 자녀 ({sharedChildren.length}명)
+                      </SpouseChildrenLabel>
+                      <SpouseChildrenChips>
+                        {sharedChildren.map((child: any, cIdx: number) => {
+                          const cId = child.id as string | undefined
+                          const cName = getPersonDisplayName(child, true)
+                          const cClickable = Boolean(cId && onPersonClick)
+                          return (
+                            <SpouseChildChip
+                              key={cId ?? `sc-${cIdx}`}
+                              type="button"
+                              disabled={!cClickable}
+                              onClick={() => cId && onPersonClick?.(cId)}
+                            >
+                              {cName}
+                            </SpouseChildChip>
+                          )
+                        })}
+                      </SpouseChildrenChips>
+                    </SpouseChildrenRow>
+                  )}
+                </SpouseDetailItem>
+              )
+            })}
+
+            {/* D1: 추정 배우자(자녀 기록 기반) 노출 및 1-Click 정식 배우자 승격 */}
+            {pendingInferred.map((inf) => {
+              const name = getPersonDisplayName(inf, true)
+              const interactive = Boolean(inf.id && onPersonClick)
+              const sharedChildren = getSharedChildrenForSpouse(inf.id, childrenList)
+              return (
+                <SpouseDetailItem key={`inferred-${inf.id}`}>
+                  <SpouseDetailHeader>
+                    <SpouseNameGroup>
+                      <SpouseDetailName
+                        as={interactive ? 'button' : 'span'}
+                        {...(interactive
+                          ? {
+                              type: 'button' as const,
+                              onClick: () => onPersonClick?.(inf.id),
+                            }
+                          : {})}
+                      >
+                        {name}
+                      </SpouseDetailName>
+                      <InferredSpouseBadge>추정 (자녀 기록 기반)</InferredSpouseBadge>
+                    </SpouseNameGroup>
+                    {onPromoteInferredSpouse && (
+                      <SpouseHeaderRight>
+                        <PromoteSpouseBtn
+                          type="button"
+                          onClick={() => onPromoteInferredSpouse(inf.id, 'PRIMARY')}
+                          title={`${name}을(를) 정실 배우자로 정식 등록`}
+                        >
+                          <FiCheck size={11} />
+                          <span>정실 등록</span>
+                        </PromoteSpouseBtn>
+                        <PromoteSpouseBtn
+                          type="button"
+                          onClick={() => onPromoteInferredSpouse(inf.id, 'CONCUBINE')}
+                          title={`${name}을(를) 후궁·첩으로 정식 등록`}
+                        >
+                          <FiCheck size={11} />
+                          <span>후궁 등록</span>
+                        </PromoteSpouseBtn>
+                        <PromoteSpouseBtn
+                          type="button"
+                          onClick={() => onPromoteInferredSpouse(inf.id, null)}
+                          title={`${name}을(를) 정식 배우자로 등록`}
+                        >
+                          <FiCheck size={11} />
+                          <span>배우자 등록</span>
+                        </PromoteSpouseBtn>
+                      </SpouseHeaderRight>
+                    )}
+                  </SpouseDetailHeader>
+                  {sharedChildren.length > 0 && (
+                    <SpouseChildrenRow>
+                      <SpouseChildrenLabel>
+                        소생 자녀 ({sharedChildren.length}명)
+                      </SpouseChildrenLabel>
+                      <SpouseChildrenChips>
+                        {sharedChildren.map((child: any, cIdx: number) => {
+                          const cId = child.id as string | undefined
+                          const cName = getPersonDisplayName(child, true)
+                          const cClickable = Boolean(cId && onPersonClick)
+                          return (
+                            <SpouseChildChip
+                              key={cId ?? `inf-sc-${cIdx}`}
+                              type="button"
+                              disabled={!cClickable}
+                              onClick={() => cId && onPersonClick?.(cId)}
+                            >
+                              {cName}
+                            </SpouseChildChip>
+                          )
+                        })}
+                      </SpouseChildrenChips>
+                    </SpouseChildrenRow>
+                  )}
+                </SpouseDetailItem>
+              )
+            })}
+          </SpouseDetailList>
+        </>
+      )}
+
+      {/* D2: 기등록 자녀 출생 서열(birthOrder) 및 반대편 부모(생모·생부) 빠른 인라인 정리 */}
+      {showQuickChildEditor && (
+        <ChildQuickEditorDetails>
+          <ChildQuickEditorSummary>
+            자녀 서열·소생 빠른 정리 ({sortedChildren.length}명)
+          </ChildQuickEditorSummary>
+          <ChildQuickEditorList>
+            {sortedChildren.map((child: any, idx: number) => {
+              const cId = child.id as string | undefined
+              if (!cId) return null
+              const cName = getPersonDisplayName(child, true)
+              const fId = (child.fatherId ?? child.father?.id ?? null) as string | null
+              const mId = (child.motherId ?? child.mother?.id ?? null) as string | null
+              const otherParentId =
+                egoId && fId === egoId ? mId : egoId && mId === egoId ? fId : mId ?? fId
+              return (
+                <ChildQuickRow key={cId}>
+                  <ChildQuickIndex>{idx + 1}.</ChildQuickIndex>
+                  <ChildQuickNameBtn
+                    type="button"
+                    onClick={() => onPersonClick?.(cId)}
+                  >
+                    {cName}
+                  </ChildQuickNameBtn>
+                  <ChildQuickFieldLabel>
+                    <span>서열</span>
+                    <ChildQuickOrderInput
+                      type="number"
+                      min={1}
+                      step={1}
+                      defaultValue={child.birthOrder ?? ''}
+                      placeholder="-"
+                      aria-label={`${cName} 출생 서열`}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim()
+                        const nextOrder = raw ? Number.parseInt(raw, 10) : null
+                        const normalized =
+                          nextOrder != null && Number.isInteger(nextOrder) && nextOrder >= 1
+                            ? nextOrder
+                            : null
+                        if (normalized !== (child.birthOrder ?? null)) {
+                          onQuickUpdateChild?.(cId, { birthOrder: normalized })
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          ;(e.target as HTMLInputElement).blur()
+                        }
+                      }}
+                    />
+                  </ChildQuickFieldLabel>
+                  {allSpouseOptions.length > 0 && (
+                    <ChildQuickFieldLabel>
+                      <span>반대편 부모</span>
+                      <ChildQuickParentSelect
+                        aria-label={`${cName} 반대편 부모 선택`}
+                        value={otherParentId ?? ''}
+                        onChange={(e) => {
+                          const nextParentId = e.target.value || null
+                          onQuickUpdateChild?.(cId, { otherParentId: nextParentId })
+                        }}
+                      >
+                        <option value="">미지정</option>
+                        {allSpouseOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </ChildQuickParentSelect>
+                    </ChildQuickFieldLabel>
+                  )}
+                </ChildQuickRow>
+              )
+            })}
+          </ChildQuickEditorList>
+        </ChildQuickEditorDetails>
+      )}
     </section>
   )
 }
 
-const SpouseHeaderRight = styled.div`
+const SpouseNameGroup = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+`
+
+const InferredSpouseBadge = styled.span`
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#64748b')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.14)' : 'rgba(148, 163, 184, 0.12)'};
+`
+
+const SpouseHeaderRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+`
+
+const SpouseRankSelect = styled.select`
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+`
+
+const PromoteSpouseBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.4)' : 'rgba(99, 102, 241, 0.3)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.08)'};
+  color: #6366f1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.26)' : 'rgba(99, 102, 241, 0.16)'};
+  }
 `
 
 const SpouseUnlinkBtn = styled.button`
@@ -301,4 +614,96 @@ const SpouseChildChip = styled.button`
   &:disabled {
     cursor: default;
   }
+`
+
+const ChildQuickEditorDetails = styled.details`
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'rgba(248, 250, 252, 0.8)'};
+`
+
+const ChildQuickEditorSummary = styled.summary`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  user-select: none;
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ChildQuickEditorList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+`
+
+const ChildQuickRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 12px;
+`
+
+const ChildQuickIndex = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  min-width: 18px;
+`
+
+const ChildQuickNameBtn = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  min-width: 80px;
+  text-align: left;
+  &:hover {
+    color: #6366f1;
+    text-decoration: underline;
+  }
+`
+
+const ChildQuickFieldLabel = styled.label`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ChildQuickOrderInput = styled.input`
+  width: 54px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ChildQuickParentSelect = styled.select`
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
 `

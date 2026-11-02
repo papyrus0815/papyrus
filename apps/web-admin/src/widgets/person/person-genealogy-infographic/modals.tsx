@@ -103,12 +103,14 @@ export function SiblingsListModal({
   truncated,
   onClose,
   onPersonClick,
+  onUnlinkSibling,
 }: {
   siblings: NodePerson[]
   anchorParents?: SiblingParentFks | null
   truncated?: boolean
   onClose: () => void
   onPersonClick?: (id: string) => void
+  onUnlinkSibling?: (sibling: NodePerson) => void
 }) {
   const nodeMap = useContext(FamilyTreeLookupContext)
   const resolvedNodeMap = nodeMap.size > 0 ? nodeMap : null
@@ -128,6 +130,13 @@ export function SiblingsListModal({
             onClose()
             onPersonClick?.(id)
           }}
+          onUnlink={
+            onUnlinkSibling && sib.id
+              ? () => {
+                  onUnlinkSibling(sib)
+                }
+              : undefined
+          }
         />
       )}
     />

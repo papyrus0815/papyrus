@@ -5539,6 +5539,15 @@ export class PersonPrismaRepository implements IPersonRepository {
         excludeIds: [...egoParentIds],
       })
 
+      // 7b-2: 부모 형제자매의 자녀 (4촌 사촌: 종형제·고종·외종·이종사촌)
+      if (auntsUnclesIds.length > 0) {
+        await fetchChildrenOf(auntsUnclesIds, {
+          take: 60,
+          scope: 'cousins',
+          excludeIds: [personId, ...sibIds],
+        })
+      }
+
       // 7c: 형제의 자녀 (조카)
       if (sibIds.length > 0) {
         await fetchChildrenOf(sibIds, {
@@ -5572,6 +5581,22 @@ export class PersonPrismaRepository implements IPersonRepository {
       scope: 'grandchildren',
     })
 
+    // ── Step 8a: 자녀의 추론 배우자 (사위·며느리 — 손자녀의 반대편 부모) ─
+    if (grandchildIds.length > 0 && childIds.length > 0) {
+      const childIdSet = new Set(childIds)
+      const childInferredSpouseIds: string[] = []
+      for (const gcid of grandchildIds) {
+        const gc = nodeMap.get(gcid)
+        if (!gc) continue
+        const fInChild = gc.fatherId && childIdSet.has(gc.fatherId)
+        const mInChild = gc.motherId && childIdSet.has(gc.motherId)
+        if (!fInChild && !mInChild) continue
+        if (gc.fatherId && !childIdSet.has(gc.fatherId)) childInferredSpouseIds.push(gc.fatherId)
+        if (gc.motherId && !childIdSet.has(gc.motherId)) childInferredSpouseIds.push(gc.motherId)
+      }
+      await fetchBatch(childInferredSpouseIds, { cap: 60, scope: 'children-inferred-spouses' })
+    }
+
     // ── Step 8b: 증손자녀 (손자녀의 자녀) ───────────────────────────
     if (grandchildIds.length > 0) {
       await fetchChildrenOf(grandchildIds, {
@@ -5579,9 +5604,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         scope: 'great-grandchildren',
       })
     }
-
-    // 삼촌·이모의 배우자 → 사촌 fetch는 폭발 방지 위해 생략 (요청 시 옵션 활성)
-    void auntsUnclesIds
 
     // ── Step 9: 수집된 모든 인물의 배우자 (cap 200) ───────────────────
     // 4대 조상·방계·후손이 모두 nodeMap에 들어와 있어 부풀 위험이 큰 단계.
@@ -5610,6 +5632,28 @@ export class PersonPrismaRepository implements IPersonRepository {
       for (const sid of getSpouseIds(p ?? {})) spouseParentSpouseIds.push(sid)
     }
     await fetchBatch(spouseParentSpouseIds, { cap: 80, scope: 'spouse-parent-spouses' })
+
+    // ── Step 12: 전 세대 공동 부모(fatherId + motherId) 추론 부부 간선 보강 ─
+    // 조상·방계·자녀·후손 중 어떤 노드에 fatherId와 motherId가 모두 기록되어 있고
+    // 양쪽 부모가 그래프(nodeMap)에 존재할 때, PersonSpouse 레코드가 없더라도
+    // 부부(derived=true) 간선으로 연결한다. (명시적 PersonSpouse가 있으면 addSpouseEdge가 derived=false 유지)
+    for (const [nid, p] of nodeMap) {
+      const fId = p.fatherId as string | null | undefined
+      const mId = p.motherId as string | null | undefined
+      if (
+        fId &&
+        mId &&
+        fId !== mId &&
+        fId !== nid &&
+        mId !== nid &&
+        nodeMap.has(fId) &&
+        nodeMap.has(mId) &&
+        !supportOnlyNodeIds.has(fId) &&
+        !supportOnlyNodeIds.has(mId)
+      ) {
+        addSpouseEdge(fId, mId, undefined, true)
+      }
+    }
 
     // ── 결과 구성 ─────────────────────────────────────────────────────
     const nodes = [...nodeMap.values()].map(p => {

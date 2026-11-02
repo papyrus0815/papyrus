@@ -8,7 +8,12 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { NODE_H, NODE_W } from './constants'
-import { FamilyTreeLookupContext, KinshipLookupContext, useNodeOpenable } from './context'
+import {
+  FamilyTreeLookupContext,
+  KinshipLookupContext,
+  SpouseNamesLookupContext,
+  useNodeOpenable,
+} from './context'
 import type { AvatarRole, FlagSource, NodePerson, PersonMetaSource } from './types'
 import {
   buildPersonTooltip,
@@ -40,6 +45,7 @@ import {
 export function CardHoverInfo({ person }: { person: PersonMetaSource }) {
   const lookup = useContext(FamilyTreeLookupContext)
   const kinshipLookup = useContext(KinshipLookupContext)
+  const spouseNamesLookup = useContext(SpouseNamesLookupContext)
   const lines = useMemo(() => {
     const ftNode = person.id ? lookup.get(person.id) : undefined
     const fId = person.fatherId ?? ftNode?.fatherId ?? null
@@ -56,12 +62,24 @@ export function CardHoverInfo({ person }: { person: PersonMetaSource }) {
       fatherName: resolvedFatherName,
       motherName: resolvedMotherName,
     })
+    const spouseNames = person.id ? spouseNamesLookup.get(person.id) : undefined
+    const withSpouses =
+      spouseNames && spouseNames.length > 0 && !baseLines.some((l) => l.label === '배우자')
+        ? [...baseLines, { label: '배우자', value: spouseNames.join(', ') }]
+        : baseLines
+
     const kinship = person.id ? kinshipLookup.get(person.id) : undefined
     if (kinship && kinship.chon !== 0) {
-      return [{ label: '기준 관계', value: kinship.summary }, ...baseLines]
+      const prefixLines: Array<{ label: string; value: string }> = [
+        { label: '기준 관계', value: kinship.summary },
+      ]
+      if (kinship.pathSummary && (kinship.pathNodeIds?.length ?? 0) >= 3) {
+        prefixLines.push({ label: '계보 경로', value: kinship.pathSummary })
+      }
+      return [...prefixLines, ...withSpouses]
     }
-    return baseLines
-  }, [person, lookup, kinshipLookup])
+    return withSpouses
+  }, [person, lookup, kinshipLookup, spouseNamesLookup])
 
   const anchorRef = useRef<HTMLSpanElement | null>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
@@ -299,6 +317,7 @@ export function NodePersonCompactCard({
   return (
     <GeoNode
       $role={role}
+      $monarch={Boolean(person.regnalName)}
       $clickable={clickable}
       $dimmed={!openable}
       title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
@@ -390,6 +409,7 @@ export function SiblingCompactNode({
   return (
     <GeoNode
       $role="sibling"
+      $monarch={Boolean(person.regnalName)}
       $clickable={clickable}
       $dimmed={!openable}
       title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
@@ -444,6 +464,7 @@ export function DescendantNode({
   return (
     <GeoNode
       $role={cardRole}
+      $monarch={Boolean(person.regnalName)}
       $clickable={clickable}
       $dimmed={!openable}
       title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
@@ -577,6 +598,7 @@ const HoverInfoValue = styled.span`
 export const GeoNode = styled.div<{
   $role: string
   $emphasis?: boolean
+  $monarch?: boolean
   $clickable?: boolean
   /** 비소유 노드 — 현재 계정이 상세를 열 수 없음(다른 계정 등록). 살짝 흐리게 + 클릭 불가. */
   $dimmed?: boolean
@@ -689,6 +711,18 @@ export const GeoNode = styled.div<{
         transform: none;
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
       }
+    `}
+
+  ${({ $monarch, $emphasis, theme }) =>
+    $monarch &&
+    !$emphasis &&
+    css`
+      border-color: ${theme.mode === 'dark'
+        ? 'rgba(251, 191, 36, 0.45)'
+        : 'rgba(217, 119, 6, 0.42)'};
+      box-shadow: ${theme.mode === 'dark'
+        ? '0 0 0 1px rgba(251, 191, 36, 0.14), 0 4px 12px rgba(217, 119, 6, 0.10)'
+        : '0 0 0 1px rgba(217, 119, 6, 0.12), 0 4px 12px rgba(217, 119, 6, 0.07)'};
     `}
 `
 

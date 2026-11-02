@@ -19,6 +19,14 @@ export const KinshipLookupContext = createContext<Map<string, KinshipInfo>>(
   new Map(),
 )
 
+/**
+ * 각 노드 ID의 배우자 표시명 배열 룩업.
+ * CardHoverInfo에서 조상·형제·자녀·후손 카드의 호버 버블에 '배우자' 라인을 자동 표시하는 데 사용.
+ */
+export const SpouseNamesLookupContext = createContext<Map<string, string[]>>(
+  new Map(),
+)
+
 export type UnlinkRelationPayload = {
   kind: 'father' | 'mother' | 'spouse' | 'child' | 'sibling'
   targetId: string
