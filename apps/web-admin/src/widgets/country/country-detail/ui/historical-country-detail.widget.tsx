@@ -1363,46 +1363,46 @@ function HistoricalOverviewSection({
 
       {/* 누가 다스렸나 옆에 어떤 체제였나 — 둘 다 '통치'의 두 얼굴이다 */}
       <DashboardPair $tall="main">
-        {/* 역대 수반 — 끝난 나라엔 '지금'이 없다. 누가 얼마나 다스렸나가 이 나라의 윤곽이다 */}
-        <DashboardStyles.Section>
-          <DashboardStyles.SectionTitleRow>
-            <DashboardStyles.SectionTitleIcon>
-              <IconVote />
-            </DashboardStyles.SectionTitleIcon>
-            <DashboardStyles.SectionTitleText>역대 수반</DashboardStyles.SectionTitleText>
-            <SectionHelpPopover sectionKey="rulers" />
-            {rulerCount > 0 && (
-              <DashboardStyles.SectionCountChip>{rulerCount}명</DashboardStyles.SectionCountChip>
-            )}
-            {outOfSpanRulerCount > 0 && (
-              <DashboardStyles.SectionCountChip
-                title="존속 기간 밖에서 시작·종료한 기록 — 다른 나라에 걸려야 할 행일 수 있습니다"
+        {/* 역대 수반 — 끝난 나라엔 '지금'이 없다. 수반이 등록되어 있을 때만 치세 띠를 노출한다 */}
+        {(stats.loading.tenures || stats.rulers.length > 0) && (
+          <DashboardStyles.Section>
+            <DashboardStyles.SectionTitleRow>
+              <DashboardStyles.SectionTitleIcon>
+                <IconVote />
+              </DashboardStyles.SectionTitleIcon>
+              <DashboardStyles.SectionTitleText>
+                역대 수반
+              </DashboardStyles.SectionTitleText>
+              <SectionHelpPopover sectionKey="rulers" />
+              {rulerCount > 0 && (
+                <DashboardStyles.SectionCountChip>
+                  {rulerCount}명
+                </DashboardStyles.SectionCountChip>
+              )}
+              {outOfSpanRulerCount > 0 && (
+                <DashboardStyles.SectionCountChip title="존속 기간 밖에서 시작·종료한 기록 — 다른 나라에 걸려야 할 행일 수 있습니다">
+                  기간 밖 {outOfSpanRulerCount}
+                </DashboardStyles.SectionCountChip>
+              )}
+              <DashboardStyles.SectionLink
+                type="button"
+                onClick={() => onGoToTab('heads')}
               >
-                기간 밖 {outOfSpanRulerCount}
-              </DashboardStyles.SectionCountChip>
+                전체 보기
+              </DashboardStyles.SectionLink>
+            </DashboardStyles.SectionTitleRow>
+            {stats.loading.tenures ? (
+              <ChartSkeleton variant="bars" />
+            ) : (
+              <HistoricalRulerTimeline
+                rulers={stats.rulers}
+                spanStart={span.start}
+                spanEnd={span.end}
+                onSelectPerson={goPerson}
+              />
             )}
-            <DashboardStyles.SectionLink type="button" onClick={() => onGoToTab('heads')}>
-              전체 보기
-            </DashboardStyles.SectionLink>
-          </DashboardStyles.SectionTitleRow>
-          {stats.loading.tenures ? (
-            <ChartSkeleton variant="bars" />
-          ) : stats.rulers.length === 0 ? (
-            <SectionEmpty
-              text="군주·국가원수·정부수반의 재위를 등록하면 존속 기간 위에 치세가 띠로 깔리고, 사람마다 카드가 섭니다."
-              hint="재위 시작·종료 연도를 입력하면 전체 존속 기간 대비 재위 비중과 순서가 자동 시각화됩니다"
-              actionLabel="수반 등록"
-              onAction={() => onGoToTab('heads')}
-            />
-          ) : (
-            <HistoricalRulerTimeline
-              rulers={stats.rulers}
-              spanStart={span.start}
-              spanEnd={span.end}
-              onSelectPerson={goPerson}
-            />
-          )}
-        </DashboardStyles.Section>
+          </DashboardStyles.Section>
+        )}
 
         {/* 정체 — 어떤 체제였나(현대 국가와 같은 패널, 역사 국가 FK로) */}
         <PoliticalSystemPanel
@@ -1420,11 +1420,15 @@ function HistoricalOverviewSection({
               <DashboardStyles.SectionTitleIcon>
                 <IconClock />
               </DashboardStyles.SectionTitleIcon>
-              <DashboardStyles.SectionTitleText>최근 활동</DashboardStyles.SectionTitleText>
+              <DashboardStyles.SectionTitleText>
+                최근 활동
+              </DashboardStyles.SectionTitleText>
               <SectionHelpPopover sectionKey="activity" />
               {stats.recentActivity.length > 0 && (
                 <DashboardStyles.SectionCountChip>
-                  최근 {Math.min(stats.recentActivity.length, RECENT_ACTIVITY_LIMIT)}건
+                  최근{' '}
+                  {Math.min(stats.recentActivity.length, RECENT_ACTIVITY_LIMIT)}
+                  건
                 </DashboardStyles.SectionCountChip>
               )}
             </DashboardStyles.SectionTitleRow>
@@ -1595,6 +1599,10 @@ const DashboardPair = styled.div<{ $lead?: boolean; $tall: 'main' | 'aside' }>`
     > :nth-child(3) {
       padding-top: 24px;
       border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+
+    > :only-child {
+      grid-column: 1 / -1;
     }
   }
 `

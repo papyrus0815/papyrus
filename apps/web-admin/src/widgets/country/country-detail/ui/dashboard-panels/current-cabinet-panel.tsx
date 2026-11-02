@@ -1971,11 +1971,6 @@ export function CurrentCabinetPanel({
           */}
         <S.SectionTitleText>행정부 · 군주·수반</S.SectionTitleText>
         <SectionHelpPopover sectionKey="cabinet" />
-        {activeRegimeMeta && (
-          <RegimeChip title={`정체: ${activeRegimeMeta.label}`}>
-            {activeRegimeMeta.label}
-          </RegimeChip>
-        )}
         {fallbackHeadTenures.length > 0 ? (
           <S.SectionCountChip>
             군주·원수 {fallbackHeadTenures.length}명 · 내각 {cabinets.length}대
@@ -4210,17 +4205,4 @@ const SwitchFade = styled.div<{ $switching: boolean }>`
   opacity: ${({ $switching }) => ($switching ? 0.4 : 1)};
   pointer-events: ${({ $switching }) => ($switching ? 'none' : 'auto')};
   transition: opacity 0.15s ease;
-`
-
-const RegimeChip = styled.span`
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(59, 130, 246, 0.16)'
-      : 'rgba(37, 99, 235, 0.08)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8')};
 `

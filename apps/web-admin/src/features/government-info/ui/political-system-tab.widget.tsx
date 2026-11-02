@@ -107,14 +107,14 @@ export function PoliticalSystemTab({
         <Hint>불러오는 중…</Hint>
       ) : systems.length === 0 ? (
         <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
-          <EmptyTitle>체제 선택</EmptyTitle>
+          <EmptyTitle>미등록</EmptyTitle>
           {GOVERNMENT_FORM_ORDER.slice(0, 6).map((formKey) => (
             <EmptyPresetBtn
               key={formKey}
               type="button"
               onClick={() => openCreate(formKey)}
             >
-              + {GOVERNMENT_FORM_LABEL[formKey]}
+              {GOVERNMENT_FORM_LABEL[formKey]}
             </EmptyPresetBtn>
           ))}
         </EmptyPresetRow>

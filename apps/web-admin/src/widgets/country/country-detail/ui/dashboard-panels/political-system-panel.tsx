@@ -166,6 +166,8 @@ function buildSpecs(system: PoliticalSystem): SpecItem[] {
   return specs
 }
 
+const SUMMARY_ROW_LIMIT = 4
+
 export function PoliticalSystemPanel({
   countryId,
   historicalCountryId,
@@ -180,22 +182,24 @@ export function PoliticalSystemPanel({
   const [editing, setEditing] = useState<PoliticalSystem | null>(null)
   const [presetForm, setPresetForm] = useState<GovernmentForm | null>(null)
   const [formOpen, setFormOpen] = useState(false)
-  const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
 
   const systems = useMemo(
     () => [...(query.data ?? [])].sort(comparePoliticalSystems),
     [query.data],
   )
   const current = useMemo(() => resolveCurrentSystem(systems), [systems])
-  const reverseChronological = useMemo(
-    () => [...systems].reverse(),
-    [systems],
-  )
-  const activeSystem = useMemo(() => {
-    if (!current) return null
-    if (!selectedSystemId) return current
-    return systems.find((item) => item.id === selectedSystemId) ?? current
-  }, [systems, current, selectedSystemId])
+  /** 현행을 맨 위에 두고 나머지는 최신순으로 */
+  const orderedSystems = useMemo(() => {
+    const rev = [...systems].reverse()
+    if (!current) return rev
+    return [current, ...rev.filter((item) => item.id !== current.id)]
+  }, [systems, current])
+
+  const visibleSystems = expanded
+    ? orderedSystems
+    : orderedSystems.slice(0, SUMMARY_ROW_LIMIT)
+  const hiddenCount = Math.max(0, orderedSystems.length - SUMMARY_ROW_LIMIT)
 
   const openCreate = (preset: GovernmentForm | null = null) => {
     setEditing(null)
@@ -203,16 +207,11 @@ export function PoliticalSystemPanel({
     setFormOpen(true)
   }
 
-  const headline = activeSystem
-    ? [
-        activeSystem.governmentForm &&
-          GOVERNMENT_FORM_LABEL[activeSystem.governmentForm],
-        activeSystem.legislatureType &&
-          LEGISLATURE_TYPE_LABEL[activeSystem.legislatureType],
-      ].filter(Boolean)
-    : []
-
-  const specs = activeSystem ? buildSpecs(activeSystem) : []
+  const openEdit = (system: PoliticalSystem) => {
+    setEditing(system)
+    setPresetForm(null)
+    setFormOpen(true)
+  }
 
   return (
     <S.Section>
@@ -226,18 +225,6 @@ export function PoliticalSystemPanel({
           <S.SectionCountChip>{systems.length}개</S.SectionCountChip>
         )}
         <S.SectionHeaderActions>
-          {activeSystem && (
-            <S.SectionAction
-              type="button"
-              onClick={() => {
-                setEditing(activeSystem)
-                setPresetForm(null)
-                setFormOpen(true)
-              }}
-            >
-              수정
-            </S.SectionAction>
-          )}
           <S.SectionAction type="button" onClick={() => openCreate(null)}>
             {systems.length > 0 ? '+ 추가' : '+ 정체 등록'}
           </S.SectionAction>
@@ -251,91 +238,106 @@ export function PoliticalSystemPanel({
 
       {query.isLoading ? (
         <ChartSkeleton variant="text" lines={2} />
-      ) : !activeSystem ? (
-        <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
-          <EmptyPresetHint>체제 선택</EmptyPresetHint>
-          {QUICK_POLITY_PRESETS.map((formKey) => (
-            <EmptyPresetChip
-              key={formKey}
-              type="button"
-              onClick={() => openCreate(formKey)}
-            >
-              + {GOVERNMENT_FORM_LABEL[formKey]}
-            </EmptyPresetChip>
-          ))}
-        </EmptyPresetRow>
-      ) : (
-        <OpenBody>
-          <Head>
-            <HeadLeft>
-              <Headline>
-                {headline.length > 0 ? (
-                  headline.map((text, index) => (
-                    <HeadlinePart key={text}>
-                      {index > 0 && <HeadlineDot aria-hidden>·</HeadlineDot>}
-                      {text}
-                    </HeadlinePart>
-                  ))
-                ) : (
-                  <HeadlinePart>{summarize(activeSystem)}</HeadlinePart>
-                )}
-              </Headline>
-              <Meta>
-                {activeSystem.name && (
-                  <SystemName>{activeSystem.name}</SystemName>
-                )}
-                <Period>{formatPeriod(activeSystem)}</Period>
-                {activeSystem.isCurrent && <NowChip>현행</NowChip>}
-                {historicalCountryId == null &&
-                  activeSystem.historicalCountryId != null && (
-                    <PastChip>
-                      {activeSystem.historicalCountry?.name ?? '과거 국가'}
-                    </PastChip>
-                  )}
-              </Meta>
-            </HeadLeft>
-
-            {reverseChronological.length > 1 && (
-              <EraTabsRow role="tablist" aria-label="시대별 정체 선택">
-                {reverseChronological.map((system) => {
-                  const isSelected = system.id === activeSystem.id
-                  return (
-                    <EraTabPill
-                      key={system.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={isSelected}
-                      $active={isSelected}
-                      onClick={() => setSelectedSystemId(system.id)}
-                    >
-                      <EraTabPeriod>{formatPeriod(system)}</EraTabPeriod>
-                      <EraTabName>
-                        {system.name || summarize(system)}
-                      </EraTabName>
-                      {system.isCurrent && <EraTabNow>현행</EraTabNow>}
-                    </EraTabPill>
-                  )
-                })}
-              </EraTabsRow>
-            )}
-          </Head>
-
-          {specs.length > 0 && (
-            <SpecsRow>
-              {specs.map((spec) => (
-                <SpecCell key={spec.key}>
-                  <SpecKey>{spec.label}</SpecKey>
-                  <SpecValue>
-                    {spec.value}
-                    {spec.note && <SpecNote>{spec.note}</SpecNote>}
-                  </SpecValue>
-                </SpecCell>
+      ) : orderedSystems.length === 0 ? (
+        <TimelineRow $empty>
+          <PeriodCol>
+            <EmptyPeriodLabel>미등록</EmptyPeriodLabel>
+          </PeriodCol>
+          <BodyCol>
+            <EmptyPresetRow role="group" aria-label="정체 빠른 등록">
+              {QUICK_POLITY_PRESETS.map((formKey) => (
+                <EmptyPresetChip
+                  key={formKey}
+                  type="button"
+                  onClick={() => openCreate(formKey)}
+                >
+                  {GOVERNMENT_FORM_LABEL[formKey]}
+                </EmptyPresetChip>
               ))}
-            </SpecsRow>
-          )}
+            </EmptyPresetRow>
+          </BodyCol>
+        </TimelineRow>
+      ) : (
+        <TimelineList>
+          {visibleSystems.map((system, rowIdx) => {
+            const isPrimary = rowIdx === 0
+            const headline = [
+              system.governmentForm &&
+                GOVERNMENT_FORM_LABEL[system.governmentForm],
+              system.legislatureType &&
+                LEGISLATURE_TYPE_LABEL[system.legislatureType],
+            ].filter(Boolean)
+            const specs = buildSpecs(system)
 
-          {activeSystem.notes && <NotesRow>{activeSystem.notes}</NotesRow>}
-        </OpenBody>
+            return (
+              <TimelineRow key={system.id}>
+                <PeriodCol>
+                  <Period $primary={isPrimary}>{formatPeriod(system)}</Period>
+                  {system.isCurrent && <NowChip>현행</NowChip>}
+                </PeriodCol>
+
+                <BodyCol>
+                  <TitleLine>
+                    <Headline $primary={isPrimary}>
+                      {headline.length > 0 ? (
+                        headline.map((text, index) => (
+                          <HeadlinePart key={text}>
+                            {index > 0 && (
+                              <HeadlineDot aria-hidden>·</HeadlineDot>
+                            )}
+                            {text}
+                          </HeadlinePart>
+                        ))
+                      ) : (
+                        <HeadlinePart>{summarize(system)}</HeadlinePart>
+                      )}
+                    </Headline>
+                    {system.name && <SystemName>{system.name}</SystemName>}
+                    {historicalCountryId == null &&
+                      system.historicalCountryId != null && (
+                        <PastChip>
+                          {system.historicalCountry?.name ?? '과거 국가'}
+                        </PastChip>
+                      )}
+                  </TitleLine>
+
+                  {specs.length > 0 && (
+                    <SpecsRow>
+                      {specs.map((spec) => (
+                        <SpecCell key={spec.key}>
+                          <SpecKey>{spec.label}</SpecKey>
+                          <SpecValue>
+                            {spec.value}
+                            {spec.note && <SpecNote>({spec.note})</SpecNote>}
+                          </SpecValue>
+                        </SpecCell>
+                      ))}
+                    </SpecsRow>
+                  )}
+
+                  {system.notes && <NotesRow>{system.notes}</NotesRow>}
+                </BodyCol>
+
+                <ActionCol>
+                  <RowEditBtn type="button" onClick={() => openEdit(system)}>
+                    수정
+                  </RowEditBtn>
+                </ActionCol>
+              </TimelineRow>
+            )
+          })}
+
+          {orderedSystems.length > SUMMARY_ROW_LIMIT && (
+            <MoreRow>
+              <MoreBtn
+                type="button"
+                onClick={() => setExpanded((prev) => !prev)}
+              >
+                {expanded ? '접기' : `이전 정체 ${hiddenCount}개 더 보기`}
+              </MoreBtn>
+            </MoreRow>
+          )}
+        </TimelineList>
       )}
 
       <PoliticalSystemFormModal
@@ -366,33 +368,95 @@ export function PoliticalSystemPanel({
   )
 }
 
-const OpenBody = styled.div`
+const TimelineList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+`
+
+const TimelineRow = styled.div<{ $empty?: boolean }>`
+  display: grid;
+  grid-template-columns: ${({ $empty }) =>
+    $empty ? '136px minmax(0, 1fr)' : '136px minmax(0, 1fr) auto'};
+  gap: 16px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-top: 2px;
+    border-top: none;
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr auto;
+  }
+`
+
+const PeriodCol = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+`
+
+const EmptyPeriodLabel = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const BodyCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    grid-column: 1 / -1;
+  }
+`
+
+const ActionCol = styled.div`
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+`
+
+const RowEditBtn = styled.button`
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const EmptyPresetRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-`
-
-const EmptyPresetHint = styled.span`
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-right: 4px;
+  gap: 6px;
 `
 
 const EmptyPresetChip = styled.button`
-  padding: 5px 12px;
+  padding: 4px 11px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: transparent;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   font-family: inherit;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
@@ -408,89 +472,20 @@ const EmptyPresetChip = styled.button`
   }
 `
 
-const EraTabsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-`
-
-const EraTabPill = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? 'rgba(99, 102, 241, 0.5)' : theme.colors.border.light};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.18)'
-        : '#eef2ff'
-      : 'transparent'};
-  font-family: inherit;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-
-  &:hover {
-    background: ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.22)'
-          : '#e0e7ff'
-        : theme.colors.hover};
-  }
-`
-
-const EraTabPeriod = styled.span`
-  font-size: 11.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EraTabName = styled.span`
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const EraTabNow = styled.span`
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 800;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
-  background: rgba(16, 185, 129, 0.16);
-`
-
-const Head = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-`
-
-const HeadLeft = styled.div`
+const TitleLine = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px 12px;
+  gap: 6px 10px;
   min-width: 0;
 `
 
-/* 체제 이름이 주인공이다 — 기간·별칭보다 확실히 크게 */
-const Headline = styled.p`
+const Headline = styled.p<{ $primary?: boolean }>`
   margin: 0;
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: baseline;
-  font-size: 18px;
+  font-size: ${({ $primary }) => ($primary ? '16.5px' : '14.5px')};
   font-weight: 800;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -502,16 +497,9 @@ const HeadlinePart = styled.span`
 `
 
 const HeadlineDot = styled.span`
-  margin: 0 8px;
+  margin: 0 7px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const Meta = styled.span`
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
 `
 
 const SystemName = styled.span`
@@ -520,25 +508,27 @@ const SystemName = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const Period = styled.span`
+const Period = styled.span<{ $primary?: boolean }>`
   font-size: 13px;
+  font-weight: ${({ $primary }) => ($primary ? 700 : 600)};
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ $primary, theme }) =>
+    $primary ? theme.colors.text.primary : theme.colors.text.secondary};
 `
 
 const NowChip = styled.span`
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
   background: rgba(16, 185, 129, 0.16);
 `
 
 const PastChip = styled.span`
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
   background: rgba(245, 158, 11, 0.16);
@@ -549,15 +539,15 @@ const SpecsRow = styled.dl`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  row-gap: 6px;
+  row-gap: 4px;
 `
 
 const SpecCell = styled.div`
   display: inline-flex;
   align-items: baseline;
-  gap: 7px;
-  padding-right: 16px;
-  margin-right: 16px;
+  gap: 6px;
+  padding-right: 14px;
+  margin-right: 14px;
   border-right: 1px solid ${({ theme }) => theme.colors.border.light};
 
   &:last-child {
@@ -568,7 +558,7 @@ const SpecCell = styled.div`
 `
 
 const SpecKey = styled.dt`
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -577,21 +567,41 @@ const SpecValue = styled.dd`
   margin: 0;
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
-  font-size: 13.5px;
-  font-weight: 700;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SpecNote = styled.span`
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const NotesRow = styled.p`
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const MoreRow = styled.div`
+  padding-top: 8px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const MoreBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  color: ${({ theme }) => theme.colors.primary};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `
