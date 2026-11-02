@@ -75,11 +75,145 @@ const ROLE_LABEL_BY_VALUE = new Map(
   EVENT_COUNTRY_ROLE_OPTIONS.map((option) => [option.value, option.label]),
 )
 
+const ROLE_HINT_BY_VALUE = new Map(
+  EVENT_COUNTRY_ROLE_OPTIONS.map((option) => [option.value, option.hint]),
+)
+
 export function eventCountryRoleLabel(
   role: string | null | undefined,
 ): string | null {
   if (!role) return null
   return ROLE_LABEL_BY_VALUE.get(role as EventCountryRole) ?? null
+}
+
+export function eventCountryRoleHint(
+  role: string | null | undefined,
+): string | null {
+  if (!role) return null
+  return ROLE_HINT_BY_VALUE.get(role as EventCountryRole) ?? null
+}
+
+/**
+ * 고른 세부 분야에 맞춘 참여국 '한 일(roleDescription)' 입력칸 placeholder.
+ */
+export function roleDescriptionPlaceholderForType(
+  eventType?: string | null,
+): string {
+  switch (eventType) {
+    case 'TREATY':
+      return '비준·할양·배상 등 이 나라의 조약 내용 (선택)'
+    case 'WAR':
+    case 'BATTLE':
+    case 'TERROR':
+    case 'UPRISING':
+      return '참전 규모·주력 부대·전과 등 (선택)'
+    case 'STATEHOOD':
+      return '독립 선포·병합·해체 경위 등 (선택)'
+    case 'SUMMIT':
+    case 'ALLIANCE_BREAK':
+      return '대표단 입장·합의·외교 조치 등 (선택)'
+    case 'TRADE':
+    case 'SANCTION':
+    case 'AID':
+      return '교역 품목·제재·원조 내역 등 (선택)'
+    default:
+      return '이 나라가 한 일 (선택)'
+  }
+}
+
+/**
+ * 참여국 순서 이동 — 위(up)/아래(down)로 한 칸 옮긴 새 배열을 돌려준다.
+ * 경계 밖이면 원본 배열을 그대로 돌려준다.
+ */
+export function moveParticipant(
+  participants: ReadonlyArray<EventCountryParticipant>,
+  index: number,
+  direction: 'up' | 'down',
+): EventCountryParticipant[] {
+  const targetIndex = direction === 'up' ? index - 1 : index + 1
+  if (
+    index < 0 ||
+    index >= participants.length ||
+    targetIndex < 0 ||
+    targetIndex >= participants.length
+  ) {
+    return [...participants]
+  }
+  const next = [...participants]
+  const [moved] = next.splice(index, 1)
+  next.splice(targetIndex, 0, moved)
+  return next
+}
+
+const RECENT_PARTICIPANTS_STORAGE_KEY = 'papyrus.eventForm.recentParticipants'
+const MAX_RECENT_PARTICIPANTS = 5
+
+export interface RecentParticipantRef {
+  countryId?: string | null
+  historicalCountryId?: string | null
+}
+
+export function readRecentParticipants(): RecentParticipantRef[] {
+  if (typeof window === 'undefined' || !window.localStorage) return []
+  try {
+    const raw = window.localStorage.getItem(RECENT_PARTICIPANTS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const result: RecentParticipantRef[] = []
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue
+      const candidate = item as Record<string, unknown>
+      if (typeof candidate.countryId === 'string' && candidate.countryId) {
+        result.push({ countryId: candidate.countryId })
+      } else if (
+        typeof candidate.historicalCountryId === 'string' &&
+        candidate.historicalCountryId
+      ) {
+        result.push({ historicalCountryId: candidate.historicalCountryId })
+      }
+      if (result.length >= MAX_RECENT_PARTICIPANTS) break
+    }
+    return result
+  } catch {
+    return []
+  }
+}
+
+export function recordRecentParticipants(
+  participants: ReadonlyArray<{
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }>,
+): void {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  if (participants.length === 0) return
+  try {
+    const fresh: RecentParticipantRef[] = []
+    for (const row of participants) {
+      if (row.countryId) fresh.push({ countryId: row.countryId })
+      else if (row.historicalCountryId) {
+        fresh.push({ historicalCountryId: row.historicalCountryId })
+      }
+    }
+    if (fresh.length === 0) return
+    const previous = readRecentParticipants()
+    const merged: RecentParticipantRef[] = []
+    const seen = new Set<string>()
+    for (const item of [...fresh, ...previous]) {
+      const key = participantKey(item)
+      if (seen.has(key)) continue
+      seen.add(key)
+      merged.push(item)
+      if (merged.length >= MAX_RECENT_PARTICIPANTS) break
+    }
+    window.localStorage.setItem(
+      RECENT_PARTICIPANTS_STORAGE_KEY,
+      JSON.stringify(merged),
+    )
+  } catch {
+    // ignore storage quota / privacy mode errors
+  }
 }
 
 /** 참여국 한 줄의 신원 — 현대/역사가 같은 uuid를 쓰더라도 섞이지 않는다 */

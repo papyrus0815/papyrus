@@ -2,6 +2,8 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import {
+  FiArrowDown,
+  FiArrowUp,
   FiClock,
   FiImage,
   FiPlus,
@@ -12,7 +14,11 @@ import styled, { type DefaultTheme, useTheme } from 'styled-components'
 import {
   EVENT_COUNTRY_ROLE_OPTIONS,
   type EventCountryParticipant,
+  type RecentParticipantRef,
+  eventCountryRoleHint,
+  moveParticipant,
   participantKey,
+  readRecentParticipants,
 } from '@/entities/event/model'
 import * as S from '@/pages/events/create/event-create.styles'
 import { EVENT_DOMAIN_ORDER, EVENT_DOMAINS, type EventDomainKey } from '@/entities/event/model/event-domain'
@@ -22,8 +28,13 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import { uploadImage } from '@/shared/api/upload'
 import {
   describeLifespanMismatch,
+  formatCountryPeriod,
   signedYearFromIsoLike,
 } from '@/shared/lib/country-period'
+import {
+  filterCountriesByQuery,
+  matchesHintYearRange,
+} from '@/shared/lib/country-picker-filter'
 import { isoPeriodEnd } from '@/shared/lib/iso-date'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
@@ -114,6 +125,10 @@ interface BasicInfoSectionProps {
   recordsSlot?: { title: string; content: React.ReactNode }
   /** 참여국이 고른 세부의 핵심 기록이면 그 세부 이름 — 라벨의 '(선택)'을 대신한다 */
   participantsCoreOf?: string
+  /** 참여국 '한 일(roleDescription)' 입력칸 placeholder — 세부 분야별로 맥락화 */
+  roleDescriptionPlaceholder?: string
+  /** 최근 사용한 참여국 목록 (생략 시 localStorage에서 읽음) */
+  recentParticipants?: RecentParticipantRef[]
 
   /** 상위 사건의 참여국 불러오기 — 상위를 골랐고 아직 안 들어온 나라가 있을 때만 */
   parentCountriesSlot?: {
@@ -179,6 +194,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   typeSlot,
   recordsSlot,
   participantsCoreOf,
+  roleDescriptionPlaceholder = '이 나라가 한 일 (선택)',
+  recentParticipants,
   parentCountriesSlot,
   playClickSound,
   getDateError,
@@ -285,6 +302,125 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         ?.querySelector<HTMLInputElement>('input')
         ?.focus({ preventScroll: true })
     })
+  }
+
+  const [countryQuickQuery, setCountryQuickQuery] = useState('')
+  const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
+    readRecentParticipants(),
+  )
+  const hintYearRange = useMemo(() => {
+    const startYear = signedYearFromIsoLike(startDate)
+    const endYear = signedYearFromIsoLike(endDate || startDate)
+    return { startYear, endYear }
+  }, [startDate, endDate])
+
+  const existingParticipantKeys = useMemo(
+    () => new Set(relatedCountries.map(participantKey)),
+    [relatedCountries],
+  )
+
+  const recentParticipantSuggestions = useMemo(() => {
+    const source = recentParticipants ?? storedRecentParticipants
+    return source
+      .filter((item) => !existingParticipantKeys.has(participantKey(item)))
+      .map((item) => {
+        if (item.historicalCountryId) {
+          const country = availableHistoricalCountries.find(
+            (candidate) => candidate.id === item.historicalCountryId,
+          )
+          if (!country) return null
+          return {
+            key: `h:${country.id}`,
+            label: `🏛️ ${country.name}`,
+            historicalCountryId: country.id,
+          }
+        }
+        if (item.countryId) {
+          const country = availableCountries.find(
+            (candidate) => candidate.id === item.countryId,
+          )
+          if (!country) return null
+          return {
+            key: `m:${country.id}`,
+            label: `${country.flagEmoji ?? '🌐'} ${country.name}`,
+            countryId: country.id,
+          }
+        }
+        return null
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+  }, [
+    recentParticipants,
+    storedRecentParticipants,
+    existingParticipantKeys,
+    availableCountries,
+    availableHistoricalCountries,
+  ])
+
+  const quickCountryMatches = useMemo(() => {
+    const query = countryQuickQuery.trim()
+    if (!query) return []
+    const lower = query.toLowerCase()
+    const matchedModern = filterCountriesByQuery(availableCountries, query)
+      .filter((country) => !existingParticipantKeys.has(`m:${country.id}`))
+      .map((country) => ({
+        key: `m:${country.id}`,
+        countryId: country.id,
+        historicalCountryId: undefined as string | undefined,
+        label: `${country.flagEmoji ?? '🌐'} ${country.name}`,
+        meta: country.isoCode ?? '',
+        eraMatched: false,
+        exact: country.name.toLowerCase() === lower,
+        prefix: country.name.toLowerCase().startsWith(lower),
+      }))
+    const matchedHistorical = filterCountriesByQuery(
+      availableHistoricalCountries,
+      query,
+    )
+      .filter((country) => !existingParticipantKeys.has(`h:${country.id}`))
+      .map((country) => {
+        const eraMatched = matchesHintYearRange(country, hintYearRange)
+        return {
+          key: `h:${country.id}`,
+          countryId: undefined as string | undefined,
+          historicalCountryId: country.id,
+          label: `🏛️ ${country.name}`,
+          meta: formatCountryPeriod(country) ?? '',
+          eraMatched,
+          exact: country.name.toLowerCase() === lower,
+          prefix: country.name.toLowerCase().startsWith(lower),
+        }
+      })
+    const combined = [...matchedModern, ...matchedHistorical]
+    combined.sort((left, right) => {
+      if (left.exact !== right.exact) return left.exact ? -1 : 1
+      if (left.eraMatched !== right.eraMatched) return left.eraMatched ? -1 : 1
+      if (left.prefix !== right.prefix) return left.prefix ? -1 : 1
+      return left.label.localeCompare(right.label, 'ko')
+    })
+    return combined.slice(0, 6)
+  }, [
+    countryQuickQuery,
+    availableCountries,
+    availableHistoricalCountries,
+    existingParticipantKeys,
+    hintYearRange,
+  ])
+
+  const addQuickParticipant = (target: {
+    countryId?: string
+    historicalCountryId?: string
+  }) => {
+    const key = participantKey(target)
+    if (existingParticipantKeys.has(key)) return
+    playClickSound()
+    setRelatedCountries([
+      ...relatedCountries,
+      target.historicalCountryId
+        ? { historicalCountryId: target.historicalCountryId, role: 'PARTICIPANT' }
+        : { countryId: target.countryId, role: 'PARTICIPANT' },
+    ])
+    setCountryQuickQuery('')
   }
 
   // F33 소프트 경고 — 사건 시점이 선택한 역사국가 존속기간 밖이면 인라인 경고(저장은 허용).
@@ -694,6 +830,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           <RoleSelect
                             value={participant.role ?? 'PARTICIPANT'}
                             aria-label={`${country.name} 역할`}
+                            title={
+                              eventCountryRoleHint(
+                                participant.role ?? 'PARTICIPANT',
+                              ) ?? undefined
+                            }
                             onChange={(changeEvent) =>
                               patch({
                                 role: changeEvent.target
@@ -707,7 +848,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                 !option.deprecated ||
                                 option.value === participant.role,
                             ).map((option) => (
-                              <option key={option.value} value={option.value}>
+                              <option
+                                key={option.value}
+                                value={option.value}
+                                title={option.hint}
+                              >
                                 {option.label}
                               </option>
                             ))}
@@ -715,43 +860,172 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           <RoleDescriptionInput
                             value={participant.roleDescription ?? ''}
                             aria-label={`${country.name}가 한 일`}
-                            placeholder="이 나라가 한 일 (선택)"
+                            placeholder={roleDescriptionPlaceholder}
                             onChange={(changeEvent) =>
                               patch({
                                 roleDescription: changeEvent.target.value,
                               })
                             }
                           />
-                          <ParticipantRemove
-                            type="button"
-                            aria-label={`${country.name} 제거`}
-                            onClick={() => {
-                              playClickSound()
-                              setRelatedCountries(
-                                relatedCountries.filter(
-                                  (row) => participantKey(row) !== key,
-                                ),
-                              )
-                            }}
-                          >
-                            <FiX size={14} />
-                          </ParticipantRemove>
+                          <ParticipantActions>
+                            {relatedCountries.length > 1 && (
+                              <>
+                                <ParticipantMoveButton
+                                  type="button"
+                                  disabled={index === 0}
+                                  aria-label={`${country.name} 위로 이동`}
+                                  title="위로 이동"
+                                  onClick={() => {
+                                    playClickSound()
+                                    setRelatedCountries(
+                                      moveParticipant(
+                                        relatedCountries,
+                                        index,
+                                        'up',
+                                      ),
+                                    )
+                                  }}
+                                >
+                                  <FiArrowUp size={13} />
+                                </ParticipantMoveButton>
+                                <ParticipantMoveButton
+                                  type="button"
+                                  disabled={
+                                    index === relatedCountries.length - 1
+                                  }
+                                  aria-label={`${country.name} 아래로 이동`}
+                                  title="아래로 이동"
+                                  onClick={() => {
+                                    playClickSound()
+                                    setRelatedCountries(
+                                      moveParticipant(
+                                        relatedCountries,
+                                        index,
+                                        'down',
+                                      ),
+                                    )
+                                  }}
+                                >
+                                  <FiArrowDown size={13} />
+                                </ParticipantMoveButton>
+                              </>
+                            )}
+                            <ParticipantRemove
+                              type="button"
+                              aria-label={`${country.name} 제거`}
+                              onClick={() => {
+                                playClickSound()
+                                setRelatedCountries(
+                                  relatedCountries.filter(
+                                    (row) => participantKey(row) !== key,
+                                  ),
+                                )
+                              }}
+                            >
+                              <FiX size={14} />
+                            </ParticipantRemove>
+                          </ParticipantActions>
                         </ParticipantRow>
                       )
                     })}
                   </ParticipantList>
                 )}
-                {/* 추가는 목록 **뒤** — 쌓이는 쪽에서 이어 붙이는 흐름 */}
-                <S.AddButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    onOpenCountryModal()
-                  }}
-                >
-                  <FiPlus size={15} />
-                  {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
-                </S.AddButton>
+                {recentParticipantSuggestions.length > 0 && (
+                  <RecentParticipantBar aria-label="최근 사용한 참여국">
+                    <RecentParticipantLabel>최근</RecentParticipantLabel>
+                    {recentParticipantSuggestions.map((entry) => (
+                      <RecentParticipantChip
+                        key={entry.key}
+                        type="button"
+                        onClick={() =>
+                          addQuickParticipant({
+                            countryId: entry.countryId,
+                            historicalCountryId: entry.historicalCountryId,
+                          })
+                        }
+                      >
+                        + {entry.label}
+                      </RecentParticipantChip>
+                    ))}
+                  </RecentParticipantBar>
+                )}
+                <CountryQuickSearchRow>
+                  <CountryQuickSearchInput
+                    type="search"
+                    aria-label="참여국 빠른 검색"
+                    placeholder="국가 이름으로 바로 추가 (예: 프랑스, 프로이센, 청나라…)"
+                    value={countryQuickQuery}
+                    onChange={(changeEvent) =>
+                      setCountryQuickQuery(changeEvent.target.value)
+                    }
+                    onKeyDown={(keyEvent) => {
+                      if (
+                        keyEvent.key === 'Enter' &&
+                        quickCountryMatches.length > 0
+                      ) {
+                        keyEvent.preventDefault()
+                        const first = quickCountryMatches[0]
+                        addQuickParticipant({
+                          countryId: first.countryId,
+                          historicalCountryId: first.historicalCountryId,
+                        })
+                      } else if (
+                        keyEvent.key === 'Escape' &&
+                        countryQuickQuery
+                      ) {
+                        keyEvent.preventDefault()
+                        setCountryQuickQuery('')
+                      }
+                    }}
+                  />
+                  {/* 추가는 목록 **뒤** — 쌓이는 쪽에서 이어 붙이는 흐름 */}
+                  <S.AddButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      onOpenCountryModal()
+                    }}
+                  >
+                    <FiPlus size={15} />
+                    {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
+                  </S.AddButton>
+                </CountryQuickSearchRow>
+                {countryQuickQuery.trim() && (
+                  <CountryQuickResultBox
+                    role="region"
+                    aria-label="참여국 빠른 검색 결과"
+                  >
+                    {quickCountryMatches.length > 0 ? (
+                      quickCountryMatches.map((match) => (
+                        <CountryQuickResultButton
+                          key={match.key}
+                          type="button"
+                          onClick={() =>
+                            addQuickParticipant({
+                              countryId: match.countryId,
+                              historicalCountryId: match.historicalCountryId,
+                            })
+                          }
+                        >
+                          <CountryQuickResultName>
+                            + {match.label}
+                          </CountryQuickResultName>
+                          <CountryQuickResultMeta>
+                            {match.eraMatched && (
+                              <CountryEraBadge>시대 일치</CountryEraBadge>
+                            )}
+                            {match.meta && <span>{match.meta}</span>}
+                          </CountryQuickResultMeta>
+                        </CountryQuickResultButton>
+                      ))
+                    ) : (
+                      <CountryQuickEmpty>
+                        &lsquo;{countryQuickQuery.trim()}&rsquo;에 맞는 국가가
+                        없습니다.
+                      </CountryQuickEmpty>
+                    )}
+                  </CountryQuickResultBox>
+                )}
                 {parentCountriesSlot && (
                   <S.AddButton
                     type="button"
@@ -1074,7 +1348,7 @@ const ParticipantList = styled.div`
 const ParticipantRow = styled.div`
   display: grid;
   /* 국가명이 주인공 — 이름 열을 역할 열보다 넓게 잡아 긴 국호도 잘리지 않게 한다. */
-  grid-template-columns: minmax(132px, 1fr) 118px minmax(0, 1.7fr) 28px;
+  grid-template-columns: minmax(132px, 1fr) 118px minmax(0, 1.7fr) auto;
   align-items: center;
   gap: 8px;
   padding: 6px 6px 6px 12px;
@@ -1092,6 +1366,163 @@ const ParticipantRow = styled.div`
     grid-template-columns: minmax(0, 1fr) auto;
     row-gap: 6px;
   }
+`
+
+const ParticipantActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+`
+
+const ParticipantMoveButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background-color: ${({ theme }) => S.getC(theme).background.hover};
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+`
+
+const RecentParticipantBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+`
+
+const RecentParticipantLabel = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RecentParticipantChip = styled.button`
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.default};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+`
+
+const CountryQuickSearchRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const CountryQuickSearchInput = styled.input`
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 360px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 12.5px;
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const CountryQuickResultBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const CountryQuickResultButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) => S.getC(theme).background.hover};
+  }
+`
+
+const CountryQuickResultName = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+`
+
+const CountryQuickResultMeta = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CountryEraBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(99, 102, 241, 0.14);
+  color: ${({ theme }) => theme.colors.primary};
+`
+
+const CountryQuickEmpty = styled.p`
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /**

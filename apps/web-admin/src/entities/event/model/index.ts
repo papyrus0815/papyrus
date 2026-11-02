@@ -25,13 +25,19 @@ export type {
 export { CENTURY_UNKNOWN, EVENTS_PAGE_SIZE_ALL } from './types'
 export {
   EVENT_COUNTRY_ROLE_OPTIONS,
+  eventCountryRoleHint,
   eventCountryRoleLabel,
+  moveParticipant,
   participantKey,
+  readRecentParticipants,
+  recordRecentParticipants,
+  roleDescriptionPlaceholderForType,
   toParticipants,
 } from './country-participant'
 export type {
   EventCountryParticipant,
   EventCountryRole,
+  RecentParticipantRef,
 } from './country-participant'
 export {
   EVENT_DOMAIN_OPTIONS,

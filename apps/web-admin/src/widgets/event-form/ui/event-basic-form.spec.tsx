@@ -65,7 +65,14 @@ jest.mock('@/entities/event-form/model', () => ({
   }),
 }))
 jest.mock('@/shared/ui/country-picker', () => ({
-  CountryPicker: () => null,
+  CountryPicker: (props: {
+    initialKind?: string
+    hintYearRange?: { startYear?: number | null; endYear?: number | null }
+  }) => (
+    <output data-testid="country-picker-meta">
+      {`${props.initialKind ?? 'default'}:${props.hintYearRange?.startYear ?? ''}:${props.hintYearRange?.endYear ?? ''}`}
+    </output>
+  ),
 }))
 jest.mock('@/features/event-facets/model/register-facets', () => {
   const actual = jest.requireActual('@/features/event-facets/model/register-facets')
@@ -144,6 +151,7 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
     typeSlot?: ReactNode
     recordsSlot?: { title: string; content: ReactNode }
     participantsCoreOf?: string
+    roleDescriptionPlaceholder?: string
     kindSlot?: {
       value: 'SINGLE' | 'COLLECTION'
       onChange: (next: 'SINGLE' | 'COLLECTION') => void
@@ -180,6 +188,9 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
       />
       <output data-testid="category">{props.category}</output>
       <output data-testid="participantsCoreOf">{props.participantsCoreOf ?? ''}</output>
+      <output data-testid="roleDescriptionPlaceholder">
+        {props.roleDescriptionPlaceholder ?? ''}
+      </output>
       <output data-testid="recordsTitle">{props.recordsSlot?.title ?? ''}</output>
       <output data-testid="kind">{props.kindSlot?.value ?? ''}</output>
       {props.kindSlot && (
@@ -888,5 +899,22 @@ describe('EventBasicForm — 분야 · 세부 분야 상호작용', () => {
       'c1:PARTICIPANT:',
     )
     expect(onDirtyChange).not.toHaveBeenCalledWith(true)
+  })
+
+  it('사건 시작 연도에 맞춰 CountryPicker에 시대 힌트와 역사국가 초기 탭을 전달하고, 세부 분야에 맞는 참여국 서술 placeholder를 내려보낸다', () => {
+    const client = makeClient()
+    render(<EventBasicForm />, { wrapper: wrap(client) })
+
+    fireEvent.change(screen.getByLabelText('시작일'), {
+      target: { value: '1683-07-14' },
+    })
+    fireEvent.click(screen.getByRole('radio', { name: '조약·협정·가입' }))
+
+    expect(screen.getByTestId('country-picker-meta')).toHaveTextContent(
+      'historical:1683:1683',
+    )
+    expect(screen.getByTestId('roleDescriptionPlaceholder')).toHaveTextContent(
+      '비준·할양·배상 등 이 나라의 조약 내용 (선택)',
+    )
   })
 })

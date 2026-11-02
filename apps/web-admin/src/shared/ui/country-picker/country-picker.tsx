@@ -71,6 +71,8 @@ interface CountryPickerBaseProps {
   historicalCountries: CountryPickerHistoricalOption[]
   /** 한쪽 탭만 보일 때(연결 현대국가·후임 역사국가 등). 기본 'all' */
   scope?: 'all' | CountryPickerKind
+  /** 열릴 때 먼저 보여 줄 탭 — 생략하면 선택값·시대 힌트로 판단 */
+  initialKind?: CountryPickerKind
   /** 지금 걸려 있는 값 — 체크 표시·여는 탭 결정·batch 초기값에 쓰인다 */
   selectedIds?: string[]
   /**
@@ -111,6 +113,7 @@ export function CountryPicker(props: CountryPickerProps) {
     modernCountries,
     historicalCountries,
     scope = 'all',
+    initialKind,
     selectedIds = EMPTY_IDS,
     hintYearRange,
     onClearSelection,
@@ -126,7 +129,9 @@ export function CountryPicker(props: CountryPickerProps) {
   const { data: continentQueryData } = useContinents()
   const continentList = continentListProp ?? continentQueryData
 
-  const [kind, setKind] = useState<CountryPickerKind>(scope === 'historical' ? 'historical' : 'modern')
+  const [kind, setKind] = useState<CountryPickerKind>(
+    scope === 'historical' ? 'historical' : initialKind ?? 'modern',
+  )
   /**
    * 대륙 필터 값은 **continentId**다(검토 IA-9) — 이름이 키면 호출 화면(id)과 값을
    * 주고받을 수 없고, 동명 대륙이 조용히 합쳐지고, 이름이 바뀌면 필터가 무효가 된다.
@@ -176,12 +181,22 @@ export function CountryPicker(props: CountryPickerProps) {
     const selectedInHistorical =
       mode !== 'add' &&
       historicalCountries.some((country) => selectedIds.includes(country.id))
-    setKind(scope !== 'all' ? scope : selectedInHistorical ? 'historical' : 'modern')
+    const hintEndYear = hintYearRange?.endYear ?? hintYearRange?.startYear
+    const hintInHistoricalEra = hintEndYear != null && hintEndYear < 1945
+    setKind(
+      scope !== 'all'
+        ? scope
+        : initialKind
+          ? initialKind
+          : selectedInHistorical || hintInHistoricalEra
+            ? 'historical'
+            : 'modern',
+    )
     setContinentId(initialContinentId ?? 'all')
     setSearchTerm('')
     setDraftIds(mode === 'add' ? [] : selectedIds)
     setCreatedCountries([])
-  }, [isOpen, mode, scope, selectedIds, historicalCountries, initialContinentId])
+  }, [isOpen, mode, scope, initialKind, selectedIds, historicalCountries, initialContinentId, hintYearRange])
 
   /** add 모드에서 잠긴(이미 담긴) id — 다른 모드에선 비어 있다 */
   const addedIdSet = useMemo(

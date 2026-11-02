@@ -429,6 +429,7 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         onCommit={actors.addCountries}
         modernCountries={allModern}
         historicalCountries={allHistorical}
+        hintYearRange={{ startYear: personContext.fromYear, endYear: personContext.toYear }}
         selectedIds={selectedCountryIds}
         isLoading={modernLoading || historicalLoading}
       />

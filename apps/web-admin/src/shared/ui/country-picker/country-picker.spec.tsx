@@ -176,6 +176,11 @@ describe('여는 상태', () => {
     expect(screen.getByRole('radio', { name: '현대 국가' })).toHaveAttribute('aria-checked', 'true')
   })
 
+  it('시대 힌트(hintYearRange)가 1945년 이전이거나 initialKind가 historical이면 역사적 국가 탭으로 바로 연다', () => {
+    renderPicker({ mode: 'add', hintYearRange: { startYear: 1683, endYear: 1683 } })
+    expect(screen.getByRole('radio', { name: '역사적 국가' })).toHaveAttribute('aria-checked', 'true')
+  })
+
   it('선택 해제 버튼은 고른 값이 있을 때만, 지정한 글자로 뜬다', () => {
     const onClearSelection = jest.fn()
     renderPicker({ mode: 'single', selectedIds: ['kr'], onClearSelection, clearSelectionLabel: '선택 안 함' })

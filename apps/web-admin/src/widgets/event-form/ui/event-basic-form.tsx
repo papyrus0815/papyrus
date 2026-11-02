@@ -30,6 +30,8 @@ import { buildEventSubmitData, checkBasicInfo, validateBasicInfo } from '@/featu
 import {
   type EventCountryParticipant,
   participantKey,
+  recordRecentParticipants,
+  roleDescriptionPlaceholderForType,
   toParticipants,
 } from '@/entities/event/model'
 import { useBasicInfoForm } from '@/features/event-form/model'
@@ -69,6 +71,7 @@ import {
 } from '@/shared/api/events'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import { formatDateRange } from '@/shared/lib/iso-date'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import {
@@ -402,6 +405,23 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   /** 고른 분야 — 앞에 보일 세부와, 세부와 함께 붙는 기록·수치 성격을 정한다 */
   const domainName = category || null
   const facets = typeFacets(eventType, domainName)
+  const countryHintYearRange = useMemo(() => {
+    const startYear = signedYearFromIsoLike(startDate)
+    const endYear = signedYearFromIsoLike(endDate || startDate)
+    if (startYear == null && endYear == null) return undefined
+    return { startYear, endYear }
+  }, [startDate, endDate])
+  const countryPickerInitialKind = useMemo<'modern' | 'historical' | undefined>(() => {
+    const refYear = countryHintYearRange?.endYear ?? countryHintYearRange?.startYear
+    if (refYear != null && refYear < 1945) return 'historical'
+    if (
+      relatedCountries.length > 0 &&
+      relatedCountries.every((row) => Boolean(row.historicalCountryId))
+    ) {
+      return 'historical'
+    }
+    return undefined
+  }, [countryHintYearRange, relatedCountries])
 
   /** 참여국 줄 → 표시 이름(현대·역사 국가 목록에서) */
   const participantName = (row: { countryId?: string | null; historicalCountryId?: string | null }) =>
@@ -824,6 +844,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       baselineRef.current = snapshotRef.current
       markDirty(false)
       recordRecentClassification({ domain: category, type: eventType })
+      recordRecentParticipants(relatedCountries)
 
       /**
        * `refetchType: 'none'` — **표시만 하고 지금 다시 받지는 않는다.**
@@ -986,6 +1007,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         participantsCoreOf={
           eventType && facets.core.includes('participants') ? EVENT_TYPES[eventType].label : undefined
         }
+        roleDescriptionPlaceholder={roleDescriptionPlaceholderForType(eventType)}
         recordsSlot={
           eventType && !isEditMode && facets.core.some((facet) => facet !== 'participants')
             ? {
@@ -1014,6 +1036,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                       setRelatedCountries(relatedCountries.filter((row) => participantKey(row) !== key))
                     }
                     eventTitle={title}
+                    startDate={startDate}
+                    endDate={endDate}
                     playClickSound={playClickSound}
                   />
                 ),
@@ -1084,6 +1108,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           title={pendingCountryRole === 'FOUNDED' ? '세워진 나라 선택' : '무너진 나라 선택'}
           modernCountries={availableCountries}
           historicalCountries={availableHistoricalCountries}
+          hintYearRange={countryHintYearRange}
+          initialKind={countryPickerInitialKind}
           selectedIds={relatedCountries
             .filter((participant) => participant.role === pendingCountryRole)
             .map((participant) => participant.countryId ?? participant.historicalCountryId ?? '')}
@@ -1113,6 +1139,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           title="참여국 추가"
           modernCountries={availableCountries}
           historicalCountries={availableHistoricalCountries}
+          hintYearRange={countryHintYearRange}
+          initialKind={countryPickerInitialKind}
           selectedIds={relatedCountries.map(
             (participant) => participant.countryId ?? participant.historicalCountryId ?? '',
           )}

@@ -40,6 +40,7 @@ import { getOrganizations } from '@/shared/api/organizations'
 import { treatyApi } from '@/shared/api/treaty'
 import { nestiaApiService } from '@/shared/api/api.service'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import {
   KitAddButton,
   KitChipGroup,
@@ -49,7 +50,7 @@ import {
   KitSelectedItem,
   KitSelectedItems,
 } from '@/shared/ui/register-form-kit/register-form-kit'
-import { PersonPickerModal } from '@/shared/ui/person-picker'
+import { PersonPickerModal, type PersonPickerContext } from '@/shared/ui/person-picker'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 
 /** 등록 뒤 상세에서 적는 기록 — 출처·진영별 값이 필요해 등록 칸으로는 받지 않는다 */
@@ -74,6 +75,9 @@ interface CoreRecordsGroupProps {
   onAssignParticipantRole?: (key: string, role: 'FOUNDED' | 'DISSOLVED') => void
   onRemoveParticipant: (key: string) => void
   eventTitle: string
+  /** 사건 시작·종료 날짜(선택) — 참여 인물 피커에서 동시대·참여국 인물을 위로 올리는 데 쓴다 */
+  startDate?: string
+  endDate?: string
   playClickSound: () => void
 }
 
@@ -89,12 +93,28 @@ export function CoreRecordsGroup({
   onAssignParticipantRole,
   onRemoveParticipant,
   eventTitle,
+  startDate,
+  endDate,
   playClickSound,
 }: CoreRecordsGroupProps) {
   const facets = typeFacets(type, domain)
   const metrics = metricsFor(type, domain)
   const [picker, setPicker] = useState<PickerKind | null>(null)
   const update = (patch: Partial<RegisterFacetDrafts>) => onDraftsChange({ ...drafts, ...patch })
+  const personContext = useMemo<PersonPickerContext | undefined>(() => {
+    const fromYear = signedYearFromIsoLike(startDate)
+    const toYear = signedYearFromIsoLike(endDate || startDate)
+    const countryIds = participants
+      .map((row) => row.countryId ?? row.historicalCountryId)
+      .filter((id): id is string => Boolean(id))
+    if (fromYear == null && toYear == null && countryIds.length === 0) return undefined
+    return {
+      fromYear,
+      toYear,
+      countryIds,
+      label: '이 사건 무렵 · 참여국 인물',
+    }
+  }, [startDate, endDate, participants])
 
   const fieldFacets = facets.core.filter((facet) => facet !== 'participants' && !DETAIL_ONLY.includes(facet))
   const detailFacets = [...facets.core, ...facets.optional].filter((facet) => DETAIL_ONLY.includes(facet))
@@ -246,6 +266,7 @@ export function CoreRecordsGroup({
         onClose={() => setPicker(null)}
         drafts={drafts}
         update={update}
+        personContext={personContext}
       />
     </>
   )
@@ -347,6 +368,18 @@ function SidesField({
                 )
               })}
             </RowList>
+            {onOpenCountryModal && (
+              <KitAddButton
+                type="button"
+                onClick={() => {
+                  playClickSound()
+                  onOpenCountryModal()
+                }}
+              >
+                <FiPlus size={15} />
+                참여국 더 추가
+              </KitAddButton>
+            )}
             {canSuggest && (
               <TextButton
                 type="button"
@@ -618,11 +651,13 @@ function RecordPickers({
   onClose,
   drafts,
   update,
+  personContext,
 }: {
   kind: PickerKind | null
   onClose: () => void
   drafts: RegisterFacetDrafts
   update: (patch: Partial<RegisterFacetDrafts>) => void
+  personContext?: PersonPickerContext
 }) {
   const [term, setTerm] = useState('')
   const debounced = useDebouncedValue(term, 250, kind ?? '')
@@ -677,6 +712,7 @@ function RecordPickers({
       <PersonPickerModal
         title={PICKER_TITLE[kind]}
         multiSelect
+        context={personContext}
         excludeIds={list.map((person) => person.personId)}
         excludeReason="이미 고른 인물은 목록에서 뺐습니다."
         onSelect={(personId, name) => {
