@@ -27,17 +27,21 @@ export {
   EVENT_COUNTRY_ROLE_OPTIONS,
   eventCountryRoleHint,
   eventCountryRoleLabel,
+  findReplacementForMismatchedCountry,
   moveParticipant,
   participantKey,
   readRecentParticipants,
   recordRecentParticipants,
+  resolveBatchCountryQuery,
   roleDescriptionPlaceholderForType,
+  suggestCountriesFromTitle,
   toParticipants,
 } from './country-participant'
 export type {
   EventCountryParticipant,
   EventCountryRole,
   RecentParticipantRef,
+  SuggestedCountryCandidate,
 } from './country-participant'
 export {
   EVENT_DOMAIN_OPTIONS,

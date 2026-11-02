@@ -1008,6 +1008,39 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           eventType && facets.core.includes('participants') ? EVENT_TYPES[eventType].label : undefined
         }
         roleDescriptionPlaceholder={roleDescriptionPlaceholderForType(eventType)}
+        participantSidesSlot={
+          eventType && !isEditMode && facets.core.includes('sides')
+            ? {
+                assignment: facetDrafts.sides.assignment,
+                sideNames: effectiveSideNames(facetDrafts),
+                onAssign: (key, slot) => {
+                  playClickSound()
+                  setFacetDrafts((previous) => {
+                    const nextAssignment = { ...previous.sides.assignment }
+                    if (!slot) delete nextAssignment[key]
+                    else nextAssignment[key] = slot
+                    return {
+                      ...previous,
+                      sides: { ...previous.sides, assignment: nextAssignment },
+                    }
+                  })
+                },
+                onReplaceKey: (oldKey, newKey) => {
+                  setFacetDrafts((previous) => {
+                    const slot = previous.sides.assignment[oldKey]
+                    if (!slot || oldKey === newKey) return previous
+                    const nextAssignment = { ...previous.sides.assignment }
+                    delete nextAssignment[oldKey]
+                    nextAssignment[newKey] = slot
+                    return {
+                      ...previous,
+                      sides: { ...previous.sides, assignment: nextAssignment },
+                    }
+                  })
+                },
+              }
+            : undefined
+        }
         recordsSlot={
           eventType && !isEditMode && facets.core.some((facet) => facet !== 'participants')
             ? {

@@ -158,4 +158,145 @@ describe('BasicInfoSection — 세로 높이 방지 및 참여국·소개 UX', (
       { countryId: 'c1', role: 'PARTICIPANT' },
     ])
   })
+
+  it('사건명에서 감지된 참여국 추천 칩과 "모두 추가" 버튼으로 원클릭 등록할 수 있다', () => {
+    const setRelatedCountries = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '영프 협상',
+          setRelatedCountries,
+        })}
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', { name: '+ 🇬🇧 영국' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '+ 🇫🇷 프랑스' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '사건명 추천 참여국 모두 추가' }),
+    )
+    expect(setRelatedCountries).toHaveBeenCalledWith([
+      { countryId: 'c2', role: 'PARTICIPANT' },
+      { countryId: 'c1', role: 'PARTICIPANT' },
+    ])
+  })
+
+  it('빠른 검색창에서 쉼표(,)로 여러 나라를 한 번에 추가하거나 +주도·+대상 역할로 바로 추가할 수 있다', () => {
+    const setRelatedCountries = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({ setRelatedCountries })}
+      />,
+    )
+
+    const searchInput = screen.getByRole('searchbox', {
+      name: '참여국 빠른 검색',
+    })
+
+    // 1) +주도 역할 버튼으로 추가
+    fireEvent.change(searchInput, { target: { value: '프랑스' } })
+    fireEvent.click(
+      screen.getByRole('button', { name: '프랑스 주도국으로 추가' }),
+    )
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      { countryId: 'c1', role: 'INITIATOR' },
+    ])
+
+    // 2) 쉼표로 구분해 여러 나라 한 번에 Enter로 추가
+    fireEvent.change(searchInput, { target: { value: '영국, 러시아' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      { countryId: 'c2', role: 'PARTICIPANT' },
+      { countryId: 'c3', role: 'PARTICIPANT' },
+    ])
+  })
+
+  it('전투·전쟁 등 진영 세부 분야일 때 참여국 행에서 바로 1편·2편을 배정·해제할 수 있다', () => {
+    const onAssign = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          relatedCountries: [{ countryId: 'c1', role: 'INITIATOR' }],
+          participantSidesSlot: {
+            assignment: { 'm:c1': 'A' },
+            sideNames: ['프랑스 측', '영국 측'],
+            onAssign,
+          },
+        })}
+      />,
+    )
+
+    const side1Btn = screen.getByRole('button', { name: '프랑스 1편' })
+    const side2Btn = screen.getByRole('button', { name: '프랑스 2편' })
+    expect(side1Btn).toHaveAttribute('aria-pressed', 'true')
+    expect(side2Btn).toHaveAttribute('aria-pressed', 'false')
+
+    // 이미 배정된 1편을 다시 누르면 미배정(null)으로 해제
+    fireEvent.click(side1Btn)
+    expect(onAssign).toHaveBeenCalledWith('m:c1', null)
+
+    // 2편 클릭 시 'B'로 전환
+    fireEvent.click(side2Btn)
+    expect(onAssign).toHaveBeenCalledWith('m:c1', 'B')
+  })
+
+  it('역사 국가 존속기간 불일치 경고에서 시대에 맞는 국가로 역할·서술·진영을 유지한 채 원클릭 교체할 수 있다', () => {
+    const setRelatedCountries = jest.fn()
+    const onReplaceKey = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          startDate: '1840-06-01',
+          endDate: '1842-08-29',
+          relatedCountries: [
+            {
+              historicalCountryId: 'h-ming',
+              role: 'TARGET',
+              roleDescription: '아편 단속',
+            },
+          ],
+          setRelatedCountries,
+          availableHistoricalCountries: [
+            {
+              id: 'h-ming',
+              name: '명나라',
+              startYear: 1368,
+              endYear: 1644,
+            } as never,
+            {
+              id: 'h-qing',
+              name: '청나라',
+              startYear: 1636,
+              endYear: 1912,
+            } as never,
+          ],
+          participantSidesSlot: {
+            assignment: { 'h:h-ming': 'B' },
+            sideNames: ['영국 측', '청나라 측'],
+            onAssign: jest.fn(),
+            onReplaceKey,
+          },
+        })}
+      />,
+    )
+
+    const replaceBtn = screen.getByRole('button', {
+      name: '🏛️ 청나라(으)로 교체',
+    })
+    fireEvent.click(replaceBtn)
+
+    expect(setRelatedCountries).toHaveBeenCalledWith([
+      {
+        historicalCountryId: 'h-qing',
+        role: 'TARGET',
+        roleDescription: '아편 단속',
+      },
+    ])
+    expect(onReplaceKey).toHaveBeenCalledWith('h:h-ming', 'h:h-qing')
+  })
 })

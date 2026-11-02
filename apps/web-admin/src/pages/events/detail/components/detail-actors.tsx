@@ -133,6 +133,14 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
       label: '이 사건 무렵 · 참여국 인물',
     }
   }, [event, countryRows])
+  const countryPickerInitialKind = useMemo<'modern' | 'historical' | undefined>(() => {
+    const refYear = personContext.toYear ?? personContext.fromYear
+    if (refYear != null && refYear < 1945) return 'historical'
+    if (countryRows.length > 0 && countryRows.every((row) => row.isHistorical)) {
+      return 'historical'
+    }
+    return undefined
+  }, [personContext.fromYear, personContext.toYear, countryRows])
   const totalCountries = countryRows.length
   const hasAnything = persons.length > 0 || totalCountries > 0
   /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다 */
@@ -430,6 +438,7 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         modernCountries={allModern}
         historicalCountries={allHistorical}
         hintYearRange={{ startYear: personContext.fromYear, endYear: personContext.toYear }}
+        initialKind={countryPickerInitialKind}
         selectedIds={selectedCountryIds}
         isLoading={modernLoading || historicalLoading}
       />

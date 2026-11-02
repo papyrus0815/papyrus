@@ -1,3 +1,14 @@
+import {
+  type CountryPeriodShape,
+  describeLifespanMismatch,
+} from '@/shared/lib/country-period'
+import {
+  type CountryHintYearRange,
+  type CountrySearchShape,
+  filterCountriesByQuery,
+  matchesHintYearRange,
+} from '@/shared/lib/country-picker-filter'
+
 /**
  * 사건 참여국 — **화면 전체가 공유하는 단일 개념**.
  *
@@ -269,4 +280,440 @@ export function toParticipants(
   ]
   rows.sort((left, right) => left.sortOrder - right.sortOrder)
   return rows.map((row) => row.participant)
+}
+
+export interface SuggestedCountryCandidate {
+  key: string
+  countryId?: string
+  historicalCountryId?: string
+  name: string
+  label: string
+}
+
+const TITLE_SHORTHAND_GROUPS: ReadonlyArray<{
+  pattern: RegExp
+  groups: ReadonlyArray<ReadonlyArray<string>>
+}> = [
+  {
+    pattern: /청일/,
+    groups: [
+      ['청나라', '청'],
+      ['일본 제국', '대일본제국', '일본'],
+    ],
+  },
+  {
+    pattern: /러일|노일/,
+    groups: [
+      ['러시아 제국', '러시아'],
+      ['일본 제국', '대일본제국', '일본'],
+    ],
+  },
+  {
+    pattern: /보불/,
+    groups: [
+      ['프로이센', '프로이센 왕국'],
+      ['프랑스 제2제국', '프랑스'],
+    ],
+  },
+  {
+    pattern: /보오/,
+    groups: [
+      ['프로이센', '프로이센 왕국'],
+      ['오스트리아 제국', '오스트리아'],
+    ],
+  },
+  {
+    pattern: /독소/,
+    groups: [
+      ['나치 독일', '독일 제국', '독일'],
+      ['소련', '소비에트 연방', '러시아'],
+    ],
+  },
+  {
+    pattern: /미소/,
+    groups: [
+      ['미국'],
+      ['소련', '소비에트 연방'],
+    ],
+  },
+  {
+    pattern: /미중/,
+    groups: [
+      ['미국'],
+      ['중국', '중화인민공화국', '청나라'],
+    ],
+  },
+  {
+    pattern: /영프|영불/,
+    groups: [
+      ['영국', '대영제국'],
+      ['프랑스', '프랑스 왕국'],
+    ],
+  },
+  {
+    pattern: /영일/,
+    groups: [
+      ['영국', '대영제국'],
+      ['일본 제국', '일본'],
+    ],
+  },
+  {
+    pattern: /미일/,
+    groups: [
+      ['미국'],
+      ['일본 제국', '일본'],
+    ],
+  },
+  {
+    pattern: /한일|조일/,
+    groups: [
+      ['대한민국', '대한제국', '조선'],
+      ['일본', '일본 제국'],
+    ],
+  },
+  {
+    pattern: /조미/,
+    groups: [
+      ['조선', '대한제국'],
+      ['미국'],
+    ],
+  },
+  {
+    pattern: /조청/,
+    groups: [
+      ['조선'],
+      ['청나라', '청'],
+    ],
+  },
+  {
+    pattern: /중일/,
+    groups: [
+      ['중화민국', '중국', '청나라'],
+      ['일본 제국', '일본'],
+    ],
+  },
+  {
+    pattern: /임진왜란|정유재란/,
+    groups: [
+      ['조선'],
+      ['일본'],
+    ],
+  },
+  {
+    pattern: /병자호란|정묘호란/,
+    groups: [
+      ['조선'],
+      ['청나라', '청', '후금'],
+    ],
+  },
+  {
+    pattern: /병인양요/,
+    groups: [
+      ['조선'],
+      ['프랑스 제2제국', '프랑스'],
+    ],
+  },
+  {
+    pattern: /신미양요/,
+    groups: [
+      ['조선'],
+      ['미국'],
+    ],
+  },
+]
+
+const COUNTRY_LINEAGE_FAMILIES: ReadonlyArray<ReadonlyArray<string>> = [
+  ['고조선', '고구려', '백제', '신라', '고려', '조선', '대한제국', '대한민국', '한국'],
+  ['한나라', '당나라', '송나라', '원나라', '명나라', '후금', '청나라', '청', '중화민국', '중화인민공화국', '중국'],
+  ['프로이센', '프로이센 왕국', '독일 제국', '바이마르 공화국', '나치 독일', '서독', '동독', '독일'],
+  ['프랑스 왕국', '프랑스 제1공화국', '프랑스 제1제국', '프랑스 제2제국', '프랑스 제3공화국', '프랑스'],
+  ['러시아 제국', '소련', '소비에트 연방', '러시아'],
+  ['오스만 제국', '튀르키예', '터키'],
+  ['대영제국', '잉글랜드 왕국', '영국'],
+  ['에도 막부', '일본 제국', '대일본제국', '일본'],
+  ['로마 왕정', '로마 공화정', '로마 공화국', '로마 제국', '서로마 제국', '이탈리아 왕국', '이탈리아'],
+  ['오스트리아 제국', '오스트리아-헝가리 제국', '오스트리아'],
+]
+
+function pickBestCandidateForAliases(
+  aliases: ReadonlyArray<string>,
+  modernCountries: ReadonlyArray<{ id: string; name: string; flagEmoji?: string | null }>,
+  historicalCountries: ReadonlyArray<{ id: string; name: string } & CountryPeriodShape>,
+  hintYearRange?: CountryHintYearRange | null,
+): SuggestedCountryCandidate | null {
+  const refYear = hintYearRange?.startYear ?? hintYearRange?.endYear ?? null
+  let bestScore = Number.NEGATIVE_INFINITY
+  let best: SuggestedCountryCandidate | null = null
+
+  aliases.forEach((alias, aliasIdx) => {
+    const aliasPriority = Math.max(0, 20 - aliasIdx * 4)
+    const lowerAlias = alias.toLowerCase()
+
+    for (const hist of historicalCountries) {
+      const lowerName = hist.name.toLowerCase()
+      if (lowerName !== lowerAlias && !lowerName.startsWith(lowerAlias)) continue
+      let score = aliasPriority + (lowerName === lowerAlias ? 30 : 10)
+      if (hintYearRange && matchesHintYearRange(hist, hintYearRange)) {
+        score += 100
+      } else if (
+        refYear != null &&
+        describeLifespanMismatch(hist, refYear, { recordSupportsBc: true })
+      ) {
+        score -= 120
+      } else if (refYear != null && refYear < 1945) {
+        score += 35
+      }
+      if (score > bestScore) {
+        bestScore = score
+        best = {
+          key: `h:${hist.id}`,
+          historicalCountryId: hist.id,
+          name: hist.name,
+          label: `🏛️ ${hist.name}`,
+        }
+      }
+    }
+
+    for (const mod of modernCountries) {
+      const lowerName = mod.name.toLowerCase()
+      if (lowerName !== lowerAlias) continue
+      let score = aliasPriority + 25
+      if (refYear == null || refYear >= 1945) {
+        score += 45
+      } else {
+        score += 10
+      }
+      if (score > bestScore) {
+        bestScore = score
+        best = {
+          key: `m:${mod.id}`,
+          countryId: mod.id,
+          name: mod.name,
+          label: `${mod.flagEmoji ?? '🌐'} ${mod.name}`,
+        }
+      }
+    }
+  })
+
+  return best
+}
+
+/**
+ * 사건명(`title`)에서 한자어 약칭('청일', '러일', '보불', '독소', '미소' 등) 및 직접 언급된
+ * 국가명을 감지해 시대에 맞는 참여국 후보를 최대 5개 추천한다.
+ */
+export function suggestCountriesFromTitle(
+  title: string | null | undefined,
+  modernCountries: ReadonlyArray<{ id: string; name: string; flagEmoji?: string | null }>,
+  historicalCountries: ReadonlyArray<{ id: string; name: string } & CountryPeriodShape>,
+  hintYearRange?: CountryHintYearRange | null,
+  existingKeys?: ReadonlySet<string>,
+): SuggestedCountryCandidate[] {
+  const trimmed = title?.trim() ?? ''
+  if (trimmed.length < 2) return []
+
+  const results: SuggestedCountryCandidate[] = []
+  const seenKeys = new Set<string>(existingKeys)
+  const seenNames = new Set<string>()
+
+  const pushCandidate = (candidate: SuggestedCountryCandidate | null) => {
+    if (!candidate) return
+    if (seenKeys.has(candidate.key) || seenNames.has(candidate.name)) return
+    seenKeys.add(candidate.key)
+    seenNames.add(candidate.name)
+    results.push(candidate)
+  }
+
+  for (const rule of TITLE_SHORTHAND_GROUPS) {
+    if (rule.pattern.test(trimmed)) {
+      for (const aliasGroup of rule.groups) {
+        pushCandidate(
+          pickBestCandidateForAliases(
+            aliasGroup,
+            modernCountries,
+            historicalCountries,
+            hintYearRange,
+          ),
+        )
+      }
+    }
+  }
+
+  // 사건명에 직접 국가 이름이 들어간 경우 (긴 이름부터 매칭해 '로마 제국'이 있을 때 '로마' 중복 방지)
+  const directMatches: Array<{ name: string; aliases: string[] }> = []
+  const allNames = new Set<string>()
+  for (const hist of historicalCountries) {
+    if (hist.name.trim().length >= 2 && trimmed.includes(hist.name.trim())) {
+      allNames.add(hist.name.trim())
+    }
+  }
+  for (const mod of modernCountries) {
+    if (mod.name.trim().length >= 2 && trimmed.includes(mod.name.trim())) {
+      allNames.add(mod.name.trim())
+    }
+  }
+  const sortedNames = [...allNames].sort((a, b) => b.length - a.length)
+  for (const matchedName of sortedNames) {
+    if (
+      directMatches.some(
+        (existing) =>
+          existing.name !== matchedName && existing.name.includes(matchedName),
+      )
+    ) {
+      continue
+    }
+    const lineage = COUNTRY_LINEAGE_FAMILIES.find((family) =>
+      family.includes(matchedName),
+    )
+    directMatches.push({
+      name: matchedName,
+      aliases: lineage ? [matchedName, ...lineage] : [matchedName],
+    })
+  }
+
+  for (const item of directMatches) {
+    pushCandidate(
+      pickBestCandidateForAliases(
+        item.aliases,
+        modernCountries,
+        historicalCountries,
+        hintYearRange,
+      ),
+    )
+    if (results.length >= 5) break
+  }
+
+  return results.slice(0, 5)
+}
+
+/**
+ * 선택한 역사국가가 사건 연도(`eventSignedYear`)와 존속기간이 어긋날 때,
+ * 같은 계보·이름군에서 해당 연도에 부합하는 대체 국가(역사국가 또는 현대국가)를 찾는다.
+ */
+export function findReplacementForMismatchedCountry(
+  mismatchedCountry: { id: string; name: string },
+  eventSignedYear: number | null | undefined,
+  modernCountries: ReadonlyArray<{ id: string; name: string; flagEmoji?: string | null }>,
+  historicalCountries: ReadonlyArray<{ id: string; name: string } & CountryPeriodShape>,
+  existingKeys?: ReadonlySet<string>,
+): SuggestedCountryCandidate | null {
+  if (eventSignedYear == null) return null
+  const name = mismatchedCountry.name.trim()
+  const lineage = COUNTRY_LINEAGE_FAMILIES.find((family) =>
+    family.some((member) => member === name || name.includes(member) || member.includes(name)),
+  )
+  const hint: CountryHintYearRange = {
+    startYear: eventSignedYear,
+    endYear: eventSignedYear,
+  }
+
+  // 1) 해당 연도에 존속기간이 일치하는 역사국가 우선 탐색
+  for (const hist of historicalCountries) {
+    if (hist.id === mismatchedCountry.id) continue
+    if (existingKeys?.has(`h:${hist.id}`)) continue
+    const inSameFamily = lineage
+      ? lineage.some((member) => hist.name === member || hist.name.includes(member))
+      : hist.name.slice(0, 2) === name.slice(0, 2)
+    if (!inSameFamily) continue
+    if (
+      matchesHintYearRange(hist, hint) &&
+      !describeLifespanMismatch(hist, eventSignedYear, { recordSupportsBc: true })
+    ) {
+      return {
+        key: `h:${hist.id}`,
+        historicalCountryId: hist.id,
+        name: hist.name,
+        label: `🏛️ ${hist.name}`,
+      }
+    }
+  }
+
+  // 2) 근현대(1945년 이후) 사건이면 같은 계보의 현대국가 제안
+  if (eventSignedYear >= 1945) {
+    for (const mod of modernCountries) {
+      if (existingKeys?.has(`m:${mod.id}`)) continue
+      const inSameFamily = lineage
+        ? lineage.some((member) => mod.name === member || mod.name.includes(member))
+        : mod.name.slice(0, 2) === name.slice(0, 2)
+      if (!inSameFamily) continue
+      return {
+        key: `m:${mod.id}`,
+        countryId: mod.id,
+        name: mod.name,
+        label: `${mod.flagEmoji ?? '🌐'} ${mod.name}`,
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * 빠른 검색창에 쉼표(,)·슬래시(/)·가운뎃점(·)으로 여러 국가명을 한꺼번에 입력했을 때
+ * 각 토큰에 가장 잘 맞는 국가 후보들을 일괄 반환한다. (토큰이 2개 미만이면 빈 배열 반환)
+ */
+export function resolveBatchCountryQuery(
+  rawQuery: string,
+  modernCountries: ReadonlyArray<{ id: string; name: string; flagEmoji?: string | null } & CountrySearchShape>,
+  historicalCountries: ReadonlyArray<{ id: string; name: string } & CountrySearchShape>,
+  hintYearRange?: CountryHintYearRange | null,
+  existingKeys?: ReadonlySet<string>,
+): SuggestedCountryCandidate[] {
+  const tokens = rawQuery
+    .split(/[,，/·]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+  if (tokens.length < 2) return []
+
+  const results: SuggestedCountryCandidate[] = []
+  const seen = new Set<string>(existingKeys)
+  const refYear = hintYearRange?.startYear ?? hintYearRange?.endYear ?? null
+
+  for (const token of tokens) {
+    const lower = token.toLowerCase()
+    const modMatches = filterCountriesByQuery([...modernCountries], token).filter(
+      (c) => !seen.has(`m:${c.id}`),
+    )
+    const histMatches = filterCountriesByQuery(
+      [...historicalCountries],
+      token,
+    ).filter((c) => !seen.has(`h:${c.id}`))
+
+    const candidates: Array<{ score: number; item: SuggestedCountryCandidate }> = []
+    for (const mod of modMatches) {
+      let score = mod.name.toLowerCase() === lower ? 100 : mod.name.toLowerCase().startsWith(lower) ? 60 : 30
+      if (refYear == null || refYear >= 1945) score += 25
+      candidates.push({
+        score,
+        item: {
+          key: `m:${mod.id}`,
+          countryId: mod.id,
+          name: mod.name,
+          label: `${mod.flagEmoji ?? '🌐'} ${mod.name}`,
+        },
+      })
+    }
+    for (const hist of histMatches) {
+      let score = hist.name.toLowerCase() === lower ? 100 : hist.name.toLowerCase().startsWith(lower) ? 60 : 30
+      if (hintYearRange && matchesHintYearRange(hist, hintYearRange)) score += 50
+      else if (refYear != null && refYear < 1945) score += 20
+      candidates.push({
+        score,
+        item: {
+          key: `h:${hist.id}`,
+          historicalCountryId: hist.id,
+          name: hist.name,
+          label: `🏛️ ${hist.name}`,
+        },
+      })
+    }
+    candidates.sort((a, b) => b.score - a.score)
+    if (candidates.length > 0) {
+      const winner = candidates[0].item
+      seen.add(winner.key)
+      results.push(winner)
+    }
+  }
+
+  return results
 }
