@@ -2118,37 +2118,6 @@ export function CurrentCabinetPanel({
       <SwitchFade $switching={overviewSwitching} aria-busy={overviewSwitching}>
       {isLoading ? (
         <GovernmentSkeleton />
-      ) : heads.length === 0 ? (
-        <DualEmptyCard
-          type="button"
-          onClick={() =>
-            openRegister(
-              null,
-              activeRegimeMeta?.defaultHeadRoleLabel ?? '국가원수·정부수반',
-              'head',
-            )
-          }
-        >
-          <DualEmptyAvatar aria-hidden>🏛️</DualEmptyAvatar>
-          <DualEmptyBody>
-            <DualEmptyBadgeRow>
-              <DualEmptyBadge>국가원수 · 정부수반</DualEmptyBadge>
-              {activePolityLabel && (
-                <DualEmptyMetaChip>{activePolityLabel}</DualEmptyMetaChip>
-              )}
-              {activeRegimeMeta && (
-                <DualEmptyMetaChip>{activeRegimeMeta.label}</DualEmptyMetaChip>
-              )}
-            </DualEmptyBadgeRow>
-            <DualEmptyTitle>
-              {selectedCabinet
-                ? cabinetLabel(selectedCabinet)
-                : (activeRegimeMeta?.defaultHeadRoleLabel ??
-                  '황제 · 국왕 · 대통령 · 총리 · 재상')}
-            </DualEmptyTitle>
-          </DualEmptyBody>
-          <DualEmptyCta>+ 수반 등록</DualEmptyCta>
-        </DualEmptyCard>
       ) : (
         <CabinetMindMap
           showPosition={
@@ -2176,7 +2145,7 @@ export function CurrentCabinetPanel({
           onRegisterCabinetHead={() =>
             openRegister(
               null,
-              activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반',
+              activeRegimeMeta?.defaultHeadRoleLabel ?? '국가원수·정부수반',
               'head',
             )
           }
@@ -2191,7 +2160,7 @@ export function CurrentCabinetPanel({
               : undefined
           }
           emptyHeadRoleLabel={
-            activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반'
+            activeRegimeMeta?.defaultHeadRoleLabel ?? '국가원수 · 정부수반'
           }
           regimeLabel={activeRegimeMeta?.label ?? null}
           members={members}

@@ -399,28 +399,24 @@ export function CabinetMindMap({
                 )}
               </CenterCard>
             ) : (
-              <CenterEmptyCard
+              <CenterCard
                 type="button"
                 $branches={hasBranches}
                 onClick={() => onRegisterCabinetHead?.()}
-                aria-label="정부 수반 등록"
+                aria-label="국가원수·정부수반 등록"
               >
-                <CenterEmptyFace $branches={hasBranches} aria-hidden>
-                  +
-                </CenterEmptyFace>
+                <CenterFace $branches={hasBranches} aria-hidden>
+                  <CenterEmptyInnerFace>+</CenterEmptyInnerFace>
+                </CenterFace>
                 <CenterRole $branches={hasBranches}>
-                  {emptyHeadRoleLabel ?? '정부 수반'}
+                  {emptyHeadRoleLabel ?? '국가원수 · 정부수반'}
                   {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
                   {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
                 </CenterRole>
-                <CenterEmptyCta $branches={hasBranches}>
-                  + 수반 등록
-                </CenterEmptyCta>
-                {cabinetLabel && (
-                  <CenterCabinet $branches={hasBranches}>
-                    {cabinetLabel}
-                  </CenterCabinet>
-                )}
+                <CenterName $branches={hasBranches}>+ 수반 등록</CenterName>
+                <CenterCabinet $branches={hasBranches}>
+                  {cabinetLabel ?? '황제 · 국왕 · 대통령 · 총리 · 재상'}
+                </CenterCabinet>
                 <CenterStats $branches={hasBranches}>
                   <CenterStat>
                     <CenterStatKey>취임</CenterStatKey>
@@ -435,7 +431,7 @@ export function CabinetMindMap({
                     <CenterStatValue>{members.length}명</CenterStatValue>
                   </CenterStat>
                 </CenterStats>
-              </CenterEmptyCard>
+              </CenterCard>
             )}
 
             {showReignCabinetsBelow && (
@@ -1217,62 +1213,18 @@ const CenterCard = styled.button<{ $branches?: boolean; $monarch?: boolean }>`
   }
 `
 
-const CenterEmptyCard = styled.button<{ $branches?: boolean }>`
-  ${centerSurface}
-  appearance: none;
-  font-family: inherit;
-  border-style: dashed;
-  cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    background 0.18s ease,
-    transform 0.18s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    border-color: rgba(99, 102, 241, 0.55);
-    background: ${({ theme }) => theme.colors.hover};
-  }
-  &:focus-visible {
-    outline: 2px solid ${CENTER_ACCENT};
-    outline-offset: 3px;
-  }
-`
-
-const CenterEmptyFace = styled.span<{ $branches?: boolean }>`
+const CenterEmptyInnerFace = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 112px;
   height: 112px;
-  margin-bottom: 12px;
-  border-radius: 999px;
-  border: 2px dashed rgba(99, 102, 241, 0.42);
-  color: ${CENTER_ACCENT};
-  font-size: 32px;
-  font-weight: 500;
-  line-height: 1;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.08)'
-      : 'rgba(99, 102, 241, 0.04)'};
-
-  @container (max-width: 820px) {
-    grid-column: 1;
-    grid-row: 1 / span 4;
-    margin-bottom: 0;
-  }
-`
-
-const CenterEmptyCta = styled.span<{ $branches?: boolean }>`
-  margin-top: 2px;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
-  @container (max-width: 820px) {
-    grid-column: 2;
-  }
+  border-radius: 50%;
+  font-size: 36px;
+  font-weight: 700;
+  background: ${({ theme }) => theme.colors.hover};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 /** 얼굴 둘레 링 — 가운데가 중심이라는 걸 색이 아니라 형태로 말한다 */
