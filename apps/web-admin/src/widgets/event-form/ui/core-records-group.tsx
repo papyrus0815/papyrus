@@ -70,6 +70,8 @@ interface CoreRecordsGroupProps {
   onOpenCountryModal?: () => void
   /** 나라를 이 역할로 넣는다 — 성립·소멸 칸(국가 선택 모달을 역할을 정한 채로 연다) */
   onAddCountryWithRole: (role: 'FOUNDED' | 'DISSOLVED') => void
+  /** 이미 참여국에 들어 있는 나라의 성립·소멸 배역을 바로 지정한다 */
+  onAssignParticipantRole?: (key: string, role: 'FOUNDED' | 'DISSOLVED') => void
   onRemoveParticipant: (key: string) => void
   eventTitle: string
   playClickSound: () => void
@@ -84,6 +86,7 @@ export function CoreRecordsGroup({
   participantName,
   onOpenCountryModal,
   onAddCountryWithRole,
+  onAssignParticipantRole,
   onRemoveParticipant,
   eventTitle,
   playClickSound,
@@ -114,6 +117,7 @@ export function CoreRecordsGroup({
           participants={participants}
           participantName={participantName}
           onAdd={onAddCountryWithRole}
+          onAssignRole={onAssignParticipantRole}
           onRemove={onRemoveParticipant}
           playClickSound={playClickSound}
         />
@@ -366,12 +370,14 @@ function StatehoodField({
   participants,
   participantName,
   onAdd,
+  onAssignRole,
   onRemove,
   playClickSound,
 }: {
   participants: EventCountryParticipant[]
   participantName: (row: EventCountryParticipant) => string
   onAdd: (role: 'FOUNDED' | 'DISSOLVED') => void
+  onAssignRole?: (key: string, role: 'FOUNDED' | 'DISSOLVED') => void
   onRemove: (key: string) => void
   playClickSound: () => void
 }) {
@@ -379,6 +385,7 @@ function StatehoodField({
     { role: 'FOUNDED', label: '세워진 나라', add: '세워진 나라 고르기' },
     { role: 'DISSOLVED', label: '무너진 나라', add: '무너진 나라 고르기' },
   ]
+  const unassigned = participants.filter((row) => row.role !== 'FOUNDED' && row.role !== 'DISSOLVED')
   return (
     <S.FormRow>
       <S.FormLabel as="span">성립·소멸</S.FormLabel>
@@ -417,6 +424,41 @@ function StatehoodField({
             )
           })}
         </StatehoodGrid>
+        {onAssignRole && unassigned.length > 0 && (
+          <RowList>
+            {unassigned.map((row) => {
+              const key = participantKey(row)
+              const name = participantName(row)
+              return (
+                <Row key={key}>
+                  <RowName>{name}</RowName>
+                  <KitChipGroup role="group" aria-label={`${name} 성립·소멸 지정`}>
+                    <SmallChip
+                      type="button"
+                      $selected={false}
+                      onClick={() => {
+                        playClickSound()
+                        onAssignRole(key, 'FOUNDED')
+                      }}
+                    >
+                      + 세워진 나라
+                    </SmallChip>
+                    <SmallChip
+                      type="button"
+                      $selected={false}
+                      onClick={() => {
+                        playClickSound()
+                        onAssignRole(key, 'DISSOLVED')
+                      }}
+                    >
+                      + 무너진 나라
+                    </SmallChip>
+                  </KitChipGroup>
+                </Row>
+              )
+            })}
+          </RowList>
+        )}
         <S.Hint>병합이면 무너진 나라(병합된 쪽)와 그대로 남는 나라를 함께 넣습니다. 고른 나라는 참여국에도 들어갑니다.</S.Hint>
       </S.FormField>
     </S.FormRow>

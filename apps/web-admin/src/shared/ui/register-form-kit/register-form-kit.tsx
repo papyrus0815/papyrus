@@ -37,8 +37,9 @@ export const kitC = (theme: DefaultTheme) => {
   }
 }
 
-/** 앱 primary(#6366f1)의 rgb — 선택 칩 면·테 알파 계산용(사건 칩의 --cat-rgb 자리) */
+/** 앱 primary(#6366f1)의 rgb — 선택 칩 면·테 알파 계산용(사건 칩의 --cat-rgb 자리, 상위에서 --chip-rgb로 덮어쓸 수 있음) */
 const PRIMARY_RGB = '99, 102, 241'
+const CHIP_RGB = `var(--chip-rgb, ${PRIMARY_RGB})`
 
 // ─── 라벨 꼬리표 ────────────────────────────────────────────────────────────
 
@@ -70,18 +71,18 @@ export const KitChoiceChip = styled.button<{ $selected: boolean; $error?: boolea
   border: 1px solid
     ${({ $selected, $error, theme }) =>
       $selected
-        ? `rgba(${PRIMARY_RGB}, 0.6)`
+        ? `rgba(${CHIP_RGB}, 0.6)`
         : $error
           ? theme.colors.alert.danger.fg
           : kitC(theme).border};
   border-radius: 999px;
   background: ${({ $selected, theme }) =>
     $selected
-      ? `rgba(${PRIMARY_RGB}, ${theme.mode === 'dark' ? 0.2 : 0.09})`
+      ? `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.2 : 0.09})`
       : kitC(theme).content};
   /* 선택은 색만으로 말하지 않는다 — 테를 한 겹 더 두껍게(안쪽 링) */
   box-shadow: ${({ $selected }) =>
-    $selected ? `inset 0 0 0 1px rgba(${PRIMARY_RGB}, 0.6)` : 'none'};
+    $selected ? `inset 0 0 0 1px rgba(${CHIP_RGB}, 0.6)` : 'none'};
   font-size: 13px;
   font-weight: 600;
   line-height: 1.3;
@@ -89,8 +90,8 @@ export const KitChoiceChip = styled.button<{ $selected: boolean; $error?: boolea
   color: ${({ $selected, theme }) =>
     $selected
       ? theme.mode === 'dark'
-        ? '#a5b4fc'
-        : '#4f46e5'
+        ? 'var(--chip-text-dark, #a5b4fc)'
+        : 'var(--chip-text, #4f46e5)'
       : kitC(theme).textSecondary};
   cursor: pointer;
   transition:
@@ -100,11 +101,11 @@ export const KitChoiceChip = styled.button<{ $selected: boolean; $error?: boolea
 
   &:hover:not(:disabled) {
     border-color: ${({ $selected }) =>
-      $selected ? `rgba(${PRIMARY_RGB}, 0.75)` : `rgba(${PRIMARY_RGB}, 0.45)`};
+      $selected ? `rgba(${CHIP_RGB}, 0.75)` : `rgba(${CHIP_RGB}, 0.45)`};
     background: ${({ $selected, theme }) =>
       $selected
-        ? `rgba(${PRIMARY_RGB}, ${theme.mode === 'dark' ? 0.26 : 0.13})`
-        : `rgba(${PRIMARY_RGB}, ${theme.mode === 'dark' ? 0.1 : 0.04})`};
+        ? `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.26 : 0.13})`
+        : `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.1 : 0.04})`};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => kitC(theme).focus};

@@ -68,9 +68,11 @@ export {
   isEventTypeKey,
   metricsFor,
   subtypesForDomain,
+  suggestClassificationFromTitle,
   typeFacets,
 } from './event-type-registry'
 export type {
+  EventClassificationSuggestion,
   EventFacetKey,
   EventTypeDef,
   EventTypeFeatures,

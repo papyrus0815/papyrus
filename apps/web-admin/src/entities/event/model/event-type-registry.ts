@@ -520,3 +520,128 @@ export function eventTypeFeatures(type?: string | null, domain?: string | null):
     expectOrganizations: facets.includes('organizations'),
   }
 }
+
+export interface EventClassificationSuggestion {
+  domain: EventDomainKey
+  type: EventTypeKey
+}
+
+const TITLE_SUGGESTION_RULES: ReadonlyArray<{
+  pattern: RegExp
+  domain: EventDomainKey
+  type: EventTypeKey
+}> = [
+  // 조약·협정·가입
+  {
+    pattern: /(?:조약|협정|협약|강화\s*조약|화약|의정서|휴전\s*협정)(?:\s*(?:체결|조인|비준|발효|갱신|폐기))?$/,
+    domain: 'DIPLOMACY',
+    type: 'TREATY',
+  },
+  { pattern: /(?:동맹\s*체결|가입)$/, domain: 'DIPLOMACY', type: 'TREATY' },
+  // 회담·회의·교섭 (종교 공의회 구분)
+  { pattern: /공의회/, domain: 'RELIGION', type: 'SUMMIT' },
+  {
+    pattern: /(?:정상\s*회담|회담|어전\s*회의|강화\s*회의|평화\s*회의|회의|교섭|회동)$/,
+    domain: 'DIPLOMACY',
+    type: 'SUMMIT',
+  },
+  // 건국·멸망·병합
+  {
+    pattern: /(?:건국|멸망|병합|독립\s*선언|독립|패망|붕괴|해체)$/,
+    domain: 'POLITICS',
+    type: 'STATEHOOD',
+  },
+  // 선언·통첩·연설
+  {
+    pattern: /(?:선전\s*포고|최후\s*통첩|중립\s*선언|연설|담화|성명|통첩|결의)$/,
+    domain: 'DIPLOMACY',
+    type: 'DECLARATION',
+  },
+  // 방문·사절
+  { pattern: /(?:국빈\s*방문|사절단|내항|기항|예방)$/, domain: 'DIPLOMACY', type: 'VISIT' },
+  // 전투·작전
+  {
+    pattern: /(?:전투|해전|회전|공방전|포위전|상륙\s*작전|작전|공습|폭격|함락|점령|진압)$/,
+    domain: 'MILITARY',
+    type: 'BATTLE',
+  },
+  // 전쟁
+  { pattern: /(?:전쟁|대전|내전|전역|사변|침공|원정|정벌|정복)$/, domain: 'MILITARY', type: 'WAR' },
+  // 동원·배치·지령
+  { pattern: /(?:총동원령|동원령|기동\s*훈련|작전\s*지령|계엄령)/, domain: 'MILITARY', type: 'MOBILIZATION' },
+  // 봉기·혁명·정변
+  {
+    pattern: /(?:봉기|혁명|정변|쿠데타|반란|민란|항쟁|의거|폭동|[가-힣]+의\s*난)$/,
+    domain: 'POLITICS',
+    type: 'UPRISING',
+  },
+  // 암살·테러·학살
+  { pattern: /(?:암살|테러|학살|저격|폭탄\s*투척)/, domain: 'POLITICS', type: 'ATTACK' },
+  // 즉위·취임·실각
+  {
+    pattern: /(?:즉위식|즉위|대관식|취임식|취임|퇴위|선위|폐위|하야|탄핵|해임|실각)$/,
+    domain: 'POLITICS',
+    type: 'POWER_CHANGE',
+  },
+  // 선거
+  { pattern: /(?:총선|대선|대통령\s*선거|선거|보궐\s*선거|국민\s*투표)$/, domain: 'POLITICS', type: 'ELECTION' },
+  // 군사 법령 vs 일반 법령·정책·개혁
+  { pattern: /(?:함대법|징병령|군제\s*개편)/, domain: 'MILITARY', type: 'LAW_POLICY' },
+  {
+    pattern: /(?:헌법|법률|법령|법안|칙령|조례|개혁|신법|[가-힣]{2,}법)(?:\s*(?:제정|공포|시행|발효|개정|폐지|반포|단행))?$/,
+    domain: 'POLITICS',
+    type: 'LAW_POLICY',
+  },
+  // 재해·사고
+  {
+    pattern: /(?:대지진|지진|대화재|화재|홍수|태풍|해일|쓰나미|대기근|기근|역병|전염병|페스트|콜레라|폭발\s*사고|참사|침몰)/,
+    domain: 'SOCIETY',
+    type: 'DISASTER',
+  },
+  // 시장·지표 vs 외교 위기
+  {
+    pattern: /(?:대공황|금융\s*위기|외환\s*위기|주가지수|금리\s*(?:인상|인하)|모라토리엄|디폴트)/,
+    domain: 'ECONOMY',
+    type: 'MARKET',
+  },
+  { pattern: /위기$/, domain: 'DIPLOMACY', type: 'CRISIS' },
+  // 기업·조직 설립
+  { pattern: /(?:회사|기업|은행|그룹|코퍼레이션).*(?:설립|창립|창업|상장|인수)$/, domain: 'ECONOMY', type: 'COMPANY' },
+  { pattern: /(?:상장|IPO|인수|실적\s*발표|창업)$/, domain: 'ECONOMY', type: 'COMPANY' },
+  { pattern: /(?:창설|결성|개설|해산|설립)$/, domain: 'POLITICS', type: 'INSTITUTION' },
+  // 건설·개통 / 제품·기술 발표
+  { pattern: /(?:착공|준공|개통|완공|진수)$/, domain: 'ECONOMY', type: 'CONSTRUCTION' },
+  { pattern: /(?:출시|공개|발매)$/, domain: 'ECONOMY', type: 'PRODUCT' },
+  // 운동·캠페인 / 이주·천도
+  {
+    pattern: /(?:불매\s*운동|사회\s*운동|계몽\s*운동|노동\s*운동|민권\s*운동|운동|시위|총파업|파업)$/,
+    domain: 'SOCIETY',
+    type: 'MOVEMENT',
+  },
+  { pattern: /(?:천도|대이동|이주)$/, domain: 'SOCIETY', type: 'MIGRATION' },
+  // 개종·세례 / 창제·저작 / 발견·학술
+  { pattern: /(?:개종|세례|국교\s*공인|기독교\s*수용|불교\s*공인)/, domain: 'RELIGION', type: 'CONVERSION' },
+  { pattern: /(?:창제|편찬|간행|출간|초연)$/, domain: 'CULTURE', type: 'CREATION' },
+  { pattern: /(?:발견|발명|노벨상|법칙\s*발표|학설\s*발표)/, domain: 'SCIENCE', type: 'DISCOVERY' },
+]
+
+/**
+ * 사건명에서 분야·세부 분야를 추론한다 — '스당 전투', '난징 조약 체결', '우창봉기'처럼
+ * 끝말이나 핵심어가 뚜렷할 때만 권하고, 애매하면 null을 돌려준다.
+ */
+export function suggestClassificationFromTitle(
+  rawTitle?: string | null,
+): EventClassificationSuggestion | null {
+  const cleaned = rawTitle
+    ?.trim()
+    .replace(/\s*(?:\([^)]*\)|\[[^\]]*\])\s*$/, '')
+    .trim()
+  if (!cleaned || cleaned.length < 2) return null
+  for (const rule of TITLE_SUGGESTION_RULES) {
+    if (rule.pattern.test(cleaned)) {
+      return { domain: rule.domain, type: rule.type }
+    }
+  }
+  return null
+}
+

@@ -37,6 +37,11 @@ import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 
 import { EventFormLoading } from './event-form-loading'
 import type {
+  EventCountryParticipant,
+  EventDomainKey,
+  EventTypeKey,
+} from '@/entities/event/model'
+import type {
   EventBasicFormHandle,
   EventBasicFormState,
   EventParentPreset,
@@ -74,6 +79,12 @@ export interface EventRegisterModalProps {
    * `{ id: string; title: string }` 시그니처 그대로 소비한다. 신규 등록 전용.
    */
   initialParent?: EventParentPreset
+  /** 목록·조망 등 진입 지면의 분야 필터 프리필(신규 등록 전용) */
+  initialDomain?: EventDomainKey | string | null
+  /** 목록·조망 등 진입 지면의 세부 분야 필터 프리필(신규 등록 전용) */
+  initialEventType?: EventTypeKey | string | null
+  /** 목록·조망 등 진입 지면의 참여국 필터 프리필(신규 등록 전용) */
+  initialCountries?: EventCountryParticipant[]
 }
 
 export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
@@ -83,6 +94,9 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   onSaved,
   onDirtyChange,
   initialParent,
+  initialDomain,
+  initialEventType,
+  initialCountries,
 }) => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -210,6 +224,9 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
                 <LazyEventBasicForm
                   eventId={eventId}
                   initialParent={initialParent}
+                  initialDomain={initialDomain}
+                  initialEventType={initialEventType}
+                  initialCountries={initialCountries}
                   formRef={formRef}
                   onDirtyChange={markDirty}
                   onStateChange={setFormState}

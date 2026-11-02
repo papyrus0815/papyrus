@@ -11,6 +11,7 @@
  */
 import { participantKey } from '@/entities/event/model/country-participant'
 import type { EventCountryParticipant } from '@/entities/event/model/country-participant'
+import { type EventTypeKey, typeFacets } from '@/entities/event/model/event-type-registry'
 import { type EventSide, syncEventSides } from '@/shared/api/event-sides'
 import {
   type EventOrganizationRole,
@@ -64,6 +65,47 @@ export const emptyRegisterFacetDrafts = (): RegisterFacetDrafts => ({
   election: null,
 })
 
+/**
+ * 현재 고른 세부 분야의 핵심 기록(`core`)에 속하지 않는 초안 값을 비운다.
+ *
+ * 세부를 '조약'으로 골라 '새 조약 만들기'를 켜 둔 뒤 세부를 '회담'이나 '전투'로 바꾸면
+ * 화면에서 조약 칸은 사라지지만 초안 상태가 남아 엉뚱한 조약·진영·취임이 저장되던 문제를 막는다.
+ * 바꾼 세부도 같은 패싯을 쓰면(예: 전투 ↔ 전쟁의 진영, 회담 ↔ 방문의 참여 인물) 그대로 보존한다.
+ */
+export function pruneFacetDraftsForType(
+  drafts: RegisterFacetDrafts,
+  type: EventTypeKey | null | undefined,
+  domain?: string | null,
+): RegisterFacetDrafts {
+  const core = new Set(typeFacets(type ?? null, domain).core)
+  return {
+    persons: core.has('persons') ? drafts.persons : [],
+    power: core.has('power') ? drafts.power : [],
+    sides: core.has('sides') ? drafts.sides : { names: ['', ''], assignment: {} },
+    treaty: core.has('treaty') ? drafts.treaty : { mode: 'none' },
+    organizations: core.has('organizations') ? drafts.organizations : [],
+    election: core.has('election') ? drafts.election : null,
+  }
+}
+
+/**
+ * 세부가 '건국·멸망·병합'(STATEHOOD)이 아닐 때나 '계속 등록'으로 참여국을 이어받을 때
+ * 참여국에 남아 있는 FOUNDED/DISSOLVED 특수 역할을 일반 참여국('PARTICIPANT')으로 되돌린다.
+ */
+export function stripStatehoodRoles(
+  participants: ReadonlyArray<EventCountryParticipant>,
+): EventCountryParticipant[] {
+  let changed = false
+  const next = participants.map((row) => {
+    if (row.role === 'FOUNDED' || row.role === 'DISSOLVED') {
+      changed = true
+      return { ...row, role: 'PARTICIPANT' as const }
+    }
+    return row
+  })
+  return changed ? next : (participants as EventCountryParticipant[])
+}
+
 /** 무엇이라도 적었나 — 이탈 가드(dirty) 판정용 */
 export function hasAnyFacetDraft(drafts: RegisterFacetDrafts): boolean {
   return (
@@ -79,10 +121,15 @@ export function hasAnyFacetDraft(drafts: RegisterFacetDrafts): boolean {
 const POWER_ROLE = '취임·즉위'
 
 /** 생성 요청에 실을 참여 인물 — 참여 인물 ∪ 취임·즉위한 인물(같은 인물은 한 번) */
-export function relatedPersonsPayload(drafts: RegisterFacetDrafts): Array<{ personId: string; role?: string }> {
+export function relatedPersonsPayload(
+  drafts: RegisterFacetDrafts,
+  type?: EventTypeKey | null,
+  domain?: string | null,
+): Array<{ personId: string; role?: string }> {
+  const active = type === undefined ? drafts : pruneFacetDraftsForType(drafts, type, domain)
   const rows = new Map<string, { personId: string; role?: string }>()
-  for (const person of drafts.power) rows.set(person.personId, { personId: person.personId, role: POWER_ROLE })
-  for (const person of drafts.persons) {
+  for (const person of active.power) rows.set(person.personId, { personId: person.personId, role: POWER_ROLE })
+  for (const person of active.persons) {
     if (!rows.has(person.personId)) {
       rows.set(person.personId, { personId: person.personId, role: person.role?.trim() || undefined })
     }
@@ -122,6 +169,9 @@ export interface CommitInput {
   /** 생성 직후의 참여국 줄 — 진영 소속·조약 서명국의 원본 */
   participants: ReadonlyArray<EventCountryParticipant>
   drafts: RegisterFacetDrafts
+  /** 현재 고른 세부 분야 — 주어지면 이 세부의 core에 속한 기록만 커밋한다 */
+  eventType?: EventTypeKey | null
+  domain?: string | null
 }
 
 export interface CommitResult {
@@ -132,7 +182,11 @@ export interface CommitResult {
 }
 
 export async function commitRegisterFacets(input: CommitInput): Promise<CommitResult> {
-  const { eventId, drafts } = input
+  const { eventId } = input
+  const drafts =
+    input.eventType === undefined
+      ? input.drafts
+      : pruneFacetDraftsForType(input.drafts, input.eventType, input.domain)
   const done: string[] = []
   const warnings: string[] = []
   const attempt = async (label: string, run: () => Promise<string | void>) => {

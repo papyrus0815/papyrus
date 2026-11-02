@@ -28,6 +28,7 @@ import { invalidateGamification } from '@/entities/gamification'
 import { useFormEntities } from '@/entities/event-form/model'
 import { buildEventSubmitData, checkBasicInfo, validateBasicInfo } from '@/features/event-create/lib'
 import {
+  type EventCountryParticipant,
   participantKey,
   toParticipants,
 } from '@/entities/event/model'
@@ -37,6 +38,7 @@ import {
   EVENT_TYPES,
   type EventTypeKey,
   defaultDomainForType,
+  isEventTypeKey,
   subtypesForDomain,
   typeFacets,
 } from '@/entities/event/model/event-type-registry'
@@ -44,7 +46,9 @@ import {
   type RegisterFacetDrafts,
   commitRegisterFacets,
   emptyRegisterFacetDrafts,
+  pruneFacetDraftsForType,
   relatedPersonsPayload,
+  stripStatehoodRoles,
 } from '@/features/event-facets/model/register-facets'
 import type { BasicInfoResetOptions } from '@/features/event-form/model/useBasicInfoForm'
 import {
@@ -138,6 +142,12 @@ export interface EventBasicFormProps {
    * 포함되어 '열자마자 dirty' 오판이 생기지 않는다. 편집 모드에서는 무시된다.
    */
   initialParent?: EventParentPreset
+  /** 목록·조망 등 진입 지면의 분야 필터 프리필(신규 등록 전용) */
+  initialDomain?: EventDomainKey | string | null
+  /** 목록·조망 등 진입 지면의 세부 분야 필터 프리필(신규 등록 전용) */
+  initialEventType?: EventTypeKey | string | null
+  /** 목록·조망 등 진입 지면의 참여국 필터 프리필(신규 등록 전용) */
+  initialCountries?: EventCountryParticipant[]
 }
 
 /**
@@ -209,11 +219,25 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   onSaved,
   notifyOnLoad = true,
   initialParent,
+  initialDomain,
+  initialEventType,
+  initialCountries,
 }) => {
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
 
   const isEditMode = Boolean(eventId)
+  const resolvedInitialType =
+    !isEditMode && isEventTypeKey(initialEventType) ? initialEventType : null
+  const resolvedInitialDomain: EventDomainKey | '' = !isEditMode
+    ? isEventDomainKey(initialDomain)
+      ? initialDomain
+      : isEventDomainKey(initialParent?.domain)
+        ? initialParent.domain
+        : resolvedInitialType
+          ? (defaultDomainForType(resolvedInitialType) ?? '')
+          : ''
+    : ''
 
   // ===== Entity: Form Entities Data =====
   // BASIC 폼은 국가·역사국가 2종만 불러온다 — 분야는 고정 목록(event-domain.ts)이라 불러올 게 없다.
@@ -254,7 +278,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     calculateDaysDifference,
     reset: resetFormFields,
   } = useBasicInfoForm({
-    category: !isEditMode && isEventDomainKey(initialParent?.domain) ? initialParent.domain : '',
+    category: resolvedInitialDomain,
+    relatedCountries: !isEditMode && initialCountries ? initialCountries : undefined,
   })
 
   // ===== Form State =====
@@ -291,10 +316,14 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   // ===== 사건 종류(신규 등록 전용) =====
   // 단일(전투·회담·조약 체결) / 묶음(전쟁·위기 — 전개는 하위 사건). 편집 모드의 전환은 상세의
   // '하위 사건으로 나누기'·'단일 사건으로'가 정본이라 여기서는 고르지 않는다.
-  const [kind, setKind] = useState<'SINGLE' | 'COLLECTION'>('SINGLE')
+  const [kind, setKind] = useState<'SINGLE' | 'COLLECTION'>(
+    resolvedInitialType && EVENT_TYPES[resolvedInitialType].usuallyCollection
+      ? 'COLLECTION'
+      : 'SINGLE',
+  )
 
   // ===== 세부 분야(선택) — 분야의 2단계이자 붙는 기록을 정한다(entities/event/model/event-type-registry.ts) =====
-  const [eventType, setEventType] = useState<EventTypeKey | null>(null)
+  const [eventType, setEventType] = useState<EventTypeKey | null>(resolvedInitialType)
   /** 단일/묶음을 사람이 직접 고쳤나 — 고치지 않았으면 세부(전쟁·위기…)가 묶음을 권한다 */
   const kindTouchedRef = useRef(false)
   /** 분야를 사람이 직접 고쳤나 — 고치지 않았으면 상위 사건의 분야를 따라 채운다 */
@@ -309,18 +338,32 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   }
 
   /** 세부 고르기(null = 해제) — 분야가 비어 있으면 세부의 기본 분야를 함께 채우고, 단일/묶음은 세부의 권장값으로 */
-  const selectType = (next: EventTypeKey | null) => {
+  const selectType = (next: EventTypeKey | null, domainOverride?: EventDomainKey | '') => {
     setEventType(next)
-    if (next && !category) {
+    let effectiveDomain: string | null =
+      (domainOverride !== undefined ? domainOverride : category) || null
+    if (next && !effectiveDomain) {
       const inferredDomain = defaultDomainForType(next)
       if (inferredDomain) {
         categoryTouchedRef.current = true
         setCategory(inferredDomain)
+        effectiveDomain = inferredDomain
       }
+    }
+    setFacetDrafts((previous) => pruneFacetDraftsForType(previous, next, effectiveDomain))
+    if (!typeFacets(next, effectiveDomain).core.includes('statehood')) {
+      setRelatedCountries(stripStatehoodRoles(relatedCountries))
     }
     if (!isEditMode && !kindTouchedRef.current) {
       setKind(next && EVENT_TYPES[next].usuallyCollection ? 'COLLECTION' : 'SINGLE')
     }
+  }
+
+  /** 사건명 추천 배지 클릭 — 분야와 세부를 한 번에 채운다 */
+  const handleApplySuggestion = (suggestion: { domain: EventDomainKey; type: EventTypeKey }) => {
+    categoryTouchedRef.current = true
+    setCategory(suggestion.domain)
+    selectType(suggestion.type, suggestion.domain)
   }
 
   /** 분야 고르기 — 해제하면 세부도 비우고, 다른 분야로 바꿀 때 그 분야 앞줄에 없는 세부는 정리한다 */
@@ -328,11 +371,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     categoryTouchedRef.current = true
     setCategory(next)
     if (!next) {
-      if (eventType !== null) selectType(null)
+      if (eventType !== null) selectType(null, '')
       return
     }
     if (eventType && !subtypesForDomain(next).primary.includes(eventType)) {
-      selectType(null)
+      selectType(null, next)
+    } else if (eventType) {
+      setFacetDrafts((previous) => pruneFacetDraftsForType(previous, eventType, next))
     }
   }
 
@@ -729,7 +774,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           kind,
           ...(eventType && { type: eventType }),
           // 참여 인물(세부의 핵심 기록이 인물인 경우) — 생성 요청에 함께 싣는다
-          relatedPersons: relatedPersonsPayload(facetDrafts),
+          relatedPersons: relatedPersonsPayload(facetDrafts, eventType, domainName),
         })
         targetId = saved.id
         /*
@@ -744,6 +789,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           location: location || null,
           description: description.trim() || null,
           participants: relatedCountries,
+          eventType,
+          domain: domainName,
           drafts: {
             ...facetDrafts,
             sides: { ...facetDrafts.sides, names: effectiveSideNames(facetDrafts) },
@@ -838,6 +885,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const handleReset = useCallback(
     (options?: BasicInfoResetOptions) => {
       resetFormFields(options)
+      if (options?.keepRelatedCountries) {
+        setRelatedCountries((previous) => stripStatehoodRoles(previous))
+      }
       // 세부는 분야를 남기는 '계속 등록'에서 함께 남긴다(같은 꼴을 연달아 등록하는 흐름) — 기록 초안은 비운다
       const nextEventType = options?.keepCategory ? eventType : null
       if (!options?.keepCategory) {
@@ -854,7 +904,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       // 비운 결과가 새 기준선 — 토큰을 올리면 기준선 effect가 다시 잡는다.
       setHydrationToken((token) => token + 1)
     },
-    [resetFormFields, eventType],
+    [resetFormFields, eventType, setRelatedCountries],
   )
 
   useImperativeHandle(
@@ -890,6 +940,11 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
             domain={domainName}
             value={eventType}
             isEditMode={isEditMode}
+            eventTitle={title}
+            onApplySuggestion={(suggestion) => {
+              playClickSound()
+              handleApplySuggestion(suggestion)
+            }}
             onChange={(next) => {
               playClickSound()
               selectType(next)
@@ -916,6 +971,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                       setPendingCountryRole(role)
                       setShowCountryModal(true)
                     }}
+                    onAssignParticipantRole={(key, role) =>
+                      setRelatedCountries(
+                        relatedCountries.map((row) =>
+                          participantKey(row) === key ? { ...row, role } : row,
+                        ),
+                      )
+                    }
                     onRemoveParticipant={(key) =>
                       setRelatedCountries(relatedCountries.filter((row) => participantKey(row) !== key))
                     }

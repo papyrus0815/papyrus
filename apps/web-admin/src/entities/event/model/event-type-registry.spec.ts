@@ -13,6 +13,7 @@ import {
   isArmedConflictType,
   metricsFor,
   subtypesForDomain,
+  suggestClassificationFromTitle,
   typeFacets,
 } from './event-type-registry'
 
@@ -156,3 +157,62 @@ describe('eventTypeFeatures — 상세 지면이 읽는 기능', () => {
     expect(eventTypeFeatures('BATTLE').expectStatehood).toBe(false)
   })
 })
+
+describe('suggestClassificationFromTitle — 사건명 기반 분야·세부 추론', () => {
+  it('끝말·핵심어로 분야와 세부를 추론한다', () => {
+    expect(suggestClassificationFromTitle('스당 전투')).toEqual({
+      domain: 'MILITARY',
+      type: 'BATTLE',
+    })
+    expect(suggestClassificationFromTitle('제2차 빈 포위전 (1683)')).toEqual({
+      domain: 'MILITARY',
+      type: 'BATTLE',
+    })
+    expect(suggestClassificationFromTitle('제1차 세계 대전')).toEqual({
+      domain: 'MILITARY',
+      type: 'WAR',
+    })
+    expect(suggestClassificationFromTitle('난징 조약 체결')).toEqual({
+      domain: 'DIPLOMACY',
+      type: 'TREATY',
+    })
+    expect(suggestClassificationFromTitle('베를린 회의')).toEqual({
+      domain: 'DIPLOMACY',
+      type: 'SUMMIT',
+    })
+    expect(suggestClassificationFromTitle('니케아 공의회')).toEqual({
+      domain: 'RELIGION',
+      type: 'SUMMIT',
+    })
+    expect(suggestClassificationFromTitle('우창봉기')).toEqual({
+      domain: 'POLITICS',
+      type: 'UPRISING',
+    })
+    expect(suggestClassificationFromTitle('안녹산의 난')).toEqual({
+      domain: 'POLITICS',
+      type: 'UPRISING',
+    })
+    expect(suggestClassificationFromTitle('청나라 건국')).toEqual({
+      domain: 'POLITICS',
+      type: 'STATEHOOD',
+    })
+    expect(suggestClassificationFromTitle('독일 제2함대법 공포')).toEqual({
+      domain: 'MILITARY',
+      type: 'LAW_POLICY',
+    })
+    expect(suggestClassificationFromTitle('바이마르 헌법 제정')).toEqual({
+      domain: 'POLITICS',
+      type: 'LAW_POLICY',
+    })
+    expect(suggestClassificationFromTitle('관동 대지진')).toEqual({
+      domain: 'SOCIETY',
+      type: 'DISASTER',
+    })
+  })
+
+  it('단서가 없거나 빈 문자열이면 null을 돌려준다', () => {
+    expect(suggestClassificationFromTitle('')).toBeNull()
+    expect(suggestClassificationFromTitle('알 수 없는 일')).toBeNull()
+  })
+})
+

@@ -112,4 +112,36 @@ describe('EventTypeField', () => {
     fireEvent.keyDown(screen.getByRole('radiogroup'), { key: 'ArrowRight' })
     expect(document.activeElement).toHaveTextContent('건설·개통')
   })
+
+  it('분야 미선택 상태에서 세부 칩 안에 함께 선택될 기본 분야 배지를 예고한다', () => {
+    renderWithTheme(
+      <EventTypeField domain={null} value={null} onChange={jest.fn()} />,
+    )
+
+    const battleChip = screen.getByRole('radio', { name: '전투·작전' })
+    expect(battleChip).toHaveTextContent('군사')
+    const treatyChip = screen.getByRole('radio', { name: '조약·협정·가입' })
+    expect(treatyChip).toHaveTextContent('외교')
+  })
+
+  it('사건명에서 분야·세부가 추론되면 원클릭 추천 배지를 띄우고 클릭 시 적용한다', () => {
+    const onApplySuggestion = jest.fn()
+    renderWithTheme(
+      <EventTypeField
+        domain={null}
+        value={null}
+        eventTitle="스당 전투"
+        onApplySuggestion={onApplySuggestion}
+        onChange={jest.fn()}
+      />,
+    )
+
+    const button = screen.getByRole('button', { name: '군사 › 전투·작전 적용' })
+    expect(button).toBeInTheDocument()
+    fireEvent.click(button)
+    expect(onApplySuggestion).toHaveBeenCalledWith({
+      domain: 'MILITARY',
+      type: 'BATTLE',
+    })
+  })
 })

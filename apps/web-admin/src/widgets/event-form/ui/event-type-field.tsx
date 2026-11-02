@@ -10,17 +10,24 @@ import React, { useEffect, useRef, useState } from 'react'
 
 import styled from 'styled-components'
 
-import { domainLabel } from '@/entities/event/model/event-domain'
+import {
+  EVENT_DOMAINS,
+  domainLabel,
+  eventDomainDef,
+  isEventDomainKey,
+} from '@/entities/event/model/event-domain'
 import {
   EVENT_TYPE_GROUPS,
   EVENT_TYPE_ORDER,
   EVENT_TYPES,
+  type EventClassificationSuggestion,
   type EventTypeKey,
   FACET_LABEL,
   FREQUENT_EVENT_TYPES,
   formatDomainPath,
   groupSubtypes,
   subtypesForDomain,
+  suggestClassificationFromTitle,
 } from '@/entities/event/model/event-type-registry'
 import {
   KitChipGroup,
@@ -35,6 +42,10 @@ export interface EventTypeFieldProps {
   onChange: (next: EventTypeKey | null) => void
   /** 편집 모드 여부 — 편집 모드는 하단 '기록' 섹션을 렌더하지 않으므로 안내 문구를 달리한다 */
   isEditMode?: boolean
+  /** 사건명 — 끝말·핵심어로 분야·세부를 추론해 원클릭 추천 배지를 띄운다 */
+  eventTitle?: string
+  /** 사건명 기반 분야·세부 원클릭 적용 */
+  onApplySuggestion?: (suggestion: EventClassificationSuggestion) => void
 }
 
 export function EventTypeField({
@@ -42,6 +53,8 @@ export function EventTypeField({
   value,
   onChange,
   isEditMode = false,
+  eventTitle,
+  onApplySuggestion,
 }: EventTypeFieldProps) {
   const { primary, rest } = subtypesForDomain(domain)
   const [showRest, setShowRest] = useState(false)
@@ -54,6 +67,13 @@ export function EventTypeField({
 
   const selected = value ? EVENT_TYPES[value] : null
   const records = selected ? selected.core.filter((facet) => facet !== 'participants') : []
+  const activeDomainTone = eventDomainDef(domain)?.soft
+
+  const rawSuggestion = suggestClassificationFromTitle(eventTitle)
+  const effectiveSuggestedDomain =
+    rawSuggestion && domain && isEventDomainKey(domain) && primary.includes(rawSuggestion.type)
+      ? domain
+      : rawSuggestion?.domain
 
   const isNoDomain = !domain
   const isOtherDomain = domain === 'OTHER'
@@ -93,6 +113,8 @@ export function EventTypeField({
     const index = runningIndex
     runningIndex += 1
     const isSelected = value === type
+    const def = EVENT_TYPES[type]
+    const chipTone = isNoDomain ? EVENT_DOMAINS[def.defaultDomain].soft : undefined
     return (
       <KitChoiceChip
         key={type}
@@ -101,13 +123,28 @@ export function EventTypeField({
         }}
         type="button"
         role="radio"
+        aria-label={def.label}
         aria-checked={isSelected}
         tabIndex={index === tabStop ? 0 : -1}
         $selected={isSelected}
-        title={EVENT_TYPES[type].examples}
+        style={
+          chipTone
+            ? ({
+                '--chip-rgb': chipTone.rgb,
+                '--chip-text': chipTone.text,
+                '--chip-text-dark': chipTone.textDark,
+              } as React.CSSProperties)
+            : undefined
+        }
+        title={
+          isNoDomain
+            ? `${domainLabel(def.defaultDomain)} › ${def.label} — ${def.examples}`
+            : def.examples
+        }
         onClick={() => onChange(isSelected ? null : type)}
       >
-        {EVENT_TYPES[type].label}
+        <span>{def.label}</span>
+        {isNoDomain && <DomainBadge aria-hidden="true">{domainLabel(def.defaultDomain)}</DomainBadge>}
       </KitChoiceChip>
     )
   }
@@ -115,7 +152,34 @@ export function EventTypeField({
   const groupLabel = domain ? `${domainLabel(domain)}의 세부 분야` : '세부 분야'
 
   return (
-    <Wrap>
+    <Wrap
+      style={
+        activeDomainTone
+          ? ({
+              '--chip-rgb': activeDomainTone.rgb,
+              '--chip-text': activeDomainTone.text,
+              '--chip-text-dark': activeDomainTone.textDark,
+            } as React.CSSProperties)
+          : undefined
+      }
+    >
+      {rawSuggestion && effectiveSuggestedDomain && value === null && (
+        <SuggestionBar>
+          <SuggestionLabel>사건명 추천</SuggestionLabel>
+          <SuggestionButton
+            type="button"
+            onClick={() => {
+              if (onApplySuggestion) {
+                onApplySuggestion({ domain: effectiveSuggestedDomain, type: rawSuggestion.type })
+              } else {
+                onChange(rawSuggestion.type)
+              }
+            }}
+          >
+            {formatDomainPath(effectiveSuggestedDomain, rawSuggestion.type)} 적용
+          </SuggestionButton>
+        </SuggestionBar>
+      )}
       <RadioHost role="radiogroup" aria-label={groupLabel} onKeyDown={handleKeyDown}>
         {isNoDomain ? (
           expanded ? (
@@ -282,3 +346,54 @@ const MoreButton = styled.button`
     outline-offset: 2px;
   }
 `
+
+const DomainBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  background: rgba(var(--chip-rgb, 99, 102, 241), ${({ theme }) => (theme.mode === 'dark' ? 0.18 : 0.1)});
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'var(--chip-text-dark, #a5b4fc)' : 'var(--chip-text, #4f46e5)'};
+`
+
+const SuggestionBar = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 12px;
+`
+
+const SuggestionLabel = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const SuggestionButton = styled.button`
+  padding: 2px 8px;
+  border: none;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.primary};
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.92;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+`
+

@@ -2333,6 +2333,26 @@ export const EventsCatalogPage: React.FC = () => {
         isOpen={createModalOpen}
         onClose={closeCreateModal}
         onDirtyChange={onCreateFormDirtyChange}
+        initialParent={
+          anchorId && eventByIdMap.get(anchorId)
+            ? {
+                id: anchorId,
+                title: eventByIdMap.get(anchorId)!.title,
+                domain: eventByIdMap.get(anchorId)!.domain,
+              }
+            : undefined
+        }
+        initialDomain={selectedCategory !== FILTER_ALL ? selectedCategory : undefined}
+        initialEventType={selectedSubtype !== FILTER_ALL ? selectedSubtype : undefined}
+        initialCountries={
+          selectedCountry !== FILTER_ALL
+            ? countries.some((country) => country.id === selectedCountry)
+              ? [{ countryId: selectedCountry, role: 'PARTICIPANT' }]
+              : historicalCountries.some((country) => country.id === selectedCountry)
+                ? [{ historicalCountryId: selectedCountry, role: 'PARTICIPANT' }]
+                : undefined
+            : undefined
+        }
       />
 
       <DeletedEventsModal

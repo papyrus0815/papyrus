@@ -28,6 +28,18 @@ jest.mock('@/shared/api/client', () => ({
   getApiConnection: jest.fn(() => ({ host: 'http://localhost:3000' })),
   apiConnection: { host: 'http://localhost:3000' },
 }))
+jest.mock('@/shared/api/event-sides', () => ({
+  syncEventSides: jest.fn(),
+}))
+jest.mock('@/shared/api/election', () => ({
+  updateElection: jest.fn(),
+}))
+jest.mock('@/shared/api/person-career', () => ({
+  personCareerApi: { updateGovernmentPositionTenure: jest.fn() },
+}))
+jest.mock('@/shared/api/treaty', () => ({
+  treatyApi: { linkEvent: jest.fn(), create: jest.fn() },
+}))
 jest.mock('@/shared/api/events', () => ({
   getEventById: jest.fn(),
   createEvent: jest.fn(),
@@ -55,22 +67,36 @@ jest.mock('@/entities/event-form/model', () => ({
 jest.mock('@/shared/ui/country-picker', () => ({
   CountryPicker: () => null,
 }))
-jest.mock('@/features/event-facets/model/register-facets', () => ({
-  emptyRegisterFacetDrafts: () => ({
-    persons: [],
-    power: [],
-    sides: { names: ['', ''], assignment: {} },
-    treaty: { mode: 'none' },
-    organizations: [],
-    election: null,
-  }),
-  relatedPersonsPayload: () => [],
-  commitRegisterFacets: jest.fn().mockResolvedValue({ done: [], warnings: [] }),
-}))
+jest.mock('@/features/event-facets/model/register-facets', () => {
+  const actual = jest.requireActual('@/features/event-facets/model/register-facets')
+  return {
+    ...actual,
+    commitRegisterFacets: jest.fn().mockResolvedValue({ done: [], warnings: [] }),
+  }
+})
 jest.mock('@/widgets/event-form/ui/core-records-group', () => ({
-  CoreRecordsGroup: (props: { type: string; domain: string | null }) => (
+  CoreRecordsGroup: (props: {
+    type: string
+    domain: string | null
+    drafts: import('@/features/event-facets/model/register-facets').RegisterFacetDrafts
+    onDraftsChange: (
+      next: import('@/features/event-facets/model/register-facets').RegisterFacetDrafts,
+    ) => void
+  }) => (
     <div data-testid="core-records-group">
-      {props.domain}:{props.type}
+      {props.domain}:{props.type}:{props.drafts.treaty.mode}
+      <button
+        type="button"
+        onClick={() =>
+          props.onDraftsChange({
+            ...props.drafts,
+            treaty: { mode: 'create', name: '가짜 조약' },
+            power: [{ personId: 'p1', name: '인물1' }],
+          })
+        }
+      >
+        _fillTreatyAndPowerDraft
+      </button>
     </div>
   ),
 }))
@@ -800,5 +826,67 @@ describe('EventBasicForm — 분야 · 세부 분야 상호작용', () => {
     expect(screen.getByTestId('category')).toHaveTextContent('MILITARY')
     expect(screen.getByTestId('participantsCoreOf')).toHaveTextContent('전투·작전')
     expect(screen.getByTestId('kind')).toHaveTextContent('SINGLE')
+  })
+
+  it('사건명 추천 배지를 클릭하면 분야·세부·묶음 여부가 한 번에 채워진다', () => {
+    const client = makeClient()
+    render(<EventBasicForm />, { wrapper: wrap(client) })
+
+    fireEvent.change(screen.getByLabelText('사건명'), {
+      target: { value: '제1차 세계 대전' },
+    })
+
+    const suggestionBtn = screen.getByRole('button', {
+      name: '군사 › 전쟁 적용',
+    })
+    fireEvent.click(suggestionBtn)
+
+    expect(screen.getByTestId('category')).toHaveTextContent('MILITARY')
+    expect(screen.getByTestId('kind')).toHaveTextContent('COLLECTION')
+    expect(screen.getByTestId('recordsTitle')).toHaveTextContent('전쟁 기록')
+  })
+
+  it('세부 분야를 바꾸면 이전 세부 전용 facetDrafts(조약·취임 등)가 정리되어 오커밋되지 않는다', () => {
+    const client = makeClient()
+    render(<EventBasicForm />, { wrapper: wrap(client) })
+
+    // 조약 세부를 고르고 조약 초안을 채운다
+    fireEvent.click(screen.getByRole('radio', { name: '조약·협정·가입' }))
+    expect(screen.getByTestId('core-records-group')).toHaveTextContent(
+      'DIPLOMACY:TREATY:none',
+    )
+    fireEvent.click(screen.getByText('_fillTreatyAndPowerDraft'))
+    expect(screen.getByTestId('core-records-group')).toHaveTextContent(
+      'DIPLOMACY:TREATY:create',
+    )
+
+    // 회담(SUMMIT)으로 바꾸면 조약·취임 초안이 정리된다
+    fireEvent.click(screen.getByRole('radio', { name: '회담·회의·교섭' }))
+    expect(screen.getByTestId('core-records-group')).toHaveTextContent(
+      'DIPLOMACY:SUMMIT:none',
+    )
+  })
+
+  it('initialDomain·initialEventType·initialCountries가 주어지면 초기값으로 채워지고 dirty가 되지 않는다', () => {
+    const onDirtyChange = jest.fn()
+    const client = makeClient()
+    render(
+      <EventBasicForm
+        initialDomain="DIPLOMACY"
+        initialEventType="TREATY"
+        initialCountries={[{ countryId: 'c1', role: 'PARTICIPANT' }]}
+        onDirtyChange={onDirtyChange}
+      />,
+      { wrapper: wrap(client) },
+    )
+
+    expect(screen.getByTestId('category')).toHaveTextContent('DIPLOMACY')
+    expect(screen.getByTestId('recordsTitle')).toHaveTextContent(
+      '조약·협정·가입 기록',
+    )
+    expect(screen.getByTestId('relatedCountries')).toHaveTextContent(
+      'c1:PARTICIPANT:',
+    )
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true)
   })
 })

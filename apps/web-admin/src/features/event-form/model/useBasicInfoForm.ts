@@ -44,6 +44,7 @@ export interface BasicInfoResetOptions {
 
 export interface BasicInfoInitialOverrides {
   category?: EventDomainKey | ''
+  relatedCountries?: EventCountryParticipant[]
 }
 
 export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
@@ -73,7 +74,11 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
   const [keywords, setKeywords] = useState<string[]>([...initial.keywords])
   const [relatedCountries, setRelatedCountries] = useState<
     EventCountryParticipant[]
-  >([...initial.relatedCountries])
+  >(
+    overrides?.relatedCountries
+      ? [...overrides.relatedCountries]
+      : [...initial.relatedCountries],
+  )
 
   /**
    * 폼 초기화 — 모달의 "사건 계속 등록"처럼 언마운트 없이 다음 입력을 받을 때 사용.
