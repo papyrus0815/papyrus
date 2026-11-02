@@ -1098,6 +1098,8 @@ export interface TenureRegisterPanelProps {
   initialAdministrationDepartmentId?: string | null
   /** 부처 슬롯에서 열 때 화면에 표시할 부처 이름 */
   initialAdministrationDepartmentName?: string | null
+  /** 마인드맵 직책 슬롯에서 열 때 미리 고를 직책 정의·직함 이름 (예: 외무장관, 국무장관, 외무대신) */
+  initialPositionTitle?: string | null
   /**
    * 재위로 연다 — '재위 추가' 진입점. 직위 피커를 군주 칭호 우선으로 놓고, 아무것도 안 고르면
    * '국왕' 정의를 미리 고른다. 재위·재임은 한 기록(직위 보유)이라 폼도 하나다 —
@@ -1124,6 +1126,7 @@ export function TenureRegisterPanel({
   defaultCabinetId,
   initialAdministrationDepartmentId,
   initialAdministrationDepartmentName,
+  initialPositionTitle,
   defaultMonarchical = false,
   defaultDefinitionTitle = '국왕',
   countryOptional = false,
@@ -1693,6 +1696,46 @@ export function TenureRegisterPanel({
     setTitleEn(defaultDefinition.titleEn ?? '')
     setPresetPositionType(null)
   }, [open, isEdit, monarchicalMode, defaultDefinitionTitle, positionDefinitions, positionDefinitionId, title])
+
+  /** 마인드맵 직책 슬롯에서 열었을 때 해당 직책 정의(외무장관·국무장관·외무대신 등)를 자동으로 미리 선택한다 */
+  const initialPositionAppliedRef = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      initialPositionAppliedRef.current = false
+      return
+    }
+    const targetTitle = initialPositionTitle?.trim()
+    if (isEdit || monarchicalMode || !targetTitle || initialPositionAppliedRef.current) {
+      return
+    }
+    const defs = positionDefinitions as PositionDefinitionLike[]
+    if (defs.length === 0) return
+    const normalizedTarget = targetTitle.replace(/\s/g, '')
+    const matchedDef =
+      defs.find((d) => (d.title ?? '').trim() === targetTitle) ??
+      defs.find((d) => (d.title ?? '').replace(/\s/g, '') === normalizedTarget)
+    initialPositionAppliedRef.current = true
+    if (positionDefinitionId || title.trim()) return
+    if (matchedDef) {
+      setPositionDefinitionId(matchedDef.id)
+      setTitle('')
+      setTitleEn(matchedDef.titleEn ?? '')
+      setPresetPositionType(null)
+    } else {
+      setPositionDefinitionId(null)
+      setTitle(targetTitle)
+      setPresetPositionType('CABINET_MINISTER')
+      setManualEntryOpen(true)
+    }
+  }, [
+    open,
+    isEdit,
+    monarchicalMode,
+    initialPositionTitle,
+    positionDefinitions,
+    positionDefinitionId,
+    title,
+  ])
 
   /** 수반 직책 선택 시 소속 행정부 지정 불가(백엔드 400) — 선택돼 있던 행정부는 자동 해제 */
   useEffect(() => {

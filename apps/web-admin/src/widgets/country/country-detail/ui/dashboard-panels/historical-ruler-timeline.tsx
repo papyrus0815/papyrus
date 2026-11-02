@@ -206,6 +206,24 @@ export function HistoricalRulerTimeline({
       <Cards>
         {visible.map((ruler) => {
           const length = reignLength(ruler)
+          const counterparts =
+            hasMultipleAxes && ruler.startYear != null && !ruler.isOutOfSpan
+              ? dated.filter((other) => {
+                  if (other.axis === ruler.axis) return false
+                  const rStart = ruler.startYear as number
+                  const rEnd = ruler.endYear ?? rStart
+                  const oStart = other.startYear as number
+                  const oEnd = other.endYear ?? oStart
+                  return oStart <= rEnd && oEnd >= rStart
+                })
+              : []
+          const counterpartSummary =
+            counterparts.length > 0
+              ? ruler.axis === 'HEAD_OF_GOVERNMENT'
+                ? `👑 ${counterparts.map((c) => c.personName).join(' · ')} 재위기`
+                : `🏛️ 정부수반 ${counterparts.slice(0, 2).map((c) => c.personName).join('·')}${counterparts.length > 2 ? ` 외 ${counterparts.length - 2}명` : ''}`
+              : null
+
           return (
             <RulerCard
               key={ruler.recordId}
@@ -232,6 +250,11 @@ export function HistoricalRulerTimeline({
                     .filter(Boolean)
                     .join(' · ')}
                 </CardMeta>
+                {counterpartSummary && (
+                  <CounterpartTag $axis={ruler.axis} title={counterpartSummary}>
+                    {counterpartSummary}
+                  </CounterpartTag>
+                )}
                 {ruler.isOutOfSpan && (
                   <OutOfSpan title="이 나라의 존속 기간과 겹치지 않습니다. 다른 나라에 걸려야 할 기록일 수 있습니다.">
                     존속 기간 밖
@@ -481,6 +504,34 @@ const CardMeta = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+`
+
+const CounterpartTag = styled.span<{ $axis?: HistoricalRulerItem['axis'] }>`
+  max-width: 100%;
+  margin-top: 2px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: ${({ $axis, theme }) =>
+    $axis === 'HEAD_OF_GOVERNMENT'
+      ? theme.mode === 'dark'
+        ? '#fde68a'
+        : '#92400e'
+      : theme.mode === 'dark'
+        ? '#99f6e4'
+        : '#0f766e'};
+  background: ${({ $axis, theme }) =>
+    $axis === 'HEAD_OF_GOVERNMENT'
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.18)'
+        : '#fef3c7'
+      : theme.mode === 'dark'
+        ? 'rgba(20, 184, 166, 0.18)'
+        : '#ccfbf1'};
 `
 
 const OutOfSpan = styled.span`

@@ -1,21 +1,49 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 
 import styled, { css } from 'styled-components'
 
 import type { CabinetMember } from './cabinet-member.types'
 
+export interface CabinetBranchSlot {
+  key: string
+  node: ReactNode
+}
+
 export interface CabinetMindMapProps {
   /** 가운데 노드가 될 수반. 없으면 정권 이름만으로 중심을 세운다 */
   head: CabinetMember | null
   /**
-   * 이원집정부제·의원내각제·입헌군주제 등에서 동시대 대응 수반
-   * (예: 내각 수반이 총리일 때 당시 군주·대통령, 또는 대통령 행정부일 때 당시 총리)
+   * 이원집정부제·의원내각제·입헌군주제 등에서 동시대 대응 수반 (단건 호환)
    */
   counterpartHead?: CabinetMember | null
+  /**
+   * 동시대 대응 수반·내각 목록
+   * - 내각 중심 보기일 때: 해당 내각 기간에 재위한 황제·국왕·국가원수 목록
+   * - 군주 중심 보기일 때: 해당 군주 재위기에 출범한 행정부(내각·총리) 목록
+   */
+  counterpartHeads?: CabinetMember[]
+  /** 동시대 군주 카드를 눌러 해당 군주의 치세 보기로 전환할 때 */
+  onSelectCounterpartHead?: (member: CabinetMember) => void
+  /** 군주 중심 보기에서 동시대 내각 카드를 눌러 해당 내각으로 전환할 때 */
+  onSelectCabinet?: (cabinetId: string) => void
+  /** 군주 중심 보기에서 동시대 내각·수반을 새로 등록할 때 */
+  onRegisterCabinetHead?: () => void
+  /** 내각 중심 보기에서 동시대 군주·국가원수를 새로 등록할 때 */
+  onRegisterCounterpartHead?: () => void
+  /** 현재 정권·치세에 각료(장관·대신 등)를 바로 등록할 때 */
+  onRegisterMinister?: () => void
+  /** 수반이 아직 없을 때 가운데 빈 카드에 표시할 기본 수반 직책 라벨 (예: 정부 수반, 대통령, 내각총리대신) */
+  emptyHeadRoleLabel?: string | null
   /** 해당 정권 시기의 정체(정부형태) 라벨 (예: 대통령제, 의원내각제, 입헌군주제) */
   regimeLabel?: string | null
   /** 가지가 될 각료들 */
   members: CabinetMember[]
+  /**
+   * 각료(members) 외에 마인드맵 좌·우 가지에 함께 달 부처 슬롯·기본 틀 슬롯(54px 규격).
+   * 각료가 0명이거나 적은 국가에서도 중앙 수반 카드 좌·우로 베지어 곡선 가지가 뻗는
+   * 동일한 3열 마인드맵 구조를 유지한다.
+   */
+  branchSlots?: CabinetBranchSlot[]
   /** 정권 이름 (예: 트럼프 2기 행정부) */
   cabinetLabel: string | null
   /** 하위 역사국가 소속 정권일 때 표시할 정치체 이름 (예: 독일 제국, 비시 프랑스) */
@@ -92,8 +120,22 @@ const nodeCenterY = (index: number) =>
 /** 'YYYY-MM-DD…' → 'YYYY.M.D' — 저장된 달력 날짜를 그대로 찍는다(시간대 보정 금지) */
 function formatNodeDate(iso: string): string {
   const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
-  if (!matched) return ''
-  return `${Number(matched[1])}.${Number(matched[2])}.${Number(matched[3])}`
+  if (matched) {
+    return `${Number(matched[1])}.${Number(matched[2])}.${Number(matched[3])}`
+  }
+  const yearOnly = /^(\d{1,4})$/.exec(iso.trim())
+  if (yearOnly) return `${Number(yearOnly[1])}년`
+  return iso.trim()
+}
+
+function formatPeriodText(
+  startDate: string | null,
+  endDate: string | null,
+): string {
+  const start = startDate ? formatNodeDate(startDate) : ''
+  const end = endDate ? formatNodeDate(endDate) : '현재'
+  if (!start && !endDate) return ''
+  return `${start || '?'} ~ ${end}`
 }
 
 const groupHeightOf = (count: number) =>
@@ -113,8 +155,16 @@ const groupHeightOf = (count: number) =>
 export function CabinetMindMap({
   head,
   counterpartHead,
+  counterpartHeads,
+  onSelectCounterpartHead,
+  onSelectCabinet,
+  onRegisterCabinetHead,
+  onRegisterCounterpartHead,
+  onRegisterMinister,
+  emptyHeadRoleLabel,
   regimeLabel,
   members,
+  branchSlots,
   cabinetLabel,
   polityLabel,
   stats,
@@ -130,15 +180,46 @@ export function CabinetMindMap({
 }: CabinetMindMapProps) {
   const visible = expanded ? members : members.slice(0, collapsedLimit)
   const hidden = members.length - visible.length
-  const hasBranches = visible.length > 0
+  const extraSlots = branchSlots ?? []
+
+  type CombinedBranchItem =
+    | { kind: 'member'; key: string; member: CabinetMember }
+    | { kind: 'slot'; key: string; node: ReactNode }
+
+  const combinedBranches: CombinedBranchItem[] = [
+    ...visible.map((member) => ({
+      kind: 'member' as const,
+      key: `m:${member.id}`,
+      member,
+    })),
+    ...extraSlots.map((slot) => ({
+      kind: 'slot' as const,
+      key: `s:${slot.key}`,
+      node: slot.node,
+    })),
+  ]
+  const hasBranches = combinedBranches.length > 0
+  const counterparts =
+    counterpartHeads && counterpartHeads.length > 0
+      ? counterpartHeads
+      : counterpartHead
+        ? [counterpartHead]
+        : []
+  const isMonarchCenter = Boolean(head?.isMonarchical)
+  const showSovereignAbove =
+    !isMonarchCenter &&
+    (counterparts.length > 0 || Boolean(onRegisterCounterpartHead))
+  const showReignCabinetsBelow =
+    isMonarchCenter &&
+    (counterparts.length > 0 || Boolean(onRegisterCabinetHead))
 
   /*
    * 좌우로 반씩 가른다. 섞지 않고 앞쪽 절반을 왼쪽에 두어, 좁은 화면에서 한 줄로 접혔을 때
    * (왼쪽 → 오른쪽 순서로 이어 읽으므로) 원래 순서가 그대로 유지된다.
    */
-  const pivot = Math.ceil(visible.length / 2)
-  const leftNodes = visible.slice(0, pivot)
-  const rightNodes = visible.slice(pivot)
+  const pivot = Math.ceil(combinedBranches.length / 2)
+  const leftItems = combinedBranches.slice(0, pivot)
+  const rightItems = combinedBranches.slice(pivot)
 
   return (
     <MapWrap>
@@ -163,118 +244,317 @@ export function CabinetMindMap({
         )}
         {hasBranches && (
           <MapSide $side="left">
-            <SideGroup side="left" nodes={leftNodes}>
-              {leftNodes.map((member) => (
-                <BranchNode
-                  key={member.id}
-                  member={member}
-                  side="left"
-                  renderFace={renderFace}
-                  onSelectPerson={onSelectPerson}
-                />
-              ))}
+            <SideGroup side="left" nodeKeys={leftItems.map((item) => item.key)}>
+              {leftItems.map((item) =>
+                item.kind === 'member' ? (
+                  <BranchNode
+                    key={item.key}
+                    member={item.member}
+                    side="left"
+                    renderFace={renderFace}
+                    onSelectPerson={onSelectPerson}
+                  />
+                ) : (
+                  <Fragment key={item.key}>{item.node}</Fragment>
+                ),
+              )}
             </SideGroup>
           </MapSide>
         )}
 
         <MapCenter $branches={hasBranches}>
-          {head ? (
-            <CenterCard
-              type="button"
-              $branches={hasBranches}
-              onClick={() => head.personId && onSelectPerson(head.personId)}
-              aria-label={`${head.name} 상세`}
-            >
-              <CenterFace $branches={hasBranches}>
-                {renderFace(head, 112)}
-              </CenterFace>
-              <CenterRole $branches={hasBranches}>
-                {head.ordinal != null && `제${head.ordinal}대 `}
-                {head.title}
-                {!head.endDate && <CenterNow>현직</CenterNow>}
-                {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
-                {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
-              </CenterRole>
-              <CenterName $branches={hasBranches}>{head.name}</CenterName>
-              {cabinetLabel && (
-                <CenterCabinet $branches={hasBranches}>
-                  {cabinetLabel}
-                </CenterCabinet>
-              )}
-              {counterpartHead && (
-                <CenterCounterpart
-                  $branches={hasBranches}
-                  role="link"
-                  tabIndex={0}
-                  onClick={(event) => {
-                    if (counterpartHead.personId) {
-                      event.stopPropagation()
-                      onSelectPerson(counterpartHead.personId)
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (
-                      (event.key === 'Enter' || event.key === ' ') &&
-                      counterpartHead.personId
-                    ) {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      onSelectPerson(counterpartHead.personId)
-                    }
-                  }}
-                  title={`${counterpartHead.title} ${counterpartHead.name} 인물 보기`}
-                >
-                  <CenterCounterpartRole>
-                    {counterpartHead.ordinal != null &&
-                      `제${counterpartHead.ordinal}대 `}
-                    {counterpartHead.title}
-                  </CenterCounterpartRole>
-                  <CenterCounterpartName>
-                    {counterpartHead.name}
-                  </CenterCounterpartName>
-                </CenterCounterpart>
-              )}
-              {showPosition && nav && nav.total > 1 && (
-                /* 목록을 걷은 대신 위치를 여기 적는다 — 줄기 위에 두면 선을 끊는다 */
-                <CenterOrdinal $branches={hasBranches}>
-                  {nav.index + 1} / {nav.total}대
-                </CenterOrdinal>
-              )}
-              {stats.length > 0 && (
+          <CenterStack $branches={hasBranches}>
+            {showSovereignAbove && (
+              <>
+                <CounterpartDeck $branches={hasBranches}>
+                  {counterparts.length > 0 ? (
+                    counterparts.map((cp) => (
+                      <SovereignPairCard
+                        key={cp.id}
+                        $monarch={Boolean(cp.isMonarchical)}
+                        $branches={hasBranches}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          cp.personId && onSelectPerson(cp.personId)
+                        }
+                        onKeyDown={(event) => {
+                          if (
+                            (event.key === 'Enter' || event.key === ' ') &&
+                            cp.personId
+                          ) {
+                            event.preventDefault()
+                            onSelectPerson(cp.personId)
+                          }
+                        }}
+                        title={`${cp.title} ${cp.name} 인물 상세`}
+                      >
+                        <SovereignPairFace $monarch={Boolean(cp.isMonarchical)}>
+                          {renderFace(cp, 44)}
+                        </SovereignPairFace>
+                        <SovereignPairBody>
+                          <SovereignPairTop>
+                            <SovereignPairBadge
+                              $monarch={Boolean(cp.isMonarchical)}
+                            >
+                              {cp.isMonarchical ? '👑 재위 군주' : '국가원수·수반'}
+                            </SovereignPairBadge>
+                            <SovereignPairRole>
+                              {cp.ordinal != null && `제${cp.ordinal}대 `}
+                              {cp.title}
+                            </SovereignPairRole>
+                            {cp.regnalEraLabel && (
+                              <SovereignEraTag>
+                                {cp.regnalEraLabel}
+                              </SovereignEraTag>
+                            )}
+                            {cp.polityLabel && cp.polityLabel !== polityLabel && (
+                              <SovereignPolityTag>
+                                {cp.polityLabel}
+                              </SovereignPolityTag>
+                            )}
+                          </SovereignPairTop>
+                          <SovereignPairNameRow>
+                            <SovereignPairName>{cp.name}</SovereignPairName>
+                            {(cp.startDate || cp.endDate) && (
+                              <SovereignPairPeriod>
+                                {formatPeriodText(cp.startDate, cp.endDate)}
+                              </SovereignPairPeriod>
+                            )}
+                          </SovereignPairNameRow>
+                        </SovereignPairBody>
+                        {onSelectCounterpartHead && (
+                          <SovereignSwitchBtn
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onSelectCounterpartHead(cp)
+                            }}
+                            title={`${cp.name} 재위기 전체 보기`}
+                          >
+                            {cp.isMonarchical ? '치세 보기' : '수반 보기'}
+                          </SovereignSwitchBtn>
+                        )}
+                      </SovereignPairCard>
+                    ))
+                  ) : (
+                    <SovereignEmptyButton
+                      type="button"
+                      onClick={() => onRegisterCounterpartHead?.()}
+                    >
+                      <SovereignPairBadge $monarch>
+                        👑 재위 군주·원수
+                      </SovereignPairBadge>
+                      <SovereignEmptyLabel>
+                        + 동시대 군주·국가원수 등록
+                      </SovereignEmptyLabel>
+                    </SovereignEmptyButton>
+                  )}
+                </CounterpartDeck>
+                <DualExecutiveConnector $branches={hasBranches} aria-hidden />
+              </>
+            )}
+
+            {head ? (
+              <CenterCard
+                type="button"
+                $branches={hasBranches}
+                $monarch={isMonarchCenter}
+                onClick={() => head.personId && onSelectPerson(head.personId)}
+                aria-label={`${head.name} 상세`}
+              >
+                <CenterFace $branches={hasBranches} $monarch={isMonarchCenter}>
+                  {renderFace(head, 112)}
+                </CenterFace>
+                <CenterRole $branches={hasBranches} $monarch={isMonarchCenter}>
+                  {isMonarchCenter && <MonarchCrown aria-hidden>👑</MonarchCrown>}
+                  {head.ordinal != null && `제${head.ordinal}대 `}
+                  {head.title}
+                  {!head.endDate && <CenterNow>현직</CenterNow>}
+                  {head.regnalEraLabel && (
+                    <CenterEraTag>{head.regnalEraLabel}</CenterEraTag>
+                  )}
+                  {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
+                  {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
+                </CenterRole>
+                <CenterName $branches={hasBranches}>{head.name}</CenterName>
+                {cabinetLabel && (
+                  <CenterCabinet $branches={hasBranches}>
+                    {cabinetLabel}
+                  </CenterCabinet>
+                )}
+                {showPosition && nav && nav.total > 1 && (
+                  /* 목록을 걷은 대신 위치를 여기 적는다 — 줄기 위에 두면 선을 끊는다 */
+                  <CenterOrdinal $branches={hasBranches}>
+                    {nav.index + 1} / {nav.total}대
+                  </CenterOrdinal>
+                )}
+                {stats.length > 0 && (
+                  <CenterStats $branches={hasBranches}>
+                    {stats.map((stat) => (
+                      <CenterStat key={stat.key}>
+                        <CenterStatKey>{stat.label}</CenterStatKey>
+                        <CenterStatValue $warn={stat.warn}>
+                          {stat.value}
+                        </CenterStatValue>
+                      </CenterStat>
+                    ))}
+                  </CenterStats>
+                )}
+              </CenterCard>
+            ) : (
+              <CenterEmptyCard
+                type="button"
+                $branches={hasBranches}
+                onClick={() => onRegisterCabinetHead?.()}
+                aria-label="정부 수반 등록"
+              >
+                <CenterEmptyFace $branches={hasBranches} aria-hidden>
+                  +
+                </CenterEmptyFace>
+                <CenterRole $branches={hasBranches}>
+                  {emptyHeadRoleLabel ?? '정부 수반'}
+                  {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
+                  {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
+                </CenterRole>
+                <CenterEmptyCta $branches={hasBranches}>
+                  + 수반 등록
+                </CenterEmptyCta>
+                {cabinetLabel && (
+                  <CenterCabinet $branches={hasBranches}>
+                    {cabinetLabel}
+                  </CenterCabinet>
+                )}
                 <CenterStats $branches={hasBranches}>
-                  {stats.map((stat) => (
-                    <CenterStat key={stat.key}>
-                      <CenterStatKey>{stat.label}</CenterStatKey>
-                      <CenterStatValue $warn={stat.warn}>
-                        {stat.value}
-                      </CenterStatValue>
-                    </CenterStat>
-                  ))}
+                  <CenterStat>
+                    <CenterStatKey>취임</CenterStatKey>
+                    <CenterStatValue>—</CenterStatValue>
+                  </CenterStat>
+                  <CenterStat>
+                    <CenterStatKey>재임</CenterStatKey>
+                    <CenterStatValue>—</CenterStatValue>
+                  </CenterStat>
+                  <CenterStat>
+                    <CenterStatKey>각료</CenterStatKey>
+                    <CenterStatValue>{members.length}명</CenterStatValue>
+                  </CenterStat>
                 </CenterStats>
-              )}
-            </CenterCard>
-          ) : (
-            <CenterCardStatic $branches={hasBranches}>
-              <CenterName $branches={hasBranches}>
-                {cabinetLabel ?? '행정부'}
-              </CenterName>
-              <CenterCabinet $branches={hasBranches}>수반 미등록</CenterCabinet>
-            </CenterCardStatic>
-          )}
+              </CenterEmptyCard>
+            )}
+
+            {showReignCabinetsBelow && (
+              <>
+                <DualExecutiveConnector $branches={hasBranches} aria-hidden />
+                <ReignCabinetsDeck $branches={hasBranches}>
+                  <ReignCabinetsHeader>
+                    <ReignCabinetsTitle>
+                      🏛️ 재위 중 행정부 · 내각
+                    </ReignCabinetsTitle>
+                    <ReignCabinetsHeaderRight>
+                      <ReignCabinetsCount>
+                        {counterparts.length}대
+                      </ReignCabinetsCount>
+                      {counterparts.length > 0 && onRegisterCabinetHead && (
+                        <ReignCabinetsAddBtn
+                          type="button"
+                          onClick={onRegisterCabinetHead}
+                        >
+                          + 내각 등록
+                        </ReignCabinetsAddBtn>
+                      )}
+                    </ReignCabinetsHeaderRight>
+                  </ReignCabinetsHeader>
+                  {counterparts.length > 0 ? (
+                    <ReignCabinetsList $branches={hasBranches}>
+                      {counterparts.map((cp) => (
+                        <ReignCabinetItem
+                          key={cp.id}
+                          type="button"
+                          onClick={() => {
+                            if (cp.cabinetId && onSelectCabinet) {
+                              onSelectCabinet(cp.cabinetId)
+                              return
+                            }
+                            if (cp.personId) {
+                              onSelectPerson(cp.personId)
+                            }
+                          }}
+                          title={
+                            cp.cabinetId
+                              ? `${cp.cabinetLabel ?? cp.name} 내각 보기로 전환`
+                              : `${cp.name} 상세`
+                          }
+                        >
+                          <ReignCabinetAvatar>
+                            {renderFace(cp, 34)}
+                          </ReignCabinetAvatar>
+                          <ReignCabinetInfo>
+                            <ReignCabinetLabel>
+                              {cp.cabinetLabel ??
+                                (cp.ordinal != null
+                                  ? `제${cp.ordinal}대 ${cp.title}`
+                                  : cp.title)}
+                            </ReignCabinetLabel>
+                            <ReignCabinetSub>
+                              <strong>{cp.name}</strong>
+                              {cp.cabinetLabel && cp.title ? ` · ${cp.title}` : ''}
+                              {(cp.startDate || cp.endDate) &&
+                                ` · ${formatPeriodText(cp.startDate, cp.endDate)}`}
+                            </ReignCabinetSub>
+                          </ReignCabinetInfo>
+                          {cp.cabinetId && onSelectCabinet && (
+                            <ReignCabinetGo>내각 보기 ›</ReignCabinetGo>
+                          )}
+                        </ReignCabinetItem>
+                      ))}
+                    </ReignCabinetsList>
+                  ) : (
+                    <ReignCabinetEmptyButton
+                      type="button"
+                      onClick={() => onRegisterCabinetHead?.()}
+                    >
+                      <ReignCabinetEmptyPlus aria-hidden>+</ReignCabinetEmptyPlus>
+                      <ReignCabinetEmptyText>
+                        <ReignCabinetEmptyTitle>
+                          이 치세의 내각 · 수반 등록
+                        </ReignCabinetEmptyTitle>
+                        <ReignCabinetEmptySub>
+                          총리·재상·수반을 등록하면 치세와 함께 표시됩니다
+                        </ReignCabinetEmptySub>
+                      </ReignCabinetEmptyText>
+                    </ReignCabinetEmptyButton>
+                  )}
+                </ReignCabinetsDeck>
+              </>
+            )}
+
+            {onRegisterMinister && (
+              <RegisterMinisterBtn
+                type="button"
+                onClick={onRegisterMinister}
+              >
+                + 이 {isMonarchCenter ? '치세' : '정권'}의 각료 등록
+              </RegisterMinisterBtn>
+            )}
+          </CenterStack>
         </MapCenter>
 
         {hasBranches && (
           <MapSide $side="right">
-            <SideGroup side="right" nodes={rightNodes}>
-              {rightNodes.map((member) => (
-                <BranchNode
-                  key={member.id}
-                  member={member}
-                  side="right"
-                  renderFace={renderFace}
-                  onSelectPerson={onSelectPerson}
-                />
-              ))}
+            <SideGroup side="right" nodeKeys={rightItems.map((item) => item.key)}>
+              {rightItems.map((item) =>
+                item.kind === 'member' ? (
+                  <BranchNode
+                    key={item.key}
+                    member={item.member}
+                    side="right"
+                    renderFace={renderFace}
+                    onSelectPerson={onSelectPerson}
+                  />
+                ) : (
+                  <Fragment key={item.key}>{item.node}</Fragment>
+                ),
+              )}
             </SideGroup>
           </MapSide>
         )}
@@ -346,7 +626,7 @@ export function CabinetMindMap({
 
 interface SideGroupProps {
   side: 'left' | 'right'
-  nodes: CabinetMember[]
+  nodeKeys: string[]
   children: ReactNode
 }
 
@@ -357,13 +637,13 @@ interface SideGroupProps {
  * 그 안에서 묶음이 어디에 놓이는지 알 수 없지만, 묶음 자신을 기준으로 하면 첫 노드부터
  * 마지막 노드까지가 곧 좌표계다.
  */
-function SideGroup({ side, nodes, children }: SideGroupProps) {
-  const height = groupHeightOf(nodes.length)
+function SideGroup({ side, nodeKeys, children }: SideGroupProps) {
+  const height = groupHeightOf(nodeKeys.length)
   const originY = height / 2
 
   return (
     <GroupBox $side={side}>
-      {nodes.length > 0 && (
+      {nodeKeys.length > 0 && (
         <BranchSvg
           $side={side}
           width={GUTTER}
@@ -372,14 +652,14 @@ function SideGroup({ side, nodes, children }: SideGroupProps) {
           aria-hidden
           focusable="false"
         >
-          {nodes.map((member, index) => {
+          {nodeKeys.map((key, index) => {
             const y = nodeCenterY(index)
             /* 제어점을 거터 한가운데 두면 양끝에서 수평으로 빠져나가 부드럽게 만난다 */
             const path =
               side === 'left'
                 ? `M ${GUTTER} ${originY} C ${GUTTER / 2} ${originY}, ${GUTTER / 2} ${y}, 0 ${y}`
                 : `M 0 ${originY} C ${GUTTER / 2} ${originY}, ${GUTTER / 2} ${y}, ${GUTTER} ${y}`
-            return <path key={member.id} d={path} />
+            return <path key={key} d={path} />
           })}
         </BranchSvg>
       )}
@@ -641,7 +921,7 @@ const BranchSvg = styled.svg<{ $side: 'left' | 'right' }>`
 
 const MapCenter = styled.div<{ $branches?: boolean }>`
   display: flex;
-  justify-content: ${({ $branches }) => ($branches ? 'center' : 'stretch')};
+  justify-content: center;
   min-width: 0;
 
   /* 격자에선 DOM 순서(왼쪽 가지 → 가운데 → 오른쪽 가지)대로면 수반이 각료 사이에 낀다 */
@@ -651,6 +931,222 @@ const MapCenter = styled.div<{ $branches?: boolean }>`
     justify-content: stretch;
     margin-bottom: 6px;
   }
+`
+
+const CenterStack = styled.div<{ $branches?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: auto;
+  min-width: 0;
+
+  @container (max-width: 820px) {
+    align-items: stretch;
+    width: 100%;
+  }
+`
+
+const CounterpartDeck = styled.div<{ $branches?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 288px;
+
+  @container (max-width: 820px) {
+    width: 100%;
+  }
+`
+
+const SovereignPairCard = styled.div<{
+  $monarch?: boolean
+  $branches?: boolean
+}>`
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 13px;
+  border-radius: 16px;
+  border: 1px solid
+    ${({ $monarch, theme }) =>
+      $monarch
+        ? theme.mode === 'dark'
+          ? 'rgba(251, 191, 36, 0.35)'
+          : 'rgba(217, 119, 6, 0.32)'
+        : theme.colors.border.medium};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(255, 255, 255, 0.03))'
+        : 'linear-gradient(135deg, #fffbeb, #ffffff)'
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.035)'
+        : theme.colors.background.primary};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 4px 14px rgba(0, 0, 0, 0.24)'
+      : '0 2px 10px rgba(15, 23, 42, 0.05)'};
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: ${({ $monarch }) =>
+      $monarch ? 'rgba(217, 119, 6, 0.6)' : 'rgba(99, 102, 241, 0.45)'};
+  }
+`
+
+const SovereignPairFace = styled.span<{ $monarch?: boolean }>`
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1.5px solid
+    ${({ $monarch }) =>
+      $monarch ? 'rgba(217, 119, 6, 0.65)' : 'rgba(99, 102, 241, 0.5)'};
+
+  img,
+  span {
+    border-radius: 999px;
+  }
+`
+
+const SovereignPairBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+`
+
+const SovereignPairTop = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const SovereignPairBadge = styled.span<{ $monarch?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? '#fde68a'
+        : '#92400e'
+      : theme.mode === 'dark'
+        ? '#c7d2fe'
+        : '#3730a3'};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.22)'
+        : '#fef3c7'
+      : theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.2)'
+        : '#e0e7ff'};
+`
+
+const SovereignPairRole = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const SovereignEraTag = styled.span`
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.16)' : '#fffbeb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.3)'
+        : 'rgba(217, 119, 6, 0.22)'};
+`
+
+const SovereignPolityTag = styled.span`
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.05)'};
+`
+
+const SovereignPairNameRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+`
+
+const SovereignPairName = styled.span`
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const SovereignPairPeriod = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SovereignSwitchBtn = styled.button`
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(251, 191, 36, 0.35)'
+        : 'rgba(217, 119, 6, 0.32)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.14)' : '#fffbeb'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fde68a' : '#b45309')};
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.25)' : '#fef3c7'};
+    border-color: rgba(217, 119, 6, 0.55);
+  }
+`
+
+const DualExecutiveConnector = styled.div<{ $branches?: boolean }>`
+  width: 2px;
+  height: 14px;
+  margin: 0 auto;
+  background: linear-gradient(
+    180deg,
+    rgba(217, 119, 6, 0.55),
+    rgba(99, 102, 241, 0.55)
+  );
 `
 
 const horizontalCenterLayout = css`
@@ -666,7 +1162,7 @@ const horizontalCenterLayout = css`
   padding: 18px 22px;
 `
 
-const centerSurface = css<{ $branches?: boolean }>`
+const centerSurface = css<{ $branches?: boolean; $monarch?: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -676,19 +1172,27 @@ const centerSurface = css<{ $branches?: boolean }>`
   border-radius: 20px;
   text-align: center;
   /*
-   * 면은 무채색으로 두고 장미색은 직함·현직 표시·얼굴 테두리에만 남긴다.
+   * 면은 무채색으로 두고 장미색/황금색은 직함·현직 표시·얼굴 테두리에만 남긴다.
    */
-  border: 1px solid ${({ theme }) => theme.colors.border.medium};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.035)'
-      : theme.colors.background.primary};
+  border: 1px solid
+    ${({ $monarch, theme }) =>
+      $monarch
+        ? theme.mode === 'dark'
+          ? 'rgba(251, 191, 36, 0.38)'
+          : 'rgba(217, 119, 6, 0.35)'
+        : theme.colors.border.medium};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'linear-gradient(180deg, rgba(251, 191, 36, 0.08), rgba(255,255,255,0.035))'
+        : 'linear-gradient(180deg, #fffdf5, #ffffff)'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.035)'
+        : theme.colors.background.primary};
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
       ? '0 8px 24px rgba(0,0,0,0.3)'
       : '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06)'};
-
-  ${({ $branches }) => !$branches && horizontalCenterLayout}
 
   /* 좁은 칼럼 — 가로로 눕힌다: 얼굴 | 직함·이름·정권 | 요약 */
   @container (max-width: 820px) {
@@ -696,7 +1200,7 @@ const centerSurface = css<{ $branches?: boolean }>`
   }
 `
 
-const CenterCard = styled.button<{ $branches?: boolean }>`
+const CenterCard = styled.button<{ $branches?: boolean; $monarch?: boolean }>`
   ${centerSurface}
   appearance: none;
   font-family: inherit;
@@ -708,7 +1212,8 @@ const CenterCard = styled.button<{ $branches?: boolean }>`
 
   &:hover {
     transform: translateY(-2px);
-    border-color: rgba(99, 102, 241, 0.45);
+    border-color: ${({ $monarch }) =>
+      $monarch ? 'rgba(217, 119, 6, 0.6)' : 'rgba(99, 102, 241, 0.45)'};
   }
   &:focus-visible {
     outline: 2px solid ${CENTER_ACCENT};
@@ -716,30 +1221,45 @@ const CenterCard = styled.button<{ $branches?: boolean }>`
   }
 `
 
-const CenterCardStatic = styled.div<{ $branches?: boolean }>`
+const CenterEmptyCard = styled.button<{ $branches?: boolean }>`
   ${centerSurface}
+  appearance: none;
+  font-family: inherit;
+  border-style: dashed;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba(99, 102, 241, 0.55);
+    background: ${({ theme }) => theme.colors.hover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${CENTER_ACCENT};
+    outline-offset: 3px;
+  }
 `
 
-/** 얼굴 둘레 링 — 가운데가 중심이라는 걸 색이 아니라 형태로 말한다 */
-const CenterFace = styled.span<{ $branches?: boolean }>`
+const CenterEmptyFace = styled.span<{ $branches?: boolean }>`
   display: inline-flex;
-  padding: 4px;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  height: 112px;
   margin-bottom: 12px;
   border-radius: 999px;
-  border: 2px solid rgba(99, 102, 241, 0.55);
-
-  img,
-  span {
-    border-radius: 999px;
-  }
-
-  ${({ $branches }) =>
-    !$branches &&
-    css`
-      grid-column: 1;
-      grid-row: 1 / span 4;
-      margin-bottom: 0;
-    `}
+  border: 2px dashed rgba(99, 102, 241, 0.42);
+  color: ${CENTER_ACCENT};
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.08)'
+      : 'rgba(99, 102, 241, 0.04)'};
 
   @container (max-width: 820px) {
     grid-column: 1;
@@ -748,25 +1268,73 @@ const CenterFace = styled.span<{ $branches?: boolean }>`
   }
 `
 
-const CenterRole = styled.span<{ $branches?: boolean }>`
+const CenterEmptyCta = styled.span<{ $branches?: boolean }>`
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  @container (max-width: 820px) {
+    grid-column: 2;
+  }
+`
+
+/** 얼굴 둘레 링 — 가운데가 중심이라는 걸 색이 아니라 형태로 말한다 */
+const CenterFace = styled.span<{ $branches?: boolean; $monarch?: boolean }>`
+  display: inline-flex;
+  padding: 4px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  border: 2px solid
+    ${({ $monarch }) =>
+      $monarch ? 'rgba(217, 119, 6, 0.65)' : 'rgba(99, 102, 241, 0.55)'};
+
+  img,
+  span {
+    border-radius: 999px;
+  }
+
+  @container (max-width: 820px) {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+    margin-bottom: 0;
+  }
+`
+
+const CenterRole = styled.span<{ $branches?: boolean; $monarch?: boolean }>`
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  justify-content: ${({ $branches }) => ($branches ? 'center' : 'flex-start')};
+  justify-content: center;
   gap: 6px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: ${CENTER_ACCENT};
-  ${({ $branches }) =>
-    !$branches &&
-    css`
-      grid-column: 2;
-    `}
+  color: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? '#fbbf24'
+        : '#b45309'
+      : CENTER_ACCENT};
   @container (max-width: 820px) {
     grid-column: 2;
     justify-content: flex-start;
   }
+`
+
+const MonarchCrown = styled.span`
+  font-size: 13px;
+  line-height: 1;
+`
+
+const CenterEraTag = styled.span`
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fde68a' : '#92400e')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7'};
 `
 
 const CenterNow = styled.span`
@@ -799,46 +1367,272 @@ const CenterRegime = styled.span`
     theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : '#eef2ff'};
 `
 
-const CenterCounterpart = styled.span<{ $branches?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+const ReignCabinetsDeck = styled.div<{ $branches?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 288px;
+  padding: 12px 14px;
+  border-radius: 16px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.025)'
+      : 'rgba(248, 250, 252, 0.9)'};
+
+  @container (max-width: 820px) {
+    width: 100%;
+  }
+`
+
+const ReignCabinetsHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const ReignCabinetsTitle = styled.span`
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ReignCabinetsCount = styled.span`
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${CENTER_ACCENT};
+  background: rgba(99, 102, 241, 0.12);
+`
+
+const ReignCabinetsList = styled.div<{ $branches?: boolean }>`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+`
+
+const ReignCabinetItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 11px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-family: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 
   &:hover {
     border-color: rgba(99, 102, 241, 0.45);
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.10)' : '#f1f5f9'};
-  }
-
-  ${({ $branches }) =>
-    !$branches &&
-    css`
-      grid-column: 2;
-      justify-self: start;
-    `}
-  @container (max-width: 820px) {
-    grid-column: 2;
-    justify-self: start;
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 
-const CenterCounterpartRole = styled.span`
+const ReignCabinetAvatar = styled.span`
+  display: inline-flex;
+  flex-shrink: 0;
+
+  img,
+  span {
+    border-radius: 999px;
+  }
+`
+
+const ReignCabinetInfo = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+`
+
+const ReignCabinetLabel = styled.span`
+  font-size: 12px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const ReignCabinetSub = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const ReignCabinetGo = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
   font-weight: 700;
+  color: ${CENTER_ACCENT};
+`
+
+const ReignCabinetsHeaderRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const ReignCabinetsAddBtn = styled.button`
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px dashed rgba(99, 102, 241, 0.45);
+  background: transparent;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: inherit;
+  color: ${CENTER_ACCENT};
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: ${CENTER_ACCENT};
+  }
+`
+
+const ReignCabinetEmptyButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const ReignCabinetEmptyPlus = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px dashed rgba(99, 102, 241, 0.45);
+  font-size: 15px;
+  font-weight: 700;
+  color: ${CENTER_ACCENT};
+  background: rgba(99, 102, 241, 0.08);
+`
+
+const ReignCabinetEmptyText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+`
+
+const ReignCabinetEmptyTitle = styled.span`
+  font-size: 12px;
+  font-weight: 800;
+  color: ${CENTER_ACCENT};
+`
+
+const ReignCabinetEmptySub = styled.span`
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.35;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const CenterCounterpartName = styled.span`
+const SovereignEmptyButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(251, 191, 36, 0.35)'
+        : 'rgba(217, 119, 6, 0.35)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(251, 191, 36, 0.05)'
+      : 'rgba(255, 251, 235, 0.7)'};
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: rgba(217, 119, 6, 0.6);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(251, 191, 36, 0.12)'
+        : 'rgba(254, 243, 199, 0.85)'};
+  }
+`
+
+const SovereignEmptyLabel = styled.span`
+  font-size: 11.5px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fde68a' : '#b45309')};
+`
+
+const RegisterMinisterBtn = styled.button`
+  margin-top: 10px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px dashed rgba(99, 102, 241, 0.45);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.08)'
+      : 'rgba(99, 102, 241, 0.05)'};
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: ${CENTER_ACCENT};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.16)'
+        : 'rgba(99, 102, 241, 0.11)'};
+  }
 `
 
 const CenterName = styled.span<{ $branches?: boolean }>`
@@ -847,11 +1641,6 @@ const CenterName = styled.span<{ $branches?: boolean }>`
   letter-spacing: -0.03em;
   line-height: 1.25;
   color: ${({ theme }) => theme.colors.text.primary};
-  ${({ $branches }) =>
-    !$branches &&
-    css`
-      grid-column: 2;
-    `}
   @container (max-width: 820px) {
     grid-column: 2;
   }
@@ -868,11 +1657,6 @@ const CenterOrdinal = styled.span<{ $branches?: boolean }>`
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
-  ${({ $branches }) =>
-    !$branches &&
-    css`
-      grid-column: 2;
-    `}
   @container (max-width: 820px) {
     grid-column: 2;
   }
@@ -882,11 +1666,6 @@ const CenterCabinet = styled.span<{ $branches?: boolean }>`
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
-  ${({ $branches }) =>
-    !$branches &&
-    css`
-      grid-column: 2;
-    `}
   @container (max-width: 820px) {
     grid-column: 2;
   }
@@ -905,21 +1684,6 @@ const CenterStats = styled.dl<{ $branches?: boolean }>`
   margin: 14px 0 0;
   padding-top: 12px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  ${({ $branches, theme }) =>
-    !$branches &&
-    css`
-      grid-column: 3;
-      grid-row: 1 / span 4;
-      align-self: center;
-      width: auto;
-      max-width: 520px;
-      justify-content: flex-end;
-      margin: 0;
-      padding: 0 0 0 22px;
-      border-top: none;
-      border-left: 1px solid ${theme.colors.border.light};
-    `}
 
   /* 눕힌 카드에선 오른쪽 칸 — 세로 구분선으로 이름 칸과 가른다 */
   @container (max-width: 820px) {

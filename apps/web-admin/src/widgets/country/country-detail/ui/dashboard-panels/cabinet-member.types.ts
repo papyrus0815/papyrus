@@ -20,6 +20,16 @@ export interface CabinetMember {
   replaced: boolean
   /** 그 자리를 앞서 맡았던 사람 */
   predecessor: string | null
+  /** 군주 재위(황제·국왕·천황·차르 등) 여부 */
+  isMonarchical?: boolean
+  /** 연호·치세 라벨 (예: 메이지 시대, 쇼와 시대) */
+  regnalEraLabel?: string | null
+  /** 소속 정치체 라벨 (예: 독일 제국, 러시아 제국) */
+  polityLabel?: string | null
+  /** 연결된 내각 ID (군주 중심 보기에서 동시대 내각 카드를 눌렀을 때 전환용) */
+  cabinetId?: string | null
+  /** 내각 명칭 (예: 1차 이토 내각, 뷜로 내각) */
+  cabinetLabel?: string | null
   /** 연결된 중앙부처 ID */
   administrationDepartmentId?: string | null
   /** 연결된 중앙부처 요약 */

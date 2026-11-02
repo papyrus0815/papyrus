@@ -53,8 +53,7 @@ import {
 import { IconBriefcase } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import type { CabinetMember } from './cabinet-member.types'
-import { CabinetMindMap } from './cabinet-mind-map'
-import { SectionEmpty } from './section-empty'
+import { type CabinetBranchSlot, CabinetMindMap } from './cabinet-mind-map'
 import { SectionHelpPopover } from './section-help-popover'
 
 interface Props {
@@ -80,13 +79,37 @@ type Member = CabinetMember
 interface TenureRow {
   id: string
   personId?: string | null
+  cabinetId?: string | null
   positionType?: string | null
-  positionDefinition?: { positionType?: string | null; title?: string | null } | null
+  positionDefinition?: {
+    positionType?: string | null
+    title?: string | null
+    isMonarchical?: boolean | null
+  } | null
   title?: string | null
   ordinal?: number | null
   isMonarchical?: boolean | null
+  regnalName?: string | null
+  regnalEras?: Array<{
+    id: string
+    eraName?: string | null
+    startYear?: number | null
+    endYear?: number | null
+    startDate?: string | null
+    endDate?: string | null
+  }> | null
+  startEra?: 'BC' | 'AD' | string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: 'BC' | 'AD' | string | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
   startDate?: string | null
   endDate?: string | null
+  administrationDepartmentId?: string | null
+  administrationDepartment?: { id: string; name: string } | null
   historicalCountryId?: string | null
   historicalCountry?: { id?: string; name?: string | null } | null
   electionCandidacy?: {
@@ -130,6 +153,244 @@ const ELECTION_STATUS_LABEL: Record<string, string> = {
 
 const HEAD_TYPES = new Set(['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'])
 
+function isTenureMonarchical(
+  row:
+    | {
+        isMonarchical?: boolean | null
+        positionDefinition?: {
+          isMonarchical?: boolean | null
+          title?: string | null
+        } | null
+        title?: string | null
+        regnalName?: string | null
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!row) return false
+  if (row.isMonarchical || row.positionDefinition?.isMonarchical) return true
+  if (row.regnalName?.trim()) return true
+  const title = (row.title ?? row.positionDefinition?.title ?? '').trim()
+  return /황제|국왕|여왕|왕|천황|차르|술탄|대공|샤|파라오|칸/.test(title)
+}
+
+function resolveTenureDisplayName(
+  row:
+    | {
+        regnalName?: string | null
+        isMonarchical?: boolean | null
+        positionDefinition?: {
+          isMonarchical?: boolean | null
+          title?: string | null
+        } | null
+        title?: string | null
+        person?: {
+          name?: string | null
+          surname?: string | null
+          middleName?: string | null
+          nameDisplayOrder?: string | null
+          country?: { defaultNameDisplayOrder?: string | null } | null
+        } | null
+      }
+    | null
+    | undefined,
+): string {
+  if (!row) return '이름 미상'
+  const regnal = row.regnalName?.trim()
+  if (regnal && isTenureMonarchical(row)) {
+    return regnal
+  }
+  if (row.person?.name) {
+    return (
+      getPersonDisplayName({
+        name: row.person.name,
+        surname: row.person.surname ?? null,
+        middleName: row.person.middleName ?? null,
+        nameDisplayOrder: row.person.nameDisplayOrder ?? null,
+        country: row.person.country ?? null,
+      }) || row.person.name
+    )
+  }
+  return regnal || '이름 미상'
+}
+
+function resolveRegnalEraLabel(
+  row:
+    | {
+        regnalEras?: Array<{
+          eraName?: string | null
+          startDate?: string | null
+          endDate?: string | null
+          startYear?: number | null
+          endYear?: number | null
+        }> | null
+      }
+    | null
+    | undefined,
+  pivotStartIso?: string | null,
+  pivotEndIso?: string | null,
+): string | null {
+  const eras = (row?.regnalEras ?? []).filter((e) => e.eraName?.trim())
+  if (eras.length === 0) return null
+  if (pivotStartIso) {
+    const matched = eras.find((e) =>
+      dateRangesOverlapIso(
+        e.startDate,
+        e.endDate,
+        pivotStartIso,
+        pivotEndIso ?? null,
+      ),
+    )
+    if (matched?.eraName) return `${matched.eraName.trim()} 시대`
+  }
+  const names = eras.map((e) => e.eraName!.trim())
+  return names.length === 1 ? `${names[0]} 시대` : `${names.join('·')} 시대`
+}
+
+function resolveTenureStartIso(
+  row:
+    | {
+        startDate?: string | null
+        startYear?: number | null
+        startMonth?: number | null
+        startDay?: number | null
+        startEra?: string | null
+      }
+    | null
+    | undefined,
+): string | null {
+  if (!row) return null
+  if (row.startDate) return row.startDate
+  if (row.startYear != null && row.startEra !== 'BC') {
+    const y = String(row.startYear).padStart(4, '0')
+    const m = String(row.startMonth ?? 1).padStart(2, '0')
+    const d = String(row.startDay ?? 1).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  return null
+}
+
+function resolveTenureEndIso(
+  row:
+    | {
+        endDate?: string | null
+        endYear?: number | null
+        endMonth?: number | null
+        endDay?: number | null
+        endEra?: string | null
+      }
+    | null
+    | undefined,
+): string | null {
+  if (!row) return null
+  if (row.endDate) return row.endDate
+  if (row.endYear != null && row.endEra !== 'BC') {
+    const y = String(row.endYear).padStart(4, '0')
+    const m = String(row.endMonth ?? 12).padStart(2, '0')
+    const d = String(row.endDay ?? 28).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  return null
+}
+
+function tenuresOverlap(
+  a:
+    | {
+        startDate?: string | null
+        endDate?: string | null
+        startYear?: number | null
+        endYear?: number | null
+        startMonth?: number | null
+        startDay?: number | null
+        endMonth?: number | null
+        endDay?: number | null
+        startEra?: string | null
+        endEra?: string | null
+      }
+    | null
+    | undefined,
+  b:
+    | {
+        startDate?: string | null
+        endDate?: string | null
+        startYear?: number | null
+        endYear?: number | null
+        startMonth?: number | null
+        startDay?: number | null
+        endMonth?: number | null
+        endDay?: number | null
+        startEra?: string | null
+        endEra?: string | null
+      }
+    | null
+    | undefined,
+): boolean {
+  const aStart = resolveTenureStartIso(a)
+  const bStart = resolveTenureStartIso(b)
+  if (!aStart || !bStart) return false
+  const aEnd = resolveTenureEndIso(a)
+  const bEnd = resolveTenureEndIso(b)
+  // 퇴임일과 취임일이 정확히 하루 맞닿은 경우(인수인계 경계일)는 동시 재임으로 보지 않는다
+  if (
+    aEnd &&
+    bEnd &&
+    aStart.length >= 10 &&
+    aEnd.length >= 10 &&
+    bStart.length >= 10 &&
+    bEnd.length >= 10 &&
+    aStart < aEnd &&
+    bStart < bEnd &&
+    (aEnd === bStart || bEnd === aStart)
+  ) {
+    return false
+  }
+  return dateRangesOverlapIso(aStart, aEnd, bStart, bEnd)
+}
+
+/**
+ * cabinet_id가 비어 있는 재임을 날짜·정치체로 정권/치세에 묶을 때,
+ * 실제 행정부 각료·부처장·차관·국무위원 성격의 직위만 통과시킨다.
+ * (작위·외교사절·지방관·입법의원·일반 야전지휘관 및 수반 본인의 타 직위는 제외)
+ */
+function isCabinetMinisterCandidate(
+  row: TenureRow,
+  headTenure: TenureRow,
+): boolean {
+  if (row.id === headTenure.id) return false
+  const headPersonId = headTenure.person?.id ?? headTenure.personId ?? null
+  const rowPersonId = row.person?.id ?? row.personId ?? null
+  if (headPersonId && rowPersonId === headPersonId) {
+    return false
+  }
+  const type =
+    row.positionType ?? row.positionDefinition?.positionType ?? ''
+  if (HEAD_TYPES.has(type)) return false
+  if (
+    type === 'ROYAL_NOBLE_TITLE' ||
+    type === 'DIPLOMATIC_POST' ||
+    type === 'LOCAL_GOVERNMENT' ||
+    type === 'LEGISLATOR'
+  ) {
+    return false
+  }
+  if (row.administrationDepartmentId) return true
+  if (
+    type === 'CABINET_MINISTER' ||
+    type === 'VICE_MINISTER' ||
+    type === 'DEPUTY_HEAD_OF_STATE'
+  ) {
+    return true
+  }
+  const title = (row.title ?? row.positionDefinition?.title ?? '').trim()
+  if (
+    type === 'SPECIAL_POSITION' &&
+    /장관|대신|상서|판서|총재|의장|처장|청장|위원장|국무|내각/.test(title)
+  ) {
+    return true
+  }
+  return false
+}
+
 /** 명단 서열 — 총리(수상) 0, 부총리 1, 나머지 2 */
 function protocolRank(title: string): number {
   if (/부총리/.test(title)) return 1
@@ -137,11 +398,64 @@ function protocolRank(title: string): number {
   return 2
 }
 
+const MIN_MINDMAP_BRANCHES = 8
+
+/**
+ * 부처명(예: '미국 국무부', '외무성', '이조')에서 해당 국가·시대 틀에 맞는
+ * 각료 직위명(예: '국무장관', '외무대신', '이조판서')을 도출한다.
+ */
+function resolveDepartmentHeadPositionTitle(
+  deptName: string,
+  currentFrame: DepartmentNameFrame,
+  countryName?: string | null,
+  polityLabel?: string | null,
+): string {
+  const clean = deptName.trim()
+  const candidates = [
+    ...currentFrame.items,
+    ...DEPARTMENT_NAME_FRAMES.flatMap((f) => f.items),
+  ]
+  for (const item of candidates) {
+    if (!item.headPositionTitle) continue
+    if (
+      clean === item.name ||
+      clean.endsWith(` ${item.name}`) ||
+      (item.name.length >= 2 && clean.endsWith(item.name))
+    ) {
+      return item.headPositionTitle
+    }
+  }
+
+  let shortName = clean
+  for (const prefix of [polityLabel, countryName]) {
+    const p = prefix?.trim()
+    if (p && shortName.startsWith(`${p} `)) {
+      shortName = shortName.slice(p.length + 1).trim()
+    }
+  }
+
+  if (/부$/.test(shortName) && currentFrame.headTitle === '부장') {
+    return `${shortName}장`
+  }
+  if (
+    /(부|성|처)$/.test(shortName) &&
+    (currentFrame.headTitle === '장관' ||
+      currentFrame.headTitle === '대신' ||
+      currentFrame.headTitle === '상서')
+  ) {
+    return `${shortName.replace(/(부|성|처)$/, '')}${currentFrame.headTitle}`
+  }
+  if (/조$/.test(shortName) && currentFrame.headTitle === '판서') {
+    return `${shortName}판서`
+  }
+  return `${shortName} ${currentFrame.headTitle}`
+}
+
 const shortDate = (iso: string | null) => {
   if (!iso) return ''
   const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
   if (!matched) return ''
-  return `${matched[1]}.${Number(matched[2])}.${Number(matched[3])}`
+  return `${Number(matched[1])}.${Number(matched[2])}.${Number(matched[3])}`
 }
 
 /** '1년 7개월째' — 취임 이후 얼마나 됐는지 */
@@ -191,15 +505,17 @@ export function CurrentCabinetPanel({
    */
   const [pickerOpen, setPickerOpen] = useState(false)
   const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
-  /** 어느 부처의 우두머리를 등록하는가. null이면 부처 없이(수반 등) */
+  /** 어느 부처·직책의 우두머리를 등록하는가. null이면 부처 없이(수반 등) */
   const [registerTarget, setRegisterTarget] = useState<{
     departmentId: string | null
     departmentName: string | null
+    positionTitle: string | null
     label: string
     mode: 'head' | 'minister' | 'any'
   }>({
     departmentId: null,
     departmentName: null,
+    positionTitle: null,
     label: '수반·각료',
     mode: 'any',
   })
@@ -223,7 +539,7 @@ export function CurrentCabinetPanel({
 
   /** 이 나라의 행정부 목록 — 카드 슬라이더의 모수 (대시보드 통계·행정부 탭과 동일 키 공유) */
   const cabinetsQuery = useQuery({
-    queryKey: ['cabinets-by-country', countryId, historicalCountryId],
+    queryKey: ['cabinets-by-country', countryId || undefined, historicalCountryId],
     queryFn: () =>
       personCareerApi.getCabinets({
         countryId: countryId || undefined,
@@ -275,11 +591,13 @@ export function CurrentCabinetPanel({
   }, [cabinets])
 
   const selectCabinet = (cabinetId: string) => {
+    setHeadViewMode('cabinet')
     setSelectedCabinetId(cabinetId)
   }
 
   /* 고른 정권이 띠 밖(가로 스크롤)에 있으면 끌어온다 — 지도 양옆 버튼으로 넘길 때도 */
   const stripRef = useRef<HTMLDivElement | null>(null)
+  const fallbackStripRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const strip = stripRef.current
     const tab = strip?.querySelector<HTMLElement>('[data-active]')
@@ -352,9 +670,16 @@ export function CurrentCabinetPanel({
    * 국가(독일 → 독일 제국)의 선거까지 온다.
    */
   const electionsQuery = useQuery({
-    queryKey: ['elections', 'list', `c:${countryId}`],
-    queryFn: () => getElections({ countryId }),
-    enabled: !!countryId,
+    queryKey: [
+      'elections',
+      'list',
+      historicalCountryId ? `hc:${historicalCountryId}` : `c:${countryId}`,
+    ],
+    queryFn: () =>
+      getElections(
+        historicalCountryId ? { historicalCountryId } : { countryId },
+      ),
+    enabled: Boolean(countryId || historicalCountryId),
     staleTime: 5 * 60_000,
   })
   const [newDepartmentName, setNewDepartmentName] = useState('')
@@ -438,7 +763,7 @@ export function CurrentCabinetPanel({
 
   // 정부 변천 패널과 같은 키 — react-query가 한 번만 받아온다
   const query = useQuery({
-    queryKey: ['tenures-by-country', countryId, historicalCountryId],
+    queryKey: ['tenures-by-country', countryId || undefined, historicalCountryId],
     queryFn: () =>
       personCareerApi.getTenuresByCountry({
         countryId: countryId || undefined,
@@ -472,9 +797,11 @@ export function CurrentCabinetPanel({
         if (cabinets.length > 0 && cabinetHeadIds.has(row.id)) return false
         return true
       })
-      .sort((left, right) =>
-        (right.startDate ?? '').localeCompare(left.startDate ?? ''),
-      )
+      .sort((left, right) => {
+        const leftStart = resolveTenureStartIso(left) ?? ''
+        const rightStart = resolveTenureStartIso(right) ?? ''
+        return rightStart.localeCompare(leftStart)
+      })
   }, [cabinets.length, cabinetHeadIds, query.data])
 
   const effectiveFallbackMode =
@@ -494,11 +821,28 @@ export function CurrentCabinetPanel({
       prev && fallbackHeadTenures.some((row) => row.id === prev)
         ? prev
         : (
-            fallbackHeadTenures.find((row) => !row.endDate) ??
-            fallbackHeadTenures[0]
+            fallbackHeadTenures.find(
+              (row) => !row.endDate && row.endYear == null,
+            ) ?? fallbackHeadTenures[0]
           ).id,
     )
   }, [fallbackHeadTenures])
+
+  const selectFallbackHead = (tenureId: string) => {
+    setSelectedFallbackHeadId(tenureId)
+    setHeadViewMode('fallback')
+  }
+
+  useEffect(() => {
+    const strip = fallbackStripRef.current
+    const tab = strip?.querySelector<HTMLElement>('[data-active]')
+    if (!strip || !tab) return
+    const left = tab.offsetLeft
+    const right = left + tab.offsetWidth
+    if (left < strip.scrollLeft || right > strip.scrollLeft + strip.clientWidth) {
+      strip.scrollTo({ left: Math.max(0, left - 12), behavior: 'smooth' })
+    }
+  }, [selectedFallbackHeadId, selectedCabinetId, headViewMode])
 
   const activeFallbackHead = useMemo(
     () =>
@@ -536,8 +880,8 @@ export function CurrentCabinetPanel({
       }
     }
     return {
-      startDate: scopeTenure.startDate ?? null,
-      endDate: scopeTenure.endDate ?? null,
+      startDate: resolveTenureStartIso(scopeTenure),
+      endDate: resolveTenureEndIso(scopeTenure),
       historicalCountryId:
         scopeTenure.historicalCountryId ?? historicalCountryId ?? null,
     }
@@ -716,6 +1060,7 @@ export function CurrentCabinetPanel({
     setRegisterTarget({
       departmentId: null,
       departmentName: null,
+      positionTitle: null,
       label: '수반·각료',
       mode: 'any',
     })
@@ -726,8 +1071,15 @@ export function CurrentCabinetPanel({
     label: string,
     mode: 'head' | 'minister' | 'any' = 'any',
     departmentName: string | null = null,
+    positionTitle: string | null = null,
   ) => {
-    setRegisterTarget({ departmentId, departmentName, label, mode })
+    setRegisterTarget({
+      departmentId,
+      departmentName,
+      positionTitle,
+      label,
+      mode,
+    })
     setPickerOpen(true)
   }
 
@@ -745,20 +1097,7 @@ export function CurrentCabinetPanel({
       string,
       { personId: string | null; name: string; period: string; count: number }
     >()
-    const allRows = (query.data ?? []) as Array<{
-      administrationDepartmentId?: string | null
-      cabinetId?: string | null
-      startDate?: string | null
-      endDate?: string | null
-      person?: {
-        id?: string
-        name?: string
-        surname?: string | null
-        middleName?: string | null
-        nameDisplayOrder?: string | null
-        country?: { defaultNameDisplayOrder?: string | null } | null
-      } | null
-    }>
+    const allRows = (query.data ?? []) as TenureRow[]
     /*
      * 고른 정권의 재임만 센다. 예전엔 국가의 **모든** 재임을 모아, 각료가 없는 정권으로
      * 바꾸면 부처 칸에 다른 정권의 장관이 앉아 있었다. 정권이 박힌 재임은 그 정권 것만,
@@ -766,20 +1105,16 @@ export function CurrentCabinetPanel({
      */
     const scopeCabinet = selectedCabinet
     const scopeTenure = scopeCabinet?.headTenure ?? activeFallbackHead
-    const scopeStart = scopeTenure?.startDate?.slice(0, 10) ?? null
-    const scopeEnd = scopeTenure?.endDate?.slice(0, 10) ?? null
     const rows = !scopeTenure
       ? allRows
       : allRows.filter((row) => {
           if (scopeCabinet && row.cabinetId) {
             return row.cabinetId === scopeCabinet.id
           }
-          const start = row.startDate?.slice(0, 10) ?? null
-          const end = row.endDate?.slice(0, 10) ?? null
-          if (!start || !scopeStart) return false
-          const startsBeforeScopeEnds = !scopeEnd || start <= scopeEnd
-          const endsAfterScopeStarts = !end || end >= scopeStart
-          return startsBeforeScopeEnds && endsAfterScopeStarts
+          if (row.cabinetId && scopeCabinet && row.cabinetId !== scopeCabinet.id) {
+            return false
+          }
+          return tenuresOverlap(row, scopeTenure)
         })
     // 서버가 startDate 내림차순으로 주므로 첫 행이 가장 최근 — 그 사람을 대표로 세운다
     for (const row of rows) {
@@ -790,20 +1125,13 @@ export function CurrentCabinetPanel({
         existing.count += 1
         continue
       }
-      const startYear = row.startDate?.slice(0, 4) ?? ''
-      const endYear = row.endDate?.slice(0, 4) ?? ''
+      const startIso = resolveTenureStartIso(row)
+      const endIso = resolveTenureEndIso(row)
+      const startYear = startIso?.slice(0, 4) ?? ''
+      const endYear = endIso?.slice(0, 4) ?? ''
       byDepartment.set(departmentId, {
         personId: row.person.id ?? null,
-        name:
-          getPersonDisplayName({
-            name: row.person.name ?? '',
-            surname: row.person.surname ?? undefined,
-            middleName: row.person.middleName ?? undefined,
-            nameDisplayOrder: row.person.nameDisplayOrder ?? null,
-            country: row.person.country ?? undefined,
-          }) ||
-          row.person.name ||
-          '이름 없음',
+        name: resolveTenureDisplayName(row),
         period: startYear ? `${startYear}~${endYear || ''}` : '',
         count: 1,
       })
@@ -814,139 +1142,269 @@ export function CurrentCabinetPanel({
   const effectiveOverview = effectiveFallbackMode ? null : overview
 
   const { members, heads } = useMemo(() => {
-    if (!effectiveOverview) {
+    const allRows = (query.data ?? []) as TenureRow[]
+
+    const mapTenureToMember = (
+      row: TenureRow,
+      isHead: boolean,
+      replaced: boolean,
+      predecessor: string | null,
+    ): Member => {
+      const monarchical = isTenureMonarchical(row)
+      return {
+        id: String(row.id),
+        personId: row.person?.id ?? row.personId ?? null,
+        name: resolveTenureDisplayName(row),
+        imageUrl: row.person?.profileImageUrl ?? null,
+        title: (
+          row.title ??
+          row.positionDefinition?.title ??
+          (isHead ? '국가원수' : '직위 미상')
+        ).trim(),
+        startDate: resolveTenureStartIso(row),
+        endDate: resolveTenureEndIso(row),
+        isHead,
+        isMonarchical: monarchical,
+        regnalEraLabel: resolveRegnalEraLabel(row),
+        polityLabel: row.historicalCountry?.name ?? null,
+        ordinal: typeof row.ordinal === 'number' ? row.ordinal : null,
+        replaced,
+        predecessor,
+        administrationDepartmentId: row.administrationDepartmentId ?? null,
+        administrationDepartment: row.administrationDepartment ?? null,
+        positionDefinition: row.positionDefinition ?? null,
+      }
+    }
+
+    const buildMembersFromTenures = (rawTenures: TenureRow[]): Member[] => {
+      const byTitle = new Map<string, TenureRow[]>()
+      for (const row of rawTenures) {
+        const title = (row.title ?? row.positionDefinition?.title ?? '').trim()
+        if (!title) continue
+        const list = byTitle.get(title) ?? []
+        list.push(row)
+        byTitle.set(title, list)
+      }
+
+      const mapped: Member[] = []
+      for (const list of byTitle.values()) {
+        const current =
+          list.find((row) => !resolveTenureEndIso(row)) ??
+          [...list].sort((left, right) =>
+            (resolveTenureEndIso(right) ?? '').localeCompare(
+              resolveTenureEndIso(left) ?? '',
+            ),
+          )[0]
+        if (!current) continue
+        const earlier = list
+          .filter(
+            (row) => row.id !== current.id && Boolean(resolveTenureEndIso(row)),
+          )
+          .sort((left, right) =>
+            (resolveTenureEndIso(right) ?? '').localeCompare(
+              resolveTenureEndIso(left) ?? '',
+            ),
+          )[0]
+        mapped.push(
+          mapTenureToMember(
+            current,
+            false,
+            Boolean(earlier),
+            earlier ? resolveTenureDisplayName(earlier) : null,
+          ),
+        )
+      }
+
+      mapped.sort(
+        (left, right) =>
+          protocolRank(left.title) - protocolRank(right.title) ||
+          (left.startDate ?? '').localeCompare(right.startDate ?? ''),
+      )
+      return mapped
+    }
+
+    if (effectiveFallbackMode) {
       if (activeFallbackHead) {
-        const personName = activeFallbackHead.person
-          ? getPersonDisplayName({
-              name: activeFallbackHead.person.name,
-              surname: activeFallbackHead.person.surname ?? null,
-              middleName: activeFallbackHead.person.middleName ?? null,
-              nameDisplayOrder:
-                activeFallbackHead.person.nameDisplayOrder ?? null,
-              country: activeFallbackHead.person.country ?? null,
-            })
-          : '이름 미상'
+        const headHistId = activeFallbackHead.historicalCountryId ?? null
+        const overlappingMinisters = allRows.filter((row) => {
+          if (!isCabinetMinisterCandidate(row, activeFallbackHead)) return false
+          if ((row.historicalCountryId ?? null) !== headHistId) return false
+          return tenuresOverlap(row, activeFallbackHead)
+        })
+
         return {
-          members: [] as Member[],
-          heads: [
-            {
-              id: String(activeFallbackHead.id),
-              personId:
-                activeFallbackHead.person?.id ??
-                activeFallbackHead.personId ??
-                null,
-              name: personName,
-              imageUrl: activeFallbackHead.person?.profileImageUrl ?? null,
-              title: (
-                activeFallbackHead.title ??
-                activeFallbackHead.positionDefinition?.title ??
-                '국가원수'
-              ).trim(),
-              startDate: activeFallbackHead.startDate ?? null,
-              endDate: activeFallbackHead.endDate ?? null,
-              isHead: true,
-              ordinal:
-                typeof activeFallbackHead.ordinal === 'number'
-                  ? activeFallbackHead.ordinal
-                  : null,
-              replaced: false,
-              predecessor: null,
-            },
-          ],
+          members: buildMembersFromTenures(overlappingMinisters),
+          heads: [mapTenureToMember(activeFallbackHead, true, false, null)],
         }
       }
       return { members: [] as Member[], heads: [] as Member[] }
     }
 
-    type OverviewTenure = NonNullable<typeof effectiveOverview.headTenure>
-    const toMember = (
-      row: OverviewTenure,
-      isHead: boolean,
-      replaced: boolean,
-      predecessor: string | null,
-    ): Member => ({
-      id: String(row.id),
-      personId: row.person?.id ?? null,
-      name: row.person ? getPersonDisplayName(row.person) : '이름 미상',
-      imageUrl: row.person?.profileImageUrl ?? null,
-      title: (row.title ?? row.positionDefinition?.title ?? '직위 미상').trim(),
-      startDate: row.startDate ?? null,
-      endDate: row.endDate ?? null,
-      isHead,
-      ordinal: typeof row.ordinal === 'number' ? row.ordinal : null,
-      replaced,
-      predecessor,
-      administrationDepartmentId: row.administrationDepartmentId ?? null,
-      administrationDepartment: row.administrationDepartment ?? null,
-      positionDefinition: row.positionDefinition ?? null,
+    const headTenure = (effectiveOverview?.headTenure ??
+      selectedCabinet?.headTenure ??
+      null) as TenureRow | null
+    const explicitRows = (effectiveOverview?.memberTenures ?? []) as TenureRow[]
+    const explicitIds = new Set(explicitRows.map((r) => r.id))
+    const headHistId =
+      selectedCabinet?.headTenure?.historicalCountryId ??
+      headTenure?.historicalCountryId ??
+      null
+
+    /*
+     * 1) overview 응답 전이거나 null인 경우에도 국가 재임 목록(allRows)에서
+     *    row.cabinetId === selectedCabinet.id 인 소속 각료를 즉시 복원하고,
+     * 2) cabinet_id가 비어 있는(null) 각료·부처장 재임도 내각 수반 임기 및 정치체(역사국가)가
+     *    겹치면 함께 묶는다 (예: 러시아 제국 고레미킨 내각의 외무장관 사조노프, 독일 제국 뷜로 내각의
+     *    해군청장 티르피츠, 일본 제국 1차 이토 내각의 외무대신 이노우에 가오루 등).
+     */
+    const dateMatchedRows = allRows.filter((row) => {
+      if (explicitIds.has(row.id)) return false
+      if (selectedCabinet?.id && row.cabinetId === selectedCabinet.id) {
+        return row.id !== headTenure?.id
+      }
+      if (!headTenure) return false
+      if (row.cabinetId && row.cabinetId !== selectedCabinet?.id) {
+        return false
+      }
+      if (!isCabinetMinisterCandidate(row, headTenure)) return false
+      if ((row.historicalCountryId ?? null) !== headHistId) return false
+      return tenuresOverlap(row, headTenure)
     })
 
-    /*
-     * 같은 자리를 이 행정부 안에서 이어받았는지 본다. overview는 **종료된 각료까지**
-     * 함께 주므로(실측 트럼프 2기 18건 중 3건 종료) 전임을 여기서 바로 찾을 수 있다.
-     */
-    const byTitle = new Map<string, OverviewTenure[]>()
-    for (const row of effectiveOverview.memberTenures ?? []) {
-      const title = (row.title ?? row.positionDefinition?.title ?? '').trim()
-      if (!title) continue
-      const list = byTitle.get(title) ?? []
-      list.push(row)
-      byTitle.set(title, list)
-    }
-
-    const mapped: Member[] = []
-    for (const list of byTitle.values()) {
-      // 현직이 없으면(전원 종료된 과거 정권) 마지막 사람을 그 자리의 얼굴로 쓴다
-      const current =
-        list.find((row) => !row.endDate) ??
-        [...list].sort((left, right) =>
-          (right.endDate ?? '').localeCompare(left.endDate ?? ''),
-        )[0]
-      if (!current) continue
-      const earlier = list
-        .filter((row) => row.id !== current.id && row.endDate)
-        .sort((left, right) =>
-          (right.endDate ?? '').localeCompare(left.endDate ?? ''),
-        )[0]
-      mapped.push(
-        toMember(
-          current,
-          false,
-          !!earlier,
-          earlier?.person ? getPersonDisplayName(earlier.person) : null,
-        ),
-      )
-    }
-    /*
-     * 총리·부총리가 먼저, 나머지는 취임 순. 취임 순만 따르면 앞 정권에서 유임된
-     * 장관(농림축산식품부)이 국무총리보다 앞에 섰다 — 명단의 첫 줄은 서열이어야 한다.
-     */
-    mapped.sort(
-      (left, right) =>
-        protocolRank(left.title) - protocolRank(right.title) ||
-        (left.startDate ?? '').localeCompare(right.startDate ?? ''),
-    )
+    const combinedRows = [...explicitRows, ...dateMatchedRows]
 
     return {
-      members: mapped,
-      heads: effectiveOverview.headTenure
-        ? [toMember(effectiveOverview.headTenure, true, false, null)]
+      members: buildMembersFromTenures(combinedRows),
+      heads: headTenure
+        ? [mapTenureToMember(headTenure, true, false, null)]
         : [],
     }
-  }, [effectiveOverview, activeFallbackHead])
+  }, [
+    effectiveFallbackMode,
+    effectiveOverview,
+    activeFallbackHead,
+    query.data,
+    selectedCabinet,
+  ])
+
+  /** 선택된 행정부의 이름 — 이름이 비면 수반+연도로 짓는다 */
+  const cabinetLabel = (cabinet: (typeof cabinets)[number]) => {
+    if (cabinet.name?.trim()) return cabinet.name.trim()
+    const full = resolveTenureDisplayName(
+      cabinet.headTenure as TenureRow | undefined,
+    )
+    return `${full} 행정부`
+  }
+  const cabinetPeriod = (cabinet: (typeof cabinets)[number]) => {
+    const from = (
+      resolveTenureStartIso(cabinet.headTenure as TenureRow | undefined) ?? ''
+    ).slice(0, 4)
+    const endIso = resolveTenureEndIso(
+      cabinet.headTenure as TenureRow | undefined,
+    )
+    const to = endIso ? endIso.slice(0, 4) : '현재'
+    return from ? `${from}–${to}` : ''
+  }
+  const fallbackHeadLabel = (row: TenureRow) => {
+    const full = resolveTenureDisplayName(row)
+    const role = (
+      row.title ??
+      row.positionDefinition?.title ??
+      '국가원수'
+    ).trim()
+    return `${full} · ${role}`
+  }
+  const fallbackHeadPeriod = (row: TenureRow) => {
+    const from = (resolveTenureStartIso(row) ?? '').slice(0, 4)
+    const endIso = resolveTenureEndIso(row)
+    const to = endIso ? endIso.slice(0, 4) : '현재'
+    return from ? `${from}–${to}` : ''
+  }
 
   /**
-   * 이원집정부제·의원내각제·입헌군주제 등에서 내각 수반과 동시에 재임한 상대 수반
-   * (예: 총리 내각일 때 동시대 대통령·군주, 대통령 행정부일 때 각료 명단 밖의 총리)
+   * 동시대 대응 수반·내각 목록 (양방향):
+   * 1) 내각 중심 보기(!effectiveFallbackMode)일 때:
+   *    그 내각 재임 기간에 재위한 황제·국왕·대통령(또는 대통령 행정부일 때 총리) 목록
+   * 2) 군주·국가원수 중심 보기(effectiveFallbackMode)일 때:
+   *    그 군주·원수 재위 기간에 출범한 내각(총리·수상) 목록
    */
-  const counterpartHead = useMemo<Member | null>(() => {
-    const headTenure = effectiveOverview?.headTenure
-    if (!headTenure) return null
+  const counterpartHeads = useMemo<Member[]>(() => {
     const allRows = (query.data ?? []) as TenureRow[]
-    const headPersonId = headTenure.person?.id ?? null
+
+    if (effectiveFallbackMode) {
+      if (!activeFallbackHead) return []
+      const targetHistId = activeFallbackHead.historicalCountryId ?? null
+      const exactCabinets = cabinets.filter((c) => {
+        if (!c.headTenure || c.headTenure.id === activeFallbackHead.id) {
+          return false
+        }
+        if ((c.headTenure.historicalCountryId ?? null) !== targetHistId) {
+          return false
+        }
+        return tenuresOverlap(
+          c.headTenure as TenureRow,
+          activeFallbackHead,
+        )
+      })
+      const bridgedCabinets =
+        exactCabinets.length > 0
+          ? exactCabinets
+          : cabinets.filter((c) => {
+              if (!c.headTenure || c.headTenure.id === activeFallbackHead.id) {
+                return false
+              }
+              return tenuresOverlap(
+                c.headTenure as TenureRow,
+                activeFallbackHead,
+              )
+            })
+
+      return [...bridgedCabinets]
+        .sort((a, b) =>
+          (
+            resolveTenureStartIso(a.headTenure as TenureRow | undefined) ?? ''
+          ).localeCompare(
+            resolveTenureStartIso(b.headTenure as TenureRow | undefined) ?? '',
+          ),
+        )
+        .map((c) => {
+          const ht = c.headTenure as TenureRow
+          return {
+            id: String(ht.id ?? c.id),
+            cabinetId: c.id,
+            cabinetLabel: cabinetLabel(c),
+            personId: ht.person?.id ?? ht.personId ?? null,
+            name: resolveTenureDisplayName(ht),
+            imageUrl: ht.person?.profileImageUrl ?? null,
+            title: (
+              ht.title ??
+              ht.positionDefinition?.title ??
+              '내각수반'
+            ).trim(),
+            startDate: resolveTenureStartIso(ht),
+            endDate: resolveTenureEndIso(ht),
+            isHead: true,
+            isMonarchical: false,
+            polityLabel: ht.historicalCountry?.name ?? null,
+            ordinal: typeof ht.ordinal === 'number' ? ht.ordinal : null,
+            replaced: false,
+            predecessor: null,
+          }
+        })
+    }
+
+    const headTenure = (effectiveOverview?.headTenure ??
+      selectedCabinet?.headTenure) as TenureRow | undefined
+    if (!headTenure) return []
+    const headPersonId = headTenure.person?.id ?? headTenure.personId ?? null
     const headHistId =
-      selectedCabinet?.headTenure?.historicalCountryId ?? null
-    const headType = headTenure.positionType ?? ''
+      selectedCabinet?.headTenure?.historicalCountryId ??
+      headTenure.historicalCountryId ??
+      null
+    const headType =
+      headTenure.positionType ??
+      headTenure.positionDefinition?.positionType ??
+      ''
     const headTitle = (
       headTenure.title ??
       headTenure.positionDefinition?.title ??
@@ -954,9 +1412,9 @@ export function CurrentCabinetPanel({
     ).trim()
     const headLooksLikePM =
       headType === 'HEAD_OF_GOVERNMENT' ||
-      /총리|수상|내각총리대신|총리대신/.test(headTitle)
+      /총리|수상|내각총리대신|총리대신|재상/.test(headTitle)
 
-    const candidates = allRows.filter((row) => {
+    const baseCandidates = allRows.filter((row) => {
       if (row.id === headTenure.id) return false
       const type =
         row.positionType ?? row.positionDefinition?.positionType ?? ''
@@ -969,122 +1427,92 @@ export function CurrentCabinetPanel({
       ) {
         return false
       }
-      if ((row.historicalCountryId ?? null) !== headHistId) return false
-      return dateRangesOverlapIso(
-        row.startDate,
-        row.endDate,
-        headTenure.startDate,
-        headTenure.endDate,
+      return tenuresOverlap(row, headTenure)
+    })
+
+    // 동일 정치체(historicalCountryId) 매칭 우선, 없을 때만 현대↔역사 브리지 군주/원수 허용
+    const exactHistCandidates = baseCandidates.filter(
+      (row) => (row.historicalCountryId ?? null) === headHistId,
+    )
+    const candidates =
+      exactHistCandidates.length > 0
+        ? exactHistCandidates
+        : baseCandidates.filter(
+            (row) =>
+              isTenureMonarchical(row) ||
+              row.historicalCountryId == null ||
+              headHistId == null,
+          )
+
+    if (candidates.length === 0) return []
+
+    const targetType = headLooksLikePM ? 'HEAD_OF_STATE' : 'HEAD_OF_GOVERNMENT'
+    const preferredTypeCandidates = candidates.filter((row) => {
+      const type =
+        row.positionType ?? row.positionDefinition?.positionType ?? ''
+      return type === targetType || isTenureMonarchical(row)
+    })
+    const finalCandidates =
+      preferredTypeCandidates.length > 0 ? preferredTypeCandidates : candidates
+
+    finalCandidates.sort((a, b) => {
+      const aMonarch = isTenureMonarchical(a) ? 0 : 1
+      const bMonarch = isTenureMonarchical(b) ? 0 : 1
+      if (aMonarch !== bMonarch) return aMonarch - bMonarch
+      return (resolveTenureStartIso(a) ?? '').localeCompare(
+        resolveTenureStartIso(b) ?? '',
       )
     })
 
-    if (candidates.length === 0) return null
-
-    // 내각 수반이 총리이면 국가원수(대통령·군주)를 우선하고, 대통령이면 정부수반(총리)을 우선
-    candidates.sort((a, b) => {
-      const aType = a.positionType ?? a.positionDefinition?.positionType ?? ''
-      const bType = b.positionType ?? b.positionDefinition?.positionType ?? ''
-      const targetType = headLooksLikePM
-        ? 'HEAD_OF_STATE'
-        : 'HEAD_OF_GOVERNMENT'
-      const aScore = aType === targetType ? 0 : 1
-      const bScore = bType === targetType ? 0 : 1
-      if (aScore !== bScore) return aScore - bScore
-      return (b.startDate ?? '').localeCompare(a.startDate ?? '')
-    })
-
-    const picked = candidates[0]
-    if (!picked) return null
-    const personName = picked.person
-      ? getPersonDisplayName({
-          name: picked.person.name,
-          surname: picked.person.surname ?? null,
-          middleName: picked.person.middleName ?? null,
-          nameDisplayOrder: picked.person.nameDisplayOrder ?? null,
-          country: picked.person.country ?? null,
-        })
-      : '이름 미상'
-
-    return {
+    return finalCandidates.map((picked) => ({
       id: String(picked.id),
       personId: picked.person?.id ?? picked.personId ?? null,
-      name: personName,
+      name: resolveTenureDisplayName(picked),
       imageUrl: picked.person?.profileImageUrl ?? null,
       title: (
         picked.title ??
         picked.positionDefinition?.title ??
         (headLooksLikePM ? '국가원수' : '정부수반')
       ).trim(),
-      startDate: picked.startDate ?? null,
-      endDate: picked.endDate ?? null,
+      startDate: resolveTenureStartIso(picked),
+      endDate: resolveTenureEndIso(picked),
       isHead: true,
+      isMonarchical: isTenureMonarchical(picked),
+      regnalEraLabel: resolveRegnalEraLabel(
+        picked,
+        resolveTenureStartIso(headTenure),
+        resolveTenureEndIso(headTenure),
+      ),
+      polityLabel: picked.historicalCountry?.name ?? null,
       ordinal: typeof picked.ordinal === 'number' ? picked.ordinal : null,
       replaced: false,
       predecessor: null,
-    }
-  }, [effectiveOverview, selectedCabinet, query.data, members])
+    }))
+  }, [
+    effectiveFallbackMode,
+    activeFallbackHead,
+    cabinets,
+    effectiveOverview,
+    selectedCabinet,
+    query.data,
+    members,
+  ])
 
-  /** 선택된 행정부의 이름 — 이름이 비면 수반+연도로 짓는다 */
-  const cabinetLabel = (cabinet: (typeof cabinets)[number]) => {
-    if (cabinet.name?.trim()) return cabinet.name.trim()
-    /*
-     * 목록 DTO의 person은 name이 optional이고 country가 선언돼 있지 않다. 그런데 응답에는
-     * country.defaultNameDisplayOrder가 실제로 들어 있고(실측 'western'), 이걸 빼면 표시
-     * 순서가 기본값(동양식)으로 떨어져 '워싱턴 조지'가 된다. DTO 타입이 응답보다 낡은
-     * 경우라 읽는 쪽에서 좁힌다.
-     */
-    const head = cabinet.headTenure?.person as
-      | (NonNullable<typeof cabinet.headTenure>['person'] & {
-          country?: { defaultNameDisplayOrder?: string | null } | null
-        })
-      | undefined
-    const full = head?.name
-      ? getPersonDisplayName({
-          name: head.name,
-          surname: head.surname ?? null,
-          middleName: head.middleName ?? null,
-          nameDisplayOrder: head.nameDisplayOrder ?? null,
-          // country를 빼면 표시 순서가 기본값(동양식)으로 떨어져 '워싱턴 조지'가 된다
-          country: head.country ?? null,
-        })
-      : '이름 미상'
-    /*
-     * 긴 이름은 카드에서 두 줄로 잘리게 두고 title로 전체를 보인다.
-     * 한때 '길면 성만 쓴다'로 줄여 봤는데, 실데이터에 이름·성이 뒤집혀 들어간 인물이 있어
-     * (푸앵카레: name='푸앵카레'(성) / surName='레몽'(이름), order='korean')
-     * '레몽 행정부'처럼 더 틀린 이름이 나왔다. 깨진 데이터 위에 추측 규칙을 얹지 않는다.
-     */
-    return `${full} 행정부`
-  }
-  const cabinetPeriod = (cabinet: (typeof cabinets)[number]) => {
-    const from = (cabinet.headTenure?.startDate ?? '').slice(0, 4)
-    const to = cabinet.headTenure?.endDate
-      ? cabinet.headTenure.endDate.slice(0, 4)
-      : '현재'
-    return from ? `${from}–${to}` : ''
-  }
-  const fallbackHeadLabel = (row: TenureRow) => {
-    const full = row.person?.name
-      ? getPersonDisplayName({
-          name: row.person.name,
-          surname: row.person.surname ?? null,
-          middleName: row.person.middleName ?? null,
-          nameDisplayOrder: row.person.nameDisplayOrder ?? null,
-          country: row.person.country ?? null,
-        })
-      : '이름 미상'
-    const role = (
-      row.title ??
-      row.positionDefinition?.title ??
-      '국가원수'
-    ).trim()
-    return `${full} · ${role}`
-  }
-  const fallbackHeadPeriod = (row: TenureRow) => {
-    const from = (row.startDate ?? '').slice(0, 4)
-    const to = row.endDate ? row.endDate.slice(0, 4) : '현재'
-    return from ? `${from}–${to}` : ''
-  }
+  const counterpartHead = counterpartHeads[0] ?? null
+
+  const coActiveHeadIds = useMemo(() => {
+    if (effectiveFallbackMode) return new Set<string>()
+    return new Set(counterpartHeads.map((cp) => cp.id))
+  }, [effectiveFallbackMode, counterpartHeads])
+
+  const coActiveCabinetIds = useMemo(() => {
+    if (!effectiveFallbackMode) return new Set<string>()
+    return new Set(
+      counterpartHeads
+        .map((cp) => cp.cabinetId)
+        .filter((id): id is string => Boolean(id)),
+    )
+  }, [effectiveFallbackMode, counterpartHeads])
 
   /** 이 정권을 낳은 선거 — 수반 임기의 후보 기록을 거쳐 온다 */
   const linkedElection =
@@ -1120,6 +1548,7 @@ export function CurrentCabinetPanel({
   const mindMapStats = useMemo(() => {
     const head = heads[0]
     if (!head) return []
+    const isMonarch = Boolean(head.isMonarchical)
     const rows: Array<{
       key: string
       label: string
@@ -1129,16 +1558,16 @@ export function CurrentCabinetPanel({
     if (head.startDate) {
       rows.push({
         key: 'start',
-        label: activeFallbackHead?.isMonarchical ? '즉위' : '취임',
+        label: isMonarch ? '즉위' : '취임',
         value: shortDate(head.startDate),
       })
       rows.push({
         key: 'span',
         label: head.endDate
-          ? activeFallbackHead?.isMonarchical
+          ? isMonarch
             ? '퇴위'
             : '퇴임'
-          : activeFallbackHead?.isMonarchical
+          : isMonarch
             ? '재위'
             : '재임',
         value: head.endDate
@@ -1163,7 +1592,7 @@ export function CurrentCabinetPanel({
       })
     }
     return rows
-  }, [heads, members.length, replacedCount, voteShare, activeFallbackHead?.isMonarchical])
+  }, [heads, members.length, replacedCount, voteShare])
 
   /*
    * 이 정권을 낳은 선거. 스키마엔 재임→후보→선거 경로가 처음부터 있었는데 화면이
@@ -1377,182 +1806,152 @@ export function CurrentCabinetPanel({
 
   const isLoading =
     cabinetsQuery.isLoading ||
-    (effectiveFallbackMode ? query.isLoading : overviewQuery.isLoading)
-  const isEmpty = heads.length === 0 && members.length === 0
-  const isCompletelyEmpty =
-    isEmpty &&
-    cabinets.length === 0 &&
-    fallbackHeadTenures.length === 0 &&
-    departments.length === 0
+    (effectiveFallbackMode
+      ? query.isLoading
+      : overviewQuery.isLoading && !selectedCabinet?.headTenure)
 
-  /** 각료가 이미 있는 정권에서도 아직 마인드맵에 나타나지 않은 부처 슬롯은 아래에 이어 그린다 */
-  const unmatchedDepartments = useMemo(() => {
-    if (members.length === 0) return departments
-    return departments.filter((department) => {
-      const inMembers = members.some((member) =>
-        doesMemberMatchDepartment(member, department, departments),
-      )
-      return !inMembers && !departmentOccupants.has(department.id)
-    })
-  }, [departments, members, departmentOccupants])
+  const showDualCounterpartRegister =
+    counterpartHeads.length === 0 &&
+    (heads.length === 0 ||
+      (!effectiveFallbackMode &&
+        (fallbackHeadTenures.length > 0 ||
+          Boolean(activeRegimeMeta?.isMonarchy) ||
+          Boolean(activeRegimeMeta?.isDualExecutive))))
 
   /*
-   * 각료가 없을 때의 칸 격자 — 채워진 각료 격자와 **같은 규격**(232px 칸·54px 높이).
-   * 부처가 있으면 부처마다 등록 칸, 없으면 고른 이름 틀의 자리(외무부·국방부…)를
-   * 흐린 칸으로 세워 누르면 그 부처가 만들어진다. 틀 고르기·직접 입력은 아래 한 줄로.
+   * 마인드맵 좌·우 각료 가지(branchSlots):
+   * - 등록된 각료(members)가 8명 미만인 정권·치세에서도 트럼프 2기 행정부처럼
+   *   좌·우 3열 마인드맵 곡선(BranchSvg)과 주요 각료 자리가 항상 펼쳐지도록 한다.
+   * - 빈 가지 칸은 '부처 만들기(AdministrationDepartment 생성)'가 아니라,
+   *   해당 국가·시대 틀에 맞는 각료 직위명(예: 국무장관, 외무장관, 외무대신, 이조판서)을 표시하고
+   *   클릭 시 즉시 인물 선택 → 각료 재임 등록 모달(해당 직책 자동 선택)을 연다.
    */
-  const emptyRoster = (
-    <>
-      <SlotGrid>
-        {departments.length > 0
-          ? departments.map((department) => (
-              <DepartmentSlot
-                key={department.id}
-                name={department.name}
-                occupant={departmentOccupants.get(department.id) ?? null}
-                onOpenPerson={onSelectPerson}
-                onRegister={() =>
-                  openRegister(
-                    department.id,
-                    department.name,
-                    'minister',
-                    department.name,
-                  )
-                }
-                onDelete={() =>
-                  void removeDepartment(department.id, department.name)
-                }
-                editing={renamingId === department.id}
-                renameValue={renameValue}
-                renaming={renaming}
-                onRenameStart={() => startRename(department.id, department.name)}
-                onRenameChange={setRenameValue}
-                onRenameCommit={() =>
-                  void commitRename(department.id, department.name)
-                }
-                onRenameCancel={cancelRename}
-              />
-            ))
-          : presetSuggestions.map((item) => (
-              <GhostSlot
-                key={item.slot + item.name}
-                type="button"
-                disabled={creatingDepartment}
-                onClick={() => void addPresets([item])}
-                title={`「${item.name}」 부처를 만들고 자리를 세웁니다`}
-              >
-                <SlotCircle aria-hidden>
-                  <FiPlus size={14} />
-                </SlotCircle>
-                <SlotText>
-                  <SlotTitle>{item.name}</SlotTitle>
-                  <SlotEmptyName>부처 만들기</SlotEmptyName>
-                </SlotText>
-              </GhostSlot>
-            ))}
-      </SlotGrid>
-      <RosterFooter>
-        {departments.length === 0 && (
-          <>
-            <RosterFooterLabel>이름 틀</RosterFooterLabel>
-            <FrameSelect
-              value={frame.id}
-              disabled={creatingDepartment}
-              onChange={(event) => setFrameIdOverride(event.target.value)}
-              aria-label="부처 명칭 틀"
-            >
-              {DEPARTMENT_NAME_FRAMES.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.label}
-                </option>
-              ))}
-            </FrameSelect>
-            {presetSuggestions.length > 0 && (
-              <PresetAll
-                type="button"
-                disabled={creatingDepartment}
-                onClick={() => void addPresets(presetSuggestions)}
-              >
-                {presetSuggestions.length}개 모두 만들기
-              </PresetAll>
-            )}
-          </>
-        )}
-        {hiddenEraDepartmentCount > 0 && (
-          <RosterFooterLink
-            type="button"
-            onClick={() => setShowAllEraDepartments((prev) => !prev)}
-          >
-            {showAllEraDepartments
-              ? '이 시대 부처만 보기'
-              : `시대 외 부처 ${hiddenEraDepartmentCount}개 더 보기`}
-          </RosterFooterLink>
-        )}
-        <RosterFooterLink type="button" onClick={() => setSetupOpen(true)}>
-          {departments.length > 0
-            ? '부처 더 담기 · 이름 정리'
-            : '부처 이름 직접 입력 · 부처 없이 등록'}
-        </RosterFooterLink>
-      </RosterFooter>
-    </>
-  )
+  const mindMapBranchSlots: CabinetBranchSlot[] = useMemo(() => {
+    const remaining = Math.max(0, MIN_MINDMAP_BRANCHES - members.length)
+    if (remaining === 0) return []
 
-  const activeRosterSlot =
-    members.length === 0 ? (
-      emptyRoster
-    ) : (
-      <>
-        {unmatchedDepartments.length > 0 && (
-          <SlotGrid>
-            {unmatchedDepartments.map((department) => (
-              <DepartmentSlot
-                key={department.id}
-                name={department.name}
-                occupant={departmentOccupants.get(department.id) ?? null}
-                onOpenPerson={onSelectPerson}
-                onRegister={() =>
-                  openRegister(
-                    department.id,
-                    department.name,
-                    'minister',
-                    department.name,
-                  )
-                }
-                onDelete={() =>
-                  void removeDepartment(department.id, department.name)
-                }
-                editing={renamingId === department.id}
-                renameValue={renameValue}
-                renaming={renaming}
-                onRenameStart={() => startRename(department.id, department.name)}
-                onRenameChange={setRenameValue}
-                onRenameCommit={() =>
-                  void commitRename(department.id, department.name)
-                }
-                onRenameCancel={cancelRename}
-              />
-            ))}
-          </SlotGrid>
-        )}
-        <RosterFooter>
-          {hiddenEraDepartmentCount > 0 && (
-            <RosterFooterLink
-              type="button"
-              onClick={() => setShowAllEraDepartments((prev) => !prev)}
-            >
-              {showAllEraDepartments
-                ? '이 시대 부처만 보기'
-                : `시대 외 부처 ${hiddenEraDepartmentCount}개 더 보기`}
-            </RosterFooterLink>
-          )}
-          <RosterFooterLink type="button" onClick={() => setSetupOpen(true)}>
-            {departments.length > 0
-              ? '부처 더 담기 · 이름 정리'
-              : '+ 각료 · 부처 관리'}
-          </RosterFooterLink>
-        </RosterFooter>
-      </>
+    const unmatchedDepartments = departments
+      .filter(
+        (dept) =>
+          !members.some((m) =>
+            doesMemberMatchDepartment(m, dept, departments),
+          ),
+      )
+      .map((dept, index) => {
+        const positionLabel = resolveDepartmentHeadPositionTitle(
+          dept.name,
+          frame,
+          countryName,
+          activePolityLabel,
+        )
+        const frameIdx = frame.items.findIndex(
+          (item) =>
+            item.headPositionTitle === positionLabel ||
+            dept.name === item.name ||
+            dept.name.endsWith(` ${item.name}`) ||
+            (item.name.length >= 2 && dept.name.endsWith(item.name)),
+        )
+        return {
+          dept,
+          positionLabel,
+          order: frameIdx >= 0 ? frameIdx : 100 + index,
+        }
+      })
+      .sort((a, b) => a.order - b.order)
+
+    const usedPositionLabels = new Set<string>(
+      members.map((m) => m.title.replace(/\s+/g, '')),
     )
+
+    const deptSlots: CabinetBranchSlot[] = []
+    for (const { dept, positionLabel } of unmatchedDepartments) {
+      if (deptSlots.length >= remaining) break
+      const normalized = positionLabel.replace(/\s+/g, '')
+      if (usedPositionLabels.has(normalized)) continue
+      usedPositionLabels.add(normalized)
+      deptSlots.push({
+        key: `dept:${dept.id}`,
+        node: (
+          <GhostSlot
+            type="button"
+            onClick={() =>
+              openRegister(
+                dept.id,
+                positionLabel,
+                'minister',
+                dept.name,
+                positionLabel,
+              )
+            }
+            title={`${positionLabel} (${dept.name}) 각료 재임 등록`}
+          >
+            <SlotCircle aria-hidden>+</SlotCircle>
+            <SlotText>
+              <SlotTitle>{positionLabel}</SlotTitle>
+              <SlotEmptyName>미등록 · + 각료 등록</SlotEmptyName>
+            </SlotText>
+          </GhostSlot>
+        ),
+      })
+    }
+
+    const presetRemaining = Math.max(0, remaining - deptSlots.length)
+    if (presetRemaining === 0) return deptSlots
+
+    const presetSlots: CabinetBranchSlot[] = []
+    for (const item of presetSuggestions) {
+      if (presetSlots.length >= presetRemaining) break
+      if (
+        members.some((m) =>
+          doesMemberMatchDepartment(m, {
+            id: '',
+            name: item.name,
+            categoryId: null,
+          }),
+        )
+      ) {
+        continue
+      }
+      const positionLabel =
+        item.headPositionTitle ?? `${item.name} ${frame.headTitle}`
+      const normalized = positionLabel.replace(/\s+/g, '')
+      if (usedPositionLabels.has(normalized)) continue
+      usedPositionLabels.add(normalized)
+      presetSlots.push({
+        key: `preset:${frame.id}:${item.slot}:${item.name}`,
+        node: (
+          <GhostSlot
+            type="button"
+            onClick={() =>
+              openRegister(
+                null,
+                positionLabel,
+                'minister',
+                null,
+                positionLabel,
+              )
+            }
+            title={`${positionLabel} 각료 재임 등록`}
+          >
+            <SlotCircle aria-hidden>+</SlotCircle>
+            <SlotText>
+              <SlotTitle>{positionLabel}</SlotTitle>
+              <SlotEmptyName>미등록 · + 각료 등록</SlotEmptyName>
+            </SlotText>
+          </GhostSlot>
+        ),
+      })
+    }
+
+    return [...deptSlots, ...presetSlots]
+  }, [
+    members,
+    departments,
+    frame,
+    countryName,
+    activePolityLabel,
+    presetSuggestions,
+  ])
 
   return (
     <S.Section>
@@ -1565,217 +1964,210 @@ export function CurrentCabinetPanel({
           * 현재만 말하지 않는다. 선택된 행정부 이름도 헤더에서 뺐다 — 카드가 이미
           * 이름을 크게 들고 선택 표시까지 한다.
           */}
-        <S.SectionTitleText>행정부</S.SectionTitleText>
+        <S.SectionTitleText>행정부 · 군주·수반</S.SectionTitleText>
         <SectionHelpPopover sectionKey="cabinet" />
         {activeRegimeMeta && (
           <RegimeChip title={`정체: ${activeRegimeMeta.label}`}>
             {activeRegimeMeta.label}
           </RegimeChip>
         )}
-        {cabinets.length > 0 && fallbackHeadTenures.length > 0 ? (
-          <ViewModeSwitch role="group" aria-label="보기 방식 전환">
-            <ViewModeBtn
-              type="button"
-              $active={!effectiveFallbackMode}
-              onClick={() => setHeadViewMode('cabinet')}
-            >
-              내각 {cabinets.length}대
-            </ViewModeBtn>
-            <ViewModeBtn
-              type="button"
-              $active={effectiveFallbackMode}
-              onClick={() => setHeadViewMode('fallback')}
-            >
-              군주·국가원수 {fallbackHeadTenures.length}명
-            </ViewModeBtn>
-          </ViewModeSwitch>
-        ) : cabinets.length > 1 ? (
-          <S.SectionCountChip>{cabinets.length}대</S.SectionCountChip>
+        {fallbackHeadTenures.length > 0 ? (
+          <S.SectionCountChip>
+            군주·원수 {fallbackHeadTenures.length}명 · 내각 {cabinets.length}대
+          </S.SectionCountChip>
         ) : (
-          cabinets.length === 0 &&
-          fallbackHeadTenures.length > 0 && (
-            <S.SectionCountChip>
-              역대 수반 {fallbackHeadTenures.length}명
-            </S.SectionCountChip>
+          cabinets.length > 1 && (
+            <S.SectionCountChip>{cabinets.length}대</S.SectionCountChip>
           )
         )}
-        {isCompletelyEmpty ? (
-          <S.SectionLink
+        <HeaderActions>
+          <S.SectionAction
             type="button"
-            onClick={() => onOpen(selectedCabinetId, false)}
+            onClick={() => openRegister(null, '수반·각료', 'any')}
           >
-            행정부 탭 열기
-          </S.SectionLink>
-        ) : (
-          <HeaderActions>
-            <S.SectionAction
-              type="button"
-              onClick={() => openRegister(null, '수반·각료', 'any')}
-            >
-              + 수반·각료 등록
-            </S.SectionAction>
-            <S.SectionAction
-              type="button"
-              onClick={() =>
-                onOpen(
-                  selectedCabinetId,
-                  effectiveFallbackMode && fallbackHeadTenures.length > 0,
-                )
-              }
-            >
-              행정부 관리
-            </S.SectionAction>
-          </HeaderActions>
-        )}
+            + 수반·각료 등록
+          </S.SectionAction>
+          <S.SectionAction
+            type="button"
+            onClick={() =>
+              onOpen(
+                selectedCabinetId,
+                effectiveFallbackMode && fallbackHeadTenures.length > 0,
+              )
+            }
+          >
+            행정부 관리
+          </S.SectionAction>
+        </HeaderActions>
       </S.SectionTitleRow>
 
       {/*
-        정권 띠 — 이 나라의 행정부를 한 줄로 깔고 고른다.
-
-        예전엔 지도 아래 '‹ 1 / 3대 ›'가 유일한 넘기기였다. 각료 격자 14칸 아래라 눈에
-        안 띄었고, 무엇이 앞뒤에 있는지는 한 칸씩 넘겨 봐야 알았다(카드 안에도 같은
-        '1 / 3대'가 한 번 더 있었다). 한때 위에 큰 정권 카드 목록을 깔았다가 '지금'보다
-        '몇 대'가 먼저 읽혀 걷었으므로, 이번엔 글자 한 줄 높이의 띠로만 둔다.
-        빈 상태 분기 **위**에 둔다 — 각료가 없는 정권을 고르면 지면이 빈 상태로 바뀌는데,
-        띠가 그 안에 있으면 함께 사라져 다른 정권으로 돌아갈 길이 없어진다.
-        최신이 왼쪽 — 지도 양옆 버튼(왼쪽 = 더 최근)과 방향이 같다.
+        통합 2단 실행 띠 — 👑 군주·국가원수 띠와 🏛️ 행정부·내각 띠를 동시에 노출한다.
+        - 내각을 고르면 그 내각 시기에 재위한 황제·국왕이 위 띠에서 동시 하이라이트($coActive)되고,
+        - 군주·원수를 고르면 그 치세에 출범한 내각들이 아래 띠에서 동시 하이라이트($coActive)된다.
+        - 군주만 등록되고 내각이 아직 0대인 국가(스웨덴·스페인·네덜란드 등)에서도
+          동일한 2단 띠 구조를 유지하고 '+ 내각·행정부 수반 등록' 진입점을 제공한다.
       */}
-      {!effectiveFallbackMode && cabinets.length > 1 && (
-        <CabinetStrip
-          ref={stripRef}
-          role="tablist"
-          aria-label="정권 고르기"
-        >
-          {cabinets.map((cabinet) => {
-            const active = cabinet.id === selectedCabinetId
-            const polity = cabinet.headTenure?.historicalCountry?.name ?? null
-            return (
-              <CabinetTab
-                key={cabinet.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                data-active={active || undefined}
-                $active={active}
-                onClick={() => selectCabinet(cabinet.id)}
+      {(fallbackHeadTenures.length > 0 || cabinets.length > 1) && (
+        <ExecutiveTracks>
+          {fallbackHeadTenures.length > 0 && (
+            <TrackRow>
+              <TrackBadge $monarch>
+                👑 군주·원수 {fallbackHeadTenures.length}
+              </TrackBadge>
+              <CabinetStrip
+                ref={fallbackStripRef}
+                role="tablist"
+                aria-label="역대 군주·국가원수 고르기"
               >
-                {polity && <CabinetTabPolity>{polity}</CabinetTabPolity>}
-                <CabinetTabName>{cabinetLabel(cabinet)}</CabinetTabName>
-                <CabinetTabPeriod>{cabinetPeriod(cabinet)}</CabinetTabPeriod>
-              </CabinetTab>
-            )
-          })}
-        </CabinetStrip>
-      )}
+                {fallbackHeadTenures.map((row) => {
+                  const active =
+                    effectiveFallbackMode && row.id === activeFallbackHead?.id
+                  const coActive =
+                    !effectiveFallbackMode && coActiveHeadIds.has(row.id)
+                  const polity = row.historicalCountry?.name ?? null
+                  const monarchical = isTenureMonarchical(row)
+                  return (
+                    <CabinetTab
+                      key={row.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      data-active={active || coActive || undefined}
+                      $active={active}
+                      $coActive={coActive}
+                      $monarch={monarchical}
+                      onClick={() => selectFallbackHead(row.id)}
+                    >
+                      {monarchical && <TabCrown aria-hidden>👑</TabCrown>}
+                      {coActive && <CoActiveTag>재위</CoActiveTag>}
+                      {polity && (
+                        <CabinetTabPolity>{polity}</CabinetTabPolity>
+                      )}
+                      <CabinetTabName>
+                        {fallbackHeadLabel(row)}
+                      </CabinetTabName>
+                      <CabinetTabPeriod>
+                        {fallbackHeadPeriod(row)}
+                      </CabinetTabPeriod>
+                    </CabinetTab>
+                  )
+                })}
+              </CabinetStrip>
+            </TrackRow>
+          )}
 
-      {effectiveFallbackMode && fallbackHeadTenures.length > 1 && (
-        <CabinetStrip
-          ref={stripRef}
-          role="tablist"
-          aria-label="역대 수반 고르기"
-        >
-          {fallbackHeadTenures.map((row) => {
-            const active = row.id === activeFallbackHead?.id
-            const polity = row.historicalCountry?.name ?? null
-            return (
-              <CabinetTab
-                key={row.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                data-active={active || undefined}
-                $active={active}
-                onClick={() => setSelectedFallbackHeadId(row.id)}
+          {(cabinets.length > 0 || fallbackHeadTenures.length > 0) && (
+            <TrackRow>
+              <TrackBadge>🏛️ 내각 {cabinets.length}</TrackBadge>
+              <CabinetStrip
+                ref={stripRef}
+                role="tablist"
+                aria-label="정권 고르기"
               >
-                {polity && <CabinetTabPolity>{polity}</CabinetTabPolity>}
-                <CabinetTabName>{fallbackHeadLabel(row)}</CabinetTabName>
-                <CabinetTabPeriod>{fallbackHeadPeriod(row)}</CabinetTabPeriod>
-              </CabinetTab>
-            )
-          })}
-        </CabinetStrip>
+                {cabinets.length > 0 ? (
+                  cabinets.map((cabinet) => {
+                    const active =
+                      !effectiveFallbackMode &&
+                      cabinet.id === selectedCabinetId
+                    const coActive =
+                      effectiveFallbackMode &&
+                      coActiveCabinetIds.has(cabinet.id)
+                    const polity =
+                      cabinet.headTenure?.historicalCountry?.name ?? null
+                    return (
+                      <CabinetTab
+                        key={cabinet.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        data-active={active || coActive || undefined}
+                        $active={active}
+                        $coActive={coActive}
+                        onClick={() => selectCabinet(cabinet.id)}
+                      >
+                        {coActive && <CoActiveTag $cabinet>치세</CoActiveTag>}
+                        {polity && (
+                          <CabinetTabPolity>{polity}</CabinetTabPolity>
+                        )}
+                        <CabinetTabName>{cabinetLabel(cabinet)}</CabinetTabName>
+                        <CabinetTabPeriod>
+                          {cabinetPeriod(cabinet)}
+                        </CabinetTabPeriod>
+                      </CabinetTab>
+                    )
+                  })
+                ) : (
+                  <TrackEmptyAction
+                    type="button"
+                    onClick={() =>
+                      openRegister(null, '내각 수반·총리', 'head')
+                    }
+                  >
+                    <TrackEmptyPlus>+</TrackEmptyPlus>
+                    내각·행정부 수반 등록
+                    <TrackEmptyHint>
+                      총리·재상·수반을 등록하면 재위 군주와 연결된 내각이 표시됩니다
+                    </TrackEmptyHint>
+                  </TrackEmptyAction>
+                )}
+              </CabinetStrip>
+            </TrackRow>
+          )}
+        </ExecutiveTracks>
       )}
 
       <SwitchFade $switching={overviewSwitching} aria-busy={overviewSwitching}>
       {isLoading ? (
         <GovernmentSkeleton />
-      ) : isCompletelyEmpty ? (
-        <SectionEmpty
-          text="등록된 정부 수반이나 내각·각료 구성이 아직 없습니다. 수반이나 각료를 등록하면 정권별 내각 마인드맵과 부처 슬롯이 표시됩니다."
-          hint="부처 편제를 먼저 설정한 뒤 수반·각료 재임 이력을 등록하면 부처별 장관 명단이 자동 배정됩니다"
-          actionLabel="수반·각료 등록"
-          onAction={() =>
-            openRegister(
-              null,
-              activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반',
-              'head',
-            )
-          }
-          secondaryLabel="부처 편제 설정"
-          onSecondary={() => setSetupOpen(true)}
-        />
-      ) : isEmpty ? (
-        <>
-          {/*
-            등록 전 지면도 등록 후와 같은 모양이다 — 가로로 누운 수반 카드 + 각료 칸 격자.
-            예전엔 점선 한 줄('정부 수반 아직 등록되지 않음')과 '각료 등록' 버튼·부처 틀
-            칩 목록이 깔려, 자료가 들어오는 순간 지면이 통째로 다른 모양으로 바뀌었다.
-          */}
-          <EmptyHeadCard
-            type="button"
-            onClick={() =>
-              openRegister(
-                null,
-                activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반',
-                'head',
-              )
-            }
-          >
-            <EmptyFace aria-hidden>
-              <FiPlus size={30} />
-            </EmptyFace>
-            <EmptyHeadText>
-              <SlotRole>
-                {activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반'}
-              </SlotRole>
-              <EmptyHeadName>아직 등록되지 않음</EmptyHeadName>
-              <EmptyHeadHint>
-                {selectedCabinet
-                  ? `${cabinetLabel(selectedCabinet)} · ${cabinetPeriod(selectedCabinet)}`
-                  : '수반을 등록하면 취임·재임·각료 수가 여기 요약됩니다'}
-              </EmptyHeadHint>
-            </EmptyHeadText>
-            <EmptyHeadStats aria-hidden>
-              {['취임', '재임', '각료'].map((label) => (
-                <EmptyHeadStat key={label}>
-                  <span>{label}</span>
-                  <strong>—</strong>
-                </EmptyHeadStat>
-              ))}
-            </EmptyHeadStats>
-            <EmptyHeadAction>+ 수반 등록</EmptyHeadAction>
-          </EmptyHeadCard>
-          {emptyRoster}
-        </>
       ) : (
-        <>
-      {/*
-        * 행정부 마인드맵 — 가운데 수반, 좌·우로 뻗는 각료.
-        *
-        * 예전엔 수반 히어로 카드 아래에 각료 칩이 격자로 깔렸다. 그러면 "이 정권에 이런
-        * 사람들이 있다"는 목록은 되지만 "이 사람 밑에 이 사람들이 있다"는 관계가 안 보인다.
-        * 정권은 본디 한 사람을 중심으로 뻗은 구조다. 히어로의 요약(취임·재임·각료·교체·
-        * 득표율)은 가운데 노드 아래로 옮겨 같은 자리에서 읽힌다.
-        */}
-      {(heads.length > 0 || members.length > 0) && (
+        /*
+         * 행정부 마인드맵 — 데이터가 아직 없는 국가에서도 텍스트 안내문(SectionEmpty) 대신
+         * 가운데 2단 이원 스택(👑 군주·국가원수 + 🏛️ 행정부·수반)과 좌·우 8개 각료 가지
+         * 블루프린트 슬롯을 상시 렌더링해 클릭 한 번으로 바로 등록할 수 있게 한다.
+         */
         <CabinetMindMap
           showPosition={
             cabinets.length <= 1 && fallbackHeadTenures.length <= 1
           }
           head={heads[0] ?? null}
           counterpartHead={counterpartHead}
+          counterpartHeads={counterpartHeads}
+          onSelectCounterpartHead={
+            fallbackHeadTenures.length > 0
+              ? (cp) => {
+                  if (
+                    fallbackHeadTenures.some((row) => row.id === cp.id)
+                  ) {
+                    selectFallbackHead(cp.id)
+                    return
+                  }
+                  if (cp.personId) {
+                    onSelectPerson(cp.personId)
+                  }
+                }
+              : undefined
+          }
+          onSelectCabinet={(cabinetId) => selectCabinet(cabinetId)}
+          onRegisterCabinetHead={() =>
+            openRegister(
+              null,
+              activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반',
+              'head',
+            )
+          }
+          onRegisterCounterpartHead={
+            showDualCounterpartRegister
+              ? () => openRegister(null, '군주·국가원수', 'head')
+              : undefined
+          }
+          onRegisterMinister={() => openRegister(null, '각료', 'minister')}
+          emptyHeadRoleLabel={
+            activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반'
+          }
           regimeLabel={activeRegimeMeta?.label ?? null}
           members={members}
+          branchSlots={mindMapBranchSlots}
           cabinetLabel={
             selectedCabinet
               ? cabinetLabel(selectedCabinet)
@@ -1791,11 +2183,8 @@ export function CurrentCabinetPanel({
           onSelectPerson={onSelectPerson}
           expanded={expanded}
           onToggleExpand={() => setExpanded((prev) => !prev)}
-          rosterSlot={activeRosterSlot}
           electionSlot={electionSlot}
         />
-      )}
-        </>
       )}
       </SwitchFade>
 
@@ -2001,13 +2390,13 @@ export function CurrentCabinetPanel({
           onClose={closeRegister}
           onSuccess={() => {
             void queryClient.invalidateQueries({
-              queryKey: ['cabinets-by-country', countryId],
+              queryKey: ['cabinets-by-country'],
             })
             void queryClient.invalidateQueries({
               queryKey: ['cabinet-overview', selectedCabinetId],
             })
             void queryClient.invalidateQueries({
-              queryKey: ['tenures-by-country', countryId],
+              queryKey: ['tenures-by-country'],
             })
             closeRegister()
           }}
@@ -2025,6 +2414,7 @@ export function CurrentCabinetPanel({
           }
           initialAdministrationDepartmentId={registerTarget.departmentId}
           initialAdministrationDepartmentName={registerTarget.departmentName}
+          initialPositionTitle={registerTarget.positionTitle}
         />
       )}
     </S.Section>
@@ -3414,34 +3804,108 @@ const Extra = styled.div`
   }
 `
 
-/* ─── 정권 띠 ─────────────────────────────────────────────────────────── */
+/* ─── 통합 2단 실행 띠 (👑 군주·원수 + 🏛️ 내각) ──────────────────────── */
+
+const ExecutiveTracks = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+`
+
+const TrackRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+`
+
+const TrackBadge = styled.span<{ $monarch?: boolean }>`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  color: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? '#fde68a'
+        : '#92400e'
+      : theme.mode === 'dark'
+        ? '#c7d2fe'
+        : '#3730a3'};
+  background: ${({ $monarch, theme }) =>
+    $monarch
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.18)'
+        : '#fef3c7'
+      : theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.18)'
+        : '#e0e7ff'};
+`
 
 const CabinetStrip = styled.div`
   display: flex;
+  flex: 1;
+  min-width: 0;
   gap: 6px;
   overflow-x: auto;
-  padding-bottom: 4px;
-  margin-bottom: 4px;
+  padding-bottom: 2px;
   scrollbar-width: thin;
 `
 
-const CabinetTab = styled.button<{ $active: boolean }>`
+const CabinetTab = styled.button<{
+  $active: boolean
+  $coActive?: boolean
+  $monarch?: boolean
+}>`
   appearance: none;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 11px;
   border-radius: 999px;
   border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? 'rgba(99, 102, 241, 0.45)' : theme.colors.border.light};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.18)'
-        : 'rgba(99, 102, 241, 0.08)'
-      : 'transparent'};
+    ${({ $active, $coActive, $monarch, theme }) => {
+      if ($active) {
+        return $monarch
+          ? 'rgba(217, 119, 6, 0.55)'
+          : 'rgba(99, 102, 241, 0.5)'
+      }
+      if ($coActive) {
+        return $monarch
+          ? 'rgba(217, 119, 6, 0.4)'
+          : 'rgba(99, 102, 241, 0.38)'
+      }
+      return theme.colors.border.light
+    }};
+  background: ${({ $active, $coActive, $monarch, theme }) => {
+    if ($active) {
+      return $monarch
+        ? theme.mode === 'dark'
+          ? 'rgba(245, 158, 11, 0.22)'
+          : '#fef3c7'
+        : theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.2)'
+          : 'rgba(99, 102, 241, 0.1)'
+    }
+    if ($coActive) {
+      return $monarch
+        ? theme.mode === 'dark'
+          ? 'rgba(245, 158, 11, 0.12)'
+          : '#fffbeb'
+        : theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.1)'
+          : '#f5f3ff'
+    }
+    return 'transparent'
+  }};
   font-family: inherit;
   cursor: pointer;
   transition:
@@ -3449,13 +3913,42 @@ const CabinetTab = styled.button<{ $active: boolean }>`
     border-color 0.15s ease;
 
   &:hover {
-    background: ${({ $active, theme }) =>
-      $active ? undefined : theme.colors.hover};
+    background: ${({ $active, $coActive, theme }) =>
+      $active || $coActive ? undefined : theme.colors.hover};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: 1px;
   }
+`
+
+const TabCrown = styled.span`
+  font-size: 11.5px;
+  line-height: 1;
+`
+
+const CoActiveTag = styled.span<{ $cabinet?: boolean }>`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  color: ${({ $cabinet, theme }) =>
+    $cabinet
+      ? theme.mode === 'dark'
+        ? '#c7d2fe'
+        : '#4338ca'
+      : theme.mode === 'dark'
+        ? '#fde68a'
+        : '#92400e'};
+  background: ${({ $cabinet, theme }) =>
+    $cabinet
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.25)'
+        : '#e0e7ff'
+      : theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.25)'
+        : '#fde68a'};
 `
 
 const CabinetTabPolity = styled.span`
@@ -3484,6 +3977,54 @@ const CabinetTabPeriod = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+const TrackEmptyAction = styled.button`
+  appearance: none;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px dashed rgba(99, 102, 241, 0.42);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.08)'
+      : 'rgba(99, 102, 241, 0.05)'};
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.65);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.16)'
+        : 'rgba(99, 102, 241, 0.11)'};
+  }
+`
+
+const TrackEmptyPlus = styled.span`
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+`
+
+const TrackEmptyHint = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-left: 2px;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+`
+
 /*
  * 정권을 바꾸는 동안 — 앞 정권을 흐리게 들고 있는다. 골격으로 번쩍 갈아끼우면 고르는
  * 동작마다 지면이 무너졌다 서고, 선명하게 두면 새 정권인 줄 안다.
@@ -3505,36 +4046,4 @@ const RegimeChip = styled.span`
       ? 'rgba(59, 130, 246, 0.16)'
       : 'rgba(37, 99, 235, 0.08)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8')};
-`
-
-const ViewModeSwitch = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)'};
-`
-
-const ViewModeBtn = styled.button<{ $active: boolean }>`
-  appearance: none;
-  border: none;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  background: ${({ $active, theme }) =>
-    $active ? theme.colors.background.primary : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
-  box-shadow: ${({ $active }) =>
-    $active ? '0 1px 2px rgba(0, 0, 0, 0.08)' : 'none'};
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
 `

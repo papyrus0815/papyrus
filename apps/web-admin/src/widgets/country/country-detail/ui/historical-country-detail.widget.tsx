@@ -89,6 +89,7 @@ import { ActivityFeed } from './dashboard-panels/activity-feed'
 import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { CompletenessPanel } from './dashboard-panels/completeness-panel'
 import { CountryCompaniesSection } from './dashboard-panels/country-companies-section'
+import { CurrentCabinetPanel } from './dashboard-panels/current-cabinet-panel'
 import { DashboardGuideBanner } from './dashboard-panels/dashboard-guide-banner'
 import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
 import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
@@ -179,6 +180,9 @@ export function HistoricalCountryDetail({
   const [activeTab, setActiveTab] = useState<HistoricalCountryTab>(
     () => initialTab ?? 'overview',
   )
+  const [governmentSubTab, setGovernmentSubTab] = useState<
+    'system' | 'heads' | 'cabinets' | 'ministries' | 'military'
+  >('system')
   const [focusEventsCentury, setFocusEventsCentury] = useState<number | null>(
     null,
   )
@@ -373,6 +377,10 @@ export function HistoricalCountryDetail({
                         country={country}
                         onEdit={onEdit ? () => onEdit(country) : undefined}
                         onGoToTab={handleTabChange}
+                        onOpenGovernmentSubTab={(subTab) => {
+                          setGovernmentSubTab(subTab)
+                          handleTabChange('government')
+                        }}
                         onOpenEventsCentury={handleOpenEventsCentury}
                       />
                     </>
@@ -408,7 +416,7 @@ export function HistoricalCountryDetail({
                     */
                     <GovernmentInfoSection
                       country={country}
-                      initialContentTab="system"
+                      initialContentTab={governmentSubTab}
                     />
                   )}
                   {activeTab === 'elections' && (
@@ -713,12 +721,16 @@ function HistoricalOverviewSection({
   country,
   onEdit,
   onGoToTab,
+  onOpenGovernmentSubTab,
   onOpenEventsCentury,
 }: {
   country: UnifiedCountry
   onEdit?: () => void
   /** 요약 칸에서 해당 탭으로(역대 수반·사건·계승 …) */
   onGoToTab: (tab: HistoricalCountryTab) => void
+  onOpenGovernmentSubTab?: (
+    subTab: 'system' | 'heads' | 'cabinets' | 'ministries' | 'military',
+  ) => void
   onOpenEventsCentury: (century: number) => void
 }) {
   /* 구조화 존속 연도 — UnifiedCountry 타입엔 없지만 역사 국가 응답에는 실려 온다 */
@@ -1427,6 +1439,22 @@ function HistoricalOverviewSection({
           </DashboardStyles.Section>
         )}
       </DashboardPair>
+
+      {/* 행정부 · 군주·수반 — 황제·국왕과 내각·각료·중앙부처를 마인드맵으로 함께 보여준다 */}
+      <CurrentCabinetPanel
+        countryId=""
+        historicalCountryId={country.id}
+        countryName={country.name}
+        onOpen={(_cabinetId, isFallbackHead) => {
+          if (isFallbackHead) {
+            onGoToTab('heads')
+            return
+          }
+          onOpenGovernmentSubTab?.('cabinets')
+        }}
+        onOpenElections={() => onGoToTab('elections')}
+        onSelectPerson={goPerson}
+      />
 
       {/* 사건 캘린더 — 날짜가 있는 사건이 실제로 존재할 때만 노출 */}
       {(stats.loading.events || stats.calendarEvents.length > 0) && (
