@@ -2021,7 +2021,7 @@ export function CurrentCabinetPanel({
         - 군주만 등록되고 내각이 아직 0대인 국가(스웨덴·스페인·네덜란드 등)에서도
           동일한 2단 띠 구조를 유지하고 '+ 내각·행정부 수반 등록' 진입점을 제공한다.
       */}
-      {(fallbackHeadTenures.length > 0 || cabinets.length > 1) && (
+      {(fallbackHeadTenures.length + cabinets.length > 1) && (
         <ExecutiveTracks>
           {fallbackHeadTenures.length > 0 && (
             <TrackRow>
@@ -2070,7 +2070,7 @@ export function CurrentCabinetPanel({
             </TrackRow>
           )}
 
-          {(cabinets.length > 0 || fallbackHeadTenures.length > 0) && (
+          {cabinets.length > 0 && (
             <TrackRow>
               <TrackBadge>🏛️ 내각 {cabinets.length}</TrackBadge>
               <CabinetStrip
@@ -2078,52 +2078,37 @@ export function CurrentCabinetPanel({
                 role="tablist"
                 aria-label="정권 고르기"
               >
-                {cabinets.length > 0 ? (
-                  cabinets.map((cabinet) => {
-                    const active =
-                      !effectiveFallbackMode &&
-                      cabinet.id === selectedCabinetId
-                    const coActive =
-                      effectiveFallbackMode &&
-                      coActiveCabinetIds.has(cabinet.id)
-                    const polity =
-                      cabinet.headTenure?.historicalCountry?.name ?? null
-                    return (
-                      <CabinetTab
-                        key={cabinet.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        data-active={active || coActive || undefined}
-                        $active={active}
-                        $coActive={coActive}
-                        onClick={() => selectCabinet(cabinet.id)}
-                      >
-                        {coActive && <CoActiveTag $cabinet>치세</CoActiveTag>}
-                        {polity && (
-                          <CabinetTabPolity>{polity}</CabinetTabPolity>
-                        )}
-                        <CabinetTabName>{cabinetLabel(cabinet)}</CabinetTabName>
-                        <CabinetTabPeriod>
-                          {cabinetPeriod(cabinet)}
-                        </CabinetTabPeriod>
-                      </CabinetTab>
-                    )
-                  })
-                ) : (
-                  <TrackEmptyAction
-                    type="button"
-                    onClick={() =>
-                      openRegister(null, '내각 수반·총리', 'head')
-                    }
-                  >
-                    <TrackEmptyPlus>+</TrackEmptyPlus>
-                    내각·행정부 수반 등록
-                    <TrackEmptyHint>
-                      총리·재상·수반을 등록하면 재위 군주와 연결된 내각이 표시됩니다
-                    </TrackEmptyHint>
-                  </TrackEmptyAction>
-                )}
+                {cabinets.map((cabinet) => {
+                  const active =
+                    !effectiveFallbackMode &&
+                    cabinet.id === selectedCabinetId
+                  const coActive =
+                    effectiveFallbackMode &&
+                    coActiveCabinetIds.has(cabinet.id)
+                  const polity =
+                    cabinet.headTenure?.historicalCountry?.name ?? null
+                  return (
+                    <CabinetTab
+                      key={cabinet.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      data-active={active || coActive || undefined}
+                      $active={active}
+                      $coActive={coActive}
+                      onClick={() => selectCabinet(cabinet.id)}
+                    >
+                      {coActive && <CoActiveTag $cabinet>치세</CoActiveTag>}
+                      {polity && (
+                        <CabinetTabPolity>{polity}</CabinetTabPolity>
+                      )}
+                      <CabinetTabName>{cabinetLabel(cabinet)}</CabinetTabName>
+                      <CabinetTabPeriod>
+                        {cabinetPeriod(cabinet)}
+                      </CabinetTabPeriod>
+                    </CabinetTab>
+                  )
+                })}
               </CabinetStrip>
             </TrackRow>
           )}
@@ -2134,57 +2119,36 @@ export function CurrentCabinetPanel({
       {isLoading ? (
         <GovernmentSkeleton />
       ) : heads.length === 0 ? (
-        <DualEmptyGrid>
-          <DualEmptyCard
-            type="button"
-            $monarch
-            onClick={() => openRegister(null, '군주·국가원수', 'head')}
-          >
-            <DualEmptyAvatar $monarch aria-hidden>
-              👑
-            </DualEmptyAvatar>
-            <DualEmptyBody>
-              <DualEmptyBadgeRow>
-                <DualEmptyBadge $monarch>군주 · 국가원수</DualEmptyBadge>
-                {activePolityLabel && (
-                  <DualEmptyMetaChip>{activePolityLabel}</DualEmptyMetaChip>
-                )}
-              </DualEmptyBadgeRow>
-              <DualEmptyTitle>국왕 · 황제 · 국가원수</DualEmptyTitle>
-            </DualEmptyBody>
-            <DualEmptyCta $monarch>+ 등록</DualEmptyCta>
-          </DualEmptyCard>
-
-          <DualEmptyCard
-            type="button"
-            onClick={() =>
-              openRegister(
-                null,
-                activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반',
-                'head',
-              )
-            }
-          >
-            <DualEmptyAvatar aria-hidden>🏛️</DualEmptyAvatar>
-            <DualEmptyBody>
-              <DualEmptyBadgeRow>
-                <DualEmptyBadge>행정부 · 내각 수반</DualEmptyBadge>
-                {activeRegimeMeta && (
-                  <DualEmptyMetaChip>
-                    {activeRegimeMeta.label}
-                  </DualEmptyMetaChip>
-                )}
-              </DualEmptyBadgeRow>
-              <DualEmptyTitle>
-                {selectedCabinet
-                  ? cabinetLabel(selectedCabinet)
-                  : (activeRegimeMeta?.defaultHeadRoleLabel ??
-                    '대통령 · 총리 · 재상')}
-              </DualEmptyTitle>
-            </DualEmptyBody>
-            <DualEmptyCta>+ 등록</DualEmptyCta>
-          </DualEmptyCard>
-        </DualEmptyGrid>
+        <DualEmptyCard
+          type="button"
+          onClick={() =>
+            openRegister(
+              null,
+              activeRegimeMeta?.defaultHeadRoleLabel ?? '국가원수·정부수반',
+              'head',
+            )
+          }
+        >
+          <DualEmptyAvatar aria-hidden>🏛️</DualEmptyAvatar>
+          <DualEmptyBody>
+            <DualEmptyBadgeRow>
+              <DualEmptyBadge>국가원수 · 정부수반</DualEmptyBadge>
+              {activePolityLabel && (
+                <DualEmptyMetaChip>{activePolityLabel}</DualEmptyMetaChip>
+              )}
+              {activeRegimeMeta && (
+                <DualEmptyMetaChip>{activeRegimeMeta.label}</DualEmptyMetaChip>
+              )}
+            </DualEmptyBadgeRow>
+            <DualEmptyTitle>
+              {selectedCabinet
+                ? cabinetLabel(selectedCabinet)
+                : (activeRegimeMeta?.defaultHeadRoleLabel ??
+                  '황제 · 국왕 · 대통령 · 총리 · 재상')}
+            </DualEmptyTitle>
+          </DualEmptyBody>
+          <DualEmptyCta>+ 수반 등록</DualEmptyCta>
+        </DualEmptyCard>
       ) : (
         <CabinetMindMap
           showPosition={

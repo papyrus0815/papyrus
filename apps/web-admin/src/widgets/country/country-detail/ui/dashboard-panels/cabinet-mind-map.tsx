@@ -206,12 +206,8 @@ export function CabinetMindMap({
         ? [counterpartHead]
         : []
   const isMonarchCenter = Boolean(head?.isMonarchical)
-  const showSovereignAbove =
-    !isMonarchCenter &&
-    (counterparts.length > 0 || Boolean(onRegisterCounterpartHead))
-  const showReignCabinetsBelow =
-    isMonarchCenter &&
-    (counterparts.length > 0 || Boolean(onRegisterCabinetHead))
+  const showSovereignAbove = !isMonarchCenter && counterparts.length > 0
+  const showReignCabinetsBelow = isMonarchCenter && counterparts.length > 0
 
   /*
    * 좌우로 반씩 가른다. 섞지 않고 앞쪽 절반을 왼쪽에 두어, 좁은 화면에서 한 줄로 접혔을 때
