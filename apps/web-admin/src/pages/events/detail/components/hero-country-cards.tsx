@@ -22,6 +22,9 @@ import {
   observationExtent,
 } from '@/entities/evidence/lib/format-observation'
 import { eventCountryRoleLabel } from '@/entities/event/model/country-participant'
+import { metaText } from '@/pages/events/styles/theme'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
+import { getOfficeHoldingTimeline, officeHoldingTimelineKey } from '@/shared/api/sovereign-reigns'
 import { type Observation } from '@/shared/api/evidence'
 import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { pathKeys } from '@/shared/router'
@@ -29,6 +32,15 @@ import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-mod
 
 import { type EventDetail, eventObservationsQueryOptions } from '../use-event-detail'
 import { formatPointShort, PARTICIPATION_LABEL } from './actors/actors.lib'
+import {
+  type BridgeCountry,
+  type CountryHeads,
+  type OfficeHoldingRow,
+  describeHeads,
+  eventWindow,
+  formatHeadPoint,
+  headsForCountry,
+} from './contemporary-heads.lib'
 import { groupBySide } from './hero-countries.lib'
 import { withSideColors } from './side-colors'
 import { LOSS_METRIC_PRIORITY, PERSONNEL_METRIC, representativeOf } from './side-metrics.lib'
@@ -96,6 +108,37 @@ export function HeroCountryCards({
     [event.relatedCountries, event.relatedHistoricalCountries],
   )
   const sides = useMemo(() => withSideColors(event.sides ?? []), [event.sides])
+
+  /*
+   * 당시 국가원수 — 사건 목록의 즉위 표지와 같은 피드·같은 캐시. 현대 국가 카드(영국·프랑스…)는 그 해의
+   * 역사 국가로 이어 찾으므로 역사 국가 목록(목록 화면과 같은 캐시)이 필요하다 — 현대 국가 카드가 있을 때만.
+   */
+  const { data: officeHoldings } = useQuery({
+    queryKey: officeHoldingTimelineKey,
+    queryFn: getOfficeHoldingTimeline,
+    staleTime: 5 * 60 * 1000,
+  })
+  const hasModernCards = (event.relatedCountries?.length ?? 0) > 0
+  const { data: historicalCountryList } = useQuery({
+    queryKey: ['historical-countries'],
+    queryFn: getAllHistoricalCountries,
+    staleTime: 5 * 60 * 1000,
+    enabled: hasModernCards,
+  })
+  const headsByKey = useMemo(() => {
+    const result = new Map<string, CountryHeads>()
+    const window = eventWindow(event)
+    if (!window || !officeHoldings) return result
+    const rows = officeHoldings as OfficeHoldingRow[]
+    const bridge = (historicalCountryList ?? []) as unknown as BridgeCountry[]
+    /* 따로 카드가 있는 역사 국가는 현대 국가 카드가 다시 싣지 않는다(보불의 프랑스·프랑스 제2제국) */
+    const ownHistorical = new Set((event.relatedHistoricalCountries ?? []).map((country) => country.id))
+    for (const country of countries) {
+      const target = { kind: country.historical ? ('H' as const) : ('C' as const), id: country.id }
+      result.set(country.key, headsForCountry(target, rows, window, bridge, ownHistorical))
+    }
+    return result
+  }, [event, officeHoldings, historicalCountryList, countries])
   const figureByParticipant = useMemo(() => {
     const grouped = new Map<string, Observation[]>()
     for (const entry of observations) {
@@ -151,6 +194,45 @@ export function HeroCountryCards({
       }
     : { href: '#actors' }
 
+  /**
+   * 당시 국가원수 한 줄 — 시작 시점의 사람, 기간 중 바뀌었으면 '→ 마지막 사람 · 시점(외 N명)'.
+   * 카드 전체가 국가 링크라 이름은 누르는 자리가 아니다(링크 안 링크 금지). 전체 목록은 툴팁에.
+   * 기록이 없는 나라는 아무것도 그리지 않는다 — 카드가 지금 그대로라 빈칸이 생기지 않는다.
+   */
+  const renderHeads = (heads: CountryHeads | undefined) => {
+    if (!heads || (!heads.atStart && heads.changes.length === 0)) return null
+    const last = heads.changes[heads.changes.length - 1]
+    const first = heads.changes[0]
+    const hidden = heads.changes.length - 1
+    return (
+      <HeadsLine title={describeHeads(heads)}>
+        <VisuallyHidden>당시 국가원수 </VisuallyHidden>
+        {heads.atStart ? (
+          <>
+            <b>{heads.atStart.name}</b>
+            {!last && heads.atStart.title && !narrow && <span className="meta">{heads.atStart.title}</span>}
+            {last && (
+              <>
+                <span className="arrow" aria-label="이후">→</span>
+                <b>{last.name}</b>
+                <span className="meta">
+                  {formatHeadPoint(last)}
+                  {hidden > 0 && ` 외 ${hidden}명`}
+                </span>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="meta">{formatHeadPoint(first)}~</span>
+            <b>{first.name}</b>
+            {hidden > 0 && <span className="meta">외 {hidden}명</span>}
+          </>
+        )}
+      </HeadsLine>
+    )
+  }
+
   const renderCard = (country: CardCountry, color: string | null) => {
     const figure = country.participantId ? figureByParticipant.get(country.participantId) : null
     const isLead = Boolean(figure && leadMetric && figure.metric.key === leadMetric.key)
@@ -192,6 +274,7 @@ export function HeroCountryCards({
             {period && <Period>{period}</Period>}
           </CardTags>
         )}
+        {renderHeads(headsByKey.get(country.key))}
         {share !== null && (
           <Share aria-hidden>
             <span style={{ width: `${share}%`, background: color ?? 'var(--hero-neutral)' }} />
@@ -441,6 +524,40 @@ const Tag = styled.span<{ $strong?: boolean }>`
   line-height: 18px;
   color: ${({ theme, $strong }) => ($strong ? theme.colors.text.primary : theme.colors.text.secondary)};
   background: ${({ theme, $strong }) => ($strong ? fill(theme.mode, 0.09, 0.12) : fill(theme.mode, 0.05, 0.07))};
+`
+
+/** 당시 국가원수 — 나라 이름 아래 한 줄. 이름만 진하게, 직함·시점은 한 단 흐리게 */
+const HeadsLine = styled.span`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 5px;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  b {
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .meta {
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    color: ${metaText};
+  }
+  .arrow {
+    color: ${metaText};
+  }
+`
+
+const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 `
 
 const Period = styled.span`

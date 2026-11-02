@@ -15,6 +15,8 @@
  *
  * 문서 구성(섹션별 단락 수)은 목차가 맡는다 — 이 패널 아래에 있다.
  */
+import { useEffect, useRef, useState } from 'react'
+
 import { useQuery } from '@tanstack/react-query'
 import { FiMapPin } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
@@ -87,6 +89,16 @@ export function DetailFacts({
   onAddOriginalTitle,
 }: DetailFactsProps) {
   const jumpTo = (anchorId: string) => (onJump ? onJump(anchorId) : scrollToAnchor(anchorId))
+  /**
+   * 휴대폰 폭에선 사실 행을 접어 둔다 — 결과·진영 같은 긴 문장이 펼쳐진 채 탭 위에 서서 크림 전쟁은 장부만 439px,
+   * 탭이 1,082px까지 밀렸다. 연도·날짜·위치·수장 링크는 그대로 두고 행만 '사실 N개 보기'로 연다(넓은 폭은 무관).
+   */
+  const [factsOpen, setFactsOpen] = useState(false)
+  const rowsRef = useRef<HTMLDivElement>(null)
+  const [rowCount, setRowCount] = useState(0)
+  useEffect(() => {
+    setRowCount(rowsRef.current?.childElementCount ?? 0)
+  })
   /**
    * 댓글 — 긴 사건에선 개요 맨 끝(일본 최초 철도: 2만 px 아래)이라 있는지조차 안 보였다. 수를 장부에 두고
    * 누르면 내려간다. 하위 사건은 자체 댓글이 없어(상위 스레드로 이어진다) 줄을 세우지 않는다.
@@ -200,7 +212,18 @@ export function DetailFacts({
 
       {contemporaryLink}
 
-      <Rows>
+      {rowCount > 0 && (
+        <FactsToggle
+          type="button"
+          aria-expanded={factsOpen}
+          aria-controls="event-facts-rows"
+          onClick={() => setFactsOpen((open) => !open)}
+        >
+          {factsOpen ? '사실 접기' : `사실 ${rowCount}개 보기`}
+        </FactsToggle>
+      )}
+
+      <Rows ref={rowsRef} id="event-facts-rows" data-open={factsOpen || undefined}>
         {duration && <FactRow label="기간">{duration}</FactRow>}
         {outcome && (
           <FactRow label="결과" wide>
@@ -485,6 +508,12 @@ const Rows = styled.div`
    * 예전엔 표(라벨 64px 열)를 여러 열 격자에 얹었는데, 이름 값(wide)이 줄을 통째로 끊어
    * 짧은 사실(기간·하위 사건)까지 한 줄에 하나씩 떨어졌다(3행 × 34px, 오른쪽 2/3 공백).
    */
+  @container eventdetail (max-width: 639px) {
+    &:not([data-open]) {
+      display: none;
+    }
+  }
+
   @container eventdetail (max-width: 919px) {
     order: 10;
     flex-basis: 100%;
@@ -643,6 +672,33 @@ const AddLine = styled.button`
   }
   &:focus-visible {
     opacity: 1;
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+`
+
+/** 휴대폰 폭에서만 보이는 사실 행 열기 — 넓은 폭에선 행이 늘 펼쳐져 있어 숨긴다 */
+const FactsToggle = styled.button`
+  display: none;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${metaText};
+  cursor: pointer;
+
+  @container eventdetail (max-width: 639px) {
+    display: inline-flex;
+    order: 9;
+  }
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
     border-radius: 2px;

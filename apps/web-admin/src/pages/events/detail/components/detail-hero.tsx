@@ -483,14 +483,37 @@ export function ContemporaryHeadsLink({ event }: { event: EventDetail }) {
   // 목적지 headsOfState가 BC 미지원(재임 tenure era 마이그 없음) — BC 연도는 빈
   // 화면으로 유도하는 셈이라 링크 자체를 내리지 않는다. BC 지원 마이그 후 가드 제거.
   if (year < 0) return null
+  /*
+   * 이 사건의 참여국을 싣고 간다 — 연도만 넘기면 수장 비교 화면이 빈 보드로 열려, 1차대전에서 누른 사람이
+   * 15개국을 하나씩 다시 골라야 했다. 기간 앞뒤로 2년씩 띄워 즉위·퇴위가 띠 가장자리에서 잘리지 않게.
+   */
+  const endYear = Math.max(extractYear(event.endDate) ?? year, year)
+  const pins = [
+    ...(event.relatedCountries ?? []).map((country) => ({ kind: 'C' as const, id: country.id })),
+    ...(event.relatedHistoricalCountries ?? []).map((country) => ({ kind: 'H' as const, id: country.id })),
+  ]
+  const span = endYear > year ? `${year}~${endYear}` : `${year}`
+  if (pins.length === 0) {
+    return (
+      <ContemporaryLine>
+        <FiAward aria-hidden />
+        <ContemporaryLink
+          to={pathKeys.headsOfState(year)}
+          title={`${formatYearLabel(year)} 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
+        >
+          {formatYearLabel(year)} 동시대 수장 비교
+        </ContemporaryLink>
+      </ContemporaryLine>
+    )
+  }
   return (
     <ContemporaryLine>
       <FiAward aria-hidden />
       <ContemporaryLink
-        to={pathKeys.headsOfState(year)}
-        title={`${formatYearLabel(year)} 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
+        to={pathKeys.headsOfState(year, { range: { startYear: year - 2, endYear: endYear + 2 }, pins })}
+        title={`참여국 ${pins.length}곳을 ${span}년 수장 연표에 놓고 비교`}
       >
-        {formatYearLabel(year)} 동시대 수장 비교
+        참여국 {pins.length}곳의 당시 수장 <ContemporarySpan>{span} 비교</ContemporarySpan>
       </ContemporaryLink>
     </ContemporaryLine>
   )
@@ -515,6 +538,12 @@ const ContemporaryLine = styled.span`
     flex-shrink: 0;
     opacity: 0.7;
   }
+`
+
+/** 링크 뒤 기간 — 링크 색은 두고 무게만 내린다 */
+const ContemporarySpan = styled.span`
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
 `
 
 const ContemporaryLink = styled(Link)`
