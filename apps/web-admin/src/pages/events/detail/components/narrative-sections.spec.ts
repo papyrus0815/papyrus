@@ -5,6 +5,8 @@
  * 가장 위험한 회귀는 "배경 단락을 고쳤더니 전개 단락이 통째로 사라지는" 것이다.
  * 아래 테스트는 그 한 줄(두 묶음을 항상 합쳐 보낸다)을 잠근다.
  */
+import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
+
 import {
   AFTERMATH_TYPE,
   BACKGROUND_TYPE,
@@ -20,6 +22,8 @@ import {
   type SectionRow,
   splitTitlePeriod,
   syncRowsWithServer,
+  addHeadingAnchors,
+  extractProseHeadings,
 } from './narrative-sections.lib'
 
 const row = (over: Partial<SectionRow> = {}): SectionRow => ({
@@ -176,6 +180,23 @@ describe('syncRowsWithServer', () => {
 })
 
 describe('splitTitlePeriod', () => {
+  it('제목 앞 날짜도 시기로 뗀다', () => {
+    expect(splitTitlePeriod('1997년 7월 8일 NATO 정상회의 초청')).toEqual({
+      title: 'NATO 정상회의 초청',
+      period: '1997년 7월 8일',
+    })
+    expect(splitTitlePeriod('1872-10-14 개통식 — 천황 친림').period).toBe('1872-10-14')
+    expect(splitTitlePeriod('1970년대: 투기꾼의 아수라장')).toEqual({ title: '투기꾼의 아수라장', period: '1970년대' })
+    expect(splitTitlePeriod('1874~1880년 코베 측 확장').period).toBe('1874~1880년')
+    expect(splitTitlePeriod('1867년 11월 9일(음력 10월 14일) 니조성 의식').title).toBe('니조성 의식')
+  })
+
+  it('낱말에 붙은 연도와 숫자로 시작하는 이름은 그대로', () => {
+    expect(splitTitlePeriod('1949년의 위기').period).toBeNull()
+    expect(splitTitlePeriod('1067mm 협궤 채택').period).toBeNull()
+    expect(splitTitlePeriod('3대 조건').period).toBeNull()
+  })
+
   it('제목 끝 연도 괄호를 시기로 뗀다', () => {
     expect(splitTitlePeriod('배경 — 국공내전 4년의 누적 (1945-1949)')).toEqual({
       title: '배경 — 국공내전 4년의 누적',
@@ -235,5 +256,22 @@ describe('전개·여파 처음 접힘', () => {
     expect(shouldCollapseLongSection('narrative', 5001)).toBe(true)
     expect(shouldCollapseLongSection('aftermath', 2501)).toBe(true)
     expect(shouldCollapseLongSection('aftermath', 2000)).toBe(false)
+  })
+})
+
+describe('단락 소제목 앵커', () => {
+  const html = '<h3>2.1 *모렐* 부임</h3><p>본문</p><h3><br></h3><h4 class="x">A &amp; B</h4>'
+
+  it('빈 소제목을 건너뛰고 번호·라벨을 낸다', () => {
+    expect(extractProseHeadings(html, 'narrative-2')).toEqual([
+      { id: 'narrative-2-h1', label: '2.1 모렐 부임' },
+      { id: 'narrative-2-h2', label: 'A & B' },
+    ])
+  })
+
+  it('앵커 번호가 목차와 같고, 소독을 거쳐도 남는다', () => {
+    const anchored = sanitizeRichTextHtml(addHeadingAnchors(html, 'narrative-2'))
+    expect(anchored).toContain('id="narrative-2-h1"')
+    expect(anchored).toContain('id="narrative-2-h2"')
   })
 })

@@ -11,7 +11,7 @@
  * - **만들면 바로 쓴다.** '단락 추가'로 생긴 단락은 제목 입력이 열린 채 포커스까지 와 있고,
  *   제목이 빈 단락은 '제목 붙이기' 한 번으로 같은 자리에서 열린다.
  */
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 
 import { FiArrowDown, FiArrowUp, FiChevronDown, FiCornerUpRight, FiPlus, FiTrash2, FiType } from 'react-icons/fi'
@@ -31,8 +31,8 @@ import { emphasisToHtml } from '@/shared/lib/emphasis-markup'
 import { tidyProseHtml } from '@/shared/lib/prose-tidy'
 
 import * as S from '../styles'
-import { InlineRichText, InlineSelect, InlineText } from './inline'
-import { plainTextLength, type SectionKind, type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
+import { InlineRichText, InlineText } from './inline'
+import { addHeadingAnchors, plainTextLength, type SectionKind, type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
 import { REVEAL_ANCHOR_EVENT, revealAnchor } from './scroll-to-anchor'
 
 export * from './narrative-sections.lib'
@@ -61,11 +61,6 @@ interface NarrativeSectionListProps {
    * 이 값이 바뀌어도 이미 떠 있는 입력을 다시 열지는 않는다(InlineText의 초기값일 뿐).
    */
   autoEditKey?: string | null
-  /**
-   * 단락이 가리킬 수 있는 하위 사건(D2). 주면 단락 머리에 '하위 사건' 선택이 생긴다 —
-   * 전개 타임라인이 이 연결로 하위 사건 막대와 단락을 잇는다.
-   */
-  subjectOptions?: ReadonlyArray<{ value: string; label: string }>
   /**
    * 번호 단락 앞의 요약 본문(배경·여파) — 타임라인의 **첫 마디**로 같은 선에 꿴다(번호 대신 점).
    * 예전엔 선 밖에 따로 놓여, 단락이 없는 사건(대부분)은 배경에 타임라인이 아예 없었다.
@@ -99,7 +94,6 @@ export function NarrativeSectionList({
   bodyPlaceholder,
   anchorPrefix,
   autoEditKey,
-  subjectOptions,
   lead,
   collapsed = false,
   clampLead = false,
@@ -107,6 +101,10 @@ export function NarrativeSectionList({
   moveTargets,
   onMoveToSection,
 }: NarrativeSectionListProps) {
+  /** 메뉴가 열리면 첫 항목으로 — 키보드 사용자가 바로 고를 수 있게(마운트 때 한 번) */
+  const focusFirstMenuItem = useCallback((menu: HTMLDivElement | null) => {
+    menu?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+  }, [])
   /** '옮기기' 메뉴가 열린 단락 */
   const [moveMenuKey, setMoveMenuKey] = useState<string | null>(null)
   /**
@@ -244,18 +242,6 @@ export function NarrativeSectionList({
                     제목 붙이기
                   </AddTitleBtn>
                 )}
-                {subjectOptions && subjectOptions.length > 0 && (
-                  <SubjectPicker data-linked={row.subjectEventId ? 'true' : undefined}>
-                    <InlineSelect
-                      value={row.subjectEventId ?? ''}
-                      options={[{ value: '', label: '연결 안 함' }, ...subjectOptions]}
-                      onSave={(next) => onFieldChange(index, { subjectEventId: next || null })}
-                      placeholder="↳ 하위 사건"
-                      label={`${labelPrefix} ${ordinal}단락이 서술하는 하위 사건`}
-                      prefix={row.subjectEventId ? <span aria-hidden="true">↳ </span> : undefined}
-                    />
-                  </SubjectPicker>
-                )}
                 <RowActions>
                   <RowActionBtn
                     type="button"
@@ -281,7 +267,19 @@ export function NarrativeSectionList({
                         if (!blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) setMoveMenuKey(null)
                       }}
                       onKeyDown={(keyEvent) => {
-                        if (keyEvent.key === 'Escape') setMoveMenuKey(null)
+                        if (moveMenuKey !== row.key) return
+                        const host = keyEvent.currentTarget
+                        if (keyEvent.key === 'Escape') {
+                          setMoveMenuKey(null)
+                          host.querySelector<HTMLElement>('[aria-haspopup]')?.focus()
+                          return
+                        }
+                        if (keyEvent.key !== 'ArrowDown' && keyEvent.key !== 'ArrowUp') return
+                        keyEvent.preventDefault()
+                        const items = [...host.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+                        const current = items.indexOf(document.activeElement as HTMLElement)
+                        const step = keyEvent.key === 'ArrowDown' ? 1 : -1
+                        items[(current + step + items.length) % items.length]?.focus()
                       }}
                     >
                       <RowActionBtn
@@ -295,7 +293,7 @@ export function NarrativeSectionList({
                         <FiCornerUpRight />
                       </RowActionBtn>
                       {moveMenuKey === row.key && (
-                        <MoveMenu role="menu">
+                        <MoveMenu role="menu" ref={focusFirstMenuItem}>
                           {moveTargets.map((target) => (
                             <MoveMenuItem
                               key={target.kind}
@@ -336,7 +334,7 @@ export function NarrativeSectionList({
                   label={`${labelPrefix} ${ordinal}단락 본문`}
                   onPersonClick={onPersonClick}
                   onEntityLink={onEntityLink}
-                  transformReadHtml={readProseHtml}
+                  transformReadHtml={(html) => readProseHtml(addHeadingAnchors(html, anchorId))}
                   autoOpen={row.key === bodyOpenKey}
                   /**
                    * sticky ✎ 금지 — sticky는 '개요'처럼 페이지를 통째로 차지하는 긴 본문
@@ -780,6 +778,11 @@ const SectionBodyHost = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
   max-width: ${S.PROSE_WIDTH}px;
 
+  /* 목차에서 소제목으로 왔을 때 화면 맨 위에 붙지 않게 — 단락 앵커와 같은 여백 */
+  h1, h2, h3, h4, h5, h6 {
+    scroll-margin-top: 24px;
+  }
+
   /* 표가 든 단락만 풀어 표는 문서 열 전체로 — 글줄은 Main의 규칙이 여전히 720에 묶는다(전체 폭 지면) */
   &:has(table) {
     max-width: none;
@@ -833,15 +836,3 @@ export function AddSectionButton({
     </AddBtn>
   )
 }
-
-/** 단락 → 하위 사건 연결(D2) — 연결 전에는 옅게, 연결되면 본문 색 */
-const SubjectPicker = styled.div`
-  flex-shrink: 0;
-  max-width: 40%;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  &[data-linked='true'] {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`

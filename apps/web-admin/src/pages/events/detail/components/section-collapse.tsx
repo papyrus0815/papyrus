@@ -113,6 +113,9 @@ export function CollapseEndBar({
 
 /** 섹션 머리의 글자 버튼 — 본문 편집을 가리지 않게 낮은 목소리로 */
 export const HeaderTextAction = styled.button`
+  &[data-prominent] {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
   padding: 4px 2px;
   border: none;
   background: none;

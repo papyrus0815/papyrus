@@ -748,6 +748,12 @@ export const RailSubIndex = styled.span`
 `
 
 /* 단락 제목은 길다('발발과 초기 남진 — 6.25 ~ 9.15 부산교두보의 11주') — 두 줄까지. */
+/** 단락 안 소제목 — 단락 줄보다 한 단 더 들이고 작게 */
+export const RailHeadingItem = styled(RailSubItem)`
+  padding-left: 44px;
+  font-size: 11.5px;
+`
+
 export const RailSubLabel = styled.span`
   display: -webkit-box;
   -webkit-line-clamp: 2;

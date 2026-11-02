@@ -26,7 +26,10 @@ export function DetailRail({ sections }: DetailRailProps) {
     () =>
       sections.flatMap((section) => [
         section.id,
-        ...(section.children ?? []).map((child) => child.id),
+        ...(section.children ?? []).flatMap((child) => [
+          child.id,
+          ...(child.headings ?? []).map((heading) => heading.id),
+        ]),
       ]),
     [sections],
   )
@@ -49,7 +52,8 @@ export function DetailRail({ sections }: DetailRailProps) {
       let current = flatIds[0]
       for (const id of flatIds) {
         const node = document.getElementById(id)
-        if (!node) continue
+        /* 줄여 둔 단락 속 소제목은 화면에 없다 — 좌표가 0이라 '이미 지나감'으로 잘못 잡힌다 */
+        if (!node || node.closest('[hidden]')) continue
         if (node.getBoundingClientRect().top <= READING_LINE) current = id
       }
       setActiveId(current)
@@ -80,7 +84,10 @@ export function DetailRail({ sections }: DetailRailProps) {
         <S.RailNavList aria-label="섹션 목차">
           {sections.map((link) => {
             const children = link.children ?? []
-            const childActive = children.some((child) => child.id === activeId)
+            const childActive = children.some(
+              (child) =>
+                child.id === activeId || child.headings?.some((heading) => heading.id === activeId),
+            )
             const isActive = activeId === link.id || childActive
             return (
               <li key={link.id}>
@@ -94,7 +101,10 @@ export function DetailRail({ sections }: DetailRailProps) {
                 </S.RailNavItem>
                 {isActive && children.length > 0 && (
                   <S.RailSubList aria-label={`${link.label} 단락`}>
-                    {children.map((child, index) => (
+                    {children.map((child, index) => {
+                      const headings = child.headings ?? []
+                      const inChild = child.id === activeId || headings.some((heading) => heading.id === activeId)
+                      return (
                       <li key={child.id}>
                         <S.RailSubItem
                           type="button"
@@ -108,8 +118,26 @@ export function DetailRail({ sections }: DetailRailProps) {
                           <S.RailSubIndex aria-hidden>{index + 1}</S.RailSubIndex>
                           <S.RailSubLabel>{child.label}</S.RailSubLabel>
                         </S.RailSubItem>
+                        {inChild && headings.length > 0 && (
+                          <S.RailSubList aria-label={`${child.label} 소제목`}>
+                            {headings.map((heading) => (
+                              <li key={heading.id}>
+                                <S.RailHeadingItem
+                                  type="button"
+                                  $active={activeId === heading.id}
+                                  aria-current={activeId === heading.id ? 'location' : undefined}
+                                  title={heading.label}
+                                  onClick={() => handleNavClick(heading.id)}
+                                >
+                                  <S.RailSubLabel>{heading.label}</S.RailSubLabel>
+                                </S.RailHeadingItem>
+                              </li>
+                            ))}
+                          </S.RailSubList>
+                        )}
                       </li>
-                    ))}
+                      )
+                    })}
                   </S.RailSubList>
                 )}
               </li>

@@ -28,6 +28,7 @@ import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inlin
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { PHASE_LABEL, groupByPhase } from './collection-development.lib'
+import { HeaderTextAction } from './section-collapse'
 import { CollectionFooter, ExpandToggle, KindSwitch, RegroupBar, createCollectionWith } from './collection-regroup'
 import { compareEventStart, crossPatchErrorMessage } from './detail-network.lib'
 import {
@@ -119,7 +120,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
    * 하위의 하위까지 — 조망 API가 주 상위 계보 전부를 준다(이 사건 상세 응답엔 직계뿐). 받기 전엔 직계로 그린다.
    * 조망은 ['events'] 아래 키라 하위를 고칠 때마다(invalidateEventQueries) 함께 다시 받는다.
    */
-  const { data: overview } = useQuery({
+  const { data: overview, isError: overviewFailed, refetch: refetchOverview } = useQuery({
     queryKey: eventKeys.overview(event.id),
     queryFn: () => getEventOverview(event.id),
     staleTime: 0,
@@ -198,7 +199,13 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
 
   /** 상위 기간에 비춘 구획(직계만) — 하나뿐이면(보통 전부 '기간 중') 구획 머리를 그리지 않는다 */
   const groups = useMemo(() => groupByPhase(tree, event), [tree, event])
-  const showPhaseHeads = groups.length > 1
+  /* 전부 '기간 중'일 때만 생략 — 하나뿐이어도 기간 밖이면 그 사실을 말해야 한다 */
+  const showPhaseHeads = groups.length > 1 || (groups.length === 1 && groups[0].phase !== 'during')
+  /** 번호 = 화면에 보이는 차례 — 기간에 걸친 하위는 시작일 순서와 구획 순서가 다를 수 있다 */
+  const ordinalById = useMemo(
+    () => new Map(groups.flatMap((group) => group.items).map((node, position) => [node.id, position + 1])),
+    [groups],
+  )
 
   /**
    * 구획의 기준 시점 — '시작 이전'은 무엇의 이전인지(상위 시작일)를 함께 말해야 구획이 읽힌다.
@@ -434,6 +441,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     return (
       <Step
         key={node.id}
+        id={`narrative-${node.id}`}
         $depth={node.depth}
         data-selected={checked || undefined}
         data-drop={hint?.type}
@@ -549,6 +557,12 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   }
 
   const allOwned = useMemo(() => [...index.values()].filter((node) => !(node as TreeRow).viaExtraLink), [index])
+  /** 접을 수 있는 묶음 — 하위가 있는 것만 */
+  const foldableIds = useMemo(
+    () => allOwned.filter((node) => node.isCollection && node.children.length > 0).map((node) => node.id),
+    [allOwned],
+  )
+  const allFolded = foldableIds.length > 0 && foldableIds.every((id) => collapsedIds.has(id))
 
   return (
     <S.Section id="narrative" aria-busy={busy} ref={sectionRef}>
@@ -563,6 +577,16 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
               ? `하위 사건 ${directCount}건 · 그 아래까지 ${totalCount}건`
               : `하위 사건 ${directCount}건`}
         </S.SectionSubtitle>
+        {foldableIds.length > 0 && (
+          <S.SectionActions>
+            <HeaderTextAction
+              type="button"
+              onClick={() => setCollapsedIds(allFolded ? new Set() : new Set(foldableIds))}
+            >
+              {allFolded ? '모두 펼치기' : '모두 접기'}
+            </HeaderTextAction>
+          </S.SectionActions>
+        )}
       </S.SectionHeader>
 
       {directCount === 0 ? (
@@ -615,11 +639,19 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
               <Steps data-phase={showPhaseHeads ? group.phase : undefined}>
                 {group.items.map((node) => {
                   /* 번호는 구획을 넘어 이어지는 직계 차례(1·2·3…) — 구획마다 다시 1부터면 몇 번째 국면인지 흐려진다 */
-                  return renderRow(node, String(tree.indexOf(node) + 1))
+                  return renderRow(node, String(ordinalById.get(node.id) ?? 0))
                 })}
               </Steps>
             </PhaseGroup>
           ))}
+          {overviewFailed && !overview && (
+            <TruncatedNote>
+              하위의 하위를 불러오지 못해 직계만 보입니다.{' '}
+              <TextButton type="button" onClick={() => void refetchOverview()}>
+                다시 불러오기
+              </TextButton>
+            </TruncatedNote>
+          )}
           {truncated && <TruncatedNote>하위가 너무 많아 일부만 보입니다 — 묶음 상세에서 나머지를 보세요.</TruncatedNote>}
           {/*
            * 다음 차례 — 추가는 목록 **끝**에 선다. 번호 열에 '+' 노드를 세워 목록의 다음 줄처럼 읽히게 한다.
@@ -691,7 +723,11 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
               setCreateOpen(false)
               setCreateUnder(null)
             }}
-            initialParent={createUnder ?? { id: event.id, title: event.title }}
+            initialParent={
+              createUnder
+                ? { ...createUnder, domain: event.domain }
+                : { id: event.id, title: event.title, domain: event.domain }
+            }
             onSaved={() => {
               invalidateEventQueries(queryClient, { eventId: event.id })
               if (createUnder) invalidateEventQueries(queryClient, { eventId: createUnder.id })
@@ -969,6 +1005,8 @@ const Steps = styled.ol`
 
 const Step = styled.li<{ $depth: number }>`
   position: relative;
+  /* 목차에서 왔을 때 sticky 구획 머리 아래로 파묻히지 않게 */
+  scroll-margin-top: 72px;
   display: grid;
   grid-template-columns: ${({ $depth }) => columnOf($depth)}px minmax(0, 1fr);
   column-gap: ${({ $depth }) => ($depth > 1 ? 10 : 12)}px;

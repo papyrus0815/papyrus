@@ -12,7 +12,7 @@
  */
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-empty'
 
-import { type SectionKind, sectionKindOf, splitTitlePeriod } from './narrative-sections.lib'
+import { type SectionKind, sectionKindOf, splitTitlePeriod, extractProseHeadings } from './narrative-sections.lib'
 
 /** 내용이 없으면 접히는 섹션들 — 모듈·댓글은 대상이 아니다(모듈은 이미 있을 때만 뜬다). */
 export type FoldableSectionId =
@@ -49,6 +49,7 @@ export interface SectionFillSource {
   eventSections?: Array<{
     sectionType: string
     title?: string | null
+    content?: string | null
     order?: number
   }>
   relatedPersons?: unknown[]
@@ -109,7 +110,14 @@ export interface OutlineItem {
   id: string
   label: string
   /** 번호 단락 — 긴 섹션(한국전쟁 '전개'는 10,800px) 안에서 길을 잃지 않게. */
-  children?: Array<{ id: string; label: string }>
+  children?: Array<OutlineChild>
+}
+
+export interface OutlineChild {
+  id: string
+  label: string
+  /** 단락 안 소제목 — 그 단락을 읽는 동안에만 펼친다 */
+  headings?: Array<{ id: string; label: string }>
 }
 
 /**
@@ -119,14 +127,19 @@ export interface OutlineItem {
 export function paragraphOutline(
   event: SectionFillSource,
   kind: SectionKind,
-): Array<{ id: string; label: string }> {
+): OutlineChild[] {
   return (event.eventSections ?? [])
     .slice()
     .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
     .filter((section) => sectionKindOf(section.sectionType) === kind)
-    .map((section, index) => ({
+    .map((section, index) => {
+      const headings = extractProseHeadings(section.content, `${kind}-${index + 1}`)
+      return {
       id: `${kind}-${index + 1}`,
+      /* 소제목이 하나뿐이면 단락 제목과 다를 바 없어 달지 않는다 */
+      ...(headings.length >= 2 ? { headings } : {}),
       /* 시기 '(1870년 12월)'는 본문 타임라인의 날짜 줄이 맡는다 — 목차에선 떼어 한 줄로 */
       label: splitTitlePeriod(section.title?.trim() ?? '').title.trim() || `${index + 1}단락`,
-    }))
+      }
+    })
 }

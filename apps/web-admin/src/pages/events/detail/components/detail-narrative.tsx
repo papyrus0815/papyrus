@@ -128,18 +128,6 @@ export function DetailNarrative({
     [serverSections],
   )
 
-  /**
-   * 전개 단락이 가리킬 수 있는 하위 사건(D2) — 주 상위·추가 상위로 이어진 자식.
-   * 전개 단계의 정본은 하위 사건이고, 단락은 '이 단계를 서술한다'고 그것을 가리킨다.
-   */
-  const subjectOptions = useMemo(
-    () => [
-      ...(event.childEvents ?? []).map((child) => ({ value: child.id, label: child.title })),
-      ...(event.extraChildren ?? []).map((child) => ({ value: child.id, label: child.title })),
-    ],
-    [event.childEvents, event.extraChildren],
-  )
-
   /* sections는 reorder/add/remove 작업이 묶여 있어 로컬 state 유지.
      server invalidate → refetch 되면 다시 로컬 상태로 동기화. */
   const toRows = useCallback(
@@ -320,11 +308,25 @@ export function DetailNarrative({
     /* 옮겨 간 섹션이 접혀 있으면 펼친다 — 방금 옮긴 단락이 어디 갔는지 보이게 */
     foldOf[to].setCollapsed(false)
   }
+  /**
+   * 묶음에 남은 전개 단락을 한 번에 배경으로 — 서버는 하나라도 남으면 저장을 거부하므로 낱개로는 못 옮긴다.
+   */
+  const moveStrayToBackground = () => {
+    commit(
+      [...backgroundRows, ...narrativeRows.map((row) => ({ ...row, sectionType: SECTION_TYPE_OF.background }))],
+      [],
+      aftermathRows,
+    )
+    backgroundFold.setCollapsed(false)
+  }
   /** 이 섹션에서 갈 수 있는 곳 — 묶음 사건은 전개가 하위 사건이라 전개로는 못 간다 */
   const targetsFrom = (from: SectionKind) =>
     (['background', 'narrative', 'aftermath'] as const)
       .filter((kind) => kind !== from && !(kind === 'narrative' && developmentSlot))
       .map((kind) => ({ kind, label: SECTION_MOVE_LABEL[kind] }))
+
+  /* 나눌 단락이 있어야 나누기다 — 한 단락짜리 전개는 연관 탭의 안내로 충분하다 */
+  const canSplit = Boolean(onRequestSplit) && narrativeRows.length >= 2
 
   return (
     <>
@@ -402,6 +404,21 @@ export function DetailNarrative({
         </S.Section>
       )}
 
+      {/* 묶음에 남은 전개 단락 — 시드·직접 입력으로만 생긴다. 조용히 숨기면 이 사건의 본문 저장이 영문 모르게 막힌다 */}
+      {developmentSlot && narrativeRows.length > 0 && (
+        <StrayNotice role="alert">
+          <b>전개 단락 {narrativeRows.length}개가 남아 있어 이 사건의 배경·여파 단락이 저장되지 않습니다.</b> 묶음
+          사건의 전개는 하위 사건이 맡습니다.
+          <StrayList>
+            {narrativeRows.map((row) => (
+              <li key={row.key}>{row.title.trim() || '제목 없는 단락'}</li>
+            ))}
+          </StrayList>
+          <HeaderTextAction type="button" onClick={moveStrayToBackground}>
+            모두 배경으로 옮기기
+          </HeaderTextAction>
+        </StrayNotice>
+      )}
       {/* 묶음 사건 — 전개는 하위 사건(배경과 여파 사이의 같은 자리) */}
       {developmentSlot}
 
@@ -413,7 +430,7 @@ export function DetailNarrative({
             {narrativeRows.length > 0 && (
               <S.SectionSubtitle>{narrativeRows.length}단락</S.SectionSubtitle>
             )}
-            {(onRequestSplit || narrativeFold.canCollapse) && (
+            {(canSplit || narrativeFold.canCollapse) && (
               <S.SectionActions>
                 {narrativeFold.canCollapse && (
                   <CollapseHeaderToggle
@@ -423,8 +440,8 @@ export function DetailNarrative({
                   />
                 )}
                 {/* 전개가 여러 국면으로 커지면 묶음 사건이 되어 국면마다 하위 사건이 된다 */}
-                {onRequestSplit && (
-                  <HeaderTextAction type="button" onClick={onRequestSplit}>
+                {canSplit && (
+                  <HeaderTextAction type="button" onClick={onRequestSplit} data-prominent={narrativeRows.length >= 5 || undefined}>
                     하위 사건으로 나누기
                   </HeaderTextAction>
                 )}
@@ -455,7 +472,6 @@ export function DetailNarrative({
               autoEditKey={autoEditKey}
               moveTargets={targetsFrom('narrative')}
               onMoveToSection={(index, kind) => moveBetween('narrative', index, kind)}
-              subjectOptions={subjectOptions}
               collapsed={narrativeFold.collapsed}
               onRequestExpand={() => narrativeFold.setCollapsed(false)}
             />
@@ -574,6 +590,26 @@ const SECTION_MOVE_LABEL: Record<SectionKind, string> = {
  * 빈 전개 안내 — InlineRichText의 빈 안내(기울임 · text.tertiary · 누르면 쓰기)와 같은 조판.
  * 버튼이지만 버튼처럼 보이지 않게: 본문 자리에 놓인 '여기에 쓰세요' 한 줄이다.
  */
+const StrayNotice = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: ${S.PROSE_WIDTH}px;
+  padding: 12px 14px;
+  border: 1px solid ${({ theme }) => theme.colors.error};
+  border-radius: 8px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const StrayList = styled.ul`
+  margin: 0;
+  padding-left: 18px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
 const EmptyLead = styled.button`
   align-self: flex-start;
   padding: 0;

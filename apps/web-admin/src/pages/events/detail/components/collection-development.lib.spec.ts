@@ -7,6 +7,15 @@ describe('phaseOf', () => {
     expect(phaseOf({ startDate: '1914-06-28T00:00:00.000Z', startDatePrecision: 'day' }, ww1)).toBe('before')
   })
 
+  it('상위 시작 전에 시작해 시작일까지 이어진 하위는 기간 중', () => {
+    expect(
+      phaseOf({ startDate: '1914-06-28', startDatePrecision: 'day', endDate: '1914-08-04', endDatePrecision: 'day' }, ww1),
+    ).toBe('during')
+    expect(
+      phaseOf({ startDate: '1914-06-28', startDatePrecision: 'day', endDate: '1914-07-23', endDatePrecision: 'day' }, ww1),
+    ).toBe('before')
+  })
+
   it('기간 안은 기간 중, 시작 당일도 기간 중', () => {
     expect(phaseOf({ startDate: '1916-02-21', startDatePrecision: 'day' }, ww1)).toBe('during')
     expect(phaseOf({ startDate: '1914-07-28', startDatePrecision: 'day' }, ww1)).toBe('during')

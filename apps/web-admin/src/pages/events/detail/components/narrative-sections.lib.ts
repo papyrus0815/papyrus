@@ -202,10 +202,53 @@ export function mergeSectionPayload(
  */
 const TITLE_PERIOD = /\s*\(\s*((?:서기|기원전|BC|AD|B\.C\.|A\.D\.)?\s*\d[^()]*)\)\s*$/
 
+/**
+ * 제목 **앞**의 날짜 — '1997년 7월 8일 NATO 초청'·'1872-10-14 개통식'·'1970년대: 투기꾼'.
+ * 날짜 뒤에 공백이나 구분 기호가 와야 한다 — '1949년의 위기'처럼 낱말에 붙은 연도는 제목의 일부다.
+ */
+const LEADING_PERIOD =
+  /^((?:기원전\s*)?\d{3,4}(?:~\d{3,4}년|년대|년(?:\s*\d{1,2}월(?:\s*\d{1,2}일)?(?:\([^)]*\))?)?|-\d{2}(?:-\d{2})?))(?:\s*[:：—–]\s*|\s+)(\S.+)$/
+
+const HEADING_PATTERN = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi
+
+const headingText = (inner: string) =>
+  inner
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** 단락 본문의 소제목 — 목차가 긴 단락 안까지 가리키게 한다. 빈 소제목은 번호를 받지 않는다 */
+export function extractProseHeadings(
+  html: string | null | undefined,
+  anchorId: string,
+): Array<{ id: string; label: string }> {
+  const headings: Array<{ id: string; label: string }> = []
+  for (const match of (html ?? '').matchAll(HEADING_PATTERN)) {
+    const label = headingText(match[2])
+    if (label) headings.push({ id: `${anchorId}-h${headings.length + 1}`, label })
+  }
+  return headings
+}
+
+/** 읽기 HTML의 소제목에 앵커를 단다(저장값 불변) — 번호는 extractProseHeadings와 같은 규칙 */
+export function addHeadingAnchors(html: string, anchorId: string): string {
+  let ordinal = 0
+  return html.replace(HEADING_PATTERN, (whole, level: string, inner: string) => {
+    if (!headingText(inner)) return whole
+    ordinal += 1
+    return `<h${level} id="${anchorId}-h${ordinal}">${inner}</h${level}>`
+  })
+}
+
 export function splitTitlePeriod(title: string): { title: string; period: string | null } {
   const match = TITLE_PERIOD.exec(title)
-  if (!match || match.index === 0) return { title, period: null }
-  return { title: title.slice(0, match.index), period: match[1].trim() }
+  if (match && match.index !== 0) return { title: title.slice(0, match.index), period: match[1].trim() }
+  const leading = LEADING_PERIOD.exec(title.trim())
+  if (leading) return { title: leading[2].trim(), period: leading[1].trim() }
+  return { title, period: null }
 }
 
 /* ───────────────────────── 긴 배경 줄여 보기 ───────────────────────── */

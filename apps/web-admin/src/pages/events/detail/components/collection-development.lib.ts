@@ -62,11 +62,14 @@ export function phaseOf(child: DatedLike, parent: DatedLike): DevelopmentPhase {
   if (!childStart) return 'undated'
   const childPrecision = toPrecision(child.startDatePrecision)
   const parentStart = parseDateTokens(parent.startDate)
-  if (
-    parentStart &&
-    compareAtCoarser(childStart, childPrecision, parentStart, toPrecision(parent.startDatePrecision)) < 0
-  ) {
-    return 'before'
+  const parentStartPrecision = toPrecision(parent.startDatePrecision)
+  if (parentStart && compareAtCoarser(childStart, childPrecision, parentStart, parentStartPrecision) < 0) {
+    /* 상위 시작 전에 시작했어도 시작일까지 이어졌으면 '시작 이전'이 아니다 — 기간에 걸쳐 있다 */
+    const childEnd = parseDateTokens(child.endDate)
+    const endsBefore =
+      !childEnd ||
+      compareAtCoarser(childEnd, toPrecision(child.endDatePrecision), parentStart, parentStartPrecision) < 0
+    if (endsBefore) return 'before'
   }
   const parentEnd = parseDateTokens(parent.endDate)
   if (
