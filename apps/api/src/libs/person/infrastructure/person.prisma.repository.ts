@@ -3234,13 +3234,29 @@ export class PersonPrismaRepository implements IPersonRepository {
   async findCabinetOverview(cabinetId: string, accountId?: string): Promise<any | null> {
     const tenureSelect = {
       id: true,
+      personId: true,
+      countryId: true,
+      historicalCountryId: true,
+      historicalCountry: {
+        select: { id: true, name: true },
+      },
       positionType: true,
       title: true,
       titleEn: true,
       ordinal: true,
       subTermNumber: true,
+      regnalName: true,
+      regnalEras: REGNAL_ERAS_ORDER,
       startDate: true,
+      startEra: true,
+      startYear: true,
+      startMonth: true,
+      startDay: true,
       endDate: true,
+      endEra: true,
+      endYear: true,
+      endMonth: true,
+      endDay: true,
       administrationDepartmentId: true,
       administrationDepartment: {
         select: { id: true, name: true, categoryId: true },
@@ -3262,9 +3278,10 @@ export class PersonPrismaRepository implements IPersonRepository {
         select: {
           id: true,
           title: true,
+          positionType: true,
+          isMonarchical: true,
           rank: true,
           categoryId: true,
-          administrationDepartmentId: true,
         },
       },
       /*
@@ -5161,6 +5178,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           ordinal: true,
           regnalName: true,
           dynastyOrdinal: true,
+          startYear: true,
+          startEra: true,
           country: {
             select: {
               id: true, name: true,
@@ -5185,7 +5204,10 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
           },
         },
-        orderBy: { startDate: Prisma.SortOrder.asc },
+        orderBy: [
+          { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+          { startYear: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+        ],
         take: 1,
       },
       // 일반 인물 카드 국기 — Person.countryId (현대 주 국적)
@@ -5285,20 +5307,34 @@ export class PersonPrismaRepository implements IPersonRepository {
       derived = false,
     ) => {
       const key = [a, b].sort().join('__')
-      // 먼저 등장한 메타를 보존(first-wins) — 실제 PersonSpouse 엣지는 BFS 초반에
-      // 추가되므로, 나중의 Step5 추론(derived) 호출이 확정 관계를 덮어쓰지 않는다.
-      if (!spouseEdgeMeta.has(key)) {
-        // 구조화 연도 우선(BC·고대는 DateTime이 null), 레거시 행은 DateTime 연도 폴백
-        const startYear = meta?.marriageStartYear ?? yearOfDate(meta?.marriageStartDate)
-        const endYear = meta?.marriageEndYear ?? yearOfDate(meta?.marriageEndDate)
+      // 구조화 연도 우선(BC·고대는 DateTime이 null), 레거시 행은 DateTime 연도 폴백
+      const startYear = meta?.marriageStartYear ?? yearOfDate(meta?.marriageStartDate)
+      const endYear = meta?.marriageEndYear ?? yearOfDate(meta?.marriageEndDate)
+      const incomingStartYear =
+        startYear != null && meta?.marriageStartEra === 'BC' ? -startYear : startYear
+      const incomingEndYear =
+        endYear != null && meta?.marriageEndEra === 'BC' ? -endYear : endYear
+      const incomingRank = (meta?.marriageRank ?? null) as string | null
+      const incomingNote = (meta?.note ?? null) as string | null
+
+      const existing = spouseEdgeMeta.get(key)
+      if (!existing) {
         spouseEdgeMeta.set(key, {
           // BC는 음수 부호 연도로 — 소비자(♥ 라벨·정렬)가 era 없이도 순서·표기 판단 가능
-          marriageStartYear: startYear != null && meta?.marriageStartEra === 'BC' ? -startYear : startYear,
-          marriageEndYear: endYear != null && meta?.marriageEndEra === 'BC' ? -endYear : endYear,
-          marriageRank: (meta?.marriageRank ?? null) as string | null,
-          note: (meta?.note ?? null) as string | null,
+          marriageStartYear: incomingStartYear,
+          marriageEndYear: incomingEndYear,
+          marriageRank: incomingRank,
+          note: incomingNote,
           derived,
         })
+      } else {
+        // 양방향 PersonSpouse 행 중 한쪽에만 marriageRank·혼인연도·메모가 기록된 경우나
+        // derived 엣지가 먼저 생성된 경우에도 non-null 메타데이터가 유실되지 않도록 병합한다.
+        existing.marriageStartYear = existing.marriageStartYear ?? incomingStartYear
+        existing.marriageEndYear = existing.marriageEndYear ?? incomingEndYear
+        existing.marriageRank = existing.marriageRank ?? incomingRank
+        existing.note = existing.note ?? incomingNote
+        existing.derived = existing.derived && derived
       }
     }
 
@@ -5342,7 +5378,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
     }
 
-    /** 자녀·형제 등 출생연도 오름차순으로 페치 (정렬 안정성) */
+    /** 자녀·형제 등 출생 서열·기원전 포함 부호 출생연도 오름차순으로 페치 (정렬 안정성) */
     const fetchChildrenOf = async (
       parentIds: string[],
       opts: { take: number; scope: string; excludeIds?: string[] },
@@ -5354,18 +5390,31 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (opts.excludeIds && opts.excludeIds.length > 0) {
         where.NOT = { id: { in: opts.excludeIds } }
       }
-      // take + 1 로 over-fetch해 절단 여부 판단
+      // BC(기원전) 인물은 birthDate 연도가 크기값(양수)이라 DB 단순 ASC에서는 나이순이 역전되므로,
+      // 넉넉히 조회한 뒤 애플리케이션 레벨에서 부호 연도(BC는 음수) 기준 재정렬 후 take만큼 절단한다.
       const rows = await this.prisma.person.findMany({
         where,
-        select: { id: true },
+        select: { id: true, birthOrder: true, birthDate: true, birthEra: true },
         orderBy: [
-          // birthOrder(서차) 1차 — 사서 인물은 생일 미상 형제가 많아 birthDate만으로는
-          // NULLS LAST 절단에서 체계적으로 탈락한다(컬럼 도입 목적 그대로 복합키 정렬).
           { birthOrder: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
           { birthDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
           { id: Prisma.SortOrder.asc },
         ],
-        take: opts.take + 1,
+        take: Math.max(opts.take + 1, 200),
+      })
+      const signedBirthYear = (r: { birthDate: Date | null; birthEra: Era | null }) => {
+        const y = yearOfDate(r.birthDate)
+        if (y == null) return Number.POSITIVE_INFINITY
+        return r.birthEra === 'BC' ? -y : y
+      }
+      rows.sort((a, b) => {
+        const orderA = a.birthOrder ?? Number.POSITIVE_INFINITY
+        const orderB = b.birthOrder ?? Number.POSITIVE_INFINITY
+        if (orderA !== orderB) return orderA - orderB
+        const yearA = signedBirthYear(a)
+        const yearB = signedBirthYear(b)
+        if (yearA !== yearB) return yearA - yearB
+        return a.id.localeCompare(b.id)
       })
       const truncated = rows.length > opts.take
       if (truncated) {

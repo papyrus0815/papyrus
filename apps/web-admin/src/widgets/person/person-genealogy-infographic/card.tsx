@@ -1,5 +1,6 @@
-import { useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
@@ -7,7 +8,7 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { NODE_H, NODE_W } from './constants'
-import { FamilyTreeLookupContext, useNodeOpenable } from './context'
+import { FamilyTreeLookupContext, KinshipLookupContext, useNodeOpenable } from './context'
 import type { AvatarRole, FlagSource, NodePerson, PersonMetaSource } from './types'
 import {
   buildPersonTooltip,
@@ -37,7 +38,31 @@ import {
  *    최하단 카드 버블이 잘리던 문제
  */
 export function CardHoverInfo({ person }: { person: PersonMetaSource }) {
-  const lines = buildPersonTooltipLines(person)
+  const lookup = useContext(FamilyTreeLookupContext)
+  const kinshipLookup = useContext(KinshipLookupContext)
+  const lines = useMemo(() => {
+    const ftNode = person.id ? lookup.get(person.id) : undefined
+    const fId = person.fatherId ?? ftNode?.fatherId ?? null
+    const mId = person.motherId ?? ftNode?.motherId ?? null
+    const resolvedFatherName =
+      person.fatherName ??
+      (fId && lookup.has(fId) ? getPersonDisplayName(lookup.get(fId)!, true) : null)
+    const resolvedMotherName =
+      person.motherName ??
+      (mId && lookup.has(mId) ? getPersonDisplayName(lookup.get(mId)!, true) : null)
+
+    const baseLines = buildPersonTooltipLines({
+      ...person,
+      fatherName: resolvedFatherName,
+      motherName: resolvedMotherName,
+    })
+    const kinship = person.id ? kinshipLookup.get(person.id) : undefined
+    if (kinship && kinship.chon !== 0) {
+      return [{ label: '기준 관계', value: kinship.summary }, ...baseLines]
+    }
+    return baseLines
+  }, [person, lookup, kinshipLookup])
+
   const anchorRef = useRef<HTMLSpanElement | null>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
@@ -305,14 +330,43 @@ export function NodePersonCompactCard({
  * badge: classifySiblingKinship 판별 결과 라벨('형제'|'이복형제'|'이부형제') —
  * 판별불가·친형제는 무수식 '형제'(기본값). 색은 전 분류 amber sibling 단일 유지(텍스트만 분화).
  */
+export function CardUnlinkButton({
+  label = '가족 연결 해제',
+  onUnlink,
+}: {
+  label?: string
+  onUnlink: () => void
+}) {
+  return (
+    <CardUnlinkBtn
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation()
+        onUnlink()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.stopPropagation()
+        }
+      }}
+    >
+      <FiX size={12} strokeWidth={2.5} />
+    </CardUnlinkBtn>
+  )
+}
+
 export function SiblingCompactNode({
   person,
   onPersonClick,
+  onUnlink,
   badge = '형제',
   badgeAriaLabel,
 }: {
   person: NodePerson
   onPersonClick?: (id: string) => void
+  onUnlink?: () => void
   badge?: string
   badgeAriaLabel?: string
 }) {
@@ -341,6 +395,7 @@ export function SiblingCompactNode({
       title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
       {...interactiveProps}
     >
+      {onUnlink && <CardUnlinkButton label="형제 연결 해제" onUnlink={onUnlink} />}
       <GeoThumbnail person={person} role="sibling" />
       <NodeNameBlock person={person} />
       <NodeBadge $role="sibling" aria-label={badgeAriaLabel}>{badge}</NodeBadge>
@@ -894,4 +949,40 @@ const InMarriageMark = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: help;
+`
+
+const CardUnlinkBtn = styled.button`
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.35)' : 'rgba(239, 68, 68, 0.25)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.92)' : 'rgba(255, 255, 255, 0.95)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#dc2626')};
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+
+  ${GeoNode}:hover &,
+  ${GeoNode}:focus-within & {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &:hover {
+    transform: scale(1.08);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(254, 226, 226, 0.95)'};
+  }
 `

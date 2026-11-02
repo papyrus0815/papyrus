@@ -93,6 +93,9 @@ export type FlagSource =
   | undefined
 
 export type PersonMetaSource = {
+  id?: string
+  fatherId?: string | null
+  motherId?: string | null
   originalName?: string | null
   posthumousName?: string | null
   templeName?: string | null

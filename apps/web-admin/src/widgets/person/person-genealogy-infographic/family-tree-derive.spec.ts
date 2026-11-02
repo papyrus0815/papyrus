@@ -27,6 +27,7 @@ import {
   isDeceasedOf,
   lifeSpan,
 } from './utils'
+import { computeKinshipMap } from './kinship'
 
 const F1 = 'father-1'
 const F2 = 'father-2'
@@ -355,5 +356,193 @@ describe('compareSiblings / lifeSpan / isDeceasedOf / buildPersonTooltipLines', 
         { label: '혼인 비고', value: '정실 왕비' },
       ]),
     )
+  })
+})
+
+describe('computeKinshipMap (촌수·한국어 친족 호칭 계산)', () => {
+  it('직계 존비속·동복/이복형제·백부/숙부/고모/외숙부·조카·배우자(정실)·며느리를 정확히 판별한다', () => {
+    const pNode = (
+      p: Pick<FamilyTreePerson, 'id' | 'name'> & Partial<FamilyTreePerson>,
+    ): FamilyTreePerson => ({
+      isOwned: true,
+      ...p,
+    })
+    const nodes: FamilyTreePerson[] = [
+      pNode({ id: 'pgf', name: '환조', gender: 'MALE', fatherId: null, motherId: null }),
+      pNode({ id: 'pgm', name: '의혜왕후', gender: 'FEMALE', fatherId: null, motherId: null }),
+      pNode({ id: 'mgf', name: '한경', gender: 'MALE', fatherId: null, motherId: null }),
+      pNode({
+        id: 'father',
+        name: '성계',
+        gender: 'MALE',
+        birthYear: 1335,
+        fatherId: 'pgf',
+        motherId: 'pgm',
+      }),
+      pNode({
+        id: 'mother',
+        name: '신의왕후',
+        gender: 'FEMALE',
+        fatherId: 'mgf',
+        motherId: null,
+      }),
+      pNode({
+        id: 'stepmother',
+        name: '신덕왕후',
+        gender: 'FEMALE',
+        fatherId: null,
+        motherId: null,
+      }),
+      pNode({
+        id: 'older-uncle',
+        name: '원계',
+        gender: 'MALE',
+        birthYear: 1330,
+        fatherId: 'pgf',
+        motherId: 'pgm',
+      }),
+      pNode({
+        id: 'younger-uncle',
+        name: '화',
+        gender: 'MALE',
+        birthYear: 1348,
+        fatherId: 'pgf',
+        motherId: 'pgm',
+      }),
+      pNode({
+        id: 'paternal-aunt',
+        name: '정화공주',
+        gender: 'FEMALE',
+        fatherId: 'pgf',
+        motherId: 'pgm',
+      }),
+      pNode({
+        id: 'maternal-uncle',
+        name: '한상질',
+        gender: 'MALE',
+        fatherId: 'mgf',
+        motherId: null,
+      }),
+      pNode({
+        id: 'ego',
+        name: '방원',
+        gender: 'MALE',
+        birthYear: 1367,
+        fatherId: 'father',
+        motherId: 'mother',
+      }),
+      pNode({
+        id: 'full-bro',
+        name: '방과',
+        gender: 'MALE',
+        birthYear: 1357,
+        fatherId: 'father',
+        motherId: 'mother',
+      }),
+      pNode({
+        id: 'half-bro',
+        name: '방석',
+        gender: 'MALE',
+        birthYear: 1382,
+        fatherId: 'father',
+        motherId: 'stepmother',
+      }),
+      pNode({
+        id: 'nephew',
+        name: '종금',
+        gender: 'MALE',
+        fatherId: 'full-bro',
+        motherId: null,
+      }),
+      pNode({
+        id: 'wife',
+        name: '원경왕후',
+        gender: 'FEMALE',
+        fatherId: null,
+        motherId: null,
+      }),
+      pNode({
+        id: 'son',
+        name: '도',
+        gender: 'MALE',
+        fatherId: 'ego',
+        motherId: 'wife',
+      }),
+      pNode({
+        id: 'daughter-in-law',
+        name: '소헌왕후',
+        gender: 'FEMALE',
+        fatherId: null,
+        motherId: null,
+      }),
+      pNode({
+        id: 'grandson',
+        name: '향',
+        gender: 'MALE',
+        fatherId: 'son',
+        motherId: 'daughter-in-law',
+      }),
+    ]
+
+    const edges = [
+      { source: 'pgf', target: 'father', type: 'parent-child' as const },
+      { source: 'pgm', target: 'father', type: 'parent-child' as const },
+      { source: 'pgf', target: 'older-uncle', type: 'parent-child' as const },
+      { source: 'pgm', target: 'older-uncle', type: 'parent-child' as const },
+      { source: 'pgf', target: 'younger-uncle', type: 'parent-child' as const },
+      { source: 'pgm', target: 'younger-uncle', type: 'parent-child' as const },
+      { source: 'pgf', target: 'paternal-aunt', type: 'parent-child' as const },
+      { source: 'pgm', target: 'paternal-aunt', type: 'parent-child' as const },
+      { source: 'mgf', target: 'mother', type: 'parent-child' as const },
+      { source: 'mgf', target: 'maternal-uncle', type: 'parent-child' as const },
+      { source: 'father', target: 'ego', type: 'parent-child' as const },
+      { source: 'mother', target: 'ego', type: 'parent-child' as const },
+      { source: 'father', target: 'full-bro', type: 'parent-child' as const },
+      { source: 'mother', target: 'full-bro', type: 'parent-child' as const },
+      { source: 'father', target: 'half-bro', type: 'parent-child' as const },
+      { source: 'stepmother', target: 'half-bro', type: 'parent-child' as const },
+      { source: 'full-bro', target: 'nephew', type: 'parent-child' as const },
+      { source: 'ego', target: 'son', type: 'parent-child' as const },
+      { source: 'wife', target: 'son', type: 'parent-child' as const },
+      { source: 'son', target: 'grandson', type: 'parent-child' as const },
+      { source: 'daughter-in-law', target: 'grandson', type: 'parent-child' as const },
+      {
+        source: 'ego',
+        target: 'wife',
+        type: 'spouse' as const,
+        marriageRank: 'PRIMARY',
+      },
+      {
+        source: 'father',
+        target: 'stepmother',
+        type: 'spouse' as const,
+        marriageRank: 'SECONDARY',
+      },
+      {
+        source: 'son',
+        target: 'daughter-in-law',
+        type: 'spouse' as const,
+        marriageRank: 'PRIMARY',
+      },
+    ]
+
+    const map = computeKinshipMap({ egoId: 'ego', nodes, edges })
+    expect(map.get('ego')?.summary).toBe('본인 (기준 인물)')
+    expect(map.get('father')?.summary).toBe('아버지 (1촌)')
+    expect(map.get('mother')?.summary).toBe('어머니 (1촌)')
+    expect(map.get('pgf')?.summary).toBe('조부 (2대조 · 2촌)')
+    expect(map.get('mgf')?.summary).toBe('외조부 (2대조 · 2촌)')
+    expect(map.get('older-uncle')?.summary).toBe('백부 (큰아버지) (3촌)')
+    expect(map.get('younger-uncle')?.summary).toBe('숙부 (작은아버지) (3촌)')
+    expect(map.get('paternal-aunt')?.summary).toBe('고모 (3촌)')
+    expect(map.get('maternal-uncle')?.summary).toBe('외숙부 (외삼촌) (3촌)')
+    expect(map.get('full-bro')?.summary).toBe('친형제 (2촌)')
+    expect(map.get('half-bro')?.summary).toBe('이복형제 (2촌)')
+    expect(map.get('nephew')?.summary).toBe('조카 (3촌)')
+    expect(map.get('wife')?.summary).toBe('배우자 · 정실')
+    expect(map.get('stepmother')?.summary).toBe('부친의 배우자 (계비·후처)')
+    expect(map.get('son')?.summary).toBe('아들 (1촌)')
+    expect(map.get('daughter-in-law')?.summary).toBe('자부 (며느리)')
+    expect(map.get('grandson')?.summary).toBe('손자 (2대손 · 2촌)')
   })
 })

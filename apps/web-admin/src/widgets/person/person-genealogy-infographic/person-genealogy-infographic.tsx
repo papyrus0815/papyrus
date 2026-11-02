@@ -26,6 +26,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { AncestorColumn } from './ancestor-column'
 import {
   CardHoverInfo,
+  CardUnlinkButton,
   ConsortMark,
   GeoNode,
   GeoThumbnail,
@@ -48,8 +49,13 @@ import {
   SPOUSE_STACK_GAP,
   TRUNCATION_SCOPE_LABEL,
 } from './constants'
-import { FamilyTreeLookupContext } from './context'
+import {
+  FamilyTreeLookupContext,
+  KinshipLookupContext,
+  type UnlinkRelationHandler,
+} from './context'
 import { DescendantSubtree } from './descendant-subtree'
+import { computeKinshipMap } from './kinship'
 import {
   classifySiblingKinship,
   ftPersonToNodePerson,
@@ -97,6 +103,8 @@ export interface PersonGenealogyInfographicProps {
   /** FamilyTreeData를 주면 조부모 이상을 동적으로 표시 (n세대 재귀) */
   familyTreeData?: FamilyTreeData | null
   onPersonClick?: (personId: string) => void
+  /** 직계 가족(아버지·어머니·배우자·형제·자녀) 1클릭 연결 해제 핸들러 */
+  onUnlinkRelation?: UnlinkRelationHandler
   /**
    * 내부 '가계도' 헤더 표시 여부(기본 true). 호스트가 이미 자체 섹션 라벨을 그리는 경우
    * false로 꺼서 이중 헤더를 피한다(person-detail-panel의 '가족 관계' 라벨).
@@ -156,6 +164,7 @@ export function PersonGenealogyInfographic({
   siblings,
   familyTreeData,
   onPersonClick,
+  onUnlinkRelation,
   showHeader = true,
 }: PersonGenealogyInfographicProps) {
   // ── FamilyTreeData 기반 동적 조상 렌더링 준비 ──────────────────
@@ -165,6 +174,11 @@ export function PersonGenealogyInfographic({
     for (const n of familyTreeData.nodes) m.set(n.id, n)
     return m
   }, [familyTreeData])
+
+  const kinshipMap = useMemo(
+    () => computeKinshipMap(familyTreeData, ego.id),
+    [familyTreeData, ego.id],
+  )
 
   const ftParentsOf = useMemo(() => {
     if (!familyTreeData) return new Map<string, string[]>()
@@ -565,9 +579,10 @@ export function PersonGenealogyInfographic({
   )
 
   /**
-   * 다중 혼인 자녀의 생모 귀속 칩(«○○○ 소생») 노출 조건 — ego 자녀들의 반대편 부모가
-   * 2명 이상으로 갈릴 때만(1차 리뷰 #1 consort 인디케이터 최소안). 반대편 부모가
-   * 하나뿐이면 배우자 카드가 이미 문맥을 제공하므로 칩은 노이즈다.
+   * 다중 혼인 자녀의 생모·생부 귀속 칩(«○○○ 소생») 노출 조건:
+   * 1) 자녀들의 반대편 부모가 2명 이상으로 갈리거나,
+   * 2) 본인의 배우자가 2명 이상(예: 정실·계비·후궁)이고 자녀에게 반대편 부모가 기록된 경우
+   *    (단일 배우자 소생이거나 외동자녀여도 다중 배우자 중 누구의 소생인지 즉시 식별 가능하도록).
    */
   const childOtherParentIds = useMemo(() => {
     const ids = new Set<string>()
@@ -581,7 +596,9 @@ export function PersonGenealogyInfographic({
     }
     return ids
   }, [childList, ego.id])
-  const showConsortMarks = childOtherParentIds.size >= 2
+  const showConsortMarks =
+    childOtherParentIds.size >= 2 ||
+    (spouseList.length >= 2 && childOtherParentIds.size >= 1)
   const consortMarkFor = (child: NodePerson) => {
     if (!showConsortMarks || !ego.id) return null
     const otherId =
@@ -675,6 +692,7 @@ export function PersonGenealogyInfographic({
 
   return (
     <FamilyTreeLookupContext.Provider value={ftNodeMap}>
+      <KinshipLookupContext.Provider value={kinshipMap}>
       <Root>
         {showHeader && (
           <InfographicHeader>
@@ -740,6 +758,18 @@ export function PersonGenealogyInfographic({
                       siblingsByPersonId={siblingsByPersonId}
                       onPersonClick={onPersonClick}
                       onOpenSiblings={(person, sibs) => setAncestorSiblingsOf({ person, siblings: sibs })}
+                      onUnlinkDirectParent={
+                        onUnlinkRelation
+                          ? () => {
+                              const node = ftNodeMap.get(ftFatherId)
+                              onUnlinkRelation({
+                                kind: 'father',
+                                targetId: ftFatherId,
+                                targetName: node ? getPersonDisplayName(node, true) : '아버지',
+                              })
+                            }
+                          : undefined
+                      }
                     />
                   )}
                   {ftMotherId && (
@@ -753,6 +783,18 @@ export function PersonGenealogyInfographic({
                       siblingsByPersonId={siblingsByPersonId}
                       onPersonClick={onPersonClick}
                       onOpenSiblings={(person, sibs) => setAncestorSiblingsOf({ person, siblings: sibs })}
+                      onUnlinkDirectParent={
+                        onUnlinkRelation
+                          ? () => {
+                              const node = ftNodeMap.get(ftMotherId)
+                              onUnlinkRelation({
+                                kind: 'mother',
+                                targetId: ftMotherId,
+                                targetName: node ? getPersonDisplayName(node, true) : '어머니',
+                              })
+                            }
+                          : undefined
+                      }
                     />
                   )}
                 </ParentsRow>
@@ -812,6 +854,18 @@ export function PersonGenealogyInfographic({
                       )}
                       {father && (
                         <GeoNode $role="parent" {...clickableProps(father.id)}>
+                          {onUnlinkRelation && father.id && (
+                            <CardUnlinkButton
+                              label="아버지 연결 해제"
+                              onUnlink={() =>
+                                onUnlinkRelation({
+                                  kind: 'father',
+                                  targetId: father.id!,
+                                  targetName: getPersonDisplayName(father, true),
+                                })
+                              }
+                            />
+                          )}
                           <GeoThumbnail person={father} role="parent" />
                           <NodeNameBlock person={father} />
                           <NodeBadge $role="parent">아버지</NodeBadge>
@@ -854,6 +908,18 @@ export function PersonGenealogyInfographic({
                       )}
                       {mother && (
                         <GeoNode $role="parentAlt" {...clickableProps(mother.id)}>
+                          {onUnlinkRelation && mother.id && (
+                            <CardUnlinkButton
+                              label="어머니 연결 해제"
+                              onUnlink={() =>
+                                onUnlinkRelation({
+                                  kind: 'mother',
+                                  targetId: mother.id!,
+                                  targetName: getPersonDisplayName(mother, true),
+                                })
+                              }
+                            />
+                          )}
                           <GeoThumbnail person={mother} role="parentAlt" />
                           <NodeNameBlock person={mother} />
                           <NodeBadge $role="parentAlt">어머니</NodeBadge>
@@ -887,6 +953,16 @@ export function PersonGenealogyInfographic({
                             badge={siblingKinshipBadgeLabel(kinship)}
                             badgeAriaLabel={siblingKinshipAriaLabel(kinship)}
                             onPersonClick={onPersonClick}
+                            onUnlink={
+                              onUnlinkRelation && sib.id
+                                ? () =>
+                                    onUnlinkRelation({
+                                      kind: 'sibling',
+                                      targetId: sib.id!,
+                                      targetName: getPersonDisplayName(sib, true),
+                                    })
+                                : undefined
+                            }
                           />
                         )
                       })}
@@ -913,6 +989,18 @@ export function PersonGenealogyInfographic({
                     <SpouseStack>
                       {spouseList.map((sp, i) => (
                         <GeoNode key={sp.id ?? `sp-${i}`} $role="spouse" {...clickableProps(sp.id)}>
+                          {onUnlinkRelation && sp.id && !sp.inferred && (
+                            <CardUnlinkButton
+                              label="배우자 연결 해제"
+                              onUnlink={() =>
+                                onUnlinkRelation({
+                                  kind: 'spouse',
+                                  targetId: sp.id!,
+                                  targetName: getPersonDisplayName(sp, true),
+                                })
+                              }
+                            />
+                          )}
                           <GeoThumbnail person={sp} role="spouse" />
                           <NodeNameBlock person={sp} />
                           <NodeBadge $role="spouse">
@@ -946,6 +1034,18 @@ export function PersonGenealogyInfographic({
                     <SpouseStack>
                       {spouseList.map((sp, i) => (
                         <GeoNode key={sp.id ?? `sp-${i}`} $role="spouse" {...clickableProps(sp.id)}>
+                          {onUnlinkRelation && sp.id && !sp.inferred && (
+                            <CardUnlinkButton
+                              label="배우자 연결 해제"
+                              onUnlink={() =>
+                                onUnlinkRelation({
+                                  kind: 'spouse',
+                                  targetId: sp.id!,
+                                  targetName: getPersonDisplayName(sp, true),
+                                })
+                              }
+                            />
+                          )}
                           <GeoThumbnail person={sp} role="spouse" />
                           <NodeNameBlock person={sp} />
                           <NodeBadge $role="spouse">
@@ -999,10 +1099,23 @@ export function PersonGenealogyInfographic({
                     {/* col 2 (auto) — 자녀 카드 + 손자녀 서브트리 */}
                     <ChildNodeColumn>
                       <GeoNode $role="child" {...clickableProps(childList[0].id)}>
+                        {onUnlinkRelation && childList[0].id && (
+                          <CardUnlinkButton
+                            label="자녀 연결 해제"
+                            onUnlink={() =>
+                              onUnlinkRelation({
+                                kind: 'child',
+                                targetId: childList[0].id!,
+                                targetName: getPersonDisplayName(childList[0], true),
+                              })
+                            }
+                          />
+                        )}
                         <GeoThumbnail person={childList[0]} role="child" />
                         <NodeNameBlock person={childList[0]} />
                         <NodeBadge $role="child">자녀</NodeBadge>
                         <CardHoverInfo person={childList[0]} />
+                        {consortMarkFor(childList[0])}
                       </GeoNode>
                       {childList[0].id && descendantsByParentId.has(childList[0].id) && (
                         <DescendantSubtree
@@ -1070,6 +1183,18 @@ export function PersonGenealogyInfographic({
                       ) : null
                       const childNode = (
                         <GeoNode key={`${pairKey}-self`} $role="child" {...clickableProps(child.id)}>
+                          {onUnlinkRelation && child.id && (
+                            <CardUnlinkButton
+                              label="자녀 연결 해제"
+                              onUnlink={() =>
+                                onUnlinkRelation({
+                                  kind: 'child',
+                                  targetId: child.id!,
+                                  targetName: getPersonDisplayName(child, true),
+                                })
+                              }
+                            />
+                          )}
                           <GeoThumbnail person={child} role="child" />
                           <NodeNameBlock person={child} />
                           <NodeBadge $role="child">자녀</NodeBadge>
@@ -1154,6 +1279,7 @@ export function PersonGenealogyInfographic({
           />
         )}
       </Root>
+      </KinshipLookupContext.Provider>
     </FamilyTreeLookupContext.Provider>
   )
 }

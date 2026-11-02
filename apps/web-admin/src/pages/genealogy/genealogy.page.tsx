@@ -24,14 +24,21 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { toPng } from 'html-to-image'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 import { FiArrowLeft, FiDownload, FiSearch, FiTarget, FiUsers } from 'react-icons/fi'
 
 import { getPersonFamilyTree, type FamilyTreePerson, type FamilyTreeData } from '@/shared/api/persons-family-tree'
 import { getUploadImageUrl } from '@/shared/api/upload'
-import { marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
+import { MARRIAGE_RANK_LABELS, marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { TRUNCATION_SCOPE_LABEL } from '@/widgets/person/person-genealogy-infographic/constants'
+import { computeKinshipMap, type KinshipInfo } from '@/widgets/person/person-genealogy-infographic/kinship'
+import {
+  compareSiblings,
+  displayInitial,
+  isDeceasedOf,
+  lifeSpan as formatNodeLifespan,
+} from '@/widgets/person/person-genealogy-infographic/utils'
 
 // ─── Layout sizes ──────────────────────────────────────────────────
 // 데스크탑/모바일 분기 — 노드 카드와 간격을 viewport에 맞춰 축소.
@@ -162,9 +169,22 @@ function computeLayout(
   }
 
   // ── C. Ego's descendant subtree (subtree-width algorithm) ─────────
-  // "desc children" of id = children at exactly id's gen + 1
+  const nodeById = new Map<string, FamilyTreePerson>(nodes.map((n) => [n.id, n]))
+  const sortNodeIdsByBirth = (ids: string[]): string[] =>
+    [...ids].sort((idA, idB) =>
+      compareSiblings(
+        nodeById.get(idA) ?? { id: idA },
+        nodeById.get(idB) ?? { id: idB },
+      ),
+    )
+
+  // "desc children" of id = children at exactly id's gen + 1, sorted by birthOrder/birthYear
   const descCh = (id: string): string[] =>
-    (childrenOf.get(id) ?? []).filter(c => genMap.get(c) === (genMap.get(id) ?? 0) + 1)
+    sortNodeIdsByBirth(
+      (childrenOf.get(id) ?? []).filter(
+        (c) => genMap.get(c) === (genMap.get(id) ?? 0) + 1,
+      ),
+    )
 
   const subW = new Map<string, number>()
   const getSubW = (id: string): number => {
@@ -195,6 +215,22 @@ function computeLayout(
   const maxX = () => (xMap.size ? Math.max(...xMap.values()) : 0)
   const minX = () => (xMap.size ? Math.min(...xMap.values()) : 0)
 
+  // Helper: min/max X at a specific generation
+  const minXAtGen = (g: number) => {
+    let m = Number.POSITIVE_INFINITY
+    for (const [id, x] of xMap) {
+      if (genMap.get(id) === g && x < m) m = x
+    }
+    return Number.isFinite(m) ? m : 0
+  }
+  const maxXAtGen = (g: number) => {
+    let m = Number.NEGATIVE_INFINITY
+    for (const [id, x] of xMap) {
+      if (genMap.get(id) === g && x > m) m = x
+    }
+    return Number.isFinite(m) ? m : 0
+  }
+
   // ── D. Ego's spouses → right (COUPLE_STEP clearance) ─────────────
   const egoSpouseSet = new Set(spousesOf.get(egoId) ?? [])
   // 배치 순서 — 엣지 발견(Set 삽입) 순서 대신 서열(정실 우선)→혼인 부호연도로 안정 정렬
@@ -220,91 +256,268 @@ function computeLayout(
   })
 
   // Ensure at least COUPLE_STEP from ego (x=0) so parent rows don't collide
-  let rightCursor = Math.max(maxX() + STEP, COUPLE_STEP)
+  let rightCursor = Math.max(maxXAtGen(0) + STEP, COUPLE_STEP)
   for (const sid of egoSpouses) {
-    xMap.set(sid, rightCursor)
-    // Check if this spouse has parents in the graph
-    const spouseHasParents = (parentsOf.get(sid) ?? []).some(pid =>
-      nodes.some(n => n.id === pid),
+    // 배우자만의 전혼 자녀(ego 자녀가 아닌 자녀)가 있으면 그 서브트리도 함께 배치
+    const spouseOnlyKids = descCh(sid).filter((cid) => !xMap.has(cid))
+    const spouseSubW =
+      spouseOnlyKids.length > 0
+        ? spouseOnlyKids.reduce((s, cid) => s + getSubW(cid), 0)
+        : STEP
+    const cx = rightCursor + (spouseSubW - STEP) / 2
+    xMap.set(sid, cx)
+    if (spouseOnlyKids.length > 0) {
+      let kLeft = cx - spouseSubW / 2
+      for (const cid of spouseOnlyKids) {
+        const w = getSubW(cid)
+        placeDesc(cid, kLeft + w / 2)
+        kLeft += w
+      }
+    }
+    const spouseHasParents = (parentsOf.get(sid) ?? []).some((pid) =>
+      nodeById.has(pid),
     )
-    // Gap between consecutive spouses also needs COUPLE_STEP if they show parents
-    rightCursor += spouseHasParents ? COUPLE_STEP : STEP
+    rightCursor += Math.max(spouseSubW, spouseHasParents ? COUPLE_STEP : STEP)
   }
 
-  // ── E. Ego's TRUE siblings → left ────────────────────────────────
-  // Siblings = gen-0 nodes that share at least one parent with ego
+  // ── E. Ego's TRUE siblings (+ their spouses & nieces/nephews) → left ──
   const egoParentSet = new Set(parentsOf.get(egoId) ?? [])
-  const siblings = nodes.filter(n => {
-    if (n.id === egoId || egoSpouseSet.has(n.id)) return false
-    if (genMap.get(n.id) !== 0) return false
-    return (parentsOf.get(n.id) ?? []).some(pid => egoParentSet.has(pid))
-  })
+  const siblings = nodes
+    .filter((n) => {
+      if (n.id === egoId || egoSpouseSet.has(n.id)) return false
+      if (genMap.get(n.id) !== 0) return false
+      return (parentsOf.get(n.id) ?? []).some((pid) => egoParentSet.has(pid))
+    })
+    .sort(compareSiblings)
 
-  let leftCursor = minX() - STEP
-  // Reverse: sibling closest to ego is placed first
+  let leftBoundary = Math.min(minXAtGen(0), minXAtGen(1)) - STEP
+  // 연장자가 좌측, 막내가 ego 바로 왼쪽에 오도록 정렬된 배열의 역순으로 좌측 확장 배치
   for (const sib of [...siblings].reverse()) {
-    if (!xMap.has(sib.id)) {
-      xMap.set(sib.id, leftCursor)
-      leftCursor -= STEP
+    if (xMap.has(sib.id)) continue
+    const sibSpouses = (spousesOf.get(sib.id) ?? []).filter(
+      (sid) => genMap.get(sid) === 0 && !xMap.has(sid) && sid !== egoId,
+    )
+    const kids = descCh(sib.id).filter((cid) => !xMap.has(cid))
+    const kidsW = kids.length > 0 ? kids.reduce((s, cid) => s + getSubW(cid), 0) : STEP
+    const coupleCount = 1 + sibSpouses.length
+    const groupW = Math.max(kidsW, coupleCount * STEP)
+
+    const groupCenter = leftBoundary - groupW / 2 + STEP / 2
+    // Place sibling and any spouse(s) around groupCenter
+    const startX = groupCenter - ((coupleCount - 1) * STEP) / 2
+    xMap.set(sib.id, startX)
+    sibSpouses.forEach((sid, idx) => {
+      xMap.set(sid, startX + (idx + 1) * STEP)
+    })
+
+    // Place nieces/nephews directly under the sibling group
+    if (kids.length > 0) {
+      let kLeft = groupCenter - kidsW / 2
+      for (const cid of kids) {
+        const w = getSubW(cid)
+        placeDesc(cid, kLeft + w / 2)
+        kLeft += w
+      }
+    }
+
+    leftBoundary -= groupW
+  }
+
+  // Place any remaining gen >= 1 descendants whose parents are already placed
+  const descGens = [...new Set(genMap.values())].filter((g) => g >= 1).sort((a, b) => a - b)
+  for (const g of descGens) {
+    for (const n of nodes) {
+      if (genMap.get(n.id) !== g || xMap.has(n.id)) continue
+      const placedParents = (parentsOf.get(n.id) ?? []).filter((pid) => xMap.has(pid))
+      if (placedParents.length > 0) {
+        const px =
+          placedParents.reduce((s, pid) => s + xMap.get(pid)!, 0) / placedParents.length
+        placeDesc(n.id, px)
+      }
+    }
+    // Also place spouses of placed descendants at generation g
+    const placedAtG = nodes
+      .filter((n) => genMap.get(n.id) === g && xMap.has(n.id))
+      .sort((a, b) => (xMap.get(a.id) ?? 0) - (xMap.get(b.id) ?? 0))
+    for (const n of placedAtG) {
+      const spList = (spousesOf.get(n.id) ?? []).filter(
+        (sid) => genMap.get(sid) === g && !xMap.has(sid),
+      )
+      let spCursor = (xMap.get(n.id) ?? 0) + STEP
+      for (const sid of spList) {
+        xMap.set(sid, spCursor)
+        spCursor += STEP
+      }
+    }
+    // Resolve any X collisions in generation g
+    const allAtG = nodes
+      .filter((n) => genMap.get(n.id) === g && xMap.has(n.id))
+      .sort((a, b) => (xMap.get(a.id) ?? 0) - (xMap.get(b.id) ?? 0))
+    for (let i = 1; i < allAtG.length; i++) {
+      const prevX = xMap.get(allAtG[i - 1].id)!
+      const currX = xMap.get(allAtG[i].id)!
+      if (currX < prevX + STEP) {
+        xMap.set(allAtG[i].id, prevX + STEP)
+      }
     }
   }
 
   // ── F. Ancestor rows (gen < 0), nearest-first ────────────────────
-  const allGens     = [...new Set(genMap.values())].sort((a, b) => a - b)
-  const ancestorGens = allGens.filter(g => g < 0).sort((a, b) => b - a) // -1, -2, …
+  const allGens      = [...new Set(genMap.values())].sort((a, b) => a - b)
+  const ancestorGens = allGens.filter((g) => g < 0).sort((a, b) => b - a) // -1, -2, …
 
   for (const g of ancestorGens) {
-    const unplaced = nodes.filter(n => genMap.get(n.id) === g && !xMap.has(n.id))
+    const unplaced = nodes
+      .filter((n) => genMap.get(n.id) === g && !xMap.has(n.id))
+      .sort(compareSiblings)
 
-    // Ideal center X for each unplaced ancestor = midpoint of its positioned children
+    // Pass 1: Direct ancestors with positioned children at g + 1
     const idealX = new Map<string, number>()
+    const directAncestorIds = new Set<string>()
     for (const n of unplaced) {
       const posKids = (childrenOf.get(n.id) ?? []).filter(
-        c => genMap.get(c) === g + 1 && xMap.has(c),
+        (c) => genMap.get(c) === g + 1 && xMap.has(c),
       )
       if (posKids.length > 0) {
-        const xs = posKids.map(c => xMap.get(c)!)
+        const xs = posKids.map((c) => xMap.get(c)!)
         idealX.set(n.id, (Math.min(...xs) + Math.max(...xs)) / 2)
+        directAncestorIds.add(n.id)
       }
     }
 
-    // Place as spouse pairs (offset ±STEP/2 from couple center), then individuals
+    // Pass 2: Collateral relatives at gen g (e.g. uncles/aunts/great-uncles) who share
+    // a parent with a direct ancestor at gen g — anchor them next to that direct ancestor
+    // instead of exiling them to maxX() on the far right!
+    for (const ancId of directAncestorIds) {
+      const ancParents = new Set(parentsOf.get(ancId) ?? [])
+      if (ancParents.size === 0) continue
+      const ancNode = nodeById.get(ancId)
+      const ancX = idealX.get(ancId) ?? 0
+      // Determine whether this ancestor is on the paternal/left side or maternal/right side
+      const isLeftBranch =
+        ancX < 0 ||
+        (ancX === 0 && (ancNode?.gender ?? '').toUpperCase() !== 'FEMALE')
+      const collaterals = unplaced
+        .filter(
+          (n) =>
+            !idealX.has(n.id) &&
+            !directAncestorIds.has(n.id) &&
+            (parentsOf.get(n.id) ?? []).some((pid) => ancParents.has(pid)),
+        )
+        .sort(compareSiblings)
+
+      collaterals.forEach((col, idx) => {
+        const offset = (idx + 1) * STEP
+        idealX.set(col.id, isLeftBranch ? ancX - offset : ancX + offset)
+      })
+    }
+
+    // Pass 3: Form units (couple pairs or individuals) and resolve collisions
+    type AncUnit = {
+      members: string[]
+      desiredCenter: number
+      isDirect: boolean
+    }
+    const units: AncUnit[] = []
     const processed = new Set<string>()
-    for (const n of unplaced) {
+
+    // Process direct ancestors first so couples stay together accurately
+    const orderedForPairing = [
+      ...unplaced.filter((n) => directAncestorIds.has(n.id)),
+      ...unplaced.filter((n) => !directAncestorIds.has(n.id)),
+    ]
+
+    for (const n of orderedForPairing) {
       if (processed.has(n.id)) continue
       processed.add(n.id)
 
-      // Find an unplaced spouse at the same gen
-      const partner = (spousesOf.get(n.id) ?? []).find(
-        sid => genMap.get(sid) === g && !xMap.has(sid) && !processed.has(sid),
+      const partners = (spousesOf.get(n.id) ?? []).filter(
+        (sid) => genMap.get(sid) === g && !xMap.has(sid) && !processed.has(sid),
       )
+      // Prefer a partner who is also a direct ancestor (co-parent)
+      const partner =
+        partners.find((sid) => directAncestorIds.has(sid)) ?? partners[0]
 
       if (partner) {
         processed.add(partner)
-        // Couple center = midpoint of all positioned children of both
         const allKids = [
           ...(childrenOf.get(n.id) ?? []),
           ...(childrenOf.get(partner) ?? []),
-        ].filter(c => genMap.get(c) === g + 1 && xMap.has(c))
+        ].filter((c) => genMap.get(c) === g + 1 && xMap.has(c))
 
         let center: number
         if (allKids.length > 0) {
-          const xs = allKids.map(c => xMap.get(c)!)
+          const xs = allKids.map((c) => xMap.get(c)!)
           center = (Math.min(...xs) + Math.max(...xs)) / 2
         } else if (idealX.has(n.id) || idealX.has(partner)) {
-          center = ((idealX.get(n.id) ?? idealX.get(partner)!) +
-                    (idealX.get(partner) ?? idealX.get(n.id)!)) / 2
+          center =
+            ((idealX.get(n.id) ?? idealX.get(partner)!) +
+              (idealX.get(partner) ?? idealX.get(n.id)!)) /
+            2
         } else {
-          // Neither has positioned children: append after rightmost placed node
           center = maxX() + COUPLE_STEP
         }
-        xMap.set(n.id, center - STEP / 2)
-        xMap.set(partner,  center + STEP / 2)
+
+        // Order couple left=MALE, right=FEMALE when known
+        const gA = (nodeById.get(n.id)?.gender ?? '').toUpperCase()
+        const gB = (nodeById.get(partner)?.gender ?? '').toUpperCase()
+        const members =
+          gA === 'FEMALE' && gB === 'MALE' ? [partner, n.id] : [n.id, partner]
+
+        // Extra spouses (concubines / 2nd spouses) of n.id or partner
+        for (const extraSid of partners) {
+          if (extraSid === partner || processed.has(extraSid)) continue
+          processed.add(extraSid)
+          members.push(extraSid)
+        }
+
+        units.push({
+          members,
+          desiredCenter: center,
+          isDirect: directAncestorIds.has(n.id) || directAncestorIds.has(partner),
+        })
       } else {
-        // Individual (no partner at this gen)
-        xMap.set(n.id, idealX.get(n.id) ?? (maxX() + STEP))
+        units.push({
+          members: [n.id],
+          desiredCenter: idealX.get(n.id) ?? maxX() + STEP,
+          isDirect: directAncestorIds.has(n.id),
+        })
       }
     }
+
+    units.sort((a, b) => a.desiredCenter - b.desiredCenter)
+
+    // Place units and resolve any horizontal overlap in generation g
+    const unitHalfSpan = (u: AncUnit) => ((u.members.length - 1) * STEP) / 2
+    const placedCenters: number[] = units.map((u) => u.desiredCenter)
+
+    // Forward pass: push overlapping units right
+    for (let i = 1; i < units.length; i++) {
+      const minCenterDist = unitHalfSpan(units[i - 1]) + unitHalfSpan(units[i]) + STEP
+      if (placedCenters[i] < placedCenters[i - 1] + minCenterDist) {
+        // If unit[i] is a direct ancestor and unit[i-1] is a collateral (e.g. paternal uncle),
+        // prefer pushing the left collateral further left so the direct ancestor stays over ego!
+        if (units[i].isDirect && !units[i - 1].isDirect) {
+          placedCenters[i - 1] = placedCenters[i] - minCenterDist
+          for (let j = i - 1; j > 0; j--) {
+            const d = unitHalfSpan(units[j - 1]) + unitHalfSpan(units[j]) + STEP
+            if (placedCenters[j - 1] > placedCenters[j] - d) {
+              placedCenters[j - 1] = placedCenters[j] - d
+            }
+          }
+        } else {
+          placedCenters[i] = placedCenters[i - 1] + minCenterDist
+        }
+      }
+    }
+
+    units.forEach((u, idx) => {
+      const c = placedCenters[idx]
+      const startX = c - unitHalfSpan(u)
+      u.members.forEach((mid, mIdx) => {
+        xMap.set(mid, startX + mIdx * STEP)
+      })
+    })
   }
 
   // ── G. Fallback: anything still unplaced ─────────────────────────
@@ -334,12 +547,18 @@ function buildGraph(
   sizes: LayoutSizes,
 ): { rfNodes: Node[]; rfEdges: Edge[] } {
   const positions = computeLayout(data, sizes)
+  const kinshipMap = computeKinshipMap(data, data.egoId)
 
-  const rfNodes: Node[] = data.nodes.map(p => ({
+  const rfNodes: Node[] = data.nodes.map((p) => ({
     id: p.id,
     type: 'personNode',
     position: positions[p.id] ?? { x: 0, y: 0 },
-    data: { person: p, isEgo: p.id === data.egoId, sizes },
+    data: {
+      person: p,
+      isEgo: p.id === data.egoId,
+      kinship: kinshipMap.get(p.id) ?? null,
+      sizes,
+    },
     draggable: true,
   }))
 
@@ -354,13 +573,42 @@ function buildGraph(
       isSpouse && (e.marriageStartYear != null || e.marriageEndYear != null)
         ? `${fmtMarriageYear(e.marriageStartYear) ?? '?'}–${fmtMarriageYear(e.marriageEndYear) ?? ''}`
         : null
+    const rankLabel =
+      isSpouse && e.marriageRank ? MARRIAGE_RANK_LABELS[e.marriageRank] ?? null : null
+    const spouseDetailParts = [rankLabel, marriagePeriod].filter(Boolean).join(' ')
     const labelText = isSpouse
-      ? (inferred ? '♡' : (marriagePeriod ? `♥ ${marriagePeriod}` : '♥'))
+      ? inferred
+        ? '♡'
+        : spouseDetailParts
+          ? `♥ ${spouseDetailParts}`
+          : '♥'
       : undefined
+
+    // 부부 엣지는 좌측 노드의 우측 핸들(right)에서 우측 노드의 좌측 핸들(left-t)로 수평 연결
+    let source = e.source
+    let target = e.target
+    let sourceHandle: string | undefined
+    let targetHandle: string | undefined
+    if (isSpouse) {
+      const posS = positions[e.source]?.x ?? 0
+      const posT = positions[e.target]?.x ?? 0
+      if (posS <= posT) {
+        source = e.source
+        target = e.target
+      } else {
+        source = e.target
+        target = e.source
+      }
+      sourceHandle = 'right'
+      targetHandle = 'left-t'
+    }
+
     return {
       id: `e-${i}-${e.source}-${e.target}`,
-      source: e.source,
-      target: e.target,
+      source,
+      target,
+      ...(sourceHandle ? { sourceHandle } : {}),
+      ...(targetHandle ? { targetHandle } : {}),
       type: isSpouse ? 'straight' : 'smoothstep',
       animated: false,
       label: labelText,
@@ -380,12 +628,14 @@ function buildGraph(
             opacity: inferred ? 0.65 : 1,
           }
         : { stroke: '#94a3b8', strokeWidth: 1.5 },
-      markerEnd: isSpouse ? undefined : {
-        type: 'arrowclosed' as any,
-        width: 12,
-        height: 12,
-        color: '#94a3b8',
-      },
+      markerEnd: isSpouse
+        ? undefined
+        : {
+            type: 'arrowclosed' as any,
+            width: 12,
+            height: 12,
+            color: '#94a3b8',
+          },
     }
   })
 
@@ -430,12 +680,20 @@ function CountryFlag({
   return null
 }
 
-function buildPersonTooltip(p: FamilyTreePerson, displayName: string): string {
+function buildPersonTooltip(
+  p: FamilyTreePerson,
+  displayName: string,
+  kinship?: KinshipInfo | null,
+): string {
   const lines: string[] = [`${displayName} — 클릭: 상세 / Shift+클릭: 중심 변경`]
+  if (kinship && kinship.chon !== 0) {
+    lines.push(`기준 관계 — ${kinship.summary}`)
+  }
   if (p.originalName) lines.push(`원어 — ${p.originalName}`)
   if (p.preEnthronementTitle) lines.push(`작호 — ${p.preEnthronementTitle}`)
   if (p.templeName) lines.push(`묘호 — ${p.templeName}`)
   if (p.posthumousName) lines.push(`시호 — ${p.posthumousName}`)
+  if (p.birthOrder != null) lines.push(`서열 — ${p.birthOrder}번째`)
   if (p.birthPlace) lines.push(`출생 — ${p.birthPlace}`)
   if (p.deathPlace) lines.push(`사망 — ${p.deathPlace}`)
   return lines.join('\n')
@@ -443,9 +701,10 @@ function buildPersonTooltip(p: FamilyTreePerson, displayName: string): string {
 
 // ─── Person Node component ─────────────────────────────────────────
 function PersonNodeInner({ data }: NodeProps) {
-  const { person, isEgo, sizes } = data as {
+  const { person, isEgo, kinship, sizes } = data as {
     person: FamilyTreePerson
     isEgo: boolean
+    kinship?: KinshipInfo | null
     sizes: LayoutSizes
   }
   const navigate = useNavigate()
@@ -466,16 +725,18 @@ function PersonNodeInner({ data }: NodeProps) {
     ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
     : null
 
-  const initial = [...(baseName.trim() || '?')][0] ?? '?'
+  // 한국식 성+이름에서 전원 성씨 첫 글자로 통일되는 문제 방지 — 이름(given name) 첫 글자 우선
+  const initial = displayInitial({
+    name: person.name,
+    surname: person.surname,
+    middleName: person.middleName,
+    nameDisplayOrder: person.nameDisplayOrder,
+    country: person.country ?? null,
+  })
 
-  // BC/AD — birthYear는 크기값(양수)이라 era 없이는 BC가 AD로 둔갑한다.
-  const fmtYear = (mag: number | null | undefined, era: string | null | undefined) =>
-    mag == null ? null : era === 'BC' ? `BC ${Math.abs(mag)}` : String(mag)
-  const lifeSpan =
-    person.birthYear != null || person.deathYear != null
-      ? `${fmtYear(person.birthYear, person.birthEra) ?? '?'}–${fmtYear(person.deathYear, person.deathEra) ?? ''}`
-      : null
-  const isDeceased = person.deathYear != null
+  // 상세 가계도(utils.ts)와 동일한 생몰·활동시기(fl.)·사망자(isAlive=false 포함) 정본 유틸 공유
+  const lifeSpan = formatNodeLifespan(person)
+  const isDeceased = isDeceasedOf(person)
   // 비소유 노드(다른 계정 등록)는 상세(/persons-timeline/:id)가 계정 스코프라 404 → 클릭 비활성 + dim
   const openable = person.isOwned !== false
   const handleClick = (ev: React.MouseEvent) => {
@@ -496,7 +757,7 @@ function PersonNodeInner({ data }: NodeProps) {
       $w={sizes.NODE_W}
       $h={sizes.NODE_H}
       onClick={handleClick}
-      title={openable ? buildPersonTooltip(person, displayName) : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
+      title={openable ? buildPersonTooltip(person, displayName, kinship) : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
@@ -551,7 +812,13 @@ function PersonNodeInner({ data }: NodeProps) {
         <NodeDynasty>{person.dynasty.name}</NodeDynasty>
       )}
 
-      {isEgo && <EgoBadge>본인</EgoBadge>}
+      {isEgo ? (
+        <EgoBadge>본인</EgoBadge>
+      ) : kinship ? (
+        <KinshipBadge title={kinship.summary}>
+          {kinship.chon != null ? `${kinship.title} · ${kinship.chon}촌` : kinship.title}
+        </KinshipBadge>
+      ) : null}
 
       <RecenterHint aria-hidden>
         <FiTarget size={9} strokeWidth={2.4} />
@@ -586,6 +853,8 @@ function useIsCompactLayout(): boolean {
 // ─── Inner flow component (needs ReactFlowProvider context) ─────────
 function GenealogyFlow({ personId }: { personId: string }) {
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const { fitView, setCenter } = useReactFlow()
   const flowWrapRef = useRef<HTMLDivElement>(null)
   const [search, setSearch] = useState('')
@@ -695,7 +964,7 @@ function GenealogyFlow({ personId }: { personId: string }) {
       const transformBefore = wrap.style.transform
       wrap.style.transform = `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`
       const dataUrl = await toPng(flowEl, {
-        backgroundColor: '#ffffff',
+        backgroundColor: isDark ? '#0f172a' : '#ffffff',
         width: W,
         height: H,
         style: { width: `${W}px`, height: `${H}px` },
@@ -711,7 +980,7 @@ function GenealogyFlow({ personId }: { personId: string }) {
     } finally {
       setExporting(false)
     }
-  }, [rfNodes, exporting, egoName, personId])
+  }, [rfNodes, exporting, egoName, personId, isDark])
 
   return (
     <PageRoot>
@@ -775,11 +1044,22 @@ function GenealogyFlow({ personId }: { personId: string }) {
           onlyRenderVisibleElements={rfNodes.length > 30}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#e2e8f0" />
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1}
+            color={isDark ? '#334155' : '#e2e8f0'}
+          />
           <Controls position="bottom-right" />
           <MiniMap
-            nodeColor={(n) => (n.data as any)?.isEgo ? '#6366f1' : '#cbd5e1'}
-            maskColor="rgba(248,250,252,0.8)"
+            nodeColor={(n) =>
+              (n.data as any)?.isEgo
+                ? '#6366f1'
+                : isDark
+                  ? '#475569'
+                  : '#cbd5e1'
+            }
+            maskColor={isDark ? 'rgba(15,23,42,0.8)' : 'rgba(248,250,252,0.8)'}
             position="bottom-left"
           />
         </ReactFlow>
@@ -1066,22 +1346,24 @@ const NodeWrap = styled.div<{
          &:hover, &:focus-within, &:active { transform: none; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }`
       : ''}
 
-  @media (prefers-color-scheme: dark) {
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `
     --node-bg: #1e293b;
     --node-border: #334155;
     --node-text: #f1f5f9;
-    --node-text-meta: #64748b;
+    --node-text-meta: #94a3b8;
     --node-avatar-bg: #0f172a;
     --node-avatar-border: #334155;
-  }
-  @media (prefers-color-scheme: light) {
+  `
+      : `
     --node-bg: #fff;
     --node-border: #e2e8f0;
     --node-text: #1e293b;
-    --node-text-meta: #94a3b8;
+    --node-text-meta: #64748b;
     --node-avatar-bg: #f1f5f9;
     --node-avatar-border: #e2e8f0;
-  }
+  `}
 `
 
 const NodeAvatar = styled.div<{
@@ -1222,6 +1504,23 @@ const NodeDynasty = styled.div`
 const EgoBadge = styled.div`
   font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.85);
   letter-spacing: 0.05em; text-transform: uppercase;
+`
+
+const KinshipBadge = styled.div`
+  margin-top: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.14)' : 'rgba(148, 163, 184, 0.12)'};
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 // pointer-events: none으로 설정하여 ReactFlow 드래그와 충돌하지 않도록 함.

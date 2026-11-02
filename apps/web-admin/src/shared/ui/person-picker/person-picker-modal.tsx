@@ -64,6 +64,8 @@ export interface PersonPickerModalProps {
   pinnedIds?: string[]
   /** 고르는 자리의 맥락 — 기간·나라가 맞는 인물을 위로 묶는다 */
   context?: PersonPickerContext
+  /** 검색 툴바 상단에 렌더링할 부가 컨트롤 (예: 혼인 서열·반대편 부모·출생 서열 원스톱 지정 바) */
+  headerAccessory?: ReactNode
 }
 
 const SORT_LABEL: Record<PersonSortKey, string> = {
@@ -93,6 +95,7 @@ export function PersonPickerModal({
   loading: givenLoading = false,
   pinnedIds,
   context,
+  headerAccessory,
 }: PersonPickerModalProps) {
   const playClickSound = useClickSound()
   const { data: fetchedPersons = [], isLoading: fetching } = useQuery({
@@ -261,6 +264,7 @@ export function PersonPickerModal({
           />
         ) : (
           <>
+            {headerAccessory}
             <S.Toolbar>
               <S.SearchRow>
                 <S.SearchBox>

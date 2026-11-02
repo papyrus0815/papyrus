@@ -70,7 +70,11 @@ import {
   useRichTextProseClick,
   useRichTextTooltipEscape,
 } from '@/shared/hooks/use-rich-text-prose-click'
-import { MARRIAGE_RANK_LABELS } from '@/shared/lib/marriage-rank-labels'
+import {
+  MARRIAGE_RANK_LABELS,
+  MARRIAGE_RANK_OPTIONS,
+  type MarriageRankToken,
+} from '@/shared/lib/marriage-rank-labels'
 import { NICKNAME_TYPE_LABELS } from '@/shared/lib/nickname-type-labels'
 import {
   type PersonNameFields,
@@ -109,6 +113,8 @@ import { PersonEventLinkModal } from '@/widgets/person/person-event-link-modal/p
 import { getRecordEventSuggestions } from '@/shared/api/person-event-links'
 import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
 import { classifySiblingKinship } from '@/widgets/person/person-genealogy-infographic/family-tree-derive'
+import type { UnlinkRelationPayload } from '@/widgets/person/person-genealogy-infographic/context'
+import { computeKinshipMap } from '@/widgets/person/person-genealogy-infographic/kinship'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
 import { PersonHumanRelationshipsSection } from '@/widgets/person/person-human-relationships-section/person-human-relationships-section'
 import { SameDynastyMembersSection } from '@/widgets/person/same-dynasty-members-section/same-dynasty-members-section'
@@ -1075,6 +1081,22 @@ export function PersonDetailPanel({
   const [familyAddMode, setFamilyAddMode] = useState<
     'child' | 'father' | 'mother' | 'sibling' | 'spouse' | null
   >(null)
+  /** 배우자 추가 모달 상단에서 즉시 지정할 혼인 서열(정실·계비·후궁 등) */
+  const [pendingSpouseRank, setPendingSpouseRank] = useState<MarriageRankToken | null>(
+    null,
+  )
+  /** 자녀 추가 모달 상단에서 원스톱으로 지정할 반대편 부모(배우자) ID 및 출생 서열 */
+  const [pendingChildOtherParentId, setPendingChildOtherParentId] = useState<string>('')
+  const [pendingChildBirthOrder, setPendingChildBirthOrder] = useState<string>('')
+
+  useEffect(() => {
+    if (!familyAddMode) {
+      setPendingSpouseRank(null)
+      setPendingChildOtherParentId('')
+      setPendingChildBirthOrder('')
+    }
+  }, [familyAddMode])
+
   /**
    * 자녀 링크 직후 반대편 부모 지정 프롬프트 — '자녀 추가'가 ego 쪽 슬롯만 기록해
    * 편부모 FK(→ 가계도 형제 판별불가)를 체계적으로 양산하던 상류 근인 개선.
@@ -1101,6 +1123,118 @@ export function PersonDetailPanel({
         rel.spouse?.id ? [rel.spouse.id] : [],
       ),
     [person],
+  )
+
+  const serializeExistingSpouseRelations = useCallback(
+    (currentPerson: NonNullable<typeof person>) => {
+      const toDateInfo = (
+        era?: string | null,
+        year?: number | null,
+        month?: number | null,
+        day?: number | null,
+      ) =>
+        year != null
+          ? {
+              era: (era === 'BC' ? 'BC' : 'AD') as 'BC' | 'AD',
+              year,
+              ...(month != null ? { month } : {}),
+              ...(day != null ? { day } : {}),
+            }
+          : undefined
+      return (currentPerson.spouseRelations ?? []).flatMap((rel) =>
+        rel.spouse?.id
+          ? [
+              {
+                spouseId: rel.spouse.id,
+                marriageStart: toDateInfo(
+                  rel.marriageStartEra,
+                  rel.marriageStartYear,
+                  rel.marriageStartMonth,
+                  rel.marriageStartDay,
+                ),
+                marriageEnd: toDateInfo(
+                  rel.marriageEndEra,
+                  rel.marriageEndYear,
+                  rel.marriageEndMonth,
+                  rel.marriageEndDay,
+                ),
+                marriageStartDate: rel.marriageStartDate ?? undefined,
+                marriageEndDate: rel.marriageEndDate ?? undefined,
+                marriageRank:
+                  (rel.marriageRank as MarriageRankToken | null | undefined) ?? null,
+                note: rel.note ?? null,
+              },
+            ]
+          : [],
+      )
+    },
+    [],
+  )
+
+  /**
+   * 가계도 카드·배우자 상세 섹션에서 1클릭으로 가족 관계 연결 해제.
+   */
+  const handleUnlinkFamilyRelation = useCallback(
+    async ({ kind, targetId, targetName }: UnlinkRelationPayload) => {
+      const currentPerson = person
+      if (!currentPerson || !targetId) return
+      const egoName = getPersonDisplayName(
+        currentPerson as unknown as PersonNameFields,
+        true,
+      )
+      const kindLabelMap: Record<UnlinkRelationPayload['kind'], string> = {
+        father: '아버지',
+        mother: '어머니',
+        spouse: '배우자',
+        child: '자녀',
+        sibling: '형제자매',
+      }
+      const roleLabel = kindLabelMap[kind]
+      const ok = await confirm({
+        title: `${roleLabel} 연결 해제`,
+        message: `${egoName}와(과) ${targetName}의 ${roleLabel} 연결을 해제할까요? (인물 데이터 자체는 삭제되지 않습니다)`,
+        confirmLabel: '연결 해제',
+        danger: true,
+      })
+      if (!ok) return
+
+      try {
+        if (kind === 'father') {
+          await updatePerson(currentPerson.id, { fatherId: null })
+        } else if (kind === 'mother') {
+          await updatePerson(currentPerson.id, { motherId: null })
+        } else if (kind === 'spouse') {
+          const existing = serializeExistingSpouseRelations(currentPerson)
+          await updatePerson(currentPerson.id, {
+            spouseRelations: existing.filter((r) => r.spouseId !== targetId),
+          })
+        } else if (kind === 'child') {
+          const fresh = await getPersonById(targetId)
+          const patch: { fatherId?: null; motherId?: null } = {}
+          if (fresh.fatherId === currentPerson.id) patch.fatherId = null
+          if (fresh.motherId === currentPerson.id) patch.motherId = null
+          if (!('fatherId' in patch) && !('motherId' in patch)) {
+            const g = (currentPerson.gender ?? '').toUpperCase()
+            if (g === 'FEMALE') patch.motherId = null
+            else patch.fatherId = null
+          }
+          await updatePerson(targetId, patch)
+        } else if (kind === 'sibling') {
+          const fresh = await getPersonById(targetId)
+          const egoFatherId = currentPerson.father?.id ?? currentPerson.fatherId ?? null
+          const egoMotherId = currentPerson.mother?.id ?? currentPerson.motherId ?? null
+          const patch: { fatherId?: null; motherId?: null } = {}
+          if (egoFatherId && fresh.fatherId === egoFatherId) patch.fatherId = null
+          if (egoMotherId && fresh.motherId === egoMotherId) patch.motherId = null
+          await updatePerson(targetId, patch)
+        }
+        await invalidatePersonCaches(true)
+        notify.success(`${roleLabel} 연결을 해제했습니다.`)
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '가족 연결 해제에 실패했습니다.'))
+      }
+    },
+    [person, serializeExistingSpouseRelations, invalidatePersonCaches],
   )
 
   /**
@@ -1152,13 +1286,28 @@ export function PersonDetailPanel({
               return
             }
           }
-          await updatePerson(targetId, { [slot]: currentPerson.id })
-          // 반대편 부모가 미기록이면 이어서 지정 프롬프트 — 편부모 FK로 남기지 않기 위한
-          // 선택 단계(모달 닫기 = 나중에). 이미 기록돼 있으면 프롬프트 생략.
           const otherSlot: 'fatherId' | 'motherId' = slot === 'fatherId' ? 'motherId' : 'fatherId'
-          const otherAlreadySet = Boolean(
-            otherSlot === 'motherId' ? target?.motherId : target?.fatherId,
-          )
+          const parsedOrder = pendingChildBirthOrder.trim()
+            ? Number.parseInt(pendingChildBirthOrder.trim(), 10)
+            : null
+          const validBirthOrder =
+            parsedOrder != null && Number.isInteger(parsedOrder) && parsedOrder >= 1
+              ? parsedOrder
+              : undefined
+          const inlineOtherParentId =
+            pendingChildOtherParentId && pendingChildOtherParentId !== targetId
+              ? pendingChildOtherParentId
+              : null
+
+          await updatePerson(targetId, {
+            [slot]: currentPerson.id,
+            ...(inlineOtherParentId ? { [otherSlot]: inlineOtherParentId } : {}),
+            ...(validBirthOrder !== undefined ? { birthOrder: validBirthOrder } : {}),
+          })
+          // 모달 상단에서 반대편 부모를 이미 지정했으면 2단계 프롬프트를 생략한다.
+          const otherAlreadySet =
+            Boolean(inlineOtherParentId) ||
+            Boolean(otherSlot === 'motherId' ? target?.motherId : target?.fatherId)
           if (!otherAlreadySet) {
             setChildOtherParent({
               childId: targetId,
@@ -1228,62 +1377,20 @@ export function PersonDetailPanel({
             ...(egoMotherId ? { motherId: egoMotherId } : {}),
           })
         } else if (mode === 'spouse') {
-          // 기존 배우자 관계 보존 후 추가(update는 통째 교체 → 전체 배열 재전송).
-          // 정실/계비/후궁 서열(marriageRank) 및 기원전·고대·연단위 구조화 날짜(marriageStart/End)도 함께 보존한다.
-          const toDateInfo = (
-            era?: string | null,
-            year?: number | null,
-            month?: number | null,
-            day?: number | null,
-          ) =>
-            year != null
-              ? {
-                  era: (era === 'BC' ? 'BC' : 'AD') as 'BC' | 'AD',
-                  year,
-                  ...(month != null ? { month } : {}),
-                  ...(day != null ? { day } : {}),
-                }
-              : undefined
-          const existing = (currentPerson.spouseRelations ?? []).flatMap((rel) =>
-            rel.spouse?.id
-              ? [
-                  {
-                    spouseId: rel.spouse.id,
-                    marriageStart: toDateInfo(
-                      rel.marriageStartEra,
-                      rel.marriageStartYear,
-                      rel.marriageStartMonth,
-                      rel.marriageStartDay,
-                    ),
-                    marriageEnd: toDateInfo(
-                      rel.marriageEndEra,
-                      rel.marriageEndYear,
-                      rel.marriageEndMonth,
-                      rel.marriageEndDay,
-                    ),
-                    marriageStartDate: rel.marriageStartDate ?? undefined,
-                    marriageEndDate: rel.marriageEndDate ?? undefined,
-                    marriageRank:
-                      (rel.marriageRank as
-                        | 'PRIMARY'
-                        | 'SECOND_PRIMARY'
-                        | 'THIRD_PRIMARY'
-                        | 'CONCUBINE'
-                        | 'OTHER'
-                        | null
-                        | undefined) ?? null,
-                    note: rel.note ?? null,
-                  },
-                ]
-              : [],
-          )
+          const existing = serializeExistingSpouseRelations(currentPerson)
           if (existing.some((rel) => rel.spouseId === targetId)) {
             notify.error('이미 배우자로 등록된 인물입니다.')
             setFamilyAddMode(null)
             return
           }
           await updatePerson(currentPerson.id, {
-            spouseRelations: [...existing, { spouseId: targetId }],
+            spouseRelations: [
+              ...existing,
+              {
+                spouseId: targetId,
+                ...(pendingSpouseRank ? { marriageRank: pendingSpouseRank } : {}),
+              },
+            ],
           })
         }
         await invalidatePersonCaches(true)
@@ -1296,7 +1403,16 @@ export function PersonDetailPanel({
         setFamilyAddMode(null)
       }
     },
-    [person, familyAddMode, familyAddPool, invalidatePersonCaches],
+    [
+      person,
+      familyAddMode,
+      familyAddPool,
+      pendingSpouseRank,
+      pendingChildOtherParentId,
+      pendingChildBirthOrder,
+      serializeExistingSpouseRelations,
+      invalidatePersonCaches,
+    ],
   )
 
   /** 자녀의 반대편 부모 FK write — 프롬프트에서 인물 선택 시 */
@@ -3701,6 +3817,9 @@ export function PersonDetailPanel({
                           ? onLinkedPersonClick
                           : pushPersonToModalStack
                       }
+                      onUnlinkRelation={
+                        !embedInModal ? handleUnlinkFamilyRelation : undefined
+                      }
                     />
                   )}
                   {familyModalConfig && (
@@ -3721,15 +3840,185 @@ export function PersonDetailPanel({
                         )
                       }
                       loading={familyAddPoolFetching}
+                      headerAccessory={
+                        familyAddMode === 'spouse' ? (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                              gap: '6px',
+                              padding: '10px 16px',
+                              borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
+                              fontSize: '12px',
+                            }}
+                          >
+                            <span style={{ fontWeight: 600, marginRight: '4px', opacity: 0.75 }}>
+                              혼인 서열(선택):
+                            </span>
+                            {(
+                              [
+                                { value: null, label: '미지정' },
+                                ...MARRIAGE_RANK_OPTIONS,
+                              ] as const
+                            ).map((opt) => {
+                              const active = pendingSpouseRank === opt.value
+                              return (
+                                <button
+                                  key={opt.value ?? 'none'}
+                                  type="button"
+                                  onClick={() => setPendingSpouseRank(opt.value)}
+                                  style={{
+                                    padding: '3px 10px',
+                                    borderRadius: '999px',
+                                    fontSize: '11.5px',
+                                    fontWeight: active ? 700 : 500,
+                                    border: active
+                                      ? '1px solid #6366f1'
+                                      : '1px solid rgba(148, 163, 184, 0.35)',
+                                    background: active
+                                      ? 'rgba(99, 102, 241, 0.14)'
+                                      : 'transparent',
+                                    color: active ? '#6366f1' : 'inherit',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ) : familyAddMode === 'child' ? (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                              gap: '8px 14px',
+                              padding: '10px 16px',
+                              borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
+                              fontSize: '12px',
+                            }}
+                          >
+                            {(person.spouseRelations ?? []).some((r) => r.spouse?.id) && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  flexWrap: 'wrap',
+                                  gap: '5px',
+                                }}
+                              >
+                                <span style={{ fontWeight: 600, marginRight: '4px', opacity: 0.75 }}>
+                                  반대편 부모(배우자):
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingChildOtherParentId('')}
+                                  style={{
+                                    padding: '3px 9px',
+                                    borderRadius: '999px',
+                                    fontSize: '11.5px',
+                                    fontWeight: !pendingChildOtherParentId ? 700 : 500,
+                                    border: !pendingChildOtherParentId
+                                      ? '1px solid #6366f1'
+                                      : '1px solid rgba(148, 163, 184, 0.35)',
+                                    background: !pendingChildOtherParentId
+                                      ? 'rgba(99, 102, 241, 0.14)'
+                                      : 'transparent',
+                                    color: !pendingChildOtherParentId ? '#6366f1' : 'inherit',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  나중에/직접 선택
+                                </button>
+                                {(person.spouseRelations ?? []).map((rel) => {
+                                  const sp = rel.spouse
+                                  if (!sp?.id) return null
+                                  const spName = getPersonDisplayName(sp, true)
+                                  const rankLbl = rel.marriageRank
+                                    ? MARRIAGE_RANK_LABELS[rel.marriageRank]
+                                    : null
+                                  const active = pendingChildOtherParentId === sp.id
+                                  return (
+                                    <button
+                                      key={sp.id}
+                                      type="button"
+                                      onClick={() => setPendingChildOtherParentId(sp.id!)}
+                                      style={{
+                                        padding: '3px 9px',
+                                        borderRadius: '999px',
+                                        fontSize: '11.5px',
+                                        fontWeight: active ? 700 : 500,
+                                        border: active
+                                          ? '1px solid #6366f1'
+                                          : '1px solid rgba(148, 163, 184, 0.35)',
+                                        background: active
+                                          ? 'rgba(99, 102, 241, 0.14)'
+                                          : 'transparent',
+                                        color: active ? '#6366f1' : 'inherit',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      {spName}
+                                      {rankLbl ? ` (${rankLbl})` : ''}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                            <label
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontWeight: 600,
+                              }}
+                            >
+                              <span style={{ opacity: 0.75 }}>출생 서열(선택):</span>
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                inputMode="numeric"
+                                placeholder="예: 1"
+                                value={pendingChildBirthOrder}
+                                onChange={(e) => setPendingChildBirthOrder(e.target.value)}
+                                style={{
+                                  width: '68px',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  border: '1px solid rgba(148, 163, 184, 0.4)',
+                                  background: 'transparent',
+                                  color: 'inherit',
+                                  fontSize: '12px',
+                                }}
+                              />
+                            </label>
+                          </div>
+                        ) : undefined
+                      }
                     />
                   )}
                 </section>
 
-                {/* 배우자 상세 — 혼인 기간·메모 */}
+                {/* 배우자 상세 — 혼인 기간·메모·소생 자녀 */}
                 <SpouseDetailSection
                   spouseRelations={p.spouseRelations}
+                  childrenList={person.children}
                   isDeceased={isDeceased}
                   onPersonClick={handlePersonClick}
+                  onUnlinkSpouse={
+                    !embedInModal
+                      ? (spouseId, spouseName) =>
+                          handleUnlinkFamilyRelation({
+                            kind: 'spouse',
+                            targetId: spouseId,
+                            targetName: spouseName,
+                          })
+                      : undefined
+                  }
                 />
 
                 {/* 인간관계 */}
@@ -4368,6 +4657,26 @@ export function PersonDetailPanel({
                   title={modalTopPersonName}
                 >
                   {modalTopPersonName || '인물'}
+                  {(() => {
+                    const kin = computeKinshipMap(familyTreeData, person.id).get(modalTopId)
+                    if (!kin || kin.chon === 0) return null
+                    return (
+                      <span
+                        style={{
+                          marginLeft: '8px',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          background: 'rgba(99, 102, 241, 0.12)',
+                          color: '#6366f1',
+                          verticalAlign: 'middle',
+                        }}
+                      >
+                        {fullName}의 {kin.summary}
+                      </span>
+                    )
+                  })()}
                 </BioMentionModalTitle>
                 <BioMentionModalBack
                   type="button"

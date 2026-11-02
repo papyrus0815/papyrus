@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
+import type { KinshipInfo } from './kinship'
 
 /**
  * familyTreeData.nodes 의 id→FamilyTreePerson 룩업.
@@ -9,6 +10,22 @@ import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
 export const FamilyTreeLookupContext = createContext<Map<string, FamilyTreePerson>>(
   new Map(),
 )
+
+/**
+ * 기준 인물(ego) 대비 각 노드 ID의 친족 호칭·촌수 룩업.
+ * CardHoverInfo에서 모든 카드 툴팁 상단에 '기준 관계'를 자동 표시하는 데 사용.
+ */
+export const KinshipLookupContext = createContext<Map<string, KinshipInfo>>(
+  new Map(),
+)
+
+export type UnlinkRelationPayload = {
+  kind: 'father' | 'mother' | 'spouse' | 'child' | 'sibling'
+  targetId: string
+  targetName: string
+}
+
+export type UnlinkRelationHandler = (payload: UnlinkRelationPayload) => void
 
 /**
  * 이 노드의 상세를 현재 계정이 열 수 있는지 (서버 isOwned 기반).

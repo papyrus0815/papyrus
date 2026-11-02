@@ -101,9 +101,8 @@ const GrandchildrenForkTrack = styled.div`
 
 const GrandchildrenRow = styled.div`
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   width: fit-content;
-  max-width: 100%;
   gap: ${DESCENDANT_GAP}px;
   justify-content: center;
   align-items: flex-start;

@@ -8,6 +8,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { ANC_PARENTS_GAP, NODE_W } from './constants'
 import {
   CardHoverInfo,
+  CardUnlinkButton,
   CountryFlag,
   GeoNode,
   NodeBadge,
@@ -35,6 +36,8 @@ interface AncestorColumnProps {
   siblingsByPersonId?: Map<string, FamilyTreePerson[]>
   onPersonClick?: (id: string) => void
   onOpenSiblings?: (person: FamilyTreePerson, siblings: FamilyTreePerson[]) => void
+  /** depth=1(아버지/어머니) 직계 부모 연결 해제 핸들러 */
+  onUnlinkDirectParent?: () => void
 }
 
 /**
@@ -59,6 +62,7 @@ export function AncestorColumn({
   siblingsByPersonId,
   onPersonClick,
   onOpenSiblings,
+  onUnlinkDirectParent,
 }: AncestorColumnProps) {
   if (visited.has(personId)) return null
   const person = nodeMap.get(personId)
@@ -173,6 +177,9 @@ export function AncestorColumn({
             }
           : {})}
       >
+        {depth === 1 && onUnlinkDirectParent && (
+          <CardUnlinkButton label={`${label} 연결 해제`} onUnlink={onUnlinkDirectParent} />
+        )}
         {/* 인라인 아바타+국기 — 군주 카드일 때 sovereignCountry 우선 표시
             (GeoThumbnail의 useNodePersonFlag는 country를 우선해 regnal flag를 놓침) */}
         <AvatarFrame>
