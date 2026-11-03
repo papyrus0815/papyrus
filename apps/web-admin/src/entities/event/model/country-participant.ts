@@ -939,3 +939,75 @@ export function swapTwoParticipants(
     { ...first, role: nextSecondRole },
   ]
 }
+
+export interface TitleYearSuggestion {
+  startIso: string
+  endIso: string
+  label: string
+}
+
+function formatYearIso(year: number, isBc: boolean): string {
+  const padded = String(year).padStart(4, '0')
+  return isBc ? `-${padded}-01-01` : `${padded}-01-01`
+}
+
+/**
+ * 사건명(`title`)에 포함된 연도 또는 연도 범위(예: '1894년 청일 전쟁', '임진왜란 (1592~1598)', '기원전 202년 해하 전투')를
+ * 감지해 시작·종료 ISO('YYYY-01-01', 정밀도 year) 추천값을 돌려준다.
+ */
+export function extractYearSuggestionFromTitle(
+  title: string | null | undefined,
+): TitleYearSuggestion | null {
+  const trimmed = title?.trim() ?? ''
+  if (!trimmed) return null
+
+  // 1) 연도 구간 (예: 1592~1598, 1950년~1953년, 1914-1918)
+  const rangeMatch = trimmed.match(
+    /(기원전|BC|B\.C\.)?\s*(\d{3,4})\s*년?\s*[~～\-–—]\s*(기원전|BC|B\.C\.)?\s*(\d{3,4})\s*년?/i,
+  )
+  if (rangeMatch) {
+    const startBc = Boolean(rangeMatch[1])
+    const startYear = Number(rangeMatch[2])
+    const endBc = Boolean(rangeMatch[3]) || startBc
+    const endYear = Number(rangeMatch[4])
+    if (startYear >= 100 && endYear >= 100) {
+      return {
+        startIso: formatYearIso(startYear, startBc),
+        endIso: formatYearIso(endYear, endBc),
+        label: `${startBc ? '기원전 ' : ''}${startYear}년 ~ ${endBc ? '기원전 ' : ''}${endYear}년`,
+      }
+    }
+  }
+
+  // 2) 기원전 단일 연도 (예: 기원전 202년, BC 44년)
+  const bcSingleMatch = trimmed.match(/(?:기원전|BC|B\.C\.)\s*(\d{1,4})\s*년?/i)
+  if (bcSingleMatch) {
+    const year = Number(bcSingleMatch[1])
+    if (year >= 1 && year <= 9999) {
+      const iso = formatYearIso(year, true)
+      return {
+        startIso: iso,
+        endIso: iso,
+        label: `기원전 ${year}년`,
+      }
+    }
+  }
+
+  // 3) 서기 단일 연도 (예: 1894년 갑오개혁, 워털루 전투 (1815))
+  const adSingleMatch =
+    trimmed.match(/(?:^|[^\d])(\d{3,4})\s*년/) ??
+    trimmed.match(/\((\d{3,4})\)/)
+  if (adSingleMatch) {
+    const year = Number(adSingleMatch[1])
+    if (year >= 100 && year <= 2100) {
+      const iso = formatYearIso(year, false)
+      return {
+        startIso: iso,
+        endIso: iso,
+        label: `${year}년`,
+      }
+    }
+  }
+
+  return null
+}

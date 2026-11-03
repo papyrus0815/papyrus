@@ -336,4 +336,48 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       { countryId: 'c1', role: 'PARTICIPANT' },
     ])
   })
+
+  it('사건명에서 분류·기간(연도)·참여국이 함께 감지되면 "한 번에 채우기"로 원클릭 동시 반영할 수 있다', () => {
+    const onApplyType = jest.fn()
+    const setStartDate = jest.fn()
+    const setEndDate = jest.fn()
+    const setStartDatePrecision = jest.fn()
+    const setEndDatePrecision = jest.fn()
+    const setRelatedCountries = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '1904년 영프 협상',
+          setStartDate,
+          setEndDate,
+          setStartDatePrecision,
+          setEndDatePrecision,
+          setRelatedCountries,
+          titleSuggestionSlot: {
+            label: '외교 › 조약·협정·가입',
+            onApply: onApplyType,
+          },
+        })}
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', { name: '추천 기간 적용: 1904년' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '사건명 추천 모두 적용' }),
+    )
+
+    expect(onApplyType).toHaveBeenCalledTimes(1)
+    expect(setStartDate).toHaveBeenCalledWith('1904-01-01')
+    expect(setEndDate).toHaveBeenCalledWith('1904-01-01')
+    expect(setStartDatePrecision).toHaveBeenCalledWith('year')
+    expect(setEndDatePrecision).toHaveBeenCalledWith('year')
+    expect(setRelatedCountries).toHaveBeenCalledWith([
+      { countryId: 'c2', role: 'PARTICIPANT' },
+      { countryId: 'c1', role: 'PARTICIPANT' },
+    ])
+  })
 })

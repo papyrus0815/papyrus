@@ -30,7 +30,7 @@ import styled, { type DefaultTheme } from 'styled-components'
 // ============================================
 // 폼 필드 max-width 설정 (여기서 한 번에 변경 가능)
 // ============================================
-export const FORM_FIELD_MAX_WIDTH = '680px'
+export const FORM_FIELD_MAX_WIDTH = '100%'
 
 // ============================================
 // 메인 색상 변수 (라이트/다크 분리 — getC(theme)로 접근)
@@ -289,10 +289,10 @@ export const FormSection = styled.div`
 // Notion 스타일 레이아웃: Label/Field 좌우 분리
 export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 24px;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
-  padding: ${(props) => (props.$compact ? '0' : '20px 0')};
+  padding: ${(props) => (props.$compact ? '0' : '16px 0')};
   margin-top: ${(props) => (props.$compact ? '0' : '0')};
   border-bottom: ${(props) =>
     props.$noBorder ? 'none' : `1px solid ${props.theme.colors.border.light}`};
@@ -306,7 +306,7 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   }
 
   @media (max-width: 1024px) {
-    grid-template-columns: 160px 1fr;
+    grid-template-columns: 128px minmax(0, 1fr);
     gap: 16px;
   }
 

@@ -235,3 +235,29 @@ it('저장 버튼은 폼이 유효할 때만 활성화된다', async () => {
     expect(screen.getByRole('button', { name: '등록 중...' })).toBeDisabled(),
   )
 })
+
+it('하단 푸터의 "등록 후 계속" 버튼은 완료 다이얼로그를 띄우지 않고 즉시 폼을 초기화해 연속 등록을 이어간다', async () => {
+  const { onClose } = setup()
+  await waitForBody()
+
+  fireEvent.click(screen.getByRole('button', { name: '등록 후 계속' }))
+  expect(submitSpy).toHaveBeenCalledTimes(1)
+
+  // 저장이 완료되면 ConfirmDialog 없이 즉시 reset + 목록 갱신
+  fireEvent.click(screen.getByText('_saved'))
+  expect(resetSpy).toHaveBeenCalledWith({
+    keepCategory: true,
+    keepRelatedCountries: true,
+  })
+  expect(refetchQueriesMock).toHaveBeenCalled()
+  expect(screen.queryByText('사건 등록 완료')).not.toBeInTheDocument()
+  expect(onClose).not.toHaveBeenCalled()
+})
+
+it('모달 안에서 Cmd/Ctrl + Enter 단축키로 즉시 저장을 실행할 수 있다', async () => {
+  setup()
+  await waitForBody()
+
+  fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
+  expect(submitSpy).toHaveBeenCalledTimes(1)
+})

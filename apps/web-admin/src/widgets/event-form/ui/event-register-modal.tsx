@@ -122,6 +122,8 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   )
   /** 저장 직후 3지 분기 다이얼로그 대상 */
   const [savedEventId, setSavedEventId] = useState<string | null>(null)
+  /** '등록 후 계속' 버튼으로 저장했을 때 확인 다이얼로그 없이 즉시 다음 등록으로 이어간다 */
+  const continueAfterSaveRef = useRef(false)
 
   /**
    * 완료 다이얼로그가 뜨면 상세 페이지 청크를 미리 받는다 — 라우트가 `lazy`라 '상세 보기'
@@ -136,6 +138,21 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   const { isEditMode, isLoading, isSubmitting, isValid, firstError } = formState
   const busy = isLoading || isSubmitting
 
+  /** 모달 안 어디서든 Cmd/Ctrl + Enter로 즉시 저장 */
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        if (!isValid || busy || savedEventId !== null) return
+        event.preventDefault()
+        continueAfterSaveRef.current = false
+        void formRef.current?.submit()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, isValid, busy, savedEventId])
+
   /** Esc·오버레이·취소 공통 — dirty면 확인부터 */
   const requestClose = useCallback(async () => {
     if (isSubmitting) return
@@ -149,15 +166,6 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     onClose()
   }, [isSubmitting, markDirty, onClose])
 
-  const handleSaved = useCallback(
-    (id: string) => {
-      markDirty(false)
-      onSaved?.(id)
-      setSavedEventId(id)
-    },
-    [markDirty, onSaved],
-  )
-
   /**
    * 뒤에 살아 있는 목록을 지금 되살린다.
    *
@@ -170,6 +178,21 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     void queryClient.refetchQueries({ queryKey: eventKeys.lists(), type: 'active' })
     void queryClient.refetchQueries({ queryKey: eventKeys.count(), type: 'active' })
   }, [queryClient])
+
+  const handleSaved = useCallback(
+    (id: string) => {
+      markDirty(false)
+      onSaved?.(id)
+      if (continueAfterSaveRef.current) {
+        continueAfterSaveRef.current = false
+        formRef.current?.reset({ keepCategory: true, keepRelatedCountries: true })
+        refetchMountedLists()
+        return
+      }
+      setSavedEventId(id)
+    },
+    [markDirty, onSaved, refetchMountedLists],
+  )
 
   /** 상세 보기 — 폼 본체가 캐시 시딩·프리페치를 끝낸 뒤라 무로딩 진입 */
   const handleViewDetail = useCallback(() => {
@@ -240,10 +263,12 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
         </PersonRegisterModalFormScroll>
 
         <PersonRegisterModalStickyFooter>
-          <FooterHint>
-            {isEditMode
-              ? '기본 정보만 수정합니다. 본문·인물·군사 기록은 상세에서 이어서 편집하세요.'
-              : '세부의 핵심 기록까지 함께 등록합니다. 본문·수치는 상세에서 이어서 채우세요.'}
+          <FooterHint $warning={!isValid && Boolean(firstError)}>
+            {!isValid && firstError
+              ? `필수 입력: ${firstError}`
+              : isEditMode
+                ? '기본 정보만 수정합니다 · ⌘/Ctrl+Enter로 바로 저장'
+                : '등록 준비 완료 · ⌘/Ctrl+Enter로 바로 저장할 수 있습니다.'}
           </FooterHint>
           <FooterActions>
             <PersonRegisterModalCancelBtn
@@ -255,9 +280,23 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
             >
               취소
             </PersonRegisterModalCancelBtn>
+            {!isEditMode && (
+              <PersonRegisterModalCancelBtn
+                type="button"
+                disabled={!isValid || busy}
+                title="저장 후 창을 닫지 않고 같은 분야·참여국으로 다음 사건을 바로 이어 등록합니다"
+                onClick={() => {
+                  continueAfterSaveRef.current = true
+                  void formRef.current?.submit()
+                }}
+              >
+                등록 후 계속
+              </PersonRegisterModalCancelBtn>
+            )}
             <PersonRegisterModalPrimaryBtn
               type="button"
               onClick={() => {
+                continueAfterSaveRef.current = false
                 void formRef.current?.submit()
               }}
               disabled={!isValid || busy}
@@ -268,7 +307,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
                     ? '저장 중...'
                     : !isValid
                       ? (firstError ?? '기본 정보를 입력해야 저장할 수 있습니다')
-                      : undefined
+                      : '단축키: ⌘/Ctrl + Enter'
               }
             >
               {isSubmitting
@@ -332,11 +371,13 @@ const FormReveal = styled.div`
   }
 `
 
-const FooterHint = styled.p`
+const FooterHint = styled.p<{ $warning?: boolean }>`
   margin: 0;
   font-size: 12px;
+  font-weight: ${({ $warning }) => ($warning ? 600 : 400)};
   line-height: 1.4;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ $warning, theme }) =>
+    $warning ? theme.colors.text.secondary : theme.colors.text.tertiary};
 
   @media (max-width: 768px) {
     display: none;

@@ -362,16 +362,13 @@ export function EventTypeField({
             )}
           </>
         ) : domain ? (
-          <>
-            {activeDomainDef && (
-              <span>
-                <b>{activeDomainDef.label}</b> — {activeDomainDef.tagline}
-              </span>
-            )}
-            <span>선택 — 고르면 그 꼴에 맞는 기록 칸이 열립니다(전투면 교전 양측, 조약이면 맺어진 조약).</span>
-          </>
+          activeDomainDef && (
+            <span>
+              <b>{activeDomainDef.label}</b> — {activeDomainDef.tagline}
+            </span>
+          )
         ) : (
-          <span>선택 — 분야를 먼저 고르거나, 여기서 세부를 고르면 어울리는 분야가 함께 선택됩니다.</span>
+          <span>분야를 먼저 고르거나 세부를 바로 고르면 어울리는 분야가 함께 선택됩니다.</span>
         )}
       </Hint>
     </Wrap>

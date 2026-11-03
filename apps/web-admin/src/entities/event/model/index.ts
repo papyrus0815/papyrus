@@ -27,6 +27,7 @@ export {
   EVENT_COUNTRY_ROLE_OPTIONS,
   eventCountryRoleHint,
   eventCountryRoleLabel,
+  extractYearSuggestionFromTitle,
   findReplacementForMismatchedCountry,
   moveParticipant,
   participantKey,
@@ -46,6 +47,7 @@ export type {
   EventCountryRole,
   RecentParticipantRef,
   SuggestedCountryCandidate,
+  TitleYearSuggestion,
 } from './country-participant'
 export {
   EVENT_DOMAIN_OPTIONS,

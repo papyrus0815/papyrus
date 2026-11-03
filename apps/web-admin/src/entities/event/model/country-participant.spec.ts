@@ -1,6 +1,7 @@
 import {
   eventCountryRoleHint,
   eventCountryRoleLabel,
+  extractYearSuggestionFromTitle,
   findReplacementForMismatchedCountry,
   moveParticipant,
   participantKey,
@@ -228,5 +229,24 @@ describe('country-participant 유틸', () => {
     expect(
       quickRoleDescriptionPresets('INITIATOR', '참전 방식·지휘·병력 등 (선택)'),
     ).toContain('선제 공격')
+  })
+
+  it('extractYearSuggestionFromTitle — 사건명에 적힌 연도·연도 구간·기원전 연도를 감지해 ISO 날짜를 추천한다', () => {
+    expect(extractYearSuggestionFromTitle('1894년 청일 전쟁')).toEqual({
+      startIso: '1894-01-01',
+      endIso: '1894-01-01',
+      label: '1894년',
+    })
+    expect(extractYearSuggestionFromTitle('임진왜란 (1592~1598)')).toEqual({
+      startIso: '1592-01-01',
+      endIso: '1598-01-01',
+      label: '1592년 ~ 1598년',
+    })
+    expect(extractYearSuggestionFromTitle('기원전 202년 해하 전투')).toEqual({
+      startIso: '-0202-01-01',
+      endIso: '-0202-01-01',
+      label: '기원전 202년',
+    })
+    expect(extractYearSuggestionFromTitle('연도 없는 사건')).toBeNull()
   })
 })

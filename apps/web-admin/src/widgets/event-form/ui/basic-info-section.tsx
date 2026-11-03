@@ -18,6 +18,7 @@ import {
   type RecentParticipantRef,
   type SuggestedCountryCandidate,
   eventCountryRoleHint,
+  extractYearSuggestionFromTitle,
   findReplacementForMismatchedCountry,
   moveParticipant,
   participantKey,
@@ -327,11 +328,32 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
   )
+  const titleYearSuggestion = useMemo(
+    () => (!startDate ? extractYearSuggestionFromTitle(title) : null),
+    [title, startDate],
+  )
+
   const hintYearRange = useMemo(() => {
-    const startYear = signedYearFromIsoLike(startDate)
-    const endYear = signedYearFromIsoLike(endDate || startDate)
+    const effectiveStart = startDate || titleYearSuggestion?.startIso || ''
+    const effectiveEnd =
+      endDate || startDate || titleYearSuggestion?.endIso || effectiveStart
+    const startYear = signedYearFromIsoLike(effectiveStart)
+    const endYear = signedYearFromIsoLike(effectiveEnd)
     return { startYear, endYear }
-  }, [startDate, endDate])
+  }, [startDate, endDate, titleYearSuggestion])
+
+  const applyTitleYearSuggestion = () => {
+    if (!titleYearSuggestion) return
+    playClickSound()
+    setStartDate(titleYearSuggestion.startIso)
+    setStartDatePrecision?.('year')
+    setStartTime('')
+    if (!endDate) {
+      setEndDate(titleYearSuggestion.endIso)
+      setEndDatePrecision?.('year')
+      setEndTime('')
+    }
+  }
 
   const existingParticipantKeys = useMemo(
     () => new Set(relatedCountries.map(participantKey)),
@@ -681,17 +703,67 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 {titleError}
               </S.ErrorMessage>
             )}
-            {titleSuggestionSlot && !typeSlot && (
-              <TitleSuggestionRow>
-                <TitleSuggestionButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    titleSuggestionSlot.onApply()
-                  }}
-                >
-                  추천 분류 적용: {titleSuggestionSlot.label}
-                </TitleSuggestionButton>
+            {(titleSuggestionSlot ||
+              titleYearSuggestion ||
+              (onOpenCountryModal && titleSuggestedCountries.length > 0)) && (
+              <TitleSuggestionRow aria-label="사건명 자동 감지 추천">
+                {titleSuggestionSlot && (
+                  <TitleSuggestionButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      titleSuggestionSlot.onApply()
+                    }}
+                  >
+                    추천 분류 적용: {titleSuggestionSlot.label}
+                  </TitleSuggestionButton>
+                )}
+                {titleYearSuggestion && (
+                  <TitleSuggestionButton
+                    type="button"
+                    onClick={applyTitleYearSuggestion}
+                  >
+                    추천 기간 적용: {titleYearSuggestion.label}
+                  </TitleSuggestionButton>
+                )}
+                {onOpenCountryModal && titleSuggestedCountries.length > 0 && (
+                  <TitleSuggestionButton
+                    type="button"
+                    onClick={() => addBatchParticipants(titleSuggestedCountries)}
+                  >
+                    추천 참여국 추가:{' '}
+                    {titleSuggestedCountries.map((c) => c.name).join(' · ')}
+                  </TitleSuggestionButton>
+                )}
+                {[
+                  Boolean(titleSuggestionSlot),
+                  Boolean(titleYearSuggestion),
+                  Boolean(onOpenCountryModal && titleSuggestedCountries.length > 0),
+                ].filter(Boolean).length >= 2 && (
+                  <TitleApplyAllButton
+                    type="button"
+                    aria-label="사건명 추천 모두 적용"
+                    onClick={() => {
+                      playClickSound()
+                      titleSuggestionSlot?.onApply()
+                      if (titleYearSuggestion) {
+                        setStartDate(titleYearSuggestion.startIso)
+                        setStartDatePrecision?.('year')
+                        setStartTime('')
+                        if (!endDate) {
+                          setEndDate(titleYearSuggestion.endIso)
+                          setEndDatePrecision?.('year')
+                          setEndTime('')
+                        }
+                      }
+                      if (onOpenCountryModal && titleSuggestedCountries.length > 0) {
+                        addBatchParticipants(titleSuggestedCountries)
+                      }
+                    }}
+                  >
+                    한 번에 채우기
+                  </TitleApplyAllButton>
+                )}
               </TitleSuggestionRow>
             )}
           </S.FormField>
@@ -2151,6 +2223,8 @@ const KeywordChipRemove = styled.button`
 const TitleSuggestionRow = styled.div`
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 2px;
 `
 
@@ -2170,6 +2244,29 @@ const TitleSuggestionButton = styled.button`
 
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+`
+
+const TitleApplyAllButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 11px;
+  border-radius: 999px;
+  border: none;
+  background: ${({ theme }) => theme.colors.primary};
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.92;
   }
 
   &:focus-visible {
