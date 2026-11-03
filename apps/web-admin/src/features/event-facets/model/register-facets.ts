@@ -12,6 +12,12 @@
 import { participantKey } from '@/entities/event/model/country-participant'
 import type { EventCountryParticipant } from '@/entities/event/model/country-participant'
 import { type EventTypeKey, typeFacets } from '@/entities/event/model/event-type-registry'
+import {
+  DIRECTED_RELATION_TYPES,
+  type EventRelationDirection,
+  type EventRelationType,
+  createEventRelation,
+} from '@/shared/api/event-relations'
 import { type EventSide, syncEventSides } from '@/shared/api/event-sides'
 import {
   type EventOrganizationRole,
@@ -28,6 +34,131 @@ import {
   signatoriesFromParticipants,
   treatyNameFromEventTitle,
 } from './treaty-from-event'
+
+export type EventRelationRoleKey =
+  | 'LED_TO:incoming'
+  | 'LED_TO:outgoing'
+  | 'INFLUENCED:incoming'
+  | 'INFLUENCED:outgoing'
+  | 'RESPONSE_TO:incoming'
+  | 'RESPONSE_TO:outgoing'
+  | 'CONCURRENT:outgoing'
+  | 'RELATED:outgoing'
+
+export interface EventRelatedDraft {
+  relatedEventId: string
+  title: string
+  dateLabel?: string
+  startYear?: number | null
+  relationType: EventRelationType
+  direction: EventRelationDirection
+  description?: string
+}
+
+export const EVENT_RELATION_ROLE_OPTIONS: ReadonlyArray<{
+  key: EventRelationRoleKey
+  relationType: EventRelationType
+  direction: EventRelationDirection
+  label: string
+  group: '원인·배경 (앞선 사건)' | '결과·파장 (뒤따른 사건)' | '동시대·기타'
+}> = [
+  {
+    key: 'LED_TO:incoming',
+    relationType: 'LED_TO',
+    direction: 'incoming',
+    label: '계기가 된 사건 (상대 → 이 사건)',
+    group: '원인·배경 (앞선 사건)',
+  },
+  {
+    key: 'INFLUENCED:incoming',
+    relationType: 'INFLUENCED',
+    direction: 'incoming',
+    label: '배경이 된 사건 (상대 → 이 사건)',
+    group: '원인·배경 (앞선 사건)',
+  },
+  {
+    key: 'RESPONSE_TO:incoming',
+    relationType: 'RESPONSE_TO',
+    direction: 'incoming',
+    label: '이 사건이 대응한 사건 (상대 → 이 사건)',
+    group: '원인·배경 (앞선 사건)',
+  },
+  {
+    key: 'LED_TO:outgoing',
+    relationType: 'LED_TO',
+    direction: 'outgoing',
+    label: '이 사건으로 일어난 사건 (이 사건 → 상대)',
+    group: '결과·파장 (뒤따른 사건)',
+  },
+  {
+    key: 'INFLUENCED:outgoing',
+    relationType: 'INFLUENCED',
+    direction: 'outgoing',
+    label: '이 사건이 배경이 된 사건 (이 사건 → 상대)',
+    group: '결과·파장 (뒤따른 사건)',
+  },
+  {
+    key: 'RESPONSE_TO:outgoing',
+    relationType: 'RESPONSE_TO',
+    direction: 'outgoing',
+    label: '이 사건에 대한 대응 (이 사건 → 상대)',
+    group: '결과·파장 (뒤따른 사건)',
+  },
+  {
+    key: 'CONCURRENT:outgoing',
+    relationType: 'CONCURRENT',
+    direction: 'outgoing',
+    label: '같은 국면의 사건 (동시 진행)',
+    group: '동시대·기타',
+  },
+  {
+    key: 'RELATED:outgoing',
+    relationType: 'RELATED',
+    direction: 'outgoing',
+    label: '관련 사건 (기타 연관)',
+    group: '동시대·기타',
+  },
+]
+
+export function toRelationRoleKey(
+  relationType: EventRelationType,
+  direction: EventRelationDirection,
+): EventRelationRoleKey {
+  const normalizedDir = DIRECTED_RELATION_TYPES.has(relationType) ? direction : 'outgoing'
+  return `${relationType}:${normalizedDir}` as EventRelationRoleKey
+}
+
+export function parseRelationRoleKey(key: EventRelationRoleKey): {
+  relationType: EventRelationType
+  direction: EventRelationDirection
+} {
+  const [relationType, direction] = key.split(':') as [
+    EventRelationType,
+    EventRelationDirection,
+  ]
+  return { relationType, direction }
+}
+
+/**
+ * 상대 사건과 현재 사건의 시작 연도를 비교해 기본 관계 유형·방향을 추론한다.
+ * - 상대 사건이 더 앞선 해에 시작했으면: '계기가 된 사건' (LED_TO · incoming)
+ * - 상대 사건이 더 뒤따른 해에 시작했으면: '이 사건으로 일어난 사건' (LED_TO · outgoing)
+ * - 연도를 비교할 수 없거나 같은 해면: 가장 흔한 '계기가 된 사건' (LED_TO · incoming)
+ */
+export function inferDefaultRelationRole(
+  candidateStartYear?: number | null,
+  currentStartYear?: number | null,
+): { relationType: EventRelationType; direction: EventRelationDirection } {
+  if (candidateStartYear != null && currentStartYear != null) {
+    if (candidateStartYear < currentStartYear) {
+      return { relationType: 'LED_TO', direction: 'incoming' }
+    }
+    if (candidateStartYear > currentStartYear) {
+      return { relationType: 'LED_TO', direction: 'outgoing' }
+    }
+  }
+  return { relationType: 'LED_TO', direction: 'incoming' }
+}
 
 export interface PickedPerson {
   personId: string
@@ -172,6 +303,8 @@ export interface CommitInput {
   /** 현재 고른 세부 분야 — 주어지면 이 세부의 core에 속한 기록만 커밋한다 */
   eventType?: EventTypeKey | null
   domain?: string | null
+  /** 등록 시점에 함께 연결할 연관 사건(EventRelation) 목록 */
+  relatedEvents?: ReadonlyArray<EventRelatedDraft>
 }
 
 export interface CommitResult {
@@ -283,6 +416,22 @@ export async function commitRegisterFacets(input: CommitInput): Promise<CommitRe
     await attempt('선거', async () => {
       await updateElection(election.id, { eventId })
       return `선거 ${election.name}`
+    })
+  }
+
+  // 연관 사건(EventRelation)
+  for (const relation of input.relatedEvents ?? []) {
+    await attempt(`연관 사건 ${relation.title}`, async () => {
+      const direction = DIRECTED_RELATION_TYPES.has(relation.relationType)
+        ? relation.direction
+        : undefined
+      await createEventRelation(eventId, {
+        relatedEventId: relation.relatedEventId,
+        relationType: relation.relationType,
+        direction,
+        description: relation.description?.trim() || null,
+      })
+      return `연관 「${relation.title}」`
     })
   }
 

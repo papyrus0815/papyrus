@@ -31,6 +31,10 @@ jest.mock('@/shared/api/client', () => ({
 jest.mock('@/shared/api/event-sides', () => ({
   syncEventSides: jest.fn(),
 }))
+jest.mock('@/shared/api/event-relations', () => ({
+  DIRECTED_RELATION_TYPES: new Set(['LED_TO', 'INFLUENCED', 'RESPONSE_TO']),
+  createEventRelation: jest.fn(),
+}))
 jest.mock('@/shared/api/election', () => ({
   updateElection: jest.fn(),
 }))
@@ -169,6 +173,31 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
       onOpenPicker: () => void
       onClear: () => void
     }
+    relatedEventsSlot?: {
+      items: Array<{
+        relatedEventId: string
+        title: string
+        relationType: string
+        direction: string
+        description?: string
+      }>
+      lastSavedEvent?: {
+        id: string
+        title: string
+        startYear?: number | null
+      } | null
+      onChange: (
+        next: Array<{
+          relatedEventId: string
+          title: string
+          startYear?: number | null
+          relationType: 'LED_TO'
+          direction: 'incoming'
+          description?: string
+        }>,
+      ) => void
+      onOpenPicker: () => void
+    }
   }) => (
     <div>
       <input
@@ -232,6 +261,40 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
           </button>
           <button type="button" onClick={props.parentEventSlot.onClear}>
             _clearParent
+          </button>
+        </>
+      )}
+      {props.relatedEventsSlot && (
+        <>
+          <output data-testid="relatedEvents">
+            {props.relatedEventsSlot.items
+              .map(
+                (item) =>
+                  `${item.relatedEventId}:${item.title}:${item.relationType}:${item.direction}`,
+              )
+              .join('|')}
+          </output>
+          <output data-testid="lastSavedEvent">
+            {props.relatedEventsSlot.lastSavedEvent
+              ? `${props.relatedEventsSlot.lastSavedEvent.id}:${props.relatedEventsSlot.lastSavedEvent.title}`
+              : ''}
+          </output>
+          <button
+            type="button"
+            onClick={() =>
+              props.relatedEventsSlot?.onChange([
+                {
+                  relatedEventId: 'evt-cause',
+                  title: '사라예보 사건',
+                  startYear: 1914,
+                  relationType: 'LED_TO',
+                  direction: 'incoming',
+                  description: '',
+                },
+              ])
+            }
+          >
+            _addRelatedCause
           </button>
         </>
       )}
@@ -915,6 +978,90 @@ describe('EventBasicForm — 분야 · 세부 분야 상호작용', () => {
     )
     expect(screen.getByTestId('roleDescriptionPlaceholder')).toHaveTextContent(
       '비준·할양·배상 등 이 나라의 조약 내용 (선택)',
+    )
+  })
+
+  it('initialRelatedEvents가 주어지면 프리필된 채 열리고 dirty 기준선에 포함된다', () => {
+    const onDirtyChange = jest.fn()
+    const client = makeClient()
+    render(
+      <EventBasicForm
+        initialRelatedEvents={[
+          {
+            relatedEventId: 'evt-prev',
+            title: '사라예보 사건',
+            relationType: 'LED_TO',
+            direction: 'incoming',
+          },
+        ]}
+        onDirtyChange={onDirtyChange}
+      />,
+      { wrapper: wrap(client) },
+    )
+
+    expect(screen.getByTestId('relatedEvents')).toHaveTextContent(
+      'evt-prev:사라예보 사건:LED_TO:incoming',
+    )
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true)
+  })
+
+  it('신규 등록 시 연관 사건이 commitRegisterFacets로 전달되고, 저장 후 reset() 시 방금 등록한 사건이 lastSavedEvent로 남아 연속 연결할 수 있다', async () => {
+    const registerFacets = jest.requireMock(
+      '@/features/event-facets/model/register-facets',
+    ) as { commitRegisterFacets: jest.Mock }
+    eventsApi.createEvent.mockResolvedValue({
+      id: 'evt-new',
+      title: '마른 전투',
+    })
+
+    const client = makeClient()
+    jest.spyOn(client, 'ensureQueryData').mockResolvedValue({} as never)
+
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    render(<EventBasicForm formRef={formRef} />, { wrapper: wrap(client) })
+
+    fireEvent.change(screen.getByLabelText('사건명'), {
+      target: { value: '마른 전투' },
+    })
+    fireEvent.change(screen.getByLabelText('시작일'), {
+      target: { value: '1914-09-05' },
+    })
+    fireEvent.change(screen.getByLabelText('분야'), {
+      target: { value: 'MILITARY' },
+    })
+
+    fireEvent.click(screen.getByText('_addRelatedCause'))
+    expect(screen.getByTestId('relatedEvents')).toHaveTextContent(
+      'evt-cause:사라예보 사건:LED_TO:incoming',
+    )
+
+    await act(async () => {
+      await formRef.current?.submit()
+    })
+
+    expect(registerFacets.commitRegisterFacets).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'evt-new',
+        relatedEvents: [
+          expect.objectContaining({
+            relatedEventId: 'evt-cause',
+            title: '사라예보 사건',
+            relationType: 'LED_TO',
+            direction: 'incoming',
+          }),
+        ],
+      }),
+    )
+
+    // 연속 등록을 위해 reset()을 호출하면 연관 사건 목록은 비워지되 방금 등록한 사건은 lastSavedEvent로 남는다
+    act(() => {
+      formRef.current?.reset({ keepCategory: true })
+    })
+    expect(screen.getByTestId('relatedEvents')).toHaveTextContent('')
+    expect(screen.getByTestId('lastSavedEvent')).toHaveTextContent(
+      'evt-new:마른 전투',
     )
   })
 })

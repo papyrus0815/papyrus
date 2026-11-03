@@ -48,9 +48,11 @@ import {
   typeFacets,
 } from '@/entities/event/model/event-type-registry'
 import {
+  type EventRelatedDraft,
   type RegisterFacetDrafts,
   commitRegisterFacets,
   emptyRegisterFacetDrafts,
+  inferDefaultRelationRole,
   pruneFacetDraftsForType,
   relatedPersonsPayload,
   stripStatehoodRoles,
@@ -154,6 +156,8 @@ export interface EventBasicFormProps {
   initialEventType?: EventTypeKey | string | null
   /** 목록·조망 등 진입 지면의 참여국 필터 프리필(신규 등록 전용) */
   initialCountries?: EventCountryParticipant[]
+  /** 상세 '새 관련 사건 등록' 등 진입 지면의 연관 사건 프리필(신규 등록 전용) */
+  initialRelatedEvents?: EventRelatedDraft[]
 }
 
 /**
@@ -228,6 +232,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   initialDomain,
   initialEventType,
   initialCountries,
+  initialRelatedEvents,
 }) => {
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
@@ -466,8 +471,12 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     queryKey: eventKeys.linkCandidates(debouncedParentTerm, 'COLLECTION'),
     // 서버 take 100 캡(알려진 제약) — 넘치는 후보는 검색어로 좁힌다. 51건 요청은
     // '50건 초과 → 더 있음' 신호용(detail-network와 동일).
-    queryFn: () =>
-      getEventLinkCandidates({ query: debouncedParentTerm, limit: 51, kind: 'COLLECTION' }),
+    queryFn: async () =>
+      (await getEventLinkCandidates({
+        query: debouncedParentTerm,
+        limit: 51,
+        kind: 'COLLECTION',
+      })) ?? [],
     enabled: parentPickerOpen && !isEditMode,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
@@ -534,6 +543,138 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       setParentSearchTerm('')
     },
     [parentCandidates],
+  )
+
+  // ===== 연관 사건(신규 등록 전용) =====
+  const [relatedEvents, setRelatedEvents] = useState<EventRelatedDraft[]>(() =>
+    !isEditMode && initialRelatedEvents ? initialRelatedEvents : [],
+  )
+  const [lastSavedEvent, setLastSavedEvent] = useState<{
+    id: string
+    title: string
+    startYear?: number | null
+  } | null>(null)
+  const [relatedPickerOpen, setRelatedPickerOpen] = useState(false)
+  const [relatedSearchTerm, setRelatedSearchTerm] = useState('')
+  const [relatedQuickQuery, setRelatedQuickQuery] = useState('')
+
+  const debouncedRelatedTerm = useDebouncedValue(
+    relatedSearchTerm,
+    250,
+    String(relatedPickerOpen),
+  )
+  const {
+    data: relatedCandidates = [],
+    isLoading: relatedCandidatesLoading,
+    isFetching: relatedCandidatesFetching,
+    isError: relatedCandidatesError,
+    refetch: refetchRelatedCandidates,
+  } = useQuery({
+    queryKey: eventKeys.linkCandidates(debouncedRelatedTerm),
+    queryFn: async () =>
+      (await getEventLinkCandidates({ query: debouncedRelatedTerm, limit: 51 })) ?? [],
+    enabled: relatedPickerOpen && !isEditMode,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  })
+
+  const debouncedRelatedQuickQuery = useDebouncedValue(relatedQuickQuery, 200)
+  const {
+    data: relatedQuickRaw = [],
+    isFetching: relatedQuickFetching,
+  } = useQuery({
+    queryKey: eventKeys.linkCandidates(debouncedRelatedQuickQuery.trim()),
+    queryFn: async () =>
+      (await getEventLinkCandidates({
+        query: debouncedRelatedQuickQuery.trim(),
+        limit: 8,
+      })) ?? [],
+    enabled: !isEditMode && debouncedRelatedQuickQuery.trim().length >= 1,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  })
+
+  const currentSignedStartYear = countryHintYearRange?.startYear ?? null
+  const { data: contemporaryRaw = [] } = useQuery({
+    queryKey: ['events', 'link-candidates', 'near', currentSignedStartYear],
+    queryFn: async () =>
+      (await getEventLinkCandidates({
+        near: currentSignedStartYear,
+        window: 15,
+        limit: 8,
+      })) ?? [],
+    enabled: !isEditMode && currentSignedStartYear != null,
+    staleTime: 60_000,
+    retry: 1,
+  })
+
+  const debouncedTitleForSimilar = useDebouncedValue(title, 250)
+  const { data: titleSimilarRaw = [] } = useQuery({
+    queryKey: eventKeys.linkCandidates(debouncedTitleForSimilar.trim()),
+    queryFn: async () =>
+      (await getEventLinkCandidates({
+        query: debouncedTitleForSimilar.trim(),
+        limit: 5,
+      })) ?? [],
+    enabled: !isEditMode && debouncedTitleForSimilar.trim().length >= 2,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  })
+
+  const linkedRelatedIdSet = useMemo(
+    () =>
+      new Set([
+        ...(parentEvent?.id ? [parentEvent.id] : []),
+        ...relatedEvents.map((item) => item.relatedEventId),
+      ]),
+    [parentEvent?.id, relatedEvents],
+  )
+
+  const relatedSearchPending =
+    relatedCandidatesFetching || relatedSearchTerm !== debouncedRelatedTerm
+
+  const relatedOptions = useMemo<SelectOption[]>(
+    () =>
+      relatedCandidates
+        .slice(0, 50)
+        .filter((candidate) => !linkedRelatedIdSet.has(candidate.id))
+        .map((candidate) => ({
+          value: candidate.id,
+          label: candidate.title,
+          description: parentCandidateDescription(candidate),
+        })),
+    [relatedCandidates, linkedRelatedIdSet],
+  )
+
+  const handleSelectRelated = useCallback(
+    (candidateId: string) => {
+      const candidate = relatedCandidates.find((item) => item.id === candidateId)
+      if (
+        candidate &&
+        !relatedEvents.some((item) => item.relatedEventId === candidate.id)
+      ) {
+        const candYear = candidateSignedStartYear(candidate)
+        const inferred = inferDefaultRelationRole(candYear, currentSignedStartYear)
+        setRelatedEvents((previous) => [
+          ...previous,
+          {
+            relatedEventId: candidate.id,
+            title: candidate.title,
+            dateLabel: candidateDateLabel(candidate),
+            startYear: candYear,
+            relationType: inferred.relationType,
+            direction: inferred.direction,
+            description: '',
+          },
+        ])
+      }
+      setRelatedPickerOpen(false)
+      setRelatedSearchTerm('')
+    },
+    [relatedCandidates, relatedEvents, currentSignedStartYear],
   )
 
   const markDirty = useCallback((next: boolean) => {
@@ -667,6 +808,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         // 상위 사건도 기준선에 포함 — initialParent 프리필 상태가 곧 기준선이라
         // '열자마자 dirty' 오판이 없고, 해제/변경만 dirty가 된다.
         parentEvent?.id ?? '',
+        relatedEvents,
         kind,
         eventType,
         facetDrafts,
@@ -685,6 +827,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       keywords,
       relatedCountries,
       parentEvent,
+      relatedEvents,
       kind,
       eventType,
       facetDrafts,
@@ -833,10 +976,19 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
             ...facetDrafts,
             sides: { ...facetDrafts.sides, names: effectiveSideNames(facetDrafts) },
           },
+          relatedEvents,
         })
+        if (relatedEvents.length > 0) {
+          queryClient.invalidateQueries({ queryKey: ['event-relations'] })
+        }
         if (committed.done.length > 0) notify.success(`기록을 이었습니다 — ${committed.done.join(' · ')}`)
         for (const warning of committed.warnings) notify.error(warning)
         if (committed.done.length > 0) saved = await getEventById(saved.id)
+        setLastSavedEvent({
+          id: saved.id,
+          title: title.trim(),
+          startYear: currentSignedStartYear,
+        })
         notify.success('사건이 등록되었습니다. 상세에서 내용을 이어서 등록하세요.')
       }
 
@@ -912,6 +1064,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     relatedCountries,
     keywords,
     parentEvent,
+    relatedEvents,
+    currentSignedStartYear,
     isEditMode,
     eventId,
     queryClient,
@@ -937,6 +1091,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       kindTouchedRef.current = false
       setKind(nextEventType && EVENT_TYPES[nextEventType].usuallyCollection ? 'COLLECTION' : 'SINGLE')
       setFacetDrafts(emptyRegisterFacetDrafts())
+      setRelatedEvents([])
+      setRelatedQuickQuery('')
       // parentEvent는 의도적으로 유지 — "계속 등록"의 전형이 같은 상위 밑에 형제
       // 가지를 연달아 등록하는 흐름이다(keepCategory와 같은 근거). 칩이 보이므로
       // 원치 않으면 ✕ 한 번으로 해제된다. 유지된 값은 아래 토큰으로 새 기준선에 편입.
@@ -1116,6 +1272,62 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                 onClear: () => setParentEvent(null),
               }
         }
+        relatedEventsSlot={
+          isEditMode
+            ? undefined
+            : {
+                items: relatedEvents,
+                onChange: setRelatedEvents,
+                onOpenPicker: () => setRelatedPickerOpen(true),
+                quickSearch: {
+                  query: relatedQuickQuery,
+                  onQueryChange: setRelatedQuickQuery,
+                  candidates: relatedQuickRaw
+                    .filter((candidate) => !linkedRelatedIdSet.has(candidate.id))
+                    .slice(0, 6)
+                    .map(toSimpleCandidate),
+                  isSearching:
+                    relatedQuickFetching ||
+                    relatedQuickQuery !== debouncedRelatedQuickQuery,
+                },
+                contemporarySuggestions: contemporaryRaw
+                  .filter((candidate) => !linkedRelatedIdSet.has(candidate.id))
+                  .slice(0, 4)
+                  .map(toSimpleCandidate),
+                lastSavedEvent,
+                currentStartYear: currentSignedStartYear,
+              }
+        }
+        similarEventsSlot={
+          isEditMode
+            ? undefined
+            : {
+                candidates: titleSimilarRaw
+                  .filter((candidate) => !linkedRelatedIdSet.has(candidate.id))
+                  .slice(0, 3)
+                  .map(toSimpleCandidate),
+                onSelectAsParent: (candidate) =>
+                  setParentEvent({ id: candidate.id, title: candidate.title }),
+                onAddAsRelated: (candidate) => {
+                  const inferred = inferDefaultRelationRole(
+                    candidate.startYear,
+                    currentSignedStartYear,
+                  )
+                  setRelatedEvents((previous) => [
+                    ...previous,
+                    {
+                      relatedEventId: candidate.id,
+                      title: candidate.title,
+                      dateLabel: candidate.dateLabel,
+                      startYear: candidate.startYear,
+                      relationType: inferred.relationType,
+                      direction: inferred.direction,
+                      description: '',
+                    },
+                  ])
+                },
+              }
+        }
         playClickSound={playClickSound}
         getDateError={getDateError}
         calculateDaysDifference={calculateDaysDifference}
@@ -1222,8 +1434,71 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           }
         />
       )}
+
+      {/* 연관 사건 피커 */}
+      {!isEditMode && (
+        <SelectModal
+          isOpen={relatedPickerOpen}
+          onClose={() => {
+            setRelatedPickerOpen(false)
+            setRelatedSearchTerm('')
+          }}
+          title="연관 사건 연결"
+          options={relatedOptions}
+          onSelect={handleSelectRelated}
+          searchable
+          searchPlaceholder="사건명으로 검색"
+          isLoading={relatedCandidatesLoading}
+          isSearching={relatedSearchPending}
+          hasError={relatedCandidatesError}
+          onRetry={() => void refetchRelatedCandidates()}
+          onQueryChange={setRelatedSearchTerm}
+          headerExtra={
+            relatedCandidates.length > 50 ? (
+              <span style={{ fontSize: 12 }}>
+                후보가 많아 50건까지만 표시 중 — 검색어로 좁혀 주세요
+              </span>
+            ) : undefined
+          }
+        />
+      )}
     </>
   )
+}
+
+function candidateSignedStartYear(candidate: EventLinkCandidate): number | null {
+  if (candidate.startDate) {
+    return signedYearFromIsoLike(candidate.startDate)
+  }
+  if (candidate.startYear != null) {
+    return candidate.startEra === 'BC' ? -candidate.startYear : candidate.startYear
+  }
+  return null
+}
+
+function candidateDateLabel(candidate: EventLinkCandidate): string | undefined {
+  if (candidate.startDate) {
+    return formatDateRange(
+      candidate.startDate,
+      candidate.endDate ?? undefined,
+      candidate.startDatePrecision,
+      candidate.endDatePrecision,
+    )
+  }
+  if (candidate.startYear != null) {
+    return `${candidate.startEra === 'BC' ? '기원전 ' : ''}${candidate.startYear}년`
+  }
+  return undefined
+}
+
+function toSimpleCandidate(candidate: EventLinkCandidate) {
+  return {
+    id: candidate.id,
+    title: candidate.title,
+    dateLabel: candidateDateLabel(candidate),
+    startYear: candidateSignedStartYear(candidate),
+    kind: candidate.kind,
+  }
 }
 
 /**

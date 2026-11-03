@@ -25,7 +25,7 @@ import { notify } from '@/shared/ui/toast'
 import * as S from '../styles'
 import * as NetStyles from './detail-network.styles'
 import { type EventDetail, eventKeys } from '../use-event-detail'
-import { useEventRelations } from '../use-event-relations'
+import { eventRelationKeys, useEventRelations } from '../use-event-relations'
 import { ChildrenBlock } from './children-block'
 import { parseDateTokens } from './collection-development.lib'
 import {
@@ -95,6 +95,12 @@ const NETWORK_BLOCKS: ReadonlyArray<{ id: NetworkBlock; label: string }> = [
   { id: 'keywords', label: '키워드' },
 ]
 
+/**
+ * BC·고대 구조화 시작 — 응답에는 있지만 EventDetail·HistoricalEvent 타입엔 선언이 없다(startDate가 null인 사건의 진실).
+ * 관련 사건 모달의 같은 시기·방향 추정이 BC 사건에서도 서게 넓혀 읽는다.
+ */
+const structuredStart = (node: object) => node as { startEra?: string | null; startYear?: number | null }
+
 export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkProps) {
   /** 단일 사건은 하위를 가질 수 없다(서버 강제) — 하위 블록·모으기·새로 만들기를 내지 않는다 */
   const isCollection = event.kind === 'COLLECTION'
@@ -106,6 +112,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
    * initialParent={현재 사건}으로 열어, 고아 생성→상세 이동→수동 연결 3단계를
    * 등록 1단계로 줄인다. */
   const [createChildOpen, setCreateChildOpen] = useState(false)
+  const [createRelatedOpen, setCreateRelatedOpen] = useState(false)
 
   /**
    * 뒤로가기 미저장 보호 — 브라우저 뒤로가기는 이 모달을 우회 언마운트해 작성분을
@@ -121,10 +128,10 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
   useEffect(() => {
     // 닫힘(정상 닫기·저장 완료) 후에는 dirty를 반드시 내린다 — 남으면 이후의
     // 아무 이동이나 계속 막힌다(호스트 훅과 동일한 방어).
-    if (!createChildOpen) createChildDirtyRef.current = false
-  }, [createChildOpen])
+    if (!createChildOpen && !createRelatedOpen) createChildDirtyRef.current = false
+  }, [createChildOpen, createRelatedOpen])
   const createChildBlocker = useBlocker(
-    () => createChildOpen && createChildDirtyRef.current,
+    () => (createChildOpen || createRelatedOpen) && createChildDirtyRef.current,
   )
   // blocked 진입당 confirm 1회만 — 비동기 confirm 대기 중 리렌더로 다이얼로그 중복 방지.
   const createChildPromptingRef = useRef(false)
@@ -154,6 +161,11 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
    * 반영한다(계층 patch mutation의 detailKey + eventKeys.lists() 무효화 패턴 복제).
    */
   const handleChildCreated = () => {
+    queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
+    queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+  }
+  const handleRelatedCreated = () => {
+    queryClient.invalidateQueries({ queryKey: eventRelationKeys.all })
     queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
     queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
   }
@@ -650,10 +662,25 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
         title: other.title,
         keywords: other.keywords ?? [],
         parentEventId: other.parentEventId ?? null,
+        startDate: other.startDate ?? null,
+        startDatePrecision: other.startDatePrecision ?? null,
+        startEra: structuredStart(other).startEra ?? null,
+        startYear: structuredStart(other).startYear ?? null,
       })),
       linked,
     )
   }, [suggestionsWanted, allEvents, event, extraParents, children, relatedQuery.data, keywords])
+  /** 상위·하위로 이미 이어진 사건 — 관련 사건 연결 모달 후보에서 뺀다(같은 쌍을 두 갈래로 잇지 않게) */
+  const hierarchyIds = useMemo(
+    () =>
+      new Set<string>([
+        ...(event.parentEventId ? [event.parentEventId] : []),
+        ...extraParents.map((parent) => parent.id),
+        ...children.map((child) => child.id),
+        ...(event.extraChildren ?? []).map((child) => child.id),
+      ]),
+    [event.parentEventId, extraParents, children, event.extraChildren],
+  )
   /** 전개 단락 수 — 나눌 단락이 둘 이상일 때만 연관 탭에 '하위 사건으로 나누기'를 세운다 */
   const narrativeCount = (event.eventSections ?? []).filter(
     (section) => sectionKindOf(section.sectionType) === 'narrative',
@@ -765,7 +792,20 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
 
       {/* 관련 사건 — 상위/하위가 아닌 별개 사건끼리의 연결(계기·배경·대응·같은 국면) */}
       {isBlockShown('related') && (
-        <RelatedBlock eventId={event.id} eventTitle={event.title} suggestions={suggestions} />
+        <RelatedBlock
+          eventId={event.id}
+          eventTitle={event.title}
+          self={{
+            startDate: event.startDate ?? null,
+            startDatePrecision: event.startDatePrecision ?? null,
+            startEra: structuredStart(event).startEra ?? null,
+            startYear: structuredStart(event).startYear ?? null,
+            parentEventId: event.parentEventId ?? null,
+          }}
+          hierarchyIds={hierarchyIds}
+          suggestions={suggestions}
+          onOpenCreateRelated={() => setCreateRelatedOpen(true)}
+        />
       )}
 
       {isBlockShown('keywords') && (
@@ -897,6 +937,26 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
             initialParent={{ id: event.id, title: event.title, domain: event.domain }}
             onSaved={handleChildCreated}
             // 뒤로가기 미저장 보호(위 useBlocker)의 dirty 신호원.
+            onDirtyChange={handleCreateChildDirtyChange}
+          />
+        </Suspense>
+      )}
+      {/* 새 관련 사건 등록 — 현재 사건을 '계기가 된 사건'으로 미리 담아 연다. */}
+      {createRelatedOpen && (
+        <Suspense fallback={null}>
+          <LazyEventRegisterModal
+            isOpen
+            onClose={() => setCreateRelatedOpen(false)}
+            initialDomain={event.domain}
+            initialRelatedEvents={[
+              {
+                relatedEventId: event.id,
+                title: event.title,
+                relationType: 'LED_TO',
+                direction: 'incoming',
+              },
+            ]}
+            onSaved={handleRelatedCreated}
             onDirtyChange={handleCreateChildDirtyChange}
           />
         </Suspense>

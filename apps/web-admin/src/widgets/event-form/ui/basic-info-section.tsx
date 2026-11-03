@@ -29,6 +29,14 @@ import {
 } from '@/entities/event/model'
 import * as S from '@/pages/events/create/event-create.styles'
 import { EVENT_DOMAIN_ORDER, EVENT_DOMAINS, type EventDomainKey } from '@/entities/event/model/event-domain'
+import {
+  EVENT_RELATION_ROLE_OPTIONS,
+  type EventRelatedDraft,
+  type EventRelationRoleKey,
+  inferDefaultRelationRole,
+  parseRelationRoleKey,
+  toRelationRoleKey,
+} from '@/features/event-facets/model/register-facets'
 import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -60,6 +68,47 @@ import { notify } from '@/shared/ui/toast'
 import { shouldEndFollowStart } from '../lib/event-date-parts'
 
 import { EventDateField } from './event-date-field'
+
+export interface SimilarEventCandidate {
+  id: string
+  title: string
+  dateLabel?: string
+  startYear?: number | null
+  kind?: 'SINGLE' | 'COLLECTION'
+}
+
+export interface RelatedEventsSlotProps {
+  items: EventRelatedDraft[]
+  onChange: (next: EventRelatedDraft[]) => void
+  onOpenPicker: () => void
+  /** 인라인 빠른 검색어와 결과 목록 */
+  quickSearch?: {
+    query: string
+    onQueryChange: (next: string) => void
+    candidates: Array<{
+      id: string
+      title: string
+      dateLabel?: string
+      startYear?: number | null
+    }>
+    isSearching?: boolean
+  }
+  /** 동시대 추천 사건 (시작 연도 전후 사건 중 아직 연결 안 된 것) */
+  contemporarySuggestions?: Array<{
+    id: string
+    title: string
+    dateLabel?: string
+    startYear?: number | null
+  }>
+  /** '등록 후 계속' 직후 방금 등록한 사건 원클릭 연결 제안 */
+  lastSavedEvent?: {
+    id: string
+    title: string
+    startYear?: number | null
+  } | null
+  /** 현재 사건의 시작 연도(부호 연도) — 연도 비교로 기본 관계 역할 추론용 */
+  currentStartYear?: number | null
+}
 
 /**
  * 이벤트 기본 정보 입력 섹션
@@ -117,6 +166,22 @@ interface BasicInfoSectionProps {
     parent: { id: string; title: string } | null
     onOpenPicker: () => void
     onClear: () => void
+  }
+
+  /**
+   * 연관 사건(선택) 슬롯 — 계기·배경·대응·동시 진행 등 상위/하위 묶음이 아닌 사건끼리의 연결.
+   * 신규 등록 전용.
+   */
+  relatedEventsSlot?: RelatedEventsSlotProps
+
+  /**
+   * 사건명 입력 시 이미 등록된 유사·중복 사건을 알려주고
+   * 원클릭으로 상위 사건 지정 또는 연관 사건 추가를 지원하는 슬롯
+   */
+  similarEventsSlot?: {
+    candidates: SimilarEventCandidate[]
+    onSelectAsParent?: (candidate: SimilarEventCandidate) => void
+    onAddAsRelated?: (candidate: SimilarEventCandidate) => void
   }
 
   /** 분야를 안 고르고 제출했을 때 */
@@ -206,6 +271,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   availableHistoricalCountries = [],
   onOpenCountryModal,
   parentEventSlot,
+  relatedEventsSlot,
+  similarEventsSlot,
   kindSlot,
   categoryError,
   titleSuggestionSlot,
@@ -325,6 +392,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
   const [countryQuickQuery, setCountryQuickQuery] = useState('')
   const [activeCountryResultIndex, setActiveCountryResultIndex] = useState(0)
+  const [activeRelatedResultIndex, setActiveRelatedResultIndex] = useState(0)
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
   )
@@ -341,6 +409,45 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     const endYear = signedYearFromIsoLike(effectiveEnd)
     return { startYear, endYear }
   }, [startDate, endDate, titleYearSuggestion])
+
+  const addRelatedEventCandidate = (
+    candidate: {
+      id: string
+      title: string
+      dateLabel?: string
+      startYear?: number | null
+    },
+    overrideRole?: {
+      relationType: EventRelatedDraft['relationType']
+      direction: EventRelatedDraft['direction']
+    },
+  ) => {
+    if (!relatedEventsSlot) return
+    if (relatedEventsSlot.items.some((item) => item.relatedEventId === candidate.id)) {
+      return
+    }
+    playClickSound()
+    const inferred =
+      overrideRole ??
+      inferDefaultRelationRole(
+        candidate.startYear,
+        relatedEventsSlot.currentStartYear ?? hintYearRange.startYear,
+      )
+    relatedEventsSlot.onChange([
+      ...relatedEventsSlot.items,
+      {
+        relatedEventId: candidate.id,
+        title: candidate.title,
+        dateLabel: candidate.dateLabel,
+        startYear: candidate.startYear,
+        relationType: inferred.relationType,
+        direction: inferred.direction,
+        description: '',
+      },
+    ])
+    relatedEventsSlot.quickSearch?.onQueryChange('')
+    setActiveRelatedResultIndex(0)
+  }
 
   const applyTitleYearSuggestion = () => {
     if (!titleYearSuggestion) return
@@ -766,6 +873,44 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 )}
               </TitleSuggestionRow>
             )}
+            {similarEventsSlot && similarEventsSlot.candidates.length > 0 && (
+              <SimilarEventsBar role="region" aria-label="유사·중복 사건 안내">
+                <SimilarEventsLabel>등록된 유사 사건</SimilarEventsLabel>
+                {similarEventsSlot.candidates.map((candidate) => (
+                  <SimilarEventItem key={candidate.id}>
+                    <SimilarEventTitle>
+                      {candidate.title}
+                      {candidate.dateLabel ? ` (${candidate.dateLabel})` : ''}
+                    </SimilarEventTitle>
+                    {candidate.kind === 'COLLECTION' &&
+                      similarEventsSlot.onSelectAsParent && (
+                        <SimilarEventActionBtn
+                          type="button"
+                          aria-label={`'${candidate.title}' 상위 사건으로 지정`}
+                          onClick={() => {
+                            playClickSound()
+                            similarEventsSlot.onSelectAsParent?.(candidate)
+                          }}
+                        >
+                          상위 사건으로 지정
+                        </SimilarEventActionBtn>
+                      )}
+                    {similarEventsSlot.onAddAsRelated && (
+                      <SimilarEventActionBtn
+                        type="button"
+                        aria-label={`'${candidate.title}' 연관 사건으로 추가`}
+                        onClick={() => {
+                          playClickSound()
+                          similarEventsSlot.onAddAsRelated?.(candidate)
+                        }}
+                      >
+                        연관 사건으로 추가
+                      </SimilarEventActionBtn>
+                    )}
+                  </SimilarEventItem>
+                ))}
+              </SimilarEventsBar>
+            )}
           </S.FormField>
         </S.FormRow>
 
@@ -1015,7 +1160,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
       </FormGroup>
 
-      {(onOpenCountryModal || parentEventSlot) && (
+      {(onOpenCountryModal || parentEventSlot || relatedEventsSlot) && (
         <FormGroup aria-labelledby="event-form-group-link">
           <FormGroupTitle id="event-form-group-link">연결</FormGroupTitle>
           {/* 관련 국가 */}
@@ -1479,6 +1624,263 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     &lsquo;연관&rsquo;에서 변경 가능)
                   </S.Hint>
                 </InlineControlRow>
+              </S.FormField>
+            </S.FormRow>
+          )}
+          {/* 연관 사건 — 계기·배경·대응·동시 진행 등 상위/하위 묶음이 아닌 사건끼리의 연결 */}
+          {relatedEventsSlot && (
+            <S.FormRow>
+              <S.FormLabel>
+                연관 사건<OptionalTag>(선택)</OptionalTag>
+              </S.FormLabel>
+              <S.FormField>
+                {relatedEventsSlot.items.length > 0 && (
+                  <ParticipantList>
+                    {relatedEventsSlot.items.map((item, index) => {
+                      const roleKey = toRelationRoleKey(
+                        item.relationType,
+                        item.direction,
+                      )
+                      const patchItem = (next: Partial<EventRelatedDraft>) =>
+                        relatedEventsSlot.onChange(
+                          relatedEventsSlot.items.map((row, rowIndex) =>
+                            rowIndex === index ? { ...row, ...next } : row,
+                          ),
+                        )
+                      return (
+                        <ParticipantRow key={item.relatedEventId}>
+                          <ParticipantHeaderLine>
+                            <ParticipantName>{item.title}</ParticipantName>
+                            {item.dateLabel && (
+                              <RelatedEventDateMeta>
+                                {item.dateLabel}
+                              </RelatedEventDateMeta>
+                            )}
+                            <RoleSelect
+                              value={roleKey}
+                              aria-label={`${item.title} 관계 역할`}
+                              onChange={(changeEvent) => {
+                                const parsed = parseRelationRoleKey(
+                                  changeEvent.target
+                                    .value as EventRelationRoleKey,
+                                )
+                                patchItem({
+                                  relationType: parsed.relationType,
+                                  direction: parsed.direction,
+                                })
+                              }}
+                            >
+                              {EVENT_RELATION_ROLE_OPTIONS.map((option) => (
+                                <option key={option.key} value={option.key}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </RoleSelect>
+                            <ParticipantActions>
+                              <ParticipantRemove
+                                type="button"
+                                aria-label={`${item.title} 연관 해제`}
+                                onClick={() => {
+                                  playClickSound()
+                                  relatedEventsSlot.onChange(
+                                    relatedEventsSlot.items.filter(
+                                      (row) =>
+                                        row.relatedEventId !==
+                                        item.relatedEventId,
+                                    ),
+                                  )
+                                }}
+                              >
+                                <FiX size={14} />
+                              </ParticipantRemove>
+                            </ParticipantActions>
+                          </ParticipantHeaderLine>
+                          <ParticipantDescriptionLine>
+                            <RelatedDescriptionInput
+                              type="text"
+                              value={item.description ?? ''}
+                              aria-label={`${item.title} 관계 설명`}
+                              placeholder="어떻게 이어지는지 한 줄 설명 (선택) — 예: 전쟁 종결 후 강화 교섭 개시"
+                              onChange={(changeEvent) =>
+                                patchItem({
+                                  description: changeEvent.target.value,
+                                })
+                              }
+                            />
+                          </ParticipantDescriptionLine>
+                        </ParticipantRow>
+                      )
+                    })}
+                  </ParticipantList>
+                )}
+                <CountryQuickSearchRow>
+                  {relatedEventsSlot.quickSearch && (
+                    <CountryQuickSearchAnchor>
+                      <CountryQuickSearchInput
+                        type="search"
+                        aria-label="연관 사건 빠른 검색"
+                        placeholder="사건명으로 빠른 검색하여 추가"
+                        value={relatedEventsSlot.quickSearch.query}
+                        onChange={(changeEvent) => {
+                          relatedEventsSlot.quickSearch?.onQueryChange(
+                            changeEvent.target.value,
+                          )
+                          setActiveRelatedResultIndex(0)
+                        }}
+                        onKeyDown={(keyEvent) => {
+                          const matches =
+                            relatedEventsSlot.quickSearch?.candidates ?? []
+                          if (keyEvent.key === 'ArrowDown') {
+                            if (matches.length > 0) {
+                              keyEvent.preventDefault()
+                              setActiveRelatedResultIndex(
+                                (prev) => (prev + 1) % matches.length,
+                              )
+                            }
+                          } else if (keyEvent.key === 'ArrowUp') {
+                            if (matches.length > 0) {
+                              keyEvent.preventDefault()
+                              setActiveRelatedResultIndex(
+                                (prev) =>
+                                  (prev - 1 + matches.length) % matches.length,
+                              )
+                            }
+                          } else if (keyEvent.key === 'Enter') {
+                            if (matches.length > 0) {
+                              keyEvent.preventDefault()
+                              const target =
+                                matches[
+                                  Math.min(
+                                    activeRelatedResultIndex,
+                                    matches.length - 1,
+                                  )
+                                ] ?? matches[0]
+                              addRelatedEventCandidate(target)
+                            }
+                          } else if (
+                            keyEvent.key === 'Escape' &&
+                            relatedEventsSlot.quickSearch?.query
+                          ) {
+                            keyEvent.preventDefault()
+                            relatedEventsSlot.quickSearch.onQueryChange('')
+                            setActiveRelatedResultIndex(0)
+                          }
+                        }}
+                      />
+                      {relatedEventsSlot.quickSearch.query.trim() && (
+                        <CountryQuickResultBox
+                          role="region"
+                          aria-label="연관 사건 빠른 검색 결과"
+                        >
+                          {relatedEventsSlot.quickSearch.candidates.length >
+                          0 ? (
+                            relatedEventsSlot.quickSearch.candidates.map(
+                              (candidate, candidateIdx) => (
+                                <CountryQuickResultButton
+                                  key={candidate.id}
+                                  type="button"
+                                  $active={
+                                    candidateIdx === activeRelatedResultIndex
+                                  }
+                                  onMouseEnter={() =>
+                                    setActiveRelatedResultIndex(candidateIdx)
+                                  }
+                                  onClick={() =>
+                                    addRelatedEventCandidate(candidate)
+                                  }
+                                >
+                                  <CountryQuickResultName>
+                                    + {candidate.title}
+                                  </CountryQuickResultName>
+                                  {candidate.dateLabel && (
+                                    <CountryQuickResultMeta>
+                                      <span>{candidate.dateLabel}</span>
+                                    </CountryQuickResultMeta>
+                                  )}
+                                </CountryQuickResultButton>
+                              ),
+                            )
+                          ) : (
+                            <CountryQuickEmpty>
+                              {relatedEventsSlot.quickSearch.isSearching
+                                ? '검색 중…'
+                                : `‘${relatedEventsSlot.quickSearch.query.trim()}’에 맞는 사건이 없습니다.`}
+                            </CountryQuickEmpty>
+                          )}
+                        </CountryQuickResultBox>
+                      )}
+                    </CountryQuickSearchAnchor>
+                  )}
+                  <S.AddButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      relatedEventsSlot.onOpenPicker()
+                    }}
+                  >
+                    <FiPlus size={15} />
+                    {relatedEventsSlot.items.length > 0
+                      ? '사건 더 추가'
+                      : '사건 찾아서 추가'}
+                  </S.AddButton>
+                  {relatedEventsSlot.lastSavedEvent &&
+                    !relatedEventsSlot.items.some(
+                      (item) =>
+                        item.relatedEventId ===
+                        relatedEventsSlot.lastSavedEvent?.id,
+                    ) &&
+                    parentEventSlot?.parent?.id !==
+                      relatedEventsSlot.lastSavedEvent.id && (
+                      <RecentParticipantBar aria-label="방금 등록한 사건 연결">
+                        <RecentParticipantLabel>
+                          연속 연결
+                        </RecentParticipantLabel>
+                        <RecentParticipantChip
+                          type="button"
+                          onClick={() =>
+                            addRelatedEventCandidate(
+                              relatedEventsSlot.lastSavedEvent!,
+                              {
+                                relationType: 'LED_TO',
+                                direction: 'incoming',
+                              },
+                            )
+                          }
+                        >
+                          + 방금 등록한 &lsquo;
+                          {relatedEventsSlot.lastSavedEvent.title}&rsquo; 계기
+                          사건으로 연결
+                        </RecentParticipantChip>
+                      </RecentParticipantBar>
+                    )}
+                  {relatedEventsSlot.contemporarySuggestions &&
+                    relatedEventsSlot.contemporarySuggestions.length > 0 && (
+                      <RecentParticipantBar aria-label="동시대 추천 연관 사건">
+                        <RecentParticipantLabel>동시대</RecentParticipantLabel>
+                        {relatedEventsSlot.contemporarySuggestions
+                          .slice(0, 4)
+                          .map((candidate) => (
+                            <RecentParticipantChip
+                              key={candidate.id}
+                              type="button"
+                              onClick={() =>
+                                addRelatedEventCandidate(candidate)
+                              }
+                            >
+                              + {candidate.title}
+                              {candidate.dateLabel
+                                ? ` (${candidate.dateLabel})`
+                                : ''}
+                            </RecentParticipantChip>
+                          ))}
+                      </RecentParticipantBar>
+                    )}
+                </CountryQuickSearchRow>
+                {relatedEventsSlot.items.length === 0 && (
+                  <S.Hint>
+                    계기·배경·대응처럼 상위/하위 묶음이 아닌 사건끼리 연결합니다.
+                  </S.Hint>
+                )}
               </S.FormField>
             </S.FormRow>
           )}
@@ -2272,5 +2674,68 @@ const TitleApplyAllButton = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
     outline-offset: 2px;
+  }
+`
+
+const SimilarEventsBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.light};
+  font-size: 12px;
+`
+
+const SimilarEventsLabel = styled.span`
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SimilarEventItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const SimilarEventTitle = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SimilarEventActionBtn = styled.button`
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.primary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const RelatedEventDateMeta = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RelatedDescriptionInput = styled.input`
+  ${participantControl}
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  min-width: 0;
+
+  &::placeholder {
+    color: ${({ theme }) => S.getC(theme).text.muted};
   }
 `

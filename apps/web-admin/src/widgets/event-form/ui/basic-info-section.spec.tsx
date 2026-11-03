@@ -22,6 +22,12 @@ jest.mock('@/shared/api/api.service', () => ({
 jest.mock('@/shared/api/upload', () => ({
   uploadImage: jest.fn(),
 }))
+jest.mock('@/shared/api/person-career', () => ({
+  personCareerApi: {},
+}))
+jest.mock('@/shared/api/treaty', () => ({
+  treatyApi: {},
+}))
 jest.mock('@/shared/ui/time-picker-modal/time-picker-modal', () => ({
   TimePickerModal: () => null,
 }))
@@ -379,5 +385,182 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       { countryId: 'c2', role: 'PARTICIPANT' },
       { countryId: 'c1', role: 'PARTICIPANT' },
     ])
+  })
+
+  it('연관 사건 빠른 검색창에서 사건을 Enter로 추가하고, 통합 관계 셀렉트·관계 설명 입력·방금 등록한 사건/동시대 추천 칩이 동작한다', () => {
+    const onChange = jest.fn()
+    const onQueryChange = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          parentEventSlot: {
+            parent: null,
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+          },
+          relatedEventsSlot: {
+            items: [
+              {
+                relatedEventId: 'evt-prev',
+                title: '사라예보 사건',
+                startYear: 1914,
+                relationType: 'LED_TO',
+                direction: 'incoming',
+                description: '',
+              },
+            ],
+            onChange,
+            onOpenPicker: jest.fn(),
+            quickSearch: {
+              query: '마른',
+              onQueryChange,
+              candidates: [
+                {
+                  id: 'evt-marne',
+                  title: '마른 전투',
+                  dateLabel: '1914',
+                  startYear: 1914,
+                },
+              ],
+            },
+            contemporarySuggestions: [
+              {
+                id: 'evt-tannenberg',
+                title: '탄넨베르크 전투',
+                dateLabel: '1914',
+                startYear: 1914,
+              },
+            ],
+            lastSavedEvent: {
+              id: 'evt-jul',
+              title: '7월 위기',
+              startYear: 1914,
+            },
+            currentStartYear: 1914,
+          },
+        })}
+      />,
+    )
+
+    // 1. 빠른 검색창에서 Enter로 첫 후보 즉시 추가
+    const quickInput = screen.getByRole('searchbox', {
+      name: '연관 사건 빠른 검색',
+    })
+    fireEvent.keyDown(quickInput, { key: 'Enter' })
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ relatedEventId: 'evt-prev' }),
+      expect.objectContaining({
+        relatedEventId: 'evt-marne',
+        title: '마른 전투',
+        relationType: 'LED_TO',
+        direction: 'incoming',
+      }),
+    ])
+
+    // 2. 방금 등록한 사건 원클릭 계기 연결 칩
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /\+ 방금 등록한.*7월 위기.*계기 사건으로 연결/,
+      }),
+    )
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ relatedEventId: 'evt-prev' }),
+      expect.objectContaining({
+        relatedEventId: 'evt-jul',
+        title: '7월 위기',
+        relationType: 'LED_TO',
+        direction: 'incoming',
+      }),
+    ])
+
+    // 3. 동시대 사건 원클릭 추천 칩
+    fireEvent.click(
+      screen.getByRole('button', { name: '+ 탄넨베르크 전투 (1914)' }),
+    )
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ relatedEventId: 'evt-prev' }),
+      expect.objectContaining({
+        relatedEventId: 'evt-tannenberg',
+        title: '탄넨베르크 전투',
+      }),
+    ])
+
+    // 4. 통합 관계 방향 셀렉트 변경 (LED_TO:incoming -> LED_TO:outgoing)
+    fireEvent.change(screen.getByLabelText('사라예보 사건 관계 역할'), {
+      target: { value: 'LED_TO:outgoing' },
+    })
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        relatedEventId: 'evt-prev',
+        relationType: 'LED_TO',
+        direction: 'outgoing',
+      }),
+    ])
+
+    // 5. 관계 설명 1줄 입력
+    fireEvent.change(screen.getByLabelText('사라예보 사건 관계 설명'), {
+      target: { value: '오스트리아-헝가리의 선전포고 촉발' },
+    })
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        relatedEventId: 'evt-prev',
+        description: '오스트리아-헝가리의 선전포고 촉발',
+      }),
+    ])
+
+    // 6. 연관 사건 연결 해제
+    fireEvent.click(
+      screen.getByRole('button', { name: '사라예보 사건 연관 해제' }),
+    )
+    expect(onChange).toHaveBeenLastCalledWith([])
+  })
+
+  it('사건명 입력 중 등록된 유사 사건 안내 바에서 원클릭으로 상위 사건 지정 및 연관 사건 추가를 실행할 수 있다', () => {
+    const onSelectAsParent = jest.fn()
+    const onAddAsRelated = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '제1차 세계 대전',
+          similarEventsSlot: {
+            candidates: [
+              {
+                id: 'evt-ww1',
+                title: '제1차 세계 대전 (유럽 전선)',
+                dateLabel: '1914',
+                startYear: 1914,
+                kind: 'COLLECTION',
+              },
+            ],
+            onSelectAsParent,
+            onAddAsRelated,
+          },
+        })}
+      />,
+    )
+
+    expect(
+      screen.getByRole('region', { name: '유사·중복 사건 안내' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: "'제1차 세계 대전 (유럽 전선)' 상위 사건으로 지정",
+      }),
+    )
+    expect(onSelectAsParent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'evt-ww1' }),
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: "'제1차 세계 대전 (유럽 전선)' 연관 사건으로 추가",
+      }),
+    )
+    expect(onAddAsRelated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'evt-ww1' }),
+    )
   })
 })

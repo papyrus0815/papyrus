@@ -41,6 +41,7 @@ import type {
   EventDomainKey,
   EventTypeKey,
 } from '@/entities/event/model'
+import type { EventRelatedDraft } from '@/features/event-facets/model/register-facets'
 import type {
   EventBasicFormHandle,
   EventBasicFormState,
@@ -48,6 +49,7 @@ import type {
 } from '@/widgets/event-form/ui/event-basic-form'
 
 export type { EventParentPreset } from '@/widgets/event-form/ui/event-basic-form'
+export type { EventRelatedDraft } from '@/features/event-facets/model/register-facets'
 
 const LazyEventBasicForm = React.lazy(() =>
   import('@/widgets/event-form/ui/event-basic-form').then((module) => ({
@@ -85,6 +87,8 @@ export interface EventRegisterModalProps {
   initialEventType?: EventTypeKey | string | null
   /** 목록·조망 등 진입 지면의 참여국 필터 프리필(신규 등록 전용) */
   initialCountries?: EventCountryParticipant[]
+  /** 상세 '새 관련 사건 등록' 등 진입 지면의 연관 사건 프리필(신규 등록 전용) */
+  initialRelatedEvents?: EventRelatedDraft[]
 }
 
 export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
@@ -97,6 +101,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   initialDomain,
   initialEventType,
   initialCountries,
+  initialRelatedEvents,
 }) => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -250,6 +255,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
                   initialDomain={initialDomain}
                   initialEventType={initialEventType}
                   initialCountries={initialCountries}
+                  initialRelatedEvents={initialRelatedEvents}
                   formRef={formRef}
                   onDirtyChange={markDirty}
                   onStateChange={setFormState}

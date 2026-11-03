@@ -70,6 +70,14 @@ jest.mock('./event-basic-form', () => ({
             ? `${props.initialParent.id}:${props.initialParent.title}`
             : ''}
         </span>
+        <span data-testid="initialRelatedEvents">
+          {props.initialRelatedEvents
+            ?.map(
+              (item) =>
+                `${item.relatedEventId}:${item.title}:${item.relationType}:${item.direction}`,
+            )
+            .join('|') ?? ''}
+        </span>
         <button type="button" onClick={() => onDirtyChange?.(true)}>
           _dirty
         </button>
@@ -119,6 +127,23 @@ it('initialParent를 폼 본체에 그대로 전달한다 — 상세·트리 뷰
   await waitForBody()
   expect(screen.getByTestId('initialParent')).toHaveTextContent(
     'evt-parent:제1차 세계 대전',
+  )
+})
+
+it('initialRelatedEvents를 폼 본체에 그대로 전달한다 — 상세 연관 섹션의 "새 관련 사건 등록" 프리셋 계약', async () => {
+  setup({
+    initialRelatedEvents: [
+      {
+        relatedEventId: 'evt-prev',
+        title: '사라예보 사건',
+        relationType: 'LED_TO',
+        direction: 'incoming',
+      },
+    ],
+  })
+  await waitForBody()
+  expect(screen.getByTestId('initialRelatedEvents')).toHaveTextContent(
+    'evt-prev:사라예보 사건:LED_TO:incoming',
   )
 })
 
