@@ -137,10 +137,10 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     )
 
     expect(
-      screen.getByRole('button', { name: '+ 🇬🇧 영국' }),
+      screen.getByRole('button', { name: '+ 영국' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: '+ 🇫🇷 프랑스' }),
+      screen.getByRole('button', { name: '+ 프랑스' }),
     ).toBeInTheDocument()
 
     fireEvent.click(
@@ -242,7 +242,7 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     )
 
     const replaceBtn = screen.getByRole('button', {
-      name: '🏛️ 청나라(으)로 교체',
+      name: '청나라(으)로 교체',
     })
     fireEvent.click(replaceBtn)
 
@@ -256,7 +256,7 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     expect(onReplaceKey).toHaveBeenCalledWith('h:h-ming', 'h:h-qing')
   })
 
-  it('2단 참여국 카드에서 1층 원클릭 역할 칩(주도국·대상국·참여국)과 2층 가로 100% 서술 입력칸이 동작한다', () => {
+  it('2단 참여국 카드에서 이모지 없는 국가명·역할 선택과 2층 가로 100% 멀티라인 서술 입력칸이 동작한다', () => {
     const setRelatedCountries = jest.fn()
     renderWithTheme(
       <BasicInfoSection
@@ -267,9 +267,9 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       />,
     )
 
-    fireEvent.click(
-      screen.getByRole('button', { name: '프랑스 주도국 지정' }),
-    )
+    fireEvent.change(screen.getByLabelText('프랑스 역할'), {
+      target: { value: 'INITIATOR' },
+    })
     expect(setRelatedCountries).toHaveBeenLastCalledWith([
       { countryId: 'c1', role: 'INITIATOR' },
     ])
@@ -286,7 +286,7 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     ])
   })
 
-  it('2개국 참여 시 "⇄ 역할·순서 맞바꾸기" 버튼으로 두 나라의 순서·역할·진영을 한 번에 맞바꿀 수 있다', () => {
+  it('2개국 참여 시 "역할·순서 맞바꾸기" 버튼으로 두 나라의 순서·역할·진영을 한 번에 맞바꿀 수 있다', () => {
     const setRelatedCountries = jest.fn()
     const onAssign = jest.fn()
     renderWithTheme(
@@ -307,7 +307,7 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     )
 
     fireEvent.click(
-      screen.getByRole('button', { name: '⇄ 역할·순서 맞바꾸기' }),
+      screen.getByRole('button', { name: '역할·순서 맞바꾸기' }),
     )
     expect(setRelatedCountries).toHaveBeenCalledWith([
       { countryId: 'c2', role: 'INITIATOR', roleDescription: '방어' },

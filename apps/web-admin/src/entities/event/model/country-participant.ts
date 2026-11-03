@@ -469,7 +469,7 @@ function pickBestCandidateForAliases(
           key: `h:${hist.id}`,
           historicalCountryId: hist.id,
           name: hist.name,
-          label: `🏛️ ${hist.name}`,
+          label: hist.name,
         }
       }
     }
@@ -489,7 +489,7 @@ function pickBestCandidateForAliases(
           key: `m:${mod.id}`,
           countryId: mod.id,
           name: mod.name,
-          label: `${mod.flagEmoji ?? '🌐'} ${mod.name}`,
+          label: mod.name,
         }
       }
     }
@@ -623,7 +623,7 @@ export function findReplacementForMismatchedCountry(
         key: `h:${hist.id}`,
         historicalCountryId: hist.id,
         name: hist.name,
-        label: `🏛️ ${hist.name}`,
+        label: hist.name,
       }
     }
   }
@@ -640,7 +640,7 @@ export function findReplacementForMismatchedCountry(
         key: `m:${mod.id}`,
         countryId: mod.id,
         name: mod.name,
-        label: `${mod.flagEmoji ?? '🌐'} ${mod.name}`,
+        label: mod.name,
       }
     }
   }
@@ -715,7 +715,7 @@ export function resolveBatchCountryQuery(
           key: `m:${mod.id}`,
           countryId: mod.id,
           name: mod.name,
-          label: `${mod.flagEmoji ?? '🌐'} ${mod.name}`,
+          label: mod.name,
         },
       })
     }
@@ -729,7 +729,7 @@ export function resolveBatchCountryQuery(
           key: `h:${hist.id}`,
           historicalCountryId: hist.id,
           name: hist.name,
-          label: `🏛️ ${hist.name}`,
+          label: hist.name,
         },
       })
     }
@@ -821,7 +821,7 @@ export function suggestCountriesForEra(
         key: `h:${hist.id}`,
         historicalCountryId: hist.id,
         name: hist.name,
-        label: `🏛️ ${hist.name}`,
+        label: hist.name,
       })
     }
   }
@@ -840,7 +840,7 @@ export function suggestCountriesForEra(
       key: `m:${mod.id}`,
       countryId: mod.id,
       name: mod.name,
-      label: `${mod.flagEmoji ?? '🌐'} ${mod.name}`,
+      label: mod.name,
     })
   }
 
@@ -850,7 +850,7 @@ export function suggestCountriesForEra(
       key: `h:${hist.id}`,
       historicalCountryId: hist.id,
       name: hist.name,
-      label: `🏛️ ${hist.name}`,
+      label: hist.name,
     })
   }
 

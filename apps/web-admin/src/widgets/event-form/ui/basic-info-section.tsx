@@ -350,7 +350,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           if (!country) return null
           return {
             key: `h:${country.id}`,
-            label: `🏛️ ${country.name}`,
+            label: country.name,
             historicalCountryId: country.id,
           }
         }
@@ -361,7 +361,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           if (!country) return null
           return {
             key: `m:${country.id}`,
-            label: `${country.flagEmoji ?? '🌐'} ${country.name}`,
+            label: country.name,
             countryId: country.id,
           }
         }
@@ -423,7 +423,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         countryId: country.id,
         historicalCountryId: undefined as string | undefined,
         rawName: country.name,
-        label: `${country.flagEmoji ?? '🌐'} ${country.name}`,
+        label: country.name,
         meta: country.isoCode ?? '',
         eraMatched: false,
         exact: country.name.toLowerCase() === lower,
@@ -441,7 +441,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           countryId: undefined as string | undefined,
           historicalCountryId: country.id,
           rawName: country.name,
-          label: `🏛️ ${country.name}`,
+          label: country.name,
           meta: formatCountryPeriod(country) ?? '',
           eraMatched,
           exact: country.name.toLowerCase() === lower,
@@ -983,43 +983,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           ),
                         )
                       return (
-                        <ParticipantRow key={key} $role={currentRole}>
+                        <ParticipantRow key={key}>
                           <ParticipantHeaderLine>
-                            <ParticipantName>
-                              {isHistorical
-                                ? `🏛️ ${country.name}`
-                                : `${(country as CountryResponseDto).flagEmoji ?? ''} ${country.name}`}
-                            </ParticipantName>
-                            <ParticipantRolePillGroup
-                              role="group"
-                              aria-label={`${country.name} 빠른 역할 선택`}
-                            >
-                              {(
-                                [
-                                  { value: 'INITIATOR', label: '주도국' },
-                                  { value: 'TARGET', label: '대상국' },
-                                  { value: 'PARTICIPANT', label: '참여국' },
-                                ] as const
-                              ).map((pill) => {
-                                const active = currentRole === pill.value
-                                return (
-                                  <ParticipantRolePill
-                                    key={pill.value}
-                                    type="button"
-                                    aria-pressed={active}
-                                    aria-label={`${country.name} ${pill.label} 지정`}
-                                    $active={active}
-                                    $role={pill.value}
-                                    onClick={() => {
-                                      playClickSound()
-                                      patch({ role: pill.value })
-                                    }}
-                                  >
-                                    {pill.label}
-                                  </ParticipantRolePill>
-                                )
-                              })}
-                            </ParticipantRolePillGroup>
+                            <ParticipantName>{country.name}</ParticipantName>
                             <RoleSelect
                               value={currentRole}
                               aria-label={`${country.name} 역할`}
@@ -1140,6 +1106,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           </ParticipantHeaderLine>
                           <ParticipantDescriptionLine>
                             <RoleDescriptionInput
+                              rows={2}
                               value={participant.roleDescription ?? ''}
                               aria-label={`${country.name}가 한 일`}
                               placeholder={roleDescriptionPlaceholder}
@@ -1289,7 +1256,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       title="두 참여국의 순서·역할(주도↔대상)·진영(1편↔2편)을 한 번에 맞바꿉니다"
                       onClick={handleSwapTwoParticipants}
                     >
-                      ⇄ 역할·순서 맞바꾸기
+                      역할·순서 맞바꾸기
                     </ParticipantSwapButton>
                   )}
                   {parentCountriesSlot && (
@@ -1361,7 +1328,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   <AlertBox
                     key={item.id}
                     variant="warning"
-                    icon="⚠️"
                     style={{ marginTop: 6 }}
                   >
                     <strong>{item.name}</strong> {item.mismatch} 국가 소멸 전후
@@ -1676,26 +1642,15 @@ const ParticipantList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 `
 
-const ParticipantRow = styled.div<{ $role?: EventCountryRole }>`
+const ParticipantRow = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px 8px 11px;
+  gap: 8px;
+  padding: 10px 12px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  border-left: 3px solid
-    ${({ $role, theme }) =>
-      $role === 'INITIATOR'
-        ? theme.colors.primary
-        : $role === 'TARGET'
-          ? '#f59e0b'
-          : $role === 'FOUNDED' || $role === 'BENEFICIARY'
-            ? '#10b981'
-            : $role === 'DISSOLVED' || $role === 'VICTIM'
-              ? '#ef4444'
-              : S.getC(theme).border.default};
   border-radius: 10px;
   background: ${({ theme }) => S.getC(theme).background.section};
   transition: border-color 0.14s ease;
@@ -1710,61 +1665,15 @@ const ParticipantHeaderLine = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 8px;
   min-width: 0;
 `
 
 const ParticipantDescriptionLine = styled.div`
   display: flex;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
   min-width: 0;
-`
-
-const ParticipantRolePillGroup = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  background: ${({ theme }) => S.getC(theme).background.content};
-`
-
-const ParticipantRolePill = styled.button<{
-  $active: boolean
-  $role: 'INITIATOR' | 'TARGET' | 'PARTICIPANT'
-}>`
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 5px;
-  border: none;
-  background: ${({ $active, $role, theme }) =>
-    !$active
-      ? 'transparent'
-      : $role === 'INITIATOR'
-        ? theme.colors.primary
-        : $role === 'TARGET'
-          ? '#d97706'
-          : S.getC(theme).background.hover};
-  color: ${({ $active, $role, theme }) =>
-    !$active
-      ? theme.colors.text.secondary
-      : $role === 'PARTICIPANT'
-        ? theme.colors.text.primary
-        : '#ffffff'};
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
-
-  &:hover {
-    color: ${({ $active, $role, theme }) =>
-      $active && $role !== 'PARTICIPANT'
-        ? '#ffffff'
-        : theme.colors.text.primary};
-  }
 `
 
 const ParticipantSideGroup = styled.div`
@@ -2114,11 +2023,15 @@ const RoleSelect = styled.select`
   background-position: right 10px center;
 `
 
-const RoleDescriptionInput = styled.input`
+const RoleDescriptionInput = styled.textarea`
   ${participantControl}
   width: 100%;
-  padding: 0 10px;
+  min-height: 56px;
+  height: auto;
+  padding: 8px 11px;
   min-width: 0;
+  line-height: 1.45;
+  resize: vertical;
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};
