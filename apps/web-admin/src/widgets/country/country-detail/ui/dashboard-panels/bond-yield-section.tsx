@@ -337,7 +337,10 @@ const Headline = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 10px 32px;
+  gap: 12px 32px;
+  padding: 14px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   margin-bottom: 14px;
 `
 

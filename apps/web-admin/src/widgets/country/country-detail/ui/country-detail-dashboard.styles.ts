@@ -1573,57 +1573,137 @@ export const LineageFilterPill = styled.button<{ $active: boolean }>`
   }
 `
 
-/** 5대 지표(기업·인구 피라미드·지표 추이·국채 금리·교역) 모두 미등록 시 단일 통합 카드 */
-export const UnifiedIndicatorsCard = styled.div`
+/** 5대 지표(기업·인구 피라미드·지표 추이·국채 금리·교역) 미등록 항목 통합 헤어라인 원장 */
+export const IndicatorsLedgerWrap = styled.div`
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px 20px;
-  border-radius: 12px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  gap: 10px;
 `
 
-export const UnifiedIndicatorsTextCol = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-export const UnifiedIndicatorsDesc = styled.p`
+export const IndicatorsLedgerList = styled.ul`
   margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
-  word-break: keep-all;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @container (min-width: 760px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 `
 
-export const UnifiedIndicatorsHint = styled.div`
+export const IndicatorsLedgerItem = styled.li`
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @container (min-width: 760px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 16px;
+    }
+    &:nth-child(even) {
+      padding-left: 16px;
+    }
+    /* 홀수 개일 때 마지막 행은 전체 폭을 쓰게 해 우측 빈칸을 없앤다 */
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 0;
+    }
+  }
+`
+
+export const IndicatorsLedgerRow = styled.div`
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 4px;
+  box-sizing: border-box;
+`
+
+export const IndicatorsLedgerIcon = styled.span`
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15, 23, 42, 0.04)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
+`
+
+export const IndicatorsLedgerBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+export const IndicatorsLedgerTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+export const IndicatorsLedgerTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const IndicatorsLedgerStatus = styled.span`
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15, 23, 42, 0.045)'};
+`
+
+export const IndicatorsLedgerScope = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  word-break: keep-all;
+`
+
+export const IndicatorsLedgerActions = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
 `
 
-export const UnifiedIndicatorsActions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-`
-
-export const UnifiedIndicatorBtn = styled.button`
-  padding: 7px 13px;
-  border-radius: 8px;
+export const IndicatorsLedgerActionBtn = styled.button`
+  appearance: none;
+  padding: 6px 12px;
+  border-radius: 7px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(99,102,241,0.42)' : 'rgba(99,102,241,0.28)'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
-  font-size: 12.5px;
+  font-family: inherit;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
@@ -1636,6 +1716,25 @@ export const UnifiedIndicatorBtn = styled.button`
       theme.mode === 'dark'
         ? 'rgba(99,102,241,0.26)'
         : 'rgba(99,102,241,0.16)'};
+  }
+`
+
+export const IndicatorsLedgerTabLink = styled.button`
+  appearance: none;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 

@@ -15,7 +15,11 @@ import {
 } from '../country-data-manager/field-configs'
 import { IconChart } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
-import { IndicatorTrendChart, type TrendPoint } from './indicator-trend-chart'
+import {
+  formatMetricValue,
+  IndicatorTrendChart,
+  type TrendPoint,
+} from './indicator-trend-chart'
 import { ChartEmpty } from './chart-empty'
 import { ChartSkeleton } from './chart-skeleton'
 import { SectionHelpPopover } from './section-help-popover'
@@ -126,6 +130,7 @@ export function IndicatorTrendsSection({
 }: IndicatorTrendsSectionProps) {
   const [managerOpen, setManagerOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | IndicatorType>('ALL')
+  const [showAllCharts, setShowAllCharts] = useState(false)
   const economicQuery = useEconomicIndicators(countryId)
   const demographicQuery = useDemographicIndicators(countryId)
   const developmentQuery = useDevelopmentIndicators(countryId)
@@ -182,13 +187,42 @@ export function IndicatorTrendsSection({
       ? 'ALL'
       : categoryFilter
 
-  const visibleSeries = useMemo(
+  const filteredSeries = useMemo(
     () =>
       activeCategory === 'ALL'
         ? allSeries
         : allSeries.filter((item) => item.category === activeCategory),
     [allSeries, activeCategory],
   )
+
+  const defaultLimit = embeddedInTab ? filteredSeries.length : 4
+  const visibleSeries =
+    showAllCharts || filteredSeries.length <= defaultLimit
+      ? filteredSeries
+      : filteredSeries.slice(0, defaultLimit)
+  const hiddenChartCount = Math.max(
+    0,
+    filteredSeries.length - visibleSeries.length,
+  )
+
+  /** 상단 핵심 지표 요약 바 — 우선순위 상위 최대 6개 지표의 최신값과 직전 대비 증감 */
+  const headlineSpecs = useMemo(() => {
+    return allSeries.slice(0, 6).map((series) => {
+      const sorted = [...series.points].sort((a, b) => a.year - b.year)
+      const latest = sorted[sorted.length - 1]
+      const prev = sorted.length >= 2 ? sorted[sorted.length - 2] : null
+      const delta = latest && prev ? latest.value - prev.value : null
+      return {
+        key: series.key,
+        title: series.title,
+        unit: series.unit,
+        latestYear: latest?.year ?? null,
+        latestValue: latest?.value ?? null,
+        prevYear: prev?.year ?? null,
+        delta,
+      }
+    })
+  }, [allSeries])
 
   const activeCategoryCount = (
     ['economic', 'demographic', 'development'] as const
@@ -262,6 +296,40 @@ export function IndicatorTrendsSection({
       ) : (
         hasAny && (
           <>
+            {headlineSpecs.length > 0 && (
+              <HeadlineStrip aria-label="핵심 지표 최신 요약">
+                {headlineSpecs.map((spec) => {
+                  if (spec.latestValue == null || spec.latestYear == null) {
+                    return null
+                  }
+                  const deltaUnit = spec.unit === '%' ? '%p' : spec.unit
+                  const deltaSign =
+                    spec.delta != null && spec.delta > 0 ? '+' : ''
+                  return (
+                    <HeadlineCell key={spec.key}>
+                      <HeadlineTop>
+                        <HeadlineTitle>{spec.title}</HeadlineTitle>
+                        <HeadlineYear>{spec.latestYear}년</HeadlineYear>
+                      </HeadlineTop>
+                      <HeadlineValueRow>
+                        <HeadlineVal>
+                          {formatMetricValue(spec.latestValue, spec.unit)}
+                        </HeadlineVal>
+                        {spec.delta != null &&
+                          spec.prevYear != null &&
+                          Math.abs(spec.delta) > 1e-6 && (
+                            <HeadlineDelta>
+                              {spec.prevYear} 대비 {deltaSign}
+                              {formatMetricValue(spec.delta, deltaUnit)}
+                            </HeadlineDelta>
+                          )}
+                      </HeadlineValueRow>
+                    </HeadlineCell>
+                  )
+                })}
+              </HeadlineStrip>
+            )}
+
             {activeCategoryCount > 1 && (
               <FilterBar role="tablist" aria-label="지표 분야 필터">
                 <FilterChip
@@ -269,7 +337,10 @@ export function IndicatorTrendsSection({
                   role="tab"
                   aria-selected={activeCategory === 'ALL'}
                   $active={activeCategory === 'ALL'}
-                  onClick={() => setCategoryFilter('ALL')}
+                  onClick={() => {
+                    setCategoryFilter('ALL')
+                    setShowAllCharts(false)
+                  }}
                 >
                   전체 <FilterCount>{allSeries.length}</FilterCount>
                 </FilterChip>
@@ -282,7 +353,10 @@ export function IndicatorTrendsSection({
                         role="tab"
                         aria-selected={activeCategory === cat}
                         $active={activeCategory === cat}
-                        onClick={() => setCategoryFilter(cat)}
+                        onClick={() => {
+                          setCategoryFilter(cat)
+                          setShowAllCharts(false)
+                        }}
                       >
                         {INDICATOR_META[cat].label}{' '}
                         <FilterCount>{categoryCounts[cat]}</FilterCount>
@@ -304,12 +378,111 @@ export function IndicatorTrendsSection({
                 ))}
               </Grid>
             </GridContainer>
+            {(hiddenChartCount > 0 ||
+              (showAllCharts && filteredSeries.length > defaultLimit)) && (
+              <MoreChartsRow>
+                <MoreChartsBtn
+                  type="button"
+                  onClick={() => setShowAllCharts((prev) => !prev)}
+                >
+                  {showAllCharts
+                    ? '핵심 추이 차트만 보기'
+                    : `추이 차트 더보기 (+${hiddenChartCount}개 지표)`}
+                </MoreChartsBtn>
+              </MoreChartsRow>
+            )}
           </>
         )
       )}
     </S.Section>
   )
 }
+
+const HeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 12px 24px;
+  padding: 14px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const HeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+const HeadlineTop = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+`
+
+const HeadlineTitle = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const HeadlineYear = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeadlineValueRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+`
+
+const HeadlineVal = styled.strong`
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const HeadlineDelta = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const MoreChartsRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+`
+
+const MoreChartsBtn = styled.button`
+  appearance: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
 
 const FilterBar = styled.div`
   display: flex;

@@ -419,6 +419,14 @@ export function PopulationPyramidSection({
                     <StatLabel>{shares.oldLabel}</StatLabel>
                     <StatValue>{percent(shares.old)}</StatValue>
                   </Stat>
+                  {shares.young > 0 && (
+                    <Stat>
+                      <StatLabel>노령화지수 (유소년 100당 고령)</StatLabel>
+                      <StatValue>
+                        {((shares.old / shares.young) * 100).toFixed(1)}
+                      </StatValue>
+                    </Stat>
+                  )}
                 </>
               )}
               <Stat>
@@ -633,7 +641,10 @@ const StatsRow = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px 32px;
-  margin-bottom: 6px;
+  padding: 14px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  margin-bottom: 10px;
 `
 
 const Headline = styled.div`

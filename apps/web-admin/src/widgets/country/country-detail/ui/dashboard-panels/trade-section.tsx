@@ -12,6 +12,7 @@ import {
   directionColor,
   formatTradeValue,
   formatTradeYear,
+  VALUE_SCALE_LABEL,
 } from '@/entities/trade/vocab'
 
 import { ChartEmpty } from './chart-empty'
@@ -254,6 +255,24 @@ export function TradeSection({
       0,
   )
 
+  const unitSuffix = [
+    current.currencyCode,
+    current.valueScale && current.valueScale !== 'ONE'
+      ? VALUE_SCALE_LABEL[current.valueScale as keyof typeof VALUE_SCALE_LABEL]
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const tradeBalance =
+    current.exportValue != null && current.importValue != null
+      ? current.exportValue - current.importValue
+      : null
+  const tradeVolume =
+    current.exportValue != null && current.importValue != null
+      ? current.exportValue + current.importValue
+      : null
+
   return (
     <S.Section $wide>
       <S.SectionTitleRow>
@@ -283,6 +302,56 @@ export function TradeSection({
           </S.SectionHeaderActions>
         )}
       </S.SectionTitleRow>
+
+      {(current.exportValue != null || current.importValue != null) && (
+        <TradeHeadlineStrip aria-label={`${yearLabel} 교역 요약`}>
+          {current.exportValue != null && (
+            <TradeHeadlineCell>
+              <TradeHeadlineLabel>수출 ({yearLabel})</TradeHeadlineLabel>
+              <TradeHeadlineVal>
+                {formatTradeValue(current.exportValue)}
+                {unitSuffix && (
+                  <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
+                )}
+              </TradeHeadlineVal>
+            </TradeHeadlineCell>
+          )}
+          {current.importValue != null && (
+            <TradeHeadlineCell>
+              <TradeHeadlineLabel>수입 ({yearLabel})</TradeHeadlineLabel>
+              <TradeHeadlineVal>
+                {formatTradeValue(current.importValue)}
+                {unitSuffix && (
+                  <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
+                )}
+              </TradeHeadlineVal>
+            </TradeHeadlineCell>
+          )}
+          {tradeBalance != null && (
+            <TradeHeadlineCell>
+              <TradeHeadlineLabel>무역수지</TradeHeadlineLabel>
+              <TradeHeadlineVal>
+                {tradeBalance > 0 ? '+' : ''}
+                {formatTradeValue(tradeBalance)}
+                <TradeBalanceTag $surplus={tradeBalance >= 0}>
+                  {tradeBalance >= 0 ? '흑자' : '적자'}
+                </TradeBalanceTag>
+              </TradeHeadlineVal>
+            </TradeHeadlineCell>
+          )}
+          {tradeVolume != null && (
+            <TradeHeadlineCell>
+              <TradeHeadlineLabel>교역 총액 (수출+수입)</TradeHeadlineLabel>
+              <TradeHeadlineVal>
+                {formatTradeValue(tradeVolume)}
+                {unitSuffix && (
+                  <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
+                )}
+              </TradeHeadlineVal>
+            </TradeHeadlineCell>
+          )}
+        </TradeHeadlineStrip>
+      )}
 
       {/* 규모·추이·연도 선택을 한 그림이 맡는다 — 자세한 이유는 TradeYearBars 주석 */}
       <TradeYearBars
@@ -571,4 +640,67 @@ const EmptyTrack = styled.span`
   border-radius: 999px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)'};
+`
+
+const TradeHeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px 24px;
+  padding: 14px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const TradeHeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+const TradeHeadlineLabel = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TradeHeadlineVal = styled.strong`
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TradeHeadlineUnit = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const TradeBalanceTag = styled.span<{ $surplus: boolean }>`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $surplus }) =>
+    $surplus
+      ? theme.mode === 'dark'
+        ? '#34d399'
+        : '#047857'
+      : theme.mode === 'dark'
+        ? '#fca5a5'
+        : '#b91c1c'};
+  background: ${({ theme, $surplus }) =>
+    $surplus
+      ? theme.mode === 'dark'
+        ? 'rgba(16,185,129,0.16)'
+        : 'rgba(16,185,129,0.10)'
+      : theme.mode === 'dark'
+        ? 'rgba(248,113,113,0.16)'
+        : 'rgba(220,38,38,0.10)'};
 `

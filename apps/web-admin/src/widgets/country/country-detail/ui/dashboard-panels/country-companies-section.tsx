@@ -51,6 +51,7 @@ export function CountryCompaniesSection({
 }: CountryCompaniesSectionProps) {
   const navigate = useNavigate()
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const { data, isLoading } = useQuery({
     queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
@@ -141,8 +142,12 @@ export function CountryCompaniesSection({
     )
   }
 
-  const visibleCompanies = companies.slice(0, DASHBOARD_COMPANY_LIMIT)
+  const visibleCompanies = expanded
+    ? companies
+    : companies.slice(0, DASHBOARD_COMPANY_LIMIT)
   const hiddenCount = companies.length - visibleCompanies.length
+  const activeCount = companies.filter((c) => !c.dissolvedAt).length
+  const dissolvedCount = companies.length - activeCount
 
   return (
     <S.Section $wide>
@@ -153,6 +158,11 @@ export function CountryCompaniesSection({
         <S.SectionTitleText>기업</S.SectionTitleText>
         <SectionHelpPopover sectionKey="companies" />
         <S.SectionCountChip>{companies.length}개</S.SectionCountChip>
+        {dissolvedCount > 0 && (
+          <S.SectionCountChip>
+            존속 {activeCount} · 해산 {dissolvedCount}
+          </S.SectionCountChip>
+        )}
         <S.SectionHeaderActions>
           <S.SectionAction
             type="button"
@@ -161,86 +171,145 @@ export function CountryCompaniesSection({
             + 기업 등록
           </S.SectionAction>
           <S.SectionLink type="button" onClick={handleOpenAll}>
-            {hiddenCount > 0 ? `전체 보기 (+${hiddenCount})` : '전체 보기'}
+            기업 탭 열기
           </S.SectionLink>
         </S.SectionHeaderActions>
       </S.SectionTitleRow>
 
-      <List>
-        {visibleCompanies.map((company) => {
-          const founded = year(company.foundedAt)
-          const dissolved = year(company.dissolvedAt)
-          /* 있는 사실만 잇는다 — 빈 칸을 만들면 '모른다'가 지면의 절반이 된다 */
-          const facts = [
-            company.shortName,
-            founded && (dissolved ? `${founded}–${dissolved}` : `${founded}년 설립`),
-            company.headquartersCity?.name,
-            company.founder?.name && `창업 ${company.founder.name}`,
-          ].filter(Boolean) as string[]
+      <LedgerWrap>
+        <List>
+          {visibleCompanies.map((company) => {
+            const anyCompany = company as unknown as Record<string, any>
+            const founded = year(company.foundedAt)
+            const dissolved = year(company.dissolvedAt)
+            const ticker =
+              typeof anyCompany.ticker === 'string' && anyCompany.ticker.trim()
+                ? anyCompany.ticker.trim()
+                : null
+            const industry =
+              typeof anyCompany.industry === 'string' && anyCompany.industry.trim()
+                ? anyCompany.industry.trim()
+                : typeof anyCompany.sector === 'string' && anyCompany.sector.trim()
+                  ? anyCompany.sector.trim()
+                  : null
+            /* 있는 사실만 잇는다 — 빈 칸을 만들면 '모른다'가 지면의 절반이 된다 */
+            const facts = [
+              company.shortName && company.shortName !== company.name
+                ? company.shortName
+                : null,
+              industry,
+              founded && (dissolved ? `${founded}–${dissolved}` : `${founded}년 설립`),
+              company.headquartersCity?.name,
+              company.founder?.name && `창업 ${company.founder.name}`,
+            ].filter(Boolean) as string[]
 
-          return (
-            <Row
-              key={company.id}
+            return (
+              <Item key={company.id}>
+                <Row
+                  type="button"
+                  onClick={() => navigate(pathKeys.companies.detail(company.id))}
+                >
+                  <Logo aria-hidden>
+                    {company.logoUrl ? (
+                      <img src={getUploadImageUrl(company.logoUrl)} alt="" />
+                    ) : (
+                      company.name.slice(0, 1)
+                    )}
+                  </Logo>
+                  <Body>
+                    <NameRow>
+                      <Name>{company.name}</Name>
+                      {ticker && <TickerBadge>{ticker}</TickerBadge>}
+                      {dissolved && <Dissolved>해산</Dissolved>}
+                    </NameRow>
+                    {facts.length > 0 && (
+                      <Facts>
+                        {facts.map((fact, index) => (
+                          <Fact key={`${fact}-${index}`}>
+                            {index > 0 && <Sep aria-hidden>·</Sep>}
+                            {fact}
+                          </Fact>
+                        ))}
+                      </Facts>
+                    )}
+                  </Body>
+                  <Chevron aria-hidden>›</Chevron>
+                </Row>
+              </Item>
+            )
+          })}
+        </List>
+        {(hiddenCount > 0 ||
+          (expanded && companies.length > DASHBOARD_COMPANY_LIMIT)) && (
+          <MoreRow>
+            <MoreBtn
               type="button"
-              onClick={() => navigate(pathKeys.companies.detail(company.id))}
+              onClick={() => setExpanded((prev) => !prev)}
             >
-              <Logo aria-hidden>
-                {company.logoUrl ? (
-                  <img src={getUploadImageUrl(company.logoUrl)} alt="" />
-                ) : (
-                  company.name.slice(0, 1)
-                )}
-              </Logo>
-              <Body>
-                <NameRow>
-                  <Name>{company.name}</Name>
-                  {dissolved && <Dissolved>해산</Dissolved>}
-                </NameRow>
-                {facts.length > 0 && (
-                  <Facts>
-                    {facts.map((fact, index) => (
-                      <Fact key={fact}>
-                        {index > 0 && <Sep aria-hidden>·</Sep>}
-                        {fact}
-                      </Fact>
-                    ))}
-                  </Facts>
-                )}
-              </Body>
-              <Chevron aria-hidden>›</Chevron>
-            </Row>
-          )
-        })}
-      </List>
+              {expanded ? '기업 목록 접기' : `기업 더보기 (+${hiddenCount}개)`}
+            </MoreBtn>
+          </MoreRow>
+        )}
+      </LedgerWrap>
       {registerModal}
     </S.Section>
   )
 }
 
 /*
- * 여러 열 카드 격자. 한 줄 목록일 땐 행이 760px에서 멈춰 '›'가 본문 한가운데 떠 있고
- * 오른쪽 400px가 비었다. 칸마다 테두리를 둘러 '›'가 제 칸 안에 머문다.
+ * 무컨테이너 2열 헤어라인 원장 — 외곽 박스 카드를 걷고 위·아래 실선과 열 구분선으로 정돈.
  */
-const List = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+const LedgerWrap = styled.div`
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+`
+
+const List = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @container (min-width: 740px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const Item = styled.li`
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @container (min-width: 740px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 14px;
+    }
+    &:nth-child(even) {
+      padding-left: 14px;
+    }
+  }
 `
 
 const Row = styled.button`
   appearance: none;
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 12px;
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 11px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.14s ease;
 
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
@@ -255,11 +324,11 @@ const Logo = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   overflow: hidden;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) => theme.colors.background.secondary};
@@ -296,11 +365,23 @@ const Name = styled.span`
   white-space: nowrap;
 `
 
+const TickerBadge = styled.span`
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
 const Dissolved = styled.span`
   flex-shrink: 0;
   padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 12px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) =>
@@ -313,7 +394,7 @@ const Facts = styled.span`
   gap: 0 6px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const Fact = styled.span`
@@ -330,4 +411,28 @@ const Chevron = styled.span`
   font-size: 15px;
   line-height: 1;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const MoreRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+`
+
+const MoreBtn = styled.button`
+  appearance: none;
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
 `

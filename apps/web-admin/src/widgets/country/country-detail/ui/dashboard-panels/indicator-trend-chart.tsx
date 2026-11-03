@@ -105,6 +105,8 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
     const peak = rows.reduce((best, row) => (row.value > best.value ? row : best))
     const trough = rows.reduce((best, row) => (row.value < best.value ? row : best))
     const last = rows[rows.length - 1]
+    const prev = rows.length >= 2 ? rows[rows.length - 2] : null
+    const delta = prev ? last.value - prev.value : null
     const average = values.reduce((sum, value) => sum + value, 0) / values.length
 
     /*
@@ -137,6 +139,8 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
       peak,
       trough,
       last,
+      prev,
+      delta,
       average,
       domain: [lowerAxis, upper.max] as [number, number],
       ticks,
@@ -213,6 +217,18 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
           <SummaryLabel>{chart.last.year}년</SummaryLabel>
           <SummaryValue>{formatMetricValue(chart.last.value, unit)}</SummaryValue>
         </SummaryItem>
+        {chart.prev != null && chart.delta != null && (
+          <SummaryItem>
+            <SummaryLabel>{chart.prev.year}년 대비</SummaryLabel>
+            <SummaryValue>
+              {chart.delta > 0 ? '+' : ''}
+              {formatMetricValue(
+                chart.delta,
+                unit === '%' ? '%p' : unit,
+              )}
+            </SummaryValue>
+          </SummaryItem>
+        )}
         <SummaryItem>
           <SummaryLabel>기간 평균</SummaryLabel>
           <SummaryValue>{formatMetricValue(chart.average, unit)}</SummaryValue>

@@ -62,14 +62,13 @@ const Box = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 20px;
-  min-height: 72px;
+  gap: 12px 24px;
+  min-height: 64px;
   box-sizing: border-box;
-  padding: 16px 20px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
-  border-radius: 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  padding: 16px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
 `
 
 const TextColumn = styled.div`
