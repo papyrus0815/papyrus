@@ -116,6 +116,7 @@ export function BondYieldSection({
 
       /* 장단기 스프레드 — 긴 쪽은 대표 만기, 짧은 쪽은 그 해에 있는 것 중 앞선 후보 */
       const points = byYear.get(year) ?? []
+      const priorPoints = priorYear != null ? (byYear.get(priorYear) ?? []) : []
       const shortLeg = SHORT_LEG_CANDIDATES.map((candidate) =>
         points.find((point) => point.maturity === candidate),
       ).find((point) => point != null && point.maturity !== benchmark)
@@ -124,12 +125,24 @@ export function BondYieldSection({
           ? benchmarkYield - shortLeg.value
           : null
 
+      const maturitySpecs = points.map((pt) => {
+        const priorPt = priorPoints.find((p) => p.maturity === pt.maturity)
+        return {
+          maturity: pt.maturity,
+          label: bondMaturityLabel(pt.maturity),
+          value: pt.value,
+          deltaBp: priorPt != null ? pt.value - priorPt.value : null,
+          isBenchmark: pt.maturity === benchmark,
+        }
+      })
+
       return {
         benchmarkYield,
         priorYear,
         deltaBp,
         spread,
         shortLeg: shortLeg ?? null,
+        maturitySpecs,
       }
     }
 
@@ -271,11 +284,38 @@ export function BondYieldSection({
                     긴 돈이 짧은 돈보다 싸다는 건 시장이 앞날을 어둡게 본다는 뜻이라
                     숫자만으로는 그 뜻이 전달되지 않는다.
                   */}
-                  {stats.spread < 0 && <InvertedTag>역전</InvertedTag>}
+                  {stats.spread < 0 ? (
+                    <InvertedTag>장단기 역전</InvertedTag>
+                  ) : stats.spread < 0.25 ? (
+                    <CurveShapeTag>평탄화</CurveShapeTag>
+                  ) : (
+                    <CurveShapeTag $normal>정상 우상향</CurveShapeTag>
+                  )}
                 </HeadlineStatValue>
               </HeadlineStat>
             )}
           </Headline>
+
+          {stats && stats.maturitySpecs.length > 1 && (
+            <MaturityStrip aria-label={`${curveYear}년 만기별 국채 수익률 명세`}>
+              {stats.maturitySpecs.map((spec) => (
+                <MaturityCell key={spec.maturity} $highlight={spec.isBenchmark}>
+                  <MaturityTop>
+                    <MaturityLabel>{spec.label}물</MaturityLabel>
+                    {spec.isBenchmark && <BenchmarkBadge>기준</BenchmarkBadge>}
+                  </MaturityTop>
+                  <MaturityValRow>
+                    <MaturityVal>{formatYield(spec.value)}</MaturityVal>
+                    {spec.deltaBp != null && Math.abs(spec.deltaBp) > 1e-4 && (
+                      <MaturityDelta $up={spec.deltaBp > 0}>
+                        {formatBasisPoints(spec.deltaBp)}
+                      </MaturityDelta>
+                    )}
+                  </MaturityValRow>
+                </MaturityCell>
+              ))}
+            </MaturityStrip>
+          )}
 
           {model.years.length > 1 && (
             <YearChips role="group" aria-label="수익률 곡선 기준 연도">
@@ -398,6 +438,92 @@ const InvertedTag = styled.span`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(248,113,113,0.34)' : 'rgba(220,38,38,0.22)'};
+`
+
+const CurveShapeTag = styled.span<{ $normal?: boolean }>`
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $normal }) =>
+    $normal
+      ? theme.mode === 'dark'
+        ? '#34d399'
+        : '#047857'
+      : theme.colors.text.secondary};
+  background: ${({ theme, $normal }) =>
+    $normal
+      ? theme.mode === 'dark'
+        ? 'rgba(16,185,129,0.14)'
+        : 'rgba(16,185,129,0.09)'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.05)'};
+`
+
+const MaturityStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px 16px;
+  padding: 10px 0 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const MaturityCell = styled.div<{ $highlight?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const MaturityTop = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+`
+
+const MaturityLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const BenchmarkBadge = styled.span`
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => theme.colors.activeLight};
+`
+
+const MaturityValRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const MaturityVal = styled.strong`
+  font-size: 14.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const MaturityDelta = styled.span<{ $up: boolean }>`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $up }) =>
+    $up
+      ? theme.mode === 'dark'
+        ? '#fca5a5'
+        : '#dc2626'
+      : theme.mode === 'dark'
+        ? '#7dd3fc'
+        : '#0284c7'};
 `
 
 const YearChips = styled.div`

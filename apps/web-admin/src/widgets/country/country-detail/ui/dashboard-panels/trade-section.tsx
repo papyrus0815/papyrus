@@ -273,6 +273,46 @@ export function TradeSection({
       ? current.exportValue + current.importValue
       : null
 
+  const currentIndex = years.findIndex((row) => row.id === current.id)
+  const prevYearRow =
+    currentIndex > 0 &&
+    years[currentIndex - 1].currencyCode === current.currencyCode &&
+    years[currentIndex - 1].valueScale === current.valueScale
+      ? years[currentIndex - 1]
+      : null
+  const prevYearLabel = prevYearRow
+    ? formatTradeYear(
+        prevYearRow.era,
+        prevYearRow.year,
+        prevYearRow.periodEndYear,
+      )
+    : null
+  const exportDeltaPct =
+    prevYearRow?.exportValue != null &&
+    prevYearRow.exportValue > 0 &&
+    current.exportValue != null
+      ? ((current.exportValue - prevYearRow.exportValue) /
+          prevYearRow.exportValue) *
+        100
+      : null
+  const importDeltaPct =
+    prevYearRow?.importValue != null &&
+    prevYearRow.importValue > 0 &&
+    current.importValue != null
+      ? ((current.importValue - prevYearRow.importValue) /
+          prevYearRow.importValue) *
+        100
+      : null
+
+  const topExportItem =
+    views.EXPORT.commodities[0]?.name ??
+    views.EXPORT.partners[0]?.partnerName ??
+    null
+  const topImportItem =
+    views.IMPORT.commodities[0]?.name ??
+    views.IMPORT.partners[0]?.partnerName ??
+    null
+
   return (
     <S.Section $wide>
       <S.SectionTitleRow>
@@ -283,7 +323,9 @@ export function TradeSection({
           {embeddedInTab ? '연도별 교역 추이 · 품목 구성' : '교역'}
         </S.SectionTitleText>
         <SectionHelpPopover sectionKey="trade" />
-        <S.SectionCountChip>{yearLabel} 기준</S.SectionCountChip>
+        <S.SectionCountChip>
+          {years.length}개 연도 · {yearLabel} 기준
+        </S.SectionCountChip>
         {!embeddedInTab && (
           <S.SectionHeaderActions>
             {countryId && (
@@ -314,6 +356,18 @@ export function TradeSection({
                   <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
                 )}
               </TradeHeadlineVal>
+              {(exportDeltaPct != null || topExportItem) && (
+                <TradeHeadlineSub>
+                  {exportDeltaPct != null && prevYearLabel && (
+                    <TradeDeltaSpan $up={exportDeltaPct >= 0}>
+                      {prevYearLabel} 대비 {exportDeltaPct >= 0 ? '+' : ''}
+                      {exportDeltaPct.toFixed(1)}%
+                    </TradeDeltaSpan>
+                  )}
+                  {exportDeltaPct != null && topExportItem && ' · '}
+                  {topExportItem && `주력: ${topExportItem}`}
+                </TradeHeadlineSub>
+              )}
             </TradeHeadlineCell>
           )}
           {current.importValue != null && (
@@ -325,6 +379,18 @@ export function TradeSection({
                   <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
                 )}
               </TradeHeadlineVal>
+              {(importDeltaPct != null || topImportItem) && (
+                <TradeHeadlineSub>
+                  {importDeltaPct != null && prevYearLabel && (
+                    <TradeDeltaSpan $up={importDeltaPct >= 0}>
+                      {prevYearLabel} 대비 {importDeltaPct >= 0 ? '+' : ''}
+                      {importDeltaPct.toFixed(1)}%
+                    </TradeDeltaSpan>
+                  )}
+                  {importDeltaPct != null && topImportItem && ' · '}
+                  {topImportItem && `주력: ${topImportItem}`}
+                </TradeHeadlineSub>
+              )}
             </TradeHeadlineCell>
           )}
           {tradeBalance != null && (
@@ -337,6 +403,11 @@ export function TradeSection({
                   {tradeBalance >= 0 ? '흑자' : '적자'}
                 </TradeBalanceTag>
               </TradeHeadlineVal>
+              {tradeVolume != null && tradeVolume > 0 && (
+                <TradeHeadlineSub>
+                  교역 총액 대비 {((Math.abs(tradeBalance) / tradeVolume) * 100).toFixed(1)}%
+                </TradeHeadlineSub>
+              )}
             </TradeHeadlineCell>
           )}
           {tradeVolume != null && (
@@ -348,6 +419,12 @@ export function TradeSection({
                   <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
                 )}
               </TradeHeadlineVal>
+              {current.exportValue != null && tradeVolume > 0 && (
+                <TradeHeadlineSub>
+                  수출 비중 {((current.exportValue / tradeVolume) * 100).toFixed(1)}% · 수입{' '}
+                  {(((current.importValue ?? 0) / tradeVolume) * 100).toFixed(1)}%
+                </TradeHeadlineSub>
+              )}
             </TradeHeadlineCell>
           )}
         </TradeHeadlineStrip>
@@ -680,6 +757,28 @@ const TradeHeadlineUnit = styled.span`
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const TradeHeadlineSub = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const TradeDeltaSpan = styled.span<{ $up: boolean }>`
+  font-weight: 700;
+  color: ${({ theme, $up }) =>
+    $up
+      ? theme.mode === 'dark'
+        ? '#34d399'
+        : '#047857'
+      : theme.mode === 'dark'
+        ? '#fca5a5'
+        : '#b91c1c'};
 `
 
 const TradeBalanceTag = styled.span<{ $surplus: boolean }>`

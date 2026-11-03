@@ -134,6 +134,9 @@ export function CountryDetailDashboard({
   const [dataManagerTab, setDataManagerTab] = useState<MainTab | null>(null)
   const [expandEmptyIndicators, setExpandEmptyIndicators] = useState(false)
   const [companyRegisterOpen, setCompanyRegisterOpen] = useState(false)
+  const [indicatorDomainFilter, setIndicatorDomainFilter] = useState<
+    'ALL' | 'trends' | 'pyramid' | 'bonds' | 'trade' | 'companies'
+  >('ALL')
 
   const latestDemographicPop = useMemo(() => {
     const sorted = [...demographicIndicators]
@@ -520,19 +523,41 @@ export function CountryDetailDashboard({
 
   const hasActivitySection = stats.loading.activity || totalActivity > 0
 
-  const countryCompanyCount = useMemo(
+  const linkedHistoricalIds = useMemo(
     () =>
-      allCompanies.filter((company) => company.countryId === country.id).length,
-    [allCompanies, country.id],
+      isModern
+        ? (country.historicalCountries ?? []).map((item) => item.id)
+        : [],
+    [isModern, country.historicalCountries],
   )
 
-  const hasPyramidData = useMemo(
-    () =>
-      (demographicIndicators as DemographicIndicator[]).some(
-        (indicator) => toPyramidRows(indicator).length > 0,
-      ),
-    [demographicIndicators],
-  )
+  const countryCompanies = useMemo(() => {
+    const histSet = new Set(linkedHistoricalIds)
+    return allCompanies.filter((company) => {
+      if (isModern) {
+        if (company.countryId === country.id) return true
+        if (company.historicalCountryId && histSet.has(company.historicalCountryId)) {
+          return true
+        }
+        return false
+      }
+      return company.historicalCountryId === country.id
+    })
+  }, [allCompanies, isModern, country.id, linkedHistoricalIds])
+
+  const countryCompanyCount = countryCompanies.length
+
+  const pyramidYears = useMemo(() => {
+    return (demographicIndicators as DemographicIndicator[])
+      .map((indicator) => ({
+        year: indicator.year,
+        rows: toPyramidRows(indicator),
+      }))
+      .filter((entry) => entry.rows.length > 0)
+      .sort((a, b) => a.year - b.year)
+  }, [demographicIndicators])
+
+  const hasPyramidData = pyramidYears.length > 0
 
   const hasTrendIndicators =
     economicIndicators.length > 0 ||
@@ -545,30 +570,37 @@ export function CountryDetailDashboard({
   const isTrendsLoading =
     isEconomicLoading || isDemographicLoading || isDevelopmentLoading
 
-  const showCompaniesPanel =
-    expandEmptyIndicators || isCompaniesLoading || countryCompanyCount > 0
-  const showPyramidPanel =
-    expandEmptyIndicators || isDemographicLoading || hasPyramidData
   const showTrendsPanel =
-    expandEmptyIndicators || isTrendsLoading || hasTrendIndicators
+    (indicatorDomainFilter === 'ALL' || indicatorDomainFilter === 'trends') &&
+    (expandEmptyIndicators || isTrendsLoading || hasTrendIndicators)
+  const showPyramidPanel =
+    (indicatorDomainFilter === 'ALL' || indicatorDomainFilter === 'pyramid') &&
+    (expandEmptyIndicators || isDemographicLoading || hasPyramidData)
   const showBondsPanel =
-    expandEmptyIndicators || isBondsLoading || hasBondsData
+    (indicatorDomainFilter === 'ALL' || indicatorDomainFilter === 'bonds') &&
+    (expandEmptyIndicators || isBondsLoading || hasBondsData)
   const showTradePanel =
-    expandEmptyIndicators || isTradeLoading || hasTradeData
+    (indicatorDomainFilter === 'ALL' || indicatorDomainFilter === 'trade') &&
+    (expandEmptyIndicators || isTradeLoading || hasTradeData)
+  const showCompaniesPanel =
+    (indicatorDomainFilter === 'ALL' || indicatorDomainFilter === 'companies') &&
+    (expandEmptyIndicators || isCompaniesLoading || countryCompanyCount > 0)
 
   const hasVisibleIndicatorPanels =
-    showCompaniesPanel ||
-    showPyramidPanel ||
     showTrendsPanel ||
+    showPyramidPanel ||
     showBondsPanel ||
-    showTradePanel
+    showTradePanel ||
+    showCompaniesPanel
 
-  const emptyIndicatorSpecs = useMemo(() => {
+  const indicatorHubSpecs = useMemo(() => {
     if (!isModern) return []
     const items: Array<{
-      key: string
+      key: 'trends' | 'pyramid' | 'bonds' | 'trade' | 'companies'
       icon: ReactNode
       title: string
+      filled: boolean
+      statusLabel: string
       scope: string
       actionLabel: string
       onAction: () => void
@@ -576,95 +608,216 @@ export function CountryDetailDashboard({
       onOpenTab: () => void
     }> = []
 
-    if (!isTrendsLoading && !hasTrendIndicators) {
-      items.push({
-        key: 'trends',
-        icon: <IconChart />,
-        title: '경제 · 인구 · 사회 지표 추이',
-        scope:
-          'GDP · 1인당 GDP · 물가 · 실업률 · 인구 · 출산율 · 기대수명 · HDI 연도별 시계열',
-        actionLabel: '+ 지표 등록',
-        onAction: () => setDataManagerTab('indicators'),
-        tabLabel: '통계 탭',
-        onOpenTab: () =>
-          navigate(pathKeys.countryStatistics(country.id, 'indicators')),
-      })
+    // 1. 경제 · 인구 · 사회 지표 추이
+    const econSorted = [...economicIndicators].sort((a, b) => b.year - a.year)
+    const demoSorted = [...demographicIndicators].sort((a, b) => b.year - a.year)
+    const devSorted = [...developmentIndicators].sort((a, b) => b.year - a.year)
+    const trendYears = [
+      ...econSorted.map((r) => r.year),
+      ...demoSorted.map((r) => r.year),
+      ...devSorted.map((r) => r.year),
+    ].filter(Number.isFinite)
+    const latestTrendYear =
+      trendYears.length > 0 ? Math.max(...trendYears) : null
+    const earliestTrendYear =
+      trendYears.length > 0 ? Math.min(...trendYears) : null
+
+    const trendParts: string[] = []
+    if (econSorted[0]?.gdp != null) {
+      trendParts.push(`GDP ${formatMetricValue(Number(econSorted[0].gdp), '$')}`)
+    }
+    if (econSorted[0]?.gdpGrowthRate != null) {
+      trendParts.push(
+        `성장률 ${formatMetricValue(Number(econSorted[0].gdpGrowthRate), '%')}`,
+      )
+    }
+    if (econSorted[0]?.gdpPerCapita != null) {
+      trendParts.push(
+        `1인당 ${formatMetricValue(Number(econSorted[0].gdpPerCapita), '$')}`,
+      )
+    }
+    if (demoSorted[0]?.fertilityRate != null) {
+      trendParts.push(`출산율 ${Number(demoSorted[0].fertilityRate).toFixed(2)}`)
+    }
+    if (devSorted[0]?.hdi != null && trendParts.length < 4) {
+      trendParts.push(`HDI ${Number(devSorted[0].hdi).toFixed(3)}`)
     }
 
-    if (!isDemographicLoading && !hasPyramidData) {
-      items.push({
-        key: 'pyramid',
-        icon: <IconUsers />,
-        title: '인구 피라미드',
-        scope:
-          '연령대별 남·여 인구 분포 · 유소년·생산연령·고령 비중 · 성비 · 노령화지수',
-        actionLabel: '+ 피라미드 등록',
-        onAction: () => setDataManagerTab('pyramid'),
-        tabLabel: '피라미드 탭',
-        onOpenTab: () =>
-          navigate(pathKeys.countryStatistics(country.id, 'pyramid')),
-      })
-    }
+    items.push({
+      key: 'trends',
+      icon: <IconChart />,
+      title: '경제 · 인구 · 사회 지표 추이',
+      filled: hasTrendIndicators,
+      statusLabel: hasTrendIndicators
+        ? earliestTrendYear && latestTrendYear && earliestTrendYear !== latestTrendYear
+          ? `${earliestTrendYear}–${latestTrendYear}년`
+          : `${latestTrendYear ?? ''}년 등록`
+        : '미등록',
+      scope:
+        hasTrendIndicators && trendParts.length > 0
+          ? trendParts.join(' · ')
+          : 'GDP · 1인당 GDP · 물가 · 실업률 · 인구 · 출산율 · 기대수명 · HDI 연도별 시계열',
+      actionLabel: hasTrendIndicators ? '지표 관리' : '+ 지표 등록',
+      onAction: () => setDataManagerTab('indicators'),
+      tabLabel: '통계 탭',
+      onOpenTab: () =>
+        navigate(pathKeys.countryStatistics(country.id, 'indicators')),
+    })
 
-    if (!isBondsLoading && !hasBondsData) {
-      items.push({
-        key: 'bonds',
-        icon: <IconPercent />,
-        title: '국채 수익률 곡선',
-        scope:
-          '만기별(1M~30Y) 국채 금리 추이 · 10Y-2Y 장단기 금리차(스프레드) 및 역전 감지',
-        actionLabel: '+ 금리 등록',
-        onAction: () => setDataManagerTab('bonds'),
-        tabLabel: '국채 탭',
-        onOpenTab: () =>
-          navigate(pathKeys.countryStatistics(country.id, 'bonds')),
-      })
-    }
+    // 2. 인구 피라미드
+    const latestPyr =
+      pyramidYears.length > 0 ? pyramidYears[pyramidYears.length - 1] : null
+    const latestPyrTotal = latestPyr
+      ? latestPyr.rows.reduce((sum, r) => sum + r.total, 0)
+      : 0
 
-    if (!isTradeLoading && !hasTradeData) {
-      items.push({
-        key: 'trade',
-        icon: <IconTrade />,
-        title: '수출입 · 교역 구조',
-        scope:
-          '연도별 수출·수입 총액 · 무역수지 흑자·적자 · 주요 교역 상대국 및 품목 비중',
-        actionLabel: '+ 교역 등록',
-        onAction: () => setDataManagerTab('trade'),
-        tabLabel: '교역 탭',
-        onOpenTab: () => navigate(pathKeys.countryTrade(country.id)),
-      })
-    }
+    items.push({
+      key: 'pyramid',
+      icon: <IconUsers />,
+      title: '인구 피라미드',
+      filled: hasPyramidData,
+      statusLabel: hasPyramidData
+        ? `${pyramidYears.length}개 연도 · ${latestPyr?.year}년`
+        : '미등록',
+      scope:
+        hasPyramidData && latestPyr
+          ? `${latestPyr.year}년 연령별 총인구 ${latestPyrTotal.toLocaleString('ko-KR')}명 · 9개 연령대 남·여 구조`
+          : '연령대별 남·여 인구 분포 · 유소년·생산연령·고령 비중 · 성비 · 노령화지수',
+      actionLabel: hasPyramidData ? '피라미드 관리' : '+ 피라미드 등록',
+      onAction: () => setDataManagerTab('pyramid'),
+      tabLabel: '피라미드 탭',
+      onOpenTab: () =>
+        navigate(pathKeys.countryStatistics(country.id, 'pyramid')),
+    })
 
-    if (!isCompaniesLoading && countryCompanyCount === 0) {
-      items.push({
-        key: 'companies',
-        icon: <IconBriefcase />,
-        title: '주요 기업',
-        scope:
-          '본사 소재 기업 · 산업 분야 · 티커 · 설립·해산 연도 · 창업자 및 대표 인물 연결',
-        actionLabel: '+ 기업 등록',
-        onAction: () => setCompanyRegisterOpen(true),
-        tabLabel: '기업 탭',
-        onOpenTab: () => navigate(pathKeys.countryCompanies(country.id)),
-      })
-    }
+    // 3. 국채 수익률 곡선
+    const bondYearSet = new Set(bondYields.map((b) => b.year))
+    const bondMatSet = new Set(bondYields.map((b) => b.maturity))
+    const latestBondYr =
+      bondYearSet.size > 0 ? Math.max(...bondYearSet) : null
+    const latest10Y = bondYields.find(
+      (b) => b.year === latestBondYr && b.maturity === 'Y10',
+    )
+
+    items.push({
+      key: 'bonds',
+      icon: <IconPercent />,
+      title: '국채 수익률 곡선',
+      filled: hasBondsData,
+      statusLabel: hasBondsData
+        ? `${bondYearSet.size}개 연도 · 만기 ${bondMatSet.size}종`
+        : '미등록',
+      scope: hasBondsData
+        ? [
+            latestBondYr ? `${latestBondYr}년 기준` : null,
+            latest10Y ? `10년물 ${Number(latest10Y.yieldRate).toFixed(2)}%` : null,
+            `만기 ${bondMatSet.size}종 수익률 곡선`,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '만기별(1M~30Y) 국채 금리 추이 · 10Y-2Y 장단기 금리차(스프레드) 및 역전 감지',
+      actionLabel: hasBondsData ? '금리 관리' : '+ 금리 등록',
+      onAction: () => setDataManagerTab('bonds'),
+      tabLabel: '국채 탭',
+      onOpenTab: () =>
+        navigate(pathKeys.countryStatistics(country.id, 'bonds')),
+    })
+
+    // 4. 수출입 · 교역 구조
+    const tradeSorted = [...exportImports].sort(
+      (a, b) => Number(b.signedYear ?? b.year) - Number(a.signedYear ?? a.year),
+    )
+    const latestTr = tradeSorted[0]
+
+    items.push({
+      key: 'trade',
+      icon: <IconTrade />,
+      title: '수출입 · 교역 구조',
+      filled: hasTradeData,
+      statusLabel: hasTradeData
+        ? `${exportImports.length}개 연도 · ${latestTr?.year}년`
+        : '미등록',
+      scope:
+        hasTradeData && latestTr
+          ? [
+              `${latestTr.year}년`,
+              latestTr.exportValue != null
+                ? `수출 ${Number(latestTr.exportValue).toLocaleString('ko-KR')}`
+                : null,
+              latestTr.importValue != null
+                ? `수입 ${Number(latestTr.importValue).toLocaleString('ko-KR')}`
+                : null,
+              latestTr.currencyCode,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          : '연도별 수출·수입 총액 · 무역수지 흑자·적자 · 주요 교역 상대국 및 품목 비중',
+      actionLabel: hasTradeData ? '교역 관리' : '+ 교역 등록',
+      onAction: () => setDataManagerTab('trade'),
+      tabLabel: '교역 탭',
+      onOpenTab: () => navigate(pathKeys.countryTrade(country.id)),
+    })
+
+    // 5. 주요 기업
+    const activeCompCount = countryCompanies.filter(
+      (c) => !c.dissolvedAt && (!c.status || c.status === 'ACTIVE'),
+    ).length
+    const endedCompCount = countryCompanyCount - activeCompCount
+    const previewCompNames = countryCompanies
+      .slice(0, 3)
+      .map((c) => c.name)
+      .join(', ')
+
+    items.push({
+      key: 'companies',
+      icon: <IconBriefcase />,
+      title: '주요 기업',
+      filled: countryCompanyCount > 0,
+      statusLabel:
+        countryCompanyCount > 0 ? `${countryCompanyCount}개 기업` : '미등록',
+      scope:
+        countryCompanyCount > 0
+          ? [
+              `활동 ${activeCompCount}`,
+              endedCompCount > 0 ? `종료 ${endedCompCount}` : null,
+              previewCompNames
+                ? `${previewCompNames}${countryCompanyCount > 3 ? ` 외 ${countryCompanyCount - 3}개` : ''}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          : '본사 소재 기업 · 산업 분야 · 티커 · 설립·해산 연도 · 창업자 및 대표 인물 연결',
+      actionLabel: countryCompanyCount > 0 ? '+ 기업 추가' : '+ 기업 등록',
+      onAction: () => setCompanyRegisterOpen(true),
+      tabLabel: '기업 탭',
+      onOpenTab: () => navigate(pathKeys.countryCompanies(country.id)),
+    })
 
     return items
   }, [
     isModern,
-    isTrendsLoading,
+    economicIndicators,
+    demographicIndicators,
+    developmentIndicators,
     hasTrendIndicators,
-    isDemographicLoading,
+    pyramidYears,
     hasPyramidData,
-    isBondsLoading,
+    bondYields,
     hasBondsData,
-    isTradeLoading,
+    exportImports,
     hasTradeData,
-    isCompaniesLoading,
+    countryCompanies,
     countryCompanyCount,
     navigate,
     country.id,
   ])
+
+  const filledIndicatorSpecs = useMemo(
+    () => indicatorHubSpecs.filter((s) => s.filled),
+    [indicatorHubSpecs],
+  )
+  const emptyIndicatorCount =
+    indicatorHubSpecs.length - filledIndicatorSpecs.length
 
   const politicalSystemCount = (politicalSystemsQuery.data ?? []).length
 
@@ -1209,18 +1362,149 @@ export function CountryDetailDashboard({
       )}
 
       {/*
-        5. 기업·인구 피라미드·지표 추이·국채 금리·교역 —
-        데이터가 있는 분야는 전용 시각화 섹션으로 즉시 렌더하고,
-        미등록 분야들은 빈 섹션 여러 개를 나열하는 대신 하단 2열 헤어라인 스펙 원장으로 통합한다.
+        5. 경제 · 인구 · 교역 · 기업 지표 —
+        상단 2열 헤어라인 종합 원장에서 5대 지표 축의 등록 상태와 최신 핵심 수치(KPI)를 한눈에 비교하고,
+        하단 차트 그리드에서는 데이터가 등록된 분야의 전용 시각화를 거시→미시 순으로 펼친다.
       */}
       {country.type === 'modern' && (
         <>
+          <S.Section>
+            <S.SectionTitleRow>
+              <S.SectionTitleIcon>
+                <IconChart />
+              </S.SectionTitleIcon>
+              <S.SectionTitleText>
+                경제 · 인구 · 교역 · 기업 지표
+              </S.SectionTitleText>
+              <SectionHelpPopover sectionKey="indicatorsHub" />
+              <S.SectionCountChip>
+                {filledIndicatorSpecs.length === 0
+                  ? '5개 분야 미등록'
+                  : `${filledIndicatorSpecs.length}/5개 분야 등록`}
+              </S.SectionCountChip>
+              <S.SectionHeaderActions>
+                <S.SectionAction
+                  type="button"
+                  onClick={() => setDataManagerTab('indicators')}
+                >
+                  통합 지표 관리
+                </S.SectionAction>
+                {emptyIndicatorCount > 0 && (
+                  <S.SectionLink
+                    type="button"
+                    onClick={() => setExpandEmptyIndicators((prev) => !prev)}
+                  >
+                    {expandEmptyIndicators
+                      ? '빈 섹션 접기'
+                      : `빈 섹션 펼치기 (+${emptyIndicatorCount})`}
+                  </S.SectionLink>
+                )}
+              </S.SectionHeaderActions>
+            </S.SectionTitleRow>
+
+            <S.IndicatorsLedgerWrap>
+              <S.IndicatorsLedgerList>
+                {indicatorHubSpecs.map((spec) => (
+                  <S.IndicatorsLedgerItem key={spec.key}>
+                    <S.IndicatorsLedgerRow>
+                      <S.IndicatorsLedgerIcon $filled={spec.filled}>
+                        {spec.icon}
+                      </S.IndicatorsLedgerIcon>
+                      <S.IndicatorsLedgerBody>
+                        <S.IndicatorsLedgerTitleRow>
+                          <S.IndicatorsLedgerTitle>
+                            {spec.title}
+                          </S.IndicatorsLedgerTitle>
+                          <S.IndicatorsLedgerStatus $filled={spec.filled}>
+                            {spec.statusLabel}
+                          </S.IndicatorsLedgerStatus>
+                        </S.IndicatorsLedgerTitleRow>
+                        <S.IndicatorsLedgerScope $filled={spec.filled}>
+                          {spec.scope}
+                        </S.IndicatorsLedgerScope>
+                      </S.IndicatorsLedgerBody>
+                      <S.IndicatorsLedgerActions>
+                        {spec.filled && (
+                          <S.IndicatorsLedgerFocusBtn
+                            type="button"
+                            $active={indicatorDomainFilter === spec.key}
+                            onClick={() =>
+                              setIndicatorDomainFilter((prev) =>
+                                prev === spec.key ? 'ALL' : spec.key,
+                              )
+                            }
+                          >
+                            {indicatorDomainFilter === spec.key
+                              ? '전체 보기'
+                              : '차트 집중'}
+                          </S.IndicatorsLedgerFocusBtn>
+                        )}
+                        <S.IndicatorsLedgerActionBtn
+                          type="button"
+                          $filled={spec.filled}
+                          onClick={spec.onAction}
+                        >
+                          {spec.actionLabel}
+                        </S.IndicatorsLedgerActionBtn>
+                        <S.IndicatorsLedgerTabLink
+                          type="button"
+                          onClick={spec.onOpenTab}
+                        >
+                          {spec.tabLabel}
+                        </S.IndicatorsLedgerTabLink>
+                      </S.IndicatorsLedgerActions>
+                    </S.IndicatorsLedgerRow>
+                  </S.IndicatorsLedgerItem>
+                ))}
+              </S.IndicatorsLedgerList>
+
+              {(filledIndicatorSpecs.length > 1 || expandEmptyIndicators) && (
+                <S.IndicatorsFilterBar
+                  role="tablist"
+                  aria-label="지표 차트 표시 분야 선택"
+                >
+                  <S.IndicatorsFilterChip
+                    type="button"
+                    role="tab"
+                    aria-selected={indicatorDomainFilter === 'ALL'}
+                    $active={indicatorDomainFilter === 'ALL'}
+                    onClick={() => setIndicatorDomainFilter('ALL')}
+                  >
+                    전체 차트 (
+                    {expandEmptyIndicators ? 5 : filledIndicatorSpecs.length})
+                  </S.IndicatorsFilterChip>
+                  {indicatorHubSpecs
+                    .filter((spec) => spec.filled || expandEmptyIndicators)
+                    .map((spec) => (
+                      <S.IndicatorsFilterChip
+                        key={spec.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={indicatorDomainFilter === spec.key}
+                        $active={indicatorDomainFilter === spec.key}
+                        onClick={() =>
+                          setIndicatorDomainFilter((prev) =>
+                            prev === spec.key ? 'ALL' : spec.key,
+                          )
+                        }
+                      >
+                        {spec.title}
+                      </S.IndicatorsFilterChip>
+                    ))}
+                </S.IndicatorsFilterBar>
+              )}
+            </S.IndicatorsLedgerWrap>
+          </S.Section>
+
           {hasVisibleIndicatorPanels && (
             <S.IndicatorsGrid>
-              {showCompaniesPanel && (
-                <CountryCompaniesSection
+              {showTrendsPanel && (
+                <IndicatorTrendsSection
                   countryId={country.id}
-                  onOpenTab={() => navigate(pathKeys.countryCompanies(country.id))}
+                  countryName={country.name}
+                  onOpenDetailTab={() =>
+                    navigate(pathKeys.countryStatistics(country.id, 'indicators'))
+                  }
                 />
               )}
               {showPyramidPanel && (
@@ -1229,15 +1513,6 @@ export function CountryDetailDashboard({
                   countryName={country.name}
                   onOpenDetailTab={() =>
                     navigate(pathKeys.countryStatistics(country.id, 'pyramid'))
-                  }
-                />
-              )}
-              {showTrendsPanel && (
-                <IndicatorTrendsSection
-                  countryId={country.id}
-                  countryName={country.name}
-                  onOpenDetailTab={() =>
-                    navigate(pathKeys.countryStatistics(country.id, 'indicators'))
                   }
                 />
               )}
@@ -1259,73 +1534,14 @@ export function CountryDetailDashboard({
                   }
                 />
               )}
+              {showCompaniesPanel && (
+                <CountryCompaniesSection
+                  countryId={country.id}
+                  linkedHistoricalCountryIds={linkedHistoricalIds}
+                  onOpenTab={() => navigate(pathKeys.countryCompanies(country.id))}
+                />
+              )}
             </S.IndicatorsGrid>
-          )}
-
-          {emptyIndicatorSpecs.length > 0 && !expandEmptyIndicators && (
-            <S.Section>
-              <S.SectionTitleRow>
-                <S.SectionTitleIcon>
-                  <IconChart />
-                </S.SectionTitleIcon>
-                <S.SectionTitleText>
-                  {emptyIndicatorSpecs.length === 5
-                    ? '경제 · 인구 · 교역 · 기업 지표'
-                    : '미등록 경제 · 인구 · 교역 · 기업 지표'}
-                </S.SectionTitleText>
-                <SectionHelpPopover sectionKey="indicatorsHub" />
-                <S.SectionCountChip>
-                  {emptyIndicatorSpecs.length}개 분야 미등록
-                </S.SectionCountChip>
-                <S.SectionLink
-                  type="button"
-                  onClick={() => setExpandEmptyIndicators(true)}
-                >
-                  개별 섹션 펼치기
-                </S.SectionLink>
-              </S.SectionTitleRow>
-
-              <S.IndicatorsLedgerWrap>
-                <S.IndicatorsLedgerList>
-                  {emptyIndicatorSpecs.map((spec) => (
-                    <S.IndicatorsLedgerItem key={spec.key}>
-                      <S.IndicatorsLedgerRow>
-                        <S.IndicatorsLedgerIcon>
-                          {spec.icon}
-                        </S.IndicatorsLedgerIcon>
-                        <S.IndicatorsLedgerBody>
-                          <S.IndicatorsLedgerTitleRow>
-                            <S.IndicatorsLedgerTitle>
-                              {spec.title}
-                            </S.IndicatorsLedgerTitle>
-                            <S.IndicatorsLedgerStatus>
-                              미등록
-                            </S.IndicatorsLedgerStatus>
-                          </S.IndicatorsLedgerTitleRow>
-                          <S.IndicatorsLedgerScope>
-                            {spec.scope}
-                          </S.IndicatorsLedgerScope>
-                        </S.IndicatorsLedgerBody>
-                        <S.IndicatorsLedgerActions>
-                          <S.IndicatorsLedgerActionBtn
-                            type="button"
-                            onClick={spec.onAction}
-                          >
-                            {spec.actionLabel}
-                          </S.IndicatorsLedgerActionBtn>
-                          <S.IndicatorsLedgerTabLink
-                            type="button"
-                            onClick={spec.onOpenTab}
-                          >
-                            {spec.tabLabel}
-                          </S.IndicatorsLedgerTabLink>
-                        </S.IndicatorsLedgerActions>
-                      </S.IndicatorsLedgerRow>
-                    </S.IndicatorsLedgerItem>
-                  ))}
-                </S.IndicatorsLedgerList>
-              </S.IndicatorsLedgerWrap>
-            </S.Section>
           )}
         </>
       )}

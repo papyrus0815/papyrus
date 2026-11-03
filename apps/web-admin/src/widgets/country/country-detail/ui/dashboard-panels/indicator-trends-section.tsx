@@ -122,6 +122,18 @@ function extractSeries(
  * 예전에는 gdpGrowthRate·populationGrowthRate 두 필드만 하드코딩해 읽어서, 사용자가 데이터 관리
  * 모달에서 GDP·1인당 GDP·출산율·기대수명·HDI를 입력해도 지면이 '자료 없음'으로 남았다.
  */
+/** 수치가 낮아질수록 긍정적이거나 상승 시 주의가 필요한 역방향 지표 */
+const INVERSE_FIELDS = new Set([
+  'unemploymentRate',
+  'inflationRate',
+  'povertyRate',
+  'giniCoefficient',
+  'debtToGdpRatio',
+  'governmentDebt',
+  'deathRate',
+  'co2EmissionsPerCapita',
+])
+
 export function IndicatorTrendsSection({
   countryId,
   countryName,
@@ -131,6 +143,7 @@ export function IndicatorTrendsSection({
   const [managerOpen, setManagerOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | IndicatorType>('ALL')
   const [showAllCharts, setShowAllCharts] = useState(false)
+  const [selectedSeriesKey, setSelectedSeriesKey] = useState<string | null>(null)
   const economicQuery = useEconomicIndicators(countryId)
   const demographicQuery = useDemographicIndicators(countryId)
   const developmentQuery = useDevelopmentIndicators(countryId)
@@ -209,20 +222,61 @@ export function IndicatorTrendsSection({
   const headlineSpecs = useMemo(() => {
     return allSeries.slice(0, 6).map((series) => {
       const sorted = [...series.points].sort((a, b) => a.year - b.year)
+      const first = sorted[0]
       const latest = sorted[sorted.length - 1]
       const prev = sorted.length >= 2 ? sorted[sorted.length - 2] : null
       const delta = latest && prev ? latest.value - prev.value : null
+      const values = sorted.map((p) => p.value)
+      const minVal = values.length > 0 ? Math.min(...values) : null
+      const maxVal = values.length > 0 ? Math.max(...values) : null
+      const fieldKey = series.key.split(':')[1] ?? ''
+      const isInverse = INVERSE_FIELDS.has(fieldKey)
+      const deltaTone: 'good' | 'caution' | 'neutral' =
+        delta == null || Math.abs(delta) <= 1e-6
+          ? 'neutral'
+          : isInverse
+            ? delta > 0
+              ? 'caution'
+              : 'good'
+            : delta > 0
+              ? 'good'
+              : 'caution'
+
       return {
         key: series.key,
+        category: series.category,
+        categoryLabel: INDICATOR_META[series.category].label,
         title: series.title,
         unit: series.unit,
+        firstYear: first?.year ?? null,
         latestYear: latest?.year ?? null,
         latestValue: latest?.value ?? null,
         prevYear: prev?.year ?? null,
         delta,
+        deltaTone,
+        pointCount: sorted.length,
+        minVal,
+        maxVal,
       }
     })
   }, [allSeries])
+
+  const handleSelectHeadline = (specKey: string, category: IndicatorType) => {
+    const nextKey = selectedSeriesKey === specKey ? null : specKey
+    setSelectedSeriesKey(nextKey)
+    if (!nextKey) return
+    if (activeCategory !== 'ALL' && activeCategory !== category) {
+      setCategoryFilter('ALL')
+    }
+    const idxInAll = allSeries.findIndex((s) => s.key === specKey)
+    if (!embeddedInTab && idxInAll >= 4) {
+      setShowAllCharts(true)
+    }
+    setTimeout(() => {
+      const el = document.getElementById(`trend-chart-${specKey}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 40)
+  }
 
   const activeCategoryCount = (
     ['economic', 'demographic', 'development'] as const
@@ -305,10 +359,21 @@ export function IndicatorTrendsSection({
                   const deltaUnit = spec.unit === '%' ? '%p' : spec.unit
                   const deltaSign =
                     spec.delta != null && spec.delta > 0 ? '+' : ''
+                  const isSelected = selectedSeriesKey === spec.key
                   return (
-                    <HeadlineCell key={spec.key}>
+                    <HeadlineCell
+                      key={spec.key}
+                      type="button"
+                      $active={isSelected}
+                      onClick={() =>
+                        handleSelectHeadline(spec.key, spec.category)
+                      }
+                    >
                       <HeadlineTop>
-                        <HeadlineTitle>{spec.title}</HeadlineTitle>
+                        <HeadlineTitleGroup>
+                          <HeadlineCatTag>{spec.categoryLabel}</HeadlineCatTag>
+                          <HeadlineTitle>{spec.title}</HeadlineTitle>
+                        </HeadlineTitleGroup>
                         <HeadlineYear>{spec.latestYear}년</HeadlineYear>
                       </HeadlineTop>
                       <HeadlineValueRow>
@@ -318,12 +383,22 @@ export function IndicatorTrendsSection({
                         {spec.delta != null &&
                           spec.prevYear != null &&
                           Math.abs(spec.delta) > 1e-6 && (
-                            <HeadlineDelta>
-                              {spec.prevYear} 대비 {deltaSign}
+                            <HeadlineDelta $tone={spec.deltaTone}>
+                              {spec.prevYear}년 대비 {deltaSign}
                               {formatMetricValue(spec.delta, deltaUnit)}
                             </HeadlineDelta>
                           )}
                       </HeadlineValueRow>
+                      {spec.pointCount >= 2 &&
+                        spec.firstYear != null &&
+                        spec.minVal != null &&
+                        spec.maxVal != null && (
+                          <HeadlineRangeNote>
+                            {spec.firstYear}–{spec.latestYear} ({spec.pointCount}
+                            개년) · {formatMetricValue(spec.minVal, spec.unit, true)} ~{' '}
+                            {formatMetricValue(spec.maxVal, spec.unit, true)}
+                          </HeadlineRangeNote>
+                        )}
                     </HeadlineCell>
                   )
                 })}
@@ -370,10 +445,13 @@ export function IndicatorTrendsSection({
                 {visibleSeries.map((series) => (
                   <IndicatorTrendChart
                     key={series.key}
+                    id={`trend-chart-${series.key}`}
                     title={series.title}
                     caption={series.caption}
                     points={series.points}
                     unit={series.unit}
+                    categoryLabel={INDICATOR_META[series.category].label}
+                    highlighted={selectedSeriesKey === series.key}
                   />
                 ))}
               </Grid>
@@ -400,25 +478,60 @@ export function IndicatorTrendsSection({
 
 const HeadlineStrip = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
-  gap: 12px 24px;
-  padding: 14px 0;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px 20px;
+  padding: 12px 0;
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const HeadlineCell = styled.div`
+const HeadlineCell = styled.button<{ $active?: boolean }>`
+  appearance: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? theme.colors.activeLight : theme.colors.hover};
+  }
 `
 
 const HeadlineTop = styled.div`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 6px;
+  width: 100%;
+`
+
+const HeadlineTitleGroup = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+`
+
+const HeadlineCatTag = styled.span`
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
 `
 
 const HeadlineTitle = styled.span`
@@ -453,11 +566,27 @@ const HeadlineVal = styled.strong`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const HeadlineDelta = styled.span`
+const HeadlineDelta = styled.span<{ $tone: 'good' | 'caution' | 'neutral' }>`
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $tone }) => {
+    if ($tone === 'neutral') return theme.colors.text.tertiary
+    if ($tone === 'good') {
+      return theme.mode === 'dark' ? '#34d399' : '#047857'
+    }
+    return theme.mode === 'dark' ? '#fca5a5' : '#b91c1c'
+  }};
+`
+
+const HeadlineRangeNote = styled.span`
+  font-size: 11px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const MoreChartsRow = styled.div`

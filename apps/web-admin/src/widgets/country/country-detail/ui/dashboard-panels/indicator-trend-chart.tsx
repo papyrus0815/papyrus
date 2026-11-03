@@ -22,12 +22,17 @@ export interface TrendPoint {
 }
 
 interface Props {
+  id?: string
   title: string
   /** 무엇을 재는 값인지 — 제목 아래 한 줄 */
   caption: string
   points: TrendPoint[]
   /** 값 뒤에 붙는 단위. 기본 '%' */
   unit?: string
+  /** 분야 태그 (경제·인구·발전) */
+  categoryLabel?: string
+  /** 상단 헤드라인에서 선택해 강조된 상태 */
+  highlighted?: boolean
 }
 
 /** 관측점을 찍는 상한 — 이보다 촘촘하면 점이 선을 덮어 오히려 안 읽힌다 */
@@ -89,7 +94,15 @@ export function formatMetricValue(
  * 값이 64개면 어느 해가 꼭짓점인지 눈으로 못 짚는다. 그래서 **최고·최저·최신 세 점만**
  * 직접 라벨을 단다(모든 점에 숫자를 붙이면 그건 목록이지 그래프가 아니다).
  */
-export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Props) {
+export function IndicatorTrendChart({
+  id,
+  title,
+  caption,
+  points,
+  unit = '%',
+  categoryLabel,
+  highlighted = false,
+}: Props) {
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const accent = isDark ? '#3987e5' : '#2a78d6'
@@ -102,11 +115,13 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
     const rows = [...points].sort((left, right) => left.year - right.year)
     if (rows.length === 0) return null
     const values = rows.map((row) => row.value)
+    const first = rows[0]
     const peak = rows.reduce((best, row) => (row.value > best.value ? row : best))
     const trough = rows.reduce((best, row) => (row.value < best.value ? row : best))
     const last = rows[rows.length - 1]
     const prev = rows.length >= 2 ? rows[rows.length - 2] : null
     const delta = prev ? last.value - prev.value : null
+    const spanDelta = rows.length >= 3 ? last.value - first.value : null
     const average = values.reduce((sum, value) => sum + value, 0) / values.length
 
     /*
@@ -136,11 +151,13 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
 
     return {
       rows,
+      first,
       peak,
       trough,
       last,
       prev,
       delta,
+      spanDelta,
       average,
       domain: [lowerAxis, upper.max] as [number, number],
       ticks,
@@ -207,40 +224,71 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
   )
 
   return (
-    <Card>
+    <Card id={id} $highlighted={highlighted}>
       <Head>
-        <Title>{title}</Title>
+        <TitleRow>
+          <Title>{title}</Title>
+          {categoryLabel && <CategoryBadge>{categoryLabel}</CategoryBadge>}
+          {chart.rows.length >= 2 && (
+            <SpanTag>
+              {chart.first.year}–{chart.last.year} ({chart.rows.length}개년)
+            </SpanTag>
+          )}
+        </TitleRow>
         <Caption>{caption}</Caption>
       </Head>
       <Summary>
         <SummaryItem>
-          <SummaryLabel>{chart.last.year}년</SummaryLabel>
+          <SummaryLabel>{chart.last.year}년 최신</SummaryLabel>
           <SummaryValue>{formatMetricValue(chart.last.value, unit)}</SummaryValue>
         </SummaryItem>
-        {chart.prev != null && chart.delta != null && (
+        {chart.rows.length === 1 ? (
           <SummaryItem>
-            <SummaryLabel>{chart.prev.year}년 대비</SummaryLabel>
-            <SummaryValue>
-              {chart.delta > 0 ? '+' : ''}
-              {formatMetricValue(
-                chart.delta,
-                unit === '%' ? '%p' : unit,
-              )}
-            </SummaryValue>
+            <SummaryLabel>관측 상태</SummaryLabel>
+            <SingleNote>단일 연도 관측치 (추가 연도 입력 시 추이선 생성)</SingleNote>
           </SummaryItem>
+        ) : (
+          <>
+            {chart.prev != null && chart.delta != null && (
+              <SummaryItem>
+                <SummaryLabel>{chart.prev.year}년 대비</SummaryLabel>
+                <SummaryValue>
+                  {chart.delta > 0 ? '+' : ''}
+                  {formatMetricValue(
+                    chart.delta,
+                    unit === '%' ? '%p' : unit,
+                  )}
+                </SummaryValue>
+              </SummaryItem>
+            )}
+            {chart.spanDelta != null && (
+              <SummaryItem>
+                <SummaryLabel>
+                  {chart.first.year}→{chart.last.year} 변화
+                </SummaryLabel>
+                <SummaryValue>
+                  {chart.spanDelta > 0 ? '+' : ''}
+                  {formatMetricValue(
+                    chart.spanDelta,
+                    unit === '%' ? '%p' : unit,
+                  )}
+                </SummaryValue>
+              </SummaryItem>
+            )}
+            <SummaryItem>
+              <SummaryLabel>기간 평균</SummaryLabel>
+              <SummaryValue>{formatMetricValue(chart.average, unit)}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>최고 {chart.peak.year}</SummaryLabel>
+              <SummaryValue>{formatMetricValue(chart.peak.value, unit)}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>최저 {chart.trough.year}</SummaryLabel>
+              <SummaryValue>{formatMetricValue(chart.trough.value, unit)}</SummaryValue>
+            </SummaryItem>
+          </>
         )}
-        <SummaryItem>
-          <SummaryLabel>기간 평균</SummaryLabel>
-          <SummaryValue>{formatMetricValue(chart.average, unit)}</SummaryValue>
-        </SummaryItem>
-        <SummaryItem>
-          <SummaryLabel>최고 {chart.peak.year}</SummaryLabel>
-          <SummaryValue>{formatMetricValue(chart.peak.value, unit)}</SummaryValue>
-        </SummaryItem>
-        <SummaryItem>
-          <SummaryLabel>최저 {chart.trough.year}</SummaryLabel>
-          <SummaryValue>{formatMetricValue(chart.trough.value, unit)}</SummaryValue>
-        </SummaryItem>
       </Summary>
 
       <Plot>
@@ -361,14 +409,25 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
   )
 }
 
-const Card = styled.div`
+const Card = styled.div<{ $highlighted?: boolean }>`
   display: flex;
   flex-direction: column;
   min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid
+    ${({ theme, $highlighted }) =>
+      $highlighted ? theme.colors.primary : theme.colors.border.light};
 `
 
 const Head = styled.div`
   margin-bottom: 10px;
+`
+
+const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
 `
 
 const Title = styled.h3`
@@ -376,6 +435,24 @@ const Title = styled.h3`
   font-size: 14.5px;
   font-weight: 800;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CategoryBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
+const SpanTag = styled.span`
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Caption = styled.p`
@@ -388,7 +465,7 @@ const Caption = styled.p`
 const Summary = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: 8px 20px;
   margin-bottom: 12px;
 `
 
@@ -399,18 +476,24 @@ const SummaryItem = styled.div`
 `
 
 const SummaryLabel = styled.span`
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const SummaryValue = styled.span`
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SingleNote = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Plot = styled.div`

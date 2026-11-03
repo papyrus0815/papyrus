@@ -257,6 +257,24 @@ export function PopulationPyramidSection({
     [current],
   )
 
+  const workingShare = useMemo(() => {
+    if (!shares) return null
+    return Math.max(0, 100 - shares.young - shares.old)
+  }, [shares])
+
+  const peakBracket = useMemo(() => {
+    if (!current || current.rows.length === 0 || current.totals.total <= 0) {
+      return null
+    }
+    const best = current.rows.reduce((acc, row) =>
+      row.total > acc.total ? row : acc,
+    )
+    return {
+      label: bracketFormLabel(best.bracket),
+      share: (best.total / current.totals.total) * 100,
+    }
+  }, [current])
+
   const manager = (
     <CountryDataManagerModal
       countryId={countryId}
@@ -355,6 +373,8 @@ export function PopulationPyramidSection({
   return (
     <S.Section $wide>
       <Title
+        yearCount={years.length}
+        activeYear={current?.year ?? null}
         onRegister={embeddedInTab ? null : () => setManagerOpen(true)}
         onOpenDetailTab={onOpenDetailTab}
       />
@@ -415,6 +435,12 @@ export function PopulationPyramidSection({
                     <StatLabel>{shares.youngLabel}</StatLabel>
                     <StatValue>{percent(shares.young)}</StatValue>
                   </Stat>
+                  {workingShare != null && (
+                    <Stat>
+                      <StatLabel>20–59세 (핵심 생산연령)</StatLabel>
+                      <StatValue>{percent(workingShare)}</StatValue>
+                    </Stat>
+                  )}
                   <Stat>
                     <StatLabel>{shares.oldLabel}</StatLabel>
                     <StatValue>{percent(shares.old)}</StatValue>
@@ -428,6 +454,15 @@ export function PopulationPyramidSection({
                     </Stat>
                   )}
                 </>
+              )}
+              {peakBracket && (
+                <Stat>
+                  <StatLabel>최다 연령층</StatLabel>
+                  <StatValue>
+                    {peakBracket.label}
+                    <StatSub>{percent(peakBracket.share)}</StatSub>
+                  </StatValue>
+                </Stat>
               )}
               <Stat>
                 {/* '98.0'만 두면 무엇 대비인지 알 수 없다 — 분모를 라벨에 적는다 */}
@@ -443,6 +478,39 @@ export function PopulationPyramidSection({
               </Stat>
             </StatGrid>
           </StatsRow>
+
+          {shares && workingShare != null && (
+            <AgeStructureBar aria-label="연령대별 인구 비중 구성">
+              <AgeStructureTrack>
+                <AgeSegment
+                  $tone="young"
+                  style={{ width: `${shares.young}%` }}
+                  title={`${shares.youngLabel}: ${percent(shares.young)}`}
+                />
+                <AgeSegment
+                  $tone="working"
+                  style={{ width: `${workingShare}%` }}
+                  title={`20–59세: ${percent(workingShare)}`}
+                />
+                <AgeSegment
+                  $tone="old"
+                  style={{ width: `${shares.old}%` }}
+                  title={`${shares.oldLabel}: ${percent(shares.old)}`}
+                />
+              </AgeStructureTrack>
+              <AgeStructureLegend>
+                <AgeLegendItem $tone="young">
+                  {shares.youngLabel} {percent(shares.young)}
+                </AgeLegendItem>
+                <AgeLegendItem $tone="working">
+                  20–59세 {percent(workingShare)}
+                </AgeLegendItem>
+                <AgeLegendItem $tone="old">
+                  {shares.oldLabel} {percent(shares.old)}
+                </AgeLegendItem>
+              </AgeStructureLegend>
+            </AgeStructureBar>
+          )}
 
           {baseline && baseline.year !== current.year && (
             <ChartToolbar>
@@ -606,9 +674,13 @@ function PyramidTooltip({
 }
 
 function Title({
+  yearCount,
+  activeYear,
   onRegister,
   onOpenDetailTab,
 }: {
+  yearCount?: number
+  activeYear?: number | null
   /** null이면 버튼을 내지 않는다 — 빈 자리 CTA와 라벨이 글자까지 같아 두 번 나온다 */
   onRegister: (() => void) | null
   onOpenDetailTab?: () => void
@@ -616,10 +688,15 @@ function Title({
   return (
     <S.SectionTitleRow>
       <S.SectionTitleIcon>
-        <IconChart />
+        <IconUsers />
       </S.SectionTitleIcon>
       <S.SectionTitleText>인구 피라미드</S.SectionTitleText>
       <SectionHelpPopover sectionKey="pyramid" />
+      {yearCount != null && yearCount > 0 && (
+        <S.SectionCountChip>
+          {yearCount}개 연도{activeYear ? ` · ${activeYear}년 기준` : ''}
+        </S.SectionCountChip>
+      )}
       {/* 이 자리에 버튼이 없으면 등록 진입점이 '지표 추이'의 작은 버튼 하나뿐이다 */}
       {onRegister && (
         <S.SectionAction type="button" onClick={onRegister}>
@@ -736,6 +813,61 @@ const StatSub = styled.span`
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const AgeStructureBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+`
+
+const AgeStructureTrack = styled.div`
+  display: flex;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  gap: 2px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
+const AGE_SEGMENT_COLOR = {
+  young: { light: '#38bdf8', dark: '#38bdf8' },
+  working: { light: '#6366f1', dark: '#818cf8' },
+  old: { light: '#f59e0b', dark: '#fbbf24' },
+} as const
+
+const AgeSegment = styled.span<{ $tone: 'young' | 'working' | 'old' }>`
+  height: 100%;
+  background: ${({ theme, $tone }) =>
+    AGE_SEGMENT_COLOR[$tone][theme.mode === 'dark' ? 'dark' : 'light']};
+`
+
+const AgeStructureLegend = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+`
+
+const AgeLegendItem = styled.span<{ $tone: 'young' | 'working' | 'old' }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: ${({ theme, $tone }) =>
+      AGE_SEGMENT_COLOR[$tone][theme.mode === 'dark' ? 'dark' : 'light']};
+  }
 `
 
 const ChartToolbar = styled.div`

@@ -1624,7 +1624,7 @@ export const IndicatorsLedgerRow = styled.div`
   box-sizing: border-box;
 `
 
-export const IndicatorsLedgerIcon = styled.span`
+export const IndicatorsLedgerIcon = styled.span<{ $filled?: boolean }>`
   width: 34px;
   height: 34px;
   border-radius: 8px;
@@ -1632,10 +1632,27 @@ export const IndicatorsLedgerIcon = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15, 23, 42, 0.04)'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme, $filled }) =>
+    $filled
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.16)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.05)'
+        : 'rgba(15, 23, 42, 0.04)'};
+  color: ${({ theme, $filled }) =>
+    $filled
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'
+      : theme.colors.text.secondary};
+  border: 1px solid
+    ${({ theme, $filled }) =>
+      $filled
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.35)'
+          : 'rgba(99, 102, 241, 0.22)'
+        : theme.colors.border.light};
 
   svg {
     width: 15px;
@@ -1666,22 +1683,36 @@ export const IndicatorsLedgerTitle = styled.span`
   white-space: nowrap;
 `
 
-export const IndicatorsLedgerStatus = styled.span`
+export const IndicatorsLedgerStatus = styled.span<{ $filled?: boolean }>`
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 10.5px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15, 23, 42, 0.045)'};
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $filled }) =>
+    $filled
+      ? theme.mode === 'dark'
+        ? '#34d399'
+        : '#047857'
+      : theme.colors.text.tertiary};
+  background: ${({ theme, $filled }) =>
+    $filled
+      ? theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.15)'
+        : 'rgba(16, 185, 129, 0.09)'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15, 23, 42, 0.045)'};
 `
 
-export const IndicatorsLedgerScope = styled.span`
+export const IndicatorsLedgerScope = styled.span<{ $filled?: boolean }>`
   font-size: 12px;
-  font-weight: 500;
+  font-weight: ${({ $filled }) => ($filled ? 600 : 500)};
+  font-variant-numeric: tabular-nums;
   line-height: 1.4;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme, $filled }) =>
+    $filled ? theme.colors.text.primary : theme.colors.text.secondary};
   word-break: keep-all;
 `
 
@@ -1692,16 +1723,52 @@ export const IndicatorsLedgerActions = styled.div`
   flex-shrink: 0;
 `
 
-export const IndicatorsLedgerActionBtn = styled.button`
+export const IndicatorsLedgerFocusBtn = styled.button<{ $active?: boolean }>`
+  appearance: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.border.medium};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+export const IndicatorsLedgerActionBtn = styled.button<{ $filled?: boolean }>`
   appearance: none;
   padding: 6px 12px;
   border-radius: 7px;
   border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.42)' : 'rgba(99,102,241,0.28)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+    ${({ theme, $filled }) =>
+      $filled
+        ? theme.colors.border.medium
+        : theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.42)'
+          : 'rgba(99,102,241,0.28)'};
+  background: ${({ theme, $filled }) =>
+    $filled
+      ? 'transparent'
+      : theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.16)'
+        : 'rgba(99,102,241,0.08)'};
+  color: ${({ theme, $filled }) =>
+    $filled
+      ? theme.colors.text.secondary
+      : theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'};
   font-family: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -1712,10 +1779,18 @@ export const IndicatorsLedgerActionBtn = styled.button`
     border-color 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.26)'
-        : 'rgba(99,102,241,0.16)'};
+    color: ${({ theme, $filled }) =>
+      $filled
+        ? theme.colors.text.primary
+        : theme.mode === 'dark'
+          ? '#a5b4fc'
+          : '#4f46e5'};
+    background: ${({ theme, $filled }) =>
+      $filled
+        ? theme.colors.hover
+        : theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.26)'
+          : 'rgba(99,102,241,0.16)'};
   }
 `
 
@@ -1735,6 +1810,44 @@ export const IndicatorsLedgerTabLink = styled.button`
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+export const IndicatorsFilterBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+`
+
+export const IndicatorsFilterChip = styled.button<{ $active: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.text.primary};
   }
 `
 

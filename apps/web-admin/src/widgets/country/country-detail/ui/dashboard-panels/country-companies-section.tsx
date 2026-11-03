@@ -7,7 +7,10 @@ import styled from 'styled-components'
 import { companyApi } from '@/shared/api/company'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
-import { CompanyRegisterModal } from '@/widgets/company-form'
+import {
+  COMPANY_STATUS_META,
+  CompanyRegisterModal,
+} from '@/widgets/company-form'
 
 import { IconBriefcase } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
@@ -20,6 +23,8 @@ const DASHBOARD_COMPANY_LIMIT = 8
 interface CountryCompaniesSectionProps {
   countryId?: string
   historicalCountryId?: string
+  /** 현대 국가와 연결된 과거 국가 ID 목록 — 전신 국가 소속 기업까지 함께 집계 */
+  linkedHistoricalCountryIds?: string[]
   /** 국가 상세 내부 '기업' 탭으로 이동 */
   onOpenTab?: () => void
 }
@@ -47,16 +52,22 @@ function year(iso: string | null): string | null {
 export function CountryCompaniesSection({
   countryId,
   historicalCountryId,
+  linkedHistoricalCountryIds,
   onOpenTab,
 }: CountryCompaniesSectionProps) {
   const navigate = useNavigate()
-  const [registerOpen, setRegisterOpen] = useState(false)
+  const [modalTarget, setModalTarget] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const { data, isLoading } = useQuery({
     queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
     staleTime: 60_000,
   })
+
+  const linkedHistSet = useMemo(
+    () => new Set(linkedHistoricalCountryIds ?? []),
+    [linkedHistoricalCountryIds],
+  )
 
   const companies = useMemo(() => {
     /* 설립순 — 역사 기록이니 오래된 것이 위다. 연도 미상은 끝으로. */
@@ -66,6 +77,13 @@ export function CountryCompaniesSection({
         if (
           historicalCountryId &&
           company.historicalCountryId === historicalCountryId
+        ) {
+          return true
+        }
+        if (
+          countryId &&
+          company.historicalCountryId &&
+          linkedHistSet.has(company.historicalCountryId)
         ) {
           return true
         }
@@ -79,7 +97,7 @@ export function CountryCompaniesSection({
         if (rightYear) return 1
         return left.name.localeCompare(right.name, 'ko-KR')
       })
-  }, [data, countryId, historicalCountryId])
+  }, [data, countryId, historicalCountryId, linkedHistSet])
 
   const targetId = countryId ?? historicalCountryId ?? ''
   const handleOpenAll = () => {
@@ -94,14 +112,16 @@ export function CountryCompaniesSection({
     navigate(pathKeys.companies.root())
   }
 
-  const registerModal = registerOpen ? (
-    <CompanyRegisterModal
-      isOpen={registerOpen}
-      onClose={() => setRegisterOpen(false)}
-      defaultCountryId={countryId}
-      defaultHistoricalCountryId={historicalCountryId}
-    />
-  ) : null
+  const registerModal =
+    modalTarget !== null ? (
+      <CompanyRegisterModal
+        isOpen
+        onClose={() => setModalTarget(null)}
+        companyId={modalTarget === 'new' ? undefined : modalTarget}
+        defaultCountryId={countryId}
+        defaultHistoricalCountryId={historicalCountryId}
+      />
+    ) : null
 
   if (isLoading) {
     return (
@@ -135,7 +155,7 @@ export function CountryCompaniesSection({
           text="이 국가에 등록된 기업이 아직 없습니다. 기업을 등록하면 설립·본사·창업자가 여기 이어 붙습니다."
           hint="본사 소재 기업을 등록하면 산업 분야 분포와 설립 연도순 요약이 생성됩니다"
           actionLabel="기업 등록"
-          onAction={() => setRegisterOpen(true)}
+          onAction={() => setModalTarget('new')}
         />
         {registerModal}
       </S.Section>
@@ -146,8 +166,32 @@ export function CountryCompaniesSection({
     ? companies
     : companies.slice(0, DASHBOARD_COMPANY_LIMIT)
   const hiddenCount = companies.length - visibleCompanies.length
-  const activeCount = companies.filter((c) => !c.dissolvedAt).length
+  const activeCount = companies.filter(
+    (c) => !c.dissolvedAt && (!c.status || c.status === 'ACTIVE'),
+  ).length
   const dissolvedCount = companies.length - activeCount
+
+  const foundedYears = companies
+    .map((c) => year(c.foundedAt))
+    .filter((y): y is string => y != null)
+    .map(Number)
+    .filter(Number.isFinite)
+  const earliestYear =
+    foundedYears.length > 0 ? Math.min(...foundedYears) : null
+
+  const topCitiesText = (() => {
+    const counts = new Map<string, number>()
+    for (const c of companies) {
+      const city = c.headquartersCity?.name?.trim()
+      if (city) counts.set(city, (counts.get(city) ?? 0) + 1)
+    }
+    if (counts.size === 0) return null
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name, cnt]) => `${name} ${cnt}`)
+      .join(' · ')
+  })()
 
   return (
     <S.Section $wide>
@@ -160,13 +204,13 @@ export function CountryCompaniesSection({
         <S.SectionCountChip>{companies.length}개</S.SectionCountChip>
         {dissolvedCount > 0 && (
           <S.SectionCountChip>
-            존속 {activeCount} · 해산 {dissolvedCount}
+            활동 {activeCount} · 종료 {dissolvedCount}
           </S.SectionCountChip>
         )}
         <S.SectionHeaderActions>
           <S.SectionAction
             type="button"
-            onClick={() => setRegisterOpen(true)}
+            onClick={() => setModalTarget('new')}
           >
             + 기업 등록
           </S.SectionAction>
@@ -176,12 +220,44 @@ export function CountryCompaniesSection({
         </S.SectionHeaderActions>
       </S.SectionTitleRow>
 
+      <CompanyHeadlineStrip aria-label="기업 요약 지표">
+        <CompanyHeadlineCell>
+          <CompanyHeadlineLabel>등록 기업</CompanyHeadlineLabel>
+          <CompanyHeadlineVal>{companies.length}개</CompanyHeadlineVal>
+        </CompanyHeadlineCell>
+        <CompanyHeadlineCell>
+          <CompanyHeadlineLabel>활동 중</CompanyHeadlineLabel>
+          <CompanyHeadlineVal>{activeCount}개</CompanyHeadlineVal>
+        </CompanyHeadlineCell>
+        {dissolvedCount > 0 && (
+          <CompanyHeadlineCell>
+            <CompanyHeadlineLabel>해산 · 합병 · 중단</CompanyHeadlineLabel>
+            <CompanyHeadlineVal>{dissolvedCount}개</CompanyHeadlineVal>
+          </CompanyHeadlineCell>
+        )}
+        {earliestYear != null && (
+          <CompanyHeadlineCell>
+            <CompanyHeadlineLabel>최초 설립 기록</CompanyHeadlineLabel>
+            <CompanyHeadlineVal>{earliestYear}년</CompanyHeadlineVal>
+          </CompanyHeadlineCell>
+        )}
+        {topCitiesText && (
+          <CompanyHeadlineCell>
+            <CompanyHeadlineLabel>주요 본사 도시</CompanyHeadlineLabel>
+            <CompanyHeadlineSubVal>{topCitiesText}</CompanyHeadlineSubVal>
+          </CompanyHeadlineCell>
+        )}
+      </CompanyHeadlineStrip>
+
       <LedgerWrap>
         <List>
           {visibleCompanies.map((company) => {
             const anyCompany = company as unknown as Record<string, any>
             const founded = year(company.foundedAt)
             const dissolved = year(company.dissolvedAt)
+            const effectiveStatus =
+              company.status ?? (dissolved ? 'DISSOLVED' : 'ACTIVE')
+            const statusMeta = COMPANY_STATUS_META[effectiveStatus]
             const ticker =
               typeof anyCompany.ticker === 'string' && anyCompany.ticker.trim()
                 ? anyCompany.ticker.trim()
@@ -192,49 +268,73 @@ export function CountryCompaniesSection({
                 : typeof anyCompany.sector === 'string' && anyCompany.sector.trim()
                   ? anyCompany.sector.trim()
                   : null
+            const periodLabel = founded
+              ? dissolved
+                ? `${founded}–${dissolved}`
+                : effectiveStatus === 'ACTIVE'
+                  ? `${founded}–현재`
+                  : `${founded}년 설립`
+              : null
             /* 있는 사실만 잇는다 — 빈 칸을 만들면 '모른다'가 지면의 절반이 된다 */
             const facts = [
               company.shortName && company.shortName !== company.name
                 ? company.shortName
                 : null,
               industry,
-              founded && (dissolved ? `${founded}–${dissolved}` : `${founded}년 설립`),
-              company.headquartersCity?.name,
+              company.headquartersCity?.name &&
+                `본사 ${company.headquartersCity.name}`,
               company.founder?.name && `창업 ${company.founder.name}`,
             ].filter(Boolean) as string[]
 
             return (
               <Item key={company.id}>
-                <Row
-                  type="button"
-                  onClick={() => navigate(pathKeys.companies.detail(company.id))}
-                >
-                  <Logo aria-hidden>
-                    {company.logoUrl ? (
-                      <img src={getUploadImageUrl(company.logoUrl)} alt="" />
-                    ) : (
-                      company.name.slice(0, 1)
-                    )}
-                  </Logo>
-                  <Body>
-                    <NameRow>
-                      <Name>{company.name}</Name>
-                      {ticker && <TickerBadge>{ticker}</TickerBadge>}
-                      {dissolved && <Dissolved>해산</Dissolved>}
-                    </NameRow>
-                    {facts.length > 0 && (
-                      <Facts>
-                        {facts.map((fact, index) => (
-                          <Fact key={`${fact}-${index}`}>
-                            {index > 0 && <Sep aria-hidden>·</Sep>}
-                            {fact}
-                          </Fact>
-                        ))}
-                      </Facts>
-                    )}
-                  </Body>
-                  <Chevron aria-hidden>›</Chevron>
-                </Row>
+                <RowWrap>
+                  <RowMain
+                    type="button"
+                    onClick={() => navigate(pathKeys.companies.detail(company.id))}
+                  >
+                    <Logo aria-hidden>
+                      {company.logoUrl ? (
+                        <img src={getUploadImageUrl(company.logoUrl)} alt="" />
+                      ) : (
+                        company.name.slice(0, 1)
+                      )}
+                    </Logo>
+                    <Body>
+                      <NameRow>
+                        <Name>{company.name}</Name>
+                        {ticker && <TickerBadge>{ticker}</TickerBadge>}
+                        <StatusBadge $tone={statusMeta.tone}>
+                          {statusMeta.label}
+                        </StatusBadge>
+                        {countryId && company.historicalCountry?.name && (
+                          <HistoricalBadge>
+                            {company.historicalCountry.name}
+                          </HistoricalBadge>
+                        )}
+                      </NameRow>
+                      {facts.length > 0 && (
+                        <Facts>
+                          {facts.map((fact, index) => (
+                            <Fact key={`${fact}-${index}`}>
+                              {index > 0 && <Sep aria-hidden>·</Sep>}
+                              {fact}
+                            </Fact>
+                          ))}
+                        </Facts>
+                      )}
+                    </Body>
+                  </RowMain>
+                  <RightMeta>
+                    {periodLabel && <PeriodChip>{periodLabel}</PeriodChip>}
+                    <EditActionBtn
+                      type="button"
+                      onClick={() => setModalTarget(company.id)}
+                    >
+                      수정
+                    </EditActionBtn>
+                  </RightMeta>
+                </RowWrap>
               </Item>
             )
           })}
@@ -259,6 +359,46 @@ export function CountryCompaniesSection({
 /*
  * 무컨테이너 2열 헤어라인 원장 — 외곽 박스 카드를 걷고 위·아래 실선과 열 구분선으로 정돈.
  */
+const CompanyHeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 24px;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const CompanyHeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const CompanyHeadlineLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CompanyHeadlineVal = styled.strong`
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CompanyHeadlineSubVal = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
 const LedgerWrap = styled.div`
   container-type: inline-size;
   display: flex;
@@ -294,10 +434,18 @@ const Item = styled.li`
   }
 `
 
-const Row = styled.button`
+const RowWrap = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+`
+
+const RowMain = styled.button`
   appearance: none;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -317,6 +465,41 @@ const Row = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: -2px;
+  }
+`
+
+const RightMeta = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-right: 4px;
+`
+
+const PeriodChip = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+const EditActionBtn = styled.button`
+  appearance: none;
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 
@@ -377,15 +560,47 @@ const TickerBadge = styled.span`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
 `
 
-const Dissolved = styled.span`
+const StatusBadge = styled.span<{ $tone: string }>`
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme, $tone }) => {
+    if ($tone === 'emerald') {
+      return theme.mode === 'dark' ? '#34d399' : '#047857'
+    }
+    if ($tone === 'amber') {
+      return theme.mode === 'dark' ? '#fbbf24' : '#b45309'
+    }
+    return theme.colors.text.tertiary
+  }};
+  background: ${({ theme, $tone }) => {
+    if ($tone === 'emerald') {
+      return theme.mode === 'dark'
+        ? 'rgba(16,185,129,0.14)'
+        : 'rgba(16,185,129,0.09)'
+    }
+    if ($tone === 'amber') {
+      return theme.mode === 'dark'
+        ? 'rgba(245,158,11,0.14)'
+        : 'rgba(245,158,11,0.09)'
+    }
+    return theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.06)'
+      : 'rgba(15,23,42,0.05)'
+  }};
+`
+
+const HistoricalBadge = styled.span`
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.045)'};
 `
 
 const Facts = styled.span`
