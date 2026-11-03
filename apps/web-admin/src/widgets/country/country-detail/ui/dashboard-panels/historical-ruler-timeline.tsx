@@ -404,7 +404,7 @@ const AxisFilterCount = styled.span`
 const Cards = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 8px;
+  gap: 4px 20px;
 `
 
 const RulerCard = styled.button`
@@ -412,19 +412,18 @@ const RulerCard = styled.button`
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding: 10px 4px;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
   font: inherit;
   text-align: left;
   color: inherit;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease;
 
   &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.activeLight};
+    background: ${({ theme }) => theme.colors.hover};
   }
 
   &:focus-visible {

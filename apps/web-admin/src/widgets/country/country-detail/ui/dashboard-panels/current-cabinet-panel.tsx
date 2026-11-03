@@ -1643,6 +1643,7 @@ export function CurrentCabinetPanel({
           </>
         ) : elections.length > 0 ? (
           <>
+            <ElectionMuted>—</ElectionMuted>
             <ElectionLink
               type="button"
               onClick={() => setElectionPickerOpen(true)}
@@ -1655,7 +1656,7 @@ export function CurrentCabinetPanel({
           </>
         ) : (
           <>
-            <ElectionMuted>등록된 선거가 없습니다</ElectionMuted>
+            <ElectionMuted>—</ElectionMuted>
             <ElectionLink type="button" onClick={onOpenElections}>
               + 선거 등록
             </ElectionLink>
@@ -1873,28 +1874,16 @@ export function CurrentCabinetPanel({
       usedPositionLabels.add(normalized)
       deptSlots.push({
         key: `dept:${dept.id}`,
-        node: (
-          <GhostSlot
-            type="button"
-            onClick={() =>
-              openRegister(
-                dept.id,
-                positionLabel,
-                'minister',
-                dept.name,
-                positionLabel,
-              )
-            }
-            title={`${positionLabel} (${dept.name}) 각료 재임 등록`}
-          >
-            <SlotCircle aria-hidden>+</SlotCircle>
-            <SlotText>
-              <SlotTitle>{positionLabel}</SlotTitle>
-              <SlotSubLabel>{dept.name} · 공석</SlotSubLabel>
-            </SlotText>
-            <SlotActionPill>+ 등록</SlotActionPill>
-          </GhostSlot>
-        ),
+        title: positionLabel,
+        subtitle: dept.name,
+        onClick: () =>
+          openRegister(
+            dept.id,
+            positionLabel,
+            'minister',
+            dept.name,
+            positionLabel,
+          ),
       })
     }
 
@@ -1922,28 +1911,16 @@ export function CurrentCabinetPanel({
       usedPositionLabels.add(normalized)
       presetSlots.push({
         key: `preset:${frame.id}:${item.slot}:${item.name}`,
-        node: (
-          <GhostSlot
-            type="button"
-            onClick={() =>
-              openRegister(
-                null,
-                positionLabel,
-                'minister',
-                null,
-                positionLabel,
-              )
-            }
-            title={`${positionLabel} 각료 재임 등록`}
-          >
-            <SlotCircle aria-hidden>+</SlotCircle>
-            <SlotText>
-              <SlotTitle>{positionLabel}</SlotTitle>
-              <SlotSubLabel>{item.name} · 공석</SlotSubLabel>
-            </SlotText>
-            <SlotActionPill>+ 등록</SlotActionPill>
-          </GhostSlot>
-        ),
+        title: positionLabel,
+        subtitle: item.name,
+        onClick: () =>
+          openRegister(
+            null,
+            positionLabel,
+            'minister',
+            null,
+            positionLabel,
+          ),
       })
     }
 
@@ -2734,14 +2711,10 @@ const SkeletonHead = styled.div<{ $ghost?: boolean }>`
   display: flex;
   align-items: center;
   gap: 22px;
-  padding: 18px 22px;
-  margin-bottom: 16px;
-  /* 불러온 뒤의 수반 카드와 같은 모서리·면 — 자료가 와도 틀이 그대로다 */
-  border-radius: 20px;
-  /* 점선 = 채워야 할 자리. 실선은 '불러오는 중인 실제 카드'로 읽힌다 */
-  border: 1px ${({ $ghost }) => ($ghost ? 'dashed' : 'solid')}
-    ${({ theme }) => theme.colors.border.medium};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 6px 0 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
 `
 
 const SkeletonHeadText = styled.div`
@@ -2783,9 +2756,8 @@ const SkeletonCell = styled.div`
   align-items: center;
   gap: 9px;
   height: 54px;
-  padding: 0 12px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding: 0 8px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const SkeletonCellText = styled.div`
@@ -3437,15 +3409,11 @@ const WonChip = styled.span`
  * 예전엔 폭 전체를 가로지르는 납작한 띠라 위의 지도와 남남으로 보였다.
  */
 const ElectionPanel = styled.section`
-  /* 본문 2열 판정은 화면이 아니라 이 카드의 폭으로 한다 */
+  /* 본문 2열 판정은 화면이 아니라 이 섹션의 폭으로 한다 */
   container-type: inline-size;
-  padding: 18px 20px;
-  border-radius: 18px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.025)'
-      : 'rgba(15,23,42,0.015)'};
+  padding: 14px 0 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
 `
 
 const ElectionHead = styled.div`
@@ -4002,28 +3970,18 @@ const TrackBadge = styled.span<{ $monarch?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
+  padding: 2px 10px 2px 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 11.5px;
   font-weight: 800;
   letter-spacing: -0.01em;
   white-space: nowrap;
   color: ${({ $monarch, theme }) =>
     $monarch
       ? theme.mode === 'dark'
-        ? '#fde68a'
-        : '#92400e'
-      : theme.mode === 'dark'
-        ? '#c7d2fe'
-        : '#3730a3'};
-  background: ${({ $monarch, theme }) =>
-    $monarch
-      ? theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.18)'
-        : '#fef3c7'
-      : theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.18)'
-        : '#e0e7ff'};
+        ? '#fbbf24'
+        : '#b45309'
+      : theme.colors.text.secondary};
 `
 
 const CabinetStrip = styled.div`

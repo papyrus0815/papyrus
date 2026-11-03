@@ -1,12 +1,22 @@
-import { Fragment, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 
 import styled, { css } from 'styled-components'
 
 import type { CabinetMember } from './cabinet-member.types'
 
+const EMPTY_EXECUTIVE_SPECS = [
+  '직위 · 칭호',
+  '취임 · 즉위',
+  '재임 · 재위',
+  '소속 각료',
+  '선출 · 계승',
+] as const
+
 export interface CabinetBranchSlot {
   key: string
-  node: ReactNode
+  title: string
+  subtitle?: string | null
+  onClick: () => void
 }
 
 export interface CabinetMindMapProps {
@@ -184,7 +194,7 @@ export function CabinetMindMap({
 
   type CombinedBranchItem =
     | { kind: 'member'; key: string; member: CabinetMember }
-    | { kind: 'slot'; key: string; node: ReactNode }
+    | { kind: 'slot'; key: string; slot: CabinetBranchSlot }
 
   const combinedBranches: CombinedBranchItem[] = [
     ...visible.map((member) => ({
@@ -195,7 +205,7 @@ export function CabinetMindMap({
     ...extraSlots.map((slot) => ({
       kind: 'slot' as const,
       key: `s:${slot.key}`,
-      node: slot.node,
+      slot,
     })),
   ]
   const hasBranches = combinedBranches.length > 0
@@ -216,6 +226,34 @@ export function CabinetMindMap({
   const pivot = Math.ceil(combinedBranches.length / 2)
   const leftItems = combinedBranches.slice(0, pivot)
   const rightItems = combinedBranches.slice(pivot)
+
+  if (!head) {
+    return (
+      <EmptyBlockButton
+        type="button"
+        onClick={() => onRegisterCabinetHead?.()}
+        aria-label="군주 · 수반 등록"
+      >
+        <EmptyHeadRow>
+          <EmptyAccentBar aria-hidden />
+          <EmptyHeadline>아직 등록된 군주 · 수반이 없습니다</EmptyHeadline>
+          <EmptyPeriod>
+            {emptyHeadRoleLabel ?? '국가원수 · 정부수반'} · 재위·재임 기간 미입력
+          </EmptyPeriod>
+          {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
+          {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
+        </EmptyHeadRow>
+        <EmptySpecStrip>
+          {EMPTY_EXECUTIVE_SPECS.map((label) => (
+            <EmptySpecColumn key={label}>
+              <EmptySpecKey>{label}</EmptySpecKey>
+              <EmptySpecValue>—</EmptySpecValue>
+            </EmptySpecColumn>
+          ))}
+        </EmptySpecStrip>
+      </EmptyBlockButton>
+    )
+  }
 
   return (
     <MapWrap>
@@ -251,7 +289,11 @@ export function CabinetMindMap({
                     onSelectPerson={onSelectPerson}
                   />
                 ) : (
-                  <Fragment key={item.key}>{item.node}</Fragment>
+                  <VacantBranchNode
+                    key={item.key}
+                    slot={item.slot}
+                    side="left"
+                  />
                 ),
               )}
             </SideGroup>
@@ -263,179 +305,124 @@ export function CabinetMindMap({
             {showSovereignAbove && (
               <>
                 <CounterpartDeck $branches={hasBranches}>
-                  {counterparts.length > 0 ? (
-                    counterparts.map((cp) => (
-                      <SovereignPairCard
-                        key={cp.id}
-                        $monarch={Boolean(cp.isMonarchical)}
-                        $branches={hasBranches}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() =>
-                          cp.personId && onSelectPerson(cp.personId)
+                  {counterparts.map((cp) => (
+                    <SovereignPairCard
+                      key={cp.id}
+                      $monarch={Boolean(cp.isMonarchical)}
+                      $branches={hasBranches}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        cp.personId && onSelectPerson(cp.personId)
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          (event.key === 'Enter' || event.key === ' ') &&
+                          cp.personId
+                        ) {
+                          event.preventDefault()
+                          onSelectPerson(cp.personId)
                         }
-                        onKeyDown={(event) => {
-                          if (
-                            (event.key === 'Enter' || event.key === ' ') &&
-                            cp.personId
-                          ) {
-                            event.preventDefault()
-                            onSelectPerson(cp.personId)
-                          }
-                        }}
-                        title={`${cp.title} ${cp.name} 인물 상세`}
-                      >
-                        <SovereignPairFace $monarch={Boolean(cp.isMonarchical)}>
-                          {renderFace(cp, 44)}
-                        </SovereignPairFace>
-                        <SovereignPairBody>
-                          <SovereignPairTop>
-                            <SovereignPairBadge
-                              $monarch={Boolean(cp.isMonarchical)}
-                            >
-                              {cp.isMonarchical ? '재위 군주' : '국가원수·수반'}
-                            </SovereignPairBadge>
-                            <SovereignPairRole>
-                              {cp.ordinal != null && `제${cp.ordinal}대 `}
-                              {cp.title}
-                            </SovereignPairRole>
-                            {cp.regnalEraLabel && (
-                              <SovereignEraTag>
-                                {cp.regnalEraLabel}
-                              </SovereignEraTag>
-                            )}
-                            {cp.polityLabel && cp.polityLabel !== polityLabel && (
-                              <SovereignPolityTag>
-                                {cp.polityLabel}
-                              </SovereignPolityTag>
-                            )}
-                          </SovereignPairTop>
-                          <SovereignPairNameRow>
-                            <SovereignPairName>{cp.name}</SovereignPairName>
-                            {(cp.startDate || cp.endDate) && (
-                              <SovereignPairPeriod>
-                                {formatPeriodText(cp.startDate, cp.endDate)}
-                              </SovereignPairPeriod>
-                            )}
-                          </SovereignPairNameRow>
-                        </SovereignPairBody>
-                        {onSelectCounterpartHead && (
-                          <SovereignSwitchBtn
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              onSelectCounterpartHead(cp)
-                            }}
-                            title={`${cp.name} 재위기 전체 보기`}
-                          >
-                            {cp.isMonarchical ? '치세 보기' : '수반 보기'}
-                          </SovereignSwitchBtn>
-                        )}
-                      </SovereignPairCard>
-                    ))
-                  ) : (
-                    <SovereignEmptyButton
-                      type="button"
-                      onClick={() => onRegisterCounterpartHead?.()}
+                      }}
+                      title={`${cp.title} ${cp.name} 인물 상세`}
                     >
-                      <SovereignPairBadge $monarch>
-                        재위 군주·원수
-                      </SovereignPairBadge>
-                      <SovereignEmptyLabel>
-                        + 동시대 군주·국가원수 등록
-                      </SovereignEmptyLabel>
-                    </SovereignEmptyButton>
-                  )}
+                      <SovereignPairFace $monarch={Boolean(cp.isMonarchical)}>
+                        {renderFace(cp, 40)}
+                      </SovereignPairFace>
+                      <SovereignPairBody>
+                        <SovereignPairTop>
+                          <SovereignPairBadge
+                            $monarch={Boolean(cp.isMonarchical)}
+                          >
+                            {cp.isMonarchical ? '재위 군주' : '국가원수·수반'}
+                          </SovereignPairBadge>
+                          <SovereignPairRole>
+                            {cp.ordinal != null && `제${cp.ordinal}대 `}
+                            {cp.title}
+                          </SovereignPairRole>
+                          {cp.regnalEraLabel && (
+                            <SovereignEraTag>
+                              {cp.regnalEraLabel}
+                            </SovereignEraTag>
+                          )}
+                          {cp.polityLabel && cp.polityLabel !== polityLabel && (
+                            <SovereignPolityTag>
+                              {cp.polityLabel}
+                            </SovereignPolityTag>
+                          )}
+                        </SovereignPairTop>
+                        <SovereignPairNameRow>
+                          <SovereignPairName>{cp.name}</SovereignPairName>
+                          {(cp.startDate || cp.endDate) && (
+                            <SovereignPairPeriod>
+                              {formatPeriodText(cp.startDate, cp.endDate)}
+                            </SovereignPairPeriod>
+                          )}
+                        </SovereignPairNameRow>
+                      </SovereignPairBody>
+                      {onSelectCounterpartHead && (
+                        <SovereignSwitchBtn
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onSelectCounterpartHead(cp)
+                          }}
+                          title={`${cp.name} 재위기 전체 보기`}
+                        >
+                          {cp.isMonarchical ? '치세 보기' : '수반 보기'}
+                        </SovereignSwitchBtn>
+                      )}
+                    </SovereignPairCard>
+                  ))}
                 </CounterpartDeck>
                 <DualExecutiveConnector $branches={hasBranches} aria-hidden />
               </>
             )}
 
-            {head ? (
-              <CenterCard
-                type="button"
-                $branches={hasBranches}
-                $monarch={isMonarchCenter}
-                onClick={() => head.personId && onSelectPerson(head.personId)}
-                aria-label={`${head.name} 상세`}
-              >
-                <CenterFace $branches={hasBranches} $monarch={isMonarchCenter}>
-                  {renderFace(head, 112)}
-                </CenterFace>
-                <CenterRole $branches={hasBranches} $monarch={isMonarchCenter}>
-                  {head.ordinal != null && `제${head.ordinal}대 `}
-                  {head.title}
-                  {!head.endDate && <CenterNow>현직</CenterNow>}
-                  {head.regnalEraLabel && (
-                    <CenterEraTag>{head.regnalEraLabel}</CenterEraTag>
-                  )}
-                  {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
-                  {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
-                </CenterRole>
-                <CenterName $branches={hasBranches}>{head.name}</CenterName>
-                {cabinetLabel && (
-                  <CenterCabinet $branches={hasBranches}>
-                    {cabinetLabel}
-                  </CenterCabinet>
+            <CenterCard
+              type="button"
+              $branches={hasBranches}
+              $monarch={isMonarchCenter}
+              onClick={() => head.personId && onSelectPerson(head.personId)}
+              aria-label={`${head.name} 상세`}
+            >
+              <CenterFace $branches={hasBranches} $monarch={isMonarchCenter}>
+                {renderFace(head, 112)}
+              </CenterFace>
+              <CenterRole $branches={hasBranches} $monarch={isMonarchCenter}>
+                {head.ordinal != null && `제${head.ordinal}대 `}
+                {head.title}
+                {!head.endDate && <CenterNow>현직</CenterNow>}
+                {head.regnalEraLabel && (
+                  <CenterEraTag>{head.regnalEraLabel}</CenterEraTag>
                 )}
-                {showPosition && nav && nav.total > 1 && (
-                  /* 목록을 걷은 대신 위치를 여기 적는다 — 줄기 위에 두면 선을 끊는다 */
-                  <CenterOrdinal $branches={hasBranches}>
-                    {nav.index + 1} / {nav.total}대
-                  </CenterOrdinal>
-                )}
-                {stats.length > 0 && (
-                  <CenterStats $branches={hasBranches}>
-                    {stats.map((stat) => (
-                      <CenterStat key={stat.key}>
-                        <CenterStatKey>{stat.label}</CenterStatKey>
-                        <CenterStatValue $warn={stat.warn}>
-                          {stat.value}
-                        </CenterStatValue>
-                      </CenterStat>
-                    ))}
-                  </CenterStats>
-                )}
-              </CenterCard>
-            ) : (
-              <CenterCard
-                type="button"
-                $branches={hasBranches}
-                onClick={() => onRegisterCabinetHead?.()}
-                aria-label="국가원수·정부수반 등록"
-              >
-                <CenterFace $branches={hasBranches} $empty aria-hidden>
-                  <CenterEmptyInnerFace>+</CenterEmptyInnerFace>
-                </CenterFace>
-                <CenterRole $branches={hasBranches}>
-                  {emptyHeadRoleLabel ?? '국가원수 · 정부수반'}
-                  {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
-                  {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
-                </CenterRole>
-                <CenterName $branches={hasBranches} $empty>
-                  아직 등록된 수반이 없습니다
-                </CenterName>
+                {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
+                {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
+              </CenterRole>
+              <CenterName $branches={hasBranches}>{head.name}</CenterName>
+              {cabinetLabel && (
                 <CenterCabinet $branches={hasBranches}>
-                  {cabinetLabel ??
-                    '황제 · 국왕 · 대통령 · 총리 등 수반을 먼저 등록하면 정권별 각료 마인드맵이 열립니다'}
+                  {cabinetLabel}
                 </CenterCabinet>
+              )}
+              {showPosition && nav && nav.total > 1 && (
+                <CenterOrdinal $branches={hasBranches}>
+                  {nav.index + 1} / {nav.total}대
+                </CenterOrdinal>
+              )}
+              {stats.length > 0 && (
                 <CenterStats $branches={hasBranches}>
-                  <CenterStat>
-                    <CenterStatKey>취임</CenterStatKey>
-                    <CenterStatValue $muted>—</CenterStatValue>
-                  </CenterStat>
-                  <CenterStat>
-                    <CenterStatKey>재임</CenterStatKey>
-                    <CenterStatValue $muted>—</CenterStatValue>
-                  </CenterStat>
-                  <CenterStat>
-                    <CenterStatKey>각료</CenterStatKey>
-                    <CenterStatValue $muted>—</CenterStatValue>
-                  </CenterStat>
-                  <CenterEmptyAction>+ 수반 등록</CenterEmptyAction>
+                  {stats.map((stat) => (
+                    <CenterStat key={stat.key}>
+                      <CenterStatKey>{stat.label}</CenterStatKey>
+                      <CenterStatValue $warn={stat.warn}>
+                        {stat.value}
+                      </CenterStatValue>
+                    </CenterStat>
+                  ))}
                 </CenterStats>
-              </CenterCard>
-            )}
+              )}
+            </CenterCard>
 
             {showReignCabinetsBelow && (
               <>
@@ -459,77 +446,51 @@ export function CabinetMindMap({
                       )}
                     </ReignCabinetsHeaderRight>
                   </ReignCabinetsHeader>
-                  {counterparts.length > 0 ? (
-                    <ReignCabinetsList $branches={hasBranches}>
-                      {counterparts.map((cp) => (
-                        <ReignCabinetItem
-                          key={cp.id}
-                          type="button"
-                          onClick={() => {
-                            if (cp.cabinetId && onSelectCabinet) {
-                              onSelectCabinet(cp.cabinetId)
-                              return
-                            }
-                            if (cp.personId) {
-                              onSelectPerson(cp.personId)
-                            }
-                          }}
-                          title={
-                            cp.cabinetId
-                              ? `${cp.cabinetLabel ?? cp.name} 내각 보기로 전환`
-                              : `${cp.name} 상세`
+                  <ReignCabinetsList $branches={hasBranches}>
+                    {counterparts.map((cp) => (
+                      <ReignCabinetItem
+                        key={cp.id}
+                        type="button"
+                        onClick={() => {
+                          if (cp.cabinetId && onSelectCabinet) {
+                            onSelectCabinet(cp.cabinetId)
+                            return
                           }
-                        >
-                          <ReignCabinetAvatar>
-                            {renderFace(cp, 34)}
-                          </ReignCabinetAvatar>
-                          <ReignCabinetInfo>
-                            <ReignCabinetLabel>
-                              {cp.cabinetLabel ??
-                                (cp.ordinal != null
-                                  ? `제${cp.ordinal}대 ${cp.title}`
-                                  : cp.title)}
-                            </ReignCabinetLabel>
-                            <ReignCabinetSub>
-                              <strong>{cp.name}</strong>
-                              {cp.cabinetLabel && cp.title ? ` · ${cp.title}` : ''}
-                              {(cp.startDate || cp.endDate) &&
-                                ` · ${formatPeriodText(cp.startDate, cp.endDate)}`}
-                            </ReignCabinetSub>
-                          </ReignCabinetInfo>
-                          {cp.cabinetId && onSelectCabinet && (
-                            <ReignCabinetGo>내각 보기 ›</ReignCabinetGo>
-                          )}
-                        </ReignCabinetItem>
-                      ))}
-                    </ReignCabinetsList>
-                  ) : (
-                    <ReignCabinetEmptyButton
-                      type="button"
-                      onClick={() => onRegisterCabinetHead?.()}
-                    >
-                      <ReignCabinetEmptyPlus aria-hidden>+</ReignCabinetEmptyPlus>
-                      <ReignCabinetEmptyText>
-                        <ReignCabinetEmptyTitle>
-                          이 치세의 내각 · 수반 등록
-                        </ReignCabinetEmptyTitle>
-                        <ReignCabinetEmptySub>
-                          총리·재상·수반을 등록하면 치세와 함께 표시됩니다
-                        </ReignCabinetEmptySub>
-                      </ReignCabinetEmptyText>
-                    </ReignCabinetEmptyButton>
-                  )}
+                          if (cp.personId) {
+                            onSelectPerson(cp.personId)
+                          }
+                        }}
+                        title={
+                          cp.cabinetId
+                            ? `${cp.cabinetLabel ?? cp.name} 내각 보기로 전환`
+                            : `${cp.name} 상세`
+                        }
+                      >
+                        <ReignCabinetAvatar>
+                          {renderFace(cp, 32)}
+                        </ReignCabinetAvatar>
+                        <ReignCabinetInfo>
+                          <ReignCabinetLabel>
+                            {cp.cabinetLabel ??
+                              (cp.ordinal != null
+                                ? `제${cp.ordinal}대 ${cp.title}`
+                                : cp.title)}
+                          </ReignCabinetLabel>
+                          <ReignCabinetSub>
+                            <strong>{cp.name}</strong>
+                            {cp.cabinetLabel && cp.title ? ` · ${cp.title}` : ''}
+                            {(cp.startDate || cp.endDate) &&
+                              ` · ${formatPeriodText(cp.startDate, cp.endDate)}`}
+                          </ReignCabinetSub>
+                        </ReignCabinetInfo>
+                        {cp.cabinetId && onSelectCabinet && (
+                          <ReignCabinetGo>내각 보기 ›</ReignCabinetGo>
+                        )}
+                      </ReignCabinetItem>
+                    ))}
+                  </ReignCabinetsList>
                 </ReignCabinetsDeck>
               </>
-            )}
-
-            {onRegisterMinister && (
-              <RegisterMinisterBtn
-                type="button"
-                onClick={onRegisterMinister}
-              >
-                + 이 {isMonarchCenter ? '치세' : '정권'}의 각료 등록
-              </RegisterMinisterBtn>
             )}
           </CenterStack>
         </MapCenter>
@@ -547,7 +508,11 @@ export function CabinetMindMap({
                     onSelectPerson={onSelectPerson}
                   />
                 ) : (
-                  <Fragment key={item.key}>{item.node}</Fragment>
+                  <VacantBranchNode
+                    key={item.key}
+                    slot={item.slot}
+                    side="right"
+                  />
                 ),
               )}
             </SideGroup>
@@ -705,6 +670,30 @@ function BranchNode({
         <NodeDate>{formatNodeDate(member.startDate)}</NodeDate>
       )}
     </Node>
+  )
+}
+
+function VacantBranchNode({
+  slot,
+  side,
+}: {
+  slot: CabinetBranchSlot
+  side: 'left' | 'right'
+}) {
+  return (
+    <VacantNode
+      $side={side}
+      type="button"
+      onClick={slot.onClick}
+      title={`${slot.title} 각료 재임 등록`}
+    >
+      <VacantFace aria-hidden>—</VacantFace>
+      <NodeText $side={side}>
+        <NodeTitle>{slot.title}</NodeTitle>
+        <VacantValue>—</VacantValue>
+      </NodeText>
+      <VacantAction>+ 등록</VacantAction>
+    </VacantNode>
   )
 }
 
@@ -960,37 +949,14 @@ const SovereignPairCard = styled.div<{
   align-items: center;
   gap: 11px;
   width: 100%;
-  padding: 10px 13px;
-  border-radius: 16px;
-  border: 1px solid
-    ${({ $monarch, theme }) =>
-      $monarch
-        ? theme.mode === 'dark'
-          ? 'rgba(251, 191, 36, 0.35)'
-          : 'rgba(217, 119, 6, 0.32)'
-        : theme.colors.border.medium};
-  background: ${({ $monarch, theme }) =>
-    $monarch
-      ? theme.mode === 'dark'
-        ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(255, 255, 255, 0.03))'
-        : 'linear-gradient(135deg, #fffbeb, #ffffff)'
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.035)'
-        : theme.colors.background.primary};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 4px 14px rgba(0, 0, 0, 0.24)'
-      : '0 2px 10px rgba(15, 23, 42, 0.05)'};
+  padding: 8px 4px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
   cursor: pointer;
-  transition:
-    transform 0.16s ease,
-    border-color 0.16s ease,
-    box-shadow 0.16s ease;
+  transition: opacity 0.15s ease;
 
   &:hover {
-    transform: translateY(-1px);
-    border-color: ${({ $monarch }) =>
-      $monarch ? 'rgba(217, 119, 6, 0.6)' : 'rgba(99, 102, 241, 0.45)'};
+    opacity: 0.85;
   }
 `
 
@@ -1154,7 +1120,7 @@ const horizontalCenterLayout = css`
   align-items: center;
   justify-items: start;
   text-align: left;
-  padding: 18px 22px;
+  padding: 6px 0;
 `
 
 const centerSurface = css<{ $branches?: boolean; $monarch?: boolean }>`
@@ -1163,33 +1129,13 @@ const centerSurface = css<{ $branches?: boolean; $monarch?: boolean }>`
   align-items: center;
   gap: 3px;
   width: 288px;
-  padding: 20px 20px 16px;
-  border-radius: 20px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
   text-align: center;
-  /*
-   * 면은 무채색으로 두고 장미색/황금색은 직함·현직 표시·얼굴 테두리에만 남긴다.
-   */
-  border: 1px solid
-    ${({ $monarch, theme }) =>
-      $monarch
-        ? theme.mode === 'dark'
-          ? 'rgba(251, 191, 36, 0.38)'
-          : 'rgba(217, 119, 6, 0.35)'
-        : theme.colors.border.medium};
-  background: ${({ $monarch, theme }) =>
-    $monarch
-      ? theme.mode === 'dark'
-        ? 'linear-gradient(180deg, rgba(251, 191, 36, 0.08), rgba(255,255,255,0.035))'
-        : 'linear-gradient(180deg, #fffdf5, #ffffff)'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.035)'
-        : theme.colors.background.primary};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 8px 24px rgba(0,0,0,0.3)'
-      : '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06)'};
 
-  /* 가지가 없을 때는 아래 부처 격자 폭에 맞춰 가로로 눕힌다 */
+  /* 가지가 없을 때는 전폭 가로 오픈 레이아웃 */
   ${({ $branches }) => !$branches && horizontalCenterLayout}
 
   /* 좁은 칼럼 — 가로로 눕힌다: 얼굴 | 직함·이름·정권 | 요약 */
@@ -1203,37 +1149,16 @@ const CenterCard = styled.button<{ $branches?: boolean; $monarch?: boolean }>`
   appearance: none;
   font-family: inherit;
   cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
+  transition: opacity 0.16s ease;
 
   &:hover {
-    transform: translateY(-2px);
-    border-color: ${({ $monarch }) =>
-      $monarch ? 'rgba(217, 119, 6, 0.6)' : 'rgba(99, 102, 241, 0.45)'};
+    opacity: 0.88;
   }
   &:focus-visible {
     outline: 2px solid ${CENTER_ACCENT};
     outline-offset: 3px;
+    border-radius: 12px;
   }
-`
-
-const CenterEmptyInnerFace = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 112px;
-  height: 112px;
-  border-radius: 50%;
-  font-size: 32px;
-  font-weight: 500;
-  line-height: 1;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.10)'
-      : 'rgba(99, 102, 241, 0.05)'};
-  color: rgba(99, 102, 241, 0.72);
 `
 
 /** 얼굴 둘레 링 — 가운데가 중심이라는 걸 색이 아니라 형태로 말한다 */
@@ -1389,19 +1314,16 @@ const ReignCabinetItem = styled.button`
   align-items: center;
   gap: 9px;
   width: 100%;
-  padding: 7px 10px;
-  border-radius: 11px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 7px 4px;
+  border: none;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+  transition: background 0.15s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.45);
     background: ${({ theme }) => theme.colors.hover};
   }
 `
@@ -1477,129 +1399,6 @@ const ReignCabinetsAddBtn = styled.button`
   &:hover {
     background: rgba(99, 102, 241, 0.1);
     border-color: ${CENTER_ACCENT};
-  }
-`
-
-const ReignCabinetEmptyButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 11px;
-  border-radius: 12px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
-  background: ${({ theme }) => theme.colors.background.primary};
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.5);
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const ReignCabinetEmptyPlus = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  border: 1px dashed rgba(99, 102, 241, 0.45);
-  font-size: 15px;
-  font-weight: 700;
-  color: ${CENTER_ACCENT};
-  background: rgba(99, 102, 241, 0.08);
-`
-
-const ReignCabinetEmptyText = styled.span`
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  flex: 1;
-`
-
-const ReignCabinetEmptyTitle = styled.span`
-  font-size: 12px;
-  font-weight: 800;
-  color: ${CENTER_ACCENT};
-`
-
-const ReignCabinetEmptySub = styled.span`
-  font-size: 10.5px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const SovereignEmptyButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  padding: 9px 12px;
-  border-radius: 14px;
-  border: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(251, 191, 36, 0.35)'
-        : 'rgba(217, 119, 6, 0.35)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(251, 191, 36, 0.05)'
-      : 'rgba(255, 251, 235, 0.7)'};
-  font-family: inherit;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-
-  &:hover {
-    border-color: rgba(217, 119, 6, 0.6);
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(251, 191, 36, 0.12)'
-        : 'rgba(254, 243, 199, 0.85)'};
-  }
-`
-
-const SovereignEmptyLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#fde68a' : '#b45309')};
-`
-
-const RegisterMinisterBtn = styled.button`
-  margin-top: 10px;
-  padding: 7px 16px;
-  border-radius: 999px;
-  border: 1px dashed rgba(99, 102, 241, 0.45);
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.08)'
-      : 'rgba(99, 102, 241, 0.05)'};
-  font-size: 12px;
-  font-weight: 700;
-  font-family: inherit;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-
-  &:hover {
-    border-color: ${CENTER_ACCENT};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.16)'
-        : 'rgba(99, 102, 241, 0.11)'};
   }
 `
 
@@ -1743,22 +1542,6 @@ const CenterStatValue = styled.dd<{ $warn?: boolean; $muted?: boolean }>`
         : theme.colors.text.primary};
 `
 
-const CenterEmptyAction = styled.span`
-  flex-shrink: 0;
-  margin-left: 4px;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: #fff;
-  background: ${CENTER_ACCENT};
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-
-  @container (max-width: 760px) {
-    margin-left: auto;
-  }
-`
-
 const RosterSlotWrap = styled.div`
   margin-top: 16px;
 `
@@ -1853,19 +1636,19 @@ const Node = styled.button<{ $side: 'left' | 'right'; $replaced: boolean }>`
   text-align: ${({ $side }) => ($side === 'left' ? 'right' : 'left')};
   width: 100%;
   height: ${NODE_HEIGHT}px;
-  padding: 0 12px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 0 8px;
+  border: none;
+  border-bottom: 1px solid
+    ${({ $replaced, theme }) =>
+      $replaced ? 'rgba(180, 83, 9, 0.35)' : theme.colors.border.light};
+  background: transparent;
   cursor: pointer;
   transition:
-    border-color 0.15s ease,
     background 0.15s ease,
     transform 0.15s ease;
 
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
-    border-color: ${({ theme }) => theme.colors.border.medium};
     transform: translateX(
       ${({ $side }) => ($side === 'left' ? '-2px' : '2px')}
     );
@@ -1874,13 +1657,6 @@ const Node = styled.button<{ $side: 'left' | 'right'; $replaced: boolean }>`
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: 2px;
   }
-
-  /* 임기 중 교체된 자리 — 색을 칠하지 않고 가장자리 한 줄로만 표시한다 */
-  ${({ $replaced }) =>
-    $replaced &&
-    css`
-      border-color: rgba(180, 83, 9, 0.35);
-    `}
 
   /* 격자 칸에서는 좌·우 가지 구분이 없다 — 모두 얼굴이 왼쪽 */
   @container (max-width: 820px) {
@@ -1891,6 +1667,161 @@ const Node = styled.button<{ $side: 'left' | 'right'; $replaced: boolean }>`
       transform: none;
     }
   }
+`
+
+const VacantAction = styled.span`
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${CENTER_ACCENT};
+  opacity: 0;
+  transition: opacity 0.15s ease;
+`
+
+const VacantNode = styled.button<{ $side: 'left' | 'right' }>`
+  position: relative;
+  appearance: none;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-direction: ${({ $side }) => ($side === 'left' ? 'row-reverse' : 'row')};
+  text-align: ${({ $side }) => ($side === 'left' ? 'right' : 'left')};
+  width: 100%;
+  height: ${NODE_HEIGHT}px;
+  padding: 0 8px;
+  border: none;
+  border-bottom: 1px dashed ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+
+  &:hover ${VacantAction},
+  &:focus-visible ${VacantAction} {
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
+
+  @container (max-width: 820px) {
+    flex-direction: row;
+    text-align: left;
+  }
+`
+
+const VacantFace = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const VacantValue = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptyHeadline = styled.p`
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: color 0.15s ease;
+`
+
+const EmptyBlockButton = styled.button`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover ${EmptyHeadline} {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const EmptyHeadRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+`
+
+const EmptyAccentBar = styled.span`
+  width: 3.5px;
+  height: 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: ${({ theme }) => theme.colors.border.medium};
+`
+
+const EmptyPeriod = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptySpecStrip = styled.dl`
+  margin: 0;
+  padding-left: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  row-gap: 12px;
+`
+
+const EmptySpecColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 24px;
+  margin-right: 24px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:last-child {
+    padding-right: 0;
+    margin-right: 0;
+    border-right: none;
+  }
+`
+
+const EmptySpecKey = styled.dt`
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptySpecValue = styled.dd`
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const NodeFace = styled.span`
