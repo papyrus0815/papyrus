@@ -210,4 +210,17 @@ describe('EventTypeField', () => {
       screen.queryByRole('searchbox', { name: '세부 분야 빠른 검색' }),
     ).not.toBeInTheDocument()
   })
+
+  it('등록 모달 인라인 기록과 상세 화면 전용 기록(metrics·military·cabinets)을 구분해 안내한다', () => {
+    renderWithTheme(
+      <EventTypeField domain="SOCIETY" value="DISASTER" onChange={jest.fn()} />,
+    )
+
+    expect(
+      screen.getByText(/등록 후 상세 화면에서 적습니다/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/아래 ‘기록’에서 바로 적습니다/),
+    ).not.toBeInTheDocument()
+  })
 })

@@ -205,6 +205,10 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     // 2편 클릭 시 'B'로 전환
     fireEvent.click(side2Btn)
     expect(onAssign).toHaveBeenCalledWith('m:c1', 'B')
+
+    // 참여국을 제거하면 진영 배정에서도 함께 해제(null)된다
+    fireEvent.click(screen.getByRole('button', { name: '프랑스 제거' }))
+    expect(onAssign).toHaveBeenLastCalledWith('m:c1', null)
   })
 
   it('역사 국가 존속기간 불일치 경고에서 시대에 맞는 국가로 역할·서술·진영을 유지한 채 원클릭 교체할 수 있다', () => {

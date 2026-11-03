@@ -854,6 +854,17 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     추천 분류 적용: {titleSuggestionSlot.label}
                   </TitleSuggestionButton>
                 )}
+                {onOpenCountryModal && titleSuggestedCountries.length > 0 && (
+                  <TitleSuggestionButton
+                    type="button"
+                    onClick={() => addBatchParticipants(titleSuggestedCountries)}
+                  >
+                    추천 참여국 적용:{' '}
+                    {titleSuggestedCountries
+                      .map((candidate) => candidate.label)
+                      .join(' · ')}
+                  </TitleSuggestionButton>
+                )}
                 {[
                   Boolean(titleSuggestionSlot),
                   Boolean(titleYearSuggestion),
@@ -935,8 +946,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             {startDate &&
               endDate &&
               !getDateError() &&
-              showStartTime &&
-              showEndTime && (
+              (showStartTime && showEndTime ? (
                 <S.PeriodBadge>
                   <FiClock size={12} />
                   {calculateDaysDifference()}일
@@ -948,11 +958,24 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       </span>
                     )}
                 </S.PeriodBadge>
-              )}
+              ) : (
+                (() => {
+                  const sYear = signedYearFromIsoLike(startDate)
+                  const eYear = signedYearFromIsoLike(endDate)
+                  if (sYear != null && eYear != null && eYear > sYear) {
+                    return (
+                      <S.PeriodBadge>
+                        <FiClock size={12} />약 {eYear - sYear}년
+                      </S.PeriodBadge>
+                    )
+                  }
+                  return null
+                })()
+              ))}
           </S.FormLabel>
           <S.FormField>
             <DateRangeGrid>
-              <S.DateRangeColumn>
+              <S.DateRangeColumn id="event-form-start-date">
                 <S.DateRangeLabel>시작</S.DateRangeLabel>
                 <DateTimeLine>
                   <EventDateField
@@ -1065,6 +1088,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormLabel>
           <S.FormField>
             <S.CategoryGrid
+              id="event-form-category-grid"
               role="radiogroup"
               aria-labelledby="event-form-category-label"
               onKeyDown={handleCategoryKeyDown}
@@ -1317,6 +1341,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                       (row) => participantKey(row) !== key,
                                     ),
                                   )
+                                  participantSidesSlot?.onAssign(key, null)
                                 }}
                               >
                                 <FiX size={14} />

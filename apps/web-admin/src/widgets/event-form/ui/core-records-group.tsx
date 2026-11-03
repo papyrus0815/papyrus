@@ -154,7 +154,9 @@ export function CoreRecordsGroup({
 
       {fieldFacets.includes('election') && (
         <S.FormRow>
-          <S.FormLabel as="span">선거</S.FormLabel>
+          <S.FormLabel as="span">
+            선거<RecordOptionalTag>(선택)</RecordOptionalTag>
+          </S.FormLabel>
           <S.FormField>
             {drafts.election ? (
               <KitSelectedItems>
@@ -164,6 +166,9 @@ export function CoreRecordsGroup({
                     <FiX size={14} />
                   </KitRemoveButton>
                 </KitSelectedItem>
+                <KitAddButton type="button" onClick={() => setPicker('election')}>
+                  바꾸기
+                </KitAddButton>
               </KitSelectedItems>
             ) : (
               <KitAddButton type="button" onClick={() => setPicker('election')}>
@@ -177,7 +182,9 @@ export function CoreRecordsGroup({
 
       {fieldFacets.includes('organizations') && (
         <S.FormRow>
-          <S.FormLabel as="span">기업·조직</S.FormLabel>
+          <S.FormLabel as="span">
+            기업·조직<RecordOptionalTag>(선택)</RecordOptionalTag>
+          </S.FormLabel>
           <S.FormField>
             {drafts.organizations.length > 0 && (
               <RowList>
@@ -280,7 +287,9 @@ function SidesField({
   const unassigned = participants.filter((row) => !assignment[participantKey(row)])
   return (
     <S.FormRow>
-      <S.FormLabel as="span">진영</S.FormLabel>
+      <S.FormLabel as="span">
+        진영<RecordOptionalTag>(선택)</RecordOptionalTag>
+      </S.FormLabel>
       <S.FormField>
         {participants.length === 0 ? (
           <S.Hint>위 참여국에 나라를 추가하면 여기서 1편·2편 진영을 나눕니다.</S.Hint>
@@ -305,7 +314,11 @@ function SidesField({
                     />
                     <SideMemberWrap aria-label={`${index + 1}번 진영 소속 국가`}>
                       {members.length === 0 ? (
-                        <SideEmptyHint>아래 국가에서 +{index + 1}편 선택</SideEmptyHint>
+                        <SideEmptyHint>
+                          {unassigned.length > 0
+                            ? `참여국·미배정에서 +${index + 1}편 선택`
+                            : `참여국에서 ${index + 1}편 선택`}
+                        </SideEmptyHint>
                       ) : (
                         members.map((row) => {
                           const key = participantKey(row)
@@ -420,7 +433,9 @@ function StatehoodField({
   const unassigned = participants.filter((row) => row.role !== 'FOUNDED' && row.role !== 'DISSOLVED')
   return (
     <S.FormRow>
-      <S.FormLabel as="span">성립·소멸</S.FormLabel>
+      <S.FormLabel as="span">
+        성립·소멸<RecordOptionalTag>(선택)</RecordOptionalTag>
+      </S.FormLabel>
       <S.FormField>
         <StatehoodGrid>
           {slots.map((slot) => {
@@ -512,7 +527,9 @@ function TreatyField({
   const suggested = treatyNameFromEventTitle(eventTitle.trim())
   return (
     <S.FormRow>
-      <S.FormLabel as="span">맺어진 조약</S.FormLabel>
+      <S.FormLabel as="span">
+        맺어진 조약<RecordOptionalTag>(선택)</RecordOptionalTag>
+      </S.FormLabel>
       <S.FormField>
         <KitChipGroup role="radiogroup" aria-label="조약 기록 방법">
           {(
@@ -558,6 +575,9 @@ function TreatyField({
                 <FiX size={14} />
               </KitRemoveButton>
             </KitSelectedItem>
+            <KitAddButton type="button" onClick={onPick}>
+              바꾸기
+            </KitAddButton>
           </KitSelectedItems>
         )}
       </S.FormField>
@@ -584,7 +604,10 @@ function PersonListField({
 }) {
   return (
     <S.FormRow>
-      <S.FormLabel as="span">{label}</S.FormLabel>
+      <S.FormLabel as="span">
+        {label}
+        <RecordOptionalTag>(선택)</RecordOptionalTag>
+      </S.FormLabel>
       <S.FormField>
         {people.length > 0 && (
           <RowList>
@@ -1043,4 +1066,11 @@ const SlotLabel = styled.div`
   font-size: 12.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RecordOptionalTag = styled.span`
+  margin-left: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => S.getC(theme).text.muted};
 `

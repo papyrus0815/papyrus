@@ -143,20 +143,41 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   const { isEditMode, isLoading, isSubmitting, isValid, firstError } = formState
   const busy = isLoading || isSubmitting
 
-  /** 모달 안 어디서든 Cmd/Ctrl + Enter로 즉시 저장 */
+  /** 모달 안 어디서든 Cmd/Ctrl + Enter로 즉시 저장, Cmd/Ctrl + Shift + Enter로 등록 후 계속 */
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         if (!isValid || busy || savedEventId !== null) return
         event.preventDefault()
-        continueAfterSaveRef.current = false
+        continueAfterSaveRef.current = Boolean(event.shiftKey && !isEditMode)
         void formRef.current?.submit()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, isValid, busy, savedEventId])
+  }, [isOpen, isValid, busy, savedEventId, isEditMode])
+
+  const focusFirstMissingField = useCallback(() => {
+    if (!firstError) return
+    if (firstError.includes('사건명')) {
+      const el = document.getElementById('event-form-title')
+      el?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+      el?.focus()
+      return
+    }
+    if (firstError.includes('분야')) {
+      const grid = document.getElementById('event-form-category-grid')
+      const btn = grid?.querySelector<HTMLElement>('[tabindex="0"], button')
+      btn?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+      btn?.focus()
+      return
+    }
+    const dateCol = document.getElementById('event-form-start-date')
+    const input = dateCol?.querySelector<HTMLElement>('input')
+    input?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    input?.focus()
+  }, [firstError])
 
   /** Esc·오버레이·취소 공통 — dirty면 확인부터 */
   const requestClose = useCallback(async () => {
@@ -270,11 +291,19 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
 
         <PersonRegisterModalStickyFooter>
           <FooterHint $warning={!isValid && Boolean(firstError)}>
-            {!isValid && firstError
-              ? `필수 입력: ${firstError}`
-              : isEditMode
-                ? '기본 정보만 수정합니다 · ⌘/Ctrl+Enter로 바로 저장'
-                : '등록 준비 완료 · ⌘/Ctrl+Enter로 바로 저장할 수 있습니다.'}
+            {!isValid && firstError ? (
+              <FooterJumpButton
+                type="button"
+                onClick={focusFirstMissingField}
+                title="클릭하면 해당 필수 입력 칸으로 이동합니다"
+              >
+                필수 입력: {firstError}
+              </FooterJumpButton>
+            ) : isEditMode ? (
+              '기본 정보만 수정합니다 · ⌘/Ctrl+Enter로 바로 저장'
+            ) : (
+              '등록 준비 완료 · ⌘/Ctrl+Enter 저장 · ⌘/Ctrl+Shift+Enter 등록 후 계속'
+            )}
           </FooterHint>
           <FooterActions>
             <PersonRegisterModalCancelBtn
@@ -290,7 +319,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
               <PersonRegisterModalCancelBtn
                 type="button"
                 disabled={!isValid || busy}
-                title="저장 후 창을 닫지 않고 같은 분야·참여국으로 다음 사건을 바로 이어 등록합니다"
+                title="저장 후 창을 닫지 않고 같은 분야·참여국으로 다음 사건을 바로 이어 등록합니다 (단축키: ⌘/Ctrl + Shift + Enter)"
                 onClick={() => {
                   continueAfterSaveRef.current = true
                   void formRef.current?.submit()
@@ -387,6 +416,27 @@ const FooterHint = styled.p<{ $warning?: boolean }>`
 
   @media (max-width: 768px) {
     display: none;
+  }
+`
+
+const FooterJumpButton = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: ${({ theme }) => theme.colors.border.default};
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.primary};
+    text-decoration-color: ${({ theme }) => theme.colors.primary};
+    outline: none;
   }
 `
 

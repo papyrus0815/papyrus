@@ -286,3 +286,18 @@ it('모달 안에서 Cmd/Ctrl + Enter 단축키로 즉시 저장을 실행할 �
   fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
   expect(submitSpy).toHaveBeenCalledTimes(1)
 })
+
+it('모달 안에서 Cmd/Ctrl + Shift + Enter 단축키로 등록 후 계속(연속 등록)을 실행할 수 있다', async () => {
+  const { onClose } = setup()
+  await waitForBody()
+
+  fireEvent.keyDown(window, { key: 'Enter', metaKey: true, shiftKey: true })
+  expect(submitSpy).toHaveBeenCalledTimes(1)
+
+  fireEvent.click(screen.getByText('_saved'))
+  expect(resetSpy).toHaveBeenCalledWith({
+    keepCategory: true,
+    keepRelatedCountries: true,
+  })
+  expect(onClose).not.toHaveBeenCalled()
+})

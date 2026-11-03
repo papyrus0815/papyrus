@@ -1217,7 +1217,15 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
             : undefined
         }
         recordsSlot={
-          eventType && !isEditMode && facets.core.some((facet) => facet !== 'participants')
+          eventType &&
+          !isEditMode &&
+          facets.core.some(
+            (facet) =>
+              facet !== 'participants' &&
+              facet !== 'metrics' &&
+              facet !== 'military' &&
+              facet !== 'cabinets',
+          )
             ? {
                 title: `${EVENT_TYPES[eventType].label} 기록`,
                 content: (
@@ -1240,9 +1248,18 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                         ),
                       )
                     }
-                    onRemoveParticipant={(key) =>
+                    onRemoveParticipant={(key) => {
                       setRelatedCountries(relatedCountries.filter((row) => participantKey(row) !== key))
-                    }
+                      setFacetDrafts((previous) => {
+                        if (!(key in previous.sides.assignment)) return previous
+                        const nextAssignment = { ...previous.sides.assignment }
+                        delete nextAssignment[key]
+                        return {
+                          ...previous,
+                          sides: { ...previous.sides, assignment: nextAssignment },
+                        }
+                      })
+                    }}
                     eventTitle={title}
                     startDate={startDate}
                     endDate={endDate}

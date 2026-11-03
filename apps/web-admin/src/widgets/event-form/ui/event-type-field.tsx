@@ -20,6 +20,7 @@ import {
   EVENT_TYPE_GROUPS,
   EVENT_TYPE_ORDER,
   EVENT_TYPES,
+  type EventFacetKey,
   type EventTypeKey,
   FACET_LABEL,
   FREQUENT_EVENT_TYPES,
@@ -31,6 +32,8 @@ import {
   subtypesForDomain,
   suggestClassificationFromTitle,
 } from '@/entities/event/model/event-type-registry'
+
+const DETAIL_ONLY_FACETS: ReadonlyArray<EventFacetKey> = ['metrics', 'military', 'cabinets']
 import type { EventDomainKey } from '@/entities/event/model/event-domain'
 import {
   KitChipGroup,
@@ -81,6 +84,8 @@ export function EventTypeField({
 
   const selected = value ? EVENT_TYPES[value] : null
   const records = selected ? selected.core.filter((facet) => facet !== 'participants') : []
+  const inlineRecords = records.filter((facet) => !DETAIL_ONLY_FACETS.includes(facet))
+  const detailOnlyRecords = records.filter((facet) => DETAIL_ONLY_FACETS.includes(facet))
   const activeDomainDef = eventDomainDef(domain)
   const activeDomainTone = activeDomainDef?.soft
 
@@ -354,20 +359,28 @@ export function EventTypeField({
               <span>
                 {formatDomainPath(domain ?? selected.defaultDomain, selected.key)} — 예: {selected.examples}
               </span>
-              {records.length > 0 && (
-                <span>
-                  {isEditMode ? (
-                    <>
-                      핵심 기록 <b>{records.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 상세 화면에서
-                      편집합니다
-                    </>
-                  ) : (
-                    <>
-                      붙는 기록 <b>{records.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 아래
+              {isEditMode ? (
+                records.length > 0 && (
+                  <span>
+                    핵심 기록 <b>{records.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 상세 화면에서
+                    편집합니다
+                  </span>
+                )
+              ) : (
+                <>
+                  {inlineRecords.length > 0 && (
+                    <span>
+                      붙는 기록 <b>{inlineRecords.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 아래
                       &lsquo;기록&rsquo;에서 바로 적습니다
-                    </>
+                    </span>
                   )}
-                </span>
+                  {detailOnlyRecords.length > 0 && (
+                    <span>
+                      상세 기록 <b>{detailOnlyRecords.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 등록 후 상세
+                      화면에서 적습니다
+                    </span>
+                  )}
+                </>
               )}
             </>
           ) : (

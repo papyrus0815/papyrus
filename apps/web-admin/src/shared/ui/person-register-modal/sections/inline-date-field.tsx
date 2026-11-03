@@ -131,7 +131,10 @@ export function InlineDateField({
             }
           }}
           onKeyDown={(event) => {
-            if ((event.key === '.' || event.key === '/') && year.length > 0) {
+            if (event.key === '-') {
+              event.preventDefault()
+              onEra(era === 'BC' ? 'AD' : 'BC')
+            } else if ((event.key === '.' || event.key === '/') && year.length > 0) {
               event.preventDefault()
               monthRef.current?.focus()
             }
@@ -223,6 +226,12 @@ export function InlineDateField({
           aria-describedby={ariaDescribedBy}
           value={year}
           onChange={(event) => onYear(digits(event.target.value, 4))}
+          onKeyDown={(event) => {
+            if (event.key === '-') {
+              event.preventDefault()
+              onEra(era === 'BC' ? 'AD' : 'BC')
+            }
+          }}
         />
         <Sep>.</Sep>
         <DateInput
