@@ -76,6 +76,8 @@ export function InlineDateField({
   pickerOpen,
 }: InlineDateFieldProps) {
   const yearRef = useRef<HTMLInputElement>(null)
+  const monthRef = useRef<HTMLInputElement>(null)
+  const dayRef = useRef<HTMLInputElement>(null)
   if (disabled) {
     return appearance === 'field' ? (
       <FieldBox id={anchorId} $disabled aria-label={ariaLabel}>
@@ -121,20 +123,49 @@ export function InlineDateField({
           aria-invalid={error || undefined}
           aria-describedby={ariaDescribedBy}
           value={year}
-          onChange={(event) => onYear(digits(event.target.value, 4))}
+          onChange={(event) => {
+            const next = digits(event.target.value, 4)
+            onYear(next)
+            if (next.length === 4 && year.length < 4) {
+              monthRef.current?.focus()
+            }
+          }}
+          onKeyDown={(event) => {
+            if ((event.key === '.' || event.key === '/') && year.length > 0) {
+              event.preventDefault()
+              monthRef.current?.focus()
+            }
+          }}
         />
         <FieldSep>.</FieldSep>
         <BareInput
+          ref={monthRef}
           $w={26}
           inputMode="numeric"
           placeholder="월"
           aria-label="월"
           aria-invalid={error || undefined}
           value={month}
-          onChange={(event) => onMonth(digits(event.target.value, 2))}
+          onChange={(event) => {
+            const next = digits(event.target.value, 2)
+            onMonth(next)
+            if (next.length === 2 && month.length < 2) {
+              dayRef.current?.focus()
+            }
+          }}
+          onKeyDown={(event) => {
+            if ((event.key === '.' || event.key === '/') && month.length > 0) {
+              event.preventDefault()
+              dayRef.current?.focus()
+            } else if (event.key === 'Backspace' && month === '') {
+              event.preventDefault()
+              yearRef.current?.focus()
+            }
+          }}
         />
         <FieldSep>.</FieldSep>
         <BareInput
+          ref={dayRef}
           $w={26}
           inputMode="numeric"
           placeholder="일"
@@ -142,6 +173,12 @@ export function InlineDateField({
           aria-invalid={error || undefined}
           value={day}
           onChange={(event) => onDay(digits(event.target.value, 2))}
+          onKeyDown={(event) => {
+            if (event.key === 'Backspace' && day === '') {
+              event.preventDefault()
+              monthRef.current?.focus()
+            }
+          }}
         />
         <EraSwitch
           type="button"

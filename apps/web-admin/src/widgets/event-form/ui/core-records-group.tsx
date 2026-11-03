@@ -283,21 +283,7 @@ function SidesField({
       <S.FormLabel as="span">진영</S.FormLabel>
       <S.FormField>
         {participants.length === 0 ? (
-          <SidesFooterRow>
-            {onOpenCountryModal && (
-              <KitAddButton
-                type="button"
-                onClick={() => {
-                  playClickSound()
-                  onOpenCountryModal()
-                }}
-              >
-                <FiPlus size={15} />
-                참여국 추가
-              </KitAddButton>
-            )}
-            <S.Hint>참여국에 나라를 넣으면 여기서 편을 가릅니다.</S.Hint>
-          </SidesFooterRow>
+          <S.Hint>위 참여국에 나라를 추가하면 여기서 1편·2편 진영을 나눕니다.</S.Hint>
         ) : (
           <>
             <SideBoardGrid>

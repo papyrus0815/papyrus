@@ -166,6 +166,23 @@ interface BasicInfoSectionProps {
     parent: { id: string; title: string } | null
     onOpenPicker: () => void
     onClear: () => void
+    quickSearch?: {
+      query: string
+      onQueryChange: (next: string) => void
+      candidates: Array<{
+        id: string
+        title: string
+        dateLabel?: string
+        startYear?: number | null
+      }>
+      isSearching?: boolean
+      onSelectCandidate?: (candidate: {
+        id: string
+        title: string
+        dateLabel?: string
+        startYear?: number | null
+      }) => void
+    }
   }
 
   /**
@@ -369,9 +386,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       }
     },
   } as const
-  const [keywordInput, setKeywordInput] = useState(keywords.join(', '))
+  const [keywordInput, setKeywordInput] = useState('')
   const [keywordValidationMsg, setKeywordValidationMsg] = useState('')
-  const skipKeywordSyncRef = useRef(false)
+  const prevKeywordsLengthRef = useRef(keywords.length)
 
   const KEYWORD_MAX_LENGTH = 30
   const KEYWORD_MAX_COUNT = 20
@@ -392,6 +409,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
   const [countryQuickQuery, setCountryQuickQuery] = useState('')
   const [activeCountryResultIndex, setActiveCountryResultIndex] = useState(0)
+  const [activeParentResultIndex, setActiveParentResultIndex] = useState(0)
   const [activeRelatedResultIndex, setActiveRelatedResultIndex] = useState(0)
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
@@ -732,17 +750,21 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     existingParticipantKeys,
   ])
 
-  const addKeywordsFromInput = () => {
-    const raw = keywordInput.trim()
+  const addKeywordsFromInput = (rawOverride?: string) => {
+    const raw = (rawOverride ?? keywordInput).trim()
     if (!raw) return
     const parts = raw
       .split(/[,，]/)
       .map((s) => s.trim())
       .filter(Boolean)
+    if (parts.length === 0) {
+      setKeywordInput('')
+      return
+    }
     const tooLong = parts.filter((s) => s.length > KEYWORD_MAX_LENGTH)
     const valid = parts
       .filter((s) => s.length <= KEYWORD_MAX_LENGTH)
-      .slice(0, KEYWORD_MAX_COUNT - keywords.length)
+      .slice(0, Math.max(0, KEYWORD_MAX_COUNT - keywords.length))
     if (tooLong.length > 0) {
       setKeywordValidationMsg(
         `키워드는 ${KEYWORD_MAX_LENGTH}자 이내로 입력해 주세요. (${tooLong.length}개 생략됨)`,
@@ -750,31 +772,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       setTimeout(() => setKeywordValidationMsg(''), 4000)
     }
     if (valid.length === 0) return
-    let next = [...keywords, ...valid]
+    const next = [...keywords, ...valid]
       .filter((k, i, arr) => arr.indexOf(k) === i)
       .slice(0, KEYWORD_MAX_COUNT)
-    // 한글 조합 중 추가된 짧은 키워드 제거 (예: '히' + '히히' → '히히'만 유지)
-    next = next.filter(
-      (k) =>
-        !next.some(
-          (other) =>
-            other !== k && other.length > k.length && other.includes(k),
-        ),
-    )
     if (next.length >= KEYWORD_MAX_COUNT && parts.length > valid.length) {
       setKeywordValidationMsg(
         `키워드는 최대 ${KEYWORD_MAX_COUNT}개까지 등록할 수 있습니다.`,
       )
       setTimeout(() => setKeywordValidationMsg(''), 4000)
     }
-    skipKeywordSyncRef.current = true
     setKeywords(next)
     setKeywordInput('')
   }
+
   useEffect(() => {
-    if (!skipKeywordSyncRef.current) setKeywordInput(keywords.join(', '))
-    skipKeywordSyncRef.current = false
-  }, [keywords])
+    if (prevKeywordsLengthRef.current > 0 && keywords.length === 0) {
+      setKeywordInput('')
+    }
+    prevKeywordsLengthRef.current = keywords.length
+  }, [keywords.length])
 
   return (
     <S.FormSection
@@ -1309,7 +1325,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           </ParticipantHeaderLine>
                           <ParticipantDescriptionLine>
                             <RoleDescriptionInput
-                              rows={2}
+                              rows={1}
                               value={participant.roleDescription ?? ''}
                               aria-label={`${country.name}가 한 일`}
                               placeholder={roleDescriptionPlaceholder}
@@ -1574,8 +1590,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               상위 사건<OptionalTag>(선택)</OptionalTag>
             </S.FormLabel>
             <S.FormField>
-              <InlineControlRow>
-                {parentEventSlot.parent ? (
+              {parentEventSlot.parent ? (
+                <InlineControlRow>
                   <S.SelectedItemsContainer>
                     <S.SelectedItem>
                       <span>{parentEventSlot.parent.title}</span>
@@ -1600,7 +1616,113 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       변경
                     </S.AddButton>
                   </S.SelectedItemsContainer>
-                ) : (
+                </InlineControlRow>
+              ) : (
+                <CountryQuickSearchRow>
+                  {parentEventSlot.quickSearch && (
+                    <CountryQuickSearchAnchor>
+                      <CountryQuickSearchInput
+                        type="search"
+                        aria-label="상위 사건 빠른 검색"
+                        placeholder="묶음 사건명으로 빠른 검색"
+                        value={parentEventSlot.quickSearch.query}
+                        onChange={(changeEvent) => {
+                          parentEventSlot.quickSearch?.onQueryChange(
+                            changeEvent.target.value,
+                          )
+                          setActiveParentResultIndex(0)
+                        }}
+                        onKeyDown={(keyEvent) => {
+                          const matches =
+                            parentEventSlot.quickSearch?.candidates ?? []
+                          if (keyEvent.key === 'ArrowDown') {
+                            if (matches.length > 0) {
+                              keyEvent.preventDefault()
+                              setActiveParentResultIndex(
+                                (prev) => (prev + 1) % matches.length,
+                              )
+                            }
+                          } else if (keyEvent.key === 'ArrowUp') {
+                            if (matches.length > 0) {
+                              keyEvent.preventDefault()
+                              setActiveParentResultIndex(
+                                (prev) =>
+                                  (prev - 1 + matches.length) % matches.length,
+                              )
+                            }
+                          } else if (keyEvent.key === 'Enter') {
+                            if (matches.length > 0) {
+                              keyEvent.preventDefault()
+                              const target =
+                                matches[
+                                  Math.min(
+                                    activeParentResultIndex,
+                                    matches.length - 1,
+                                  )
+                                ] ?? matches[0]
+                              playClickSound()
+                              parentEventSlot.quickSearch?.onSelectCandidate?.(
+                                target,
+                              )
+                              setActiveParentResultIndex(0)
+                            }
+                          } else if (
+                            keyEvent.key === 'Escape' &&
+                            parentEventSlot.quickSearch?.query
+                          ) {
+                            keyEvent.preventDefault()
+                            parentEventSlot.quickSearch.onQueryChange('')
+                            setActiveParentResultIndex(0)
+                          }
+                        }}
+                      />
+                      {parentEventSlot.quickSearch.query.trim() && (
+                        <CountryQuickResultBox
+                          role="region"
+                          aria-label="상위 사건 빠른 검색 결과"
+                        >
+                          {parentEventSlot.quickSearch.candidates.length > 0 ? (
+                            parentEventSlot.quickSearch.candidates.map(
+                              (candidate, candidateIdx) => (
+                                <CountryQuickResultButton
+                                  key={candidate.id}
+                                  type="button"
+                                  $active={
+                                    candidateIdx === activeParentResultIndex
+                                  }
+                                  onMouseEnter={() =>
+                                    setActiveParentResultIndex(candidateIdx)
+                                  }
+                                  onClick={() => {
+                                    playClickSound()
+                                    parentEventSlot.quickSearch?.onSelectCandidate?.(
+                                      candidate,
+                                    )
+                                    setActiveParentResultIndex(0)
+                                  }}
+                                >
+                                  <CountryQuickResultName>
+                                    {candidate.title}
+                                  </CountryQuickResultName>
+                                  {candidate.dateLabel && (
+                                    <CountryQuickResultMeta>
+                                      <span>{candidate.dateLabel}</span>
+                                    </CountryQuickResultMeta>
+                                  )}
+                                </CountryQuickResultButton>
+                              ),
+                            )
+                          ) : (
+                            <CountryQuickEmpty>
+                              {parentEventSlot.quickSearch.isSearching
+                                ? '검색 중…'
+                                : `‘${parentEventSlot.quickSearch.query.trim()}’에 맞는 묶음 사건이 없습니다.`}
+                            </CountryQuickEmpty>
+                          )}
+                        </CountryQuickResultBox>
+                      )}
+                    </CountryQuickSearchAnchor>
+                  )}
                   <S.AddButton
                     type="button"
                     onClick={() => {
@@ -1611,8 +1733,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     <FiPlus size={15} />
                     상위 사건 선택
                   </S.AddButton>
-                )}
-              </InlineControlRow>
+                </CountryQuickSearchRow>
+              )}
             </S.FormField>
           </S.FormRow>
         )}
@@ -1873,14 +1995,32 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           <S.FormField>
             <S.Input
               type="text"
-              placeholder="같은 사건 매칭용 대표 낱말 입력 후 Enter — 쉼표로 구분 (최대 20개·각 30자)"
+              aria-label="키워드 입력"
+              placeholder="같은 사건 매칭용 대표 낱말 입력 후 Enter 또는 쉼표(,) — 최대 20개·각 30자"
               value={keywordInput}
               onChange={(e) => setKeywordInput(e.target.value)}
+              onBlur={() => {
+                if (keywordInput.trim()) {
+                  addKeywordsFromInput()
+                }
+              }}
               onKeyDown={(e) => {
-                if (e.key !== 'Enter') return
                 if ((e.nativeEvent as KeyboardEvent).isComposing) return
-                e.preventDefault()
-                addKeywordsFromInput()
+                if (e.key === 'Enter' || e.key === ',') {
+                  if (keywordInput.trim()) {
+                    e.preventDefault()
+                    addKeywordsFromInput()
+                  } else if (e.key === ',') {
+                    e.preventDefault()
+                  }
+                } else if (
+                  e.key === 'Backspace' &&
+                  keywordInput === '' &&
+                  keywords.length > 0
+                ) {
+                  e.preventDefault()
+                  setKeywords(keywords.slice(0, -1))
+                }
               }}
             />
             {keywordValidationMsg && (
@@ -2295,8 +2435,8 @@ const CountryQuickResultBox = styled.div`
   padding: 6px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1e1e24' : '#ffffff')};
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
 `
 
 const CountryQuickBatchButton = styled.button`
@@ -2447,9 +2587,9 @@ const RoleSelect = styled.select`
 const RoleDescriptionInput = styled.textarea`
   ${participantControl}
   width: 100%;
-  min-height: 44px;
-  height: auto;
-  padding: 8px 12px;
+  min-height: 34px;
+  height: 34px;
+  padding: 6px 11px;
   min-width: 0;
   line-height: 1.45;
   resize: vertical;

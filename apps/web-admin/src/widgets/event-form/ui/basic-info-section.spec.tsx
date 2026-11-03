@@ -617,4 +617,91 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       within(contextSection).getByText('맥락 · 부가 정보'),
     ).toBeInTheDocument()
   })
+
+  it('키워드 입력창에서 Enter·쉼표(,)·포커스 해제로 칩을 추가하고, 부분 문자열 키워드를 보존하며 칩 삭제 시 입력창에 덤프하지 않는다', () => {
+    const setKeywords = jest.fn()
+    const { rerender } = renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          keywords: ['대전'],
+          setKeywords,
+        })}
+      />,
+    )
+
+    const keywordInput = screen.getByLabelText('키워드 입력') as HTMLInputElement
+    // 초기 하이드레이션/렌더 시 기존 칩이 입력창에 덤프되지 않고 빈 상태를 유지한다
+    expect(keywordInput.value).toBe('')
+
+    // '세계 대전' 입력 후 쉼표(,) 키를 누르면 기존 짧은 키워드('대전')가 지워지지 않고 함께 유지된다
+    fireEvent.change(keywordInput, { target: { value: '세계 대전' } })
+    fireEvent.keyDown(keywordInput, { key: ',' })
+    expect(setKeywords).toHaveBeenLastCalledWith(['대전', '세계 대전'])
+    expect(keywordInput.value).toBe('')
+
+    // 포커스 해제(blur) 시에도 입력 중이던 키워드가 자동 칩으로 확정된다
+    fireEvent.change(keywordInput, { target: { value: '총동원령' } })
+    fireEvent.blur(keywordInput)
+    expect(setKeywords).toHaveBeenLastCalledWith(['대전', '총동원령'])
+    expect(keywordInput.value).toBe('')
+
+    // 칩이 여러 개일 때 하나를 삭제해도 나머지 키워드가 텍스트 입력창에 덤프되지 않는다
+    rerender(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          keywords: ['대전', '세계 대전'],
+          setKeywords,
+        })}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '세계 대전 제거' }))
+    expect(setKeywords).toHaveBeenLastCalledWith(['대전'])
+    expect(keywordInput.value).toBe('')
+
+    // 빈 입력창에서 Backspace를 누르면 마지막 키워드 칩이 제거된다
+    fireEvent.keyDown(keywordInput, { key: 'Backspace' })
+    expect(setKeywords).toHaveBeenLastCalledWith(['대전'])
+  })
+
+  it('상위 사건 미선택 시 인라인 빠른 검색창에서 묶음 사건을 Enter 또는 클릭으로 즉시 선택할 수 있다', () => {
+    const onSelectCandidate = jest.fn()
+    const onQueryChange = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          parentEventSlot: {
+            parent: null,
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+            quickSearch: {
+              query: '세계 대전',
+              onQueryChange,
+              candidates: [
+                {
+                  id: 'evt-ww1',
+                  title: '제1차 세계 대전',
+                  dateLabel: '1914 ~ 1918',
+                  startYear: 1914,
+                },
+              ],
+              onSelectCandidate,
+            },
+          },
+        })}
+      />,
+    )
+
+    const parentSearchInput = screen.getByRole('searchbox', {
+      name: '상위 사건 빠른 검색',
+    })
+    fireEvent.keyDown(parentSearchInput, { key: 'Enter' })
+
+    expect(onSelectCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'evt-ww1',
+        title: '제1차 세계 대전',
+      }),
+    )
+  })
 })

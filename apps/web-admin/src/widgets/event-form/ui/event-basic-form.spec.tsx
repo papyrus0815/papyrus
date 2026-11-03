@@ -152,6 +152,10 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
     endDate: string
     category: string
     setCategory: (next: string) => void
+    titleSuggestionSlot?: {
+      label: string
+      onApply: () => void
+    }
     typeSlot?: ReactNode
     recordsSlot?: { title: string; content: ReactNode }
     participantsCoreOf?: string
@@ -232,6 +236,11 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
           }
         >
           _toggleKind
+        </button>
+      )}
+      {props.titleSuggestionSlot && (
+        <button type="button" onClick={props.titleSuggestionSlot.onApply}>
+          {props.titleSuggestionSlot.label} 적용
         </button>
       )}
       {props.typeSlot}

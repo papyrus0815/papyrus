@@ -627,8 +627,8 @@ const SearchResultBox = styled.div`
   padding: 6px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1e1e24' : '#ffffff')};
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
 `
 
 const SearchResultButton = styled.button`

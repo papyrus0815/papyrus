@@ -453,6 +453,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   )
   const [parentPickerOpen, setParentPickerOpen] = useState(false)
   const [parentSearchTerm, setParentSearchTerm] = useState('')
+  const [parentQuickQuery, setParentQuickQuery] = useState('')
   // 모달 열림/닫힘 시 debounced를 즉시 현재값으로 스냅(detail-network와 동일 규약).
   const debouncedParentTerm = useDebouncedValue(
     parentSearchTerm,
@@ -478,6 +479,24 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         kind: 'COLLECTION',
       })) ?? [],
     enabled: parentPickerOpen && !isEditMode,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  })
+
+  const debouncedParentQuickQuery = useDebouncedValue(parentQuickQuery, 200)
+  const {
+    data: parentQuickRaw = [],
+    isFetching: parentQuickFetching,
+  } = useQuery({
+    queryKey: eventKeys.linkCandidates(debouncedParentQuickQuery.trim(), 'COLLECTION'),
+    queryFn: async () =>
+      (await getEventLinkCandidates({
+        query: debouncedParentQuickQuery.trim(),
+        limit: 8,
+        kind: 'COLLECTION',
+      })) ?? [],
+    enabled: !isEditMode && !parentEvent && debouncedParentQuickQuery.trim().length >= 1,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
     retry: 1,
@@ -1093,6 +1112,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       setFacetDrafts(emptyRegisterFacetDrafts())
       setRelatedEvents([])
       setRelatedQuickQuery('')
+      setParentQuickQuery('')
       // parentEvent는 의도적으로 유지 — "계속 등록"의 전형이 같은 상위 밑에 형제
       // 가지를 연달아 등록하는 흐름이다(keepCategory와 같은 근거). 칩이 보이므로
       // 원치 않으면 ✕ 한 번으로 해제된다. 유지된 값은 아래 토큰으로 새 기준선에 편입.
@@ -1148,7 +1168,6 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
             domain={domainName}
             value={eventType}
             isEditMode={isEditMode}
-            eventTitle={title}
             hasParent={Boolean(parentEvent)}
             onApplySuggestion={(suggestion) => {
               playClickSound()
@@ -1270,6 +1289,21 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                 parent: parentEvent,
                 onOpenPicker: () => setParentPickerOpen(true),
                 onClear: () => setParentEvent(null),
+                quickSearch: {
+                  query: parentQuickQuery,
+                  onQueryChange: setParentQuickQuery,
+                  candidates: parentQuickRaw
+                    .filter((candidate) => !linkedRelatedIdSet.has(candidate.id))
+                    .slice(0, 6)
+                    .map(toSimpleCandidate),
+                  isSearching:
+                    parentQuickFetching ||
+                    parentQuickQuery !== debouncedParentQuickQuery,
+                  onSelectCandidate: (candidate) => {
+                    setParentEvent({ id: candidate.id, title: candidate.title })
+                    setParentQuickQuery('')
+                  },
+                },
               }
         }
         relatedEventsSlot={
