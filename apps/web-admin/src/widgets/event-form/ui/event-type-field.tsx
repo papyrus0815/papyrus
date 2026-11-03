@@ -450,7 +450,13 @@ const Hint = styled.p`
   flex-wrap: wrap;
   align-items: center;
   gap: 2px 10px;
-  margin: 0;
+  margin: 2px 0 0;
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    `rgba(var(--chip-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.12 : 0.06})`};
+  border: 1px solid ${({ theme }) =>
+    `rgba(var(--chip-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.24 : 0.16})`};
   font-size: 12px;
   line-height: 1.45;
   color: ${({ theme }) => theme.colors.text.secondary};

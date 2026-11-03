@@ -342,14 +342,16 @@ export const PeriodBadge = styled.div`
   margin-top: 6px;
   font-size: 11px;
   font-weight: 600;
-  color: ${({ theme }) => getC(theme).primary.dark};
+  color: ${({ theme }) => `var(--active-domain-text, ${getC(theme).primary.dark})`};
   background: ${({ theme }) =>
-    pickC(theme, 'rgba(99, 102, 241, 0.08)', 'rgba(167, 139, 250, 0.14)')};
+    `rgba(var(--active-domain-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.18 : 0.1})`};
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.22);
   border-radius: 999px;
   padding: 2px 8px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 
   span {
     color: ${({ theme }) => getC(theme).text.muted};
@@ -366,12 +368,14 @@ export const DateRangeRow = styled.div`
 export const DateRangeColumn = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 `
 
 export const DateRangeLabel = styled.div`
-  font-size: 12px;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 700;
   color: ${({ theme }) => getC(theme).text.secondary};
   letter-spacing: -0.01em;
 `

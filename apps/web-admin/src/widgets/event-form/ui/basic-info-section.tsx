@@ -827,7 +827,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             사건명 <S.Required>*</S.Required>
           </S.FormLabel>
           <S.FormField>
-            <S.Input
+            <TitleInput
               ref={titleInputRef}
               id="event-form-title"
               type="text"
@@ -2299,7 +2299,9 @@ const ParticipantSideBtn = styled.button<{ $active: boolean }>`
       ? '0 1px 2px rgba(15, 23, 42, 0.08)'
       : 'none'};
   color: ${({ $active, theme }) =>
-    $active ? theme.colors.primary : theme.colors.text.secondary};
+    $active
+      ? `var(--active-domain-text, ${theme.colors.primary})`
+      : theme.colors.text.secondary};
   font: inherit;
   font-size: 11.5px;
   font-weight: 600;
@@ -2645,6 +2647,13 @@ const RoleDescriptionInput = styled.textarea`
   }
 `
 
+const TitleInput = styled(S.Input)`
+  height: 42px;
+  padding: 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+`
+
 const OverviewTextarea = styled(S.Textarea)`
   min-height: 112px;
   padding: 11px 13px;
@@ -2652,17 +2661,18 @@ const OverviewTextarea = styled(S.Textarea)`
 `
 
 /* ─── 묶음 ───
- * 행마다 그어 두던 구분선(8개)을 걷고, 성격이 같은 행끼리 묶어 묶음 사이에만 선을 둔다.
+ * 행마다 그어 두던 구분선(8개)을 걷고, 성격이 같은 행끼리 묶어 섹션 헤더 바로 구획을 나눈다.
  * 기본 정보(필수 둘 + 카테고리) → 연결(참여국·상위) → 소개(글·키워드·이미지) 순 —
  * 위에서부터 채울수록 '등록할 만한 사건'이 되는 순서다. */
 const FormGroup = styled.section`
   display: flex;
   flex-direction: column;
-  padding: 0 0 14px;
+  padding: 0 0 10px;
 
   & + & {
-    padding-top: 22px;
-    border-top: 1px solid ${({ theme }) => S.getC(theme).border.default};
+    margin-top: 20px;
+    padding-top: 4px;
+    border-top: none;
   }
 
   > ${S.FormRow} {
@@ -2672,11 +2682,14 @@ const FormGroup = styled.section`
 `
 
 const FormGroupTitle = styled.h3`
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 10px;
-  font-size: 13.5px;
+  width: 100%;
+  margin: 0 0 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.35;
@@ -2746,12 +2759,14 @@ const KeywordChip = styled.span`
   gap: 4px;
   height: 28px;
   padding: 0 4px 0 10px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.24);
   border-radius: 999px;
-  background: ${({ theme }) => S.getC(theme).background.section};
+  background: ${({ theme }) =>
+    `rgba(var(--active-domain-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.12 : 0.06})`};
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 13px;
   font-weight: 500;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 `
 
 const KeywordChipRemove = styled.button`
@@ -2784,6 +2799,10 @@ const TitleSuggestionRow = styled.div`
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.05);
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.14);
 `
 
 const TitleSuggestionButton = styled.button`
@@ -2794,7 +2813,7 @@ const TitleSuggestionButton = styled.button`
   padding: 0 10px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: transparent;
+  background: ${({ theme }) => S.getC(theme).background.content};
   color: ${({ theme }) => theme.colors.primary};
   font: inherit;
   font-size: 12px;
@@ -2841,6 +2860,10 @@ const SimilarEventsBar = styled.div`
   flex-wrap: wrap;
   gap: 6px 10px;
   margin-top: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.05);
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.14);
   font-size: 12px;
 `
 

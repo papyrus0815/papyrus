@@ -417,13 +417,15 @@ const FieldIconBtn = styled.button`
   justify-content: center;
   width: 28px;
   height: 28px;
-  margin-right: 4px;
+  margin-right: 5px;
   flex-shrink: 0;
   color: ${({ theme }) => kitC(theme).textMuted};
-  background: transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.03)'};
   border: none;
   border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
     color: ${({ theme }) => theme.colors.primary};
@@ -468,19 +470,27 @@ const FieldSep = styled.span`
 /** 서기/기원전 — 칸 오른쪽 끝의 작은 글 스위치(기원전일 때만 강조) */
 const EraSwitch = styled.button<{ $bc: boolean }>`
   margin-left: auto;
-  padding: 3px 8px;
+  padding: 2px 8px;
   flex-shrink: 0;
   font-size: ${FONT.meta};
   font-weight: ${({ $bc }) => ($bc ? 600 : 500)};
   color: ${({ $bc, theme }) =>
-    $bc ? theme.colors.active : theme.colors.text.tertiary};
-  background: ${({ $bc, theme }) => ($bc ? theme.colors.activeLight : 'transparent')};
-  border: none;
+    $bc ? theme.colors.active : theme.colors.text.secondary};
+  background: ${({ $bc, theme }) =>
+    $bc
+      ? theme.colors.activeLight
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.03)'
+        : 'rgba(15, 23, 42, 0.02)'};
+  border: 1px solid ${({ $bc, theme }) =>
+    $bc ? theme.colors.active : theme.colors.border.light};
   border-radius: ${RADIUS.pill};
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover {
     color: ${({ theme }) => theme.colors.active};
+    border-color: ${({ theme }) => theme.colors.active};
     background: ${({ theme }) => theme.colors.activeLight};
   }
   &:focus-visible {

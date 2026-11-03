@@ -441,7 +441,7 @@ function StatehoodField({
           {slots.map((slot) => {
             const rows = participants.filter((row) => row.role === slot.role)
             return (
-              <div key={slot.role}>
+              <StatehoodCard key={slot.role}>
                 <SlotLabel>{slot.label}</SlotLabel>
                 <KitSelectedItems>
                   {rows.map((row) => (
@@ -467,7 +467,7 @@ function StatehoodField({
                     {slot.add}
                   </KitAddButton>
                 </KitSelectedItems>
-              </div>
+              </StatehoodCard>
             )
           })}
         </StatehoodGrid>
@@ -792,13 +792,17 @@ const Row = styled.div`
   grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.8fr) 28px;
   align-items: center;
   gap: 10px;
-  padding: 2px 0 10px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: transparent;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.section};
+  transition: border-color 0.15s ease;
 
-  &:last-child {
-    padding-bottom: 2px;
-    border-bottom: none;
+  &:focus-within {
+    border-color: var(
+      --active-domain-accent,
+      ${({ theme }) => S.getC(theme).border.focus}
+    );
   }
 
   @media (max-width: 640px) {
@@ -1062,8 +1066,18 @@ const StatehoodGrid = styled.div`
   }
 `
 
+const StatehoodCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.section};
+`
+
 const SlotLabel = styled.div`
-  margin-bottom: 6px;
+  margin-bottom: 2px;
   font-size: 12.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
