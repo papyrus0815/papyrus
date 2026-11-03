@@ -105,12 +105,12 @@ export const KitChoiceChip = styled.button<{ $selected: boolean; $error?: boolea
     box-shadow 0.15s ease;
 
   &:hover:not(:disabled) {
-    border-color: ${({ $selected, theme }) =>
-      $selected ? `rgba(${CHIP_RGB}, 0.75)` : kitC(theme).borderHover};
+    border-color: ${({ $selected }) =>
+      $selected ? `rgba(${CHIP_RGB}, 0.8)` : `rgba(${CHIP_RGB}, 0.45)`};
     background: ${({ $selected, theme }) =>
       $selected
-        ? `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.25 : 0.14})`
-        : kitC(theme).section};
+        ? `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.25 : 0.15})`
+        : `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.1 : 0.05})`};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => kitC(theme).focus};

@@ -891,9 +891,11 @@ const SideBoardGrid = styled.div`
 const SideCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 0;
-  background: transparent;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.section};
 `
 
 const SideNameInput = styled.input`
@@ -931,10 +933,9 @@ const SideMemberWrap = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 5px 10px;
-  border-radius: 8px;
-  background: ${({ theme }) => S.getC(theme).background.section};
+  min-height: 34px;
+  padding: 2px 0;
+  background: transparent;
 `
 
 const SideEmptyHint = styled.span`

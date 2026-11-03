@@ -408,7 +408,7 @@ export { FormInput as Input, FormTextarea as Textarea } from '@/shared/ui/form-i
 export const CategoryGrid = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
 `
 
 // 확장 가능한 카테고리 카드
@@ -417,44 +417,49 @@ export const CategoryCard = styled.button<{
   $selected: boolean
 }>`
   position: relative;
-  height: 34px;
+  height: 36px;
   border: 1px solid
     ${({ $selected, theme }) =>
-      $selected ? 'rgba(var(--cat-rgb), 0.55)' : getC(theme).border.default};
+      $selected
+        ? 'rgba(var(--cat-rgb), 0.68)'
+        : theme.mode === 'dark'
+          ? 'rgba(var(--cat-rgb), 0.28)'
+          : 'rgba(var(--cat-rgb), 0.24)'};
   border-radius: 999px;
-  padding: 0 13px;
+  padding: 0 13px 0 8px;
   background: ${({ $selected, theme }) =>
     $selected
-      ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.2 : 0.1})`
+      ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.24 : 0.13})`
       : getC(theme).background.content};
   cursor: pointer;
   transition:
     border-color 0.15s ease,
     background 0.15s ease,
     color 0.15s ease,
-    box-shadow 0.15s ease;
+    box-shadow 0.15s ease,
+    transform 0.12s ease;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   box-shadow: ${({ $selected, theme }) =>
     $selected
-      ? '0 1px 2px rgba(var(--cat-rgb), 0.12)'
+      ? '0 1px 3px rgba(var(--cat-rgb), 0.18), 0 0 0 1px rgba(var(--cat-rgb), 0.22)'
       : theme.mode === 'dark'
         ? 'none'
         : '0 1px 2px rgba(15, 23, 42, 0.03)'};
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => getC(theme).border.focus};
+    outline: 2px solid var(--cat-accent, ${({ theme }) => getC(theme).border.focus});
     outline-offset: 2px;
   }
 
   &:hover {
-    border-color: ${({ $selected, theme }) =>
-      $selected ? 'rgba(var(--cat-rgb), 0.75)' : getC(theme).border.hover};
+    border-color: ${({ $selected }) =>
+      $selected ? 'rgba(var(--cat-rgb), 0.85)' : 'rgba(var(--cat-rgb), 0.52)'};
     background: ${({ $selected, theme }) =>
       $selected
-        ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.25 : 0.14})`
-        : getC(theme).background.hover};
+        ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.28 : 0.17})`
+        : `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.12 : 0.06})`};
   }
 `
 
@@ -462,12 +467,19 @@ export const CategoryIcon = styled.span<{
   $selected?: boolean
 }>`
   flex: none;
-  color: ${({ $selected, theme }) =>
-    $selected ? 'var(--cat-text)' : getC(theme).text.muted};
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? 'var(--cat-accent, var(--cat-text))'
+      : `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.2 : 0.12})`};
+  color: ${({ $selected }) =>
+    $selected ? '#ffffff' : 'var(--cat-accent, var(--cat-text))'};
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 `
 
 export const CategoryLabel = styled.span`
@@ -476,9 +488,14 @@ export const CategoryLabel = styled.span`
   letter-spacing: -0.01em;
   color: ${({ theme }) => getC(theme).text.primary};
   white-space: nowrap;
+  transition: color 0.15s ease;
+
+  ${CategoryCard}:hover > & {
+    color: var(--cat-text);
+  }
 
   [aria-pressed='true'] > & {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--cat-text);
   }
 `

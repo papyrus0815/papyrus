@@ -792,12 +792,27 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     prevKeywordsLengthRef.current = keywords.length
   }, [keywords.length])
 
+  const activeDomainTone = category ? EVENT_DOMAINS[category] : null
+
   return (
     <S.FormSection
       as={motion.div}
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3 }}
+      style={
+        activeDomainTone
+          ? {
+              '--active-domain-rgb': activeDomainTone.soft.rgb,
+              '--active-domain-accent': isDark
+                ? activeDomainTone.dark
+                : activeDomainTone.badge,
+              '--active-domain-text': isDark
+                ? activeDomainTone.soft.textDark
+                : activeDomainTone.soft.text,
+            }
+          : undefined
+      }
     >
       <FormGroup
         id="event-form-group-basic"
@@ -1113,6 +1128,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       {
                         '--cat-rgb': domain.soft.rgb,
                         '--cat-text': isDark ? domain.soft.textDark : domain.soft.text,
+                        '--cat-accent': isDark ? domain.dark : domain.badge,
                       } as React.CSSProperties
                     }
                     $selected={isSelected}
@@ -1172,11 +1188,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             개요 설명<OptionalTag>(선택)</OptionalTag>
           </S.FormLabel>
           <S.FormField>
-            <S.Textarea
+            <OverviewTextarea
               placeholder="무슨 일이 왜 일어났는지 두세 문장으로"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={2}
+              rows={4}
             />
           </S.FormField>
         </S.FormRow>
@@ -2219,21 +2235,25 @@ const OptionalTag = styled.span`
 const ParticipantList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 8px;
 `
 
 const ParticipantRow = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 2px 0 12px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: transparent;
+  gap: 7px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.section};
+  transition: border-color 0.15s ease;
 
-  &:last-child {
-    padding-bottom: 2px;
-    border-bottom: none;
+  &:focus-within {
+    border-color: var(
+      --active-domain-accent,
+      ${({ theme }) => S.getC(theme).border.focus}
+    );
   }
 `
 
@@ -2618,16 +2638,17 @@ const RoleDescriptionInput = styled.textarea`
   min-width: 0;
   line-height: 1.45;
   resize: vertical;
-  background-color: ${({ theme }) => S.getC(theme).background.section};
-
-  &:focus,
-  &:focus-visible {
-    background-color: ${({ theme }) => S.getC(theme).background.content};
-  }
+  background-color: ${({ theme }) => S.getC(theme).background.content};
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};
   }
+`
+
+const OverviewTextarea = styled(S.Textarea)`
+  min-height: 112px;
+  padding: 11px 13px;
+  line-height: 1.6;
 `
 
 /* ─── 묶음 ───
@@ -2637,26 +2658,41 @@ const RoleDescriptionInput = styled.textarea`
 const FormGroup = styled.section`
   display: flex;
   flex-direction: column;
-  padding: 0 0 12px;
+  padding: 0 0 14px;
 
   & + & {
-    padding-top: 20px;
+    padding-top: 22px;
     border-top: 1px solid ${({ theme }) => S.getC(theme).border.default};
   }
 
   > ${S.FormRow} {
-    padding: 9px 0;
+    padding: 10px 0;
     border-bottom: none;
   }
 `
 
 const FormGroupTitle = styled.h3`
-  margin: 0 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
   font-size: 13.5px;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.35;
   color: ${({ theme }) => theme.colors.text.primary};
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(
+      --active-domain-accent,
+      ${({ theme }) => theme.colors.primary}
+    );
+    transition: background-color 0.2s ease;
+  }
 `
 
 const InlineControlRow = styled.div`

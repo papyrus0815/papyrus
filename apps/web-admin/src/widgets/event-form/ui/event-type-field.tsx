@@ -457,7 +457,10 @@ const Hint = styled.p`
 
   b {
     font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
+    color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? `var(--chip-text-dark, ${theme.colors.text.primary})`
+        : `var(--chip-text, ${theme.colors.text.primary})`};
   }
 `
 
