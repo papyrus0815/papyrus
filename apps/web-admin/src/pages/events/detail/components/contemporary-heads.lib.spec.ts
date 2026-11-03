@@ -1,5 +1,6 @@
 import {
   type BridgeCountry,
+  accessionMarkers,
   type OfficeHoldingRow,
   describeHeads,
   eventWindow,
@@ -143,5 +144,52 @@ describe('headsForCountry', () => {
   it('툴팁은 시작 시점과 교체를 모두 적는다', () => {
     const heads = headsForCountry({ kind: 'H', id: RUSSIA }, [nicholas1, alexander2], crimea)
     expect(describeHeads(heads)).toBe('니콜라이 1세 (황제) — 사건 시작 시점\n1855.3 알렉산드르 2세 (황제)')
+  })
+})
+
+describe('accessionMarkers', () => {
+  const window = { fromKey: 18531016, toKey: 18560330, year: 1853 }
+  it('기간 안 즉위를 선대와 함께 낸다', () => {
+    const markers = accessionMarkers({ rows: [nicholas1, alexander2], targets: [{ kind: 'H', id: RUSSIA }], window })
+    expect(markers).toHaveLength(1)
+    expect(markers[0]).toMatchObject({ name: '알렉산드르 2세', verb: '즉위', predecessor: '니콜라이 1세', startDate: '1855-03-02' })
+  })
+  it('같은 날 그 사람 이름이 든 하위 사건이 있으면 세우지 않는다', () => {
+    const markers = accessionMarkers({
+      rows: [nicholas1, alexander2],
+      targets: [{ kind: 'H', id: RUSSIA }],
+      window,
+      existingEvents: [{ title: '니콜라이 1세 사망과 알렉산드르 2세 즉위', startDate: '1855-03-02', startDatePrecision: 'day' }],
+    })
+    expect(markers).toHaveLength(0)
+  })
+  it('같은 사람이 같은 날 여러 나라에 오르면 한 표지, 대통령은 취임', () => {
+    const prussia = row({ ...alexander2, id: 'w1', personId: 'p-w', historicalCountryId: 'h-pr', regnalName: '빌헬름 1세', historicalCountry: { id: 'h-pr', name: '프로이센 왕국' } })
+    const confed = row({ ...prussia, id: 'w2', historicalCountryId: 'h-nd', historicalCountry: { id: 'h-nd', name: '북독일 연방' } })
+    const president = row({
+      id: 'pr1',
+      personId: 'p-pres',
+      historicalCountryId: 'h-fr',
+      startDate: '1855-01-01',
+      startDatePrecision: 'day',
+      positionDefinition: { title: '대통령', positionType: 'HEAD_OF_STATE', isMonarchical: false },
+      person: person('p-pres', '대통령'),
+    })
+    const markers = accessionMarkers({
+      rows: [prussia, confed, president],
+      targets: [
+        { kind: 'H', id: 'h-pr' },
+        { kind: 'H', id: 'h-nd' },
+        { kind: 'H', id: 'h-fr' },
+      ],
+      window,
+    })
+    expect(markers.map((marker) => [marker.name, marker.verb, marker.countries.join('·')])).toEqual([
+      ['대통령', '취임', ''],
+      ['빌헬름 1세', '즉위', '프로이센 왕국·북독일 연방'],
+    ])
+  })
+  it('구간 밖 즉위는 내지 않는다', () => {
+    expect(accessionMarkers({ rows: [nicholas1, alexander2], targets: [{ kind: 'H', id: RUSSIA }], window: { fromKey: 18600101, toKey: 18700101, year: 1860 } })).toEqual([])
   })
 })

@@ -1,4 +1,4 @@
-import { type DragEvent, type ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { type DragEvent, Fragment, type ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiLayers, FiLink2, FiPlus } from 'react-icons/fi'
@@ -18,6 +18,8 @@ import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { type UpdateEventDto, deleteEvent, updateEvent } from '@/shared/api/events'
 import { getEventOverview } from '@/shared/api/event-overview'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
+import { getOfficeHoldingTimeline, officeHoldingTimelineKey } from '@/shared/api/sovereign-reigns'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
 import { pathKeys } from '@/shared/router'
@@ -27,8 +29,15 @@ import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inlin
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
-import { PHASE_LABEL, groupByPhase } from './collection-development.lib'
-import { type GapInfo, siblingGaps, spanText } from './development-gap.lib'
+import { type DevelopmentPhase, PHASE_LABEL, groupByPhase, phaseOf, spanOfChildren } from './collection-development.lib'
+import {
+  type AccessionMarker,
+  type BridgeCountry,
+  type OfficeHoldingRow,
+  accessionMarkers,
+  eventWindow,
+} from './contemporary-heads.lib'
+import { type GapInfo, type QuietSpan, quietSpansWithStart, siblingGaps, spanText, trailingQuiet } from './development-gap.lib'
 import { HeaderTextAction } from './section-collapse'
 import { CollectionFooter, ExpandToggle, KindSwitch, RegroupBar, createCollectionWith } from './collection-regroup'
 import { compareEventStart, crossPatchErrorMessage } from './detail-network.lib'
@@ -74,6 +83,8 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   const navigate = useNavigate()
   /** 접은 묶음 — 기본은 전부 펼친다('모든 사건을 본다'). 접은 것만 기억한다 */
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set())
+  /** 참여국 국가원수의 즉위·취임 표지 — 기본은 보인다. 머리의 단추로 숨긴다 */
+  const [showAccessions, setShowAccessions] = useState(true)
   /** 골라서 묶기 — 켜면 번호 자리가 고르기 칸이 되고 아래에 묶기 막대가 붙는다 */
   const [selecting, setSelecting] = useState(false)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -211,19 +222,112 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
    * 앞 사건 시작 며칠 뒤인지 — 같은 상위 아래 화면 차례에서 앞에 나온 형제 중 가장 늦게 시작한 사건과 견준다(직계는 구획을 넘어 이어지는 차례,
    * 하위 묶음 안은 그 안에서). 첫 행은 비운다 — 상위 시작과의 관계는 구획(시작 이전·기간 중)이 이미 말한다.
    */
-  const gapById = useMemo(() => {
-    const map = new Map<string, GapInfo>()
-    const visit = (siblings: TreeRow[]) => {
-      const gaps = siblingGaps(siblings)
+  const { gapById, quietById } = useMemo(() => {
+    const gaps = new Map<string, GapInfo & { anchorRef: string | null }>()
+    const quiets = new Map<string, QuietSpan>()
+    /* 번호는 renderRow와 같은 규칙 — 직계는 화면 차례(ordinalById), 하위는 '상위 번호-자리' */
+    const visit = (siblings: TreeRow[], ordinalOf: (node: TreeRow, position: number) => string) => {
+      const siblingGapList = siblingGaps(siblings)
+      const quietList = quietSpansWithStart(siblings)
       siblings.forEach((node, position) => {
-        const gap = gaps[position]
-        if (gap) map.set(node.id, gap)
-        visit(node.children)
+        const gap = siblingGapList[position]
+        if (gap) {
+          /* 견준 사건이 화면 바로 위 행이 아니면 그 번호를 적는다 */
+          const anchorIndex = gap.anchorIndex ?? position - 1
+          const anchorRef =
+            anchorIndex !== position - 1 && siblings[anchorIndex]
+              ? ordinalOf(siblings[anchorIndex], anchorIndex)
+              : null
+          gaps.set(node.id, { ...gap, anchorRef })
+        }
+        const quiet = quietList[position]
+        if (quiet) quiets.set(node.id, quiet)
+        const own = ordinalOf(node, position)
+        visit(node.children, (_child, childPosition) => `${own}-${childPosition + 1}`)
       })
     }
-    visit(groups.flatMap((group) => group.items))
-    return map
-  }, [groups])
+    visit(groups.flatMap((group) => group.items), (node) => String(ordinalById.get(node.id) ?? 0))
+    return { gapById: gaps, quietById: quiets }
+  }, [groups, ordinalById])
+  /**
+   * 하위가 끝난 뒤 상위가 끝나기까지 1년 넘게 빈 시간 — '기간 중' 구획 끝에 공백 줄로 단다.
+   * 하위가 상위 끝 뒤까지 있으면(끝난 뒤 구획) 비어 있지 않으므로 직계 전체(추가 상위 연결 포함)로 잰다.
+   */
+  const trailing = useMemo(() => {
+    const length = trailingQuiet(tree, event)
+    if (!length) return null
+    const covered = spanOfChildren(tree)
+    const from = covered ? formatDateRange(covered.endDate, undefined, covered.endDatePrecision, undefined) : null
+    return { length, from }
+  }, [tree, event])
+  /*
+   * 즉위·취임 표지 — 참여국 국가원수가 이 사건 동안 바뀐 시점을 하위 사건 사이에 끼운다(사건 목록의 즉위 표지와 같은 피드·캐시).
+   * 구간은 상위 기간과 하위 범위를 합친 것. 현대 국가 참여국은 그 해의 역사 국가로 이어 찾는다.
+   */
+  const { data: officeHoldings } = useQuery({
+    queryKey: officeHoldingTimelineKey,
+    queryFn: getOfficeHoldingTimeline,
+    staleTime: 5 * 60 * 1000,
+  })
+  const hasModernParticipants = (event.relatedCountries?.length ?? 0) > 0
+  const { data: historicalCountryList } = useQuery({
+    queryKey: ['historical-countries'],
+    queryFn: getAllHistoricalCountries,
+    staleTime: 5 * 60 * 1000,
+    enabled: hasModernParticipants,
+  })
+  const accessions = useMemo<AccessionMarker[]>(() => {
+    if (!officeHoldings) return []
+    const targets = [
+      ...(event.relatedCountries ?? []).map((country) => ({ kind: 'C' as const, id: country.id })),
+      ...(event.relatedHistoricalCountries ?? []).map((country) => ({ kind: 'H' as const, id: country.id })),
+    ]
+    if (targets.length === 0) return []
+    const covered = spanOfChildren(tree)
+    const windows = [
+      eventWindow(event),
+      covered
+        ? eventWindow({ startDate: covered.startDate, startDatePrecision: covered.startDatePrecision, endDate: covered.endDate })
+        : null,
+    ].filter((window): window is NonNullable<typeof window> => window !== null)
+    if (windows.length === 0) return []
+    return accessionMarkers({
+      rows: officeHoldings as OfficeHoldingRow[],
+      targets,
+      window: {
+        fromKey: Math.min(...windows.map((window) => window.startKey)),
+        toKey: Math.max(...windows.map((window) => window.endKey)),
+        year: Math.min(...windows.map((window) => window.startYear)),
+      },
+      historicalCountries: (historicalCountryList ?? []) as unknown as BridgeCountry[],
+      skipHistoricalIds: new Set((event.relatedHistoricalCountries ?? []).map((country) => country.id)),
+      existingEvents: [...index.values()].map((node) => ({
+        title: node.title,
+        startDate: node.startDate,
+        startDatePrecision: node.startDatePrecision,
+      })),
+    })
+  }, [officeHoldings, historicalCountryList, event, tree, index])
+  /** 표지를 구획에 나눈다 — 그 구획이 없으면(시작 이전 표지인데 구획이 '기간 중'뿐) 가장 가까운 구획 끝에 */
+  const accessionsByPhase = useMemo(() => {
+    const byPhase = new Map<DevelopmentPhase, AccessionMarker[]>()
+    if (!showAccessions || groups.length === 0) return byPhase
+    const phases = groups.map((group) => group.phase)
+    for (const marker of accessions) {
+      let phase = showPhaseHeads
+        ? phaseOf({ startDate: marker.startDate, startDatePrecision: marker.startPrecision }, event)
+        : phases[0]
+      if (!phases.includes(phase)) phase = phase === 'before' ? phases[0] : phases[phases.length - 1]
+      byPhase.set(phase, [...(byPhase.get(phase) ?? []), marker])
+    }
+    return byPhase
+  }, [accessions, showAccessions, groups, showPhaseHeads, event])
+  /** 하위 사건이 실제로 다룬 기간 — 상위 기간과 다를 때가 많다(1차대전 하위는 1914년 6~8월뿐) */
+  const coveredRange = useMemo(() => {
+    const covered = spanOfChildren(tree)
+    if (!covered) return null
+    return formatDateRange(covered.startDate, covered.endDate, covered.startDatePrecision, covered.endDatePrecision)
+  }, [tree])
 
   /**
    * 구획의 기준 시점 — '시작 이전'은 무엇의 이전인지(상위 시작일)를 함께 말해야 구획이 읽힌다.
@@ -445,7 +549,17 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
 
   /* ── 한 행(재귀) — 타임라인의 한 마디 ── */
 
-  const renderRow = (node: TreeRow, ordinal: string): ReactNode => {
+  /** 공백 줄 — 1년 넘게 기록이 빈 자리. 타임라인 선을 점선으로 끊고 얼마나 비었는지 적는다 */
+  const renderQuiet = (node: TreeRow, quiet: QuietSpan): ReactNode => (
+    <QuietGap key={`quiet-${node.id}`} $depth={node.depth}>
+      <span>{quiet.label}</span>
+    </QuietGap>
+  )
+
+  /**
+   * @param quietOutside 공백 줄을 바깥(직계 목록)에서 이미 세웠다 — 즉위 표지와 날짜순으로 섞으려고 직계는 바깥이 맡는다
+   */
+  const renderRow = (node: TreeRow, ordinal: string, quietOutside = false): ReactNode => {
     const owned = !node.viaExtraLink
     const collapsed = collapsedIds.has(node.id)
     const checked = selectedIds.has(node.id)
@@ -457,11 +571,13 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     /** 진행 기간·앞 사건과의 간격 — 날짜 줄에 붙인다(행 높이를 늘리지 않게) */
     const span = spanText(node)
     const gap = gapById.get(node.id) ?? null
+    const quiet = quietById.get(node.id) ?? null
     const nested = node.depth > 1
     const canDrag = owned && !selecting && !busy
     return (
+      <Fragment key={node.id}>
+      {quiet && !quietOutside && renderQuiet(node, quiet)}
       <Step
-        key={node.id}
         id={`narrative-${node.id}`}
         $depth={node.depth}
         data-selected={checked || undefined}
@@ -502,17 +618,12 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 </DomainMeta>
               )}
               {node.viaExtraLink && <span>추가 상위로 연결</span>}
-              {gap && (
-                <StepGap title={gap.title}>
-                  {gap.text}
-                  {gap.ongoing && (
-                    <span className="ongoing">
-                      {' '}
-                      · <span className="wide">앞 사건 </span>진행 중
-                    </span>
-                  )}
-                </StepGap>
-              )}
+              {/*
+                * 앞 사건과의 간격 — 그 행 자신의 날짜 줄 끝에 문장으로('앞 사건 9일 뒤'). 행 사이 선 위 알약은 위·아래
+                * 어느 행의 말인지 맞춰 읽어야 했고, '+9일'만으로는 무엇과 견준 값인지 읽히지 않았다.
+                * 위에 공백 줄이 서면 그 줄이 같은 말을 하므로 비운다.
+                */}
+              {gap && !quiet && <StepGap title={gap.title}>{gapPhrase(gap)}</StepGap>}
             </StepPeriod>
             <StepHead>
               <StepTitle
@@ -586,8 +697,29 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
           )}
         </StepBody>
       </Step>
+      </Fragment>
     )
   }
+
+  /** 즉위·취임 표지 한 줄 — 하위 사건과 같은 선 위, 번호 대신 왕관 노드. 번호·간격 계산에는 끼지 않는다 */
+  const renderAccession = (marker: AccessionMarker): ReactNode => (
+    <AccessionStep key={`accession-${marker.key}`} aria-label={`${marker.countries.join('·')} ${marker.name} ${marker.verb}`}>
+      <AccessionNode aria-hidden $verb={marker.verb}>
+        {marker.verb === '즉위' ? '♛' : '★'}
+      </AccessionNode>
+      <AccessionBody>
+        <AccessionDate>
+          {formatDateRange(marker.startDate, undefined, marker.startPrecision, undefined)}
+          {marker.countries.length > 0 && <span>{marker.countries.join(' · ')}</span>}
+        </AccessionDate>
+        <AccessionTitle>
+          <b>{marker.name}</b>
+          {marker.title ? ` ${marker.title}` : ''} {marker.verb}
+          {marker.predecessor && <span className="prev"> · {marker.predecessor} 다음</span>}
+        </AccessionTitle>
+      </AccessionBody>
+    </AccessionStep>
+  )
 
   const allOwned = useMemo(() => [...index.values()].filter((node) => !(node as TreeRow).viaExtraLink), [index])
   /** 접을 수 있는 묶음 — 하위가 있는 것만 */
@@ -609,15 +741,32 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             : totalCount > directCount
               ? `하위 사건 ${directCount}건 · 그 아래까지 ${totalCount}건`
               : `하위 사건 ${directCount}건`}
+          {coveredRange && directCount > 1 && (
+            <CoveredRange title="하위 사건이 실제로 다룬 기간 — 가장 이른 시작부터 가장 늦은 끝까지">
+              {' · '}
+              {coveredRange}
+            </CoveredRange>
+          )}
         </S.SectionSubtitle>
-        {foldableIds.length > 0 && (
+        {(foldableIds.length > 0 || accessions.length > 0) && (
           <S.SectionActions>
-            <HeaderTextAction
-              type="button"
-              onClick={() => setCollapsedIds(allFolded ? new Set() : new Set(foldableIds))}
-            >
-              {allFolded ? '모두 펼치기' : '모두 접기'}
-            </HeaderTextAction>
+            {accessions.length > 0 && (
+              <HeaderTextAction
+                type="button"
+                aria-pressed={showAccessions}
+                onClick={() => setShowAccessions((shown) => !shown)}
+              >
+                {showAccessions ? `즉위 표지 숨기기 (${accessions.length})` : `즉위 표지 보기 (${accessions.length})`}
+              </HeaderTextAction>
+            )}
+            {foldableIds.length > 0 && (
+              <HeaderTextAction
+                type="button"
+                onClick={() => setCollapsedIds(allFolded ? new Set() : new Set(foldableIds))}
+              >
+                {allFolded ? '모두 펼치기' : '모두 접기'}
+              </HeaderTextAction>
+            )}
           </S.SectionActions>
         )}
       </S.SectionHeader>
@@ -670,10 +819,38 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 </PhaseHead>
               )}
               <Steps data-phase={showPhaseHeads ? group.phase : undefined}>
-                {group.items.map((node) => {
-                  /* 번호는 구획을 넘어 이어지는 직계 차례(1·2·3…) — 구획마다 다시 1부터면 몇 번째 국면인지 흐려진다 */
-                  return renderRow(node, String(ordinalById.get(node.id) ?? 0))
-                })}
+                {(() => {
+                  /* 즉위 표지는 날짜가 앞서는 하위 사건 앞에 끼운다 — 날짜 모르는 행 앞에서는 끼우지 않는다 */
+                  const pending = [...(accessionsByPhase.get(group.phase) ?? [])]
+                  const out: ReactNode[] = []
+                  for (const node of group.items) {
+                    const nodeKey = eventWindow(node)?.startKey ?? null
+                    /* 공백 줄은 그것이 시작된 때(앞 사건이 끝난 날)에 — 그 안에 든 즉위 표지보다 앞에 선다 */
+                    const quiet = quietById.get(node.id)
+                    if (quiet) {
+                      while (pending.length > 0 && pending[0].sortKey < quiet.fromKey) {
+                        out.push(renderAccession(pending.shift()!))
+                      }
+                      out.push(renderQuiet(node, quiet))
+                    }
+                    while (nodeKey != null && pending.length > 0 && pending[0].sortKey < nodeKey) {
+                      out.push(renderAccession(pending.shift()!))
+                    }
+                    /* 번호는 구획을 넘어 이어지는 직계 차례(1·2·3…) — 구획마다 다시 1부터면 몇 번째 국면인지 흐려진다 */
+                    out.push(renderRow(node, String(ordinalById.get(node.id) ?? 0), true))
+                  }
+                  for (const marker of pending) out.push(renderAccession(marker))
+                  return out
+                })()}
+                {/* 상위가 끝나기까지 남은 빈 시간 — 기간 안 마지막 구획 끝에(구획이 없으면 목록 끝에) */}
+                {trailing && (group.phase === 'during' || !showPhaseHeads) && (
+                  <QuietGap $depth={1} data-trailing>
+                    <span>
+                      {trailing.from ? `${trailing.from} 이후 ` : ''}
+                      {trailing.length} 동안 하위 사건 없음
+                    </span>
+                  </QuietGap>
+                )}
               </Steps>
             </PhaseGroup>
           ))}
@@ -1184,26 +1361,124 @@ const StepPeriod = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/** 1년 넘는 공백 — 행 사이 한 줄. 선 위에 지면색+점선을 덮어 실선을 끊는다 */
+const QuietGap = styled.li<{ $depth: number }>`
+  position: relative;
+  list-style: none;
+  padding: 0 0 6px ${({ $depth }) => columnOf($depth) + ($depth > 1 ? 10 : 12)}px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: ${({ $depth }) => lineLeft(columnOf($depth))}px;
+    top: -4px;
+    bottom: -4px;
+    width: 2px;
+    box-sizing: border-box;
+    background: ${({ theme }) => ledgerBackground(theme.mode)};
+    border-left: 2px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+/** 즉위·취임 표지 — 하위 사건 행과 같은 격자, 한 단 작고 흐리게(사건이 아니라 배경 사실) */
+const AccessionStep = styled.li`
+  position: relative;
+  display: grid;
+  grid-template-columns: ${columnOf(1)}px minmax(0, 1fr);
+  column-gap: 12px;
+  list-style: none;
+`
+
+const AccessionNode = styled.span<{ $verb: '즉위' | '취임' }>`
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1;
+  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
+`
+
+const AccessionBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 1px 0 2px;
+`
+
+const AccessionDate = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+
+  span {
+    font-weight: 500;
+    color: ${metaText};
+  }
+`
+
+const AccessionTitle = styled.div`
+  font-size: 14px;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  b {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .prev {
+    font-size: 12.5px;
+    color: ${metaText};
+  }
+`
+
+/** 전개 머리의 '하위가 다룬 기간' — 건수 뒤에 이어 쓴다 */
+const CoveredRange = styled.span`
+  font-variant-numeric: tabular-nums;
+`
+
 /** 진행 기간 — 날짜 바로 뒤, 한 단 흐리게 */
 const StepSpan = styled.span`
   font-weight: 500;
   color: ${metaText};
 `
 
-/** 앞 사건과의 간격 — 날짜 줄 오른쪽 끝. 진행 중이던 앞 사건은 덧붙여 말한다 */
+/** '앞 사건 9일 뒤'·'앞 사건과 같은 날'·'10번 사건 3일 뒤 · 아직 진행 중'(뒷말은 견준 사건이 아직 이어지고 있다는 뜻) */
+function gapPhrase(gap: GapInfo & { anchorRef: string | null }): string {
+  const reference = gap.anchorRef ? `${gap.anchorRef}번 사건` : '앞 사건'
+  const sameTime = gap.text === '같은 날' || gap.text === '같은 달'
+  const base = sameTime ? `${reference}과 ${gap.text}` : `${reference} ${gap.text}`
+  return gap.ongoing ? `${base} · 아직 진행 중` : base
+}
+
+/** 앞 사건과의 간격 — 날짜 줄 끝, 한 단 흐리게(날짜보다 앞서지 않게) */
 const StepGap = styled.span`
   margin-left: auto;
-  font-weight: 600;
+  font-weight: 500;
   color: ${metaText};
-  white-space: nowrap;
 
-  .ongoing {
-    font-weight: 500;
-  }
+  /* 휴대폰 폭 — 오른쪽 끝에 홀로 떨어지지 않게 날짜 아래 한 줄로(왼쪽 정렬) */
   @container eventdetail (max-width: 639px) {
-    .wide {
-      display: none;
-    }
+    flex-basis: 100%;
+    margin-left: 0;
   }
 `
 

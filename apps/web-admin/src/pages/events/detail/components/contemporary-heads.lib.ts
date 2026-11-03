@@ -35,6 +35,8 @@ export interface OfficeHoldingRow {
   endMonth?: number | null
   endDay?: number | null
   positionDefinition?: { title?: string | null; positionType?: string | null; isMonarchical?: boolean | null } | null
+  country?: { id: string; name?: string | null } | null
+  historicalCountry?: { id: string; name?: string | null } | null
   person?: {
     id: string
     name: string
@@ -252,4 +254,119 @@ export function describeHeads(heads: CountryHeads): string {
     parts.push(`${formatHeadPoint(change)} ${change.name}${change.title ? ` (${change.title})` : ''}`)
   }
   return parts.join('\n')
+}
+
+/** 전개 타임라인에 끼우는 즉위·취임 표지 */
+export interface AccessionMarker {
+  /** 표지 키 — 사람+시점 */
+  key: string
+  personId: string
+  /** 정렬 키(연·월·일 정수, BC 음수) */
+  sortKey: number
+  /** 구획 판정용 부호 ISO('-0044-03-15') */
+  startDate: string
+  startPrecision: 'day' | 'month' | 'year'
+  name: string
+  title: string | null
+  /** 군주는 즉위, 대통령 같은 비군주 국가원수는 취임 */
+  verb: '즉위' | '취임'
+  /** 같은 사람이 같은 날 여러 나라에 오른 것은 한 표지로(빌헬름 1세 — 프로이센 왕국·북독일 연방) */
+  countries: string[]
+  /** 같은 나라 바로 앞 국가원수 */
+  predecessor: string | null
+}
+
+const pad = (value: number, size: number) => String(Math.abs(value)).padStart(size, '0')
+
+/**
+ * 사건 기간 안에 참여국 국가원수가 바뀐 시점들 — 전개 타임라인에 하위 사건과 함께 날짜 순으로 끼운다.
+ * @param window 표지를 세울 구간(양 끝 포함) — 상위 기간과 하위 사건 범위를 합친 것
+ * @param existingEvents 하위 사건 — 같은 날 그 사람 이름이 든 하위 사건이 있으면(크림 전쟁 '니콜라이 1세 사망과
+ *   알렉산드르 2세 즉위') 표지를 세우지 않는다. 같은 일이 두 줄로 서면 안 된다.
+ */
+export function accessionMarkers(params: {
+  rows: ReadonlyArray<OfficeHoldingRow>
+  targets: ReadonlyArray<HeadsTarget>
+  window: { fromKey: number; toKey: number; year: number }
+  historicalCountries?: ReadonlyArray<BridgeCountry>
+  skipHistoricalIds?: ReadonlySet<string>
+  existingEvents?: ReadonlyArray<{ title: string; startDate?: string | null; startDatePrecision?: string | null }>
+}): AccessionMarker[] {
+  const { rows, targets, window, historicalCountries = [], skipHistoricalIds = new Set<string>(), existingEvents = [] } = params
+  const historicalIds = new Set<string>()
+  const modernIds = new Set<string>()
+  for (const target of targets) {
+    if (target.kind === 'H') historicalIds.add(target.id)
+    else {
+      modernIds.add(target.id)
+      for (const id of bridgedHistoricalIds(target.id, window.year, historicalCountries)) {
+        if (!skipHistoricalIds.has(id)) historicalIds.add(id)
+      }
+    }
+  }
+  const countryKeyOf = (row: OfficeHoldingRow) =>
+    row.historicalCountryId && historicalIds.has(row.historicalCountryId)
+      ? `H:${row.historicalCountryId}`
+      : row.countryId && modernIds.has(row.countryId)
+        ? `C:${row.countryId}`
+        : null
+
+  /* 나라별 국가원수 기록(시간순) — 선대를 찾는 데 쓴다 */
+  const byCountry = new Map<string, Span[]>()
+  for (const row of rows) {
+    const countryKey = countryKeyOf(row)
+    if (!countryKey || !isHeadOfStateRow(row)) continue
+    const span = spanOf(row)
+    if (!span) continue
+    byCountry.set(countryKey, [...(byCountry.get(countryKey) ?? []), span])
+  }
+
+  const eventKeys = existingEvents.map((event) => ({
+    title: event.title,
+    key: lowerBound(null, null, null, null, event.startDate, event.startDatePrecision)?.key ?? null,
+  }))
+
+  const merged = new Map<string, AccessionMarker>()
+  for (const [, spans] of byCountry) {
+    spans.sort((left, right) => left.start.key - right.start.key)
+    spans.forEach((span, position) => {
+      const key = span.start.key
+      if (key < window.fromKey || key > window.toKey) return
+      const head = toHead(span)
+      const firstName = head.name.split(' ')[0]
+      const covered = eventKeys.some((event) => event.key === key && firstName.length >= 2 && event.title.includes(firstName))
+      if (covered) return
+      const previous = [...spans.slice(0, position)].reverse().find((candidate) => candidate.row.personId !== span.row.personId)
+      const country = span.row.historicalCountry?.name ?? span.row.country?.name ?? null
+      const mergeKey = `${span.row.personId}:${key}`
+      const existing = merged.get(mergeKey)
+      if (existing) {
+        if (country && !existing.countries.includes(country)) existing.countries.push(country)
+        return
+      }
+      const { row } = span
+      const precision: AccessionMarker['startPrecision'] =
+        row.startDatePrecision === 'year' || row.startDatePrecision === 'month'
+          ? row.startDatePrecision
+          : span.start.month == null
+            ? 'year'
+            : 'day'
+      const year = span.start.year
+      const month = Math.floor((Math.abs(key) % 10000) / 100) || 1
+      const day = Math.abs(key) % 100 || 1
+      merged.set(mergeKey, {
+        key: mergeKey,
+        personId: row.personId,
+        sortKey: key,
+        startDate: `${year < 0 ? '-' : ''}${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}`,
+        startPrecision: precision,
+        name: head.name,
+        title: head.title,
+        verb: (row.isMonarchical ?? row.positionDefinition?.isMonarchical) ? '즉위' : '취임',
+        countries: country ? [country] : [],
+        predecessor: previous ? toHead(previous).name : null,
+      })
+    })
+  }
+  return [...merged.values()].sort((left, right) => left.sortKey - right.sortKey)
 }
