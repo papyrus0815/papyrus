@@ -409,8 +409,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
   const [countryQuickQuery, setCountryQuickQuery] = useState('')
   const [activeCountryResultIndex, setActiveCountryResultIndex] = useState(0)
+  const [isCountryQuickDismissed, setIsCountryQuickDismissed] = useState(false)
   const [activeParentResultIndex, setActiveParentResultIndex] = useState(0)
+  const [isParentQuickDismissed, setIsParentQuickDismissed] = useState(false)
   const [activeRelatedResultIndex, setActiveRelatedResultIndex] = useState(0)
+  const [isRelatedQuickDismissed, setIsRelatedQuickDismissed] = useState(false)
+  const [isThumbnailDragOver, setIsThumbnailDragOver] = useState(false)
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
   )
@@ -794,6 +798,36 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
   const activeDomainTone = category ? EVENT_DOMAINS[category] : null
 
+  const handleThumbnailUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      notify.error('이미지 파일만 업로드할 수 있습니다.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      notify.error('파일 크기는 10MB를 초과할 수 없습니다.')
+      return
+    }
+
+    if (thumbnail && thumbnail.startsWith('blob:')) {
+      URL.revokeObjectURL(thumbnail)
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    setThumbnail(previewUrl)
+    setThumbnailFile(file)
+
+    try {
+      const result = await uploadImage(file, 'events')
+      URL.revokeObjectURL(previewUrl)
+      setThumbnail(result.url)
+    } catch {
+      notify.error('썸네일 업로드에 실패했습니다.')
+      URL.revokeObjectURL(previewUrl)
+      setThumbnail('')
+      setThumbnailFile(null)
+    }
+  }
+
   return (
     <S.FormSection
       as={motion.div}
@@ -810,6 +844,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               '--active-domain-text': isDark
                 ? activeDomainTone.soft.textDark
                 : activeDomainTone.soft.text,
+              '--chip-rgb': activeDomainTone.soft.rgb,
+              '--chip-text': activeDomainTone.soft.text,
+              '--chip-text-dark': activeDomainTone.soft.textDark,
             }
           : undefined
       }
@@ -1383,20 +1420,33 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   </ParticipantList>
                 )}
                 <CountryQuickSearchRow>
-                  <CountryQuickSearchAnchor>
+                  <CountryQuickSearchAnchor
+                    onBlur={(blurEvent) => {
+                      if (
+                        !blurEvent.currentTarget.contains(
+                          blurEvent.relatedTarget as Node | null,
+                        )
+                      ) {
+                        setIsCountryQuickDismissed(true)
+                      }
+                    }}
+                  >
                     <CountryQuickSearchInput
                       type="search"
                       aria-label="참여국 빠른 검색"
                       placeholder="국가 이름·약칭 빠른 검색 (예: 청일, 영프, 프랑스, 영국…)"
                       value={countryQuickQuery}
+                      onFocus={() => setIsCountryQuickDismissed(false)}
                       onChange={(changeEvent) => {
                         setCountryQuickQuery(changeEvent.target.value)
                         setActiveCountryResultIndex(0)
+                        setIsCountryQuickDismissed(false)
                       }}
                       onKeyDown={(keyEvent) => {
                         if (keyEvent.key === 'ArrowDown') {
                           if (quickCountryMatches.length > 0) {
                             keyEvent.preventDefault()
+                            setIsCountryQuickDismissed(false)
                             setActiveCountryResultIndex(
                               (prev) => (prev + 1) % quickCountryMatches.length,
                             )
@@ -1404,6 +1454,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         } else if (keyEvent.key === 'ArrowUp') {
                           if (quickCountryMatches.length > 0) {
                             keyEvent.preventDefault()
+                            setIsCountryQuickDismissed(false)
                             setActiveCountryResultIndex(
                               (prev) =>
                                 (prev - 1 + quickCountryMatches.length) %
@@ -1441,7 +1492,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         }
                       }}
                     />
-                    {countryQuickQuery.trim() && (
+                    {countryQuickQuery.trim() && !isCountryQuickDismissed && (
                       <CountryQuickResultBox
                         role="region"
                         aria-label="참여국 빠른 검색 결과"
@@ -1661,17 +1712,29 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               ) : (
                 <CountryQuickSearchRow>
                   {parentEventSlot.quickSearch && (
-                    <CountryQuickSearchAnchor>
+                    <CountryQuickSearchAnchor
+                      onBlur={(blurEvent) => {
+                        if (
+                          !blurEvent.currentTarget.contains(
+                            blurEvent.relatedTarget as Node | null,
+                          )
+                        ) {
+                          setIsParentQuickDismissed(true)
+                        }
+                      }}
+                    >
                       <CountryQuickSearchInput
                         type="search"
                         aria-label="상위 사건 빠른 검색"
                         placeholder="묶음 사건명으로 빠른 검색"
                         value={parentEventSlot.quickSearch.query}
+                        onFocus={() => setIsParentQuickDismissed(false)}
                         onChange={(changeEvent) => {
                           parentEventSlot.quickSearch?.onQueryChange(
                             changeEvent.target.value,
                           )
                           setActiveParentResultIndex(0)
+                          setIsParentQuickDismissed(false)
                         }}
                         onKeyDown={(keyEvent) => {
                           const matches =
@@ -1679,6 +1742,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           if (keyEvent.key === 'ArrowDown') {
                             if (matches.length > 0) {
                               keyEvent.preventDefault()
+                              setIsParentQuickDismissed(false)
                               setActiveParentResultIndex(
                                 (prev) => (prev + 1) % matches.length,
                               )
@@ -1686,6 +1750,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           } else if (keyEvent.key === 'ArrowUp') {
                             if (matches.length > 0) {
                               keyEvent.preventDefault()
+                              setIsParentQuickDismissed(false)
                               setActiveParentResultIndex(
                                 (prev) =>
                                   (prev - 1 + matches.length) % matches.length,
@@ -1717,11 +1782,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           }
                         }}
                       />
-                      {parentEventSlot.quickSearch.query.trim() && (
-                        <CountryQuickResultBox
-                          role="region"
-                          aria-label="상위 사건 빠른 검색 결과"
-                        >
+                      {parentEventSlot.quickSearch.query.trim() &&
+                        !isParentQuickDismissed && (
+                          <CountryQuickResultBox
+                            role="region"
+                            aria-label="상위 사건 빠른 검색 결과"
+                          >
                           {parentEventSlot.quickSearch.candidates.length > 0 ? (
                             parentEventSlot.quickSearch.candidates.map(
                               (candidate, candidateIdx) => (
@@ -1868,17 +1934,29 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               )}
               <CountryQuickSearchRow>
                 {relatedEventsSlot.quickSearch && (
-                  <CountryQuickSearchAnchor>
+                  <CountryQuickSearchAnchor
+                    onBlur={(blurEvent) => {
+                      if (
+                        !blurEvent.currentTarget.contains(
+                          blurEvent.relatedTarget as Node | null,
+                        )
+                      ) {
+                        setIsRelatedQuickDismissed(true)
+                      }
+                    }}
+                  >
                     <CountryQuickSearchInput
                       type="search"
                       aria-label="연관 사건 빠른 검색"
                       placeholder="사건명으로 빠른 검색하여 추가"
                       value={relatedEventsSlot.quickSearch.query}
+                      onFocus={() => setIsRelatedQuickDismissed(false)}
                       onChange={(changeEvent) => {
                         relatedEventsSlot.quickSearch?.onQueryChange(
                           changeEvent.target.value,
                         )
                         setActiveRelatedResultIndex(0)
+                        setIsRelatedQuickDismissed(false)
                       }}
                       onKeyDown={(keyEvent) => {
                         const matches =
@@ -1886,6 +1964,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         if (keyEvent.key === 'ArrowDown') {
                           if (matches.length > 0) {
                             keyEvent.preventDefault()
+                            setIsRelatedQuickDismissed(false)
                             setActiveRelatedResultIndex(
                               (prev) => (prev + 1) % matches.length,
                             )
@@ -1893,6 +1972,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         } else if (keyEvent.key === 'ArrowUp') {
                           if (matches.length > 0) {
                             keyEvent.preventDefault()
+                            setIsRelatedQuickDismissed(false)
                             setActiveRelatedResultIndex(
                               (prev) =>
                                 (prev - 1 + matches.length) % matches.length,
@@ -1920,11 +2000,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         }
                       }}
                     />
-                    {relatedEventsSlot.quickSearch.query.trim() && (
-                      <CountryQuickResultBox
-                        role="region"
-                        aria-label="연관 사건 빠른 검색 결과"
-                      >
+                    {relatedEventsSlot.quickSearch.query.trim() &&
+                      !isRelatedQuickDismissed && (
+                        <CountryQuickResultBox
+                          role="region"
+                          aria-label="연관 사건 빠른 검색 결과"
+                        >
                         {relatedEventsSlot.quickSearch.candidates.length > 0 ? (
                           relatedEventsSlot.quickSearch.candidates.map(
                             (candidate, candidateIdx) => (
@@ -2031,7 +2112,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
         <S.FormRow>
           <S.FormLabel>
-            키워드<OptionalTag>(선택)</OptionalTag>
+            키워드
+            <OptionalTag>
+              {keywords.length > 0
+                ? `(${keywords.length}/${KEYWORD_MAX_COUNT})`
+                : '(선택)'}
+            </OptionalTag>
           </S.FormLabel>
           <S.FormField>
             <S.Input
@@ -2087,6 +2173,18 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     </KeywordChipRemove>
                   </KeywordChip>
                 ))}
+                {keywords.length >= 2 && (
+                  <KeywordClearAllButton
+                    type="button"
+                    aria-label="키워드 모두 지우기"
+                    onClick={() => {
+                      playClickSound()
+                      setKeywords([])
+                    }}
+                  >
+                    모두 지우기
+                  </KeywordClearAllButton>
+                )}
               </KeywordChipList>
             )}
           </S.FormField>
@@ -2099,7 +2197,22 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormLabel>
           <S.FormField>
             {thumbnail ? (
-              <KitUploadFilled>
+              <KitUploadFilled
+                onDragOver={(dragEvent) => {
+                  dragEvent.preventDefault()
+                  setIsThumbnailDragOver(true)
+                }}
+                onDragLeave={() => setIsThumbnailDragOver(false)}
+                onDrop={(dropEvent) => {
+                  dropEvent.preventDefault()
+                  setIsThumbnailDragOver(false)
+                  const file = dropEvent.dataTransfer.files?.[0]
+                  if (file) {
+                    playClickSound()
+                    void handleThumbnailUpload(file)
+                  }
+                }}
+              >
                 <KitUploadThumb>
                   <img
                     src={getImageUrl(thumbnail)}
@@ -2113,9 +2226,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 </KitUploadThumb>
                 <KitUploadText>
                   <strong>
-                    {thumbnail.startsWith('blob:')
-                      ? '올리는 중…'
-                      : '대표 이미지'}
+                    {isThumbnailDragOver
+                      ? '여기에 놓아 대표 이미지 바꾸기'
+                      : thumbnail.startsWith('blob:')
+                        ? '올리는 중…'
+                        : '대표 이미지'}
                   </strong>
                   <span>목록과 상세 머리에 쓰입니다</span>
                 </KitUploadText>
@@ -2151,17 +2266,38 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             ) : (
               <KitUploadStrip
                 type="button"
+                $dragOver={isThumbnailDragOver}
                 onClick={() => {
                   playClickSound()
                   thumbnailInputRef.current?.click()
+                }}
+                onDragOver={(dragEvent) => {
+                  dragEvent.preventDefault()
+                  setIsThumbnailDragOver(true)
+                }}
+                onDragLeave={() => setIsThumbnailDragOver(false)}
+                onDrop={(dropEvent) => {
+                  dropEvent.preventDefault()
+                  setIsThumbnailDragOver(false)
+                  const file = dropEvent.dataTransfer.files?.[0]
+                  if (file) {
+                    playClickSound()
+                    void handleThumbnailUpload(file)
+                  }
                 }}
               >
                 <KitUploadThumb aria-hidden>
                   <FiImage size={18} />
                 </KitUploadThumb>
                 <KitUploadText>
-                  <strong>대표 이미지 올리기</strong>
-                  <span>목록과 상세 머리에 쓰입니다 · 10MB 이하</span>
+                  <strong>
+                    {isThumbnailDragOver
+                      ? '여기에 놓아 대표 이미지 올리기'
+                      : '대표 이미지 올리기'}
+                  </strong>
+                  <span>
+                    클릭하거나 이미지를 끌어다 놓으세요 · 10MB 이하
+                  </span>
                 </KitUploadText>
               </KitUploadStrip>
             )}
@@ -2170,33 +2306,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               type="file"
               accept="image/*"
               style={{ display: 'none' }}
-              onChange={async (e) => {
+              onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (!file) return
-
-                if (file.size > 10 * 1024 * 1024) {
-                  notify.error('파일 크기는 10MB를 초과할 수 없습니다.')
-                  return
-                }
-
-                if (thumbnail && thumbnail.startsWith('blob:')) {
-                  URL.revokeObjectURL(thumbnail)
-                }
-
-                const previewUrl = URL.createObjectURL(file)
-                setThumbnail(previewUrl)
-                setThumbnailFile(file)
-
-                try {
-                  const result = await uploadImage(file, 'events')
-                  URL.revokeObjectURL(previewUrl)
-                  setThumbnail(result.url)
-                } catch {
-                  notify.error('썸네일 업로드에 실패했습니다.')
-                  URL.revokeObjectURL(previewUrl)
-                  setThumbnail('')
-                  setThumbnailFile(null)
-                }
+                void handleThumbnailUpload(file)
               }}
             />
           </S.FormField>
@@ -2389,16 +2502,16 @@ const SuggestAllChip = styled.button`
   height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.primary};
-  background: rgba(99, 102, 241, 0.08);
-  color: ${({ theme }) => theme.colors.primary};
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.45);
+  background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.1);
+  color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
   font: inherit;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.14);
+    background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.16);
   }
 `
 
@@ -2492,10 +2605,10 @@ const CountryQuickBatchButton = styled.button`
   justify-content: space-between;
   gap: 8px;
   padding: 6px 10px;
-  border: 1px solid ${({ theme }) => theme.colors.primary};
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.45);
   border-radius: 7px;
-  background: rgba(99, 102, 241, 0.08);
-  color: ${({ theme }) => theme.colors.primary};
+  background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.1);
+  color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
   font: inherit;
   font-size: 12.5px;
   font-weight: 700;
@@ -2544,8 +2657,8 @@ const CountryEraBadge = styled.span`
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
-  background: rgba(99, 102, 241, 0.14);
-  color: ${({ theme }) => theme.colors.primary};
+  background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.14);
+  color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
 `
 
 const CountryQuickEmpty = styled.p`
@@ -2793,6 +2906,29 @@ const KeywordChipRemove = styled.button`
   }
 `
 
+const KeywordClearAllButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.error};
+    border-color: ${({ theme }) => theme.colors.error};
+    outline: none;
+  }
+`
+
 const TitleSuggestionRow = styled.div`
   display: flex;
   align-items: center;
@@ -2814,14 +2950,14 @@ const TitleSuggestionButton = styled.button`
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => S.getC(theme).background.content};
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
   font: inherit;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
+    border-color: rgba(var(--active-domain-rgb, 99, 102, 241), 0.55);
   }
 
   &:focus-visible {
@@ -2836,16 +2972,16 @@ const TitleApplyAllButton = styled.button`
   height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.primary};
-  background: rgba(99, 102, 241, 0.08);
-  color: ${({ theme }) => theme.colors.primary};
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.45);
+  background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.1);
+  color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
   font: inherit;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.14);
+    background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.16);
   }
 
   &:focus-visible {

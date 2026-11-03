@@ -297,7 +297,8 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
                 onClick={focusFirstMissingField}
                 title="클릭하면 해당 필수 입력 칸으로 이동합니다"
               >
-                필수 입력: {firstError}
+                <span>필수 입력: {firstError}</span>
+                <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
               </FooterJumpButton>
             ) : isEditMode ? (
               '기본 정보만 수정합니다 · ⌘/Ctrl+Enter로 바로 저장'
@@ -420,24 +421,37 @@ const FooterHint = styled.p<{ $warning?: boolean }>`
 `
 
 const FooterJumpButton = styled.button`
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.32)' : 'rgba(99, 102, 241, 0.24)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.14)' : 'rgba(99, 102, 241, 0.07)'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#c7d2fe' : theme.colors.primary};
   font: inherit;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-color: ${({ theme }) => theme.colors.border.default};
-  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover,
   &:focus-visible {
-    color: ${({ theme }) => theme.colors.primary};
-    text-decoration-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.22)' : 'rgba(99, 102, 241, 0.13)'};
+    border-color: ${({ theme }) => theme.colors.primary};
     outline: none;
   }
+`
+
+const FooterJumpArrow = styled.span`
+  font-size: 11.5px;
+  opacity: 0.85;
 `
 
 const FooterActions = styled.div`

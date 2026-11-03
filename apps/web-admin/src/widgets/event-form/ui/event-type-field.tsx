@@ -71,6 +71,8 @@ export function EventTypeField({
   const { primary, rest } = subtypesForDomain(domain, { hasParent })
   const [showRest, setShowRest] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0)
+  const [isSearchDismissed, setIsSearchDismissed] = useState(false)
   const [storedRecents] = useState<RecentClassificationCombo[]>(() => readRecentClassifications())
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([])
 
@@ -186,9 +188,10 @@ export function EventTypeField({
 
   const groupLabel = domain ? `${domainLabel(domain)}의 세부 분야` : '세부 분야'
 
+  const showQuickSearch = isNoDomain || isOtherDomain || expanded
   const showSuggestion = Boolean(rawSuggestion && effectiveSuggestedDomain && value === null)
   const showRecents = isNoDomain && !isEditMode && effectiveRecents.length > 0 && Boolean(onApplySuggestion)
-  const showToolbar = isNoDomain || showSuggestion
+  const showToolbar = showQuickSearch || showSuggestion || showRecents
 
   return (
     <Wrap
@@ -204,43 +207,81 @@ export function EventTypeField({
     >
       {showToolbar && (
         <ToolbarRow>
-          {isNoDomain && (
-            <QuickSearchAnchor>
+          {showQuickSearch && (
+            <QuickSearchAnchor
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setIsSearchDismissed(true)
+                }
+              }}
+            >
               <QuickSearchRow>
                 <QuickSearchInput
                   type="search"
                   aria-label="세부 분야 빠른 검색"
                   placeholder="세부·예시 검색 (전투, 선전포고, 개통, 탄핵…)"
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onFocus={() => setIsSearchDismissed(false)}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value)
+                    setActiveSearchIndex(0)
+                    setIsSearchDismissed(false)
+                  }}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' && searchMatches.length > 0) {
+                    if (event.key === 'ArrowDown') {
+                      if (searchMatches.length > 0) {
+                        event.preventDefault()
+                        setIsSearchDismissed(false)
+                        setActiveSearchIndex((prev) => (prev + 1) % searchMatches.length)
+                      }
+                    } else if (event.key === 'ArrowUp') {
+                      if (searchMatches.length > 0) {
+                        event.preventDefault()
+                        setIsSearchDismissed(false)
+                        setActiveSearchIndex(
+                          (prev) => (prev - 1 + searchMatches.length) % searchMatches.length,
+                        )
+                      }
+                    } else if (event.key === 'Enter' && searchMatches.length > 0) {
                       event.preventDefault()
-                      const first = searchMatches[0]
-                      applyCombo({ domain: first.domain, type: first.type })
+                      const target =
+                        searchMatches[Math.min(activeSearchIndex, searchMatches.length - 1)] ??
+                        searchMatches[0]
+                      applyCombo({ domain: target.domain, type: target.type })
                       setSearchQuery('')
+                      setActiveSearchIndex(0)
                     } else if (event.key === 'Escape' && searchQuery) {
                       event.preventDefault()
                       setSearchQuery('')
+                      setActiveSearchIndex(0)
                     }
                   }}
                 />
                 {searchQuery && (
-                  <QuickSearchClear type="button" onClick={() => setSearchQuery('')}>
+                  <QuickSearchClear
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setActiveSearchIndex(0)
+                    }}
+                  >
                     지우기
                   </QuickSearchClear>
                 )}
               </QuickSearchRow>
-              {searchQuery.trim() && (
+              {searchQuery.trim() && !isSearchDismissed && (
                 <SearchResultBox role="region" aria-label="세부 분야 검색 결과">
                   {searchMatches.length > 0 ? (
-                    searchMatches.map((match) => (
+                    searchMatches.map((match, matchIdx) => (
                       <SearchResultButton
                         key={match.type}
                         type="button"
+                        $active={matchIdx === activeSearchIndex}
+                        onMouseEnter={() => setActiveSearchIndex(matchIdx)}
                         onClick={() => {
                           applyCombo({ domain: match.domain, type: match.type })
                           setSearchQuery('')
+                          setActiveSearchIndex(0)
                         }}
                       >
                         <SearchResultTitle>{formatDomainPath(match.domain, match.type)}</SearchResultTitle>
@@ -653,7 +694,7 @@ const SearchResultBox = styled.div`
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
 `
 
-const SearchResultButton = styled.button`
+const SearchResultButton = styled.button<{ $active?: boolean }>`
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -661,7 +702,10 @@ const SearchResultButton = styled.button`
   padding: 6px 10px;
   border: none;
   border-radius: 7px;
-  background: transparent;
+  background: ${({ $active, theme }) =>
+    $active
+      ? `rgba(var(--chip-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.16 : 0.08})`
+      : 'transparent'};
   color: ${({ theme }) => theme.colors.text.primary};
   font: inherit;
   text-align: left;

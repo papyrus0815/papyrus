@@ -223,4 +223,41 @@ describe('EventTypeField', () => {
       screen.queryByText(/아래 ‘기록’에서 바로 적습니다/),
     ).not.toBeInTheDocument()
   })
+
+  it('다른 세부 더 보기를 펼치면 빠른 검색창이 노출되고, 화살표 키로 후보를 이동해 선택하며 포커스 이탈 시 결과창이 닫힌다', () => {
+    const onApplySuggestion = jest.fn()
+    renderWithTheme(
+      <EventTypeField
+        domain="MILITARY"
+        value={null}
+        onApplySuggestion={onApplySuggestion}
+        onChange={jest.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /다른 세부 더 보기/ }))
+    const searchInput = screen.getByRole('searchbox', {
+      name: '세부 분야 빠른 검색',
+    })
+
+    fireEvent.change(searchInput, { target: { value: '전' } })
+    expect(
+      screen.getByRole('region', { name: '세부 분야 검색 결과' }),
+    ).toBeInTheDocument()
+
+    // 외부로 포커스 이탈 시 결과 드롭다운이 닫히고 다시 포커스하면 열린다
+    fireEvent.blur(searchInput, { relatedTarget: document.body })
+    expect(
+      screen.queryByRole('region', { name: '세부 분야 검색 결과' }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.focus(searchInput)
+    expect(
+      screen.getByRole('region', { name: '세부 분야 검색 결과' }),
+    ).toBeInTheDocument()
+
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+    expect(onApplySuggestion).toHaveBeenCalledTimes(1)
+  })
 })

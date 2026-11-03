@@ -708,4 +708,42 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       }),
     )
   })
+
+  it('인라인 빠른 검색창에서 외부로 포커스가 벗어나면 결과 드롭다운이 닫히고, 다시 포커스하면 열린다', () => {
+    renderWithTheme(<BasicInfoSection {...makeDefaultProps()} />)
+
+    const searchInput = screen.getByRole('searchbox', {
+      name: '참여국 빠른 검색',
+    })
+    fireEvent.change(searchInput, { target: { value: '프랑스' } })
+    expect(
+      screen.getByRole('region', { name: '참여국 빠른 검색 결과' }),
+    ).toBeInTheDocument()
+
+    fireEvent.blur(searchInput, { relatedTarget: document.body })
+    expect(
+      screen.queryByRole('region', { name: '참여국 빠른 검색 결과' }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.focus(searchInput)
+    expect(
+      screen.getByRole('region', { name: '참여국 빠른 검색 결과' }),
+    ).toBeInTheDocument()
+  })
+
+  it('키워드 등록 시 개수 카운터(N/20)를 표시하고 2개 이상일 때 모두 지우기 버튼으로 한 번에 비울 수 있다', () => {
+    const setKeywords = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          keywords: ['베르사유', '강화조약'],
+          setKeywords,
+        })}
+      />,
+    )
+
+    expect(screen.getByText('(2/20)')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '키워드 모두 지우기' }))
+    expect(setKeywords).toHaveBeenCalledWith([])
+  })
 })
