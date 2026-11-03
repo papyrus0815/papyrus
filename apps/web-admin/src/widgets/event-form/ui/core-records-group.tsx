@@ -783,16 +783,16 @@ function RecordPickers({
 const RowList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 4px;
 `
 
 const Row = styled.div`
   display: grid;
   grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.8fr) 28px;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 12px;
+  padding: 10px 14px;
   border-radius: 10px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.section};
@@ -885,7 +885,7 @@ const RowSelect = styled.select`
 const SideBoardGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 16px;
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
@@ -895,8 +895,8 @@ const SideBoardGrid = styled.div`
 const SideCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.section};
@@ -1059,7 +1059,7 @@ const TextButton = styled.button`
 const StatehoodGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 16px;
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
@@ -1069,8 +1069,8 @@ const StatehoodGrid = styled.div`
 const StatehoodCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.section};

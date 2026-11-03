@@ -440,14 +440,14 @@ export function EventTypeField({
 const Wrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 `
 
 const ToolbarRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: 8px 12px;
 `
 
 const QuickSearchAnchor = styled.div`
@@ -464,20 +464,20 @@ const RadioHost = styled.div`
 const GroupStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 `
 
 const GroupBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 `
 
 const RestSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
+  gap: 12px;
+  padding-top: 12px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
@@ -490,16 +490,16 @@ const Hint = styled.p`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 10px;
-  margin: 2px 0 0;
-  padding: 7px 11px;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  padding: 9px 13px;
   border-radius: 8px;
   background: ${({ theme }) =>
     `rgba(var(--chip-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.12 : 0.06})`};
   border: 1px solid ${({ theme }) =>
     `rgba(var(--chip-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.24 : 0.16})`};
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
 
   b {

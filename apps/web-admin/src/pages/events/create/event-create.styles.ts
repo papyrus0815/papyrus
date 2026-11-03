@@ -289,10 +289,10 @@ export const FormSection = styled.div`
 // Notion 스타일 레이아웃: Label/Field 좌우 분리
 export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   display: grid;
-  grid-template-columns: 136px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
-  padding: ${(props) => (props.$compact ? '0' : '12px 0')};
+  padding: ${(props) => (props.$compact ? '0' : '14px 0')};
   margin-top: 0;
   border-bottom: ${(props) =>
     props.$noBorder ? 'none' : `1px solid ${props.theme.colors.border.light}`};
@@ -306,14 +306,14 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   }
 
   @media (max-width: 1024px) {
-    grid-template-columns: 124px minmax(0, 1fr);
-    gap: 16px;
+    grid-template-columns: 132px minmax(0, 1fr);
+    gap: 18px;
   }
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
-    gap: 6px;
-    padding: ${(props) => (props.$compact ? '0' : '12px 0')};
+    gap: 8px;
+    padding: ${(props) => (props.$compact ? '0' : '14px 0')};
   }
 `
 
@@ -362,13 +362,13 @@ export const PeriodBadge = styled.div`
 export const DateRangeRow = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 18px;
 `
 
 export const DateRangeColumn = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 `
 
 export const DateRangeLabel = styled.div`
@@ -383,7 +383,7 @@ export const DateRangeLabel = styled.div`
 export const FormField = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   max-width: ${FORM_FIELD_MAX_WIDTH};
   /* 그리드/플렉스 자식(카테고리 그리드 등)이 트랙을 밀어내 컨테이너를 넘는 것 방지 */
   min-width: 0;
@@ -412,7 +412,7 @@ export { FormInput as Input, FormTextarea as Textarea } from '@/shared/ui/form-i
 export const CategoryGrid = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px 9px;
 `
 
 // 확장 가능한 카테고리 카드
@@ -421,7 +421,7 @@ export const CategoryCard = styled.button<{
   $selected: boolean
 }>`
   position: relative;
-  height: 36px;
+  height: 38px;
   border: 1px solid
     ${({ $selected, theme }) =>
       $selected
@@ -430,7 +430,7 @@ export const CategoryCard = styled.button<{
           ? 'rgba(var(--cat-rgb), 0.28)'
           : 'rgba(var(--cat-rgb), 0.24)'};
   border-radius: 999px;
-  padding: 0 13px 0 8px;
+  padding: 0 14px 0 9px;
   background: ${({ $selected, theme }) =>
     $selected
       ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.24 : 0.13})`

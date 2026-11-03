@@ -56,7 +56,7 @@ export const KitOptionalTag = styled.span`
 export const KitChipGroup = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 `
 
 /** 사건 카테고리 칩(CategoryCard)에서 아이콘 원만 뺀 것 — 높이는 아이콘 칩과 같은 34px */

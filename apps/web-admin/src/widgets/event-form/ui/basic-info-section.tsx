@@ -2348,15 +2348,15 @@ const OptionalTag = styled.span`
 const ParticipantList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 4px;
 `
 
 const ParticipantRow = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px 12px;
+  gap: 9px;
+  padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.section};
@@ -2374,7 +2374,7 @@ const ParticipantHeaderLine = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 `
 
@@ -2462,7 +2462,9 @@ const RecentParticipantBar = styled.div`
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
+  flex-basis: 100%;
+  gap: 6px 8px;
+  margin-top: 2px;
   font-size: 12px;
 `
 
@@ -2539,7 +2541,7 @@ const CountryQuickSearchRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 8px 10px;
 `
 
 const CountryQuickSearchAnchor = styled.div`
@@ -2780,16 +2782,17 @@ const OverviewTextarea = styled(S.Textarea)`
 const FormGroup = styled.section`
   display: flex;
   flex-direction: column;
-  padding: 0 0 10px;
+  gap: 4px;
+  padding: 0 0 12px;
 
   & + & {
-    margin-top: 20px;
-    padding-top: 4px;
+    margin-top: 28px;
+    padding-top: 6px;
     border-top: none;
   }
 
   > ${S.FormRow} {
-    padding: 10px 0;
+    padding: 14px 0;
     border-bottom: none;
   }
 `
@@ -2799,8 +2802,8 @@ const FormGroupTitle = styled.h3`
   align-items: center;
   gap: 8px;
   width: 100%;
-  margin: 0 0 8px;
-  padding-bottom: 10px;
+  margin: 0 0 12px;
+  padding-bottom: 12px;
   border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
   font-size: 14px;
   font-weight: 700;
@@ -2825,24 +2828,24 @@ const InlineControlRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: 8px 12px;
 `
 
 /* ─── 기간 ─── */
 const DateRangeGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 18px;
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 14px;
   }
 `
 
 const DateTimeLine = styled.div`
   display: flex;
-  gap: 6px;
+  gap: 8px;
 
   > :first-child {
     flex: 1;
@@ -2863,7 +2866,8 @@ const TimeTrigger = styled(S.DateInputWrapper)`
 const KeywordChipList = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 2px;
 `
 
 const KeywordChip = styled.span`
@@ -2933,9 +2937,9 @@ const TitleSuggestionRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 2px;
-  padding: 6px 10px;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 8px 12px;
   border-radius: 8px;
   background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.05);
   border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.14);
@@ -2994,9 +2998,9 @@ const SimilarEventsBar = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 10px;
-  margin-top: 2px;
-  padding: 6px 10px;
+  gap: 8px 12px;
+  margin-top: 4px;
+  padding: 8px 12px;
   border-radius: 8px;
   background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.05);
   border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.14);
@@ -3012,7 +3016,7 @@ const SimilarEventItem = styled.span`
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
 `
 
 const SimilarEventTitle = styled.span`
@@ -3043,8 +3047,8 @@ const KindInlineRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 2px;
+  gap: 10px;
+  padding-top: 6px;
 `
 
 const KindInlineLabel = styled.span`
