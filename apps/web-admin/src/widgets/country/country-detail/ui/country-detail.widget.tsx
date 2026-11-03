@@ -160,8 +160,16 @@ function CountryDetailInner({
     Partial<Record<OverviewSubTab, number>> | undefined
   >(() => {
     if (!modernCountry) return undefined
+    const linkedHistIds = new Set(
+      (modernCountry.historicalCountries ?? [])
+        .map((item) => item?.id)
+        .filter((id): id is string => Boolean(id)),
+    )
     const companyCount = allCompanies.filter(
-      (company) => company.countryId === modernCountry.id,
+      (company) =>
+        company.countryId === modernCountry.id ||
+        (Boolean(company.historicalCountryId) &&
+          linkedHistIds.has(company.historicalCountryId!)),
     ).length
     const statYearCount = new Set([
       ...economicRows.map((row) => row.year),

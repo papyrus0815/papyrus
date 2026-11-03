@@ -708,12 +708,12 @@ function linkedSpan(country: FoundingLinkedCountry): string {
 const Cards = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-  gap: 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 /*
- * 쪽 색 — 사건 목록 레일 표지와 같은 짝(건국 초록·멸망 장미). 카드 테두리 위 3px 띠와
- * 킥커 글자에만 쓴다: 면을 칠하면 두 카드가 경고/성공 알림처럼 읽힌다.
+ * 쪽 색 — 사건 목록 레일 표지와 같은 짝(건국 초록·멸망 장미). 상단 2px 헤어라인과
+ * 킥커 글자에만 쓴다: 면을 칠하면 두 칸이 경고/성공 알림처럼 읽힌다.
  */
 const SIDE_INK = {
   founding: { light: '#15803d', dark: '#4ade80' },
@@ -728,10 +728,23 @@ const Card = styled.section<{ $side: Side }>`
   gap: 18px;
   padding: 0 18px 16px;
   overflow: hidden;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-top: 3px solid ${({ theme, $side }) => sideInk($side, theme.mode)};
-  border-radius: 12px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff')};
+  border: none;
+  border-top: 2px solid ${({ theme, $side }) => sideInk($side, theme.mode)};
+  border-radius: 0;
+  background: transparent;
+
+  &:not(:last-child) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  @media (max-width: 720px) {
+    padding: 0 4px 16px;
+
+    &:not(:last-child) {
+      border-right: none;
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
 `
 
 /* 초상(64px) 유무와 상관없이 같은 높이 — 나란한 두 카드의 첫 묶음이 같은 y에 선다 */
@@ -1013,7 +1026,7 @@ const FillRow = styled.div`
   gap: 6px;
   margin-top: auto;
   padding-top: 12px;
-  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const FillLabel = styled.span`

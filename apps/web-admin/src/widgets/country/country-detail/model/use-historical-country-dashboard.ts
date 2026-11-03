@@ -5,7 +5,8 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { politicalSystemKeys } from '@/entities/political-system/api'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
-import { getLaws } from '@/shared/api/election'
+import { type AdministrativeDivision, cityApi } from '@/shared/api/city'
+import { getElections, getLaws } from '@/shared/api/election'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { getAllEventsExhaustive } from '@/shared/api/events'
@@ -70,12 +71,16 @@ export type HistoricalFillTarget =
   | 'events'
   | 'figures'
   | 'heads'
+  | 'regions'
   | 'government'
+  | 'elections'
   | 'laws'
   | 'ethnicity'
   | 'succession'
   | 'treaty'
   | 'relation'
+  | 'trade'
+  | 'companies'
 
 export interface HistoricalCompletenessField extends CompletenessField {
   historicalTarget: HistoricalFillTarget
@@ -186,6 +191,8 @@ export function useHistoricalCountryDashboard(
     departmentsQuery,
     lawsQuery,
     ethnicityQuery,
+    divisionsQuery,
+    electionsQuery,
   ] = useQueries({
     queries: [
       {
@@ -255,6 +262,21 @@ export function useHistoricalCountryDashboard(
       {
         queryKey: ['ethnicities', 'by-historical-country', id],
         queryFn: () => ethnicityApi.getAll({ historicalCountryId: id }),
+        staleTime: STALE_MS,
+      },
+      {
+        queryKey: [
+          'administrative-divisions',
+          { countryId: '', historicalCountryId: id },
+          { schemeId: '' },
+        ],
+        queryFn: () =>
+          cityApi.getAdministrativeDivisions({ historicalCountryId: id }),
+        staleTime: STALE_MS,
+      },
+      {
+        queryKey: ['elections', 'list', `h:${id}`],
+        queryFn: () => getElections({ historicalCountryId: id }),
         staleTime: STALE_MS,
       },
     ],
@@ -510,7 +532,36 @@ export function useHistoricalCountryDashboard(
       })
     }
 
+    for (const ps of asArray(politicalSystemsQuery.data)) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(ps)
+      if (!ps.id || !activityAt) continue
+      governanceItems.push({
+        id: `ps-${ps.id}`,
+        kind: 'political-system',
+        category: 'governance',
+        refId: String(ps.id),
+        label: ps.name?.trim() || ps.title?.trim() || '정체 기록',
+        subLabel: '정체 변천',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
     const archiveItems: RecentActivityItem[] = []
+    for (const election of asArray(electionsQuery.data)) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(election)
+      if (!election.id || !activityAt) continue
+      archiveItems.push({
+        id: `election-${election.id}`,
+        kind: 'election',
+        category: 'archive',
+        refId: String(election.id),
+        label: election.name?.trim() || election.title?.trim() || '선거·투표',
+        subLabel: '선거·투표',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
     for (const law of asArray(lawsQuery.data)) {
       const { activityAt, isUpdated } = resolveActivityTimestamp(law)
       if (!law.id || !activityAt) continue
@@ -538,6 +589,8 @@ export function useHistoricalCountryDashboard(
     eventsQuery.data,
     tenuresQuery.data,
     departmentsQuery.data,
+    politicalSystemsQuery.data,
+    electionsQuery.data,
     lawsQuery.data,
   ])
 
@@ -547,6 +600,18 @@ export function useHistoricalCountryDashboard(
   const departments = asArray(departmentsQuery.data)
   const laws = asArray(lawsQuery.data)
   const ethnicities = asArray(ethnicityQuery.data)
+  const elections = asArray(electionsQuery.data)
+  const divisionCount = useMemo(() => {
+    const countTree = (nodes: AdministrativeDivision[]): number =>
+      nodes.reduce(
+        (sum, node) => sum + 1 + countTree(node.children ?? []),
+        0,
+      )
+    return Array.isArray(divisionsQuery.data)
+      ? countTree(divisionsQuery.data)
+      : 0
+  }, [divisionsQuery.data])
+  const electionCount = elections.length
   const administrationCount = departments.length + politicalSystems.length
   const lawCount = laws.length
   const ethnicityCount = ethnicities.length
@@ -657,6 +722,8 @@ export function useHistoricalCountryDashboard(
       departmentsQuery.isLoading || politicalSystemsQuery.isLoading,
     laws: lawsQuery.isLoading,
     ethnicity: ethnicityQuery.isLoading,
+    regions: divisionsQuery.isLoading,
+    elections: electionsQuery.isLoading,
     lineage:
       transitionsQuery.isLoading ||
       allCountriesQuery.isLoading ||
@@ -676,6 +743,8 @@ export function useHistoricalCountryDashboard(
     membershipCount: memberships.length,
     relationCount: relations.length,
     administrationCount,
+    divisionCount,
+    electionCount,
     lawCount,
     ethnicityCount,
     treatyCount,

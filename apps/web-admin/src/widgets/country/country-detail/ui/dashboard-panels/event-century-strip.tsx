@@ -34,6 +34,11 @@ export function EventCenturyStrip({ counts, onOpen }: EventCenturyStripProps) {
   const total = counts.reduce((acc, row) => acc + row.count, 0)
   const first = counts[0].century
   const last = counts[counts.length - 1].century
+  const peakRow = counts.reduce(
+    (best, row) => (row.count > best.count ? row : best),
+    counts[0],
+  )
+  const peakSharePct = total > 0 ? Math.round((peakRow.count / total) * 100) : 0
 
   return (
     <Root>
@@ -41,8 +46,18 @@ export function EventCenturyStrip({ counts, onOpen }: EventCenturyStripProps) {
         <Range>
           {centuryLabel(first)}
           {first !== last && ` – ${centuryLabel(last)}`}
+          {counts.length > 1 && ` · ${counts.length}개 세기`}
         </Range>
         <Total>{total.toLocaleString('ko-KR')}건</Total>
+        {peakRow && total > 0 && (
+          <PeakBadge
+            type="button"
+            onClick={() => onOpen(peakRow.century)}
+            title={`${centuryLabel(peakRow.century)}로 이동`}
+          >
+            최다 집중: <strong>{centuryLabel(peakRow.century)}</strong> ({peakRow.count}건 · {peakSharePct}%)
+          </PeakBadge>
+        )}
       </Head>
 
       <Bars>
@@ -95,7 +110,8 @@ const Root = styled.div`
 const Head = styled.div`
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 `
 
 const Range = styled.span`
@@ -109,6 +125,30 @@ const Total = styled.span`
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const PeakBadge = styled.button`
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  }
+
+  &:hover strong {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 `
 
 const Bars = styled.div`

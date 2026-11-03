@@ -71,13 +71,17 @@ const Card = styled.button<{ $upcoming: boolean }>`
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid
+  padding: 10px 4px;
+  border: none;
+  border-top: 1px solid
     ${({ $upcoming, theme }) =>
       $upcoming ? 'rgba(79,70,229,0.35)' : theme.colors.border.light};
-  background: ${({ $upcoming, theme }) =>
-    $upcoming ? 'rgba(79,70,229,0.06)' : 'transparent'};
+  border-bottom: 1px solid
+    ${({ $upcoming, theme }) =>
+      $upcoming ? 'rgba(79,70,229,0.35)' : theme.colors.border.light};
+  border-radius: 0;
+  background: ${({ $upcoming }) =>
+    $upcoming ? 'rgba(79,70,229,0.04)' : 'transparent'};
   cursor: pointer;
   text-align: left;
 

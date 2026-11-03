@@ -341,6 +341,32 @@ export function LineageFlow({
       : `${firstCentury} — ${lastCentury}`
   }, [nodes, modernEndpoint])
 
+  const lineageStructureSummary = useMemo(() => {
+    if (nodes.length === 0) return null
+    const centuryCount = columns.filter((col) => col.centuryIndex != null).length
+    const hasDistance = nodes.some((node) => node.distance != null && node.distance !== 0)
+    const parts: string[] = []
+    if (hasDistance) {
+      const predCount = nodes.filter((node) => (node.distance ?? 0) < 0).length
+      const succCount = nodes.filter((node) => (node.distance ?? 0) > 0).length
+      if (predCount > 0) parts.push(`전신 ${predCount}`)
+      if (succCount > 0) parts.push(`후신 ${succCount}`)
+    } else {
+      const directCount = nodes.filter(
+        (node) => !node.linkKind || node.linkKind === 'PREDECESSOR',
+      ).length
+      const branchCount = nodes.length - directCount
+      parts.push(`표시 ${nodes.length}개국`)
+      if (branchCount > 0) {
+        parts.push(`직계 ${directCount} · 구성·유산 ${branchCount}`)
+      }
+    }
+    if (centuryCount > 0) {
+      parts.push(`${centuryCount}개 세기`)
+    }
+    return parts.length > 0 ? parts.join(' · ') : null
+  }, [nodes, columns])
+
   const [viewMode, setViewMode] = useState<LineageViewMode>('century')
   const [zoomIndex, setZoomIndex] = useState<number>(DEFAULT_ZOOM_INDEX)
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false)
@@ -414,6 +440,11 @@ export function LineageFlow({
         {overallSpanSummary && (
           <SpanSummaryBadge title="계보 전체 시간 범위">
             {overallSpanSummary}
+          </SpanSummaryBadge>
+        )}
+        {lineageStructureSummary && (
+          <SpanSummaryBadge title="계보 구조 요약">
+            {lineageStructureSummary}
           </SpanSummaryBadge>
         )}
         {toolbarLeft}
