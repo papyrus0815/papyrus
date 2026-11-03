@@ -12,8 +12,11 @@ import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { REASON_MAX, focusNextRemovalTarget } from './detail-network.lib'
 import * as NetStyles from './detail-network.styles'
 
-/** 하위 사건 카드 표시 상한 — 초과분은 '더 보기'로 펼침. */
-const CHILD_CARD_CAP = 24
+/**
+ * 하위 사건 표시 상한 — 초과분은 '더 보기'로 펼침. 같은 하위 목록이 개요 › 전개와 조망에도 있어
+ * 연관에서는 연결 사유 관리에 필요한 만큼만 먼저 보인다(1차대전 18행이 1,387px였다).
+ */
+const CHILD_CARD_CAP = 6
 
 /** 추가 하위(역방향 엣지) 칩 표시 상한 — 카드보다 밀도 높은 칩이라 별도 상한. */
 const EXTRA_CHILD_CAP = 12
@@ -199,7 +202,7 @@ export function ChildrenBlock({
             onClick={() => setShowAllChildren(true)}
             aria-label={`하위 사건 ${hiddenChildCount}개 더 보기`}
           >
-            외 {hiddenChildCount}개 더 보기
+            외 {hiddenChildCount}개 더 보기 · 시간 흐름은 개요의 전개에서
           </NetStyles.MoreBtn>
         )}
         {/* 추가 어포던스 행 — $reveal 미지정: '하위 사건 추가'(AddBtn)와 강등된

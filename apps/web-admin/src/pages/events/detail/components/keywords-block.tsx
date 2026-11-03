@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 
 import { FiPlus, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
+import styled from 'styled-components'
 
 import { type UpdateEventDto } from '@/shared/api/events'
 
@@ -86,7 +88,10 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
       <NetStyles.KeywordsRow>
         {visibleKeywords.map((keyword) => (
           <NetStyles.KeywordChip key={keyword}>
-            <span>{keyword}</span>
+            {/* 누르면 이 키워드가 든 사건 목록 — 예전엔 지우기만 되는 막다른 칩이었다(고유 2,036개 중 310개를 여러 사건이 공유) */}
+            <KeywordLink to={`/events/?q=${encodeURIComponent(keyword)}`} title={`'${keyword}'가 든 사건 목록`}>
+              {keyword}
+            </KeywordLink>
             <NetStyles.ChipX
               type="button"
               ref={(node) => {
@@ -143,3 +148,18 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
     </NetStyles.HierBlock>
   )
 }
+
+const KeywordLink = styled(Link)`
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+`

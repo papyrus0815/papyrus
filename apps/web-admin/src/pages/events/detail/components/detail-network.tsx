@@ -11,6 +11,8 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useBlocker } from 'react-router-dom'
 
+import { useEvents } from '@/entities/event/model'
+
 import {
   type EventLinkCandidate,
   type UpdateEventDto,
@@ -33,6 +35,8 @@ import {
   focusNextRemovalTarget,
 } from './detail-network.lib'
 import { KeywordsBlock } from './keywords-block'
+import { sectionKindOf } from './narrative-sections.lib'
+import { keywordSuggestions } from './related-suggestions.lib'
 import { ParentBlock } from './parent-block'
 import { RelatedBlock } from './related-block'
 import { useLinkCandidatePicker } from './use-link-candidate-picker'
@@ -621,6 +625,40 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
    * '상위 1+N', 주 상위 부재/유령 + 추가 상위 잔존은 '상위 0+N'으로 상태를 드러낸다. */
   const relatedCount = relatedQuery.data?.length ?? 0
 
+  /*
+   * 같은 키워드의 사건 — 관련 사건으로 이을 후보. 키워드가 둘 이상일 때만 사건 전부(하위 포함)를 받는다.
+   * 상위·하위·형제·이미 이은 관련 사건은 뺀다(이미 이어져 있다).
+   */
+  const suggestionsWanted = keywords.length >= 2
+  const { events: allEvents } = useEvents({ autoLoadAll: true, includeSubEvents: true, enabled: suggestionsWanted })
+  const suggestions = useMemo(() => {
+    if (!suggestionsWanted || allEvents.length === 0) return []
+    const linked = new Set<string>([
+      ...(event.parentEventId ? [event.parentEventId] : []),
+      ...extraParents.map((parent) => parent.id),
+      ...children.map((child) => child.id),
+      ...(event.extraChildren ?? []).map((child) => child.id),
+      ...(relatedQuery.data ?? []).map((relation) => relation.event.id),
+      ...(event.parentEventId
+        ? allEvents.filter((other) => other.parentEventId === event.parentEventId).map((other) => other.id)
+        : []),
+    ])
+    return keywordSuggestions(
+      { id: event.id, title: event.title, keywords },
+      allEvents.map((other) => ({
+        id: other.id,
+        title: other.title,
+        keywords: other.keywords ?? [],
+        parentEventId: other.parentEventId ?? null,
+      })),
+      linked,
+    )
+  }, [suggestionsWanted, allEvents, event, extraParents, children, relatedQuery.data, keywords])
+  /** 전개 단락 수 — 나눌 단락이 둘 이상일 때만 연관 탭에 '하위 사건으로 나누기'를 세운다 */
+  const narrativeCount = (event.eventSections ?? []).filter(
+    (section) => sectionKindOf(section.sectionType) === 'narrative',
+  ).length
+
   /**
    * 블록 접기 — 내용 있는 블록만 그리고, 빈 블록은 아래 '연결 추가' 칩 한 줄로 모은다.
    * 예전엔 키워드만 있는 사건(한국전쟁: 키워드 58)도 '상위 사건 지정·최상위로 지정·추가 상위·
@@ -634,7 +672,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
       extraParents.length > 0 ||
       Boolean(event.parentEventId),
     children: children.length > 0 || (event.extraChildren?.length ?? 0) > 0,
-    related: relatedCount > 0,
+    related: relatedCount > 0 || suggestions.length > 0,
     keywords: keywords.length > 0,
   }
   const [shownBlocks, setShownBlocks] = useState<ReadonlySet<NetworkBlock>>(
@@ -698,7 +736,8 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
       )}
 
       {/* 단일 사건 — 하위 대신 '나누기'. 전개가 국면으로 커지면 묶음이 되어 국면마다 하위 사건이 된다 */}
-      {!isCollection && onRequestSplit && (
+      {/* 한 단락짜리 전개까지 단일 사건 452건 모두에 같은 안내가 서 있었다 — 나눌 단락이 있을 때만 */}
+      {!isCollection && onRequestSplit && narrativeCount >= 2 && (
         <NetStyles.HierBlock role="group" aria-labelledby="network-children-label">
           <NetStyles.BlockLabel id="network-children-label">하위 사건</NetStyles.BlockLabel>
           <NetStyles.HelperNote>
@@ -726,7 +765,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
 
       {/* 관련 사건 — 상위/하위가 아닌 별개 사건끼리의 연결(계기·배경·대응·같은 국면) */}
       {isBlockShown('related') && (
-        <RelatedBlock eventId={event.id} eventTitle={event.title} />
+        <RelatedBlock eventId={event.id} eventTitle={event.title} suggestions={suggestions} />
       )}
 
       {isBlockShown('keywords') && (

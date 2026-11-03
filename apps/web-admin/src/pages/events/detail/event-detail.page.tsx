@@ -481,7 +481,7 @@ function EventDetailContent({
       countOf(event.extraParents) +
       countOf(event.childEvents) +
       countOf(event.extraChildren) +
-      countOf(event.keywords) +
+      // 키워드는 세지 않는다 — 사라예보 '연관 15' 중 14가 키워드라 연결이 많은 사건처럼 보였다
       relatedCount,
     media: countOf(event.eventImages),
   }
@@ -965,6 +965,13 @@ function EventDetailContent({
                 <Suspense fallback={<EventPanelLoading label="하위 사건을 모으는 중…" />}>
                   <LazyEventOverviewPanel
                     eventId={event.id}
+                    accessionTargets={[
+                      ...(event.relatedCountries ?? []).map((country) => ({ kind: 'C' as const, id: country.id })),
+                      ...(event.relatedHistoricalCountries ?? []).map((country) => ({
+                        kind: 'H' as const,
+                        id: country.id,
+                      })),
+                    ]}
                     onGatherExisting={() => setActiveTab('links')}
                     onPersonClick={onPersonClick}
                   />

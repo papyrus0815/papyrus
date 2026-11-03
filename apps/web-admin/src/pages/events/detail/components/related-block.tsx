@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiArrowRight, FiPlus, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
@@ -38,6 +39,7 @@ import { notify } from '@/shared/ui/toast'
 import { usePrefetchEventDetail } from '../use-event-detail'
 import { eventRelationKeys, useEventRelations } from '../use-event-relations'
 import { REASON_MAX } from './detail-network.lib'
+import { type RelatedSuggestion } from './related-suggestions.lib'
 import * as NetStyles from './detail-network.styles'
 
 /**
@@ -55,6 +57,8 @@ import * as NetStyles from './detail-network.styles'
 interface RelatedBlockProps {
   eventId: string
   eventTitle: string
+  /** 같은 키워드의 사건 — 누르면 그 사건이 채워진 작성 줄이 열린다 */
+  suggestions?: RelatedSuggestion[]
 }
 
 /** 작성 줄 상태 — 새 연결(relationId 없음) 또는 기존 관계 수정 */
@@ -123,7 +127,7 @@ function errorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-export function RelatedBlock({ eventId, eventTitle }: RelatedBlockProps) {
+export function RelatedBlock({ eventId, eventTitle, suggestions = [] }: RelatedBlockProps) {
   const queryClient = useQueryClient()
   const prefetchEvent = usePrefetchEventDetail()
   const { data: relations = [], isError } = useEventRelations(eventId)
@@ -171,6 +175,9 @@ export function RelatedBlock({ eventId, eventTitle }: RelatedBlockProps) {
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: eventRelationKeys.all })
+
+  /** 이미 이은 사건은 후보에서 뺀다(연결 직후 목록이 바로 줄어든다) */
+  const visibleSuggestions = suggestions.filter((suggestion) => !relatedIds.has(suggestion.id))
 
   const saveMutation = useMutation({
     mutationFn: async (next: Draft) => {
@@ -436,6 +443,47 @@ export function RelatedBlock({ eventId, eventTitle }: RelatedBlockProps) {
         </Composer>
       )}
 
+      {/*
+        * 같은 키워드의 사건 — 이미 적어 둔 키워드가 말하는 이웃. 누르면 상대가 채워진 작성 줄이 열려 유형만 고르면 된다
+        * ('관련'으로 시작 — 계기·배경은 사람이 판단). 이미 이은 사건은 빠진다.
+        */}
+      {!draft && visibleSuggestions.length > 0 && (
+        <Group>
+          <GroupLabel>같은 키워드의 사건</GroupLabel>
+          <SuggestionList>
+            {visibleSuggestions.map((suggestion) => (
+              <SuggestionRow key={suggestion.id}>
+                <SuggestionText>
+                  <SuggestionTitle
+                    to={pathKeys.events.detail(suggestion.id)}
+                    onMouseEnter={() => prefetchEvent(suggestion.id)}
+                  >
+                    {suggestion.title}
+                  </SuggestionTitle>
+                  <SuggestionShared>
+                    겹친 키워드 {suggestion.shared.slice(0, 4).join(' · ')}
+                    {suggestion.shared.length > 4 && ` 외 ${suggestion.shared.length - 4}`}
+                  </SuggestionShared>
+                </SuggestionText>
+                <NetStyles.TextBtn
+                  type="button"
+                  onClick={() =>
+                    setDraft({
+                      other: { id: suggestion.id, title: suggestion.title },
+                      relationType: 'RELATED',
+                      direction: 'outgoing',
+                      description: '',
+                    })
+                  }
+                >
+                  연결
+                </NetStyles.TextBtn>
+              </SuggestionRow>
+            ))}
+          </SuggestionList>
+        </Group>
+      )}
+
       {!draft && (
         <NetStyles.HierRow>
           <NetStyles.AddBtn type="button" onClick={() => setPickerOpen(true)}>
@@ -469,6 +517,53 @@ export function RelatedBlock({ eventId, eventTitle }: RelatedBlockProps) {
     </NetStyles.HierBlock>
   )
 }
+
+const SuggestionList = styled.ul`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+`
+
+const SuggestionRow = styled.li`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+
+  &:hover {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)')};
+  }
+`
+
+const SuggestionText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+`
+
+const SuggestionTitle = styled(Link)`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: none;
+  overflow-wrap: anywhere;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const SuggestionShared = styled.span`
+  font-size: 12px;
+  color: ${metaText};
+`
 
 const Group = styled.div`
   display: flex;
