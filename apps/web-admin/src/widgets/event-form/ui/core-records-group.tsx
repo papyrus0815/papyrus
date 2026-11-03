@@ -815,19 +815,23 @@ function RecordPickers({
 const RowList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 6px;
 `
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.6fr) 28px;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.8fr) 28px;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px 6px 12px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  border-radius: 10px;
-  background: ${({ theme }) => S.getC(theme).background.section};
+  padding: 0 0 8px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
 
   @media (max-width: 640px) {
     grid-template-columns: minmax(0, 1fr) 28px;
@@ -887,7 +891,7 @@ const RowSelect = styled.select`
 const SideBoardGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 16px;
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
@@ -898,10 +902,8 @@ const SideCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  border-radius: 10px;
-  background: ${({ theme }) => S.getC(theme).background.section};
+  padding: 0;
+  background: transparent;
 `
 
 const SideNameInput = styled.input`

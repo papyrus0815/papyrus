@@ -1641,23 +1641,21 @@ const OptionalTag = styled.span`
 const ParticipantList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   margin-bottom: 10px;
 `
 
 const ParticipantRow = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  border-radius: 10px;
-  background: ${({ theme }) => S.getC(theme).background.section};
-  transition: border-color 0.14s ease;
+  gap: 6px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
 
-  &:hover,
-  &:focus-within {
-    border-color: ${({ theme }) => S.getC(theme).border.default};
+  &:last-child {
+    padding-bottom: 2px;
+    border-bottom: none;
   }
 `
 
