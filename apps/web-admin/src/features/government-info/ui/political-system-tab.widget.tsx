@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import {
@@ -20,18 +21,28 @@ import {
   primaryHouseLabel,
   STATE_STRUCTURE_LABEL,
 } from '@/entities/political-system/model/political-system'
+import { personCareerApi } from '@/shared/api/person-career'
+import { getAllPersons } from '@/shared/api/persons'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
 
 import { PoliticalSystemFormModal } from './political-system-form.modal'
 
 const EMPTY_FACT_LABELS = [
-  '국가원수',
-  '정부수반',
+  '국가원수 · 정부수반',
   '입법부 · 의회',
   '국가 구조',
   '정당제',
 ] as const
+
+interface HeadRegisterTarget {
+  positionId: string | null
+  positionTitle: string
+  positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+  historicalCountryId: string | null
+}
 
 interface Props {
   /** 현대 국가 ID — 주면 연결된 과거 국가의 정체까지 함께 온다 */
@@ -53,6 +64,7 @@ export function PoliticalSystemTab({
   historicalCountryId,
   countryName,
 }: Props) {
+  const queryClient = useQueryClient()
   const scope = { countryId, historicalCountryId }
   const query = usePoliticalSystems(scope)
   const createMutation = useCreatePoliticalSystem()
@@ -61,6 +73,40 @@ export function PoliticalSystemTab({
 
   const [editing, setEditing] = useState<PoliticalSystem | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [headRegisterTarget, setHeadRegisterTarget] =
+    useState<HeadRegisterTarget | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+
+  const tenuresQuery = useQuery({
+    queryKey: ['tenures-by-country', countryId || undefined, historicalCountryId],
+    queryFn: () =>
+      personCareerApi.getTenuresByCountry({
+        countryId: countryId || undefined,
+        historicalCountryId,
+      }),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
+
+  const personsQuery = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
+    enabled: pickerOpen,
+    staleTime: 5 * 60_000,
+  })
+
+  const openHeadRegister = (target: HeadRegisterTarget) => {
+    setHeadRegisterTarget(target)
+    setRegisterPersonId(null)
+    setPickerOpen(true)
+  }
+
+  const closeHeadRegister = () => {
+    setPickerOpen(false)
+    setRegisterPersonId(null)
+    setHeadRegisterTarget(null)
+  }
 
   const systems = useMemo(
     () => [...(query.data ?? [])].sort(comparePoliticalSystems),
@@ -194,29 +240,70 @@ export function PoliticalSystemTab({
                         </FactValue>
                       </Fact>
                     )}
-                  {/* 직함은 카탈로그가 정본 — 자유입력 칸을 직접 읽지 않는다 */}
-                  {headOfStateTitleOf(system) && (
-                    <Fact>
-                      <FactKey>국가원수</FactKey>
-                      <FactValue>
-                        {headOfStateTitleOf(system)}
-                        {system.headOfStateHasPower === false && (
-                          <Muted> (상징)</Muted>
+                  {/* 직함은 카탈로그가 정본 — 일원 체제면 하나로 합치고 클릭 시 해당 직책 수장 등록으로 잇는다 */}
+                  {(() => {
+                    const hos = headOfStateTitleOf(system)
+                    const hog = headOfGovernmentTitleOf(system)
+                    const isDistinctDual = Boolean(hos && hog && hos !== hog)
+                    return (
+                      <>
+                        {hos && (
+                          <Fact>
+                            <FactKey>
+                              {isDistinctDual ? '국가원수' : '국가원수 · 정부수반'}
+                            </FactKey>
+                            <FactValue>
+                              {hos}
+                              {system.headOfStateHasPower === false && (
+                                <Muted> (상징)</Muted>
+                              )}
+                              <InlineRegisterBtn
+                                type="button"
+                                onClick={() =>
+                                  openHeadRegister({
+                                    positionId:
+                                      system.headOfStatePositionId ?? null,
+                                    positionTitle: hos,
+                                    positionType: 'HEAD_OF_STATE',
+                                    historicalCountryId:
+                                      system.historicalCountryId ?? null,
+                                  })
+                                }
+                              >
+                                + 수장 등록
+                              </InlineRegisterBtn>
+                            </FactValue>
+                          </Fact>
                         )}
-                      </FactValue>
-                    </Fact>
-                  )}
-                  {headOfGovernmentTitleOf(system) && (
-                    <Fact>
-                      <FactKey>정부수반</FactKey>
-                      <FactValue>
-                        {headOfGovernmentTitleOf(system)}
-                        {system.headOfGovernmentHasPower === false && (
-                          <Muted> (상징)</Muted>
+                        {hog && (!hos || isDistinctDual) && (
+                          <Fact>
+                            <FactKey>정부수반</FactKey>
+                            <FactValue>
+                              {hog}
+                              {system.headOfGovernmentHasPower === false && (
+                                <Muted> (상징)</Muted>
+                              )}
+                              <InlineRegisterBtn
+                                type="button"
+                                onClick={() =>
+                                  openHeadRegister({
+                                    positionId:
+                                      system.headOfGovernmentPositionId ?? null,
+                                    positionTitle: hog,
+                                    positionType: 'HEAD_OF_GOVERNMENT',
+                                    historicalCountryId:
+                                      system.historicalCountryId ?? null,
+                                  })
+                                }
+                              >
+                                + 수장 등록
+                              </InlineRegisterBtn>
+                            </FactValue>
+                          </Fact>
                         )}
-                      </FactValue>
-                    </Fact>
-                  )}
+                      </>
+                    )
+                  })()}
                 </Facts>
 
                 {system.notes && <Notes>{system.notes}</Notes>}
@@ -248,20 +335,105 @@ export function PoliticalSystemTab({
         historicalCountryId={historicalCountryId}
         countryName={countryName}
         onSubmit={async (dto) => {
-          if (editing) {
-            await updateMutation.mutateAsync({ id: editing.id, dto })
-            notify.success('정체가 수정되었습니다')
-          } else {
-            await createMutation.mutateAsync({
-              ...dto,
-              countryId: countryId ?? null,
-              historicalCountryId: historicalCountryId ?? null,
-            })
-            notify.success('정체가 추가되었습니다')
-          }
+          const saved = editing
+            ? await updateMutation.mutateAsync({ id: editing.id, dto })
+            : await createMutation.mutateAsync({
+                ...dto,
+                countryId: countryId ?? null,
+                historicalCountryId: historicalCountryId ?? null,
+              })
           setFormOpen(false)
+
+          const hog = headOfGovernmentTitleOf(saved)
+          const hos = headOfStateTitleOf(saved)
+          const rows = (tenuresQuery.data ?? []) as Array<{
+            title?: string | null
+            positionDefinition?: { id?: string | null; title?: string | null } | null
+          }>
+          const hasTenureForTitle = (
+            posId: string | null | undefined,
+            titleText: string | null,
+          ) => {
+            if (!titleText) return true
+            const norm = titleText.trim().replace(/\s+/g, '')
+            return rows.some(
+              (r) =>
+                (posId && r.positionDefinition?.id === posId) ||
+                (r.title ?? r.positionDefinition?.title ?? '')
+                  .trim()
+                  .replace(/\s+/g, '') === norm,
+            )
+          }
+
+          if (hog && !hasTenureForTitle(saved.headOfGovernmentPositionId, hog)) {
+            notify.success(
+              `정체가 저장되었습니다. 이어서 「${hog}」 수장 인물을 등록해 보세요.`,
+            )
+            openHeadRegister({
+              positionId: saved.headOfGovernmentPositionId ?? null,
+              positionTitle: hog,
+              positionType: 'HEAD_OF_GOVERNMENT',
+              historicalCountryId: saved.historicalCountryId ?? null,
+            })
+          } else if (hos && !hasTenureForTitle(saved.headOfStatePositionId, hos)) {
+            notify.success(
+              `정체가 저장되었습니다. 이어서 「${hos}」 수장 인물을 등록해 보세요.`,
+            )
+            openHeadRegister({
+              positionId: saved.headOfStatePositionId ?? null,
+              positionTitle: hos,
+              positionType: 'HEAD_OF_STATE',
+              historicalCountryId: saved.historicalCountryId ?? null,
+            })
+          } else {
+            notify.success(
+              editing ? '정체가 수정되었습니다' : '정체가 추가되었습니다',
+            )
+          }
         }}
       />
+
+      {pickerOpen && headRegisterTarget && (
+        <PersonSelectModal
+          persons={personsQuery.data ?? []}
+          selectedPersonId={registerPersonId ?? ''}
+          loading={personsQuery.isLoading}
+          title={`${headRegisterTarget.positionTitle} 등록 — 인물 선택`}
+          searchPlaceholder="등록할 수장 인물을 검색..."
+          defaultCountryId={countryId}
+          onSelect={(personId) => {
+            setRegisterPersonId(personId)
+            setPickerOpen(false)
+          }}
+          onClose={closeHeadRegister}
+        />
+      )}
+
+      {registerPersonId && headRegisterTarget && (
+        <TenureRegisterPanel
+          personId={registerPersonId}
+          open
+          onClose={closeHeadRegister}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({
+              queryKey: ['cabinets-by-country'],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ['tenures-by-country'],
+            })
+            closeHeadRegister()
+          }}
+          initialCountryId={countryId}
+          initialHistoricalCountryId={
+            headRegisterTarget.historicalCountryId ??
+            historicalCountryId ??
+            null
+          }
+          initialPositionDefinitionId={headRegisterTarget.positionId}
+          initialPositionTitle={headRegisterTarget.positionTitle}
+          initialPositionType={headRegisterTarget.positionType}
+        />
+      )}
     </div>
   )
 }
@@ -431,6 +603,24 @@ const FactValue = styled.dd<{ $muted?: boolean }>`
 
 const Muted = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const InlineRegisterBtn = styled.button`
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px dashed rgba(99, 102, 241, 0.45);
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: #6366f1;
+  }
 `
 
 const Notes = styled.p`

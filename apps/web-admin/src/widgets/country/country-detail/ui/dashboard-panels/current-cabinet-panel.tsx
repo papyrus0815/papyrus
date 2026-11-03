@@ -39,6 +39,10 @@ import {
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { politicalSystemKeys } from '@/entities/political-system/api'
+import {
+  headOfGovernmentTitleOf,
+  headOfStateTitleOf,
+} from '@/entities/political-system/model/political-system'
 import { listPoliticalSystems } from '@/shared/api/political-system'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
@@ -510,12 +514,16 @@ export function CurrentCabinetPanel({
     departmentId: string | null
     departmentName: string | null
     positionTitle: string | null
+    positionDefinitionId: string | null
+    positionType: string | null
     label: string
     mode: 'head' | 'minister' | 'any'
   }>({
     departmentId: null,
     departmentName: null,
     positionTitle: null,
+    positionDefinitionId: null,
+    positionType: null,
     label: '수반·각료',
     mode: 'any',
   })
@@ -906,6 +914,101 @@ export function CurrentCabinetPanel({
     ? (GOVERNMENT_FORM_META[activePoliticalSystem.governmentForm] ?? null)
     : null
 
+  /*
+   * 정체(PoliticalSystem)에 등록된 수장 카테고리(직함·PositionDefinition)를 행정부 마인드맵에 그대로 상속한다.
+   * - 단일 행정수반 체제(대통령제·절대군주제 등)이거나 두 직함이 같으면:
+   *   하나의 수장 직함(primaryHeadSpec)만 중앙 노드에 표시하고, 클릭 시 그 직함으로 재임 폼을 바로 연다.
+   * - 이원 수반 체제(의원내각제·입헌군주제·이원집정부제 등)이거나 국가원수와 정부수반 직함이 서로 다르면:
+   *   중앙 노드는 내각·정부수반(polityHogTitle), 상단 대응 수반 슬롯은 국가원수·군주(polityHosTitle)로 연결한다.
+   */
+  const polityHosTitle = activePoliticalSystem
+    ? headOfStateTitleOf(activePoliticalSystem)
+    : null
+  const polityHogTitle = activePoliticalSystem
+    ? headOfGovernmentTitleOf(activePoliticalSystem)
+    : null
+  const hasDistinctDualPolityHeads = Boolean(
+    polityHosTitle && polityHogTitle && polityHosTitle !== polityHogTitle,
+  )
+  const isDualExecutiveRegime =
+    hasDistinctDualPolityHeads ||
+    Boolean(activeRegimeMeta?.isDualExecutive) ||
+    (Boolean(activeRegimeMeta?.isMonarchy) &&
+      activePoliticalSystem?.governmentForm !== 'ABSOLUTE_MONARCHY')
+
+  const primaryHeadSpec = useMemo(() => {
+    if (hasDistinctDualPolityHeads) {
+      return {
+        title:
+          polityHogTitle ??
+          activeRegimeMeta?.defaultHeadRoleLabel ??
+          '정부수반',
+        positionDefinitionId:
+          activePoliticalSystem?.headOfGovernmentPositionId ?? null,
+        positionType: 'HEAD_OF_GOVERNMENT' as const,
+      }
+    }
+    const unifiedTitle =
+      polityHosTitle ??
+      polityHogTitle ??
+      activeRegimeMeta?.defaultHeadRoleLabel ??
+      '국가원수 · 정부수반'
+    const unifiedPositionId =
+      activePoliticalSystem?.headOfStatePositionId ??
+      activePoliticalSystem?.headOfGovernmentPositionId ??
+      null
+    const unifiedPositionType = polityHosTitle
+      ? ('HEAD_OF_STATE' as const)
+      : polityHogTitle
+        ? ('HEAD_OF_GOVERNMENT' as const)
+        : ('HEAD_OF_STATE' as const)
+    return {
+      title: unifiedTitle,
+      positionDefinitionId: unifiedPositionId,
+      positionType: unifiedPositionType,
+    }
+  }, [
+    hasDistinctDualPolityHeads,
+    polityHosTitle,
+    polityHogTitle,
+    activeRegimeMeta,
+    activePoliticalSystem,
+  ])
+
+  const counterpartHeadSpec = useMemo(() => {
+    if (hasDistinctDualPolityHeads && polityHosTitle) {
+      return {
+        title: polityHosTitle,
+        positionDefinitionId:
+          activePoliticalSystem?.headOfStatePositionId ?? null,
+        positionType: 'HEAD_OF_STATE' as const,
+      }
+    }
+    if (isDualExecutiveRegime) {
+      return {
+        title:
+          polityHosTitle && polityHosTitle !== primaryHeadSpec.title
+            ? polityHosTitle
+            : activeRegimeMeta?.isMonarchy
+              ? '군주 · 국가원수'
+              : '국가원수',
+        positionDefinitionId:
+          polityHosTitle && polityHosTitle !== primaryHeadSpec.title
+            ? (activePoliticalSystem?.headOfStatePositionId ?? null)
+            : null,
+        positionType: 'HEAD_OF_STATE' as const,
+      }
+    }
+    return null
+  }, [
+    hasDistinctDualPolityHeads,
+    isDualExecutiveRegime,
+    polityHosTitle,
+    primaryHeadSpec.title,
+    activeRegimeMeta,
+    activePoliticalSystem,
+  ])
+
   const allDepartments = departmentsQuery.data ?? []
   const eraFilteredDepartments = useMemo(
     () => filterDepartmentsForCabinet(allDepartments, activeCabinetScope),
@@ -1061,6 +1164,8 @@ export function CurrentCabinetPanel({
       departmentId: null,
       departmentName: null,
       positionTitle: null,
+      positionDefinitionId: null,
+      positionType: null,
       label: '수반·각료',
       mode: 'any',
     })
@@ -1072,11 +1177,15 @@ export function CurrentCabinetPanel({
     mode: 'head' | 'minister' | 'any' = 'any',
     departmentName: string | null = null,
     positionTitle: string | null = null,
+    positionDefinitionId: string | null = null,
+    positionType: string | null = null,
   ) => {
     setRegisterTarget({
       departmentId,
       departmentName,
       positionTitle,
+      positionDefinitionId,
+      positionType,
       label,
       mode,
     })
@@ -1813,11 +1922,10 @@ export function CurrentCabinetPanel({
 
   const showDualCounterpartRegister =
     counterpartHeads.length === 0 &&
+    Boolean(counterpartHeadSpec) &&
     (heads.length === 0 ||
       (!effectiveFallbackMode &&
-        (fallbackHeadTenures.length > 0 ||
-          Boolean(activeRegimeMeta?.isMonarchy) ||
-          Boolean(activeRegimeMeta?.isDualExecutive))))
+        (fallbackHeadTenures.length > 0 || isDualExecutiveRegime)))
 
   /*
    * 마인드맵 좌·우 각료 가지(branchSlots):
@@ -1962,13 +2070,23 @@ export function CurrentCabinetPanel({
               heads.length === 0
                 ? openRegister(
                     null,
-                    activeRegimeMeta?.defaultHeadRoleLabel ?? '정부 수반',
+                    primaryHeadSpec.title,
                     'head',
+                    null,
+                    polityHosTitle || polityHogTitle
+                      ? primaryHeadSpec.title
+                      : null,
+                    primaryHeadSpec.positionDefinitionId,
+                    primaryHeadSpec.positionType,
                   )
                 : openRegister(null, '수반·각료', 'any')
             }
           >
-            {heads.length === 0 ? '+ 수반·군주 등록' : '+ 수반·각료 등록'}
+            {heads.length === 0
+              ? polityHosTitle || polityHogTitle
+                ? `+ ${primaryHeadSpec.title} 등록`
+                : '+ 수반·군주 등록'
+              : '+ 수반·각료 등록'}
           </S.SectionAction>
           <S.SectionAction
             type="button"
@@ -2114,13 +2232,26 @@ export function CurrentCabinetPanel({
           onRegisterCabinetHead={() =>
             openRegister(
               null,
-              activeRegimeMeta?.defaultHeadRoleLabel ?? '국가원수·정부수반',
+              primaryHeadSpec.title,
               'head',
+              null,
+              polityHosTitle || polityHogTitle ? primaryHeadSpec.title : null,
+              primaryHeadSpec.positionDefinitionId,
+              primaryHeadSpec.positionType,
             )
           }
           onRegisterCounterpartHead={
-            showDualCounterpartRegister
-              ? () => openRegister(null, '군주·국가원수', 'head')
+            showDualCounterpartRegister && counterpartHeadSpec
+              ? () =>
+                  openRegister(
+                    null,
+                    counterpartHeadSpec.title,
+                    'head',
+                    null,
+                    polityHosTitle ? counterpartHeadSpec.title : null,
+                    counterpartHeadSpec.positionDefinitionId,
+                    counterpartHeadSpec.positionType,
+                  )
               : undefined
           }
           onRegisterMinister={
@@ -2128,8 +2259,11 @@ export function CurrentCabinetPanel({
               ? () => openRegister(null, '각료', 'minister')
               : undefined
           }
-          emptyHeadRoleLabel={
-            activeRegimeMeta?.defaultHeadRoleLabel ?? '국가원수 · 정부수반'
+          emptyHeadRoleLabel={primaryHeadSpec.title}
+          emptyCounterpartRoleLabel={
+            showDualCounterpartRegister && counterpartHeadSpec
+              ? counterpartHeadSpec.title
+              : null
           }
           regimeLabel={activeRegimeMeta?.label ?? null}
           members={members}
@@ -2381,6 +2515,8 @@ export function CurrentCabinetPanel({
           initialAdministrationDepartmentId={registerTarget.departmentId}
           initialAdministrationDepartmentName={registerTarget.departmentName}
           initialPositionTitle={registerTarget.positionTitle}
+          initialPositionDefinitionId={registerTarget.positionDefinitionId}
+          initialPositionType={registerTarget.positionType}
         />
       )}
     </S.Section>

@@ -11,6 +11,7 @@
  */
 import { useMemo, useState } from 'react'
 
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import {
@@ -33,6 +34,10 @@ import {
   summarize,
 } from '@/entities/political-system/model/political-system'
 import { PoliticalSystemFormModal } from '@/features/government-info/ui/political-system-form.modal'
+import { personCareerApi } from '@/shared/api/person-career'
+import { getAllPersons } from '@/shared/api/persons'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
 
 import { IconLandmark } from '../country-detail-dashboard.icons'
@@ -41,12 +46,18 @@ import { ChartSkeleton } from './chart-skeleton'
 import { SectionHelpPopover } from './section-help-popover'
 
 const EMPTY_SPEC_LABELS = [
-  '국가원수',
-  '정부수반',
+  '국가원수 · 정부수반',
   '입법부 · 의회',
   '국가 구조',
   '정당제',
 ] as const
+
+interface HeadRegisterTarget {
+  positionId: string | null
+  positionTitle: string
+  positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+  historicalCountryId: string | null
+}
 
 interface Props {
   /** 현대 국가 ID — 주면 브리지로 연결된 과거 국가의 정체까지 함께 온다 */
@@ -72,37 +83,69 @@ interface SpecItem {
   label: string
   value: string
   note?: string
+  headAction?: HeadRegisterTarget
 }
 
 function buildSpecs(system: PoliticalSystem): SpecItem[] {
   const specs: SpecItem[] = []
 
   const headOfState = headOfStateTitleOf(system)
-  if (headOfState) {
+  const headOfGovernment = headOfGovernmentTitleOf(system)
+  const hasDistinctDualHeads =
+    Boolean(headOfState) &&
+    Boolean(headOfGovernment) &&
+    headOfState !== headOfGovernment
+
+  if (hasDistinctDualHeads && headOfState && headOfGovernment) {
     specs.push({
       key: 'hos',
       label: '국가원수',
       value: headOfState,
       note: system.headOfStateHasPower === false ? '상징' : '실권',
+      headAction: {
+        positionId: system.headOfStatePositionId ?? null,
+        positionTitle: headOfState,
+        positionType: 'HEAD_OF_STATE',
+        historicalCountryId: system.historicalCountryId ?? null,
+      },
     })
-  }
-
-  const headOfGovernment = headOfGovernmentTitleOf(system)
-  const isUnifiedExecutive =
-    system.governmentForm === 'PRESIDENTIAL' ||
-    system.governmentForm === 'ABSOLUTE_MONARCHY'
-  if (headOfGovernment) {
     specs.push({
       key: 'hog',
       label: '정부수반',
       value: headOfGovernment,
       note: system.headOfGovernmentHasPower === false ? '상징' : '실권',
+      headAction: {
+        positionId: system.headOfGovernmentPositionId ?? null,
+        positionTitle: headOfGovernment,
+        positionType: 'HEAD_OF_GOVERNMENT',
+        historicalCountryId: system.historicalCountryId ?? null,
+      },
     })
-  } else if (isUnifiedExecutive && headOfState) {
+  } else if (headOfState) {
+    specs.push({
+      key: 'hos',
+      label: '국가원수 · 정부수반',
+      value: headOfState,
+      note: system.headOfStateHasPower === false ? '상징' : '실권',
+      headAction: {
+        positionId: system.headOfStatePositionId ?? null,
+        positionTitle: headOfState,
+        positionType: 'HEAD_OF_STATE',
+        historicalCountryId: system.historicalCountryId ?? null,
+      },
+    })
+  } else if (headOfGovernment) {
     specs.push({
       key: 'hog',
       label: '정부수반',
-      value: `${headOfState} 겸임`,
+      value: headOfGovernment,
+      note: system.headOfGovernmentHasPower === false ? '상징' : '실권',
+      headAction: {
+        positionId: system.headOfGovernmentPositionId ?? null,
+        positionTitle: headOfGovernment,
+        positionType: 'HEAD_OF_GOVERNMENT',
+        historicalCountryId: system.historicalCountryId ?? null,
+      },
     })
   }
 
@@ -172,6 +215,7 @@ export function PoliticalSystemPanel({
   countryName,
   onOpenAll,
 }: Props) {
+  const queryClient = useQueryClient()
   const scope = { countryId, historicalCountryId }
   const query = usePoliticalSystems(scope)
   const createMutation = useCreatePoliticalSystem()
@@ -180,6 +224,81 @@ export function PoliticalSystemPanel({
   const [editing, setEditing] = useState<PoliticalSystem | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [headRegisterTarget, setHeadRegisterTarget] =
+    useState<HeadRegisterTarget | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+
+  const tenuresQuery = useQuery({
+    queryKey: ['tenures-by-country', countryId || undefined, historicalCountryId],
+    queryFn: () =>
+      personCareerApi.getTenuresByCountry({
+        countryId: countryId || undefined,
+        historicalCountryId,
+      }),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
+
+  const personsQuery = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
+    enabled: pickerOpen,
+    staleTime: 5 * 60_000,
+  })
+
+  const countHeadTenuresFor = (action: HeadRegisterTarget): number => {
+    const rows = (tenuresQuery.data ?? []) as Array<{
+      title?: string | null
+      positionType?: string | null
+      historicalCountryId?: string | null
+      positionDefinition?: {
+        id?: string | null
+        title?: string | null
+        positionType?: string | null
+      } | null
+    }>
+    const targetTitle = action.positionTitle.trim().replace(/\s+/g, '')
+    return rows.filter((row) => {
+      if (
+        action.historicalCountryId &&
+        row.historicalCountryId &&
+        row.historicalCountryId !== action.historicalCountryId
+      ) {
+        return false
+      }
+      if (
+        action.positionId &&
+        row.positionDefinition?.id &&
+        row.positionDefinition.id === action.positionId
+      ) {
+        return true
+      }
+      const rowTitle = (
+        row.title ??
+        row.positionDefinition?.title ??
+        ''
+      )
+        .trim()
+        .replace(/\s+/g, '')
+      if (rowTitle && targetTitle && rowTitle === targetTitle) {
+        return true
+      }
+      return false
+    }).length
+  }
+
+  const openHeadRegister = (target: HeadRegisterTarget) => {
+    setHeadRegisterTarget(target)
+    setRegisterPersonId(null)
+    setPickerOpen(true)
+  }
+
+  const closeHeadRegister = () => {
+    setPickerOpen(false)
+    setRegisterPersonId(null)
+    setHeadRegisterTarget(null)
+  }
 
   const systems = useMemo(
     () => [...(query.data ?? [])].sort(comparePoliticalSystems),
@@ -298,19 +417,36 @@ export function PoliticalSystemPanel({
 
             {currentSpecs.length > 0 && (
               <PrimarySpecStrip>
-                {currentSpecs.map((spec) => (
-                  <SpecColumn key={spec.key}>
-                    <SpecColumnKey>{spec.label}</SpecColumnKey>
-                    <SpecColumnValue>
-                      <span>{spec.value}</span>
-                      {spec.note && (
-                        <PowerTag $symbolic={spec.note === '상징'}>
-                          {spec.note}
-                        </PowerTag>
-                      )}
-                    </SpecColumnValue>
-                  </SpecColumn>
-                ))}
+                {currentSpecs.map((spec) => {
+                  const headCount = spec.headAction
+                    ? countHeadTenuresFor(spec.headAction)
+                    : 0
+                  return (
+                    <SpecColumn key={spec.key}>
+                      <SpecColumnKey>{spec.label}</SpecColumnKey>
+                      <SpecColumnValue>
+                        <span>{spec.value}</span>
+                        {spec.note && (
+                          <PowerTag $symbolic={spec.note === '상징'}>
+                            {spec.note}
+                          </PowerTag>
+                        )}
+                        {spec.headAction && (
+                          <HeadRegisterBtn
+                            type="button"
+                            $empty={headCount === 0}
+                            onClick={() => openHeadRegister(spec.headAction!)}
+                            title={`「${spec.value}」 직책으로 수장 인물 등록`}
+                          >
+                            {headCount === 0
+                              ? '+ 인물 등록'
+                              : `${headCount}명 · + 추가`}
+                          </HeadRegisterBtn>
+                        )}
+                      </SpecColumnValue>
+                    </SpecColumn>
+                  )
+                })}
               </PrimarySpecStrip>
             )}
 
@@ -403,20 +539,80 @@ export function PoliticalSystemPanel({
         historicalCountryId={historicalCountryId}
         countryName={countryName}
         onSubmit={async (dto) => {
-          if (editing) {
-            await updateMutation.mutateAsync({ id: editing.id, dto })
-            notify.success('정체가 수정되었습니다')
-          } else {
-            await createMutation.mutateAsync({
-              ...dto,
-              countryId: countryId ?? null,
-              historicalCountryId: historicalCountryId ?? null,
-            })
-            notify.success('정체가 추가되었습니다')
-          }
+          const saved = editing
+            ? await updateMutation.mutateAsync({ id: editing.id, dto })
+            : await createMutation.mutateAsync({
+                ...dto,
+                countryId: countryId ?? null,
+                historicalCountryId: historicalCountryId ?? null,
+              })
           setFormOpen(false)
+
+          const savedHeadSpecs = buildSpecs(saved).filter(
+            (spec): spec is SpecItem & { headAction: HeadRegisterTarget } =>
+              Boolean(spec.headAction),
+          )
+          // 실권 수반 우선으로 아직 인물이 0명인 수장 카테고리를 찾는다
+          const prioritized = [...savedHeadSpecs].sort((a, b) =>
+            a.note === '실권' && b.note !== '상징' ? -1 : 1,
+          )
+          const unfilled = prioritized.find(
+            (spec) => countHeadTenuresFor(spec.headAction) === 0,
+          )
+          if (unfilled) {
+            notify.success(
+              `정체가 저장되었습니다. 이어서 「${unfilled.value}」 수장 인물을 등록해 보세요.`,
+            )
+            openHeadRegister(unfilled.headAction)
+          } else {
+            notify.success(
+              editing ? '정체가 수정되었습니다' : '정체가 추가되었습니다',
+            )
+          }
         }}
       />
+
+      {pickerOpen && headRegisterTarget && (
+        <PersonSelectModal
+          persons={personsQuery.data ?? []}
+          selectedPersonId={registerPersonId ?? ''}
+          loading={personsQuery.isLoading}
+          title={`${headRegisterTarget.positionTitle} 등록 — 인물 선택`}
+          searchPlaceholder="등록할 수장 인물을 검색..."
+          defaultCountryId={countryId}
+          onSelect={(personId) => {
+            setRegisterPersonId(personId)
+            setPickerOpen(false)
+          }}
+          onClose={closeHeadRegister}
+        />
+      )}
+
+      {registerPersonId && headRegisterTarget && (
+        <TenureRegisterPanel
+          personId={registerPersonId}
+          open
+          onClose={closeHeadRegister}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({
+              queryKey: ['cabinets-by-country'],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ['tenures-by-country'],
+            })
+            closeHeadRegister()
+          }}
+          initialCountryId={countryId}
+          initialHistoricalCountryId={
+            headRegisterTarget.historicalCountryId ??
+            historicalCountryId ??
+            null
+          }
+          initialPositionDefinitionId={headRegisterTarget.positionId}
+          initialPositionTitle={headRegisterTarget.positionTitle}
+          initialPositionType={headRegisterTarget.positionType}
+        />
+      )}
     </S.Section>
   )
 }
@@ -568,6 +764,35 @@ const PowerTag = styled.span<{ $symbolic?: boolean }>`
         ? 'rgba(255,255,255,0.06)'
         : 'rgba(15,23,42,0.05)'
       : 'rgba(99, 102, 241, 0.12)'};
+`
+
+const HeadRegisterBtn = styled.button<{ $empty?: boolean }>`
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px ${({ $empty }) => ($empty ? 'dashed' : 'solid')}
+    ${({ $empty, theme }) =>
+      $empty ? 'rgba(99, 102, 241, 0.45)' : theme.colors.border.light};
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ $empty, theme }) =>
+    $empty
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'
+      : theme.colors.text.tertiary};
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: #6366f1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  }
 `
 
 const EmptyBlockButton = styled.button`

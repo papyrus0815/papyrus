@@ -102,6 +102,15 @@ const toText = (value: unknown) => (value == null ? '' : String(value))
  */
 const CUSTOM_TITLE = '__custom__'
 
+/** 국가원수와 정부수반이 제도적으로 분리되는 이원 집행부 정체 */
+const DUAL_EXECUTIVE_FORMS = new Set<string>([
+  'PARLIAMENTARY',
+  'CONSTITUTIONAL_MONARCHY',
+  'SEMI_PRESIDENTIAL',
+  'ONE_PARTY',
+  'THEOCRACY',
+])
+
 /** 카탈로그에서 이 축에 쓸 수 있는 유형 */
 type HeadAxis = 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
 
@@ -180,7 +189,8 @@ function applyGovernmentFormDefaults(
       break
     case 'ABSOLUTE_MONARCHY':
       next.headOfStateHasPower = true
-      next.headOfGovernmentHasPower = true
+      next.headOfGovernmentChoice = ''
+      next.headOfGovernmentTitle = ''
       if (!next.legislatureType) next.legislatureType = 'NONE'
       break
     case 'ONE_PARTY':
@@ -251,6 +261,7 @@ export function PoliticalSystemFormModal({
 }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [forceSplitExecutive, setForceSplitExecutive] = useState(false)
 
   /*
    * 직함 후보 = 관직 정의 카탈로그. 재임·재위가 쓰는 것과 **같은 목록·같은 쿼리키**를
@@ -300,12 +311,18 @@ export function PoliticalSystemFormModal({
     if (!open) return
     if (editing) {
       setForm(hydrate(editing))
+      setForceSplitExecutive(
+        Boolean(
+          editing.headOfGovernmentPositionId || editing.headOfGovernmentTitle,
+        ),
+      )
       return
     }
     const base: FormState = {
       ...EMPTY,
       isCurrent: defaultIsCurrent,
     }
+    setForceSplitExecutive(false)
     setForm(
       initialGovernmentForm
         ? applyGovernmentFormDefaults(initialGovernmentForm, base)
@@ -319,6 +336,11 @@ export function PoliticalSystemFormModal({
   const legislature = (form.legislatureType || null) as LegislatureType | null
   const isBicameral = legislature === 'BICAMERAL'
   const hasLegislature = legislature !== 'NONE'
+  const isNaturallyDualExecutive = DUAL_EXECUTIVE_FORMS.has(form.governmentForm)
+  const isDualExecutive =
+    isNaturallyDualExecutive ||
+    forceSplitExecutive ||
+    Boolean(form.headOfGovernmentChoice)
 
   const handleSubmit = async () => {
     const startYear = numberOrNull(form.startYear)
@@ -355,7 +377,13 @@ export function PoliticalSystemFormModal({
        * (서버도 같은 규칙으로 한 번 더 정리한다.)
        */
       ...headAxisPayload('headOfState', form),
-      ...headAxisPayload('headOfGovernment', form),
+      ...(isDualExecutive
+        ? headAxisPayload('headOfGovernment', form)
+        : {
+            headOfGovernmentPositionId: null,
+            headOfGovernmentTitle: null,
+            headOfGovernmentHasPower: null,
+          }),
       stateStructure: (form.stateStructure ||
         null) as UpdatePoliticalSystemInput['stateStructure'],
       partySystem: (form.partySystem ||
@@ -540,15 +568,50 @@ export function PoliticalSystemFormModal({
           </Grid>
         )}
 
-        <SectionLabel>국가원수 · 정부수반</SectionLabel>
+        <SectionHeaderRow>
+          <SectionLabel style={{ margin: 0 }}>
+            {isDualExecutive
+              ? '국가원수 · 정부수반 직함 (이원 체제)'
+              : '국가수반 직함 (국가원수 · 정부수반 겸임)'}
+          </SectionLabel>
+          {!isDualExecutive ? (
+            <SplitToggleBtn
+              type="button"
+              onClick={() => setForceSplitExecutive(true)}
+            >
+              + 정부수반 직함 별도 지정
+            </SplitToggleBtn>
+          ) : (
+            !isNaturallyDualExecutive && (
+              <SplitToggleBtn
+                type="button"
+                onClick={() => {
+                  setForceSplitExecutive(false)
+                  setForm((prev) => ({
+                    ...prev,
+                    headOfGovernmentChoice: '',
+                    headOfGovernmentTitle: '',
+                  }))
+                }}
+              >
+                단일 수반(겸임)으로 합치기
+              </SplitToggleBtn>
+            )
+          )}
+        </SectionHeaderRow>
         {/*
           직함은 관직 정의 카탈로그에서 고른다 — 재임·재위가 참조하는 그 목록이다.
-          여기만 자유 문자열이면 같은 '대통령'이 두 어휘로 갈라져 직책으로 잇지 못한다.
-          카탈로그에 없는 칭호만 '직접 입력'으로 떨어진다.
+          대통령제·절대군주제 같은 일원 체제에서는 국가원수와 정부수반이 한 사람이므로
+          단일 칸으로 받고, 의원내각제·입헌군주제·이원집정부제이거나 별도 지정을 켠 경우에만
+          국가원수와 정부수반 두 칸으로 나눈다.
         */}
         <Grid>
           <Field>
-            국가원수 직함
+            {isDualExecutive
+              ? '국가원수 직함 (대통령 · 국왕 · 황제 등)'
+              : form.governmentForm === 'ABSOLUTE_MONARCHY'
+                ? '군주 · 국가원수 직함'
+                : '수반 직함 (국가원수 · 정부수반)'}
             <Select
               value={form.headOfStateChoice}
               onChange={(event) => set('headOfStateChoice', event.target.value)}
@@ -569,7 +632,7 @@ export function PoliticalSystemFormModal({
                 aria-label="국가원수 직함 직접 입력"
               />
             )}
-            {form.headOfStateChoice && (
+            {form.headOfStateChoice && isDualExecutive && (
               <CheckLabel>
                 <input
                   type="checkbox"
@@ -578,53 +641,54 @@ export function PoliticalSystemFormModal({
                     set('headOfStateHasPower', event.target.checked)
                   }
                 />
-                실권이 있다
+                실권이 있다 (해제 시 상징적 국가원수)
               </CheckLabel>
             )}
           </Field>
-          <Field>
-            정부수반 직함
-            <Select
-              value={form.headOfGovernmentChoice}
-              onChange={(event) =>
-                set('headOfGovernmentChoice', event.target.value)
-              }
-            >
-              <option value="">지정 안 함 (대통령제면 비움)</option>
-              {optionsFor('HEAD_OF_GOVERNMENT').map((def) => (
-                <option key={def.id} value={def.id}>
-                  {def.title}
-                </option>
-              ))}
-              <option value={CUSTOM_TITLE}>직접 입력…</option>
-            </Select>
-            {form.headOfGovernmentChoice === CUSTOM_TITLE && (
-              <Input
-                value={form.headOfGovernmentTitle}
+          {isDualExecutive && (
+            <Field>
+              정부수반 직함 (총리 · 수상 · 내각총리대신 등)
+              <Select
+                value={form.headOfGovernmentChoice}
                 onChange={(event) =>
-                  set('headOfGovernmentTitle', event.target.value)
+                  set('headOfGovernmentChoice', event.target.value)
                 }
-                placeholder="임시정부 수반"
-                aria-label="정부수반 직함 직접 입력"
-              />
-            )}
-            {form.headOfGovernmentChoice && (
-              <CheckLabel>
-                <input
-                  type="checkbox"
-                  checked={form.headOfGovernmentHasPower}
+              >
+                <option value="">지정 안 함</option>
+                {optionsFor('HEAD_OF_GOVERNMENT').map((def) => (
+                  <option key={def.id} value={def.id}>
+                    {def.title}
+                  </option>
+                ))}
+                <option value={CUSTOM_TITLE}>직접 입력…</option>
+              </Select>
+              {form.headOfGovernmentChoice === CUSTOM_TITLE && (
+                <Input
+                  value={form.headOfGovernmentTitle}
                   onChange={(event) =>
-                    set('headOfGovernmentHasPower', event.target.checked)
+                    set('headOfGovernmentTitle', event.target.value)
                   }
+                  placeholder="임시정부 수반 · 국무원 총리"
+                  aria-label="정부수반 직함 직접 입력"
                 />
-                실권이 있다
-              </CheckLabel>
-            )}
-          </Field>
+              )}
+              {form.headOfGovernmentChoice && (
+                <CheckLabel>
+                  <input
+                    type="checkbox"
+                    checked={form.headOfGovernmentHasPower}
+                    onChange={(event) =>
+                      set('headOfGovernmentHasPower', event.target.checked)
+                    }
+                  />
+                  실권이 있다
+                </CheckLabel>
+              )}
+            </Field>
+          )}
         </Grid>
         <FieldHint>
-          목록에 없는 직함은 「직위 정의」 탭에서 먼저 만들면 재임·재위 기록과 같은
-          직책으로 이어집니다.
+          여기서 지정한 수장 직함(예: 대통령, 국왕, 내각총리대신)은 아래 행정부 · 수반 등록과 자동 연결됩니다.
         </FieldHint>
 
         <SectionLabel>국가 구조 · 정당제</SectionLabel>
@@ -680,6 +744,29 @@ export function PoliticalSystemFormModal({
     </Modal>
   )
 }
+
+const SectionHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 10px;
+`
+
+const SplitToggleBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
 
 const SectionLabel = styled.h3`
   margin: 18px 0 10px;

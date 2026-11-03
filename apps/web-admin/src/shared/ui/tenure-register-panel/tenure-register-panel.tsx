@@ -1098,8 +1098,12 @@ export interface TenureRegisterPanelProps {
   initialAdministrationDepartmentId?: string | null
   /** 부처 슬롯에서 열 때 화면에 표시할 부처 이름 */
   initialAdministrationDepartmentName?: string | null
-  /** 마인드맵 직책 슬롯에서 열 때 미리 고를 직책 정의·직함 이름 (예: 외무장관, 국무장관, 외무대신) */
+  /** 정체·마인드맵에서 열 때 미리 고를 직책 정의 ID */
+  initialPositionDefinitionId?: string | null
+  /** 마인드맵·정체 직책 슬롯에서 열 때 미리 고를 직책 정의·직함 이름 (예: 대통령, 국왕, 외무장관) */
   initialPositionTitle?: string | null
+  /** 정의에 없는 자유입력 직함으로 열 때 기본 직위 유형 (예: HEAD_OF_STATE, HEAD_OF_GOVERNMENT, CABINET_MINISTER) */
+  initialPositionType?: string | null
   /**
    * 재위로 연다 — '재위 추가' 진입점. 직위 피커를 군주 칭호 우선으로 놓고, 아무것도 안 고르면
    * '국왕' 정의를 미리 고른다. 재위·재임은 한 기록(직위 보유)이라 폼도 하나다 —
@@ -1126,7 +1130,9 @@ export function TenureRegisterPanel({
   defaultCabinetId,
   initialAdministrationDepartmentId,
   initialAdministrationDepartmentName,
+  initialPositionDefinitionId,
   initialPositionTitle,
+  initialPositionType,
   defaultMonarchical = false,
   defaultDefinitionTitle = '국왕',
   countryOptional = false,
@@ -1697,41 +1703,56 @@ export function TenureRegisterPanel({
     setPresetPositionType(null)
   }, [open, isEdit, monarchicalMode, defaultDefinitionTitle, positionDefinitions, positionDefinitionId, title])
 
-  /** 마인드맵 직책 슬롯에서 열었을 때 해당 직책 정의(외무장관·국무장관·외무대신 등)를 자동으로 미리 선택한다 */
+  /** 마인드맵·정체 직책 슬롯에서 열었을 때 해당 직책 정의(대통령·국왕·외무장관 등)를 자동으로 미리 선택한다 */
   const initialPositionAppliedRef = useRef(false)
   useEffect(() => {
     if (!open) {
       initialPositionAppliedRef.current = false
       return
     }
-    const targetTitle = initialPositionTitle?.trim()
-    if (isEdit || monarchicalMode || !targetTitle || initialPositionAppliedRef.current) {
+    const targetId = initialPositionDefinitionId?.trim() || null
+    const targetTitle = initialPositionTitle?.trim() || null
+    if (
+      isEdit ||
+      (!targetId && !targetTitle) ||
+      initialPositionAppliedRef.current
+    ) {
       return
     }
     const defs = positionDefinitions as PositionDefinitionLike[]
     if (defs.length === 0) return
-    const normalizedTarget = targetTitle.replace(/\s/g, '')
+    const normalizedTarget = targetTitle ? targetTitle.replace(/\s/g, '') : ''
     const matchedDef =
-      defs.find((d) => (d.title ?? '').trim() === targetTitle) ??
-      defs.find((d) => (d.title ?? '').replace(/\s/g, '') === normalizedTarget)
+      (targetId ? defs.find((d) => d.id === targetId) : undefined) ??
+      (targetTitle
+        ? (defs.find((d) => (d.title ?? '').trim() === targetTitle) ??
+          defs.find((d) => (d.title ?? '').replace(/\s/g, '') === normalizedTarget))
+        : undefined)
     initialPositionAppliedRef.current = true
     if (positionDefinitionId || title.trim()) return
     if (matchedDef) {
+      if (matchedDef.isMonarchical) {
+        setMonarchicalMode(true)
+      }
       setPositionDefinitionId(matchedDef.id)
       setTitle('')
       setTitleEn(matchedDef.titleEn ?? '')
       setPresetPositionType(null)
-    } else {
+    } else if (targetTitle) {
+      if (/황제|국왕|여왕|왕|천황|차르|술탄|대공|샤|파라오|칸/.test(targetTitle)) {
+        setMonarchicalMode(true)
+      }
       setPositionDefinitionId(null)
       setTitle(targetTitle)
-      setPresetPositionType('CABINET_MINISTER')
+      setPresetPositionType(initialPositionType ?? 'CABINET_MINISTER')
       setManualEntryOpen(true)
     }
   }, [
     open,
     isEdit,
-    monarchicalMode,
+    initialPositionDefinitionId,
     initialPositionTitle,
+    initialPositionType,
     positionDefinitions,
     positionDefinitionId,
     title,
