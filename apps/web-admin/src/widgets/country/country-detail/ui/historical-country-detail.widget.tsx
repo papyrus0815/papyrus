@@ -1077,15 +1077,15 @@ function HistoricalOverviewSection({
       {/* 규모 줄 — 현대 국가 대시보드와 같은 6칸 제원 그리드(FactSpecGrid) + 누락 제원 보완 바 */}
       <DashboardStyles.FactBar aria-label="국가 개요 지표">
         <DashboardStyles.FactSpecGrid>
-          <DashboardStyles.Fact $empty={period === '알 수 없음'}>
+          <DashboardStyles.Fact $missing={period === '알 수 없음'}>
             <DashboardStyles.FactLabel>존속 기간</DashboardStyles.FactLabel>
-            <DashboardStyles.FactValue $empty={period === '알 수 없음'}>
+            <DashboardStyles.FactValue $missing={period === '알 수 없음'}>
               {period}
             </DashboardStyles.FactValue>
           </DashboardStyles.Fact>
-          <DashboardStyles.Fact $empty={durationYears == null}>
+          <DashboardStyles.Fact $missing={durationYears == null}>
             <DashboardStyles.FactLabel>존속 연수</DashboardStyles.FactLabel>
-            <DashboardStyles.FactValue $empty={durationYears == null}>
+            <DashboardStyles.FactValue $missing={durationYears == null}>
               {durationYears != null ? (
                 <>
                   {durationYears.toLocaleString()}
@@ -1096,23 +1096,23 @@ function HistoricalOverviewSection({
               )}
             </DashboardStyles.FactValue>
           </DashboardStyles.Fact>
-          <DashboardStyles.Fact $empty={!country.stateType}>
+          <DashboardStyles.Fact $missing={!country.stateType}>
             <DashboardStyles.FactLabel>국가 형태</DashboardStyles.FactLabel>
-            <DashboardStyles.FactValue $empty={!country.stateType}>
+            <DashboardStyles.FactValue $missing={!country.stateType}>
               {country.stateType
                 ? getStateTypeLabel(country.stateType)
                 : '미등록'}
             </DashboardStyles.FactValue>
           </DashboardStyles.Fact>
-          <DashboardStyles.Fact $empty={!entityKindLabel}>
+          <DashboardStyles.Fact $missing={!entityKindLabel}>
             <DashboardStyles.FactLabel>정치체 성격</DashboardStyles.FactLabel>
-            <DashboardStyles.FactValue $empty={!entityKindLabel}>
+            <DashboardStyles.FactValue $missing={!entityKindLabel}>
               {entityKindLabel ?? '미분류'}
             </DashboardStyles.FactValue>
           </DashboardStyles.Fact>
-          <DashboardStyles.Fact $empty={rulerCount === 0}>
+          <DashboardStyles.Fact $missing={rulerCount === 0}>
             <DashboardStyles.FactLabel>역대 수반</DashboardStyles.FactLabel>
-            <DashboardStyles.FactValue $empty={rulerCount === 0}>
+            <DashboardStyles.FactValue $missing={rulerCount === 0}>
               {rulerCount > 0 ? (
                 <>
                   {rulerCount}
@@ -1123,25 +1123,27 @@ function HistoricalOverviewSection({
               )}
             </DashboardStyles.FactValue>
           </DashboardStyles.Fact>
-          <DashboardStyles.Fact $empty={!capitalText}>
+          <DashboardStyles.Fact $missing={!capitalText}>
             <DashboardStyles.FactLabel>수도</DashboardStyles.FactLabel>
-            <DashboardStyles.FactValue $empty={!capitalText}>
+            <DashboardStyles.FactValue $missing={!capitalText}>
               {capitalText || '미등록'}
             </DashboardStyles.FactValue>
           </DashboardStyles.Fact>
         </DashboardStyles.FactSpecGrid>
         {missingFactLabels.length > 0 && onEdit && (
-          <DashboardStyles.FactSupplementBar>
-            <DashboardStyles.FactSupplementLabel>
+          <DashboardStyles.FactEmptyRow>
+            <DashboardStyles.FactEmptyText>
               미등록 제원: {missingFactLabels.join(' · ')}
-            </DashboardStyles.FactSupplementLabel>
-            <DashboardStyles.FactSupplementAction
-              type="button"
-              onClick={onEdit}
-            >
-              + 기본 정보 입력
-            </DashboardStyles.FactSupplementAction>
-          </DashboardStyles.FactSupplementBar>
+            </DashboardStyles.FactEmptyText>
+            <DashboardStyles.FactEmptyActions>
+              <DashboardStyles.FactEmptyAction
+                type="button"
+                onClick={onEdit}
+              >
+                + 기본 정보 입력
+              </DashboardStyles.FactEmptyAction>
+            </DashboardStyles.FactEmptyActions>
+          </DashboardStyles.FactEmptyRow>
         )}
       </DashboardStyles.FactBar>
 
@@ -1370,49 +1372,54 @@ function HistoricalOverviewSection({
         />
       </DashboardStyles.Section>
 
-      {/* 역대 수반 — 끝난 나라엔 '지금'이 없다. 수반이 등록되어 있을 때만 치세 띠를 노출한다 */}
-      {(stats.loading.tenures || stats.rulers.length > 0) && (
-        <DashboardStyles.Section
-          id="section-rulers"
-          data-section-count={rulerCount > 0 ? String(rulerCount) : undefined}
-        >
-          <DashboardStyles.SectionTitleRow>
-            <DashboardStyles.SectionTitleIcon>
-              <IconVote />
-            </DashboardStyles.SectionTitleIcon>
-            <DashboardStyles.SectionTitleText>
-              역대 수반
-            </DashboardStyles.SectionTitleText>
-            <SectionHelpPopover sectionKey="rulers" />
-            {rulerCount > 0 && (
-              <DashboardStyles.SectionCountChip>
-                {rulerCount}명
-              </DashboardStyles.SectionCountChip>
-            )}
-            {outOfSpanRulerCount > 0 && (
-              <DashboardStyles.SectionCountChip title="존속 기간 밖에서 시작·종료한 기록 — 다른 나라에 걸려야 할 행일 수 있습니다">
-                기간 밖 {outOfSpanRulerCount}
-              </DashboardStyles.SectionCountChip>
-            )}
-            <DashboardStyles.SectionLink
-              type="button"
-              onClick={() => onGoToTab('heads')}
-            >
-              전체 보기
-            </DashboardStyles.SectionLink>
-          </DashboardStyles.SectionTitleRow>
-          {stats.loading.tenures ? (
-            <ChartSkeleton variant="bars" />
-          ) : (
-            <HistoricalRulerTimeline
-              rulers={stats.rulers}
-              spanStart={span.start}
-              spanEnd={span.end}
-              onSelectPerson={goPerson}
-            />
+      {/* 역대 수반 — 0명이어도 대시보드에 상시 노출해 등록 진입점을 제공한다 */}
+      <DashboardStyles.Section
+        id="section-rulers"
+        data-section-count={rulerCount > 0 ? String(rulerCount) : undefined}
+      >
+        <DashboardStyles.SectionTitleRow>
+          <DashboardStyles.SectionTitleIcon>
+            <IconVote />
+          </DashboardStyles.SectionTitleIcon>
+          <DashboardStyles.SectionTitleText>
+            역대 수반
+          </DashboardStyles.SectionTitleText>
+          <SectionHelpPopover sectionKey="rulers" />
+          {rulerCount > 0 && (
+            <DashboardStyles.SectionCountChip>
+              {rulerCount}명
+            </DashboardStyles.SectionCountChip>
           )}
-        </DashboardStyles.Section>
-      )}
+          {outOfSpanRulerCount > 0 && (
+            <DashboardStyles.SectionCountChip title="존속 기간 밖에서 시작·종료한 기록 — 다른 나라에 걸려야 할 행일 수 있습니다">
+              기간 밖 {outOfSpanRulerCount}
+            </DashboardStyles.SectionCountChip>
+          )}
+          <DashboardStyles.SectionLink
+            type="button"
+            onClick={() => onGoToTab('heads')}
+          >
+            {stats.rulers.length > 0 ? '전체 보기' : '+ 수반 등록'}
+          </DashboardStyles.SectionLink>
+        </DashboardStyles.SectionTitleRow>
+        {stats.loading.tenures ? (
+          <ChartSkeleton variant="bars" />
+        ) : stats.rulers.length === 0 ? (
+          <SectionEmpty
+            text="이 국가의 역대 군주·국가원수·정부수반 재임 기록이 아직 없습니다. 등록하면 존속 기간 위 재위 띠와 2열 수반 원장이 생성됩니다."
+            hint="초대 통치자를 등록하면 상단 건국·멸망 원장에도 자동 연결됩니다"
+            actionLabel="역대 수반 등록"
+            onAction={() => onGoToTab('heads')}
+          />
+        ) : (
+          <HistoricalRulerTimeline
+            rulers={stats.rulers}
+            spanStart={span.start}
+            spanEnd={span.end}
+            onSelectPerson={goPerson}
+          />
+        )}
+      </DashboardStyles.Section>
 
       {/* 정체 — 어떤 체제였나(현대 국가와 같은 2열 원장 패널, 역사 국가 FK로 전체 폭 사용) */}
       <PoliticalSystemPanel
@@ -1680,79 +1687,97 @@ function HistoricalOverviewSection({
           <DashboardStyles.SectionCountChip>
             등록 {filledIndicatorDomains}/2개 도메인
           </DashboardStyles.SectionCountChip>
-          <DashboardStyles.SectionLink
-            type="button"
-            onClick={() => onGoToTab('trade')}
-          >
-            교역 상세 보기 →
-          </DashboardStyles.SectionLink>
+          <DashboardStyles.SectionHeaderActions>
+            {emptyIndicatorDomains > 0 && (
+              <DashboardStyles.SectionLink
+                type="button"
+                onClick={() => setShowEmptyIndicators((prev) => !prev)}
+              >
+                {showEmptyIndicators
+                  ? `빈 섹션 접기`
+                  : `빈 섹션 펼치기 (+${emptyIndicatorDomains})`}
+              </DashboardStyles.SectionLink>
+            )}
+            <DashboardStyles.SectionLink
+              type="button"
+              onClick={() => onGoToTab('trade')}
+            >
+              교역 상세 보기 →
+            </DashboardStyles.SectionLink>
+          </DashboardStyles.SectionHeaderActions>
         </DashboardStyles.SectionTitleRow>
 
-        <DashboardStyles.IndicatorsLedger>
-          <DashboardStyles.IndicatorsLedgerGrid>
-            <DashboardStyles.IndicatorsLedgerRow $empty={!hasTradeData}>
-              <DashboardStyles.IndicatorsLedgerIdentity>
-                <DashboardStyles.IndicatorsLedgerCode $empty={!hasTradeData}>
+        <DashboardStyles.IndicatorsLedgerWrap>
+          <DashboardStyles.IndicatorsLedgerList>
+            <DashboardStyles.IndicatorsLedgerItem>
+              <DashboardStyles.IndicatorsLedgerRow>
+                <DashboardStyles.IndicatorsLedgerIcon $filled={hasTradeData}>
                   01
-                </DashboardStyles.IndicatorsLedgerCode>
-                <DashboardStyles.IndicatorsLedgerLabelGroup>
-                  <DashboardStyles.IndicatorsLedgerName $empty={!hasTradeData}>
-                    교역 (수출·수입)
-                  </DashboardStyles.IndicatorsLedgerName>
-                  <DashboardStyles.IndicatorsLedgerSpec>
+                </DashboardStyles.IndicatorsLedgerIcon>
+                <DashboardStyles.IndicatorsLedgerBody>
+                  <DashboardStyles.IndicatorsLedgerTitleRow>
+                    <DashboardStyles.IndicatorsLedgerTitle>
+                      교역 (수출·수입)
+                    </DashboardStyles.IndicatorsLedgerTitle>
+                    <DashboardStyles.IndicatorsLedgerStatus $filled={hasTradeData}>
+                      {hasTradeData ? `${tradeYearCount}개년` : '미등록'}
+                    </DashboardStyles.IndicatorsLedgerStatus>
+                  </DashboardStyles.IndicatorsLedgerTitleRow>
+                  <DashboardStyles.IndicatorsLedgerScope $filled={hasTradeData}>
                     {hasTradeData
                       ? `교역 기록 ${tradeYearCount}개년 · 총 ${tradeRecords.length}건`
                       : '연도별 수출·수입 총액 · 품목 구성 · 주요 교역 상대국'}
-                  </DashboardStyles.IndicatorsLedgerSpec>
-                </DashboardStyles.IndicatorsLedgerLabelGroup>
-              </DashboardStyles.IndicatorsLedgerIdentity>
-              <DashboardStyles.IndicatorsLedgerRight>
-                <DashboardStyles.IndicatorsLedgerStatus $filled={hasTradeData}>
-                  {hasTradeData ? `${tradeYearCount}개년` : '미등록'}
-                </DashboardStyles.IndicatorsLedgerStatus>
-                <DashboardStyles.IndicatorsLedgerAction
-                  type="button"
-                  onClick={() => onGoToTab('trade')}
-                >
-                  {hasTradeData ? '교역 탭 →' : '+ 교역 등록'}
-                </DashboardStyles.IndicatorsLedgerAction>
-              </DashboardStyles.IndicatorsLedgerRight>
-            </DashboardStyles.IndicatorsLedgerRow>
+                  </DashboardStyles.IndicatorsLedgerScope>
+                </DashboardStyles.IndicatorsLedgerBody>
+                <DashboardStyles.IndicatorsLedgerActions>
+                  <DashboardStyles.IndicatorsLedgerActionBtn
+                    type="button"
+                    $filled={hasTradeData}
+                    onClick={() => onGoToTab('trade')}
+                  >
+                    {hasTradeData ? '교역 탭 →' : '+ 교역 등록'}
+                  </DashboardStyles.IndicatorsLedgerActionBtn>
+                </DashboardStyles.IndicatorsLedgerActions>
+              </DashboardStyles.IndicatorsLedgerRow>
+            </DashboardStyles.IndicatorsLedgerItem>
 
-            <DashboardStyles.IndicatorsLedgerRow $empty={!hasCompanyData}>
-              <DashboardStyles.IndicatorsLedgerIdentity>
-                <DashboardStyles.IndicatorsLedgerCode $empty={!hasCompanyData}>
+            <DashboardStyles.IndicatorsLedgerItem>
+              <DashboardStyles.IndicatorsLedgerRow>
+                <DashboardStyles.IndicatorsLedgerIcon $filled={hasCompanyData}>
                   02
-                </DashboardStyles.IndicatorsLedgerCode>
-                <DashboardStyles.IndicatorsLedgerLabelGroup>
-                  <DashboardStyles.IndicatorsLedgerName $empty={!hasCompanyData}>
-                    기업 · 상단
-                  </DashboardStyles.IndicatorsLedgerName>
-                  <DashboardStyles.IndicatorsLedgerSpec>
+                </DashboardStyles.IndicatorsLedgerIcon>
+                <DashboardStyles.IndicatorsLedgerBody>
+                  <DashboardStyles.IndicatorsLedgerTitleRow>
+                    <DashboardStyles.IndicatorsLedgerTitle>
+                      기업 · 상단
+                    </DashboardStyles.IndicatorsLedgerTitle>
+                    <DashboardStyles.IndicatorsLedgerStatus $filled={hasCompanyData}>
+                      {hasCompanyData
+                        ? `${companyCount.toLocaleString()}개사`
+                        : '미등록'}
+                    </DashboardStyles.IndicatorsLedgerStatus>
+                  </DashboardStyles.IndicatorsLedgerTitleRow>
+                  <DashboardStyles.IndicatorsLedgerScope $filled={hasCompanyData}>
                     {hasCompanyData
                       ? `등록 기업·상단 ${companyCount.toLocaleString()}개사`
                       : '시대별 주요 기업 · 특권 상단 · 공방 · 금융기관'}
-                  </DashboardStyles.IndicatorsLedgerSpec>
-                </DashboardStyles.IndicatorsLedgerLabelGroup>
-              </DashboardStyles.IndicatorsLedgerIdentity>
-              <DashboardStyles.IndicatorsLedgerRight>
-                <DashboardStyles.IndicatorsLedgerStatus $filled={hasCompanyData}>
-                  {hasCompanyData
-                    ? `${companyCount.toLocaleString()}개사`
-                    : '미등록'}
-                </DashboardStyles.IndicatorsLedgerStatus>
-                <DashboardStyles.IndicatorsLedgerAction
-                  type="button"
-                  onClick={() => onGoToTab('companies')}
-                >
-                  {hasCompanyData ? '기업 탭 →' : '+ 기업 등록'}
-                </DashboardStyles.IndicatorsLedgerAction>
-              </DashboardStyles.IndicatorsLedgerRight>
-            </DashboardStyles.IndicatorsLedgerRow>
-          </DashboardStyles.IndicatorsLedgerGrid>
+                  </DashboardStyles.IndicatorsLedgerScope>
+                </DashboardStyles.IndicatorsLedgerBody>
+                <DashboardStyles.IndicatorsLedgerActions>
+                  <DashboardStyles.IndicatorsLedgerActionBtn
+                    type="button"
+                    $filled={hasCompanyData}
+                    onClick={() => onGoToTab('companies')}
+                  >
+                    {hasCompanyData ? '기업 탭 →' : '+ 기업 등록'}
+                  </DashboardStyles.IndicatorsLedgerActionBtn>
+                </DashboardStyles.IndicatorsLedgerActions>
+              </DashboardStyles.IndicatorsLedgerRow>
+            </DashboardStyles.IndicatorsLedgerItem>
+          </DashboardStyles.IndicatorsLedgerList>
 
           {(filledIndicatorDomains > 0 || showEmptyIndicators) && (
-            <DashboardStyles.IndicatorsDomainFilterBar>
+            <DashboardStyles.IndicatorsFilterBar>
               {(
                 [
                   {
@@ -1772,47 +1797,18 @@ function HistoricalOverviewSection({
                   },
                 ] as const
               ).map((pill) => (
-                <DashboardStyles.IndicatorsDomainFilterPill
+                <DashboardStyles.IndicatorsFilterChip
                   key={pill.key}
                   type="button"
                   $active={indicatorDomainFilter === pill.key}
                   onClick={() => setIndicatorDomainFilter(pill.key)}
                 >
-                  {pill.label}
-                  <span>{pill.count}</span>
-                </DashboardStyles.IndicatorsDomainFilterPill>
+                  {pill.label} ({pill.count})
+                </DashboardStyles.IndicatorsFilterChip>
               ))}
-
-              {emptyIndicatorDomains > 0 && filledIndicatorDomains > 0 && (
-                <DashboardStyles.IndicatorsLedgerFooterBtn
-                  type="button"
-                  style={{ marginLeft: 'auto' }}
-                  onClick={() => setShowEmptyIndicators((prev) => !prev)}
-                >
-                  {showEmptyIndicators
-                    ? `빈 지표 섹션 숨기기 (${emptyIndicatorDomains}개)`
-                    : `빈 지표 섹션 펼치기 (${emptyIndicatorDomains}개)`}
-                </DashboardStyles.IndicatorsLedgerFooterBtn>
-              )}
-            </DashboardStyles.IndicatorsDomainFilterBar>
+            </DashboardStyles.IndicatorsFilterBar>
           )}
-
-          {filledIndicatorDomains === 0 && (
-            <DashboardStyles.IndicatorsLedgerFooter>
-              <DashboardStyles.IndicatorsLedgerFooterHint>
-                이 역사 국가에 등록된 교역·기업 상세 지표가 없습니다. 위 원장에서 도메인별로 바로 등록하거나 상세 입력 패널을 펼쳐보세요.
-              </DashboardStyles.IndicatorsLedgerFooterHint>
-              <DashboardStyles.IndicatorsLedgerFooterBtn
-                type="button"
-                onClick={() => setShowEmptyIndicators((prev) => !prev)}
-              >
-                {showEmptyIndicators
-                  ? '빈 상세 패널 접기'
-                  : '빈 상세 패널 펼치기 (2개)'}
-              </DashboardStyles.IndicatorsLedgerFooterBtn>
-            </DashboardStyles.IndicatorsLedgerFooter>
-          )}
-        </DashboardStyles.IndicatorsLedger>
+        </DashboardStyles.IndicatorsLedgerWrap>
 
         {(filledIndicatorDomains > 0 || showEmptyIndicators) && (
           <DashboardStyles.IndicatorsGrid>

@@ -566,6 +566,12 @@ export function CountryDetailDashboard({
           </S.FactEmptyActions>
         </S.FactEmptyRow>
       )}
+      {country.description?.trim() && (
+        <S.FactDescriptionBar>
+          <S.FactDescriptionLabel>국가 개요</S.FactDescriptionLabel>
+          <S.FactDescriptionText>{country.description.trim()}</S.FactDescriptionText>
+        </S.FactDescriptionBar>
+      )}
     </S.FactBar>
   )
 

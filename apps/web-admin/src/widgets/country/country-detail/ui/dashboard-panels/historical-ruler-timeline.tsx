@@ -110,6 +110,43 @@ export function HistoricalRulerTimeline({
       )
     : null
 
+  const inSpanRulers = rulers.filter((r) => !r.isOutOfSpan)
+  const outOfSpanCount = rulers.length - inSpanRulers.length
+  const hosCount = inSpanRulers.filter((r) => r.axis === 'HEAD_OF_STATE').length
+  const hogCount = inSpanRulers.filter(
+    (r) => r.axis === 'HEAD_OF_GOVERNMENT',
+  ).length
+  const primaryPool =
+    inSpanRulers.filter((r) => r.axis === (axes[0] ?? 'HEAD_OF_STATE'))
+      .length > 0
+      ? inSpanRulers.filter((r) => r.axis === (axes[0] ?? 'HEAD_OF_STATE'))
+      : inSpanRulers
+  const firstRuler = primaryPool[0] ?? rulers[0] ?? null
+  const lastRuler =
+    primaryPool.length > 1
+      ? primaryPool[primaryPool.length - 1]
+      : null
+  const reignLengths = inSpanRulers
+    .map((ruler) => ({ ruler, years: reignLength(ruler) }))
+    .filter(
+      (entry): entry is { ruler: HistoricalRulerItem; years: number } =>
+        entry.years != null,
+    )
+  const avgReignYears =
+    reignLengths.length > 0
+      ? Math.round(
+          (reignLengths.reduce((sum, item) => sum + item.years, 0) /
+            reignLengths.length) *
+            10,
+        ) / 10
+      : null
+  const longestRuler =
+    reignLengths.length > 0
+      ? reignLengths.reduce((best, cur) =>
+          cur.years > best.years ? cur : best,
+        )
+      : null
+
   const filteredRulers =
     !hasMultipleAxes || axisFilter === 'ALL'
       ? rulers
@@ -119,6 +156,72 @@ export function HistoricalRulerTimeline({
 
   return (
     <Wrap>
+      <HeadlineStrip>
+        <HeadlineCell>
+          <HeadlineLabel>등록 수반</HeadlineLabel>
+          <HeadlineValue>
+            {inSpanRulers.length}
+            <HeadlineUnit>명</HeadlineUnit>
+          </HeadlineValue>
+          <HeadlineSub>
+            {hasMultipleAxes
+              ? `국가원수 ${hosCount} · 정부수반 ${hogCount}`
+              : outOfSpanCount > 0
+                ? `존속 기간 밖 ${outOfSpanCount}건 별도`
+                : '존속 기간 내 재위·재임'}
+          </HeadlineSub>
+        </HeadlineCell>
+        <HeadlineCell>
+          <HeadlineLabel>초대 — 마지막</HeadlineLabel>
+          <HeadlineValue>
+            {firstRuler ? firstRuler.personName : '—'}
+            {lastRuler ? ` → ${lastRuler.personName}` : ''}
+          </HeadlineValue>
+          <HeadlineSub>
+            {firstRuler
+              ? `${yearsLabel(firstRuler)}${lastRuler ? ` ~ ${yearsLabel(lastRuler)}` : ''}`
+              : '재위 연대순'}
+          </HeadlineSub>
+        </HeadlineCell>
+        <HeadlineCell>
+          <HeadlineLabel>평균 · 최장 재위</HeadlineLabel>
+          <HeadlineValue>
+            {avgReignYears != null ? (
+              <>
+                평균 {avgReignYears}
+                <HeadlineUnit>년</HeadlineUnit>
+              </>
+            ) : (
+              '연수 미산정'
+            )}
+          </HeadlineValue>
+          <HeadlineSub>
+            {longestRuler
+              ? `최장: ${longestRuler.ruler.personName} (${longestRuler.years}년)`
+              : '시작·종료 연도 기준'}
+          </HeadlineSub>
+        </HeadlineCell>
+        <HeadlineCell>
+          <HeadlineLabel>치세 기록 밀도</HeadlineLabel>
+          <HeadlineValue>
+            {coveragePercent != null ? (
+              <>
+                {coveragePercent}
+                <HeadlineUnit>%</HeadlineUnit>
+              </>
+            ) : (
+              '—'
+            )}
+          </HeadlineValue>
+          <HeadlineSub>
+            {coveragePercent != null
+              ? coveragePercent >= 95
+                ? '존속 기간 전체 기록됨'
+                : `미기록 공백 ${100 - coveragePercent}%`
+              : '존속 기간 대비 재위 비율'}
+          </HeadlineSub>
+        </HeadlineCell>
+      </HeadlineStrip>
       {canDrawBand && (
         <Band aria-label="재위 띠">
           {axes.map((axis) => (
@@ -280,6 +383,71 @@ const Wrap = styled.div`
   gap: 16px;
 `
 
+const HeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 2px solid ${({ theme }) => theme.colors.text.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 820px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const HeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  min-width: 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:last-child {
+    border-right: none;
+  }
+
+  @media (max-width: 820px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const HeadlineLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeadlineValue = styled.span`
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const HeadlineUnit = styled.span`
+  margin-left: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeadlineSub = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
 const Band = styled.div`
   display: flex;
   flex-direction: column;
@@ -403,8 +571,12 @@ const AxisFilterCount = styled.span`
 
 const Cards = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 4px 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 2px solid ${({ theme }) => theme.colors.text.primary};
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `
 
 const RulerCard = styled.button`
@@ -412,7 +584,7 @@ const RulerCard = styled.button`
   align-items: center;
   gap: 12px;
   min-width: 0;
-  padding: 10px 4px;
+  padding: 10px 12px;
   border: none;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
@@ -421,6 +593,17 @@ const RulerCard = styled.button`
   color: inherit;
   cursor: pointer;
   transition: background 0.15s ease;
+
+  &:nth-child(odd) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  @media (max-width: 720px) {
+    padding: 10px 4px;
+    &:nth-child(odd) {
+      border-right: none;
+    }
+  }
 
   &:hover:not(:disabled) {
     background: ${({ theme }) => theme.colors.hover};

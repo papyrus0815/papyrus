@@ -187,9 +187,78 @@ export function EventCalendarPanel({
   }, [monthsWithEvents])
 
   const hasIndex = yearIndex.length > 0
+  const datedEventCount = events.length - yearOnlyCount
+  const peakMonth = useMemo(() => {
+    if (monthsWithEvents.length === 0) return null
+    return monthsWithEvents.reduce(
+      (best, entry) => (entry.count > best.count ? entry : best),
+      monthsWithEvents[0],
+    )
+  }, [monthsWithEvents])
+  const yearRangeLabel = useMemo(() => {
+    if (yearIndex.length === 0) return '—'
+    const latestY = yearIndex[0].year
+    const earliestY = yearIndex[yearIndex.length - 1].year
+    if (latestY === earliestY) return formatCalYear(latestY)
+    return `${formatCalYear(earliestY, false)} – ${formatCalYear(latestY)}`
+  }, [yearIndex])
 
   return (
     <Frame>
+      <HeadlineStrip>
+        <HeadlineCell>
+          <HeadlineLabel>일자 확인 사건</HeadlineLabel>
+          <HeadlineValue>
+            {datedEventCount.toLocaleString('ko-KR')}
+            <HeadlineUnit>건</HeadlineUnit>
+          </HeadlineValue>
+          <HeadlineSub>
+            전체 {events.length.toLocaleString('ko-KR')}건 중 월·일 파악
+          </HeadlineSub>
+        </HeadlineCell>
+        <HeadlineCell>
+          <HeadlineLabel>분포 범위</HeadlineLabel>
+          <HeadlineValue>{yearRangeLabel}</HeadlineValue>
+          <HeadlineSub>
+            {yearIndex.length}개 연도 · {monthsWithEvents.length}개 달에 분포
+          </HeadlineSub>
+        </HeadlineCell>
+        <HeadlineCell>
+          <HeadlineLabel>최다 사건 집중 월</HeadlineLabel>
+          {peakMonth ? (
+            <HeadlineActionBtn
+              type="button"
+              onClick={() =>
+                goMonth({ year: peakMonth.year, month: peakMonth.month })
+              }
+              title="클릭하여 해당 달로 이동"
+            >
+              {formatCalYear(peakMonth.year)} {peakMonth.month}월 (
+              {peakMonth.count}건)
+            </HeadlineActionBtn>
+          ) : (
+            <HeadlineValue>—</HeadlineValue>
+          )}
+          <HeadlineSub>
+            {peakMonth
+              ? '클릭 시 해당 달 격자로 즉시 이동'
+              : '일자 확인 사건 기준'}
+          </HeadlineSub>
+        </HeadlineCell>
+        <HeadlineCell>
+          <HeadlineLabel>연도만 아는 사건</HeadlineLabel>
+          <HeadlineValue>
+            {yearOnlyCount.toLocaleString('ko-KR')}
+            <HeadlineUnit>건</HeadlineUnit>
+          </HeadlineValue>
+          <HeadlineSub>
+            {yearOnlyCount > 0
+              ? '특정 월·일 미상으로 달력 격자 제외'
+              : '모든 사건의 월·일 확인됨'}
+          </HeadlineSub>
+        </HeadlineCell>
+      </HeadlineStrip>
+
       <Root $withSide={hasIndex}>
         <Main>
           <Head>
@@ -391,6 +460,97 @@ const dayInk = (tone: DayTone, isDark: boolean, fallback: string) => {
 const Frame = styled.div`
   container: calendar / inline-size;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`
+
+const HeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 2px solid ${({ theme }) => theme.colors.text.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 820px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const HeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  min-width: 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:last-child {
+    border-right: none;
+  }
+
+  @media (max-width: 820px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const HeadlineLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeadlineValue = styled.span`
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const HeadlineUnit = styled.span`
+  margin-left: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeadlineActionBtn = styled.button`
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+`
+
+const HeadlineSub = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 const Root = styled.div<{ $withSide: boolean }>`
@@ -611,6 +771,11 @@ const Side = styled.aside`
   flex-direction: column;
   gap: 20px;
   min-width: 0;
+
+  @container calendar (min-width: 880px) {
+    padding-left: 24px;
+    border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
 `
 
 const SideBlock = styled.div`

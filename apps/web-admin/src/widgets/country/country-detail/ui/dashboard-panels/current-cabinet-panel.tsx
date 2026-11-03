@@ -2041,8 +2041,17 @@ export function CurrentCabinetPanel({
     presetSuggestions,
   ])
 
+  const cabinetSectionCount =
+    cabinets.length > 0
+      ? `${cabinets.length}대`
+      : fallbackHeadTenures.length > 0
+        ? `${fallbackHeadTenures.length}명`
+        : departments.length > 0
+          ? `부처 ${departments.length}`
+          : undefined
+
   return (
-    <S.Section>
+    <S.Section id="section-cabinet" data-section-count={cabinetSectionCount}>
       <S.SectionTitleRow>
         <S.SectionTitleIcon>
           <IconBriefcase />

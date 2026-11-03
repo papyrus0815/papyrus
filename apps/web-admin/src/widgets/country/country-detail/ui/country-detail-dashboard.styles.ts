@@ -1141,6 +1141,33 @@ export const FactEmptyAction = styled.button`
   }
 `
 
+export const FactDescriptionBar = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  width: 100%;
+  box-sizing: border-box;
+`
+
+export const FactDescriptionLabel = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const FactDescriptionText = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  word-break: keep-all;
+`
+
 /** 하단 보조 — 최근 활동과 완성도를 나란히 */
 /** 좁은 화면에서만 — 넓어지면 이 내용이 우측 레일로 간다 */
 export const BottomRow = styled.div`

@@ -83,10 +83,14 @@ interface SpecItem {
   label: string
   value: string
   note?: string
+  empty?: boolean
   headAction?: HeadRegisterTarget
 }
 
-function buildSpecs(system: PoliticalSystem): SpecItem[] {
+function buildSpecs(
+  system: PoliticalSystem,
+  includeEmpty = false,
+): SpecItem[] {
   const specs: SpecItem[] = []
 
   const headOfState = headOfStateTitleOf(system)
@@ -147,9 +151,24 @@ function buildSpecs(system: PoliticalSystem): SpecItem[] {
         historicalCountryId: system.historicalCountryId ?? null,
       },
     })
+  } else if (includeEmpty) {
+    specs.push({
+      key: 'hos-empty',
+      label: '국가원수 · 정부수반',
+      value: '미등록',
+      empty: true,
+    })
   }
 
-  if (system.lowerHouseName || system.lowerHouseSeats != null) {
+  const hasLower = Boolean(
+    system.lowerHouseName || system.lowerHouseSeats != null,
+  )
+  const hasUpper = Boolean(
+    system.legislatureType === 'BICAMERAL' &&
+      (system.upperHouseName || system.upperHouseSeats != null),
+  )
+
+  if (hasLower) {
     const label = primaryHouseLabel(system.legislatureType ?? null)
     const distinctName = stripDuplicateHouseLabel(label, system.lowerHouseName)
     specs.push({
@@ -167,10 +186,7 @@ function buildSpecs(system: PoliticalSystem): SpecItem[] {
     })
   }
 
-  if (
-    system.legislatureType === 'BICAMERAL' &&
-    (system.upperHouseName || system.upperHouseSeats != null)
-  ) {
+  if (hasUpper) {
     const label = '상원'
     const distinctName = stripDuplicateHouseLabel(label, system.upperHouseName)
     specs.push({
@@ -188,11 +204,29 @@ function buildSpecs(system: PoliticalSystem): SpecItem[] {
     })
   }
 
+  if (!hasLower && !hasUpper && includeEmpty) {
+    specs.push({
+      key: 'legislature-empty',
+      label: '입법부 · 의회',
+      value: system.legislatureType
+        ? LEGISLATURE_TYPE_LABEL[system.legislatureType]
+        : '미등록',
+      empty: !system.legislatureType,
+    })
+  }
+
   if (system.stateStructure) {
     specs.push({
       key: 'structure',
       label: '국가 구조',
       value: STATE_STRUCTURE_LABEL[system.stateStructure],
+    })
+  } else if (includeEmpty) {
+    specs.push({
+      key: 'structure-empty',
+      label: '국가 구조',
+      value: '미등록',
+      empty: true,
     })
   }
 
@@ -201,6 +235,13 @@ function buildSpecs(system: PoliticalSystem): SpecItem[] {
       key: 'party',
       label: '정당제',
       value: PARTY_SYSTEM_LABEL[system.partySystem],
+    })
+  } else if (includeEmpty) {
+    specs.push({
+      key: 'party-empty',
+      label: '정당제',
+      value: '미등록',
+      empty: true,
     })
   }
 
@@ -335,10 +376,13 @@ export function PoliticalSystemPanel({
           LEGISLATURE_TYPE_LABEL[current.legislatureType],
       ].filter(Boolean)
     : []
-  const currentSpecs = current ? buildSpecs(current) : []
+  const currentSpecs = current ? buildSpecs(current, true) : []
 
   return (
-    <S.Section>
+    <S.Section
+      id="section-polity"
+      data-section-count={systems.length > 0 ? String(systems.length) : undefined}
+    >
       <S.SectionTitleRow>
         <S.SectionTitleIcon>
           <IconLandmark />
@@ -424,7 +468,7 @@ export function PoliticalSystemPanel({
                   return (
                     <SpecColumn key={spec.key}>
                       <SpecColumnKey>{spec.label}</SpecColumnKey>
-                      <SpecColumnValue>
+                      <SpecColumnValue $muted={spec.empty}>
                         <span>{spec.value}</span>
                         {spec.note && (
                           <PowerTag $symbolic={spec.note === '상징'}>
@@ -441,6 +485,16 @@ export function PoliticalSystemPanel({
                             {headCount === 0
                               ? '+ 인물 등록'
                               : `${headCount}명 · + 추가`}
+                          </HeadRegisterBtn>
+                        )}
+                        {spec.empty && (
+                          <HeadRegisterBtn
+                            type="button"
+                            $empty
+                            onClick={() => openEdit(current)}
+                            title={`「${spec.label}」 제원 입력`}
+                          >
+                            + 입력
                           </HeadRegisterBtn>
                         )}
                       </SpecColumnValue>
@@ -702,29 +756,35 @@ const PastChip = styled.span`
 `
 
 /**
- * 상자 테두리 없이 세로 헤어라인(1px)으로만 가른 2단 타이포그래피 스펙 열.
+ * 상단 2px · 하단 1px · 셀 간 1px 수직 헤어라인으로 구성된 무컨테이너 정체 스펙 원장 그리드.
  */
 const PrimarySpecStrip = styled.dl`
   margin: 0;
-  padding-left: 13px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  row-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  border-top: 2px solid ${({ theme }) => theme.colors.text.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const SpecColumn = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding-right: 24px;
-  margin-right: 24px;
+  gap: 4px;
+  padding: 11px 16px;
+  min-width: 0;
   border-right: 1px solid ${({ theme }) => theme.colors.border.light};
 
   &:last-child {
-    padding-right: 0;
-    margin-right: 0;
     border-right: none;
+  }
+
+  @media (max-width: 640px) {
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
   }
 `
 
@@ -769,7 +829,7 @@ const PowerTag = styled.span<{ $symbolic?: boolean }>`
 const HeadRegisterBtn = styled.button<{ $empty?: boolean }>`
   padding: 2px 7px;
   border-radius: 6px;
-  border: 1px ${({ $empty }) => ($empty ? 'dashed' : 'solid')}
+  border: 1px solid
     ${({ $empty, theme }) =>
       $empty ? 'rgba(99, 102, 241, 0.45)' : theme.colors.border.light};
   background: transparent;
