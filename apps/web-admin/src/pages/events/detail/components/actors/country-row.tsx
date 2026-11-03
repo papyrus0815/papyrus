@@ -78,7 +78,6 @@ export function ActorCountryRow({
   const hasRoleDescription = Boolean(row.roleDescription?.trim())
   /** 빈 칸 편집 — ✎를 눌러 연다(hover로 펼치지 않는다: 행이 덜컹거렸다) */
   const [editing, setEditing] = useState(false)
-  const isDefaultRole = !row.role || row.role === 'PARTICIPANT'
   const period = membershipPeriodLabel(row)
   const participation = row.participation && row.participation !== 'FULL' ? PARTICIPATION_LABEL[row.participation] : null
   const hasFacts = Boolean(period || participation || side)
@@ -104,11 +103,9 @@ export function ActorCountryRow({
               ⚠ {row.existenceWarning}
             </MismatchNote>
           )}
-          {/* 평범한 '참여국'(또는 미지정)은 모든 행이 같은 글자라 소음 — 편집 중에만 */}
-          {(!isDefaultRole || editing) && (
           <CountryRolePicker>
             <InlineSelect
-              value={row.role ?? ''}
+              value={row.role || 'PARTICIPANT'}
               options={EVENT_COUNTRY_ROLE_OPTIONS.filter(
                 // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
                 (option) => !option.deprecated || option.value === row.role,
@@ -122,7 +119,6 @@ export function ActorCountryRow({
               label={`${row.name} 역할`}
             />
           </CountryRolePicker>
-          )}
         </CountryNameLine>
         {hasFacts && (
           <CountryFacts>

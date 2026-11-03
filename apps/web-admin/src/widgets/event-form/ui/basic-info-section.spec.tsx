@@ -75,8 +75,8 @@ function makeDefaultProps(
   }
 }
 
-describe('BasicInfoSection — 세로 높이 방지 및 참여국·소개 UX', () => {
-  it('참여국이 4개를 초과하면 기본 4개만 표시하고 "+ 외 N개국 더보기" 토글로 펼치거나 접을 수 있다', () => {
+describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여국 UX', () => {
+  it('참여국 목록과 소개 그룹은 펼치기/더보기 버튼 없이 처음부터 전체 항목이 바로 표시된다', () => {
     renderWithTheme(
       <BasicInfoSection
         {...makeDefaultProps({
@@ -88,56 +88,22 @@ describe('BasicInfoSection — 세로 높이 방지 및 참여국·소개 UX', (
       />,
     )
 
-    // 기본 4개(프랑스·영국·러시아·미국)만 노출되고 5·6번째(이탈리아·일본)는 접혀 있다
+    // 6개 국가가 더보기/펼치기 없이 모두 즉시 노출된다
     expect(screen.getByLabelText('프랑스 역할')).toBeInTheDocument()
     expect(screen.getByLabelText('미국 역할')).toBeInTheDocument()
-    expect(screen.queryByLabelText('이탈리아 역할')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('일본 역할')).not.toBeInTheDocument()
-
-    const toggleBtn = screen.getByRole('button', {
-      name: '+ 외 2개국 더보기 (총 6개국)',
-    })
-    fireEvent.click(toggleBtn)
-
     expect(screen.getByLabelText('이탈리아 역할')).toBeInTheDocument()
     expect(screen.getByLabelText('일본 역할')).toBeInTheDocument()
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: '참여국 목록 접기 (상위 4개만 표시)',
-      }),
-    )
-    expect(screen.queryByLabelText('이탈리아 역할')).not.toBeInTheDocument()
-  })
-
-  it('선택 입력인 "소개" 그룹은 비어 있을 때 접혀 있어 세로 길이를 아끼고, 펼치기 버튼이나 기존 값이 있으면 열린다', () => {
-    const { rerender } = renderWithTheme(
-      <BasicInfoSection {...makeDefaultProps()} />,
-    )
-
     expect(
-      screen.queryByPlaceholderText('무슨 일이 왜 일어났는지 두세 문장으로'),
+      screen.queryByRole('button', { name: /더보기|목록 접기/ }),
     ).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '소개 펼치기' }))
+    // 소개 그룹(개요 설명·키워드·썸네일)도 펼치기 버튼 없이 즉시 노출된다
     expect(
       screen.getByPlaceholderText('무슨 일이 왜 일어났는지 두세 문장으로'),
     ).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '소개 접기' }))
     expect(
-      screen.queryByPlaceholderText('무슨 일이 왜 일어났는지 두세 문장으로'),
+      screen.queryByRole('button', { name: /소개 펼치기|소개 접기/ }),
     ).not.toBeInTheDocument()
-
-    // 편집 하이드레이션 등으로 값이 들어오면 자동으로 펼쳐진다
-    rerender(
-      <BasicInfoSection
-        {...makeDefaultProps({ description: '기존 개요 설명' })}
-      />,
-    )
-    expect(
-      screen.getByPlaceholderText('무슨 일이 왜 일어났는지 두세 문장으로'),
-    ).toHaveValue('기존 개요 설명')
   })
 
   it('참여국 빠른 검색창에서 국가 이름을 입력해 Enter로 즉시 참여국에 추가할 수 있다', () => {
@@ -186,7 +152,7 @@ describe('BasicInfoSection — 세로 높이 방지 및 참여국·소개 UX', (
     ])
   })
 
-  it('빠른 검색창에서 쉼표(,)로 여러 나라를 한 번에 추가하거나 +주도·+대상 역할로 바로 추가할 수 있다', () => {
+  it('빠른 검색창에서 쉼표(,)로 여러 나라를 한 번에 입력해 Enter로 추가할 수 있다', () => {
     const setRelatedCountries = jest.fn()
     renderWithTheme(
       <BasicInfoSection
@@ -198,16 +164,6 @@ describe('BasicInfoSection — 세로 높이 방지 및 참여국·소개 UX', (
       name: '참여국 빠른 검색',
     })
 
-    // 1) +주도 역할 버튼으로 추가
-    fireEvent.change(searchInput, { target: { value: '프랑스' } })
-    fireEvent.click(
-      screen.getByRole('button', { name: '프랑스 주도국으로 추가' }),
-    )
-    expect(setRelatedCountries).toHaveBeenLastCalledWith([
-      { countryId: 'c1', role: 'INITIATOR' },
-    ])
-
-    // 2) 쉼표로 구분해 여러 나라 한 번에 Enter로 추가
     fireEvent.change(searchInput, { target: { value: '영국, 러시아' } })
     fireEvent.keyDown(searchInput, { key: 'Enter' })
     expect(setRelatedCountries).toHaveBeenLastCalledWith([

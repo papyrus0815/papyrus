@@ -30,10 +30,13 @@ export {
   findReplacementForMismatchedCountry,
   moveParticipant,
   participantKey,
+  quickRoleDescriptionPresets,
   readRecentParticipants,
   recordRecentParticipants,
   resolveBatchCountryQuery,
   roleDescriptionPlaceholderForType,
+  sortParticipantsByRolePriority,
+  suggestCountriesForEra,
   suggestCountriesFromTitle,
   toParticipants,
 } from './country-participant'

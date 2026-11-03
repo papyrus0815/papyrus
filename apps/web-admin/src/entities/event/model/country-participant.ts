@@ -717,3 +717,172 @@ export function resolveBatchCountryQuery(
 
   return results
 }
+
+const ERA_MAJOR_HISTORICAL_NAMES = [
+  '조선',
+  '대한제국',
+  '고려',
+  '청나라',
+  '명나라',
+  '일본 제국',
+  '에도 막부',
+  '대영제국',
+  '프랑스 왕국',
+  '프랑스 제1공화국',
+  '프랑스 제1제국',
+  '프랑스 제3공화국',
+  '프로이센 왕국',
+  '독일 제국',
+  '나치 독일',
+  '러시아 제국',
+  '소련',
+  '오스만 제국',
+  '오스트리아 제국',
+  '오스트리아-헝가리 제국',
+  '로마 제국',
+  '로마 공화정',
+]
+
+const MAJOR_MODERN_NAMES = [
+  '대한민국',
+  '미국',
+  '영국',
+  '프랑스',
+  '중국',
+  '일본',
+  '러시아',
+  '독일',
+  '이탈리아',
+]
+
+/**
+ * 사건 연도(`hintYearRange`)가 있으면 해당 시대에 존속했던 주요 역사·현대 국가를,
+ * 연도가 없으면 빈출 주요 국가를 골라 항상 눈에 보이는 빠른 추가 후보를 돌려준다.
+ */
+export function suggestCountriesForEra(
+  modernCountries: ReadonlyArray<{ id: string; name: string; flagEmoji?: string | null }>,
+  historicalCountries: ReadonlyArray<{ id: string; name: string } & CountryPeriodShape>,
+  hintYearRange?: CountryHintYearRange | null,
+  existingKeys?: ReadonlySet<string>,
+  limit = 6,
+): SuggestedCountryCandidate[] {
+  const results: SuggestedCountryCandidate[] = []
+  const seen = new Set<string>(existingKeys)
+  const refYear = hintYearRange?.startYear ?? hintYearRange?.endYear ?? null
+
+  const push = (candidate: SuggestedCountryCandidate) => {
+    if (results.length >= limit) return
+    if (seen.has(candidate.key)) return
+    seen.add(candidate.key)
+    results.push(candidate)
+  }
+
+  if (refYear != null && refYear < 1945 && hintYearRange) {
+    // 1) 사건 연도에 존속기간이 일치하는 역사국가 중 주요국 우선
+    const matchedHistorical = historicalCountries.filter(
+      (hist) => !seen.has(`h:${hist.id}`) && matchesHintYearRange(hist, hintYearRange),
+    )
+    matchedHistorical.sort((a, b) => {
+      const aMajor = ERA_MAJOR_HISTORICAL_NAMES.indexOf(a.name)
+      const bMajor = ERA_MAJOR_HISTORICAL_NAMES.indexOf(b.name)
+      if (aMajor !== -1 && bMajor !== -1) return aMajor - bMajor
+      if (aMajor !== -1) return -1
+      if (bMajor !== -1) return 1
+      return a.name.localeCompare(b.name, 'ko')
+    })
+    for (const hist of matchedHistorical) {
+      push({
+        key: `h:${hist.id}`,
+        historicalCountryId: hist.id,
+        name: hist.name,
+        label: `🏛️ ${hist.name}`,
+      })
+    }
+  }
+
+  // 2) 주요 현대국가 우선 배치
+  const sortedModern = [...modernCountries].sort((a, b) => {
+    const aMajor = MAJOR_MODERN_NAMES.indexOf(a.name)
+    const bMajor = MAJOR_MODERN_NAMES.indexOf(b.name)
+    if (aMajor !== -1 && bMajor !== -1) return aMajor - bMajor
+    if (aMajor !== -1) return -1
+    if (bMajor !== -1) return 1
+    return a.name.localeCompare(b.name, 'ko')
+  })
+  for (const mod of sortedModern) {
+    push({
+      key: `m:${mod.id}`,
+      countryId: mod.id,
+      name: mod.name,
+      label: `${mod.flagEmoji ?? '🌐'} ${mod.name}`,
+    })
+  }
+
+  // 3) 여전히 남으면 역사국가로 채움
+  for (const hist of historicalCountries) {
+    push({
+      key: `h:${hist.id}`,
+      historicalCountryId: hist.id,
+      name: hist.name,
+      label: `🏛️ ${hist.name}`,
+    })
+  }
+
+  return results
+}
+
+const ROLE_SORT_WEIGHT: Record<string, number> = {
+  INITIATOR: 0,
+  TARGET: 1,
+  FOUNDED: 2,
+  DISSOLVED: 3,
+  MEDIATOR: 4,
+  PARTICIPANT: 5,
+  VICTIM: 6,
+  BENEFICIARY: 7,
+  OBSERVER: 8,
+  ALLY: 9,
+  ADVERSARY: 10,
+  OTHER: 11,
+}
+
+/**
+ * 참여국 목록을 역할 중요도(주도국 → 대상국 → 성립/소멸 → 조정/참여국 순)로 정렬한다.
+ */
+export function sortParticipantsByRolePriority<T extends EventCountryParticipant>(
+  list: readonly T[],
+): T[] {
+  return [...list].sort((left, right) => {
+    const leftWeight = ROLE_SORT_WEIGHT[left.role ?? 'PARTICIPANT'] ?? 5
+    const rightWeight = ROLE_SORT_WEIGHT[right.role ?? 'PARTICIPANT'] ?? 5
+    return leftWeight - rightWeight
+  })
+}
+
+/**
+ * 역할과 세부 분야 안내 문구에 맞춘 '이 나라가 한 일' 원클릭 빠른 서술 프리셋.
+ */
+export function quickRoleDescriptionPresets(
+  role?: EventCountryRole,
+  placeholder?: string,
+): string[] {
+  const hint = placeholder ?? ''
+  if (hint.includes('조약')) {
+    if (role === 'MEDIATOR') return ['협상 중재', '조약 주선']
+    return ['조약 체결', '비준·서명', '협상 대표']
+  }
+  if (hint.includes('참전')) {
+    if (role === 'INITIATOR') return ['선제 공격', '작전 주도', '침공']
+    if (role === 'TARGET') return ['방어·항전', '피침', '반격']
+    return ['참전', '병력 지원', '연합 작전']
+  }
+  if (hint.includes('독립')) {
+    if (role === 'FOUNDED') return ['건국·독립 선포', '정부 수립']
+    if (role === 'DISSOLVED') return ['국권 상실·해체', '멸망·병합']
+    return ['승인·지원', '관여']
+  }
+  if (role === 'INITIATOR') return ['사건 주도', '발의·개최']
+  if (role === 'TARGET') return ['대상·대응', '방어·수용']
+  if (role === 'MEDIATOR') return ['중재·조정', '회담 주선']
+  return ['핵심 참여', '공동 참여']
+}

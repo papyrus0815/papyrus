@@ -4,10 +4,13 @@ import {
   findReplacementForMismatchedCountry,
   moveParticipant,
   participantKey,
+  quickRoleDescriptionPresets,
   readRecentParticipants,
   recordRecentParticipants,
   resolveBatchCountryQuery,
   roleDescriptionPlaceholderForType,
+  sortParticipantsByRolePriority,
+  suggestCountriesForEra,
   suggestCountriesFromTitle,
   toParticipants,
 } from './country-participant'
@@ -159,5 +162,34 @@ describe('country-participant 유틸', () => {
 
     // 구분자가 없으면 빈 배열을 돌려 단일 검색 흐름을 유지한다
     expect(resolveBatchCountryQuery('프랑스', modern, [])).toEqual([])
+  })
+
+  it('suggestCountriesForEra · sortParticipantsByRolePriority · quickRoleDescriptionPresets — 시대 추천·역할 정렬·서술 프리셋을 제공한다', () => {
+    const modern = [
+      { id: 'fr', name: '프랑스', flagEmoji: '🇫🇷' },
+      { id: 'kr', name: '대한민국', flagEmoji: '🇰🇷' },
+    ]
+    const historical = [
+      { id: 'joseon', name: '조선', startYear: 1392, endYear: 1897 },
+      { id: 'goryeo', name: '고려', startYear: 918, endYear: 1392 },
+    ]
+
+    const eraPicks = suggestCountriesForEra(
+      modern,
+      historical,
+      { startYear: 1592, endYear: 1598 },
+    )
+    expect(eraPicks[0]?.key).toBe('h:joseon')
+
+    const sorted = sortParticipantsByRolePriority([
+      { countryId: 'fr', role: 'PARTICIPANT' as const },
+      { historicalCountryId: 'joseon', role: 'TARGET' as const },
+      { countryId: 'kr', role: 'INITIATOR' as const },
+    ])
+    expect(sorted.map(participantKey)).toEqual(['m:kr', 'h:joseon', 'm:fr'])
+
+    expect(
+      quickRoleDescriptionPresets('INITIATOR', '참전 방식·지휘·병력 등 (선택)'),
+    ).toContain('선제 공격')
   })
 })
