@@ -161,8 +161,10 @@ describe('연도만 아는 사건(정밀도 NULL 1월 1일 자리 표시)', () =
     startDate: '0974-01-01',
     endDate: '0974-12-31',
   })
+  /* 같은 시대의 상위 — 1차대전 밑에 974년 사건을 두면 '동떨어진 하위'로 빠진다 */
+  const ottonian = node({ id: 'r974', parentEventId: null, depth: 0, startDate: '0973-05-07', endDate: '0983-12-07' })
   it('라벨은 연도만, 막대는 불확실 구간, 점검은 일부', () => {
-    const gantt = buildGantt(root, [yearOnly])
+    const gantt = buildGantt(ottonian, [yearOnly])
     expect(gantt.rows[0].dateLabel).toBe('974')
     expect(gantt.rows[0].uncertain).toBe(false)
     expect(checkNode(yearOnly).date).toBe('partial')
@@ -511,4 +513,35 @@ it('2~6년 하위는 분기 칸 — 연 단위면 3년이 막대 4개뿐이었�
   const bins = timeHistogram(buildGantt(root, [early, late]))
   expect(bins.length).toBeGreaterThan(10)
   expect(bins[0].label).toBe('1875년 3분기')
+})
+
+describe('상위 기간과 동떨어진 하위', () => {
+  it('연도 오타(1989)는 축에서 빼고 따로 둔다 — 축이 백 년 늘지 않는다', () => {
+    const typo = node({
+      id: 'typo',
+      title: '연도 오타',
+      parentEventId: 'root',
+      depth: 1,
+      startDate: '2014-07-01T00:00:00.000Z',
+      endDate: '2014-07-01T00:00:00.000Z',
+    })
+    const gantt = buildGantt(root, [...descendants, typo])
+    expect(gantt.farOff.map((entry) => entry.node.id)).toEqual(['typo'])
+    expect(gantt.rows.some((row) => row.node.id === 'typo')).toBe(false)
+    expect(gantt.domain[1]).toBeLessThan(1920)
+  })
+  it('몇 주 앞선 전사(사라예보)는 동떨어지지 않았다', () => {
+    expect(buildGantt(root, descendants).farOff).toEqual([])
+  })
+})
+
+describe('동떨어짐 기준', () => {
+  it('짧은 상위의 수십 년 뒤 후일담은 그대로, 끝을 모르는 상위는 뒤쪽을 따지지 않는다', () => {
+    const duchy = node({ id: 'duchy', parentEventId: null, depth: 0, startDate: '0867-01-01', endDate: '0870-12-31' })
+    const later = node({ id: 'later', startDate: '0895-01-01' })
+    expect(buildGantt(duchy, [later]).farOff).toEqual([])
+    const open = node({ id: 'open', parentEventId: null, depth: 0, startDate: '1600-12-31T00:00:00.000Z' })
+    const century = node({ id: 'century', startDate: '1765-08-12T00:00:00.000Z' })
+    expect(buildGantt(open, [century]).farOff).toEqual([])
+  })
 })

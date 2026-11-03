@@ -19,6 +19,8 @@ import { useTheme } from 'styled-components'
 import { eventTypeDef } from '@/entities/event/model/event-type-registry'
 import { EventPanelLoading } from '@/entities/event/ui/panel-loading'
 import { getEventOverview } from '@/shared/api/event-overview'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
+import { getOfficeHoldingTimeline, officeHoldingTimelineKey } from '@/shared/api/sovereign-reigns'
 import { updateEvent } from '@/shared/api/events'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -47,6 +49,7 @@ import {
   periodParam,
   timeHistogram,
   type PeriodFilter,
+  farOffIds,
 } from './event-overview.lib'
 import {
   ChecklistPanel,
@@ -57,6 +60,14 @@ import {
   SidesMetricsPanel,
 } from './overview-sections'
 import { OverviewEventModal } from './overview-event-modal'
+import {
+  type AccessionMarker,
+  type BridgeCountry,
+  type HeadsTarget,
+  type OfficeHoldingRow,
+  accessionMarkers,
+  eventWindow,
+} from '../detail/components/contemporary-heads.lib'
 import * as S from './overview.styles'
 
 /**
@@ -83,12 +94,15 @@ interface EventOverviewPanelProps {
   onGatherExisting?: () => void
   /** 인물 이름 → 상세의 인물 모달(?person=) — 참여 탭과 같은 길 */
   onPersonClick?: (personId: string) => void
+  /** 상위 사건의 참여국 — 주면 간트에 참여국 국가원수의 즉위·취임 선을 긋는다(개요 › 전개의 즉위 표지와 같은 계산) */
+  accessionTargets?: HeadsTarget[]
 }
 
 export function EventOverviewPanel({
   eventId,
   onGatherExisting,
   onPersonClick,
+  accessionTargets = [],
 }: EventOverviewPanelProps) {
 
   const { data, isLoading, isError } = useQuery({
@@ -97,6 +111,47 @@ export function EventOverviewPanel({
     // 하위 사건을 고치면 그 하위의 키만 무효화된다 — 조망은 들어올 때마다 다시 받는다
     staleTime: 0,
   })
+
+  /* 즉위·취임 — 사건 목록·개요 전개와 같은 직위 보유 피드(캐시 공유). 현대 국가 참여국이 있을 때만 역사 국가 목록 */
+  const { data: officeHoldings } = useQuery({
+    queryKey: officeHoldingTimelineKey,
+    queryFn: getOfficeHoldingTimeline,
+    staleTime: 5 * 60 * 1000,
+    enabled: accessionTargets.length > 0,
+  })
+  const { data: historicalCountryList } = useQuery({
+    queryKey: ['historical-countries'],
+    queryFn: getAllHistoricalCountries,
+    staleTime: 5 * 60 * 1000,
+    enabled: accessionTargets.some((target) => target.kind === 'C'),
+  })
+  const accessionKey = accessionTargets.map((target) => `${target.kind}:${target.id}`).join(',')
+  const accessions = useMemo<AccessionMarker[]>(() => {
+    if (!data || !officeHoldings || accessionTargets.length === 0) return []
+    /* 상위 기간과 동떨어진 하위(연도 오타)는 구간에서 뺀다 — 간트가 축에서 빼는 것과 같은 기준 */
+    const farIds = farOffIds(data.root, data.descendants)
+    const windows = [data.root, ...data.descendants.filter((node) => !farIds.has(node.id))]
+      .map((node) => eventWindow(node))
+      .filter((window): window is NonNullable<typeof window> => window !== null)
+    if (windows.length === 0) return []
+    return accessionMarkers({
+      rows: officeHoldings as OfficeHoldingRow[],
+      targets: accessionTargets,
+      window: {
+        fromKey: Math.min(...windows.map((window) => window.startKey)),
+        toKey: Math.max(...windows.map((window) => window.endKey)),
+        year: Math.min(...windows.map((window) => window.startYear)),
+      },
+      historicalCountries: (historicalCountryList ?? []) as unknown as BridgeCountry[],
+      skipHistoricalIds: new Set(accessionTargets.filter((target) => target.kind === 'H').map((target) => target.id)),
+      existingEvents: data.descendants.map((node) => ({
+        title: node.title,
+        startDate: node.startDate,
+        startDatePrecision: node.startDatePrecision,
+      })),
+    })
+    // accessionTargets는 매 렌더 새 배열이라 의존성은 내용 키(accessionKey)로 견준다
+  }, [data, officeHoldings, historicalCountryList, accessionKey])
 
   /**
    * 보기 상태는 URL이 정본 — 열린 사건(`?event=`)만 공유되고 거르기·축·정렬은 새로고침에 사라졌다.
@@ -665,6 +720,7 @@ export function EventOverviewPanel({
               hotId={highlightId}
               onHover={setHotId}
               onOpen={openEventById}
+              accessions={accessions}
             />
             <DistributionPanel
               part="period"

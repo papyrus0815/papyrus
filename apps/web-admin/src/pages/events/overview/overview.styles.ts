@@ -797,6 +797,15 @@ export const GanttGrid = styled.div`
   display: grid;
   grid-template-columns: ${GANTT_LABEL_WIDTH} minmax(420px, 1fr);
   min-width: 640px;
+
+  /*
+   * 좁은 폭 — 제목 열(최소 240px)이 화면 대부분을 먹어 막대가 가로 스크롤 너머에 있었다(390px에서 막대 0개).
+   * 한 열로 바꿔 제목 아래에 그 막대를 둔다. 줄이 display: contents라 제목·막대가 차례로 쌓인다.
+   */
+  @container overviewpanel (max-width: 659px) {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
 `
 
 /**
@@ -806,6 +815,10 @@ export const GanttGrid = styled.div`
 export const GanttScroll = styled.div`
   overflow-x: auto;
   min-width: 0;
+  /* 한 열 배치는 가로로 밀 것이 없다 — 막대 끝 날짜가 몇 px 넘쳐 생기던 가로 스크롤을 자른다 */
+  @container overviewpanel (max-width: 659px) {
+    overflow-x: clip;
+  }
   @container overviewpanel (min-width: 660px) {
     overflow: visible;
   }
@@ -825,12 +838,17 @@ export const GanttAxisCorner = styled.div`
   left: 0;
   z-index: 4;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+
+  @container overviewpanel (max-width: 659px) {
+    display: none;
+  }
 `
 
-export const GanttAxis = styled.div`
+export const GanttAxis = styled.div<{ $withAccessions?: boolean }>`
   ${ganttAxisSticky}
-  /* 위 14px = '상위 기간' 표지, 아래 = 눈금 — 둘이 한 줄에 서면 글자가 겹쳤다 */
-  height: 40px;
+  /* 위 14px = '상위 기간' 표지, 아래 = 눈금 — 둘이 한 줄에 서면 글자가 겹쳤다.
+     즉위 표지가 있으면 그 사이에 한 줄(14px)을 더 둔다 — 상위 시작·끝 글자와 왕관이 겹쳤다 */
+  height: ${({ $withAccessions }) => ($withAccessions ? 54 : 40)}px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
@@ -867,6 +885,40 @@ export const ParentEdgeMark = styled.span<{ $side: 'start' | 'end' }>`
   color: ${({ theme }) => ledgerAccent(theme.mode)};
   border-${({ $side }) => ($side === 'end' ? 'right' : 'left')}: 2px solid
     ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+/** 즉위·취임 표지 — 축 위 왕관(♛)·별(★). 이름은 마우스를 올리면(축이 좁아 글자로 다 세우면 겹친다) */
+const accessionInk = (mode: string) => (mode === 'dark' ? '#fbbf24' : '#b45309')
+
+export const AccessionMark = styled.span`
+  position: absolute;
+  top: 16px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  white-space: nowrap;
+
+  small {
+    font-size: 9.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  font-size: 12px;
+  line-height: 14px;
+  color: ${({ theme }) => accessionInk(theme.mode)};
+  cursor: help;
+`
+
+/** 즉위·취임 선(줄마다) — 상위 시작·끝 선보다 옅은 점선 */
+export const AccessionLine = styled.div`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dotted ${({ theme }) => accessionInk(theme.mode)};
+  opacity: 0.75;
+  pointer-events: none;
 `
 
 /** 상위 사건의 시작·끝 선(줄마다) — 눈금선보다 진하고 점선 */
@@ -960,6 +1012,13 @@ export const GanttLabel = styled.div<{
   position: sticky;
   left: 0;
   z-index: 1;
+
+  /* 한 열 배치 — 막대가 바로 아래 줄에 서니 제목은 붙박을 필요가 없다 */
+  @container overviewpanel (max-width: 659px) {
+    position: static;
+    min-height: 0;
+    padding-top: 8px;
+  }
   background:
     linear-gradient(
       ${({ $hot, $stripe, theme }) =>
@@ -1020,6 +1079,10 @@ export const RowTitleButton = styled.button<{ $wrap?: boolean }>`
 export const GanttTrack = styled.div<{ $dim: boolean; $hot: boolean; $stripe?: boolean }>`
   position: relative;
   min-height: 34px;
+
+  @container overviewpanel (max-width: 659px) {
+    min-height: 26px;
+  }
   cursor: pointer;
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   background: ${({ $hot, $stripe, theme }) =>

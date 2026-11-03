@@ -42,6 +42,11 @@ export interface GanttRow extends AxisSpan {
 
 export interface GanttLayout {
   rows: GanttRow[]
+  /**
+   * 상위 기간과 동떨어진 하위 — 축에서 뺀다. 연도 오타 하나가 축을 백 년 늘려 나머지를 한쪽에 눌렀다
+   * (프랑스 혁명: 1790을 1890, 1789를 1989로 입력한 3건 때문에 축이 1992년까지 늘었다). 화면이 따로 알린다.
+   */
+  farOff: Array<{ node: EventOverviewNode; dateLabel: string }>
   /** 날짜가 없어 축에 못 놓은 사건 — 숨기지 않고 따로 센다 */
   undated: EventOverviewNode[]
   /**
@@ -210,6 +215,40 @@ export function axisTicks(
  */
 export type GanttFit = 'children' | 'parent'
 
+/**
+ * 동떨어짐 판정의 최소 여유(년). 연도 오타는 대개 백 년·천 년 단위(1790→1890, 1789→1989)로 어긋나고,
+ * 실제 후일담은 수십 년 안이다(보헤미아 공작령 867~870의 후일담 883·895).
+ */
+const FAR_MIN_YEARS = 50
+
+/**
+ * 상위 기간에서 크게 동떨어졌나 — 상위 기간 앞뒤로 '상위 기간 길이의 2배'(최소 50년)보다 더 떨어지면.
+ * 끝을 모르는 상위(진행 중·종료일 미입력)는 뒤쪽을 판정하지 않는다 — 언제까지 이어졌는지 모른다.
+ * 실데이터(2026-11-02) 전 하위에서 걸리는 것은 연도 오타 3건뿐이었다.
+ */
+export function isFarFromParent(
+  span: AxisSpan,
+  rootSpan: AxisSpan | null,
+  rootHasEnd = true,
+): boolean {
+  if (!rootSpan) return false
+  const margin = Math.max((rootSpan.to - rootSpan.from) * 2, FAR_MIN_YEARS)
+  const tooEarly = span.to < rootSpan.from - margin
+  const tooLate = rootHasEnd && span.from > rootSpan.to + margin
+  return tooEarly || tooLate
+}
+
+/** 동떨어진 하위의 id — 즉위 표지 구간 등 축 밖 계산도 같은 기준으로 뺀다 */
+export function farOffIds(root: EventOverviewNode, descendants: EventOverviewNode[]): Set<string> {
+  const rootSpan = toAxisSpan(withEffectivePrecision(root))
+  const ids = new Set<string>()
+  for (const node of descendants) {
+    const span = toAxisSpan(withEffectivePrecision(node))
+    if (span && isFarFromParent(span, rootSpan, Boolean(root.endDate))) ids.add(node.id)
+  }
+  return ids
+}
+
 export function buildGantt(
   root: EventOverviewNode,
   descendants: EventOverviewNode[],
@@ -218,10 +257,14 @@ export function buildGantt(
   const titleById = new Map([root, ...descendants].map((node) => [node.id, node.title]))
   const placed: Array<{ node: EventOverviewNode; span: AxisSpan }> = []
   const undated: EventOverviewNode[] = []
+  const farOff: GanttLayout['farOff'] = []
+  const rootSpanForFar = toAxisSpan(withEffectivePrecision(root))
   for (const node of descendants) {
     const span = toAxisSpan(withEffectivePrecision(node))
-    if (span) placed.push({ node, span })
-    else undated.push(node)
+    if (!span) undated.push(node)
+    else if (isFarFromParent(span, rootSpanForFar, Boolean(root.endDate))) {
+      farOff.push({ node, dateLabel: formatSpanLabel(withEffectivePrecision(node)) })
+    } else placed.push({ node, span })
   }
   const spanById = new Map(placed.map((entry) => [entry.node.id, entry.span]))
   const startOf = (item: EventOverviewNode) => spanById.get(item.id)?.from ?? Infinity
@@ -312,6 +355,7 @@ export function buildGantt(
   return {
     rows,
     undated,
+    farOff,
     parentBand,
     parentEdges,
     ticks: brokenTicks(low, high, stretches)

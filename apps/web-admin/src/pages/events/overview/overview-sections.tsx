@@ -41,6 +41,8 @@ import {
 import { type RegroupCandidate, RegroupBar } from '../detail/components/collection-regroup'
 import { withSideColors } from '../detail/components/side-colors'
 
+import { type AccessionMarker } from '../detail/components/contemporary-heads.lib'
+import { toAxisSpan } from '../detail/components/development-timeline.lib'
 import * as S from './overview.styles'
 
 /** 사건 하나가 지금 걸러진 집합 밖인가 — 집합이 없으면 아무것도 흐리지 않는다 */
@@ -108,7 +110,10 @@ export function GanttPanel({
   hotId,
   onHover,
   onOpen,
+  accessions = [],
 }: HoverProps & {
+  /** 참여국 국가원수의 즉위·취임 — 축의 왕관과 줄마다 점선 */
+  accessions?: AccessionMarker[]
   /**
    * 걸리지 않은 줄을 흐리지 않고 뺀다 — 묶음을 고르면 '그 묶음만 보기'라 다른 줄 8개가 흐린 채
    * 자리를 차지할 이유가 없다. 나라·세부·시기 거르기는 흐리기(맥락 유지) 그대로.
@@ -164,7 +169,7 @@ export function GanttPanel({
     setRegrouping(false)
     setPicked(new Set())
   }
-  const allNodes = [...gantt.rows.map((row) => row.node), ...gantt.undated]
+  const allNodes = [...gantt.rows.map((row) => row.node), ...gantt.farOff.map((entry) => entry.node), ...gantt.undated]
   const toCandidate = (node: EventOverviewNode): RegroupCandidate => ({
     id: node.id,
     title: node.title,
@@ -195,8 +200,56 @@ export function GanttPanel({
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
-  /** 띠가 축을 거의 다 덮어 그리지 않을 때만 경계선으로 말한다(띠가 있으면 띠 가장자리가 곧 경계) */
-  const edges = gantt.parentBand ? [] : gantt.parentEdges
+  /**
+   * 상위 사건의 시작·끝 선 — 띠가 있어도 긋는다. 띠만으로는 1차대전 개전 7.28이 축 끝의 옅은 회색이라
+   * 거의 보이지 않았고, 그 대신 10줄에 '기간 전' 표지가 반복됐다. 선이 축에 서면 줄 표지는 뺀다.
+   */
+  const edges = gantt.parentEdges
+  const edgeSides = new Set(edges.map((edge) => edge.side))
+  const showOutsideTag = (outside: 'before' | 'after') =>
+    outside === 'before' ? !edgeSides.has('start') : !edgeSides.has('end')
+  /** 즉위·취임 — 지금 축 안에 드는 것만. 축 값은 막대와 같은 천문 연도 실수 */
+  const accessionPoints = accessions.flatMap((marker) => {
+    const span = toAxisSpan({
+      id: marker.key,
+      title: marker.name,
+      startDate: marker.startDate,
+      startDatePrecision: marker.startPrecision,
+    })
+    if (!span) return []
+    const pct = gantt.toPct(span.from)
+    if (pct < 0 || pct > 100) return []
+    const where = marker.countries.length > 0 ? `${marker.countries.join('·')} ` : ''
+    return [
+      {
+        key: marker.key,
+        pct,
+        glyph: marker.verb === '즉위' ? '♛' : '★',
+        label: `${where}${marker.name}${marker.title ? ` ${marker.title}` : ''} ${marker.verb}${
+          marker.predecessor ? ` (${marker.predecessor} 다음)` : ''
+        }`,
+      },
+    ]
+  })
+  /**
+   * 가까이 붙은 표지는 하나로 — 접은 빈 구간(≈) 안의 즉위 셋(동인도회사 1707·1714·1727)이 한 점에 겹쳐 쌓였다.
+   * 축 폭의 1.5% 안이면 묶고, 툴팁에 모두 적는다. 둘 이상이면 왕관 옆에 수.
+   */
+  const accessionMarks = accessionPoints.reduce<
+    Array<{ key: string; pct: number; glyph: string; label: string; count: number }>
+  >((marks, point) => {
+    const last = marks[marks.length - 1]
+    /* 왕관 폭(약 18px) 안에 붙으면 하나로 — %로만 재면 좁은 축에서 이웃 묶음끼리 또 겹쳤다 */
+    const mergePct = trackPx > 0 ? (18 / trackPx) * 100 : 1.5
+    if (last && Math.abs(point.pct - last.pct) < mergePct) {
+      last.label = `${last.label}\n${point.label}`
+      last.count += 1
+      if (point.glyph === '♛') last.glyph = '♛'
+      return marks
+    }
+    marks.push({ ...point, count: 1 })
+    return marks
+  }, [])
   /** 막대 색 = 분야 — 둘 이상일 때만 범례(하나뿐이면 색이 가르는 게 없다). 많은 순 */
   const domainCounts = new Map<string, number>()
   for (const row of gantt.rows) domainCounts.set(row.node.domain, (domainCounts.get(row.node.domain) ?? 0) + 1)
@@ -249,7 +302,11 @@ export function GanttPanel({
               : '축 전체가 상위 사건의 기간 안'}
           {' · 점선 막대 = 연·월만 아는 날짜(그 기간 어딘가)'}
           {gantt.undated.length > 0 && ` · 날짜 없음 ${gantt.undated.length}건은 '기록 점검' 탭에`}
-          {outsideCount > 0 && ` · 상위 기간 밖 ${outsideCount}건(제목 뒤 '기간 전·후' 표지)`}
+          {outsideCount > 0 &&
+            (edges.length > 0
+              ? ` · 상위 기간 밖 ${outsideCount}건(시작·끝 선 바깥)`
+              : ` · 상위 기간 밖 ${outsideCount}건(제목 뒤 '기간 전·후' 표지)`)}
+          {accessionMarks.length > 0 && ' · ♛·★ 점선 = 참여국 국가원수 즉위·취임(축의 표지에 마우스를 올리면 이름)'}
           {hiddenCount > 0 && ` · 묶음 밖 ${hiddenCount}건 숨김`}
         </S.PanelNote>
         {domainsShown.length > 1 && (
@@ -262,6 +319,20 @@ export function GanttPanel({
               </li>
             ))}
           </S.DomainLegend>
+        )}
+        {/* 날짜가 상위 기간과 동떨어진 하위 — 대개 연도 오타(1790→1890). 축에서 빼고 여기서 고치러 간다 */}
+        {gantt.farOff.length > 0 && (
+          <S.GapNotice role="note">
+            <span>
+              날짜가 상위 기간과 크게 동떨어진 하위 <strong>{gantt.farOff.length}건</strong>은 그래프에서 뺐습니다 —
+              연도를 잘못 입력하지 않았는지 확인하세요.
+            </span>
+            {gantt.farOff.map((entry) => (
+              <S.TextButton key={entry.node.id} type="button" onClick={() => onOpen(entry.node.id)}>
+                {entry.dateLabel} {entry.node.title}
+              </S.TextButton>
+            ))}
+          </S.GapNotice>
         )}
         {gaps.length > 0 && (
           <S.GapNotice role="note">
@@ -306,13 +377,13 @@ export function GanttPanel({
         <S.GanttScroll>
           <S.GanttGrid role="list" aria-label="하위 사건 시간축">
             <S.GanttAxisCorner aria-hidden="true" />
-            <S.GanttAxis aria-hidden="true" ref={axisRef}>
+            <S.GanttAxis aria-hidden="true" ref={axisRef} $withAccessions={accessionMarks.length > 0}>
               {edges.map((edge) => (
                 <S.ParentEdgeMark key={edge.side} $side={edge.side} style={{ left: `${edge.pct}%` }}>
                   {edge.label}
                 </S.ParentEdgeMark>
               ))}
-              {gantt.parentBand && (
+              {gantt.parentBand && edges.length === 0 && (
                 <S.ParentBandMark
                   style={{
                     left: `${gantt.parentBand.leftPct}%`,
@@ -328,6 +399,12 @@ export function GanttPanel({
                 >
                   ≈
                 </S.AxisBreak>
+              ))}
+              {accessionMarks.map((mark) => (
+                <S.AccessionMark key={mark.key} title={mark.label} aria-label={mark.label} style={{ left: `${mark.pct}%` }}>
+                  {mark.glyph}
+                  {mark.count > 1 && <small>{mark.count}</small>}
+                </S.AccessionMark>
               ))}
               {gantt.ticks.map((tick) => (
                 <S.GanttTick
@@ -425,7 +502,7 @@ export function GanttPanel({
                     </S.RowTitleButton>
                     {/* 상위 기간 밖 — 예전엔 줄 맨 왼쪽 주황 세로선이었다(묶음 왼쪽 색선과 같은 문법이라
                         함께 걷어 냄). 이제 제목 뒤 작은 글자 표지 */}
-                    {row.outside && (
+                    {row.outside && showOutsideTag(row.outside) && (
                       <S.OutsideTag
                         title={
                           row.outside === 'before'
@@ -487,6 +564,9 @@ export function GanttPanel({
                     ))}
                     {edges.map((edge) => (
                       <S.ParentEdgeLine key={edge.side} style={{ left: `${edge.pct}%` }} />
+                    ))}
+                    {accessionMarks.map((mark) => (
+                      <S.AccessionLine key={mark.key} style={{ left: `${mark.pct}%` }} />
                     ))}
                     <S.Bar
                       $color={color}
