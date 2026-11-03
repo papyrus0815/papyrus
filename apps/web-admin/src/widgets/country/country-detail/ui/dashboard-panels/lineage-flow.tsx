@@ -367,6 +367,123 @@ export function LineageFlow({
     return parts.length > 0 ? parts.join(' · ') : null
   }, [nodes, columns])
 
+  const headlineCells = useMemo(() => {
+    const centuryCount = columns.filter((col) => col.centuryIndex != null).length
+    const hasDistance = nodes.some((node) => node.distance != null && node.distance !== 0)
+    const startYears = nodes
+      .map((node) => node.startYear)
+      .filter((year): year is number => year != null)
+    const endYears = nodes
+      .map((node) => node.endYear ?? node.startYear)
+      .filter((year): year is number => year != null)
+    const earliest = startYears.length > 0 ? Math.min(...startYears) : null
+    const latest = endYears.length > 0 ? Math.max(...endYears) : earliest
+    const currentYear = new Date().getFullYear()
+    const totalHistoryYears =
+      earliest != null
+        ? Math.max(1, (modernEndpoint ? currentYear : (latest ?? earliest)) - earliest)
+        : null
+
+    let structureMeta = centuryCount > 0 ? `${centuryCount}개 세기 분포` : '시대 구분 미상'
+    if (hasDistance) {
+      const predCount = nodes.filter((node) => (node.distance ?? 0) < 0).length
+      const succCount = nodes.filter((node) => (node.distance ?? 0) > 0).length
+      structureMeta = `전신 ${predCount} · 후신 ${succCount}${centuryCount > 0 ? ` · ${centuryCount}개 세기` : ''}`
+    } else {
+      const directCount = nodes.filter(
+        (node) => !node.linkKind || node.linkKind === 'PREDECESSOR',
+      ).length
+      const branchCount = nodes.length - directCount
+      structureMeta =
+        branchCount > 0
+          ? `직계 ${directCount} · 구성·유산 ${branchCount}`
+          : `직계 계승 ${directCount}개국${centuryCount > 0 ? ` · ${centuryCount}개 세기` : ''}`
+    }
+
+    const longestNode = [...nodes]
+      .filter((node) => (node.durationYears ?? 0) > 0)
+      .sort((a, b) => (b.durationYears ?? 0) - (a.durationYears ?? 0))[0] ?? nodes[0] ?? null
+
+    let successionValue = '직계 연결'
+    let successionMeta = '전후 계승 관계'
+    if (hasDistance) {
+      const directPreds = nodes.filter((node) => node.distance === -1)
+      const directSuccs = nodes.filter((node) => node.distance === 1)
+      const currentNode =
+        nodes.find((node) => node.id === currentId || node.distance === 0) ?? null
+      const predLabel =
+        directPreds.length > 0
+          ? directPreds.map((n) => n.name).slice(0, 2).join('·')
+          : '시초'
+      const succLabel =
+        directSuccs.length > 0
+          ? directSuccs.map((n) => n.name).slice(0, 2).join('·')
+          : '종결'
+      successionValue = currentNode
+        ? `${predLabel} → ${currentNode.name} → ${succLabel}`
+        : `${predLabel} → ${succLabel}`
+      successionMeta = `직전 전신 ${directPreds.length} · 직계 후신 ${directSuccs.length}`
+    } else if (modernEndpoint) {
+      const directNodes = nodes.filter(
+        (node) => !node.linkKind || node.linkKind === 'PREDECESSOR',
+      )
+      const latestPred = directNodes[directNodes.length - 1] ?? nodes[nodes.length - 1]
+      const earliestOrigin = nodes[0]
+      successionValue = latestPred
+        ? `${latestPred.name} → ${modernEndpoint.name}`
+        : modernEndpoint.name
+      successionMeta = earliestOrigin
+        ? `최초 기원 ${earliestOrigin.name}${earliestOrigin.yearsLabel ? ` (${earliestOrigin.yearsLabel})` : ''}`
+        : '현존 국가 승계'
+    } else if (nodes.length >= 2) {
+      const first = nodes[0]
+      const last = nodes[nodes.length - 1]
+      successionValue = `${first.name} → ${last.name}`
+      successionMeta = `기원부터 최근 정치체까지 ${nodes.length}단계`
+    }
+
+    return [
+      {
+        label: '연결 정치체 수',
+        value: `${nodes.length}개 정치체${modernEndpoint ? ' + 현존 1' : ''}`,
+        meta: structureMeta,
+      },
+      {
+        label: '통사 기록 범위',
+        value:
+          earliest != null
+            ? `${formatSignedYearAxis(earliest)} — ${modernEndpoint ? '현재' : formatSignedYearAxis(latest ?? earliest)}`
+            : (overallSpanSummary ?? '연대 미상'),
+        meta:
+          totalHistoryYears != null
+            ? `약 ${totalHistoryYears.toLocaleString('ko-KR')}년사 · ${overallSpanSummary ?? ''}`
+            : '존속 연대 기록 기준',
+      },
+      {
+        label: longestNode?.durationYears ? '최장 존속 정치체' : '최초 기원 정치체',
+        value: longestNode
+          ? longestNode.durationYears
+            ? `${longestNode.name} · ${longestNode.durationYears.toLocaleString('ko-KR')}년`
+            : longestNode.name
+          : '—',
+        meta: longestNode
+          ? [
+              longestNode.yearsLabel,
+              resolveStateBadgeLabel(longestNode),
+              longestNode.capital ? `수도 ${longestNode.capital}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || '핵심 계보 노드'
+          : '등록된 정치체 없음',
+      },
+      {
+        label: '직계 전신 · 승계 흐름',
+        value: successionValue,
+        meta: successionMeta,
+      },
+    ]
+  }, [nodes, columns, modernEndpoint, currentId, overallSpanSummary])
+
   const [viewMode, setViewMode] = useState<LineageViewMode>('century')
   const [zoomIndex, setZoomIndex] = useState<number>(DEFAULT_ZOOM_INDEX)
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false)
@@ -437,12 +554,12 @@ export function LineageFlow({
   const renderToolbarControls = (inModal: boolean) => (
     <ToolbarRow>
       <ToolbarLeftGroup>
-        {overallSpanSummary && (
+        {inModal && overallSpanSummary && (
           <SpanSummaryBadge title="계보 전체 시간 범위">
             {overallSpanSummary}
           </SpanSummaryBadge>
         )}
-        {lineageStructureSummary && (
+        {inModal && lineageStructureSummary && (
           <SpanSummaryBadge title="계보 구조 요약">
             {lineageStructureSummary}
           </SpanSummaryBadge>
@@ -526,6 +643,18 @@ export function LineageFlow({
 
   return (
     <Container>
+      {nodes.length > 0 && (
+        <LineageHeadlineStrip role="group" aria-label="계보 핵심 요약">
+          {headlineCells.map((cell) => (
+            <LineageHeadlineCell key={cell.label}>
+              <LineageHeadlineLabel>{cell.label}</LineageHeadlineLabel>
+              <LineageHeadlineValue>{cell.value}</LineageHeadlineValue>
+              <LineageHeadlineMeta>{cell.meta}</LineageHeadlineMeta>
+            </LineageHeadlineCell>
+          ))}
+        </LineageHeadlineStrip>
+      )}
+
       {renderToolbarControls(false)}
 
       <LineageViewportBody
@@ -1096,6 +1225,88 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
+`
+
+const LineageHeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const LineageHeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  min-width: 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+`
+
+const LineageHeadlineLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: -0.01em;
+`
+
+const LineageHeadlineValue = styled.strong`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const LineageHeadlineMeta = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const ToolbarRow = styled.div`

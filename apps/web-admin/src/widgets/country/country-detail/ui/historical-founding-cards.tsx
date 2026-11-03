@@ -227,9 +227,6 @@ function FoundingCard({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [addedThisSession, setAddedThisSession] = useState(0)
-  /* '비어 있음' 칩에서 연 주체 모달 — 열린 동안엔 칩을 내리지 않는다(내리면 모달도 닫힌다) */
-  const [agentChipPickerOpen, setAgentChipPickerOpen] = useState(false)
-  const showAgentChip = agents.length === 0 || agentChipPickerOpen
   const debouncedTerm = useDebouncedValue(searchTerm, 250, String(pickerOpen))
   const role = side === 'founding' ? 'FOUNDED' : 'DISSOLVED'
 
@@ -419,36 +416,59 @@ function FoundingCard({
         </CardHead>
       )}
 
-      {/* ── 배경 — 카드의 머리말. 길면 네 줄로 접고, 쓰기는 모달 ── */}
-      {hasNote && (
-        <Lead>
-          <LeadText $clamped={!noteExpanded}>
-            {isLikelyRichTextHtml(note ?? '') ? (
-              <RichTextReadView html={note ?? ''} />
-            ) : (
-              <PlainNote>{note}</PlainNote>
-            )}
-          </LeadText>
-          <LeadActions>
-            <TextButton type="button" onClick={() => setNoteExpanded((open) => !open)}>
-              {noteExpanded ? '접기' : '전체 보기'}
-            </TextButton>
-            <TextButton type="button" onClick={() => setNoteModalOpen(true)}>
-              <FiEdit2 aria-hidden /> 배경 수정
-            </TextButton>
-          </LeadActions>
-        </Lead>
-      )}
-
-      {/*
-       * 채워진 묶음만 세운다. 빈 묶음은 카드 아래 '비어 있음' 한 줄의 칩으로 모은다.
-       * 라벨 열(dt|dd) 대신 묶음 머리 + 줄 목록 — 이름·메모가 카드 폭을 다 쓴다.
-       */}
-      {/* ── 세운 쪽·멸망시킨 쪽 — 카드가 답하는 첫 질문('누가')이라 맨 위 ── */}
-      {agents.length > 0 && (
+      <SpecLedger>
+        {/* ── 1. 배경 서술 ── */}
         <Group>
           <GroupHead>
-            {agentLabel}
+            <span>{title} 배경</span>
+            {hasNote && (
+              <GroupHeadActions>
+                <TextButton
+                  type="button"
+                  onClick={() => setNoteExpanded((open) => !open)}
+                >
+                  {noteExpanded ? '접기' : '전체 보기'}
+                </TextButton>
+                <TextButton
+                  id={`founding-note-trigger-${side}`}
+                  type="button"
+                  onClick={() => setNoteModalOpen(true)}
+                >
+                  <FiEdit2 aria-hidden /> 배경 수정
+                </TextButton>
+              </GroupHeadActions>
+            )}
+          </GroupHead>
+          {hasNote ? (
+            <Lead>
+              <LeadText $clamped={!noteExpanded}>
+                {isLikelyRichTextHtml(note ?? '') ? (
+                  <RichTextReadView html={note ?? ''} />
+                ) : (
+                  <PlainNote>{note}</PlainNote>
+                )}
+              </LeadText>
+            </Lead>
+          ) : (
+            <EmptySpecRow>
+              <EmptySpecText>
+                미등록 · {title} 배경 서술이 아직 작성되지 않았습니다
+              </EmptySpecText>
+              <SpecInlineAction
+                id={`founding-note-trigger-${side}`}
+                type="button"
+                onClick={() => setNoteModalOpen(true)}
+              >
+                <FiPlus aria-hidden /> {title} 배경 작성
+              </SpecInlineAction>
+            </EmptySpecRow>
+          )}
+        </Group>
+
+        {/* ── 2. 건국자 · 멸망 주체 ── */}
+        <Group>
+          <GroupHead>
+            <span>{agentLabel}</span>
             <GroupCount>{agents.length}</GroupCount>
           </GroupHead>
           <HistoricalStatehoodAgents
@@ -460,88 +480,101 @@ function FoundingCard({
             anchorYear={year}
           />
         </Group>
-      )}
 
-      {/* ── 사건 ── */}
-      {events.length > 0 && (
+        {/* ── 3. 계기 사건 ── */}
         <Group>
           <GroupHead>
-            {title} 사건
+            <span>{title} 사건</span>
             <GroupCount>{events.length}</GroupCount>
           </GroupHead>
-          <RowList>
-            {events.map((event) => {
-              const signedEventYear = statehoodEventYear(event)
-              const eventYear = formatCountryYearShort(signedEventYear)
-              /* 사건 연도와 등록된 존속 연도가 어긋나면 알린다 — 어느 쪽이 맞는지는 사용자가
-                 판단한다(랑고바르드: 이주 568 / 파비아 함락 572처럼 기준 사건이 다를 수 있다). */
-              const mismatch = signedEventYear != null && year != null && signedEventYear !== year
-              return (
-                <FoundingRow
-                  key={event.id}
-                  to={pathKeys.events.detail(event.id)}
-                  onOpen={previewOnClick(() => openEvent(event))}
-                  openLabel={`${event.title} 미리보기`}
-                  thumb={
-                    <FoundingThumb
-                      src={event.imageUrl}
-                      name={event.title}
-                      shape="rect"
-                      size={24}
-                      placeholderIcon={<FiCalendar aria-hidden />}
-                    />
-                  }
-                  title={event.title}
-                  meta={eventYear || undefined}
-                  sub={
-                    event.roleDescription || mismatch ? (
-                      <>
-                        {event.roleDescription && <span>{event.roleDescription}</span>}
-                        {mismatch && (
-                          <Warn
-                            title={`사건은 ${eventYear}, 국가 존속 ${side === 'founding' ? '시작' : '끝'}은 ${yearLabel}로 등록돼 있습니다 — 한쪽을 고치거나 그대로 두세요`}
-                          >
-                            등록 연도({yearLabel})와 다름
-                          </Warn>
-                        )}
-                      </>
-                    ) : undefined
-                  }
-                  trailing={
-                    <RowAction
-                      type="button"
-                      $danger
-                      aria-label={`'${event.title}' ${title} 사건 연결 해제`}
-                      title="연결 해제(사건의 참여국으로는 남는다)"
-                      disabled={roleMutation.isPending}
-                      onClick={() => roleMutation.mutate({ eventId: event.id, next: null })}
-                    >
-                      <FiX aria-hidden />
-                    </RowAction>
-                  }
-                />
-              )
-            })}
-            <li>
-              <RowAddButton type="button" onClick={openPicker}>
-                <FiPlus aria-hidden /> 사건 연결
-              </RowAddButton>
-            </li>
-          </RowList>
+          {events.length > 0 ? (
+            <RowList>
+              {events.map((event) => {
+                const signedEventYear = statehoodEventYear(event)
+                const eventYear = formatCountryYearShort(signedEventYear)
+                const mismatch =
+                  signedEventYear != null && year != null && signedEventYear !== year
+                return (
+                  <FoundingRow
+                    key={event.id}
+                    to={pathKeys.events.detail(event.id)}
+                    onOpen={previewOnClick(() => openEvent(event))}
+                    openLabel={`${event.title} 미리보기`}
+                    thumb={
+                      <FoundingThumb
+                        src={event.imageUrl}
+                        name={event.title}
+                        shape="rect"
+                        size={24}
+                        placeholderIcon={<FiCalendar aria-hidden />}
+                      />
+                    }
+                    title={event.title}
+                    meta={eventYear || undefined}
+                    sub={
+                      event.roleDescription || mismatch ? (
+                        <>
+                          {event.roleDescription && (
+                            <span>{event.roleDescription}</span>
+                          )}
+                          {mismatch && (
+                            <Warn
+                              title={`사건은 ${eventYear}, 국가 존속 ${side === 'founding' ? '시작' : '끝'}은 ${yearLabel}로 등록돼 있습니다 — 한쪽을 고치거나 그대로 두세요`}
+                            >
+                              등록 연도({yearLabel})와 다름
+                            </Warn>
+                          )}
+                        </>
+                      ) : undefined
+                    }
+                    trailing={
+                      <RowAction
+                        type="button"
+                        $danger
+                        aria-label={`'${event.title}' ${title} 사건 연결 해제`}
+                        title="연결 해제(사건의 참여국으로는 남는다)"
+                        disabled={roleMutation.isPending}
+                        onClick={() =>
+                          roleMutation.mutate({ eventId: event.id, next: null })
+                        }
+                      >
+                        <FiX aria-hidden />
+                      </RowAction>
+                    }
+                  />
+                )
+              })}
+              <li>
+                <RowAddButton type="button" onClick={openPicker}>
+                  <FiPlus aria-hidden /> 사건 연결
+                </RowAddButton>
+              </li>
+            </RowList>
+          ) : (
+            <EmptySpecRow>
+              <EmptySpecText>
+                미등록 · 연결된 {title} 계기 사건이 없습니다
+              </EmptySpecText>
+              <SpecInlineAction type="button" onClick={openPicker}>
+                <FiPlus aria-hidden /> {title} 사건 연결
+              </SpecInlineAction>
+            </EmptySpecRow>
+          )}
         </Group>
-      )}
 
-      {/* ── 초대(건국) · 마지막(멸망) ── */}
-      {(side === 'founding' || rulers.length > 0) && (
+        {/* ── 4. 초대(건국) · 마지막(멸망) 통치자 ── */}
         <Group>
-          {/* 가장 이른 기록이 건국과 멀면 '초대'라 부르지 않는다 — 랑고바르드의 첫 재위 기록이
-              774년 카를 1세(건국 206년 뒤)였다. 그때는 '첫 기록'으로 부르고 거리를 밝힌다. */}
-          <GroupHead>{rulerLabel}</GroupHead>
+          <GroupHead>
+            <span>{rulerLabel}</span>
+            <GroupCount>{rulers.length}</GroupCount>
+          </GroupHead>
           {rulers.length > 0 ? (
             <RowList>
               {rulers.map((ruler) => {
                 const span = rulerSpan(ruler)
-                const name = ruler.regnalName?.trim() || getPersonDisplayName(ruler.person, true)
+                const name =
+                  ruler.regnalName?.trim() ||
+                  getPersonDisplayName(ruler.person, true)
                 const gap = gapFromFounding(ruler, year)
                 const hint =
                   side === 'founding' && ruler.basis === 'earliest'
@@ -555,15 +588,24 @@ function FoundingCard({
                   <FoundingRow
                     key={ruler.recordId}
                     to={pathKeys.personsTimelineDetail(ruler.person.id)}
-                    onOpen={previewOnClick(() => preview.openPerson(ruler.person.id))}
+                    onOpen={previewOnClick(() =>
+                      preview.openPerson(ruler.person.id),
+                    )}
                     openLabel={`${name} 미리보기`}
                     thumb={
-                      <FoundingThumb src={ruler.person.profileImageUrl} name={name} shape="round" size={32} />
+                      <FoundingThumb
+                        src={ruler.person.profileImageUrl}
+                        name={name}
+                        shape="round"
+                        size={32}
+                      />
                     }
                     title={name}
                     meta={
                       <>
-                        <span>{ruler.title || RULER_FALLBACK_TITLE[ruler.kind]}</span>
+                        <span>
+                          {ruler.title || RULER_FALLBACK_TITLE[ruler.kind]}
+                        </span>
                         {span && <span>{span}</span>}
                       </>
                     }
@@ -573,86 +615,68 @@ function FoundingCard({
               })}
             </RowList>
           ) : (
-            <EmptyLine>
-              재위·재임 기록이 없습니다
+            <EmptySpecRow>
+              <EmptySpecText>미등록 · 재위·재임 기록이 없습니다</EmptySpecText>
               {onGoToHeads && (
-                <TextButton type="button" onClick={onGoToHeads}>
+                <SpecInlineAction type="button" onClick={onGoToHeads}>
                   역대 수반에서 등록
-                </TextButton>
+                </SpecInlineAction>
               )}
-            </EmptyLine>
+            </EmptySpecRow>
           )}
         </Group>
-      )}
 
-      {/* ── 전신·후신 ── */}
-      {linked.length > 0 && (
+        {/* ── 5. 전신·후신 국가 ── */}
         <Group>
           <GroupHead>
-            {linkedLabel}
+            <span>{linkedLabel}</span>
             <GroupCount>{linked.length}</GroupCount>
           </GroupHead>
-          <RowList>
-            {linked.map((country) => (
-              <FoundingRow
-                key={`${country.id}-${country.eventType}`}
-                to={pathKeys.countryDetail(country.id)}
-                onOpen={previewOnClick(() =>
-                  preview.openCountry({ id: country.id, kind: 'historical', name: country.name }),
-                )}
-                openLabel={`${country.name} 미리보기`}
-                thumb={
-                  <FoundingThumb
-                    src={country.thumbnailUrl}
-                    name={country.name}
-                    shape="rect"
-                    size={24}
-                    placeholderIcon={<FiFlag aria-hidden />}
-                  />
-                }
-                title={country.name}
-                meta={
-                  <>
-                    <span>{TRANSITION_LABEL[country.eventType] ?? country.eventType}</span>
-                    {linkedSpan(country) && <span>{linkedSpan(country)}</span>}
-                  </>
-                }
-              />
-            ))}
-          </RowList>
+          {linked.length > 0 ? (
+            <RowList>
+              {linked.map((country) => (
+                <FoundingRow
+                  key={`${country.id}-${country.eventType}`}
+                  to={pathKeys.countryDetail(country.id)}
+                  onOpen={previewOnClick(() =>
+                    preview.openCountry({
+                      id: country.id,
+                      kind: 'historical',
+                      name: country.name,
+                    }),
+                  )}
+                  openLabel={`${country.name} 미리보기`}
+                  thumb={
+                    <FoundingThumb
+                      src={country.thumbnailUrl}
+                      name={country.name}
+                      shape="rect"
+                      size={24}
+                      placeholderIcon={<FiFlag aria-hidden />}
+                    />
+                  }
+                  title={country.name}
+                  meta={
+                    <>
+                      <span>
+                        {TRANSITION_LABEL[country.eventType] ??
+                          country.eventType}
+                      </span>
+                      {linkedSpan(country) && <span>{linkedSpan(country)}</span>}
+                    </>
+                  }
+                />
+              ))}
+            </RowList>
+          ) : (
+            <EmptySpecRow>
+              <EmptySpecText>
+                미등록 · 연결된 {linkedLabel} 기록이 없습니다
+              </EmptySpecText>
+            </EmptySpecRow>
+          )}
         </Group>
-      )}
-
-      {(showAgentChip || !hasNote || events.length === 0) && (
-        <FillRow>
-          <FillLabel>비어 있음</FillLabel>
-          {showAgentChip && (
-            <HistoricalStatehoodAgents
-              historicalCountryId={historicalCountryId}
-              side={side === 'founding' ? 'FOUNDING' : 'DISSOLUTION'}
-              agents={agents}
-              title={title}
-              anchorYear={year}
-              triggerLabel={agentLabel}
-              onPickerOpenChange={setAgentChipPickerOpen}
-            />
-          )}
-          {!hasNote && (
-            <FillChip
-              id={`founding-note-trigger-${side}`}
-              type="button"
-              onClick={() => setNoteModalOpen(true)}
-            >
-              <FiPlus aria-hidden /> {title} 배경
-            </FillChip>
-          )}
-          {events.length === 0 && (
-            <FillChip type="button" onClick={openPicker}>
-              <FiPlus aria-hidden /> {title} 사건
-            </FillChip>
-          )}
-        </FillRow>
-      )}
+      </SpecLedger>
 
       <BackgroundEditModal
         isOpen={noteModalOpen}
@@ -942,10 +966,23 @@ const PlainNote = styled.p`
 `
 
 /* 묶음 — 머리(라벨·개수) + 줄 목록 */
+const SpecLedger = styled.div`
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
 const Group = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 2px;
+  }
 `
 
 const GroupHead = styled.h4`
@@ -956,6 +993,54 @@ const GroupHead = styled.h4`
   font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const GroupHeadActions = styled.div`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const EmptySpecRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+`
+
+const EmptySpecText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SpecInlineAction = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.035)'};
+  }
+
+  svg {
+    width: 11px;
+    height: 11px;
+  }
 `
 
 const GroupCount = styled.span`

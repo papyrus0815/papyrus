@@ -27,7 +27,7 @@ interface ActivityGroup {
 
 type FilterKey = 'all' | ActivityCategory
 
-const DEFAULT_VISIBLE_COUNT = 8
+const DEFAULT_VISIBLE_COUNT = 10
 
 const EMPTY_AXES = [
   { key: 'person', label: '인물 기록', value: '생몰년 · 작호 · 소속' },
@@ -212,6 +212,63 @@ export function ActivityFeed({
     return `신규 등록 ${createdCount}건`
   }, [filteredItems])
 
+  const headlineCells = useMemo(() => {
+    const updatedCount = items.filter((item) => item.isUpdated).length
+    const createdCount = items.length - updatedCount
+    const categoryEntries: Array<{ key: ActivityCategory; label: string; count: number }> = [
+      { key: 'person', label: '인물 기록', count: categoryCounts.person },
+      { key: 'event', label: '역사 사건', count: categoryCounts.event },
+      { key: 'governance', label: '통치 · 제도', count: categoryCounts.governance },
+      { key: 'archive', label: '법제 · 지역', count: categoryCounts.archive },
+    ]
+    const activeCategoryCount = categoryEntries.filter((c) => c.count > 0).length
+    const topCategory =
+      [...categoryEntries].sort((a, b) => b.count - a.count)[0] ?? null
+    const latestItem = items[0] ?? null
+
+    return [
+      {
+        label: '집계 활동 건수',
+        value: `${items.length}건`,
+        meta:
+          resolvedFilter === 'all'
+            ? `현재 ${visibleItems.length}건 표시 · ${activeCategoryCount}개 분야`
+            : `필터 ${filteredItems.length}건 중 ${visibleItems.length}건 표시`,
+      },
+      {
+        label: '신규 등록 · 수정 비중',
+        value:
+          updatedCount > 0 && createdCount > 0
+            ? `신규 ${createdCount} · 수정 ${updatedCount}`
+            : updatedCount > 0
+              ? `수정 ${updatedCount}건`
+              : `신규 등록 ${createdCount}건`,
+        meta:
+          items.length > 0
+            ? `신규 ${Math.round((createdCount / items.length) * 100)}% · 수정 ${Math.round((updatedCount / items.length) * 100)}%`
+            : '등록·갱신 이력 집계',
+      },
+      {
+        label: '최다 활동 분야',
+        value:
+          topCategory && topCategory.count > 0
+            ? `${topCategory.label} · ${topCategory.count}건`
+            : '—',
+        meta: categoryEntries
+          .filter((c) => c.count > 0)
+          .map((c) => `${c.label.split(' ')[0]} ${c.count}`)
+          .join(' · ') || '도메인별 집계',
+      },
+      {
+        label: '최근 갱신 기록',
+        value: latestItem ? latestItem.label : '—',
+        meta: latestItem
+          ? `${getKindMeta(latestItem.kind).label} · ${formatRelativeTime(latestItem.createdAt)}`
+          : '최근 기록 시각',
+      },
+    ]
+  }, [items, categoryCounts, resolvedFilter, visibleItems.length, filteredItems.length])
+
   if (items.length === 0 && !isLoading) {
     return (
       <S.ActivityEmptyGrid aria-label="최근 활동 대기 상태">
@@ -251,33 +308,41 @@ export function ActivityFeed({
 
   return (
     <>
-      {(filterTabs.length > 0 || summaryNote) && (
+      {items.length > 0 && (
+        <S.ActivityHeadlineStrip role="group" aria-label="최근 활동 핵심 요약">
+          {headlineCells.map((cell) => (
+            <S.ActivityHeadlineCell key={cell.label}>
+              <S.ActivityHeadlineLabel>{cell.label}</S.ActivityHeadlineLabel>
+              <S.ActivityHeadlineValue>{cell.value}</S.ActivityHeadlineValue>
+              <S.ActivityHeadlineMeta>{cell.meta}</S.ActivityHeadlineMeta>
+            </S.ActivityHeadlineCell>
+          ))}
+        </S.ActivityHeadlineStrip>
+      )}
+
+      {filterTabs.length > 0 && (
         <S.ActivityToolbar>
-          {filterTabs.length > 0 ? (
-            <S.ActivityFilterGroup role="group" aria-label="최근 활동 분류 필터">
-              {filterTabs.map((tab) => {
-                const isActive = resolvedFilter === tab.key
-                return (
-                  <S.ActivityFilterPill
-                    key={tab.key}
-                    type="button"
-                    $active={isActive}
-                    onClick={() => {
-                      setActiveFilter(tab.key)
-                      setExpanded(false)
-                    }}
-                  >
-                    {tab.label}
-                    <S.ActivityFilterCount $active={isActive}>
-                      {tab.count}
-                    </S.ActivityFilterCount>
-                  </S.ActivityFilterPill>
-                )
-              })}
-            </S.ActivityFilterGroup>
-          ) : (
-            <span />
-          )}
+          <S.ActivityFilterGroup role="group" aria-label="최근 활동 분류 필터">
+            {filterTabs.map((tab) => {
+              const isActive = resolvedFilter === tab.key
+              return (
+                <S.ActivityFilterPill
+                  key={tab.key}
+                  type="button"
+                  $active={isActive}
+                  onClick={() => {
+                    setActiveFilter(tab.key)
+                    setExpanded(false)
+                  }}
+                >
+                  {tab.label}
+                  <S.ActivityFilterCount $active={isActive}>
+                    {tab.count}
+                  </S.ActivityFilterCount>
+                </S.ActivityFilterPill>
+              )
+            })}
+          </S.ActivityFilterGroup>
           {summaryNote && (
             <S.ActivitySummaryMeta>{summaryNote}</S.ActivitySummaryMeta>
           )}

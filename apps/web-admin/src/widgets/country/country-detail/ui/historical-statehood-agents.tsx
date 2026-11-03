@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import styled from 'styled-components'
 
 import { FiEdit2, FiFlag, FiPlus } from 'react-icons/fi'
 
@@ -524,6 +525,22 @@ export function HistoricalStatehoodAgents({
         >
           <FiPlus aria-hidden /> {triggerLabel}
         </FillChip>
+      ) : agents.length === 0 ? (
+        <EmptyAgentRow>
+          <EmptyAgentText>
+            미등록 · {side === 'FOUNDING' ? '세운 인물·나라가' : '멸망시킨 인물·나라가'} 아직 없습니다
+          </EmptyAgentText>
+          <EmptyAgentAction
+            type="button"
+            onClick={() => {
+              setAddedThisSession(0)
+              setPickerOpen(true)
+            }}
+          >
+            <FiPlus aria-hidden />{' '}
+            {side === 'FOUNDING' ? '건국 주체 등록' : '멸망 주체 등록'}
+          </EmptyAgentAction>
+        </EmptyAgentRow>
       ) : (
         <RowList>
           {agents.map((agent) => {
@@ -637,3 +654,44 @@ export function HistoricalStatehoodAgents({
     </>
   )
 }
+
+const EmptyAgentRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+`
+
+const EmptyAgentText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptyAgentAction = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.035)'};
+  }
+
+  svg {
+    width: 11px;
+    height: 11px;
+  }
+`

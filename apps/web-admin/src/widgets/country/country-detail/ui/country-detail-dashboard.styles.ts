@@ -619,6 +619,88 @@ export const ActivitySummaryMeta = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+export const ActivityHeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+export const ActivityHeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  min-width: 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+`
+
+export const ActivityHeadlineLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: -0.01em;
+`
+
+export const ActivityHeadlineValue = styled.strong`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+export const ActivityHeadlineMeta = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
 export const ActivityGroupBlock = styled.div`
   display: flex;
   flex-direction: column;
@@ -650,7 +732,7 @@ export const FeedList = styled.ul`
   grid-template-columns: minmax(0, 1fr);
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
 
-  @container (min-width: 740px) {
+  @media (min-width: 820px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 `
@@ -660,7 +742,7 @@ export const FeedItem = styled.li`
   min-width: 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
-  @container (min-width: 740px) {
+  @media (min-width: 820px) {
     &:nth-child(odd) {
       border-right: 1px solid ${({ theme }) => theme.colors.border.light};
       padding-right: 14px;
@@ -834,11 +916,17 @@ export const ActivityToggleBtn = styled.button`
 
 export const ActivityEmptyGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px 24px;
-  padding: 14px 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
 `
 
 export const ActivityEmptyCell = styled.div`
@@ -846,6 +934,37 @@ export const ActivityEmptyCell = styled.div`
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
 `
 
 export const ActivityEmptyLabel = styled.span`

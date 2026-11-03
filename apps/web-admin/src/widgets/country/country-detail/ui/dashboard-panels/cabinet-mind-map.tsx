@@ -1192,7 +1192,7 @@ const CenterFace = styled.span<{
   padding: 4px;
   margin-bottom: 12px;
   border-radius: 999px;
-  border: 2px ${({ $empty }) => ($empty ? 'dashed' : 'solid')}
+  border: 2px solid
     ${({ $monarch, $empty }) =>
       $empty
         ? 'rgba(99, 102, 241, 0.42)'
@@ -1412,7 +1412,7 @@ const ReignCabinetsHeaderRight = styled.div`
 const ReignCabinetsAddBtn = styled.button`
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px dashed rgba(99, 102, 241, 0.45);
+  border: 1px solid rgba(99, 102, 241, 0.45);
   background: transparent;
   font-size: 10.5px;
   font-weight: 700;
@@ -1718,7 +1718,7 @@ const VacantNode = styled.button<{ $side: 'left' | 'right' }>`
   height: ${NODE_HEIGHT}px;
   padding: 0 8px;
   border: none;
-  border-bottom: 1px dashed ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -1754,7 +1754,7 @@ const VacantFace = styled.span`
   border-radius: 50%;
   font-size: 13px;
   font-weight: 700;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 

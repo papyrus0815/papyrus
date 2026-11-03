@@ -2050,17 +2050,142 @@ export function CurrentCabinetPanel({
           ? `부처 ${departments.length}`
           : undefined
 
+  const [cabinetViewMode, setCabinetViewMode] = useState<'mindmap' | 'ledger'>('mindmap')
+
+  const activeSelectionLabel = selectedCabinet
+    ? cabinetLabel(selectedCabinet)
+    : activeFallbackHead
+      ? fallbackHeadLabel(activeFallbackHead)
+      : heads[0]
+        ? `${heads[0].name} · ${heads[0].title}`
+        : null
+
+  const cabinetHeadlineCells = useMemo(() => {
+    const primaryHead = heads[0] ?? null
+    const startStr = primaryHead?.startDate ? shortDate(primaryHead.startDate) : null
+    const endStr = primaryHead?.endDate ? shortDate(primaryHead.endDate) : '현재'
+    const elapsed =
+      primaryHead?.startDate && !primaryHead?.endDate
+        ? elapsedText(primaryHead.startDate)
+        : null
+    const periodLine = startStr
+      ? `${startStr} ~ ${endStr}${elapsed ? ` (${elapsed})` : ''}`
+      : '재임·재위 기간 미상'
+
+    let counterpartValue = primaryHead
+      ? `${primaryHead.name} (${primaryHead.title})`
+      : `${primaryHeadSpec.title} 미등록`
+    let counterpartMeta = [
+      activeRegimeMeta?.label ?? (primaryHead?.isMonarchical ? '군주 치세' : '단일 행정수반 체제'),
+      fallbackHeadTenures.length > 0 || cabinets.length > 0
+        ? `군주·원수 ${fallbackHeadTenures.length}명 · 내각 ${cabinets.length}대`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+
+    if (counterpartHeads.length > 0) {
+      if (effectiveFallbackMode) {
+        counterpartValue = `${primaryHead?.name ?? '군주'} · 동시대 내각 ${counterpartHeads.length}대`
+        counterpartMeta = counterpartHeads
+          .slice(0, 2)
+          .map((cp) => cp.cabinetLabel || cp.name)
+          .join(' · ')
+      } else {
+        const cp = counterpartHeads[0]
+        counterpartValue = `${primaryHead?.name ?? '수반'} · ${cp.name} (${cp.title})`
+        counterpartMeta = [
+          activeRegimeMeta?.label ?? '이원 수반 체제',
+          counterpartHeads.length > 1 ? `동시대 ${counterpartHeads.length}명` : cp.regnalEraLabel,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      }
+    }
+
+    const totalSlots = members.length + mindMapBranchSlots.length
+    const rosterValue =
+      departments.length > 0
+        ? `각료 ${members.length}명 / 부처 ${departments.length}개`
+        : `각료 ${members.length}명${mindMapBranchSlots.length > 0 ? ` · 주요 직위 ${totalSlots}석` : ''}`
+    const rosterMeta = [
+      replacedCount > 0 ? `임기 중 교체 ${replacedCount}자리` : '임기 중 교체 없음',
+      mindMapBranchSlots.length > 0 ? `공석 ${mindMapBranchSlots.length}자리` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+
+    const electionValue = linkedElection
+      ? linkedElection.name
+      : primaryHead?.isMonarchical
+        ? primaryHead.regnalEraLabel || '세습 · 즉위'
+        : elections.length > 0
+          ? `미연결 (선거 ${elections.length}건)`
+          : '연결된 선거 없음'
+    const electionMeta = linkedElection
+      ? [
+          voteShare != null ? `득표율 ${voteShare.toFixed(1)}%` : null,
+          electionDetailQuery.data?.voterTurnoutPercent != null
+            ? `투표율 ${electionDetailQuery.data.voterTurnoutPercent}%`
+            : null,
+          electionDetailQuery.data?.pollDate
+            ? shortDate(electionDetailQuery.data.pollDate)
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || '출범 근거 선거 연결됨'
+      : primaryHead?.isMonarchical
+        ? activePolityLabel ?? '군주 재위 기록 기준'
+        : '수반 임기 ↔ 선거 후보 연결 가능'
+
+    return [
+      {
+        label: effectiveFallbackMode ? '선택 치세 · 재위 기간' : '선택 정권 · 재임 기간',
+        value: activeSelectionLabel ?? '정권·수반 미등록',
+        meta: [activePolityLabel, periodLine].filter(Boolean).join(' · '),
+      },
+      {
+        label: '수반 체제 · 대응 수반',
+        value: counterpartValue,
+        meta: counterpartMeta,
+      },
+      {
+        label: '각료 · 중앙부처 충원',
+        value: rosterValue,
+        meta: rosterMeta,
+      },
+      {
+        label: '출범 근거 · 선거',
+        value: electionValue,
+        meta: electionMeta,
+      },
+    ]
+  }, [
+    heads,
+    primaryHeadSpec.title,
+    activeRegimeMeta?.label,
+    fallbackHeadTenures.length,
+    cabinets.length,
+    counterpartHeads,
+    effectiveFallbackMode,
+    members.length,
+    mindMapBranchSlots.length,
+    departments.length,
+    replacedCount,
+    linkedElection,
+    elections.length,
+    voteShare,
+    electionDetailQuery.data,
+    activePolityLabel,
+    activeSelectionLabel,
+  ])
+
   return (
     <S.Section id="section-cabinet" data-section-count={cabinetSectionCount}>
       <S.SectionTitleRow>
         <S.SectionTitleIcon>
           <IconBriefcase />
         </S.SectionTitleIcon>
-        {/*
-          * '지금'이 아니다. 카드로 과거 정권을 고를 수 있게 된 순간부터 이 지면은
-          * 현재만 말하지 않는다. 선택된 행정부 이름도 헤더에서 뺐다 — 카드가 이미
-          * 이름을 크게 들고 선택 표시까지 한다.
-          */}
         <S.SectionTitleText>행정부 · 군주·수반</S.SectionTitleText>
         <SectionHelpPopover sectionKey="cabinet" />
         {fallbackHeadTenures.length > 0 ? (
@@ -2073,6 +2198,26 @@ export function CurrentCabinetPanel({
           )
         )}
         <HeaderActions>
+          <CabinetViewSwitch role="tablist" aria-label="행정부 보기 방식 전환">
+            <CabinetViewSwitchBtn
+              type="button"
+              role="tab"
+              aria-selected={cabinetViewMode === 'mindmap'}
+              $active={cabinetViewMode === 'mindmap'}
+              onClick={() => setCabinetViewMode('mindmap')}
+            >
+              마인드맵
+            </CabinetViewSwitchBtn>
+            <CabinetViewSwitchBtn
+              type="button"
+              role="tab"
+              aria-selected={cabinetViewMode === 'ledger'}
+              $active={cabinetViewMode === 'ledger'}
+              onClick={() => setCabinetViewMode('ledger')}
+            >
+              2열 원장
+            </CabinetViewSwitchBtn>
+          </CabinetViewSwitch>
           <S.SectionAction
             type="button"
             onClick={() =>
@@ -2110,6 +2255,16 @@ export function CurrentCabinetPanel({
           </S.SectionAction>
         </HeaderActions>
       </S.SectionTitleRow>
+
+      <CabinetHeadlineStrip role="group" aria-label="행정부 · 군주·수반 핵심 요약">
+        {cabinetHeadlineCells.map((cell) => (
+          <CabinetHeadlineCell key={cell.label}>
+            <CabinetHeadlineLabel>{cell.label}</CabinetHeadlineLabel>
+            <CabinetHeadlineValue>{cell.value}</CabinetHeadlineValue>
+            <CabinetHeadlineMeta>{cell.meta}</CabinetHeadlineMeta>
+          </CabinetHeadlineCell>
+        ))}
+      </CabinetHeadlineStrip>
 
       {/*
         통합 2단 실행 띠 — 👑 군주·국가원수 띠와 🏛️ 행정부·내각 띠를 동시에 노출한다.
@@ -2214,6 +2369,264 @@ export function CurrentCabinetPanel({
       <SwitchFade $switching={overviewSwitching} aria-busy={overviewSwitching}>
       {isLoading ? (
         <GovernmentSkeleton />
+      ) : cabinetViewMode === 'ledger' ? (
+        <CabinetLedgerWrap>
+          <CabinetLedgerLeaderGrid>
+            <CabinetLedgerLeaderCell>
+              <CabinetLedgerSectionTitle>
+                <span>{effectiveFallbackMode ? '중심 군주 · 국가원수' : '행정부 수반 · 국가원수'}</span>
+                {activeRegimeMeta?.label && (
+                  <CabinetLedgerBadge>{activeRegimeMeta.label}</CabinetLedgerBadge>
+                )}
+              </CabinetLedgerSectionTitle>
+              {heads[0] ? (
+                <CabinetLedgerLeaderRow
+                  type="button"
+                  onClick={() =>
+                    heads[0]?.personId && onSelectPerson(heads[0].personId)
+                  }
+                >
+                  <Face member={heads[0]} size={42} />
+                  <CabinetLedgerPersonBody>
+                    <CabinetLedgerRoleLine>
+                      <span>
+                        {heads[0].ordinal != null && `제${heads[0].ordinal}대 `}
+                        {heads[0].title}
+                      </span>
+                      {heads[0].regnalEraLabel && (
+                        <CabinetLedgerSubTag>{heads[0].regnalEraLabel}</CabinetLedgerSubTag>
+                      )}
+                      {!heads[0].endDate && (
+                        <CabinetLedgerNowTag>
+                          {heads[0].isMonarchical ? '재위 중' : '현직'}
+                        </CabinetLedgerNowTag>
+                      )}
+                    </CabinetLedgerRoleLine>
+                    <CabinetLedgerPersonName>{heads[0].name}</CabinetLedgerPersonName>
+                  </CabinetLedgerPersonBody>
+                  <CabinetLedgerMetaCol>
+                    <CabinetLedgerDateText>
+                      {heads[0].startDate ? shortDate(heads[0].startDate) : '?'} ~{' '}
+                      {heads[0].endDate ? shortDate(heads[0].endDate) : '현재'}
+                    </CabinetLedgerDateText>
+                    {heads[0].startDate && !heads[0].endDate && (
+                      <CabinetLedgerSubMeta>
+                        {elapsedText(heads[0].startDate)}
+                      </CabinetLedgerSubMeta>
+                    )}
+                  </CabinetLedgerMetaCol>
+                </CabinetLedgerLeaderRow>
+              ) : (
+                <CabinetLedgerEmptyRow>
+                  <CabinetLedgerEmptyText>
+                    미등록 · {primaryHeadSpec.title} 기록이 아직 없습니다
+                  </CabinetLedgerEmptyText>
+                  <CabinetLedgerInlineBtn
+                    type="button"
+                    onClick={() =>
+                      openRegister(
+                        null,
+                        primaryHeadSpec.title,
+                        'head',
+                        null,
+                        polityHosTitle || polityHogTitle
+                          ? primaryHeadSpec.title
+                          : null,
+                        primaryHeadSpec.positionDefinitionId,
+                        primaryHeadSpec.positionType,
+                      )
+                    }
+                  >
+                    + {primaryHeadSpec.title} 등록
+                  </CabinetLedgerInlineBtn>
+                </CabinetLedgerEmptyRow>
+              )}
+            </CabinetLedgerLeaderCell>
+
+            <CabinetLedgerLeaderCell>
+              <CabinetLedgerSectionTitle>
+                <span>
+                  {effectiveFallbackMode
+                    ? `동시대 출범 내각 (${counterpartHeads.length}대)`
+                    : `동시대 대응 수반 · 군주 (${counterpartHeads.length}명)`}
+                </span>
+                {showDualCounterpartRegister && counterpartHeadSpec && (
+                  <CabinetLedgerInlineBtn
+                    type="button"
+                    onClick={() =>
+                      openRegister(
+                        null,
+                        counterpartHeadSpec.title,
+                        'head',
+                        null,
+                        polityHosTitle ? counterpartHeadSpec.title : null,
+                        counterpartHeadSpec.positionDefinitionId,
+                        counterpartHeadSpec.positionType,
+                      )
+                    }
+                  >
+                    + {counterpartHeadSpec.title} 등록
+                  </CabinetLedgerInlineBtn>
+                )}
+              </CabinetLedgerSectionTitle>
+              {counterpartHeads.length > 0 ? (
+                <CabinetLedgerCounterpartList>
+                  {counterpartHeads.map((cp) => (
+                    <CabinetLedgerLeaderRow
+                      key={cp.id}
+                      type="button"
+                      onClick={() => {
+                        if (effectiveFallbackMode && cp.cabinetId) {
+                          selectCabinet(cp.cabinetId)
+                          return
+                        }
+                        if (
+                          !effectiveFallbackMode &&
+                          fallbackHeadTenures.some((row) => row.id === cp.id)
+                        ) {
+                          selectFallbackHead(cp.id)
+                          return
+                        }
+                        if (cp.personId) {
+                          onSelectPerson(cp.personId)
+                        }
+                      }}
+                    >
+                      <Face member={cp} size={36} />
+                      <CabinetLedgerPersonBody>
+                        <CabinetLedgerRoleLine>
+                          <span>
+                            {cp.ordinal != null && `제${cp.ordinal}대 `}
+                            {cp.title}
+                          </span>
+                          {cp.cabinetLabel && (
+                            <CabinetLedgerSubTag>{cp.cabinetLabel}</CabinetLedgerSubTag>
+                          )}
+                        </CabinetLedgerRoleLine>
+                        <CabinetLedgerPersonName>{cp.name}</CabinetLedgerPersonName>
+                      </CabinetLedgerPersonBody>
+                      <CabinetLedgerMetaCol>
+                        <CabinetLedgerDateText>
+                          {cp.startDate ? shortDate(cp.startDate) : '?'} ~{' '}
+                          {cp.endDate ? shortDate(cp.endDate) : '현재'}
+                        </CabinetLedgerDateText>
+                        <CabinetLedgerSwitchHint>
+                          {effectiveFallbackMode ? '내각 전환 →' : '치세 보기 →'}
+                        </CabinetLedgerSwitchHint>
+                      </CabinetLedgerMetaCol>
+                    </CabinetLedgerLeaderRow>
+                  ))}
+                </CabinetLedgerCounterpartList>
+              ) : (
+                <CabinetLedgerEmptyRow>
+                  <CabinetLedgerEmptyText>
+                    {effectiveFallbackMode
+                      ? '해당 군주·원수 재위 기간에 연결된 내각이 없습니다'
+                      : '단일 수반 체제이거나 동시대 대응 수반 기록이 없습니다'}
+                  </CabinetLedgerEmptyText>
+                  {effectiveFallbackMode && (
+                    <CabinetLedgerInlineBtn
+                      type="button"
+                      onClick={() =>
+                        openRegister(
+                          null,
+                          primaryHeadSpec.title,
+                          'head',
+                          null,
+                          polityHosTitle || polityHogTitle
+                            ? primaryHeadSpec.title
+                            : null,
+                          primaryHeadSpec.positionDefinitionId,
+                          primaryHeadSpec.positionType,
+                        )
+                      }
+                    >
+                      + 내각 수반 등록
+                    </CabinetLedgerInlineBtn>
+                  )}
+                </CabinetLedgerEmptyRow>
+              )}
+            </CabinetLedgerLeaderCell>
+          </CabinetLedgerLeaderGrid>
+
+          <CabinetLedgerRosterHeader>
+            <CabinetLedgerSectionTitle>
+              <span>각료 · 중앙부처 명세 원장</span>
+              <CabinetLedgerBadge>
+                재임 {members.length}명
+                {mindMapBranchSlots.length > 0 && ` · 공석 ${mindMapBranchSlots.length}자리`}
+              </CabinetLedgerBadge>
+            </CabinetLedgerSectionTitle>
+            <CabinetLedgerRosterActions>
+              <CabinetLedgerInlineBtn
+                type="button"
+                onClick={() => setSetupOpen(true)}
+              >
+                부처 구성 · 관리
+              </CabinetLedgerInlineBtn>
+              <CabinetLedgerInlineBtn
+                type="button"
+                onClick={() => openRegister(null, '각료', 'minister')}
+              >
+                + 각료 직접 등록
+              </CabinetLedgerInlineBtn>
+            </CabinetLedgerRosterActions>
+          </CabinetLedgerRosterHeader>
+
+          <CabinetLedgerRosterGrid>
+            {members.map((member, idx) => (
+              <CabinetLedgerMemberCell
+                key={member.id}
+                type="button"
+                onClick={() => member.personId && onSelectPerson(member.personId)}
+              >
+                <CabinetLedgerRank>{idx + 1}</CabinetLedgerRank>
+                <Face member={member} size={34} muted />
+                <CabinetLedgerPersonBody>
+                  <CabinetLedgerRoleLine>
+                    <span>{member.title}</span>
+                    {member.replaced && (
+                      <CabinetLedgerReplacedTag>
+                        교체{member.predecessor ? ` (전임 ${member.predecessor})` : ''}
+                      </CabinetLedgerReplacedTag>
+                    )}
+                  </CabinetLedgerRoleLine>
+                  <CabinetLedgerPersonName>{member.name}</CabinetLedgerPersonName>
+                </CabinetLedgerPersonBody>
+                <CabinetLedgerMetaCol>
+                  <CabinetLedgerDateText>
+                    {member.startDate ? shortDate(member.startDate) : '?'} ~{' '}
+                    {member.endDate ? shortDate(member.endDate) : '현재'}
+                  </CabinetLedgerDateText>
+                </CabinetLedgerMetaCol>
+              </CabinetLedgerMemberCell>
+            ))}
+
+            {mindMapBranchSlots.map((slot) => (
+              <CabinetLedgerVacantCell
+                key={slot.key}
+                type="button"
+                onClick={slot.onClick}
+              >
+                <CabinetLedgerRank $vacant>—</CabinetLedgerRank>
+                <CabinetLedgerPersonBody>
+                  <CabinetLedgerRoleLine>
+                    <span>{slot.title}</span>
+                    {slot.subtitle && slot.subtitle !== slot.title && (
+                      <CabinetLedgerSubMeta>{slot.subtitle}</CabinetLedgerSubMeta>
+                    )}
+                  </CabinetLedgerRoleLine>
+                  <CabinetLedgerVacantText>공석 · 미등록</CabinetLedgerVacantText>
+                </CabinetLedgerPersonBody>
+                <CabinetLedgerMetaCol>
+                  <CabinetLedgerAssignHint>+ 임명 등록</CabinetLedgerAssignHint>
+                </CabinetLedgerMetaCol>
+              </CabinetLedgerVacantCell>
+            ))}
+          </CabinetLedgerRosterGrid>
+
+          {electionSlot}
+        </CabinetLedgerWrap>
       ) : (
         <CabinetMindMap
           showPosition={
@@ -2915,7 +3328,7 @@ const slotBase = `
   gap: 10px;
   width: 100%;
   border-radius: 10px;
-  border: 1px dashed;
+  border: 1px solid;
   background: none;
   text-align: left;
   cursor: pointer;
@@ -2973,7 +3386,7 @@ const SlotMain = styled.button<{ $filled?: boolean }>`
   height: 54px;
   padding: 0 60px 0 12px;
   border-radius: 12px;
-  border-style: ${({ $filled }) => ($filled ? 'solid' : 'dashed')};
+  border-style: solid;
   border-color: ${({ theme }) => theme.colors.border.medium};
   background: ${({ theme }) => theme.colors.background.primary};
   font-family: inherit;
@@ -3063,7 +3476,7 @@ const DualEmptyCard = styled.button<{ $monarch?: boolean }>`
   width: 100%;
   padding: 16px 18px;
   border-radius: 16px;
-  border: 1px dashed
+  border: 1px solid
     ${({ $monarch, theme }) =>
       $monarch
         ? theme.mode === 'dark'
@@ -3108,7 +3521,7 @@ const DualEmptyAvatar = styled.span<{ $monarch?: boolean }>`
   border-radius: 50%;
   font-size: 22px;
   line-height: 1;
-  border: 1.5px dashed
+  border: 1.5px solid
     ${({ $monarch }) =>
       $monarch ? 'rgba(217, 119, 6, 0.5)' : 'rgba(99, 102, 241, 0.45)'};
   background: ${({ $monarch, theme }) =>
@@ -3216,8 +3629,7 @@ const SlotCircle = styled.span<{ $filled?: boolean }>`
   border-radius: 50%;
   font-size: 13px;
   font-weight: 700;
-  border: 1px ${({ $filled }) => ($filled ? 'solid' : 'dashed')}
-    ${({ theme }) => theme.colors.border.medium};
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
   background: ${({ $filled, theme }) =>
     $filled
       ? theme.mode === 'dark'
@@ -3279,7 +3691,7 @@ const EmptyHeadCard = styled.button`
   margin-bottom: 16px;
   padding: 18px 22px;
   border-radius: 20px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
   background: ${({ theme }) => theme.colors.background.primary};
   font-family: inherit;
   text-align: left;
@@ -3309,7 +3721,7 @@ const EmptyFace = styled.span`
   width: 112px;
   height: 112px;
   border-radius: 50%;
-  border: 2px dashed rgba(99, 102, 241, 0.35);
+  border: 2px solid rgba(99, 102, 241, 0.35);
   color: rgba(99, 102, 241, 0.65);
 `
 
@@ -3918,7 +4330,7 @@ const PresetChips = styled.div`
 const PresetChip = styled.button`
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: none;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 12px;
@@ -4253,7 +4665,7 @@ const TrackEmptyAction = styled.button`
   gap: 6px;
   padding: 5px 12px;
   border-radius: 999px;
-  border: 1px dashed rgba(99, 102, 241, 0.42);
+  border: 1px solid rgba(99, 102, 241, 0.42);
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(99, 102, 241, 0.08)'
@@ -4301,4 +4713,432 @@ const SwitchFade = styled.div<{ $switching: boolean }>`
   opacity: ${({ $switching }) => ($switching ? 0.4 : 1)};
   pointer-events: ${({ $switching }) => ($switching ? 'none' : 'auto')};
   transition: opacity 0.15s ease;
+`
+
+/* ─── 상단 4칸 요약 스트립 + 보기 방식 전환 + 2열 원장 ─────────────────── */
+
+const CabinetViewSwitch = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.045)' : 'rgba(15,23,42,0.04)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const CabinetViewSwitchBtn = styled.button<{ $active: boolean }>`
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+  box-shadow: ${({ $active }) =>
+    $active ? '0 1px 2px rgba(15, 23, 42, 0.08)' : 'none'};
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const CabinetHeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const CabinetHeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  min-width: 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+`
+
+const CabinetHeadlineLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: -0.01em;
+`
+
+const CabinetHeadlineValue = styled.strong`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const CabinetHeadlineMeta = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const CabinetLedgerWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`
+
+const CabinetLedgerLeaderGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 820px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const CabinetLedgerLeaderCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  min-width: 0;
+
+  &:first-child {
+    padding-left: 4px;
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  &:last-child {
+    padding-right: 4px;
+  }
+
+  @media (max-width: 820px) {
+    padding: 10px 4px;
+
+    &:first-child {
+      border-right: none;
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const CabinetLedgerSectionTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CabinetLedgerBadge = styled.span`
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
+const CabinetLedgerCounterpartList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const CabinetLedgerLeaderRow = styled.button`
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const CabinetLedgerPersonBody = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const CabinetLedgerRoleLine = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CabinetLedgerPersonName = styled.strong`
+  font-size: 14px;
+  font-weight: 750;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const CabinetLedgerSubTag = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+`
+
+const CabinetLedgerNowTag = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.12);
+`
+
+const CabinetLedgerReplacedTag = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.18)' : '#fef3c7'};
+`
+
+const CabinetLedgerMetaCol = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+`
+
+const CabinetLedgerDateText = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CabinetLedgerSubMeta = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CabinetLedgerSwitchHint = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+`
+
+const CabinetLedgerEmptyRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+`
+
+const CabinetLedgerEmptyText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CabinetLedgerInlineBtn = styled.button`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const CabinetLedgerRosterHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const CabinetLedgerRosterActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const CabinetLedgerRosterGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @media (max-width: 820px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const CabinetLedgerMemberCell = styled.button`
+  appearance: none;
+  display: grid;
+  grid-template-columns: 22px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:nth-child(odd) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+
+  @media (max-width: 820px) {
+    &:nth-child(odd) {
+      border-right: none;
+    }
+  }
+`
+
+const CabinetLedgerVacantCell = styled.button`
+  appearance: none;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:nth-child(odd) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+
+  @media (max-width: 820px) {
+    &:nth-child(odd) {
+      border-right: none;
+    }
+  }
+`
+
+const CabinetLedgerRank = styled.span<{ $vacant?: boolean }>`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $vacant }) =>
+    $vacant ? theme.colors.text.tertiary : theme.colors.text.secondary};
+  text-align: center;
+`
+
+const CabinetLedgerVacantText = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CabinetLedgerAssignHint = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
 `

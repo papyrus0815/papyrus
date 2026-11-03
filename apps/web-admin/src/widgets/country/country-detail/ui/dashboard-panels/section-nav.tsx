@@ -104,8 +104,13 @@ export function SectionNav({ rootRef }: SectionNavProps) {
           if (label) {
             const countEl =
               heading?.parentElement?.querySelector('[data-section-count]') ??
+              section.querySelector('[data-section-count]') ??
               null
-            const count = compactCountText(countEl?.textContent)
+            const rawCount =
+              countEl?.textContent ||
+              countEl?.getAttribute('data-section-count') ||
+              section.getAttribute('data-section-count')
+            const count = compactCountText(rawCount)
             next.push({ label, count, element: section })
           }
         }
@@ -129,6 +134,8 @@ export function SectionNav({ rootRef }: SectionNavProps) {
       childList: true,
       subtree: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ['data-section-count'],
     })
     return () => {
       observer.disconnect()
