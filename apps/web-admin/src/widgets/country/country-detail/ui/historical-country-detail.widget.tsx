@@ -1438,6 +1438,32 @@ function HistoricalOverviewSection({
                 isLoading={stats.loading.persons || stats.loading.events}
                 onPersonClick={goPerson}
                 onEventClick={(eventId) => setPreviewEventId(eventId)}
+                onNavigateDomain={(kind, _refId, personId) => {
+                  if (kind === 'tenure') {
+                    if (personId) goPerson(personId)
+                    else onGoToTab('heads')
+                    return
+                  }
+                  if (
+                    kind === 'political-system' ||
+                    kind === 'cabinet' ||
+                    kind === 'department'
+                  ) {
+                    onGoToTab('government')
+                    return
+                  }
+                  if (kind === 'law') {
+                    onGoToTab('laws')
+                    return
+                  }
+                  if (kind === 'treaty') {
+                    onGoToTab('treaty')
+                    return
+                  }
+                  if (kind === 'election') {
+                    onGoToTab('elections')
+                  }
+                }}
               />
             </DashboardStyles.FeedPanel>
           </DashboardStyles.Section>

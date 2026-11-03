@@ -1057,6 +1057,40 @@ export function CountryDetailDashboard({
               isLoading={stats.loading.activity}
               onPersonClick={(personId) => setPreviewPersonId(personId)}
               onEventClick={(eventId) => setPreviewEventId(eventId)}
+              onNavigateDomain={(kind, refId, personId) => {
+                if (kind === 'tenure') {
+                  if (personId) setPreviewPersonId(personId)
+                  else goGovernment('heads')
+                  return
+                }
+                if (kind === 'political-system') {
+                  goPoliticalSystem()
+                  return
+                }
+                if (kind === 'cabinet') {
+                  goGovernment('cabinets', refId)
+                  return
+                }
+                if (kind === 'department') {
+                  goGovernment('ministries')
+                  return
+                }
+                if (kind === 'election') {
+                  goElections()
+                  return
+                }
+                if (kind === 'law') {
+                  goLaws()
+                  return
+                }
+                if (kind === 'treaty') {
+                  goTreaty()
+                  return
+                }
+                if (kind === 'city') {
+                  goRegions()
+                }
+              }}
             />
           </S.FeedPanel>
         </S.Section>

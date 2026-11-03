@@ -4,6 +4,12 @@ import { useQueries } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { politicalSystemKeys } from '@/entities/political-system/api'
+import {
+  formatPeriod as formatPoliticalSystemPeriod,
+  GOVERNMENT_FORM_LABEL,
+  headOfGovernmentTitleOf,
+  headOfStateTitleOf,
+} from '@/entities/political-system/model/political-system'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { cityApi } from '@/shared/api/city'
@@ -26,7 +32,19 @@ export interface RecentPersonItem {
   profileImageUrl?: string | null
 }
 
-export type ActivityKind = 'person' | 'event'
+export type ActivityKind =
+  | 'person'
+  | 'event'
+  | 'tenure'
+  | 'political-system'
+  | 'cabinet'
+  | 'department'
+  | 'election'
+  | 'law'
+  | 'treaty'
+  | 'city'
+
+export type ActivityCategory = 'person' | 'event' | 'governance' | 'archive'
 
 /** 달력 한 칸에 찍히는 사건 */
 export interface CalendarEventItem {
@@ -44,9 +62,17 @@ export interface CalendarEventItem {
 export interface RecentActivityItem {
   id: string
   kind: ActivityKind
+  category?: ActivityCategory
   refId: string
+  /** 재임(tenure) 등 인물과 연결된 항목일 때 인물 미리보기 연동용 */
+  personId?: string | null
   label: string
+  /** 시대·생몰년·소속 국가·직함·기간 등 보조 맥락 한 줄 */
+  subLabel?: string | null
+  /** 활동 기준 시각 (updatedAt 우선, 없으면 createdAt) */
   createdAt: string
+  /** 생성 이후 수정된 기록인지 여부 */
+  isUpdated?: boolean
   profileImageUrl?: string | null
   startDate?: string | null
   endDate?: string | null
@@ -194,37 +220,221 @@ const HEAD_TYPES = new Set(['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'])
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
 
 /** 최근 활동 피드에 올릴 최대 줄 수 */
-const ACTIVITY_FEED_LIMIT = 10
-/** 그 중 한 종류가 먼저 차지할 수 있는 몫 */
-const ACTIVITY_KIND_QUOTA = 5
+const ACTIVITY_FEED_LIMIT = 16
+/** 그 중 한 종류(도메인 묶음)가 먼저 차지할 수 있는 기본 몫 */
+const ACTIVITY_KIND_QUOTA = 4
 
 const byCreatedAtDesc = (a: RecentActivityItem, b: RecentActivityItem) =>
   new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
 
 /**
- * 인물·사건을 종류별 몫을 먼저 떼고 합친다.
+ * 레코드의 생성·수정 시각 중 최신 활동 시각을 추출하고 수정 여부를 판별한다.
+ * 생성 직후(60초 이내) 자동 후처리된 updatedAt은 신규 등록으로 간주한다.
+ */
+export function resolveActivityTimestamp(rec: any): {
+  activityAt: string
+  isUpdated: boolean
+} {
+  const created = String(rec?.createdAt ?? rec?.created_at ?? '').trim()
+  const updated = String(rec?.updatedAt ?? rec?.updated_at ?? '').trim()
+  const cTime = created ? new Date(created).getTime() : NaN
+  const uTime = updated ? new Date(updated).getTime() : NaN
+  if (Number.isFinite(uTime) && Number.isFinite(cTime) && uTime - cTime > 60_000) {
+    return { activityAt: updated, isUpdated: true }
+  }
+  if (Number.isFinite(cTime)) {
+    return { activityAt: created, isUpdated: false }
+  }
+  if (Number.isFinite(uTime)) {
+    return { activityAt: updated, isUpdated: false }
+  }
+  return { activityAt: '', isUpdated: false }
+}
+
+export function formatActivityYearFromIso(
+  isoOrDate?: string | null,
+  era?: string | null,
+  yearNum?: number | null,
+): string | null {
+  if (yearNum != null && Number.isFinite(Number(yearNum)) && Number(yearNum) !== 0) {
+    const absY = Math.abs(Number(yearNum))
+    const isBc = era === 'BC' || Number(yearNum) < 0
+    return isBc ? `BC ${absY}년` : `${absY}년`
+  }
+  if (typeof isoOrDate !== 'string' || !isoOrDate.trim()) return null
+  const matched = /^(-?)(\d{1,6})(?:-(\d{2})-(\d{2}))?/.exec(isoOrDate.trim())
+  if (!matched) return null
+  const y = Number(matched[2])
+  if (!Number.isFinite(y) || y === 0) return null
+  const isBc = matched[1] === '-' || era === 'BC'
+  return isBc ? `BC ${y}년` : `${y}년`
+}
+
+export function formatPersonSubLabel(
+  person: any,
+  fallbackPolityName?: string | null,
+  currentCountryName?: string | null,
+): string | null {
+  const parts: string[] = []
+  const honorific =
+    person?.regnalName?.trim() ||
+    person?.templeName?.trim() ||
+    person?.posthumousName?.trim() ||
+    person?.preEnthronementTitle?.trim() ||
+    person?.job?.name?.trim() ||
+    person?.dynasty?.name?.trim() ||
+    null
+  if (honorific && honorific !== person?.name?.trim()) {
+    parts.push(honorific)
+  }
+
+  const bYear = formatActivityYearFromIso(
+    person?.birthDate,
+    person?.birthEra,
+    person?.birthYear,
+  )
+  const dYear = person?.isAlive
+    ? '현재'
+    : formatActivityYearFromIso(
+        person?.deathDate,
+        person?.deathEra,
+        person?.deathYear,
+      )
+  if (bYear && dYear) {
+    parts.push(`${bYear.replace(/년$/, '')}–${dYear}`)
+  } else if (bYear) {
+    parts.push(`${bYear}생`)
+  } else if (dYear && dYear !== '현재') {
+    parts.push(`${dYear}몰`)
+  }
+
+  const polity =
+    fallbackPolityName?.trim() ||
+    (person?.country?.isHistorical ? person?.country?.name?.trim() : null) ||
+    null
+  if (polity && polity !== currentCountryName?.trim()) {
+    parts.push(polity)
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+export function formatEventSubLabel(
+  event: any,
+  currentCountryName?: string | null,
+): string | null {
+  const parts: string[] = []
+  const startYear = formatActivityYearFromIso(
+    event?.startDate,
+    event?.startEra,
+    event?.startYear,
+  )
+  const endYear = formatActivityYearFromIso(
+    event?.endDate,
+    event?.endEra,
+    event?.endYear,
+  )
+
+  if (startYear && endYear && startYear !== endYear) {
+    parts.push(`${startYear.replace(/년$/, '')}–${endYear}`)
+  } else if (startYear) {
+    const rawStart = typeof event?.startDate === 'string' ? event.startDate.trim() : ''
+    const mdMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(rawStart)
+    if (
+      mdMatch &&
+      event?.isDayKnown !== false &&
+      !(mdMatch[2] === '01' && mdMatch[3] === '01')
+    ) {
+      parts.push(`${Number(mdMatch[1])}.${mdMatch[2]}.${mdMatch[3]}`)
+    } else {
+      parts.push(startYear)
+    }
+  }
+
+  const polity =
+    event?.historicalCountry?.name?.trim() ||
+    (event?.country?.isHistorical ? event?.country?.name?.trim() : null) ||
+    null
+  if (polity && polity !== currentCountryName?.trim()) {
+    parts.push(polity)
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+/**
+ * 도메인 묶음별 활동 내역을 균형 있게 합친다.
  *
- * 예전엔 그냥 합쳐 `createdAt` 순 10건을 잘랐다. 기록은 시딩 배치 단위로 한꺼번에
- * 들어오므로 가장 늦게 들어온 배치 하나가 열 줄을 통째로 먹는다 — 미국은 사건이
- * 41건 있는데도 피드가 각료 10명으로만 채워졌다. 각 종류에서 먼저 몫만큼 뽑고,
- * 남는 자리만 최신순으로 메운다.
+ * 1) 최근 7일 이내에 새로 등록·수정된 항목은 실제 사용자의 최근 편집이므로
+ *    종류에 상관없이 먼저 우선 반영한다(단, 한 묶음 일괄 시딩이 전부를 덮지 않게 묶음당 최대 6건).
+ * 2) 나머지 자리는 각 도메인 묶음에서 최소 몫(ACTIVITY_KIND_QUOTA)을 먼저 떼고,
+ *    남는 자리를 최신순으로 채운다.
  */
 export function pickWithKindQuota(
-  persons: RecentActivityItem[],
-  events: RecentActivityItem[],
+  ...groups: RecentActivityItem[][]
 ): RecentActivityItem[] {
-  const sortedPersons = [...persons].sort(byCreatedAtDesc)
-  const sortedEvents = [...events].sort(byCreatedAtDesc)
-  const picked = [
-    ...sortedPersons.slice(0, ACTIVITY_KIND_QUOTA),
-    ...sortedEvents.slice(0, ACTIVITY_KIND_QUOTA),
-  ]
-  // 한쪽이 몫을 다 못 채우면 그 자리는 다른 쪽 최신 기록으로 메운다
-  const leftover = [
-    ...sortedPersons.slice(ACTIVITY_KIND_QUOTA),
-    ...sortedEvents.slice(ACTIVITY_KIND_QUOTA),
-  ].sort(byCreatedAtDesc)
-  picked.push(...leftover.slice(0, Math.max(0, ACTIVITY_FEED_LIMIT - picked.length)))
+  const nonEmptyGroups = groups
+    .map((group) => [...group].sort(byCreatedAtDesc))
+    .filter((group) => group.length > 0)
+  if (nonEmptyGroups.length === 0) return []
+
+  const recentCutoff = Date.now() - SEVEN_DAYS_MS
+  const pickedIds = new Set<string>()
+  const picked: RecentActivityItem[] = []
+
+  // 1단계: 최근 7일 내 실제 활동 우선 수집 (묶음당 최대 6건)
+  const recentCandidates: RecentActivityItem[] = []
+  for (const group of nonEmptyGroups) {
+    const recentInGroup = group
+      .filter((item) => {
+        const ts = new Date(item.createdAt).getTime()
+        return Number.isFinite(ts) && ts >= recentCutoff
+      })
+      .slice(0, 6)
+    recentCandidates.push(...recentInGroup)
+  }
+  recentCandidates.sort(byCreatedAtDesc)
+  for (const item of recentCandidates) {
+    if (picked.length >= ACTIVITY_FEED_LIMIT) break
+    if (!pickedIds.has(item.id)) {
+      pickedIds.add(item.id)
+      picked.push(item)
+    }
+  }
+
+  // 2단계: 각 도메인 묶음에서 최소 몫(ACTIVITY_KIND_QUOTA) 보장
+  const quotaPerGroup = Math.max(
+    2,
+    Math.min(
+      ACTIVITY_KIND_QUOTA,
+      Math.floor(ACTIVITY_FEED_LIMIT / nonEmptyGroups.length),
+    ),
+  )
+  for (const group of nonEmptyGroups) {
+    let count = 0
+    for (const item of group) {
+      if (count >= quotaPerGroup || picked.length >= ACTIVITY_FEED_LIMIT) break
+      if (!pickedIds.has(item.id)) {
+        pickedIds.add(item.id)
+        picked.push(item)
+        count++
+      }
+    }
+  }
+
+  // 3단계: 남는 슬롯을 전체 최신순으로 보충
+  if (picked.length < ACTIVITY_FEED_LIMIT) {
+    const leftover = nonEmptyGroups
+      .flat()
+      .filter((item) => !pickedIds.has(item.id))
+      .sort(byCreatedAtDesc)
+    for (const item of leftover) {
+      if (picked.length >= ACTIVITY_FEED_LIMIT) break
+      pickedIds.add(item.id)
+      picked.push(item)
+    }
+  }
+
   return picked.sort(byCreatedAtDesc).slice(0, ACTIVITY_FEED_LIMIT)
 }
 
@@ -376,20 +586,30 @@ export function useCountryDashboardStats(
     return (sorted[0] as { id?: string } | undefined)?.id ?? null
   }, [cabinetsQuery.data])
 
-  // 현대 국가 묶음 + 연결된 과거 국가 묶음의 인물을 id 기준으로 합집합
-  const persons = useMemo<PersonResponseDto[]>(() => {
+  // 현대 국가 묶음 + 연결된 과거 국가 묶음의 인물을 id 기준으로 합집합 + 소속 과거국가 이름 매핑
+  const { persons, personPolityById } = useMemo<{
+    persons: PersonResponseDto[]
+    personPolityById: Map<string, string>
+  }>(() => {
     const grouped = personsQuery.data
-    if (!grouped) return []
     const byId = new Map<string, PersonResponseDto>()
+    const polityMap = new Map<string, string>()
+    if (!grouped) return { persons: [], personPolityById: polityMap }
     for (const p of grouped.modern ?? []) {
       if (p?.id) byId.set(p.id, p)
     }
     for (const group of grouped.historical ?? []) {
+      const polityName = group.historicalCountryName?.trim() || ''
       for (const p of group.persons ?? []) {
-        if (p?.id && !byId.has(p.id)) byId.set(p.id, p)
+        if (p?.id) {
+          if (!byId.has(p.id)) byId.set(p.id, p)
+          if (polityName && !polityMap.has(p.id)) {
+            polityMap.set(p.id, polityName)
+          }
+        }
       }
     }
-    return [...byId.values()]
+    return { persons: [...byId.values()], personPolityById: polityMap }
   }, [personsQuery.data])
 
   const personCount = persons.length
@@ -523,27 +743,278 @@ export function useCountryDashboardStats(
   }, [persons, country?.defaultNameDisplayOrder])
 
   const recentActivity = useMemo((): RecentActivityItem[] => {
-    const persons = recentPersons.map<RecentActivityItem>((p) => ({
-      id: `person-${p.id}`,
-      kind: 'person',
-      refId: p.id,
-      label: p.displayName,
-      createdAt: p.createdAt,
-      profileImageUrl: p.profileImageUrl,
-    }))
-    const events = ((eventsQuery.data ?? []) as any[])
-      .map<RecentActivityItem>((e) => ({
-        id: `event-${e.id}`,
-        kind: 'event',
-        refId: e.id,
-        label: e.title ?? '제목 없음',
-        createdAt: e.createdAt ?? e.created_at ?? '',
-        startDate: e.startDate ?? null,
-        endDate: e.endDate ?? null,
-      }))
-      .filter((e) => e.createdAt)
-    return pickWithKindQuota(persons, events)
-  }, [recentPersons, eventsQuery.data])
+    const currentCountryName = country?.name ?? null
+    const defaultOrder = country?.defaultNameDisplayOrder ?? null
+
+    const personItems = (persons as any[])
+      .map<RecentActivityItem>((p) => {
+        const { activityAt, isUpdated } = resolveActivityTimestamp(p)
+        const order = p.country?.defaultNameDisplayOrder ?? defaultOrder
+        const displayName =
+          getPersonDisplayName(
+            {
+              name: p.name ?? '',
+              surname: p.surname,
+              middleName: p.middleName,
+              nameDisplayOrder: p.nameDisplayOrder ?? null,
+              country: p.country ?? undefined,
+            },
+            order != null ? { countryDefaultNameDisplayOrder: order } : undefined,
+          ) ||
+          p.name ||
+          p.surname ||
+          '이름 없음'
+        return {
+          id: `person-${p.id}`,
+          kind: 'person',
+          category: 'person',
+          refId: p.id ?? '',
+          personId: p.id ?? null,
+          label: displayName,
+          subLabel: formatPersonSubLabel(
+            p,
+            personPolityById.get(p.id) ?? null,
+            currentCountryName,
+          ),
+          createdAt: activityAt,
+          isUpdated,
+          profileImageUrl: p.profileImageUrl ?? p.profile_image_url ?? null,
+        }
+      })
+      .filter((item) => item.refId && item.createdAt)
+
+    const eventItems = ((eventsQuery.data ?? []) as any[])
+      .map<RecentActivityItem>((e) => {
+        const { activityAt, isUpdated } = resolveActivityTimestamp(e)
+        return {
+          id: `event-${e.id}`,
+          kind: 'event',
+          category: 'event',
+          refId: e.id ?? '',
+          label: e.title?.trim() || '제목 없음',
+          subLabel: formatEventSubLabel(e, currentCountryName),
+          createdAt: activityAt,
+          isUpdated,
+          startDate: e.startDate ?? null,
+          endDate: e.endDate ?? null,
+        }
+      })
+      .filter((item) => item.refId && item.createdAt)
+
+    const governanceItems: RecentActivityItem[] = []
+
+    for (const sys of (politicalSystemsQuery.data ?? []) as any[]) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(sys)
+      if (!sys?.id || !activityAt) continue
+      const formLabel =
+        (sys.governmentForm &&
+          (GOVERNMENT_FORM_LABEL as Record<string, string>)[sys.governmentForm]) ||
+        sys.title?.trim() ||
+        '정체'
+      const hos = headOfStateTitleOf(sys)
+      const hog = headOfGovernmentTitleOf(sys)
+      const headSummary =
+        hos && hog && hos !== hog
+          ? `${hos} · ${hog}`
+          : hos || hog || null
+      const periodText = formatPoliticalSystemPeriod(sys)
+      const subParts = [
+        sys.title?.trim() && sys.title.trim() !== formLabel ? sys.title.trim() : null,
+        headSummary ? `수장: ${headSummary}` : null,
+        periodText !== '기간 미상' ? periodText : null,
+        sys.historicalCountry?.name && sys.historicalCountry.name !== currentCountryName
+          ? sys.historicalCountry.name
+          : null,
+      ].filter(Boolean)
+      governanceItems.push({
+        id: `political-system-${sys.id}`,
+        kind: 'political-system',
+        category: 'governance',
+        refId: sys.id,
+        label: formLabel,
+        subLabel: subParts.length > 0 ? subParts.join(' · ') : '헌법·통치 체제',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
+    for (const t of (tenuresQuery.data ?? []) as any[]) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(t)
+      if (!t?.id || !activityAt) continue
+      const order = t.person?.country?.defaultNameDisplayOrder ?? defaultOrder
+      const personName =
+        t.regnalName?.trim() ||
+        getPersonDisplayName(
+          {
+            name: t.person?.name ?? '',
+            surname: t.person?.surname,
+            middleName: t.person?.middleName,
+            nameDisplayOrder: t.person?.nameDisplayOrder ?? null,
+            country: t.person?.country ?? undefined,
+          },
+          order != null ? { countryDefaultNameDisplayOrder: order } : undefined,
+        ) ||
+        t.person?.name ||
+        '인물 미상'
+      const posTitle =
+        t.title?.trim() ||
+        t.positionDefinition?.title?.trim() ||
+        t.administrationDepartment?.name?.trim() ||
+        '재임'
+      const posType =
+        t.positionType ??
+        t.positionDefinition?.positionType ??
+        t.position?.positionType
+      const roleKindLabel =
+        posType === 'HEAD_OF_STATE'
+          ? '국가원수'
+          : posType === 'HEAD_OF_GOVERNMENT'
+            ? '정부수반'
+            : posType === 'MINISTER'
+              ? t.administrationDepartment?.name?.trim() || '각료'
+              : '공직'
+      const startY = formatActivityYearFromIso(t.startDate, t.startEra, t.startYear)
+      const endY = t.endDate || t.endYear != null
+        ? formatActivityYearFromIso(t.endDate, t.endEra, t.endYear)
+        : '현재'
+      const spanText =
+        startY && endY
+          ? startY === endY
+            ? startY
+            : `${startY.replace(/년$/, '')}–${endY}`
+          : startY || null
+      const subParts = [roleKindLabel, spanText].filter(Boolean)
+      governanceItems.push({
+        id: `tenure-${t.id}`,
+        kind: 'tenure',
+        category: 'governance',
+        refId: t.id,
+        personId: t.person?.id ?? t.personId ?? null,
+        label: `${personName} · ${posTitle}`,
+        subLabel: subParts.length > 0 ? subParts.join(' · ') : null,
+        createdAt: activityAt,
+        isUpdated,
+        profileImageUrl:
+          t.person?.profileImageUrl ?? t.person?.profile_image_url ?? null,
+      })
+    }
+
+    for (const cab of (cabinetsQuery.data ?? []) as any[]) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(cab)
+      if (!cab?.id || !activityAt) continue
+      const startY = formatActivityYearFromIso(cab.headTenure?.startDate)
+      const endY = cab.headTenure?.endDate
+        ? formatActivityYearFromIso(cab.headTenure?.endDate)
+        : startY
+          ? '현재'
+          : null
+      const spanText =
+        startY && endY ? `${startY.replace(/년$/, '')}–${endY}` : startY
+      governanceItems.push({
+        id: `cabinet-${cab.id}`,
+        kind: 'cabinet',
+        category: 'governance',
+        refId: cab.id,
+        label: cab.name?.trim() || '행정부 내각',
+        subLabel: spanText ? `내각 편제 · ${spanText}` : '내각 편제',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
+    for (const dept of (administrationQuery.data ?? []) as any[]) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(dept)
+      if (!dept?.id || !activityAt) continue
+      governanceItems.push({
+        id: `department-${dept.id}`,
+        kind: 'department',
+        category: 'governance',
+        refId: dept.id,
+        label: dept.name?.trim() || '중앙부처',
+        subLabel: dept.englishName?.trim()
+          ? `중앙부처 · ${dept.englishName.trim()}`
+          : '중앙부처 편제',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
+    const archiveItems: RecentActivityItem[] = []
+
+    for (const elec of (electionsQuery.data ?? []) as any[]) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(elec)
+      if (!elec?.id || !activityAt) continue
+      const pollText =
+        typeof elec.pollDate === 'string' && elec.pollDate.length >= 10
+          ? elec.pollDate.slice(0, 10).replace(/-/g, '.')
+          : formatActivityYearFromIso(elec.pollDate)
+      archiveItems.push({
+        id: `election-${elec.id}`,
+        kind: 'election',
+        category: 'archive',
+        refId: elec.id,
+        label: elec.name?.trim() || '선거',
+        subLabel: pollText ? `선거 · ${pollText}` : '선거 기록',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
+    for (const law of (lawsQuery.data ?? []) as any[]) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(law)
+      if (!law?.id || !activityAt) continue
+      const yearText = formatActivityYearFromIso(
+        law.enactedDate ?? law.promulgatedDate ?? law.startDate,
+        law.era,
+        law.year,
+      )
+      archiveItems.push({
+        id: `law-${law.id}`,
+        kind: 'law',
+        category: 'archive',
+        refId: law.id,
+        label: law.title?.trim() || law.name?.trim() || '법령',
+        subLabel: yearText ? `법령 · ${yearText}` : '법령 · 제도',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
+    for (const city of (citiesQuery.data ?? []) as any[]) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(city)
+      if (!city?.id || !activityAt) continue
+      archiveItems.push({
+        id: `city-${city.id}`,
+        kind: 'city',
+        category: 'archive',
+        refId: city.id,
+        label: city.name?.trim() || '행정구역',
+        subLabel: city.isCapital ? '수도 · 행정구역' : '행정구역',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
+    return pickWithKindQuota(
+      personItems,
+      eventItems,
+      governanceItems,
+      archiveItems,
+    )
+  }, [
+    persons,
+    personPolityById,
+    country?.name,
+    country?.defaultNameDisplayOrder,
+    eventsQuery.data,
+    politicalSystemsQuery.data,
+    tenuresQuery.data,
+    cabinetsQuery.data,
+    administrationQuery.data,
+    electionsQuery.data,
+    lawsQuery.data,
+    citiesQuery.data,
+  ])
 
   const currentHeads = useMemo((): CurrentHead[] => {
     const tenures = (tenuresQuery.data ?? []) as any[]

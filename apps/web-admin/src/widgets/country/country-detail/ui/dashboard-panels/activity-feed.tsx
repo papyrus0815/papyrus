@@ -1,16 +1,104 @@
-import { Fragment } from 'react'
+import { useMemo, useState } from 'react'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
 
 import { formatRelativeTime } from '../../lib/relative-time'
-import type { RecentActivityItem } from '../../model/use-country-dashboard-stats'
-import { IconCalendar } from '../country-detail-dashboard.icons'
+import type {
+  ActivityCategory,
+  ActivityKind,
+  RecentActivityItem,
+} from '../../model/use-country-dashboard-stats'
+import {
+  IconBriefcase,
+  IconCalendar,
+  IconCity,
+  IconLandmark,
+  IconScroll,
+  IconVote,
+} from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
+import type { AccentKey } from '../country-detail-dashboard.styles'
 import { getPersonInitial, startOfDay } from './format'
 
 interface ActivityGroup {
   label: string
   items: RecentActivityItem[]
+}
+
+type FilterKey = 'all' | ActivityCategory
+
+const DEFAULT_VISIBLE_COUNT = 8
+
+const EMPTY_AXES = [
+  { key: 'person', label: '인물 기록', value: '생몰년 · 작호 · 소속' },
+  { key: 'event', label: '역사 사건', value: '발생 연도 · 시대 맥락' },
+  { key: 'governance', label: '통치 · 제도', value: '정체 · 수반 재임 · 내각' },
+  { key: 'archive', label: '법제 · 지역', value: '선거 · 법령 · 행정구역' },
+] as const
+
+function resolveCategory(item: RecentActivityItem): ActivityCategory {
+  if (item.category) return item.category
+  if (item.kind === 'person') return 'person'
+  if (item.kind === 'event') return 'event'
+  if (
+    item.kind === 'tenure' ||
+    item.kind === 'political-system' ||
+    item.kind === 'cabinet' ||
+    item.kind === 'department'
+  ) {
+    return 'governance'
+  }
+  return 'archive'
+}
+
+function getKindMeta(kind: ActivityKind): {
+  label: string
+  accent: AccentKey
+  roundAvatar: boolean
+} {
+  switch (kind) {
+    case 'person':
+      return { label: '인물', accent: 'violet', roundAvatar: true }
+    case 'event':
+      return { label: '사건', accent: 'amber', roundAvatar: false }
+    case 'tenure':
+      return { label: '재임', accent: 'indigo', roundAvatar: true }
+    case 'political-system':
+      return { label: '정체', accent: 'indigo', roundAvatar: false }
+    case 'cabinet':
+      return { label: '행정부', accent: 'rose', roundAvatar: false }
+    case 'department':
+      return { label: '부처', accent: 'sky', roundAvatar: false }
+    case 'election':
+      return { label: '선거', accent: 'emerald', roundAvatar: false }
+    case 'law':
+      return { label: '법령', accent: 'sky', roundAvatar: false }
+    case 'treaty':
+      return { label: '조약', accent: 'emerald', roundAvatar: false }
+    case 'city':
+      return { label: '행정구역', accent: 'sky', roundAvatar: false }
+  }
+}
+
+function renderKindIcon(kind: ActivityKind) {
+  switch (kind) {
+    case 'event':
+      return <IconCalendar />
+    case 'political-system':
+    case 'department':
+      return <IconLandmark />
+    case 'cabinet':
+      return <IconBriefcase />
+    case 'election':
+      return <IconVote />
+    case 'law':
+    case 'treaty':
+      return <IconScroll />
+    case 'city':
+      return <IconCity />
+    default:
+      return <IconLandmark />
+  }
 }
 
 function groupActivityByTime(items: RecentActivityItem[]): ActivityGroup[] {
@@ -41,7 +129,7 @@ function groupActivityByTime(items: RecentActivityItem[]): ActivityGroup[] {
     out.push({ label: '지난 7일', items: groups.thisWeek })
   if (groups.thisMonth.length)
     out.push({ label: '지난 30일', items: groups.thisMonth })
-  if (groups.older.length) out.push({ label: '이전', items: groups.older })
+  if (groups.older.length) out.push({ label: '이전 기록', items: groups.older })
   return out
 }
 
@@ -50,6 +138,11 @@ export interface ActivityFeedProps {
   isLoading: boolean
   onPersonClick: (personId: string) => void
   onEventClick: (eventId: string) => void
+  onNavigateDomain?: (
+    kind: ActivityKind,
+    refId: string,
+    personId?: string | null,
+  ) => void
 }
 
 export function ActivityFeed({
@@ -57,34 +150,172 @@ export function ActivityFeed({
   isLoading,
   onPersonClick,
   onEventClick,
+  onNavigateDomain,
 }: ActivityFeedProps) {
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
+  const [expanded, setExpanded] = useState(false)
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<FilterKey, number> = {
+      all: items.length,
+      person: 0,
+      event: 0,
+      governance: 0,
+      archive: 0,
+    }
+    for (const item of items) {
+      counts[resolveCategory(item)] += 1
+    }
+    return counts
+  }, [items])
+
+  const filterTabs = useMemo(() => {
+    const candidates: Array<{ key: FilterKey; label: string; count: number }> = [
+      { key: 'all', label: '전체', count: categoryCounts.all },
+      { key: 'person', label: '인물', count: categoryCounts.person },
+      { key: 'event', label: '사건', count: categoryCounts.event },
+      { key: 'governance', label: '통치·제도', count: categoryCounts.governance },
+      { key: 'archive', label: '법제·지역', count: categoryCounts.archive },
+    ]
+    const nonEmptyCategories = candidates.filter(
+      (c) => c.key !== 'all' && c.count > 0,
+    )
+    if (nonEmptyCategories.length <= 1) return []
+    return [candidates[0], ...nonEmptyCategories]
+  }, [categoryCounts])
+
+  const resolvedFilter: FilterKey =
+    activeFilter !== 'all' && categoryCounts[activeFilter] === 0
+      ? 'all'
+      : activeFilter
+
+  const filteredItems = useMemo(() => {
+    if (resolvedFilter === 'all') return items
+    return items.filter((item) => resolveCategory(item) === resolvedFilter)
+  }, [items, resolvedFilter])
+
+  const visibleItems = expanded
+    ? filteredItems
+    : filteredItems.slice(0, DEFAULT_VISIBLE_COUNT)
+  const hiddenCount = Math.max(0, filteredItems.length - visibleItems.length)
+
+  const summaryNote = useMemo(() => {
+    if (filteredItems.length === 0) return null
+    const updatedCount = filteredItems.filter((item) => item.isUpdated).length
+    const createdCount = filteredItems.length - updatedCount
+    if (updatedCount > 0 && createdCount > 0) {
+      return `신규 ${createdCount} · 수정 ${updatedCount}`
+    }
+    if (updatedCount > 0) {
+      return `수정 ${updatedCount}건`
+    }
+    return `신규 등록 ${createdCount}건`
+  }, [filteredItems])
+
   if (items.length === 0 && !isLoading) {
-    return <S.FeedEmpty>최근 등록된 인물이나 사건이 없습니다.</S.FeedEmpty>
+    return (
+      <S.ActivityEmptyGrid aria-label="최근 활동 대기 상태">
+        {EMPTY_AXES.map((axis) => (
+          <S.ActivityEmptyCell key={axis.key}>
+            <S.ActivityEmptyLabel>{axis.label}</S.ActivityEmptyLabel>
+            <S.ActivityEmptyValue>{axis.value}</S.ActivityEmptyValue>
+          </S.ActivityEmptyCell>
+        ))}
+      </S.ActivityEmptyGrid>
+    )
   }
-  const groups = groupActivityByTime(items)
+
+  const groups = groupActivityByTime(visibleItems)
+
+  const handleRowSelect = (item: RecentActivityItem) => {
+    if (item.kind === 'person') {
+      onPersonClick(item.refId)
+      return
+    }
+    if (item.kind === 'event') {
+      onEventClick(item.refId)
+      return
+    }
+    if (item.kind === 'tenure' && item.personId && !onNavigateDomain) {
+      onPersonClick(item.personId)
+      return
+    }
+    if (onNavigateDomain) {
+      onNavigateDomain(item.kind, item.refId, item.personId)
+      return
+    }
+    if (item.personId) {
+      onPersonClick(item.personId)
+    }
+  }
+
   return (
     <>
+      {(filterTabs.length > 0 || summaryNote) && (
+        <S.ActivityToolbar>
+          {filterTabs.length > 0 ? (
+            <S.ActivityFilterGroup role="group" aria-label="최근 활동 분류 필터">
+              {filterTabs.map((tab) => {
+                const isActive = resolvedFilter === tab.key
+                return (
+                  <S.ActivityFilterPill
+                    key={tab.key}
+                    type="button"
+                    $active={isActive}
+                    onClick={() => {
+                      setActiveFilter(tab.key)
+                      setExpanded(false)
+                    }}
+                  >
+                    {tab.label}
+                    <S.ActivityFilterCount $active={isActive}>
+                      {tab.count}
+                    </S.ActivityFilterCount>
+                  </S.ActivityFilterPill>
+                )
+              })}
+            </S.ActivityFilterGroup>
+          ) : (
+            <span />
+          )}
+          {summaryNote && (
+            <S.ActivitySummaryMeta>{summaryNote}</S.ActivitySummaryMeta>
+          )}
+        </S.ActivityToolbar>
+      )}
+
       {groups.map((g) => (
-        <Fragment key={g.label}>
-          <S.ActivityGroupHeader>{g.label}</S.ActivityGroupHeader>
+        <S.ActivityGroupBlock key={g.label}>
+          <S.ActivityGroupHeader>
+            <span>{g.label}</span>
+            <S.ActivityGroupCount>{g.items.length}</S.ActivityGroupCount>
+          </S.ActivityGroupHeader>
           <S.FeedList>
             {g.items.map((item) => (
               <S.FeedItem key={item.id}>
-                <S.FeedDot
-                  $accent={item.kind === 'person' ? 'violet' : 'amber'}
-                />
                 <ActivityRow
                   item={item}
-                  onSelect={() => {
-                    if (item.kind === 'person') onPersonClick(item.refId)
-                    else onEventClick(item.refId)
-                  }}
+                  onSelect={() => handleRowSelect(item)}
                 />
               </S.FeedItem>
             ))}
           </S.FeedList>
-        </Fragment>
+        </S.ActivityGroupBlock>
       ))}
+
+      {(hiddenCount > 0 ||
+        (expanded && filteredItems.length > DEFAULT_VISIBLE_COUNT)) && (
+        <S.ActivityFooterRow>
+          <S.ActivityToggleBtn
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+          >
+            {expanded
+              ? '최근 활동 접기'
+              : `활동 내역 더보기 (+${hiddenCount}건)`}
+          </S.ActivityToggleBtn>
+        </S.ActivityFooterRow>
+      )}
     </>
   )
 }
@@ -96,25 +327,34 @@ function ActivityRow({
   item: RecentActivityItem
   onSelect: () => void
 }) {
+  const meta = getKindMeta(item.kind)
+
   return (
     <S.FeedRow as="button" type="button" onClick={onSelect}>
-      {item.kind === 'person' ? (
-        <S.FeedAvatar $accent="violet">
-          {item.profileImageUrl ? (
+      <S.FeedAvatar $accent={meta.accent} $round={meta.roundAvatar} aria-hidden>
+        {meta.roundAvatar ? (
+          item.profileImageUrl ? (
             <img src={getUploadImageUrl(item.profileImageUrl)} alt="" />
           ) : (
             <span>{getPersonInitial(item.label)}</span>
-          )}
-        </S.FeedAvatar>
-      ) : (
-        /* 사건 줄만 아바타 자리가 비어 들여쓰기가 들쭉날쭉했다 — 달력 표지로 채운다 */
-        <S.FeedAvatar $accent="amber" aria-hidden>
-          <IconCalendar />
-        </S.FeedAvatar>
-      )}
-      <S.FeedLabel>{item.label}</S.FeedLabel>
-      <S.FeedKind>{item.kind === 'person' ? '인물' : '사건'}</S.FeedKind>
-      <S.FeedTime>{formatRelativeTime(item.createdAt)}</S.FeedTime>
+          )
+        ) : (
+          renderKindIcon(item.kind)
+        )}
+      </S.FeedAvatar>
+
+      <S.FeedTextCol>
+        <S.FeedTitleLine>
+          <S.FeedLabel>{item.label}</S.FeedLabel>
+          {item.isUpdated && <S.FeedUpdateBadge>수정</S.FeedUpdateBadge>}
+        </S.FeedTitleLine>
+        {item.subLabel && <S.FeedSubLabel>{item.subLabel}</S.FeedSubLabel>}
+      </S.FeedTextCol>
+
+      <S.FeedMetaCol>
+        <S.FeedKind $accent={meta.accent}>{meta.label}</S.FeedKind>
+        <S.FeedTime>{formatRelativeTime(item.createdAt)}</S.FeedTime>
+      </S.FeedMetaCol>
     </S.FeedRow>
   )
 }

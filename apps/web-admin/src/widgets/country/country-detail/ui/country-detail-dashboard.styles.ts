@@ -547,121 +547,164 @@ export const EmptyHint = styled.p`
   ${surfaceStatic}
 `
 
-/* ─── 최근 활동 — 타임라인 ──────────────────────────────────────────── */
+/* ─── 최근 활동 — 무컨테이너 헤어라인 원장 ─────────────────────────── */
 
 export const FeedPanel = styled.div`
   position: relative;
-  border-radius: 10px;
-  padding: ${space.xl}px ${space.xxl}px;
-  ${surfaceStatic}
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`
+
+export const ActivityToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+`
+
+export const ActivityFilterGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+export const ActivityFilterPill = styled.button<{ $active: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? PRIMARY_SOFT_BORDER : theme.colors.border.light};
+  background: ${({ $active }) => ($active ? PRIMARY_SOFT_BG : 'transparent')};
+  color: ${({ theme, $active }) =>
+    $active ? PRIMARY : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    color: ${({ theme, $active }) =>
+      $active ? PRIMARY : theme.colors.text.primary};
+    border-color: ${({ theme, $active }) =>
+      $active ? PRIMARY_SOFT_BORDER : theme.colors.border.medium};
+  }
+`
+
+export const ActivityFilterCount = styled.span<{ $active: boolean }>`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $active }) =>
+    $active ? PRIMARY : theme.colors.text.tertiary};
+`
+
+export const ActivitySummaryMeta = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const ActivityGroupBlock = styled.div`
+  display: flex;
+  flex-direction: column;
 `
 
 export const ActivityGroupHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: ${space.sm}px;
-  padding: ${space.md}px ${space.xs}px ${space.sm}px;
-  font-size: 12px;
-  font-weight: 700;
+  gap: 8px;
+  padding: 0 0 8px;
+  font-size: 11.5px;
+  font-weight: 800;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  &:first-child {
-    padding-top: 0;
-  }
-  &::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : 'rgba(15, 23, 42, 0.06)'};
-  }
+  letter-spacing: 0.04em;
+`
+
+export const ActivityGroupCount = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 export const FeedList = styled.ul`
-  position: relative;
   margin: 0;
-  padding: 0 0 0 28px;
+  padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: ${space.xs}px;
-  max-height: clamp(280px, 50vh, 520px);
-  overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
 
-  /* 좌측 세로 라인 */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 14px;
-    bottom: 14px;
-    left: 11px;
-    width: 1.5px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.10)'
-        : 'rgba(15, 23, 42, 0.08)'};
-  }
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)'};
-    border-radius: ${radius.pill}px;
+  @container (min-width: 740px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 `
 
 export const FeedItem = styled.li`
   position: relative;
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @container (min-width: 740px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 14px;
+    }
+    &:nth-child(even) {
+      padding-left: 14px;
+    }
+  }
 `
 
 export const FeedDot = styled.span<{ $accent?: AccentKey }>`
-  position: absolute;
-  left: -22px;
-  top: 17px;
-  width: 10px;
-  height: 10px;
-  border-radius: ${radius.pill}px;
-  background: ${({ $accent }) => accent($accent, 'base')};
-  box-shadow: 0 0 0 2.5px
-    ${({ theme }) => (theme.mode === 'dark' ? '#0b0d12' : '#ffffff')};
+  display: none;
 `
 
-/*
- * 행 높이 58 → 44px. 열 줄이 650px를 먹어 옆 '더 채울 것' 카드 아래가 통째로 비었다.
- * 호버는 남색 면·테두리·밀림을 걷고 옅은 면 하나로 — 목록 한 줄에 버튼 셋의 신호를 줄 이유가 없다.
- */
 export const FeedRow = styled.div`
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: 8px;
+  gap: 12px;
+  padding: 10px 6px;
+  border-radius: 6px;
   border: none;
   background: transparent;
   font-family: inherit;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: background 0.15s ease;
+  box-sizing: border-box;
+  transition: background 0.14s ease;
+
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
   }
   &:focus-visible {
     outline: 2px solid ${PRIMARY};
-    outline-offset: 2px;
+    outline-offset: -2px;
   }
 `
 
-export const FeedAvatar = styled.div<{ $accent?: AccentKey }>`
-  width: 30px;
-  height: 30px;
-  border-radius: ${radius.pill}px;
+export const FeedAvatar = styled.div<{
+  $accent?: AccentKey
+  $round?: boolean
+}>`
+  width: 32px;
+  height: 32px;
+  border-radius: ${({ $round }) => ($round ? `${radius.pill}px` : '8px')};
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -683,37 +726,142 @@ export const FeedAvatar = styled.div<{ $accent?: AccentKey }>`
   }
 `
 
-/** 인물·사건 — 색(점·아바타)만으로 종류를 말하지 않게 글자로도 적는다 */
-export const FeedKind = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  white-space: nowrap;
+export const FeedTextCol = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+export const FeedTitleLine = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 `
 
 export const FeedLabel = styled.span`
-  flex: 1;
   min-width: 0;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.35;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `
 
-export const FeedTime = styled.span`
+export const FeedUpdateBadge = styled.span`
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${PRIMARY};
+  background: ${PRIMARY_SOFT_BG};
+`
+
+export const FeedSubLabel = styled.span`
+  min-width: 0;
   font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const FeedMetaCol = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+`
+
+/** 인물·사건·정체·재임 등 도메인 구분 */
+export const FeedKind = styled.span<{ $accent?: AccentKey }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ $accent }) => accent($accent, 'ink')};
+  background: ${({ $accent }) => accent($accent, 'soft')};
+  white-space: nowrap;
+`
+
+export const FeedTime = styled.span`
+  font-size: 11.5px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+`
+
+export const ActivityFooterRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 2px;
+`
+
+export const ActivityToggleBtn = styled.button`
+  appearance: none;
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+export const ActivityEmptyGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px 24px;
+  padding: 14px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+export const ActivityEmptyCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+export const ActivityEmptyLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const ActivityEmptyValue = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.72;
 `
 
 export const FeedEmpty = styled.p`
   margin: 0;
-  padding: ${space.xxl}px 0;
-  text-align: center;
+  padding: ${space.lg}px 0;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.5;

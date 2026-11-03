@@ -35,7 +35,11 @@ import {
   type CalendarEventItem,
   type CompletenessField,
   type RecentActivityItem,
+  formatActivityYearFromIso,
+  formatEventSubLabel,
+  formatPersonSubLabel,
   pickWithKindQuota,
+  resolveActivityTimestamp,
 } from './use-country-dashboard-stats'
 
 /** 역대 수반 한 줄 — 재위·재임을 한 모양으로 */
@@ -399,31 +403,143 @@ export function useHistoricalCountryDashboard(
     return rows
   }, [eventsQuery.data])
 
-  /* 최근 활동 — 이 나라에 걸린 인물·사건을 종류별 최소 몫(pickWithKindQuota)으로 배분해 등록순 정렬 */
+  /* 최근 활동 — 이 나라에 걸린 인물·사건·통치·법령을 종류별 최소 몫(pickWithKindQuota)으로 배분해 최신순 정렬 */
   const recentActivity = useMemo<RecentActivityItem[]>(() => {
-    const persons = asArray(personsQuery.data)
-      .map<RecentActivityItem>((person) => ({
-        id: `person-${person.id}`,
-        kind: 'person',
-        refId: person.id ?? '',
-        label: personNameOf(person),
-        createdAt: person.createdAt ?? '',
-        profileImageUrl: person.profileImageUrl ?? null,
-      }))
-      .filter((item) => item.createdAt)
-    const events = asArray(eventsQuery.data)
-      .map<RecentActivityItem>((event) => ({
-        id: `event-${event.id}`,
-        kind: 'event',
-        refId: event.id ?? '',
-        label: event.title ?? '제목 없음',
-        createdAt: event.createdAt ?? '',
-        startDate: event.startDate ?? null,
-        endDate: event.endDate ?? null,
-      }))
-      .filter((item) => item.createdAt)
-    return pickWithKindQuota(persons, events)
-  }, [personsQuery.data, eventsQuery.data])
+    const currentCountryName = country.name
+    const personItems = asArray(personsQuery.data)
+      .map<RecentActivityItem>((person) => {
+        const { activityAt, isUpdated } = resolveActivityTimestamp(person)
+        return {
+          id: `person-${person.id}`,
+          kind: 'person',
+          category: 'person',
+          refId: person.id ?? '',
+          personId: person.id ?? null,
+          label: personNameOf(person),
+          subLabel: formatPersonSubLabel(person, null, currentCountryName),
+          createdAt: activityAt,
+          isUpdated,
+          profileImageUrl: person.profileImageUrl ?? null,
+        }
+      })
+      .filter((item) => item.refId && item.createdAt)
+
+    const eventItems = asArray(eventsQuery.data)
+      .map<RecentActivityItem>((event) => {
+        const { activityAt, isUpdated } = resolveActivityTimestamp(event)
+        return {
+          id: `event-${event.id}`,
+          kind: 'event',
+          category: 'event',
+          refId: event.id ?? '',
+          label: event.title?.trim() || '제목 없음',
+          subLabel: formatEventSubLabel(event, currentCountryName),
+          createdAt: activityAt,
+          isUpdated,
+          startDate: event.startDate ?? null,
+          endDate: event.endDate ?? null,
+        }
+      })
+      .filter((item) => item.refId && item.createdAt)
+
+    const governanceItems: RecentActivityItem[] = []
+    for (const tenure of asArray(tenuresQuery.data)) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(tenure)
+      if (!tenure.id || !activityAt) continue
+      const personName =
+        tenure.regnalName?.trim() || personNameOf(tenure.person)
+      const posTitle =
+        tenure.title?.trim() ||
+        tenure.positionDefinition?.title?.trim() ||
+        '재임'
+      const posType =
+        tenure.positionType ?? tenure.positionDefinition?.positionType
+      const roleKindLabel =
+        posType === 'HEAD_OF_STATE'
+          ? '국가원수'
+          : posType === 'HEAD_OF_GOVERNMENT'
+            ? '정부수반'
+            : posType === 'MINISTER'
+              ? '각료'
+              : '공직'
+      const startY = formatActivityYearFromIso(
+        tenure.startDate,
+        tenure.startEra,
+        tenure.startYear,
+      )
+      const endY =
+        tenure.endDate || tenure.endYear != null
+          ? formatActivityYearFromIso(
+              tenure.endDate,
+              tenure.endEra,
+              tenure.endYear,
+            )
+          : null
+      const spanText =
+        startY && endY
+          ? startY === endY
+            ? startY
+            : `${startY.replace(/년$/, '')}–${endY}`
+          : startY || null
+      governanceItems.push({
+        id: `tenure-${tenure.id}`,
+        kind: 'tenure',
+        category: 'governance',
+        refId: String(tenure.id),
+        personId: tenure.person?.id ?? tenure.personId ?? null,
+        label: `${personName} · ${posTitle}`,
+        subLabel: [roleKindLabel, spanText].filter(Boolean).join(' · ') || null,
+        createdAt: activityAt,
+        isUpdated,
+        profileImageUrl: tenure.person?.profileImageUrl ?? null,
+      })
+    }
+
+    for (const dept of asArray(departmentsQuery.data)) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(dept)
+      if (!dept.id || !activityAt) continue
+      governanceItems.push({
+        id: `department-${dept.id}`,
+        kind: 'department',
+        category: 'governance',
+        refId: String(dept.id),
+        label: dept.name?.trim() || '관청·부처',
+        subLabel: '관청·부처 편제',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
+    const archiveItems: RecentActivityItem[] = []
+    for (const law of asArray(lawsQuery.data)) {
+      const { activityAt, isUpdated } = resolveActivityTimestamp(law)
+      if (!law.id || !activityAt) continue
+      archiveItems.push({
+        id: `law-${law.id}`,
+        kind: 'law',
+        category: 'archive',
+        refId: String(law.id),
+        label: law.title?.trim() || law.name?.trim() || '법령·제도',
+        subLabel: '법령·제도',
+        createdAt: activityAt,
+        isUpdated,
+      })
+    }
+
+    return pickWithKindQuota(
+      personItems,
+      eventItems,
+      governanceItems,
+      archiveItems,
+    )
+  }, [
+    country.name,
+    personsQuery.data,
+    eventsQuery.data,
+    tenuresQuery.data,
+    departmentsQuery.data,
+    lawsQuery.data,
+  ])
 
   const memberships = asArray(membershipsQuery.data)
   const relations = asArray(relationsQuery.data)
