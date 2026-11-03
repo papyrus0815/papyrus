@@ -206,5 +206,8 @@ describe('EventTypeField', () => {
     expect(radios[0]).toHaveAccessibleName('전투·작전')
     expect(radios[0]).toHaveAttribute('tabindex', '0')
     expect(screen.getByText(/전쟁·작전·군비/)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('searchbox', { name: '세부 분야 빠른 검색' }),
+    ).not.toBeInTheDocument()
   })
 })

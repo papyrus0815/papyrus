@@ -176,15 +176,17 @@ export const PersonRegisterModalFormScroll = React.forwardRef<
 /** 스크롤 밖 하단 고정 — `PersonRegisterModalBox` flex 열에서 `FormScroll` 아래 */
 export const PersonRegisterModalStickyFooter = styled.div`
   flex-shrink: 0;
-  padding: 12px 20px;
+  padding: 14px 28px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.015)' : '#fafbfc'};
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
 
   @media (max-width: 768px) {
-    padding: 10px 16px;
+    padding: 12px 16px;
   }
 `
 
@@ -217,40 +219,57 @@ export const PersonRegisterModalFormActions = styled.div`
 `
 
 export const PersonRegisterModalPrimaryBtn = styled.button`
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: #fff;
   background: ${({ theme }) => theme.colors.primary};
-  border: none;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25);
   cursor: pointer;
-  transition: background 0.12s, opacity 0.12s;
+  transition: background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
   &:hover:not(:disabled) {
     background: ${({ theme }) => theme.colors.button.hover};
   }
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
+    box-shadow: none;
     cursor: not-allowed;
   }
 `
 
 export const PersonRegisterModalCancelBtn = styled.button`
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 15px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 6px;
+  border-radius: 8px;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.04)'};
   cursor: pointer;
-  transition: border-color 0.12s, color 0.12s;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
   &:hover:not(:disabled) {
     border-color: ${({ theme }) => theme.colors.border.medium};
-    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#f8fafc'};
   }
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
+    box-shadow: none;
     cursor: not-allowed;
   }
 `

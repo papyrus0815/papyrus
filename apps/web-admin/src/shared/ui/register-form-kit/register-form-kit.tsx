@@ -56,35 +56,39 @@ export const KitOptionalTag = styled.span`
 export const KitChipGroup = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 `
 
-/** 사건 카테고리 칩(CategoryCard)에서 아이콘 원만 뺀 것 — 높이는 아이콘 칩과 같은 36px */
+/** 사건 카테고리 칩(CategoryCard)에서 아이콘 원만 뺀 것 — 높이는 아이콘 칩과 같은 34px */
 export const KitChoiceChip = styled.button<{ $selected: boolean; $error?: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   box-sizing: border-box;
-  min-height: 36px;
-  padding: 0 14px;
+  height: 34px;
+  padding: 0 13px;
   border: 1px solid
     ${({ $selected, $error, theme }) =>
       $selected
-        ? `rgba(${CHIP_RGB}, 0.6)`
+        ? `rgba(${CHIP_RGB}, 0.55)`
         : $error
           ? theme.colors.alert.danger.fg
           : kitC(theme).border};
   border-radius: 999px;
   background: ${({ $selected, theme }) =>
     $selected
-      ? `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.2 : 0.09})`
+      ? `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.2 : 0.1})`
       : kitC(theme).content};
-  /* 선택은 색만으로 말하지 않는다 — 테를 한 겹 더 두껍게(안쪽 링) */
-  box-shadow: ${({ $selected }) =>
-    $selected ? `inset 0 0 0 1px rgba(${CHIP_RGB}, 0.6)` : 'none'};
+  box-shadow: ${({ $selected, theme }) =>
+    $selected
+      ? `0 1px 2px rgba(${CHIP_RGB}, 0.12)`
+      : theme.mode === 'dark'
+        ? 'none'
+        : '0 1px 2px rgba(15, 23, 42, 0.03)'};
   font-size: 13px;
-  font-weight: 600;
+  font-weight: ${({ $selected }) => ($selected ? 600 : 500)};
+  letter-spacing: -0.01em;
   line-height: 1.3;
   white-space: nowrap;
   color: ${({ $selected, theme }) =>
@@ -92,20 +96,21 @@ export const KitChoiceChip = styled.button<{ $selected: boolean; $error?: boolea
       ? theme.mode === 'dark'
         ? 'var(--chip-text-dark, #a5b4fc)'
         : 'var(--chip-text, #4f46e5)'
-      : kitC(theme).textSecondary};
+      : kitC(theme).textPrimary};
   cursor: pointer;
   transition:
     border-color 0.15s ease,
     background 0.15s ease,
+    color 0.15s ease,
     box-shadow 0.15s ease;
 
   &:hover:not(:disabled) {
-    border-color: ${({ $selected }) =>
-      $selected ? `rgba(${CHIP_RGB}, 0.75)` : `rgba(${CHIP_RGB}, 0.45)`};
+    border-color: ${({ $selected, theme }) =>
+      $selected ? `rgba(${CHIP_RGB}, 0.75)` : kitC(theme).borderHover};
     background: ${({ $selected, theme }) =>
       $selected
-        ? `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.26 : 0.13})`
-        : `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.1 : 0.04})`};
+        ? `rgba(${CHIP_RGB}, ${theme.mode === 'dark' ? 0.25 : 0.14})`
+        : kitC(theme).section};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => kitC(theme).focus};
@@ -280,18 +285,28 @@ export const KitAddButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 14px;
+  height: 36px;
+  padding: 0 13px;
   background: ${({ theme }) => kitC(theme).content};
-  color: ${({ theme }) => kitC(theme).textSecondary};
+  color: ${({ theme }) => kitC(theme).textPrimary};
   border: 1px solid ${({ theme }) => kitC(theme).border};
   border-radius: 8px;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.04)'};
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   cursor: pointer;
   width: fit-content;
+  white-space: nowrap;
   transition:
     background 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  svg {
+    color: ${({ theme }) => kitC(theme).focus};
+  }
 
   &:hover:not(:disabled) {
     background: ${({ theme }) => kitC(theme).section};
@@ -319,36 +334,39 @@ export const KitSelectedItems = styled.div`
 export const KitSelectedItem = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(167, 139, 250, 0.14)' : 'rgba(99, 102, 241, 0.08)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(167, 139, 250, 0.30)' : 'rgba(99, 102, 241, 0.2)'};
-  border-radius: 20px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  background: ${({ theme }) => kitC(theme).section};
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  border-radius: 8px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => kitC(theme).textPrimary};
 `
 
 /** 사건 폼 RemoveButton */
 export const KitRemoveButton = styled.button`
+  width: 24px;
+  height: 24px;
   border: none;
-  background: rgba(239, 68, 68, 0.1);
-  padding: 4px;
+  background: transparent;
+  padding: 0;
   border-radius: 6px;
-  color: #ef4444;
+  color: ${({ theme }) => kitC(theme).textMuted};
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: color 0.14s ease, background-color 0.14s ease;
   flex-shrink: 0;
 
-  &:hover {
-    background: rgba(239, 68, 68, 0.15);
-    color: #dc2626;
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+    color: #ef4444;
   }
 `
 
@@ -382,8 +400,7 @@ export const kitDateTriggerCss = css<{ $error?: boolean }>`
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
-  /* 사건 날짜 칸 실측 36px(padding 9 + 14px 글 한 줄) */
-  min-height: 36px;
+  min-height: 38px;
   border: 1px solid
     ${({ $error, theme }) =>
       $error ? theme.colors.alert.danger.fg : kitC(theme).border};

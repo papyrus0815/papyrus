@@ -114,7 +114,7 @@ export function InlineDateField({
         </FieldIconBtn>
         <BareInput
           ref={yearRef}
-          $w={40}
+          $w={46}
           inputMode="numeric"
           placeholder="연도"
           aria-label="연도"
@@ -125,7 +125,7 @@ export function InlineDateField({
         />
         <FieldSep>.</FieldSep>
         <BareInput
-          $w={22}
+          $w={26}
           inputMode="numeric"
           placeholder="월"
           aria-label="월"
@@ -135,7 +135,7 @@ export function InlineDateField({
         />
         <FieldSep>.</FieldSep>
         <BareInput
-          $w={22}
+          $w={26}
           inputMode="numeric"
           placeholder="일"
           aria-label="일"
@@ -350,8 +350,8 @@ const FieldBox = styled.div<{ $error?: boolean; $disabled?: boolean }>`
   ${kitDateTriggerCss}
   gap: 2px;
   width: 100%;
-  height: 36px;
-  padding: 0 8px 0 4px;
+  height: 38px;
+  padding: 0 10px 0 6px;
   cursor: ${({ $disabled }) => ($disabled ? 'default' : 'text')};
   ${({ $disabled, theme }) =>
     $disabled

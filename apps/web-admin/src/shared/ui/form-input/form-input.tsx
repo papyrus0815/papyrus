@@ -6,20 +6,24 @@ import styled from 'styled-components'
 
 const StyledInput = styled.input<{ $error?: boolean }>`
   width: 100%;
-  padding: 9px 12px;
-  font-size: 14px;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13.5px;
   line-height: 1.5;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
   border: 1px solid
     ${({ $error, theme }) =>
       $error
         ? theme.colors.alert.danger.fg
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.08)'
-          : '#e5e7eb'};
+          : '#e2e8f0'};
   border-radius: 8px;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.02)'};
   outline: none;
   transition:
     border-color 0.15s ease,
@@ -33,7 +37,7 @@ const StyledInput = styled.input<{ $error?: boolean }>`
 
   &:hover:not(:disabled):not(:focus) {
     border-color: ${({ $error, theme }) =>
-      $error ? theme.colors.alert.danger.fg : theme.colors.border.medium};
+      $error ? theme.colors.alert.danger.fg : '#cbd5e1'};
   }
 
   &:focus {
@@ -77,20 +81,23 @@ const StyledTextarea = styled.textarea<{
   $resize?: 'none' | 'vertical' | 'both'
 }>`
   width: 100%;
-  padding: 10px 12px;
-  font-size: 14px;
-  line-height: 1.6;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
   border: 1px solid
     ${({ $error, theme }) =>
       $error
         ? theme.colors.alert.danger.fg
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.08)'
-          : '#e5e7eb'};
+          : '#e2e8f0'};
   border-radius: 8px;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.02)'};
   outline: none;
   transition:
     border-color 0.15s ease,

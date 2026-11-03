@@ -181,6 +181,10 @@ export function EventTypeField({
 
   const groupLabel = domain ? `${domainLabel(domain)}의 세부 분야` : '세부 분야'
 
+  const showSuggestion = Boolean(rawSuggestion && effectiveSuggestedDomain && value === null)
+  const showRecents = isNoDomain && !isEditMode && effectiveRecents.length > 0 && Boolean(onApplySuggestion)
+  const showToolbar = isNoDomain || showSuggestion
+
   return (
     <Wrap
       style={
@@ -193,87 +197,91 @@ export function EventTypeField({
           : undefined
       }
     >
-      <ToolbarRow>
-        <QuickSearchAnchor>
-          <QuickSearchRow>
-            <QuickSearchInput
-              type="search"
-              aria-label="세부 분야 빠른 검색"
-              placeholder="세부·예시 검색 (전투, 선전포고, 개통, 탄핵…)"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && searchMatches.length > 0) {
-                  event.preventDefault()
-                  const first = searchMatches[0]
-                  applyCombo({ domain: first.domain, type: first.type })
-                  setSearchQuery('')
-                } else if (event.key === 'Escape' && searchQuery) {
-                  event.preventDefault()
-                  setSearchQuery('')
-                }
-              }}
-            />
-            {searchQuery && (
-              <QuickSearchClear type="button" onClick={() => setSearchQuery('')}>
-                지우기
-              </QuickSearchClear>
-            )}
-          </QuickSearchRow>
-          {searchQuery.trim() && (
-            <SearchResultBox role="region" aria-label="세부 분야 검색 결과">
-              {searchMatches.length > 0 ? (
-                searchMatches.map((match) => (
-                  <SearchResultButton
-                    key={match.type}
-                    type="button"
-                    onClick={() => {
-                      applyCombo({ domain: match.domain, type: match.type })
+      {showToolbar && (
+        <ToolbarRow>
+          {isNoDomain && (
+            <QuickSearchAnchor>
+              <QuickSearchRow>
+                <QuickSearchInput
+                  type="search"
+                  aria-label="세부 분야 빠른 검색"
+                  placeholder="세부·예시 검색 (전투, 선전포고, 개통, 탄핵…)"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && searchMatches.length > 0) {
+                      event.preventDefault()
+                      const first = searchMatches[0]
+                      applyCombo({ domain: first.domain, type: first.type })
                       setSearchQuery('')
-                    }}
-                  >
-                    <SearchResultTitle>{formatDomainPath(match.domain, match.type)}</SearchResultTitle>
-                    <SearchResultExamples>{match.examples}</SearchResultExamples>
-                  </SearchResultButton>
-                ))
-              ) : (
-                <SearchEmptyText>&lsquo;{searchQuery.trim()}&rsquo;에 맞는 세부 분야가 없습니다.</SearchEmptyText>
+                    } else if (event.key === 'Escape' && searchQuery) {
+                      event.preventDefault()
+                      setSearchQuery('')
+                    }
+                  }}
+                />
+                {searchQuery && (
+                  <QuickSearchClear type="button" onClick={() => setSearchQuery('')}>
+                    지우기
+                  </QuickSearchClear>
+                )}
+              </QuickSearchRow>
+              {searchQuery.trim() && (
+                <SearchResultBox role="region" aria-label="세부 분야 검색 결과">
+                  {searchMatches.length > 0 ? (
+                    searchMatches.map((match) => (
+                      <SearchResultButton
+                        key={match.type}
+                        type="button"
+                        onClick={() => {
+                          applyCombo({ domain: match.domain, type: match.type })
+                          setSearchQuery('')
+                        }}
+                      >
+                        <SearchResultTitle>{formatDomainPath(match.domain, match.type)}</SearchResultTitle>
+                        <SearchResultExamples>{match.examples}</SearchResultExamples>
+                      </SearchResultButton>
+                    ))
+                  ) : (
+                    <SearchEmptyText>&lsquo;{searchQuery.trim()}&rsquo;에 맞는 세부 분야가 없습니다.</SearchEmptyText>
+                  )}
+                </SearchResultBox>
               )}
-            </SearchResultBox>
+            </QuickSearchAnchor>
           )}
-        </QuickSearchAnchor>
-        {rawSuggestion && effectiveSuggestedDomain && value === null && (
-          <SuggestionBar>
-            <SuggestionLabel>사건명 추천</SuggestionLabel>
-            <SuggestionButton
-              type="button"
-              onClick={() => applyCombo({ domain: effectiveSuggestedDomain, type: rawSuggestion.type })}
-            >
-              {formatDomainPath(effectiveSuggestedDomain, rawSuggestion.type)} 적용
-            </SuggestionButton>
-          </SuggestionBar>
-        )}
-        {!isEditMode && effectiveRecents.length > 0 && onApplySuggestion && (
-          <RecentBar aria-label="최근 사용한 분류">
-            <RecentLabel>최근</RecentLabel>
-            {effectiveRecents.map((combo) => {
-              const key = `${combo.domain}:${combo.type ?? ''}`
-              const isCurrent = domain === combo.domain && value === combo.type
-              return (
-                <RecentChip
-                  key={key}
-                  type="button"
-                  aria-pressed={isCurrent}
-                  $active={isCurrent}
-                  onClick={() => applyCombo(combo)}
-                >
-                  {formatDomainPath(combo.domain, combo.type)}
-                </RecentChip>
-              )
-            })}
-          </RecentBar>
-        )}
-      </ToolbarRow>
+          {showSuggestion && rawSuggestion && effectiveSuggestedDomain && (
+            <SuggestionBar>
+              <SuggestionLabel>사건명 추천</SuggestionLabel>
+              <SuggestionButton
+                type="button"
+                onClick={() => applyCombo({ domain: effectiveSuggestedDomain, type: rawSuggestion.type })}
+              >
+                {formatDomainPath(effectiveSuggestedDomain, rawSuggestion.type)} 적용
+              </SuggestionButton>
+            </SuggestionBar>
+          )}
+          {showRecents && (
+            <RecentBar aria-label="최근 사용한 분류">
+              <RecentLabel>최근</RecentLabel>
+              {effectiveRecents.map((combo) => {
+                const key = `${combo.domain}:${combo.type ?? ''}`
+                const isCurrent = domain === combo.domain && value === combo.type
+                return (
+                  <RecentChip
+                    key={key}
+                    type="button"
+                    aria-pressed={isCurrent}
+                    $active={isCurrent}
+                    onClick={() => applyCombo(combo)}
+                  >
+                    {formatDomainPath(combo.domain, combo.type)}
+                  </RecentChip>
+                )
+              })}
+            </RecentBar>
+          )}
+        </ToolbarRow>
+      )}
       <RadioHost role="radiogroup" aria-label={groupLabel} onKeyDown={handleKeyDown}>
         {isNoDomain ? (
           expanded ? (
@@ -339,38 +347,38 @@ export function EventTypeField({
           </GroupStack>
         )}
       </RadioHost>
-      <Hint>
-        {selected ? (
-          <>
-            <span>
-              {formatDomainPath(domain ?? selected.defaultDomain, selected.key)} — 예: {selected.examples}
-            </span>
-            {records.length > 0 && (
+      {(selected || (domain && activeDomainDef)) && (
+        <Hint>
+          {selected ? (
+            <>
               <span>
-                {isEditMode ? (
-                  <>
-                    핵심 기록 <b>{records.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 상세 화면에서
-                    편집합니다
-                  </>
-                ) : (
-                  <>
-                    붙는 기록 <b>{records.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 아래
-                    &lsquo;기록&rsquo;에서 바로 적습니다
-                  </>
-                )}
+                {formatDomainPath(domain ?? selected.defaultDomain, selected.key)} — 예: {selected.examples}
               </span>
-            )}
-          </>
-        ) : domain ? (
-          activeDomainDef && (
-            <span>
-              <b>{activeDomainDef.label}</b> — {activeDomainDef.tagline}
-            </span>
-          )
-        ) : (
-          <span>분야를 먼저 고르거나 세부를 바로 고르면 어울리는 분야가 함께 선택됩니다.</span>
-        )}
-      </Hint>
+              {records.length > 0 && (
+                <span>
+                  {isEditMode ? (
+                    <>
+                      핵심 기록 <b>{records.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 상세 화면에서
+                      편집합니다
+                    </>
+                  ) : (
+                    <>
+                      붙는 기록 <b>{records.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 아래
+                      &lsquo;기록&rsquo;에서 바로 적습니다
+                    </>
+                  )}
+                </span>
+              )}
+            </>
+          ) : (
+            activeDomainDef && (
+              <span>
+                <b>{activeDomainDef.label}</b> — {activeDomainDef.tagline}
+              </span>
+            )
+          )}
+        </Hint>
+      )}
     </Wrap>
   )
 }
@@ -416,7 +424,7 @@ const RestSection = styled.div`
   flex-direction: column;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const MoreRow = styled.div`
@@ -441,17 +449,24 @@ const Hint = styled.p`
 `
 
 const MoreButton = styled.button`
-  padding: 6px 10px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.light};
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 999px;
   background: transparent;
   font: inherit;
   font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
   }
 
   &:focus-visible {
@@ -475,33 +490,29 @@ const SuggestionBar = styled.div`
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  align-self: flex-start;
-  padding: 5px 10px;
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  gap: 6px;
   font-size: 12px;
 `
 
 const SuggestionLabel = styled.span`
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const SuggestionButton = styled.button`
-  padding: 2px 8px;
-  border: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => theme.colors.primary};
   border-radius: 999px;
-  background: ${({ theme }) => theme.colors.primary};
-  color: #ffffff;
+  background: rgba(99, 102, 241, 0.08);
+  color: ${({ theme }) => theme.colors.primary};
   font: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    opacity: 0.92;
+    background: rgba(99, 102, 241, 0.14);
   }
 
   &:focus-visible {
@@ -524,7 +535,8 @@ const RecentLabel = styled.span`
 `
 
 const RecentChip = styled.button<{ $active: boolean }>`
-  padding: 3px 9px;
+  height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid
     ${({ $active, theme }) => ($active ? theme.colors.primary : theme.colors.border.light)};
@@ -538,8 +550,8 @@ const RecentChip = styled.button<{ $active: boolean }>`
   cursor: pointer;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.border.default};
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 
   &:focus-visible {
@@ -557,22 +569,30 @@ const QuickSearchRow = styled.div`
 const QuickSearchInput = styled.input`
   flex: 1;
   min-width: 0;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.primary};
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
+  letter-spacing: -0.01em;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
+  &:hover:not(:focus) {
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
+
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
 `
 

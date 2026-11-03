@@ -104,36 +104,50 @@ export function segmentToggleMixin(
 export function segmentGroupMixin(theme: DefaultTheme, error?: boolean) {
   return css`
     display: inline-flex;
-    align-items: stretch;
+    align-items: center;
     gap: 2px;
-    padding: 2px;
+    padding: 3px;
     border: 1px solid
-      ${error ? theme.colors.alert.danger.fg : theme.colors.border.default};
+      ${error ? theme.colors.alert.danger.fg : theme.colors.border.light};
     border-radius: ${RADIUS.control};
-    background: ${theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
+    background: ${theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
+    width: fit-content;
   `
 }
 
 export function segmentItemMixin(theme: DefaultTheme, active?: boolean) {
   return css`
-    padding: 5px 12px;
-    font-size: ${FONT.label};
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12.5px;
     font-weight: ${active ? 600 : 500};
-    line-height: 1.2;
+    letter-spacing: -0.01em;
+    line-height: 1;
     white-space: nowrap;
     cursor: pointer;
     outline: none;
     border: none;
     border-radius: 6px;
-    color: ${active ? theme.colors.active : theme.colors.text.secondary};
-    background: ${active ? theme.colors.activeLight : 'transparent'};
+    color: ${active
+      ? theme.mode === 'dark'
+        ? theme.colors.active
+        : theme.colors.text.primary
+      : theme.colors.text.secondary};
+    background: ${active
+      ? theme.mode === 'dark'
+        ? theme.colors.activeLight
+        : '#ffffff'
+      : 'transparent'};
+    box-shadow: ${active && theme.mode !== 'dark'
+      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
+      : 'none'};
     transition:
-      background 0.12s ease,
-      color 0.12s ease,
-      box-shadow 0.12s ease;
+      background 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease;
 
     &:hover:not(:disabled) {
-      color: ${active ? theme.colors.active : theme.colors.text.primary};
+      color: ${theme.colors.text.primary};
     }
     &:focus-visible {
       box-shadow: ${theme.colors.focusRing.primary};

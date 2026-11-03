@@ -1,7 +1,7 @@
 import React from 'react'
 
 import '@testing-library/jest-dom'
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { renderWithTheme } from '@/shared/test/render-with-theme'
@@ -562,5 +562,59 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     expect(onAddAsRelated).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'evt-ww1' }),
     )
+  })
+
+  it('등록 흐름에 맞춰 기본 정보(사건명→기간→분야→세부 분야·단위→개요 설명) → 참여 주체·기록 → 맥락·부가 정보 3섹션 순으로 배치한다', () => {
+    const { container } = renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          category: 'MILITARY',
+          typeSlot: <div data-testid="type-slot-body">전투·작전</div>,
+          kindSlot: {
+            value: 'SINGLE',
+            onChange: jest.fn(),
+          },
+          recordsSlot: {
+            title: '전투·작전 기록',
+            content: <div data-testid="records-slot-body">진영 보드</div>,
+          },
+        })}
+      />,
+    )
+
+    const sections = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        'section[id^="event-form-group-"]',
+      ),
+    )
+    expect(sections.map((section) => section.id)).toEqual([
+      'event-form-group-basic',
+      'event-form-group-participants',
+      'event-form-group-context',
+    ])
+
+    const basicSection = sections[0]
+    expect(within(basicSection).getByText('기본 정보')).toBeInTheDocument()
+    expect(
+      within(basicSection).getByPlaceholderText(
+        '무슨 일이 왜 일어났는지 두세 문장으로',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(basicSection).getByRole('radiogroup', { name: '사건 종류' }),
+    ).toBeInTheDocument()
+
+    const participantsSection = sections[1]
+    expect(
+      within(participantsSection).getByText('참여 주체 · 전투·작전 기록'),
+    ).toBeInTheDocument()
+    expect(
+      within(participantsSection).getByTestId('records-slot-body'),
+    ).toBeInTheDocument()
+
+    const contextSection = sections[2]
+    expect(
+      within(contextSection).getByText('맥락 · 부가 정보'),
+    ).toBeInTheDocument()
   })
 })

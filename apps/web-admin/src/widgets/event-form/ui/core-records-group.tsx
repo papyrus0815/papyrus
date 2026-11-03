@@ -17,8 +17,6 @@ import styled from 'styled-components'
 import {
   type EventFacetKey,
   type EventTypeKey,
-  FACET_LABEL,
-  metricsFor,
   typeFacets,
 } from '@/entities/event/model/event-type-registry'
 import {
@@ -45,7 +43,6 @@ import {
   KitAddButton,
   KitChipGroup,
   KitChoiceChip,
-  KitOptionalTag,
   KitRemoveButton,
   KitSelectedItem,
   KitSelectedItems,
@@ -98,7 +95,6 @@ export function CoreRecordsGroup({
   playClickSound,
 }: CoreRecordsGroupProps) {
   const facets = typeFacets(type, domain)
-  const metrics = metricsFor(type, domain)
   const [picker, setPicker] = useState<PickerKind | null>(null)
   const update = (patch: Partial<RegisterFacetDrafts>) => onDraftsChange({ ...drafts, ...patch })
   const personContext = useMemo<PersonPickerContext | undefined>(() => {
@@ -117,7 +113,6 @@ export function CoreRecordsGroup({
   }, [startDate, endDate, participants])
 
   const fieldFacets = facets.core.filter((facet) => facet !== 'participants' && !DETAIL_ONLY.includes(facet))
-  const detailFacets = [...facets.core, ...facets.optional].filter((facet) => DETAIL_ONLY.includes(facet))
 
   return (
     <>
@@ -150,7 +145,6 @@ export function CoreRecordsGroup({
       {fieldFacets.includes('power') && (
         <PersonListField
           label="취임·즉위한 인물"
-          hint="등록하면 이 인물의 재임·재위 중 사건 시기에 시작한 기록을 이 사건에 잇습니다(하나로 정해질 때)."
           people={drafts.power}
           onChange={(power) => update({ power })}
           onAdd={() => setPicker('power')}
@@ -177,7 +171,6 @@ export function CoreRecordsGroup({
                 선거 고르기
               </KitAddButton>
             )}
-            <S.Hint>선거 기록이 없으면 등록 뒤 선거 지면에서 만들어 이 사건에 이을 수 있습니다.</S.Hint>
           </S.FormField>
         </S.FormRow>
       )}
@@ -234,31 +227,12 @@ export function CoreRecordsGroup({
       {fieldFacets.includes('persons') && (
         <PersonListField
           label="참여 인물"
-          hint="이 사건에서 한 일을 한 줄로 적어 두면 인물 상세의 사건 탭에도 그대로 실립니다."
           people={drafts.persons}
           onChange={(persons) => update({ persons })}
           onAdd={() => setPicker('persons')}
           addLabel={drafts.persons.length > 0 ? '인물 더 추가' : '인물 고르기'}
           withRole
         />
-      )}
-
-      {detailFacets.length > 0 && (
-        <S.FormRow>
-          <S.FormLabel as="span">
-            등록 뒤 상세에서<KitOptionalTag>(선택)</KitOptionalTag>
-          </S.FormLabel>
-          <S.FormField>
-            <S.Hint>
-              {detailFacets
-                .map((facet) =>
-                  facet === 'metrics' && metrics.presets.length > 0 ? metrics.menuLabel : FACET_LABEL[facet],
-                )
-                .join(' · ')}{' '}
-              — 출처와 함께 적어야 해서 등록 뒤 상세의 &lsquo;진영·수치&rsquo; 탭에서 기록합니다.
-            </S.Hint>
-          </S.FormField>
-        </S.FormRow>
       )}
 
       <RecordPickers
@@ -417,20 +391,8 @@ function SidesField({
                 })}
               </UnassignedBar>
             )}
-            <SidesFooterRow>
-              {onOpenCountryModal && (
-                <KitAddButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    onOpenCountryModal()
-                  }}
-                >
-                  <FiPlus size={15} />
-                  참여국 더 추가
-                </KitAddButton>
-              )}
-              {canSuggest && (
+            {canSuggest && (
+              <SidesFooterRow>
                 <TextButton
                   type="button"
                   onClick={() =>
@@ -439,8 +401,8 @@ function SidesField({
                 >
                   참여국 역할로 나누기 (주도·동맹 / 대상·적대·피해)
                 </TextButton>
-              )}
-            </SidesFooterRow>
+              </SidesFooterRow>
+            )}
           </>
         )}
       </S.FormField>
@@ -542,7 +504,6 @@ function StatehoodField({
             })}
           </UnassignedBar>
         )}
-        <S.Hint>병합이면 무너진 나라(병합된 쪽)와 그대로 남는 나라를 함께 넣습니다. 고른 나라는 참여국에도 들어갑니다.</S.Hint>
       </S.FormField>
     </S.FormRow>
   )
@@ -592,15 +553,16 @@ function TreatyField({
           ))}
         </KitChipGroup>
         {treaty.mode === 'create' && (
-          <>
-            <S.Input
-              aria-label="새 조약 이름"
-              placeholder={suggested || '조약 이름'}
-              value={treaty.name}
-              onChange={(change) => update({ treaty: { mode: 'create', name: change.target.value } })}
-            />
-            <S.Hint>비워 두면 사건명에서 &lsquo;체결·조인&rsquo;을 뗀 이름으로 만들고, 참여국을 서명국으로 옮깁니다.</S.Hint>
-          </>
+          <S.Input
+            aria-label="새 조약 이름"
+            placeholder={
+              suggested
+                ? `${suggested} (비워 두면 사건명으로 자동 생성)`
+                : '조약 이름 (비워 두면 사건명으로 자동 생성)'
+            }
+            value={treaty.name}
+            onChange={(change) => update({ treaty: { mode: 'create', name: change.target.value } })}
+          />
         )}
         {treaty.mode === 'link' && (
           <KitSelectedItems>
@@ -621,7 +583,6 @@ function TreatyField({
 
 function PersonListField({
   label,
-  hint,
   people,
   onChange,
   onAdd,
@@ -629,7 +590,6 @@ function PersonListField({
   withRole = false,
 }: {
   label: string
-  hint: string
   people: PickedPerson[]
   onChange: (next: PickedPerson[]) => void
   onAdd: () => void
@@ -648,7 +608,7 @@ function PersonListField({
                 {withRole ? (
                   <RowInput
                     aria-label={`${person.name}이(가) 한 일`}
-                    placeholder="한 일 (선택)"
+                    placeholder="이 사건에서 한 일 (선택)"
                     value={person.role ?? ''}
                     onChange={(change) =>
                       onChange(
@@ -676,7 +636,6 @@ function PersonListField({
           <FiPlus size={15} />
           {addLabel}
         </KitAddButton>
-        <S.Hint>{hint}</S.Hint>
       </S.FormField>
     </S.FormRow>
   )
@@ -816,20 +775,20 @@ const RowList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 `
 
 const Row = styled.div`
   display: grid;
   grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.8fr) 28px;
   align-items: center;
-  gap: 8px;
-  padding: 0 0 8px;
+  gap: 10px;
+  padding: 2px 0 10px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
 
   &:last-child {
-    padding-bottom: 0;
+    padding-bottom: 2px;
     border-bottom: none;
   }
 
@@ -843,8 +802,9 @@ const Row = styled.div`
 `
 
 const RowName = styled.span`
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
@@ -856,16 +816,27 @@ const rowControl = `
   border-radius: 8px;
   font-family: inherit;
   font-size: 13px;
+  letter-spacing: -0.01em;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 `
 
 const RowInput = styled.input`
   ${rowControl}
   min-width: 0;
-  padding: 0 10px;
+  padding: 0 11px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.content};
   color: ${({ theme }) => theme.colors.text.primary};
 
+  &::placeholder {
+    color: ${({ theme }) => S.getC(theme).text.muted};
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => S.getC(theme).border.hover};
+  }
+
+  &:focus,
   &:focus-visible {
     outline: none;
     border-color: ${({ theme }) => S.getC(theme).border.focus};
@@ -875,12 +846,22 @@ const RowInput = styled.input`
 
 const RowSelect = styled.select`
   ${rowControl}
-  padding: 0 10px;
+  appearance: none;
+  padding: 0 28px 0 11px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) => S.getC(theme).background.content};
+  background-color: ${({ theme }) => S.getC(theme).background.content};
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
   color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 600;
+  cursor: pointer;
 
+  &:hover {
+    border-color: ${({ theme }) => S.getC(theme).border.hover};
+  }
+
+  &:focus,
   &:focus-visible {
     outline: none;
     border-color: ${({ theme }) => S.getC(theme).border.focus};
@@ -891,7 +872,7 @@ const RowSelect = styled.select`
 const SideBoardGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px;
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
@@ -907,16 +888,28 @@ const SideCard = styled.div`
 `
 
 const SideNameInput = styled.input`
-  height: 30px;
-  border-radius: 7px;
+  height: 34px;
+  border-radius: 8px;
   font-family: inherit;
   font-size: 13px;
-  padding: 0 10px;
+  letter-spacing: -0.01em;
+  padding: 0 11px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.content};
   color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 600;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
+  &::placeholder {
+    color: ${({ theme }) => S.getC(theme).text.muted};
+    font-weight: 500;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => S.getC(theme).border.hover};
+  }
+
+  &:focus,
   &:focus-visible {
     outline: none;
     border-color: ${({ theme }) => S.getC(theme).border.focus};
@@ -928,8 +921,11 @@ const SideMemberWrap = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  min-height: 28px;
+  gap: 6px;
+  min-height: 36px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: ${({ theme }) => S.getC(theme).background.section};
 `
 
 const SideEmptyHint = styled.span`
@@ -993,7 +989,7 @@ const UnassignedChip = styled.span`
   gap: 4px;
   padding: 2px 4px 2px 8px;
   border-radius: 999px;
-  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
   background: ${({ theme }) => S.getC(theme).background.section};
   font-size: 12px;
 `
@@ -1029,16 +1025,21 @@ const SidesFooterRow = styled.div`
 `
 
 const TextButton = styled.button`
-  padding: 2px 0;
-  border: none;
-  background: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 999px;
+  background: transparent;
   font: inherit;
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
-  text-decoration: underline;
-  text-underline-offset: 3px;
   cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
 `
 
 const StatehoodGrid = styled.div`

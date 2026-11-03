@@ -289,11 +289,11 @@ export const FormSection = styled.div`
 // Notion 스타일 레이아웃: Label/Field 좌우 분리
 export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
+  grid-template-columns: 136px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
-  padding: ${(props) => (props.$compact ? '0' : '16px 0')};
-  margin-top: ${(props) => (props.$compact ? '0' : '0')};
+  padding: ${(props) => (props.$compact ? '0' : '12px 0')};
+  margin-top: 0;
   border-bottom: ${(props) =>
     props.$noBorder ? 'none' : `1px solid ${props.theme.colors.border.light}`};
 
@@ -306,14 +306,14 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   }
 
   @media (max-width: 1024px) {
-    grid-template-columns: 128px minmax(0, 1fr);
+    grid-template-columns: 124px minmax(0, 1fr);
     gap: 16px;
   }
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
-    gap: 8px;
-    padding: ${(props) => (props.$compact ? '0' : '16px 0')};
+    gap: 6px;
+    padding: ${(props) => (props.$compact ? '0' : '12px 0')};
   }
 `
 
@@ -324,11 +324,12 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
  */
 export const FormLabel = styled.label`
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.4;
-  color: ${({ theme }) => theme.colors.text.primary};
-  padding-top: 10px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => getC(theme).text.secondary};
+  padding-top: 9px;
 
   @media (max-width: 768px) {
     padding-top: 0;
@@ -338,43 +339,41 @@ export const FormLabel = styled.label`
 export const PeriodBadge = styled.div`
   /* 라벨(글 흐름) 아래 줄에 선다 */
   width: fit-content;
-  margin-top: 8px;
+  margin-top: 6px;
   font-size: 11px;
   font-weight: 600;
   color: ${({ theme }) => getC(theme).primary.dark};
   background: ${({ theme }) =>
-    pickC(theme, '#f3effe', 'rgba(167, 139, 250, 0.14)')};
-  border-radius: 6px;
-  padding: 3px 8px;
+    pickC(theme, 'rgba(99, 102, 241, 0.08)', 'rgba(167, 139, 250, 0.14)')};
+  border-radius: 999px;
+  padding: 2px 8px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
 
   span {
     color: ${({ theme }) => getC(theme).text.muted};
-    font-size: 10px;
+    font-size: 10.5px;
   }
 `
 
 export const DateRangeRow = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px;
 `
 
 export const DateRangeColumn = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 `
 
 export const DateRangeLabel = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => getC(theme).text.secondary};
+  letter-spacing: -0.01em;
 `
 
 export const FormField = styled.div`
@@ -395,7 +394,8 @@ export const Required = styled.span.attrs({
   role: 'img',
 })`
   color: #ef4444;
-  font-size: 14px;
+  font-size: 13px;
+  margin-left: 2px;
 `
 
 /** 공용 Input — FormInput 컴포넌트 직접 re-export */
@@ -408,7 +408,7 @@ export { FormInput as Input, FormTextarea as Textarea } from '@/shared/ui/form-i
 export const CategoryGrid = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 `
 
 // 확장 가능한 카테고리 카드
@@ -417,30 +417,31 @@ export const CategoryCard = styled.button<{
   $selected: boolean
 }>`
   position: relative;
-  /*
-   * 색은 **분야 자기 색**(목록과 같은 분야 레지스트리 soft 톤) — 칩이 인라인 CSS 변수
-   * --cat-rgb / --cat-text로 받는다. 예전엔 DB id에서 키를 뽑아 전부 회색('other')이었다.
-   */
+  height: 34px;
   border: 1px solid
     ${({ $selected, theme }) =>
-      $selected ? 'rgba(var(--cat-rgb), 0.6)' : getC(theme).border.default};
+      $selected ? 'rgba(var(--cat-rgb), 0.55)' : getC(theme).border.default};
   border-radius: 999px;
-  padding: 5px 13px 5px 5px;
+  padding: 0 13px;
   background: ${({ $selected, theme }) =>
     $selected
-      ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.2 : 0.09})`
+      ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.2 : 0.1})`
       : getC(theme).background.content};
   cursor: pointer;
   transition:
     border-color 0.15s ease,
     background 0.15s ease,
+    color 0.15s ease,
     box-shadow 0.15s ease;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  /* 선택은 색만으로 말하지 않는다 — 테를 한 겹 더 두껍게(안쪽 링) */
-  box-shadow: ${({ $selected }) =>
-    $selected ? 'inset 0 0 0 1px rgba(var(--cat-rgb), 0.6)' : 'none'};
+  gap: 6px;
+  box-shadow: ${({ $selected, theme }) =>
+    $selected
+      ? '0 1px 2px rgba(var(--cat-rgb), 0.12)'
+      : theme.mode === 'dark'
+        ? 'none'
+        : '0 1px 2px rgba(15, 23, 42, 0.03)'};
 
   &:focus-visible {
     outline: 2px solid ${({ theme }) => getC(theme).border.focus};
@@ -448,40 +449,36 @@ export const CategoryCard = styled.button<{
   }
 
   &:hover {
-    border-color: ${({ $selected }) =>
-      $selected ? 'rgba(var(--cat-rgb), 0.75)' : 'rgba(var(--cat-rgb), 0.45)'};
+    border-color: ${({ $selected, theme }) =>
+      $selected ? 'rgba(var(--cat-rgb), 0.75)' : getC(theme).border.hover};
     background: ${({ $selected, theme }) =>
       $selected
-        ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.26 : 0.13})`
-        : `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.1 : 0.04})`};
+        ? `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.25 : 0.14})`
+        : getC(theme).background.hover};
   }
 `
 
-export const CategoryIcon = styled.div<{
+export const CategoryIcon = styled.span<{
   $selected?: boolean
 }>`
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
   flex: none;
-  /* 안 고른 칩도 아이콘 원에 자기 색을 옅게 — 11개를 훑을 때 색이 먼저 길을 안내한다 */
-  background: ${({ $selected, theme }) =>
-    $selected
-      ? 'rgb(var(--cat-rgb))'
-      : `rgba(var(--cat-rgb), ${theme.mode === 'dark' ? 0.2 : 0.1})`};
-  color: ${({ $selected }) => ($selected ? '#ffffff' : 'var(--cat-text)')};
-  display: flex;
+  color: ${({ $selected, theme }) =>
+    $selected ? 'var(--cat-text)' : getC(theme).text.muted};
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.15s ease;
 `
 
 export const CategoryLabel = styled.span`
   font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => getC(theme).text.secondary};
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => getC(theme).text.primary};
   white-space: nowrap;
 
   [aria-pressed='true'] > & {
+    font-weight: 600;
     color: var(--cat-text);
   }
 `
@@ -521,11 +518,12 @@ export const DateInputWrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+  height: 38px;
   border: 1px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 8px;
-  padding: 9px 12px;
+  padding: 0 12px;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   background: ${({ theme }) => getC(theme).background.content};
   max-width: ${FORM_FIELD_MAX_WIDTH};
 
@@ -548,7 +546,8 @@ export const DateInputWrapper = styled.div`
 
 export const DateInputDisplay = styled.div`
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
   color: ${({ theme }) => getC(theme).text.primary};
 
   &:empty::before {
@@ -708,77 +707,48 @@ export const ThumbnailDeleteButton = styled.button`
 `
 
 export const UploadButton = styled.button`
-  padding: 7px 14px;
+  height: 36px;
+  padding: 0 13px;
   font-size: 13px;
   font-weight: 600;
-  color: ${({ theme }) => getC(theme).text.secondary};
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => getC(theme).text.primary};
   background: ${({ theme }) => getC(theme).background.content};
   border: 1px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 8px;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.04)'};
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => getC(theme).background.section};
+    background: ${({ theme }) => getC(theme).background.hover};
     border-color: ${({ theme }) => getC(theme).border.hover};
   }
 `
 
-// ============================================
-// 내용 작성 섹션: 에디터 + 사이드바 레이아웃
-// ============================================
-
-// ============================================
-// 사이드바: 사건 빠른 정보
-// ============================================
-
-// ============================================
-// 사이드바: 목차 / 섹션 네비게이션
-// ============================================
-
-// ============================================
-// 사이드바: 작성 통계
-// ============================================
-
-// ============================================
-// 사이드바: 빠른 참조
-// ============================================
-
-// ============================================
-// 기존 섹션 추가 버튼
-// ============================================
-
-// 섹션 사이에 나타나는 작은 추가 버튼
-
 /** 공용 TextArea — FormTextarea 컴포넌트 직접 re-export (Textarea alias) */
 export { FormTextarea as TextArea } from '@/shared/ui/form-input/form-input'
 
-// 태그 관련 스타일
-
-// 선택된 사건 리스트
-
-// 관련 국가 스타일
-
 export const SelectedItemsContainer = styled.div`
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
 `
 
 export const SelectedItem = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 12px;
-  background: ${({ theme }) =>
-    pickC(theme, 'rgba(99, 102, 241, 0.08)', 'rgba(167, 139, 250, 0.14)')};
-  border: 1px solid
-    ${({ theme }) =>
-      pickC(theme, 'rgba(99, 102, 241, 0.2)', 'rgba(167, 139, 250, 0.30)')};
-  border-radius: 20px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  background: ${({ theme }) => getC(theme).background.section};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
+  border-radius: 8px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => getC(theme).text.primary};
 `
 
@@ -787,39 +757,53 @@ export const AddButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 14px;
+  height: 36px;
+  padding: 0 13px;
   background: ${({ theme }) => getC(theme).background.content};
-  color: ${({ theme }) => getC(theme).text.secondary};
+  color: ${({ theme }) => getC(theme).text.primary};
   border: 1px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 8px;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.04)'};
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   cursor: pointer;
   width: fit-content;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  svg {
+    color: ${({ theme }) => getC(theme).primary.main};
+    transition: transform 0.15s ease;
+  }
 
   &:hover {
-    background: ${({ theme }) => getC(theme).background.section};
+    background: ${({ theme }) => getC(theme).background.hover};
     border-color: ${({ theme }) => getC(theme).border.hover};
   }
 `
 
 export const RemoveButton = styled.button`
+  width: 24px;
+  height: 24px;
   border: none;
-  background: rgba(239, 68, 68, 0.1);
-  padding: 4px;
+  background: transparent;
+  padding: 0;
   border-radius: 6px;
-  color: #ef4444;
+  color: ${({ theme }) => getC(theme).text.muted};
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: color 0.14s ease, background-color 0.14s ease;
   flex-shrink: 0;
 
-  &:hover {
-    background: rgba(239, 68, 68, 0.15);
-    color: #dc2626;
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+    color: #ef4444;
   }
 `
 
