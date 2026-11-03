@@ -4,14 +4,6 @@ import styled, { css } from 'styled-components'
 
 import type { CabinetMember } from './cabinet-member.types'
 
-const EMPTY_EXECUTIVE_SPECS = [
-  '직위 · 칭호',
-  '취임 · 즉위',
-  '재임 · 재위',
-  '소속 각료',
-  '선출 · 계승',
-] as const
-
 export interface CabinetBranchSlot {
   key: string
   title: string
@@ -227,34 +219,6 @@ export function CabinetMindMap({
   const leftItems = combinedBranches.slice(0, pivot)
   const rightItems = combinedBranches.slice(pivot)
 
-  if (!head) {
-    return (
-      <EmptyBlockButton
-        type="button"
-        onClick={() => onRegisterCabinetHead?.()}
-        aria-label="군주 · 수반 등록"
-      >
-        <EmptyHeadRow>
-          <EmptyAccentBar aria-hidden />
-          <EmptyHeadline>아직 등록된 군주 · 수반이 없습니다</EmptyHeadline>
-          <EmptyPeriod>
-            {emptyHeadRoleLabel ?? '국가원수 · 정부수반'} · 재위·재임 기간 미입력
-          </EmptyPeriod>
-          {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
-          {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
-        </EmptyHeadRow>
-        <EmptySpecStrip>
-          {EMPTY_EXECUTIVE_SPECS.map((label) => (
-            <EmptySpecColumn key={label}>
-              <EmptySpecKey>{label}</EmptySpecKey>
-              <EmptySpecValue>—</EmptySpecValue>
-            </EmptySpecColumn>
-          ))}
-        </EmptySpecStrip>
-      </EmptyBlockButton>
-    )
-  }
-
   return (
     <MapWrap>
       <MapRoot
@@ -278,7 +242,11 @@ export function CabinetMindMap({
         )}
         {hasBranches && (
           <MapSide $side="left">
-            <SideGroup side="left" nodeKeys={leftItems.map((item) => item.key)}>
+            <SideGroup
+              side="left"
+              muted={!head}
+              nodeKeys={leftItems.map((item) => item.key)}
+            >
               {leftItems.map((item) =>
                 item.kind === 'member' ? (
                   <BranchNode
@@ -379,50 +347,88 @@ export function CabinetMindMap({
               </>
             )}
 
-            <CenterCard
-              type="button"
-              $branches={hasBranches}
-              $monarch={isMonarchCenter}
-              onClick={() => head.personId && onSelectPerson(head.personId)}
-              aria-label={`${head.name} 상세`}
-            >
-              <CenterFace $branches={hasBranches} $monarch={isMonarchCenter}>
-                {renderFace(head, 112)}
-              </CenterFace>
-              <CenterRole $branches={hasBranches} $monarch={isMonarchCenter}>
-                {head.ordinal != null && `제${head.ordinal}대 `}
-                {head.title}
-                {!head.endDate && <CenterNow>현직</CenterNow>}
-                {head.regnalEraLabel && (
-                  <CenterEraTag>{head.regnalEraLabel}</CenterEraTag>
+            {head ? (
+              <CenterCard
+                type="button"
+                $branches={hasBranches}
+                $monarch={isMonarchCenter}
+                onClick={() => head.personId && onSelectPerson(head.personId)}
+                aria-label={`${head.name} 상세`}
+              >
+                <CenterFace $branches={hasBranches} $monarch={isMonarchCenter}>
+                  {renderFace(head, 112)}
+                </CenterFace>
+                <CenterRole $branches={hasBranches} $monarch={isMonarchCenter}>
+                  {head.ordinal != null && `제${head.ordinal}대 `}
+                  {head.title}
+                  {!head.endDate && <CenterNow>현직</CenterNow>}
+                  {head.regnalEraLabel && (
+                    <CenterEraTag>{head.regnalEraLabel}</CenterEraTag>
+                  )}
+                  {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
+                  {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
+                </CenterRole>
+                <CenterName $branches={hasBranches}>{head.name}</CenterName>
+                {cabinetLabel && (
+                  <CenterCabinet $branches={hasBranches}>
+                    {cabinetLabel}
+                  </CenterCabinet>
                 )}
-                {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
-                {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
-              </CenterRole>
-              <CenterName $branches={hasBranches}>{head.name}</CenterName>
-              {cabinetLabel && (
+                {showPosition && nav && nav.total > 1 && (
+                  <CenterOrdinal $branches={hasBranches}>
+                    {nav.index + 1} / {nav.total}대
+                  </CenterOrdinal>
+                )}
+                {stats.length > 0 && (
+                  <CenterStats $branches={hasBranches}>
+                    {stats.map((stat) => (
+                      <CenterStat key={stat.key}>
+                        <CenterStatKey>{stat.label}</CenterStatKey>
+                        <CenterStatValue $warn={stat.warn}>
+                          {stat.value}
+                        </CenterStatValue>
+                      </CenterStat>
+                    ))}
+                  </CenterStats>
+                )}
+              </CenterCard>
+            ) : (
+              <CenterCard
+                type="button"
+                $branches={hasBranches}
+                onClick={() => onRegisterCabinetHead?.()}
+                aria-label="군주 · 수반 등록"
+              >
+                <CenterFace $branches={hasBranches} $empty>
+                  <EmptyLeaderAvatar aria-hidden>—</EmptyLeaderAvatar>
+                </CenterFace>
+                <CenterRole $branches={hasBranches} $empty>
+                  {emptyHeadRoleLabel ?? '국가원수 · 정부수반'}
+                  {polityLabel && <CenterPolity>{polityLabel}</CenterPolity>}
+                  {regimeLabel && <CenterRegime>{regimeLabel}</CenterRegime>}
+                </CenterRole>
+                <CenterName $branches={hasBranches} $empty>
+                  —
+                </CenterName>
                 <CenterCabinet $branches={hasBranches}>
-                  {cabinetLabel}
+                  + 수반 · 군주 등록
                 </CenterCabinet>
-              )}
-              {showPosition && nav && nav.total > 1 && (
-                <CenterOrdinal $branches={hasBranches}>
-                  {nav.index + 1} / {nav.total}대
-                </CenterOrdinal>
-              )}
-              {stats.length > 0 && (
                 <CenterStats $branches={hasBranches}>
-                  {stats.map((stat) => (
-                    <CenterStat key={stat.key}>
-                      <CenterStatKey>{stat.label}</CenterStatKey>
-                      <CenterStatValue $warn={stat.warn}>
-                        {stat.value}
-                      </CenterStatValue>
-                    </CenterStat>
-                  ))}
+                  <CenterStat>
+                    <CenterStatKey>취임 · 즉위</CenterStatKey>
+                    <CenterStatValue $muted>—</CenterStatValue>
+                  </CenterStat>
+                  <CenterStat>
+                    <CenterStatKey>재임 · 재위</CenterStatKey>
+                    <CenterStatValue $muted>—</CenterStatValue>
+                  </CenterStat>
+                  <CenterStat>
+                    <CenterStatKey>각료</CenterStatKey>
+                    <CenterStatValue $muted>—</CenterStatValue>
+                  </CenterStat>
                 </CenterStats>
-              )}
-            </CenterCard>
+              </CenterCard>
+            )}
 
             {showReignCabinetsBelow && (
               <>
@@ -497,7 +503,11 @@ export function CabinetMindMap({
 
         {hasBranches && (
           <MapSide $side="right">
-            <SideGroup side="right" nodeKeys={rightItems.map((item) => item.key)}>
+            <SideGroup
+              side="right"
+              muted={!head}
+              nodeKeys={rightItems.map((item) => item.key)}
+            >
               {rightItems.map((item) =>
                 item.kind === 'member' ? (
                   <BranchNode
@@ -586,6 +596,7 @@ export function CabinetMindMap({
 
 interface SideGroupProps {
   side: 'left' | 'right'
+  muted?: boolean
   nodeKeys: string[]
   children: ReactNode
 }
@@ -597,7 +608,7 @@ interface SideGroupProps {
  * 그 안에서 묶음이 어디에 놓이는지 알 수 없지만, 묶음 자신을 기준으로 하면 첫 노드부터
  * 마지막 노드까지가 곧 좌표계다.
  */
-function SideGroup({ side, nodeKeys, children }: SideGroupProps) {
+function SideGroup({ side, muted = false, nodeKeys, children }: SideGroupProps) {
   const height = groupHeightOf(nodeKeys.length)
   const originY = height / 2
 
@@ -606,6 +617,7 @@ function SideGroup({ side, nodeKeys, children }: SideGroupProps) {
       {nodeKeys.length > 0 && (
         <BranchSvg
           $side={side}
+          $muted={muted}
           width={GUTTER}
           height={height}
           viewBox={`0 0 ${GUTTER} ${height}`}
@@ -884,7 +896,7 @@ const GroupBox = styled.div<{ $side: 'left' | 'right' }>`
   }
 `
 
-const BranchSvg = styled.svg<{ $side: 'left' | 'right' }>`
+const BranchSvg = styled.svg<{ $side: 'left' | 'right'; $muted?: boolean }>`
   position: absolute;
   top: 0;
   ${({ $side }) =>
@@ -896,6 +908,11 @@ const BranchSvg = styled.svg<{ $side: 'left' | 'right' }>`
     fill: none;
     stroke: ${lineColor};
     stroke-width: 1.25;
+    ${({ $muted }) =>
+      $muted &&
+      css`
+        stroke-dasharray: 4 4;
+      `}
   }
 
   @container (max-width: 820px) {
@@ -1199,7 +1216,11 @@ const CenterFace = styled.span<{
   }
 `
 
-const CenterRole = styled.span<{ $branches?: boolean; $monarch?: boolean }>`
+const CenterRole = styled.span<{
+  $branches?: boolean
+  $monarch?: boolean
+  $empty?: boolean
+}>`
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1208,12 +1229,14 @@ const CenterRole = styled.span<{ $branches?: boolean; $monarch?: boolean }>`
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: ${({ $monarch, theme }) =>
-    $monarch
-      ? theme.mode === 'dark'
-        ? '#fbbf24'
-        : '#b45309'
-      : CENTER_ACCENT};
+  color: ${({ $monarch, $empty, theme }) =>
+    $empty
+      ? theme.colors.text.tertiary
+      : $monarch
+        ? theme.mode === 'dark'
+          ? '#fbbf24'
+          : '#b45309'
+        : CENTER_ACCENT};
   ${({ $branches }) =>
     !$branches &&
     css`
@@ -1737,91 +1760,17 @@ const VacantValue = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const EmptyHeadline = styled.p`
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  transition: color 0.15s ease;
-`
-
-const EmptyBlockButton = styled.button`
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: none;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover ${EmptyHeadline} {
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-`
-
-const EmptyHeadRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
+const EmptyLeaderAvatar = styled.span`
+  display: inline-flex;
   align-items: center;
-  gap: 8px 10px;
-  min-width: 0;
-`
-
-const EmptyAccentBar = styled.span`
-  width: 3.5px;
-  height: 18px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: ${({ theme }) => theme.colors.border.medium};
-`
-
-const EmptyPeriod = styled.span`
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EmptySpecStrip = styled.dl`
-  margin: 0;
-  padding-left: 13px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  row-gap: 12px;
-`
-
-const EmptySpecColumn = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding-right: 24px;
-  margin-right: 24px;
-  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  &:last-child {
-    padding-right: 0;
-    margin-right: 0;
-    border-right: none;
-  }
-`
-
-const EmptySpecKey = styled.dt`
-  font-size: 11.5px;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: 0.01em;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EmptySpecValue = styled.dd`
-  margin: 0;
-  font-size: 14.5px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: transparent;
 `
 
 const NodeFace = styled.span`
