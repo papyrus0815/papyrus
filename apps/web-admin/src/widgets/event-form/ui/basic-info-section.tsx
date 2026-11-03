@@ -14,6 +14,7 @@ import styled, { type DefaultTheme, useTheme } from 'styled-components'
 import {
   EVENT_COUNTRY_ROLE_OPTIONS,
   type EventCountryParticipant,
+  type EventCountryRole,
   type RecentParticipantRef,
   type SuggestedCountryCandidate,
   eventCountryRoleHint,
@@ -23,6 +24,7 @@ import {
   readRecentParticipants,
   resolveBatchCountryQuery,
   suggestCountriesFromTitle,
+  swapTwoParticipants,
 } from '@/entities/event/model'
 import * as S from '@/pages/events/create/event-create.styles'
 import { EVENT_DOMAIN_ORDER, EVENT_DOMAINS, type EventDomainKey } from '@/entities/event/model/event-domain'
@@ -321,6 +323,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   }
 
   const [countryQuickQuery, setCountryQuickQuery] = useState('')
+  const [activeCountryResultIndex, setActiveCountryResultIndex] = useState(0)
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
   )
@@ -478,6 +481,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         : { countryId: target.countryId, role },
     ])
     setCountryQuickQuery('')
+    setActiveCountryResultIndex(0)
   }
 
   const addBatchParticipants = (
@@ -503,6 +507,24 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       ),
     ])
     setCountryQuickQuery('')
+    setActiveCountryResultIndex(0)
+  }
+
+  const handleSwapTwoParticipants = () => {
+    if (relatedCountries.length !== 2) return
+    playClickSound()
+    const [first, second] = relatedCountries
+    const keyA = participantKey(first)
+    const keyB = participantKey(second)
+    setRelatedCountries(swapTwoParticipants(relatedCountries))
+    if (participantSidesSlot) {
+      const slotA = participantSidesSlot.assignment[keyA] ?? null
+      const slotB = participantSidesSlot.assignment[keyB] ?? null
+      if (slotA !== slotB) {
+        participantSidesSlot.onAssign(keyA, slotB)
+        participantSidesSlot.onAssign(keyB, slotA)
+      }
+    }
   }
 
   const replaceParticipantAt = (
@@ -950,7 +972,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           )
                       if (!country) return null
                       const key = participantKey(participant)
-                      const currentRole = participant.role ?? 'PARTICIPANT'
+                      const currentRole: EventCountryRole =
+                        participant.role ?? 'PARTICIPANT'
                       const patch = (
                         next: Partial<EventCountryParticipant>,
                       ) =>
@@ -960,142 +983,173 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           ),
                         )
                       return (
-                        <ParticipantRow
-                          key={key}
-                          $withSides={Boolean(participantSidesSlot)}
-                        >
-                          <ParticipantName>
-                            {isHistorical
-                              ? `🏛️ ${country.name}`
-                              : `${(country as CountryResponseDto).flagEmoji ?? ''} ${country.name}`}
-                          </ParticipantName>
-                          <RoleSelect
-                            value={currentRole}
-                            aria-label={`${country.name} 역할`}
-                            title={
-                              eventCountryRoleHint(currentRole) ?? undefined
-                            }
-                            onChange={(changeEvent) =>
-                              patch({
-                                role: changeEvent.target
-                                  .value as EventCountryParticipant['role'],
-                              })
-                            }
-                          >
-                            {EVENT_COUNTRY_ROLE_OPTIONS.filter(
-                              // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
-                              (option) =>
-                                !option.deprecated ||
-                                option.value === participant.role,
-                            ).map((option) => (
-                              <option
-                                key={option.value}
-                                value={option.value}
-                                title={option.hint}
-                              >
-                                {option.label}
-                              </option>
-                            ))}
-                          </RoleSelect>
-                          {participantSidesSlot && (
-                            <ParticipantSideGroup
+                        <ParticipantRow key={key} $role={currentRole}>
+                          <ParticipantHeaderLine>
+                            <ParticipantName>
+                              {isHistorical
+                                ? `🏛️ ${country.name}`
+                                : `${(country as CountryResponseDto).flagEmoji ?? ''} ${country.name}`}
+                            </ParticipantName>
+                            <ParticipantRolePillGroup
                               role="group"
-                              aria-label={`${country.name} 진영 배정`}
+                              aria-label={`${country.name} 빠른 역할 선택`}
                             >
-                              {(['A', 'B'] as const).map((slot, slotIdx) => {
-                                const currentSlot =
-                                  participantSidesSlot.assignment[key] ?? null
-                                const active = currentSlot === slot
+                              {(
+                                [
+                                  { value: 'INITIATOR', label: '주도국' },
+                                  { value: 'TARGET', label: '대상국' },
+                                  { value: 'PARTICIPANT', label: '참여국' },
+                                ] as const
+                              ).map((pill) => {
+                                const active = currentRole === pill.value
                                 return (
-                                  <ParticipantSideBtn
-                                    key={slot}
+                                  <ParticipantRolePill
+                                    key={pill.value}
                                     type="button"
                                     aria-pressed={active}
+                                    aria-label={`${country.name} ${pill.label} 지정`}
                                     $active={active}
-                                    title={`${slotIdx + 1}번 진영 (${participantSidesSlot.sideNames[slotIdx]})`}
-                                    aria-label={`${country.name} ${slotIdx + 1}편`}
+                                    $role={pill.value}
                                     onClick={() => {
                                       playClickSound()
-                                      participantSidesSlot.onAssign(
-                                        key,
-                                        active ? null : slot,
+                                      patch({ role: pill.value })
+                                    }}
+                                  >
+                                    {pill.label}
+                                  </ParticipantRolePill>
+                                )
+                              })}
+                            </ParticipantRolePillGroup>
+                            <RoleSelect
+                              value={currentRole}
+                              aria-label={`${country.name} 역할`}
+                              title={
+                                eventCountryRoleHint(currentRole) ?? undefined
+                              }
+                              onChange={(changeEvent) =>
+                                patch({
+                                  role: changeEvent.target
+                                    .value as EventCountryParticipant['role'],
+                                })
+                              }
+                            >
+                              {EVENT_COUNTRY_ROLE_OPTIONS.filter(
+                                // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
+                                (option) =>
+                                  !option.deprecated ||
+                                  option.value === participant.role,
+                              ).map((option) => (
+                                <option
+                                  key={option.value}
+                                  value={option.value}
+                                  title={option.hint}
+                                >
+                                  {option.label}
+                                </option>
+                              ))}
+                            </RoleSelect>
+                            {participantSidesSlot && (
+                              <ParticipantSideGroup
+                                role="group"
+                                aria-label={`${country.name} 진영 배정`}
+                              >
+                                {(['A', 'B'] as const).map((slot, slotIdx) => {
+                                  const currentSlot =
+                                    participantSidesSlot.assignment[key] ?? null
+                                  const active = currentSlot === slot
+                                  return (
+                                    <ParticipantSideBtn
+                                      key={slot}
+                                      type="button"
+                                      aria-pressed={active}
+                                      $active={active}
+                                      title={`${slotIdx + 1}번 진영 (${participantSidesSlot.sideNames[slotIdx]})`}
+                                      aria-label={`${country.name} ${slotIdx + 1}편`}
+                                      onClick={() => {
+                                        playClickSound()
+                                        participantSidesSlot.onAssign(
+                                          key,
+                                          active ? null : slot,
+                                        )
+                                      }}
+                                    >
+                                      {slotIdx + 1}편
+                                    </ParticipantSideBtn>
+                                  )
+                                })}
+                              </ParticipantSideGroup>
+                            )}
+                            <ParticipantActions>
+                              {relatedCountries.length > 1 && (
+                                <>
+                                  <ParticipantMoveButton
+                                    type="button"
+                                    disabled={index === 0}
+                                    aria-label={`${country.name} 위로 이동`}
+                                    title="위로 이동"
+                                    onClick={() => {
+                                      playClickSound()
+                                      setRelatedCountries(
+                                        moveParticipant(
+                                          relatedCountries,
+                                          index,
+                                          'up',
+                                        ),
                                       )
                                     }}
                                   >
-                                    {slotIdx + 1}편
-                                  </ParticipantSideBtn>
-                                )
-                              })}
-                            </ParticipantSideGroup>
-                          )}
-                          <RoleDescriptionInput
-                            value={participant.roleDescription ?? ''}
-                            aria-label={`${country.name}가 한 일`}
-                            placeholder={roleDescriptionPlaceholder}
-                            onChange={(changeEvent) =>
-                              patch({
-                                roleDescription: changeEvent.target.value,
-                              })
-                            }
-                          />
-                          <ParticipantActions>
-                            {relatedCountries.length > 1 && (
-                              <>
-                                <ParticipantMoveButton
-                                  type="button"
-                                  disabled={index === 0}
-                                  aria-label={`${country.name} 위로 이동`}
-                                  title="위로 이동"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setRelatedCountries(
-                                      moveParticipant(
-                                        relatedCountries,
-                                        index,
-                                        'up',
-                                      ),
-                                    )
-                                  }}
-                                >
-                                  <FiArrowUp size={13} />
-                                </ParticipantMoveButton>
-                                <ParticipantMoveButton
-                                  type="button"
-                                  disabled={
-                                    index === relatedCountries.length - 1
-                                  }
-                                  aria-label={`${country.name} 아래로 이동`}
-                                  title="아래로 이동"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setRelatedCountries(
-                                      moveParticipant(
-                                        relatedCountries,
-                                        index,
-                                        'down',
-                                      ),
-                                    )
-                                  }}
-                                >
-                                  <FiArrowDown size={13} />
-                                </ParticipantMoveButton>
-                              </>
-                            )}
-                            <ParticipantRemove
-                              type="button"
-                              aria-label={`${country.name} 제거`}
-                              onClick={() => {
-                                playClickSound()
-                                setRelatedCountries(
-                                  relatedCountries.filter(
-                                    (row) => participantKey(row) !== key,
-                                  ),
-                                )
-                              }}
-                            >
-                              <FiX size={14} />
-                            </ParticipantRemove>
-                          </ParticipantActions>
+                                    <FiArrowUp size={13} />
+                                  </ParticipantMoveButton>
+                                  <ParticipantMoveButton
+                                    type="button"
+                                    disabled={
+                                      index === relatedCountries.length - 1
+                                    }
+                                    aria-label={`${country.name} 아래로 이동`}
+                                    title="아래로 이동"
+                                    onClick={() => {
+                                      playClickSound()
+                                      setRelatedCountries(
+                                        moveParticipant(
+                                          relatedCountries,
+                                          index,
+                                          'down',
+                                        ),
+                                      )
+                                    }}
+                                  >
+                                    <FiArrowDown size={13} />
+                                  </ParticipantMoveButton>
+                                </>
+                              )}
+                              <ParticipantRemove
+                                type="button"
+                                aria-label={`${country.name} 제거`}
+                                onClick={() => {
+                                  playClickSound()
+                                  setRelatedCountries(
+                                    relatedCountries.filter(
+                                      (row) => participantKey(row) !== key,
+                                    ),
+                                  )
+                                }}
+                              >
+                                <FiX size={14} />
+                              </ParticipantRemove>
+                            </ParticipantActions>
+                          </ParticipantHeaderLine>
+                          <ParticipantDescriptionLine>
+                            <RoleDescriptionInput
+                              value={participant.roleDescription ?? ''}
+                              aria-label={`${country.name}가 한 일`}
+                              placeholder={roleDescriptionPlaceholder}
+                              onChange={(changeEvent) =>
+                                patch({
+                                  roleDescription: changeEvent.target.value,
+                                })
+                              }
+                            />
+                          </ParticipantDescriptionLine>
                         </ParticipantRow>
                       )
                     })}
@@ -1106,22 +1160,48 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     <CountryQuickSearchInput
                       type="search"
                       aria-label="참여국 빠른 검색"
-                      placeholder="국가 이름 검색 (쉼표로 여러 국가 입력 가능)"
+                      placeholder="국가 이름·약칭 빠른 검색 (예: 청일, 영프, 프랑스, 영국…)"
                       value={countryQuickQuery}
-                      onChange={(changeEvent) =>
+                      onChange={(changeEvent) => {
                         setCountryQuickQuery(changeEvent.target.value)
-                      }
+                        setActiveCountryResultIndex(0)
+                      }}
                       onKeyDown={(keyEvent) => {
-                        if (keyEvent.key === 'Enter') {
-                          if (batchCountryMatches.length >= 2) {
+                        if (keyEvent.key === 'ArrowDown') {
+                          if (quickCountryMatches.length > 0) {
+                            keyEvent.preventDefault()
+                            setActiveCountryResultIndex(
+                              (prev) => (prev + 1) % quickCountryMatches.length,
+                            )
+                          }
+                        } else if (keyEvent.key === 'ArrowUp') {
+                          if (quickCountryMatches.length > 0) {
+                            keyEvent.preventDefault()
+                            setActiveCountryResultIndex(
+                              (prev) =>
+                                (prev - 1 + quickCountryMatches.length) %
+                                quickCountryMatches.length,
+                            )
+                          }
+                        } else if (keyEvent.key === 'Enter') {
+                          if (
+                            batchCountryMatches.length >= 2 &&
+                            activeCountryResultIndex === 0
+                          ) {
                             keyEvent.preventDefault()
                             addBatchParticipants(batchCountryMatches)
                           } else if (quickCountryMatches.length > 0) {
                             keyEvent.preventDefault()
-                            const first = quickCountryMatches[0]
+                            const target =
+                              quickCountryMatches[
+                                Math.min(
+                                  activeCountryResultIndex,
+                                  quickCountryMatches.length - 1,
+                                )
+                              ] ?? quickCountryMatches[0]
                             addQuickParticipant({
-                              countryId: first.countryId,
-                              historicalCountryId: first.historicalCountryId,
+                              countryId: target.countryId,
+                              historicalCountryId: target.historicalCountryId,
                             })
                           }
                         } else if (
@@ -1130,6 +1210,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         ) {
                           keyEvent.preventDefault()
                           setCountryQuickQuery('')
+                          setActiveCountryResultIndex(0)
                         }
                       }}
                     />
@@ -1153,10 +1234,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           </CountryQuickBatchButton>
                         )}
                         {quickCountryMatches.length > 0 ? (
-                          quickCountryMatches.map((match) => (
+                          quickCountryMatches.map((match, matchIdx) => (
                             <CountryQuickResultButton
                               key={match.key}
                               type="button"
+                              $active={matchIdx === activeCountryResultIndex}
+                              onMouseEnter={() =>
+                                setActiveCountryResultIndex(matchIdx)
+                              }
                               onClick={() =>
                                 addQuickParticipant({
                                   countryId: match.countryId,
@@ -1198,6 +1283,15 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     <FiPlus size={15} />
                     {relatedCountries.length > 0 ? '국가 더 추가' : '국가 추가'}
                   </S.AddButton>
+                  {relatedCountries.length === 2 && (
+                    <ParticipantSwapButton
+                      type="button"
+                      title="두 참여국의 순서·역할(주도↔대상)·진영(1편↔2편)을 한 번에 맞바꿉니다"
+                      onClick={handleSwapTwoParticipants}
+                    >
+                      ⇄ 역할·순서 맞바꾸기
+                    </ParticipantSwapButton>
+                  )}
                   {parentCountriesSlot && (
                     <S.AddButton
                       type="button"
@@ -1581,22 +1675,28 @@ const OptionalTag = styled.span`
 const ParticipantList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-bottom: 6px;
+  gap: 8px;
+  margin-bottom: 8px;
 `
 
-const ParticipantRow = styled.div<{ $withSides?: boolean }>`
-  display: grid;
-  /* 국가명은 적정 폭(84~144px)만 쓰고, 남은 가로 공간(1fr)은 전부 '이 나라가 한 일' 입력칸에 배정한다 */
-  grid-template-columns: ${({ $withSides }) =>
-    $withSides
-      ? 'minmax(84px, 132px) 98px auto minmax(220px, 1fr) auto'
-      : 'minmax(84px, 144px) 100px minmax(240px, 1fr) auto'};
-  align-items: center;
+const ParticipantRow = styled.div<{ $role?: EventCountryRole }>`
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  padding: 5px 6px 5px 10px;
+  padding: 8px 10px 8px 11px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  border-radius: 9px;
+  border-left: 3px solid
+    ${({ $role, theme }) =>
+      $role === 'INITIATOR'
+        ? theme.colors.primary
+        : $role === 'TARGET'
+          ? '#f59e0b'
+          : $role === 'FOUNDED' || $role === 'BENEFICIARY'
+            ? '#10b981'
+            : $role === 'DISSOLVED' || $role === 'VICTIM'
+              ? '#ef4444'
+              : S.getC(theme).border.default};
+  border-radius: 10px;
   background: ${({ theme }) => S.getC(theme).background.section};
   transition: border-color 0.14s ease;
 
@@ -1604,10 +1704,66 @@ const ParticipantRow = styled.div<{ $withSides?: boolean }>`
   &:focus-within {
     border-color: ${({ theme }) => S.getC(theme).border.default};
   }
+`
 
-  @media (max-width: 720px) {
-    grid-template-columns: minmax(0, 1fr) auto;
-    row-gap: 6px;
+const ParticipantHeaderLine = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+`
+
+const ParticipantDescriptionLine = styled.div`
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+`
+
+const ParticipantRolePillGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) => S.getC(theme).background.content};
+`
+
+const ParticipantRolePill = styled.button<{
+  $active: boolean
+  $role: 'INITIATOR' | 'TARGET' | 'PARTICIPANT'
+}>`
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 5px;
+  border: none;
+  background: ${({ $active, $role, theme }) =>
+    !$active
+      ? 'transparent'
+      : $role === 'INITIATOR'
+        ? theme.colors.primary
+        : $role === 'TARGET'
+          ? '#d97706'
+          : S.getC(theme).background.hover};
+  color: ${({ $active, $role, theme }) =>
+    !$active
+      ? theme.colors.text.secondary
+      : $role === 'PARTICIPANT'
+        ? theme.colors.text.primary
+        : '#ffffff'};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    color: ${({ $active, $role, theme }) =>
+      $active && $role !== 'PARTICIPANT'
+        ? '#ffffff'
+        : theme.colors.text.primary};
   }
 `
 
@@ -1643,6 +1799,7 @@ const ParticipantActions = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  margin-left: auto;
 `
 
 const ParticipantMoveButton = styled.button`
@@ -1738,6 +1895,27 @@ const LifespanReplaceBtn = styled.button`
   }
 `
 
+const ParticipantSwapButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
 const CountryQuickSearchRow = styled.div`
   display: flex;
   align-items: center;
@@ -1747,22 +1925,21 @@ const CountryQuickSearchRow = styled.div`
 
 const CountryQuickSearchAnchor = styled.div`
   position: relative;
-  flex: 1 1 210px;
+  flex: 1 1 280px;
   min-width: 0;
-  max-width: 320px;
 `
 
 const CountryQuickSearchInput = styled.input`
   width: 100%;
   min-width: 0;
-  height: 30px;
-  padding: 0 10px;
+  height: 34px;
+  padding: 0 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 8px;
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1811,7 +1988,7 @@ const CountryQuickBatchButton = styled.button`
   cursor: pointer;
 `
 
-const CountryQuickResultButton = styled.button`
+const CountryQuickResultButton = styled.button<{ $active?: boolean }>`
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1821,7 +1998,8 @@ const CountryQuickResultButton = styled.button`
   padding: 5px 8px;
   border: none;
   border-radius: 7px;
-  background: transparent;
+  background: ${({ $active, theme }) =>
+    $active ? S.getC(theme).background.hover : 'transparent'};
   color: ${({ theme }) => theme.colors.text.primary};
   font: inherit;
   text-align: left;
@@ -1895,12 +2073,11 @@ const ParticipantRemove = styled.button`
 `
 
 const ParticipantName = styled.span`
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  margin-right: 2px;
 `
 
 /* 행 안 입력칸 공통 — 폼의 다른 입력칸과 같은 테·모서리·포커스 헤일로 */

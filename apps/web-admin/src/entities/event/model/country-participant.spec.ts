@@ -12,6 +12,7 @@ import {
   sortParticipantsByRolePriority,
   suggestCountriesForEra,
   suggestCountriesFromTitle,
+  swapTwoParticipants,
   toParticipants,
 } from './country-participant'
 
@@ -147,11 +148,15 @@ describe('country-participant 유틸', () => {
     expect(replacement?.name).toBe('청나라')
   })
 
-  it('resolveBatchCountryQuery — 쉼표(,)·슬래시(/)·가운뎃점(·)으로 구분된 여러 나라 질의를 한 번에 해석한다', () => {
+  it('resolveBatchCountryQuery — 쉼표(,)·슬래시(/)·가운뎃점(·)으로 구분된 여러 나라 질의와 양자 약칭(청일·영프 등)을 한 번에 해석한다', () => {
     const modern = [
       { id: 'fr', name: '프랑스', isoCode: 'FR' },
       { id: 'gb', name: '영국', isoCode: 'GB' },
       { id: 'ru', name: '러시아', isoCode: 'RU' },
+    ]
+    const historical = [
+      { id: 'qing', name: '청나라', startYear: 1636, endYear: 1912 },
+      { id: 'jp-h', name: '일본 제국', startYear: 1868, endYear: 1947 },
     ]
     const matches = resolveBatchCountryQuery(
       '프랑스, 영국, 러시아',
@@ -160,8 +165,40 @@ describe('country-participant 유틸', () => {
     )
     expect(matches.map((item) => item.key)).toEqual(['m:fr', 'm:gb', 'm:ru'])
 
-    // 구분자가 없으면 빈 배열을 돌려 단일 검색 흐름을 유지한다
+    // 양자 약칭('영프', '청일')을 검색창에 바로 쳐도 2개국 묶음 후보로 풀어준다
+    expect(
+      resolveBatchCountryQuery('영프', modern, []).map((item) => item.key),
+    ).toEqual(['m:gb', 'm:fr'])
+    expect(
+      resolveBatchCountryQuery('청일', modern, historical, {
+        startYear: 1894,
+        endYear: 1895,
+      }).map((item) => item.key),
+    ).toEqual(['h:qing', 'h:jp-h'])
+
+    // 구분자·약칭이 아닌 단일 국가명이면 빈 배열을 돌려 단일 검색 흐름을 유지한다
     expect(resolveBatchCountryQuery('프랑스', modern, [])).toEqual([])
+  })
+
+  it('swapTwoParticipants — 2개국 양자 사건에서 순서와 역할을 한 번에 맞바꾼다', () => {
+    const swappedRoles = swapTwoParticipants([
+      { countryId: 'fr', role: 'INITIATOR', roleDescription: '선전포고' },
+      { countryId: 'gb', role: 'TARGET', roleDescription: '방어' },
+    ])
+    expect(swappedRoles).toEqual([
+      { countryId: 'gb', role: 'INITIATOR', roleDescription: '방어' },
+      { countryId: 'fr', role: 'TARGET', roleDescription: '선전포고' },
+    ])
+
+    // 둘 다 기본값(PARTICIPANT)이면 맞바꾸면서 1순위를 INITIATOR, 2순위를 TARGET으로 지정한다
+    const fromDefault = swapTwoParticipants([
+      { countryId: 'fr', role: 'PARTICIPANT' },
+      { countryId: 'gb', role: 'PARTICIPANT' },
+    ])
+    expect(fromDefault).toEqual([
+      { countryId: 'gb', role: 'INITIATOR' },
+      { countryId: 'fr', role: 'TARGET' },
+    ])
   })
 
   it('suggestCountriesForEra · sortParticipantsByRolePriority · quickRoleDescriptionPresets — 시대 추천·역할 정렬·서술 프리셋을 제공한다', () => {

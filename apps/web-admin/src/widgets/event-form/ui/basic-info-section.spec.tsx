@@ -255,4 +255,85 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     ])
     expect(onReplaceKey).toHaveBeenCalledWith('h:h-ming', 'h:h-qing')
   })
+
+  it('2단 참여국 카드에서 1층 원클릭 역할 칩(주도국·대상국·참여국)과 2층 가로 100% 서술 입력칸이 동작한다', () => {
+    const setRelatedCountries = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          relatedCountries: [{ countryId: 'c1', role: 'PARTICIPANT' }],
+          setRelatedCountries,
+        })}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '프랑스 주도국 지정' }),
+    )
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      { countryId: 'c1', role: 'INITIATOR' },
+    ])
+
+    fireEvent.change(screen.getByLabelText('프랑스가 한 일'), {
+      target: { value: '베르사유 조약 서명 및 배상금 청구' },
+    })
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      {
+        countryId: 'c1',
+        role: 'PARTICIPANT',
+        roleDescription: '베르사유 조약 서명 및 배상금 청구',
+      },
+    ])
+  })
+
+  it('2개국 참여 시 "⇄ 역할·순서 맞바꾸기" 버튼으로 두 나라의 순서·역할·진영을 한 번에 맞바꿀 수 있다', () => {
+    const setRelatedCountries = jest.fn()
+    const onAssign = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          relatedCountries: [
+            { countryId: 'c1', role: 'INITIATOR', roleDescription: '공격' },
+            { countryId: 'c2', role: 'TARGET', roleDescription: '방어' },
+          ],
+          setRelatedCountries,
+          participantSidesSlot: {
+            assignment: { 'm:c1': 'A', 'm:c2': 'B' },
+            sideNames: ['1진영', '2진영'],
+            onAssign,
+          },
+        })}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '⇄ 역할·순서 맞바꾸기' }),
+    )
+    expect(setRelatedCountries).toHaveBeenCalledWith([
+      { countryId: 'c2', role: 'INITIATOR', roleDescription: '방어' },
+      { countryId: 'c1', role: 'TARGET', roleDescription: '공격' },
+    ])
+    expect(onAssign).toHaveBeenCalledWith('m:c1', 'B')
+    expect(onAssign).toHaveBeenCalledWith('m:c2', 'A')
+  })
+
+  it('빠른 검색창에 양자 약칭("영프")을 입력해 Enter 한 번으로 두 나라를 동시 추가할 수 있다', () => {
+    const setRelatedCountries = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({ setRelatedCountries })}
+      />,
+    )
+
+    const searchInput = screen.getByRole('searchbox', {
+      name: '참여국 빠른 검색',
+    })
+    fireEvent.change(searchInput, { target: { value: '영프' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
+
+    expect(setRelatedCountries).toHaveBeenCalledWith([
+      { countryId: 'c2', role: 'PARTICIPANT' },
+      { countryId: 'c1', role: 'PARTICIPANT' },
+    ])
+  })
 })

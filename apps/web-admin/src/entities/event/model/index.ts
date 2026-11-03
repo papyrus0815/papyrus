@@ -38,6 +38,7 @@ export {
   sortParticipantsByRolePriority,
   suggestCountriesForEra,
   suggestCountriesFromTitle,
+  swapTwoParticipants,
   toParticipants,
 } from './country-participant'
 export type {

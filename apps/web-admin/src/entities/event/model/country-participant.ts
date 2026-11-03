@@ -649,8 +649,9 @@ export function findReplacementForMismatchedCountry(
 }
 
 /**
- * 빠른 검색창에 쉼표(,)·슬래시(/)·가운뎃점(·)으로 여러 국가명을 한꺼번에 입력했을 때
- * 각 토큰에 가장 잘 맞는 국가 후보들을 일괄 반환한다. (토큰이 2개 미만이면 빈 배열 반환)
+ * 빠른 검색창에 쉼표(,)·슬래시(/)·가운뎃점(·)으로 여러 국가명을 한꺼번에 입력했거나
+ * 양자 약칭('청일', '러일', '영프', '독소', '한일' 등)을 입력했을 때
+ * 각 국가 후보들을 일괄 반환한다. (매칭된 후보가 2개 미만이면 빈 배열 반환)
  */
 export function resolveBatchCountryQuery(
   rawQuery: string,
@@ -659,11 +660,36 @@ export function resolveBatchCountryQuery(
   hintYearRange?: CountryHintYearRange | null,
   existingKeys?: ReadonlySet<string>,
 ): SuggestedCountryCandidate[] {
-  const tokens = rawQuery
+  const trimmed = rawQuery.trim()
+  if (!trimmed) return []
+
+  const tokens = trimmed
     .split(/[,，/·]+/)
     .map((token) => token.trim())
     .filter((token) => token.length > 0)
-  if (tokens.length < 2) return []
+
+  if (tokens.length < 2) {
+    // 단일 토큰이라도 양자 사건 약칭('청일', '러일', '영프', '독소' 등)이면 두 국가를 한 번에 풀어준다
+    const shorthandMatches: SuggestedCountryCandidate[] = []
+    const seenKeys = new Set<string>(existingKeys)
+    for (const rule of TITLE_SHORTHAND_GROUPS) {
+      if (rule.pattern.test(trimmed)) {
+        for (const aliasGroup of rule.groups) {
+          const picked = pickBestCandidateForAliases(
+            aliasGroup,
+            modernCountries,
+            historicalCountries,
+            hintYearRange,
+          )
+          if (picked && !seenKeys.has(picked.key)) {
+            seenKeys.add(picked.key)
+            shorthandMatches.push(picked)
+          }
+        }
+      }
+    }
+    return shorthandMatches.length >= 2 ? shorthandMatches : []
+  }
 
   const results: SuggestedCountryCandidate[] = []
   const seen = new Set<string>(existingKeys)
@@ -885,4 +911,31 @@ export function quickRoleDescriptionPresets(
   if (role === 'TARGET') return ['대상·대응', '방어·수용']
   if (role === 'MEDIATOR') return ['중재·조정', '회담 주선']
   return ['핵심 참여', '공동 참여']
+}
+
+/**
+ * 2개국 양자 사건에서 두 참여국의 순서와 역할(주도국↔대상국 등)을 한 번에 맞바꾼다.
+ * 두 나라가 모두 기본값('PARTICIPANT')이면 새 1순위를 'INITIATOR'(주도국), 2순위를 'TARGET'(대상국)으로 자동 배정한다.
+ */
+export function swapTwoParticipants(
+  participants: ReadonlyArray<EventCountryParticipant>,
+): EventCountryParticipant[] {
+  if (participants.length !== 2) return [...participants]
+  const [first, second] = participants
+  const firstRole = first.role ?? 'PARTICIPANT'
+  const secondRole = second.role ?? 'PARTICIPANT'
+
+  const nextFirstRole: EventCountryRole =
+    firstRole === secondRole && firstRole === 'PARTICIPANT'
+      ? 'INITIATOR'
+      : firstRole
+  const nextSecondRole: EventCountryRole =
+    firstRole === secondRole && firstRole === 'PARTICIPANT'
+      ? 'TARGET'
+      : secondRole
+
+  return [
+    { ...second, role: nextFirstRole },
+    { ...first, role: nextSecondRole },
+  ]
 }
