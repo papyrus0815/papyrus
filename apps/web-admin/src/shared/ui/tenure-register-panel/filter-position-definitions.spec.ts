@@ -24,20 +24,15 @@ describe('filterPositionDefinitions', () => {
   const duke = { id: 'du', positionType: 'ROYAL_NOBLE_TITLE', isMonarchical: false }
   const all = [king, president, daimyo, foreignMinister, primeMinister, duke]
 
-  describe('일반 관직 재임 플로우 (isMinisterFlow=false)', () => {
+  describe('일반 수반·관직 등록 플로우 (isMinisterFlow=false)', () => {
     const result = filterPositionDefinitions(all, { isMinisterFlow: false })
     const ids = result.map((def) => def.id)
 
-    it('군주·주권 칭호(isMonarchical=true)는 제외한다 — 국왕·번주', () => {
-      expect(ids).not.toContain('k')
-      expect(ids).not.toContain('d')
+    it('군주(국왕·번주)와 공화정 원수(대통령)를 나누지 않고 모든 국가원수를 함께 포함한다', () => {
+      expect(ids).toEqual(expect.arrayContaining(['k', 'd', 'p']))
     })
 
-    it('공화정 원수(isMonarchical=false HEAD_OF_STATE)는 유지한다 — 대통령', () => {
-      expect(ids).toContain('p')
-    })
-
-    it('각료·총리·귀족은 유지한다 — 외무장관·총리·공작', () => {
+    it('각료·총리·귀족도 모두 유지한다 — 외무장관·총리·공작', () => {
       expect(ids).toEqual(expect.arrayContaining(['fm', 'pm', 'du']))
     })
   })

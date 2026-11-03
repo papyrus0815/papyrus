@@ -36,8 +36,6 @@ export interface CabinetMindMapProps {
   onRegisterMinister?: () => void
   /** 수반이 아직 없을 때 가운데 빈 카드에 표시할 기본 수반 직책 라벨 (예: 정부 수반, 대통령, 내각총리대신) */
   emptyHeadRoleLabel?: string | null
-  /** 이원 수반 체제(입헌군주제·의원내각제·이원집정부제 등)에서 대응 국가원수·군주가 없을 때 상단 슬롯에 표시할 직책 라벨 */
-  emptyCounterpartRoleLabel?: string | null
   /** 해당 정권 시기의 정체(정부형태) 라벨 (예: 대통령제, 의원내각제, 입헌군주제) */
   regimeLabel?: string | null
   /** 가지가 될 각료들 */
@@ -166,7 +164,6 @@ export function CabinetMindMap({
   onRegisterCounterpartHead,
   onRegisterMinister,
   emptyHeadRoleLabel,
-  emptyCounterpartRoleLabel,
   regimeLabel,
   members,
   branchSlots,
@@ -212,10 +209,6 @@ export function CabinetMindMap({
         : []
   const isMonarchCenter = Boolean(head?.isMonarchical)
   const showSovereignAbove = !isMonarchCenter && counterparts.length > 0
-  const showEmptySovereignAbove =
-    !isMonarchCenter &&
-    counterparts.length === 0 &&
-    Boolean(emptyCounterpartRoleLabel && onRegisterCounterpartHead)
   const showReignCabinetsBelow = isMonarchCenter && counterparts.length > 0
 
   /*
@@ -349,48 +342,6 @@ export function CabinetMindMap({
                       )}
                     </SovereignPairCard>
                   ))}
-                </CounterpartDeck>
-                <DualExecutiveConnector $branches={hasBranches} aria-hidden />
-              </>
-            )}
-
-            {showEmptySovereignAbove && (
-              <>
-                <CounterpartDeck $branches={hasBranches}>
-                  <SovereignPairCard
-                    $branches={hasBranches}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onRegisterCounterpartHead?.()}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        onRegisterCounterpartHead?.()
-                      }
-                    }}
-                    title={`${emptyCounterpartRoleLabel} 등록`}
-                  >
-                    <SovereignPairBody>
-                      <SovereignPairTop>
-                        <SovereignPairBadge>국가원수</SovereignPairBadge>
-                        <SovereignPairRole>
-                          {emptyCounterpartRoleLabel}
-                        </SovereignPairRole>
-                      </SovereignPairTop>
-                      <SovereignPairNameRow>
-                        <SovereignPairPeriod>—</SovereignPairPeriod>
-                      </SovereignPairNameRow>
-                    </SovereignPairBody>
-                    <SovereignSwitchBtn
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onRegisterCounterpartHead?.()
-                      }}
-                    >
-                      + {emptyCounterpartRoleLabel} 등록
-                    </SovereignSwitchBtn>
-                  </SovereignPairCard>
                 </CounterpartDeck>
                 <DualExecutiveConnector $branches={hasBranches} aria-hidden />
               </>

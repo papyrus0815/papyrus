@@ -12,7 +12,6 @@
 import {
   getRecordFamily,
   RECORD_FAMILY_GROUP_LABELS,
-  type RecordFamily,
 } from '@/entities/government-position/model/record-family'
 
 import { filterPositionDefinitions } from './filter-position-definitions'
@@ -114,9 +113,6 @@ function compareByUsageThenRank(
   return definitionLabel(left).localeCompare(definitionLabel(right))
 }
 
-/** 그룹 표시 순서 — 관직이 먼저, 작위는 아래. 군주 칭호는 이 피커에 오지 않는다. */
-const GROUP_ORDER: RecordFamily[] = ['OFFICE', 'NOBLE_TITLE', 'SOVEREIGN']
-
 /** 기본으로 접어 둘 그룹 — SelectModal의 collapsedGroups로 그대로 넘긴다. */
 export const DEFAULT_COLLAPSED_POSITION_GROUPS = [
   RECORD_FAMILY_GROUP_LABELS.NOBLE_TITLE,
@@ -158,27 +154,32 @@ export function buildPositionOptions({
   }
 
   /**
-   * 사용 실적 그룹에는 **관직(OFFICE)만** 넣는다.
-   * 사용 실적은 재임+재위를 합산한 값이라, 가족 게이트가 없으면 재위 이력(러시아 제국 황제 16건 등)이
-   * 딸려 와 "관직 재임" 피커 최상단에 군주·작위가 뜬다. 같은 정의가 두 그룹에 들어가면
-   * SelectModal의 key도 중복된다.
+   * 사용 실적 그룹에는 작위(NOBLE_TITLE)를 제외한 모든 국가원수(대통령·국왕·황제 등)·정부수반·관직을 넣는다.
+   * 국가원수를 공화정(대통령)과 군주(국왕·황제)로 나누지 않고, 이 국가에서 쓰인 직책이면 모두 상단에 올린다.
    */
-  const usedOffice = visible
-    .filter((def) => getRecordFamily(def) === 'OFFICE' && def.usedInThisCountry === true)
+  const usedPositions = visible
+    .filter((def) => getRecordFamily(def) !== 'NOBLE_TITLE' && def.usedInThisCountry === true)
     .sort(compareByUsageThenRank)
-  const usedIds = new Set(usedOffice.map((def) => def.id))
+  const usedIds = new Set(usedPositions.map((def) => def.id))
 
-  const byFamily = new Map<RecordFamily, PositionOptionItem[]>()
+  const officeBucket: PositionOptionItem[] = []
+  const nobleBucket: PositionOptionItem[] = []
   visible.forEach((def) => {
     if (usedIds.has(def.id)) return
-    const family = getRecordFamily(def)
-    const bucket = byFamily.get(family) ?? []
-    bucket.push({
-      value: def.id,
-      label: definitionLabel(def),
-      group: RECORD_FAMILY_GROUP_LABELS[family],
-    })
-    byFamily.set(family, bucket)
+    const isNoble = getRecordFamily(def) === 'NOBLE_TITLE'
+    if (isNoble) {
+      nobleBucket.push({
+        value: def.id,
+        label: definitionLabel(def),
+        group: RECORD_FAMILY_GROUP_LABELS.NOBLE_TITLE,
+      })
+    } else {
+      officeBucket.push({
+        value: def.id,
+        label: definitionLabel(def),
+        group: RECORD_FAMILY_GROUP_LABELS.OFFICE,
+      })
+    }
   })
 
   // 같은 positionType의 정의가 이미 있으면 내장 항목은 중복 노출하지 않는다.
@@ -191,13 +192,13 @@ export function buildPositionOptions({
       group: RECORD_FAMILY_GROUP_LABELS.OFFICE,
     }))
   if (builtinOptions.length > 0) {
-    byFamily.set('OFFICE', [...(byFamily.get('OFFICE') ?? []), ...builtinOptions])
+    officeBucket.push(...builtinOptions)
   }
 
   const options: PositionOptionItem[] = []
 
   // 1) 이 국가에서 실제로 쓰인 직책 — 정의 실적 + 자유입력 실적 순
-  usedOffice.forEach((def) => {
+  usedPositions.forEach((def) => {
     options.push({
       value: def.id,
       label: definitionLabel(def),
@@ -215,10 +216,8 @@ export function buildPositionOptions({
     })
   })
 
-  GROUP_ORDER.forEach((family) => {
-    const bucket = byFamily.get(family)
-    if (bucket && bucket.length > 0) options.push(...bucket)
-  })
+  if (officeBucket.length > 0) options.push(...officeBucket)
+  if (nobleBucket.length > 0) options.push(...nobleBucket)
 
   // 그룹이 하나뿐이면 머리글이 정보를 더하지 않는다 — 구획 라벨을 떼고 평평하게.
   const distinctGroups = new Set(options.map((option) => option.group))

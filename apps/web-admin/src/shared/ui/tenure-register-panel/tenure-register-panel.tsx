@@ -1411,30 +1411,22 @@ export function TenureRegisterPanel({
     positionType === 'HEAD_OF_STATE' || positionType === 'HEAD_OF_GOVERNMENT'
 
   /**
-   * 각료 추가로 열렸을 때는 각료/차관/기타만 표시; 일반 재임은 군주·주권 칭호 제외 +
-   * 작위는 접히는 별도 그룹으로 강등(공직 임기가 아니므로).
+   * 각료 추가로 열렸을 때는 각료/차관/기타만 표시하고,
+   * 일반 수반·관직 등록에서는 국가원수(대통령·국왕·황제·천황·술탄·국가주석 등)와
+   * 정부수반·관직을 나누지 않고 한 피커에 통합 노출한다.
    */
   const isMinisterFlowForFilter = !tenureId && initialCabinetId != null
   const positionTitleOptions: SelectOption<string>[] = useMemo(
     () =>
-      reignEntry
-        ? // 재위 — 군주 칭호·작위를 위로, 그 밖의 직위는 접힌 그룹으로(쇼군처럼 관직 유형 재위도 고를 수 있게)
-          [
-            ...buildReignPositionOptions({
-              definitions: positionDefinitions as PositionDefinitionLike[],
-              pinnedDefinition,
-            }),
-            { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' },
-          ]
-        : buildPositionOptions({
-            definitions: positionDefinitions as PositionDefinitionLike[],
-            isMinisterFlow: isMinisterFlowForFilter,
-            builtins: BUILTIN_POSITIONS,
-            pinnedDefinition,
-            recentTitles,
-            otherValue: OTHER_POSITION_VALUE,
-          }),
-    [reignEntry, positionDefinitions, isMinisterFlowForFilter, pinnedDefinition, recentTitles],
+      buildPositionOptions({
+        definitions: positionDefinitions as PositionDefinitionLike[],
+        isMinisterFlow: isMinisterFlowForFilter,
+        builtins: BUILTIN_POSITIONS,
+        pinnedDefinition,
+        recentTitles,
+        otherValue: OTHER_POSITION_VALUE,
+      }),
+    [positionDefinitions, isMinisterFlowForFilter, pinnedDefinition, recentTitles],
   )
 
   /**
@@ -1471,9 +1463,7 @@ export function TenureRegisterPanel({
           : '직책 선택'
       : (selectedDef?.title ?? selectedDef?.name ?? (title || '직책 선택'))
 
-  const collapsedPositionGroups = reignEntry
-    ? DEFAULT_COLLAPSED_REIGN_GROUPS
-    : DEFAULT_COLLAPSED_POSITION_GROUPS
+  const collapsedPositionGroups = DEFAULT_COLLAPSED_POSITION_GROUPS
 
   const filteredPositionOptions = useMemo(() => {
     if (!positionQuery.trim()) return positionTitleOptions
@@ -1520,6 +1510,7 @@ export function TenureRegisterPanel({
     setLocalTitleDraft('')
     const builtin = BUILTIN_POSITIONS.find((b) => b.value === value)
     if (builtin) {
+      setMonarchicalMode(false)
       setPositionDefinitionId(null)
       setTitle(builtin.title)
       setTitleEn(builtin.titleEn)
@@ -1530,6 +1521,7 @@ export function TenureRegisterPanel({
     // presetPositionType을 함께 세워야 positionType이 'OTHER'로 떨어지지 않는다.
     const recentTitle = parseRecentTitleValue(value)
     if (recentTitle != null) {
+      setMonarchicalMode(false)
       setPositionDefinitionId(null)
       setTitle(recentTitle.title)
       setTitleEn('')
@@ -1537,6 +1529,7 @@ export function TenureRegisterPanel({
       return
     }
     if (value === OTHER_POSITION_VALUE) {
+      setMonarchicalMode(false)
       setPositionDefinitionId(null)
       setTitle('')
       setTitleEn('')
@@ -1545,12 +1538,14 @@ export function TenureRegisterPanel({
       const def = definitionPool.find((definition) => definition.id === value)
       if (def?.isGeneric) {
         // 일반 정의(군 지휘관·특별 직위…) — 종류만 정하고 구체 직함을 직접 입력한다
+        setMonarchicalMode(Boolean(def.isMonarchical))
         setPositionDefinitionId(def.id)
         setTitle('')
         setTitleEn('')
         setPresetPositionType(null)
         setManualEntryOpen(true)
       } else if (def) {
+        setMonarchicalMode(Boolean(def.isMonarchical))
         setPositionDefinitionId(def.id)
         setTitle('')
         setTitleEn(def.titleEn ?? '')
@@ -2262,47 +2257,6 @@ export function TenureRegisterPanel({
                     </FieldRow>
                   )}
 
-                  {/* 구분 — 사건 등록 모달 '종류(단일/묶음)' 행과 동일한 SegmentControl chips */}
-                  {!isMinisterFlow && !isEdit && (
-                    <FieldRow>
-                      <FieldLabel as="span">구분</FieldLabel>
-                      <FieldControl>
-                        <SegmentControl
-                          appearance="chips"
-                          ariaLabel="기록 구분"
-                          value={monarchicalMode ? 'reign' : 'tenure'}
-                          onChange={(next) => {
-                            if (next === 'reign') {
-                              defaultReignAppliedRef.current = false
-                              setMonarchicalMode(true)
-                              if (selectedDef && !selectedDef.isMonarchical) {
-                                setPositionDefinitionId(null)
-                                setTitle('')
-                                setTitleEn('')
-                              }
-                            } else {
-                              setMonarchicalMode(false)
-                              if (selectedDef?.isMonarchical) {
-                                setPositionDefinitionId(null)
-                                setTitle('')
-                                setTitleEn('')
-                              }
-                            }
-                          }}
-                          options={[
-                            { value: 'tenure', label: '관직 재임' },
-                            { value: 'reign', label: '군주 재위' },
-                          ]}
-                        />
-                        <FieldHint>
-                          {monarchicalMode
-                            ? '국왕·황제·교황 등 군주의 재위 기간과 왕호·즉위 순서를 기록합니다.'
-                            : '대통령·총리·장관·영의정 등 공직 임기와 대수를 기록합니다.'}
-                        </FieldHint>
-                      </FieldControl>
-                    </FieldRow>
-                  )}
-
                   {/* 국가·정체 — 사건 등록 모달 '참여국' 카드 형태(이모지 없이 깔끔한 정보 카드) + 소속 국가 빠른 선택 */}
                   <FieldRow>
                     <FieldLabel as="span">
@@ -2491,11 +2445,7 @@ export function TenureRegisterPanel({
                                 aria-label="직책명 검색"
                                 value={positionQuery}
                                 onChange={(e) => setPositionQuery(e.target.value)}
-                                placeholder={
-                                  isReign
-                                    ? '직위·칭호 검색 (예: 국왕, 황제, 교황...)'
-                                    : '직책명 검색 (예: 대통령, 영의정, 장관...)'
-                                }
+                                placeholder="직책명 검색 (예: 대통령, 국왕, 황제, 총리, 장관...)"
                                 onKeyDown={(e) => {
                                   if (e.key === 'Escape') {
                                     e.preventDefault()

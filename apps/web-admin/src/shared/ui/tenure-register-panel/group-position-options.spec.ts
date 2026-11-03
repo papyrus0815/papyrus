@@ -16,12 +16,14 @@ const 외무장관 = { id: 'm', title: '외무장관', positionType: 'CABINET_MI
 
 const ALL = [대통령, 국왕, 쇼군, 자작, 외무장관]
 
-describe('buildPositionOptions — 관직 재임 피커', () => {
-  it('군주 칭호는 빼고, 작위는 접히는 별도 그룹으로 강등한다', () => {
+describe('buildPositionOptions — 통합 직책 피커', () => {
+  it('국가원수(대통령·국왕)를 나누지 않고 함께 포함하며, 작위만 접히는 별도 그룹으로 강등한다', () => {
     const options = buildPositionOptions({ definitions: ALL, isMinisterFlow: false })
-    expect(options.map((option) => option.value)).not.toContain('k')
+    expect(options.map((option) => option.value)).toContain('k')
+    expect(options.map((option) => option.value)).toContain('p')
     expect(options.find((option) => option.value === 'v')?.group).toBe('작위·칭호')
     expect(options.find((option) => option.value === 'p')?.group).toBe('관직')
+    expect(options.find((option) => option.value === 'k')?.group).toBe('관직')
     expect(DEFAULT_COLLAPSED_POSITION_GROUPS).toContain('작위·칭호')
   })
 
@@ -66,11 +68,11 @@ describe('buildPositionOptions — 관직 재임 피커', () => {
 
   it('수정 중인 정의가 군주 칭호여도 되살린다(재위 행을 재임 패널로 편집하는 경로)', () => {
     const options = buildPositionOptions({
-      definitions: ALL,
+      definitions: [대통령, 자작],
       isMinisterFlow: false,
       pinnedDefinition: 국왕,
     })
-    expect(options.find((option) => option.value === 'k')?.group).toBe('군주 칭호')
+    expect(options.find((option) => option.value === 'k')?.group).toBe('관직')
   })
 
   it('수정 중인 정의가 이미 목록에 있으면 중복 노출하지 않는다', () => {

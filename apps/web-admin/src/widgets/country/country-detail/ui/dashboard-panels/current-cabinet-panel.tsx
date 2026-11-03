@@ -2260,11 +2260,6 @@ export function CurrentCabinetPanel({
               : undefined
           }
           emptyHeadRoleLabel={primaryHeadSpec.title}
-          emptyCounterpartRoleLabel={
-            showDualCounterpartRegister && counterpartHeadSpec
-              ? counterpartHeadSpec.title
-              : null
-          }
           regimeLabel={activeRegimeMeta?.label ?? null}
           members={members}
           branchSlots={mindMapBranchSlots}
