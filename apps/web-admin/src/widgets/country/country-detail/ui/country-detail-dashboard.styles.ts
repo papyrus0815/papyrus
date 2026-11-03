@@ -302,7 +302,9 @@ export const SectionHeaderActions = styled.div`
   }
 `
 
-export const SectionCountChip = styled.span`
+export const SectionCountChip = styled.span.attrs({
+  'data-section-count': '',
+})`
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1009,51 +1011,67 @@ export const EmptyCtaButton = styled.button`
 /* ── 개편(2026-08): 규모 지표 바 · 지금 · 하단 2열 ───────────────────────────── */
 
 /**
- * 규모 지표 바 — 인구·면적·밀도·수도를 한 줄에. (ISO는 히어로 이름 옆 칩으로 옮겼다)
- * 예전엔 큰 카드 3개(인구/면적/수도) + 별도 메타 줄로 세로를 많이 먹었다. 값 자체는
- * 짧으므로 한 줄에 세워도 읽힌다.
+ * 규모 지표 스펙 바 — 외곽 둥근 박스 및 점선 빈 상태 상자를 제거하고,
+ * 상·하단 헤어라인 실선과 열 구분선으로 인구·면적·밀도·수도·GDP 등 핵심 제원을 정돈한다.
  */
 export const FactBar = styled.div`
-  /*
-   * 예전엔 auto-fit + minmax(150px, 1fr)이라 칸이 남는 폭을 전부 나눠 가졌다 —
-   * 2,162px에서 한 칸이 540px가 되고 그 안의 값은 '—' 한 글자였다. 칸 폭을 고정하고
-   * 바 자체가 내용만큼만 차지하게 한다.
-   */
-  display: flex;
-  flex-wrap: wrap;
-  width: max-content;
-  max-width: 100%;
-  gap: 1px;
-  border-radius: 14px;
-  overflow: hidden;
-  background: ${({ theme }) => theme.colors.border.light};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-export const Fact = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  /* 늘어나도 된다 — 바(FactBar)가 max-content라 한 줄일 땐 남는 폭이 없어 효과가 없고,
-     좁은 화면에서 줄이 넘어갈 때만 남은 자리를 나눠 갖는다. 0이던 시절엔 390px에서
-     줄 끝에 틈새 배경(회색 칸)이 드러났다. */
-  flex: 1 1 auto;
-  min-width: 168px;
-  padding: 14px 16px;
-  background: ${({ theme }) => theme.colors.background.primary};
+  width: 100%;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+export const FactSpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  width: 100%;
+`
+
+export const Fact = styled.div<{ $missing?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 16px 12px 0;
+
+  @media (min-width: 641px) {
+    &:not(:first-child) {
+      padding-left: 16px;
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+    &:last-child {
+      padding-right: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    padding: 10px 0;
+    &:not(:first-child) {
+      border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+export const FactHeadRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 `
 
 export const FactLabel = styled.span`
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-export const FactValue = styled.span`
-  font-size: 20px;
-  font-weight: 800;
+export const FactValue = styled.span<{ $missing?: boolean }>`
+  font-size: ${({ $missing }) => ($missing ? '14px' : '19px')};
+  font-weight: ${({ $missing }) => ($missing ? 600 : 800)};
   letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme, $missing }) =>
+    $missing ? theme.colors.text.tertiary : theme.colors.text.primary};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
@@ -1068,10 +1086,13 @@ export const FactUnit = styled.span`
 `
 
 export const FactSubNote = styled.span`
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 export const FactEmptyRow = styled.div`
@@ -1079,19 +1100,16 @@ export const FactEmptyRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 20px;
-  padding: 14px 20px;
-  border-radius: 12px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  gap: 8px 16px;
+  padding: 8px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   width: 100%;
   box-sizing: border-box;
 `
 
 export const FactEmptyText = styled.span`
-  flex: 1 1 260px;
-  font-size: 13px;
+  flex: 1 1 240px;
+  font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -1099,24 +1117,26 @@ export const FactEmptyText = styled.span`
 export const FactEmptyActions = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 `
 
 export const FactEmptyAction = styled.button`
   appearance: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.medium};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
 
   &:hover {
+    border-color: #6366f1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
     background: ${({ theme }) => theme.colors.hover};
   }
 `
@@ -1181,44 +1201,33 @@ export const IndicatorsGrid = styled.div`
 /* ─── 사건 연표 (2026-09) ─────────────────────────────────────────────── */
 
 /**
- * 기록 원장 + 사건 연표 한 줄.
+ * 기록 2열 원장 + 사건 연표.
  *
- * 원장은 막대가 폭을 흡수하고 연표는 내용만큼이라, 넓을 땐 원장이 남는 폭을 갖고
- * 연표가 오른쪽에 붙는다. 칼럼이 좁으면(이 그릇 기준 — 뷰포트가 아니다) 위아래로 쌓는다.
+ * 기록 원장이 2열 전체 폭을 쓰므로 사건 연표는 아래에 무컨테이너 실선 블록으로 이어 붙인다.
  */
 export const RecordGrid = styled.div`
-  /* 컨테이너 쿼리는 그릇 자신이 아니라 자손에게만 걸린다 — 격자는 한 겹 안쪽에 둔다 */
-  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
 `
 
 export const RecordGridBody = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-
-  @container (min-width: 860px) {
-    /*
-     * 원장(RecordLedger)에 최소 340px을 보장하고, 사건 연표(EventTimelineBlock)는
-     * 내용 폭(max-content)만큼 자리를 잡되 남는 폭을 넘지 않게 한다.
-     */
-    grid-template-columns: minmax(340px, 1fr) minmax(0, auto);
-    gap: 24px;
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
 `
 
-/** 막대 몇 개짜리 띠가 본문 폭 전체를 상자로 두르면 빈 면이 주인공이 된다 — 내용만큼만 */
 export const EventTimelineBlock = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: max-content;
+  width: 100%;
   min-width: 0;
-  max-width: 100%;
   box-sizing: border-box;
-  padding: 14px 16px;
-  border-radius: 12px;
-  ${surfaceStatic}
+  padding-top: 12px;
 `
 
 export const EventTimelineLabel = styled.span`
@@ -1233,10 +1242,9 @@ export const EventTimelineLabel = styled.span`
 export const CountryNotesBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  ${surfaceStatic}
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const CountryNotesHeader = styled.div`
@@ -1252,18 +1260,17 @@ export const CountryNotesList = styled.ul`
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 `
 
 export const CountryNoteItem = styled.li`
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 
   &:first-child {
-    padding-top: 0;
+    padding-top: 4px;
     border-top: none;
   }
 `

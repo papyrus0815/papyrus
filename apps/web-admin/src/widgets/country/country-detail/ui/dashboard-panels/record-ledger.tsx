@@ -34,134 +34,169 @@ export interface RecordLedgerProps {
 }
 
 /**
- * 기록 원장 — 이 나라에 무엇이 얼마나 쌓였는지 **서로 견주어** 보이게.
- *
- * 예전에는 축마다 카드를 세우고 숫자를 크게 찍었다. 그러면 "인물 20"과 "사건 39"가
- * 각자 자기 상자 안에 있어 **둘 중 어느 쪽이 많은지 눈으로 비교되지 않는다**.
- * 게다가 카드는 폭을 380px에서 멈춰 본문 오른쪽이 통째로 비었다.
- *
- * 한 줄에 하나씩, 막대 길이로 견준다 — 폭을 자연스럽게 다 쓰고 순위가 즉시 읽힌다.
- * 값이 0인 축은 막대를 그리지 않고 아래 한 줄로 접는다(0을 크게 그리면 그게 주인공이 된다).
+ * 기록 · 완성도 2열 헤어라인 원장 —
+ * 상단 헤드라인 요약 스트립(기록 완성도 · 총 축적 기록 · 최다 기록 분야 · 최근 7일 신규)과
+ * 하단 10대 아카이빙 축 2열 비교 원장을 무컨테이너 실선 레이아웃으로 통합한다.
+ * 등록된 축은 상대 비중 막대·건수·7일 증감(+N)으로 순위가 즉시 비교되고,
+ * 미등록(0건) 축도 작은 하단 알약으로 뭉개지 않고 같은 원장 격자 안에서 '+ 기록하기' 동선을 제공한다.
  */
 export function RecordLedger({
   rows,
   completeness,
-  onFillMissing,
 }: RecordLedgerProps) {
-  const filled = rows.filter((row) => row.isLoading || row.value > 0)
+  const filled = rows
+    .filter((row) => row.isLoading || row.value > 0)
+    .sort((a, b) => b.value - a.value)
   const empty = rows.filter((row) => !row.isLoading && row.value === 0)
+  const orderedRows = [...filled, ...empty]
+
   const max = filled.reduce((acc, row) => Math.max(acc, row.value), 0) || 1
+  const totalCount = rows.reduce((acc, row) => acc + row.value, 0)
+  const totalDelta = rows.reduce((acc, row) => acc + (row.delta || 0), 0)
+  const topAxis = filled.find((row) => row.value > 0) ?? null
 
-  const percent =
-    completeness && completeness.total > 0
-      ? Math.round((completeness.filled / completeness.total) * 100)
-      : null
-
-  const hasMissing =
+  const filledAxesCount =
     completeness && !completeness.isLoading
-      ? completeness.missing.length > 0
-      : empty.length > 0
+      ? completeness.filled
+      : filled.filter((r) => r.value > 0).length
+  const totalAxesCount =
+    completeness && !completeness.isLoading && completeness.total > 0
+      ? completeness.total
+      : rows.length
+  const percent =
+    totalAxesCount > 0
+      ? Math.round((filledAxesCount / totalAxesCount) * 100)
+      : 0
 
   return (
     <Root>
-      {completeness && !completeness.isLoading && percent != null && (
-        <CompletenessBar>
-          <CompletenessLeft>
-            <CompletenessLabel>기록 완성도</CompletenessLabel>
+      <HeadlineStrip aria-label="기록 완성도 및 축적 요약">
+        <HeadlineCell>
+          <HeadlineLabel>기록 완성도</HeadlineLabel>
+          <HeadlinePrimaryRow>
+            <HeadlineValue>{percent}%</HeadlineValue>
             <CompletenessTrack aria-hidden>
               <CompletenessFill
-                $full={completeness.filled === completeness.total}
+                $full={filledAxesCount === totalAxesCount && totalAxesCount > 0}
                 style={{ width: `${percent}%` }}
               />
             </CompletenessTrack>
-            <CompletenessStat>
-              <strong>{percent}%</strong> ({completeness.filled}/
-              {completeness.total} 축)
-            </CompletenessStat>
-          </CompletenessLeft>
-          {completeness.missing.length === 0 && (
-            <FullBadge>✓ 모든 기록 축 등록 완료</FullBadge>
-          )}
-        </CompletenessBar>
-      )}
+          </HeadlinePrimaryRow>
+          <HeadlineSub>
+            {filledAxesCount}/{totalAxesCount}개 기록 축 등록
+          </HeadlineSub>
+        </HeadlineCell>
 
-      {filled.length > 0 && (
-        <List>
-          {filled.map((row) => {
-            const interactive = row.onClick != null
-            return (
+        <HeadlineCell>
+          <HeadlineLabel>총 축적 기록</HeadlineLabel>
+          <HeadlineValue>
+            {totalCount.toLocaleString('ko-KR')}
+            <HeadlineUnit>건</HeadlineUnit>
+          </HeadlineValue>
+          <HeadlineSub>
+            활성 {filled.filter((r) => r.value > 0).length}개 축 · 미등록{' '}
+            {empty.length}개 축
+          </HeadlineSub>
+        </HeadlineCell>
+
+        <HeadlineCell>
+          <HeadlineLabel>최다 축적 분야</HeadlineLabel>
+          <HeadlineValue>
+            {topAxis ? (
+              <>
+                {topAxis.label}{' '}
+                <HeadlineInlineStat>
+                  {topAxis.value.toLocaleString('ko-KR')}
+                  {topAxis.unit}
+                </HeadlineInlineStat>
+              </>
+            ) : (
+              '미등록'
+            )}
+          </HeadlineValue>
+          <HeadlineSub>
+            {topAxis && totalCount > 0
+              ? `전체 기록의 ${Math.round((topAxis.value / totalCount) * 100)}% 차지`
+              : '아래 원장에서 첫 기록을 등록해 보세요'}
+          </HeadlineSub>
+        </HeadlineCell>
+
+        <HeadlineCell>
+          <HeadlineLabel>최근 7일 신규</HeadlineLabel>
+          <HeadlineValue $positive={totalDelta > 0}>
+            {totalDelta > 0
+              ? `+${totalDelta.toLocaleString('ko-KR')}건`
+              : '변동 없음'}
+          </HeadlineValue>
+          <HeadlineSub>
+            {totalDelta > 0
+              ? '최근 7일 내 새로 추가된 기록'
+              : '최근 7일 내 신규 등록 없음'}
+          </HeadlineSub>
+        </HeadlineCell>
+      </HeadlineStrip>
+
+      <LedgerGrid>
+        {orderedRows.map((row) => {
+          const isFilled = row.isLoading || row.value > 0
+          const interactive = row.onClick != null
+          const ratio =
+            !row.isLoading && row.value > 0
+              ? Math.max(4, Math.round((row.value / max) * 100))
+              : 0
+
+          return (
+            <LedgerCell key={row.key}>
               <Row
-                key={row.key}
                 as={interactive ? 'button' : 'div'}
                 type={interactive ? 'button' : undefined}
                 $interactive={interactive}
+                $filled={isFilled}
                 onClick={row.onClick ?? undefined}
                 aria-label={
                   interactive
-                    ? `${row.label} ${row.value}${row.unit} — 탭으로 이동`
+                    ? isFilled
+                      ? `${row.label} ${row.value}${row.unit} — 탭으로 이동`
+                      : `${row.label} 미등록 — 기록하러 가기`
                     : undefined
                 }
               >
-                <RowIcon aria-hidden>{row.icon}</RowIcon>
-                <RowLabel>{row.label}</RowLabel>
-                <BarTrack>
-                  <BarFill
-                    style={{
-                      width: row.isLoading
-                        ? '0%'
-                        : `${Math.max(2, (row.value / max) * 100)}%`,
-                    }}
-                  />
-                </BarTrack>
-                <RowValue>
-                  {row.isLoading ? '—' : row.value.toLocaleString('ko-KR')}
-                  <RowUnit>{row.unit}</RowUnit>
-                </RowValue>
-                {row.delta > 0 && <RowDelta>+{row.delta}</RowDelta>}
-                {interactive && <RowChevron aria-hidden>›</RowChevron>}
-              </Row>
-            )
-          })}
-        </List>
-      )}
+                <RowIcon $filled={isFilled} aria-hidden>
+                  {row.icon}
+                </RowIcon>
+                <RowLabel $filled={isFilled}>{row.label}</RowLabel>
 
-      {hasMissing && (
-        <EmptyRow $withDivider={filled.length > 0}>
-          <EmptyLabel>미등록 기록 바로가기</EmptyLabel>
-          {completeness && !completeness.isLoading
-            ? completeness.missing.map((field) =>
-                onFillMissing ? (
-                  <EmptyChip
-                    key={field.key}
-                    type="button"
-                    onClick={() => onFillMissing(field)}
-                    aria-label={`${field.label} 기록하러 가기`}
-                  >
-                    + {field.label}
-                  </EmptyChip>
+                {isFilled ? (
+                  <BarTrack aria-hidden>
+                    <BarFill style={{ width: `${ratio}%` }} />
+                  </BarTrack>
                 ) : (
-                  <EmptyChipStatic key={field.key}>{field.label}</EmptyChipStatic>
-                ),
-              )
-            : empty.map((row) =>
-                row.onClick ? (
-                  <EmptyChip
-                    key={row.key}
-                    type="button"
-                    onClick={row.onClick}
-                    aria-label={`${row.label} 기록하러 가기`}
-                  >
-                    + {row.label}
-                  </EmptyChip>
-                ) : (
-                  <EmptyChipStatic key={row.key}>
-                    {row.label}
-                    {row.badge ? ` · ${row.badge}` : ''}
-                  </EmptyChipStatic>
-                ),
-              )}
-        </EmptyRow>
-      )}
+                  <EmptyStatusText>
+                    {row.badge ? `미등록 · ${row.badge}` : '미등록'}
+                  </EmptyStatusText>
+                )}
+
+                <RowRight>
+                  {isFilled ? (
+                    <>
+                      {row.delta > 0 && <RowDelta>+{row.delta}</RowDelta>}
+                      <RowValue>
+                        {row.isLoading
+                          ? '—'
+                          : row.value.toLocaleString('ko-KR')}
+                        <RowUnit>{row.unit}</RowUnit>
+                      </RowValue>
+                      {interactive && <RowChevron aria-hidden>›</RowChevron>}
+                    </>
+                  ) : interactive ? (
+                    <RecordActionTag>+ 기록하기</RecordActionTag>
+                  ) : null}
+                </RowRight>
+              </Row>
+            </LedgerCell>
+          )
+        })}
+      </LedgerGrid>
     </Root>
   )
 }
@@ -169,155 +204,92 @@ export function RecordLedger({
 const Root = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
   min-width: 0;
   width: 100%;
 `
 
-const List = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-`
-
-const Row = styled.div<{ $interactive: boolean }>`
+const HeadlineStrip = styled.div`
   display: grid;
-  /*
-   * 막대에 상한을 둔다. 폭을 다 쓰게 두면 '20명'이 제 이름표에서 1,100px 떨어져
-   * 서로를 못 찾는다 — 선거 카드에서 겪은 것과 같은 문제다. 남는 폭은 오른쪽 여백으로.
-   */
-  grid-template-columns: 26px minmax(68px, max-content) minmax(60px, 760px) max-content auto auto;
-  justify-content: start;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 9px 10px;
-  border: none;
-  border-radius: 10px;
-  background: none;
-  font-family: inherit;
-  text-align: left;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 20px;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
-  ${({ $interactive, theme }) =>
-    $interactive &&
-    css`
-      cursor: pointer;
-
-      &:hover {
-        background: ${theme.colors.hover};
-      }
-      &:focus-visible {
-        outline: 2px solid ${theme.colors.active};
-        outline-offset: -2px;
-      }
-    `}
-`
-
-const RowIcon = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-
-  svg {
-    width: 15px;
-    height: 15px;
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
   }
 `
 
-const RowLabel = styled.span`
-  font-size: 13px;
+const HeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+
+  @media (min-width: 961px) {
+    &:not(:first-child) {
+      padding-left: 18px;
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const HeadlineLabel = styled.span`
+  font-size: 11.5px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-/** 막대가 폭을 흡수한다 — 카드가 380px에서 멈추던 자리를 그대로 쓴다 */
-const BarTrack = styled.span`
-  display: block;
-  height: 8px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
-  overflow: hidden;
+const HeadlinePrimaryRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
 `
 
-const BarFill = styled.span`
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.75),
-    rgba(139, 92, 246, 0.75)
-  );
-  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-`
-
-const RowValue = styled.span`
-  min-width: 68px;
-  text-align: right;
-  font-size: 15px;
+const HeadlineValue = styled.span<{ $positive?: boolean }>`
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme, $positive }) =>
+    $positive ? '#10b981' : theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
-const RowUnit = styled.span`
-  margin-left: 3px;
+const HeadlineUnit = styled.span`
+  margin-left: 2px;
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-/** 최근 7일 증가분 — 있을 때만 */
-const RowDelta = styled.span`
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #059669;
-  background: rgba(16, 185, 129, 0.14);
-`
-
-const RowChevron = styled.span`
-  font-size: 15px;
-  line-height: 1;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const CompletenessBar = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  padding: 6px 10px 10px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const CompletenessLeft = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-`
-
-const CompletenessLabel = styled.span`
-  font-size: 12px;
+const HeadlineInlineStat = styled.span`
+  font-size: 13.5px;
   font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeadlineSub = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const CompletenessTrack = styled.span`
   display: inline-block;
-  width: 96px;
-  height: 7px;
+  flex: 1;
+  max-width: 96px;
+  height: 6px;
   border-radius: 999px;
   overflow: hidden;
   background: ${({ theme }) =>
@@ -335,84 +307,165 @@ const CompletenessFill = styled.span<{ $full: boolean }>`
   transition: width 0.35s ease;
 `
 
-const CompletenessStat = styled.span`
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
+const LedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
 
-  strong {
-    font-weight: 800;
-    color: ${({ theme }) => theme.colors.text.primary};
+  @media (min-width: 780px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 `
 
-const FullBadge = styled.span`
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 700;
-  background: rgba(16, 185, 129, 0.14);
-  color: #10b981;
+const LedgerCell = styled.div`
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 780px) {
+    &:nth-child(even) {
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
 `
 
-const EmptyRow = styled.div<{ $withDivider?: boolean }>`
-  display: flex;
-  flex-wrap: wrap;
+const Row = styled.div<{ $interactive: boolean; $filled: boolean }>`
+  display: grid;
+  grid-template-columns: 22px minmax(68px, max-content) minmax(40px, 1fr) max-content;
   align-items: center;
-  gap: 8px;
-  padding: ${({ $withDivider }) =>
-    $withDivider ? '12px 10px 2px' : '2px 10px 0'};
-  border-top: ${({ theme, $withDivider }) =>
-    $withDivider ? `1px dashed ${theme.colors.border.light}` : 'none'};
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+
+  ${({ $interactive, theme }) =>
+    $interactive &&
+    css`
+      cursor: pointer;
+      transition: background 0.14s ease;
+
+      &:hover {
+        background: ${theme.colors.hover};
+      }
+      &:focus-visible {
+        outline: 2px solid ${theme.colors.active};
+        outline-offset: -2px;
+      }
+    `}
 `
 
-const EmptyLabel = styled.span`
+const RowIcon = styled.span<{ $filled: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: ${({ theme, $filled }) =>
+    $filled
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'
+      : theme.colors.text.tertiary};
+  opacity: ${({ $filled }) => ($filled ? 1 : 0.65)};
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
+`
+
+const RowLabel = styled.span<{ $filled: boolean }>`
+  font-size: 13px;
+  font-weight: ${({ $filled }) => ($filled ? 700 : 600)};
+  color: ${({ theme, $filled }) =>
+    $filled ? theme.colors.text.primary : theme.colors.text.secondary};
+  white-space: nowrap;
+`
+
+const BarTrack = styled.span`
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
+  overflow: hidden;
+`
+
+const BarFill = styled.span`
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(99, 102, 241, 0.78),
+    rgba(139, 92, 246, 0.78)
+  );
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+`
+
+const EmptyStatusText = styled.span`
   font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const RowRight = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+`
+
+const RowValue = styled.span`
+  text-align: right;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const RowUnit = styled.span`
+  margin-left: 2px;
+  font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const emptyChipBase = css`
+const RowDelta = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.14);
+`
+
+const RowChevron = styled.span`
+  font-size: 15px;
+  line-height: 1;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RecordActionTag = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.04)'
-      : 'rgba(15, 23, 42, 0.035)'};
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)'};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.07)'
-        : 'rgba(15, 23, 42, 0.06)'};
-`
-
-const EmptyChip = styled.button`
-  ${emptyChipBase}
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-
-  &:hover {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: rgba(99, 102, 241, 0.2);
-    color: #4f46e5;
-  }
-  &:focus-visible {
-    outline: 2px solid #6366f1;
-    outline-offset: 2px;
-  }
-`
-
-const EmptyChipStatic = styled.span`
-  ${emptyChipBase}
-  opacity: 0.65;
+        ? 'rgba(99,102,241,0.24)'
+        : 'rgba(99,102,241,0.18)'};
 `

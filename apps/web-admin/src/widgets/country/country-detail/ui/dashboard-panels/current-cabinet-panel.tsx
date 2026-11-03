@@ -2059,7 +2059,7 @@ export function CurrentCabinetPanel({
             군주·원수 {fallbackHeadTenures.length}명 · 내각 {cabinets.length}대
           </S.SectionCountChip>
         ) : (
-          cabinets.length > 1 && (
+          cabinets.length > 0 && (
             <S.SectionCountChip>{cabinets.length}대</S.SectionCountChip>
           )
         )}

@@ -5,12 +5,44 @@ import styled from 'styled-components'
 
 interface NavEntry {
   label: string
+  count: string | null
   element: HTMLElement
 }
 
 export interface SectionNavProps {
   /** 장(章)을 찾을 대시보드 뿌리 */
   rootRef: RefObject<HTMLElement | null>
+}
+
+function compactCountText(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const text = raw.replace(/\s+/g, ' ').trim()
+  if (!text) return null
+
+  const unregisteredMatch = /^(\d+)개\s*분야\s*미등록$/.exec(text)
+  if (unregisteredMatch) return `0/${unregisteredMatch[1]}`
+
+  const ratioMatch = /^(\d+\/\d+)개?\s*분야/.exec(text)
+  if (ratioMatch) return ratioMatch[1]
+
+  const monarchCabinetMatch =
+    /군주·원수\s*(\d+)명\s*·\s*내각\s*(\d+)대/.exec(text)
+  if (monarchCabinetMatch) {
+    const heads = Number(monarchCabinetMatch[1])
+    const cabs = Number(monarchCabinetMatch[2])
+    return cabs > 0 ? `${heads}명·${cabs}대` : `${heads}명`
+  }
+
+  const pastCountryMatch = /^과거\s*국가\s*([\d,]+)개$/.exec(text)
+  if (pastCountryMatch) return pastCountryMatch[1]
+
+  const totalMatch = /^총\s*([\d,]+)건$/.exec(text)
+  if (totalMatch) return totalMatch[1]
+
+  const simpleCountMatch = /^([\d,]+)(건|개|명)$/.exec(text)
+  if (simpleCountMatch) return simpleCountMatch[1]
+
+  return text
 }
 
 /** 스크롤 위치를 판정할 때 목차 아래로 더 내려다보는 여유 — 장 머리가 이만큼 들어오면 '지금 장' */
@@ -69,13 +101,20 @@ export function SectionNav({ rootRef }: SectionNavProps) {
         for (const section of sections) {
           const heading = section.querySelector('h2')
           const label = heading?.textContent?.trim()
-          if (label) next.push({ label, element: section })
+          if (label) {
+            const countEl =
+              heading?.parentElement?.querySelector('[data-section-count]') ??
+              null
+            const count = compactCountText(countEl?.textContent)
+            next.push({ label, count, element: section })
+          }
         }
         setEntries((previous) =>
           previous.length === next.length &&
           previous.every(
             (entry, index) =>
               entry.label === next[index].label &&
+              entry.count === next[index].count &&
               entry.element === next[index].element,
           )
             ? previous
@@ -86,7 +125,11 @@ export function SectionNav({ rootRef }: SectionNavProps) {
 
     collect()
     const observer = new MutationObserver(collect)
-    observer.observe(root, { childList: true, subtree: true })
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    })
     return () => {
       observer.disconnect()
       cancelAnimationFrame(frame)
@@ -196,7 +239,10 @@ export function SectionNav({ rootRef }: SectionNavProps) {
               aria-current={isActive ? 'true' : undefined}
               onClick={() => jump(entry.element)}
             >
-              {entry.label}
+              <span>{entry.label}</span>
+              {entry.count && (
+                <ItemCount $active={isActive}>{entry.count}</ItemCount>
+              )}
             </Item>
           )
         })}
@@ -250,8 +296,11 @@ const Track = styled.div`
 `
 
 const Item = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex-shrink: 0;
-  padding: 6px 12px;
+  padding: 5px 11px;
   border: none;
   border-radius: 999px;
   font-family: inherit;
@@ -279,4 +328,28 @@ const Item = styled.button<{ $active: boolean }>`
     outline: 2px solid ${({ theme }) => theme.colors.active};
     outline-offset: 1px;
   }
+`
+
+const ItemCount = styled.span<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'
+      : theme.colors.text.tertiary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.22)'
+        : 'rgba(99, 102, 241, 0.12)'
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.045)'};
 `

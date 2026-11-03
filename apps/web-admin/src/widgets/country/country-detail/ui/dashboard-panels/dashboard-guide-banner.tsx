@@ -98,7 +98,7 @@ export function DashboardGuideBanner({
               <ProgressFill style={{ width: `${progressRatio}%` }} />
             </ProgressTrack>
             <ProgressLabel>
-              {completedCount}/{totalSteps} 단계 완료
+              {completedCount}/{totalSteps} 단계 완료 ({progressRatio}%)
             </ProgressLabel>
           </ProgressWrap>
         </HeaderLeft>
@@ -108,7 +108,7 @@ export function DashboardGuideBanner({
           onClick={handleToggle}
           aria-expanded={isOpen}
         >
-          {isOpen ? '가이드 접기 ▴' : '4단계 가이드 보기 ▾'}
+          {isOpen ? '가이드 접기' : '4단계 가이드 보기'}
         </ToggleButton>
       </HeaderBar>
 
@@ -118,9 +118,10 @@ export function DashboardGuideBanner({
             <StepCard key={step.key} $status={step.status}>
               <StepTopRow>
                 <StepNumBadge $status={step.status}>
-                  {step.status === 'completed' ? '✓' : `STEP ${step.stepNumber}`}
+                  STEP 0{step.stepNumber}
                 </StepNumBadge>
                 <StepStatusChip $status={step.status}>
+                  <StepStatusDot $status={step.status} aria-hidden />
                   {step.statusLabel}
                 </StepStatusChip>
               </StepTopRow>
@@ -139,9 +140,10 @@ export function DashboardGuideBanner({
           {diagnosticHints.map((hint) => (
             <DiagnosticItem key={hint.key} $tone={hint.tone ?? 'info'}>
               <DiagnosticLead>
-                <DiagnosticDot $tone={hint.tone ?? 'info'}>
-                  {hint.tone === 'warning' ? '!' : '💡'}
-                </DiagnosticDot>
+                <DiagnosticBadge $tone={hint.tone ?? 'info'}>
+                  <DiagnosticStatusDot $tone={hint.tone ?? 'info'} aria-hidden />
+                  {hint.tone === 'warning' ? '정합성 주의' : '보완 제안'}
+                </DiagnosticBadge>
                 <DiagnosticText>{hint.message}</DiagnosticText>
               </DiagnosticLead>
               <DiagnosticAction type="button" onClick={hint.onAction}>
@@ -155,17 +157,15 @@ export function DashboardGuideBanner({
   )
 }
 
+/*
+ * 무컨테이너 헤어라인 구축 가이드 & 정합성 원장 —
+ * 외곽 둥근 박스 및 4개 내부 카드 상자를 걷어내고 상·하단 실선과 열 구분선으로 정돈한다.
+ */
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.05)'
-      : 'rgba(99, 102, 241, 0.03)'};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const HeaderBar = styled.div`
@@ -174,6 +174,7 @@ const HeaderBar = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 10px 16px;
+  padding: 10px 0;
 `
 
 const HeaderLeft = styled.div`
@@ -187,13 +188,13 @@ const HeaderLeft = styled.div`
 const GuideBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
+  padding: 2px 7px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.22)' : 'rgba(99,102,241,0.12)'};
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.10)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
 `
 
@@ -212,8 +213,8 @@ const ProgressWrap = styled.div`
 
 const ProgressTrack = styled.span`
   display: inline-block;
-  width: 72px;
-  height: 6px;
+  width: 76px;
+  height: 5px;
   border-radius: 999px;
   overflow: hidden;
   background: ${({ theme }) =>
@@ -236,11 +237,12 @@ const ProgressLabel = styled.span`
 `
 
 const ToggleButton = styled.button`
-  padding: 5px 10px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -249,13 +251,14 @@ const ToggleButton = styled.button`
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 
 const StepGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @media (max-width: 1100px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -269,20 +272,36 @@ const StepCard = styled.div<{ $status: 'completed' | 'partial' | 'empty' }>`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid
-    ${({ theme, $status }) =>
-      $status === 'completed'
-        ? theme.mode === 'dark'
-          ? 'rgba(16, 185, 129, 0.35)'
-          : 'rgba(16, 185, 129, 0.28)'
-        : $status === 'partial'
-          ? theme.mode === 'dark'
-            ? 'rgba(99, 102, 241, 0.35)'
-            : 'rgba(99, 102, 241, 0.28)'
-          : theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 12px 16px 12px 0;
+  min-width: 0;
+
+  @media (min-width: 1101px) {
+    &:not(:first-child) {
+      padding-left: 16px;
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+    &:last-child {
+      padding-right: 0;
+    }
+  }
+
+  @media (min-width: 601px) and (max-width: 1100px) {
+    &:nth-child(2n) {
+      padding-left: 16px;
+      padding-right: 0;
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+    &:nth-child(n + 3) {
+      border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 600px) {
+    padding: 10px 0;
+    &:not(:first-child) {
+      border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
 `
 
 const StepTopRow = styled.div`
@@ -297,7 +316,8 @@ const StepNumBadge = styled.span<{
 }>`
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
   color: ${({ theme, $status }) =>
     $status === 'completed'
       ? '#10b981'
@@ -311,18 +331,22 @@ const StepNumBadge = styled.span<{
 const StepStatusChip = styled.span<{
   $status: 'completed' | 'partial' | 'empty'
 }>`
-  padding: 2px 6px;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   background: ${({ theme, $status }) =>
     $status === 'completed'
-      ? 'rgba(16, 185, 129, 0.14)'
+      ? 'rgba(16, 185, 129, 0.12)'
       : $status === 'partial'
-        ? 'rgba(99, 102, 241, 0.14)'
+        ? 'rgba(99, 102, 241, 0.12)'
         : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.06)'
-          : 'rgba(15,23,42,0.05)'};
+          ? 'rgba(255,255,255,0.05)'
+          : 'rgba(15,23,42,0.045)'};
   color: ${({ theme, $status }) =>
     $status === 'completed'
       ? '#10b981'
@@ -330,6 +354,20 @@ const StepStatusChip = styled.span<{
         ? theme.mode === 'dark'
           ? '#a5b4fc'
           : '#4f46e5'
+        : theme.colors.text.tertiary};
+`
+
+const StepStatusDot = styled.span<{
+  $status: 'completed' | 'partial' | 'empty'
+}>`
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme, $status }) =>
+    $status === 'completed'
+      ? '#10b981'
+      : $status === 'partial'
+        ? '#6366f1'
         : theme.colors.text.tertiary};
 `
 
@@ -350,31 +388,32 @@ const StepDesc = styled.p`
 
 const StepActionBtn = styled.button`
   align-self: flex-start;
-  margin-top: 4px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: none;
+  margin-top: 2px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.28)' : 'rgba(99,102,241,0.22)'};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.09)'};
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
-  font-size: 12px;
+  font-family: inherit;
+  font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
 
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.26)'
-        : 'rgba(99,102,241,0.16)'};
+        ? 'rgba(99,102,241,0.22)'
+        : 'rgba(99,102,241,0.13)'};
   }
 `
 
 const DiagnosticsList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 8px;
-  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const DiagnosticItem = styled.div<{ $tone: 'info' | 'warning' }>`
@@ -383,16 +422,11 @@ const DiagnosticItem = styled.div<{ $tone: 'info' | 'warning' }>`
   align-items: center;
   justify-content: space-between;
   gap: 8px 14px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: ${({ theme, $tone }) =>
-    $tone === 'warning'
-      ? theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.10)'
-        : 'rgba(245, 158, 11, 0.08)'
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.03)'
-        : 'rgba(255, 255, 255, 0.7)'};
+  padding: 8px 0;
+
+  & + & {
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
 `
 
 const DiagnosticLead = styled.div`
@@ -403,21 +437,32 @@ const DiagnosticLead = styled.div`
   flex: 1 1 220px;
 `
 
-const DiagnosticDot = styled.span<{ $tone: 'info' | 'warning' }>`
+const DiagnosticBadge = styled.span<{ $tone: 'info' | 'warning' }>`
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 4px;
   flex-shrink: 0;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   background: ${({ $tone }) =>
     $tone === 'warning'
-      ? 'rgba(245, 158, 11, 0.22)'
-      : 'rgba(99, 102, 241, 0.16)'};
-  color: ${({ $tone }) => ($tone === 'warning' ? '#d97706' : '#4f46e5')};
+      ? 'rgba(245, 158, 11, 0.14)'
+      : 'rgba(99, 102, 241, 0.10)'};
+  color: ${({ theme, $tone }) =>
+    $tone === 'warning'
+      ? '#d97706'
+      : theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'};
+`
+
+const DiagnosticStatusDot = styled.span<{ $tone: 'info' | 'warning' }>`
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ $tone }) => ($tone === 'warning' ? '#f59e0b' : '#6366f1')};
 `
 
 const DiagnosticText = styled.span`
@@ -428,11 +473,12 @@ const DiagnosticText = styled.span`
 `
 
 const DiagnosticAction = styled.button`
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 3px 9px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
   font-size: 11.5px;
   font-weight: 700;
   white-space: nowrap;
