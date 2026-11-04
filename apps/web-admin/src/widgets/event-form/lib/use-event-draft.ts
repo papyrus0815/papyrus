@@ -39,6 +39,9 @@ export interface EventDraftSnapshot {
   category: EventDomainKey | ''
   eventType: EventTypeKey | null
   kind: 'SINGLE' | 'COLLECTION'
+  location?: string
+  locationLatitude?: number | null
+  locationLongitude?: number | null
   thumbnail: string
   keywords: string[]
   relatedCountries: EventCountryParticipant[]
@@ -78,6 +81,10 @@ export function hasEventDraftContent(
   if (snapshot.endDate) return true
   if (snapshot.category) return true
   if (snapshot.eventType) return true
+  if (snapshot.location?.trim()) return true
+  if (snapshot.locationLatitude != null || snapshot.locationLongitude != null) {
+    return true
+  }
   if (snapshot.thumbnail && !snapshot.thumbnail.startsWith('blob:')) return true
   if (Array.isArray(snapshot.keywords) && snapshot.keywords.length > 0) return true
   if (

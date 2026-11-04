@@ -64,6 +64,7 @@ import {
   type EventDetail,
   eventDetailQueryOptions,
 } from '@/pages/events/detail/use-event-detail'
+import { LocationPickerModal } from '@/pages/events/detail/components/location-picker-modal'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   type EventLinkCandidate,
@@ -296,6 +297,11 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setThumbnail,
     setThumbnailFile,
     location,
+    setLocation,
+    locationLatitude,
+    setLocationLatitude,
+    locationLongitude,
+    setLocationLongitude,
     keywords,
     setKeywords,
     relatedCountries,
@@ -313,6 +319,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const [isLoadingEvent, setIsLoadingEvent] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
+  const [locationModalOpen, setLocationModalOpen] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
   /** 날짜 칸에 직접 친 값이 날짜가 못 되는 동안의 문구 — 빈 값과 구분해 저장을 막는다 */
   const [dateInputErrors, setDateInputErrors] = useState<{ start: string | null; end: string | null }>({
@@ -339,6 +346,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
    * 캡션/출처를 보존하면서 썸네일만 교체해야 상세에서 추가한 이미지가 소실되지 않는다.
    */
   const loadedImagesRef = useRef<LoadedEventImage[] | null>(null)
+  const loadedHasCoordinatesRef = useRef(false)
 
   // ===== 사건 종류(신규 등록 전용) =====
   // 단일(전투·회담·조약 체결) / 묶음(전쟁·위기 — 전개는 하위 사건). 편집 모드의 전환은 상세의
@@ -767,6 +775,16 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         }
 
         setKeywords(Array.isArray(event.keywords) ? event.keywords : [])
+        setLocation(event.location || '')
+        const loadedLat = (event as { locationLatitude?: number | null })
+          .locationLatitude
+        const loadedLng = (event as { locationLongitude?: number | null })
+          .locationLongitude
+        const hasLoadedCoords =
+          typeof loadedLat === 'number' && typeof loadedLng === 'number'
+        loadedHasCoordinatesRef.current = hasLoadedCoords
+        setLocationLatitude(hasLoadedCoords ? loadedLat : null)
+        setLocationLongitude(hasLoadedCoords ? loadedLng : null)
 
         const eventImages = event.eventImages as LoadedEventImage[] | undefined
         loadedImagesRef.current = eventImages ?? []
@@ -837,6 +855,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         endTime,
         endDatePrecision,
         category,
+        location,
+        locationLatitude,
+        locationLongitude,
         thumbnail,
         keywords,
         relatedCountries,
@@ -858,6 +879,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       endTime,
       endDatePrecision,
       category,
+      location,
+      locationLatitude,
+      locationLongitude,
       thumbnail,
       keywords,
       relatedCountries,
@@ -898,6 +922,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       category,
       eventType,
       kind,
+      location,
+      locationLatitude,
+      locationLongitude,
       thumbnail,
       keywords,
       relatedCountries,
@@ -917,6 +944,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       category,
       eventType,
       kind,
+      location,
+      locationLatitude,
+      locationLongitude,
       thumbnail,
       keywords,
       relatedCountries,
@@ -962,6 +992,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setEventType(d.eventType ?? null)
     kindTouchedRef.current = true
     setKind(d.kind ?? 'SINGLE')
+    setLocation(d.location ?? '')
+    setLocationLatitude(
+      typeof d.locationLatitude === 'number' ? d.locationLatitude : null,
+    )
+    setLocationLongitude(
+      typeof d.locationLongitude === 'number' ? d.locationLongitude : null,
+    )
     setThumbnail(
       d.thumbnail && !d.thumbnail.startsWith('blob:') ? d.thumbnail : '',
     )
@@ -985,6 +1022,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setEndTime,
     setEndDatePrecision,
     setCategory,
+    setLocation,
+    setLocationLatitude,
+    setLocationLongitude,
     setThumbnail,
     setThumbnailFile,
     setKeywords,
@@ -1064,6 +1104,11 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       // 상세 페이지 청크를 미리 데워 저장 직후 이동이 매끄럽도록.
       void import('@/pages/events/detail/event-detail.page')
 
+      const includeLocationCoordinates =
+        locationLatitude !== null ||
+        locationLongitude !== null ||
+        (isEditMode && loadedHasCoordinatesRef.current)
+
       const eventData = buildEventSubmitData({
         title: title.trim(),
         description: description.trim(),
@@ -1076,6 +1121,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         endDatePrecision: endDate ? endDatePrecision : undefined,
         domain: category,
         location,
+        ...(includeLocationCoordinates && {
+          locationLatitude,
+          locationLongitude,
+        }),
         thumbnail,
         // 신규 등록에서만 유효 — 빈 값('')은 빌더가 undefined(미전송)로 정규화한다
         // (기존 계약 유지). 편집 모드 계층 편집은 상세 '연관' 섹션 담당.
@@ -1221,6 +1270,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     endTime,
     category,
     location,
+    locationLatitude,
+    locationLongitude,
     thumbnail,
     relatedCountries,
     keywords,
@@ -1448,6 +1499,17 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         thumbnail={thumbnail}
         setThumbnail={setThumbnail}
         setThumbnailFile={setThumbnailFile}
+        locationSlot={{
+          location,
+          setLocation,
+          latitude: locationLatitude,
+          longitude: locationLongitude,
+          onClearCoordinates: () => {
+            setLocationLatitude(null)
+            setLocationLongitude(null)
+          },
+          onOpenMapModal: () => setLocationModalOpen(true),
+        }}
         keywords={keywords}
         setKeywords={setKeywords}
         relatedCountries={relatedCountries}
@@ -1687,6 +1749,25 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
               </span>
             ) : undefined
           }
+        />
+      )}
+
+      {/* 위치 지도 선택 모달 */}
+      {locationModalOpen && (
+        <LocationPickerModal
+          isOpen={locationModalOpen}
+          onClose={() => setLocationModalOpen(false)}
+          initial={{
+            location,
+            latitude: locationLatitude,
+            longitude: locationLongitude,
+          }}
+          onSave={(next) => {
+            setLocation(next.location)
+            setLocationLatitude(next.locationLatitude)
+            setLocationLongitude(next.locationLongitude)
+            setLocationModalOpen(false)
+          }}
         />
       )}
     </>

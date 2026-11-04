@@ -99,6 +99,8 @@ export const buildEventSubmitData = (params: {
   /** 분야 키(MILITARY…) — 빈 문자열이면 보내지 않는다 */
   domain: EventDomainKey | ''
   location: string
+  locationLatitude?: number | null
+  locationLongitude?: number | null
   /** 등록된 도시 참조 (PlaceSelect DB 선택) */
   cityId?: string | null
   /** 등록된 행정구역 참조 (PlaceSelect DB 선택) */
@@ -168,6 +170,12 @@ export const buildEventSubmitData = (params: {
     endDatePrecision: params.endDatePrecision ?? undefined,
     domain: params.domain || undefined,
     location: params.location.trim() || undefined,
+    ...(params.locationLatitude !== undefined && {
+      locationLatitude: params.locationLatitude,
+    }),
+    ...(params.locationLongitude !== undefined && {
+      locationLongitude: params.locationLongitude,
+    }),
     cityId: params.cityId || undefined,
     administrativeDivisionId: params.administrativeDivisionId || undefined,
     /**

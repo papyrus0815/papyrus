@@ -6,6 +6,7 @@ import {
   FiArrowUp,
   FiClock,
   FiImage,
+  FiMapPin,
   FiPlus,
   FiX,
 } from 'react-icons/fi'
@@ -245,6 +246,18 @@ interface BasicInfoSectionProps {
     onChange: (value: 'SINGLE' | 'COLLECTION') => void
   }
 
+  /**
+   * 사건 위치(선택) 슬롯 — 장소 이름(설명) 입력과 지도 핀 좌표 선택을 지원한다.
+   */
+  locationSlot?: {
+    location: string
+    setLocation: (next: string) => void
+    latitude?: number | null
+    longitude?: number | null
+    onClearCoordinates?: () => void
+    onOpenMapModal: () => void
+  }
+
   // UI 상태
   playClickSound: () => void
   getDateError: () => string | null
@@ -291,6 +304,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   relatedEventsSlot,
   similarEventsSlot,
   kindSlot,
+  locationSlot,
   categoryError,
   titleSuggestionSlot,
   typeSlot,
@@ -2163,6 +2177,80 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormRow>
         )}
 
+        {/* 위치 */}
+        {locationSlot && (
+          <S.FormRow>
+            <S.FormLabel htmlFor="event-form-location">
+              위치<OptionalTag>(선택)</OptionalTag>
+            </S.FormLabel>
+            <S.FormField>
+              <LocationInputRow>
+                <LocationInput
+                  id="event-form-location"
+                  type="text"
+                  aria-label="위치 이름"
+                  maxLength={255}
+                  placeholder="예: 베르사유 궁전, 워털루, 판문점 (직접 입력 또는 지도에서 선택)"
+                  value={locationSlot.location}
+                  onChange={(e) => locationSlot.setLocation(e.target.value)}
+                />
+                <S.AddButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    locationSlot.onOpenMapModal()
+                  }}
+                >
+                  <FiMapPin size={14} />
+                  {locationSlot.latitude != null &&
+                  locationSlot.longitude != null
+                    ? '지도 핀 수정'
+                    : '지도에서 찍기'}
+                </S.AddButton>
+                {(locationSlot.location.trim().length > 0 ||
+                  (locationSlot.latitude != null &&
+                    locationSlot.longitude != null)) && (
+                  <LocationClearBtn
+                    type="button"
+                    aria-label="위치 비우기"
+                    onClick={() => {
+                      playClickSound()
+                      locationSlot.setLocation('')
+                      locationSlot.onClearCoordinates?.()
+                    }}
+                  >
+                    비우기
+                  </LocationClearBtn>
+                )}
+              </LocationInputRow>
+              {locationSlot.latitude != null &&
+                locationSlot.longitude != null && (
+                  <LocationCoordBar aria-label="선택된 지도 좌표">
+                    <FiMapPin size={12} />
+                    <span>
+                      {formatLocationCoordinate(
+                        locationSlot.latitude,
+                        locationSlot.longitude,
+                      )}
+                    </span>
+                    {locationSlot.onClearCoordinates && (
+                      <LocationCoordClearBtn
+                        type="button"
+                        aria-label="지도 핀 지우기"
+                        onClick={() => {
+                          playClickSound()
+                          locationSlot.onClearCoordinates?.()
+                        }}
+                      >
+                        핀 지우기
+                      </LocationCoordClearBtn>
+                    )}
+                  </LocationCoordBar>
+                )}
+            </S.FormField>
+          </S.FormRow>
+        )}
+
         {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
         <S.FormRow>
           <S.FormLabel>
@@ -3140,6 +3228,90 @@ const DateQuickActionBtn = styled.button`
     border-color: ${({ theme }) => theme.colors.primary};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)'};
+    outline: none;
+  }
+`
+
+function formatLocationCoordinate(lat: number, lng: number): string {
+  const latitude = `${lat >= 0 ? '북위' : '남위'} ${Math.abs(lat).toFixed(4)}°`
+  const longitude = `${lng >= 0 ? '동경' : '서경'} ${Math.abs(lng).toFixed(4)}°`
+  return `${latitude}, ${longitude}`
+}
+
+const LocationInputRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const LocationInput = styled(S.Input)`
+  flex: 1 1 240px;
+  min-width: 180px;
+`
+
+const LocationClearBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.error};
+    border-color: ${({ theme }) => theme.colors.error};
+    outline: none;
+  }
+`
+
+const LocationCoordBar = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(99, 102, 241, 0.18)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  width: fit-content;
+
+  svg {
+    color: ${({ theme }) => theme.colors.primary};
+    flex-shrink: 0;
+  }
+`
+
+const LocationCoordClearBtn = styled.button`
+  border: none;
+  background: transparent;
+  padding: 0 2px;
+  margin-left: 2px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.error};
+    text-decoration: underline;
     outline: none;
   }
 `

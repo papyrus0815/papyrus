@@ -139,6 +139,36 @@ jest.mock('@/shared/ui/select-modal/select-modal', () => ({
     ) : null,
 }))
 
+jest.mock('@/pages/events/detail/components/location-picker-modal', () => ({
+  LocationPickerModal: (props: {
+    isOpen: boolean
+    onClose: () => void
+    onSave: (value: {
+      location: string
+      locationLatitude: number | null
+      locationLongitude: number | null
+      locationNote: string | null
+    }) => void
+  }) =>
+    props.isOpen ? (
+      <div data-testid="location-picker-modal">
+        <button
+          type="button"
+          onClick={() =>
+            props.onSave({
+              location: '베르사유 궁전',
+              locationLatitude: 48.8049,
+              locationLongitude: 2.1204,
+              locationNote: null,
+            })
+          }
+        >
+          _saveLocationFromMap
+        </button>
+      </div>
+    ) : null,
+}))
+
 /**
  * 실제 BasicInfoSection은 834줄에 자식 모달 5개를 물고 있다. 여기서 검증할 계약은
  * "폼 상태가 섹션에 옳게 흘러가는가"이므로 값을 노출하는 최소 스텁으로 대체한다.
@@ -163,6 +193,14 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
     kindSlot?: {
       value: 'SINGLE' | 'COLLECTION'
       onChange: (next: 'SINGLE' | 'COLLECTION') => void
+    }
+    locationSlot?: {
+      location: string
+      setLocation: (next: string) => void
+      latitude?: number | null
+      longitude?: number | null
+      onClearCoordinates?: () => void
+      onOpenMapModal: () => void
     }
     thumbnail: string
     keywords: string[]
@@ -249,6 +287,24 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
       <output data-testid="endDate">{props.endDate}</output>
       <output data-testid="thumbnail">{props.thumbnail}</output>
       <output data-testid="keywords">{props.keywords.join('|')}</output>
+      {props.locationSlot && (
+        <>
+          <input
+            aria-label="위치"
+            value={props.locationSlot.location}
+            onChange={(event) => props.locationSlot?.setLocation(event.target.value)}
+          />
+          <output data-testid="locationCoords">
+            {props.locationSlot.latitude != null &&
+            props.locationSlot.longitude != null
+              ? `${props.locationSlot.latitude},${props.locationSlot.longitude}`
+              : ''}
+          </output>
+          <button type="button" onClick={props.locationSlot.onOpenMapModal}>
+            _openLocationMap
+          </button>
+        </>
+      )}
       <output data-testid="relatedCountries">
         {props.relatedCountries
           .map(
@@ -1220,5 +1276,51 @@ describe('EventBasicForm — 분야 · 세부 분야 상호작용', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+
+  it('위치 선택 모달에서 장소 이름과 좌표를 고르면 임시 저장·복원 및 사건 등록 payload에 함께 반영된다', async () => {
+    eventsApi.createEvent.mockResolvedValue({
+      id: 'evt-versailles',
+      title: '베르사유 조약',
+    })
+    const client = makeClient()
+    jest.spyOn(client, 'ensureQueryData').mockResolvedValue({} as never)
+
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    render(<EventBasicForm formRef={formRef} />, { wrapper: wrap(client) })
+
+    fireEvent.change(screen.getByLabelText('사건명'), {
+      target: { value: '베르사유 조약' },
+    })
+    fireEvent.change(screen.getByLabelText('시작일'), {
+      target: { value: '1919-06-28' },
+    })
+    fireEvent.change(screen.getByLabelText('분야'), {
+      target: { value: 'DIPLOMACY' },
+    })
+
+    fireEvent.click(screen.getByText('_openLocationMap'))
+    expect(screen.getByTestId('location-picker-modal')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('_saveLocationFromMap'))
+
+    expect(screen.getByLabelText('위치')).toHaveValue('베르사유 궁전')
+    expect(screen.getByTestId('locationCoords')).toHaveTextContent(
+      '48.8049,2.1204',
+    )
+
+    await act(async () => {
+      await formRef.current?.submit()
+    })
+
+    expect(eventsApi.createEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '베르사유 조약',
+        location: '베르사유 궁전',
+        locationLatitude: 48.8049,
+        locationLongitude: 2.1204,
+      }),
+    )
   })
 })

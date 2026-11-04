@@ -788,4 +788,47 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     )
     expect(setEndDate).toHaveBeenCalledWith('1919-03-01')
   })
+
+  it('위치 슬롯(locationSlot)이 주어지면 장소 이름 입력, 지도 핀 열기, 좌표 배지 표시 및 비우기 동작을 지원한다', () => {
+    const setLocation = jest.fn()
+    const onClearCoordinates = jest.fn()
+    const onOpenMapModal = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          locationSlot: {
+            location: '베르사유 궁전',
+            setLocation,
+            latitude: 48.8049,
+            longitude: 2.1204,
+            onClearCoordinates,
+            onOpenMapModal,
+          },
+        })}
+      />,
+    )
+
+    const locationInput = screen.getByLabelText('위치 이름') as HTMLInputElement
+    expect(locationInput.value).toBe('베르사유 궁전')
+
+    fireEvent.change(locationInput, { target: { value: '베르사유 궁전 거울의 방' } })
+    expect(setLocation).toHaveBeenCalledWith('베르사유 궁전 거울의 방')
+
+    // 좌표 배지가 표시되고 '지도 핀 수정' 버튼으로 모달을 열 수 있다
+    expect(screen.getByLabelText('선택된 지도 좌표')).toHaveTextContent(
+      '북위 48.8049°, 동경 2.1204°',
+    )
+    fireEvent.click(screen.getByRole('button', { name: '지도 핀 수정' }))
+    expect(onOpenMapModal).toHaveBeenCalledTimes(1)
+
+    // 핀 지우기 클릭 시 좌표만 초기화한다
+    fireEvent.click(screen.getByRole('button', { name: '지도 핀 지우기' }))
+    expect(onClearCoordinates).toHaveBeenCalledTimes(1)
+
+    // 비우기 클릭 시 이름과 좌표를 모두 초기화한다
+    fireEvent.click(screen.getByRole('button', { name: '위치 비우기' }))
+    expect(setLocation).toHaveBeenLastCalledWith('')
+    expect(onClearCoordinates).toHaveBeenCalledTimes(2)
+  })
 })

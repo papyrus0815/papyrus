@@ -27,6 +27,8 @@ export const BASIC_INFO_FORM_INITIAL = {
   thumbnail: '',
   thumbnailFile: null as File | null,
   location: '',
+  locationLatitude: null as number | null,
+  locationLongitude: null as number | null,
   tags: [] as string[],
   keywords: [] as string[],
   /**
@@ -70,6 +72,12 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
   )
   // location: 사람이 읽는 위치 라벨(자유 텍스트 또는 DB 선택의 표시명) — DB Event.location 컬럼.
   const [location, setLocation] = useState<string>(initial.location)
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(
+    initial.locationLatitude,
+  )
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(
+    initial.locationLongitude,
+  )
   const [tags, setTags] = useState<string[]>([...initial.tags])
   const [keywords, setKeywords] = useState<string[]>([...initial.keywords])
   const [relatedCountries, setRelatedCountries] = useState<
@@ -96,6 +104,8 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
     setThumbnail(initial.thumbnail)
     setThumbnailFile(initial.thumbnailFile)
     setLocation(initial.location)
+    setLocationLatitude(initial.locationLatitude)
+    setLocationLongitude(initial.locationLongitude)
     setTags([...initial.tags])
     setKeywords([...initial.keywords])
     if (!options?.keepCategory) setCategory(initial.category)
@@ -147,6 +157,8 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
     thumbnail,
     thumbnailFile,
     location,
+    locationLatitude,
+    locationLongitude,
     tags,
     keywords,
     relatedCountries,
@@ -164,6 +176,8 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
     setThumbnail,
     setThumbnailFile,
     setLocation,
+    setLocationLatitude,
+    setLocationLongitude,
     setTags,
     setKeywords,
     setRelatedCountries,
