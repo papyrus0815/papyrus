@@ -1451,34 +1451,66 @@ function HistoricalOverviewSection({
               </OverviewSaveButton>
             </OverviewActions>
           </OverviewBody>
-        ) : savedDescription || resolvedNameOrigin || resolvedHistory ? (
-          <OverviewBody>
-            {savedDescription &&
-              (isLikelyRichTextHtml(savedDescription) ? (
-                <RichTextReadView html={savedDescription} />
-              ) : (
-                <OverviewPlain>{savedDescription}</OverviewPlain>
-              ))}
-            {resolvedNameOrigin && (
-              <NarrativeSubBlock>
-                <NarrativeSubLabel>국호·명칭 유래</NarrativeSubLabel>
-                <OverviewPlain>{resolvedNameOrigin}</OverviewPlain>
-              </NarrativeSubBlock>
-            )}
-            {resolvedHistory && (
-              <NarrativeSubBlock>
-                <NarrativeSubLabel>역사 서술</NarrativeSubLabel>
-                <OverviewPlain>{resolvedHistory}</OverviewPlain>
-              </NarrativeSubBlock>
-            )}
-          </OverviewBody>
         ) : (
-          <SectionEmpty
-            text="이 나라가 어떤 나라였는지 몇 문단으로 적어 두면 지면 맨 위에서 먼저 읽힙니다."
-            hint="시대적 위상·성립 배경·국호 유래를 요약해 두면 대시보드 도입부가 명확해집니다"
-            actionLabel="개요 작성"
-            onAction={handleOpenEditor}
-          />
+          <OverviewLedgerGrid>
+            <OverviewCol>
+              <OverviewSubHeader>
+                <NarrativeSubLabel>개요 본문</NarrativeSubLabel>
+                <OverviewInlineAction type="button" onClick={handleOpenEditor}>
+                  {savedDescription ? '수정' : '+ 개요 작성'}
+                </OverviewInlineAction>
+              </OverviewSubHeader>
+              {savedDescription ? (
+                isLikelyRichTextHtml(savedDescription) ? (
+                  <RichTextReadView html={savedDescription} />
+                ) : (
+                  <OverviewPlain>{savedDescription}</OverviewPlain>
+                )
+              ) : (
+                <OverviewColEmpty>
+                  이 나라가 어떤 나라였는지 시대적 위상과 성립 배경을 몇 문단으로 적어 두면 지면 맨 위에서 먼저 읽힙니다.
+                </OverviewColEmpty>
+              )}
+            </OverviewCol>
+
+            <OverviewCol>
+              <NarrativeSubBlock $first>
+                <OverviewSubHeader>
+                  <NarrativeSubLabel>국호 · 명칭 유래</NarrativeSubLabel>
+                  {onEdit && (
+                    <OverviewInlineAction type="button" onClick={onEdit}>
+                      {resolvedNameOrigin ? '수정' : '+ 기본 정보에서 입력'}
+                    </OverviewInlineAction>
+                  )}
+                </OverviewSubHeader>
+                {resolvedNameOrigin ? (
+                  <OverviewPlain>{resolvedNameOrigin}</OverviewPlain>
+                ) : (
+                  <OverviewColEmpty>
+                    국호의 유래나 시대별 명칭 변천이 아직 기록되지 않았습니다.
+                  </OverviewColEmpty>
+                )}
+              </NarrativeSubBlock>
+
+              <NarrativeSubBlock>
+                <OverviewSubHeader>
+                  <NarrativeSubLabel>역사 서술</NarrativeSubLabel>
+                  {onEdit && (
+                    <OverviewInlineAction type="button" onClick={onEdit}>
+                      {resolvedHistory ? '수정' : '+ 기본 정보에서 입력'}
+                    </OverviewInlineAction>
+                  )}
+                </OverviewSubHeader>
+                {resolvedHistory ? (
+                  <OverviewPlain>{resolvedHistory}</OverviewPlain>
+                ) : (
+                  <OverviewColEmpty>
+                    주요 시대 구분과 흥망성쇠 통사 서술이 아직 기록되지 않았습니다.
+                  </OverviewColEmpty>
+                )}
+              </NarrativeSubBlock>
+            </OverviewCol>
+          </OverviewLedgerGrid>
         )}
       </DashboardStyles.Section>
 
@@ -1821,6 +1853,7 @@ function HistoricalOverviewSection({
           <DashboardStyles.SectionTitleText>
             교역 · 기업 지표
           </DashboardStyles.SectionTitleText>
+          <SectionHelpPopover sectionKey="indicatorsHub" />
           <DashboardStyles.SectionCountChip>
             등록 {filledIndicatorDomains}/2개 도메인
           </DashboardStyles.SectionCountChip>
@@ -1939,7 +1972,7 @@ function HistoricalOverviewSection({
             <DashboardStyles.IndicatorsLedgerItem>
               <DashboardStyles.IndicatorsLedgerRow>
                 <DashboardStyles.IndicatorsLedgerIcon $filled={hasTradeData}>
-                  01
+                  <IconTrade />
                 </DashboardStyles.IndicatorsLedgerIcon>
                 <DashboardStyles.IndicatorsLedgerBody>
                   <DashboardStyles.IndicatorsLedgerTitleRow>
@@ -1957,6 +1990,21 @@ function HistoricalOverviewSection({
                   </DashboardStyles.IndicatorsLedgerScope>
                 </DashboardStyles.IndicatorsLedgerBody>
                 <DashboardStyles.IndicatorsLedgerActions>
+                  {hasTradeData && (
+                    <DashboardStyles.IndicatorsLedgerFocusBtn
+                      type="button"
+                      $active={indicatorDomainFilter === 'trade'}
+                      onClick={() =>
+                        setIndicatorDomainFilter((prev) =>
+                          prev === 'trade' ? 'all' : 'trade',
+                        )
+                      }
+                    >
+                      {indicatorDomainFilter === 'trade'
+                        ? '필터 해제'
+                        : '차트 집중'}
+                    </DashboardStyles.IndicatorsLedgerFocusBtn>
+                  )}
                   <DashboardStyles.IndicatorsLedgerActionBtn
                     type="button"
                     $filled={hasTradeData}
@@ -1971,7 +2019,7 @@ function HistoricalOverviewSection({
             <DashboardStyles.IndicatorsLedgerItem>
               <DashboardStyles.IndicatorsLedgerRow>
                 <DashboardStyles.IndicatorsLedgerIcon $filled={hasCompanyData}>
-                  02
+                  <IconBriefcase />
                 </DashboardStyles.IndicatorsLedgerIcon>
                 <DashboardStyles.IndicatorsLedgerBody>
                   <DashboardStyles.IndicatorsLedgerTitleRow>
@@ -1991,6 +2039,21 @@ function HistoricalOverviewSection({
                   </DashboardStyles.IndicatorsLedgerScope>
                 </DashboardStyles.IndicatorsLedgerBody>
                 <DashboardStyles.IndicatorsLedgerActions>
+                  {hasCompanyData && (
+                    <DashboardStyles.IndicatorsLedgerFocusBtn
+                      type="button"
+                      $active={indicatorDomainFilter === 'companies'}
+                      onClick={() =>
+                        setIndicatorDomainFilter((prev) =>
+                          prev === 'companies' ? 'all' : 'companies',
+                        )
+                      }
+                    >
+                      {indicatorDomainFilter === 'companies'
+                        ? '필터 해제'
+                        : '목록 집중'}
+                    </DashboardStyles.IndicatorsLedgerFocusBtn>
+                  )}
                   <DashboardStyles.IndicatorsLedgerActionBtn
                     type="button"
                     $filled={hasCompanyData}
@@ -2099,7 +2162,6 @@ const DashboardRoot = styled(DashboardStyles.DashboardRoot)`
 `
 
 const OverviewBody = styled.div`
-  max-width: 760px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2108,18 +2170,91 @@ const OverviewBody = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+const OverviewLedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 14px;
+  line-height: 1.75;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  @container historical-dashboard (min-width: 820px) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  }
+`
+
+const OverviewCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 2px;
+
+  @container historical-dashboard (min-width: 820px) {
+    &:first-child {
+      padding-right: 22px;
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+
+    &:last-child {
+      padding-left: 22px;
+    }
+  }
+
+  @container historical-dashboard (max-width: 819px) {
+    &:not(:first-child) {
+      border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const OverviewSubHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const OverviewInlineAction = styled.button`
+  appearance: none;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const OverviewColEmpty = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 const OverviewPlain = styled.p`
   margin: 0;
   white-space: pre-wrap;
 `
 
-const NarrativeSubBlock = styled.div`
+const NarrativeSubBlock = styled.div<{ $first?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-top: 12px;
-  margin-top: 4px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  gap: 6px;
+  padding-top: ${({ $first }) => ($first ? '0' : '12px')};
+  margin-top: ${({ $first }) => ($first ? '0' : '4px')};
+  border-top: ${({ theme, $first }) =>
+    $first ? 'none' : `1px solid ${theme.colors.border.light}`};
 `
 
 const NarrativeSubLabel = styled.span`

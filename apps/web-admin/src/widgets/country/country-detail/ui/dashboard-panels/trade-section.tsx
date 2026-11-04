@@ -97,6 +97,7 @@ export function TradeSection({
    * 옛 id가 자연히 안 맞아 최신으로 돌아온다 — 초기화 effect가 따로 필요 없다.
    */
   const [pickedYearId, setPickedYearId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'chart' | 'ledger'>('chart')
   const modernQuery = useExportImports(countryId)
   const historicalQuery = useTradeRecords(
     historicalCountryId ? { historicalCountryId } : {},
@@ -315,23 +316,37 @@ export function TradeSection({
         <S.SectionCountChip>
           {years.length}개 연도 · {yearLabel} 기준
         </S.SectionCountChip>
-        {!embeddedInTab && (
-          <S.SectionHeaderActions>
-            {countryId && (
-              <S.SectionAction
-                type="button"
-                onClick={() => setManagerOpen(true)}
-              >
-                데이터 관리
-              </S.SectionAction>
-            )}
-            {onOpenDetailTab && (
-              <S.SectionLink type="button" onClick={onOpenDetailTab}>
-                상세·원장 보기
-              </S.SectionLink>
-            )}
-          </S.SectionHeaderActions>
-        )}
+        <S.SectionHeaderActions>
+          <TradeViewToggleGroup role="group" aria-label="교역 표시 방식">
+            <TradeViewToggleBtn
+              type="button"
+              $active={viewMode === 'chart'}
+              onClick={() => setViewMode('chart')}
+            >
+              차트 · 구성
+            </TradeViewToggleBtn>
+            <TradeViewToggleBtn
+              type="button"
+              $active={viewMode === 'ledger'}
+              onClick={() => setViewMode('ledger')}
+            >
+              연도별 원장
+            </TradeViewToggleBtn>
+          </TradeViewToggleGroup>
+          {!embeddedInTab && countryId && (
+            <S.SectionAction
+              type="button"
+              onClick={() => setManagerOpen(true)}
+            >
+              데이터 관리
+            </S.SectionAction>
+          )}
+          {!embeddedInTab && onOpenDetailTab && (
+            <S.SectionLink type="button" onClick={onOpenDetailTab}>
+              상세·원장 보기
+            </S.SectionLink>
+          )}
+        </S.SectionHeaderActions>
       </S.SectionTitleRow>
 
       <TradeHeadlineStrip aria-label={`${yearLabel} 교역 요약`}>
@@ -453,44 +468,138 @@ export function TradeSection({
         </TradeHeadlineCell>
       </TradeHeadlineStrip>
 
-      {/* 규모·추이·연도 선택을 한 그림이 맡는다 — 자세한 이유는 TradeYearBars 주석 */}
-      <TradeYearBars
-        years={years.map((row) => ({
-          id: row.id,
-          label: formatTradeYear(row.era, row.year, row.periodEndYear),
-          exportValue: row.exportValue,
-          importValue: row.importValue,
-          currencyCode: row.currencyCode,
-          valueScale: row.valueScale,
-        }))}
-        selectedId={current.id}
-        onSelect={setPickedYearId}
-      />
+      {viewMode === 'chart' ? (
+        <>
+          {/* 규모·추이·연도 선택을 한 그림이 맡는다 — 자세한 이유는 TradeYearBars 주석 */}
+          <TradeYearBars
+            years={years.map((row) => ({
+              id: row.id,
+              label: formatTradeYear(row.era, row.year, row.periodEndYear),
+              exportValue: row.exportValue,
+              importValue: row.importValue,
+              currencyCode: row.currencyCode,
+              valueScale: row.valueScale,
+            }))}
+            selectedId={current.id}
+            onSelect={setPickedYearId}
+          />
 
-      {hasFlows && (
-        <S.TradeGroupsContainer>
-          <S.TradeItemGroups>
-            {(['EXPORT', 'IMPORT'] as const).map((direction) => (
-              <TradeDirectionView
-                key={direction}
-                direction={direction}
-                view={views[direction]}
-                unitSuffix={unitSuffix}
-                tradeVolume={tradeVolume}
-                isDark={isDark}
-                onPickCommodity={setPickedCommodity}
-              />
-            ))}
-          </S.TradeItemGroups>
-        </S.TradeGroupsContainer>
-      )}
+          {hasFlows && (
+            <S.TradeGroupsContainer>
+              <S.TradeItemGroups>
+                {(['EXPORT', 'IMPORT'] as const).map((direction) => (
+                  <TradeDirectionView
+                    key={direction}
+                    direction={direction}
+                    view={views[direction]}
+                    unitSuffix={unitSuffix}
+                    tradeVolume={tradeVolume}
+                    isDark={isDark}
+                    onPickCommodity={setPickedCommodity}
+                  />
+                ))}
+              </S.TradeItemGroups>
+            </S.TradeGroupsContainer>
+          )}
 
-      {(current.sourceName || current.isEstimate) && (
-        <S.TradeSourceLine>
-          {current.isEstimate && '추정치'}
-          {current.isEstimate && current.sourceName && ' · '}
-          {current.sourceName && `출처: ${current.sourceName}`}
-        </S.TradeSourceLine>
+          {(current.sourceName || current.isEstimate) && (
+            <S.TradeSourceLine>
+              {current.isEstimate && '추정치'}
+              {current.isEstimate && current.sourceName && ' · '}
+              {current.sourceName && `출처: ${current.sourceName}`}
+            </S.TradeSourceLine>
+          )}
+        </>
+      ) : (
+        <TradeLedgerWrap>
+          <TradeLedgerGrid>
+            {[...years].reverse().map((row) => {
+              const rowLabel = formatTradeYear(
+                row.era,
+                row.year,
+                row.periodEndYear,
+              )
+              const rowUnit = [
+                row.currencyCode,
+                row.valueScale && row.valueScale !== 'ONE'
+                  ? VALUE_SCALE_LABEL[
+                      row.valueScale as keyof typeof VALUE_SCALE_LABEL
+                    ]
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' ')
+              const rowBalance =
+                row.exportValue != null && row.importValue != null
+                  ? row.exportValue - row.importValue
+                  : null
+              const rowVolume =
+                row.exportValue != null && row.importValue != null
+                  ? row.exportValue + row.importValue
+                  : null
+              const expItems = row.items.filter(
+                (item) => item.direction === 'EXPORT',
+              )
+              const impItems = row.items.filter(
+                (item) => item.direction === 'IMPORT',
+              )
+              const rowTopExp =
+                expItems[0]?.name ?? expItems[0]?.partnerName ?? null
+              const rowTopImp =
+                impItems[0]?.name ?? impItems[0]?.partnerName ?? null
+
+              return (
+                <TradeLedgerItem key={row.id}>
+                  <TradeLedgerRowBtn
+                    type="button"
+                    $selected={row.id === current.id}
+                    onClick={() => {
+                      setPickedYearId(row.id)
+                      setViewMode('chart')
+                    }}
+                  >
+                    <TradeLedgerTopLine>
+                      <TradeLedgerYearGroup>
+                        <TradeLedgerYear>{rowLabel}</TradeLedgerYear>
+                        {row.isEstimate && (
+                          <TradeLedgerEstimateTag>추정</TradeLedgerEstimateTag>
+                        )}
+                        {rowBalance != null && (
+                          <TradeBalanceTag $surplus={rowBalance >= 0}>
+                            {rowBalance >= 0 ? '흑자' : '적자'}{' '}
+                            {rowBalance > 0 ? '+' : ''}
+                            {formatTradeValue(rowBalance)}
+                          </TradeBalanceTag>
+                        )}
+                      </TradeLedgerYearGroup>
+                      <TradeLedgerVolume>
+                        {rowVolume != null
+                          ? `총액 ${formatTradeValue(rowVolume)}${rowUnit ? ` ${rowUnit}` : ''}`
+                          : `명세 ${row.items.length}건`}
+                      </TradeLedgerVolume>
+                    </TradeLedgerTopLine>
+                    <TradeLedgerSubLine>
+                      <TradeLedgerSubText>
+                        수출{' '}
+                        {row.exportValue != null
+                          ? formatTradeValue(row.exportValue)
+                          : '—'}
+                        {rowTopExp ? ` (${rowTopExp})` : ''} · 수입{' '}
+                        {row.importValue != null
+                          ? formatTradeValue(row.importValue)
+                          : '—'}
+                        {rowTopImp ? ` (${rowTopImp})` : ''}
+                      </TradeLedgerSubText>
+                      <TradeLedgerActionHint>
+                        상세 구성 ›
+                      </TradeLedgerActionHint>
+                    </TradeLedgerSubLine>
+                  </TradeLedgerRowBtn>
+                </TradeLedgerItem>
+              )
+            })}
+          </TradeLedgerGrid>
+        </TradeLedgerWrap>
       )}
 
       <CommodityFlowsModal
@@ -856,4 +965,164 @@ const TradeBalanceTag = styled.span<{ $surplus: boolean }>`
       : theme.mode === 'dark'
         ? 'rgba(248,113,113,0.16)'
         : 'rgba(220,38,38,0.10)'};
+`
+
+const TradeViewToggleGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const TradeViewToggleBtn = styled.button<{ $active: boolean }>`
+  padding: 3px 9px;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.tertiary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+  box-shadow: ${({ $active }) =>
+    $active ? '0 1px 2px rgba(15, 23, 42, 0.08)' : 'none'};
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.text.primary};
+  }
+`
+
+const TradeLedgerWrap = styled.div`
+  container-type: inline-size;
+  width: 100%;
+`
+
+const TradeLedgerGrid = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @container (min-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const TradeLedgerItem = styled.li`
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @container (min-width: 720px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 14px;
+    }
+    &:nth-child(even) {
+      padding-left: 14px;
+    }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 0;
+    }
+  }
+`
+
+const TradeLedgerRowBtn = styled.button<{ $selected: boolean }>`
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 11px 6px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ theme, $selected }) =>
+    $selected ? theme.colors.activeLight : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.14s ease;
+
+  &:hover {
+    background: ${({ theme, $selected }) =>
+      $selected ? theme.colors.activeLight : theme.colors.hover};
+  }
+`
+
+const TradeLedgerTopLine = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+`
+
+const TradeLedgerYearGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const TradeLedgerYear = styled.span`
+  font-size: 13.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TradeLedgerEstimateTag = styled.span`
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
+const TradeLedgerVolume = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+`
+
+const TradeLedgerSubLine = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+`
+
+const TradeLedgerSubText = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const TradeLedgerActionHint = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary};
 `

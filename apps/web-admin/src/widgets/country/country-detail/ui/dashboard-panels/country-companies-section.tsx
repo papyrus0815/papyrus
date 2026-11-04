@@ -58,6 +58,9 @@ export function CountryCompaniesSection({
   const navigate = useNavigate()
   const [modalTarget, setModalTarget] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'active' | 'dissolved' | 'historical'
+  >('all')
   const { data, isLoading } = useQuery({
     queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
@@ -123,6 +126,46 @@ export function CountryCompaniesSection({
       />
     ) : null
 
+  const { topCitiesText, cityCount, topIndustriesText, industryCount } =
+    useMemo(() => {
+      const cityMap = new Map<string, number>()
+      const indMap = new Map<string, number>()
+      for (const company of companies) {
+        const city = company.headquartersCity?.name?.trim()
+        if (city) cityMap.set(city, (cityMap.get(city) ?? 0) + 1)
+        const anyC = company as unknown as Record<string, any>
+        const ind =
+          typeof anyC.industry === 'string' && anyC.industry.trim()
+            ? anyC.industry.trim()
+            : typeof anyC.sector === 'string' && anyC.sector.trim()
+              ? anyC.sector.trim()
+              : null
+        if (ind) indMap.set(ind, (indMap.get(ind) ?? 0) + 1)
+      }
+      const citiesStr =
+        cityMap.size > 0
+          ? [...cityMap.entries()]
+              .sort((entryA, entryB) => entryB[1] - entryA[1])
+              .slice(0, 3)
+              .map(([name, cnt]) => `${name} ${cnt}`)
+              .join(' · ')
+          : null
+      const indsStr =
+        indMap.size > 0
+          ? [...indMap.entries()]
+              .sort((entryA, entryB) => entryB[1] - entryA[1])
+              .slice(0, 3)
+              .map(([name, cnt]) => `${name} ${cnt}`)
+              .join(' · ')
+          : null
+      return {
+        topCitiesText: citiesStr,
+        cityCount: cityMap.size,
+        topIndustriesText: indsStr,
+        industryCount: indMap.size,
+      }
+    }, [companies])
+
   if (isLoading) {
     return (
       <S.Section>
@@ -162,18 +205,15 @@ export function CountryCompaniesSection({
     )
   }
 
-  const visibleCompanies = expanded
-    ? companies
-    : companies.slice(0, DASHBOARD_COMPANY_LIMIT)
-  const hiddenCount = companies.length - visibleCompanies.length
   const activeCount = companies.filter(
-    (c) => !c.dissolvedAt && (!c.status || c.status === 'ACTIVE'),
+    (company) =>
+      !company.dissolvedAt && (!company.status || company.status === 'ACTIVE'),
   ).length
   const dissolvedCount = companies.length - activeCount
 
   const foundedYears = companies
-    .map((c) => year(c.foundedAt))
-    .filter((y): y is string => y != null)
+    .map((company) => year(company.foundedAt))
+    .filter((yr): yr is string => yr != null)
     .map(Number)
     .filter(Number.isFinite)
   const earliestYear =
@@ -181,48 +221,32 @@ export function CountryCompaniesSection({
   const latestFoundedYear =
     foundedYears.length > 0 ? Math.max(...foundedYears) : null
   const historicalCompanyCount = countryId
-    ? companies.filter((c) => c.historicalCountryId && !c.countryId).length
+    ? companies.filter(
+        (company) => company.historicalCountryId && !company.countryId,
+      ).length
     : 0
 
-  const { topCitiesText, cityCount, topIndustriesText, industryCount } =
-    useMemo(() => {
-      const cityMap = new Map<string, number>()
-      const indMap = new Map<string, number>()
-      for (const c of companies) {
-        const city = c.headquartersCity?.name?.trim()
-        if (city) cityMap.set(city, (cityMap.get(city) ?? 0) + 1)
-        const anyC = c as unknown as Record<string, any>
-        const ind =
-          typeof anyC.industry === 'string' && anyC.industry.trim()
-            ? anyC.industry.trim()
-            : typeof anyC.sector === 'string' && anyC.sector.trim()
-              ? anyC.sector.trim()
-              : null
-        if (ind) indMap.set(ind, (indMap.get(ind) ?? 0) + 1)
-      }
-      const citiesStr =
-        cityMap.size > 0
-          ? [...cityMap.entries()]
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 3)
-              .map(([name, cnt]) => `${name} ${cnt}`)
-              .join(' · ')
-          : null
-      const indsStr =
-        indMap.size > 0
-          ? [...indMap.entries()]
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 3)
-              .map(([name, cnt]) => `${name} ${cnt}`)
-              .join(' · ')
-          : null
-      return {
-        topCitiesText: citiesStr,
-        cityCount: cityMap.size,
-        topIndustriesText: indsStr,
-        industryCount: indMap.size,
-      }
-    }, [companies])
+  const filteredByStatus = companies.filter((company) => {
+    const isAct =
+      !company.dissolvedAt && (!company.status || company.status === 'ACTIVE')
+    if (statusFilter === 'active') return isAct
+    if (statusFilter === 'dissolved') return !isAct
+    if (statusFilter === 'historical') {
+      return Boolean(
+        countryId && company.historicalCountryId && !company.countryId,
+      )
+    }
+    return true
+  })
+  const effectiveFiltered =
+    filteredByStatus.length > 0 ? filteredByStatus : companies
+
+  const visibleCompanies = expanded
+    ? effectiveFiltered
+    : effectiveFiltered.slice(0, DASHBOARD_COMPANY_LIMIT)
+  const hiddenCount = effectiveFiltered.length - visibleCompanies.length
+  const showFilterBar =
+    (activeCount > 0 && dissolvedCount > 0) || historicalCompanyCount > 0
 
   return (
     <S.Section $wide>
@@ -300,6 +324,44 @@ export function CountryCompaniesSection({
       </CompanyHeadlineStrip>
 
       <LedgerWrap>
+        {showFilterBar && (
+          <FilterBar role="group" aria-label="기업 상태 및 소속 필터">
+            <FilterChip
+              type="button"
+              $active={statusFilter === 'all'}
+              onClick={() => setStatusFilter('all')}
+            >
+              전체 ({companies.length})
+            </FilterChip>
+            {activeCount > 0 && (
+              <FilterChip
+                type="button"
+                $active={statusFilter === 'active'}
+                onClick={() => setStatusFilter('active')}
+              >
+                활동 중 ({activeCount})
+              </FilterChip>
+            )}
+            {dissolvedCount > 0 && (
+              <FilterChip
+                type="button"
+                $active={statusFilter === 'dissolved'}
+                onClick={() => setStatusFilter('dissolved')}
+              >
+                종료·해산 ({dissolvedCount})
+              </FilterChip>
+            )}
+            {historicalCompanyCount > 0 && (
+              <FilterChip
+                type="button"
+                $active={statusFilter === 'historical'}
+                onClick={() => setStatusFilter('historical')}
+              >
+                전신 국가 ({historicalCompanyCount})
+              </FilterChip>
+            )}
+          </FilterBar>
+        )}
         <List>
           {visibleCompanies.map((company) => {
             const anyCompany = company as unknown as Record<string, any>
@@ -390,7 +452,7 @@ export function CountryCompaniesSection({
           })}
         </List>
         {(hiddenCount > 0 ||
-          (expanded && companies.length > DASHBOARD_COMPANY_LIMIT)) && (
+          (expanded && effectiveFiltered.length > DASHBOARD_COMPANY_LIMIT)) && (
           <MoreRow>
             <MoreBtn
               type="button"
@@ -503,6 +565,45 @@ const LedgerWrap = styled.div`
   gap: 10px;
 `
 
+const FilterBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+`
+
+const FilterChip = styled.button<{ $active: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.text.primary};
+  }
+`
+
 const List = styled.ul`
   margin: 0;
   padding: 0;
@@ -527,6 +628,11 @@ const Item = styled.li`
     }
     &:nth-child(even) {
       padding-left: 14px;
+    }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 0;
     }
   }
 `

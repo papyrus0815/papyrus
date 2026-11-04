@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import styled, { css } from 'styled-components'
 
@@ -44,11 +44,20 @@ export function RecordLedger({
   rows,
   completeness,
 }: RecordLedgerProps) {
+  const [axisFilter, setAxisFilter] = useState<'all' | 'filled' | 'empty'>('all')
   const filled = rows
     .filter((row) => row.isLoading || row.value > 0)
     .sort((a, b) => b.value - a.value)
   const empty = rows.filter((row) => !row.isLoading && row.value === 0)
   const orderedRows = [...filled, ...empty]
+
+  const filteredRows =
+    axisFilter === 'filled' && filled.length > 0
+      ? filled
+      : axisFilter === 'empty' && empty.length > 0
+        ? empty
+        : orderedRows
+  const showAxisFilter = filled.length > 0 && empty.length > 0
 
   const max = filled.reduce((acc, row) => Math.max(acc, row.value), 0) || 1
   const totalCount = rows.reduce((acc, row) => acc + row.value, 0)
@@ -136,8 +145,34 @@ export function RecordLedger({
         </HeadlineCell>
       </HeadlineStrip>
 
+      {showAxisFilter && (
+        <FilterBar role="group" aria-label="기록 영역 등록 상태 필터">
+          <FilterChip
+            type="button"
+            $active={axisFilter === 'all'}
+            onClick={() => setAxisFilter('all')}
+          >
+            전체 ({orderedRows.length})
+          </FilterChip>
+          <FilterChip
+            type="button"
+            $active={axisFilter === 'filled'}
+            onClick={() => setAxisFilter('filled')}
+          >
+            등록됨 ({filled.length})
+          </FilterChip>
+          <FilterChip
+            type="button"
+            $active={axisFilter === 'empty'}
+            onClick={() => setAxisFilter('empty')}
+          >
+            미등록 ({empty.length})
+          </FilterChip>
+        </FilterBar>
+      )}
+
       <LedgerGrid>
-        {orderedRows.map((row) => {
+        {filteredRows.map((row) => {
           const isFilled = row.isLoading || row.value > 0
           const interactive = row.onClick != null
           const ratio =
@@ -307,6 +342,46 @@ const CompletenessFill = styled.span<{ $full: boolean }>`
   transition: width 0.35s ease;
 `
 
+const FilterBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const FilterChip = styled.button<{ $active: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.primary : theme.colors.text.primary};
+  }
+`
+
 const LedgerGrid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -323,6 +398,9 @@ const LedgerCell = styled.div`
   @media (min-width: 780px) {
     &:nth-child(even) {
       border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
     }
   }
 `

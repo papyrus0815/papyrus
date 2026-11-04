@@ -136,6 +136,7 @@ export function CountryDetailDashboard({
 
   const [dataManagerTab, setDataManagerTab] = useState<MainTab | null>(null)
   const [expandEmptyIndicators, setExpandEmptyIndicators] = useState(false)
+  const [expandNotes, setExpandNotes] = useState(false)
   const [companyRegisterOpen, setCompanyRegisterOpen] = useState(false)
   const [indicatorDomainFilter, setIndicatorDomainFilter] = useState<
     'ALL' | 'trends' | 'pyramid' | 'bonds' | 'trade' | 'companies'
@@ -1371,22 +1372,36 @@ export function CountryDetailDashboard({
               <S.EventTimelineLabel>
                 국가 메모 · 기록 ({countryRecords.length}건)
               </S.EventTimelineLabel>
-              <S.SectionLink
-                type="button"
-                onClick={() => setDataManagerTab('records')}
-              >
-                관리
-              </S.SectionLink>
+              <S.CountryNotesActions>
+                {countryRecords.length > 6 && (
+                  <S.SectionLink
+                    type="button"
+                    onClick={() => setExpandNotes((prev) => !prev)}
+                  >
+                    {expandNotes
+                      ? '메모 접기'
+                      : `메모 더보기 (+${countryRecords.length - 6}건)`}
+                  </S.SectionLink>
+                )}
+                <S.SectionLink
+                  type="button"
+                  onClick={() => setDataManagerTab('records')}
+                >
+                  + 메모 추가 · 관리
+                </S.SectionLink>
+              </S.CountryNotesActions>
             </S.CountryNotesHeader>
             <S.CountryNotesList>
-              {countryRecords.slice(0, 5).map((rec) => (
-                <S.CountryNoteItem key={rec.id}>
-                  <S.CountryNoteDate>
-                    {new Date(rec.recordedAt).toLocaleDateString('ko-KR')}
-                  </S.CountryNoteDate>
-                  <S.CountryNoteText>{rec.description}</S.CountryNoteText>
-                </S.CountryNoteItem>
-              ))}
+              {(expandNotes ? countryRecords : countryRecords.slice(0, 6)).map(
+                (rec) => (
+                  <S.CountryNoteItem key={rec.id}>
+                    <S.CountryNoteDate>
+                      {new Date(rec.recordedAt).toLocaleDateString('ko-KR')}
+                    </S.CountryNoteDate>
+                    <S.CountryNoteText>{rec.description}</S.CountryNoteText>
+                  </S.CountryNoteItem>
+                ),
+              )}
             </S.CountryNotesList>
           </S.CountryNotesBlock>
         )}

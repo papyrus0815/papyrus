@@ -4753,7 +4753,7 @@ const CabinetViewSwitchBtn = styled.button<{ $active: boolean }>`
 const CabinetHeadlineStrip = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @media (max-width: 960px) {

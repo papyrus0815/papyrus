@@ -1416,7 +1416,6 @@ export const CountryNotesBlock = styled.div`
   flex-direction: column;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const CountryNotesHeader = styled.div`
@@ -1426,24 +1425,50 @@ export const CountryNotesHeader = styled.div`
   gap: 8px;
 `
 
+export const CountryNotesActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  > button {
+    margin-left: 0;
+  }
+`
+
 export const CountryNotesList = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @media (min-width: 780px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 `
 
 export const CountryNoteItem = styled.li`
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 8px 0;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding: 10px 6px;
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
-  &:first-child {
-    padding-top: 4px;
-    border-top: none;
+  @media (min-width: 780px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 14px;
+    }
+    &:nth-child(even) {
+      padding-left: 14px;
+    }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 6px;
+    }
   }
 `
 
