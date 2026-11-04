@@ -1180,4 +1180,45 @@ describe('EventBasicForm — 분야 · 세부 분야 상호작용', () => {
       screen.queryByRole('status', { name: '임시 저장된 사건 초안 안내' }),
     ).not.toBeInTheDocument()
   })
+
+  it('이전 초안 배너가 떠 있을 때 실수로 글자를 먼저 입력해도 배너가 사라지지 않고 "이어쓰기"로 직전 초안을 복원할 수 있다', () => {
+    jest.useFakeTimers()
+    try {
+      const client = makeClient()
+      const firstRender = render(<EventBasicForm />, { wrapper: wrap(client) })
+
+      fireEvent.change(screen.getByLabelText('사건명'), {
+        target: { value: '30년 전쟁' },
+      })
+      fireEvent.change(screen.getByLabelText('시작일'), {
+        target: { value: '1618-05-23' },
+      })
+      firstRender.unmount()
+
+      const secondRender = render(<EventBasicForm />, { wrapper: wrap(client) })
+      expect(
+        screen.getByRole('status', { name: '임시 저장된 사건 초안 안내' }),
+      ).toHaveTextContent('30년 전쟁')
+
+      // 배너를 누르기 전에 실수로 한 글자를 입력하고 디바운스 시간이 지나도 배너와 이전 초안은 유지된다
+      fireEvent.change(screen.getByLabelText('사건명'), {
+        target: { value: 'ㄱ' },
+      })
+      act(() => {
+        jest.advanceTimersByTime(500)
+      })
+
+      expect(
+        screen.getByRole('status', { name: '임시 저장된 사건 초안 안내' }),
+      ).toHaveTextContent('30년 전쟁')
+
+      fireEvent.click(screen.getByRole('button', { name: '임시 저장본 이어쓰기' }))
+      expect(screen.getByLabelText('사건명')).toHaveValue('30년 전쟁')
+      expect(screen.getByTestId('startDate')).toHaveTextContent('1618-05-23')
+
+      secondRender.unmount()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
 })

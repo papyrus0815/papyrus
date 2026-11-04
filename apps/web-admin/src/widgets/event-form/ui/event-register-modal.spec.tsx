@@ -111,6 +111,21 @@ jest.mock('./event-basic-form', () => ({
         >
           _draftSaved
         </button>
+        <button
+          type="button"
+          onClick={() =>
+            onStateChange?.({
+              isEditMode: false,
+              isLoading: false,
+              isSubmitting: false,
+              isValid: false,
+              firstError: '사건명을 입력해주세요',
+              missingCount: 3,
+            })
+          }
+        >
+          _invalidWithMissing3
+        </button>
       </div>
     )
   },
@@ -327,4 +342,37 @@ it('신규 등록 중 초안이 자동 저장되면 하단 푸터에 "자동 저
   expect(screen.getByRole('status', { name: '임시 자동 저장됨' })).toHaveTextContent(
     '자동 저장됨',
   )
+})
+
+it('헤더에 섹션 이동 네비게이션을 노출하고, 작성 중(dirty)일 때 초기화 버튼으로 폼을 비울 수 있다', async () => {
+  setup()
+  await waitForBody()
+
+  const sectionNav = screen.getByRole('navigation', { name: '폼 섹션 이동' })
+  expect(sectionNav).toHaveTextContent('기본 정보')
+  expect(sectionNav).toHaveTextContent('참여 주체')
+  expect(sectionNav).toHaveTextContent('맥락·부가')
+
+  // dirty가 아닐 때는 초기화 버튼이 숨겨진다
+  expect(
+    screen.queryByRole('button', { name: '작성 내용 초기화' }),
+  ).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByText('_dirty'))
+
+  const resetBtn = screen.getByRole('button', { name: '작성 내용 초기화' })
+  fireEvent.click(resetBtn)
+
+  await waitFor(() => expect(confirmMock).toHaveBeenCalledTimes(1))
+  expect(resetSpy).toHaveBeenCalledWith()
+})
+
+it('필수 입력 항목이 여러 개 비어 있을 때 하단 점프 버튼에 남은 건수(외 N건)를 함께 표시한다', async () => {
+  setup()
+  await waitForBody()
+
+  fireEvent.click(screen.getByText('_invalidWithMissing3'))
+
+  expect(screen.getByText('필수 입력: 사건명을 입력해주세요')).toBeInTheDocument()
+  expect(screen.getByText('외 2건')).toBeInTheDocument()
 })

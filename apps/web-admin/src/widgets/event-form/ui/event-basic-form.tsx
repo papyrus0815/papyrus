@@ -134,6 +134,8 @@ export interface EventBasicFormState {
   isValid: boolean
   /** 저장 불가 사유 중 첫 번째 (버튼 title 용) */
   firstError?: string
+  /** 아직 비어 있는 필수 입력 항목 수 (사건명·기간·분야 중 미충족 개수) */
+  missingCount?: number
   /** 신규 등록 임시 자동저장 시각(ms) — 있으면 셸 푸터에 '자동 저장됨' 표시 */
   draftSavedAt?: number | null
 }
@@ -1009,6 +1011,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   /* 분야는 필수 — 사건의 분류이자 색·필터의 기준이다. 세부(2단계)는 선택 */
   const categoryError = category ? undefined : '분야를 골라 주세요'
   const isValid = isBasicInfoValid() && validation.ok && Boolean(category)
+  const missingCount =
+    (title.trim() ? 0 : 1) +
+    (startDate && !dateInputErrors.start && !validation.fields.startDate ? 0 : 1) +
+    (category ? 0 : 1)
   useEffect(() => {
     onStateChange?.({
       isEditMode,
@@ -1016,6 +1022,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       isSubmitting,
       isValid,
       firstError: validation.firstError ?? categoryError ?? undefined,
+      missingCount,
       ...(draftSavedAt !== null && { draftSavedAt }),
     })
   }, [
@@ -1025,6 +1032,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     isValid,
     validation.firstError,
     categoryError,
+    missingCount,
     draftSavedAt,
     onStateChange,
   ])
@@ -1244,10 +1252,13 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       // 가지를 연달아 등록하는 흐름이다(keepCategory와 같은 근거). 칩이 보이므로
       // 원치 않으면 ✕ 한 번으로 해제된다. 유지된 값은 아래 토큰으로 새 기준선에 편입.
       setSubmitAttempted(false)
+      if (!isEditMode) {
+        discardDraft()
+      }
       // 비운 결과가 새 기준선 — 토큰을 올리면 기준선 effect가 다시 잡는다.
       setHydrationToken((token) => token + 1)
     },
-    [resetFormFields, eventType, setRelatedCountries],
+    [resetFormFields, eventType, setRelatedCountries, isEditMode, discardDraft],
   )
 
   useImperativeHandle(

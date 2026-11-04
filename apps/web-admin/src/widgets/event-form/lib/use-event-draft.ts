@@ -238,7 +238,6 @@ export function useEventDraft({
     hasPendingSaveRef.current = false
     if (savedAt !== null) {
       setLastSavedAt(savedAt)
-      setPendingDraft(null)
     }
     return savedAt
   }, [storageKey])
@@ -258,7 +257,6 @@ export function useEventDraft({
       hasPendingSaveRef.current = false
       if (savedAt !== null) {
         setLastSavedAt(savedAt)
-        setPendingDraft(null)
       }
     }, SAVE_DEBOUNCE_MS)
   }, [storageKey])
@@ -275,9 +273,15 @@ export function useEventDraft({
   }, [storageKey])
 
   const consumePendingDraft = useCallback((): EventDraftEnvelope | null => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    hasPendingSaveRef.current = false
     const current = pendingDraft ?? readEventDraft(storageKey)
     setPendingDraft(null)
     if (current) {
+      writeEventDraft(current.data, storageKey)
       setLastSavedAt(current.savedAt)
     }
     return current

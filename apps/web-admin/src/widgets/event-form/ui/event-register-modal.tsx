@@ -60,6 +60,14 @@ const LazyEventBasicForm = React.lazy(() =>
 const CREATE_LEAVE_MESSAGE =
   '작성 중인 내용은 임시 저장되어 다음에 이어 쓸 수 있습니다. 창을 닫으시겠습니까?'
 const EDIT_LEAVE_MESSAGE = '저장하지 않은 변경 사항이 있습니다. 닫으시겠습니까?'
+const RESET_CONFIRM_MESSAGE =
+  '작성 중인 내용을 모두 지우고 처음 상태로 되돌리시겠습니까?'
+
+const FORM_SECTION_LINKS = [
+  { id: 'event-form-group-basic', label: '기본 정보' },
+  { id: 'event-form-group-participants', label: '참여 주체' },
+  { id: 'event-form-group-context', label: '맥락·부가' },
+] as const
 
 export interface EventRegisterModalProps {
   isOpen: boolean
@@ -108,6 +116,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const formRef = useRef<EventBasicFormHandle | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const [formState, setFormState] = useState<EventBasicFormState>({
     isEditMode: Boolean(eventId),
     isLoading: false,
@@ -142,9 +151,43 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     void import('@/pages/events/detail/event-detail.page').catch(() => undefined)
   }, [savedEventId])
 
-  const { isEditMode, isLoading, isSubmitting, isValid, firstError, draftSavedAt } =
-    formState
+  const {
+    isEditMode,
+    isLoading,
+    isSubmitting,
+    isValid,
+    firstError,
+    missingCount,
+    draftSavedAt,
+  } = formState
   const busy = isLoading || isSubmitting
+
+  const scrollToTopAndFocusTitle = useCallback(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo?.({ top: 0, behavior: 'smooth' })
+      scrollContainerRef.current.scrollTop = 0
+    }
+    const titleInput = document.getElementById('event-form-title')
+    titleInput?.focus()
+  }, [])
+
+  const scrollToSection = useCallback((sectionId: string) => {
+    const section = document.getElementById(sectionId)
+    section?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }, [])
+
+  const handleResetForm = useCallback(async () => {
+    if (busy) return
+    if (
+      isDirtyRef.current &&
+      !(await confirm({ title: '초기화 확인', message: RESET_CONFIRM_MESSAGE }))
+    ) {
+      return
+    }
+    formRef.current?.reset()
+    markDirty(false)
+    scrollToTopAndFocusTitle()
+  }, [busy, markDirty, scrollToTopAndFocusTitle])
 
   /** 모달 안 어디서든 Cmd/Ctrl + Enter로 즉시 저장, Cmd/Ctrl + Shift + Enter로 등록 후 계속 */
   useEffect(() => {
@@ -216,12 +259,13 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
       if (continueAfterSaveRef.current) {
         continueAfterSaveRef.current = false
         formRef.current?.reset({ keepCategory: true, keepRelatedCountries: true })
+        scrollToTopAndFocusTitle()
         refetchMountedLists()
         return
       }
       setSavedEventId(id)
     },
-    [markDirty, onSaved, refetchMountedLists],
+    [markDirty, onSaved, refetchMountedLists, scrollToTopAndFocusTitle],
   )
 
   /** 상세 보기 — 폼 본체가 캐시 시딩·프리페치를 끝낸 뒤라 무로딩 진입 */
@@ -238,8 +282,9 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   const handleRegisterAnother = useCallback(() => {
     setSavedEventId(null)
     formRef.current?.reset({ keepCategory: true, keepRelatedCountries: true })
+    scrollToTopAndFocusTitle()
     refetchMountedLists()
-  }, [refetchMountedLists])
+  }, [refetchMountedLists, scrollToTopAndFocusTitle])
 
   const handleCloseAfterSave = useCallback(() => {
     setSavedEventId(null)
@@ -255,14 +300,42 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
           void requestClose()
         }}
         title={isEditMode ? '사건 수정' : '사건 등록'}
+        headerActions={
+          <HeaderActionsBar>
+            <SectionJumpNav aria-label="폼 섹션 이동">
+              {FORM_SECTION_LINKS.map((item) => (
+                <SectionJumpBtn
+                  key={item.id}
+                  type="button"
+                  onClick={() => scrollToSection(item.id)}
+                >
+                  {item.label}
+                </SectionJumpBtn>
+              ))}
+            </SectionJumpNav>
+            {!isEditMode && isDirty && !busy && (
+              <HeaderResetBtn
+                type="button"
+                aria-label="작성 내용 초기화"
+                title="입력한 내용을 모두 비우고 처음 상태로 되돌립니다"
+                onClick={() => {
+                  void handleResetForm()
+                }}
+              >
+                초기화
+              </HeaderResetBtn>
+            )}
+          </HeaderActionsBar>
+        }
         maxWidth="min(1040px, 96vw)"
         minHeight="min(680px, 86vh)"
+        height="min(840px, 88vh)"
         fullBleedOnMobile
         // 저장 중에는 Esc·오버레이로 닫히지 않게 — 요청이 날아간 뒤 UI만 사라지는 상태 방지
         closeOnEsc={!isSubmitting}
         closeOnOverlayClick={!isSubmitting}
       >
-        <PersonRegisterModalFormScroll>
+        <PersonRegisterModalFormScroll ref={scrollContainerRef}>
           {isSubmitting && (
             <BusyBar role="status" aria-live="polite">
               {isEditMode ? '수정 사항을 저장하는 중...' : '사건을 등록하는 중...'}
@@ -312,12 +385,31 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
                 title="클릭하면 해당 필수 입력 칸으로 이동합니다"
               >
                 <span>필수 입력: {firstError}</span>
+                {typeof missingCount === 'number' && missingCount > 1 && (
+                  <FooterMissingCount>외 {missingCount - 1}건</FooterMissingCount>
+                )}
                 <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
               </FooterJumpButton>
             ) : isEditMode ? (
-              <span>기본 정보만 수정합니다 · ⌘/Ctrl+Enter로 바로 저장</span>
+              <FooterReadyGroup>
+                <span>기본 정보만 수정합니다</span>
+                <FooterShortcutItem>
+                  <FooterKbd>⌘↵</FooterKbd>
+                  <span>바로 저장</span>
+                </FooterShortcutItem>
+              </FooterReadyGroup>
             ) : (
-              <span>등록 준비 완료 · ⌘/Ctrl+Enter 저장 · ⌘/Ctrl+Shift+Enter 등록 후 계속</span>
+              <FooterReadyGroup>
+                <FooterReadyBadge>등록 준비 완료</FooterReadyBadge>
+                <FooterShortcutItem>
+                  <FooterKbd>⌘↵</FooterKbd>
+                  <span>저장</span>
+                </FooterShortcutItem>
+                <FooterShortcutItem>
+                  <FooterKbd>⇧⌘↵</FooterKbd>
+                  <span>등록 후 계속</span>
+                </FooterShortcutItem>
+              </FooterReadyGroup>
             )}
           </FooterHint>
           <FooterActions>
@@ -394,6 +486,75 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     </>
   )
 }
+
+const HeaderActionsBar = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: 4px;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+`
+
+const SectionJumpNav = styled.nav`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.04)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const SectionJumpBtn = styled.button`
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s ease, background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#ffffff'};
+    outline: none;
+  }
+`
+
+const HeaderResetBtn = styled.button`
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.error};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.28)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2'};
+    outline: none;
+  }
+`
 
 const BusyBar = styled.div`
   margin: 0 0 16px;
@@ -495,6 +656,55 @@ const FooterJumpButton = styled.button`
 const FooterJumpArrow = styled.span`
   font-size: 11.5px;
   opacity: 0.85;
+`
+
+const FooterMissingCount = styled.span`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.22)' : 'rgba(99, 102, 241, 0.12)'};
+`
+
+const FooterReadyGroup = styled.span`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+`
+
+const FooterReadyBadge = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const FooterShortcutItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const FooterKbd = styled.kbd`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
 `
 
 const FooterActions = styled.div`
