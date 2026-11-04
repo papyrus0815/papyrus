@@ -831,4 +831,60 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     expect(setLocation).toHaveBeenLastCalledWith('')
     expect(onClearCoordinates).toHaveBeenCalledTimes(2)
   })
+
+  it('위치 입력칸에서 인라인 장소 검색 후보를 고르면 장소명과 좌표가 함께 설정되고, 위치 메모를 수정·비울 수 있다', () => {
+    const setLocation = jest.fn()
+    const setLocationNote = jest.fn()
+    const onSelectCoordinates = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          locationSlot: {
+            location: '베르사유',
+            setLocation,
+            latitude: null,
+            longitude: null,
+            locationNote: '현 프랑스 일드프랑스',
+            setLocationNote,
+            onSelectCoordinates,
+            onOpenMapModal: jest.fn(),
+            quickSearch: {
+              candidates: [
+                {
+                  placeId: 'p1',
+                  shortName: '베르사유 궁전',
+                  displayName: '프랑스 일드프랑스 베르사유 궁전',
+                  lat: 48.8049,
+                  lng: 2.1204,
+                },
+              ],
+              isSearching: false,
+            },
+          },
+        })}
+      />,
+    )
+
+    const locationInput = screen.getByLabelText('위치 이름')
+    fireEvent.focus(locationInput)
+
+    // 인라인 빠른 검색 드롭다운에서 첫 번째 장소 선택
+    expect(
+      screen.getByRole('region', { name: '위치 빠른 검색 결과' }),
+    ).toBeInTheDocument()
+    fireEvent.keyDown(locationInput, { key: 'Enter' })
+
+    expect(setLocation).toHaveBeenCalledWith('베르사유 궁전')
+    expect(onSelectCoordinates).toHaveBeenCalledWith(48.8049, 2.1204)
+
+    // 위치 메모 수정 및 비우기
+    const noteInput = screen.getByLabelText('위치 메모') as HTMLInputElement
+    expect(noteInput.value).toBe('현 프랑스 일드프랑스')
+    fireEvent.change(noteInput, { target: { value: '거울의 방' } })
+    expect(setLocationNote).toHaveBeenCalledWith('거울의 방')
+
+    fireEvent.click(screen.getByRole('button', { name: '위치 메모 비우기' }))
+    expect(setLocationNote).toHaveBeenLastCalledWith('')
+  })
 })

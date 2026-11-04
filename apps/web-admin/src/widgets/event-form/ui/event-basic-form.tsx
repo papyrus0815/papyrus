@@ -64,7 +64,11 @@ import {
   type EventDetail,
   eventDetailQueryOptions,
 } from '@/pages/events/detail/use-event-detail'
-import { LocationPickerModal } from '@/pages/events/detail/components/location-picker-modal'
+import {
+  LocationPickerModal,
+  parseCoordinateInput,
+} from '@/pages/events/detail/components/location-picker-modal'
+import { cityApi } from '@/shared/api/city'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   type EventLinkCandidate,
@@ -302,6 +306,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setLocationLatitude,
     locationLongitude,
     setLocationLongitude,
+    locationNote,
+    setLocationNote,
     keywords,
     setKeywords,
     relatedCountries,
@@ -347,6 +353,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
    */
   const loadedImagesRef = useRef<LoadedEventImage[] | null>(null)
   const loadedHasCoordinatesRef = useRef(false)
+  const loadedHasLocationNoteRef = useRef(false)
 
   // ===== 사건 종류(신규 등록 전용) =====
   // 단일(전투·회담·조약 체결) / 묶음(전쟁·위기 — 전개는 하위 사건). 편집 모드의 전환은 상세의
@@ -667,6 +674,24 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     retry: 1,
   })
 
+  const debouncedLocationQuery = useDebouncedValue(location.trim(), 300)
+  const {
+    data: locationQuickRaw = [],
+    isFetching: locationQuickFetching,
+  } = useQuery({
+    queryKey: ['place-search', 'any', debouncedLocationQuery],
+    queryFn: () =>
+      cityApi.searchPlaces(debouncedLocationQuery, undefined, { anyPlace: true }),
+    enabled:
+      debouncedLocationQuery.length >= 2 &&
+      locationLatitude === null &&
+      locationLongitude === null &&
+      parseCoordinateInput(debouncedLocationQuery) === null,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  })
+
   const linkedRelatedIdSet = useMemo(
     () =>
       new Set([
@@ -785,6 +810,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         loadedHasCoordinatesRef.current = hasLoadedCoords
         setLocationLatitude(hasLoadedCoords ? loadedLat : null)
         setLocationLongitude(hasLoadedCoords ? loadedLng : null)
+        const loadedNote = (event as { locationNote?: string | null }).locationNote
+        loadedHasLocationNoteRef.current = Boolean(loadedNote?.trim())
+        setLocationNote(loadedNote || '')
 
         const eventImages = event.eventImages as LoadedEventImage[] | undefined
         loadedImagesRef.current = eventImages ?? []
@@ -858,6 +886,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         location,
         locationLatitude,
         locationLongitude,
+        locationNote,
         thumbnail,
         keywords,
         relatedCountries,
@@ -882,6 +911,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       location,
       locationLatitude,
       locationLongitude,
+      locationNote,
       thumbnail,
       keywords,
       relatedCountries,
@@ -925,6 +955,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       location,
       locationLatitude,
       locationLongitude,
+      locationNote,
       thumbnail,
       keywords,
       relatedCountries,
@@ -947,6 +978,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       location,
       locationLatitude,
       locationLongitude,
+      locationNote,
       thumbnail,
       keywords,
       relatedCountries,
@@ -999,6 +1031,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setLocationLongitude(
       typeof d.locationLongitude === 'number' ? d.locationLongitude : null,
     )
+    setLocationNote(d.locationNote ?? '')
     setThumbnail(
       d.thumbnail && !d.thumbnail.startsWith('blob:') ? d.thumbnail : '',
     )
@@ -1025,6 +1058,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     setLocation,
     setLocationLatitude,
     setLocationLongitude,
+    setLocationNote,
     setThumbnail,
     setThumbnailFile,
     setKeywords,
@@ -1108,6 +1142,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         locationLatitude !== null ||
         locationLongitude !== null ||
         (isEditMode && loadedHasCoordinatesRef.current)
+      const includeLocationNote =
+        Boolean(locationNote.trim()) ||
+        (isEditMode && loadedHasLocationNoteRef.current)
 
       const eventData = buildEventSubmitData({
         title: title.trim(),
@@ -1124,6 +1161,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         ...(includeLocationCoordinates && {
           locationLatitude,
           locationLongitude,
+        }),
+        ...(includeLocationNote && {
+          locationNote: locationNote.trim() || null,
         }),
         thumbnail,
         // 신규 등록에서만 유효 — 빈 값('')은 빌더가 undefined(미전송)로 정규화한다
@@ -1272,6 +1312,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     location,
     locationLatitude,
     locationLongitude,
+    locationNote,
     thumbnail,
     relatedCountries,
     keywords,
@@ -1504,11 +1545,23 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           setLocation,
           latitude: locationLatitude,
           longitude: locationLongitude,
+          locationNote,
+          setLocationNote,
+          onSelectCoordinates: (lat, lng) => {
+            setLocationLatitude(lat)
+            setLocationLongitude(lng)
+          },
           onClearCoordinates: () => {
             setLocationLatitude(null)
             setLocationLongitude(null)
           },
           onOpenMapModal: () => setLocationModalOpen(true),
+          quickSearch: {
+            candidates: locationQuickRaw.slice(0, 6),
+            isSearching:
+              locationQuickFetching ||
+              location.trim() !== debouncedLocationQuery,
+          },
         }}
         keywords={keywords}
         setKeywords={setKeywords}
@@ -1761,11 +1814,17 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
             location,
             latitude: locationLatitude,
             longitude: locationLongitude,
+            note: locationNote,
           }}
+          contextHints={[
+            title.trim() || null,
+            ...relatedCountries.map((row) => participantName(row)),
+          ]}
           onSave={(next) => {
             setLocation(next.location)
             setLocationLatitude(next.locationLatitude)
             setLocationLongitude(next.locationLongitude)
+            setLocationNote(next.locationNote ?? '')
             setLocationModalOpen(false)
           }}
         />

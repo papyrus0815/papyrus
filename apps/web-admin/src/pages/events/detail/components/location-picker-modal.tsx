@@ -11,7 +11,11 @@ import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { Modal, ModalFooter } from '@/shared/ui/modal'
 
 import { type LatLng } from './location-picker-map'
-import { placeQueryFromText } from './location-text.lib'
+import {
+  extractPlaceSearchCandidates,
+  placeQueryFromText,
+  splitLocationLabelAndNote,
+} from './location-text.lib'
 
 const LocationPickerMap = lazy(() => import('./location-picker-map'))
 
@@ -30,6 +34,8 @@ interface LocationPickerModalProps {
   isOpen: boolean
   onClose: () => void
   initial: { location?: string | null; latitude?: number | null; longitude?: number | null; note?: string | null }
+  /** 사건명·참여국 등 위치 검색 힌트 (원클릭 검색 칩으로 제공) */
+  contextHints?: ReadonlyArray<string | null | undefined>
   onSave: (value: LocationValue) => void
 }
 
@@ -45,16 +51,85 @@ export function googleMapsUrl(point: LatLng): string {
   return `https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}`
 }
 
+function clampValidLatLng(lat: number, lng: number): LatLng | null {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null
+  return {
+    lat: Number(lat.toFixed(6)),
+    lng: Number(lng.toFixed(6)),
+  }
+}
+
 /**
- * 검색창에 붙여넣은 위·경도 문자열('48.8049, 2.1204', '북위 37.95, 동경 126.67', '48.8049° N, 2.1204° E')을
- * 좌표로 파싱한다. 유효한 위도(-90~90)·경도(-180~180)일 때만 반환한다.
+ * 검색창에 붙여넣은 위·경도 문자열을 좌표로 파싱한다:
+ * 1. Google 지도 / OpenStreetMap URL ('!3d48.8049!4d2.1204', '@48.8049,2.1204', '?q=48.8049,2.1204', '#map=14/48.8049/2.1204')
+ * 2. 위키백과 도·분·초(DMS) 표기 ('37°57′21.6″N 126°40′37.2″E', '북위 37° 57′ 21″ 동경 126° 40′ 37″')
+ * 3. 소수점 위·경도 ('48.8049, 2.1204', '북위 37.95, 동경 126.67', '48.8049° N, 2.1204° E')
  */
 export function parseCoordinateInput(raw: string): LatLng | null {
   const trimmed = raw.trim()
   if (!trimmed) return null
-  const pattern =
+
+  // 1. Google Maps / OpenStreetMap URL 패턴
+  if (/^https?:\/\//i.test(trimmed) || trimmed.includes('google.com/maps') || trimmed.includes('openstreetmap.org')) {
+    const pin3d4d = trimmed.match(/!3d([+-]?\d+(?:\.\d+)?)!4d([+-]?\d+(?:\.\d+)?)/)
+    if (pin3d4d) {
+      return clampValidLatLng(Number(pin3d4d[1]), Number(pin3d4d[2]))
+    }
+    const osmHash = trimmed.match(/#map=\d+\/([+-]?\d+(?:\.\d+)?)\/([+-]?\d+(?:\.\d+)?)/)
+    if (osmHash) {
+      return clampValidLatLng(Number(osmHash[1]), Number(osmHash[2]))
+    }
+    const queryParam = trimmed.match(/[?&](?:q|query|ll)=([+-]?\d+(?:\.\d+)?)\s*(?:,|%2C)\s*([+-]?\d+(?:\.\d+)?)/i)
+    if (queryParam) {
+      return clampValidLatLng(Number(queryParam[1]), Number(queryParam[2]))
+    }
+    const atCoord = trimmed.match(/@([+-]?\d+(?:\.\d+)?),([+-]?\d+(?:\.\d+)?)/)
+    if (atCoord) {
+      return clampValidLatLng(Number(atCoord[1]), Number(atCoord[2]))
+    }
+  }
+
+  // 2. 도·분·초(DMS) 패턴 (예: 37°57′21″N 126°40′37″E, 북위 48° 48′ 17.6″ 동경 2° 07′ 13.4″)
+  const dmsPattern =
+    /^(?:(북위|남위)\s*)?(\d{1,2})\s*(?:°|도)\s*(?:(\d{1,2})\s*(?:['′ʹ]|분)\s*)?(?:(\d{1,2}(?:\.\d+)?)\s*(?:["″ʺ]|''|초)\s*)?([NSns])?\s*[,/\s]\s*(?:(동경|서경)\s*)?(\d{1,3})\s*(?:°|도)\s*(?:(\d{1,2})\s*(?:['′ʹ]|분)\s*)?(?:(\d{1,2}(?:\.\d+)?)\s*(?:["″ʺ]|''|초)\s*)?([EWew])?$/
+  const dmsMatch = trimmed.match(dmsPattern)
+  if (dmsMatch) {
+    const [
+      ,
+      korLatDir,
+      latDegStr,
+      latMinStr,
+      latSecStr,
+      engLatDir,
+      korLngDir,
+      lngDegStr,
+      lngMinStr,
+      lngSecStr,
+      engLngDir,
+    ] = dmsMatch
+    // 분이나 초 또는 반구 표기가 하나라도 있을 때 DMS로 판정 (순수 소수점은 3번에서 처리)
+    if (latMinStr || latSecStr || lngMinStr || lngSecStr || korLatDir || engLatDir || korLngDir || engLngDir) {
+      const latDeg = Number(latDegStr)
+      const latMin = latMinStr ? Number(latMinStr) : 0
+      const latSec = latSecStr ? Number(latSecStr) : 0
+      const lngDeg = Number(lngDegStr)
+      const lngMin = lngMinStr ? Number(lngMinStr) : 0
+      const lngSec = lngSecStr ? Number(lngSecStr) : 0
+      if (latMin < 60 && latSec < 60 && lngMin < 60 && lngSec < 60) {
+        let lat = latDeg + latMin / 60 + latSec / 3600
+        let lng = lngDeg + lngMin / 60 + lngSec / 3600
+        if (korLatDir === '남위' || engLatDir?.toUpperCase() === 'S') lat = -lat
+        if (korLngDir === '서경' || engLngDir?.toUpperCase() === 'W') lng = -lng
+        return clampValidLatLng(lat, lng)
+      }
+    }
+  }
+
+  // 3. 소수점 위·경도(DD) 패턴
+  const ddPattern =
     /^(?:(북위|남위)\s*)?([+-]?\d+(?:\.\d+)?)\s*°?\s*([NSns])?\s*[,/\s]\s*(?:(동경|서경)\s*)?([+-]?\d+(?:\.\d+)?)\s*°?\s*([EWew])?$/
-  const matched = trimmed.match(pattern)
+  const matched = trimmed.match(ddPattern)
   if (!matched) return null
   const [, korLatDir, latNumStr, engLatDir, korLngDir, lngNumStr, engLngDir] = matched
   let lat = Number(latNumStr)
@@ -70,11 +145,7 @@ export function parseCoordinateInput(raw: string): LatLng | null {
   } else if (korLngDir === '동경' || engLngDir?.toUpperCase() === 'E') {
     lng = Math.abs(lng)
   }
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null
-  return {
-    lat: Number(lat.toFixed(6)),
-    lng: Number(lng.toFixed(6)),
-  }
+  return clampValidLatLng(lat, lng)
 }
 
 /**
@@ -82,7 +153,13 @@ export function parseCoordinateInput(raw: string): LatLng | null {
  * 예전 '위치 추가'는 글만 적는 칸이라 지도에 찍을 수 없었다(525건 중 85건이 글, 좌표 0건).
  * 글(location)은 그대로 이름·설명으로 남고, 좌표는 대표 한 점이다.
  */
-export function LocationPickerModal({ isOpen, onClose, initial, onSave }: LocationPickerModalProps) {
+export function LocationPickerModal({
+  isOpen,
+  onClose,
+  initial,
+  contextHints,
+  onSave,
+}: LocationPickerModalProps) {
   const [label, setLabel] = useState(initial.location ?? '')
   const [point, setPoint] = useState<LatLng | null>(
     initial.latitude != null && initial.longitude != null ? { lat: initial.latitude, lng: initial.longitude } : null,
@@ -104,6 +181,14 @@ export function LocationPickerModal({ isOpen, onClose, initial, onSave }: Locati
   const [suggestedPlaceName, setSuggestedPlaceName] = useState<string | null>(null)
   const debouncedQuery = useDebouncedValue(query.trim(), 350)
   const parsedCoord = useMemo(() => parseCoordinateInput(query), [query])
+  const searchCandidates = useMemo(
+    () => extractPlaceSearchCandidates(label || initial.location, contextHints),
+    [label, initial.location, contextHints],
+  )
+  const splitSuggestion = useMemo(
+    () => (!note.trim() ? splitLocationLabelAndNote(label) : null),
+    [label, note],
+  )
 
   const searchQuery = useQuery({
     queryKey: ['place-search', 'any', debouncedQuery],
@@ -204,6 +289,26 @@ export function LocationPickerModal({ isOpen, onClose, initial, onSave }: Locati
         </SearchBox>
 
         {prefilled && <PrefillNote>위치 글의 첫 장소로 찾았습니다 — 맞지 않으면 검색어를 고치세요</PrefillNote>}
+        {searchCandidates.length > 0 &&
+          (searchCandidates.length > 1 ||
+            searchCandidates[0] !== query.trim()) && (
+            <CandidateChipRow aria-label="추천 장소 검색어">
+              <CandidateChipLabel>빠른 검색</CandidateChipLabel>
+              {searchCandidates.map((candidate) => (
+                <CandidateChipButton
+                  key={candidate}
+                  type="button"
+                  $active={query.trim() === candidate}
+                  onClick={() => {
+                    setQuery(candidate)
+                    setActiveIndex(0)
+                  }}
+                >
+                  {candidate}
+                </CandidateChipButton>
+              ))}
+            </CandidateChipRow>
+          )}
         {(query.trim().length >= 2 || parsedCoord !== null) && (
           <Results id="location-search-results" aria-live="polite">
             {parsedCoord && (
@@ -269,20 +374,34 @@ export function LocationPickerModal({ isOpen, onClose, initial, onSave }: Locati
         <Field>
           <FieldLabelRow>
             <FieldLabel htmlFor="event-location-label">장소 이름</FieldLabel>
-            {suggestedPlaceName && suggestedPlaceName !== label.trim() && (
-              <ReplaceLabelButton
-                type="button"
-                onClick={() => {
-                  /* 원래 글(여러 곳·설명)은 버리지 않고 메모로 — 메모가 비어 있을 때만 */
-                  if (!note.trim() && label.trim()) setNote(label.trim())
-                  setLabel(suggestedPlaceName)
-                  autoFilledNameRef.current = suggestedPlaceName
-                  setSuggestedPlaceName(null)
-                }}
-              >
-                &lsquo;{suggestedPlaceName}&rsquo;(으)로 이름 바꾸기
-              </ReplaceLabelButton>
-            )}
+            <FieldLabelActions>
+              {splitSuggestion && (
+                <ReplaceLabelButton
+                  type="button"
+                  aria-label="장소 이름과 위치 메모 자동 나누기"
+                  onClick={() => {
+                    setLabel(splitSuggestion.label)
+                    setNote(splitSuggestion.note)
+                  }}
+                >
+                  이름·메모 나누기
+                </ReplaceLabelButton>
+              )}
+              {suggestedPlaceName && suggestedPlaceName !== label.trim() && (
+                <ReplaceLabelButton
+                  type="button"
+                  onClick={() => {
+                    /* 원래 글(여러 곳·설명)은 버리지 않고 메모로 — 메모가 비어 있을 때만 */
+                    if (!note.trim() && label.trim()) setNote(label.trim())
+                    setLabel(suggestedPlaceName)
+                    autoFilledNameRef.current = suggestedPlaceName
+                    setSuggestedPlaceName(null)
+                  }}
+                >
+                  &lsquo;{suggestedPlaceName}&rsquo;(으)로 이름 바꾸기
+                </ReplaceLabelButton>
+              )}
+            </FieldLabelActions>
           </FieldLabelRow>
           <LabelInput
             id="event-location-label"
@@ -343,6 +462,46 @@ const PrefillNote = styled.p`
   margin: -4px 0 0;
   font-size: 12px;
   color: ${metaText};
+`
+
+const CandidateChipRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: -4px;
+`
+
+const CandidateChipLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const CandidateChipButton = styled.button<{ $active?: boolean }>`
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.border.default};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.08)'
+        : 'rgba(15,23,42,0.05)'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 `
 
 const Body = styled.div`
@@ -507,7 +666,15 @@ const FieldLabelRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
+`
+
+const FieldLabelActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 `
 
 const FieldLabel = styled.label`

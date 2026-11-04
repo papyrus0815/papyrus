@@ -101,6 +101,7 @@ export const buildEventSubmitData = (params: {
   location: string
   locationLatitude?: number | null
   locationLongitude?: number | null
+  locationNote?: string | null
   /** 등록된 도시 참조 (PlaceSelect DB 선택) */
   cityId?: string | null
   /** 등록된 행정구역 참조 (PlaceSelect DB 선택) */
@@ -175,6 +176,9 @@ export const buildEventSubmitData = (params: {
     }),
     ...(params.locationLongitude !== undefined && {
       locationLongitude: params.locationLongitude,
+    }),
+    ...(params.locationNote !== undefined && {
+      locationNote: params.locationNote,
     }),
     cityId: params.cityId || undefined,
     administrativeDivisionId: params.administrativeDivisionId || undefined,

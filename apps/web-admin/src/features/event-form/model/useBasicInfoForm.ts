@@ -29,6 +29,7 @@ export const BASIC_INFO_FORM_INITIAL = {
   location: '',
   locationLatitude: null as number | null,
   locationLongitude: null as number | null,
+  locationNote: '',
   tags: [] as string[],
   keywords: [] as string[],
   /**
@@ -78,6 +79,7 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
   const [locationLongitude, setLocationLongitude] = useState<number | null>(
     initial.locationLongitude,
   )
+  const [locationNote, setLocationNote] = useState<string>(initial.locationNote)
   const [tags, setTags] = useState<string[]>([...initial.tags])
   const [keywords, setKeywords] = useState<string[]>([...initial.keywords])
   const [relatedCountries, setRelatedCountries] = useState<
@@ -106,6 +108,7 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
     setLocation(initial.location)
     setLocationLatitude(initial.locationLatitude)
     setLocationLongitude(initial.locationLongitude)
+    setLocationNote(initial.locationNote)
     setTags([...initial.tags])
     setKeywords([...initial.keywords])
     if (!options?.keepCategory) setCategory(initial.category)
@@ -159,6 +162,7 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
     location,
     locationLatitude,
     locationLongitude,
+    locationNote,
     tags,
     keywords,
     relatedCountries,
@@ -178,6 +182,7 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
     setLocation,
     setLocationLatitude,
     setLocationLongitude,
+    setLocationNote,
     setTags,
     setKeywords,
     setRelatedCountries,

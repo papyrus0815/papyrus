@@ -80,6 +80,32 @@ describe('parseCoordinateInput', () => {
     })
   })
 
+  it('도·분·초(DMS) 표기와 Google 지도·OpenStreetMap URL에서 좌표를 파싱한다', () => {
+    const dmsEn = parseCoordinateInput('37°57′21.6″N 126°40′37.2″E')
+    expect(dmsEn?.lat).toBeCloseTo(37.956, 4)
+    expect(dmsEn?.lng).toBeCloseTo(126.677, 4)
+
+    const dmsKo = parseCoordinateInput('북위 37도 57분 21.6초 동경 126도 40분 37.2초')
+    expect(dmsKo?.lat).toBeCloseTo(37.956, 4)
+    expect(dmsKo?.lng).toBeCloseTo(126.677, 4)
+
+    expect(
+      parseCoordinateInput(
+        'https://www.google.com/maps/place/Versailles/@48.8049,2.1204,15z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d48.8048649!4d2.1203554',
+      ),
+    ).toEqual({
+      lat: 48.804865,
+      lng: 2.120355,
+    })
+
+    expect(
+      parseCoordinateInput('https://www.openstreetmap.org/#map=14/37.9560/126.6770'),
+    ).toEqual({
+      lat: 37.956,
+      lng: 126.677,
+    })
+  })
+
   it('범위를 벗어난 위·경도나 일반 장소명은 null을 반환한다', () => {
     expect(parseCoordinateInput('95.0, 2.1204')).toBeNull()
     expect(parseCoordinateInput('48.8, 195.0')).toBeNull()
@@ -194,5 +220,39 @@ describe('LocationPickerModal', () => {
       locationLongitude: null,
       locationNote: null,
     })
+  })
+
+  it('복합 지명에서 빠른 검색 칩과 이름·메모 나누기 버튼을 제공한다', async () => {
+    mockedSearchPlaces.mockResolvedValue([])
+    renderModal(
+      <LocationPickerModal
+        isOpen
+        onClose={jest.fn()}
+        initial={{
+          location: '콘스탄티노폴리스 (현 튀르키예 이스탄불)',
+        }}
+        contextHints={['오스만 제국']}
+        onSave={jest.fn()}
+      />,
+    )
+
+    // 빠른 검색 후보 칩 노출 및 클릭 시 검색어 전환
+    const chip = screen.getByRole('button', { name: '튀르키예 이스탄불' })
+    fireEvent.click(chip)
+    const searchInput = screen.getByRole('searchbox', {
+      name: '장소 검색',
+    }) as HTMLInputElement
+    expect(searchInput.value).toBe('튀르키예 이스탄불')
+
+    // 이름·메모 나누기 클릭 시 장소 이름과 위치 메모가 분리된다
+    fireEvent.click(
+      screen.getByRole('button', { name: '장소 이름과 위치 메모 자동 나누기' }),
+    )
+    expect(
+      (screen.getByLabelText('장소 이름') as HTMLTextAreaElement).value,
+    ).toBe('콘스탄티노폴리스')
+    expect(
+      (screen.getByLabelText('위치 메모 (선택)') as HTMLTextAreaElement).value,
+    ).toBe('현 튀르키예 이스탄불')
   })
 })

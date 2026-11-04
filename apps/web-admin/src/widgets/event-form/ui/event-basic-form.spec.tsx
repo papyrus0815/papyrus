@@ -139,7 +139,14 @@ jest.mock('@/shared/ui/select-modal/select-modal', () => ({
     ) : null,
 }))
 
+jest.mock('@/shared/api/city', () => ({
+  cityApi: {
+    searchPlaces: jest.fn().mockResolvedValue([]),
+  },
+}))
+
 jest.mock('@/pages/events/detail/components/location-picker-modal', () => ({
+  parseCoordinateInput: jest.fn(() => null),
   LocationPickerModal: (props: {
     isOpen: boolean
     onClose: () => void
@@ -159,7 +166,7 @@ jest.mock('@/pages/events/detail/components/location-picker-modal', () => ({
               location: '베르사유 궁전',
               locationLatitude: 48.8049,
               locationLongitude: 2.1204,
-              locationNote: null,
+              locationNote: '거울의 방',
             })
           }
         >
@@ -1320,6 +1327,7 @@ describe('EventBasicForm — 분야 · 세부 분야 상호작용', () => {
         location: '베르사유 궁전',
         locationLatitude: 48.8049,
         locationLongitude: 2.1204,
+        locationNote: '거울의 방',
       }),
     )
   })

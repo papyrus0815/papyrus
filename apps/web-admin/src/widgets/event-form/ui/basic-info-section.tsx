@@ -39,6 +39,7 @@ import {
   toRelationRoleKey,
 } from '@/features/event-facets/model/register-facets'
 import { getImageUrl } from '@/pages/events/utils/event-create.utils'
+import { parseCoordinateInput } from '@/pages/events/detail/components/location-picker-modal'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { uploadImage } from '@/shared/api/upload'
@@ -254,8 +255,21 @@ interface BasicInfoSectionProps {
     setLocation: (next: string) => void
     latitude?: number | null
     longitude?: number | null
+    locationNote?: string
+    setLocationNote?: (next: string) => void
+    onSelectCoordinates?: (lat: number, lng: number) => void
     onClearCoordinates?: () => void
     onOpenMapModal: () => void
+    quickSearch?: {
+      candidates: ReadonlyArray<{
+        placeId: string
+        shortName: string
+        displayName: string
+        lat: number
+        lng: number
+      }>
+      isSearching?: boolean
+    }
   }
 
   // UI 상태
@@ -428,6 +442,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const [isParentQuickDismissed, setIsParentQuickDismissed] = useState(false)
   const [activeRelatedResultIndex, setActiveRelatedResultIndex] = useState(0)
   const [isRelatedQuickDismissed, setIsRelatedQuickDismissed] = useState(false)
+  const [activeLocationResultIndex, setActiveLocationResultIndex] = useState(0)
+  const [isLocationQuickDismissed, setIsLocationQuickDismissed] = useState(true)
+  const parsedLocationCoord = useMemo(
+    () => parseCoordinateInput(locationSlot?.location ?? ''),
+    [locationSlot?.location],
+  )
   const [isThumbnailDragOver, setIsThumbnailDragOver] = useState(false)
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
@@ -2185,15 +2205,169 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.FormLabel>
             <S.FormField>
               <LocationInputRow>
-                <LocationInput
-                  id="event-form-location"
-                  type="text"
-                  aria-label="위치 이름"
-                  maxLength={255}
-                  placeholder="예: 베르사유 궁전, 워털루, 판문점 (직접 입력 또는 지도에서 선택)"
-                  value={locationSlot.location}
-                  onChange={(e) => locationSlot.setLocation(e.target.value)}
-                />
+                <LocationSearchAnchor
+                  onBlur={(blurEvent) => {
+                    if (
+                      !blurEvent.currentTarget.contains(
+                        blurEvent.relatedTarget as Node | null,
+                      )
+                    ) {
+                      setIsLocationQuickDismissed(true)
+                    }
+                  }}
+                >
+                  <LocationInput
+                    id="event-form-location"
+                    type="text"
+                    aria-label="위치 이름"
+                    maxLength={255}
+                    placeholder="예: 베르사유 궁전, 워털루, 판문점 (직접 입력 또는 지도에서 선택)"
+                    value={locationSlot.location}
+                    onFocus={() => setIsLocationQuickDismissed(false)}
+                    onChange={(e) => {
+                      locationSlot.setLocation(e.target.value)
+                      setActiveLocationResultIndex(0)
+                      setIsLocationQuickDismissed(false)
+                    }}
+                    onKeyDown={(keyEvent) => {
+                      const matches =
+                        locationSlot.quickSearch?.candidates ?? []
+                      if (keyEvent.key === 'ArrowDown') {
+                        if (matches.length > 0) {
+                          keyEvent.preventDefault()
+                          setIsLocationQuickDismissed(false)
+                          setActiveLocationResultIndex(
+                            (prev) => (prev + 1) % matches.length,
+                          )
+                        }
+                      } else if (keyEvent.key === 'ArrowUp') {
+                        if (matches.length > 0) {
+                          keyEvent.preventDefault()
+                          setIsLocationQuickDismissed(false)
+                          setActiveLocationResultIndex(
+                            (prev) =>
+                              (prev - 1 + matches.length) % matches.length,
+                          )
+                        }
+                      } else if (
+                        keyEvent.key === 'Enter' &&
+                        !isLocationQuickDismissed
+                      ) {
+                        if (parsedLocationCoord) {
+                          keyEvent.preventDefault()
+                          playClickSound()
+                          locationSlot.onSelectCoordinates?.(
+                            parsedLocationCoord.lat,
+                            parsedLocationCoord.lng,
+                          )
+                          locationSlot.setLocation('')
+                          setIsLocationQuickDismissed(true)
+                        } else if (matches.length > 0) {
+                          keyEvent.preventDefault()
+                          const picked =
+                            matches[
+                              Math.min(
+                                activeLocationResultIndex,
+                                matches.length - 1,
+                              )
+                            ] ?? matches[0]
+                          if (picked) {
+                            playClickSound()
+                            locationSlot.setLocation(picked.shortName)
+                            locationSlot.onSelectCoordinates?.(
+                              picked.lat,
+                              picked.lng,
+                            )
+                            setIsLocationQuickDismissed(true)
+                            setActiveLocationResultIndex(0)
+                          }
+                        }
+                      } else if (
+                        keyEvent.key === 'Escape' &&
+                        !isLocationQuickDismissed
+                      ) {
+                        keyEvent.preventDefault()
+                        setIsLocationQuickDismissed(true)
+                      }
+                    }}
+                  />
+                  {!isLocationQuickDismissed &&
+                    (parsedLocationCoord !== null ||
+                      (locationSlot.quickSearch &&
+                        locationSlot.location.trim().length >= 2 &&
+                        (locationSlot.quickSearch.candidates.length > 0 ||
+                          locationSlot.quickSearch.isSearching))) && (
+                      <CountryQuickResultBox
+                        role="region"
+                        aria-label="위치 빠른 검색 결과"
+                      >
+                        {parsedLocationCoord ? (
+                          <CountryQuickResultButton
+                            type="button"
+                            $active
+                            onClick={() => {
+                              playClickSound()
+                              locationSlot.onSelectCoordinates?.(
+                                parsedLocationCoord.lat,
+                                parsedLocationCoord.lng,
+                              )
+                              locationSlot.setLocation('')
+                              setIsLocationQuickDismissed(true)
+                            }}
+                          >
+                            <CountryQuickResultName>
+                              + 좌표로 바로 핀 설정
+                            </CountryQuickResultName>
+                            <CountryQuickResultMeta>
+                              <span>
+                                {formatLocationCoordinate(
+                                  parsedLocationCoord.lat,
+                                  parsedLocationCoord.lng,
+                                )}
+                              </span>
+                            </CountryQuickResultMeta>
+                          </CountryQuickResultButton>
+                        ) : locationSlot.quickSearch &&
+                          locationSlot.quickSearch.candidates.length > 0 ? (
+                          locationSlot.quickSearch.candidates.map(
+                            (candidate, candidateIdx) => (
+                              <CountryQuickResultButton
+                                key={candidate.placeId}
+                                type="button"
+                                $active={
+                                  candidateIdx === activeLocationResultIndex
+                                }
+                                onMouseEnter={() =>
+                                  setActiveLocationResultIndex(candidateIdx)
+                                }
+                                onClick={() => {
+                                  playClickSound()
+                                  locationSlot.setLocation(candidate.shortName)
+                                  locationSlot.onSelectCoordinates?.(
+                                    candidate.lat,
+                                    candidate.lng,
+                                  )
+                                  setIsLocationQuickDismissed(true)
+                                  setActiveLocationResultIndex(0)
+                                }}
+                              >
+                                <CountryQuickResultName>
+                                  + {candidate.shortName}
+                                </CountryQuickResultName>
+                                <CountryQuickResultMeta>
+                                  <span>{candidate.displayName}</span>
+                                </CountryQuickResultMeta>
+                              </CountryQuickResultButton>
+                            ),
+                          )
+                        ) : (
+                          <CountryQuickEmpty>
+                            장소를 검색하는 중…
+                          </CountryQuickEmpty>
+                        )}
+                      </CountryQuickResultBox>
+                    )}
+                </LocationSearchAnchor>
                 <S.AddButton
                   type="button"
                   onClick={() => {
@@ -2208,6 +2382,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     : '지도에서 찍기'}
                 </S.AddButton>
                 {(locationSlot.location.trim().length > 0 ||
+                  Boolean(locationSlot.locationNote?.trim()) ||
                   (locationSlot.latitude != null &&
                     locationSlot.longitude != null)) && (
                   <LocationClearBtn
@@ -2216,6 +2391,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     onClick={() => {
                       playClickSound()
                       locationSlot.setLocation('')
+                      locationSlot.setLocationNote?.('')
                       locationSlot.onClearCoordinates?.()
                     }}
                   >
@@ -2247,6 +2423,32 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     )}
                   </LocationCoordBar>
                 )}
+              {Boolean(locationSlot.locationNote?.trim()) && (
+                <LocationNoteRow>
+                  <LocationNoteBadge>위치 메모</LocationNoteBadge>
+                  <LocationNoteInput
+                    type="text"
+                    aria-label="위치 메모"
+                    value={locationSlot.locationNote ?? ''}
+                    placeholder="위치 메모 (현 지명·나머지 장소 등)"
+                    onChange={(event) =>
+                      locationSlot.setLocationNote?.(event.target.value)
+                    }
+                  />
+                  {locationSlot.setLocationNote && (
+                    <LocationCoordClearBtn
+                      type="button"
+                      aria-label="위치 메모 비우기"
+                      onClick={() => {
+                        playClickSound()
+                        locationSlot.setLocationNote?.('')
+                      }}
+                    >
+                      메모 지우기
+                    </LocationCoordClearBtn>
+                  )}
+                </LocationNoteRow>
+              )}
             </S.FormField>
           </S.FormRow>
         )}
@@ -3245,9 +3447,33 @@ const LocationInputRow = styled.div`
   gap: 8px;
 `
 
-const LocationInput = styled(S.Input)`
+const LocationSearchAnchor = styled(CountryQuickSearchAnchor)`
   flex: 1 1 240px;
   min-width: 180px;
+`
+
+const LocationInput = styled(S.Input)`
+  width: 100%;
+`
+
+const LocationNoteRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+`
+
+const LocationNoteBadge = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+`
+
+const LocationNoteInput = styled(S.Input)`
+  flex: 1;
+  height: 32px;
+  font-size: 12.5px;
 `
 
 const LocationClearBtn = styled.button`
