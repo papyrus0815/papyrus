@@ -1143,8 +1143,16 @@ export const FactBar = styled.div`
 
 export const FactSpecGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   width: 100%;
+
+  @media (max-width: 1180px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 `
 
 export const Fact = styled.div<{ $missing?: boolean }>`
@@ -1152,22 +1160,40 @@ export const Fact = styled.div<{ $missing?: boolean }>`
   flex-direction: column;
   gap: 3px;
   min-width: 0;
-  padding: 12px 16px 12px 0;
+  padding: 12px 16px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
 
-  @media (min-width: 641px) {
-    &:not(:first-child) {
-      padding-left: 16px;
-      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 1180px) and (min-width: 641px) {
+    &:nth-child(3n) {
+      border-right: none;
     }
-    &:last-child {
-      padding-right: 0;
+    &:nth-child(3n + 1) {
+      padding-left: 2px;
+    }
+    &:nth-child(-n + 3) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     }
   }
 
   @media (max-width: 640px) {
-    padding: 10px 0;
-    &:not(:first-child) {
-      border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    padding: 10px 12px;
+    &:nth-child(2n) {
+      border-right: none;
+    }
+    &:nth-child(2n + 1) {
+      padding-left: 2px;
+    }
+    &:nth-child(-n + 4) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     }
   }
 `
@@ -1757,6 +1783,97 @@ export const LineageFilterPill = styled.button<{ $active: boolean }>`
     color: ${({ theme, $active }) =>
       $active ? theme.colors.primary : theme.colors.text.primary};
   }
+`
+
+/** 섹션 상단 공통 4칸 헤어라인 요약 스트립 (지표 허브 · 역사 개요 등) */
+export const SectionHeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+export const SectionHeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  min-width: 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+    &:nth-child(2n + 1) {
+      padding-left: 2px;
+    }
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 2px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+`
+
+export const SectionHeadlineLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const SectionHeadlineValue = styled.span<{ $muted?: boolean }>`
+  font-size: 15px;
+  font-weight: ${({ $muted }) => ($muted ? 600 : 800)};
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $muted }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const SectionHeadlineUnit = styled.span`
+  margin-left: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const SectionHeadlineSub = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 /** 5대 지표(기업·인구 피라미드·지표 추이·국채 금리·교역) 미등록 항목 통합 헤어라인 원장 */

@@ -221,7 +221,7 @@ export function SectionHelpPopover({
           </MetaBlock>
           {resolved.tip && (
             <TipBlock>
-              <TipBadge>TIP</TipBadge>
+              <TipBadge>활용 안내</TipBadge>
               <TipText>{resolved.tip}</TipText>
             </TipBlock>
           )}

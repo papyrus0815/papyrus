@@ -386,7 +386,7 @@ const Wrap = styled.div`
 const HeadlineStrip = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 2px solid ${({ theme }) => theme.colors.text.primary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @media (max-width: 820px) {
@@ -572,7 +572,7 @@ const AxisFilterCount = styled.span`
 const Cards = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 2px solid ${({ theme }) => theme.colors.text.primary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
 
   @media (max-width: 720px) {
     grid-template-columns: minmax(0, 1fr);

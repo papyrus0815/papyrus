@@ -1072,6 +1072,26 @@ function HistoricalOverviewSection({
     onGoToTab(target)
   }
 
+  const overviewFilledCount =
+    (savedDescription ? 1 : 0) +
+    (resolvedNameOrigin ? 1 : 0) +
+    (resolvedHistory ? 1 : 0)
+  const foundingStartSigned = foundingSignedYear(
+    structuredSpan.startEra,
+    structuredSpan.startYear,
+  )
+  const foundingEndSigned = foundingSignedYear(
+    structuredSpan.endEra,
+    structuredSpan.endYear,
+  )
+  const foundingFilledCount =
+    (foundingStartSigned != null ? 1 : 0) + (foundingEndSigned != null ? 1 : 0)
+  const firstRulerName = rulersInSpan[0]?.personName ?? null
+  const lastRulerName =
+    rulersInSpan.length > 1
+      ? rulersInSpan[rulersInSpan.length - 1]?.personName ?? null
+      : null
+
   return (
     <DashboardRoot ref={rootRef}>
       {/* 규모 줄 — 현대 국가 대시보드와 같은 6칸 제원 그리드(FactSpecGrid) + 누락 제원 보완 바 */}
@@ -1082,6 +1102,11 @@ function HistoricalOverviewSection({
             <DashboardStyles.FactValue $missing={period === '알 수 없음'}>
               {period}
             </DashboardStyles.FactValue>
+            <DashboardStyles.FactSubNote>
+              {span.start != null || span.end != null
+                ? `${span.start != null ? '성립 연도 확인' : '성립 미상'} · ${span.end != null ? '종료 연도 확인' : '종료 미상'}`
+                : '성립·종료 연도 미입력'}
+            </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
           <DashboardStyles.Fact $missing={durationYears == null}>
             <DashboardStyles.FactLabel>존속 연수</DashboardStyles.FactLabel>
@@ -1095,6 +1120,13 @@ function HistoricalOverviewSection({
                 '미산정'
               )}
             </DashboardStyles.FactValue>
+            <DashboardStyles.FactSubNote>
+              {durationYears != null
+                ? rulerCount > 0
+                  ? `수반 1인당 평균 약 ${Math.round((durationYears / rulerCount) * 10) / 10}년`
+                  : '성립~종료 통산 기간'
+                : '성립·종료 연도 입력 시 자동 계산'}
+            </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
           <DashboardStyles.Fact $missing={!country.stateType}>
             <DashboardStyles.FactLabel>국가 형태</DashboardStyles.FactLabel>
@@ -1103,12 +1135,28 @@ function HistoricalOverviewSection({
                 ? getStateTypeLabel(country.stateType)
                 : '미등록'}
             </DashboardStyles.FactValue>
+            <DashboardStyles.FactSubNote>
+              {country.era
+                ? `시대 구분: ${country.era}`
+                : '군주국 · 제국 · 공화국 등 체제 분류'}
+            </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
           <DashboardStyles.Fact $missing={!entityKindLabel}>
             <DashboardStyles.FactLabel>정치체 성격</DashboardStyles.FactLabel>
             <DashboardStyles.FactValue $missing={!entityKindLabel}>
               {entityKindLabel ?? '미분류'}
             </DashboardStyles.FactValue>
+            <DashboardStyles.FactSubNote>
+              {entityKind === 'STATE'
+                ? '독립 국가 · 왕조 단위 주권체'
+                : entityKind === 'REGIME'
+                  ? '정권 · 헌정 체제 단위'
+                  : entityKind === 'PERIOD'
+                    ? '시대 · 역사 구분 단위'
+                    : entityKind === 'PEOPLE'
+                      ? '종족 · 부족 연맹 단위'
+                      : '국가 · 정권 · 시대 · 종족 분류'}
+            </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
           <DashboardStyles.Fact $missing={rulerCount === 0}>
             <DashboardStyles.FactLabel>역대 수반</DashboardStyles.FactLabel>
@@ -1122,12 +1170,24 @@ function HistoricalOverviewSection({
                 '미등록'
               )}
             </DashboardStyles.FactValue>
+            <DashboardStyles.FactSubNote>
+              {firstRulerName
+                ? `${firstRulerName}${lastRulerName ? ` → ${lastRulerName}` : ' 재위'}`
+                : '군주·국가원수·정부수반 미등록'}
+            </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
           <DashboardStyles.Fact $missing={!capitalText}>
             <DashboardStyles.FactLabel>수도</DashboardStyles.FactLabel>
             <DashboardStyles.FactValue $missing={!capitalText}>
               {capitalText || '미등록'}
             </DashboardStyles.FactValue>
+            <DashboardStyles.FactSubNote>
+              {capitalText
+                ? stats.divisionCount > 0
+                  ? `공식 수도 · 행정구역 ${stats.divisionCount}곳`
+                  : '대표 도성 · 수도'
+                : '수도 명칭 미입력'}
+            </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
         </DashboardStyles.FactSpecGrid>
         {missingFactLabels.length > 0 && onEdit && (
@@ -1275,7 +1335,7 @@ function HistoricalOverviewSection({
       <DashboardStyles.Section
         id="section-overview"
         aria-labelledby="historical-overview-heading"
-        data-section-count={savedDescription ? '작성됨' : undefined}
+        data-section-count={`${overviewFilledCount}/3`}
       >
         <DashboardStyles.SectionTitleRow>
           <DashboardStyles.SectionTitleIcon>
@@ -1285,12 +1345,85 @@ function HistoricalOverviewSection({
             개요
           </DashboardStyles.SectionTitleText>
           <SectionHelpPopover sectionKey="overview" />
+          <DashboardStyles.SectionCountChip>
+            {overviewFilledCount}/3개 항목
+          </DashboardStyles.SectionCountChip>
           {!isEditorOpen && (
             <DashboardStyles.SectionLink type="button" onClick={handleOpenEditor}>
               {savedDescription ? '수정' : '+ 작성'}
             </DashboardStyles.SectionLink>
           )}
         </DashboardStyles.SectionTitleRow>
+
+        <DashboardStyles.SectionHeadlineStrip aria-label="개요 및 역사 서술 요약">
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              개요 본문
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={!savedDescription}>
+              {savedDescription ? '작성됨' : '미작성'}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {savedDescription
+                ? `공백 제외 ${savedDescription.replace(/<[^>]+>/g, '').replace(/\s+/g, '').length.toLocaleString('ko-KR')}자`
+                : '도입부 개요 서술 미입력'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              국호 · 명칭 유래
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={!resolvedNameOrigin}>
+              {resolvedNameOrigin ? '작성됨' : '미작성'}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {resolvedNameOrigin
+                ? `공백 제외 ${resolvedNameOrigin.replace(/\s+/g, '').length.toLocaleString('ko-KR')}자`
+                : '기본 정보에서 국호 유래 입력 가능'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              역사 서술
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={!resolvedHistory}>
+              {resolvedHistory ? '작성됨' : '미작성'}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {resolvedHistory
+                ? `공백 제외 ${resolvedHistory.replace(/\s+/g, '').length.toLocaleString('ko-KR')}자`
+                : '기본 정보에서 통사 서술 입력 가능'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              연결 계보 · 조약
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={stats.transitionCount + stats.treatyCount === 0}
+            >
+              {stats.transitionCount + stats.treatyCount > 0 ? (
+                <>
+                  {(stats.transitionCount + stats.treatyCount).toLocaleString(
+                    'ko-KR',
+                  )}
+                  <DashboardStyles.SectionHeadlineUnit>
+                    건
+                  </DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              계승 {stats.transitionCount}건 · 조약 {stats.treatyCount}건
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+        </DashboardStyles.SectionHeadlineStrip>
+
         {isEditorOpen ? (
           <OverviewBody>
             <RichTextEditor
@@ -1353,6 +1486,7 @@ function HistoricalOverviewSection({
       <DashboardStyles.Section
         id="section-founding"
         aria-labelledby="historical-founding-heading"
+        data-section-count={`${foundingFilledCount}/2`}
       >
         <DashboardStyles.SectionTitleRow>
           <DashboardStyles.SectionTitleIcon>
@@ -1362,12 +1496,15 @@ function HistoricalOverviewSection({
             {!entityKind || entityKind === 'STATE' ? '건국·멸망' : '성립·종료'}
           </DashboardStyles.SectionTitleText>
           <SectionHelpPopover sectionKey="founding" />
+          <DashboardStyles.SectionCountChip>
+            {foundingFilledCount}/2개 시점
+          </DashboardStyles.SectionCountChip>
         </DashboardStyles.SectionTitleRow>
         <HistoricalFoundingCards
           historicalCountryId={country.id}
           entityKind={entityKind ?? null}
-          startYear={foundingSignedYear(structuredSpan.startEra, structuredSpan.startYear)}
-          endYear={foundingSignedYear(structuredSpan.endEra, structuredSpan.endYear)}
+          startYear={foundingStartSigned}
+          endYear={foundingEndSigned}
           onGoToHeads={() => onGoToTab('heads')}
         />
       </DashboardStyles.Section>
@@ -1706,6 +1843,96 @@ function HistoricalOverviewSection({
             </DashboardStyles.SectionLink>
           </DashboardStyles.SectionHeaderActions>
         </DashboardStyles.SectionTitleRow>
+
+        <DashboardStyles.SectionHeadlineStrip aria-label="역사 국가 교역 및 기업 지표 요약">
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              등록 도메인 현황
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={filledIndicatorDomains === 0}
+            >
+              {filledIndicatorDomains}/2
+              <DashboardStyles.SectionHeadlineUnit>
+                개 도메인
+              </DashboardStyles.SectionHeadlineUnit>
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {emptyIndicatorDomains === 0
+                ? '교역·기업 모두 등록 완료'
+                : `미등록 ${emptyIndicatorDomains}개 도메인 · 아래 원장에서 추가`}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              교역 기록 연수
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={!hasTradeData}>
+              {hasTradeData ? (
+                <>
+                  {tradeYearCount.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>
+                    개년
+                  </DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {hasTradeData
+                ? '연도별 수출·수입 시계열 기록'
+                : '연도별 교역 기록 미입력'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              누적 교역 건수
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={!hasTradeData}>
+              {hasTradeData ? (
+                <>
+                  {tradeRecords.length.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>
+                    건
+                  </DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {hasTradeData
+                ? '품목 · 교역 상대국 기록 포함'
+                : '수출·수입 품목 및 상대국 미입력'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              등록 기업 · 상단
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={!hasCompanyData}>
+              {hasCompanyData ? (
+                <>
+                  {companyCount.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>
+                    개사
+                  </DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {hasCompanyData
+                ? '소속 상단 · 공방 · 금융기관'
+                : '시대별 주요 기업·상단 미등록'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+        </DashboardStyles.SectionHeadlineStrip>
 
         <DashboardStyles.IndicatorsLedgerWrap>
           <DashboardStyles.IndicatorsLedgerList>

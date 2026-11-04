@@ -79,46 +79,68 @@ export function EventCalendarPanel({
   events,
   onSelectEvent,
 }: EventCalendarPanelProps) {
-  /** 날짜별 사건 — 일자를 아는 것만 */
-  const { byDay, monthsWithEvents, yearOnlyCount } = useMemo(() => {
-    const map = new Map<string, CalendarEventItem[]>()
-    const months = new Map<string, YearMonth & { count: number }>()
-    let yearOnly = 0
-    for (const event of events) {
-      if (!event.isDayKnown) {
-        yearOnly += 1
-        continue
-      }
-      const parsed = parseDate(event.date)
-      if (!parsed) {
-        yearOnly += 1
-        continue
-      }
-      const dayKey = keyOf(parsed.year, parsed.month, parsed.day)
-      const bucket = map.get(dayKey)
-      if (bucket) bucket.push(event)
-      else map.set(dayKey, [event])
+  const [viewMode, setViewMode] = useState<'calendar' | 'ledger'>('calendar')
+  const [ledgerExpanded, setLedgerExpanded] = useState(false)
 
-      const monthKey = `${parsed.year}-${parsed.month}`
-      const monthEntry = months.get(monthKey)
-      if (monthEntry) monthEntry.count += 1
-      else
-        months.set(monthKey, {
+  /** 날짜별 사건 — 일자를 아는 것만 */
+  const { byDay, monthsWithEvents, allDatedEvents, yearOnlyCount } =
+    useMemo(() => {
+      const map = new Map<string, CalendarEventItem[]>()
+      const months = new Map<string, YearMonth & { count: number }>()
+      const datedRows: Array<{
+        year: number
+        month: number
+        day: number
+        event: CalendarEventItem
+      }> = []
+      let yearOnly = 0
+      for (const event of events) {
+        if (!event.isDayKnown) {
+          yearOnly += 1
+          continue
+        }
+        const parsed = parseDate(event.date)
+        if (!parsed) {
+          yearOnly += 1
+          continue
+        }
+        datedRows.push({
           year: parsed.year,
           month: parsed.month,
-          count: 1,
+          day: parsed.day,
+          event,
         })
-    }
-    return {
-      byDay: map,
-      monthsWithEvents: [...months.values()].sort((left, right) =>
-        left.year !== right.year
-          ? right.year - left.year
-          : right.month - left.month,
-      ),
-      yearOnlyCount: yearOnly,
-    }
-  }, [events])
+        const dayKey = keyOf(parsed.year, parsed.month, parsed.day)
+        const bucket = map.get(dayKey)
+        if (bucket) bucket.push(event)
+        else map.set(dayKey, [event])
+
+        const monthKey = `${parsed.year}-${parsed.month}`
+        const monthEntry = months.get(monthKey)
+        if (monthEntry) monthEntry.count += 1
+        else
+          months.set(monthKey, {
+            year: parsed.year,
+            month: parsed.month,
+            count: 1,
+          })
+      }
+      datedRows.sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year
+        if (a.month !== b.month) return b.month - a.month
+        return b.day - a.day
+      })
+      return {
+        byDay: map,
+        monthsWithEvents: [...months.values()].sort((left, right) =>
+          left.year !== right.year
+            ? right.year - left.year
+            : right.month - left.month,
+        ),
+        allDatedEvents: datedRows,
+        yearOnlyCount: yearOnly,
+      }
+    }, [events])
 
   /* 오늘이 아니라 **사건이 있는 가장 최근 달**에서 연다 — 빈 격자로 시작하지 않는다 */
   const [cursor, setCursor] = useState<YearMonth | null>(null)
@@ -259,6 +281,75 @@ export function EventCalendarPanel({
         </HeadlineCell>
       </HeadlineStrip>
 
+      <ViewToolbarRow>
+        <ViewToolbarHint>
+          {viewMode === 'calendar'
+            ? '월간 격자와 우측 연도·월 색인으로 날짜별 사건을 탐색합니다'
+            : `월·일이 확인된 사건 ${allDatedEvents.length.toLocaleString('ko-KR')}건을 최신 일자순 2열 원장으로 표시합니다`}
+        </ViewToolbarHint>
+        <ViewToggleGroup role="group" aria-label="사건 캘린더 보기 방식">
+          <ViewToggleBtn
+            type="button"
+            $active={viewMode === 'calendar'}
+            onClick={() => setViewMode('calendar')}
+          >
+            월간 달력
+          </ViewToggleBtn>
+          <ViewToggleBtn
+            type="button"
+            $active={viewMode === 'ledger'}
+            onClick={() => setViewMode('ledger')}
+          >
+            전체 사건 원장 ({allDatedEvents.length})
+          </ViewToggleBtn>
+        </ViewToggleGroup>
+      </ViewToolbarRow>
+
+      {viewMode === 'ledger' ? (
+        <LedgerWrap>
+          <LedgerGrid role="table" aria-label="일자 확인 사건 전체 원장">
+            {(ledgerExpanded
+              ? allDatedEvents
+              : allDatedEvents.slice(0, 16)
+            ).map(({ year, month, day, event }) => (
+              <LedgerCell key={`${event.id}-${year}-${month}-${day}`}>
+                <LedgerRowButton
+                  type="button"
+                  onClick={() => onSelectEvent(event.id)}
+                >
+                  <LedgerDateBadge>
+                    {formatCalYear(year)} {month}월 {day}일
+                  </LedgerDateBadge>
+                  <LedgerEventTitle title={event.title}>
+                    {event.title}
+                  </LedgerEventTitle>
+                  <LedgerGoMonthBtn
+                    as="span"
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation()
+                      goMonth({ year, month })
+                      setViewMode('calendar')
+                    }}
+                    title="이 달 달력으로 이동"
+                  >
+                    달력 ›
+                  </LedgerGoMonthBtn>
+                </LedgerRowButton>
+              </LedgerCell>
+            ))}
+          </LedgerGrid>
+          {allDatedEvents.length > 16 && (
+            <LedgerMoreBtn
+              type="button"
+              onClick={() => setLedgerExpanded((prev) => !prev)}
+            >
+              {ledgerExpanded
+                ? '접기'
+                : `사건 ${(allDatedEvents.length - 16).toLocaleString('ko-KR')}건 더 보기`}
+            </LedgerMoreBtn>
+          )}
+        </LedgerWrap>
+      ) : (
       <Root $withSide={hasIndex}>
         <Main>
           <Head>
@@ -434,6 +525,7 @@ export function EventCalendarPanel({
           </Side>
         )}
       </Root>
+      )}
     </Frame>
   )
 }
@@ -468,11 +560,144 @@ const Frame = styled.div`
 const HeadlineStrip = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 2px solid ${({ theme }) => theme.colors.text.primary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @media (max-width: 820px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const ViewToolbarRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+`
+
+const ViewToolbarHint = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ViewToggleGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 7px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const ViewToggleBtn = styled.button<{ $active: boolean }>`
+  appearance: none;
+  padding: 3px 9px;
+  border: none;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.tertiary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+`
+
+const LedgerWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const LedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @media (min-width: 760px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const LedgerCell = styled.div`
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 760px) {
+    &:nth-child(even) {
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const LedgerRowButton = styled.button`
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const LedgerDateBadge = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+`
+
+const LedgerEventTitle = styled.span`
+  font-size: 13px;
+  font-weight: 650;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const LedgerGoMonthBtn = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  padding: 2px 6px;
+  border-radius: 4px;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.activeLight};
+  }
+`
+
+const LedgerMoreBtn = styled.button`
+  align-self: flex-start;
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 

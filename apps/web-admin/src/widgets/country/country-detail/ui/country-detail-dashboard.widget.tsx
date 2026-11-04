@@ -164,6 +164,28 @@ export function CountryDetailDashboard({
     return sorted[0] ?? null
   }, [economicIndicators])
 
+  const latestDevelopmentHdi = useMemo(() => {
+    const sorted = [...developmentIndicators]
+      .filter((row) => row.hdi != null && Number.isFinite(Number(row.hdi)))
+      .sort((first, second) => second.year - first.year)
+    return sorted[0] ?? null
+  }, [developmentIndicators])
+
+  const latestMacroYear = useMemo(() => {
+    const years = [
+      ...economicIndicators.map((r) => r.year),
+      ...demographicIndicators.map((r) => r.year),
+      ...developmentIndicators.map((r) => r.year),
+      ...bondYields.map((r) => r.year),
+    ].filter(Number.isFinite)
+    return years.length > 0 ? Math.max(...years) : null
+  }, [
+    economicIndicators,
+    demographicIndicators,
+    developmentIndicators,
+    bondYields,
+  ])
+
   const directPopNum = parsePopulation(country.population)
   const popNum = directPopNum ?? parsePopulation(latestDemographicPop?.population)
   const popYearNote =
@@ -188,7 +210,8 @@ export function CountryDetailDashboard({
     !!densityText ||
     !!capitalText ||
     latestEconomicGdp != null ||
-    latestEconomicGdpPerCapita != null
+    latestEconomicGdpPerCapita != null ||
+    latestDevelopmentHdi != null
 
   const goEvents = () => navigate(pathKeys.countryEvents(country.id))
   /** 연표 막대 → 사건 탭의 그 세기 묶음 */
@@ -527,8 +550,8 @@ export function CountryDetailDashboard({
                 </S.FactValue>
                 <S.FactSubNote>
                   {latestEconomicGdp.year}년 기준
-                  {latestEconomicGdpPerCapita?.gdpPerCapita != null
-                    ? ` · 1인당 ${formatMetricValue(latestEconomicGdpPerCapita.gdpPerCapita, '$')}`
+                  {latestEconomicGdp.gdpGrowthRate != null
+                    ? ` · 성장률 ${Number(latestEconomicGdp.gdpGrowthRate) >= 0 ? '+' : ''}${Number(latestEconomicGdp.gdpGrowthRate).toFixed(1)}%`
                     : ''}
                 </S.FactSubNote>
               </>
@@ -536,6 +559,49 @@ export function CountryDetailDashboard({
               <>
                 <S.FactValue $missing>미등록</S.FactValue>
                 <S.FactSubNote>연도별 경제 지표 미입력</S.FactSubNote>
+              </>
+            )}
+          </S.Fact>
+        )}
+
+        {(isModern ||
+          latestEconomicGdpPerCapita?.gdpPerCapita != null ||
+          latestDevelopmentHdi?.hdi != null) && (
+          <S.Fact
+            $missing={
+              latestEconomicGdpPerCapita?.gdpPerCapita == null &&
+              latestDevelopmentHdi?.hdi == null
+            }
+          >
+            <S.FactLabel>1인당 GDP · HDI</S.FactLabel>
+            {latestEconomicGdpPerCapita?.gdpPerCapita != null ? (
+              <>
+                <S.FactValue>
+                  {formatMetricValue(
+                    latestEconomicGdpPerCapita.gdpPerCapita,
+                    '$',
+                  )}
+                </S.FactValue>
+                <S.FactSubNote>
+                  {latestEconomicGdpPerCapita.year}년 기준
+                  {latestDevelopmentHdi?.hdi != null
+                    ? ` · HDI ${Number(latestDevelopmentHdi.hdi).toFixed(3)}`
+                    : ' · HDI 미입력'}
+                </S.FactSubNote>
+              </>
+            ) : latestDevelopmentHdi?.hdi != null ? (
+              <>
+                <S.FactValue>
+                  HDI {Number(latestDevelopmentHdi.hdi).toFixed(3)}
+                </S.FactValue>
+                <S.FactSubNote>
+                  {latestDevelopmentHdi.year}년 인간개발지수 · 1인당 GDP 미입력
+                </S.FactSubNote>
+              </>
+            ) : (
+              <>
+                <S.FactValue $missing>미등록</S.FactValue>
+                <S.FactSubNote>1인당 소득 · 인간개발지수 미입력</S.FactSubNote>
               </>
             )}
           </S.Fact>
@@ -1467,6 +1533,102 @@ export function CountryDetailDashboard({
             )}
           </S.SectionHeaderActions>
         </S.SectionTitleRow>
+
+        <S.SectionHeadlineStrip aria-label="지표 도메인 종합 요약">
+          <S.SectionHeadlineCell>
+            <S.SectionHeadlineLabel>등록 도메인 현황</S.SectionHeadlineLabel>
+            <S.SectionHeadlineValue $muted={filledIndicatorSpecs.length === 0}>
+              {filledIndicatorSpecs.length}/{indicatorHubSpecs.length}
+              <S.SectionHeadlineUnit>개 분야</S.SectionHeadlineUnit>
+            </S.SectionHeadlineValue>
+            <S.SectionHeadlineSub>
+              {emptyIndicatorCount === 0
+                ? '모든 지표 도메인 등록 완료'
+                : `미등록 ${emptyIndicatorCount}개 분야 · 아래 원장에서 추가`}
+            </S.SectionHeadlineSub>
+          </S.SectionHeadlineCell>
+
+          <S.SectionHeadlineCell>
+            <S.SectionHeadlineLabel>
+              {isModern ? '거시 · 금리 · 인구 기준' : '교역 기록 연수'}
+            </S.SectionHeadlineLabel>
+            {isModern ? (
+              <>
+                <S.SectionHeadlineValue $muted={latestMacroYear == null}>
+                  {latestMacroYear != null ? (
+                    <>
+                      {latestMacroYear}
+                      <S.SectionHeadlineUnit>년 최신</S.SectionHeadlineUnit>
+                    </>
+                  ) : (
+                    '미등록'
+                  )}
+                </S.SectionHeadlineValue>
+                <S.SectionHeadlineSub>
+                  {latestMacroYear != null
+                    ? `거시 ${economicIndicators.length} · 인구 ${demographicIndicators.length} · 국채 ${new Set(bondYields.map((b) => b.year)).size}개년`
+                    : '경제·인구·국채 시계열 미입력'}
+                </S.SectionHeadlineSub>
+              </>
+            ) : (
+              <>
+                <S.SectionHeadlineValue $muted={!hasTradeData}>
+                  {hasTradeData ? (
+                    <>
+                      {new Set(tradeRecords.map((r) => r.year)).size}
+                      <S.SectionHeadlineUnit>개년</S.SectionHeadlineUnit>
+                    </>
+                  ) : (
+                    '미등록'
+                  )}
+                </S.SectionHeadlineValue>
+                <S.SectionHeadlineSub>
+                  {hasTradeData
+                    ? '연도별 수출·수입 시계열 기록'
+                    : '교역 연도 기록 미입력'}
+                </S.SectionHeadlineSub>
+              </>
+            )}
+          </S.SectionHeadlineCell>
+
+          <S.SectionHeadlineCell>
+            <S.SectionHeadlineLabel>교역 기록 범위</S.SectionHeadlineLabel>
+            <S.SectionHeadlineValue $muted={!hasTradeData}>
+              {hasTradeData ? (
+                <>
+                  {tradeRecords.length.toLocaleString('ko-KR')}
+                  <S.SectionHeadlineUnit>건</S.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </S.SectionHeadlineValue>
+            <S.SectionHeadlineSub>
+              {hasTradeData
+                ? `최신 ${[...tradeRecords].sort((a, b) => Number(b.signedYear ?? b.year) - Number(a.signedYear ?? a.year))[0]?.year}년 교역 수지·품목`
+                : '수출·수입 총액 및 주요 교역품 미입력'}
+            </S.SectionHeadlineSub>
+          </S.SectionHeadlineCell>
+
+          <S.SectionHeadlineCell>
+            <S.SectionHeadlineLabel>등록 기업 · 상단</S.SectionHeadlineLabel>
+            <S.SectionHeadlineValue $muted={countryCompanyCount === 0}>
+              {countryCompanyCount > 0 ? (
+                <>
+                  {countryCompanyCount.toLocaleString('ko-KR')}
+                  <S.SectionHeadlineUnit>개사</S.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </S.SectionHeadlineValue>
+            <S.SectionHeadlineSub>
+              {countryCompanyCount > 0
+                ? `활동 ${countryCompanies.filter((c) => !c.dissolvedAt && (!c.status || c.status === 'ACTIVE')).length}개사 · 본사·소속 기업`
+                : '주요 기업·상단·금융기관 미등록'}
+            </S.SectionHeadlineSub>
+          </S.SectionHeadlineCell>
+        </S.SectionHeadlineStrip>
 
         <S.IndicatorsLedgerWrap>
           <S.IndicatorsLedgerList>

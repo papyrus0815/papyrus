@@ -756,13 +756,13 @@ const PastChip = styled.span`
 `
 
 /**
- * 상단 2px · 하단 1px · 셀 간 1px 수직 헤어라인으로 구성된 무컨테이너 정체 스펙 원장 그리드.
+ * 상·하단 1px · 셀 간 1px 수직 헤어라인으로 구성된 무컨테이너 정체 스펙 원장 그리드.
  */
 const PrimarySpecStrip = styled.dl`
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  border-top: 2px solid ${({ theme }) => theme.colors.text.primary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 

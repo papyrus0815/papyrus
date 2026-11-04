@@ -118,7 +118,7 @@ export function DashboardGuideBanner({
             <StepCard key={step.key} $status={step.status}>
               <StepTopRow>
                 <StepNumBadge $status={step.status}>
-                  STEP 0{step.stepNumber}
+                  {step.stepNumber}단계
                 </StepNumBadge>
                 <StepStatusChip $status={step.status}>
                   <StepStatusDot $status={step.status} aria-hidden />
