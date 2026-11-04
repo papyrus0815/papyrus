@@ -152,24 +152,65 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
     staleTime: 60_000,
   })
 
+  /*
+   * 후보 — 이 사건의 관련국 선거를 먼저, 그 안에서 사건 연도에 가까운 순. 예전엔 연도만 봐서 다른 나라 선거가 섞여 올랐다.
+   * 다른 사건에 이미 연결된 선거는 그 사실을 적는다 — 한 선거는 사건 하나만 가리켜, 고르면 그 사건에서 떨어져 이리 온다.
+   */
+  const relatedCountryKeys = useMemo(
+    () =>
+      new Set([
+        ...(event.relatedCountries ?? []).map((country) => `C:${country.id}`),
+        ...(event.relatedHistoricalCountries ?? []).map((country) => `H:${country.id}`),
+      ]),
+    [event.relatedCountries, event.relatedHistoricalCountries],
+  )
   const electionOptions = useMemo(() => {
     const linked = new Set(elections.map((election) => election.id))
     const yearOf = (iso: string) => parseIsoDateParts(iso)?.year ?? null
+    const isRelatedCountry = (election: (typeof allElections)[number]) =>
+      (election.countryId != null && relatedCountryKeys.has(`C:${election.countryId}`)) ||
+      (election.historicalCountryId != null && relatedCountryKeys.has(`H:${election.historicalCountryId}`))
     return allElections
       .filter((election) => !linked.has(election.id))
       .sort((left, right) => {
+        const countryOrder = Number(isRelatedCountry(right)) - Number(isRelatedCountry(left))
+        if (countryOrder !== 0) return countryOrder
         if (eventYear == null) return right.pollDate.localeCompare(left.pollDate)
         const distance = (iso: string) => Math.abs((yearOf(iso) ?? 0) - eventYear)
         return distance(left.pollDate) - distance(right.pollDate)
       })
-      .map((election) => ({
-        value: election.id,
-        label: election.name,
-        description: [ELECTION_TYPE_LABEL[election.electionType] ?? election.electionType, election.pollDate.slice(0, 10)]
-          .filter(Boolean)
-          .join(' · '),
-      }))
-  }, [allElections, elections, eventYear])
+      .map((election) => {
+        const elsewhere = election.event && !election.event.deletedAt ? election.event.title : null
+        return {
+          value: election.id,
+          label: election.name,
+          description: [
+            ELECTION_TYPE_LABEL[election.electionType] ?? election.electionType,
+            election.pollDate.slice(0, 10),
+            isRelatedCountry(election) ? '관련국' : null,
+            elsewhere ? `이미 ‘${elsewhere}’에 연결됨 — 고르면 옮김` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        }
+      })
+  }, [allElections, elections, eventYear, relatedCountryKeys])
+
+  /** 다른 사건에 연결된 선거를 고르면 옮길지 묻는다 — 예전엔 말없이 그 사건에서 떼어 왔다 */
+  const pickElection = async (electionId: string) => {
+    setElectionPickerOpen(false)
+    const picked = allElections.find((election) => election.id === electionId)
+    const elsewhere = picked?.event && !picked.event.deletedAt ? picked.event.title : null
+    if (elsewhere) {
+      const ok = await confirm({
+        title: '다른 사건에서 옮기기',
+        message: `「${picked?.name}」은 지금 ‘${elsewhere}’에 연결돼 있습니다. 이 사건으로 옮길까요? 그 사건에서는 선거 결과가 사라집니다.`,
+        confirmLabel: '옮기기',
+      })
+      if (!ok) return
+    }
+    setElectionMutation.mutate({ electionId, eventId: event.id })
+  }
 
   const setElectionMutation = useMutation({
     mutationFn: ({ electionId, eventId }: { electionId: string; eventId: string | null }) =>
@@ -274,10 +315,7 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
         isLoading={electionsLoading}
         searchable
         searchPlaceholder="선거 이름으로 검색..."
-        onSelect={(electionId) => {
-          setElectionPickerOpen(false)
-          setElectionMutation.mutate({ electionId, eventId: event.id })
-        }}
+        onSelect={(electionId) => void pickElection(electionId)}
       />
     </S.Section>
   )

@@ -9,9 +9,11 @@ import { CabinetPoliticalPartyController } from './presentation/cabinet-politica
 import { LawController } from './presentation/law.controller'
 import { LawTypeController } from './presentation/law-type.controller'
 import { NotificationModule } from '../notification/notification.module'
+import { EventModule } from '../event/infrastructure/event.module'
 
 @Module({
-  imports: [PrismaModule, NotificationModule],
+  // 사건 모듈 — 선거에서 서사 사건을 만들 때 EventService(포인트·참여국 등 생성 부수효과 포함)를 그대로 쓴다
+  imports: [PrismaModule, NotificationModule, EventModule],
   controllers: [
     PoliticalPartyController,
     PoliticalPartyTransitionController,

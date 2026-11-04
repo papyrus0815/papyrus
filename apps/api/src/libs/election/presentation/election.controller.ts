@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   ForbiddenException,
@@ -22,6 +23,8 @@ import {
   Prisma,
 } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
+import { EventService } from '../../event/application/event.service'
+import { assertEventOwnership } from '../../event/domain/event-ownership'
 import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
 import { buildPartyResultComparisonVsPrevious } from '../domain/election-party-comparison.util'
 import { findPreviousComparableElection } from '../domain/find-previous-election.util'
@@ -186,7 +189,10 @@ export interface CreateElectionBody {
 @Controller('elections')
 @UseGuards(AuthGuard('jwt'))
 export class ElectionController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventService: EventService,
+  ) {}
 
   @Get()
   async list(
@@ -240,6 +246,8 @@ export class ElectionController {
         historicalCountry: { select: { id: true, name: true } },
         candidacies: { select: { id: true } },
         ballotOptions: { select: { id: true } },
+        // 연결 사건 요약 — 사건 쪽 '선거 연결' 후보가 '이미 ‘X’에 연결됨'을 보이게(한 선거=한 사건이라 고르면 옮겨 간다)
+        event: { select: { id: true, title: true, deletedAt: true } },
       },
     })
     return serializeElectionBigInt(rows)
@@ -665,7 +673,7 @@ export class ElectionController {
         scopeAdministrativeDivisionId: body.scopeAdministrativeDivisionId ?? undefined,
         convocationOrdinal: body.convocationOrdinal ?? undefined,
         description: body.description ?? undefined,
-        eventId: body.eventId ?? undefined,
+        eventId: (await this.checkLinkableEvent(body.eventId, accountId)) ?? undefined,
         // 소유자는 JWT 주체 고정 (body 값은 신뢰하지 않는다)
         accountId: accountId ?? undefined,
       },
@@ -724,7 +732,9 @@ export class ElectionController {
       data.scopeAdministrativeDivisionId = body.scopeAdministrativeDivisionId
     if (body.convocationOrdinal !== undefined) data.convocationOrdinal = body.convocationOrdinal
     if (body.description !== undefined) data.description = body.description
-    if (body.eventId !== undefined) data.eventId = body.eventId
+    if (body.eventId !== undefined) {
+      data.eventId = await this.checkLinkableEvent(body.eventId, this.actorAccountId(req))
+    }
 
     const row = await this.prisma.election.update({
       where: { id },
@@ -732,6 +742,101 @@ export class ElectionController {
       include: electionInclude,
     })
     return serializeElectionBigInt(row)
+  }
+
+  /**
+   * 선거의 서사 사건 만들기 — 이 선거를 사건 목록·연표에 올린다.
+   * 예전엔 사건을 따로 등록하고 그 UUID를 선거 폼에 붙여 넣어야 해서 연결이 0건이었다.
+   * 제목·설명·투표일·나라를 선거에서 가져와 분야 정치·세부 선거로 만들고 곧바로 잇는다.
+   * 이미 살아 있는 사건이 연결돼 있으면 409(한 선거의 서사 정본은 하나).
+   * @tag elections
+   */
+  @Post(':id/narrative-event')
+  async createNarrativeEvent(
+    @Request() req: any,
+    @Param('id') id: string,
+  ): Promise<{ eventId: string; eventTitle: string }> {
+    const accountId = this.actorAccountId(req)
+    await this.ensureElectionOwner(id, accountId)
+    const election = await this.prisma.election.findUnique({
+      where: { id },
+      select: {
+        name: true,
+        description: true,
+        pollDate: true,
+        pollEndDate: true,
+        countryId: true,
+        historicalCountryId: true,
+        event: { select: { id: true, deletedAt: true } },
+      },
+    })
+    if (!election) throw new NotFoundException('선거를 찾을 수 없습니다.')
+    if (election.event && !election.event.deletedAt) {
+      throw new ConflictException('이미 연결된 사건이 있습니다 — 연결을 끊은 뒤 다시 만드세요')
+    }
+
+    /* 투표일 → 사건 날짜(일 정밀도). 선거는 모두 근현대라 DATETIME 범위(AD 1000~) 안이다 */
+    const dayOf = (value: Date) => ({
+      date: new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate())),
+      year: value.getUTCFullYear(),
+      month: value.getUTCMonth() + 1,
+      day: value.getUTCDate(),
+    })
+    const start = dayOf(election.pollDate)
+    const end =
+      election.pollEndDate && election.pollEndDate.getTime() > election.pollDate.getTime()
+        ? dayOf(election.pollEndDate)
+        : null
+
+    const event = await this.eventService.createEvent(
+      {
+        title: election.name,
+        description: election.description ?? undefined,
+        startDate: start.date,
+        startDatePrecision: 'day',
+        startEra: 'AD',
+        startYear: start.year,
+        startMonth: start.month,
+        startDay: start.day,
+        endDate: end?.date,
+        endDatePrecision: end ? 'day' : undefined,
+        endEra: end ? 'AD' : undefined,
+        endYear: end?.year,
+        endMonth: end?.month,
+        endDay: end?.day,
+        domain: 'POLITICS',
+        type: 'ELECTION',
+        kind: 'SINGLE',
+        createdById: accountId,
+      } as Parameters<EventService['createEvent']>[0],
+      {
+        relatedCountries: election.countryId
+          ? [{ countryId: election.countryId }]
+          : election.historicalCountryId
+            ? [{ historicalCountryId: election.historicalCountryId }]
+            : undefined,
+      },
+    )
+    await this.prisma.election.update({ where: { id }, data: { eventId: event.id } })
+    return { eventId: event.id, eventTitle: event.title }
+  }
+
+  /**
+   * 연결할 사건 검사 — 있고, 지워지지 않았고, 본인이 등록한 사건만. 예전엔 아무 UUID나 받아
+   * 남의 사건·없는 사건에도 걸렸다. null·빈 문자열은 연결 해제(null).
+   */
+  private async checkLinkableEvent(
+    eventId: string | null | undefined,
+    accountId: string | undefined,
+  ): Promise<string | null | undefined> {
+    if (eventId === undefined) return undefined
+    const trimmed = eventId?.trim()
+    if (!trimmed) return null
+    await assertEventOwnership(this.prisma, trimmed, accountId, {
+      action: '선거에 연결',
+      deleted: 'not-found',
+    })
+    return trimmed
   }
 
   @Delete(':id')

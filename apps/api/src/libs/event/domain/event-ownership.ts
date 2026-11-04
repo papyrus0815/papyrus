@@ -18,7 +18,7 @@ import type { PrismaClient } from '@prisma/client'
  */
 export interface EventOwnershipOptions {
   /** 거절 문구의 동작 — '조회' → '본인이 등록한 사건만 조회할 수 있습니다.' */
-  action: '조회' | '수정' | '삭제' | '진영 편집'
+  action: '조회' | '수정' | '삭제' | '진영 편집' | '선거에 연결'
   /**
    * 소프트삭제된 사건:
    * - `allow`(기본) 통과 — 조회, 그리고 연결 해제처럼 정리하는 쓰기

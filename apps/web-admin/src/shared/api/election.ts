@@ -166,6 +166,10 @@ export type ElectionListRow = {
   candidacies?: { id: string }[]
   ballotOptions?: { id: string }[]
   countryId?: string | null
+  historicalCountryId?: string | null
+  /** 이 선거의 서사 사건(있으면) — 한 선거는 사건 하나만 가리킨다 */
+  eventId?: string | null
+  event?: { id: string; title: string; deletedAt?: string | null } | null
 }
 
 /**
@@ -529,6 +533,17 @@ export async function updateElection(
   return requestJson<ElectionDetailDto>(
     `/elections/${encodeURIComponent(electionId)}`,
     { method: 'PATCH', body: JSON.stringify(body) },
+  )
+}
+
+/**
+ * 선거의 서사 사건 만들기 — 제목·설명·투표일·나라를 선거에서 가져와 '정치 › 선거' 사건을 만들고 곧바로 잇는다.
+ * 이미 살아 있는 사건이 연결돼 있으면 409.
+ */
+export async function createElectionNarrativeEvent(electionId: string) {
+  return requestJson<{ eventId: string; eventTitle: string }>(
+    `/elections/${encodeURIComponent(electionId)}/narrative-event`,
+    { method: 'POST' },
   )
 }
 

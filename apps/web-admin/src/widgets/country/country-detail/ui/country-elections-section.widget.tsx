@@ -59,6 +59,7 @@ import {
   labelLegislatureClosureKind,
   labelNominationType,
   updateBallotOption,
+  createElectionNarrativeEvent,
   updateElection,
   updateElectionCandidacy,
   upsertBallotOptionResult,
@@ -142,6 +143,7 @@ import {
   HistoryProseTooltipOverlay,
 } from './cabinets-section.styled'
 import { CountryPoliticalPartiesBlock } from './country-political-parties-block.widget'
+import { LinkedEventPickerField } from './linked-event-picker-field'
 import {
   BallotOptionEditInput,
   BallotOptionEditRow,
@@ -1557,6 +1559,27 @@ export function CountryElectionsSection({
       queryClient.invalidateQueries({ queryKey: qk.detail(selectedId) })
   }, [queryClient, scopeKey, selectedId])
 
+  /** 선거 → 서사 사건 만들기 — 사건 목록·연표에 이 선거가 서게 한다(서버가 생성과 연결을 한 번에) */
+  const narrativeEventMut = useMutation({
+    mutationFn: (electionId: string) => createElectionNarrativeEvent(electionId),
+    onSuccess: (result) => {
+      notify.success(`‘${result.eventTitle}’ 사건을 만들어 연결했습니다`)
+      invalidate()
+      void queryClient.invalidateQueries({ queryKey: ['events'] })
+    },
+    onError: (error: Error) => {
+      let message = error.message
+      try {
+        /* 서버 오류 본문은 { error: { message } } — 원문 JSON이 토스트에 찍히지 않게 문구만 */
+        const parsed = JSON.parse(error.message) as { message?: string; error?: { message?: string } }
+        message = parsed.error?.message ?? parsed.message ?? message
+      } catch {
+        /* 본문이 JSON이 아니면 그대로 */
+      }
+      notify.error(message || '사건을 만들지 못했습니다')
+    },
+  })
+
   const saveElectionMut = useMutation({
     mutationFn: async (payload: {
       mode: 'create' | 'edit'
@@ -2106,6 +2129,8 @@ export function CountryElectionsSection({
                         saveElectionMut.isPending ||
                         saveElectionLinkedEventDescriptionMut.isPending
                       }
+                      onCreateNarrativeEvent={() => narrativeEventMut.mutate(detail.id)}
+                      creatingNarrativeEvent={narrativeEventMut.isPending}
                       onDeleteElection={() => {
                         setConfirmDialog({
                           title: '선거 삭제',
@@ -2366,6 +2391,8 @@ function ElectionDetailPanel({
   onRenameBallotOption,
   onDeleteBallotOption,
   onEditBallotResult,
+  onCreateNarrativeEvent,
+  creatingNarrativeEvent,
 }: {
   detail: ElectionDetailDto
   entityLinkCountryId?: string
@@ -2390,6 +2417,9 @@ function ElectionDetailPanel({
   onRenameBallotOption: (optionId: string, label: string) => Promise<void>
   onDeleteBallotOption: (opt: ElectionBallotOptionDto) => void
   onEditBallotResult: (opt: ElectionBallotOptionDto) => void
+  /** 연결 사건이 없을 때 — 이 선거로 사건을 만들어 잇는다 */
+  onCreateNarrativeEvent?: () => void
+  creatingNarrativeEvent?: boolean
 }) {
   const navigate = useNavigate()
 
@@ -3032,6 +3062,30 @@ function ElectionDetailPanel({
                   }}
                 >
                   {detail.event?.title?.trim() || detail.eventId}
+                </button>
+              </ElectionDetailCountryMeta>
+            ) : onCreateNarrativeEvent ? (
+              /* 연결 사건이 없으면 이 선거는 사건 목록·연표에 없다 — 한 번에 만들어 잇는다 */
+              <ElectionDetailCountryMeta>
+                연결 사건 없음 ·{' '}
+                <button
+                  type="button"
+                  disabled={creatingNarrativeEvent}
+                  onClick={onCreateNarrativeEvent}
+                  title="제목·설명·투표일·나라를 이 선거에서 가져와 '정치 › 선거' 사건을 만들고 연결합니다"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    margin: 0,
+                    cursor: creatingNarrativeEvent ? 'progress' : 'pointer',
+                    color: theme.colors.primary,
+                    textDecoration: 'underline',
+                    font: 'inherit',
+                    fontWeight: 600,
+                  }}
+                >
+                  {creatingNarrativeEvent ? '사건 만드는 중…' : '사건으로 만들어 연표에 올리기'}
                 </button>
               </ElectionDetailCountryMeta>
             ) : null}
@@ -4924,12 +4978,13 @@ function ElectionFormModal({
                   연결 사건 (선택)
                 </FieldLabel>
                 <ModalFieldWide>
-                  <Input
-                    id="election-form-linked-event"
+                  {/* 예전엔 사건 UUID를 손으로 붙이는 칸이라 연결이 0건이었다 — 사건 검색으로 고른다 */}
+                  <LinkedEventPickerField
+                    inputId="election-form-linked-event"
                     value={linkedEventId}
-                    onChange={(e) => setLinkedEventId(e.target.value)}
-                    placeholder="Event UUID — 비우면 연결 해제"
-                    autoComplete="off"
+                    initialTitle={initial?.event?.title ?? null}
+                    nearYear={Number.parseInt(pollDate.slice(0, 4), 10) || null}
+                    onChange={setLinkedEventId}
                   />
                 </ModalFieldWide>
               </FieldRow>
