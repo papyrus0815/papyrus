@@ -38,7 +38,7 @@ export function SectionEmpty({
         <Text>{text}</Text>
         {hint && (
           <HintRow>
-            <HintBadge>TIP</HintBadge>
+            <HintBadge>작성 안내</HintBadge>
             <HintText>{hint}</HintText>
           </HintRow>
         )}

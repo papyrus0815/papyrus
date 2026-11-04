@@ -216,18 +216,7 @@ export function TradeSection({
             if (countryId) setManagerOpen(true)
             else onOpenDetailTab?.()
           }}
-        >
-          <EmptyBars>
-            {[0, 1, 2].map((row) => (
-              <EmptyBarRow key={row}>
-                {/* 격자 자식이 하나뿐이면 첫 칸(연도 자리)에 들어가 62px로 짜부라진다 */}
-                <span />
-                <EmptyTrack />
-                <span />
-              </EmptyBarRow>
-            ))}
-          </EmptyBars>
-        </ChartEmpty>
+        />
         {countryId && (
           <CountryDataManagerModal
             countryId={countryId}
@@ -345,57 +334,67 @@ export function TradeSection({
         )}
       </S.SectionTitleRow>
 
-      {(current.exportValue != null || current.importValue != null) && (
-        <TradeHeadlineStrip aria-label={`${yearLabel} 교역 요약`}>
-          {current.exportValue != null && (
-            <TradeHeadlineCell>
-              <TradeHeadlineLabel>수출 ({yearLabel})</TradeHeadlineLabel>
-              <TradeHeadlineVal>
+      <TradeHeadlineStrip aria-label={`${yearLabel} 교역 요약`}>
+        <TradeHeadlineCell>
+          <TradeHeadlineLabel>수출 ({yearLabel})</TradeHeadlineLabel>
+          <TradeHeadlineVal>
+            {current.exportValue != null ? (
+              <>
                 {formatTradeValue(current.exportValue)}
                 {unitSuffix && (
                   <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
                 )}
-              </TradeHeadlineVal>
-              {(exportDeltaPct != null || topExportItem) && (
-                <TradeHeadlineSub>
-                  {exportDeltaPct != null && prevYearLabel && (
-                    <TradeDeltaSpan $up={exportDeltaPct >= 0}>
-                      {prevYearLabel} 대비 {exportDeltaPct >= 0 ? '+' : ''}
-                      {exportDeltaPct.toFixed(1)}%
-                    </TradeDeltaSpan>
-                  )}
-                  {exportDeltaPct != null && topExportItem && ' · '}
-                  {topExportItem && `주력: ${topExportItem}`}
-                </TradeHeadlineSub>
-              )}
-            </TradeHeadlineCell>
-          )}
-          {current.importValue != null && (
-            <TradeHeadlineCell>
-              <TradeHeadlineLabel>수입 ({yearLabel})</TradeHeadlineLabel>
-              <TradeHeadlineVal>
+              </>
+            ) : (
+              '총액 미기재'
+            )}
+          </TradeHeadlineVal>
+          <TradeHeadlineSub>
+            {exportDeltaPct != null && prevYearLabel && (
+              <TradeDeltaSpan $up={exportDeltaPct >= 0}>
+                {prevYearLabel} 대비 {exportDeltaPct >= 0 ? '+' : ''}
+                {exportDeltaPct.toFixed(1)}%
+              </TradeDeltaSpan>
+            )}
+            {exportDeltaPct != null && topExportItem && ' · '}
+            {topExportItem
+              ? `주력: ${topExportItem}`
+              : `등록 품목 ${views.EXPORT.commodities.length}건 · 상대 ${views.EXPORT.partners.length}건`}
+          </TradeHeadlineSub>
+        </TradeHeadlineCell>
+
+        <TradeHeadlineCell>
+          <TradeHeadlineLabel>수입 ({yearLabel})</TradeHeadlineLabel>
+          <TradeHeadlineVal>
+            {current.importValue != null ? (
+              <>
                 {formatTradeValue(current.importValue)}
                 {unitSuffix && (
                   <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
                 )}
-              </TradeHeadlineVal>
-              {(importDeltaPct != null || topImportItem) && (
-                <TradeHeadlineSub>
-                  {importDeltaPct != null && prevYearLabel && (
-                    <TradeDeltaSpan $up={importDeltaPct >= 0}>
-                      {prevYearLabel} 대비 {importDeltaPct >= 0 ? '+' : ''}
-                      {importDeltaPct.toFixed(1)}%
-                    </TradeDeltaSpan>
-                  )}
-                  {importDeltaPct != null && topImportItem && ' · '}
-                  {topImportItem && `주력: ${topImportItem}`}
-                </TradeHeadlineSub>
-              )}
-            </TradeHeadlineCell>
-          )}
-          {tradeBalance != null && (
-            <TradeHeadlineCell>
-              <TradeHeadlineLabel>무역수지</TradeHeadlineLabel>
+              </>
+            ) : (
+              '총액 미기재'
+            )}
+          </TradeHeadlineVal>
+          <TradeHeadlineSub>
+            {importDeltaPct != null && prevYearLabel && (
+              <TradeDeltaSpan $up={importDeltaPct >= 0}>
+                {prevYearLabel} 대비 {importDeltaPct >= 0 ? '+' : ''}
+                {importDeltaPct.toFixed(1)}%
+              </TradeDeltaSpan>
+            )}
+            {importDeltaPct != null && topImportItem && ' · '}
+            {topImportItem
+              ? `주력: ${topImportItem}`
+              : `등록 품목 ${views.IMPORT.commodities.length}건 · 상대 ${views.IMPORT.partners.length}건`}
+          </TradeHeadlineSub>
+        </TradeHeadlineCell>
+
+        <TradeHeadlineCell>
+          <TradeHeadlineLabel>무역수지</TradeHeadlineLabel>
+          {tradeBalance != null ? (
+            <>
               <TradeHeadlineVal>
                 {tradeBalance > 0 ? '+' : ''}
                 {formatTradeValue(tradeBalance)}
@@ -403,32 +402,56 @@ export function TradeSection({
                   {tradeBalance >= 0 ? '흑자' : '적자'}
                 </TradeBalanceTag>
               </TradeHeadlineVal>
-              {tradeVolume != null && tradeVolume > 0 && (
-                <TradeHeadlineSub>
-                  교역 총액 대비 {((Math.abs(tradeBalance) / tradeVolume) * 100).toFixed(1)}%
-                </TradeHeadlineSub>
-              )}
-            </TradeHeadlineCell>
+              <TradeHeadlineSub>
+                {tradeVolume != null && tradeVolume > 0
+                  ? `교역 총액 대비 ${((Math.abs(tradeBalance) / tradeVolume) * 100).toFixed(1)}%`
+                  : '수출 − 수입 차액'}
+              </TradeHeadlineSub>
+            </>
+          ) : (
+            <>
+              <TradeHeadlineVal>산출 불가</TradeHeadlineVal>
+              <TradeHeadlineSub>
+                수출·수입 총액 모두 입력 시 자동 계산
+              </TradeHeadlineSub>
+            </>
           )}
-          {tradeVolume != null && (
-            <TradeHeadlineCell>
-              <TradeHeadlineLabel>교역 총액 (수출+수입)</TradeHeadlineLabel>
+        </TradeHeadlineCell>
+
+        <TradeHeadlineCell>
+          <TradeHeadlineLabel>교역 총액 (수출+수입)</TradeHeadlineLabel>
+          {tradeVolume != null ? (
+            <>
               <TradeHeadlineVal>
                 {formatTradeValue(tradeVolume)}
                 {unitSuffix && (
                   <TradeHeadlineUnit>{unitSuffix}</TradeHeadlineUnit>
                 )}
               </TradeHeadlineVal>
-              {current.exportValue != null && tradeVolume > 0 && (
-                <TradeHeadlineSub>
-                  수출 비중 {((current.exportValue / tradeVolume) * 100).toFixed(1)}% · 수입{' '}
-                  {(((current.importValue ?? 0) / tradeVolume) * 100).toFixed(1)}%
-                </TradeHeadlineSub>
-              )}
-            </TradeHeadlineCell>
+              <TradeHeadlineSub>
+                {current.exportValue != null && tradeVolume > 0
+                  ? `수출 비중 ${((current.exportValue / tradeVolume) * 100).toFixed(1)}% · 수입 ${(((current.importValue ?? 0) / tradeVolume) * 100).toFixed(1)}%`
+                  : `상세 명세 ${current.items.length}건`}
+              </TradeHeadlineSub>
+            </>
+          ) : (
+            <>
+              <TradeHeadlineVal>{current.items.length}건 명세</TradeHeadlineVal>
+              <TradeHeadlineSub>
+                수출 명세{' '}
+                {views.EXPORT.commodities.length +
+                  views.EXPORT.partners.length +
+                  views.EXPORT.partnerCommodities.length}
+                건 · 수입 명세{' '}
+                {views.IMPORT.commodities.length +
+                  views.IMPORT.partners.length +
+                  views.IMPORT.partnerCommodities.length}
+                건
+              </TradeHeadlineSub>
+            </>
           )}
-        </TradeHeadlineStrip>
-      )}
+        </TradeHeadlineCell>
+      </TradeHeadlineStrip>
 
       {/* 규모·추이·연도 선택을 한 그림이 맡는다 — 자세한 이유는 TradeYearBars 주석 */}
       <TradeYearBars
@@ -452,6 +475,8 @@ export function TradeSection({
                 key={direction}
                 direction={direction}
                 view={views[direction]}
+                unitSuffix={unitSuffix}
+                tradeVolume={tradeVolume}
                 isDark={isDark}
                 onPickCommodity={setPickedCommodity}
               />
@@ -490,6 +515,8 @@ export function TradeSection({
 interface TradeDirectionViewProps {
   direction: Direction
   view: DirectionView
+  unitSuffix: string
+  tradeVolume: number | null
   isDark: boolean
   onPickCommodity: (picked: { id: string; name: string }) => void
 }
@@ -498,42 +525,57 @@ interface TradeDirectionViewProps {
 function TradeDirectionView({
   direction,
   view,
+  unitSuffix,
+  tradeVolume,
   isDark,
   onPickCommodity,
 }: TradeDirectionViewProps) {
   const label = direction === 'EXPORT' ? '수출' : '수입'
   const color = directionColor(direction, isDark)
-  if (
+  const itemCount =
     view.commodities.length +
-      view.partners.length +
-      view.partnerCommodities.length ===
-    0
-  ) {
+    view.partners.length +
+    view.partnerCommodities.length
+  if (itemCount === 0) {
     return null
   }
 
   const known = view.slices.reduce((sum, slice) => sum + slice.pct, 0)
-  /*
-   * 막대는 언제나 그 방향 전체(100%)를 트랙으로 깐다. 등록된 품목이 29%뿐이면 29%만
-   * 칠하고 나머지는 빈칸으로 둔다 — 옛 막대는 등록분을 100%로 늘여 그려서 '에너지·광물
-   * 44%'처럼 보였지만 실제 수출 대비로는 13%였다. 모수가 다른 두 수를 나란히 두면
-   * 읽는 사람은 큰 쪽으로 읽는다.
-   */
   const relative = view.coverage == null
+  const volumeSharePct =
+    view.total != null && tradeVolume != null && tradeVolume > 0
+      ? ((view.total / tradeVolume) * 100).toFixed(1)
+      : null
 
   return (
     <S.TradeDirectionBlock>
       <S.TradeDirectionHeader>
-        <S.TradeDirectionName $color={color}>{label}</S.TradeDirectionName>
-        {view.slices.length > 0 && (
-          <S.TradeCoverageNote>
-            {relative
-              ? '등록된 품목끼리의 비율 (전체 대비는 알 수 없음)'
-              : `등록 품목이 ${label}의 ${known.toFixed(1)}%를 덮는다`}
-            {view.unknownCount > 0 &&
-              ` · 비중 미상 ${view.unknownCount}건은 막대에 없음`}
-          </S.TradeCoverageNote>
-        )}
+        <S.TradeDirectionTitleGroup>
+          <S.TradeDirectionName $color={color}>{label}</S.TradeDirectionName>
+          {view.slices.length > 0 && (
+            <S.TradeCoverageNote>
+              {relative
+                ? '등록 품목 간 비율'
+                : `등록 품목이 ${label}의 ${known.toFixed(1)}% 포괄`}
+              {view.unknownCount > 0 && ` · 미상 ${view.unknownCount}건`}
+            </S.TradeCoverageNote>
+          )}
+        </S.TradeDirectionTitleGroup>
+        <S.TradeDirectionMeta>
+          {view.total != null && (
+            <strong>
+              {formatTradeValue(view.total)}
+              {unitSuffix ? ` ${unitSuffix}` : ''}
+              {volumeSharePct ? ` (${volumeSharePct}%)` : ''}
+            </strong>
+          )}
+          <span>
+            품목 {view.commodities.length} · 상대 {view.partners.length}
+            {view.partnerCommodities.length > 0
+              ? ` · 상대별 품목 ${view.partnerCommodities.length}`
+              : ''}
+          </span>
+        </S.TradeDirectionMeta>
       </S.TradeDirectionHeader>
 
       {view.slices.length > 0 && (
@@ -694,38 +736,19 @@ function TradeItemLine({
   )
 }
 
-/* 교역 빈 상태의 막대 골격 — 연도·금액은 없고 트랙만 */
-const EmptyBars = styled.div`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  gap: 14px;
-  padding: 10px 0 26px;
-`
-
-const EmptyBarRow = styled.div`
-  display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) 128px;
-  gap: 12px;
-  align-items: center;
-  /* 폭을 안 주면 격자 자식이 내용 폭으로 줄어 트랙이 왼쪽에 짜부라진다 */
-  width: 100%;
-`
-
-const EmptyTrack = styled.span`
-  height: 20px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)'};
-`
-
 const TradeHeadlineStrip = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px 24px;
-  padding: 14px 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
 `
 
 const TradeHeadlineCell = styled.div`
@@ -733,6 +756,37 @@ const TradeHeadlineCell = styled.div`
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
 `
 
 const TradeHeadlineLabel = styled.span`

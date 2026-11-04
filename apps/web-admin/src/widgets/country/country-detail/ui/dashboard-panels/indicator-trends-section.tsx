@@ -144,6 +144,7 @@ export function IndicatorTrendsSection({
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | IndicatorType>('ALL')
   const [showAllCharts, setShowAllCharts] = useState(false)
   const [selectedSeriesKey, setSelectedSeriesKey] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'chart' | 'ledger'>('chart')
   const economicQuery = useEconomicIndicators(countryId)
   const demographicQuery = useDemographicIndicators(countryId)
   const developmentQuery = useDevelopmentIndicators(countryId)
@@ -218,9 +219,9 @@ export function IndicatorTrendsSection({
     filteredSeries.length - visibleSeries.length,
   )
 
-  /** 상단 핵심 지표 요약 바 — 우선순위 상위 최대 6개 지표의 최신값과 직전 대비 증감 */
-  const headlineSpecs = useMemo(() => {
-    return allSeries.slice(0, 6).map((series) => {
+  /** 지표별 요약 명세 — 상단 4칸 스트립 및 수치 원장에서 공용으로 사용 */
+  const seriesSpecs = useMemo(() => {
+    return allSeries.map((series) => {
       const sorted = [...series.points].sort((a, b) => a.year - b.year)
       const first = sorted[0]
       const latest = sorted[sorted.length - 1]
@@ -229,6 +230,10 @@ export function IndicatorTrendsSection({
       const values = sorted.map((p) => p.value)
       const minVal = values.length > 0 ? Math.min(...values) : null
       const maxVal = values.length > 0 ? Math.max(...values) : null
+      const avgVal =
+        values.length > 0
+          ? values.reduce((acc, cur) => acc + cur, 0) / values.length
+          : null
       const fieldKey = series.key.split(':')[1] ?? ''
       const isInverse = INVERSE_FIELDS.has(fieldKey)
       const deltaTone: 'good' | 'caution' | 'neutral' =
@@ -247,6 +252,7 @@ export function IndicatorTrendsSection({
         category: series.category,
         categoryLabel: INDICATOR_META[series.category].label,
         title: series.title,
+        caption: series.caption,
         unit: series.unit,
         firstYear: first?.year ?? null,
         latestYear: latest?.year ?? null,
@@ -257,8 +263,35 @@ export function IndicatorTrendsSection({
         pointCount: sorted.length,
         minVal,
         maxVal,
+        avgVal,
+        recentPoints: sorted.slice(-6).reverse(),
       }
     })
+  }, [allSeries])
+
+  /** 상단 핵심 지표 4칸 헤어라인 요약 바 — 우선순위 상위 최대 4개 지표 */
+  const headlineSpecs = useMemo(() => seriesSpecs.slice(0, 4), [seriesSpecs])
+
+  const filteredSpecs = useMemo(
+    () =>
+      activeCategory === 'ALL'
+        ? seriesSpecs
+        : seriesSpecs.filter((item) => item.category === activeCategory),
+    [seriesSpecs, activeCategory],
+  )
+
+  const overallYearSpan = useMemo(() => {
+    const years: number[] = []
+    for (const s of allSeries) {
+      for (const pt of s.points) {
+        years.push(pt.year)
+      }
+    }
+    if (years.length === 0) return null
+    const minY = Math.min(...years)
+    const maxY = Math.max(...years)
+    const distinctCount = new Set(years).size
+    return { minY, maxY, distinctCount }
   }, [allSeries])
 
   const handleSelectHeadline = (specKey: string, category: IndicatorType) => {
@@ -324,22 +357,7 @@ export function IndicatorTrendsSection({
           hint="최소 2개 연도 이상 입력 시 전년 대비 증감과 시계열 꺾은선 차트가 활성화됩니다"
           actionLabel="연도별 지표 등록"
           onAction={() => setManagerOpen(true)}
-        >
-          <GridContainer>
-            <Grid>
-              <IndicatorTrendChart
-                title="경제 성장률"
-                caption="연간 실질 GDP 성장률"
-                points={[]}
-              />
-              <IndicatorTrendChart
-                title="인구 증가율"
-                caption="전년 대비 인구 증감률"
-                points={[]}
-              />
-            </Grid>
-          </GridContainer>
-        </ChartEmpty>
+        />
       )}
 
       {manager}
@@ -361,113 +379,265 @@ export function IndicatorTrendsSection({
                     spec.delta != null && spec.delta > 0 ? '+' : ''
                   const isSelected = selectedSeriesKey === spec.key
                   return (
-                    <HeadlineCell
-                      key={spec.key}
-                      type="button"
-                      $active={isSelected}
-                      onClick={() =>
-                        handleSelectHeadline(spec.key, spec.category)
-                      }
-                    >
+                    <HeadlineCellSlot key={spec.key}>
+                      <HeadlineCell
+                        type="button"
+                        $active={isSelected}
+                        onClick={() =>
+                          handleSelectHeadline(spec.key, spec.category)
+                        }
+                      >
+                        <HeadlineTop>
+                          <HeadlineTitleGroup>
+                            <HeadlineCatTag>{spec.categoryLabel}</HeadlineCatTag>
+                            <HeadlineTitle>{spec.title}</HeadlineTitle>
+                          </HeadlineTitleGroup>
+                          <HeadlineYear>{spec.latestYear}년</HeadlineYear>
+                        </HeadlineTop>
+                        <HeadlineValueRow>
+                          <HeadlineVal>
+                            {formatMetricValue(spec.latestValue, spec.unit)}
+                          </HeadlineVal>
+                          {spec.delta != null &&
+                            spec.prevYear != null &&
+                            Math.abs(spec.delta) > 1e-6 && (
+                              <HeadlineDelta $tone={spec.deltaTone}>
+                                {spec.prevYear}년 대비 {deltaSign}
+                                {formatMetricValue(spec.delta, deltaUnit)}
+                              </HeadlineDelta>
+                            )}
+                        </HeadlineValueRow>
+                        <HeadlineRangeNote>
+                          {spec.pointCount >= 2 &&
+                          spec.firstYear != null &&
+                          spec.minVal != null &&
+                          spec.maxVal != null
+                            ? `${spec.firstYear}–${spec.latestYear} (${spec.pointCount}개년) · ${formatMetricValue(spec.minVal, spec.unit, true)} ~ ${formatMetricValue(spec.maxVal, spec.unit, true)}`
+                            : `${spec.latestYear}년 단일 관측 기록`}
+                        </HeadlineRangeNote>
+                      </HeadlineCell>
+                    </HeadlineCellSlot>
+                  )
+                })}
+                {headlineSpecs.length < 4 && (
+                  <HeadlineCellSlot>
+                    <HeadlineStaticCell>
                       <HeadlineTop>
-                        <HeadlineTitleGroup>
-                          <HeadlineCatTag>{spec.categoryLabel}</HeadlineCatTag>
-                          <HeadlineTitle>{spec.title}</HeadlineTitle>
-                        </HeadlineTitleGroup>
-                        <HeadlineYear>{spec.latestYear}년</HeadlineYear>
+                        <HeadlineTitle>등록 지표 총계</HeadlineTitle>
+                      </HeadlineTop>
+                      <HeadlineValueRow>
+                        <HeadlineVal>{allSeries.length}개 지표</HeadlineVal>
+                      </HeadlineValueRow>
+                      <HeadlineRangeNote>
+                        경제 {categoryCounts.economic} · 인구{' '}
+                        {categoryCounts.demographic} · 발전{' '}
+                        {categoryCounts.development}
+                      </HeadlineRangeNote>
+                    </HeadlineStaticCell>
+                  </HeadlineCellSlot>
+                )}
+                {headlineSpecs.length < 3 && (
+                  <HeadlineCellSlot>
+                    <HeadlineStaticCell>
+                      <HeadlineTop>
+                        <HeadlineTitle>관측 연도 범위</HeadlineTitle>
                       </HeadlineTop>
                       <HeadlineValueRow>
                         <HeadlineVal>
-                          {formatMetricValue(spec.latestValue, spec.unit)}
+                          {overallYearSpan
+                            ? overallYearSpan.minY === overallYearSpan.maxY
+                              ? `${overallYearSpan.maxY}년`
+                              : `${overallYearSpan.minY}–${overallYearSpan.maxY}년`
+                            : '—'}
                         </HeadlineVal>
-                        {spec.delta != null &&
-                          spec.prevYear != null &&
-                          Math.abs(spec.delta) > 1e-6 && (
-                            <HeadlineDelta $tone={spec.deltaTone}>
-                              {spec.prevYear}년 대비 {deltaSign}
-                              {formatMetricValue(spec.delta, deltaUnit)}
-                            </HeadlineDelta>
-                          )}
                       </HeadlineValueRow>
-                      {spec.pointCount >= 2 &&
-                        spec.firstYear != null &&
-                        spec.minVal != null &&
-                        spec.maxVal != null && (
-                          <HeadlineRangeNote>
-                            {spec.firstYear}–{spec.latestYear} ({spec.pointCount}
-                            개년) · {formatMetricValue(spec.minVal, spec.unit, true)} ~{' '}
-                            {formatMetricValue(spec.maxVal, spec.unit, true)}
-                          </HeadlineRangeNote>
-                        )}
-                    </HeadlineCell>
-                  )
-                })}
+                      <HeadlineRangeNote>
+                        {overallYearSpan
+                          ? `총 ${overallYearSpan.distinctCount}개 관측 연도`
+                          : '관측 연도 없음'}
+                      </HeadlineRangeNote>
+                    </HeadlineStaticCell>
+                  </HeadlineCellSlot>
+                )}
+                {headlineSpecs.length < 2 && (
+                  <HeadlineCellSlot>
+                    <HeadlineStaticCell>
+                      <HeadlineTop>
+                        <HeadlineTitle>수집 분야 현황</HeadlineTitle>
+                      </HeadlineTop>
+                      <HeadlineValueRow>
+                        <HeadlineVal>{activeCategoryCount}/3개 분야</HeadlineVal>
+                      </HeadlineValueRow>
+                      <HeadlineRangeNote>
+                        경제 · 인구 · 발전 시계열
+                      </HeadlineRangeNote>
+                    </HeadlineStaticCell>
+                  </HeadlineCellSlot>
+                )}
               </HeadlineStrip>
             )}
 
-            {activeCategoryCount > 1 && (
-              <FilterBar role="tablist" aria-label="지표 분야 필터">
-                <FilterChip
+            <ToolbarRow>
+              {activeCategoryCount > 1 ? (
+                <FilterBar role="tablist" aria-label="지표 분야 필터">
+                  <FilterChip
+                    type="button"
+                    role="tab"
+                    aria-selected={activeCategory === 'ALL'}
+                    $active={activeCategory === 'ALL'}
+                    onClick={() => {
+                      setCategoryFilter('ALL')
+                      setShowAllCharts(false)
+                    }}
+                  >
+                    전체 <FilterCount>{allSeries.length}</FilterCount>
+                  </FilterChip>
+                  {(['economic', 'demographic', 'development'] as const).map(
+                    (cat) =>
+                      categoryCounts[cat] > 0 ? (
+                        <FilterChip
+                          key={cat}
+                          type="button"
+                          role="tab"
+                          aria-selected={activeCategory === cat}
+                          $active={activeCategory === cat}
+                          onClick={() => {
+                            setCategoryFilter(cat)
+                            setShowAllCharts(false)
+                          }}
+                        >
+                          {INDICATOR_META[cat].label}{' '}
+                          <FilterCount>{categoryCounts[cat]}</FilterCount>
+                        </FilterChip>
+                      ) : null,
+                  )}
+                </FilterBar>
+              ) : (
+                <span />
+              )}
+
+              <ViewSwitch role="tablist" aria-label="지표 추이 보기 방식">
+                <ViewSwitchBtn
                   type="button"
                   role="tab"
-                  aria-selected={activeCategory === 'ALL'}
-                  $active={activeCategory === 'ALL'}
-                  onClick={() => {
-                    setCategoryFilter('ALL')
-                    setShowAllCharts(false)
-                  }}
+                  aria-selected={viewMode === 'chart'}
+                  $active={viewMode === 'chart'}
+                  onClick={() => setViewMode('chart')}
                 >
-                  전체 <FilterCount>{allSeries.length}</FilterCount>
-                </FilterChip>
-                {(['economic', 'demographic', 'development'] as const).map(
-                  (cat) =>
-                    categoryCounts[cat] > 0 ? (
-                      <FilterChip
-                        key={cat}
-                        type="button"
-                        role="tab"
-                        aria-selected={activeCategory === cat}
-                        $active={activeCategory === cat}
-                        onClick={() => {
-                          setCategoryFilter(cat)
-                          setShowAllCharts(false)
-                        }}
-                      >
-                        {INDICATOR_META[cat].label}{' '}
-                        <FilterCount>{categoryCounts[cat]}</FilterCount>
-                      </FilterChip>
-                    ) : null,
-                )}
-              </FilterBar>
-            )}
-            <GridContainer>
-              <Grid>
-                {visibleSeries.map((series) => (
-                  <IndicatorTrendChart
-                    key={series.key}
-                    id={`trend-chart-${series.key}`}
-                    title={series.title}
-                    caption={series.caption}
-                    points={series.points}
-                    unit={series.unit}
-                    categoryLabel={INDICATOR_META[series.category].label}
-                    highlighted={selectedSeriesKey === series.key}
-                  />
-                ))}
-              </Grid>
-            </GridContainer>
-            {(hiddenChartCount > 0 ||
-              (showAllCharts && filteredSeries.length > defaultLimit)) && (
-              <MoreChartsRow>
-                <MoreChartsBtn
+                  추이 차트
+                </ViewSwitchBtn>
+                <ViewSwitchBtn
                   type="button"
-                  onClick={() => setShowAllCharts((prev) => !prev)}
+                  role="tab"
+                  aria-selected={viewMode === 'ledger'}
+                  $active={viewMode === 'ledger'}
+                  onClick={() => setViewMode('ledger')}
                 >
-                  {showAllCharts
-                    ? '핵심 추이 차트만 보기'
-                    : `추이 차트 더보기 (+${hiddenChartCount}개 지표)`}
-                </MoreChartsBtn>
-              </MoreChartsRow>
+                  수치 원장
+                </ViewSwitchBtn>
+              </ViewSwitch>
+            </ToolbarRow>
+
+            {viewMode === 'chart' ? (
+              <>
+                <GridContainer>
+                  <Grid>
+                    {visibleSeries.map((series) => (
+                      <IndicatorTrendChart
+                        key={series.key}
+                        id={`trend-chart-${series.key}`}
+                        title={series.title}
+                        caption={series.caption}
+                        points={series.points}
+                        unit={series.unit}
+                        categoryLabel={INDICATOR_META[series.category].label}
+                        highlighted={selectedSeriesKey === series.key}
+                      />
+                    ))}
+                  </Grid>
+                </GridContainer>
+                {(hiddenChartCount > 0 ||
+                  (showAllCharts && filteredSeries.length > defaultLimit)) && (
+                  <MoreChartsRow>
+                    <MoreChartsBtn
+                      type="button"
+                      onClick={() => setShowAllCharts((prev) => !prev)}
+                    >
+                      {showAllCharts
+                        ? '핵심 추이 차트만 보기'
+                        : `추이 차트 더보기 (+${hiddenChartCount}개 지표)`}
+                    </MoreChartsBtn>
+                  </MoreChartsRow>
+                )}
+              </>
+            ) : (
+              <LedgerContainer>
+                <LedgerGrid>
+                  {filteredSpecs.map((spec) => {
+                    const deltaUnit = spec.unit === '%' ? '%p' : spec.unit
+                    const deltaSign =
+                      spec.delta != null && spec.delta > 0 ? '+' : ''
+                    return (
+                      <LedgerItem
+                        key={spec.key}
+                        $highlighted={selectedSeriesKey === spec.key}
+                      >
+                        <LedgerHeader>
+                          <HeadlineTitleGroup>
+                            <HeadlineCatTag>{spec.categoryLabel}</HeadlineCatTag>
+                            <LedgerTitle>{spec.title}</LedgerTitle>
+                          </HeadlineTitleGroup>
+                          <LedgerMeta>
+                            {spec.firstYear != null && spec.latestYear != null
+                              ? spec.firstYear === spec.latestYear
+                                ? `${spec.latestYear}년 (1개년)`
+                                : `${spec.firstYear}–${spec.latestYear}년 (${spec.pointCount}개년)`
+                              : `${spec.pointCount}개년`}
+                          </LedgerMeta>
+                        </LedgerHeader>
+                        <LedgerSummaryRow>
+                          <LedgerPrimaryVal>
+                            {spec.latestValue != null
+                              ? formatMetricValue(spec.latestValue, spec.unit)
+                              : '—'}
+                            {spec.latestYear != null && (
+                              <LedgerYearNote>
+                                ({spec.latestYear}년)
+                              </LedgerYearNote>
+                            )}
+                          </LedgerPrimaryVal>
+                          {spec.delta != null &&
+                            spec.prevYear != null &&
+                            Math.abs(spec.delta) > 1e-6 && (
+                              <HeadlineDelta $tone={spec.deltaTone}>
+                                {spec.prevYear}년 대비 {deltaSign}
+                                {formatMetricValue(spec.delta, deltaUnit)}
+                              </HeadlineDelta>
+                            )}
+                          {spec.pointCount >= 2 &&
+                            spec.minVal != null &&
+                            spec.maxVal != null && (
+                              <LedgerRangeSpan>
+                                범위 {formatMetricValue(spec.minVal, spec.unit, true)} ~{' '}
+                                {formatMetricValue(spec.maxVal, spec.unit, true)}
+                              </LedgerRangeSpan>
+                            )}
+                        </LedgerSummaryRow>
+                        <LedgerYearsRow>
+                          {spec.recentPoints.map((pt) => (
+                            <LedgerYearCell key={pt.year}>
+                              <LedgerYearKey>{pt.year}년</LedgerYearKey>
+                              <LedgerYearVal>
+                                {formatMetricValue(pt.value, spec.unit, true)}
+                              </LedgerYearVal>
+                            </LedgerYearCell>
+                          ))}
+                        </LedgerYearsRow>
+                      </LedgerItem>
+                    )
+                  })}
+                </LedgerGrid>
+              </LedgerContainer>
             )}
           </>
         )
@@ -478,11 +648,52 @@ export function IndicatorTrendsSection({
 
 const HeadlineStrip = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 8px 20px;
-  padding: 12px 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const HeadlineCellSlot = styled.div`
+  min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
 `
 
 const HeadlineCell = styled.button<{ $active?: boolean }>`
@@ -490,6 +701,7 @@ const HeadlineCell = styled.button<{ $active?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 3px;
+  width: 100%;
   min-width: 0;
   padding: 6px 8px;
   margin: -6px -8px;
@@ -506,6 +718,14 @@ const HeadlineCell = styled.button<{ $active?: boolean }>`
     background: ${({ theme, $active }) =>
       $active ? theme.colors.activeLight : theme.colors.hover};
   }
+`
+
+const HeadlineStaticCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
 `
 
 const HeadlineTop = styled.div`
@@ -613,10 +833,177 @@ const MoreChartsBtn = styled.button`
   }
 `
 
+const ToolbarRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+`
+
 const FilterBar = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+`
+
+const ViewSwitch = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+`
+
+const ViewSwitchBtn = styled.button<{ $active: boolean }>`
+  appearance: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const LedgerContainer = styled.div`
+  container-type: inline-size;
+`
+
+const LedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @container (min-width: 740px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const LedgerItem = styled.div<{ $highlighted?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 4px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme, $highlighted }) =>
+    $highlighted ? theme.colors.activeLight : 'transparent'};
+
+  @container (min-width: 740px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 18px;
+    }
+    &:nth-child(even) {
+      padding-left: 18px;
+    }
+  }
+`
+
+const LedgerHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const LedgerTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const LedgerMeta = styled.span`
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LedgerSummaryRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+`
+
+const LedgerPrimaryVal = styled.strong`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const LedgerYearNote = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LedgerRangeSpan = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LedgerYearsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding-top: 8px;
+  gap: 6px 10px;
+`
+
+const LedgerYearCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding-right: 8px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:last-child {
+    border-right: none;
+    padding-right: 0;
+  }
+`
+
+const LedgerYearKey = styled.span`
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LedgerYearVal = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const FilterChip = styled.button<{ $active: boolean }>`

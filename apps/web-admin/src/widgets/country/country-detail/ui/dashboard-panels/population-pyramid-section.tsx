@@ -26,10 +26,7 @@ import { CountryDataManagerModal } from '../country-data-manager/country-data-ma
 import { ChartEmpty } from './chart-empty'
 import { ChartSkeleton } from './chart-skeleton'
 import { SectionHelpPopover } from './section-help-popover'
-import {
-  IconChart,
-  IconUsers,
-} from '../country-detail-dashboard.icons'
+import { IconUsers } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 
 import {
@@ -198,6 +195,7 @@ export function PopulationPyramidSection({
 
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [ghostOn, setGhostOn] = useState(true)
+  const [viewMode, setViewMode] = useState<'chart' | 'ledger'>('chart')
 
   // 기본은 가장 최근 해. 국가를 바꿔 목록이 갈리면 선택도 따라 옮긴다.
   useEffect(() => {
@@ -313,49 +311,7 @@ export function PopulationPyramidSection({
           hint="2개 연도 이상 등록하면 가장 이른 기준 연도의 윤곽선이 함께 겹쳐져 고령화 추이를 비교합니다"
           actionLabel="연령·성별 인구 등록"
           onAction={() => setManagerOpen(true)}
-        >
-          <ChartBox>
-            <ResponsiveContainer
-              width="100%"
-              height={5 * ROW_HEIGHT + 16}
-            >
-              <BarChart
-                data={[...AGE_BRACKETS.slice(0, 5)].reverse().map((bracket) => ({
-                  bracket: bracket.label,
-                  value: 0,
-                }))}
-                layout="vertical"
-                margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
-              >
-                <CartesianGrid
-                  horizontal={false}
-                  stroke={isDark ? 'rgba(255,255,255,0.07)' : '#eef1f5'}
-                />
-                <XAxis
-                  type="number"
-                  domain={[-1, 1]}
-                  ticks={[-1, -0.5, 0, 0.5, 1]}
-                  /* 값이 없으니 눈금 '숫자'는 비운다 — 채우면 거짓이 된다 */
-                  tick={false}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="bracket"
-                  width={54}
-                  tick={{ fontSize: 12.5, fill: theme.colors.text.primary }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <ReferenceLine
-                  x={0}
-                  stroke={isDark ? 'rgba(255,255,255,0.22)' : '#cbd5e1'}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartBox>
-        </ChartEmpty>
+        />
         {manager}
       </S.Section>
     )
@@ -369,6 +325,23 @@ export function PopulationPyramidSection({
       : 'rgba(15,23,42,0.55)'
     : null
   const ghostHalo = isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.9)'
+
+  const maleShare =
+    current && current.totals.total > 0
+      ? (current.totals.male / current.totals.total) * 100
+      : 0
+  const femaleShare =
+    current && current.totals.total > 0
+      ? (current.totals.female / current.totals.total) * 100
+      : 0
+  const sexRatioText =
+    current && current.totals.female > 0
+      ? ((current.totals.male / current.totals.female) * 100).toFixed(1)
+      : '—'
+  const agingIndexText =
+    shares && shares.young > 0
+      ? ((shares.old / shares.young) * 100).toFixed(1)
+      : null
 
   return (
     <S.Section $wide>
@@ -393,91 +366,68 @@ export function PopulationPyramidSection({
 
       {current && (
         <>
-          <StatsRow>
-            <Headline>
+          <HeadlineStrip aria-label={`${current.year}년 인구 피라미드 핵심 요약`}>
+            <HeadlineCell>
               <HeadlineLabel>{current.year}년 총인구</HeadlineLabel>
               <HeadlineValue>
                 {current.totals.total.toLocaleString()}
                 <HeadlineUnit>명</HeadlineUnit>
               </HeadlineValue>
-              {growth != null && previous && (
+              {growth != null && previous ? (
                 <HeadlineDelta $tone={growth >= 0 ? 'up' : 'down'}>
                   {previous.year}년 대비 {growth >= 0 ? '+' : '−'}
-                  {Math.abs(growth).toLocaleString()}
+                  {Math.abs(growth).toLocaleString()}명
                 </HeadlineDelta>
+              ) : (
+                <HeadlineSubNote>
+                  {years.length > 1
+                    ? `${years[0].year}–${years[years.length - 1].year}년 (${years.length}개년 관측)`
+                    : `${current.year}년 단일 관측 기록`}
+                </HeadlineSubNote>
               )}
-            </Headline>
+            </HeadlineCell>
 
-            <StatGrid>
-              <Stat>
-                <StatLabel $dot={colors.male}>남성</StatLabel>
-                <StatValue>
-                  {current.totals.male.toLocaleString()}
-                  <StatSub>
-                    {percent((current.totals.male / current.totals.total) * 100)}
-                  </StatSub>
-                </StatValue>
-              </Stat>
-              <Stat>
-                <StatLabel $dot={colors.female}>여성</StatLabel>
-                <StatValue>
-                  {current.totals.female.toLocaleString()}
-                  <StatSub>
-                    {percent(
-                      (current.totals.female / current.totals.total) * 100,
-                    )}
-                  </StatSub>
-                </StatValue>
-              </Stat>
-              {shares && (
-                <>
-                  <Stat>
-                    <StatLabel>{shares.youngLabel}</StatLabel>
-                    <StatValue>{percent(shares.young)}</StatValue>
-                  </Stat>
-                  {workingShare != null && (
-                    <Stat>
-                      <StatLabel>20–59세 (핵심 생산연령)</StatLabel>
-                      <StatValue>{percent(workingShare)}</StatValue>
-                    </Stat>
-                  )}
-                  <Stat>
-                    <StatLabel>{shares.oldLabel}</StatLabel>
-                    <StatValue>{percent(shares.old)}</StatValue>
-                  </Stat>
-                  {shares.young > 0 && (
-                    <Stat>
-                      <StatLabel>노령화지수 (유소년 100당 고령)</StatLabel>
-                      <StatValue>
-                        {((shares.old / shares.young) * 100).toFixed(1)}
-                      </StatValue>
-                    </Stat>
-                  )}
-                </>
-              )}
-              {peakBracket && (
-                <Stat>
-                  <StatLabel>최다 연령층</StatLabel>
-                  <StatValue>
-                    {peakBracket.label}
-                    <StatSub>{percent(peakBracket.share)}</StatSub>
-                  </StatValue>
-                </Stat>
-              )}
-              <Stat>
-                {/* '98.0'만 두면 무엇 대비인지 알 수 없다 — 분모를 라벨에 적는다 */}
-                <StatLabel>성비 (여 100당 남)</StatLabel>
-                <StatValue>
-                  {current.totals.female > 0
-                    ? (
-                        (current.totals.male / current.totals.female) *
-                        100
-                      ).toFixed(1)
+            <HeadlineCell>
+              <HeadlineLabel>남녀 구성 · 성비 (여 100당 남)</HeadlineLabel>
+              <HeadlineValue>
+                성비 {sexRatioText}
+              </HeadlineValue>
+              <HeadlineSubNote>
+                <DotInline $color={colors.male} />남{' '}
+                {compact(current.totals.male)} ({percent(maleShare)}) ·{' '}
+                <DotInline $color={colors.female} />여{' '}
+                {compact(current.totals.female)} ({percent(femaleShare)})
+              </HeadlineSubNote>
+            </HeadlineCell>
+
+            <HeadlineCell>
+              <HeadlineLabel>연령 3구간 비중 (핵심 생산연령)</HeadlineLabel>
+              <HeadlineValue>
+                20–59세 {workingShare != null ? percent(workingShare) : '—'}
+              </HeadlineValue>
+              <HeadlineSubNote>
+                {shares
+                  ? `${shares.youngLabel} ${percent(shares.young)} · ${shares.oldLabel} ${percent(shares.old)}`
+                  : '연령 구간 미집계'}
+              </HeadlineSubNote>
+            </HeadlineCell>
+
+            <HeadlineCell>
+              <HeadlineLabel>고령화 · 최다 연령층</HeadlineLabel>
+              <HeadlineValue>
+                {agingIndexText != null
+                  ? `노령화지수 ${agingIndexText}`
+                  : shares
+                    ? `${shares.oldLabel} ${percent(shares.old)}`
                     : '—'}
-                </StatValue>
-              </Stat>
-            </StatGrid>
-          </StatsRow>
+              </HeadlineValue>
+              <HeadlineSubNote>
+                {peakBracket
+                  ? `최다 연령층: ${peakBracket.label} (${percent(peakBracket.share)})`
+                  : '연령대 데이터 없음'}
+              </HeadlineSubNote>
+            </HeadlineCell>
+          </HeadlineStrip>
 
           {shares && workingShare != null && (
             <AgeStructureBar aria-label="연령대별 인구 비중 구성">
@@ -512,8 +462,8 @@ export function PopulationPyramidSection({
             </AgeStructureBar>
           )}
 
-          {baseline && baseline.year !== current.year && (
-            <ChartToolbar>
+          <ChartToolbar>
+            {baseline && baseline.year !== current.year && viewMode === 'chart' ? (
               <GhostToggle
                 type="button"
                 aria-pressed={ghostOn}
@@ -523,103 +473,185 @@ export function PopulationPyramidSection({
                 <GhostSwatch aria-hidden="true" />
                 {baseline.year}년 윤곽 겹치기
               </GhostToggle>
-            </ChartToolbar>
-          )}
+            ) : (
+              <span />
+            )}
 
-          <ChartBox>
-            <ResponsiveContainer
-              width="100%"
-              height={chartRows.length * ROW_HEIGHT + 44}
-            >
-              <BarChart
-                data={chartRows}
-                layout="vertical"
-                stackOffset="sign"
-                margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
+            <ViewSwitch role="tablist" aria-label="인구 피라미드 보기 방식">
+              <ViewSwitchBtn
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'chart'}
+                $active={viewMode === 'chart'}
+                onClick={() => setViewMode('chart')}
               >
-                <CartesianGrid
-                  horizontal={false}
-                  stroke={isDark ? 'rgba(255,255,255,0.07)' : '#eef1f5'}
-                />
-                <XAxis
-                  type="number"
-                  domain={[-axis.max, axis.max]}
-                  ticks={axisTicks}
-                  tickFormatter={(value: number) =>
-                    value === 0 ? '0' : compact(value)
-                  }
-                  tick={{ fontSize: 12, fill: theme.colors.text.secondary }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="bracket"
-                  width={54}
-                  tick={{ fontSize: 12.5, fill: theme.colors.text.primary }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <ReferenceLine
-                  x={0}
-                  stroke={isDark ? 'rgba(255,255,255,0.22)' : '#cbd5e1'}
-                />
-                <Tooltip
-                  cursor={{
-                    fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                  }}
-                  content={(props) => (
-                    <PyramidTooltip
-                      active={props.active}
-                      row={
-                        (props.payload?.[0]?.payload as ChartRow | undefined) ??
-                        null
-                      }
-                      total={current.totals.total}
-                      year={current.year}
-                      ghostYear={ghostYear?.year ?? null}
-                      colors={colors}
-                    />
-                  )}
-                />
-                {/* 남성은 축 왼쪽 — 음수로 그리고 라벨만 절댓값으로 되돌린다 */}
-                <Bar
-                  dataKey="maleSigned"
-                  name="남성"
-                  stackId="pyramid"
-                  barSize={BAR_THICKNESS}
-                  isAnimationActive={false}
-                  activeBar={false}
-                  shape={(shapeProps: unknown) => (
-                    <PyramidBar
-                      {...(shapeProps as BarShapeArgs)}
-                      side="male"
-                      fill={colors.male}
-                      ghostInk={ghostInk}
-                      ghostHalo={ghostHalo}
-                    />
-                  )}
-                />
-                <Bar
-                  dataKey="female"
-                  name="여성"
-                  stackId="pyramid"
-                  barSize={BAR_THICKNESS}
-                  isAnimationActive={false}
-                  activeBar={false}
-                  shape={(shapeProps: unknown) => (
-                    <PyramidBar
-                      {...(shapeProps as BarShapeArgs)}
-                      side="female"
-                      fill={colors.female}
-                      ghostInk={ghostInk}
-                      ghostHalo={ghostHalo}
-                    />
-                  )}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartBox>
+                피라미드 차트
+              </ViewSwitchBtn>
+              <ViewSwitchBtn
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'ledger'}
+                $active={viewMode === 'ledger'}
+                onClick={() => setViewMode('ledger')}
+              >
+                연령대 원장
+              </ViewSwitchBtn>
+            </ViewSwitch>
+          </ChartToolbar>
+
+          {viewMode === 'chart' ? (
+            <ChartBox>
+              <ResponsiveContainer
+                width="100%"
+                height={chartRows.length * ROW_HEIGHT + 44}
+              >
+                <BarChart
+                  data={chartRows}
+                  layout="vertical"
+                  stackOffset="sign"
+                  margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
+                >
+                  <CartesianGrid
+                    horizontal={false}
+                    stroke={isDark ? 'rgba(255,255,255,0.07)' : '#eef1f5'}
+                  />
+                  <XAxis
+                    type="number"
+                    domain={[-axis.max, axis.max]}
+                    ticks={axisTicks}
+                    tickFormatter={(value: number) =>
+                      value === 0 ? '0' : compact(value)
+                    }
+                    tick={{ fontSize: 12, fill: theme.colors.text.secondary }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="bracket"
+                    width={54}
+                    tick={{ fontSize: 12.5, fill: theme.colors.text.primary }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <ReferenceLine
+                    x={0}
+                    stroke={isDark ? 'rgba(255,255,255,0.22)' : '#cbd5e1'}
+                  />
+                  <Tooltip
+                    cursor={{
+                      fill: isDark
+                        ? 'rgba(255,255,255,0.05)'
+                        : 'rgba(0,0,0,0.03)',
+                    }}
+                    content={(props) => (
+                      <PyramidTooltip
+                        active={props.active}
+                        row={
+                          (props.payload?.[0]?.payload as
+                            | ChartRow
+                            | undefined) ?? null
+                        }
+                        total={current.totals.total}
+                        year={current.year}
+                        ghostYear={ghostYear?.year ?? null}
+                        colors={colors}
+                      />
+                    )}
+                  />
+                  {/* 남성은 축 왼쪽 — 음수로 그리고 라벨만 절댓값으로 되돌린다 */}
+                  <Bar
+                    dataKey="maleSigned"
+                    name="남성"
+                    stackId="pyramid"
+                    barSize={BAR_THICKNESS}
+                    isAnimationActive={false}
+                    activeBar={false}
+                    shape={(shapeProps: unknown) => (
+                      <PyramidBar
+                        {...(shapeProps as BarShapeArgs)}
+                        side="male"
+                        fill={colors.male}
+                        ghostInk={ghostInk}
+                        ghostHalo={ghostHalo}
+                      />
+                    )}
+                  />
+                  <Bar
+                    dataKey="female"
+                    name="여성"
+                    stackId="pyramid"
+                    barSize={BAR_THICKNESS}
+                    isAnimationActive={false}
+                    activeBar={false}
+                    shape={(shapeProps: unknown) => (
+                      <PyramidBar
+                        {...(shapeProps as BarShapeArgs)}
+                        side="female"
+                        fill={colors.female}
+                        ghostInk={ghostInk}
+                        ghostHalo={ghostHalo}
+                      />
+                    )}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartBox>
+          ) : (
+            <LedgerContainer>
+              <LedgerGrid>
+                {current.rows.map((row) => {
+                  const rowShare =
+                    current.totals.total > 0
+                      ? (row.total / current.totals.total) * 100
+                      : 0
+                  const baseRow =
+                    baseline && baseline.year !== current.year
+                      ? baseline.rows.find((r) => r.bracket === row.bracket)
+                      : null
+                  const deltaVsBase =
+                    baseRow != null ? row.total - baseRow.total : null
+                  const rowSexRatio =
+                    row.female > 0
+                      ? ((row.male / row.female) * 100).toFixed(1)
+                      : '—'
+                  return (
+                    <LedgerItem key={row.bracket}>
+                      <LedgerHeader>
+                        <LedgerTitle>
+                          {bracketFormLabel(row.bracket)}
+                        </LedgerTitle>
+                        <LedgerShareBadge>{percent(rowShare)}</LedgerShareBadge>
+                      </LedgerHeader>
+                      <LedgerSummaryRow>
+                        <LedgerPrimaryVal>
+                          {row.total.toLocaleString()}명
+                        </LedgerPrimaryVal>
+                        {deltaVsBase != null && baseline && (
+                          <HeadlineDelta $tone={deltaVsBase >= 0 ? 'up' : 'down'}>
+                            {baseline.year}년 대비{' '}
+                            {deltaVsBase >= 0 ? '+' : '−'}
+                            {Math.abs(deltaVsBase).toLocaleString()}명
+                          </HeadlineDelta>
+                        )}
+                      </LedgerSummaryRow>
+                      <LedgerSexRow>
+                        <LedgerSexItem>
+                          <DotInline $color={colors.male} />남{' '}
+                          {row.male.toLocaleString()}명
+                        </LedgerSexItem>
+                        <LedgerSexItem>
+                          <DotInline $color={colors.female} />여{' '}
+                          {row.female.toLocaleString()}명
+                        </LedgerSexItem>
+                        <LedgerSexRatio>성비 {rowSexRatio}</LedgerSexRatio>
+                      </LedgerSexRow>
+                    </LedgerItem>
+                  )
+                })}
+              </LedgerGrid>
+            </LedgerContainer>
+          )}
         </>
       )}
     </S.Section>
@@ -712,50 +744,86 @@ function Title({
   )
 }
 
-const StatsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px 32px;
-  padding: 14px 0;
+const HeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   margin-bottom: 10px;
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
 `
 
-const Headline = styled.div`
+const HeadlineCell = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
 `
 
 const HeadlineLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeadlineValue = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const HeadlineUnit = styled.span`
   font-size: 12.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-/* 큰 숫자엔 고정폭 숫자를 쓰지 않는다 — 자릿수가 벌어져 헐거워 보인다 */
-const HeadlineValue = styled.span`
-  display: flex;
-  align-items: baseline;
-  gap: 3px;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const HeadlineUnit = styled.span`
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 const HeadlineDelta = styled.span<{ $tone: 'up' | 'down' }>`
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ $tone, theme }) =>
     $tone === 'up'
@@ -767,52 +835,27 @@ const HeadlineDelta = styled.span<{ $tone: 'up' | 'down' }>`
         : '#b91c1c'};
 `
 
-const StatGrid = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 26px;
-`
-
-const Stat = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-`
-
-const StatLabel = styled.span<{ $dot?: string }>`
+const HeadlineSubNote = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  ${({ $dot }) =>
-    $dot &&
-    `&::before {
-      content: '';
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: ${$dot};
-    }`}
-`
-
-const StatValue = styled.span`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 15.5px;
-  font-weight: 700;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
-const StatSub = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+const DotInline = styled.span<{ $color: string }>`
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
 `
 
 const AgeStructureBar = styled.div`
@@ -872,8 +915,11 @@ const AgeLegendItem = styled.span<{ $tone: 'young' | 'working' | 'old' }>`
 
 const ChartToolbar = styled.div`
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: -6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 6px;
 `
 
 const GhostToggle = styled.button<{ $on: boolean }>`
@@ -886,7 +932,7 @@ const GhostToggle = styled.button<{ $on: boolean }>`
   background: ${({ $on, theme }) =>
     $on ? theme.colors.background.tertiary : 'transparent'};
   color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 
@@ -903,6 +949,130 @@ const GhostSwatch = styled.span`
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.62)' : 'rgba(15,23,42,0.55)'};
   border-left: none;
+`
+
+const ViewSwitch = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+`
+
+const ViewSwitchBtn = styled.button<{ $active: boolean }>`
+  appearance: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const LedgerContainer = styled.div`
+  container-type: inline-size;
+`
+
+const LedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @container (min-width: 680px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const LedgerItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px 4px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @container (min-width: 680px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 18px;
+    }
+    &:nth-child(even) {
+      padding-left: 18px;
+    }
+  }
+`
+
+const LedgerHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const LedgerTitle = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const LedgerShareBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
+const LedgerSummaryRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+`
+
+const LedgerPrimaryVal = styled.strong`
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const LedgerSexRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const LedgerSexItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+`
+
+const LedgerSexRatio = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const ChartBox = styled.div`

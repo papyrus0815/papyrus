@@ -51,6 +51,7 @@ export function BondYieldSection({
 }: BondYieldSectionProps) {
   const [managerOpen, setManagerOpen] = useState(false)
   const [pickedYear, setPickedYear] = useState<number | null>(null)
+  const [viewMode, setViewMode] = useState<'chart' | 'ledger'>('chart')
   const bondQuery = useBondYields(countryId)
 
   const model = useMemo(() => {
@@ -127,18 +128,33 @@ export function BondYieldSection({
 
       const maturitySpecs = points.map((pt) => {
         const priorPt = priorPoints.find((p) => p.maturity === pt.maturity)
+        const historyPoints = years
+          .map((y) => {
+            const found = byYear
+              .get(y)
+              ?.find((p) => p.maturity === pt.maturity)
+            return found ? { year: y, value: found.value } : null
+          })
+          .filter((item): item is { year: number; value: number } => item != null)
         return {
           maturity: pt.maturity,
           label: bondMaturityLabel(pt.maturity),
           value: pt.value,
+          priorValue: priorPt?.value ?? null,
           deltaBp: priorPt != null ? pt.value - priorPt.value : null,
+          spreadVsBenchmark:
+            benchmarkYield != null && pt.maturity !== benchmark
+              ? pt.value - benchmarkYield
+              : null,
           isBenchmark: pt.maturity === benchmark,
+          recentHistory: historyPoints.slice(-6).reverse(),
         }
       })
 
       return {
         benchmarkYield,
         priorYear,
+        priorYield,
         deltaBp,
         spread,
         shortLeg: shortLeg ?? null,
@@ -146,12 +162,20 @@ export function BondYieldSection({
       }
     }
 
+    const benchmarkValues = trendPoints.map((pt) => pt.value)
+    const minBenchmarkYield =
+      benchmarkValues.length > 0 ? Math.min(...benchmarkValues) : null
+    const maxBenchmarkYield =
+      benchmarkValues.length > 0 ? Math.max(...benchmarkValues) : null
+
     return {
       byYear,
       years,
       latestYear,
       benchmark,
       trendPoints,
+      minBenchmarkYield,
+      maxBenchmarkYield,
       statsFor,
       maturityCount: new Set(rows.map((row) => row.maturity)).size,
     }
@@ -234,67 +258,97 @@ export function BondYieldSection({
           hint="동일 연도에 단기(2년물)와 장기(10년물) 금리를 함께 입력하면 장단기 금리차(스프레드)가 자동 계산됩니다"
           actionLabel="국채 금리 등록"
           onAction={() => setManagerOpen(true)}
-        >
-          <GridContainer>
-            <Grid>
-              <BondYieldCurve
-                title="수익률 곡선"
-                caption="한 해의 만기별 국채 금리"
-                series={[]}
-              />
-              <IndicatorTrendChart
-                title="10년물 금리 추이"
-                caption="대표 만기 국채 수익률"
-                points={[]}
-              />
-            </Grid>
-          </GridContainer>
-        </ChartEmpty>
+        />
       ) : (
         <>
-          <Headline>
-            <HeadlineMain>
+          <HeadlineStrip aria-label={`${curveYear}년 국채 금리 핵심 요약`}>
+            <HeadlineCell>
               <HeadlineLabel>
-                {curveYear}년 {benchmarkLabel}물
+                {curveYear}년 기준물 ({benchmarkLabel}물)
               </HeadlineLabel>
               <HeadlineValue>
                 {stats?.benchmarkYield != null
                   ? formatYield(stats.benchmarkYield)
                   : '—'}
               </HeadlineValue>
-            </HeadlineMain>
-            {stats?.deltaBp != null && stats.priorYear != null && (
-              <HeadlineStat>
-                <HeadlineLabel>{stats.priorYear}년 대비</HeadlineLabel>
-                <HeadlineStatValue $tone={stats.deltaBp >= 0 ? 'up' : 'down'}>
-                  {formatBasisPoints(stats.deltaBp)}
-                </HeadlineStatValue>
-              </HeadlineStat>
-            )}
-            {stats?.spread != null && stats.shortLeg != null && (
-              <HeadlineStat>
-                <HeadlineLabel>
-                  장단기 스프레드 ({benchmarkLabel} −{' '}
-                  {bondMaturityLabel(stats.shortLeg.maturity)})
-                </HeadlineLabel>
-                <HeadlineStatValue $tone={stats.spread < 0 ? 'down' : 'flat'}>
-                  {formatBasisPoints(stats.spread)}
-                  {/*
-                    장단기 역전은 이 지면에서 유일하게 '경고'로 읽혀야 하는 값이다 —
-                    긴 돈이 짧은 돈보다 싸다는 건 시장이 앞날을 어둡게 본다는 뜻이라
-                    숫자만으로는 그 뜻이 전달되지 않는다.
-                  */}
-                  {stats.spread < 0 ? (
-                    <InvertedTag>장단기 역전</InvertedTag>
-                  ) : stats.spread < 0.25 ? (
-                    <CurveShapeTag>평탄화</CurveShapeTag>
-                  ) : (
-                    <CurveShapeTag $normal>정상 우상향</CurveShapeTag>
-                  )}
-                </HeadlineStatValue>
-              </HeadlineStat>
-            )}
-          </Headline>
+              <HeadlineSubNote>
+                {stats
+                  ? `${curveYear}년 등록 만기 ${stats.maturitySpecs.length}종`
+                  : '관측 기록 없음'}
+              </HeadlineSubNote>
+            </HeadlineCell>
+
+            <HeadlineCell>
+              <HeadlineLabel>직전 관측 대비 증감</HeadlineLabel>
+              {stats?.deltaBp != null && stats.priorYear != null ? (
+                <>
+                  <HeadlineStatValue $tone={stats.deltaBp >= 0 ? 'up' : 'down'}>
+                    {formatBasisPoints(stats.deltaBp)}
+                  </HeadlineStatValue>
+                  <HeadlineSubNote>
+                    {stats.priorYear}년 (
+                    {stats.priorYield != null
+                      ? formatYield(stats.priorYield)
+                      : '—'}
+                    ) 대비
+                  </HeadlineSubNote>
+                </>
+              ) : (
+                <>
+                  <HeadlineStatValue $tone="flat">
+                    비교 연도 없음
+                  </HeadlineStatValue>
+                  <HeadlineSubNote>
+                    직전 관측 연도 데이터 미등록
+                  </HeadlineSubNote>
+                </>
+              )}
+            </HeadlineCell>
+
+            <HeadlineCell>
+              <HeadlineLabel>장단기 금리차 (스프레드)</HeadlineLabel>
+              {stats?.spread != null && stats.shortLeg != null ? (
+                <>
+                  <HeadlineStatValue $tone={stats.spread < 0 ? 'down' : 'flat'}>
+                    {formatBasisPoints(stats.spread)}
+                    {stats.spread < 0 ? (
+                      <InvertedTag>장단기 역전</InvertedTag>
+                    ) : stats.spread < 0.25 ? (
+                      <CurveShapeTag>평탄화</CurveShapeTag>
+                    ) : (
+                      <CurveShapeTag $normal>정상 우상향</CurveShapeTag>
+                    )}
+                  </HeadlineStatValue>
+                  <HeadlineSubNote>
+                    {benchmarkLabel}물 −{' '}
+                    {bondMaturityLabel(stats.shortLeg.maturity)}물 수익률 차
+                  </HeadlineSubNote>
+                </>
+              ) : (
+                <>
+                  <HeadlineStatValue $tone="flat">산출 불가</HeadlineStatValue>
+                  <HeadlineSubNote>
+                    동일 연도 단기물(2년·1년) 입력 필요
+                  </HeadlineSubNote>
+                </>
+              )}
+            </HeadlineCell>
+
+            <HeadlineCell>
+              <HeadlineLabel>관측 연대 · 기준물 범위</HeadlineLabel>
+              <HeadlineStatValue $tone="flat">
+                {model.years.length > 1
+                  ? `${model.years[0]}–${model.latestYear}년 (${model.years.length}개년)`
+                  : `${model.latestYear}년 (1개년)`}
+              </HeadlineStatValue>
+              <HeadlineSubNote>
+                {model.minBenchmarkYield != null &&
+                model.maxBenchmarkYield != null
+                  ? `${benchmarkLabel}물 ${formatYield(model.minBenchmarkYield)} ~ ${formatYield(model.maxBenchmarkYield)}`
+                  : `전체 만기 ${model.maturityCount}종`}
+              </HeadlineSubNote>
+            </HeadlineCell>
+          </HeadlineStrip>
 
           {stats && stats.maturitySpecs.length > 1 && (
             <MaturityStrip aria-label={`${curveYear}년 만기별 국채 수익률 명세`}>
@@ -317,41 +371,118 @@ export function BondYieldSection({
             </MaturityStrip>
           )}
 
-          {model.years.length > 1 && (
-            <YearChips role="group" aria-label="수익률 곡선 기준 연도">
-              {model.years
-                .slice()
-                .reverse()
-                .map((year) => (
-                  <YearChip
-                    key={year}
-                    type="button"
-                    $active={year === curveYear}
-                    aria-pressed={year === curveYear}
-                    onClick={() => setPickedYear(year)}
-                  >
-                    {year}
-                  </YearChip>
-                ))}
-            </YearChips>
-          )}
+          <ToolbarRow>
+            {model.years.length > 1 ? (
+              <YearChips role="group" aria-label="수익률 곡선 기준 연도">
+                {model.years
+                  .slice()
+                  .reverse()
+                  .map((year) => (
+                    <YearChip
+                      key={year}
+                      type="button"
+                      $active={year === curveYear}
+                      aria-pressed={year === curveYear}
+                      onClick={() => setPickedYear(year)}
+                    >
+                      {year}
+                    </YearChip>
+                  ))}
+              </YearChips>
+            ) : (
+              <span />
+            )}
 
-          <GridContainer>
-            <Grid>
-              <BondYieldCurve
-                title="수익률 곡선"
-                caption={`${curveYear}년 만기별 국채 금리`}
-                series={curveSeries}
-              />
-              {model.trendPoints.length > 0 && (
-                <IndicatorTrendChart
-                  title={`${benchmarkLabel}물 금리 추이`}
-                  caption="대표 만기 국채 수익률"
-                  points={model.trendPoints}
+            <ViewSwitch role="tablist" aria-label="국채 금리 보기 방식">
+              <ViewSwitchBtn
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'chart'}
+                $active={viewMode === 'chart'}
+                onClick={() => setViewMode('chart')}
+              >
+                곡선·추이 차트
+              </ViewSwitchBtn>
+              <ViewSwitchBtn
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'ledger'}
+                $active={viewMode === 'ledger'}
+                onClick={() => setViewMode('ledger')}
+              >
+                만기·연도 원장
+              </ViewSwitchBtn>
+            </ViewSwitch>
+          </ToolbarRow>
+
+          {viewMode === 'chart' ? (
+            <GridContainer>
+              <Grid>
+                <BondYieldCurve
+                  title="수익률 곡선"
+                  caption={`${curveYear}년 만기별 국채 금리`}
+                  series={curveSeries}
                 />
-              )}
-            </Grid>
-          </GridContainer>
+                {model.trendPoints.length > 0 && (
+                  <IndicatorTrendChart
+                    title={`${benchmarkLabel}물 금리 추이`}
+                    caption="대표 만기 국채 수익률"
+                    points={model.trendPoints}
+                  />
+                )}
+              </Grid>
+            </GridContainer>
+          ) : (
+            <LedgerContainer>
+              <LedgerGrid>
+                {(stats?.maturitySpecs ?? []).map((spec) => (
+                  <LedgerItem
+                    key={spec.maturity}
+                    $highlight={spec.isBenchmark}
+                  >
+                    <LedgerHeader>
+                      <MaturityTop>
+                        <LedgerTitle>{spec.label}물 국채</LedgerTitle>
+                        {spec.isBenchmark && (
+                          <BenchmarkBadge>기준물</BenchmarkBadge>
+                        )}
+                      </MaturityTop>
+                      <LedgerMeta>{curveYear}년 기준</LedgerMeta>
+                    </LedgerHeader>
+                    <LedgerSummaryRow>
+                      <LedgerPrimaryVal>
+                        {formatYield(spec.value)}
+                      </LedgerPrimaryVal>
+                      {spec.deltaBp != null && stats?.priorYear != null && (
+                        <MaturityDelta $up={spec.deltaBp > 0}>
+                          {stats.priorYear}년 대비{' '}
+                          {formatBasisPoints(spec.deltaBp)}
+                        </MaturityDelta>
+                      )}
+                      {spec.spreadVsBenchmark != null && (
+                        <LedgerSpreadSpan>
+                          {benchmarkLabel}물 대비{' '}
+                          {formatBasisPoints(spec.spreadVsBenchmark)}
+                        </LedgerSpreadSpan>
+                      )}
+                    </LedgerSummaryRow>
+                    {spec.recentHistory.length > 0 && (
+                      <LedgerYearsRow>
+                        {spec.recentHistory.map((pt) => (
+                          <LedgerYearCell key={pt.year}>
+                            <LedgerYearKey>{pt.year}년</LedgerYearKey>
+                            <LedgerYearVal>
+                              {formatYield(pt.value)}
+                            </LedgerYearVal>
+                          </LedgerYearCell>
+                        ))}
+                      </LedgerYearsRow>
+                    )}
+                  </LedgerItem>
+                ))}
+              </LedgerGrid>
+            </LedgerContainer>
+          )}
         </>
       )}
     </S.Section>
@@ -373,40 +504,71 @@ const Grid = styled.div`
 `
 
 
-const Headline = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px 32px;
-  padding: 14px 0;
+const HeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  margin-bottom: 14px;
+  margin-bottom: 10px;
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
 `
 
-const HeadlineMain = styled.div`
+const HeadlineCell = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
-`
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
 
-const HeadlineStat = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
 `
 
 const HeadlineLabel = styled.span`
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const HeadlineValue = styled.strong`
-  font-size: 30px;
+  font-size: 20px;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.15;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -415,9 +577,12 @@ const HeadlineValue = styled.strong`
 const HeadlineStatValue = styled.span<{ $tone: 'up' | 'down' | 'flat' }>`
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: ${({ $tone, theme }) => {
     if ($tone === 'flat') return theme.colors.text.primary
@@ -425,6 +590,16 @@ const HeadlineStatValue = styled.span<{ $tone: 'up' | 'down' | 'flat' }>`
     if ($tone === 'up') return isDark ? '#fca5a5' : '#dc2626'
     return isDark ? '#7dd3fc' : '#0284c7'
   }};
+`
+
+const HeadlineSubNote = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const InvertedTag = styled.span`
@@ -464,8 +639,7 @@ const CurveShapeTag = styled.span<{ $normal?: boolean }>`
 const MaturityStrip = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-  gap: 8px 16px;
-  padding: 10px 0 12px;
+  padding: 8px 0 10px;
   margin-bottom: 12px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
@@ -475,6 +649,17 @@ const MaturityCell = styled.div<{ $highlight?: boolean }>`
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  padding: 2px 12px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
 `
 
 const MaturityTop = styled.div`
@@ -526,11 +711,19 @@ const MaturityDelta = styled.span<{ $up: boolean }>`
         : '#0284c7'};
 `
 
+const ToolbarRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 14px;
+`
+
 const YearChips = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 14px;
 `
 
 const YearChip = styled.button<{ $active: boolean }>`
@@ -547,4 +740,147 @@ const YearChip = styled.button<{ $active: boolean }>`
     $active ? theme.colors.activeLight : 'transparent'};
   color: ${({ $active, theme }) =>
     $active ? theme.colors.active : theme.colors.text.secondary};
+`
+
+const ViewSwitch = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+`
+
+const ViewSwitchBtn = styled.button<{ $active: boolean }>`
+  appearance: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const LedgerContainer = styled.div`
+  container-type: inline-size;
+`
+
+const LedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @container (min-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const LedgerItem = styled.div<{ $highlight?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 4px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme, $highlight }) =>
+    $highlight ? theme.colors.activeLight : 'transparent'};
+
+  @container (min-width: 720px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 18px;
+    }
+    &:nth-child(even) {
+      padding-left: 18px;
+    }
+  }
+`
+
+const LedgerHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const LedgerTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const LedgerMeta = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LedgerSummaryRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+`
+
+const LedgerPrimaryVal = styled.strong`
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const LedgerSpreadSpan = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LedgerYearsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding-top: 8px;
+  gap: 6px 10px;
+`
+
+const LedgerYearCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding-right: 8px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:last-child {
+    border-right: none;
+    padding-right: 0;
+  }
+`
+
+const LedgerYearKey = styled.span`
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LedgerYearVal = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
 `

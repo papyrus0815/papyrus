@@ -178,20 +178,51 @@ export function CountryCompaniesSection({
     .filter(Number.isFinite)
   const earliestYear =
     foundedYears.length > 0 ? Math.min(...foundedYears) : null
+  const latestFoundedYear =
+    foundedYears.length > 0 ? Math.max(...foundedYears) : null
+  const historicalCompanyCount = countryId
+    ? companies.filter((c) => c.historicalCountryId && !c.countryId).length
+    : 0
 
-  const topCitiesText = (() => {
-    const counts = new Map<string, number>()
-    for (const c of companies) {
-      const city = c.headquartersCity?.name?.trim()
-      if (city) counts.set(city, (counts.get(city) ?? 0) + 1)
-    }
-    if (counts.size === 0) return null
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([name, cnt]) => `${name} ${cnt}`)
-      .join(' · ')
-  })()
+  const { topCitiesText, cityCount, topIndustriesText, industryCount } =
+    useMemo(() => {
+      const cityMap = new Map<string, number>()
+      const indMap = new Map<string, number>()
+      for (const c of companies) {
+        const city = c.headquartersCity?.name?.trim()
+        if (city) cityMap.set(city, (cityMap.get(city) ?? 0) + 1)
+        const anyC = c as unknown as Record<string, any>
+        const ind =
+          typeof anyC.industry === 'string' && anyC.industry.trim()
+            ? anyC.industry.trim()
+            : typeof anyC.sector === 'string' && anyC.sector.trim()
+              ? anyC.sector.trim()
+              : null
+        if (ind) indMap.set(ind, (indMap.get(ind) ?? 0) + 1)
+      }
+      const citiesStr =
+        cityMap.size > 0
+          ? [...cityMap.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 3)
+              .map(([name, cnt]) => `${name} ${cnt}`)
+              .join(' · ')
+          : null
+      const indsStr =
+        indMap.size > 0
+          ? [...indMap.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 3)
+              .map(([name, cnt]) => `${name} ${cnt}`)
+              .join(' · ')
+          : null
+      return {
+        topCitiesText: citiesStr,
+        cityCount: cityMap.size,
+        topIndustriesText: indsStr,
+        industryCount: indMap.size,
+      }
+    }, [companies])
 
   return (
     <S.Section $wide>
@@ -222,31 +253,50 @@ export function CountryCompaniesSection({
 
       <CompanyHeadlineStrip aria-label="기업 요약 지표">
         <CompanyHeadlineCell>
-          <CompanyHeadlineLabel>등록 기업</CompanyHeadlineLabel>
+          <CompanyHeadlineLabel>등록 기업 총계</CompanyHeadlineLabel>
           <CompanyHeadlineVal>{companies.length}개</CompanyHeadlineVal>
+          <CompanyHeadlineSub>
+            {historicalCompanyCount > 0
+              ? `현 국가 ${companies.length - historicalCompanyCount} · 전신 국가 ${historicalCompanyCount}`
+              : '국가 소속 등록 법인'}
+          </CompanyHeadlineSub>
         </CompanyHeadlineCell>
+
         <CompanyHeadlineCell>
-          <CompanyHeadlineLabel>활동 중</CompanyHeadlineLabel>
-          <CompanyHeadlineVal>{activeCount}개</CompanyHeadlineVal>
+          <CompanyHeadlineLabel>운용 상태 (활동 · 종료)</CompanyHeadlineLabel>
+          <CompanyHeadlineVal>활동 {activeCount}개</CompanyHeadlineVal>
+          <CompanyHeadlineSub>
+            {dissolvedCount > 0
+              ? `해산·합병·중단 ${dissolvedCount}개`
+              : '전수 활동 중'}
+          </CompanyHeadlineSub>
         </CompanyHeadlineCell>
-        {dissolvedCount > 0 && (
-          <CompanyHeadlineCell>
-            <CompanyHeadlineLabel>해산 · 합병 · 중단</CompanyHeadlineLabel>
-            <CompanyHeadlineVal>{dissolvedCount}개</CompanyHeadlineVal>
-          </CompanyHeadlineCell>
-        )}
-        {earliestYear != null && (
-          <CompanyHeadlineCell>
-            <CompanyHeadlineLabel>최초 설립 기록</CompanyHeadlineLabel>
-            <CompanyHeadlineVal>{earliestYear}년</CompanyHeadlineVal>
-          </CompanyHeadlineCell>
-        )}
-        {topCitiesText && (
-          <CompanyHeadlineCell>
-            <CompanyHeadlineLabel>주요 본사 도시</CompanyHeadlineLabel>
-            <CompanyHeadlineSubVal>{topCitiesText}</CompanyHeadlineSubVal>
-          </CompanyHeadlineCell>
-        )}
+
+        <CompanyHeadlineCell>
+          <CompanyHeadlineLabel>설립 연대 범위</CompanyHeadlineLabel>
+          <CompanyHeadlineVal>
+            {earliestYear != null
+              ? latestFoundedYear != null && latestFoundedYear !== earliestYear
+                ? `${earliestYear}–${latestFoundedYear}년`
+                : `${earliestYear}년`
+              : '설립일 미기재'}
+          </CompanyHeadlineVal>
+          <CompanyHeadlineSub>
+            설립연도 기록 {foundedYears.length}/{companies.length}개
+          </CompanyHeadlineSub>
+        </CompanyHeadlineCell>
+
+        <CompanyHeadlineCell>
+          <CompanyHeadlineLabel>주요 본사 · 산업 분포</CompanyHeadlineLabel>
+          <CompanyHeadlineSubVal>
+            {topCitiesText ?? topIndustriesText ?? '본사·산업 미기재'}
+          </CompanyHeadlineSubVal>
+          <CompanyHeadlineSub>
+            {topCitiesText && topIndustriesText
+              ? `주요 분야: ${topIndustriesText}`
+              : `본사 도시 ${cityCount}곳 · 분야 ${industryCount}종`}
+          </CompanyHeadlineSub>
+        </CompanyHeadlineCell>
       </CompanyHeadlineStrip>
 
       <LedgerWrap>
@@ -361,18 +411,55 @@ export function CountryCompaniesSection({
  */
 const CompanyHeadlineStrip = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px 24px;
-  padding: 12px 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
 `
 
 const CompanyHeadlineCell = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
+  padding: 12px 14px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 960px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
+  @media (max-width: 560px) {
+    padding: 9px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
 `
 
 const CompanyHeadlineLabel = styled.span`
@@ -390,10 +477,20 @@ const CompanyHeadlineVal = styled.strong`
 `
 
 const CompanyHeadlineSubVal = styled.span`
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const CompanyHeadlineSub = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

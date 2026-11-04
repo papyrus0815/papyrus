@@ -1454,10 +1454,11 @@ export const TradeGroupsContainer = styled.div`
 
 export const TradeItemGroups = styled.div`
   display: grid;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @container (min-width: 720px) {
-    grid-template-columns: 1fr 1fr;
-    column-gap: 30px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 `
 
@@ -1466,7 +1467,9 @@ export const TradeItemGroup = styled.div`
   align-items: flex-start;
   gap: 8px;
   flex-wrap: wrap;
+  padding-top: 10px;
   margin-top: 4px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const TradeItemLabel = styled.span`
@@ -1596,9 +1599,35 @@ export const TradeCompositionDot = styled.span<{ $color: string }>`
 /** 수출 블록과 수입 블록이 어디서 갈리는지 — 라벨만으로는 안 갈렸다 */
 export const TradeDirectionHeader = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 6px 12px;
   margin-bottom: 4px;
+`
+
+export const TradeDirectionTitleGroup = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+`
+
+export const TradeDirectionMeta = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  strong {
+    font-size: 13px;
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 export const TradeDirectionName = styled.span<{ $color: string }>`
@@ -1620,7 +1649,7 @@ export const TradeDirectionName = styled.span<{ $color: string }>`
 
 /** 막대가 무엇의 비율인지 — 이 문장이 없으면 등록분 비율을 전체 비율로 읽는다 */
 export const TradeCoverageNote = styled.span`
-  font-size: 12.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -1629,7 +1658,8 @@ export const TradeDirectionBlock = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 16px 0 4px;
+  min-width: 0;
+  padding: 14px 0 12px;
 
   /* 수출 블록이 어디서 끝나고 수입이 시작하는지 — 굵은 제목 대신 가는 선이 가른다 */
   & + & {
@@ -1638,11 +1668,14 @@ export const TradeDirectionBlock = styled.div`
 
   /* 좌우로 서면 가르는 선의 방향도 바뀐다 */
   @container (min-width: 720px) {
+    &:first-child:not(:last-child) {
+      padding-right: 20px;
+    }
+
     & + & {
       border-top: none;
       border-left: 1px solid ${({ theme }) => theme.colors.border.light};
-      padding-left: 30px;
-      margin-left: -30px;
+      padding-left: 20px;
     }
   }
 `

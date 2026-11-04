@@ -3243,6 +3243,44 @@ export const HeroActions = styled.div`
   flex-shrink: 0;
 `
 
+/** 헤더 우측 인라인 정보 수정 버튼 — 케밥을 열지 않고 기본 제원을 즉시 편집 */
+export const HeroEditButton = styled.button`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
+
+    svg {
+      opacity: 1;
+    }
+  }
+`
+
 /** DropdownMenu(absolute; top:100%)의 기준점 */
 export const HeroKebab = styled.div`
   position: relative;
