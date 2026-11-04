@@ -619,6 +619,14 @@ export const ActivitySummaryMeta = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+export const ActivityRightGroup = styled.div`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+`
+
 export const ActivityHeadlineStrip = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -749,6 +757,11 @@ export const FeedItem = styled.li`
     }
     &:nth-child(even) {
       padding-left: 14px;
+    }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 0;
     }
   }
 `
@@ -1306,11 +1319,32 @@ export const FactDescriptionLabel = styled.span`
 
 export const FactDescriptionText = styled.p`
   margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.secondary};
   word-break: keep-all;
+`
+
+export const FactDescriptionEditBtn = styled.button`
+  appearance: none;
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #6366f1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  }
 `
 
 /** 하단 보조 — 최근 활동과 완성도를 나란히 */

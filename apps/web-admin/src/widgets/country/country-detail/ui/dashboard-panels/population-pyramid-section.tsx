@@ -607,7 +607,9 @@ export function PopulationPyramidSection({
                       : 0
                   const baseRow =
                     baseline && baseline.year !== current.year
-                      ? baseline.rows.find((r) => r.bracket === row.bracket)
+                      ? baseline.rows.find(
+                          (baseItem) => baseItem.bracket === row.bracket,
+                        )
                       : null
                   const deltaVsBase =
                     baseRow != null ? row.total - baseRow.total : null
@@ -1010,6 +1012,11 @@ const LedgerItem = styled.div`
     }
     &:nth-child(even) {
       padding-left: 18px;
+    }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 4px;
     }
   }
 `

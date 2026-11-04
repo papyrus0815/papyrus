@@ -804,6 +804,11 @@ const LedgerItem = styled.div<{ $highlight?: boolean }>`
     &:nth-child(even) {
       padding-left: 18px;
     }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 4px;
+    }
   }
 `
 

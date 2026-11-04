@@ -153,6 +153,7 @@ export function ActivityFeed({
   onNavigateDomain,
 }: ActivityFeedProps) {
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
+  const [groupByTime, setGroupByTime] = useState(true)
   const [expanded, setExpanded] = useState(false)
 
   const categoryCounts = useMemo(() => {
@@ -178,7 +179,7 @@ export function ActivityFeed({
       { key: 'archive', label: '법제·지역', count: categoryCounts.archive },
     ]
     const nonEmptyCategories = candidates.filter(
-      (c) => c.key !== 'all' && c.count > 0,
+      (candidate) => candidate.key !== 'all' && candidate.count > 0,
     )
     if (nonEmptyCategories.length <= 1) return []
     return [candidates[0], ...nonEmptyCategories]
@@ -221,9 +222,12 @@ export function ActivityFeed({
       { key: 'governance', label: '통치 · 제도', count: categoryCounts.governance },
       { key: 'archive', label: '법제 · 지역', count: categoryCounts.archive },
     ]
-    const activeCategoryCount = categoryEntries.filter((c) => c.count > 0).length
+    const activeCategoryCount = categoryEntries.filter(
+      (entry) => entry.count > 0,
+    ).length
     const topCategory =
-      [...categoryEntries].sort((a, b) => b.count - a.count)[0] ?? null
+      [...categoryEntries].sort((left, right) => right.count - left.count)[0] ??
+      null
     const latestItem = items[0] ?? null
 
     return [
@@ -254,10 +258,11 @@ export function ActivityFeed({
           topCategory && topCategory.count > 0
             ? `${topCategory.label} · ${topCategory.count}건`
             : '—',
-        meta: categoryEntries
-          .filter((c) => c.count > 0)
-          .map((c) => `${c.label.split(' ')[0]} ${c.count}`)
-          .join(' · ') || '도메인별 집계',
+        meta:
+          categoryEntries
+            .filter((entry) => entry.count > 0)
+            .map((entry) => `${entry.label.split(' ')[0]} ${entry.count}`)
+            .join(' · ') || '도메인별 집계',
       },
       {
         label: '최근 갱신 기록',
@@ -320,53 +325,88 @@ export function ActivityFeed({
         </S.ActivityHeadlineStrip>
       )}
 
-      {filterTabs.length > 0 && (
+      {(filterTabs.length > 0 || groups.length > 1 || summaryNote) && (
         <S.ActivityToolbar>
-          <S.ActivityFilterGroup role="group" aria-label="최근 활동 분류 필터">
-            {filterTabs.map((tab) => {
-              const isActive = resolvedFilter === tab.key
-              return (
-                <S.ActivityFilterPill
-                  key={tab.key}
-                  type="button"
-                  $active={isActive}
-                  onClick={() => {
-                    setActiveFilter(tab.key)
-                    setExpanded(false)
-                  }}
-                >
-                  {tab.label}
-                  <S.ActivityFilterCount $active={isActive}>
-                    {tab.count}
-                  </S.ActivityFilterCount>
-                </S.ActivityFilterPill>
-              )
-            })}
-          </S.ActivityFilterGroup>
-          {summaryNote && (
-            <S.ActivitySummaryMeta>{summaryNote}</S.ActivitySummaryMeta>
+          {filterTabs.length > 0 && (
+            <S.ActivityFilterGroup role="group" aria-label="최근 활동 분류 필터">
+              {filterTabs.map((tab) => {
+                const isActive = resolvedFilter === tab.key
+                return (
+                  <S.ActivityFilterPill
+                    key={tab.key}
+                    type="button"
+                    $active={isActive}
+                    onClick={() => {
+                      setActiveFilter(tab.key)
+                      setExpanded(false)
+                    }}
+                  >
+                    {tab.label}
+                    <S.ActivityFilterCount $active={isActive}>
+                      {tab.count}
+                    </S.ActivityFilterCount>
+                  </S.ActivityFilterPill>
+                )
+              })}
+            </S.ActivityFilterGroup>
           )}
+          <S.ActivityRightGroup>
+            {summaryNote && (
+              <S.ActivitySummaryMeta>{summaryNote}</S.ActivitySummaryMeta>
+            )}
+            {groups.length > 1 && (
+              <S.ActivityFilterGroup role="group" aria-label="최근 활동 묶음 방식">
+                <S.ActivityFilterPill
+                  type="button"
+                  $active={groupByTime}
+                  onClick={() => setGroupByTime(true)}
+                >
+                  시간대별
+                </S.ActivityFilterPill>
+                <S.ActivityFilterPill
+                  type="button"
+                  $active={!groupByTime}
+                  onClick={() => setGroupByTime(false)}
+                >
+                  연속 원장
+                </S.ActivityFilterPill>
+              </S.ActivityFilterGroup>
+            )}
+          </S.ActivityRightGroup>
         </S.ActivityToolbar>
       )}
 
-      {groups.map((g) => (
-        <S.ActivityGroupBlock key={g.label}>
-          <S.ActivityGroupHeader>
-            <span>{g.label}</span>
-            <S.ActivityGroupCount>{g.items.length}</S.ActivityGroupCount>
-          </S.ActivityGroupHeader>
-          <S.FeedList>
-            {g.items.map((item) => (
-              <S.FeedItem key={item.id}>
-                <ActivityRow
-                  item={item}
-                  onSelect={() => handleRowSelect(item)}
-                />
-              </S.FeedItem>
-            ))}
-          </S.FeedList>
-        </S.ActivityGroupBlock>
-      ))}
+      {groupByTime ? (
+        groups.map((group) => (
+          <S.ActivityGroupBlock key={group.label}>
+            <S.ActivityGroupHeader>
+              <span>{group.label}</span>
+              <S.ActivityGroupCount>{group.items.length}</S.ActivityGroupCount>
+            </S.ActivityGroupHeader>
+            <S.FeedList>
+              {group.items.map((item) => (
+                <S.FeedItem key={item.id}>
+                  <ActivityRow
+                    item={item}
+                    onSelect={() => handleRowSelect(item)}
+                  />
+                </S.FeedItem>
+              ))}
+            </S.FeedList>
+          </S.ActivityGroupBlock>
+        ))
+      ) : (
+        <S.FeedList>
+          {visibleItems.map((item) => (
+            <S.FeedItem key={item.id}>
+              <ActivityRow
+                item={item}
+                onSelect={() => handleRowSelect(item)}
+              />
+            </S.FeedItem>
+          ))}
+        </S.FeedList>
+      )}
 
       {(hiddenCount > 0 ||
         (expanded && filteredItems.length > DEFAULT_VISIBLE_COUNT)) && (

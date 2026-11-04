@@ -1746,7 +1746,7 @@ function HistoricalOverviewSection({
           id="section-activity"
           data-section-count={
             stats.recentActivity.length > 0
-              ? String(Math.min(stats.recentActivity.length, RECENT_ACTIVITY_LIMIT))
+              ? String(stats.recentActivity.length)
               : undefined
           }
         >
@@ -1760,15 +1760,13 @@ function HistoricalOverviewSection({
             <SectionHelpPopover sectionKey="activity" />
             {stats.recentActivity.length > 0 && (
               <DashboardStyles.SectionCountChip>
-                최근{' '}
-                {Math.min(stats.recentActivity.length, RECENT_ACTIVITY_LIMIT)}
-                건
+                최근 {stats.recentActivity.length}건
               </DashboardStyles.SectionCountChip>
             )}
           </DashboardStyles.SectionTitleRow>
           <DashboardStyles.FeedPanel>
             <ActivityFeed
-              items={stats.recentActivity.slice(0, RECENT_ACTIVITY_LIMIT)}
+              items={stats.recentActivity}
               isLoading={stats.loading.persons || stats.loading.events}
               onPersonClick={goPerson}
               onEventClick={(eventId) => setPreviewEventId(eventId)}
@@ -2153,9 +2151,6 @@ function HistoricalOverviewSection({
  * 대시보드 뿌리 — 폭 판단을 뷰포트가 아니라 **지면 자신의 폭**으로 한다(좌측 목록·레일을
  * 접고 펴면 같은 뷰포트에서도 본문 폭이 400px 넘게 달라진다).
  */
-/** 최근 활동 칸 건수 — 현대 국가 대시보드와 동일하게 최대 10건 2열 원장으로 표시 */
-const RECENT_ACTIVITY_LIMIT = 10
-
 const DashboardRoot = styled(DashboardStyles.DashboardRoot)`
   container-type: inline-size;
   container-name: historical-dashboard;

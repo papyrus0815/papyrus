@@ -174,10 +174,10 @@ export function CountryDetailDashboard({
 
   const latestMacroYear = useMemo(() => {
     const years = [
-      ...economicIndicators.map((r) => r.year),
-      ...demographicIndicators.map((r) => r.year),
-      ...developmentIndicators.map((r) => r.year),
-      ...bondYields.map((r) => r.year),
+      ...economicIndicators.map((row) => row.year),
+      ...demographicIndicators.map((row) => row.year),
+      ...developmentIndicators.map((row) => row.year),
+      ...bondYields.map((row) => row.year),
     ].filter(Number.isFinite)
     return years.length > 0 ? Math.max(...years) : null
   }, [
@@ -637,6 +637,11 @@ export function CountryDetailDashboard({
         <S.FactDescriptionBar>
           <S.FactDescriptionLabel>국가 개요</S.FactDescriptionLabel>
           <S.FactDescriptionText>{country.description.trim()}</S.FactDescriptionText>
+          {onEdit && (
+            <S.FactDescriptionEditBtn type="button" onClick={onEdit}>
+              수정
+            </S.FactDescriptionEditBtn>
+          )}
         </S.FactDescriptionBar>
       )}
     </S.FactBar>
@@ -675,7 +680,7 @@ export function CountryDetailDashboard({
         rows: toPyramidRows(indicator),
       }))
       .filter((entry) => entry.rows.length > 0)
-      .sort((a, b) => a.year - b.year)
+      .sort((left, right) => left.year - right.year)
   }, [demographicIndicators])
 
   const hasPyramidData = pyramidYears.length > 0
@@ -737,17 +742,19 @@ export function CountryDetailDashboard({
 
     if (isModern) {
       // 1. 경제 · 인구 · 사회 지표 추이
-      const econSorted = [...economicIndicators].sort((a, b) => b.year - a.year)
+      const econSorted = [...economicIndicators].sort(
+        (left, right) => right.year - left.year,
+      )
       const demoSorted = [...demographicIndicators].sort(
-        (a, b) => b.year - a.year,
+        (left, right) => right.year - left.year,
       )
       const devSorted = [...developmentIndicators].sort(
-        (a, b) => b.year - a.year,
+        (left, right) => right.year - left.year,
       )
       const trendYears = [
-        ...econSorted.map((r) => r.year),
-        ...demoSorted.map((r) => r.year),
-        ...devSorted.map((r) => r.year),
+        ...econSorted.map((row) => row.year),
+        ...demoSorted.map((row) => row.year),
+        ...devSorted.map((row) => row.year),
       ].filter(Number.isFinite)
       const latestTrendYear =
         trendYears.length > 0 ? Math.max(...trendYears) : null
@@ -806,7 +813,7 @@ export function CountryDetailDashboard({
       const latestPyr =
         pyramidYears.length > 0 ? pyramidYears[pyramidYears.length - 1] : null
       const latestPyrTotal = latestPyr
-        ? latestPyr.rows.reduce((sum, r) => sum + r.total, 0)
+        ? latestPyr.rows.reduce((sum, row) => sum + row.total, 0)
         : 0
 
       items.push({
@@ -829,12 +836,12 @@ export function CountryDetailDashboard({
       })
 
       // 3. 국채 수익률 곡선
-      const bondYearSet = new Set(bondYields.map((b) => b.year))
-      const bondMatSet = new Set(bondYields.map((b) => b.maturity))
+      const bondYearSet = new Set(bondYields.map((bond) => bond.year))
+      const bondMatSet = new Set(bondYields.map((bond) => bond.maturity))
       const latestBondYr =
         bondYearSet.size > 0 ? Math.max(...bondYearSet) : null
       const latest10Y = bondYields.find(
-        (b) => b.year === latestBondYr && b.maturity === 'Y10',
+        (bond) => bond.year === latestBondYr && bond.maturity === 'Y10',
       )
 
       items.push({
@@ -866,7 +873,9 @@ export function CountryDetailDashboard({
 
     // 4. 수출입 · 교역 구조 (현대·역사 국가 공통)
     const tradeSorted = [...tradeRecords].sort(
-      (a, b) => Number(b.signedYear ?? b.year) - Number(a.signedYear ?? a.year),
+      (left, right) =>
+        Number(right.signedYear ?? right.year) -
+        Number(left.signedYear ?? left.year),
     )
     const latestTr = tradeSorted[0]
 
@@ -904,12 +913,14 @@ export function CountryDetailDashboard({
 
     // 5. 주요 기업 (현대·역사 국가 공통)
     const activeCompCount = countryCompanies.filter(
-      (c) => !c.dissolvedAt && (!c.status || c.status === 'ACTIVE'),
+      (company) =>
+        !company.dissolvedAt &&
+        (!company.status || company.status === 'ACTIVE'),
     ).length
     const endedCompCount = countryCompanyCount - activeCompCount
     const previewCompNames = countryCompanies
       .slice(0, 3)
-      .map((c) => c.name)
+      .map((company) => company.name)
       .join(', ')
 
     items.push({
@@ -957,7 +968,7 @@ export function CountryDetailDashboard({
   ])
 
   const filledIndicatorSpecs = useMemo(
-    () => indicatorHubSpecs.filter((s) => s.filled),
+    () => indicatorHubSpecs.filter((spec) => spec.filled),
     [indicatorHubSpecs],
   )
   const emptyIndicatorCount =
@@ -1581,7 +1592,7 @@ export function CountryDetailDashboard({
                 </S.SectionHeadlineValue>
                 <S.SectionHeadlineSub>
                   {latestMacroYear != null
-                    ? `거시 ${economicIndicators.length} · 인구 ${demographicIndicators.length} · 국채 ${new Set(bondYields.map((b) => b.year)).size}개년`
+                    ? `거시 ${economicIndicators.length} · 인구 ${demographicIndicators.length} · 국채 ${new Set(bondYields.map((bond) => bond.year)).size}개년`
                     : '경제·인구·국채 시계열 미입력'}
                 </S.SectionHeadlineSub>
               </>
@@ -1590,7 +1601,7 @@ export function CountryDetailDashboard({
                 <S.SectionHeadlineValue $muted={!hasTradeData}>
                   {hasTradeData ? (
                     <>
-                      {new Set(tradeRecords.map((r) => r.year)).size}
+                      {new Set(tradeRecords.map((row) => row.year)).size}
                       <S.SectionHeadlineUnit>개년</S.SectionHeadlineUnit>
                     </>
                   ) : (
@@ -1620,7 +1631,7 @@ export function CountryDetailDashboard({
             </S.SectionHeadlineValue>
             <S.SectionHeadlineSub>
               {hasTradeData
-                ? `최신 ${[...tradeRecords].sort((a, b) => Number(b.signedYear ?? b.year) - Number(a.signedYear ?? a.year))[0]?.year}년 교역 수지·품목`
+                ? `최신 ${[...tradeRecords].sort((left, right) => Number(right.signedYear ?? right.year) - Number(left.signedYear ?? left.year))[0]?.year}년 교역 수지·품목`
                 : '수출·수입 총액 및 주요 교역품 미입력'}
             </S.SectionHeadlineSub>
           </S.SectionHeadlineCell>
@@ -1639,7 +1650,7 @@ export function CountryDetailDashboard({
             </S.SectionHeadlineValue>
             <S.SectionHeadlineSub>
               {countryCompanyCount > 0
-                ? `활동 ${countryCompanies.filter((c) => !c.dissolvedAt && (!c.status || c.status === 'ACTIVE')).length}개사 · 본사·소속 기업`
+                ? `활동 ${countryCompanies.filter((company) => !company.dissolvedAt && (!company.status || company.status === 'ACTIVE')).length}개사 · 본사·소속 기업`
                 : '주요 기업·상단·금융기관 미등록'}
             </S.SectionHeadlineSub>
           </S.SectionHeadlineCell>

@@ -45,13 +45,6 @@ import * as S from '../country-detail-dashboard.styles'
 import { ChartSkeleton } from './chart-skeleton'
 import { SectionHelpPopover } from './section-help-popover'
 
-const EMPTY_SPEC_LABELS = [
-  '국가원수 · 정부수반',
-  '입법부 · 의회',
-  '국가 구조',
-  '정당제',
-] as const
-
 interface HeadRegisterTarget {
   positionId: string | null
   positionTitle: string
@@ -248,7 +241,7 @@ function buildSpecs(
   return specs
 }
 
-const PAST_ROW_LIMIT = 3
+const PAST_ROW_LIMIT = 4
 
 export function PoliticalSystemPanel({
   countryId,
@@ -420,25 +413,47 @@ export function PoliticalSystemPanel({
       {query.isLoading ? (
         <ChartSkeleton variant="text" lines={2} />
       ) : !current ? (
-        <EmptyBlockButton
-          type="button"
-          onClick={openCreate}
-          aria-label="정체 등록"
-        >
-          <PrimaryHeadRow>
-            <AccentBar $muted aria-hidden />
-            <PrimaryHeadline $muted>아직 등록된 정체가 없습니다</PrimaryHeadline>
-            <Period>헌법 체제 · 통치 기간 미입력</Period>
-          </PrimaryHeadRow>
-          <PrimarySpecStrip>
-            {EMPTY_SPEC_LABELS.map((label) => (
-              <SpecColumn key={label}>
-                <SpecColumnKey>{label}</SpecColumnKey>
-                <SpecColumnValue $muted>—</SpecColumnValue>
-              </SpecColumn>
-            ))}
-          </PrimarySpecStrip>
-        </EmptyBlockButton>
+        <PolityStack>
+          <S.SectionHeadlineStrip>
+            <S.SectionHeadlineCell>
+              <S.SectionHeadlineLabel>현행 · 대표 정부 형태</S.SectionHeadlineLabel>
+              <S.SectionHeadlineValue $muted>미등록</S.SectionHeadlineValue>
+              <S.SectionHeadlineSub>
+                대통령제 · 의원내각제 · 군주제 등
+              </S.SectionHeadlineSub>
+            </S.SectionHeadlineCell>
+            <S.SectionHeadlineCell>
+              <S.SectionHeadlineLabel>통치 수반 구조</S.SectionHeadlineLabel>
+              <S.SectionHeadlineValue $muted>미등록</S.SectionHeadlineValue>
+              <S.SectionHeadlineSub>
+                국가원수 · 정부수반 직책 구성
+              </S.SectionHeadlineSub>
+            </S.SectionHeadlineCell>
+            <S.SectionHeadlineCell>
+              <S.SectionHeadlineLabel>입법부 · 의회 체제</S.SectionHeadlineLabel>
+              <S.SectionHeadlineValue $muted>미등록</S.SectionHeadlineValue>
+              <S.SectionHeadlineSub>
+                단원제 · 양원제 및 의석 정원
+              </S.SectionHeadlineSub>
+            </S.SectionHeadlineCell>
+            <S.SectionHeadlineCell>
+              <S.SectionHeadlineLabel>국가 구조 · 정당제</S.SectionHeadlineLabel>
+              <S.SectionHeadlineValue $muted>미등록</S.SectionHeadlineValue>
+              <S.SectionHeadlineSub>
+                단일국가 · 연방제 · 정당 체제
+              </S.SectionHeadlineSub>
+            </S.SectionHeadlineCell>
+          </S.SectionHeadlineStrip>
+
+          <EmptyActionRow>
+            <EmptyActionText>
+              아직 등록된 정체가 없습니다. 헌법 체제·통치 수반 직책·입법부 구성을 등록하면 수반 인물 등록과도 바로 연동됩니다.
+            </EmptyActionText>
+            <EmptyActionBtn type="button" onClick={openCreate}>
+              + 첫 정체 등록
+            </EmptyActionBtn>
+          </EmptyActionRow>
+        </PolityStack>
       ) : (
         <PolityStack>
           <S.SectionHeadlineStrip>
@@ -602,39 +617,61 @@ export function PoliticalSystemPanel({
           </PrimaryBlock>
 
           {pastSystems.length > 0 && (
-            <PastTimeline>
-              {visiblePast.map((system) => {
-                const pastHeadline = [
-                  system.governmentForm &&
-                    GOVERNMENT_FORM_LABEL[system.governmentForm],
-                  system.legislatureType &&
-                    LEGISLATURE_TYPE_LABEL[system.legislatureType],
-                ].filter(Boolean)
-                const pastSpecs = buildSpecs(system)
+            <PastLedgerWrap>
+              <PastHeaderBar>
+                <PastHeaderTitle>
+                  과거 정체 변천 원장 ({pastSystems.length}개 체제)
+                </PastHeaderTitle>
+                {pastSystems.length > PAST_ROW_LIMIT && (
+                  <MoreBtn
+                    type="button"
+                    onClick={() => setExpanded((prev) => !prev)}
+                  >
+                    {expanded
+                      ? '이전 정체 접기'
+                      : `이전 정체 ${hiddenPastCount}개 더 보기`}
+                  </MoreBtn>
+                )}
+              </PastHeaderBar>
 
-                return (
-                  <PastRow key={system.id}>
-                    <PastDot aria-hidden />
-                    <PastPeriodCol>
-                      <Period>{formatPeriod(system)}</Period>
-                    </PastPeriodCol>
-                    <PastBodyCol>
-                      <PastTitleLine>
-                        <PastHeadline>
-                          {pastHeadline.length > 0
-                            ? pastHeadline.join(' · ')
-                            : summarize(system)}
-                        </PastHeadline>
-                        {system.name && (
-                          <PastSystemName>{system.name}</PastSystemName>
-                        )}
-                        {historicalCountryId == null &&
-                          system.historicalCountryId != null && (
-                            <PastChip>
-                              {system.historicalCountry?.name ?? '과거 국가'}
-                            </PastChip>
+              <PastLedgerGrid role="list" aria-label="과거 정체 변천 원장">
+                {visiblePast.map((system) => {
+                  const pastHeadline = [
+                    system.governmentForm &&
+                      GOVERNMENT_FORM_LABEL[system.governmentForm],
+                    system.legislatureType &&
+                      LEGISLATURE_TYPE_LABEL[system.legislatureType],
+                  ].filter(Boolean)
+                  const pastSpecs = buildSpecs(system)
+
+                  return (
+                    <PastLedgerCell key={system.id} role="listitem">
+                      <PastCellTopRow>
+                        <PastTitleLine>
+                          <PastPeriodBadge>{formatPeriod(system)}</PastPeriodBadge>
+                          <PastHeadline>
+                            {pastHeadline.length > 0
+                              ? pastHeadline.join(' · ')
+                              : summarize(system)}
+                          </PastHeadline>
+                          {system.name && (
+                            <PastSystemName>{system.name}</PastSystemName>
                           )}
-                      </PastTitleLine>
+                          {historicalCountryId == null &&
+                            system.historicalCountryId != null && (
+                              <PastChip>
+                                {system.historicalCountry?.name ?? '과거 국가'}
+                              </PastChip>
+                            )}
+                        </PastTitleLine>
+                        <RowEditBtn
+                          type="button"
+                          onClick={() => openEdit(system)}
+                        >
+                          수정
+                        </RowEditBtn>
+                      </PastCellTopRow>
+
                       {pastSpecs.length > 0 && (
                         <InlineSpecs>
                           {pastSpecs.map((spec) => (
@@ -650,30 +687,11 @@ export function PoliticalSystemPanel({
                           ))}
                         </InlineSpecs>
                       )}
-                    </PastBodyCol>
-                    <RowEditBtn
-                      type="button"
-                      onClick={() => openEdit(system)}
-                    >
-                      수정
-                    </RowEditBtn>
-                  </PastRow>
-                )
-              })}
-
-              {pastSystems.length > PAST_ROW_LIMIT && (
-                <MoreRow>
-                  <MoreBtn
-                    type="button"
-                    onClick={() => setExpanded((prev) => !prev)}
-                  >
-                    {expanded
-                      ? '이전 정체 접기'
-                      : `이전 정체 ${hiddenPastCount}개 더 보기`}
-                  </MoreBtn>
-                </MoreRow>
-              )}
-            </PastTimeline>
+                    </PastLedgerCell>
+                  )
+                })}
+              </PastLedgerGrid>
+            </PastLedgerWrap>
           )}
         </PolityStack>
       )}
@@ -701,8 +719,8 @@ export function PoliticalSystemPanel({
               Boolean(spec.headAction),
           )
           // 실권 수반 우선으로 아직 인물이 0명인 수장 카테고리를 찾는다
-          const prioritized = [...savedHeadSpecs].sort((a, b) =>
-            a.note === '실권' && b.note !== '상징' ? -1 : 1,
+          const prioritized = [...savedHeadSpecs].sort((left, right) =>
+            left.note === '실권' && right.note !== '상징' ? -1 : 1,
           )
           const unfilled = prioritized.find(
             (spec) => countHeadTenuresFor(spec.headAction) === 0,
@@ -949,91 +967,125 @@ const HeadRegisterBtn = styled.button<{ $empty?: boolean }>`
   }
 `
 
-const EmptyBlockButton = styled.button`
+const EmptyActionRow = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 6px 2px 10px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const EmptyActionText = styled.span`
+  flex: 1 1 260px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptyActionBtn = styled.button`
+  appearance: none;
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  background: transparent;
   font-family: inherit;
-  text-align: left;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   cursor: pointer;
 
-  &:hover ${PrimaryHeadline} {
-    color: ${({ theme }) => theme.colors.text.secondary};
+  &:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: #6366f1;
   }
 `
 
 /**
- * 과거 정체 연대표 — 좌측 세로 타임라인 축 + 오픈 행.
+ * 과거 정체 변천 원장 — 2열 헤어라인 원장 그리드.
  */
-const PastTimeline = styled.div`
-  position: relative;
+const PastLedgerWrap = styled.div`
   display: flex;
   flex-direction: column;
-  padding-top: 12px;
-  padding-left: 18px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 4px;
-    top: 22px;
-    bottom: 14px;
-    width: 1.5px;
-    background: ${({ theme }) => theme.colors.border.light};
-  }
+  gap: 8px;
+  padding-top: 8px;
 `
 
-const PastRow = styled.div`
-  position: relative;
-  display: grid;
-  grid-template-columns: 118px minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: baseline;
-  padding: 7px 0;
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr auto;
-  }
-`
-
-const PastDot = styled.span`
-  position: absolute;
-  left: -17px;
-  top: 13px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  box-sizing: border-box;
-  border: 1.5px solid ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) => theme.colors.background.primary};
-`
-
-const PastPeriodCol = styled.div`
-  min-width: 0;
-`
-
-const PastBodyCol = styled.div`
+const PastHeaderBar = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 14px;
-  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+`
 
-  @media (max-width: 640px) {
-    grid-column: 1 / -1;
+const PastHeaderTitle = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const PastLedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @media (min-width: 760px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+`
+
+const PastLedgerCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px 4px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 760px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-right: 16px;
+    }
+
+    &:nth-child(even) {
+      padding-left: 16px;
+    }
+
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 4px;
+    }
+  }
+`
+
+const PastCellTopRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+`
+
+const PastPeriodBadge = styled.span`
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
 `
 
 const PastTitleLine = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
+  min-width: 0;
 `
 
 const PastHeadline = styled.span`
@@ -1083,6 +1135,7 @@ const InlineSpecNote = styled.span`
 `
 
 const RowEditBtn = styled.button`
+  flex-shrink: 0;
   padding: 3px 9px;
   border-radius: 6px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
@@ -1108,10 +1161,6 @@ const NotesRow = styled.p`
   font-size: 12.5px;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const MoreRow = styled.div`
-  padding-top: 6px;
 `
 
 const MoreBtn = styled.button`

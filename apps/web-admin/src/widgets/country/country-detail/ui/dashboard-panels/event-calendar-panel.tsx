@@ -80,67 +80,101 @@ export function EventCalendarPanel({
   onSelectEvent,
 }: EventCalendarPanelProps) {
   const [viewMode, setViewMode] = useState<'calendar' | 'ledger'>('calendar')
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'dated' | 'yearOnly'>('all')
   const [ledgerExpanded, setLedgerExpanded] = useState(false)
 
-  /** 날짜별 사건 — 일자를 아는 것만 */
-  const { byDay, monthsWithEvents, allDatedEvents, yearOnlyCount } =
-    useMemo(() => {
-      const map = new Map<string, CalendarEventItem[]>()
-      const months = new Map<string, YearMonth & { count: number }>()
-      const datedRows: Array<{
-        year: number
-        month: number
-        day: number
-        event: CalendarEventItem
-      }> = []
-      let yearOnly = 0
-      for (const event of events) {
-        if (!event.isDayKnown) {
-          yearOnly += 1
-          continue
-        }
-        const parsed = parseDate(event.date)
-        if (!parsed) {
-          yearOnly += 1
-          continue
-        }
-        datedRows.push({
-          year: parsed.year,
-          month: parsed.month,
-          day: parsed.day,
+  /** 날짜별 사건 — 일자를 아는 것과 연도만 아는 것을 함께 분류 */
+  const {
+    byDay,
+    monthsWithEvents,
+    allDatedEvents,
+    yearOnlyEvents,
+    allLedgerEvents,
+    yearOnlyCount,
+  } = useMemo(() => {
+    const map = new Map<string, CalendarEventItem[]>()
+    const months = new Map<string, YearMonth & { count: number }>()
+    type LedgerEventRow = {
+      year: number | null
+      month: number | null
+      day: number | null
+      isDayKnown: boolean
+      event: CalendarEventItem
+    }
+    const datedRows: LedgerEventRow[] = []
+    const yearOnlyRows: LedgerEventRow[] = []
+    let yearOnly = 0
+    for (const event of events) {
+      const parsed = parseDate(event.date)
+      if (!event.isDayKnown || !parsed) {
+        const yearMatch = /^(-?\d{1,6})/.exec(event.date.trim())
+        const parsedYear =
+          parsed?.year ?? (yearMatch ? Number(yearMatch[1]) : null)
+        yearOnlyRows.push({
+          year: parsedYear,
+          month: null,
+          day: null,
+          isDayKnown: false,
           event,
         })
-        const dayKey = keyOf(parsed.year, parsed.month, parsed.day)
-        const bucket = map.get(dayKey)
-        if (bucket) bucket.push(event)
-        else map.set(dayKey, [event])
-
-        const monthKey = `${parsed.year}-${parsed.month}`
-        const monthEntry = months.get(monthKey)
-        if (monthEntry) monthEntry.count += 1
-        else
-          months.set(monthKey, {
-            year: parsed.year,
-            month: parsed.month,
-            count: 1,
-          })
+        yearOnly += 1
+        continue
       }
-      datedRows.sort((a, b) => {
-        if (a.year !== b.year) return b.year - a.year
-        if (a.month !== b.month) return b.month - a.month
-        return b.day - a.day
+      datedRows.push({
+        year: parsed.year,
+        month: parsed.month,
+        day: parsed.day,
+        isDayKnown: true,
+        event,
       })
-      return {
-        byDay: map,
-        monthsWithEvents: [...months.values()].sort((left, right) =>
-          left.year !== right.year
-            ? right.year - left.year
-            : right.month - left.month,
-        ),
-        allDatedEvents: datedRows,
-        yearOnlyCount: yearOnly,
-      }
-    }, [events])
+      const dayKey = keyOf(parsed.year, parsed.month, parsed.day)
+      const bucket = map.get(dayKey)
+      if (bucket) bucket.push(event)
+      else map.set(dayKey, [event])
+
+      const monthKey = `${parsed.year}-${parsed.month}`
+      const monthEntry = months.get(monthKey)
+      if (monthEntry) monthEntry.count += 1
+      else
+        months.set(monthKey, {
+          year: parsed.year,
+          month: parsed.month,
+          count: 1,
+        })
+    }
+    const sortLedgerRows = (left: LedgerEventRow, right: LedgerEventRow) => {
+      const leftYear = left.year ?? -999999
+      const rightYear = right.year ?? -999999
+      if (leftYear !== rightYear) return rightYear - leftYear
+      const leftMonth = left.month ?? 0
+      const rightMonth = right.month ?? 0
+      if (leftMonth !== rightMonth) return rightMonth - leftMonth
+      const leftDay = left.day ?? 0
+      const rightDay = right.day ?? 0
+      return rightDay - leftDay
+    }
+    datedRows.sort(sortLedgerRows)
+    yearOnlyRows.sort(sortLedgerRows)
+    const combinedRows = [...datedRows, ...yearOnlyRows].sort(sortLedgerRows)
+    return {
+      byDay: map,
+      monthsWithEvents: [...months.values()].sort((left, right) =>
+        left.year !== right.year
+          ? right.year - left.year
+          : right.month - left.month,
+      ),
+      allDatedEvents: datedRows,
+      yearOnlyEvents: yearOnlyRows,
+      allLedgerEvents: combinedRows,
+      yearOnlyCount: yearOnly,
+    }
+  }, [events])
+
+  const filteredLedgerEvents = useMemo(() => {
+    if (ledgerFilter === 'dated') return allDatedEvents
+    if (ledgerFilter === 'yearOnly') return yearOnlyEvents
+    return allLedgerEvents
+  }, [ledgerFilter, allDatedEvents, yearOnlyEvents, allLedgerEvents])
 
   /* 오늘이 아니라 **사건이 있는 가장 최근 달**에서 연다 — 빈 격자로 시작하지 않는다 */
   const [cursor, setCursor] = useState<YearMonth | null>(null)
@@ -269,24 +303,74 @@ export function EventCalendarPanel({
         </HeadlineCell>
         <HeadlineCell>
           <HeadlineLabel>연도만 아는 사건</HeadlineLabel>
-          <HeadlineValue>
-            {yearOnlyCount.toLocaleString('ko-KR')}
-            <HeadlineUnit>건</HeadlineUnit>
-          </HeadlineValue>
+          {yearOnlyCount > 0 ? (
+            <HeadlineActionBtn
+              type="button"
+              onClick={() => {
+                setViewMode('ledger')
+                setLedgerFilter('yearOnly')
+                setLedgerExpanded(false)
+              }}
+              title="클릭하여 연도만 확인된 사건 원장 보기"
+            >
+              {yearOnlyCount.toLocaleString('ko-KR')}
+              <HeadlineUnit>건</HeadlineUnit>
+            </HeadlineActionBtn>
+          ) : (
+            <HeadlineValue>
+              0<HeadlineUnit>건</HeadlineUnit>
+            </HeadlineValue>
+          )}
           <HeadlineSub>
             {yearOnlyCount > 0
-              ? '특정 월·일 미상으로 달력 격자 제외'
+              ? '클릭 시 연도만 확인된 사건 원장으로 이동'
               : '모든 사건의 월·일 확인됨'}
           </HeadlineSub>
         </HeadlineCell>
       </HeadlineStrip>
 
       <ViewToolbarRow>
-        <ViewToolbarHint>
-          {viewMode === 'calendar'
-            ? '월간 격자와 우측 연도·월 색인으로 날짜별 사건을 탐색합니다'
-            : `월·일이 확인된 사건 ${allDatedEvents.length.toLocaleString('ko-KR')}건을 최신 일자순 2열 원장으로 표시합니다`}
-        </ViewToolbarHint>
+        {viewMode === 'ledger' && yearOnlyCount > 0 ? (
+          <LedgerFilterBar role="group" aria-label="사건 일자 상세도 필터">
+            {(
+              [
+                {
+                  key: 'all' as const,
+                  label: '전체',
+                  count: allLedgerEvents.length,
+                },
+                {
+                  key: 'dated' as const,
+                  label: '월·일 확인',
+                  count: allDatedEvents.length,
+                },
+                {
+                  key: 'yearOnly' as const,
+                  label: '연도만 확인',
+                  count: yearOnlyEvents.length,
+                },
+              ] as const
+            ).map((pill) => (
+              <LedgerFilterChip
+                key={pill.key}
+                type="button"
+                $active={ledgerFilter === pill.key}
+                onClick={() => {
+                  setLedgerFilter(pill.key)
+                  setLedgerExpanded(false)
+                }}
+              >
+                {pill.label} ({pill.count.toLocaleString('ko-KR')})
+              </LedgerFilterChip>
+            ))}
+          </LedgerFilterBar>
+        ) : (
+          <ViewToolbarHint>
+            {viewMode === 'calendar'
+              ? '월간 격자와 우측 연도·월 색인으로 날짜별 사건을 탐색합니다'
+              : `등록된 사건 ${filteredLedgerEvents.length.toLocaleString('ko-KR')}건을 최신순 2열 원장으로 표시합니다`}
+          </ViewToolbarHint>
+        )}
         <ViewToggleGroup role="group" aria-label="사건 캘린더 보기 방식">
           <ViewToggleBtn
             type="button"
@@ -300,52 +384,60 @@ export function EventCalendarPanel({
             $active={viewMode === 'ledger'}
             onClick={() => setViewMode('ledger')}
           >
-            전체 사건 원장 ({allDatedEvents.length})
+            전체 사건 원장 ({allLedgerEvents.length})
           </ViewToggleBtn>
         </ViewToggleGroup>
       </ViewToolbarRow>
 
       {viewMode === 'ledger' ? (
         <LedgerWrap>
-          <LedgerGrid role="table" aria-label="일자 확인 사건 전체 원장">
+          <LedgerGrid role="table" aria-label="사건 전체 원장">
             {(ledgerExpanded
-              ? allDatedEvents
-              : allDatedEvents.slice(0, 16)
-            ).map(({ year, month, day, event }) => (
-              <LedgerCell key={`${event.id}-${year}-${month}-${day}`}>
+              ? filteredLedgerEvents
+              : filteredLedgerEvents.slice(0, 16)
+            ).map(({ year, month, day, isDayKnown, event }) => (
+              <LedgerCell
+                key={`${event.id}-${year ?? 'u'}-${month ?? 'u'}-${day ?? 'u'}`}
+              >
                 <LedgerRowButton
                   type="button"
                   onClick={() => onSelectEvent(event.id)}
                 >
-                  <LedgerDateBadge>
-                    {formatCalYear(year)} {month}월 {day}일
+                  <LedgerDateBadge $muted={!isDayKnown}>
+                    {isDayKnown && year != null && month != null && day != null
+                      ? `${formatCalYear(year)} ${month}월 ${day}일`
+                      : `${year != null ? formatCalYear(year) : '연도 미상'} · 월·일 미상`}
                   </LedgerDateBadge>
                   <LedgerEventTitle title={event.title}>
                     {event.title}
                   </LedgerEventTitle>
-                  <LedgerGoMonthBtn
-                    as="span"
-                    onClick={(e: React.MouseEvent) => {
-                      e.stopPropagation()
-                      goMonth({ year, month })
-                      setViewMode('calendar')
-                    }}
-                    title="이 달 달력으로 이동"
-                  >
-                    달력 ›
-                  </LedgerGoMonthBtn>
+                  {isDayKnown && year != null && month != null ? (
+                    <LedgerGoMonthBtn
+                      as="span"
+                      onClick={(clickEvent: React.MouseEvent) => {
+                        clickEvent.stopPropagation()
+                        goMonth({ year, month })
+                        setViewMode('calendar')
+                      }}
+                      title="이 달 달력으로 이동"
+                    >
+                      달력 ›
+                    </LedgerGoMonthBtn>
+                  ) : (
+                    <LedgerYearOnlyTag>상세 ›</LedgerYearOnlyTag>
+                  )}
                 </LedgerRowButton>
               </LedgerCell>
             ))}
           </LedgerGrid>
-          {allDatedEvents.length > 16 && (
+          {filteredLedgerEvents.length > 16 && (
             <LedgerMoreBtn
               type="button"
               onClick={() => setLedgerExpanded((prev) => !prev)}
             >
               {ledgerExpanded
                 ? '접기'
-                : `사건 ${(allDatedEvents.length - 16).toLocaleString('ko-KR')}건 더 보기`}
+                : `사건 ${(filteredLedgerEvents.length - 16).toLocaleString('ko-KR')}건 더 보기`}
             </LedgerMoreBtn>
           )}
         </LedgerWrap>
@@ -450,7 +542,19 @@ export function EventCalendarPanel({
 
           {yearOnlyCount > 0 && (
             <Footnote>
-              연도만 아는 사건 {yearOnlyCount}건은 날짜 칸에 올리지 않았습니다
+              <span>
+                연도만 아는 사건 {yearOnlyCount}건은 날짜 칸에 올리지 않았습니다
+              </span>
+              <FootnoteActionBtn
+                type="button"
+                onClick={() => {
+                  setViewMode('ledger')
+                  setLedgerFilter('yearOnly')
+                  setLedgerExpanded(false)
+                }}
+              >
+                원장에서 보기 ›
+              </FootnoteActionBtn>
             </Footnote>
           )}
         </Main>
@@ -608,6 +712,40 @@ const ViewToggleBtn = styled.button<{ $active: boolean }>`
     $active ? theme.colors.background.primary : 'transparent'};
 `
 
+const LedgerFilterBar = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const LedgerFilterChip = styled.button<{ $active: boolean }>`
+  appearance: none;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? 'rgba(99, 102, 241, 0.45)' : theme.colors.border.light};
+  background: ${({ $active }) =>
+    $active ? 'rgba(99, 102, 241, 0.12)' : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'
+      : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #6366f1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  }
+`
+
 const LedgerWrap = styled.div`
   display: flex;
   flex-direction: column;
@@ -632,6 +770,9 @@ const LedgerCell = styled.div`
     &:nth-child(even) {
       border-left: 1px solid ${({ theme }) => theme.colors.border.light};
     }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
   }
 `
 
@@ -654,11 +795,12 @@ const LedgerRowButton = styled.button`
   }
 `
 
-const LedgerDateBadge = styled.span`
+const LedgerDateBadge = styled.span<{ $muted?: boolean }>`
   font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme, $muted }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
   white-space: nowrap;
 `
 
@@ -681,6 +823,13 @@ const LedgerGoMonthBtn = styled.span`
   &:hover {
     background: ${({ theme }) => theme.colors.activeLight};
   }
+`
+
+const LedgerYearOnlyTag = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  padding: 2px 6px;
 `
 
 const LedgerMoreBtn = styled.button`
@@ -984,9 +1133,30 @@ const DayMore = styled.span`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
 `
 
-const Footnote = styled.span`
+const Footnote = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const FootnoteActionBtn = styled.button`
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 `
 
 /* ─── 오른쪽 칸 ─────────────────────────────────────────────────────── */

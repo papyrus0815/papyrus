@@ -222,12 +222,14 @@ export function IndicatorTrendsSection({
   /** 지표별 요약 명세 — 상단 4칸 스트립 및 수치 원장에서 공용으로 사용 */
   const seriesSpecs = useMemo(() => {
     return allSeries.map((series) => {
-      const sorted = [...series.points].sort((a, b) => a.year - b.year)
+      const sorted = [...series.points].sort(
+        (left, right) => left.year - right.year,
+      )
       const first = sorted[0]
       const latest = sorted[sorted.length - 1]
       const prev = sorted.length >= 2 ? sorted[sorted.length - 2] : null
       const delta = latest && prev ? latest.value - prev.value : null
-      const values = sorted.map((p) => p.value)
+      const values = sorted.map((point) => point.value)
       const minVal = values.length > 0 ? Math.min(...values) : null
       const maxVal = values.length > 0 ? Math.max(...values) : null
       const avgVal =
@@ -282,8 +284,8 @@ export function IndicatorTrendsSection({
 
   const overallYearSpan = useMemo(() => {
     const years: number[] = []
-    for (const s of allSeries) {
-      for (const pt of s.points) {
+    for (const series of allSeries) {
+      for (const pt of series.points) {
         years.push(pt.year)
       }
     }
@@ -301,7 +303,7 @@ export function IndicatorTrendsSection({
     if (activeCategory !== 'ALL' && activeCategory !== category) {
       setCategoryFilter('ALL')
     }
-    const idxInAll = allSeries.findIndex((s) => s.key === specKey)
+    const idxInAll = allSeries.findIndex((series) => series.key === specKey)
     if (!embeddedInTab && idxInAll >= 4) {
       setShowAllCharts(true)
     }
@@ -908,6 +910,11 @@ const LedgerItem = styled.div<{ $highlighted?: boolean }>`
     }
     &:nth-child(even) {
       padding-left: 18px;
+    }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+      padding-right: 4px;
     }
   }
 `

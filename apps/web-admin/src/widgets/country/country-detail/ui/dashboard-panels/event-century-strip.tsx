@@ -356,6 +356,9 @@ const LedgerCell = styled.div`
     &:nth-child(even) {
       border-left: 1px solid ${({ theme }) => theme.colors.border.light};
     }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
   }
 `
 
