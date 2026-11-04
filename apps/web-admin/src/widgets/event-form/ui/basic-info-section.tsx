@@ -40,6 +40,12 @@ import {
 } from '@/features/event-facets/model/register-facets'
 import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import { parseCoordinateInput } from '@/pages/events/detail/components/location-picker-modal'
+import {
+  type RecentLocationEntry,
+  extractPlaceFromEventTitle,
+  readRecentLocations,
+  splitLocationLabelAndNote,
+} from '@/pages/events/detail/components/location-text.lib'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { uploadImage } from '@/shared/api/upload'
@@ -270,6 +276,16 @@ interface BasicInfoSectionProps {
       }>
       isSearching?: boolean
     }
+    /** 상위 사건에 지정된 위치·좌표·메모를 원클릭으로 가져오는 슬롯 */
+    parentLocation?: {
+      parentTitle: string
+      location: string
+      latitude?: number | null
+      longitude?: number | null
+      note?: string | null
+    }
+    /** 최근 사용한 위치 목록 (생략 시 localStorage에서 읽음) */
+    recentLocations?: ReadonlyArray<RecentLocationEntry>
   }
 
   // UI 상태
@@ -444,13 +460,28 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const [isRelatedQuickDismissed, setIsRelatedQuickDismissed] = useState(false)
   const [activeLocationResultIndex, setActiveLocationResultIndex] = useState(0)
   const [isLocationQuickDismissed, setIsLocationQuickDismissed] = useState(true)
+  const [isLocationNoteOpen, setIsLocationNoteOpen] = useState(false)
   const parsedLocationCoord = useMemo(
     () => parseCoordinateInput(locationSlot?.location ?? ''),
     [locationSlot?.location],
   )
+  const locationSplitSuggestion = useMemo(
+    () =>
+      locationSlot && !locationSlot.locationNote?.trim()
+        ? splitLocationLabelAndNote(locationSlot.location)
+        : null,
+    [locationSlot],
+  )
   const [isThumbnailDragOver, setIsThumbnailDragOver] = useState(false)
   const [storedRecentParticipants] = useState<RecentParticipantRef[]>(() =>
     readRecentParticipants(),
+  )
+  const [storedRecentLocations] = useState<RecentLocationEntry[]>(() =>
+    readRecentLocations(),
+  )
+  const recentLocationSuggestions = useMemo(
+    () => locationSlot?.recentLocations ?? storedRecentLocations,
+    [locationSlot?.recentLocations, storedRecentLocations],
   )
   const titleYearSuggestion = useMemo(
     () => (!startDate ? extractYearSuggestionFromTitle(title) : null),
@@ -578,6 +609,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       existingParticipantKeys,
     ],
   )
+
+  const titleLocationSuggestion = useMemo(() => {
+    if (!locationSlot || locationSlot.location.trim()) return null
+    const excludedNames = new Set<string>()
+    for (const country of availableCountries) excludedNames.add(country.name)
+    for (const country of availableHistoricalCountries) {
+      excludedNames.add(country.name)
+    }
+    for (const candidate of titleSuggestedCountries) {
+      excludedNames.add(candidate.label)
+    }
+    return extractPlaceFromEventTitle(title, excludedNames)
+  }, [
+    locationSlot,
+    title,
+    availableCountries,
+    availableHistoricalCountries,
+    titleSuggestedCountries,
+  ])
 
   const batchCountryMatches = useMemo(
     () =>
@@ -942,6 +992,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             )}
             {(titleSuggestionSlot ||
               titleYearSuggestion ||
+              titleLocationSuggestion ||
               (onOpenCountryModal && titleSuggestedCountries.length > 0)) && (
               <TitleSuggestionRow aria-label="사건명 자동 감지 추천">
                 {titleYearSuggestion && (
@@ -974,9 +1025,21 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       .join(' · ')}
                   </TitleSuggestionButton>
                 )}
+                {titleLocationSuggestion && locationSlot && (
+                  <TitleSuggestionButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      locationSlot.setLocation(titleLocationSuggestion)
+                    }}
+                  >
+                    추천 위치 적용: {titleLocationSuggestion}
+                  </TitleSuggestionButton>
+                )}
                 {[
                   Boolean(titleSuggestionSlot),
                   Boolean(titleYearSuggestion),
+                  Boolean(titleLocationSuggestion),
                   Boolean(onOpenCountryModal && titleSuggestedCountries.length > 0),
                 ].filter(Boolean).length >= 2 && (
                   <TitleApplyAllButton
@@ -997,6 +1060,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       }
                       if (onOpenCountryModal && titleSuggestedCountries.length > 0) {
                         addBatchParticipants(titleSuggestedCountries)
+                      }
+                      if (titleLocationSuggestion && locationSlot) {
+                        locationSlot.setLocation(titleLocationSuggestion)
                       }
                     }}
                   >
@@ -2381,6 +2447,69 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     ? '지도 핀 수정'
                     : '지도에서 찍기'}
                 </S.AddButton>
+                {locationSplitSuggestion && locationSlot.setLocationNote && (
+                  <LocationClearBtn
+                    type="button"
+                    aria-label="위치 이름과 메모 자동 나누기"
+                    onClick={() => {
+                      playClickSound()
+                      locationSlot.setLocation(locationSplitSuggestion.label)
+                      locationSlot.setLocationNote?.(locationSplitSuggestion.note)
+                      setIsLocationNoteOpen(true)
+                    }}
+                  >
+                    이름·메모 나누기
+                  </LocationClearBtn>
+                )}
+                {locationSlot.setLocationNote &&
+                  !isLocationNoteOpen &&
+                  !locationSlot.locationNote?.trim() && (
+                    <LocationClearBtn
+                      type="button"
+                      aria-label="위치 메모 입력칸 열기"
+                      onClick={() => {
+                        playClickSound()
+                        setIsLocationNoteOpen(true)
+                      }}
+                    >
+                      + 메모
+                    </LocationClearBtn>
+                  )}
+                {locationSlot.parentLocation &&
+                  !locationSlot.location.trim() &&
+                  locationSlot.latitude == null &&
+                  locationSlot.longitude == null && (
+                    <S.AddButton
+                      type="button"
+                      aria-label="상위 사건 위치 불러오기"
+                      title={`'${locationSlot.parentLocation.parentTitle}'의 위치를 그대로 가져옵니다`}
+                      onClick={() => {
+                        const parentLoc = locationSlot.parentLocation
+                        if (!parentLoc) return
+                        playClickSound()
+                        locationSlot.setLocation(parentLoc.location)
+                        if (
+                          parentLoc.latitude != null &&
+                          parentLoc.longitude != null
+                        ) {
+                          locationSlot.onSelectCoordinates?.(
+                            parentLoc.latitude,
+                            parentLoc.longitude,
+                          )
+                        }
+                        if (parentLoc.note) {
+                          locationSlot.setLocationNote?.(parentLoc.note)
+                          setIsLocationNoteOpen(true)
+                        }
+                      }}
+                    >
+                      <FiMapPin size={14} />
+                      상위 사건 위치 불러오기
+                      {locationSlot.parentLocation.location
+                        ? ` (${locationSlot.parentLocation.location})`
+                        : ''}
+                    </S.AddButton>
+                  )}
                 {(locationSlot.location.trim().length > 0 ||
                   Boolean(locationSlot.locationNote?.trim()) ||
                   (locationSlot.latitude != null &&
@@ -2393,12 +2522,46 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       locationSlot.setLocation('')
                       locationSlot.setLocationNote?.('')
                       locationSlot.onClearCoordinates?.()
+                      setIsLocationNoteOpen(false)
                     }}
                   >
                     비우기
                   </LocationClearBtn>
                 )}
               </LocationInputRow>
+              {!locationSlot.location.trim() &&
+                locationSlot.latitude == null &&
+                locationSlot.longitude == null &&
+                recentLocationSuggestions.length > 0 && (
+                  <RecentParticipantBar aria-label="최근 사용한 위치">
+                    <RecentParticipantLabel>최근</RecentParticipantLabel>
+                    {recentLocationSuggestions.map((entry) => (
+                      <RecentParticipantChip
+                        key={entry.location}
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          locationSlot.setLocation(entry.location)
+                          if (
+                            entry.latitude != null &&
+                            entry.longitude != null
+                          ) {
+                            locationSlot.onSelectCoordinates?.(
+                              entry.latitude,
+                              entry.longitude,
+                            )
+                          }
+                          if (entry.note) {
+                            locationSlot.setLocationNote?.(entry.note)
+                            setIsLocationNoteOpen(true)
+                          }
+                        }}
+                      >
+                        + {entry.location}
+                      </RecentParticipantChip>
+                    ))}
+                  </RecentParticipantBar>
+                )}
               {locationSlot.latitude != null &&
                 locationSlot.longitude != null && (
                   <LocationCoordBar aria-label="선택된 지도 좌표">
@@ -2423,7 +2586,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     )}
                   </LocationCoordBar>
                 )}
-              {Boolean(locationSlot.locationNote?.trim()) && (
+              {(isLocationNoteOpen ||
+                Boolean(locationSlot.locationNote?.trim())) && (
                 <LocationNoteRow>
                   <LocationNoteBadge>위치 메모</LocationNoteBadge>
                   <LocationNoteInput
@@ -2431,6 +2595,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     aria-label="위치 메모"
                     value={locationSlot.locationNote ?? ''}
                     placeholder="위치 메모 (현 지명·나머지 장소 등)"
+                    onFocus={() => setIsLocationNoteOpen(true)}
                     onChange={(event) =>
                       locationSlot.setLocationNote?.(event.target.value)
                     }
@@ -2442,6 +2607,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       onClick={() => {
                         playClickSound()
                         locationSlot.setLocationNote?.('')
+                        setIsLocationNoteOpen(false)
                       }}
                     >
                       메모 지우기

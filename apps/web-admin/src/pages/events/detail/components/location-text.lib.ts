@@ -90,11 +90,222 @@ export function extractPlaceSearchCandidates(
 
   for (const hint of contextHints) {
     if (hint && hint.trim()) {
+      const fromTitle = extractPlaceFromEventTitle(hint)
+      if (fromTitle) push(fromTitle)
       push(hint)
     }
   }
 
   return result.slice(0, 6)
+}
+
+const PLACE_EVENT_SUFFIX_PATTERN =
+  /^(.+?)\s+(?:제\s*\d+\s*차\s*)?(전투|해전|회전|공방전|포위전|대첩|상륙\s*작전|상륙전|공습|폭격|대학살|학살|강화\s*조약|조약|협약|협정|화의|정상\s*회담|회담|회의|공의회|사건|코뮌|습격|봉쇄|대지진|대화재|칙령|선언)$/
+
+const NON_PLACE_TITLE_PREFIXES = new Set([
+  '영프',
+  '미소',
+  '러일',
+  '청일',
+  '조일',
+  '독소',
+  '영일',
+  '미일',
+  '한일',
+  '한미',
+  '중일',
+  '보불',
+  '프프로이센',
+  '삼국',
+  '사국',
+  '오국',
+  '다자',
+  '국제',
+  '세계',
+  '유럽',
+  '동방',
+  '서방',
+  '남북',
+  '상호',
+  '평화',
+  '자유',
+  '방위',
+  '안보',
+  '무역',
+  '통상',
+  '수호',
+  '불가침',
+  '군축',
+  '인권',
+  '노동',
+  '농민',
+  '청년',
+  '학생',
+  '군인',
+  '장교',
+  '신성',
+  '동맹',
+  '연합',
+  '제1차',
+  '제2차',
+  '제3차',
+  '프랑스',
+  '영국',
+  '미국',
+  '독일',
+  '러시아',
+  '일본',
+  '중국',
+  '조선',
+  '청나라',
+  '명나라',
+  '고려',
+  '오스만',
+  '스페인',
+  '포르투갈',
+  '네덜란드',
+  '오스트리아',
+  '프로이센',
+  '소련',
+  '이탈리아',
+])
+
+/**
+ * 사건명('1919년 베르사유 조약', '워털루 전투', '얄타 회담', '노르망디 상륙 작전', '사라예보 사건')에서
+ * 연도·차수와 사건 유형 접미사를 떼어내고 지명 후보를 추출한다.
+ * 국가명·양자 약칭('영프 협상', '러일 전쟁')이나 비지명 수식어는 제외한다.
+ */
+export function extractPlaceFromEventTitle(
+  title: string | null | undefined,
+  excludeNames?: ReadonlySet<string>,
+): string | null {
+  if (!title) return null
+  const withoutLeadingMeta = title
+    .trim()
+    .replace(/^(?:기원전\s*|BC\s*|B\.C\.\s*)?\d{1,4}년(?:\s*\d{1,2}월(?:\s*\d{1,2}일)?)?\s*/i, '')
+    .replace(/^제\s*\d+\s*차\s*/, '')
+    .trim()
+  if (!withoutLeadingMeta) return null
+
+  const match = withoutLeadingMeta.match(PLACE_EVENT_SUFFIX_PATTERN)
+  if (!match?.[1]) return null
+
+  const candidate = match[1]
+    .replace(/^(?:기원전\s*|BC\s*|B\.C\.\s*)?\d{1,4}년\s*/i, '')
+    .replace(/^제\s*\d+\s*차\s*/, '')
+    .trim()
+
+  if (!candidate) return null
+  if (candidate.length < 2 && candidate !== '빈') return null
+  if (candidate.length > 20) return null
+  if (/^\d+$/.test(candidate)) return null
+  if (NON_PLACE_TITLE_PREFIXES.has(candidate)) return null
+  if (excludeNames?.has(candidate)) return null
+  if (/(?:전쟁|혁명|내전|운동|동맹|연합|제국|왕국|공화국|연방|왕조|막부)$/.test(candidate)) {
+    return null
+  }
+
+  return candidate
+}
+
+/**
+ * 지도 검색 결과의 `displayName`('발미, 마른, 그랑테스트, 프랑스')에서
+ * `shortName`('발미')과 우편번호(숫자)를 제외한 상위 행정구역·국가 경로 문자열을 만든다.
+ */
+export function formatPlaceDetailNote(
+  shortName: string | null | undefined,
+  displayName: string | null | undefined,
+): string | null {
+  if (!displayName) return null
+  const normalizedShort = (shortName ?? '').trim()
+  const parts = displayName
+    .split(',')
+    .map((segment) => segment.trim())
+    .filter(
+      (segment) =>
+        segment.length > 0 &&
+        segment !== normalizedShort &&
+        !/^\d[\d\s-]*$/.test(segment),
+    )
+  if (parts.length === 0) return null
+  const joined = parts.join(', ')
+  return joined.length >= 2 ? joined : null
+}
+
+export interface RecentLocationEntry {
+  location: string
+  latitude?: number | null
+  longitude?: number | null
+  note?: string | null
+}
+
+const RECENT_LOCATIONS_STORAGE_KEY = 'papyrus:event-form:recent-locations'
+const MAX_RECENT_LOCATIONS = 5
+
+export function readRecentLocations(): RecentLocationEntry[] {
+  if (typeof window === 'undefined' || !window.localStorage) return []
+  try {
+    const raw = window.localStorage.getItem(RECENT_LOCATIONS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const result: RecentLocationEntry[] = []
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue
+      const candidate = item as Record<string, unknown>
+      const loc =
+        typeof candidate.location === 'string' ? candidate.location.trim() : ''
+      if (!loc) continue
+      result.push({
+        location: loc,
+        latitude:
+          typeof candidate.latitude === 'number' &&
+          Number.isFinite(candidate.latitude)
+            ? candidate.latitude
+            : null,
+        longitude:
+          typeof candidate.longitude === 'number' &&
+          Number.isFinite(candidate.longitude)
+            ? candidate.longitude
+            : null,
+        note:
+          typeof candidate.note === 'string' && candidate.note.trim()
+            ? candidate.note.trim()
+            : null,
+      })
+      if (result.length >= MAX_RECENT_LOCATIONS) break
+    }
+    return result
+  } catch {
+    return []
+  }
+}
+
+export function recordRecentLocation(entry: RecentLocationEntry): void {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  const location = entry.location.trim()
+  if (!location) return
+  try {
+    const previous = readRecentLocations()
+    const fresh: RecentLocationEntry = {
+      location,
+      latitude: entry.latitude ?? null,
+      longitude: entry.longitude ?? null,
+      note: entry.note?.trim() || null,
+    }
+    const merged: RecentLocationEntry[] = [fresh]
+    for (const item of previous) {
+      if (item.location === location) continue
+      merged.push(item)
+      if (merged.length >= MAX_RECENT_LOCATIONS) break
+    }
+    window.localStorage.setItem(
+      RECENT_LOCATIONS_STORAGE_KEY,
+      JSON.stringify(merged),
+    )
+  } catch {
+    // ignore storage quota / privacy mode errors
+  }
 }
 
 /**

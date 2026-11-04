@@ -68,6 +68,7 @@ import {
   LocationPickerModal,
   parseCoordinateInput,
 } from '@/pages/events/detail/components/location-picker-modal'
+import { recordRecentLocation } from '@/pages/events/detail/components/location-text.lib'
 import { cityApi } from '@/shared/api/city'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
@@ -569,6 +570,29 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       ...(parentDetail.relatedHistoricalCountries ?? []).map((country) => ({ historicalCountryId: country.id })),
     ].filter((row) => !have.has('countryId' in row ? `c:${row.countryId}` : `h:${row.historicalCountryId}`))
   }, [parentDetail, relatedCountries])
+
+  const parentLocationToImport = useMemo(() => {
+    if (!parentDetail || isEditMode) return undefined
+    const parentLocText = parentDetail.location?.trim() ?? ''
+    const parentLat =
+      parentDetail.locationLatitude != null
+        ? Number(parentDetail.locationLatitude)
+        : null
+    const parentLng =
+      parentDetail.locationLongitude != null
+        ? Number(parentDetail.locationLongitude)
+        : null
+    if (!parentLocText && (parentLat == null || parentLng == null)) {
+      return undefined
+    }
+    return {
+      parentTitle: parentDetail.title,
+      location: parentLocText,
+      latitude: parentLat,
+      longitude: parentLng,
+      note: parentDetail.locationNote?.trim() || null,
+    }
+  }, [parentDetail, isEditMode])
 
   const parentSearchPending =
     parentCandidatesFetching || parentSearchTerm !== debouncedParentTerm
@@ -1247,6 +1271,14 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       }
       recordRecentClassification({ domain: category, type: eventType })
       recordRecentParticipants(relatedCountries)
+      if (location.trim()) {
+        recordRecentLocation({
+          location: location.trim(),
+          latitude: locationLatitude,
+          longitude: locationLongitude,
+          note: locationNote.trim() || null,
+        })
+      }
 
       /**
        * `refetchType: 'none'` — **표시만 하고 지금 다시 받지는 않는다.**
@@ -1562,6 +1594,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
               locationQuickFetching ||
               location.trim() !== debouncedLocationQuery,
           },
+          parentLocation: parentLocationToImport,
         }}
         keywords={keywords}
         setKeywords={setKeywords}

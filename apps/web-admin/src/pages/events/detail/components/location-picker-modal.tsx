@@ -13,7 +13,9 @@ import { Modal, ModalFooter } from '@/shared/ui/modal'
 import { type LatLng } from './location-picker-map'
 import {
   extractPlaceSearchCandidates,
+  formatPlaceDetailNote,
   placeQueryFromText,
+  recordRecentLocation,
   splitLocationLabelAndNote,
 } from './location-text.lib'
 
@@ -179,6 +181,8 @@ export function LocationPickerModal({
   const autoFilledNameRef = useRef<string | null>(null)
   /** 사용자가 이미 직접 적어 둔 설명이 있을 때, 방금 고른 장소 이름으로 바꿀 수 있는 보조 제안 */
   const [suggestedPlaceName, setSuggestedPlaceName] = useState<string | null>(null)
+  /** 방금 고른 장소의 상세 주소(행정구역·국가)를 위치 메모에 채울 수 있는 보조 제안 */
+  const [suggestedDetailNote, setSuggestedDetailNote] = useState<string | null>(null)
   const debouncedQuery = useDebouncedValue(query.trim(), 350)
   const parsedCoord = useMemo(() => parseCoordinateInput(query), [query])
   const searchCandidates = useMemo(
@@ -202,7 +206,17 @@ export function LocationPickerModal({
     query.trim().length >= 2 &&
     (searchQuery.isFetching || query.trim() !== debouncedQuery)
 
-  const handlePick = useCallback((next: LatLng) => setPoint(next), [])
+  const handlePick = useCallback(
+    (next: LatLng) => {
+      setPoint(next)
+      const trimmedQuery = query.trim()
+      if (!label.trim() && trimmedQuery && !parseCoordinateInput(trimmedQuery)) {
+        setLabel(trimmedQuery)
+        autoFilledNameRef.current = trimmedQuery
+      }
+    },
+    [label, query],
+  )
 
   const applyCoordinateJump = (coord: LatLng) => {
     setPoint(coord)
@@ -224,17 +238,31 @@ export function LocationPickerModal({
     } else {
       setSuggestedPlaceName(null)
     }
+    setSuggestedDetailNote(
+      formatPlaceDetailNote(result.shortName, result.displayName),
+    )
     setQuery('')
     setActiveIndex(0)
   }
 
-  const save = () =>
+  const save = () => {
+    const trimmedLabel = label.trim()
+    const trimmedNote = note.trim() || null
+    if (trimmedLabel) {
+      recordRecentLocation({
+        location: trimmedLabel,
+        latitude: point?.lat ?? null,
+        longitude: point?.lng ?? null,
+        note: trimmedNote,
+      })
+    }
     onSave({
-      location: label.trim(),
+      location: trimmedLabel,
       locationLatitude: point?.lat ?? null,
       locationLongitude: point?.lng ?? null,
-      locationNote: note.trim() || null,
+      locationNote: trimmedNote,
     })
+  }
 
   const canClearAll = Boolean(
     label.trim() ||
@@ -245,7 +273,14 @@ export function LocationPickerModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="사건 위치" subtitle="장소를 찾거나 지도를 눌러 핀을 꽂으세요" maxWidth="720px">
-      <Body>
+      <Body
+        onKeyDown={(keyEvent) => {
+          if ((keyEvent.metaKey || keyEvent.ctrlKey) && keyEvent.key === 'Enter') {
+            keyEvent.preventDefault()
+            save()
+          }
+        }}
+      >
         <SearchBox>
           <FiSearch aria-hidden />
           <SearchInput
@@ -420,7 +455,25 @@ export function LocationPickerModal({
           * 장소 이름 자리에 섰다. 메모는 이름 아래 작게 보인다.
           */}
         <Field>
-          <FieldLabel htmlFor="event-location-note">위치 메모 (선택)</FieldLabel>
+          <FieldLabelRow>
+            <FieldLabel htmlFor="event-location-note">위치 메모 (선택)</FieldLabel>
+            {suggestedDetailNote && !note.includes(suggestedDetailNote) && (
+              <ReplaceLabelButton
+                type="button"
+                aria-label="검색된 상세 주소를 위치 메모에 넣기"
+                onClick={() => {
+                  setNote((previous) =>
+                    previous.trim()
+                      ? `${previous.trim()} · ${suggestedDetailNote}`
+                      : suggestedDetailNote,
+                  )
+                  setSuggestedDetailNote(null)
+                }}
+              >
+                검색된 주소 넣기
+              </ReplaceLabelButton>
+            )}
+          </FieldLabelRow>
           <LabelInput
             id="event-location-note"
             value={note}

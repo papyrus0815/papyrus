@@ -255,4 +255,60 @@ describe('LocationPickerModal', () => {
       (screen.getByLabelText('위치 메모 (선택)') as HTMLTextAreaElement).value,
     ).toBe('현 튀르키예 이스탄불')
   })
+
+  it('장소 이름이 비어 있을 때 검색어 입력 후 지도를 직접 클릭하면 검색어가 장소 이름으로 채워지고, 검색 결과의 상세 주소 넣기 및 Ctrl+Enter 저장이 동작한다', async () => {
+    mockedSearchPlaces.mockResolvedValue([
+      {
+        placeId: 'p-valmy',
+        shortName: '발미',
+        displayName: '발미, 51800, 마른, 그랑테스트, 프랑스',
+        lat: 49.0792,
+        lng: 4.7736,
+      },
+    ])
+
+    const onSave = jest.fn()
+    renderModal(
+      <LocationPickerModal
+        isOpen
+        onClose={jest.fn()}
+        initial={{}}
+        onSave={onSave}
+      />,
+    )
+
+    const searchInput = screen.getByRole('searchbox', { name: '장소 검색' })
+    fireEvent.change(searchInput, { target: { value: '한산도 앞바다' } })
+
+    // 지도를 직접 클릭해 핀을 꽂으면 빈 장소 이름이 검색어로 채워진다
+    fireEvent.click(screen.getByRole('button', { name: '_pickOnMap' }))
+    const labelInput = screen.getByLabelText(
+      '장소 이름',
+    ) as HTMLTextAreaElement
+    expect(labelInput.value).toBe('한산도 앞바다')
+
+    // 검색 결과를 고른 뒤 '검색된 주소 넣기'로 위치 메모를 채울 수 있다
+    fireEvent.change(searchInput, { target: { value: '발미' } })
+    fireEvent.click(await screen.findByText('발미'))
+    expect(labelInput.value).toBe('발미')
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '검색된 상세 주소를 위치 메모에 넣기',
+      }),
+    )
+    const noteInput = screen.getByLabelText(
+      '위치 메모 (선택)',
+    ) as HTMLTextAreaElement
+    expect(noteInput.value).toBe('마른, 그랑테스트, 프랑스')
+
+    // Ctrl+Enter로 즉시 저장된다
+    fireEvent.keyDown(noteInput, { key: 'Enter', ctrlKey: true })
+    expect(onSave).toHaveBeenCalledWith({
+      location: '발미',
+      locationLatitude: 49.0792,
+      locationLongitude: 4.7736,
+      locationNote: '마른, 그랑테스트, 프랑스',
+    })
+  })
 })

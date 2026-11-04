@@ -887,4 +887,106 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     fireEvent.click(screen.getByRole('button', { name: '위치 메모 비우기' }))
     expect(setLocationNote).toHaveBeenLastCalledWith('')
   })
+
+  it('사건명에서 지명 후보가 감지되면 "추천 위치 적용" 및 "한 번에 채우기"로 위치를 자동 반영한다', () => {
+    const setLocation = jest.fn()
+    const setStartDate = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '1919년 베르사유 조약',
+          setStartDate,
+          locationSlot: {
+            location: '',
+            setLocation,
+            onOpenMapModal: jest.fn(),
+          },
+        })}
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', { name: '추천 위치 적용: 베르사유' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '사건명 추천 모두 적용' }),
+    )
+    expect(setStartDate).toHaveBeenCalledWith('1919-01-01')
+    expect(setLocation).toHaveBeenCalledWith('베르사유')
+  })
+
+  it('등록 폼 위치 영역에서 + 메모 열기, 이름·메모 자동 나누기, 상위 사건 위치 불러오기, 최근 위치 칩 선택을 지원한다', () => {
+    const setLocation = jest.fn()
+    const setLocationNote = jest.fn()
+    const onSelectCoordinates = jest.fn()
+
+    const { rerender } = renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          locationSlot: {
+            location: '',
+            setLocation,
+            latitude: null,
+            longitude: null,
+            locationNote: '',
+            setLocationNote,
+            onSelectCoordinates,
+            onOpenMapModal: jest.fn(),
+            parentLocation: {
+              parentTitle: '나폴레옹 전쟁',
+              location: '워털루',
+              latitude: 50.7147,
+              longitude: 4.3991,
+              note: '벨기에 브라방왈롱',
+            },
+            recentLocations: [
+              {
+                location: '베르사유 궁전',
+                latitude: 48.8049,
+                longitude: 2.1204,
+                note: '거울의 방',
+              },
+            ],
+          },
+        })}
+      />,
+    )
+
+    // 1. 상위 사건 위치 불러오기
+    fireEvent.click(
+      screen.getByRole('button', { name: '상위 사건 위치 불러오기' }),
+    )
+    expect(setLocation).toHaveBeenCalledWith('워털루')
+    expect(onSelectCoordinates).toHaveBeenCalledWith(50.7147, 4.3991)
+    expect(setLocationNote).toHaveBeenCalledWith('벨기에 브라방왈롱')
+
+    // 2. 최근 위치 칩 선택
+    fireEvent.click(screen.getByRole('button', { name: '+ 베르사유 궁전' }))
+    expect(setLocation).toHaveBeenLastCalledWith('베르사유 궁전')
+    expect(onSelectCoordinates).toHaveBeenLastCalledWith(48.8049, 2.1204)
+    expect(setLocationNote).toHaveBeenLastCalledWith('거울의 방')
+
+    // 3. 복합 지명이 입력된 상태에서 이름·메모 자동 나누기
+    rerender(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          locationSlot: {
+            location: '콘스탄티노폴리스 (현 튀르키예 이스탄불)',
+            setLocation,
+            locationNote: '',
+            setLocationNote,
+            onOpenMapModal: jest.fn(),
+          },
+        })}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '위치 이름과 메모 자동 나누기' }),
+    )
+    expect(setLocation).toHaveBeenLastCalledWith('콘스탄티노폴리스')
+    expect(setLocationNote).toHaveBeenLastCalledWith('현 튀르키예 이스탄불')
+  })
 })
