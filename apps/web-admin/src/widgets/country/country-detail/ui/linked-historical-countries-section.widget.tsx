@@ -4,22 +4,30 @@
  */
 import { useMemo, useState } from 'react'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getStateTypeLabel } from '@/entities/historical-country/lib/utils'
+import { useHistoricalCountries } from '@/features/historical-country'
 import {
+  getHistoricalCountryById,
   type HistoricalCountryMembershipDto,
   type HistoricalCountryRelationDto,
   type HistoricalCountryTransitionDto,
   type HistoricalMembershipRole,
   type HistoricalRelationType,
   type TransitionEventType,
+  type UpdateHistoricalCountryDto,
+  updateHistoricalCountry,
 } from '@/shared/api/historical-countries'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { compareByCountryStart, formatCountryPeriod } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { CountryPicker, type CountryPickerPick } from '@/shared/ui/country-picker'
+import { notify } from '@/shared/ui/toast'
 
 import { classifyLinkedHistorical } from '../model/linked-historical-classify'
 import {
@@ -77,6 +85,7 @@ export function LinkedHistoricalCountriesSection({
   country,
 }: LinkedHistoricalCountriesSectionProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const rawList = country.historicalCountries ?? []
   const list = useMemo(
     () => [...rawList].sort(compareByCountryStart),
@@ -87,6 +96,13 @@ export function LinkedHistoricalCountriesSection({
   const [viewMode, setViewMode] = useState<'list' | 'flow'>('list')
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilterKey>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [isPickerOpen, setIsPickerOpen] = useState(false)
+  const [isMutatingLink, setIsMutatingLink] = useState(false)
+
+  const {
+    data: allHistoricalCountries = [],
+    isLoading: isAllHistoricalLoading,
+  } = useHistoricalCountries({ enabled: isPickerOpen })
 
   const linkedIds = useMemo(() => list.map((item) => item.id), [list])
   const {
@@ -95,6 +111,79 @@ export function LinkedHistoricalCountriesSection({
     memberships,
     isLoading: isLinkedDataLoading,
   } = useLinkedHistoricalData(linkedIds)
+
+  const handleCommitLink = async (pickedList: CountryPickerPick[]) => {
+    if (pickedList.length === 0 || isMutatingLink) return
+    setIsMutatingLink(true)
+    const toastId = notify.loading('과거 국가 연결 중...')
+    try {
+      for (const picked of pickedList) {
+        const detail = (await getHistoricalCountryById(picked.id)) as {
+          parentModernCountryIds?: string[]
+        }
+        const existingModernIds = detail.parentModernCountryIds ?? []
+        const nextModernIds = Array.from(
+          new Set([...existingModernIds, country.id]),
+        )
+        await updateHistoricalCountry(picked.id, {
+          parentModernCountryIds: nextModernIds,
+        } as UpdateHistoricalCountryDto)
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['countries'] }),
+        queryClient.invalidateQueries({ queryKey: ['historical-countries'] }),
+      ])
+      notify.success(
+        `${pickedList.length}개 과거 국가를 ${country.name}에 연결했습니다.`,
+        { id: toastId },
+      )
+      setIsPickerOpen(false)
+    } catch (error) {
+      notify.error(
+        `연결 실패: ${(error as Error).message || '오류가 발생했습니다.'}`,
+        { id: toastId },
+      )
+    } finally {
+      setIsMutatingLink(false)
+    }
+  }
+
+  const handleUnlink = async (item: HistoricalCountryItem) => {
+    if (isMutatingLink) return
+    const confirmed = await confirm({
+      title: '과거 국가 연결 해제',
+      message: `${item.name}와(과) ${country.name}의 연결을 해제하시겠습니까? (과거 국가 자체는 삭제되지 않습니다.)`,
+      confirmText: '연결 해제',
+      danger: true,
+    })
+    if (!confirmed) return
+    setIsMutatingLink(true)
+    const toastId = notify.loading('연결 해제 중...')
+    try {
+      const detail = (await getHistoricalCountryById(item.id)) as {
+        parentModernCountryIds?: string[]
+      }
+      const existingModernIds = detail.parentModernCountryIds ?? []
+      const nextModernIds = existingModernIds.filter(
+        (modernId) => modernId !== country.id,
+      )
+      await updateHistoricalCountry(item.id, {
+        parentModernCountryIds: nextModernIds,
+      } as UpdateHistoricalCountryDto)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['countries'] }),
+        queryClient.invalidateQueries({ queryKey: ['historical-countries'] }),
+      ])
+      notify.success(`${item.name} 연결을 해제했습니다.`, { id: toastId })
+    } catch (error) {
+      notify.error(
+        `연결 해제 실패: ${(error as Error).message || '오류가 발생했습니다.'}`,
+        { id: toastId },
+      )
+    } finally {
+      setIsMutatingLink(false)
+    }
+  }
 
   const idToCountry = useMemo(() => {
     const map = new Map<string, HistoricalCountryItem>()
@@ -414,26 +503,37 @@ export function LinkedHistoricalCountriesSection({
             </Description>
           </HeadText>
 
-          <ModeSwitchGroup role="tablist" aria-label="과거 국가 보기 방식">
-            <ModeSwitchBtn
+          <HeadActions>
+            {count > 0 && (
+              <ModeSwitchGroup role="tablist" aria-label="과거 국가 보기 방식">
+                <ModeSwitchBtn
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'list'}
+                  $active={viewMode === 'list'}
+                  onClick={() => setViewMode('list')}
+                >
+                  2열 원장
+                </ModeSwitchBtn>
+                <ModeSwitchBtn
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'flow'}
+                  $active={viewMode === 'flow'}
+                  onClick={() => setViewMode('flow')}
+                >
+                  계보 흐름도
+                </ModeSwitchBtn>
+              </ModeSwitchGroup>
+            )}
+            <LinkAddButton
               type="button"
-              role="tab"
-              aria-selected={viewMode === 'list'}
-              $active={viewMode === 'list'}
-              onClick={() => setViewMode('list')}
+              disabled={isMutatingLink}
+              onClick={() => setIsPickerOpen(true)}
             >
-              2열 원장
-            </ModeSwitchBtn>
-            <ModeSwitchBtn
-              type="button"
-              role="tab"
-              aria-selected={viewMode === 'flow'}
-              $active={viewMode === 'flow'}
-              onClick={() => setViewMode('flow')}
-            >
-              계보 흐름도
-            </ModeSwitchBtn>
-          </ModeSwitchGroup>
+              + 과거 국가 연결
+            </LinkAddButton>
+          </HeadActions>
         </HeadRow>
 
         <DashboardStyles.SectionHeadlineStrip aria-label="연결된 과거 국가 요약 지표">
@@ -532,11 +632,18 @@ export function LinkedHistoricalCountriesSection({
           <EmptySpecGrid>
             <EmptySpecCell>
               <EmptySpecTitle>
-                1. 과거 국가에서 현대 국가({country.name}) 연결
+                1. 이 탭에서 과거 국가 직접 연결
               </EmptySpecTitle>
               <EmptySpecDesc>
-                역사적 국가 상세의 기본 정보 수정에서 「연결할 현대 국가」로 {country.name}을(를) 지정하면 이 탭과 대시보드 계보에 즉시 반영됩니다.
+                「+ 과거 국가 연결」로 기존 역사적 국가를 선택하면 {country.name}의 전신·구성 정치체·역사 유산 계보에 즉시 연결됩니다.
               </EmptySpecDesc>
+              <EmptyActionBtn
+                type="button"
+                disabled={isMutatingLink}
+                onClick={() => setIsPickerOpen(true)}
+              >
+                + 과거 국가 연결하기
+              </EmptyActionBtn>
             </EmptySpecCell>
             <EmptySpecCell>
               <EmptySpecTitle>
@@ -800,6 +907,16 @@ export function LinkedHistoricalCountriesSection({
 
                         <DetailActionLabel>상세 →</DetailActionLabel>
                       </CountryRowButton>
+
+                      <CountryRowActions>
+                        <UnlinkRowBtn
+                          type="button"
+                          disabled={isMutatingLink}
+                          onClick={() => void handleUnlink(item)}
+                        >
+                          연결 해제
+                        </UnlinkRowBtn>
+                      </CountryRowActions>
                     </CountryLedgerCell>
                   )
                 })}
@@ -807,6 +924,19 @@ export function LinkedHistoricalCountriesSection({
             )}
           </>
         )}
+
+        <CountryPicker
+          isOpen={isPickerOpen}
+          onClose={() => setIsPickerOpen(false)}
+          title={`${country.name}에 연결할 과거 국가 선택`}
+          mode="add"
+          scope="historical"
+          modernCountries={[]}
+          historicalCountries={allHistoricalCountries}
+          selectedIds={linkedIds}
+          isLoading={isAllHistoricalLoading}
+          onCommit={(pickedList) => void handleCommitLink(pickedList)}
+        />
       </SectionWrap>
     </DashboardStyles.DashboardRoot>
   )
@@ -832,6 +962,36 @@ const HeadText = styled.div`
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+`
+
+const HeadActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const LinkAddButton = styled.button`
+  padding: 5px 11px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => theme.colors.active};
+    color: ${({ theme }) => theme.colors.active};
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `
 
 const Title = styled.h3`
@@ -949,6 +1109,9 @@ const CountryLedgerGrid = styled.div`
 `
 
 const CountryLedgerCell = styled.div`
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
   min-width: 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
@@ -967,7 +1130,8 @@ const CountryRowButton = styled.button`
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 12px 12px;
   border: none;
   background: transparent;
@@ -979,6 +1143,37 @@ const CountryRowButton = styled.button`
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+  }
+`
+
+const CountryRowActions = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 0 10px 0 4px;
+  flex-shrink: 0;
+`
+
+const UnlinkRowBtn = styled.button`
+  padding: 3px 7px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.alert.danger.fg};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2'};
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `
 
@@ -1275,4 +1470,27 @@ const EmptySpecDesc = styled.p`
   font-size: 12.5px;
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const EmptyActionBtn = styled.button`
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `

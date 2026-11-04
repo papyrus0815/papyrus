@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
+import { type Country, useCountries } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
   getPersonsByHistoricalCountryUnion,
@@ -217,6 +218,28 @@ export function HistoricalCountryDetail({
 
   // 이 위젯은 country-detail.widget이 country.type === 'historical'로 분기 후에만 마운트됨 — id 직접 사용.
   const historicalCountryId = country.id
+  const navigate = useNavigate()
+  const { data: allModernCountries = [] } = useCountries()
+  const { data: historicalDetailRecord } = useHistoricalCountry(historicalCountryId)
+  const linkedModernCountries = useMemo<Country[]>(() => {
+    const detailModernIds = new Set(
+      (
+        historicalDetailRecord as
+          | { parentModernCountryIds?: string[] }
+          | undefined
+      )?.parentModernCountryIds ?? [],
+    )
+    return allModernCountries.filter((modern) => {
+      if (detailModernIds.has(modern.id)) return true
+      const embeddedHistorical = (
+        modern as { historicalCountries?: Array<{ id: string }> }
+      ).historicalCountries
+      return Boolean(
+        embeddedHistorical?.some((hist) => hist.id === historicalCountryId),
+      )
+    })
+  }, [allModernCountries, historicalDetailRecord, historicalCountryId])
+
   const { data: transitions = [] } = useQuery({
     queryKey: ['historical-country-transitions', historicalCountryId],
     queryFn: () => getTransitionsByHistoricalCountryId(historicalCountryId),
@@ -224,7 +247,7 @@ export function HistoricalCountryDetail({
   })
   // 이 국가가 후임인 변천 = 탄생 유형 (고려 → 조선 시 조선 입장에서 "계승")
   const incomingTransition = transitions.find(
-    (t) => t.successorId === historicalCountryId,
+    (transition) => transition.successorId === historicalCountryId,
   )
   const incomingCategoryLabel = incomingTransition
     ? TRANSITION_EVENT_LABELS[incomingTransition.eventType] ?? incomingTransition.eventType
@@ -449,11 +472,16 @@ export function HistoricalCountryDetail({
                           <HistoricalHeaderMeta
                             country={country}
                             incomingCategoryLabel={incomingCategoryLabel}
+                            linkedModernCountries={linkedModernCountries}
+                            onNavigateModernCountry={(modernId) =>
+                              navigate(pathKeys.countryDetail(modernId))
+                            }
                           />
                         }
                       />
                       <HistoricalOverviewSection
                         country={country}
+                        linkedModernCountries={linkedModernCountries}
                         onEdit={onEdit ? () => onEdit(country) : undefined}
                         onGoToTab={handleTabChange}
                         onOpenGovernmentSubTab={(subTab) => {
@@ -613,13 +641,17 @@ export function HistoricalCountryDetail({
 // 역사적 국가 헤더 (현대 국가와 동일 레이아웃/스타일)
 // ============================================
 
-/** 머리글 메타 줄 — 영문 표기 · 존속 기간 · 국가 형태 · 변천 */
+/** 머리글 메타 줄 — 영문 표기 · 존속 기간 · 국가 형태 · 변천 · 연결 현대 국가 */
 function HistoricalHeaderMeta({
   country,
   incomingCategoryLabel,
+  linkedModernCountries = [],
+  onNavigateModernCountry,
 }: {
   country: UnifiedCountry
   incomingCategoryLabel?: string | null
+  linkedModernCountries?: Country[]
+  onNavigateModernCountry?: (modernId: string) => void
 }) {
   const period = formatCountryPeriod(country)
   const entityKind = country.entityKind
@@ -642,6 +674,16 @@ function HistoricalHeaderMeta({
           {incomingCategoryLabel}
         </CountryStyles.HeroMetaChip>
       )}
+      {linkedModernCountries.map((modern) => (
+        <HeaderModernLinkBtn
+          key={modern.id}
+          type="button"
+          title={`${modern.name} 현대 국가 상세로 이동`}
+          onClick={() => onNavigateModernCountry?.(modern.id)}
+        >
+          현대: {modern.name} →
+        </HeaderModernLinkBtn>
+      ))}
     </>
   )
 }
@@ -801,12 +843,14 @@ function HistoricalCountryTabs({
 
 function HistoricalOverviewSection({
   country,
+  linkedModernCountries = [],
   onEdit,
   onGoToTab,
   onOpenGovernmentSubTab,
   onOpenEventsCentury,
 }: {
   country: UnifiedCountry
+  linkedModernCountries?: Country[]
   onEdit?: () => void
   /** 요약 칸에서 해당 탭으로(역대 수반·사건·계승 …) */
   onGoToTab: (tab: HistoricalCountryTab) => void
@@ -1242,6 +1286,38 @@ function HistoricalOverviewSection({
             </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
         </DashboardStyles.FactSpecGrid>
+        <ModernLinkStrip>
+          <ModernLinkLabel>연결된 현대 국가</ModernLinkLabel>
+          {linkedModernCountries.length > 0 ? (
+            <ModernLinkItems>
+              {linkedModernCountries.map((modern) => (
+                <ModernLinkPill
+                  key={modern.id}
+                  type="button"
+                  onClick={() => navigate(pathKeys.countryDetail(modern.id))}
+                >
+                  {modern.name} →
+                </ModernLinkPill>
+              ))}
+              {onEdit && (
+                <ModernLinkActionBtn type="button" onClick={onEdit}>
+                  연결 수정
+                </ModernLinkActionBtn>
+              )}
+            </ModernLinkItems>
+          ) : (
+            <ModernLinkItems>
+              <ModernLinkMutedText>
+                미연결 (현대 국가 대시보드 및 계보 흐름도에서 제외됨)
+              </ModernLinkMutedText>
+              {onEdit && (
+                <ModernLinkActionBtn type="button" onClick={onEdit}>
+                  + 현대 국가 연결
+                </ModernLinkActionBtn>
+              )}
+            </ModernLinkItems>
+          )}
+        </ModernLinkStrip>
         {missingFactLabels.length > 0 && onEdit && (
           <DashboardStyles.FactEmptyRow>
             <DashboardStyles.FactEmptyText>
@@ -1666,12 +1742,16 @@ function HistoricalOverviewSection({
         onSelectPerson={goPerson}
       />
 
-      {/* 계보 — 전신·후신 두 대까지 세기 축 위에. 이 나라는 강조, 나머지는 눌러 건너간다 */}
+      {/* 계보 — 전신·후신 두 대까지 세기 축 위에 + 소속·구성·국가 관계·연결 현대 국가 통합 */}
       <DashboardStyles.Section
         id="section-lineage"
         data-section-count={
-          stats.lineage.length > 1
-            ? String(stats.lineage.length - 1)
+          stats.transitionCount + stats.membershipCount + stats.relationCount > 0
+            ? String(
+                stats.transitionCount +
+                  stats.membershipCount +
+                  stats.relationCount,
+              )
             : undefined
         }
       >
@@ -1681,21 +1761,147 @@ function HistoricalOverviewSection({
           </DashboardStyles.SectionTitleIcon>
           <DashboardStyles.SectionTitleText>계보</DashboardStyles.SectionTitleText>
           <SectionHelpPopover sectionKey="lineage" />
-          {stats.lineage.length > 1 && (
-            <DashboardStyles.SectionCountChip>
-              앞뒤 {stats.lineage.length - 1}개국
-            </DashboardStyles.SectionCountChip>
-          )}
-          <DashboardStyles.SectionLink type="button" onClick={() => onGoToTab('succession')}>
-            계승 관리
-          </DashboardStyles.SectionLink>
+          <DashboardStyles.SectionCountChip>
+            계승 {stats.transitionCount} · 소속 {stats.membershipCount} · 관계{' '}
+            {stats.relationCount}
+          </DashboardStyles.SectionCountChip>
+          <LineageHeaderActions>
+            <LineageHeaderBtn
+              type="button"
+              onClick={() => onGoToTab('succession')}
+            >
+              계승 관리
+            </LineageHeaderBtn>
+            <LineageHeaderBtn
+              type="button"
+              onClick={() => onGoToTab('membership')}
+            >
+              소속·구성
+            </LineageHeaderBtn>
+            <LineageHeaderBtn
+              type="button"
+              onClick={() => onGoToTab('relation')}
+            >
+              국가 관계
+            </LineageHeaderBtn>
+          </LineageHeaderActions>
         </DashboardStyles.SectionTitleRow>
+
+        <DashboardStyles.SectionHeadlineStrip aria-label="국가 간 관계 3축 및 현대 계승 요약">
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              전후 계승 · 변천
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={stats.transitionCount === 0}
+            >
+              {stats.transitionCount > 0 ? (
+                <>
+                  {stats.transitionCount.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {stats.lineage.length > 1
+                ? `앞뒤 계보 ${stats.lineage.length - 1}개국`
+                : '전신·후신 계승 관계 미등록'}{' '}
+              ·{' '}
+              <LineageInlineLink
+                type="button"
+                onClick={() => onGoToTab('succession')}
+              >
+                계승 탭 →
+              </LineageInlineLink>
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              소속 · 구성 정치체
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={stats.membershipCount === 0}
+            >
+              {stats.membershipCount > 0 ? (
+                <>
+                  {stats.membershipCount.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '없음'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              연방·제국 소속 및 하위 구성국 ·{' '}
+              <LineageInlineLink
+                type="button"
+                onClick={() => onGoToTab('membership')}
+              >
+                소속·구성 탭 →
+              </LineageInlineLink>
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              수평 국가 관계
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={stats.relationCount === 0}
+            >
+              {stats.relationCount > 0 ? (
+                <>
+                  {stats.relationCount.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '없음'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              동맹·조공·교전·동군연합 ·{' '}
+              <LineageInlineLink
+                type="button"
+                onClick={() => onGoToTab('relation')}
+              >
+                국가 관계 탭 →
+              </LineageInlineLink>
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              연결된 현대 국가
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={linkedModernCountries.length === 0}
+            >
+              {linkedModernCountries.length > 0 ? (
+                <>
+                  {linkedModernCountries.length.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미연결'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {linkedModernCountries.length > 0
+                ? linkedModernCountries.map((modern) => modern.name).join(' · ')
+                : '기본 정보에서 연결할 현대 국가 지정 가능'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+        </DashboardStyles.SectionHeadlineStrip>
+
         {stats.loading.lineage ? (
           <ChartSkeleton variant="bars" />
-        ) : stats.lineage.length <= 1 ? (
+        ) : stats.lineage.length <= 1 && linkedModernCountries.length === 0 ? (
           <SectionEmpty
             text="이 나라가 무엇에서 나와 무엇으로 이어졌는지 계승 관계를 걸면, 앞뒤 두 대까지 세기 축 위에 그려집니다."
-            hint="전신·후신 국가를 연결하면 세기별 계보 흐름도가 자동 생성됩니다"
+            hint="전신·후신 국가나 현대 국가를 연결하면 세기별 계보 흐름도가 자동 생성됩니다"
             actionLabel="계승 관계 추가"
             onAction={() => onGoToTab('succession')}
           />
@@ -1711,12 +1917,26 @@ function HistoricalOverviewSection({
               hasSecondDegree && lineageDepthFilter === 'direct'
                 ? directLineage
                 : stats.lineage
+            const primaryModern = linkedModernCountries[0]
 
             return (
               <LineageFlow
                 historicalCountries={displayedLineage}
                 currentId={country.id}
-                onSelect={(id) => navigate(pathKeys.countryDetail(id))}
+                modernEndpoint={
+                  primaryModern
+                    ? {
+                        id: primaryModern.id,
+                        name: primaryModern.name,
+                        flagEmoji: primaryModern.flagEmoji,
+                        thumbnailUrl: primaryModern.thumbnailUrl,
+                        isoCode: primaryModern.isoCode,
+                      }
+                    : undefined
+                }
+                onSelect={(targetId) =>
+                  navigate(pathKeys.countryDetail(targetId))
+                }
                 maxPerColumn={4}
                 toolbarLeft={
                   hasSecondDegree ? (
@@ -3233,4 +3453,127 @@ const HistoricalGovernmentNote = styled.p`
   font-size: 12.5px;
   line-height: 1.6;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeaderModernLinkBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 4px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.active};
+    background: ${({ theme }) => theme.colors.activeLight};
+  }
+`
+
+const ModernLinkStrip = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const ModernLinkLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+const ModernLinkItems = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const ModernLinkPill = styled.button`
+  padding: 2px 8px;
+  border: none;
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.activeLight};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const ModernLinkMutedText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ModernLinkActionBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const LineageHeaderActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+`
+
+const LineageHeaderBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.active};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const LineageInlineLink = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 `
