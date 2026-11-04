@@ -37,6 +37,11 @@ const OPTIMISTIC_SCALAR_FIELDS = [
   'title',
   'description',
   'location',
+  /** 국면 손 지정 — '몇 국면'이 바로 바뀌게 */
+  'phaseId',
+  /** 위치 핀 — 빠지면 지도 모달에서 저장해도 refetch 전까지 '지도에 찍기'로 남는다 */
+  'locationLatitude',
+  'locationLongitude',
   'background',
   'aftermath',
   'warCost',
@@ -197,7 +202,9 @@ export function useEventMutation(eventId: string) {
         // 연결 사유도 쌍의 반대면(자식↔부모 페이지)을 stale하게 만든다 — patch가 상대 id를
         // 명시하므로 해당 event-detail 키만 표적 무효화(자기 자신은 위 isMutating 게이트).
         'parentLinkReasons' in patch ||
-        'childLinkReasons' in patch
+        'childLinkReasons' in patch ||
+        // 국면 손 지정 — 상위 사건 전개의 장 머리 배치가 바뀐다
+        'phaseId' in patch
       ) {
         queryClient.invalidateQueries({
           queryKey: eventKeys.detailAll(),

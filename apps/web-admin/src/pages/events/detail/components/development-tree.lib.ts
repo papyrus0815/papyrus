@@ -28,6 +28,10 @@ export interface TreeSource {
   domain?: string | null
   /** 응답에 종류가 실려 오면 그것이 정본. 없으면 하위가 있는지로 판별(단일은 하위를 가질 수 없다) */
   kind?: 'SINGLE' | 'COLLECTION' | null
+  /** 손으로 넣은 상위의 국면 — 비면 날짜로 자동 */
+  phaseId?: string | null
+  /** 이 묶음의 국면 — 최상위 전개에서도 펼친 묶음 안에 장 머리를 세운다 */
+  phases?: ReadonlyArray<import('./event-phase.lib').EventPhase>
 }
 
 export interface TreeNode extends TreeSource {

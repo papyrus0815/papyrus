@@ -543,11 +543,17 @@ export const cityApi = {
   },
 
   /** OpenStreetMap Nominatim 장소 검색 (백엔드 프록시) */
-  searchPlaces: async (q: string, countryCode?: string): Promise<PlaceSearchResult[]> => {
+  searchPlaces: async (
+    q: string,
+    countryCode?: string,
+    /** anyPlace — 도시로 좁히지 않는다(사건 위치: 궁전·전장·섬) */
+    options?: { anyPlace?: boolean },
+  ): Promise<PlaceSearchResult[]> => {
     if (!q || q.trim().length < 2) return []
     try {
       const params = new URLSearchParams({ q: q.trim() })
       if (countryCode) params.set('countryCode', countryCode)
+      if (options?.anyPlace) params.set('scope', 'any')
       const res = await fetch(`${getBaseUrl()}/cities/place-search?${params}`, {
         headers: getHeaders(),
       })

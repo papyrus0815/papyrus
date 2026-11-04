@@ -34,6 +34,8 @@ const node = (over: Partial<EventOverviewNode> & { id: string }): EventOverviewN
   imageCount: 0,
   hasBackground: false,
   hasAftermath: false,
+  phaseId: null,
+  phases: [],
   ...over,
 })
 

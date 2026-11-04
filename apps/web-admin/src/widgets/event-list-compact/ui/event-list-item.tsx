@@ -79,6 +79,9 @@ interface EventListItemProps {
    * 무엇의 하위인지 알 방법이 없었다.
    */
   anchorParent?: { id: string; title: string; year: number | null } | null
+  /** 상위 사건의 국면(장) 중 어디인가 — '2국면'·'2–4국면'. 국면은 목록에 행이 없어 하위 줄의 작은 표지로만 */
+  chapterLabel?: string | null
+  chapterTitle?: string | null
   /** 트리에서의 부모 노드 id — ← 키가 부모 행으로 올라갈 때 쓴다(최상위는 null) */
   parentNodeId?: string | null
   /**
@@ -326,6 +329,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   childCount = 0,
   hiddenChildCount = 0,
   anchorParent = null,
+  chapterLabel = null,
+  chapterTitle = null,
   parentNodeId = null,
   isMatch = true,
   isActive,
@@ -817,6 +822,9 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
             {/* 부모가 다른 밴드로 갈라져 나가 화면에서 인접하지 않을 때만 계보를 밝힌다.
                 부모가 바로 위 행이면 칩은 순수한 중복이고, 1914년처럼 자식 18행이
                 이어지는 구간에서 매 행에 붙으면 밀도만 잡아먹는다(검토 IDX-7). */}
+            {chapterLabel && (
+              <ChapterChip title={`상위 사건의 국면 — ${chapterTitle ?? ''}`}>{chapterLabel}</ChapterChip>
+            )}
             {anchorParent && (
               <AnchorChip
                 type="button"
@@ -2004,6 +2012,22 @@ const RelatedTag = styled.span`
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
+  white-space: nowrap;
+`
+
+/** 국면 표지 — 상위 사건의 몇 번째 장인지. 앵커 칩과 같은 크기, 테두리 대신 옅은 면 */
+const ChapterChip = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(129,140,248,0.16)' : 'rgba(79,70,229,0.08)')};
+  font-size: var(--row-chip);
+  font-weight: 700;
+  line-height: 1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   white-space: nowrap;
 `
 

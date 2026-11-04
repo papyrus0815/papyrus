@@ -205,6 +205,22 @@ export interface HistoricalEvent {
   extraParentCount?: number
   /** 관련 사건(EventRelation) 개수 — 목록 `_count` 양방향 합. 미로드면 undefined */
   relatedCount?: number
+  /** 손으로 넣은 상위 사건의 국면 — 비면 날짜로 자동(목록 '2국면' 표지). transformer가 매핑한다 */
+  phaseId?: string | null
+  /** 이 묶음의 국면(구획) — 목록이 하위 줄에 '2국면' 표지를 단다. 미로드면 undefined */
+  phases?: Array<{
+    id: string
+    title: string
+    order: number
+    startEra?: 'BC' | 'AD' | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    endEra?: 'BC' | 'AD' | null
+    endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
+  }>
   sectionTitles?: string[] // 작성된 섹션 제목 리스트 (deprecated)
   eventSections?: EventSection[] // 사건 섹션 목록 (새 구조)
   eventImages?: EventImage[] // 사건 이미지 목록 (새 구조)

@@ -356,6 +356,37 @@ export async function getEventAccessionCandidates(eventId: string): Promise<Even
   return (await response.json()) as EventAccession[]
 }
 
+/** 국면 입력 한 줄 — 배열 순서가 표시 순서, id 없으면 새 국면 */
+export interface EventPhaseInput {
+  id?: string
+  title: string
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  description?: string | null
+}
+
+/**
+ * 국면 목록 동기화 — PUT /events/:id/phases. 빠진 국면은 지워지고, 그 국면에 손으로 넣었던 하위 사건은
+ * '날짜로 자동'으로 돌아간다.
+ */
+export async function putEventPhases(eventId: string, phases: EventPhaseInput[]) {
+  const connection = getConnection()
+  const response = await fetch(`${connection.host}/events/${encodeURIComponent(eventId)}/phases`, {
+    method: 'PUT',
+    headers: { ...(connection.headers ?? {}), 'Content-Type': 'application/json' } as HeadersInit,
+    credentials: 'include',
+    body: JSON.stringify({ phases }),
+  })
+  if (!response.ok) throw new Error(`국면 저장 실패: HTTP ${response.status}`)
+  return (await response.json()) as Array<EventPhaseInput & { id: string; order: number }>
+}
+
 export async function getEventLinkCandidates(params?: {
   /** 사건명 부분일치 검색어 — 비면 최근 수정순 기본 목록 */
   query?: string

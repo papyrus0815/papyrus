@@ -13,6 +13,7 @@ import {
   ledgerHairlineStrong,
   ledgerHoverFill,
   ledgerSubtleFill,
+  withAlpha,
 } from '@/entities/event/ui/ledger-tokens'
 
 import type { RoleTone } from './event-overview.lib'
@@ -1087,6 +1088,88 @@ export const GanttTrack = styled.div<{ $dim: boolean; $hot: boolean; $stripe?: b
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   background: ${({ $hot, $stripe, theme }) =>
     $hot ? ledgerHoverFill(theme.mode) : $stripe ? stripeFill(theme.mode) : 'transparent'};
+`
+
+/** 국면 띠의 제목 칸 — 축 아래 한 줄, 제목 열 자리에 '국면' */
+export const ChapterLaneLabel = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+
+  @container overviewpanel (max-width: 659px) {
+    display: none;
+  }
+`
+
+/** 국면 띠 — 조망을 연 사건의 장(章). 사건 막대와 갈리게 각진 칸·왼쪽 굵은 선 */
+export const ChapterLane = styled.div`
+  position: relative;
+  height: 26px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+export const ChapterSegment = styled.span`
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  border-left: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  border-radius: 0 4px 4px 0;
+  background: ${({ theme }) => withAlpha(ledgerAccent(theme.mode), theme.mode === 'dark' ? 0.16 : 0.08)};
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  &[data-even] {
+    background: ${({ theme }) => withAlpha(ledgerAccent(theme.mode), theme.mode === 'dark' ? 0.08 : 0.04)};
+  }
+
+  b {
+    flex-shrink: 0;
+    font-weight: 800;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+/** 묶음 머리 줄 위 국면 경계 — 점선과 번호. 마우스를 올리면 국면 이름 */
+export const ChapterTick = styled.span`
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  z-index: 2;
+  width: 8px;
+  margin-left: -4px;
+  border-left: 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 0;
+    bottom: 0;
+    border-left: 2px dotted ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &::after {
+    content: attr(data-n);
+    position: absolute;
+    top: -2px;
+    left: 7px;
+    font-size: 9.5px;
+    font-weight: 800;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 `
 
 /** 상위 사건 자신의 기간 — 모든 줄 뒤에 깔리는 띠 */

@@ -7,9 +7,11 @@ import { eventKeys } from '@/shared/api/event-query-keys'
 import { type UpdateEventDto, getEventsByParentId } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 import { InlineText } from '@/shared/ui/inline-edit'
+import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { REASON_MAX, compareEventStart } from './detail-network.lib'
+import { assignPhases, phaseRangeLabel, phaseReach, phaseReachLabel } from './event-phase.lib'
 import * as NetStyles from './detail-network.styles'
 
 const REASON_PLACEHOLDER =
@@ -104,6 +106,29 @@ export function ParentBlock({
       ? sortedSiblings[siblingIndex + 1]
       : null
 
+  /*
+   * 국면 — 상위 사건을 시간으로 나눈 장 중 이 사건이 든 곳. 손으로 넣은 게 없으면 시작일로 자동.
+   * 국면은 사건이 아니라 목차라서 상위를 바꾸지 않고 '몇 국면'만 고친다.
+   */
+  const parentChapters = useMemo(
+    () => [...(parentEvent?.phases ?? [])].sort((left, right) => left.order - right.order),
+    [parentEvent?.phases],
+  )
+  const autoChapter = useMemo(
+    () =>
+      assignPhases(parentChapters, [
+        { id: event.id, phaseId: null, startDate: event.startDate, startDatePrecision: event.startDatePrecision },
+      ]).get(event.id)?.phaseId ?? null,
+    [parentChapters, event.id, event.startDate, event.startDatePrecision],
+  )
+  const manualChapter = parentChapters.some((chapter) => chapter.id === event.phaseId) ? (event.phaseId ?? null) : null
+  const currentChapterId = manualChapter ?? autoChapter
+  const chapterName = (id: string | null) => {
+    const position = parentChapters.findIndex((chapter) => chapter.id === id)
+    return position >= 0 ? `${position + 1}국면 · ${parentChapters[position].title}` : '국면 밖'
+  }
+  const [chapterPickerOpen, setChapterPickerOpen] = useState(false)
+
   return (
     <NetStyles.HierBlock role="group" aria-labelledby="network-parent-label">
       <NetStyles.BlockLabel id="network-parent-label">상위 사건</NetStyles.BlockLabel>
@@ -160,6 +185,52 @@ export function ParentBlock({
             maxLength={REASON_MAX}
             showCount
             style={{ flex: 1 }}
+          />
+        </NetStyles.ReasonLine>
+      )}
+      {parentEvent && parentChapters.length > 0 && (
+        <NetStyles.ReasonLine>
+          <NetStyles.ReasonKicker>국면</NetStyles.ReasonKicker>
+          <span>
+            {chapterName(currentChapterId)}
+            {(() => {
+              /* 여러 국면에 걸치면 끝 국면까지 — 시작 국면 하나만 말하면 1792–1797 전쟁이 '2국면'으로만 읽힌다 */
+              const reach = phaseReach(parentChapters, {
+                id: event.id,
+                phaseId: manualChapter,
+                startDate: event.startDate,
+                startDatePrecision: event.startDatePrecision,
+                endDate: event.endDate,
+                endDatePrecision: event.endDatePrecision,
+              })
+              return reach.to != null && reach.from != null && reach.to > reach.from ? ` → ${phaseReachLabel(reach)}에 걸침` : ''
+            })()}
+            {manualChapter ? ' (직접 지정)' : ' (날짜로 자동)'}
+          </span>
+          <NetStyles.TextBtn type="button" onClick={() => setChapterPickerOpen(true)} aria-label="국면 바꾸기">
+            바꾸기
+          </NetStyles.TextBtn>
+          <SelectModal
+            isOpen={chapterPickerOpen}
+            onClose={() => setChapterPickerOpen(false)}
+            title={`'${parentEvent.title}'의 어느 국면인가`}
+            selectedValue={manualChapter ?? '__auto'}
+            options={[
+              {
+                value: '__auto',
+                label: '날짜로 자동',
+                description: `시작일로 정합니다 — 지금은 ${chapterName(autoChapter)}`,
+              },
+              ...parentChapters.map((chapter, position) => ({
+                value: chapter.id,
+                label: `${position + 1}국면 · ${chapter.title}`,
+                description: phaseRangeLabel(chapter) || undefined,
+              })),
+            ]}
+            onSelect={(value) => {
+              setChapterPickerOpen(false)
+              onPatch({ phaseId: value === '__auto' ? null : value } as UpdateEventDto, { savedLabel: '국면' })
+            }}
           />
         </NetStyles.ReasonLine>
       )}

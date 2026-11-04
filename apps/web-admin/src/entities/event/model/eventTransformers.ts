@@ -156,6 +156,9 @@ export const transformEventsFromApi = (
       extraParentCount: (evt as { extraParentCount?: number }).extraParentCount,
       // 관련 사건 개수 — 같은 '미로드 vs 0' 계약. 매핑을 빠뜨리면 위와 똑같이 조용히 죽는다.
       relatedCount: (evt as { relatedCount?: number }).relatedCount,
+      // 국면 — 같은 사고(매핑 누락 = 조용한 소멸). 목록 하위 줄의 '2국면' 표지 근거
+      phaseId: (evt as { phaseId?: string | null }).phaseId ?? null,
+      phases: (evt as { phases?: HistoricalEvent['phases'] }).phases,
       sectionTitles: evt.sectionTitles ?? [],
       eventSections: evt.eventSections,
       eventImages: evt.eventImages,

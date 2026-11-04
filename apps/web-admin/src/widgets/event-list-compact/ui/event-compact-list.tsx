@@ -60,6 +60,7 @@ import type {
 } from '@/features/event-hierarchy/model'
 
 import { EventListItem } from './event-list-item'
+import { type EventPhase, phaseReach, phaseReachLabel } from '../../../pages/events/detail/components/event-phase.lib'
 
 interface EventCompactListProps {
   /**
@@ -725,12 +726,45 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       if (parentBucket === (bucketYearById.get(node.id) ?? null)) return null
       return { id: parentNodeId, title: parentTitle, year: parentBucket }
     })()
+    /*
+     * 국면 — 상위 사건이 장(국면)으로 나뉘어 있으면 이 하위 사건이 몇 번째 장인지. 국면은 사건이 아니라 목록에 행이
+     * 없으므로, 하위 줄의 작은 표지로만 말한다(손 지정 phaseId 우선, 없으면 시작일).
+     */
+    const chapter = (() => {
+      if (depth === 0 || !parentNodeId) return null
+      const parentPhases = eventById.get(parentNodeId)?.phases as EventPhase[] | undefined
+      if (!parentPhases || parentPhases.length === 0) return null
+      const self = eventById.get(node.id) as
+        | {
+            phaseId?: string | null
+            startDate?: string | null
+            startDatePrecision?: string | null
+            endDate?: string | null
+            endDatePrecision?: string | null
+          }
+        | undefined
+      const reach = phaseReach(parentPhases, {
+        id: node.id,
+        phaseId: self?.phaseId ?? null,
+        startDate: self?.startDate ?? node.period.start ?? null,
+        startDatePrecision: self?.startDatePrecision ?? node.period.startPrecision ?? null,
+        endDate: self?.endDate ?? null,
+        endDatePrecision: self?.endDatePrecision ?? null,
+      })
+      /* 국면 밖은 표지를 달지 않는다 — 목록에서 '국면 전'은 소음(장 머리가 있는 전개가 말한다) */
+      if (reach.from == null) return null
+      const sorted = [...parentPhases].sort((left, right) => left.order - right.order)
+      const names = sorted.slice(reach.from - 1, reach.to ?? reach.from).map((phase, index) => `${(reach.from ?? 0) + index}국면 ${phase.title}`)
+      return { label: phaseReachLabel(reach), title: names.join(' → ') }
+    })()
     return (
       <EventListItem
         key={node.id}
         node={node}
         event={event}
         depth={depth}
+        chapterLabel={chapter?.label ?? null}
+        chapterTitle={chapter?.title ?? null}
         isExpanded={expandedEventIds.has(node.id)}
         // 평탄화가 알려주는 값을 그대로 쓴다 — 자식 수로 추측하면 평면 모드에서
         // 눌러도 아무 일이 없는 셰브론이 그려진다.

@@ -182,6 +182,13 @@ export interface EventDetail {
   endDate?: string | null
   endDatePrecision?: string | null
   location?: string | null
+  /** 대표 위치 좌표(WGS84) — 위치 선택 지도에서 고른 한 점. 위도·경도는 짝으로만 있다 */
+  locationLatitude?: number | null
+  locationLongitude?: number | null
+  /** 상위 사건의 국면에 손으로 넣은 것 — 비면 날짜로 자동 배정 */
+  phaseId?: string | null
+  /** 이 사건(묶음)의 국면 — 사건이 아니라 구획(목차). 상세와 직속 상위에서만 실린다 */
+  phases?: import('./components/event-phase.lib').EventPhase[]
   /** 분야 — 무엇에 관한 일인가(entities/event/model/event-domain.ts) */
   domain?: import('@/entities/event/model/event-domain').EventDomainKey
   background?: string | null

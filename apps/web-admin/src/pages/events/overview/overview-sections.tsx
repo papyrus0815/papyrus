@@ -43,6 +43,7 @@ import { withSideColors } from '../detail/components/side-colors'
 
 import { type AccessionMarker } from '../detail/components/contemporary-heads.lib'
 import { toAxisSpan } from '../detail/components/development-timeline.lib'
+import { type EventPhase, datedPhases, phaseRangeLabel } from '../detail/components/event-phase.lib'
 import * as S from './overview.styles'
 
 /** 사건 하나가 지금 걸러진 집합 밖인가 — 집합이 없으면 아무것도 흐리지 않는다 */
@@ -111,9 +112,12 @@ export function GanttPanel({
   onHover,
   onOpen,
   accessions = [],
+  rootPhases = [],
 }: HoverProps & {
   /** 참여국 국가원수의 즉위·취임 — 축의 왕관과 줄마다 점선 */
   accessions?: AccessionMarker[]
+  /** 조망을 연 사건의 국면 — 축 아래 '국면' 띠 한 줄 */
+  rootPhases?: EventPhase[]
   /**
    * 걸리지 않은 줄을 흐리지 않고 뺀다 — 묶음을 고르면 '그 묶음만 보기'라 다른 줄 8개가 흐린 채
    * 자리를 차지할 이유가 없다. 나라·세부·시기 거르기는 흐리기(맥락 유지) 그대로.
@@ -250,6 +254,33 @@ export function GanttPanel({
     marks.push({ ...point, count: 1 })
     return marks
   }, [])
+  /** 국면 → 축 위 구간(%) — 화면 밖은 자르고, 다 밖이면 뺀다 */
+  const chapterSegments = (phases: ReadonlyArray<EventPhase> | undefined) =>
+    datedPhases(phases ?? []).flatMap((dated) => {
+      const span = toAxisSpan({
+        id: dated.phase.id,
+        title: dated.phase.title,
+        startDate: dated.startDate,
+        startDatePrecision: dated.startDatePrecision,
+        endDate: dated.endDate,
+        endDatePrecision: dated.endDatePrecision,
+      })
+      if (!span) return []
+      const left = Math.max(0, gantt.toPct(span.from))
+      const right = Math.min(100, gantt.toPct(span.to))
+      if (right <= left) return []
+      return [
+        {
+          key: dated.phase.id,
+          position: dated.position,
+          label: `${dated.position}국면 · ${dated.phase.title}${phaseRangeLabel(dated.phase) ? ` (${phaseRangeLabel(dated.phase)})` : ''}`,
+          title: dated.phase.title,
+          left,
+          width: right - left,
+        },
+      ]
+    })
+  const rootChapters = chapterSegments(rootPhases)
   /** 막대 색 = 분야 — 둘 이상일 때만 범례(하나뿐이면 색이 가르는 게 없다). 많은 순 */
   const domainCounts = new Map<string, number>()
   for (const row of gantt.rows) domainCounts.set(row.node.domain, (domainCounts.get(row.node.domain) ?? 0) + 1)
@@ -416,6 +447,25 @@ export function GanttPanel({
                 </S.GanttTick>
               ))}
             </S.GanttAxis>
+            {/* 국면(목차) — 사건 막대가 아니라 이 사건을 나눈 장. 축 바로 아래 한 줄 */}
+            {rootChapters.length > 0 && (
+              <>
+                <S.ChapterLaneLabel aria-hidden="true">국면</S.ChapterLaneLabel>
+                <S.ChapterLane role="listitem" aria-label={`국면 ${rootChapters.length}개`}>
+                  {rootChapters.map((segment) => (
+                    <S.ChapterSegment
+                      key={segment.key}
+                      title={segment.label}
+                      data-even={segment.position % 2 === 0 || undefined}
+                      style={{ left: `${segment.left}%`, width: `${segment.width}%` }}
+                    >
+                      <b>{segment.position}</b>
+                      {segment.title}
+                    </S.ChapterSegment>
+                  ))}
+                </S.ChapterLane>
+              </>
+            )}
             {shownRows.map((row, rowIndex) => {
               const stripe = rowIndex % 2 === 1
               const groupId = grouping.groupIdOf.get(row.node.id)
@@ -536,6 +586,34 @@ export function GanttPanel({
                         }}
                       />
                     )}
+                    {/* 묶음 머리 줄 — 그 묶음의 국면 경계(첫 국면 시작은 막대 시작과 겹쳐 둘째부터) */}
+                    {isGroupHead &&
+                      chapterSegments(row.node.phases)
+                        .filter((segment) => segment.position > 1)
+                        /* 12px 안에 붙은 경계는 한 표지로 — 1789년 안의 2·3·4국면 번호가 겹쳐 읽히지 않았다 */
+                        .reduce<Array<{ key: string; left: number; numbers: number[]; labels: string[] }>>((ticks, segment) => {
+                          const last = ticks[ticks.length - 1]
+                          const nearPct = trackPx > 0 ? (12 / trackPx) * 100 : 1.5
+                          if (last && segment.left - last.left < nearPct) {
+                            last.numbers.push(segment.position)
+                            last.labels.push(segment.label)
+                            return ticks
+                          }
+                          ticks.push({ key: segment.key, left: segment.left, numbers: [segment.position], labels: [segment.label] })
+                          return ticks
+                        }, [])
+                        .map((tick) => (
+                          <S.ChapterTick
+                            key={tick.key}
+                            data-n={
+                              tick.numbers.length > 1
+                                ? `${tick.numbers[0]}–${tick.numbers[tick.numbers.length - 1]}`
+                                : tick.numbers[0]
+                            }
+                            title={tick.labels.join('\n')}
+                            style={{ left: `${tick.left}%` }}
+                          />
+                        ))}
                     {groupBand && groupTone && (
                       <S.GroupBand
                         $color={groupTone}

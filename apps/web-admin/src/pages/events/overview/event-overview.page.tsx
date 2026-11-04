@@ -68,6 +68,7 @@ import {
   accessionMarkers,
   eventWindow,
 } from '../detail/components/contemporary-heads.lib'
+import { type EventPhase } from '../detail/components/event-phase.lib'
 import * as S from './overview.styles'
 
 /**
@@ -721,6 +722,7 @@ export function EventOverviewPanel({
               onHover={setHotId}
               onOpen={openEventById}
               accessions={accessions}
+              rootPhases={root.phases as EventPhase[] | undefined}
             />
             <DistributionPanel
               part="period"

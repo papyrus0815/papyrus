@@ -44,6 +44,8 @@ import {
   type RoleCountry,
 } from './event-facts.lib'
 import { InlineDateRange, InlineText } from './inline'
+import { type LatLng } from './location-picker-map'
+import { LocationPickerModal, formatCoordinate, googleMapsUrl } from './location-picker-modal'
 import { OriginalDateLine } from './original-date-line'
 import { SIDE_OUTCOME_LABEL } from './side-outcome'
 import { representativeOf } from './side-metrics.lib'
@@ -94,6 +96,13 @@ export function DetailFacts({
    * 탭이 1,082px까지 밀렸다. 연도·날짜·위치·수장 링크는 그대로 두고 행만 '사실 N개 보기'로 연다(넓은 폭은 무관).
    */
   const [factsOpen, setFactsOpen] = useState(false)
+  /** 위치 — 글(이름·설명)과 지도 핀(대표 한 점). 핀은 위도·경도가 짝으로 있을 때만 */
+  const [locationModalOpen, setLocationModalOpen] = useState(false)
+  const locationText = event.location?.trim() ?? ''
+  const locationPoint: LatLng | null =
+    event.locationLatitude != null && event.locationLongitude != null
+      ? { lat: Number(event.locationLatitude), lng: Number(event.locationLongitude) }
+      : null
   const rowsRef = useRef<HTMLDivElement>(null)
   const [rowCount, setRowCount] = useState(0)
   useEffect(() => {
@@ -191,18 +200,63 @@ export function DetailFacts({
         <OriginalDateLine event={event} onPatch={onPatch} />
       </OriginalDateSlot>
 
-      <LocationLine title={event.location ?? ''} data-filled={event.location?.trim() ? 'true' : undefined}>
-        <PinIcon aria-hidden>
-          <FiMapPin />
-        </PinIcon>
-        <InlineText
-          value={event.location ?? ''}
-          /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
-          onSave={(next) => onPatch({ location: next.trim() })}
-          placeholder="위치 추가"
-          label="위치"
+      {/*
+        * 위치 — 비어 있으면 '위치 추가'가 지도 모달을 연다. 글이 있으면 글은 그 자리에서 고치고,
+        * 옆 '지도'로 핀을 꽂거나 옮긴다. 핀이 있으면 'Google 지도'로 바로 확인.
+        */}
+      {locationText || locationPoint ? (
+        <LocationLine title={locationText} data-filled="true">
+          <PinIcon aria-hidden data-pinned={locationPoint ? 'true' : undefined}>
+            <FiMapPin />
+          </PinIcon>
+          <LocationText>
+            {locationText ? (
+              <InlineText
+                value={event.location ?? ''}
+                /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
+                onSave={(next) => onPatch({ location: next.trim() })}
+                placeholder="위치 이름"
+                label="위치"
+              />
+            ) : (
+              <span>{formatCoordinate(locationPoint as LatLng)}</span>
+            )}
+            <LocationActions>
+              <LocationMapButton
+                type="button"
+                onClick={() => setLocationModalOpen(true)}
+                aria-label={locationPoint ? '지도에서 위치 핀 보기·옮기기' : '지도에 위치 핀 꽂기'}
+              >
+                {locationPoint ? '지도' : '지도에 찍기'}
+              </LocationMapButton>
+              {locationPoint && (
+                <LocationExternal href={googleMapsUrl(locationPoint)} target="_blank" rel="noreferrer">
+                  Google 지도
+                </LocationExternal>
+              )}
+            </LocationActions>
+          </LocationText>
+        </LocationLine>
+      ) : (
+        <AddLine type="button" onClick={() => setLocationModalOpen(true)}>
+          <FiMapPin aria-hidden /> 위치 추가
+        </AddLine>
+      )}
+      {locationModalOpen && (
+        <LocationPickerModal
+          isOpen
+          onClose={() => setLocationModalOpen(false)}
+          initial={{
+            location: event.location,
+            latitude: locationPoint?.lat ?? null,
+            longitude: locationPoint?.lng ?? null,
+          }}
+          onSave={(value) => {
+            onPatch(value as UpdateEventDto)
+            setLocationModalOpen(false)
+          }}
         />
-      </LocationLine>
+      )}
 
       {onAddOriginalTitle && !event.originalTitle?.trim() && (
         <AddLine type="button" onClick={onAddOriginalTitle}>
@@ -481,9 +535,56 @@ const PinIcon = styled.span`
   flex-shrink: 0;
   color: ${metaText};
 
+  /* 지도에 찍힌 위치 — 핀이 강조색으로 선다 */
+  &[data-pinned='true'] {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
   svg {
     width: 12px;
     height: 12px;
+  }
+`
+
+const LocationText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const LocationActions = styled.span`
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+`
+
+const LocationMapButton = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const LocationExternal = styled.a`
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 `
 

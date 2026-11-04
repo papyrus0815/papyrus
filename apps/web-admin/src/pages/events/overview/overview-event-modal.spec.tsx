@@ -35,6 +35,8 @@ const event: EventOverviewNode = {
   imageCount: 0,
   hasBackground: false,
   hasAftermath: false,
+  phaseId: null,
+  phases: [],
 }
 
 function setup(over: Partial<React.ComponentProps<typeof OverviewEventModal>> = {}) {
