@@ -104,8 +104,11 @@ export function DetailRail({ sections }: DetailRailProps) {
                     {children.map((child, index) => {
                       const headings = child.headings ?? []
                       const inChild = child.id === activeId || headings.some((heading) => heading.id === activeId)
+                      /* 국면이 바뀌는 자리에 장 소제목 — 하위 14건이 한 줄로 늘어서던 목차를 장으로 가른다 */
+                      const chapterStarts = child.chapter && child.chapter !== children[index - 1]?.chapter
                       return (
                       <li key={child.id}>
+                        {chapterStarts && <S.RailChapterLabel title={child.chapter}>{child.chapter}</S.RailChapterLabel>}
                         <S.RailSubItem
                           type="button"
                           $active={activeId === child.id}

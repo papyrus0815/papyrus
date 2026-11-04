@@ -116,6 +116,8 @@ export interface OutlineItem {
 export interface OutlineChild {
   id: string
   label: string
+  /** 국면(목차) — 묶음 전개의 하위가 든 장. 바뀌는 자리에 목차가 작은 소제목을 세운다 */
+  chapter?: string
   /** 단락 안 소제목 — 그 단락을 읽는 동안에만 펼친다 */
   headings?: Array<{ id: string; label: string }>
 }

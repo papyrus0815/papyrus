@@ -78,6 +78,7 @@ import {
   paragraphOutline,
 } from './components/section-outline.lib'
 import { groupByPhase } from './components/collection-development.lib'
+import { phaseReach, phaseReachLabel } from './components/event-phase.lib'
 import { compareEventStart } from './components/detail-network.lib'
 import * as S from './styles'
 import { type EventDetail, eventKeys, useEventDetail } from './use-event-detail'
@@ -579,7 +580,23 @@ function EventDetailContent({
               ),
               event,
             ).flatMap((group) =>
-              group.items.map((child) => ({ id: `narrative-${child.id}`, label: child.title })),
+              group.items.map((child) => {
+                /* 국면이 있으면 목차에도 장 — 전개의 장 머리와 같은 배정(손 지정 우선, 없으면 시작일) */
+                const chapters = [...(event.phases ?? [])].sort((left, right) => left.order - right.order)
+                if (chapters.length === 0) return { id: `narrative-${child.id}`, label: child.title }
+                const reach = phaseReach(chapters, {
+                  id: child.id,
+                  phaseId: (child as { phaseId?: string | null }).phaseId ?? null,
+                  startDate: child.startDate,
+                  startDatePrecision: child.startDatePrecision,
+                })
+                const chapter = reach.from != null ? chapters[reach.from - 1] : null
+                return {
+                  id: `narrative-${child.id}`,
+                  label: child.title,
+                  chapter: chapter ? `${reach.from}국면 · ${chapter.title}` : phaseReachLabel(reach),
+                }
+              }),
             )
           : paragraphOutline(event, kind)
       return children.length >= 2 ? children : undefined

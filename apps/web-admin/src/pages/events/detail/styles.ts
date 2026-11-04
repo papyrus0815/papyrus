@@ -739,6 +739,24 @@ export const RailSubItem = styled.button<{ $active: boolean }>`
 `
 
 /* 단락 번호 — 본문의 단락 번호와 같은 mono 숫자라 '본문의 3'과 '목차의 3'이 한 눈에 짝이 된다. */
+/** 목차의 장(국면) 소제목 — 단락 줄 위에 작게, 강조색 */
+export const RailChapterLabel = styled.span`
+  display: block;
+  margin: 8px 0 2px;
+  padding-left: 2px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  li:first-child > & {
+    margin-top: 2px;
+  }
+`
+
 export const RailSubIndex = styled.span`
   ${DIGIT_DISPLAY}
   flex-shrink: 0;

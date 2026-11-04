@@ -848,13 +848,15 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     const chapter = position != null ? chapters[position - 1] : null
     const first = chapters[0]
     const last = chapters[chapters.length - 1]
-    const title = chapter
-      ? `${position}국면 · ${chapter.title}`
+    /* 위 줄(작게) = 몇 국면·기간·건수, 아래 줄(크게) = 국면 이름 — 사건 행(날짜 줄 + 제목)과 같은 두 줄 문법이되 띠로 갈린다 */
+    const kicker = chapter
+      ? `${position}국면`
       : head.reach.outside === 'before'
         ? '국면 전'
         : head.reach.outside === 'after'
           ? '국면 후'
           : '국면 사이'
+    const title = chapter ? chapter.title : '어느 국면에도 들지 않는 하위 사건'
     const range = chapter
       ? phaseRangeLabel(chapter)
       : head.reach.outside === 'before' && first
@@ -863,14 +865,22 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
           ? `${chapters.length}국면(–${phaseRangeLabel(last).split('–')[1] ?? ''}) 이후`
           : ''
     return (
-      <ChapterHead key={`chapter-${firstNodeId}`} $depth={depth} data-outside={!chapter || undefined}>
-        <ChapterMark aria-hidden>{position ?? '·'}</ChapterMark>
+      <ChapterHead
+        key={`chapter-${firstNodeId}`}
+        $depth={depth}
+        data-outside={!chapter || undefined}
+        aria-label={`${kicker}${chapter ? ` ${chapter.title}` : ''}${range ? `, ${range}` : ''}, ${head.count}건`}
+      >
+        <ChapterMark aria-hidden $depth={depth}>
+          {position ?? '·'}
+        </ChapterMark>
         <ChapterText>
-          <ChapterTitle>{title}</ChapterTitle>
-          <ChapterMeta>
+          <ChapterKicker>
+            <b>{kicker}</b>
             {range && <span>{range}</span>}
             <span>{head.count}건</span>
-          </ChapterMeta>
+          </ChapterKicker>
+          <ChapterTitle $depth={depth}>{title}</ChapterTitle>
         </ChapterText>
       </ChapterHead>
     )
@@ -938,7 +948,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
       {directCount === 0 ? (
         <Empty>
           <EmptyText>
-            아직 하위 사건이 없습니다. 묶음 사건의 전개는 전투·회담·조약 같은 국면을 하위 사건으로
+            아직 하위 사건이 없습니다. 묶음 사건의 전개는 전투·회담·조약 같은 일을 하위 사건으로
             등록해 차례로 쌓습니다.
           </EmptyText>
           <EmptyActions>
@@ -1057,7 +1067,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 </NextStepNode>
                 <AddChildText>
                   <AddChildTitle>하위 사건 추가</AddChildTitle>
-                  <AddChildHint>{directCount + 1}번째 국면 — 전투·회담·조약을 차례 끝에</AddChildHint>
+                  <AddChildHint>{directCount + 1}번째 하위 사건 — 전투·회담·조약을 차례 끝에</AddChildHint>
                 </AddChildText>
               </AddChildRow>
               <NextStepTools>
@@ -1940,6 +1950,11 @@ const PhaseGroup = styled.section`
  * 장(국면) 머리 — 전개 줄 위에 서는 목차 줄. 하위 사건 행(번호 노드)과 갈리게 노드 자리에 국면 번호를 각진 칸으로.
  * 구획 머리(이전·기간 중·이후)보다 한 단 가볍다 — 그것은 기간에 대한 위치, 이것은 쓰는 사람이 나눈 장.
  */
+/**
+ * 장(국면) 머리 — 사건 행과 갈리는 옅은 강조색 띠. 위 줄 작은 표지(몇 국면·기간·건수) + 아래 줄 국면 이름.
+ * 예전엔 한 줄 14.5px 제목이 사건 제목(15px)과 무게가 같아 '장'으로 읽히지 않았다.
+ * 펼친 하위 묶음 안(최상위에서 본 대분류의 국면)은 한 단 작게. 국면 밖은 회색 띠.
+ */
 const ChapterHead = styled.li<{ $depth: number }>`
   position: relative;
   z-index: 1;
@@ -1947,57 +1962,82 @@ const ChapterHead = styled.li<{ $depth: number }>`
   grid-template-columns: ${({ $depth }) => columnOf($depth)}px minmax(0, 1fr);
   column-gap: ${({ $depth }) => ($depth > 1 ? 10 : 12)}px;
   align-items: center;
-  margin-top: 6px;
-  padding: 6px 0;
+  margin: ${({ $depth }) => ($depth > 1 ? '4px 0 0' : '10px 0 2px')};
+  padding: ${({ $depth }) => ($depth > 1 ? '6px 10px 6px 0' : '10px 14px 10px 0')};
   list-style: none;
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: 10px;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
 
   &:first-child {
     margin-top: 0;
-    border-top: none;
+  }
+
+  &[data-outside] {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)')};
   }
 `
 
-const ChapterMark = styled.span`
+const ChapterMark = styled.span<{ $depth: number }>`
   justify-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
+  min-width: ${({ $depth }) => ($depth > 1 ? 20 : 26)}px;
+  height: ${({ $depth }) => ($depth > 1 ? 20 : 26)}px;
   padding: 0 4px;
-  border-radius: 6px;
+  border-radius: 7px;
   background: ${({ theme }) => ledgerAccent(theme.mode)};
-  font-size: 12px;
+  /* 세로선 위에 떠 있게 — 띠 색으로 테두리를 둘러 선을 끊는다 */
+  box-shadow: 0 0 0 3px ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  font-size: ${({ $depth }) => ($depth > 1 ? 11 : 13)}px;
   font-weight: 800;
   color: #fff;
 
   [data-outside] > & {
     background: ${({ theme }) => theme.colors.text.tertiary};
+    box-shadow: none;
   }
 `
 
 const ChapterText = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 10px;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 `
 
-const ChapterTitle = styled.span`
-  font-size: 14.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const ChapterMeta = styled.span`
+const ChapterKicker = styled.span`
   display: inline-flex;
-  gap: 8px;
-  font-size: 12px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 11.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
+
+  b {
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  [data-outside] & b {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const ChapterTitle = styled.span<{ $depth: number }>`
+  font-size: ${({ $depth }) => ($depth > 1 ? 14 : 16.5)}px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow-wrap: anywhere;
+
+  [data-outside] & {
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
 `
 
 const PhaseHead = styled.h3`

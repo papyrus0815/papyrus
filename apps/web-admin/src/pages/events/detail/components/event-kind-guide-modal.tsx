@@ -95,7 +95,7 @@ export function EventKindGuideModal({
             <KindExample>예: 전쟁 · 위기 · 개혁 · 운동</KindExample>
             <List>
               <li>
-                <b>전개 = 하위 사건</b>들 — 글 대신 국면을 하위 사건으로 등록합니다
+                <b>전개 = 하위 사건</b>들 — 글 대신 일어난 일을 하위 사건으로 등록하고, 길면 국면(목차)으로 나눕니다
               </li>
               <li>본문에는 배경과 여파만 씁니다</li>
               <li>상위가 없으면 &lsquo;최상위 사건&rsquo;</li>
