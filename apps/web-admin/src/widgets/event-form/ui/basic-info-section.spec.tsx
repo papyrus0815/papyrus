@@ -989,4 +989,169 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     expect(setLocation).toHaveBeenLastCalledWith('콘스탄티노폴리스')
     expect(setLocationNote).toHaveBeenLastCalledWith('현 튀르키예 이스탄불')
   })
+
+  it('사건명에 연·월·일 전체 날짜가 있으면 추천 기간 적용 시 정밀도(day)까지 함께 맞춘다', () => {
+    const setStartDate = jest.fn()
+    const setEndDate = jest.fn()
+    const setStartDatePrecision = jest.fn()
+    const setEndDatePrecision = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '1919년 3월 1일 3·1 운동',
+          setStartDate,
+          setEndDate,
+          setStartDatePrecision,
+          setEndDatePrecision,
+        })}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '추천 기간 적용: 1919년 3월 1일' }),
+    )
+    expect(setStartDate).toHaveBeenCalledWith('1919-03-01')
+    expect(setEndDate).toHaveBeenCalledWith('1919-03-01')
+    expect(setStartDatePrecision).toHaveBeenCalledWith('day')
+    expect(setEndDatePrecision).toHaveBeenCalledWith('day')
+  })
+
+  it('참여국 역할순 정렬 버튼, 한 일 빠른 프리셋 칩, 시대별 추천 참여국 칩이 동작한다', () => {
+    const setRelatedCountries = jest.fn()
+
+    const { rerender } = renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          startDate: '1592-04-13',
+          availableHistoricalCountries: [
+            {
+              id: 'h-joseon',
+              name: '조선',
+              startYear: 1392,
+              endYear: 1897,
+            } as never,
+          ],
+          setRelatedCountries,
+        })}
+      />,
+    )
+
+    // 1. 참여국이 비어 있고 시작 연도가 있으면 시대 추천 칩 노출
+    const eraBar = screen.getByLabelText('시대별 추천 참여국')
+    fireEvent.click(within(eraBar).getByRole('button', { name: '+ 조선' }))
+    expect(setRelatedCountries).toHaveBeenCalledWith([
+      { historicalCountryId: 'h-joseon', role: 'PARTICIPANT' },
+    ])
+
+    // 2. 참여국이 역할 우선순위와 다르게 담긴 경우 '역할순 정렬'과 '한 일 빠른 입력' 프리셋 제공
+    rerender(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          roleDescriptionPlaceholder: '참전 방식·지휘·병력 등 (선택)',
+          relatedCountries: [
+            { countryId: 'c3', role: 'PARTICIPANT' },
+            { countryId: 'c1', role: 'INITIATOR' },
+            { countryId: 'c2', role: 'TARGET' },
+          ],
+          setRelatedCountries,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '참여국 역할순 정렬' }))
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      { countryId: 'c1', role: 'INITIATOR' },
+      { countryId: 'c2', role: 'TARGET' },
+      { countryId: 'c3', role: 'PARTICIPANT' },
+    ])
+
+    // 한 일 입력칸 포커스 시 빠른 프리셋 칩 노출 및 클릭 시 즉시 입력
+    const roleDescInput = screen.getByLabelText('프랑스가 한 일')
+    fireEvent.focus(roleDescInput)
+    const presetGroup = screen.getByRole('group', {
+      name: '프랑스 한 일 빠른 입력',
+    })
+    fireEvent.click(
+      within(presetGroup).getByRole('button', { name: '+ 선제 공격' }),
+    )
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      { countryId: 'c3', role: 'PARTICIPANT' },
+      { countryId: 'c1', role: 'INITIATOR', roleDescription: '선제 공격' },
+      { countryId: 'c2', role: 'TARGET' },
+    ])
+  })
+
+  it('상위 사건 기간이 주어지면 시작일 원클릭 적용과 기간 벗어남 소프트 경고를 제공하고, 맥락 기반 추천 키워드를 추가할 수 있다', () => {
+    const setStartDate = jest.fn()
+    const setEndDate = jest.fn()
+    const setKeywords = jest.fn()
+
+    const { rerender } = renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '1916년 베르됭 전투',
+          setStartDate,
+          setEndDate,
+          setKeywords,
+          relatedCountries: [{ countryId: 'c1', role: 'PARTICIPANT' }],
+          parentEventSlot: {
+            parent: { id: 'evt-ww1', title: '제1차 세계 대전' },
+            parentPeriod: {
+              startDate: '1914-07-28',
+              endDate: '1918-11-11',
+            },
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+          },
+        })}
+      />,
+    )
+
+    // 1. 시작일이 비어 있을 때 '상위 사건 시작일 적용' 버튼 노출
+    fireEvent.click(
+      screen.getByRole('button', { name: '상위 사건 시작일 적용' }),
+    )
+    expect(setStartDate).toHaveBeenCalledWith('1914-07-28')
+    expect(setEndDate).toHaveBeenCalledWith('1914-07-28')
+
+    // 2. 맥락 기반 추천 키워드 바 노출 및 '모두 추가'
+    const keywordBar = screen.getByLabelText('추천 키워드')
+    expect(
+      within(keywordBar).getByRole('button', { name: '+ 베르됭 전투' }),
+    ).toBeInTheDocument()
+    expect(
+      within(keywordBar).getByRole('button', { name: '+ 프랑스' }),
+    ).toBeInTheDocument()
+    fireEvent.click(
+      within(keywordBar).getByRole('button', { name: '추천 키워드 모두 추가' }),
+    )
+    expect(setKeywords).toHaveBeenCalledWith(
+      expect.arrayContaining(['베르됭 전투', '프랑스', '제1차 세계 대전']),
+    )
+
+    // 3. 하위 사건 연도가 상위 사건 기간 밖이면 소프트 경고 노출
+    rerender(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '전후 조약',
+          startDate: '1920-01-10',
+          endDate: '1920-01-10',
+          parentEventSlot: {
+            parent: { id: 'evt-ww1', title: '제1차 세계 대전' },
+            parentPeriod: {
+              startDate: '1914-07-28',
+              endDate: '1918-11-11',
+            },
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+          },
+        })}
+      />,
+    )
+
+    expect(
+      screen.getByText(/상위 사건 ‘제1차 세계 대전’의 종료 연도\(1918년\)보다 뒤입니다/),
+    ).toBeInTheDocument()
+  })
 })

@@ -23,8 +23,11 @@ import {
   findReplacementForMismatchedCountry,
   moveParticipant,
   participantKey,
+  quickRoleDescriptionPresets,
   readRecentParticipants,
   resolveBatchCountryQuery,
+  sortParticipantsByRolePriority,
+  suggestCountriesForEra,
   suggestCountriesFromTitle,
   swapTwoParticipants,
 } from '@/entities/event/model'
@@ -172,6 +175,11 @@ interface BasicInfoSectionProps {
    */
   parentEventSlot?: {
     parent: { id: string; title: string } | null
+    /** 상위 사건의 시작·종료일 ISO — 하위 사건 시작일 빠른 채우기 및 기간 벗어남 소프트 경고용 */
+    parentPeriod?: {
+      startDate?: string | null
+      endDate?: string | null
+    }
     onOpenPicker: () => void
     onClear: () => void
     quickSearch?: {
@@ -461,6 +469,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const [activeLocationResultIndex, setActiveLocationResultIndex] = useState(0)
   const [isLocationQuickDismissed, setIsLocationQuickDismissed] = useState(true)
   const [isLocationNoteOpen, setIsLocationNoteOpen] = useState(false)
+  const [focusedRoleDescKey, setFocusedRoleDescKey] = useState<string | null>(
+    null,
+  )
   const parsedLocationCoord = useMemo(
     () => parseCoordinateInput(locationSlot?.location ?? ''),
     [locationSlot?.location],
@@ -539,12 +550,13 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const applyTitleYearSuggestion = () => {
     if (!titleYearSuggestion) return
     playClickSound()
+    const nextPrecision = titleYearSuggestion.precision ?? 'year'
     setStartDate(titleYearSuggestion.startIso)
-    setStartDatePrecision?.('year')
+    setStartDatePrecision?.(nextPrecision)
     setStartTime('')
     if (!endDate) {
       setEndDate(titleYearSuggestion.endIso)
-      setEndDatePrecision?.('year')
+      setEndDatePrecision?.(nextPrecision)
       setEndTime('')
     }
   }
@@ -627,6 +639,132 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     availableCountries,
     availableHistoricalCountries,
     titleSuggestedCountries,
+  ])
+
+  const canSortByRolePriority = useMemo(() => {
+    if (relatedCountries.length < 2) return false
+    const sorted = sortParticipantsByRolePriority(relatedCountries)
+    return sorted.some(
+      (item, index) =>
+        participantKey(item) !== participantKey(relatedCountries[index]),
+    )
+  }, [relatedCountries])
+
+  const eraParticipantSuggestions = useMemo(() => {
+    if (
+      relatedCountries.length > 0 ||
+      titleSuggestedCountries.length > 0 ||
+      recentParticipantSuggestions.length > 0
+    ) {
+      return []
+    }
+    const startYear = signedYearFromIsoLike(startDate)
+    if (startYear == null) return []
+    const endYear = signedYearFromIsoLike(endDate || startDate)
+    return suggestCountriesForEra(
+      availableCountries,
+      availableHistoricalCountries,
+      { startYear, endYear },
+      existingParticipantKeys,
+      5,
+    )
+  }, [
+    relatedCountries.length,
+    titleSuggestedCountries.length,
+    recentParticipantSuggestions.length,
+    startDate,
+    endDate,
+    availableCountries,
+    availableHistoricalCountries,
+    existingParticipantKeys,
+  ])
+
+  const parentPeriodMismatchWarning = useMemo(() => {
+    const parentPeriod = parentEventSlot?.parentPeriod
+    const parentTitle = parentEventSlot?.parent?.title
+    if (!parentPeriod || !parentTitle || !startDate) return null
+    const parentStartYear = signedYearFromIsoLike(parentPeriod.startDate ?? '')
+    const parentEndYear = signedYearFromIsoLike(
+      parentPeriod.endDate || parentPeriod.startDate || '',
+    )
+    const childStartYear = signedYearFromIsoLike(startDate)
+    const childEndYear = signedYearFromIsoLike(endDate || startDate)
+    if (childStartYear == null) return null
+    if (parentStartYear != null && childStartYear < parentStartYear) {
+      return `상위 사건 ‘${parentTitle}’의 시작 연도(${parentStartYear < 0 ? `BC ${Math.abs(parentStartYear)}` : parentStartYear}년)보다 앞섭니다.`
+    }
+    if (
+      parentEndYear != null &&
+      childEndYear != null &&
+      childEndYear > parentEndYear
+    ) {
+      return `상위 사건 ‘${parentTitle}’의 종료 연도(${parentEndYear < 0 ? `BC ${Math.abs(parentEndYear)}` : parentEndYear}년)보다 뒤입니다.`
+    }
+    return null
+  }, [parentEventSlot, startDate, endDate])
+
+  const suggestedKeywords = useMemo(() => {
+    const existingSet = new Set(keywords.map((item) => item.trim().toLowerCase()))
+    const candidates: string[] = []
+    const pushCandidate = (raw: string | null | undefined) => {
+      const cleaned = raw?.trim()
+      if (
+        !cleaned ||
+        cleaned.length < 2 ||
+        cleaned.length > KEYWORD_MAX_LENGTH
+      ) {
+        return
+      }
+      const lower = cleaned.toLowerCase()
+      if (existingSet.has(lower)) return
+      if (candidates.some((item) => item.toLowerCase() === lower)) return
+      candidates.push(cleaned)
+    }
+
+    const strippedTitle = title
+      .replace(
+        /^\s*(?:기원전|BC|B\.C\.)?\s*\d{1,4}\s*년(?:\s*\d{1,2}\s*월)?(?:\s*\d{1,2}\s*일)?\s*/i,
+        '',
+      )
+      .replace(
+        /^\s*\d{3,4}\s*[./-]\s*\d{1,2}(?:\s*[./-]\s*\d{1,2}\.?)?\s*/,
+        '',
+      )
+      .replace(/\s*\(\s*(?:기원전|BC|B\.C\.)?\s*\d{1,4}[^)]*\)\s*$/i, '')
+      .trim()
+    if (strippedTitle.length >= 2) {
+      pushCandidate(strippedTitle)
+    }
+    if (titleLocationSuggestion) {
+      pushCandidate(titleLocationSuggestion)
+    }
+    if (locationSlot?.location.trim()) {
+      pushCandidate(locationSlot.location.trim())
+    }
+    for (const participant of relatedCountries) {
+      const country = participant.historicalCountryId
+        ? availableHistoricalCountries.find(
+            (candidate) => candidate.id === participant.historicalCountryId,
+          )
+        : availableCountries.find(
+            (candidate) => candidate.id === participant.countryId,
+          )
+      if (country) pushCandidate(country.name)
+    }
+    if (parentEventSlot?.parent?.title) {
+      pushCandidate(parentEventSlot.parent.title)
+    }
+    return candidates.slice(0, 6)
+  }, [
+    keywords,
+    KEYWORD_MAX_LENGTH,
+    title,
+    titleLocationSuggestion,
+    locationSlot?.location,
+    relatedCountries,
+    availableHistoricalCountries,
+    availableCountries,
+    parentEventSlot?.parent?.title,
   ])
 
   const batchCountryMatches = useMemo(
@@ -843,15 +981,15 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     if (!raw) return
     const parts = raw
       .split(/[,，]/)
-      .map((s) => s.trim())
+      .map((part) => part.trim())
       .filter(Boolean)
     if (parts.length === 0) {
       setKeywordInput('')
       return
     }
-    const tooLong = parts.filter((s) => s.length > KEYWORD_MAX_LENGTH)
+    const tooLong = parts.filter((part) => part.length > KEYWORD_MAX_LENGTH)
     const valid = parts
-      .filter((s) => s.length <= KEYWORD_MAX_LENGTH)
+      .filter((part) => part.length <= KEYWORD_MAX_LENGTH)
       .slice(0, Math.max(0, KEYWORD_MAX_COUNT - keywords.length))
     if (tooLong.length > 0) {
       setKeywordValidationMsg(
@@ -861,7 +999,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     }
     if (valid.length === 0) return
     const next = [...keywords, ...valid]
-      .filter((k, i, arr) => arr.indexOf(k) === i)
+      .filter((item, index, arr) => arr.indexOf(item) === index)
       .slice(0, KEYWORD_MAX_COUNT)
     if (next.length >= KEYWORD_MAX_COUNT && parts.length > valid.length) {
       setKeywordValidationMsg(
@@ -1049,12 +1187,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       playClickSound()
                       titleSuggestionSlot?.onApply()
                       if (titleYearSuggestion) {
+                        const nextPrecision =
+                          titleYearSuggestion.precision ?? 'year'
                         setStartDate(titleYearSuggestion.startIso)
-                        setStartDatePrecision?.('year')
+                        setStartDatePrecision?.(nextPrecision)
                         setStartTime('')
                         if (!endDate) {
                           setEndDate(titleYearSuggestion.endIso)
-                          setEndDatePrecision?.('year')
+                          setEndDatePrecision?.(nextPrecision)
                           setEndTime('')
                         }
                       }
@@ -1153,7 +1293,46 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           <S.FormField>
             <DateRangeGrid>
               <S.DateRangeColumn id="event-form-start-date">
-                <S.DateRangeLabel>시작</S.DateRangeLabel>
+                <DateColumnHeaderRow>
+                  <S.DateRangeLabel>시작</S.DateRangeLabel>
+                  {!startDate && parentEventSlot?.parentPeriod?.startDate && (
+                    <DateQuickActions>
+                      <DateQuickActionBtn
+                        type="button"
+                        aria-label="상위 사건 시작일 적용"
+                        onClick={() => {
+                          const parentStart =
+                            parentEventSlot.parentPeriod?.startDate
+                          if (!parentStart) return
+                          playClickSound()
+                          const inferredPrecision: DatePickerPrecision =
+                            /^-?\d{1,6}-\d{2}-\d{2}/.test(parentStart)
+                              ? 'day'
+                              : /^-?\d{1,6}-\d{2}$/.test(parentStart)
+                                ? 'month'
+                                : 'year'
+                          const normalizedStart =
+                            inferredPrecision === 'year'
+                              ? `${parentStart.replace(/-.*$/, '')}-01-01`
+                              : inferredPrecision === 'month'
+                                ? `${parentStart}-01`
+                                : parentStart.slice(0, 10)
+                          setStartDate(normalizedStart)
+                          setStartDatePrecision?.(inferredPrecision)
+                          setStartTime('')
+                          if (!endDate) {
+                            setEndFollowsStart(true)
+                            setEndDate(normalizedStart)
+                            setEndDatePrecision?.(inferredPrecision)
+                            setEndTime('')
+                          }
+                        }}
+                      >
+                        상위 사건 시작일 적용
+                      </DateQuickActionBtn>
+                    </DateQuickActions>
+                  )}
+                </DateColumnHeaderRow>
                 <DateTimeLine>
                   <EventDateField
                     anchorId={startDateAnchorId}
@@ -1291,6 +1470,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     ? `종료: ${endInputError}`
                     : (startDateError ?? endDateError ?? getDateError())}
               </S.ErrorMessage>
+            )}
+            {parentPeriodMismatchWarning && (
+              <AlertBox variant="warning" style={{ marginTop: 6 }}>
+                {parentPeriodMismatchWarning} 전조·후속 사건 등 정당한 경우라면 그대로 저장하세요.
+              </AlertBox>
             )}
           </S.FormField>
         </S.FormRow>
@@ -1502,17 +1686,59 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               })}
                             </ParticipantSideGroup>
                           )}
-                          <RoleDescriptionInput
-                            type="text"
-                            value={participant.roleDescription ?? ''}
-                            aria-label={`${country.name}가 한 일`}
-                            placeholder={roleDescriptionPlaceholder}
-                            onChange={(changeEvent) =>
-                              patch({
-                                roleDescription: changeEvent.target.value,
-                              })
-                            }
-                          />
+                          <RoleDescriptionWrap
+                            onBlur={(blurEvent) => {
+                              if (
+                                !blurEvent.currentTarget.contains(
+                                  blurEvent.relatedTarget as Node | null,
+                                )
+                              ) {
+                                setFocusedRoleDescKey((previous) =>
+                                  previous === key ? null : previous,
+                                )
+                              }
+                            }}
+                          >
+                            <RoleDescriptionInput
+                              type="text"
+                              value={participant.roleDescription ?? ''}
+                              aria-label={`${country.name}가 한 일`}
+                              placeholder={roleDescriptionPlaceholder}
+                              onFocus={() => setFocusedRoleDescKey(key)}
+                              onChange={(changeEvent) =>
+                                patch({
+                                  roleDescription: changeEvent.target.value,
+                                })
+                              }
+                            />
+                            {focusedRoleDescKey === key &&
+                              !participant.roleDescription?.trim() && (
+                                <RolePresetBar
+                                  role="group"
+                                  aria-label={`${country.name} 한 일 빠른 입력`}
+                                >
+                                  {quickRoleDescriptionPresets(
+                                    currentRole,
+                                    roleDescriptionPlaceholder,
+                                  ).map((preset) => (
+                                    <RolePresetChip
+                                      key={preset}
+                                      type="button"
+                                      onMouseDown={(mouseEvent) =>
+                                        mouseEvent.preventDefault()
+                                      }
+                                      onClick={() => {
+                                        playClickSound()
+                                        patch({ roleDescription: preset })
+                                        setFocusedRoleDescKey(null)
+                                      }}
+                                    >
+                                      + {preset}
+                                    </RolePresetChip>
+                                  ))}
+                                </RolePresetBar>
+                              )}
+                          </RoleDescriptionWrap>
                           <ParticipantActions>
                             {relatedCountries.length > 1 && (
                               <>
@@ -1727,6 +1953,21 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       역할·순서 맞바꾸기
                     </S.AddButton>
                   )}
+                  {canSortByRolePriority && (
+                    <S.AddButton
+                      type="button"
+                      aria-label="참여국 역할순 정렬"
+                      title="주도국 → 대상국 → 성립·소멸 → 중재 → 참여 순으로 정렬합니다"
+                      onClick={() => {
+                        playClickSound()
+                        setRelatedCountries(
+                          sortParticipantsByRolePriority(relatedCountries),
+                        )
+                      }}
+                    >
+                      역할순 정렬
+                    </S.AddButton>
+                  )}
                   {parentCountriesSlot && (
                     <S.AddButton
                       type="button"
@@ -1770,23 +2011,43 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         </SuggestAllChip>
                       )}
                     </RecentParticipantBar>
+                  ) : relatedCountries.length === 0 &&
+                    recentParticipantSuggestions.length > 0 ? (
+                    <RecentParticipantBar aria-label="최근 사용한 참여국">
+                      <RecentParticipantLabel>최근</RecentParticipantLabel>
+                      {recentParticipantSuggestions.map((entry) => (
+                        <RecentParticipantChip
+                          key={entry.key}
+                          type="button"
+                          onClick={() =>
+                            addQuickParticipant({
+                              countryId: entry.countryId,
+                              historicalCountryId: entry.historicalCountryId,
+                            })
+                          }
+                        >
+                          + {entry.label}
+                        </RecentParticipantChip>
+                      ))}
+                    </RecentParticipantBar>
                   ) : (
                     relatedCountries.length === 0 &&
-                    recentParticipantSuggestions.length > 0 && (
-                      <RecentParticipantBar aria-label="최근 사용한 참여국">
-                        <RecentParticipantLabel>최근</RecentParticipantLabel>
-                        {recentParticipantSuggestions.map((entry) => (
+                    eraParticipantSuggestions.length > 0 && (
+                      <RecentParticipantBar aria-label="시대별 추천 참여국">
+                        <RecentParticipantLabel>시대 추천</RecentParticipantLabel>
+                        {eraParticipantSuggestions.map((candidate) => (
                           <RecentParticipantChip
-                            key={entry.key}
+                            key={candidate.key}
                             type="button"
                             onClick={() =>
                               addQuickParticipant({
-                                countryId: entry.countryId,
-                                historicalCountryId: entry.historicalCountryId,
+                                countryId: candidate.countryId,
+                                historicalCountryId:
+                                  candidate.historicalCountryId,
                               })
                             }
                           >
-                            + {entry.label}
+                            + {candidate.label}
                           </RecentParticipantChip>
                         ))}
                       </RecentParticipantBar>
@@ -2665,6 +2926,36 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 {keywordValidationMsg}
               </S.ErrorMessage>
             )}
+            {suggestedKeywords.length > 0 &&
+              keywords.length < KEYWORD_MAX_COUNT && (
+                <RecentParticipantBar aria-label="추천 키워드">
+                  <RecentParticipantLabel>추천</RecentParticipantLabel>
+                  {suggestedKeywords.map((candidate) => (
+                    <RecentParticipantChip
+                      key={candidate}
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        addKeywordsFromInput(candidate)
+                      }}
+                    >
+                      + {candidate}
+                    </RecentParticipantChip>
+                  ))}
+                  {suggestedKeywords.length >= 2 && (
+                    <SuggestAllChip
+                      type="button"
+                      aria-label="추천 키워드 모두 추가"
+                      onClick={() => {
+                        playClickSound()
+                        addKeywordsFromInput(suggestedKeywords.join(', '))
+                      }}
+                    >
+                      모두 추가 ({suggestedKeywords.length})
+                    </SuggestAllChip>
+                  )}
+                </RecentParticipantBar>
+              )}
             {keywords.length > 0 && (
               <KeywordChipList>
                 {keywords.map((keyword) => (
@@ -3247,15 +3538,55 @@ const RoleSelect = styled.select`
   background-position: right 10px center;
 `
 
-const RoleDescriptionInput = styled.input`
-  ${participantControl}
+const RoleDescriptionWrap = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 180px;
   min-width: 140px;
+  gap: 5px;
+`
+
+const RoleDescriptionInput = styled.input`
+  ${participantControl}
+  width: 100%;
   height: 34px;
   padding: 0 11px;
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};
+  }
+`
+
+const RolePresetBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const RolePresetChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)'};
+    outline: none;
   }
 `
 

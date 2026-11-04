@@ -227,12 +227,27 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     scrollToTopAndFocusTitle()
   }, [busy, markDirty, scrollToTopAndFocusTitle])
 
-  /** 모달 안 어디서든 Cmd/Ctrl + Enter로 즉시 저장, Cmd/Ctrl + Shift + Enter로 등록 후 계속 */
+  /** 모달 안 어디서든 Cmd/Ctrl + Enter로 즉시 저장, Cmd/Ctrl + Shift + Enter로 등록 후 계속 (단, 하위 피커/지도 모달이 열려 있을 때는 제외) */
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        if (event.defaultPrevented) return
         if (!isValid || busy || savedEventId !== null) return
+        const targetElement =
+          event.target instanceof Element ? event.target : null
+        const closestDialog = targetElement?.closest('[role="dialog"]')
+        if (
+          closestDialog &&
+          scrollContainerRef.current &&
+          !closestDialog.contains(scrollContainerRef.current)
+        ) {
+          return
+        }
+        const openModalDialogs = document.querySelectorAll(
+          '[role="dialog"][aria-modal="true"]',
+        )
+        if (openModalDialogs.length > 1) return
         event.preventDefault()
         continueAfterSaveRef.current = Boolean(event.shiftKey && !isEditMode)
         void formRef.current?.submit()

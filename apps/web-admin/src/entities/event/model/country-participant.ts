@@ -552,7 +552,9 @@ export function suggestCountriesFromTitle(
       allNames.add(mod.name.trim())
     }
   }
-  const sortedNames = [...allNames].sort((a, b) => b.length - a.length)
+  const sortedNames = [...allNames].sort(
+    (left, right) => right.length - left.length,
+  )
   for (const matchedName of sortedNames) {
     if (
       directMatches.some(
@@ -698,12 +700,12 @@ export function resolveBatchCountryQuery(
   for (const token of tokens) {
     const lower = token.toLowerCase()
     const modMatches = filterCountriesByQuery([...modernCountries], token).filter(
-      (c) => !seen.has(`m:${c.id}`),
+      (country) => !seen.has(`m:${country.id}`),
     )
     const histMatches = filterCountriesByQuery(
       [...historicalCountries],
       token,
-    ).filter((c) => !seen.has(`h:${c.id}`))
+    ).filter((country) => !seen.has(`h:${country.id}`))
 
     const candidates: Array<{ score: number; item: SuggestedCountryCandidate }> = []
     for (const mod of modMatches) {
@@ -733,7 +735,7 @@ export function resolveBatchCountryQuery(
         },
       })
     }
-    candidates.sort((a, b) => b.score - a.score)
+    candidates.sort((left, right) => right.score - left.score)
     if (candidates.length > 0) {
       const winner = candidates[0].item
       seen.add(winner.key)
@@ -808,13 +810,13 @@ export function suggestCountriesForEra(
     const matchedHistorical = historicalCountries.filter(
       (hist) => !seen.has(`h:${hist.id}`) && matchesHintYearRange(hist, hintYearRange),
     )
-    matchedHistorical.sort((a, b) => {
-      const aMajor = ERA_MAJOR_HISTORICAL_NAMES.indexOf(a.name)
-      const bMajor = ERA_MAJOR_HISTORICAL_NAMES.indexOf(b.name)
+    matchedHistorical.sort((left, right) => {
+      const aMajor = ERA_MAJOR_HISTORICAL_NAMES.indexOf(left.name)
+      const bMajor = ERA_MAJOR_HISTORICAL_NAMES.indexOf(right.name)
       if (aMajor !== -1 && bMajor !== -1) return aMajor - bMajor
       if (aMajor !== -1) return -1
       if (bMajor !== -1) return 1
-      return a.name.localeCompare(b.name, 'ko')
+      return left.name.localeCompare(right.name, 'ko')
     })
     for (const hist of matchedHistorical) {
       push({
@@ -827,13 +829,13 @@ export function suggestCountriesForEra(
   }
 
   // 2) 주요 현대국가 우선 배치
-  const sortedModern = [...modernCountries].sort((a, b) => {
-    const aMajor = MAJOR_MODERN_NAMES.indexOf(a.name)
-    const bMajor = MAJOR_MODERN_NAMES.indexOf(b.name)
+  const sortedModern = [...modernCountries].sort((left, right) => {
+    const aMajor = MAJOR_MODERN_NAMES.indexOf(left.name)
+    const bMajor = MAJOR_MODERN_NAMES.indexOf(right.name)
     if (aMajor !== -1 && bMajor !== -1) return aMajor - bMajor
     if (aMajor !== -1) return -1
     if (bMajor !== -1) return 1
-    return a.name.localeCompare(b.name, 'ko')
+    return left.name.localeCompare(right.name, 'ko')
   })
   for (const mod of sortedModern) {
     push({
@@ -944,16 +946,19 @@ export interface TitleYearSuggestion {
   startIso: string
   endIso: string
   label: string
+  precision?: 'year' | 'month' | 'day'
 }
 
-function formatYearIso(year: number, isBc: boolean): string {
+function formatYearIso(year: number, isBc: boolean, month = 1, day = 1): string {
   const padded = String(year).padStart(4, '0')
-  return isBc ? `-${padded}-01-01` : `${padded}-01-01`
+  const mm = String(month).padStart(2, '0')
+  const dd = String(day).padStart(2, '0')
+  return isBc ? `-${padded}-${mm}-${dd}` : `${padded}-${mm}-${dd}`
 }
 
 /**
- * 사건명(`title`)에 포함된 연도 또는 연도 범위(예: '1894년 청일 전쟁', '임진왜란 (1592~1598)', '기원전 202년 해하 전투')를
- * 감지해 시작·종료 ISO('YYYY-01-01', 정밀도 year) 추천값을 돌려준다.
+ * 사건명(`title`)에 포함된 연·월·일, 연·월, 연도 또는 연도 범위(예: '1919년 3월 1일 3·1 운동', '1830년 7월 혁명',
+ * '1894년 청일 전쟁', '임진왜란 (1592~1598)', '기원전 202년 해하 전투')를 감지해 시작·종료 ISO와 정밀도 추천값을 돌려준다.
  */
 export function extractYearSuggestionFromTitle(
   title: string | null | undefined,
@@ -961,7 +966,83 @@ export function extractYearSuggestionFromTitle(
   const trimmed = title?.trim() ?? ''
   if (!trimmed) return null
 
-  // 1) 연도 구간 (예: 1592~1598, 1950년~1953년, 1914-1918)
+  // 1) 연·월·일 (예: 1919년 3월 1일, 기원전 44년 3월 15일, 1950. 6. 25.)
+  const korFullDateMatch = trimmed.match(
+    /(기원전|BC|B\.C\.)?\s*(\d{1,4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/i,
+  )
+  if (korFullDateMatch) {
+    const isBc = Boolean(korFullDateMatch[1])
+    const year = Number(korFullDateMatch[2])
+    const month = Number(korFullDateMatch[3])
+    const day = Number(korFullDateMatch[4])
+    if (
+      year >= (isBc ? 1 : 100) &&
+      year <= (isBc ? 9999 : 2100) &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= 31
+    ) {
+      const iso = formatYearIso(year, isBc, month, day)
+      return {
+        startIso: iso,
+        endIso: iso,
+        label: `${isBc ? '기원전 ' : ''}${year}년 ${month}월 ${day}일`,
+        precision: 'day',
+      }
+    }
+  }
+
+  const dotFullDateMatch = trimmed.match(
+    /(?:^|[^\d])(\d{3,4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?/,
+  )
+  if (dotFullDateMatch) {
+    const year = Number(dotFullDateMatch[1])
+    const month = Number(dotFullDateMatch[2])
+    const day = Number(dotFullDateMatch[3])
+    if (
+      year >= 100 &&
+      year <= 2100 &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= 31
+    ) {
+      const iso = formatYearIso(year, false, month, day)
+      return {
+        startIso: iso,
+        endIso: iso,
+        label: `${year}년 ${month}월 ${day}일`,
+        precision: 'day',
+      }
+    }
+  }
+
+  // 2) 연·월 (예: 1830년 7월 혁명, 1917년 10월 혁명)
+  const yearMonthMatch = trimmed.match(
+    /(기원전|BC|B\.C\.)?\s*(\d{1,4})\s*년\s*(\d{1,2})\s*월(?!\s*\d)/i,
+  )
+  if (yearMonthMatch) {
+    const isBc = Boolean(yearMonthMatch[1])
+    const year = Number(yearMonthMatch[2])
+    const month = Number(yearMonthMatch[3])
+    if (
+      year >= (isBc ? 1 : 100) &&
+      year <= (isBc ? 9999 : 2100) &&
+      month >= 1 &&
+      month <= 12
+    ) {
+      const iso = formatYearIso(year, isBc, month, 1)
+      return {
+        startIso: iso,
+        endIso: iso,
+        label: `${isBc ? '기원전 ' : ''}${year}년 ${month}월`,
+        precision: 'month',
+      }
+    }
+  }
+
+  // 3) 연도 구간 (예: 1592~1598, 1950년~1953년, 1914-1918)
   const rangeMatch = trimmed.match(
     /(기원전|BC|B\.C\.)?\s*(\d{3,4})\s*년?\s*[~～\-–—]\s*(기원전|BC|B\.C\.)?\s*(\d{3,4})\s*년?/i,
   )

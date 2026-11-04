@@ -1033,40 +1033,46 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const handleRestoreDraft = useCallback(() => {
     const envelope = consumePendingDraft()
     if (!envelope) return
-    const d = envelope.data
+    const draft = envelope.data
     playClickSound()
-    setTitle(d.title ?? '')
-    setDescription(d.description ?? '')
-    setStartDate(d.startDate ?? '')
-    setStartTime(d.startTime ?? '')
-    setStartDatePrecision(d.startDatePrecision ?? 'day')
-    setEndDate(d.endDate ?? '')
-    setEndTime(d.endTime ?? '')
-    setEndDatePrecision(d.endDatePrecision ?? 'day')
-    categoryTouchedRef.current = Boolean(d.category)
-    setCategory(d.category ?? '')
-    setEventType(d.eventType ?? null)
+    setTitle(draft.title ?? '')
+    setDescription(draft.description ?? '')
+    setStartDate(draft.startDate ?? '')
+    setStartTime(draft.startTime ?? '')
+    setStartDatePrecision(draft.startDatePrecision ?? 'day')
+    setEndDate(draft.endDate ?? '')
+    setEndTime(draft.endTime ?? '')
+    setEndDatePrecision(draft.endDatePrecision ?? 'day')
+    categoryTouchedRef.current = Boolean(draft.category)
+    setCategory(draft.category ?? '')
+    setEventType(draft.eventType ?? null)
     kindTouchedRef.current = true
-    setKind(d.kind ?? 'SINGLE')
-    setLocation(d.location ?? '')
+    setKind(draft.kind ?? 'SINGLE')
+    setLocation(draft.location ?? '')
     setLocationLatitude(
-      typeof d.locationLatitude === 'number' ? d.locationLatitude : null,
+      typeof draft.locationLatitude === 'number' ? draft.locationLatitude : null,
     )
     setLocationLongitude(
-      typeof d.locationLongitude === 'number' ? d.locationLongitude : null,
+      typeof draft.locationLongitude === 'number'
+        ? draft.locationLongitude
+        : null,
     )
-    setLocationNote(d.locationNote ?? '')
+    setLocationNote(draft.locationNote ?? '')
     setThumbnail(
-      d.thumbnail && !d.thumbnail.startsWith('blob:') ? d.thumbnail : '',
+      draft.thumbnail && !draft.thumbnail.startsWith('blob:')
+        ? draft.thumbnail
+        : '',
     )
     setThumbnailFile(null)
-    setKeywords(Array.isArray(d.keywords) ? d.keywords : [])
+    setKeywords(Array.isArray(draft.keywords) ? draft.keywords : [])
     setRelatedCountries(
-      Array.isArray(d.relatedCountries) ? d.relatedCountries : [],
+      Array.isArray(draft.relatedCountries) ? draft.relatedCountries : [],
     )
-    setParentEvent(d.parentEvent ?? null)
-    setRelatedEvents(Array.isArray(d.relatedEvents) ? d.relatedEvents : [])
-    setFacetDrafts(d.facetDrafts ?? emptyRegisterFacetDrafts())
+    setParentEvent(draft.parentEvent ?? null)
+    setRelatedEvents(
+      Array.isArray(draft.relatedEvents) ? draft.relatedEvents : [],
+    )
+    setFacetDrafts(draft.facetDrafts ?? emptyRegisterFacetDrafts())
   }, [
     consumePendingDraft,
     playClickSound,
@@ -1628,6 +1634,12 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
             ? undefined
             : {
                 parent: parentEvent,
+                parentPeriod: parentDetail
+                  ? {
+                      startDate: parentDetail.startDate,
+                      endDate: parentDetail.endDate,
+                    }
+                  : undefined,
                 onOpenPicker: () => setParentPickerOpen(true),
                 onClear: () => setParentEvent(null),
                 quickSearch: {

@@ -410,3 +410,26 @@ it('상위 사건이나 연관 사건 프리셋으로 열렸을 때 모달 헤�
   expect(contextTab).toHaveAttribute('aria-current', 'location')
   expect(basicTab).not.toHaveAttribute('aria-current')
 })
+
+it('하위 피커 모달(nested dialog)이 열려 있거나 이미 처리된(defaultPrevented) Cmd/Ctrl + Enter는 부모 사건 등록 폼을 제출하지 않는다', async () => {
+  setup()
+  await waitForBody()
+
+  const nestedDialog = document.createElement('div')
+  nestedDialog.setAttribute('role', 'dialog')
+  nestedDialog.setAttribute('aria-modal', 'true')
+  const nestedInput = document.createElement('input')
+  nestedDialog.appendChild(nestedInput)
+  document.body.appendChild(nestedDialog)
+
+  try {
+    fireEvent.keyDown(nestedInput, { key: 'Enter', metaKey: true })
+    expect(submitSpy).not.toHaveBeenCalled()
+  } finally {
+    document.body.removeChild(nestedDialog)
+  }
+
+  // 하위 다이얼로그가 닫힌 뒤에는 다시 정상적으로 제출된다
+  fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
+  expect(submitSpy).toHaveBeenCalledTimes(1)
+})

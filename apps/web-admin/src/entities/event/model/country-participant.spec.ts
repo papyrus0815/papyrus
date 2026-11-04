@@ -231,11 +231,29 @@ describe('country-participant 유틸', () => {
     ).toContain('선제 공격')
   })
 
-  it('extractYearSuggestionFromTitle — 사건명에 적힌 연도·연도 구간·기원전 연도를 감지해 ISO 날짜를 추천한다', () => {
+  it('extractYearSuggestionFromTitle — 사건명에 적힌 연도·연월·전체 날짜·연도 구간·기원전 연도를 감지해 ISO 날짜와 정밀도를 추천한다', () => {
     expect(extractYearSuggestionFromTitle('1894년 청일 전쟁')).toEqual({
       startIso: '1894-01-01',
       endIso: '1894-01-01',
       label: '1894년',
+    })
+    expect(extractYearSuggestionFromTitle('1919년 3월 1일 3·1 운동')).toEqual({
+      startIso: '1919-03-01',
+      endIso: '1919-03-01',
+      label: '1919년 3월 1일',
+      precision: 'day',
+    })
+    expect(extractYearSuggestionFromTitle('1950. 6. 25. 한국 전쟁')).toEqual({
+      startIso: '1950-06-25',
+      endIso: '1950-06-25',
+      label: '1950년 6월 25일',
+      precision: 'day',
+    })
+    expect(extractYearSuggestionFromTitle('1830년 7월 혁명')).toEqual({
+      startIso: '1830-07-01',
+      endIso: '1830-07-01',
+      label: '1830년 7월',
+      precision: 'month',
     })
     expect(extractYearSuggestionFromTitle('임진왜란 (1592~1598)')).toEqual({
       startIso: '1592-01-01',
