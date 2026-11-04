@@ -8,14 +8,22 @@
  * 겹쳐야 후보가 된다 — 하나만 겹치면 '1914'·'오스만 제국' 같은 넓은 말 하나로 묶인다.
  */
 
-export interface KeywordEvent {
+/** 날짜 — 후보를 고르면 저장 방향을 날짜로 정하는 데 쓴다(그대로 실어 보낸다) */
+interface StartFields {
+  startDate?: string | null
+  startDatePrecision?: string | null
+  startEra?: string | null
+  startYear?: number | null
+}
+
+export interface KeywordEvent extends StartFields {
   id: string
   title: string
   keywords?: string[] | null
   parentEventId?: string | null
 }
 
-export interface RelatedSuggestion {
+export interface RelatedSuggestion extends StartFields {
   id: string
   title: string
   /** 겹친 키워드 — 드문 것부터 */
@@ -59,7 +67,16 @@ export function keywordSuggestions(
     if (sharedKeys.length < 2) continue
     sharedKeys.sort((left, right) => (frequency.get(left) ?? 1) - (frequency.get(right) ?? 1))
     const score = sharedKeys.reduce((sum, key) => sum + 1 / Math.log2(1 + (frequency.get(key) ?? 1)), 0)
-    results.push({ id: event.id, title: event.title, shared: sharedKeys.map((key) => mine.get(key) ?? key), score })
+    results.push({
+      id: event.id,
+      title: event.title,
+      startDate: event.startDate,
+      startDatePrecision: event.startDatePrecision,
+      startEra: event.startEra,
+      startYear: event.startYear,
+      shared: sharedKeys.map((key) => mine.get(key) ?? key),
+      score,
+    })
   }
   return results.sort((left, right) => right.score - left.score || left.title.localeCompare(right.title)).slice(0, limit)
 }

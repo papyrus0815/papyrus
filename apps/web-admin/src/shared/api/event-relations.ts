@@ -34,35 +34,39 @@ export const EVENT_RELATION_LABELS: Record<
   EventRelationType,
   { outgoing: string; incoming: string; name: string; hint: string }
 > = {
+  /*
+   * 묶음 머리는 **이 사건을 주어로 한 문장**이다 — 예전 '계기가 된 사건'·'관련 사건'은 무엇의 계기인지,
+   * 블록 이름('관련 사건')과 무엇이 다른지 읽히지 않았다. hint는 유형 고르기와 묶음 머리 곁에 그대로 보인다.
+   */
   LED_TO: {
     name: '직접 계기',
-    outgoing: '이 사건으로 일어난 사건',
-    incoming: '계기가 된 사건',
-    hint: '한 사건이 다른 사건을 직접 일으켰다',
+    outgoing: '이 사건이 직접 일으킨 사건',
+    incoming: '이 사건을 직접 일으킨 사건',
+    hint: '한 사건이 다른 사건을 직접 일으켰다 — 그것이 없었다면 일어나지 않았을 일',
   },
   INFLUENCED: {
     name: '배경·영향',
     outgoing: '이 사건이 배경이 된 사건',
-    incoming: '배경이 된 사건',
-    hint: '직접 원인은 아니지만 바탕이 되었다',
+    incoming: '이 사건의 배경이 된 사건',
+    hint: '직접 일으키지는 않았지만 일어날 바탕·조건을 만들었다',
   },
   RESPONSE_TO: {
     name: '대응',
-    outgoing: '이 사건에 대한 대응',
+    outgoing: '이 사건에 대응해 일어난 사건',
     incoming: '이 사건이 대응한 사건',
-    hint: '한 사건이 다른 사건에 대한 대응·반작용이다',
+    hint: '한 사건이 다른 사건에 맞서거나 그 뒤를 수습하려고 일어났다',
   },
   CONCURRENT: {
     name: '같은 국면',
-    outgoing: '같은 국면의 사건',
-    incoming: '같은 국면의 사건',
-    hint: '같은 시기에 얽혀 함께 진행되었다',
+    outgoing: '같은 때 얽혀 진행된 사건',
+    incoming: '같은 때 얽혀 진행된 사건',
+    hint: '원인·결과라기보다 같은 시기에 서로 얽혀 함께 진행되었다',
   },
   RELATED: {
-    name: '관련',
-    outgoing: '관련 사건',
-    incoming: '관련 사건',
-    hint: '그 밖의 관련',
+    name: '그 밖의 연관',
+    outgoing: '그 밖에 이어진 사건',
+    incoming: '그 밖에 이어진 사건',
+    hint: '위 네 가지로 말하기 어려운 연관 — 설명에 어떻게 이어지는지 적어 두면 좋다',
   },
 }
 

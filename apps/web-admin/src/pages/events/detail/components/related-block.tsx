@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiArrowRight, FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowRight, FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -90,6 +90,15 @@ const TYPE_OPTIONS: Array<{ value: EventRelationType; label: string }> = (
   ['LED_TO', 'INFLUENCED', 'RESPONSE_TO', 'CONCURRENT', 'RELATED'] as const
 ).map((type) => ({ value: type, label: EVENT_RELATION_LABELS[type].name }))
 
+/** 묶음의 자리 — 이 사건보다 앞선 원인 쪽 · 뒤따른 결과 쪽 · 곁 */
+type GroupSide = 'before' | 'after' | 'beside'
+const SIDE_GLYPH: Record<GroupSide, string> = { before: '←', after: '→', beside: '↔' }
+const SIDE_TITLE: Record<GroupSide, string> = {
+  before: '이 사건보다 앞선 원인 쪽',
+  after: '이 사건이 낳은 결과 쪽',
+  beside: '같은 때 얽힌 사건',
+}
+
 /** 같은 시기 후보의 창 — 앞뒤 30년(서버 기본), 가까운 순 */
 const NEAR_WINDOW_YEARS = 30
 /** 모달 구획 이름 — SelectModal 그룹 라벨 */
@@ -151,6 +160,7 @@ export function RelatedBlock({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [descriptionDraftId, setDescriptionDraftId] = useState<string | null>(null)
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
 
   // ── 후보 검색(서버) — 상위/하위 픽커와 같은 link-candidates 엔드포인트 ──
   const [searchTerm, setSearchTerm] = useState('')
@@ -375,19 +385,40 @@ export function RelatedBlock({
     return EVENT_RELATION_GROUP_ORDER.flatMap(({ type, direction }) => {
       const items = byKey.get(`${type}:${direction}`)
       if (!items?.length) return []
-      return [{ key: `${type}:${direction}`, label: EVENT_RELATION_LABELS[type][direction], items }]
+      /* 원인 쪽(이 사건보다 앞) · 결과 쪽(뒤) · 곁(같은 때·그 밖) — 머리의 화살표가 이 사건과의 선후를 말한다 */
+      const side: GroupSide = !DIRECTED_RELATION_TYPES.has(type)
+        ? 'beside'
+        : direction === 'incoming'
+          ? 'before'
+          : 'after'
+      return [
+        {
+          key: `${type}:${direction}`,
+          label: EVENT_RELATION_LABELS[type][direction],
+          hint: EVENT_RELATION_LABELS[type].hint,
+          side,
+          items,
+        },
+      ]
     })
   }, [relations])
 
   return (
-    <NetStyles.HierBlock role="group" aria-labelledby="network-related-label">
-      <NetStyles.BlockLabel id="network-related-label">관련 사건</NetStyles.BlockLabel>
+    <NetStyles.HierBlock
+      role="group"
+      aria-labelledby="network-related-label"
+    >
 
       {isError && <NetStyles.HelperNote>관련 사건을 불러오지 못했습니다</NetStyles.HelperNote>}
 
       {groups.map((group) => (
         <Group key={group.key} role="group" aria-label={group.label}>
-          <GroupLabel>{group.label}</GroupLabel>
+          <GroupHead>
+            <GroupArrow aria-hidden title={SIDE_TITLE[group.side]}>
+              {SIDE_GLYPH[group.side]}
+            </GroupArrow>
+            <GroupLabel title={group.hint}>{group.label}</GroupLabel>
+          </GroupHead>
           <NetStyles.ChildList>
             {group.items.map((relation) => {
               const other = relation.event
@@ -425,7 +456,7 @@ export function RelatedBlock({
                       onClick={() => openEdit(relation)}
                       aria-label={`'${other.title}' 관계 유형·방향 수정`}
                     >
-                      유형
+                      관계 바꾸기
                     </NetStyles.AddReasonBtn>
                     <NetStyles.RemoveChildBtn
                       type="button"
@@ -495,6 +526,8 @@ export function RelatedBlock({
               options={TYPE_OPTIONS}
               ariaLabel="관계 유형"
             />
+            {/* 고른 유형이 무슨 뜻인지 — 이름만으론 '배경·영향'과 '직접 계기'의 경계를 알 수 없다 */}
+            <TypeHint>{EVENT_RELATION_LABELS[draft.relationType].hint}</TypeHint>
           </ComposerField>
 
           {DIRECTED_RELATION_TYPES.has(draft.relationType) && (
@@ -574,62 +607,70 @@ export function RelatedBlock({
         </Composer>
       )}
 
-      {/*
-        * 같은 키워드의 사건 — 이미 적어 둔 키워드가 말하는 이웃. 누르면 상대가 채워진 작성 줄이 열려 유형만 고르면 된다
-        * ('관련'으로 시작 — 계기·배경은 사람이 판단). 이미 이은 사건은 빠진다.
-        */}
-      {!draft && visibleSuggestions.length > 0 && (
-        <Group>
-          <GroupLabel>같은 키워드의 사건</GroupLabel>
-          <SuggestionList>
-            {visibleSuggestions.map((suggestion) => (
-              <SuggestionRow key={suggestion.id}>
-                <SuggestionText>
-                  <SuggestionTitle
-                    to={pathKeys.events.detail(suggestion.id)}
-                    onMouseEnter={() => prefetchEvent(suggestion.id)}
-                  >
-                    {suggestion.title}
-                  </SuggestionTitle>
-                  <SuggestionShared>
-                    겹친 키워드 {suggestion.shared.slice(0, 4).join(' · ')}
-                    {suggestion.shared.length > 4 && ` 외 ${suggestion.shared.length - 4}`}
-                  </SuggestionShared>
-                </SuggestionText>
-                <NetStyles.TextBtn
-                  type="button"
-                  onClick={() =>
-                    openNew(
-                      { id: suggestion.id, title: suggestion.title, ...startFieldsOf(suggestion) },
-                      'RELATED',
-                    )
-                  }
-                >
-                  연결
-                </NetStyles.TextBtn>
-              </SuggestionRow>
-            ))}
-          </SuggestionList>
-        </Group>
-      )}
-
       {!draft && (
         <NetStyles.HierRow>
           <NetStyles.AddBtn type="button" onClick={() => setPickerOpen(true)}>
-            <FiPlus /> 관련 사건 연결
+            <FiPlus /> 기존 사건과 잇기
           </NetStyles.AddBtn>
           {onOpenCreateRelated && (
             <NetStyles.AddBtn type="button" onClick={onOpenCreateRelated}>
               <FiPlus /> 새 관련 사건 등록
             </NetStyles.AddBtn>
           )}
-          {relations.length === 0 && !isError && (
-            <NetStyles.HelperNote>
-              계기·배경·대응처럼 상위/하위가 아닌 사건끼리의 연결
-            </NetStyles.HelperNote>
-          )}
         </NetStyles.HierRow>
       )}
+
+      {/*
+        * 같은 키워드의 사건 — 이미 적어 둔 키워드가 말하는 이웃. 이은 관계와 섞여 보이지 않게 버튼 아래 점선 상자로. 누르면 상대가 채워진 작성 줄이 열려 유형만 고르면 된다
+        * ('관련'으로 시작 — 계기·배경은 사람이 판단). 이미 이은 사건은 빠진다.
+        */}
+      {!draft && visibleSuggestions.length > 0 && (
+        <Suggestions>
+          {/* 접어 둔 한 줄 — 이은 관계와 섞여 '이미 연결된 사건'처럼 읽히지 않게 */}
+          <SuggestionToggle
+            type="button"
+            aria-expanded={suggestionsOpen}
+            aria-controls="related-suggestion-list"
+            onClick={() => setSuggestionsOpen((previous) => !previous)}
+          >
+            <FiChevronRight aria-hidden data-open={suggestionsOpen} />
+            같은 키워드로 이을 만한 사건 {visibleSuggestions.length}건
+          </SuggestionToggle>
+          {suggestionsOpen && (
+            <SuggestionList id="related-suggestion-list">
+              {visibleSuggestions.map((suggestion) => (
+                <SuggestionRow key={suggestion.id}>
+                  <SuggestionText>
+                    <SuggestionTitle
+                      to={pathKeys.events.detail(suggestion.id)}
+                      onMouseEnter={() => prefetchEvent(suggestion.id)}
+                    >
+                      {suggestion.title}
+                    </SuggestionTitle>
+                    <SuggestionShared>
+                      겹친 키워드 {suggestion.shared.slice(0, 4).join(' · ')}
+                      {suggestion.shared.length > 4 && ` 외 ${suggestion.shared.length - 4}`}
+                    </SuggestionShared>
+                  </SuggestionText>
+                  <NetStyles.TextBtn
+                    type="button"
+                    aria-label={`‘${suggestion.title}’${particle(suggestion.title, '과/와')} 잇기`}
+                    onClick={() =>
+                      openNew(
+                        { id: suggestion.id, title: suggestion.title, ...startFieldsOf(suggestion) },
+                        'RELATED',
+                      )
+                    }
+                  >
+                    잇기
+                  </NetStyles.TextBtn>
+                </SuggestionRow>
+              ))}
+            </SuggestionList>
+          )}
+        </Suggestions>
+      )}
+
 
       <SelectModal
         isOpen={pickerOpen}
@@ -638,6 +679,12 @@ export function RelatedBlock({
           setSearchTerm('')
         }}
         title="관련 사건 연결"
+        headerExtra={
+          <PickerIntro>
+            이 사건과 <strong>원인·결과로 이어진 다른 사건</strong>을 고르세요. 고른 뒤 직접 계기·배경·대응 중
+            무엇인지 정합니다.
+          </PickerIntro>
+        }
         options={candidateOptions}
         onSelect={handlePick}
         searchable
@@ -705,11 +752,87 @@ const Group = styled.div`
   gap: 2px;
 `
 
-/** 묶음 머리 — 이 사건 쪽에서 읽는 관계 문구('계기가 된 사건' 등) */
+/** 묶음 머리 — 화살표(이 사건과의 선후) + 이 사건을 주어로 한 문장 + 유형 뜻풀이 */
+const GroupHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin-top: 4px;
+`
+
+const GroupArrow = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
 const GroupLabel = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const Suggestions = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+/** 접힌 후보 한 줄 — 본문보다 한 단 낮은 메타 글씨 */
+const SuggestionToggle = styled.button`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 4px 0 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
   font-size: 12.5px;
   font-weight: 600;
   color: ${metaText};
+  cursor: pointer;
+
+  svg {
+    transition: transform 0.15s ease;
+  }
+  svg[data-open='true'] {
+    transform: rotate(90deg);
+  }
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+`
+
+const TypeHint = styled.span`
+  flex-basis: 100%;
+  padding-left: 44px;
+  font-size: 12px;
+  color: ${metaText};
+
+  @media (max-width: 639px) {
+    padding-left: 0;
+  }
+`
+
+const PickerIntro = styled.p`
+  margin: 10px 0 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${metaText};
+
+  strong {
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
 `
 
 /** 행 오른쪽 편집 크롬 — ChildRow의 hover-reveal 스코프가 AddReasonBtn·RemoveChildBtn을 연다 */

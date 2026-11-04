@@ -10,6 +10,7 @@ import {
 
 import { useQueryClient } from '@tanstack/react-query'
 import { useBlocker } from 'react-router-dom'
+import { FiLayers, FiShuffle } from 'react-icons/fi'
 
 import { useEvents } from '@/entities/event/model'
 
@@ -35,6 +36,8 @@ import {
   focusNextRemovalTarget,
 } from './detail-network.lib'
 import { KeywordsBlock } from './keywords-block'
+import { NetworkZone, ZoneTail } from './network-zone'
+import { RelatedHelp } from './related-help'
 import { sectionKindOf } from './narrative-sections.lib'
 import { keywordSuggestions } from './related-suggestions.lib'
 import { ParentBlock } from './parent-block'
@@ -88,11 +91,11 @@ const PROMOTE_CLEAR_ALL_VALUE = '__clear-all-parents__'
 type NetworkBlock = 'parent' | 'children' | 'related' | 'keywords'
 
 /** 연관 섹션의 블록 — 배열 순서가 화면 순서이고 '연결 추가' 칩 순서다 */
-const NETWORK_BLOCKS: ReadonlyArray<{ id: NetworkBlock; label: string }> = [
-  { id: 'parent', label: '상위 사건' },
-  { id: 'children', label: '하위 사건' },
-  { id: 'related', label: '관련 사건' },
-  { id: 'keywords', label: '키워드' },
+const NETWORK_BLOCKS: ReadonlyArray<{ id: NetworkBlock; label: string; hint: string }> = [
+  { id: 'parent', label: '상위 사건', hint: '이 사건을 품는 더 큰 사건(묶음)' },
+  { id: 'children', label: '하위 사건', hint: '이 사건 안에서 일어난 작은 사건' },
+  { id: 'related', label: '관련 사건', hint: '묶음과 별개로 원인·결과로 이어진 다른 사건(직접 계기·배경·대응)' },
+  { id: 'keywords', label: '키워드', hint: '이 사건을 찾고 묶는 낱말' },
 ]
 
 /**
@@ -719,6 +722,11 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
       return next
     })
   }, [filledKey])
+  /** 소속 구역에 그릴 것이 있나 — 상위·하위 블록, 또는 단일 사건의 '나누기' 안내 */
+  const hierarchyZoneShown = () =>
+    isBlockShown('parent') ||
+    (!isCollection && Boolean(onRequestSplit) && narrativeCount >= 2) ||
+    (isCollection && isBlockShown('children'))
   const isBlockShown = (block: NetworkBlock) =>
     blockFilled[block] || shownBlocks.has(block)
   const foldedBlocks = NETWORK_BLOCKS.filter(
@@ -746,6 +754,18 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
         )}
       </S.SectionHeader>
 
+      {/*
+        * 소속 구역 — 상위·하위(어느 묶음 안에 있나). 아래 '관련 사건'(원인·결과)과 종류가 다른 연결이라
+        * 아이콘·제목·세로선 색이 다른 구역으로 가른다.
+        */}
+      {hierarchyZoneShown() && (
+      <NetworkZone
+        kind="hierarchy"
+        icon={<FiLayers />}
+        title="소속"
+        titleId="network-zone-hierarchy"
+        description="이 사건이 들어 있는 큰 사건(상위)과, 이 사건 안에서 일어난 사건(하위)"
+      >
       {/* 상위 사건 — 지정/변경/해제 + 추가 상위 칩 + 형제 네비 */}
       {isBlockShown('parent') && (
       <ParentBlock
@@ -789,9 +809,19 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
           onOpenCreateChild={() => setCreateChildOpen(true)}
         />
       )}
+      </NetworkZone>
+      )}
 
       {/* 관련 사건 — 상위/하위가 아닌 별개 사건끼리의 연결(계기·배경·대응·같은 국면) */}
       {isBlockShown('related') && (
+        <NetworkZone
+          kind="related"
+          icon={<FiShuffle />}
+          title="관련 사건"
+          titleId="network-related-label"
+          description="묶음과 상관없이 원인·결과로 이어진 다른 사건"
+          extra={<RelatedHelp />}
+        >
         <RelatedBlock
           eventId={event.id}
           eventTitle={event.title}
@@ -806,8 +836,10 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
           suggestions={suggestions}
           onOpenCreateRelated={() => setCreateRelatedOpen(true)}
         />
+        </NetworkZone>
       )}
 
+      <ZoneTail>
       {isBlockShown('keywords') && (
         <KeywordsBlock keywords={keywords} onPatch={onPatch} />
       )}
@@ -822,12 +854,14 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
               onClick={() =>
                 setShownBlocks((prev) => new Set(prev).add(block.id))
               }
+              title={block.hint}
             >
               + {block.label}
             </NetStyles.FoldedLinkChip>
           ))}
         </NetStyles.FoldedLinks>
       )}
+      </ZoneTail>
 
       <SelectModal
         isOpen={parentModalOpen}
