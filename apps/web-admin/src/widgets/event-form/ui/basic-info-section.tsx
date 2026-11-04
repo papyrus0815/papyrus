@@ -1281,139 +1281,135 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         )
                       return (
                         <ParticipantRow key={key}>
-                          <ParticipantHeaderLine>
-                            <ParticipantName>{country.name}</ParticipantName>
-                            <RoleSelect
-                              value={currentRole}
-                              aria-label={`${country.name} 역할`}
-                              title={
-                                eventCountryRoleHint(currentRole) ?? undefined
-                              }
-                              onChange={(changeEvent) =>
-                                patch({
-                                  role: changeEvent.target
-                                    .value as EventCountryParticipant['role'],
-                                })
-                              }
+                          <ParticipantName>{country.name}</ParticipantName>
+                          <RoleSelect
+                            value={currentRole}
+                            aria-label={`${country.name} 역할`}
+                            title={
+                              eventCountryRoleHint(currentRole) ?? undefined
+                            }
+                            onChange={(changeEvent) =>
+                              patch({
+                                role: changeEvent.target
+                                  .value as EventCountryParticipant['role'],
+                              })
+                            }
+                          >
+                            {EVENT_COUNTRY_ROLE_OPTIONS.filter(
+                              (option) =>
+                                !option.deprecated ||
+                                option.value === participant.role,
+                            ).map((option) => (
+                              <option
+                                key={option.value}
+                                value={option.value}
+                                title={option.hint}
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </RoleSelect>
+                          {participantSidesSlot && (
+                            <ParticipantSideGroup
+                              role="group"
+                              aria-label={`${country.name} 진영 배정`}
                             >
-                              {EVENT_COUNTRY_ROLE_OPTIONS.filter(
-                                (option) =>
-                                  !option.deprecated ||
-                                  option.value === participant.role,
-                              ).map((option) => (
-                                <option
-                                  key={option.value}
-                                  value={option.value}
-                                  title={option.hint}
+                              {(['A', 'B'] as const).map((slot, slotIdx) => {
+                                const currentSlot =
+                                  participantSidesSlot.assignment[key] ?? null
+                                const active = currentSlot === slot
+                                return (
+                                  <ParticipantSideBtn
+                                    key={slot}
+                                    type="button"
+                                    aria-pressed={active}
+                                    $active={active}
+                                    title={`${slotIdx + 1}번 진영 (${participantSidesSlot.sideNames[slotIdx]})`}
+                                    aria-label={`${country.name} ${slotIdx + 1}편`}
+                                    onClick={() => {
+                                      playClickSound()
+                                      participantSidesSlot.onAssign(
+                                        key,
+                                        active ? null : slot,
+                                      )
+                                    }}
+                                  >
+                                    {slotIdx + 1}편
+                                  </ParticipantSideBtn>
+                                )
+                              })}
+                            </ParticipantSideGroup>
+                          )}
+                          <RoleDescriptionInput
+                            type="text"
+                            value={participant.roleDescription ?? ''}
+                            aria-label={`${country.name}가 한 일`}
+                            placeholder={roleDescriptionPlaceholder}
+                            onChange={(changeEvent) =>
+                              patch({
+                                roleDescription: changeEvent.target.value,
+                              })
+                            }
+                          />
+                          <ParticipantActions>
+                            {relatedCountries.length > 1 && (
+                              <>
+                                <ParticipantMoveButton
+                                  type="button"
+                                  disabled={index === 0}
+                                  aria-label={`${country.name} 위로 이동`}
+                                  title="위로 이동"
+                                  onClick={() => {
+                                    playClickSound()
+                                    setRelatedCountries(
+                                      moveParticipant(
+                                        relatedCountries,
+                                        index,
+                                        'up',
+                                      ),
+                                    )
+                                  }}
                                 >
-                                  {option.label}
-                                </option>
-                              ))}
-                            </RoleSelect>
-                            {participantSidesSlot && (
-                              <ParticipantSideGroup
-                                role="group"
-                                aria-label={`${country.name} 진영 배정`}
-                              >
-                                {(['A', 'B'] as const).map((slot, slotIdx) => {
-                                  const currentSlot =
-                                    participantSidesSlot.assignment[key] ?? null
-                                  const active = currentSlot === slot
-                                  return (
-                                    <ParticipantSideBtn
-                                      key={slot}
-                                      type="button"
-                                      aria-pressed={active}
-                                      $active={active}
-                                      title={`${slotIdx + 1}번 진영 (${participantSidesSlot.sideNames[slotIdx]})`}
-                                      aria-label={`${country.name} ${slotIdx + 1}편`}
-                                      onClick={() => {
-                                        playClickSound()
-                                        participantSidesSlot.onAssign(
-                                          key,
-                                          active ? null : slot,
-                                        )
-                                      }}
-                                    >
-                                      {slotIdx + 1}편
-                                    </ParticipantSideBtn>
-                                  )
-                                })}
-                              </ParticipantSideGroup>
+                                  <FiArrowUp size={13} />
+                                </ParticipantMoveButton>
+                                <ParticipantMoveButton
+                                  type="button"
+                                  disabled={
+                                    index === relatedCountries.length - 1
+                                  }
+                                  aria-label={`${country.name} 아래로 이동`}
+                                  title="아래로 이동"
+                                  onClick={() => {
+                                    playClickSound()
+                                    setRelatedCountries(
+                                      moveParticipant(
+                                        relatedCountries,
+                                        index,
+                                        'down',
+                                      ),
+                                    )
+                                  }}
+                                >
+                                  <FiArrowDown size={13} />
+                                </ParticipantMoveButton>
+                              </>
                             )}
-                            <ParticipantActions>
-                              {relatedCountries.length > 1 && (
-                                <>
-                                  <ParticipantMoveButton
-                                    type="button"
-                                    disabled={index === 0}
-                                    aria-label={`${country.name} 위로 이동`}
-                                    title="위로 이동"
-                                    onClick={() => {
-                                      playClickSound()
-                                      setRelatedCountries(
-                                        moveParticipant(
-                                          relatedCountries,
-                                          index,
-                                          'up',
-                                        ),
-                                      )
-                                    }}
-                                  >
-                                    <FiArrowUp size={13} />
-                                  </ParticipantMoveButton>
-                                  <ParticipantMoveButton
-                                    type="button"
-                                    disabled={
-                                      index === relatedCountries.length - 1
-                                    }
-                                    aria-label={`${country.name} 아래로 이동`}
-                                    title="아래로 이동"
-                                    onClick={() => {
-                                      playClickSound()
-                                      setRelatedCountries(
-                                        moveParticipant(
-                                          relatedCountries,
-                                          index,
-                                          'down',
-                                        ),
-                                      )
-                                    }}
-                                  >
-                                    <FiArrowDown size={13} />
-                                  </ParticipantMoveButton>
-                                </>
-                              )}
-                              <ParticipantRemove
-                                type="button"
-                                aria-label={`${country.name} 제거`}
-                                onClick={() => {
-                                  playClickSound()
-                                  setRelatedCountries(
-                                    relatedCountries.filter(
-                                      (row) => participantKey(row) !== key,
-                                    ),
-                                  )
-                                  participantSidesSlot?.onAssign(key, null)
-                                }}
-                              >
-                                <FiX size={14} />
-                              </ParticipantRemove>
-                            </ParticipantActions>
-                          </ParticipantHeaderLine>
-                          <ParticipantDescriptionLine>
-                            <RoleDescriptionInput
-                              rows={1}
-                              value={participant.roleDescription ?? ''}
-                              aria-label={`${country.name}가 한 일`}
-                              placeholder={roleDescriptionPlaceholder}
-                              onChange={(changeEvent) =>
-                                patch({
-                                  roleDescription: changeEvent.target.value,
-                                })
-                              }
-                            />
-                          </ParticipantDescriptionLine>
+                            <ParticipantRemove
+                              type="button"
+                              aria-label={`${country.name} 제거`}
+                              onClick={() => {
+                                playClickSound()
+                                setRelatedCountries(
+                                  relatedCountries.filter(
+                                    (row) => participantKey(row) !== key,
+                                  ),
+                                )
+                                participantSidesSlot?.onAssign(key, null)
+                              }}
+                            >
+                              <FiX size={14} />
+                            </ParticipantRemove>
+                          </ParticipantActions>
                         </ParticipantRow>
                       )
                     })}
@@ -1868,65 +1864,61 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       )
                     return (
                       <ParticipantRow key={item.relatedEventId}>
-                        <ParticipantHeaderLine>
-                          <ParticipantName>{item.title}</ParticipantName>
-                          {item.dateLabel && (
-                            <RelatedEventDateMeta>
-                              {item.dateLabel}
-                            </RelatedEventDateMeta>
-                          )}
-                          <RoleSelect
-                            value={roleKey}
-                            aria-label={`${item.title} 관계 역할`}
-                            onChange={(changeEvent) => {
-                              const parsed = parseRelationRoleKey(
-                                changeEvent.target
-                                  .value as EventRelationRoleKey,
+                        <ParticipantName>{item.title}</ParticipantName>
+                        {item.dateLabel && (
+                          <RelatedEventDateMeta>
+                            {item.dateLabel}
+                          </RelatedEventDateMeta>
+                        )}
+                        <RoleSelect
+                          value={roleKey}
+                          aria-label={`${item.title} 관계 역할`}
+                          onChange={(changeEvent) => {
+                            const parsed = parseRelationRoleKey(
+                              changeEvent.target
+                                .value as EventRelationRoleKey,
+                            )
+                            patchItem({
+                              relationType: parsed.relationType,
+                              direction: parsed.direction,
+                            })
+                          }}
+                        >
+                          {EVENT_RELATION_ROLE_OPTIONS.map((option) => (
+                            <option key={option.key} value={option.key}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </RoleSelect>
+                        <RelatedDescriptionInput
+                          type="text"
+                          value={item.description ?? ''}
+                          aria-label={`${item.title} 관계 설명`}
+                          placeholder="어떻게 이어지는지 한 줄 설명 (선택)"
+                          onChange={(changeEvent) =>
+                            patchItem({
+                              description: changeEvent.target.value,
+                            })
+                          }
+                        />
+                        <ParticipantActions>
+                          <ParticipantRemove
+                            type="button"
+                            aria-label={`${item.title} 연관 해제`}
+                            onClick={() => {
+                              playClickSound()
+                              relatedEventsSlot.onChange(
+                                relatedEventsSlot.items.filter(
+                                  (row) =>
+                                    row.relatedEventId !==
+                                    item.relatedEventId,
+                                ),
                               )
-                              patchItem({
-                                relationType: parsed.relationType,
-                                direction: parsed.direction,
-                              })
                             }}
                           >
-                            {EVENT_RELATION_ROLE_OPTIONS.map((option) => (
-                              <option key={option.key} value={option.key}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </RoleSelect>
-                          <ParticipantActions>
-                            <ParticipantRemove
-                              type="button"
-                              aria-label={`${item.title} 연관 해제`}
-                              onClick={() => {
-                                playClickSound()
-                                relatedEventsSlot.onChange(
-                                  relatedEventsSlot.items.filter(
-                                    (row) =>
-                                      row.relatedEventId !==
-                                      item.relatedEventId,
-                                  ),
-                                )
-                              }}
-                            >
-                              <FiX size={14} />
-                            </ParticipantRemove>
-                          </ParticipantActions>
-                        </ParticipantHeaderLine>
-                        <ParticipantDescriptionLine>
-                          <RelatedDescriptionInput
-                            type="text"
-                            value={item.description ?? ''}
-                            aria-label={`${item.title} 관계 설명`}
-                            placeholder="어떻게 이어지는지 한 줄 설명 (선택) — 예: 전쟁 종결 후 강화 교섭 개시"
-                            onChange={(changeEvent) =>
-                              patchItem({
-                                description: changeEvent.target.value,
-                              })
-                            }
-                          />
-                        </ParticipantDescriptionLine>
+                            <FiX size={14} />
+                          </ParticipantRemove>
+                        </ParticipantActions>
                       </ParticipantRow>
                     )
                   })}
@@ -2348,58 +2340,46 @@ const OptionalTag = styled.span`
 const ParticipantList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: 0;
+  margin-bottom: 6px;
 `
 
 const ParticipantRow = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) => S.getC(theme).background.section};
-  transition: border-color 0.15s ease;
-
-  &:focus-within {
-    border-color: var(
-      --active-domain-accent,
-      ${({ theme }) => S.getC(theme).border.focus}
-    );
-  }
-`
-
-const ParticipantHeaderLine = styled.div`
-  display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  min-width: 0;
-`
+  gap: 8px 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: transparent;
 
-const ParticipantDescriptionLine = styled.div`
-  display: flex;
-  align-items: stretch;
-  width: 100%;
-  min-width: 0;
+  &:first-child {
+    padding-top: 2px;
+  }
+
+  &:last-child {
+    padding-bottom: 4px;
+    border-bottom: none;
+  }
 `
 
 const ParticipantSideGroup = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  height: 34px;
   padding: 2px;
-  border-radius: 7px;
+  border-radius: 8px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.light};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
+  flex-shrink: 0;
 `
 
 const ParticipantSideBtn = styled.button<{ $active: boolean }>`
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
   border: none;
   background: ${({ $active, theme }) =>
     $active
@@ -2431,6 +2411,7 @@ const ParticipantActions = styled.div`
   align-items: center;
   gap: 2px;
   margin-left: auto;
+  flex-shrink: 0;
 `
 
 const ParticipantMoveButton = styled.button`
@@ -2703,6 +2684,7 @@ const ParticipantRemove = styled.button`
 `
 
 const ParticipantName = styled.span`
+  min-width: 64px;
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -2738,6 +2720,7 @@ const participantControl = ({ theme }: { theme: DefaultTheme }) => `
 const RoleSelect = styled.select`
   ${participantControl}
   appearance: none;
+  flex-shrink: 0;
   padding: 0 28px 0 11px;
   font-weight: 600;
   cursor: pointer;
@@ -2746,16 +2729,12 @@ const RoleSelect = styled.select`
   background-position: right 10px center;
 `
 
-const RoleDescriptionInput = styled.textarea`
+const RoleDescriptionInput = styled.input`
   ${participantControl}
-  width: 100%;
-  min-height: 34px;
+  flex: 1 1 180px;
+  min-width: 140px;
   height: 34px;
-  padding: 6px 11px;
-  min-width: 0;
-  line-height: 1.45;
-  resize: vertical;
-  background-color: ${({ theme }) => S.getC(theme).background.content};
+  padding: 0 11px;
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};
@@ -2938,11 +2917,7 @@ const TitleSuggestionRow = styled.div`
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 4px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.05);
-  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.14);
+  margin-top: 2px;
 `
 
 const TitleSuggestionButton = styled.button`
@@ -2953,7 +2928,7 @@ const TitleSuggestionButton = styled.button`
   padding: 0 10px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => S.getC(theme).background.content};
+  background: transparent;
   color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
   font: inherit;
   font-size: 12px;
@@ -2999,11 +2974,7 @@ const SimilarEventsBar = styled.div`
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 12px;
-  margin-top: 4px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.05);
-  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.14);
+  margin-top: 2px;
   font-size: 12px;
 `
 
@@ -3065,10 +3036,10 @@ const RelatedEventDateMeta = styled.span`
 
 const RelatedDescriptionInput = styled.input`
   ${participantControl}
-  width: 100%;
+  flex: 1 1 180px;
+  min-width: 140px;
   height: 34px;
   padding: 0 11px;
-  min-width: 0;
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};

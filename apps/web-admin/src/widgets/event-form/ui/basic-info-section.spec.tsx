@@ -266,7 +266,7 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     expect(onReplaceKey).toHaveBeenCalledWith('h:h-ming', 'h:h-qing')
   })
 
-  it('2단 참여국 카드에서 이모지 없는 국가명·역할 선택과 2층 가로 100% 멀티라인 서술 입력칸이 동작한다', () => {
+  it('참여국 평면 원장 행에서 국가명·역할 선택과 한 일 서술 입력칸이 한 줄 흐름으로 동작한다', () => {
     const setRelatedCountries = jest.fn()
     renderWithTheme(
       <BasicInfoSection

@@ -783,8 +783,8 @@ function RecordPickers({
 const RowList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: 0;
+  margin-bottom: 6px;
 `
 
 const Row = styled.div`
@@ -792,17 +792,17 @@ const Row = styled.div`
   grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.8fr) 28px;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) => S.getC(theme).background.section};
-  transition: border-color 0.15s ease;
+  padding: 9px 0;
+  border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: transparent;
 
-  &:focus-within {
-    border-color: var(
-      --active-domain-accent,
-      ${({ theme }) => S.getC(theme).border.focus}
-    );
+  &:first-child {
+    padding-top: 2px;
+  }
+
+  &:last-child {
+    padding-bottom: 4px;
+    border-bottom: none;
   }
 
   @media (max-width: 640px) {
@@ -885,21 +885,34 @@ const RowSelect = styled.select`
 const SideBoardGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 20px;
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
 `
 
 const SideCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) => S.getC(theme).background.section};
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+
+  & + & {
+    padding-left: 20px;
+    border-left: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  }
+
+  @media (max-width: 560px) {
+    & + & {
+      padding-left: 0;
+      padding-top: 12px;
+      border-left: none;
+      border-top: 1px solid ${({ theme }) => S.getC(theme).border.light};
+    }
+  }
 `
 
 const SideNameInput = styled.input`
@@ -1001,10 +1014,8 @@ const UnassignedChip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 4px 2px 8px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) => S.getC(theme).background.section};
+  padding: 2px 0;
+  background: transparent;
   font-size: 12px;
 `
 
@@ -1017,7 +1028,7 @@ const UnassignedAssignButton = styled.button`
   padding: 2px 7px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.light};
   border-radius: 999px;
-  background: ${({ theme }) => S.getC(theme).background.content};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font: inherit;
   font-size: 11.5px;
@@ -1059,10 +1070,11 @@ const TextButton = styled.button`
 const StatehoodGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 20px;
 
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
 `
 
@@ -1070,10 +1082,22 @@ const StatehoodCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) => S.getC(theme).background.section};
+  padding: 0;
+  background: transparent;
+
+  & + & {
+    padding-left: 20px;
+    border-left: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  }
+
+  @media (max-width: 560px) {
+    & + & {
+      padding-left: 0;
+      padding-top: 12px;
+      border-left: none;
+      border-top: 1px solid ${({ theme }) => S.getC(theme).border.light};
+    }
+  }
 `
 
 const SlotLabel = styled.div`
