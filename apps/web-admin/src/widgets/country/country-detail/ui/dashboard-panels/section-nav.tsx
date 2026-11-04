@@ -19,10 +19,13 @@ function compactCountText(raw: string | null | undefined): string | null {
   const text = raw.replace(/\s+/g, ' ').trim()
   if (!text) return null
 
-  const unregisteredMatch = /^(\d+)개\s*분야\s*미등록$/.exec(text)
+  const unregisteredMatch = /^(\d+)개\s*(?:분야|도메인|항목|시점)\s*미등록$/.exec(
+    text,
+  )
   if (unregisteredMatch) return `0/${unregisteredMatch[1]}`
 
-  const ratioMatch = /^(\d+\/\d+)개?\s*분야/.exec(text)
+  const ratioMatch =
+    /^(?:등록\s*)?(\d+\/\d+)\s*개?\s*(?:분야|도메인|항목|시점)?/.exec(text)
   if (ratioMatch) return ratioMatch[1]
 
   const monarchCabinetMatch =
@@ -33,13 +36,13 @@ function compactCountText(raw: string | null | undefined): string | null {
     return cabs > 0 ? `${heads}명·${cabs}대` : `${heads}명`
   }
 
-  const pastCountryMatch = /^과거\s*국가\s*([\d,]+)개$/.exec(text)
+  const pastCountryMatch = /^(?:과거\s*국가|앞뒤)\s*([\d,]+)개국?$/.exec(text)
   if (pastCountryMatch) return pastCountryMatch[1]
 
   const totalMatch = /^총\s*([\d,]+)건$/.exec(text)
   if (totalMatch) return totalMatch[1]
 
-  const simpleCountMatch = /^([\d,]+)(건|개|명)$/.exec(text)
+  const simpleCountMatch = /^([\d,]+)(건|개|명|대|곳)$/.exec(text)
   if (simpleCountMatch) return simpleCountMatch[1]
 
   return text
@@ -229,31 +232,63 @@ export function SectionNav({ rootRef }: SectionNavProps) {
     })
   }, [])
 
+  const scrollToTop = useCallback(() => {
+    const reduceMotion = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)',
+    ).matches
+    const scroller = findScrollParent(navRef.current)
+    if (scroller && scroller !== document.scrollingElement) {
+      scroller.scrollTo({
+        top: 0,
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      })
+    } else {
+      window.scrollTo({
+        top: 0,
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      })
+    }
+  }, [])
+
   /* 장이 셋도 안 되면 목차가 오히려 군더더기다 */
   if (entries.length < 3) return null
 
   return (
     <Bar ref={navRef} aria-label="대시보드 목차">
-      <Track>
-        {entries.map((entry, index) => {
-          const isActive = activeIndices.includes(index)
-          return (
-            <Item
-              key={`${entry.label}-${index}`}
-              type="button"
-              data-nav-index={index}
-              $active={isActive}
-              aria-current={isActive ? 'true' : undefined}
-              onClick={() => jump(entry.element)}
-            >
-              <span>{entry.label}</span>
-              {entry.count && (
-                <ItemCount $active={isActive}>{entry.count}</ItemCount>
-              )}
-            </Item>
-          )
-        })}
-      </Track>
+      <BarInner>
+        <Track>
+          {entries.map((entry, index) => {
+            const isActive = activeIndices.includes(index)
+            return (
+              <Item
+                key={`${entry.label}-${index}`}
+                type="button"
+                data-nav-index={index}
+                $active={isActive}
+                aria-current={isActive ? 'true' : undefined}
+                onClick={() => jump(entry.element)}
+              >
+                <span>{entry.label}</span>
+                {entry.count && (
+                  <ItemCount $active={isActive}>{entry.count}</ItemCount>
+                )}
+              </Item>
+            )
+          })}
+        </Track>
+        <NavMetaGroup>
+          <NavPositionBadge title="현재 읽고 있는 섹션 위치">
+            {firstActive + 1}/{entries.length}
+          </NavPositionBadge>
+          <TopJumpButton
+            type="button"
+            onClick={scrollToTop}
+            title="대시보드 맨 위로 이동"
+          >
+            ↑ 맨 위로
+          </TopJumpButton>
+        </NavMetaGroup>
+      </BarInner>
     </Bar>
   )
 }
@@ -290,15 +325,64 @@ const Bar = styled.nav`
   }
 `
 
+const BarInner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+`
+
 const Track = styled.div`
   position: relative;
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
     display: none;
+  }
+`
+
+const NavMetaGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-left: 8px;
+  border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const NavPositionBadge = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const TopJumpButton = styled.button`
+  appearance: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 

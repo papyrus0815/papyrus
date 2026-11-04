@@ -63,6 +63,35 @@ function coverageOf(
   return Math.round((covered / (domainEnd - domainStart)) * 100)
 }
 
+/** [domainStart, domainEnd] 안에서 수반 재위가 비어 있는 연도 공백 구간 목록 */
+function findUncoveredGaps(
+  rulers: HistoricalRulerItem[],
+  domainStart: number,
+  domainEnd: number,
+): Array<{ start: number; end: number; years: number }> {
+  const intervals = rulers
+    .map((ruler) => [
+      Math.max(ruler.startYear as number, domainStart),
+      Math.min(ruler.endYear ?? (ruler.startYear as number), domainEnd),
+    ])
+    .filter(([start, end]) => end > start)
+    .sort((left, right) => left[0] - right[0])
+  const gaps: Array<{ start: number; end: number; years: number }> = []
+  let cursor = domainStart
+  for (const [start, end] of intervals) {
+    if (start > cursor) {
+      gaps.push({ start: cursor, end: start, years: start - cursor })
+    }
+    if (end > cursor) {
+      cursor = end
+    }
+  }
+  if (domainEnd > cursor) {
+    gaps.push({ start: cursor, end: domainEnd, years: domainEnd - cursor })
+  }
+  return gaps.filter((gap) => gap.years >= 1)
+}
+
 /**
  * 역대 수반 — 존속 기간 위에 재위를 띠로 깔고, 아래에 사람을 카드로 세운다.
  *
@@ -81,6 +110,7 @@ export function HistoricalRulerTimeline({
 }: HistoricalRulerTimelineProps) {
   const [expanded, setExpanded] = useState(false)
   const [axisFilter, setAxisFilter] = useState<'ALL' | HistoricalRulerItem['axis']>('ALL')
+  const [viewMode, setViewMode] = useState<'cards' | 'ledger'>('cards')
 
   const dated = rulers.filter(
     (ruler) => ruler.startYear != null && !ruler.isOutOfSpan,
@@ -102,13 +132,15 @@ export function HistoricalRulerTimeline({
     rulers.some((r) => r.axis === 'HEAD_OF_GOVERNMENT')
 
   /* 치세가 덮은 비율 — 빈 구간이 '없던 시대'가 아니라 '아직 안 적은 재위'임을 말해 준다 */
+  const primaryDated = dated.filter(
+    (ruler) => ruler.axis === (axes[0] ?? 'HEAD_OF_STATE'),
+  )
   const coveragePercent = canDrawBand
-    ? coverageOf(
-        dated.filter((ruler) => ruler.axis === (axes[0] ?? 'HEAD_OF_STATE')),
-        domainStart,
-        domainEnd,
-      )
+    ? coverageOf(primaryDated, domainStart, domainEnd)
     : null
+  const uncoveredGaps = canDrawBand
+    ? findUncoveredGaps(primaryDated, domainStart, domainEnd)
+    : []
 
   const inSpanRulers = rulers.filter((r) => !r.isOutOfSpan)
   const outOfSpanCount = rulers.length - inSpanRulers.length
@@ -269,109 +301,204 @@ export function HistoricalRulerTimeline({
             )}
             <span>{formatCountryYearShort(domainEnd)}</span>
           </Scale>
+          {uncoveredGaps.length > 0 && coveragePercent != null && coveragePercent < 95 && (
+            <GapSummaryLine $offset={axes.length > 1}>
+              <GapSummaryLabel>미기록 공백 ({uncoveredGaps.length}곳)</GapSummaryLabel>
+              <GapSummaryText>
+                {uncoveredGaps
+                  .slice(0, 4)
+                  .map(
+                    (gap) =>
+                      `${formatCountryYearShort(gap.start)}–${formatCountryYearShort(gap.end)} (${gap.years}년)`,
+                  )
+                  .join(' · ')}
+                {uncoveredGaps.length > 4
+                  ? ` 외 ${uncoveredGaps.length - 4}곳`
+                  : ''}
+              </GapSummaryText>
+            </GapSummaryLine>
+          )}
         </Band>
       )}
 
-      {hasMultipleAxes && (
-        <AxisFilterRow role="tablist" aria-label="역대 수반 축 필터">
-          {(
-            [
-              { key: 'ALL', label: '전체', count: rulers.length },
-              {
-                key: 'HEAD_OF_STATE',
-                label: '국가원수',
-                count: rulers.filter((r) => r.axis === 'HEAD_OF_STATE').length,
-              },
-              {
-                key: 'HEAD_OF_GOVERNMENT',
-                label: '정부수반',
-                count: rulers.filter((r) => r.axis === 'HEAD_OF_GOVERNMENT').length,
-              },
-            ] as const
-          ).map((item) => {
-            const active = axisFilter === item.key
+      <ToolbarRow>
+        {hasMultipleAxes ? (
+          <AxisFilterRow role="tablist" aria-label="역대 수반 축 필터">
+            {(
+              [
+                { key: 'ALL', label: '전체', count: rulers.length },
+                {
+                  key: 'HEAD_OF_STATE',
+                  label: '국가원수',
+                  count: rulers.filter((r) => r.axis === 'HEAD_OF_STATE').length,
+                },
+                {
+                  key: 'HEAD_OF_GOVERNMENT',
+                  label: '정부수반',
+                  count: rulers.filter((r) => r.axis === 'HEAD_OF_GOVERNMENT').length,
+                },
+              ] as const
+            ).map((item) => {
+              const active = axisFilter === item.key
+              return (
+                <AxisFilterChip
+                  key={item.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  $active={active}
+                  onClick={() => setAxisFilter(item.key)}
+                >
+                  {item.label} <AxisFilterCount>{item.count}</AxisFilterCount>
+                </AxisFilterChip>
+              )
+            })}
+          </AxisFilterRow>
+        ) : (
+          <ToolbarHint>
+            수반을 누르면 인물 상세 미리보기가 열립니다
+          </ToolbarHint>
+        )}
+
+        <ViewToggleGroup role="group" aria-label="역대 수반 보기 방식">
+          <ViewToggleBtn
+            type="button"
+            $active={viewMode === 'cards'}
+            onClick={() => setViewMode('cards')}
+          >
+            재위 카드
+          </ViewToggleBtn>
+          <ViewToggleBtn
+            type="button"
+            $active={viewMode === 'ledger'}
+            onClick={() => setViewMode('ledger')}
+          >
+            수치 원장 ({filteredRulers.length})
+          </ViewToggleBtn>
+        </ViewToggleGroup>
+      </ToolbarRow>
+
+      {viewMode === 'ledger' ? (
+        <LedgerGrid role="table" aria-label="역대 수반 전체 수치 원장">
+          {filteredRulers.map((ruler, index) => {
+            const length = reignLength(ruler)
+            const maxReign = longestRuler?.years ?? 1
+            const ratio =
+              length != null && maxReign > 0
+                ? Math.max(4, Math.round((length / maxReign) * 100))
+                : 0
             return (
-              <AxisFilterChip
-                key={item.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                $active={active}
-                onClick={() => setAxisFilter(item.key)}
-              >
-                {item.label} <AxisFilterCount>{item.count}</AxisFilterCount>
-              </AxisFilterChip>
+              <LedgerCell key={ruler.recordId}>
+                <LedgerRowButton
+                  type="button"
+                  onClick={() =>
+                    ruler.personId && onSelectPerson(ruler.personId)
+                  }
+                  disabled={!ruler.personId}
+                >
+                  <LedgerOrdinal $axis={ruler.axis}>
+                    {ruler.ordinal != null
+                      ? `제${ruler.ordinal}대`
+                      : `#${index + 1}`}
+                  </LedgerOrdinal>
+                  <LedgerIdentity>
+                    <LedgerNameLine>
+                      <LedgerName>{ruler.personName}</LedgerName>
+                      {ruler.title && <LedgerTitle>{ruler.title}</LedgerTitle>}
+                      {ruler.isOutOfSpan && (
+                        <OutOfSpan title="존속 기간 밖 기록">기간 밖</OutOfSpan>
+                      )}
+                    </LedgerNameLine>
+                    {length != null && (
+                      <LedgerBarTrack aria-hidden>
+                        <LedgerBarFill
+                          $axis={ruler.axis}
+                          style={{ width: `${ratio}%` }}
+                        />
+                      </LedgerBarTrack>
+                    )}
+                  </LedgerIdentity>
+                  <LedgerMetaRight>
+                    <LedgerYears>{yearsLabel(ruler)}</LedgerYears>
+                    <LedgerDuration>
+                      {length != null ? `${length}년` : '연수 미상'}
+                    </LedgerDuration>
+                  </LedgerMetaRight>
+                </LedgerRowButton>
+              </LedgerCell>
             )
           })}
-        </AxisFilterRow>
-      )}
+        </LedgerGrid>
+      ) : (
+        <>
+          <Cards>
+            {visible.map((ruler) => {
+              const length = reignLength(ruler)
+              const counterparts =
+                hasMultipleAxes && ruler.startYear != null && !ruler.isOutOfSpan
+                  ? dated.filter((other) => {
+                      if (other.axis === ruler.axis) return false
+                      const rStart = ruler.startYear as number
+                      const rEnd = ruler.endYear ?? rStart
+                      const oStart = other.startYear as number
+                      const oEnd = other.endYear ?? oStart
+                      return oStart <= rEnd && oEnd >= rStart
+                    })
+                  : []
+              const counterpartSummary =
+                counterparts.length > 0
+                  ? ruler.axis === 'HEAD_OF_GOVERNMENT'
+                    ? `${counterparts.map((c) => c.personName).join(' · ')} 재위기`
+                    : `정부수반 ${counterparts.slice(0, 2).map((c) => c.personName).join('·')}${counterparts.length > 2 ? ` 외 ${counterparts.length - 2}명` : ''}`
+                  : null
 
-      <Cards>
-        {visible.map((ruler) => {
-          const length = reignLength(ruler)
-          const counterparts =
-            hasMultipleAxes && ruler.startYear != null && !ruler.isOutOfSpan
-              ? dated.filter((other) => {
-                  if (other.axis === ruler.axis) return false
-                  const rStart = ruler.startYear as number
-                  const rEnd = ruler.endYear ?? rStart
-                  const oStart = other.startYear as number
-                  const oEnd = other.endYear ?? oStart
-                  return oStart <= rEnd && oEnd >= rStart
-                })
-              : []
-          const counterpartSummary =
-            counterparts.length > 0
-              ? ruler.axis === 'HEAD_OF_GOVERNMENT'
-                ? `${counterparts.map((c) => c.personName).join(' · ')} 재위기`
-                : `정부수반 ${counterparts.slice(0, 2).map((c) => c.personName).join('·')}${counterparts.length > 2 ? ` 외 ${counterparts.length - 2}명` : ''}`
-              : null
-
-          return (
-            <RulerCard
-              key={ruler.recordId}
-              type="button"
-              onClick={() => ruler.personId && onSelectPerson(ruler.personId)}
-              disabled={!ruler.personId}
-            >
-              <Avatar aria-hidden>
-                {ruler.profileImageUrl ? (
-                  <img src={getUploadImageUrl(ruler.profileImageUrl)} alt="" />
-                ) : (
-                  ruler.personName.slice(0, 1)
-                )}
-              </Avatar>
-              <CardMain>
-                <CardTop>
-                  {ruler.ordinal != null && (
-                    <Ordinal $axis={ruler.axis}>제{ruler.ordinal}대</Ordinal>
-                  )}
-                  <CardName>{ruler.personName}</CardName>
-                </CardTop>
-                <CardMeta>
-                  {[ruler.title, yearsLabel(ruler), length != null ? `${length}년` : null]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </CardMeta>
-                {counterpartSummary && (
-                  <CounterpartTag $axis={ruler.axis} title={counterpartSummary}>
-                    {counterpartSummary}
-                  </CounterpartTag>
-                )}
-                {ruler.isOutOfSpan && (
-                  <OutOfSpan title="이 나라의 존속 기간과 겹치지 않습니다. 다른 나라에 걸려야 할 기록일 수 있습니다.">
-                    존속 기간 밖
-                  </OutOfSpan>
-                )}
-              </CardMain>
-            </RulerCard>
-          )
-        })}
-      </Cards>
-      {filteredRulers.length > COLLAPSED_LIMIT && (
-        <MoreButton type="button" onClick={() => setExpanded((open) => !open)}>
-          {expanded ? '접기' : `${hiddenCount}명 더 보기`}
-        </MoreButton>
+              return (
+                <RulerCard
+                  key={ruler.recordId}
+                  type="button"
+                  onClick={() => ruler.personId && onSelectPerson(ruler.personId)}
+                  disabled={!ruler.personId}
+                >
+                  <Avatar aria-hidden>
+                    {ruler.profileImageUrl ? (
+                      <img src={getUploadImageUrl(ruler.profileImageUrl)} alt="" />
+                    ) : (
+                      ruler.personName.slice(0, 1)
+                    )}
+                  </Avatar>
+                  <CardMain>
+                    <CardTop>
+                      {ruler.ordinal != null && (
+                        <Ordinal $axis={ruler.axis}>제{ruler.ordinal}대</Ordinal>
+                      )}
+                      <CardName>{ruler.personName}</CardName>
+                    </CardTop>
+                    <CardMeta>
+                      {[ruler.title, yearsLabel(ruler), length != null ? `${length}년` : null]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </CardMeta>
+                    {counterpartSummary && (
+                      <CounterpartTag $axis={ruler.axis} title={counterpartSummary}>
+                        {counterpartSummary}
+                      </CounterpartTag>
+                    )}
+                    {ruler.isOutOfSpan && (
+                      <OutOfSpan title="이 나라의 존속 기간과 겹치지 않습니다. 다른 나라에 걸려야 할 기록일 수 있습니다.">
+                        존속 기간 밖
+                      </OutOfSpan>
+                    )}
+                  </CardMain>
+                </RulerCard>
+              )
+            })}
+          </Cards>
+          {filteredRulers.length > COLLAPSED_LIMIT && (
+            <MoreButton type="button" onClick={() => setExpanded((open) => !open)}>
+              {expanded ? '접기' : `${hiddenCount}명 더 보기`}
+            </MoreButton>
+          )}
+        </>
       )}
     </Wrap>
   )
@@ -530,6 +657,195 @@ const Scale = styled.div<{ $offset: boolean }>`
 const Coverage = styled.span`
   font-weight: 500;
   text-align: center;
+`
+
+const GapSummaryLine = styled.div<{ $offset: boolean }>`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-left: ${({ $offset }) => ($offset ? '66px' : '0')};
+  padding-top: 4px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+`
+
+const GapSummaryLabel = styled.span`
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+`
+
+const GapSummaryText = styled.span`
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ToolbarRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+`
+
+const ToolbarHint = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ViewToggleGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 7px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const ViewToggleBtn = styled.button<{ $active: boolean }>`
+  appearance: none;
+  padding: 3px 9px;
+  border: none;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.tertiary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+`
+
+const LedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @media (min-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const LedgerCell = styled.div`
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 720px) {
+    &:nth-child(even) {
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const LedgerRowButton = styled.button`
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+  &:disabled {
+    cursor: default;
+  }
+`
+
+const LedgerOrdinal = styled.span<{ $axis?: HistoricalRulerItem['axis'] }>`
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ $axis, theme }) =>
+    $axis === 'HEAD_OF_GOVERNMENT'
+      ? theme.mode === 'dark'
+        ? '#2dd4bf'
+        : '#0f766e'
+      : theme.colors.primary};
+`
+
+const LedgerIdentity = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+const LedgerNameLine = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+`
+
+const LedgerName = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const LedgerTitle = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+const LedgerBarTrack = styled.span`
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+  overflow: hidden;
+`
+
+const LedgerBarFill = styled.span<{ $axis?: HistoricalRulerItem['axis'] }>`
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: ${({ $axis, theme }) =>
+    $axis === 'HEAD_OF_GOVERNMENT'
+      ? theme.mode === 'dark'
+        ? '#14b8a6'
+        : '#0d9488'
+      : theme.colors.primary};
+`
+
+const LedgerMetaRight = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+`
+
+const LedgerYears = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const LedgerDuration = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const AxisFilterRow = styled.div`

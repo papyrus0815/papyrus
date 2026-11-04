@@ -65,7 +65,7 @@ interface CenturyColumn {
   nodes: LineageNode[]
 }
 
-type LineageViewMode = 'century' | 'span'
+type LineageViewMode = 'century' | 'span' | 'ledger'
 
 const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3] as const
 const DEFAULT_ZOOM_INDEX = 1 // 1.0 (100%)
@@ -568,34 +568,36 @@ export function LineageFlow({
       </ToolbarLeftGroup>
 
       <ToolbarRightGroup>
-        <ZoomControlGroup role="group" aria-label="계보 확대·축소">
-          <ZoomStepButton
-            type="button"
-            onClick={handleZoomOut}
-            disabled={!canZoomOut}
-            aria-label="축소"
-            title="축소 (Ctrl/Cmd + 휠 아래로)"
-          >
-            −
-          </ZoomStepButton>
-          <ZoomReadoutButton
-            type="button"
-            onClick={handleZoomReset}
-            title="클릭하여 100% 기본 배율로 초기화"
-            $modified={zoomIndex !== DEFAULT_ZOOM_INDEX}
-          >
-            {zoomPercent}%
-          </ZoomReadoutButton>
-          <ZoomStepButton
-            type="button"
-            onClick={handleZoomIn}
-            disabled={!canZoomIn}
-            aria-label="확대"
-            title="확대 (Ctrl/Cmd + 휠 위로)"
-          >
-            +
-          </ZoomStepButton>
-        </ZoomControlGroup>
+        {viewMode !== 'ledger' && (
+          <ZoomControlGroup role="group" aria-label="계보 확대·축소">
+            <ZoomStepButton
+              type="button"
+              onClick={handleZoomOut}
+              disabled={!canZoomOut}
+              aria-label="축소"
+              title="축소 (Ctrl/Cmd + 휠 아래로)"
+            >
+              −
+            </ZoomStepButton>
+            <ZoomReadoutButton
+              type="button"
+              onClick={handleZoomReset}
+              title="클릭하여 100% 기본 배율로 초기화"
+              $modified={zoomIndex !== DEFAULT_ZOOM_INDEX}
+            >
+              {zoomPercent}%
+            </ZoomReadoutButton>
+            <ZoomStepButton
+              type="button"
+              onClick={handleZoomIn}
+              disabled={!canZoomIn}
+              aria-label="확대"
+              title="확대 (Ctrl/Cmd + 휠 위로)"
+            >
+              +
+            </ZoomStepButton>
+          </ZoomControlGroup>
+        )}
 
         <ViewSwitchGroup role="tablist" aria-label="계보 보기 방식 전환">
           <ViewSwitchButton
@@ -615,6 +617,15 @@ export function LineageFlow({
             onClick={() => setViewMode('span')}
           >
             존속 기간 바
+          </ViewSwitchButton>
+          <ViewSwitchButton
+            type="button"
+            role="tab"
+            aria-selected={viewMode === 'ledger'}
+            $active={viewMode === 'ledger'}
+            onClick={() => setViewMode('ledger')}
+          >
+            2열 원장
           </ViewSwitchButton>
         </ViewSwitchGroup>
 
@@ -1063,6 +1074,104 @@ function LineageViewportBody({
     )
   }
 
+  if (viewMode === 'ledger') {
+    return (
+      <LedgerViewGrid role="table" aria-label="계보 연결 정치체 2열 원장">
+        {nodes.map((node) => {
+          const isCurrent = node.id === currentId
+          const interactive = !!onSelect && !isCurrent
+          const avatarUrl = getUploadImageUrl(node.thumbnailUrl)
+          const hierarchyLabel = resolveHierarchyLabel(node, isCurrent)
+          const stateLabel = resolveStateBadgeLabel(node)
+          const centuryText =
+            node.startYear != null
+              ? centuryLabelFromIndex(centuryIndexOf(node.startYear))
+              : '연대 미상'
+          const subMeta = [
+            hierarchyLabel,
+            stateLabel,
+            node.capital ? `수도 ${node.capital}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+
+          return (
+            <LedgerViewCell key={node.id}>
+              <LedgerViewRow
+                as={interactive ? 'button' : 'div'}
+                type={interactive ? 'button' : undefined}
+                onClick={interactive ? () => onSelect(node.id) : undefined}
+                aria-current={isCurrent ? 'page' : undefined}
+                title={buildNodeTooltip(node)}
+                $current={isCurrent}
+                $interactive={interactive}
+              >
+                <LedgerCenturyCol $current={isCurrent}>
+                  {centuryText}
+                </LedgerCenturyCol>
+                <LedgerIdentityCol>
+                  <LedgerTitleLine>
+                    {avatarUrl && (
+                      <FlagThumb $small aria-hidden>
+                        <FlagThumbImg src={avatarUrl} alt="" />
+                      </FlagThumb>
+                    )}
+                    <LedgerNodeName $current={isCurrent}>
+                      {node.name}
+                    </LedgerNodeName>
+                  </LedgerTitleLine>
+                  {subMeta && <LedgerSubMeta>{subMeta}</LedgerSubMeta>}
+                </LedgerIdentityCol>
+                <LedgerPeriodCol>
+                  <LedgerYearsText>
+                    {node.yearsLabel ?? '연대 미상'}
+                  </LedgerYearsText>
+                  <LedgerDurationText>
+                    {node.durationYears != null && node.durationYears > 0
+                      ? `${node.durationYears.toLocaleString('ko-KR')}년`
+                      : ''}
+                    {interactive && <LedgerChevron aria-hidden>›</LedgerChevron>}
+                  </LedgerDurationText>
+                </LedgerPeriodCol>
+              </LedgerViewRow>
+            </LedgerViewCell>
+          )
+        })}
+
+        {modernEndpoint && (
+          <LedgerViewCell key="__modern_endpoint_ledger">
+            <LedgerViewRow
+              aria-current="page"
+              $current
+              $interactive={false}
+              title={`${modernEndpoint.name} (현재 조회 중인 현대 국가)`}
+            >
+              <LedgerCenturyCol $current>현재</LedgerCenturyCol>
+              <LedgerIdentityCol>
+                <LedgerTitleLine>
+                  {endpointAvatarUrl && (
+                    <FlagThumb $small aria-hidden>
+                      <FlagThumbImg src={endpointAvatarUrl} alt="" />
+                    </FlagThumb>
+                  )}
+                  <LedgerNodeName $current>{modernEndpoint.name}</LedgerNodeName>
+                </LedgerTitleLine>
+                <LedgerSubMeta>
+                  현대 국가 · 현재
+                  {modernEndpoint.isoCode ? ` · ${modernEndpoint.isoCode}` : ''}
+                </LedgerSubMeta>
+              </LedgerIdentityCol>
+              <LedgerPeriodCol>
+                <LedgerYearsText>현존</LedgerYearsText>
+                <LedgerDurationText>종착점</LedgerDurationText>
+              </LedgerPeriodCol>
+            </LedgerViewRow>
+          </LedgerViewCell>
+        )}
+      </LedgerViewGrid>
+    )
+  }
+
   return (
     <SpanViewScrollOuter onWheel={handleWheel}>
       <SpanViewContainer $scale={zoomScale}>
@@ -1230,7 +1339,7 @@ const Container = styled.div`
 const LineageHeadlineStrip = styled.div`
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @media (max-width: 960px) {
@@ -1240,6 +1349,135 @@ const LineageHeadlineStrip = styled.div`
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
   }
+`
+
+const LedgerViewGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @media (min-width: 820px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const LedgerViewCell = styled.div`
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 820px) {
+    &:nth-child(even) {
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const LedgerViewRow = styled.div<{ $current?: boolean; $interactive?: boolean }>`
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: none;
+  background: ${({ theme, $current }) =>
+    $current
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.1)'
+        : 'rgba(99, 102, 241, 0.05)'
+      : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  cursor: ${({ $interactive }) => ($interactive ? 'pointer' : 'default')};
+  transition: background 0.14s ease;
+
+  &:hover {
+    background: ${({ theme, $interactive, $current }) =>
+      $interactive
+        ? theme.colors.hover
+        : $current
+          ? theme.mode === 'dark'
+            ? 'rgba(99, 102, 241, 0.12)'
+            : 'rgba(99, 102, 241, 0.06)'
+          : 'transparent'};
+  }
+`
+
+const LedgerCenturyCol = styled.span<{ $current?: boolean }>`
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $current }) =>
+    $current ? theme.colors.primary : theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+const LedgerIdentityCol = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const LedgerTitleLine = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const LedgerNodeName = styled.span<{ $current?: boolean }>`
+  font-size: 13.5px;
+  font-weight: ${({ $current }) => ($current ? 800 : 700)};
+  color: ${({ theme, $current }) =>
+    $current ? theme.colors.primary : theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const LedgerSubMeta = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const LedgerPeriodCol = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+`
+
+const LedgerYearsText = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+`
+
+const LedgerDurationText = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+const LedgerChevron = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
 `
 
 const LineageHeadlineCell = styled.div`

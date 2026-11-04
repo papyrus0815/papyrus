@@ -153,24 +153,120 @@ function FoundingCardsInner({
   }
   if (!summary) return null
 
+  const foundingYearText = formatCountryYearShort(startYear)
+  const dissolutionYearText = formatCountryYearShort(endYear)
+  const founderNames = (summary.founders ?? [])
+    .map((a) => (a.person ? getPersonDisplayName(a.person, true) : a.name))
+    .filter(Boolean)
+  const dissolverNames = (summary.dissolvers ?? [])
+    .map((a) => (a.person ? getPersonDisplayName(a.person, true) : a.name))
+    .filter(Boolean)
+  const firstRulerName = summary.firstRulers[0]
+    ? summary.firstRulers[0].regnalName?.trim() ||
+      getPersonDisplayName(summary.firstRulers[0].person, true)
+    : null
+  const lastRulerName = (summary.lastRulers ?? [])[0]
+    ? (summary.lastRulers ?? [])[0].regnalName?.trim() ||
+      getPersonDisplayName((summary.lastRulers ?? [])[0].person, true)
+    : null
+  const foundedEventCount = statehood?.founded.length ?? 0
+  const dissolvedEventCount = statehood?.dissolved.length ?? 0
+  const totalStatehoodEvents = foundedEventCount + dissolvedEventCount
+  const predCount = summary.predecessors.length
+  const succCount = summary.successors.length
+
   return (
-    <Cards>
-      <FoundingCard
-        side="founding"
-        title={isState ? '건국' : '성립'}
-        year={startYear}
-        historicalCountryId={historicalCountryId}
-        note={summary.foundingNote}
-        events={statehood?.founded ?? []}
-        rulers={summary.firstRulers}
-        agents={summary.founders ?? []}
-        agentLabel={isState ? '건국자' : '세운 쪽'}
-        linked={summary.predecessors}
-        linkedLabel="전신"
-        onGoToHeads={onGoToHeads}
-      />
-      {/* 현존·미상인 나라에는 멸망 카드를 세우지 않는다 — 배경을 미리 쓸 자리가 아니다 */}
-      {(endYear != null || summary.dissolutionNote || (statehood?.dissolved.length ?? 0) > 0) && (
+    <Wrap>
+      <HeadlineStrip aria-label="건국·멸망 및 계승 요약">
+        <HeadlineCell>
+          <HeadlineLabel>
+            {isState ? '건국 시점 · 주체' : '성립 시점 · 주체'}
+          </HeadlineLabel>
+          <HeadlineValue $muted={!foundingYearText}>
+            {foundingYearText || '연도 미상'}
+          </HeadlineValue>
+          <HeadlineSub>
+            {founderNames.length > 0
+              ? `${isState ? '건국자' : '주체'} ${founderNames.slice(0, 2).join('·')}`
+              : firstRulerName
+                ? `초대 ${firstRulerName}`
+                : '건국 주체 · 초대 수반 미지정'}
+          </HeadlineSub>
+        </HeadlineCell>
+
+        <HeadlineCell>
+          <HeadlineLabel>
+            {isState ? '멸망 시점 · 주체' : '종료 시점 · 주체'}
+          </HeadlineLabel>
+          <HeadlineValue $muted={!dissolutionYearText}>
+            {dissolutionYearText || '연도 미상'}
+          </HeadlineValue>
+          <HeadlineSub>
+            {dissolverNames.length > 0
+              ? `${isState ? '멸망 주체' : '종료 주체'} ${dissolverNames.slice(0, 2).join('·')}`
+              : lastRulerName
+                ? `마지막 ${lastRulerName}`
+                : '멸망 주체 · 마지막 수반 미지정'}
+          </HeadlineSub>
+        </HeadlineCell>
+
+        <HeadlineCell>
+          <HeadlineLabel>연결 계기 사건</HeadlineLabel>
+          <HeadlineValue $muted={totalStatehoodEvents === 0}>
+            {totalStatehoodEvents > 0 ? (
+              <>
+                {totalStatehoodEvents.toLocaleString('ko-KR')}
+                <HeadlineUnit>건</HeadlineUnit>
+              </>
+            ) : (
+              '미등록'
+            )}
+          </HeadlineValue>
+          <HeadlineSub>
+            {isState ? '건국' : '성립'} {foundedEventCount}건 ·{' '}
+            {isState ? '멸망' : '종료'} {dissolvedEventCount}건
+          </HeadlineSub>
+        </HeadlineCell>
+
+        <HeadlineCell>
+          <HeadlineLabel>전신 → 후신 승계</HeadlineLabel>
+          <HeadlineValue $muted={predCount + succCount === 0}>
+            {predCount + succCount > 0
+              ? `전신 ${predCount} → 후신 ${succCount}`
+              : '미등록'}
+          </HeadlineValue>
+          <HeadlineSub>
+            {predCount + succCount > 0
+              ? [
+                  summary.predecessors[0]?.name
+                    ? `전신 ${summary.predecessors[0].name}`
+                    : null,
+                  summary.successors[0]?.name
+                    ? `후신 ${summary.successors[0].name}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : '전신·후신 역사 국가 연결 없음'}
+          </HeadlineSub>
+        </HeadlineCell>
+      </HeadlineStrip>
+
+      <Cards>
+        <FoundingCard
+          side="founding"
+          title={isState ? '건국' : '성립'}
+          year={startYear}
+          historicalCountryId={historicalCountryId}
+          note={summary.foundingNote}
+          events={statehood?.founded ?? []}
+          rulers={summary.firstRulers}
+          agents={summary.founders ?? []}
+          agentLabel={isState ? '건국자' : '세운 쪽'}
+          linked={summary.predecessors}
+          linkedLabel="전신"
+          onGoToHeads={onGoToHeads}
+        />
         <FoundingCard
           side="dissolution"
           title={isState ? '멸망' : '종료'}
@@ -183,9 +279,10 @@ function FoundingCardsInner({
           agentLabel={isState ? '멸망시킨 쪽' : '끝낸 쪽'}
           linked={summary.successors}
           linkedLabel="후신"
+          onGoToHeads={onGoToHeads}
         />
-      )}
-    </Cards>
+      </Cards>
+    </Wrap>
   )
 }
 
@@ -729,10 +826,96 @@ function linkedSpan(country: FoundingLinkedCountry): string {
 
 // ─── Styled ─────────────────────────────────────────────────────────────────
 
+const Wrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`
+
+const HeadlineStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 860px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const HeadlineCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  min-width: 0;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  @media (max-width: 860px) {
+    &:nth-child(2n) {
+      border-right: none;
+    }
+    &:nth-child(2n + 1) {
+      padding-left: 2px;
+    }
+    &:nth-child(-n + 2) {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const HeadlineLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeadlineValue = styled.span<{ $muted?: boolean }>`
+  font-size: 15px;
+  font-weight: ${({ $muted }) => ($muted ? 600 : 800)};
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $muted }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const HeadlineUnit = styled.span`
+  margin-left: 2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeadlineSub = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
 const Cards = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `
 
 /*

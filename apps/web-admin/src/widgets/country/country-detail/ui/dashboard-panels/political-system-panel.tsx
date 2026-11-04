@@ -377,6 +377,14 @@ export function PoliticalSystemPanel({
       ].filter(Boolean)
     : []
   const currentSpecs = current ? buildSpecs(current, true) : []
+  const currentHos = current ? headOfStateTitleOf(current) : null
+  const currentHog = current ? headOfGovernmentTitleOf(current) : null
+  const hasDualCurrentHeads =
+    Boolean(currentHos) && Boolean(currentHog) && currentHos !== currentHog
+  const totalLegislatureSeats =
+    current && (current.lowerHouseSeats != null || current.upperHouseSeats != null)
+      ? (current.lowerHouseSeats ?? 0) + (current.upperHouseSeats ?? 0)
+      : null
 
   return (
     <S.Section
@@ -433,6 +441,92 @@ export function PoliticalSystemPanel({
         </EmptyBlockButton>
       ) : (
         <PolityStack>
+          <S.SectionHeadlineStrip>
+            <S.SectionHeadlineCell>
+              <S.SectionHeadlineLabel>현행 · 대표 정부 형태</S.SectionHeadlineLabel>
+              <S.SectionHeadlineValue>
+                {current.governmentForm
+                  ? GOVERNMENT_FORM_LABEL[current.governmentForm]
+                  : summarize(current)}
+                {current.isCurrent && (
+                  <S.SectionHeadlineUnit>현행</S.SectionHeadlineUnit>
+                )}
+              </S.SectionHeadlineValue>
+              <S.SectionHeadlineSub>
+                {[
+                  current.name,
+                  formatPeriod(current),
+                  pastSystems.length > 0
+                    ? `변천 ${systems.length}개 체제`
+                    : '단일 체제 기록',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </S.SectionHeadlineSub>
+            </S.SectionHeadlineCell>
+
+            <S.SectionHeadlineCell>
+              <S.SectionHeadlineLabel>통치 수반 구조</S.SectionHeadlineLabel>
+              <S.SectionHeadlineValue
+                $muted={!currentHos && !currentHog}
+              >
+                {hasDualCurrentHeads
+                  ? `${currentHos} · ${currentHog}`
+                  : (currentHos ?? currentHog ?? '미등록')}
+              </S.SectionHeadlineValue>
+              <S.SectionHeadlineSub>
+                {hasDualCurrentHeads
+                  ? '국가원수 · 정부수반 분리(이원)'
+                  : currentHos || currentHog
+                    ? '단일 통치 수반 체제'
+                    : '수반 직책 미입력'}
+              </S.SectionHeadlineSub>
+            </S.SectionHeadlineCell>
+
+            <S.SectionHeadlineCell>
+              <S.SectionHeadlineLabel>입법부 · 의회 체제</S.SectionHeadlineLabel>
+              <S.SectionHeadlineValue $muted={!current.legislatureType}>
+                {current.legislatureType
+                  ? LEGISLATURE_TYPE_LABEL[current.legislatureType]
+                  : '미등록'}
+                {totalLegislatureSeats != null && totalLegislatureSeats > 0 && (
+                  <S.SectionHeadlineUnit>
+                    {totalLegislatureSeats.toLocaleString()}석
+                  </S.SectionHeadlineUnit>
+                )}
+              </S.SectionHeadlineValue>
+              <S.SectionHeadlineSub>
+                {[current.lowerHouseName, current.upperHouseName]
+                  .filter(Boolean)
+                  .join(' · ') ||
+                  (current.legislatureType
+                    ? '의회 명칭 · 정원 제원'
+                    : '의회 형태 미입력')}
+              </S.SectionHeadlineSub>
+            </S.SectionHeadlineCell>
+
+            <S.SectionHeadlineCell>
+              <S.SectionHeadlineLabel>국가 구조 · 정당제</S.SectionHeadlineLabel>
+              <S.SectionHeadlineValue
+                $muted={!current.stateStructure && !current.partySystem}
+              >
+                {[
+                  current.stateStructure &&
+                    STATE_STRUCTURE_LABEL[current.stateStructure],
+                  current.partySystem &&
+                    PARTY_SYSTEM_LABEL[current.partySystem],
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || '미등록'}
+              </S.SectionHeadlineValue>
+              <S.SectionHeadlineSub>
+                {pastSystems.length > 0
+                  ? `과거 ${pastSystems.length}개 구 체제 변천 기록`
+                  : '권력 분산 · 정당 경쟁 구도'}
+              </S.SectionHeadlineSub>
+            </S.SectionHeadlineCell>
+          </S.SectionHeadlineStrip>
+
           <PrimaryBlock>
             <PrimaryHeadRow>
               <AccentBar aria-hidden />
