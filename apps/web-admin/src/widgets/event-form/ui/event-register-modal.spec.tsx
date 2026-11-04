@@ -376,3 +376,37 @@ it('필수 입력 항목이 여러 개 비어 있을 때 하단 점프 버튼에
   expect(screen.getByText('필수 입력: 사건명을 입력해주세요')).toBeInTheDocument()
   expect(screen.getByText('외 2건')).toBeInTheDocument()
 })
+
+it('상위 사건이나 연관 사건 프리셋으로 열렸을 때 모달 헤더에 맥락 배지를 노출하고, 섹션 탭 클릭 시 활성 위치(aria-current)가 갱신된다', async () => {
+  setup({
+    initialParent: { id: 'evt-ww1', title: '제1차 세계 대전' },
+    initialRelatedEvents: [
+      {
+        relatedEventId: 'evt-sarajevo',
+        title: '사라예보 사건',
+        relationType: 'LED_TO',
+        direction: 'incoming',
+      },
+    ],
+  })
+  await waitForBody()
+
+  expect(
+    screen.getByRole('button', {
+      name: '상위 사건: 제1차 세계 대전 (맥락 섹션으로 이동)',
+    }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', {
+      name: '연관 사건 1건 (맥락 섹션으로 이동)',
+    }),
+  ).toBeInTheDocument()
+
+  const basicTab = screen.getByRole('button', { name: '기본 정보' })
+  const contextTab = screen.getByRole('button', { name: '맥락·부가' })
+  expect(basicTab).toHaveAttribute('aria-current', 'location')
+
+  fireEvent.click(contextTab)
+  expect(contextTab).toHaveAttribute('aria-current', 'location')
+  expect(basicTab).not.toHaveAttribute('aria-current')
+})

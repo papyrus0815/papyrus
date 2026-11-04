@@ -746,4 +746,46 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     fireEvent.click(screen.getByRole('button', { name: '키워드 모두 지우기' }))
     expect(setKeywords).toHaveBeenCalledWith([])
   })
+
+  it('시작일과 종료일이 같은 날이면 기간 배지에 "0일" 대신 "당일"을 표시하고, 종료일 빠른 버튼으로 시작일과 같게 맞추거나 비울 수 있다', () => {
+    const setEndDate = jest.fn()
+    const setEndTime = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          startDate: '1919-03-01',
+          endDate: '1919-03-01',
+          setEndDate,
+          setEndTime,
+          calculateDaysDifference: () => 0,
+        })}
+      />,
+    )
+
+    expect(screen.getByText('당일')).toBeInTheDocument()
+    expect(screen.queryByText('0일')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '종료일 비우기' }))
+    expect(setEndDate).toHaveBeenCalledWith('')
+    expect(setEndTime).toHaveBeenCalledWith('')
+  })
+
+  it('종료일이 시작일과 다를 때 "시작일과 같게" 버튼을 누르면 종료일이 시작일로 맞춰진다', () => {
+    const setEndDate = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          startDate: '1919-03-01',
+          endDate: '1919-04-11',
+          setEndDate,
+          calculateDaysDifference: () => 41,
+        })}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '종료일을 시작일과 같게 설정' }),
+    )
+    expect(setEndDate).toHaveBeenCalledWith('1919-03-01')
+  })
 })

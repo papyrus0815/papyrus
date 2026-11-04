@@ -827,6 +827,29 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       setThumbnailFile(null)
     }
   }
+  const handleThumbnailUploadRef = useRef(handleThumbnailUpload)
+  handleThumbnailUploadRef.current = handleThumbnailUpload
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      const items = event.clipboardData?.items
+      if (!items) return
+      for (let i = 0; i < items.length; i += 1) {
+        const item = items[i]
+        if (item && item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) {
+            event.preventDefault()
+            playClickSound()
+            void handleThumbnailUploadRef.current(file)
+            return
+          }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [playClickSound])
 
   return (
     <S.FormSection
@@ -1001,7 +1024,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               (showStartTime && showEndTime ? (
                 <S.PeriodBadge>
                   <FiClock size={12} />
-                  {calculateDaysDifference()}일
+                  {calculateDaysDifference() === 0
+                    ? '당일'
+                    : `${calculateDaysDifference()}일`}
                   {calculateDaysDifference() !== null &&
                     calculateDaysDifference()! > 365 && (
                       <span>
@@ -1078,8 +1103,45 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 </DateTimeLine>
               </S.DateRangeColumn>
 
-              <S.DateRangeColumn>
-                <S.DateRangeLabel>종료</S.DateRangeLabel>
+              <S.DateRangeColumn id="event-form-end-date">
+                <DateColumnHeaderRow>
+                  <S.DateRangeLabel>종료</S.DateRangeLabel>
+                  {(Boolean(endDate) || Boolean(startDate)) && (
+                    <DateQuickActions>
+                      {startDate &&
+                        (endDate !== startDate ||
+                          endDatePrecision !== startDatePrecision) && (
+                          <DateQuickActionBtn
+                            type="button"
+                            aria-label="종료일을 시작일과 같게 설정"
+                            onClick={() => {
+                              playClickSound()
+                              setEndFollowsStart(true)
+                              setEndDate(startDate)
+                              setEndDatePrecision?.(startDatePrecision)
+                              if (startDatePrecision !== 'day') setEndTime('')
+                            }}
+                          >
+                            시작일과 같게
+                          </DateQuickActionBtn>
+                        )}
+                      {Boolean(endDate) && (
+                        <DateQuickActionBtn
+                          type="button"
+                          aria-label="종료일 비우기"
+                          onClick={() => {
+                            playClickSound()
+                            setEndFollowsStart(false)
+                            setEndDate('')
+                            setEndTime('')
+                          }}
+                        >
+                          비우기
+                        </DateQuickActionBtn>
+                      )}
+                    </DateQuickActions>
+                  )}
+                </DateColumnHeaderRow>
                 <DateTimeLine>
                   <EventDateField
                     anchorId={endDateAnchorId}
@@ -2288,7 +2350,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       : '대표 이미지 올리기'}
                   </strong>
                   <span>
-                    클릭하거나 이미지를 끌어다 놓으세요 · 10MB 이하
+                    클릭 · 드래그 · Ctrl/⌘+V 붙여넣기 · 10MB 이하
                   </span>
                 </KitUploadText>
               </KitUploadStrip>
@@ -3043,5 +3105,41 @@ const RelatedDescriptionInput = styled.input`
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};
+  }
+`
+
+const DateColumnHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const DateQuickActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const DateQuickActionBtn = styled.button`
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)'};
+    outline: none;
   }
 `

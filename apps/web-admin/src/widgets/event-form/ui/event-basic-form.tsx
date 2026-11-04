@@ -138,6 +138,10 @@ export interface EventBasicFormState {
   missingCount?: number
   /** 신규 등록 임시 자동저장 시각(ms) — 있으면 셸 푸터에 '자동 저장됨' 표시 */
   draftSavedAt?: number | null
+  /** 현재 연결된 상위 사건명 (신규 등록 헤더 배지 표시용) */
+  parentEventTitle?: string | null
+  /** 현재 연결된 연관 사건 건수 (신규 등록 헤더 배지 표시용) */
+  relatedEventsCount?: number
 }
 
 export interface EventBasicFormProps {
@@ -1024,6 +1028,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       firstError: validation.firstError ?? categoryError ?? undefined,
       missingCount,
       ...(draftSavedAt !== null && { draftSavedAt }),
+      parentEventTitle: parentEvent?.title ?? null,
+      relatedEventsCount: relatedEvents.length,
     })
   }, [
     isEditMode,
@@ -1034,6 +1040,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     categoryError,
     missingCount,
     draftSavedAt,
+    parentEvent?.title,
+    relatedEvents.length,
     onStateChange,
   ])
 

@@ -159,10 +159,29 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     firstError,
     missingCount,
     draftSavedAt,
+    parentEventTitle,
+    relatedEventsCount,
   } = formState
   const busy = isLoading || isSubmitting
+  const [activeSectionId, setActiveSectionId] = useState<string>(
+    FORM_SECTION_LINKS[0].id,
+  )
+
+  const activeParentTitle =
+    !isEditMode
+      ? parentEventTitle !== undefined
+        ? parentEventTitle
+        : (initialParent?.title ?? null)
+      : null
+  const activeRelatedCount =
+    !isEditMode
+      ? relatedEventsCount !== undefined
+        ? relatedEventsCount
+        : (initialRelatedEvents?.length ?? 0)
+      : 0
 
   const scrollToTopAndFocusTitle = useCallback(() => {
+    setActiveSectionId(FORM_SECTION_LINKS[0].id)
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTo?.({ top: 0, behavior: 'smooth' })
       scrollContainerRef.current.scrollTop = 0
@@ -172,9 +191,28 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   }, [])
 
   const scrollToSection = useCallback((sectionId: string) => {
+    setActiveSectionId(sectionId)
     const section = document.getElementById(sectionId)
     section?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }, [])
+
+  const handleFormScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const container = event.currentTarget
+      const containerRect = container.getBoundingClientRect()
+      const threshold = containerRect.top + 96
+      let currentId: string = FORM_SECTION_LINKS[0].id
+      for (const item of FORM_SECTION_LINKS) {
+        const el = document.getElementById(item.id)
+        if (!el) continue
+        if (el.getBoundingClientRect().top <= threshold) {
+          currentId = item.id
+        }
+      }
+      setActiveSectionId((prev) => (prev === currentId ? prev : currentId))
+    },
+    [],
+  )
 
   const handleResetForm = useCallback(async () => {
     if (busy) return
@@ -219,7 +257,11 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
       btn?.focus()
       return
     }
-    const dateCol = document.getElementById('event-form-start-date')
+    const isEndDateError = firstError.includes('종료')
+    const dateCol = isEndDateError
+      ? (document.getElementById('event-form-end-date') ??
+          document.getElementById('event-form-start-date'))
+      : document.getElementById('event-form-start-date')
     const input = dateCol?.querySelector<HTMLElement>('input')
     input?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
     input?.focus()
@@ -302,16 +344,43 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
         title={isEditMode ? '사건 수정' : '사건 등록'}
         headerActions={
           <HeaderActionsBar>
+            {activeParentTitle && (
+              <HeaderContextBadge
+                type="button"
+                aria-label={`상위 사건: ${activeParentTitle} (맥락 섹션으로 이동)`}
+                title={`상위 사건 '${activeParentTitle}'의 하위 사건으로 등록합니다 (클릭 시 맥락 섹션으로 이동)`}
+                onClick={() => scrollToSection('event-form-group-context')}
+              >
+                <span>↳</span>
+                <HeaderContextBadgeText>{activeParentTitle} 하위</HeaderContextBadgeText>
+              </HeaderContextBadge>
+            )}
+            {activeRelatedCount > 0 && (
+              <HeaderContextBadge
+                type="button"
+                aria-label={`연관 사건 ${activeRelatedCount}건 (맥락 섹션으로 이동)`}
+                title={`연관 사건 ${activeRelatedCount}건이 연결되어 있습니다 (클릭 시 맥락 섹션으로 이동)`}
+                onClick={() => scrollToSection('event-form-group-context')}
+              >
+                <span>⇄</span>
+                <span>연관 {activeRelatedCount}건</span>
+              </HeaderContextBadge>
+            )}
             <SectionJumpNav aria-label="폼 섹션 이동">
-              {FORM_SECTION_LINKS.map((item) => (
-                <SectionJumpBtn
-                  key={item.id}
-                  type="button"
-                  onClick={() => scrollToSection(item.id)}
-                >
-                  {item.label}
-                </SectionJumpBtn>
-              ))}
+              {FORM_SECTION_LINKS.map((item) => {
+                const isActive = activeSectionId === item.id
+                return (
+                  <SectionJumpBtn
+                    key={item.id}
+                    type="button"
+                    $active={isActive}
+                    aria-current={isActive ? 'location' : undefined}
+                    onClick={() => scrollToSection(item.id)}
+                  >
+                    {item.label}
+                  </SectionJumpBtn>
+                )
+              })}
             </SectionJumpNav>
             {!isEditMode && isDirty && !busy && (
               <HeaderResetBtn
@@ -335,7 +404,10 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
         closeOnEsc={!isSubmitting}
         closeOnOverlayClick={!isSubmitting}
       >
-        <PersonRegisterModalFormScroll ref={scrollContainerRef}>
+        <PersonRegisterModalFormScroll
+          ref={scrollContainerRef}
+          onScroll={handleFormScroll}
+        >
           {isSubmitting && (
             <BusyBar role="status" aria-live="polite">
               {isEditMode ? '수정 사항을 저장하는 중...' : '사건을 등록하는 중...'}
@@ -499,6 +571,42 @@ const HeaderActionsBar = styled.div`
   }
 `
 
+const HeaderContextBadge = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.22)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.14)' : 'rgba(99, 102, 241, 0.06)'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#c7d2fe' : theme.colors.primary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.22)' : 'rgba(99, 102, 241, 0.12)'};
+    border-color: ${({ theme }) => theme.colors.primary};
+    outline: none;
+  }
+`
+
+const HeaderContextBadgeText = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
 const SectionJumpNav = styled.nav`
   display: inline-flex;
   align-items: center;
@@ -510,13 +618,23 @@ const SectionJumpNav = styled.nav`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const SectionJumpBtn = styled.button`
+const SectionJumpBtn = styled.button<{ $active?: boolean }>`
   height: 24px;
   padding: 0 10px;
   border: none;
   border-radius: 999px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : '#ffffff'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  box-shadow: ${({ $active, theme }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
+      : 'none'};
   font: inherit;
   font-size: 11.5px;
   font-weight: 600;
@@ -527,7 +645,7 @@ const SectionJumpBtn = styled.button`
   &:focus-visible {
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#ffffff'};
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#ffffff'};
     outline: none;
   }
 `
