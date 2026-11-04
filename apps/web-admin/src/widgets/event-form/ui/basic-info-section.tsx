@@ -1226,7 +1226,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormLabel>
           <S.FormField>
             <OverviewTextarea
-              placeholder="무슨 일이 왜 일어났는지 두세 문장으로"
+              placeholder="사건의 개요 설명을 입력하세요."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}

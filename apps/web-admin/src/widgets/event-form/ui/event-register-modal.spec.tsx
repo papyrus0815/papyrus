@@ -97,6 +97,20 @@ jest.mock('./event-basic-form', () => ({
         >
           _submitting
         </button>
+        <button
+          type="button"
+          onClick={() =>
+            onStateChange?.({
+              isEditMode: false,
+              isLoading: false,
+              isSubmitting: false,
+              isValid: true,
+              draftSavedAt: Date.now(),
+            })
+          }
+        >
+          _draftSaved
+        </button>
       </div>
     )
   },
@@ -300,4 +314,17 @@ it('모달 안에서 Cmd/Ctrl + Shift + Enter 단축키로 등록 후 계속(연
     keepRelatedCountries: true,
   })
   expect(onClose).not.toHaveBeenCalled()
+})
+
+it('신규 등록 중 초안이 자동 저장되면 하단 푸터에 "자동 저장됨" 상태 배지가 표시된다', async () => {
+  setup()
+  await waitForBody()
+
+  expect(screen.queryByRole('status', { name: '임시 자동 저장됨' })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByText('_draftSaved'))
+
+  expect(screen.getByRole('status', { name: '임시 자동 저장됨' })).toHaveTextContent(
+    '자동 저장됨',
+  )
 })

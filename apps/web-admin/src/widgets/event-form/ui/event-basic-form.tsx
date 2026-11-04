@@ -22,6 +22,8 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { FiRotateCcw } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import { personKeys } from '@/entities/person/query-keys'
 import { invalidateGamification } from '@/entities/gamification'
@@ -81,6 +83,12 @@ import {
   type SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
+import {
+  type EventDraftSnapshot,
+  formatDraftRelativeTime,
+  formatDraftSummaryLabel,
+  useEventDraft,
+} from '@/widgets/event-form/lib/use-event-draft'
 import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
 import { CoreRecordsGroup } from '@/widgets/event-form/ui/core-records-group'
 import { EventTypeField } from '@/widgets/event-form/ui/event-type-field'
@@ -126,6 +134,8 @@ export interface EventBasicFormState {
   isValid: boolean
   /** 저장 불가 사유 중 첫 번째 (버튼 title 용) */
   firstError?: string
+  /** 신규 등록 임시 자동저장 시각(ms) — 있으면 셸 푸터에 '자동 저장됨' 표시 */
+  draftSavedAt?: number | null
 }
 
 export interface EventBasicFormProps {
@@ -869,6 +879,117 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     markDirty(snapshot !== baselineRef.current)
   }, [snapshot, markDirty])
 
+  const buildDraftSnapshot = useCallback(
+    (): EventDraftSnapshot => ({
+      title,
+      description,
+      startDate,
+      startTime,
+      startDatePrecision,
+      endDate,
+      endTime,
+      endDatePrecision,
+      category,
+      eventType,
+      kind,
+      thumbnail,
+      keywords,
+      relatedCountries,
+      parentEvent,
+      relatedEvents,
+      facetDrafts,
+    }),
+    [
+      title,
+      description,
+      startDate,
+      startTime,
+      startDatePrecision,
+      endDate,
+      endTime,
+      endDatePrecision,
+      category,
+      eventType,
+      kind,
+      thumbnail,
+      keywords,
+      relatedCountries,
+      parentEvent,
+      relatedEvents,
+      facetDrafts,
+    ],
+  )
+
+  const {
+    pendingDraft,
+    lastSavedAt: draftSavedAt,
+    scheduleSave: scheduleDraftSave,
+    discardDraft,
+    consumePendingDraft,
+  } = useEventDraft({
+    enabled: !isEditMode && !isSubmitting,
+    isDirty,
+    getSnapshot: buildDraftSnapshot,
+  })
+
+  useEffect(() => {
+    if (!isEditMode && isDirty && !isSubmitting) {
+      scheduleDraftSave()
+    }
+  }, [isEditMode, isDirty, isSubmitting, snapshot, scheduleDraftSave])
+
+  const handleRestoreDraft = useCallback(() => {
+    const envelope = consumePendingDraft()
+    if (!envelope) return
+    const d = envelope.data
+    playClickSound()
+    setTitle(d.title ?? '')
+    setDescription(d.description ?? '')
+    setStartDate(d.startDate ?? '')
+    setStartTime(d.startTime ?? '')
+    setStartDatePrecision(d.startDatePrecision ?? 'day')
+    setEndDate(d.endDate ?? '')
+    setEndTime(d.endTime ?? '')
+    setEndDatePrecision(d.endDatePrecision ?? 'day')
+    categoryTouchedRef.current = Boolean(d.category)
+    setCategory(d.category ?? '')
+    setEventType(d.eventType ?? null)
+    kindTouchedRef.current = true
+    setKind(d.kind ?? 'SINGLE')
+    setThumbnail(
+      d.thumbnail && !d.thumbnail.startsWith('blob:') ? d.thumbnail : '',
+    )
+    setThumbnailFile(null)
+    setKeywords(Array.isArray(d.keywords) ? d.keywords : [])
+    setRelatedCountries(
+      Array.isArray(d.relatedCountries) ? d.relatedCountries : [],
+    )
+    setParentEvent(d.parentEvent ?? null)
+    setRelatedEvents(Array.isArray(d.relatedEvents) ? d.relatedEvents : [])
+    setFacetDrafts(d.facetDrafts ?? emptyRegisterFacetDrafts())
+  }, [
+    consumePendingDraft,
+    playClickSound,
+    setTitle,
+    setDescription,
+    setStartDate,
+    setStartTime,
+    setStartDatePrecision,
+    setEndDate,
+    setEndTime,
+    setEndDatePrecision,
+    setCategory,
+    setThumbnail,
+    setThumbnailFile,
+    setKeywords,
+    setRelatedCountries,
+  ])
+
+  const handleDiscardDraft = useCallback(() => {
+    playClickSound()
+    discardDraft()
+  }, [playClickSound, discardDraft])
+
   // 새로고침·탭 닫기 경고. SPA 내 라우트 전환은 셸(useBlocker)이 담당한다.
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
@@ -895,6 +1016,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       isSubmitting,
       isValid,
       firstError: validation.firstError ?? categoryError ?? undefined,
+      ...(draftSavedAt !== null && { draftSavedAt }),
     })
   }, [
     isEditMode,
@@ -903,6 +1025,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     isValid,
     validation.firstError,
     categoryError,
+    draftSavedAt,
     onStateChange,
   ])
 
@@ -1014,6 +1137,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       // 저장된 값이 새 기준선 — 이후 수정분만 다시 dirty가 된다.
       baselineRef.current = snapshotRef.current
       markDirty(false)
+      if (!isEditMode) {
+        discardDraft()
+      }
       recordRecentClassification({ domain: category, type: eventType })
       recordRecentParticipants(relatedCountries)
 
@@ -1089,6 +1215,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     eventId,
     queryClient,
     markDirty,
+    discardDraft,
     onSaved,
     eventType,
     facetDrafts,
@@ -1131,6 +1258,36 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
 
   return (
     <>
+      {!isEditMode && pendingDraft && (
+        <DraftBanner role="status" aria-label="임시 저장된 사건 초안 안내">
+          <DraftBannerIcon aria-hidden="true">
+            <FiRotateCcw size={14} strokeWidth={2.2} />
+          </DraftBannerIcon>
+          <DraftBannerText>
+            <strong>임시 저장된 내용</strong>
+            <span>
+              · {formatDraftSummaryLabel(pendingDraft.data)} (
+              {formatDraftRelativeTime(pendingDraft.savedAt)})
+            </span>
+          </DraftBannerText>
+          <DraftBannerActions>
+            <DraftDiscardBtn
+              type="button"
+              aria-label="임시 저장본 버리기"
+              onClick={handleDiscardDraft}
+            >
+              버리기
+            </DraftDiscardBtn>
+            <DraftRestoreBtn
+              type="button"
+              aria-label="임시 저장본 이어쓰기"
+              onClick={handleRestoreDraft}
+            >
+              이어쓰기
+            </DraftRestoreBtn>
+          </DraftBannerActions>
+        </DraftBanner>
+      )}
       <BasicInfoSection
         title={title}
         setTitle={setTitle}
@@ -1582,3 +1739,105 @@ function parentCandidateDescription(
 }
 
 export default EventBasicForm
+
+const DraftBanner = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin: 0 0 18px;
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.1)'
+      : 'rgba(99, 102, 241, 0.05)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.24)'
+        : 'rgba(99, 102, 241, 0.18)'};
+  font-size: 13px;
+`
+
+const DraftBannerIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.2)'
+      : 'rgba(99, 102, 241, 0.12)'};
+  color: ${({ theme }) => theme.colors.primary};
+  flex-shrink: 0;
+`
+
+const DraftBannerText = styled.span`
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  letter-spacing: -0.01em;
+
+  > strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  > span {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+  }
+`
+
+const DraftBannerActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+`
+
+const DraftDiscardBtn = styled.button`
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    background-color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2'};
+  }
+`
+
+const DraftRestoreBtn = styled.button`
+  height: 28px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  background: ${({ theme }) => theme.colors.primary};
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: opacity 0.14s ease;
+
+  &:hover {
+    opacity: 0.92;
+  }
+`

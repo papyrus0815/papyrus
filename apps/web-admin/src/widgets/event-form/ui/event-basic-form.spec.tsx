@@ -334,6 +334,7 @@ function wrap(client: QueryClient) {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  window.localStorage.clear()
 })
 
 // ────────────────────────────────────────────────────────────────
@@ -1072,5 +1073,111 @@ describe('EventBasicForm — 분야 · 세부 분야 상호작용', () => {
     expect(screen.getByTestId('lastSavedEvent')).toHaveTextContent(
       'evt-new:마른 전투',
     )
+  })
+
+  it('작성 중 창이 닫혀 언마운트되더라도 임시 저장본이 localStorage에 보존되고, 다시 열면 이어쓰기 배너로 복원할 수 있다', () => {
+    const client = makeClient()
+    const firstRender = render(<EventBasicForm />, { wrapper: wrap(client) })
+
+    fireEvent.change(screen.getByLabelText('사건명'), {
+      target: { value: '베스트팔렌 조약' },
+    })
+    fireEvent.change(screen.getByLabelText('시작일'), {
+      target: { value: '1648-10-24' },
+    })
+    fireEvent.change(screen.getByLabelText('분야'), {
+      target: { value: 'DIPLOMACY' },
+    })
+    fireEvent.click(screen.getByRole('radio', { name: '조약·협정·가입' }))
+    fireEvent.click(screen.getByText('_fillTreatyAndPowerDraft'))
+
+    // 디바운스 타이머가 돌기 전에 창이 닫혀도(unmount) 즉시 플러시되어야 한다
+    firstRender.unmount()
+
+    const secondRender = render(<EventBasicForm />, { wrapper: wrap(client) })
+    expect(
+      screen.getByRole('status', { name: '임시 저장된 사건 초안 안내' }),
+    ).toHaveTextContent('베스트팔렌 조약')
+
+    // 이어쓰기를 누르기 전에는 초기 빈 상태를 유지한다
+    expect(screen.getByLabelText('사건명')).toHaveValue('')
+
+    fireEvent.click(screen.getByRole('button', { name: '임시 저장본 이어쓰기' }))
+
+    expect(screen.getByLabelText('사건명')).toHaveValue('베스트팔렌 조약')
+    expect(screen.getByTestId('startDate')).toHaveTextContent('1648-10-24')
+    expect(screen.getByTestId('category')).toHaveTextContent('DIPLOMACY')
+    expect(screen.getByTestId('core-records-group')).toHaveTextContent(
+      'DIPLOMACY:TREATY:create',
+    )
+    expect(
+      screen.queryByRole('status', { name: '임시 저장된 사건 초안 안내' }),
+    ).not.toBeInTheDocument()
+
+    secondRender.unmount()
+  })
+
+  it('임시 저장 배너에서 "버리기"를 누르면 초안이 삭제되고 다시 열어도 배너가 뜨지 않는다', () => {
+    const client = makeClient()
+    const firstRender = render(<EventBasicForm />, { wrapper: wrap(client) })
+
+    fireEvent.change(screen.getByLabelText('사건명'), {
+      target: { value: '임시 메모 사건' },
+    })
+    firstRender.unmount()
+
+    const secondRender = render(<EventBasicForm />, { wrapper: wrap(client) })
+    expect(
+      screen.getByRole('status', { name: '임시 저장된 사건 초안 안내' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '임시 저장본 버리기' }))
+    expect(
+      screen.queryByRole('status', { name: '임시 저장된 사건 초안 안내' }),
+    ).not.toBeInTheDocument()
+
+    secondRender.unmount()
+
+    render(<EventBasicForm />, { wrapper: wrap(client) })
+    expect(
+      screen.queryByRole('status', { name: '임시 저장된 사건 초안 안내' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('사건 등록을 완료하면 임시 저장본도 함께 비워져 다음 등록 시 이전 초안 배너가 남지 않는다', async () => {
+    eventsApi.createEvent.mockResolvedValue({
+      id: 'evt-created',
+      title: '워털루 전투',
+    })
+    const client = makeClient()
+    jest.spyOn(client, 'ensureQueryData').mockResolvedValue({} as never)
+
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    const firstRender = render(<EventBasicForm formRef={formRef} />, {
+      wrapper: wrap(client),
+    })
+
+    fireEvent.change(screen.getByLabelText('사건명'), {
+      target: { value: '워털루 전투' },
+    })
+    fireEvent.change(screen.getByLabelText('시작일'), {
+      target: { value: '1815-06-18' },
+    })
+    fireEvent.change(screen.getByLabelText('분야'), {
+      target: { value: 'MILITARY' },
+    })
+
+    await act(async () => {
+      await formRef.current?.submit()
+    })
+
+    firstRender.unmount()
+
+    render(<EventBasicForm />, { wrapper: wrap(client) })
+    expect(
+      screen.queryByRole('status', { name: '임시 저장된 사건 초안 안내' }),
+    ).not.toBeInTheDocument()
   })
 })

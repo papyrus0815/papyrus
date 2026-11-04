@@ -105,7 +105,7 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
 
     // 소개 그룹(개요 설명·키워드·썸네일)도 펼치기 버튼 없이 즉시 노출된다
     expect(
-      screen.getByPlaceholderText('무슨 일이 왜 일어났는지 두세 문장으로'),
+      screen.getByPlaceholderText('사건의 개요 설명을 입력하세요.'),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /소개 펼치기|소개 접기/ }),
@@ -601,7 +601,7 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     expect(within(basicSection).getByText('기본 정보')).toBeInTheDocument()
     expect(
       within(basicSection).getByPlaceholderText(
-        '무슨 일이 왜 일어났는지 두세 문장으로',
+        '사건의 개요 설명을 입력하세요.',
       ),
     ).toBeInTheDocument()
     expect(

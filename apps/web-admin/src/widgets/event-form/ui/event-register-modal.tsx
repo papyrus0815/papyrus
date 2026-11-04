@@ -57,7 +57,9 @@ const LazyEventBasicForm = React.lazy(() =>
   })),
 )
 
-const LEAVE_MESSAGE = '저장하지 않은 변경 사항이 있습니다. 닫으시겠습니까?'
+const CREATE_LEAVE_MESSAGE =
+  '작성 중인 내용은 임시 저장되어 다음에 이어 쓸 수 있습니다. 창을 닫으시겠습니까?'
+const EDIT_LEAVE_MESSAGE = '저장하지 않은 변경 사항이 있습니다. 닫으시겠습니까?'
 
 export interface EventRegisterModalProps {
   isOpen: boolean
@@ -140,7 +142,8 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     void import('@/pages/events/detail/event-detail.page').catch(() => undefined)
   }, [savedEventId])
 
-  const { isEditMode, isLoading, isSubmitting, isValid, firstError } = formState
+  const { isEditMode, isLoading, isSubmitting, isValid, firstError, draftSavedAt } =
+    formState
   const busy = isLoading || isSubmitting
 
   /** 모달 안 어디서든 Cmd/Ctrl + Enter로 즉시 저장, Cmd/Ctrl + Shift + Enter로 등록 후 계속 */
@@ -182,15 +185,16 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   /** Esc·오버레이·취소 공통 — dirty면 확인부터 */
   const requestClose = useCallback(async () => {
     if (isSubmitting) return
+    const leaveMessage = isEditMode ? EDIT_LEAVE_MESSAGE : CREATE_LEAVE_MESSAGE
     if (
       isDirtyRef.current &&
-      !(await confirm({ title: '확인', message: LEAVE_MESSAGE }))
+      !(await confirm({ title: '확인', message: leaveMessage }))
     ) {
       return
     }
     markDirty(false)
     onClose()
-  }, [isSubmitting, markDirty, onClose])
+  }, [isEditMode, isSubmitting, markDirty, onClose])
 
   /**
    * 뒤에 살아 있는 목록을 지금 되살린다.
@@ -291,6 +295,16 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
 
         <PersonRegisterModalStickyFooter>
           <FooterHint $warning={!isValid && Boolean(firstError)}>
+            {!isEditMode && Boolean(draftSavedAt) && (
+              <DraftSavedBadge
+                role="status"
+                aria-label="임시 자동 저장됨"
+                title="작성 중인 내용은 이 브라우저에 자동으로 임시 저장됩니다"
+              >
+                <DraftSavedDot aria-hidden="true" />
+                자동 저장됨
+              </DraftSavedBadge>
+            )}
             {!isValid && firstError ? (
               <FooterJumpButton
                 type="button"
@@ -301,9 +315,9 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
                 <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
               </FooterJumpButton>
             ) : isEditMode ? (
-              '기본 정보만 수정합니다 · ⌘/Ctrl+Enter로 바로 저장'
+              <span>기본 정보만 수정합니다 · ⌘/Ctrl+Enter로 바로 저장</span>
             ) : (
-              '등록 준비 완료 · ⌘/Ctrl+Enter 저장 · ⌘/Ctrl+Shift+Enter 등록 후 계속'
+              <span>등록 준비 완료 · ⌘/Ctrl+Enter 저장 · ⌘/Ctrl+Shift+Enter 등록 후 계속</span>
             )}
           </FooterHint>
           <FooterActions>
@@ -407,7 +421,11 @@ const FormReveal = styled.div`
   }
 `
 
-const FooterHint = styled.p<{ $warning?: boolean }>`
+const FooterHint = styled.div<{ $warning?: boolean }>`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 0;
   font-size: 12px;
   font-weight: ${({ $warning }) => ($warning ? 600 : 400)};
@@ -418,6 +436,31 @@ const FooterHint = styled.p<{ $warning?: boolean }>`
   @media (max-width: 768px) {
     display: none;
   }
+`
+
+const DraftSavedBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#6ee7b7' : '#047857'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.14)' : 'rgba(16, 185, 129, 0.1)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.28)' : 'rgba(16, 185, 129, 0.22)'};
+`
+
+const DraftSavedDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 `
 
 const FooterJumpButton = styled.button`
