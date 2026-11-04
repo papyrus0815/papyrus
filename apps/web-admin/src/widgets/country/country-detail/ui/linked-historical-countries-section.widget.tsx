@@ -112,29 +112,80 @@ export function LinkedHistoricalCountriesSection({
     isLoading: isLinkedDataLoading,
   } = useLinkedHistoricalData(linkedIds)
 
+  const invalidateBridgeDependentCaches = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['countries'] }),
+      queryClient.invalidateQueries({ queryKey: ['historical-countries'] }),
+      queryClient.invalidateQueries({
+        queryKey: ['persons', 'by-country-grouped', country.id],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['persons', 'by-country', country.id],
+      }),
+      queryClient.invalidateQueries({ queryKey: ['treaties'] }),
+    ])
+  }
+
+  const resolveExistingModernIds = async (
+    historicalCountryId: string,
+  ): Promise<string[]> => {
+    const cached = allHistoricalCountries.find(
+      (candidate) => candidate.id === historicalCountryId,
+    ) as { parentModernCountryIds?: string[] } | undefined
+    if (Array.isArray(cached?.parentModernCountryIds)) {
+      return cached.parentModernCountryIds
+    }
+    const detail = (await getHistoricalCountryById(historicalCountryId)) as {
+      parentModernCountryIds?: string[]
+    }
+    return detail.parentModernCountryIds ?? []
+  }
+
   const handleCommitLink = async (pickedList: CountryPickerPick[]) => {
     if (pickedList.length === 0 || isMutatingLink) return
     setIsMutatingLink(true)
     const toastId = notify.loading('과거 국가 연결 중...')
     try {
-      for (const picked of pickedList) {
-        const detail = (await getHistoricalCountryById(picked.id)) as {
-          parentModernCountryIds?: string[]
-        }
-        const existingModernIds = detail.parentModernCountryIds ?? []
-        const nextModernIds = Array.from(
-          new Set([...existingModernIds, country.id]),
-        )
-        await updateHistoricalCountry(picked.id, {
-          parentModernCountryIds: nextModernIds,
-        } as UpdateHistoricalCountryDto)
+      const results = await Promise.allSettled(
+        pickedList.map(async (picked) => {
+          const existingModernIds = await resolveExistingModernIds(picked.id)
+          const nextModernIds = Array.from(
+            new Set([...existingModernIds, country.id]),
+          )
+          await updateHistoricalCountry(picked.id, {
+            parentModernCountryIds: nextModernIds,
+          } as UpdateHistoricalCountryDto)
+        }),
+      )
+      const succeededCount = results.filter(
+        (result) => result.status === 'fulfilled',
+      ).length
+      const firstRejected = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
+      )
+
+      if (succeededCount > 0) {
+        await invalidateBridgeDependentCaches()
       }
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['countries'] }),
-        queryClient.invalidateQueries({ queryKey: ['historical-countries'] }),
-      ])
+
+      if (firstRejected) {
+        const reasonMessage =
+          (firstRejected.reason as Error)?.message || '오류가 발생했습니다.'
+        notify.error(
+          succeededCount > 0
+            ? `${succeededCount}개 연결 완료, 일부 실패: ${reasonMessage}`
+            : `연결 실패: ${reasonMessage}`,
+          { id: toastId },
+        )
+        if (succeededCount > 0) {
+          setIsPickerOpen(false)
+        }
+        return
+      }
+
       notify.success(
-        `${pickedList.length}개 과거 국가를 ${country.name}에 연결했습니다.`,
+        `${succeededCount}개 과거 국가를 ${country.name}에 연결했습니다.`,
         { id: toastId },
       )
       setIsPickerOpen(false)
@@ -160,20 +211,14 @@ export function LinkedHistoricalCountriesSection({
     setIsMutatingLink(true)
     const toastId = notify.loading('연결 해제 중...')
     try {
-      const detail = (await getHistoricalCountryById(item.id)) as {
-        parentModernCountryIds?: string[]
-      }
-      const existingModernIds = detail.parentModernCountryIds ?? []
+      const existingModernIds = await resolveExistingModernIds(item.id)
       const nextModernIds = existingModernIds.filter(
         (modernId) => modernId !== country.id,
       )
       await updateHistoricalCountry(item.id, {
         parentModernCountryIds: nextModernIds,
       } as UpdateHistoricalCountryDto)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['countries'] }),
-        queryClient.invalidateQueries({ queryKey: ['historical-countries'] }),
-      ])
+      await invalidateBridgeDependentCaches()
       notify.success(`${item.name} 연결을 해제했습니다.`, { id: toastId })
     } catch (error) {
       notify.error(

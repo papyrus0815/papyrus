@@ -208,6 +208,16 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
     return result
   }, [data, query, categoryFilter, country.name])
 
+  const filteredUniqueCount = useMemo(
+    () =>
+      new Set(
+        groups.flatMap((group) => group.persons.map((person) => person.id)),
+      ).size,
+    [groups],
+  )
+  const isFilterActive =
+    categoryFilter !== 'all' || query.trim().length > 0
+
   const toggle = (key: string) =>
     setCollapsed((previous) => {
       const next = new Set(previous)
@@ -456,6 +466,22 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
               </FilterChipGroup>
 
               <ToolbarRight>
+                {isFilterActive && (
+                  <FilterStatusWrap>
+                    <FilterResultText>
+                      결과 {filteredUniqueCount.toLocaleString('ko-KR')}명
+                    </FilterResultText>
+                    <FilterResetBtn
+                      type="button"
+                      onClick={() => {
+                        setCategoryFilter('all')
+                        setQuery('')
+                      }}
+                    >
+                      초기화
+                    </FilterResetBtn>
+                  </FilterStatusWrap>
+                )}
                 <SearchInput
                   type="search"
                   value={query}
@@ -727,6 +753,35 @@ const ToolbarRight = styled.div`
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+`
+
+const FilterStatusWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const FilterResultText = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const FilterResetBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 `
 
 const SearchInput = styled.input`

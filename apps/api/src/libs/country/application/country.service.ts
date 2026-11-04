@@ -57,12 +57,15 @@ const MATURITY_ORDER = [
 ] as const
 
 /** 국가 완성도 신호: 썸네일 / 수도 / 현지어명 (각 1신호) */
-function countryCompletenessBonus(c: {
+function countryCompletenessBonus(country: {
   thumbnailUrl?: string | null
   capital?: string | null
   localName?: string | null
 }): number {
-  const signals = (c.thumbnailUrl ? 1 : 0) + (c.capital ? 1 : 0) + (c.localName ? 1 : 0)
+  const signals =
+    (country.thumbnailUrl ? 1 : 0) +
+    (country.capital ? 1 : 0) +
+    (country.localName ? 1 : 0)
   return completenessBonus(signals)
 }
 
@@ -173,11 +176,13 @@ export class CountryService {
     }
 
     // 썸네일 제거/교체 시 기존 업로드 파일 삭제 (/uploads/images/... 만)
-    const newThumbnail = data.thumbnailUrl ?? null
-    const isClearingOrReplacing =
-      newThumbnail !== (current.thumbnailUrl ?? null)
-    if (isClearingOrReplacing && current.thumbnailUrl) {
-      await this.uploadService.deleteFileByUrl(current.thumbnailUrl)
+    if (data.thumbnailUrl !== undefined) {
+      const newThumbnail = data.thumbnailUrl ?? null
+      const isClearingOrReplacing =
+        newThumbnail !== (current.thumbnailUrl ?? null)
+      if (isClearingOrReplacing && current.thumbnailUrl) {
+        await this.uploadService.deleteFileByUrl(current.thumbnailUrl)
+      }
     }
 
     const country = await this.countries.update(id, data)
@@ -819,10 +824,10 @@ export class CountryService {
 }
 
 /** string|null|undefined → BigInt 컬럼 입력값 변환 (undefined는 변경 스킵). */
-function toBigIntField(v?: string | null): bigint | null | undefined {
-  if (v === undefined) return undefined
-  if (v === null || v === '') return null
-  return BigInt(v)
+function toBigIntField(rawValue?: string | null): bigint | null | undefined {
+  if (rawValue === undefined) return undefined
+  if (rawValue === null || rawValue === '') return null
+  return BigInt(rawValue)
 }
 
 function serializeCountryRecord(record: {

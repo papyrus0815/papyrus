@@ -14,8 +14,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
-import { type Country, useCountries } from '@/entities/country/api'
+import type { Country } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 import {
   getPersonsByHistoricalCountryUnion,
   type PersonResponseDto,
@@ -219,15 +220,14 @@ export function HistoricalCountryDetail({
   // 이 위젯은 country-detail.widget이 country.type === 'historical'로 분기 후에만 마운트됨 — id 직접 사용.
   const historicalCountryId = country.id
   const navigate = useNavigate()
-  const { data: allModernCountries = [] } = useCountries()
-  const { data: historicalDetailRecord } = useHistoricalCountry(historicalCountryId)
+  const { countries: allModernCountries, apiHistoricalCountries } =
+    useCountryListState()
   const linkedModernCountries = useMemo<Country[]>(() => {
+    const matchedHistorical = apiHistoricalCountries?.find(
+      (item) => item.id === historicalCountryId,
+    ) as { parentModernCountryIds?: string[] } | undefined
     const detailModernIds = new Set(
-      (
-        historicalDetailRecord as
-          | { parentModernCountryIds?: string[] }
-          | undefined
-      )?.parentModernCountryIds ?? [],
+      matchedHistorical?.parentModernCountryIds ?? [],
     )
     return allModernCountries.filter((modern) => {
       if (detailModernIds.has(modern.id)) return true
@@ -238,7 +238,7 @@ export function HistoricalCountryDetail({
         embeddedHistorical?.some((hist) => hist.id === historicalCountryId),
       )
     })
-  }, [allModernCountries, historicalDetailRecord, historicalCountryId])
+  }, [allModernCountries, apiHistoricalCountries, historicalCountryId])
 
   const { data: transitions = [] } = useQuery({
     queryKey: ['historical-country-transitions', historicalCountryId],
@@ -905,6 +905,9 @@ function HistoricalOverviewSection({
   const [lineageDepthFilter, setLineageDepthFilter] = useState<'all' | 'direct'>(
     'all',
   )
+  const [selectedModernEndpointId, setSelectedModernEndpointId] = useState<
+    string | null
+  >(null)
   const [indicatorDomainFilter, setIndicatorDomainFilter] = useState<
     'all' | 'trade' | 'companies'
   >('all')
@@ -940,6 +943,7 @@ function HistoricalOverviewSection({
   // 국가 변경 시 리셋
   useEffect(() => {
     setSavedDescription(resolvedDescription)
+    setSelectedModernEndpointId(null)
   }, [country.id, resolvedDescription])
 
   const updateMutation = useMutation({
@@ -1917,20 +1921,24 @@ function HistoricalOverviewSection({
               hasSecondDegree && lineageDepthFilter === 'direct'
                 ? directLineage
                 : stats.lineage
-            const primaryModern = linkedModernCountries[0]
+            const activeModern =
+              linkedModernCountries.find(
+                (modern) => modern.id === selectedModernEndpointId,
+              ) ?? linkedModernCountries[0]
+            const hasMultipleModern = linkedModernCountries.length > 1
 
             return (
               <LineageFlow
                 historicalCountries={displayedLineage}
                 currentId={country.id}
                 modernEndpoint={
-                  primaryModern
+                  activeModern
                     ? {
-                        id: primaryModern.id,
-                        name: primaryModern.name,
-                        flagEmoji: primaryModern.flagEmoji,
-                        thumbnailUrl: primaryModern.thumbnailUrl,
-                        isoCode: primaryModern.isoCode,
+                        id: activeModern.id,
+                        name: activeModern.name,
+                        flagEmoji: activeModern.flagEmoji,
+                        thumbnailUrl: activeModern.thumbnailUrl,
+                        isoCode: activeModern.isoCode,
                       }
                     : undefined
                 }
@@ -1939,25 +1947,42 @@ function HistoricalOverviewSection({
                 }
                 maxPerColumn={4}
                 toolbarLeft={
-                  hasSecondDegree ? (
+                  hasSecondDegree || hasMultipleModern ? (
                     <DashboardStyles.LineageFilterGroup
                       role="group"
-                      aria-label="계보 세대 범위 필터"
+                      aria-label="계보 세대 및 현대 종착점 필터"
                     >
-                      <DashboardStyles.LineageFilterPill
-                        type="button"
-                        $active={lineageDepthFilter === 'all'}
-                        onClick={() => setLineageDepthFilter('all')}
-                      >
-                        2대 전체 {stats.lineage.length}
-                      </DashboardStyles.LineageFilterPill>
-                      <DashboardStyles.LineageFilterPill
-                        type="button"
-                        $active={lineageDepthFilter === 'direct'}
-                        onClick={() => setLineageDepthFilter('direct')}
-                      >
-                        직계 1대 {directLineage.length}
-                      </DashboardStyles.LineageFilterPill>
+                      {hasSecondDegree && (
+                        <>
+                          <DashboardStyles.LineageFilterPill
+                            type="button"
+                            $active={lineageDepthFilter === 'all'}
+                            onClick={() => setLineageDepthFilter('all')}
+                          >
+                            2대 전체 {stats.lineage.length}
+                          </DashboardStyles.LineageFilterPill>
+                          <DashboardStyles.LineageFilterPill
+                            type="button"
+                            $active={lineageDepthFilter === 'direct'}
+                            onClick={() => setLineageDepthFilter('direct')}
+                          >
+                            직계 1대 {directLineage.length}
+                          </DashboardStyles.LineageFilterPill>
+                        </>
+                      )}
+                      {hasMultipleModern &&
+                        linkedModernCountries.map((modern) => (
+                          <DashboardStyles.LineageFilterPill
+                            key={modern.id}
+                            type="button"
+                            $active={activeModern?.id === modern.id}
+                            onClick={() =>
+                              setSelectedModernEndpointId(modern.id)
+                            }
+                          >
+                            현대: {modern.name}
+                          </DashboardStyles.LineageFilterPill>
+                        ))}
                     </DashboardStyles.LineageFilterGroup>
                   ) : undefined
                 }

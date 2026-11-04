@@ -4,6 +4,7 @@ import {
   IHistoricalCountryRepository,
   CreateHistoricalCountryData,
   UpdateHistoricalCountryData,
+  HistoricalCountryListFilter,
 } from '../domain/historical-country.repository'
 import { HistoricalCountry } from '../domain/historical-country.entity'
 import { HistoricalCountryPrismaRepository } from '../infrastructure/historical-country.prisma.repository'
@@ -34,13 +35,15 @@ import { completenessBonus } from '../../gamification/domain/point.policy'
 import { UploadService } from '../../shared/upload/upload.service'
 
 /** 역사적 국가 완성도 신호: 썸네일 / 설명 / 명칭 유래 (각 1신호) */
-function historicalCompletenessBonus(c: {
+function historicalCompletenessBonus(country: {
   thumbnailUrl?: string | null
   description?: string | null
   nameOrigin?: string | null
 }): number {
   const signals =
-    (c.thumbnailUrl ? 1 : 0) + (c.description ? 1 : 0) + (c.nameOrigin ? 1 : 0)
+    (country.thumbnailUrl ? 1 : 0) +
+    (country.description ? 1 : 0) +
+    (country.nameOrigin ? 1 : 0)
   return completenessBonus(signals)
 }
 
@@ -73,7 +76,10 @@ export class HistoricalCountryService {
     accountId?: string,
     filter?: { entityKind?: string; stateType?: string },
   ): Promise<HistoricalCountry[]> {
-    return await this.repository.findAll(accountId, filter as any)
+    return await this.repository.findAll(
+      accountId,
+      filter as HistoricalCountryListFilter | undefined,
+    )
   }
 
   /**
@@ -186,11 +192,13 @@ export class HistoricalCountryService {
     if (!current) {
       throw await this.buildAccessError(id, accountId, '수정')
     }
-    const newThumbnail = data.thumbnailUrl ?? null
-    const isClearingOrReplacing =
-      newThumbnail !== (current.thumbnailUrl ?? null)
-    if (isClearingOrReplacing && current.thumbnailUrl) {
-      await this.uploadService.deleteFileByUrl(current.thumbnailUrl)
+    if (data.thumbnailUrl !== undefined) {
+      const newThumbnail = data.thumbnailUrl ?? null
+      const isClearingOrReplacing =
+        newThumbnail !== (current.thumbnailUrl ?? null)
+      if (isClearingOrReplacing && current.thumbnailUrl) {
+        await this.uploadService.deleteFileByUrl(current.thumbnailUrl)
+      }
     }
     const country = await this.repository.update(id, data)
     await this.notificationService.notifyHistoricalCountry(
@@ -252,7 +260,7 @@ export class HistoricalCountryService {
     const ids =
       accountId && historicalCountryIds.length > 0
         ? (await this.repository.findManyByIdsWithAccount(historicalCountryIds, accountId)).map(
-            (c) => c.id,
+            (countryItem) => countryItem.id,
           )
         : historicalCountryIds
     return this.transitionRepository.findManyByHistoricalCountryIds(ids)
@@ -362,7 +370,7 @@ export class HistoricalCountryService {
     const ids =
       accountId && historicalCountryIds.length > 0
         ? (await this.repository.findManyByIdsWithAccount(historicalCountryIds, accountId)).map(
-            (c) => c.id,
+            (countryItem) => countryItem.id,
           )
         : historicalCountryIds
     return this.membershipRepository.findManyByHistoricalCountryIds(ids)
@@ -453,7 +461,7 @@ export class HistoricalCountryService {
     const ids =
       accountId && historicalCountryIds.length > 0
         ? (await this.repository.findManyByIdsWithAccount(historicalCountryIds, accountId)).map(
-            (c) => c.id,
+            (countryItem) => countryItem.id,
           )
         : historicalCountryIds
     return this.relationRepository.findManyByHistoricalCountryIds(ids)
