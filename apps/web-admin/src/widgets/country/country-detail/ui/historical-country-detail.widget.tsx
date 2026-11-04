@@ -9,13 +9,17 @@ import {
 } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { getPersonsByHistoricalCountryUnion } from '@/shared/api/persons'
+import {
+  getPersonsByHistoricalCountryUnion,
+  type PersonResponseDto,
+} from '@/shared/api/persons'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   formatCountryPeriod,
   getCountryDurationYears,
@@ -132,6 +136,8 @@ export type HistoricalCountryTab =
  * 겹치는 것만 노출 — modern과 어휘 일치를 유지해 페이지 전환·딥링크 동작을 통일한다.
  */
 type HistoricalSyncedTab =
+  | 'events'
+  | 'figures'
   | 'heads'
   | 'regions'
   | 'government'
@@ -142,6 +148,16 @@ type HistoricalSyncedTab =
   | 'trade'
   | 'companies'
 
+type HistoricalUrlTab = Exclude<HistoricalSyncedTab, 'figures'> | 'persons'
+
+const LOCAL_QUERY_TAB_SET = new Set<HistoricalCountryTab>([
+  'heads',
+  'succession',
+  'membership',
+  'relation',
+  'culture',
+])
+
 interface HistoricalCountryDetailProps {
   country: UnifiedCountry
   isLoading?: boolean
@@ -150,15 +166,16 @@ interface HistoricalCountryDetailProps {
   /** URL 연동: 특정 탭으로 직접 진입 시 (`'dashboard'` 등 historical에 없는 키는 외부에서 매핑 안 됨). */
   initialTab?: HistoricalSyncedTab
   /** 탭 변경 시 URL 갱신 콜백 — overview 등으로 돌아갈 땐 null. */
-  onTabChangeToUrl?: (tab: HistoricalSyncedTab | null) => void
+  onTabChangeToUrl?: (tab: HistoricalUrlTab | null) => void
 }
 
 /*
- * 'heads'(역대 수반)는 URL에 싣지 않는다 — 라우팅 훅이 현대 국가 규약대로 heads를 행정조직
- * URL(/government)로 접어, 역사 국가에서 '역대 수반'을 누르면 행정조직(정체) 탭으로 튕겼다.
- * 역사 국가엔 역대 수반이 독립 탭이라 로컬 상태로만 둔다.
+ * 'heads'(역대 수반)는 라우트 세그먼트에는 싣지 않고 ?tab= 쿼리로 유지한다 —
+ * 라우팅 훅이 현대 국가 규약대로 /heads를 행정조직 URL(/government)로 접기 때문이다.
  */
 const SYNCED_TAB_SET = new Set<HistoricalCountryTab>([
+  'events',
+  'figures',
   'regions',
   'government',
   'elections',
@@ -182,9 +199,15 @@ export function HistoricalCountryDetail({
   initialTab,
   onTabChangeToUrl,
 }: HistoricalCountryDetailProps) {
-  const [activeTab, setActiveTab] = useState<HistoricalCountryTab>(
-    () => initialTab ?? 'overview',
-  )
+  const [searchParams, setSearchParams] = useSearchParams()
+  const queryTabParam = searchParams.get('tab') as HistoricalCountryTab | null
+  const [activeTab, setActiveTab] = useState<HistoricalCountryTab>(() => {
+    if (initialTab) return initialTab
+    if (queryTabParam && LOCAL_QUERY_TAB_SET.has(queryTabParam)) {
+      return queryTabParam
+    }
+    return 'overview'
+  })
   const [governmentSubTab, setGovernmentSubTab] = useState<
     'system' | 'heads' | 'cabinets' | 'ministries' | 'military'
   >('system')
@@ -275,10 +298,32 @@ export function HistoricalCountryDetail({
       setFocusEventsCentury(null)
     }
     setActiveTab(tab)
-    // URL과 연동되는 탭만 부모로 전파, 그 외(overview·events·figures 등)는 null로 reset.
-    onTabChangeToUrl?.(
-      SYNCED_TAB_SET.has(tab) ? (tab as HistoricalSyncedTab) : null,
-    )
+    if (SYNCED_TAB_SET.has(tab)) {
+      onTabChangeToUrl?.(
+        tab === 'figures' ? 'persons' : (tab as HistoricalUrlTab),
+      )
+      return
+    }
+    onTabChangeToUrl?.(null)
+    if (LOCAL_QUERY_TAB_SET.has(tab)) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          next.set('tab', tab)
+          return next
+        },
+        { replace: true },
+      )
+    } else if (searchParams.has('tab')) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          next.delete('tab')
+          return next
+        },
+        { replace: true },
+      )
+    }
   }
 
   const handleOpenEventsCentury = (century: number) => {
@@ -292,8 +337,12 @@ export function HistoricalCountryDetail({
       setActiveTab(initialTab)
       return
     }
+    if (queryTabParam && LOCAL_QUERY_TAB_SET.has(queryTabParam)) {
+      setActiveTab(queryTabParam)
+      return
+    }
     setActiveTab((prev) => (SYNCED_TAB_SET.has(prev) ? 'overview' : prev))
-  }, [initialTab])
+  }, [initialTab, queryTabParam])
 
   return (
     <CountryStyles.DetailPaneRelative>
@@ -431,7 +480,10 @@ export function HistoricalCountryDetail({
                     />
                   )}
                   {activeTab === 'figures' && (
-                    <HistoricalFiguresSection country={country} />
+                    <HistoricalFiguresSection
+                      country={country}
+                      onGoToHeads={() => handleTabChange('heads')}
+                    />
                   )}
                   {activeTab === 'heads' && (
                     <HeadsOfStateSection country={country} />
@@ -1538,6 +1590,7 @@ function HistoricalOverviewSection({
           startYear={foundingStartSigned}
           endYear={foundingEndSigned}
           onGoToHeads={() => onGoToTab('heads')}
+          onGoToSuccession={() => onGoToTab('succession')}
         />
       </DashboardStyles.Section>
 
@@ -2314,10 +2367,20 @@ function foundingSignedYear(era: unknown, year: unknown): number | null {
  * 재임 단독 API를 쓰던 것을 3원 합집합(GET /persons/by-historical-country/:id)으로
  * 대체 — 재임 없는 문인·학자(현대 국가 상세와 동일 기준)도 포함된다.
  */
-function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
+function HistoricalFiguresSection({
+  country,
+  onGoToHeads,
+}: {
+  country: UnifiedCountry
+  onGoToHeads?: () => void
+}) {
   const navigate = useNavigate()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<
+    'all' | 'tenured' | 'lifespan' | 'portrait'
+  >('all')
+  const [viewMode, setViewMode] = useState<'ledger' | 'cards'>('ledger')
+  const [previewPersonId, setPreviewPersonId] = useState<string | null>(null)
 
   const { data: figures = [], isLoading } = useQuery({
     queryKey: ['historical-country-union-persons', country.id],
@@ -2325,74 +2388,394 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
     enabled: !!country.id,
   })
 
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          padding: '48px',
-          background: isDark ? '#1d1d1d' : '#fafafa',
-          minHeight: 'calc(100vh - 300px)',
-          textAlign: 'center',
-          color: isDark ? '#a1a1aa' : '#64748b',
-        }}
-      >
-        불러오는 중…
-      </div>
+  const hasTenure = (person: PersonResponseDto) => {
+    const tenures = (
+      person as PersonResponseDto & {
+        governmentTenures?: Array<{
+          title?: string | null
+          positionDefinition?: { name?: string | null } | null
+        }>
+      }
+    ).governmentTenures
+    return Boolean(
+      (tenures && tenures.length > 0) ||
+        (person as PersonResponseDto & { jobTitle?: string | null }).jobTitle,
     )
   }
 
-  if (figures.length === 0) {
+  const getPrimaryRoleLabel = (person: PersonResponseDto): string | null => {
+    const extended = person as PersonResponseDto & {
+      jobTitle?: string | null
+      governmentTenures?: Array<{
+        title?: string | null
+        positionDefinition?: { name?: string | null } | null
+      }>
+    }
+    const firstTenure = extended.governmentTenures?.[0]
     return (
-      <div
-        style={{
-          padding: '48px',
-          background: isDark ? '#1d1d1d' : '#fafafa',
-          minHeight: 'calc(100vh - 300px)',
-        }}
-      >
-        <EmptyState
-          message="등록된 인물이 없습니다"
-          description="이 국가를 주 국적으로 삼거나 재임·소속 기록이 있는 인물이 여기에 표시됩니다."
-          isDark={isDark}
-        />
-      </div>
+      firstTenure?.title?.trim() ||
+      firstTenure?.positionDefinition?.name?.trim() ||
+      extended.jobTitle?.trim() ||
+      null
     )
   }
+
+  const formatPersonLifespan = (person: PersonResponseDto): string => {
+    const birthText =
+      person.birthYear != null
+        ? `${person.birthEra === 'BC' ? 'BC ' : ''}${Math.abs(person.birthYear)}`
+        : null
+    const deathText =
+      person.deathYear != null
+        ? `${person.deathEra === 'BC' ? 'BC ' : ''}${Math.abs(person.deathYear)}`
+        : null
+    if (!birthText && !deathText) return '생몰년 미상'
+    if (birthText && deathText) return `${birthText} ~ ${deathText}년`
+    if (birthText) return `${birthText}년생`
+    return `~ ${deathText}년 몰`
+  }
+
+  const withTenureList = useMemo(
+    () => figures.filter(hasTenure),
+    [figures],
+  )
+  const withLifespanList = useMemo(
+    () =>
+      figures.filter(
+        (person) => person.birthYear != null || person.deathYear != null,
+      ),
+    [figures],
+  )
+  const withPortraitList = useMemo(
+    () => figures.filter((person) => Boolean(person.profileImageUrl)),
+    [figures],
+  )
+
+  const filteredFigures = useMemo(() => {
+    const lowered = searchQuery.trim().toLowerCase()
+    return figures.filter((person) => {
+      if (categoryFilter === 'tenured' && !hasTenure(person)) return false
+      if (
+        categoryFilter === 'lifespan' &&
+        person.birthYear == null &&
+        person.deathYear == null
+      ) {
+        return false
+      }
+      if (categoryFilter === 'portrait' && !person.profileImageUrl) {
+        return false
+      }
+      if (!lowered) return true
+      const searchable = [
+        getPersonDisplayName(person, true),
+        person.name,
+        person.surname,
+        person.regnalName,
+        getPrimaryRoleLabel(person),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return searchable.includes(lowered)
+    })
+  }, [figures, categoryFilter, searchQuery])
 
   return (
-    <div
-      style={{
-        padding: '48px',
-        background: isDark ? '#1d1d1d' : '#fafafa',
-        minHeight: 'calc(100vh - 300px)',
-      }}
-    >
-      <p
-        style={{
-          margin: '0 0 20px',
-          fontSize: 13,
-          color: isDark ? '#a1a1aa' : '#64748b',
-        }}
-      >
-        이 국가 소속 인물 {figures.length}명
-      </p>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
-          gap: '20px',
-        }}
-      >
-        {figures.map((figure, index) => (
-          <PersonCard
-            key={figure.id}
-            person={figure}
-            index={index}
-            onClick={() => navigate(pathKeys.personsTimelineDetail(figure.id))}
-          />
-        ))}
-      </div>
-    </div>
+    <DashboardStyles.DashboardRoot>
+      <FiguresSectionWrap>
+        <FiguresHeadRow>
+          <FiguresHeadText>
+            <FiguresTitle>소속 인물</FiguresTitle>
+            <FiguresDescription>
+              이 국가를 주 국적으로 삼거나 재위·관직 재임·소속 기록이 있는 3원 합집합 인물 원장입니다.
+            </FiguresDescription>
+          </FiguresHeadText>
+          <FiguresHeadActions>
+            {onGoToHeads && (
+              <FiguresActionBtn type="button" onClick={onGoToHeads}>
+                역대 수반 관리
+              </FiguresActionBtn>
+            )}
+            <FiguresActionBtn
+              type="button"
+              onClick={() => navigate(pathKeys.personsDashboard())}
+            >
+              인물 대시보드 →
+            </FiguresActionBtn>
+          </FiguresHeadActions>
+        </FiguresHeadRow>
+
+        <DashboardStyles.SectionHeadlineStrip aria-label="소속 인물 요약 지표">
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              전체 소속 인물
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={figures.length === 0}>
+              {figures.length > 0 ? (
+                <>
+                  {figures.length.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>명</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              주 국적 · 재임 · 소속 3원 합집합
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              관직·재임 기록 보유
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={withTenureList.length === 0}
+            >
+              {withTenureList.length > 0 ? (
+                <>
+                  {withTenureList.length.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>명</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '없음'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {figures.length > 0
+                ? `전체의 ${Math.round((withTenureList.length / figures.length) * 100)}% · 군주·관료·직책 보유`
+                : '재위·관직 재임자 기록 대기'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              생몰년 확인율
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={withLifespanList.length === 0}
+            >
+              {figures.length > 0 ? (
+                <>
+                  {Math.round((withLifespanList.length / figures.length) * 100)}
+                  <DashboardStyles.SectionHeadlineUnit>%</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '—'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {figures.length > 0
+                ? `생년·몰년 확인 ${withLifespanList.length}/${figures.length}명`
+                : '생몰년 데이터 미집계'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              초상 보유율
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={withPortraitList.length === 0}
+            >
+              {figures.length > 0 ? (
+                <>
+                  {Math.round((withPortraitList.length / figures.length) * 100)}
+                  <DashboardStyles.SectionHeadlineUnit>%</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '—'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {figures.length > 0
+                ? `초상 이미지 ${withPortraitList.length}/${figures.length}명`
+                : '초상 이미지 미등록'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+        </DashboardStyles.SectionHeadlineStrip>
+
+        {isLoading ? (
+          <ChartSkeleton variant="bars" rows={5} />
+        ) : figures.length === 0 ? (
+          <FiguresEmptySpecGrid>
+            <FiguresEmptySpecCell>
+              <FiguresEmptySpecTitle>
+                1. 주 국적 · 소속 국가 지정
+              </FiguresEmptySpecTitle>
+              <FiguresEmptySpecDesc>
+                인물 정보에서 주 국적 또는 시대별 소속 국가로 {country.name}을(를) 지정하면 문인·학자·장수 등 모든 인물이 자동 집계됩니다.
+              </FiguresEmptySpecDesc>
+              <FiguresEmptySpecAction
+                type="button"
+                onClick={() => navigate(pathKeys.personsDashboard())}
+              >
+                인물 대시보드에서 연결 →
+              </FiguresEmptySpecAction>
+            </FiguresEmptySpecCell>
+            <FiguresEmptySpecCell>
+              <FiguresEmptySpecTitle>
+                2. 역대 수반 · 관직 재임 등록
+              </FiguresEmptySpecTitle>
+              <FiguresEmptySpecDesc>
+                역대 수반 탭이나 행정조직 탭에서 군주·국가원수·관직 재임자를 등록하면 별도 국적 설정 없이도 이 국가 인물로 함께 묶입니다.
+              </FiguresEmptySpecDesc>
+              {onGoToHeads && (
+                <FiguresEmptySpecAction type="button" onClick={onGoToHeads}>
+                  역대 수반 탭으로 이동 →
+                </FiguresEmptySpecAction>
+              )}
+            </FiguresEmptySpecCell>
+          </FiguresEmptySpecGrid>
+        ) : (
+          <>
+            <FiguresToolbar>
+              <FiguresFilterGroup role="tablist" aria-label="인물 분류 필터">
+                <FiguresFilterChip
+                  type="button"
+                  role="tab"
+                  aria-selected={categoryFilter === 'all'}
+                  $active={categoryFilter === 'all'}
+                  onClick={() => setCategoryFilter('all')}
+                >
+                  전체 <FiguresFilterCount>{figures.length}</FiguresFilterCount>
+                </FiguresFilterChip>
+                <FiguresFilterChip
+                  type="button"
+                  role="tab"
+                  aria-selected={categoryFilter === 'tenured'}
+                  $active={categoryFilter === 'tenured'}
+                  onClick={() => setCategoryFilter('tenured')}
+                >
+                  관직·재임{' '}
+                  <FiguresFilterCount>{withTenureList.length}</FiguresFilterCount>
+                </FiguresFilterChip>
+                <FiguresFilterChip
+                  type="button"
+                  role="tab"
+                  aria-selected={categoryFilter === 'lifespan'}
+                  $active={categoryFilter === 'lifespan'}
+                  onClick={() => setCategoryFilter('lifespan')}
+                >
+                  생몰년 확인{' '}
+                  <FiguresFilterCount>{withLifespanList.length}</FiguresFilterCount>
+                </FiguresFilterChip>
+                <FiguresFilterChip
+                  type="button"
+                  role="tab"
+                  aria-selected={categoryFilter === 'portrait'}
+                  $active={categoryFilter === 'portrait'}
+                  onClick={() => setCategoryFilter('portrait')}
+                >
+                  초상 보유{' '}
+                  <FiguresFilterCount>{withPortraitList.length}</FiguresFilterCount>
+                </FiguresFilterChip>
+              </FiguresFilterGroup>
+
+              <FiguresToolbarRight>
+                <FiguresSearchInput
+                  type="search"
+                  value={searchQuery}
+                  onChange={(changeEvent) =>
+                    setSearchQuery(changeEvent.target.value)
+                  }
+                  placeholder="이름 · 시호 · 직책 검색…"
+                  aria-label="소속 인물 검색"
+                />
+                <FiguresViewToggle role="group" aria-label="인물 보기 방식">
+                  <FiguresViewBtn
+                    type="button"
+                    $active={viewMode === 'ledger'}
+                    onClick={() => setViewMode('ledger')}
+                  >
+                    2열 원장
+                  </FiguresViewBtn>
+                  <FiguresViewBtn
+                    type="button"
+                    $active={viewMode === 'cards'}
+                    onClick={() => setViewMode('cards')}
+                  >
+                    초상 카드
+                  </FiguresViewBtn>
+                </FiguresViewToggle>
+              </FiguresToolbarRight>
+            </FiguresToolbar>
+
+            {filteredFigures.length === 0 ? (
+              <FiguresNoMatch>
+                선택한 필터나 검색어와 일치하는 소속 인물이 없습니다.
+              </FiguresNoMatch>
+            ) : viewMode === 'ledger' ? (
+              <FiguresLedgerGrid>
+                {filteredFigures.map((person) => {
+                  const displayName =
+                    getPersonDisplayName(person, true) || person.name
+                  const roleLabel = getPrimaryRoleLabel(person)
+                  const lifespanLabel = formatPersonLifespan(person)
+                  return (
+                    <FiguresLedgerRow key={person.id}>
+                      <FiguresLedgerMainBtn
+                        type="button"
+                        onClick={() => setPreviewPersonId(person.id)}
+                      >
+                        <FiguresAvatar>
+                          {person.profileImageUrl ? (
+                            <img
+                              src={getUploadImageUrl(person.profileImageUrl)}
+                              alt=""
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span>{displayName.slice(0, 1)}</span>
+                          )}
+                        </FiguresAvatar>
+                        <FiguresPersonMeta>
+                          <FiguresNameLine>
+                            <FiguresPersonName>{displayName}</FiguresPersonName>
+                            {roleLabel && (
+                              <FiguresRoleBadge>{roleLabel}</FiguresRoleBadge>
+                            )}
+                          </FiguresNameLine>
+                          <FiguresLifespanText>
+                            {lifespanLabel}
+                          </FiguresLifespanText>
+                        </FiguresPersonMeta>
+                      </FiguresLedgerMainBtn>
+                      <FiguresDetailBtn
+                        type="button"
+                        onClick={() =>
+                          navigate(pathKeys.personsTimelineDetail(person.id))
+                        }
+                      >
+                        연보 →
+                      </FiguresDetailBtn>
+                    </FiguresLedgerRow>
+                  )
+                })}
+              </FiguresLedgerGrid>
+            ) : (
+              <FiguresCardGrid>
+                {filteredFigures.map((figure, index) => (
+                  <PersonCard
+                    key={figure.id}
+                    person={figure}
+                    index={index}
+                    onClick={() =>
+                      navigate(pathKeys.personsTimelineDetail(figure.id))
+                    }
+                  />
+                ))}
+              </FiguresCardGrid>
+            )}
+          </>
+        )}
+      </FiguresSectionWrap>
+
+      <PersonInlineModal
+        personId={previewPersonId}
+        onClose={() => setPreviewPersonId(null)}
+      />
+    </DashboardStyles.DashboardRoot>
   )
 }
 
@@ -2455,175 +2838,385 @@ function HistoricalRegionsSection({ country }: { country: UnifiedCountry }) {
  * 정직한 플레이스홀더로 둔다.
  */
 function CultureSection() {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
   return (
-    <div
-      style={{
-        padding: '48px',
-        background: isDark ? '#1d1d1d' : '#fafafa',
-        minHeight: 'calc(100vh - 300px)',
-      }}
-    >
-      <EmptyState
-        message="문화 유산 정보가 준비 중입니다"
-        description="문화재·예술·기록유산을 등록·표시하는 기능은 아직 제공되지 않습니다"
-        isDark={isDark}
-      />
-    </div>
+    <DashboardStyles.DashboardRoot>
+      <FiguresSectionWrap>
+        <FiguresHeadRow>
+          <FiguresHeadText>
+            <FiguresTitle>문화 유산</FiguresTitle>
+            <FiguresDescription>
+              문화재·예술·기록유산을 등록·표시하는 기능은 준비 중입니다.
+            </FiguresDescription>
+          </FiguresHeadText>
+        </FiguresHeadRow>
+      </FiguresSectionWrap>
+    </DashboardStyles.DashboardRoot>
   )
 }
 
-// ============================================
-// 공통 컴포넌트
-// ============================================
+const FiguresSectionWrap = styled.section`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+`
 
-function EmptyState({
-  message,
-  description,
-  isDark = false,
-}: {
-  message: string
-  description?: string
-  isDark?: boolean
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '20px',
-        padding: '80px 40px',
-        background: isDark ? '#212121' : 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-        border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
-        borderRadius: '14px',
-        textAlign: 'center',
-      }}
-    >
-      <div
-        style={{
-          width: '100px',
-          height: '100px',
-          borderRadius: '50%',
-          background: isDark ? '#2a2a2a' : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
-        }}
-      >
-        <svg
-          width="44"
-          height="44"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={isDark ? '#a1a1aa' : '#64748b'}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
-      </div>
-      <div>
-        <div
-          style={{
-            fontSize: '18px',
-            fontWeight: 800,
-            color: isDark ? '#f5f5f5' : '#0f172a',
-            marginBottom: '8px',
-            letterSpacing: '-0.02em',
-          }}
-        >
-          {message}
-        </div>
-        {description && (
-          <div style={{ fontSize: '14px', color: isDark ? '#a1a1aa' : '#64748b' }}>
-            {description}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
+const FiguresHeadRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+`
 
-function InfoCard({
-  label,
-  value,
-  color,
-  isDark = false,
-}: {
-  label: string
-  value: string
-  color: string
-  isDark?: boolean
-}) {
-  return (
-    <div
-      style={{
-        padding: '24px',
-        background: isDark ? '#212121' : '#ffffff',
-        border: `1px solid ${isDark ? '#2a2a2a' : '#f1f5f9'}`,
-        borderRadius: '14px',
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        cursor: 'pointer',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = `0 8px 24px ${color}20`
-        e.currentTarget.style.transform = 'translateY(-2px)'
-        e.currentTarget.style.borderColor = isDark ? '#3f3f46' : '#cbd5e1'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
-        e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.borderColor = isDark ? '#2a2a2a' : '#f1f5f9'
-      }}
-    >
-      {/* 좌측 컬러 라인 */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '4px',
-          height: '100%',
-          background: color,
-        }}
-      />
+const FiguresHeadText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
 
-      <div style={{ position: 'relative', paddingLeft: '12px' }}>
-        <div
-          style={{
-            fontSize: '12px',
-            color: isDark ? '#71717a' : '#94a3b8',
-            marginBottom: '8px',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          {label}
-        </div>
-        <div
-          style={{
-            fontSize: '22px',
-            fontWeight: 800,
-            color: isDark ? '#f5f5f5' : '#0f172a',
-            letterSpacing: '-0.02em',
-          }}
-        >
-          {value}
-        </div>
-      </div>
-    </div>
-  )
-}
+const FiguresTitle = styled.h3`
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const FiguresDescription = styled.p`
+  margin: 0;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const FiguresHeadActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const FiguresActionBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.active};
+  }
+`
+
+const FiguresToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const FiguresFilterGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+`
+
+const FiguresFilterChip = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.active : theme.colors.text.primary};
+  }
+`
+
+const FiguresFilterCount = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+`
+
+const FiguresToolbarRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const FiguresSearchInput = styled.input`
+  width: min(240px, 100%);
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.active};
+  }
+`
+
+const FiguresViewToggle = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding-left: 8px;
+`
+
+const FiguresViewBtn = styled.button<{ $active: boolean }>`
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  cursor: pointer;
+`
+
+const FiguresLedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @media (min-width: 760px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const FiguresLedgerRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 760px) {
+    &:nth-child(even) {
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+  }
+`
+
+const FiguresLedgerMainBtn = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+`
+
+const FiguresAvatar = styled.div`
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+
+const FiguresPersonMeta = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+`
+
+const FiguresNameLine = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const FiguresPersonName = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const FiguresRoleBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.active};
+  background: ${({ theme }) => theme.colors.activeLight};
+  white-space: nowrap;
+  flex-shrink: 0;
+`
+
+const FiguresLifespanText = styled.span`
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const FiguresDetailBtn = styled.button`
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.active};
+    background: ${({ theme }) => theme.colors.activeLight};
+  }
+`
+
+const FiguresCardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  padding-top: 12px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+`
+
+const FiguresNoMatch = styled.p`
+  margin: 0;
+  padding: 20px 0;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const FiguresEmptySpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const FiguresEmptySpecCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 14px;
+  min-width: 0;
+
+  & + & {
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  @media (min-width: 720px) {
+    & + & {
+      border-top: none;
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const FiguresEmptySpecTitle = styled.div`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const FiguresEmptySpecDesc = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const FiguresEmptySpecAction = styled.button`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.activeLight};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.active};
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.9;
+  }
+`
 
 /* 역사 국가의 행정조직 탭 = 정체 + 안내 한 줄 */
 const HistoricalGovernmentPane = styled.div`

@@ -240,17 +240,20 @@ function CountryDetailInner({
     const historicalInitialTab =
       initialDetailTab === 'political-system'
         ? ('government' as const)
-        : initialDetailTab === 'heads' ||
-            initialDetailTab === 'regions' ||
-            initialDetailTab === 'government' ||
-            initialDetailTab === 'elections' ||
-            initialDetailTab === 'laws' ||
-            initialDetailTab === 'ethnicity' ||
-            initialDetailTab === 'treaty' ||
-            initialDetailTab === 'trade' ||
-            initialDetailTab === 'companies'
-          ? initialDetailTab
-          : undefined
+        : initialDetailTab === 'persons'
+          ? ('figures' as const)
+          : initialDetailTab === 'events' ||
+              initialDetailTab === 'heads' ||
+              initialDetailTab === 'regions' ||
+              initialDetailTab === 'government' ||
+              initialDetailTab === 'elections' ||
+              initialDetailTab === 'laws' ||
+              initialDetailTab === 'ethnicity' ||
+              initialDetailTab === 'treaty' ||
+              initialDetailTab === 'trade' ||
+              initialDetailTab === 'companies'
+            ? initialDetailTab
+            : undefined
     return (
       <HistoricalCountryDetail
         country={country}

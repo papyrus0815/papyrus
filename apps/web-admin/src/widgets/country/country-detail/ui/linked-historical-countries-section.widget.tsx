@@ -1,26 +1,14 @@
 /**
- * 연결된 역사적 국가와 관계 섹션
- * - 현대 국가 상세 > 대시보드 탭에서 사용
- * - 탭: 목록 | 흐름도 (역대 수반 계보도 스타일 참조)
- * - 변천·소속·수평 관계 정보를 모두 표시
- * - 깔끔하고 트렌디한 디자인
+ * 현대 국가 상세 > '과거 국가' 탭
+ * - 무컨테이너 헤어라인 4칸 KPI 요약 바 + 분류/검색 필터 바 + 2열 과거 국가 원장 + LineageFlow 계보도 통합
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 
-import { motion } from 'framer-motion'
-import {
-  FiArrowRight,
-  FiCheckCircle,
-  FiHome,
-  FiUsers,
-  FiX,
-} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getStateTypeLabel } from '@/entities/historical-country/lib/utils'
-import { useThemeStore } from '@/shared/styles/theme.store'
 import {
   type HistoricalCountryMembershipDto,
   type HistoricalCountryRelationDto,
@@ -29,554 +17,21 @@ import {
   type HistoricalRelationType,
   type TransitionEventType,
 } from '@/shared/api/historical-countries'
+import { getUploadImageUrl } from '@/shared/api/upload'
+import { compareByCountryStart, formatCountryPeriod } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
-import * as CountryStyles from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
 
+import { classifyLinkedHistorical } from '../model/linked-historical-classify'
 import {
   MEMBERSHIP_ROLE_LABELS,
   RELATION_TYPE_LABELS,
   TRANSITION_EVENT_LABELS,
   TRANSITION_SCOPE_LABELS,
 } from '../model/linked-historical-labels'
-import {
-  getChains,
-  getCountryYearRange,
-  getMainPathAndBranchRows,
-} from '../model/linked-historical-flow-graph'
-import { classifyLinkedHistorical } from '../model/linked-historical-classify'
 import { useLinkedHistoricalData } from '../model/use-linked-historical-data.hook'
-
-/* 행정조직·인물과 동일: 단일 악센트, 회색 톤 */
-const MAIN = '#6366f1'
-const BORDER = '#e5e7eb'
-const MUTED = '#64748b'
-const TITLE = '#0f172a'
-
-// 라벨 상수는 ../model/linked-historical-labels로 이동됨
-
-/** 관계 정보가 비어있을 때의 안정적 fallback — 매 렌더 새 객체 생성 방지. */
-const EMPTY_RELS: {
-  transitions: HistoricalCountryTransitionDto[]
-  relations: HistoricalCountryRelationDto[]
-  memberships: HistoricalCountryMembershipDto[]
-} = { transitions: [], relations: [], memberships: [] }
-
-/** 흐름도 카드 최소 폭(%) — 한쪽 연도만 알려진 국가의 클릭 영역 확보용. */
-const MIN_FLOW_WIDTH_PCT = 1.5
-
-/**
- * 목록을 전신/구성국/유산 3버킷으로 접기 시작하는 최소 연결 개수.
- * 이보다 적으면 평면 나열이 더 읽기 쉬워 flat 유지(소형국은 애초에 '많다' 문제가 없다).
- */
-const LINKED_BUCKET_THRESHOLD = 8
-
-/** 연결된 역사적 국가가 없을 때 메시지 — list/flow 모드 공통. */
-const LINKED_EMPTY_MESSAGE =
-  '이 현대 국가에 연결된 역사적 국가가 없습니다. 역사적 국가를 등록한 뒤, 해당 국가 편집에서 「연결할 현대 국가」로 이 국가를 지정하면 여기에 표시됩니다.'
-
-const sectionLabelStyle: React.CSSProperties = {
-  marginBottom: 18,
-  fontSize: 12,
-  fontWeight: 600,
-  color: '#64748b',
-  lineHeight: 1.4,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  return (
-    <div style={{ ...sectionLabelStyle, color: isDark ? '#a1a1aa' : '#64748b' }}>
-      {children}
-    </div>
-  )
-}
-
-function formatPeriod(h: {
-  startEra?: string | null
-  startYear?: number | null
-  endEra?: string | null
-  endYear?: number | null
-}): string {
-  const start = h.startYear
-    ? `${h.startEra === 'BC' ? '기원전 ' : ''}${h.startYear}년`
-    : ''
-  const end = h.endYear
-    ? `${h.endEra === 'BC' ? '기원전 ' : ''}${h.endYear}년`
-    : ''
-  if (!start && !end) return '—'
-  if (!start) return `~ ${end}`
-  if (!end) return `${start} ~`
-  return `${start} ~ ${end}`
-}
-
-/* 행정조직 StatCard와 동일: 흰 배경, 테두리, 아이콘만 악센트 */
-const StatCardWrap = styled.div`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
-  border: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
-  border-radius: 16px;
-  padding: 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
-  }
-`
-
-function StatCard({
-  icon,
-  title,
-  value,
-  unit,
-}: {
-  icon: React.ReactNode
-  title: string
-  value: string | number
-  unit: string
-}) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  return (
-    <StatCardWrap>
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 12,
-          background: isDark ? '#2a2a2a' : '#f3f4f6',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: MAIN,
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 11,
-            color: isDark ? '#a1a1aa' : MUTED,
-            marginBottom: 4,
-            fontWeight: 600,
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {title}
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: 6,
-            flexWrap: 'wrap',
-          }}
-        >
-          <span
-            style={{
-              fontSize: 24,
-              fontWeight: 700,
-              color: isDark ? '#f5f5f5' : TITLE,
-              letterSpacing: '-0.03em',
-              lineHeight: 1.2,
-            }}
-          >
-            {value}
-          </span>
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 500,
-              color: isDark ? '#a1a1aa' : MUTED,
-            }}
-          >
-            {unit}
-          </span>
-        </div>
-      </div>
-    </StatCardWrap>
-  )
-}
-
-/** 역대 수반 계보도와 동일한 탭 스타일 */
-/* 행정조직 탭과 동일: pill 배경, 활성 = 흰 배경 + 인디고 글자 */
-const ViewModeTabs = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
-  border-radius: 20px;
-  width: fit-content;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`
-
-const ViewModeTab = styled.button<{ $active?: boolean }>`
-  flex: 0 0 auto;
-  padding: 10px 18px;
-  border-radius: 14px;
-  border: none;
-  background: ${({ $active, theme }) =>
-    $active ? (theme.mode === 'dark' ? '#212121' : '#ffffff') : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? '#4f46e5' : theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
-  font-size: 13px;
-  font-weight: ${(p) => (p.$active ? '600' : '500')};
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
-  white-space: nowrap;
-  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
-  &:hover {
-    color: ${({ $active, theme }) =>
-      $active ? '#4f46e5' : theme.mode === 'dark' ? '#d1d5db' : '#475569'};
-    background: ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? '#212121'
-          : '#ffffff'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.08)'
-          : 'rgba(255,255,255,0.6)'};
-  }
-`
-
-const LoadingBarTrack = styled.div`
-  height: 4px;
-  width: 100%;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  border-radius: 2px;
-  overflow: hidden;
-`
-const LoadingBarFill = styled.div`
-  height: 100%;
-  width: 40%;
-  background: ${MAIN};
-  border-radius: 2px;
-  animation: loadingBar 1.2s ease-in-out infinite;
-  @keyframes loadingBar {
-    0% {
-      transform: translateX(-100%);
-    }
-    50% {
-      transform: translateX(250%);
-    }
-    100% {
-      transform: translateX(-100%);
-    }
-  }
-`
-
-const LinkedDataLoadingWrap = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  gap: 16px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : MUTED)};
-  font-size: 14px;
-  font-weight: 500;
-`
-const LinkedDataSpinner = styled.div`
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(99, 102, 241, 0.2);
-  border-top-color: ${MAIN};
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-`
-
-/** 흐름도: 하단 연도 축과 같은 가로 스케일 — 카드 left/width = 연도 구간 */
-const FLOW_ROW_HEIGHT = 128
-/** 이 연수 미만이면 카드 대신 필(툴팁) 표기 */
-const SHORT_DURATION_YEARS = 20
-
-/** 흐름도 컨텐츠 래퍼 — 스크롤은 상위(전체 영역)에서 처리, 여기서는 overflow 없음 */
-const FlowContentScroll = styled.div`
-  width: 100%;
-  min-width: 0;
-  padding-bottom: 20px;
-  display: flex;
-  flex-direction: column;
-`
-
-/** 흐름도 내부 — 연도 범위에 따라 최소 너비. 상위에서 스크롤되므로 flex:1 제거 */
-const FLOW_TIMELINE_BASE_MIN_WIDTH = 960
-const FLOW_PX_PER_YEAR = 6
-const FlowScrollInner = styled.div<{ $minWidth: number }>`
-  width: 100%;
-  min-width: ${(p) => p.$minWidth}px;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-`
-
-/** 흐름도 카드 영역 — FlowScrollInner와 동일 너비, flex:1로 남은 공간 채워 하단 연도축을 뷰 하단으로 */
-const FlowContent = styled.div`
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  flex: 1;
-  padding: 16px 0 32px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  box-sizing: border-box;
-`
-
-/** 한 계보 한 줄 — 너비 100% = minYear~maxYear, 카드는 연도 비율로 위치·너비 */
-const FlowRow = styled.div`
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  height: ${FLOW_ROW_HEIGHT}px;
-  box-sizing: border-box;
-`
-
-/** 카드: left%·width% = 하단 연도 축과 동일 스케일 (연도 구간 정확히).
- * 호출자가 이미 MIN_FLOW_WIDTH_PCT로 클램프하지만, props가 우회될 가능성에 대비한 데드 가드. */
-const FlowCard = styled.button<{ $leftPct: number; $widthPct: number }>`
-  position: absolute;
-  left: ${(p) => p.$leftPct}%;
-  width: ${(p) => Math.max(MIN_FLOW_WIDTH_PCT, p.$widthPct)}%;
-  top: 0;
-  height: 100%;
-  padding: 14px 16px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
-  border: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  box-sizing: border-box;
-
-  &:hover {
-    border-color: #c7d2fe;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
-    transform: translateY(-2px);
-  }
-`
-
-/** 짧은 기간(10년 미만) 국가용 필 — 연도 위치 유지, 툴팁으로 전체 정보 */
-const FlowCardPill = styled.button<{ $leftPct: number; $widthPct: number }>`
-  position: absolute;
-  left: ${(p) => p.$leftPct}%;
-  width: ${(p) => Math.max(MIN_FLOW_WIDTH_PCT, p.$widthPct)}%;
-  top: 50%;
-  transform: translateY(-50%);
-  min-height: 40px;
-  padding: 8px 12px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
-  border: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
-  cursor: pointer;
-  text-align: center;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  box-sizing: border-box;
-
-  &:hover {
-    border-color: #c7d2fe;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#f5f3ff'};
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
-  }
-`
-
-/** 카드와 카드 경계(연도 이어짐) 표시 — 하단 축과 맞는 x 위치 */
-const FlowConnector = styled.div<{ $leftPct: number }>`
-  position: absolute;
-  left: ${(p) => p.$leftPct}%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
-  border: 1px solid #c7d2fe;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1;
-  pointer-events: none;
-  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.1);
-`
-
-/** 하단 연도 축 래퍼 — 카드와 동일 너비, 카드↔막대바 간격 충분히 확보 */
-const FlowBottomAxisWrap = styled.div`
-  width: 100%;
-  min-width: 0;
-  margin-top: 24px;
-  padding-top: 40px;
-  padding-bottom: 16px;
-  flex-shrink: 0;
-  box-sizing: border-box;
-`
-
-const FlowBottomAxisTrack = styled.div`
-  position: relative;
-  width: 100%;
-  height: 44px;
-  box-sizing: border-box;
-`
-
-const FlowBottomAxisBar = styled.div`
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 14px;
-  height: 5px;
-  background: linear-gradient(90deg, #c7d2fe 0%, #a5b4fc 50%, #818cf8 100%);
-  border-radius: 3px;
-  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.15);
-`
-
-const FlowBottomAxisLabel = styled.span<{ $leftPct: number }>`
-  position: absolute;
-  left: ${(p) => p.$leftPct}%;
-  transform: translateX(-50%);
-  bottom: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : MUTED)};
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-`
-
-/** 관계 뱃지 — 행정조직 탭 버튼과 동일: 인디고 배경/텍스트 */
-const RelationBadge = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  color: #4f46e5;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
-  white-space: nowrap;
-`
-
-/** 전체 보기 모달 — 화면을 채우는 모달 */
-const FlowFullViewOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  box-sizing: border-box;
-`
-
-const FlowFullViewModal = styled.div`
-  width: 100%;
-  max-width: 100%;
-  height: 100%;
-  max-height: 100%;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
-  border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-sizing: border-box;
-`
-
-const FlowFullViewHeader = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
-`
-
-const FlowFullViewTitle = styled.h2`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : TITLE)};
-`
-
-const FlowFullViewCloseBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
-  border: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    color 0.2s,
-    border-color 0.2s;
-
-  &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : TITLE)};
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${MAIN};
-    outline-offset: 2px;
-  }
-`
-
-const FlowFullViewBody = styled.div`
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 24px;
-  box-sizing: border-box;
-`
+import * as DashboardStyles from './country-detail-dashboard.styles'
+import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
+import { LineageFlow } from './dashboard-panels/lineage-flow'
 
 export interface LinkedHistoricalCountriesSectionProps {
   country: UnifiedCountry
@@ -586,57 +41,70 @@ type HistoricalCountryItem = NonNullable<
   NonNullable<UnifiedCountry['historicalCountries']>[number]
 >
 
+type CategoryFilterKey =
+  | 'all'
+  | 'PREDECESSOR'
+  | 'CONSTITUENT'
+  | 'HERITAGE'
+  | 'withRelations'
 
-const FLOW_ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4] as const
-const DEFAULT_FLOW_ZOOM_INDEX = 2 // 1.0 (100%)
+const EMPTY_RELS: {
+  transitions: HistoricalCountryTransitionDto[]
+  relations: HistoricalCountryRelationDto[]
+  memberships: HistoricalCountryMembershipDto[]
+} = { transitions: [], relations: [], memberships: [] }
+
+const LINK_KIND_LABEL: Record<string, string> = {
+  PREDECESSOR: '직계 전신',
+  CONSTITUENT: '구성 정치체',
+  HERITAGE: '역사 유산',
+}
+
+function toSignedYear(
+  era: string | null | undefined,
+  year: number | null | undefined,
+): number | null {
+  if (year == null) return null
+  return era === 'BC' ? -Math.abs(year) : Math.abs(year)
+}
+
+function formatSignedYearShort(signedYear: number | null): string | null {
+  if (signedYear == null) return null
+  return signedYear < 0 ? `BC ${Math.abs(signedYear)}년` : `${signedYear}년`
+}
 
 export function LinkedHistoricalCountriesSection({
   country,
 }: LinkedHistoricalCountriesSectionProps) {
   const navigate = useNavigate()
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  const list = country.historicalCountries ?? []
-  const count = list.length
-  const [viewMode, setViewMode] = useState<'list' | 'flow'>('list')
-  const [flowFullViewOpen, setFlowFullViewOpen] = useState(false)
-  const [flowZoomIndex, setFlowZoomIndex] = useState<number>(
-    DEFAULT_FLOW_ZOOM_INDEX,
+  const rawList = country.historicalCountries ?? []
+  const list = useMemo(
+    () => [...rawList].sort(compareByCountryStart),
+    [rawList],
   )
-  const flowZoomScale = FLOW_ZOOM_STEPS[flowZoomIndex] ?? 1
-  const flowZoomPercent = Math.round(flowZoomScale * 100)
-  const canFlowZoomOut = flowZoomIndex > 0
-  const canFlowZoomIn = flowZoomIndex < FLOW_ZOOM_STEPS.length - 1
-  const handleFlowZoomOut = () =>
-    setFlowZoomIndex((prev) => Math.max(0, prev - 1))
-  const handleFlowZoomIn = () =>
-    setFlowZoomIndex((prev) => Math.min(FLOW_ZOOM_STEPS.length - 1, prev + 1))
-  const handleFlowZoomReset = () => setFlowZoomIndex(DEFAULT_FLOW_ZOOM_INDEX)
+  const count = list.length
 
-  // 전체 보기 모달 — ESC로 닫기 (키보드 사용자가 갇히지 않도록)
-  useEffect(() => {
-    if (!flowFullViewOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setFlowFullViewOpen(false)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [flowFullViewOpen])
+  const [viewMode, setViewMode] = useState<'list' | 'flow'>('list')
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterKey>('all')
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const linkedIds = useMemo(() => list.map((h) => h.id), [list])
+  const linkedIds = useMemo(() => list.map((item) => item.id), [list])
   const {
     transitions,
     relations,
     memberships,
     isLoading: isLinkedDataLoading,
   } = useLinkedHistoricalData(linkedIds)
+
   const idToCountry = useMemo(() => {
-    const m = new Map<string, (typeof list)[0]>()
-    list.forEach((h) => m.set(h.id, h))
-    return m
+    const map = new Map<string, HistoricalCountryItem>()
+    for (const item of list) {
+      map.set(item.id, item)
+    }
+    return map
   }, [list])
 
-  /** 국가별 관계 정보 집계 */
+  /** 국가별 변천·수평·소속 관계 집계 */
   const countryRelations = useMemo(() => {
     const map = new Map<
       string,
@@ -646,50 +114,45 @@ export function LinkedHistoricalCountriesSection({
         memberships: HistoricalCountryMembershipDto[]
       }
     >()
-    list.forEach((h) => {
-      map.set(h.id, { transitions: [], relations: [], memberships: [] })
-    })
-    transitions.forEach((t) => {
-      map.get(t.predecessorId)?.transitions.push(t)
-      map.get(t.successorId)?.transitions.push(t)
-    })
-    relations.forEach((r) => {
-      map.get(r.subjectCountryId)?.relations.push(r)
-      map.get(r.objectCountryId)?.relations.push(r)
-    })
-    memberships.forEach((m) => {
-      map.get(m.historicalCountryId)?.memberships.push(m)
-      map.get(m.memberCountryId)?.memberships.push(m)
-    })
+    for (const item of list) {
+      map.set(item.id, { transitions: [], relations: [], memberships: [] })
+    }
+    for (const transition of transitions) {
+      map.get(transition.predecessorId)?.transitions.push(transition)
+      if (transition.successorId !== transition.predecessorId) {
+        map.get(transition.successorId)?.transitions.push(transition)
+      }
+    }
+    for (const relation of relations) {
+      map.get(relation.subjectCountryId)?.relations.push(relation)
+      if (relation.objectCountryId !== relation.subjectCountryId) {
+        map.get(relation.objectCountryId)?.relations.push(relation)
+      }
+    }
+    for (const membership of memberships) {
+      map.get(membership.historicalCountryId)?.memberships.push(membership)
+      if (membership.memberCountryId !== membership.historicalCountryId) {
+        map.get(membership.memberCountryId)?.memberships.push(membership)
+      }
+    }
     return map
   }, [list, transitions, relations, memberships])
 
-  /**
-   * 표시용 3버킷 분류 — 전신(펼침)/구성국(접힘)/유산(접힘).
-   * ⚠️ 표시 전용 파생이다. 브리지 행·스코프 합산과 무관하며 어떤 노드도 사라지지 않는다.
-   * 계보가 잡히지 않거나(트렁크 없음) 소형국이면 버킷 이득이 없어 flat으로 폴백.
-   */
-  const linkedBuckets = useMemo(() => {
-    // 정본은 서버가 실어준 linkKind. 모든 항목에 있으면 그걸 쓰고, 없으면(구버전 API·
-    // 캐시) 클라 분류로 폴백한다. 둘은 동일 알고리즘이라 결과가 같다.
+  /** 직계 전신 / 구성 정치체 / 역사 유산 분류 */
+  const classification = useMemo(() => {
     const kindById = new Map<string, string>()
     const hasServerKind =
       list.length > 0 && list.every((item) => item.linkKind != null)
     if (hasServerKind) {
-      for (const item of list) kindById.set(item.id, item.linkKind as string)
-    } else {
-      const toSigned = (
-        era: string | null | undefined,
-        year: number | null | undefined,
-      ): number | null => {
-        if (year == null) return null
-        return era === 'BC' ? -Math.abs(year) : Math.abs(year)
+      for (const item of list) {
+        kindById.set(item.id, String(item.linkKind))
       }
+    } else {
       const { kindById: clientKind } = classifyLinkedHistorical({
         nodes: list.map((item) => ({
           id: item.id,
-          startYear: toSigned(item.startEra, item.startYear),
-          endYear: toSigned(item.endEra, item.endYear),
+          startYear: toSignedYear(item.startEra, item.startYear),
+          endYear: toSignedYear(item.endEra, item.endYear),
         })),
         transitions: transitions.map((transition) => ({
           predecessorId: transition.predecessorId,
@@ -701,8 +164,11 @@ export function LinkedHistoricalCountriesSection({
           isLeadingMember: membership.isLeadingMember,
         })),
       })
-      for (const [id, kind] of clientKind) kindById.set(id, kind)
+      for (const [nodeId, kind] of clientKind) {
+        kindById.set(nodeId, kind)
+      }
     }
+
     const predecessors = list.filter(
       (item) => kindById.get(item.id) === 'PREDECESSOR',
     )
@@ -712,2267 +178,1101 @@ export function LinkedHistoricalCountriesSection({
     const heritage = list.filter(
       (item) => kindById.get(item.id) === 'HERITAGE',
     )
-    // 전신 계보가 2 이상 잡혀야 버킷팅(서버 flat 폴백 시 전신 0 → 평면 유지).
-    const shouldBucket =
-      list.length > LINKED_BUCKET_THRESHOLD &&
-      predecessors.length >= 2 &&
-      constituents.length + heritage.length > 0
-    return { predecessors, constituents, heritage, shouldBucket }
+    return { kindById, predecessors, constituents, heritage }
   }, [list, transitions, memberships])
 
-  /** 흐름도용: 변천 있으면 체인별, 없으면 전체를 한 줄로. 연방-구성원도 같은 체인으로 묶어 선 연결 */
-  const { chains, transitionByEdge } = useMemo(() => {
-    const edgeMap = new Map<string, HistoricalCountryTransitionDto>()
-    transitions.forEach((t) => {
-      edgeMap.set(`${t.predecessorId}\t${t.successorId}`, t)
-    })
-    const nodeIds = list.map((h) => h.id)
-    if (nodeIds.length === 0) {
-      return { chains: [] as string[][], transitionByEdge: edgeMap }
-    }
-    const edges: { predecessorId: string; successorId: string }[] = transitions.map((t) => ({
-      predecessorId: t.predecessorId,
-      successorId: t.successorId,
-    }))
-    memberships.forEach((m) => {
-      if (nodeIds.includes(m.memberCountryId) && nodeIds.includes(m.historicalCountryId)) {
-        edges.push({
-          predecessorId: m.memberCountryId,
-          successorId: m.historicalCountryId,
-        })
+  /** 통사 연도 범위 */
+  const spanSummary = useMemo(() => {
+    let minSigned: number | null = null
+    let maxSigned: number | null = null
+    for (const item of list) {
+      const startSigned = toSignedYear(item.startEra, item.startYear)
+      const endSigned = toSignedYear(item.endEra, item.endYear)
+      if (startSigned != null) {
+        minSigned =
+          minSigned == null ? startSigned : Math.min(minSigned, startSigned)
+        maxSigned =
+          maxSigned == null ? startSigned : Math.max(maxSigned, startSigned)
       }
-    })
-    if (edges.length === 0) {
-      return {
-        chains: [nodeIds],
-        transitionByEdge: edgeMap,
+      if (endSigned != null) {
+        minSigned =
+          minSigned == null ? endSigned : Math.min(minSigned, endSigned)
+        maxSigned =
+          maxSigned == null ? endSigned : Math.max(maxSigned, endSigned)
       }
     }
-    const chainsList = getChains(nodeIds, edges)
-    return { chains: chainsList, transitionByEdge: edgeMap }
-  }, [list, transitions, memberships])
-
-  /** 메인 계보(최장 경로) 1행 + 합류 브랜치 각 1행. 메인 행은 계승(SUCCESSION)만, 멸망 등은 브랜치로. 동일 길이면 가장 최근(endYear) 계보를 메인으로 */
-  const flowRowsByChain = useMemo(() => {
-    const transitionEdges = transitions.map((t) => ({
-      predecessorId: t.predecessorId,
-      successorId: t.successorId,
-    }))
-    const getNodeEndYear = (id: string): number | null => {
-      const h = idToCountry.get(id) as
-        | { endYear?: number | null; end_year?: number; endEra?: string | null; end_era?: string }
-        | undefined
-      if (!h) return null
-      const y = h.endYear ?? h.end_year
-      if (y == null) return null
-      const era = h.endEra ?? h.end_era
-      return era === 'BC' ? -Math.abs(Number(y)) : Number(y)
+    return {
+      minLabel: formatSignedYearShort(minSigned),
+      maxLabel: formatSignedYearShort(maxSigned),
+      totalYears:
+        minSigned != null && maxSigned != null && maxSigned >= minSigned
+          ? maxSigned - minSigned
+          : null,
     }
-    return chains.map((chain) =>
-      getMainPathAndBranchRows(
-        chain,
-        transitionEdges,
-        transitionByEdge,
-        getNodeEndYear,
-      ),
-    )
-  }, [chains, transitions, transitionByEdge, idToCountry])
-
-  /** 흐름도 좌측 연도 바용: 연결된 국가들의 연도 범위 (BC는 음수). 숫자 보정 적용 */
-  const flowYearRange = useMemo(() => {
-    const toNum = (v: number | null | undefined): number | null => {
-      if (v == null) return null
-      const n = typeof v === 'number' ? v : Number(v)
-      return Number.isFinite(n) ? n : null
-    }
-    let minY: number | null = null
-    let maxY: number | null = null
-    list.forEach((h) => {
-      const startYear = toNum(h.startYear)
-      const endYear = toNum(h.endYear)
-      const sy =
-        startYear != null
-          ? h.startEra === 'BC'
-            ? -Math.abs(startYear)
-            : Math.abs(startYear)
-          : null
-      const ey =
-        endYear != null
-          ? h.endEra === 'BC'
-            ? -Math.abs(endYear)
-            : Math.abs(endYear)
-          : null
-      if (sy != null) {
-        minY = minY == null ? sy : Math.min(minY, sy)
-        maxY = maxY == null ? sy : Math.max(maxY, sy)
-      }
-      if (ey != null) {
-        minY = minY == null ? ey : Math.min(minY, ey)
-        maxY = maxY == null ? ey : Math.max(maxY, ey)
-      }
-    })
-    const currentYear = new Date().getFullYear()
-    if (minY == null || maxY == null) {
-      const c = minY ?? maxY ?? currentYear
-      return {
-        minYear: c - 100,
-        maxYear: Math.max(c + 100, currentYear),
-        labels: [c - 100, c, currentYear] as number[],
-        currentYear,
-      }
-    }
-    const maxYExtended = Math.max(maxY, currentYear)
-    if (minY === maxY) {
-      const pad = Math.max(50, Math.abs(minY) / 10)
-      return {
-        minYear: minY - pad,
-        maxYear: Math.max(maxY + pad, currentYear),
-        labels: [minY - pad, minY, currentYear] as number[],
-        currentYear,
-      }
-    }
-    const range = maxYExtended - minY
-    const step =
-      range <= 200 ? 50 : range <= 500 ? 100 : range <= 2000 ? 200 : 500
-    const labels: number[] = []
-    const start = Math.floor(minY / step) * step
-    for (let y = start; y <= maxYExtended; y += step) {
-      if (y >= minY - step && y <= maxYExtended) labels.push(y)
-    }
-    if (labels.length === 0) labels.push(minY, maxYExtended)
-    const minYVal = minY
-    const roundYears = [1800, 1900, 2000]
-    roundYears.forEach((y) => {
-      if (minYVal != null && y >= minYVal && y <= maxYExtended && !labels.includes(y))
-        labels.push(y)
-    })
-    if (maxYExtended >= currentYear && !labels.includes(currentYear))
-      labels.push(currentYear)
-    labels.sort((a, b) => a - b)
-    return { minYear: minY, maxYear: maxYExtended, labels, currentYear }
   }, [list])
 
-  /** 행별 카드 위치(%) — 연결선 좌표 계산용 */
-  const flowLayout = useMemo(() => {
-    const range = flowYearRange.maxYear - flowYearRange.minYear
-    const toPct = (y: number) =>
-      range === 0
-        ? 0
-        : ((y - flowYearRange.minYear) / range) * 100
-    return flowRowsByChain.map((rows) =>
-      rows.map((row) =>
-        row.map((id) => {
-          const h = idToCountry.get(id)
-          const yr = h ? getCountryYearRange(h) : null
-          if (!h || !yr) return { id, leftPct: 0, widthPct: 0 }
-          const leftPct = toPct(yr.startYear)
-          const endPct = toPct(yr.endYear)
-          // 클릭 영역 확보 — 한쪽 연도만 알려진 국가(width≈0)도 최소 폭으로 보이게.
-          const widthPct = Math.max(MIN_FLOW_WIDTH_PCT, endPct - leftPct)
-          return { id, leftPct, widthPct }
-        }),
-      ),
-    )
-  }, [flowRowsByChain, flowYearRange, idToCountry])
-
-  /** transitions를 predecessorId → transition Map으로 — flowConnectors 빌드 시 O(1) lookup. */
-  const transitionByPredecessor = useMemo(() => {
-    const m = new Map<string, HistoricalCountryTransitionDto>()
-    for (const t of transitions) {
-      // 같은 predecessor가 둘 이상이면 첫 번째만 사용 (이전 동작과 동일).
-      if (!m.has(t.predecessorId)) m.set(t.predecessorId, t)
-    }
-    return m
-  }, [transitions])
-
-  /** 브랜치 → 메인 행 연결: fromId/toId 포함 (뱃지·한가닥선·요약용). 계승·동군연합·연방(멤버십) 포함 */
-  const flowConnectors = useMemo(() => {
-    const out: {
-      fromId: string
-      toId: string
-      fromGlobalRow: number
-      toGlobalRow: number
-      fromCenterPct: number
-      toCenterPct: number
-      type: 'successor' | 'personal_union' | 'membership'
-      eventType?: TransitionEventType
-      membershipRole?: string
-      isLeadingMember?: boolean
-    }[] = []
-    let globalRowOffset = 0
-    flowRowsByChain.forEach((rows, chainIdx) => {
-      const mainRowIds = new Set(rows[0])
-      const mainLayout = flowLayout[chainIdx]?.[0] ?? []
-      const toCenter = (nodeId: string) => {
-        const p = mainLayout.find((x) => x.id === nodeId)
-        return p ? p.leftPct + p.widthPct / 2 : 50
-      }
-      for (let rowIdx = 1; rowIdx < rows.length; rowIdx++) {
-        const rowLayout = flowLayout[chainIdx]?.[rowIdx] ?? []
-        for (const { id: branchId, leftPct, widthPct } of rowLayout) {
-          const fromCenterPct = leftPct + widthPct / 2
-          const fromGlobalRow = globalRowOffset + rowIdx
-          const toGlobalRow = globalRowOffset + 0
-          const rels = countryRelations.get(branchId) ?? EMPTY_RELS
-          const successorTransition = transitionByPredecessor.get(branchId)
-          const successorId = successorTransition?.successorId
-          if (successorId && mainRowIds.has(successorId)) {
-            out.push({
-              fromId: branchId,
-              toId: successorId,
-              fromGlobalRow,
-              toGlobalRow,
-              fromCenterPct,
-              toCenterPct: toCenter(successorId),
-              type: 'successor',
-              eventType: successorTransition?.eventType,
-            })
-          }
-          rels.relations
-            .filter(
-              (r) =>
-                r.relationType === 'PERSONAL_UNION' &&
-                (r.subjectCountryId === branchId ||
-                  r.objectCountryId === branchId),
-            )
-            .forEach((r) => {
-              const otherId =
-                r.subjectCountryId === branchId
-                  ? r.objectCountryId
-                  : r.subjectCountryId
-              if (mainRowIds.has(otherId)) {
-                out.push({
-                  fromId: branchId,
-                  toId: otherId,
-                  fromGlobalRow,
-                  toGlobalRow,
-                  fromCenterPct,
-                  toCenterPct: toCenter(otherId),
-                  type: 'personal_union',
-                })
-              }
-            })
-          rels.memberships.forEach((m) => {
-            if (m.memberCountryId !== branchId) return
-            const parentId = m.historicalCountryId
-            if (!mainRowIds.has(parentId)) return
-            out.push({
-              fromId: branchId,
-              toId: parentId,
-              fromGlobalRow,
-              toGlobalRow,
-              fromCenterPct,
-              toCenterPct: toCenter(parentId),
-              type: 'membership',
-              membershipRole: m.role,
-              isLeadingMember: m.isLeadingMember ?? false,
-            })
-          })
-        }
-      }
-      // 메인 행 카드 → 브랜치 행 변천선 (예: 아프샤르→이란 숭고국 멸망). 멸망선이 사라지지 않도록
-      const mainLayout0 = flowLayout[chainIdx]?.[0] ?? []
-      for (let i = 0; i < rows[0].length; i++) {
-        const mainId = rows[0][i]
-        const successorTransition = transitionByPredecessor.get(mainId)
-        const successorId = successorTransition?.successorId
-        if (!successorId || mainRowIds.has(successorId)) continue
-        const branchRowIdx = rows.findIndex(
-          (row, idx) => idx >= 1 && row.includes(successorId),
+  const withRelationsCount = useMemo(
+    () =>
+      list.filter((item) => {
+        const rels = countryRelations.get(item.id) ?? EMPTY_RELS
+        return (
+          rels.transitions.length +
+            rels.relations.length +
+            rels.memberships.length >
+          0
         )
-        if (branchRowIdx < 0) continue
-        const branchLayout = flowLayout[chainIdx]?.[branchRowIdx] ?? []
-        const toNode = branchLayout.find((x) => x.id === successorId)
-        const fromNode = mainLayout0.find((x) => x.id === mainId)
-        if (!toNode || !fromNode) continue
-        out.push({
-          fromId: mainId,
-          toId: successorId,
-          fromGlobalRow: globalRowOffset + 0,
-          toGlobalRow: globalRowOffset + branchRowIdx,
-          fromCenterPct: fromNode.leftPct + fromNode.widthPct / 2,
-          toCenterPct: toNode.leftPct + toNode.widthPct / 2,
-          type: 'successor',
-          eventType: successorTransition?.eventType,
-        })
-      }
-      globalRowOffset += rows.length
-    })
-    return out
-  }, [flowRowsByChain, flowLayout, transitionByPredecessor, countryRelations])
-
-  /** 메인 행 카드별로 "들어오는" 브랜치 관계 (뱃지용). 계승·동군연합·연방 구성원 포함 */
-  const incomingRelationsByMainId = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        successor: Array<{ fromId: string; eventType?: TransitionEventType }>
-        personalUnion: string[]
-        membership: Array<{ id: string; role: string; isLeadingMember: boolean }>
-      }
-    >()
-    flowConnectors.forEach((c) => {
-      if (!map.has(c.toId))
-        map.set(c.toId, {
-          successor: [],
-          personalUnion: [],
-          membership: [],
-        })
-      const entry = map.get(c.toId)!
-      if (c.type === 'successor')
-        entry.successor.push({ fromId: c.fromId, eventType: c.eventType })
-      else if (c.type === 'personal_union') entry.personalUnion.push(c.fromId)
-      else if (c.type === 'membership' && c.membershipRole != null)
-        entry.membership.push({
-          id: c.fromId,
-          role: c.membershipRole,
-          isLeadingMember: c.isLeadingMember ?? false,
-        })
-    })
-    // 메인 행에서 같은 줄 이전 카드→현재 카드 변천도 배지에 포함 (잔드·아프샤르 둘 다 멸망 등)
-    flowRowsByChain.forEach((rows) => {
-      const mainRow = rows[0]
-      if (!mainRow) return
-      for (let i = 1; i < mainRow.length; i++) {
-        const prevId = mainRow[i - 1]
-        const toId = mainRow[i]
-        const t = transitionByEdge.get(`${prevId}\t${toId}`)
-        if (!t) continue
-        if (!map.has(toId))
-          map.set(toId, {
-            successor: [],
-            personalUnion: [],
-            membership: [],
-          })
-        map.get(toId)!.successor.push({
-          fromId: prevId,
-          eventType: t.eventType as TransitionEventType,
-        })
-      }
-    })
-    return map
-  }, [flowConnectors, flowRowsByChain, transitionByEdge])
-
-  /** 관계 유형별로 선을 분리 (계승 / 동군연합 / 연방 각각 따로, 끝에 해당 관계만 라벨) */
-  const flowConnectorsByBranch = useMemo(() => {
-    const byKey = new Map<
-      string,
-      { fromGlobalRow: number; fromCenterPct: number; toGlobalRow: number; type: 'successor' | 'personal_union' | 'membership'; list: typeof flowConnectors }
-    >()
-    flowConnectors.forEach((c) => {
-      const key = `${c.fromGlobalRow}\t${c.fromCenterPct}\t${c.type}`
-      if (!byKey.has(key))
-        byKey.set(key, {
-          fromGlobalRow: c.fromGlobalRow,
-          fromCenterPct: c.fromCenterPct,
-          toGlobalRow: c.toGlobalRow,
-          type: c.type,
-          list: [],
-        })
-      byKey.get(key)!.list.push(c)
-    })
-    return Array.from(byKey.values())
-  }, [flowConnectors])
-
-  const totalFlowRows = flowRowsByChain.reduce(
-    (s, rows) => s + rows.length,
-    0,
-  )
-  const FLOW_ROW_GAP = 20
-  const flowRowsTotalHeight =
-    totalFlowRows * FLOW_ROW_HEIGHT +
-    Math.max(0, totalFlowRows - 1) * FLOW_ROW_GAP
-
-  const flowMinWidth = Math.round(
-    Math.max(
-      FLOW_TIMELINE_BASE_MIN_WIDTH,
-      (flowYearRange.maxYear - flowYearRange.minYear) * FLOW_PX_PER_YEAR,
-    ) * flowZoomScale,
+      }).length,
+    [list, countryRelations],
   )
 
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 32,
-        padding: '36px 32px 48px',
-        background: isDark ? '#212121' : '#ffffff',
-        flex: viewMode === 'flow' ? '0 0 auto' : 1,
-        minHeight: viewMode === 'flow' ? 'auto' : 0,
-        position: 'relative',
-      }}
-    >
-      <CountryStyles.GlobalDashboardHero>
-        <CountryStyles.HeroContent>
-          <CountryStyles.HeroTextGroup>
-            <CountryStyles.HeroTitle>역사적 국가</CountryStyles.HeroTitle>
-            <CountryStyles.HeroSubtitle>
-              이 현대 국가에 연결된 역사적 국가의 변천·소속·수평 관계를 목록 또는 흐름도로 확인할 수 있습니다.
-            </CountryStyles.HeroSubtitle>
-          </CountryStyles.HeroTextGroup>
-        </CountryStyles.HeroContent>
-      </CountryStyles.GlobalDashboardHero>
+  const filteredList = useMemo(() => {
+    const lowered = searchQuery.trim().toLowerCase()
+    return list.filter((item) => {
+      const resolvedKind =
+        classification.kindById.get(item.id) ?? item.linkKind ?? null
+      const rels = countryRelations.get(item.id) ?? EMPTY_RELS
+      const hasAnyRel =
+        rels.transitions.length +
+          rels.relations.length +
+          rels.memberships.length >
+        0
 
-      {/* 탭: 목록 | 흐름도 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 20,
-          flexWrap: 'wrap',
-        }}
-      >
-        <ViewModeTabs
-          role="tablist"
-          aria-label="보기 방식"
-          onKeyDown={(e) => {
-            // 화살표 키로 탭 전환 — WAI-ARIA tabs 패턴.
-            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
-            e.preventDefault()
-            setViewMode((v) => (v === 'list' ? 'flow' : 'list'))
-          }}
-        >
-          <ViewModeTab
-            role="tab"
-            aria-selected={viewMode === 'list'}
-            tabIndex={viewMode === 'list' ? 0 : -1}
-            $active={viewMode === 'list'}
-            onClick={() => setViewMode('list')}
-          >
-            목록
-          </ViewModeTab>
-          <ViewModeTab
-            role="tab"
-            aria-selected={viewMode === 'flow'}
-            tabIndex={viewMode === 'flow' ? 0 : -1}
-            $active={viewMode === 'flow'}
-            onClick={() => setViewMode('flow')}
-          >
-            흐름도
-          </ViewModeTab>
-        </ViewModeTabs>
-        <span
-          style={{
-            fontSize: 13,
-            color: isDark ? '#a1a1aa' : '#64748b',
-            fontWeight: 500,
-          }}
-        >
-          {viewMode === 'list'
-            ? '연결된 역사적 국가를 카드 목록으로 볼 수 있습니다.'
-            : '전임·계승 국가 변천을 한눈에 볼 수 있습니다.'}
-        </span>
-      </div>
+      if (
+        categoryFilter === 'PREDECESSOR' ||
+        categoryFilter === 'CONSTITUENT' ||
+        categoryFilter === 'HERITAGE'
+      ) {
+        if (resolvedKind !== categoryFilter) return false
+      } else if (categoryFilter === 'withRelations' && !hasAnyRel) {
+        return false
+      }
 
-      {/* 로딩 인디케이터는 단일 — 본문 영역의 spinner+text 한 곳만. 상단 progress bar는 중복이라 제거. */}
-      {isLinkedDataLoading ? (
-        <LinkedDataLoadingWrap role="status" aria-live="polite">
-          <LinkedDataSpinner />
-          <span>변천·관계·소속 데이터를 불러오는 중...</span>
-        </LinkedDataLoadingWrap>
-      ) : viewMode === 'list' ? (
-        <>
-        <section aria-label="연결된 역사적 국가 요약">
-          <SectionLabel>요약 지표</SectionLabel>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-              gap: 20,
-            }}
-          >
-            {[
-              { icon: <FiHome size={24} strokeWidth={2} />, title: '연결된 역사적 국가', value: count, unit: '개' },
-              { icon: <FiArrowRight size={24} strokeWidth={2} />, title: '변천 관계', value: transitions.length, unit: '건' },
-              { icon: <FiUsers size={24} strokeWidth={2} />, title: '수평 관계', value: relations.length, unit: '건' },
-              { icon: <FiCheckCircle size={24} strokeWidth={2} />, title: '소속 관계', value: memberships.length, unit: '건' },
-            ].map((s) => (
-              <StatCard key={s.title} icon={s.icon} title={s.title} value={s.value} unit={s.unit} />
-            ))}
-          </div>
-        </section>
-        <section aria-label="연결된 역사적 국가 목록">
-          <SectionLabel>역사적 국가 목록</SectionLabel>
-          {count === 0 ? (
-            <EmptyCard>{LINKED_EMPTY_MESSAGE}</EmptyCard>
-          ) : linkedBuckets.shouldBucket ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <LinkedBucketGroup
-                title="직계 전신"
-                hint="이 국가로 이어진 주 계보"
-                tone={MAIN}
-                items={linkedBuckets.predecessors}
-                defaultOpen
-                idToCountry={idToCountry}
-                countryRelations={countryRelations}
-                onNavigate={(id) => navigate(pathKeys.countryDetail(id))}
-              />
-              {linkedBuckets.constituents.length > 0 && (
-                <LinkedBucketGroup
-                  title="구성 정치체"
-                  hint="당대 이 나라를 구성한 제후국·구성원"
-                  tone="#64748b"
-                  items={linkedBuckets.constituents}
-                  defaultOpen={false}
-                  idToCountry={idToCountry}
-                  countryRelations={countryRelations}
-                  onNavigate={(id) => navigate(pathKeys.countryDetail(id))}
-                />
-              )}
-              {linkedBuckets.heritage.length > 0 && (
-                <LinkedBucketGroup
-                  title="관련·유산 정치체"
-                  hint="영토를 공유한 고대·광역 정치체 등"
-                  tone="#94a3b8"
-                  items={linkedBuckets.heritage}
-                  defaultOpen={false}
-                  idToCountry={idToCountry}
-                  countryRelations={countryRelations}
-                  onNavigate={(id) => navigate(pathKeys.countryDetail(id))}
-                />
-              )}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {list.map((h, idx) => {
-                const rels = countryRelations.get(h.id) ?? EMPTY_RELS
-                return (
-                  <HistoricalCountryCard
-                    key={h.id}
-                    h={h}
-                    idx={idx}
-                    relations={rels}
-                    idToCountry={idToCountry}
-                    onDetail={() =>
-                      navigate(pathKeys.countryDetail(h.id))
-                    }
-                  />
-                )
-              })}
-            </div>
-          )}
-        </section>
-        </>
-      ) : (
-        <section
-          aria-label="국가 계보 흐름도"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            width: '100%',
-            minWidth: 0,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 12,
-              marginBottom: 18,
-            }}
-          >
-            <SectionLabel>국가 계보 흐름도</SectionLabel>
-            {count > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div
-                  role="group"
-                  aria-label="흐름도 배율 조절"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: 2,
-                    borderRadius: 10,
-                    background: isDark ? '#2a2a2a' : '#f1f5f9',
-                    border: `1px solid ${isDark ? '#3f3f46' : '#e2e8f0'}`,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={handleFlowZoomOut}
-                    disabled={!canFlowZoomOut}
-                    aria-label="축소"
-                    style={{
-                      width: 28,
-                      height: 28,
-                      border: 'none',
-                      borderRadius: 7,
-                      background: 'transparent',
-                      color: isDark ? '#e4e4e7' : '#334155',
-                      fontWeight: 700,
-                      fontSize: 15,
-                      cursor: canFlowZoomOut ? 'pointer' : 'default',
-                      opacity: canFlowZoomOut ? 1 : 0.35,
-                    }}
-                  >
-                    −
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFlowZoomReset}
-                    title="클릭하여 100%로 초기화"
-                    style={{
-                      minWidth: 52,
-                      height: 28,
-                      padding: '0 8px',
-                      border: 'none',
-                      borderRadius: 7,
-                      background:
-                        flowZoomIndex !== DEFAULT_FLOW_ZOOM_INDEX
-                          ? isDark
-                            ? '#18181b'
-                            : '#ffffff'
-                          : 'transparent',
-                      color:
-                        flowZoomIndex !== DEFAULT_FLOW_ZOOM_INDEX
-                          ? '#4f46e5'
-                          : isDark
-                            ? '#a1a1aa'
-                            : '#475569',
-                      fontWeight: 700,
-                      fontSize: 12,
-                      fontVariantNumeric: 'tabular-nums',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {flowZoomPercent}%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFlowZoomIn}
-                    disabled={!canFlowZoomIn}
-                    aria-label="확대"
-                    style={{
-                      width: 28,
-                      height: 28,
-                      border: 'none',
-                      borderRadius: 7,
-                      background: 'transparent',
-                      color: isDark ? '#e4e4e7' : '#334155',
-                      fontWeight: 700,
-                      fontSize: 15,
-                      cursor: canFlowZoomIn ? 'pointer' : 'default',
-                      opacity: canFlowZoomIn ? 1 : 0.35,
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFlowFullViewOpen(true)}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: '#4f46e5',
-                    background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
-                    border: '1px solid #c7d2fe',
-                    borderRadius: 10,
-                    cursor: 'pointer',
-                  }}
-                >
-                  전체 보기
-                </button>
-              </div>
-            )}
-          </div>
-          {count === 0 ? (
-            <EmptyCard>{LINKED_EMPTY_MESSAGE}</EmptyCard>
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 0,
-                width: '100%',
-                minWidth: flowMinWidth,
-              }}
-            >
-              <FlowContentScroll>
-                <FlowScrollInner $minWidth={flowMinWidth}>
-                  <FlowContent>
-                    {totalFlowRows > 0 &&
-                      flowConnectorsByBranch.length > 0 && (
-                        <div
-                          aria-hidden
-                          style={{
-                            position: 'absolute',
-                            left: 0,
-                            top: 0,
-                            width: '100%',
-                            height: flowRowsTotalHeight,
-                            pointerEvents: 'none',
-                            zIndex: 10,
-                          }}
-                        >
-                          <svg
-                            width="100%"
-                            height={flowRowsTotalHeight}
-                            style={{ display: 'block' }}
-                            preserveAspectRatio="none"
-                            viewBox={`0 0 100 ${flowRowsTotalHeight}`}
-                          >
-                            {flowConnectorsByBranch.map((group, i) => {
-                              const midX =
-                                group.list.reduce(
-                                  (s, c) => s + c.toCenterPct,
-                                  0,
-                                ) / group.list.length
-                              const fromX = group.fromCenterPct
-                              const rowCenter = (r: number) =>
-                                16 +
-                                (r + 0.5) * (FLOW_ROW_HEIGHT + FLOW_ROW_GAP) -
-                                FLOW_ROW_GAP / 2
-                              const fromY = rowCenter(group.fromGlobalRow)
-                              const toY = rowCenter(group.toGlobalRow)
-                              return (
-                                <line
-                                  key={i}
-                                  x1={fromX}
-                                  y1={fromY}
-                                  x2={midX}
-                                  y2={toY}
-                                  stroke="#a5b4fc"
-                                  strokeWidth={1.5}
-                                  strokeLinecap="round"
-                                  vectorEffect="non-scaling-stroke"
-                                />
-                              )
-                            })}
-                          </svg>
-                          {flowConnectorsByBranch.map((group, i) => {
-                            const midX =
-                              group.list.reduce(
-                                (s, c) => s + c.toCenterPct,
-                                0,
-                              ) / group.list.length
-                            const fromX = group.fromCenterPct
-                            const toY =
-                              16 +
-                              (group.toGlobalRow + 0.5) * (FLOW_ROW_HEIGHT + FLOW_ROW_GAP) -
-                              FLOW_ROW_GAP / 2
-                            const labelText =
-                              group.type === 'successor'
-                                ? (TRANSITION_EVENT_LABELS[
-                                    group.list[0]?.eventType as TransitionEventType
-                                  ] ?? '계승')
-                                : group.type === 'personal_union'
-                                  ? '동군연합'
-                                  : group.list[0]?.type === 'membership' && group.list[0]?.membershipRole
-                                    ? group.list[0].isLeadingMember
-                                      ? '연방·주축'
-                                      : (MEMBERSHIP_ROLE_LABELS[group.list[0].membershipRole as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? group.list[0].membershipRole)
-                                    : ''
-                            return (
-                              labelText ? (
-                                <div
-                                  key={`label-${i}`}
-                                  style={{
-                                    position: 'absolute',
-                                    left: `${midX}%`,
-                                    top: toY,
-                                    transform: 'translate(-50%, -100%)',
-                                    marginBottom: -4,
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: isDark ? '#a1a1aa' : '#64748b',
-                                    background: isDark ? '#1d1d1d' : '#f8fafc',
-                                    padding: '3px 8px',
-                                    borderRadius: 6,
-                                    border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                                  }}
-                                >
-                                  {labelText}
-                                </div>
-                              ) : null
-                            )
-                          })}
-                        </div>
-                      )}
-                    {flowRowsByChain.flatMap((rows, chainIdx) =>
-                      rows.map((orderedChain, rowIdx) => {
-                        const range =
-                          flowYearRange.maxYear - flowYearRange.minYear
-                        const toPct = (y: number) =>
-                          range === 0
-                            ? 0
-                            : ((y - flowYearRange.minYear) / range) * 100
-                        return (
-                          <FlowRow
-                            key={`${chainIdx}-${rowIdx}`}
-                          >
-                            {orderedChain.map((id, index) => {
-                              const h = idToCountry.get(id)
-                              const yr = h ? getCountryYearRange(h) : null
-                              if (!h || !yr) return null
-                              const leftPct = toPct(yr.startYear)
-                              const endPct = toPct(yr.endYear)
-                              // 한쪽 연도만 알려진 국가도 클릭 가능 폭 확보.
-                              const widthPct = Math.max(
-                                MIN_FLOW_WIDTH_PCT,
-                                endPct - leftPct,
-                              )
-                              const spanYears = yr.endYear - yr.startYear
-                              const isShortDuration =
-                                spanYears < SHORT_DURATION_YEARS
-                              const nextId = orderedChain[index + 1]
-                              const transition = nextId
-                                ? transitionByEdge.get(`${id}\t${nextId}`)
-                                : null
-                              const rels = countryRelations.get(id) ?? EMPTY_RELS
-                              const hasPersonalUnionWithNext =
-                                !!nextId &&
-                                !transition &&
-                                rels.relations.some(
-                                  (r) =>
-                                    (r.subjectCountryId === nextId ||
-                                      r.objectCountryId === nextId) &&
-                                    r.relationType === 'PERSONAL_UNION',
-                                )
-                              const connectorPct = toPct(yr.endYear)
-                            const periodText = formatPeriod({
-                              startEra: h.startEra,
-                              startYear: h.startYear,
-                              endEra: h.endEra,
-                              endYear: h.endYear,
-                            })
-                            const tooltipText = `${h.name} (${periodText})`
-                            return (
-                              <React.Fragment key={id}>
-                                {isShortDuration ? (
-                                  <FlowCardPill
-                                    type="button"
-                                    $leftPct={leftPct}
-                                    $widthPct={widthPct}
-                                    title={tooltipText}
-                                    onClick={() =>
-                                      navigate(
-                                        pathKeys.countryDetail(h.id),
-                                      )
-                                    }
-                                  >
-                                    <span
-                                      style={{
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        color: isDark ? '#f5f5f5' : TITLE,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {h.name}
-                                    </span>
-                                  </FlowCardPill>
-                                ) : (
-                                  <FlowCard
-                                    type="button"
-                                    $leftPct={leftPct}
-                                    $widthPct={widthPct}
-                                    title={tooltipText}
-                                    onClick={() =>
-                                      navigate(
-                                        pathKeys.countryDetail(h.id),
-                                      )
-                                    }
-                                  >
-                                    {h.thumbnailUrl ? (
-                                      <img
-                                        src={h.thumbnailUrl}
-                                        alt=""
-                                        style={{
-                                          width: 44,
-                                          height: 44,
-                                          borderRadius: 10,
-                                          objectFit: 'cover',
-                                          border: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
-                                          flexShrink: 0,
-                                        }}
-                                      />
-                                    ) : (
-                                      <div
-                                        style={{
-                                          width: 44,
-                                          height: 44,
-                                          borderRadius: 10,
-                                          background: isDark
-                                            ? 'rgba(99,102,241,0.12)'
-                                            : '#eef2ff',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          fontSize: 20,
-                                          flexShrink: 0,
-                                          border: `1px solid #c7d2fe`,
-                                        }}
-                                      >
-                                        🏛️
-                                      </div>
-                                    )}
-                                    <div
-                                      style={{
-                                        minWidth: 0,
-                                        flex: 1,
-                                        overflow: 'hidden',
-                                      }}
-                                    >
-                                      <div
-                                        style={{
-                                          fontSize: 14,
-                                          fontWeight: 700,
-                                          color: isDark ? '#f5f5f5' : TITLE,
-                                          letterSpacing: '-0.02em',
-                                          overflow: 'hidden',
-                                          textOverflow: 'ellipsis',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        {h.name}
-                                      </div>
-                                      {rowIdx === 0 && (() => {
-                                        const incoming =
-                                          incomingRelationsByMainId.get(id)
-                                        if (
-                                          !incoming ||
-                                          (incoming.successor.length === 0 &&
-                                            incoming.personalUnion.length === 0 &&
-                                            incoming.membership.length === 0)
-                                        )
-                                          return null
-                                        return (
-                                          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                            {incoming.successor.length > 0 && (() => {
-                                              // 변천 유형별로 그룹 (멸망/계승 등 각각 라벨 표시)
-                                              const byEventType = new Map<string, Array<{ fromId: string; eventType?: TransitionEventType }>>()
-                                              incoming.successor.forEach((s) => {
-                                                const key = s.eventType ?? 'SUCCESSION'
-                                                if (!byEventType.has(key)) byEventType.set(key, [])
-                                                byEventType.get(key)!.push(s)
-                                              })
-                                              return Array.from(byEventType.entries()).map(([eventType, list]) => (
-                                                <div key={eventType} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                                                  <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? '#a1a1aa' : '#64748b', marginRight: 2 }}>
-                                                    {TRANSITION_EVENT_LABELS[eventType as TransitionEventType] ?? '계승'}
-                                                  </span>
-                                                  {list.map((s) => (
-                                                    <span
-                                                      key={`s-${s.fromId}`}
-                                                      title={`${TRANSITION_EVENT_LABELS[s.eventType as TransitionEventType] ?? '계승'}: ${idToCountry.get(s.fromId)?.name ?? s.fromId}`}
-                                                      style={{
-                                                        flexShrink: 0,
-                                                        fontSize: 10,
-                                                        fontWeight: 600,
-                                                        color: '#4f46e5',
-                                                        background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
-                                                        padding: '2px 6px',
-                                                        borderRadius: 4,
-                                                        border: '1px solid #c7d2fe',
-                                                      }}
-                                                    >
-                                                      ← {idToCountry.get(s.fromId)?.name ?? s.fromId}
-                                                    </span>
-                                                  ))}
-                                                </div>
-                                              ))
-                                            })()}
-                                            {incoming.personalUnion.length > 0 && (
-                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? '#a1a1aa' : '#64748b', marginRight: 2 }}>동군연합</span>
-                                                {incoming.personalUnion.map((bid) => (
-                                                  <span
-                                                    key={`p-${bid}`}
-                                                    title={`동군연합: ${idToCountry.get(bid)?.name ?? bid}`}
-                                                    style={{
-                                                      flexShrink: 0,
-                                                      fontSize: 10,
-                                                      fontWeight: 600,
-                                                      color: '#6366f1',
-                                                      background: isDark ? 'rgba(99,102,241,0.12)' : '#f5f3ff',
-                                                      padding: '2px 6px',
-                                                      borderRadius: 4,
-                                                      border: '1px solid #ddd6fe',
-                                                    }}
-                                                  >
-                                                    {idToCountry.get(bid)?.name ?? bid}
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            )}
-                                            {incoming.membership.length > 0 && (
-                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? '#a1a1aa' : '#64748b', marginRight: 2 }}>소속·연방</span>
-                                                {incoming.membership.map(
-                                                  ({ id: bid, role, isLeadingMember }) => (
-                                                    <span
-                                                      key={`m-${bid}`}
-                                                      title={`${MEMBERSHIP_ROLE_LABELS[role as keyof typeof MEMBERSHIP_ROLE_LABELS] ?? role}: ${idToCountry.get(bid)?.name ?? bid}${isLeadingMember ? ' (주축)' : ''}`}
-                                                      style={{
-                                                        flexShrink: 0,
-                                                        fontSize: 10,
-                                                        fontWeight: 600,
-                                                        color: isLeadingMember ? '#b45309' : isDark ? '#a1a1aa' : '#64748b',
-                                                        background: isLeadingMember ? '#fef3c7' : isDark ? '#2a2a2a' : '#f1f5f9',
-                                                        padding: '2px 6px',
-                                                        borderRadius: 4,
-                                                        border: `1px solid ${isLeadingMember ? '#fcd34d' : isDark ? '#2a2a2a' : '#e2e8f0'}`,
-                                                      }}
-                                                    >
-                                                      {idToCountry.get(bid)?.name ?? bid}
-                                                      {isLeadingMember ? ' ·주축' : ''}
-                                                    </span>
-                                                  ),
-                                                )}
-                                              </div>
-                                            )}
-                                          </div>
-                                        )
-                                      })()}
-                                      <div
-                                        style={{
-                                          marginTop: 4,
-                                          fontSize: 12,
-                                          color: isDark ? '#a1a1aa' : MUTED,
-                                          fontWeight: 500,
-                                        }}
-                                      >
-                                        {periodText}
-                                      </div>
-                                      <div style={{ marginTop: 6 }}>
-                                        <RelationBadge>
-                                          {getStateTypeLabel(
-                                            h.stateType as Parameters<
-                                              typeof getStateTypeLabel
-                                            >[0],
-                                          )}
-                                        </RelationBadge>
-                                      </div>
-                                    </div>
-                                  </FlowCard>
-                                )}
-                                {transition && (
-                                  <FlowConnector
-                                    $leftPct={connectorPct}
-                                    title={
-                                      TRANSITION_EVENT_LABELS[
-                                        transition.eventType as TransitionEventType
-                                      ] ?? transition.eventType
-                                    }
-                                  >
-                                    <svg
-                                      width="14"
-                                      height="14"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="#6366f1"
-                                      strokeWidth="2.5"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    >
-                                      <path d="M5 12h14M12 5l7 7-7 7" />
-                                    </svg>
-                                  </FlowConnector>
-                                )}
-                                {hasPersonalUnionWithNext && (
-                                  <FlowConnector
-                                    $leftPct={connectorPct}
-                                    title="동군연합"
-                                  >
-                                    <svg
-                                      width="14"
-                                      height="14"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="#6366f1"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    >
-                                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                                    </svg>
-                                  </FlowConnector>
-                                )}
-                              </React.Fragment>
-                            )
-                          })}
-                        </FlowRow>
-                      )
-                    })
-                    )}
-                  </FlowContent>
-                  <FlowBottomAxisWrap>
-                    <FlowBottomAxisTrack>
-                      <FlowBottomAxisBar />
-                      {flowYearRange.labels.map((year) => {
-                        const range =
-                          flowYearRange.maxYear - flowYearRange.minYear
-                        const leftPct =
-                          range === 0
-                            ? 50
-                            : ((year - flowYearRange.minYear) / range) * 100
-                        const label =
-                          flowYearRange.currentYear != null &&
-                          year === flowYearRange.currentYear
-                            ? '현재'
-                            : year < 0
-                              ? `BC ${Math.abs(year)}`
-                              : String(year)
-                        return (
-                          <FlowBottomAxisLabel key={year} $leftPct={leftPct}>
-                            {label}
-                          </FlowBottomAxisLabel>
-                        )
-                      })}
-                    </FlowBottomAxisTrack>
-                  </FlowBottomAxisWrap>
-                </FlowScrollInner>
-              </FlowContentScroll>
-            </div>
-          )}
-        </section>
-      )}
+      if (!lowered) return true
+      const stateTypeLabel = item.stateType
+        ? getStateTypeLabel(item.stateType)
+        : ''
+      const kindLabel = resolvedKind ? (LINK_KIND_LABEL[resolvedKind] ?? '') : ''
+      const searchable = [
+        item.name,
+        item.enName,
+        stateTypeLabel,
+        kindLabel,
+        formatCountryPeriod(item),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return searchable.includes(lowered)
+    })
+  }, [list, classification.kindById, countryRelations, categoryFilter, searchQuery])
 
-      {flowFullViewOpen && viewMode === 'flow' && count > 0 && (
-        <FlowFullViewOverlay
-          onClick={() => setFlowFullViewOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="flow-fullview-title"
-        >
-          <FlowFullViewModal onClick={(e) => e.stopPropagation()}>
-            <FlowFullViewHeader>
-              <FlowFullViewTitle id="flow-fullview-title">
-                국가 계보 흐름도 — 전체 보기
-              </FlowFullViewTitle>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <div
-                  role="group"
-                  aria-label="전체 보기 배율 조절"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: 2,
-                    borderRadius: 10,
-                    background: isDark ? '#2a2a2a' : '#f1f5f9',
-                    border: `1px solid ${isDark ? '#3f3f46' : '#e2e8f0'}`,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={handleFlowZoomOut}
-                    disabled={!canFlowZoomOut}
-                    aria-label="축소"
-                    style={{
-                      width: 30,
-                      height: 30,
-                      border: 'none',
-                      borderRadius: 8,
-                      background: 'transparent',
-                      color: isDark ? '#e4e4e7' : '#334155',
-                      fontWeight: 700,
-                      fontSize: 16,
-                      cursor: canFlowZoomOut ? 'pointer' : 'default',
-                      opacity: canFlowZoomOut ? 1 : 0.35,
-                    }}
-                  >
-                    −
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFlowZoomReset}
-                    title="클릭하여 100%로 초기화"
-                    style={{
-                      minWidth: 56,
-                      height: 30,
-                      padding: '0 8px',
-                      border: 'none',
-                      borderRadius: 8,
-                      background:
-                        flowZoomIndex !== DEFAULT_FLOW_ZOOM_INDEX
-                          ? isDark
-                            ? '#18181b'
-                            : '#ffffff'
-                          : 'transparent',
-                      color:
-                        flowZoomIndex !== DEFAULT_FLOW_ZOOM_INDEX
-                          ? '#4f46e5'
-                          : isDark
-                            ? '#a1a1aa'
-                            : '#475569',
-                      fontWeight: 700,
-                      fontSize: 12.5,
-                      fontVariantNumeric: 'tabular-nums',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {flowZoomPercent}%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFlowZoomIn}
-                    disabled={!canFlowZoomIn}
-                    aria-label="확대"
-                    style={{
-                      width: 30,
-                      height: 30,
-                      border: 'none',
-                      borderRadius: 8,
-                      background: 'transparent',
-                      color: isDark ? '#e4e4e7' : '#334155',
-                      fontWeight: 700,
-                      fontSize: 16,
-                      cursor: canFlowZoomIn ? 'pointer' : 'default',
-                      opacity: canFlowZoomIn ? 1 : 0.35,
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
-                <FlowFullViewCloseBtn
-                  type="button"
-                  onClick={() => setFlowFullViewOpen(false)}
-                  aria-label="전체 보기 닫기 (ESC)"
-                >
-                  <FiX size={16} />
-                  닫기
-                </FlowFullViewCloseBtn>
-              </div>
-            </FlowFullViewHeader>
-            <FlowFullViewBody>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 0,
-                  width: '100%',
-                  minWidth: flowMinWidth,
-                }}
-              >
-                <FlowContentScroll>
-                  <FlowScrollInner $minWidth={flowMinWidth}>
-                    <FlowContent>
-                      {totalFlowRows > 0 &&
-                        flowConnectorsByBranch.length > 0 && (
-                          <div
-                            aria-hidden
-                            style={{
-                              position: 'absolute',
-                              left: 0,
-                              top: 0,
-                              width: '100%',
-                              height: flowRowsTotalHeight,
-                              pointerEvents: 'none',
-                              zIndex: 10,
-                            }}
-                          >
-                            <svg
-                              width="100%"
-                              height={flowRowsTotalHeight}
-                              style={{ display: 'block' }}
-                              preserveAspectRatio="none"
-                              viewBox={`0 0 100 ${flowRowsTotalHeight}`}
-                            >
-                              {flowConnectorsByBranch.map((group, i) => {
-                                const midX =
-                                  group.list.reduce(
-                                    (s, c) => s + c.toCenterPct,
-                                    0,
-                                  ) / group.list.length
-                                const fromX = group.fromCenterPct
-                                const rowCenter = (r: number) =>
-                                  16 +
-                                  (r + 0.5) * (FLOW_ROW_HEIGHT + FLOW_ROW_GAP) -
-                                  FLOW_ROW_GAP / 2
-                                const fromY = rowCenter(group.fromGlobalRow)
-                                const toY = rowCenter(group.toGlobalRow)
-                                return (
-                                  <line
-                                    key={i}
-                                    x1={fromX}
-                                    y1={fromY}
-                                    x2={midX}
-                                    y2={toY}
-                                    stroke="#a5b4fc"
-                                    strokeWidth={1.5}
-                                    strokeLinecap="round"
-                                    vectorEffect="non-scaling-stroke"
-                                  />
-                                )
-                              })}
-                            </svg>
-                            {flowConnectorsByBranch.map((group, i) => {
-                              const midX =
-                                group.list.reduce(
-                                  (s, c) => s + c.toCenterPct,
-                                  0,
-                                ) / group.list.length
-                              const toY =
-                                16 +
-                                (group.toGlobalRow + 0.5) * (FLOW_ROW_HEIGHT + FLOW_ROW_GAP) -
-                                FLOW_ROW_GAP / 2
-                              const labelText =
-                                group.type === 'successor'
-                                  ? (TRANSITION_EVENT_LABELS[
-                                      group.list[0]?.eventType as TransitionEventType
-                                    ] ?? '계승')
-                                  : group.type === 'personal_union'
-                                    ? '동군연합'
-                                    : group.list[0]?.type === 'membership' &&
-                                        group.list[0]?.membershipRole
-                                      ? group.list[0].isLeadingMember
-                                        ? '연방·주축'
-                                        : (MEMBERSHIP_ROLE_LABELS[
-                                            group.list[0].membershipRole as keyof typeof MEMBERSHIP_ROLE_LABELS
-                                          ] ?? group.list[0].membershipRole)
-                                      : ''
-                              return labelText ? (
-                                <div
-                                  key={`label-${i}`}
-                                  style={{
-                                    position: 'absolute',
-                                    left: `${midX}%`,
-                                    top: toY,
-                                    transform: 'translate(-50%, -100%)',
-                                    marginBottom: -4,
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: isDark ? '#a1a1aa' : '#64748b',
-                                    background: isDark ? '#1d1d1d' : '#f8fafc',
-                                    padding: '3px 8px',
-                                    borderRadius: 6,
-                                    border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                                  }}
-                                >
-                                  {labelText}
-                                </div>
-                              ) : null
-                            })}
-                          </div>
-                        )}
-                    {flowRowsByChain.flatMap((rows, chainIdx) =>
-                      rows.map((orderedChain, rowIdx) => {
-                        const range =
-                          flowYearRange.maxYear - flowYearRange.minYear
-                        const toPct = (y: number) =>
-                          range === 0
-                            ? 0
-                            : ((y - flowYearRange.minYear) / range) * 100
-                        return (
-                          <FlowRow key={`${chainIdx}-${rowIdx}`}>
-                            {orderedChain.map((id, index) => {
-                              const h = idToCountry.get(id)
-                              const yr = h ? getCountryYearRange(h) : null
-                              if (!h || !yr) return null
-                              const leftPct = toPct(yr.startYear)
-                              const endPct = toPct(yr.endYear)
-                              // 한쪽 연도만 알려진 국가도 클릭 가능 폭 확보.
-                              const widthPct = Math.max(
-                                MIN_FLOW_WIDTH_PCT,
-                                endPct - leftPct,
-                              )
-                              const spanYears = yr.endYear - yr.startYear
-                              const isShortDuration =
-                                spanYears < SHORT_DURATION_YEARS
-                              const nextId = orderedChain[index + 1]
-                              const transition = nextId
-                                ? transitionByEdge.get(`${id}\t${nextId}`)
-                                : null
-                              const rels = countryRelations.get(id) ?? EMPTY_RELS
-                              const hasPersonalUnionWithNext =
-                                !!nextId &&
-                                !transition &&
-                                rels.relations.some(
-                                  (r) =>
-                                    (r.subjectCountryId === nextId ||
-                                      r.objectCountryId === nextId) &&
-                                    r.relationType === 'PERSONAL_UNION',
-                                )
-                              const connectorPct = toPct(yr.endYear)
-                              const periodText = formatPeriod({
-                                startEra: h.startEra,
-                                startYear: h.startYear,
-                                endEra: h.endEra,
-                                endYear: h.endYear,
-                              })
-                              const tooltipText = `${h.name} (${periodText})`
-                              return (
-                                <React.Fragment key={id}>
-                                  {isShortDuration ? (
-                                    <FlowCardPill
-                                      type="button"
-                                      $leftPct={leftPct}
-                                      $widthPct={widthPct}
-                                      title={tooltipText}
-                                      onClick={() =>
-                                        navigate(
-                                          pathKeys.countryDetail(h.id),
-                                        )
-                                      }
-                                    >
-                                      <span
-                                        style={{
-                                          fontSize: 13,
-                                          fontWeight: 600,
-                                          color: isDark ? '#f5f5f5' : TITLE,
-                                        }}
-                                      >
-                                        {h.name}
-                                      </span>
-                                      <span
-                                        style={{
-                                          fontSize: 11,
-                                          color: isDark ? '#a1a1aa' : MUTED,
-                                        }}
-                                      >
-                                        {periodText}
-                                      </span>
-                                    </FlowCardPill>
-                                  ) : (
-                                    <FlowCard
-                                      type="button"
-                                      $leftPct={leftPct}
-                                      $widthPct={widthPct}
-                                      title={tooltipText}
-                                      onClick={() =>
-                                        navigate(
-                                          pathKeys.countryDetail(h.id),
-                                        )
-                                      }
-                                    >
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: 10,
-                                          minWidth: 0,
-                                        }}
-                                      >
-                                        {h.thumbnailUrl ? (
-                                          <img
-                                            src={h.thumbnailUrl}
-                                            alt=""
-                                            style={{
-                                              width: 32,
-                                              height: 20,
-                                              objectFit: 'cover',
-                                              borderRadius: 4,
-                                            }}
-                                          />
-                                        ) : (
-                                          <span
-                                            style={{
-                                              width: 32,
-                                              height: 20,
-                                              borderRadius: 4,
-                                              background: isDark ? '#2a2a2a' : BORDER,
-                                              display: 'inline-block',
-                                            }}
-                                          />
-                                        )}
-                                        <div
-                                          style={{
-                                            flex: 1,
-                                            minWidth: 0,
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                            color: isDark ? '#f5f5f5' : 'inherit',
-                                          }}
-                                        >
-                                          {h.name}
-                                        </div>
-                                      </div>
-                                      {rowIdx === 0 && (() => {
-                                        const incoming =
-                                          incomingRelationsByMainId.get(id)
-                                        if (
-                                          !incoming ||
-                                          (incoming.successor.length === 0 &&
-                                            incoming.personalUnion.length === 0 &&
-                                            incoming.membership.length === 0)
-                                        )
-                                          return null
-                                        return (
-                                          <div
-                                            style={{
-                                              marginTop: 4,
-                                              display: 'flex',
-                                              flexDirection: 'column',
-                                              gap: 6,
-                                            }}
-                                          >
-                                            {incoming.successor.length > 0 &&
-                                              (() => {
-                                                const byEventType = new Map<
-                                                  string,
-                                                  Array<{
-                                                    fromId: string
-                                                    eventType?: TransitionEventType
-                                                  }>
-                                                >()
-                                                incoming.successor.forEach(
-                                                  (s) => {
-                                                    const key =
-                                                      s.eventType ?? 'SUCCESSION'
-                                                    if (!byEventType.has(key))
-                                                      byEventType.set(key, [])
-                                                    byEventType
-                                                      .get(key)!
-                                                      .push(s)
-                                                  },
-                                                )
-                                                return Array.from(
-                                                  byEventType.entries(),
-                                                ).map(([eventType, list]) => (
-                                                  <div
-                                                    key={eventType}
-                                                    style={{
-                                                      display: 'flex',
-                                                      flexWrap: 'wrap',
-                                                      gap: 4,
-                                                      alignItems: 'center',
-                                                    }}
-                                                  >
-                                                    <span
-                                                      style={{
-                                                        fontSize: 10,
-                                                        fontWeight: 700,
-                                                        color: isDark ? '#a1a1aa' : '#64748b',
-                                                        marginRight: 2,
-                                                      }}
-                                                    >
-                                                      {TRANSITION_EVENT_LABELS[
-                                                        eventType as TransitionEventType
-                                                      ] ?? '계승'}
-                                                    </span>
-                                                    {list.map((s) => (
-                                                      <span
-                                                        key={`s-${s.fromId}`}
-                                                        title={`${TRANSITION_EVENT_LABELS[s.eventType as TransitionEventType] ?? '계승'}: ${idToCountry.get(s.fromId)?.name ?? s.fromId}`}
-                                                        style={{
-                                                          flexShrink: 0,
-                                                          fontSize: 10,
-                                                          fontWeight: 600,
-                                                          color: '#4f46e5',
-                                                          background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
-                                                          padding: '2px 6px',
-                                                          borderRadius: 4,
-                                                          border: '1px solid #c7d2fe',
-                                                        }}
-                                                      >
-                                                        ←{' '}
-                                                        {idToCountry.get(s.fromId)
-                                                          ?.name ?? s.fromId}
-                                                      </span>
-                                                    ))}
-                                                  </div>
-                                                ))
-                                              })()}
-                                            {incoming.personalUnion.length > 0 && (
-                                              <div
-                                                style={{
-                                                  display: 'flex',
-                                                  flexWrap: 'wrap',
-                                                  gap: 4,
-                                                  alignItems: 'center',
-                                                }}
-                                              >
-                                                <span
-                                                  style={{
-                                                    fontSize: 10,
-                                                    fontWeight: 700,
-                                                    color: isDark ? '#a1a1aa' : '#64748b',
-                                                    marginRight: 2,
-                                                  }}
-                                                >
-                                                  동군연합
-                                                </span>
-                                                {incoming.personalUnion.map(
-                                                  (bid) => (
-                                                    <span
-                                                      key={`p-${bid}`}
-                                                      style={{
-                                                        flexShrink: 0,
-                                                        fontSize: 10,
-                                                        fontWeight: 600,
-                                                        color: '#6366f1',
-                                                        background: isDark ? 'rgba(99,102,241,0.12)' : '#f5f3ff',
-                                                        padding: '2px 6px',
-                                                        borderRadius: 4,
-                                                        border: '1px solid #ddd6fe',
-                                                      }}
-                                                    >
-                                                      {idToCountry.get(bid)
-                                                        ?.name ?? bid}
-                                                    </span>
-                                                  ),
-                                                )}
-                                              </div>
-                                            )}
-                                            {incoming.membership.length > 0 && (
-                                              <div
-                                                style={{
-                                                  display: 'flex',
-                                                  flexWrap: 'wrap',
-                                                  gap: 4,
-                                                  alignItems: 'center',
-                                                }}
-                                              >
-                                                <span
-                                                  style={{
-                                                    fontSize: 10,
-                                                    fontWeight: 700,
-                                                    color: isDark ? '#a1a1aa' : '#64748b',
-                                                    marginRight: 2,
-                                                  }}
-                                                >
-                                                  연방
-                                                </span>
-                                                {incoming.membership.map(
-                                                  (m) => (
-                                                    <span
-                                                      key={`m-${m.id}`}
-                                                      style={{
-                                                        flexShrink: 0,
-                                                        fontSize: 10,
-                                                        fontWeight: 600,
-                                                        color: isDark ? '#a1a1aa' : '#64748b',
-                                                        background: isDark ? '#2a2a2a' : '#f1f5f9',
-                                                        padding: '2px 6px',
-                                                        borderRadius: 4,
-                                                        border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
-                                                      }}
-                                                    >
-                                                      {idToCountry.get(m.id)
-                                                        ?.name ?? m.id}
-                                                    </span>
-                                                  ),
-                                                )}
-                                              </div>
-                                            )}
-                                          </div>
-                                        )
-                                      })()}
-                                      <div
-                                        style={{
-                                          fontSize: 11,
-                                          color: isDark ? '#a1a1aa' : MUTED,
-                                          marginTop: 2,
-                                        }}
-                                      >
-                                        {periodText}
-                                      </div>
-                                      <div
-                                        style={{
-                                          marginTop: 4,
-                                          display: 'flex',
-                                          flexWrap: 'wrap',
-                                          gap: 4,
-                                        }}
-                                      >
-                                        <RelationBadge>
-                                          {getStateTypeLabel(h.stateType)}
-                                        </RelationBadge>
-                                      </div>
-                                      <FlowCardRelations
-                                        rels={rels}
-                                        idToCountry={idToCountry}
-                                        currentId={id}
-                                      />
-                                    </FlowCard>
-                                  )}
-                                  {transition && (
-                                    <FlowConnector
-                                      $leftPct={connectorPct}
-                                      title={
-                                        TRANSITION_EVENT_LABELS[
-                                          transition.eventType as TransitionEventType
-                                        ] ?? transition.eventType
-                                      }
-                                    >
-                                      <svg
-                                        width="14"
-                                        height="14"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="#6366f1"
-                                        strokeWidth="2.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      >
-                                        <path d="M5 12h14M12 5l7 7-7 7" />
-                                      </svg>
-                                    </FlowConnector>
-                                  )}
-                                  {hasPersonalUnionWithNext && (
-                                    <FlowConnector
-                                      $leftPct={connectorPct}
-                                      title="동군연합"
-                                    >
-                                      <svg
-                                        width="14"
-                                        height="14"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="#6366f1"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      >
-                                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                                      </svg>
-                                    </FlowConnector>
-                                  )}
-                                </React.Fragment>
-                              )
-                            })}
-                          </FlowRow>
-                        )
-                      }),
-                    )}
-                    </FlowContent>
-                    <FlowBottomAxisWrap>
-                      <FlowBottomAxisTrack>
-                        <FlowBottomAxisBar />
-                        {flowYearRange.labels.map((year) => {
-                          const range =
-                            flowYearRange.maxYear - flowYearRange.minYear
-                          const leftPct =
-                            range === 0
-                              ? 50
-                              : ((year - flowYearRange.minYear) / range) * 100
-                          const label =
-                            flowYearRange.currentYear != null &&
-                            year === flowYearRange.currentYear
-                              ? '현재'
-                              : year < 0
-                                ? `BC ${Math.abs(year)}`
-                                : String(year)
-                          return (
-                            <FlowBottomAxisLabel
-                              key={year}
-                              $leftPct={leftPct}
-                            >
-                              {label}
-                            </FlowBottomAxisLabel>
-                          )
-                        })}
-                      </FlowBottomAxisTrack>
-                    </FlowBottomAxisWrap>
-                  </FlowScrollInner>
-                </FlowContentScroll>
-              </div>
-            </FlowFullViewBody>
-          </FlowFullViewModal>
-        </FlowFullViewOverlay>
-      )}
-    </div>
+  const enrichedForLineage = useMemo(
+    () =>
+      filteredList.map((item) => ({
+        ...item,
+        linkKind:
+          classification.kindById.get(item.id) ?? item.linkKind ?? null,
+      })),
+    [filteredList, classification.kindById],
   )
-}
 
-/** 카드 내 관계 정보 블록 — 변천·수평·소속 모두 표기 */
-function FlowCardRelations({
-  rels,
-  idToCountry,
-  currentId,
-}: {
-  rels: {
-    transitions: HistoricalCountryTransitionDto[]
-    relations: HistoricalCountryRelationDto[]
-    memberships: HistoricalCountryMembershipDto[]
+  const renderRelationSummaries = (item: HistoricalCountryItem) => {
+    const rels = countryRelations.get(item.id) ?? EMPTY_RELS
+    const chips: Array<{ key: string; label: string; highlight?: boolean }> = []
+
+    for (const transition of rels.transitions) {
+      const isIncoming = transition.successorId === item.id
+      const otherId = isIncoming
+        ? transition.predecessorId
+        : transition.successorId
+      const otherName =
+        idToCountry.get(otherId)?.name ??
+        (isIncoming ? transition.predecessorName : transition.successorName) ??
+        '미상'
+      const eventLabel =
+        TRANSITION_EVENT_LABELS[transition.eventType as TransitionEventType] ??
+        transition.eventType
+      const scopeText = transition.transitionScope
+        ? ` · ${TRANSITION_SCOPE_LABELS[transition.transitionScope] ?? transition.transitionScope}`
+        : ''
+      chips.push({
+        key: `tr-${transition.id}-${isIncoming ? 'in' : 'out'}`,
+        label: isIncoming
+          ? `전신 ← ${otherName} (${eventLabel}${scopeText})`
+          : `후신 → ${otherName} (${eventLabel}${scopeText})`,
+        highlight: true,
+      })
+    }
+
+    for (const membership of rels.memberships) {
+      const isParent = membership.historicalCountryId === item.id
+      const otherName = isParent
+        ? (idToCountry.get(membership.memberCountryId)?.name ??
+          membership.memberName)
+        : (idToCountry.get(membership.historicalCountryId)?.name ??
+          membership.parentName)
+      const roleLabel =
+        MEMBERSHIP_ROLE_LABELS[membership.role as HistoricalMembershipRole] ??
+        membership.role
+      const leaderSuffix = membership.isLeadingMember ? '·주축' : ''
+      chips.push({
+        key: `mem-${membership.id}-${isParent ? 'parent' : 'member'}`,
+        label: isParent
+          ? `하위포함 ⊃ ${otherName ?? '미상'} (${roleLabel}${leaderSuffix})`
+          : `상위소속 ⊂ ${otherName ?? '미상'} (${roleLabel}${leaderSuffix})`,
+      })
+    }
+
+    for (const relation of rels.relations) {
+      const isSubject = relation.subjectCountryId === item.id
+      const otherId = isSubject
+        ? relation.objectCountryId
+        : relation.subjectCountryId
+      const otherName =
+        idToCountry.get(otherId)?.name ??
+        (isSubject ? relation.objectCountryName : relation.subjectCountryName) ??
+        '미상'
+      const relLabel =
+        RELATION_TYPE_LABELS[relation.relationType as HistoricalRelationType] ??
+        relation.relationType
+      chips.push({
+        key: `rel-${relation.id}`,
+        label: `${relLabel}: ${otherName}`,
+      })
+    }
+
+    return chips
   }
-  idToCountry: Map<string, HistoricalCountryItem>
-  currentId: string
-}) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  const hasAny =
-    rels.transitions.length > 0 ||
-    rels.relations.length > 0 ||
-    rels.memberships.length > 0
-  if (!hasAny) return null
+
+  const filterBarNode = (
+    <FilterChipGroup role="tablist" aria-label="과거 국가 계보 분류 필터">
+      <FilterChip
+        type="button"
+        role="tab"
+        aria-selected={categoryFilter === 'all'}
+        $active={categoryFilter === 'all'}
+        onClick={() => setCategoryFilter('all')}
+      >
+        전체 <FilterChipCount>{count}</FilterChipCount>
+      </FilterChip>
+      <FilterChip
+        type="button"
+        role="tab"
+        aria-selected={categoryFilter === 'PREDECESSOR'}
+        $active={categoryFilter === 'PREDECESSOR'}
+        onClick={() => setCategoryFilter('PREDECESSOR')}
+      >
+        직계 전신{' '}
+        <FilterChipCount>{classification.predecessors.length}</FilterChipCount>
+      </FilterChip>
+      {classification.constituents.length > 0 && (
+        <FilterChip
+          type="button"
+          role="tab"
+          aria-selected={categoryFilter === 'CONSTITUENT'}
+          $active={categoryFilter === 'CONSTITUENT'}
+          onClick={() => setCategoryFilter('CONSTITUENT')}
+        >
+          구성 정치체{' '}
+          <FilterChipCount>{classification.constituents.length}</FilterChipCount>
+        </FilterChip>
+      )}
+      {classification.heritage.length > 0 && (
+        <FilterChip
+          type="button"
+          role="tab"
+          aria-selected={categoryFilter === 'HERITAGE'}
+          $active={categoryFilter === 'HERITAGE'}
+          onClick={() => setCategoryFilter('HERITAGE')}
+        >
+          역사 유산{' '}
+          <FilterChipCount>{classification.heritage.length}</FilterChipCount>
+        </FilterChip>
+      )}
+      {withRelationsCount > 0 && (
+        <FilterChip
+          type="button"
+          role="tab"
+          aria-selected={categoryFilter === 'withRelations'}
+          $active={categoryFilter === 'withRelations'}
+          onClick={() => setCategoryFilter('withRelations')}
+        >
+          관계 보유 <FilterChipCount>{withRelationsCount}</FilterChipCount>
+        </FilterChip>
+      )}
+    </FilterChipGroup>
+  )
 
   return (
-    <div
-      style={{
-        marginTop: 12,
-        paddingTop: 12,
-        borderTop: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        fontSize: 12,
-        color: isDark ? '#a1a1aa' : MUTED,
-      }}
-    >
-      <div
-        style={{
-          fontWeight: 600,
-          color: isDark ? '#f5f5f5' : TITLE,
-          fontSize: 11,
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}
-      >
-        관계 정보
-      </div>
-      {rels.transitions.length > 0 && (
-        <div>
-          <span style={{ fontWeight: 600, color: isDark ? '#a1a1aa' : MUTED }}>변천 </span>
-          {rels.transitions.map((t) => {
-            const isIncoming = t.successorId === currentId
-            const otherId = isIncoming ? t.predecessorId : t.successorId
-            const otherName =
-              idToCountry.get(otherId)?.name ??
-              (isIncoming ? t.predecessorName : t.successorName) ??
-              '—'
-            return (
-              <div key={t.id} style={{ marginTop: 2 }}>
-                {isIncoming ? '전임' : '계승'} → {otherName}
-                <span style={{ marginLeft: 6 }}>
-                  (
-                  {TRANSITION_EVENT_LABELS[
-                    t.eventType as TransitionEventType
-                  ] ?? t.eventType}
-                  {(t as { transitionScope?: string | null }).transitionScope
-                    ? ` · ${TRANSITION_SCOPE_LABELS[(t as { transitionScope: string }).transitionScope] ?? (t as { transitionScope: string }).transitionScope}`
-                    : ''}
+    <DashboardStyles.DashboardRoot>
+      <SectionWrap>
+        <HeadRow>
+          <HeadText>
+            <Title>과거 국가 · 역사 계보</Title>
+            <Description>
+              {country.name}에 연결된 역사적 국가의 직계 전신·구성 정치체·유산 분류와 변천·소속·수평 외교 관계를 원장 및 흐름도로 확인합니다.
+            </Description>
+          </HeadText>
+
+          <ModeSwitchGroup role="tablist" aria-label="과거 국가 보기 방식">
+            <ModeSwitchBtn
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'list'}
+              $active={viewMode === 'list'}
+              onClick={() => setViewMode('list')}
+            >
+              2열 원장
+            </ModeSwitchBtn>
+            <ModeSwitchBtn
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'flow'}
+              $active={viewMode === 'flow'}
+              onClick={() => setViewMode('flow')}
+            >
+              계보 흐름도
+            </ModeSwitchBtn>
+          </ModeSwitchGroup>
+        </HeadRow>
+
+        <DashboardStyles.SectionHeadlineStrip aria-label="연결된 과거 국가 요약 지표">
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              연결된 과거 국가
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={count === 0}>
+              {count > 0 ? (
+                <>
+                  {count.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '미등록'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {spanSummary.minLabel && spanSummary.maxLabel
+                ? `${spanSummary.minLabel} ~ ${spanSummary.maxLabel}${spanSummary.totalYears ? ` (${spanSummary.totalYears.toLocaleString('ko-KR')}년)` : ''}`
+                : '연결된 역사 국가 존속 범위'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              계보 역할 분포
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue $muted={count === 0}>
+              {count > 0 ? (
+                <>
+                  직계 {classification.predecessors.length}
+                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '—'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {count > 0
+                ? `구성 정치체 ${classification.constituents.length} · 역사 유산 ${classification.heritage.length}`
+                : '전신·구성국·유산 자동 분류'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              계승 · 소속 관계
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={transitions.length + memberships.length === 0}
+            >
+              {transitions.length + memberships.length > 0 ? (
+                <>
+                  {(transitions.length + memberships.length).toLocaleString(
+                    'ko-KR',
+                  )}
+                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '없음'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              변천 {transitions.length}건 · 소속·구성 {memberships.length}건
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              수평 외교 · 교전 관계
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue
+              $muted={relations.length === 0}
+            >
+              {relations.length > 0 ? (
+                <>
+                  {relations.length.toLocaleString('ko-KR')}
+                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
+                </>
+              ) : (
+                '없음'
+              )}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {relations.length > 0
+                ? `관계 보유 국가 ${withRelationsCount}/${count}개국`
+                : '동맹·조공·전쟁·동군연합 기록 없음'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+        </DashboardStyles.SectionHeadlineStrip>
+
+        {isLinkedDataLoading ? (
+          <ChartSkeleton variant="bars" rows={5} />
+        ) : count === 0 ? (
+          <EmptySpecGrid>
+            <EmptySpecCell>
+              <EmptySpecTitle>
+                1. 과거 국가에서 현대 국가({country.name}) 연결
+              </EmptySpecTitle>
+              <EmptySpecDesc>
+                역사적 국가 상세의 기본 정보 수정에서 「연결할 현대 국가」로 {country.name}을(를) 지정하면 이 탭과 대시보드 계보에 즉시 반영됩니다.
+              </EmptySpecDesc>
+            </EmptySpecCell>
+            <EmptySpecCell>
+              <EmptySpecTitle>
+                2. 전신 · 구성 정치체 · 역사 유산 자동 분류
+              </EmptySpecTitle>
+              <EmptySpecDesc>
+                연결된 역사 국가들 사이에 계승·변천이나 소속·구성 관계를 입력하면 직계 전신, 구성 정치체, 역사 유산으로 자동 분류됩니다.
+              </EmptySpecDesc>
+            </EmptySpecCell>
+          </EmptySpecGrid>
+        ) : viewMode === 'flow' ? (
+          <FlowSectionWrap>
+            <LineageFlow
+              historicalCountries={enrichedForLineage}
+              modernEndpoint={{
+                id: country.id,
+                name: country.name,
+                flagEmoji: country.flagEmoji,
+                thumbnailUrl: country.thumbnailUrl,
+                isoCode: country.isoCode,
+              }}
+              onSelect={(targetId) =>
+                navigate(pathKeys.countryDetail(targetId))
+              }
+              toolbarLeft={filterBarNode}
+            />
+
+            {transitions.length + memberships.length + relations.length > 0 && (
+              <SubLedgerSection aria-label="변천·소속·수평 관계 원장">
+                <SubLedgerHead>
+                  <SubLedgerTitle>
+                    국가 간 변천 · 소속 · 외교 관계 원장
+                  </SubLedgerTitle>
+                  <SubLedgerCount>
+                    총{' '}
+                    {(
+                      transitions.length +
+                      memberships.length +
+                      relations.length
+                    ).toLocaleString('ko-KR')}
+                    건
+                  </SubLedgerCount>
+                </SubLedgerHead>
+                <RelationLedgerGrid>
+                  {transitions.map((transition) => (
+                    <RelationLedgerCell key={`tr-${transition.id}`}>
+                      <RelationKindBadge $tone="transition">
+                        변천 ·{' '}
+                        {TRANSITION_EVENT_LABELS[
+                          transition.eventType as TransitionEventType
+                        ] ?? transition.eventType}
+                      </RelationKindBadge>
+                      <RelationMainText>
+                        <RelationNodeBtn
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              pathKeys.countryDetail(transition.predecessorId),
+                            )
+                          }
+                        >
+                          {idToCountry.get(transition.predecessorId)?.name ??
+                            transition.predecessorName ??
+                            '전임'}
+                        </RelationNodeBtn>
+                        <RelationArrow>→</RelationArrow>
+                        <RelationNodeBtn
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              pathKeys.countryDetail(transition.successorId),
+                            )
+                          }
+                        >
+                          {idToCountry.get(transition.successorId)?.name ??
+                            transition.successorName ??
+                            '후임'}
+                        </RelationNodeBtn>
+                      </RelationMainText>
+                    </RelationLedgerCell>
+                  ))}
+
+                  {memberships.map((membership) => (
+                    <RelationLedgerCell key={`mem-${membership.id}`}>
+                      <RelationKindBadge $tone="membership">
+                        소속 ·{' '}
+                        {MEMBERSHIP_ROLE_LABELS[
+                          membership.role as HistoricalMembershipRole
+                        ] ?? membership.role}
+                        {membership.isLeadingMember ? ' (주축)' : ''}
+                      </RelationKindBadge>
+                      <RelationMainText>
+                        <RelationNodeBtn
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              pathKeys.countryDetail(
+                                membership.historicalCountryId,
+                              ),
+                            )
+                          }
+                        >
+                          {idToCountry.get(membership.historicalCountryId)
+                            ?.name ??
+                            membership.parentName ??
+                            '상위'}
+                        </RelationNodeBtn>
+                        <RelationArrow>⊃</RelationArrow>
+                        <RelationNodeBtn
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              pathKeys.countryDetail(
+                                membership.memberCountryId,
+                              ),
+                            )
+                          }
+                        >
+                          {idToCountry.get(membership.memberCountryId)?.name ??
+                            membership.memberName ??
+                            '하위'}
+                        </RelationNodeBtn>
+                      </RelationMainText>
+                    </RelationLedgerCell>
+                  ))}
+
+                  {relations.map((relation) => (
+                    <RelationLedgerCell key={`rel-${relation.id}`}>
+                      <RelationKindBadge $tone="relation">
+                        관계 ·{' '}
+                        {RELATION_TYPE_LABELS[
+                          relation.relationType as HistoricalRelationType
+                        ] ?? relation.relationType}
+                      </RelationKindBadge>
+                      <RelationMainText>
+                        <RelationNodeBtn
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              pathKeys.countryDetail(relation.subjectCountryId),
+                            )
+                          }
+                        >
+                          {idToCountry.get(relation.subjectCountryId)?.name ??
+                            relation.subjectCountryName ??
+                            '주체'}
+                        </RelationNodeBtn>
+                        <RelationArrow>↔</RelationArrow>
+                        <RelationNodeBtn
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              pathKeys.countryDetail(relation.objectCountryId),
+                            )
+                          }
+                        >
+                          {idToCountry.get(relation.objectCountryId)?.name ??
+                            relation.objectCountryName ??
+                            '대상'}
+                        </RelationNodeBtn>
+                      </RelationMainText>
+                    </RelationLedgerCell>
+                  ))}
+                </RelationLedgerGrid>
+              </SubLedgerSection>
+            )}
+          </FlowSectionWrap>
+        ) : (
+          <>
+            <FilterToolbar>
+              {filterBarNode}
+              <SearchInput
+                type="search"
+                value={searchQuery}
+                onChange={(changeEvent) =>
+                  setSearchQuery(changeEvent.target.value)
+                }
+                placeholder="국호 · 영문명 · 체제 · 연도 검색…"
+                aria-label="과거 국가 검색"
+              />
+            </FilterToolbar>
+
+            {filteredList.length === 0 ? (
+              <NoMatchRow>
+                선택한 분류나 검색어와 일치하는 과거 국가가 없습니다.
+              </NoMatchRow>
+            ) : (
+              <CountryLedgerGrid>
+                {filteredList.map((item) => {
+                  const resolvedKind =
+                    classification.kindById.get(item.id) ??
+                    item.linkKind ??
+                    null
+                  const kindLabel = resolvedKind
+                    ? LINK_KIND_LABEL[resolvedKind]
+                    : null
+                  const stateTypeLabel = item.stateType
+                    ? getStateTypeLabel(item.stateType)
+                    : null
+                  const periodLabel = formatCountryPeriod(item)
+                  const relationChips = renderRelationSummaries(item)
+
+                  return (
+                    <CountryLedgerCell key={item.id}>
+                      <CountryRowButton
+                        type="button"
+                        onClick={() =>
+                          navigate(pathKeys.countryDetail(item.id))
+                        }
+                      >
+                        <CountryThumb>
+                          {item.thumbnailUrl ? (
+                            <img
+                              src={getUploadImageUrl(item.thumbnailUrl)}
+                              alt=""
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span>{item.name.slice(0, 1)}</span>
+                          )}
+                        </CountryThumb>
+
+                        <CountryMainCol>
+                          <CountryTitleRow>
+                            <CountryNameText>{item.name}</CountryNameText>
+                            {item.enName && (
+                              <CountryEnNameText>{item.enName}</CountryEnNameText>
+                            )}
+                          </CountryTitleRow>
+
+                          <CountryMetaRow>
+                            {kindLabel && (
+                              <KindBadge $kind={resolvedKind ?? ''}>
+                                {kindLabel}
+                              </KindBadge>
+                            )}
+                            {stateTypeLabel && stateTypeLabel !== '미분류' && (
+                              <StateBadge>{stateTypeLabel}</StateBadge>
+                            )}
+                            <PeriodText>{periodLabel}</PeriodText>
+                          </CountryMetaRow>
+
+                          {relationChips.length > 0 && (
+                            <RelationChipRow>
+                              {relationChips.slice(0, 4).map((chip) => (
+                                <RelationChip
+                                  key={chip.key}
+                                  $highlight={chip.highlight}
+                                >
+                                  {chip.label}
+                                </RelationChip>
+                              ))}
+                              {relationChips.length > 4 && (
+                                <RelationChip>
+                                  외 {relationChips.length - 4}건
+                                </RelationChip>
+                              )}
+                            </RelationChipRow>
+                          )}
+                        </CountryMainCol>
+
+                        <DetailActionLabel>상세 →</DetailActionLabel>
+                      </CountryRowButton>
+                    </CountryLedgerCell>
                   )
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {rels.relations.length > 0 && (
-        <div>
-          <span style={{ fontWeight: 600, color: isDark ? '#a1a1aa' : MUTED }}>수평 관계 </span>
-          {rels.relations.map((r) => {
-            const otherId =
-              r.subjectCountryId === currentId
-                ? r.objectCountryId
-                : r.subjectCountryId
-            const otherName =
-              idToCountry.get(otherId)?.name ??
-              (r.subjectCountryId === currentId
-                ? r.objectCountryName
-                : r.subjectCountryName) ??
-              '—'
-            return (
-              <div key={r.id} style={{ marginTop: 2 }}>
-                {RELATION_TYPE_LABELS[
-                  r.relationType as HistoricalRelationType
-                ] ?? r.relationType}
-                : {otherName}
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {rels.memberships.length > 0 && (
-        <div>
-          <span style={{ fontWeight: 600, color: isDark ? '#a1a1aa' : MUTED }}>소속 </span>
-          {rels.memberships.map((m) => {
-            const isParent = m.historicalCountryId === currentId
-            const otherName = isParent ? m.memberName : m.parentName
-            const role =
-              MEMBERSHIP_ROLE_LABELS[m.role as HistoricalMembershipRole] ??
-              m.role
-            const roleLabel = m.isLeadingMember ? `${role} · 주축` : role
-            return (
-              <div key={m.id} style={{ marginTop: 2 }}>
-                {isParent
-                  ? `하위: ${otherName ?? '—'} (${roleLabel})`
-                  : `상위: ${otherName ?? '—'} (${roleLabel})`}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
+                })}
+              </CountryLedgerGrid>
+            )}
+          </>
+        )}
+      </SectionWrap>
+    </DashboardStyles.DashboardRoot>
   )
 }
 
-const EmptyCard = styled.div`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
-  border: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
-  border-radius: 16px;
-  padding: 56px 48px;
-  text-align: center;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : MUTED)};
-  font-size: 15px;
-  line-height: 1.65;
-  font-weight: 500;
+const SectionWrap = styled.section`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 `
 
-/** 목록용 국가 카드 — 행정조직 카드와 동일 톤 */
-const ModernCountryCard = styled(motion.div)`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
-  border: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
-  border-radius: 16px;
-  padding: 28px;
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.02);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+const HeadRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+`
+
+const HeadText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+const Title = styled.h3`
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const Description = styled.p`
+  margin: 0;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ModeSwitchGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 6px;
+`
+
+const ModeSwitchBtn = styled.button<{ $active: boolean }>`
+  padding: 5px 11px;
+  border: none;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  cursor: pointer;
 
   &:hover {
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
-    transform: translateY(-2px);
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.active : theme.colors.text.primary};
   }
 `
 
-/**
- * 목록 3버킷 중 한 그룹 — 접이식 헤더(제목·개수·설명) + 펼치면 카드들.
- * 전신 그룹만 기본 펼침, 구성국·유산은 접힘으로 "많다" 체감을 눌러준다.
- */
-function LinkedBucketGroup({
-  title,
-  hint,
-  tone,
-  items,
-  defaultOpen,
-  idToCountry,
-  countryRelations,
-  onNavigate,
-}: {
-  title: string
-  hint: string
-  tone: string
-  items: HistoricalCountryItem[]
-  defaultOpen: boolean
-  idToCountry: Map<string, HistoricalCountryItem>
-  countryRelations: Map<string, typeof EMPTY_RELS>
-  onNavigate: (id: string) => void
-}) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          width: '100%',
-          padding: '12px 14px',
-          background: isDark ? '#1a1a1a' : '#f8fafc',
-          border: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
-          borderRadius: 12,
-          cursor: 'pointer',
-          textAlign: 'left',
-          color: isDark ? '#f5f5f5' : TITLE,
-        }}
-      >
-        <span
-          aria-hidden
-          style={{
-            display: 'inline-flex',
-            fontSize: 12,
-            color: isDark ? '#a1a1aa' : MUTED,
-            transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
-            transition: 'transform 0.18s ease',
-          }}
-        >
-          ▶
-        </span>
-        <span style={{ fontSize: 15, fontWeight: 700 }}>{title}</span>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 700,
-            color: tone,
-            background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
-            border: `1px solid ${isDark ? 'rgba(99,102,241,0.24)' : '#e0e7ff'}`,
-            borderRadius: 999,
-            padding: '2px 9px',
-          }}
-        >
-          {items.length}개
-        </span>
-        <span
-          style={{
-            fontSize: 12,
-            color: isDark ? '#a1a1aa' : MUTED,
-            fontWeight: 500,
-            marginLeft: 'auto',
-          }}
-        >
-          {hint}
-        </span>
-      </button>
-      {open && (
-        <div
-          role="group"
-          aria-label={title}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
-            marginTop: 14,
-          }}
-        >
-          {items.map((item, index) => (
-            <HistoricalCountryCard
-              key={item.id}
-              h={item}
-              idx={index}
-              relations={countryRelations.get(item.id) ?? EMPTY_RELS}
-              idToCountry={idToCountry}
-              onDetail={() => onNavigate(item.id)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
+const FilterToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
 
-function HistoricalCountryCard({
-  h,
-  idx,
-  relations,
-  idToCountry,
-  onDetail,
-}: {
-  h: HistoricalCountryItem
-  idx: number
-  relations: {
-    transitions: HistoricalCountryTransitionDto[]
-    relations: HistoricalCountryRelationDto[]
-    memberships: HistoricalCountryMembershipDto[]
+const FilterChipGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+`
+
+const FilterChip = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.active : theme.colors.text.primary};
   }
-  idToCountry: Map<string, HistoricalCountryItem>
-  onDetail: () => void
-}) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  const totalRels =
-    relations.transitions.length +
-    relations.relations.length +
-    relations.memberships.length
+`
 
-  return (
-    <ModernCountryCard
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(idx * 0.04, 0.32) }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 24,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 20,
-            minWidth: 0,
-            flex: 1,
-          }}
-        >
-          {h.thumbnailUrl ? (
-            <img
-              src={h.thumbnailUrl}
-              alt=""
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: 14,
-                objectFit: 'cover',
-                border: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
-                flexShrink: 0,
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: 14,
-                background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 28,
-                flexShrink: 0,
-                border: `1px solid #c7d2fe`,
-              }}
-            >
-              🏛️
-            </div>
-          )}
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: 20,
-                fontWeight: 800,
-                color: isDark ? '#f5f5f5' : '#0f172a',
-                letterSpacing: '-0.03em',
-              }}
-            >
-              {h.name}
-            </h3>
-            {h.enName && (
-              <p
-                style={{
-                  margin: '6px 0 0',
-                  fontSize: 14,
-                  color: isDark ? '#a1a1aa' : '#64748b',
-                  fontWeight: 500,
-                }}
-              >
-                {h.enName}
-              </p>
-            )}
-            <div
-              style={{
-                marginTop: 12,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                flexWrap: 'wrap',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: '#4f46e5',
-                  background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
-                  padding: '4px 10px',
-                  borderRadius: 8,
-                }}
-              >
-                {getStateTypeLabel(
-                  h.stateType as Parameters<typeof getStateTypeLabel>[0],
-                )}
-              </span>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: isDark ? '#a1a1aa' : '#64748b',
-                  fontWeight: 500,
-                }}
-              >
-                {formatPeriod({
-                  startEra: h.startEra,
-                  startYear: h.startYear,
-                  endEra: h.endEra,
-                  endYear: h.endYear,
-                })}
-              </span>
-            </div>
-            {totalRels > 0 && (
-              <div
-                style={{
-                  marginTop: 14,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  flexWrap: 'wrap',
-                }}
-              >
-                {relations.transitions.length > 0 && (
-                  <RelationBadge>
-                    변천 {relations.transitions.length}
-                  </RelationBadge>
-                )}
-                {relations.relations.length > 0 && (
-                  <RelationBadge>
-                    관계 {relations.relations.length}
-                  </RelationBadge>
-                )}
-                {relations.memberships.length > 0 && (
-                  <RelationBadge>
-                    소속 {relations.memberships.length}
-                  </RelationBadge>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onDetail}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '10px 18px',
-            borderRadius: 12,
-            border: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
-            background: isDark ? '#212121' : '#fff',
-            color: '#4f46e5',
-            cursor: 'pointer',
-            fontSize: 13,
-            fontWeight: 600,
-            flexShrink: 0,
-          }}
-          onMouseEnter={(event) => {
-            event.currentTarget.style.background = isDark
-              ? 'rgba(99,102,241,0.12)'
-              : '#eef2ff'
-            event.currentTarget.style.borderColor = '#c7d2fe'
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.background = isDark ? '#212121' : '#fff'
-            event.currentTarget.style.borderColor = isDark ? '#2a2a2a' : BORDER
-          }}
-        >
-          상세 보기
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </button>
-      </div>
-    </ModernCountryCard>
-  )
-}
+const FilterChipCount = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+`
+
+const SearchInput = styled.input`
+  width: min(260px, 100%);
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.active};
+  }
+`
+
+const CountryLedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  @media (min-width: 780px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const CountryLedgerCell = styled.div`
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 780px) {
+    &:nth-child(even) {
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+  }
+`
+
+const CountryRowButton = styled.button`
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 12px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+  }
+`
+
+const CountryThumb = styled.div`
+  width: 38px;
+  height: 28px;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+
+const CountryMainCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+`
+
+const CountryTitleRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+`
+
+const CountryNameText = styled.span`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CountryEnNameText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const CountryMetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+`
+
+const KindBadge = styled.span<{ $kind: string }>`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $kind }) =>
+    $kind === 'PREDECESSOR'
+      ? theme.colors.active
+      : theme.colors.text.secondary};
+  background: ${({ theme, $kind }) =>
+    $kind === 'PREDECESSOR'
+      ? theme.colors.activeLight
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : '#f1f5f9'};
+`
+
+const StateBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc'};
+`
+
+const PeriodText = styled.span`
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RelationChipRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+`
+
+const RelationChip = styled.span<{ $highlight?: boolean }>`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme, $highlight }) =>
+    $highlight ? theme.colors.text.primary : theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
+`
+
+const DetailActionLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+
+  ${CountryRowButton}:hover & {
+    color: ${({ theme }) => theme.colors.active};
+  }
+`
+
+const FlowSectionWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 8px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const SubLedgerSection = styled.section`
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+`
+
+const SubLedgerHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+`
+
+const SubLedgerTitle = styled.h4`
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SubLedgerCount = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RelationLedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 780px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const RelationLedgerCell = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  min-width: 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 780px) {
+    &:nth-child(even) {
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+  }
+`
+
+const RelationKindBadge = styled.span<{
+  $tone: 'transition' | 'membership' | 'relation'
+}>`
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: ${({ theme, $tone }) =>
+    $tone === 'transition'
+      ? theme.colors.active
+      : theme.colors.text.secondary};
+  background: ${({ theme, $tone }) =>
+    $tone === 'transition'
+      ? theme.colors.activeLight
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : '#f1f5f9'};
+`
+
+const RelationMainText = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+  font-size: 13px;
+`
+
+const RelationNodeBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.active};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const RelationArrow = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const NoMatchRow = styled.p`
+  margin: 0;
+  padding: 20px 0;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const EmptySpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const EmptySpecCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 14px;
+  min-width: 0;
+
+  & + & {
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  @media (min-width: 720px) {
+    & + & {
+      border-top: none;
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const EmptySpecTitle = styled.div`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EmptySpecDesc = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`

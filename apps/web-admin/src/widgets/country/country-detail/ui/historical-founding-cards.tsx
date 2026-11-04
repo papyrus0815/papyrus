@@ -63,6 +63,8 @@ interface HistoricalFoundingCardsProps {
   endYear: number | null
   /** '역대 수반' 탭으로 — 초대 기록이 없을 때의 등록 경로 */
   onGoToHeads?: () => void
+  /** '계승' 탭으로 — 전신·후신 기록이 없을 때의 연결 경로 */
+  onGoToSuccession?: () => void
 }
 
 export const foundingSummaryKey = (id: string) =>
@@ -135,6 +137,7 @@ function FoundingCardsInner({
   startYear,
   endYear,
   onGoToHeads,
+  onGoToSuccession,
 }: HistoricalFoundingCardsProps) {
   const isState = !entityKind || entityKind === 'STATE'
   const { data: summary, isLoading: isSummaryLoading } = useQuery({
@@ -156,10 +159,14 @@ function FoundingCardsInner({
   const foundingYearText = formatCountryYearShort(startYear)
   const dissolutionYearText = formatCountryYearShort(endYear)
   const founderNames = (summary.founders ?? [])
-    .map((a) => (a.person ? getPersonDisplayName(a.person, true) : a.name))
+    .map((agent) =>
+      agent.person ? getPersonDisplayName(agent.person, true) : agent.name,
+    )
     .filter(Boolean)
   const dissolverNames = (summary.dissolvers ?? [])
-    .map((a) => (a.person ? getPersonDisplayName(a.person, true) : a.name))
+    .map((agent) =>
+      agent.person ? getPersonDisplayName(agent.person, true) : agent.name,
+    )
     .filter(Boolean)
   const firstRulerName = summary.firstRulers[0]
     ? summary.firstRulers[0].regnalName?.trim() ||
@@ -266,6 +273,7 @@ function FoundingCardsInner({
           linked={summary.predecessors}
           linkedLabel="전신"
           onGoToHeads={onGoToHeads}
+          onGoToSuccession={onGoToSuccession}
         />
         <FoundingCard
           side="dissolution"
@@ -280,6 +288,7 @@ function FoundingCardsInner({
           linked={summary.successors}
           linkedLabel="후신"
           onGoToHeads={onGoToHeads}
+          onGoToSuccession={onGoToSuccession}
         />
       </Cards>
     </Wrap>
@@ -301,6 +310,7 @@ interface FoundingCardProps {
   linked: FoundingLinkedCountry[]
   linkedLabel: string
   onGoToHeads?: () => void
+  onGoToSuccession?: () => void
 }
 
 function FoundingCard({
@@ -316,6 +326,7 @@ function FoundingCard({
   linked,
   linkedLabel,
   onGoToHeads,
+  onGoToSuccession,
 }: FoundingCardProps) {
   const queryClient = useQueryClient()
   const preview = useFoundingPreview()
@@ -728,6 +739,13 @@ function FoundingCard({
           <GroupHead>
             <span>{linkedLabel}</span>
             <GroupCount>{linked.length}</GroupCount>
+            {linked.length > 0 && onGoToSuccession && (
+              <GroupHeadActions>
+                <TextButton type="button" onClick={onGoToSuccession}>
+                  계승 관리
+                </TextButton>
+              </GroupHeadActions>
+            )}
           </GroupHead>
           {linked.length > 0 ? (
             <RowList>
@@ -770,6 +788,11 @@ function FoundingCard({
               <EmptySpecText>
                 미등록 · 연결된 {linkedLabel} 기록이 없습니다
               </EmptySpecText>
+              {onGoToSuccession && (
+                <SpecInlineAction type="button" onClick={onGoToSuccession}>
+                  계승에서 연결
+                </SpecInlineAction>
+              )}
             </EmptySpecRow>
           )}
         </Group>

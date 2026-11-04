@@ -128,8 +128,8 @@ export function HistoricalRulerTimeline({
     (axis) => dated.some((ruler) => ruler.axis === axis),
   )
   const hasMultipleAxes =
-    rulers.some((r) => r.axis === 'HEAD_OF_STATE') &&
-    rulers.some((r) => r.axis === 'HEAD_OF_GOVERNMENT')
+    rulers.some((ruler) => ruler.axis === 'HEAD_OF_STATE') &&
+    rulers.some((ruler) => ruler.axis === 'HEAD_OF_GOVERNMENT')
 
   /* 치세가 덮은 비율 — 빈 구간이 '없던 시대'가 아니라 '아직 안 적은 재위'임을 말해 준다 */
   const primaryDated = dated.filter(
@@ -142,16 +142,20 @@ export function HistoricalRulerTimeline({
     ? findUncoveredGaps(primaryDated, domainStart, domainEnd)
     : []
 
-  const inSpanRulers = rulers.filter((r) => !r.isOutOfSpan)
+  const inSpanRulers = rulers.filter((ruler) => !ruler.isOutOfSpan)
   const outOfSpanCount = rulers.length - inSpanRulers.length
-  const hosCount = inSpanRulers.filter((r) => r.axis === 'HEAD_OF_STATE').length
+  const hosCount = inSpanRulers.filter(
+    (ruler) => ruler.axis === 'HEAD_OF_STATE',
+  ).length
   const hogCount = inSpanRulers.filter(
-    (r) => r.axis === 'HEAD_OF_GOVERNMENT',
+    (ruler) => ruler.axis === 'HEAD_OF_GOVERNMENT',
   ).length
   const primaryPool =
-    inSpanRulers.filter((r) => r.axis === (axes[0] ?? 'HEAD_OF_STATE'))
+    inSpanRulers.filter((ruler) => ruler.axis === (axes[0] ?? 'HEAD_OF_STATE'))
       .length > 0
-      ? inSpanRulers.filter((r) => r.axis === (axes[0] ?? 'HEAD_OF_STATE'))
+      ? inSpanRulers.filter(
+          (ruler) => ruler.axis === (axes[0] ?? 'HEAD_OF_STATE'),
+        )
       : inSpanRulers
   const firstRuler = primaryPool[0] ?? rulers[0] ?? null
   const lastRuler =
@@ -330,12 +334,16 @@ export function HistoricalRulerTimeline({
                 {
                   key: 'HEAD_OF_STATE',
                   label: '국가원수',
-                  count: rulers.filter((r) => r.axis === 'HEAD_OF_STATE').length,
+                  count: rulers.filter(
+                    (ruler) => ruler.axis === 'HEAD_OF_STATE',
+                  ).length,
                 },
                 {
                   key: 'HEAD_OF_GOVERNMENT',
                   label: '정부수반',
-                  count: rulers.filter((r) => r.axis === 'HEAD_OF_GOVERNMENT').length,
+                  count: rulers.filter(
+                    (ruler) => ruler.axis === 'HEAD_OF_GOVERNMENT',
+                  ).length,
                 },
               ] as const
             ).map((item) => {
@@ -448,8 +456,8 @@ export function HistoricalRulerTimeline({
               const counterpartSummary =
                 counterparts.length > 0
                   ? ruler.axis === 'HEAD_OF_GOVERNMENT'
-                    ? `${counterparts.map((c) => c.personName).join(' · ')} 재위기`
-                    : `정부수반 ${counterparts.slice(0, 2).map((c) => c.personName).join('·')}${counterparts.length > 2 ? ` 외 ${counterparts.length - 2}명` : ''}`
+                    ? `${counterparts.map((counterpart) => counterpart.personName).join(' · ')} 재위기`
+                    : `정부수반 ${counterparts.slice(0, 2).map((counterpart) => counterpart.personName).join('·')}${counterparts.length > 2 ? ` 외 ${counterparts.length - 2}명` : ''}`
                   : null
 
               return (
@@ -737,6 +745,10 @@ const LedgerCell = styled.div`
   @media (min-width: 720px) {
     &:nth-child(even) {
       border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
     }
   }
 `
