@@ -397,8 +397,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
           </HeaderActionsBar>
         }
         maxWidth="min(1040px, 96vw)"
-        minHeight="min(680px, 86vh)"
-        height="min(840px, 88vh)"
+        minHeight="90vh"
         fullBleedOnMobile
         // 저장 중에는 Esc·오버레이로 닫히지 않게 — 요청이 날아간 뒤 UI만 사라지는 상태 방지
         closeOnEsc={!isSubmitting}
