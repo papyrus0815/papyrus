@@ -717,13 +717,15 @@ export class CityController {
   /**
    * Nominatim (OpenStreetMap) 장소 검색 프록시
    * GET /cities/place-search?q=서울&countryCode=kr&limit=8
+   * scope=any — 도시로 좁히지 않는다(궁전·전장·섬 — 사건 위치 고르기용)
    */
   @Get('place-search')
   searchPlaces(
     @Query('q') q?: string,
     @Query('countryCode') countryCode?: string,
     @Query('limit') limit?: string,
+    @Query('scope') scope?: string,
   ): Promise<PlaceSearchResult[]> {
-    return this.cityService.searchPlaces(q, countryCode, limit)
+    return this.cityService.searchPlaces(q, countryCode, limit, scope === 'any' ? 'any' : 'city')
   }
 }

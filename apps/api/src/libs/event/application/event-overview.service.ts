@@ -79,6 +79,22 @@ export interface EventOverviewNode {
   type: EventTypeValue | null
   /** 사건 종류 — 묶음 전개 트리가 '하위가 아직 없는 묶음'(끌어다 놓을 수 있는 자리)을 알아보게 */
   kind: 'SINGLE' | 'COLLECTION'
+  /** 손으로 넣은 상위의 국면(없으면 날짜로 자동) */
+  phaseId: string | null
+  /** 이 묶음의 국면 — 사건이 아니라 구획(목차) */
+  phases: Array<{
+    id: string
+    title: string
+    order: number
+    startEra: 'BC' | 'AD' | null
+    startYear: number | null
+    startMonth: number | null
+    startDay: number | null
+    endEra: 'BC' | 'AD' | null
+    endYear: number | null
+    endMonth: number | null
+    endDay: number | null
+  }>
   countries: EventOverviewCountry[]
   persons: EventOverviewPerson[]
   sides: EventOverviewSide[]
@@ -99,6 +115,8 @@ export interface EventOverviewResponse {
 }
 
 const NODE_INCLUDE = {
+  // 국면(묶음 안의 구획) — 조망이 묶음 띠 위에 장 경계를 긋는다
+  phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
   countryRelations: {
     orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
     include: {
@@ -270,6 +288,20 @@ export class EventOverviewService {
       domain: row.domain,
       type: row.type,
       kind: row.kind,
+      phaseId: row.phaseId ?? null,
+      phases: row.phases.map((phase) => ({
+        id: phase.id,
+        title: phase.title,
+        order: phase.order,
+        startEra: phase.startEra,
+        startYear: phase.startYear,
+        startMonth: phase.startMonth,
+        startDay: phase.startDay,
+        endEra: phase.endEra,
+        endYear: phase.endYear,
+        endMonth: phase.endMonth,
+        endDay: phase.endDay,
+      })),
       countries,
       persons: row.persons.map((participation) => ({
         personId: participation.personId,

@@ -1286,6 +1286,8 @@ export class CityService {
     q?: string,
     countryCode?: string,
     limit?: string,
+    /** 'any'면 도시로 좁히지 않는다 — 사건 위치(궁전·전장·섬)는 도시가 아닌 곳이 많다 */
+    scope: 'city' | 'any' = 'city',
   ): Promise<PlaceSearchResult[]> {
     if (!q || q.trim().length < 2) return []
 
@@ -1300,8 +1302,8 @@ export class CityService {
         namedetails: '1',
         limit: maxResults,
         dedupe: '1',
-        featuretype: 'city',
       })
+      if (scope === 'city') p.set('featuretype', 'city')
       if (countryCode) p.set('countrycodes', countryCode.toLowerCase())
       return p
     }

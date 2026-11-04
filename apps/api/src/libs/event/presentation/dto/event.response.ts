@@ -4,6 +4,7 @@ import type { EventSideView } from '../../application/event-side.service'
 import type { CalendarSystemValue } from '../../domain/event.entity'
 import type { StructuredPoint as StructuredPointView } from '../../../shared/structured-point'
 import { ApiProperty } from '@nestjs/swagger'
+import { EventPhaseDto } from './event-phase.dto'
 
 export class EventResponseDto {
   @ApiProperty({ description: '사건 ID' })
@@ -53,6 +54,22 @@ export class EventResponseDto {
 
   @ApiProperty({ description: '위치 (자유 텍스트)', required: false })
   location?: string | null
+
+  @ApiProperty({ description: '손으로 넣은 상위 사건의 국면 id — 비면 날짜로 자동 배정', required: false, nullable: true })
+  phaseId?: string | null
+
+  @ApiProperty({
+    description: '이 사건(묶음)의 국면 목록 — 상세 조회에서만. 국면은 사건이 아니라 구획(목차)',
+    required: false,
+    type: [EventPhaseDto],
+  })
+  phases?: EventPhaseDto[]
+
+  @ApiProperty({ description: '대표 위치 위도(WGS84) — 경도와 짝', required: false, nullable: true, type: Number })
+  locationLatitude?: number | null
+
+  @ApiProperty({ description: '대표 위치 경도(WGS84) — 위도와 짝', required: false, nullable: true, type: Number })
+  locationLongitude?: number | null
 
   @ApiProperty({ description: '분야 — 무엇에 관한 일인가. 2단계는 type(세부 분야)', enum: EVENT_DOMAIN_VALUES })
   domain!: EventDomainValue

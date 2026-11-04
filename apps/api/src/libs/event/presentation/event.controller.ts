@@ -49,6 +49,7 @@ import { Event } from '../domain/event.entity'
 import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
 import { EventCountryRole, EventOrganizationRole, PrismaClient } from '@prisma/client'
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
+import { toEventPhaseDto } from './event-phase.controller'
 import { assertEventOwnership, ensureEventOwnership } from '../domain/event-ownership'
 import { formatEventDate } from '../domain/event-date'
 import { parseEventDomain, type EventDomainValue } from '../domain/event-domain'
@@ -284,6 +285,25 @@ export interface EventOrganizationDto {
 const decimalToString = (value: unknown): string | null => (value == null ? null : String(value))
 
 /** 선택 텍스트 칸 — 생략(undefined)=유지, 빈 문자열·null=비움, 나머지는 앞뒤 공백 정리 */
+/**
+ * 대표 위치 좌표 — 위도·경도는 짝으로만 받는다(한쪽만 오면 400). 둘 다 생략이면 손대지 않고(undefined),
+ * 둘 다 null이면 지운다. 한 점의 반쪽만 저장되면 지도가 (0, 경도)·(위도, 0)에 엉뚱한 핀을 세운다.
+ */
+const coordinatePair = (dto: {
+  locationLatitude?: number | null
+  locationLongitude?: number | null
+}): { locationLatitude?: number | null; locationLongitude?: number | null } => {
+  const latitude = dto.locationLatitude
+  const longitude = dto.locationLongitude
+  if (latitude === undefined && longitude === undefined) return {}
+  const latitudeSet = latitude != null
+  const longitudeSet = longitude != null
+  if (latitudeSet !== longitudeSet) {
+    throw new BadRequestException('위도와 경도는 함께 보내야 합니다(지울 때는 둘 다 null)')
+  }
+  return { locationLatitude: latitude ?? null, locationLongitude: longitude ?? null }
+}
+
 const emptyToNull = (value: string | null | undefined): string | null | undefined =>
   value === undefined ? undefined : value?.trim() || null
 
@@ -384,6 +404,28 @@ export class EventController {
    * @param event Event 엔티티
    * @returns EventResponseDto
    */
+  /**
+   * 국면 손 지정 — 국면은 이 사건의 (바뀐 뒤) 주 상위 것만 받는다. null = 날짜로 자동.
+   * 주 상위가 바뀌는데 국면을 같이 보내지 않으면 옛 상위의 국면이 남지 않게 풀어 준다.
+   */
+  private async resolvePhasePatch(id: string, dto: UpdateEventDto): Promise<string | null | undefined> {
+    const current = await this.prisma.event.findUnique({
+      where: { id },
+      select: { parentEventId: true, phaseId: true },
+    })
+    const targetParent = dto.parentEventId !== undefined ? (dto.parentEventId ?? null) : (current?.parentEventId ?? null)
+    if (dto.phaseId === undefined) {
+      const parentChanged = dto.parentEventId !== undefined && targetParent !== (current?.parentEventId ?? null)
+      return parentChanged && current?.phaseId ? null : undefined
+    }
+    if (dto.phaseId === null) return null
+    const phase = await this.prisma.eventPhase.findUnique({ where: { id: dto.phaseId }, select: { eventId: true } })
+    if (!phase || phase.eventId !== targetParent) {
+      throw new BadRequestException('상위 사건의 국면만 지정할 수 있습니다')
+    }
+    return dto.phaseId
+  }
+
   private toResponseDto(event: any): EventResponseDto {
     // EventSection 변환
     const eventSections = event.eventSections?.map((section: any) => ({
@@ -501,6 +543,11 @@ export class EventController {
       endCalendar: event.endCalendar ?? null,
       endDateOriginal: event.endDateOriginal ?? null,
       location: event.location,
+      locationLatitude: event.locationLatitude ?? null,
+      locationLongitude: event.locationLongitude ?? null,
+      phaseId: event.phaseId ?? null,
+      // 국면 — 상세에서만 include된다(conditional: 목록·후보 payload를 []로 오염시키지 않게)
+      phases: Array.isArray(event.phases) ? event.phases.map(toEventPhaseDto) : undefined,
       domain: event.domain ?? 'OTHER',
       background: event.background,
       aftermath: event.aftermath,
@@ -946,6 +993,8 @@ export class EventController {
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
         parentEvent: true,
+        // 국면 — 목록이 하위 사건 줄에 '2국면' 표지를 단다(묶음만 행이 있다)
+        phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
         /*
          * 하위 사건 중첩 — 루트만 보는 기본 모드에서만 싣는다.
          * includeSubEvents=true면 자식이 이미 각자 한 행으로 서 있어, 여기서 또
@@ -969,6 +1018,8 @@ export class EventController {
                     },
                   },
                   historicalCountry: { select: { id: true, name: true } },
+                  // 자식 묶음의 국면 — 손자 줄의 '2국면' 표지 근거(입법의회기 › 하위)
+                  phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
                   // 목록은 섹션 *제목*만 소비한다(드로어의 '본문 구성' 칩) —
                   // content 제외 근거는 아래 루트 include 주석 참고.
                   eventSections: {
@@ -1701,6 +1752,8 @@ export class EventController {
         parentEvent: {
           omit: LIST_OMITTED_BODY_FIELDS,
           include: {
+            // 직속 상위의 국면 — 이 사건이 '몇 국면'인지 보이고 손으로 바꾸게(조부모 이상은 싣지 않는다)
+            phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
             parentEvent: {
               omit: LIST_OMITTED_BODY_FIELDS,
               include: {
@@ -1758,6 +1811,8 @@ export class EventController {
         hierarchyReasonsAsParent: {
           select: { childEventId: true, reason: true },
         },
+        // 국면(묶음 안의 구획) — 상세에서만
+        phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
         childEvents: {
           // 소프트 삭제된 자식 제외 — 유령 카드 방지 + 프론트가 이 목록으로
           // childEventIds 전체 재전송을 만들기 때문에(가드가 삭제 사건을 거부) 필수.
@@ -2057,6 +2112,7 @@ export class EventController {
         endCalendar: dto.endCalendar,
         endDateOriginal: emptyToNull(dto.endDateOriginal),
         location: dto.location,
+        ...coordinatePair(dto),
         domain: dto.domain,
         background: dto.background,
         aftermath: dto.aftermath,
@@ -2122,6 +2178,7 @@ export class EventController {
 
     const startPartsU = parseEventDate(dto.startDate)
     const endPartsU = parseEventDate(dto.endDate)
+    const phasePatch = await this.resolvePhasePatch(id, dto)
     const event = await this.eventService.updateEvent(
       id,
       {
@@ -2145,6 +2202,8 @@ export class EventController {
         endCalendar: dto.endCalendar,
         endDateOriginal: emptyToNull(dto.endDateOriginal),
         location: dto.location,
+        ...coordinatePair(dto),
+        phaseId: phasePatch,
         domain: dto.domain,
         background: dto.background,
         aftermath: dto.aftermath,

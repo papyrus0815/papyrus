@@ -11,12 +11,13 @@ import { EventOverviewService } from '../application/event-overview.service'
 import { EventPrismaRepository } from './event.prisma.repository'
 import { EventTrashCleanupTask } from './event-trash-cleanup.task'
 import { EventController } from '../presentation/event.controller'
+import { EventPhaseController } from '../presentation/event-phase.controller'
 import { PrismaModule } from '../../shared/database'
 import { NotificationModule } from '../../notification/notification.module'
 
 @Module({
   imports: [PrismaModule, NotificationModule],
-  controllers: [EventController, EventSideController, EventOverviewController],
+  controllers: [EventController, EventSideController, EventOverviewController, EventPhaseController],
   providers: [
     EventService,
     MilitaryEventService,

@@ -4,6 +4,9 @@ import { EVENT_TYPE_VALUES, type EventTypeValue } from '../../domain/event-type'
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
+  IsNumber,
+  Max,
+  Min,
   ValidateIf,
   IsString,
   IsOptional,
@@ -88,6 +91,30 @@ export class CreateEventDto {
   @IsString()
   @IsOptional()
   location?: string
+
+  @ApiProperty({
+    description: '대표 위치 위도(WGS84, -90~90) — 경도와 짝. null이면 좌표 지우기',
+    required: false,
+    nullable: true,
+    type: Number,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 7 })
+  @Min(-90)
+  @Max(90)
+  locationLatitude?: number | null
+
+  @ApiProperty({
+    description: '대표 위치 경도(WGS84, -180~180) — 위도와 짝. null이면 좌표 지우기',
+    required: false,
+    nullable: true,
+    type: Number,
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 7 })
+  @Min(-180)
+  @Max(180)
+  locationLongitude?: number | null
 
   @ApiProperty({
     description: '키워드 (동일 사건 매핑용, 추후 검색/매칭에 사용)',
