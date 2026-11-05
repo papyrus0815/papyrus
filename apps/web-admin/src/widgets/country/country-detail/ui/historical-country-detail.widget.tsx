@@ -129,7 +129,6 @@ export type HistoricalCountryTab =
   | 'membership' // 소속·구성 (신성로마-제후국 등)
   | 'relation' // 국가 관계 (한·중 조공, 동맹 등)
   | 'treaty' // 조약·협정 (강화도조약 등)
-  | 'culture' // 문화 유산
 
 /**
  * 페이지 → 위젯이 받는 URL-동기화 가능한 탭 키 부분집합.
@@ -157,7 +156,6 @@ const LOCAL_QUERY_TAB_SET = new Set<HistoricalCountryTab>([
   'succession',
   'membership',
   'relation',
-  'culture',
 ])
 
 interface HistoricalCountryDetailProps {
@@ -446,22 +444,13 @@ export function HistoricalCountryDetail({
                 />
               </CountryStyles.StickyTopBar>
 
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    width: '100%',
-                  }}
-                >
-                  {activeTab === 'overview' && (
+              <CountryStyles.TabSwapMotion
+                key={activeTab}
+                role="tabpanel"
+                aria-labelledby={historicalTabId(activeTab)}
+                tabIndex={0}
+              >
+                {activeTab === 'overview' && (
                     <>
                       <CountryDetailHeader
                         country={country}
@@ -624,11 +613,7 @@ export function HistoricalCountryDetail({
                       <TreatySectionWidget country={country} />
                     </div>
                   )}
-                  {/* 문화는 저작 API가 없어 플레이스홀더 — 로드맵 확정 시 배선.
-                      영토 변천 탭은 저작 모델·데이터가 없어 제거함(행정구역은 regions 탭에서 실제 지원). */}
-                  {activeTab === 'culture' && <CultureSection />}
-                </motion.div>
-              </AnimatePresence>
+              </CountryStyles.TabSwapMotion>
             </CountryStyles.AnalyticsDashboard>
           </motion.div>
         )}
@@ -3068,34 +3053,6 @@ function HistoricalRegionsSection({ country }: { country: UnifiedCountry }) {
         }}
       />
     </div>
-  )
-}
-
-// ============================================
-// 문화 유산 섹션
-// ============================================
-
-/**
- * 문화 유산 탭 — 저작 가능한 데이터 모델·API가 아직 없어 정직한 '준비 중' 상태.
- *
- * 과거에는 국가명 includes('조선'|'고려') 매칭으로 하드코딩 목업을 렌더해
- * 실데이터로 오인될 수 있었다(예: 북한 상세에 조선왕조 유산). 목업을 제거해
- * 정직한 플레이스홀더로 둔다.
- */
-function CultureSection() {
-  return (
-    <DashboardStyles.DashboardRoot>
-      <FiguresSectionWrap>
-        <FiguresHeadRow>
-          <FiguresHeadText>
-            <FiguresTitle>문화 유산</FiguresTitle>
-            <FiguresDescription>
-              문화재·예술·기록유산을 등록·표시하는 기능은 준비 중입니다.
-            </FiguresDescription>
-          </FiguresHeadText>
-        </FiguresHeadRow>
-      </FiguresSectionWrap>
-    </DashboardStyles.DashboardRoot>
   )
 }
 

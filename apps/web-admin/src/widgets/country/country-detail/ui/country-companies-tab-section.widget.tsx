@@ -32,7 +32,7 @@ import {
   CompanyRegisterModal,
 } from '@/widgets/company-form'
 
-import { SectionEmpty } from './dashboard-panels/section-empty'
+import * as DashboardStyles from './country-detail-dashboard.styles'
 
 export interface CountryCompaniesTabSectionProps {
   country: UnifiedCountry
@@ -252,12 +252,22 @@ export function CountryCompaniesTabSection({
     if (!confirmed) return
     try {
       await companyApi.delete(company.id)
-      await queryClient.invalidateQueries({ queryKey: ['companies'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['companies'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['historical-country-companies'],
+        }),
+      ])
       notify.success('기업이 삭제되었습니다.')
     } catch {
       notify.error('기업 삭제에 실패했습니다.')
     }
   }
+
+  const hasActiveFilter =
+    statusFilter !== 'ALL' ||
+    scopeFilter !== 'ALL' ||
+    searchQuery.trim().length > 0
 
   return (
     <Root
@@ -267,8 +277,8 @@ export function CountryCompaniesTabSection({
     >
       <SectionTabHeader
         variant="plain"
-        title="기업"
-        description={`${country.name}에 설립·소속된 기업의 존속 기간, 창업자, 본사 도시 및 이력을 관리합니다.`}
+        title="기업 · 상단"
+        description={`${country.name}에 설립·소속된 기업 및 시대별 상단·공방·금융기관의 존속 기간, 창업자, 본사 도시 및 이력을 관리합니다.`}
         rightSlot={
           <HeaderButtons>
             <SecondaryBtn
@@ -289,39 +299,137 @@ export function CountryCompaniesTabSection({
         }
       />
 
-      {countryCompanies.length > 0 && (
-        <SummaryStrip aria-label="기업 요약 지표">
-          <SummaryCell>
-            <SummaryLabel>등록 기업</SummaryLabel>
-            <SummaryValue>{stats.total}개</SummaryValue>
-          </SummaryCell>
-          <SummaryCell>
-            <SummaryLabel>활동 중</SummaryLabel>
-            <SummaryValue>{stats.active}개</SummaryValue>
-          </SummaryCell>
-          <SummaryCell>
-            <SummaryLabel>해산 · 합병 · 중단</SummaryLabel>
-            <SummaryValue>{stats.ended}개</SummaryValue>
-          </SummaryCell>
-          {stats.earliestLabel && (
-            <SummaryCell>
-              <SummaryLabel>최초 설립 기록</SummaryLabel>
-              <SummaryValue>{stats.earliestLabel}</SummaryValue>
-            </SummaryCell>
-          )}
-        </SummaryStrip>
-      )}
+      <DashboardStyles.SectionHeadlineStrip aria-label="기업 요약 지표">
+        <DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineLabel>
+            전체 소속 기업
+          </DashboardStyles.SectionHeadlineLabel>
+          <DashboardStyles.SectionHeadlineValue $muted={stats.total === 0}>
+            {stats.total > 0 ? (
+              <>
+                {stats.total.toLocaleString('ko-KR')}
+                <DashboardStyles.SectionHeadlineUnit>
+                  개사
+                </DashboardStyles.SectionHeadlineUnit>
+              </>
+            ) : (
+              '미등록'
+            )}
+          </DashboardStyles.SectionHeadlineValue>
+          <DashboardStyles.SectionHeadlineSub>
+            {stats.total > 0
+              ? isModern && historicalCount > 0
+                ? `현대 국가 ${modernCount}개 · 연결 과거 국가 ${historicalCount}개`
+                : '국가 소속 기업 · 상단 · 공방'
+              : '등록된 소속 기업 없음'}
+          </DashboardStyles.SectionHeadlineSub>
+        </DashboardStyles.SectionHeadlineCell>
+
+        <DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineLabel>
+            활동 중
+          </DashboardStyles.SectionHeadlineLabel>
+          <DashboardStyles.SectionHeadlineValue $muted={stats.active === 0}>
+            {stats.active > 0 ? (
+              <>
+                {stats.active.toLocaleString('ko-KR')}
+                <DashboardStyles.SectionHeadlineUnit>
+                  개사
+                </DashboardStyles.SectionHeadlineUnit>
+              </>
+            ) : (
+              '없음'
+            )}
+          </DashboardStyles.SectionHeadlineValue>
+          <DashboardStyles.SectionHeadlineSub>
+            {stats.total > 0
+              ? `전체의 ${Math.round((stats.active / stats.total) * 100)}% 존속·운영 중`
+              : '현존 기업 데이터 대기'}
+          </DashboardStyles.SectionHeadlineSub>
+        </DashboardStyles.SectionHeadlineCell>
+
+        <DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineLabel>
+            해산 · 합병 · 중단
+          </DashboardStyles.SectionHeadlineLabel>
+          <DashboardStyles.SectionHeadlineValue $muted={stats.ended === 0}>
+            {stats.ended > 0 ? (
+              <>
+                {stats.ended.toLocaleString('ko-KR')}
+                <DashboardStyles.SectionHeadlineUnit>
+                  개사
+                </DashboardStyles.SectionHeadlineUnit>
+              </>
+            ) : (
+              '없음'
+            )}
+          </DashboardStyles.SectionHeadlineValue>
+          <DashboardStyles.SectionHeadlineSub>
+            {stats.ended > 0
+              ? '해산 · 인수합병 · 국유화 · 운영 종료'
+              : '종료 이력 기업 없음'}
+          </DashboardStyles.SectionHeadlineSub>
+        </DashboardStyles.SectionHeadlineCell>
+
+        <DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineLabel>
+            최초 설립 기록
+          </DashboardStyles.SectionHeadlineLabel>
+          <DashboardStyles.SectionHeadlineValue
+            $muted={!stats.earliestLabel}
+          >
+            {stats.earliestLabel ?? '—'}
+          </DashboardStyles.SectionHeadlineValue>
+          <DashboardStyles.SectionHeadlineSub>
+            {stats.earliestLabel
+              ? '확인된 가장 이른 설립 연도'
+              : '설립 연도 데이터 미등록'}
+          </DashboardStyles.SectionHeadlineSub>
+        </DashboardStyles.SectionHeadlineCell>
+      </DashboardStyles.SectionHeadlineStrip>
 
       {isLoading ? (
         <LoadingBox>기업 목록을 불러오는 중…</LoadingBox>
       ) : countryCompanies.length === 0 ? (
-        <SectionEmpty
-          text={`${country.name}에 등록된 기업이 아직 없습니다. 기업을 등록하면 설립 연도부터 현재까지의 존속 타임라인과 창업자·본사 정보가 여기에 정리됩니다.`}
-          actionLabel="첫 기업 등록"
-          onAction={() => setModalTarget('new')}
-          secondaryLabel="전체 국가 기업 목록 보기"
-          onSecondary={() => navigate(pathKeys.companies.root())}
-        />
+        <CompaniesEmptySpecGrid>
+          <CompaniesEmptySpecCell>
+            <CompaniesEmptySpecTitle>
+              1. 소속 기업 · 상단 · 금융기관 등록
+            </CompaniesEmptySpecTitle>
+            <CompaniesEmptySpecDesc>
+              {country.name}에 설립·소속된 기업이나 역사적 특권 상단·공방·금융기관을 등록하면 설립 연도부터 현재(또는 해산 시점)까지의 존속 타임라인과 창업자·본사 정보가 정리됩니다.
+            </CompaniesEmptySpecDesc>
+            <CompaniesEmptySpecAction
+              type="button"
+              onClick={() => setModalTarget('new')}
+            >
+              + 첫 기업 등록 →
+            </CompaniesEmptySpecAction>
+          </CompaniesEmptySpecCell>
+
+          <CompaniesEmptySpecCell>
+            <CompaniesEmptySpecTitle>
+              2. 업종 카탈로그 및 전체 국가 기업 대시보드
+            </CompaniesEmptySpecTitle>
+            <CompaniesEmptySpecDesc>
+              업종 카탈로그를 구성해 산업군을 분류하거나, 전체 국가 기업 목록에서 타 국가 소속 기업들과의 설립 시기·존속 기간을 비교할 수 있습니다.
+            </CompaniesEmptySpecDesc>
+            <CompaniesEmptySpecActionRow>
+              <CompaniesEmptySpecAction
+                type="button"
+                onClick={() => setCategoriesOpen(true)}
+              >
+                업종 카탈로그 관리
+              </CompaniesEmptySpecAction>
+              <CompaniesEmptySpecAction
+                type="button"
+                onClick={() => navigate(pathKeys.companies.root())}
+              >
+                전체 기업 목록 보기 →
+              </CompaniesEmptySpecAction>
+            </CompaniesEmptySpecActionRow>
+          </CompaniesEmptySpecCell>
+        </CompaniesEmptySpecGrid>
       ) : (
         <>
           <Toolbar>
@@ -336,6 +444,23 @@ export function CountryCompaniesTabSection({
             </SearchWrap>
 
             <FilterGroup>
+              {hasActiveFilter && (
+                <>
+                  <FilterResultSummary>
+                    검색 결과 {filteredCompanies.length}개사
+                  </FilterResultSummary>
+                  <FilterResetBtn
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter('ALL')
+                      setScopeFilter('ALL')
+                      setSearchQuery('')
+                    }}
+                  >
+                    필터 초기화
+                  </FilterResetBtn>
+                </>
+              )}
               {isModern && historicalCount > 0 && (
                 <ChipGroup role="group" aria-label="시대 범위">
                   <FilterChip
@@ -552,7 +677,12 @@ export function CountryCompaniesTabSection({
       {modalTarget !== null && (
         <CompanyRegisterModal
           isOpen
-          onClose={() => setModalTarget(null)}
+          onClose={() => {
+            setModalTarget(null)
+            void queryClient.invalidateQueries({
+              queryKey: ['historical-country-companies'],
+            })
+          }}
           companyId={modalTarget === 'new' ? undefined : modalTarget}
           defaultCountryId={isModern ? country.id : undefined}
           defaultHistoricalCountryId={!isModern ? country.id : undefined}
@@ -572,15 +702,15 @@ export function CountryCompaniesTabSection({
 const Root = styled(motion.div)`
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 36px 32px 48px;
+  gap: 20px;
+  padding: 28px 32px 48px;
   min-height: calc(100vh - 200px);
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
 
   @media (max-width: 768px) {
-    padding: 24px 20px 36px;
+    padding: 20px 16px 36px;
   }
 `
 
@@ -595,9 +725,9 @@ const SecondaryBtn = styled.button`
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 13px;
   font-weight: 600;
@@ -605,42 +735,77 @@ const SecondaryBtn = styled.button`
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
     background: ${({ theme }) => theme.colors.hover};
   }
 `
 
-const SummaryStrip = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  width: max-content;
-  max-width: 100%;
-  gap: 1px;
-  border-radius: 12px;
-  overflow: hidden;
-  background: ${({ theme }) => theme.colors.border.light};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+const CompaniesEmptySpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
 `
 
-const SummaryCell = styled.div`
+const CompaniesEmptySpecCell = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  min-width: 140px;
-  padding: 12px 16px;
-  background: ${({ theme }) => theme.colors.background.primary};
+  align-items: flex-start;
+  gap: 8px;
+  padding: 20px 22px;
+
+  &:first-child {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  @media (max-width: 768px) {
+    &:first-child {
+      border-right: none;
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
 `
 
-const SummaryLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const SummaryValue = styled.span`
-  font-size: 18px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+const CompaniesEmptySpecTitle = styled.div`
+  font-size: 13.5px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CompaniesEmptySpecDesc = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CompaniesEmptySpecActionRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+`
+
+const CompaniesEmptySpecAction = styled.button`
+  margin-top: 4px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
 `
 
 const Toolbar = styled.div`
@@ -655,13 +820,13 @@ const SearchWrap = styled.label`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-width: 260px;
-  flex: 1 1 280px;
-  max-width: 420px;
-  padding: 8px 12px;
-  border-radius: 10px;
+  min-width: 240px;
+  flex: 1 1 260px;
+  max-width: 380px;
+  padding: 6px 10px;
+  border-radius: 7px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -670,7 +835,7 @@ const SearchInput = styled.input`
   border: none;
   outline: none;
   background: transparent;
-  font-size: 13px;
+  font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -681,6 +846,28 @@ const FilterGroup = styled.div`
   gap: 8px;
 `
 
+const FilterResultSummary = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const FilterResetBtn = styled.button`
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
 const ChipGroup = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
@@ -689,7 +876,7 @@ const ChipGroup = styled.div`
 
 const FilterChip = styled.button<{ $active: boolean }>`
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -707,10 +894,8 @@ const FilterChip = styled.button<{ $active: boolean }>`
 `
 
 const TableCard = styled.div`
-  border-radius: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
-  overflow: hidden;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const AxisHeader = styled.div`
@@ -718,9 +903,8 @@ const AxisHeader = styled.div`
   grid-template-columns: minmax(240px, 1.2fr) minmax(200px, 1.6fr) 210px;
   align-items: center;
   gap: 16px;
-  padding: 10px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.secondary};
   font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -761,7 +945,7 @@ const CompanyRow = styled.div`
   grid-template-columns: minmax(240px, 1.2fr) minmax(200px, 1.6fr) 210px;
   align-items: center;
   gap: 16px;
-  padding: 12px 18px;
+  padding: 12px 14px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   transition: background 0.14s ease;
 
@@ -795,7 +979,7 @@ const IdentityCell = styled.button`
 const LogoBox = styled.span`
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: 8px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -837,7 +1021,7 @@ const CompanyName = styled.span`
 
 const StatusBadge = styled.span<{ $tone: string }>`
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
   color: ${({ $tone }) => $tone};
@@ -846,7 +1030,7 @@ const StatusBadge = styled.span<{ $tone: string }>`
 
 const HistoricalBadge = styled.span`
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
@@ -934,11 +1118,9 @@ const IconButton = styled.button<{ $danger?: boolean }>`
 `
 
 const LoadingBox = styled.div`
-  padding: 48px 24px;
-  text-align: center;
-  border-radius: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
-  font-size: 13.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  padding: 28px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
