@@ -821,6 +821,8 @@ function EventDetailContent({
   const foldedInActiveTab = folded.filter(
     (section) =>
       tabOf(section.id) === activeTab &&
+      // 연관 탭의 조약은 연관 칸 '연결 추가' 줄이 든다 — 추가 자리가 두 곳(연결 추가 · 더 채울 수 있는 것)으로 갈렸다
+      !(activeTab === 'links' && section.id === 'treaties') &&
       !(activeTab === 'media' && section.id === 'appendix') &&
       // 묶음의 '전체 글' 안내가 위에서 배경·여파 쓰기를 이미 든다
       !(collectionTextNotice && (section.id === 'background' || section.id === 'aftermath')) &&
@@ -1117,6 +1119,7 @@ function EventDetailContent({
                       event={event}
                       onPatch={onPatch}
                       onRequestSplit={() => setSplitOpen(true)}
+                      onAddTreaty={!promoteTreaties && !isVisible('treaties') ? () => revealSection('treaties') : undefined}
                     />
                   )}
                 </>

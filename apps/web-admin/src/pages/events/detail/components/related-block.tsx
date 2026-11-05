@@ -62,6 +62,9 @@ interface RelatedBlockProps {
   suggestions?: RelatedSuggestion[]
   /** 현재 사건을 '계기가 된 사건'으로 미리 담아 새 관련 사건 등록 모달 열기 */
   onOpenCreateRelated?: () => void
+  /** 연결 지도와 함께 가리키는 사건 — 지도 마디에 올리면 이 줄이, 이 줄에 올리면 지도 마디가 진해진다 */
+  hotEventId?: string | null
+  onHoverEvent?: (id: string | null) => void
 }
 
 type Draft = RelationDraft
@@ -125,6 +128,8 @@ export function RelatedBlock({
   hierarchyIds,
   suggestions = [],
   onOpenCreateRelated,
+  hotEventId = null,
+  onHoverEvent,
 }: RelatedBlockProps) {
   const queryClient = useQueryClient()
   const prefetchEvent = usePrefetchEventDetail()
@@ -362,7 +367,10 @@ export function RelatedBlock({
             <GroupArrow aria-hidden title={SIDE_TITLE[group.side]}>
               {SIDE_GLYPH[group.side]}
             </GroupArrow>
-            <GroupLabel title={group.hint}>{group.label}</GroupLabel>
+            <GroupLabel title={group.hint}>
+              {group.label}
+              <GroupCount>{group.items.length}</GroupCount>
+            </GroupLabel>
           </GroupHead>
           <NetStyles.ChildList>
             {group.items.map((relation) => {
@@ -371,7 +379,12 @@ export function RelatedBlock({
               const dateLabel = counterpartDateLabel(other)
               const hasDescription = Boolean(relation.description?.trim())
               return (
-                <NetStyles.ChildRow key={relation.id}>
+                <NetStyles.ChildRow
+                  key={relation.id}
+                  data-hot={hotEventId === other.id ? '' : undefined}
+                  onMouseEnter={() => onHoverEvent?.(other.id)}
+                  onMouseLeave={() => onHoverEvent?.(null)}
+                >
                   <NetStyles.ChildCard
                     to={pathKeys.events.detail(other.id)}
                     viewTransition
@@ -614,6 +627,12 @@ const GroupLabel = styled.span`
   font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const GroupCount = styled.span`
+  margin-left: 6px;
+  font-weight: 400;
+  color: ${metaText};
 `
 
 const Suggestions = styled.div`

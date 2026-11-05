@@ -539,6 +539,13 @@ export const ChildRow = styled.li`
   position: relative;
   display: block;
   padding: 12px 8px;
+  border-radius: 8px;
+  transition: background 0.18s ease;
+
+  /* 연결 지도와 함께 가리킴 — 지도 마디에 올리면 이 줄이 진해진다 */
+  &[data-hot] {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
+  }
 
   /* 형제 행 사이 헤어라인 — 카드 박스 대신 리스트 구분선. 첫 행은 무선. */
   & + & {

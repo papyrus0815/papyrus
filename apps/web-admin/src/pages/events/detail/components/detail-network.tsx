@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react'
 
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBlocker } from 'react-router-dom'
 import { FiLayers, FiShuffle } from 'react-icons/fi'
 
@@ -25,6 +25,8 @@ import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import * as NetStyles from './detail-network.styles'
+import { getEventOverview } from '@/shared/api/event-overview'
+
 import { type EventDetail, eventKeys } from '../use-event-detail'
 import { eventRelationKeys, useEventRelations } from '../use-event-relations'
 import { ChildrenBlock } from './children-block'
@@ -58,6 +60,8 @@ const LazyEventRegisterModal = lazy(() =>
 )
 
 interface DetailNetworkProps {
+  /** 조약이 아직 없을 때 '+ 조약' 칩 — 페이지 아래 '더 채울 수 있는 것'과 두 곳에 나뉘어 있던 추가 자리를 이 줄로 모은다 */
+  onAddTreaty?: () => void
   event: EventDetail
   /** opts.savedLabel — 저장 토스트 문구 교체(대상명을 박아야 하는 patch용) */
   onPatch: (patch: UpdateEventDto, opts?: { savedLabel?: string }) => void
@@ -106,12 +110,25 @@ const NETWORK_BLOCKS: ReadonlyArray<{ id: NetworkBlock; label: string; hint: str
  */
 const structuredStart = (node: object) => node as { startEra?: string | null; startYear?: number | null }
 
-export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkProps) {
+export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: DetailNetworkProps) {
   /** 단일 사건은 하위를 가질 수 없다(서버 강제) — 하위 블록·모으기·새로 만들기를 내지 않는다 */
   const isCollection = event.kind === 'COLLECTION'
   const queryClient = useQueryClient()
   // 섹션 부제의 '관련 N' — RelatedBlock과 같은 캐시를 읽는다(추가 요청 없음)
   const relatedQuery = useEventRelations(event.id)
+  /*
+   * 묶음 — 아래 사건들끼리의 관계 수(조망 응답, 전개·조망과 같은 캐시). 지도는 이 수가 있을 때만 의미가 있고,
+   * 탭 머리 '연관 4'(하위 수)만으론 지도에 그려진 아래 연결 43개가 보이지 않았다.
+   */
+  const { data: overview } = useQuery({
+    queryKey: eventKeys.overview(event.id),
+    queryFn: () => getEventOverview(event.id),
+    enabled: event.kind === 'COLLECTION',
+    staleTime: 30_000,
+  })
+  const descendantRelationCount = overview?.relations?.length ?? 0
+  /** 지도·목록이 함께 가리키는 사건 — 목록 줄에 올리면 지도 마디가, 지도 마디에 올리면 목록 줄이 진해진다 */
+  const [hotEventId, setHotEventId] = useState<string | null>(null)
   /** 연결 지도 펼침 — 사람마다 기억(편의 상태) */
   const [mapShown, setMapShownState] = useState(() => {
     try {
@@ -747,8 +764,9 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
     isBlockShown('parent') ||
     (!isCollection && Boolean(onRequestSplit) && narrativeCount >= 2) ||
     (isCollection && isBlockShown('children'))
+  /* 관련 사건은 늘 편다 — 사건 대부분(591 중 535)이 관계 0이라, 잇기가 맨 아래 '+ 관련 사건' 칩 안에 숨어 있었다 */
   const isBlockShown = (block: NetworkBlock) =>
-    blockFilled[block] || shownBlocks.has(block)
+    block === 'related' || blockFilled[block] || shownBlocks.has(block)
   const foldedBlocks = NETWORK_BLOCKS.filter(
     (block) => !isBlockShown(block.id) && (isCollection || block.id !== 'children'),
   )
@@ -760,10 +778,17 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
       : null,
     children.length > 0 ? `자식 ${children.length}` : null,
     relatedCount > 0 ? `관련 ${relatedCount}` : null,
+    descendantRelationCount > 0 ? `아래 사건끼리 연결 ${descendantRelationCount}` : null,
     keywords.length > 0 ? `키워드 ${keywords.length}` : null,
   ]
     .filter(Boolean)
     .join(' · ')
+
+  /*
+   * 연결 지도는 관련 사건이 있을 때만 — 관계 0인 사건(발미)은 지도 330px에 '상위 — 이 사건' 두 마디뿐이라 바로 아래
+   * 소속 칸과 같은 말이었다. 묶음은 아래 사건들끼리의 연결이 있으면.
+   */
+  const mapAvailable = relatedCount > 0 || (isCollection && descendantRelationCount > 0)
 
   return (
     <S.Section id="network">
@@ -772,7 +797,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
         {relationSummary && (
           <S.SectionSubtitle>{relationSummary}</S.SectionSubtitle>
         )}
-        {(parentEvent || extraParents.length > 0 || children.length > 0 || relatedCount > 0) && (
+        {mapAvailable && (
           <S.SectionActions>
             <HeaderTextAction type="button" onClick={() => setMapShown(!mapShown)} aria-expanded={mapShown}>
               {mapShown ? '연결 지도 접기' : '연결 지도 보기'}
@@ -782,8 +807,13 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
       </S.SectionHeader>
 
       {/* 연결 지도 — 이 사건을 가운데 둔 마인드맵(상위·하위 한 단 + 관련 두 단). 아래 목록이 편집 자리 */}
-      {mapShown && (parentEvent || extraParents.length > 0 || children.length > 0 || relatedCount > 0) && (
-        <EventRelationMindmap eventId={event.id} isCollection={isCollection} />
+      {mapShown && mapAvailable && (
+        <EventRelationMindmap
+          eventId={event.id}
+          isCollection={isCollection}
+          hotId={hotEventId}
+          onHover={setHotEventId}
+        />
       )}
 
       {/*
@@ -867,6 +897,8 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
           hierarchyIds={hierarchyIds}
           suggestions={suggestions}
           onOpenCreateRelated={() => setCreateRelatedOpen(true)}
+          hotEventId={hotEventId}
+          onHoverEvent={mapShown && mapAvailable ? setHotEventId : undefined}
         />
         </NetworkZone>
       )}
@@ -876,7 +908,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
         <KeywordsBlock keywords={keywords} onPatch={onPatch} />
       )}
 
-      {foldedBlocks.length > 0 && (
+      {(foldedBlocks.length > 0 || onAddTreaty) && (
         <NetStyles.FoldedLinks>
           <NetStyles.FoldedLinksLabel>연결 추가</NetStyles.FoldedLinksLabel>
           {foldedBlocks.map((block) => (
@@ -891,6 +923,11 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
               + {block.label}
             </NetStyles.FoldedLinkChip>
           ))}
+          {onAddTreaty && (
+            <NetStyles.FoldedLinkChip type="button" onClick={onAddTreaty} title="이 사건과 맺어진·이 사건을 끝낸 조약">
+              + 조약
+            </NetStyles.FoldedLinkChip>
+          )}
         </NetStyles.FoldedLinks>
       )}
       </ZoneTail>

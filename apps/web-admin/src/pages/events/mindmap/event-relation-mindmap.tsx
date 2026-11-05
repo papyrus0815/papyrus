@@ -27,12 +27,27 @@ import { useMindmapRelationActions } from './use-mindmap-relation-actions'
 
 const MindmapCanvas = lazy(() => import('./mindmap-canvas'))
 
-export function EventRelationMindmap({ eventId, isCollection = false }: { eventId: string; isCollection?: boolean }) {
-  return isCollection ? <CollectionMindmap eventId={eventId} /> : <EgoMindmap eventId={eventId} />
+interface LinkedHover {
+  /** 연관 목록과 함께 가리키는 사건 — 목록 줄에 올리면 지도 마디가 진해진다 */
+  hotId?: string | null
+  onHover?: (id: string | null) => void
+}
+
+export function EventRelationMindmap({
+  eventId,
+  isCollection = false,
+  hotId,
+  onHover,
+}: { eventId: string; isCollection?: boolean } & LinkedHover) {
+  return isCollection ? (
+    <CollectionMindmap eventId={eventId} hotId={hotId} onHover={onHover} />
+  ) : (
+    <EgoMindmap eventId={eventId} hotId={hotId} onHover={onHover} />
+  )
 }
 
 /** 묶음 — 아래 전체 나무 + 모든 연결(조망 응답) */
-function CollectionMindmap({ eventId }: { eventId: string }) {
+function CollectionMindmap({ eventId, hotId, onHover }: { eventId: string } & LinkedHover) {
   const navigate = useNavigate()
   const theme = useTheme()
   /* 기본 = 관련 사건 사슬. 처음엔 소속 나무 전체를 기본으로 했다가 "관련된 사건을 보는 마인드맵이 아닌가"로 바로잡음 */
@@ -147,6 +162,8 @@ function CollectionMindmap({ eventId }: { eventId: string }) {
               return next
             })
           }
+          hotId={hotId}
+          onHover={onHover}
           fullscreenTitle={`${data.root.title} — 연결 지도`}
           candidates={'candidates' in mindmap ? mindmap.candidates : undefined}
           onCreateRelation={relationActions.create}
@@ -159,7 +176,7 @@ function CollectionMindmap({ eventId }: { eventId: string }) {
 }
 
 /** 단일 사건 — 가운데 두고 상위·하위·관련 1~2단 */
-function EgoMindmap({ eventId }: { eventId: string }) {
+function EgoMindmap({ eventId, hotId, onHover }: { eventId: string } & LinkedHover) {
   const navigate = useNavigate()
   const [hops, setHops] = useState<1 | 2>(2)
   const { data, isLoading, isError } = useQuery({
@@ -199,6 +216,8 @@ function EgoMindmap({ eventId }: { eventId: string }) {
           data={mindmap}
           height={Math.min(560, Math.max(320, 120 + mindmap.specs.size * 22))}
           onOpen={(id) => navigate(pathKeys.events.detail(id))}
+          hotId={hotId}
+          onHover={onHover}
           fullscreenTitle={`${data.nodes.find((node) => node.id === data.centerId)?.title ?? ''} — 연결 지도`}
           onCreateRelation={relationActions.create}
           onUpdateRelation={relationActions.update}
