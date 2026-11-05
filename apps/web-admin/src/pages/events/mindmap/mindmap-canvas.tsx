@@ -126,15 +126,23 @@ const MindNode = memo(function MindNode({ data }: NodeProps<Node<MindNodeData>>)
       {data.side === 'left' && toggle}
       {data.openable ? (
         <NodeButton type="button" className="nodrag" onClick={() => data.onOpen(data.id)}>
-          {data.number && <span className="number">{data.number}</span>}
+          {(data.number || data.year) && (
+            <span className="meta">
+              {data.number && <span className="number">{data.number}</span>}
+              {data.year && <span className="year">{data.year}</span>}
+            </span>
+          )}
           <span className="label">{data.label}</span>
-          {data.year && <span className="year">{data.year}</span>}
         </NodeButton>
       ) : (
         <NodeText>
-          {data.number && <span className="number">{data.number}</span>}
+          {(data.number || data.year) && (
+            <span className="meta">
+              {data.number && <span className="number">{data.number}</span>}
+              {data.year && <span className="year">{data.year}</span>}
+            </span>
+          )}
           <span className="label">{data.label}</span>
-          {data.year && <span className="year">{data.year}</span>}
         </NodeText>
       )}
       {data.side !== 'left' && toggle}
@@ -246,10 +254,33 @@ function MindmapFlow({
     })
   }
 
+  /*
+   * 마우스를 올린 사건의 **사슬 전체** — 방향 있는 연결을 따라 원인 쪽(위로)·결과 쪽(아래로) 끝까지, 방향 없는 연결은
+   * 바로 이웃만. 예전엔 바로 이웃만 진해져 '이 일이 어디서 와서 어디로 갔나'를 한 번에 볼 수 없었다.
+   */
   const connected = useMemo(() => {
     if (!activeId) return null
     const set = new Set<string>([activeId])
+    const walk = (direction: 'down' | 'up') => {
+      const queue = [activeId]
+      const visited = new Set<string>([activeId])
+      while (queue.length > 0) {
+        const current = queue.shift()!
+        for (const relation of data.relations) {
+          if (!relation.arrow) continue
+          const next = direction === 'down' ? (relation.from === current ? relation.to : null) : relation.to === current ? relation.from : null
+          if (next && !visited.has(next)) {
+            visited.add(next)
+            set.add(next)
+            queue.push(next)
+          }
+        }
+      }
+    }
+    walk('down')
+    walk('up')
     for (const relation of data.relations) {
+      if (relation.arrow) continue
       if (relation.from === activeId) set.add(relation.to)
       if (relation.to === activeId) set.add(relation.from)
     }
@@ -323,7 +354,9 @@ function MindmapFlow({
       const touched =
         selected ||
         connected === null ||
-        (connected.has(relation.from) && connected.has(relation.to) && (relation.from === activeId || relation.to === activeId))
+        (connected.has(relation.from) &&
+          connected.has(relation.to) &&
+          (relation.arrow || relation.from === activeId || relation.to === activeId))
       /* 보조 선(가지를 건너는·사슬을 이루지 않은 선)은 평소 한 단 흐리고 가늘게 — 주 사슬이 먼저 읽히게 */
       const restOpacity = relation.cross ? 0.32 : 0.8
       list.push({
@@ -570,6 +603,10 @@ const Host = styled.div`
   /* 멀리 줄었을 때 — 사건 마디는 번호만(글자가 점처럼 되기 전에 의미를 줄인다) */
   &[data-far] .mind-event .label,
   &[data-far] .mind-event .year,
+  &[data-far] .mind-event .meta {
+    border-right: 0;
+  }
+  &[data-far] .mind-event .year,
   &[data-far] .mind-external .label {
     display: none;
   }
@@ -779,26 +816,26 @@ const NodeBox = styled.div<{ $kind: MindNodeKind; $color: string | null; $hot: b
         color: ${ink};
         border: 1.5px dashed ${theme.colors.text.secondary};
       `
-    /* 사건 — 직사각형 + 왼쪽 묶음 색 띠. 알약(999px)에 띠를 넣으면 띠가 '(' 괄호처럼 휘어 보였다 */
+    /* 사건 — 중립 직사각형(색 띠 없음, 사용자 지시). 어느 묶음인지는 번호(1-…·3-…)가 든다 */
     return `
       border-radius: 8px;
       background: ${surface};
       color: ${ink};
       border: 1px solid ${theme.colors.border.default};
-      box-shadow: inset 4px 0 0 ${$color ?? theme.colors.border.default};
-      padding-left: 12px;
+      padding: 0 10px;
     `
   }}
 
   /* 강조는 outline — 사건 마디의 왼쪽 색 띠(inset box-shadow)를 덮지 않고, 자리도 차지하지 않는다 */
   outline: 2px solid ${({ $hot, theme }) => ($hot ? theme.colors.text.primary : 'transparent')};
+  /* 사슬에 든 마디(흐리지 않은 것) — 테두리를 한 단 진하게 */
   outline-offset: 2px;
 `
 
 const NodeButton = styled.button`
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
@@ -817,12 +854,24 @@ const NodeButton = styled.button`
     border-radius: 6px;
   }
 
-  .number {
+  /* 왼쪽 메타 칸 — 번호(위)·연도(아래). 제목 뒤에 붙던 연도가 두 줄 제목과 자리를 다퉜다 */
+  .meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1px;
     flex-shrink: 0;
+    min-width: 34px;
+    padding-right: 8px;
+    border-right: 1px solid ${({ theme }) => theme.colors.border.default};
+    line-height: 1.1;
+  }
+  .number {
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
-    color: ${metaText};
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
   /* 두 줄까지 — 넘치면 말줄임(전체는 마우스 올림) */
   .label {
@@ -840,9 +889,7 @@ const NodeButton = styled.button`
     text-underline-offset: 2px;
   }
   .year {
-    flex-shrink: 0;
-    margin-left: auto;
-    font-size: 10.5px;
+    font-size: 10px;
     font-variant-numeric: tabular-nums;
     color: ${metaText};
   }
@@ -855,17 +902,25 @@ const NodeText = styled.span`
   flex: 1 1 auto;
   min-width: 0;
 
-  .year {
+  .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
     flex-shrink: 0;
-    margin-left: auto;
-    font-size: 10.5px;
+    min-width: 34px;
+    padding-right: 8px;
+    border-right: 1px solid ${({ theme }) => theme.colors.border.default};
+    line-height: 1.1;
+  }
+  .year {
+    font-size: 10px;
     color: ${metaText};
   }
 
   .number {
-    flex-shrink: 0;
     font-size: 11px;
-    color: ${metaText};
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
   .label {
     display: -webkit-box;

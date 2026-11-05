@@ -20,7 +20,8 @@ export interface ChainMindmapInput {
   ordered: ReadonlyArray<EventOverviewNode>
   relations: ReadonlyArray<EventOverviewRelation>
   numberById: Map<string, string>
-  colorOf: (id: string) => string | null
+  /** 지금은 쓰지 않는다(색 띠 제거) — 소속 구조 보기와 같은 입력 모양을 유지 */
+  colorOf?: (id: string) => string | null
   groupOf?: (id: string) => string | null
   hiddenTypes: ReadonlySet<RelationType>
 }
@@ -28,7 +29,7 @@ export interface ChainMindmapInput {
 const extId = (id: string) => `ext:${id}`
 
 export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { chainCount: number } {
-  const { root, ordered, numberById, colorOf, hiddenTypes } = input
+  const { root, ordered, numberById, hiddenTypes } = input
   const relations = input.relations.filter((relation) => !hiddenTypes.has(relation.type))
   const byId = new Map([root, ...ordered].map((node) => [node.id, node]))
   /* 마디 id — 트리 밖 사건은 'ext:' 접두(조망 마인드맵과 같은 규약) */
@@ -104,7 +105,8 @@ export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { cha
         kind,
         label: titleOf.get(id) ?? '',
         number: id.startsWith('ext:') ? null : (numberById.get(id) ?? null),
-        color: id.startsWith('ext:') ? null : colorOf(id),
+        /* 색 띠를 없앴다(사용자 지시) — 뿌리 → 사슬 머리 선도 중립색. 묶음은 번호가 든다 */
+        color: null,
         openable: true,
         year: yearOf(startOf.get(id)),
         hint: id.startsWith('ext:') ? '이 묶음 밖 사건' : null,
