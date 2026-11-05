@@ -134,3 +134,23 @@ export function byProximity<T extends PickerEvent>(self: PickerEvent, items: Rea
     .sort((left, right) => left.distance - right.distance || left.index - right.index)
     .map((entry) => entry.item)
 }
+
+/** 부호 끝 연도 — ISO 끝이 없으면 구조화 끝 연도, 그것도 없으면 시작 연도 */
+export function signedEndYear(node: PickerEvent & { endDate?: string | null; endEra?: string | null; endYear?: number | null }): number | null {
+  const parts = parseIsoDateParts(node.endDate ?? undefined)
+  if (parts) return parts.year
+  if (node.endYear != null) return node.endEra === 'BC' ? -node.endYear : node.endYear
+  return signedStartYear(node)
+}
+
+/**
+ * 하위 사건의 시작이 상위 기간에서 벗어났나 — 앞뒤 1년 여유(연도만 아는 사건·경계 걸침). 벗어난 해 수, 아니면 0.
+ * '지롱드파 지도부 21인 처형'이 1793이 아니라 1973으로 들어가 상위(1792–1795) 밖에 178년 떨어져 있었는데 화면이 말하지 않았다.
+ */
+export function yearsOutsideParent(childYear: number | null, parentStart: number | null, parentEnd: number | null): number {
+  if (childYear == null || parentStart == null) return 0
+  const end = parentEnd ?? parentStart
+  if (childYear < parentStart - 1) return parentStart - childYear
+  if (childYear > end + 1) return childYear - end
+  return 0
+}

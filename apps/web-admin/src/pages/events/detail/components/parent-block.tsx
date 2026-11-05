@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { type UpdateEventDto, getEventsByParentId } from '@/shared/api/events'
+import { formatYearLabel } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 import { InlineText } from '@/shared/ui/inline-edit'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
@@ -13,6 +14,7 @@ import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { REASON_MAX, compareEventStart } from './detail-network.lib'
 import { assignPhases, phaseRangeLabel, phaseReach, phaseReachLabel } from './event-phase.lib'
+import { type PickerEvent, signedEndYear, signedStartYear, yearsOutsideParent } from './related-picker.lib'
 import * as NetStyles from './detail-network.styles'
 
 const REASON_PLACEHOLDER =
@@ -141,6 +143,11 @@ export function ParentBlock({
   }
   const chainTruncated = Boolean(ancestor)
   const hasReason = Boolean(event.parentLinkReason?.trim())
+  /* 날짜가 상위 기간 밖 — 오타(1793 → 1973)이거나 상위를 잘못 고른 것. BC는 구조화 연도로 */
+  const selfYear = signedStartYear(event as unknown as PickerEvent)
+  const parentStartYear = parentEvent ? signedStartYear(parentEvent as unknown as PickerEvent) : null
+  const parentEndYear = parentEvent ? signedEndYear(parentEvent as unknown as PickerEvent) : null
+  const outsideBy = yearsOutsideParent(selfYear, parentStartYear, parentEndYear)
   const reach = phaseReach(parentChapters, {
     id: event.id,
     phaseId: manualChapter,
@@ -210,6 +217,14 @@ export function ParentBlock({
           </NetStyles.AddBtn>
         )}
       </NetStyles.MembershipRow>
+      {outsideBy > 0 && parentStartYear != null && (
+        <NetStyles.WarnNote role="note">
+          이 사건({formatYearLabel(selfYear ?? 0)})이 상위 기간(
+          {formatYearLabel(parentStartYear)}
+          {parentEndYear != null && parentEndYear !== parentStartYear ? `–${formatYearLabel(parentEndYear)}` : ''}) 밖에
+          {' '}{outsideBy}년 떨어져 있습니다 — 날짜 오타이거나 상위를 잘못 고른 것일 수 있습니다
+        </NetStyles.WarnNote>
+      )}
       {/* 유령 상위 표지 — 주 상위가 해제·삭제됐는데 추가 상위만 남은 상태의 유일 안내. */}
       {!parentEvent && extraParents.length > 0 && (
         <NetStyles.HelperNote>

@@ -31,7 +31,7 @@ import { usePrefetchEventDetail } from '../use-event-detail'
 import { eventRelationKeys, useEventRelations } from '../use-event-relations'
 import { REASON_MAX, compareEventStart } from './detail-network.lib'
 import { type LinkCandidate, type RelatedLinkFilter, type RelationDraft, RelatedLinkModal } from './related-link-modal'
-import { type PickerEvent, byProximity, particle, signedStartYear } from './related-picker.lib'
+import { type PickerEvent, byProximity, directionConflicts, particle, signedStartYear } from './related-picker.lib'
 import { type RelatedSuggestion } from './related-suggestions.lib'
 import * as NetStyles from './detail-network.styles'
 
@@ -381,6 +381,8 @@ export function RelatedBlock({
               const category = eventDomainDef(other.domain)
               const dateLabel = counterpartDateLabel(other)
               const hasDescription = Boolean(relation.description?.trim())
+              /* 날짜와 반대 방향 — 원인 쪽에 뒤 사건, 결과 쪽에 앞 사건(잇기 창엔 경고가 있지만 이미 이은 것은 말하지 않았다) */
+              const reversed = directionConflicts(relation.relationType, relation.direction, self, startFieldsOf(other))
               return (
                 <NetStyles.ChildRow
                   key={relation.id}
@@ -400,6 +402,11 @@ export function RelatedBlock({
                       <RelationTag title={EVENT_RELATION_LABELS[relation.relationType].hint}>
                         {EVENT_RELATION_LABELS[relation.relationType].name}
                       </RelationTag>
+                      {reversed && (
+                        <ReversedTag title="상대 사건의 날짜가 이 칸과 반대입니다 — '관계 바꾸기'로 방향을 고치거나 날짜를 확인하세요">
+                          날짜와 방향 반대
+                        </ReversedTag>
+                      )}
                     </NetStyles.ChildEyebrow>
                     <NetStyles.ChildBody>
                       <NetStyles.ChildTitle>{other.title}</NetStyles.ChildTitle>
@@ -672,4 +679,10 @@ const RelationTag = styled.small`
   font-weight: 600;
   letter-spacing: 0;
   color: ${metaText};
+`
+
+/** 방향·날짜 어긋남 — 호박색(주의). 고치기는 행의 '관계 바꾸기'(잇기 창에서 날짜대로 버튼) */
+const ReversedTag = styled(RelationTag)`
+  border-color: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(251,191,36,0.4)' : 'rgba(180,83,9,0.35)')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
 `

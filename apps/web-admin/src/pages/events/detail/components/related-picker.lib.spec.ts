@@ -1,6 +1,7 @@
 import {
   byProximity,
   directionConflicts,
+  yearsOutsideParent,
   inferDirection,
   particle,
   relationSentence,
@@ -71,5 +72,15 @@ describe('byProximity', () => {
       { id: 'c', ...annexation },
     ]
     expect(byProximity(sarajevo, items).map((item) => item.id)).toEqual(['b', 'c', 'a', 'none'])
+  })
+})
+
+describe('yearsOutsideParent', () => {
+  it('상위 기간 앞뒤 1년 안이면 0, 벗어나면 떨어진 해 수', () => {
+    expect(yearsOutsideParent(1793, 1792, 1795)).toBe(0)
+    expect(yearsOutsideParent(1796, 1792, 1795)).toBe(0)
+    expect(yearsOutsideParent(1973, 1792, 1795)).toBe(178)
+    expect(yearsOutsideParent(1700, 1792, null)).toBe(92)
+    expect(yearsOutsideParent(null, 1792, 1795)).toBe(0)
   })
 })

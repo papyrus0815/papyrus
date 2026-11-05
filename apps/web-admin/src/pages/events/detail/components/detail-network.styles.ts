@@ -54,6 +54,15 @@ export const HelperNote = styled.span`
   color: ${metaText};
 `
 
+/** 데이터 점검 경고 — 호박색(상태 '주의'), 아이콘 대신 글로 무엇이 이상한지 말한다. 소속 줄 아래 국면 줄과 같은 들여쓰기 */
+export const WarnNote = styled.span`
+  padding-left: 34px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+`
+
 /**
  * 최상위(앵커) 사건 상태 배지 — 상세 상위 블록의 **긍정형·상시 노출** 표기.
  *
