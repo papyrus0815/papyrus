@@ -11,9 +11,11 @@
  *   '연결' 또는 '연결하고 계속'(창을 닫지 않고 다음 사건으로).
  * - 좁은 폭: 한 칸 — 고르면 정하기 화면으로, '← 목록'으로 돌아간다.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 
-import { FiArrowLeft, FiArrowRight, FiSearch } from 'react-icons/fi'
+import { useQuery } from '@tanstack/react-query'
+
+import { FiArrowLeft, FiArrowRight, FiExternalLink, FiMapPin, FiPlus, FiSearch } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
@@ -24,9 +26,12 @@ import {
   type EventRelationDirection,
   type EventRelationType,
 } from '@/shared/api/event-relations'
+import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { Modal, ModalBody } from '@/shared/ui/modal'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 
+import { eventDetailQueryOptions } from '../use-event-detail'
 import { REASON_MAX } from './detail-network.lib'
 import {
   type PickerEvent,
@@ -80,7 +85,12 @@ interface RelatedLinkModalProps {
   /** 들어올 때 고른 상태(관계 바꾸기·키워드 '잇기') */
   initialDraft: RelationDraft | null
   saving: boolean
-  onSave: (draft: RelationDraft) => Promise<void>
+  /** 저장 — 새로 만든 관계 id를 돌려주면 '되돌리기'가 그 연결을 끊는다 */
+  onSave: (draft: RelationDraft) => Promise<string | undefined>
+  /** 이은 관계 끊기(고치기 화면·되돌리기) */
+  onDelete?: (relationId: string) => Promise<void>
+  /** 찾아도 없을 때 — 새 관련 사건 등록(창을 닫고 등록 창을 연다) */
+  onCreateNew?: () => void
 }
 
 export function RelatedLinkModal({
@@ -97,12 +107,20 @@ export function RelatedLinkModal({
   initialDraft,
   saving,
   onSave,
+  onDelete,
+  onCreateNew,
 }: RelatedLinkModalProps) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [hideLinked, setHideLinked] = useState(false)
   const [draft, setDraft] = useState<RelationDraft | null>(initialDraft)
   const [linkedCount, setLinkedCount] = useState(0)
+  /** '연결하고 계속'으로 마지막에 이은 것 — 되돌리기 */
+  const [lastLinked, setLastLinked] = useState<{ relationId: string; title: string } | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  /* 고른 사건 미리보기 — 상세 조회(같은 캐시). 요약 517/589건이 있는데 창엔 제목·날짜뿐이라 무슨 사건인지 몰랐다 */
+  const previewQuery = useQuery({ ...eventDetailQueryOptions(draft?.other.id ?? ''), enabled: Boolean(draft) })
+  const preview = draft && previewQuery.data?.id === draft.other.id ? previewQuery.data : null
   const searchRef = useRef<HTMLInputElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
 
@@ -114,6 +132,7 @@ export function RelatedLinkModal({
     onQueryChange('')
     setFilter('all')
     setLinkedCount(0)
+    setLastLinked(null)
     // 열릴 때만
   }, [isOpen])
 
@@ -180,17 +199,64 @@ export function RelatedLinkModal({
 
   const save = async (keepOpen: boolean) => {
     if (!draft) return
+    let savedId: string | undefined
     try {
-      await onSave(draft)
+      savedId = await onSave(draft)
     } catch {
       /* 실패 안내는 저장하는 쪽(토스트)이 맡는다 — 창은 그대로 두어 다시 시도하게 */
       return
     }
     if (keepOpen) {
       setLinkedCount((count) => count + 1)
+      setLastLinked(savedId && !draft.relationId ? { relationId: savedId, title: draft.other.title } : null)
       setDraft(null)
       requestAnimationFrame(() => searchRef.current?.focus())
     } else onClose()
+  }
+
+  /* 키보드 — 찾기 칸 ↓ → 첫 후보, 목록 안 ↑↓, Enter는 단추 그대로. 예전엔 찾기 칸에서 목록으로 갈 길이 Tab 여러 번뿐 */
+  const rowButtons = () => [...(listRef.current?.querySelectorAll<HTMLButtonElement>('button[data-row]') ?? [])]
+  const moveFocus = (keyEvent: KeyboardEvent<HTMLElement>) => {
+    if (keyEvent.key !== 'ArrowDown' && keyEvent.key !== 'ArrowUp') return
+    const rows = rowButtons()
+    if (rows.length === 0) return
+    keyEvent.preventDefault()
+    const index = rows.indexOf(document.activeElement as HTMLButtonElement)
+    if (index < 0) {
+      if (keyEvent.key === 'ArrowDown') rows[0].focus()
+      return
+    }
+    const next = keyEvent.key === 'ArrowDown' ? index + 1 : index - 1
+    if (next < 0) searchRef.current?.focus()
+    else rows[Math.min(next, rows.length - 1)].focus()
+  }
+
+  const removeExisting = async () => {
+    if (!draft?.relationId || !onDelete) return
+    const ok = await confirm({
+      title: '이 연결을 끊을까요?',
+      message: `‘${draft.other.title}’과의 연결 — 두 사건 모두에서 사라지고 적어 둔 이유도 지워집니다.`,
+      confirmLabel: '끊기',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await onDelete(draft.relationId)
+      setDraft(null)
+    } catch {
+      /* 안내는 지우는 쪽이 */
+    }
+  }
+
+  const undoLast = async () => {
+    if (!lastLinked || !onDelete) return
+    try {
+      await onDelete(lastLinked.relationId)
+      setLinkedCount((count) => Math.max(0, count - 1))
+      setLastLinked(null)
+    } catch {
+      /* 안내는 지우는 쪽이 */
+    }
   }
 
   return (
@@ -202,6 +268,11 @@ export function RelatedLinkModal({
         <>
           ‘{eventTitle}’과 원인·결과로 이어진 다른 사건 — 고르고, 어떻게 이어지는지 정합니다
           {linkedCount > 0 && <Linked> · 이번에 {linkedCount}건 이음</Linked>}
+          {lastLinked && onDelete && (
+            <UndoButton type="button" onClick={() => void undoLast()} title={`‘${lastLinked.title}’ 연결 되돌리기`}>
+              마지막 것 되돌리기
+            </UndoButton>
+          )}
         </>
       }
       maxWidth="min(1040px, 96vw)"
@@ -209,7 +280,18 @@ export function RelatedLinkModal({
     >
       {/* 공용 ModalBody — 안쪽 여백. 바로 넣으면 목록·입력칸이 창 가장자리에 붙었다 */}
       <ModalBody>
-      <Layout data-picked={draft ? '' : undefined}>
+      <Layout
+        data-picked={draft ? '' : undefined}
+        onKeyDownCapture={(keyEvent) => {
+          /* Esc는 한 단계씩 — 정하기 중이면 목록으로(창은 그대로), 목록이면 창 닫기 */
+          if (keyEvent.key !== 'Escape' || !draft || keyEvent.defaultPrevented) return
+          keyEvent.preventDefault()
+          keyEvent.stopPropagation()
+          const id = draft.other.id
+          setDraft(null)
+          requestAnimationFrame(() => rowButtons().find((row) => row.dataset.row === id)?.focus())
+        }}
+      >
         <ListPane aria-label="사건 고르기">
           <SearchBox>
             <FiSearch aria-hidden />
@@ -223,6 +305,7 @@ export function RelatedLinkModal({
                 setQuery(changeEvent.target.value)
                 onQueryChange(changeEvent.target.value)
               }}
+              onKeyDown={moveFocus}
             />
           </SearchBox>
           <Filters role="group" aria-label="거르기">
@@ -247,7 +330,7 @@ export function RelatedLinkModal({
             )}
           </Filters>
 
-          <ListScroll>
+          <ListScroll ref={listRef} onKeyDown={moveFocus}>
             {failed ? (
               <Empty>
                 후보를 불러오지 못했습니다.{' '}
@@ -258,7 +341,15 @@ export function RelatedLinkModal({
             ) : loading ? (
               <Empty>후보를 찾는 중…</Empty>
             ) : sections.length === 0 ? (
-              <Empty>{query.trim() ? `‘${query.trim()}’에 맞는 사건이 없습니다` : '고를 사건이 없습니다'}</Empty>
+              <Empty>
+                {query.trim() ? `‘${query.trim()}’에 맞는 사건이 없습니다.` : '고를 사건이 없습니다.'}
+                <span className="note">상위·하위로 이미 이어진 사건은 여기 나오지 않습니다 — 연관 탭 '소속'에서 봅니다.</span>
+                {onCreateNew && (
+                  <CreateButton type="button" onClick={onCreateNew}>
+                    <FiPlus aria-hidden /> 이 사건과 이을 새 사건 등록
+                  </CreateButton>
+                )}
+              </Empty>
             ) : (
               sections.map((section) => (
                 <Section key={section.key} aria-label={section.title}>
@@ -272,7 +363,7 @@ export function RelatedLinkModal({
                       const when = relativeStart(self, candidate)
                       return (
                         <li key={candidate.id}>
-                          <Row type="button" aria-pressed={selected} onClick={() => choose(candidate)}>
+                          <Row type="button" data-row={candidate.id} aria-pressed={selected} onClick={() => choose(candidate)}>
                             <span className="date">{candidate.dateLabel ?? '날짜 모름'}</span>
                             <span className="main">
                               <span className="title">{candidate.title}</span>
@@ -316,6 +407,36 @@ export function RelatedLinkModal({
                 <span className="meta">
                   {[draft.other.dateLabel, relative ? `이 사건 ${relative}` : null].filter(Boolean).join(' · ')}
                 </span>
+                {preview ? (
+                  <PreviewText>
+                    {preview.description?.trim() ? (
+                      <span className="summary">{preview.description.replace(/<[^>]+>/g, ' ').trim()}</span>
+                    ) : (
+                      <span className="summary" data-empty>
+                        요약이 아직 없는 사건입니다
+                      </span>
+                    )}
+                    {(preview.location?.trim() ||
+                      (preview.relatedCountries?.length ?? 0) + (preview.relatedHistoricalCountries?.length ?? 0) > 0) && (
+                      <span className="facts">
+                        {preview.location?.trim() && <FiMapPin aria-hidden />}
+                        {[
+                          preview.location?.trim() || null,
+                          ...[...(preview.relatedHistoricalCountries ?? []), ...(preview.relatedCountries ?? [])]
+                            .slice(0, 4)
+                            .map((country) => country.name),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    )}
+                  </PreviewText>
+                ) : (
+                  previewQuery.isLoading && <PreviewText><span className="summary" data-empty>요약을 불러오는 중…</span></PreviewText>
+                )}
+                <OpenLink href={pathKeys.events.detail(draft.other.id)} target="_blank" rel="noreferrer">
+                  상세 새 탭 <FiExternalLink aria-hidden />
+                </OpenLink>
               </Picked>
 
               <Field>
@@ -401,6 +522,11 @@ export function RelatedLinkModal({
               </Field>
 
               <Actions>
+                {draft.relationId && onDelete && (
+                  <button type="button" data-danger onClick={() => void removeExisting()}>
+                    연결 끊기
+                  </button>
+                )}
                 <button type="button" onClick={() => setDraft(null)}>
                   다른 사건 고르기
                 </button>
@@ -425,6 +551,85 @@ export function RelatedLinkModal({
 const Linked = styled.span`
   font-weight: 700;
   color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const UndoButton = styled.button`
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: inherit;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+`
+
+const PreviewText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+
+  .summary {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.55;
+    color: ${({ theme }) => theme.colors.text.secondary};
+
+    &[data-empty] {
+      font-style: italic;
+      color: ${metaText};
+    }
+  }
+  .facts {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: ${metaText};
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
+`
+
+const OpenLink = styled.a`
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  text-decoration: none;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const CreateButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 6px 12px !important;
+  border: 1px solid ${({ theme }) => theme.colors.border.default} !important;
+  border-radius: 8px;
+  text-decoration: none !important;
+  color: ${({ theme }) => theme.colors.text.primary} !important;
 `
 
 const Layout = styled.div`
@@ -630,11 +835,19 @@ const Badge = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const Empty = styled.p`
+const Empty = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   margin: 0;
   padding: 24px 4px;
   font-size: 13px;
   color: ${metaText};
+
+  .note {
+    font-size: 12px;
+  }
 
   button {
     padding: 0;
@@ -808,13 +1021,19 @@ const Count = styled.span`
   color: ${metaText};
 `
 
+/* 바닥에 붙는 버튼 줄 — 미리보기·이유까지 서면 칸이 길어져 '연결'이 창 아래로 잘렸다 */
 const Actions = styled.div`
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   margin-top: auto;
-  padding-top: 8px;
+  padding: 10px 0 2px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(20,20,20,0.96)' : '#ffffff')};
 
   button {
     padding: 7px 14px;
@@ -831,6 +1050,10 @@ const Actions = styled.div`
       background: ${({ theme }) => ledgerAccent(theme.mode)};
       color: #ffffff;
       font-weight: 700;
+    }
+    &[data-danger] {
+      margin-right: auto;
+      color: #dc2626;
     }
     &:disabled {
       opacity: 0.5;

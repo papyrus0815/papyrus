@@ -523,8 +523,20 @@ export function RelatedBlock({
         initialDraft={initialDraft}
         saving={saveMutation.isPending}
         onSave={async (next) => {
-          await saveMutation.mutateAsync(next)
+          const saved = await saveMutation.mutateAsync(next)
+          return (saved as { id?: string } | undefined)?.id
         }}
+        onDelete={async (relationId) => {
+          await removeMutation.mutateAsync(relationId)
+        }}
+        onCreateNew={
+          onOpenCreateRelated
+            ? () => {
+                closePicker()
+                onOpenCreateRelated()
+              }
+            : undefined
+        }
       />
     </NetStyles.HierBlock>
   )
