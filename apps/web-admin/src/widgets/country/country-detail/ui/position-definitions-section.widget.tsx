@@ -29,6 +29,7 @@ import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import type { GovernmentPositionDefinition } from '@/shared/api/government-positions'
+import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   FormCardWrapper,
   FormHeader,
@@ -220,28 +221,122 @@ const AddBtn = styled.button`
   }
 `
 
-const List = styled.ul`
+const PositionLedgerGrid = styled.ul`
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 820px) {
+    grid-template-columns: 1fr;
+  }
 `
 
-const Card = styled.li`
+const PositionLedgerRow = styled.li`
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 16px 18px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e9eef5'};
-  border-radius: 14px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  &:hover {
-    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
-    box-shadow: 0 2px 10px rgba(79, 70, 229, 0.07);
+  padding: 15px 16px;
+  background: transparent;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  transition: background 0.14s ease;
+
+  &:nth-child(odd) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
   }
+
+  &:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    border-right: none;
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+
+  @media (max-width: 820px) {
+    &:nth-child(odd) {
+      border-right: none;
+    }
+  }
+`
+
+const FilterControlsRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+`
+
+const FilterResultMeta = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+const FilterResetButton = styled.button`
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const PositionEmptySpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const PositionEmptySpecCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:nth-child(odd) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  &:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    border-right: none;
+  }
+
+  @media (max-width: 720px) {
+    &:nth-child(odd) {
+      border-right: none;
+    }
+  }
+`
+
+const PositionEmptySpecTitle = styled.div`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const PositionEmptySpecDesc = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const CardBody = styled.div`
@@ -602,21 +697,39 @@ export function PositionDefinitionsSection({
   const scopeCounts = useMemo(() => {
     let countryOnly = 0
     let globalOnly = 0
-    for (const d of baseDefinitions) {
-      const scopes = d.scopes ?? []
-      if (scopes.length === 0) {
+    let monarchicalCount = 0
+    const monarchicalTypes = new Set([
+      'HEAD_OF_STATE',
+      'HEIR_APPARENT',
+      'REGENT',
+      'ROYAL_NOBLE_TITLE',
+    ])
+    for (const definitionItem of baseDefinitions) {
+      const scopes = definitionItem.scopes ?? []
+      const isGlobal = scopes.length === 0
+      const isCurrent = !isGlobal && isScopedToCurrentCountry(definitionItem)
+      if (isGlobal) {
         globalOnly += 1
-      } else if (isScopedToCurrentCountry(d)) {
+      } else if (isCurrent) {
         countryOnly += 1
+      }
+      if (!country || isGlobal || isCurrent) {
+        if (
+          definitionItem.isMonarchical ||
+          monarchicalTypes.has(definitionItem.positionType)
+        ) {
+          monarchicalCount += 1
+        }
       }
     }
     return {
       applicable: countryOnly + globalOnly,
       countryOnly,
       globalOnly,
+      monarchicalCount,
       all: baseDefinitions.length,
     }
-  }, [baseDefinitions, matchingCountryIds])
+  }, [baseDefinitions, country, matchingCountryIds])
 
   const definitions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -825,6 +938,55 @@ export function PositionDefinitionsSection({
 
       {view === 'list' ? (
         <>
+          {!isLoading && baseDefinitions.length > 0 && (
+            <DashboardStyles.SectionHeadlineStrip style={{ marginBottom: 16 }}>
+              <DashboardStyles.SectionHeadlineCell>
+                <DashboardStyles.SectionHeadlineLabel>
+                  {country ? `${country.name} 적용 가능` : '전체 등록 직위'}
+                </DashboardStyles.SectionHeadlineLabel>
+                <DashboardStyles.SectionHeadlineValue>
+                  {scopeCounts.applicable.toLocaleString()}개
+                </DashboardStyles.SectionHeadlineValue>
+                <DashboardStyles.SectionHeadlineSub>
+                  재임·재위 등록 시 선택 가능 직위
+                </DashboardStyles.SectionHeadlineSub>
+              </DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineCell>
+                <DashboardStyles.SectionHeadlineLabel>
+                  {country ? `${country.name} 전용 직위` : '특정 국가 전용'}
+                </DashboardStyles.SectionHeadlineLabel>
+                <DashboardStyles.SectionHeadlineValue>
+                  {scopeCounts.countryOnly.toLocaleString()}개
+                </DashboardStyles.SectionHeadlineValue>
+                <DashboardStyles.SectionHeadlineSub>
+                  현재 국가 스코프 지정 직위
+                </DashboardStyles.SectionHeadlineSub>
+              </DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineCell>
+                <DashboardStyles.SectionHeadlineLabel>
+                  전역 공용 직위
+                </DashboardStyles.SectionHeadlineLabel>
+                <DashboardStyles.SectionHeadlineValue>
+                  {scopeCounts.globalOnly.toLocaleString()}개
+                </DashboardStyles.SectionHeadlineValue>
+                <DashboardStyles.SectionHeadlineSub>
+                  국가 구분 없이 공통 적용
+                </DashboardStyles.SectionHeadlineSub>
+              </DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineCell>
+                <DashboardStyles.SectionHeadlineLabel>
+                  군주 · 국가원수 · 왕실
+                </DashboardStyles.SectionHeadlineLabel>
+                <DashboardStyles.SectionHeadlineValue>
+                  {scopeCounts.monarchicalCount.toLocaleString()}개
+                </DashboardStyles.SectionHeadlineValue>
+                <DashboardStyles.SectionHeadlineSub>
+                  원수·섭정·왕세자·왕족 직위
+                </DashboardStyles.SectionHeadlineSub>
+              </DashboardStyles.SectionHeadlineCell>
+            </DashboardStyles.SectionHeadlineStrip>
+          )}
+
           <FilterBar>
             {country ? (
               <FilterTabGroup role="tablist" aria-label="직위 적용 범위 필터">
@@ -866,40 +1028,90 @@ export function PositionDefinitionsSection({
                 </FilterTab>
               </FilterTabGroup>
             ) : (
-              <div />
+              <FilterResultMeta>
+                전체 {scopeCounts.all.toLocaleString()}개 직위
+              </FilterResultMeta>
             )}
-            <SearchInputWrap>
-              <FiSearch size={14} color="#94a3b8" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="직위명·영문명·부처 검색..."
-                aria-label="직위 정의 검색"
-              />
-            </SearchInputWrap>
+            <FilterControlsRight>
+              {(scopeFilter !== 'applicable' || searchQuery.trim().length > 0) && (
+                <>
+                  <FilterResultMeta>
+                    조회 {definitions.length.toLocaleString()}개
+                  </FilterResultMeta>
+                  <FilterResetButton
+                    type="button"
+                    onClick={() => {
+                      setScopeFilter('applicable')
+                      setSearchQuery('')
+                    }}
+                  >
+                    필터 초기화
+                  </FilterResetButton>
+                </>
+              )}
+              <SearchInputWrap>
+                <FiSearch size={14} color="#94a3b8" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="직위명·영문명·부처 검색..."
+                  aria-label="직위 정의 검색"
+                />
+              </SearchInputWrap>
+            </FilterControlsRight>
           </FilterBar>
 
           {isLoading ? (
             <EmptyState><FiLayers size={28} />불러오는 중...</EmptyState>
           ) : definitions.length === 0 ? (
-            <EmptyState>
-              <FiAward size={32} color="#c7d2fe" />
-              {country && scopeFilter === 'country_only'
-                ? `${country.name} 전용으로 지정된 직위가 없습니다.`
-                : '등록된 직위가 없습니다.'}
-            </EmptyState>
+            <PositionEmptySpecGrid>
+              <PositionEmptySpecCell>
+                <PositionEmptySpecTitle>
+                  {country && scopeFilter === 'country_only'
+                    ? `${country.name} 전용 직위 스코프`
+                    : '직위 정의 및 유형 분류'}
+                </PositionEmptySpecTitle>
+                <PositionEmptySpecDesc>
+                  {country && scopeFilter === 'country_only'
+                    ? `현재 ${country.name} 전용으로 지정된 직위가 없습니다. 직위 등록 시 현재 국가 전용 옵션을 켜거나 기존 직위에 적용 국가를 추가할 수 있습니다.`
+                    : '국가원수·정부수반·각료·의회의원·왕실 칭호 등 15종 직위 유형과 서열(Rank)을 표준화하여 관리합니다.'}
+                </PositionEmptySpecDesc>
+              </PositionEmptySpecCell>
+              <PositionEmptySpecCell>
+                <PositionEmptySpecTitle>
+                  전역 공용 vs 특정 국가 전용
+                </PositionEmptySpecTitle>
+                <PositionEmptySpecDesc>
+                  적용 범위가 비어 있으면 모든 국가의 재임·재위 피커에서 사용할 수 있고, 특정 현대·역사 국가를 지정하면 해당 국가 전용으로 격리됩니다.
+                </PositionEmptySpecDesc>
+              </PositionEmptySpecCell>
+              <PositionEmptySpecCell>
+                <PositionEmptySpecTitle>
+                  중앙부처 카테고리 · 행정기구 연동
+                </PositionEmptySpecTitle>
+                <PositionEmptySpecDesc>
+                  각 직위를 중앙행정 카테고리나 특정 행정기구에 연결하여 부처별 직제 및 역대 장·차관보 계보를 체계적으로 구성합니다.
+                </PositionEmptySpecDesc>
+              </PositionEmptySpecCell>
+              <PositionEmptySpecCell>
+                <PositionEmptySpecTitle>직위 정의 등록 안내</PositionEmptySpecTitle>
+                <PositionEmptySpecDesc>
+                  우측 상단 <strong>직위 등록</strong> 버튼을 눌러 새 관직·직위를 정의하거나 검색·적용 범위 필터를 조정해 보세요.
+                </PositionEmptySpecDesc>
+              </PositionEmptySpecCell>
+            </PositionEmptySpecGrid>
           ) : (
-            <List>
+            <PositionLedgerGrid>
               {definitions.map((def) => {
                 const typeLabel =
-                  POSITION_TYPE_OPTIONS.find((o) => o.value === def.positionType)?.label ??
+                  POSITION_TYPE_OPTIONS.find((option) => option.value === def.positionType)?.label ??
                   def.positionType
                 const parentLabel = def.category?.name ?? def.organization?.name ?? null
                 const scopeLabels = describeScopes(def)
 
                 return (
-                  <Card key={def.id}>
+                  <PositionLedgerRow key={def.id}>
                     <CardBody>
                       <CardTitle>{def.title}</CardTitle>
                       <CardMeta>
@@ -914,6 +1126,12 @@ export function PositionDefinitionsSection({
                           <>
                             <Dot />
                             <MetaText>{def.titleEn}</MetaText>
+                          </>
+                        )}
+                        {def.rank != null && (
+                          <>
+                            <Dot />
+                            <MetaText>서열 {def.rank}</MetaText>
                           </>
                         )}
                         <Dot />
@@ -935,10 +1153,10 @@ export function PositionDefinitionsSection({
                         <FiTrash2 size={15} />
                       </IconBtn>
                     </CardActions>
-                  </Card>
+                  </PositionLedgerRow>
                 )
               })}
-            </List>
+            </PositionLedgerGrid>
           )}
         </>
       ) : (

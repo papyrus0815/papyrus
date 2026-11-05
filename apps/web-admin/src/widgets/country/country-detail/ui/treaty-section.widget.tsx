@@ -5,14 +5,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiChevronLeft,
   FiEdit2,
+  FiExternalLink,
   FiFileText,
   FiGlobe,
   FiImage,
   FiPlus,
+  FiSearch,
   FiTrash2,
   FiUsers,
   FiX,
 } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 import styled, {
   keyframes,
   ThemeProvider,
@@ -20,8 +23,12 @@ import styled, {
 } from 'styled-components'
 
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
+import { pathKeys } from '@/shared/router'
 import { getTreatySectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+
+import * as DashboardStyles from './country-detail-dashboard.styles'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -60,48 +67,335 @@ const fadeIn = keyframes`from { opacity: 0; transform: translateY(6px); } to { o
 // ──────────────────────────────────────────────
 
 const Wrap = styled.div`
-  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 32px 48px;
   min-height: 400px;
   animation: ${fadeIn} 0.18s ease;
+
+  @media (max-width: 768px) {
+    padding: 20px 16px 36px;
+  }
 `
 
-const Header = styled.div`
-  display: flex;
+const TreatyHeaderActions = styled.div`
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 8px;
+  flex-wrap: wrap;
 `
 
-const Title = styled.h2`
-  font-size: 16px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.ts!.text};
-  margin: 0;
-`
-
-const AddBtn = styled.button`
-  display: flex;
+const TreatySecondaryBtn = styled.button`
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  background: ${({ theme }) => theme.ts!.main};
-  color: #fff;
-  border: none;
-  border-radius: 10px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s;
+
   &:hover {
-    background: ${({ theme }) => theme.ts!.mainHover};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 
 const Empty = styled.div`
-  text-align: center;
-  padding: 60px 24px;
-  color: ${({ theme }) => theme.ts!.textMuted};
+  padding: 28px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 13px;
+`
+
+const TreatyEmptySpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const TreatyEmptySpecCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 20px 22px;
+
+  &:first-child {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  @media (max-width: 768px) {
+    &:first-child {
+      border-right: none;
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+`
+
+const TreatyEmptySpecTitle = styled.div`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TreatyEmptySpecDesc = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TreatyEmptySpecAction = styled.button`
+  margin-top: 4px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const TreatyToolbar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+`
+
+const TreatyFilterGroup = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const TreatyFilterChip = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const TreatyFilterCount = styled.span`
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+`
+
+const TreatyToolbarRight = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+`
+
+const TreatyResultSummary = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TreatyResetBtn = styled.button`
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const TreatySearchBox = styled.label`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: 240px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const TreatySearchInput = styled.input`
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TreatyViewToggle = styled.div`
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const TreatyViewBtn = styled.button<{ $active: boolean }>`
+  padding: 4px 9px;
+  border: none;
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+`
+
+const TreatyLedgerGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const TreatyLedgerRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  cursor: pointer;
+  transition: background 0.14s ease;
+
+  &:nth-child(odd) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  &:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    border-right: none;
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+
+  @media (max-width: 900px) {
+    &:nth-child(odd) {
+      border-right: none;
+    }
+  }
+`
+
+const TreatyLedgerMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+`
+
+const TreatyTitleLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const TreatyLedgerName = styled.span`
   font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TreatyLedgerTypeBadge = styled.span`
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => theme.colors.activeLight};
+`
+
+const TreatyViolationBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+`
+
+const TreatyMetaLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TreatyDetailBtn = styled.button`
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
 `
 
 const Grid = styled.div`
@@ -737,7 +1031,8 @@ interface TreatySectionProps {
 export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
   country,
 }) => {
-  const qc = useQueryClient()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const countryId = country.type === 'modern' ? country.id : undefined
   const historicalCountryId =
     country.type === 'historical' ? country.id : undefined
@@ -745,21 +1040,82 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
   const { data: treaties = [], isLoading } = useQuery({
     queryKey: ['treaties', countryId, historicalCountryId],
     queryFn: async () => {
-      const r = await treatyApi.getAll({ countryId, historicalCountryId })
-      return r.items
+      const response = await treatyApi.getAll({
+        countryId,
+        historicalCountryId,
+      })
+      return response.items
     },
     enabled: !!(countryId || historicalCountryId),
   })
 
   const [detailId, setDetailId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<TreatyType | 'ALL'>('ALL')
+  const [viewMode, setViewMode] = useState<'ledger' | 'cards'>('ledger')
 
   const invalidate = useCallback(() => {
-    qc.invalidateQueries({
-      queryKey: ['treaties', countryId, historicalCountryId],
+    void queryClient.invalidateQueries({
+      queryKey: ['treaties'],
     })
-    if (detailId) qc.invalidateQueries({ queryKey: ['treaty', detailId] })
-  }, [qc, countryId, historicalCountryId, detailId])
+    void queryClient.invalidateQueries({
+      queryKey: ['treaties-by-country'],
+    })
+    if (detailId) {
+      void queryClient.invalidateQueries({ queryKey: ['treaty', detailId] })
+    }
+  }, [queryClient, detailId])
+
+  const distinctTypeCount = useMemo(() => {
+    const typeSet = new Set<string>()
+    for (const treatyItem of treaties) {
+      if (treatyItem.type) typeSet.add(treatyItem.type)
+    }
+    return typeSet.size
+  }, [treaties])
+
+  const violatedList = useMemo(
+    () => treaties.filter((treatyItem) => Boolean(treatyItem.violationDate)),
+    [treaties],
+  )
+  const validCount = treaties.length - violatedList.length
+
+  const typeChipItems = useMemo(() => {
+    const counts = new Map<TreatyType, number>()
+    for (const treatyItem of treaties) {
+      counts.set(treatyItem.type, (counts.get(treatyItem.type) ?? 0) + 1)
+    }
+    return [...counts.entries()].map(([typeKey, count]) => ({
+      typeKey,
+      label: TREATY_TYPE_LABELS[typeKey] ?? typeKey,
+      count,
+    }))
+  }, [treaties])
+
+  const filteredTreaties = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase()
+    return treaties.filter((treatyItem) => {
+      if (typeFilter !== 'ALL' && treatyItem.type !== typeFilter) return false
+      if (!keyword) return true
+      const signatoryNames = treatyItem.signatories
+        .map(
+          (signatory) =>
+            signatory.country?.name ?? signatory.historicalCountry?.name ?? '',
+        )
+        .join(' ')
+      return [
+        treatyItem.name,
+        treatyItem.alias,
+        treatyItem.location,
+        TREATY_TYPE_LABELS[treatyItem.type],
+        signatoryNames,
+      ].some((field) => field?.toLowerCase().includes(keyword))
+    })
+  }, [treaties, typeFilter, searchQuery])
+
+  const hasActiveFilter =
+    typeFilter !== 'ALL' || searchQuery.trim().length > 0
 
   const parentTheme = useTheme()
   const { mode } = useThemeStore()
@@ -769,89 +1125,369 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
     [parentTheme, treatyPalette],
   )
 
-  const inner =
-    detailId ? (
-      <TreatyDetail
-        treatyId={detailId}
-        onBack={() => setDetailId(null)}
-        onInvalidate={invalidate}
+  const inner = detailId ? (
+    <TreatyDetail
+      treatyId={detailId}
+      onBack={() => setDetailId(null)}
+      onInvalidate={invalidate}
+    />
+  ) : (
+    <Wrap>
+      <SectionTabHeader
+        variant="plain"
+        title="조약 · 협정"
+        description={`${country.name}이(가) 서명·참여한 조약과 협정의 체결일, 발효·만료·파기 이력 및 당사국을 관리합니다.`}
+        rightSlot={
+          <TreatyHeaderActions>
+            <TreatySecondaryBtn
+              type="button"
+              onClick={() => navigate(pathKeys.treaties.list())}
+            >
+              <FiExternalLink size={14} />
+              조약 카탈로그
+            </TreatySecondaryBtn>
+            <AddButton type="button" onClick={() => setCreateOpen(true)}>
+              <FiPlus size={14} /> 조약 등록
+            </AddButton>
+          </TreatyHeaderActions>
+        }
       />
-    ) : (
-      <Wrap>
-      <Header>
-        <Title>조약 · 협정 ({treaties.length})</Title>
-        <AddBtn onClick={() => setCreateOpen(true)}>
-          <FiPlus size={14} /> 조약 등록
-        </AddBtn>
-      </Header>
+
+      <DashboardStyles.SectionHeadlineStrip aria-label="조약 요약 지표">
+        <DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineLabel>
+            전체 참여 조약
+          </DashboardStyles.SectionHeadlineLabel>
+          <DashboardStyles.SectionHeadlineValue $muted={treaties.length === 0}>
+            {treaties.length > 0 ? (
+              <>
+                {treaties.length.toLocaleString('ko-KR')}
+                <DashboardStyles.SectionHeadlineUnit>
+                  건
+                </DashboardStyles.SectionHeadlineUnit>
+              </>
+            ) : (
+              '미등록'
+            )}
+          </DashboardStyles.SectionHeadlineValue>
+          <DashboardStyles.SectionHeadlineSub>
+            {treaties.length > 0
+              ? '서명 · 비준 · 가입 조약 및 협정'
+              : '등록된 참여 조약 없음'}
+          </DashboardStyles.SectionHeadlineSub>
+        </DashboardStyles.SectionHeadlineCell>
+
+        <DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineLabel>
+            체결 조약 유형
+          </DashboardStyles.SectionHeadlineLabel>
+          <DashboardStyles.SectionHeadlineValue
+            $muted={distinctTypeCount === 0}
+          >
+            {distinctTypeCount > 0 ? (
+              <>
+                {distinctTypeCount.toLocaleString('ko-KR')}
+                <DashboardStyles.SectionHeadlineUnit>
+                  종
+                </DashboardStyles.SectionHeadlineUnit>
+              </>
+            ) : (
+              '없음'
+            )}
+          </DashboardStyles.SectionHeadlineValue>
+          <DashboardStyles.SectionHeadlineSub>
+            {treaties.length > 0
+              ? '불가침 · 평화 · 동맹 · 통상 등 분류'
+              : '조약 유형 데이터 대기'}
+          </DashboardStyles.SectionHeadlineSub>
+        </DashboardStyles.SectionHeadlineCell>
+
+        <DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineLabel>
+            유효 · 이행 기록
+          </DashboardStyles.SectionHeadlineLabel>
+          <DashboardStyles.SectionHeadlineValue $muted={validCount === 0}>
+            {validCount > 0 ? (
+              <>
+                {validCount.toLocaleString('ko-KR')}
+                <DashboardStyles.SectionHeadlineUnit>
+                  건
+                </DashboardStyles.SectionHeadlineUnit>
+              </>
+            ) : (
+              '없음'
+            )}
+          </DashboardStyles.SectionHeadlineValue>
+          <DashboardStyles.SectionHeadlineSub>
+            {treaties.length > 0
+              ? '파기 기록 없는 체결·발효 조약'
+              : '유효·이행 조약 없음'}
+          </DashboardStyles.SectionHeadlineSub>
+        </DashboardStyles.SectionHeadlineCell>
+
+        <DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineLabel>
+            파기 · 위반 기록
+          </DashboardStyles.SectionHeadlineLabel>
+          <DashboardStyles.SectionHeadlineValue
+            $muted={violatedList.length === 0}
+          >
+            {violatedList.length > 0 ? (
+              <>
+                {violatedList.length.toLocaleString('ko-KR')}
+                <DashboardStyles.SectionHeadlineUnit>
+                  건
+                </DashboardStyles.SectionHeadlineUnit>
+              </>
+            ) : (
+              '없음'
+            )}
+          </DashboardStyles.SectionHeadlineValue>
+          <DashboardStyles.SectionHeadlineSub>
+            {violatedList.length > 0
+              ? '파기일 또는 위반 사유 명시 조약'
+              : '파기·위반 기록 없음'}
+          </DashboardStyles.SectionHeadlineSub>
+        </DashboardStyles.SectionHeadlineCell>
+      </DashboardStyles.SectionHeadlineStrip>
 
       {isLoading ? (
         <Empty>불러오는 중…</Empty>
       ) : treaties.length === 0 ? (
-        <Empty>
-          등록된 조약이 없습니다.
-          <br />
-          <span style={{ fontSize: 12, marginTop: 6, display: 'block' }}>
-            독소 불가침 조약, 베르사유 조약 등 이 국가가 참여한 조약을
-            등록하세요.
-          </span>
-        </Empty>
+        <TreatyEmptySpecGrid>
+          <TreatyEmptySpecCell>
+            <TreatyEmptySpecTitle>
+              1. 신규 조약 · 협정 직접 등록
+            </TreatyEmptySpecTitle>
+            <TreatyEmptySpecDesc>
+              강화도조약, 베르사유 조약, 상호방위조약 등 {country.name}이(가) 서명·참여한 조약의 체결일, 조항, 서명국을 등록합니다.
+            </TreatyEmptySpecDesc>
+            <TreatyEmptySpecAction
+              type="button"
+              onClick={() => setCreateOpen(true)}
+            >
+              + 첫 조약 등록 →
+            </TreatyEmptySpecAction>
+          </TreatyEmptySpecCell>
+
+          <TreatyEmptySpecCell>
+            <TreatyEmptySpecTitle>
+              2. 전역 조약 카탈로그에서 당사국 연결
+            </TreatyEmptySpecTitle>
+            <TreatyEmptySpecDesc>
+              전체 조약 카탈로그에 이미 등록된 다자·양자 조약에서 이 국가를 서명국·비준국으로 추가하면 이 탭과 대시보드에 자동 집계됩니다.
+            </TreatyEmptySpecDesc>
+            <TreatyEmptySpecAction
+              type="button"
+              onClick={() => navigate(pathKeys.treaties.list())}
+            >
+              조약 카탈로그로 이동 →
+            </TreatyEmptySpecAction>
+          </TreatyEmptySpecCell>
+        </TreatyEmptySpecGrid>
       ) : (
-        <Grid>
-          {treaties.map((t) => {
-            const thumb =
-              t.images.find((i) => i.isPrimary)?.imageUrl ??
-              t.images[0]?.imageUrl
-            return (
-              <Card key={t.id} onClick={() => setDetailId(t.id)}>
-                <CardThumb $url={thumb}>
-                  <CardTypeBadge>{TREATY_TYPE_LABELS[t.type]}</CardTypeBadge>
-                </CardThumb>
-                <CardBody>
-                  <CardName>{t.name}</CardName>
-                  {t.alias && <CardAlias>{t.alias}</CardAlias>}
-                  <CardMeta>
-                    <MetaChip>서명 {fmtDate(t.signDate)}</MetaChip>
-                    {t.violationDate && (
-                      <MetaChip style={{ color: treatyPalette.danger }}>
-                        파기 {fmtDate(t.violationDate)}
-                      </MetaChip>
+        <>
+          <TreatyToolbar>
+            <TreatyFilterGroup role="tablist" aria-label="조약 유형 필터">
+              <TreatyFilterChip
+                type="button"
+                role="tab"
+                aria-selected={typeFilter === 'ALL'}
+                $active={typeFilter === 'ALL'}
+                onClick={() => setTypeFilter('ALL')}
+              >
+                전체 <TreatyFilterCount>{treaties.length}</TreatyFilterCount>
+              </TreatyFilterChip>
+              {typeChipItems.map((chip) => (
+                <TreatyFilterChip
+                  key={chip.typeKey}
+                  type="button"
+                  role="tab"
+                  aria-selected={typeFilter === chip.typeKey}
+                  $active={typeFilter === chip.typeKey}
+                  onClick={() => setTypeFilter(chip.typeKey)}
+                >
+                  {chip.label}{' '}
+                  <TreatyFilterCount>{chip.count}</TreatyFilterCount>
+                </TreatyFilterChip>
+              ))}
+            </TreatyFilterGroup>
+
+            <TreatyToolbarRight>
+              {hasActiveFilter && (
+                <>
+                  <TreatyResultSummary>
+                    검색 결과 {filteredTreaties.length}건
+                  </TreatyResultSummary>
+                  <TreatyResetBtn
+                    type="button"
+                    onClick={() => {
+                      setTypeFilter('ALL')
+                      setSearchQuery('')
+                    }}
+                  >
+                    필터 초기화
+                  </TreatyResetBtn>
+                </>
+              )}
+              <TreatySearchBox>
+                <FiSearch size={13} />
+                <TreatySearchInput
+                  type="search"
+                  value={searchQuery}
+                  onChange={(changeEvent) =>
+                    setSearchQuery(changeEvent.target.value)
+                  }
+                  placeholder="조약명 · 별칭 · 체결지 · 당사국 검색…"
+                  aria-label="조약 검색"
+                />
+              </TreatySearchBox>
+              <TreatyViewToggle role="group" aria-label="조약 보기 방식">
+                <TreatyViewBtn
+                  type="button"
+                  $active={viewMode === 'ledger'}
+                  onClick={() => setViewMode('ledger')}
+                >
+                  2열 원장
+                </TreatyViewBtn>
+                <TreatyViewBtn
+                  type="button"
+                  $active={viewMode === 'cards'}
+                  onClick={() => setViewMode('cards')}
+                >
+                  카드
+                </TreatyViewBtn>
+              </TreatyViewToggle>
+            </TreatyToolbarRight>
+          </TreatyToolbar>
+
+          {filteredTreaties.length === 0 ? (
+            <Empty>선택한 유형이나 검색어와 일치하는 조약이 없습니다.</Empty>
+          ) : viewMode === 'ledger' ? (
+            <TreatyLedgerGrid>
+              {filteredTreaties.map((treatyItem) => (
+                <TreatyLedgerRow
+                  key={treatyItem.id}
+                  onClick={() => setDetailId(treatyItem.id)}
+                >
+                  <TreatyLedgerMain>
+                    <TreatyTitleLine>
+                      <TreatyLedgerName>{treatyItem.name}</TreatyLedgerName>
+                      <TreatyLedgerTypeBadge>
+                        {TREATY_TYPE_LABELS[treatyItem.type]}
+                      </TreatyLedgerTypeBadge>
+                      {treatyItem.violationDate && (
+                        <TreatyViolationBadge>
+                          파기 {fmtDate(treatyItem.violationDate)}
+                        </TreatyViolationBadge>
+                      )}
+                    </TreatyTitleLine>
+                    <TreatyMetaLine>
+                      <span>서명 {fmtDate(treatyItem.signDate)}</span>
+                      {treatyItem.location && (
+                        <span>· {treatyItem.location}</span>
+                      )}
+                      {treatyItem.alias && <span>· {treatyItem.alias}</span>}
+                    </TreatyMetaLine>
+                    {treatyItem.signatories.length > 0 && (
+                      <SignatoryList>
+                        {treatyItem.signatories.map((signatory) => {
+                          const signatoryName =
+                            signatory.country?.name ??
+                            signatory.historicalCountry?.name ??
+                            '?'
+                          const flag = signatory.country?.flagEmoji ?? ''
+                          return (
+                            <SignatoryChip key={signatory.id}>
+                              {flag && <span>{flag}</span>}
+                              {signatoryName}
+                            </SignatoryChip>
+                          )
+                        })}
+                      </SignatoryList>
                     )}
-                    {t.location && <MetaChip>{t.location}</MetaChip>}
-                  </CardMeta>
-                  <SignatoryList>
-                    {t.signatories.map((s) => {
-                      const name =
-                        s.country?.name ?? s.historicalCountry?.name ?? '?'
-                      const flag = s.country?.flagEmoji ?? ''
-                      return (
-                        <SignatoryChip key={s.id}>
-                          {flag && <span>{flag}</span>}
-                          {name}
-                        </SignatoryChip>
-                      )
-                    })}
-                  </SignatoryList>
-                </CardBody>
-              </Card>
-            )
-          })}
-        </Grid>
+                  </TreatyLedgerMain>
+                  <TreatyDetailBtn
+                    type="button"
+                    onClick={(clickEvent) => {
+                      clickEvent.stopPropagation()
+                      setDetailId(treatyItem.id)
+                    }}
+                  >
+                    상세 →
+                  </TreatyDetailBtn>
+                </TreatyLedgerRow>
+              ))}
+            </TreatyLedgerGrid>
+          ) : (
+            <Grid>
+              {filteredTreaties.map((treatyItem) => {
+                const thumb =
+                  treatyItem.images.find((imageItem) => imageItem.isPrimary)
+                    ?.imageUrl ?? treatyItem.images[0]?.imageUrl
+                return (
+                  <Card
+                    key={treatyItem.id}
+                    onClick={() => setDetailId(treatyItem.id)}
+                  >
+                    <CardThumb $url={thumb}>
+                      <CardTypeBadge>
+                        {TREATY_TYPE_LABELS[treatyItem.type]}
+                      </CardTypeBadge>
+                    </CardThumb>
+                    <CardBody>
+                      <CardName>{treatyItem.name}</CardName>
+                      {treatyItem.alias && (
+                        <CardAlias>{treatyItem.alias}</CardAlias>
+                      )}
+                      <CardMeta>
+                        <MetaChip>서명 {fmtDate(treatyItem.signDate)}</MetaChip>
+                        {treatyItem.violationDate && (
+                          <MetaChip style={{ color: treatyPalette.danger }}>
+                            파기 {fmtDate(treatyItem.violationDate)}
+                          </MetaChip>
+                        )}
+                        {treatyItem.location && (
+                          <MetaChip>{treatyItem.location}</MetaChip>
+                        )}
+                      </CardMeta>
+                      <SignatoryList>
+                        {treatyItem.signatories.map((signatory) => {
+                          const signatoryName =
+                            signatory.country?.name ??
+                            signatory.historicalCountry?.name ??
+                            '?'
+                          const flag = signatory.country?.flagEmoji ?? ''
+                          return (
+                            <SignatoryChip key={signatory.id}>
+                              {flag && <span>{flag}</span>}
+                              {signatoryName}
+                            </SignatoryChip>
+                          )
+                        })}
+                      </SignatoryList>
+                    </CardBody>
+                  </Card>
+                )
+              })}
+            </Grid>
+          )}
+        </>
       )}
 
       {createOpen && (
         <TreatyCreateModal
           country={country}
           onClose={() => setCreateOpen(false)}
-          onCreated={(id) => {
+          onCreated={(createdId) => {
             setCreateOpen(false)
             invalidate()
-            setDetailId(id)
+            setDetailId(createdId)
           }}
         />
       )}
     </Wrap>
-    )
+  )
 
   return <ThemeProvider theme={treatyTheme}>{inner}</ThemeProvider>
 }

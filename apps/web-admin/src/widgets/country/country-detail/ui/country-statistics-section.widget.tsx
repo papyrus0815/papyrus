@@ -250,10 +250,9 @@ const LedgerCard = styled.section`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px 22px;
-  border-radius: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  padding: 18px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const LedgerHeader = styled.div`

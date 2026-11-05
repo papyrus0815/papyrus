@@ -23,6 +23,7 @@ import { pathKeys } from '@/shared/router'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 
 import type { CalendarEventItem } from '../model/use-country-dashboard-stats'
+import * as DashboardStyles from './country-detail-dashboard.styles'
 import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
 import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
 
@@ -113,9 +114,10 @@ const EventRow = styled.button`
   align-items: baseline;
   gap: 12px;
   width: 100%;
-  padding: 10px 8px;
+  padding: 11px 8px;
   border: none;
-  border-radius: 8px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 0;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -299,17 +301,166 @@ const CountryChip = styled.span<{ $past?: boolean }>`
 `
 
 const CenturyBarCard = styled.div`
-  padding: 14px 18px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  padding: 14px 4px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 0;
+  background: transparent;
 `
 
 const CalendarCard = styled.div`
-  padding: 20px 22px;
-  border-radius: 14px;
+  padding: 18px 4px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 0;
+  background: transparent;
+`
+
+const FilterToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const ScopeChipGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+`
+
+const ScopeFilterChip = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.5)'
+          : '#a5b4fc'
+        : theme.colors.border.default};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.2)'
+        : '#eef2ff'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'
+      : theme.colors.text.secondary};
+`
+
+const SearchControlsGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+`
+
+const SearchInputWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  min-width: 240px;
+
+  input {
+    border: none;
+    background: transparent;
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    width: 100%;
+  }
+`
+
+const FilterResultMeta = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+const FilterResetButton = styled.button`
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const EventEmptySpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const EventEmptySpecCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  &:nth-child(odd) {
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  &:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    border-right: none;
+  }
+
+  @media (max-width: 720px) {
+    &:nth-child(odd) {
+      border-right: none;
+    }
+  }
+`
+
+const EventEmptySpecTitle = styled.div`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EventEmptySpecDesc = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export interface EventsTimelineSectionProps {
@@ -352,6 +503,10 @@ export function EventsTimelineSection({
   const [isCreateOpen, setIsCreateOpen] = useState(
     Boolean(initialFormFromSearchParams),
   )
+  const [eraScopeFilter, setEraScopeFilter] = useState<
+    'all' | 'modern' | 'historical'
+  >('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const viewMode: 'list' | 'calendar' =
     searchParams.get('view') === 'calendar' ? 'calendar' : 'list'
 
@@ -386,6 +541,14 @@ export function EventsTimelineSection({
     () => (scopeCountryIds?.length ? new Set(scopeCountryIds) : null),
     [scopeCountryIds],
   )
+  const historicalBridgeIds = useMemo(() => {
+    if (!countryId || !scopeCountryIds || scopeCountryIds.length <= 1) {
+      return new Set<string>()
+    }
+    return new Set(scopeCountryIds.filter((itemId) => itemId !== countryId))
+  }, [countryId, scopeCountryIds])
+  const hasHistoricalBridge = historicalBridgeIds.size > 0
+
   const list = useMemo(() => {
     const all = events ?? []
     if (!scopeSet) return all
@@ -402,6 +565,119 @@ export function EventsTimelineSection({
     })
   }, [events, scopeSet])
 
+  const kpiSummary = useMemo(() => {
+    const centuries = new Set<number>()
+    let minYear: number | null = null
+    let maxYear: number | null = null
+    let unknownYearCount = 0
+    let dayKnownCount = 0
+    let modernCount = 0
+    let historicalCount = 0
+
+    for (const eventItem of list) {
+      const signedYear = signedYearFromIsoLike(eventItem.startDate)
+      if (signedYear == null || signedYear === 0) {
+        unknownYearCount += 1
+      } else {
+        const century =
+          signedYear < 0
+            ? -Math.ceil(Math.abs(signedYear) / 100)
+            : Math.ceil(signedYear / 100)
+        centuries.add(century)
+        if (minYear == null || signedYear < minYear) minYear = signedYear
+        if (maxYear == null || signedYear > maxYear) maxYear = signedYear
+      }
+
+      const rawStart = eventItem.startDate
+      if (
+        eventItem.id &&
+        typeof rawStart === 'string' &&
+        /^(-?\d{1,6}-\d{2}-\d{2})/.test(rawStart)
+      ) {
+        const withDayKnown = eventItem as { isDayKnown?: boolean }
+        if (withDayKnown.isDayKnown !== false) {
+          dayKnownCount += 1
+        }
+      }
+
+      if (hasHistoricalBridge && countryId) {
+        const modernList =
+          (eventItem as { relatedCountries?: Array<{ id: string }> })
+            .relatedCountries ?? []
+        const historicalList =
+          (eventItem as { relatedHistoricalCountries?: Array<{ id: string }> })
+            .relatedHistoricalCountries ?? []
+        if (modernList.some((rel) => rel.id === countryId)) {
+          modernCount += 1
+        }
+        if (
+          historicalList.some((rel) => historicalBridgeIds.has(rel.id)) ||
+          modernList.some((rel) => historicalBridgeIds.has(rel.id))
+        ) {
+          historicalCount += 1
+        }
+      }
+    }
+
+    const yearSpanValue =
+      minYear != null && maxYear != null
+        ? minYear === maxYear
+          ? formatSignedYear(minYear)
+          : `${formatSignedYear(minYear)} ~ ${formatSignedYear(maxYear)}`
+        : '연도 미상'
+
+    return {
+      totalCount: list.length,
+      centuryCount: centuries.size,
+      unknownYearCount,
+      yearSpanValue,
+      dayKnownCount,
+      modernCount,
+      historicalCount,
+    }
+  }, [list, hasHistoricalBridge, countryId, historicalBridgeIds])
+
+  const filteredList = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    return list.filter((eventItem) => {
+      const withRelations = eventItem as typeof eventItem & {
+        relatedCountries?: Array<{ id: string; name: string }>
+        relatedHistoricalCountries?: Array<{ id: string; name: string }>
+      }
+      const modernList = withRelations.relatedCountries ?? []
+      const historicalList = withRelations.relatedHistoricalCountries ?? []
+
+      if (hasHistoricalBridge && countryId && eraScopeFilter !== 'all') {
+        if (eraScopeFilter === 'modern') {
+          if (!modernList.some((rel) => rel.id === countryId)) return false
+        } else if (eraScopeFilter === 'historical') {
+          const matchesHistorical =
+            historicalList.some((rel) => historicalBridgeIds.has(rel.id)) ||
+            modernList.some((rel) => historicalBridgeIds.has(rel.id))
+          if (!matchesHistorical) return false
+        }
+      }
+
+      if (query) {
+        const signedYear = signedYearFromIsoLike(eventItem.startDate)
+        const yearText =
+          signedYear == null ? '미상' : formatSignedYear(signedYear)
+        const haystack = [
+          eventItem.title ?? '',
+          yearText,
+          eventItem.startDate ?? '',
+          ...modernList.map((rel) => rel.name),
+          ...historicalList.map((rel) => rel.name),
+        ]
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(query)) return false
+      }
+
+      return true
+    })
+  }, [list, hasHistoricalBridge, countryId, eraScopeFilter, historicalBridgeIds, searchQuery])
+
   /**
    * 시간축 그룹 — 세기 → 사건. 카드 격자는 읽는 순서가 지그재그이고 연도 축이 없어서
    * "언제 무슨 일이 있었나"를 못 읽는다. 세기로 묶고 행마다 연도를 고정폭으로 세운다.
@@ -415,7 +691,7 @@ export function EventsTimelineSection({
     Array<{ century: number; count: number }>
   >(() => {
     const byCentury = new Map<number, number>()
-    for (const eventItem of list) {
+    for (const eventItem of filteredList) {
       const signedYear = signedYearFromIsoLike(eventItem.startDate)
       if (signedYear == null || signedYear === 0) continue
       const century =
@@ -427,11 +703,11 @@ export function EventsTimelineSection({
     return [...byCentury.entries()]
       .map(([century, count]) => ({ century, count }))
       .sort((left, right) => left.century - right.century)
-  }, [list])
+  }, [filteredList])
 
   const calendarEvents = useMemo<CalendarEventItem[]>(() => {
     const rows: CalendarEventItem[] = []
-    for (const eventItem of list) {
+    for (const eventItem of filteredList) {
       const rawStart = eventItem.startDate
       if (!eventItem.id || typeof rawStart !== 'string') continue
       const matched = /^(-?\d{1,6}-\d{2}-\d{2})/.exec(rawStart)
@@ -445,7 +721,7 @@ export function EventsTimelineSection({
       })
     }
     return rows
-  }, [list])
+  }, [filteredList])
 
   const jumpToCentury = (century: number) => {
     const targetKey = `c${century > 0 ? 1 : -1}-${Math.abs(century)}`
@@ -463,7 +739,7 @@ export function EventsTimelineSection({
 
   const centuryGroups = useMemo(() => {
     type Entry = {
-      event: (typeof list)[number]
+      event: (typeof filteredList)[number]
       signedYear: number | null
       yearLabel: string
       rangeLabel: string | null
@@ -471,7 +747,7 @@ export function EventsTimelineSection({
       historical: Array<{ id: string; name: string }>
     }
 
-    const entries: Entry[] = list.map((event) => {
+    const entries: Entry[] = filteredList.map((event) => {
       const withRelations = event as typeof event & {
         relatedCountries?: Array<{
           id: string
@@ -538,7 +814,7 @@ export function EventsTimelineSection({
           return (left.signedYear - right.signedYear) * direction
         }),
       }))
-  }, [list, order])
+  }, [filteredList, order])
 
   /*
    * 연표 막대에서 넘어온 세기로 데려다 놓는다.
@@ -600,6 +876,9 @@ export function EventsTimelineSection({
     setIsCreateOpen(true)
     onNavigateToForm?.(true)
   }
+
+  const isFiltered =
+    eraScopeFilter !== 'all' || searchQuery.trim().length > 0
 
   return (
     <Root
@@ -694,112 +973,186 @@ export function EventsTimelineSection({
       {/* 저장 뒤 목록 갱신은 모달이 한다 — 이 목록(useEvents)도 ['events'] 아래라 함께 다시 받는다 */}
       <EventRegisterModal isOpen={isCreateOpen} onClose={closeCreate} />
 
+      {list.length > 0 && (
+        <DashboardStyles.SectionHeadlineStrip>
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              전체 연관 사건
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue>
+              {kpiSummary.totalCount.toLocaleString()}건
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {hasHistoricalBridge
+                ? `현대 국가 ${kpiSummary.modernCount}건 · 과거 국가 ${kpiSummary.historicalCount}건`
+                : '현재 국가 스코프 등록 사건'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              걸쳐 있는 세기
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue>
+              {kpiSummary.centuryCount.toLocaleString()}개 세기
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              {kpiSummary.unknownYearCount > 0
+                ? `연도 미상 ${kpiSummary.unknownYearCount}건 별도 분류`
+                : '연도 확인 사건 기준'}
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              최초 ~ 최근 연도 범위
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue>
+              {kpiSummary.yearSpanValue}
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              연표 시작일 기준 통사 범위
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+          <DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineLabel>
+              일자 확인 사건 (캘린더)
+            </DashboardStyles.SectionHeadlineLabel>
+            <DashboardStyles.SectionHeadlineValue>
+              {kpiSummary.dayKnownCount.toLocaleString()}건
+            </DashboardStyles.SectionHeadlineValue>
+            <DashboardStyles.SectionHeadlineSub>
+              월·일 단위 캘린더 표시 가능
+            </DashboardStyles.SectionHeadlineSub>
+          </DashboardStyles.SectionHeadlineCell>
+        </DashboardStyles.SectionHeadlineStrip>
+      )}
+
+      {list.length > 0 && (
+        <FilterToolbar>
+          {hasHistoricalBridge ? (
+            <ScopeChipGroup role="tablist" aria-label="시대 범위 필터">
+              <ScopeFilterChip
+                type="button"
+                role="tab"
+                aria-selected={eraScopeFilter === 'all'}
+                $active={eraScopeFilter === 'all'}
+                onClick={() => setEraScopeFilter('all')}
+              >
+                전체 ({kpiSummary.totalCount})
+              </ScopeFilterChip>
+              <ScopeFilterChip
+                type="button"
+                role="tab"
+                aria-selected={eraScopeFilter === 'modern'}
+                $active={eraScopeFilter === 'modern'}
+                onClick={() => setEraScopeFilter('modern')}
+              >
+                현대 국가 직접 연관 ({kpiSummary.modernCount})
+              </ScopeFilterChip>
+              <ScopeFilterChip
+                type="button"
+                role="tab"
+                aria-selected={eraScopeFilter === 'historical'}
+                $active={eraScopeFilter === 'historical'}
+                onClick={() => setEraScopeFilter('historical')}
+              >
+                연결 과거 국가 ({kpiSummary.historicalCount})
+              </ScopeFilterChip>
+            </ScopeChipGroup>
+          ) : (
+            <FilterResultMeta>
+              전체 {kpiSummary.totalCount.toLocaleString()}건
+            </FilterResultMeta>
+          )}
+          <SearchControlsGroup>
+            {isFiltered && (
+              <>
+                <FilterResultMeta>
+                  검색 결과 {filteredList.length.toLocaleString()}건 / 전체{' '}
+                  {kpiSummary.totalCount.toLocaleString()}건
+                </FilterResultMeta>
+                <FilterResetButton
+                  type="button"
+                  onClick={() => {
+                    setEraScopeFilter('all')
+                    setSearchQuery('')
+                  }}
+                >
+                  필터 초기화
+                </FilterResetButton>
+              </>
+            )}
+            <SearchInputWrap>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="사건명·연도·관련 국가 검색..."
+                aria-label="연대표 사건 검색"
+              />
+            </SearchInputWrap>
+          </SearchControlsGroup>
+        </FilterToolbar>
+      )}
+
       <section aria-label="연대표">
         {isLoading && list.length === 0 ? (
           <div
             style={{
-              padding: 56,
+              padding: '36px 12px',
               textAlign: 'center',
               color: theme.colors.text.secondary,
               fontSize: 14,
-              background: isDark ? 'rgba(255,255,255,0.04)' : '#f9fafb',
-              borderRadius: 16,
-              border: `1px solid ${theme.colors.border.default}`,
+              borderTop: `1px solid ${theme.colors.border.light}`,
+              borderBottom: `1px solid ${theme.colors.border.light}`,
             }}
           >
             불러오는 중…
           </div>
         ) : list.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+          <EventEmptySpecGrid>
+            <EventEmptySpecCell>
+              <EventEmptySpecTitle>
+                연도·세기별 사건 연표 원장
+              </EventEmptySpecTitle>
+              <EventEmptySpecDesc>
+                기원전(BC)부터 현대까지 시작 연도 기준으로 세기별 묶음과 연도열을 정렬해 국가 통사를 한눈에 훑을 수 있습니다.
+              </EventEmptySpecDesc>
+            </EventEmptySpecCell>
+            <EventEmptySpecCell>
+              <EventEmptySpecTitle>
+                현대·과거 국가 통사 브리지
+              </EventEmptySpecTitle>
+              <EventEmptySpecDesc>
+                현재 국가뿐 아니라 연결된 과거 국가(왕조·이전 정체)에 결속된 역사 사건까지 하나의 연대표에서 함께 조회합니다.
+              </EventEmptySpecDesc>
+            </EventEmptySpecCell>
+            <EventEmptySpecCell>
+              <EventEmptySpecTitle>
+                세기 막대 점프 및 월·일 캘린더
+              </EventEmptySpecTitle>
+              <EventEmptySpecDesc>
+                상단 세기 분포 막대를 클릭해 목표 세기로 즉시 이동하거나, 일자가 확인된 사건을 월별 캘린더 뷰로 전환해 볼 수 있습니다.
+              </EventEmptySpecDesc>
+            </EventEmptySpecCell>
+            <EventEmptySpecCell>
+              <EventEmptySpecTitle>첫 사건 등록 안내</EventEmptySpecTitle>
+              <EventEmptySpecDesc>
+                우측 상단 <strong>새 사건 등록</strong> 버튼을 눌러 이 국가와 연관된 첫 역사·현대 사건을 등록해 보세요.
+              </EventEmptySpecDesc>
+            </EventEmptySpecCell>
+          </EventEmptySpecGrid>
+        ) : filteredList.length === 0 ? (
+          <div
             style={{
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '64px 40px 72px',
-              background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
-              backdropFilter: isDark ? 'blur(12px)' : 'none',
-              borderRadius: 20,
-              border: `1px solid ${theme.colors.border.light}`,
-              boxShadow: isDark
-                ? '0 1px 3px rgba(0,0,0,0.4)'
-                : '0 1px 3px rgba(0,0,0,0.04)',
-              overflow: 'hidden',
+              padding: '36px 12px',
+              textAlign: 'center',
+              color: theme.colors.text.secondary,
+              fontSize: 13.5,
+              borderBottom: `1px solid ${theme.colors.border.light}`,
             }}
           >
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '20%',
-                width: 280,
-                height: 280,
-                marginLeft: -140,
-                marginTop: -140,
-                borderRadius: '50%',
-                background:
-                  'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)',
-                filter: 'blur(32px)',
-                pointerEvents: 'none',
-              }}
-            />
-            <div
-              style={{
-                position: 'relative',
-                zIndex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                textAlign: 'center',
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: theme.colors.text.primary,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                등록된 사건이 없습니다
-              </h3>
-              <p
-                style={{
-                  margin: '10px 0 0',
-                  fontSize: 14,
-                  color: theme.colors.text.secondary,
-                  maxWidth: 320,
-                  lineHeight: 1.55,
-                  fontWeight: 500,
-                }}
-              >
-                위{' '}
-                <strong
-                  style={{
-                    color: theme.colors.text.primary,
-                    fontWeight: 600,
-                  }}
-                >
-                  새 사건 등록
-                </strong>{' '}
-                버튼을 눌러 첫 사건을 등록하거나,{' '}
-                <strong
-                  style={{
-                    color: theme.colors.text.primary,
-                    fontWeight: 600,
-                  }}
-                >
-                  사건
-                </strong>{' '}
-                메뉴에서 연대표를 이용해 보세요.
-              </p>
-            </div>
-          </motion.div>
+            조건에 맞는 사건이 없습니다. 검색어나 시대 범위 필터를 조정해 보세요.
+          </div>
         ) : viewMode === 'calendar' ? (
           <CalendarCard>
             <EventCalendarPanel

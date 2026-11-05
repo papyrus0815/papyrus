@@ -79,8 +79,7 @@ const Root = styled(motion.div)`
 `
 
 const LedgerCard = styled.div`
-  padding: 20px 22px;
-  border-radius: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 16px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
