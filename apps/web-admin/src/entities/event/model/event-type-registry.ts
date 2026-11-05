@@ -543,7 +543,8 @@ export function eventTypeFeatures(type?: string | null, domain?: string | null):
     metricPresets: metrics.presets,
     metricSubject: metrics.subject,
     promoteTreaties: core.includes('treaty'),
-    expectStatehood: facets.includes('statehood'),
+    /* 성립·소멸은 핵심일 때만 비어 있어도 세운다 — 영토 변경은 선택이라(1차 분할에서 연방은 소멸하지 않았다) 빈 안내만 섰다 */
+    expectStatehood: core.includes('statehood'),
     expectTerritory: facets.includes('territory'),
     expectPower: facets.includes('power') || facets.includes('election'),
     expectOrganizations: facets.includes('organizations'),

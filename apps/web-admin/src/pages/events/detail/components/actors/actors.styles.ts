@@ -616,6 +616,12 @@ export const EmptyGroupLine = styled.p`
   font-size: 13px;
   line-height: 1.55;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
+
+  a {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    font-weight: 600;
+    text-underline-offset: 3px;
+  }
 `
 
 /** 진영 머리 — 진영 색 견본 + 진영색 옅은 바탕(선 없음). 진영 밖('그 밖')은 무채색 면 */
@@ -739,7 +745,7 @@ export const CountryFlag = styled.span`
 export const CountryLink = styled(Link)`
   color: inherit;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
 
   &:hover,
   &:focus-visible {
@@ -750,15 +756,12 @@ export const CountryLink = styled(Link)`
   }
 `
 
-/* 역사 국가도 /country/:histId 상세가 실존 — 현대국(CountryLink)과 동일한
- * 링크 어포던스(hover·focus-visible 밑줄)를 상속하고 이탤릭 톤만 덧입힌다. */
-export const HistoricalCountryName = styled(CountryLink)`
-  font-style: italic;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.78)'
-      : 'rgba(15,23,42,0.74)'};
-`
+/*
+ * 역사 국가도 /country/:histId 상세가 실존 — 현대국(CountryLink)과 같은 링크·같은 잉크.
+ * 예전엔 이탤릭 + 74% 회색이었는데, 참여국 1,086줄 대부분이 역사 국가라 탭의 이름이 거의 다 '비어 있음'
+ * 자리표시(같은 탭의 빈 칸이 기울임 회색)처럼 읽혔다. 나라 이름은 이 행의 닻이다.
+ */
+export const HistoricalCountryName = styled(CountryLink)``
 
 
 

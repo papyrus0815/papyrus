@@ -284,6 +284,16 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             국가 추가
           </AddBtn>
         </GroupHead>
+        {/*
+          * 진영은 있는데 어느 나라도 진영에 들지 않았다 — 머리엔 '진영 4'가 서 있는데 목록은 평평해 진영이 어디 갔는지 몰랐다
+          * (프랑스 혁명: 진영 4 · 진영에 든 나라 0). 어디서 넣는지 한 줄로.
+          */}
+        {sideCount >= 2 && !manageMode && countryRows.length > 0 && !countryRows.some((row) => row.sideId) && (
+          <EmptyGroupLine>
+            진영 {sideCount}개에 아직 나라가 들지 않았습니다 — <a href="#module-sides">진영·수치</a>에서 나라를 진영에 넣으면
+            여기서 진영별로 나뉩니다.
+          </EmptyGroupLine>
+        )}
         {countryRows.length > 0 &&
           (countrySideGroups ? (
             /*
@@ -320,21 +330,19 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
       <ActorsBlock $divided={delegationMode}>
         <GroupHead>
           <GroupLabel>
-            {delegationMode ? '참여 국가 미지정 인물' : '인물'}
+            {delegationMode && listedPersons.length > 0 ? '나라 없이 참여한 인물' : '인물'}
             {listedPersons.length > 0 && <GroupCount>{listedPersons.length}</GroupCount>}
           </GroupLabel>
           <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
             인물 추가
           </AddBtn>
         </GroupHead>
-        {delegationMode && listedPersons.length === 0 && (
-          <EmptyGroupLine>인물은 모두 위 나라 아래에 있습니다 — 참여 국가가 없는 인물만 여기에 모입니다.</EmptyGroupLine>
-        )}
+        {/*
+          * 빈 무리도 한 줄은 말한다(머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다) — 다만 짧게.
+          * 대표단 보기에서 '모두 위 나라 아래에 있습니다'는 빈 자리를 설명만 했다 — 머리와 추가 버튼으로 충분하다.
+          */}
         {persons.length === 0 && hasAnything && (
-          // 빈 무리도 한 줄은 말한다 — 머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다
-          <EmptyGroupLine>
-            아직 없습니다 — 이끈 사람·지휘관·대표 같은 인물을 걸어 두면 인물 문서에서도 이 사건이 보입니다.
-          </EmptyGroupLine>
+          <EmptyGroupLine>아직 없습니다 — 이끈 사람·지휘관·대표를 걸어 두면 인물 문서에도 이 사건이 보입니다.</EmptyGroupLine>
         )}
         {listedPersons.length > 0 && (
           <PersonList>
@@ -401,8 +409,11 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
           </S.EmptyState>
         )}
 
-        {/* 대표단 보기면 나라(+그 인물)가 먼저, 아니면 예전처럼 인물이 먼저 */}
-        {delegationMode ? (
+        {/*
+          * 대표단 보기면 나라(+그 인물)가 먼저, 아니면 인물이 먼저 — 단 인물이 0명이면 나라가 먼저.
+          * 사건 602건 중 인물이 걸린 사건은 59건이라, 대부분의 탭이 빈 인물 칸으로 시작했다.
+          */}
+        {delegationMode || (persons.length === 0 && totalCountries > 0) ? (
           <>
             {nationsBlock}
             {personsBlock}
