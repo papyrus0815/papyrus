@@ -875,13 +875,20 @@ export const FoldedLinkChip = styled.button`
   }
 `
 
-/** 소속 한 줄 — 연관 탭 맨 위의 경로. 본문 링크보다 한 단 낮은 글씨, 이 사건만 진하게 */
-export const MembershipPath = styled.nav`
+/** 소속 — 연관 탭 맨 위. 경로 줄 + 국면 한 줄 + 이전/다음 한 줄 (예전 '소속' 칸 287px를 대신) */
+export const MembershipBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 14px;
+`
+
+/** 경로 줄 — 본문 링크보다 한 단 낮은 글씨, 이 사건만 진하게. 편집 버튼은 올리면 보인다 */
+export const MembershipRow = styled.div<{ $reveal?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 4px;
-  margin: 0 0 10px;
   font-size: 13px;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -894,13 +901,94 @@ export const MembershipPath = styled.nav`
     color: ${({ theme }) => theme.colors.text.primary};
   }
   a:focus-visible {
-    outline: 2px solid #6366f1;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
     border-radius: 4px;
   }
   strong {
     font-weight: 600;
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  ${TextBtn} {
+    opacity: 0;
+  }
+  &:hover ${TextBtn}, &:focus-within ${TextBtn}, ${TextBtn}:focus-visible {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    ${TextBtn} {
+      opacity: 0.55;
+    }
+  }
+`
+
+export const MembershipActions = styled.span`
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 2px;
+  margin-left: 6px;
+
+  ${TextBtn} {
+    white-space: nowrap;
+  }
+`
+
+/** 국면 한 줄 — 메타 글씨. '바꾸기'는 꺾이지 않게(휴대폰에서 '바꾸/기'로 두 줄이었다) */
+export const MembershipMeta = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  padding-left: 34px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${metaText};
+
+  ${TextBtn} {
+    white-space: nowrap;
+  }
+`
+
+/** 이전/다음 — 한 줄 두 칸, 제목은 말줄임 */
+export const SiblingStrip = styled.nav`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  max-width: 880px;
+  padding-left: 30px;
+`
+
+export const SiblingStripLink = styled(Link)<{ $alignEnd?: boolean }>`
+  grid-column: ${({ $alignEnd }) => ($alignEnd ? '2' : '1')};
+  display: inline-flex;
+  align-items: center;
+  justify-content: ${({ $alignEnd }) => ($alignEnd ? 'flex-end' : 'flex-start')};
+  gap: 2px;
+  min-width: 0;
+  min-height: 28px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-decoration: none;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  svg {
+    flex-shrink: 0;
+    width: 13px;
+    height: 13px;
+    color: ${metaText};
+  }
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 `
 

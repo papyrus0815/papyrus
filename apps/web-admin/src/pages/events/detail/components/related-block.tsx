@@ -10,14 +10,12 @@ import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import {
   DIRECTED_RELATION_TYPES,
-  EVENT_RELATION_GROUP_ORDER,
   EVENT_RELATION_LABELS,
   type EventRelationCounterpart,
   type EventRelationDirection,
   type EventRelationItem,
   createEventRelation,
   deleteEventRelation,
-  relationGroupKey,
   updateEventRelation,
 } from '@/shared/api/event-relations'
 import { eventKeys } from '@/shared/api/event-query-keys'
@@ -31,7 +29,7 @@ import { notify } from '@/shared/ui/toast'
 
 import { usePrefetchEventDetail } from '../use-event-detail'
 import { eventRelationKeys, useEventRelations } from '../use-event-relations'
-import { REASON_MAX } from './detail-network.lib'
+import { REASON_MAX, compareEventStart } from './detail-network.lib'
 import { type LinkCandidate, type RelatedLinkFilter, type RelationDraft, RelatedLinkModal } from './related-link-modal'
 import { type PickerEvent, byProximity, particle, signedStartYear } from './related-picker.lib'
 import { type RelatedSuggestion } from './related-suggestions.lib'
@@ -63,6 +61,8 @@ interface RelatedBlockProps {
   /** 연결 지도와 함께 가리키는 사건 — 지도 마디에 올리면 이 줄이, 이 줄에 올리면 지도 마디가 진해진다 */
   hotEventId?: string | null
   onHoverEvent?: (id: string | null) => void
+  /** 묶음 — 지도에 그린 아래 사건끼리의 연결 수. 자기 관계가 0이면 '위 지도에서'를 한 줄 알린다 */
+  descendantRelationCount?: number
 }
 
 type Draft = RelationDraft
@@ -70,18 +70,24 @@ type Draft = RelationDraft
 /** 묶음의 자리 — 이 사건보다 앞선 원인 쪽 · 뒤따른 결과 쪽 · 곁 */
 type GroupSide = 'before' | 'after' | 'beside'
 const SIDE_GLYPH: Record<GroupSide, string> = { before: '←', after: '→', beside: '↔' }
-const SIDE_TITLE: Record<GroupSide, string> = {
-  before: '이 사건보다 앞선 원인 쪽',
+const SIDE_LABEL: Record<GroupSide, string> = {
+  before: '이 사건의 원인 쪽',
   after: '이 사건이 낳은 결과 쪽',
-  beside: '같은 때 얽힌 사건',
+  beside: '곁에서 얽힌 사건',
 }
+const SIDE_HINT: Record<GroupSide, string> = {
+  before: '이 사건을 일으켰거나 배경이 된 사건, 이 사건이 맞선 사건',
+  after: '이 사건이 일으켰거나 배경이 된 사건, 이 사건에 맞서 일어난 사건',
+  beside: '원인·결과라기보다 같은 때 얽혔거나 그 밖에 이어진 사건',
+}
+const SIDE_ORDER: GroupSide[] = ['before', 'after', 'beside']
 
 /**
  * 긴 목록 접기 — 관련 사건이 이보다 많으면 종류 묶음마다 앞의 몇 건만 보이고 나머지는 '더 보기'.
  * NSPM-2(관계 5)·연맹제(8)에서 이유 글까지 펼친 목록이 지도 아래 1,000px를 넘겼다.
  */
 const LONG_LIST = 6
-const GROUP_PREVIEW = 3
+const GROUP_PREVIEW = 4
 
 /** 같은 시기 후보의 창 — 앞뒤 30년(서버 기본), 가까운 순 */
 const NEAR_WINDOW_YEARS = 30
@@ -135,6 +141,7 @@ export function RelatedBlock({
   onOpenCreateRelated,
   hotEventId = null,
   onHoverEvent,
+  descendantRelationCount = 0,
 }: RelatedBlockProps) {
   const queryClient = useQueryClient()
   const prefetchEvent = usePrefetchEventDetail()
@@ -320,31 +327,23 @@ export function RelatedBlock({
     if (ok) removeMutation.mutate(relation.id)
   }
 
-  // 묶음 — 정해진 순서대로, 빈 묶음은 건너뛴다
+  /*
+   * 묶음 — 원인 쪽 · 결과 쪽 · 곁 세 칸만. 관계 종류(직접 계기·배경·대응)는 행의 꼬리표로.
+   * 예전엔 종류×방향 8칸이라 지롱드파(관계 7)가 4묶음, 그중 2묶음이 1건짜리 — 머리가 행만큼 자리를 먹었다.
+   * 칸 안은 날짜순(원인 쪽은 앞선 일부터 읽힌다).
+   */
   const groups = useMemo(() => {
-    const byKey = new Map<string, EventRelationItem[]>()
-    for (const relation of relations) {
-      const key = relationGroupKey(relation)
-      byKey.set(key, [...(byKey.get(key) ?? []), relation])
-    }
-    return EVENT_RELATION_GROUP_ORDER.flatMap(({ type, direction }) => {
-      const items = byKey.get(`${type}:${direction}`)
-      if (!items?.length) return []
-      /* 원인 쪽(이 사건보다 앞) · 결과 쪽(뒤) · 곁(같은 때·그 밖) — 머리의 화살표가 이 사건과의 선후를 말한다 */
-      const side: GroupSide = !DIRECTED_RELATION_TYPES.has(type)
+    const sideOf = (relation: EventRelationItem): GroupSide =>
+      !DIRECTED_RELATION_TYPES.has(relation.relationType)
         ? 'beside'
-        : direction === 'incoming'
+        : relation.direction === 'incoming'
           ? 'before'
           : 'after'
-      return [
-        {
-          key: `${type}:${direction}`,
-          label: EVENT_RELATION_LABELS[type][direction],
-          hint: EVENT_RELATION_LABELS[type].hint,
-          side,
-          items,
-        },
-      ]
+    return SIDE_ORDER.flatMap((side) => {
+      const items = relations
+        .filter((relation) => sideOf(relation) === side)
+        .sort((left, right) => compareEventStart(left.event.startDate, right.event.startDate))
+      return items.length > 0 ? [{ key: side, label: SIDE_LABEL[side], hint: SIDE_HINT[side], side, items }] : []
     })
   }, [relations])
 
@@ -355,6 +354,12 @@ export function RelatedBlock({
     >
 
       {isError && <NetStyles.HelperNote>관련 사건을 불러오지 못했습니다</NetStyles.HelperNote>}
+      {/* 묶음의 자기 관계 0 — 아래 사건끼리의 연결은 위 지도에 있다(잇기 버튼만 덩그러니 서서 지도와 따로 놀았다) */}
+      {relations.length === 0 && descendantRelationCount > 0 && (
+        <NetStyles.HelperNote>
+          이 사건 자체에 이은 관련 사건은 없습니다 — 아래 사건끼리의 연결 {descendantRelationCount}개는 위 지도에서 보고 고칩니다
+        </NetStyles.HelperNote>
+      )}
 
       {groups.map((group) => {
         const folded = relations.length > LONG_LIST && group.items.length > GROUP_PREVIEW + 1 && !expandedGroups.has(group.key)
@@ -362,7 +367,7 @@ export function RelatedBlock({
         return (
         <Group key={group.key} role="group" aria-label={group.label}>
           <GroupHead>
-            <GroupArrow aria-hidden title={SIDE_TITLE[group.side]}>
+            <GroupArrow aria-hidden>
               {SIDE_GLYPH[group.side]}
             </GroupArrow>
             <GroupLabel title={group.hint}>
@@ -392,6 +397,9 @@ export function RelatedBlock({
                     <NetStyles.ChildEyebrow $cat={category}>
                       <span aria-hidden><category.Icon /></span>
                       {dateLabel || category.label}
+                      <RelationTag title={EVENT_RELATION_LABELS[relation.relationType].hint}>
+                        {EVENT_RELATION_LABELS[relation.relationType].name}
+                      </RelationTag>
                     </NetStyles.ChildEyebrow>
                     <NetStyles.ChildBody>
                       <NetStyles.ChildTitle>{other.title}</NetStyles.ChildTitle>
@@ -646,4 +654,22 @@ const MoreButton = styled(ReasonToggle)`
   min-height: 28px;
   margin-left: 4px;
   font-size: 12.5px;
+`
+
+/**
+ * 관계 종류 꼬리표 — 묶음을 원인/결과/곁 셋으로 줄이며 행으로 내려온 종류. 날짜 줄 끝, 분류 색이 아닌 메타 글씨.
+ * span이 아니라 small — 날짜 줄의 '> span'(18px 아이콘 상자) 규칙에 걸려 글자가 세로로 꺾이고 분류 색을 입었다
+ */
+const RelationTag = styled.small`
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-left: 2px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)')};
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: ${metaText};
 `

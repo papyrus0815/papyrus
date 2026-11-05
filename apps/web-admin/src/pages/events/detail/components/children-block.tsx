@@ -99,7 +99,8 @@ export function ChildrenBlock({
     <>
       {/* 하위 사건 — 시간순 플랫 리스트 행 + 추가/제거 */}
       <NetStyles.HierBlock role="group" aria-labelledby="network-children-label">
-        <NetStyles.BlockLabel id="network-children-label">하위 사건</NetStyles.BlockLabel>
+        {/* 칸 머리(하위 사건)가 이미 말한다 — 화면엔 한 번, 읽기 도구엔 묶음 이름으로 */}
+        <NetStyles.VisuallyHidden id="network-children-label">하위 사건</NetStyles.VisuallyHidden>
         {childEvents.length > 0 && (
           <NetStyles.ChildList>
             {visibleChildren.map((child) => {

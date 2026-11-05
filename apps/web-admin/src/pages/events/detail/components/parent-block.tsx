@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type RefObject } from 'react'
 
 import { FiChevronLeft, FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { eventKeys } from '@/shared/api/event-query-keys'
@@ -128,84 +129,99 @@ export function ParentBlock({
     return position >= 0 ? `${position + 1}국면 · ${parentChapters[position].title}` : '국면 밖'
   }
   const [chapterPickerOpen, setChapterPickerOpen] = useState(false)
+  /** 주 상위 사유 적기 — 비어 있으면 줄을 세우지 않고, '사유'를 누르면 편집 칸으로 연다 */
+  const [reasonEditing, setReasonEditing] = useState(false)
 
+  /* 소속 경로 — 상위의 상위까지(3단, 더 있으면 …). 이 줄이 소속의 본체다 */
+  const chain: Array<{ id: string; title: string }> = []
+  let ancestor = parentEvent
+  while (ancestor && chain.length < 3) {
+    chain.unshift({ id: ancestor.id, title: ancestor.title })
+    ancestor = ancestor.parentEvent
+  }
+  const chainTruncated = Boolean(ancestor)
+  const hasReason = Boolean(event.parentLinkReason?.trim())
+  const reach = phaseReach(parentChapters, {
+    id: event.id,
+    phaseId: manualChapter,
+    startDate: event.startDate,
+    startDatePrecision: event.startDatePrecision,
+    endDate: event.endDate,
+    endDatePrecision: event.endDatePrecision,
+  })
+
+  /*
+   * 소속 한 줄 — 예전엔 맨 위 경로 줄 아래에 '소속' 칸이 또 서서 '상위 사건: 국민공회기'를 한 번 더 말했고(287px, 휴대폰 392),
+   * 비어 있는 '연결 사유 추가'·'추가 상위 + 추가' 줄이 늘 섰다. 이제 경로 줄 하나 + 국면·이전/다음 한 줄씩.
+   * 사유·추가 상위는 값이 있을 때만 줄로, 없으면 경로 줄 끝의 '사유'·'추가 상위' 버튼(올리면 보임)으로.
+   */
   return (
-    <NetStyles.HierBlock role="group" aria-labelledby="network-parent-label">
-      <NetStyles.BlockLabel id="network-parent-label">상위 사건</NetStyles.BlockLabel>
-      {/* $reveal — 편집 크롬(변경·해제 TextBtn)만 hover/focus-within 시 노출.
-          빈 상태의 AddBtn(상위 사건 지정)은 셀렉터 밖이라 상시 노출(어포던스 유지). */}
-      <NetStyles.HierRow $reveal>
+    <NetStyles.MembershipBar role="group" aria-label="소속">
+      <NetStyles.MembershipRow $reveal>
+        <NetStyles.MembershipLabel>소속</NetStyles.MembershipLabel>
         {parentEvent ? (
           <>
-            <NetStyles.ParentLink
-              to={pathKeys.events.detail(parentEvent.id)}
-              viewTransition
-              onMouseEnter={() => prefetchEvent(parentEvent.id)}
-            >
-              {parentEvent.title}
-            </NetStyles.ParentLink>
-            <NetStyles.TextBtn
-              type="button"
-              onClick={onOpenParentModal}
-              aria-label="상위 사건 변경"
-            >
-              변경
-            </NetStyles.TextBtn>
-            <NetStyles.TextBtn
-              type="button"
-              onClick={onReleaseParent}
-              aria-label="상위 사건 해제"
-            >
-              해제
-            </NetStyles.TextBtn>
+            {chainTruncated && <span aria-hidden title="더 상위 사건이 있습니다">… ›</span>}
+            {chain.map((step) => (
+              <span key={step.id}>
+                <Link
+                  to={pathKeys.events.detail(step.id)}
+                  viewTransition
+                  onMouseEnter={() => prefetchEvent(step.id)}
+                  onFocus={() => prefetchEvent(step.id)}
+                >
+                  {step.title}
+                </Link>
+                <span aria-hidden> › </span>
+              </span>
+            ))}
+            <strong aria-current="page">{event.title}</strong>
+            <NetStyles.MembershipActions>
+              <NetStyles.TextBtn type="button" onClick={onOpenParentModal} aria-label="상위 사건 변경">
+                변경
+              </NetStyles.TextBtn>
+              <NetStyles.TextBtn type="button" onClick={onReleaseParent} aria-label="상위 사건 해제">
+                해제
+              </NetStyles.TextBtn>
+              {!hasReason && !reasonEditing && (
+                <NetStyles.TextBtn
+                  type="button"
+                  onClick={() => setReasonEditing(true)}
+                  aria-label={`'${parentEvent.title}'과 이어진 사유 적기`}
+                >
+                  사유
+                </NetStyles.TextBtn>
+              )}
+              {extraParents.length === 0 && (
+                <NetStyles.TextBtn
+                  type="button"
+                  ref={extrasAddRef}
+                  onClick={onOpenExtrasModal}
+                  title="이 사건이 함께 속한 다른 큰 사건"
+                >
+                  추가 상위
+                </NetStyles.TextBtn>
+              )}
+            </NetStyles.MembershipActions>
           </>
         ) : (
           <NetStyles.AddBtn type="button" onClick={onOpenParentModal}>
             <FiPlus /> 상위 사건 지정
           </NetStyles.AddBtn>
         )}
-      </NetStyles.HierRow>
+      </NetStyles.MembershipRow>
       {/* 유령 상위 표지 — 주 상위가 해제·삭제됐는데 추가 상위만 남은 상태의 유일 안내. */}
       {!parentEvent && extraParents.length > 0 && (
         <NetStyles.HelperNote>
           주 상위가 해제·삭제됨 — 추가 상위 {extraParents.length}개 유지 중
         </NetStyles.HelperNote>
       )}
-      {/* 주 상위 연결 사유 — '왜 이 사건이 대표 상위와 이어지는가'. 주/부가 사용자에겐
-          한 개념이라 대표 관계에도 사유를 적을 수 있게(비대칭 해소). */}
-      {parentEvent && (
-        <NetStyles.ReasonLine>
-          <NetStyles.ReasonKicker>연결 사유</NetStyles.ReasonKicker>
-          <InlineText
-            value={event.parentLinkReason ?? ''}
-            onSave={(next) => saveParentReason(parentEvent.id, next)}
-            placeholder="연결 사유 추가"
-            label={`'${parentEvent.title}' 연결 사유`}
-            multiline
-            maxLength={REASON_MAX}
-            showCount
-            style={{ flex: 1 }}
-          />
-        </NetStyles.ReasonLine>
-      )}
       {parentEvent && parentChapters.length > 0 && (
-        <NetStyles.ReasonLine>
-          <NetStyles.ReasonKicker>국면</NetStyles.ReasonKicker>
+        <NetStyles.MembershipMeta>
           <span>
             {chapterName(currentChapterId)}
-            {(() => {
-              /* 여러 국면에 걸치면 끝 국면까지 — 시작 국면 하나만 말하면 1792–1797 전쟁이 '2국면'으로만 읽힌다 */
-              const reach = phaseReach(parentChapters, {
-                id: event.id,
-                phaseId: manualChapter,
-                startDate: event.startDate,
-                startDatePrecision: event.startDatePrecision,
-                endDate: event.endDate,
-                endDatePrecision: event.endDatePrecision,
-              })
-              return reach.to != null && reach.from != null && reach.to > reach.from ? ` → ${phaseReachLabel(reach)}에 걸침` : ''
-            })()}
-            {manualChapter ? ' (직접 지정)' : ' (날짜로 자동)'}
+            {reach.to != null && reach.from != null && reach.to > reach.from ? ` → ${phaseReachLabel(reach)}에 걸침` : ''}
+            {manualChapter ? ' · 직접 지정' : ' · 날짜로 자동'}
           </span>
           <NetStyles.TextBtn type="button" onClick={() => setChapterPickerOpen(true)} aria-label="국면 바꾸기">
             바꾸기
@@ -232,11 +248,35 @@ export function ParentBlock({
               onPatch({ phaseId: value === '__auto' ? null : value } as UpdateEventDto, { savedLabel: '국면' })
             }}
           />
+        </NetStyles.MembershipMeta>
+      )}
+      {/* 주 상위 연결 사유 — 적어 둔 것이 있거나 '사유'를 눌렀을 때만 */}
+      {parentEvent && (hasReason || reasonEditing) && (
+        <NetStyles.ReasonLine
+          onBlur={(blurEvent) => {
+            const next = blurEvent.relatedTarget as Node | null
+            if (next && blurEvent.currentTarget.contains(next)) return
+            setReasonEditing(false)
+          }}
+        >
+          <NetStyles.ReasonKicker>연결 사유</NetStyles.ReasonKicker>
+          <InlineText
+            value={event.parentLinkReason ?? ''}
+            onSave={(next) => saveParentReason(parentEvent.id, next)}
+            placeholder={REASON_PLACEHOLDER}
+            label={`'${parentEvent.title}' 연결 사유`}
+            multiline
+            maxLength={REASON_MAX}
+            showCount
+            style={{ flex: 1 }}
+            autoEdit={!hasReason}
+          />
         </NetStyles.ReasonLine>
       )}
       {/* 추가 상위 — 주 상위 외 다중 상위(EventParentLink). 트리·breadcrumb·형제는
           주 상위 기준이고, 이 칩 행이 다중 소속 발견성의 정본 지면. 편집(추가·해제·
           승격)은 자식인 이 사건 쪽에서만. */}
+      {extraParents.length > 0 && (
       <NetStyles.ExtraParentsRow>
         <NetStyles.BlockLabel id="network-extra-parents-label">
           추가 상위
@@ -320,6 +360,7 @@ export function ParentBlock({
           </NetStyles.HelperNote>
         )}
       </NetStyles.ExtraParentsRow>
+      )}
       {/* 추가 상위 연결 사유 편집 라인 — 열린 칩 하나만. 칩 행 밀도를 지키려 별도 라인. */}
       {openExtraReasonId &&
         (() => {
@@ -344,41 +385,40 @@ export function ParentBlock({
             </NetStyles.ReasonLine>
           )
         })()}
+      {/* 이전/다음 — 한 줄 두 칸(예전 카드 2장은 휴대폰에서 세로로 쌓여 130px) */}
       {parentEvent && (prevSibling || nextSibling) && (
-        <NetStyles.SiblingNav aria-label="형제 사건 이동">
+        <NetStyles.SiblingStrip aria-label="같은 상위의 이전·다음 사건">
           {prevSibling ? (
-            <NetStyles.SiblingLink
+            <NetStyles.SiblingStripLink
               to={pathKeys.events.detail(prevSibling.id)}
               viewTransition
               onMouseEnter={() => prefetchEvent(prevSibling.id)}
               onFocus={() => prefetchEvent(prevSibling.id)}
               aria-label={`이전 형제 사건: ${prevSibling.title}`}
+              title={prevSibling.title}
             >
-              <NetStyles.SiblingKicker>
-                <FiChevronLeft aria-hidden />
-                이전 사건
-              </NetStyles.SiblingKicker>
-              <NetStyles.SiblingText>{prevSibling.title}</NetStyles.SiblingText>
-            </NetStyles.SiblingLink>
-          ) : null}
+              <FiChevronLeft aria-hidden />
+              <span>{prevSibling.title}</span>
+            </NetStyles.SiblingStripLink>
+          ) : (
+            <span aria-hidden />
+          )}
           {nextSibling && (
-            <NetStyles.SiblingLink
+            <NetStyles.SiblingStripLink
               to={pathKeys.events.detail(nextSibling.id)}
               viewTransition
               onMouseEnter={() => prefetchEvent(nextSibling.id)}
               onFocus={() => prefetchEvent(nextSibling.id)}
               aria-label={`다음 형제 사건: ${nextSibling.title}`}
+              title={nextSibling.title}
               $alignEnd
             >
-              <NetStyles.SiblingKicker>
-                다음 사건
-                <FiChevronRight aria-hidden />
-              </NetStyles.SiblingKicker>
-              <NetStyles.SiblingText>{nextSibling.title}</NetStyles.SiblingText>
-            </NetStyles.SiblingLink>
+              <span>{nextSibling.title}</span>
+              <FiChevronRight aria-hidden />
+            </NetStyles.SiblingStripLink>
           )}
-        </NetStyles.SiblingNav>
+        </NetStyles.SiblingStrip>
       )}
-    </NetStyles.HierBlock>
+    </NetStyles.MembershipBar>
   )
 }

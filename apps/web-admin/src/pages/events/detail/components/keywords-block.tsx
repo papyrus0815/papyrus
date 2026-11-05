@@ -19,7 +19,8 @@ interface KeywordsBlockProps {
  * 앞 몇 개만 보이고 나머지는 '+N개 더'로 — 키워드는 사건당 평균 11개지만 25개 사건이
  * 20개를 넘고 최대 58개다(실측). 58개가 9줄 벽이 되어 연관 섹션 전체를 차지했다.
  */
-const KEYWORD_PREVIEW_COUNT = 16
+/* 16 → 10: 본문 열(650px)에 한 줄 6~7개라 16개면 세 줄, 사라예보(14)가 175px였다 — 두 줄까지만 */
+const KEYWORD_PREVIEW_COUNT = 10
 
 /**
  * 키워드 블록 — inline chip 편집. 칩의 ✕로 제거, "+" 인풋으로 추가. 별도 폼 X.

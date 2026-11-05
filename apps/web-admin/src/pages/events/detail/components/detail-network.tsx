@@ -9,7 +9,7 @@ import {
 } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useBlocker } from 'react-router-dom'
+import { useBlocker } from 'react-router-dom'
 import { FiLayers, FiShuffle } from 'react-icons/fi'
 
 import { useEvents } from '@/entities/event/model'
@@ -21,7 +21,6 @@ import {
 } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
-import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
@@ -765,9 +764,8 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
       return next
     })
   }, [filledKey])
-  /** 소속 구역에 그릴 것이 있나 — 상위·하위 블록, 또는 단일 사건의 '나누기' 안내 */
+  /** 하위 구역에 그릴 것이 있나 — 하위 블록, 또는 단일 사건의 '나누기' 안내(상위는 맨 위 소속 줄) */
   const hierarchyZoneShown = () =>
-    isBlockShown('parent') ||
     (!isCollection && Boolean(onRequestSplit) && narrativeCount >= 2) ||
     (isCollection && isBlockShown('children'))
   /* 관련 사건은 늘 편다 — 사건 대부분(591 중 535)이 관계 0이라, 잇기가 맨 아래 '+ 관련 사건' 칩 안에 숨어 있었다 */
@@ -796,18 +794,6 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
    */
   const mapAvailable = relatedCount > 0 || (isCollection && descendantRelationCount > 0)
 
-  /*
-   * 소속 한 줄 — '어디에 속하나'를 지도 위에 경로로(프랑스 혁명 › 제1차 대불동맹 전쟁 › 발미). 소속 칸은 지도·관련 사건 사이에
-   * 있어, 지도를 읽기 전에 이 사건의 자리를 알 수 없었다. 편집은 아래 소속 칸이 그대로 맡는다(3단까지, 더 있으면 …).
-   */
-  const membershipPath: Array<{ id: string; title: string }> = []
-  let ancestor = parentEvent
-  while (ancestor && membershipPath.length < 3) {
-    membershipPath.unshift({ id: ancestor.id, title: ancestor.title })
-    ancestor = ancestor.parentEvent
-  }
-  const membershipTruncated = Boolean(ancestor)
-
   return (
     <S.Section id="network">
       <S.SectionHeader>
@@ -824,25 +810,23 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
         )}
       </S.SectionHeader>
 
-      {membershipPath.length > 0 && (
-        <NetStyles.MembershipPath aria-label="소속 경로">
-          <NetStyles.MembershipLabel>소속</NetStyles.MembershipLabel>
-          {membershipTruncated && <span aria-hidden title="더 상위 사건이 있습니다">… ›</span>}
-          {membershipPath.map((step) => (
-            <span key={step.id}>
-              <Link to={pathKeys.events.detail(step.id)} viewTransition>
-                {step.title}
-              </Link>
-              <span aria-hidden> › </span>
-            </span>
-          ))}
-          <strong aria-current="page">{event.title}</strong>
-          {extraParents.length > 0 && (
-            <NetStyles.MembershipExtra title={extraParents.map((extra) => extra.title).join(', ')}>
-              · 다른 상위 {extraParents.length}
-            </NetStyles.MembershipExtra>
-          )}
-        </NetStyles.MembershipPath>
+      {/*
+        * 소속 — 맨 위 한 줄(소속 프랑스 혁명 › 제1차 대불동맹 전쟁 › 발미 전투). 지도를 읽기 전에 이 사건의 자리부터.
+        * 예전엔 이 경로 줄 아래 '소속' 칸이 상위를 한 번 더 말했다(287px)
+        */}
+      {isBlockShown('parent') && (
+        <ParentBlock
+          event={event}
+          extraParents={extraParents}
+          onOpenParentModal={() => setParentModalOpen(true)}
+          onOpenExtrasModal={() => setExtrasModalOpen(true)}
+          onReleaseParent={() => void releaseParent()}
+          onPromoteExtraParent={promoteExtraParent}
+          onRemoveExtraParent={removeExtraParent}
+          onPatch={onPatch}
+          extraRemoveRefs={extraRemoveRefs}
+          extrasAddRef={extrasAddRef}
+        />
       )}
 
       {/* 연결 지도 — 이 사건을 가운데 둔 마인드맵(상위·하위 한 단 + 관련 두 단). 아래 목록이 편집 자리 */}
@@ -863,31 +847,15 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
       <NetworkZone
         kind="hierarchy"
         icon={<FiLayers />}
-        title="소속"
+        title="하위 사건"
         titleId="network-zone-hierarchy"
-        description="이 사건이 들어 있는 큰 사건(상위)과, 이 사건 안에서 일어난 사건(하위)"
+        description="이 사건 안에서 일어난 작은 사건"
       >
-      {/* 상위 사건 — 지정/변경/해제 + 추가 상위 칩 + 형제 네비 */}
-      {isBlockShown('parent') && (
-      <ParentBlock
-        event={event}
-        extraParents={extraParents}
-        onOpenParentModal={() => setParentModalOpen(true)}
-        onOpenExtrasModal={() => setExtrasModalOpen(true)}
-        onReleaseParent={() => void releaseParent()}
-        onPromoteExtraParent={promoteExtraParent}
-        onRemoveExtraParent={removeExtraParent}
-        onPatch={onPatch}
-        extraRemoveRefs={extraRemoveRefs}
-        extrasAddRef={extrasAddRef}
-      />
-      )}
-
       {/* 단일 사건 — 하위 대신 '나누기'. 전개가 국면으로 커지면 묶음이 되어 국면마다 하위 사건이 된다 */}
       {/* 한 단락짜리 전개까지 단일 사건 452건 모두에 같은 안내가 서 있었다 — 나눌 단락이 있을 때만 */}
       {!isCollection && onRequestSplit && narrativeCount >= 2 && (
         <NetStyles.HierBlock role="group" aria-labelledby="network-children-label">
-          <NetStyles.BlockLabel id="network-children-label">하위 사건</NetStyles.BlockLabel>
+          <NetStyles.VisuallyHidden id="network-children-label">하위 사건</NetStyles.VisuallyHidden>
           <NetStyles.HelperNote>
             단일 사건은 하위 사건을 두지 않습니다. 여러 국면으로 이뤄진 사건이라면 묶음 사건으로
             나누세요 — 전개 단락이 하위 사건이 됩니다.
@@ -936,6 +904,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
           hierarchyIds={hierarchyIds}
           suggestions={suggestions}
           onOpenCreateRelated={() => setCreateRelatedOpen(true)}
+          descendantRelationCount={mapAvailable && mapShown ? descendantRelationCount : 0}
           hotEventId={hotEventId}
           onHoverEvent={mapShown && mapAvailable ? setHotEventId : undefined}
         />
@@ -955,7 +924,10 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
               key={block.id}
               type="button"
               onClick={() =>
-                setShownBlocks((prev) => new Set(prev).add(block.id))
+                /* 상위는 펼칠 칸이 없다(맨 위 소속 줄) — 바로 고르는 창으로 */
+                block.id === 'parent'
+                  ? setParentModalOpen(true)
+                  : setShownBlocks((prev) => new Set(prev).add(block.id))
               }
               title={block.hint}
             >

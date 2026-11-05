@@ -178,12 +178,18 @@ function CollectionMindmap({ eventId, hotId, onHover }: { eventId: string } & Li
 /** 단일 사건 — 가운데 두고 상위·하위·관련 1~2단 */
 function EgoMindmap({ eventId, hotId, onHover }: { eventId: string } & LinkedHover) {
   const navigate = useNavigate()
-  const [hops, setHops] = useState<1 | 2>(2)
+  const [hopsChoice, setHops] = useState<1 | 2 | null>(null)
   const { data, isLoading, isError } = useQuery({
     queryKey: eventKeys.relationGraph(eventId),
     queryFn: () => getEventRelationGraph(eventId, 2),
     staleTime: 30_000,
   })
+  /*
+   * 기본 단수 — 바로 이어진 사건이 넉넉하면(4개 이상) 한 단으로 시작해 아래 목록과 같은 것을 보인다. 지롱드파는 두 단으로 시작해
+   * 목록 7건 위에 지도 24마디가 섰다. 바로 이어진 것이 적으면 관련의 관련까지 보여야 맥락이 선다
+   */
+  const nearCount = data?.nodes.filter((node) => node.hop === 1).length ?? 0
+  const hops: 1 | 2 = hopsChoice ?? (nearCount >= 4 ? 1 : 2)
   const mindmap = useMemo(() => (data ? buildEgoMindmap(data, hops) : null), [data, hops])
   const relationActions = useMindmapRelationActions()
   const relationCount = data?.relations.length ?? 0
@@ -214,7 +220,8 @@ function EgoMindmap({ eventId, hotId, onHover }: { eventId: string } & LinkedHov
       <Suspense fallback={<Loading>지도를 싣는 중…</Loading>}>
         <MindmapCanvas
           data={mindmap}
-          height={Math.min(560, Math.max(320, 120 + mindmap.specs.size * 22))}
+          height={560}
+          minHeight={260}
           onOpen={(id) => navigate(pathKeys.events.detail(id))}
           hotId={hotId}
           onHover={onHover}

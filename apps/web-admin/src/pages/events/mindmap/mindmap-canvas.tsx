@@ -9,7 +9,7 @@
  */
 import '@xyflow/react/dist/style.css'
 
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { FiMaximize2, FiSearch } from 'react-icons/fi'
 
@@ -51,7 +51,13 @@ import {
 
 interface MindmapCanvasProps {
   data: MindmapData
+  /** 지도 높이 — minHeight를 주면 이것이 상한이고, 그림 높이에 맞춰 줄어든다 */
   height: number
+  /**
+   * 주면 그림 높이에 맞춘다(이 값 ~ height). 예전엔 마디 **개수**로 높이를 정해, 가로로 펼친 지롱드파 지도가 626px 중
+   * 200px 띠에만 그려지고 위아래가 비었다
+   */
+  minHeight?: number
   hotId?: string | null
   onOpen: (id: string) => void
   onToggle?: (id: string) => void
@@ -202,9 +208,14 @@ function RelationEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, 
 const nodeTypes = { mind: MindNode }
 const edgeTypes = { relation: RelationEdge }
 
+/** 지도 위아래 덮개(찾기 줄·범례)가 먹는 높이 */
+const CANVAS_CHROME = 104
+const FIT_PADDING = 0.08
+
 function MindmapFlow({
   data,
   height,
+  minHeight,
   hotId = null,
   onOpen,
   onToggle,
@@ -280,6 +291,38 @@ function MindmapFlow({
   const activeId = hoveredId ?? foundId ?? hotId
   const positions = useMemo(() => layoutMindmap(data.tree), [data.tree])
   const canConnect = Boolean(onCreateRelation)
+  /* 그림 맞춤 높이 — 지도 폭에서 맞춤 배율을 셈해(읽히는 하한 아래면 하한 배율) 그림 높이 + 덮개 */
+  const [hostWidth, setHostWidth] = useState(0)
+  useLayoutEffect(() => {
+    if (minHeight == null) return
+    const host = hostRef.current
+    if (!host) return
+    setHostWidth(host.clientWidth)
+    const observer = new ResizeObserver(() => setHostWidth(host.clientWidth))
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [minHeight])
+  const fittedHeight = useMemo(() => {
+    if (minHeight == null || hostWidth === 0 || positions.size === 0) return height
+    let left = Infinity
+    let right = -Infinity
+    let top = Infinity
+    let bottom = -Infinity
+    for (const [id, position] of positions) {
+      const spec = data.specs.get(id)
+      if (!spec) continue
+      const size = MIND_NODE_SIZE[spec.kind]
+      left = Math.min(left, position.x)
+      right = Math.max(right, position.x + size.width)
+      top = Math.min(top, position.y)
+      bottom = Math.max(bottom, position.y + size.height)
+    }
+    const pad = 1 + FIT_PADDING * 2
+    /* 배율 상한 0.9 — 마디가 적은 지도(NSPM-2, 6마디)는 1.1배로 키워 맞추느라 오히려 커졌다. 0.9배면 글자가 읽히고 키는 준다 */
+    const widthScale = Math.min(0.9, hostWidth / ((right - left) * pad))
+    const scale = widthScale < READABLE_ZOOM ? READABLE_ZOOM + 0.08 : widthScale
+    return Math.round(Math.min(height, Math.max(minHeight, (bottom - top) * pad * scale + CANVAS_CHROME)))
+  }, [minHeight, hostWidth, positions, data.specs, height])
 
   const centerOn = (id: string, nextZoom?: number) => {
     const position = positions.get(id)
@@ -455,8 +498,8 @@ function MindmapFlow({
       })
     })
     return () => cancelAnimationFrame(frame)
-    // centerOn은 positions·specs에서 나온다(signature가 그 변화를 잡는다)
-  }, [signature, fitView])
+    // centerOn은 positions·specs에서 나온다(signature가 그 변화를 잡는다). 높이가 그림에 맞춰 바뀌면 다시 맞춘다
+  }, [signature, fittedHeight, fitView])
   /* 칸이 열리고 닫히면 지도 폭이 바뀐다 — 다시 맞춘다 */
   useEffect(() => {
     const frame = requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ padding: 0.08, maxZoom: 1.1, duration: 200 })))
@@ -491,7 +534,7 @@ function MindmapFlow({
   return (
     <Host
       ref={hostRef}
-      style={{ height }}
+      style={{ height: fittedHeight }}
       data-far={zoom < FAR_ZOOM ? '' : undefined}
       onDragOver={(dragEvent) => {
         if (!onCreateRelation || !dragEvent.dataTransfer.types.includes(DRAG_TYPE)) return
@@ -745,7 +788,7 @@ export default function MindmapCanvas(props: MindmapCanvasProps) {
       {fullscreen && (
         <Modal isOpen onClose={() => setFullscreen(false)} title={props.fullscreenTitle} maxWidth="min(1680px, 96vw)">
           <ReactFlowProvider>
-            <MindmapFlow {...props} height={Math.round(window.innerHeight * 0.78)} />
+            <MindmapFlow {...props} minHeight={undefined} height={Math.round(window.innerHeight * 0.78)} />
           </ReactFlowProvider>
         </Modal>
       )}
