@@ -120,6 +120,8 @@ export function roleDescriptionPlaceholderForType(
       return '참전 규모·주력 부대·전과 등 (선택)'
     case 'STATEHOOD':
       return '독립 선포·병합·해체 경위 등 (선택)'
+    case 'TERRITORY':
+      return '내준·받은 땅과 그 경위 — 면적·인구는 영토 이전 줄에 (선택)'
     case 'SUMMIT':
     case 'ALLIANCE_BREAK':
       return '대표단 입장·합의·외교 조치 등 (선택)'

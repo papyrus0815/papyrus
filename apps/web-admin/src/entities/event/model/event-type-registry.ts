@@ -2,7 +2,7 @@
  * 사건 세부 분야 레지스트리 — **분야의 2단계(분야 › 세부)이자 "이 사건에는 무엇을 기록하는가"의 단일 정본.**
  *
  *  - 분야(Event.domain, 9종·필수): 무엇에 관한 일인가 — 정치·외교·군사·경제… 색·필터의 기준(event-domain.ts).
- *  - 세부(Event.type, 28종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
+ *  - 세부(Event.type, 29종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
  *    **붙는 기록을 정한다**(전투 → 교전 양측, 조약 → 맺어진 조약, 즉위 → 재임 기록).
  *
  * 화면은 '군사 › 법령·정책·개혁' 한 줄의 2단 분류로 보이지만 **저장은 독립된 두 축**이다. 실측 452건에서
@@ -35,6 +35,7 @@ export type EventTypeKey =
   | 'CRISIS'
   | 'EXPANSION'
   | 'STATEHOOD'
+  | 'TERRITORY'
   | 'POWER_CHANGE'
   | 'ELECTION'
   | 'LAW_POLICY'
@@ -57,6 +58,7 @@ export type EventTypeKey =
  *  participants 참여국(역할)    · persons 참여 인물      · sides 진영(교전 양측)
  *  metrics 수치(지표·출처)      · military 작전 정보     · treaty 맺어진 조약
  *  statehood 성립·소멸 국가     · power 취임·즉위 기록   · election 선거
+ *  territory 영토 이전(어느 땅이 누구에게서 누구에게로)
  *  organizations 기업·조직      · cabinets 관련 행정부
  */
 export type EventFacetKey =
@@ -67,6 +69,7 @@ export type EventFacetKey =
   | 'military'
   | 'treaty'
   | 'statehood'
+  | 'territory'
   | 'power'
   | 'election'
   | 'organizations'
@@ -80,6 +83,7 @@ export const FACET_LABEL: Record<EventFacetKey, string> = {
   military: '작전 정보',
   treaty: '맺어진 조약',
   statehood: '성립·소멸 국가',
+  territory: '영토 이전',
   power: '취임·즉위',
   election: '선거',
   organizations: '기업·조직',
@@ -270,8 +274,18 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
   },
   // ── 국가·권력 ──────────────────────────────────────────────────────────
   STATEHOOD: {
-    key: 'STATEHOOD', short: '흥망', label: '건국·멸망·병합', examples: '청나라 건국 · 서로마 멸망 · 병합 · 독립 선언', defaultDomain: 'POLITICS',
-    core: ['statehood'], optional: ['persons', 'power', 'metrics'],
+    key: 'STATEHOOD', short: '흥망', label: '건국·멸망·독립', examples: '청나라 건국 · 서로마 멸망 · 독립 선언', defaultDomain: 'POLITICS',
+    core: ['statehood'], optional: ['persons', 'power', 'territory', 'metrics'],
+    metrics: TERRITORY_METRICS,
+  },
+  /*
+   * 영토 변경 — 땅이 한 나라에서 다른 나라로(폴란드 분할·시모노세키 할양·알래스카 매입). 예전엔 '건국·멸망·병합'에 들어가
+   * 핵심 기록이 '성립·소멸 국가'였는데, 1차 폴란드 분할에서 연방은 소멸하지 않았다 — 칸이 사건과 맞지 않았다.
+   * 나라가 통째로 사라지는 병합은 영토 이전 1줄 + 성립·소멸(멸망 역할)을 함께 쓴다.
+   */
+  TERRITORY: {
+    key: 'TERRITORY', short: '영토', label: '영토 변경(할양·분할·병합)', examples: '폴란드 분할 · 타이완 할양 · 알래스카 매입 · 보스니아 병합', defaultDomain: 'DIPLOMACY',
+    core: ['territory', 'participants'], optional: ['treaty', 'statehood', 'persons', 'metrics'],
     metrics: TERRITORY_METRICS,
   },
   POWER_CHANGE: {
@@ -357,11 +371,11 @@ export interface EventTypeGroup {
   types: EventTypeKey[]
 }
 
-/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 28종을 훑기 쉽게 묶는다 */
+/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 29종을 훑기 쉽게 묶는다 */
 export const EVENT_TYPE_GROUPS: ReadonlyArray<EventTypeGroup> = [
   { label: '충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'MOBILIZATION'] },
   { label: '국가 간', types: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'] },
-  { label: '국가·권력', types: ['STATEHOOD', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'INCIDENT', 'MOVEMENT'] },
+  { label: '국가·권력', types: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'INCIDENT', 'MOVEMENT'] },
   { label: '경제·산업', types: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION'] },
   { label: '자연·문화·사람', types: ['DISASTER', 'DISCOVERY', 'CREATION', 'CONVERSION', 'MIGRATION', 'PERSONAL'] },
 ]
@@ -394,8 +408,8 @@ export function groupSubtypes(types: ReadonlyArray<EventTypeKey>): EventTypeGrou
  * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 기타는 앞줄이 없어 전부 보인다.
  */
 export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = {
-  POLITICS: ['STATEHOOD', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'DECLARATION', 'PERSONAL'],
-  DIPLOMACY: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
+  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'DECLARATION', 'PERSONAL'],
+  DIPLOMACY: ['TREATY', 'TERRITORY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
   MILITARY: ['WAR', 'BATTLE', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
   ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'MOVEMENT'],
   SOCIETY: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
@@ -510,6 +524,7 @@ export interface EventTypeFeatures {
   metricSubject: 'side' | 'event'
   promoteTreaties: boolean
   expectStatehood: boolean
+  expectTerritory: boolean
   expectPower: boolean
   expectOrganizations: boolean
 }
@@ -529,6 +544,7 @@ export function eventTypeFeatures(type?: string | null, domain?: string | null):
     metricSubject: metrics.subject,
     promoteTreaties: core.includes('treaty'),
     expectStatehood: facets.includes('statehood'),
+    expectTerritory: facets.includes('territory'),
     expectPower: facets.includes('power') || facets.includes('election'),
     expectOrganizations: facets.includes('organizations'),
   }
@@ -558,9 +574,17 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
     domain: 'DIPLOMACY',
     type: 'SUMMIT',
   },
-  // 건국·멸망·병합
+  // 기업 합병은 영토가 아니다 — 아래 영토 규칙('합병$')보다 먼저
+  { pattern: /(?:회사|기업|은행|그룹|인수)\s*(?:와|과)?\s*.*합병$/, domain: 'ECONOMY', type: 'COMPANY' },
+  // 영토 변경 — '병합'은 나라 전체여도 땅이 넘어간 일이라 여기(멸망은 성립·소멸 칸으로 함께)
   {
-    pattern: /(?:건국|멸망|병합|독립\s*선언|독립|패망|붕괴|해체)$/,
+    pattern: /(?:분할|할양|병합|합병|매입|반환|조차|割讓)$/,
+    domain: 'DIPLOMACY',
+    type: 'TERRITORY',
+  },
+  // 건국·멸망·독립
+  {
+    pattern: /(?:건국|멸망|독립\s*선언|독립|패망|붕괴|해체)$/,
     domain: 'POLITICS',
     type: 'STATEHOOD',
   },
@@ -671,7 +695,8 @@ const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
   VISIT: '국빈방문 사절단 내항 기항 예방 순방',
   CRISIS: '외교위기 사태 분쟁 대치',
   EXPANSION: '식민지 개척 진출 원정대',
-  STATEHOOD: '건국 멸망 병합 합병 독립선언 독립 패망 붕괴 해체 왕조',
+  STATEHOOD: '건국 멸망 독립선언 독립 패망 붕괴 해체 왕조',
+  TERRITORY: '영토 분할 할양 병합 합병 매입 교환 반환 조차 국경 영토변경 割讓',
   POWER_CHANGE: '즉위식 대관식 취임식 퇴위 선위 폐위 하야 탄핵 해임 실각 계승',
   ELECTION: '총선 대선 대통령선거 보궐선거 국민투표 투표',
   LAW_POLICY: '헌법 법률 법령 법안 칙령 조례 개혁 신법 공포 제정 시행 폐지 함대법 징병령',

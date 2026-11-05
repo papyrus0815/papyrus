@@ -21,8 +21,8 @@ import {
 } from './event-type-registry'
 
 describe('세부 분야 레지스트리', () => {
-  it('서버 enum 28종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
-    expect(EVENT_TYPE_ORDER).toHaveLength(28)
+  it('서버 enum 29종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
+    expect(EVENT_TYPE_ORDER).toHaveLength(29)
     for (const [key, def] of Object.entries(EVENT_TYPES)) {
       expect(def.key).toBe(key)
       expect(def.core.filter((facet) => def.optional.includes(facet))).toEqual([])
@@ -71,7 +71,7 @@ describe('세부 분야 레지스트리', () => {
     expect(formatDomainPath(null, null)).toBe('기타')
   })
 
-  it('의미군 묶음(EVENT_TYPE_GROUPS)은 28종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
+  it('의미군 묶음(EVENT_TYPE_GROUPS)은 29종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
     const flattened = EVENT_TYPE_GROUPS.flatMap((group) => group.types)
     expect(flattened).toEqual(EVENT_TYPE_ORDER)
     expect(groupSubtypes(['BATTLE', 'TREATY'])).toEqual([
@@ -229,7 +229,7 @@ describe('subtypesForDomain hasParent 정렬 · searchClassifications · 최근 
     expect(withParent.primary[withParent.primary.length - 1]).toBe('WAR')
   })
 
-  it('searchClassifications — 세부 이름·예시·동의어로 28종 전체에서 검색하고 현재 분야를 우선한다', () => {
+  it('searchClassifications — 세부 이름·예시·동의어로 29종 전체에서 검색하고 현재 분야를 우선한다', () => {
     const landing = searchClassifications('상륙작전', null)
     expect(landing[0]).toMatchObject({ type: 'BATTLE', domain: 'MILITARY' })
 

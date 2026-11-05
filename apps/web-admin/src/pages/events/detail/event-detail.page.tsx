@@ -10,8 +10,9 @@ import {
   useState,
 } from 'react'
 
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { getEventTerritoryTransfers, territoryTransferKeys } from '@/shared/api/territory-transfers'
 import { syncEventSides } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
@@ -58,6 +59,7 @@ import { DetailOrganizations } from './components/detail-organizations'
 import { DetailPower, hasPowerData } from './components/detail-power'
 import { DetailRail } from './components/detail-rail'
 import { DetailStatehood, statehoodEntries } from './components/detail-statehood'
+import { DetailTerritory } from './components/detail-territory'
 import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
@@ -120,7 +122,7 @@ const LazyEventOverviewPanel = lazy(() =>
  */
 function tabOfSection(id: string, promoteTreaties: boolean): EventTabId {
   if (/^(background|narrative|aftermath|comments|development)/.test(id)) return 'overview'
-  if (/^(actors|statehood|power|organizations)/.test(id)) return 'actors'
+  if (/^(actors|statehood|territory|power|organizations)/.test(id)) return 'actors'
   if (id.startsWith('module-')) return 'modules'
   if (id === 'treaties') return promoteTreaties ? 'overview' : 'links'
   if (id === 'network') return 'links'
@@ -402,6 +404,13 @@ function EventDetailContent({
   const promoteTreaties = features.promoteTreaties
   /* 국가 성립·소멸 — 역할(건국·멸망)이 있으면 늘, 건국/멸망 사건이면 비어 있어도 보인다 */
   const showStatehood = features.expectStatehood || statehoodEntries(event).length > 0
+  /* 영토 이전 — 줄이 있으면 늘, 영토 변경 사건이면 비어 있어도 보인다(같은 캐시를 섹션도 읽는다) */
+  const territoryQuery = useQuery({
+    queryKey: territoryTransferKeys.event(event.id),
+    queryFn: () => getEventTerritoryTransfers(event.id),
+    staleTime: 30_000,
+  })
+  const showTerritory = features.expectTerritory || (territoryQuery.data?.length ?? 0) > 0
   /* 권력 교체·선거 — 취임·즉위·선거가 걸려 있으면 늘, 즉위·취임·선거 형식이면 비어 있어도 보인다 */
   const showPower = features.expectPower || hasPowerData(event)
   /* 관련 기업·조직 — 연결이 있으면 늘, 경제 사건이면 비어 있어도 보인다 */
@@ -653,6 +662,7 @@ function EventDetailContent({
         children: withParagraphs('aftermath'),
       })
     if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
+    if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
     if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
     if (showOrganizations) items.push({ id: 'organizations', label: '관련 기업·조직' })
     if (promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
@@ -679,7 +689,7 @@ function EventDetailContent({
     // 섹션 구성은 보임 여부·단락 제목·모듈에만 의존한다 — event 전체를 deps에 두면
     // 인라인 patch refetch마다 재계산된다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleKey, event, enabledModules, promoteTreaties, showStatehood, showPower, showOrganizations])
+  }, [visibleKey, event, enabledModules, promoteTreaties, showStatehood, showTerritory, showPower, showOrganizations])
 
   /**
    * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
@@ -800,7 +810,7 @@ function EventDetailContent({
    * 빈 탭 머리(TabEmpty)로 같은 버튼을 들고 '무엇을 둘 수 있는 탭인지'를 말한다.
    */
   const emptyTab: Partial<Record<EventTabId, { title: string; text: string }>> = {
-    ...(!isVisible('actors') && !showStatehood && !showPower && !showOrganizations
+    ...(!isVisible('actors') && !showStatehood && !showTerritory && !showPower && !showOrganizations
       ? {
           actors: {
             title: '아직 참여한 인물·국가가 없습니다',
@@ -1058,6 +1068,14 @@ function EventDetailContent({
                       expectStatehood={features.expectStatehood}
                       onCountryClick={onCountryClick}
                       onPersonClick={onPersonClick}
+                    />
+                  )}
+                  {showTerritory && (
+                    <DetailTerritory
+                      event={event}
+                      expectTerritory={features.expectTerritory}
+                      readOnly={trashedView}
+                      onCountryClick={onCountryClick}
                     />
                   )}
                   {showPower && (
